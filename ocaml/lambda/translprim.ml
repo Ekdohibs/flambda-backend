@@ -719,15 +719,15 @@ let lambda_of_prim prim_name prim loc args arg_exps =
       let lam = lambda_of_loc kind loc in
       Lprim(Pmakeblock(0, Immutable, None, alloc_heap), [lam; arg], loc)
   | Send pos, [obj; meth] ->
-      Lsend(Public, meth, obj, [], pos, alloc_heap, loc)
+      Lsend(Public, meth, obj, [], pos, alloc_heap, loc, Lambda.layout_top)
   | Send_self pos, [obj; meth] ->
-      Lsend(Self, meth, obj, [], pos, alloc_heap, loc)
+      Lsend(Self, meth, obj, [], pos, alloc_heap, loc, Lambda.layout_top)
   | Send_cache apos, [obj; meth; cache; pos] ->
       (* Cached mode only works in the native backend *)
       if !Clflags.native_code then
-        Lsend(Cached, meth, obj, [cache; pos], apos, alloc_heap, loc)
+        Lsend(Cached, meth, obj, [cache; pos], apos, alloc_heap, loc, Lambda.layout_top)
       else
-        Lsend(Public, meth, obj, [], apos, alloc_heap, loc)
+        Lsend(Public, meth, obj, [], apos, alloc_heap, loc, Lambda.layout_top)
   | Frame_pointers, [] ->
       let frame_pointers =
         if !Clflags.native_code && Config.with_frame_pointers then 1 else 0

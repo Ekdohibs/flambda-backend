@@ -370,7 +370,7 @@ type lambda =
   | Lfor of lambda_for
   | Lassign of Ident.t * lambda
   | Lsend of meth_kind * lambda * lambda * lambda list
-             * region_close * alloc_mode * scoped_location
+             * region_close * alloc_mode * scoped_location * layout
   | Levent of lambda * lambda_event
   | Lifused of Ident.t * lambda
   | Lregion of lambda * layout
@@ -631,3 +631,5 @@ val mod_field: ?read_semantics: field_read_semantics -> int -> primitive
 val mod_setfield: int -> primitive
 
 val structured_constant_layout : structured_constant -> layout
+
+val primitive_result_layout : primitive -> layout

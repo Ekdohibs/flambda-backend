@@ -983,7 +983,7 @@ let rec compute_expr_layout kinds lam =
   | Lconst cst -> structured_constant_layout cst
   | Lfunction _ -> Lambda.layout_function
   | Lapply { ap_result_layout; _ } -> ap_result_layout
-  | Lsend _ -> failwith "todo"
+  | Lsend (_, _, _, _, _, _, _, layout) -> layout
   | Llet(_, kind, id, _, body) | Lmutlet(kind, id, _, body) ->
     compute_expr_layout (V.Map.add id kind kinds) body
   | Lletrec(defs, body) ->
@@ -993,7 +993,7 @@ let rec compute_expr_layout kinds lam =
     in
     compute_expr_layout kinds body
   | Lprim(p, _, _) ->
-    failwith "todo"
+    Lambda.primitive_result_layout p
   | Lswitch(_, _, _, kind) | Lstringswitch(_, _, _, _, kind)
   | Lstaticcatch(_, _, _, kind) | Ltrywith(_, _, _, kind)
   | Lifthenelse(_, _, _, kind) | Lregion (_, kind) ->
@@ -1202,12 +1202,11 @@ let rec close ({ backend; fenv; cenv ; mutable_vars; kinds; catch_env } as env) 
           fail_if_probe ~probe "Unknown function";
           (Ugeneric_apply(ufunct, uargs, List.map (compute_expr_layout kinds) args, ap_result_layout, (pos, mode), dbg), Value_unknown)
       end
-  | Lsend(kind, met, obj, args, pos, mode, loc) ->
+  | Lsend(kind, met, obj, args, pos, mode, loc, result_layout) ->
       let (umet, _) = close env met in
       let (uobj, _) = close env obj in
       let dbg = Debuginfo.from_location loc in
-      let args_layout = assert false in
-      let result_layout = assert false in
+      let args_layout = List.map (compute_expr_layout kinds) args in
       (Usend(kind, umet, uobj, close_list env args, args_layout, result_layout, (pos,mode), dbg),
        Value_unknown)
   | Llet(str, kind, id, lam, body) ->
