@@ -28,6 +28,7 @@ type const =
 type apply = {
   func : Variable.t;
   args : Variable.t list;
+  result_layout : Lambda.layout;
   kind : call_kind;
   dbg : Debuginfo.t;
   reg_close : Lambda.region_close;
@@ -50,6 +51,7 @@ type send = {
   dbg : Debuginfo.t;
   reg_close : Lambda.region_close;
   mode : Lambda.alloc_mode;
+  result_layout : Lambda.layout;
 }
 
 type project_closure = Projection.project_closure
@@ -75,7 +77,7 @@ type t =
   | String_switch of Variable.t * (string * t) list * t option
                      * Lambda.layout
   | Static_raise of Static_exception.t * Variable.t list
-  | Static_catch of Static_exception.t * Variable.t list * t * t * Lambda.layout
+  | Static_catch of Static_exception.t * ( Variable.t * Lambda.layout ) list * t * t * Lambda.layout
   | Try_with of t * Variable.t * t * Lambda.layout
   | While of t * t
   | For of for_loop
@@ -129,6 +131,7 @@ and function_declarations = {
 and function_declaration = {
   closure_origin: Closure_origin.t;
   params : Parameter.t list;
+  return_layout : Lambda.layout;
   alloc_mode : Lambda.alloc_mode;
   region : bool;
   body : t;
@@ -336,7 +339,7 @@ let rec lam ppf (flam : t) =
            | [] -> ()
            | _ ->
                List.iter
-                 (fun x -> fprintf ppf " %a" Variable.print x)
+                 (fun (x, _layout) -> fprintf ppf " %a" Variable.print x)
                  vars)
         vars
         lam lhandler
@@ -606,7 +609,7 @@ let rec variables_usage ?ignore_uses_as_callee ?ignore_uses_as_argument
       | Static_raise (_, es) ->
         List.iter free_variable es
       | Static_catch (_, vars, e1, e2, _) ->
-        List.iter bound_variable vars;
+        List.iter (fun (var, _layout) -> bound_variable var) vars;
         aux e1;
         aux e2
       | Try_with (e1, var, e2, _kind) ->
@@ -1042,6 +1045,7 @@ let update_body_of_function_declaration (func_decl: function_declaration)
       ~body : function_declaration =
   { closure_origin = func_decl.closure_origin;
     params = func_decl.params;
+    return_layout = func_decl.return_layout;
     alloc_mode = func_decl.alloc_mode;
     region = func_decl.region;
     body;
@@ -1065,6 +1069,7 @@ let rec check_param_modes mode = function
      check_param_modes m params
 
 let create_function_declaration ~params ~alloc_mode ~region ~body ~stub
+      ~(return_layout : Lambda.layout)
       ~(inline : Lambda.inline_attribute)
       ~(specialise : Lambda.specialise_attribute)
       ~(check : Lambda.check_attribute)
@@ -1093,6 +1098,7 @@ let create_function_declaration ~params ~alloc_mode ~region ~body ~stub
   check_param_modes alloc_mode params;
   { closure_origin;
     params;
+    return_layout;
     alloc_mode;
     region;
     body;
