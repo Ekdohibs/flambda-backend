@@ -537,7 +537,7 @@ let value_kind_union (k1 : Lambda.value_kind) (k2 : Lambda.value_kind) =
   if Lambda.equal_value_kind k1 k2 then k1
   else Pgenval
 
-let layout_union l1 l2 =
+let rec layout_union l1 l2 =
   match l1, l2 with
   | Pbottom, l
   | l, Pbottom -> l
@@ -546,7 +546,11 @@ let layout_union l1 l2 =
   | Punboxed_float, Punboxed_float -> Punboxed_float
   | Punboxed_int bi1, Punboxed_int bi2 ->
       if equal_boxed_integer bi1 bi2 then l1 else Ptop
-  | (Ptop | Pvalue _ | Punboxed_float | Punboxed_int _), _ ->
+  | Punboxed_product layouts1, Punboxed_product layouts2 ->
+      if List.compare_lengths layouts1 layouts2 <> 0 then Ptop
+      else Punboxed_product (List.map2 layout_union layouts1 layouts2)
+  | (Ptop | Pvalue _ | Punboxed_float | Punboxed_int _ | Punboxed_product _),
+    _ ->
       Ptop
 
 (* Error report *)
