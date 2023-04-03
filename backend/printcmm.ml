@@ -237,6 +237,8 @@ let operation d = function
   | Copaque -> "opaque"
   | Cbeginregion -> "beginregion"
   | Cendregion -> "endregion"
+  | Ctuple_field (field, _ty) ->
+    to_string "tuple_field %i" field
 
 
 let rec expr ppf = function

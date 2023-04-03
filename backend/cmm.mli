@@ -219,6 +219,7 @@ and operation =
   | Cprobe_is_enabled of { name: string }
   | Copaque (* Sys.opaque_identity *)
   | Cbeginregion | Cendregion
+  | Ctuple_field of int * machtype
 
 (* This is information used exclusively during construction of cmm terms by
    cmmgen, and thus irrelevant for selectgen and flambda2. *)
