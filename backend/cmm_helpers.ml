@@ -1060,7 +1060,7 @@ module Extended_machtype = struct
   let change_tagged_int_to_val t =
     Array.map Extended_machtype_component.change_tagged_int_to_val t
 
-  let of_layout (layout : Lambda.layout) =
+  let rec of_layout (layout : Lambda.layout) =
     match layout with
     | Ptop -> Misc.fatal_error "No Extended_machtype for layout [Ptop]"
     | Pbottom ->
@@ -1071,8 +1071,8 @@ module Extended_machtype = struct
       typ_any_int
     | Pvalue Pintval -> typ_tagged_int
     | Pvalue _ -> typ_val
-    | Punboxed_product _ ->
-      Misc.fatal_error "Punboxed_product not expected here"
+    | Punboxed_product fields ->
+      Array.concat @@ List.map of_layout fields
 end
 
 let machtype_of_layout layout =
