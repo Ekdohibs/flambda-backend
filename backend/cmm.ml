@@ -217,7 +217,7 @@ and operation =
   | Cprobe_is_enabled of { name: string }
   | Copaque
   | Cbeginregion | Cendregion
-  | Ctuple_field of int * machtype
+  | Ctuple_field of int * machtype array
 
 type kind_for_unboxing =
   | Any
