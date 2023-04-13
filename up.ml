@@ -289,3 +289,20 @@ external make_unboxed_triple_o_i_o
 
 let[@inline never] returns_unboxed_triple_of_void_int_void_not_inlined x =
   make_unboxed_triple_o_i_o (void ()) x (void ())
+
+let[@inline never] ccatch c a b =
+  let[@local] sub p =
+    let a = unboxed_pair_field_0_v_v p in
+    let b = unboxed_pair_field_1_v_v p in
+    a - b
+  in
+  if c then
+    let p1 = make_unboxed_pair_v_v a b in
+    sub p1
+  else
+    let p2 = make_unboxed_pair_v_v b a in
+    sub p2
+
+let () =
+  Printf.printf "%d\n%!" (ccatch true 1 2);
+  Printf.printf "%d\n%!" (ccatch false 1 2)
