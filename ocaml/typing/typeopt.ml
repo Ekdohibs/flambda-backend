@@ -257,6 +257,8 @@ type memo = {
 
 let produced_types : memo TTbl.t = TTbl.create 100
 
+let reset_cache () = TTbl.reset produced_types
+
 (* [value_kind] has a pre-condition that it is only called on values.  With the
    current set of sort restrictions, there are two reasons this invariant may
    be violated:

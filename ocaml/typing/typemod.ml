@@ -3914,4 +3914,5 @@ let () =
 let reset ~preserve_persistent_env =
   Env.reset_cache ~preserve_persistent_env;
   Envaux.reset_cache ~preserve_persistent_env;
+  Typeopt.reset_cache ();
   Typetexp.TyVarEnv.reset ()
