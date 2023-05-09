@@ -239,6 +239,24 @@ let value_kind_of_value_jkind jkind =
     if !Clflags.native_code && Sys.word_size = 64 then Pintval else Pgenval
   | Any | Void | Float64 | Word | Bits32 | Bits64 -> assert false
 
+module TTbl = struct
+  module M = struct
+    type t = Types.type_expr
+    let hash t = Types.get_id t
+    let equal t1 t2 = Types.get_id t1 = Types.get_id t2
+  end
+  module Tbl = Hashtbl.Make(M)
+  include Tbl
+end
+
+type memo = {
+  depth : int;
+  num_nodes_visited : int;
+  kind : Lambda.value_kind;
+}
+
+let produced_types : memo TTbl.t = TTbl.create 100
+
 (* [value_kind] has a pre-condition that it is only called on values.  With the
    current set of sort restrictions, there are two reasons this invariant may
    be violated:
@@ -298,6 +316,7 @@ let value_kind_of_value_jkind jkind =
    anything - void would be ideal, but for now it gets value.  If the safety check
    goes away, think about whether we should add defaulting elsewhere.)
 *)
+
 exception Missing_cmi_fallback
 
 let fallback_if_missing_cmi ~default f =
@@ -313,7 +332,7 @@ let fallback_if_missing_cmi ~default f =
    check the sorts of the relevant types.  Ideally this wouldn't involve
    expensive layout computation, because the sorts are stored somewhere (e.g.,
    [record_representation]).  But that's not currently the case for tuples. *)
-let rec value_kind env ~loc ~visited ~depth ~num_nodes_visited ty
+let rec value_kind' env ~loc ~visited ~depth ~num_nodes_visited ty
   : int * value_kind =
   let[@inline] cannot_proceed () =
     Numbers.Int.Set.mem (get_id ty) visited
@@ -585,6 +604,23 @@ and value_kind_record env ~loc ~visited ~depth ~num_nodes_visited
         in
         (num_nodes_visited, Pvariant { consts = []; non_consts })
     end
+
+and value_kind env ~loc ~visited ~depth ~num_nodes_visited ty
+  : int * value_kind =
+  let memo () =
+    let num_nodes_visited, kind =
+      value_kind' env ~loc ~visited ~depth ~num_nodes_visited ty
+    in
+    TTbl.replace produced_types ty { depth; kind; num_nodes_visited };
+    num_nodes_visited, kind
+  in
+  match TTbl.find_opt produced_types ty with
+  | Some { depth = prev_depth; num_nodes_visited = prev_num_nodes_visited; kind } ->
+      if prev_depth <= depth && prev_num_nodes_visited <= num_nodes_visited then
+        num_nodes_visited, kind
+      else memo ()
+  | None ->
+      memo ()
 
 let value_kind env loc ty =
   try
