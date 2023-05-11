@@ -1553,7 +1553,8 @@ let close_one_function acc ~code_id ~external_env ~by_function_slot decl
     Code.create code_id ~params_and_body
       ~free_names_of_params_and_body:(Acc.free_names acc) ~params_arity
       ~num_trailing_local_params:(Function_decl.num_trailing_local_params decl)
-      ~result_arity:return ~result_types:Unknown
+      ~result_arity:(Flambda_arity.unarize_t return)
+      ~result_types:Unknown
       ~contains_no_escaping_local_allocs:
         (Function_decl.contains_no_escaping_local_allocs decl)
       ~stub ~inline
@@ -1682,7 +1683,8 @@ let close_functions acc external_env ~current_region function_declarations =
           Code_metadata.create code_id ~params_arity
             ~num_trailing_local_params:
               (Function_decl.num_trailing_local_params decl)
-            ~result_arity ~result_types:Unknown
+            ~result_arity:(Flambda_arity.unarize_t result_arity)
+            ~result_types:Unknown
             ~contains_no_escaping_local_allocs:
               (Function_decl.contains_no_escaping_local_allocs decl)
             ~stub:(Function_decl.stub decl) ~inline:Never_inline ~check

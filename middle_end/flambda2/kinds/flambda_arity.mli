@@ -73,7 +73,7 @@ val unarize : _ t -> Flambda_kind.With_subkind.t list
 val unarize_per_parameter : _ t -> Flambda_kind.With_subkind.t list list
 
 (** Like [unarize] but returns a value of type [t]. *)
-val unarize_t : _ t -> [> `Unarized] t
+val unarize_t : _ t -> [`Unarized] t
 
 (** Given an arity and an identifier, produce a list of identifiers (with
     corresponding kinds) whose length matches [unarize t], with names derived
