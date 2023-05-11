@@ -2188,13 +2188,13 @@ type call_args_split =
   | Exact of IR.simple list
   | Partial_app of
       { provided : IR.simple list;
-        missing_arity : [`Unarized | `Complex] Flambda_arity.t
+        missing_arity : [`Complex] Flambda_arity.t
       }
   | Over_app of
       { full : IR.simple list;
-        provided_arity : [`Unarized | `Complex] Flambda_arity.t;
+        provided_arity : [`Complex] Flambda_arity.t;
         remaining : IR.simple list;
-        remaining_arity : [`Unarized | `Complex] Flambda_arity.t
+        remaining_arity : [`Complex] Flambda_arity.t
       }
 
 let close_apply acc env (apply : IR.apply) : Expr_with_acc.t =

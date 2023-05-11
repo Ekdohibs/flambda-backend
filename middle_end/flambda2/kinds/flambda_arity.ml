@@ -16,8 +16,8 @@
 
 module Component = struct
   type _ t =
-    | Singleton : Flambda_kind.With_subkind.t -> [> `Unarized] t
-    | Unboxed_product : _ t list -> [> `Complex] t
+    | Singleton : Flambda_kind.With_subkind.t -> [> ] t
+    | Unboxed_product : _ t list -> [`Complex] t
 
   let rec equal_ignoring_subkinds : type uc1 uc2. uc1 t -> uc2 t -> bool =
    fun t1 t2 ->
@@ -58,14 +58,19 @@ module Component = struct
     | Singleton kind -> [kind]
     | Unboxed_product [] -> []
     | Unboxed_product ts -> List.concat_map unarize ts
+
+  let component : [`Unarized] t -> Flambda_kind.With_subkind.t =
+   fun t ->
+    match t with
+    | Singleton kind -> kind
 end
 
 type 'uc t = 'uc Component.t list
 
 module Component_for_creation = struct
   type 'uc t = 'uc Component.t =
-    | Singleton : Flambda_kind.With_subkind.t -> [> `Unarized] t
-    | Unboxed_product : _ t list -> [> `Complex] t
+    | Singleton : Flambda_kind.With_subkind.t -> [> ] t
+    | Unboxed_product : _ t list -> [`Complex] t
 
   let rec from_lambda (layout : Lambda.layout) =
     match layout with
@@ -109,6 +114,8 @@ let is_one_param_of_kind_value : type uc. uc t -> bool =
   | [] | Component.Singleton _ :: _ | Component.Unboxed_product _ :: _ -> false
 
 let unarize t = t |> List.map Component.unarize |> List.concat
+
+let unarized_components (t : [`Unarized] t) = List.map Component.component t
 
 let unarize_per_parameter t = t |> List.map Component.unarize
 

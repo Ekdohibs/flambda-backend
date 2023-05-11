@@ -165,9 +165,7 @@ let rebuild_non_inlined_direct_full_application apply ~use_id ~exn_cont_use_id
       in
       uacc, RE.create_apply (UA.are_rebuilding_terms uacc) apply
     | Some use_id ->
-      EB.rewrite_fixed_arity_apply uacc ~use_id
-        (Flambda_arity.unarize_t result_arity)
-        apply
+      EB.rewrite_fixed_arity_apply uacc ~use_id result_arity apply
   in
   after_rebuild expr uacc
 
@@ -273,7 +271,7 @@ let simplify_direct_full_application ~simplify_expr dacc apply function_type
                          arg))
                   denv params args
               in
-              let result_arity = Flambda_arity.unarize result_arity in
+              let result_arity = Flambda_arity.unarized_components result_arity in
               let denv =
                 List.fold_left2
                   (fun denv kind result ->
@@ -584,7 +582,7 @@ let simplify_direct_partial_application ~simplify_expr dacc apply
           ~free_names_of_params_and_body:free_names ~newer_version_of:None
           ~params_arity:(Bound_parameters.arity remaining_params)
           ~num_trailing_local_params
-          ~result_arity:(Flambda_arity.unarize_t result_arity)
+          ~result_arity:result_arity
           ~result_types:Unknown ~contains_no_escaping_local_allocs ~stub:true
           ~inline:Default_inline ~poll_attribute:Default
           ~check:Check_attribute.Default_check ~is_a_functor:false ~recursive
@@ -757,7 +755,7 @@ let simplify_direct_function_call ~simplify_expr dacc apply
            the function being overapplied returns kind Value. *)
         if not
              (Flambda_arity.equal_ignoring_subkinds
-                (Flambda_arity.unarize_t result_arity)
+                result_arity
                 result_arity_of_application)
         then
           Misc.fatal_errorf
@@ -794,7 +792,7 @@ let simplify_direct_function_call ~simplify_expr dacc apply
         simplify_direct_partial_application ~simplify_expr dacc apply
           ~callee's_code_id ~callee's_code_metadata ~callee's_function_slot
           ~param_arity:params_arity ~args_arity
-          ~result_arity:(Flambda_arity.unarize_t result_arity)
+          ~result_arity:result_arity
           ~recursive ~down_to_up ~coming_from_indirect
           ~closure_alloc_mode_from_type ~current_region
           ~num_trailing_local_non_unarized_params:
@@ -818,7 +816,7 @@ let rebuild_function_call_where_callee's_type_unavailable apply call_kind
   in
   let uacc, expr =
     EB.rewrite_fixed_arity_apply uacc ~use_id
-      (Flambda_arity.unarize_t (Apply.return_arity apply))
+      (Apply.return_arity apply)
       apply
   in
   after_rebuild expr uacc
@@ -996,7 +994,7 @@ let rebuild_method_call apply ~use_id ~exn_cont_use_id uacc ~after_rebuild =
   in
   let uacc, expr =
     EB.rewrite_fixed_arity_apply uacc ~use_id
-      (Flambda_arity.unarize_t (Apply.return_arity apply))
+      (Apply.return_arity apply)
       apply
   in
   after_rebuild expr uacc
@@ -1020,7 +1018,8 @@ let simplify_method_call dacc apply ~callee_ty ~kind:_ ~obj ~arg_types
   let args_arity = Apply.args_arity apply in
   let args_arity_from_types = T.arity_of_list arg_types in
   if not
-       (Flambda_arity.equal_ignoring_subkinds args_arity_from_types args_arity)
+       (Flambda_arity.equal_ignoring_subkinds args_arity_from_types
+          (Flambda_arity.unarize_t args_arity))
   then
     Misc.fatal_errorf
       "Arity %a of [Apply] arguments doesn't match parameter arity %a of \
@@ -1058,7 +1057,7 @@ let rebuild_c_call apply ~use_id ~exn_cont_use_id ~return_arity uacc
     match use_id with
     | Some use_id ->
       EB.rewrite_fixed_arity_apply uacc ~use_id
-        (Flambda_arity.unarize_t return_arity)
+        return_arity
         apply
     | None ->
       let uacc =
@@ -1081,7 +1080,8 @@ let simplify_c_call ~simplify_expr dacc apply ~callee_ty ~arg_types ~down_to_up
       callee_kind T.print callee_ty;
   let args_arity_from_types = T.arity_of_list arg_types in
   if not
-       (Flambda_arity.equal_ignoring_subkinds args_arity_from_types args_arity)
+       (Flambda_arity.equal_ignoring_subkinds args_arity_from_types
+          (Flambda_arity.unarize_t args_arity))
   then
     Misc.fatal_errorf
       "Arity %a of [Apply] arguments doesn't match parameter arity %a of C \

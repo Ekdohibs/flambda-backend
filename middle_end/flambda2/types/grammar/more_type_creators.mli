@@ -149,7 +149,7 @@ val unknown_with_subkind :
   Type_grammar.t
 
 (** For each of the kinds in an arity, create an "unknown" type. *)
-val unknown_types_from_arity : _ Flambda_arity.t -> Type_grammar.t list
+val unknown_types_from_arity : [`Unarized] Flambda_arity.t -> Type_grammar.t list
 
 (** For each of the kinds in an arity, create an "bottom" type. *)
-val bottom_types_from_arity : _ Flambda_arity.t -> Type_grammar.t list
+val bottom_types_from_arity : [`Complex] Flambda_arity.t -> Type_grammar.t list

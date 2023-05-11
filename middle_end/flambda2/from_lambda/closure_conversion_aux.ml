@@ -64,8 +64,8 @@ module IR = struct
       probe : Lambda.probe;
       mode : Lambda.alloc_mode;
       region : Ident.t;
-      args_arity : [`Unarized | `Complex] Flambda_arity.t;
-      return_arity : [`Unarized | `Complex] Flambda_arity.t
+      args_arity : [`Complex] Flambda_arity.t;
+      return_arity : [`Complex] Flambda_arity.t
     }
 
   type switch =
@@ -676,8 +676,8 @@ module Function_decls = struct
         kind : Lambda.function_kind;
         params : (Ident.t * Flambda_kind.With_subkind.t) list;
         removed_params : Ident.Set.t;
-        params_arity : [`Unarized | `Complex] Flambda_arity.t;
-        return : [`Unarized | `Complex] Flambda_arity.t;
+        params_arity : [`Complex] Flambda_arity.t;
+        return : [`Complex] Flambda_arity.t;
         return_continuation : Continuation.t;
         exn_continuation : IR.exn_continuation;
         my_region : Ident.t;

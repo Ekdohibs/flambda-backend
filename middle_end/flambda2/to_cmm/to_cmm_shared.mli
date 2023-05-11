@@ -101,4 +101,4 @@ val make_update :
 val check_arity : _ Flambda_arity.t -> _ list -> bool
 
 val extended_machtype_of_return_arity :
-  _ Flambda_arity.t -> Cmm_helpers.Extended_machtype.t
+  [`Unarized] Flambda_arity.t -> Cmm_helpers.Extended_machtype.t

@@ -176,7 +176,7 @@ let simplify_function_body context ~outer_dacc function_slot_opt
   match
     C.simplify_function_body context dacc body ~return_continuation
       ~exn_continuation
-      ~return_arity:(Code.result_arity code |> Flambda_arity.unarize_t)
+      ~return_arity:(Code.result_arity code)
       ~implicit_params:
         (Bound_parameters.create
            [ Bound_parameter.create my_closure
@@ -347,7 +347,7 @@ let simplify_function0 context ~outer_dacc function_slot_opt code_id code
         BP.create
           (Variable.create ("result" ^ string_of_int i))
           kind_with_subkind)
-      (Flambda_arity.unarize result_arity)
+      (Flambda_arity.unarized_components result_arity)
     |> Bound_parameters.create
   in
   let { params;

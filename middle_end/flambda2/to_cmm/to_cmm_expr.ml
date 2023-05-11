@@ -182,7 +182,7 @@ let translate_apply0 ~dbg_with_inlined:dbg env res apply =
     in
     let returns = Apply.returns apply in
     let wrap =
-      match Flambda_arity.unarize return_arity with
+      match Flambda_arity.unarized_components return_arity with
       (* Returned int32 values need to be sign_extended because it's not clear
          whether C code that returns an int32 returns one that is sign extended
          or not. There is no need to wrap other return arities. Note that
