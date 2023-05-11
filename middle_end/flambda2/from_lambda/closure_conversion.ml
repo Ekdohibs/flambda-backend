@@ -2228,8 +2228,17 @@ let close_apply acc env (apply : IR.apply) : Expr_with_acc.t =
         contains_no_escaping_local_allocs ) -> (
     let acc, _ = find_simples_and_arity acc env apply.args in
     let split_args =
-      let non_unarized_arity = arity in
-      let arity = Flambda_arity.unarize arity in
+      let non_unarized_arity, arity =
+        let arity =
+          if is_tupled
+          then
+            Flambda_arity.create_singletons
+              [ Flambda_kind.With_subkind.block Tag.zero
+                  (Flambda_arity.unarize arity) ]
+          else arity
+        in
+        arity, Flambda_arity.unarize arity
+      in
       let split args arity =
         let rec cut n l =
           if n <= 0
@@ -2264,11 +2273,6 @@ let close_apply acc env (apply : IR.apply) : Expr_with_acc.t =
               remaining;
               remaining_arity
             }
-      in
-      let arity =
-        if is_tupled
-        then [Flambda_kind.With_subkind.block Tag.zero arity]
-        else arity
       in
       split apply.args arity
     in
