@@ -328,7 +328,8 @@ let rec unknown_with_subkind ?(alloc_mode = Alloc_mode.For_types.unknown ())
 let bottom_with_subkind kind = bottom (Flambda_kind.With_subkind.kind kind)
 
 let unknown_types_from_arity arity =
-  List.map (unknown_with_subkind ?alloc_mode:None)
+  List.map
+    (unknown_with_subkind ?alloc_mode:None)
     (Flambda_arity.unarized_components arity)
 
 let bottom_types_from_arity arity =

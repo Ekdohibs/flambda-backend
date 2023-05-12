@@ -459,13 +459,11 @@ let is_default_arity (a : [`Unarized] Flambda_arity.t) =
 
 let complex_arity (a : [`Complex] Flambda_arity.t) : Fexpr.arity =
   (* CR mshinwell: add unboxed arities to Fexpr *)
-  Flambda_arity.unarize a
-  |> List.map kind_with_subkind
+  Flambda_arity.unarize a |> List.map kind_with_subkind
 
 let arity (a : [`Unarized] Flambda_arity.t) : Fexpr.arity =
   (* CR mshinwell: add unboxed arities to Fexpr *)
-  Flambda_arity.unarized_components a
-  |> List.map kind_with_subkind
+  Flambda_arity.unarized_components a |> List.map kind_with_subkind
 
 let arity_opt (a : [`Unarized] Flambda_arity.t) : Fexpr.arity option =
   if is_default_arity a then None else Some (arity a)

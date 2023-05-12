@@ -72,7 +72,8 @@ val unarize : [`Complex] t -> Flambda_kind.With_subkind.t list
 val unarized_components : [`Unarized] t -> Flambda_kind.With_subkind.t list
 
 (** Like [unarize] but returns one list per parameter. *)
-val unarize_per_parameter : [`Complex] t -> Flambda_kind.With_subkind.t list list
+val unarize_per_parameter :
+  [`Complex] t -> Flambda_kind.With_subkind.t list list
 
 (** Like [unarize] but returns a value of type [t]. *)
 val unarize_t : [`Complex] t -> [`Unarized] t
@@ -92,4 +93,5 @@ val from_lambda_list : Lambda.layout list -> [`Complex] t
 
 (** Remove the first portion of an arity to correspond to a partial
     application. *)
-val partially_apply : [`Complex] t -> num_non_unarized_params_provided:int -> [`Complex] t
+val partially_apply :
+  [`Complex] t -> num_non_unarized_params_provided:int -> [`Complex] t

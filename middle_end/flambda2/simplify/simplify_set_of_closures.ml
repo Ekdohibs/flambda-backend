@@ -175,8 +175,7 @@ let simplify_function_body context ~outer_dacc function_slot_opt
   assert (not (DE.at_unit_toplevel (DA.denv dacc)));
   match
     C.simplify_function_body context dacc body ~return_continuation
-      ~exn_continuation
-      ~return_arity:(Code.result_arity code)
+      ~exn_continuation ~return_arity:(Code.result_arity code)
       ~implicit_params:
         (Bound_parameters.create
            [ Bound_parameter.create my_closure

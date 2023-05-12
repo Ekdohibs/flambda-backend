@@ -60,9 +60,7 @@ module Component = struct
     | Unboxed_product ts -> List.concat_map unarize ts
 
   let component : [`Unarized] t -> Flambda_kind.With_subkind.t =
-   fun t ->
-    match t with
-    | Singleton kind -> kind
+   fun t -> match t with Singleton kind -> kind
 end
 
 type 'uc t = 'uc Component.t list

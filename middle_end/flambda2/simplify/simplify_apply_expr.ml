@@ -271,7 +271,9 @@ let simplify_direct_full_application ~simplify_expr dacc apply function_type
                          arg))
                   denv params args
               in
-              let result_arity = Flambda_arity.unarized_components result_arity in
+              let result_arity =
+                Flambda_arity.unarized_components result_arity
+              in
               let denv =
                 List.fold_left2
                   (fun denv kind result ->
@@ -581,12 +583,10 @@ let simplify_direct_partial_application ~simplify_expr dacc apply
         Code.create code_id ~params_and_body
           ~free_names_of_params_and_body:free_names ~newer_version_of:None
           ~params_arity:(Bound_parameters.arity remaining_params)
-          ~num_trailing_local_params
-          ~result_arity:result_arity
-          ~result_types:Unknown ~contains_no_escaping_local_allocs ~stub:true
-          ~inline:Default_inline ~poll_attribute:Default
-          ~check:Check_attribute.Default_check ~is_a_functor:false ~recursive
-          ~cost_metrics:cost_metrics_of_body
+          ~num_trailing_local_params ~result_arity ~result_types:Unknown
+          ~contains_no_escaping_local_allocs ~stub:true ~inline:Default_inline
+          ~poll_attribute:Default ~check:Check_attribute.Default_check
+          ~is_a_functor:false ~recursive ~cost_metrics:cost_metrics_of_body
           ~inlining_arguments:(DE.inlining_arguments (DA.denv dacc))
           ~dbg ~is_tupled:false
           ~is_my_closure_used:
@@ -754,8 +754,7 @@ let simplify_direct_function_call ~simplify_expr dacc apply
            present on the application expression, so all we can do is check that
            the function being overapplied returns kind Value. *)
         if not
-             (Flambda_arity.equal_ignoring_subkinds
-                result_arity
+             (Flambda_arity.equal_ignoring_subkinds result_arity
                 result_arity_of_application)
         then
           Misc.fatal_errorf
@@ -791,10 +790,9 @@ let simplify_direct_function_call ~simplify_expr dacc apply
             Apply.print apply;
         simplify_direct_partial_application ~simplify_expr dacc apply
           ~callee's_code_id ~callee's_code_metadata ~callee's_function_slot
-          ~param_arity:params_arity ~args_arity
-          ~result_arity:result_arity
-          ~recursive ~down_to_up ~coming_from_indirect
-          ~closure_alloc_mode_from_type ~current_region
+          ~param_arity:params_arity ~args_arity ~result_arity ~recursive
+          ~down_to_up ~coming_from_indirect ~closure_alloc_mode_from_type
+          ~current_region
           ~num_trailing_local_non_unarized_params:
             (Code_metadata.num_trailing_local_params callee's_code_metadata))
       else
@@ -815,9 +813,7 @@ let rebuild_function_call_where_callee's_type_unavailable apply call_kind
          Unused_because_function_unknown)
   in
   let uacc, expr =
-    EB.rewrite_fixed_arity_apply uacc ~use_id
-      (Apply.return_arity apply)
-      apply
+    EB.rewrite_fixed_arity_apply uacc ~use_id (Apply.return_arity apply) apply
   in
   after_rebuild expr uacc
 
@@ -993,9 +989,7 @@ let rebuild_method_call apply ~use_id ~exn_cont_use_id uacc ~after_rebuild =
       apply
   in
   let uacc, expr =
-    EB.rewrite_fixed_arity_apply uacc ~use_id
-      (Apply.return_arity apply)
-      apply
+    EB.rewrite_fixed_arity_apply uacc ~use_id (Apply.return_arity apply) apply
   in
   after_rebuild expr uacc
 
@@ -1056,9 +1050,7 @@ let rebuild_c_call apply ~use_id ~exn_cont_use_id ~return_arity uacc
   let uacc, expr =
     match use_id with
     | Some use_id ->
-      EB.rewrite_fixed_arity_apply uacc ~use_id
-        return_arity
-        apply
+      EB.rewrite_fixed_arity_apply uacc ~use_id return_arity apply
     | None ->
       let uacc =
         UA.add_free_names uacc (Apply.free_names apply)

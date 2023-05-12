@@ -55,17 +55,14 @@ module Env : sig
   val register_unboxed_product :
     t ->
     unboxed_product:Ident.t ->
-    before_unarization:
-      [`Complex] Flambda_arity.Component_for_creation.t ->
+    before_unarization:[`Complex] Flambda_arity.Component_for_creation.t ->
     fields:(Ident.t * Flambda_kind.With_subkind.t) list ->
     t
 
   val get_unboxed_product_fields :
     t ->
     Ident.t ->
-    ([`Complex] Flambda_arity.Component_for_creation.t
-    * Ident.t list)
-    option
+    ([`Complex] Flambda_arity.Component_for_creation.t * Ident.t list) option
 
   type add_continuation_result = private
     { body_env : t;
@@ -1275,15 +1272,13 @@ type cps_continuation =
   | Non_tail of non_tail_continuation
 
 let apply_cps_cont_simple k ?(dbg = Debuginfo.none) acc env ccenv simples
-    (arity_component :
-      [`Complex] Flambda_arity.Component_for_creation.t) =
+    (arity_component : [`Complex] Flambda_arity.Component_for_creation.t) =
   match k with
   | Tail k -> apply_cont_with_extra_args acc env ccenv ~dbg k None simples
   | Non_tail k -> k acc env ccenv simples arity_component
 
 let apply_cps_cont k ?dbg acc env ccenv id
-    (arity_component :
-      [`Complex] Flambda_arity.Component_for_creation.t) =
+    (arity_component : [`Complex] Flambda_arity.Component_for_creation.t) =
   apply_cps_cont_simple k ?dbg acc env ccenv [IR.Var id] arity_component
 
 let maybe_insert_let_cont result_var_name layout k acc env ccenv body =
@@ -1917,8 +1912,7 @@ and cps_non_tail_list :
   (* Always evaluate right-to-left. *)
   cps_non_tail_list_core acc env ccenv lams
     (fun acc env ccenv ids
-         (arity :
-           [`Complex] Flambda_arity.Component_for_creation.t list) ->
+         (arity : [`Complex] Flambda_arity.Component_for_creation.t list) ->
       k acc env ccenv (List.rev ids) (List.rev arity))
     k_exn
 
