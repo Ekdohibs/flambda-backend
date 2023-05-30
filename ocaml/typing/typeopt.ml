@@ -486,7 +486,18 @@ let value_kind env loc ty =
 
 (* CR layouts v2: We'll have other layouts. Think about what to do with the
    sanity check in value_kind. *)
-let layout env loc ty = Lambda.Pvalue (value_kind env loc ty)
+let rec layout env loc ty =
+  match get_desc (scrape_ty env ty) with
+  | Tconstr(p, args, _) when Path.same p Predef.path_unboxed_pair ->
+      let layouts = List.map (layout env loc) args in
+      Punboxed_product layouts
+  | Tconstr(p, args, _) when Path.same p Predef.path_unboxed_triple ->
+      let layouts = List.map (layout env loc) args in
+      Punboxed_product layouts
+  | Tconstr(p, _, _) when Path.same p Predef.path_void ->
+      Punboxed_product []
+  | _ ->
+      Lambda.Pvalue (value_kind env loc ty)
 
 let function_return_layout env loc ty =
   match is_function_type env ty with

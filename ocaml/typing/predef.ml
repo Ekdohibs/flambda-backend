@@ -196,6 +196,55 @@ let common_initial_env add_type add_extension empty_env =
       }
     in
     add_type type_ident decl env
+  and add_type2 type_ident
+      ?(kind=fun _ -> Type_abstract)
+      ?(layout=Layout.value)
+      ~variance ~separability env =
+    let param0 = newgenvar Layout.value in
+    let param1 = newgenvar Layout.value in
+    let decl =
+      {type_params = [param0; param1];
+       type_arity = 2;
+       type_kind = kind param0;
+       type_layout = layout;
+       type_loc = Location.none;
+       type_private = Asttypes.Public;
+       type_manifest = None;
+       type_variance = [variance; variance];
+       type_separability = [separability; separability];
+       type_is_newtype = false;
+       type_expansion_scope = lowest_level;
+       type_attributes = [];
+       type_unboxed_default = false;
+       type_uid = Uid.of_predef_id type_ident;
+      }
+    in
+    add_type type_ident decl env
+  and add_type3 type_ident
+      ?(kind=fun _ -> Type_abstract)
+      ?(layout=Layout.value)
+      ~variance ~separability env =
+    let param0 = newgenvar Layout.value in
+    let param1 = newgenvar Layout.value in
+    let param2 = newgenvar Layout.value in
+    let decl =
+      {type_params = [param0; param1; param2];
+       type_arity = 3;
+       type_kind = kind param0;
+       type_layout = layout;
+       type_loc = Location.none;
+       type_private = Asttypes.Public;
+       type_manifest = None;
+       type_variance = [variance; variance; variance];
+       type_separability = [separability; separability; separability];
+       type_is_newtype = false;
+       type_expansion_scope = lowest_level;
+       type_attributes = [];
+       type_unboxed_default = false;
+       type_uid = Uid.of_predef_id type_ident;
+      }
+    in
+    add_type type_ident decl env
   in
   let add_extension id args layouts =
     add_extension id
@@ -261,6 +310,13 @@ let common_initial_env add_type add_extension empty_env =
   |> add_type ident_unit
        ~kind:(variant [cstr ident_void []] [| [| |] |])
        ~layout:(Layout.immediate ~why:Enumeration)
+  |> add_type2 ident_unboxed_pair
+    ~variance:Variance.covariant
+    ~separability:Separability.Ind
+  |> add_type3 ident_unboxed_triple
+    ~variance:Variance.covariant
+    ~separability:Separability.Ind
+  |> add_type ident_real_void
   (* Predefined exceptions - alphabetical order *)
   |> add_extension ident_assert_failure
        [newgenty (Ttuple[type_string; type_int; type_int])]
