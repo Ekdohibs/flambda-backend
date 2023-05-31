@@ -931,7 +931,7 @@ method emit_expr_aux (env:environment) exp :
         let field_slice =
           Array.sub loc_exp size_before (Array.length fields_layout.(field))
         in
-        Some field_slice
+        ret field_slice
     end
   | Cop(op, args, dbg) ->
       begin match self#emit_parts_list env args with
