@@ -41,63 +41,6 @@ module VP = Backend_var.With_provenance
 let no_phantom_lets () =
   Misc.fatal_error "Closure does not support phantom let generation"
 
-(* Auxiliaries for compiling functions *)
-
-let rec split_list n l =
-  if n <= 0 then ([], l) else begin
-    match l with
-      [] -> fatal_error "Closure.split_list"
-    | a::l -> let (l1, l2) = split_list (n-1) l in (a::l1, l2)
-  end
-
-let split_closure_fv kinds fv =
-  let (not_scanned_fv, scanned_fv) =
-    List.fold_left (fun acc id ->
-        let kind = V.Map.find id kinds in
-        let f (not_scanned_fv, scanned_fv) expr (atom : Clambda_layout.atom) =
-          match atom with
-          | Value -> not_scanned_fv, ((expr, atom) :: scanned_fv)
-          | Value_int | Unboxed_float | Unboxed_int _ ->
-            ((expr, atom) :: not_scanned_fv, scanned_fv)
-        in
-        Clambda_layout.fold_left_layout f acc (Uvar id) kind)
-      ([],[]) fv
-  in
-  (List.rev not_scanned_fv, List.rev scanned_fv)
-
-let layout_of_atom (atom : Closure_offsets.layout_atom) : Lambda.layout =
-  match atom with
-  | Value -> Pvalue Pgenval
-  | Value_int -> Pvalue Pintval
-  | Unboxed_float -> Punboxed_float
-  | Unboxed_int bi -> Punboxed_int bi
-
-let load_env_field ~base_offset
-    ~closure (parts : Clambda_layout.decomposition) : Clambda.ulambda =
-  let rec rebuild (parts : Closure_offsets.parts) : Clambda.ulambda * Clambda_primitives.layout =
-    match parts with
-    | Atom { offset = var_offset; layout } ->
-      let pos = var_offset + base_offset in
-      let layout = layout_of_atom layout in
-      Uprim (Pfield (pos, layout), [closure], Debuginfo.none), layout
-    | Product parts ->
-      let parts = Array.to_list @@ Array.map rebuild parts in
-      let parts, layouts = List.split parts in
-      Uprim (Pmake_unboxed_product layouts, parts, Debuginfo.none),
-      Punboxed_product layouts
-  in
-  let expr, _layout = rebuild parts in
-  expr
-
-let add_to_closure_env env_param base_offset fv =
-  List.fold_left (fun cenv (id, decomp) ->
-      let expr =
-        load_env_field ~base_offset ~closure:(Uvar env_param)
-          decomp
-      in
-      V.Map.add id expr cenv)
-    V.Map.empty fv
-
 (* Auxiliary for accessing globals.  We change the name of the global
    to the name of the corresponding asm symbol.  This is done here
    and no longer in Cmmgen so that approximations stored in .cmx files
@@ -1011,6 +954,63 @@ let close_approx_var { fenv; cenv } id =
 let close_var env id =
   let (ulam, _app) = close_approx_var env id in ulam
 
+(* Auxiliaries for compiling functions *)
+
+let rec split_list n l =
+  if n <= 0 then ([], l) else begin
+    match l with
+      [] -> fatal_error "Closure.split_list"
+    | a::l -> let (l1, l2) = split_list (n-1) l in (a::l1, l2)
+  end
+
+let split_closure_fv env kinds fv =
+  let (not_scanned_fv, scanned_fv) =
+    List.fold_left (fun acc id ->
+        let kind = V.Map.find id kinds in
+        let f (not_scanned_fv, scanned_fv) expr (atom : Clambda_layout.atom) =
+          match atom with
+          | Value -> not_scanned_fv, ((expr, atom) :: scanned_fv)
+          | Value_int | Unboxed_float | Unboxed_int _ ->
+            ((expr, atom) :: not_scanned_fv, scanned_fv)
+        in
+        Clambda_layout.fold_left_layout f acc (close_var env id) kind)
+      ([],[]) fv
+  in
+  (List.rev not_scanned_fv, List.rev scanned_fv)
+
+let layout_of_atom (atom : Closure_offsets.layout_atom) : Lambda.layout =
+  match atom with
+  | Value -> Pvalue Pgenval
+  | Value_int -> Pvalue Pintval
+  | Unboxed_float -> Punboxed_float
+  | Unboxed_int bi -> Punboxed_int bi
+
+let load_env_field ~base_offset
+    ~closure (parts : Clambda_layout.decomposition) : Clambda.ulambda =
+  let rec rebuild (parts : Closure_offsets.parts) : Clambda.ulambda * Clambda_primitives.layout =
+    match parts with
+    | Atom { offset = var_offset; layout } ->
+      let pos = var_offset + base_offset in
+      let layout = layout_of_atom layout in
+      Uprim (Pfield (pos, layout), [closure], Debuginfo.none), layout
+    | Product parts ->
+      let parts = Array.to_list @@ Array.map rebuild parts in
+      let parts, layouts = List.split parts in
+      Uprim (Pmake_unboxed_product layouts, parts, Debuginfo.none),
+      Punboxed_product layouts
+  in
+  let expr, _layout = rebuild parts in
+  expr
+
+let add_to_closure_env env_param base_offset fv =
+  List.fold_left (fun cenv (id, decomp) ->
+      let expr =
+        load_env_field ~base_offset ~closure:(Uvar env_param)
+          decomp
+      in
+      V.Map.add id expr cenv)
+    V.Map.empty fv
+
 let compute_expr_layout kinds lambda =
   let find_kind id = Ident.Map.find_opt id kinds in
   compute_expr_layout find_kind lambda
@@ -1527,7 +1527,6 @@ and close_functions { backend; fenv; cenv; mutable_vars; kinds; catch_env } fun_
   (* Determine the free variables of the functions *)
   let fv =
     V.Set.elements (free_variables (Lletrec(fun_defs, lambda_unit))) in
-  let not_scanned_fv, scanned_fv = split_closure_fv kinds fv in
   let free_vars = List.map (fun id -> id, V.Map.find id kinds) fv in
   (* Build the function descriptors for the functions.
      Initially all functions are assumed not to need their environment
@@ -1691,6 +1690,8 @@ and close_functions { backend; fenv; cenv; mutable_vars; kinds; catch_env } fun_
   (* Return the Uclosure node and the list of all identifiers defined,
      with offsets and approximations. *)
   let (clos, infos) = List.split clos_info_list in
+  let env = { backend; cenv; fenv; mutable_vars; kinds; catch_env } in
+  let not_scanned_fv, scanned_fv = split_closure_fv env kinds fv in
   let not_scanned_fv, scanned_fv =
     if !useless_env then [], [] else not_scanned_fv, scanned_fv in
   (Uclosure {
