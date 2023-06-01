@@ -198,10 +198,10 @@ let common_initial_env add_type add_extension empty_env =
     add_type type_ident decl env
   and add_type2 type_ident
       ?(kind=fun _ -> Type_abstract)
-      ?(layout=Layout.value)
+      ?(layout=Layout.value ~why:(Primitive type_ident))
       ~variance ~separability env =
-    let param0 = newgenvar Layout.value in
-    let param1 = newgenvar Layout.value in
+    let param0 = newgenvar (Layout.value ~why:Type_argument) in
+    let param1 = newgenvar (Layout.value ~why:Type_argument) in
     let decl =
       {type_params = [param0; param1];
        type_arity = 2;
@@ -222,11 +222,11 @@ let common_initial_env add_type add_extension empty_env =
     add_type type_ident decl env
   and add_type3 type_ident
       ?(kind=fun _ -> Type_abstract)
-      ?(layout=Layout.value)
+      ?(layout=Layout.value ~why:(Primitive type_ident))
       ~variance ~separability env =
-    let param0 = newgenvar Layout.value in
-    let param1 = newgenvar Layout.value in
-    let param2 = newgenvar Layout.value in
+    let param0 = newgenvar (Layout.value ~why:Type_argument) in
+    let param1 = newgenvar (Layout.value ~why:Type_argument) in
+    let param2 = newgenvar (Layout.value ~why:Type_argument) in
     let decl =
       {type_params = [param0; param1; param2];
        type_arity = 3;
