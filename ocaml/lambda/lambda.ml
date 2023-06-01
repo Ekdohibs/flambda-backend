@@ -1424,7 +1424,7 @@ let structured_constant_layout = function
   | Const_float_array _ | Const_float_block _ -> Pvalue (Parrayval Pfloatarray)
 
 let primitive_result_layout (p : primitive) =
-  assert (Sys.backend_type = Sys.Native);
+  assert !Clflags.native_code;
   match p with
   | Popaque layout | Pobj_magic layout -> layout
   | Pbytes_to_string | Pbytes_of_string -> layout_string
