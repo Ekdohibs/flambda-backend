@@ -150,7 +150,8 @@ let get_field env layout ptr n dbg =
     | Pvalue Pintval | Punboxed_int _ -> Word_int
     | Pvalue _ -> Word_val
     | Punboxed_float -> Double
-    | Punboxed_product _ -> Misc.fatal_error "TBD"
+    | Punboxed_product _ ->
+      Misc.fatal_error "Unboxed products cannot be stored as fields for now."
     | Ptop ->
         Misc.fatal_errorf "get_field with Ptop: %a" Debuginfo.print_compact dbg
     | Pbottom ->
@@ -435,36 +436,6 @@ let rec is_unboxed_number_cmm = function
         (join_unboxed_number_kind ~strict)
         (is_unboxed_number_cmm body)
         (List.map (fun (_, _, e, _) -> is_unboxed_number_cmm e) handlers)
-
-type layout_atom =
-  | LValue
-  | Lunboxed_float
-  | Lunboxed_int of Lambda.boxed_integer
-
-let rec take_n n l =
-  if n <= 0 then []
-  else
-    match l with
-    | [] -> assert false
-    | h :: t -> h :: (take_n (n-1) t)
-
-let rec flatten_layout (layout : Lambda.layout) =
-  match layout with
-  | Ptop -> assert false
-  | Pbottom -> []
-  | Pvalue _ -> [LValue]
-  | Punboxed_float -> [Lunboxed_float]
-  | Punboxed_int b -> [Lunboxed_int b]
-  | Punboxed_product l ->
-    List.flatten (List.map flatten_layout l)
-
-let layout_machtype (atom : layout_atom) =
-  match atom with
-  | LValue -> typ_val
-  | Lunboxed_float -> typ_float
-  | Lunboxed_int _ ->
-    (* Only 64-bit architectures, so this is always [typ_int] *)
-    typ_int
 
 (* Translate an expression *)
 
