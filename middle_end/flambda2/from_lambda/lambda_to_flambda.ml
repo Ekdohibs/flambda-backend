@@ -1468,19 +1468,34 @@ let rec cps acc env ccenv (lam : L.lambda) (k : cps_continuation)
           then Recursive
           else Nonrecursive
         in
-        let params =
-          let args =
-            List.map
-              (fun (arg, kind) ->
-                arg, IR.User_visible, Flambda_kind.With_subkind.unsafe_from_lambda kind)
-              args
+        let handler_env, params =
+          let args_arity = Flambda_arity.from_lambda_list (List.map snd args) in
+          let unarized_per_arg = Flambda_arity.unarize_per_parameter args_arity in
+          let handler_env, args =
+            List.fold_left_map
+              (fun handler_env ((arg, layout), kinds) ->
+                 match kinds with
+                 | [] -> handler_env, []
+                 | [kind] -> handler_env, [arg, kind]
+                 | _ :: _ ->
+                   let fields =
+                     List.mapi
+                       (fun n kind ->
+                          let ident =
+                            Ident.create_local
+                              (Printf.sprintf "%s_unboxed%d" (Ident.unique_name arg) n)
+                          in
+                          ident, kind)
+                       kinds
+                   in
+                   let before_unarization =
+                     Flambda_arity.Component_for_creation.from_lambda layout
+                   in
+                   Env.register_unboxed_product handler_env ~unboxed_product:arg ~before_unarization ~fields, fields)
+              handler_env
+              (List.combine args unarized_per_arg)
           in
-          let extra_params =
-            List.map
-              (fun (extra_param, kind) -> extra_param, IR.User_visible, kind)
-              extra_params
-          in
-          args @ extra_params
+          handler_env, List.map (fun (arg, kind) -> arg, IR.User_visible, kind) (List.flatten args @ extra_params)
         in
         let handler acc ccenv =
           let ccenv = CCenv.set_not_at_toplevel ccenv in
