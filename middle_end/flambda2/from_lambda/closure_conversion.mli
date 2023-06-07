@@ -25,9 +25,8 @@ module Expr_with_acc = Closure_conversion_aux.Expr_with_acc
 val close_let :
   Acc.t ->
   Env.t ->
-  Ident.t ->
+  (Ident.t * Flambda_kind.With_subkind.t) list ->
   IR.user_visible ->
-  Flambda_kind.With_subkind.t ->
   IR.named ->
   body:(Acc.t -> Env.t -> Expr_with_acc.t) ->
   Expr_with_acc.t

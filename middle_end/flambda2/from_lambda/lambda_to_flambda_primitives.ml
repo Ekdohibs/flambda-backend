@@ -581,6 +581,7 @@ let bbswap bi si mode arg ~current_region : H.expr_primitive =
 (* Primitive conversion *)
 let convert_lprim ~big_endian (prim : L.primitive) (args : Simple.t list list)
     (dbg : Debuginfo.t) ~current_region : H.expr_primitive list =
+  let orig_args = args in
   let args = List.map (List.map (fun arg : H.simple_or_prim -> Simple arg)) args in
   let size_int =
     assert (Targetint.size mod 8 = 0);
@@ -594,6 +595,35 @@ let convert_lprim ~big_endian (prim : L.primitive) (args : Simple.t list list)
     let shape = convert_block_shape shape ~num_fields:(List.length args) in
     let mutability = Mutability.from_lambda mutability in
     [Variadic (Make_block (Values (tag, shape), mutability, mode), args)]
+  | Pmake_unboxed_product layouts, _ ->
+    if List.compare_lengths layouts args <> 0 then
+      Misc.fatal_errorf "Pmake_unboxed_product: expected %d arguments, got %d" (List.length layouts) (List.length args);
+    List.map (fun arg : H.expr_primitive -> Simple arg) (List.flatten orig_args)
+  | Punboxed_product_field (n, layouts), [_] ->
+    let layouts_array = Array.of_list layouts in
+    if n < 0 || n >= Array.length layouts_array
+    then Misc.fatal_errorf "Invalid field index %d for Punboxed_product_field" n;
+    let arity_component =
+      Flambda_arity.Component_for_creation.Unboxed_product
+        (List.map Flambda_arity.Component_for_creation.from_lambda layouts)
+    in
+    let field_arity_component =
+      (* N.B. The arity of the field being projected, bound to [id], may in
+         itself be an unboxed product. *)
+      layouts_array.(n) |> Flambda_arity.Component_for_creation.from_lambda
+    in
+    let field_arity = Flambda_arity.create [field_arity_component] in
+    let num_fields_prior_to_projected_fields =
+      Misc.Stdlib.List.split_at n layouts
+      |> fst
+      |> List.map Flambda_arity.Component_for_creation.from_lambda
+      |> Flambda_arity.create |> Flambda_arity.cardinal_unarized
+    in
+    let num_projected_fields = Flambda_arity.cardinal_unarized field_arity in
+    let projected_args =
+      List.hd orig_args |> Array.of_list |> (fun a -> Array.sub a num_fields_prior_to_projected_fields num_projected_fields) |> Array.to_list
+    in
+    List.map (fun arg : H.expr_primitive -> Simple arg) projected_args
   | Pmakefloatblock (mutability, mode), _ ->
     let args = List.flatten args in
     let mode = Alloc_mode.For_allocations.from_lambda mode ~current_region in
@@ -1196,6 +1226,7 @@ let convert_lprim ~big_endian (prim : L.primitive) (args : Simple.t list list)
       | Pduparray _ | Pfloatfield _ | Pcvtbint _ | Poffsetref _ | Pbswap16
       | Pbbswap _ | Pisint _ | Pint_as_pointer | Pbigarraydim _ | Pobj_dup
       | Pobj_magic _ | Punbox_float | Pbox_float _ | Punbox_int _ | Pbox_int _
+      | Punboxed_product_field _
         ),
       ([] | _ :: _ :: _ | [([] | _ :: _ :: _)]) ) ->
     Misc.fatal_errorf
@@ -1231,8 +1262,7 @@ let convert_lprim ~big_endian (prim : L.primitive) (args : Simple.t list list)
        %a (%a)"
       Printlambda.primitive prim H.print_list_of_lists_of_simple_or_prim args
   | ( ( Pignore | Psequand | Psequor | Pbytes_of_string | Pbytes_to_string
-      | Parray_of_iarray | Parray_to_iarray | Pmake_unboxed_product _
-      | Punboxed_product_field _ ),
+      | Parray_of_iarray | Parray_to_iarray),
       _ ) ->
     Misc.fatal_errorf
       "[%a] should have been removed by [Lambda_to_flambda.transform_primitive]"
