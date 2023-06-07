@@ -708,15 +708,14 @@ let rewrite_fixed_arity_continuation0 uacc cont_or_apply_cont ~use_id arity :
   match UE.find_apply_cont_rewrite uenv original_cont with
   | None -> This_continuation cont
   | Some rewrite when Apply_cont_rewrite.does_nothing rewrite ->
-    (* XXX getting original_params_arity is tedious as it requires propagation
-       through Simplify_let_cont
-
-       let arity_in_rewrite = Apply_cont_rewrite.original_params_arity rewrite
-       in if not (Flambda_arity.equal_ignoring_subkinds arity arity_in_rewrite)
-       then Misc.fatal_errorf "Arity %a provided to fixed-arity-wrapper addition
-       function does not \ match arity %a in rewrite:@ %a" Flambda_arity.print
-       arity Flambda_arity.print arity_in_rewrite Apply_cont_rewrite.print
-       rewrite; *)
+    let arity_in_rewrite = Apply_cont_rewrite.original_params_arity rewrite in
+    if not (Flambda_arity.equal_ignoring_subkinds arity arity_in_rewrite)
+    then
+      Misc.fatal_errorf
+        "Arity %a provided to fixed-arity-wrapper addition\n\
+        \       function does not  match arity %a in rewrite:@ %a"
+        Flambda_arity.print arity Flambda_arity.print arity_in_rewrite
+        Apply_cont_rewrite.print rewrite;
     This_continuation cont
   | Some rewrite -> (
     let new_wrapper params expr ~free_names
