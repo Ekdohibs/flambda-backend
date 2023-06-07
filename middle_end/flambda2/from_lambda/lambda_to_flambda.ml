@@ -565,10 +565,6 @@ module Acc = Closure_conversion_aux.Acc
 type primitive_transform_result =
   | Primitive of L.primitive * L.lambda list * L.scoped_location
   | Transformed of L.lambda
-  | Unboxed_binding of
-      (Ident.t * Flambda_kind.With_subkind.t) option list * Env.t
-      (** [Unboxed_binding] enables a subset of the unboxed values arriving from
-          the defining expression to be bound. *)
 
 let must_be_singleton_simple simples =
   match simples with
@@ -715,7 +711,7 @@ let switch_for_if_then_else ~cond ~ifso ~ifnot ~kind =
   in
   L.Lswitch (cond, switch, Loc_unknown, kind)
 
-let transform_primitive env id (prim : L.primitive) args loc =
+let transform_primitive env (prim : L.primitive) args loc =
   match prim, args with
   | Psequor, [arg1; arg2] ->
     let const_true = Ident.create_local "const_true" in
@@ -818,117 +814,6 @@ let transform_primitive env id (prim : L.primitive) args loc =
           "Lambda_to_flambda.transform_primitive: Pbigarrayset with unknown \
            layout and elements should only have dimensions between 1 and 3 \
            (see translprim).")
- (* | Pmake_unboxed_product layouts, args ->
-    (* CR mshinwell: should there be a case here for when args is a
-       singleton? *)
-    if List.compare_lengths layouts args <> 0
-    then
-      Misc.fatal_errorf
-        "Pmake_unboxed_product layouts (%a) don't match arguments (%a)"
-        (Format.pp_print_list ~pp_sep:Format.pp_print_space Printlambda.layout)
-        layouts
-        (Format.pp_print_list ~pp_sep:Format.pp_print_space Printlambda.lambda)
-        args;
-    let arity_component =
-      Flambda_arity.Component_for_creation.Unboxed_product
-        (List.map Flambda_arity.Component_for_creation.from_lambda layouts)
-    in
-    let arity = Flambda_arity.create [arity_component] in
-    let fields = Flambda_arity.fresh_idents_unarized ~id arity in
-    let env =
-      Env.register_unboxed_product env ~unboxed_product:id
-        ~before_unarization:arity_component ~fields
-    in
-    if unboxed_product_debug ()
-    then
-      Format.eprintf "Making unboxed product, bound to %a: num fields = %d\n%!"
-        Ident.print id (List.length fields);
-    let fields = List.map (fun ident_and_kind -> Some ident_and_kind) fields in
-    Unboxed_binding (fields, env) *)
-(*  | Punboxed_product_field (n, layouts), [_arg] ->
-    let layouts_array = Array.of_list layouts in
-    if n < 0 || n >= Array.length layouts_array
-    then Misc.fatal_errorf "Invalid field index %d for Punboxed_product_field" n;
-    let arity_component =
-      Flambda_arity.Component_for_creation.Unboxed_product
-        (List.map Flambda_arity.Component_for_creation.from_lambda layouts)
-    in
-    let arity = Flambda_arity.create [arity_component] in
-    if unboxed_product_debug ()
-    then
-      Format.eprintf
-        "Punboxed_product_field bound to %a, product %a, field %d, arity %a:\n\
-         %!"
-        Ident.print id Printlambda.lambda _arg n Flambda_arity.print arity;
-    let field_arity_component =
-      (* N.B. The arity of the field being projected, bound to [id], may in
-         itself be an unboxed product. *)
-      layouts_array.(n) |> Flambda_arity.Component_for_creation.from_lambda
-    in
-    let field_arity = Flambda_arity.create [field_arity_component] in
-    let ids_all_fields_with_kinds =
-      Flambda_arity.fresh_idents_unarized arity ~id
-    in
-    let num_fields_prior_to_projected_fields =
-      Misc.Stdlib.List.split_at n layouts
-      |> fst
-      |> List.map Flambda_arity.Component_for_creation.from_lambda
-      |> Flambda_arity.create |> Flambda_arity.cardinal_unarized
-    in
-    if unboxed_product_debug ()
-    then
-      Format.eprintf "num_fields_prior_to_projected_fields %d\n%!"
-        num_fields_prior_to_projected_fields;
-    let num_projected_fields = Flambda_arity.cardinal_unarized field_arity in
-    let ids_projected_fields =
-      Array.sub
-        (Array.of_list ids_all_fields_with_kinds)
-        num_fields_prior_to_projected_fields num_projected_fields
-      |> Array.to_list
-      (* CR mshinwell: try to keep this as an array? *)
-    in
-    let env =
-      if num_projected_fields <> 1
-      then
-        (* If the field being projected is an unboxed product, we must ensure
-           any occurrences of [id] get expanded to the individual fields, just
-           like we do in the [Pmake_unboxed_product] case above. *)
-        Env.register_unboxed_product env ~unboxed_product:id
-          ~before_unarization:field_arity_component ~fields:ids_projected_fields
-      else env
-    in
-    if unboxed_product_debug ()
-    then
-      Format.eprintf
-        "Unboxed projection: emitting binding of %d ids, num projected fields %d\n\
-         %!"
-        (List.length ids_all_fields_with_kinds)
-        (List.length ids_projected_fields);
-    let field_mask =
-      List.mapi
-        (fun cur_field (field, kind) ->
-          if cur_field < num_fields_prior_to_projected_fields
-             || cur_field
-                >= num_fields_prior_to_projected_fields + num_projected_fields
-          then None
-          else
-            match ids_projected_fields with
-            | [(_, kind)] ->
-              (* If no splitting is occurring, we must cause [id] to be bound,
-                 being the original bound variable from the enclosing [Llet]. *)
-              Some (id, kind)
-            | [] | _ :: _ ->
-              (* In all other cases we cause one of the variables representing
-                 the individual fields of the unboxed product to be bound. *)
-              Some (field, kind))
-        ids_all_fields_with_kinds
-    in
-    Unboxed_binding (field_mask, env)
-   | Punboxed_product_field _, (([] | _ :: _) as args) ->
-    Misc.fatal_errorf
-      "Punboxed_product_field only takes one argument, but found: %a"
-      (Format.pp_print_list ~pp_sep:Format.pp_print_space Printlambda.lambda)
-      args *)
   | _, _ -> Primitive (prim, args, loc)
   [@@ocaml.warning "-fragile-match"]
 
@@ -1414,7 +1299,6 @@ let rec cps acc env ccenv (lam : L.lambda) (k : cps_continuation)
     let body acc ccenv = cps acc env ccenv body k k_exn in
     let kind = (Flambda_kind.With_subkind.from_lambda_value_kind value_kind) in
     CC.close_let acc ccenv [id, kind] User_visible
-      
       (Simple (Const const)) ~body
   | Llet
       ( ((Strict | Alias | StrictOpt) as let_kind),
@@ -1424,7 +1308,7 @@ let rec cps acc env ccenv (lam : L.lambda) (k : cps_continuation)
         body ) -> (
     if unboxed_product_debug ()
     then Format.eprintf "Handling let-binding: %a\n%!" Printlambda.lambda lam;
-    match transform_primitive env id prim args loc with
+    match transform_primitive env prim args loc with
     | Primitive (prim, args, loc) ->
       (* This case avoids extraneous continuations. *)
       let exn_continuation : IR.exn_continuation option =
@@ -1461,46 +1345,6 @@ let rec cps acc env ccenv (lam : L.lambda) (k : cps_continuation)
           CC.close_let acc ccenv ids_with_kinds User_visible
             (Prim { prim; args; loc; exn_continuation; region })
             ~body)
-        k_exn
-    | Unboxed_binding (ids_with_kinds, env) ->
-      cps_non_tail_list acc env ccenv args
-        (fun acc env ccenv (args : IR.simple list list) _arity ->
-           let args = List.flatten args in
-          if unboxed_product_debug ()
-          then
-            Format.eprintf "Unboxed_binding: ids_with_kinds=(%a) args=(%a)\n%!"
-              (Format.pp_print_list ~pp_sep:Format.pp_print_space
-                 (Misc.Stdlib.Option.print (fun ppf (id, kind) ->
-                      Format.fprintf ppf "%a :: %a" Ident.print id
-                        Flambda_kind.With_subkind.print kind)))
-              ids_with_kinds
-              (Format.pp_print_list ~pp_sep:Format.pp_print_space
-                 IR.print_simple)
-              args;
-          let body acc ccenv = cps acc env ccenv body k k_exn in
-          if List.compare_lengths ids_with_kinds args <> 0
-          then
-            Misc.fatal_errorf
-              "ids_with_kinds (%a) doesn't match args (%a) for:@ %a"
-              (Format.pp_print_list ~pp_sep:Format.pp_print_space
-                 (Misc.Stdlib.Option.print (fun ppf (id, kind) ->
-                      Format.fprintf ppf "%a :: %a" Ident.print id
-                        Flambda_kind.With_subkind.print kind)))
-              ids_with_kinds
-              (Format.pp_print_list ~pp_sep:Format.pp_print_space
-                 IR.print_simple)
-              args Printlambda.lambda lam;
-          let builder =
-            List.fold_left2
-              (fun body id_and_kind_opt arg acc ccenv ->
-                match id_and_kind_opt with
-                | None -> body acc ccenv
-                | Some (id, kind) ->
-                  CC.close_let acc ccenv [id, kind] Not_user_visible (Simple arg)
-                    ~body)
-              body ids_with_kinds args
-          in
-          builder acc ccenv)
         k_exn
     | Transformed lam ->
       cps acc env ccenv (L.Llet (let_kind, layout, id, lam, body)) k k_exn)
