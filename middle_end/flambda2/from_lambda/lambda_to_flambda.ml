@@ -1263,7 +1263,7 @@ type non_tail_list_continuation =
   Acc.t ->
   Env.t ->
   CCenv.t ->
-  IR.simple list ->
+  IR.simple list list ->
   [`Complex] Flambda_arity.Component_for_creation.t list ->
   Expr_with_acc.t
 
@@ -1407,10 +1407,14 @@ let rec cps acc env ccenv (lam : L.lambda) (k : cps_continuation)
     in
     let_expr acc ccenv
   | Llet ((Strict | Alias | StrictOpt), layout, id, Lconst const, body) ->
+    let value_kind = match layout with
+      | Pvalue value_kind -> value_kind
+      | Ptop | Pbottom | Punboxed_float | Punboxed_int _ | Punboxed_product _ ->    Misc.fatal_errorf "Constant with non-value layout: %a %a" Printlambda.structured_constant const Printlambda.layout layout
+    in
     (* This case avoids extraneous continuations. *)
     let body acc ccenv = cps acc env ccenv body k k_exn in
     CC.close_let acc ccenv id User_visible
-      (Flambda_kind.With_subkind.from_lambda layout)
+      (Flambda_kind.With_subkind.from_lambda_value_kind value_kind)
       (Simple (Const const)) ~body
   | Llet
       ( ((Strict | Alias | StrictOpt) as let_kind),
@@ -1443,7 +1447,7 @@ let rec cps acc env ccenv (lam : L.lambda) (k : cps_continuation)
         k_exn
     | Unboxed_binding (ids_with_kinds, env) ->
       cps_non_tail_list acc env ccenv args
-        (fun acc env ccenv (args : IR.simple list) _arity ->
+        (fun acc env ccenv (args : IR.simple list list) _arity ->
           if unboxed_product_debug ()
           then
             Format.eprintf "Unboxed_binding: ids_with_kinds=(%a) args=(%a)\n%!"
@@ -1545,12 +1549,14 @@ let rec cps acc env ccenv (lam : L.lambda) (k : cps_continuation)
       | [_] ->
         cps_non_tail_list acc env ccenv args
           (fun acc _env ccenv args _arity ->
+             if List.compare_length_with (List.hd args) 1 <> 0 then
+               Misc.fatal_error "Lraise takes only one unarized argument";
             let exn_continuation : IR.exn_continuation =
               { exn_handler = k_exn;
                 extra_args = extra_args_for_exn_continuation env k_exn
               }
             in
-            CC.close_raise acc ccenv ~raise_kind ~arg:(List.hd args) loc
+            CC.close_raise acc ccenv ~raise_kind ~arg:(List.hd (List.hd args)) loc
               exn_continuation)
           k_exn
       | [] | _ :: _ ->
@@ -1587,7 +1593,7 @@ let rec cps acc env ccenv (lam : L.lambda) (k : cps_continuation)
             (fun var : IR.simple -> Var var)
             (Env.extra_args_for_continuation env continuation)
         in
-        compile_staticfail acc env ccenv ~continuation ~args:(args @ extra_args))
+        compile_staticfail acc env ccenv ~continuation ~args:(List.flatten args @ extra_args))
       k_exn
   | Lstaticcatch (body, (static_exn, args), handler, layout) ->
     maybe_insert_let_cont "staticcatch_result" layout k acc env ccenv
@@ -1643,7 +1649,7 @@ let rec cps acc env ccenv (lam : L.lambda) (k : cps_continuation)
                         func = meth;
                         continuation = k;
                         exn_continuation;
-                        args;
+                        args = List.flatten args;
                         loc;
                         region_close = pos;
                         inlined = Default_inlined;
@@ -1652,8 +1658,8 @@ let rec cps acc env ccenv (lam : L.lambda) (k : cps_continuation)
                         region = Env.current_region env;
                         args_arity = Flambda_arity.create args_arity;
                         return_arity =
-                          Flambda_arity.create_singletons
-                            [Flambda_kind.With_subkind.from_lambda layout]
+                          Flambda_arity.create
+                            [Flambda_arity.Component_for_creation.from_lambda layout]
                       }
                     in
                     wrap_return_continuation acc env ccenv apply))
@@ -1878,7 +1884,7 @@ and cps_tail_apply acc env ccenv ap_func ap_args ap_region_close ap_mode ap_loc
               func;
               continuation = k;
               exn_continuation;
-              args;
+              args = List.flatten args;
               loc = ap_loc;
               region_close = ap_region_close;
               inlined = ap_inlined;
@@ -1925,7 +1931,7 @@ and cps_non_tail_list_core acc env ccenv (lams : L.lambda list)
       (fun acc env ccenv simples arity ->
         cps_non_tail_list_core acc env ccenv lams
           (fun acc env ccenv simples' arity' ->
-            k acc env ccenv (List.rev simples @ simples') (arity :: arity'))
+            k acc env ccenv (simples :: simples') (arity :: arity'))
           k_exn)
       k_exn
 
@@ -2228,7 +2234,7 @@ and cps_switch acc env ccenv (switch : L.lambda_switch) ~condition_dbg
               Flambda_kind.With_subkind.naked_immediate
               (Prim
                  { prim = Pisint { variant_only = true };
-                   args = [Var scrutinee];
+                   args = [[Var scrutinee]];
                    loc = Loc_unknown;
                    exn_continuation = None;
                    region

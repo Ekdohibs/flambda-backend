@@ -71,9 +71,13 @@ module Component_for_creation = struct
     | Unboxed_product : _ t list -> [`Complex] t
 
   let rec from_lambda (layout : Lambda.layout) =
+    let module K = Flambda_kind.With_subkind in
     match layout with
-    | Pvalue _ | Punboxed_float | Punboxed_int _ ->
-      Singleton (Flambda_kind.With_subkind.from_lambda layout)
+    | Pvalue vk -> Singleton (K.from_lambda_value_kind vk)
+    | Punboxed_float -> Singleton K.naked_float
+    | Punboxed_int Pint32 -> Singleton K.naked_int32
+    | Punboxed_int Pint64 -> Singleton K.naked_int64
+    | Punboxed_int Pnativeint -> Singleton K.naked_nativeint
     | Punboxed_product layouts -> Unboxed_product (List.map from_lambda layouts)
     | Ptop ->
       Misc.fatal_error
