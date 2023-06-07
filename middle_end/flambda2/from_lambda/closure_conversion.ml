@@ -400,15 +400,24 @@ let close_c_call acc env ~loc ~ids_with_kinds
   (* We always replace the original let-binding with an Flambda expression, so
      we call [k] with [None], to get just the closure-converted body of that
      binding. *)
-  let env, let_bound_vars = List.fold_left_map (
-      fun env (id, kind) -> Env.add_var_like env id Not_user_visible kind) env ids_with_kinds in
+  let env, let_bound_vars =
+    List.fold_left_map
+      (fun env (id, kind) -> Env.add_var_like env id Not_user_visible kind)
+      env ids_with_kinds
+  in
   let cost_metrics_of_body, free_names_of_body, acc, body =
-    Acc.measure_cost_metrics acc ~f:(fun acc -> k acc (List.map (fun var -> Named.create_simple (Simple.var var)) let_bound_vars))
+    Acc.measure_cost_metrics acc ~f:(fun acc ->
+        k acc
+          (List.map
+             (fun var -> Named.create_simple (Simple.var var))
+             let_bound_vars))
   in
   let let_bound_var =
     match let_bound_vars with
     | [let_bound_var] -> let_bound_var
-    | [] | _ :: _ :: _ -> Misc.fatal_error "close_c_call: unboxed products are currently unsupported"
+    | [] | _ :: _ :: _ ->
+      Misc.fatal_error
+        "close_c_call: unboxed products are currently unsupported"
   in
   let box_return_value =
     match prim_native_repr_res with
@@ -627,8 +636,8 @@ let close_raise acc env ~raise_kind ~arg loc exn_continuation =
   (* Since raising of an exception doesn't terminate, we don't call [k]. *)
   Expr_with_acc.create_apply_cont acc apply_cont
 
-let close_primitive acc env ~ids_with_kinds named (prim : Lambda.primitive) ~args
-    loc (exn_continuation : IR.exn_continuation option) ~current_region
+let close_primitive acc env ~ids_with_kinds named (prim : Lambda.primitive)
+    ~args loc (exn_continuation : IR.exn_continuation option) ~current_region
     (k : Acc.t -> Named.t list -> Expr_with_acc.t) : Expr_with_acc.t =
   let orig_exn_continuation = exn_continuation in
   let acc, exn_continuation =
@@ -639,7 +648,9 @@ let close_primitive acc env ~ids_with_kinds named (prim : Lambda.primitive) ~arg
       acc, Some cont
   in
   let orig_args = args in
-  let acc, args = List.fold_left_map (fun acc arg -> find_simples acc env arg) acc args in
+  let acc, args =
+    List.fold_left_map (fun acc arg -> find_simples acc env arg) acc args
+  in
   let dbg = Debuginfo.from_location loc in
   match prim, args with
   | Pccall prim, args ->
@@ -677,8 +688,9 @@ let close_primitive acc env ~ids_with_kinds named (prim : Lambda.primitive) ~arg
           IR.print_named named
       | Some exn_continuation -> exn_continuation
     in
-    close_raise acc env ~raise_kind ~arg:(List.hd (List.hd orig_args)) loc
-      exn_continuation
+    close_raise acc env ~raise_kind
+      ~arg:(List.hd (List.hd orig_args))
+      loc exn_continuation
   | (Pmakeblock _ | Pmakefloatblock _ | Pmakearray _), [] ->
     (* Special case for liftable empty block or array *)
     let acc, sym =
@@ -755,8 +767,8 @@ let close_named acc env ~ids_with_kinds (named : IR.named)
     let prim : Lambda_to_flambda_primitives_helpers.expr_primitive =
       Unary (Tag_immediate, Prim (Unary (Get_tag, Simple named)))
     in
-    Lambda_to_flambda_primitives_helpers.bind_recs acc None ~register_const0 [prim]
-      Debuginfo.none k
+    Lambda_to_flambda_primitives_helpers.bind_recs acc None ~register_const0
+      [prim] Debuginfo.none k
   | Begin_region { try_region_parent } ->
     let prim : Lambda_to_flambda_primitives_helpers.expr_primitive =
       match try_region_parent with
@@ -765,17 +777,18 @@ let close_named acc env ~ids_with_kinds (named : IR.named)
         let try_region_parent = find_simple_from_id env try_region_parent in
         Unary (Begin_try_region, Simple try_region_parent)
     in
-    Lambda_to_flambda_primitives_helpers.bind_recs acc None ~register_const0 [prim]
-      Debuginfo.none k
+    Lambda_to_flambda_primitives_helpers.bind_recs acc None ~register_const0
+      [prim] Debuginfo.none k
   | End_region id ->
     let named = find_simple_from_id env id in
     let prim : Lambda_to_flambda_primitives_helpers.expr_primitive =
       Unary (End_region, Simple named)
     in
-    Lambda_to_flambda_primitives_helpers.bind_recs acc None ~register_const0 [prim]
-      Debuginfo.none k
+    Lambda_to_flambda_primitives_helpers.bind_recs acc None ~register_const0
+      [prim] Debuginfo.none k
   | Prim { prim; args; loc; exn_continuation; region } ->
-    close_primitive acc env ~ids_with_kinds named prim ~args loc exn_continuation
+    close_primitive acc env ~ids_with_kinds named prim ~args loc
+      exn_continuation
       ~current_region:(fst (Env.find_var env region))
       k
 
@@ -859,66 +872,120 @@ let close_let acc env ids user_visible defining_expr
   let rec cont ids env acc (defining_exprs : Named.t list) =
     match ids, defining_exprs with
     | [], [] -> body acc env
-    | (id, kind) :: ids, defining_expr :: defining_exprs ->
+    | (id, kind) :: ids, defining_expr :: defining_exprs -> (
       let body_env, var = Env.add_var_like env id user_visible kind in
-      let body acc env =
-        cont ids env acc defining_exprs
-      in
-      begin
-    match defining_expr with
-    | Simple simple ->
-      let body_env = Env.add_simple_to_substitute env id simple kind in
-      body acc body_env
-    | Prim ((Nullary Begin_region | Unary (End_region, _)), _)
-      when not (Flambda_features.stack_allocation_enabled ()) ->
-      (* We use [body_env] to ensure the region variables are still in the
-         environment, to avoid lookup errors, even though the [Let] won't be
-         generated. *)
-      body acc body_env
-    | _ -> (
-      let bound_pattern =
-        Bound_pattern.singleton (VB.create var Name_mode.normal)
-      in
-      let bind acc env =
-        (* CR pchambart: Not tail ! The body function is the recursion *)
-        let acc, body = body acc env in
-        Let_with_acc.create acc bound_pattern defining_expr ~body
-      in
+      let body acc env = cont ids env acc defining_exprs in
       match defining_expr with
-      | Prim
-          ( Variadic
-              (Make_block (Values (tag, _), Immutable, alloc_mode), fields),
-            _ ) -> (
-        let approxs =
-          List.map (find_value_approximation body_env) fields |> Array.of_list
+      | Simple simple ->
+        let body_env = Env.add_simple_to_substitute env id simple kind in
+        body acc body_env
+      | Prim ((Nullary Begin_region | Unary (End_region, _)), _)
+        when not (Flambda_features.stack_allocation_enabled ()) ->
+        (* We use [body_env] to ensure the region variables are still in the
+           environment, to avoid lookup errors, even though the [Let] won't be
+           generated. *)
+        body acc body_env
+      | _ -> (
+        let bound_pattern =
+          Bound_pattern.singleton (VB.create var Name_mode.normal)
         in
-        let fields_kind = classify_fields_of_block env fields alloc_mode in
-        match fields_kind with
-        | Constant static_fields ->
-          let acc, sym =
-            register_const0 acc
-              (Static_const.block tag Immutable static_fields)
-              (Ident.name id)
+        let bind acc env =
+          (* CR pchambart: Not tail ! The body function is the recursion *)
+          let acc, body = body acc env in
+          Let_with_acc.create acc bound_pattern defining_expr ~body
+        in
+        match defining_expr with
+        | Prim
+            ( Variadic
+                (Make_block (Values (tag, _), Immutable, alloc_mode), fields),
+              _ ) -> (
+          let approxs =
+            List.map (find_value_approximation body_env) fields |> Array.of_list
           in
-          let body_env =
-            Env.add_simple_to_substitute body_env id (Simple.symbol sym) kind
-          in
-          let acc =
-            Acc.add_symbol_approximation acc sym
-              (Value_approximation.Block_approximation
-                 (approxs, Alloc_mode.For_allocations.as_type alloc_mode))
-          in
-          body acc body_env
-        | Computed_static static_fields ->
-          (* This is a inconstant statically-allocated value, so cannot go
-             through [register_const0]. The definition must be placed right
-             away. *)
+          let fields_kind = classify_fields_of_block env fields alloc_mode in
+          match fields_kind with
+          | Constant static_fields ->
+            let acc, sym =
+              register_const0 acc
+                (Static_const.block tag Immutable static_fields)
+                (Ident.name id)
+            in
+            let body_env =
+              Env.add_simple_to_substitute body_env id (Simple.symbol sym) kind
+            in
+            let acc =
+              Acc.add_symbol_approximation acc sym
+                (Value_approximation.Block_approximation
+                   (approxs, Alloc_mode.For_allocations.as_type alloc_mode))
+            in
+            body acc body_env
+          | Computed_static static_fields ->
+            (* This is a inconstant statically-allocated value, so cannot go
+               through [register_const0]. The definition must be placed right
+               away. *)
+            let symbol =
+              Symbol.create
+                (Compilation_unit.get_current_exn ())
+                (Linkage_name.of_string (Variable.unique_name var))
+            in
+            let static_const = Static_const.block tag Immutable static_fields in
+            let static_consts =
+              [Static_const_or_code.create_static_const static_const]
+            in
+            let defining_expr =
+              Static_const_group.create static_consts
+              |> Named.create_static_consts
+            in
+            let body_env =
+              Env.add_simple_to_substitute body_env id (Simple.symbol symbol)
+                kind
+            in
+            let approx =
+              Value_approximation.Block_approximation
+                (approxs, Alloc_mode.For_allocations.as_type alloc_mode)
+            in
+            let acc = Acc.add_symbol_approximation acc symbol approx in
+            let acc, body = body acc body_env in
+            Let_with_acc.create acc
+              (Bound_pattern.static
+                 (Bound_static.create [Bound_static.Pattern.block_like symbol]))
+              defining_expr ~body
+          | Dynamic_block ->
+            let body_env =
+              Env.add_block_approximation body_env var approxs
+                (Alloc_mode.For_allocations.as_type alloc_mode)
+            in
+            bind acc body_env)
+        | Prim
+            ( Variadic
+                ( Make_block (Values (tag, _), Immutable_unique, _alloc_mode),
+                  [exn_name; exn_id] ),
+              _ )
+          when Tag.Scannable.equal tag Tag.Scannable.object_tag
+               && Env.at_toplevel env
+               && Flambda_features.classic_mode () ->
+          (* Special case to lift toplevel exception declarations *)
           let symbol =
             Symbol.create
               (Compilation_unit.get_current_exn ())
               (Linkage_name.of_string (Variable.unique_name var))
           in
-          let static_const = Static_const.block tag Immutable static_fields in
+          let transform_arg arg =
+            Simple.pattern_match' arg
+              ~var:(fun var ~coercion:_ ->
+                Field_of_static_block.Dynamically_computed (var, Debuginfo.none))
+              ~symbol:(fun sym ~coercion:_ -> Field_of_static_block.Symbol sym)
+              ~const:(fun const ->
+                Misc.fatal_errorf "Constant %a not expected as argument in %a"
+                  Reg_width_const.print const Named.print defining_expr)
+          in
+          (* This is an inconstant statically-allocated value, so cannot go
+             through [register_const0]. The definition must be placed right
+             away. *)
+          let static_const =
+            Static_const.block Tag.Scannable.object_tag Immutable_unique
+              [transform_arg exn_name; transform_arg exn_id]
+          in
           let static_consts =
             [Static_const_or_code.create_static_const static_const]
           in
@@ -929,96 +996,43 @@ let close_let acc env ids user_visible defining_expr
           let body_env =
             Env.add_simple_to_substitute body_env id (Simple.symbol symbol) kind
           in
-          let approx =
-            Value_approximation.Block_approximation
-              (approxs, Alloc_mode.For_allocations.as_type alloc_mode)
+          let acc =
+            Acc.add_symbol_approximation acc symbol
+              Value_approximation.Value_unknown
           in
-          let acc = Acc.add_symbol_approximation acc symbol approx in
           let acc, body = body acc body_env in
           Let_with_acc.create acc
             (Bound_pattern.static
                (Bound_static.create [Bound_static.Pattern.block_like symbol]))
             defining_expr ~body
-        | Dynamic_block ->
-          let body_env =
-            Env.add_block_approximation body_env var approxs
-              (Alloc_mode.For_allocations.as_type alloc_mode)
-          in
-          bind acc body_env)
-      | Prim
-          ( Variadic
-              ( Make_block (Values (tag, _), Immutable_unique, _alloc_mode),
-                [exn_name; exn_id] ),
-            _ )
-        when Tag.Scannable.equal tag Tag.Scannable.object_tag
-             && Env.at_toplevel env
-             && Flambda_features.classic_mode () ->
-        (* Special case to lift toplevel exception declarations *)
-        let symbol =
-          Symbol.create
-            (Compilation_unit.get_current_exn ())
-            (Linkage_name.of_string (Variable.unique_name var))
-        in
-        let transform_arg arg =
-          Simple.pattern_match' arg
-            ~var:(fun var ~coercion:_ ->
-              Field_of_static_block.Dynamically_computed (var, Debuginfo.none))
-            ~symbol:(fun sym ~coercion:_ -> Field_of_static_block.Symbol sym)
-            ~const:(fun const ->
-              Misc.fatal_errorf "Constant %a not expected as argument in %a"
-                Reg_width_const.print const Named.print defining_expr)
-        in
-        (* This is an inconstant statically-allocated value, so cannot go
-           through [register_const0]. The definition must be placed right
-           away. *)
-        let static_const =
-          Static_const.block Tag.Scannable.object_tag Immutable_unique
-            [transform_arg exn_name; transform_arg exn_id]
-        in
-        let static_consts =
-          [Static_const_or_code.create_static_const static_const]
-        in
-        let defining_expr =
-          Static_const_group.create static_consts |> Named.create_static_consts
-        in
-        let body_env =
-          Env.add_simple_to_substitute body_env id (Simple.symbol symbol) kind
-        in
-        let acc =
-          Acc.add_symbol_approximation acc symbol
-            Value_approximation.Value_unknown
-        in
-        let acc, body = body acc body_env in
-        Let_with_acc.create acc
-          (Bound_pattern.static
-             (Bound_static.create [Bound_static.Pattern.block_like symbol]))
-          defining_expr ~body
-      | Prim (Binary (Block_load _, block, field), _) -> (
-        match simplify_block_load acc body_env ~block ~field with
-        | Unknown -> bind acc body_env
-        | Not_a_block ->
-          if Flambda_features.check_invariants ()
-          then
-            (* CR keryan: This is hidden behind invariants check because it can
-               appear on correct code using Lazy or GADT. It might warrant a
-               proper warning at some point. *)
-            Misc.fatal_errorf
-              "Unexpected approximation found when block approximation was \
-               expected in [Closure_conversion]: %a"
-              Named.print defining_expr
-          else
-            ( acc,
-              Expr.create_invalid
-                (Defining_expr_of_let (bound_pattern, defining_expr)) )
-        | Field_contents sim ->
-          let body_env = Env.add_simple_to_substitute env id sim kind in
-          body acc body_env
-        | Block_but_cannot_simplify approx ->
-          let body_env = Env.add_var_approximation body_env var approx in
-          bind acc body_env)
-      | _ -> bind acc body_env)
-    end
-    | _, _ -> Misc.fatal_errorf "CC.close_let: defining_exprs should have the same length as number of variables"
+        | Prim (Binary (Block_load _, block, field), _) -> (
+          match simplify_block_load acc body_env ~block ~field with
+          | Unknown -> bind acc body_env
+          | Not_a_block ->
+            if Flambda_features.check_invariants ()
+            then
+              (* CR keryan: This is hidden behind invariants check because it
+                 can appear on correct code using Lazy or GADT. It might warrant
+                 a proper warning at some point. *)
+              Misc.fatal_errorf
+                "Unexpected approximation found when block approximation was \
+                 expected in [Closure_conversion]: %a"
+                Named.print defining_expr
+            else
+              ( acc,
+                Expr.create_invalid
+                  (Defining_expr_of_let (bound_pattern, defining_expr)) )
+          | Field_contents sim ->
+            let body_env = Env.add_simple_to_substitute env id sim kind in
+            body acc body_env
+          | Block_but_cannot_simplify approx ->
+            let body_env = Env.add_var_approximation body_env var approx in
+            bind acc body_env)
+        | _ -> bind acc body_env))
+    | _, _ ->
+      Misc.fatal_errorf
+        "CC.close_let: defining_exprs should have the same length as number of \
+         variables"
   in
   close_named acc env ~ids_with_kinds:ids defining_expr (cont ids env)
 

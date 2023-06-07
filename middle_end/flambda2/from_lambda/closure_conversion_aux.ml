@@ -94,8 +94,9 @@ module IR = struct
     | Prim { prim; args; _ } ->
       fprintf ppf "@[<2>(%a %a)@]" Printlambda.primitive prim
         (Format.pp_print_list ~pp_sep:Format.pp_print_space (fun ppf arg ->
-           fprintf ppf "@[<2>(%a)@]"
-            (Format.pp_print_list ~pp_sep:Format.pp_print_space print_simple) arg))
+             fprintf ppf "@[<2>(%a)@]"
+               (Format.pp_print_list ~pp_sep:Format.pp_print_space print_simple)
+               arg))
         args
 end
 

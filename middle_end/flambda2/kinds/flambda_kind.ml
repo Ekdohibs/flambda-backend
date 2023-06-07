@@ -542,8 +542,8 @@ module With_subkind = struct
     | Punboxed_int Pint64 -> naked_int64
     | Punboxed_int Pnativeint -> naked_nativeint
     | Punboxed_product _ | Ptop | Pbottom ->
-      Misc.fatal_errorf "Flambda_kind.unsafe_from_lambda: cannot convert %a" Printlambda.layout layout
-
+      Misc.fatal_errorf "Flambda_kind.unsafe_from_lambda: cannot convert %a"
+        Printlambda.layout layout
 
   include Container_types.Make (struct
     type nonrec t = t

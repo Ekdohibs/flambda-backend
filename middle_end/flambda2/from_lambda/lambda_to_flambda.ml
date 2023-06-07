@@ -674,9 +674,9 @@ let compile_staticfail acc env ccenv ~(continuation : Continuation.t) ~args :
         | Try_with _ -> body acc ccenv
         | Regular region_ident ->
           CC.close_let acc ccenv
-            [Ident.create_local "unit", Flambda_kind.With_subkind.tagged_immediate]
-            Not_user_visible
-            (End_region region_ident) ~body
+            [ ( Ident.create_local "unit",
+                Flambda_kind.With_subkind.tagged_immediate ) ]
+            Not_user_visible (End_region region_ident) ~body
     in
     let no_end_region after_everything = after_everything in
     match
@@ -965,9 +965,10 @@ let restore_continuation_context acc env ccenv cont ~close_early body =
        comment in [cps] on the [Lregion] case. *)
     if close_early
     then
-      CC.close_let acc ccenv [Ident.create_local "unit", Flambda_kind.With_subkind.tagged_immediate]
-        Not_user_visible
-        (End_region region) ~body:(fun acc ccenv -> body acc ccenv cont)
+      CC.close_let acc ccenv
+        [Ident.create_local "unit", Flambda_kind.With_subkind.tagged_immediate]
+        Not_user_visible (End_region region)
+        ~body:(fun acc ccenv -> body acc ccenv cont)
     else
       let ({ continuation_closing_region; continuation_after_closing_region }
             : Env.region_closure_continuation) =
@@ -1194,8 +1195,9 @@ let name_if_not_var acc ccenv name simple kind body =
   | IR.Var id -> body id acc ccenv
   | IR.Const _ ->
     let id = Ident.create_local name in
-    CC.close_let acc ccenv [id, kind] Not_user_visible (IR.Simple simple)
-      ~body:(body id)
+    CC.close_let acc ccenv
+      [id, kind]
+      Not_user_visible (IR.Simple simple) ~body:(body id)
 
 let rec cps acc env ccenv (lam : L.lambda) (k : cps_continuation)
     (k_exn : Continuation.t) : Expr_with_acc.t =
@@ -1276,8 +1278,9 @@ let rec cps acc env ccenv (lam : L.lambda) (k : cps_continuation)
         let kind = Flambda_kind.With_subkind.unsafe_from_lambda value_kind in
         let env, new_id = Env.register_mutable_variable env id kind in
         let body acc ccenv = cps acc env ccenv body k k_exn in
-        CC.close_let acc ccenv [new_id, kind] User_visible
-          (Simple (Var temp_id)) ~body)
+        CC.close_let acc ccenv
+          [new_id, kind]
+          User_visible (Simple (Var temp_id)) ~body)
   | Llet ((Strict | Alias | StrictOpt), _, fun_id, Lfunction func, body) ->
     (* This case is here to get function names right. *)
     let bindings = cps_function_bindings env [fun_id, L.Lfunction func] in
@@ -1291,15 +1294,17 @@ let rec cps acc env ccenv (lam : L.lambda) (k : cps_continuation)
     in
     let_expr acc ccenv
   | Llet ((Strict | Alias | StrictOpt), layout, id, Lconst const, body) ->
-    let value_kind = match layout with
+    let value_kind =
+      match layout with
       | Pvalue value_kind -> value_kind
-      | Ptop | Pbottom | Punboxed_float | Punboxed_int _ | Punboxed_product _ ->    Misc.fatal_errorf "Constant with non-value layout: %a %a" Printlambda.structured_constant const Printlambda.layout layout
+      | Ptop | Pbottom | Punboxed_float | Punboxed_int _ | Punboxed_product _ ->
+        Misc.fatal_errorf "Constant with non-value layout: %a %a"
+          Printlambda.structured_constant const Printlambda.layout layout
     in
     (* This case avoids extraneous continuations. *)
     let body acc ccenv = cps acc env ccenv body k k_exn in
-    let kind = (Flambda_kind.With_subkind.from_lambda_value_kind value_kind) in
-    CC.close_let acc ccenv [id, kind] User_visible
-      (Simple (Const const)) ~body
+    let kind = Flambda_kind.With_subkind.from_lambda_value_kind value_kind in
+    CC.close_let acc ccenv [id, kind] User_visible (Simple (Const const)) ~body
   | Llet
       ( ((Strict | Alias | StrictOpt) as let_kind),
         layout,
@@ -1322,24 +1327,26 @@ let rec cps acc env ccenv (lam : L.lambda) (k : cps_continuation)
       in
       cps_non_tail_list acc env ccenv args
         (fun acc env ccenv args _arity ->
-           let env, ids_with_kinds =
-             match layout with
-             | Ptop | Pbottom -> Misc.fatal_error "Cannot bind layout [Ptop] or [Pbottom]"
-             | Pvalue _ | Punboxed_int _ | Punboxed_float -> env, [id, Flambda_kind.With_subkind.unsafe_from_lambda layout]
-             | Punboxed_product layouts ->
-           let arity_component =
-             Flambda_arity.Component_for_creation.Unboxed_product
-               (List.map Flambda_arity.Component_for_creation.from_lambda layouts)
-           in
-           let arity = Flambda_arity.create [arity_component] in
-           let fields = Flambda_arity.fresh_idents_unarized ~id arity in
-           let env =
-             Env.register_unboxed_product env ~unboxed_product:id
-               ~before_unarization:arity_component ~fields
-           in
-           env, fields
-           in
-
+          let env, ids_with_kinds =
+            match layout with
+            | Ptop | Pbottom ->
+              Misc.fatal_error "Cannot bind layout [Ptop] or [Pbottom]"
+            | Pvalue _ | Punboxed_int _ | Punboxed_float ->
+              env, [id, Flambda_kind.With_subkind.unsafe_from_lambda layout]
+            | Punboxed_product layouts ->
+              let arity_component =
+                Flambda_arity.Component_for_creation.Unboxed_product
+                  (List.map Flambda_arity.Component_for_creation.from_lambda
+                     layouts)
+              in
+              let arity = Flambda_arity.create [arity_component] in
+              let fields = Flambda_arity.fresh_idents_unarized ~id arity in
+              let env =
+                Env.register_unboxed_product env ~unboxed_product:id
+                  ~before_unarization:arity_component ~fields
+              in
+              env, fields
+          in
           let body acc ccenv = cps acc env ccenv body k k_exn in
           let region = Env.current_region env in
           CC.close_let acc ccenv ids_with_kinds User_visible
@@ -1366,14 +1373,16 @@ let rec cps acc env ccenv (lam : L.lambda) (k : cps_continuation)
         let env, new_id = Env.update_mutable_variable env being_assigned in
         let body acc ccenv =
           let body acc ccenv = cps acc env ccenv body k k_exn in
-          CC.close_let acc ccenv [id,            Flambda_kind.With_subkind.tagged_immediate] Not_user_visible
-            (Simple (Const L.const_unit)) ~body
+          CC.close_let acc ccenv
+            [id, Flambda_kind.With_subkind.tagged_immediate]
+            Not_user_visible (Simple (Const L.const_unit)) ~body
         in
         let value_kind =
           snd (Env.get_mutable_variable_with_kind env being_assigned)
         in
-        CC.close_let acc ccenv [new_id, value_kind] User_visible (Simple new_value)
-          ~body)
+        CC.close_let acc ccenv
+          [new_id, value_kind]
+          User_visible (Simple new_value) ~body)
       k_exn
   | Llet ((Strict | Alias | StrictOpt), layout, id, defining_expr, body) ->
     let_cont_nonrecursive_with_extra_params acc env ccenv ~is_exn_handler:false
@@ -1410,15 +1419,16 @@ let rec cps acc env ccenv (lam : L.lambda) (k : cps_continuation)
       | [_] ->
         cps_non_tail_list acc env ccenv args
           (fun acc _env ccenv args _arity ->
-             if List.compare_length_with (List.hd args) 1 <> 0 then
-               Misc.fatal_error "Lraise takes only one unarized argument";
+            if List.compare_length_with (List.hd args) 1 <> 0
+            then Misc.fatal_error "Lraise takes only one unarized argument";
             let exn_continuation : IR.exn_continuation =
               { exn_handler = k_exn;
                 extra_args = extra_args_for_exn_continuation env k_exn
               }
             in
-            CC.close_raise acc ccenv ~raise_kind ~arg:(List.hd (List.hd args)) loc
-              exn_continuation)
+            CC.close_raise acc ccenv ~raise_kind
+              ~arg:(List.hd (List.hd args))
+              loc exn_continuation)
           k_exn
       | [] | _ :: _ ->
         Misc.fatal_errorf "Wrong number of arguments for Lraise: %a"
@@ -1454,7 +1464,8 @@ let rec cps acc env ccenv (lam : L.lambda) (k : cps_continuation)
             (fun var : IR.simple -> Var var)
             (Env.extra_args_for_continuation env continuation)
         in
-        compile_staticfail acc env ccenv ~continuation ~args:(List.flatten args @ extra_args))
+        compile_staticfail acc env ccenv ~continuation
+          ~args:(List.flatten args @ extra_args))
       k_exn
   | Lstaticcatch (body, (static_exn, args), handler, layout) ->
     maybe_insert_let_cont "staticcatch_result" layout k acc env ccenv
@@ -1470,32 +1481,40 @@ let rec cps acc env ccenv (lam : L.lambda) (k : cps_continuation)
         in
         let handler_env, params =
           let args_arity = Flambda_arity.from_lambda_list (List.map snd args) in
-          let unarized_per_arg = Flambda_arity.unarize_per_parameter args_arity in
+          let unarized_per_arg =
+            Flambda_arity.unarize_per_parameter args_arity
+          in
           let handler_env, args =
             List.fold_left_map
               (fun handler_env ((arg, layout), kinds) ->
-                 match kinds with
-                 | [] -> handler_env, []
-                 | [kind] -> handler_env, [arg, kind]
-                 | _ :: _ ->
-                   let fields =
-                     List.mapi
-                       (fun n kind ->
-                          let ident =
-                            Ident.create_local
-                              (Printf.sprintf "%s_unboxed%d" (Ident.unique_name arg) n)
-                          in
-                          ident, kind)
-                       kinds
-                   in
-                   let before_unarization =
-                     Flambda_arity.Component_for_creation.from_lambda layout
-                   in
-                   Env.register_unboxed_product handler_env ~unboxed_product:arg ~before_unarization ~fields, fields)
+                match kinds with
+                | [] -> handler_env, []
+                | [kind] -> handler_env, [arg, kind]
+                | _ :: _ ->
+                  let fields =
+                    List.mapi
+                      (fun n kind ->
+                        let ident =
+                          Ident.create_local
+                            (Printf.sprintf "%s_unboxed%d"
+                               (Ident.unique_name arg) n)
+                        in
+                        ident, kind)
+                      kinds
+                  in
+                  let before_unarization =
+                    Flambda_arity.Component_for_creation.from_lambda layout
+                  in
+                  ( Env.register_unboxed_product handler_env
+                      ~unboxed_product:arg ~before_unarization ~fields,
+                    fields ))
               handler_env
               (List.combine args unarized_per_arg)
           in
-          handler_env, List.map (fun (arg, kind) -> arg, IR.User_visible, kind) (List.flatten args @ extra_params)
+          ( handler_env,
+            List.map
+              (fun (arg, kind) -> arg, IR.User_visible, kind)
+              (List.flatten args @ extra_params) )
         in
         let handler acc ccenv =
           let ccenv = CCenv.set_not_at_toplevel ccenv in
@@ -1535,7 +1554,8 @@ let rec cps acc env ccenv (lam : L.lambda) (k : cps_continuation)
                         args_arity = Flambda_arity.create args_arity;
                         return_arity =
                           Flambda_arity.create
-                            [Flambda_arity.Component_for_creation.from_lambda layout]
+                            [ Flambda_arity.Component_for_creation.from_lambda
+                                layout ]
                       }
                     in
                     wrap_return_continuation acc env ccenv apply))
@@ -1564,8 +1584,9 @@ let rec cps acc env ccenv (lam : L.lambda) (k : cps_continuation)
        same toplevel context, here we need to assume that all of the body could
        be behind a branch. *)
     let ccenv = CCenv.set_not_at_toplevel ccenv in
-    CC.close_let acc ccenv [region, Flambda_kind.With_subkind.region] Not_user_visible
-      
+    CC.close_let acc ccenv
+      [region, Flambda_kind.With_subkind.region]
+      Not_user_visible
       (Begin_region { try_region_parent = Some (Env.current_region env) })
       ~body:(fun acc ccenv ->
         maybe_insert_let_cont "try_with_result" kind k acc env ccenv
@@ -1595,9 +1616,11 @@ let rec cps acc env ccenv (lam : L.lambda) (k : cps_continuation)
                       (Some (IR.Pop { exn_handler = handler_continuation }))
                       [IR.Var body_result]))
               ~handler:(fun acc env ccenv ->
-                  CC.close_let acc ccenv [Ident.create_local "unit", Flambda_kind.With_subkind.tagged_immediate]
-                  Not_user_visible 
-                  (End_region region) ~body:(fun acc ccenv ->
+                CC.close_let acc ccenv
+                  [ ( Ident.create_local "unit",
+                      Flambda_kind.With_subkind.tagged_immediate ) ]
+                  Not_user_visible (End_region region)
+                  ~body:(fun acc ccenv ->
                     let env = Env.leaving_try_region env in
                     cps_tail acc env ccenv handler k k_exn))))
   | Lifthenelse (cond, ifso, ifnot, kind) ->
@@ -1635,8 +1658,9 @@ let rec cps acc env ccenv (lam : L.lambda) (k : cps_continuation)
         let _, value_kind =
           Env.get_mutable_variable_with_kind env being_assigned
         in
-        CC.close_let acc ccenv [new_id, value_kind] User_visible (Simple new_value)
-          ~body)
+        CC.close_let acc ccenv
+          [new_id, value_kind]
+          User_visible (Simple new_value) ~body)
       k_exn
   | Levent (body, _event) -> cps acc env ccenv body k k_exn
   | Lifused _ ->
@@ -1650,9 +1674,10 @@ let rec cps acc env ccenv (lam : L.lambda) (k : cps_continuation)
     cps acc env ccenv body k k_exn
   | Lexclave body ->
     let region = Env.current_region env in
-    CC.close_let acc ccenv [Ident.create_local "unit", Flambda_kind.With_subkind.tagged_immediate]
-      Not_user_visible 
-      (End_region region) ~body:(fun acc ccenv ->
+    CC.close_let acc ccenv
+      [Ident.create_local "unit", Flambda_kind.With_subkind.tagged_immediate]
+      Not_user_visible (End_region region)
+      ~body:(fun acc ccenv ->
         let env = Env.leaving_region env in
         cps acc env ccenv body k k_exn)
   | Lregion (body, layout) ->
@@ -1661,8 +1686,9 @@ let rec cps acc env ccenv (lam : L.lambda) (k : cps_continuation)
        continuation for the code after the body. *)
     let region = Ident.create_local "region" in
     let dbg = Debuginfo.none in
-    CC.close_let acc ccenv [region, Flambda_kind.With_subkind.region] Not_user_visible
-      
+    CC.close_let acc ccenv
+      [region, Flambda_kind.With_subkind.region]
+      Not_user_visible
       (Begin_region { try_region_parent = None })
       ~body:(fun acc ccenv ->
         maybe_insert_let_cont "body_return" layout k acc env ccenv
@@ -1698,9 +1724,11 @@ let rec cps acc env ccenv (lam : L.lambda) (k : cps_continuation)
                 in
                 cps_tail acc env ccenv body k k_exn)
               ~handler:(fun acc env ccenv ->
-                  CC.close_let acc ccenv [Ident.create_local "unit", Flambda_kind.With_subkind.tagged_immediate]
-                  Not_user_visible 
-                  (End_region region) ~body:(fun acc ccenv ->
+                CC.close_let acc ccenv
+                  [ ( Ident.create_local "unit",
+                      Flambda_kind.With_subkind.tagged_immediate ) ]
+                  Not_user_visible (End_region region)
+                  ~body:(fun acc ccenv ->
                     (* Both body and handler will continue at
                        [return_continuation] by default.
                        [restore_region_context] will intercept the
@@ -2083,8 +2111,9 @@ and cps_switch acc env ccenv (switch : L.lambda_switch) ~condition_dbg
           let body acc ccenv =
             CC.close_switch acc ccenv ~condition_dbg scrutinee_tag block_switch
           in
-          CC.close_let acc ccenv [scrutinee_tag, Flambda_kind.With_subkind.naked_immediate] Not_user_visible
-             (Get_tag scrutinee) ~body
+          CC.close_let acc ccenv
+            [scrutinee_tag, Flambda_kind.With_subkind.naked_immediate]
+            Not_user_visible (Get_tag scrutinee) ~body
         in
         if switch.sw_numblocks = 0
         then const_switch, wrappers
@@ -2106,8 +2135,9 @@ and cps_switch acc env ccenv (switch : L.lambda_switch) ~condition_dbg
                 isint_switch
             in
             let region = Env.current_region env in
-            CC.close_let acc ccenv [is_scrutinee_int, Flambda_kind.With_subkind.naked_immediate] Not_user_visible
-              
+            CC.close_let acc ccenv
+              [is_scrutinee_int, Flambda_kind.With_subkind.naked_immediate]
+              Not_user_visible
               (Prim
                  { prim = Pisint { variant_only = true };
                    args = [[Var scrutinee]];
