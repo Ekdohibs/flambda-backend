@@ -71,7 +71,7 @@ let closure_environment_var (ufunction:Clambda.ufunction) =
   let n = List.length ufunction.arity.params_layout in
   match ufunction.arity.function_kind with
   | Curried _ when List.length ufunction.params = n + 1 ->
-    let env_var = List.nth ufunction.params n in
+    let env_var = List.nth ufunction.params (if n = 1 then 0 else n) in
     assert (VP.name env_var = "env");
     Some env_var
   | _ ->

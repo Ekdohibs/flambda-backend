@@ -704,7 +704,7 @@ and to_clambda_set_of_closures t env
     let body, _body_layout = to_clambda t env_body function_decl.body in
     { label;
       arity = clambda_arity function_decl;
-      params = params @ [VP.create env_var];
+      params = (if List.compare_length_with params 1 = 0 then VP.create env_var :: params else  params @ [VP.create env_var]);
       body;
       dbg = function_decl.dbg;
       env = Some env_var;
@@ -771,6 +771,7 @@ and to_clambda_closed_set_of_closures t env symbol
           env, VP.create id :: params)
         function_decl.params (env, [])
     in
+    let params = if List.compare_length_with params 1 = 0 then VP.create (Ident.create_local "env") :: params else params in
     let body =
       let body, body_layout = to_clambda t env_body function_decl.body in
       if not (Lambda.compatible_layout body_layout function_decl.return_layout) then
