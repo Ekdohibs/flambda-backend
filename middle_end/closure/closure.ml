@@ -851,6 +851,12 @@ let bind_params { backend; mutable_vars; _ } loc fdesc params args funct body =
   (* Reverse parameters and arguments to preserve right-to-left
      evaluation order (PR#2910). *)
   let params, args = List.rev params, List.rev args in
+  let params =
+    match params with
+    | [param; closure] when List.compare_length_with fdesc.fun_arity.params_layout 1 = 0 ->
+      if fdesc.fun_closed then [param] else [closure; param]
+    | _ -> params
+  in
   let params, args, body =
     (* Ensure funct is evaluated after args *)
     match params with
@@ -1611,7 +1617,9 @@ and close_functions { backend; fenv; cenv; mutable_vars; kinds; catch_env } fun_
     in
     if !useless_env && occurs_var env_param ubody then raise NotClosed;
     let fun_params =
-      if !useless_env
+      if List.compare_length_with params 1 = 0 then
+        [env_param, Lambda.layout_function] @ params
+      else if !useless_env
       then params
       else params @ [env_param, Lambda.layout_function]
     in

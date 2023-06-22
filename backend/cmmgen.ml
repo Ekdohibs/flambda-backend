@@ -1568,6 +1568,8 @@ let transl_function f =
   let params_layout =
     if List.length f.params = List.length f.arity.params_layout then
       f.arity.params_layout
+    else if List.length f.arity.params_layout = 1 then
+      Lambda.layout_function :: f.arity.params_layout
     else
       f.arity.params_layout @ [Lambda.layout_function]
   in
