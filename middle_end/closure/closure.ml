@@ -1646,6 +1646,9 @@ and close_functions { backend; fenv; cenv; mutable_vars; kinds; catch_env } fun_
         0
         fun_params
     in
+    let n =
+      if List.compare_length_with params 1 = 0 && !useless_env then n - 1 else n
+    in
     let threshold =
       match inline_attribute with
       | Default_inline ->
