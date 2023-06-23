@@ -628,6 +628,7 @@ let rec create_blocks (t : t) (i : L.instruction) (block : C.basic_block)
     | Iopaque -> basic Opaque
     | Ibeginregion -> basic Begin_region
     | Iendregion -> basic End_region
+    | Igap -> basic Gap
     | Iname_for_debugger { ident; which_parameter; provenance; is_assignment }
       ->
       basic

@@ -125,6 +125,7 @@ let is_move_basic : Cfg.basic -> bool =
     | Begin_region -> false
     | End_region -> false
     | Specific _ -> false
+    | Gap -> false
     | Name_for_debugger _ -> false)
   | Reloadretaddr | Pushtrap _ | Poptrap | Prologue -> false
 

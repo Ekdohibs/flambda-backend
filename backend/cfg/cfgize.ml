@@ -225,6 +225,7 @@ let basic_or_terminator_of_operation :
   | Iprobe_is_enabled { name } -> Basic (Op (Probe_is_enabled { name }))
   | Ibeginregion -> Basic (Op Begin_region)
   | Iendregion -> Basic (Op End_region)
+  | Igap -> Basic (Op Gap)
 
 let float_test_of_float_comparison :
     Cmm.float_comparison ->
@@ -671,7 +672,7 @@ module Stack_offset_and_exn = struct
         | Load _ | Store _ | Intop _ | Intop_imm _ | Intop_atomic _ | Negf
         | Absf | Addf | Subf | Mulf | Divf | Compf _ | Floatofint | Intoffloat
         | Valueofint | Csel _ | Intofvalue | Probe_is_enabled _ | Opaque
-        | Begin_region | End_region | Specific _ | Name_for_debugger _ )
+        | Begin_region | End_region | Specific _ | Name_for_debugger _ | Gap)
     | Reloadretaddr | Prologue ->
       stack_offset, traps
 

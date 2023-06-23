@@ -271,6 +271,7 @@ let dump_op ppf = function
   | Opaque -> Format.fprintf ppf "opaque"
   | Begin_region -> Format.fprintf ppf "beginregion"
   | End_region -> Format.fprintf ppf "endregion"
+  | Gap -> Format.fprintf ppf "gap"
   | Name_for_debugger _ -> Format.fprintf ppf "name_for_debugger"
 
 let dump_basic ppf (basic : basic) =
@@ -473,6 +474,7 @@ let is_pure_operation : operation -> bool = function
   | Specific s ->
     assert (not (Arch.operation_can_raise s));
     Arch.operation_is_pure s
+  | Gap -> false (* make sure we don't duplicate it *)
   | Name_for_debugger _ -> true
 
 let is_pure_basic : basic -> bool = function
@@ -513,7 +515,7 @@ let is_noop_move instr =
       | Store _ | Intop _ | Intop_imm _ | Intop_atomic _ | Negf | Absf | Addf
       | Subf | Mulf | Divf | Compf _ | Floatofint | Intoffloat | Opaque
       | Valueofint | Intofvalue | Probe_is_enabled _ | Specific _
-      | Name_for_debugger _ | Begin_region | End_region )
+      | Name_for_debugger _ | Begin_region | End_region | Gap)
   | Reloadretaddr | Pushtrap _ | Poptrap | Prologue ->
     false
 

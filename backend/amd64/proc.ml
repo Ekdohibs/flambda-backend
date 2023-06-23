@@ -427,7 +427,7 @@ let destroyed_at_basic (basic : Cfg_intf.S.basic) =
                   | Ifloat_round _ | Ifloat_min | Ifloat_max
                   | Isextend32 | Izextend32 | Icrc32q | Ipause
                   | Iprefetch _ | Ilfence | Isfence | Imfence)
-       | Name_for_debugger _)
+       | Name_for_debugger _ | Gap)
   | Poptrap | Prologue ->
     if fp then [| rbp |] else [||]
 
