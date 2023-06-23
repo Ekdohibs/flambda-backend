@@ -143,6 +143,7 @@ let occurs_var var u =
     | Usend(_, met, obj, args, _, _, _, _) ->
         occurs met || occurs obj || List.exists occurs args
     | Uunreachable -> false
+    | Ugap -> false
     | Uregion e -> occurs e
     | Uexclave e -> occurs e
   and occurs_array a =
@@ -256,6 +257,7 @@ let lambda_smaller lam threshold =
         size := !size + 8;
         lambda_size met; lambda_size obj; lambda_list_size args
     | Uunreachable -> ()
+    | Ugap -> ()
     | Uregion e ->
         size := !size + 2;
         lambda_size e
@@ -768,6 +770,8 @@ let rec substitute loc ((backend, fpc) as st) sb rn ulam =
             List.map (substitute loc st sb rn) ul, args_layout, result_layout, pos, dbg)
   | Uunreachable ->
       Uunreachable
+  | Ugap ->
+      Ugap
   | Uregion e ->
       region (substitute loc st sb rn e)
   | Uexclave e ->
@@ -901,8 +905,7 @@ let direct_apply env fundesc ufunct uargs pos result_layout mode ~probe ~loc ~at
        | [arg] ->
          (* unary function have a different call convention where the closure is
             the first parameter/argument *)
-         (* CR gbury: replace ufunct by the cmm Gap operation (when `not ufunct_used`) *)
-         [clos; arg]
+         if clos_used then [clos; arg] else [Ugap; arg]
        | l -> if clos_used then l @ [clos] else l
      in
      if fundesc.fun_closed && is_pure ufunct then
@@ -925,10 +928,9 @@ let direct_apply env fundesc ufunct uargs pos result_layout mode ~probe ~loc ~at
            | None -> app
            | Some (v, e) -> Ulet(Immutable, layout, v, e, app))
          (if fundesc.fun_closed then
-            (* CR gbury: replace this Uconst by a *Gap* operation (in clambda) *)
             Usequence (ufunct,
                        Udirect_apply (fundesc.fun_label,
-                                      full_args (Uconst (Uconst_int 1)) false app_args,
+                                      full_args Ugap false app_args,
                                       probe, result_layout, kind, dbg))
           else
             let clos = V.create_local "clos" in
@@ -1813,6 +1815,7 @@ let collect_exported_structured_constants a =
     | Uassign (_, u) -> ulam u
     | Usend (_, u1, u2, ul, _, _, _, _) -> ulam u1; ulam u2; List.iter ulam ul
     | Uunreachable -> ()
+    | Ugap -> ()
     | Uregion u -> ulam u
     | Uexclave u -> ulam u
   in

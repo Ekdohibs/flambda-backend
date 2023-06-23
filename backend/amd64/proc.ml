@@ -370,7 +370,7 @@ let destroyed_at_oper = function
        | Iname_for_debugger _ | Iprobe _| Iprobe_is_enabled _ | Iopaque)
   | Iend | Ireturn _ | Iifthenelse (_, _, _) | Icatch (_, _, _, _)
   | Iexit _ | Iraise _
-  | Iop(Ibeginregion | Iendregion)
+  | Iop(Ibeginregion | Iendregion|Igap)
     ->
     if fp then
 (* prevent any use of the frame pointer ! *)
@@ -475,7 +475,7 @@ let safe_register_pressure = function
   | Iintop _ | Iintop_imm (_, _) | Iintop_atomic _
   | Ispecific _ | Iname_for_debugger _
   | Iprobe _ | Iprobe_is_enabled _ | Iopaque
-  | Ibeginregion | Iendregion
+  | Ibeginregion | Iendregion | Igap
     -> if fp then 10 else 11
 
 let max_register_pressure =
@@ -519,7 +519,7 @@ let max_register_pressure =
              | Ioffset_loc (_, _) | Ifloatarithmem (_, _)
              | Ibswap _ | Ifloatsqrtf _ | Isqrtf)
   | Iname_for_debugger _ | Iprobe _ | Iprobe_is_enabled _ | Iopaque
-  | Ibeginregion | Iendregion
+  | Ibeginregion | Iendregion | Igap
     -> consumes ~int:0 ~float:0
 
 (* Layout of the stack frame *)
@@ -558,7 +558,7 @@ let operation_supported = function
   | Ccmpf _
   | Craise _
   | Ccheckbound
-  | Cprobe _ | Cprobe_is_enabled _ | Copaque | Cbeginregion | Cendregion
+  | Cprobe _ | Cprobe_is_enabled _ | Copaque | Cbeginregion | Cendregion | Cgap
     -> true
 
 let trap_size_in_bytes = 16

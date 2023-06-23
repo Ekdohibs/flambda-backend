@@ -107,6 +107,7 @@ and ulambda =
       meth_kind * ulambda * ulambda * ulambda list
       * Lambda.layout list * Lambda.layout * apply_kind * Debuginfo.t
   | Uunreachable
+  | Ugap
   | Uregion of ulambda
   | Uexclave of ulambda
 

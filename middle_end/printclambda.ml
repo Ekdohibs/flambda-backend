@@ -288,6 +288,8 @@ and lam ppf = function
         form kind lam obj lam met args largs
   | Uunreachable ->
       fprintf ppf "unreachable"
+  | Ugap ->
+      fprintf ppf "gap"
   | Uregion e ->
       fprintf ppf "@[<2>(region@ %a)@]" lam e
   | Uexclave e ->

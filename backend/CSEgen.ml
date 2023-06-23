@@ -253,12 +253,13 @@ method class_of_operation op =
   | Iname_for_debugger _ -> Op_pure
   | Iprobe_is_enabled _ -> Op_other
   | Ibeginregion | Iendregion -> Op_other
+  | Igap -> Op_other
 
 (* Operations that are so cheap that it isn't worth factoring them. *)
 
 method is_cheap_operation op =
   match op with
-  | Iconst_int _ -> true
+  | Iconst_int _ | Igap -> true
   | _ -> false
 
 (* Forget all equations involving mutable memory loads.

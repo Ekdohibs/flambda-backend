@@ -237,6 +237,7 @@ let operation d = function
   | Copaque -> "opaque"
   | Cbeginregion -> "beginregion"
   | Cendregion -> "endregion"
+  | Cgap -> "gap"
 
 
 let rec expr ppf = function

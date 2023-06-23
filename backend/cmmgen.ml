@@ -808,6 +808,7 @@ let rec transl env e =
   | Uunreachable ->
       let dbg = Debuginfo.none in
       Cop(Cload (Word_int, Mutable), [Cconst_int (0, dbg)], dbg)
+  | Ugap -> Cop (Cgap, [], Debuginfo.none)
   | Uregion e ->
       region (transl env e)
   | Uexclave e ->

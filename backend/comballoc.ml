@@ -89,7 +89,7 @@ let rec combine i allocstate =
          Iintoffloat|Ivalueofint|Iintofvalue|Iopaque|Iconst_int _|Iconst_float _|
          Iconst_symbol _|Istackoffset _|Iload (_, _, _)|Istore (_, _, _)|Icompf _|
          Icsel _ |
-         Ispecific _|Iname_for_debugger _|Iprobe_is_enabled _))
+         Ispecific _|Iname_for_debugger _|Iprobe_is_enabled _|Igap))
   | Iop(Iintop(Iadd | Isub | Imul | Idiv | Imod | Iand | Ior | Ixor
               | Ilsl | Ilsr | Iasr | Ipopcnt | Imulh _
               | Iclz _ | Ictz _ | Icomp _))

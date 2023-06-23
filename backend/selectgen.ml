@@ -228,6 +228,7 @@ let oper_result_type = function
        naked pointer into the local allocation stack. *)
     typ_int
   | Cendregion -> typ_void
+  | Cgap -> typ_int
 
 (* Infer the size in bytes of the result of an expression whose evaluation
    may be deferred (cf. [emit_parts]). *)
@@ -499,7 +500,8 @@ method is_simple_expr = function
       | Ccsel _
       | Cabsf | Caddf | Csubf | Cmulf | Cdivf | Cfloatofint | Cintoffloat
       | Cvalueofint | Cintofvalue
-      | Ccmpf _ -> List.for_all self#is_simple_expr args
+      | Ccmpf _
+      | Cgap -> List.for_all self#is_simple_expr args
       end
   | Cassign _ | Cifthenelse _ | Cswitch _ | Ccatch _ | Cexit _
   | Ctrywith _ | Cregion _ | Ctail _ -> false
@@ -552,7 +554,7 @@ method effects_of exp =
       | Cclz _ | Cctz _ | Cpopcnt
       | Clsl | Clsr | Casr | Ccmpi _ | Caddv | Cadda | Ccmpa _ | Cnegf | Cabsf
       | Caddf | Csubf | Cmulf | Cdivf | Cfloatofint | Cintoffloat
-      | Cvalueofint | Cintofvalue | Ccmpf _ ->
+      | Cvalueofint | Cintofvalue | Ccmpf _ | Cgap ->
         EC.none
     in
     EC.join from_op (EC.join_list_map args self#effects_of)
@@ -695,6 +697,7 @@ method select_operation op args _dbg =
   | (Cprobe_is_enabled {name}, _) -> Iprobe_is_enabled {name}, []
   | (Cbeginregion, _) -> Ibeginregion, []
   | (Cendregion, _) -> Iendregion, args
+  | (Cgap, _) -> Igap, []
   | _ -> Misc.fatal_error "Selection.select_oper"
 
 method private select_arith_comm op = function

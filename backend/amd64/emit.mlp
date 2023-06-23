@@ -870,6 +870,7 @@ let emit_instr fallthrough i =
         cfi_adjust_cfa_offset n;
       end;
     end
+  | Lop Igap -> ()
   | Lop(Imove | Ispill | Ireload) ->
       move i.arg.(0) i.res.(0)
   | Lop(Iconst_int n) ->

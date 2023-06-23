@@ -597,9 +597,8 @@ and to_clambda_direct_apply t func args direct_func probe dbg pos mode result_la
     | [arg] ->
       (* Unary functions have a different call convention, where the closure is
          the first parameter/argument. *)
-      (* CR gbury: replace the constant by the *gap* operation *)
       if closed then
-        [Clambda.Uconst (Uconst_int 1); arg]
+        [Clambda.Ugap; arg]
       else
         let func, func_layout = subst_var env func in
         assert(Lambda.compatible_layout func_layout Lambda.layout_function);
