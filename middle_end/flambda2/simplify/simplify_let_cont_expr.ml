@@ -561,6 +561,8 @@ let rebuild_single_non_recursive_handler ~at_unit_toplevel
         else None
       in
       let removed_aliased = get_removed_aliased_params uacc cont in
+      Format.eprintf "DACC = %a@. UACC = %a@." DA.print (UA.creation_dacc uacc) UA.print uacc;
+      Format.eprintf "HANDLER = %a@." (Rebuilt_expr.print (UA.are_rebuilding_terms uacc)) handler;
       let decide_param_usage =
         decide_param_usage_non_recursive ~free_names
           ~required_names:(UA.required_names uacc) ~removed_aliased ~exn_bucket

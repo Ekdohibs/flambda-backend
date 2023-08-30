@@ -591,9 +591,23 @@ let simplify_set_of_closures0 outer_dacc context set_of_closures
               closure_type)
           denv closure_types_by_bound_name)
   in
+  let value_slots_to_keep =
+    Function_slot.Lmap.fold (fun _ code_id value_slots_to_keep ->
+        let code_or_metadata =
+          DE.find_code_exn (DA.denv dacc) code_id
+        in
+        match Code_or_metadata.view code_or_metadata with
+        | Code_present code ->
+          let free_names_of_params_and_body = Code.free_names_of_params_and_body code in
+          let value_slots = Name_occurrences.value_slots_in_normal_projections free_names_of_params_and_body in
+          Value_slot.Set.union value_slots_to_keep value_slots
+        | Metadata_only _ ->
+          Value_slot.Map.keys value_slots
+      ) all_function_decls_in_set Value_slot.Set.empty
+  in
   let set_of_closures =
     Function_declarations.create all_function_decls_in_set
-    |> Set_of_closures.create ~value_slots
+    |> Set_of_closures.create ~value_slots:(Value_slot.Map.filter (fun slot _ -> Value_slot.Set.mem slot value_slots_to_keep) value_slots)
          (Set_of_closures.alloc_mode set_of_closures)
   in
   { set_of_closures; dacc }
