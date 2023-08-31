@@ -890,6 +890,8 @@ let simplify_function_call ~simplify_expr dacc apply ~callee_ty
   (* CR-someday mshinwell: Should this be using [meet_shape], like for
      primitives? *)
   let denv = DA.denv dacc in
+  Format.eprintf "TYP = %a@." T.print callee_ty;
+  Format.eprintf "ENV = %a@." TE.print (DE.typing_env denv);
   match T.meet_single_closures_entry (DE.typing_env denv) callee_ty with
   | Known_result
       ( callee's_function_slot,
