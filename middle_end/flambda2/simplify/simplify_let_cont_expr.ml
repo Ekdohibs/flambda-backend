@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*                                 OCaml                                  *)
 (*                                                                        *)
-(*                       Pierre Chambart, OCamlPro                        *)
+(*   Guillaume Bury, Pierre Chambart and Nathanaëlle Courant, OCamlPro    *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
 (*   Copyright 2013--2020 OCamlPro SAS                                    *)
@@ -50,18 +50,20 @@ type one_recursive_handler =
     is_cold : bool
   }
 
+type non_recursive_handler =
+  { cont : Continuation.t;
+    params : Bound_parameters.t;
+    handler : Expr.t;
+    is_exn_handler : bool;
+    is_cold : bool
+  }
+
 type original_handlers =
   | Recursive of
       { invariant_params : Bound_parameters.t;
         continuation_handlers : one_recursive_handler Continuation.Map.t
       }
-  | Non_recursive of
-      { cont : Continuation.t;
-        params : Bound_parameters.t;
-        handler : Expr.t;
-        is_exn_handler : bool;
-        is_cold : bool
-      }
+  | Non_recursive of non_recursive_handler
 
 type simplify_let_cont_data =
   { body : Expr.t;
@@ -158,6 +160,224 @@ type rebuild_let_cont_data =
     cost_metrics_of_subsequent_exprs : Cost_metrics.t;
     uenv_of_subsequent_exprs : UE.t
   }
+
+(* Helpers *)
+
+let split_non_recursive_let_cont handler =
+  let cont, body =
+    Non_recursive_let_cont_handler.pattern_match handler
+      ~f:(fun cont ~body -> cont, body)
+  in
+  let cont_handler = Non_recursive_let_cont_handler.handler handler in
+  let is_exn_handler = CH.is_exn_handler cont_handler in
+  let is_cold = CH.is_cold cont_handler in
+  let params, handler =
+    CH.pattern_match cont_handler ~f:(fun params ~handler ->
+        params, handler)
+  in
+  body, { cont; params; handler; is_exn_handler; is_cold }
+
+let split_recursive_let_cont handlers =
+  let invariant_params, body, rec_handlers =
+    Recursive_let_cont_handlers.pattern_match handlers
+      ~f:(fun ~invariant_params ~body rec_handlers ->
+          invariant_params, body, rec_handlers)
+  in
+  assert (not (Continuation_handlers.contains_exn_handler rec_handlers));
+  let handlers = Continuation_handlers.to_map rec_handlers in
+  let continuation_handlers =
+    Continuation.Map.map
+      (fun handler ->
+         let is_cold = CH.is_cold handler in
+         CH.pattern_match handler ~f:(fun params ~handler ->
+             { params; handler; is_cold }))
+      handlers
+  in
+  body, invariant_params, continuation_handlers
+
+let split_let_cont let_cont : _ * original_handlers =
+  match (let_cont : Let_cont.t) with
+  | Non_recursive { handler; _ } ->
+    let body, non_rec_handler = split_non_recursive_let_cont handler in
+    body, Non_recursive non_rec_handler
+  | Recursive handlers ->
+    let body, invariant_params, continuation_handlers = split_recursive_let_cont handlers in
+    body, Recursive { invariant_params; continuation_handlers; }
+
+  (* Lifting of continuations *)
+
+module Lift = struct
+
+  exception No_lifting
+
+  type cont_params = {
+    invariant_or_normal_params : Bound_parameters.t;
+    new_params : Bound_parameters.t;
+    variant_params : Bound_parameters.t;
+  }
+
+  type t = {
+    expr : Expr.t;
+    lifted_conts : original_handlers list;
+    cont_params : cont_params Continuation.Map.t;
+  }
+
+  let decide_to_lift ~scrutinee:_ =
+    (* CR gbury: implement an actual criterion for when to lift continuations *)
+    true
+
+  let add_params_to_apply_cont cont_params vars_defined apply_cont =
+    let cont = Apply_cont.continuation apply_cont in
+    match Continuation.Map.find cont cont_params with
+    | exception Not_found -> apply_cont
+    | { invariant_or_normal_params; new_params; variant_params = _; } ->
+      let invariant_or_normal_args, variant_args =
+        Misc.Stdlib.List.map2_prefix (fun _ arg -> arg)
+          (Bound_parameters.to_list invariant_or_normal_params) (Apply_cont.args apply_cont)
+      in
+      let new_args, _ = Misc.Stdlib.List.map2_prefix (
+          fun _new_param_fresh new_param_in_expr ->
+            Bound_parameter.simple new_param_in_expr
+        ) (Bound_parameters.to_list new_params) (Bound_parameters.to_list vars_defined)
+      in
+      let args = List.append (List.append invariant_or_normal_args new_args) variant_args in
+      Apply_cont.with_continuation_and_args apply_cont cont ~args
+
+  (* TODO: take into account the added args from previous lifting (as store din the denv) *)
+  let rec shallow0 (cont_params, vars_defined) expr =
+    match Expr.descr expr with
+    | Let let_expr ->
+      let defining_expr = Let.defining_expr let_expr in
+      let bound_pattern, body = Let.pattern_match let_expr
+          ~f:(fun bound_pattern ~body -> bound_pattern, body) in
+      let bound_param_list = Bound_pattern.fold_all_bound_vars bound_pattern
+          ~init:Bound_parameters.empty ~f:(fun acc bound_var ->
+              let v = Bound_var.var bound_var in
+              let kind =
+                match defining_expr with
+                | Simple simple ->
+                  Simple.pattern_match' simple
+                    ~var:(fun _var ~coercion:_ -> assert false)
+                    ~const:(fun _const -> assert false)
+                    ~symbol:(fun _symbol ~coercion:_ -> K.With_subkind.any_value)
+                | Prim (prim, _) -> K.With_subkind.anything (P.result_kind' prim)
+                | Set_of_closures _ -> K.With_subkind.any_value
+                | Rec_info _ | Static_consts _ ->
+                  Misc.fatal_errorf "Unexpected named bound to a variable"
+              in
+              Bound_parameters.cons (Bound_parameter.create v kind) acc)
+      in
+      let vars_defined = Bound_parameters.append vars_defined bound_param_list in
+      let { cont_params; lifted_conts; expr; } = shallow0 (cont_params, vars_defined) body in
+      let expr =
+        Expr.create_let
+          (Let.create bound_pattern defining_expr ~body:expr ~free_names_of_body:Unknown)
+      in
+      { cont_params; lifted_conts; expr; }
+    | Let_cont let_cont ->
+      let body, original_handlers = split_let_cont let_cont in
+      let original_handlers, cont_params =
+        match original_handlers with
+        | Non_recursive ({ cont; params = original_params; handler; _ } as non_rec_handler) ->
+          let new_params = Bound_parameters.rename vars_defined in
+          let renaming = Bound_parameters.renaming vars_defined ~guaranteed_fresh:new_params in
+          let handler = Expr.apply_renaming handler renaming in
+          let cont_params = Continuation.Map.add cont {
+              invariant_or_normal_params = original_params; new_params; variant_params = Bound_parameters.empty;
+            } cont_params in
+          let ret : original_handlers = Non_recursive
+              { non_rec_handler with handler; params = Bound_parameters.append new_params original_params
+              } in
+          ret, cont_params
+        | Recursive _ ->
+          assert false
+      in
+      let { cont_params; lifted_conts; expr; } = shallow0 (cont_params, vars_defined) body in
+      let lifted_conts = original_handlers :: lifted_conts in
+      { cont_params; lifted_conts; expr; }
+    | Apply_cont apply_cont ->
+      let expr = Expr.create_apply_cont (add_params_to_apply_cont cont_params vars_defined apply_cont) in
+      { cont_params; lifted_conts = []; expr; }
+    | Switch switch ->
+      let scrutinee = Switch.scrutinee switch in
+      if not (decide_to_lift ~scrutinee) then raise No_lifting
+      else begin
+        let switch =
+          let arms =
+            Targetint_31_63.Map.map (add_params_to_apply_cont cont_params vars_defined)
+              (Switch.arms switch)
+          in
+          let condition_dbg = Switch.condition_dbg switch in
+          Switch.create ~condition_dbg ~scrutinee ~arms
+        in
+        let expr = Expr.create_switch switch in
+        { cont_params; lifted_conts = []; expr; }
+      end
+    | Apply apply ->
+      let dbg = Apply.dbg apply in
+      (* TODO: exn cont *)
+      let expr =
+        match Apply_expr.continuation apply with
+        | Never_returns -> Expr.create_apply apply
+        | Return cont ->
+          begin match Continuation.Map.find cont cont_params with
+            | exception Not_found -> Expr.create_apply apply
+            | { invariant_or_normal_params; new_params; variant_params; } ->
+              let wrapper_cont = Continuation.create () in
+              let wrapper_invariant_params = Bound_parameters.rename invariant_or_normal_params in
+              let wrapper_variant_params = Bound_parameters.rename variant_params in
+              let wrapper_body =
+                let new_params =
+                  Bound_parameters.create @@ fst @@ Misc.Stdlib.List.map2_prefix (
+                    fun _new_param_fresh new_param_in_expr -> new_param_in_expr
+                  ) (Bound_parameters.to_list new_params) (Bound_parameters.to_list vars_defined)
+                in
+                let args =
+                  Bound_parameters.append wrapper_invariant_params
+                    (Bound_parameters.append new_params wrapper_variant_params)
+                  |> Bound_parameters.simples
+                in
+                Expr.create_apply_cont (Apply_cont.create ~dbg cont ~args)
+              in
+              let wrapper_handler =
+                Continuation_handler.create (Bound_parameters.append wrapper_invariant_params wrapper_variant_params)
+                  ~handler:wrapper_body ~free_names_of_handler:Unknown
+                  ~is_exn_handler:false ~is_cold:false
+              in
+              let new_apply = Apply.with_continuation apply (Return wrapper_cont) in
+              Let_cont.create_non_recursive wrapper_cont wrapper_handler
+                ~body:(Expr.create_apply new_apply) ~free_names_of_body:Unknown
+          end
+      in
+      { cont_params; lifted_conts = []; expr; }
+    | Invalid _ ->
+      { cont_params; lifted_conts = []; expr; }
+
+  let compute_rewrites _ : _ Continuation.Map.t Continuation.Map.t =
+    Continuation.Map.empty
+
+  type res =
+    | Nothing_lifted
+    | Lifted of {
+        handler : original_handlers;
+        lifted : original_handlers list;
+      }
+
+  let shallow handler =
+    match (handler : original_handlers) with
+    | Recursive _ -> Nothing_lifted
+    | Non_recursive h ->
+      begin match shallow0 (Continuation.Map.empty, h.params) h.handler with
+        | exception No_lifting -> Nothing_lifted
+        | { lifted_conts = []; _ } -> Nothing_lifted
+        | { cont_params; lifted_conts; expr; } ->
+          let _ = compute_rewrites cont_params in
+          (* store these in the lifteed_conts *)
+          let handler : original_handlers = Non_recursive { h with handler = expr; } in
+          Lifted { handler; lifted = List.rev lifted_conts; }
+      end
+
+end
 
 let decide_param_usage_non_recursive ~free_names ~required_names
     ~removed_aliased ~exn_bucket param : Apply_cont_rewrite.used =
@@ -1053,7 +1273,7 @@ let simplify_handler ~simplify_expr ~is_recursive ~is_exn_handler
 
 let simplify_single_recursive_handler ~simplify_expr cont_uses_env_so_far
     ~invariant_params consts_lifted_during_body all_handlers_set denv_to_reset
-    dacc cont { params; handler; is_cold } k =
+    dacc cont ({ params; handler; is_cold } : one_recursive_handler) k =
   (* Here we perform the downwards traversal on a single handler.
 
      We also make unboxing decisions at this step, which are necessary to
@@ -1159,18 +1379,45 @@ let simplify_recursive_handlers ~rebuild_body ~invariant_params ~invariant_epa
   in
   loop
 
-let after_downwards_traversal_of_body ~simplify_expr
+let rec down_to_up_for_lifted_continuations ~denv_before_body ~simplify_expr
+    lifted_conts ~down_to_up =
+  match lifted_conts with
+  | [] -> down_to_up
+  | handlers :: other_lifted_handlers ->
+    let data : after_downwards_traversal_of_body_data =
+      { denv_before_body; prior_lifted_constants = LCS.empty; handlers; }
+    in
+    let down_to_up =
+      after_downwards_traversal_of_body ~simplify_expr data ~down_to_up
+    in
+    down_to_up_for_lifted_continuations ~denv_before_body ~simplify_expr
+      other_lifted_handlers ~down_to_up
+
+and after_downwards_traversal_of_body ~simplify_expr
     (data : after_downwards_traversal_of_body_data) ~down_to_up dacc
     ~rebuild:rebuild_body =
-  (* At this point, we have done the downwards traversal of the body. We prepare
-     to loop over all the handlers defined by the let cont. *)
+  (* At this point, we have done the downwards traversal of the body, and we have
+     a stack of lifted conts to explore *after* the current continuation.
+     We prepare to loop over all the handlers defined by the let cont, before
+     recursing over the stack of lifted continuations. *)
+  let handlers, down_to_up =
+    match Lift.shallow data.handlers with
+    | Nothing_lifted -> data.handlers, down_to_up
+    | Lifted [] -> assert false
+    | Lifted (handlers :: lifted_handlers) ->
+      let down_to_up = down_to_up_for_lifted_continuations
+          ~denv_before_body:data.denv_before_body ~simplify_expr (List.rev lifted_handlers)
+          ~down_to_up
+      in
+      handlers, down_to_up
+  in
   let body_continuation_uses_env = DA.continuation_uses_env dacc in
   let denv = data.denv_before_body in
   let consts_lifted_during_body = DA.get_lifted_constants dacc in
   let dacc =
     DA.add_to_lifted_constant_accumulator dacc data.prior_lifted_constants
   in
-  match data.handlers with
+  match handlers with
   | Non_recursive { cont; params; handler; is_exn_handler; is_cold } -> (
     match
       Continuation_uses_env.get_continuation_uses body_continuation_uses_env
@@ -1295,53 +1542,16 @@ let simplify_let_cont0 ~simplify_expr dacc (data : simplify_let_cont_data)
   in
   let body = data.body in
   let data : after_downwards_traversal_of_body_data =
-    { denv_before_body; prior_lifted_constants; handlers = data.handlers }
-  in
+    { denv_before_body; prior_lifted_constants; handlers = data.handlers; } in
   simplify_expr dacc body
-    ~down_to_up:
-      (after_downwards_traversal_of_body ~simplify_expr data ~down_to_up)
+    ~down_to_up:(after_downwards_traversal_of_body ~simplify_expr data ~down_to_up)
 
-let simplify_let_cont ~simplify_expr dacc (let_cont : Let_cont.t) ~down_to_up =
+let simplify_let_cont ~simplify_expr dacc let_cont ~down_to_up =
   (* This is the entry point to simplify a let cont expression. The only thing
      it does is to match all handlers to break the name abstraction, and then
      call [simplify_let_cont_stage1]. *)
-  let data : simplify_let_cont_data =
-    match let_cont with
-    | Non_recursive { handler; _ } ->
-      let cont, body =
-        Non_recursive_let_cont_handler.pattern_match handler
-          ~f:(fun cont ~body -> cont, body)
-      in
-      let cont_handler = Non_recursive_let_cont_handler.handler handler in
-      let is_exn_handler = CH.is_exn_handler cont_handler in
-      let is_cold = CH.is_cold cont_handler in
-      let params, handler =
-        CH.pattern_match cont_handler ~f:(fun params ~handler ->
-            params, handler)
-      in
-      { body;
-        handlers =
-          Non_recursive { cont; params; handler; is_exn_handler; is_cold }
-      }
-    | Recursive handlers ->
-      let invariant_params, body, rec_handlers =
-        Recursive_let_cont_handlers.pattern_match handlers
-          ~f:(fun ~invariant_params ~body rec_handlers ->
-            invariant_params, body, rec_handlers)
-      in
-      assert (not (Continuation_handlers.contains_exn_handler rec_handlers));
-      let handlers = Continuation_handlers.to_map rec_handlers in
-      let continuation_handlers =
-        Continuation.Map.map
-          (fun handler ->
-            let is_cold = CH.is_cold handler in
-            CH.pattern_match handler ~f:(fun params ~handler ->
-                { params; handler; is_cold }))
-          handlers
-      in
-      { body; handlers = Recursive { invariant_params; continuation_handlers } }
-  in
-  simplify_let_cont0 ~simplify_expr dacc data ~down_to_up
+  let body, handlers = split_let_cont let_cont in
+  simplify_let_cont0 ~simplify_expr dacc { body; handlers; }  ~down_to_up
 
 let simplify_as_recursive_let_cont ~simplify_expr dacc (body, handlers)
     ~down_to_up =
