@@ -1252,6 +1252,7 @@ let prepare_dacc_for_handlers dacc ~env_at_fork ~params ~is_recursive
 
 let simplify_handler ~simplify_expr ~is_recursive ~is_exn_handler
     ~invariant_params ~params cont dacc handler k =
+  let dacc = DA.map_denv ~f:(DE.with_current_continuation cont) dacc in
   let dacc = DA.with_continuation_uses_env dacc ~cont_uses_env:CUE.empty in
   let dacc =
     DA.map_flow_acc

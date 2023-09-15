@@ -39,6 +39,7 @@ val create :
   unit_toplevel_exn_continuation:Continuation.t ->
   unit_toplevel_return_continuation:Continuation.t ->
   toplevel_my_region:Variable.t ->
+  dummy_toplevel_cont:Continuation.t ->
   t
 
 val all_code : t -> Code.t Code_id.Map.t
@@ -208,3 +209,7 @@ val loopify_state : t -> Loopify_state.t
 val set_loopify_state : Loopify_state.t -> t -> t
 
 val with_code_age_relation : Code_age_relation.t -> t -> t
+
+val current_continuation : t -> Continuation.t
+
+val with_current_continuation : Continuation.t -> t -> t
