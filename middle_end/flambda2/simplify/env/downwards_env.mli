@@ -210,6 +210,6 @@ val set_loopify_state : Loopify_state.t -> t -> t
 
 val with_code_age_relation : Code_age_relation.t -> t -> t
 
-val current_continuation : t -> Continuation.t
+val continuation_stack : t -> Continuation.t list
 
-val with_current_continuation : Continuation.t -> t -> t
+val enter_continuation : Continuation.t -> t -> t

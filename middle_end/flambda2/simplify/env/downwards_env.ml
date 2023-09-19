@@ -46,7 +46,7 @@ type t =
     all_code : Code.t Code_id.Map.t;
     inlining_history_tracker : Inlining_history.Tracker.t;
     loopify_state : Loopify_state.t;
-    current_continuation : Continuation.t;
+    continuation_stack : Continuation.t list;
   }
 
 let print_debuginfo ppf dbg =
@@ -62,7 +62,7 @@ let [@ocamlformat "disable"] print ppf { round; typing_env;
                 do_not_rebuild_terms; closure_info;
                 unit_toplevel_return_continuation; all_code;
                 get_imported_code = _; inlining_history_tracker = _;
-                loopify_state; current_continuation
+                loopify_state; continuation_stack
               } =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(round@ %d)@]@ \
@@ -80,7 +80,7 @@ let [@ocamlformat "disable"] print ppf { round; typing_env;
       @[<hov 1>(closure_info@ %a)@]@ \
       @[<hov 1>(all_code@ %a)@]@ \
       @[<hov 1>(loopify_state@ %a)@]@ \
-      @[<hov 1>(current_continuation@ %a)@]\
+      @[<hov 1>(continuation_stack@ %a)@]\
       )@]"
     round
     TE.print typing_env
@@ -97,7 +97,7 @@ let [@ocamlformat "disable"] print ppf { round; typing_env;
     Closure_info.print closure_info
     (Code_id.Map.print Code.print) all_code
     Loopify_state.print loopify_state
-    Continuation.print current_continuation
+    (Format.pp_print_list ~pp_sep:Format.pp_print_space Continuation.print) continuation_stack
 
 let create ~round ~(resolver : resolver)
     ~(get_imported_names : get_imported_names)
@@ -128,10 +128,10 @@ let create ~round ~(resolver : resolver)
     inlining_history_tracker =
       Inlining_history.Tracker.empty (Compilation_unit.get_current_exn ());
     loopify_state = Loopify_state.do_not_loopify;
-    current_continuation = dummy_toplevel_cont
+    continuation_stack = [dummy_toplevel_cont]
   }
 
-let current_continuation t = t.current_continuation
+let continuation_stack t = t.continuation_stack
 
 let all_code t = t.all_code
 
@@ -191,7 +191,7 @@ let enter_set_of_closures
       all_code;
       inlining_history_tracker;
       loopify_state = _;
-      current_continuation;
+      continuation_stack = _;
     } =
   { round;
     typing_env = TE.closure_env typing_env;
@@ -210,10 +210,7 @@ let enter_set_of_closures
     all_code;
     inlining_history_tracker;
     loopify_state = Loopify_state.do_not_loopify;
-    (* CR gbury: this is slightly inexact, but the correct continuation should be
-       set when we enter the body of each function in the set of closures.
-       Alternatively, the `current_continuation` field could be an option. *)
-    current_continuation
+    continuation_stack = [];
   }
 
 let define_variable t var kind =
@@ -561,6 +558,6 @@ let with_code_age_relation code_age_relation t =
     typing_env = TE.with_code_age_relation t.typing_env code_age_relation
   }
 
-let with_current_continuation current_continuation t =
-  { t with current_continuation }
+let enter_continuation cont t =
+  { t with continuation_stack = cont :: t.continuation_stack }
 
