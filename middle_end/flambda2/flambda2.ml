@@ -158,6 +158,10 @@ let lambda_to_cmm ~ppf_dump:ppf ~prefixname ~filename:_ ~keep_symbol_tables
           Profile.record_call ~accumulate:true "simplify" (fun () ->
               Simplify.run ~cmx_loader ~round raw_flambda)
         in
+        let flambda =
+          Profile.record_call ~accumulate:true "flambda2_traverse" (fun () ->
+              Traverse.traverse_toplevel flambda)
+        in
         (if Flambda_features.inlining_report ()
         then
           let output_prefix = Printf.sprintf "%s.%d" prefixname round in
