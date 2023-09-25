@@ -25,3 +25,14 @@ let of_descr (descr : Descr.t) =
   | Naked_int64 i -> naked_int64 i
   | Naked_nativeint i -> naked_nativeint i
   | Naked_vec128 v -> naked_vec128 v
+
+let kind (t : t) =
+  let module K = Flambda_kind.With_subkind in
+  match descr t with
+  | Tagged_immediate _ -> K.tagged_immediate
+  | Naked_immediate _ -> K.naked_immediate
+  | Naked_float _ -> K.naked_float
+  | Naked_int32 _ -> K.naked_int32
+  | Naked_int64 _ -> K.naked_int64
+  | Naked_nativeint _ -> K.naked_nativeint
+  | Naked_vec128 _ -> K.naked_vec128

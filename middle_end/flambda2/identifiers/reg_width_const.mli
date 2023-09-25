@@ -21,3 +21,5 @@ include module type of struct
 end
 
 val of_descr : Descr.t -> t
+
+val kind : t -> Flambda_kind.With_subkind.t

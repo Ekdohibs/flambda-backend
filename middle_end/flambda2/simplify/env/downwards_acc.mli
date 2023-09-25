@@ -47,6 +47,7 @@ val with_continuation_uses_env : t -> cont_uses_env:Continuation_uses_env.t -> t
     continuation. This is used when turning local exceptions into jumps. *)
 val demote_exn_handler : t -> Continuation.t -> t
 
+
 val demoted_exn_handlers : t -> Continuation.Set.t
 
 val code_age_relation : t -> Code_age_relation.t
@@ -103,3 +104,8 @@ val are_rebuilding_terms : t -> Are_rebuilding_terms.t
 val slot_offsets : t -> Slot_offsets.t Code_id.Map.t
 
 val with_slot_offsets : t -> slot_offsets:Slot_offsets.t Code_id.Map.t -> t
+
+val lifted_cont_params : t -> Lifted_cont_params.t Continuation.Map.t
+
+val add_lifted_cont_params : t -> Lifted_cont_params.t Continuation.Map.t -> t
+
