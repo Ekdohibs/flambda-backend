@@ -496,6 +496,7 @@ and lfunction = private
     attr: function_attribute; (* specified with [@inline] attribute *)
     loc : scoped_location;
     mode : alloc_mode;     (* alloc mode of the closure itself *)
+    ret_mode: alloc_mode;
     region : bool;         (* false if this function may locally
                               allocate in the caller's region *)
   }
@@ -615,6 +616,7 @@ val lfunction :
   attr:function_attribute -> (* specified with [@inline] attribute *)
   loc:scoped_location ->
   mode:alloc_mode ->
+  ret_mode:alloc_mode ->
   region:bool ->
   lambda
 
