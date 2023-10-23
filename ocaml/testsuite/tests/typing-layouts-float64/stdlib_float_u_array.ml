@@ -817,3 +817,92 @@ module Test (A : S) : sig end = struct
 end
 
 module T3 = Test (Float_u_array)
+
+(* Extra tests for functions not covered above *)
+module Float_u = Stdlib__Float_u
+let () =
+  let open Stdlib__Float_u_array in
+  let check_inval f arg =
+    match f arg with
+    | _ -> assert false
+    | exception (Invalid_argument _) -> ()
+    | exception _ -> assert false
+  in
+
+  (* make_matrix *)
+  check_inval (make_matrix (-1) 1) (Float_u.of_int 1);
+  check_inval (make_matrix 1 (-1)) (Float_u.of_int 1);
+  let check_matrix a =
+    let row_len = Array.length a in
+    assert (row_len > 0);
+    let col_len = length (a.(0)) in
+    for row = 0 to (row_len - 1) do
+      assert (length (a.(row)) = col_len);
+      for col = 0 to (col_len - 1) do
+        assert Float_u.(equal (get (a.(row)) col) (of_int 1))
+      done
+    done in
+  let a = make_matrix 100 100 (Float_u.of_int 1) in
+  check_matrix a;
+  let a = make_matrix 101 100 (Float_u.of_int 1) in
+  check_matrix a;
+  let a = make_matrix 101 101 (Float_u.of_int 1) in
+  check_matrix a;
+  let a = make_matrix 100 101 (Float_u.of_int 1) in
+  check_matrix a;
+
+  (* for_all2 *)
+  let test a =
+    let r = ref 0.0 in
+    let f x y =
+      let x = Float_u.to_float x in
+      let y = Float_u.to_float y in
+      assert (x = !r);
+      assert (y = !r);
+      r := x +. 1.0;
+      true
+    in
+    assert (for_all2 f a a);
+    let f x y =
+      let x = Float_u.to_float x in
+      let y = Float_u.to_float y in
+      assert (x = 0.0); assert (y = 0.0); false in
+    if length a > 0 then assert (not (for_all2 f a a))
+
+  in
+  let a = init 777 Float_u.of_int in
+  test a;
+  let a = init 778 Float_u.of_int in
+  test a;
+  let a = init 0 Float_u.of_int in
+  test a;
+  check_inval (fun x -> for_all2 (fun _ _ -> true) (make 100 x) (make 101 x))
+    (Float_u.of_int 1);
+
+  (* exists2 *)
+  let test a =
+    let r = ref 0.0 in
+    let f x y =
+      let x = Float_u.to_float x in
+      let y = Float_u.to_float y in
+      assert (x = !r);
+      assert (y = !r);
+      r := x +. 1.0;
+      false
+    in
+    assert (not (exists2 f a a));
+    let f x y =
+      let x = Float_u.to_float x in
+      let y = Float_u.to_float y in
+      assert (x = 0.0); assert (y = 0.0); true in
+    if length a > 0 then assert (exists2 f a a)
+
+  in
+  let a = init 777 Float_u.of_int in
+  test a;
+  let a = init 778 Float_u.of_int in
+  test a;
+  let a = init 0 Float_u.of_int in
+  test a;
+  check_inval (fun x -> exists2 (fun _ _ -> true) (make 100 x) (make 101 x))
+    (Float_u.of_int 1)
