@@ -213,6 +213,19 @@ module Test (A : S) : sig end = struct
   check_inval (fun i -> A.make i 1.0) (-1);
   check_inval (fun i -> A.make i 1.0) (A.max_length + 1);
 
+  let a = A.make 1001 1.0 in
+  for i = 0 to 499 do A.set a i (Float.of_int i) done;
+  let rec loop i =
+    if i >= 0 then begin
+      assert (A.get a i = (if i < 500 then Float.of_int i else 1.0));
+      loop (i - 1);
+    end
+  in loop 1000;
+  check_inval (A.get a) (-1);
+  check_inval (A.get a) (1001);
+  check_inval (fun i -> A.set a i 1.0) (-1);
+  check_inval (fun i -> A.set a i 1.0) 1001;
+
   (* [length] *)
   let test_length l = assert (l = (A.length (A.create l))) in
   test_length 0;
@@ -225,6 +238,8 @@ module Test (A : S) : sig end = struct
 
   (* [init] *)
   let a = A.init 1000 Float.of_int in
+  check_i a;
+  let a = A.init 1001 Float.of_int in
   check_i a;
   check_inval (fun i -> A.init i Float.of_int) (-1);
   check_inval (fun i -> A.init i Float.of_int) (A.max_length + 1);
@@ -244,6 +259,9 @@ module Test (A : S) : sig end = struct
   check 100 1;
   check 100 100;
   check 1000 1000;
+  check 1000 1001;
+  check 1001 1000;
+  check 1001 1001;
   (* check_inval omitted *)
 
   (* [concat] *)
@@ -262,6 +280,10 @@ module Test (A : S) : sig end = struct
   check [0];
   check [1000; 1000; 1000];
   check [];
+  check [1001; 1000; 1000];
+  check [1000; 1001; 1000];
+  check [1000; 1000; 1001];
+  check [1001; 1001; 1001];
   (* check_inval omitted *)
 
   (* [sub] *)
@@ -276,6 +298,18 @@ module Test (A : S) : sig end = struct
   check_inval (A.sub a 0) (-1);
   check_inval (A.sub a 0) 1001;
   check_inval (A.sub a 1000) 1;
+
+  let a = A.init 1001 (fun i -> Float.of_int (i - 101)) in
+  let b = A.sub a 101 199 in
+  check_i b;
+  assert (A.length b = 199);
+  let b = A.sub a 1001 0 in
+  check_i (A.sub a 1001 0);
+  assert  (A.length b = 0);
+  check_inval (A.sub a (-1)) 0;
+  check_inval (A.sub a 0) (-1);
+  check_inval (A.sub a 0) 1002;
+  check_inval (A.sub a 1001) 1;
 
   (* [copy] *)
   let check len =
@@ -320,6 +354,20 @@ module Test (A : S) : sig end = struct
   check_inval (A.blit a 0 a (-1)) 0;
   check_inval (A.blit a 0 a 100) 1;
   check_inval (A.blit a 0 a 101) 0;
+  let a = A.create 101 in
+  check_inval (A.fill a (-1) 0) 1.0;
+  check_inval (A.fill a 0 (-1)) 1.0;
+  check_inval (A.fill a 0 102) 1.0;
+  check_inval (A.fill a 101 1) 1.0;
+  check_inval (A.fill a 102 0) 1.0;
+  check_inval (A.blit a (-1) a 0) 0;
+  check_inval (A.blit a 0 a 0) (-1);
+  check_inval (A.blit a 0 a 0) 102;
+  check_inval (A.blit a 101 a 0) 1;
+  check_inval (A.blit a 102 a 0) 0;
+  check_inval (A.blit a 0 a (-1)) 0;
+  check_inval (A.blit a 0 a 101) 1;
+  check_inval (A.blit a 0 a 102) 0;
   let test_blit_overlap a ofs1 ofs2 len =
     let a = A.of_list a in
     let b = A.copy a in
@@ -333,6 +381,8 @@ module Test (A : S) : sig end = struct
   (* [to_list] [of_list] *)
   let a = A.init 1000 Float.of_int in
   assert (compare a (A.of_list (A.to_list a)) = 0);
+  let a = A.init 1001 Float.of_int in
+  assert (compare a (A.of_list (A.to_list a)) = 0);
   let a = A.init 0 Float.of_int in
   assert (compare a (A.of_list (A.to_list a)) = 0);
   (* check_inval omitted *)
@@ -343,6 +393,11 @@ module Test (A : S) : sig end = struct
   A.iter (fun x -> assert (x = !r); r := x +. 1.0) a;
   A.iter (fun _ -> assert false) (A.create 0);
   assert (!r = 300.0);
+
+  let a = A.init 301 (Float.of_int) in
+  let r = ref 0.0 in
+  A.iter (fun x -> assert (x = !r); r := x +. 1.0) a;
+  assert (!r = 301.0);
 
   (* [iteri] *)
   let a = A.init 300 Float.of_int in
@@ -356,6 +411,17 @@ module Test (A : S) : sig end = struct
   A.iteri (fun _ _ -> assert false) (A.create 0);
   assert (!r = 300);
 
+  let a = A.init 301 Float.of_int in
+  let r = ref 0 in
+  let f i x =
+    assert (i = !r);
+    assert (x = Float.of_int i);
+    r := i + 1
+  in
+  A.iteri f a;
+  A.iteri (fun _ _ -> assert false) (A.create 0);
+  assert (!r = 301);
+
   (* [map], test result and order of evaluation *)
   let a = A.init 500 Float.of_int in
   let r = ref 0.0 in
@@ -366,6 +432,16 @@ module Test (A : S) : sig end = struct
   in
   let b = A.map f a in
   check_i (A.sub b 1 499);
+
+  let a = A.init 501 Float.of_int in
+  let r = ref 0.0 in
+  let f x =
+    assert (x = !r);
+    r := !r +. 1.0;
+    x -. 1.0
+  in
+  let b = A.map f a in
+  check_i (A.sub b 1 500);
 
   (* [mapi], test result and order of evaluation *)
   let a = A.init 500 Float.of_int in
@@ -379,6 +455,17 @@ module Test (A : S) : sig end = struct
   let b = A.mapi f a in
   check_i (A.sub b 1 499);
 
+  let a = A.init 501 Float.of_int in
+  let r = ref 0.0 in
+  let f i x =
+    assert (x = Float.of_int i);
+    assert (x = !r);
+    r := !r +. 1.0;
+    x -. 1.0
+  in
+  let b = A.mapi f a in
+  check_i (A.sub b 1 500);
+
   (* [fold_left], test result and order of evaluation *)
   let a = A.init 500 Float.of_int in
   let f acc x =
@@ -388,6 +475,10 @@ module Test (A : S) : sig end = struct
   let acc = A.fold_left f 0.0 a in
   assert (acc = 500.0);
 
+  let a = A.init 501 Float.of_int in
+  let acc = A.fold_left f 0.0 a in
+  assert (acc = 501.0);
+
   (* [fold_right], test result and order of evaluation *)
   let a = A.init 500 Float.of_int in
   let f x acc =
@@ -395,6 +486,10 @@ module Test (A : S) : sig end = struct
     x
   in
   let acc = A.fold_right f a 500.0 in
+  assert (acc = 0.0);
+
+  let a = A.init 501 Float.of_int in
+  let acc = A.fold_right f a 501.0 in
   assert (acc = 0.0);
 
   (* [iter2], test result and order of evaluation *)
@@ -410,6 +505,16 @@ module Test (A : S) : sig end = struct
   let c = A.create 456 in
   check_inval (A.iter2 (fun _ _ -> assert false) a) c;
   check_inval (A.iter2 (fun _ _ -> assert false) c) a;
+
+  let a = A.init 124 Float.of_int in
+  let b = A.init 124 Float.of_int in
+  let r = ref 0.0 in
+  let f x y =
+    assert (x = !r);
+    assert (y = !r);
+    r := !r +. 1.0;
+  in
+  A.iter2 f a b;
 
   (* [map2], test result and order of evaluation *)
   let a = A.init 456 Float.of_int in
@@ -427,8 +532,31 @@ module Test (A : S) : sig end = struct
   check_inval (A.map2 (fun _ _ -> assert false) a) d;
   check_inval (A.map2 (fun _ _ -> assert false) d) a;
 
+  let a = A.init 457 Float.of_int in
+  let b = A.init 457 (fun i -> Float.of_int i /. 2.0) in
+  let r = ref 0.0 in
+  let f x y =
+    assert (x = !r);
+    assert (y = !r /. 2.0);
+    r := !r +. 1.0;
+    2.0 *. (x -. y)
+  in
+  let c = A.map2 f a b in
+  check_i c;
+
   (* [for_all], test result and order of evaluation *)
   let a = A.init 777 Float.of_int in
+  let r = ref 0.0 in
+  let f x =
+    assert (x = !r);
+    r := x +. 1.0;
+    true
+  in
+  assert (A.for_all f a);
+  let f x = assert (x = 0.0); false in
+  assert (not (A.for_all f a));
+
+  let a = A.init 778 Float.of_int in
   let r = ref 0.0 in
   let f x =
     assert (x = !r);
@@ -451,6 +579,17 @@ module Test (A : S) : sig end = struct
   let f x = assert (x = 0.0); true in
   assert (A.exists f a);
 
+  let a = A.init 778 Float.of_int in
+  let r = ref 0.0 in
+  let f x =
+    assert (x = !r);
+    r := x +. 1.0;
+    false
+  in
+  assert (not (A.exists f a));
+  let f x = assert (x = 0.0); true in
+  assert (A.exists f a);
+
   (* [mem] *)
   let a = A.init 7777 Float.of_int in
   assert (A.mem 0.0 a);
@@ -459,6 +598,17 @@ module Test (A : S) : sig end = struct
   assert (not (A.mem 7777.0 a));
   let check v =
     A.set a 1000 v;
+    assert (A.mem v a);
+  in
+  List.iter check [infinity; neg_infinity; neg_zero; nan];
+
+  let a = A.init 7778 Float.of_int in
+  assert (A.mem 0.0 a);
+  assert (A.mem 7777.0 a);
+  assert (not (A.mem (-1.0) a));
+  assert (not (A.mem 7778.0 a));
+  let check v =
+    A.set a 1001 v;
     assert (A.mem v a);
   in
   List.iter check [infinity; neg_infinity; neg_zero; nan];
@@ -526,15 +676,25 @@ module Test (A : S) : sig end = struct
     check_sort s Stdlib.compare a; (* already sorted *)
     check_sort s (fun x y -> Stdlib.compare y x) a; (* reverse-sorted *)
 
+    let a = A.init 6 Float.of_int in
+    check_sort s Stdlib.compare a; (* already sorted *)
+    check_sort s (fun x y -> Stdlib.compare y x) a; (* reverse-sorted *)
+
     let a = A.of_list [nan; neg_infinity; neg_zero; 0.; infinity] in
     check_sort s Stdlib.compare a; (* already sorted *)
     check_sort s (fun x y -> Stdlib.compare y x) a; (* reverse-sorted *)
 
     let a = A.init 50000 rand_float in
     check_sort s Stdlib.compare a;
+    let a = A.init 50001 rand_float in
+    check_sort s Stdlib.compare a;
     let a = A.make 1000 1.0 in
     check_sort s Stdlib.compare a;
+    let a = A.make 1001 1.0 in
+    check_sort s Stdlib.compare a;
     let a = A.append (A.make 1000 1.0) (A.make 1000 2.0) in
+    check_sort s Stdlib.compare a;
+    let a = A.append (A.make 1001 1.0) (A.make 1001 2.0) in
     check_sort s Stdlib.compare a;
   in
   check A.sort;
@@ -552,6 +712,7 @@ module Test (A : S) : sig end = struct
     Seq.iter f s;
   in
   check_seq (A.init 999 Float.of_int);
+  check_seq (A.init 1000 Float.of_int);
   check_seq (A.create 0);
 
   (* [to_seqi] *)
@@ -566,6 +727,7 @@ module Test (A : S) : sig end = struct
     Seq.iter f s;
   in
   check_seqi (A.init 999 Float.of_int);
+  check_seqi (A.init 1000 Float.of_int);
   check_seqi (A.create 0);
 
   (* [of_seq] *)
@@ -631,6 +793,10 @@ module Test (A : S) : sig end = struct
   let a = A.create 3 in
   for i = 0 to 2 do A.unsafe_set a i (float i) done;
   for i = 0 to 2 do assert (A.unsafe_get a i = float i) done;
+
+  let a = A.create 4 in
+  for i = 0 to 3 do A.unsafe_set a i (float i) done;
+  for i = 0 to 3 do assert (A.unsafe_get a i = float i) done;
 
   (* I/O *)
   let test_structured_io value =
