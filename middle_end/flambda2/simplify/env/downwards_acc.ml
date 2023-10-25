@@ -30,13 +30,14 @@ type t =
     demoted_exn_handlers : Continuation.Set.t;
     code_ids_to_remember : Code_id.Set.t;
     code_ids_to_never_delete : Code_id.Set.t;
-    slot_offsets : Slot_offsets.t Code_id.Map.t
+    slot_offsets : Slot_offsets.t Code_id.Map.t;
+    are_lifting_conts : Are_lifting_conts.t;
   }
 
 let [@ocamlformat "disable"] print ppf
       { denv; continuation_uses_env; shareable_constants; used_value_slots;
         lifted_constants; lifted_cont_params; flow_acc; demoted_exn_handlers;
-        code_ids_to_remember; code_ids_to_never_delete; slot_offsets } =
+        code_ids_to_remember; code_ids_to_never_delete; slot_offsets; are_lifting_conts } =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(denv@ %a)@]@ \
       @[<hov 1>(continuation_uses_env@ %a)@]@ \
@@ -48,7 +49,8 @@ let [@ocamlformat "disable"] print ppf
       @[<hov 1>(demoted_exn_handlers@ %a)@]@ \
       @[<hov 1>(code_ids_to_remember@ %a)@]@ \
       @[<hov 1>(code_ids_to_never_delete@ %a)@]@ \
-      @[<hov 1>(slot_offsets@ %a)@]\
+      @[<hov 1>(slot_offsets@ %a)@]@ \
+      @[<hov 1>(are_lifting_conts@ %a)@]\
       )@]"
     DE.print denv
     CUE.print continuation_uses_env
@@ -61,6 +63,7 @@ let [@ocamlformat "disable"] print ppf
     Code_id.Set.print code_ids_to_remember
     Code_id.Set.print code_ids_to_never_delete
     (Code_id.Map.print Slot_offsets.print) slot_offsets
+    Are_lifting_conts.print are_lifting_conts
 
 let create denv continuation_uses_env =
   { denv;
@@ -73,7 +76,8 @@ let create denv continuation_uses_env =
     flow_acc = Flow.Acc.empty ();
     demoted_exn_handlers = Continuation.Set.empty;
     code_ids_to_remember = Code_id.Set.empty;
-    code_ids_to_never_delete = Code_id.Set.empty
+    code_ids_to_never_delete = Code_id.Set.empty;
+    are_lifting_conts = Are_lifting_conts.no_lifting;
   }
 
 let denv t = t.denv
@@ -218,4 +222,9 @@ let lifted_cont_params t = t.lifted_cont_params
 let add_lifted_cont_params t new_lifted_cont_params =
   let lifted_cont_params = Continuation.Map.disjoint_union t.lifted_cont_params new_lifted_cont_params in
   { t with lifted_cont_params; }
+
+let are_lifting_conts t = t.are_lifting_conts
+
+let with_are_lifting_conts t are_lifting_conts =
+  { t with are_lifting_conts; }
 

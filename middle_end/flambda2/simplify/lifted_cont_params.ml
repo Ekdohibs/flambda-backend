@@ -59,29 +59,21 @@ let rename t =
   let new_params_indexed = Id.Map.of_list (List.combine keys (Bound_parameters.to_list new_bound_params)) in
   { (* t with *) new_params_indexed; }, renaming
 
-let bound_parameters t =
-  Bound_parameters.create (Id.Map.data t.new_params_indexed)
-
 let fold ~init ~f { new_params_indexed; } =
   Id.Map.fold f new_params_indexed init
 
-let find_arg id { new_params_indexed; } =
-  match Id.Map.find_opt id new_params_indexed with
-  | Some param -> Bound_parameter.simple param
-  | None ->
-    Misc.fatal_errorf "Missing lifted param id in lifted_cont_params"
+let rec find_arg id = function
+  | [] -> Misc.fatal_errorf "Missing lifted param id in lifted_cont_params"
+  | { new_params_indexed; } :: r ->
+    match Id.Map.find_opt id new_params_indexed with
+    | Some param -> Bound_parameter.simple param
+    | None -> find_arg id r
 
-let args ~callee_lifted_params ~caller_lifted_params =
-  let map =
-    Id.Map.merge (fun _ callee_param_opt caller_param_opt ->
-        match callee_param_opt, caller_param_opt with
-        | None, None -> assert false (* invariant of the Map module *)
-        | Some _, None ->
-          Misc.fatal_errorf "Missing lifted param"
-        | None, Some _ -> None
-        | Some _, Some bp -> Some (Bound_parameter.simple bp)
-      ) callee_lifted_params.new_params_indexed
-      caller_lifted_params.new_params_indexed
-  in
-  Id.Map.data map
+let args ~callee_lifted_params ~caller_stack_lifted_params =
+  fold callee_lifted_params ~init:[]
+    ~f:(fun id _callee_param acc -> find_arg id caller_stack_lifted_params :: acc)
 
+let bound_parameters t =
+  Bound_parameters.create @@
+  fold t ~init:[]
+    ~f:(fun _id bound_param acc -> bound_param :: acc)

@@ -47,6 +47,8 @@ type t =
     inlining_history_tracker : Inlining_history.Tracker.t;
     loopify_state : Loopify_state.t;
     continuation_stack : Continuation.t list;
+    variables_defined_in_current_continuation : Lifted_cont_params.t;
+    (* CR gbury: maybe rename Lifted_cont_params -> Indexed_bound_parameters ? *)
   }
 
 let print_debuginfo ppf dbg =
@@ -62,7 +64,8 @@ let [@ocamlformat "disable"] print ppf { round; typing_env;
                 do_not_rebuild_terms; closure_info;
                 unit_toplevel_return_continuation; all_code;
                 get_imported_code = _; inlining_history_tracker = _;
-                loopify_state; continuation_stack
+                loopify_state; continuation_stack;
+                variables_defined_in_current_continuation;
               } =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(round@ %d)@]@ \
@@ -80,7 +83,8 @@ let [@ocamlformat "disable"] print ppf { round; typing_env;
       @[<hov 1>(closure_info@ %a)@]@ \
       @[<hov 1>(all_code@ %a)@]@ \
       @[<hov 1>(loopify_state@ %a)@]@ \
-      @[<hov 1>(continuation_stack@ %a)@]\
+      @[<hov 1>(continuation_stack@ %a)@]@ \
+      @[<hov 1>(variables_defined_in_current_continuation@ %a)@]\
       )@]"
     round
     TE.print typing_env
@@ -98,6 +102,7 @@ let [@ocamlformat "disable"] print ppf { round; typing_env;
     (Code_id.Map.print Code.print) all_code
     Loopify_state.print loopify_state
     (Format.pp_print_list ~pp_sep:Format.pp_print_space Continuation.print) continuation_stack
+    Lifted_cont_params.print variables_defined_in_current_continuation
 
 let create ~round ~(resolver : resolver)
     ~(get_imported_names : get_imported_names)
@@ -128,7 +133,8 @@ let create ~round ~(resolver : resolver)
     inlining_history_tracker =
       Inlining_history.Tracker.empty (Compilation_unit.get_current_exn ());
     loopify_state = Loopify_state.do_not_loopify;
-    continuation_stack = [dummy_toplevel_cont]
+    continuation_stack = [dummy_toplevel_cont];
+    variables_defined_in_current_continuation = Lifted_cont_params.empty;
   }
 
 let continuation_stack t = t.continuation_stack
@@ -173,6 +179,9 @@ let set_inlining_history_tracker inlining_history_tracker t =
 let increment_continuation_scope t =
   { t with typing_env = TE.increment_scope t.typing_env }
 
+let bump_current_level_scope t =
+  { t with typing_env = TE.bump_current_level_scope t.typing_env }
+
 let enter_set_of_closures
     { round;
       typing_env;
@@ -192,6 +201,7 @@ let enter_set_of_closures
       inlining_history_tracker;
       loopify_state = _;
       continuation_stack = _;
+      variables_defined_in_current_continuation = _;
     } =
   { round;
     typing_env = TE.closure_env typing_env;
@@ -211,6 +221,7 @@ let enter_set_of_closures
     inlining_history_tracker;
     loopify_state = Loopify_state.do_not_loopify;
     continuation_stack = [];
+    variables_defined_in_current_continuation = Lifted_cont_params.empty;
   }
 
 let define_variable t var kind =
@@ -559,5 +570,17 @@ let with_code_age_relation code_age_relation t =
   }
 
 let enter_continuation cont t =
-  { t with continuation_stack = cont :: t.continuation_stack }
+  { t with
+    continuation_stack = cont :: t.continuation_stack;
+    variables_defined_in_current_continuation = Lifted_cont_params.empty;
+  }
+
+let variables_defined_in_current_continuation t =
+  t.variables_defined_in_current_continuation
+
+let add_variable_defined_in_current_continuation t var kind =
+  let bp = Bound_parameter.create var kind in
+  { t with
+    variables_defined_in_current_continuation =
+      Lifted_cont_params.new_param t.variables_defined_in_current_continuation bp; }
 

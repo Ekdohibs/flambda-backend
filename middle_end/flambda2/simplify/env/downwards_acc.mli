@@ -109,3 +109,7 @@ val lifted_cont_params : t -> Lifted_cont_params.t Continuation.Map.t
 
 val add_lifted_cont_params : t -> Lifted_cont_params.t Continuation.Map.t -> t
 
+val are_lifting_conts : t -> Are_lifting_conts.t
+
+val with_are_lifting_conts : t -> Are_lifting_conts.t -> t
+

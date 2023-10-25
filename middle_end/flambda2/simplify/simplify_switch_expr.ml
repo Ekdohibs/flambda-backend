@@ -416,6 +416,17 @@ let simplify_switch0 dacc switch ~down_to_up =
   let condition_dbg =
     DE.add_inlined_debuginfo (DA.denv dacc) (Switch.condition_dbg switch)
   in
+  let dacc =
+    match DA.are_lifting_conts dacc with
+    | Lifting_out_of _ -> Misc.fatal_errorf "this should not happen"
+    | Not_lifting -> dacc
+    | Analyzing { continuation ; uses = _; } ->
+      (* TODO/FIXME: implement an actual criterion for when to lift continuations.
+         Currently for testing, we lift any continuation that occurs in a handler that
+         ends with a switch. *)
+      DA.with_are_lifting_conts dacc
+        (Are_lifting_conts.lift_continuations_out_of continuation)
+  in
   down_to_up dacc
     ~rebuild:
       (rebuild_switch ~arms ~condition_dbg ~scrutinee ~scrutinee_ty
