@@ -18,7 +18,6 @@ type t =
   { continuations : Continuation_in_env.t Continuation.Map.t;
     continuation_aliases : Continuation.t Continuation.Map.t;
     apply_cont_rewrites : Apply_cont_rewrite.t Continuation.Map.t;
-    lifted_continuations : Lifted_cont.original_handlers list;
     are_rebuilding_terms : Are_rebuilding_terms.t
   }
 
@@ -26,24 +25,20 @@ let create are_rebuilding_terms =
   { continuations = Continuation.Map.empty;
     continuation_aliases = Continuation.Map.empty;
     apply_cont_rewrites = Continuation.Map.empty;
-    lifted_continuations = [];
     are_rebuilding_terms
   }
 
 let [@ocamlformat "disable"] print ppf
     { continuations; continuation_aliases;
-      apply_cont_rewrites; lifted_continuations; are_rebuilding_terms } =
+      apply_cont_rewrites; are_rebuilding_terms } =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(continuations@ %a)@]@ \
       @[<hov 1>(continuation_aliases@ %a)@]@ \
-      @[<hov 1>(lifted_continuations@ %a)@]@ \
       @[<hov 1>(apply_cont_rewrites@ %a)@]\
       )@]"
     (Continuation.Map.print (Continuation_in_env.print are_rebuilding_terms))
     continuations
     (Continuation.Map.print Continuation.print) continuation_aliases
-    (Format.pp_print_list ~pp_sep:Format.pp_print_space
-       Lifted_cont.print_original_handlers) lifted_continuations
     (Continuation.Map.print Apply_cont_rewrite.print)
     apply_cont_rewrites
 
@@ -153,9 +148,4 @@ let find_apply_cont_rewrite t cont =
   match Continuation.Map.find cont t.apply_cont_rewrites with
   | exception Not_found -> None
   | rewrite -> Some rewrite
-
-let lifted_continuations t = t.lifted_continuations
-
-let add_lifted_continuation original_handlers t =
-  { t with lifted_continuations = original_handlers :: t.lifted_continuations; }
 

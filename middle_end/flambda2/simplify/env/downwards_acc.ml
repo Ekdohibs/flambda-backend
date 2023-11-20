@@ -32,12 +32,14 @@ type t =
     code_ids_to_never_delete : Code_id.Set.t;
     slot_offsets : Slot_offsets.t Code_id.Map.t;
     are_lifting_conts : Are_lifting_conts.t;
+    lifted_continuations : Lifted_cont.original_handlers list;
   }
 
 let [@ocamlformat "disable"] print ppf
       { denv; continuation_uses_env; shareable_constants; used_value_slots;
         lifted_constants; lifted_cont_params; flow_acc; demoted_exn_handlers;
-        code_ids_to_remember; code_ids_to_never_delete; slot_offsets; are_lifting_conts } =
+        code_ids_to_remember; code_ids_to_never_delete; slot_offsets;
+        are_lifting_conts; lifted_continuations; } =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(denv@ %a)@]@ \
       @[<hov 1>(continuation_uses_env@ %a)@]@ \
@@ -50,7 +52,8 @@ let [@ocamlformat "disable"] print ppf
       @[<hov 1>(code_ids_to_remember@ %a)@]@ \
       @[<hov 1>(code_ids_to_never_delete@ %a)@]@ \
       @[<hov 1>(slot_offsets@ %a)@]@ \
-      @[<hov 1>(are_lifting_conts@ %a)@]\
+      @[<hov 1>(are_lifting_conts@ %a)@]@ \
+      @[<hov 1>(lifted_continuations@ %a)@]\
       )@]"
     DE.print denv
     CUE.print continuation_uses_env
@@ -64,6 +67,8 @@ let [@ocamlformat "disable"] print ppf
     Code_id.Set.print code_ids_to_never_delete
     (Code_id.Map.print Slot_offsets.print) slot_offsets
     Are_lifting_conts.print are_lifting_conts
+    (Format.pp_print_list ~pp_sep:Format.pp_print_space
+       Lifted_cont.print_original_handlers) lifted_continuations
 
 let create denv continuation_uses_env =
   { denv;
@@ -78,6 +83,7 @@ let create denv continuation_uses_env =
     code_ids_to_remember = Code_id.Set.empty;
     code_ids_to_never_delete = Code_id.Set.empty;
     are_lifting_conts = Are_lifting_conts.no_lifting;
+    lifted_continuations = [];
   }
 
 let denv t = t.denv
@@ -227,4 +233,10 @@ let are_lifting_conts t = t.are_lifting_conts
 
 let with_are_lifting_conts t are_lifting_conts =
   { t with are_lifting_conts; }
+
+let get_and_clear_lifted_continuations t =
+  { t with lifted_continuations = []; }, t.lifted_continuations
+
+let add_lifted_continuation original_handlers t =
+  { t with lifted_continuations = original_handlers :: t.lifted_continuations; }
 

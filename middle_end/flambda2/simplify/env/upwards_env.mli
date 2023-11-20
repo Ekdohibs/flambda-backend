@@ -62,7 +62,3 @@ val replace_apply_cont_rewrite :
 
 val find_apply_cont_rewrite : t -> Continuation.t -> Apply_cont_rewrite.t option
 
-val lifted_continuations : t -> Lifted_cont.original_handlers list
-
-val add_lifted_continuation : Lifted_cont.original_handlers -> t -> t
-

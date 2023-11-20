@@ -113,3 +113,7 @@ val are_lifting_conts : t -> Are_lifting_conts.t
 
 val with_are_lifting_conts : t -> Are_lifting_conts.t -> t
 
+val get_and_clear_lifted_continuations : t -> t * Lifted_cont.original_handlers list
+
+val add_lifted_continuation : Lifted_cont.original_handlers -> t -> t
+
