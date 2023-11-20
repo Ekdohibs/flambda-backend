@@ -508,6 +508,8 @@ module Lift = struct
 
 end
 
+let _ = Lift.shallow
+
 let decide_param_usage_non_recursive ~free_names ~required_names
     ~removed_aliased ~exn_bucket param : Apply_cont_rewrite.used =
   (* The free_names computation is the reference here, because it records
@@ -1277,7 +1279,8 @@ let sort_handlers data handlers =
       group :: inner)
     [] sorted_handlers_from_the_inside_to_the_outside
 
-let after_downwards_traversal_of_body_and_handlers
+let rec after_downwards_traversal_of_body_and_handlers
+  ~simplify_expr ~denv_for_join
     (data : after_downwards_traversal_of_body_and_handlers_data) ~down_to_up
     dacc =
   (* At this point we have done a downwards traversal on the body and all the
@@ -1288,23 +1291,18 @@ let after_downwards_traversal_of_body_and_handlers
     let data : prepare_to_rebuild_handlers_data = Lifted_out { rebuild_body; } in
     down_to_up dacc ~rebuild:(prepare_to_rebuild_handlers data)
   | Rebuild data ->
-    begin match DA.are_lifting_conts dacc with
+    let dacc, down_to_up = (* match DA.are_lifting_conts dacc with
       | Lifting_out_of { continuation = _; } ->
         (* Here we are in the case where we are trying to lift some continuations
            out of the currently-being defined continuation. These lifted continuations
            are stored in the dacc, and need to be downwards traversed, before we rebuild
-           everything. *)
+                              everything. *) *)
+        Format.eprintf "LIFTOUT %a@." DA.print dacc;
         let dacc, lifted_conts = DA.get_and_clear_lifted_continuations dacc in
-        let denv_for_join = assert false in
-        let simplify_expr = assert false in
-        (* this rebuild_body should never be called
-           TODO: cleaner way to do this. *)
-        let rebuild_body _ = assert false in
-        simplify_handlers ~simplify_expr ~rebuild_body 
-
-
-        assert false
-      | Analyzing _ | Not_lifting ->
+        dacc, down_to_up_for_lifted_continuations ~denv_for_join ~simplify_expr lifted_conts ~down_to_up
+(*      | Analyzing _ | Not_lifting ->
+        dacc, down_to_up *)
+    in
         (* Here, we finally have the "normal" path, when we want to actually rebuild
            the let-cont, so we need to call the global [down_to_up] function. First
            however, we have to take care of several things:
@@ -1353,9 +1351,8 @@ let after_downwards_traversal_of_body_and_handlers
                   }
         in
         down_to_up dacc ~rebuild:(prepare_to_rebuild_handlers data)
-    end
 
-let prepare_dacc_for_handlers dacc ~env_at_fork ~params ~is_recursive
+and prepare_dacc_for_handlers dacc ~env_at_fork ~params ~is_recursive
     ~consts_lifted_during_body continuation_sort is_exn_handler_cont uses
     ~lifted_params ~arg_types_by_use_id =
   (* In the recursive case, [params] are actually the invariant params, as we
@@ -1435,7 +1432,7 @@ let prepare_dacc_for_handlers dacc ~env_at_fork ~params ~is_recursive
     is_exn_handler,
     join_result.extra_params_and_args )
 
-let simplify_handler ~(simplify_expr : Expr.t Simplify_common.expr_simplifier) ~is_recursive ~is_exn_handler
+and simplify_handler ~(simplify_expr : Expr.t Simplify_common.expr_simplifier) ~is_recursive ~is_exn_handler
     ~invariant_params ~params cont dacc handler k =
   let dacc = DA.map_denv ~f:(DE.enter_continuation cont) dacc in
   let dacc = DA.with_continuation_uses_env dacc ~cont_uses_env:CUE.empty in
@@ -1457,7 +1454,7 @@ let simplify_handler ~(simplify_expr : Expr.t Simplify_common.expr_simplifier) ~
       in
       k dacc rebuild_handler cont_uses_env_in_handler)
 
-let simplify_single_recursive_handler ~simplify_expr cont_uses_env_so_far
+and simplify_single_recursive_handler ~simplify_expr cont_uses_env_so_far
     ~invariant_params consts_lifted_during_body all_handlers_set denv_to_reset
     dacc cont ({ params; handler; is_cold } : one_recursive_handler) k =
   (* Here we perform the downwards traversal on a single handler.
@@ -1509,7 +1506,7 @@ let simplify_single_recursive_handler ~simplify_expr cont_uses_env_so_far
         }
         cont_uses_env_so_far)
 
-let simplify_recursive_handlers ~rebuild_body ~invariant_params ~invariant_epa
+and simplify_recursive_handlers ~rebuild_body ~invariant_params ~invariant_epa
     ~continuation_handlers ~simplify_expr ~consts_lifted_during_body
     ~all_conts_set ~common_denv =
   let rec loop cont_uses_env_so_far reachable_handlers_to_simplify
@@ -1567,7 +1564,7 @@ let simplify_recursive_handlers ~rebuild_body ~invariant_params ~invariant_epa
   in
   loop
 
-let simplify_handlers ~simplify_expr ~rebuild_body
+and simplify_handlers ~simplify_expr ~rebuild_body
     (data: after_downwards_traversal_of_body_data) dacc k =
   (* In this case we have decided not to lift the continuation being let-bound
      outside of its context. So the remaining thing to do is setup the dacc,
@@ -1579,6 +1576,7 @@ let simplify_handlers ~simplify_expr ~rebuild_body
   let dacc =
     DA.add_to_lifted_constant_accumulator dacc data.prior_lifted_constants
   in
+  let previous_are_lifting_conts = DA.are_lifting_conts dacc in
   match data.handlers with
   | Non_recursive { cont; params; lifted_params; handler; is_exn_handler; is_cold } -> (
       let dacc = DA.with_are_lifting_conts dacc Are_lifting_conts.no_lifting in
@@ -1649,6 +1647,7 @@ let simplify_handlers ~simplify_expr ~rebuild_body
                let cont_uses_env = CUE.remove cont_uses_env_so_far cont in
                DA.with_continuation_uses_env dacc ~cont_uses_env
              in
+             let dacc = DA.with_are_lifting_conts dacc previous_are_lifting_conts in
              let data : after_downwards_traversal_of_body_and_handlers_rebuild =
                { rebuild_body;
                  cont_uses_env = cont_uses_env_so_far;
@@ -1681,7 +1680,7 @@ let simplify_handlers ~simplify_expr ~rebuild_body
     let dacc, unbox_decisions, is_exn_handler, extra_params_and_args_for_cse =
       prepare_dacc_for_handlers dacc ~env_at_fork:denv
         ~params:invariant_params ~lifted_params
-        ~is_recursive:true ~consts_lifted_during_body Normal_or_exn None
+        ~is_recursive:true ~consts_lifted_during_body (Normal_or_exn : Continuation.Sort.t) None
         (List.concat_map Continuation_uses.get_uses all_uses)
         ~arg_types_by_use_id
     in
@@ -1695,13 +1694,14 @@ let simplify_handlers ~simplify_expr ~rebuild_body
       ~continuation_handlers ~simplify_expr
       ~consts_lifted_during_body ~all_conts_set ~common_denv
       body_continuation_uses_env used_handlers_in_body Continuation.Set.empty
-      Continuation.Map.empty dacc k
+      Continuation.Map.empty dacc (fun dacc data -> let dacc = DA.with_are_lifting_conts dacc previous_are_lifting_conts in k dacc data)
 
-let after_downwards_traversal_of_body ~simplify_expr ~down_to_up
+and after_downwards_traversal_of_body ~simplify_expr ~down_to_up
     (data : after_downwards_traversal_of_body_data)
     dacc ~rebuild:rebuild_body =
   (* At this point, we have done the downwards traversal of the body, and
      we have two situations wrt to continuation lifting. *)
+  let denv_for_join = data.denv_for_join in
   match DA.are_lifting_conts dacc with
   | Lifting_out_of { continuation = _; } ->
     (* In this case, we have decided to lift the continuation being bound out
@@ -1709,14 +1709,16 @@ let after_downwards_traversal_of_body ~simplify_expr ~down_to_up
          of the continuation to add it to the uenv on the way up. *)
     (* TODO: compute and store the lifted_cont_params *)
     let dacc = DA.add_lifted_continuation data.handlers dacc in
+    Format.eprintf "ADD %a@." DA.print dacc;
+
     let data : after_downwards_traversal_of_body_and_handlers_data = Lifted_out { rebuild_body; } in
-    after_downwards_traversal_of_body_and_handlers data ~down_to_up dacc
+    after_downwards_traversal_of_body_and_handlers ~simplify_expr ~denv_for_join data ~down_to_up dacc
   | Not_lifting | Analyzing _ ->
     simplify_handlers ~simplify_expr data dacc ~rebuild_body (fun dacc data ->
-        after_downwards_traversal_of_body_and_handlers (Rebuild data) ~down_to_up dacc
+        after_downwards_traversal_of_body_and_handlers ~simplify_expr ~denv_for_join (Rebuild data : after_downwards_traversal_of_body_and_handlers_data) ~down_to_up dacc
       )
 
-let rec down_to_up_for_lifted_continuations ~denv_for_join ~simplify_expr
+and down_to_up_for_lifted_continuations ~denv_for_join ~simplify_expr
     lifted_conts ~down_to_up =
   match lifted_conts with
   | [] -> down_to_up
@@ -1725,8 +1727,13 @@ let rec down_to_up_for_lifted_continuations ~denv_for_join ~simplify_expr
         Lifted_cont.print_original_handlers handlers;
     let data : after_downwards_traversal_of_body_data =
       { denv_for_join; prior_lifted_constants = LCS.empty; handlers; }
-    in
+      in
     let down_to_up =
+      (* (fun dacc ~rebuild:rebuild_body ->
+         simplify_handlers ~simplify_expr data dacc ~rebuild_body (fun dacc data ->
+             after_downwards_traversal_of_body_and_handlers ~simplify_expr ~denv_for_join (Rebuild data : after_downwards_traversal_of_body_and_handlers_data) ~down_to_up dacc
+           )
+         ) *)
       after_downwards_traversal_of_body ~simplify_expr data ~down_to_up
     in
     down_to_up_for_lifted_continuations ~denv_for_join ~simplify_expr
