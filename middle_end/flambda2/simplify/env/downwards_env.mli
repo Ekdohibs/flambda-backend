@@ -215,3 +215,8 @@ val with_code_age_relation : Code_age_relation.t -> t -> t
 val continuation_stack : t -> Continuation.t list
 
 val enter_continuation : Continuation.t -> t -> t
+
+val variables_defined_in_current_continuation : t -> Lifted_cont_params.t
+
+val add_variable_defined_in_current_continuation : t -> Bound_parameter.t -> t
+

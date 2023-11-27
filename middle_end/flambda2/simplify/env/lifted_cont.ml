@@ -36,6 +36,28 @@ type original_handlers =
       }
   | Non_recursive of non_recursive_handler
 
+let add_params_to_lift t params_to_lift =
+  let lifted_params, renaming = Lifted_cont_params.rename params_to_lift in
+  match t with
+  | Recursive ({ lifted_params = old_lifted; continuation_handlers; _ } as recursive) ->
+    if Lifted_cont_params.is_empty old_lifted then begin
+      let continuation_handlers =
+        Continuation.Map.map (fun (one_rec_handler : one_recursive_handler) ->
+            let handler = Flambda.Expr.apply_renaming one_rec_handler.handler renaming in
+            { one_rec_handler with handler; }
+          ) continuation_handlers
+      in
+      Recursive { recursive with lifted_params; continuation_handlers; }
+    end else
+      Misc.fatal_errorf "Cannot add lifted params to a continuation that already has lifted params"
+  | Non_recursive ({ lifted_params = old_lifted; handler; _ } as non_rec) ->
+    if Lifted_cont_params.is_empty old_lifted then
+      let handler = Flambda.Expr.apply_renaming handler renaming in
+      Non_recursive { non_rec with lifted_params; handler; }
+    else
+      Misc.fatal_errorf "Cannot add lifted params to a continuation that already has lifted params"
+
+
 let print_one_recursive_handler ppf ({ params; handler; is_cold; } : one_recursive_handler) =
   Format.fprintf ppf
     "@[<hov 1>(\

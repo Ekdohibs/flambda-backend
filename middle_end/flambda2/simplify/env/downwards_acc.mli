@@ -107,7 +107,7 @@ val with_slot_offsets : t -> slot_offsets:Slot_offsets.t Code_id.Map.t -> t
 
 val lifted_cont_params : t -> Lifted_cont_params.t Continuation.Map.t
 
-val add_lifted_cont_params : t -> Lifted_cont_params.t Continuation.Map.t -> t
+val add_lifted_cont_params : t -> Continuation.t -> Lifted_cont_params.t -> t
 
 val are_lifting_conts : t -> Are_lifting_conts.t
 

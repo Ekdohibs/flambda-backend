@@ -225,8 +225,13 @@ let with_slot_offsets t ~slot_offsets = { t with slot_offsets }
 
 let lifted_cont_params t = t.lifted_cont_params
 
-let add_lifted_cont_params t new_lifted_cont_params =
-  let lifted_cont_params = Continuation.Map.disjoint_union t.lifted_cont_params new_lifted_cont_params in
+let add_lifted_cont_params t cont lifted_params =
+  let lifted_cont_params =
+    Continuation.Map.update cont (function
+        | None -> Some lifted_params
+        | Some _ -> Misc.fatal_errorf "Pre-existing lifting params, cannot add new lifted params"
+      ) t.lifted_cont_params
+  in
   { t with lifted_cont_params; }
 
 let are_lifting_conts t = t.are_lifting_conts

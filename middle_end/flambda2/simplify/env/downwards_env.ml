@@ -575,13 +575,11 @@ let enter_continuation cont t =
     variables_defined_in_current_continuation = Lifted_cont_params.empty;
   }
 
-(*
 let variables_defined_in_current_continuation t =
   t.variables_defined_in_current_continuation
 
-let add_variable_defined_in_current_continuation t var kind =
-  let bp = Bound_parameter.create var kind in
+let add_variable_defined_in_current_continuation t bound_param =
   { t with
     variables_defined_in_current_continuation =
-      Lifted_cont_params.new_param t.variables_defined_in_current_continuation bp; }
-*)
+      Lifted_cont_params.new_param t.variables_defined_in_current_continuation bound_param; }
+
