@@ -246,7 +246,7 @@ let extend_lifted_continuation_uses lifted_cont_params callee_lifted_params uses
           let env_at_use = One_continuation_use.env_at_use one_use in
           let stack = DE.continuation_stack env_at_use in
           if debug () then
-            Format.eprintf "''' USE %a '''@\nstack: %a@."
+            Format.eprintf "''' USE %a '''@\nstack: %a@\n@."
               Apply_cont_rewrite_id.print id
               (Format.pp_print_list ~pp_sep:Format.pp_print_space Continuation.print) stack;
           let caller_stack_lifted_params = List.filter_map (fun c -> Continuation.Map.find_opt c lifted_cont_params) stack in
@@ -261,7 +261,7 @@ let extend_lifted_continuation_uses lifted_cont_params callee_lifted_params uses
     lifted_params, uses
   end
 
-let add_extra_params_and_args_for_lifting lifted_cont_params callee_lifted_params uses epa =
+let add_extra_params_and_args_for_lifting cont_lifting_params callee_lifted_params uses epa =
   Lifted_cont_params.fold callee_lifted_params ~init:epa
     ~f:(fun lifted_param_id extra_param epa ->
         let extra_args =
@@ -269,7 +269,7 @@ let add_extra_params_and_args_for_lifting lifted_cont_params callee_lifted_param
               let id = One_continuation_use.id one_use in
               let env_at_use = One_continuation_use.env_at_use one_use in
               let stack = DE.continuation_stack env_at_use in
-              let caller_stack_lifted_params = List.filter_map (fun c -> Continuation.Map.find_opt c lifted_cont_params) stack in
+              let caller_stack_lifted_params = List.filter_map (fun c -> Continuation.Map.find_opt c cont_lifting_params) stack in
               let arg = Lifted_cont_params.find_arg lifted_param_id caller_stack_lifted_params in
               Apply_cont_rewrite_id.Map.add id (EPA.Extra_arg.Already_in_scope arg)  map
             ) Apply_cont_rewrite_id.Map.empty uses
@@ -955,7 +955,7 @@ let get_uses (data : after_downwards_traversal_of_body_and_handlers_rebuild) con
       Continuation.print cont
   | Some cont -> cont
 
-let create_handler_to_rebuild lifted_cont_params
+let create_handler_to_rebuild cont_lifting_params
     (data : after_downwards_traversal_of_body_and_handlers_rebuild) cont
     (handler : handler_after_downwards_traversal) =
   (* See comment at the top of [after_downwards_travsersal_of_body_and_handlers]. *)
@@ -983,7 +983,7 @@ let create_handler_to_rebuild lifted_cont_params
       invariant_extra_args
   in
   let invariant_epa =
-    add_extra_params_and_args_for_lifting lifted_cont_params
+    add_extra_params_and_args_for_lifting cont_lifting_params
       data.lifted_params (Continuation_uses.get_uses uses) invariant_epa
   in
   let extra_params_and_args =
@@ -1086,9 +1086,9 @@ let rec after_downwards_traversal_of_body_and_handlers
          independant blocks of recursive or non-recursive continuations. In case one
          of those is non-recursive, we can check whether the continuation is
          inlinable if it is used a single time. *)
-    let lifted_cont_params = DA.lifted_cont_params dacc in
+    let cont_lifting_params = DA.cont_lifting_params dacc in
     let handlers =
-      Continuation.Map.mapi (create_handler_to_rebuild lifted_cont_params data) data.handlers
+      Continuation.Map.mapi (create_handler_to_rebuild cont_lifting_params data) data.handlers
     in
     let dacc =
       DA.map_flow_acc dacc ~f:(fun flow_acc ->
@@ -1123,7 +1123,7 @@ and prepare_dacc_for_handlers dacc ~env_at_fork ~params ~is_recursive
        want those lifted params to be unboxed: it should not be beneficial (since
        the lifted params should already include unbxoed versions). *)
     let lifted_params, uses =
-      extend_lifted_continuation_uses (DA.lifted_cont_params dacc) lifted_params uses
+      extend_lifted_continuation_uses (DA.cont_lifting_params dacc) lifted_params uses
     in
     let params = Bound_parameters.append params lifted_params in
     if false && debug () then
@@ -1194,6 +1194,7 @@ and prepare_dacc_for_handlers dacc ~env_at_fork ~params ~is_recursive
 
 and simplify_handler ~simplify_expr ~is_recursive ~is_exn_handler
     ~lifted_params ~invariant_params ~params cont dacc handler k =
+  Format.eprintf "SIMPLIFY %a@\n@." Continuation.print cont;
   let all_params = Bound_parameters.append invariant_params params in
   let dacc = DA.map_denv dacc ~f:(DE.enter_continuation cont lifted_params) in
   let dacc = DA.map_denv dacc ~f:(fun denv ->
@@ -1201,6 +1202,9 @@ and simplify_handler ~simplify_expr ~is_recursive ~is_exn_handler
           DE.add_variable_defined_in_current_continuation denv bp
         ) denv (Bound_parameters.to_list all_params))
   in
+  Format.eprintf "DEFINED: %a@\n@."
+    Lifted_cont_params.print
+    (DE.variables_defined_in_current_continuation (DA.denv dacc));
   let dacc = DA.with_continuation_uses_env dacc ~cont_uses_env:CUE.empty in
   let dacc =
     DA.map_flow_acc
@@ -1210,10 +1214,6 @@ and simplify_handler ~simplify_expr ~is_recursive ~is_exn_handler
       dacc
   in
   simplify_expr dacc handler ~down_to_up:(fun dacc ~rebuild:rebuild_handler ->
-      let defined_in_handler = DE.variables_defined_in_current_continuation (DA.denv dacc) in
-      Format.eprintf "IN ENV: %a -> %a@." Continuation.print cont
-        Lifted_cont_params.print defined_in_handler;
-      let dacc = DA.add_lifted_cont_params dacc cont defined_in_handler in
       let dacc = DA.map_flow_acc ~f:(Flow.Acc.exit_continuation cont) dacc in
       let cont_uses_env_in_handler = DA.continuation_uses_env dacc in
       let cont_uses_env_in_handler =
@@ -1347,7 +1347,7 @@ and simplify_handlers ~simplify_expr ~rebuild_body
   let previous_are_lifting_conts = DA.are_lifting_conts dacc in
   match data.handlers with
   | Non_recursive { cont; params; lifted_params; handler; is_exn_handler; is_cold } -> (
-      Format.eprintf "SIMPLIFY %a@\n@." Continuation.print cont;
+      Format.eprintf "SIMPLIFY_HANDLERS %a@\n@." Continuation.print cont;
       let dacc = DA.with_are_lifting_conts dacc Are_lifting_conts.no_lifting in
       match
         Continuation_uses_env.get_continuation_uses body_continuation_uses_env

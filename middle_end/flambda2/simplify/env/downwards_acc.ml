@@ -25,7 +25,7 @@ type t =
     shareable_constants : Symbol.t Static_const.Map.t;
     used_value_slots : Name_occurrences.t;
     lifted_constants : LCS.t;
-    lifted_cont_params : Lifted_cont_params.t Continuation.Map.t;
+    cont_lifting_params : Lifted_cont_params.t Continuation.Map.t;
     flow_acc : Flow.Acc.t;
     demoted_exn_handlers : Continuation.Set.t;
     code_ids_to_remember : Code_id.Set.t;
@@ -37,7 +37,7 @@ type t =
 
 let [@ocamlformat "disable"] print ppf
       { denv; continuation_uses_env; shareable_constants; used_value_slots;
-        lifted_constants; lifted_cont_params; flow_acc; demoted_exn_handlers;
+        lifted_constants; cont_lifting_params; flow_acc; demoted_exn_handlers;
         code_ids_to_remember; code_ids_to_never_delete; slot_offsets;
         are_lifting_conts; lifted_continuations; } =
   Format.fprintf ppf "@[<hov 1>(\
@@ -46,7 +46,7 @@ let [@ocamlformat "disable"] print ppf
       @[<hov 1>(shareable_constants@ %a)@]@ \
       @[<hov 1>(used_value_slots@ %a)@]@ \
       @[<hov 1>(lifted_constant_state@ %a)@]@ \
-      @[<hov 1>(lifted_cont_params@ %a)@]@ \
+      @[<hov 1>(cont_lifting_params@ %a)@]@ \
       @[<hov 1>(flow_acc@ %a)@]@ \
       @[<hov 1>(demoted_exn_handlers@ %a)@]@ \
       @[<hov 1>(code_ids_to_remember@ %a)@]@ \
@@ -60,7 +60,7 @@ let [@ocamlformat "disable"] print ppf
     (Static_const.Map.print Symbol.print) shareable_constants
     Name_occurrences.print used_value_slots
     LCS.print lifted_constants
-    (Continuation.Map.print Lifted_cont_params.print) lifted_cont_params
+    (Continuation.Map.print Lifted_cont_params.print) cont_lifting_params
     Flow.Acc.print flow_acc
     Continuation.Set.print demoted_exn_handlers
     Code_id.Set.print code_ids_to_remember
@@ -77,7 +77,7 @@ let create denv continuation_uses_env =
     shareable_constants = Static_const.Map.empty;
     used_value_slots = Name_occurrences.empty;
     lifted_constants = LCS.empty;
-    lifted_cont_params = Continuation.Map.empty;
+    cont_lifting_params = Continuation.Map.empty;
     flow_acc = Flow.Acc.empty ();
     demoted_exn_handlers = Continuation.Set.empty;
     code_ids_to_remember = Code_id.Set.empty;
@@ -223,16 +223,22 @@ let slot_offsets t = t.slot_offsets
 
 let with_slot_offsets t ~slot_offsets = { t with slot_offsets }
 
-let lifted_cont_params t = t.lifted_cont_params
+let cont_lifting_params t = t.cont_lifting_params
 
-let add_lifted_cont_params t cont lifted_params =
-  let lifted_cont_params =
-    Continuation.Map.update cont (function
-        | None -> Some lifted_params
-        | Some _ -> Misc.fatal_errorf "Pre-existing lifting params, cannot add new lifted params"
-      ) t.lifted_cont_params
+let register_cont_lifting_params_of_current_continuation t =
+  let cont =
+    match DE.continuation_stack t.denv with
+    | cont :: _ -> cont
+    | [] -> Misc.fatal_errorf "Empty continuation_stack in denv"
   in
-  { t with lifted_cont_params; }
+  let lifting_params = DE.variables_defined_in_current_continuation t.denv in
+  let cont_lifting_params =
+    Continuation.Map.update cont (function
+        | None -> Some lifting_params
+        | Some _ -> Misc.fatal_errorf "Pre-existing lifting params, cannot add new lifted params"
+      ) t.cont_lifting_params
+  in
+  { t with cont_lifting_params; }
 
 let are_lifting_conts t = t.are_lifting_conts
 
