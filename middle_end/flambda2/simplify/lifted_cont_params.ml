@@ -17,6 +17,7 @@
 module Id : sig
   type t
   val fresh : unit -> t
+  val print : Format.formatter -> t -> unit
   module Map : Container_types.Map with type key = t
 end = struct
   type t = int
@@ -63,7 +64,10 @@ let fold ~init ~f { new_params_indexed; } =
   Id.Map.fold f new_params_indexed init
 
 let rec find_arg id = function
-  | [] -> Misc.fatal_errorf "Missing lifted param id in lifted_cont_params"
+  | [] ->
+    Misc.fatal_errorf
+      "Missing lifted param id: %a not found in lifted_cont_params stack"
+      Id.print id
   | { new_params_indexed; } :: r ->
     match Id.Map.find_opt id new_params_indexed with
     | Some param -> Bound_parameter.simple param

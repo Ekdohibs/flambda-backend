@@ -1059,11 +1059,9 @@ let rec after_downwards_traversal_of_body_and_handlers
     down_to_up dacc ~rebuild:(prepare_to_rebuild_handlers data)
   | Rebuild data ->
     let dacc, down_to_up =
-      Format.eprintf "LIFTOUT %a@." DA.print dacc;
+      (* Format.eprintf "LIFTOUT %a@." DA.print dacc; *)
       let dacc, lifted_conts = DA.get_and_clear_lifted_continuations dacc in
       dacc, down_to_up_for_lifted_continuations ~denv_for_join ~simplify_expr lifted_conts ~down_to_up
-      (*      | Analyzing _ | Not_lifting ->
-              dacc, down_to_up *)
     in
     (* Here, we finally have the "normal" path, when we want to actually rebuild
        the let-cont, so we need to call the global [down_to_up] function. First
@@ -1197,11 +1195,11 @@ and prepare_dacc_for_handlers dacc ~env_at_fork ~params ~is_recursive
 and simplify_handler ~simplify_expr ~is_recursive ~is_exn_handler
     ~lifted_params ~invariant_params ~params cont dacc handler k =
   let all_params = Bound_parameters.append invariant_params params in
-  let dacc = DA.map_denv dacc ~f:(DE.enter_continuation cont) in
+  let dacc = DA.map_denv dacc ~f:(DE.enter_continuation cont lifted_params) in
   let dacc = DA.map_denv dacc ~f:(fun denv ->
       List.fold_left (fun denv bp ->
           DE.add_variable_defined_in_current_continuation denv bp
-        ) denv (Bound_parameters.to_list (Bound_parameters.append all_params (Lifted_cont_params.bound_parameters lifted_params))))
+        ) denv (Bound_parameters.to_list all_params))
   in
   let dacc = DA.with_continuation_uses_env dacc ~cont_uses_env:CUE.empty in
   let dacc =
@@ -1213,6 +1211,8 @@ and simplify_handler ~simplify_expr ~is_recursive ~is_exn_handler
   in
   simplify_expr dacc handler ~down_to_up:(fun dacc ~rebuild:rebuild_handler ->
       let defined_in_handler = DE.variables_defined_in_current_continuation (DA.denv dacc) in
+      Format.eprintf "IN ENV: %a -> %a@." Continuation.print cont
+        Lifted_cont_params.print defined_in_handler;
       let dacc = DA.add_lifted_cont_params dacc cont defined_in_handler in
       let dacc = DA.map_flow_acc ~f:(Flow.Acc.exit_continuation cont) dacc in
       let cont_uses_env_in_handler = DA.continuation_uses_env dacc in
@@ -1347,6 +1347,7 @@ and simplify_handlers ~simplify_expr ~rebuild_body
   let previous_are_lifting_conts = DA.are_lifting_conts dacc in
   match data.handlers with
   | Non_recursive { cont; params; lifted_params; handler; is_exn_handler; is_cold } -> (
+      Format.eprintf "SIMPLIFY %a@\n@." Continuation.print cont;
       let dacc = DA.with_are_lifting_conts dacc Are_lifting_conts.no_lifting in
       match
         Continuation_uses_env.get_continuation_uses body_continuation_uses_env

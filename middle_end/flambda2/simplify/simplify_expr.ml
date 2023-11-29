@@ -26,7 +26,7 @@ let simplify_toplevel_common dacc simplify ~params ~implicit_params
   in
   let dacc =
     DA.map_denv dacc
-      ~f:(DE.enter_continuation dummy_toplevel_cont)
+      ~f:(DE.enter_continuation dummy_toplevel_cont Lifted_cont_params.empty)
     |> DA.map_flow_acc
       ~f:
         (Flow.Acc.init_toplevel ~dummy_toplevel_cont

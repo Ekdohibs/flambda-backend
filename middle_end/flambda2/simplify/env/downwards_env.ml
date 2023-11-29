@@ -569,10 +569,10 @@ let with_code_age_relation code_age_relation t =
     typing_env = TE.with_code_age_relation t.typing_env code_age_relation
   }
 
-let enter_continuation cont t =
+let enter_continuation cont lifted_params t =
   { t with
     continuation_stack = cont :: t.continuation_stack;
-    variables_defined_in_current_continuation = Lifted_cont_params.empty;
+    variables_defined_in_current_continuation = lifted_params;
   }
 
 let variables_defined_in_current_continuation t =
