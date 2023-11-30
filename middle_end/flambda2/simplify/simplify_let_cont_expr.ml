@@ -1195,7 +1195,7 @@ and prepare_dacc_for_handlers dacc ~env_at_fork ~params ~is_recursive
 
 and simplify_handler ~simplify_expr ~is_recursive ~is_exn_handler
     ~lifted_params ~invariant_params ~params cont dacc handler k =
-  Format.eprintf "SIMPLIFY %a@\n@." Continuation.print cont;
+  (* Format.eprintf "SIMPLIFY %a@\n@." Continuation.print cont; *)
   let all_params = Bound_parameters.append invariant_params params in
   let dacc = DA.map_denv dacc ~f:(DE.enter_continuation cont lifted_params) in
   let dacc = DA.map_denv dacc ~f:(fun denv ->
@@ -1203,9 +1203,9 @@ and simplify_handler ~simplify_expr ~is_recursive ~is_exn_handler
           DE.add_variable_defined_in_current_continuation denv bp
         ) denv (Bound_parameters.to_list all_params))
   in
-  Format.eprintf "DEFINED: %a@\n@."
+  (* Format.eprintf "DEFINED: %a@\n@."
     Lifted_cont_params.print
-    (DE.variables_defined_in_current_continuation (DA.denv dacc));
+     (DE.variables_defined_in_current_continuation (DA.denv dacc)); *)
   let dacc = DA.with_continuation_uses_env dacc ~cont_uses_env:CUE.empty in
   let dacc =
     DA.map_flow_acc
@@ -1492,7 +1492,7 @@ and after_downwards_traversal_of_body ~simplify_expr ~down_to_up
     let dacc = DA.add_lifted_continuation handlers dacc in
     (* Restore lifted constants in dacc *)
     let dacc = DA.add_to_lifted_constant_accumulator dacc data.prior_lifted_constants in
-    Format.eprintf "ADD %a@." Lifted_cont.print_original_handlers handlers;
+    (* Format.eprintf "ADD %a@." Lifted_cont.print_original_handlers handlers; *)
     let data : after_downwards_traversal_of_body_and_handlers_data = Lifted_out { rebuild_body; } in
     after_downwards_traversal_of_body_and_handlers ~simplify_expr ~denv_for_join ~prior_lifted_constants data ~down_to_up dacc
   | Not_lifting | Analyzing _ ->
