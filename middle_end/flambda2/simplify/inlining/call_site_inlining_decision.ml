@@ -95,7 +95,6 @@ let speculative_inlining dacc ~apply ~function_type ~simplify_expr ~return_arity
            Thus we here provide empty/dummy values for the used_value_slots and
            code_age_relation, and ignore the reachable_code_id part of the
            data_flow analysis. *)
-        Format.eprintf "SPECULATIVE DATA FLOW@.";
         let flow_result =
           Flow.Analysis.analyze data_flow ~speculative:true
             ~print_name:"speculative" ~code_age_relation:Code_age_relation.empty

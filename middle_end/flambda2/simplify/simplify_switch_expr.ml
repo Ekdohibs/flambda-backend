@@ -421,7 +421,7 @@ let simplify_switch0 dacc switch ~down_to_up =
     | Lifting_out_of _ -> Misc.fatal_errorf "this should not happen"
     | Not_lifting -> dacc
     | Analyzing { continuation ; uses = _; } ->
-      Format.eprintf "Analyzing inside of continuation %a@." Continuation.print continuation;
+      (* Format.eprintf "Analyzing inside of continuation %a@." Continuation.print continuation; *)
       (* TODO/FIXME: implement an actual criterion for when to lift continuations.
          Currently for testing, we lift any continuation that occurs in a handler that
          ends with a switch. *)
