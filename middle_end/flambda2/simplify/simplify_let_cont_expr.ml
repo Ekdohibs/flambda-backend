@@ -1047,7 +1047,7 @@ let sort_handlers data handlers =
     [] sorted_handlers_from_the_inside_to_the_outside
 
 let rec after_downwards_traversal_of_body_and_handlers
-    ~simplify_expr ~denv_for_join ~prior_lifted_constants
+    ~simplify_expr ~denv_for_join
     (data : after_downwards_traversal_of_body_and_handlers_data) ~down_to_up
     dacc =
   (* At this point we have done a downwards traversal on the body and all the
@@ -1062,7 +1062,7 @@ let rec after_downwards_traversal_of_body_and_handlers
       (* Format.eprintf "LIFTOUT %a@." DA.print dacc; *)
       let dacc, lifted_conts = DA.get_and_clear_lifted_continuations dacc in
       dacc, down_to_up_for_lifted_continuations ~denv_for_join
-        ~prior_lifted_constants ~simplify_expr lifted_conts ~down_to_up
+        ~simplify_expr lifted_conts ~down_to_up
     in
     (* Here, we finally have the "normal" path, when we want to actually rebuild
        the let-cont, so we need to call the global [down_to_up] function. First
@@ -1195,7 +1195,6 @@ and prepare_dacc_for_handlers dacc ~env_at_fork ~params ~is_recursive
 
 and simplify_handler ~simplify_expr ~is_recursive ~is_exn_handler
     ~lifted_params ~invariant_params ~params cont dacc handler k =
-  (* Format.eprintf "SIMPLIFY %a@\n@." Continuation.print cont; *)
   let all_params = Bound_parameters.append invariant_params params in
   let dacc = DA.map_denv dacc ~f:(DE.enter_continuation cont lifted_params) in
   let dacc = DA.map_denv dacc ~f:(fun denv ->
@@ -1480,7 +1479,6 @@ and after_downwards_traversal_of_body ~simplify_expr ~down_to_up
   (* At this point, we have done the downwards traversal of the body, and
      we have two situations wrt to continuation lifting. *)
   let denv_for_join = data.denv_for_join in
-  let prior_lifted_constants = data.prior_lifted_constants in
   match DA.are_lifting_conts dacc with
   | Lifting_out_of { continuation = _; } ->
     (* In this case, we have decided to lift the continuation being bound out
@@ -1494,13 +1492,13 @@ and after_downwards_traversal_of_body ~simplify_expr ~down_to_up
     let dacc = DA.add_to_lifted_constant_accumulator dacc data.prior_lifted_constants in
     (* Format.eprintf "ADD %a@." Lifted_cont.print_original_handlers handlers; *)
     let data : after_downwards_traversal_of_body_and_handlers_data = Lifted_out { rebuild_body; } in
-    after_downwards_traversal_of_body_and_handlers ~simplify_expr ~denv_for_join ~prior_lifted_constants data ~down_to_up dacc
+    after_downwards_traversal_of_body_and_handlers ~simplify_expr ~denv_for_join data ~down_to_up dacc
   | Not_lifting | Analyzing _ ->
     simplify_handlers ~simplify_expr data dacc ~rebuild_body (fun dacc data ->
-        after_downwards_traversal_of_body_and_handlers ~simplify_expr ~denv_for_join ~prior_lifted_constants (Rebuild data : after_downwards_traversal_of_body_and_handlers_data) ~down_to_up dacc
+        after_downwards_traversal_of_body_and_handlers ~simplify_expr ~denv_for_join (Rebuild data : after_downwards_traversal_of_body_and_handlers_data) ~down_to_up dacc
       )
 
-and down_to_up_for_lifted_continuations ~denv_for_join ~prior_lifted_constants ~simplify_expr
+and down_to_up_for_lifted_continuations ~denv_for_join ~simplify_expr
     lifted_conts ~down_to_up =
   match lifted_conts with
   | [] -> down_to_up
@@ -1508,12 +1506,12 @@ and down_to_up_for_lifted_continuations ~denv_for_join ~prior_lifted_constants ~
     if debug () then Format.eprintf "stacking downwards for %a@."
         Lifted_cont.print_original_handlers handlers;
     let data : after_downwards_traversal_of_body_data =
-      { denv_for_join; prior_lifted_constants; handlers; }
+      { denv_for_join; prior_lifted_constants = LCS.empty; handlers; }
     in
     let down_to_up =
       after_downwards_traversal_of_body ~simplify_expr data ~down_to_up
     in
-    down_to_up_for_lifted_continuations ~denv_for_join ~prior_lifted_constants ~simplify_expr
+    down_to_up_for_lifted_continuations ~denv_for_join ~simplify_expr
       other_lifted_handlers ~down_to_up
 
 let simplify_let_cont0 ~(simplify_expr : _ Simplify_common.expr_simplifier) dacc (data : simplify_let_cont_data)
