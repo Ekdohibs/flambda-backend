@@ -1155,7 +1155,7 @@ and prepare_dacc_for_handlers dacc ~env_at_fork ~params ~is_recursive
         (* Don't try to unbox parameters of inlinable continuations, since the
            typing env still contains enough information to avoid re-reading the
            fields. *)
-        | None -> handler_env, do_not_unbox (), false, dacc)
+        | None -> handler_env, do_not_unbox (), false, DA.with_are_lifting_conts dacc Are_lifting_conts.no_lifting)
     | Normal_or_exn | Define_root_symbol ->
       let dacc, is_exn_handler =
         match is_exn_handler_cont with
