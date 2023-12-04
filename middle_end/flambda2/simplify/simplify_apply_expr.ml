@@ -838,17 +838,18 @@ let simplify_function_call_where_callee's_type_unavailable dacc apply
       ~env_at_use
       ~arg_types:(T.unknown_types_from_arity (Apply.return_arity apply))
   in
-  let call_kind =
+  let call_kind, apply =
     match call with
     | Indirect_unknown_arity ->
-      Call_kind.indirect_function_call_unknown_arity apply_alloc_mode
+      Call_kind.indirect_function_call_unknown_arity apply_alloc_mode, apply
     | Indirect_known_arity ->
-      Call_kind.indirect_function_call_known_arity apply_alloc_mode
+      Call_kind.indirect_function_call_known_arity apply_alloc_mode, apply
     | Direct _code_id ->
       (* Some types have regressed in precision. Since this used to be a direct
          call, however, we know the function's arity even though we don't know
          which function it is. *)
-      Call_kind.indirect_function_call_known_arity apply_alloc_mode
+      let call_kind = Call_kind.indirect_function_call_known_arity apply_alloc_mode in
+      call_kind, Apply_expr.with_call_kind apply call_kind
   in
   let dacc =
     record_free_names_of_apply_as_used ~use_id:(Some use_id) ~exn_cont_use_id
