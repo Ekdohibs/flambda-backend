@@ -583,3 +583,35 @@ let add_variable_defined_in_current_continuation t bound_param =
     variables_defined_in_current_continuation =
       Lifted_cont_params.new_param t.variables_defined_in_current_continuation bound_param; }
 
+let denv_for_lifted_continuation ~denv_for_join ~denv =
+    (* At this point, we are lifting a continuation k' with handler [handlers], out of
+       a continuation k, and:
+       - [denv_for_join] is the denv just before the letk for k
+       - [denv] is the denv just before the letk for k'
+
+       And we need to decide which parts of denv to use to simplify the handlers of k'
+       after there are lifted out from the handler of k. *)
+  {
+    typing_env = denv_for_join.typing_env;
+    inlined_debuginfo = denv.inlined_debuginfo;
+    can_inline = denv.can_inline;
+    inlining_state = denv.inlining_state;
+    at_unit_toplevel = denv_for_join.at_unit_toplevel;
+    variables_defined_at_toplevel = denv_for_join.variables_defined_at_toplevel;
+    cse = denv_for_join.cse;
+    all_code = denv.all_code;
+    inlining_history_tracker = denv.inlining_history_tracker;
+    continuation_stack = denv_for_join.continuation_stack;
+    variables_defined_in_current_continuation = denv_for_join.variables_defined_in_current_continuation;
+
+    (* These should not matter, both denvs should have the same value of these fields *)
+    round = denv.round;
+    propagating_float_consts = denv.propagating_float_consts;
+    unit_toplevel_return_continuation = denv.unit_toplevel_return_continuation;
+    unit_toplevel_exn_continuation = denv.unit_toplevel_exn_continuation;
+    do_not_rebuild_terms = denv.do_not_rebuild_terms;
+    closure_info = denv.closure_info;
+    get_imported_code = denv.get_imported_code;
+    loopify_state = denv.loopify_state;
+  }
+

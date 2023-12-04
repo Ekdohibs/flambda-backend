@@ -1061,8 +1061,8 @@ let rec after_downwards_traversal_of_body_and_handlers
     let dacc, down_to_up =
       (* Format.eprintf "LIFTOUT %a@." DA.print dacc; *)
       let dacc, lifted_conts = DA.get_and_clear_lifted_continuations dacc in
-      dacc, down_to_up_for_lifted_continuations ~denv_for_join
-        ~simplify_expr lifted_conts ~down_to_up
+      dacc, down_to_up_for_lifted_continuations
+        ~simplify_expr ~denv_for_join lifted_conts ~down_to_up
     in
     (* Here, we finally have the "normal" path, when we want to actually rebuild
        the let-cont, so we need to call the global [down_to_up] function. First
@@ -1490,7 +1490,7 @@ and after_downwards_traversal_of_body ~simplify_expr ~down_to_up
          `down_to_up` later. *)
     let params_to_lift = DE.variables_defined_in_current_continuation (DA.denv dacc) in
     let handlers = Lifted_cont.add_params_to_lift data.handlers params_to_lift in
-    let dacc = DA.add_lifted_continuation handlers dacc in
+    let dacc = DA.add_lifted_continuation data.denv_for_join handlers dacc in
     (* Restore lifted constants in dacc *)
     let dacc = DA.add_to_lifted_constant_accumulator dacc data.prior_lifted_constants in
     if debug () then Format.eprintf "ADD %a@." Lifted_cont.print_original_handlers handlers;
@@ -1501,20 +1501,27 @@ and after_downwards_traversal_of_body ~simplify_expr ~down_to_up
         after_downwards_traversal_of_body_and_handlers ~simplify_expr ~denv_for_join (Rebuild data : after_downwards_traversal_of_body_and_handlers_data) ~down_to_up dacc
       )
 
-and down_to_up_for_lifted_continuations ~denv_for_join ~simplify_expr
-    lifted_conts ~down_to_up =
+and down_to_up_for_lifted_continuations ~simplify_expr ~denv_for_join lifted_conts ~down_to_up =
   match lifted_conts with
   | [] -> down_to_up
-  | handlers :: other_lifted_handlers ->
+  | (denv, handlers) :: other_lifted_handlers ->
+    (* At this point, we are lifting a continuation k' with handler [handlers], out of
+       a continuation k, and:
+       - [denv_for_join] is the denv just before the letk for k
+       - [denv] is the denv just before the letk for k'
+
+       And we need to decide which parts of denv to use to simplify the handlers of k'
+       after there are lifted out from the handler of k. *)
+    let actual_denv = DE.denv_for_lifted_continuation ~denv_for_join ~denv in
     if debug () then Format.eprintf "stacking downwards for %a@."
         Lifted_cont.print_original_handlers handlers;
     let data : after_downwards_traversal_of_body_data =
-      { denv_for_join; prior_lifted_constants = LCS.empty; handlers; }
+      { denv_for_join = actual_denv; prior_lifted_constants = LCS.empty; handlers; }
     in
     let down_to_up =
       after_downwards_traversal_of_body ~simplify_expr data ~down_to_up
     in
-    down_to_up_for_lifted_continuations ~denv_for_join ~simplify_expr
+    down_to_up_for_lifted_continuations ~simplify_expr ~denv_for_join
       other_lifted_handlers ~down_to_up
 
 let simplify_let_cont0 ~(simplify_expr : _ Simplify_common.expr_simplifier) dacc (data : simplify_let_cont_data)

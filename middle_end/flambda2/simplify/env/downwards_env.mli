@@ -220,3 +220,5 @@ val variables_defined_in_current_continuation : t -> Lifted_cont_params.t
 
 val add_variable_defined_in_current_continuation : t -> Bound_parameter.t -> t
 
+val denv_for_lifted_continuation : denv_for_join:t -> denv:t -> t
+

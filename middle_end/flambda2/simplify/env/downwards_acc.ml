@@ -32,8 +32,16 @@ type t =
     code_ids_to_never_delete : Code_id.Set.t;
     slot_offsets : Slot_offsets.t Code_id.Map.t;
     are_lifting_conts : Are_lifting_conts.t;
-    lifted_continuations : Lifted_cont.original_handlers list;
+    lifted_continuations : (DE.t * Lifted_cont.original_handlers) list;
   }
+
+let print_lifted_cont ppf (denv, original_handlers) =
+  Format.fprintf ppf "@[<hov 1>(\
+      @[<hov 1>(denv %a)@]@ \
+      @[<hov 1>(original_handlers %a)@]\
+     )@]"
+    DE.print denv
+    Lifted_cont.print_original_handlers original_handlers
 
 let [@ocamlformat "disable"] print ppf
       { denv; continuation_uses_env; shareable_constants; used_value_slots;
@@ -68,7 +76,7 @@ let [@ocamlformat "disable"] print ppf
     (Code_id.Map.print Slot_offsets.print) slot_offsets
     Are_lifting_conts.print are_lifting_conts
     (Format.pp_print_list ~pp_sep:Format.pp_print_space
-       Lifted_cont.print_original_handlers) lifted_continuations
+       print_lifted_cont) lifted_continuations
 
 let create denv continuation_uses_env =
   { denv;
@@ -248,6 +256,6 @@ let with_are_lifting_conts t are_lifting_conts =
 let get_and_clear_lifted_continuations t =
   { t with lifted_continuations = []; }, t.lifted_continuations
 
-let add_lifted_continuation original_handlers t =
-  { t with lifted_continuations = original_handlers :: t.lifted_continuations; }
+let add_lifted_continuation denv original_handlers t =
+  { t with lifted_continuations = (denv, original_handlers) :: t.lifted_continuations; }
 
