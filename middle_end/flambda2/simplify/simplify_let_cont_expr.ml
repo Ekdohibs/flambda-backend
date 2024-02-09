@@ -1196,13 +1196,16 @@ and prepare_dacc_for_handlers dacc ~env_at_fork ~params ~is_recursive
     join_result.extra_params_and_args )
 
 and simplify_handler ~simplify_expr ~is_recursive ~is_exn_handler
-    ~lifted_params ~invariant_params ~params cont dacc handler k =
-  let all_params = Bound_parameters.append invariant_params params in
+    ~lifted_params ~invariant_params ~params ~all_extra_params cont dacc handler k =
+  let all_params =
+      (Bound_parameters.append invariant_params params) in
   let dacc = DA.map_denv dacc ~f:(DE.enter_continuation cont lifted_params) in
   let dacc = DA.map_denv dacc ~f:(fun denv ->
       List.fold_left (fun denv bp ->
           DE.add_variable_defined_in_current_continuation denv bp
-        ) denv (Bound_parameters.to_list all_params))
+        ) denv (Bound_parameters.to_list
+                  (Bound_parameters.append all_params all_extra_params))
+    )
   in
   if debug () then
     Format.eprintf "DEFINED: %a@\n@."
@@ -1227,7 +1230,8 @@ and simplify_handler ~simplify_expr ~is_recursive ~is_exn_handler
       k dacc rebuild_handler cont_uses_env_in_handler)
 
 and simplify_single_recursive_handler ~simplify_expr cont_uses_env_so_far
-    ~lifted_params ~invariant_params consts_lifted_during_body all_handlers_set denv_to_reset
+    ~lifted_params ~invariant_params ~invariant_epa
+    consts_lifted_during_body all_handlers_set denv_to_reset
     dacc cont ({ params; handler; is_cold } : one_recursive_handler) k =
   (* Here we perform the downwards traversal on a single handler.
 
@@ -1255,8 +1259,13 @@ and simplify_single_recursive_handler ~simplify_expr cont_uses_env_so_far
     handler_env, decisions, dacc
   in
   let dacc = DA.with_denv dacc handler_env in
+  let all_extra_params =
+    Bound_parameters.append
+      (EPA.extra_params invariant_epa)
+      (Unbox_continuation_params.compute_extra_params_in_unspecified_order unbox_decisions)
+  in
   simplify_handler ~simplify_expr ~is_recursive:true ~is_exn_handler:false
-    ~lifted_params ~params ~invariant_params cont dacc handler
+    ~lifted_params ~params ~invariant_params ~all_extra_params cont dacc handler
     (fun dacc rebuild_handler cont_uses_env_in_handler ->
        let cont_uses_env_so_far =
          CUE.union cont_uses_env_so_far cont_uses_env_in_handler
@@ -1316,7 +1325,7 @@ and simplify_recursive_handlers ~rebuild_body ~lifted_params ~invariant_params ~
         Continuation.Set.remove cont reachable_handlers_to_simplify
       in
       let handler = Continuation.Map.find cont continuation_handlers in
-      simplify_single_recursive_handler ~simplify_expr ~lifted_params ~invariant_params
+      simplify_single_recursive_handler ~simplify_expr ~lifted_params ~invariant_params ~invariant_epa
         cont_uses_env_so_far consts_lifted_during_body all_conts_set common_denv
         dacc cont handler (fun dacc rebuild cont_uses_env_so_far ->
             let simplified_handlers_set =
@@ -1402,9 +1411,16 @@ and simplify_handlers ~simplify_expr ~rebuild_body
             (Continuation_uses.get_uses uses)
             ~arg_types_by_use_id:(Continuation_uses.get_arg_types_by_use_id uses)
         in
-        (* Format.eprintf "DACC = %a@." DA.print dacc; *)
+        Format.eprintf "Decisions for %a:@\n%a@\ndacc:@\n%a@\n@."
+          Continuation.print cont Unbox_continuation_params.Decisions.print unbox_decisions
+          TE.print (DE.typing_env (DA.denv dacc));
+        let all_extra_params =
+          Bound_parameters.append
+            (EPA.extra_params extra_params_and_args_for_cse)
+            (Unbox_continuation_params.compute_extra_params_in_unspecified_order unbox_decisions)
+        in
         simplify_handler ~simplify_expr ~is_recursive:false ~is_exn_handler
-          ~lifted_params ~params cont dacc handler ~invariant_params:Bound_parameters.empty
+          ~lifted_params ~params ~all_extra_params cont dacc handler ~invariant_params:Bound_parameters.empty
           (fun dacc rebuild_handler cont_uses_env_in_handler ->
              let cont_uses_env_so_far =
                CUE.union body_continuation_uses_env cont_uses_env_in_handler
@@ -1512,7 +1528,8 @@ and down_to_up_for_lifted_continuations ~simplify_expr ~denv_for_join lifted_con
 
        And we need to decide which parts of denv to use to simplify the handlers of k'
        after there are lifted out from the handler of k. *)
-    let actual_denv = DE.denv_for_lifted_continuation ~denv_for_join ~denv in
+    let params = assert false in (* TODO: fix this / the cse join situation *)
+    let actual_denv = DE.denv_for_lifted_continuation ~denv_for_join ~denv ~params in
     if debug () then Format.eprintf "stacking downwards for %a@."
         Lifted_cont.print_original_handlers handlers;
     let data : after_downwards_traversal_of_body_data =
