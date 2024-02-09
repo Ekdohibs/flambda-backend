@@ -1528,8 +1528,7 @@ and down_to_up_for_lifted_continuations ~simplify_expr ~denv_for_join lifted_con
 
        And we need to decide which parts of denv to use to simplify the handlers of k'
        after there are lifted out from the handler of k. *)
-    let params = assert false in (* TODO: fix this / the cse join situation *)
-    let actual_denv = DE.denv_for_lifted_continuation ~denv_for_join ~denv ~params in
+    let actual_denv = DE.denv_for_lifted_continuation ~denv_for_join ~denv in
     if debug () then Format.eprintf "stacking downwards for %a@."
         Lifted_cont.print_original_handlers handlers;
     let data : after_downwards_traversal_of_body_data =

@@ -583,7 +583,7 @@ let add_variable_defined_in_current_continuation t bound_param =
     variables_defined_in_current_continuation =
       Lifted_cont_params.new_param t.variables_defined_in_current_continuation bound_param; }
 
-let denv_for_lifted_continuation ~denv_for_join ~denv ~params =
+let denv_for_lifted_continuation ~denv_for_join ~denv =
     (* At this point, we are lifting a continuation k' with handler [handlers], out of
        a continuation k, and:
        - [denv_for_join] is the denv just before the letk for k
@@ -591,20 +591,6 @@ let denv_for_lifted_continuation ~denv_for_join ~denv ~params =
 
        And we need to decide which parts of denv to use to simplify the handlers of k'
        after there are lifted out from the handler of k. *)
-  let cse =
-      match CSE.join
-        ~typing_env_at_fork:denv_for_join.typing_env
-        ~cse_at_fork:denv_for_join.cse
-        ~use_info:[denv]
-        ~get_typing_env:(fun denv -> denv.typing_env)
-        ~get_rewrite_id:(fun _denv -> assert false) (* TODO: fix this *)
-        ~get_cse:(fun denv -> denv.cse)
-        ~params with
-      | None -> denv_for_join.cse
-      | Some { cse_at_join_point; _ } ->
-        (* TODO: this is wrong *)
-        cse_at_join_point
-  in
   {
     typing_env = denv_for_join.typing_env;
     inlined_debuginfo = denv.inlined_debuginfo;
@@ -612,7 +598,7 @@ let denv_for_lifted_continuation ~denv_for_join ~denv ~params =
     inlining_state = denv.inlining_state;
     at_unit_toplevel = denv_for_join.at_unit_toplevel;
     variables_defined_at_toplevel = denv_for_join.variables_defined_at_toplevel;
-    cse;
+    cse = denv_for_join.cse;
     all_code = denv.all_code;
     inlining_history_tracker = denv.inlining_history_tracker;
     continuation_stack = denv_for_join.continuation_stack;
