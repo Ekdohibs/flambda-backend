@@ -1411,9 +1411,9 @@ and simplify_handlers ~simplify_expr ~rebuild_body
             (Continuation_uses.get_uses uses)
             ~arg_types_by_use_id:(Continuation_uses.get_arg_types_by_use_id uses)
         in
-        Format.eprintf "Decisions for %a:@\n%a@\ndacc:@\n%a@\n@."
+        (* Format.eprintf "Decisions for %a:@\n%a@\ndacc:@\n%a@\n@."
           Continuation.print cont Unbox_continuation_params.Decisions.print unbox_decisions
-          TE.print (DE.typing_env (DA.denv dacc));
+           TE.print (DE.typing_env (DA.denv dacc)); *)
         let all_extra_params =
           Bound_parameters.append
             (EPA.extra_params extra_params_and_args_for_cse)
