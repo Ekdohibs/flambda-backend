@@ -15,6 +15,8 @@ let arg_minimizers = ref ""
 let command = ref ""
 let typing_command = ref ""
 let output_file = ref ""
+let check_error_cmd = ref ""
+let use_cmt = ref false
 let test = ref false
 let anon_fun filename = input_files := filename :: !input_files
 
@@ -27,6 +29,13 @@ let spec_list =
       Arg.Set_string typing_command,
       "Set command to use to generate cmt file" );
     ("-o", Arg.Set_string output_file, "Set output file/folder");
+    ( "--use-cmt",
+      Arg.Set use_cmt,
+      "Use existing cmt file instead of generating it" );
+    ( "--check-error-cmd",
+      Arg.Set_string check_error_cmd,
+      "Set command to check the presence of an error; in this case, \
+       minimization will be done in-place." );
     ("--test", Arg.Set test, "Run only first iteration of minimizer");
   ]
 
@@ -119,14 +128,20 @@ let main () =
   let cmt_command =
     if !typing_command = "" then !command else !typing_command
   in
-  let cmt_infos = generate_cmt cmt_command file_names in
+  let cmt_infos =
+    if !use_cmt then read_all_cmts file_names
+    else generate_cmt cmt_command file_names
+  in
   let file_strs =
     List.map (fun cmt_info -> extract_cmt cmt_info.cmt_annots) cmt_infos
   in
 
   (* CHECKING ERROR PRESENCE *)
   let c =
-    List.fold_left (fun c output -> c ^ " " ^ output) !command file_names
+    if !check_error_cmd = "" then
+      get_check_error_cmd
+        (List.fold_left (fun c output -> c ^ " " ^ output) !command file_names)
+    else !check_error_cmd
   in
   if not (raise_error c) then (
     Format.eprintf "This command does not raise the error %S. @."
@@ -137,11 +152,15 @@ let main () =
     (* MONOFILE MINIMIZATION*)
     let input = List.hd file_names in
     let output_file =
-      if !output_file = "" then
+      if !check_error_cmd <> "" then input
+      else if !output_file = "" then
         String.sub input 0 (String.length input - 3) ^ "_min.ml"
       else !output_file
     in
-    let c = !command ^ " " ^ output_file in
+    let c =
+      if !check_error_cmd = "" then !command ^ " " ^ output_file
+      else !check_error_cmd
+    in
     let input_str = ref (List.hd file_strs) in
     update_single output_file !input_str;
     let has_changed = ref true in

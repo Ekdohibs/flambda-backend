@@ -141,9 +141,15 @@ let make_command c output_files =
 let compile (filename : string) compile_command =
   Sys.command (!compile_command ^ " " ^ filename)
 
-let raise_error compile_command =
-  Sys.command (compile_command ^ " 2>&1 | grep " ^ !error_str ^ " > /dev/null")
-  = 0
+let get_check_error_cmd compile_command =
+  compile_command ^ " 2>&1 | grep " ^ !error_str ^ "> /dev/null"
+
+let raise_error cmd = Sys.command cmd = 0
+
+let read_all_cmts filenames =
+  List.map
+    (fun s -> read_cmt (String.sub s 0 (String.length s - 3) ^ ".cmt"))
+    filenames
 
 let generate_cmt typing_command (filenames : string list) =
   let params = List.fold_left (fun s output -> s ^ " " ^ output) "" filenames in
@@ -151,11 +157,7 @@ let generate_cmt typing_command (filenames : string list) =
     Sys.command (typing_command ^ " -bin-annot -stop-after typing " ^ params)
     = 0
   then (
-    let l =
-      List.map
-        (fun s -> read_cmt (String.sub s 0 (String.length s - 3) ^ ".cmt"))
-        filenames
-    in
+    let l = read_all_cmts filenames in
     List.iter
       (fun s ->
         Stdlib.ignore
