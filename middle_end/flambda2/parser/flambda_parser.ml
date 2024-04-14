@@ -1,9 +1,6 @@
 
 (* This generated code requires the following version of CamlinternalMenhirLib: *)
 
-let () =
-  CamlinternalMenhirLib.StaticVersion.require_20230608
-
 module MenhirBasics = struct
   
   exception Error
