@@ -148,3 +148,19 @@ let partially_apply t ~num_non_unarized_params_provided =
   else snd (Misc.Stdlib.List.split_at num_non_unarized_params_provided t)
 
 let concat t1 t2 = t1 @ t2
+
+let group_unarized_parameters (t : [`Complex] t) (l : 'a list) : 'a list list =
+  let t = unarize_per_parameter t in 
+  let rec aux t l =
+    match t, l with
+    | [], [] -> []
+    | [], _ :: _ ->
+      Misc.fatal_errorf
+        "[group_unarized_paremeters]: [t] and [l] do not have compatible lengths"
+    | kinds :: t, l ->
+      let group, rest =
+        Misc.Stdlib.List.map2_prefix (fun _kind x -> x) kinds l
+      in
+      group :: aux t rest
+  in
+  aux t l

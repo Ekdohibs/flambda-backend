@@ -124,19 +124,7 @@ let translate_apply0 ~dbg_with_inlined:dbg env res apply =
       args_arity
   in
   let split_args () =
-    let rec aux args args_arity =
-      match args_arity, args with
-      | [], [] -> []
-      | [], _ :: _ ->
-        Misc.fatal_errorf
-          "[split_args]: [args] and [args_ty] do not have compatible lengths"
-      | kinds :: args_arity, args ->
-        let group, rest =
-          Misc.Stdlib.List.map2_prefix (fun _kind arg -> arg) kinds args
-        in
-        C.make_tuple group :: aux rest args_arity
-    in
-    aux args args_arity
+    Flambda_arity.group_unarized_parameters (Apply.args_arity apply) args |> List.map C.make_tuple 
   in
   let return_ty = C.extended_machtype_of_return_arity return_arity in
   match Apply.call_kind apply with

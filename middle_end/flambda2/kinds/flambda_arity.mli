@@ -114,3 +114,9 @@ val partially_apply :
 (** Concatenation of two arities, usually used to add information about more
     parameters to an existing arity. *)
 val concat : 'a t -> 'a t -> 'a t
+
+(* Given an arity and a list of length equal to the number of unarized parameters,
+   produce a list where the elements corresponding to the same non-unarized parameter
+   have been grouped together. *)
+val group_unarized_parameters : [`Complex] t -> 'a list -> 'a list list
+
