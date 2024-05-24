@@ -538,8 +538,8 @@ let compute_extra_params_in_unspecified_order extra_params decision =
                 Unbox
                   ( Unique_tag_and_size _ | Variant _ | Closure_single_entry _
                   | Number
-                      ( ( Naked_float | Naked_int32 | Naked_int64 | Naked_vec128
-                        | Naked_nativeint ),
+                      ( ( Naked_float32 | Naked_float | Naked_int32
+                        | Naked_int64 | Naked_vec128 | Naked_nativeint ),
                         _ ) );
               is_int = _
             } ->

@@ -46,6 +46,7 @@ let kind (t : t) =
   match descr t with
   | Tagged_immediate _ -> K.tagged_immediate
   | Naked_immediate _ -> K.naked_immediate
+  | Naked_float32 _ -> K.naked_float32
   | Naked_float _ -> K.naked_float
   | Naked_int32 _ -> K.naked_int32
   | Naked_int64 _ -> K.naked_int64
