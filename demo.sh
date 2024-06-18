@@ -1,26 +1,38 @@
 #!/usr/bin/env bash
 
-autoconf
-./configure --enable-middle-end=flambda2
-make runtime-stdlib
+#autoconf
+#./configure --enable-middle-end=flambda2 --enable-runtime=runtime4
+make
 make minimizer
 
 OCAMLLIB=_build/install/runtime_stdlib/lib/ocaml_runtime_stdlib/
 export OCAMLLIB
 
 
-COMPILE="_build/_bootinstall/bin/ocamlopt.opt -c -Oclassic"
-INPUT=ocaml/testsuite/tests/backtrace/inline_traversal_test.ml
-OUTPUT=minimized.ml
+FLAGS=( "-Oclassic" "-O3" "" "-principal -I _build/main/ocaml/.ocamlcommon.objs/byte -I _build/main/ocaml/.ocamlcommon.objs/native -dflambda" "-principal -I _build/main/ocaml/.ocamlcommon.objs/byte -I _build/main/ocaml/.ocamlcommon.objs/native -dflambda" )
+CHAMELON_FLAGS=( "" "" "" "-e Defining_expr_of_let" "-e Defining_expr_of_let")
+INPUTS=( ocaml/testsuite/tests/backtrace/inline_traversal_test.ml binary_packing.ml letrec.ml ocaml/typing/env.ml env.ml )
+OUTPUTS=( inline_traversal_test_min.ml binary_packing_min.ml letrec_min.ml env.ml env_min.ml )
+EXTRACOMMAND=( "" "" "" "cp ocaml/typing/env.mli env.mli" "" )
 
-# Fails
-$COMPILE $INPUT 2>/dev/null
-echo $?
+ITERATE=${1:-${!FLAGS[@]}}
 
-# Minimize exemple
-_build/default/chamelon/chamelon.exe -c "$COMPILE" $INPUT -o $OUTPUT
+for idx in $ITERATE; do
+  COMPILE="_build/_bootinstall/bin/ocamlopt.opt -c ${FLAGS[$idx]}"
+  INPUT=${INPUTS[$idx]}
+  OUTPUT=${OUTPUTS[$idx]}
 
-# Still fails
-$COMPILE $OUTPUT 2>/dev/null
-echo $?
+  ${EXTRACOMMAND[$idx]}
 
+  # Fails
+  $COMPILE $INPUT 2>/dev/null
+  echo $?
+
+  # Minimize exemple
+  _build/default/chamelon/chamelon.exe -c "$COMPILE" $INPUT -o $OUTPUT ${CHAMELON_FLAGS[$idx]}
+
+  # Still fails
+  $COMPILE $OUTPUT 2>/dev/null
+  echo $?
+
+done

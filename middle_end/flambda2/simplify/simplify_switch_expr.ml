@@ -453,8 +453,7 @@ let rebuild_switch ~original ~arms ~condition_dbg ~scrutinee ~scrutinee_ty
           assert (List.length consts = TI.Map.cardinal arms);
           let tagging_prim : P.t = Unary (Tag_immediate, scrutinee) in
           match
-            find_cse_simple dacc_before_switch (UA.required_names uacc)
-              tagging_prim
+            find_cse_simple dacc_before_switch tagging_prim
           with
           | None -> normal_case0 uacc
           | Some tagged_scrutinee ->
