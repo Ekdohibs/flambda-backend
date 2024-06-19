@@ -1,12 +1,10 @@
-{ pkgs ? import ./nix { } }:
+{ pkgs ? import ./nix }:
 
 let
   inherit (pkgs) ocamlPackages;
 in
 
 pkgs.mkShell {
-  strictDeps = true;
-
   configureFlags = [ "--enable-middle-end-flambda2" ];
 
   nativeBuildInputs = with ocamlPackages; [

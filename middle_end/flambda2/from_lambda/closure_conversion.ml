@@ -3255,7 +3255,7 @@ let close_program (type mode) ~(mode : mode Flambda_features.mode) ~big_endian
       Flambda_unit.create ~return_continuation:return_cont ~exn_continuation
         ~toplevel_my_region ~body ~module_symbol ~used_value_slots:Unknown
     in
-    { unit; code_slot_offsets; metadata = Normal }
+    { unit; code_slot_offsets = Code_id.Map.empty; metadata = Normal }
   | Classic ->
     let all_code =
       Exported_code.add_code (Acc.code_map acc)
