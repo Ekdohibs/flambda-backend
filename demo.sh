@@ -14,8 +14,8 @@ export OCAMLLIB
 
 FLAGS=( "-Oclassic" "-O3" "" "" "-principal -I _build/main/ocaml/.ocamlcommon.objs/byte -I _build/main/ocaml/.ocamlcommon.objs/native -dflambda" "-principal -I _build/main/ocaml/.ocamlcommon.objs/byte -I _build/main/ocaml/.ocamlcommon.objs/native -dflambda" )
 CHAMELON_FLAGS=( "" "" "" "" "-e Defining_expr_of_let" "-e Defining_expr_of_let")
-INPUTS=( ocaml/testsuite/tests/backtrace/inline_traversal_test.ml binary_packing.ml letrec.ml seq.ml ocaml/typing/env.ml env.ml )
-OUTPUTS=( inline_traversal_test_min.ml binary_packing_min.ml letrec_min.ml seq_min.ml env.ml env_min.ml )
+INPUTS=( ocaml/testsuite/tests/backtrace/inline_traversal_test.ml binary_packing.ml letrec.ml seqtest.ml ocaml/typing/env.ml env.ml )
+OUTPUTS=( inline_traversal_test_min.ml binary_packing_min.ml letrec_min.ml seqtest_min.ml env.ml env_min.ml )
 EXTRACOMMAND=( "" "" "" "" "cp ocaml/typing/env.mli env.mli" "" )
 
 ITERATE=${1:-${!FLAGS[@]}}
