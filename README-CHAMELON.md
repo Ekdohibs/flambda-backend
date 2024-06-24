@@ -59,8 +59,8 @@ We describe each of the test cases below:
   - The file itself does not compile without its associated `.mli` file. However, this
     prevents some minimisations; as such, we perform two successive minimisations, one
     with the `.mli` file, followed by minimizing the result of the first one, which does
-    not need the `.mli` file to compile. This allows us to successively reduce a ~3800
-    lines file, to a ~700 lines file, to a file with only a couple dozen lines.
+    not need the `.mli` file to compile. This allows us to successively reduce a ~4000
+    lines file, to a ~450 lines file, to a file with 34 lines.
 
   - It does not crash the compiler like the others, instead producing an error at runtime.
     Fortunately, there is a pattern in the produced code we can look for, which can
