@@ -27,6 +27,10 @@ You should see in the standard output:
    * `Removes error.` when the transformation removes the error.
    * `No more changes.` when the end of the program is reached.
 
+After this, the minimized files appear directly in this folder. They have the same name as
+the original files, with the suffix `_min`: this way, `env.ml` is minimized in `env_min.ml`.
+If you wish, you can then compare original files to minimized files.
+
 We describe each of the test cases below:
 
 - `ocaml/testsuite/tests/backtrace/inline_traversal_test.ml`:
@@ -54,17 +58,28 @@ We describe each of the test cases below:
   It was due to a bug in the computation of the possible shapes of the values for some
   types.
 
-  It is notable in several aspects beside its size:
+  It is notable in several aspects besides its size:
 
-  - The file itself does not compile without its associated `.mli` file. However, this
-    prevents some minimisations; as such, we perform two successive minimisations, one
-    with the `.mli` file, followed by minimizing the result of the first one, which does
+  - The file itself does not compile without its associated `.mli` file. Consequently,
+    this prevents some minimisations; as such, we perform two successive minimisations,
+    one with the `.mli` file, and a second one by minimizing the result of the first,
     not need the `.mli` file to compile. This allows us to successively reduce a ~4000
     lines file, to a ~450 lines file, to a file with 34 lines.
 
   - It does not crash the compiler like the others, instead producing an error at runtime.
-    Fortunately, there is a pattern in the produced code we can look for, which can
-    appear in normal code that only appears here if the bug is present. Thus, we minimize
-    the example by ensuring that pattern still appears in the minimized file. While this
-    gives us no guarantee the minimized file has the same bug, it was small enough to
-    identify a bug, and fixing that bug confirmed that this was the initial bug.
+    Fortunately, there is a pattern in the produced code which, here, only appears when
+    the bug is present. Thus, we minimize the example by ensuring that pattern still
+    appears in the minimized file.
+
+
+Using chamelon
+==============
+
+If you want to run chamelon outside the demonstration setting, see chamelon's own README
+(`chamelon/README.md`) for more information about its usage. Chamelon can also be directly
+downloaded from github, either in the `chamelon` subfolder of
+https://github.com/ocaml-flambda/flambda-backend for a flambda-enabled version, or at
+the stand-alone chamelon repository https://github.com/Ekdohibs/chamelon .
+
+
+

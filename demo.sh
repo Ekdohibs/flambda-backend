@@ -39,3 +39,13 @@ for idx in $ITERATE; do
   echo $?
 
 done
+
+
+for idx in $ITERATE; do
+  INPUT=${INPUTS[$idx]}
+  OUTPUT=${OUTPUTS[$idx]}
+
+  echo "Input: $INPUT, $(wc -l < $INPUT) lines"
+  echo "Output: $OUTPUT, $(wc -l < $OUTPUT) lines"
+  echo ""
+done
