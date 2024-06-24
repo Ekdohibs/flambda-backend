@@ -10,7 +10,7 @@ The demonstration can be run with `./demo.sh`, which builds the tool then minimi
 sevaral inputs. If you use the provided docker image, you can simply do:
 ```bash
 docker image import chamelon-docker.tar.bz2 chamelon:chamelon
-docker run -u user -w /home/user -i chamelon:chamelon /bin/bash
+docker run -u user -w /home/user -ti chamelon:chamelon /bin/bash
 ```
 This will get you a shell inside the docker image, from which you can launch `./demo.sh`.
 
