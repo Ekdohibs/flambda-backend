@@ -40,11 +40,11 @@ We describe each of the test cases below:
   pattern matching is one of the few constructions remaining.
 
 - `letrec.ml`:
-  This failed to due to a bug in the compilation of recursive values. While this example
+  This failed due to a bug in the compilation of recursive values. While this example
   was written by hand after suspecting a bug from the code, chamelon is still able to
   minimize it to provide an easier-to-debug example.
 
-- `seq.ml`:
+- `seqtest.ml`:
   This example failed due to a bug where non-simplified versions of functions ended up
   in the output, which the code didn't expect.
 
