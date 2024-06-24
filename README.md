@@ -1,49 +1,70 @@
-# The Flambda backend project for OCaml
 
-This repository is for more experimental work, of production quality, on the middle end
-and backend of the OCaml compiler.
-This is also the home of the Flambda 2 optimiser and the Cfg backend.
+ The source code of the chamelon delta-debugger is available in the `chamelon` directory.
+ This is a version of the ocaml-flambda compiler, on top of which we reverted a certain
+ number of bugfixes, in order to demonstrate real, in the wild minimisation problems.
 
-The Flambda backend is currently based on OCaml 4.14.1.
+Demonstration
+=============
 
-The following gives basic instructions for getting set up.  Please see
-[`HACKING.md`](HACKING.md) for more detailed instructions if you want to develop in this repo.
-That file also contains instructions for installing the Flambda backend compiler in a way
-that it can be used to build OPAM packages.
-
-## One-time setup for dev work or installation
-
-Only currently tested on Linux/x86-64 and macOS/x86-64.
-
-One-time setup (you can also use other 4.14.x releases):
+The demonstration can be run with `./demo.sh`, which builds the tool then minimizes 
+sevaral inputs. If you use the provided docker image, you can simply do:
+```bash
+docker image import chamelon-docker.tar.bz2 chamelon:chamelon
+docker run -u user -w /home/user -ti chamelon:chamelon /bin/bash
 ```
-$ opam switch 4.14.1  # or "opam switch create 4.14.1" if you haven't got that switch already
-$ eval $(opam env)
-$ opam install dune.3.8.1 menhir.20210419
-```
+This will get you a shell inside the docker image, from which you can launch `./demo.sh`.
 
-You probably then want to fork the `ocaml-flambda/flambda-backend` repo to your own Github org.
+Otherwise, you can install `ocaml-4.14.1`, `menhir.20210419` and `dune.3.8.1` (for
+instance using opam), before running `./demo.sh`.
 
-## Branching and configuring
+You should see in the standard output:
++ First, logs from building the tool
++ Second, for each input, the steps performed by the tool:
+ - `Starting to minimize [minimized_name].ml` before a new minimization attempt.
+ - Then for each atomic heuristics: `Trying heuristic-name: pos=i, len=j...` before trying
+   to perform `heuristic-name` at `j` program points starting from position `i`, and:
+   * `Reduced.` when the transformation is applied.
+   * `Removes error.` when the transformation removes the error.
+   * `No more changes.` when the end of the program is reached.
 
-Use normal commands to make a branch from the desired upstream branch (typically `main`), e.g.:
-```
-$ git clone https://github.com/ocaml-flambda/flambda-backend
-$ cd flambda-backend
-$ git checkout -b myfeature origin/main
-```
+We describe each of the test cases below:
 
-The Flambda backend tree has to be configured before building.  The configure script is not checked
-in; you have to run `autoconf`.  For example:
-```
-$ autoconf
-$ ./configure --prefix=/path/to/install/dir
-```
+- `ocaml/testsuite/tests/backtrace/inline_traversal_test.ml`:
+  This file failed when compiled with `_build/_bootinstall/bin/ocamlopt.opt -Oclassic`.
+  This was due to a bug in the then in-progress global pass, when inlining across
+  different optimisation modes.
 
-## Building and installing
+- `binary_packing.ml`:
+  This was the original motivation for writing chamelon. This file failed to compile due
+  to a bug in the optimisation of pattern-matching, as we can see in the output where
+  pattern matching is one of the few constructions remaining.
 
-To build and install the Flambda backend, which produces a compiler installation directory whose
-layout is compatible with upstream, run:
-```
-$ make install
-```
+- `letrec.ml`:
+  This failed to due to a bug in the compilation of recursive values. While this example
+  was written by hand after suspecting a bug from the code, chamelon is still able to
+  minimize it to provide an easier-to-debug example.
+
+- `seq.ml`:
+  This example failed due to a bug where non-simplified versions of functions ended up
+  in the output, which the code didn't expect.
+
+- `ocaml/typing/env.ml`:
+  This example is the largest we show here, and as such, takes longer than the others
+  (about 20 minutes on a laptop).
+  It was due to a bug in the computation of the possible shapes of the values for some
+  types.
+
+  It is notable in several aspects beside its size:
+
+  - The file itself does not compile without its associated `.mli` file. However, this
+    prevents some minimisations; as such, we perform two successive minimisations, one
+    with the `.mli` file, followed by minimizing the result of the first one, which does
+    not need the `.mli` file to compile. This allows us to successively reduce a ~4000
+    lines file, to a ~450 lines file, to a file with 34 lines.
+
+  - It does not crash the compiler like the others, instead producing an error at runtime.
+    Fortunately, there is a pattern in the produced code we can look for, which can
+    appear in normal code that only appears here if the bug is present. Thus, we minimize
+    the example by ensuring that pattern still appears in the minimized file. While this
+    gives us no guarantee the minimized file has the same bug, it was small enough to
+    identify a bug, and fixing that bug confirmed that this was the initial bug.
