@@ -170,7 +170,14 @@ let variant_kind print_value_kind ppf ~consts ~non_consts =
       (tag_and_constructor_shape print_value_kind))
     non_consts
 
-let rec value_kind ppf = function
+let value_kind print_value_kind_non_null ppf vk =
+  match vk.nullable with
+  | Non_nullable ->
+    print_value_kind_non_null ppf vk.raw_kind
+  | Nullable ->
+    fprintf ppf "%a or_null" print_value_kind_non_null vk.raw_kind
+
+let rec value_kind_non_null ppf = function
   | Pgenval -> ()
   | Pintval -> fprintf ppf "[int]"
   | Pboxedfloatval bf -> fprintf ppf "[%s]" (boxed_float_name bf)
@@ -178,9 +185,10 @@ let rec value_kind ppf = function
   | Pboxedintval bi -> fprintf ppf "[%s]" (boxed_integer_name bi)
   | Pboxedvectorval (Pvec128 v) -> fprintf ppf "[%s]" (vec128_name v)
   | Pvariant { consts; non_consts; } ->
-    variant_kind value_kind' ppf ~consts ~non_consts
+    variant_kind (value_kind value_kind_non_null')
+      ppf ~consts ~non_consts
 
-and value_kind' ppf = function
+and value_kind_non_null' ppf = function
   | Pgenval -> fprintf ppf "*"
   | Pintval -> fprintf ppf "[int]"
   | Pboxedfloatval bf -> fprintf ppf "[%s]" (boxed_float_name bf)
@@ -188,11 +196,15 @@ and value_kind' ppf = function
   | Pboxedintval bi -> fprintf ppf "[%s]" (boxed_integer_name bi)
   | Pboxedvectorval (Pvec128 v) -> fprintf ppf "[%s]" (vec128_name v)
   | Pvariant { consts; non_consts; } ->
-    variant_kind value_kind' ppf ~consts ~non_consts
+    variant_kind (value_kind value_kind_non_null')
+      ppf ~consts ~non_consts
 
 let rec layout' is_top ppf layout_ =
   match layout_ with
-  | Pvalue k -> (if is_top then value_kind else value_kind') ppf k
+  | Pvalue k ->
+    (if is_top then value_kind value_kind_non_null
+     else value_kind value_kind_non_null')
+      ppf k
   | Ptop -> fprintf ppf "[top]"
   | Pbottom -> fprintf ppf "[bottom]"
   | Punboxed_float bf -> fprintf ppf "[unboxed_%s]" (boxed_float_name bf)
@@ -208,18 +220,18 @@ let layout ppf layout_ = layout' true ppf layout_
 let return_kind ppf (mode, kind) =
   let smode = alloc_mode_if_local mode in
   match kind with
-  | Pvalue Pgenval when is_heap_mode mode -> ()
-  | Pvalue Pgenval -> fprintf ppf ": %s@ " smode
-  | Pvalue Pintval -> fprintf ppf ": int@ "
-  | Pvalue (Pboxedfloatval bf) ->
+  | Pvalue { raw_kind = Pgenval; _ } when is_heap_mode mode -> ()
+  | Pvalue { raw_kind = Pgenval; _ } -> fprintf ppf ": %s@ " smode
+  | Pvalue { raw_kind = Pintval; _ } -> fprintf ppf ": int@ "
+  | Pvalue { raw_kind = Pboxedfloatval bf; _ } ->
      fprintf ppf ": %s%s@ " smode (boxed_float_name bf)
-  | Pvalue (Parrayval elt_kind) ->
+  | Pvalue { raw_kind = Parrayval elt_kind; _ } ->
      fprintf ppf ": %s%sarray@ " smode (array_kind elt_kind)
-  | Pvalue (Pboxedintval bi) -> fprintf ppf ": %s%s@ " smode (boxed_integer_name bi)
-  | Pvalue (Pboxedvectorval (Pvec128 v)) ->
+  | Pvalue { raw_kind = Pboxedintval bi; _ } -> fprintf ppf ": %s%s@ " smode (boxed_integer_name bi)
+  | Pvalue { raw_kind = (Pboxedvectorval (Pvec128 v)); _ } ->
     fprintf ppf ": %s%s@ " smode (vec128_name v)
-  | Pvalue (Pvariant { consts; non_consts; }) ->
-    variant_kind value_kind' ppf ~consts ~non_consts
+  | Pvalue { raw_kind = (Pvariant { consts; non_consts; }); _ } ->
+    variant_kind (value_kind value_kind_non_null') ppf ~consts ~non_consts
   | Punboxed_float bf -> fprintf ppf ": unboxed_%s@ " (boxed_float_name bf)
   | Punboxed_int bi -> fprintf ppf ": unboxed_%s@ " (boxed_integer_name bi)
   | Punboxed_vector (Pvec128 v) -> fprintf ppf ": unboxed_%s@ " (vec128_name v)
@@ -227,7 +239,7 @@ let return_kind ppf (mode, kind) =
   | Ptop -> fprintf ppf ": top@ "
   | Pbottom -> fprintf ppf ": bottom@ "
 
-let field_kind ppf = function
+let field_kind_non_null ppf = function
   | Pgenval -> pp_print_string ppf "*"
   | Pintval -> pp_print_string ppf "int"
   | Pboxedfloatval bf -> pp_print_string ppf (boxed_float_name bf)
@@ -239,8 +251,10 @@ let field_kind ppf = function
       (Format.pp_print_list ~pp_sep:Format.pp_print_space Format.pp_print_int)
       consts
       (Format.pp_print_list ~pp_sep:Format.pp_print_space
-        (tag_and_constructor_shape value_kind'))
+        (tag_and_constructor_shape (value_kind value_kind_non_null')))
       non_consts
+
+let field_kind = value_kind field_kind_non_null
 
 let alloc_kind = function
   | Alloc_heap -> ""
@@ -317,7 +331,7 @@ let record_rep ppf r = match r with
 
 let block_shape ppf shape = match shape with
   | None | Some [] -> ()
-  | Some l when List.for_all ((=) Pgenval) l -> ()
+  | Some l when List.for_all ((=) Lambda.generic_value) l -> ()
   | Some [elt] ->
       Format.fprintf ppf " (%a)" field_kind elt
   | Some (h :: t) ->
@@ -1278,3 +1292,7 @@ let structured_constant = struct_const
 let lambda = lam
 
 let program ppf { code } = lambda ppf code
+
+let value_kind' = value_kind value_kind_non_null'
+
+let value_kind = value_kind value_kind_non_null
