@@ -901,7 +901,7 @@ let lambda_unit = Lconst const_unit
 let non_null_value raw_kind =
   Pvalue { raw_kind; nullable = Non_nullable }
 let nullable_value raw_kind =
-  Pvalue { raw_kind; nullable = Non_nullable }
+  Pvalue { raw_kind; nullable = Nullable }
 
 let layout_unit = non_null_value Pintval
 let layout_int = non_null_value Pintval

@@ -162,41 +162,51 @@ let tag_and_constructor_shape print_value_kind ppf (tag, shape) =
     (constructor_shape print_value_kind)
     shape
 
-let variant_kind print_value_kind ppf ~consts ~non_consts =
-  fprintf ppf "@[<hov 1>[(consts (%a))@ (non_consts (%a))]@]"
+let variant_kind or_null_suffix print_value_kind ppf ~consts ~non_consts =
+  fprintf ppf "@[<hov 1>[(consts (%a))@ (non_consts (%a))%s]@]"
     (Format.pp_print_list ~pp_sep:Format.pp_print_space Format.pp_print_int)
     consts
     (Format.pp_print_list ~pp_sep:Format.pp_print_space
       (tag_and_constructor_shape print_value_kind))
     non_consts
+    or_null_suffix
 
 let value_kind print_value_kind_non_null ppf vk =
-  match vk.nullable with
-  | Non_nullable ->
-    print_value_kind_non_null ppf vk.raw_kind
-  | Nullable ->
-    fprintf ppf "%a or_null" print_value_kind_non_null vk.raw_kind
+  let or_null_suffix =
+    match vk.nullable with
+    | Non_nullable -> ""
+    | Nullable -> " or_null"
+  in
+  print_value_kind_non_null or_null_suffix ppf vk.raw_kind
 
-let rec value_kind_non_null ppf = function
+let rec value_kind_non_null or_null_suffix ppf = function
   | Pgenval -> ()
-  | Pintval -> fprintf ppf "[int]"
-  | Pboxedfloatval bf -> fprintf ppf "[%s]" (boxed_float_name bf)
-  | Parrayval elt_kind -> fprintf ppf "[%sarray]" (array_kind elt_kind)
-  | Pboxedintval bi -> fprintf ppf "[%s]" (boxed_integer_name bi)
-  | Pboxedvectorval (Pvec128 v) -> fprintf ppf "[%s]" (vec128_name v)
+  | Pintval -> fprintf ppf "[int%s]" or_null_suffix
+  | Pboxedfloatval bf ->
+    fprintf ppf "[%s%s]" (boxed_float_name bf) or_null_suffix
+  | Parrayval elt_kind ->
+    fprintf ppf "[%sarray%s]" (array_kind elt_kind) or_null_suffix
+  | Pboxedintval bi ->
+    fprintf ppf "[%s%s]" (boxed_integer_name bi) or_null_suffix
+  | Pboxedvectorval (Pvec128 v) ->
+    fprintf ppf "[%s%s]" (vec128_name v) or_null_suffix
   | Pvariant { consts; non_consts; } ->
-    variant_kind (value_kind value_kind_non_null')
+    variant_kind or_null_suffix (value_kind value_kind_non_null')
       ppf ~consts ~non_consts
 
-and value_kind_non_null' ppf = function
+and value_kind_non_null' or_null_suffix ppf = function
   | Pgenval -> fprintf ppf "*"
-  | Pintval -> fprintf ppf "[int]"
-  | Pboxedfloatval bf -> fprintf ppf "[%s]" (boxed_float_name bf)
-  | Parrayval elt_kind -> fprintf ppf "[%sarray]" (array_kind elt_kind)
-  | Pboxedintval bi -> fprintf ppf "[%s]" (boxed_integer_name bi)
-  | Pboxedvectorval (Pvec128 v) -> fprintf ppf "[%s]" (vec128_name v)
+  | Pintval -> fprintf ppf "[int%s]" or_null_suffix
+  | Pboxedfloatval bf ->
+    fprintf ppf "[%s%s]" (boxed_float_name bf) or_null_suffix
+  | Parrayval elt_kind ->
+    fprintf ppf "[%sarray%s]" (array_kind elt_kind) or_null_suffix
+  | Pboxedintval bi ->
+    fprintf ppf "[%s%s]" (boxed_integer_name bi) or_null_suffix
+  | Pboxedvectorval (Pvec128 v) ->
+    fprintf ppf "[%s%s]" (vec128_name v) or_null_suffix
   | Pvariant { consts; non_consts; } ->
-    variant_kind (value_kind value_kind_non_null')
+    variant_kind or_null_suffix (value_kind value_kind_non_null')
       ppf ~consts ~non_consts
 
 let rec layout' is_top ppf layout_ =
@@ -220,18 +230,28 @@ let layout ppf layout_ = layout' true ppf layout_
 let return_kind ppf (mode, kind) =
   let smode = alloc_mode_if_local mode in
   match kind with
-  | Pvalue { raw_kind = Pgenval; _ } when is_heap_mode mode -> ()
-  | Pvalue { raw_kind = Pgenval; _ } -> fprintf ppf ": %s@ " smode
-  | Pvalue { raw_kind = Pintval; _ } -> fprintf ppf ": int@ "
-  | Pvalue { raw_kind = Pboxedfloatval bf; _ } ->
-     fprintf ppf ": %s%s@ " smode (boxed_float_name bf)
-  | Pvalue { raw_kind = Parrayval elt_kind; _ } ->
-     fprintf ppf ": %s%sarray@ " smode (array_kind elt_kind)
-  | Pvalue { raw_kind = Pboxedintval bi; _ } -> fprintf ppf ": %s%s@ " smode (boxed_integer_name bi)
-  | Pvalue { raw_kind = (Pboxedvectorval (Pvec128 v)); _ } ->
-    fprintf ppf ": %s%s@ " smode (vec128_name v)
-  | Pvalue { raw_kind = (Pvariant { consts; non_consts; }); _ } ->
-    variant_kind (value_kind value_kind_non_null') ppf ~consts ~non_consts
+  | Pvalue { raw_kind; nullable } -> begin
+    let or_null_suffix =
+      match nullable with
+      | Non_nullable -> ""
+      | Nullable -> " or_null"
+    in
+    match raw_kind with
+    | Pgenval when is_heap_mode mode -> ()
+    | Pgenval -> fprintf ppf ": %s@ " smode
+    | Pintval -> fprintf ppf ": int@ "
+    | Pboxedfloatval bf ->
+      fprintf ppf ": %s%s%s@ " smode (boxed_float_name bf) or_null_suffix
+    | Parrayval elt_kind ->
+      fprintf ppf ": %s%sarray%s@ " smode (array_kind elt_kind) or_null_suffix
+    | Pboxedintval bi ->
+      fprintf ppf ": %s%s%s@ " smode (boxed_integer_name bi) or_null_suffix
+    | Pboxedvectorval (Pvec128 v) ->
+      fprintf ppf ": %s%s%s@ " smode (vec128_name v) or_null_suffix
+    | Pvariant { consts; non_consts; } ->
+      variant_kind or_null_suffix (value_kind value_kind_non_null')
+        ppf ~consts ~non_consts
+  end
   | Punboxed_float bf -> fprintf ppf ": unboxed_%s@ " (boxed_float_name bf)
   | Punboxed_int bi -> fprintf ppf ": unboxed_%s@ " (boxed_integer_name bi)
   | Punboxed_vector (Pvec128 v) -> fprintf ppf ": unboxed_%s@ " (vec128_name v)
@@ -239,20 +259,25 @@ let return_kind ppf (mode, kind) =
   | Ptop -> fprintf ppf ": top@ "
   | Pbottom -> fprintf ppf ": bottom@ "
 
-let field_kind_non_null ppf = function
+let field_kind_non_null or_null_suffix ppf = function
   | Pgenval -> pp_print_string ppf "*"
-  | Pintval -> pp_print_string ppf "int"
-  | Pboxedfloatval bf -> pp_print_string ppf (boxed_float_name bf)
-  | Parrayval elt_kind -> fprintf ppf "%s-array" (array_kind elt_kind)
-  | Pboxedintval bi -> pp_print_string ppf (boxed_integer_name bi)
-  | Pboxedvectorval (Pvec128 v) -> pp_print_string ppf (vec128_name v)
+  | Pintval -> fprintf ppf "int%s" or_null_suffix
+  | Pboxedfloatval bf ->
+    fprintf ppf "%s%s" (boxed_float_name bf) or_null_suffix
+  | Parrayval elt_kind ->
+    fprintf ppf "%s-array%s" (array_kind elt_kind) or_null_suffix
+  | Pboxedintval bi ->
+    fprintf ppf "%s%s" (boxed_integer_name bi) or_null_suffix
+  | Pboxedvectorval (Pvec128 v) ->
+    fprintf ppf "%s%s" (vec128_name v) or_null_suffix
   | Pvariant { consts; non_consts; } ->
-    fprintf ppf "@[<hov 1>[(consts (%a))@ (non_consts (%a))]@]"
+    fprintf ppf "@[<hov 1>[(consts (%a))@ (non_consts (%a))%s]@]"
       (Format.pp_print_list ~pp_sep:Format.pp_print_space Format.pp_print_int)
       consts
       (Format.pp_print_list ~pp_sep:Format.pp_print_space
         (tag_and_constructor_shape (value_kind value_kind_non_null')))
       non_consts
+      or_null_suffix
 
 let field_kind = value_kind field_kind_non_null
 
@@ -1296,3 +1321,5 @@ let program ppf { code } = lambda ppf code
 let value_kind' = value_kind value_kind_non_null'
 
 let value_kind = value_kind value_kind_non_null
+
+let variant_kind = variant_kind ""
