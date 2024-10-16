@@ -299,7 +299,7 @@ let compute_result_types ~is_a_functor ~is_opaque ~return_cont_uses
         (Continuation_uses.get_uses uses)
         ~is_recursive:false ~params:return_cont_params ~env_at_fork
         ~consts_lifted_during_body:lifted_consts_this_function
-        ~lifted_cont_extra_params_and_args:EPA.empty
+        ~previous_extra_params_and_args:EPA.empty
     in
     let bound_params_and_results =
       Bound_parameters.append params return_cont_params

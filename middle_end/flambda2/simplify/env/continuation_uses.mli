@@ -66,3 +66,5 @@ val get_typing_env_no_more_than_one_use :
 val union : t -> t -> t
 
 val mark_non_inlinable : t -> t
+
+val clear_uses : t -> t

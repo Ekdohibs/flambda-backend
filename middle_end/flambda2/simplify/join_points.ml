@@ -74,7 +74,7 @@ let introduce_extra_params_for_join denv use_envs_with_ids
     denv, use_envs_with_ids
 
 let join ?cut_after denv params ~consts_lifted_during_body ~use_envs_with_ids
-    ~lifted_cont_extra_params_and_args =
+    ~previous_extra_params_and_args =
   let definition_scope = DE.get_continuation_scope denv in
   let extra_lifted_consts_in_use_envs =
     LCS.all_defined_symbols consts_lifted_during_body
@@ -92,11 +92,11 @@ let join ?cut_after denv params ~consts_lifted_during_body ~use_envs_with_ids
   in
   let extra_params_and_args =
     match cse_join_result with
-    | None -> lifted_cont_extra_params_and_args
+    | None -> previous_extra_params_and_args
     | Some cse_join_result ->
       (* CR gbury: the order of the EPA should not matter here *)
       EPA.concat ~outer:cse_join_result.extra_params
-        ~inner:lifted_cont_extra_params_and_args
+        ~inner:previous_extra_params_and_args
   in
   let denv, use_envs_with_ids' =
     introduce_extra_params_for_join denv use_envs_with_ids
@@ -177,7 +177,7 @@ let add_equations_on_params typing_env ~is_recursive ~params:params'
   add_equations_on_params typing_env params param_types
 
 let compute_handler_env ?cut_after uses ~is_recursive ~env_at_fork
-    ~consts_lifted_during_body ~params ~lifted_cont_extra_params_and_args =
+    ~consts_lifted_during_body ~params ~previous_extra_params_and_args =
   (* Augment the environment at each use with the parameter definitions and
      associated equations. *)
   let use_envs_with_ids =
@@ -200,7 +200,7 @@ let compute_handler_env ?cut_after uses ~is_recursive ~env_at_fork
     let use_tenv =
       let use = use_env, use_id, Continuation_use_kind.Inlinable in
       match
-        introduce_extra_params_in_use_env lifted_cont_extra_params_and_args use
+        introduce_extra_params_in_use_env previous_extra_params_and_args use
       with
       | Some (use_env, _, _) -> use_env
       | None ->
@@ -272,15 +272,15 @@ let compute_handler_env ?cut_after uses ~is_recursive ~env_at_fork
         let denv = DE.define_parameters denv ~extra:false ~params in
         Profile.record_call ~accumulate:true "join" (fun () ->
             join ?cut_after denv params ~consts_lifted_during_body
-              ~use_envs_with_ids ~lifted_cont_extra_params_and_args)
+              ~use_envs_with_ids ~previous_extra_params_and_args)
       else
         (* Define parameters with basic equations from the subkinds *)
         let denv = DE.add_parameters_with_unknown_types denv ~extra:false params in
         let denv =
           DE.add_parameters_with_unknown_types denv ~extra:true
-            (EPA.extra_params lifted_cont_extra_params_and_args)
+            (EPA.extra_params previous_extra_params_and_args)
         in
-        denv, lifted_cont_extra_params_and_args
+        denv, previous_extra_params_and_args
     in
     let escapes =
       List.exists

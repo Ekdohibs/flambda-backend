@@ -185,6 +185,8 @@ val disable_inlining : t -> t
 
 val set_rebuild_terms : t -> t
 
+val set_rebuild_partially : t -> t
+
 val are_rebuilding_terms : t -> Are_rebuilding_terms.t
 
 val enter_closure :
@@ -230,5 +232,7 @@ val cost_of_lifting_continuations_out_of_current_one : t -> int
 val add_lifting_cost : int -> t -> t
 
 val must_inline : t -> bool
+
+val replay_history : t -> Replay_history.t
 
 val denv_for_lifted_continuation : denv_for_join:t -> denv:t -> t

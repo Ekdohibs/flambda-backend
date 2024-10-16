@@ -220,8 +220,7 @@ let create_let uacc (bound_vars : Bound_pattern.t) (defining_expr : Named.t)
         free_names_of_let
     in
     let uacc =
-      if Are_rebuilding_terms.do_not_rebuild_terms
-           (UA.are_rebuilding_terms uacc)
+      if Are_rebuilding_terms.are_not_rebuilding (UA.are_rebuilding_terms uacc)
       then uacc
       else add_set_of_closures_offsets ~is_phantom defining_expr uacc
     in
@@ -375,7 +374,7 @@ let create_raw_let_symbol uacc bound_static static_consts ~body =
               (* Static consts always have zero cost metrics at present. *)
             ~cost_metrics_of_defining_expr:Cost_metrics.zero)
   in
-  if Are_rebuilding_terms.do_not_rebuild_terms (UA.are_rebuilding_terms uacc)
+  if Are_rebuilding_terms.are_not_rebuilding (UA.are_rebuilding_terms uacc)
   then RE.term_not_rebuilt, uacc
   else
     let defining_expr = Rebuilt_static_const.Group.to_named static_consts in
@@ -722,9 +721,15 @@ let rewrite_fixed_arity_continuation0 uacc cont_or_apply_cont ~use_id arity :
     | Continuation cont -> cont
     | Apply_cont apply_cont -> Apply_cont.continuation apply_cont
   in
-  let original_cont = cont in
-  let cont = UE.resolve_continuation_aliases uenv cont in
-  match UE.find_apply_cont_rewrite uenv original_cont with
+  let actual_cont =
+    match
+      Continuation_callsite_map.find cont use_id (UA.specialization_map uacc)
+    with
+    | exception Not_found -> cont
+    | specialized -> specialized
+  in
+  let cont = UE.resolve_continuation_aliases uenv actual_cont in
+  match UE.find_apply_cont_rewrite uenv actual_cont with
   | None -> This_continuation cont
   | Some rewrite when Apply_cont_rewrite.does_nothing rewrite ->
     let arity_in_rewrite = Apply_cont_rewrite.original_params_arity rewrite in
