@@ -1645,6 +1645,7 @@ let simplify_let_cont0 ~(simplify_expr : _ Simplify_common.expr_simplifier) dacc
      continuations that have been lifted during the first downwards pass, and
      whhose handlers must be replaced on subsequent passes, so that they can
      refer to the lifted ones. *)
+  Format.eprintf "--- LET_CONT0@\n%a@\n@." Original_handlers.print data.handlers;
   let handlers =
     match Replay_history.replay_continuation_mapping (DE.replay_history denv_for_body) with
     | Still_recording -> data.handlers

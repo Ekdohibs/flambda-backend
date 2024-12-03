@@ -77,6 +77,8 @@ val define_continuations : t -> Continuation.t list -> t
 
 val define_variable : t -> Bound_var.t -> Flambda_kind.t -> t
 
+val define_extra_variable : t -> Bound_var.t -> Flambda_kind.t -> t
+
 val add_name : t -> Bound_name.t -> Flambda2_types.t -> t
 
 val add_variable : t -> Bound_var.t -> Flambda2_types.t -> t

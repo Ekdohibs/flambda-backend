@@ -133,6 +133,8 @@ let define_continuations t conts =
   { t with replay_history }
 
 let define_variable0 ~extra t var kind =
+  if not extra && (String.starts_with ~prefix:"unboxed_" (Variable.name (Bound_var.var var))) then
+    Misc.fatal_errorf "Non-extra unboxed parameter";
   let replay_history =
     if extra then t.replay_history
     else Replay_history.define_variable (Bound_var.var var) t.replay_history
@@ -170,6 +172,9 @@ let define_variable0 ~extra t var kind =
 
 let define_variable t var kind =
   (define_variable0 [@inlined hint]) ~extra:false t var kind
+
+let define_extra_variable t var kind =
+  (define_variable0 [@inlined hint]) ~extra:true t var kind
 
 let create ~round ~(resolver : resolver)
     ~(get_imported_names : get_imported_names)

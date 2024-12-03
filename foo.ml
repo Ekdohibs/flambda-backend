@@ -14,8 +14,10 @@ let view i =
 let foo i =
   match view i with
   | Foo i -> Format.printf "foo: %d" i
+               (*
   | Bar 13 -> Format.printf "bar/13"
   | Bar 42 -> Format.printf "bar/42"
+              *)
   | Bar _ -> assert false (* can this branch be deleted ? *)
 
 (*
