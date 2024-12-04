@@ -431,8 +431,15 @@ let add_extra_args_to_call ~extra_args rewrite_id original_args =
 
 let normalize_acc ~specialization_map (t : T.Acc.t) =
   let map =
-    Continuation.Map.map
-      (fun (elt : T.Continuation_info.t) ->
+    Continuation.Map.filter_map
+      (fun cont (elt : T.Continuation_info.t) ->
+        (* Note: [cont=elt.continuation] *)
+         (* The keys of the specialization maps are the "generic" continuations that
+            we specialize. These continuations have **all** of their calls specialized,
+            so we can remove them from the control flow graph. *)
+         if Continuation.Map.mem cont specialization_map then
+           None
+         else begin
         (* Rewrite continuations calls to the specialized ones *)
         let apply_cont_args =
           Continuation.Map.fold
@@ -468,7 +475,7 @@ let normalize_acc ~specialization_map (t : T.Acc.t) =
                  flow analysis find a dominator for parameters of [cont] that we
                  do not have access to. Since we then only look at which
                  continuation can call which to know which arguments to add,
-                 this causes the ‌adding of the extra parameters to assume we
+                 this causes the adding of the extra parameters to assume we
                  need access to that dominator since it looks like we can call
                  [cont], but since neither we nor any of our callers have access
                  to it, trying to add the dominator crashes the compiler. *)
@@ -477,7 +484,7 @@ let normalize_acc ~specialization_map (t : T.Acc.t) =
               else Some rewrite_ids)
             apply_cont_args
         in
-        { elt with apply_cont_args })
+        Some { elt with apply_cont_args } end)
       t.map
   in
   let map =
@@ -518,6 +525,8 @@ let normalize_acc ~specialization_map (t : T.Acc.t) =
   let map =
     Continuation.Map.fold
       (fun cont epa map ->
+         if Continuation.Map.mem cont specialization_map then map
+         else begin
         let elt : T.Continuation_info.t = Continuation.Map.find cont map in
         let elt =
           let params =
@@ -525,7 +534,7 @@ let normalize_acc ~specialization_map (t : T.Acc.t) =
           in
           { elt with params }
         in
-        Continuation.Map.add cont elt map)
+        Continuation.Map.add cont elt map end)
       t.extra map
   in
   { t with map; extra = Continuation.Map.empty }

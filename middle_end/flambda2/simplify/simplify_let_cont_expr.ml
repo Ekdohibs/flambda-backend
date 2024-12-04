@@ -195,6 +195,7 @@ let extra_params_and_args_for_lifting callee_lifted_params uses =
   List.fold_left
     (fun epa one_use ->
       let id = One_continuation_use.id one_use in
+      Format.eprintf "&&& USE %a@." Apply_cont_rewrite_id.print id;
       let env_at_use = One_continuation_use.env_at_use one_use in
       let caller_stack_lifted_params =
         DE.defined_variables_by_scope env_at_use
@@ -1099,7 +1100,8 @@ and specialize_continuation_if_needed ~simplify_expr dacc
           CUE.clear_continuation_uses data.cont_uses_env_after_body cont
         in
         let data =
-          { data with cont_uses_env; cont_uses_env_after_body = cont_uses_env }
+          { data with handlers = Continuation.Map.empty;
+                      cont_uses_env; cont_uses_env_after_body = cont_uses_env }
         in
         let dacc = DA.with_continuation_uses_env dacc ~cont_uses_env in
         compute_specialized_continuation_handlers ~simplify_expr ~replay
