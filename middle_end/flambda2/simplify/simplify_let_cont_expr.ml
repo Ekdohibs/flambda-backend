@@ -989,6 +989,9 @@ let rec compute_specialized_continuation ~replay ~simplify_expr ~original_cont
     let lifted_params = original.lifted_params in
     let is_exn_handler = original.is_exn_handler in
     let denv = data.after_downwards_traversal_of_body.denv_for_join in
+    Format.eprintf "~~~ SPECIALIZED %a@\nreplay: %a@\n@." Continuation.print cont
+      Replay_history.print (fst (Option.get replay))
+    ;
     (* TODO: refactor some function in CUE and Continuation_uses to take a
        [One_continuation_use.t] as argument *)
     let uses =
@@ -1561,14 +1564,14 @@ and after_downwards_traversal_of_body ~simplify_expr ~down_to_up
        its defining handler. Therefore we save the non-simplified version of the
        continuation in the dacc, so that we can simplify during the `down_to_up`
        later. *)
-    Format.eprintf "/// LIFTING:@\n%a@\n@."
-      Original_handlers.print data.handlers;
     let params_to_lift =
       DE.variables_defined_in_current_continuation denv_for_join
     in
     let handlers =
       Original_handlers.add_params_to_lift data.handlers params_to_lift
     in
+    Format.eprintf "/// LIFTING:@\n%a@\n@."
+      Original_handlers.print handlers;
     let dacc = DA.add_lifted_continuation data.denv_for_join handlers dacc in
     (* Restore lifted constants in dacc *)
     let dacc =
@@ -1576,6 +1579,7 @@ and after_downwards_traversal_of_body ~simplify_expr ~down_to_up
     in
     down_to_up dacc ~rebuild:rebuild_body
   | Not_lifting | Analyzing _ ->
+    Format.eprintf "... SIMPLIFY@\n%a@\n@." Original_handlers.print data.handlers;
     simplify_handlers data dacc ~simplify_expr ~down_to_up ~denv_for_join
       ~rebuild_body
 
