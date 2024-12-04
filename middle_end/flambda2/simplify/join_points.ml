@@ -189,7 +189,7 @@ let compute_handler_env ?cut_after uses ~is_recursive ~env_at_fork
         in
         let use_env =
           let use_env =
-            DE.enter_inlined_continuation_handler (U.env_at_use use)
+            DE.clear_replay_history (U.env_at_use use)
           in
           let use_env = DE.define_parameters ~extra:false use_env ~params in
           DE.map_typing_env use_env ~f:add_or_meet_param_type
