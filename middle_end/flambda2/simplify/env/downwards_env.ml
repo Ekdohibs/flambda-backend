@@ -66,7 +66,7 @@ type t =
            generate a fresh [Lifted_cont_param] when we execute
            [define_variable]. Note that this set will always be a subset of the
            head of the defined_variables_by_scope field. *)
-    cost_of_lifting_continuations_out_of_current_one : int;
+    cost_of_lifting_continuations_out_of_current_one : int
         (* This cost is the number of parameters that would have to be created
            if we lifted all continuations that are defined in the current
            continuation's handler. *)
@@ -134,7 +134,8 @@ let define_continuations t conts =
 
 let define_variable0 ~extra t var kind =
   let replay_history =
-    if extra then t.replay_history
+    if extra
+    then t.replay_history
     else Replay_history.define_variable (Bound_var.var var) t.replay_history
   in
   let defined_variables_by_scope =
@@ -204,7 +205,7 @@ let create ~round ~(resolver : resolver)
       specialization_cost = Specialization_cost.cannot_specialize At_toplevel;
       defined_variables_by_scope = [Lifted_cont_params.empty];
       lifted = Variable.Set.empty;
-      cost_of_lifting_continuations_out_of_current_one = 0;
+      cost_of_lifting_continuations_out_of_current_one = 0
     }
   in
   define_variable
@@ -282,7 +283,7 @@ let enter_set_of_closures
       specialization_cost = _;
       defined_variables_by_scope = _;
       lifted = _;
-      cost_of_lifting_continuations_out_of_current_one = _;
+      cost_of_lifting_continuations_out_of_current_one = _
     } =
   { round;
     typing_env = TE.closure_env typing_env;
@@ -306,7 +307,7 @@ let enter_set_of_closures
     specialization_cost = Specialization_cost.cannot_specialize At_toplevel;
     defined_variables_by_scope = [Lifted_cont_params.empty];
     lifted = Variable.Set.empty;
-    cost_of_lifting_continuations_out_of_current_one = 0;
+    cost_of_lifting_continuations_out_of_current_one = 0
   }
 
 let define_symbol t sym kind =
@@ -384,7 +385,8 @@ let define_parameters ~extra t ~params =
     t
     (Bound_parameters.to_list params)
 
-let add_parameters ~extra ?(name_mode = Name_mode.normal) t params ~param_types =
+let add_parameters ~extra ?(name_mode = Name_mode.normal) t params ~param_types
+    =
   let params' = params in
   let params = Bound_parameters.to_list params in
   if List.compare_lengths params param_types <> 0
@@ -623,11 +625,11 @@ let with_code_age_relation code_age_relation t =
   }
 
 let enter_inlined_continuation_handler t =
-  (* Note: the replay_history does not matter here, we should not be able
-     to use it ever in the case of an inlined continuation handler (since it
-     will never be specializable by itself). *)
+  (* Note: the replay_history does not matter here, we should not be able to use
+     it ever in the case of an inlined continuation handler (since it will never
+     be specializable by itself). *)
   let replay_history = Replay_history.first_pass in
-  { t with replay_history; }
+  { t with replay_history }
 
 let enter_continuation_handler ~replay lifted_params t =
   let replay_history =
@@ -645,7 +647,7 @@ let enter_continuation_handler ~replay lifted_params t =
     lifted;
     replay_history;
     defined_variables_by_scope = lifted_params :: t.defined_variables_by_scope;
-    cost_of_lifting_continuations_out_of_current_one = 0;
+    cost_of_lifting_continuations_out_of_current_one = 0
   }
 
 let variables_defined_in_current_continuation t =
@@ -706,5 +708,5 @@ let denv_for_lifted_continuation ~denv_for_join ~denv =
     are_rebuilding_terms = denv.are_rebuilding_terms;
     closure_info = denv.closure_info;
     get_imported_code = denv.get_imported_code;
-    loopify_state = denv.loopify_state;
+    loopify_state = denv.loopify_state
   }

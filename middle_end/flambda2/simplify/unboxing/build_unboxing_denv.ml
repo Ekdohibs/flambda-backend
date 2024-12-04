@@ -40,7 +40,8 @@ let rec denv_of_decision denv ~param_var (decision : U.decision) : DE.t =
       Misc.Stdlib.List.fold_lefti
         (fun index denv ({ epa = { param = var; _ }; _ } : U.field_decision) ->
           let v = VB.create var Name_mode.normal in
-          DE.define_extra_variable denv v (K.Block_shape.element_kind shape index))
+          DE.define_extra_variable denv v
+            (K.Block_shape.element_kind shape index))
         denv fields
     in
     let type_of_var index (field : U.field_decision) =
@@ -145,7 +146,8 @@ let rec denv_of_decision denv ~param_var (decision : U.decision) : DE.t =
           Misc.Stdlib.List.fold_lefti
             (fun index denv ({ epa = { param = var; _ }; _ } : U.field_decision) ->
               let v = VB.create var Name_mode.normal in
-              DE.define_extra_variable denv v (K.Block_shape.element_kind shape index))
+              DE.define_extra_variable denv v
+                (K.Block_shape.element_kind shape index))
             denv block_fields)
         fields_by_tag denv
     in

@@ -13,7 +13,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-
 (* List of actions that should be replayed, currently only cares about bound
    variables and continuations. In the future, we may want to also store
    inlining decisions.
@@ -41,8 +40,8 @@ type t =
       }
   | Replaying of
       { always_inline : bool;
-        (* Force inlining of all function calls during replay. This is for instance
-           set by the match-in-match specialization. *)
+        (* Force inlining of all function calls during replay. This is for
+           instance set by the match-in-match specialization. *)
         previous_history : Action.t list;
         (* Bindables opened during the first pass, with the head of the list
            being the outermost/first one opened. *)
@@ -72,7 +71,6 @@ let[@ocamlformat "disable"] print ppf = function
         (Variable.Map.print Variable.print) variables
         (Continuation.Map.print Continuation.print) continuations
 
-
 (* Creating API *)
 (* ************ *)
 
@@ -95,24 +93,26 @@ let replay ~always_inline = function
 
 let error_empty_history replay action =
   Misc.fatal_errorf
-    "@[<v>@[<hov>Found an empty replay history when replaying action:@ %a.@]@ Replay: %a@]"
+    "@[<v>@[<hov>Found an empty replay history when replaying action:@ %a.@]@ \
+     Replay: %a@]"
     Action.print action print replay
 
 let error_mismatched_action replay old_action new_action =
   Misc.fatal_errorf
-    "@[<v>Action mismatch when replaying history:@ old action: %a@ new action: %a@ replay: %a"
+    "@[<v>Action mismatch when replaying history:@ old action: %a@ new action: \
+     %a@ replay: %a"
     Action.print old_action Action.print new_action print replay
 
 let error_not_renamed_version_of replay old_action new_action =
   Misc.fatal_errorf
-    "@[<v>Actions are not renamed versions when replaying history:@ old action: %a@ new action: %a@ replay: %a"
+    "@[<v>Actions are not renamed versions when replaying history:@ old \
+     action: %a@ new action: %a@ replay: %a"
     Action.print old_action Action.print new_action print replay
 
 let define_variable var replay =
   let action : Action.t = Bound_variable var in
   match replay with
-  | First_pass { history } ->
-    First_pass { history = action :: history }
+  | First_pass { history } -> First_pass { history = action :: history }
   | Replaying
       { previous_history = prev_bound :: previous_history;
         variables;
@@ -126,16 +126,13 @@ let define_variable var replay =
       else
         let variables = Variable.Map.add var prev_var variables in
         Replaying { previous_history; variables; continuations; always_inline }
-    | Bound_continuations _ ->
-      error_mismatched_action replay prev_bound action)
-  | Replaying { previous_history = []; _ } ->
-    error_empty_history replay action
+    | Bound_continuations _ -> error_mismatched_action replay prev_bound action)
+  | Replaying { previous_history = []; _ } -> error_empty_history replay action
 
 let define_continuations conts replay =
   let action : Action.t = Bound_continuations conts in
   match replay with
-  | First_pass { history } ->
-    First_pass { history = action :: history }
+  | First_pass { history } -> First_pass { history = action :: history }
   | Replaying
       { previous_history = prev_bound :: previous_history;
         variables;
@@ -156,11 +153,8 @@ let define_continuations conts replay =
             continuations prev_conts conts
         in
         Replaying { previous_history; variables; continuations; always_inline }
-    | Bound_variable _ ->
-      error_mismatched_action replay prev_bound action)
-  | Replaying { previous_history = []; _ } ->
-      error_empty_history replay action
-
+    | Bound_variable _ -> error_mismatched_action replay prev_bound action)
+  | Replaying { previous_history = []; _ } -> error_empty_history replay action
 
 (* Inspection API *)
 (* ************** *)

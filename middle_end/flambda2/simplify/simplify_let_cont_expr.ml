@@ -195,7 +195,8 @@ let extra_params_and_args_for_lifting callee_lifted_params uses =
   List.fold_left
     (fun epa one_use ->
       let id = One_continuation_use.id one_use in
-      if debug () then Format.eprintf "&&& USE %a@." Apply_cont_rewrite_id.print id;
+      if debug ()
+      then Format.eprintf "&&& USE %a@." Apply_cont_rewrite_id.print id;
       let env_at_use = One_continuation_use.env_at_use one_use in
       let caller_stack_lifted_params =
         DE.defined_variables_by_scope env_at_use
@@ -977,8 +978,7 @@ let sort_handlers data handlers =
     [] sorted_handlers_from_the_inside_to_the_outside
 
 let rec compute_specialized_continuation ~replay ~simplify_expr ~original_cont
-    ~(handler : handler_after_downwards_traversal) dacc
-    data use k =
+    ~(handler : handler_after_downwards_traversal) dacc data use k =
   let cont = Continuation.rename original_cont in
   (* Compute the specialized handler *)
   match handler.original with
@@ -990,9 +990,11 @@ let rec compute_specialized_continuation ~replay ~simplify_expr ~original_cont
     let lifted_params = original.lifted_params in
     let is_exn_handler = original.is_exn_handler in
     let denv = data.after_downwards_traversal_of_body.denv_for_join in
-    if debug () then Format.eprintf "~~~ SPECIALIZED %a@\nreplay: %a@\n@." Continuation.print cont
-      Replay_history.print (fst (Option.get replay))
-    ;
+    if debug ()
+    then
+      Format.eprintf "~~~ SPECIALIZED %a@\nreplay: %a@\n@." Continuation.print
+        cont Replay_history.print
+        (fst (Option.get replay));
     (* TODO: refactor some function in CUE and Continuation_uses to take a
        [One_continuation_use.t] as argument *)
     let uses =
@@ -1004,10 +1006,9 @@ let rec compute_specialized_continuation ~replay ~simplify_expr ~original_cont
         ~arg_types:(One_continuation_use.arg_types use)
     in
     let dacc, unbox_decisions, is_exn_handler, extra_params_and_args =
-      prepare_dacc_for_handlers dacc ~env_at_fork:denv ~params
-        ~replay ~lifted_params
-        ~consts_lifted_during_body:data.consts_lifted_during_body ~is_recursive
-        (Continuation.sort cont)
+      prepare_dacc_for_handlers dacc ~env_at_fork:denv ~params ~replay
+        ~lifted_params ~consts_lifted_during_body:data.consts_lifted_during_body
+        ~is_recursive (Continuation.sort cont)
         (if is_exn_handler then Some cont else None)
         [use]
         ~arg_types_by_use_id:(Continuation_uses.get_arg_types_by_use_id uses)
@@ -1030,7 +1031,9 @@ let rec compute_specialized_continuation ~replay ~simplify_expr ~original_cont
             rebuild_handler;
             is_exn_handler;
             is_cold = handler.is_cold;
-            continuations_used = Continuation.Set.empty; (* this is only used for sorting mutually recursive continuation, so this does not matter for non-recursive continuations *)
+            continuations_used = Continuation.Set.empty;
+            (* this is only used for sorting mutually recursive continuation, so
+               this does not matter for non-recursive continuations *)
             unbox_decisions;
             extra_params_and_args
           }
@@ -1055,15 +1058,15 @@ let rec compute_specialized_continuation ~replay ~simplify_expr ~original_cont
         in
         k dacc data)
 
-and compute_specialized_continuation_handlers ~replay ~simplify_expr ~original_cont
-    ~handler dacc data uses k =
+and compute_specialized_continuation_handlers ~replay ~simplify_expr
+    ~original_cont ~handler dacc data uses k =
   match uses with
   | [] -> k dacc data
   | use :: other_uses ->
-    compute_specialized_continuation ~replay ~simplify_expr
-      ~original_cont ~handler dacc data use (fun dacc data ->
-        compute_specialized_continuation_handlers ~replay ~simplify_expr ~original_cont
-          ~handler dacc data other_uses k)
+    compute_specialized_continuation ~replay ~simplify_expr ~original_cont
+      ~handler dacc data use (fun dacc data ->
+        compute_specialized_continuation_handlers ~replay ~simplify_expr
+          ~original_cont ~handler dacc data other_uses k)
 
 and specialize_continuation_if_needed ~simplify_expr dacc
     (data : after_downwards_traversal_of_body_and_handlers_data) k =
@@ -1083,15 +1086,19 @@ and specialize_continuation_if_needed ~simplify_expr dacc
         (* only a single use, the continuation is already specialized *)
         k dacc data
       | uses ->
-          if debug () then Format.eprintf "!!! SPECIALIZATION %a !!!@]@\n@."
-          Continuation.print cont;
+        if debug ()
+        then
+          Format.eprintf "!!! SPECIALIZATION %a !!!@]@\n@." Continuation.print
+            cont;
         (* Save the replay history *)
         let replay =
           let always_inline = true in
           let denv = DA.denv dacc in
           let replay_history = DE.replay_history denv in
-          if debug () then Format.eprintf "--- SPEC %a@\nreplay: %a@\n@." Continuation.print cont
-            Replay_history.print replay_history;
+          if debug ()
+          then
+            Format.eprintf "--- SPEC %a@\nreplay: %a@\n@." Continuation.print
+              cont Replay_history.print replay_history;
           Some (replay_history, always_inline)
         in
         (* We need to adjust the contination uses env with a few things: TODO:
@@ -1100,8 +1107,11 @@ and specialize_continuation_if_needed ~simplify_expr dacc
           CUE.clear_continuation_uses data.cont_uses_env_after_body cont
         in
         let data =
-          { data with handlers = Continuation.Map.empty;
-                      cont_uses_env; cont_uses_env_after_body = cont_uses_env }
+          { data with
+            handlers = Continuation.Map.empty;
+            cont_uses_env;
+            cont_uses_env_after_body = cont_uses_env
+          }
         in
         let dacc = DA.with_continuation_uses_env dacc ~cont_uses_env in
         compute_specialized_continuation_handlers ~simplify_expr ~replay
@@ -1120,8 +1130,7 @@ and after_downwards_traversal_of_body_and_handlers ~simplify_expr ~denv_for_join
     down_to_up_for_lifted_continuations ~simplify_expr ~denv_for_join
       lifted_conts ~down_to_up
   in
-  specialize_continuation_if_needed ~simplify_expr dacc
-    data
+  specialize_continuation_if_needed ~simplify_expr dacc data
     (fun dacc (data : after_downwards_traversal_of_body_and_handlers_data) ->
       (* Here, we want to actually rebuild the let-cont, so we need to call the
          global [down_to_up] function. First however, we have to take care of
@@ -1535,7 +1544,8 @@ and simplify_handlers ~simplify_expr ~down_to_up ~denv_for_join ~rebuild_body
     in
     let dacc, unbox_decisions, is_exn_handler, extra_params_and_args =
       prepare_dacc_for_handlers dacc ~env_at_fork:denv ~params:invariant_params
-        ~lifted_params ~is_recursive:true ~replay:None ~consts_lifted_during_body
+        ~lifted_params ~is_recursive:true ~replay:None
+        ~consts_lifted_during_body
         (Normal_or_exn : Continuation.Sort.t)
         None
         (List.concat_map Continuation_uses.get_uses all_uses)
@@ -1572,8 +1582,9 @@ and after_downwards_traversal_of_body ~simplify_expr ~down_to_up
     let handlers =
       Original_handlers.add_params_to_lift data.handlers params_to_lift
     in
-    if debug () then Format.eprintf "/// LIFTING:@\n%a@\n@."
-      Original_handlers.print handlers;
+    if debug ()
+    then
+      Format.eprintf "/// LIFTING:@\n%a@\n@." Original_handlers.print handlers;
     let dacc = DA.add_lifted_continuation data.denv_for_join handlers dacc in
     (* Restore lifted constants in dacc *)
     let dacc =
@@ -1581,7 +1592,10 @@ and after_downwards_traversal_of_body ~simplify_expr ~down_to_up
     in
     down_to_up dacc ~rebuild:rebuild_body
   | Not_lifting | Analyzing _ ->
-      if debug () then Format.eprintf "... SIMPLIFY@\n%a@\n@." Original_handlers.print data.handlers;
+    if debug ()
+    then
+      Format.eprintf "... SIMPLIFY@\n%a@\n@." Original_handlers.print
+        data.handlers;
     simplify_handlers data dacc ~simplify_expr ~down_to_up ~denv_for_join
       ~rebuild_body
 
@@ -1651,17 +1665,27 @@ let simplify_let_cont0 ~(simplify_expr : _ Simplify_common.expr_simplifier) dacc
      continuations that have been lifted during the first downwards pass, and
      whhose handlers must be replaced on subsequent passes, so that they can
      refer to the lifted ones. *)
-  if debug () then Format.eprintf "--- LET_CONT0@\n%a@\n@." Original_handlers.print data.handlers;
+  if debug ()
+  then
+    Format.eprintf "--- LET_CONT0@\n%a@\n@." Original_handlers.print
+      data.handlers;
   let handlers =
-    match Replay_history.replay_continuation_mapping (DE.replay_history denv_for_body) with
+    match
+      Replay_history.replay_continuation_mapping
+        (DE.replay_history denv_for_body)
+    with
     | Still_recording -> data.handlers
     | Replayed continuation_mapping -> (
       match data.handlers with
       | Non_recursive non_rec_handler ->
-          if debug () then Format.eprintf "+++ LIFTED ? %a@\nreplay: %a@\n@."
-          Continuation.print non_rec_handler.cont
-          Replay_history.print (DE.replay_history denv_for_body);
-        let lifted_cont = Continuation.Map.find non_rec_handler.cont continuation_mapping in
+        if debug ()
+        then
+          Format.eprintf "+++ LIFTED ? %a@\nreplay: %a@\n@." Continuation.print
+            non_rec_handler.cont Replay_history.print
+            (DE.replay_history denv_for_body);
+        let lifted_cont =
+          Continuation.Map.find non_rec_handler.cont continuation_mapping
+        in
         let new_handler =
           let args =
             List.map
@@ -1673,8 +1697,10 @@ let simplify_let_cont0 ~(simplify_expr : _ Simplify_common.expr_simplifier) dacc
           in
           Flambda.Expr.create_apply_cont apply_cont
         in
-        if debug () then Format.eprintf "*** LIFTED %a:@\n%a@\n@."
-          Continuation.print non_rec_handler.cont Flambda.Expr.print new_handler;
+        if debug ()
+        then
+          Format.eprintf "*** LIFTED %a:@\n%a@\n@." Continuation.print
+            non_rec_handler.cont Flambda.Expr.print new_handler;
         let new_non_rec_handler =
           Non_recursive_handler.with_handler new_handler non_rec_handler
         in

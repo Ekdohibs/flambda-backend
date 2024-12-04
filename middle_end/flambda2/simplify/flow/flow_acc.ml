@@ -434,57 +434,61 @@ let normalize_acc ~specialization_map (t : T.Acc.t) =
     Continuation.Map.filter_map
       (fun cont (elt : T.Continuation_info.t) ->
         (* Note: [cont=elt.continuation] *)
-         (* The keys of the specialization maps are the "generic" continuations that
-            we specialize. These continuations have **all** of their calls specialized,
-            so we can remove them from the control flow graph. *)
-         if Continuation.Map.mem cont specialization_map then
-           None
-         else begin
-        (* Rewrite continuations calls to the specialized ones *)
-        let apply_cont_args =
-          Continuation.Map.fold
-            (fun cont rewrite_ids acc ->
-              match Continuation.Map.find cont specialization_map with
-              | exception Not_found -> Continuation.Map.add cont rewrite_ids acc
-              | specialized_ids ->
-                Apply_cont_rewrite_id.Map.fold
-                  (fun id args acc ->
-                    match Apply_cont_rewrite_id.Map.find id specialized_ids with
-                    | exception Not_found ->
-                      Continuation_callsite_map.add cont id args acc
-                    | specialized ->
-                      Continuation_callsite_map.add specialized id args acc)
-                  rewrite_ids acc)
-            elt.apply_cont_args Continuation.Map.empty
-        in
-        (* Add extra args to the continuation call sites *)
-        let apply_cont_args =
-          Continuation.Map.filter_map
-            (fun cont rewrite_ids ->
-              let rewrite_ids =
-                match Continuation.Map.find cont t.extra with
-                | exception Not_found -> rewrite_ids
-                | epa ->
-                  let extra_args = EPA.extra_args epa in
-                  Apply_cont_rewrite_id.Map.filter_map
-                    (add_extra_args_to_call ~extra_args)
-                    rewrite_ids
-              in
-              (* We must not leave an empty [Apply_cont_rewrite_id] map here.
-                 Indeed, not having any actual continuation arguments will let
-                 flow analysis find a dominator for parameters of [cont] that we
-                 do not have access to. Since we then only look at which
-                 continuation can call which to know which arguments to add,
-                 this causes the adding of the extra parameters to assume we
-                 need access to that dominator since it looks like we can call
-                 [cont], but since neither we nor any of our callers have access
-                 to it, trying to add the dominator crashes the compiler. *)
-              if Apply_cont_rewrite_id.Map.is_empty rewrite_ids
-              then None
-              else Some rewrite_ids)
-            apply_cont_args
-        in
-        Some { elt with apply_cont_args } end)
+        (* The keys of the specialization maps are the "generic" continuations
+           that we specialize. These continuations have **all** of their calls
+           specialized, so we can remove them from the control flow graph. *)
+        if Continuation.Map.mem cont specialization_map
+        then None
+        else
+          (* Rewrite continuations calls to the specialized ones *)
+          let apply_cont_args =
+            Continuation.Map.fold
+              (fun cont rewrite_ids acc ->
+                match Continuation.Map.find cont specialization_map with
+                | exception Not_found ->
+                  Continuation.Map.add cont rewrite_ids acc
+                | specialized_ids ->
+                  Apply_cont_rewrite_id.Map.fold
+                    (fun id args acc ->
+                      match
+                        Apply_cont_rewrite_id.Map.find id specialized_ids
+                      with
+                      | exception Not_found ->
+                        Continuation_callsite_map.add cont id args acc
+                      | specialized ->
+                        Continuation_callsite_map.add specialized id args acc)
+                    rewrite_ids acc)
+              elt.apply_cont_args Continuation.Map.empty
+          in
+          (* Add extra args to the continuation call sites *)
+          let apply_cont_args =
+            Continuation.Map.filter_map
+              (fun cont rewrite_ids ->
+                let rewrite_ids =
+                  match Continuation.Map.find cont t.extra with
+                  | exception Not_found -> rewrite_ids
+                  | epa ->
+                    let extra_args = EPA.extra_args epa in
+                    Apply_cont_rewrite_id.Map.filter_map
+                      (add_extra_args_to_call ~extra_args)
+                      rewrite_ids
+                in
+                (* We must not leave an empty [Apply_cont_rewrite_id] map here.
+                   Indeed, not having any actual continuation arguments will let
+                   flow analysis find a dominator for parameters of [cont] that
+                   we do not have access to. Since we then only look at which
+                   continuation can call which to know which arguments to add,
+                   this causes the adding of the extra parameters to assume we
+                   need access to that dominator since it looks like we can call
+                   [cont], but since neither we nor any of our callers have
+                   access to it, trying to add the dominator crashes the
+                   compiler. *)
+                if Apply_cont_rewrite_id.Map.is_empty rewrite_ids
+                then None
+                else Some rewrite_ids)
+              apply_cont_args
+          in
+          Some { elt with apply_cont_args })
       t.map
   in
   let map =
@@ -525,16 +529,17 @@ let normalize_acc ~specialization_map (t : T.Acc.t) =
   let map =
     Continuation.Map.fold
       (fun cont epa map ->
-         if Continuation.Map.mem cont specialization_map then map
-         else begin
-        let elt : T.Continuation_info.t = Continuation.Map.find cont map in
-        let elt =
-          let params =
-            Bound_parameters.append elt.params (EPA.extra_params epa)
+        if Continuation.Map.mem cont specialization_map
+        then map
+        else
+          let elt : T.Continuation_info.t = Continuation.Map.find cont map in
+          let elt =
+            let params =
+              Bound_parameters.append elt.params (EPA.extra_params epa)
+            in
+            { elt with params }
           in
-          { elt with params }
-        in
-        Continuation.Map.add cont elt map end)
+          Continuation.Map.add cont elt map)
       t.extra map
   in
   { t with map; extra = Continuation.Map.empty }

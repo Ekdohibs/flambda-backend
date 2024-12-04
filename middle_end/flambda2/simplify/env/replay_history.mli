@@ -91,4 +91,5 @@ val replay_variable_mapping : t -> Variable.t Variable.Map.t replay_result
     of the current pass to continuations bound during the first pass.
 
     On a first pass replay, this will raise a fatal error. *)
-val replay_continuation_mapping : t -> Continuation.t Continuation.Map.t replay_result
+val replay_continuation_mapping :
+  t -> Continuation.t Continuation.Map.t replay_result

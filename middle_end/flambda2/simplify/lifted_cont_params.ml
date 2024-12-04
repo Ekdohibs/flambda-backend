@@ -35,12 +35,12 @@ let new_param t ~replay_history bound_param =
     match Replay_history.replay_variable_mapping replay_history with
     | Still_recording -> bound_param
     | Replayed variable_mapping ->
-        let original_var = Variable.Map.find (BP.var bound_param) variable_mapping in
-        BP.create original_var (BP.kind bound_param)
+      let original_var =
+        Variable.Map.find (BP.var bound_param) variable_mapping
+      in
+      BP.create original_var (BP.kind bound_param)
   in
-  let new_params_indexed =
-    BP.Map.add key bound_param t.new_params_indexed
-  in
+  let new_params_indexed = BP.Map.add key bound_param t.new_params_indexed in
   { len = t.len + 1; new_params_indexed }
 
 let rename t =
