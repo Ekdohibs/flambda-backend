@@ -622,6 +622,13 @@ let with_code_age_relation code_age_relation t =
     typing_env = TE.with_code_age_relation t.typing_env code_age_relation
   }
 
+let enter_inlined_continuation_handler t =
+  (* Note: the replay_history does not matter here, we should not be able
+     to use it ever in the case of an inlined continuation handler (since it
+     will never be specializable by itself). *)
+  let replay_history = Replay_history.first_pass in
+  { t with replay_history; }
+
 let enter_continuation_handler ~replay lifted_params t =
   let replay_history =
     match replay with

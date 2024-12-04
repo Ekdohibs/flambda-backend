@@ -195,7 +195,7 @@ let extra_params_and_args_for_lifting callee_lifted_params uses =
   List.fold_left
     (fun epa one_use ->
       let id = One_continuation_use.id one_use in
-      Format.eprintf "&&& USE %a@." Apply_cont_rewrite_id.print id;
+      if debug () then Format.eprintf "&&& USE %a@." Apply_cont_rewrite_id.print id;
       let env_at_use = One_continuation_use.env_at_use one_use in
       let caller_stack_lifted_params =
         DE.defined_variables_by_scope env_at_use
@@ -990,7 +990,7 @@ let rec compute_specialized_continuation ~replay ~simplify_expr ~original_cont
     let lifted_params = original.lifted_params in
     let is_exn_handler = original.is_exn_handler in
     let denv = data.after_downwards_traversal_of_body.denv_for_join in
-    Format.eprintf "~~~ SPECIALIZED %a@\nreplay: %a@\n@." Continuation.print cont
+    if debug () then Format.eprintf "~~~ SPECIALIZED %a@\nreplay: %a@\n@." Continuation.print cont
       Replay_history.print (fst (Option.get replay))
     ;
     (* TODO: refactor some function in CUE and Continuation_uses to take a
@@ -1083,14 +1083,14 @@ and specialize_continuation_if_needed ~simplify_expr dacc
         (* only a single use, the continuation is already specialized *)
         k dacc data
       | uses ->
-        Format.eprintf "!!! SPECIALIZATION %a !!!@]@\n@."
+          if debug () then Format.eprintf "!!! SPECIALIZATION %a !!!@]@\n@."
           Continuation.print cont;
         (* Save the replay history *)
         let replay =
           let always_inline = true in
           let denv = DA.denv dacc in
           let replay_history = DE.replay_history denv in
-          Format.eprintf "--- SPEC %a@\nreplay: %a@\n@." Continuation.print cont
+          if debug () then Format.eprintf "--- SPEC %a@\nreplay: %a@\n@." Continuation.print cont
             Replay_history.print replay_history;
           Some (replay_history, always_inline)
         in
@@ -1572,7 +1572,7 @@ and after_downwards_traversal_of_body ~simplify_expr ~down_to_up
     let handlers =
       Original_handlers.add_params_to_lift data.handlers params_to_lift
     in
-    Format.eprintf "/// LIFTING:@\n%a@\n@."
+    if debug () then Format.eprintf "/// LIFTING:@\n%a@\n@."
       Original_handlers.print handlers;
     let dacc = DA.add_lifted_continuation data.denv_for_join handlers dacc in
     (* Restore lifted constants in dacc *)
@@ -1581,7 +1581,7 @@ and after_downwards_traversal_of_body ~simplify_expr ~down_to_up
     in
     down_to_up dacc ~rebuild:rebuild_body
   | Not_lifting | Analyzing _ ->
-    Format.eprintf "... SIMPLIFY@\n%a@\n@." Original_handlers.print data.handlers;
+      if debug () then Format.eprintf "... SIMPLIFY@\n%a@\n@." Original_handlers.print data.handlers;
     simplify_handlers data dacc ~simplify_expr ~down_to_up ~denv_for_join
       ~rebuild_body
 
@@ -1651,14 +1651,14 @@ let simplify_let_cont0 ~(simplify_expr : _ Simplify_common.expr_simplifier) dacc
      continuations that have been lifted during the first downwards pass, and
      whhose handlers must be replaced on subsequent passes, so that they can
      refer to the lifted ones. *)
-  Format.eprintf "--- LET_CONT0@\n%a@\n@." Original_handlers.print data.handlers;
+  if debug () then Format.eprintf "--- LET_CONT0@\n%a@\n@." Original_handlers.print data.handlers;
   let handlers =
     match Replay_history.replay_continuation_mapping (DE.replay_history denv_for_body) with
     | Still_recording -> data.handlers
     | Replayed continuation_mapping -> (
       match data.handlers with
       | Non_recursive non_rec_handler ->
-        Format.eprintf "+++ LIFTED ? %a@\nreplay: %a@\n@."
+          if debug () then Format.eprintf "+++ LIFTED ? %a@\nreplay: %a@\n@."
           Continuation.print non_rec_handler.cont
           Replay_history.print (DE.replay_history denv_for_body);
         let lifted_cont = Continuation.Map.find non_rec_handler.cont continuation_mapping in
@@ -1673,7 +1673,7 @@ let simplify_let_cont0 ~(simplify_expr : _ Simplify_common.expr_simplifier) dacc
           in
           Flambda.Expr.create_apply_cont apply_cont
         in
-        Format.eprintf "*** LIFTED %a:@\n%a@\n@."
+        if debug () then Format.eprintf "*** LIFTED %a:@\n%a@\n@."
           Continuation.print non_rec_handler.cont Flambda.Expr.print new_handler;
         let new_non_rec_handler =
           Non_recursive_handler.with_handler new_handler non_rec_handler

@@ -41,8 +41,8 @@ type t =
       }
   | Replaying of
       { always_inline : bool;
-            (** Force inlining of all function calls during replay. This is for instance
-          set by the match-in-match specialization. *)
+        (* Force inlining of all function calls during replay. This is for instance
+           set by the match-in-match specialization. *)
         previous_history : Action.t list;
         (* Bindables opened during the first pass, with the head of the list
            being the outermost/first one opened. *)

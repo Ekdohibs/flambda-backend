@@ -227,6 +227,8 @@ val defined_variables_by_scope : t -> Lifted_cont_params.t list
 val enter_continuation_handler :
   replay:(Replay_history.t * bool) option -> Lifted_cont_params.t -> t -> t
 
+val enter_inlined_continuation_handler : t -> t
+
 val variables_defined_in_current_continuation : t -> Lifted_cont_params.t
 
 val cost_of_lifting_continuations_out_of_current_one : t -> int
