@@ -625,7 +625,8 @@ let with_code_age_relation code_age_relation t =
   }
 
 let clear_replay_history t =
-  (* CR gbury: should we try and have a "dummy" replay history for this use case ? *)
+  (* CR gbury: should we try and have a "dummy" replay history for this use case
+     ? *)
   let replay_history = Replay_history.first_pass in
   { t with replay_history }
 

@@ -64,7 +64,8 @@ val print : Format.formatter -> t -> unit
 val no_lifting : t
 
 (** Delay the choice of lifting until the leaf of a continuation's handler. *)
-val think_about_lifting_out_of : is_exn_handler:bool -> Continuation.t -> Continuation_uses.t -> t
+val think_about_lifting_out_of :
+  is_exn_handler:bool -> Continuation.t -> Continuation_uses.t -> t
 
 (** Instruct [simplify_let_cont] to lift continuations. *)
 val lift_continuations_out_of : Continuation.t -> t

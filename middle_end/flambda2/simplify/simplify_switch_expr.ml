@@ -605,43 +605,41 @@ let simplify_switch0 dacc switch ~down_to_up =
          when going downwards through a [Switch] expression. See the \
          explanation in [are_lifting_conts.mli]."
     | Not_lifting -> dacc
-    | Analyzing { continuation; uses; is_exn_handler; } ->
-      (* Some preliminary requirements. We do **not** specialize continuations if
-         one of the following conditions are true:
+    | Analyzing { continuation; uses; is_exn_handler } ->
+      (* Some preliminary requirements. We do **not** specialize continuations
+         if one of the following conditions are true:
 
          - they have only one (or less) use
 
-         - they are an exception handler. To handle this case, the existing mechanism
-           used to rewrite specialized calls on the way up should be extended to also
-         rewrite pop_traps and other uses of exn handlers (which is not currently the case).
-      *)
-        if is_exn_handler ||
-           Continuation_uses.number_of_uses uses <= 1 then
-          dacc
-        else begin
-      let denv = DA.denv dacc in
-      (* Estimate the cost of lifting: this mainly comes from adding new
-         parameters, which increase the work done by the typing env, as well as
-         the flow analysis. We then only do the lifting if the cost is within
-         the budget for the current function. *)
-      let budget = DA.get_continuation_lifting_budget dacc in
-      let cost = DE.cost_of_lifting_continuations_out_of_current_one denv in
-      if budget = 0 || budget < cost
+         - they are an exception handler. To handle this case, the existing
+         mechanism used to rewrite specialized calls on the way up should be
+         extended to also rewrite pop_traps and other uses of exn handlers
+         (which is not currently the case). *)
+      if is_exn_handler || Continuation_uses.number_of_uses uses <= 1
       then dacc
       else
-        (* TODO/FIXME: implement an actual criterion for when to lift
-           continuations and specialize them. Currently for testing, we lift any
-           continuation that occurs in a handler that ends with a switch (if the
-           bduget allows), and we specialize the continuation that ends with the
-           switch. *)
-        let dacc = DA.decrease_continuation_lifting_budget dacc cost in
-        let dacc =
-          DA.with_are_lifting_conts dacc
-            (Are_lifting_conts.lift_continuations_out_of continuation)
-        in
-        let dacc = DA.add_continuation_to_specialize dacc continuation in
-        dacc
-    end
+        let denv = DA.denv dacc in
+        (* Estimate the cost of lifting: this mainly comes from adding new
+           parameters, which increase the work done by the typing env, as well
+           as the flow analysis. We then only do the lifting if the cost is
+           within the budget for the current function. *)
+        let budget = DA.get_continuation_lifting_budget dacc in
+        let cost = DE.cost_of_lifting_continuations_out_of_current_one denv in
+        if budget = 0 || budget < cost
+        then dacc
+        else
+          (* TODO/FIXME: implement an actual criterion for when to lift
+             continuations and specialize them. Currently for testing, we lift
+             any continuation that occurs in a handler that ends with a switch
+             (if the bduget allows), and we specialize the continuation that
+             ends with the switch. *)
+          let dacc = DA.decrease_continuation_lifting_budget dacc cost in
+          let dacc =
+            DA.with_are_lifting_conts dacc
+              (Are_lifting_conts.lift_continuations_out_of continuation)
+          in
+          let dacc = DA.add_continuation_to_specialize dacc continuation in
+          dacc
   in
   down_to_up dacc
     ~rebuild:

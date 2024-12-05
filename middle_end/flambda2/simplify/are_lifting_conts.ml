@@ -25,7 +25,7 @@ type t =
 let no_lifting : t = Not_lifting
 
 let think_about_lifting_out_of ~is_exn_handler continuation uses =
-  Analyzing { continuation; uses; is_exn_handler; }
+  Analyzing { continuation; uses; is_exn_handler }
 
 let lift_continuations_out_of continuation : t = Lifting_out_of { continuation }
 
