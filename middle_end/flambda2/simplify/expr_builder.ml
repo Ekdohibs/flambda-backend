@@ -764,7 +764,7 @@ let rewrite_fixed_arity_continuation0 uacc cont_or_apply_cont ~use_id arity :
         { cont; handler; free_names_of_handler; cost_metrics_of_handler }
     in
     match cont_or_apply_cont with
-    | Continuation cont -> (
+    | Continuation _ -> (
       (* In this case, any generated [Apply_cont] will sit inside a wrapper that
          binds [kinded_params]. *)
       let params =

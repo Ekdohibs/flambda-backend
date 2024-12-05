@@ -1442,7 +1442,7 @@ and simplify_handlers ~simplify_expr ~down_to_up ~denv_for_join ~rebuild_body
     | Some uses ->
       let dacc =
         DA.with_are_lifting_conts dacc
-          (Are_lifting_conts.think_about_lifting_out_of cont uses)
+          (Are_lifting_conts.think_about_lifting_out_of ~is_exn_handler cont uses)
       in
       let at_unit_toplevel =
         (* We try to show that [handler] postdominates [body] (which is done by

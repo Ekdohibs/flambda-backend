@@ -605,7 +605,20 @@ let simplify_switch0 dacc switch ~down_to_up =
          when going downwards through a [Switch] expression. See the \
          explanation in [are_lifting_conts.mli]."
     | Not_lifting -> dacc
-    | Analyzing { continuation; uses = _ } ->
+    | Analyzing { continuation; uses; is_exn_handler; } ->
+      (* Some preliminary requirements. We do **not** specialize continuations if
+         one of the following conditions are true:
+
+         - they have only one (or less) use
+
+         - they are an exception handler. To handle this case, the existing mechanism
+           used to rewrite specialized calls on the way up should be extended to also
+         rewrite pop_traps and other uses of exn handlers (which is not currently the case).
+      *)
+        if is_exn_handler ||
+           Continuation_uses.number_of_uses uses <= 1 then
+          dacc
+        else begin
       let denv = DA.denv dacc in
       (* Estimate the cost of lifting: this mainly comes from adding new
          parameters, which increase the work done by the typing env, as well as
@@ -628,6 +641,7 @@ let simplify_switch0 dacc switch ~down_to_up =
         in
         let dacc = DA.add_continuation_to_specialize dacc continuation in
         dacc
+    end
   in
   down_to_up dacc
     ~rebuild:
