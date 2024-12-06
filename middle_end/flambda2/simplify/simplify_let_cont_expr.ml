@@ -990,6 +990,7 @@ let rec compute_specialized_continuation ~replay ~simplify_expr ~original_cont
     let lifted_params = original.lifted_params in
     let is_exn_handler = original.is_exn_handler in
     let denv = data.after_downwards_traversal_of_body.denv_for_join in
+    (* TODO: set DE.at_unit_toplevel false ? *)
     if debug ()
     then
       Format.eprintf "~~~ SPECIALIZED %a@\nreplay: %a@\n@." Continuation.print
@@ -1023,6 +1024,7 @@ let rec compute_specialized_continuation ~replay ~simplify_expr ~original_cont
         let cont_uses_env =
           CUE.union data.cont_uses_env cont_uses_env_in_handler
         in
+        let cont_uses_env = CUE.remove cont_uses_env cont in
         let dacc = DA.with_continuation_uses_env dacc ~cont_uses_env in
         (* create the new handler *)
         let rebuild =
@@ -1103,9 +1105,7 @@ and specialize_continuation_if_needed ~simplify_expr dacc
         in
         (* We need to adjust the contination uses env with a few things: TODO:
            continue this comment *)
-        let cont_uses_env =
-          CUE.clear_continuation_uses data.cont_uses_env_after_body cont
-        in
+        let cont_uses_env = CUE.remove data.cont_uses_env_after_body cont in
         let data =
           { data with
             handlers = Continuation.Map.empty;
@@ -1150,6 +1150,9 @@ and after_downwards_traversal_of_body_and_handlers ~simplify_expr ~denv_for_join
          several independant blocks of recursive or non-recursive continuations.
          In case one of those is non-recursive, we can check whether the
          continuation is inlinable if it is used a single time. *)
+      if debug () then Format.eprintf "vvv AFTER SPEC@\n%a@\n@."
+          CUE.print data.cont_uses_env;
+      let dacc = DA.with_continuation_uses_env dacc ~cont_uses_env:data.cont_uses_env in
       let handlers =
         Continuation.Map.mapi (create_handler_to_rebuild data) data.handlers
       in
@@ -1445,6 +1448,9 @@ and simplify_handlers ~simplify_expr ~down_to_up ~denv_for_join ~rebuild_body
           (Are_lifting_conts.think_about_lifting_out_of ~is_exn_handler cont
              uses)
       in
+      if debug () then Format.eprintf "^^^ CUE BODY %a@\n%a@\n@."
+          Continuation.print cont
+          CUE.print body_continuation_uses_env;
       let at_unit_toplevel =
         (* We try to show that [handler] postdominates [body] (which is done by
            showing that [body] can only return through [cont]) and that if
