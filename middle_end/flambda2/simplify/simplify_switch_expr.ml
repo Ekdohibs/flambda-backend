@@ -616,13 +616,13 @@ let simplify_switch0 dacc switch ~down_to_up =
          extended to also rewrite pop_traps and other uses of exn handlers
          (which is not currently the case).
 
-         - we are at toplevel, in which case there can be symbols which we
-         might duplicate by specializing (which would be an error). More generally,
+         - we are at toplevel, in which case there can be symbols which we might
+         duplicate by specializing (which would be an error). More generally,
          the benefits of specialization at unit toplevel do not seem that great,
-         because partial evaluation would be better.
-      *)
-      if is_exn_handler || Continuation_uses.number_of_uses uses <= 1 ||
-         (DE.at_unit_toplevel (DA.denv dacc))
+         because partial evaluation would be better. *)
+      if is_exn_handler
+         || Continuation_uses.number_of_uses uses <= 1
+         || DE.at_unit_toplevel (DA.denv dacc)
       then dacc
       else
         let denv = DA.denv dacc in

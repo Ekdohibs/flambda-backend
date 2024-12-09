@@ -82,8 +82,8 @@ type after_downwards_traversal_of_body_and_handlers_data =
     (* used for specialization *)
     rebuild_body : expr_to_rebuild;
     cont_uses_env : CUE.t;
-    (* total cont uses env in body + handlers, including the uses of the continuations
-       currently being bound *)
+    (* total cont uses env in body + handlers, including the uses of the
+       continuations currently being bound *)
     at_unit_toplevel : bool;
     consts_lifted_during_body : Lifted_constant_state.t;
     lifted_params : Lifted_cont_params.t;
@@ -1149,12 +1149,17 @@ and after_downwards_traversal_of_body_and_handlers ~simplify_expr ~denv_for_join
          several independant blocks of recursive or non-recursive continuations.
          In case one of those is non-recursive, we can check whether the
          continuation is inlinable if it is used a single time. *)
-      if debug () then Format.eprintf "vvv AFTER SPEC@\n%a@\n@."
-          CUE.print data.cont_uses_env;
-      (* We need to reset the [dacc.cont_uses_env] for the rest of the traversal. Here, [data.cont_uses_env] contains the total
-         CUE for the body + handler, so we only need to remove the continuations that we bind from it to reset the [cont_uses_env] correctly. *)
-      let cont_uses_env = Continuation.Map.fold (fun cont _ cont_uses_env ->
-          CUE.remove cont_uses_env cont) data.handlers data.cont_uses_env
+      if debug ()
+      then
+        Format.eprintf "vvv AFTER SPEC@\n%a@\n@." CUE.print data.cont_uses_env;
+      (* We need to reset the [dacc.cont_uses_env] for the rest of the
+         traversal. Here, [data.cont_uses_env] contains the total CUE for the
+         body + handler, so we only need to remove the continuations that we
+         bind from it to reset the [cont_uses_env] correctly. *)
+      let cont_uses_env =
+        Continuation.Map.fold
+          (fun cont _ cont_uses_env -> CUE.remove cont_uses_env cont)
+          data.handlers data.cont_uses_env
       in
       let dacc = DA.with_continuation_uses_env dacc ~cont_uses_env in
       let handlers =
@@ -1362,12 +1367,10 @@ and simplify_recursive_handlers ~down_to_up ~data ~rebuild_body ~denv_for_join
     match Continuation.Set.min_elt_opt reachable_handlers_to_simplify with
     | None ->
       (* all remaining_handlers are unreachable *)
-      (* let cont_uses_env =
-        Continuation.Set.fold
-          (fun cont cont_uses_env -> CUE.remove cont_uses_env cont)
-          simplified_handlers_set cont_uses_env_so_far
-      in
-      let dacc = DA.with_continuation_uses_env dacc ~cont_uses_env in *)
+      (* let cont_uses_env = Continuation.Set.fold (fun cont cont_uses_env ->
+         CUE.remove cont_uses_env cont) simplified_handlers_set
+         cont_uses_env_so_far in let dacc = DA.with_continuation_uses_env dacc
+         ~cont_uses_env in *)
       let data : after_downwards_traversal_of_body_and_handlers_data =
         { rebuild_body;
           cont_uses_env_after_body;
@@ -1452,8 +1455,9 @@ and simplify_handlers ~simplify_expr ~down_to_up ~denv_for_join ~rebuild_body
           (Are_lifting_conts.think_about_lifting_out_of ~is_exn_handler cont
              uses)
       in
-      if debug () then Format.eprintf "^^^ CUE BODY %a@\n%a@\n@."
-          Continuation.print cont
+      if debug ()
+      then
+        Format.eprintf "^^^ CUE BODY %a@\n%a@\n@." Continuation.print cont
           CUE.print body_continuation_uses_env;
       let at_unit_toplevel =
         (* We try to show that [handler] postdominates [body] (which is done by
@@ -1496,12 +1500,10 @@ and simplify_handlers ~simplify_expr ~down_to_up ~denv_for_join ~rebuild_body
               extra_params_and_args
             }
           in
-          (* let dacc =
-            (* Update the dacc with the new cont_uses_env, which removes the
-               uses of [cont] since it leaves scope. *)
-            let cont_uses_env = CUE.remove cont_uses_env_so_far cont in
-            DA.with_continuation_uses_env dacc ~cont_uses_env
-          in *)
+          (* let dacc = (* Update the dacc with the new cont_uses_env, which
+             removes the uses of [cont] since it leaves scope. *) let
+             cont_uses_env = CUE.remove cont_uses_env_so_far cont in
+             DA.with_continuation_uses_env dacc ~cont_uses_env in *)
           let dacc =
             DA.with_are_lifting_conts dacc previous_are_lifting_conts
           in
@@ -1509,7 +1511,8 @@ and simplify_handlers ~simplify_expr ~down_to_up ~denv_for_join ~rebuild_body
             { rebuild_body;
               cont_uses_env_after_body = body_continuation_uses_env;
               after_downwards_traversal_of_body = data;
-              cont_uses_env = cont_uses_env_so_far; (* CUE.remove cont_uses_env_so_far cont; *)
+              cont_uses_env = cont_uses_env_so_far;
+              (* CUE.remove cont_uses_env_so_far cont; *)
               lifted_params;
               invariant_params = Bound_parameters.empty;
               invariant_extra_params_and_args = EPA.empty;
