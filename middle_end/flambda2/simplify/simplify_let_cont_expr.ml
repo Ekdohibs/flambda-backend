@@ -82,7 +82,8 @@ type after_downwards_traversal_of_body_and_handlers_data =
     (* used for specialization *)
     rebuild_body : expr_to_rebuild;
     cont_uses_env : CUE.t;
-    (* total cont uses env in body + handlers (+ previous exprs) *)
+    (* total cont uses env in body + handlers, including the uses of the continuations
+       currently being bound *)
     at_unit_toplevel : bool;
     consts_lifted_during_body : Lifted_constant_state.t;
     lifted_params : Lifted_cont_params.t;
@@ -1150,6 +1151,8 @@ and after_downwards_traversal_of_body_and_handlers ~simplify_expr ~denv_for_join
          continuation is inlinable if it is used a single time. *)
       if debug () then Format.eprintf "vvv AFTER SPEC@\n%a@\n@."
           CUE.print data.cont_uses_env;
+      (* We need to reset the [dacc.cont_uses_env] for the rest of the traversal. Here, [data.cont_uses_env] contains the total
+         CUE for the body + handler, so we only need to remove the continuations that we bind from it to reset the [cont_uses_env] correctly. *)
       let cont_uses_env = Continuation.Map.fold (fun cont _ cont_uses_env ->
           CUE.remove cont_uses_env cont) data.handlers data.cont_uses_env
       in
