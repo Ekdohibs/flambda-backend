@@ -212,6 +212,27 @@ let extra_params_and_args_for_lifting callee_lifted_params uses =
       EPA.add_args_for_all_params epa id extra_args)
     epa uses
 
+let arg_types_by_use_id_for_lifting callee_lifted_params uses =
+  let bound_callee_params = Bound_parameters.to_list (Lifted_cont_params.bound_parameters callee_lifted_params) in
+  List.fold_left
+    (fun arg_types_by_use_id one_use ->
+      let id = One_continuation_use.id one_use in
+      let env_at_use = One_continuation_use.env_at_use one_use in
+      let caller_stack_lifted_params =
+        DE.defined_variables_by_scope env_at_use
+      in
+      let args =
+        Lifted_cont_params.args ~callee_lifted_params
+          ~caller_stack_lifted_params
+      in
+      let lifted_arg_types =
+        List.map2 (fun arg param -> Continuation_uses.{ typing_env = DE.typing_env env_at_use; arg_type = Flambda2_types.alias_type_of (KS.kind (Bound_parameter.kind param)) arg }) args bound_callee_params
+      in
+      List.map2 (fun arg_type_by_use_id arg_type ->
+        Apply_cont_rewrite_id.Map.add id arg_type arg_type_by_use_id)
+      arg_types_by_use_id lifted_arg_types)
+    (List.map (fun _ -> Apply_cont_rewrite_id.Map.empty) bound_callee_params) uses
+
 let decide_param_usage_non_recursive ~free_names ~required_names
     ~removed_aliased ~exn_bucket param : Apply_cont_rewrite.used =
   (* The free_names computation is the reference here, because it records
@@ -926,6 +947,7 @@ let create_handler_to_rebuild
         (List.length (Bound_parameters.to_list data.invariant_params))
         arg_types_by_use_id
     in
+    let arg_types_by_use_id = arg_types_by_use_id @ arg_types_by_use_id_for_lifting data.lifted_params (Continuation_uses.get_uses uses) in
     Unbox_continuation_params.compute_extra_params_and_args
       handler.unbox_decisions ~arg_types_by_use_id handler.extra_params_and_args
   in
@@ -1253,6 +1275,8 @@ and prepare_dacc_for_handlers dacc ~replay ~env_at_fork ~params ~is_recursive
         (* Unbox the parameters of the continuation if possible. Any such
            unboxing will induce a rewrite (or wrapper) on the application sites
            of the continuation. *)
+        let params = Bound_parameters.append params (Lifted_cont_params.bound_parameters lifted_params) in
+        let arg_types_by_use_id = arg_types_by_use_id @ arg_types_by_use_id_for_lifting lifted_params uses in
         let param_types = TE.find_params (DE.typing_env handler_env) params in
         let handler_env, decisions =
           Unbox_continuation_params.make_decisions handler_env

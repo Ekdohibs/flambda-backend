@@ -35,7 +35,7 @@ val add_use :
 
 val get_uses : t -> One_continuation_use.t list
 
-type arg_at_use = private
+type arg_at_use =
   { arg_type : Flambda2_types.t;
     typing_env : Flambda2_types.Typing_env.t
   }
