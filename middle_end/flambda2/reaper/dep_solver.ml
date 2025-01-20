@@ -218,7 +218,10 @@ type field_elt =
 (** Represents the part of a value that can be accessed *)
 type elt =
   | Top  (** Value completely accessed *)
-  | Fields of field_elt Field.Map.t
+  | Fields of
+      { fields : field_elt Field.Map.t;
+        uses : Code_id_or_name.Set.t
+      }
       (** Only the given fields are accessed, each field either being completely accessed for [Field_top]
       or corresponding to the union of all the elements corresponding to all the
       [Code_id_or_name.t] in the set for [Field_vals]. *)
@@ -234,7 +237,9 @@ let pp_elt ppf elt =
   | Top -> Format.pp_print_string ppf "⊤"
   | Bottom -> Format.pp_print_string ppf "⊥"
   | Fields fields ->
-    Format.fprintf ppf "{ %a }" (Field.Map.print pp_field_elt) fields
+    Format.fprintf ppf "{ fields: %a; uses : %a }"
+      (Field.Map.print pp_field_elt)
+      fields.fields Code_id_or_name.Set.print fields.uses
 
 module Graph = struct
   type graph = Global_flow_graph.graph
@@ -270,9 +275,11 @@ module Graph = struct
     | Bottom, _ | _, Top -> true
     | (Top | Fields _), Bottom | Top, Fields _ -> false
     | Fields f1, Fields f2 ->
-      if f1 == f2
+      if f1.uses == f2.uses && f1.fields == f2.fields
       then true
       else
+        Code_id_or_name.Set.subset f1.uses f2.uses
+        &&
         let ok = ref true in
         ignore
           (Field.Map.merge
@@ -285,7 +292,7 @@ module Graph = struct
                | Some (Field_vals e1), Some (Field_vals e2) ->
                  if not (Code_id_or_name.Set.subset e1 e2) then ok := false);
                None)
-             f1 f2);
+             f1.fields f2.fields);
         !ok
 
   let elt_deps elt =
@@ -297,7 +304,7 @@ module Graph = struct
           match v with
           | Field_top -> acc
           | Field_vals v -> Code_id_or_name.Set.union v acc)
-        f Code_id_or_name.Set.empty
+        f.fields Code_id_or_name.Set.empty
 
   let join_elt e1 e2 =
     if e1 == e2
@@ -307,14 +314,17 @@ module Graph = struct
       | Bottom, e | e, Bottom -> e
       | Top, _ | _, Top -> Top
       | Fields f1, Fields f2 ->
-        Fields
-          (Field.Map.union
-             (fun _ e1 e2 ->
-               match e1, e2 with
-               | Field_top, _ | _, Field_top -> Some Field_top
-               | Field_vals e1, Field_vals e2 ->
-                 Some (Field_vals (Code_id_or_name.Set.union e1 e2)))
-             f1 f2)
+        let fields =
+          Field.Map.union
+            (fun _ e1 e2 ->
+              match e1, e2 with
+              | Field_top, _ | _, Field_top -> Some Field_top
+              | Field_vals e1, Field_vals e2 ->
+                Some (Field_vals (Code_id_or_name.Set.union e1 e2)))
+            f1.fields f2.fields
+        in
+        let uses = Code_id_or_name.Set.union f1.uses f2.uses in
+        Fields { fields; uses }
 
   let make_field_elt uses (k : Code_id_or_name.t) =
     match Hashtbl.find_opt uses k with
@@ -329,8 +339,12 @@ module Graph = struct
       match dep with
       | Alias _ -> elt
       | Use _ -> Top
-      | Accessor { relation; _ } ->
-        Fields (Field.Map.singleton relation (make_field_elt uses k))
+      | Accessor { relation; target } ->
+        let fields = Field.Map.singleton relation (make_field_elt uses k) in
+        let uses =
+          Code_id_or_name.Set.singleton (Code_id_or_name.name target)
+        in
+        Fields { fields; uses }
       | Constructor { relation; _ } -> (
         match elt with
         | Bottom -> assert false
@@ -338,7 +352,7 @@ module Graph = struct
         | Fields fields -> (
           try
             let elems =
-              match Field.Map.find_opt relation fields with
+              match Field.Map.find_opt relation fields.fields with
               | None -> Code_id_or_name.Set.empty
               | Some Field_top -> raise Exit
               | Some (Field_vals s) -> s
@@ -352,11 +366,11 @@ module Graph = struct
               elems Bottom
           with Exit -> Top))
       | Alias_if_def { if_defined; _ } -> (
-        match Hashtbl.find_opt uses (Code_id_or_name.code_id if_defined) with
+        match Hashtbl.find_opt uses if_defined with
         | None | Some Bottom -> Bottom
         | Some (Fields _ | Top) -> elt)
       | Propagate { source; _ } -> (
-        match Hashtbl.find_opt uses (Code_id_or_name.name source) with
+        match Hashtbl.find_opt uses source with
         | None -> Bottom
         | Some elt -> elt))
 
@@ -367,11 +381,11 @@ module Graph = struct
     | Accessor _ -> false
     | Constructor _ -> true
     | Alias_if_def { if_defined; _ } -> (
-      match Hashtbl.find_opt uses (Code_id_or_name.code_id if_defined) with
+      match Hashtbl.find_opt uses if_defined with
       | None | Some Bottom -> false
       | Some (Fields _ | Top) -> true)
     | Propagate { source; _ } -> (
-      match Hashtbl.find_opt uses (Code_id_or_name.name source) with
+      match Hashtbl.find_opt uses source with
       | None | Some (Bottom | Fields _) -> false
       | Some Top -> true)
 
@@ -397,11 +411,272 @@ end
 
 module Solver = Make_Fixpoint (Graph)
 
-type result = Graph.state * Datalog.database
+module Dual_graph = struct
+  include Global_flow_graph.Dual
+  module Node = Code_id_or_name
 
-let pp_result ppf (old_res, new_res) =
-  let res = old_res in
-  let elts = List.of_seq @@ Hashtbl.to_seq res in
+  type field_elt =
+    | Field_top
+    | Field_vals of Code_id_or_name.Set.t
+
+  type elt =
+    | Top  (** Any value can flow to this variable *)
+    | Block of
+        { fields : field_elt Field.Map.t;
+          sources : Code_id_or_name.Set.t
+        }
+        (** This value can be produced at any of those sources.
+          Its value can be extracted from the fields of those field sources  *)
+    | Bottom  (** No value can flow here *)
+
+  let pp_field_elt ppf elt =
+    match elt with
+    | Field_top -> Format.pp_print_string ppf "⊤"
+    | Field_vals s -> Code_id_or_name.Set.print ppf s
+
+  let pp_elt ppf elt =
+    match elt with
+    | Top -> Format.pp_print_string ppf "⊤"
+    | Bottom -> Format.pp_print_string ppf "⊥"
+    | Block { fields; sources } ->
+      Format.fprintf ppf "@[<hov 2>{@ sources: %a;@ fields: %a }@]"
+        Code_id_or_name.Set.print sources
+        (Field.Map.print pp_field_elt)
+        fields
+
+  let fold_nodes (graph : graph) f init =
+    Code_id_or_name.Map.fold (fun n _ acc -> f n acc) graph init
+
+  let fold_edges (type a) (graph : graph) (n : Node.t) (f : edge -> a -> a)
+      (init : a) : a =
+    match Code_id_or_name.Map.find_opt n graph with
+    | None -> init
+    | Some deps -> List.fold_left (Fun.flip f) init deps
+
+  let target (dep : edge) : Code_id_or_name.t =
+    match dep with
+    | Alias { target } | Accessor { target; _ } | Constructor { target; _ } ->
+      target
+
+  let less_equal_elt (e1 : elt) (e2 : elt) =
+    match e1, e2 with
+    | Bottom, _ | _, Top -> true
+    | (Top | Block _), Bottom | Top, Block _ -> false
+    | Block f1, Block f2 ->
+      if e1 == e2
+      then true
+      else
+        Code_id_or_name.Set.subset f1.sources f2.sources
+        &&
+        let ok = ref true in
+        ignore
+          (Field.Map.merge
+             (fun _ e1 e2 ->
+               (match e1, e2 with
+               | None, _ -> ()
+               | Some _, None -> ok := false
+               | _, Some Field_top -> ()
+               | Some Field_top, _ -> ok := false
+               | Some (Field_vals e1), Some (Field_vals e2) ->
+                 if not (Code_id_or_name.Set.subset e1 e2) then ok := false);
+               None)
+             f1.fields f2.fields);
+        !ok
+
+  let elt_deps elt =
+    match elt with
+    | Bottom | Top -> Code_id_or_name.Set.empty
+    | Block f ->
+      Field.Map.fold
+        (fun _ v acc ->
+          match v with
+          | Field_top -> acc
+          | Field_vals v -> Code_id_or_name.Set.union v acc)
+        f.fields Code_id_or_name.Set.empty
+
+  let join_elt e1 e2 =
+    if e1 == e2
+    then e1
+    else
+      match e1, e2 with
+      | Bottom, e | e, Bottom -> e
+      | Top, _ | _, Top -> Top
+      | Block f1, Block f2 ->
+        let fields =
+          Field.Map.union
+            (fun _ e1 e2 ->
+              match e1, e2 with
+              | Field_top, _ | _, Field_top -> Some Field_top
+              | Field_vals e1, Field_vals e2 ->
+                Some (Field_vals (Code_id_or_name.Set.union e1 e2)))
+            f1.fields f2.fields
+        in
+        let sources = Code_id_or_name.Set.union f1.sources f2.sources in
+        Block { fields; sources }
+
+  let make_field_elt sources (k : Code_id_or_name.t) =
+    match Hashtbl.find_opt sources k with
+    | Some Top -> Field_top
+    | None | Some (Bottom | Block _) ->
+      Field_vals (Code_id_or_name.Set.singleton k)
+
+  let propagate sources (k : Code_id_or_name.t) (elt : elt) (dep : edge) : elt =
+    match elt with
+    | Bottom -> Bottom
+    | Top | Block _ -> (
+      match dep with
+      | Alias _ -> elt
+      | Constructor { relation; target } ->
+        Block
+          { fields = Field.Map.singleton relation (make_field_elt sources k);
+            sources = Code_id_or_name.Set.singleton target
+          }
+      | Accessor { relation; _ } -> (
+        match elt with
+        | Bottom -> assert false
+        | Top -> Top
+        | Block { fields; _ } -> (
+          try
+            let elems =
+              match Field.Map.find_opt relation fields with
+              | None -> Code_id_or_name.Set.empty
+              | Some Field_top -> raise Exit
+              | Some (Field_vals s) -> s
+            in
+            Code_id_or_name.Set.fold
+              (fun n acc ->
+                join_elt acc
+                  (match Hashtbl.find_opt sources n with
+                  | None -> Bottom
+                  | Some e -> e))
+              elems Bottom
+          with Exit -> Top)))
+
+  let propagate_top _sources (dep : edge) : bool =
+    match dep with
+    | Alias _ -> true
+    | Constructor _ -> false
+    | Accessor _ -> true
+
+  let top = Top
+
+  let is_top = function Top -> true | Bottom | Block _ -> false
+
+  let is_bottom = function Bottom -> true | Top | Block _ -> false
+
+  let widen _ ~old:elt1 elt2 = join_elt elt1 elt2
+
+  let join _ elt1 elt2 = join_elt elt1 elt2
+
+  let less_equal _ elt1 elt2 = less_equal_elt elt1 elt2
+
+  type state = (Code_id_or_name.t, elt) Hashtbl.t
+
+  let get state n =
+    match Hashtbl.find_opt state n with None -> Bottom | Some elt -> elt
+
+  let set state n elt = Hashtbl.replace state n elt
+
+  let build_dual (graph : Graph.graph) (solution : Graph.state) :
+      graph * Code_id_or_name.Set.t =
+    let add graph from to_ =
+      Code_id_or_name.Map.update from
+        (function None -> Some [to_] | Some l -> Some (to_ :: l))
+        graph
+    in
+    (* top_roots is the initialization of the fixpoint. We can only consider top
+       values as potential roots because we think that every constructor descend
+       from one that has at least one top as its arguments. This is somewhat
+       safe because atomic values are top (let x = 1: x would be top) and there
+       are no purely cyclic values, for instance let rec x = x :: x would be
+       initialized from external C functions (so Top). And a loop produced
+       through a function cannot terminate (let rec loop () = (loop ()) :: (loop
+       ())), hence the value is never produced. Note that this last case might
+       actually be tricky (dead code still has to be compiled) *)
+    let top_roots = ref Code_id_or_name.Set.empty in
+    let graph =
+      Hashtbl.fold
+        (fun node (deps : Global_flow_graph.Dep.Set.t) acc ->
+          Global_flow_graph.Dep.Set.fold
+            (fun dep acc ->
+              match dep with
+              | Alias { target } ->
+                add acc (Code_id_or_name.name target) (Alias { target = node })
+              | Alias_if_def { if_defined; target } -> (
+                match Hashtbl.find_opt solution if_defined with
+                | None | Some Bottom -> acc
+                | Some (Fields _ | Top) ->
+                  add acc
+                    (Code_id_or_name.name target)
+                    (Alias { target = node }))
+              | Propagate _ ->
+                (* CR ncourant/pchambart: verify the invariant that this edge
+                   should already be in the graph (or added later) by an
+                   alias_if_def *)
+                acc
+              | Constructor { relation; target } ->
+                add acc target (Constructor { relation; target = node })
+              | Accessor { relation; target } ->
+                add acc
+                  (Code_id_or_name.name target)
+                  (Accessor { relation; target = node })
+              | Use _ ->
+                top_roots := Code_id_or_name.Set.add node !top_roots;
+                acc)
+            deps acc)
+        (Global_flow_graph.name_to_dep graph) Code_id_or_name.Map.empty
+    in
+    graph, !top_roots
+end
+
+module Alias_solver = Make_Fixpoint (Dual_graph)
+
+type alias_result = Dual_graph.state
+
+type 'a unboxed_fields =
+  | Not_unboxed of 'a
+  | Unboxed of 'a unboxed_fields Field.Map.t
+
+let rec pp_unboxed_elt pp_unboxed ppf = function
+  | Not_unboxed x -> pp_unboxed ppf x
+  | Unboxed fields -> Field.Map.print (pp_unboxed_elt pp_unboxed) ppf fields
+
+(* type repr = | Unboxed_fields of Variable.t unboxed_fields |
+   Changed_representation of Field.t unboxed_fields *)
+
+type assigned = Variable.t unboxed_fields Field.Map.t
+
+type changed_representation =
+  | Block_representation of
+      (int * Flambda_primitive.Block_access_kind.t) unboxed_fields Field.Map.t * int
+  | Closure_representation of
+      Value_slot.t unboxed_fields Field.Map.t * Function_slot.t
+
+let pp_changed_representation ff = function
+  | Block_representation (fields, size) ->
+      Format.fprintf ff
+        "(fields %a) (size %d)"
+        (Field.Map.print (pp_unboxed_elt (fun ff (field, _) -> Format.pp_print_int ff field))) fields size
+  | Closure_representation (fields, function_slot) ->
+      Format.fprintf ff
+        "(fields %a) (function_slot %a)"
+        (Field.Map.print (pp_unboxed_elt Value_slot.print)) fields
+        Function_slot.print function_slot
+
+type result =
+  { uses : Graph.state;
+    db : Datalog.database;
+    aliases : alias_result;
+    dual_graph : Dual_graph.graph;
+    unboxed_fields : assigned Code_id_or_name.Map.t;
+    (* CR: [(Field.t, Constant.t) Either.t unboxed_fields Code_id_or_name.Map.t]
+       ? *)
+    changed_representation :
+      changed_representation Code_id_or_name.Map.t
+  }
+
+let pp_result ppf res =
+  let elts = List.of_seq @@ Hashtbl.to_seq res.uses in
   let pp ppf l =
     let pp_sep ppf () = Format.fprintf ppf ",@ " in
     let pp ppf (name, elt) =
@@ -410,7 +685,7 @@ let pp_result ppf (old_res, new_res) =
     Format.pp_print_list ~pp_sep pp ppf l
   in
   Format.fprintf ppf "@[<hov 2>{@ %a@ }@]" pp elts;
-  Format.fprintf ppf "%a@." Datalog.print new_res
+  Format.fprintf ppf "%a@." Datalog.print res.db
 
 module Usages_rel = Datalog.Schema.Relation2 (Code_id_or_name) (Code_id_or_name)
 
@@ -549,7 +824,7 @@ let query_used_field =
     compile ["X"; "F"; "Y"] (fun [x; f; y] ->
         where [used_fields_rel x f y] (yield [x; f; y]))
 
-let db_to_uses db =
+let _db_to_uses db =
   (* Format.eprintf "%a@." Database.print_database db; *)
   let open Datalog in
   let open! Global_flow_graph in
@@ -558,13 +833,13 @@ let db_to_uses db =
   Cursor.iter query_used_field_top db ~f:(fun [u; f] ->
       let f = Field.decode f in
       let[@local] ff fields =
-        Hashtbl.replace h u (Fields (Field.Map.add f Field_top fields))
+        Hashtbl.replace h u (Fields { fields = (Field.Map.add f Field_top fields); uses = assert false })
       in
       match Hashtbl.find_opt h u with
       | Some Bottom -> assert false
       | Some Top -> ()
       | None -> ff Field.Map.empty
-      | Some (Fields f) -> ff f);
+      | Some (Fields {fields = f; _}) -> ff f);
   Cursor.iter query_used_field db ~f:(fun [u; f; v] ->
       let[@local] ff fields =
         let f = Field.decode f in
@@ -582,14 +857,15 @@ let db_to_uses db =
             | Some (Field_vals w) ->
               Field.Map.add f (Field_vals (Code_id_or_name.Set.add v w)) fields
         in
-        Hashtbl.replace h u (Fields fields)
+        Hashtbl.replace h u (Fields {fields; uses = assert false})
       in
       match Hashtbl.find_opt h u with
       | Some Bottom -> assert false
       | Some Top -> ()
       | None -> ff Field.Map.empty
-      | Some (Fields f) -> ff f);
+      | Some (Fields {fields = f; _}) -> ff f);
   h
+
 
 let datalog_schedule_no_usages =
   let open Datalog in
@@ -772,36 +1048,198 @@ let has_use =
 let field_used =
   if with_usages then field_used_with_usages else field_used_without_usages
 
-let print_color (_, db) v =
+let print_color {db; _} v =
   if exists_with_parameters used_pred_query [v] db
   then "#a7a7a7"
   else if has_use db v
   then "#f1c40f"
   else "white"
 
-let has_use (old_result, db) v =
-  let old_is_used = Hashtbl.mem old_result v in
-  let new_is_used = has_use db v in
+let has_use uses v =
+  let old_is_used = Hashtbl.mem uses.uses v in
+  let new_is_used = has_use uses.db v in
   if old_is_used <> new_is_used
   then
     Misc.fatal_errorf "Different is_used on %a (old %b, new %b)@."
       Code_id_or_name.print v old_is_used new_is_used;
   new_is_used
 
-let field_used (old_result, db) v f =
-  let new_is_used = field_used db v f in
+let field_used uses v f =
+  let new_is_used = field_used uses.db v f in
   let old_is_used =
-    match Hashtbl.find_opt old_result v with
+    match Hashtbl.find_opt uses.uses v with
     | None -> false
     | Some Bottom -> false
     | Some Top -> true
-    | Some (Fields fields) -> Field.Map.mem f fields
+    | Some (Fields { fields; _ }) -> Field.Map.mem f fields
   in
   if old_is_used <> new_is_used
   then
     Misc.fatal_errorf "Different field_used on %a %a (old %b, new %b)@."
       Code_id_or_name.print v Field.print f old_is_used new_is_used;
   new_is_used
+
+let _pp_dual_result ppf (res : Dual_graph.state) =
+  let elts = List.of_seq @@ Hashtbl.to_seq res in
+  let pp ppf l =
+    let pp_sep ppf () = Format.fprintf ppf ",@ " in
+    let pp ppf (name, elt) =
+      Format.fprintf ppf "%a: %a" Code_id_or_name.print name Dual_graph.pp_elt
+        elt
+    in
+    Format.pp_print_list ~pp_sep pp ppf l
+  in
+  Format.fprintf ppf "@[<hov 2>{@ %a@ }@]" pp elts
+
+type problematic_uses =
+  | Cannot_unbox_due_to_uses
+  | No_problem of { use_aliases : Code_id_or_name.Set.t }
+
+let problematic_uses ~for_destructuring_value elt =
+  match elt with
+  | Top -> Cannot_unbox_due_to_uses
+  | Bottom ->
+    No_problem { use_aliases = Code_id_or_name.Set.empty }
+    (* Cannot_unbox_due_to_uses *)
+  | Fields { fields; uses } ->
+    if for_destructuring_value
+       && Field.Map.exists
+            (fun (field : Field.t) _ ->
+              match[@ocaml.warning "-4"] field with
+              (* We probably cannot destructure a closure that is called
+                 somewhere. *)
+              | Code_of_closure | Apply _ -> true
+              | _ -> false)
+            fields
+    then Cannot_unbox_due_to_uses
+    else No_problem { use_aliases = uses }
+
+let can_change_representation ~for_destructuring_value dual dual_graph graph allocation_id
+    =
+  (* The representation can be changed only if we can track its uses. And all
+     the use sites can be changed. If a different value where to flow to that
+     same use site, it would not be possible to change the representation.
+
+     Note: This alias constraint is not a strict requirement, we might lighten
+     that later.
+
+     We also add the constraint that for a set of closures to have a changed
+     representation, it must be true of all the closures defined in it,
+     regardless of whether they are actually used. *)
+  (* CR ncourant: we probably want to memoize this function *)
+  let check_single ~for_destructuring_value allocation_id =
+  let uses =
+    match Hashtbl.find_opt graph allocation_id with
+    | None -> Bottom
+    | Some uses -> uses
+  in
+  match problematic_uses ~for_destructuring_value uses with
+  | Cannot_unbox_due_to_uses -> false
+  | No_problem { use_aliases } ->
+    let alias_dominated_by_allocation_id alias =
+      match (Hashtbl.find_opt dual alias : Dual_graph.elt option) with
+      | None -> true
+      | Some Bottom -> true
+      | Some Top -> false
+      | Some (Block { sources; _ }) ->
+        Code_id_or_name.Set.equal
+          (Code_id_or_name.Set.singleton allocation_id)
+          sources
+    in
+    alias_dominated_by_allocation_id allocation_id
+    && Code_id_or_name.Set.for_all alias_dominated_by_allocation_id use_aliases
+  in
+  check_single ~for_destructuring_value allocation_id &&
+  List.for_all (fun (edge : Dual_graph.edge) ->
+      match[@ocaml.warning "-4"] edge with
+      | Constructor { target; relation = Function_slot _ } ->
+          check_single ~for_destructuring_value:false target
+      | _ -> true)
+    (match Code_id_or_name.Map.find_opt allocation_id dual_graph with None -> [] | Some l -> l)
+
+
+let map_from_allocation_points_to_dominated dual =
+  let map = ref Code_id_or_name.Map.empty in
+  Hashtbl.iter
+    (fun id (elt : Dual_graph.elt) ->
+      match elt with
+      | Bottom | Top -> ()
+      | Block { sources; _ } -> (
+        (* Sources are only allocation points, so if sources is not a singleton,
+           then id has no dominator that can be an allocation point. *)
+        match Code_id_or_name.Set.get_singleton sources with
+        | None -> ()
+        | Some elt ->
+          map
+            := Code_id_or_name.Map.update elt
+                 (function
+                   | None -> Some (Code_id_or_name.Set.singleton id)
+                   | Some set -> Some (Code_id_or_name.Set.add id set))
+                 !map))
+    dual;
+  !map
+
+let rec mapi_unboxed_fields (not_unboxed : 'a -> 'b -> 'c) (unboxed : Field.t
+   -> 'a -> 'a) (acc : 'a) (uf : 'b unboxed_fields) : 'c unboxed_fields = match
+   uf with | Not_unboxed x -> Not_unboxed (not_unboxed acc x) | Unboxed f ->
+   Unboxed (Field.Map.mapi (fun field uf -> mapi_unboxed_fields not_unboxed
+   unboxed (unboxed field acc) uf) f)
+
+let map_unboxed_fields f uf = mapi_unboxed_fields (fun () x -> f x) (fun _ ()
+   -> ()) () uf
+
+let can_unbox dual dual_graph graph ~dominated_by_allocation_points
+    allocation_id =
+  (* CR ncourant: we probably want to memoize this function *)
+  can_change_representation ~for_destructuring_value:true dual dual_graph graph
+    allocation_id
+  &&
+  let aliases =
+    match
+      Code_id_or_name.Map.find_opt allocation_id dominated_by_allocation_points
+    with
+    | Some x -> x
+    | None -> Code_id_or_name.Set.empty
+  in
+  Code_id_or_name.Set.for_all
+    (fun alias ->
+       let edges = match Code_id_or_name.Map.find_opt alias dual_graph with None -> [] | Some l -> l in
+      List.for_all
+        (fun (edge : Dual_graph.edge) ->
+          match edge with
+          | Alias _ | Accessor _ -> true
+          | Constructor { target; relation } ->
+            let target_uses =
+              match Hashtbl.find_opt graph target with
+              | None -> Bottom
+              | Some t -> t
+            in
+            let relation_is_used =
+              match target_uses with
+              | Bottom -> false
+              | Top -> true
+              | Fields { fields; _ } -> Field.Map.mem relation fields
+            in
+            (not relation_is_used)
+            ||
+            let relation_prevents_unboxing =
+              match relation with
+              | Field.Block _ -> false
+              | Field.Value_slot _ -> false
+              | Field.Function_slot _ -> true (* TODO back to false *)
+              | Field.Code_of_closure -> true
+              | Field.Is_int -> true
+              | Field.Get_tag -> true
+              | Field.Apply (_, _) ->
+                (* This requires unboxing returns of function, maybe later *)
+                let unclear = true in
+                unclear
+            in
+            (not relation_prevents_unboxing)
+            && can_change_representation ~for_destructuring_value:false dual dual_graph
+                 graph target)
+        edges)
+    aliases
 
 let fixpoint (graph_new : Global_flow_graph.graph) =
   let result = Hashtbl.create 17 in
@@ -823,7 +1261,7 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
     (t2 -. t1')
     ((t1 -. t0) /. (t2 -. t1'));
   Format.eprintf "%a@." Datalog.Schedule.print_stats stats;
-  let result2 = db_to_uses db in
+  (* let result2 = db_to_uses db in *)
   (* Format.eprintf "OLD:@.%a@.@.NEW:@.%a@.@." pp_result result pp_result
      result2; Format.eprintf "DB:@.%a@." Database.print_database db; *)
   (* Format.eprintf "OLD RESULT:@.%a@." pp_result result; Format.eprintf
@@ -831,7 +1269,7 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
      relation -> List.mem (Database.relation_name relation) ["used";
      "used_fields"]) _db); *)
   Solver.check_fixpoint graph_new uses result;
-  Hashtbl.iter
+  (* Hashtbl.iter
     (fun k v ->
       let v2 = Hashtbl.find result2 k in
       if not (Graph.less_equal_elt v v2 && Graph.less_equal_elt v2 v)
@@ -843,5 +1281,234 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
     (fun k _v ->
       let _v2 = Hashtbl.find result k in
       ())
-    result2;
-  result, db
+    result2; *)
+  let dual_graph, roots = Dual_graph.build_dual graph_new result in
+  let aliases = Hashtbl.create 17 in
+  Alias_solver.fixpoint_topo dual_graph roots aliases;
+  Format.eprintf "@.SAUCISSE XXX@.@.@.";
+  let dominated_by_allocation_points =
+    map_from_allocation_points_to_dominated aliases
+  in
+  let allocation_point_dominator =
+    Code_id_or_name.Map.fold
+      (fun alloc_point dominated acc ->
+        Code_id_or_name.Set.fold
+          (fun dom acc -> Code_id_or_name.Map.add dom alloc_point acc)
+          dominated acc)
+      dominated_by_allocation_points Code_id_or_name.Map.empty
+  in
+  Hashtbl.iter
+    (fun code_or_name elt ->
+      if can_change_representation ~for_destructuring_value:true aliases dual_graph result
+           code_or_name
+      then
+        let path =
+          match
+            Code_id_or_name.Map.find_opt code_or_name
+              dominated_by_allocation_points
+          with
+          | Some x -> x
+          | None -> Code_id_or_name.Set.empty
+        in
+        Format.eprintf "%a => %a@.%a@." Code_id_or_name.print code_or_name
+          pp_elt elt Code_id_or_name.Set.print path)
+    result;
+  Format.eprintf "@.UNBOXABLE XXX@.@.@.";
+  let assigned : assigned Code_id_or_name.Map.t ref = ref Code_id_or_name.Map.empty in
+  let to_unbox =
+    Hashtbl.fold
+      (fun code_or_name _elt to_unbox ->
+        if can_unbox aliases dual_graph result ~dominated_by_allocation_points
+             code_or_name
+        then Code_id_or_name.Set.add code_or_name to_unbox
+        else to_unbox)
+      result Code_id_or_name.Set.empty
+  in
+  let to_change_representation =
+    Hashtbl.fold
+      (fun code_or_name _elt to_change_representation ->
+        if (not (Code_id_or_name.Set.mem code_or_name to_unbox))
+           && can_change_representation ~for_destructuring_value:false aliases dual_graph
+                result code_or_name
+        then Code_id_or_name.Set.add code_or_name to_change_representation
+        else to_change_representation)
+      result Code_id_or_name.Set.empty
+  in
+  let has_to_be_unboxed code_or_name =
+    match
+      Code_id_or_name.Map.find_opt code_or_name allocation_point_dominator
+    with
+    | None -> false
+    | Some alloc_point -> Code_id_or_name.Set.mem alloc_point to_unbox
+  in
+  Code_id_or_name.Set.iter
+    (fun code_or_name ->
+      Format.eprintf "%a@." Code_id_or_name.print code_or_name;
+      let to_patch =
+        match
+          Code_id_or_name.Map.find_opt code_or_name
+            dominated_by_allocation_points
+        with
+        | None -> Code_id_or_name.Set.empty
+        | Some x -> x
+      in
+      Code_id_or_name.Set.iter
+        (fun to_patch ->
+          let rec unbox_elt elt name_prefix =
+            match elt with
+            | Top ->
+              Misc.fatal_errorf "Trying to unbox Top uses when unboxing %a"
+                Code_id_or_name.print to_patch
+            | Bottom -> Field.Map.empty
+            | Fields { fields; _ } ->
+              Field.Map.mapi
+                (fun field field_elt ->
+                  let new_name =
+                    Flambda_colours.without_colours ~f:(fun () ->
+                        Format.asprintf "%s_field_%a" name_prefix Field.print
+                          field)
+                  in
+                  let[@local] default () =
+                    (* TODO let ghost for debugging *)
+                    Not_unboxed (Variable.create new_name)
+                  in
+                  match field_elt with
+                  | Field_top -> default ()
+                  | Field_vals flow_to ->
+                    if Code_id_or_name.Set.is_empty flow_to
+                    then Misc.fatal_errorf "Empty set in [Field_vals]";
+                    if Code_id_or_name.Set.for_all has_to_be_unboxed flow_to
+                    then
+                      let elt =
+                        Code_id_or_name.Set.fold
+                          (fun flow acc ->
+                            match Hashtbl.find_opt result flow with
+                            | None ->
+                              Misc.fatal_errorf
+                                "%a is in [Field_vals] but not in result"
+                                Code_id_or_name.print flow
+                            | Some elt -> Graph.join_elt acc elt)
+                          flow_to Bottom
+                      in
+                      Unboxed (unbox_elt elt new_name)
+                    else if Code_id_or_name.Set.exists has_to_be_unboxed flow_to
+                    then
+                      Misc.fatal_errorf
+                        "Field %a of %s flows to both unboxed and non-unboxed \
+                         variables"
+                        Field.print field name_prefix
+                    else default ())
+                fields
+          in
+          let new_name =
+            Flambda_colours.without_colours ~f:(fun () ->
+                Format.asprintf "%a_into_%a" Code_id_or_name.print code_or_name
+                  Code_id_or_name.print to_patch)
+          in
+          let fields =
+            match Hashtbl.find_opt result to_patch with
+            | None -> Field.Map.empty
+            | Some elt -> unbox_elt elt new_name
+          in
+          assigned := Code_id_or_name.Map.add to_patch fields !assigned)
+        to_patch)
+    to_unbox;
+  Format.printf "new vars: %a"
+    (Code_id_or_name.Map.print
+       (Field.Map.print (pp_unboxed_elt Variable.print)))
+    !assigned;
+  let changed_representation = ref Code_id_or_name.Map.empty in
+  Code_id_or_name.Set.iter
+    (fun code_id_or_name ->
+      let uses =
+        match Hashtbl.find_opt result code_id_or_name with
+        | None -> Bottom
+        | Some x -> x
+      in
+      let r = ref ~-1 in
+      let mk_field () =
+        incr r;
+        (!r, 
+         Flambda_primitive.(Block_access_kind.Values { tag = Unknown; size = Unknown; field_kind = Block_access_field_kind.Any_value }))
+      in
+      let repr =
+        let rec repr_elt mk_field = function
+          | Top ->
+            Misc.fatal_errorf "Cannot change representation of Top for %a"
+              Code_id_or_name.print code_id_or_name
+          | Bottom -> Field.Map.empty
+          | Fields { fields; _ } ->
+            (* TODO handle closures & non-value fields *)
+            Field.Map.filter_map
+              (fun field field_elt ->
+                 match field with
+                 | Code_of_closure | Apply _ -> None
+                 | Get_tag | Is_int | Block _ | Value_slot _ | Function_slot _ ->
+                Some (match field_elt with
+                | Field_top -> Not_unboxed (mk_field ())
+                | Field_vals flow_to ->
+                  if Code_id_or_name.Set.is_empty flow_to
+                  then Misc.fatal_errorf "Empty set in [Field_vals]";
+                  if Code_id_or_name.Set.for_all has_to_be_unboxed flow_to
+                  then
+                    let elt =
+                      Code_id_or_name.Set.fold
+                        (fun flow acc ->
+                          match Hashtbl.find_opt result flow with
+                          | None ->
+                            Misc.fatal_errorf
+                              "%a is in [Field_vals] but not in result"
+                              Code_id_or_name.print flow
+                          | Some elt -> Graph.join_elt acc elt)
+                        flow_to Bottom
+                    in
+                    Unboxed (repr_elt mk_field elt)
+                  else if Code_id_or_name.Set.exists has_to_be_unboxed flow_to
+                  then
+                    Misc.fatal_errorf
+                      "Field %a of %a flows to both unboxed and non-unboxed \
+                       variables"
+                      Field.print field Code_id_or_name.print code_id_or_name
+                  else Not_unboxed (mk_field ())))
+              fields
+        in
+        if match uses with
+          | Bottom -> true | Top -> assert false
+          | Fields { fields; _ } ->
+              not (Field.Map.exists (fun field _ -> match field with Block _ | Is_int | Get_tag -> false | Code_of_closure | Apply _ | Value_slot _ | Function_slot _ -> true) fields)
+        then
+        let repr = repr_elt mk_field uses in
+        Block_representation (repr, !r + 1)
+        else
+          let mk_field () =
+            Value_slot.create (Compilation_unit.get_current_exn ())
+              ~name:"unboxed_value_slot" Flambda_kind.With_subkind.any_value (* TODO *) 
+          in
+          let repr = repr_elt mk_field uses in
+          Closure_representation (repr,
+                                  Function_slot.create (Compilation_unit.get_current_exn ()) ~name:"unboxed_function_slot" Flambda_kind.With_subkind.any_value)
+      in
+      Code_id_or_name.Set.iter
+        (fun c ->
+          changed_representation
+            := Code_id_or_name.Map.add c repr !changed_representation)
+        (match Code_id_or_name.Map.find_opt code_id_or_name dominated_by_allocation_points with None -> Code_id_or_name.Set.empty (*XXX check this*) | Some s -> s))
+    to_change_representation;
+  Format.eprintf "@.TO_CHG: %a@."
+    (Code_id_or_name.Map.print pp_changed_representation)
+    !changed_representation;
+  { uses = result;
+    db;
+    aliases;
+    dual_graph;
+    (* unboxed_fields = !assigned;
+    changed_representation = !changed_representation *)
+    unboxed_fields = Code_id_or_name.Map.empty ;
+    changed_representation = Code_id_or_name.Map.empty
+  }
+
+let get_unboxed_fields uses cn =
+  Code_id_or_name.Map.find_opt cn uses.unboxed_fields
+
+let get_changed_representation uses cn =
+  Code_id_or_name.Map.find_opt cn uses.changed_representation
