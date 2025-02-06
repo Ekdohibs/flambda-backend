@@ -115,6 +115,8 @@ val used_fields_top_rel : (Code_id_or_name.t, int, _) rel2
 
 val used_fields_rel : (Code_id_or_name.t, int, Code_id_or_name.t, _) rel3
 
+val local_field_pred : (int, _) rel1
+
 val pp_used_graph : Format.formatter -> graph -> unit
 
 val create : unit -> graph

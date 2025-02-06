@@ -31,6 +31,8 @@ let apply_cont_deps denv acc apply_cont =
   let (Normal params) = params in
   List.iter2 (fun param dep -> Acc.alias_dep ~denv param dep acc) params args
 
+let reaper_test_opaque = Sys.getenv_opt "REAPEROPAQUE" <> None
+
 let prepare_code ~denv acc (code_id : Code_id.t) (code : Code.t) =
   let return =
     List.init
@@ -258,7 +260,7 @@ and traverse_prim denv acc ~bound_pattern (prim : Flambda_primitive.t) ~default
                 ~from:(Code_id_or_name.name denv.all_constants)
            )))
       fields
-  | Unary (Opaque_identity { middle_end_only = true; _ }, arg) ->
+  | Unary (Opaque_identity { middle_end_only = true; _ }, arg) when reaper_test_opaque ->
     (* XXX TO REMOVE !!! *)
     Simple.pattern_match arg
       ~name:(fun arg ~coercion:_ -> default_bp (fun to_ -> Graph.add_alias (Acc.graph acc) ~to_ ~from:arg))
