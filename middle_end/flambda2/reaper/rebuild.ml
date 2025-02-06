@@ -1288,10 +1288,10 @@ let rebuild ~(code_deps : Traverse_acc.code_dep Code_id.Map.t)
       Dep_solver.has_use solved_dep code_dep.indirect_call_witness
     in
     if can_be_called_indirectly
-    then (fun var kind ->
+    then ((fun var kind ->
       assert (
         Option.is_none (Dep_solver.get_unboxed_fields solved_dep (Code_id_or_name.var var)));
-      Keep (var, kind))
+      Keep (var, kind)))
     else
       fun param kind ->
       match
@@ -1302,7 +1302,7 @@ let rebuild ~(code_deps : Traverse_acc.code_dep Code_id.Map.t)
         let is_var_used =
           Dep_solver.has_use solved_dep (Code_id_or_name.var param)
         in
-        if is_var_used then Keep (param, kind) else Delete
+        if true || is_var_used then Keep (param, kind) else Delete
       | Some fields -> Unbox fields
   in
   let function_params_to_keep =
@@ -1330,7 +1330,7 @@ let rebuild ~(code_deps : Traverse_acc.code_dep Code_id.Map.t)
         in
         if can_be_called_indirectly
         then List.map2 (fun v kind -> Keep (v, kind)) code_dep.return kinds
-        else
+        else (Format.eprintf "DIRECT: %a@." Code_id.print code_id; 
           List.map2
             (fun v kind ->
               match
@@ -1343,7 +1343,7 @@ let rebuild ~(code_deps : Traverse_acc.code_dep Code_id.Map.t)
                 (* TODO: fix this, needs the mapping between code ids of functions and their return continuations *)
                 if true || is_var_used then Keep (v, kind) else Delete
               | Some fields -> Unbox fields)
-            code_dep.return kinds)
+            code_dep.return kinds))
       code_deps
   in
   let should_keep_param cont param kind =

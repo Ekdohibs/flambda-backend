@@ -230,6 +230,7 @@ module Used_pred = Datalog.Schema.Relation1 (Code_id_or_name)
 module Used_fields_top_rel = Datalog.Schema.Relation2 (Code_id_or_name) (FieldC)
 module Used_fields_rel =
   Datalog.Schema.Relation3 (Code_id_or_name) (FieldC) (Code_id_or_name)
+module Local_field_pred = Datalog.Schema.Relation1 (FieldC)
 
 type graph =
   { name_to_dep : (Code_id_or_name.t, Dep.Set.t) Hashtbl.t;
@@ -239,7 +240,8 @@ type graph =
     mutable accessor_rel : Accessor_rel.t;
     mutable constructor_rel : Constructor_rel.t;
     mutable propagate_rel : Propagate_rel.t;
-    mutable used_pred : Used_pred.t
+    mutable used_pred : Used_pred.t;
+    mutable local_field_pred : Local_field_pred.t
   }
 
 let alias_rel = Alias_rel.create ~name:"alias"
@@ -256,7 +258,11 @@ let used_pred = Used_pred.create ~name:"used"
 
 let used_fields_top_rel = Used_fields_top_rel.create ~name:"used_fields_top"
 
-let used_fields_rel = Used_fields_rel.create ~name:"used_fields_rel"
+let used_fields_rel =
+  Datalog.create_relation ~name:"used_fields" Used_fields_rel.columns
+
+let local_field_pred =
+  Datalog.create_relation ~name:"local_field" Local_field_pred.columns
 
 let name_to_dep { name_to_dep; _ } = name_to_dep
 
@@ -269,6 +275,7 @@ let to_datalog graph =
   @@ Datalog.set_table constructor_rel graph.constructor_rel
   @@ Datalog.set_table propagate_rel graph.propagate_rel
   @@ Datalog.set_table used_pred graph.used_pred
+  @@ Datalog.set_table local_field_pred graph.local_field_pred
   @@ Datalog.empty
 
 type 'a rel0 = [> `Atom of Datalog.atom] as 'a
@@ -306,6 +313,8 @@ let used_fields_top_rel var field = Datalog.atom used_fields_top_rel [var; field
 let used_fields_rel var field used_as =
   Datalog.atom used_fields_rel [var; field; used_as]
 
+let local_field_pred var = Datalog.atom local_field_pred [var]
+
 let pp_used_graph ppf (graph : graph) =
   let elts = List.of_seq @@ Hashtbl.to_seq graph.used in
   let pp ppf l =
@@ -325,7 +334,8 @@ let create () =
     accessor_rel = Accessor_rel.empty;
     constructor_rel = Constructor_rel.empty;
     propagate_rel = Propagate_rel.empty;
-    used_pred = Used_pred.empty
+    used_pred = Used_pred.empty;
+    local_field_pred = Local_field_pred.empty;
   }
 
 let add_graph_dep t k v =
@@ -343,18 +353,30 @@ let add_use_dep t ~to_ ~from =
   add_graph_dep t to_ (Use { target = from });
   t.use_rel <- Use_rel.add_or_replace [to_; from] () t.use_rel
 
+let encode_field t field =
+  let r = Field.encode field in
+  begin
+    if match (field : Field.t) with
+    | Value_slot v -> Compilation_unit.is_current (Value_slot.get_compilation_unit v)
+    | Function_slot f -> Compilation_unit.is_current (Function_slot.get_compilation_unit f)
+    | Code_of_closure | Apply _ | Block _ | Is_int | Get_tag -> false
+    then
+      t.local_field_pred <- Local_field_pred.add_or_replace [r] () t.local_field_pred
+  end;
+  r
+
 let add_constructor_dep t ~base relation ~from =
   add_graph_dep t base (Constructor { relation; target = from });
   t.constructor_rel
     <- Constructor_rel.add_or_replace
-         [base; Field.encode relation; from]
+         [base; encode_field t relation; from]
          () t.constructor_rel
 
 let add_accessor_dep t ~to_ relation ~base =
   add_graph_dep t to_ (Accessor { relation; target = base });
   t.accessor_rel
     <- Accessor_rel.add_or_replace
-         [to_; Field.encode relation; Code_id_or_name.name base]
+         [to_; encode_field t relation; Code_id_or_name.name base]
          () t.accessor_rel
 
 let add_propagate_dep t ~if_used ~to_ ~from =
