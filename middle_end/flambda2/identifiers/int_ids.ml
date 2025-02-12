@@ -512,8 +512,10 @@ end
 module Name = struct
   type t = Id.t
 
+  let var_injection = Identity_injection.id
   let var v = v
 
+  let symbol_injection = Identity_injection.id
   let symbol s = s
 
   let[@inline always] pattern_match t ~var ~symbol =
@@ -553,6 +555,11 @@ module Name = struct
 
   module Set = Tree.Set
   module Map = Tree.Map
+  
+  let var_set_injection = Identity_injection.id
+  let symbol_set_injection = Identity_injection.id
+  let var_map_injection = Identity_injection.id
+  let symbol_map_injection = Identity_injection.id
 end
 
 module Rec_info_expr = Rec_info_expr0.Make (Variable)
@@ -797,8 +804,10 @@ end
 module Code_id_or_symbol = struct
   type t = Table_by_int_id.Id.t
 
+  (* let code_id_injection = Identity_injection.id *)
   let create_code_id code_id = code_id
 
+  (* let symbol_injection = Identity_injection.id *)
   let create_symbol symbol = symbol
 
   let pattern_match t ~code_id ~symbol =
@@ -844,19 +853,15 @@ module Code_id_or_symbol = struct
   module Set = Tree.Set
   module Map = Tree.Map
   module Lmap = Lmap.Make (T)
+(*
+  let code_id_set_injection = Identity_injection.id
+  let symbol_set_injection = Identity_injection.id
+  let code_id_map_injection = Identity_injection.id
+  let symbol_map_injection = Identity_injection.id
+*)
+  let[@inline] set_of_code_id_set code_ids = code_ids
 
-  let set_of_code_id_set code_ids =
-    (* CR-someday lmaurer: This is just an expensive identity. Should add
-       something to [Patricia_tree] to let us translate. *)
-    Code_id.Set.fold
-      (fun code_id free_code_ids ->
-        Set.add (create_code_id code_id) free_code_ids)
-      code_ids Set.empty
-
-  let set_of_symbol_set symbols =
-    Symbol.Set.fold
-      (fun sym free_syms -> Set.add (create_symbol sym) free_syms)
-      symbols Set.empty
+  let[@inline] set_of_symbol_set symbols = symbols
 end
 
 module Code_id_or_name = struct

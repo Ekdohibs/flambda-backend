@@ -144,9 +144,16 @@ module Name : sig
 
   include Container_types.S with type t := t
 
+  val var_injection : (Variable.t, t) Identity_injection.t
   val var : Variable.t -> t
 
+  val symbol_injection : (Variable.t, t) Identity_injection.t
   val symbol : Symbol.t -> t
+
+  val var_set_injection : (Variable.Set.t, Set.t) Identity_injection.t
+  val var_map_injection : ('a Variable.Map.t, 'a Map.t) Identity_injection.t
+  val symbol_set_injection : (Symbol.Set.t, Set.t) Identity_injection.t
+  val symbol_map_injection : ('a Symbol.Map.t, 'a Map.t) Identity_injection.t
 
   val pattern_match :
     t -> var:(Variable.t -> 'a) -> symbol:(Symbol.t -> 'a) -> 'a

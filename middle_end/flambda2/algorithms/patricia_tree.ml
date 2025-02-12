@@ -1109,7 +1109,14 @@ module Map = struct
   let of_set f set = Set.fold (fun e map -> add e (f e) map) set empty
 
   let diff_domains = diff
+
+  module Make_inject = Identity_injection.Make_covariant(struct type nonrec +'a t = 'a t end)
+  let make_inject = Make_inject.fmap
 end
+
+type set = Set.t
+
+type +!'a map = 'a Map.t
 
 module Make (X : sig
   val print : Format.formatter -> key -> unit

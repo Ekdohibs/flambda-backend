@@ -151,6 +151,9 @@ module Make_map (T : Thing) (Set : Set_plus_stdlib with type elt = T.t) = struct
         t
     in
     if not !changed then t else t'
+
+  module Make_inject = Identity_injection.Make_covariant(struct type nonrec +'a t = 'a t end)
+  let make_inject = Make_inject.fmap
 end
 [@@inline always]
 

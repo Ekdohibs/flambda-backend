@@ -224,6 +224,8 @@ module type Map = sig
   val replace : key -> ('a -> 'a) -> 'a t -> 'a t
 
   val map_sharing : ('a -> 'a) -> 'a t -> 'a t
+
+  val make_inject : ('a, 'b) Identity_injection.t -> ('a t, 'b t) Identity_injection.t
 end
 
 module type S = sig

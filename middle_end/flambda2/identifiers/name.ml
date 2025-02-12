@@ -26,13 +26,11 @@ let to_var t =
 let to_symbol t =
   pattern_match t ~var:(fun _ -> None) ~symbol:(fun symbol -> Some symbol)
 
-let set_of_var_set vars =
-  Variable.Set.fold (fun v t_set -> Set.add (var v) t_set) vars Set.empty
+let[@inline] set_of_var_set vars =
+  Identity_injection.inject var_set_injection vars
 
-let set_of_symbol_set symbols =
-  Symbol.Set.fold
-    (fun sym t_set -> Set.add (symbol sym) t_set)
-    symbols Set.empty
+let[@inline] set_of_symbol_set symbols =
+  Identity_injection.inject symbol_set_injection symbols
 
 let set_to_var_set t =
   Set.fold
