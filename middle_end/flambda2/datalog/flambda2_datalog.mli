@@ -131,10 +131,12 @@ module Datalog : sig
   end
 
   type atom
+  type equality
 
   type hypothesis =
     [ `Atom of atom
-    | `Not_atom of atom ]
+    | `Not_atom of atom 
+    | `Not_equal of equality ]
 
   (** [atom rel args] represents the application of relation [rel] to the
       arguments [args].
@@ -152,6 +154,8 @@ module Datalog : sig
   val atom : ('t, 'k) relation -> 'k Term.hlist -> [> `Atom of atom]
 
   val not : [< `Atom of atom] -> [> `Not_atom of atom]
+
+  val not_equal : 'k Term.t -> 'k Term.t -> [> `Not_equal of equality]
 
   type database
 
