@@ -748,6 +748,26 @@ let field_has_use_rel field v = Datalog.atom field_has_use_rel [field; v]
 *)
 let with_usages = true
 
+(*
+
+The program is abstracted as a series of relations concerning the reading and writing of fields of values.
+
+There are 5 different relations:
+- [alias to_ from] corresponds to [let to_ = from]
+- [accessor to_ relation base] corresponds to [let to_ = base.relation]
+- [constructor base relation from] corresponds to constructing a block [let base = { relation = from }]
+- [propagate if_used to_ from] means [alias to_ from], but only if [is_used] is used
+- [use to_ from] corresponds to [let to_ = f(from)], creating an arbitrary result [to_] and consuming [from].
+
+We perform an analysis that computes the ways each value can be used: either entirely, not at all, or, for each
+of its fields, how that field might be used.
+
+
+
+
+
+*)
+
 let datalog_schedule_usages =
   let open Datalog in
   let open Global_flow_graph in
@@ -1301,6 +1321,37 @@ type problematic_uses =
   | Cannot_unbox_due_to_uses
   | No_problem of { use_aliases : Code_id_or_name.Set.t }
 
+module Syntax = struct
+  include Datalog
+  let ( let$ ) xs f = compile xs f
+  let ( ==> ) h c = where h (deduce c)
+end
+
+module N = Datalog.Schema.Relation1 (Code_id_or_name)
+
+let problematic_uses_destr = Datalog.create_relation ~name:"problematic_uses_destr" N.columns
+let problematic_uses_destr x = Datalog.atom problematic_uses_destr [x]
+let problematic_uses_nodestr = Datalog.create_relation ~name:"problematic_uses_nodestr" N.columns
+let problematic_uses_nodestr x = Datalog.atom problematic_uses_nodestr [x]
+
+let problematic_uses =
+  let open! Syntax in
+  let open Global_flow_graph in
+  let used_prob =
+    let$ [x] = ["x"] in [used_pred x] ==> (and_ [(problematic_uses_destr x); (problematic_uses_nodestr x)])
+  in
+  let field_cannot_be_destructured i = match Field.decode i with | Code_of_closure | Apply _ -> true | _ -> false in
+  let field_prob1 =
+    let$ [x; usage; field; _v] = ["x"; "usage"; "field"; "_v"] in
+    [ usages_rel x usage; used_fields_rel usage field _v; filter (fun [x] -> field_cannot_be_destructured x) [field] ] ==> problematic_uses_destr x
+  in
+  let field_prob2 =
+    let$ [x; usage; field] = ["x"; "usage"; "field"] in
+    [ usages_rel x usage; used_fields_top_rel usage field; filter (fun [x] -> field_cannot_be_destructured x) [field] ] ==> problematic_uses_destr x
+  in
+  [used_prob; field_prob1; field_prob2]
+
+
 let problematic_uses ~for_destructuring_value elt =
   match elt with
   | Top -> Cannot_unbox_due_to_uses
@@ -1320,6 +1371,35 @@ let problematic_uses ~for_destructuring_value elt =
             fields
     then Cannot_unbox_due_to_uses
     else No_problem { use_aliases = uses }
+
+let cannot_unbox = Datalog.create_relation ~name:"can_unbox" N.columns
+let cannot_unbox x = Datalog.atom can_unbox [x]
+let cannot_change_repr = Datalog.create_relation ~name:"can_change_repr" N.columns
+let cannot_change_repr x = Datalog.atom can_change_repr [x]
+
+let can_change_representation =
+  let open! Syntax in
+  let open Global_flow_graph in
+  let uses_not_ok =
+    let$ [allocation_id; alias; alias_source] = ["allocation_id"; "alias"; "alias_source"] in
+    [usages_rel allocation_id alias; sources_rel alias alias_source; not_equal alias_source allocation_id] ==>
+    (and_ [problematic_uses_destr allocation_id; problematic_uses_nodestr allocation_id])
+  in
+  let uses_not_ok2 =
+    let$ [allocation_id; alias] = ["allocation_id"; "alias"] in
+    [usages_rel allocation_id alias; any_source_pred alias] ==>
+    (and_ [problematic_uses_destr allocation_id; problematic_uses_nodestr allocation_id])
+  in
+  let self_not_ok =
+    let$ [allocation_id; source] = ["allocation_id"; "source"] in
+    [sources_rel allocation_id source; not_equal source allocation_id] ==>
+    (and_ [problematic_uses_destr allocation_id; problematic_uses_nodestr allocation_id])
+  in
+  let self_not_ok2 =
+    let$ [allocation_id] = ["allocation_id"] in [any_source_pred allocation_id] ==>
+    (and_ [problematic_uses_destr allocation_id; problematic_uses_nodestr allocation_id])
+  in
+  [uses_not_ok; uses_not_ok2; self_not_ok; self_not_ok2]
 
 let can_change_representation ~for_destructuring_value dual dual_graph graph allocation_id
     =
@@ -1365,6 +1445,38 @@ let can_change_representation ~for_destructuring_value dual dual_graph graph all
     (match Code_id_or_name.Map.find_opt allocation_id dual_graph with None -> [] | Some l -> l)
 
 
+let multiple_allocation_points = Datalog.create_relation ~name:"multiple_allocation_points" N.columns
+let multiple_allocation_points x = Datalog.atom multiple_allocation_points [x]
+
+module NN = Datalog.Schema.Relation2 (Code_id_or_name) (Code_id_or_name)
+
+let dominator = Datalog.create_relation ~name:"dominator" NN.columns
+let dominator x y = Datalog.atom dominator [x; y]
+
+
+let map_from_allocation_points_to_dominated =
+  let open! Syntax in
+  let map_rule =
+    let$ [x; y; z] = ["x"; "y"; "z"] in
+    [ sources_rel x y; sources_rel x z; not_equal y z ] ==> multiple_allocation_points x
+  in
+  let dominator_rule =
+    let$ [x; y] = ["x"; "y"] in
+    [ sources_rel x y; not (multiple_allocation_points x) ] ==> dominator y x
+  in
+  [ map_rule; dominator_rule ]
+  (*
+  let sources_query = compile ["x"; "y"] (fun [x; y] -> where [sources_rel x y] (yield [x; y])) in
+  fun db ->
+    let h = Hashtbl.create 17 in
+    Cursor.iter ~f:(fun [x; y] ->
+        if Hashtbl.mem h x then Hashtbl.replace h x None else Hashtbl.add h x (Some y)
+      ) sources_query db;
+    Hashtbl.fold (fun id elt acc -> match elt with None -> acc | Some elt -> Code_id_or_name.Map.update elt (function | None -> Some (Code_id_or_name.Set.singleton id) | Some set -> Some (Code_id_or_name.Set.add id set)) acc)
+      h Code_id_or_name.Map.empty
+  *)
+
+(*
 let map_from_allocation_points_to_dominated dual =
   let map = ref Code_id_or_name.Map.empty in
   Hashtbl.iter
@@ -1385,7 +1497,7 @@ let map_from_allocation_points_to_dominated dual =
                  !map))
     dual;
   !map
-
+*)
 let rec mapi_unboxed_fields (not_unboxed : 'a -> 'b -> 'c) (unboxed : Field.t
    -> 'a -> 'a) (acc : 'a) (uf : 'b unboxed_fields) : 'c unboxed_fields = match
    uf with | Not_unboxed x -> Not_unboxed (not_unboxed acc x) | Unboxed f ->
@@ -1495,7 +1607,7 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
   Alias_solver.fixpoint_topo dual_graph roots aliases;
   if debug then Format.eprintf "@.SAUCISSE XXX@.@.@.";
   let dominated_by_allocation_points =
-    map_from_allocation_points_to_dominated aliases
+    map_from_allocation_points_to_dominated db
   in
   let allocation_point_dominator =
     Code_id_or_name.Map.fold
