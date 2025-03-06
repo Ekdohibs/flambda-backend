@@ -26,6 +26,7 @@ type vm_action =
       * string list
       -> vm_action
   | Unless_eq : 'k option ref * 'k option ref * string * string -> vm_action
+  | Filter : ('k Constant.hlist -> bool) * 'k Option_ref.hlist * string list -> vm_action
 
 type action =
   | Bind_iterator :
@@ -41,6 +42,8 @@ let unless id cell args =
        (Table.Id.is_trie id, cell, args.values, Table.Id.name id, args.names))
 
 let unless_eq cell1 cell2 = VM_action (Unless_eq (cell1.value, cell2.value, cell1.name, cell2.name))
+
+let filter f args = VM_action (Filter (f, args.values, args.names))
 
 type binder = Bind_table : ('t, 'k, 'v) Table.Id.t * 't ref -> binder
 
@@ -59,6 +62,12 @@ let pp_cursor_action ff = function
          Format.pp_print_string)
       l_names
   | Unless_eq (_x1, _x2, x1_name, x2_name) -> Format.fprintf ff "if %s == %s:@ continue" x1_name x2_name
+  | Filter (_f, _args, args_names) -> Format.fprintf ff "<filter>(%a)"
+      (Format.pp_print_list
+         ~pp_sep:(fun ff () -> Format.fprintf ff ", ")
+         Format.pp_print_string)
+      args_names
+
 
 module Order : sig
   type t
@@ -312,6 +321,8 @@ let evaluate = function
     if Option.get !cell1 == Option.get !cell2 then
       Virtual_machine.Skip else Virtual_machine.Accept
     (* CR ncourant: I don't like this **at all**, need something cleaner *)
+  | Filter (f, args, _args_names) ->
+    if f (Option_ref.get args) then Virtual_machine.Accept else Virtual_machine.Skip
 
 let naive_iter cursor db f =
   bind_table_list cursor.cursor_binders db;

@@ -26,6 +26,9 @@ val unless :
 val unless_eq :
   'k option ref with_name -> 'k option ref with_name -> action
 
+val filter :
+  ('k Constant.hlist -> bool) -> 'k Option_ref.hlist with_names -> action
+
 type actions
 
 val add_action : actions -> action -> unit

@@ -186,6 +186,14 @@ let unless_eq arg1 arg2 k info =
   Cursor.add_action post_level (Cursor.unless_eq ref1 ref2);
   k info
 
+let filter f args k info =
+  let refs = compile_terms args in
+  let post_level =
+    find_last_binding (Cursor.initial_actions info.context) args
+  in
+  Cursor.add_action post_level (Cursor.filter f refs);
+  k info
+
 type callback =
   | Callback :
       { func : 'a Constant.hlist -> unit;
