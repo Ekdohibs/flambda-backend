@@ -675,8 +675,8 @@ type result =
       changed_representation Code_id_or_name.Map.t
   }
 
-let pp_result ppf res =
-  let elts = List.of_seq @@ Hashtbl.to_seq res.uses in
+let pp_uses ppf uses =
+  let elts = List.of_seq @@ Hashtbl.to_seq uses in
   let pp ppf l =
     let pp_sep ppf () = Format.fprintf ppf ",@ " in
     let pp ppf (name, elt) =
@@ -684,7 +684,10 @@ let pp_result ppf res =
     in
     Format.pp_print_list ~pp_sep pp ppf l
   in
-  Format.fprintf ppf "@[<hov 2>{@ %a@ }@]" pp elts;
+  Format.fprintf ppf "@[<hov 2>{@ %a@ }@]" pp elts
+
+let pp_result ppf res =
+  pp_uses ppf res.uses;
   Format.fprintf ppf "%a@." Datalog.print res.db
 
 
@@ -1190,12 +1193,18 @@ let datalog_rules =
     (let$ [allocation_id; alias; alias_source] = ["allocation_id"; "alias"; "alias_source"] in
       [usages_rel allocation_id alias; sources_rel alias alias_source; not_equal alias_source allocation_id] ==>
       cannot_change_representation0 allocation_id);
+    (* (let$ [allocation_id; alias] = ["allocation_id"; "alias"] in
+      [usages_rel allocation_id alias; not (sources_rel alias allocation_id)] ==>
+      cannot_change_representation0 allocation_id); *)
     (let$ [allocation_id; alias] = ["allocation_id"; "alias"] in
     [usages_rel allocation_id alias; any_source_pred alias] ==>
     cannot_change_representation0 allocation_id);
     (let$ [allocation_id; source] = ["allocation_id"; "source"] in
     [sources_rel allocation_id source; not_equal source allocation_id] ==>
     cannot_change_representation0 allocation_id); 
+    (* (let$ [allocation_id; usage] = ["allocation_id"; "usage"] in
+     [usages_rel allocation_id usage; not (sources_rel allocation_id allocation_id)] ==>
+    cannot_change_representation0 allocation_id); *)
     (let$ [allocation_id] = ["allocation_id"] in
      [any_source_pred allocation_id] ==>
      cannot_change_representation0 allocation_id); 
@@ -1485,6 +1494,7 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
   let db = Datalog.Schedule.run ~stats (Datalog.Schedule.saturate datalog_rules) db in
   if debug then Format.eprintf "%a@." Datalog.Schedule.print_stats stats;
   (* let result2 = db_to_uses db in *)
+  if Sys.getenv_opt "DUMPOLD" <> None then Format.eprintf "OLD: %a@." pp_uses result;
   (* Format.eprintf "OLD:@.%a@.@.NEW:@.%a@.@." pp_result result pp_result
      result2; Format.eprintf "DB:@.%a@." Database.print_database db; *)
   (* Format.eprintf "OLD RESULT:@.%a@." pp_result result; Format.eprintf
@@ -1536,7 +1546,7 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
         Format.eprintf "%a => %a@.%a@." Code_id_or_name.print code_or_name
           pp_elt elt Code_id_or_name.Set.print path)
     result;
-  (* Format.eprintf "%a@." Datalog.print db; *)
+  if Sys.getenv_opt "DUMPDB" <> None then Format.eprintf "%a@." Datalog.print db;
   if debug then Format.eprintf "@.UNBOXABLE XXX@.@.@.";
   let assigned : assigned Code_id_or_name.Map.t ref = ref Code_id_or_name.Map.empty in
   let not_unboxable =
@@ -1552,8 +1562,8 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
       (fun code_or_name _elt to_unbox ->
         let b = not_unboxable code_or_name in
         let chk x =
-          if not x then
-            Misc.fatal_errorf "Expected unboxable = %b for %a but failed" b Code_id_or_name.print code_or_name
+          if not x then 
+            Misc.fatal_errorf "Expected unboxable = %b for %a %a but failed" b Code_id_or_name.print code_or_name pp_elt _elt
         in
         if can_unbox aliases dual_graph result ~dominated_by_allocation_points
              code_or_name
