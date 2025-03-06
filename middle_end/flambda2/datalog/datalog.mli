@@ -66,6 +66,9 @@ val unless_atom :
 val unless_eq :
   'k Term.t -> 'k Term.t -> ('p, 'a) program -> ('p, 'a) program
 
+val filter :
+  ('k Constant.hlist -> bool) -> 'k Term.hlist -> ('p, 'a) program -> ('p, 'a) program
+
 type callback
 
 val create_callback :
