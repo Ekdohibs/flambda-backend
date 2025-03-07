@@ -1332,7 +1332,7 @@ let rebuild ~(code_deps : Traverse_acc.code_dep Code_id.Map.t)
         in
         if can_be_called_indirectly
         then List.map2 (fun v kind -> Keep (v, kind)) code_dep.return kinds
-        else (Format.eprintf "DIRECT: %a@." Code_id.print code_id; 
+        else ((* Format.eprintf "DIRECT: %a@." Code_id.print code_id; *)
           List.map2
             (fun v kind ->
               match

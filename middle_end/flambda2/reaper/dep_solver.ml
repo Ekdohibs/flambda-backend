@@ -1145,7 +1145,7 @@ let field_used uses v f =
     | Some Top -> true
     | Some (Fields { fields; _ }) -> Field.Map.mem f fields
   in
-  Format.eprintf "FIELD_USED %a %a = %b@." Code_id_or_name.print v Field.print f new_is_used;
+  (* Format.eprintf "FIELD_USED %a %a = %b@." Code_id_or_name.print v Field.print f new_is_used; *)
   if false && old_is_used <> new_is_used
   then
     Misc.fatal_errorf "Different field_used on %a %a (old %b, new %b)@."
@@ -1209,10 +1209,11 @@ let datalog_rules =
     cannot_change_representation0 allocation_id);
     (let$ [allocation_id; source] = ["allocation_id"; "source"] in
     [sources_rel allocation_id source; not_equal source allocation_id] ==>
-    cannot_change_representation0 allocation_id); 
-    (* (let$ [allocation_id; usage] = ["allocation_id"; "usage"] in
+    cannot_change_representation0 allocation_id);
+    (* Used but not its own source: either from any source, or it has no source at all and it is dead code. In either case, do not unbox *)
+    (let$ [allocation_id; usage] = ["allocation_id"; "usage"] in
      [usages_rel allocation_id usage; not (sources_rel allocation_id allocation_id)] ==>
-    cannot_change_representation0 allocation_id); *)
+    cannot_change_representation0 allocation_id);
     (let$ [allocation_id] = ["allocation_id"] in
      [any_source_pred allocation_id] ==>
      cannot_change_representation0 allocation_id); 
@@ -1221,12 +1222,12 @@ let datalog_rules =
      [ constructor_rel x field y; filter_field is_function_slot field; cannot_change_representation0 x] ==> cannot_change_representation y);
 
     (let$ [x] = ["x"] in [cannot_change_representation x] ==> cannot_unbox x);
-    (* (let$ [x; field] = ["x"; "field"] in
-     [field_of_constructor_is_used x field; filter_field field_cannot_be_destructured field] ==> cannot_unbox x); *)
-    (let$ [x; usage; field] = ["x"; "usage"; "field"] in
+    (let$ [x; field] = ["x"; "field"] in
+     [field_of_constructor_is_used x field; filter_field field_cannot_be_destructured field] ==> cannot_unbox x);
+    (* (let$ [x; usage; field] = ["x"; "usage"; "field"] in
      [usages_rel x usage; used_fields_top_rel usage field; filter_field field_cannot_be_destructured field] ==> cannot_unbox x);
     (let$ [x; usage; field; _v] = ["x"; "usage"; "field"; "_v"] in
-     [usages_rel x usage; used_fields_rel usage field _v; filter_field field_cannot_be_destructured field] ==> cannot_unbox x);
+     [usages_rel x usage; used_fields_rel usage field _v; filter_field field_cannot_be_destructured field] ==> cannot_unbox x);*) 
 (*    (let$ [alias; allocation_id; relation; to_; usage] = ["alias"; "allocation_id"; "relation"; "to_"; "usage"] in
      [sources_rel alias allocation_id; rev_constructor_rel alias relation to_;
       usages_rel to_ usage;
@@ -1346,14 +1347,14 @@ let can_change_representation ~for_destructuring_value dual dual_graph graph all
   | Cannot_unbox_due_to_uses -> false
   | No_problem { use_aliases } ->
     let alias_dominated_by_allocation_id alias =
-      let e = 
+      (* let e = 
       match (Hashtbl.find_opt dual alias : Dual_graph.elt option) with
       None -> Dual_graph.Bottom | Some x -> x
       in
-      Format.eprintf "DUAL %a => %a@." Code_id_or_name.print alias Dual_graph.pp_elt e;
+      Format.eprintf "DUAL %a => %a@." Code_id_or_name.print alias Dual_graph.pp_elt e; *)
       match (Hashtbl.find_opt dual alias : Dual_graph.elt option) with
-      | None -> true
-      | Some Bottom -> true
+      | None -> false (* true *)
+      | Some Bottom -> false (* true *)
       | Some Top -> false
       | Some (Block { sources; _ }) ->
         Code_id_or_name.Set.equal
@@ -1372,7 +1373,7 @@ let can_change_representation ~for_destructuring_value dual dual_graph graph all
       | _ -> true)
     (match Code_id_or_name.Map.find_opt allocation_id dual_graph with None -> [] | Some l -> l)
   in
-  Format.eprintf "CANCHG %a %b ==> %b@." Code_id_or_name.print allocation_id for_destructuring_value r;
+  (* Format.eprintf "CANCHG %a %b ==> %b@." Code_id_or_name.print allocation_id for_destructuring_value r; *)
   r
 
 (*
@@ -1492,7 +1493,7 @@ let can_unbox dual dual_graph graph ~dominated_by_allocation_points
         edges)
     aliases
 
-let debug = true
+let debug = Sys.getenv_opt "REAPERDBG" <> None
 let fixpoint (graph_new : Global_flow_graph.graph) =
   let result = Hashtbl.create 17 in
   let uses =
@@ -1502,6 +1503,9 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
   Gc.full_major ();
   let t0 = Sys.time () in
   Solver.fixpoint_topo graph_new uses result;
+  let dual_graph, roots = Dual_graph.build_dual graph_new result in
+  let aliases = Hashtbl.create 17 in
+  Alias_solver.fixpoint_topo dual_graph roots aliases;
   let t1 = Sys.time () in
   Gc.full_major ();
   let t1' = Sys.time () in
@@ -1536,9 +1540,6 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
       let _v2 = Hashtbl.find result k in
       ())
     result2; *)
-  let dual_graph, roots = Dual_graph.build_dual graph_new result in
-  let aliases = Hashtbl.create 17 in
-  Alias_solver.fixpoint_topo dual_graph roots aliases;
   if debug then Format.eprintf "@.SAUCISSE XXX@.@.@.";
   let dominated_by_allocation_points =
     map_from_allocation_points_to_dominated db
