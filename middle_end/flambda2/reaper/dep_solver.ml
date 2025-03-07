@@ -416,7 +416,7 @@ module Dual_graph = struct
   module Node = Code_id_or_name
 
   type field_elt =
-    | Field_top
+   | Field_top
     | Field_vals of Code_id_or_name.Set.t
 
   type elt =
@@ -626,6 +626,14 @@ module Dual_graph = struct
             deps acc)
         (Global_flow_graph.name_to_dep graph) Code_id_or_name.Map.empty
     in
+    Node.Map.iter (fun node _ ->
+      Code_id_or_name.pattern_match node ~code_id:(fun _ -> ())
+        ~symbol:(fun symbol ->
+          if not (Compilation_unit.equal (Symbol.compilation_unit symbol) (Compilation_unit.get_current_exn ())) then
+            top_roots := Code_id_or_name.Set.add node !top_roots
+          )
+        ~var:(fun _ -> ())
+      ) graph;
     graph, !top_roots
 end
 
@@ -1213,8 +1221,12 @@ let datalog_rules =
      [ constructor_rel x field y; filter_field is_function_slot field; cannot_change_representation0 x] ==> cannot_change_representation y);
 
     (let$ [x] = ["x"] in [cannot_change_representation x] ==> cannot_unbox x);
-    (let$ [x; field] = ["x"; "field"] in
-     [field_of_constructor_is_used x field; filter_field field_cannot_be_destructured field] ==> cannot_unbox x);
+    (* (let$ [x; field] = ["x"; "field"] in
+     [field_of_constructor_is_used x field; filter_field field_cannot_be_destructured field] ==> cannot_unbox x); *)
+    (let$ [x; usage; field] = ["x"; "usage"; "field"] in
+     [usages_rel x usage; used_fields_top_rel usage field; filter_field field_cannot_be_destructured field] ==> cannot_unbox x);
+    (let$ [x; usage; field; _v] = ["x"; "usage"; "field"; "_v"] in
+     [usages_rel x usage; used_fields_rel usage field _v; filter_field field_cannot_be_destructured field] ==> cannot_unbox x);
 (*    (let$ [alias; allocation_id; relation; to_; usage] = ["alias"; "allocation_id"; "relation"; "to_"; "usage"] in
      [sources_rel alias allocation_id; rev_constructor_rel alias relation to_;
       usages_rel to_ usage;
@@ -1334,6 +1346,11 @@ let can_change_representation ~for_destructuring_value dual dual_graph graph all
   | Cannot_unbox_due_to_uses -> false
   | No_problem { use_aliases } ->
     let alias_dominated_by_allocation_id alias =
+      let e = 
+      match (Hashtbl.find_opt dual alias : Dual_graph.elt option) with
+      None -> Dual_graph.Bottom | Some x -> x
+      in
+      Format.eprintf "DUAL %a => %a@." Code_id_or_name.print alias Dual_graph.pp_elt e;
       match (Hashtbl.find_opt dual alias : Dual_graph.elt option) with
       | None -> true
       | Some Bottom -> true
@@ -1346,6 +1363,7 @@ let can_change_representation ~for_destructuring_value dual dual_graph graph all
     alias_dominated_by_allocation_id allocation_id
     && Code_id_or_name.Set.for_all alias_dominated_by_allocation_id use_aliases
   in
+  let r = 
   check_single ~for_destructuring_value allocation_id &&
   List.for_all (fun (edge : Dual_graph.edge) ->
       match[@ocaml.warning "-4"] edge with
@@ -1353,6 +1371,9 @@ let can_change_representation ~for_destructuring_value dual dual_graph graph all
           check_single ~for_destructuring_value:false target
       | _ -> true)
     (match Code_id_or_name.Map.find_opt allocation_id dual_graph with None -> [] | Some l -> l)
+  in
+  Format.eprintf "CANCHG %a %b ==> %b@." Code_id_or_name.print allocation_id for_destructuring_value r;
+  r
 
 (*
 let multiple_allocation_points = Datalog.create_relation ~name:"multiple_allocation_points" N.columns

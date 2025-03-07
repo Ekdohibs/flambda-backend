@@ -33,6 +33,13 @@ let apply_cont_deps denv acc apply_cont =
 
 let reaper_test_opaque = Sys.getenv_opt "REAPEROPAQUE" <> None
 
+let simple_to_name denv simple =
+  Simple.pattern_match' simple
+    ~const:(fun _ -> denv.all_constants)
+    ~var:(fun v ~coercion:_ -> Name.var v)
+    ~symbol:(fun s ~coercion:_ ->
+        if Compilation_unit.is_current (Symbol.compilation_unit s) then Name.symbol s else denv.all_constants)
+
 let prepare_code ~denv acc (code_id : Code_id.t) (code : Code.t) =
   let return =
     List.init
@@ -122,14 +129,12 @@ let record_set_of_closures_deps denv names_and_function_slots set_of_closures ac
     (fun _function_slot function_slot_name ->
       Value_slot.Map.iter
         (fun value_slot simple ->
-          Simple.pattern_match
-            ~const:(fun _ -> Graph.add_constructor_dep (Acc.graph acc) ~base:(Code_id_or_name.name function_slot_name) (Value_slot value_slot) ~from:(Code_id_or_name.name denv.all_constants))
-            ~name:(fun name ~coercion:_ ->
+           let name = simple_to_name denv simple in
               Graph.add_constructor_dep (Acc.graph acc)
                 ~base:(Code_id_or_name.name function_slot_name)
                 (Value_slot value_slot)
-                ~from:(Code_id_or_name.name name))
-            simple)
+                ~from:(Code_id_or_name.name name)
+            )
         (Set_of_closures.value_slots set_of_closures);
       Function_slot.Lmap.iter
         (fun function_slot name ->
@@ -180,10 +185,8 @@ and traverse_let denv acc let_expr : rev_expr =
     Acc.alias_kind
       (Name.var (Bound_var.var (Bound_pattern.must_be_singleton bound_pattern)))
       s acc;
-    Simple.pattern_match s
-      ~name:(fun name ~coercion:_ ->
-        default_bp (fun to_ -> Graph.add_alias (Acc.graph acc) ~to_ ~from:name))
-      ~const:(fun _ -> default_bp (fun to_ -> Graph.add_use_dep (Acc.graph acc) ~to_ ~from:(Code_id_or_name.name denv.all_constants)))
+    let name = simple_to_name denv s in
+    default_bp (fun to_ -> Graph.add_alias (Acc.graph acc) ~to_ ~from:name)
   | Rec_info _ -> default acc);
   let named : rev_named =
     match defining_expr with
@@ -249,37 +252,22 @@ and traverse_prim denv acc ~bound_pattern (prim : Flambda_primitive.t) ~default
     List.iteri
       (fun i field ->
         let kind = Flambda_kind.Block_shape.element_kind block_shape i in
-        Simple.pattern_match field
-          ~name:(fun name ~coercion:_ ->
+        let name = simple_to_name denv field in
             default_bp (fun base ->
                 Graph.add_constructor_dep (Acc.graph acc) ~base (Block (i, kind))
                   ~from:(Code_id_or_name.name name)))
-          ~const:(fun _ ->
-              default_bp (fun base ->
-                Graph.add_constructor_dep (Acc.graph acc) ~base (Block (i, kind))
-                ~from:(Code_id_or_name.name denv.all_constants)
-           )))
       fields
   | Unary (Opaque_identity { middle_end_only = true; _ }, arg) when reaper_test_opaque ->
     (* XXX TO REMOVE !!! *)
-    Simple.pattern_match arg
-      ~name:(fun arg ~coercion:_ -> default_bp (fun to_ -> Graph.add_alias (Acc.graph acc) ~to_ ~from:arg))
-      ~const:(fun _ -> ())
+      let arg = simple_to_name denv arg in
+      default_bp (fun to_ -> Graph.add_alias (Acc.graph acc) ~to_ ~from:arg)
   | Unary (Project_function_slot { move_from = _; move_to }, block) ->
-    let block =
-      Simple.pattern_match block
-        ~name:(fun name ~coercion:_ -> name)
-        ~const:(fun _ -> assert false)
-    in
+    let block = simple_to_name denv block in
     default_bp (fun to_ ->
         Graph.add_accessor_dep (Acc.graph acc) ~to_ (Function_slot move_to)
           ~base:block)
   | Unary (Project_value_slot { project_from = _; value_slot }, block) ->
-    let block =
-      Simple.pattern_match block
-        ~name:(fun name ~coercion:_ -> name)
-        ~const:(fun _ -> assert false)
-    in
+    let block = simple_to_name denv block in
     default_bp (fun to_ ->
         Graph.add_accessor_dep (Acc.graph acc) ~to_ (Value_slot value_slot)
           ~base:block)
@@ -289,37 +277,19 @@ and traverse_prim denv acc ~bound_pattern (prim : Flambda_primitive.t) ~default
        we can make stores only escape the corresponding fields of the block
        instead of the whole block. *)
     let kind = Flambda_primitive.Block_access_kind.element_kind_for_load kind in
-    Simple.pattern_match block
-      ~const:(fun _ ->
-        (* CR ncourant: it seems this const case can happen with the
-         * following code:
-         *
-         * let[@inline] f b x = if b then Lazy.force x else 0
-         * let g b = f b (lazy 0)
-         *
-         * It is unclear why it has not been transformed by an Invalid by
-         * simplify, however.
-         *)
-        default_bp (fun to_ ->
-          Graph.add_accessor_dep (Acc.graph acc) ~to_
-          (Block (Targetint_31_63.to_int field, kind)) ~base:denv.all_constants))
-      ~name:(fun block ~coercion:_ ->
+    let block = simple_to_name denv block in
         default_bp (fun to_ ->
             Graph.add_accessor_dep (Acc.graph acc) ~to_
               (Block (Targetint_31_63.to_int field, kind))
-              ~base:block))
+              ~base:block)
   | Unary (Is_int _, arg) ->
-    Simple.pattern_match arg
-      ~name:(fun name ~coercion:_ ->
+      let name = simple_to_name denv arg in
         default_bp (fun to_ ->
-            Graph.add_accessor_dep (Acc.graph acc) ~to_ Is_int ~base:name))
-      ~const:(fun _ -> default_bp (fun to_ -> Graph.add_use_dep (Acc.graph acc) ~to_ ~from:(Code_id_or_name.name denv.all_constants)))
+            Graph.add_accessor_dep (Acc.graph acc) ~to_ Is_int ~base:name)
   | Unary (Get_tag, arg) ->
-    Simple.pattern_match arg
-      ~name:(fun name ~coercion:_ ->
+      let name = simple_to_name denv arg in
         default_bp (fun to_ ->
-            Graph.add_accessor_dep (Acc.graph acc) ~to_ Get_tag ~base:name))
-      ~const:(fun _ -> default_bp (fun to_ -> Graph.add_use_dep (Acc.graph acc) ~to_ ~from:(Code_id_or_name.name denv.all_constants)))
+            Graph.add_accessor_dep (Acc.graph acc) ~to_ Get_tag ~base:name)
   | prim ->
     let () =
       match Flambda_primitive.effects_and_coeffects prim with
@@ -388,17 +358,14 @@ and traverse_static_consts denv acc ~(bound_pattern : Bound_pattern.t) group =
         List.iteri
           (fun i (field : Simple.With_debuginfo.t) ->
             let kind = block_field_kind i in
-            Simple.pattern_match
-              (Simple.With_debuginfo.simple field)
-              ~name:(fun field_name ~coercion:_ ->
+            let field_name = simple_to_name denv (Simple.With_debuginfo.simple field) in
                 Graph.add_constructor_dep (Acc.graph acc)
                   ~base:(Code_id_or_name.name name)
                   (Block (i, kind))
                   ~from:(Code_id_or_name.name field_name))
-              ~const:(fun _ -> Graph.add_constructor_dep (Acc.graph acc) ~base:(Code_id_or_name.name name) (Block (i, kind)) ~from:(Code_id_or_name.name denv.all_constants)))
           fields
       | Set_of_closures _ -> assert false
-      | _ -> ())
+      | _ -> Graph.add_alias (Acc.graph acc) ~to_:(Code_id_or_name.name name) ~from:(denv.all_constants))
 
 and traverse_let_cont denv acc (let_cont : Let_cont.t) : rev_expr =
   match let_cont with
@@ -523,31 +490,6 @@ and traverse_cont_handler :
       k handler acc)
 
 and traverse_apply denv acc apply : rev_expr =
-  let default_acc acc =
-    (* CR ncourant: track regions properly *)
-    List.iter (fun arg -> Acc.used ~denv arg acc) (Apply.args apply);
-    (match Apply.callee apply with
-    | None -> ()
-    | Some callee -> Acc.used ~denv callee acc);
-    match Apply.call_kind apply with
-    | Function _ -> ()
-    | Method { obj; kind = _; alloc_mode = _ } -> Acc.used ~denv obj acc
-    | C_call _ -> ()
-    | Effect (Perform { eff }) -> Acc.used ~denv eff acc
-    | Effect (Reperform { eff; cont; last_fiber }) ->
-      Acc.used ~denv eff acc;
-      Acc.used ~denv cont acc;
-      Acc.used ~denv last_fiber acc
-    | Effect (Run_stack { stack; f; arg }) ->
-      Acc.used ~denv stack acc;
-      Acc.used ~denv f acc;
-      Acc.used ~denv arg acc
-    | Effect (Resume { stack; f; arg; last_fiber }) ->
-      Acc.used ~denv stack acc;
-      Acc.used ~denv f acc;
-      Acc.used ~denv arg acc;
-      Acc.used ~denv last_fiber acc
-  in
   let return_args =
     match Apply.continuation apply with
     | Never_returns -> None
@@ -568,6 +510,34 @@ and traverse_apply denv acc apply : rev_expr =
         (fun param (arg, _kind) -> Acc.alias_dep ~denv param arg acc)
         extra_params extra_args;
       exn_param
+  in
+  let default_acc acc =
+    (* CR ncourant: track regions properly *)
+    List.iter (fun arg -> Acc.used ~denv arg acc) (Apply.args apply);
+    (match Apply.callee apply with
+    | None -> ()
+    | Some callee -> Acc.used ~denv callee acc);
+    Acc.alias_dep ~denv exn_arg (Simple.name denv.le_monde_exterieur) acc;
+    List.iter (fun param -> 
+        Acc.alias_dep ~denv param (Simple.name denv.le_monde_exterieur) acc) (match return_args with None -> [] | Some l -> l);
+    match Apply.call_kind apply with
+    | Function _ -> ()
+    | Method { obj; kind = _; alloc_mode = _ } -> Acc.used ~denv obj acc
+    | C_call _ -> ()
+    | Effect (Perform { eff }) -> Acc.used ~denv eff acc
+    | Effect (Reperform { eff; cont; last_fiber }) ->
+      Acc.used ~denv eff acc;
+      Acc.used ~denv cont acc;
+      Acc.used ~denv last_fiber acc
+    | Effect (Run_stack { stack; f; arg }) ->
+      Acc.used ~denv stack acc;
+      Acc.used ~denv f acc;
+      Acc.used ~denv arg acc
+    | Effect (Resume { stack; f; arg; last_fiber }) ->
+      Acc.used ~denv stack acc;
+      Acc.used ~denv f acc;
+      Acc.used ~denv arg acc;
+      Acc.used ~denv last_fiber acc
   in
   traverse_call_kind denv acc apply ~exn_arg ~return_args ~default_acc;
   let expr = Apply apply in
@@ -601,10 +571,7 @@ and traverse_call_kind denv acc apply ~exn_arg ~return_args ~default_acc =
       match Apply.callee apply with
       | None -> assert false
       | Some callee ->
-        Simple.pattern_match
-          ~name:(fun callee ~coercion:_ -> callee)
-          ~const:(fun _ -> assert false)
-          callee
+          simple_to_name denv callee
     in
     let arity = Apply.args_arity apply in
     let partial_apply = ref callee in

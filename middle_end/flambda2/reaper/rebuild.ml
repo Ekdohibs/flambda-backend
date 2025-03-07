@@ -63,12 +63,14 @@ let is_code_id_used (env : env) code_id =
   is_used env (Code_id_or_name.code_id code_id)
   || not (Compilation_unit.is_current (Code_id.get_compilation_unit code_id))
 
-let is_name_used (env : env) name = is_used env (Code_id_or_name.name name)
+let is_symbol_used (env : env) symbol =
+  is_used env (Code_id_or_name.symbol symbol)
+  || not (Compilation_unit.is_current (Symbol.compilation_unit symbol))
 
 let is_var_used (env : env) var = is_used env (Code_id_or_name.var var)
 
-let is_symbol_used (env : env) symbol =
-  is_used env (Code_id_or_name.symbol symbol)
+let is_name_used (env : env) name =
+  Name.pattern_match name ~symbol:(is_symbol_used env) ~var:(is_var_used env)
 
 let poison_value = 0 (* 123456789 *)
 
