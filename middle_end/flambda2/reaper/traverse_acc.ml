@@ -88,6 +88,13 @@ let bound_parameter_kind (bp : Bound_parameter.t) t =
   let name = Name.var (Bound_parameter.var bp) in
   t.kinds <- Name.Map.add name kind t.kinds
 
+let simple_to_name ~all_constants simple =
+  Simple.pattern_match' simple
+    ~const:(fun _ -> all_constants)
+    ~var:(fun v ~coercion:_ -> Name.var v)
+    ~symbol:(fun s ~coercion:_ ->
+        if Compilation_unit.is_current (Symbol.compilation_unit s) then Name.symbol s else all_constants)
+
 let alias_kind name simple t =
   let kind =
     Simple.pattern_match simple
@@ -116,24 +123,19 @@ let add_code code_id dep t = t.code <- Code_id.Map.add code_id dep t.code
 
 let find_code t code_id = Code_id.Map.find code_id t.code
 
-let alias_dep ~denv pat dep t =
-  Simple.pattern_match dep
-    ~name:(fun name ~coercion:_ ->
-      Graph.add_alias t.deps ~to_:(Code_id_or_name.var pat) ~from:name)
-    ~const:(fun _ -> Graph.add_use_dep t.deps ~to_:(Code_id_or_name.var pat) ~from:(Code_id_or_name.name denv.Env.all_constants))
+let alias_dep ~(denv : Env.t) pat dep t =
+      Graph.add_alias t.deps ~to_:(Code_id_or_name.var pat) ~from:(simple_to_name ~all_constants:denv.all_constants dep)
 
 let root v t = Graph.add_use t.deps (Code_id_or_name.var v)
 
 let used ~(denv : Env.t) dep t =
-  Simple.pattern_match dep
-    ~name:(fun name ~coercion:_ ->
+  let name = simple_to_name ~all_constants:denv.all_constants dep in
       match denv.current_code_id with
       | None -> Graph.add_use t.deps (Code_id_or_name.name name)
       | Some code_id ->
         Graph.add_use_dep t.deps
           ~to_:(Code_id_or_name.code_id code_id)
-          ~from:(Code_id_or_name.name name))
-    ~const:(fun _ -> ())
+          ~from:(Code_id_or_name.name name)
 
 let used_code_id code_id t =
   Graph.add_use t.deps (Code_id_or_name.code_id code_id)
@@ -249,18 +251,12 @@ let deps t ~all_constants =
       in
       List.iter2
         (fun param arg ->
-          Simple.pattern_match arg
-            ~name:(fun name ~coercion:_ -> add_cond_dep param name)
-            ~const:(fun _ -> add_cond_dep param all_constants))
+           add_cond_dep param (simple_to_name ~all_constants arg))
         code_dep.params apply_args;
       (match apply_closure with
       | None -> ()
       | Some apply_closure ->
-        Simple.pattern_match apply_closure
-          ~name:(fun name ~coercion:_ -> add_cond_dep code_dep.my_closure name)
-          ~const:(fun _ ->
-            (* Very unlikely for a closure to be a const: probably dead code *)
-            add_cond_dep code_dep.my_closure all_constants));
+          add_cond_dep code_dep.my_closure (simple_to_name ~all_constants apply_closure));
       (match params_of_apply_return_cont with
       | None -> ()
       | Some apply_return ->
