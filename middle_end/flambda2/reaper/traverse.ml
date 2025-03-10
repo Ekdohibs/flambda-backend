@@ -256,7 +256,11 @@ and traverse_prim denv acc ~bound_pattern (prim : Flambda_primitive.t) ~default
             default_bp (fun base ->
                 Graph.add_constructor_dep (Acc.graph acc) ~base (Block (i, kind))
                   ~from:(Code_id_or_name.name name)))
-      fields
+      fields;
+    default_bp (fun base ->
+      Graph.add_constructor_dep (Acc.graph acc) ~base Is_int ~from:(Code_id_or_name.name denv.all_constants);
+      Graph.add_constructor_dep (Acc.graph acc) ~base Get_tag ~from:(Code_id_or_name.name denv.all_constants)
+      )
   | Unary (Opaque_identity { middle_end_only = true; _ }, arg) when reaper_test_opaque ->
     (* XXX TO REMOVE !!! *)
       let arg = simple_to_name denv arg in
@@ -282,7 +286,7 @@ and traverse_prim denv acc ~bound_pattern (prim : Flambda_primitive.t) ~default
             Graph.add_accessor_dep (Acc.graph acc) ~to_
               (Block (Targetint_31_63.to_int field, kind))
               ~base:block)
-  | Unary (Is_int _, arg) ->
+  | Unary (Is_int { variant_only = true }, arg) ->
       let name = simple_to_name denv arg in
         default_bp (fun to_ ->
             Graph.add_accessor_dep (Acc.graph acc) ~to_ Is_int ~base:name)
@@ -363,7 +367,9 @@ and traverse_static_consts denv acc ~(bound_pattern : Bound_pattern.t) group =
                   ~base:(Code_id_or_name.name name)
                   (Block (i, kind))
                   ~from:(Code_id_or_name.name field_name))
-          fields
+          fields;
+        Graph.add_constructor_dep (Acc.graph acc) ~base:(Code_id_or_name.name name) Is_int ~from:(Code_id_or_name.name denv.all_constants);
+        Graph.add_constructor_dep (Acc.graph acc) ~base:(Code_id_or_name.name name) Get_tag ~from:(Code_id_or_name.name denv.all_constants)
       | Set_of_closures _ -> assert false
       | _ -> Graph.add_alias (Acc.graph acc) ~to_:(Code_id_or_name.name name) ~from:(denv.all_constants))
 
