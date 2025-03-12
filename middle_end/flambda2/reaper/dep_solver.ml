@@ -658,18 +658,19 @@ type changed_representation =
   | Block_representation of
       (int * Flambda_primitive.Block_access_kind.t) unboxed_fields Field.Map.t * int
   | Closure_representation of
-      Value_slot.t unboxed_fields Field.Map.t * Function_slot.t
+      Value_slot.t unboxed_fields Field.Map.t * Function_slot.t Function_slot.Map.t (* old -> new *) * Function_slot.t (* OLD current function slot *)
 
 let pp_changed_representation ff = function
   | Block_representation (fields, size) ->
       Format.fprintf ff
         "(fields %a) (size %d)"
         (Field.Map.print (pp_unboxed_elt (fun ff (field, _) -> Format.pp_print_int ff field))) fields size
-  | Closure_representation (fields, function_slot) ->
+  | Closure_representation (fields, function_slots, fs) ->
       Format.fprintf ff
-        "(fields %a) (function_slot %a)"
+        "(fields %a) (function_slots %a) (current %a)"
         (Field.Map.print (pp_unboxed_elt Value_slot.print)) fields
-        Function_slot.print function_slot
+        (Function_slot.Map.print Function_slot.print) function_slots
+        Function_slot.print fs
 
 type result =
   { uses : Graph.state;
@@ -708,9 +709,17 @@ let rel1 name schema =
   let r = Datalog.create_relation ~name schema in
   fun x -> Datalog.atom r [x]
 
+let rel1_r name schema =
+  let r = Datalog.create_relation ~name schema in
+  r, fun x -> Datalog.atom r [x]
+
 let rel2 name schema =
   let r = Datalog.create_relation ~name schema in
   fun x y -> Datalog.atom r [x; y]
+
+let rel2_r name schema =
+  let r = Datalog.create_relation ~name schema in
+  r, fun x y -> Datalog.atom r [x; y]
 
 let rel3 name schema =
   let r = Datalog.create_relation ~name schema in
@@ -1069,6 +1078,81 @@ let mk_exists_query params existentials f =
             foreach existentials (fun existentials ->
                 where (f params existentials) (yield [])))))
 
+
+let is_function_slot : Field.t -> _ = function[@ocaml.warning "-4"] Function_slot _ -> true | _ -> false
+
+module Syntax = struct
+  include Datalog
+  let ( let$ ) xs f = compile xs f
+  let ( ==> ) h c = where h (deduce c)
+end
+
+let filter_field f x =
+  let open! Syntax in
+  filter (fun [x] -> f (Field.decode x)) [x]
+
+
+let get_all_usages =
+  let out_tbl, out = rel1_r "out" Cols.[n] in
+  let in_tbl, in_ = rel1_r "in_" Cols.[n] in
+  let open! Syntax in
+  let open! Global_flow_graph in
+  let rs = [
+    (let$ [x; y] = ["x"; "y"] in
+     [ in_ x; usages_rel x y ] ==> out y);
+    (let$ [x; field; y] = ["x"; "field"; "y"] in
+     [ out x; used_fields_rel x field y; filter_field is_function_slot field ] ==> out y)
+  ] in
+  fun db s ->
+    let db = Datalog.set_table in_tbl s db in
+    let db = Datalog.Schedule.run (Datalog.Schedule.saturate rs) db in
+    Datalog.get_table out_tbl db
+
+let fieldc_map_to_field_map m =
+  Global_flow_graph.FieldC.Map.fold (fun k r acc -> Field.Map.add (Field.decode k) r acc) m Field.Map.empty
+
+let get_fields =
+  let out_tbl1, out1 = rel1_r "out1" Cols.[f] in
+  let out_tbl2, out2 = rel2_r "out2" Cols.[f; n] in
+  let in_tbl, in_ = rel1_r "in_" Cols.[n] in
+  let open! Syntax in
+  let open! Global_flow_graph in
+  let rs = [
+    (let$ [x; field] = ["x"; "field"] in
+     [ in_ x; used_fields_top_rel x field; filter_field (fun x -> Stdlib.not (is_function_slot x)) field ] ==> out1 field);
+    (let$ [x; field; y] = ["x"; "field"; "y"] in
+     [ in_ x; used_fields_rel x field y; not (out1 field); filter_field (fun x -> Stdlib.not (is_function_slot x)) field ] ==> out2 field y)
+  ] in
+  fun db s ->
+    let db = Datalog.set_table in_tbl s db in
+    let db = Datalog.Schedule.(run (fixpoint (List.map (fun r -> saturate [r]) rs)) db) in
+    fieldc_map_to_field_map (
+    FieldC.Map.merge (fun k x y ->
+        match x, y with
+        | None, None -> assert false
+        | Some _, Some _ -> Misc.fatal_errorf "Got two results for field %a" Field.print (Field.decode k)
+        | Some (), None -> Some None
+        | None, Some m -> Some (Some m)
+      ) (Datalog.get_table out_tbl1 db) (Datalog.get_table out_tbl2 db))
+
+type set_of_closures_def =
+  | Not_a_set_of_closures
+  | Set_of_closures of (Function_slot.t * Code_id_or_name.t) list
+
+let get_set_of_closures_def =
+  
+    let q = Datalog.(
+    compile [] (fun [] ->
+        with_parameters ["x"] (fun [x] ->
+            foreach ["field"; "y"] (fun [field; y] ->
+                  where [ Global_flow_graph.constructor_rel x field y; filter_field is_function_slot field ] (yield [field; y])))))
+    in
+  fun db v ->
+    let l = Datalog.Cursor.fold_with_parameters q [v] db ~init:[] ~f:(fun [f; y] l -> ((match[@ocaml.warning "-4"] Field.decode f with Function_slot fs -> fs | _ -> assert false), y) :: l)
+    in
+    match l with [] -> Not_a_set_of_closures | _ :: _ -> Set_of_closures l
+
+
 let used_pred_query =
   let open! Global_flow_graph in
   mk_exists_query ["X"] [] (fun [x] [] -> [used_pred x])
@@ -1168,27 +1252,18 @@ type problematic_uses =
   | Cannot_unbox_due_to_uses
   | No_problem of { use_aliases : Code_id_or_name.Set.t }
 
-module Syntax = struct
-  include Datalog
-  let ( let$ ) xs f = compile xs f
-  let ( ==> ) h c = where h (deduce c)
-end
 
 let field_of_constructor_is_used = rel2 "field_of_constructor_is_used" Cols.[n; f]
 let cannot_change_representation0 = rel1 "cannot_change_representation0" Cols.[n]
 let cannot_change_representation = rel1 "cannot_change_representation" Cols.[n]
+let cannot_unbox0 = rel1 "cannot_unbox0" Cols.[n]
 let cannot_unbox = rel1 "cannot_unbox" Cols.[n]
-
-let filter_field f x =
-  let open! Syntax in
-  filter (fun [x] -> f (Field.decode x)) [x]
 
 let datalog_rules =
   let open! Syntax in
   let open! Global_flow_graph in
   let field_cannot_be_destructured (i : Field.t) = match[@ocaml.warning "-4"] i with | Code_of_closure | Apply _ -> true | _ -> false in
-  let relation_prevents_unboxing : Field.t -> _ = function Block _ | Value_slot _ -> false | Function_slot _ -> true (* todo *) | Code_of_closure | Is_int | Get_tag -> true | Apply _ -> true (* todo? *) in
-  let is_function_slot : Field.t -> _ = function[@ocaml.warning "-4"] Function_slot _ -> true | _ -> false in
+  let relation_prevents_unboxing : Field.t -> _ = function Block _ | Value_slot _ -> false | Function_slot _ -> false (* todo *) | Code_of_closure | Is_int | Get_tag -> true | Apply _ -> true (* todo? *) in
   [
     (let$ [base; relation; from] = ["base"; "relation"; "from"] in
      [constructor_rel base relation from; used_pred base] ==> field_of_constructor_is_used base relation);
@@ -1221,9 +1296,13 @@ let datalog_rules =
     (let$ [x; field; y] = ["x"; "field"; "y"] in
      [ constructor_rel x field y; filter_field is_function_slot field; cannot_change_representation0 x] ==> cannot_change_representation y);
 
-    (let$ [x] = ["x"] in [cannot_change_representation x] ==> cannot_unbox x);
+    (let$ [x] = ["x"] in [cannot_change_representation x] ==> cannot_unbox0 x);
     (let$ [x; field] = ["x"; "field"] in
-     [field_of_constructor_is_used x field; filter_field field_cannot_be_destructured field] ==> cannot_unbox x);
+     [field_of_constructor_is_used x field; filter_field field_cannot_be_destructured field] ==> cannot_unbox0 x);
+
+    (let$ [x] = ["x"] in [cannot_unbox0 x] ==> cannot_unbox x);
+    (let$ [x; field; y] = ["x"; "field"; "y"] in
+     [cannot_unbox0 x; constructor_rel x field y; filter_field is_function_slot field] ==> cannot_unbox y);
     (* (let$ [x; usage; field] = ["x"; "usage"; "field"] in
      [usages_rel x usage; used_fields_top_rel usage field; filter_field field_cannot_be_destructured field] ==> cannot_unbox x);
     (let$ [x; usage; field; _v] = ["x"; "usage"; "field"; "_v"] in
@@ -1587,8 +1666,8 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
           if not x then 
             Misc.fatal_errorf "Expected unboxable = %b for %a %a but failed" b Code_id_or_name.print code_or_name pp_elt _elt
         in
-        if can_unbox aliases dual_graph result ~dominated_by_allocation_points
-             code_or_name
+        if ignore (can_unbox aliases dual_graph result ~dominated_by_allocation_points
+                     code_or_name); not b
         then (chk (not b); Code_id_or_name.Set.add code_or_name to_unbox)
         else (chk b; to_unbox))
       result Code_id_or_name.Set.empty
@@ -1614,7 +1693,7 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
     | None -> false
     | Some alloc_point -> Code_id_or_name.Set.mem alloc_point to_unbox
   in
-  if debug then Code_id_or_name.Set.iter
+  Code_id_or_name.Set.iter
     (fun code_or_name ->
       Format.eprintf "%a@." Code_id_or_name.print code_or_name;
       let to_patch =
@@ -1627,15 +1706,9 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
       in
       Code_id_or_name.Set.iter
         (fun to_patch ->
-          let rec unbox_elt elt name_prefix =
-            match elt with
-            | Top ->
-              Misc.fatal_errorf "Trying to unbox Top uses when unboxing %a"
-                Code_id_or_name.print to_patch
-            | Bottom -> Field.Map.empty
-            | Fields { fields; _ } ->
-              Field.Map.mapi
-                (fun field field_elt ->
+          let rec unbox_rec usages name_prefix =
+            let fields = get_fields db usages in
+            Field.Map.mapi (fun field field_use ->
                   let new_name =
                     Flambda_colours.without_colours ~f:(fun () ->
                         Format.asprintf "%s_field_%a" name_prefix Field.print
@@ -1645,26 +1718,15 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
                     (* TODO let ghost for debugging *)
                     Not_unboxed (Variable.create new_name)
                   in
-                  match field_elt with
-                  | Field_top -> default ()
-                  | Field_vals flow_to ->
-                    if Code_id_or_name.Set.is_empty flow_to
+                  match field_use with
+                  | None -> default ()
+                  | Some flow_to ->
+                    if Code_id_or_name.Map.is_empty flow_to
                     then Misc.fatal_errorf "Empty set in [Field_vals]";
-                    if Code_id_or_name.Set.for_all has_to_be_unboxed flow_to
+                    if Code_id_or_name.Map.for_all (fun k () -> has_to_be_unboxed k) flow_to
                     then
-                      let elt =
-                        Code_id_or_name.Set.fold
-                          (fun flow acc ->
-                            match Hashtbl.find_opt result flow with
-                            | None ->
-                              Misc.fatal_errorf
-                                "%a is in [Field_vals] but not in result"
-                                Code_id_or_name.print flow
-                            | Some elt -> Graph.join_elt acc elt)
-                          flow_to Bottom
-                      in
-                      Unboxed (unbox_elt elt new_name)
-                    else if Code_id_or_name.Set.exists has_to_be_unboxed flow_to
+                      Unboxed (unbox_rec (get_all_usages db flow_to) new_name)
+                    else if Code_id_or_name.Map.exists (fun k () -> has_to_be_unboxed k) flow_to
                     then
                       Misc.fatal_errorf
                         "Field %a of %s flows to both unboxed and non-unboxed \
@@ -1678,10 +1740,7 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
                 Format.asprintf "%a_into_%a" Code_id_or_name.print code_or_name
                   Code_id_or_name.print to_patch)
           in
-          let fields =
-            match Hashtbl.find_opt result to_patch with
-            | None -> Field.Map.empty
-            | Some elt -> unbox_elt elt new_name
+          let fields = unbox_rec (get_all_usages db (Code_id_or_name.Map.singleton to_patch ())) new_name
           in
           assigned := Code_id_or_name.Map.add to_patch fields !assigned)
         to_patch)
@@ -1693,50 +1752,32 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
   let changed_representation = ref Code_id_or_name.Map.empty in
   Code_id_or_name.Set.iter
     (fun code_id_or_name ->
-      let uses =
-        match Hashtbl.find_opt result code_id_or_name with
-        | None -> Bottom
-        | Some x -> x
-      in
-      let r = ref ~-1 in
-      let mk_field () =
-        incr r;
-        (!r, 
-         Flambda_primitive.(Block_access_kind.Values { tag = Unknown; size = Unknown; field_kind = Block_access_field_kind.Any_value }))
-      in
-      let repr =
-        let rec repr_elt mk_field = function
-          | Top ->
-            Misc.fatal_errorf "Cannot change representation of Top for %a"
-              Code_id_or_name.print code_id_or_name
-          | Bottom -> Field.Map.empty
-          | Fields { fields; _ } ->
+       if Code_id_or_name.Map.mem code_id_or_name !changed_representation then () else begin
+         let add_to_s repr c =
+      Code_id_or_name.Set.iter
+        (fun c ->
+          changed_representation
+            := Code_id_or_name.Map.add c repr !changed_representation)
+        (match Code_id_or_name.Map.find_opt c dominated_by_allocation_points with None -> Code_id_or_name.Set.empty | Some s -> s)
+         in
+         let set_of_closures_def = get_set_of_closures_def db code_id_or_name in
+        let rec repr_rec mk_field usages =
+          let fields = get_fields db usages in
             (* TODO handle closures & non-value fields *)
             Field.Map.filter_map
-              (fun field field_elt ->
+              (fun field field_use ->
                  match field with
                  | Code_of_closure | Apply _ -> None
                  | Get_tag | Is_int | Block _ | Value_slot _ | Function_slot _ ->
-                Some (match field_elt with
-                | Field_top -> Not_unboxed (mk_field ())
-                | Field_vals flow_to ->
-                  if Code_id_or_name.Set.is_empty flow_to
-                  then Misc.fatal_errorf "Empty set in [Field_vals]";
-                  if Code_id_or_name.Set.for_all has_to_be_unboxed flow_to
+                Some (match field_use with
+                | None -> Not_unboxed (mk_field ())
+                | Some flow_to ->
+                  if Code_id_or_name.Map.is_empty flow_to
+                  then Misc.fatal_errorf "Empty set in [flow_to]";
+                  if Code_id_or_name.Map.for_all (fun k () -> has_to_be_unboxed k) flow_to
                   then
-                    let elt =
-                      Code_id_or_name.Set.fold
-                        (fun flow acc ->
-                          match Hashtbl.find_opt result flow with
-                          | None ->
-                            Misc.fatal_errorf
-                              "%a is in [Field_vals] but not in result"
-                              Code_id_or_name.print flow
-                          | Some elt -> Graph.join_elt acc elt)
-                        flow_to Bottom
-                    in
-                    Unboxed (repr_elt mk_field elt)
-                  else if Code_id_or_name.Set.exists has_to_be_unboxed flow_to
+                    Unboxed (repr_rec mk_field (get_all_usages db flow_to))
+                  else if Code_id_or_name.Map.exists (fun k () -> has_to_be_unboxed k) flow_to
                   then
                     Misc.fatal_errorf
                       "Field %a of %a flows to both unboxed and non-unboxed \
@@ -1745,27 +1786,30 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
                   else Not_unboxed (mk_field ())))
               fields
         in
-        if match uses with
-          | Bottom -> true | Top -> assert false
-          | Fields { fields; _ } ->
-              not (Field.Map.exists (fun field _ -> match field with Block _ | Is_int | Get_tag -> false | Code_of_closure | Apply _ | Value_slot _ | Function_slot _ -> true) fields)
-        then
-        let repr = repr_elt mk_field uses in
-        Block_representation (repr, !r + 1)
-        else
-          let mk_field () =
+        match set_of_closures_def with
+        | Not_a_set_of_closures ->
+      let r = ref ~-1 in
+      let mk_field_block () = 
+      incr r;
+        (!r, 
+         Flambda_primitive.(Block_access_kind.Values { tag = Unknown; size = Unknown; field_kind = Block_access_field_kind.Any_value }))
+      in
+            let uses = get_all_usages db (Code_id_or_name.Map.singleton code_id_or_name ()) in
+      let repr = repr_rec mk_field_block uses in
+            add_to_s (Block_representation (repr, !r + 1)) code_id_or_name
+        | Set_of_closures l ->
+         let mk_field_clos () =
             Value_slot.create (Compilation_unit.get_current_exn ())
               ~name:"unboxed_value_slot" Flambda_kind.With_subkind.any_value (* TODO *) 
-          in
-          let repr = repr_elt mk_field uses in
-          Closure_representation (repr,
-                                  Function_slot.create (Compilation_unit.get_current_exn ()) ~name:"unboxed_function_slot" Flambda_kind.With_subkind.any_value)
       in
-      Code_id_or_name.Set.iter
-        (fun c ->
-          changed_representation
-            := Code_id_or_name.Map.add c repr !changed_representation)
-        (match Code_id_or_name.Map.find_opt code_id_or_name dominated_by_allocation_points with None -> Code_id_or_name.Set.empty (*XXX check this*) | Some s -> s))
+            let uses = get_all_usages db (List.fold_left (fun acc (_, x) -> Code_id_or_name.Map.add x () acc) Code_id_or_name.Map.empty l) in
+      let repr = repr_rec mk_field_clos uses in
+      let fss = List.fold_left (fun acc (fs, _) ->
+        Function_slot.Map.add fs (Function_slot.create (Compilation_unit.get_current_exn ()) ~name:(Function_slot.name fs) Flambda_kind.With_subkind.any_value) acc) Function_slot.Map.empty l
+      in
+      List.iter (fun (fs, f) -> add_to_s (
+            Closure_representation (repr, fss, fs)) f) l
+    end)
     to_change_representation;
   if debug then Format.eprintf "@.TO_CHG: %a@."
     (Code_id_or_name.Map.print pp_changed_representation)
@@ -1774,10 +1818,10 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
     db;
     aliases;
     dual_graph;
-    (* unboxed_fields = !assigned;
-    changed_representation = !changed_representation *)
-    unboxed_fields = Code_id_or_name.Map.empty ;
-    changed_representation = Code_id_or_name.Map.empty
+    unboxed_fields = !assigned;
+    changed_representation = !changed_representation
+    (* unboxed_fields = Code_id_or_name.Map.empty ;
+    changed_representation = Code_id_or_name.Map.empty *)
   }
 
 let get_unboxed_fields uses cn =

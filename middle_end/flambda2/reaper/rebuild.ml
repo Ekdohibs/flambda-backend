@@ -981,7 +981,7 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
                     in
                     RE.create_let bp named ~body:hole)
                   (Dep_solver.Unboxed to_bind) arg hole
-                | Closure_representation (arg_fields, function_slot) ->
+                | Closure_representation (arg_fields, function_slots, current_function_slot) ->
                 let arg = Field.Map.find field arg_fields in
                 fold2_unboxed_subset
                   (fun var value_slot hole ->
@@ -991,7 +991,7 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
                     in
                     let named =
                           Named.create_prim
-                            (Flambda_primitive.Unary (Project_value_slot { value_slot; project_from = function_slot }, oarg)) dbg
+                            (Flambda_primitive.Unary (Project_value_slot { value_slot; project_from = Function_slot.Map.find current_function_slot function_slots }, oarg)) dbg
                     in
                     RE.create_let bp named ~body:hole)
                   (Dep_solver.Unboxed to_bind) arg hole
@@ -1054,12 +1054,11 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
                     dbg ) ->
                 let field = Field.Value_slot value_slot in
                 load_field field arg dbg
-              | Simple arg ->
+              | Prim (Unary (Project_function_slot _, arg), _) | Simple arg ->
                 bind_fields (Dep_solver.Unboxed to_bind)
                   (Dep_solver.Unboxed (get_simple_unboxable env arg))
                   hole
               | named ->
-                (* TODO project_value_slot *)
                 Format.printf "BOUM ? %a@." Named.print named;
                 assert false)
             | _ -> assert false)
@@ -1070,6 +1069,13 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
             (* TODO when this block is stored anywhere else, the subkind is no
                longer correct... we need to fix that somehow *)
             match let_.defining_expr with
+              | Named (Prim (Unary (Project_function_slot { move_from; move_to }, arg), dbg)) ->
+                let fields = Option.get (Dep_solver.get_changed_representation env.uses (Code_id_or_name.var (Bound_var.var bv))) in
+                let fss = match fields with Block_representation _ -> assert false | Closure_representation (_, fss, _) -> fss in
+                let named = Named.create_prim
+                    (Unary (Project_function_slot { move_to = Function_slot.Map.find move_to fss; move_from = Function_slot.Map.find move_from fss}, arg)) dbg
+                in
+                RE.create_let bp named ~body:hole
             | Named
                 (Prim
                   (Variadic (Make_block (_kind, _mut, alloc_mode), args), dbg))
@@ -1140,13 +1146,13 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
                        (Code_id_or_name.var (Bound_var.var bv))))
                    bvs ->
             (* TODO: handle the case with more than 1 closure + merge with unbox as we can sometimes unbox some but not all *)
-            assert (List.compare_length_with bvs 1 = 0);
+            (* assert (List.compare_length_with bvs 1 = 0); *)
             let bv = List.hd bvs in
             let repr = Option.get (Dep_solver.get_changed_representation env.uses (Code_id_or_name.var (Bound_var.var bv))) in
-            let fields, function_slot =
+            let fields, function_slots =
               match repr with
               | Block_representation _ -> assert false
-              | Closure_representation (fields, function_slot) -> fields, function_slot
+              | Closure_representation (fields, function_slots, _) -> fields, function_slots
             in
                 let alloc_mode, value_slots, fundecls =
                   match let_.defining_expr with
@@ -1164,7 +1170,7 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
                     match (f : Field.t) with
                       | Is_int | Get_tag | Block _ -> assert false
                       | Code_of_closure | Apply _ -> assert false
-                      | Function_slot _ -> failwith "todo"
+                      | Function_slot _ -> assert false 
                       | Value_slot value_slot ->
                       let arg = Value_slot.Map.find value_slot value_slots in
                       if simple_is_unboxable env arg
@@ -1184,8 +1190,11 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
                       
                   fields Value_slot.Map.empty
               in
-          let _, code_id = Function_slot.Lmap.get_singleton_exn (Function_declarations.funs_in_order fundecls) in 
-              let set_of_closures = (Set_of_closures.create alloc_mode (Function_declarations.create (Function_slot.Lmap.singleton function_slot code_id )) ~value_slots:mp) in
+              let new_fundecls =
+                Function_slot.Lmap.of_list (List.map (fun (fs, code_id) ->
+                    Function_slot.Map.find fs function_slots, code_id) (Function_slot.Lmap.bindings (Function_declarations.funs_in_order fundecls)))
+              in
+              let set_of_closures = (Set_of_closures.create alloc_mode (Function_declarations.create new_fundecls) ~value_slots:mp) in
             all_slot_offsets
               := Slot_offsets.add_set_of_closures !all_slot_offsets ~is_phantom:false
                    set_of_closures;

@@ -30,7 +30,7 @@ type changed_representation =
   | Block_representation of
       (int * Flambda_primitive.Block_access_kind.t) unboxed_fields Global_flow_graph.Field.Map.t * int
   | Closure_representation of
-      Value_slot.t unboxed_fields Global_flow_graph.Field.Map.t * Function_slot.t
+      Value_slot.t unboxed_fields Global_flow_graph.Field.Map.t * Function_slot.t Function_slot.Map.t * Function_slot.t
 
 (*
 type result =
