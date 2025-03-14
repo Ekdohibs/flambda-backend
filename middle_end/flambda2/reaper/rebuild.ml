@@ -718,7 +718,13 @@ and rebuild_function_params_and_body (kinds : Flambda_kind.t Name.Map.t)
     let params_decision =
       List.map2 (fun decision param ->
           match decision with
-          | Delete | Unbox _ -> decision
+          | Delete -> Delete
+          | Unbox _ -> Unbox (Option.get 
+
+                  (Dep_solver.get_unboxed_fields env.uses 
+                    (Code_id_or_name.var (Bound_parameter.var param)))
+
+                                )
           | Keep (_, kind) -> Keep (Bound_parameter.var param, kind)
         ) params_decision (Bound_parameters.to_list params)
     in
@@ -884,11 +890,14 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
             assert (
               List.for_all
                 (fun bv ->
+                   not (Dep_solver.has_use env.uses (Code_id_or_name.var (Bound_var.var bv))) ||
                      Option.is_some (Dep_solver.get_unboxed_fields env.uses
                        (Code_id_or_name.var (Bound_var.var bv))))
                 bvs);
             List.fold_left
               (fun hole bv ->
+                 if not (Dep_solver.has_use env.uses (Code_id_or_name.var (Bound_var.var bv))) then
+                   hole else
                 let to_bind =
                   Option.get (Dep_solver.get_unboxed_fields env.uses 
                     (Code_id_or_name.var (Bound_var.var bv)))
@@ -1154,6 +1163,11 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
               | Block_representation _ -> assert false
               | Closure_representation (fields, function_slots, _) -> fields, function_slots
             in
+  let code_is_used bv =
+    Dep_solver.field_used env.uses
+      (Code_id_or_name.var (Bound_var.var bv))
+      Code_of_closure
+  in
                 let alloc_mode, value_slots, fundecls =
                   match let_.defining_expr with
                   | Named (Set_of_closures _set) ->
@@ -1191,8 +1205,21 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
                   fields Value_slot.Map.empty
               in
               let new_fundecls =
-                Function_slot.Lmap.of_list (List.map (fun (fs, code_id) ->
-                    Function_slot.Map.find fs function_slots, code_id) (Function_slot.Lmap.bindings (Function_declarations.funs_in_order fundecls)))
+                Function_slot.Lmap.of_list (List.map2 (fun bv (fs, code_id) ->
+                    let code_id = if code_is_used bv then code_id else 
+                        match (code_id : Function_declarations.code_id_in_function_declaration) with
+  | Code_id code_id ->
+              let code_metadata = env.get_code_metadata code_id in
+              Function_declarations.Deleted
+                { function_slot_size =
+                    Code_metadata.function_slot_size code_metadata;
+                  dbg = Code_metadata.dbg code_metadata
+                }
+  | Deleted _ -> code_id
+
+
+                         in
+                    Function_slot.Map.find fs function_slots, code_id) bvs (Function_slot.Lmap.bindings (Function_declarations.funs_in_order fundecls)))
               in
               let set_of_closures = (Set_of_closures.create alloc_mode (Function_declarations.create new_fundecls) ~value_slots:mp) in
             all_slot_offsets

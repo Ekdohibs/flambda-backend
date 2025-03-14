@@ -1100,8 +1100,8 @@ let get_all_usages =
   let rs = [
     (let$ [x; y] = ["x"; "y"] in
      [ in_ x; usages_rel x y ] ==> out y);
-    (let$ [x; field; y] = ["x"; "field"; "y"] in
-     [ out x; used_fields_rel x field y; filter_field is_function_slot field ] ==> out y)
+    (let$ [x; field; y; z] = ["x"; "field"; "y"; "z"] in
+     [ out x; used_fields_rel x field y; filter_field is_function_slot field; usages_rel y z ] ==> out z)
   ] in
   fun db s ->
     let db = Datalog.set_table in_tbl s db in
@@ -1299,6 +1299,8 @@ let datalog_rules =
     (let$ [x] = ["x"] in [cannot_change_representation x] ==> cannot_unbox0 x);
     (let$ [x; field] = ["x"; "field"] in
      [field_of_constructor_is_used x field; filter_field field_cannot_be_destructured field] ==> cannot_unbox0 x);
+    (let$ [x; _source] = ["x"; "_source"] in
+     [sources_rel x _source; filter (fun [x] -> Code_id_or_name.pattern_match x ~symbol:(fun _ -> true) ~var:(fun _ -> false) ~code_id:(fun _ -> false)) [x]] ==> cannot_unbox0 x);
 
     (let$ [x] = ["x"] in [cannot_unbox0 x] ==> cannot_unbox x);
     (let$ [x; field; y] = ["x"; "field"; "y"] in
@@ -1767,8 +1769,9 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
             Field.Map.filter_map
               (fun field field_use ->
                  match field with
+                 | Function_slot _ -> assert false
                  | Code_of_closure | Apply _ -> None
-                 | Get_tag | Is_int | Block _ | Value_slot _ | Function_slot _ ->
+                 | Get_tag | Is_int | Block _ | Value_slot _ ->
                 Some (match field_use with
                 | None -> Not_unboxed (mk_field ())
                 | Some flow_to ->
