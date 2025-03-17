@@ -1575,6 +1575,15 @@ let can_unbox dual dual_graph graph ~dominated_by_allocation_points
                  graph target)
         edges)
     aliases
+(*
+let field_kind field =
+  match (field : Global_flow_graph.Field.t) with
+  | Block (_, kind) -> kind
+  | Value_slot vs -> Flambda_kind.With_subkind.kind (Value_slot.kind vs)
+  | Function_slot _ -> Flambda_kind.value
+  | Is_int | Get_tag -> Flambda_kind.naked_immediate
+  | Code_of_closure | Apply _ -> Misc.fatal_errorf "field_kind of %a" Field.print field
+*)
 
 let debug = Sys.getenv_opt "REAPERDBG" <> None
 let fixpoint (graph_new : Global_flow_graph.graph) =
