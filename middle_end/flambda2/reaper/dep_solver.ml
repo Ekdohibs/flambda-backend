@@ -1106,10 +1106,7 @@ let get_all_usages =
   fun db s ->
     let db = Datalog.set_table in_tbl s db in
     let db = Datalog.Schedule.run (Datalog.Schedule.saturate rs) db in
-    let r = Datalog.get_table out_tbl db in
-    Format.eprintf "IN = %a@.OUT = %a@."
-      (Code_id_or_name.Map.print Unit.print) s (Code_id_or_name.Map.print Unit.print) r;
-    r
+    Datalog.get_table out_tbl db
 
 let fieldc_map_to_field_map m =
   Global_flow_graph.FieldC.Map.fold (fun k r acc -> Field.Map.add (Field.decode k) r acc) m Field.Map.empty
@@ -1128,27 +1125,17 @@ let get_fields =
   ] in
   fun db s ->
     
-  let stats = Datalog.Schedule.create_stats () in
     let db = Datalog.set_table in_tbl s db in
-    let db = List.fold_left (fun db r -> Datalog.Schedule.(run ~stats (saturate [r])) db) db rs in
+    let db = List.fold_left (fun db r -> Datalog.Schedule.(run (saturate [r])) db) db rs in
     
-  Format.eprintf "%a@." Datalog.Schedule.print_stats stats;
-  Format.eprintf "DB IS:@.%a@." Datalog.print db;
-    Format.eprintf "OUT1 = %a@.OUT2 = %a@."
-      (FieldC.Map.print Unit.print) (Datalog.get_table out_tbl1 db)
-      (FieldC.Map.print (Code_id_or_name.Map.print Unit.print)) (Datalog.get_table out_tbl2 db);
-    let r = fieldc_map_to_field_map (
+    fieldc_map_to_field_map (
     FieldC.Map.merge (fun k x y ->
         match x, y with
         | None, None -> assert false
         | Some _, Some _ -> Misc.fatal_errorf "Got two results for field %a" Field.print (Field.decode k)
         | Some (), None -> Some None
         | None, Some m -> Some (Some m)
-      ) (Datalog.get_table out_tbl1 db) (Datalog.get_table out_tbl2 db)) in
-    Format.eprintf "INF = %a@.OUTF = %a@."
-      (Code_id_or_name.Map.print Unit.print) s
-      (Field.Map.print (Format.pp_print_option (Code_id_or_name.Map.print Unit.print))) r;
-    r
+      ) (Datalog.get_table out_tbl1 db) (Datalog.get_table out_tbl2 db))
 
 type set_of_closures_def =
   | Not_a_set_of_closures
