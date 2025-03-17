@@ -278,7 +278,8 @@ let get_simple_unboxable env simple =
 let field_kind : Field.t -> _ = function
   | Block (_, kind) -> kind
   | Value_slot vs -> Flambda_kind.With_subkind.kind (Value_slot.kind vs)
-  | Function_slot _ | Is_int | Get_tag -> Flambda_kind.value
+  | Function_slot _ -> Flambda_kind.value
+  | Is_int | Get_tag -> Flambda_kind.naked_immediate
   | (Code_of_closure | Apply _) as field ->
     Misc.fatal_errorf "[field_kind] for %a" Field.print field
 
@@ -412,6 +413,12 @@ let rewrite_named kinds env (named : Named.t) =
   | Prim (Unary (Project_value_slot { value_slot; _ }, arg), _dbg)
     when simple_is_unboxable env arg ->
     rewrite_field_access arg (Global_flow_graph.Field.Value_slot value_slot)
+  | Prim (Unary (Is_int { variant_only = true }, arg), _dbg)
+    when simple_is_unboxable env arg ->
+    rewrite_field_access arg (Global_flow_graph.Field.Is_int)
+  | Prim (Unary (Get_tag, arg), _dbg)
+    when simple_is_unboxable env arg ->
+    rewrite_field_access arg (Global_flow_graph.Field.Get_tag)
   | Prim (prim, dbg) ->
     let prim = Flambda_primitive.map_args (rewrite_simple kinds env) prim in
     Named.create_prim prim dbg
@@ -1087,7 +1094,7 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
                 RE.create_let bp named ~body:hole
             | Named
                 (Prim
-                  (Variadic (Make_block (_kind, _mut, alloc_mode), args), dbg))
+                  (Variadic (Make_block (kind, _mut, alloc_mode), args), dbg))
               ->
               let fields =
                 Option.get (Dep_solver.get_changed_representation env.uses
@@ -1114,8 +1121,32 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
                           Numeric_types.Int.Map.add ff (rewrite_simple kinds env arg) mp
                         | Dep_solver.Unboxed _ ->
                           Misc.fatal_errorf "trying to unbox simple")
-                    | Get_tag -> failwith "todo"
-                    | Is_int -> failwith "todo"
+                    | Get_tag ->
+    let tag = match kind with
+      | Values (tag, _) | Mixed (tag, _) ->
+          Tag.to_targetint_31_63 (Tag.Scannable.to_tag tag)
+      | Naked_floats -> Tag.to_targetint_31_63 (Tag.double_array_tag)
+    in
+                        (
+
+                        match uf with
+                        | Dep_solver.Not_unboxed (ff, _) ->
+                          Numeric_types.Int.Map.add ff (rewrite_simple kinds env (Simple.const_int tag)) mp
+                        | Dep_solver.Unboxed _ ->
+                          Misc.fatal_errorf "trying to unbox simple")
+
+                    | Is_int ->
+
+                        (
+
+                        match uf with
+                        | Dep_solver.Not_unboxed (ff, _) ->
+                          Numeric_types.Int.Map.add ff (rewrite_simple kinds env (Simple.const_one)) mp
+                        | Dep_solver.Unboxed _ ->
+                          Misc.fatal_errorf "trying to unbox simple")
+
+
+
                     | Value_slot _ | Function_slot _ | Code_of_closure | Apply _
                       ->
                       assert false)
