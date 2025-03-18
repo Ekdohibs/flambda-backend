@@ -131,12 +131,14 @@ module Datalog : sig
   end
 
   type atom
+
   type equality
+
   type filter
 
   type hypothesis =
     [ `Atom of atom
-    | `Not_atom of atom 
+    | `Not_atom of atom
     | `Not_equal of equality
     | `Filter of filter ]
 
@@ -159,7 +161,8 @@ module Datalog : sig
 
   val not_equal : 'k Term.t -> 'k Term.t -> [> `Not_equal of equality]
 
-  val filter : ('k Constant.hlist -> bool) -> 'k Term.hlist -> [> `Filter of filter]
+  val filter :
+    ('k Constant.hlist -> bool) -> 'k Term.hlist -> [> `Filter of filter]
 
   type database
 

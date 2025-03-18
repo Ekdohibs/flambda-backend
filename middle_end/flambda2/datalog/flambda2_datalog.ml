@@ -251,7 +251,7 @@ module Datalog = struct
 
   type hypothesis =
     [ `Atom of atom
-    | `Not_atom of atom 
+    | `Not_atom of atom
     | `Not_equal of equality
     | `Filter of filter ]
 

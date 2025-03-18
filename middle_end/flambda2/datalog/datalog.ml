@@ -168,7 +168,7 @@ let rec compile_terms : type a. a Term.hlist -> a Option_ref.hlist with_names =
   | term :: terms ->
     let { value; name } = compile_term term in
     let { values; names } = compile_terms terms in
-    { values = value :: values ; names = name :: names }
+    { values = value :: values; names = name :: names }
 
 let unless_atom id args k info =
   let refs = compile_terms args in
@@ -182,7 +182,9 @@ let unless_atom id args k info =
 let unless_eq arg1 arg2 k info =
   let ref1 = compile_term arg1 in
   let ref2 = compile_term arg2 in
-  let post_level = find_last_binding (Cursor.initial_actions info.context) [arg1; arg2] in
+  let post_level =
+    find_last_binding (Cursor.initial_actions info.context) [arg1; arg2]
+  in
   Cursor.add_action post_level (Cursor.unless_eq ref1 ref2);
   k info
 

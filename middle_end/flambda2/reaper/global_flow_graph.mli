@@ -132,7 +132,11 @@ val add_use_dep :
 val add_use : graph -> Code_id_or_name.t -> unit
 
 val add_propagate_dep :
-  graph -> if_used:Code_id_or_name.t -> to_:Code_id_or_name.t -> from:Name.t -> unit
+  graph ->
+  if_used:Code_id_or_name.t ->
+  to_:Code_id_or_name.t ->
+  from:Name.t ->
+  unit
 
 val add_constructor_dep :
   graph -> base:Code_id_or_name.t -> Field.t -> from:Code_id_or_name.t -> unit

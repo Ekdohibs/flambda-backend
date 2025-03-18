@@ -23,32 +23,29 @@ type 'a unboxed_fields =
   | Not_unboxed of 'a
   | Unboxed of 'a unboxed_fields Global_flow_graph.Field.Map.t
 
-type assigned =
-  Variable.t unboxed_fields Global_flow_graph.Field.Map.t
+type assigned = Variable.t unboxed_fields Global_flow_graph.Field.Map.t
 
 type changed_representation =
   | Block_representation of
-      (int * Flambda_primitive.Block_access_kind.t) unboxed_fields Global_flow_graph.Field.Map.t * int
+      (int * Flambda_primitive.Block_access_kind.t) unboxed_fields
+      Global_flow_graph.Field.Map.t
+      * int
   | Closure_representation of
-      Value_slot.t unboxed_fields Global_flow_graph.Field.Map.t * Function_slot.t Function_slot.Map.t * Function_slot.t
+      Value_slot.t unboxed_fields Global_flow_graph.Field.Map.t
+      * Function_slot.t Function_slot.Map.t
+      * Function_slot.t
 
-(*
-type result =
-  { uses : use_result;
-    aliases : alias_result;
-    dual_graph : Global_flow_graph.Dual.graph;
-    unboxed_fields : assigned Code_id_or_name.Map.t;
-    changed_representation :
-      changed_representation
-      Code_id_or_name.Map.t
-  }
-*)
+(* type result = { uses : use_result; aliases : alias_result; dual_graph :
+   Global_flow_graph.Dual.graph; unboxed_fields : assigned
+   Code_id_or_name.Map.t; changed_representation : changed_representation
+   Code_id_or_name.Map.t } *)
 
 val map_unboxed_fields : ('a -> 'b) -> 'a unboxed_fields -> 'b unboxed_fields
 
 val get_unboxed_fields : result -> Code_id_or_name.t -> assigned option
 
-val get_changed_representation : result -> Code_id_or_name.t -> changed_representation option
+val get_changed_representation :
+  result -> Code_id_or_name.t -> changed_representation option
 
 val has_use : result -> Code_id_or_name.t -> bool
 
