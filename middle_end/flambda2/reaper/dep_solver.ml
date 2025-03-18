@@ -1257,6 +1257,7 @@ type problematic_uses =
 
 let field_of_constructor_is_used = rel2 "field_of_constructor_is_used" Cols.[n; f]
 let cannot_change_representation0 = rel1 "cannot_change_representation0" Cols.[n]
+let cannot_change_representation1 = rel1 "cannot_change_representation1" Cols.[n]
 let cannot_change_representation = rel1 "cannot_change_representation" Cols.[n]
 let cannot_unbox0 = rel1 "cannot_unbox0" Cols.[n]
 let cannot_unbox = rel1 "cannot_unbox" Cols.[n]
@@ -1294,15 +1295,23 @@ let datalog_rules =
     (let$ [allocation_id] = ["allocation_id"] in
      [any_source_pred allocation_id] ==>
      cannot_change_representation0 allocation_id); 
-    (let$ [x] = ["x"] in [cannot_change_representation0 x] ==> cannot_change_representation x);
-    (let$ [x; field; y] = ["x"; "field"; "y"] in
-     [ constructor_rel x field y; filter_field is_function_slot field; cannot_change_representation0 x] ==> cannot_change_representation y);
+    
+    (let$ [x; _source] = ["x"; "_source"] in
+     [sources_rel x _source; filter (fun [x] -> Code_id_or_name.pattern_match x ~symbol:(fun _ -> true) ~var:(fun _ -> false) ~code_id:(fun _ -> false)) [x]] ==> cannot_change_representation0 x);
 
-    (let$ [x] = ["x"] in [cannot_change_representation x] ==> cannot_unbox0 x);
+    (let$ [x] = ["x"] in [cannot_change_representation0 x] ==> cannot_change_representation1 x);
+    (let$ [x; field; y] = ["x"; "field"; "y"] in
+     [ constructor_rel x field y; filter_field is_function_slot field; cannot_change_representation0 x] ==> cannot_change_representation1 y);
+
+
+    (let$ [x] = ["x"] in [cannot_change_representation1 x] ==> cannot_change_representation x);
+    (let$ [x; field; y] = ["x"; "field"; "y"] in
+     [ constructor_rel x field y; filter_field (fun (f : Field.t) -> match f with Block _ | Is_int | Get_tag -> true | Value_slot _ | Function_slot _ | Code_of_closure | Apply _ -> false) field ] ==> cannot_change_representation x);
+
+
+    (let$ [x] = ["x"] in [cannot_change_representation1 x] ==> cannot_unbox0 x);
     (let$ [x; field] = ["x"; "field"] in
      [field_of_constructor_is_used x field; filter_field field_cannot_be_destructured field] ==> cannot_unbox0 x);
-    (let$ [x; _source] = ["x"; "_source"] in
-     [sources_rel x _source; filter (fun [x] -> Code_id_or_name.pattern_match x ~symbol:(fun _ -> true) ~var:(fun _ -> false) ~code_id:(fun _ -> false)) [x]] ==> cannot_unbox0 x);
 
     (let$ [x] = ["x"] in [cannot_unbox0 x] ==> cannot_unbox x);
     (let$ [x; field; y] = ["x"; "field"; "y"] in
@@ -1689,9 +1698,9 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
     Hashtbl.fold
       (fun code_or_name _elt to_change_representation ->
          let b = not_chg code_or_name in
-         let chg = 
+         let chg = not b (* 
            can_change_representation ~for_destructuring_value:false aliases dual_graph
-                result code_or_name
+                result code_or_name *)
          in
          assert (b = not chg);
         if (not (Code_id_or_name.Set.mem code_or_name to_unbox)) && chg
