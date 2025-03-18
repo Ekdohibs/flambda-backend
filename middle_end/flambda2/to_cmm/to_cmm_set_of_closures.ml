@@ -256,7 +256,11 @@ end = struct
           let acc =
             P.int ~dbg closure_info :: P.term_of_symbol ~dbg code_symbol :: acc
           in
-          let acc = if size = 3 then P.int ~dbg 0n (* P.term_of_symbol ~dbg code_symbol *) :: acc else acc in
+          let acc =
+            if size = 3
+            then P.int ~dbg 0n (* P.term_of_symbol ~dbg code_symbol *) :: acc
+            else acc
+          in
           ( acc,
             rev_append_chunks ~for_static_sets
               [Cmm.Word_int; Cmm.Word_int]

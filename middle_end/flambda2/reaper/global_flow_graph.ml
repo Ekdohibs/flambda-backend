@@ -335,7 +335,7 @@ let create () =
     constructor_rel = Constructor_rel.empty;
     propagate_rel = Propagate_rel.empty;
     used_pred = Used_pred.empty;
-    local_field_pred = Local_field_pred.empty;
+    local_field_pred = Local_field_pred.empty
   }
 
 let add_graph_dep t k v =
@@ -355,14 +355,17 @@ let add_use_dep t ~to_ ~from =
 
 let encode_field t field =
   let r = Field.encode field in
-  begin
-    if false && match (field : Field.t) with
-    | Value_slot v -> Compilation_unit.is_current (Value_slot.get_compilation_unit v)
-    | Function_slot f -> Compilation_unit.is_current (Function_slot.get_compilation_unit f)
-    | Code_of_closure | Apply _ | Block _ | Is_int | Get_tag -> false
-    then
-      t.local_field_pred <- Local_field_pred.add_or_replace [r] () t.local_field_pred
-  end;
+  if false
+     &&
+     match (field : Field.t) with
+     | Value_slot v ->
+       Compilation_unit.is_current (Value_slot.get_compilation_unit v)
+     | Function_slot f ->
+       Compilation_unit.is_current (Function_slot.get_compilation_unit f)
+     | Code_of_closure | Apply _ | Block _ | Is_int | Get_tag -> false
+  then
+    t.local_field_pred
+      <- Local_field_pred.add_or_replace [r] () t.local_field_pred;
   r
 
 let add_constructor_dep t ~base relation ~from =
@@ -380,16 +383,11 @@ let add_accessor_dep t ~to_ relation ~base =
          () t.accessor_rel
 
 let add_propagate_dep t ~if_used ~to_ ~from =
-  add_graph_dep t
-    if_used
-    (Propagate { target = from; source = to_ });
-  add_graph_dep t to_
-    (Alias_if_def { target = from; if_defined = if_used });
+  add_graph_dep t if_used (Propagate { target = from; source = to_ });
+  add_graph_dep t to_ (Alias_if_def { target = from; if_defined = if_used });
   t.propagate_rel
     <- Propagate_rel.add_or_replace
-         [ if_used;
-           to_;
-           Code_id_or_name.name from ]
+         [if_used; to_; Code_id_or_name.name from]
          () t.propagate_rel
 
 let add_opaque_let_dependency t ~to_ ~from =
@@ -407,7 +405,6 @@ let add_opaque_let_dependency t ~to_ ~from =
 let add_use t (var : Code_id_or_name.t) =
   Hashtbl.replace t.used var ();
   t.used_pred <- Used_pred.add_or_replace [var] () t.used_pred
-
 
 module Dual = struct
   type edge =
