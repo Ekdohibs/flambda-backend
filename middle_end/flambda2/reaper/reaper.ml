@@ -55,6 +55,10 @@ let run ~cmx_loader ~all_code (unit : Flambda_unit.t) =
         Code_or_metadata.code_metadata (Exported_code.find_exn all_code code_id))
       holed
   in
+  (* Format.eprintf
+    "SO: %a@.FREE: %a@."
+    Slot_offsets.print slot_offsets
+    Name_occurrences.print free_names; *)
   (* Is this what we really want? This keeps all the code that has not been
      deleted by this pass to be exported in the cmx. It looks like this does the
      same thing as [Simplify], but on the other hand, we might not want to
