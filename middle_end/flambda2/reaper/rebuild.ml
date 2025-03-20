@@ -608,11 +608,12 @@ let function_params_and_body_free_names fpb =
       let f =
         Name_occurrences.remove_continuation f ~continuation:exn_continuation
       in
+      let o2l = function None -> [] | Some x -> [x] in
       List.fold_left
         (fun f var -> Name_occurrences.remove_var f ~var)
         f
-        (my_closure :: my_region :: my_ghost_region :: my_depth
-        :: Bound_parameters.vars params))
+        (o2l my_region @ o2l my_ghost_region
+        @ (my_closure :: my_depth :: Bound_parameters.vars params)))
 
 let rec rebuild_expr (kinds : Flambda_kind.t Name.Map.t) (env : env)
     (rev_expr : rev_expr) : RE.t =
