@@ -309,7 +309,7 @@ let create ?(calls = []) ?output context =
 
 let bind_table (Bind_table (id, handler)) database =
   let table = Table.Map.get id database in
-  handler.contents <- table;
+  handler := table;
   not (Trie.is_empty (Table.Id.is_trie id) table)
 
 let bind_table_list binders database =
