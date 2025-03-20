@@ -587,16 +587,32 @@ let change_set_of_closures_representation (env : env) kinds bound_to
 
 let function_params_and_body_free_names fpb =
   Function_params_and_body.pattern_match fpb
-    ~f:(fun ~return_continuation ~exn_continuation params ~body:_
-         ~my_closure ~is_my_closure_used:_ ~my_region ~my_ghost_region
-         ~my_depth ~free_names_of_body ->
-         let f = match free_names_of_body with Unknown -> assert false | Known f -> f in
-         let f = Name_occurrences.remove_continuation f ~continuation:return_continuation in
-         let f = Name_occurrences.remove_continuation f ~continuation:exn_continuation in
-         List.fold_left (fun f var ->
-             Name_occurrences.remove_var f ~var)
-             f (my_closure :: my_region :: my_ghost_region :: my_depth :: Bound_parameters.vars params)
-       )
+    ~f:(fun
+         ~return_continuation
+         ~exn_continuation
+         params
+         ~body:_
+         ~my_closure
+         ~is_my_closure_used:_
+         ~my_region
+         ~my_ghost_region
+         ~my_depth
+         ~free_names_of_body
+       ->
+      let f =
+        match free_names_of_body with Unknown -> assert false | Known f -> f
+      in
+      let f =
+        Name_occurrences.remove_continuation f ~continuation:return_continuation
+      in
+      let f =
+        Name_occurrences.remove_continuation f ~continuation:exn_continuation
+      in
+      List.fold_left
+        (fun f var -> Name_occurrences.remove_var f ~var)
+        f
+        (my_closure :: my_region :: my_ghost_region :: my_depth
+        :: Bound_parameters.vars params))
 
 let rec rebuild_expr (kinds : Flambda_kind.t Name.Map.t) (env : env)
     (rev_expr : rev_expr) : RE.t =
@@ -861,9 +877,8 @@ and rebuild_function_params_and_body (kinds : Flambda_kind.t Name.Map.t)
   match updating_calling_convention with
   | Not_changing_calling_convention ->
     let body = rebuild_expr kinds env body in
-    (* Format.eprintf "REBUILD %a FREE %a@."
-      Code_id.print code_id
-      Name_occurrences.print body.free_names; *)
+    (* Format.eprintf "REBUILD %a FREE %a@." Code_id.print code_id
+       Name_occurrences.print body.free_names; *)
     ( Function_params_and_body.create ~return_continuation ~exn_continuation
         params ~body:body.expr ~free_names_of_body:(Known body.free_names)
         ~my_closure ~my_region ~my_ghost_region ~my_depth,
@@ -926,9 +941,8 @@ and rebuild_function_params_and_body (kinds : Flambda_kind.t Name.Map.t)
         (Code_metadata.with_params_arity params_arity code_metadata)
     in
     let body = rebuild_expr kinds env body in
-    (* Format.eprintf "REBUILD %a FREE %a@."
-      Code_id.print code_id
-      Name_occurrences.print body.free_names; *)
+    (* Format.eprintf "REBUILD %a FREE %a@." Code_id.print code_id
+       Name_occurrences.print body.free_names; *)
     (* assert (List.exists Fun.id (Continuation.Map.find return_continuation
        env.cont_params_to_keep)); *)
     ( Function_params_and_body.create ~return_continuation ~exn_continuation
@@ -984,9 +998,14 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
                     if is_symbol_used env sym then Some arg else None
                   | Set_of_closures m ->
                     if Function_slot.Lmap.exists
-                        (fun _ sym -> assert (not (Option.is_some (Dep_solver.get_changed_representation env.uses (Code_id_or_name.symbol sym)))) ; is_symbol_used env sym
-
-                        )
+                         (fun _ sym ->
+                           assert (
+                             not
+                               (Option.is_some
+                                  (Dep_solver.get_changed_representation
+                                     env.uses
+                                     (Code_id_or_name.symbol sym))));
+                           is_symbol_used env sym)
                          m
                     then Some arg
                     else None)
@@ -1018,7 +1037,8 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
                 in
                 let code =
                   Code.create_with_metadata ~params_and_body ~code_metadata
-                    ~free_names_of_params_and_body:(function_params_and_body_free_names params_and_body)
+                    ~free_names_of_params_and_body:
+                      (function_params_and_body_free_names params_and_body)
                 in
                 all_code := Code_id.Map.add (Code.code_id code) code !all_code;
                 Static_const_or_code.create_code code
