@@ -80,9 +80,10 @@ let poison kind = Simple.const_int_of_kind kind poison_value
 let rewrite_simple kinds (env : env) simple =
   Simple.pattern_match simple
     ~name:(fun name ~coercion:_ ->
-      assert (
+        if not (
         Option.is_none
-          (Dep_solver.get_unboxed_fields env.uses (Code_id_or_name.name name)));
+          (Dep_solver.get_unboxed_fields env.uses (Code_id_or_name.name name))) then
+          Misc.fatal_errorf "UNBOXED?? %a@." Name.print name;
       if is_name_used env name
       then simple
       else

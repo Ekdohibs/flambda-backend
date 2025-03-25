@@ -355,8 +355,8 @@ let add_use_dep t ~to_ ~from =
 
 let encode_field t field =
   let r = Field.encode field in
-  if false
-     &&
+  if (* false
+     && *)
      match (field : Field.t) with
      | Value_slot v ->
        Compilation_unit.is_current (Value_slot.get_compilation_unit v)
