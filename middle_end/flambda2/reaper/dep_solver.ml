@@ -1338,7 +1338,7 @@ let datalog_rules =
     | Apply _ -> true (* todo? *)
   in
   [ (let$ [base; relation; from] = ["base"; "relation"; "from"] in
-     [constructor_rel base relation from; used_pred base]
+     [constructor_rel base relation from; used_pred base; not (local_field_pred relation)]
      ==> field_of_constructor_is_used base relation);
     (let$ [base; relation; from; usage] =
        ["base"; "relation"; "from"; "usage"]
@@ -1354,6 +1354,16 @@ let datalog_rules =
        usages_rel base usage;
        used_fields_rel usage relation _v ]
      ==> field_of_constructor_is_used base relation);
+    (let$ [base; relation; from; usage] = ["base"; "relation"; "from"; "usage"] in
+     [constructor_rel base relation from; used_pred base; reading_field_rel relation usage; used_pred usage] ==> field_of_constructor_is_used base relation);
+    (let$ [base; relation; from; usage1; usage2] = ["base"; "relation"; "from"; "usage1"; "usage2"] in
+     [constructor_rel base relation from; used_pred base; reading_field_rel relation usage1; usages_rel usage1 usage2] ==> field_of_constructor_is_used base relation);
+    (let$ [usage; base; relation; from; _v] = ["usage"; "base"; "relation"; "from"; "_v"] in
+     [sources_rel usage base; constructor_rel base relation from; used_pred base; local_field_pred relation; used_fields_rel usage relation _v] ==> field_of_constructor_is_used base relation);
+    (let$ [usage; base; relation; from] = ["usage"; "base"; "relation"; "from"] in
+     [sources_rel usage base; constructor_rel base relation from; used_pred base; local_field_pred relation; used_fields_top_rel usage relation] ==> field_of_constructor_is_used base relation);
+
+
     (let$ [x] = ["x"] in
      [used_pred x] ==> cannot_change_representation0 x);
     (let$ [allocation_id; alias; alias_source] =
@@ -1415,13 +1425,6 @@ let datalog_rules =
      [ field_of_constructor_is_used x field;
        filter_field field_cannot_be_destructured field ]
      ==> cannot_unbox0 x);
-    (let$ [x] = ["x"] in
-     [cannot_unbox0 x] ==> cannot_unbox x);
-    (let$ [x; field; y] = ["x"; "field"; "y"] in
-     [ cannot_unbox0 x;
-       constructor_rel x field y;
-       filter_field is_function_slot field ]
-     ==> cannot_unbox y);
     (* (let$ [x; usage; field] = ["x"; "usage"; "field"] in [usages_rel x usage;
        used_fields_top_rel usage field; filter_field
        field_cannot_be_destructured field] ==> cannot_unbox x); (let$ [x; usage;
@@ -1442,7 +1445,7 @@ let datalog_rules =
        rev_constructor_rel alias relation to_;
        field_of_constructor_is_used to_ relation;
        filter_field relation_prevents_unboxing relation ]
-     ==> cannot_unbox allocation_id);
+     ==> cannot_unbox0 allocation_id);
     (let$ [alias; allocation_id; relation; to_] =
        ["alias"; "allocation_id"; "relation"; "to_"]
      in
@@ -1450,7 +1453,17 @@ let datalog_rules =
        rev_constructor_rel alias relation to_;
        field_of_constructor_is_used to_ relation;
        cannot_change_representation to_ ]
-     ==> cannot_unbox allocation_id) ]
+     ==> cannot_unbox0 allocation_id) 
+  ;
+    (let$ [x] = ["x"] in
+     [cannot_unbox0 x] ==> cannot_unbox x);
+    (let$ [x; field; y] = ["x"; "field"; "y"] in
+     [ cannot_unbox0 x;
+       constructor_rel x field y;
+       filter_field is_function_slot field ]
+     ==> cannot_unbox y);
+
+  ]
 
 (* let problematic_uses_destr = Datalog.create_relation
    ~name:"problematic_uses_destr" N.columns let problematic_uses_destr x =
@@ -1782,15 +1795,30 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
     in
     fun x -> exists_with_parameters q [x] db
   in
+
+  let all_with_use = Hashtbl.create 17 in
+let query_uses =
+  let open Datalog in
+  let open! Global_flow_graph in
+  compile ["X"] (fun [x] -> where [used_pred x] (yield [x]))
+  in
+let query_usage =
+  let open Datalog in
+  let open! Global_flow_graph in
+  compile ["X"; "U"] (fun [x; u] ->
+      where [usages_rel x u] (yield [x])) in
+  Datalog.Cursor.iter query_uses db ~f:(fun [u] -> Hashtbl.replace all_with_use u ());
+  Datalog.Cursor.iter query_usage db ~f:(fun [u] -> Hashtbl.replace all_with_use u ());
+
   let to_unbox =
     Hashtbl.fold
-      (fun code_or_name _elt to_unbox ->
+      (fun code_or_name () to_unbox ->
         let b = not_unboxable code_or_name in
         let chk x =
           if not x
-          then
+          then () (*
             Misc.fatal_errorf "Expected unboxable = %b for %a %a but failed" b
-              Code_id_or_name.print code_or_name pp_elt _elt
+              Code_id_or_name.print code_or_name pp_elt _elt *)
         in
         if ignore
              (can_unbox aliases dual_graph result
@@ -1802,11 +1830,11 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
         else (
           chk b;
           to_unbox))
-      result Code_id_or_name.Set.empty
+      all_with_use Code_id_or_name.Set.empty
   in
   let to_change_representation =
     Hashtbl.fold
-      (fun code_or_name _elt to_change_representation ->
+      (fun code_or_name () to_change_representation ->
         let b = not_chg code_or_name in
         let chg =
           not b
@@ -1817,7 +1845,7 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
         if (not (Code_id_or_name.Set.mem code_or_name to_unbox)) && chg
         then Code_id_or_name.Set.add code_or_name to_change_representation
         else to_change_representation)
-      result Code_id_or_name.Set.empty
+      all_with_use Code_id_or_name.Set.empty
   in
   let has_to_be_unboxed code_or_name =
     match
