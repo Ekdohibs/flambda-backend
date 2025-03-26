@@ -1424,6 +1424,21 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
               (Named.create_set_of_closures set_of_closures)
               ~body:hole
           | _ ->
+              match[@ocaml.warning "-4"] defining_expr with
+  | Prim (Variadic (Make_block (block_kind, _mutability, _) as mb, fields), dbg) ->
+    let _tag, block_shape = Flambda_primitive.Block_kind.to_shape block_kind in
+    let bound_name = match bp with Singleton v -> Code_id_or_name.var (Bound_var.var v) | Set_of_closures _ | Static _ -> assert false in
+    let fields = List.mapi
+      (fun i field ->
+        let kind = Flambda_kind.Block_shape.element_kind block_shape i in
+        let f = Global_flow_graph.Field.Block (i, kind) in
+        if Dep_solver.field_used env.uses bound_name f then
+          rewrite_simple kinds env field
+        else
+          poison kind)
+      fields in
+    RE.create_let bp (Named.create_prim (Variadic (mb, fields)) dbg) ~body:hole
+              | _ ->
             let defining_expr = rewrite_named kinds env defining_expr in
             RE.create_let bp defining_expr ~body:hole
         end
