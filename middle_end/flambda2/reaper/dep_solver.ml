@@ -1990,7 +1990,7 @@ let query_usage =
             Value_slot.create
               (Compilation_unit.get_current_exn ())
               ~name:"unboxed_value_slot"
-              Flambda_kind.With_subkind.any_value (* TODO *)
+              Flambda_kind.value (* TODO *)
           in
           let uses =
             get_all_usages db
@@ -2006,7 +2006,7 @@ let query_usage =
                   (Function_slot.create
                      (Compilation_unit.get_current_exn ())
                      ~name:(Function_slot.name fs)
-                     Flambda_kind.With_subkind.any_value)
+                     Flambda_kind.value)
                   acc)
               Function_slot.Map.empty l
           in

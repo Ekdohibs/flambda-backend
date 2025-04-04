@@ -296,7 +296,7 @@ let get_simple_changed_repr env simple =
 
 let field_kind : Field.t -> _ = function
   | Block (_, kind) -> kind
-  | Value_slot vs -> Flambda_kind.With_subkind.kind (Value_slot.kind vs)
+  | Value_slot vs -> Value_slot.kind vs
   | Function_slot _ -> Flambda_kind.value
   | Is_int | Get_tag -> Flambda_kind.naked_immediate
   | (Code_of_closure | Apply _) as field ->
