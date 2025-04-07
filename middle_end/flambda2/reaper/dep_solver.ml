@@ -1045,6 +1045,14 @@ let query_used_field =
   compile ["X"; "U"; "F"; "y"] (fun [x; u; f; y] ->
       where [usages_rel x u; used_fields_rel u f y] (yield [x; f; y]))
 
+let field_kind : Field.t -> _ = function
+  | Block (_, kind) -> kind
+  | Value_slot vs -> Value_slot.kind vs
+  | Function_slot _ -> Flambda_kind.value
+  | Is_int | Get_tag -> Flambda_kind.naked_immediate
+  | (Code_of_closure | Apply _) as field ->
+    Misc.fatal_errorf "[field_kind] for %a" Field.print field
+
 let _db_to_uses db =
   (* Format.eprintf "%a@." Database.print_database db; *)
   let open Datalog in
@@ -1367,6 +1375,7 @@ let datalog_rules =
      [sources_rel usage base; constructor_rel base relation from; used_pred base; local_field_pred relation; used_fields_top_rel usage relation] ==> field_of_constructor_is_used base relation);
 
 
+    (* CR ncourant: even if used, representation could be changed if it only has local fields *)
     (let$ [x] = ["x"] in
      [used_pred x] ==> cannot_change_representation0 x);
     (let$ [allocation_id; alias; alias_source] =
@@ -1779,7 +1788,7 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
   let stats = Datalog.Schedule.create_stats () in
   let db = Datalog.Schedule.run ~stats datalog_schedule datalog in
   let t2 = Sys.time () in
-  Format.eprintf "EXISTING: %f, DATALOG: %f, SPEEDUP: %f@." (t1 -. t0)
+  if debug then Format.eprintf "EXISTING: %f, DATALOG: %f, SPEEDUP: %f@." (t1 -. t0)
     (t2 -. t1')
     ((t1 -. t0) /. (t2 -. t1'));
   let db =
@@ -1907,7 +1916,7 @@ let query_usage =
   in
   Code_id_or_name.Set.iter
     (fun code_or_name ->
-      Format.eprintf "%a@." Code_id_or_name.print code_or_name;
+      (* Format.eprintf "%a@." Code_id_or_name.print code_or_name; *)
       let to_patch =
         match
           Code_id_or_name.Map.find_opt code_or_name
@@ -1999,7 +2008,7 @@ let query_usage =
               | Get_tag | Is_int | Block _ | Value_slot _ ->
                 Some
                   (match field_use with
-                  | None -> Not_unboxed (mk_field ())
+                  | None -> Not_unboxed (mk_field (field_kind field))
                   | Some flow_to ->
                     if Code_id_or_name.Map.is_empty flow_to
                     then Misc.fatal_errorf "Empty set in [flow_to]";
@@ -2015,13 +2024,14 @@ let query_usage =
                         "Field %a of %a flows to both unboxed and non-unboxed \
                          variables"
                         Field.print field Code_id_or_name.print code_id_or_name
-                    else Not_unboxed (mk_field ())))
+                    else Not_unboxed (mk_field (field_kind field))))
             fields
         in
         match set_of_closures_def with
         | Not_a_set_of_closures ->
           let r = ref ~-1 in
-          let mk_field_block () =
+          let mk_field_block _field_kind =
+            (* XXX fixme, disabled for now *)
             incr r;
             ( !r,
               Flambda_primitive.(
@@ -2037,11 +2047,11 @@ let query_usage =
           let repr = repr_rec mk_field_block uses in
           add_to_s (Block_representation (repr, !r + 1)) code_id_or_name
         | Set_of_closures l ->
-          let mk_field_clos () =
+          let mk_field_clos field_kind =
             Value_slot.create
               (Compilation_unit.get_current_exn ())
               ~name:"unboxed_value_slot"
-              Flambda_kind.value (* TODO *)
+              field_kind
           in
           let uses =
             get_all_usages db
