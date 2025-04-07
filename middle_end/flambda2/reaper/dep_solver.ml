@@ -1212,6 +1212,8 @@ let used_pred_query =
   let open! Global_flow_graph in
   mk_exists_query ["X"] [] (fun [x] [] -> [used_pred x])
 
+let is_top db x = exists_with_parameters used_pred_query [x] db
+
 let has_use, field_used =
   let open! Global_flow_graph in
   let usages_query =
@@ -1268,6 +1270,7 @@ let print_color { db; _ } v =
   then "#f1c40f"
   else "white"
 
+let real_has_use = has_use
 let has_use uses v =
   let old_is_used = Hashtbl.mem uses.uses v in
   let new_is_used = has_use uses.db v in
@@ -1706,6 +1709,54 @@ let can_unbox dual dual_graph graph ~dominated_by_allocation_points
    (Value_slot.kind vs) | Function_slot _ -> Flambda_kind.value | Is_int |
    Get_tag -> Flambda_kind.naked_immediate | Code_of_closure | Apply _ ->
    Misc.fatal_errorf "field_kind of %a" Field.print field *)
+
+  let[@inline] erase kind =
+    Flambda_kind.With_subkind.create
+      (Flambda_kind.With_subkind.kind kind)
+      Flambda_kind.With_subkind.Non_null_value_subkind.Anything
+      (Flambda_kind.With_subkind.nullable kind)
+
+let rec rewrite_kind_with_subkind_not_top_not_bottom db flow_to kind =
+  match Flambda_kind.With_subkind.non_null_value_subkind kind with
+  | Anything -> kind
+  | Tagged_immediate -> kind (* Always correct, since poison is a tagged immediate *)
+  | Boxed_float32 | Boxed_float | Boxed_int32 | Boxed_int64 | Boxed_nativeint
+  | Boxed_vec128 | Float_block _ | Float_array | Immediate_array | Value_array
+  | Generic_array | Unboxed_float32_array | Unboxed_int32_array | Unboxed_int64_array
+  | Unboxed_nativeint_array | Unboxed_vec128_array | Unboxed_product_array ->
+      (* For all these subkinds, we don't track fields (for now). Thus, being in this
+         case without being top or bottom means that we never use this particular value,
+         but that it syntactically looks like it could be used. We probably could keep
+         the subkind info, but as this value should not be used, it is best to delete it. *)
+      erase kind
+  | Variant { consts; non_consts } ->
+      (* CR ncourant: we should make sure poison is in the consts! *)
+      let usages = get_all_usages db flow_to in
+      let fields = get_fields db usages in
+      let non_consts = Tag.Scannable.Map.map (fun (shape, kinds) ->
+        let kinds = List.mapi (fun i kind ->
+          let field = Global_flow_graph.Field.Block (i, Flambda_kind.With_subkind.kind kind) in
+          match Field.Map.find_opt field fields with
+          | None -> (* maybe poison *) erase kind
+          | Some None -> (* top *) kind
+          | Some (Some flow_to) ->
+              rewrite_kind_with_subkind_not_top_not_bottom db flow_to kind
+            ) kinds in
+        shape, kinds
+        ) non_consts in
+      Flambda_kind.With_subkind.create
+        Flambda_kind.value
+        (Flambda_kind.With_subkind.Non_null_value_subkind.Variant {
+          consts; non_consts
+        }) (Flambda_kind.With_subkind.nullable kind)
+
+let rewrite_kind_with_subkind uses var kind =
+  let db = uses.db in
+  let var = Code_id_or_name.name var in
+  if is_top db var then kind
+  else if not (real_has_use db var) then erase kind
+  else rewrite_kind_with_subkind_not_top_not_bottom db
+      (Code_id_or_name.Map.singleton var ()) kind
 
 let debug = Sys.getenv_opt "REAPERDBG" <> None
 
