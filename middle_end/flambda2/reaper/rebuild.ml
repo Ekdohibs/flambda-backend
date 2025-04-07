@@ -1476,7 +1476,13 @@ with_subkinds subkinds
     | Static _ -> default ()
     | Singleton v ->
       let v = Bound_var.var v in
-      if is_var_used env v then default () else erase ())
+      (* CR ncourant: we should probably properly track regions *)
+      let is_begin_region =
+        match[@ocaml.warning "-4"] let_.defining_expr with
+        | Named (Prim (Variadic (Begin_region _, _), _)) -> true
+        | _ -> false
+      in
+      if is_begin_region || is_var_used env v then default () else erase ())
   | Let_cont { cont; parent; handler } ->
     let { bound_parameters = _; expr; is_exn_handler; is_cold } = handler in
     let parameters_to_keep =
