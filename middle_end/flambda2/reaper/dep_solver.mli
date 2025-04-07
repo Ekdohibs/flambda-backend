@@ -54,3 +54,5 @@ val field_used :
 
 (** Color of node when producing the graph as a .dot *)
 val print_color : result -> Code_id_or_name.t -> string
+
+val rewrite_kind_with_subkind : result -> Name.t -> Flambda_kind.With_subkind.t -> Flambda_kind.With_subkind.t

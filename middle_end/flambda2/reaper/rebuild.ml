@@ -1425,9 +1425,34 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
               ~body:hole
           | _ ->
               match[@ocaml.warning "-4"] defining_expr with
-  | Prim (Variadic (Make_block (block_kind, _mutability, _) as mb, fields), dbg) ->
+  | Prim (Variadic (Make_block (block_kind, mutability, alloc_mode), fields), dbg) ->
+    let bound_name = match bp with Singleton v -> Name.var (Bound_var.var v) | Set_of_closures _ | Static _ -> assert false in
     let _tag, block_shape = Flambda_primitive.Block_kind.to_shape block_kind in
-    let bound_name = match bp with Singleton v -> Code_id_or_name.var (Bound_var.var v) | Set_of_closures _ | Static _ -> assert false in
+    let block_kind = match block_kind with
+      | Mixed _ | Naked_floats -> block_kind
+      | Values (tag, subkinds) ->
+          let ks = Flambda_kind.With_subkind.create
+                     Flambda_kind.value
+                     (Flambda_kind.With_subkind.Non_null_value_subkind.Variant { consts = Targetint_31_63.Set.empty ;  non_consts = Tag.Scannable.Map.singleton tag (block_shape, subkinds) })
+                     Flambda_kind.With_subkind.Nullable.Non_nullable
+          in
+          let ks = Dep_solver.rewrite_kind_with_subkind env.uses bound_name ks in
+          let[@local] with_subkinds subkinds =
+            Flambda_primitive.Block_kind.Values (tag, subkinds)
+          in
+          let[@local] default () =
+with_subkinds (List.map (fun ks ->
+                Flambda_kind.With_subkind.erase_subkind ks) subkinds)
+          in
+          match Flambda_kind.With_subkind.non_null_value_subkind ks with
+          | Variant { consts = _; non_consts } ->
+              (match Tag.Scannable.Map.get_singleton non_consts with
+               | Some (_, (_, subkinds)) ->
+with_subkinds subkinds
+               | None -> default ())
+          | _ -> default ()
+    in
+    let bound_name = Code_id_or_name.name bound_name in
     let fields = List.mapi
       (fun i field ->
         let kind = Flambda_kind.Block_shape.element_kind block_shape i in
@@ -1437,7 +1462,7 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
         else
           poison kind)
       fields in
-    RE.create_let bp (Named.create_prim (Variadic (mb, fields)) dbg) ~body:hole
+    RE.create_let bp (Named.create_prim (Variadic (Make_block (block_kind, mutability, alloc_mode), fields)) dbg) ~body:hole
               | _ ->
             let defining_expr = rewrite_named kinds env defining_expr in
             RE.create_let bp defining_expr ~body:hole
@@ -1591,6 +1616,7 @@ let rebuild ~(code_deps : Traverse_acc.code_dep Code_id.Map.t)
                 let is_var_used =
                   Dep_solver.has_use solved_dep (Code_id_or_name.var v)
                 in
+                let kind = Dep_solver.rewrite_kind_with_subkind solved_dep (Name.var v) kind in
                 (* TODO: fix this, needs the mapping between code ids of
                    functions and their return continuations *)
                 if true || is_var_used then Keep (v, kind) else Delete
@@ -1615,7 +1641,7 @@ let rebuild ~(code_deps : Traverse_acc.code_dep Code_id.Map.t)
          ||
          let info = Continuation.Map.find cont continuation_info in
          info.is_exn_handler && Variable.equal param (List.hd info.params)
-      then Keep (param, kind)
+      then Keep (param, Dep_solver.rewrite_kind_with_subkind solved_dep (Name.var param) kind)
       else Delete
     | Some fields -> Unbox fields
   in
