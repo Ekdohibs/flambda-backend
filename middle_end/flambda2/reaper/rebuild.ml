@@ -118,42 +118,46 @@ let rewrite_simple_with_debuginfo kinds env (simple : Simple.With_debuginfo.t) =
     (rewrite_simple kinds env (Simple.With_debuginfo.simple simple))
     (Simple.With_debuginfo.dbg simple)
 
+let do_not_change_set_of_closures_representation env kinds
+    ({ function_decls; value_slots; alloc_mode } : rev_set_of_closures) =
+  (* TODO: merge with [change_set_of_closures_representation] *)
+  let function_decls =
+    let module FD = Function_declarations in
+    FD.create
+      (Function_slot.Lmap.mapi
+         (fun _slot (code_id : FD.code_id_in_function_declaration) :
+              FD.code_id_in_function_declaration ->
+           match code_id with
+           | Deleted _ -> code_id
+           | Code_id code_id ->
+             if is_code_id_used env code_id
+             then Code_id code_id
+             else
+               let code_metadata = env.get_code_metadata code_id in
+               Deleted
+                 { function_slot_size =
+                     Code_metadata.function_slot_size code_metadata;
+                   dbg = Code_metadata.dbg code_metadata
+                 })
+         (FD.funs_in_order function_decls))
+  in
+  let set_of_closures =
+    Set_of_closures.create
+      ~value_slots:(Value_slot.Map.map (rewrite_simple kinds env) value_slots)
+      alloc_mode function_decls
+  in
+  all_slot_offsets
+    := Slot_offsets.add_set_of_closures !all_slot_offsets ~is_phantom:false
+         set_of_closures;
+  set_of_closures
+
 let rewrite_static_const kinds (env : env) (sc : Static_const.t) =
   match sc with
-  | Set_of_closures sc ->
-    let function_decls = Set_of_closures.function_decls sc in
-    let function_decls =
-      let module FD = Function_declarations in
-      FD.create
-        (Function_slot.Lmap.mapi
-           (fun _slot (code_id : FD.code_id_in_function_declaration) :
-                FD.code_id_in_function_declaration ->
-             match code_id with
-             | Deleted _ -> code_id
-             | Code_id code_id ->
-               if is_code_id_used env code_id
-               then Code_id code_id
-               else
-                 let code_metadata = env.get_code_metadata code_id in
-                 Deleted
-                   { function_slot_size =
-                       Code_metadata.function_slot_size code_metadata;
-                     dbg = Code_metadata.dbg code_metadata
-                   })
-           (FD.funs_in_order function_decls))
-    in
-    let set_of_closures =
-      Set_of_closures.create
-        ~value_slots:
-          (Value_slot.Map.map (rewrite_simple kinds env)
-             (Set_of_closures.value_slots sc))
-        (Set_of_closures.alloc_mode sc)
-        function_decls
-    in
-    all_slot_offsets
-      := Slot_offsets.add_set_of_closures !all_slot_offsets ~is_phantom:false
-           set_of_closures;
-    Static_const.set_of_closures set_of_closures
+  | Set_of_closures _ ->
+    Misc.fatal_errorf
+      "Set_of_closures is not permitted in conjunction with Other in the \
+       Static_const case:@ %a"
+      Static_const.print sc
   | Block (tag, mut, shape, fields) ->
     let fields = List.map (rewrite_simple_with_debuginfo kinds env) fields in
     Static_const.block tag mut shape fields
@@ -1051,9 +1055,24 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
                   |> Bound_static.symbols_being_defined |> Symbol.Set.elements
                   |> List.map Name.symbol
                 in
-                set_of_closures
-                |> change_set_of_closures_representation env kinds bound_to
-                |> Static_const.set_of_closures
+                let need_to_change_repr =
+                  match bound_to with
+                  | bound_to :: _ ->
+                    Dep_solver.get_changed_representation env.uses
+                      (Code_id_or_name.name bound_to)
+                    |> Option.is_some
+                  | [] -> Misc.fatal_error "Empty set of closures"
+                in
+                let set_of_closures =
+                  if need_to_change_repr
+                  then
+                    change_set_of_closures_representation env kinds bound_to
+                      set_of_closures
+                  else
+                    do_not_change_set_of_closures_representation env kinds
+                      set_of_closures
+                in
+                Static_const.set_of_closures set_of_closures
                 |> Static_const_or_code.create_static_const
               | Static_const (Other static_const) -> (
                 match static_const with
