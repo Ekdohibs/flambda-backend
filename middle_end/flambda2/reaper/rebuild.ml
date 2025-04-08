@@ -80,10 +80,11 @@ let poison kind = Simple.const_int_of_kind kind poison_value
 let rewrite_simple kinds (env : env) simple =
   Simple.pattern_match simple
     ~name:(fun name ~coercion:_ ->
-        if not (
-        Option.is_none
-          (Dep_solver.get_unboxed_fields env.uses (Code_id_or_name.name name))) then
-          Misc.fatal_errorf "UNBOXED?? %a@." Name.print name;
+      if not
+           (Option.is_none
+              (Dep_solver.get_unboxed_fields env.uses
+                 (Code_id_or_name.name name)))
+      then Misc.fatal_errorf "UNBOXED?? %a@." Name.print name;
       if is_name_used env name
       then simple
       else
@@ -1044,8 +1045,31 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
                 in
                 all_code := Code_id.Map.add (Code.code_id code) code !all_code;
                 Static_const_or_code.create_code code
-              | Static_const static_const ->
-                Static_const_or_code.create_static_const static_const
+              | Static_const (Set_of_closures set_of_closures) ->
+                let bound_to =
+                  bound_static |> Bound_static.create
+                  |> Bound_static.symbols_being_defined |> Symbol.Set.elements
+                  |> List.map Name.symbol
+                in
+                set_of_closures
+                |> change_set_of_closures_representation env kinds bound_to
+                |> Static_const.set_of_closures
+                |> Static_const_or_code.create_static_const
+              | Static_const (Other static_const) -> (
+                match static_const with
+                | Block _ | Boxed_float32 _ | Boxed_float _ | Boxed_int32 _
+                | Boxed_int64 _ | Boxed_nativeint _ | Boxed_vec128 _
+                | Immutable_float_block _ | Immutable_float_array _
+                | Immutable_float32_array _ | Immutable_int32_array _
+                | Immutable_int64_array _ | Immutable_nativeint_array _
+                | Immutable_vec128_array _ | Immutable_value_array _
+                | Empty_array _ | Mutable_string _ | Immutable_string _ ->
+                  Static_const_or_code.create_static_const static_const
+                | Set_of_closures _ ->
+                  Misc.fatal_errorf
+                    "Set_of_closures is not permitted in conjunction with \
+                     Other in the Static_const case:@ %a"
+                    Static_const.print static_const)
             in
             let group =
               Static_const_group.create (List.map static_const_or_code group)
@@ -1230,8 +1254,12 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
                         else Either.Left arg
                       | Is_int -> Either.Left Simple.untagged_const_false
                       | Get_tag ->
-                          let tag, _ = Flambda_primitive.Block_kind.to_shape kind in
-                          Either.Left (Simple.untagged_const_int (Tag.to_targetint_31_63 tag))
+                        let tag, _ =
+                          Flambda_primitive.Block_kind.to_shape kind
+                        in
+                        Either.Left
+                          (Simple.untagged_const_int
+                             (Tag.to_targetint_31_63 tag))
                       | Value_slot _ | Function_slot _ | Code_of_closure
                       | Apply _ ->
                         assert false
@@ -1423,49 +1451,75 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
             RE.create_let bp
               (Named.create_set_of_closures set_of_closures)
               ~body:hole
-          | _ ->
-              match[@ocaml.warning "-4"] defining_expr with
-  | Prim (Variadic (Make_block (block_kind, mutability, alloc_mode), fields), dbg) ->
-    let bound_name = match bp with Singleton v -> Name.var (Bound_var.var v) | Set_of_closures _ | Static _ -> assert false in
-    let _tag, block_shape = Flambda_primitive.Block_kind.to_shape block_kind in
-    let block_kind = match block_kind with
-      | Mixed _ | Naked_floats -> block_kind
-      | Values (tag, subkinds) ->
-          let ks = Flambda_kind.With_subkind.create
-                     Flambda_kind.value
-                     (Flambda_kind.With_subkind.Non_null_value_subkind.Variant { consts = Targetint_31_63.Set.empty ;  non_consts = Tag.Scannable.Map.singleton tag (block_shape, subkinds) })
-                     Flambda_kind.With_subkind.Nullable.Non_nullable
-          in
-          let ks = Dep_solver.rewrite_kind_with_subkind env.uses bound_name ks in
-          let[@local] with_subkinds subkinds =
-            Flambda_primitive.Block_kind.Values (tag, subkinds)
-          in
-          let[@local] default () =
-with_subkinds (List.map (fun ks ->
-                Flambda_kind.With_subkind.erase_subkind ks) subkinds)
-          in
-          match Flambda_kind.With_subkind.non_null_value_subkind ks with
-          | Variant { consts = _; non_consts } ->
-              (match Tag.Scannable.Map.get_singleton non_consts with
-               | Some (_, (_, subkinds)) ->
-with_subkinds subkinds
-               | None -> default ())
-          | _ -> default ()
-    in
-    let bound_name = Code_id_or_name.name bound_name in
-    let fields = List.mapi
-      (fun i field ->
-        let kind = Flambda_kind.Block_shape.element_kind block_shape i in
-        let f = Global_flow_graph.Field.Block (i, kind) in
-        if Dep_solver.field_used env.uses bound_name f then
-          rewrite_simple kinds env field
-        else
-          poison kind)
-      fields in
-    RE.create_let bp (Named.create_prim (Variadic (Make_block (block_kind, mutability, alloc_mode), fields)) dbg) ~body:hole
-              | _ ->
-            let defining_expr = rewrite_named kinds env defining_expr in
-            RE.create_let bp defining_expr ~body:hole
+          | _ -> (
+            match[@ocaml.warning "-4"] defining_expr with
+            | Prim
+                ( Variadic
+                    (Make_block (block_kind, mutability, alloc_mode), fields),
+                  dbg ) ->
+              let bound_name =
+                match bp with
+                | Singleton v -> Name.var (Bound_var.var v)
+                | Set_of_closures _ | Static _ -> assert false
+              in
+              let _tag, block_shape =
+                Flambda_primitive.Block_kind.to_shape block_kind
+              in
+              let block_kind =
+                match block_kind with
+                | Mixed _ | Naked_floats -> block_kind
+                | Values (tag, subkinds) -> (
+                  let ks =
+                    Flambda_kind.With_subkind.create Flambda_kind.value
+                      (Flambda_kind.With_subkind.Non_null_value_subkind.Variant
+                         { consts = Targetint_31_63.Set.empty;
+                           non_consts =
+                             Tag.Scannable.Map.singleton tag
+                               (block_shape, subkinds)
+                         })
+                      Flambda_kind.With_subkind.Nullable.Non_nullable
+                  in
+                  let ks =
+                    Dep_solver.rewrite_kind_with_subkind env.uses bound_name ks
+                  in
+                  let[@local] with_subkinds subkinds =
+                    Flambda_primitive.Block_kind.Values (tag, subkinds)
+                  in
+                  let[@local] default () =
+                    with_subkinds
+                      (List.map
+                         (fun ks -> Flambda_kind.With_subkind.erase_subkind ks)
+                         subkinds)
+                  in
+                  match Flambda_kind.With_subkind.non_null_value_subkind ks with
+                  | Variant { consts = _; non_consts } -> (
+                    match Tag.Scannable.Map.get_singleton non_consts with
+                    | Some (_, (_, subkinds)) -> with_subkinds subkinds
+                    | None -> default ())
+                  | _ -> default ())
+              in
+              let bound_name = Code_id_or_name.name bound_name in
+              let fields =
+                List.mapi
+                  (fun i field ->
+                    let kind =
+                      Flambda_kind.Block_shape.element_kind block_shape i
+                    in
+                    let f = Global_flow_graph.Field.Block (i, kind) in
+                    if Dep_solver.field_used env.uses bound_name f
+                    then rewrite_simple kinds env field
+                    else poison kind)
+                  fields
+              in
+              RE.create_let bp
+                (Named.create_prim
+                   (Variadic
+                      (Make_block (block_kind, mutability, alloc_mode), fields))
+                   dbg)
+                ~body:hole
+            | _ ->
+              let defining_expr = rewrite_named kinds env defining_expr in
+              RE.create_let bp defining_expr ~body:hole)
         end
         [@ocaml.warning "-4"]
       in
@@ -1622,7 +1676,10 @@ let rebuild ~(code_deps : Traverse_acc.code_dep Code_id.Map.t)
                 let is_var_used =
                   Dep_solver.has_use solved_dep (Code_id_or_name.var v)
                 in
-                let kind = Dep_solver.rewrite_kind_with_subkind solved_dep (Name.var v) kind in
+                let kind =
+                  Dep_solver.rewrite_kind_with_subkind solved_dep (Name.var v)
+                    kind
+                in
                 (* TODO: fix this, needs the mapping between code ids of
                    functions and their return continuations *)
                 if true || is_var_used then Keep (v, kind) else Delete
@@ -1647,7 +1704,11 @@ let rebuild ~(code_deps : Traverse_acc.code_dep Code_id.Map.t)
          ||
          let info = Continuation.Map.find cont continuation_info in
          info.is_exn_handler && Variable.equal param (List.hd info.params)
-      then Keep (param, Dep_solver.rewrite_kind_with_subkind solved_dep (Name.var param) kind)
+      then
+        Keep
+          ( param,
+            Dep_solver.rewrite_kind_with_subkind solved_dep (Name.var param)
+              kind )
       else Delete
     | Some fields -> Unbox fields
   in
