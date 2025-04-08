@@ -84,8 +84,8 @@ let rewrite_simple kinds (env : env) simple =
            (Option.is_none
               (Dep_solver.get_unboxed_fields env.uses
                  (Code_id_or_name.name name)))
-      then Misc.fatal_errorf "UNBOXED?? %a@." Name.print name;
-      if is_name_used env name
+      then simple (* XXX Misc.fatal_errorf "UNBOXED?? %a@." Name.print name; *)
+      else if is_name_used env name
       then simple
       else
         let kind =
