@@ -187,14 +187,16 @@ and traverse_let denv acc let_expr : rev_expr =
     let name = simple_to_name denv s in
     default_bp (fun to_ -> Graph.add_alias (Acc.graph acc) ~to_ ~from:name)
   | Rec_info _ -> default acc);
+  let make_set_of_closures set_of_closures =
+    let function_decls = Set_of_closures.function_decls set_of_closures in
+    let value_slots = Set_of_closures.value_slots set_of_closures in
+    let alloc_mode = Set_of_closures.alloc_mode set_of_closures in
+    { function_decls; value_slots; alloc_mode }
+  in
   let named : rev_named =
     match defining_expr with
     | Set_of_closures set_of_closures ->
-      let function_decls = Set_of_closures.function_decls set_of_closures in
-      let value_slots = Set_of_closures.value_slots set_of_closures in
-      let alloc_mode = Set_of_closures.alloc_mode set_of_closures in
-      let set_of_closures = { function_decls; value_slots; alloc_mode } in
-      Set_of_closures set_of_closures
+      Set_of_closures (make_set_of_closures set_of_closures)
     | Static_consts group ->
       let bound_static =
         match bound_pattern with
@@ -213,10 +215,11 @@ and traverse_let denv acc let_expr : rev_expr =
             Code code :: rev_group)
           ~deleted_code:(fun rev_group _ -> Deleted_code :: rev_group)
           ~set_of_closures:(fun rev_group ~closure_symbols:_ set_of_closures ->
-            let static_const = Static_const.set_of_closures set_of_closures in
-            Static_const static_const :: rev_group)
+            Static_const
+              (Set_of_closures (make_set_of_closures set_of_closures))
+            :: rev_group)
           ~block_like:(fun rev_group _symbol static_const ->
-            Static_const static_const :: rev_group)
+            Static_const (Other static_const) :: rev_group)
       in
       let group = List.rev rev_group in
       Static_consts group
