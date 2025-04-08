@@ -1218,7 +1218,7 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
             match let_.defining_expr with
             | Named named -> (
               match named with
-              | Prim (Variadic (Make_block (_kind, _, _), args), _dbg) ->
+              | Prim (Variadic (Make_block (kind, _, _), args), _dbg) ->
                 Field.Map.fold
                   (fun (field : Global_flow_graph.Field.t) var hole ->
                     let arg =
@@ -1230,8 +1230,8 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
                         else Either.Left arg
                       | Is_int -> Either.Left Simple.untagged_const_false
                       | Get_tag ->
-                        (* TODO *)
-                        assert false
+                          let tag, _ = Flambda_primitive.Block_kind.to_shape kind in
+                          Either.Left (Simple.untagged_const_int (Tag.to_targetint_31_63 tag))
                       | Value_slot _ | Function_slot _ | Code_of_closure
                       | Apply _ ->
                         assert false
