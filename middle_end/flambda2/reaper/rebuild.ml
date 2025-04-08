@@ -154,10 +154,8 @@ let do_not_change_set_of_closures_representation env kinds
 let rewrite_static_const kinds (env : env) (sc : Static_const.t) =
   match sc with
   | Set_of_closures _ ->
-    Misc.fatal_errorf
-      "Set_of_closures is not permitted in conjunction with Other in the \
-       Static_const case:@ %a"
-      Static_const.print sc
+    (* Already rewritten *)
+    sc
   | Block (tag, mut, shape, fields) ->
     let fields = List.map (rewrite_simple_with_debuginfo kinds env) fields in
     Static_const.block tag mut shape fields
