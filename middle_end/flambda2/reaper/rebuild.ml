@@ -119,32 +119,55 @@ let rewrite_simple_with_debuginfo kinds env (simple : Simple.With_debuginfo.t) =
     (Simple.With_debuginfo.dbg simple)
 
 let do_not_change_set_of_closures_representation env kinds
+    ~(bound : Name.t list)
     ({ function_decls; value_slots; alloc_mode } : rev_set_of_closures) =
-  (* TODO: merge with [change_set_of_closures_representation] *)
+  let slot_is_used slot =
+    List.exists
+      (fun bound_name ->
+        Dep_solver.field_used env.uses (Code_id_or_name.name bound_name) slot)
+      bound
+  in
+  let code_is_used bound_name =
+    Dep_solver.field_used env.uses
+      (Code_id_or_name.name bound_name)
+      Code_of_closure
+  in
+  let value_slots =
+    Value_slot.Map.filter_map
+      (fun slot simple ->
+        if not (slot_is_used (Value_slot slot))
+        then None
+        else Some (rewrite_simple kinds env simple))
+      value_slots
+  in
+  let open Function_declarations in
   let function_decls =
-    let module FD = Function_declarations in
-    FD.create
-      (Function_slot.Lmap.mapi
-         (fun _slot (code_id : FD.code_id_in_function_declaration) :
-              FD.code_id_in_function_declaration ->
-           match code_id with
-           | Deleted _ -> code_id
-           | Code_id code_id ->
-             if is_code_id_used env code_id
-             then Code_id code_id
-             else
-               let code_metadata = env.get_code_metadata code_id in
-               Deleted
-                 { function_slot_size =
-                     Code_metadata.function_slot_size code_metadata;
-                   dbg = Code_metadata.dbg code_metadata
-                 })
-         (FD.funs_in_order function_decls))
+    List.map2
+      (fun bound_name (slot, code_id) ->
+        let code_id =
+          match code_id with
+          | Deleted _ -> code_id
+          | Code_id code_id ->
+            if code_is_used bound_name
+            then Code_id code_id
+            else
+              let code_metadata = env.get_code_metadata code_id in
+              Deleted
+                { function_slot_size =
+                    Code_metadata.function_slot_size code_metadata;
+                  dbg = Code_metadata.dbg code_metadata
+                }
+        in
+        slot, code_id)
+      bound
+      (Function_slot.Lmap.bindings
+         (Function_declarations.funs_in_order function_decls))
+  in
+  let function_decls =
+    Function_declarations.create (Function_slot.Lmap.of_list function_decls)
   in
   let set_of_closures =
-    Set_of_closures.create
-      ~value_slots:(Value_slot.Map.map (rewrite_simple kinds env) value_slots)
-      alloc_mode function_decls
+    Set_of_closures.create ~value_slots alloc_mode function_decls
   in
   all_slot_offsets
     := Slot_offsets.add_set_of_closures !all_slot_offsets ~is_phantom:false
@@ -214,55 +237,6 @@ let rewrite_static_const_or_code kinds env (sc : Static_const_or_code.t) =
 
 let rewrite_static_const_group kinds env (group : Static_const_group.t) =
   Static_const_group.map ~f:(rewrite_static_const_or_code kinds env) group
-
-(* TODO: merge this with [do_not_change_set_of_closures_representation] *)
-let rewrite_set_of_closures bound (env : env) value_slots alloc_mode
-    function_decls =
-  let slot_is_used slot =
-    List.exists
-      (fun bv ->
-        Dep_solver.field_used env.uses
-          (Code_id_or_name.var (Bound_var.var bv))
-          slot)
-      bound
-  in
-  let code_is_used bv =
-    Dep_solver.field_used env.uses
-      (Code_id_or_name.var (Bound_var.var bv))
-      Code_of_closure
-  in
-  let value_slots =
-    Value_slot.Map.filter
-      (fun slot _ -> slot_is_used (Value_slot slot))
-      value_slots
-  in
-  let open Function_declarations in
-  let function_decls =
-    List.map2
-      (fun bound_var (slot, code_id) ->
-        let code_id =
-          match code_id with
-          | Deleted _ -> code_id
-          | Code_id code_id ->
-            if code_is_used bound_var
-            then Code_id code_id
-            else
-              let code_metadata = env.get_code_metadata code_id in
-              Deleted
-                { function_slot_size =
-                    Code_metadata.function_slot_size code_metadata;
-                  dbg = Code_metadata.dbg code_metadata
-                }
-        in
-        slot, code_id)
-      bound
-      (Function_slot.Lmap.bindings
-         (Function_declarations.funs_in_order function_decls))
-  in
-  let function_decls =
-    Function_declarations.create (Function_slot.Lmap.of_list function_decls)
-  in
-  Set_of_closures.create ~value_slots alloc_mode function_decls
 
 let simple_is_unboxable env simple =
   Simple.pattern_match
@@ -1017,8 +991,10 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
                     else None)
                 (List.combine (Bound_static.to_list bound_static) group)
             in
-            let bound_static, group = List.split bound_and_group in
-            let static_const_or_code = function
+            let bound_static, _group = List.split bound_and_group in
+            let static_const_or_code
+                ((bound_to : Bound_static.Pattern.t), static_const_or_code) =
+              match static_const_or_code with
               | Deleted_code -> Static_const_or_code.deleted_code
               | Code
                   { params_and_body;
@@ -1050,10 +1026,13 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
                 Static_const_or_code.create_code code
               | Static_const (Set_of_closures set_of_closures) ->
                 let bound_to =
-                  bound_static |> Bound_static.create
-                  |> Bound_static.symbols_being_defined |> Symbol.Set.elements
-                  |> List.map Name.symbol
+                  match bound_to with
+                  | Set_of_closures function_slots ->
+                    Function_slot.Lmap.data function_slots
+                  | Code _ | Block_like _ ->
+                    Misc.fatal_error "Expected Set_of_closures"
                 in
+                let bound_to = List.map Name.symbol bound_to in
                 let need_to_change_repr =
                   match bound_to with
                   | bound_to :: _ ->
@@ -1069,7 +1048,7 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
                       set_of_closures
                   else
                     do_not_change_set_of_closures_representation env kinds
-                      set_of_closures
+                      ~bound:bound_to set_of_closures
                 in
                 Static_const.set_of_closures set_of_closures
                 |> Static_const_or_code.create_static_const
@@ -1090,21 +1069,23 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
                     Static_const.print static_const)
             in
             let group =
-              Static_const_group.create (List.map static_const_or_code group)
+              Static_const_group.create
+                (List.map static_const_or_code bound_and_group)
             in
             ( Bound_pattern.static (Bound_static.create bound_static),
               Named.create_static_consts group )
-          | Set_of_closures { value_slots; alloc_mode; function_decls } ->
+          | Set_of_closures set_of_closures ->
             let bound =
               match let_.bound_pattern with
-              | Set_of_closures s -> s
+              | Set_of_closures bound_vars ->
+                List.map Name.var (List.map Bound_var.var bound_vars)
               | Static _ | Singleton _ ->
                 (* Pattern is a set of closures *)
                 assert false
             in
             let set_of_closures =
-              rewrite_set_of_closures bound env value_slots alloc_mode
-                function_decls
+              do_not_change_set_of_closures_representation env kinds ~bound
+                set_of_closures
             in
             let is_phantom =
               Name_mode.is_phantom @@ Bound_pattern.name_mode let_.bound_pattern
