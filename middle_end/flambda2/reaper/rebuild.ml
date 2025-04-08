@@ -215,6 +215,7 @@ let rewrite_static_const_or_code kinds env (sc : Static_const_or_code.t) =
 let rewrite_static_const_group kinds env (group : Static_const_group.t) =
   Static_const_group.map ~f:(rewrite_static_const_or_code kinds env) group
 
+(* TODO: merge this with [do_not_change_set_of_closures_representation] *)
 let rewrite_set_of_closures bound (env : env) value_slots alloc_mode
     function_decls =
   let slot_is_used slot =
