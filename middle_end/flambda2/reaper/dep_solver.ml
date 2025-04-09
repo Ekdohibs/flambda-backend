@@ -1342,6 +1342,11 @@ let datalog_rules =
     | Code_of_closure | Apply _ -> true
     | _ -> false
   in
+  let real_field (i : Field.t) =
+    match[@ocaml.warning "-4"] i with
+    | Code_of_closure | Apply _ -> false
+    | _ -> true
+  in
   let relation_prevents_unboxing : Field.t -> _ = function
     | Block _ | Value_slot _ -> false
     | Function_slot _ -> false (* todo *)
@@ -1375,21 +1380,54 @@ let datalog_rules =
      [sources_rel usage base; constructor_rel base relation from; used_pred base; local_field_pred relation; used_fields_top_rel usage relation] ==> field_of_constructor_is_used base relation);
 
 
-    (* CR ncourant: even if used, representation could be changed if it only has local fields *)
-    (let$ [x] = ["x"] in
-     [used_pred x] ==> cannot_change_representation0 x);
-    (let$ [allocation_id; alias; alias_source] =
+  ] @
+  (if Sys.getenv_opt "REAPER_FORCE_UNBOX" <> None then
+    (let$ [x; field; y] = ["x"; "field"; "y"] in
+     [used_pred x; not (local_field_pred field); filter_field real_field field; constructor_rel x field y] ==> cannot_change_representation0 x)
+   else (let$ [x] = ["x"] in [used_pred x] ==> cannot_change_representation0 x))
+    :: [
+    (* (let$ [allocation_id; alias; alias_source] =
        ["allocation_id"; "alias"; "alias_source"]
      in
      [ usages_rel allocation_id alias;
        sources_rel alias alias_source;
        not_equal alias_source allocation_id ]
+     ==> cannot_change_representation0 allocation_id); *)
+      (let$ [allocation_id; alias; alias_source; field; _v] =
+         ["allocation_id"; "alias"; "alias_source"; "field"; "_v"]
+     in
+     [ usages_rel allocation_id alias;
+       sources_rel alias alias_source;
+       not_equal alias_source allocation_id;
+       filter_field real_field field;
+       used_fields_rel alias field _v
+     ]
+     ==> cannot_change_representation0 allocation_id);
+      (let$ [allocation_id; alias; alias_source; field] =
+         ["allocation_id"; "alias"; "alias_source"; "field"]
+     in
+     [ usages_rel allocation_id alias;
+       sources_rel alias alias_source;
+       not_equal alias_source allocation_id;
+       filter_field real_field field;
+       used_fields_top_rel alias field
+     ]
      ==> cannot_change_representation0 allocation_id);
     (* (let$ [allocation_id; alias] = ["allocation_id"; "alias"] in [usages_rel
        allocation_id alias; not (sources_rel alias allocation_id)] ==>
        cannot_change_representation0 allocation_id); *)
-    (let$ [allocation_id; alias] = ["allocation_id"; "alias"] in
+    (* (let$ [allocation_id; alias] = ["allocation_id"; "alias"] in
      [usages_rel allocation_id alias; any_source_pred alias]
+     ==> cannot_change_representation0 allocation_id); *)
+      (let$ [allocation_id; alias; field; _v] = ["allocation_id"; "alias"; "field"; "_v"] in
+       [usages_rel allocation_id alias; any_source_pred alias;
+      filter_field real_field field; used_fields_rel alias field _v
+       ]
+     ==> cannot_change_representation0 allocation_id);
+      (let$ [allocation_id; alias; field] = ["allocation_id"; "alias"; "field"] in
+       [usages_rel allocation_id alias; any_source_pred alias;
+        filter_field real_field field; used_fields_top_rel alias field
+       ]
      ==> cannot_change_representation0 allocation_id);
     (let$ [allocation_id; source] = ["allocation_id"; "source"] in
      [sources_rel allocation_id source; not_equal source allocation_id]
@@ -1433,6 +1471,8 @@ let datalog_rules =
      ==> cannot_change_representation x);
     (let$ [x] = ["x"] in
      [cannot_change_representation1 x] ==> cannot_unbox0 x);
+    (let$ [x] = ["x"] in
+     [used_pred x] ==> cannot_unbox0 x);
     (let$ [x; field] = ["x"; "field"] in
      [ field_of_constructor_is_used x field;
        filter_field field_cannot_be_destructured field ]
