@@ -23,6 +23,12 @@ type 'a unboxed_fields =
   | Not_unboxed of 'a
   | Unboxed of 'a unboxed_fields Global_flow_graph.Field.Map.t
 
+val print_unboxed_fields :
+  (Format.formatter -> 'a -> unit) ->
+  Format.formatter ->
+  'a unboxed_fields ->
+  unit
+
 type assigned = Variable.t unboxed_fields Global_flow_graph.Field.Map.t
 
 type changed_representation =
@@ -55,4 +61,5 @@ val field_used :
 (** Color of node when producing the graph as a .dot *)
 val print_color : result -> Code_id_or_name.t -> string
 
-val rewrite_kind_with_subkind : result -> Name.t -> Flambda_kind.With_subkind.t -> Flambda_kind.With_subkind.t
+val rewrite_kind_with_subkind :
+  result -> Name.t -> Flambda_kind.With_subkind.t -> Flambda_kind.With_subkind.t

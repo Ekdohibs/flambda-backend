@@ -31,6 +31,17 @@ type param_decision =
   | Delete
   | Unbox of Variable.t Dep_solver.unboxed_fields Field.Map.t
 
+let print_param_decision ppf param_decision =
+  match param_decision with
+  | Keep (v, kind) ->
+    Format.fprintf ppf "Keep (%a, %a)" Variable.print v
+      Flambda_kind.With_subkind.print kind
+  | Delete -> Format.fprintf ppf "Delete"
+  | Unbox fields ->
+    Format.fprintf ppf "Unbox %a"
+      (Field.Map.print (Dep_solver.print_unboxed_fields Variable.print))
+      fields
+
 type env =
   { uses : Dep_solver.result;
     code_deps : Traverse_acc.code_dep Code_id.Map.t;
@@ -696,8 +707,9 @@ let rec rebuild_expr (kinds : Flambda_kind.t Name.Map.t) (env : env)
                     match apply_decision, func_decision with
                     | Unbox _, (Keep _ | Delete) | (Keep _ | Delete), Unbox _ ->
                       Misc.fatal_errorf
-                        "Inconsistent apply and func decisions:@ %a" Apply.print
-                        apply
+                        "Inconsistent apply (%a) and func (%a) decisions:@ %a"
+                        print_param_decision apply_decision print_param_decision
+                        func_decision Apply.print apply
                     | Delete, _ -> rev_args
                     | Keep (_, _), Keep (v, _) -> Simple.var v :: rev_args
                     | Keep (_, kind), Delete ->
