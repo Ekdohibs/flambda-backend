@@ -1356,6 +1356,8 @@ let datalog_rules =
     | Code_of_closure | Is_int | Get_tag -> true
     | Apply _ -> true (* todo? *)
   in
+  let is_code_field : Field.t -> _ = function[@ocaml.warning "-4"] Code_of_closure -> true | _ -> false in
+  let is_apply_field : Field.t -> _ = function[@ocaml.warning "-4"] Apply _ -> true | _ -> false in
   [ (let$ [base; relation; from] = ["base"; "relation"; "from"] in
      [ constructor_rel base relation from;
        used_pred base;
@@ -1375,8 +1377,6 @@ let datalog_rules =
        usages_rel base usage;
        used_fields_rel usage relation _v ]
      ==> field_of_constructor_is_used base relation);
-    (let$ [base; relation; from; usage] =
-       ["base"; "relation"; "from"; "usage"]
      in
      [ constructor_rel base relation from;
        used_pred base;
@@ -1408,7 +1408,12 @@ let datalog_rules =
        used_pred base;
        local_field_pred relation;
        used_fields_top_rel usage relation ]
-     ==> field_of_constructor_is_used base relation) ]
+     ==> field_of_constructor_is_used base relation);
+    (let$ [base; relation; from; coderel] = ["base"; "relation"; "from"; "coderel"] in
+     [ constructor_rel base relation from; filter_field is_apply_field relation;
+       field_of_constructor_is_used base coderel; filter_field is_code_field coderel ] ==>
+     field_of_constructor_is_used base relation)
+]
   @ (if Sys.getenv_opt "REAPER_FORCE_UNBOX" <> None
     then
       let$ [x; field; y] = ["x"; "field"; "y"] in
