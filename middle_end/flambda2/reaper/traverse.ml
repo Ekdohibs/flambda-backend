@@ -600,7 +600,16 @@ and traverse_call_kind denv acc apply ~exn_arg ~return_args ~default_acc =
       | Some callee -> simple_to_name denv callee
     in
     let arity = Apply.args_arity apply in
-    let partial_apply = ref callee in
+    (* If doing an indirect apply, consider that this can be an indirect apply to *anything*,
+       not just the closure we are considering. This loses precision for the sources, but avoids
+       having closures with their return value unboxed, which are indirectly called.
+
+       CR-someday ncourant: remove this hack, and allow unboxing return values of indirect calls.
+    *)
+    let callee0 = Variable.create "callee0" in
+    Graph.add_alias (Acc.graph acc) ~from:callee ~to_:(Code_id_or_name.var callee0);
+    Graph.add_alias (Acc.graph acc) ~from:denv.le_monde_exterieur ~to_:(Code_id_or_name.var callee0);
+    let partial_apply = ref (Name.var callee0) in
     let calls_are_not_pure = Variable.create "not_pure" in
     Acc.used ~denv (Simple.var calls_are_not_pure) acc;
     (match function_call with
