@@ -695,7 +695,9 @@ let rec rebuild_expr (kinds : Flambda_kind.t Name.Map.t) (env : env)
                   (fun rev_args apply_decision func_decision ->
                     match apply_decision, func_decision with
                     | Unbox _, (Keep _ | Delete) | (Keep _ | Delete), Unbox _ ->
-                      assert false
+                      Misc.fatal_errorf
+                        "Inconsistent apply and func decisions:@ %a" Apply.print
+                        apply
                     | Delete, _ -> rev_args
                     | Keep (_, _), Keep (v, _) -> Simple.var v :: rev_args
                     | Keep (_, kind), Delete ->
