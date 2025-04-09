@@ -654,6 +654,8 @@ let rec pp_unboxed_elt pp_unboxed ppf = function
   | Not_unboxed x -> pp_unboxed ppf x
   | Unboxed fields -> Field.Map.print (pp_unboxed_elt pp_unboxed) ppf fields
 
+let print_unboxed_fields = pp_unboxed_elt
+
 (* type repr = | Unboxed_fields of Variable.t unboxed_fields |
    Changed_representation of Field.t unboxed_fields *)
 
@@ -1279,6 +1281,7 @@ let print_color { db; _ } v =
   else "white"
 
 let real_has_use = has_use
+
 let has_use uses v =
   let old_is_used = Hashtbl.mem uses.uses v in
   let new_is_used = has_use uses.db v in
@@ -1354,7 +1357,9 @@ let datalog_rules =
     | Apply _ -> true (* todo? *)
   in
   [ (let$ [base; relation; from] = ["base"; "relation"; "from"] in
-     [constructor_rel base relation from; used_pred base; not (local_field_pred relation)]
+     [ constructor_rel base relation from;
+       used_pred base;
+       not (local_field_pred relation) ]
      ==> field_of_constructor_is_used base relation);
     (let$ [base; relation; from; usage] =
        ["base"; "relation"; "from"; "usage"]
@@ -1370,152 +1375,180 @@ let datalog_rules =
        usages_rel base usage;
        used_fields_rel usage relation _v ]
      ==> field_of_constructor_is_used base relation);
-    (let$ [base; relation; from; usage] = ["base"; "relation"; "from"; "usage"] in
-     [constructor_rel base relation from; used_pred base; reading_field_rel relation usage; used_pred usage] ==> field_of_constructor_is_used base relation);
-    (let$ [base; relation; from; usage1; usage2] = ["base"; "relation"; "from"; "usage1"; "usage2"] in
-     [constructor_rel base relation from; used_pred base; reading_field_rel relation usage1; usages_rel usage1 usage2] ==> field_of_constructor_is_used base relation);
-    (let$ [usage; base; relation; from; _v] = ["usage"; "base"; "relation"; "from"; "_v"] in
-     [sources_rel usage base; constructor_rel base relation from; used_pred base; local_field_pred relation; used_fields_rel usage relation _v] ==> field_of_constructor_is_used base relation);
-    (let$ [usage; base; relation; from] = ["usage"; "base"; "relation"; "from"] in
-     [sources_rel usage base; constructor_rel base relation from; used_pred base; local_field_pred relation; used_fields_top_rel usage relation] ==> field_of_constructor_is_used base relation);
-
-
-  ] @
-  (if Sys.getenv_opt "REAPER_FORCE_UNBOX" <> None then
-    (let$ [x; field; y] = ["x"; "field"; "y"] in
-     [used_pred x; not (local_field_pred field); filter_field real_field field; constructor_rel x field y] ==> cannot_change_representation0 x)
-   else (let$ [x] = ["x"] in [used_pred x] ==> cannot_change_representation0 x))
-    :: [
-    (* (let$ [allocation_id; alias; alias_source] =
-       ["allocation_id"; "alias"; "alias_source"]
+    (let$ [base; relation; from; usage] =
+       ["base"; "relation"; "from"; "usage"]
      in
-     [ usages_rel allocation_id alias;
-       sources_rel alias alias_source;
-       not_equal alias_source allocation_id ]
-     ==> cannot_change_representation0 allocation_id); *)
-      (let$ [allocation_id; alias; alias_source; field; _v] =
-         ["allocation_id"; "alias"; "alias_source"; "field"; "_v"]
+     [ constructor_rel base relation from;
+       used_pred base;
+       reading_field_rel relation usage;
+       used_pred usage ]
+     ==> field_of_constructor_is_used base relation);
+    (let$ [base; relation; from; usage1; usage2] =
+       ["base"; "relation"; "from"; "usage1"; "usage2"]
      in
-     [ usages_rel allocation_id alias;
-       sources_rel alias alias_source;
-       not_equal alias_source allocation_id;
-       filter_field real_field field;
-       used_fields_rel alias field _v
-     ]
-     ==> cannot_change_representation0 allocation_id);
-      (let$ [allocation_id; alias; alias_source; field] =
-         ["allocation_id"; "alias"; "alias_source"; "field"]
+     [ constructor_rel base relation from;
+       used_pred base;
+       reading_field_rel relation usage1;
+       usages_rel usage1 usage2 ]
+     ==> field_of_constructor_is_used base relation);
+    (let$ [usage; base; relation; from; _v] =
+       ["usage"; "base"; "relation"; "from"; "_v"]
      in
-     [ usages_rel allocation_id alias;
-       sources_rel alias alias_source;
-       not_equal alias_source allocation_id;
-       filter_field real_field field;
-       used_fields_top_rel alias field
-     ]
-     ==> cannot_change_representation0 allocation_id);
-    (* (let$ [allocation_id; alias] = ["allocation_id"; "alias"] in [usages_rel
-       allocation_id alias; not (sources_rel alias allocation_id)] ==>
-       cannot_change_representation0 allocation_id); *)
-    (* (let$ [allocation_id; alias] = ["allocation_id"; "alias"] in
-     [usages_rel allocation_id alias; any_source_pred alias]
-     ==> cannot_change_representation0 allocation_id); *)
-      (let$ [allocation_id; alias; field; _v] = ["allocation_id"; "alias"; "field"; "_v"] in
-       [usages_rel allocation_id alias; any_source_pred alias;
-      filter_field real_field field; used_fields_rel alias field _v
-       ]
-     ==> cannot_change_representation0 allocation_id);
-      (let$ [allocation_id; alias; field] = ["allocation_id"; "alias"; "field"] in
-       [usages_rel allocation_id alias; any_source_pred alias;
-        filter_field real_field field; used_fields_top_rel alias field
-       ]
-     ==> cannot_change_representation0 allocation_id);
-    (let$ [allocation_id; source] = ["allocation_id"; "source"] in
-     [sources_rel allocation_id source; not_equal source allocation_id]
-     ==> cannot_change_representation0 allocation_id);
-    (* Used but not its own source: either from any source, or it has no source
-       at all and it is dead code. In either case, do not unbox *)
-    (let$ [allocation_id; usage] = ["allocation_id"; "usage"] in
-     [ usages_rel allocation_id usage;
-       not (sources_rel allocation_id allocation_id) ]
-     ==> cannot_change_representation0 allocation_id);
-    (let$ [allocation_id] = ["allocation_id"] in
-     [any_source_pred allocation_id]
-     ==> cannot_change_representation0 allocation_id);
-    (let$ [x; _source] = ["x"; "_source"] in
-     [ sources_rel x _source;
-       filter
-         (fun [x] ->
-           Code_id_or_name.pattern_match x
-             ~symbol:(fun _ -> true)
-             ~var:(fun _ -> false)
-             ~code_id:(fun _ -> false))
-         [x] ]
-     ==> cannot_change_representation0 x);
-    (let$ [x] = ["x"] in
-     [cannot_change_representation0 x] ==> cannot_change_representation1 x);
-    (let$ [x; field; y] = ["x"; "field"; "y"] in
-     [ constructor_rel x field y;
-       filter_field is_function_slot field;
-       cannot_change_representation0 x ]
-     ==> cannot_change_representation1 y);
-    (let$ [x] = ["x"] in
-     [cannot_change_representation1 x] ==> cannot_change_representation x);
-    (let$ [x; field; y] = ["x"; "field"; "y"] in
-     [ constructor_rel x field y;
-       filter_field
-         (fun (f : Field.t) ->
-           match f with
-           | Block _ | Is_int | Get_tag -> true
-           | Value_slot _ | Function_slot _ | Code_of_closure | Apply _ -> false)
-         field ]
-     ==> cannot_change_representation x);
-    (let$ [x] = ["x"] in
-     [cannot_change_representation1 x] ==> cannot_unbox0 x);
-    (let$ [x] = ["x"] in
-     [used_pred x] ==> cannot_unbox0 x);
-    (let$ [x; field] = ["x"; "field"] in
-     [ field_of_constructor_is_used x field;
-       filter_field field_cannot_be_destructured field ]
-     ==> cannot_unbox0 x);
-    (* (let$ [x; usage; field] = ["x"; "usage"; "field"] in [usages_rel x usage;
-       used_fields_top_rel usage field; filter_field
-       field_cannot_be_destructured field] ==> cannot_unbox x); (let$ [x; usage;
-       field; _v] = ["x"; "usage"; "field"; "_v"] in [usages_rel x usage;
-       used_fields_rel usage field _v; filter_field field_cannot_be_destructured
-       field] ==> cannot_unbox x);*)
-    (* (let$ [alias; allocation_id; relation; to_; usage] = ["alias";
-       "allocation_id"; "relation"; "to_"; "usage"] in [sources_rel alias
-       allocation_id; rev_constructor_rel alias relation to_; usages_rel to_
-       usage; (used_fields_top_rel usage relation || exists ["_v"] (fun [_v] ->
-       used_fields_rel usage relation _v)); (filter_field
-       relation_prevents_unboxing relation || cannot_change_representation to_)
-       ] ==> cannot_unbox allocation_id) *)
-    (let$ [alias; allocation_id; relation; to_] =
-       ["alias"; "allocation_id"; "relation"; "to_"]
+     [ sources_rel usage base;
+       constructor_rel base relation from;
+       used_pred base;
+       local_field_pred relation;
+       used_fields_rel usage relation _v ]
+     ==> field_of_constructor_is_used base relation);
+    (let$ [usage; base; relation; from] =
+       ["usage"; "base"; "relation"; "from"]
      in
-     [ sources_rel alias allocation_id;
-       rev_constructor_rel alias relation to_;
-       field_of_constructor_is_used to_ relation;
-       filter_field relation_prevents_unboxing relation ]
-     ==> cannot_unbox0 allocation_id);
-    (let$ [alias; allocation_id; relation; to_] =
-       ["alias"; "allocation_id"; "relation"; "to_"]
-     in
-     [ sources_rel alias allocation_id;
-       rev_constructor_rel alias relation to_;
-       field_of_constructor_is_used to_ relation;
-       cannot_change_representation to_ ]
-     ==> cannot_unbox0 allocation_id) 
-  ;
-    (let$ [x] = ["x"] in
-     [cannot_unbox0 x] ==> cannot_unbox x);
-    (let$ [x; field; y] = ["x"; "field"; "y"] in
-     [ cannot_unbox0 x;
-       constructor_rel x field y;
-       filter_field is_function_slot field ]
-     ==> cannot_unbox y);
-
-  ]
+     [ sources_rel usage base;
+       constructor_rel base relation from;
+       used_pred base;
+       local_field_pred relation;
+       used_fields_top_rel usage relation ]
+     ==> field_of_constructor_is_used base relation) ]
+  @ (if Sys.getenv_opt "REAPER_FORCE_UNBOX" <> None
+    then
+      let$ [x; field; y] = ["x"; "field"; "y"] in
+      [ used_pred x;
+        not (local_field_pred field);
+        filter_field real_field field;
+        constructor_rel x field y ]
+      ==> cannot_change_representation0 x
+    else
+      let$ [x] = ["x"] in
+      [used_pred x] ==> cannot_change_representation0 x)
+    :: [ (* (let$ [allocation_id; alias; alias_source] = ["allocation_id";
+            "alias"; "alias_source"] in [ usages_rel allocation_id alias;
+            sources_rel alias alias_source; not_equal alias_source allocation_id
+            ] ==> cannot_change_representation0 allocation_id); *)
+         (let$ [allocation_id; alias; alias_source; field; _v] =
+            ["allocation_id"; "alias"; "alias_source"; "field"; "_v"]
+          in
+          [ usages_rel allocation_id alias;
+            sources_rel alias alias_source;
+            not_equal alias_source allocation_id;
+            filter_field real_field field;
+            used_fields_rel alias field _v ]
+          ==> cannot_change_representation0 allocation_id);
+         (let$ [allocation_id; alias; alias_source; field] =
+            ["allocation_id"; "alias"; "alias_source"; "field"]
+          in
+          [ usages_rel allocation_id alias;
+            sources_rel alias alias_source;
+            not_equal alias_source allocation_id;
+            filter_field real_field field;
+            used_fields_top_rel alias field ]
+          ==> cannot_change_representation0 allocation_id);
+         (* (let$ [allocation_id; alias] = ["allocation_id"; "alias"] in
+            [usages_rel allocation_id alias; not (sources_rel alias
+            allocation_id)] ==> cannot_change_representation0 allocation_id); *)
+         (* (let$ [allocation_id; alias] = ["allocation_id"; "alias"] in
+            [usages_rel allocation_id alias; any_source_pred alias] ==>
+            cannot_change_representation0 allocation_id); *)
+         (let$ [allocation_id; alias; field; _v] =
+            ["allocation_id"; "alias"; "field"; "_v"]
+          in
+          [ usages_rel allocation_id alias;
+            any_source_pred alias;
+            filter_field real_field field;
+            used_fields_rel alias field _v ]
+          ==> cannot_change_representation0 allocation_id);
+         (let$ [allocation_id; alias; field] =
+            ["allocation_id"; "alias"; "field"]
+          in
+          [ usages_rel allocation_id alias;
+            any_source_pred alias;
+            filter_field real_field field;
+            used_fields_top_rel alias field ]
+          ==> cannot_change_representation0 allocation_id);
+         (let$ [allocation_id; source] = ["allocation_id"; "source"] in
+          [sources_rel allocation_id source; not_equal source allocation_id]
+          ==> cannot_change_representation0 allocation_id);
+         (* Used but not its own source: either from any source, or it has no
+            source at all and it is dead code. In either case, do not unbox *)
+         (let$ [allocation_id; usage] = ["allocation_id"; "usage"] in
+          [ usages_rel allocation_id usage;
+            not (sources_rel allocation_id allocation_id) ]
+          ==> cannot_change_representation0 allocation_id);
+         (let$ [allocation_id] = ["allocation_id"] in
+          [any_source_pred allocation_id]
+          ==> cannot_change_representation0 allocation_id);
+         (let$ [x; _source] = ["x"; "_source"] in
+          [ sources_rel x _source;
+            filter
+              (fun [x] ->
+                Code_id_or_name.pattern_match x
+                  ~symbol:(fun _ -> true)
+                  ~var:(fun _ -> false)
+                  ~code_id:(fun _ -> false))
+              [x] ]
+          ==> cannot_change_representation0 x);
+         (let$ [x] = ["x"] in
+          [cannot_change_representation0 x] ==> cannot_change_representation1 x);
+         (let$ [x; field; y] = ["x"; "field"; "y"] in
+          [ constructor_rel x field y;
+            filter_field is_function_slot field;
+            cannot_change_representation0 x ]
+          ==> cannot_change_representation1 y);
+         (let$ [x] = ["x"] in
+          [cannot_change_representation1 x] ==> cannot_change_representation x);
+         (let$ [x; field; y] = ["x"; "field"; "y"] in
+          [ constructor_rel x field y;
+            filter_field
+              (fun (f : Field.t) ->
+                match f with
+                | Block _ | Is_int | Get_tag -> true
+                | Value_slot _ | Function_slot _ | Code_of_closure | Apply _ ->
+                  false)
+              field ]
+          ==> cannot_change_representation x);
+         (let$ [x] = ["x"] in
+          [cannot_change_representation1 x] ==> cannot_unbox0 x);
+         (let$ [x] = ["x"] in
+          [used_pred x] ==> cannot_unbox0 x);
+         (let$ [x; field] = ["x"; "field"] in
+          [ field_of_constructor_is_used x field;
+            filter_field field_cannot_be_destructured field ]
+          ==> cannot_unbox0 x);
+         (* (let$ [x; usage; field] = ["x"; "usage"; "field"] in [usages_rel x
+            usage; used_fields_top_rel usage field; filter_field
+            field_cannot_be_destructured field] ==> cannot_unbox x); (let$ [x;
+            usage; field; _v] = ["x"; "usage"; "field"; "_v"] in [usages_rel x
+            usage; used_fields_rel usage field _v; filter_field
+            field_cannot_be_destructured field] ==> cannot_unbox x);*)
+         (* (let$ [alias; allocation_id; relation; to_; usage] = ["alias";
+            "allocation_id"; "relation"; "to_"; "usage"] in [sources_rel alias
+            allocation_id; rev_constructor_rel alias relation to_; usages_rel
+            to_ usage; (used_fields_top_rel usage relation || exists ["_v"] (fun
+            [_v] -> used_fields_rel usage relation _v)); (filter_field
+            relation_prevents_unboxing relation || cannot_change_representation
+            to_) ] ==> cannot_unbox allocation_id) *)
+         (let$ [alias; allocation_id; relation; to_] =
+            ["alias"; "allocation_id"; "relation"; "to_"]
+          in
+          [ sources_rel alias allocation_id;
+            rev_constructor_rel alias relation to_;
+            field_of_constructor_is_used to_ relation;
+            filter_field relation_prevents_unboxing relation ]
+          ==> cannot_unbox0 allocation_id);
+         (let$ [alias; allocation_id; relation; to_] =
+            ["alias"; "allocation_id"; "relation"; "to_"]
+          in
+          [ sources_rel alias allocation_id;
+            rev_constructor_rel alias relation to_;
+            field_of_constructor_is_used to_ relation;
+            cannot_change_representation to_ ]
+          ==> cannot_unbox0 allocation_id);
+         (let$ [x] = ["x"] in
+          [cannot_unbox0 x] ==> cannot_unbox x);
+         (let$ [x; field; y] = ["x"; "field"; "y"] in
+          [ cannot_unbox0 x;
+            constructor_rel x field y;
+            filter_field is_function_slot field ]
+          ==> cannot_unbox y) ]
 
 (* let problematic_uses_destr = Datalog.create_relation
    ~name:"problematic_uses_destr" N.columns let problematic_uses_destr x =
@@ -1759,53 +1792,68 @@ let can_unbox dual dual_graph graph ~dominated_by_allocation_points
    Get_tag -> Flambda_kind.naked_immediate | Code_of_closure | Apply _ ->
    Misc.fatal_errorf "field_kind of %a" Field.print field *)
 
-  let[@inline] erase kind =
-    Flambda_kind.With_subkind.create
-      (Flambda_kind.With_subkind.kind kind)
-      Flambda_kind.With_subkind.Non_null_value_subkind.Anything
-      (Flambda_kind.With_subkind.nullable kind)
+let[@inline] erase kind =
+  Flambda_kind.With_subkind.create
+    (Flambda_kind.With_subkind.kind kind)
+    Flambda_kind.With_subkind.Non_null_value_subkind.Anything
+    (Flambda_kind.With_subkind.nullable kind)
 
 let rec rewrite_kind_with_subkind_not_top_not_bottom db flow_to kind =
   match Flambda_kind.With_subkind.non_null_value_subkind kind with
   | Anything -> kind
-  | Tagged_immediate -> kind (* Always correct, since poison is a tagged immediate *)
+  | Tagged_immediate ->
+    kind (* Always correct, since poison is a tagged immediate *)
   | Boxed_float32 | Boxed_float | Boxed_int32 | Boxed_int64 | Boxed_nativeint
   | Boxed_vec128 | Float_block _ | Float_array | Immediate_array | Value_array
-  | Generic_array | Unboxed_float32_array | Unboxed_int32_array | Unboxed_int64_array
-  | Unboxed_nativeint_array | Unboxed_vec128_array | Unboxed_product_array ->
-      (* For all these subkinds, we don't track fields (for now). Thus, being in this
-         case without being top or bottom means that we never use this particular value,
-         but that it syntactically looks like it could be used. We probably could keep
-         the subkind info, but as this value should not be used, it is best to delete it. *)
-      erase kind
+  | Generic_array | Unboxed_float32_array | Unboxed_int32_array
+  | Unboxed_int64_array | Unboxed_nativeint_array | Unboxed_vec128_array
+  | Unboxed_product_array ->
+    (* For all these subkinds, we don't track fields (for now). Thus, being in
+       this case without being top or bottom means that we never use this
+       particular value, but that it syntactically looks like it could be used.
+       We probably could keep the subkind info, but as this value should not be
+       used, it is best to delete it. *)
+    erase kind
   | Variant { consts; non_consts } ->
-      (* CR ncourant: we should make sure poison is in the consts! *)
-      let usages = get_all_usages db flow_to in
-      let fields = get_fields db usages in
-      let non_consts = Tag.Scannable.Map.map (fun (shape, kinds) ->
-        let kinds = List.mapi (fun i kind ->
-          let field = Global_flow_graph.Field.Block (i, Flambda_kind.With_subkind.kind kind) in
-          match Field.Map.find_opt field fields with
-          | None -> (* maybe poison *) erase kind
-          | Some None -> (* top *) kind
-          | Some (Some flow_to) ->
-              rewrite_kind_with_subkind_not_top_not_bottom db flow_to kind
-            ) kinds in
-        shape, kinds
-        ) non_consts in
-      Flambda_kind.With_subkind.create
-        Flambda_kind.value
-        (Flambda_kind.With_subkind.Non_null_value_subkind.Variant {
-          consts; non_consts
-        }) (Flambda_kind.With_subkind.nullable kind)
+    (* CR ncourant: we should make sure poison is in the consts! *)
+    let usages = get_all_usages db flow_to in
+    let fields = get_fields db usages in
+    let non_consts =
+      Tag.Scannable.Map.map
+        (fun (shape, kinds) ->
+          let kinds =
+            List.mapi
+              (fun i kind ->
+                let field =
+                  Global_flow_graph.Field.Block
+                    (i, Flambda_kind.With_subkind.kind kind)
+                in
+                match Field.Map.find_opt field fields with
+                | None -> (* maybe poison *) erase kind
+                | Some None -> (* top *) kind
+                | Some (Some flow_to) ->
+                  rewrite_kind_with_subkind_not_top_not_bottom db flow_to kind)
+              kinds
+          in
+          shape, kinds)
+        non_consts
+    in
+    Flambda_kind.With_subkind.create Flambda_kind.value
+      (Flambda_kind.With_subkind.Non_null_value_subkind.Variant
+         { consts; non_consts })
+      (Flambda_kind.With_subkind.nullable kind)
 
 let rewrite_kind_with_subkind uses var kind =
   let db = uses.db in
   let var = Code_id_or_name.name var in
-  if is_top db var then kind
-  else if not (real_has_use db var) then erase kind
-  else rewrite_kind_with_subkind_not_top_not_bottom db
-      (Code_id_or_name.Map.singleton var ()) kind
+  if is_top db var
+  then kind
+  else if not (real_has_use db var)
+  then erase kind
+  else
+    rewrite_kind_with_subkind_not_top_not_bottom db
+      (Code_id_or_name.Map.singleton var ())
+      kind
 
 let debug = Sys.getenv_opt "REAPERDBG" <> None
 
@@ -1828,9 +1876,11 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
   let stats = Datalog.Schedule.create_stats () in
   let db = Datalog.Schedule.run ~stats datalog_schedule datalog in
   let t2 = Sys.time () in
-  if debug then Format.eprintf "EXISTING: %f, DATALOG: %f, SPEEDUP: %f@." (t1 -. t0)
-    (t2 -. t1')
-    ((t1 -. t0) /. (t2 -. t1'));
+  if debug
+  then
+    Format.eprintf "EXISTING: %f, DATALOG: %f, SPEEDUP: %f@." (t1 -. t0)
+      (t2 -. t1')
+      ((t1 -. t0) /. (t2 -. t1'));
   let db =
     Datalog.Schedule.run ~stats (Datalog.Schedule.saturate datalog_rules) db
   in
@@ -1895,30 +1945,29 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
     in
     fun x -> exists_with_parameters q [x] db
   in
-
   let all_with_use = Hashtbl.create 17 in
-let query_uses =
-  let open Datalog in
-  let open! Global_flow_graph in
-  compile ["X"] (fun [x] -> where [used_pred x] (yield [x]))
+  let query_uses =
+    let open Datalog in
+    let open! Global_flow_graph in
+    compile ["X"] (fun [x] -> where [used_pred x] (yield [x]))
   in
-let query_usage =
-  let open Datalog in
-  let open! Global_flow_graph in
-  compile ["X"; "U"] (fun [x; u] ->
-      where [usages_rel x u] (yield [x])) in
-  Datalog.Cursor.iter query_uses db ~f:(fun [u] -> Hashtbl.replace all_with_use u ());
-  Datalog.Cursor.iter query_usage db ~f:(fun [u] -> Hashtbl.replace all_with_use u ());
-
+  let query_usage =
+    let open Datalog in
+    let open! Global_flow_graph in
+    compile ["X"; "U"] (fun [x; u] -> where [usages_rel x u] (yield [x]))
+  in
+  Datalog.Cursor.iter query_uses db ~f:(fun [u] ->
+      Hashtbl.replace all_with_use u ());
+  Datalog.Cursor.iter query_usage db ~f:(fun [u] ->
+      Hashtbl.replace all_with_use u ());
   let to_unbox =
     Hashtbl.fold
       (fun code_or_name () to_unbox ->
         let b = not_unboxable code_or_name in
         let chk x =
-          if not x
-          then () (*
-            Misc.fatal_errorf "Expected unboxable = %b for %a %a but failed" b
-              Code_id_or_name.print code_or_name pp_elt _elt *)
+          if not x then ()
+          (* Misc.fatal_errorf "Expected unboxable = %b for %a %a but failed" b
+             Code_id_or_name.print code_or_name pp_elt _elt *)
         in
         if ignore
              (can_unbox aliases dual_graph result
@@ -2090,8 +2139,8 @@ let query_usage =
           let mk_field_clos field_kind =
             Value_slot.create
               (Compilation_unit.get_current_exn ())
-              ~name:"unboxed_value_slot"
-              (Flambda_kind.With_subkind.anything field_kind)
+              ~name:"unboxed_value_slot" ~is_always_immediate:false
+              field_kind
           in
           let uses =
             get_all_usages db
@@ -2106,8 +2155,7 @@ let query_usage =
                 Function_slot.Map.add fs
                   (Function_slot.create
                      (Compilation_unit.get_current_exn ())
-                     ~name:(Function_slot.name fs)
-                     Flambda_kind.With_subkind.any_value)
+                     ~name:(Function_slot.name fs) ~is_always_immediate:false Flambda_kind.value)
                   acc)
               Function_slot.Map.empty l
           in
