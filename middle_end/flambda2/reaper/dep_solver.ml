@@ -1409,11 +1409,15 @@ let datalog_rules =
        local_field_pred relation;
        used_fields_top_rel usage relation ]
      ==> field_of_constructor_is_used base relation);
-    (let$ [base; relation; from; coderel] = ["base"; "relation"; "from"; "coderel"] in
-     [ constructor_rel base relation from; filter_field is_apply_field relation;
-       field_of_constructor_is_used base coderel; filter_field is_code_field coderel ] ==>
-     field_of_constructor_is_used base relation)
-]
+    (let$ [base; relation; from; coderel; indirect_call_witness] =
+       ["base"; "relation"; "from"; "coderel"; "indirect_call_witness"]
+     in
+     [ constructor_rel base relation from;
+       filter_field is_apply_field relation;
+       constructor_rel base coderel indirect_call_witness;
+       used_pred indirect_call_witness;
+       filter_field is_code_field coderel ]
+     ==> field_of_constructor_is_used base relation) ]
   @ (if Sys.getenv_opt "REAPER_FORCE_UNBOX" <> None
     then
       let$ [x; field; y] = ["x"; "field"; "y"] in
