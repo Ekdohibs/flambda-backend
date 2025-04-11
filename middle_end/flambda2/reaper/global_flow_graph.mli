@@ -36,6 +36,8 @@ module Field : sig
 
   val print : Format.formatter -> t -> unit
 
+  val kind : t -> Flambda_kind.t
+
   module Map : Container_types.Map with type key = t
 
   val encode : t -> int
