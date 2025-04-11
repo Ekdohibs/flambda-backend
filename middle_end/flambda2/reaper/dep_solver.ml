@@ -28,7 +28,7 @@ let print_unboxed_fields = pp_unboxed_elt
 (* type repr = | Unboxed_fields of Variable.t unboxed_fields |
    Changed_representation of Field.t unboxed_fields *)
 
-type assigned = Variable.t unboxed_fields Field.Map.t
+type unboxed = Variable.t unboxed_fields Field.Map.t
 
 type changed_representation =
   | Block_representation of
@@ -55,7 +55,7 @@ let pp_changed_representation ff = function
 type result =
   { 
     db : Datalog.database;
-    unboxed_fields : assigned Code_id_or_name.Map.t;
+    unboxed_fields : unboxed Code_id_or_name.Map.t;
     (* CR: [(Field.t, Constant.t) Either.t unboxed_fields Code_id_or_name.Map.t]
        ? *)
     changed_representation : changed_representation Code_id_or_name.Map.t
@@ -557,21 +557,6 @@ let has_use, field_used =
       || exists_with_parameters used_field_top_query [x; field] db
       || exists_with_parameters used_field_query [x; field] db )
 
-let print_color { db; _ } v =
-  if exists_with_parameters used_pred_query [v] db
-  then "#a7a7a7"
-  else if has_use db v
-  then "#f1c40f"
-  else "white"
-
-let real_has_use = has_use
-
-let has_use uses v =
-  has_use uses.db v
-
-let field_used uses v f =
-  field_used uses.db v f
-
 let field_of_constructor_is_used =
   rel2 "field_of_constructor_is_used" Cols.[n; f]
 
@@ -916,7 +901,7 @@ let rewrite_kind_with_subkind uses var kind =
   let var = Code_id_or_name.name var in
   if is_top db var
   then kind
-  else if not (real_has_use db var)
+  else if not (has_use db var)
   then erase kind
   else
     rewrite_kind_with_subkind_not_top_not_bottom db
@@ -945,7 +930,7 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
           dominated acc)
       dominated_by_allocation_points Code_id_or_name.Map.empty
   in
-  let assigned : assigned Code_id_or_name.Map.t ref =
+  let unboxed : unboxed Code_id_or_name.Map.t ref =
     ref Code_id_or_name.Map.empty
   in
   let not_unboxable =
@@ -1010,7 +995,7 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
       in
       Code_id_or_name.Set.iter
         (fun to_patch ->
-          (* CR-someday ncourant: insert ghost makeblocks/set of closures for debugging *)
+          (* CR-someday ncourant: produce ghost makeblocks/set of closures for debugging *)
           let rec unbox_rec usages name_prefix =
             let fields = get_fields db usages in
             Field.Map.mapi
@@ -1053,7 +1038,7 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
               (get_all_usages db (Code_id_or_name.Map.singleton to_patch ()))
               new_name
           in
-          assigned := Code_id_or_name.Map.add to_patch fields !assigned)
+          unboxed := Code_id_or_name.Map.add to_patch fields !unboxed)
         to_patch)
     to_unbox;
   if debug
@@ -1061,7 +1046,7 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
     Format.printf "new vars: %a"
       (Code_id_or_name.Map.print
          (Field.Map.print (pp_unboxed_elt Variable.print)))
-      !assigned;
+      !unboxed;
   let changed_representation = ref Code_id_or_name.Map.empty in
   Code_id_or_name.Set.iter
     (fun code_id_or_name ->
@@ -1163,15 +1148,37 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
       !changed_representation;
   { 
     db;
-    unboxed_fields = !assigned;
+    unboxed_fields = !unboxed;
     changed_representation =
       !changed_representation
       (* unboxed_fields = Code_id_or_name.Map.empty ; changed_representation =
          Code_id_or_name.Map.empty *)
   }
 
+
+let print_color { db; unboxed_fields; changed_representation } v =
+  if Code_id_or_name.Map.mem v unboxed_fields
+  then "#dd2233"
+  else if Code_id_or_name.Map.mem v changed_representation
+  then "#2255ff"
+  else if exists_with_parameters used_pred_query [v] db
+  then "#a7a7a7"
+  else if has_use db v
+  then "#f1c40f"
+  else "white"
+
+
+
+
 let get_unboxed_fields uses cn =
   Code_id_or_name.Map.find_opt cn uses.unboxed_fields
 
 let get_changed_representation uses cn =
   Code_id_or_name.Map.find_opt cn uses.changed_representation
+
+
+let has_use uses v =
+  has_use uses.db v
+
+let field_used uses v f =
+  field_used uses.db v f
