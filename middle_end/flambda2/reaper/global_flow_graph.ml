@@ -107,6 +107,14 @@ module Field = struct
   end
 
   include M
+  let kind : t -> _ = function
+  | Block (_, kind) -> kind
+  | Value_slot vs -> Value_slot.kind vs
+  | Function_slot _ -> Flambda_kind.value
+  | Is_int | Get_tag -> Flambda_kind.naked_immediate
+  | (Code_of_closure | Apply _) as field ->
+    Misc.fatal_errorf "[field_kind] for virtual field %a" print field
+  
   module Container = Container_types.Make (M)
   module Map = Container.Map
 
@@ -208,6 +216,7 @@ module Dep = struct
   end
 
   include M
+
   module Container = Container_types.Make (M)
   module Set = Container.Set
 end
