@@ -28,9 +28,13 @@ let print_unboxed_fields = pp_unboxed_elt
 (* type repr = | Unboxed_fields of Variable.t unboxed_fields |
    Changed_representation of Field.t unboxed_fields *)
 
+(* CR-someday ncourant: track fields that are known to be constant to avoid
+   having them be represented. *)
 type unboxed = Variable.t unboxed_fields Field.Map.t
 
 type changed_representation =
+  (* CR ncourant: this is currently never produced, because we need to rewrite the
+     value_kinds to account for changed representations before enabling this *)
   | Block_representation of
       (int * Flambda_primitive.Block_access_kind.t) unboxed_fields Field.Map.t
       * int
@@ -56,8 +60,6 @@ type result =
   { 
     db : Datalog.database;
     unboxed_fields : unboxed Code_id_or_name.Map.t;
-    (* CR: [(Field.t, Constant.t) Either.t unboxed_fields Code_id_or_name.Map.t]
-       ? *)
     changed_representation : changed_representation Code_id_or_name.Map.t
   }
 
@@ -70,21 +72,17 @@ module Cols = struct
   let f = Global_flow_graph.FieldC.datalog_column_id
 end
 
-let rel1 name schema =
-  let r = Datalog.create_relation ~name schema in
-  fun x -> Datalog.atom r [x]
-
 let rel1_r name schema =
   let r = Datalog.create_relation ~name schema in
   r, fun x -> Datalog.atom r [x]
 
-let rel2 name schema =
-  let r = Datalog.create_relation ~name schema in
-  fun x y -> Datalog.atom r [x; y]
+let rel1 name schema = snd (rel1_r name schema)
 
 let rel2_r name schema =
   let r = Datalog.create_relation ~name schema in
   r, fun x y -> Datalog.atom r [x; y]
+
+let rel2 name schema = snd (rel2_r name schema)
 
 let rel3 name schema =
   let r = Datalog.create_relation ~name schema in
@@ -106,23 +104,28 @@ let rev_constructor_rel = rel3 "rev_constructor" Cols.[n; f; n]
 
 let rev_accessor_rel = rel3 "rev_accessor" Cols.[n; f; n]
 
-(* let field_has_use_rel = Datalog.create_relation ~name:"field_has_use"
-   FN.columns let field_has_use_rel field v = Datalog.atom field_has_use_rel
-   [field; v] *)
-
 (* The program is abstracted as a series of relations concerning the reading and
    writing of fields of values.
 
-   There are 5 different relations: - [alias to_ from] corresponds to [let to_ =
-   from] - [accessor to_ relation base] corresponds to [let to_ = base.relation]
-   - [constructor base relation from] corresponds to constructing a block [let
-   base = { relation = from }] - [propagate if_used to_ from] means [alias to_
-   from], but only if [is_used] is used - [use to_ from] corresponds to [let to_
-   = f(from)], creating an arbitrary result [to_] and consuming [from].
+   There are 5 different relations:
+
+   - [alias to_ from] corresponds to [let to_ = from]
+
+   - [accessor to_ relation base] corresponds to [let to_ = base.relation]
+   
+   - [constructor base relation from] corresponds to constructing a block
+   [let base = { relation = from }]
+
+   - [propagate if_used to_ from] means [alias to_ from], but only if [is_used] is used
+
+   - [use to_ from] corresponds to [let to_ = f(from)], creating an arbitrary result
+   [to_] and consuming [from].
 
    We perform an analysis that computes the ways each value can be used: either
    entirely, not at all, or, for each of its fields, how that field might be
-   used. *)
+   used. We also perform a reverse analysis that computes where each value can come from:
+   either an arbitrary source (for use and values coming from outside the compilation unit),
+   or a given constructor. *)
 
 let datalog_schedule =
   let open Datalog in
@@ -130,7 +133,7 @@ let datalog_schedule =
   let not = Datalog.not in
   let ( let$ ) xs f = compile xs f in
   let ( ==> ) h c = where h (deduce c) in
-  (* rev_alias *)
+  (* Reverse relations, because datalog does not implement a more efficient representation yet. *)
   let rev_alias =
     let$ [to_; from] = ["to_"; "from"] in
     [alias_rel to_ from] ==> rev_alias_rel from to_
@@ -147,38 +150,38 @@ let datalog_schedule =
   (* usages *)
   let usages_accessor_1 =
     let$ [to_; relation; base; _var] = ["to_"; "relation"; "base"; "_var"] in
-    [ (*not (used_pred base);*)
+    [ not (used_pred base);
       usages_rel to_ _var;
       accessor_rel to_ relation base ]
     ==> usages_rel base base
   in
   let usages_accessor_2 =
     let$ [to_; relation; base] = ["to_"; "relation"; "base"] in
-    [(*not (used_pred base); *) used_pred to_; accessor_rel to_ relation base]
+    [ not (used_pred base); used_pred to_; accessor_rel to_ relation base]
     ==> usages_rel base base
   in
   let usages_alias =
     let$ [to_; from; usage] = ["to_"; "from"; "usage"] in
-    [ (* not (used_pred from); not (used_pred to_); *)
+    [ not (used_pred from); not (used_pred to_);
       usages_rel to_ usage;
       alias_rel to_ from ]
     ==> usages_rel from usage
   in
   (* sources *)
-  (* let sources_constructor_1 = let$ [from; relation; base; _var] = ["from";
+  let sources_constructor_1 = let$ [from; relation; base; _var] = ["from";
      "relation"; "base"; "_var"] in [not (any_source_pred base); sources_rel
      from _var; rev_constructor_rel from relation base] ==> sources_rel base
      base in let sources_constructor_2 = let$ [from; relation; base] = ["from";
      "relation"; "base"] in [not (any_source_pred base); any_source_pred from;
-     rev_constructor_rel from relation base] ==> sources_rel base base in *)
+     rev_constructor_rel from relation base] ==> sources_rel base base in (*
   let sources_constructor =
     let$ [from; relation; base] = ["from"; "relation"; "base"] in
-    [(*not (any_source_pred base); *) rev_constructor_rel from relation base]
+    [ not (any_source_pred base); rev_constructor_rel from relation base]
     ==> sources_rel base base
-  in
+  in *)
   let sources_alias =
     let$ [from; to_; source] = ["from"; "to_"; "source"] in
-    [ (* not (any_source_pred from); not (any_source_pred to_); *)
+    [ not (any_source_pred from); not (any_source_pred to_);
       sources_rel from source;
       rev_alias_rel from to_ ]
     ==> sources_rel to_ source
@@ -215,11 +218,11 @@ let datalog_schedule =
   in
   (* constructor-sources *)
   let field_sources_from_constructor_field_sources =
-    let$ [from; relation; base] = ["from"; "relation"; "base"] in
+    let$ [from; relation; base; _var] = ["from"; "relation"; "base"; "_var"] in
     [ not (any_source_pred base);
       not (any_source_pred from);
       not (field_top_sources_rel base relation);
-      rev_constructor_rel from relation base (* sources_rel from _var *) ]
+      rev_constructor_rel from relation base; sources_rel from _var ]
     ==> field_sources_rel base relation from
   in
   let field_sources_from_constructor_field_top_sources =
@@ -329,7 +332,7 @@ let datalog_schedule =
             usages_accessor_1;
             usages_accessor_2;
             usages_alias;
-            sources_constructor;
+            sources_constructor_1; sources_constructor_2;
             sources_alias;
             rev_alias ] ])
 
@@ -613,6 +616,8 @@ let datalog_rules =
           ==> cannot_change_representation1 y);
          (let$ [x] = ["x"] in
           [cannot_change_representation1 x] ==> cannot_change_representation x);
+    (* Due to value_kinds not taking representation changes into account for now,
+       blocks cannot have their representation changed, so we prevent it here. *)
          (let$ [x; field; y] = ["x"; "field"; "y"] in
           [ constructor_rel x field y;
             filter_field
@@ -631,19 +636,6 @@ let datalog_rules =
           [ field_of_constructor_is_used x field;
             filter_field field_cannot_be_destructured field ]
           ==> cannot_unbox0 x);
-         (* (let$ [x; usage; field] = ["x"; "usage"; "field"] in [usages_rel x
-            usage; used_fields_top_rel usage field; filter_field
-            field_cannot_be_destructured field] ==> cannot_unbox x); (let$ [x;
-            usage; field; _v] = ["x"; "usage"; "field"; "_v"] in [usages_rel x
-            usage; used_fields_rel usage field _v; filter_field
-            field_cannot_be_destructured field] ==> cannot_unbox x);*)
-         (* (let$ [alias; allocation_id; relation; to_; usage] = ["alias";
-            "allocation_id"; "relation"; "to_"; "usage"] in [sources_rel alias
-            allocation_id; rev_constructor_rel alias relation to_; usages_rel
-            to_ usage; (used_fields_top_rel usage relation || exists ["_v"] (fun
-            [_v] -> used_fields_rel usage relation _v)); (filter_field
-            relation_prevents_unboxing relation || cannot_change_representation
-            to_) ] ==> cannot_unbox allocation_id) *)
          (let$ [alias; allocation_id; relation; to_] =
             ["alias"; "allocation_id"; "relation"; "to_"]
           in
