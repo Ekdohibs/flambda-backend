@@ -106,10 +106,6 @@ let rev_constructor_rel = rel3 "rev_constructor" Cols.[n; f; n]
 
 let rev_accessor_rel = rel3 "rev_accessor" Cols.[n; f; n]
 
-let escaping_field_rel = rel2 "escaping_field" Cols.[f; n]
-
-let reading_field_rel = rel2 "reading_field" Cols.[f; n]
-
 (* let field_has_use_rel = Datalog.create_relation ~name:"field_has_use"
    FN.columns let field_has_use_rel field v = Datalog.atom field_has_use_rel
    [field; v] *)
@@ -210,24 +206,11 @@ let datalog_schedule =
       usages_rel to_ _var ]
     ==> used_fields_rel base relation to_
   in
-  let used_fields_from_accessor_used_fields2 =
-    let$ [to_; relation; base] = ["to_"; "relation"; "base"] in
-    [used_pred to_; accessor_rel to_ relation base; local_field_pred relation]
-    ==> used_fields_rel base relation to_
-  in
-  let used_fields_from_accessor_used_fields3 =
-    let$ [to_; relation; base; _var] = ["to_"; "relation"; "base"; "_var"] in
-    [ usages_rel to_ _var;
-      accessor_rel to_ relation base;
-      local_field_pred relation ]
-    ==> used_fields_rel base relation to_
-  in
   let used_fields_from_accessor_used_fields_top =
     let$ [to_; relation; base] = ["to_"; "relation"; "base"] in
     [ not (used_pred base);
       used_pred to_;
-      accessor_rel to_ relation base;
-      not (local_field_pred relation) ]
+      accessor_rel to_ relation base ]
     ==> used_fields_top_rel base relation
   in
   (* constructor-sources *)
@@ -239,19 +222,12 @@ let datalog_schedule =
       rev_constructor_rel from relation base (* sources_rel from _var *) ]
     ==> field_sources_rel base relation from
   in
-  let field_sources_from_constructor_field_sources2 =
-    let$ [from; relation; base] = ["from"; "relation"; "base"] in
-    [ any_source_pred from;
-      rev_constructor_rel from relation base;
-      local_field_pred relation ]
-    ==> field_sources_rel base relation from
-  in
   let field_sources_from_constructor_field_top_sources =
     let$ [from; relation; base] = ["from"; "relation"; "base"] in
     [ not (any_source_pred base);
       any_source_pred from;
       rev_constructor_rel from relation base;
-      not (local_field_pred relation) ]
+     ]
     ==> field_top_sources_rel base relation
   in
   (* constructor-used *)
@@ -259,9 +235,9 @@ let datalog_schedule =
     let$ [base; base_use; relation; from; to_] =
       ["base"; "base_use"; "relation"; "from"; "to_"]
     in
-    [ (* not (used_pred from); *)
+    [ not (used_pred from);
       not (used_fields_top_rel base_use relation);
-      (* not (used_pred base); *)
+      not (used_pred base);
       constructor_rel base relation from;
       usages_rel base base_use;
       used_fields_rel base_use relation to_ ]
@@ -281,25 +257,17 @@ let datalog_schedule =
     let$ [base; relation; from] = ["base"; "relation"; "from"] in
     [ used_pred base;
       constructor_rel base relation from;
-      not (local_field_pred relation) ]
+     ]
     ==> used_pred from
-  in
-  let escaping_local_field =
-    let$ [base; relation; from] = ["base"; "relation"; "from"] in
-    [ used_pred base;
-      constructor_rel base relation from;
-      local_field_pred relation ]
-    ==> escaping_field_rel relation from
   in
   (* accessor-sources *)
   let alias_from_accessed_constructor_2 =
     let$ [base; base_source; relation; to_; from] =
       ["base"; "base_source"; "relation"; "to_"; "from"]
     in
-    [ (* not (any_source_pred to_); *)
-      (* XXX or local field *)
+    [ not (any_source_pred to_);
       not (field_top_sources_rel base_source relation);
-      (* not (any_source_pred base);*)
+      not (any_source_pred base);
       rev_accessor_rel base relation to_;
       sources_rel base base_source;
       field_sources_rel base_source relation from ]
@@ -319,22 +287,8 @@ let datalog_schedule =
     let$ [base; relation; to_] = ["base"; "relation"; "to_"] in
     [ any_source_pred base;
       rev_accessor_rel base relation to_;
-      not (local_field_pred relation) ]
+   ]
     ==> any_source_pred to_
-  in
-  let reading_local_field =
-    let$ [base; relation; to_] = ["base"; "relation"; "to_"] in
-    [ any_source_pred base;
-      (* XXX reenable*)
-      rev_accessor_rel base relation to_;
-      local_field_pred relation ]
-    ==> reading_field_rel relation to_
-  in
-  (* reading-escaping *)
-  let reading_escaping =
-    let$ [relation; from; to_] = ["relation"; "from"; "to_"] in
-    [escaping_field_rel relation from; reading_field_rel relation to_]
-    ==> alias_rel to_ from
   in
   (* use *)
   let used_from_use_1 =
@@ -364,19 +318,13 @@ let datalog_schedule =
             used_from_accessed_constructor;
             any_source_from_accessed_constructor;
             any_source_from_accessor_any_source;
-            escaping_local_field;
-            reading_local_field;
-            reading_escaping;
             rev_alias ];
         saturate
           [ alias_from_accessed_constructor;
             alias_from_accessed_constructor_2;
             used_fields_from_accessor_used_fields;
-            used_fields_from_accessor_used_fields2;
-            used_fields_from_accessor_used_fields3;
             used_fields_from_accessor_used_fields_top;
             field_sources_from_constructor_field_sources;
-            field_sources_from_constructor_field_sources2;
             field_sources_from_constructor_field_top_sources;
             usages_accessor_1;
             usages_accessor_2;
@@ -521,39 +469,12 @@ let has_use, field_used =
     mk_exists_query ["X"; "F"] ["U"; "V"] (fun [x; f] [u; v] ->
         [usages_rel x u; used_fields_rel u f v])
   in
-  let is_local_field_query =
-    mk_exists_query ["F"] [] (fun [f] [] -> [local_field_pred f])
-  in
-  let escapes_1 =
-    mk_exists_query ["X"; "F"] ["U"] (fun [x; f] [u] ->
-        [used_pred x; reading_field_rel f u; used_pred u])
-  in
-  let escapes_2 =
-    mk_exists_query ["X"; "F"] ["U"; "V"] (fun [x; f] [u; v] ->
-        [used_pred x; reading_field_rel f u; usages_rel u v])
-  in
-  let escapes_3 =
-    mk_exists_query ["X"; "F"] ["U"; "V"] (fun [x; f] [u; v] ->
-        [used_pred x; local_field_pred f; sources_rel u x; used_fields_rel u f v])
-  in
-  let escapes_4 =
-    mk_exists_query ["X"; "F"] ["U"] (fun [x; f] [u] ->
-        [ used_pred x;
-          local_field_pred f;
-          sources_rel u x;
-          used_fields_top_rel u f ])
-  in
   ( (fun db x ->
       exists_with_parameters used_pred_query [x] db
       || exists_with_parameters usages_query [x] db),
     fun db x field ->
       let field = Field.encode field in
       exists_with_parameters used_pred_query [x] db
-      && not (exists_with_parameters is_local_field_query [field] db)
-      || exists_with_parameters escapes_1 [x; field] db
-      || exists_with_parameters escapes_2 [x; field] db
-      || exists_with_parameters escapes_3 [x; field] db
-      || exists_with_parameters escapes_4 [x; field] db
       || exists_with_parameters used_field_top_query [x; field] db
       || exists_with_parameters used_field_query [x; field] db )
 
@@ -594,7 +515,7 @@ let datalog_rules =
   [ (let$ [base; relation; from] = ["base"; "relation"; "from"] in
      [ constructor_rel base relation from;
        used_pred base;
-       not (local_field_pred relation) ]
+       ]
      ==> field_of_constructor_is_used base relation);
     (let$ [base; relation; from; usage] =
        ["base"; "relation"; "from"; "usage"]
@@ -610,38 +531,6 @@ let datalog_rules =
        usages_rel base usage;
        used_fields_rel usage relation _v ]
      ==> field_of_constructor_is_used base relation);
-     in
-     [ constructor_rel base relation from;
-       used_pred base;
-       reading_field_rel relation usage;
-       used_pred usage ]
-     ==> field_of_constructor_is_used base relation);
-    (let$ [base; relation; from; usage1; usage2] =
-       ["base"; "relation"; "from"; "usage1"; "usage2"]
-     in
-     [ constructor_rel base relation from;
-       used_pred base;
-       reading_field_rel relation usage1;
-       usages_rel usage1 usage2 ]
-     ==> field_of_constructor_is_used base relation);
-    (let$ [usage; base; relation; from; _v] =
-       ["usage"; "base"; "relation"; "from"; "_v"]
-     in
-     [ sources_rel usage base;
-       constructor_rel base relation from;
-       used_pred base;
-       local_field_pred relation;
-       used_fields_rel usage relation _v ]
-     ==> field_of_constructor_is_used base relation);
-    (let$ [usage; base; relation; from] =
-       ["usage"; "base"; "relation"; "from"]
-     in
-     [ sources_rel usage base;
-       constructor_rel base relation from;
-       used_pred base;
-       local_field_pred relation;
-       used_fields_top_rel usage relation ]
-     ==> field_of_constructor_is_used base relation);
     (let$ [base; relation; from; coderel; indirect_call_witness] =
        ["base"; "relation"; "from"; "coderel"; "indirect_call_witness"]
      in
@@ -650,22 +539,9 @@ let datalog_rules =
        constructor_rel base coderel indirect_call_witness;
        used_pred indirect_call_witness;
        filter_field is_code_field coderel ]
-     ==> field_of_constructor_is_used base relation) ]
-  @ (if Sys.getenv_opt "REAPER_FORCE_UNBOX" <> None
-    then
-      let$ [x; field; y] = ["x"; "field"; "y"] in
-      [ used_pred x;
-        not (local_field_pred field);
-        filter_field real_field field;
-        constructor_rel x field y ]
-      ==> cannot_change_representation0 x
-    else
-      let$ [x] = ["x"] in
-      [used_pred x] ==> cannot_change_representation0 x)
-    :: [ (* (let$ [allocation_id; alias; alias_source] = ["allocation_id";
-            "alias"; "alias_source"] in [ usages_rel allocation_id alias;
-            sources_rel alias alias_source; not_equal alias_source allocation_id
-            ] ==> cannot_change_representation0 allocation_id); *)
+     ==> field_of_constructor_is_used base relation);
+      (let$ [x] = ["x"] in
+       [used_pred x] ==> cannot_change_representation0 x);
          (let$ [allocation_id; alias; alias_source; field; _v] =
             ["allocation_id"; "alias"; "alias_source"; "field"; "_v"]
           in
@@ -684,12 +560,6 @@ let datalog_rules =
             filter_field real_field field;
             used_fields_top_rel alias field ]
           ==> cannot_change_representation0 allocation_id);
-         (* (let$ [allocation_id; alias] = ["allocation_id"; "alias"] in
-            [usages_rel allocation_id alias; not (sources_rel alias
-            allocation_id)] ==> cannot_change_representation0 allocation_id); *)
-         (* (let$ [allocation_id; alias] = ["allocation_id"; "alias"] in
-            [usages_rel allocation_id alias; any_source_pred alias] ==>
-            cannot_change_representation0 allocation_id); *)
          (let$ [allocation_id; alias; field; _v] =
             ["allocation_id"; "alias"; "field"; "_v"]
           in
@@ -844,6 +714,8 @@ let[@inline] erase kind =
     (Flambda_kind.With_subkind.nullable kind)
 
 let rec rewrite_kind_with_subkind_not_top_not_bottom db flow_to kind =
+  (* CR ncourant: rewrite changed representation, or at least replace with Top.
+     Not needed while we don't change representation of blocks. *)
   match Flambda_kind.With_subkind.non_null_value_subkind kind with
   | Anything -> kind
   | Tagged_immediate ->
