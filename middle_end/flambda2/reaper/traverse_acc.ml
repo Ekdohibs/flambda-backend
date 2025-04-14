@@ -168,7 +168,7 @@ let add_set_of_closures_dep let_bound_name_of_the_closure closure_code_id t =
     <- { let_bound_name_of_the_closure; closure_code_id }
        :: t.set_of_closures_dep
 
-let record_set_of_closure_deps t =
+let record_set_of_closure_deps ~le_monde_exterieur t =
   List.iter
     (fun { let_bound_name_of_the_closure = name; closure_code_id = code_id } ->
       match find_code t code_id with
@@ -178,11 +178,32 @@ let record_set_of_closure_deps t =
             (Compilation_unit.is_current (Code_id.get_compilation_unit code_id)));
         (* The code comes from another compilation unit; so we don't know what
            happens once it is applied. As such, it must escape the whole
-           block. *)
+           block. Besides, return values can be anything. *)
         Graph.add_constructor_dep t.deps
           ~base:(Code_id_or_name.name name)
           Code_of_closure
-          ~from:(Code_id_or_name.name name)
+          ~from:(Code_id_or_name.name name);
+        (* let code_metadata = assert false in
+        let num_returns = Flambda_arity.cardinal_unarized (Code_metadata.result_arity code_metadata) in *)
+        let num_returns = 10 in
+        for i = 0 to num_returns - 1 do
+          Graph.add_constructor_dep t.deps
+            ~base:(Code_id_or_name.name name)
+            (Apply (Direct_code_pointer, Normal i))
+            ~from:(Code_id_or_name.name le_monde_exterieur);
+          Graph.add_constructor_dep t.deps
+            ~base:(Code_id_or_name.name name)
+            (Apply (Indirect_code_pointer, Normal i))
+            ~from:(Code_id_or_name.name le_monde_exterieur)
+        done;
+        Graph.add_constructor_dep t.deps
+          ~base:(Code_id_or_name.name name)
+          (Apply (Direct_code_pointer, Exn))
+          ~from:(Code_id_or_name.name le_monde_exterieur);
+        Graph.add_constructor_dep t.deps
+          ~base:(Code_id_or_name.name name)
+          (Apply (Indirect_code_pointer, Exn))
+          ~from:(Code_id_or_name.name le_monde_exterieur)
       | code_dep ->
         Graph.add_alias t.deps
           ~to_:(Code_id_or_name.var code_dep.my_closure)
@@ -238,7 +259,7 @@ let record_set_of_closure_deps t =
 
 let graph t = t.deps
 
-let deps t ~all_constants =
+let deps t ~le_monde_exterieur ~all_constants =
   List.iter
     (fun { function_containing_apply_expr;
            apply_code_id;
@@ -276,5 +297,5 @@ let deps t ~all_constants =
           code_dep.return apply_return);
       add_cond_dep param_of_apply_exn_cont (Name.var code_dep.exn))
     t.apply_deps;
-  record_set_of_closure_deps t;
+  record_set_of_closure_deps ~le_monde_exterieur t;
   t.deps
