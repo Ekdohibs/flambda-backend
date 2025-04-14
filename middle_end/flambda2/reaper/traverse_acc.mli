@@ -94,4 +94,4 @@ val code_deps : t -> code_dep Code_id.Map.t
 
 val graph : t -> Graph.graph
 
-val deps : t -> all_constants:Name.t -> Graph.graph
+val deps : t -> le_monde_exterieur:Name.t -> all_constants:Name.t -> Graph.graph

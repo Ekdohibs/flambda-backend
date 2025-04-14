@@ -825,7 +825,7 @@ let run (unit : Flambda_unit.t) =
       acc (Flambda_unit.body unit)
   in
   let holed = Profile.record_call ~accumulate:false "down" create_holed in
-  let deps = Acc.deps ~all_constants:(Name.symbol all_constants) acc in
+  let deps = Acc.deps ~le_monde_exterieur:(Name.symbol le_monde_exterieur) ~all_constants:(Name.symbol all_constants) acc in
   let kinds = Acc.kinds acc in
   let fixed_arity_continuations = Acc.fixed_arity_continuations acc in
   let continuation_info = Acc.get_continuation_info acc in
