@@ -219,15 +219,19 @@ let record_set_of_closure_deps t =
             ~from:code_dep.indirect_call_witness;
           acc := tmp_name
         done;
+        let[@inline] add_deps_for entry =
         List.iteri
           (fun i v ->
             Graph.add_constructor_dep t.deps ~base:!acc
-              (Apply (Indirect_code_pointer, Normal i))
+              (Apply (entry, Normal i))
               ~from:(Code_id_or_name.var v))
           code_dep.return;
         Graph.add_constructor_dep t.deps ~base:!acc
-          (Apply (Indirect_code_pointer, Exn))
-          ~from:(Code_id_or_name.var code_dep.exn);
+          (Apply (entry, Exn))
+          ~from:(Code_id_or_name.var code_dep.exn)
+        in
+        add_deps_for Indirect_code_pointer;
+        if num_params > 1 then add_deps_for Direct_code_pointer;
         Graph.add_constructor_dep t.deps ~base:!acc Code_of_closure
           ~from:code_dep.indirect_call_witness)
     t.set_of_closures_dep
