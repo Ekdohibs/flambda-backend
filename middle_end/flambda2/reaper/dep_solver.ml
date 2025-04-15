@@ -494,6 +494,10 @@ let cannot_unbox0 = rel1 "cannot_unbox0" Cols.[n]
 
 let cannot_unbox = rel1 "cannot_unbox" Cols.[n]
 
+let to_unbox = rel1 "to_unbox" Cols.[n]
+
+let to_change_representation = rel1 "to_change_representation" Cols.[n]
+
 let datalog_rules =
   let open! Syntax in
   let open! Global_flow_graph in
@@ -652,7 +656,17 @@ let datalog_rules =
           [ cannot_unbox0 x;
             constructor_rel x field y;
             filter_field is_function_slot field ]
-          ==> cannot_unbox y) ]
+          ==> cannot_unbox y);
+         (let$ [x] = ["x"] in
+          [used_pred x; not (cannot_unbox x)] ==> to_unbox x);
+         (let$ [x; _y] = ["x"; "_y"] in
+          [usages_rel x _y; not (cannot_unbox x)] ==> to_unbox x);
+         (let$ [x] = ["x"] in
+          [used_pred x; not (cannot_change_representation x); not (to_unbox x)]
+          ==> to_change_representation x);
+         (let$ [x; _y] = ["x"; "_y"] in
+          [usages_rel x _y; not (cannot_change_representation x); not (to_unbox x)]
+          ==> to_change_representation x) ]
 
 let map_from_allocation_points_to_dominated =
   (* let open! Syntax in let map_rule = let$ [x; y; z] = ["x"; "y"; "z"] in [
@@ -766,8 +780,38 @@ let rewrite_kind_with_subkind uses var kind =
 
 let debug = Sys.getenv_opt "REAPERDBG" <> None
 
-let fixpoint (graph_new : Global_flow_graph.graph) =
-  let datalog = Global_flow_graph.to_datalog graph_new in
+let rec mk_unboxed_fields ~has_to_be_unboxed ~mk db usages name_prefix =
+  let fields = get_fields db usages in
+  Field.Map.mapi
+    (fun field field_use ->
+      let new_name =
+        Flambda_colours.without_colours ~f:(fun () ->
+            Format.asprintf "%s_field_%a" name_prefix Field.print
+              field)
+      in
+      let[@local] default () = Not_unboxed (mk (Field.kind field) new_name) in
+      match field_use with
+      | None -> default ()
+      | Some flow_to ->
+        if Code_id_or_name.Map.is_empty flow_to
+        then Misc.fatal_errorf "Empty set in [get_fields]";
+        if Code_id_or_name.Map.for_all
+             (fun k () -> has_to_be_unboxed k)
+             flow_to
+        then Unboxed (mk_unboxed_fields ~has_to_be_unboxed ~mk db (get_all_usages db flow_to) new_name)
+        else if Code_id_or_name.Map.exists
+                  (fun k () -> has_to_be_unboxed k)
+                  flow_to
+        then
+          Misc.fatal_errorf
+            "Field %a of %s flows to both unboxed and non-unboxed \
+             variables"
+            Field.print field name_prefix
+        else default ())
+    fields
+
+let fixpoint (graph : Global_flow_graph.graph) =
+  let datalog = Global_flow_graph.to_datalog graph in
   let stats = Datalog.Schedule.create_stats () in
   let db = Datalog.Schedule.run ~stats datalog_schedule datalog in
   let db =
@@ -789,57 +833,27 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
   let unboxed : unboxed Code_id_or_name.Map.t ref =
     ref Code_id_or_name.Map.empty
   in
-  let not_unboxable =
-    let q = mk_exists_query ["X"] [] (fun [x] [] -> [cannot_unbox x]) in
-    fun x -> exists_with_parameters q [x] db
+  let query_to_unbox =
+    Datalog.(compile ["X"] (fun [x] -> where [to_unbox x] (yield [x])))
   in
-  let not_chg =
-    let q =
-      mk_exists_query ["X"] [] (fun [x] [] -> [cannot_change_representation x])
-    in
-    fun x -> exists_with_parameters q [x] db
+  let query_to_change_representation =
+    Datalog.(compile ["X"] (fun [x] -> where [to_change_representation x] (yield [x])))
   in
-  let all_with_use = Hashtbl.create 17 in
-  let query_uses =
-    let open Datalog in
-    let open! Global_flow_graph in
-    compile ["X"] (fun [x] -> where [used_pred x] (yield [x]))
-  in
-  let query_usage =
-    let open Datalog in
-    let open! Global_flow_graph in
-    compile ["X"; "U"] (fun [x; u] -> where [usages_rel x u] (yield [x]))
-  in
-  Datalog.Cursor.iter query_uses db ~f:(fun [u] ->
-      Hashtbl.replace all_with_use u ());
-  Datalog.Cursor.iter query_usage db ~f:(fun [u] ->
-      Hashtbl.replace all_with_use u ());
-  let to_unbox =
-    Hashtbl.fold
-      (fun code_or_name () to_unbox ->
-         if not_unboxable code_or_name then to_unbox
-         else Code_id_or_name.Set.add code_or_name to_unbox)
-      all_with_use Code_id_or_name.Set.empty
-  in
-  let to_change_representation =
-    Hashtbl.fold
-      (fun code_or_name () to_change_representation ->
-         if Code_id_or_name.Set.mem code_or_name to_unbox || not_chg code_or_name then
-           to_change_representation
-          else
-         Code_id_or_name.Set.add code_or_name to_change_representation
-      )
-      all_with_use Code_id_or_name.Set.empty
-  in
+  let to_unbox = Hashtbl.create 17 in
+  let to_change_representation = Hashtbl.create 17 in
+  Datalog.Cursor.iter query_to_unbox db ~f:(fun [u] ->
+      Hashtbl.replace to_unbox u ());
+  Datalog.Cursor.iter query_to_change_representation db ~f:(fun [u] ->
+      Hashtbl.replace to_change_representation u ());
   let has_to_be_unboxed code_or_name =
     match
       Code_id_or_name.Map.find_opt code_or_name allocation_point_dominator
     with
     | None -> false
-    | Some alloc_point -> Code_id_or_name.Set.mem alloc_point to_unbox
+    | Some alloc_point -> Hashtbl.mem to_unbox alloc_point
   in
-  Code_id_or_name.Set.iter
-    (fun code_or_name ->
+  Hashtbl.iter
+    (fun code_or_name () ->
       (* Format.eprintf "%a@." Code_id_or_name.print code_or_name; *)
       let to_patch =
         match
@@ -852,45 +866,13 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
       Code_id_or_name.Set.iter
         (fun to_patch ->
           (* CR-someday ncourant: produce ghost makeblocks/set of closures for debugging *)
-          let rec unbox_rec usages name_prefix =
-            let fields = get_fields db usages in
-            Field.Map.mapi
-              (fun field field_use ->
-                let new_name =
-                  Flambda_colours.without_colours ~f:(fun () ->
-                      Format.asprintf "%s_field_%a" name_prefix Field.print
-                        field)
-                in
-                let[@local] default () =
-                  Not_unboxed (Variable.create new_name)
-                in
-                match field_use with
-                | None -> default ()
-                | Some flow_to ->
-                  if Code_id_or_name.Map.is_empty flow_to
-                  then Misc.fatal_errorf "Empty set in [get_fields]";
-                  if Code_id_or_name.Map.for_all
-                       (fun k () -> has_to_be_unboxed k)
-                       flow_to
-                  then Unboxed (unbox_rec (get_all_usages db flow_to) new_name)
-                  else if Code_id_or_name.Map.exists
-                            (fun k () -> has_to_be_unboxed k)
-                            flow_to
-                  then
-                    Misc.fatal_errorf
-                      "Field %a of %s flows to both unboxed and non-unboxed \
-                       variables"
-                      Field.print field name_prefix
-                  else default ())
-              fields
-          in
           let new_name =
             Flambda_colours.without_colours ~f:(fun () ->
                 Format.asprintf "%a_into_%a" Code_id_or_name.print code_or_name
                   Code_id_or_name.print to_patch)
           in
           let fields =
-            unbox_rec
+            mk_unboxed_fields ~has_to_be_unboxed ~mk:(fun _kind name -> Variable.create name) db
               (get_all_usages db (Code_id_or_name.Map.singleton to_patch ()))
               new_name
           in
@@ -904,8 +886,8 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
          (Field.Map.print (pp_unboxed_elt Variable.print)))
       !unboxed;
   let changed_representation = ref Code_id_or_name.Map.empty in
-  Code_id_or_name.Set.iter
-    (fun code_id_or_name ->
+  Hashtbl.iter
+    (fun code_id_or_name () ->
       if Code_id_or_name.Map.mem code_id_or_name !changed_representation
       then ()
       else
@@ -920,41 +902,10 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
             | None -> Code_id_or_name.Set.empty
             | Some s -> s)
         in
-        let set_of_closures_def = get_set_of_closures_def db code_id_or_name in
-        let rec repr_rec mk_field usages =
-          let fields = get_fields db usages in
-          (* TODO handle closures & non-value fields *)
-          Field.Map.filter_map
-            (fun field field_use ->
-              match field with
-              | Function_slot _ -> assert false
-              | Code_of_closure | Apply _ -> None
-              | Get_tag | Is_int | Block _ | Value_slot _ ->
-                Some
-                  (match field_use with
-                  | None -> Not_unboxed (mk_field (Field.kind field))
-                  | Some flow_to ->
-                    if Code_id_or_name.Map.is_empty flow_to
-                    then Misc.fatal_errorf "Empty set in [flow_to]";
-                    if Code_id_or_name.Map.for_all
-                         (fun k () -> has_to_be_unboxed k)
-                         flow_to
-                    then Unboxed (repr_rec mk_field (get_all_usages db flow_to))
-                    else if Code_id_or_name.Map.exists
-                              (fun k () -> has_to_be_unboxed k)
-                              flow_to
-                    then
-                      Misc.fatal_errorf
-                        "Field %a of %a flows to both unboxed and non-unboxed \
-                         variables"
-                        Field.print field Code_id_or_name.print code_id_or_name
-                    else Not_unboxed (mk_field (Field.kind field))))
-            fields
-        in
-        match set_of_closures_def with
+        match get_set_of_closures_def db code_id_or_name with
         | Not_a_set_of_closures ->
           let r = ref ~-1 in
-          let mk_field_block _field_kind =
+          let mk _kind _name =
             (* XXX fixme, disabled for now *)
             incr r;
             ( !r,
@@ -968,14 +919,15 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
           let uses =
             get_all_usages db (Code_id_or_name.Map.singleton code_id_or_name ())
           in
-          let repr = repr_rec mk_field_block uses in
+          let repr =
+            mk_unboxed_fields ~has_to_be_unboxed ~mk db
+            uses "" in
           add_to_s (Block_representation (repr, !r + 1)) code_id_or_name
         | Set_of_closures l ->
-          let mk_field_clos field_kind =
+          let mk kind name =
             Value_slot.create
               (Compilation_unit.get_current_exn ())
-              ~name:"unboxed_value_slot" ~is_always_immediate:false
-              field_kind
+              ~name ~is_always_immediate:false kind
           in
           let uses =
             get_all_usages db
@@ -983,7 +935,7 @@ let fixpoint (graph_new : Global_flow_graph.graph) =
                  (fun acc (_, x) -> Code_id_or_name.Map.add x () acc)
                  Code_id_or_name.Map.empty l)
           in
-          let repr = repr_rec mk_field_clos uses in
+          let repr = mk_unboxed_fields ~has_to_be_unboxed ~mk db uses "unboxed" in
           let fss =
             List.fold_left
               (fun acc (fs, _) ->
