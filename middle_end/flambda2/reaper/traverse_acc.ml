@@ -168,7 +168,7 @@ let add_set_of_closures_dep let_bound_name_of_the_closure closure_code_id t =
     <- { let_bound_name_of_the_closure; closure_code_id }
        :: t.set_of_closures_dep
 
-let record_set_of_closure_deps ~le_monde_exterieur t =
+let record_set_of_closure_deps ~get_code_metadata ~le_monde_exterieur t =
   List.iter
     (fun { let_bound_name_of_the_closure = name; closure_code_id = code_id } ->
       match find_code t code_id with
@@ -183,10 +183,11 @@ let record_set_of_closure_deps ~le_monde_exterieur t =
           ~base:(Code_id_or_name.name name)
           Code_of_closure
           ~from:(Code_id_or_name.name name);
-        (* let code_metadata = assert false in let num_returns =
-           Flambda_arity.cardinal_unarized (Code_metadata.result_arity
-           code_metadata) in *)
-        let num_returns = 10 in
+        let code_metadata = get_code_metadata code_id in
+        let num_returns =
+          Flambda_arity.cardinal_unarized
+            (Code_metadata.result_arity code_metadata)
+        in
         for i = 0 to num_returns - 1 do
           Graph.add_constructor_dep t.deps
             ~base:(Code_id_or_name.name name)
@@ -260,7 +261,7 @@ let record_set_of_closure_deps ~le_monde_exterieur t =
 
 let graph t = t.deps
 
-let deps t ~le_monde_exterieur ~all_constants =
+let deps t ~get_code_metadata ~le_monde_exterieur ~all_constants =
   List.iter
     (fun { function_containing_apply_expr;
            apply_code_id;
@@ -298,5 +299,5 @@ let deps t ~le_monde_exterieur ~all_constants =
           code_dep.return apply_return);
       add_cond_dep param_of_apply_exn_cont (Name.var code_dep.exn))
     t.apply_deps;
-  record_set_of_closure_deps ~le_monde_exterieur t;
+  record_set_of_closure_deps ~get_code_metadata ~le_monde_exterieur t;
   t.deps
