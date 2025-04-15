@@ -25,11 +25,14 @@ let rec pp_unboxed_elt pp_unboxed ppf = function
 
 let print_unboxed_fields = pp_unboxed_elt
 
-(* type repr = | Unboxed_fields of Variable.t unboxed_fields |
-   Changed_representation of Field.t unboxed_fields *)
+(* CR-someday ncourant: track fields that are known to be constant, here and in
+   changed_representation, to avoid having them be represented. This is a bit
+   complex for two main reasons:
 
-(* CR-someday ncourant: track fields that are known to be constant to avoid
-   having them be represented. *)
+   - At this point in the dependency solver, we do not know the specific value
+   of the constant but only that it is one (an alias to all_constants)
+
+   - For symbols, this could break dominator scoping. *)
 type unboxed = Variable.t unboxed_fields Field.Map.t
 
 type changed_representation =
@@ -64,6 +67,14 @@ type result =
   }
 
 let pp_result ppf res = Format.fprintf ppf "%a@." Datalog.print res.db
+
+module Syntax = struct
+  include Datalog
+
+  let ( let$ ) xs f = compile xs f
+
+  let ( ==> ) h c = where h (deduce c)
+end
 
 module Cols = struct
   let n = Code_id_or_name.datalog_column_id
@@ -128,11 +139,8 @@ let rev_accessor_rel = rel3 "rev_accessor" Cols.[n; f; n]
    the compilation unit), or a given constructor. *)
 
 let datalog_schedule =
-  let open Datalog in
   let open Global_flow_graph in
-  let not = Datalog.not in
-  let ( let$ ) xs f = compile xs f in
-  let ( ==> ) h c = where h (deduce c) in
+  let open! Syntax in
   (* Reverse relations, because datalog does not implement a more efficient
      representation yet. *)
   let rev_alias =
@@ -352,19 +360,13 @@ let is_function_slot : Field.t -> _ = function[@ocaml.warning "-4"]
   | Function_slot _ -> true
   | _ -> false
 
-module Syntax = struct
-  include Datalog
-
-  let ( let$ ) xs f = compile xs f
-
-  let ( ==> ) h c = where h (deduce c)
-end
-
 let filter_field f x =
   let open! Syntax in
   filter (fun [x] -> f (Field.decode x)) [x]
 
 let get_all_usages =
+  (* CR-someday ncourant: once the datalog API supports something cleaner, use
+     it. *)
   let out_tbl, out = rel1_r "out" Cols.[n] in
   let in_tbl, in_ = rel1_r "in_" Cols.[n] in
   let open! Syntax in
@@ -390,6 +392,8 @@ let fieldc_map_to_field_map m =
     m Field.Map.empty
 
 let get_fields =
+  (* CR-someday ncourant: likewise here; I find this function particulartly
+     ugly. *)
   let out_tbl1, out1 = rel1_r "out1" Cols.[f] in
   let out_tbl2, out2 = rel2_r "out2" Cols.[f; n] in
   let in_tbl, in_ = rel1_r "in_" Cols.[n] in
@@ -592,6 +596,10 @@ let datalog_rules =
     (let$ [allocation_id] = ["allocation_id"] in
      [any_source_pred allocation_id]
      ==> cannot_change_representation0 allocation_id);
+    (* CR-someday ncourant: we completely prevent changing the representation of
+       symbols. While allowing them to be unboxed is difficult, due to symbols
+       being always values, we could at least change their representation. This
+       would require rewriting in the types, which is not done yet. *)
     (let$ [x; _source] = ["x"; "_source"] in
      [ sources_rel x _source;
        filter
@@ -710,6 +718,9 @@ let rec mapi_unboxed_fields (not_unboxed : 'a -> 'b -> 'c)
 let map_unboxed_fields f uf =
   mapi_unboxed_fields (fun () x -> f x) (fun _ () -> ()) () uf
 
+(* Note that this depends crucially on the fact that the poison value is not
+   nullable. If it was, we could instead keep the subkind but erase the
+   nullability part instead. *)
 let[@inline] erase kind =
   Flambda_kind.With_subkind.create
     (Flambda_kind.With_subkind.kind kind)
@@ -908,6 +919,8 @@ let fixpoint (graph : Global_flow_graph.graph) =
           let r = ref ~-1 in
           let mk _kind _name =
             (* XXX fixme, disabled for now *)
+            (* TODO depending on the kind, use two counters; then produce a
+               mixed block; map_unboxed_fields should help with that *)
             incr r;
             ( !r,
               Flambda_primitive.(
