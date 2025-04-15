@@ -796,32 +796,41 @@ let debug = Sys.getenv_opt "REAPERDBG" <> None
 
 let rec mk_unboxed_fields ~has_to_be_unboxed ~mk db usages name_prefix =
   let fields = get_fields db usages in
-  Field.Map.mapi
+  Field.Map.filter_map
     (fun field field_use ->
-      let new_name =
-        Flambda_colours.without_colours ~f:(fun () ->
-            Format.asprintf "%s_field_%a" name_prefix Field.print field)
-      in
-      let[@local] default () = Not_unboxed (mk (Field.kind field) new_name) in
-      match field_use with
-      | None -> default ()
-      | Some flow_to ->
-        if Code_id_or_name.Map.is_empty flow_to
-        then Misc.fatal_errorf "Empty set in [get_fields]";
-        if Code_id_or_name.Map.for_all (fun k () -> has_to_be_unboxed k) flow_to
-        then
-          Unboxed
-            (mk_unboxed_fields ~has_to_be_unboxed ~mk db
-               (get_all_usages db flow_to)
-               new_name)
-        else if Code_id_or_name.Map.exists
-                  (fun k () -> has_to_be_unboxed k)
-                  flow_to
-        then
-          Misc.fatal_errorf
-            "Field %a of %s flows to both unboxed and non-unboxed variables"
-            Field.print field name_prefix
-        else default ())
+      match field with
+      | Function_slot _ -> assert false
+      | Apply _ | Code_of_closure -> None
+      | Block _ | Value_slot _ | Is_int | Get_tag -> (
+        let new_name =
+          Flambda_colours.without_colours ~f:(fun () ->
+              Format.asprintf "%s_field_%a" name_prefix Field.print field)
+        in
+        let[@local] default () =
+          Some (Not_unboxed (mk (Field.kind field) new_name))
+        in
+        match field_use with
+        | None -> default ()
+        | Some flow_to ->
+          if Code_id_or_name.Map.is_empty flow_to
+          then Misc.fatal_errorf "Empty set in [get_fields]";
+          if Code_id_or_name.Map.for_all
+               (fun k () -> has_to_be_unboxed k)
+               flow_to
+          then
+            Some
+              (Unboxed
+                 (mk_unboxed_fields ~has_to_be_unboxed ~mk db
+                    (get_all_usages db flow_to)
+                    new_name))
+          else if Code_id_or_name.Map.exists
+                    (fun k () -> has_to_be_unboxed k)
+                    flow_to
+          then
+            Misc.fatal_errorf
+              "Field %a of %s flows to both unboxed and non-unboxed variables"
+              Field.print field name_prefix
+          else default ()))
     fields
 
 let fixpoint (graph : Global_flow_graph.graph) =
@@ -829,7 +838,10 @@ let fixpoint (graph : Global_flow_graph.graph) =
   let stats = Datalog.Schedule.create_stats () in
   let db = Datalog.Schedule.run ~stats datalog_schedule datalog in
   let db =
-    Datalog.Schedule.run ~stats (Datalog.Schedule.saturate datalog_rules) db
+    List.fold_left
+      (fun db rule ->
+        Datalog.Schedule.run ~stats (Datalog.Schedule.saturate [rule]) db)
+      db datalog_rules
   in
   if debug then Format.eprintf "%a@." Datalog.Schedule.print_stats stats;
   if Sys.getenv_opt "DUMPDB" <> None then Format.eprintf "%a@." Datalog.print db;
