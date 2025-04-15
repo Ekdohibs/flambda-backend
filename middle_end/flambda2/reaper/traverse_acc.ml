@@ -177,14 +177,15 @@ let record_set_of_closure_deps ~le_monde_exterieur t =
           not
             (Compilation_unit.is_current (Code_id.get_compilation_unit code_id)));
         (* The code comes from another compilation unit; so we don't know what
-           happens once it is applied. As such, it must escape the whole
-           block. Besides, return values can be anything. *)
+           happens once it is applied. As such, it must escape the whole block.
+           Besides, return values can be anything. *)
         Graph.add_constructor_dep t.deps
           ~base:(Code_id_or_name.name name)
           Code_of_closure
           ~from:(Code_id_or_name.name name);
-        (* let code_metadata = assert false in
-        let num_returns = Flambda_arity.cardinal_unarized (Code_metadata.result_arity code_metadata) in *)
+        (* let code_metadata = assert false in let num_returns =
+           Flambda_arity.cardinal_unarized (Code_metadata.result_arity
+           code_metadata) in *)
         let num_returns = 10 in
         for i = 0 to num_returns - 1 do
           Graph.add_constructor_dep t.deps
@@ -241,15 +242,15 @@ let record_set_of_closure_deps ~le_monde_exterieur t =
           acc := tmp_name
         done;
         let[@inline] add_deps_for entry =
-        List.iteri
-          (fun i v ->
-            Graph.add_constructor_dep t.deps ~base:!acc
-              (Apply (entry, Normal i))
-              ~from:(Code_id_or_name.var v))
-          code_dep.return;
-        Graph.add_constructor_dep t.deps ~base:!acc
-          (Apply (entry, Exn))
-          ~from:(Code_id_or_name.var code_dep.exn)
+          List.iteri
+            (fun i v ->
+              Graph.add_constructor_dep t.deps ~base:!acc
+                (Apply (entry, Normal i))
+                ~from:(Code_id_or_name.var v))
+            code_dep.return;
+          Graph.add_constructor_dep t.deps ~base:!acc
+            (Apply (entry, Exn))
+            ~from:(Code_id_or_name.var code_dep.exn)
         in
         add_deps_for Indirect_code_pointer;
         if num_params > 1 then add_deps_for Direct_code_pointer;
