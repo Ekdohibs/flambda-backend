@@ -706,10 +706,13 @@ let rec rebuild_expr (kinds : Flambda_kind.t Name.Map.t) (env : env)
                   (fun rev_args apply_decision func_decision ->
                     match apply_decision, func_decision with
                     | Unbox _, (Keep _ | Delete) | (Keep _ | Delete), Unbox _ ->
+                      let callee_was_called_indirectly =
+                        Dep_solver.field_used env.uses (Simple.pattern_match (Option.get (Apply.callee apply)) ~name:(fun name ~coercion:_ -> Code_id_or_name.name name) ~const:(fun _ -> assert false)) Code_of_closure in
                       Misc.fatal_errorf
-                        "Inconsistent apply (%a) and func (%a) decisions:@ %a"
+                        "Inconsistent apply (%a) and func (%a) decisions:@ %a@.Callee was called indirectly = %b@."
                         print_param_decision apply_decision print_param_decision
                         func_decision Apply.print apply
+                        callee_was_called_indirectly
                     | Delete, _ -> rev_args
                     | Keep (_, _), Keep (v, _) -> Simple.var v :: rev_args
                     | Keep (_, kind), Delete ->
