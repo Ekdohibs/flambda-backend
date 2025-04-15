@@ -25,6 +25,13 @@ let unit_with_body (unit : Flambda_unit.t) (body : Flambda.Expr.t) =
 
 let run ~cmx_loader ~all_code (unit : Flambda_unit.t) =
   let debug_print = Flambda_features.dump_reaper () in
+  let load_code = Flambda_cmx.get_imported_code cmx_loader in
+  let get_code_metadata code_id =
+    Code_or_metadata.code_metadata
+      (match Exported_code.find all_code code_id with
+      | Some code -> code
+      | None -> Exported_code.find_exn (load_code ()) code_id)
+  in
   let Traverse.
         { holed;
           deps;
@@ -33,7 +40,7 @@ let run ~cmx_loader ~all_code (unit : Flambda_unit.t) =
           continuation_info;
           code_deps
         } =
-    Traverse.run unit
+    Traverse.run ~get_code_metadata unit
   in
   if debug_print
   then Format.printf "USED %a@." Global_flow_graph.pp_used_graph deps;
@@ -50,10 +57,7 @@ let run ~cmx_loader ~all_code (unit : Flambda_unit.t) =
   in
   let Rebuild.{ body; free_names; all_code; slot_offsets } =
     Rebuild.rebuild ~code_deps ~fixed_arity_continuations ~continuation_info
-      kinds solved_dep
-      (fun code_id ->
-        Code_or_metadata.code_metadata (Exported_code.find_exn all_code code_id))
-      holed
+      kinds solved_dep get_code_metadata holed
   in
   (* Format.eprintf "SO: %a@.FREE: %a@." Slot_offsets.print slot_offsets
      Name_occurrences.print free_names; *)
