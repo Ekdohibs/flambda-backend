@@ -50,7 +50,12 @@ val get_changed_representation :
 
 val has_use : result -> Code_id_or_name.t -> bool
 
+val has_source : result -> Code_id_or_name.t -> bool
+
 val field_used :
+  result -> Code_id_or_name.t -> Global_flow_graph.Field.t -> bool
+
+val not_local_field_has_source :
   result -> Code_id_or_name.t -> Global_flow_graph.Field.t -> bool
 
 (** Color of node when producing the graph as a .dot *)
