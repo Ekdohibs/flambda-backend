@@ -548,8 +548,11 @@ let rewrite_apply_cont_expr kinds env ac =
        (fun arg ->
          Simple.pattern_match arg
            ~name:(fun name ~coercion:_ ->
-             let name = Code_id_or_name.name name in
-             not (Dep_solver.has_source env.uses name))
+             (not (Dep_solver.has_source env.uses (Code_id_or_name.name name)))
+             && Name.pattern_match name
+                  ~symbol:(fun s_ ->
+                    Compilation_unit.is_current (Symbol.compilation_unit s_))
+                  ~var:(fun _ -> true))
            ~const:(fun _ -> false))
        args
   then None
@@ -620,20 +623,28 @@ let rec rebuild_expr (kinds : Flambda_kind.t Name.Map.t) (env : env)
         let free_names = Apply_cont_expr.free_names ac in
         RE.from_expr ~expr ~free_names)
     | Switch switch ->
-      let switch =
-        Switch_expr.create
-          ~condition_dbg:(Switch_expr.condition_dbg switch)
-            (* Scrutinee should never need rewriting, do it anyway for
-               completeness *)
-          ~scrutinee:(rewrite_simple kinds env (Switch_expr.scrutinee switch))
-          ~arms:
-            (Targetint_31_63.Map.filter_map
-               (fun _ -> rewrite_apply_cont_expr kinds env)
-               (Switch_expr.arms switch))
+      let arms =
+        Targetint_31_63.Map.filter_map
+          (fun _ -> rewrite_apply_cont_expr kinds env)
+          (Switch_expr.arms switch)
       in
-      let expr = Expr.create_switch switch in
-      let free_names = Switch_expr.free_names switch in
-      RE.from_expr ~expr ~free_names
+      if Targetint_31_63.Map.is_empty arms
+      then
+        RE.from_expr
+          ~expr:(Expr.create_invalid Zero_switch_arms)
+          ~free_names:Name_occurrences.empty
+      else
+        let switch =
+          Switch_expr.create
+            ~condition_dbg:(Switch_expr.condition_dbg switch)
+              (* Scrutinee should never need rewriting, do it anyway for
+                 completeness *)
+            ~scrutinee:(rewrite_simple kinds env (Switch_expr.scrutinee switch))
+            ~arms
+        in
+        let expr = Expr.create_switch switch in
+        let free_names = Switch_expr.free_names switch in
+        RE.from_expr ~expr ~free_names
     | Apply apply -> (
       (* CR ncourant: we never rewrite alloc_mode. This is currently ok because
          we never remove begin- or end-region primitives, but might be needed
@@ -1576,38 +1587,41 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
       in
       if is_begin_region || is_var_used env v then default () else erase ())
   | Let_cont { cont; parent; handler } ->
-    let { bound_parameters = _; expr; is_exn_handler; is_cold } = handler in
-    let parameters_to_keep =
-      Continuation.Map.find cont env.cont_params_to_keep
-    in
-    let cont_handler =
-      let handler = rebuild_expr kinds env expr in
-      let l = get_parameters parameters_to_keep in
-      let l =
-        List.concat_map
-          (fun param ->
-            let v = Bound_parameter.var param in
-            match
-              Dep_solver.get_unboxed_fields env.uses (Code_id_or_name.var v)
-            with
-            | None -> [param]
-            | Some fields ->
-              fold_unboxed_with_kind
-                (fun kind v acc ->
-                  Bound_parameter.create v
-                    (Flambda_kind.With_subkind.anything kind)
-                  :: acc)
-                fields [])
-          l
+    if not (Name_occurrences.mem_continuation hole.free_names cont)
+    then rebuild_holed kinds env parent hole
+    else
+      let { bound_parameters = _; expr; is_exn_handler; is_cold } = handler in
+      let parameters_to_keep =
+        Continuation.Map.find cont env.cont_params_to_keep
       in
-      RE.create_continuation_handler
-        (Bound_parameters.create l)
-        ~handler ~is_exn_handler ~is_cold
-    in
-    let let_cont_expr =
-      RE.create_non_recursive_let_cont cont cont_handler ~body:hole
-    in
-    rebuild_holed kinds env parent let_cont_expr
+      let cont_handler =
+        let handler = rebuild_expr kinds env expr in
+        let l = get_parameters parameters_to_keep in
+        let l =
+          List.concat_map
+            (fun param ->
+              let v = Bound_parameter.var param in
+              match
+                Dep_solver.get_unboxed_fields env.uses (Code_id_or_name.var v)
+              with
+              | None -> [param]
+              | Some fields ->
+                fold_unboxed_with_kind
+                  (fun kind v acc ->
+                    Bound_parameter.create v
+                      (Flambda_kind.With_subkind.anything kind)
+                    :: acc)
+                  fields [])
+            l
+        in
+        RE.create_continuation_handler
+          (Bound_parameters.create l)
+          ~handler ~is_exn_handler ~is_cold
+      in
+      let let_cont_expr =
+        RE.create_non_recursive_let_cont cont cont_handler ~body:hole
+      in
+      rebuild_holed kinds env parent let_cont_expr
   | Let_cont_rec { parent; handlers; invariant_params } ->
     (* TODO unboxed parameters *)
     let filter_params cont params =

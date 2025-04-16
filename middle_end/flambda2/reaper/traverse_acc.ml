@@ -287,7 +287,7 @@ let deps t ~get_code_metadata ~le_monde_exterieur ~all_constants =
           add_cond_dep param (simple_to_name ~all_constants arg))
         code_dep.params apply_args;
       (match apply_closure with
-      | None -> ()
+      | None -> add_cond_dep code_dep.my_closure le_monde_exterieur
       | Some apply_closure ->
         add_cond_dep code_dep.my_closure
           (simple_to_name ~all_constants apply_closure));
