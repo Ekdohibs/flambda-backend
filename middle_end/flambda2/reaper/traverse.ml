@@ -722,8 +722,6 @@ and traverse_function_params_and_body acc code_id code ~return_continuation
       all_constants
     }
   in
-  if is_opaque
-  then List.iter (fun v -> Acc.used ~denv (Simple.var v) acc) (exn :: return);
   Bound_parameters.iter (fun bp -> Acc.bound_parameter_kind bp acc) params;
   Acc.kind (Name.var my_closure) Flambda_kind.value acc;
   Option.iter
@@ -734,8 +732,21 @@ and traverse_function_params_and_body acc code_id code ~return_continuation
     my_ghost_region;
   Acc.kind (Name.var my_depth) Flambda_kind.rec_info acc;
   if is_opaque
-  then
-    List.iter (fun arg -> Acc.used ~denv (Simple.var arg) acc) code_dep.params
+  then (
+    List.iter (fun arg -> Acc.used ~denv (Simple.var arg) acc) code_dep.params;
+    List.iter (fun v -> Acc.used ~denv (Simple.var v) acc) (exn :: return);
+    let[@inline] any_source v =
+      Graph.add_alias (Acc.graph acc) ~from:le_monde_exterieur
+        ~to_:(Code_id_or_name.var v)
+    in
+    List.iter
+      (fun param -> any_source (Bound_parameter.var param))
+      (Bound_parameters.to_list params);
+    any_source my_closure;
+    any_source my_depth;
+    Option.iter any_source my_region;
+    Option.iter any_source my_ghost_region;
+    List.iter any_source (code_dep.exn :: code_dep.return))
   else
     List.iter2
       (fun param arg ->
