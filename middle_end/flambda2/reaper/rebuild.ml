@@ -698,39 +698,77 @@ let rec rebuild_expr (kinds : Flambda_kind.t Name.Map.t) (env : env)
           let cont_handler =
             let return_parameters = get_parameters return_decisions in
             let handler =
-              let rev_args =
-                (* TODO if the decisions are equal, don't introduce the wrapper.
-                   Not really important but this will be simpler for
-                   debugging *)
-                List.fold_left2
-                  (fun rev_args apply_decision func_decision ->
-                    match apply_decision, func_decision with
-                    | Unbox _, (Keep _ | Delete) | (Keep _ | Delete), Unbox _ ->
-                      let callee_was_called_indirectly =
-                        Dep_solver.field_used env.uses (Simple.pattern_match (Option.get (Apply.callee apply)) ~name:(fun name ~coercion:_ -> Code_id_or_name.name name) ~const:(fun _ -> assert false)) Code_of_closure in
-                      Misc.fatal_errorf
-                        "Inconsistent apply (%a) and func (%a) decisions:@ %a@.Callee was called indirectly = %b@."
-                        print_param_decision apply_decision print_param_decision
-                        func_decision Apply.print apply
-                        callee_was_called_indirectly
-                    | Delete, _ -> rev_args
-                    | Keep (_, _), Keep (v, _) -> Simple.var v :: rev_args
-                    | Keep (_, kind), Delete ->
-                      poison (Flambda_kind.With_subkind.kind kind) :: rev_args
-                    | Unbox fields_apply, Unbox fields_func ->
-                      fold2_unboxed_subset_with_kind
-                        (fun _kind _var_apply var_func rev_args ->
-                          Simple.var var_func :: rev_args)
-                        fields_apply fields_func rev_args)
-                  [] apply_decisions return_decisions
-              in
-              let args = List.rev rev_args in
-              let apply_cont =
-                Apply_cont_expr.create return_cont ~args ~dbg:Debuginfo.none
-              in
-              RE.from_expr
-                ~expr:(Expr.create_apply_cont apply_cont)
-                ~free_names:(Apply_cont_expr.free_names apply_cont)
+              try
+                let _, rev_args =
+                  (* TODO if the decisions are equal, don't introduce the
+                     wrapper. Not really important but this will be simpler for
+                     debugging *)
+                  List.fold_left2
+                    (fun (i, rev_args) apply_decision func_decision ->
+                      match apply_decision, func_decision with
+                      | Unbox _, (Keep _ | Delete) | (Keep _ | Delete), Unbox _
+                        ->
+                        let[@inline] error () =
+                          Misc.fatal_errorf
+                            "Inconsistent apply (%a) and func (%a) decisions:@ \
+                             %a@."
+                            print_param_decision apply_decision
+                            print_param_decision func_decision Apply.print apply
+                        in
+                        let direct_or_indirect =
+                          match[@ocaml.warning "-4"] Apply.call_kind apply with
+                          | Function { function_call = Direct _; _ } -> error ()
+                          | Function { function_call = Indirect_known_arity; _ }
+                            ->
+                            Global_flow_graph.Field.Direct_code_pointer
+                          | _ -> Global_flow_graph.Field.Indirect_code_pointer
+                        in
+                        let field =
+                          Global_flow_graph.Field.Apply
+                            ( direct_or_indirect,
+                              Global_flow_graph.Field.Normal i )
+                        in
+                        let has_any_source =
+                          Dep_solver.not_local_field_has_source env.uses
+                            (Simple.pattern_match
+                               (Option.get (Apply.callee apply))
+                               ~name:(fun name ~coercion:_ ->
+                                 Code_id_or_name.name name)
+                               ~const:(fun _ -> assert false))
+                            field
+                        in
+                        if has_any_source then error () else raise Exit
+                      | Delete, _ -> i + 1, rev_args
+                      | Keep (_, _), Keep (v, _) ->
+                        i + 1, Simple.var v :: rev_args
+                      | Keep (_, kind), Delete ->
+                        ( i + 1,
+                          poison (Flambda_kind.With_subkind.kind kind)
+                          :: rev_args )
+                      | Unbox fields_apply, Unbox fields_func ->
+                        ( i + 1,
+                          fold2_unboxed_subset_with_kind
+                            (fun _kind _var_apply var_func rev_args ->
+                              Simple.var var_func :: rev_args)
+                            fields_apply fields_func rev_args ))
+                    (0, []) apply_decisions return_decisions
+                in
+                let args = List.rev rev_args in
+                let apply_cont =
+                  Apply_cont_expr.create return_cont ~args ~dbg:Debuginfo.none
+                in
+                RE.from_expr
+                  ~expr:(Expr.create_apply_cont apply_cont)
+                  ~free_names:(Apply_cont_expr.free_names apply_cont)
+              with Exit ->
+                RE.from_expr
+                  ~expr:
+                    (Expr.create_invalid
+                       (Message
+                          (Format.asprintf "Function call to %a never returns"
+                             Simple.print
+                             (Option.get (Apply.callee apply)))))
+                  ~free_names:Name_occurrences.empty
             in
             RE.create_continuation_handler
               (Bound_parameters.create return_parameters)

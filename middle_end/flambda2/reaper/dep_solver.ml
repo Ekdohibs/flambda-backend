@@ -486,6 +486,37 @@ let has_use, field_used =
       || exists_with_parameters used_field_top_query [x; field] db
       || exists_with_parameters used_field_query [x; field] db )
 
+let has_source =
+  let open! Global_flow_graph in
+  let any_source_query =
+    mk_exists_query ["X"] [] (fun [x] [] -> [any_source_pred x])
+  in
+  let has_source_query =
+    mk_exists_query ["X"] ["Y"] (fun [x] [y] -> [sources_rel x y])
+  in
+  fun db x ->
+    exists_with_parameters any_source_query [x] db
+    || exists_with_parameters has_source_query [x] db
+
+let not_local_field_has_source =
+  let open! Global_flow_graph in
+  let any_source_query =
+    mk_exists_query ["X"] [] (fun [x] [] -> [any_source_pred x])
+  in
+  let field_any_source_query =
+    mk_exists_query ["X"; "F"] ["S"] (fun [x; f] [s] ->
+        [sources_rel x s; field_top_sources_rel s f])
+  in
+  let field_source_query =
+    mk_exists_query ["X"; "F"] ["S"; "V"] (fun [x; f] [s; v] ->
+        [sources_rel x s; field_sources_rel s f v])
+  in
+  fun db x field ->
+    let field = Field.encode field in
+    exists_with_parameters any_source_query [x] db
+    || exists_with_parameters field_any_source_query [x; field] db
+    || exists_with_parameters field_source_query [x; field] db
+
 let field_of_constructor_is_used =
   rel2 "field_of_constructor_is_used" Cols.[n; f]
 
@@ -1013,3 +1044,7 @@ let get_changed_representation uses cn =
 let has_use uses v = has_use uses.db v
 
 let field_used uses v f = field_used uses.db v f
+
+let has_source uses v = has_source uses.db v
+
+let not_local_field_has_source uses v f = not_local_field_has_source uses.db v f
