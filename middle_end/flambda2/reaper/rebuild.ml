@@ -544,11 +544,21 @@ let rewrite_named kinds env (named : Named.t) =
 let rewrite_apply_cont_expr kinds env ac =
   let cont = Apply_cont_expr.continuation ac in
   let args = Apply_cont_expr.args ac in
-  let args =
-    let args_to_keep = Continuation.Map.find cont env.cont_params_to_keep in
-    get_args kinds env args_to_keep args
-  in
-  Apply_cont_expr.with_continuation_and_args ac cont ~args
+  if List.exists
+       (fun arg ->
+         Simple.pattern_match arg
+           ~name:(fun name ~coercion:_ ->
+             let name = Code_id_or_name.name name in
+             not (Dep_solver.has_source env.uses name))
+           ~const:(fun _ -> false))
+       args
+  then None
+  else
+    let args =
+      let args_to_keep = Continuation.Map.find cont env.cont_params_to_keep in
+      get_args kinds env args_to_keep args
+    in
+    Some (Apply_cont_expr.with_continuation_and_args ac cont ~args)
 
 type change_calling_convention =
   | Not_changing_calling_convention
@@ -593,11 +603,22 @@ let rec rebuild_expr (kinds : Flambda_kind.t Name.Map.t) (env : env)
       RE.from_expr
         ~expr:(Expr.create_invalid (Message message))
         ~free_names:Name_occurrences.empty
-    | Apply_cont ac ->
-      let ac = rewrite_apply_cont_expr kinds env ac in
-      let expr = Expr.create_apply_cont ac in
-      let free_names = Apply_cont_expr.free_names ac in
-      RE.from_expr ~expr ~free_names
+    | Apply_cont ac -> (
+      let nac = rewrite_apply_cont_expr kinds env ac in
+      match nac with
+      | None ->
+        RE.from_expr
+          ~expr:
+            (Expr.create_invalid
+               (Message
+                  (Format.asprintf "Dead continuation call to %a"
+                     Continuation.print
+                     (Apply_cont_expr.continuation ac))))
+          ~free_names:Name_occurrences.empty
+      | Some ac ->
+        let expr = Expr.create_apply_cont ac in
+        let free_names = Apply_cont_expr.free_names ac in
+        RE.from_expr ~expr ~free_names)
     | Switch switch ->
       let switch =
         Switch_expr.create
@@ -606,8 +627,8 @@ let rec rebuild_expr (kinds : Flambda_kind.t Name.Map.t) (env : env)
                completeness *)
           ~scrutinee:(rewrite_simple kinds env (Switch_expr.scrutinee switch))
           ~arms:
-            (Targetint_31_63.Map.map
-               (rewrite_apply_cont_expr kinds env)
+            (Targetint_31_63.Map.filter_map
+               (fun _ -> rewrite_apply_cont_expr kinds env)
                (Switch_expr.arms switch))
       in
       let expr = Expr.create_switch switch in
