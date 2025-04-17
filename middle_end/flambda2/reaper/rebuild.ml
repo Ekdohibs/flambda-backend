@@ -541,6 +541,12 @@ let rewrite_named kinds env (named : Named.t) =
     Named.create_static_consts (rewrite_static_const_group kinds env sc)
   | Rec_info r -> Named.create_rec_info r
 
+let is_dead_var env kinds v =
+  let kind = Name.Map.find (Name.var v) kinds in
+  match[@ocaml.warning "-4"] kind with
+  | Flambda_kind.(Region | Rec_info) -> false
+  | _ -> not (Dep_solver.has_source env.uses (Code_id_or_name.var v))
+
 let rewrite_apply_cont_expr kinds env ac =
   let cont = Apply_cont_expr.continuation ac in
   let args = Apply_cont_expr.args ac in
@@ -555,13 +561,14 @@ let rewrite_apply_cont_expr kinds env ac =
                   ~var:(fun _ -> true))
            ~const:(fun _ -> false))
        args
-  then None
+  then
+    Misc.fatal_errorf "Dead variable in apply cont: %a" Apply_cont_expr.print ac
   else
     let args =
       let args_to_keep = Continuation.Map.find cont env.cont_params_to_keep in
       get_args kinds env args_to_keep args
     in
-    Some (Apply_cont_expr.with_continuation_and_args ac cont ~args)
+    Apply_cont_expr.with_continuation_and_args ac cont ~args
 
 type change_calling_convention =
   | Not_changing_calling_convention
@@ -606,45 +613,28 @@ let rec rebuild_expr (kinds : Flambda_kind.t Name.Map.t) (env : env)
       RE.from_expr
         ~expr:(Expr.create_invalid (Message message))
         ~free_names:Name_occurrences.empty
-    | Apply_cont ac -> (
-      let nac = rewrite_apply_cont_expr kinds env ac in
-      match nac with
-      | None ->
-        RE.from_expr
-          ~expr:
-            (Expr.create_invalid
-               (Message
-                  (Format.asprintf "Dead continuation call to %a"
-                     Continuation.print
-                     (Apply_cont_expr.continuation ac))))
-          ~free_names:Name_occurrences.empty
-      | Some ac ->
-        let expr = Expr.create_apply_cont ac in
-        let free_names = Apply_cont_expr.free_names ac in
-        RE.from_expr ~expr ~free_names)
+    | Apply_cont ac ->
+      let ac = rewrite_apply_cont_expr kinds env ac in
+      let expr = Expr.create_apply_cont ac in
+      let free_names = Apply_cont_expr.free_names ac in
+      RE.from_expr ~expr ~free_names
     | Switch switch ->
       let arms =
-        Targetint_31_63.Map.filter_map
-          (fun _ -> rewrite_apply_cont_expr kinds env)
+        Targetint_31_63.Map.map
+          (rewrite_apply_cont_expr kinds env)
           (Switch_expr.arms switch)
       in
-      if Targetint_31_63.Map.is_empty arms
-      then
-        RE.from_expr
-          ~expr:(Expr.create_invalid Zero_switch_arms)
-          ~free_names:Name_occurrences.empty
-      else
-        let switch =
-          Switch_expr.create
-            ~condition_dbg:(Switch_expr.condition_dbg switch)
-              (* Scrutinee should never need rewriting, do it anyway for
-                 completeness *)
-            ~scrutinee:(rewrite_simple kinds env (Switch_expr.scrutinee switch))
-            ~arms
-        in
-        let expr = Expr.create_switch switch in
-        let free_names = Switch_expr.free_names switch in
-        RE.from_expr ~expr ~free_names
+      let switch =
+        Switch_expr.create
+          ~condition_dbg:(Switch_expr.condition_dbg switch)
+            (* Scrutinee should never need rewriting, do it anyway for
+               completeness *)
+          ~scrutinee:(rewrite_simple kinds env (Switch_expr.scrutinee switch))
+          ~arms
+      in
+      let expr = Expr.create_switch switch in
+      let free_names = Switch_expr.free_names switch in
+      RE.from_expr ~expr ~free_names
     | Apply apply -> (
       (* CR ncourant: we never rewrite alloc_mode. This is currently ok because
          we never remove begin- or end-region primitives, but might be needed
@@ -920,9 +910,30 @@ and rebuild_function_params_and_body (kinds : Flambda_kind.t Name.Map.t)
       then Not_changing_calling_convention
       else Changing_calling_convention code_id
   in
+  let rebuild_body () =
+    let all_vars =
+      Option.to_list my_region
+      @ Option.to_list my_ghost_region
+      @ (my_closure :: Bound_parameters.vars params)
+    in
+    match List.filter (is_dead_var env kinds) all_vars with
+    | [] -> rebuild_expr kinds env body
+    | _ :: _ as dead_vars ->
+      let msg =
+        Format.asprintf
+          "Function is never called because of dead parameters: [%a]."
+          (Format.pp_print_list
+             ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
+             Variable.print)
+          dead_vars
+      in
+      RE.from_expr
+        ~expr:(Expr.create_invalid (Message msg))
+        ~free_names:Name_occurrences.empty
+  in
   match updating_calling_convention with
   | Not_changing_calling_convention ->
-    let body = rebuild_expr kinds env body in
+    let body = rebuild_body () in
     (* Format.eprintf "REBUILD %a FREE %a@." Code_id.print code_id
        Name_occurrences.print body.free_names; *)
     ( Function_params_and_body.create ~return_continuation ~exn_continuation
@@ -986,7 +997,7 @@ and rebuild_function_params_and_body (kinds : Flambda_kind.t Name.Map.t)
       Code_metadata.with_is_tupled false
         (Code_metadata.with_params_arity params_arity code_metadata)
     in
-    let body = rebuild_expr kinds env body in
+    let body = rebuild_body () in
     (* Format.eprintf "REBUILD %a FREE %a@." Code_id.print code_id
        Name_occurrences.print body.free_names; *)
     (* assert (List.exists Fun.id (Continuation.Map.find return_continuation
@@ -1590,12 +1601,30 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
     if not (Name_occurrences.mem_continuation hole.free_names cont)
     then rebuild_holed kinds env parent hole
     else
-      let { bound_parameters = _; expr; is_exn_handler; is_cold } = handler in
+      let { bound_parameters; expr; is_exn_handler; is_cold } = handler in
       let parameters_to_keep =
         Continuation.Map.find cont env.cont_params_to_keep
       in
       let cont_handler =
-        let handler = rebuild_expr kinds env expr in
+        let handler =
+          match
+            List.filter (is_dead_var env kinds)
+              (Bound_parameters.vars bound_parameters)
+          with
+          | [] -> rebuild_expr kinds env expr
+          | _ :: _ as dead_vars ->
+            let msg =
+              Format.asprintf
+                "Continuation is never called because of dead parameters: [%a]."
+                (Format.pp_print_list
+                   ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
+                   Variable.print)
+                dead_vars
+            in
+            RE.from_expr
+              ~expr:(Expr.create_invalid (Message msg))
+              ~free_names:Name_occurrences.empty
+        in
         let l = get_parameters parameters_to_keep in
         let l =
           List.concat_map

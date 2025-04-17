@@ -280,7 +280,7 @@ and traverse_prim denv acc ~bound_pattern (prim : Flambda_primitive.t) ~default
     default_bp (fun to_ ->
         Graph.add_accessor_dep (Acc.graph acc) ~to_ (Value_slot value_slot)
           ~base:block)
-  | Unary (Block_load { kind; mut = _; field }, block) ->
+  | Unary (Block_load { kind; mut; field }, block) -> (
     (* Loads from mutable blocks are also tracked here. This is ok because
        stores automatically escape the block. CR ncourant: think about whether
        we can make stores only escape the corresponding fields of the block
@@ -290,7 +290,12 @@ and traverse_prim denv acc ~bound_pattern (prim : Flambda_primitive.t) ~default
     default_bp (fun to_ ->
         Graph.add_accessor_dep (Acc.graph acc) ~to_
           (Block (Targetint_31_63.to_int field, kind))
-          ~base:block)
+          ~base:block);
+    match mut with
+    | Immutable | Immutable_unique -> ()
+    | Mutable ->
+      default_bp (fun to_ ->
+          Graph.add_alias (Acc.graph acc) ~to_ ~from:denv.le_monde_exterieur))
   | Unary (Is_int { variant_only = true }, arg) ->
     let name = simple_to_name denv arg in
     default_bp (fun to_ ->
