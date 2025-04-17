@@ -456,6 +456,12 @@ let get_arity params_decisions =
       [ Unboxed_product
           (List.map (fun k -> Component_for_creation.Singleton k) arity) ])
 
+let get_simple_kind kinds simple =
+  Simple.pattern_match
+    ~const:(fun const -> Reg_width_const.kind const)
+    ~name:(fun name ~coercion:_ -> Name.Map.find name kinds)
+    simple
+
 let rewrite_named kinds env (named : Named.t) =
   let[@local] rewrite_field_access arg field =
     let arg = get_simple_unboxable env arg in
@@ -561,14 +567,13 @@ let rewrite_apply_cont_expr kinds env ac =
                   ~var:(fun _ -> true))
            ~const:(fun _ -> false))
        args
-  then
-    Misc.fatal_errorf "Dead variable in apply cont: %a" Apply_cont_expr.print ac
+  then None
   else
     let args =
       let args_to_keep = Continuation.Map.find cont env.cont_params_to_keep in
       get_args kinds env args_to_keep args
     in
-    Apply_cont_expr.with_continuation_and_args ac cont ~args
+    Some (Apply_cont_expr.with_continuation_and_args ac cont ~args)
 
 type change_calling_convention =
   | Not_changing_calling_convention
@@ -613,28 +618,43 @@ let rec rebuild_expr (kinds : Flambda_kind.t Name.Map.t) (env : env)
       RE.from_expr
         ~expr:(Expr.create_invalid (Message message))
         ~free_names:Name_occurrences.empty
-    | Apply_cont ac ->
-      let ac = rewrite_apply_cont_expr kinds env ac in
-      let expr = Expr.create_apply_cont ac in
-      let free_names = Apply_cont_expr.free_names ac in
-      RE.from_expr ~expr ~free_names
+    | Apply_cont ac -> (
+      match rewrite_apply_cont_expr kinds env ac with
+      | None ->
+        RE.from_expr
+          ~expr:
+            (Expr.create_invalid
+               (Message
+                  (Format.asprintf "Dead variable in apply cont: %a"
+                     Apply_cont_expr.print ac)))
+          ~free_names:Name_occurrences.empty
+      | Some ac ->
+        let expr = Expr.create_apply_cont ac in
+        let free_names = Apply_cont_expr.free_names ac in
+        RE.from_expr ~expr ~free_names)
     | Switch switch ->
       let arms =
-        Targetint_31_63.Map.map
-          (rewrite_apply_cont_expr kinds env)
+        Targetint_31_63.Map.filter_map
+          (fun _ -> rewrite_apply_cont_expr kinds env)
           (Switch_expr.arms switch)
       in
-      let switch =
-        Switch_expr.create
-          ~condition_dbg:(Switch_expr.condition_dbg switch)
-            (* Scrutinee should never need rewriting, do it anyway for
-               completeness *)
-          ~scrutinee:(rewrite_simple kinds env (Switch_expr.scrutinee switch))
-          ~arms
-      in
-      let expr = Expr.create_switch switch in
-      let free_names = Switch_expr.free_names switch in
-      RE.from_expr ~expr ~free_names
+      if Targetint_31_63.Map.is_empty arms
+      then
+        RE.from_expr
+          ~expr:(Expr.create_invalid Zero_switch_arms)
+          ~free_names:Name_occurrences.empty
+      else
+        let switch =
+          Switch_expr.create
+            ~condition_dbg:(Switch_expr.condition_dbg switch)
+              (* Scrutinee should never need rewriting, do it anyway for
+                 completeness *)
+            ~scrutinee:(rewrite_simple kinds env (Switch_expr.scrutinee switch))
+            ~arms
+        in
+        let expr = Expr.create_switch switch in
+        let free_names = Switch_expr.free_names switch in
+        RE.from_expr ~expr ~free_names
     | Apply apply -> (
       (* CR ncourant: we never rewrite alloc_mode. This is currently ok because
          we never remove begin- or end-region primitives, but might be needed
@@ -1309,8 +1329,17 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
                   (fun (field : Global_flow_graph.Field.t) var hole ->
                     let arg =
                       match field with
-                      | Block (nth, _kind) ->
-                        let arg = List.nth args nth in
+                      | Block (nth, field_kind) ->
+                        let arg =
+                          if nth < List.length args
+                          then
+                            let arg = List.nth args nth in
+                            if Flambda_kind.equal field_kind
+                                 (get_simple_kind kinds arg)
+                            then arg
+                            else poison field_kind
+                          else poison field_kind
+                        in
                         if simple_is_unboxable env arg
                         then Either.Right (get_simple_unboxable env arg)
                         else Either.Left arg
