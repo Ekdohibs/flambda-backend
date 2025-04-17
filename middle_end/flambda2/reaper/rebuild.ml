@@ -457,9 +457,10 @@ let get_arity params_decisions =
           (List.map (fun k -> Component_for_creation.Singleton k) arity) ])
 
 let get_simple_kind kinds simple =
-  Simple.pattern_match
+  Simple.pattern_match'
     ~const:(fun const -> Reg_width_const.kind const)
-    ~name:(fun name ~coercion:_ -> Name.Map.find name kinds)
+    ~symbol:(fun _ ~coercion:_ -> Flambda_kind.value)
+    ~var:(fun var ~coercion:_ -> Name.Map.find (Name.var var) kinds)
     simple
 
 let rewrite_named kinds env (named : Named.t) =
