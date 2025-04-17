@@ -79,10 +79,15 @@ let is_symbol_used (env : env) symbol =
   is_used env (Code_id_or_name.symbol symbol)
   || not (Compilation_unit.is_current (Symbol.compilation_unit symbol))
 
-let is_var_used (env : env) var = is_used env (Code_id_or_name.var var)
+let is_var_used (env : env) kinds var =
+  let kind = Name.Map.find (Name.var var) kinds in
+  match[@ocaml.warning "-4"] kind with
+  | Flambda_kind.(Region | Rec_info) -> true
+  | _ -> is_used env (Code_id_or_name.var var)
 
-let is_name_used (env : env) name =
-  Name.pattern_match name ~symbol:(is_symbol_used env) ~var:(is_var_used env)
+let is_name_used (env : env) kinds name =
+  Name.pattern_match name ~symbol:(is_symbol_used env)
+    ~var:(is_var_used env kinds)
 
 let poison_value = 0 (* 123456789 *)
 
@@ -162,7 +167,7 @@ let rewrite_simple kinds (env : env) simple =
               (Dep_solver.get_unboxed_fields env.uses
                  (Code_id_or_name.name name)))
       then simple (* XXX Misc.fatal_errorf "UNBOXED?? %a@." Name.print name; *)
-      else if is_name_used env name
+      else if is_name_used env kinds name
       then simple
       else
         let kind =
@@ -176,19 +181,20 @@ let rewrite_simple kinds (env : env) simple =
         poison kind)
     ~const:(fun _ -> simple)
 
-let rewrite_simple_opt (env : env) = function
+let rewrite_simple_opt (env : env) kinds = function
   | None -> None
   | Some simple as simpl ->
     Simple.pattern_match simple
       ~name:(fun name ~coercion:_ ->
-        if is_name_used env name then simpl else None)
+        if is_name_used env kinds name then simpl else None)
       ~const:(fun _ -> simpl)
 
-let rewrite_or_variable default env (or_variable : _ Or_variable.t) =
+let rewrite_or_variable default env kinds (or_variable : _ Or_variable.t) =
+  (* CR ncourant: rewrite unboxed variables *)
   match or_variable with
   | Const _ -> or_variable
   | Var (v, _) ->
-    if is_var_used env v then or_variable else Or_variable.Const default
+    if is_var_used env kinds v then or_variable else Or_variable.Const default
 
 let rewrite_simple_with_debuginfo kinds env (simple : Simple.With_debuginfo.t) =
   Simple.With_debuginfo.create
@@ -319,46 +325,46 @@ let rewrite_static_const kinds (env : env) (sc : Static_const.t) =
     let fields = List.map (rewrite_simple_with_debuginfo kinds env) fields in
     Static_const.block tag mut shape fields
   | Boxed_float f ->
-    Static_const.boxed_float (rewrite_or_variable Float.zero env f)
+    Static_const.boxed_float (rewrite_or_variable Float.zero env kinds f)
   | Boxed_float32 f ->
-    Static_const.boxed_float32 (rewrite_or_variable Float32.zero env f)
+    Static_const.boxed_float32 (rewrite_or_variable Float32.zero env kinds f)
   | Boxed_int32 n ->
-    Static_const.boxed_int32 (rewrite_or_variable Int32.zero env n)
+    Static_const.boxed_int32 (rewrite_or_variable Int32.zero env kinds n)
   | Boxed_int64 n ->
-    Static_const.boxed_int64 (rewrite_or_variable Int64.zero env n)
+    Static_const.boxed_int64 (rewrite_or_variable Int64.zero env kinds n)
   | Boxed_nativeint n ->
     Static_const.boxed_nativeint
-      (rewrite_or_variable Targetint_32_64.zero env n)
+      (rewrite_or_variable Targetint_32_64.zero env kinds n)
   | Boxed_vec128 n ->
     Static_const.boxed_vec128
-      (rewrite_or_variable Vector_types.Vec128.Bit_pattern.zero env n)
+      (rewrite_or_variable Vector_types.Vec128.Bit_pattern.zero env kinds n)
   | Immutable_float_block fields ->
-    let fields = List.map (rewrite_or_variable Float.zero env) fields in
+    let fields = List.map (rewrite_or_variable Float.zero env kinds) fields in
     Static_const.immutable_float_block fields
   | Immutable_float_array fields ->
-    let fields = List.map (rewrite_or_variable Float.zero env) fields in
+    let fields = List.map (rewrite_or_variable Float.zero env kinds) fields in
     Static_const.immutable_float_array fields
   | Immutable_float32_array fields ->
-    let fields = List.map (rewrite_or_variable Float32.zero env) fields in
+    let fields = List.map (rewrite_or_variable Float32.zero env kinds) fields in
     Static_const.immutable_float32_array fields
   | Immutable_value_array fields ->
     let fields = List.map (rewrite_simple_with_debuginfo kinds env) fields in
     Static_const.immutable_value_array fields
   | Immutable_int32_array fields ->
-    let fields = List.map (rewrite_or_variable Int32.zero env) fields in
+    let fields = List.map (rewrite_or_variable Int32.zero env kinds) fields in
     Static_const.immutable_int32_array fields
   | Immutable_int64_array fields ->
-    let fields = List.map (rewrite_or_variable Int64.zero env) fields in
+    let fields = List.map (rewrite_or_variable Int64.zero env kinds) fields in
     Static_const.immutable_int64_array fields
   | Immutable_nativeint_array fields ->
     let fields =
-      List.map (rewrite_or_variable Targetint_32_64.zero env) fields
+      List.map (rewrite_or_variable Targetint_32_64.zero env kinds) fields
     in
     Static_const.immutable_nativeint_array fields
   | Immutable_vec128_array fields ->
     let fields =
       List.map
-        (rewrite_or_variable Vector_types.Vec128.Bit_pattern.zero env)
+        (rewrite_or_variable Vector_types.Vec128.Bit_pattern.zero env kinds)
         fields
     in
     Static_const.immutable_vec128_array fields
@@ -836,7 +842,7 @@ let rec rebuild_expr (kinds : Flambda_kind.t Name.Map.t) (env : env)
              will put [None] as the callee instead of a dummy value, as a dummy
              value would then be further used in a later simplify pass to refine
              the call kind and produce an invalid. *)
-            ~callee:(rewrite_simple_opt env (Apply.callee apply))
+            ~callee:(rewrite_simple_opt env kinds (Apply.callee apply))
             exn_continuation ~args ~args_arity ~return_arity ~call_kind
             (Apply.dbg apply) ~inlined:(Apply.inlined apply)
             ~inlining_state:(Apply.inlining_state apply)
@@ -867,7 +873,7 @@ let rec rebuild_expr (kinds : Flambda_kind.t Name.Map.t) (env : env)
                  which will put [None] as the callee instead of a dummy value,
                  as a dummy value would then be further used in a later simplify
                  pass to refine the call kind and produce an invalid. *)
-              rewrite_simple_opt env callee )
+              rewrite_simple_opt env kinds callee )
         in
         let params_decisions =
           match Code_id.Map.find_opt code_id env.function_params_to_keep with
@@ -1100,7 +1106,7 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
                     free_names_of_params_and_body = _
                   } ->
                 let is_my_closure_used =
-                  is_var_used env params_and_body.my_closure
+                  is_var_used env kinds params_and_body.my_closure
                 in
                 let code_metadata =
                   if Bool.equal is_my_closure_used
@@ -1626,7 +1632,9 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
         | Named (Prim (Variadic (Begin_region _, _), _)) -> true
         | _ -> false
       in
-      if is_begin_region || is_var_used env v then default () else erase ())
+      if is_begin_region || is_var_used env kinds v
+      then default ()
+      else erase ())
   | Let_cont { cont; parent; handler } ->
     if not (Name_occurrences.mem_continuation hole.free_names cont)
     then rebuild_holed kinds env parent hole
