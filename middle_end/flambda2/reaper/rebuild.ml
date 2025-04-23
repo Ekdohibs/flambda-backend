@@ -769,8 +769,8 @@ let rec rebuild_expr (kinds : Flambda_kind.t Name.Map.t) (env : env)
                           | Function { function_call = Direct _; _ } -> error ()
                           | Function { function_call = Indirect_known_arity; _ }
                             ->
-                            Global_flow_graph.Field.Direct_code_pointer
-                          | _ -> Global_flow_graph.Field.Indirect_code_pointer
+                            Global_flow_graph.Direct_code_pointer
+                          | _ -> Global_flow_graph.Indirect_code_pointer
                         in
                         let field =
                           Global_flow_graph.Field.Apply

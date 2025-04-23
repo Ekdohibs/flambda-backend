@@ -13,14 +13,14 @@
 (*                                                                        *)
 (**************************************************************************)
 
+type closure_entry_point =
+  | Indirect_code_pointer
+  | Direct_code_pointer
+
 module Field : sig
   type return_kind =
     | Normal of int
     | Exn
-
-  type closure_entry_point =
-    | Indirect_code_pointer
-    | Direct_code_pointer
 
   type t =
     | Block of int * Flambda_kind.t (* nth field of a block *)
@@ -45,50 +45,25 @@ module Field : sig
   val decode : int -> t
 end
 
-module Dep : sig
-  type t =
-    | Alias of { target : Name.t }
-    | Use of { target : Code_id_or_name.t }
-    (* If source is not bottom, then target is fully used (top) *)
-    | Accessor of
-        { target : Name.t;
-          relation : Field.t
-        }
-    (* The source is obtained from the target by accessing this relation *)
-    | Constructor of
-        { target : Code_id_or_name.t;
-          relation : Field.t
-        }
-    (* The source is obtained from the target by building a value with this
-       relation
+module FieldC : Datalog.Column.S with type t = int
 
-       Note: in general there are multiple such dependencies with the same
-       source, since a block has multiple fields for instance *)
-    | Alias_if_def of
-        { target : Name.t;
-          if_defined : Code_id_or_name.t
-        }
-    (* If [if_defined] is not bottom, then this is equivalent to an alias to
-       [target] *)
-    | Propagate of
-        { target : Name.t;
-          source : Code_id_or_name.t
-        }
-  (* If the source this not bottom, then [source] is an alias to [target]
-     (counterpart of [Alias_if_def], always generated in pairs) *)
+module CoField : sig
+  type t = Param of closure_entry_point * int
+
+  val equal : t -> t -> bool
 
   val print : Format.formatter -> t -> unit
 
-  module Set : Container_types.Set with type elt = t
+  module Map : Container_types.Map with type key = t
+
+  val encode : t -> int
+
+  val decode : int -> t
 end
 
-module FieldC : Datalog.Column.S with type t = int
+module CoFieldC : Datalog.Column.S with type t = int
 
 type graph
-
-val name_to_dep : graph -> (Code_id_or_name.t, Dep.Set.t) Hashtbl.t
-
-val used : graph -> (Code_id_or_name.t, unit) Hashtbl.t
 
 val to_datalog : graph -> Datalog.database
 
@@ -108,6 +83,10 @@ val accessor_rel : (Code_id_or_name.t, int, Code_id_or_name.t, _) rel3
 
 val constructor_rel : (Code_id_or_name.t, int, Code_id_or_name.t, _) rel3
 
+val coaccessor_rel : (Code_id_or_name.t, int, Code_id_or_name.t, _) rel3
+
+val coconstructor_rel : (Code_id_or_name.t, int, Code_id_or_name.t, _) rel3
+
 val propagate_rel :
   (Code_id_or_name.t, Code_id_or_name.t, Code_id_or_name.t, _) rel3
 
@@ -116,8 +95,6 @@ val used_pred : (Code_id_or_name.t, _) rel1
 val used_fields_top_rel : (Code_id_or_name.t, int, _) rel2
 
 val used_fields_rel : (Code_id_or_name.t, int, Code_id_or_name.t, _) rel3
-
-val pp_used_graph : Format.formatter -> graph -> unit
 
 val create : unit -> graph
 
@@ -144,19 +121,8 @@ val add_constructor_dep :
 val add_accessor_dep :
   graph -> to_:Code_id_or_name.t -> Field.t -> base:Name.t -> unit
 
-module Dual : sig
-  type edge =
-    | Alias of { target : Code_id_or_name.t }
-    | Constructor of
-        { target : Code_id_or_name.t;
-          relation : Field.t
-        }
-    | Accessor of
-        { target : Code_id_or_name.t;
-          relation : Field.t
-        }
+val add_coaccessor_dep :
+  graph -> to_:Code_id_or_name.t -> CoField.t -> base:Code_id_or_name.t -> unit
 
-  type edges = edge list
-
-  type graph = edges Code_id_or_name.Map.t
-end
+val add_coconstructor_dep :
+  graph -> base:Code_id_or_name.t -> CoField.t -> from:Code_id_or_name.t -> unit
