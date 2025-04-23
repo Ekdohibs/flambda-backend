@@ -52,25 +52,24 @@ module P = struct
         "%a [label=\"%a\" style=\"filled\" fillcolor=\"%s\"];@\n" (node_id ~ctx)
         name Code_id_or_name.print name (print_color name)
 
-  let dep_names (dep : Graph.Dep.t) =
-    match dep with
-    | Graph.Dep.Alias { target } | Graph.Dep.Accessor { target; _ } ->
-      [Code_id_or_name.name target]
-    | Graph.Dep.Use { target } | Graph.Dep.Constructor { target; _ } -> [target]
-    | Graph.Dep.Alias_if_def { target; if_defined } ->
-      [Code_id_or_name.name target; if_defined]
-    | Graph.Dep.Propagate { target; source } ->
-      [Code_id_or_name.name target; source]
+  let dep_names _ = assert false
+  (* (dep : Graph.Dep.t) = match dep with | Graph.Dep.Alias { target } |
+     Graph.Dep.Accessor { target; _ } -> [Code_id_or_name.name target] |
+     Graph.Dep.Use { target } | Graph.Dep.Constructor { target; _ } -> [target]
+     | Graph.Dep.Alias_if_def { target; if_defined } -> [Code_id_or_name.name
+     target; if_defined] | Graph.Dep.Propagate { target; source } ->
+     [Code_id_or_name.name target; source] *)
 
-  let all_names t =
+  let all_names _t =
     let names = Hashtbl.create 100 in
     Hashtbl.iter
-      (fun name dep ->
+      (fun name _dep ->
         let dep_names =
-          Graph.Dep.Set.fold (fun dep acc -> dep_names dep @ acc) dep []
+          assert false
+          (* Graph.Dep.Set.fold (fun dep acc -> dep_names dep @ acc) dep [] *)
         in
         List.iter (fun name -> Hashtbl.replace names name ()) (name :: dep_names))
-      (Graph.name_to_dep t);
+      (failwith "todo" (* Graph.name_to_dep t *));
     names
 
   let nodes ~ctx ~print_color ppf t =
@@ -80,33 +79,27 @@ module P = struct
           Code_id_or_name.pattern_match'
             ~code_id:(fun _ -> false)
             ~name:(fun name ->
-              Hashtbl.mem (Graph.used t) (Code_id_or_name.name name))
+              Hashtbl.mem
+                (failwith "todo" (* Graph.used t *))
+                (Code_id_or_name.name name))
             name
         in
         node ~ctx ~root ~print_color ppf name)
       (all_names t)
 
-  let edge ~ctx ppf src (dst : Graph.Dep.t) =
-    let color, deps =
-      match dst with
-      | Alias { target } -> "black", [Code_id_or_name.name target]
-      | Use { target } -> "red", [target]
-      | Accessor { target; _ } -> "green", [Code_id_or_name.name target]
-      | Constructor { target; _ } -> "blue", [target]
-      | Alias_if_def { target; _ } -> "pink", [Code_id_or_name.name target]
-      | Propagate { target; _ } -> "brown", [Code_id_or_name.name target]
-    in
-    List.iter
-      (fun dst ->
-        Format.fprintf ppf "%a -> %a [color=\"%s\"];@\n" (node_id ~ctx) src
-          (node_id ~ctx) dst color)
-      deps
+  let edge ~ctx:_ _ppf _src _dst = assert false
+  (* (dst : Graph.Dep.t) = let color, deps = match dst with | Alias { target }
+     -> "black", [Code_id_or_name.name target] | Use { target } -> "red",
+     [target] | Accessor { target; _ } -> "green", [Code_id_or_name.name target]
+     | Constructor { target; _ } -> "blue", [target] | Alias_if_def { target; _
+     } -> "pink", [Code_id_or_name.name target] | Propagate { target; _ } ->
+     "brown", [Code_id_or_name.name target] in List.iter (fun dst ->
+     Format.fprintf ppf "%a -> %a [color=\"%s\"];@\n" (node_id ~ctx) src
+     (node_id ~ctx) dst color) deps *)
 
-  let edges ~ctx ppf t =
-    Hashtbl.iter
-      (fun src dst_set ->
-        Graph.Dep.Set.iter (fun dst -> edge ~ctx ppf src dst) dst_set)
-      (Graph.name_to_dep t)
+  let edges ~ctx:_ _ppf _t = assert false
+  (* Hashtbl.iter (fun src dst_set -> Graph.Dep.Set.iter (fun dst -> edge ~ctx
+     ppf src dst) dst_set) (failwith "todo" (* Graph.name_to_dep t *)) *)
 
   let code_deps ~ctx ~code_id ~print_color ppf
       (code_dep : Traverse_acc.code_dep) =

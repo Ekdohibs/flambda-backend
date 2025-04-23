@@ -42,8 +42,6 @@ let run ~cmx_loader ~all_code (unit : Flambda_unit.t) =
         } =
     Traverse.run ~get_code_metadata unit
   in
-  if debug_print
-  then Format.printf "USED %a@." Global_flow_graph.pp_used_graph deps;
   let solved_dep = Dep_solver.fixpoint deps in
   if debug_print
   then

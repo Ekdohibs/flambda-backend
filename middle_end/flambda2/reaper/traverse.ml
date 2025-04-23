@@ -629,7 +629,7 @@ and traverse_call_kind denv acc apply ~exn_arg ~return_args ~default_acc =
     Graph.add_accessor_dep (Acc.graph acc)
       ~to_:(Code_id_or_name.var calls_are_not_pure)
       Code_of_closure ~base:!partial_apply;
-    let closure_entry_point : Global_flow_graph.Field.closure_entry_point =
+    let closure_entry_point : Global_flow_graph.closure_entry_point =
       match function_call with
       | Indirect_unknown_arity -> Indirect_code_pointer
       | Indirect_known_arity -> Direct_code_pointer
