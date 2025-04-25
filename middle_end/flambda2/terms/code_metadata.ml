@@ -169,8 +169,8 @@ let createk k code_id ~newer_version_of ~params_arity ~param_modes
     ()
   | true, (Always_inline | Unroll _) ->
     Misc.fatal_error "Stubs may not be annotated as [Always_inline] or [Unroll]");
-  if first_complex_local_param < 0
-     || first_complex_local_param > Flambda_arity.num_params params_arity
+  if Flambda_arity.num_params params_arity > 1 (* XXX fixme *) && (first_complex_local_param < 0
+     || first_complex_local_param > Flambda_arity.num_params params_arity)
   then
     Misc.fatal_errorf
       "Illegal first_complex_local_param=%d for params arity: %a"

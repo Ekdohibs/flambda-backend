@@ -366,7 +366,7 @@ let simplify_direct_full_application ~simplify_expr dacc apply function_type
    when there are zero args. *)
 
 let simplify_direct_partial_application ~simplify_expr dacc apply
-    ~callee's_code_id:_ ~callee's_code_metadata ~callee's_function_slot
+    ~callee's_code_id ~callee's_code_metadata ~callee's_function_slot
     ~param_arity ~param_modes ~args_arity ~result_arity ~recursive ~down_to_up
     ~coming_from_indirect
     ~(closure_alloc_mode_from_type : Alloc_mode.For_types.t) ~apply_alloc_mode
@@ -562,8 +562,9 @@ let simplify_direct_partial_application ~simplify_expr dacc apply
           Alloc_mode.For_applications.from_lambda result_mode
             ~current_region:my_region ~current_ghost_region:my_ghost_region
         in
-        let call_kind = (*
-          Call_kind.direct_function_call callee's_code_id *) Call_kind.indirect_function_call_known_arity apply_alloc_mode
+        let call_kind =
+          Call_kind.direct_function_call callee's_code_id apply_alloc_mode
+          (* Call_kind.indirect_function_call_known_arity apply_alloc_mode *)
         in
         let body, cost_metrics_of_body, free_names =
           (* [free_names] is going to be the free names of the whole resulting

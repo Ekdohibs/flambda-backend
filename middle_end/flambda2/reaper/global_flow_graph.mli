@@ -101,7 +101,7 @@ val create : unit -> graph
 val add_opaque_let_dependency :
   graph -> to_:Bound_pattern.t -> from:Name_occurrences.t -> unit
 
-val add_alias : graph -> to_:Code_id_or_name.t -> from:Name.t -> unit
+val add_alias : graph -> to_:Code_id_or_name.t -> from:Code_id_or_name.t -> unit
 
 val add_use_dep :
   graph -> to_:Code_id_or_name.t -> from:Code_id_or_name.t -> unit
@@ -112,14 +112,14 @@ val add_propagate_dep :
   graph ->
   if_used:Code_id_or_name.t ->
   to_:Code_id_or_name.t ->
-  from:Name.t ->
+  from:Code_id_or_name.t ->
   unit
 
 val add_constructor_dep :
   graph -> base:Code_id_or_name.t -> Field.t -> from:Code_id_or_name.t -> unit
 
 val add_accessor_dep :
-  graph -> to_:Code_id_or_name.t -> Field.t -> base:Name.t -> unit
+  graph -> to_:Code_id_or_name.t -> Field.t -> base:Code_id_or_name.t -> unit
 
 val add_coaccessor_dep :
   graph -> to_:Code_id_or_name.t -> CoField.t -> base:Code_id_or_name.t -> unit

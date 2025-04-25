@@ -49,7 +49,8 @@ type apply_dep =
     apply_args : Simple.t list;
     apply_closure : Simple.t option;
     params_of_apply_return_cont : Variable.t list option;
-    param_of_apply_exn_cont : Variable.t
+    param_of_apply_exn_cont : Variable.t;
+    not_pure_call_witness : Variable.t
   }
 
 type closure_dep =
@@ -127,7 +128,9 @@ let find_code t code_id = Code_id.Map.find code_id t.code
 
 let alias_dep ~(denv : Env.t) pat dep t =
   Graph.add_alias t.deps ~to_:(Code_id_or_name.var pat)
-    ~from:(simple_to_name ~all_constants:denv.all_constants dep)
+    ~from:
+      (Code_id_or_name.name
+         (simple_to_name ~all_constants:denv.all_constants dep))
 
 let root v t = Graph.add_use t.deps (Code_id_or_name.var v)
 
@@ -168,6 +171,19 @@ let add_set_of_closures_dep let_bound_name_of_the_closure closure_code_id t =
     <- { let_bound_name_of_the_closure; closure_code_id }
        :: t.set_of_closures_dep
 
+let rec unflatten shape l =
+  match shape, l with
+  | [], [] -> []
+  | [], _ :: _ -> Misc.fatal_error "unflatten: too many arguments"
+  | [] :: shape, _ -> [] :: unflatten shape l
+  | (_ :: _) :: _, [] -> Misc.fatal_error "unflatten: too few arguments"
+  | (_ :: rest) :: shape, arg :: args -> (
+    match unflatten (rest :: shape) args with
+    | [] -> assert false
+    | h :: q -> (arg :: h) :: q)
+
+let _ = ignore unflatten
+
 let record_set_of_closure_deps ~get_code_metadata ~le_monde_exterieur t =
   List.iter
     (fun { let_bound_name_of_the_closure = name; closure_code_id = code_id } ->
@@ -205,11 +221,37 @@ let record_set_of_closure_deps ~get_code_metadata ~le_monde_exterieur t =
         Graph.add_constructor_dep t.deps
           ~base:(Code_id_or_name.name name)
           (Apply (Indirect_code_pointer, Exn))
-          ~from:(Code_id_or_name.name le_monde_exterieur)
+          ~from:(Code_id_or_name.name le_monde_exterieur);
+        let params_unarized =
+          Flambda_arity.unarize_per_parameter
+            (Code_metadata.params_arity code_metadata)
+        in
+        let is_tupled = Code_metadata.is_tupled code_metadata in
+        let num_indirect_params =
+          if is_tupled then 1 else List.length (List.hd params_unarized)
+        in
+        let num_direct_params =
+          List.length
+            (Flambda_arity.unarize (Code_metadata.params_arity code_metadata))
+        in
+        let always_used = Variable.create "always_used" in
+        Graph.add_use t.deps (Code_id_or_name.var always_used);
+        for i = 0 to num_direct_params - 1 do
+          Graph.add_coconstructor_dep t.deps
+            ~base:(Code_id_or_name.name name)
+            (Param (Direct_code_pointer, i))
+            ~from:(Code_id_or_name.var always_used)
+        done;
+        for i = 0 to num_indirect_params - 1 do
+          Graph.add_coconstructor_dep t.deps
+            ~base:(Code_id_or_name.name name)
+            (Param (Indirect_code_pointer, i))
+            ~from:(Code_id_or_name.var always_used)
+        done
       | code_dep ->
         Graph.add_alias t.deps
           ~to_:(Code_id_or_name.var code_dep.my_closure)
-          ~from:name;
+          ~from:(Code_id_or_name.name name);
         List.iteri
           (fun i v ->
             Graph.add_constructor_dep t.deps
@@ -217,46 +259,82 @@ let record_set_of_closure_deps ~get_code_metadata ~le_monde_exterieur t =
               (Apply (Direct_code_pointer, Normal i))
               ~from:(Code_id_or_name.var v))
           code_dep.return;
+        List.iteri
+          (fun i v ->
+            Graph.add_coconstructor_dep t.deps
+              ~base:(Code_id_or_name.name name)
+              (Param (Direct_code_pointer, i))
+              ~from:(Code_id_or_name.var v))
+          code_dep.params;
         Graph.add_constructor_dep t.deps
           ~base:(Code_id_or_name.name name)
           (Apply (Direct_code_pointer, Exn))
           ~from:(Code_id_or_name.var code_dep.exn);
-        let num_params =
-          if code_dep.is_tupled
-          then 1
-          else Flambda_arity.num_params code_dep.arity
-        in
-        let acc = ref (Code_id_or_name.name name) in
-        for i = 1 to num_params - 1 do
-          let tmp_name =
-            Code_id_or_name.var
-              (Variable.create (Printf.sprintf "partial_apply_%i" i))
-          in
-          Graph.add_constructor_dep t.deps ~base:!acc
-            (Apply (Indirect_code_pointer, Normal 0))
-            ~from:tmp_name;
-          (* The code_id needs to stay alive even if the function is only
-             partially applied, as the arity is needed at runtime in that
-             case. *)
-          Graph.add_constructor_dep t.deps ~base:!acc Code_of_closure
-            ~from:code_dep.indirect_call_witness;
-          acc := tmp_name
-        done;
-        let[@inline] add_deps_for entry =
+        if code_dep.is_tupled
+        then (
+          Graph.add_constructor_dep t.deps
+            ~base:(Code_id_or_name.name name)
+            (Apply (Indirect_code_pointer, Exn))
+            ~from:(Code_id_or_name.var code_dep.exn);
+          List.iteri
+            (fun i return_arg ->
+              Graph.add_constructor_dep t.deps
+                ~from:(Code_id_or_name.var return_arg)
+                (Apply (Indirect_code_pointer, Normal i))
+                ~base:(Code_id_or_name.name name))
+            code_dep.return;
+          Graph.add_constructor_dep t.deps ~from:code_dep.indirect_call_witness
+            Code_of_closure
+            ~base:(Code_id_or_name.name name);
+          let untuple_var = Variable.create "untuple_var" in
+          Graph.add_coconstructor_dep t.deps
+            ~from:(Code_id_or_name.var untuple_var)
+            (Param (Indirect_code_pointer, 0))
+            ~base:(Code_id_or_name.name name);
           List.iteri
             (fun i v ->
-              Graph.add_constructor_dep t.deps ~base:!acc
-                (Apply (entry, Normal i))
-                ~from:(Code_id_or_name.var v))
-            code_dep.return;
-          Graph.add_constructor_dep t.deps ~base:!acc
-            (Apply (entry, Exn))
-            ~from:(Code_id_or_name.var code_dep.exn)
-        in
-        add_deps_for Indirect_code_pointer;
-        if num_params > 1 then add_deps_for Direct_code_pointer;
-        Graph.add_constructor_dep t.deps ~base:!acc Code_of_closure
-          ~from:code_dep.indirect_call_witness)
+              Graph.add_accessor_dep t.deps ~to_:(Code_id_or_name.var v)
+                (Block (i, Flambda_kind.value))
+                ~base:(Code_id_or_name.var untuple_var))
+            code_dep.params)
+        else
+          let rec add_deps func params =
+            match params with
+            | [] -> Misc.fatal_error "add_deps: no params"
+            | first :: rest -> (
+              List.iteri
+                (fun i arg ->
+                  Graph.add_coconstructor_dep t.deps
+                    ~from:(Code_id_or_name.var arg)
+                    (Param (Indirect_code_pointer, i))
+                    ~base:func)
+                first;
+              Graph.add_constructor_dep t.deps
+                ~from:code_dep.indirect_call_witness Code_of_closure ~base:func;
+              match rest with
+              | [] ->
+                Graph.add_constructor_dep t.deps ~base:func
+                  (Apply (Indirect_code_pointer, Exn))
+                  ~from:(Code_id_or_name.var code_dep.exn);
+                List.iteri
+                  (fun i return_arg ->
+                    Graph.add_constructor_dep t.deps
+                      ~from:(Code_id_or_name.var return_arg)
+                      (Apply (Indirect_code_pointer, Normal i))
+                      ~base:func)
+                  code_dep.return
+              | _ :: _ ->
+                let v = Variable.create "partial_apply" in
+                Graph.add_constructor_dep t.deps ~from:(Code_id_or_name.var v)
+                  (Apply (Indirect_code_pointer, Normal 0))
+                  ~base:func;
+                add_deps (Code_id_or_name.var v) rest)
+          in
+          add_deps
+            (Code_id_or_name.name name)
+            (unflatten
+               (Flambda_arity.unarize_per_parameter code_dep.arity)
+               code_dep.params))
     t.set_of_closures_dep
 
 let graph t = t.deps
@@ -268,18 +346,24 @@ let deps t ~get_code_metadata ~le_monde_exterieur ~all_constants =
            apply_args;
            apply_closure;
            params_of_apply_return_cont;
-           param_of_apply_exn_cont
+           param_of_apply_exn_cont;
+           not_pure_call_witness
          } ->
       let code_dep = find_code t apply_code_id in
+      Format.eprintf "CODE DEP %a@." Code_id.print apply_code_id;
+      Graph.add_alias t.deps ~from:code_dep.indirect_call_witness
+        ~to_:(Code_id_or_name.var not_pure_call_witness);
       let add_cond_dep param name =
         let param = Name.var param in
         match function_containing_apply_expr with
         | None ->
-          Graph.add_alias t.deps ~to_:(Code_id_or_name.name param) ~from:name
+          Graph.add_alias t.deps
+            ~to_:(Code_id_or_name.name param)
+            ~from:(Code_id_or_name.name name)
         | Some code_id ->
           Graph.add_propagate_dep t.deps
             ~if_used:(Code_id_or_name.code_id code_id)
-            ~from:name
+            ~from:(Code_id_or_name.name name)
             ~to_:(Code_id_or_name.name param)
       in
       List.iter2

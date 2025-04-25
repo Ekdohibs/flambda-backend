@@ -86,20 +86,29 @@ let prepare_code ~denv acc (code_id : Code_id.t) (code : Code.t) =
       indirect_call_witness
     }
   in
-  Graph.add_use_dep (Acc.graph acc) ~to_:indirect_call_witness
+  Graph.add_constructor_dep (Acc.graph acc) ~base:indirect_call_witness
+    Code_of_closure
     ~from:(Code_id_or_name.code_id code_id);
-  let le_monde_exterieur = denv.le_monde_exterieur in
-  List.iter
-    (fun param ->
-      let param = Code_id_or_name.var param in
-      Graph.add_propagate_dep (Acc.graph acc) ~if_used:indirect_call_witness
-        ~from:le_monde_exterieur ~to_:param)
-    params;
+  Graph.add_alias (Acc.graph acc)
+    ~to_:(Code_id_or_name.code_id code_id)
+    ~from:(Code_id_or_name.name denv.le_monde_exterieur);
+  (* Graph.add_use_dep (Acc.graph acc) ~to_:indirect_call_witness
+     ~from:(Code_id_or_name.code_id code_id); *)
+  (* let le_monde_exterieur = denv.le_monde_exterieur in List.iter (fun param ->
+     let param = Code_id_or_name.var param in Graph.add_propagate_dep (Acc.graph
+     acc) ~if_used:indirect_call_witness ~from:le_monde_exterieur ~to_:param)
+     params; *)
   if has_unsafe_result_type
-  then
+  then (
     List.iter
       (fun var -> Acc.used ~denv (Simple.var var) acc)
       ((my_closure :: params) @ (exn :: return));
+    let le_monde_exterieur = Code_id_or_name.name denv.le_monde_exterieur in
+    List.iter
+      (fun param ->
+        let param = Code_id_or_name.var param in
+        Graph.add_alias (Acc.graph acc) ~to_:param ~from:le_monde_exterieur)
+      params);
   if never_delete
   then (
     List.iter (fun var -> Acc.used ~denv (Simple.var var) acc) (exn :: return);
@@ -184,7 +193,7 @@ and traverse_let denv acc let_expr : rev_expr =
     Acc.alias_kind
       (Name.var (Bound_var.var (Bound_pattern.must_be_singleton bound_pattern)))
       s acc;
-    let name = simple_to_name denv s in
+    let name = Code_id_or_name.name (simple_to_name denv s) in
     default_bp (fun to_ -> Graph.add_alias (Acc.graph acc) ~to_ ~from:name)
   | Rec_info _ -> default acc);
   let make_set_of_closures set_of_closures =
@@ -268,15 +277,15 @@ and traverse_prim denv acc ~bound_pattern (prim : Flambda_primitive.t) ~default
   | Unary (Opaque_identity { middle_end_only = true; _ }, arg)
     when reaper_test_opaque ->
     (* XXX TO REMOVE !!! *)
-    let arg = simple_to_name denv arg in
+    let arg = Code_id_or_name.name (simple_to_name denv arg) in
     default_bp (fun to_ -> Graph.add_alias (Acc.graph acc) ~to_ ~from:arg)
   | Unary (Project_function_slot { move_from = _; move_to }, block) ->
-    let block = simple_to_name denv block in
+    let block = Code_id_or_name.name (simple_to_name denv block) in
     default_bp (fun to_ ->
         Graph.add_accessor_dep (Acc.graph acc) ~to_ (Function_slot move_to)
           ~base:block)
   | Unary (Project_value_slot { project_from = _; value_slot }, block) ->
-    let block = simple_to_name denv block in
+    let block = Code_id_or_name.name (simple_to_name denv block) in
     default_bp (fun to_ ->
         Graph.add_accessor_dep (Acc.graph acc) ~to_ (Value_slot value_slot)
           ~base:block)
@@ -286,7 +295,7 @@ and traverse_prim denv acc ~bound_pattern (prim : Flambda_primitive.t) ~default
        we can make stores only escape the corresponding fields of the block
        instead of the whole block. *)
     let kind = Flambda_primitive.Block_access_kind.element_kind_for_load kind in
-    let block = simple_to_name denv block in
+    let block = Code_id_or_name.name (simple_to_name denv block) in
     default_bp (fun to_ ->
         Graph.add_accessor_dep (Acc.graph acc) ~to_
           (Block (Targetint_31_63.to_int field, kind))
@@ -295,13 +304,14 @@ and traverse_prim denv acc ~bound_pattern (prim : Flambda_primitive.t) ~default
     | Immutable | Immutable_unique -> ()
     | Mutable ->
       default_bp (fun to_ ->
-          Graph.add_alias (Acc.graph acc) ~to_ ~from:denv.le_monde_exterieur))
+          Graph.add_alias (Acc.graph acc) ~to_
+            ~from:(Code_id_or_name.name denv.le_monde_exterieur)))
   | Unary (Is_int { variant_only = true }, arg) ->
-    let name = simple_to_name denv arg in
+    let name = Code_id_or_name.name (simple_to_name denv arg) in
     default_bp (fun to_ ->
         Graph.add_accessor_dep (Acc.graph acc) ~to_ Is_int ~base:name)
   | Unary (Get_tag, arg) ->
-    let name = simple_to_name denv arg in
+    let name = Code_id_or_name.name (simple_to_name denv arg) in
     default_bp (fun to_ ->
         Graph.add_accessor_dep (Acc.graph acc) ~to_ Get_tag ~base:name)
   | prim ->
@@ -395,7 +405,7 @@ and traverse_static_consts denv acc ~(bound_pattern : Bound_pattern.t) group =
       | _ ->
         Graph.add_alias (Acc.graph acc)
           ~to_:(Code_id_or_name.name name)
-          ~from:denv.all_constants)
+          ~from:(Code_id_or_name.name denv.all_constants))
 
 and traverse_let_cont denv acc (let_cont : Let_cont.t) : rev_expr =
   match let_cont with
@@ -576,79 +586,110 @@ and traverse_apply denv acc apply : rev_expr =
   { expr; holed_expr = denv.parent }
 
 and traverse_call_kind denv acc apply ~exn_arg ~return_args ~default_acc =
+  let calls_are_not_pure = Variable.create "not_pure" in
+  Acc.used ~denv (Simple.var calls_are_not_pure) acc;
+  let add_call_widget (function_call : Call_kind.Function_call.t) =
+    let rec unflatten shape l =
+      match shape, l with
+      | [], [] -> []
+      | [], _ :: _ -> Misc.fatal_error "unflatten: too many arguments"
+      | [] :: shape, _ -> [] :: unflatten shape l
+      | (_ :: _) :: _, [] -> Misc.fatal_error "unflatten: too few arguments"
+      | (_ :: rest) :: shape, arg :: args -> (
+        match unflatten (rest :: shape) args with
+        | [] -> assert false
+        | h :: q -> (arg :: h) :: q)
+    in
+    let arity, closure_entry_point =
+      match function_call with
+      | Indirect_unknown_arity ->
+        ( Flambda_arity.unarize_per_parameter (Apply.args_arity apply),
+          Global_flow_graph.Indirect_code_pointer )
+      | Indirect_known_arity | Direct _ ->
+        ( [Flambda_arity.unarize (Apply.args_arity apply)],
+          Global_flow_graph.Direct_code_pointer )
+    in
+    let args = unflatten arity (Apply.args apply) in
+    (* List.iter (fun arg -> Acc.used ~denv arg acc) (Apply.args apply); *)
+    let callee =
+      match Apply.callee apply with
+      | None -> assert false
+      | Some callee -> Code_id_or_name.name (simple_to_name denv callee)
+    in
+    let rec add_deps callee args calls_are_not_pure =
+      match args with
+      | [] -> Misc.fatal_error "add_deps: no args"
+      | first :: rest -> (
+        List.iteri
+          (fun i arg ->
+            Graph.add_coaccessor_dep (Acc.graph acc)
+              ~to_:(Code_id_or_name.name (simple_to_name denv arg))
+              (Param (closure_entry_point, i))
+              ~base:callee)
+          first;
+        Graph.add_accessor_dep (Acc.graph acc)
+          ~to_:(Code_id_or_name.var calls_are_not_pure)
+          Code_of_closure ~base:callee;
+        Graph.add_accessor_dep (Acc.graph acc)
+          ~to_:(Code_id_or_name.var exn_arg)
+          (Apply (closure_entry_point, Exn))
+          ~base:callee;
+        match rest with
+        | [] -> (
+          match return_args with
+          | None -> ()
+          | Some return_args ->
+            List.iteri
+              (fun i return_arg ->
+                Graph.add_accessor_dep (Acc.graph acc)
+                  ~to_:(Code_id_or_name.var return_arg)
+                  (Apply (closure_entry_point, Normal i))
+                  ~base:callee)
+              return_args)
+        | _ :: _ ->
+          let v = Variable.create "partial_apply" in
+          Graph.add_accessor_dep (Acc.graph acc) ~to_:(Code_id_or_name.var v)
+            (Apply (closure_entry_point, Normal 0))
+            ~base:callee;
+          let calls_are_not_pure = Variable.create "not_pure" in
+          Acc.used ~denv (Simple.var calls_are_not_pure) acc;
+          add_deps (Code_id_or_name.var v) rest calls_are_not_pure)
+    in
+    add_deps callee args calls_are_not_pure
+  in
   match Apply.call_kind apply with
-  | Function { function_call = Direct code_id; _ } ->
+  | Function { function_call = Direct code_id as function_call; _ } ->
     (* CR ncourant: think about cross-module propagation *)
-    if Compilation_unit.is_current (Code_id.get_compilation_unit code_id)
-    then (
+    (* if Compilation_unit.is_current (Code_id.get_compilation_unit code_id)
+       then ( let apply_dep = { Traverse_acc.function_containing_apply_expr =
+       denv.current_code_id; apply_code_id = code_id; apply_args = Apply.args
+       apply; apply_closure = Apply.callee apply; params_of_apply_return_cont =
+       return_args; param_of_apply_exn_cont = exn_arg; not_pure_call_witness =
+       calls_are_not_pure } in Acc.add_apply apply_dep acc; if Option.is_some
+       (Apply.callee apply) then add_call_widget function_call) else default_acc
+       acc *)
+    if Option.is_some (Apply.callee apply)
+    then add_call_widget function_call
+    else if Compilation_unit.is_current (Code_id.get_compilation_unit code_id)
+    then
       let apply_dep =
         { Traverse_acc.function_containing_apply_expr = denv.current_code_id;
           apply_code_id = code_id;
           apply_args = Apply.args apply;
           apply_closure = Apply.callee apply;
           params_of_apply_return_cont = return_args;
-          param_of_apply_exn_cont = exn_arg
+          param_of_apply_exn_cont = exn_arg;
+          not_pure_call_witness = calls_are_not_pure
         }
       in
-      Acc.add_apply apply_dep acc;
-      Acc.called ~denv code_id acc)
+      Acc.add_apply apply_dep acc
     else default_acc acc
   | Function
       { function_call =
           (Indirect_unknown_arity | Indirect_known_arity) as function_call;
         _
       } ->
-    List.iter (fun arg -> Acc.used ~denv arg acc) (Apply.args apply);
-    let callee =
-      match Apply.callee apply with
-      | None -> assert false
-      | Some callee -> simple_to_name denv callee
-    in
-    let arity = Apply.args_arity apply in
-    let partial_apply = ref callee in
-    let calls_are_not_pure = Variable.create "not_pure" in
-    Acc.used ~denv (Simple.var calls_are_not_pure) acc;
-    (match function_call with
-    | Indirect_unknown_arity ->
-      for i = 1 to Flambda_arity.num_params arity - 1 do
-        let v = Variable.create (Printf.sprintf "partial_apply_%i" i) in
-        Graph.add_accessor_dep (Acc.graph acc) ~to_:(Code_id_or_name.var v)
-          (Apply (Indirect_code_pointer, Normal 0))
-          ~base:!partial_apply;
-        Graph.add_accessor_dep (Acc.graph acc)
-          ~to_:(Code_id_or_name.var exn_arg)
-          (Apply (Indirect_code_pointer, Exn))
-          ~base:!partial_apply;
-        Graph.add_accessor_dep (Acc.graph acc)
-          ~to_:(Code_id_or_name.var calls_are_not_pure)
-          Code_of_closure ~base:!partial_apply;
-        partial_apply := Name.var v
-      done
-    | Indirect_known_arity -> ()
-    | Direct _ -> assert false);
-    Graph.add_accessor_dep (Acc.graph acc)
-      ~to_:(Code_id_or_name.var calls_are_not_pure)
-      Code_of_closure ~base:!partial_apply;
-    let closure_entry_point : Global_flow_graph.closure_entry_point =
-      match function_call with
-      | Indirect_unknown_arity -> Indirect_code_pointer
-      | Indirect_known_arity -> Direct_code_pointer
-      | Direct _ -> assert false
-    in
-    (match return_args with
-    | None -> ()
-    | Some return_args ->
-      List.iteri
-        (fun i return_arg ->
-          Graph.add_accessor_dep (Acc.graph acc)
-            ~to_:(Code_id_or_name.var return_arg)
-            (Apply (closure_entry_point, Normal i))
-            ~base:!partial_apply)
-        return_args);
-    Graph.add_accessor_dep (Acc.graph acc)
-      ~to_:(Code_id_or_name.var exn_arg)
-      (Apply (closure_entry_point, Exn))
-      ~base:!partial_apply
+    add_call_widget function_call
   | Method _ | C_call _ | Effect _ -> default_acc acc
 
 and traverse_apply_cont denv acc apply_cont : rev_expr =
@@ -741,7 +782,8 @@ and traverse_function_params_and_body acc code_id code ~return_continuation
     List.iter (fun arg -> Acc.used ~denv (Simple.var arg) acc) code_dep.params;
     List.iter (fun v -> Acc.used ~denv (Simple.var v) acc) (exn :: return);
     let[@inline] any_source v =
-      Graph.add_alias (Acc.graph acc) ~from:le_monde_exterieur
+      Graph.add_alias (Acc.graph acc)
+        ~from:(Code_id_or_name.name le_monde_exterieur)
         ~to_:(Code_id_or_name.var v)
     in
     List.iter
@@ -757,7 +799,7 @@ and traverse_function_params_and_body acc code_id code ~return_continuation
       (fun param arg ->
         Graph.add_alias (Acc.graph acc)
           ~to_:(Code_id_or_name.var (Bound_parameter.var param))
-          ~from:(Name.var arg))
+          ~from:(Code_id_or_name.var arg))
       (Bound_parameters.to_list params)
       code_dep.params;
   if is_opaque
@@ -765,7 +807,7 @@ and traverse_function_params_and_body acc code_id code ~return_continuation
   else
     Graph.add_alias (Acc.graph acc)
       ~to_:(Code_id_or_name.var my_closure)
-      ~from:(Name.var code_dep.my_closure);
+      ~from:(Code_id_or_name.var code_dep.my_closure);
   let body = traverse denv acc body in
   let params_and_body =
     { return_continuation;
