@@ -306,8 +306,7 @@ let create () =
   }
 
 let add_alias t ~to_ ~from =
-  t.alias_rel
-    <- Alias_rel.add_or_replace [to_; Code_id_or_name.name from] () t.alias_rel
+  t.alias_rel <- Alias_rel.add_or_replace [to_; from] () t.alias_rel
 
 let add_use_dep t ~to_ ~from =
   t.use_rel <- Use_rel.add_or_replace [to_; from] () t.use_rel
@@ -323,7 +322,7 @@ let add_constructor_dep t ~base relation ~from =
 let add_accessor_dep t ~to_ relation ~base =
   t.accessor_rel
     <- Accessor_rel.add_or_replace
-         [to_; encode_field t relation; Code_id_or_name.name base]
+         [to_; encode_field t relation; base]
          () t.accessor_rel
 
 let add_coaccessor_dep t ~to_ relation ~base =
@@ -340,9 +339,7 @@ let add_coconstructor_dep t ~base relation ~from =
 
 let add_propagate_dep t ~if_used ~to_ ~from =
   t.propagate_rel
-    <- Propagate_rel.add_or_replace
-         [if_used; to_; Code_id_or_name.name from]
-         () t.propagate_rel
+    <- Propagate_rel.add_or_replace [if_used; to_; from] () t.propagate_rel
 
 let add_opaque_let_dependency t ~to_ ~from =
   let bound_to = Bound_pattern.free_names to_ in

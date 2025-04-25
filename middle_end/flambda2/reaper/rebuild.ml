@@ -284,7 +284,7 @@ let rewrite_set_of_closures env kinds ~(bound : Name.t list)
               let code_metadata = env.get_code_metadata code_id in
               Deleted
                 { function_slot_size =
-                    Code_metadata.function_slot_size code_metadata;
+                    3 (* Code_metadata.function_slot_size code_metadata *);
                   dbg = Code_metadata.dbg code_metadata
                 }
         in
@@ -690,19 +690,54 @@ let rec rebuild_expr (kinds : Flambda_kind.t Name.Map.t) (env : env)
                ~f:(rewrite_simple f) ~arg:(rewrite_simple arg)
                ~last_fiber:(rewrite_simple last_fiber))
       in
-      let updating_calling_convention =
+      let code_id_actually_called, new_call_kind, _should_break_call =
+        let called c alloc_mode call_kind was_indirect_unknown_arity =
+          let code_id =
+            Simple.pattern_match c
+              ~const:(fun _ -> None)
+              ~name:(fun name ~coercion:_ ->
+                Dep_solver.code_id_actually_called env.uses name)
+          in
+          match code_id with
+          | None -> code_id, call_kind, false
+          | Some code_id ->
+            let new_call_kind =
+              Call_kind.direct_function_call code_id alloc_mode
+            in
+            Some code_id, new_call_kind, was_indirect_unknown_arity
+        in
         match[@ocaml.warning "-4"] call_kind with
-        | Function { function_call = Direct code_id; _ } -> (
+        | Function { function_call = Direct code_id; alloc_mode } -> (
+          match Apply.callee apply with
+          | None -> Some code_id, call_kind, false
+          | Some c ->
+            let call_kind =
+              if Dep_solver.has_use env.uses (Code_id_or_name.code_id code_id)
+              then call_kind
+              else Call_kind.indirect_function_call_known_arity alloc_mode
+            in
+            called c alloc_mode call_kind false)
+        | Function { function_call = Indirect_unknown_arity; alloc_mode } ->
+          called (Option.get (Apply.callee apply)) alloc_mode call_kind true
+        | Function { function_call = Indirect_known_arity; alloc_mode } ->
+          called (Option.get (Apply.callee apply)) alloc_mode call_kind false
+        | _ -> None, call_kind, false
+      in
+      let updating_calling_convention =
+        match code_id_actually_called with
+        | None -> Not_changing_calling_convention
+        | Some code_id -> (
+          (* Format.eprintf "CODE ID %a@." Code_id.print code_id; *)
           match Code_id.Map.find_opt code_id env.code_deps with
           | None -> Not_changing_calling_convention
           | Some code_dep ->
-            let can_be_called_indirectly =
-              Dep_solver.has_use env.uses code_dep.indirect_call_witness
+            let cannot_change_calling_convention =
+              Dep_solver.cannot_change_calling_convention env.uses
+                code_dep.indirect_call_witness
             in
-            if can_be_called_indirectly
+            if cannot_change_calling_convention
             then Not_changing_calling_convention
             else Changing_calling_convention code_id)
-        | _ -> Not_changing_calling_convention
       in
       let exn_continuation = Apply.exn_continuation apply in
       let exn_continuation =
@@ -830,9 +865,10 @@ let rec rebuild_expr (kinds : Flambda_kind.t Name.Map.t) (env : env)
           RE.create_non_recursive_let_cont return_cont_wrapper cont_handler
             ~body
       in
-      (* TODO rewrite return arity *)
+      (* TODO rewrite arities *)
       match updating_calling_convention with
       | Not_changing_calling_convention ->
+        Format.eprintf "NOT CHANGING CALLING CONVENTION %a@." Apply.print apply;
         let args = List.map (rewrite_simple kinds env) (Apply.args apply) in
         let args_arity = Apply.args_arity apply in
         let return_arity = Apply.return_arity apply in
@@ -843,8 +879,9 @@ let rec rebuild_expr (kinds : Flambda_kind.t Name.Map.t) (env : env)
              value would then be further used in a later simplify pass to refine
              the call kind and produce an invalid. *)
             ~callee:(rewrite_simple_opt env kinds (Apply.callee apply))
-            exn_continuation ~args ~args_arity ~return_arity ~call_kind
-            (Apply.dbg apply) ~inlined:(Apply.inlined apply)
+            exn_continuation ~args ~args_arity ~return_arity
+            ~call_kind:new_call_kind (Apply.dbg apply)
+            ~inlined:(Apply.inlined apply)
             ~inlining_state:(Apply.inlining_state apply)
             ~probe:(Apply.probe apply) ~position:(Apply.position apply)
             ~relative_history:(Apply.relative_history apply)
@@ -856,6 +893,8 @@ let rec rebuild_expr (kinds : Flambda_kind.t Name.Map.t) (env : env)
         in
         make_apply_wrapper make_apply (Apply.continuation apply) func_decisions
       | Changing_calling_convention code_id ->
+        Format.eprintf "CHANGING CALLING CONVENTION %a %a@." Code_id.print
+          code_id Apply.print apply;
         let args_from_unboxed_callee, callee =
           match Apply.callee apply with
           | Some callee when simple_is_unboxable env callee ->
@@ -901,7 +940,7 @@ let rec rebuild_expr (kinds : Flambda_kind.t Name.Map.t) (env : env)
         let args = List.map fst args in
         let make_apply ~continuation =
           Apply.create ~callee ~continuation exn_continuation ~args ~args_arity
-            ~return_arity ~call_kind (Apply.dbg apply)
+            ~return_arity ~call_kind:new_call_kind (Apply.dbg apply)
             ~inlined:(Apply.inlined apply)
             ~inlining_state:(Apply.inlining_state apply)
             ~probe:(Apply.probe apply) ~position:(Apply.position apply)
@@ -930,10 +969,11 @@ and rebuild_function_params_and_body (kinds : Flambda_kind.t Name.Map.t)
     match Code_id.Map.find_opt code_id env.code_deps with
     | None -> assert false
     | Some code_dep ->
-      let can_be_called_indirectly =
-        Dep_solver.has_use env.uses code_dep.indirect_call_witness
+      let cannot_change_calling_convention =
+        Dep_solver.cannot_change_calling_convention env.uses
+          code_dep.indirect_call_witness
       in
-      if can_be_called_indirectly
+      if cannot_change_calling_convention
       then Not_changing_calling_convention
       else Changing_calling_convention code_id
   in
@@ -1126,6 +1166,9 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
                     ~free_names_of_params_and_body:
                       (function_params_and_body_free_names params_and_body)
                 in
+                assert (
+                  Compilation_unit.is_current
+                    (Code_id.get_compilation_unit (Code.code_id code)));
                 all_code := Code_id.Map.add (Code.code_id code) code !all_code;
                 Static_const_or_code.create_code code
               | Static_const (Set_of_closures set_of_closures) ->
@@ -1738,10 +1781,11 @@ let rebuild ~(code_deps : Traverse_acc.code_dep Code_id.Map.t)
   all_slot_offsets := Slot_offsets.empty;
   all_code := Code_id.Map.empty;
   let should_keep_function_param (code_dep : Traverse_acc.code_dep) =
-    let can_be_called_indirectly =
-      Dep_solver.has_use solved_dep code_dep.indirect_call_witness
+    let cannot_change_calling_convention =
+      Dep_solver.cannot_change_calling_convention solved_dep
+        code_dep.indirect_call_witness
     in
-    if can_be_called_indirectly
+    if cannot_change_calling_convention
     then (fun var kind ->
       assert (
         Option.is_none
@@ -1774,15 +1818,16 @@ let rebuild ~(code_deps : Traverse_acc.code_dep Code_id.Map.t)
   let function_return_decision =
     Code_id.Map.mapi
       (fun code_id (code_dep : Traverse_acc.code_dep) ->
-        let can_be_called_indirectly =
-          Dep_solver.has_use solved_dep code_dep.indirect_call_witness
+        let cannot_change_calling_convention =
+          Dep_solver.cannot_change_calling_convention solved_dep
+            code_dep.indirect_call_witness
         in
         let metadata = get_code_metadata code_id in
         let kinds =
           Flambda_arity.unarized_components
             (Code_metadata.result_arity metadata)
         in
-        if can_be_called_indirectly
+        if cannot_change_calling_convention
         then List.map2 (fun v kind -> Keep (v, kind)) code_dep.return kinds
         else
           (* Format.eprintf "DIRECT: %a@." Code_id.print code_id; *)

@@ -49,7 +49,8 @@ type apply_dep =
     apply_args : Simple.t list;
     apply_closure : Simple.t option;
     params_of_apply_return_cont : Variable.t list option;
-    param_of_apply_exn_cont : Variable.t
+    param_of_apply_exn_cont : Variable.t;
+    not_pure_call_witness : Variable.t
   }
 
 type t

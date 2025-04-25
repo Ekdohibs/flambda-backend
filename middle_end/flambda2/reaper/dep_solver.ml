@@ -639,6 +639,9 @@ let not_local_field_has_source =
 let field_of_constructor_is_used =
   rel2 "field_of_constructor_is_used" Cols.[n; f]
 
+let cannot_change_calling_convention =
+  rel1 "cannot_change_calling_convention" Cols.[n]
+
 let cannot_change_representation0 = rel1 "cannot_change_representation0" Cols.[n]
 
 let cannot_change_representation1 = rel1 "cannot_change_representation1" Cols.[n]
@@ -666,14 +669,18 @@ let datalog_rules =
     | Code_of_closure | Apply _ -> false
     | _ -> true
   in
-  let relation_prevents_unboxing : Field.t -> _ = function
-    | Block _ | Value_slot _ -> false
-    | Function_slot _ -> false (* todo *)
-    | Code_of_closure | Is_int | Get_tag -> true
-    | Apply _ -> true (* todo? *)
+  (* let relation_prevents_unboxing : Field.t -> _ = function | Block _ |
+     Value_slot _ -> false | Function_slot _ -> false (* todo *) |
+     Code_of_closure | Is_int | Get_tag -> true | Apply _ -> true (* todo? *)
+     in *)
+  let is_code_field : Field.t -> _ = function[@ocaml.warning "-4"]
+    | Code_of_closure -> true
+    | _ -> false
   in
-  let is_code_field : Field.t -> _ = function[@ocaml.warning "-4"] Code_of_closure -> true | _ -> false in
-  let is_apply_field : Field.t -> _ = function[@ocaml.warning "-4"] Apply _ -> true | _ -> false in
+  let is_apply_field : Field.t -> _ = function[@ocaml.warning "-4"]
+    | Apply _ -> true
+    | _ -> false
+  in
   [ (let$ [base; relation; from] = ["base"; "relation"; "from"] in
      [constructor_rel base relation from; used_pred base]
      ==> field_of_constructor_is_used base relation);
@@ -746,6 +753,42 @@ let datalog_rules =
     (let$ [allocation_id] = ["allocation_id"] in
      [any_source_pred allocation_id]
      ==> cannot_change_representation0 allocation_id);
+    (* Note this rule is here to still allow changing the calling convention of
+       symbols /!\ when adding back the local value slots, there should be a few
+       more rules here *)
+    (* TODO this is wrong: some closures can have their representation changed
+       but not their calling convention *)
+    (let$ [set_of_closures; coderel; indirect_call_witness] =
+       ["set_of_closures"; "coderel"; "indirect_call_witness"]
+     in
+     [ constructor_rel set_of_closures coderel indirect_call_witness;
+       filter_field is_code_field coderel;
+       used_pred indirect_call_witness;
+       cannot_change_representation0 set_of_closures ]
+     ==> cannot_change_calling_convention indirect_call_witness);
+    (let$ [set_of_closures; coderel; indirect_call_witness; indirect1; indirect2]
+         =
+       [ "set_of_closures";
+         "coderel";
+         "indirect_call_witness";
+         "indirect1";
+         "indirect2" ]
+     in
+     [ rev_accessor_rel set_of_closures coderel indirect_call_witness;
+       filter_field is_code_field coderel;
+       used_pred indirect_call_witness;
+       sources_rel indirect_call_witness indirect1;
+       sources_rel indirect_call_witness indirect2;
+       not_equal indirect1 indirect2 ]
+     ==> cannot_change_calling_convention indirect1);
+    (* CR ncourant: we need to either check this is a total application or
+       introduce wrappers when rebuilding *)
+    (* (let$ [set_of_closures; coderel; calls_not_pure_witness; indirect] =
+       ["set_of_closures"; "coderel"; "calls_not_pure_witness"; "indirect"] in [
+       rev_accessor_rel set_of_closures coderel calls_not_pure_witness;
+       filter_field is_code_field coderel; used_pred calls_not_pure_witness;
+       any_source_pred calls_not_pure_witness; alias_rel calls_not_pure_witness
+       indirect ] ==> cannot_change_calling_convention indirect); *)
     (* CR-someday ncourant: we completely prevent changing the representation of
        symbols. While allowing them to be unboxed is difficult, due to symbols
        being always values, we could at least change their representation. This
@@ -789,13 +832,39 @@ let datalog_rules =
      [ field_of_constructor_is_used x field;
        filter_field field_cannot_be_destructured field ]
      ==> cannot_unbox0 x);
-    (let$ [alias; allocation_id; relation; to_] =
-       ["alias"; "allocation_id"; "relation"; "to_"]
+    (let$ [alias; allocation_id; relation; to_; coderel; indirect_call_witness]
+         =
+       [ "alias";
+         "allocation_id";
+         "relation";
+         "to_";
+         "coderel";
+         "indirect_call_witness" ]
      in
      [ sources_rel alias allocation_id;
        rev_constructor_rel alias relation to_;
-       field_of_constructor_is_used to_ relation;
-       filter_field relation_prevents_unboxing relation ]
+       filter_field
+         (fun (f : Field.t) ->
+           match[@ocaml.warning "-4"] f with Apply _ -> true | _ -> false)
+         relation;
+       constructor_rel to_ coderel indirect_call_witness;
+       filter_field is_code_field coderel;
+       cannot_change_calling_convention indirect_call_witness ]
+     ==> cannot_unbox0 allocation_id);
+    (let$ [alias; allocation_id; relation; to_; coderel; indirect_call_witness]
+         =
+       [ "alias";
+         "allocation_id";
+         "relation";
+         "to_";
+         "coderel";
+         "indirect_call_witness" ]
+     in
+     [ sources_rel alias allocation_id;
+       rev_coaccessor_rel alias relation to_;
+       constructor_rel to_ coderel indirect_call_witness;
+       filter_field is_code_field coderel;
+       cannot_change_calling_convention indirect_call_witness ]
      ==> cannot_unbox0 allocation_id);
     (let$ [alias; allocation_id; relation; to_] =
        ["alias"; "allocation_id"; "relation"; "to_"]
@@ -804,11 +873,6 @@ let datalog_rules =
        rev_constructor_rel alias relation to_;
        field_of_constructor_is_used to_ relation;
        cannot_change_representation to_ ]
-     ==> cannot_unbox0 allocation_id);
-    (let$ [alias; allocation_id; relation; to_] =
-       ["alias"; "allocation_id"; "relation"; "to_"]
-     in
-     [sources_rel alias allocation_id; rev_coaccessor_rel alias relation to_]
      ==> cannot_unbox0 allocation_id);
     (let$ [x] = ["x"] in
      [cannot_unbox0 x] ==> cannot_unbox x);
@@ -1168,3 +1232,59 @@ let field_used uses v f = field_used uses.db v f
 let has_source uses v = has_source uses.db v
 
 let not_local_field_has_source uses v f = not_local_field_has_source uses.db v f
+
+let cannot_change_calling_convention_query =
+  mk_exists_query ["X"] [] (fun [x] [] -> [cannot_change_calling_convention x])
+
+let cannot_change_calling_convention_of_closure_query =
+  mk_exists_query ["set_of_closures"; "coderel"]
+    ["indirect_call_witness"; "indirect"]
+    (fun [set_of_closures; coderel] [indirect_call_witness; indirect] ->
+      [ rev_accessor_rel set_of_closures coderel indirect_call_witness;
+        sources_rel indirect_call_witness indirect;
+        cannot_change_calling_convention indirect ])
+
+let cannot_change_calling_convention uses v =
+  exists_with_parameters cannot_change_calling_convention_query [v] uses.db
+
+let code_id_actually_called_query =
+  let open Syntax in
+  let open Global_flow_graph in
+  compile [] (fun [] ->
+      with_parameters ["set_of_closures"; "coderel"]
+        (fun [set_of_closres; coderel] ->
+          foreach ["indirect_call_witness"; "indirect"; "codeid"]
+            (fun [indirect_call_witness; indirect; codeid] ->
+              where
+                [ rev_accessor_rel set_of_closres coderel indirect_call_witness;
+                  sources_rel indirect_call_witness indirect;
+                  used_pred indirect_call_witness;
+                  constructor_rel indirect coderel codeid ]
+                (yield [codeid]))))
+
+let code_id_actually_called uses v =
+  if exists_with_parameters used_pred_query [Code_id_or_name.name v] uses.db
+  then None
+  else if exists_with_parameters
+            cannot_change_calling_convention_of_closure_query
+            [Code_id_or_name.name v; Field.encode Code_of_closure]
+            uses.db
+  then None
+  else
+    Datalog.Cursor.fold_with_parameters code_id_actually_called_query
+      [Code_id_or_name.name v; Field.encode Code_of_closure]
+      uses.db ~init:None
+      ~f:(fun [codeid] acc ->
+        let codeid =
+          Code_id_or_name.pattern_match' codeid
+            ~code_id:(fun code_id -> code_id)
+            ~name:(fun name ->
+              Misc.fatal_errorf "code_id_actually_called found a name: %a"
+                Name.print name)
+        in
+        if Option.is_some acc && not (Code_id.equal (Option.get acc) codeid)
+        then
+          Misc.fatal_errorf
+            "code_id_actually_called found two code ids: %a and %a"
+            Code_id.print (Option.get acc) Code_id.print codeid
+        else Some codeid)
