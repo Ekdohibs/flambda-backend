@@ -30,6 +30,7 @@ module Field : sig
     | Is_int (* value checked for [Is_int] *)
     | Get_tag (* tag of the value is read *)
     | Apply of closure_entry_point * return_kind
+    | Code_id_of_call_witness of int
   (* Returns of functions: either exn path or nth value for normal returns *)
 
   val equal : t -> t -> bool

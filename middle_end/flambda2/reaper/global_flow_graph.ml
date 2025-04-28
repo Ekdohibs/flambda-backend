@@ -38,6 +38,7 @@ module Field = struct
       | Is_int
       | Get_tag
       | Apply of closure_entry_point * return_kind
+      | Code_id_of_call_witness of int
 
     let compare_return_kind r1 r2 =
       match r1, r2 with
@@ -63,28 +64,44 @@ module Field = struct
             (closure_entry_point_to_int ep2)
         in
         if c <> 0 then c else compare_return_kind r1 r2
+      | Code_id_of_call_witness c1, Code_id_of_call_witness c2 ->
+        Int.compare c1 c2
       | ( Block _,
           ( Value_slot _ | Function_slot _ | Code_of_closure | Is_int | Get_tag
-          | Apply _ ) ) ->
+          | Apply _ | Code_id_of_call_witness _ ) ) ->
         -1
       | ( ( Value_slot _ | Function_slot _ | Code_of_closure | Is_int | Get_tag
-          | Apply _ ),
+          | Apply _ | Code_id_of_call_witness _ ),
           Block _ ) ->
         1
       | ( Value_slot _,
-          (Function_slot _ | Code_of_closure | Is_int | Get_tag | Apply _) ) ->
+          ( Function_slot _ | Code_of_closure | Is_int | Get_tag | Apply _
+          | Code_id_of_call_witness _ ) ) ->
         -1
-      | ( (Function_slot _ | Code_of_closure | Is_int | Get_tag | Apply _),
+      | ( ( Function_slot _ | Code_of_closure | Is_int | Get_tag | Apply _
+          | Code_id_of_call_witness _ ),
           Value_slot _ ) ->
         1
-      | Function_slot _, (Code_of_closure | Is_int | Get_tag | Apply _) -> -1
-      | (Code_of_closure | Is_int | Get_tag | Apply _), Function_slot _ -> 1
-      | Code_of_closure, (Is_int | Get_tag | Apply _) -> -1
-      | (Is_int | Get_tag | Apply _), Code_of_closure -> 1
-      | Is_int, (Get_tag | Apply _) -> -1
-      | (Get_tag | Apply _), Is_int -> 1
-      | Get_tag, Apply _ -> -1
-      | Apply _, Get_tag -> 1
+      | ( Function_slot _,
+          ( Code_of_closure | Is_int | Get_tag | Apply _
+          | Code_id_of_call_witness _ ) ) ->
+        -1
+      | ( ( Code_of_closure | Is_int | Get_tag | Apply _
+          | Code_id_of_call_witness _ ),
+          Function_slot _ ) ->
+        1
+      | Code_of_closure, (Is_int | Get_tag | Apply _ | Code_id_of_call_witness _)
+        ->
+        -1
+      | ( (Is_int | Get_tag | Apply _ | Code_id_of_call_witness _),
+          Code_of_closure ) ->
+        1
+      | Is_int, (Get_tag | Apply _ | Code_id_of_call_witness _) -> -1
+      | (Get_tag | Apply _ | Code_id_of_call_witness _), Is_int -> 1
+      | Get_tag, (Apply _ | Code_id_of_call_witness _) -> -1
+      | (Apply _ | Code_id_of_call_witness _), Get_tag -> 1
+      | Apply _, Code_id_of_call_witness _ -> -1
+      | Code_id_of_call_witness _, Apply _ -> 1
 
     let equal a b = compare a b = 0
 
@@ -103,6 +120,8 @@ module Field = struct
           i
       | Apply (ep, Exn) ->
         Format.fprintf ppf "Apply (%s, Exn)" (closure_entry_point_to_string ep)
+      | Code_id_of_call_witness i ->
+        Format.fprintf ppf "Code_id_of_call_witness %d" i
   end
 
   include M
@@ -112,7 +131,7 @@ module Field = struct
     | Value_slot vs -> Value_slot.kind vs
     | Function_slot _ -> Flambda_kind.value
     | Is_int | Get_tag -> Flambda_kind.naked_immediate
-    | (Code_of_closure | Apply _) as field ->
+    | (Code_of_closure | Apply _ | Code_id_of_call_witness _) as field ->
       Misc.fatal_errorf "[field_kind] for virtual field %a" print field
 
   module Container = Container_types.Make (M)

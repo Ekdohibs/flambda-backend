@@ -72,9 +72,11 @@ let prepare_code ~denv acc (code_id : Code_id.t) (code : Code.t) =
     | Assume _ -> false
     | Check _ -> true
   in
-  let indirect_call_witness =
-    Code_id_or_name.var
-      (Variable.create (Printf.sprintf "witness_for_%s" (Code_id.name code_id)))
+  let call_witnesses =
+    List.init (Flambda_arity.cardinal_unarized arity) (fun i ->
+        Code_id_or_name.var
+          (Variable.create
+             (Printf.sprintf "witness_%d_for_%s" i (Code_id.name code_id))))
   in
   let code_dep =
     { Traverse_acc.arity;
@@ -83,12 +85,15 @@ let prepare_code ~denv acc (code_id : Code_id.t) (code : Code.t) =
       exn;
       params;
       is_tupled = Code.is_tupled code;
-      indirect_call_witness
+      call_witnesses
     }
   in
-  Graph.add_constructor_dep (Acc.graph acc) ~base:indirect_call_witness
-    Code_of_closure
-    ~from:(Code_id_or_name.code_id code_id);
+  List.iteri
+    (fun i witness ->
+      Graph.add_constructor_dep (Acc.graph acc) ~base:witness
+        (Code_id_of_call_witness i)
+        ~from:(Code_id_or_name.code_id code_id))
+    call_witnesses;
   Graph.add_alias (Acc.graph acc)
     ~to_:(Code_id_or_name.code_id code_id)
     ~from:(Code_id_or_name.name denv.le_monde_exterieur);
