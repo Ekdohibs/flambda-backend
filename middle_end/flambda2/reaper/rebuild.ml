@@ -93,20 +93,12 @@ let poison_value = 0 (* 123456789 *)
 
 let poison kind = Simple.const_int_of_kind kind poison_value
 
-let field_kind : Field.t -> _ = function
-  | Block (_, kind) -> kind
-  | Value_slot vs -> Value_slot.kind vs
-  | Function_slot _ -> Flambda_kind.value
-  | Is_int | Get_tag -> Flambda_kind.naked_immediate
-  | (Code_of_closure | Apply _) as field ->
-    Misc.fatal_errorf "[field_kind] for %a" Field.print field
-
 let rec fold_unboxed_with_kind (f : Flambda_kind.t -> 'a -> 'b -> 'b)
     (fields : 'a Dep_solver.unboxed_fields Field.Map.t) acc =
   Field.Map.fold
     (fun field elt acc ->
       match (elt : _ Dep_solver.unboxed_fields) with
-      | Not_unboxed elt -> f (field_kind field) elt acc
+      | Not_unboxed elt -> f (Field.kind field) elt acc
       | Unboxed fields -> fold_unboxed_with_kind f fields acc)
     fields acc
 
@@ -136,7 +128,7 @@ let rec fold2_unboxed_subset_with_kind
       match
         (f1, f2 : _ Dep_solver.unboxed_fields * _ Dep_solver.unboxed_fields)
       with
-      | Not_unboxed x1, Not_unboxed x2 -> f (field_kind field) x1 x2 acc
+      | Not_unboxed x1, Not_unboxed x2 -> f (Field.kind field) x1 x2 acc
       | Not_unboxed _, Unboxed _ | Unboxed _, Not_unboxed _ ->
         Misc.fatal_errorf "[fold2_unboxed_subset]"
       | Unboxed fields1, Unboxed fields2 ->
@@ -246,7 +238,8 @@ let rewrite_set_of_closures env kinds ~(bound : Name.t list)
           (fun field uf value_slots ->
             match (field : Field.t) with
             | Is_int | Get_tag | Block _ -> assert false
-            | Code_of_closure | Apply _ -> assert false
+            | Code_of_closure | Apply _ | Code_id_of_call_witness _ ->
+              assert false
             | Function_slot _ -> assert false
             | Value_slot value_slot -> (
               let arg = Value_slot.Map.find value_slot existing_value_slots in
@@ -699,8 +692,9 @@ let rec rebuild_expr (kinds : Flambda_kind.t Name.Map.t) (env : env)
                 Dep_solver.code_id_actually_called env.uses name)
           in
           match code_id with
-          | None -> code_id, call_kind, false
-          | Some code_id ->
+          | None -> None, call_kind, false
+          | Some (code_id, num_already_applied_params) ->
+            if num_already_applied_params <> 0 then failwith "todo";
             let new_call_kind =
               Call_kind.direct_function_call code_id alloc_mode
             in
@@ -727,13 +721,14 @@ let rec rebuild_expr (kinds : Flambda_kind.t Name.Map.t) (env : env)
         match code_id_actually_called with
         | None -> Not_changing_calling_convention
         | Some code_id -> (
-          (* Format.eprintf "CODE ID %a@." Code_id.print code_id; *)
+          Format.eprintf "CODE ID %a: %a@."
+            (Format.pp_print_option Simple.print)
+            (Apply.callee apply) Code_id.print code_id;
           match Code_id.Map.find_opt code_id env.code_deps with
           | None -> Not_changing_calling_convention
-          | Some code_dep ->
+          | Some _ ->
             let cannot_change_calling_convention =
-              Dep_solver.cannot_change_calling_convention env.uses
-                code_dep.indirect_call_witness
+              Dep_solver.cannot_change_calling_convention env.uses code_id
             in
             if cannot_change_calling_convention
             then Not_changing_calling_convention
@@ -868,7 +863,8 @@ let rec rebuild_expr (kinds : Flambda_kind.t Name.Map.t) (env : env)
       (* TODO rewrite arities *)
       match updating_calling_convention with
       | Not_changing_calling_convention ->
-        Format.eprintf "NOT CHANGING CALLING CONVENTION %a@." Apply.print apply;
+        (* Format.eprintf "NOT CHANGING CALLING CONVENTION %a@." Apply.print
+           apply; *)
         let args = List.map (rewrite_simple kinds env) (Apply.args apply) in
         let args_arity = Apply.args_arity apply in
         let return_arity = Apply.return_arity apply in
@@ -893,8 +889,8 @@ let rec rebuild_expr (kinds : Flambda_kind.t Name.Map.t) (env : env)
         in
         make_apply_wrapper make_apply (Apply.continuation apply) func_decisions
       | Changing_calling_convention code_id ->
-        Format.eprintf "CHANGING CALLING CONVENTION %a %a@." Code_id.print
-          code_id Apply.print apply;
+        (* Format.eprintf "CHANGING CALLING CONVENTION %a %a@." Code_id.print
+           code_id Apply.print apply; *)
         let args_from_unboxed_callee, callee =
           match Apply.callee apply with
           | Some callee when simple_is_unboxable env callee ->
@@ -968,10 +964,9 @@ and rebuild_function_params_and_body (kinds : Flambda_kind.t Name.Map.t)
   let updating_calling_convention =
     match Code_id.Map.find_opt code_id env.code_deps with
     | None -> assert false
-    | Some code_dep ->
+    | Some _ ->
       let cannot_change_calling_convention =
-        Dep_solver.cannot_change_calling_convention env.uses
-          code_dep.indirect_call_witness
+        Dep_solver.cannot_change_calling_convention env.uses code_id
       in
       if cannot_change_calling_convention
       then Not_changing_calling_convention
@@ -1291,7 +1286,7 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
                           in
                           RE.create_let bp (Named.create_simple arg) ~body:hole
                       | Block _ | Is_int | Get_tag | Function_slot _
-                      | Code_of_closure | Apply _ ->
+                      | Code_of_closure | Apply _ | Code_id_of_call_witness _ ->
                         assert false)
                     to_bind hole)
               hole bvs
@@ -1402,7 +1397,7 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
                           (Simple.untagged_const_int
                              (Tag.to_targetint_31_63 tag))
                       | Value_slot _ | Function_slot _ | Code_of_closure
-                      | Apply _ ->
+                      | Apply _ | Code_id_of_call_witness _ ->
                         assert false
                     in
                     match arg with
@@ -1539,7 +1534,7 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
                       | Dep_solver.Unboxed _ ->
                         Misc.fatal_errorf "trying to unbox simple")
                     | Value_slot _ | Function_slot _ | Code_of_closure | Apply _
-                      ->
+                    | Code_id_of_call_witness _ ->
                       assert false)
                   fields Numeric_types.Int.Map.empty
               in
@@ -1780,10 +1775,9 @@ let rebuild ~(code_deps : Traverse_acc.code_dep Code_id.Map.t)
     get_code_metadata holed =
   all_slot_offsets := Slot_offsets.empty;
   all_code := Code_id.Map.empty;
-  let should_keep_function_param (code_dep : Traverse_acc.code_dep) =
+  let should_keep_function_param code_id =
     let cannot_change_calling_convention =
-      Dep_solver.cannot_change_calling_convention solved_dep
-        code_dep.indirect_call_witness
+      Dep_solver.cannot_change_calling_convention solved_dep code_id
     in
     if cannot_change_calling_convention
     then (fun var kind ->
@@ -1804,23 +1798,22 @@ let rebuild ~(code_deps : Traverse_acc.code_dep Code_id.Map.t)
       | Some fields -> Unbox fields
   in
   let function_params_to_keep =
-    Code_id.Map.map
-      (fun (code_dep : Traverse_acc.code_dep) ->
+    Code_id.Map.mapi
+      (fun code_id (code_dep : Traverse_acc.code_dep) ->
         let kinds = Flambda_arity.unarize code_dep.arity in
-        List.map2 (should_keep_function_param code_dep) code_dep.params kinds)
+        List.map2 (should_keep_function_param code_id) code_dep.params kinds)
       code_deps
   in
   let should_keep_function_param code_id =
     match Code_id.Map.find_opt code_id code_deps with
     | None -> fun var kind -> Keep (var, kind)
-    | Some code_dep -> should_keep_function_param code_dep
+    | Some _ -> should_keep_function_param code_id
   in
   let function_return_decision =
     Code_id.Map.mapi
       (fun code_id (code_dep : Traverse_acc.code_dep) ->
         let cannot_change_calling_convention =
-          Dep_solver.cannot_change_calling_convention solved_dep
-            code_dep.indirect_call_witness
+          Dep_solver.cannot_change_calling_convention solved_dep code_id
         in
         let metadata = get_code_metadata code_id in
         let kinds =

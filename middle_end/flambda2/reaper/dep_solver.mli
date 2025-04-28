@@ -64,6 +64,6 @@ val print_color : result -> Code_id_or_name.t -> string
 val rewrite_kind_with_subkind :
   result -> Name.t -> Flambda_kind.With_subkind.t -> Flambda_kind.With_subkind.t
 
-val cannot_change_calling_convention : result -> Code_id_or_name.t -> bool
+val cannot_change_calling_convention : result -> Code_id.t -> bool
 
-val code_id_actually_called : result -> Name.t -> Code_id.t option
+val code_id_actually_called : result -> Name.t -> (Code_id.t * int) option

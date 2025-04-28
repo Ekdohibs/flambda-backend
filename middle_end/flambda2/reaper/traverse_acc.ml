@@ -40,7 +40,8 @@ type code_dep =
     return : Variable.t list; (* Dummy variable representing return value *)
     exn : Variable.t; (* Dummy variable representing exn return value *)
     is_tupled : bool;
-    indirect_call_witness : Code_id_or_name.t
+    call_witnesses :
+      Code_id_or_name.t list (* One element for each (complex) parameter *)
   }
 
 type apply_dep =
@@ -270,8 +271,11 @@ let record_set_of_closure_deps ~get_code_metadata ~le_monde_exterieur t =
           ~base:(Code_id_or_name.name name)
           (Apply (Direct_code_pointer, Exn))
           ~from:(Code_id_or_name.var code_dep.exn);
+        let call_witnesses = code_dep.call_witnesses in
         if code_dep.is_tupled
         then (
+          assert (List.compare_length_with call_witnesses 1 = 0);
+          let call_witness = List.hd call_witnesses in
           Graph.add_constructor_dep t.deps
             ~base:(Code_id_or_name.name name)
             (Apply (Indirect_code_pointer, Exn))
@@ -283,8 +287,7 @@ let record_set_of_closure_deps ~get_code_metadata ~le_monde_exterieur t =
                 (Apply (Indirect_code_pointer, Normal i))
                 ~base:(Code_id_or_name.name name))
             code_dep.return;
-          Graph.add_constructor_dep t.deps ~from:code_dep.indirect_call_witness
-            Code_of_closure
+          Graph.add_constructor_dep t.deps ~from:call_witness Code_of_closure
             ~base:(Code_id_or_name.name name);
           let untuple_var = Variable.create "untuple_var" in
           Graph.add_coconstructor_dep t.deps
@@ -298,10 +301,10 @@ let record_set_of_closure_deps ~get_code_metadata ~le_monde_exterieur t =
                 ~base:(Code_id_or_name.var untuple_var))
             code_dep.params)
         else
-          let rec add_deps func params =
-            match params with
+          let rec add_deps func params_and_witnesses =
+            match params_and_witnesses with
             | [] -> Misc.fatal_error "add_deps: no params"
-            | first :: rest -> (
+            | (first, witness) :: rest -> (
               List.iteri
                 (fun i arg ->
                   Graph.add_coconstructor_dep t.deps
@@ -309,8 +312,8 @@ let record_set_of_closure_deps ~get_code_metadata ~le_monde_exterieur t =
                     (Param (Indirect_code_pointer, i))
                     ~base:func)
                 first;
-              Graph.add_constructor_dep t.deps
-                ~from:code_dep.indirect_call_witness Code_of_closure ~base:func;
+              Graph.add_constructor_dep t.deps ~from:witness Code_of_closure
+                ~base:func;
               match rest with
               | [] ->
                 Graph.add_constructor_dep t.deps ~base:func
@@ -330,11 +333,15 @@ let record_set_of_closure_deps ~get_code_metadata ~le_monde_exterieur t =
                   ~base:func;
                 add_deps (Code_id_or_name.var v) rest)
           in
+          let params =
+            unflatten
+              (Flambda_arity.unarize_per_parameter code_dep.arity)
+              code_dep.params
+          in
+          assert (List.compare_lengths call_witnesses params = 0);
           add_deps
             (Code_id_or_name.name name)
-            (unflatten
-               (Flambda_arity.unarize_per_parameter code_dep.arity)
-               code_dep.params))
+            (List.combine params call_witnesses))
     t.set_of_closures_dep
 
 let graph t = t.deps
@@ -350,8 +357,8 @@ let deps t ~get_code_metadata ~le_monde_exterieur ~all_constants =
            not_pure_call_witness
          } ->
       let code_dep = find_code t apply_code_id in
-      Format.eprintf "CODE DEP %a@." Code_id.print apply_code_id;
-      Graph.add_alias t.deps ~from:code_dep.indirect_call_witness
+      Graph.add_alias t.deps
+        ~from:(List.hd code_dep.call_witnesses)
         ~to_:(Code_id_or_name.var not_pure_call_witness);
       let add_cond_dep param name =
         let param = Name.var param in
