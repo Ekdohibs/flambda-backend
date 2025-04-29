@@ -73,7 +73,9 @@ let prepare_code ~denv acc (code_id : Code_id.t) (code : Code.t) =
     | Check _ -> true
   in
   let call_witnesses =
-    List.init (Flambda_arity.cardinal_unarized arity) (fun i ->
+    List.init
+      (if Code.is_tupled code then 1 else Flambda_arity.num_params arity)
+      (fun i ->
         Code_id_or_name.var
           (Variable.create
              (Printf.sprintf "witness_%d_for_%s" i (Code_id.name code_id))))
@@ -594,27 +596,15 @@ and traverse_call_kind denv acc apply ~exn_arg ~return_args ~default_acc =
   let calls_are_not_pure = Variable.create "not_pure" in
   Acc.used ~denv (Simple.var calls_are_not_pure) acc;
   let add_call_widget (function_call : Call_kind.Function_call.t) =
-    let rec unflatten shape l =
-      match shape, l with
-      | [], [] -> []
-      | [], _ :: _ -> Misc.fatal_error "unflatten: too many arguments"
-      | [] :: shape, _ -> [] :: unflatten shape l
-      | (_ :: _) :: _, [] -> Misc.fatal_error "unflatten: too few arguments"
-      | (_ :: rest) :: shape, arg :: args -> (
-        match unflatten (rest :: shape) args with
-        | [] -> assert false
-        | h :: q -> (arg :: h) :: q)
-    in
-    let arity, closure_entry_point =
+    let args, closure_entry_point =
       match function_call with
       | Indirect_unknown_arity ->
-        ( Flambda_arity.unarize_per_parameter (Apply.args_arity apply),
+        ( Flambda_arity.group_by_parameter (Apply.args_arity apply)
+            (Apply.args apply),
           Global_flow_graph.Indirect_code_pointer )
       | Indirect_known_arity | Direct _ ->
-        ( [Flambda_arity.unarize (Apply.args_arity apply)],
-          Global_flow_graph.Direct_code_pointer )
+        [Apply.args apply], Global_flow_graph.Direct_code_pointer
     in
-    let args = unflatten arity (Apply.args apply) in
     (* List.iter (fun arg -> Acc.used ~denv arg acc) (Apply.args apply); *)
     let callee =
       match Apply.callee apply with

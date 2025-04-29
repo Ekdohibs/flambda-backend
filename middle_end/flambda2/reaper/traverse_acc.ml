@@ -172,19 +172,6 @@ let add_set_of_closures_dep let_bound_name_of_the_closure closure_code_id t =
     <- { let_bound_name_of_the_closure; closure_code_id }
        :: t.set_of_closures_dep
 
-let rec unflatten shape l =
-  match shape, l with
-  | [], [] -> []
-  | [], _ :: _ -> Misc.fatal_error "unflatten: too many arguments"
-  | [] :: shape, _ -> [] :: unflatten shape l
-  | (_ :: _) :: _, [] -> Misc.fatal_error "unflatten: too few arguments"
-  | (_ :: rest) :: shape, arg :: args -> (
-    match unflatten (rest :: shape) args with
-    | [] -> assert false
-    | h :: q -> (arg :: h) :: q)
-
-let _ = ignore unflatten
-
 let record_set_of_closure_deps ~get_code_metadata ~le_monde_exterieur t =
   List.iter
     (fun { let_bound_name_of_the_closure = name; closure_code_id = code_id } ->
@@ -334,9 +321,7 @@ let record_set_of_closure_deps ~get_code_metadata ~le_monde_exterieur t =
                 add_deps (Code_id_or_name.var v) rest)
           in
           let params =
-            unflatten
-              (Flambda_arity.unarize_per_parameter code_dep.arity)
-              code_dep.params
+            Flambda_arity.group_by_parameter code_dep.arity code_dep.params
           in
           assert (List.compare_lengths call_witnesses params = 0);
           add_deps
