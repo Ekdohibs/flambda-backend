@@ -884,14 +884,22 @@ let datalog_rules =
      [ field_of_constructor_is_used x field;
        filter_field field_cannot_be_destructured field ]
      ==> cannot_unbox0 x);
-    (let$ [alias; allocation_id; relation; to_; coderel; indirect_call_witness]
-         =
+    (let$ [ alias;
+            allocation_id;
+            relation;
+            to_;
+            coderel;
+            call_witness;
+            code_id_of_witness;
+            codeid ] =
        [ "alias";
          "allocation_id";
          "relation";
          "to_";
          "coderel";
-         "indirect_call_witness" ]
+         "call_witness";
+         "code_id_of_witness";
+         "codeid" ]
      in
      [ sources_rel alias allocation_id;
        rev_constructor_rel alias relation to_;
@@ -899,24 +907,34 @@ let datalog_rules =
          (fun (f : Field.t) ->
            match[@ocaml.warning "-4"] f with Apply _ -> true | _ -> false)
          relation;
-       constructor_rel to_ coderel indirect_call_witness;
+       constructor_rel to_ coderel call_witness;
        filter_field is_code_field coderel;
-       cannot_change_calling_convention indirect_call_witness ]
+       constructor_rel call_witness code_id_of_witness codeid;
+       cannot_change_calling_convention codeid ]
      ==> cannot_unbox0 allocation_id);
-    (let$ [alias; allocation_id; relation; to_; coderel; indirect_call_witness]
-         =
+    (let$ [ alias;
+            allocation_id;
+            relation;
+            to_;
+            coderel;
+            call_witness;
+            code_id_of_witness;
+            codeid ] =
        [ "alias";
          "allocation_id";
          "relation";
          "to_";
          "coderel";
-         "indirect_call_witness" ]
+         "call_witness";
+         "code_id_of_witness";
+         "codeid" ]
      in
      [ sources_rel alias allocation_id;
-       rev_coaccessor_rel alias relation to_;
-       constructor_rel to_ coderel indirect_call_witness;
+       rev_coconstructor_rel alias relation to_;
+       constructor_rel to_ coderel call_witness;
        filter_field is_code_field coderel;
-       cannot_change_calling_convention indirect_call_witness ]
+       constructor_rel call_witness code_id_of_witness codeid;
+       cannot_change_calling_convention codeid ]
      ==> cannot_unbox0 allocation_id);
     (let$ [alias; allocation_id; relation; to_] =
        ["alias"; "allocation_id"; "relation"; "to_"]
@@ -1303,7 +1321,8 @@ let cannot_change_calling_convention_of_called_closure_query2 =
     ->
       [ rev_accessor_rel set_of_closures coderel call_witness;
         sources_rel call_witness call_witness_source;
-        rev_constructor_rel call_witness code_id_of_witness codeid;
+        Global_flow_graph.constructor_rel call_witness_source code_id_of_witness
+          codeid;
         cannot_change_calling_convention codeid ])
 
 let cannot_change_calling_convention uses v =
@@ -1368,7 +1387,7 @@ let code_id_actually_called uses v =
           then
             Misc.fatal_errorf
               "code_id_actually_called found two code ids: (%a, %d) and (%a, \
-               %d)"
+               %d) for %a"
               Code_id.print codeid0 num_already_applied_params0 Code_id.print
-              codeid num_already_applied_params
+              codeid num_already_applied_params Name.print v
           else Some (codeid, num_already_applied_params))
