@@ -1301,91 +1301,130 @@ let has_source uses v = has_source uses.db v
 
 let not_local_field_has_source uses v f = not_local_field_has_source uses.db v f
 
+let code_id_actually_called =
+  let out_tbl, out = rel1_r "out" Cols.[n] in
+  let in_tbl, in_ = rel1_r "in_" Cols.[n] in
+  let open! Syntax in
+  let open! Global_flow_graph in
+  let indirect_apply_return_0 =
+    Datalog.Term.constant
+      (Field.encode (Field.Apply (Indirect_code_pointer, Normal 0)))
+  in
+  let coderel = Datalog.Term.constant (Field.encode Code_of_closure) in
+  let nxt_query =
+    let$ [x; y] = ["x"; "y"] in
+    [in_ x; rev_accessor_rel x indirect_apply_return_0 y] ==> out y
+  in
+  let cannot_change_calling_convention_of_called_closure_query1 =
+    let$ [set_of_closures; call_witness] =
+      ["set_of_closures"; "call_witness"]
+    in
+    where
+      [ in_ set_of_closures;
+        rev_accessor_rel set_of_closures coderel call_witness;
+        any_source_pred call_witness ]
+      (yield [])
+  in
+  let cannot_change_calling_convention_of_called_closure_query2 =
+    let$ [ set_of_closures;
+           call_witness;
+           call_witness_source;
+           code_id_of_witness;
+           code_id ] =
+      [ "set_of_closures";
+        "call_witness";
+        "call_witness_source";
+        "code_id_of_witness";
+        "code_id" ]
+    in
+    where
+      [ in_ set_of_closures;
+        rev_accessor_rel set_of_closures coderel call_witness;
+        sources_rel call_witness call_witness_source;
+        constructor_rel call_witness_source code_id_of_witness code_id;
+        cannot_change_calling_convention code_id ]
+      (yield [])
+  in
+  let code_id_actually_called_query =
+    let$ [ set_of_closures;
+           call_witness;
+           call_witness_source;
+           code_id_of_witness;
+           code_id ] =
+      [ "set_of_closures";
+        "call_witness";
+        "call_witness_source";
+        "code_id_of_witness";
+        "code_id" ]
+    in
+    where
+      [ in_ set_of_closures;
+        rev_accessor_rel set_of_closures coderel call_witness;
+        sources_rel call_witness call_witness_source;
+        used_pred call_witness;
+        constructor_rel call_witness_source code_id_of_witness code_id ]
+      (yield [code_id_of_witness; code_id])
+  in
+  fun uses v num_args ->
+    let result = ref [] in
+    let prev =
+      ref (Code_id_or_name.Map.singleton (Code_id_or_name.name v) ())
+    in
+    for i = 0 to num_args - 1 do
+      let db = Datalog.set_table in_tbl !prev uses.db in
+      (if i < num_args - 1
+      then
+        let db =
+          Datalog.Schedule.run (Datalog.Schedule.saturate [nxt_query]) db
+        in
+        prev := Datalog.get_table out_tbl db);
+      if Datalog.Cursor.fold
+           cannot_change_calling_convention_of_called_closure_query1 db
+           ~init:false ~f:(fun [] _ -> true)
+         || Datalog.Cursor.fold
+              cannot_change_calling_convention_of_called_closure_query2 db
+              ~init:false ~f:(fun [] _ -> true)
+      then result := None :: !result
+      else
+        let r =
+          Datalog.Cursor.fold code_id_actually_called_query db ~init:None
+            ~f:(fun [code_id_of_witness; codeid] acc ->
+              let num_already_applied_params =
+                match[@ocaml.warning "-4"] Field.decode code_id_of_witness with
+                | Code_id_of_call_witness i -> i
+                | code_id_of_witness ->
+                  Misc.fatal_errorf
+                    "code_id_actually_called found a non-call-witness: %a"
+                    Field.print code_id_of_witness
+              in
+              let codeid =
+                Code_id_or_name.pattern_match' codeid
+                  ~code_id:(fun code_id -> code_id)
+                  ~name:(fun name ->
+                    Misc.fatal_errorf "code_id_actually_called found a name: %a"
+                      Name.print name)
+              in
+              match acc with
+              | None -> Some (codeid, num_already_applied_params)
+              | Some (codeid0, num_already_applied_params0) ->
+                if num_already_applied_params0 <> num_already_applied_params
+                   || Stdlib.not (Code_id.equal codeid0 codeid)
+                then
+                  Misc.fatal_errorf
+                    "code_id_actually_called found two code ids: (%a, %d) and \
+                     (%a, %d) for %a"
+                    Code_id.print codeid0 num_already_applied_params0
+                    Code_id.print codeid num_already_applied_params Name.print v
+                else Some (codeid, num_already_applied_params))
+        in
+        result := r :: !result
+    done;
+    List.rev !result
+
 let cannot_change_calling_convention_query =
   mk_exists_query ["X"] [] (fun [x] [] -> [cannot_change_calling_convention x])
-
-let cannot_change_calling_convention_of_called_closure_query1 =
-  mk_exists_query ["set_of_closures"; "coderel"] ["call_witness"]
-    (fun [set_of_closures; coderel] [call_witness] ->
-      [ rev_accessor_rel set_of_closures coderel call_witness;
-        any_source_pred call_witness ])
-
-let cannot_change_calling_convention_of_called_closure_query2 =
-  mk_exists_query ["set_of_closures"; "coderel"]
-    ["call_witness"; "call_witness_source"; "code_id_of_witness"; "codeid"]
-    (fun
-      [set_of_closures; coderel]
-      [call_witness; call_witness_source; code_id_of_witness; codeid]
-    ->
-      [ rev_accessor_rel set_of_closures coderel call_witness;
-        sources_rel call_witness call_witness_source;
-        Global_flow_graph.constructor_rel call_witness_source code_id_of_witness
-          codeid;
-        cannot_change_calling_convention codeid ])
 
 let cannot_change_calling_convention uses v =
   exists_with_parameters cannot_change_calling_convention_query
     [Code_id_or_name.code_id v]
     uses.db
-
-let code_id_actually_called_query =
-  let open Syntax in
-  let open Global_flow_graph in
-  compile [] (fun [] ->
-      with_parameters ["set_of_closures"; "coderel"]
-        (fun [set_of_closres; coderel] ->
-          foreach
-            ["indirect_call_witness"; "indirect"; "code_id_of_witness"; "codeid"]
-            (fun [indirect_call_witness; indirect; code_id_of_witness; codeid]
-            ->
-              where
-                [ rev_accessor_rel set_of_closres coderel indirect_call_witness;
-                  sources_rel indirect_call_witness indirect;
-                  used_pred indirect_call_witness;
-                  constructor_rel indirect code_id_of_witness codeid ]
-                (yield [code_id_of_witness; codeid]))))
-
-let code_id_actually_called uses v =
-  if exists_with_parameters used_pred_query [Code_id_or_name.name v] uses.db
-  then None
-  else if exists_with_parameters
-            cannot_change_calling_convention_of_called_closure_query1
-            [Code_id_or_name.name v; Field.encode Code_of_closure]
-            uses.db
-          || exists_with_parameters
-               cannot_change_calling_convention_of_called_closure_query2
-               [Code_id_or_name.name v; Field.encode Code_of_closure]
-               uses.db
-  then None
-  else
-    Datalog.Cursor.fold_with_parameters code_id_actually_called_query
-      [Code_id_or_name.name v; Field.encode Code_of_closure]
-      uses.db ~init:None
-      ~f:(fun [code_id_of_witness; codeid] acc ->
-        let num_already_applied_params =
-          match[@ocaml.warning "-4"] Field.decode code_id_of_witness with
-          | Code_id_of_call_witness i -> i
-          | code_id_of_witness ->
-            Misc.fatal_errorf
-              "code_id_actually_called found a non-call-witness: %a" Field.print
-              code_id_of_witness
-        in
-        let codeid =
-          Code_id_or_name.pattern_match' codeid
-            ~code_id:(fun code_id -> code_id)
-            ~name:(fun name ->
-              Misc.fatal_errorf "code_id_actually_called found a name: %a"
-                Name.print name)
-        in
-        match acc with
-        | None -> Some (codeid, num_already_applied_params)
-        | Some (codeid0, num_already_applied_params0) ->
-          if num_already_applied_params0 <> num_already_applied_params
-             || not (Code_id.equal codeid0 codeid)
-          then
-            Misc.fatal_errorf
-              "code_id_actually_called found two code ids: (%a, %d) and (%a, \
-               %d) for %a"
-              Code_id.print codeid0 num_already_applied_params0 Code_id.print
-              codeid num_already_applied_params Name.print v
-          else Some (codeid, num_already_applied_params))

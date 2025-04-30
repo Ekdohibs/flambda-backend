@@ -685,11 +685,16 @@ let rec rebuild_expr (kinds : Flambda_kind.t Name.Map.t) (env : env)
       in
       let code_id_actually_called, new_call_kind, _should_break_call =
         let called c alloc_mode call_kind was_indirect_unknown_arity =
+          let num_args =
+            if was_indirect_unknown_arity
+            then Flambda_arity.num_params (Apply.args_arity apply)
+            else 1
+          in
           let code_id =
             Simple.pattern_match c
-              ~const:(fun _ -> None)
+              ~const:(fun _ -> assert false)
               ~name:(fun name ~coercion:_ ->
-                Dep_solver.code_id_actually_called env.uses name)
+                Dep_solver.code_id_actually_called env.uses name num_args)
           in
           match code_id with
           | None -> None, call_kind, false

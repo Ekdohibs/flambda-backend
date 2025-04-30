@@ -66,4 +66,5 @@ val rewrite_kind_with_subkind :
 
 val cannot_change_calling_convention : result -> Code_id.t -> bool
 
-val code_id_actually_called : result -> Name.t -> (Code_id.t * int) option
+val code_id_actually_called :
+  result -> Name.t -> int -> (Code_id.t * int) option list
