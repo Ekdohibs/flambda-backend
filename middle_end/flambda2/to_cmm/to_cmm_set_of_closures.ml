@@ -261,10 +261,16 @@ end = struct
             then P.int ~dbg 0n (* P.term_of_symbol ~dbg code_symbol *) :: acc
             else acc
           in
-          ( acc,
-            rev_append_chunks ~for_static_sets
-              [Cmm.Word_int; Cmm.Word_int]
-              chunk_acc,
+          let chunk_acc = 
+            if size = 3 then 
+              rev_append_chunks ~for_static_sets
+            [Cmm.Word_int; Cmm.Word_int; Cmm.Word_int]
+            chunk_acc
+else             rev_append_chunks ~for_static_sets
+[Cmm.Word_int; Cmm.Word_int]
+chunk_acc in
+            ( acc,
+            chunk_acc,
             Backend_var.Set.empty,
             slot_offset + size,
             env,
@@ -625,6 +631,7 @@ let let_static_set_of_closures0 env res closure_symbols
   let block =
     match l with
     | _ :: _ ->
+      (* Format.eprintf "XXX %d %d@." length (List.length l); *)
       let header = C.cint (C.black_closure_header length) in
       header :: l
     | [] ->
