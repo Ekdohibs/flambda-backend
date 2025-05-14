@@ -1,5 +1,6 @@
-
-module Sexp : sig type t end
+module Sexp : sig
+  type t
+end
 
 type t
 

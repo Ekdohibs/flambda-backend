@@ -4257,7 +4257,7 @@ let indirect_full_call ~dbg ty pos alloc_mode f args_type args =
   | [] -> Misc.fatal_error "indirect_full_call: args_type was empty"
   | _ :: _ :: _ ->
     (* Use a variable to avoid duplicating the cmm code of the closure [f]. *)
-    let v = Backend_var.create_local "*closure*" in 
+    let v = Backend_var.create_local "*closure*" in
     let v' = Backend_var.With_provenance.create v in
     (* get the function's code pointer *)
     let fun_ptr =

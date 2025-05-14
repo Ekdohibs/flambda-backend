@@ -7,8 +7,7 @@ type t2 =
     d1 : int
   }
 
-let[@opaque] add_pairs_immutable_record (a : t2) (b : t2) :
-    t2 =
+let[@opaque] add_pairs_immutable_record (a : t2) (b : t2) : t2 =
   { d0 = a.d0 + b.d0; d1 = a.d1 + b.d1 }
 
 type t4 =
@@ -18,14 +17,12 @@ type t4 =
     d3 : int
   }
 
-let[@opaque] add_fours_immutable_record (a : t4) (b : t4) :
-    t4 =
+let[@opaque] add_fours_immutable_record (a : t4) (b : t4) : t4 =
   { d0 = a.d0 + b.d0; d1 = a.d1 + b.d1; d2 = a.d2 + b.d2; d3 = a.d3 + b.d3 }
 
 (* Tuples *)
 
-let[@opaque] add_int_tuples ((a0, a1) : int * int)
-    ((b0, b1) : int * int) =
+let[@opaque] add_int_tuples ((a0, a1) : int * int) ((b0, b1) : int * int) =
   a0 + b0, a1 + b1
 
 let[@opaque] add_t2_to_t4 (a : t2) (b : t2) : t4 =
@@ -33,16 +30,14 @@ let[@opaque] add_t2_to_t4 (a : t2) (b : t2) : t4 =
 
 (* CR gyorsh: can't vectorize, requires a shuffle because the order of the first
    vector access is not the same as the second. *)
-let[@opaque] add_t2_to_t4_reordered (a : t2) (b : t2) : t4
-    =
+let[@opaque] add_t2_to_t4_reordered (a : t2) (b : t2) : t4 =
   { d0 = a.d0 + b.d0; d1 = a.d1 + b.d1; d3 = a.d0 + b.d0; d2 = a.d1 + b.d1 }
 
 let[@opaque] copy_t2_to_t4_immutable_record (a : t2) : t4 =
   { d0 = a.d0; d1 = a.d1; d2 = a.d0; d3 = a.d1 }
 
 (* CR gyorsh: can't vectorize same load. *)
-let[@opaque] same_value_in_both_fields_immutable_record
-    (a : t2) : t2 =
+let[@opaque] same_value_in_both_fields_immutable_record (a : t2) : t2 =
   let x = a.d0 in
   let y = a.d1 in
   let z = x + y in
@@ -53,15 +48,13 @@ type s2 =
     mutable f1 : int
   }
 
-let[@opaque] copy_pairs_mutable_record (a : s2) (b : s2) :
-    unit =
+let[@opaque] copy_pairs_mutable_record (a : s2) (b : s2) : unit =
   b.f0 <- a.f0;
   b.f1 <- a.f1;
   ()
 
 (* CR gyorsh: dependency outside computation should only look at reg not mem *)
-let[@opaque] copy_pairs_mutable_record_return (a : s2)
-    (b : s2) : s2 =
+let[@opaque] copy_pairs_mutable_record_return (a : s2) (b : s2) : s2 =
   b.f0 <- a.f0;
   b.f1 <- a.f1;
   b
@@ -73,16 +66,14 @@ type s4 =
     mutable f3 : int
   }
 
-let[@opaque] copy_fours_mutable_record (a : s4) (b : s4) :
-    unit =
+let[@opaque] copy_fours_mutable_record (a : s4) (b : s4) : unit =
   a.f0 <- b.f0;
   a.f1 <- b.f1;
   a.f2 <- b.f2;
   a.f3 <- b.f3;
   ()
 
-let[@opaque] add_fours_mutable_record (a : s4) (b : s4) :
-    unit =
+let[@opaque] add_fours_mutable_record (a : s4) (b : s4) : unit =
   a.f0 <- b.f0 + a.f0;
   a.f1 <- b.f1 + a.f1;
   a.f2 <- b.f2 + a.f2;
