@@ -891,3 +891,102 @@ module Equal_types_for_debug : sig
   val equal_env_extension :
     Typing_env.t -> Typing_env_extension.t -> Typing_env_extension.t -> bool
 end
+
+module Rewriter : sig
+  module Var : sig
+    type t
+
+    val create : unit -> t
+  end
+
+  type 'a pattern
+
+  module Pattern : sig
+    type 'a t = 'a pattern
+
+    val var : Var.t -> 'a -> 'a t
+
+    val untag : 'a t -> 'a t
+
+    type 'a block_field
+
+    val block_field :
+      Target_ocaml_int.t -> Flambda_kind.t -> 'a t -> 'a block_field
+
+    val block : ?tag:Tag.t -> 'a block_field list -> 'a t
+
+    type 'a array_field
+
+    val array_field :
+      Target_ocaml_int.t -> Flambda_kind.t -> 'a t -> 'a array_field
+
+    val array : 'a array_field list -> 'a t
+
+    type 'a closure_field
+
+    val value_slot : Value_slot.t -> 'a t -> 'a closure_field
+
+    val closure : 'a closure_field list -> 'a t
+  end
+
+  type 'a expr
+
+  module Expr : sig
+    type 'a t = 'a expr
+
+    module Function_type : sig
+      type 'a t
+
+      val create : Code_id.t -> rec_info:'a -> 'a t
+    end
+
+    val tag_immediate : 'a -> 'a t
+
+    val immutable_block :
+      is_unique:bool ->
+      Tag.t ->
+      shape:Flambda_kind.Block_shape.t ->
+      Alloc_mode.For_types.t ->
+      fields:'a list ->
+      'a t
+
+    val exactly_this_closure :
+      Function_slot.t ->
+      all_function_slots_in_set:
+        'a Function_type.t Or_unknown_or_bottom.t Function_slot.Map.t ->
+      all_closure_types_in_set:'a Function_slot.Map.t ->
+      all_value_slots_in_set:'a Value_slot.Map.t ->
+      Alloc_mode.For_types.t ->
+      'a t
+  end
+
+  type 'a representation =
+    | Unchanged
+    | Unknown
+    | Rewrite of 'a pattern * Var.t expr
+
+  module Make (X : sig
+    type t
+
+    module Map : Container_types.Map with type key = t
+
+    val representation : t -> typing_env -> flambda_type -> t representation
+
+    val block_slot :
+      ?tag:Tag.t -> t -> Target_ocaml_int.t -> typing_env -> flambda_type -> t
+
+    val array_slot : t -> Target_ocaml_int.t -> typing_env -> flambda_type -> t
+
+    val value_slot : t -> Value_slot.t -> typing_env -> flambda_type -> t
+
+    val function_slot :
+      t -> Function_slot.t -> typing_env -> Closures_entry.t -> t
+  end) : sig
+    (** Rewrite the provided typing env.
+
+        The provided name map contains all the names that must be preserved,
+        along with their abstraction. It must only contain symbols and variables
+        with [Name_mode.normal] that exist in the provided typing env. *)
+    val rewrite : typing_env -> (X.t * Flambda_kind.t) Name.Map.t -> typing_env
+  end
+end
