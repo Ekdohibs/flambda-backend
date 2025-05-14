@@ -1,0 +1,73 @@
+MEET CHAINS WITH TWO VARS
+
+Initial situation:
+((defined_symbols { }) (code_age_relation {})
+ (levels
+  ((scope 1) (defined_vars
+   {([0m[38;5;111;1mvar1/3N[0m :: [0m[38;5;37;1m𝕍[0m Normal) ([0m[38;5;111;1mimm0/0N[0m :: [0m[38;5;37;1m𝕍[0m Normal) ([0m[38;5;111;1mvar2/4N[0m :: [0m[38;5;37;1m𝕍[0m Normal)
+    ([0m[38;5;111;1mvar0/2N[0m :: [0m[38;5;37;1m𝕍[0m Normal) ([0m[38;5;111;1mimm2/1N[0m :: [0m[38;5;37;1m𝕍[0m Normal)}))
+  ((defined_vars { var1/3N imm0/0N var2/4N var0/2N imm2/1N })
+   (equations
+    ([0m[38;5;111;1mvar1/3N[0m :
+      (Val!
+       (Variant
+        (blocks (alloc_mode Heap)
+         (known
+          {(tag_0 => (Known 2),
+            ((Val!
+              (Variant
+               (blocks (alloc_mode Heap)
+                (known
+                 {(tag_1 => (Known 2), ((Val ([0m[38;5;160;1m=[0m [0m[38;5;111;1mvar0/2N[0m)) (Val ([0m[38;5;160;1m=[0m [0m[38;5;111;1mimm2/1N[0m))))}))))
+             (Val ([0m[38;5;160;1m=[0m [0m[38;5;111;1mvar0/2N[0m))))}))))
+     [0m[38;5;111;1mimm0/0N[0m : (Val! (Variant (tagged_imms [0m[38;5;37;1m⊤[0m)))
+     [0m[38;5;111;1mvar2/4N[0m : (Val ([0m[38;5;160;1m=[0m [0m[38;5;111;1mvar1/3N[0m))
+     [0m[38;5;111;1mvar0/2N[0m :
+      (Val!
+       (Variant
+        (blocks (alloc_mode Heap)
+         (known
+          {(tag_2 => (Known 2), ((Val ([0m[38;5;160;1m=[0m [0m[38;5;111;1mimm0/0N[0m)) (Val ([0m[38;5;160;1m=[0m [0m[38;5;111;1mimm0/0N[0m))))}))))
+     [0m[38;5;111;1mimm2/1N[0m : (Val! (Variant (tagged_imms [0m[38;5;37;1m⊤[0m))))))))
+ (aliases
+  ((canonical_elements {([0m[38;5;111;1mvar2/4N[0m ([0m[38;5;111;1mvar1/3N[0m [0m[38;5;243;1m(coercion [0m[38;5;243;1mid[0m[38;5;243;1m)[0m))})
+   (aliases_of_canonical_names {([0m[38;5;111;1mvar1/3N[0m {(Normal {([0m[38;5;111;1mvar2/4N[0m [0m[38;5;243;1mid[0m)})})})
+   (aliases_of_consts {}))))
+After rewrite keeping only even/odd fields (with live vars [0m[38;5;111;1mvar1/3N[0m, [0m[38;5;111;1mvar2/4N[0m):
+((defined_symbols { }) (code_age_relation {})
+ (levels
+  ((scope 1) (defined_vars
+   {([0m[38;5;111;1mvar1/3N[0m :: [0m[38;5;37;1m𝕍[0m Normal) ([0m[38;5;111;1mvar0/5N[0m :: [0m[38;5;37;1m𝕍[0m In_types) ([0m[38;5;111;1mimm0/0N[0m :: [0m[38;5;37;1m𝕍[0m In_types)
+    ([0m[38;5;111;1mvar2/4N[0m :: [0m[38;5;37;1m𝕍[0m Normal) ([0m[38;5;111;1mvar0/2N[0m :: [0m[38;5;37;1m𝕍[0m In_types)}))
+  ((defined_vars { var1/3N var0/5N imm0/0N var2/4N var0/2N })
+   (equations
+    ([0m[38;5;111;1mvar1/3N[0m :
+      (Val!
+       (Variant
+        (blocks (alloc_mode Heap)
+         (known
+          {(tag_0 => (Known 2),
+            ((Val!
+              (Variant
+               (blocks (alloc_mode Heap)
+                (known {(tag_1 => (Known 2), ((Val ([0m[38;5;160;1m=[0m [0m[38;5;111;1mvar0/5N[0m)) (Val [0m[38;5;37;1m⊤[0m)))}))))
+             (Val [0m[38;5;37;1m⊤[0m)))}))))
+     [0m[38;5;111;1mvar0/5N[0m :
+      (Val!
+       (Variant
+        (blocks (alloc_mode Heap)
+         (known {(tag_2 => (Known 2), ((Val ([0m[38;5;160;1m=[0m [0m[38;5;111;1mimm0/0N[0m)) (Val [0m[38;5;37;1m⊤[0m)))}))))
+     [0m[38;5;111;1mimm0/0N[0m : (Val! (Variant (tagged_imms [0m[38;5;37;1m⊤[0m)))
+     [0m[38;5;111;1mvar2/4N[0m :
+      (Val!
+       (Variant
+        (blocks (alloc_mode Heap)
+         (known {(tag_0 => (Known 2), ((Val [0m[38;5;37;1m⊤[0m) (Val ([0m[38;5;160;1m=[0m [0m[38;5;111;1mvar0/2N[0m))))}))))
+     [0m[38;5;111;1mvar0/2N[0m :
+      (Val!
+       (Variant
+        (blocks (alloc_mode Heap)
+         (known {(tag_2 => (Known 2), ((Val [0m[38;5;37;1m⊤[0m) (Val ([0m[38;5;160;1m=[0m [0m[38;5;111;1mimm0/0N[0m))))})))))))))
+ (aliases
+  ((canonical_elements {}) (aliases_of_canonical_names {})
+   (aliases_of_consts {}))))
