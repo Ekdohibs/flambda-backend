@@ -87,3 +87,5 @@ module Equal_types_for_debug = struct
     Equal_types_for_debug.equal_env_extension ~meet_type:(Meet.meet_type ()) env
       ext1 ext2
 end
+
+module Rewriter = Traversals
