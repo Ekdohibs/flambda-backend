@@ -717,7 +717,7 @@ let datalog_rules =
      in
      [ usages_rel allocation_id alias;
        sources_rel alias alias_source;
-       not_equal alias_source allocation_id;
+       not_equal Cols.n alias_source allocation_id;
        filter_field real_field field;
        used_fields_rel alias field _v ]
      ==> cannot_change_representation0 allocation_id);
@@ -726,7 +726,7 @@ let datalog_rules =
      in
      [ usages_rel allocation_id alias;
        sources_rel alias alias_source;
-       not_equal alias_source allocation_id;
+       not_equal Cols.n alias_source allocation_id;
        filter_field real_field field;
        used_fields_top_rel alias field ]
      ==> cannot_change_representation0 allocation_id);
@@ -745,7 +745,7 @@ let datalog_rules =
        used_fields_top_rel alias field ]
      ==> cannot_change_representation0 allocation_id);
     (let$ [allocation_id; source] = ["allocation_id"; "source"] in
-     [sources_rel allocation_id source; not_equal source allocation_id]
+     [sources_rel allocation_id source; not_equal Cols.n source allocation_id]
      ==> cannot_change_representation0 allocation_id);
     (* Used but not its own source: either from any source, or it has no source
        at all and it is dead code. In either case, do not unbox *)
@@ -768,7 +768,7 @@ let datalog_rules =
      in
      [ usages_rel allocation_id alias;
        sources_rel alias alias_source;
-       not_equal alias_source allocation_id;
+       not_equal Cols.n alias_source allocation_id;
        filter_field is_code_field field;
        used_fields_rel alias field _v ]
      ==> cannot_change_closure_calling_convention allocation_id);
@@ -777,7 +777,7 @@ let datalog_rules =
      in
      [ usages_rel allocation_id alias;
        sources_rel alias alias_source;
-       not_equal alias_source allocation_id;
+       not_equal Cols.n alias_source allocation_id;
        filter_field is_code_field field;
        used_fields_top_rel alias field ]
      ==> cannot_change_closure_calling_convention allocation_id);
@@ -796,7 +796,7 @@ let datalog_rules =
        used_fields_top_rel alias field ]
      ==> cannot_change_closure_calling_convention allocation_id);
     (let$ [allocation_id; source] = ["allocation_id"; "source"] in
-     [sources_rel allocation_id source; not_equal source allocation_id]
+     [sources_rel allocation_id source; not_equal Cols.n source allocation_id]
      ==> cannot_change_closure_calling_convention allocation_id);
     (* Used but not its own source: either from any source, or it has no source
        at all and it is dead code. In either case, do not unbox *)
@@ -1323,7 +1323,8 @@ let fixpoint (graph : Global_flow_graph.graph) =
                 Function_slot.Map.add fs
                   (Function_slot.create
                      (Compilation_unit.get_current_exn ())
-                     ~name:(Function_slot.name fs) ~is_always_immediate:false Flambda_kind.value)
+                     ~name:(Function_slot.name fs) ~is_always_immediate:false
+                     Flambda_kind.value)
                   acc)
               Function_slot.Map.empty l
           in

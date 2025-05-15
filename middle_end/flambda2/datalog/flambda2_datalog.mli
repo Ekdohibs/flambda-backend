@@ -159,7 +159,8 @@ module Datalog : sig
 
   val not : [< `Atom of atom] -> [> `Not_atom of atom]
 
-  val not_equal : 'k Term.t -> 'k Term.t -> [> `Not_equal of equality]
+  val not_equal :
+    (_, 'k, _) Column.id -> 'k Term.t -> 'k Term.t -> [> `Not_equal of equality]
 
   val filter :
     ('k Constant.hlist -> bool) -> 'k Term.hlist -> [> `Filter of filter]

@@ -15,6 +15,10 @@
 
 open Datalog_imports
 
+type _ value_repr = Int_repr : int value_repr
+
+let int_repr = Int_repr
+
 (* Note: we don't use [with_name] here to avoid the extra indirection during
    execution. *)
 type vm_action =
@@ -25,7 +29,9 @@ type vm_action =
       * string
       * string list
       -> vm_action
-  | Unless_eq : 'k option ref * 'k option ref * string * string -> vm_action
+  | Unless_eq :
+      'k value_repr * 'k option ref * 'k option ref * string * string
+      -> vm_action
   | Filter :
       ('k Constant.hlist -> bool) * 'k Option_ref.hlist * string list
       -> vm_action
@@ -43,8 +49,8 @@ let unless id cell args =
     (Unless
        (Table.Id.is_trie id, cell, args.values, Table.Id.name id, args.names))
 
-let unless_eq cell1 cell2 =
-  VM_action (Unless_eq (cell1.value, cell2.value, cell1.name, cell2.name))
+let unless_eq repr cell1 cell2 =
+  VM_action (Unless_eq (repr, cell1.value, cell2.value, cell1.name, cell2.name))
 
 let filter f args = VM_action (Filter (f, args.values, args.names))
 
@@ -64,7 +70,7 @@ let pp_cursor_action ff = function
          ~pp_sep:(fun ff () -> Format.fprintf ff ", ")
          Format.pp_print_string)
       l_names
-  | Unless_eq (_x1, _x2, x1_name, x2_name) ->
+  | Unless_eq (_repr, _x1, _x2, x1_name, x2_name) ->
     Format.fprintf ff "if %s == %s:@ continue" x1_name x2_name
   | Filter (_f, _args, args_names) ->
     Format.fprintf ff "<filter>(%a)"
@@ -321,12 +327,10 @@ let evaluate = function
          (Trie.find_opt is_trie (Option_ref.get args) cell.contents)
     then Virtual_machine.Skip
     else Virtual_machine.Accept
-  | Unless_eq (cell1, cell2, _cell1_name, _cell2_name) ->
-    if Option.get !cell1 == Option.get !cell2
+  | Unless_eq (Int_repr, cell1, cell2, _cell1_name, _cell2_name) ->
+    if Option.get !cell1 = Option.get !cell2
     then Virtual_machine.Skip
-    else
-      Virtual_machine.Accept
-      (* CR ncourant: I don't like this **at all**, need something cleaner *)
+    else Virtual_machine.Accept
   | Filter (f, args, _args_names) ->
     if f (Option_ref.get args)
     then Virtual_machine.Accept

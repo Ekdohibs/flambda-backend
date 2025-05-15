@@ -60,6 +60,9 @@ module Datalog = struct
       | { repr = Patricia_tree_repr; _ } :: (_ :: _ as columns) ->
         Trie.patricia_tree_of_trie (is_trie columns)
 
+    let key_repr : type t k v. (t, k, v) id -> k Cursor.value_repr = function
+      | { repr = Patricia_tree_repr; _ } -> Cursor.int_repr
+
     module type S = sig
       type t
 
@@ -245,7 +248,8 @@ module Datalog = struct
 
   let deduce = Schedule.deduce
 
-  type equality = Equality : 'k Term.t * 'k Term.t -> equality
+  type equality =
+    | Equality : 'k Cursor.value_repr * 'k Term.t * 'k Term.t -> equality
 
   type filter = Filter : ('k Constant.hlist -> bool) * 'k Term.hlist -> filter
 
@@ -259,7 +263,7 @@ module Datalog = struct
 
   let not (`Atom atom) = `Not_atom atom
 
-  let not_equal x y = `Not_equal (Equality (x, y))
+  let not_equal c x y = `Not_equal (Equality (Column.key_repr c, x, y))
 
   let filter f args = `Filter (Filter (f, args))
 
@@ -269,7 +273,7 @@ module Datalog = struct
         match predicate with
         | `Atom (Atom (id, args)) -> where_atom id args f
         | `Not_atom (Atom (id, args)) -> unless_atom id args f
-        | `Not_equal (Equality (t1, t2)) -> unless_eq t1 t2 f
+        | `Not_equal (Equality (repr, t1, t2)) -> unless_eq repr t1 t2 f
         | `Filter (Filter (p, args)) -> Datalog.filter p args f)
       f predicates
 

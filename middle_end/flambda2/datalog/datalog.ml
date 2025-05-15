@@ -179,13 +179,13 @@ let unless_atom id args k info =
   Cursor.add_action post_level (Cursor.unless id r refs);
   k info
 
-let unless_eq arg1 arg2 k info =
+let unless_eq repr arg1 arg2 k info =
   let ref1 = compile_term arg1 in
   let ref2 = compile_term arg2 in
   let post_level =
     find_last_binding (Cursor.initial_actions info.context) [arg1; arg2]
   in
-  Cursor.add_action post_level (Cursor.unless_eq ref1 ref2);
+  Cursor.add_action post_level (Cursor.unless_eq repr ref1 ref2);
   k info
 
 let filter f args k info =
