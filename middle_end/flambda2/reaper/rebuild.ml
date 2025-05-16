@@ -1754,6 +1754,7 @@ let rebuild ~(code_deps : Traverse_acc.code_dep Code_id.Map.t)
       match DS.get_unboxed_fields solved_dep (Code_id_or_name.var param) with
       | None ->
         let is_var_used = DS.has_use solved_dep (Code_id_or_name.var param) in
+        (* XXX what should happen to this "if"? *)
         if true || is_var_used then Keep (param, kind) else Delete
       | Some fields -> Unbox fields
   in
