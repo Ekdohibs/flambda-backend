@@ -28,7 +28,7 @@
  * DEALINGS IN THE SOFTWARE.                                                  *
  ******************************************************************************)
 
-type result =
+type result = private
   { body : Flambda.Expr.t;
     free_names : Name_occurrences.t;
     all_code : Code.t Code_id.Map.t;
