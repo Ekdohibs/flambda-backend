@@ -1492,6 +1492,61 @@ and rebuild_set_of_closures_binding_whose_representation_is_being_changed kinds
   let set_of_closures = rewrite_set_of_closures env kinds ~bound set in
   RE.create_let bp (Named.create_set_of_closures set_of_closures) ~body:hole
 
+and rebuild_make_block kinds env (bp : Bound_pattern.t)
+    ~(block_kind : P.Block_kind.t) ~mutability ~alloc_mode ~fields ~hole dbg =
+  let bound_name =
+    match bp with
+    | Singleton v -> Name.var (Bound_var.var v)
+    | Set_of_closures _ | Static _ -> assert false
+  in
+  let _tag, block_shape = P.Block_kind.to_shape block_kind in
+  let block_kind =
+    match block_kind with
+    | Mixed _ | Naked_floats -> block_kind
+    | Values (tag, subkinds) -> (
+      let ks =
+        K.With_subkind.create K.value
+          (K.With_subkind.Non_null_value_subkind.Variant
+             { consts = Targetint_31_63.Set.empty;
+               non_consts =
+                 Tag.Scannable.Map.singleton tag (block_shape, subkinds)
+             })
+          K.With_subkind.Nullable.Non_nullable
+      in
+      let ks = Dep_solver.rewrite_kind_with_subkind env.uses bound_name ks in
+      let[@local] with_subkinds subkinds =
+        P.Block_kind.Values (tag, subkinds)
+      in
+      let[@local] default () =
+        with_subkinds
+          (List.map (fun ks -> K.With_subkind.erase_subkind ks) subkinds)
+      in
+      match[@ocaml.warning "-fragile-match"]
+        K.With_subkind.non_null_value_subkind ks
+      with
+      | Variant { consts = _; non_consts } -> (
+        match Tag.Scannable.Map.get_singleton non_consts with
+        | Some (_, (_, subkinds)) -> with_subkinds subkinds
+        | None -> default ())
+      | _ -> default ())
+  in
+  let bound_name = Code_id_or_name.name bound_name in
+  let fields =
+    List.mapi
+      (fun i field ->
+        let kind = K.Block_shape.element_kind block_shape i in
+        let f = GFG.Field.Block (i, kind) in
+        if Dep_solver.field_used env.uses bound_name f
+        then rewrite_simple kinds env field
+        else poison kind)
+      fields
+  in
+  RE.create_let bp
+    (Named.create_prim
+       (Variadic (Make_block (block_kind, mutability, alloc_mode), fields))
+       dbg)
+    ~body:hole
+
 and rebuild_let_expr_holed0 (kinds : K.t Name.Map.t) (env : env)
     ~(bound_pattern : Bound_pattern.t) ~(defining_expr : Rev_expr.rev_named)
     ~hole : RE.t =
@@ -1585,58 +1640,8 @@ and rebuild_let_expr_holed0 (kinds : K.t Name.Map.t) (env : env)
     | Prim
         (Variadic (Make_block (block_kind, mutability, alloc_mode), fields), dbg)
       ->
-      let bound_name =
-        match bp with
-        | Singleton v -> Name.var (Bound_var.var v)
-        | Set_of_closures _ | Static _ -> assert false
-      in
-      let _tag, block_shape = P.Block_kind.to_shape block_kind in
-      let block_kind =
-        match block_kind with
-        | Mixed _ | Naked_floats -> block_kind
-        | Values (tag, subkinds) -> (
-          let ks =
-            K.With_subkind.create K.value
-              (K.With_subkind.Non_null_value_subkind.Variant
-                 { consts = Targetint_31_63.Set.empty;
-                   non_consts =
-                     Tag.Scannable.Map.singleton tag (block_shape, subkinds)
-                 })
-              K.With_subkind.Nullable.Non_nullable
-          in
-          let ks =
-            Dep_solver.rewrite_kind_with_subkind env.uses bound_name ks
-          in
-          let[@local] with_subkinds subkinds =
-            P.Block_kind.Values (tag, subkinds)
-          in
-          let[@local] default () =
-            with_subkinds
-              (List.map (fun ks -> K.With_subkind.erase_subkind ks) subkinds)
-          in
-          match K.With_subkind.non_null_value_subkind ks with
-          | Variant { consts = _; non_consts } -> (
-            match Tag.Scannable.Map.get_singleton non_consts with
-            | Some (_, (_, subkinds)) -> with_subkinds subkinds
-            | None -> default ())
-          | _ -> default ())
-      in
-      let bound_name = Code_id_or_name.name bound_name in
-      let fields =
-        List.mapi
-          (fun i field ->
-            let kind = K.Block_shape.element_kind block_shape i in
-            let f = GFG.Field.Block (i, kind) in
-            if Dep_solver.field_used env.uses bound_name f
-            then rewrite_simple kinds env field
-            else poison kind)
-          fields
-      in
-      RE.create_let bp
-        (Named.create_prim
-           (Variadic (Make_block (block_kind, mutability, alloc_mode), fields))
-           dbg)
-        ~body:hole
+      rebuild_make_block kinds env bp ~block_kind ~mutability ~alloc_mode
+        ~fields ~hole dbg
     | _ ->
       let defining_expr = rewrite_named kinds env defining_expr' in
       RE.create_let bp defining_expr ~body:hole)
