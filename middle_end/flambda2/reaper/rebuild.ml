@@ -1697,9 +1697,11 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
       let v = Bound_var.var v in
       (* CR ncourant: we should probably properly track regions *)
       let is_begin_region =
-        match[@ocaml.warning "-4"] let_.defining_expr with
-        | Named (Prim (Variadic (Begin_region _, _), _)) -> true
-        | _ -> false
+        match let_.defining_expr with
+        | Named (Prim (prim, _)) -> Flambda_primitive.is_begin_region prim
+        | Named (Simple _ | Set_of_closures _ | Static_consts _ | Rec_info _)
+        | Set_of_closures _ | Static_consts _ ->
+          false
       in
       if is_begin_region || is_var_used env kinds v
       then default ()
