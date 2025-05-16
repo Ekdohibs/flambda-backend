@@ -621,64 +621,62 @@ let make_apply_wrapper env
     let return_cont_wrapper = Continuation.rename return_cont in
     let apply = make_apply ~continuation:(Return return_cont_wrapper) in
     let apply_expr = Expr.create_apply apply in
+    let rev_args_or_invalid =
+      (* TODO if the decisions are equal, don't introduce the wrapper. Not
+         really important but this will be simpler for debugging *)
+      List.fold_left2
+        (fun (rev_args_or_invalid : _ Or_invalid.t) apply_decision func_decision
+             : _ Or_invalid.t ->
+          match rev_args_or_invalid with
+          | Invalid -> Invalid
+          | Ok (i, rev_args) -> (
+            match apply_decision, func_decision with
+            | Unbox _, (Keep _ | Delete) | (Keep _ | Delete), Unbox _ ->
+              let[@inline] error () =
+                Misc.fatal_errorf
+                  "Inconsistent apply (%a) and func (%a) decisions:@ %a@."
+                  print_param_decision apply_decision print_param_decision
+                  func_decision Apply.print apply
+              in
+              let direct_or_indirect =
+                match Apply.call_kind apply with
+                | Function { function_call = Direct _; _ } -> error ()
+                | Function { function_call = Indirect_known_arity; _ } ->
+                  Global_flow_graph.Direct_code_pointer
+                | Function { function_call = Indirect_unknown_arity; _ }
+                | C_call _ | Method _ | Effect _ ->
+                  Global_flow_graph.Indirect_code_pointer
+              in
+              let field =
+                Global_flow_graph.Field.Apply
+                  (direct_or_indirect, Global_flow_graph.Field.Normal i)
+              in
+              let has_any_source =
+                Dep_solver.not_local_field_has_source env.uses
+                  (Simple.pattern_match
+                     (Option.get (Apply.callee apply))
+                     ~name:(fun name ~coercion:_ -> Code_id_or_name.name name)
+                     ~const:(fun _ -> assert false))
+                  field
+              in
+              if has_any_source then error () else raise Exit
+            | Delete, _ -> Ok (i + 1, rev_args)
+            | Keep (_, _), Keep (v, _) -> Ok (i + 1, Simple.var v :: rev_args)
+            | Keep (_, kind), Delete ->
+              Ok (i + 1, poison (K.With_subkind.kind kind) :: rev_args)
+            | Unbox fields_apply, Unbox fields_func ->
+              Ok
+                ( i + 1,
+                  fold2_unboxed_subset_with_kind
+                    (fun _kind _var_apply var_func rev_args ->
+                      Simple.var var_func :: rev_args)
+                    fields_apply fields_func rev_args )))
+        (Or_invalid.Ok (0, []))
+        apply_decisions return_decisions
+    in
     let cont_handler =
       let return_parameters = get_parameters return_decisions in
       let handler =
-        let rev_args_or_invalid =
-          (* TODO if the decisions are equal, don't introduce the wrapper. Not
-             really important but this will be simpler for debugging *)
-          List.fold_left2
-            (fun (rev_args_or_invalid : _ Or_invalid.t) apply_decision
-                 func_decision : _ Or_invalid.t ->
-              match rev_args_or_invalid with
-              | Invalid -> Invalid
-              | Ok (i, rev_args) -> (
-                match apply_decision, func_decision with
-                | Unbox _, (Keep _ | Delete) | (Keep _ | Delete), Unbox _ ->
-                  let[@inline] error () =
-                    Misc.fatal_errorf
-                      "Inconsistent apply (%a) and func (%a) decisions:@ %a@."
-                      print_param_decision apply_decision print_param_decision
-                      func_decision Apply.print apply
-                  in
-                  let direct_or_indirect =
-                    match Apply.call_kind apply with
-                    | Function { function_call = Direct _; _ } -> error ()
-                    | Function { function_call = Indirect_known_arity; _ } ->
-                      Global_flow_graph.Direct_code_pointer
-                    | Function { function_call = Indirect_unknown_arity; _ }
-                    | C_call _ | Method _ | Effect _ ->
-                      Global_flow_graph.Indirect_code_pointer
-                  in
-                  let field =
-                    Global_flow_graph.Field.Apply
-                      (direct_or_indirect, Global_flow_graph.Field.Normal i)
-                  in
-                  let has_any_source =
-                    Dep_solver.not_local_field_has_source env.uses
-                      (Simple.pattern_match
-                         (Option.get (Apply.callee apply))
-                         ~name:(fun name ~coercion:_ ->
-                           Code_id_or_name.name name)
-                         ~const:(fun _ -> assert false))
-                      field
-                  in
-                  if has_any_source then error () else raise Exit
-                | Delete, _ -> Ok (i + 1, rev_args)
-                | Keep (_, _), Keep (v, _) ->
-                  Ok (i + 1, Simple.var v :: rev_args)
-                | Keep (_, kind), Delete ->
-                  Ok (i + 1, poison (K.With_subkind.kind kind) :: rev_args)
-                | Unbox fields_apply, Unbox fields_func ->
-                  Ok
-                    ( i + 1,
-                      fold2_unboxed_subset_with_kind
-                        (fun _kind _var_apply var_func rev_args ->
-                          Simple.var var_func :: rev_args)
-                        fields_apply fields_func rev_args )))
-            (Or_invalid.Ok (0, []))
-            apply_decisions return_decisions
-        in
         match rev_args_or_invalid with
         | Ok (_, rev_args) ->
           let args = List.rev rev_args in
