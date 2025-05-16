@@ -19,6 +19,7 @@ module Float = Numeric_types.Float_by_bit_pattern
 module Float32 = Numeric_types.Float32_by_bit_pattern
 module GFG = Global_flow_graph
 module K = Flambda_kind
+module Int = Numeric_types.Int
 module P = Flambda_primitive
 module RE = Rebuilt_expr
 module SC = Static_const
@@ -1139,15 +1140,14 @@ let rebuild_singleton_binding_whose_representation_is_being_changed env bp bv
             if simple_is_unboxable env arg
             then
               fold2_unboxed_subset
-                (fun (ff, _) var mp ->
-                  Numeric_types.Int.Map.add ff (Simple.var var) mp)
+                (fun (ff, _) var mp -> Int.Map.add ff (Simple.var var) mp)
                 uf
                 (Unboxed (get_simple_unboxable env arg))
                 mp
             else
               match uf with
               | Not_unboxed (ff, _) ->
-                Numeric_types.Int.Map.add ff (rewrite_simple env arg) mp
+                Int.Map.add ff (rewrite_simple env arg) mp
               | Unboxed _ -> Misc.fatal_errorf "trying to unbox simple")
           | Get_tag -> (
             let tag =
@@ -1158,25 +1158,21 @@ let rebuild_singleton_binding_whose_representation_is_being_changed env bp bv
             in
             match uf with
             | Not_unboxed (ff, _) ->
-              Numeric_types.Int.Map.add ff
-                (rewrite_simple env (Simple.const_int tag))
-                mp
+              Int.Map.add ff (rewrite_simple env (Simple.const_int tag)) mp
             | Unboxed _ -> Misc.fatal_errorf "trying to unbox simple")
           | Is_int -> (
             match uf with
             | Not_unboxed (ff, _) ->
-              Numeric_types.Int.Map.add ff
-                (rewrite_simple env Simple.const_one)
-                mp
+              Int.Map.add ff (rewrite_simple env Simple.const_one) mp
             | Unboxed _ -> Misc.fatal_errorf "trying to unbox simple")
           | Value_slot _ | Function_slot _ | Code_of_closure | Apply _
           | Code_id_of_call_witness _ ->
             assert false)
-        fields Numeric_types.Int.Map.empty
+        fields Int.Map.empty
     in
     let args =
       List.init size (fun i ->
-          match Numeric_types.Int.Map.find_opt i mp with
+          match Int.Map.find_opt i mp with
           | None -> Simple.const_zero
           | Some x -> x)
     in
