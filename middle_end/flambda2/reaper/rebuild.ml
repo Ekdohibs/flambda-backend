@@ -21,6 +21,7 @@ module GFG = Global_flow_graph
 module K = Flambda_kind
 module P = Flambda_primitive
 module RE = Rebuilt_expr
+module SC = Static_const
 module Field = GFG.Field
 
 type rev_expr = Rev_expr.t
@@ -308,58 +309,54 @@ let rewrite_set_of_closures env kinds ~(bound : Name.t list)
          set_of_closures;
   set_of_closures
 
-let rewrite_static_const kinds (env : env) (sc : Static_const.t) =
+let rewrite_static_const kinds (env : env) (sc : SC.t) =
   match sc with
   | Set_of_closures _ ->
     (* Already rewritten *)
     sc
   | Block (tag, mut, shape, fields) ->
     let fields = List.map (rewrite_simple_with_debuginfo kinds env) fields in
-    Static_const.block tag mut shape fields
-  | Boxed_float f ->
-    Static_const.boxed_float (rewrite_or_variable Float.zero env kinds f)
+    SC.block tag mut shape fields
+  | Boxed_float f -> SC.boxed_float (rewrite_or_variable Float.zero env kinds f)
   | Boxed_float32 f ->
-    Static_const.boxed_float32 (rewrite_or_variable Float32.zero env kinds f)
-  | Boxed_int32 n ->
-    Static_const.boxed_int32 (rewrite_or_variable Int32.zero env kinds n)
-  | Boxed_int64 n ->
-    Static_const.boxed_int64 (rewrite_or_variable Int64.zero env kinds n)
+    SC.boxed_float32 (rewrite_or_variable Float32.zero env kinds f)
+  | Boxed_int32 n -> SC.boxed_int32 (rewrite_or_variable Int32.zero env kinds n)
+  | Boxed_int64 n -> SC.boxed_int64 (rewrite_or_variable Int64.zero env kinds n)
   | Boxed_nativeint n ->
-    Static_const.boxed_nativeint
-      (rewrite_or_variable Targetint_32_64.zero env kinds n)
+    SC.boxed_nativeint (rewrite_or_variable Targetint_32_64.zero env kinds n)
   | Boxed_vec128 n ->
-    Static_const.boxed_vec128
+    SC.boxed_vec128
       (rewrite_or_variable Vector_types.Vec128.Bit_pattern.zero env kinds n)
   | Immutable_float_block fields ->
     let fields = List.map (rewrite_or_variable Float.zero env kinds) fields in
-    Static_const.immutable_float_block fields
+    SC.immutable_float_block fields
   | Immutable_float_array fields ->
     let fields = List.map (rewrite_or_variable Float.zero env kinds) fields in
-    Static_const.immutable_float_array fields
+    SC.immutable_float_array fields
   | Immutable_float32_array fields ->
     let fields = List.map (rewrite_or_variable Float32.zero env kinds) fields in
-    Static_const.immutable_float32_array fields
+    SC.immutable_float32_array fields
   | Immutable_value_array fields ->
     let fields = List.map (rewrite_simple_with_debuginfo kinds env) fields in
-    Static_const.immutable_value_array fields
+    SC.immutable_value_array fields
   | Immutable_int32_array fields ->
     let fields = List.map (rewrite_or_variable Int32.zero env kinds) fields in
-    Static_const.immutable_int32_array fields
+    SC.immutable_int32_array fields
   | Immutable_int64_array fields ->
     let fields = List.map (rewrite_or_variable Int64.zero env kinds) fields in
-    Static_const.immutable_int64_array fields
+    SC.immutable_int64_array fields
   | Immutable_nativeint_array fields ->
     let fields =
       List.map (rewrite_or_variable Targetint_32_64.zero env kinds) fields
     in
-    Static_const.immutable_nativeint_array fields
+    SC.immutable_nativeint_array fields
   | Immutable_vec128_array fields ->
     let fields =
       List.map
         (rewrite_or_variable Vector_types.Vec128.Bit_pattern.zero env kinds)
         fields
     in
-    Static_const.immutable_vec128_array fields
+    SC.immutable_vec128_array fields
   | Empty_array _ | Mutable_string _ | Immutable_string _ -> sc
 
 let rewrite_static_const_or_code kinds env (sc : Static_const_or_code.t) =
@@ -1199,7 +1196,7 @@ and rebuild_holed (kinds : K.t Name.Map.t) (env : env)
                   rewrite_set_of_closures env kinds ~bound:bound_to
                     set_of_closures
                 in
-                Static_const.set_of_closures set_of_closures
+                SC.set_of_closures set_of_closures
                 |> Static_const_or_code.create_static_const
               | Static_const (Other static_const) -> (
                 match static_const with
@@ -1215,7 +1212,7 @@ and rebuild_holed (kinds : K.t Name.Map.t) (env : env)
                   Misc.fatal_errorf
                     "Set_of_closures is not permitted in conjunction with \
                      Other in the Static_const case:@ %a"
-                    Static_const.print static_const)
+                    SC.print static_const)
             in
             let group =
               Static_const_group.create
