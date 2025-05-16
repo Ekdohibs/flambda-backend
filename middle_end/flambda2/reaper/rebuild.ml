@@ -456,7 +456,7 @@ let get_simple_kind kinds simple =
     ~var:(fun var ~coercion:_ -> Name.Map.find (Name.var var) kinds)
     simple
 
-let rewrite_named kinds env (named : Named.t) =
+let rebuild_named_default_case kinds env (named : Named.t) =
   let[@local] rewrite_field_access arg field =
     let arg = get_simple_unboxable env arg in
     let var = Field.Map.find field arg in
@@ -1474,7 +1474,9 @@ and rebuild_singleton_binding_whose_representation_is_being_changed kinds env bp
     in
     RE.create_let bp named ~body:hole
   | _ ->
-    let defining_expr = rewrite_named kinds env new_defining_expr in
+    let defining_expr =
+      rebuild_named_default_case kinds env new_defining_expr
+    in
     RE.create_let bp defining_expr ~body:hole
 
 and rebuild_set_of_closures_binding_whose_representation_is_being_changed kinds
@@ -1619,7 +1621,7 @@ and default_defining_expr_for_rebuilding_let kinds env
 and rebuild_let_expr_holed0 (kinds : K.t Name.Map.t) (env : env)
     ~(bound_pattern : Bound_pattern.t) ~(defining_expr : Rev_expr.rev_named)
     ~hole : RE.t =
-  let bp, defining_expr' =
+  let bp, new_defining_expr =
     default_defining_expr_for_rebuilding_let kinds env bound_pattern
       defining_expr
   in
@@ -1633,21 +1635,22 @@ and rebuild_let_expr_holed0 (kinds : K.t Name.Map.t) (env : env)
   | Singleton bv when bound_vars_will_have_their_representation_changed env [bv]
     ->
     rebuild_singleton_binding_whose_representation_is_being_changed kinds env bp
-      bv ~orig_defining_expr:defining_expr ~new_defining_expr:defining_expr'
-      ~hole
+      bv ~orig_defining_expr:defining_expr ~new_defining_expr ~hole
   | Set_of_closures bvs
     when bound_vars_will_have_their_representation_changed env bvs ->
     rebuild_set_of_closures_binding_whose_representation_is_being_changed kinds
       env bp bvs ~orig_defining_expr:defining_expr ~hole
   | _ -> (
-    match[@ocaml.warning "-4"] defining_expr' with
+    match[@ocaml.warning "-4"] new_defining_expr with
     | Flambda.Prim
         (Variadic (Make_block (block_kind, mutability, alloc_mode), fields), dbg)
       ->
       rebuild_make_block_default_case kinds env bp ~block_kind ~mutability
         ~alloc_mode ~fields ~hole dbg
     | _ ->
-      let defining_expr = rewrite_named kinds env defining_expr' in
+      let defining_expr =
+        rebuild_named_default_case kinds env new_defining_expr
+      in
       RE.create_let bp defining_expr ~body:hole)
 
 and rebuild_let_expr_holed (kinds : K.t Name.Map.t) (env : env)
