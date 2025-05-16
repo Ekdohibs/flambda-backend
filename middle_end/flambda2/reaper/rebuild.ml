@@ -1492,7 +1492,7 @@ and rebuild_set_of_closures_binding_whose_representation_is_being_changed kinds
   let set_of_closures = rewrite_set_of_closures env kinds ~bound set in
   RE.create_let bp (Named.create_set_of_closures set_of_closures) ~body:hole
 
-and rebuild_make_block kinds env (bp : Bound_pattern.t)
+and rebuild_make_block_default_case kinds env (bp : Bound_pattern.t)
     ~(block_kind : P.Block_kind.t) ~mutability ~alloc_mode ~fields ~hole dbg =
   let bound_name =
     match bp with
@@ -1640,8 +1640,8 @@ and rebuild_let_expr_holed0 (kinds : K.t Name.Map.t) (env : env)
     | Prim
         (Variadic (Make_block (block_kind, mutability, alloc_mode), fields), dbg)
       ->
-      rebuild_make_block kinds env bp ~block_kind ~mutability ~alloc_mode
-        ~fields ~hole dbg
+      rebuild_make_block_default_case kinds env bp ~block_kind ~mutability
+        ~alloc_mode ~fields ~hole dbg
     | _ ->
       let defining_expr = rewrite_named kinds env defining_expr' in
       RE.create_let bp defining_expr ~body:hole)
