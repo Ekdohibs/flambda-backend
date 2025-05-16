@@ -19,6 +19,7 @@ module Float = Numeric_types.Float_by_bit_pattern
 module Float32 = Numeric_types.Float32_by_bit_pattern
 module GFG = Global_flow_graph
 module K = Flambda_kind
+module KS = K.With_subkind
 module Int = Numeric_types.Int
 module P = Flambda_primitive
 module RE = Rebuilt_expr
@@ -26,15 +27,14 @@ module SC = Static_const
 module Field = GFG.Field
 
 type param_decision =
-  | Keep of Variable.t * K.With_subkind.t
+  | Keep of Variable.t * KS.t
   | Delete
   | Unbox of Variable.t DS.unboxed_fields Field.Map.t
 
 let print_param_decision ppf param_decision =
   match param_decision with
   | Keep (v, kind) ->
-    Format.fprintf ppf "Keep (%a, %a)" Variable.print v K.With_subkind.print
-      kind
+    Format.fprintf ppf "Keep (%a, %a)" Variable.print v KS.print kind
   | Delete -> Format.fprintf ppf "Delete"
   | Unbox fields ->
     Format.fprintf ppf "Unbox %a"
@@ -47,12 +47,11 @@ type env =
     get_code_metadata : Code_id.t -> Code_metadata.t;
     (* TODO change names *)
     cont_params_to_keep : param_decision list Continuation.Map.t;
-    should_keep_param :
-      Continuation.t -> Variable.t -> K.With_subkind.t -> param_decision;
+    should_keep_param : Continuation.t -> Variable.t -> KS.t -> param_decision;
     (* TODO same here *)
     function_params_to_keep : param_decision list Code_id.Map.t;
     should_keep_function_param :
-      Code_id.t -> Variable.t -> K.With_subkind.t -> param_decision;
+      Code_id.t -> Variable.t -> KS.t -> param_decision;
     function_return_decision : param_decision list Code_id.Map.t;
     kinds : K.t Name.Map.t
   }
@@ -171,8 +170,7 @@ let get_parameters params_decisions =
       | Keep (var, kind) -> Bound_parameter.create var kind :: acc
       | Unbox fields ->
         fold_unboxed_with_kind
-          (fun kind v acc ->
-            Bound_parameter.create v (K.With_subkind.anything kind) :: acc)
+          (fun kind v acc -> Bound_parameter.create v (KS.anything kind) :: acc)
           fields acc)
     [] params_decisions
   |> List.rev
@@ -186,7 +184,7 @@ let get_arity params_decisions =
         | Keep (_, kind) -> kind :: acc
         | Unbox fields ->
           fold_unboxed_with_kind
-            (fun kind _ acc -> K.With_subkind.anything kind :: acc)
+            (fun kind _ acc -> KS.anything kind :: acc)
             fields acc)
       [] params_decisions
     |> List.rev
@@ -263,7 +261,7 @@ let get_args_with_kinds env params_decisions args =
         let arg_fields = get_simple_unboxable env arg in
         fold2_unboxed_subset_with_kind
           (fun kind _param arg_field acc ->
-            (Simple.var arg_field, K.With_subkind.anything kind) :: acc)
+            (Simple.var arg_field, KS.anything kind) :: acc)
           fields arg_fields acc)
     [] args params_decisions
   |> List.rev
@@ -662,7 +660,7 @@ let make_apply_wrapper env
             | Delete, _ -> Ok (i + 1, rev_args)
             | Keep (_, _), Keep (v, _) -> Ok (i + 1, Simple.var v :: rev_args)
             | Keep (_, kind), Delete ->
-              Ok (i + 1, poison (K.With_subkind.kind kind) :: rev_args)
+              Ok (i + 1, poison (KS.kind kind) :: rev_args)
             | Unbox fields_apply, Unbox fields_func ->
               Ok
                 ( i + 1,
@@ -851,8 +849,7 @@ let rebuild_apply env apply =
         let fields = get_simple_unboxable env callee in
         let new_args =
           fold_unboxed_with_kind
-            (fun kind v acc ->
-              (Simple.var v, K.With_subkind.anything kind) :: acc)
+            (fun kind v acc -> (Simple.var v, KS.anything kind) :: acc)
             fields []
         in
         new_args, None
@@ -1181,8 +1178,7 @@ let rebuild_singleton_binding_whose_representation_is_being_changed env bp bv
         (P.Variadic
            ( Make_block
                ( P.Block_kind.Values
-                   ( Tag.Scannable.zero,
-                     List.map (fun _ -> K.With_subkind.any_value) args ),
+                   (Tag.Scannable.zero, List.map (fun _ -> KS.any_value) args),
                  Immutable,
                  alloc_mode ),
              args ))
@@ -1229,25 +1225,22 @@ let rebuild_make_block_default_case env (bp : Bound_pattern.t)
     | Mixed _ | Naked_floats -> block_kind
     | Values (tag, subkinds) -> (
       let ks =
-        K.With_subkind.create K.value
-          (K.With_subkind.Non_null_value_subkind.Variant
+        KS.create K.value
+          (KS.Non_null_value_subkind.Variant
              { consts = Targetint_31_63.Set.empty;
                non_consts =
                  Tag.Scannable.Map.singleton tag (block_shape, subkinds)
              })
-          K.With_subkind.Nullable.Non_nullable
+          KS.Nullable.Non_nullable
       in
       let ks = DS.rewrite_kind_with_subkind env.uses bound_name ks in
       let[@local] with_subkinds subkinds =
         P.Block_kind.Values (tag, subkinds)
       in
       let[@local] default () =
-        with_subkinds
-          (List.map (fun ks -> K.With_subkind.erase_subkind ks) subkinds)
+        with_subkinds (List.map (fun ks -> KS.erase_subkind ks) subkinds)
       in
-      match[@ocaml.warning "-fragile-match"]
-        K.With_subkind.non_null_value_subkind ks
-      with
+      match[@ocaml.warning "-fragile-match"] KS.non_null_value_subkind ks with
       | Variant { consts = _; non_consts } -> (
         match Tag.Scannable.Map.get_singleton non_consts with
         | Some (_, (_, subkinds)) -> with_subkinds subkinds
@@ -1462,8 +1455,7 @@ and rebuild_holed (env : env) res (rev_expr : Rev_expr.rev_expr_holed)
               | Some fields ->
                 fold_unboxed_with_kind
                   (fun kind v acc ->
-                    Bound_parameter.create v (K.With_subkind.anything kind)
-                    :: acc)
+                    Bound_parameter.create v (KS.anything kind) :: acc)
                   fields [])
             l
         in
@@ -1665,7 +1657,7 @@ and rebuild_function_params_and_body (env : env) res code_metadata
       | Some fields ->
         ( fold_unboxed_with_kind
             (fun kind v acc ->
-              Bound_parameter.create v (K.With_subkind.anything kind) :: acc)
+              Bound_parameter.create v (KS.anything kind) :: acc)
             fields [],
           Code_metadata.with_is_my_closure_used false code_metadata )
     in
