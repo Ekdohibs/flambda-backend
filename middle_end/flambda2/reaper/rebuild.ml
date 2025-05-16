@@ -1622,11 +1622,11 @@ and default_defining_expr_for_rebuilding_let kinds env
 and rebuild_let_expr_holed0 (kinds : K.t Name.Map.t) (env : env)
     ~(bound_pattern : Bound_pattern.t) ~(defining_expr : Rev_expr.rev_named)
     ~hole : RE.t =
-  let bp, new_defining_expr =
+  let bound_pattern, new_defining_expr =
     default_defining_expr_for_rebuilding_let kinds env bound_pattern
       defining_expr
   in
-  match bound_pattern with
+  match (bound_pattern : Bound_pattern.t) with
   | Set_of_closures bvs when bound_vars_will_be_unboxed env bvs ->
     rebuild_set_of_closures_binding_which_is_being_unboxed env bvs
       ~defining_expr ~hole
@@ -1635,24 +1635,25 @@ and rebuild_let_expr_holed0 (kinds : K.t Name.Map.t) (env : env)
       ~hole
   | Singleton bv when bound_vars_will_have_their_representation_changed env [bv]
     ->
-    rebuild_singleton_binding_whose_representation_is_being_changed kinds env bp
-      bv ~orig_defining_expr:defining_expr ~new_defining_expr ~hole
+    rebuild_singleton_binding_whose_representation_is_being_changed kinds env
+      bound_pattern bv ~orig_defining_expr:defining_expr ~new_defining_expr
+      ~hole
   | Set_of_closures bvs
     when bound_vars_will_have_their_representation_changed env bvs ->
     rebuild_set_of_closures_binding_whose_representation_is_being_changed kinds
-      env bp bvs ~orig_defining_expr:defining_expr ~hole
+      env bound_pattern bvs ~orig_defining_expr:defining_expr ~hole
   | Singleton _ | Set_of_closures _ | Static _ -> (
     match[@ocaml.warning "-4"] new_defining_expr with
     | Flambda.Prim
         (Variadic (Make_block (block_kind, mutability, alloc_mode), fields), dbg)
       ->
-      rebuild_make_block_default_case kinds env bp ~block_kind ~mutability
-        ~alloc_mode ~fields ~hole dbg
+      rebuild_make_block_default_case kinds env bound_pattern ~block_kind
+        ~mutability ~alloc_mode ~fields ~hole dbg
     | _ ->
       let defining_expr =
         rebuild_named_default_case kinds env new_defining_expr
       in
-      RE.create_let bp defining_expr ~body:hole)
+      RE.create_let bound_pattern defining_expr ~body:hole)
 
 and rebuild_let_expr_holed (kinds : K.t Name.Map.t) (env : env)
     ~(bound_pattern : Bound_pattern.t) ~(defining_expr : Rev_expr.rev_named)
