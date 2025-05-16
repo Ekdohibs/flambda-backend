@@ -487,7 +487,7 @@ let rebuild_named_default_case env (named : Named.t) =
                arg ))
           dbg)
   in
-  match[@ocaml.warning "-4"] named with
+  match[@ocaml.warning "-fragile-match"] named with
   | Simple simple -> Named.create_simple (rewrite_simple env simple)
   | Prim (Unary (Block_load { kind; field; _ }, arg), _dbg)
     when simple_is_unboxable env arg ->
@@ -1288,7 +1288,7 @@ let rebuild_let_expr_holed0 (env : env) res ~(bound_pattern : Bound_pattern.t)
     rebuild_set_of_closures_binding_whose_representation_is_being_changed env
       res bound_pattern bvs ~orig_defining_expr:defining_expr ~hole
   | Singleton _ | Set_of_closures _ | Static _ -> (
-    match[@ocaml.warning "-4"] new_defining_expr with
+    match[@ocaml.warning "-fragile-match"] new_defining_expr with
     | Flambda.Prim
         (Variadic (Make_block (block_kind, mutability, alloc_mode), fields), dbg)
       ->
