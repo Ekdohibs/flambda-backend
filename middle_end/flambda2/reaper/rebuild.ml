@@ -683,7 +683,7 @@ let make_apply_wrapper env
         | Ok (_, rev_args) ->
           let args = List.rev rev_args in
           let apply_cont =
-            Apply_cont_expr.create return_cont ~args ~dbg:Debuginfo.none
+            Apply_cont_expr.create return_cont ~args ~dbg:(Apply.dbg apply)
           in
           RE.from_expr
             ~expr:(Expr.create_apply_cont apply_cont)
