@@ -990,7 +990,7 @@ let rebuild_singleton_binding_which_is_being_unboxed env bv
     | Prim (Variadic (Make_block (kind, _, _), args), _dbg) ->
       Field.Map.fold
         (fun (field : GFG.Field.t) (var : _ DS.unboxed_fields) hole ->
-          let arg =
+          let arg : _ Either.t =
             match field with
             | Block (nth, field_kind) ->
               let arg =
@@ -1003,19 +1003,18 @@ let rebuild_singleton_binding_which_is_being_unboxed env bv
                 else poison field_kind
               in
               if simple_is_unboxable env arg
-              then Either.Right (get_simple_unboxable env arg)
-              else Either.Left arg
-            | Is_int -> Either.Left Simple.untagged_const_false
+              then Right (get_simple_unboxable env arg)
+              else Left arg
+            | Is_int -> Left Simple.untagged_const_false
             | Get_tag ->
               let tag, _ = P.Block_kind.to_shape kind in
-              Either.Left
-                (Simple.untagged_const_int (Tag.to_targetint_31_63 tag))
+              Left (Simple.untagged_const_int (Tag.to_targetint_31_63 tag))
             | Value_slot _ | Function_slot _ | Code_of_closure | Apply _
             | Code_id_of_call_witness _ ->
               assert false
           in
           match arg with
-          | Either.Left simple ->
+          | Left simple ->
             let var =
               match var with
               | Not_unboxed var -> var
@@ -1025,7 +1024,7 @@ let rebuild_singleton_binding_which_is_being_unboxed env bv
               Bound_pattern.singleton (Bound_var.create var Name_mode.normal)
             in
             RE.create_let bp (Named.create_simple simple) ~body:hole
-          | Either.Right arg_fields -> bind_fields var (Unboxed arg_fields) hole)
+          | Right arg_fields -> bind_fields var (Unboxed arg_fields) hole)
         to_bind hole
     (* | Prim ( Unary (Opaque_identity { middle_end_only = true; _ }, arg), _dbg
        ) -> (* XXX TO REMOVE *) bind_fields (DS.Unboxed to_bind) (DS.Unboxed
