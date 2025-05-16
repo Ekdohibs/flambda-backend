@@ -673,7 +673,7 @@ let make_apply_wrapper env
                      ~const:(fun _ -> assert false))
                   field
               in
-              if has_any_source then error () else raise Exit
+              if has_any_source then error () else Invalid
             | Delete, _ -> Ok (i + 1, rev_args)
             | Keep (_, _), Keep (v, _) -> Ok (i + 1, Simple.var v :: rev_args)
             | Keep (_, kind), Delete ->
