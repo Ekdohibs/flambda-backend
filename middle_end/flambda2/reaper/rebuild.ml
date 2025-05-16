@@ -218,6 +218,65 @@ let is_dead_var env v =
   | Value | Naked_number _ ->
     not (DS.has_source env.uses (Code_id_or_name.var v))
 
+type change_calling_convention =
+  | Not_changing_calling_convention
+  | Changing_calling_convention of Code_id.t
+
+let bind_fields fields arg_fields hole =
+  fold2_unboxed_subset
+    (fun var arg hole ->
+      let bp =
+        Bound_pattern.singleton (Bound_var.create var Name_mode.normal)
+      in
+      RE.create_let bp (Named.create_simple (Simple.var arg)) ~body:hole)
+    fields arg_fields hole
+
+let bound_vars_will_be_unboxed env bvs =
+  List.exists
+    (fun bv ->
+      Option.is_some
+        (DS.get_unboxed_fields env.uses
+           (Code_id_or_name.var (Bound_var.var bv))))
+    bvs
+
+let bound_vars_will_have_their_representation_changed env bvs =
+  List.exists
+    (fun bv ->
+      Option.is_some
+        (DS.get_changed_representation env.uses
+           (Code_id_or_name.var (Bound_var.var bv))))
+    bvs
+
+let function_params_and_body_free_names fpb =
+  Function_params_and_body.pattern_match fpb
+    ~f:(fun
+         ~return_continuation
+         ~exn_continuation
+         params
+         ~body:_
+         ~my_closure
+         ~is_my_closure_used:_
+         ~my_region
+         ~my_ghost_region
+         ~my_depth
+         ~free_names_of_body
+       ->
+      let f =
+        match free_names_of_body with Unknown -> assert false | Known f -> f
+      in
+      let f =
+        Name_occurrences.remove_continuation f ~continuation:return_continuation
+      in
+      let f =
+        Name_occurrences.remove_continuation f ~continuation:exn_continuation
+      in
+      let o2l = function None -> [] | Some x -> [x] in
+      List.fold_left
+        (fun f var -> Name_occurrences.remove_var f ~var)
+        f
+        (o2l my_region @ o2l my_ghost_region
+        @ (my_closure :: my_depth :: Bound_parameters.vars params)))
+
 let get_simple_kind env simple =
   Simple.pattern_match'
     ~const:(fun const -> Reg_width_const.kind const)
@@ -560,65 +619,6 @@ let rewrite_apply_cont_expr env ac =
       get_args env args_to_keep args
     in
     Some (Apply_cont_expr.with_continuation_and_args ac cont ~args)
-
-type change_calling_convention =
-  | Not_changing_calling_convention
-  | Changing_calling_convention of Code_id.t
-
-let bind_fields fields arg_fields hole =
-  fold2_unboxed_subset
-    (fun var arg hole ->
-      let bp =
-        Bound_pattern.singleton (Bound_var.create var Name_mode.normal)
-      in
-      RE.create_let bp (Named.create_simple (Simple.var arg)) ~body:hole)
-    fields arg_fields hole
-
-let bound_vars_will_be_unboxed env bvs =
-  List.exists
-    (fun bv ->
-      Option.is_some
-        (DS.get_unboxed_fields env.uses
-           (Code_id_or_name.var (Bound_var.var bv))))
-    bvs
-
-let bound_vars_will_have_their_representation_changed env bvs =
-  List.exists
-    (fun bv ->
-      Option.is_some
-        (DS.get_changed_representation env.uses
-           (Code_id_or_name.var (Bound_var.var bv))))
-    bvs
-
-let function_params_and_body_free_names fpb =
-  Function_params_and_body.pattern_match fpb
-    ~f:(fun
-         ~return_continuation
-         ~exn_continuation
-         params
-         ~body:_
-         ~my_closure
-         ~is_my_closure_used:_
-         ~my_region
-         ~my_ghost_region
-         ~my_depth
-         ~free_names_of_body
-       ->
-      let f =
-        match free_names_of_body with Unknown -> assert false | Known f -> f
-      in
-      let f =
-        Name_occurrences.remove_continuation f ~continuation:return_continuation
-      in
-      let f =
-        Name_occurrences.remove_continuation f ~continuation:exn_continuation
-      in
-      let o2l = function None -> [] | Some x -> [x] in
-      List.fold_left
-        (fun f var -> Name_occurrences.remove_var f ~var)
-        f
-        (o2l my_region @ o2l my_ghost_region
-        @ (my_closure :: my_depth :: Bound_parameters.vars params)))
 
 let make_apply_wrapper env
     (make_apply : continuation:Apply_expr.Result_continuation.t -> Apply_expr.t)
