@@ -537,10 +537,11 @@ let rewrite_named kinds env (named : Named.t) =
   | Rec_info r -> Named.create_rec_info r
 
 let is_dead_var env kinds v =
-  let kind = Name.Map.find (Name.var v) kinds in
-  match[@ocaml.warning "-4"] kind with
-  | K.(Region | Rec_info) -> false
-  | _ -> not (Dep_solver.has_source env.uses (Code_id_or_name.var v))
+  let (kind : K.t) = Name.Map.find (Name.var v) kinds in
+  match kind with
+  | Region | Rec_info -> false
+  | Value | Naked_number _ ->
+    not (Dep_solver.has_source env.uses (Code_id_or_name.var v))
 
 let rewrite_apply_cont_expr kinds env ac =
   let cont = Apply_cont_expr.continuation ac in
