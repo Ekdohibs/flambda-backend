@@ -17,10 +17,11 @@ open! Flambda.Import
 open! Rev_expr
 module Float = Numeric_types.Float_by_bit_pattern
 module Float32 = Numeric_types.Float32_by_bit_pattern
+module GFG = Global_flow_graph
 module K = Flambda_kind
 module P = Flambda_primitive
 module RE = Rebuilt_expr
-module Field = Global_flow_graph.Field
+module Field = GFG.Field
 
 type rev_expr = Rev_expr.t
 
@@ -507,34 +508,29 @@ let rewrite_named kinds env (named : Named.t) =
   | Prim (Unary (Block_load { kind; field; _ }, arg), _dbg)
     when simple_is_unboxable env arg ->
     let kind = P.Block_access_kind.element_kind_for_load kind in
-    let field =
-      Global_flow_graph.Field.Block (Targetint_31_63.to_int field, kind)
-    in
+    let field = GFG.Field.Block (Targetint_31_63.to_int field, kind) in
     rewrite_field_access arg field
   | Prim (Unary (Project_value_slot { value_slot; _ }, arg), _dbg)
     when simple_is_unboxable env arg ->
-    rewrite_field_access arg (Global_flow_graph.Field.Value_slot value_slot)
+    rewrite_field_access arg (GFG.Field.Value_slot value_slot)
   | Prim (Unary (Is_int { variant_only = true }, arg), _dbg)
     when simple_is_unboxable env arg ->
-    rewrite_field_access arg Global_flow_graph.Field.Is_int
+    rewrite_field_access arg GFG.Field.Is_int
   | Prim (Unary (Get_tag, arg), _dbg) when simple_is_unboxable env arg ->
-    rewrite_field_access arg Global_flow_graph.Field.Get_tag
+    rewrite_field_access arg GFG.Field.Get_tag
   | Prim (Unary (Block_load { kind; field; _ }, arg), dbg)
     when simple_changed_repr env arg ->
     let kind = P.Block_access_kind.element_kind_for_load kind in
-    let field =
-      Global_flow_graph.Field.Block (Targetint_31_63.to_int field, kind)
-    in
+    let field = GFG.Field.Block (Targetint_31_63.to_int field, kind) in
     rewrite_field_access_chg_repr arg field dbg
   | Prim (Unary (Project_value_slot { value_slot; _ }, arg), dbg)
     when simple_changed_repr env arg ->
-    rewrite_field_access_chg_repr arg
-      (Global_flow_graph.Field.Value_slot value_slot) dbg
+    rewrite_field_access_chg_repr arg (GFG.Field.Value_slot value_slot) dbg
   | Prim (Unary (Is_int { variant_only = true }, arg), dbg)
     when simple_changed_repr env arg ->
-    rewrite_field_access_chg_repr arg Global_flow_graph.Field.Is_int dbg
+    rewrite_field_access_chg_repr arg GFG.Field.Is_int dbg
   | Prim (Unary (Get_tag, arg), dbg) when simple_changed_repr env arg ->
-    rewrite_field_access_chg_repr arg Global_flow_graph.Field.Get_tag dbg
+    rewrite_field_access_chg_repr arg GFG.Field.Get_tag dbg
   | Prim (prim, dbg) ->
     let prim = P.map_args (rewrite_simple kinds env) prim in
     Named.create_prim prim dbg
@@ -642,14 +638,13 @@ let make_apply_wrapper env
                 match Apply.call_kind apply with
                 | Function { function_call = Direct _; _ } -> error ()
                 | Function { function_call = Indirect_known_arity; _ } ->
-                  Global_flow_graph.Direct_code_pointer
+                  GFG.Direct_code_pointer
                 | Function { function_call = Indirect_unknown_arity; _ }
                 | C_call _ | Method _ | Effect _ ->
-                  Global_flow_graph.Indirect_code_pointer
+                  GFG.Indirect_code_pointer
               in
               let field =
-                Global_flow_graph.Field.Apply
-                  (direct_or_indirect, Global_flow_graph.Field.Normal i)
+                GFG.Field.Apply (direct_or_indirect, GFG.Field.Normal i)
               in
               let has_any_source =
                 Dep_solver.not_local_field_has_source env.uses
@@ -1289,7 +1284,7 @@ and rebuild_holed (kinds : K.t Name.Map.t) (env : env)
                     | _ -> assert false
                   in
                   Field.Map.fold
-                    (fun (field : Global_flow_graph.Field.t) var hole ->
+                    (fun (field : GFG.Field.t) var hole ->
                       match field with
                       | Value_slot value_slot ->
                         let arg = Value_slot.Map.find value_slot value_slots in
@@ -1396,7 +1391,7 @@ and rebuild_holed (kinds : K.t Name.Map.t) (env : env)
               match named with
               | Prim (Variadic (Make_block (kind, _, _), args), _dbg) ->
                 Field.Map.fold
-                  (fun (field : Global_flow_graph.Field.t) var hole ->
+                  (fun (field : GFG.Field.t) var hole ->
                     let arg =
                       match field with
                       | Block (nth, field_kind) ->
@@ -1655,7 +1650,7 @@ and rebuild_holed (kinds : K.t Name.Map.t) (env : env)
                 List.mapi
                   (fun i field ->
                     let kind = K.Block_shape.element_kind block_shape i in
-                    let f = Global_flow_graph.Field.Block (i, kind) in
+                    let f = GFG.Field.Block (i, kind) in
                     if Dep_solver.field_used env.uses bound_name f
                     then rewrite_simple kinds env field
                     else poison kind)
