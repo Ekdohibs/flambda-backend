@@ -642,11 +642,13 @@ let make_apply_wrapper env
                       func_decision Apply.print apply
                   in
                   let direct_or_indirect =
-                    match[@ocaml.warning "-4"] Apply.call_kind apply with
+                    match Apply.call_kind apply with
                     | Function { function_call = Direct _; _ } -> error ()
                     | Function { function_call = Indirect_known_arity; _ } ->
                       Global_flow_graph.Direct_code_pointer
-                    | _ -> Global_flow_graph.Indirect_code_pointer
+                    | Function { function_call = Indirect_unknown_arity; _ }
+                    | C_call _ | Method _ | Effect _ ->
+                      Global_flow_graph.Indirect_code_pointer
                   in
                   let field =
                     Global_flow_graph.Field.Apply
