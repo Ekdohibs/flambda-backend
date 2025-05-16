@@ -753,6 +753,7 @@ let rebuild_apply env apply =
       | None -> None, call_kind, false
       | Some (code_id, num_already_applied_params) ->
         if num_already_applied_params <> 0 then failwith "todo";
+        (* XXX *)
         let new_call_kind = Call_kind.direct_function_call code_id alloc_mode in
         Some code_id, new_call_kind, was_indirect_unknown_arity
     in
