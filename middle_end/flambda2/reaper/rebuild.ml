@@ -790,7 +790,7 @@ let rec rebuild_expr (kinds : K.t Name.Map.t) (env : env) (rev_expr : rev_expr)
             in
             Some code_id, new_call_kind, was_indirect_unknown_arity
         in
-        match[@ocaml.warning "-4"] call_kind with
+        match call_kind with
         | Function { function_call = Direct code_id; alloc_mode } -> (
           match Apply.callee apply with
           | Some c
@@ -813,7 +813,7 @@ let rec rebuild_expr (kinds : K.t Name.Map.t) (env : env) (rev_expr : rev_expr)
           None, call_kind, false
         | Function { function_call = Indirect_known_arity; alloc_mode } ->
           called (Option.get (Apply.callee apply)) alloc_mode call_kind false
-        | _ -> None, call_kind, false
+        | C_call _ | Method _ | Effect _ -> None, call_kind, false
       in
       let updating_calling_convention =
         match code_id_actually_called with
