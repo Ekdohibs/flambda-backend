@@ -1547,77 +1547,81 @@ and rebuild_make_block_default_case kinds env (bp : Bound_pattern.t)
        dbg)
     ~body:hole
 
+and default_defining_expr_for_rebuilding_let kinds env
+    (bound_pattern : Bound_pattern.t) (defining_expr : Rev_expr.rev_named) =
+  match defining_expr with
+  | Named defining_expr -> bound_pattern, defining_expr
+  | Static_consts group ->
+    let bound_static =
+      match bound_pattern with
+      | Static l -> l
+      | Set_of_closures _ | Singleton _ ->
+        (* Bound pattern is static consts, so can't bind something else *)
+        assert false
+    in
+    let bound_and_group =
+      List.filter_map
+        (fun ((p, e) as arg : Bound_static.Pattern.t * _) ->
+          match p with
+          | Code code_id ->
+            if is_code_id_used env code_id
+            then Some arg
+            else (
+              (match e with
+              | Code _ -> ()
+              | Deleted_code -> ()
+              | Static_const _ ->
+                (* Pattern is [Code _], so can't bind static const *)
+                assert false);
+              Some (p, Deleted_code))
+          | Block_like sym -> if is_symbol_used env sym then Some arg else None
+          | Set_of_closures m ->
+            if Function_slot.Lmap.exists
+                 (fun _ sym ->
+                   assert (
+                     not
+                       (Option.is_some
+                          (Dep_solver.get_changed_representation env.uses
+                             (Code_id_or_name.symbol sym))));
+                   is_symbol_used env sym)
+                 m
+            then Some arg
+            else None)
+        (List.combine (Bound_static.to_list bound_static) group)
+    in
+    let bound_static, _group = List.split bound_and_group in
+    let group =
+      Static_const_group.create
+        (List.map (rebuild_static_const_or_code kinds env) bound_and_group)
+    in
+    ( Bound_pattern.static (Bound_static.create bound_static),
+      Named.create_static_consts group )
+  | Set_of_closures set_of_closures ->
+    let bound =
+      match bound_pattern with
+      | Set_of_closures bound_vars ->
+        List.map Name.var (List.map Bound_var.var bound_vars)
+      | Static _ | Singleton _ ->
+        (* Pattern is a set of closures *)
+        assert false
+    in
+    let set_of_closures =
+      rewrite_set_of_closures env kinds ~bound set_of_closures
+    in
+    let is_phantom =
+      Name_mode.is_phantom @@ Bound_pattern.name_mode bound_pattern
+    in
+    all_slot_offsets
+      := Slot_offsets.add_set_of_closures !all_slot_offsets ~is_phantom
+           set_of_closures;
+    bound_pattern, Named.create_set_of_closures set_of_closures
+
 and rebuild_let_expr_holed0 (kinds : K.t Name.Map.t) (env : env)
     ~(bound_pattern : Bound_pattern.t) ~(defining_expr : Rev_expr.rev_named)
     ~hole : RE.t =
   let bp, defining_expr' =
-    match defining_expr with
-    | Named defining_expr -> bound_pattern, defining_expr
-    | Static_consts group ->
-      let bound_static =
-        match bound_pattern with
-        | Static l -> l
-        | Set_of_closures _ | Singleton _ ->
-          (* Bound pattern is static consts, so can't bind something else *)
-          assert false
-      in
-      let bound_and_group =
-        List.filter_map
-          (fun ((p, e) as arg : Bound_static.Pattern.t * _) ->
-            match p with
-            | Code code_id ->
-              if is_code_id_used env code_id
-              then Some arg
-              else (
-                (match e with
-                | Code _ -> ()
-                | Deleted_code -> ()
-                | Static_const _ ->
-                  (* Pattern is [Code _], so can't bind static const *)
-                  assert false);
-                Some (p, Deleted_code))
-            | Block_like sym ->
-              if is_symbol_used env sym then Some arg else None
-            | Set_of_closures m ->
-              if Function_slot.Lmap.exists
-                   (fun _ sym ->
-                     assert (
-                       not
-                         (Option.is_some
-                            (Dep_solver.get_changed_representation env.uses
-                               (Code_id_or_name.symbol sym))));
-                     is_symbol_used env sym)
-                   m
-              then Some arg
-              else None)
-          (List.combine (Bound_static.to_list bound_static) group)
-      in
-      let bound_static, _group = List.split bound_and_group in
-      let group =
-        Static_const_group.create
-          (List.map (rebuild_static_const_or_code kinds env) bound_and_group)
-      in
-      ( Bound_pattern.static (Bound_static.create bound_static),
-        Named.create_static_consts group )
-    | Set_of_closures set_of_closures ->
-      let bound =
-        match bound_pattern with
-        | Set_of_closures bound_vars ->
-          List.map Name.var (List.map Bound_var.var bound_vars)
-        | Static _ | Singleton _ ->
-          (* Pattern is a set of closures *)
-          assert false
-      in
-      let set_of_closures =
-        rewrite_set_of_closures env kinds ~bound set_of_closures
-      in
-      let is_phantom =
-        Name_mode.is_phantom @@ Bound_pattern.name_mode bound_pattern
-      in
-      all_slot_offsets
-        := Slot_offsets.add_set_of_closures !all_slot_offsets ~is_phantom
-             set_of_closures;
-      bound_pattern, Named.create_set_of_closures set_of_closures
+    default_defining_expr_for_rebuilding_let kinds env bound_pattern
+      defining_expr
   in
   match[@ocaml.warning "-fragile-match"] bound_pattern with
   | Set_of_closures bvs when bound_vars_will_be_unboxed env bvs ->
@@ -1637,7 +1641,7 @@ and rebuild_let_expr_holed0 (kinds : K.t Name.Map.t) (env : env)
       env bp bvs ~orig_defining_expr:defining_expr ~hole
   | _ -> (
     match[@ocaml.warning "-4"] defining_expr' with
-    | Prim
+    | Flambda.Prim
         (Variadic (Make_block (block_kind, mutability, alloc_mode), fields), dbg)
       ->
       rebuild_make_block_default_case kinds env bp ~block_kind ~mutability
