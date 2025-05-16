@@ -736,68 +736,69 @@ let rewrite_call_kind env (call_kind : Call_kind.t) =
          ~f:(rewrite_simple f) ~arg:(rewrite_simple arg)
          ~last_fiber:(rewrite_simple last_fiber))
 
+let decide_whether_apply_needs_calling_convention_change env apply =
+  let call_kind = rewrite_call_kind env (Apply.call_kind apply) in
+  let code_id_actually_called, call_kind, _should_break_call =
+    let called c alloc_mode call_kind was_indirect_unknown_arity =
+      let code_id =
+        Simple.pattern_match c
+          ~const:(fun _ -> None)
+          ~name:(fun name ~coercion:_ ->
+            Dep_solver.code_id_actually_called env.uses name)
+      in
+      match code_id with
+      | None -> None, call_kind, false
+      | Some (code_id, num_already_applied_params) ->
+        if num_already_applied_params <> 0 then failwith "todo";
+        (* XXX *)
+        let new_call_kind = Call_kind.direct_function_call code_id alloc_mode in
+        Some code_id, new_call_kind, was_indirect_unknown_arity
+    in
+    match call_kind with
+    | Function { function_call = Direct code_id; alloc_mode } -> (
+      match Apply.callee apply with
+      | Some c
+        when Simple.pattern_match'
+               ~var:(fun _ ~coercion:_ -> true)
+               ~const:(fun _ -> true)
+               ~symbol:(fun s ~coercion:_ ->
+                 Compilation_unit.is_current (Symbol.compilation_unit s))
+               c ->
+        let call_kind =
+          if Dep_solver.has_use env.uses (Code_id_or_name.code_id code_id)
+          then call_kind
+          else Call_kind.indirect_function_call_known_arity alloc_mode
+        in
+        called c alloc_mode call_kind false
+      | None | Some _ -> Some code_id, call_kind, false)
+    | Function { function_call = Indirect_unknown_arity; alloc_mode = _ } ->
+      (* called (Option.get (Apply.callee apply)) alloc_mode call_kind true *)
+      None, call_kind, false
+    | Function { function_call = Indirect_known_arity; alloc_mode } ->
+      called (Option.get (Apply.callee apply)) alloc_mode call_kind false
+    | C_call _ | Method _ | Effect _ -> None, call_kind, false
+  in
+  match code_id_actually_called with
+  | None -> Not_changing_calling_convention, call_kind
+  | Some code_id -> (
+    (* Format.eprintf "CODE ID %a: %a@." (Format.pp_print_option Simple.print)
+       (Apply.callee apply) Code_id.print code_id; *)
+    match Code_id.Map.find_opt code_id env.code_deps with
+    | None -> Not_changing_calling_convention, call_kind
+    | Some _ ->
+      let cannot_change_calling_convention =
+        Dep_solver.cannot_change_calling_convention env.uses code_id
+      in
+      if cannot_change_calling_convention
+      then Not_changing_calling_convention, call_kind
+      else Changing_calling_convention code_id, call_kind)
+
 let rebuild_apply env apply =
   (* CR ncourant: we never rewrite alloc_mode. This is currently ok because we
      never remove begin- or end-region primitives, but might be needed later if
      we chose to handle them. *)
   let updating_calling_convention, call_kind =
-    let call_kind = rewrite_call_kind env (Apply.call_kind apply) in
-    let code_id_actually_called, call_kind, _should_break_call =
-      let called c alloc_mode call_kind was_indirect_unknown_arity =
-        let code_id =
-          Simple.pattern_match c
-            ~const:(fun _ -> None)
-            ~name:(fun name ~coercion:_ ->
-              Dep_solver.code_id_actually_called env.uses name)
-        in
-        match code_id with
-        | None -> None, call_kind, false
-        | Some (code_id, num_already_applied_params) ->
-          if num_already_applied_params <> 0 then failwith "todo";
-          (* XXX *)
-          let new_call_kind =
-            Call_kind.direct_function_call code_id alloc_mode
-          in
-          Some code_id, new_call_kind, was_indirect_unknown_arity
-      in
-      match call_kind with
-      | Function { function_call = Direct code_id; alloc_mode } -> (
-        match Apply.callee apply with
-        | Some c
-          when Simple.pattern_match'
-                 ~var:(fun _ ~coercion:_ -> true)
-                 ~const:(fun _ -> true)
-                 ~symbol:(fun s ~coercion:_ ->
-                   Compilation_unit.is_current (Symbol.compilation_unit s))
-                 c ->
-          let call_kind =
-            if Dep_solver.has_use env.uses (Code_id_or_name.code_id code_id)
-            then call_kind
-            else Call_kind.indirect_function_call_known_arity alloc_mode
-          in
-          called c alloc_mode call_kind false
-        | None | Some _ -> Some code_id, call_kind, false)
-      | Function { function_call = Indirect_unknown_arity; alloc_mode = _ } ->
-        (* called (Option.get (Apply.callee apply)) alloc_mode call_kind true *)
-        None, call_kind, false
-      | Function { function_call = Indirect_known_arity; alloc_mode } ->
-        called (Option.get (Apply.callee apply)) alloc_mode call_kind false
-      | C_call _ | Method _ | Effect _ -> None, call_kind, false
-    in
-    match code_id_actually_called with
-    | None -> Not_changing_calling_convention, call_kind
-    | Some code_id -> (
-      (* Format.eprintf "CODE ID %a: %a@." (Format.pp_print_option Simple.print)
-         (Apply.callee apply) Code_id.print code_id; *)
-      match Code_id.Map.find_opt code_id env.code_deps with
-      | None -> Not_changing_calling_convention, call_kind
-      | Some _ ->
-        let cannot_change_calling_convention =
-          Dep_solver.cannot_change_calling_convention env.uses code_id
-        in
-        if cannot_change_calling_convention
-        then Not_changing_calling_convention, call_kind
-        else Changing_calling_convention code_id, call_kind)
+    decide_whether_apply_needs_calling_convention_change env apply
   in
   let exn_continuation = Apply.exn_continuation apply in
   let exn_continuation =
