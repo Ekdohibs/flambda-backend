@@ -1156,7 +1156,6 @@ and rebuild_static_const_or_code kinds env
 and rebuild_let_expr_holed (kinds : K.t Name.Map.t) (env : env)
     ~(bound_pattern : Bound_pattern.t) ~(defining_expr : Rev_expr.rev_named)
     ~parent ~hole : RE.t =
-  let[@local] erase () = rebuild_holed kinds env parent hole in
   let[@local] default () =
     let subexpr =
       let bp, defining_expr' =
@@ -1665,7 +1664,9 @@ and rebuild_let_expr_holed (kinds : K.t Name.Map.t) (env : env)
       | Set_of_closures _ | Static_consts _ ->
         false
     in
-    if is_begin_region || is_var_used env kinds v then default () else erase ()
+    if is_begin_region || is_var_used env kinds v
+    then default ()
+    else rebuild_holed kinds env parent hole
 
 and rebuild_holed (kinds : K.t Name.Map.t) (env : env)
     (rev_expr : rev_expr_holed) (hole : RE.t) : RE.t =
