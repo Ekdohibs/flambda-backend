@@ -569,6 +569,15 @@ type change_calling_convention =
   | Not_changing_calling_convention
   | Changing_calling_convention of Code_id.t
 
+let bind_fields fields arg_fields hole =
+  fold2_unboxed_subset
+    (fun var arg hole ->
+      let bp =
+        Bound_pattern.singleton (Bound_var.create var Name_mode.normal)
+      in
+      RE.create_let bp (Named.create_simple (Simple.var arg)) ~body:hole)
+    fields arg_fields hole
+
 let bound_vars_will_be_unboxed env bvs =
   List.exists
     (fun bv ->
@@ -715,8 +724,614 @@ let make_apply_wrapper env
     in
     RE.create_non_recursive_let_cont return_cont_wrapper cont_handler ~body
 
-let rec rebuild_expr (kinds : K.t Name.Map.t) (env : env) (rev_expr : rev_expr)
-    : RE.t =
+let rebuild_singleton_binding_which_is_being_unboxed kinds env bv
+    ~(defining_expr : Rev_expr.rev_named) ~hole =
+  let to_bind =
+    Option.get
+      (Dep_solver.get_unboxed_fields env.uses
+         (Code_id_or_name.var (Bound_var.var bv)))
+  in
+  let load_field field arg dbg =
+    let oarg = arg in
+    let arg =
+      Simple.pattern_match arg
+        ~const:(fun _ -> Misc.fatal_error "Loading unboxed from constant")
+        ~name:(fun name ~coercion:_ -> name)
+    in
+    let arg = Code_id_or_name.name arg in
+    match Dep_solver.get_unboxed_fields env.uses arg with
+    | Some arg ->
+      bind_fields (Dep_solver.Unboxed to_bind) (Field.Map.find field arg) hole
+    | None -> (
+      assert (
+        Option.is_some (Dep_solver.get_changed_representation env.uses arg));
+      let arg =
+        Option.get (Dep_solver.get_changed_representation env.uses arg)
+      in
+      match arg with
+      | Block_representation (arg_fields, _size) ->
+        let arg = Field.Map.find field arg_fields in
+        fold2_unboxed_subset
+          (fun var (field, kind) hole ->
+            let bp =
+              Bound_pattern.singleton (Bound_var.create var Name_mode.normal)
+            in
+            let named =
+              Named.create_prim
+                (P.Unary
+                   ( Block_load
+                       { field = Targetint_31_63.of_int field;
+                         kind;
+                         mut = Immutable
+                       },
+                     oarg ))
+                dbg
+            in
+            RE.create_let bp named ~body:hole)
+          (Dep_solver.Unboxed to_bind) arg hole
+      | Closure_representation
+          (arg_fields, function_slots, current_function_slot) ->
+        let arg = Field.Map.find field arg_fields in
+        fold2_unboxed_subset
+          (fun var value_slot hole ->
+            let bp =
+              Bound_pattern.singleton (Bound_var.create var Name_mode.normal)
+            in
+            let named =
+              Named.create_prim
+                (P.Unary
+                   ( Project_value_slot
+                       { value_slot;
+                         project_from =
+                           Function_slot.Map.find current_function_slot
+                             function_slots
+                       },
+                     oarg ))
+                dbg
+            in
+            RE.create_let bp named ~body:hole)
+          (Dep_solver.Unboxed to_bind) arg hole)
+  in
+  match[@ocaml.warning "-fragile-match"] defining_expr with
+  | Named named -> (
+    match[@ocaml.warning "-fragile-match"] named with
+    | Prim (Variadic (Make_block (kind, _, _), args), _dbg) ->
+      Field.Map.fold
+        (fun (field : GFG.Field.t) var hole ->
+          let arg =
+            match field with
+            | Block (nth, field_kind) ->
+              let arg =
+                if nth < List.length args
+                then
+                  let arg = List.nth args nth in
+                  if K.equal field_kind (get_simple_kind kinds arg)
+                  then arg
+                  else poison field_kind
+                else poison field_kind
+              in
+              if simple_is_unboxable env arg
+              then Either.Right (get_simple_unboxable env arg)
+              else Either.Left arg
+            | Is_int -> Either.Left Simple.untagged_const_false
+            | Get_tag ->
+              let tag, _ = P.Block_kind.to_shape kind in
+              Either.Left
+                (Simple.untagged_const_int (Tag.to_targetint_31_63 tag))
+            | Value_slot _ | Function_slot _ | Code_of_closure | Apply _
+            | Code_id_of_call_witness _ ->
+              assert false
+          in
+          match arg with
+          | Either.Left simple ->
+            let var =
+              match var with
+              | Dep_solver.Not_unboxed var -> var
+              | Dep_solver.Unboxed _ ->
+                Misc.fatal_errorf "Trying to unbox non-unboxable"
+            in
+            let bp =
+              Bound_pattern.singleton (Bound_var.create var Name_mode.normal)
+            in
+            RE.create_let bp (Named.create_simple simple) ~body:hole
+          | Either.Right arg_fields ->
+            bind_fields var (Dep_solver.Unboxed arg_fields) hole)
+        to_bind hole
+    (* | Prim ( Unary (Opaque_identity { middle_end_only = true; _ }, arg), _dbg
+       ) -> (* XXX TO REMOVE *) bind_fields (Dep_solver.Unboxed to_bind)
+       (Dep_solver.Unboxed (get_simple_unboxable env arg)) hole *)
+    | Prim (Unary (Block_load { field; kind; _ }, arg), dbg) ->
+      let field =
+        Field.Block
+          ( Targetint_31_63.to_int field,
+            P.Block_access_kind.element_kind_for_load kind )
+      in
+      load_field field arg dbg
+    | Prim
+        (Unary (Project_value_slot { value_slot; project_from = _ }, arg), dbg)
+      ->
+      let field = Field.Value_slot value_slot in
+      load_field field arg dbg
+    | Prim (Unary (Project_function_slot _, arg), _) | Simple arg ->
+      bind_fields (Dep_solver.Unboxed to_bind)
+        (Dep_solver.Unboxed (get_simple_unboxable env arg))
+        hole
+    | named ->
+      Format.printf "BOUM ? %a@." Named.print named;
+      assert false)
+  | _ -> assert false
+
+let rebuild_set_of_closures_binding_which_is_being_unboxed env bvs
+    ~(defining_expr : Rev_expr.rev_named) ~hole =
+  assert (
+    List.for_all
+      (fun bv ->
+        (not
+           (Dep_solver.has_use env.uses
+              (Code_id_or_name.var (Bound_var.var bv))))
+        || Option.is_some
+             (Dep_solver.get_unboxed_fields env.uses
+                (Code_id_or_name.var (Bound_var.var bv))))
+      bvs);
+  List.fold_left
+    (fun hole bv ->
+      if not
+           (Dep_solver.has_use env.uses
+              (Code_id_or_name.var (Bound_var.var bv)))
+      then hole
+      else
+        let to_bind =
+          Option.get
+            (Dep_solver.get_unboxed_fields env.uses
+               (Code_id_or_name.var (Bound_var.var bv)))
+        in
+        let value_slots =
+          match[@ocaml.warning "-fragile-match"] defining_expr with
+          | Named (Set_of_closures _set) ->
+            (* Possible ? *)
+            assert false
+            (* Set_of_closures.value_slots set *)
+          | Set_of_closures set -> set.value_slots
+          | _ -> assert false
+        in
+        Field.Map.fold
+          (fun (field : GFG.Field.t) var hole ->
+            match field with
+            | Value_slot value_slot ->
+              let arg = Value_slot.Map.find value_slot value_slots in
+              if simple_is_unboxable env arg
+              then
+                bind_fields var
+                  (Dep_solver.Unboxed (get_simple_unboxable env arg))
+                  hole
+              else
+                let var =
+                  match var with
+                  | Dep_solver.Not_unboxed var -> var
+                  | Dep_solver.Unboxed _ ->
+                    Misc.fatal_errorf "Trying to unbox non-unboxable"
+                in
+                let bp =
+                  Bound_pattern.singleton
+                    (Bound_var.create var Name_mode.normal)
+                in
+                RE.create_let bp (Named.create_simple arg) ~body:hole
+            | Block _ | Is_int | Get_tag | Function_slot _ | Code_of_closure
+            | Apply _ | Code_id_of_call_witness _ ->
+              assert false)
+          to_bind hole)
+    hole bvs
+
+let rebuild_singleton_binding_whose_representation_is_being_changed kinds env bp
+    bv ~(orig_defining_expr : Rev_expr.rev_named) ~(new_defining_expr : Named.t)
+    ~hole =
+  (* TODO when this block is stored anywhere else, the subkind is no longer
+     correct... we need to fix that somehow *)
+  match[@ocaml.warning "-fragile-match"] orig_defining_expr with
+  | Named
+      (Prim (Unary (Project_function_slot { move_from; move_to }, arg), dbg)) ->
+    let fields =
+      Option.get
+        (Dep_solver.get_changed_representation env.uses
+           (Code_id_or_name.var (Bound_var.var bv)))
+    in
+    let fss =
+      match fields with
+      | Block_representation _ -> assert false
+      | Closure_representation (_, fss, _) -> fss
+    in
+    let named =
+      Named.create_prim
+        (Unary
+           ( Project_function_slot
+               { move_to = Function_slot.Map.find move_to fss;
+                 move_from = Function_slot.Map.find move_from fss
+               },
+             arg ))
+        dbg
+    in
+    RE.create_let bp named ~body:hole
+  | Named (Prim (Variadic (Make_block (kind, _mut, alloc_mode), args), dbg)) ->
+    let fields =
+      Option.get
+        (Dep_solver.get_changed_representation env.uses
+           (Code_id_or_name.var (Bound_var.var bv)))
+    in
+    let fields, size =
+      match fields with
+      | Block_representation (fields, size) -> fields, size
+      | Closure_representation _ -> assert false
+    in
+    let mp =
+      Field.Map.fold
+        (fun f uf mp ->
+          match (f : Field.t) with
+          | Block (i, _kind) -> (
+            let arg = List.nth args i in
+            if simple_is_unboxable env arg
+            then
+              fold2_unboxed_subset
+                (fun (ff, _) var mp ->
+                  Numeric_types.Int.Map.add ff (Simple.var var) mp)
+                uf
+                (Dep_solver.Unboxed (get_simple_unboxable env arg))
+                mp
+            else
+              match uf with
+              | Dep_solver.Not_unboxed (ff, _) ->
+                Numeric_types.Int.Map.add ff (rewrite_simple kinds env arg) mp
+              | Dep_solver.Unboxed _ ->
+                Misc.fatal_errorf "trying to unbox simple")
+          | Get_tag -> (
+            let tag =
+              match kind with
+              | Values (tag, _) | Mixed (tag, _) ->
+                Tag.to_targetint_31_63 (Tag.Scannable.to_tag tag)
+              | Naked_floats -> Tag.to_targetint_31_63 Tag.double_array_tag
+            in
+            match uf with
+            | Dep_solver.Not_unboxed (ff, _) ->
+              Numeric_types.Int.Map.add ff
+                (rewrite_simple kinds env (Simple.const_int tag))
+                mp
+            | Dep_solver.Unboxed _ -> Misc.fatal_errorf "trying to unbox simple"
+            )
+          | Is_int -> (
+            match uf with
+            | Dep_solver.Not_unboxed (ff, _) ->
+              Numeric_types.Int.Map.add ff
+                (rewrite_simple kinds env Simple.const_one)
+                mp
+            | Dep_solver.Unboxed _ -> Misc.fatal_errorf "trying to unbox simple"
+            )
+          | Value_slot _ | Function_slot _ | Code_of_closure | Apply _
+          | Code_id_of_call_witness _ ->
+            assert false)
+        fields Numeric_types.Int.Map.empty
+    in
+    let args =
+      List.init size (fun i ->
+          match Numeric_types.Int.Map.find_opt i mp with
+          | None -> Simple.const_zero
+          | Some x -> x)
+    in
+    let named =
+      Named.create_prim
+        (P.Variadic
+           ( Make_block
+               ( P.Block_kind.Values
+                   ( Tag.Scannable.zero,
+                     List.map (fun _ -> K.With_subkind.any_value) args ),
+                 Immutable,
+                 alloc_mode ),
+             args ))
+        dbg
+    in
+    RE.create_let bp named ~body:hole
+  | _ ->
+    (* XXX mshinwell: when do we end up here? *)
+    let defining_expr =
+      rebuild_named_default_case kinds env new_defining_expr
+    in
+    RE.create_let bp defining_expr ~body:hole
+
+let rebuild_set_of_closures_binding_whose_representation_is_being_changed kinds
+    env bp bvs ~(orig_defining_expr : Rev_expr.rev_named) ~hole =
+  let bound = List.map (fun bv -> Name.var (Bound_var.var bv)) bvs in
+  let set =
+    match[@ocaml.warning "-fragile-match"] orig_defining_expr with
+    | Named (Set_of_closures _set) ->
+      (* Possible ? *)
+      assert false
+      (* Set_of_closures.value_slots set *)
+    | Set_of_closures set -> set
+    | _ -> assert false
+  in
+  let set_of_closures = rewrite_set_of_closures env kinds ~bound set in
+  RE.create_let bp (Named.create_set_of_closures set_of_closures) ~body:hole
+
+let rebuild_make_block_default_case kinds env (bp : Bound_pattern.t)
+    ~(block_kind : P.Block_kind.t) ~mutability ~alloc_mode ~fields ~hole dbg =
+  let bound_name =
+    match bp with
+    | Singleton v -> Name.var (Bound_var.var v)
+    | Set_of_closures _ | Static _ -> assert false
+  in
+  let _tag, block_shape = P.Block_kind.to_shape block_kind in
+  let block_kind =
+    match block_kind with
+    | Mixed _ | Naked_floats -> block_kind
+    | Values (tag, subkinds) -> (
+      let ks =
+        K.With_subkind.create K.value
+          (K.With_subkind.Non_null_value_subkind.Variant
+             { consts = Targetint_31_63.Set.empty;
+               non_consts =
+                 Tag.Scannable.Map.singleton tag (block_shape, subkinds)
+             })
+          K.With_subkind.Nullable.Non_nullable
+      in
+      let ks = Dep_solver.rewrite_kind_with_subkind env.uses bound_name ks in
+      let[@local] with_subkinds subkinds =
+        P.Block_kind.Values (tag, subkinds)
+      in
+      let[@local] default () =
+        with_subkinds
+          (List.map (fun ks -> K.With_subkind.erase_subkind ks) subkinds)
+      in
+      match[@ocaml.warning "-fragile-match"]
+        K.With_subkind.non_null_value_subkind ks
+      with
+      | Variant { consts = _; non_consts } -> (
+        match Tag.Scannable.Map.get_singleton non_consts with
+        | Some (_, (_, subkinds)) -> with_subkinds subkinds
+        | None -> default ())
+      | _ -> default ())
+  in
+  let bound_name = Code_id_or_name.name bound_name in
+  let fields =
+    List.mapi
+      (fun i field ->
+        let kind = K.Block_shape.element_kind block_shape i in
+        let f = GFG.Field.Block (i, kind) in
+        if Dep_solver.field_used env.uses bound_name f
+        then rewrite_simple kinds env field
+        else poison kind)
+      fields
+  in
+  RE.create_let bp
+    (Named.create_prim
+       (Variadic (Make_block (block_kind, mutability, alloc_mode), fields))
+       dbg)
+    ~body:hole
+
+let rebuild_let_expr_holed0 (kinds : K.t Name.Map.t) (env : env)
+    ~(bound_pattern : Bound_pattern.t) ~(defining_expr : Rev_expr.rev_named)
+    ~new_defining_expr ~hole : RE.t =
+  match (bound_pattern : Bound_pattern.t) with
+  | Set_of_closures bvs when bound_vars_will_be_unboxed env bvs ->
+    rebuild_set_of_closures_binding_which_is_being_unboxed env bvs
+      ~defining_expr ~hole
+  | Singleton bv when bound_vars_will_be_unboxed env [bv] ->
+    rebuild_singleton_binding_which_is_being_unboxed kinds env bv ~defining_expr
+      ~hole
+  | Singleton bv when bound_vars_will_have_their_representation_changed env [bv]
+    ->
+    rebuild_singleton_binding_whose_representation_is_being_changed kinds env
+      bound_pattern bv ~orig_defining_expr:defining_expr ~new_defining_expr
+      ~hole
+  | Set_of_closures bvs
+    when bound_vars_will_have_their_representation_changed env bvs ->
+    rebuild_set_of_closures_binding_whose_representation_is_being_changed kinds
+      env bound_pattern bvs ~orig_defining_expr:defining_expr ~hole
+  | Singleton _ | Set_of_closures _ | Static _ -> (
+    match[@ocaml.warning "-4"] new_defining_expr with
+    | Flambda.Prim
+        (Variadic (Make_block (block_kind, mutability, alloc_mode), fields), dbg)
+      ->
+      rebuild_make_block_default_case kinds env bound_pattern ~block_kind
+        ~mutability ~alloc_mode ~fields ~hole dbg
+    | _ ->
+      let defining_expr =
+        rebuild_named_default_case kinds env new_defining_expr
+      in
+      RE.create_let bound_pattern defining_expr ~body:hole)
+
+let rec default_defining_expr_for_rebuilding_let kinds env
+    (bound_pattern : Bound_pattern.t) (defining_expr : Rev_expr.rev_named) =
+  match defining_expr with
+  | Named defining_expr -> bound_pattern, defining_expr
+  | Static_consts group ->
+    let bound_static =
+      match bound_pattern with
+      | Static l -> l
+      | Set_of_closures _ | Singleton _ ->
+        (* Bound pattern is static consts, so can't bind something else *)
+        assert false
+    in
+    let bound_and_group =
+      List.filter_map
+        (fun ((p, e) as arg : Bound_static.Pattern.t * _) ->
+          match p with
+          | Code code_id ->
+            if is_code_id_used env code_id
+            then Some arg
+            else (
+              (match e with
+              | Code _ -> ()
+              | Deleted_code -> ()
+              | Static_const _ ->
+                (* Pattern is [Code _], so can't bind static const *)
+                assert false);
+              Some (p, Deleted_code))
+          | Block_like sym -> if is_symbol_used env sym then Some arg else None
+          | Set_of_closures m ->
+            if Function_slot.Lmap.exists
+                 (fun _ sym ->
+                   assert (
+                     not
+                       (Option.is_some
+                          (Dep_solver.get_changed_representation env.uses
+                             (Code_id_or_name.symbol sym))));
+                   is_symbol_used env sym)
+                 m
+            then Some arg
+            else None)
+        (List.combine (Bound_static.to_list bound_static) group)
+    in
+    let bound_static, _group = List.split bound_and_group in
+    let group =
+      Static_const_group.create
+        (List.map (rebuild_static_const_or_code kinds env) bound_and_group)
+    in
+    ( Bound_pattern.static (Bound_static.create bound_static),
+      Named.create_static_consts group )
+  | Set_of_closures set_of_closures ->
+    let bound =
+      match bound_pattern with
+      | Set_of_closures bound_vars ->
+        List.map Name.var (List.map Bound_var.var bound_vars)
+      | Static _ | Singleton _ ->
+        (* Pattern is a set of closures *)
+        assert false
+    in
+    let set_of_closures =
+      rewrite_set_of_closures env kinds ~bound set_of_closures
+    in
+    let is_phantom =
+      Name_mode.is_phantom @@ Bound_pattern.name_mode bound_pattern
+    in
+    all_slot_offsets
+      := Slot_offsets.add_set_of_closures !all_slot_offsets ~is_phantom
+           set_of_closures;
+    bound_pattern, Named.create_set_of_closures set_of_closures
+
+and rebuild_let_expr_holed (kinds : K.t Name.Map.t) (env : env)
+    ~(bound_pattern : Bound_pattern.t) ~(defining_expr : Rev_expr.rev_named)
+    ~parent ~hole : RE.t =
+  let bound_pattern, new_defining_expr =
+    default_defining_expr_for_rebuilding_let kinds env bound_pattern
+      defining_expr
+  in
+  let subexpr =
+    match (bound_pattern : Bound_pattern.t) with
+    | Set_of_closures _ | Static _ ->
+      rebuild_let_expr_holed0 kinds env ~bound_pattern ~defining_expr
+        ~new_defining_expr ~hole
+    | Singleton v ->
+      let v = Bound_var.var v in
+      (* CR ncourant: we should probably properly track regions *)
+      let is_begin_region =
+        match defining_expr with
+        | Named (Prim (prim, _)) -> P.is_begin_region prim
+        | Named (Simple _ | Set_of_closures _ | Static_consts _ | Rec_info _)
+        | Set_of_closures _ | Static_consts _ ->
+          false
+      in
+      if is_begin_region || is_var_used env kinds v
+      then
+        rebuild_let_expr_holed0 kinds env ~bound_pattern ~defining_expr
+          ~new_defining_expr ~hole
+      else hole
+  in
+  rebuild_holed kinds env parent subexpr
+
+and rebuild_holed (kinds : K.t Name.Map.t) (env : env)
+    (rev_expr : rev_expr_holed) (hole : RE.t) : RE.t =
+  match rev_expr with
+  | Hole -> hole
+  | Let { bound_pattern; defining_expr; parent } ->
+    rebuild_let_expr_holed kinds env ~bound_pattern ~defining_expr ~parent ~hole
+  | Let_cont { cont; parent; handler } ->
+    if not (Name_occurrences.mem_continuation hole.free_names cont)
+    then rebuild_holed kinds env parent hole
+    else
+      let { bound_parameters; expr; is_exn_handler; is_cold } = handler in
+      let parameters_to_keep =
+        Continuation.Map.find cont env.cont_params_to_keep
+      in
+      let cont_handler =
+        let handler =
+          match
+            List.filter (is_dead_var env kinds)
+              (Bound_parameters.vars bound_parameters)
+          with
+          | [] -> rebuild_expr kinds env expr
+          | _ :: _ as dead_vars ->
+            let msg =
+              Format.asprintf
+                "Continuation is never called because of dead parameters: [%a]."
+                (Format.pp_print_list
+                   ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
+                   Variable.print)
+                dead_vars
+            in
+            RE.from_expr
+              ~expr:(Expr.create_invalid (Message msg))
+              ~free_names:Name_occurrences.empty
+        in
+        let l = get_parameters parameters_to_keep in
+        let l =
+          List.concat_map
+            (fun param ->
+              let v = Bound_parameter.var param in
+              match
+                Dep_solver.get_unboxed_fields env.uses (Code_id_or_name.var v)
+              with
+              | None -> [param]
+              | Some fields ->
+                fold_unboxed_with_kind
+                  (fun kind v acc ->
+                    Bound_parameter.create v (K.With_subkind.anything kind)
+                    :: acc)
+                  fields [])
+            l
+        in
+        RE.create_continuation_handler
+          (Bound_parameters.create l)
+          ~handler ~is_exn_handler ~is_cold
+      in
+      let let_cont_expr =
+        RE.create_non_recursive_let_cont cont cont_handler ~body:hole
+      in
+      rebuild_holed kinds env parent let_cont_expr
+  | Let_cont_rec { parent; handlers; invariant_params } ->
+    (* TODO unboxed parameters *)
+    let filter_params cont params =
+      let params = Bound_parameters.to_list params in
+      let params =
+        get_parameters
+          (List.map
+             (fun param ->
+               env.should_keep_param cont
+                 (Bound_parameter.var param)
+                 (Bound_parameter.kind param))
+             params)
+      in
+      Bound_parameters.create params
+    in
+    let handlers =
+      Continuation.Map.mapi
+        (fun cont handler ->
+          let { bound_parameters; expr; is_exn_handler; is_cold } = handler in
+          let bound_parameters = filter_params cont bound_parameters in
+          let handler = rebuild_expr kinds env expr in
+          RE.create_continuation_handler bound_parameters ~handler
+            ~is_exn_handler ~is_cold)
+        handlers
+    in
+    let invariant_params =
+      filter_params
+        (fst (Continuation.Map.min_binding handlers))
+        invariant_params
+    in
+    let let_cont_expr =
+      RE.create_recursive_let_cont ~invariant_params handlers ~body:hole
+    in
+    rebuild_holed kinds env parent let_cont_expr
+
+and rebuild_expr (kinds : K.t Name.Map.t) (env : env) (rev_expr : rev_expr) :
+    RE.t =
   let { expr; holed_expr } = rev_expr in
   let expr =
     match expr with
@@ -1104,15 +1719,6 @@ and rebuild_function_params_and_body (kinds : K.t Name.Map.t) (env : env)
         ~my_region ~my_ghost_region ~my_depth,
       code_metadata )
 
-and bind_fields fields arg_fields hole =
-  fold2_unboxed_subset
-    (fun var arg hole ->
-      let bp =
-        Bound_pattern.singleton (Bound_var.create var Name_mode.normal)
-      in
-      RE.create_let bp (Named.create_simple (Simple.var arg)) ~body:hole)
-    fields arg_fields hole
-
 and rebuild_static_const_or_code kinds env
     ((bound_to : Bound_static.Pattern.t), static_const_or_code) =
   match static_const_or_code with
@@ -1168,609 +1774,6 @@ and rebuild_static_const_or_code kinds env
         "Set_of_closures is not permitted in conjunction with Other in the \
          Static_const case:@ %a"
         SC.print static_const)
-
-and rebuild_singleton_binding_which_is_being_unboxed kinds env bv
-    ~(defining_expr : Rev_expr.rev_named) ~hole =
-  let to_bind =
-    Option.get
-      (Dep_solver.get_unboxed_fields env.uses
-         (Code_id_or_name.var (Bound_var.var bv)))
-  in
-  let load_field field arg dbg =
-    let oarg = arg in
-    let arg =
-      Simple.pattern_match arg
-        ~const:(fun _ -> Misc.fatal_error "Loading unboxed from constant")
-        ~name:(fun name ~coercion:_ -> name)
-    in
-    let arg = Code_id_or_name.name arg in
-    match Dep_solver.get_unboxed_fields env.uses arg with
-    | Some arg ->
-      bind_fields (Dep_solver.Unboxed to_bind) (Field.Map.find field arg) hole
-    | None -> (
-      assert (
-        Option.is_some (Dep_solver.get_changed_representation env.uses arg));
-      let arg =
-        Option.get (Dep_solver.get_changed_representation env.uses arg)
-      in
-      match arg with
-      | Block_representation (arg_fields, _size) ->
-        let arg = Field.Map.find field arg_fields in
-        fold2_unboxed_subset
-          (fun var (field, kind) hole ->
-            let bp =
-              Bound_pattern.singleton (Bound_var.create var Name_mode.normal)
-            in
-            let named =
-              Named.create_prim
-                (P.Unary
-                   ( Block_load
-                       { field = Targetint_31_63.of_int field;
-                         kind;
-                         mut = Immutable
-                       },
-                     oarg ))
-                dbg
-            in
-            RE.create_let bp named ~body:hole)
-          (Dep_solver.Unboxed to_bind) arg hole
-      | Closure_representation
-          (arg_fields, function_slots, current_function_slot) ->
-        let arg = Field.Map.find field arg_fields in
-        fold2_unboxed_subset
-          (fun var value_slot hole ->
-            let bp =
-              Bound_pattern.singleton (Bound_var.create var Name_mode.normal)
-            in
-            let named =
-              Named.create_prim
-                (P.Unary
-                   ( Project_value_slot
-                       { value_slot;
-                         project_from =
-                           Function_slot.Map.find current_function_slot
-                             function_slots
-                       },
-                     oarg ))
-                dbg
-            in
-            RE.create_let bp named ~body:hole)
-          (Dep_solver.Unboxed to_bind) arg hole)
-  in
-  match[@ocaml.warning "-fragile-match"] defining_expr with
-  | Named named -> (
-    match[@ocaml.warning "-fragile-match"] named with
-    | Prim (Variadic (Make_block (kind, _, _), args), _dbg) ->
-      Field.Map.fold
-        (fun (field : GFG.Field.t) var hole ->
-          let arg =
-            match field with
-            | Block (nth, field_kind) ->
-              let arg =
-                if nth < List.length args
-                then
-                  let arg = List.nth args nth in
-                  if K.equal field_kind (get_simple_kind kinds arg)
-                  then arg
-                  else poison field_kind
-                else poison field_kind
-              in
-              if simple_is_unboxable env arg
-              then Either.Right (get_simple_unboxable env arg)
-              else Either.Left arg
-            | Is_int -> Either.Left Simple.untagged_const_false
-            | Get_tag ->
-              let tag, _ = P.Block_kind.to_shape kind in
-              Either.Left
-                (Simple.untagged_const_int (Tag.to_targetint_31_63 tag))
-            | Value_slot _ | Function_slot _ | Code_of_closure | Apply _
-            | Code_id_of_call_witness _ ->
-              assert false
-          in
-          match arg with
-          | Either.Left simple ->
-            let var =
-              match var with
-              | Dep_solver.Not_unboxed var -> var
-              | Dep_solver.Unboxed _ ->
-                Misc.fatal_errorf "Trying to unbox non-unboxable"
-            in
-            let bp =
-              Bound_pattern.singleton (Bound_var.create var Name_mode.normal)
-            in
-            RE.create_let bp (Named.create_simple simple) ~body:hole
-          | Either.Right arg_fields ->
-            bind_fields var (Dep_solver.Unboxed arg_fields) hole)
-        to_bind hole
-    (* | Prim ( Unary (Opaque_identity { middle_end_only = true; _ }, arg), _dbg
-       ) -> (* XXX TO REMOVE *) bind_fields (Dep_solver.Unboxed to_bind)
-       (Dep_solver.Unboxed (get_simple_unboxable env arg)) hole *)
-    | Prim (Unary (Block_load { field; kind; _ }, arg), dbg) ->
-      let field =
-        Field.Block
-          ( Targetint_31_63.to_int field,
-            P.Block_access_kind.element_kind_for_load kind )
-      in
-      load_field field arg dbg
-    | Prim
-        (Unary (Project_value_slot { value_slot; project_from = _ }, arg), dbg)
-      ->
-      let field = Field.Value_slot value_slot in
-      load_field field arg dbg
-    | Prim (Unary (Project_function_slot _, arg), _) | Simple arg ->
-      bind_fields (Dep_solver.Unboxed to_bind)
-        (Dep_solver.Unboxed (get_simple_unboxable env arg))
-        hole
-    | named ->
-      Format.printf "BOUM ? %a@." Named.print named;
-      assert false)
-  | _ -> assert false
-
-and rebuild_set_of_closures_binding_which_is_being_unboxed env bvs
-    ~(defining_expr : Rev_expr.rev_named) ~hole =
-  assert (
-    List.for_all
-      (fun bv ->
-        (not
-           (Dep_solver.has_use env.uses
-              (Code_id_or_name.var (Bound_var.var bv))))
-        || Option.is_some
-             (Dep_solver.get_unboxed_fields env.uses
-                (Code_id_or_name.var (Bound_var.var bv))))
-      bvs);
-  List.fold_left
-    (fun hole bv ->
-      if not
-           (Dep_solver.has_use env.uses
-              (Code_id_or_name.var (Bound_var.var bv)))
-      then hole
-      else
-        let to_bind =
-          Option.get
-            (Dep_solver.get_unboxed_fields env.uses
-               (Code_id_or_name.var (Bound_var.var bv)))
-        in
-        let value_slots =
-          match[@ocaml.warning "-fragile-match"] defining_expr with
-          | Named (Set_of_closures _set) ->
-            (* Possible ? *)
-            assert false
-            (* Set_of_closures.value_slots set *)
-          | Set_of_closures set -> set.value_slots
-          | _ -> assert false
-        in
-        Field.Map.fold
-          (fun (field : GFG.Field.t) var hole ->
-            match field with
-            | Value_slot value_slot ->
-              let arg = Value_slot.Map.find value_slot value_slots in
-              if simple_is_unboxable env arg
-              then
-                bind_fields var
-                  (Dep_solver.Unboxed (get_simple_unboxable env arg))
-                  hole
-              else
-                let var =
-                  match var with
-                  | Dep_solver.Not_unboxed var -> var
-                  | Dep_solver.Unboxed _ ->
-                    Misc.fatal_errorf "Trying to unbox non-unboxable"
-                in
-                let bp =
-                  Bound_pattern.singleton
-                    (Bound_var.create var Name_mode.normal)
-                in
-                RE.create_let bp (Named.create_simple arg) ~body:hole
-            | Block _ | Is_int | Get_tag | Function_slot _ | Code_of_closure
-            | Apply _ | Code_id_of_call_witness _ ->
-              assert false)
-          to_bind hole)
-    hole bvs
-
-and rebuild_singleton_binding_whose_representation_is_being_changed kinds env bp
-    bv ~(orig_defining_expr : Rev_expr.rev_named) ~(new_defining_expr : Named.t)
-    ~hole =
-  (* TODO when this block is stored anywhere else, the subkind is no longer
-     correct... we need to fix that somehow *)
-  match[@ocaml.warning "-fragile-match"] orig_defining_expr with
-  | Named
-      (Prim (Unary (Project_function_slot { move_from; move_to }, arg), dbg)) ->
-    let fields =
-      Option.get
-        (Dep_solver.get_changed_representation env.uses
-           (Code_id_or_name.var (Bound_var.var bv)))
-    in
-    let fss =
-      match fields with
-      | Block_representation _ -> assert false
-      | Closure_representation (_, fss, _) -> fss
-    in
-    let named =
-      Named.create_prim
-        (Unary
-           ( Project_function_slot
-               { move_to = Function_slot.Map.find move_to fss;
-                 move_from = Function_slot.Map.find move_from fss
-               },
-             arg ))
-        dbg
-    in
-    RE.create_let bp named ~body:hole
-  | Named (Prim (Variadic (Make_block (kind, _mut, alloc_mode), args), dbg)) ->
-    let fields =
-      Option.get
-        (Dep_solver.get_changed_representation env.uses
-           (Code_id_or_name.var (Bound_var.var bv)))
-    in
-    let fields, size =
-      match fields with
-      | Block_representation (fields, size) -> fields, size
-      | Closure_representation _ -> assert false
-    in
-    let mp =
-      Field.Map.fold
-        (fun f uf mp ->
-          match (f : Field.t) with
-          | Block (i, _kind) -> (
-            let arg = List.nth args i in
-            if simple_is_unboxable env arg
-            then
-              fold2_unboxed_subset
-                (fun (ff, _) var mp ->
-                  Numeric_types.Int.Map.add ff (Simple.var var) mp)
-                uf
-                (Dep_solver.Unboxed (get_simple_unboxable env arg))
-                mp
-            else
-              match uf with
-              | Dep_solver.Not_unboxed (ff, _) ->
-                Numeric_types.Int.Map.add ff (rewrite_simple kinds env arg) mp
-              | Dep_solver.Unboxed _ ->
-                Misc.fatal_errorf "trying to unbox simple")
-          | Get_tag -> (
-            let tag =
-              match kind with
-              | Values (tag, _) | Mixed (tag, _) ->
-                Tag.to_targetint_31_63 (Tag.Scannable.to_tag tag)
-              | Naked_floats -> Tag.to_targetint_31_63 Tag.double_array_tag
-            in
-            match uf with
-            | Dep_solver.Not_unboxed (ff, _) ->
-              Numeric_types.Int.Map.add ff
-                (rewrite_simple kinds env (Simple.const_int tag))
-                mp
-            | Dep_solver.Unboxed _ -> Misc.fatal_errorf "trying to unbox simple"
-            )
-          | Is_int -> (
-            match uf with
-            | Dep_solver.Not_unboxed (ff, _) ->
-              Numeric_types.Int.Map.add ff
-                (rewrite_simple kinds env Simple.const_one)
-                mp
-            | Dep_solver.Unboxed _ -> Misc.fatal_errorf "trying to unbox simple"
-            )
-          | Value_slot _ | Function_slot _ | Code_of_closure | Apply _
-          | Code_id_of_call_witness _ ->
-            assert false)
-        fields Numeric_types.Int.Map.empty
-    in
-    let args =
-      List.init size (fun i ->
-          match Numeric_types.Int.Map.find_opt i mp with
-          | None -> Simple.const_zero
-          | Some x -> x)
-    in
-    let named =
-      Named.create_prim
-        (P.Variadic
-           ( Make_block
-               ( P.Block_kind.Values
-                   ( Tag.Scannable.zero,
-                     List.map (fun _ -> K.With_subkind.any_value) args ),
-                 Immutable,
-                 alloc_mode ),
-             args ))
-        dbg
-    in
-    RE.create_let bp named ~body:hole
-  | _ ->
-    (* XXX mshinwell: when do we end up here? *)
-    let defining_expr =
-      rebuild_named_default_case kinds env new_defining_expr
-    in
-    RE.create_let bp defining_expr ~body:hole
-
-and rebuild_set_of_closures_binding_whose_representation_is_being_changed kinds
-    env bp bvs ~(orig_defining_expr : Rev_expr.rev_named) ~hole =
-  let bound = List.map (fun bv -> Name.var (Bound_var.var bv)) bvs in
-  let set =
-    match[@ocaml.warning "-fragile-match"] orig_defining_expr with
-    | Named (Set_of_closures _set) ->
-      (* Possible ? *)
-      assert false
-      (* Set_of_closures.value_slots set *)
-    | Set_of_closures set -> set
-    | _ -> assert false
-  in
-  let set_of_closures = rewrite_set_of_closures env kinds ~bound set in
-  RE.create_let bp (Named.create_set_of_closures set_of_closures) ~body:hole
-
-and rebuild_make_block_default_case kinds env (bp : Bound_pattern.t)
-    ~(block_kind : P.Block_kind.t) ~mutability ~alloc_mode ~fields ~hole dbg =
-  let bound_name =
-    match bp with
-    | Singleton v -> Name.var (Bound_var.var v)
-    | Set_of_closures _ | Static _ -> assert false
-  in
-  let _tag, block_shape = P.Block_kind.to_shape block_kind in
-  let block_kind =
-    match block_kind with
-    | Mixed _ | Naked_floats -> block_kind
-    | Values (tag, subkinds) -> (
-      let ks =
-        K.With_subkind.create K.value
-          (K.With_subkind.Non_null_value_subkind.Variant
-             { consts = Targetint_31_63.Set.empty;
-               non_consts =
-                 Tag.Scannable.Map.singleton tag (block_shape, subkinds)
-             })
-          K.With_subkind.Nullable.Non_nullable
-      in
-      let ks = Dep_solver.rewrite_kind_with_subkind env.uses bound_name ks in
-      let[@local] with_subkinds subkinds =
-        P.Block_kind.Values (tag, subkinds)
-      in
-      let[@local] default () =
-        with_subkinds
-          (List.map (fun ks -> K.With_subkind.erase_subkind ks) subkinds)
-      in
-      match[@ocaml.warning "-fragile-match"]
-        K.With_subkind.non_null_value_subkind ks
-      with
-      | Variant { consts = _; non_consts } -> (
-        match Tag.Scannable.Map.get_singleton non_consts with
-        | Some (_, (_, subkinds)) -> with_subkinds subkinds
-        | None -> default ())
-      | _ -> default ())
-  in
-  let bound_name = Code_id_or_name.name bound_name in
-  let fields =
-    List.mapi
-      (fun i field ->
-        let kind = K.Block_shape.element_kind block_shape i in
-        let f = GFG.Field.Block (i, kind) in
-        if Dep_solver.field_used env.uses bound_name f
-        then rewrite_simple kinds env field
-        else poison kind)
-      fields
-  in
-  RE.create_let bp
-    (Named.create_prim
-       (Variadic (Make_block (block_kind, mutability, alloc_mode), fields))
-       dbg)
-    ~body:hole
-
-and default_defining_expr_for_rebuilding_let kinds env
-    (bound_pattern : Bound_pattern.t) (defining_expr : Rev_expr.rev_named) =
-  match defining_expr with
-  | Named defining_expr -> bound_pattern, defining_expr
-  | Static_consts group ->
-    let bound_static =
-      match bound_pattern with
-      | Static l -> l
-      | Set_of_closures _ | Singleton _ ->
-        (* Bound pattern is static consts, so can't bind something else *)
-        assert false
-    in
-    let bound_and_group =
-      List.filter_map
-        (fun ((p, e) as arg : Bound_static.Pattern.t * _) ->
-          match p with
-          | Code code_id ->
-            if is_code_id_used env code_id
-            then Some arg
-            else (
-              (match e with
-              | Code _ -> ()
-              | Deleted_code -> ()
-              | Static_const _ ->
-                (* Pattern is [Code _], so can't bind static const *)
-                assert false);
-              Some (p, Deleted_code))
-          | Block_like sym -> if is_symbol_used env sym then Some arg else None
-          | Set_of_closures m ->
-            if Function_slot.Lmap.exists
-                 (fun _ sym ->
-                   assert (
-                     not
-                       (Option.is_some
-                          (Dep_solver.get_changed_representation env.uses
-                             (Code_id_or_name.symbol sym))));
-                   is_symbol_used env sym)
-                 m
-            then Some arg
-            else None)
-        (List.combine (Bound_static.to_list bound_static) group)
-    in
-    let bound_static, _group = List.split bound_and_group in
-    let group =
-      Static_const_group.create
-        (List.map (rebuild_static_const_or_code kinds env) bound_and_group)
-    in
-    ( Bound_pattern.static (Bound_static.create bound_static),
-      Named.create_static_consts group )
-  | Set_of_closures set_of_closures ->
-    let bound =
-      match bound_pattern with
-      | Set_of_closures bound_vars ->
-        List.map Name.var (List.map Bound_var.var bound_vars)
-      | Static _ | Singleton _ ->
-        (* Pattern is a set of closures *)
-        assert false
-    in
-    let set_of_closures =
-      rewrite_set_of_closures env kinds ~bound set_of_closures
-    in
-    let is_phantom =
-      Name_mode.is_phantom @@ Bound_pattern.name_mode bound_pattern
-    in
-    all_slot_offsets
-      := Slot_offsets.add_set_of_closures !all_slot_offsets ~is_phantom
-           set_of_closures;
-    bound_pattern, Named.create_set_of_closures set_of_closures
-
-and rebuild_let_expr_holed0 (kinds : K.t Name.Map.t) (env : env)
-    ~(bound_pattern : Bound_pattern.t) ~(defining_expr : Rev_expr.rev_named)
-    ~hole : RE.t =
-  let bound_pattern, new_defining_expr =
-    default_defining_expr_for_rebuilding_let kinds env bound_pattern
-      defining_expr
-  in
-  match (bound_pattern : Bound_pattern.t) with
-  | Set_of_closures bvs when bound_vars_will_be_unboxed env bvs ->
-    rebuild_set_of_closures_binding_which_is_being_unboxed env bvs
-      ~defining_expr ~hole
-  | Singleton bv when bound_vars_will_be_unboxed env [bv] ->
-    rebuild_singleton_binding_which_is_being_unboxed kinds env bv ~defining_expr
-      ~hole
-  | Singleton bv when bound_vars_will_have_their_representation_changed env [bv]
-    ->
-    rebuild_singleton_binding_whose_representation_is_being_changed kinds env
-      bound_pattern bv ~orig_defining_expr:defining_expr ~new_defining_expr
-      ~hole
-  | Set_of_closures bvs
-    when bound_vars_will_have_their_representation_changed env bvs ->
-    rebuild_set_of_closures_binding_whose_representation_is_being_changed kinds
-      env bound_pattern bvs ~orig_defining_expr:defining_expr ~hole
-  | Singleton _ | Set_of_closures _ | Static _ -> (
-    match[@ocaml.warning "-4"] new_defining_expr with
-    | Flambda.Prim
-        (Variadic (Make_block (block_kind, mutability, alloc_mode), fields), dbg)
-      ->
-      rebuild_make_block_default_case kinds env bound_pattern ~block_kind
-        ~mutability ~alloc_mode ~fields ~hole dbg
-    | _ ->
-      let defining_expr =
-        rebuild_named_default_case kinds env new_defining_expr
-      in
-      RE.create_let bound_pattern defining_expr ~body:hole)
-
-and rebuild_let_expr_holed (kinds : K.t Name.Map.t) (env : env)
-    ~(bound_pattern : Bound_pattern.t) ~(defining_expr : Rev_expr.rev_named)
-    ~parent ~hole : RE.t =
-  let subexpr =
-    match bound_pattern with
-    | Set_of_closures _ | Static _ ->
-      rebuild_let_expr_holed0 kinds env ~bound_pattern ~defining_expr ~hole
-    | Singleton v ->
-      let v = Bound_var.var v in
-      (* CR ncourant: we should probably properly track regions *)
-      let is_begin_region =
-        match defining_expr with
-        | Named (Prim (prim, _)) -> P.is_begin_region prim
-        | Named (Simple _ | Set_of_closures _ | Static_consts _ | Rec_info _)
-        | Set_of_closures _ | Static_consts _ ->
-          false
-      in
-      if is_begin_region || is_var_used env kinds v
-      then rebuild_let_expr_holed0 kinds env ~bound_pattern ~defining_expr ~hole
-      else hole
-  in
-  rebuild_holed kinds env parent subexpr
-
-and rebuild_holed (kinds : K.t Name.Map.t) (env : env)
-    (rev_expr : rev_expr_holed) (hole : RE.t) : RE.t =
-  match rev_expr with
-  | Hole -> hole
-  | Let { bound_pattern; defining_expr; parent } ->
-    rebuild_let_expr_holed kinds env ~bound_pattern ~defining_expr ~parent ~hole
-  | Let_cont { cont; parent; handler } ->
-    if not (Name_occurrences.mem_continuation hole.free_names cont)
-    then rebuild_holed kinds env parent hole
-    else
-      let { bound_parameters; expr; is_exn_handler; is_cold } = handler in
-      let parameters_to_keep =
-        Continuation.Map.find cont env.cont_params_to_keep
-      in
-      let cont_handler =
-        let handler =
-          match
-            List.filter (is_dead_var env kinds)
-              (Bound_parameters.vars bound_parameters)
-          with
-          | [] -> rebuild_expr kinds env expr
-          | _ :: _ as dead_vars ->
-            let msg =
-              Format.asprintf
-                "Continuation is never called because of dead parameters: [%a]."
-                (Format.pp_print_list
-                   ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
-                   Variable.print)
-                dead_vars
-            in
-            RE.from_expr
-              ~expr:(Expr.create_invalid (Message msg))
-              ~free_names:Name_occurrences.empty
-        in
-        let l = get_parameters parameters_to_keep in
-        let l =
-          List.concat_map
-            (fun param ->
-              let v = Bound_parameter.var param in
-              match
-                Dep_solver.get_unboxed_fields env.uses (Code_id_or_name.var v)
-              with
-              | None -> [param]
-              | Some fields ->
-                fold_unboxed_with_kind
-                  (fun kind v acc ->
-                    Bound_parameter.create v (K.With_subkind.anything kind)
-                    :: acc)
-                  fields [])
-            l
-        in
-        RE.create_continuation_handler
-          (Bound_parameters.create l)
-          ~handler ~is_exn_handler ~is_cold
-      in
-      let let_cont_expr =
-        RE.create_non_recursive_let_cont cont cont_handler ~body:hole
-      in
-      rebuild_holed kinds env parent let_cont_expr
-  | Let_cont_rec { parent; handlers; invariant_params } ->
-    (* TODO unboxed parameters *)
-    let filter_params cont params =
-      let params = Bound_parameters.to_list params in
-      let params =
-        get_parameters
-          (List.map
-             (fun param ->
-               env.should_keep_param cont
-                 (Bound_parameter.var param)
-                 (Bound_parameter.kind param))
-             params)
-      in
-      Bound_parameters.create params
-    in
-    let handlers =
-      Continuation.Map.mapi
-        (fun cont handler ->
-          let { bound_parameters; expr; is_exn_handler; is_cold } = handler in
-          let bound_parameters = filter_params cont bound_parameters in
-          let handler = rebuild_expr kinds env expr in
-          RE.create_continuation_handler bound_parameters ~handler
-            ~is_exn_handler ~is_cold)
-        handlers
-    in
-    let invariant_params =
-      filter_params
-        (fst (Continuation.Map.min_binding handlers))
-        invariant_params
-    in
-    let let_cont_expr =
-      RE.create_recursive_let_cont ~invariant_params handlers ~body:hole
-    in
-    rebuild_holed kinds env parent let_cont_expr
 
 type result =
   { body : Expr.t;
