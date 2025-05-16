@@ -921,68 +921,69 @@ let rebuild_apply env apply =
     make_apply_wrapper env make_apply (Apply.continuation apply)
       return_decisions
 
+let load_field_from_value_which_is_being_unboxed env ~to_bind field arg dbg
+    ~hole =
+  let oarg = arg in
+  let arg =
+    Simple.pattern_match arg
+      ~const:(fun _ -> Misc.fatal_error "Loading unboxed from constant")
+      ~name:(fun name ~coercion:_ -> name)
+  in
+  let arg = Code_id_or_name.name arg in
+  match DS.get_unboxed_fields env.uses arg with
+  | Some arg -> bind_fields (Unboxed to_bind) (Field.Map.find field arg) hole
+  | None -> (
+    assert (Option.is_some (DS.get_changed_representation env.uses arg));
+    let arg = Option.get (DS.get_changed_representation env.uses arg) in
+    match arg with
+    | Block_representation (arg_fields, _size) ->
+      let arg = Field.Map.find field arg_fields in
+      fold2_unboxed_subset
+        (fun var (field, kind) hole ->
+          let bp =
+            Bound_pattern.singleton (Bound_var.create var Name_mode.normal)
+          in
+          let named =
+            Named.create_prim
+              (P.Unary
+                 ( Block_load
+                     { field = Targetint_31_63.of_int field;
+                       kind;
+                       mut = Immutable
+                     },
+                   oarg ))
+              dbg
+          in
+          RE.create_let bp named ~body:hole)
+        (Unboxed to_bind) arg hole
+    | Closure_representation (arg_fields, function_slots, current_function_slot)
+      ->
+      let arg = Field.Map.find field arg_fields in
+      fold2_unboxed_subset
+        (fun var value_slot hole ->
+          let bp =
+            Bound_pattern.singleton (Bound_var.create var Name_mode.normal)
+          in
+          let named =
+            Named.create_prim
+              (P.Unary
+                 ( Project_value_slot
+                     { value_slot;
+                       project_from =
+                         Function_slot.Map.find current_function_slot
+                           function_slots
+                     },
+                   oarg ))
+              dbg
+          in
+          RE.create_let bp named ~body:hole)
+        (Unboxed to_bind) arg hole)
+
 let rebuild_singleton_binding_which_is_being_unboxed env bv
     ~(defining_expr : Rev_expr.rev_named) ~hole =
   let to_bind =
     Option.get
       (DS.get_unboxed_fields env.uses (Code_id_or_name.var (Bound_var.var bv)))
-  in
-  let load_field field arg dbg =
-    let oarg = arg in
-    let arg =
-      Simple.pattern_match arg
-        ~const:(fun _ -> Misc.fatal_error "Loading unboxed from constant")
-        ~name:(fun name ~coercion:_ -> name)
-    in
-    let arg = Code_id_or_name.name arg in
-    match DS.get_unboxed_fields env.uses arg with
-    | Some arg -> bind_fields (Unboxed to_bind) (Field.Map.find field arg) hole
-    | None -> (
-      assert (Option.is_some (DS.get_changed_representation env.uses arg));
-      let arg = Option.get (DS.get_changed_representation env.uses arg) in
-      match arg with
-      | Block_representation (arg_fields, _size) ->
-        let arg = Field.Map.find field arg_fields in
-        fold2_unboxed_subset
-          (fun var (field, kind) hole ->
-            let bp =
-              Bound_pattern.singleton (Bound_var.create var Name_mode.normal)
-            in
-            let named =
-              Named.create_prim
-                (P.Unary
-                   ( Block_load
-                       { field = Targetint_31_63.of_int field;
-                         kind;
-                         mut = Immutable
-                       },
-                     oarg ))
-                dbg
-            in
-            RE.create_let bp named ~body:hole)
-          (Unboxed to_bind) arg hole
-      | Closure_representation
-          (arg_fields, function_slots, current_function_slot) ->
-        let arg = Field.Map.find field arg_fields in
-        fold2_unboxed_subset
-          (fun var value_slot hole ->
-            let bp =
-              Bound_pattern.singleton (Bound_var.create var Name_mode.normal)
-            in
-            let named =
-              Named.create_prim
-                (P.Unary
-                   ( Project_value_slot
-                       { value_slot;
-                         project_from =
-                           Function_slot.Map.find current_function_slot
-                             function_slots
-                       },
-                     oarg ))
-                dbg
-            in
-            RE.create_let bp named ~body:hole)
-          (Unboxed to_bind) arg hole)
   in
   match[@ocaml.warning "-fragile-match"] defining_expr with
   | Named named -> (
@@ -1035,12 +1036,14 @@ let rebuild_singleton_binding_which_is_being_unboxed env bv
           ( Targetint_31_63.to_int field,
             P.Block_access_kind.element_kind_for_load kind )
       in
-      load_field field arg dbg
+      load_field_from_value_which_is_being_unboxed env ~to_bind field arg dbg
+        ~hole
     | Prim
         (Unary (Project_value_slot { value_slot; project_from = _ }, arg), dbg)
       ->
       let field = Field.Value_slot value_slot in
-      load_field field arg dbg
+      load_field_from_value_which_is_being_unboxed env ~to_bind field arg dbg
+        ~hole
     | Prim (Unary (Project_function_slot _, arg), _) | Simple arg ->
       bind_fields (Unboxed to_bind)
         (Unboxed (get_simple_unboxable env arg))
