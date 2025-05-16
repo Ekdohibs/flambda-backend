@@ -20,7 +20,7 @@ type tail_expr =
   | Apply of Apply_expr.t
 
 type rev_expr_holed =
-  | Up
+  | Hole
   | Let of
       { bound_pattern : Bound_pattern.t;
         defining_expr : rev_named;

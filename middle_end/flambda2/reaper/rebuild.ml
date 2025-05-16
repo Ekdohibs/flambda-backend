@@ -1100,7 +1100,7 @@ and bind_fields fields arg_fields hole =
 and rebuild_holed (kinds : K.t Name.Map.t) (env : env)
     (rev_expr : rev_expr_holed) (hole : RE.t) : RE.t =
   match rev_expr with
-  | Up -> hole
+  | Hole -> hole
   | Let let_ -> (
     let[@local] erase () = rebuild_holed kinds env let_.parent hole in
     let[@local] default () =

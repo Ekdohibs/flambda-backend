@@ -448,7 +448,7 @@ and traverse_let_cont_non_recursive denv acc cont ~body handler =
     traverse denv acc body
   in
   traverse_cont_handler
-    { parent = Up;
+    { parent = Hole;
       conts = denv.conts;
       current_code_id = denv.current_code_id;
       le_monde_exterieur = denv.le_monde_exterieur;
@@ -496,7 +496,7 @@ and traverse_let_cont_recursive denv acc ~invariant_params ~body handlers =
         let is_cold = Continuation_handler.is_cold cont_handler in
         let expr =
           traverse
-            { parent = Up;
+            { parent = Hole;
               conts;
               current_code_id = denv.current_code_id;
               le_monde_exterieur = denv.le_monde_exterieur;
@@ -753,7 +753,7 @@ and traverse_function_params_and_body acc code_id code ~return_continuation
   Acc.fixed_arity_continuation acc return_continuation;
   Acc.fixed_arity_continuation acc exn_continuation;
   let denv =
-    { parent = Up;
+    { parent = Hole;
       conts;
       current_code_id = Some code_id;
       le_monde_exterieur;
@@ -866,7 +866,7 @@ let run ~get_code_metadata (unit : Flambda_unit.t) =
     Acc.fixed_arity_continuation acc return_continuation;
     Acc.fixed_arity_continuation acc exn_continuation;
     traverse
-      { parent = Up;
+      { parent = Hole;
         conts;
         current_code_id = None;
         le_monde_exterieur = Name.symbol le_monde_exterieur;
