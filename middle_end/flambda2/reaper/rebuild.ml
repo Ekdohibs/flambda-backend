@@ -58,7 +58,8 @@ type env =
     function_params_to_keep : param_decision list Code_id.Map.t;
     should_keep_function_param :
       Code_id.t -> Variable.t -> K.With_subkind.t -> param_decision;
-    function_return_decision : param_decision list Code_id.Map.t
+    function_return_decision : param_decision list Code_id.Map.t;
+    kinds : K.t Name.Map.t
   }
 
 let freshen_decisions = function
@@ -80,15 +81,14 @@ let is_symbol_used (env : env) symbol =
   is_used env (Code_id_or_name.symbol symbol)
   || not (Compilation_unit.is_current (Symbol.compilation_unit symbol))
 
-let is_var_used (env : env) kinds var =
-  let kind = Name.Map.find (Name.var var) kinds in
+let is_var_used (env : env) var =
+  let kind = Name.Map.find (Name.var var) env.kinds in
   match[@ocaml.warning "-4"] kind with
   | K.(Region | Rec_info) -> true
   | _ -> is_used env (Code_id_or_name.var var)
 
-let is_name_used (env : env) kinds name =
-  Name.pattern_match name ~symbol:(is_symbol_used env)
-    ~var:(is_var_used env kinds)
+let is_name_used (env : env) name =
+  Name.pattern_match name ~symbol:(is_symbol_used env) ~var:(is_var_used env)
 
 let poison_value = 0 (* 123456789 *)
 
@@ -151,7 +151,7 @@ let get_simple_unboxable env simple =
         (Dep_solver.get_unboxed_fields env.uses (Code_id_or_name.name name)))
     simple
 
-let rewrite_simple kinds (env : env) simple =
+let rewrite_simple (env : env) simple =
   Simple.pattern_match simple
     ~name:(fun name ~coercion:_ ->
       if not
@@ -159,11 +159,11 @@ let rewrite_simple kinds (env : env) simple =
               (Dep_solver.get_unboxed_fields env.uses
                  (Code_id_or_name.name name)))
       then simple (* XXX Misc.fatal_errorf "UNBOXED?? %a@." Name.print name; *)
-      else if is_name_used env kinds name
+      else if is_name_used env name
       then simple
       else
         let kind =
-          match Name.Map.find_opt name kinds with
+          match Name.Map.find_opt name env.kinds with
           | Some k -> k
           | None ->
             if Name.is_symbol name
@@ -173,33 +173,33 @@ let rewrite_simple kinds (env : env) simple =
         poison kind)
     ~const:(fun _ -> simple)
 
-let rewrite_simple_opt (env : env) kinds = function
+let rewrite_simple_opt (env : env) = function
   | None -> None
   | Some simple as simpl ->
     Simple.pattern_match simple
       ~name:(fun name ~coercion:_ ->
-        if is_name_used env kinds name then simpl else None)
+        if is_name_used env name then simpl else None)
       ~const:(fun _ -> simpl)
 
-let rewrite_or_variable default env kinds (or_variable : _ Or_variable.t) =
+let rewrite_or_variable default env (or_variable : _ Or_variable.t) =
   (* CR ncourant: rewrite unboxed variables *)
   match or_variable with
   | Const _ -> or_variable
   | Var (v, _) ->
-    if is_var_used env kinds v then or_variable else Or_variable.Const default
+    if is_var_used env v then or_variable else Or_variable.Const default
 
-let rewrite_or_variables default env kinds or_variables =
-  List.map (rewrite_or_variable default env kinds) or_variables
+let rewrite_or_variables default env or_variables =
+  List.map (rewrite_or_variable default env) or_variables
 
-let rewrite_simple_with_debuginfo kinds env (simple : Simple.With_debuginfo.t) =
+let rewrite_simple_with_debuginfo env (simple : Simple.With_debuginfo.t) =
   Simple.With_debuginfo.create
-    (rewrite_simple kinds env (Simple.With_debuginfo.simple simple))
+    (rewrite_simple env (Simple.With_debuginfo.simple simple))
     (Simple.With_debuginfo.dbg simple)
 
-let rewrite_simples_with_debuginfo kinds env simples =
-  List.map (rewrite_simple_with_debuginfo kinds env) simples
+let rewrite_simples_with_debuginfo env simples =
+  List.map (rewrite_simple_with_debuginfo env) simples
 
-let rewrite_set_of_closures env kinds ~(bound : Name.t list)
+let rewrite_set_of_closures env ~(bound : Name.t list)
     ({ function_decls; value_slots; alloc_mode } : rev_set_of_closures) =
   let slot_is_used slot =
     List.exists
@@ -227,7 +227,7 @@ let rewrite_set_of_closures env kinds ~(bound : Name.t list)
           (fun slot simple ->
             if not (slot_is_used (Value_slot slot))
             then None
-            else Some (rewrite_simple kinds env simple))
+            else Some (rewrite_simple env simple))
           value_slots
       in
       value_slots, None
@@ -260,9 +260,7 @@ let rewrite_set_of_closures env kinds ~(bound : Name.t list)
               else
                 match uf with
                 | Dep_solver.Not_unboxed ff ->
-                  Value_slot.Map.add ff
-                    (rewrite_simple kinds env arg)
-                    value_slots
+                  Value_slot.Map.add ff (rewrite_simple env arg) value_slots
                 | Dep_solver.Unboxed _ ->
                   Misc.fatal_errorf "trying to unbox simple"))
           fields Value_slot.Map.empty
@@ -315,54 +313,51 @@ let rewrite_set_of_closures env kinds ~(bound : Name.t list)
          set_of_closures;
   set_of_closures
 
-let rewrite_static_const kinds (env : env) (sc : SC.t) =
+let rewrite_static_const (env : env) (sc : SC.t) =
   match sc with
   | Set_of_closures _ ->
     (* Already rewritten *)
     sc
   | Block (tag, mut, shape, fields) ->
-    SC.block tag mut shape (rewrite_simples_with_debuginfo kinds env fields)
-  | Boxed_float f -> SC.boxed_float (rewrite_or_variable Float.zero env kinds f)
-  | Boxed_float32 f ->
-    SC.boxed_float32 (rewrite_or_variable Float32.zero env kinds f)
-  | Boxed_int32 n -> SC.boxed_int32 (rewrite_or_variable Int32.zero env kinds n)
-  | Boxed_int64 n -> SC.boxed_int64 (rewrite_or_variable Int64.zero env kinds n)
+    SC.block tag mut shape (rewrite_simples_with_debuginfo env fields)
+  | Boxed_float f -> SC.boxed_float (rewrite_or_variable Float.zero env f)
+  | Boxed_float32 f -> SC.boxed_float32 (rewrite_or_variable Float32.zero env f)
+  | Boxed_int32 n -> SC.boxed_int32 (rewrite_or_variable Int32.zero env n)
+  | Boxed_int64 n -> SC.boxed_int64 (rewrite_or_variable Int64.zero env n)
   | Boxed_nativeint n ->
-    SC.boxed_nativeint (rewrite_or_variable Targetint_32_64.zero env kinds n)
+    SC.boxed_nativeint (rewrite_or_variable Targetint_32_64.zero env n)
   | Boxed_vec128 n ->
     SC.boxed_vec128
-      (rewrite_or_variable Vector_types.Vec128.Bit_pattern.zero env kinds n)
+      (rewrite_or_variable Vector_types.Vec128.Bit_pattern.zero env n)
   | Immutable_float_block fields ->
-    SC.immutable_float_block (rewrite_or_variables Float.zero env kinds fields)
+    SC.immutable_float_block (rewrite_or_variables Float.zero env fields)
   | Immutable_float_array fields ->
-    SC.immutable_float_array (rewrite_or_variables Float.zero env kinds fields)
+    SC.immutable_float_array (rewrite_or_variables Float.zero env fields)
   | Immutable_float32_array fields ->
-    SC.immutable_float32_array
-      (rewrite_or_variables Float32.zero env kinds fields)
+    SC.immutable_float32_array (rewrite_or_variables Float32.zero env fields)
   | Immutable_value_array fields ->
-    SC.immutable_value_array (rewrite_simples_with_debuginfo kinds env fields)
+    SC.immutable_value_array (rewrite_simples_with_debuginfo env fields)
   | Immutable_int32_array fields ->
-    SC.immutable_int32_array (rewrite_or_variables Int32.zero env kinds fields)
+    SC.immutable_int32_array (rewrite_or_variables Int32.zero env fields)
   | Immutable_int64_array fields ->
-    SC.immutable_int64_array (rewrite_or_variables Int64.zero env kinds fields)
+    SC.immutable_int64_array (rewrite_or_variables Int64.zero env fields)
   | Immutable_nativeint_array fields ->
     SC.immutable_nativeint_array
-      (rewrite_or_variables Targetint_32_64.zero env kinds fields)
+      (rewrite_or_variables Targetint_32_64.zero env fields)
   | Immutable_vec128_array fields ->
     SC.immutable_vec128_array
-      (rewrite_or_variables Vector_types.Vec128.Bit_pattern.zero env kinds
-         fields)
+      (rewrite_or_variables Vector_types.Vec128.Bit_pattern.zero env fields)
   | Empty_array _ | Mutable_string _ | Immutable_string _ -> sc
 
-let rewrite_static_const_or_code kinds env (sc : Static_const_or_code.t) =
+let rewrite_static_const_or_code env (sc : Static_const_or_code.t) =
   match sc with
   | Code _ -> sc
   | Deleted_code -> sc
   | Static_const sc ->
-    Static_const_or_code.create_static_const (rewrite_static_const kinds env sc)
+    Static_const_or_code.create_static_const (rewrite_static_const env sc)
 
-let rewrite_static_const_group kinds env (group : Static_const_group.t) =
-  Static_const_group.map ~f:(rewrite_static_const_or_code kinds env) group
+let rewrite_static_const_group env (group : Static_const_group.t) =
+  Static_const_group.map ~f:(rewrite_static_const_or_code env) group
 
 let simple_changed_repr env simple =
   Simple.pattern_match
@@ -396,12 +391,12 @@ let get_parameters params_decisions =
     [] params_decisions
   |> List.rev
 
-let get_args kinds env params_decisions args =
+let get_args env params_decisions args =
   List.fold_left2
     (fun acc arg param_decision ->
       match param_decision with
       | Delete -> acc
-      | Keep _ -> rewrite_simple kinds env arg :: acc
+      | Keep _ -> rewrite_simple env arg :: acc
       | Unbox fields ->
         let arg_fields = get_simple_unboxable env arg in
         fold2_unboxed_subset_with_kind
@@ -410,12 +405,12 @@ let get_args kinds env params_decisions args =
     [] args params_decisions
   |> List.rev
 
-let get_args_with_kinds kinds env params_decisions args =
+let get_args_with_kinds env params_decisions args =
   List.fold_left2
     (fun acc arg param_decision ->
       match param_decision with
       | Delete -> acc
-      | Keep (_, kind) -> (rewrite_simple kinds env arg, kind) :: acc
+      | Keep (_, kind) -> (rewrite_simple env arg, kind) :: acc
       | Unbox fields ->
         let arg_fields = get_simple_unboxable env arg in
         fold2_unboxed_subset_with_kind
@@ -444,14 +439,14 @@ let get_arity params_decisions =
       [ Unboxed_product
           (List.map (fun k -> Component_for_creation.Singleton k) arity) ])
 
-let get_simple_kind kinds simple =
+let get_simple_kind env simple =
   Simple.pattern_match'
     ~const:(fun const -> Reg_width_const.kind const)
     ~symbol:(fun _ ~coercion:_ -> K.value)
-    ~var:(fun var ~coercion:_ -> Name.Map.find (Name.var var) kinds)
+    ~var:(fun var ~coercion:_ -> Name.Map.find (Name.var var) env.kinds)
     simple
 
-let rebuild_named_default_case kinds env (named : Named.t) =
+let rebuild_named_default_case env (named : Named.t) =
   let[@local] rewrite_field_access arg field =
     let arg = get_simple_unboxable env arg in
     let var = Field.Map.find field arg in
@@ -496,7 +491,7 @@ let rebuild_named_default_case kinds env (named : Named.t) =
           dbg)
   in
   match[@ocaml.warning "-4"] named with
-  | Simple simple -> Named.create_simple (rewrite_simple kinds env simple)
+  | Simple simple -> Named.create_simple (rewrite_simple env simple)
   | Prim (Unary (Block_load { kind; field; _ }, arg), _dbg)
     when simple_is_unboxable env arg ->
     let kind = P.Block_access_kind.element_kind_for_load kind in
@@ -524,21 +519,21 @@ let rebuild_named_default_case kinds env (named : Named.t) =
   | Prim (Unary (Get_tag, arg), dbg) when simple_changed_repr env arg ->
     rewrite_field_access_chg_repr arg GFG.Field.Get_tag dbg
   | Prim (prim, dbg) ->
-    let prim = P.map_args (rewrite_simple kinds env) prim in
+    let prim = P.map_args (rewrite_simple env) prim in
     Named.create_prim prim dbg
   | Set_of_closures s -> Named.create_set_of_closures s (* Already rewritten *)
   | Static_consts sc ->
-    Named.create_static_consts (rewrite_static_const_group kinds env sc)
+    Named.create_static_consts (rewrite_static_const_group env sc)
   | Rec_info r -> Named.create_rec_info r
 
-let is_dead_var env kinds v =
-  let (kind : K.t) = Name.Map.find (Name.var v) kinds in
+let is_dead_var env v =
+  let (kind : K.t) = Name.Map.find (Name.var v) env.kinds in
   match kind with
   | Region | Rec_info -> false
   | Value | Naked_number _ ->
     not (Dep_solver.has_source env.uses (Code_id_or_name.var v))
 
-let rewrite_apply_cont_expr kinds env ac =
+let rewrite_apply_cont_expr env ac =
   let cont = Apply_cont_expr.continuation ac in
   let args = Apply_cont_expr.args ac in
   if List.exists
@@ -556,7 +551,7 @@ let rewrite_apply_cont_expr kinds env ac =
   else
     let args =
       let args_to_keep = Continuation.Map.find cont env.cont_params_to_keep in
-      get_args kinds env args_to_keep args
+      get_args env args_to_keep args
     in
     Some (Apply_cont_expr.with_continuation_and_args ac cont ~args)
 
@@ -719,7 +714,7 @@ let make_apply_wrapper env
     in
     RE.create_non_recursive_let_cont return_cont_wrapper cont_handler ~body
 
-let rebuild_singleton_binding_which_is_being_unboxed kinds env bv
+let rebuild_singleton_binding_which_is_being_unboxed env bv
     ~(defining_expr : Rev_expr.rev_named) ~hole =
   let to_bind =
     Option.get
@@ -800,7 +795,7 @@ let rebuild_singleton_binding_which_is_being_unboxed kinds env bv
                 if nth < List.length args
                 then
                   let arg = List.nth args nth in
-                  if K.equal field_kind (get_simple_kind kinds arg)
+                  if K.equal field_kind (get_simple_kind env arg)
                   then arg
                   else poison field_kind
                 else poison field_kind
@@ -917,8 +912,8 @@ let rebuild_set_of_closures_binding_which_is_being_unboxed env bvs
           to_bind hole)
     hole bvs
 
-let rebuild_singleton_binding_whose_representation_is_being_changed kinds env bp
-    bv ~(orig_defining_expr : Rev_expr.rev_named) ~(new_defining_expr : Named.t)
+let rebuild_singleton_binding_whose_representation_is_being_changed env bp bv
+    ~(orig_defining_expr : Rev_expr.rev_named) ~(new_defining_expr : Named.t)
     ~hole =
   (* TODO when this block is stored anywhere else, the subkind is no longer
      correct... we need to fix that somehow *)
@@ -974,7 +969,7 @@ let rebuild_singleton_binding_whose_representation_is_being_changed kinds env bp
             else
               match uf with
               | Dep_solver.Not_unboxed (ff, _) ->
-                Numeric_types.Int.Map.add ff (rewrite_simple kinds env arg) mp
+                Numeric_types.Int.Map.add ff (rewrite_simple env arg) mp
               | Dep_solver.Unboxed _ ->
                 Misc.fatal_errorf "trying to unbox simple")
           | Get_tag -> (
@@ -987,7 +982,7 @@ let rebuild_singleton_binding_whose_representation_is_being_changed kinds env bp
             match uf with
             | Dep_solver.Not_unboxed (ff, _) ->
               Numeric_types.Int.Map.add ff
-                (rewrite_simple kinds env (Simple.const_int tag))
+                (rewrite_simple env (Simple.const_int tag))
                 mp
             | Dep_solver.Unboxed _ -> Misc.fatal_errorf "trying to unbox simple"
             )
@@ -995,7 +990,7 @@ let rebuild_singleton_binding_whose_representation_is_being_changed kinds env bp
             match uf with
             | Dep_solver.Not_unboxed (ff, _) ->
               Numeric_types.Int.Map.add ff
-                (rewrite_simple kinds env Simple.const_one)
+                (rewrite_simple env Simple.const_one)
                 mp
             | Dep_solver.Unboxed _ -> Misc.fatal_errorf "trying to unbox simple"
             )
@@ -1031,13 +1026,11 @@ let rebuild_singleton_binding_whose_representation_is_being_changed kinds env bp
      * then [z] will be marked as having its representation changed, because
      * it is equal to [x].  However we don't need to rewrite the [fst y]
      * primitive, which brings us to this case. *)
-    let defining_expr =
-      rebuild_named_default_case kinds env new_defining_expr
-    in
+    let defining_expr = rebuild_named_default_case env new_defining_expr in
     RE.create_let bp defining_expr ~body:hole
 
-let rebuild_set_of_closures_binding_whose_representation_is_being_changed kinds
-    env bp bvs ~(orig_defining_expr : Rev_expr.rev_named) ~hole =
+let rebuild_set_of_closures_binding_whose_representation_is_being_changed env bp
+    bvs ~(orig_defining_expr : Rev_expr.rev_named) ~hole =
   let bound = List.map (fun bv -> Name.var (Bound_var.var bv)) bvs in
   let set =
     match[@ocaml.warning "-fragile-match"] orig_defining_expr with
@@ -1048,10 +1041,10 @@ let rebuild_set_of_closures_binding_whose_representation_is_being_changed kinds
     | Set_of_closures set -> set
     | _ -> assert false
   in
-  let set_of_closures = rewrite_set_of_closures env kinds ~bound set in
+  let set_of_closures = rewrite_set_of_closures env ~bound set in
   RE.create_let bp (Named.create_set_of_closures set_of_closures) ~body:hole
 
-let rebuild_make_block_default_case kinds env (bp : Bound_pattern.t)
+let rebuild_make_block_default_case env (bp : Bound_pattern.t)
     ~(block_kind : P.Block_kind.t) ~mutability ~alloc_mode ~fields ~hole dbg =
   let bound_name =
     match bp with
@@ -1096,7 +1089,7 @@ let rebuild_make_block_default_case kinds env (bp : Bound_pattern.t)
         let kind = K.Block_shape.element_kind block_shape i in
         let f = GFG.Field.Block (i, kind) in
         if Dep_solver.field_used env.uses bound_name f
-        then rewrite_simple kinds env field
+        then rewrite_simple env field
         else poison kind)
       fields
   in
@@ -1106,39 +1099,35 @@ let rebuild_make_block_default_case kinds env (bp : Bound_pattern.t)
        dbg)
     ~body:hole
 
-let rebuild_let_expr_holed0 (kinds : K.t Name.Map.t) (env : env)
-    ~(bound_pattern : Bound_pattern.t) ~(defining_expr : Rev_expr.rev_named)
-    ~new_defining_expr ~hole : RE.t =
+let rebuild_let_expr_holed0 (env : env) ~(bound_pattern : Bound_pattern.t)
+    ~(defining_expr : Rev_expr.rev_named) ~new_defining_expr ~hole : RE.t =
   match (bound_pattern : Bound_pattern.t) with
   | Set_of_closures bvs when bound_vars_will_be_unboxed env bvs ->
     rebuild_set_of_closures_binding_which_is_being_unboxed env bvs
       ~defining_expr ~hole
   | Singleton bv when bound_vars_will_be_unboxed env [bv] ->
-    rebuild_singleton_binding_which_is_being_unboxed kinds env bv ~defining_expr
-      ~hole
+    rebuild_singleton_binding_which_is_being_unboxed env bv ~defining_expr ~hole
   | Singleton bv when bound_vars_will_have_their_representation_changed env [bv]
     ->
-    rebuild_singleton_binding_whose_representation_is_being_changed kinds env
+    rebuild_singleton_binding_whose_representation_is_being_changed env
       bound_pattern bv ~orig_defining_expr:defining_expr ~new_defining_expr
       ~hole
   | Set_of_closures bvs
     when bound_vars_will_have_their_representation_changed env bvs ->
-    rebuild_set_of_closures_binding_whose_representation_is_being_changed kinds
-      env bound_pattern bvs ~orig_defining_expr:defining_expr ~hole
+    rebuild_set_of_closures_binding_whose_representation_is_being_changed env
+      bound_pattern bvs ~orig_defining_expr:defining_expr ~hole
   | Singleton _ | Set_of_closures _ | Static _ -> (
     match[@ocaml.warning "-4"] new_defining_expr with
     | Flambda.Prim
         (Variadic (Make_block (block_kind, mutability, alloc_mode), fields), dbg)
       ->
-      rebuild_make_block_default_case kinds env bound_pattern ~block_kind
-        ~mutability ~alloc_mode ~fields ~hole dbg
+      rebuild_make_block_default_case env bound_pattern ~block_kind ~mutability
+        ~alloc_mode ~fields ~hole dbg
     | _ ->
-      let defining_expr =
-        rebuild_named_default_case kinds env new_defining_expr
-      in
+      let defining_expr = rebuild_named_default_case env new_defining_expr in
       RE.create_let bound_pattern defining_expr ~body:hole)
 
-let rec default_defining_expr_for_rebuilding_let kinds env
+let rec default_defining_expr_for_rebuilding_let env
     (bound_pattern : Bound_pattern.t) (defining_expr : Rev_expr.rev_named) =
   match defining_expr with
   | Named defining_expr -> bound_pattern, defining_expr
@@ -1183,7 +1172,7 @@ let rec default_defining_expr_for_rebuilding_let kinds env
     let bound_static, _group = List.split bound_and_group in
     let group =
       Static_const_group.create
-        (List.map (rebuild_static_const_or_code kinds env) bound_and_group)
+        (List.map (rebuild_static_const_or_code env) bound_and_group)
     in
     ( Bound_pattern.static (Bound_static.create bound_static),
       Named.create_static_consts group )
@@ -1196,9 +1185,7 @@ let rec default_defining_expr_for_rebuilding_let kinds env
         (* Pattern is a set of closures *)
         assert false
     in
-    let set_of_closures =
-      rewrite_set_of_closures env kinds ~bound set_of_closures
-    in
+    let set_of_closures = rewrite_set_of_closures env ~bound set_of_closures in
     let is_phantom =
       Name_mode.is_phantom @@ Bound_pattern.name_mode bound_pattern
     in
@@ -1207,17 +1194,15 @@ let rec default_defining_expr_for_rebuilding_let kinds env
            set_of_closures;
     bound_pattern, Named.create_set_of_closures set_of_closures
 
-and rebuild_let_expr_holed (kinds : K.t Name.Map.t) (env : env)
-    ~(bound_pattern : Bound_pattern.t) ~(defining_expr : Rev_expr.rev_named)
-    ~parent ~hole : RE.t =
+and rebuild_let_expr_holed (env : env) ~(bound_pattern : Bound_pattern.t)
+    ~(defining_expr : Rev_expr.rev_named) ~parent ~hole : RE.t =
   let bound_pattern, new_defining_expr =
-    default_defining_expr_for_rebuilding_let kinds env bound_pattern
-      defining_expr
+    default_defining_expr_for_rebuilding_let env bound_pattern defining_expr
   in
   let subexpr =
     match (bound_pattern : Bound_pattern.t) with
     | Set_of_closures _ | Static _ ->
-      rebuild_let_expr_holed0 kinds env ~bound_pattern ~defining_expr
+      rebuild_let_expr_holed0 env ~bound_pattern ~defining_expr
         ~new_defining_expr ~hole
     | Singleton v ->
       let v = Bound_var.var v in
@@ -1229,23 +1214,22 @@ and rebuild_let_expr_holed (kinds : K.t Name.Map.t) (env : env)
         | Set_of_closures _ | Static_consts _ ->
           false
       in
-      if is_begin_region || is_var_used env kinds v
+      if is_begin_region || is_var_used env v
       then
-        rebuild_let_expr_holed0 kinds env ~bound_pattern ~defining_expr
+        rebuild_let_expr_holed0 env ~bound_pattern ~defining_expr
           ~new_defining_expr ~hole
       else hole
   in
-  rebuild_holed kinds env parent subexpr
+  rebuild_holed env parent subexpr
 
-and rebuild_holed (kinds : K.t Name.Map.t) (env : env)
-    (rev_expr : rev_expr_holed) (hole : RE.t) : RE.t =
+and rebuild_holed (env : env) (rev_expr : rev_expr_holed) (hole : RE.t) : RE.t =
   match rev_expr with
   | Hole -> hole
   | Let { bound_pattern; defining_expr; parent } ->
-    rebuild_let_expr_holed kinds env ~bound_pattern ~defining_expr ~parent ~hole
+    rebuild_let_expr_holed env ~bound_pattern ~defining_expr ~parent ~hole
   | Let_cont { cont; parent; handler } ->
     if not (Name_occurrences.mem_continuation hole.free_names cont)
-    then rebuild_holed kinds env parent hole
+    then rebuild_holed env parent hole
     else
       let { bound_parameters; expr; is_exn_handler; is_cold } = handler in
       let parameters_to_keep =
@@ -1254,10 +1238,10 @@ and rebuild_holed (kinds : K.t Name.Map.t) (env : env)
       let cont_handler =
         let handler =
           match
-            List.filter (is_dead_var env kinds)
+            List.filter (is_dead_var env)
               (Bound_parameters.vars bound_parameters)
           with
-          | [] -> rebuild_expr kinds env expr
+          | [] -> rebuild_expr env expr
           | _ :: _ as dead_vars ->
             let msg =
               Format.asprintf
@@ -1295,7 +1279,7 @@ and rebuild_holed (kinds : K.t Name.Map.t) (env : env)
       let let_cont_expr =
         RE.create_non_recursive_let_cont cont cont_handler ~body:hole
       in
-      rebuild_holed kinds env parent let_cont_expr
+      rebuild_holed env parent let_cont_expr
   | Let_cont_rec { parent; handlers; invariant_params } ->
     (* TODO unboxed parameters *)
     let filter_params cont params =
@@ -1316,7 +1300,7 @@ and rebuild_holed (kinds : K.t Name.Map.t) (env : env)
         (fun cont handler ->
           let { bound_parameters; expr; is_exn_handler; is_cold } = handler in
           let bound_parameters = filter_params cont bound_parameters in
-          let handler = rebuild_expr kinds env expr in
+          let handler = rebuild_expr env expr in
           RE.create_continuation_handler bound_parameters ~handler
             ~is_exn_handler ~is_cold)
         handlers
@@ -1329,10 +1313,9 @@ and rebuild_holed (kinds : K.t Name.Map.t) (env : env)
     let let_cont_expr =
       RE.create_recursive_let_cont ~invariant_params handlers ~body:hole
     in
-    rebuild_holed kinds env parent let_cont_expr
+    rebuild_holed env parent let_cont_expr
 
-and rebuild_expr (kinds : K.t Name.Map.t) (env : env) (rev_expr : rev_expr) :
-    RE.t =
+and rebuild_expr (env : env) (rev_expr : rev_expr) : RE.t =
   let { expr; holed_expr } = rev_expr in
   let expr =
     match expr with
@@ -1341,7 +1324,7 @@ and rebuild_expr (kinds : K.t Name.Map.t) (env : env) (rev_expr : rev_expr) :
         ~expr:(Expr.create_invalid (Message message))
         ~free_names:Name_occurrences.empty
     | Apply_cont ac -> (
-      match rewrite_apply_cont_expr kinds env ac with
+      match rewrite_apply_cont_expr env ac with
       | None ->
         RE.from_expr
           ~expr:
@@ -1357,7 +1340,7 @@ and rebuild_expr (kinds : K.t Name.Map.t) (env : env) (rev_expr : rev_expr) :
     | Switch switch ->
       let arms =
         Targetint_31_63.Map.filter_map
-          (fun _ -> rewrite_apply_cont_expr kinds env)
+          (fun _ -> rewrite_apply_cont_expr env)
           (Switch_expr.arms switch)
       in
       if Targetint_31_63.Map.is_empty arms
@@ -1371,7 +1354,7 @@ and rebuild_expr (kinds : K.t Name.Map.t) (env : env) (rev_expr : rev_expr) :
             ~condition_dbg:(Switch_expr.condition_dbg switch)
               (* Scrutinee should never need rewriting, do it anyway for
                  completeness *)
-            ~scrutinee:(rewrite_simple kinds env (Switch_expr.scrutinee switch))
+            ~scrutinee:(rewrite_simple env (Switch_expr.scrutinee switch))
             ~arms
         in
         let expr = Expr.create_switch switch in
@@ -1382,7 +1365,7 @@ and rebuild_expr (kinds : K.t Name.Map.t) (env : env) (rev_expr : rev_expr) :
          we never remove begin- or end-region primitives, but might be needed
          later if we chose to handle them. *)
       let call_kind =
-        let rewrite_simple = rewrite_simple kinds env in
+        let rewrite_simple = rewrite_simple env in
         match Apply.call_kind apply with
         | Function _ as ck -> ck
         | Method { kind; obj; alloc_mode } ->
@@ -1476,12 +1459,11 @@ and rebuild_expr (kinds : K.t Name.Map.t) (env : env) (rev_expr : rev_expr) :
               (* This contains the exn argument that is not part of the extra
                  args *)
             in
-            get_args_with_kinds kinds env args_to_keep (List.map fst extra_args)
+            get_args_with_kinds env args_to_keep (List.map fst extra_args)
             (* with Not_found -> (* Not defined in cont_params_to_keep *)
                extra_args *)
           in
-          (* List.map (fun (simple, kind) -> rewrite_simple kinds env simple,
-             kind) *)
+          (* List.map (fun (simple, kind) -> rewrite_simple env simple, kind) *)
           selected_extra_args
         in
         Exn_continuation.create ~exn_handler ~extra_args
@@ -1492,7 +1474,7 @@ and rebuild_expr (kinds : K.t Name.Map.t) (env : env) (rev_expr : rev_expr) :
       | Not_changing_calling_convention ->
         (* Format.eprintf "NOT CHANGING CALLING CONVENTION %a@." Apply.print
            apply; *)
-        let args = List.map (rewrite_simple kinds env) (Apply.args apply) in
+        let args = List.map (rewrite_simple env) (Apply.args apply) in
         let args_arity = Apply.args_arity apply in
         let return_arity = Apply.return_arity apply in
         let make_apply =
@@ -1501,7 +1483,7 @@ and rebuild_expr (kinds : K.t Name.Map.t) (env : env) (rev_expr : rev_expr) :
              will put [None] as the callee instead of a dummy value, as a dummy
              value would then be further used in a later simplify pass to refine
              the call kind and produce an invalid. *)
-            ~callee:(rewrite_simple_opt env kinds (Apply.callee apply))
+            ~callee:(rewrite_simple_opt env (Apply.callee apply))
             exn_continuation ~args ~args_arity ~return_arity
             ~call_kind:new_call_kind (Apply.dbg apply)
             ~inlined:(Apply.inlined apply)
@@ -1536,7 +1518,7 @@ and rebuild_expr (kinds : K.t Name.Map.t) (env : env) (rev_expr : rev_expr) :
                  which will put [None] as the callee instead of a dummy value,
                  as a dummy value would then be further used in a later simplify
                  pass to refine the call kind and produce an invalid. *)
-              rewrite_simple_opt env kinds callee )
+              rewrite_simple_opt env callee )
         in
         let params_decisions =
           match Code_id.Map.find_opt code_id env.function_params_to_keep with
@@ -1551,9 +1533,7 @@ and rebuild_expr (kinds : K.t Name.Map.t) (env : env) (rev_expr : rev_expr) :
           Flambda_arity.group_by_parameter (Apply.args_arity apply)
             (Apply.args apply)
         in
-        let args =
-          List.map2 (get_args_with_kinds kinds env) params_decisions args
-        in
+        let args = List.map2 (get_args_with_kinds env) params_decisions args in
         let args =
           match args with
           | [] -> assert false
@@ -1587,10 +1567,10 @@ and rebuild_expr (kinds : K.t Name.Map.t) (env : env) (rev_expr : rev_expr) :
         make_apply_wrapper env make_apply (Apply.continuation apply)
           return_decisions)
   in
-  rebuild_holed kinds env holed_expr expr
+  rebuild_holed env holed_expr expr
 
-and rebuild_function_params_and_body (kinds : K.t Name.Map.t) (env : env)
-    code_metadata (params_and_body : rev_params_and_body) =
+and rebuild_function_params_and_body (env : env) code_metadata
+    (params_and_body : rev_params_and_body) =
   let { return_continuation;
         exn_continuation;
         params;
@@ -1620,8 +1600,8 @@ and rebuild_function_params_and_body (kinds : K.t Name.Map.t) (env : env)
       @ Option.to_list my_ghost_region
       @ (my_closure :: Bound_parameters.vars params)
     in
-    match List.filter (is_dead_var env kinds) all_vars with
-    | [] -> rebuild_expr kinds env body
+    match List.filter (is_dead_var env) all_vars with
+    | [] -> rebuild_expr env body
     | _ :: _ as dead_vars ->
       let msg =
         Format.asprintf
@@ -1720,13 +1700,13 @@ and rebuild_function_params_and_body (kinds : K.t Name.Map.t) (env : env)
         ~my_region ~my_ghost_region ~my_depth,
       code_metadata )
 
-and rebuild_static_const_or_code kinds env
+and rebuild_static_const_or_code env
     ((bound_to : Bound_static.Pattern.t), static_const_or_code) =
   match static_const_or_code with
   | Deleted_code -> Static_const_or_code.deleted_code
   | Code { params_and_body; code_metadata; free_names_of_params_and_body = _ }
     ->
-    let is_my_closure_used = is_var_used env kinds params_and_body.my_closure in
+    let is_my_closure_used = is_var_used env params_and_body.my_closure in
     let code_metadata =
       if Bool.equal is_my_closure_used
            (Code_metadata.is_my_closure_used code_metadata)
@@ -1736,7 +1716,7 @@ and rebuild_static_const_or_code kinds env
         Code_metadata.with_is_my_closure_used is_my_closure_used code_metadata)
     in
     let params_and_body, code_metadata =
-      rebuild_function_params_and_body kinds env code_metadata params_and_body
+      rebuild_function_params_and_body env code_metadata params_and_body
     in
     let code =
       Code.create_with_metadata ~params_and_body ~code_metadata
@@ -1756,7 +1736,7 @@ and rebuild_static_const_or_code kinds env
     in
     let bound_to = List.map Name.symbol bound_to in
     let set_of_closures =
-      rewrite_set_of_closures env kinds ~bound:bound_to set_of_closures
+      rewrite_set_of_closures env ~bound:bound_to set_of_closures
     in
     SC.set_of_closures set_of_closures
     |> Static_const_or_code.create_static_const
@@ -1897,12 +1877,12 @@ let rebuild ~(code_deps : Traverse_acc.code_dep Code_id.Map.t)
       should_keep_param;
       function_params_to_keep;
       should_keep_function_param;
-      function_return_decision
+      function_return_decision;
+      kinds
     }
   in
   let rebuilt_expr =
-    Profile.record_call ~accumulate:true "up" (fun () ->
-        rebuild_expr kinds env holed)
+    Profile.record_call ~accumulate:true "up" (fun () -> rebuild_expr env holed)
   in
   { body = rebuilt_expr.expr;
     free_names = rebuilt_expr.free_names;
