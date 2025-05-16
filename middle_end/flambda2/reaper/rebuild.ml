@@ -1626,7 +1626,7 @@ and rebuild_let_expr_holed0 (kinds : K.t Name.Map.t) (env : env)
     default_defining_expr_for_rebuilding_let kinds env bound_pattern
       defining_expr
   in
-  match[@ocaml.warning "-fragile-match"] bound_pattern with
+  match bound_pattern with
   | Set_of_closures bvs when bound_vars_will_be_unboxed env bvs ->
     rebuild_set_of_closures_binding_which_is_being_unboxed env bvs
       ~defining_expr ~hole
@@ -1641,7 +1641,7 @@ and rebuild_let_expr_holed0 (kinds : K.t Name.Map.t) (env : env)
     when bound_vars_will_have_their_representation_changed env bvs ->
     rebuild_set_of_closures_binding_whose_representation_is_being_changed kinds
       env bp bvs ~orig_defining_expr:defining_expr ~hole
-  | _ -> (
+  | Singleton _ | Set_of_closures _ | Static _ -> (
     match[@ocaml.warning "-4"] new_defining_expr with
     | Flambda.Prim
         (Variadic (Make_block (block_kind, mutability, alloc_mode), fields), dbg)
