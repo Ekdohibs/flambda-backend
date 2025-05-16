@@ -605,6 +605,99 @@ let function_params_and_body_free_names fpb =
         (o2l my_region @ o2l my_ghost_region
         @ (my_closure :: my_depth :: Bound_parameters.vars params)))
 
+let make_apply_wrapper env
+    (make_apply : continuation:Apply_expr.Result_continuation.t -> Apply_expr.t)
+    apply_continuation return_decisions =
+  match (apply_continuation : Apply_expr.Result_continuation.t) with
+  | Never_returns ->
+    let apply = make_apply ~continuation:Never_returns in
+    RE.from_expr ~expr:(Expr.create_apply apply)
+      ~free_names:(Apply.free_names apply)
+  | Return return_cont ->
+    let return_decisions = List.map freshen_decisions return_decisions in
+    let apply_decisions =
+      Continuation.Map.find return_cont env.cont_params_to_keep
+    in
+    let return_cont_wrapper = Continuation.rename return_cont in
+    let apply = make_apply ~continuation:(Return return_cont_wrapper) in
+    let apply_expr = Expr.create_apply apply in
+    let cont_handler =
+      let return_parameters = get_parameters return_decisions in
+      let handler =
+        try
+          let _, rev_args =
+            (* TODO if the decisions are equal, don't introduce the wrapper. Not
+               really important but this will be simpler for debugging *)
+            List.fold_left2
+              (fun (i, rev_args) apply_decision func_decision ->
+                match apply_decision, func_decision with
+                | Unbox _, (Keep _ | Delete) | (Keep _ | Delete), Unbox _ ->
+                  let[@inline] error () =
+                    Misc.fatal_errorf
+                      "Inconsistent apply (%a) and func (%a) decisions:@ %a@."
+                      print_param_decision apply_decision print_param_decision
+                      func_decision Apply.print apply
+                  in
+                  let direct_or_indirect =
+                    match[@ocaml.warning "-4"] Apply.call_kind apply with
+                    | Function { function_call = Direct _; _ } -> error ()
+                    | Function { function_call = Indirect_known_arity; _ } ->
+                      Global_flow_graph.Direct_code_pointer
+                    | _ -> Global_flow_graph.Indirect_code_pointer
+                  in
+                  let field =
+                    Global_flow_graph.Field.Apply
+                      (direct_or_indirect, Global_flow_graph.Field.Normal i)
+                  in
+                  let has_any_source =
+                    Dep_solver.not_local_field_has_source env.uses
+                      (Simple.pattern_match
+                         (Option.get (Apply.callee apply))
+                         ~name:(fun name ~coercion:_ ->
+                           Code_id_or_name.name name)
+                         ~const:(fun _ -> assert false))
+                      field
+                  in
+                  if has_any_source then error () else raise Exit
+                | Delete, _ -> i + 1, rev_args
+                | Keep (_, _), Keep (v, _) -> i + 1, Simple.var v :: rev_args
+                | Keep (_, kind), Delete ->
+                  i + 1, poison (K.With_subkind.kind kind) :: rev_args
+                | Unbox fields_apply, Unbox fields_func ->
+                  ( i + 1,
+                    fold2_unboxed_subset_with_kind
+                      (fun _kind _var_apply var_func rev_args ->
+                        Simple.var var_func :: rev_args)
+                      fields_apply fields_func rev_args ))
+              (0, []) apply_decisions return_decisions
+          in
+          let args = List.rev rev_args in
+          let apply_cont =
+            Apply_cont_expr.create return_cont ~args ~dbg:Debuginfo.none
+          in
+          RE.from_expr
+            ~expr:(Expr.create_apply_cont apply_cont)
+            ~free_names:(Apply_cont_expr.free_names apply_cont)
+        with Exit ->
+          RE.from_expr
+            ~expr:
+              (Expr.create_invalid
+                 (Message
+                    (Format.asprintf "Function call to %a never returns"
+                       Simple.print
+                       (Option.get (Apply.callee apply)))))
+            ~free_names:Name_occurrences.empty
+      in
+      RE.create_continuation_handler
+        (Bound_parameters.create return_parameters)
+        ~handler ~is_exn_handler:false ~is_cold:false
+      (* TODO: take the one from the original return cont *)
+    in
+    let body =
+      RE.from_expr ~expr:apply_expr ~free_names:(Apply.free_names apply)
+    in
+    RE.create_non_recursive_let_cont return_cont_wrapper cont_handler ~body
+
 let rec rebuild_expr (kinds : K.t Name.Map.t) (env : env) (rev_expr : rev_expr)
     : RE.t =
   let { expr; holed_expr } = rev_expr in
@@ -760,107 +853,6 @@ let rec rebuild_expr (kinds : K.t Name.Map.t) (env : env) (rev_expr : rev_expr)
         in
         Exn_continuation.create ~exn_handler ~extra_args
       in
-      let make_apply_wrapper
-          (make_apply :
-            continuation:Apply_expr.Result_continuation.t -> Apply_expr.t)
-          apply_continuation return_decisions =
-        match (apply_continuation : Apply_expr.Result_continuation.t) with
-        | Never_returns ->
-          let apply = make_apply ~continuation:Never_returns in
-          RE.from_expr ~expr:(Expr.create_apply apply)
-            ~free_names:(Apply.free_names apply)
-        | Return return_cont ->
-          let return_decisions = List.map freshen_decisions return_decisions in
-          let apply_decisions =
-            Continuation.Map.find return_cont env.cont_params_to_keep
-          in
-          let return_cont_wrapper = Continuation.rename return_cont in
-          let apply = make_apply ~continuation:(Return return_cont_wrapper) in
-          let apply_expr = Expr.create_apply apply in
-          let cont_handler =
-            let return_parameters = get_parameters return_decisions in
-            let handler =
-              try
-                let _, rev_args =
-                  (* TODO if the decisions are equal, don't introduce the
-                     wrapper. Not really important but this will be simpler for
-                     debugging *)
-                  List.fold_left2
-                    (fun (i, rev_args) apply_decision func_decision ->
-                      match apply_decision, func_decision with
-                      | Unbox _, (Keep _ | Delete) | (Keep _ | Delete), Unbox _
-                        ->
-                        let[@inline] error () =
-                          Misc.fatal_errorf
-                            "Inconsistent apply (%a) and func (%a) decisions:@ \
-                             %a@."
-                            print_param_decision apply_decision
-                            print_param_decision func_decision Apply.print apply
-                        in
-                        let direct_or_indirect =
-                          match[@ocaml.warning "-4"] Apply.call_kind apply with
-                          | Function { function_call = Direct _; _ } -> error ()
-                          | Function { function_call = Indirect_known_arity; _ }
-                            ->
-                            Global_flow_graph.Direct_code_pointer
-                          | _ -> Global_flow_graph.Indirect_code_pointer
-                        in
-                        let field =
-                          Global_flow_graph.Field.Apply
-                            ( direct_or_indirect,
-                              Global_flow_graph.Field.Normal i )
-                        in
-                        let has_any_source =
-                          Dep_solver.not_local_field_has_source env.uses
-                            (Simple.pattern_match
-                               (Option.get (Apply.callee apply))
-                               ~name:(fun name ~coercion:_ ->
-                                 Code_id_or_name.name name)
-                               ~const:(fun _ -> assert false))
-                            field
-                        in
-                        if has_any_source then error () else raise Exit
-                      | Delete, _ -> i + 1, rev_args
-                      | Keep (_, _), Keep (v, _) ->
-                        i + 1, Simple.var v :: rev_args
-                      | Keep (_, kind), Delete ->
-                        i + 1, poison (K.With_subkind.kind kind) :: rev_args
-                      | Unbox fields_apply, Unbox fields_func ->
-                        ( i + 1,
-                          fold2_unboxed_subset_with_kind
-                            (fun _kind _var_apply var_func rev_args ->
-                              Simple.var var_func :: rev_args)
-                            fields_apply fields_func rev_args ))
-                    (0, []) apply_decisions return_decisions
-                in
-                let args = List.rev rev_args in
-                let apply_cont =
-                  Apply_cont_expr.create return_cont ~args ~dbg:Debuginfo.none
-                in
-                RE.from_expr
-                  ~expr:(Expr.create_apply_cont apply_cont)
-                  ~free_names:(Apply_cont_expr.free_names apply_cont)
-              with Exit ->
-                RE.from_expr
-                  ~expr:
-                    (Expr.create_invalid
-                       (Message
-                          (Format.asprintf "Function call to %a never returns"
-                             Simple.print
-                             (Option.get (Apply.callee apply)))))
-                  ~free_names:Name_occurrences.empty
-            in
-            RE.create_continuation_handler
-              (Bound_parameters.create return_parameters)
-              ~handler ~is_exn_handler:false ~is_cold:false
-            (* TODO: take the one from the original return cont *)
-          in
-          let body =
-            RE.from_expr ~expr:apply_expr ~free_names:(Apply.free_names apply)
-          in
-          RE.create_non_recursive_let_cont return_cont_wrapper cont_handler
-            ~body
-      in
       (* TODO rewrite arities *)
       match updating_calling_convention with
       | Not_changing_calling_convention ->
@@ -888,7 +880,8 @@ let rec rebuild_expr (kinds : K.t Name.Map.t) (env : env) (rev_expr : rev_expr)
             (fun kind -> Keep (Variable.create "function_return", kind))
             (Flambda_arity.unarized_components return_arity)
         in
-        make_apply_wrapper make_apply (Apply.continuation apply) func_decisions
+        make_apply_wrapper env make_apply (Apply.continuation apply)
+          func_decisions
       | Changing_calling_convention code_id ->
         (* Format.eprintf "CHANGING CALLING CONVENTION %a %a@." Code_id.print
            code_id Apply.print apply; *)
@@ -957,7 +950,7 @@ let rec rebuild_expr (kinds : K.t Name.Map.t) (env : env) (rev_expr : rev_expr)
             ~probe:(Apply.probe apply) ~position:(Apply.position apply)
             ~relative_history:(Apply.relative_history apply)
         in
-        make_apply_wrapper make_apply (Apply.continuation apply)
+        make_apply_wrapper env make_apply (Apply.continuation apply)
           return_decisions)
   in
   rebuild_holed kinds env holed_expr expr
