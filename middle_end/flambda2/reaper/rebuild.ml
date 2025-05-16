@@ -624,12 +624,15 @@ let make_apply_wrapper env
     let cont_handler =
       let return_parameters = get_parameters return_decisions in
       let handler =
-        try
-          let _, rev_args =
-            (* TODO if the decisions are equal, don't introduce the wrapper. Not
-               really important but this will be simpler for debugging *)
-            List.fold_left2
-              (fun (i, rev_args) apply_decision func_decision ->
+        let rev_args_or_invalid =
+          (* TODO if the decisions are equal, don't introduce the wrapper. Not
+             really important but this will be simpler for debugging *)
+          List.fold_left2
+            (fun (rev_args_or_invalid : _ Or_invalid.t) apply_decision
+                 func_decision : _ Or_invalid.t ->
+              match rev_args_or_invalid with
+              | Invalid -> Invalid
+              | Ok (i, rev_args) -> (
                 match apply_decision, func_decision with
                 | Unbox _, (Keep _ | Delete) | (Keep _ | Delete), Unbox _ ->
                   let[@inline] error () =
@@ -659,18 +662,23 @@ let make_apply_wrapper env
                       field
                   in
                   if has_any_source then error () else raise Exit
-                | Delete, _ -> i + 1, rev_args
-                | Keep (_, _), Keep (v, _) -> i + 1, Simple.var v :: rev_args
+                | Delete, _ -> Ok (i + 1, rev_args)
+                | Keep (_, _), Keep (v, _) ->
+                  Ok (i + 1, Simple.var v :: rev_args)
                 | Keep (_, kind), Delete ->
-                  i + 1, poison (K.With_subkind.kind kind) :: rev_args
+                  Ok (i + 1, poison (K.With_subkind.kind kind) :: rev_args)
                 | Unbox fields_apply, Unbox fields_func ->
-                  ( i + 1,
-                    fold2_unboxed_subset_with_kind
-                      (fun _kind _var_apply var_func rev_args ->
-                        Simple.var var_func :: rev_args)
-                      fields_apply fields_func rev_args ))
-              (0, []) apply_decisions return_decisions
-          in
+                  Ok
+                    ( i + 1,
+                      fold2_unboxed_subset_with_kind
+                        (fun _kind _var_apply var_func rev_args ->
+                          Simple.var var_func :: rev_args)
+                        fields_apply fields_func rev_args )))
+            (Or_invalid.Ok (0, []))
+            apply_decisions return_decisions
+        in
+        match rev_args_or_invalid with
+        | Ok (_, rev_args) ->
           let args = List.rev rev_args in
           let apply_cont =
             Apply_cont_expr.create return_cont ~args ~dbg:Debuginfo.none
@@ -678,7 +686,7 @@ let make_apply_wrapper env
           RE.from_expr
             ~expr:(Expr.create_apply_cont apply_cont)
             ~free_names:(Apply_cont_expr.free_names apply_cont)
-        with Exit ->
+        | Invalid ->
           RE.from_expr
             ~expr:
               (Expr.create_invalid
