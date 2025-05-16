@@ -239,7 +239,7 @@ let rewrite_set_of_closures env ~(bound : Name.t list)
       let existing_value_slots = value_slots in
       let value_slots =
         Field.Map.fold
-          (fun field uf value_slots ->
+          (fun field (uf : _ Dep_solver.unboxed_fields) value_slots ->
             match (field : Field.t) with
             | Is_int | Get_tag | Block _ -> assert false
             | Code_of_closure | Apply _ | Code_id_of_call_witness _ ->
@@ -253,14 +253,13 @@ let rewrite_set_of_closures env ~(bound : Name.t list)
                   (fun ff var value_slots ->
                     Value_slot.Map.add ff (Simple.var var) value_slots)
                   uf
-                  (Dep_solver.Unboxed (get_simple_unboxable env arg))
+                  (Unboxed (get_simple_unboxable env arg))
                   value_slots
               else
                 match uf with
-                | Dep_solver.Not_unboxed ff ->
+                | Not_unboxed ff ->
                   Value_slot.Map.add ff (rewrite_simple env arg) value_slots
-                | Dep_solver.Unboxed _ ->
-                  Misc.fatal_errorf "trying to unbox simple"))
+                | Unboxed _ -> Misc.fatal_errorf "trying to unbox simple"))
           fields Value_slot.Map.empty
       in
       value_slots, function_slots
@@ -450,9 +449,8 @@ let rebuild_named_default_case env (named : Named.t) =
     let var = Field.Map.find field arg in
     let var =
       match var with
-      | Dep_solver.Not_unboxed var -> var
-      | Dep_solver.Unboxed _ ->
-        Misc.fatal_errorf "Trying to bind non-unboxed to unboxed"
+      | Not_unboxed var -> var
+      | Unboxed _ -> Misc.fatal_errorf "Trying to bind non-unboxed to unboxed"
     in
     Named.create_simple (Simple.var var)
   in
@@ -462,9 +460,8 @@ let rebuild_named_default_case env (named : Named.t) =
     | Block_representation (arg_fields, _size) -> (
       let f = Field.Map.find field arg_fields in
       match f with
-      | Dep_solver.Unboxed _ ->
-        Misc.fatal_errorf "Trying to bind non-unboxed to unboxed"
-      | Dep_solver.Not_unboxed (field, kind) ->
+      | Unboxed _ -> Misc.fatal_errorf "Trying to bind non-unboxed to unboxed"
+      | Not_unboxed (field, kind) ->
         Named.create_prim
           (P.Unary
              ( Block_load
@@ -475,9 +472,8 @@ let rebuild_named_default_case env (named : Named.t) =
       -> (
       let f = Field.Map.find field arg_fields in
       match f with
-      | Dep_solver.Unboxed _ ->
-        Misc.fatal_errorf "Trying to bind non-unboxed to unboxed"
-      | Dep_solver.Not_unboxed value_slot ->
+      | Unboxed _ -> Misc.fatal_errorf "Trying to bind non-unboxed to unboxed"
+      | Not_unboxed value_slot ->
         Named.create_prim
           (P.Unary
              ( Project_value_slot
@@ -930,8 +926,7 @@ let rebuild_singleton_binding_which_is_being_unboxed env bv
     in
     let arg = Code_id_or_name.name arg in
     match Dep_solver.get_unboxed_fields env.uses arg with
-    | Some arg ->
-      bind_fields (Dep_solver.Unboxed to_bind) (Field.Map.find field arg) hole
+    | Some arg -> bind_fields (Unboxed to_bind) (Field.Map.find field arg) hole
     | None -> (
       assert (
         Option.is_some (Dep_solver.get_changed_representation env.uses arg));
@@ -958,7 +953,7 @@ let rebuild_singleton_binding_which_is_being_unboxed env bv
                 dbg
             in
             RE.create_let bp named ~body:hole)
-          (Dep_solver.Unboxed to_bind) arg hole
+          (Unboxed to_bind) arg hole
       | Closure_representation
           (arg_fields, function_slots, current_function_slot) ->
         let arg = Field.Map.find field arg_fields in
@@ -980,14 +975,14 @@ let rebuild_singleton_binding_which_is_being_unboxed env bv
                 dbg
             in
             RE.create_let bp named ~body:hole)
-          (Dep_solver.Unboxed to_bind) arg hole)
+          (Unboxed to_bind) arg hole)
   in
   match[@ocaml.warning "-fragile-match"] defining_expr with
   | Named named -> (
     match[@ocaml.warning "-fragile-match"] named with
     | Prim (Variadic (Make_block (kind, _, _), args), _dbg) ->
       Field.Map.fold
-        (fun (field : GFG.Field.t) var hole ->
+        (fun (field : GFG.Field.t) (var : _ Dep_solver.unboxed_fields) hole ->
           let arg =
             match field with
             | Block (nth, field_kind) ->
@@ -1016,16 +1011,14 @@ let rebuild_singleton_binding_which_is_being_unboxed env bv
           | Either.Left simple ->
             let var =
               match var with
-              | Dep_solver.Not_unboxed var -> var
-              | Dep_solver.Unboxed _ ->
-                Misc.fatal_errorf "Trying to unbox non-unboxable"
+              | Not_unboxed var -> var
+              | Unboxed _ -> Misc.fatal_errorf "Trying to unbox non-unboxable"
             in
             let bp =
               Bound_pattern.singleton (Bound_var.create var Name_mode.normal)
             in
             RE.create_let bp (Named.create_simple simple) ~body:hole
-          | Either.Right arg_fields ->
-            bind_fields var (Dep_solver.Unboxed arg_fields) hole)
+          | Either.Right arg_fields -> bind_fields var (Unboxed arg_fields) hole)
         to_bind hole
     (* | Prim ( Unary (Opaque_identity { middle_end_only = true; _ }, arg), _dbg
        ) -> (* XXX TO REMOVE *) bind_fields (Dep_solver.Unboxed to_bind)
@@ -1043,8 +1036,8 @@ let rebuild_singleton_binding_which_is_being_unboxed env bv
       let field = Field.Value_slot value_slot in
       load_field field arg dbg
     | Prim (Unary (Project_function_slot _, arg), _) | Simple arg ->
-      bind_fields (Dep_solver.Unboxed to_bind)
-        (Dep_solver.Unboxed (get_simple_unboxable env arg))
+      bind_fields (Unboxed to_bind)
+        (Unboxed (get_simple_unboxable env arg))
         hole
     | named ->
       Format.printf "BOUM ? %a@." Named.print named;
@@ -1085,20 +1078,17 @@ let rebuild_set_of_closures_binding_which_is_being_unboxed env bvs
           | _ -> assert false
         in
         Field.Map.fold
-          (fun (field : GFG.Field.t) var hole ->
+          (fun (field : GFG.Field.t) (var : _ Dep_solver.unboxed_fields) hole ->
             match field with
             | Value_slot value_slot ->
               let arg = Value_slot.Map.find value_slot value_slots in
               if simple_is_unboxable env arg
-              then
-                bind_fields var
-                  (Dep_solver.Unboxed (get_simple_unboxable env arg))
-                  hole
+              then bind_fields var (Unboxed (get_simple_unboxable env arg)) hole
               else
                 let var =
                   match var with
-                  | Dep_solver.Not_unboxed var -> var
-                  | Dep_solver.Unboxed _ ->
+                  | Not_unboxed var -> var
+                  | Unboxed _ ->
                     Misc.fatal_errorf "Trying to unbox non-unboxable"
                 in
                 let bp =
@@ -1154,7 +1144,7 @@ let rebuild_singleton_binding_whose_representation_is_being_changed env bp bv
     in
     let mp =
       Field.Map.fold
-        (fun f uf mp ->
+        (fun f (uf : _ Dep_solver.unboxed_fields) mp ->
           match (f : Field.t) with
           | Block (i, _kind) -> (
             let arg = List.nth args i in
@@ -1164,14 +1154,13 @@ let rebuild_singleton_binding_whose_representation_is_being_changed env bp bv
                 (fun (ff, _) var mp ->
                   Numeric_types.Int.Map.add ff (Simple.var var) mp)
                 uf
-                (Dep_solver.Unboxed (get_simple_unboxable env arg))
+                (Unboxed (get_simple_unboxable env arg))
                 mp
             else
               match uf with
-              | Dep_solver.Not_unboxed (ff, _) ->
+              | Not_unboxed (ff, _) ->
                 Numeric_types.Int.Map.add ff (rewrite_simple env arg) mp
-              | Dep_solver.Unboxed _ ->
-                Misc.fatal_errorf "trying to unbox simple")
+              | Unboxed _ -> Misc.fatal_errorf "trying to unbox simple")
           | Get_tag -> (
             let tag =
               match kind with
@@ -1180,20 +1169,18 @@ let rebuild_singleton_binding_whose_representation_is_being_changed env bp bv
               | Naked_floats -> Tag.to_targetint_31_63 Tag.double_array_tag
             in
             match uf with
-            | Dep_solver.Not_unboxed (ff, _) ->
+            | Not_unboxed (ff, _) ->
               Numeric_types.Int.Map.add ff
                 (rewrite_simple env (Simple.const_int tag))
                 mp
-            | Dep_solver.Unboxed _ -> Misc.fatal_errorf "trying to unbox simple"
-            )
+            | Unboxed _ -> Misc.fatal_errorf "trying to unbox simple")
           | Is_int -> (
             match uf with
-            | Dep_solver.Not_unboxed (ff, _) ->
+            | Not_unboxed (ff, _) ->
               Numeric_types.Int.Map.add ff
                 (rewrite_simple env Simple.const_one)
                 mp
-            | Dep_solver.Unboxed _ -> Misc.fatal_errorf "trying to unbox simple"
-            )
+            | Unboxed _ -> Misc.fatal_errorf "trying to unbox simple")
           | Value_slot _ | Function_slot _ | Code_of_closure | Apply _
           | Code_id_of_call_witness _ ->
             assert false)
