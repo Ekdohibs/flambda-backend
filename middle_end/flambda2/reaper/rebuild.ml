@@ -741,8 +741,8 @@ let rebuild_apply env apply =
      never remove begin- or end-region primitives, but might be needed later if
      we chose to handle them. *)
   let call_kind = rewrite_call_kind env (Apply.call_kind apply) in
-  let updating_calling_convention, new_call_kind =
-    let code_id_actually_called, new_call_kind, _should_break_call =
+  let updating_calling_convention, call_kind =
+    let code_id_actually_called, call_kind, _should_break_call =
       let called c alloc_mode call_kind was_indirect_unknown_arity =
         let code_id =
           Simple.pattern_match c
@@ -785,19 +785,19 @@ let rebuild_apply env apply =
       | C_call _ | Method _ | Effect _ -> None, call_kind, false
     in
     match code_id_actually_called with
-    | None -> Not_changing_calling_convention, new_call_kind
+    | None -> Not_changing_calling_convention, call_kind
     | Some code_id -> (
       (* Format.eprintf "CODE ID %a: %a@." (Format.pp_print_option Simple.print)
          (Apply.callee apply) Code_id.print code_id; *)
       match Code_id.Map.find_opt code_id env.code_deps with
-      | None -> Not_changing_calling_convention, new_call_kind
+      | None -> Not_changing_calling_convention, call_kind
       | Some _ ->
         let cannot_change_calling_convention =
           Dep_solver.cannot_change_calling_convention env.uses code_id
         in
         if cannot_change_calling_convention
-        then Not_changing_calling_convention, new_call_kind
-        else Changing_calling_convention code_id, new_call_kind)
+        then Not_changing_calling_convention, call_kind
+        else Changing_calling_convention code_id, call_kind)
   in
   let exn_continuation = Apply.exn_continuation apply in
   let exn_continuation =
@@ -836,9 +836,8 @@ let rebuild_apply env apply =
          value would then be further used in a later simplify pass to refine the
          call kind and produce an invalid. *)
         ~callee:(rewrite_simple_opt env (Apply.callee apply))
-        exn_continuation ~args ~args_arity ~return_arity
-        ~call_kind:new_call_kind (Apply.dbg apply)
-        ~inlined:(Apply.inlined apply)
+        exn_continuation ~args ~args_arity ~return_arity ~call_kind
+        (Apply.dbg apply) ~inlined:(Apply.inlined apply)
         ~inlining_state:(Apply.inlining_state apply)
         ~probe:(Apply.probe apply) ~position:(Apply.position apply)
         ~relative_history:(Apply.relative_history apply)
@@ -905,7 +904,7 @@ let rebuild_apply env apply =
     let args = List.map fst (List.flatten args) in
     let make_apply ~continuation =
       Apply.create ~callee ~continuation exn_continuation ~args ~args_arity
-        ~return_arity ~call_kind:new_call_kind (Apply.dbg apply)
+        ~return_arity ~call_kind (Apply.dbg apply)
         ~inlined:(Apply.inlined apply)
         ~inlining_state:(Apply.inlining_state apply)
         ~probe:(Apply.probe apply) ~position:(Apply.position apply)
