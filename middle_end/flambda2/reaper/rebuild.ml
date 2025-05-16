@@ -1029,7 +1029,13 @@ let rebuild_singleton_binding_whose_representation_is_being_changed kinds env bp
     in
     RE.create_let bp named ~body:hole
   | _ ->
-    (* XXX mshinwell: when do we end up here? *)
+    (* In a situation such as:
+     *   x is a variable whose representation is being changed
+     *   y = (x, 0)  (assume the representation of [y] is not changed)
+     *   z = fst y
+     * then [z] will be marked as having its representation changed, because
+     * it is equal to [x].  However we don't need to rewrite the [fst y]
+     * primitive, which brings us to this case. *)
     let defining_expr =
       rebuild_named_default_case kinds env new_defining_expr
     in
