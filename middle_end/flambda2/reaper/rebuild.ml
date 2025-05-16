@@ -1367,6 +1367,116 @@ and rebuild_set_of_closures_binding_which_is_being_unboxed env bvs
           to_bind hole)
     hole bvs
 
+and rebuild_singleton_binding_whose_representation_is_being_changed kinds env bp
+    bv ~(orig_defining_expr : Rev_expr.rev_named) ~(new_defining_expr : Named.t)
+    ~hole =
+  (* TODO when this block is stored anywhere else, the subkind is no longer
+     correct... we need to fix that somehow *)
+  match[@ocaml.warning "-fragile-match"] orig_defining_expr with
+  | Named
+      (Prim (Unary (Project_function_slot { move_from; move_to }, arg), dbg)) ->
+    let fields =
+      Option.get
+        (Dep_solver.get_changed_representation env.uses
+           (Code_id_or_name.var (Bound_var.var bv)))
+    in
+    let fss =
+      match fields with
+      | Block_representation _ -> assert false
+      | Closure_representation (_, fss, _) -> fss
+    in
+    let named =
+      Named.create_prim
+        (Unary
+           ( Project_function_slot
+               { move_to = Function_slot.Map.find move_to fss;
+                 move_from = Function_slot.Map.find move_from fss
+               },
+             arg ))
+        dbg
+    in
+    RE.create_let bp named ~body:hole
+  | Named (Prim (Variadic (Make_block (kind, _mut, alloc_mode), args), dbg)) ->
+    let fields =
+      Option.get
+        (Dep_solver.get_changed_representation env.uses
+           (Code_id_or_name.var (Bound_var.var bv)))
+    in
+    let fields, size =
+      match fields with
+      | Block_representation (fields, size) -> fields, size
+      | Closure_representation _ -> assert false
+    in
+    let mp =
+      Field.Map.fold
+        (fun f uf mp ->
+          match (f : Field.t) with
+          | Block (i, _kind) -> (
+            let arg = List.nth args i in
+            if simple_is_unboxable env arg
+            then
+              fold2_unboxed_subset
+                (fun (ff, _) var mp ->
+                  Numeric_types.Int.Map.add ff (Simple.var var) mp)
+                uf
+                (Dep_solver.Unboxed (get_simple_unboxable env arg))
+                mp
+            else
+              match uf with
+              | Dep_solver.Not_unboxed (ff, _) ->
+                Numeric_types.Int.Map.add ff (rewrite_simple kinds env arg) mp
+              | Dep_solver.Unboxed _ ->
+                Misc.fatal_errorf "trying to unbox simple")
+          | Get_tag -> (
+            let tag =
+              match kind with
+              | Values (tag, _) | Mixed (tag, _) ->
+                Tag.to_targetint_31_63 (Tag.Scannable.to_tag tag)
+              | Naked_floats -> Tag.to_targetint_31_63 Tag.double_array_tag
+            in
+            match uf with
+            | Dep_solver.Not_unboxed (ff, _) ->
+              Numeric_types.Int.Map.add ff
+                (rewrite_simple kinds env (Simple.const_int tag))
+                mp
+            | Dep_solver.Unboxed _ -> Misc.fatal_errorf "trying to unbox simple"
+            )
+          | Is_int -> (
+            match uf with
+            | Dep_solver.Not_unboxed (ff, _) ->
+              Numeric_types.Int.Map.add ff
+                (rewrite_simple kinds env Simple.const_one)
+                mp
+            | Dep_solver.Unboxed _ -> Misc.fatal_errorf "trying to unbox simple"
+            )
+          | Value_slot _ | Function_slot _ | Code_of_closure | Apply _
+          | Code_id_of_call_witness _ ->
+            assert false)
+        fields Numeric_types.Int.Map.empty
+    in
+    let args =
+      List.init size (fun i ->
+          match Numeric_types.Int.Map.find_opt i mp with
+          | None -> Simple.const_zero
+          | Some x -> x)
+    in
+    let named =
+      Named.create_prim
+        (P.Variadic
+           ( Make_block
+               ( P.Block_kind.Values
+                   ( Tag.Scannable.zero,
+                     List.map (fun _ -> K.With_subkind.any_value) args ),
+                 Immutable,
+                 alloc_mode ),
+             args ))
+        dbg
+    in
+    RE.create_let bp named ~body:hole
+  | _ ->
+    let defining_expr = rewrite_named kinds env new_defining_expr in
+    RE.create_let bp defining_expr ~body:hole
+
 and rebuild_let_expr_holed0 (kinds : K.t Name.Map.t) (env : env)
     ~(bound_pattern : Bound_pattern.t) ~(defining_expr : Rev_expr.rev_named)
     ~hole : RE.t =
@@ -1447,115 +1557,10 @@ and rebuild_let_expr_holed0 (kinds : K.t Name.Map.t) (env : env)
     rebuild_singleton_binding_which_is_being_unboxed kinds env bv ~defining_expr
       ~hole
   | Singleton bv when bound_vars_will_have_their_representation_changed env [bv]
-    -> (
-    (* TODO when this block is stored anywhere else, the subkind is no longer
-       correct... we need to fix that somehow *)
-    match defining_expr with
-    | Named
-        (Prim (Unary (Project_function_slot { move_from; move_to }, arg), dbg))
-      ->
-      let fields =
-        Option.get
-          (Dep_solver.get_changed_representation env.uses
-             (Code_id_or_name.var (Bound_var.var bv)))
-      in
-      let fss =
-        match fields with
-        | Block_representation _ -> assert false
-        | Closure_representation (_, fss, _) -> fss
-      in
-      let named =
-        Named.create_prim
-          (Unary
-             ( Project_function_slot
-                 { move_to = Function_slot.Map.find move_to fss;
-                   move_from = Function_slot.Map.find move_from fss
-                 },
-               arg ))
-          dbg
-      in
-      RE.create_let bp named ~body:hole
-    | Named (Prim (Variadic (Make_block (kind, _mut, alloc_mode), args), dbg))
-      ->
-      let fields =
-        Option.get
-          (Dep_solver.get_changed_representation env.uses
-             (Code_id_or_name.var (Bound_var.var bv)))
-      in
-      let fields, size =
-        match fields with
-        | Block_representation (fields, size) -> fields, size
-        | Closure_representation _ -> assert false
-      in
-      let mp =
-        Field.Map.fold
-          (fun f uf mp ->
-            match (f : Field.t) with
-            | Block (i, _kind) -> (
-              let arg = List.nth args i in
-              if simple_is_unboxable env arg
-              then
-                fold2_unboxed_subset
-                  (fun (ff, _) var mp ->
-                    Numeric_types.Int.Map.add ff (Simple.var var) mp)
-                  uf
-                  (Dep_solver.Unboxed (get_simple_unboxable env arg))
-                  mp
-              else
-                match uf with
-                | Dep_solver.Not_unboxed (ff, _) ->
-                  Numeric_types.Int.Map.add ff (rewrite_simple kinds env arg) mp
-                | Dep_solver.Unboxed _ ->
-                  Misc.fatal_errorf "trying to unbox simple")
-            | Get_tag -> (
-              let tag =
-                match kind with
-                | Values (tag, _) | Mixed (tag, _) ->
-                  Tag.to_targetint_31_63 (Tag.Scannable.to_tag tag)
-                | Naked_floats -> Tag.to_targetint_31_63 Tag.double_array_tag
-              in
-              match uf with
-              | Dep_solver.Not_unboxed (ff, _) ->
-                Numeric_types.Int.Map.add ff
-                  (rewrite_simple kinds env (Simple.const_int tag))
-                  mp
-              | Dep_solver.Unboxed _ ->
-                Misc.fatal_errorf "trying to unbox simple")
-            | Is_int -> (
-              match uf with
-              | Dep_solver.Not_unboxed (ff, _) ->
-                Numeric_types.Int.Map.add ff
-                  (rewrite_simple kinds env Simple.const_one)
-                  mp
-              | Dep_solver.Unboxed _ ->
-                Misc.fatal_errorf "trying to unbox simple")
-            | Value_slot _ | Function_slot _ | Code_of_closure | Apply _
-            | Code_id_of_call_witness _ ->
-              assert false)
-          fields Numeric_types.Int.Map.empty
-      in
-      let args =
-        List.init size (fun i ->
-            match Numeric_types.Int.Map.find_opt i mp with
-            | None -> Simple.const_zero
-            | Some x -> x)
-      in
-      let named =
-        Named.create_prim
-          (P.Variadic
-             ( Make_block
-                 ( P.Block_kind.Values
-                     ( Tag.Scannable.zero,
-                       List.map (fun _ -> K.With_subkind.any_value) args ),
-                   Immutable,
-                   alloc_mode ),
-               args ))
-          dbg
-      in
-      RE.create_let bp named ~body:hole
-    | _ ->
-      let defining_expr = rewrite_named kinds env defining_expr' in
-      RE.create_let bp defining_expr ~body:hole)
+    ->
+    rebuild_singleton_binding_whose_representation_is_being_changed kinds env bp
+      bv ~orig_defining_expr:defining_expr ~new_defining_expr:defining_expr'
+      ~hole
   | Set_of_closures bvs
     when bound_vars_will_have_their_representation_changed env bvs ->
     let bound = List.map (fun bv -> Name.var (Bound_var.var bv)) bvs in
