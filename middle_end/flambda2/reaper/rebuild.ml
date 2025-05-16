@@ -1226,12 +1226,12 @@ let rebuild_make_block_default_case env (bp : Bound_pattern.t)
     | Values (tag, subkinds) -> (
       let ks =
         KS.create K.value
-          (KS.Non_null_value_subkind.Variant
+          (Variant
              { consts = Targetint_31_63.Set.empty;
                non_consts =
                  Tag.Scannable.Map.singleton tag (block_shape, subkinds)
              })
-          KS.Nullable.Non_nullable
+          Non_nullable
       in
       let ks = DS.rewrite_kind_with_subkind env.uses bound_name ks in
       let[@local] with_subkinds subkinds =
