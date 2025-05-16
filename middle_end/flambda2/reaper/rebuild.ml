@@ -855,6 +855,7 @@ let rec rebuild_expr (kinds : K.t Name.Map.t) (env : env) (rev_expr : rev_expr)
         Exn_continuation.create ~exn_handler ~extra_args
       in
       (* TODO rewrite arities *)
+      (* XXX mshinwell: does this "rewrite arities" need to be done now? *)
       match updating_calling_convention with
       | Not_changing_calling_convention ->
         (* Format.eprintf "NOT CHANGING CALLING CONVENTION %a@." Apply.print
