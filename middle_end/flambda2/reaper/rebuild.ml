@@ -1477,6 +1477,21 @@ and rebuild_singleton_binding_whose_representation_is_being_changed kinds env bp
     let defining_expr = rewrite_named kinds env new_defining_expr in
     RE.create_let bp defining_expr ~body:hole
 
+and rebuild_set_of_closures_binding_whose_representation_is_being_changed kinds
+    env bp bvs ~(orig_defining_expr : Rev_expr.rev_named) ~hole =
+  let bound = List.map (fun bv -> Name.var (Bound_var.var bv)) bvs in
+  let set =
+    match[@ocaml.warning "-fragile-match"] orig_defining_expr with
+    | Named (Set_of_closures _set) ->
+      (* Possible ? *)
+      assert false
+      (* Set_of_closures.value_slots set *)
+    | Set_of_closures set -> set
+    | _ -> assert false
+  in
+  let set_of_closures = rewrite_set_of_closures env kinds ~bound set in
+  RE.create_let bp (Named.create_set_of_closures set_of_closures) ~body:hole
+
 and rebuild_let_expr_holed0 (kinds : K.t Name.Map.t) (env : env)
     ~(bound_pattern : Bound_pattern.t) ~(defining_expr : Rev_expr.rev_named)
     ~hole : RE.t =
@@ -1563,18 +1578,8 @@ and rebuild_let_expr_holed0 (kinds : K.t Name.Map.t) (env : env)
       ~hole
   | Set_of_closures bvs
     when bound_vars_will_have_their_representation_changed env bvs ->
-    let bound = List.map (fun bv -> Name.var (Bound_var.var bv)) bvs in
-    let set =
-      match[@ocaml.warning "-fragile-match"] defining_expr with
-      | Named (Set_of_closures _set) ->
-        (* Possible ? *)
-        assert false
-        (* Set_of_closures.value_slots set *)
-      | Set_of_closures set -> set
-      | _ -> assert false
-    in
-    let set_of_closures = rewrite_set_of_closures env kinds ~bound set in
-    RE.create_let bp (Named.create_set_of_closures set_of_closures) ~body:hole
+    rebuild_set_of_closures_binding_whose_representation_is_being_changed kinds
+      env bp bvs ~orig_defining_expr:defining_expr ~hole
   | _ -> (
     match[@ocaml.warning "-4"] defining_expr' with
     | Prim
