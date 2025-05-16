@@ -188,10 +188,16 @@ let rewrite_or_variable default env kinds (or_variable : _ Or_variable.t) =
   | Var (v, _) ->
     if is_var_used env kinds v then or_variable else Or_variable.Const default
 
+let rewrite_or_variables default env kinds or_variables =
+  List.map (rewrite_or_variable default env kinds) or_variables
+
 let rewrite_simple_with_debuginfo kinds env (simple : Simple.With_debuginfo.t) =
   Simple.With_debuginfo.create
     (rewrite_simple kinds env (Simple.With_debuginfo.simple simple))
     (Simple.With_debuginfo.dbg simple)
+
+let rewrite_simples_with_debuginfo kinds env simples =
+  List.map (rewrite_simple_with_debuginfo kinds env) simples
 
 let rewrite_set_of_closures env kinds ~(bound : Name.t list)
     ({ function_decls; value_slots; alloc_mode } : rev_set_of_closures) =
@@ -315,8 +321,7 @@ let rewrite_static_const kinds (env : env) (sc : SC.t) =
     (* Already rewritten *)
     sc
   | Block (tag, mut, shape, fields) ->
-    let fields = List.map (rewrite_simple_with_debuginfo kinds env) fields in
-    SC.block tag mut shape fields
+    SC.block tag mut shape (rewrite_simples_with_debuginfo kinds env fields)
   | Boxed_float f -> SC.boxed_float (rewrite_or_variable Float.zero env kinds f)
   | Boxed_float32 f ->
     SC.boxed_float32 (rewrite_or_variable Float32.zero env kinds f)
@@ -328,35 +333,25 @@ let rewrite_static_const kinds (env : env) (sc : SC.t) =
     SC.boxed_vec128
       (rewrite_or_variable Vector_types.Vec128.Bit_pattern.zero env kinds n)
   | Immutable_float_block fields ->
-    let fields = List.map (rewrite_or_variable Float.zero env kinds) fields in
-    SC.immutable_float_block fields
+    SC.immutable_float_block (rewrite_or_variables Float.zero env kinds fields)
   | Immutable_float_array fields ->
-    let fields = List.map (rewrite_or_variable Float.zero env kinds) fields in
-    SC.immutable_float_array fields
+    SC.immutable_float_array (rewrite_or_variables Float.zero env kinds fields)
   | Immutable_float32_array fields ->
-    let fields = List.map (rewrite_or_variable Float32.zero env kinds) fields in
-    SC.immutable_float32_array fields
+    SC.immutable_float32_array
+      (rewrite_or_variables Float32.zero env kinds fields)
   | Immutable_value_array fields ->
-    let fields = List.map (rewrite_simple_with_debuginfo kinds env) fields in
-    SC.immutable_value_array fields
+    SC.immutable_value_array (rewrite_simples_with_debuginfo kinds env fields)
   | Immutable_int32_array fields ->
-    let fields = List.map (rewrite_or_variable Int32.zero env kinds) fields in
-    SC.immutable_int32_array fields
+    SC.immutable_int32_array (rewrite_or_variables Int32.zero env kinds fields)
   | Immutable_int64_array fields ->
-    let fields = List.map (rewrite_or_variable Int64.zero env kinds) fields in
-    SC.immutable_int64_array fields
+    SC.immutable_int64_array (rewrite_or_variables Int64.zero env kinds fields)
   | Immutable_nativeint_array fields ->
-    let fields =
-      List.map (rewrite_or_variable Targetint_32_64.zero env kinds) fields
-    in
-    SC.immutable_nativeint_array fields
+    SC.immutable_nativeint_array
+      (rewrite_or_variables Targetint_32_64.zero env kinds fields)
   | Immutable_vec128_array fields ->
-    let fields =
-      List.map
-        (rewrite_or_variable Vector_types.Vec128.Bit_pattern.zero env kinds)
-        fields
-    in
-    SC.immutable_vec128_array fields
+    SC.immutable_vec128_array
+      (rewrite_or_variables Vector_types.Vec128.Bit_pattern.zero env kinds
+         fields)
   | Empty_array _ | Mutable_string _ | Immutable_string _ -> sc
 
 let rewrite_static_const_or_code kinds env (sc : Static_const_or_code.t) =
