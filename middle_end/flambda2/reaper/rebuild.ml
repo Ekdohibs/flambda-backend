@@ -712,6 +712,204 @@ let make_apply_wrapper env
     in
     RE.create_non_recursive_let_cont return_cont_wrapper cont_handler ~body
 
+let rebuild_apply env apply =
+  (* CR ncourant: we never rewrite alloc_mode. This is currently ok because we
+     never remove begin- or end-region primitives, but might be needed later if
+     we chose to handle them. *)
+  let call_kind =
+    let rewrite_simple = rewrite_simple env in
+    match Apply.call_kind apply with
+    | Function _ as ck -> ck
+    | Method { kind; obj; alloc_mode } ->
+      Call_kind.method_call kind ~obj:(rewrite_simple obj) alloc_mode
+    | C_call _ as ck -> ck
+    | Effect (Perform { eff }) ->
+      Call_kind.effect (Call_kind.Effect.perform ~eff:(rewrite_simple eff))
+    | Effect (Reperform { eff; cont; last_fiber }) ->
+      Call_kind.effect
+        (Call_kind.Effect.reperform ~eff:(rewrite_simple eff)
+           ~cont:(rewrite_simple cont)
+           ~last_fiber:(rewrite_simple last_fiber))
+    | Effect (Run_stack { stack; f; arg }) ->
+      Call_kind.effect
+        (Call_kind.Effect.run_stack ~stack:(rewrite_simple stack)
+           ~f:(rewrite_simple f) ~arg:(rewrite_simple arg))
+    | Effect (Resume { stack; f; arg; last_fiber }) ->
+      Call_kind.effect
+        (Call_kind.Effect.resume ~stack:(rewrite_simple stack)
+           ~f:(rewrite_simple f) ~arg:(rewrite_simple arg)
+           ~last_fiber:(rewrite_simple last_fiber))
+  in
+  let code_id_actually_called, new_call_kind, _should_break_call =
+    let called c alloc_mode call_kind was_indirect_unknown_arity =
+      let code_id =
+        Simple.pattern_match c
+          ~const:(fun _ -> None)
+          ~name:(fun name ~coercion:_ ->
+            Dep_solver.code_id_actually_called env.uses name)
+      in
+      match code_id with
+      | None -> None, call_kind, false
+      | Some (code_id, num_already_applied_params) ->
+        if num_already_applied_params <> 0 then failwith "todo";
+        let new_call_kind = Call_kind.direct_function_call code_id alloc_mode in
+        Some code_id, new_call_kind, was_indirect_unknown_arity
+    in
+    match call_kind with
+    | Function { function_call = Direct code_id; alloc_mode } -> (
+      match Apply.callee apply with
+      | Some c
+        when Simple.pattern_match'
+               ~var:(fun _ ~coercion:_ -> true)
+               ~const:(fun _ -> true)
+               ~symbol:(fun s ~coercion:_ ->
+                 Compilation_unit.is_current (Symbol.compilation_unit s))
+               c ->
+        let call_kind =
+          if Dep_solver.has_use env.uses (Code_id_or_name.code_id code_id)
+          then call_kind
+          else Call_kind.indirect_function_call_known_arity alloc_mode
+        in
+        called c alloc_mode call_kind false
+      | None | Some _ -> Some code_id, call_kind, false)
+    | Function { function_call = Indirect_unknown_arity; alloc_mode = _ } ->
+      (* called (Option.get (Apply.callee apply)) alloc_mode call_kind true *)
+      None, call_kind, false
+    | Function { function_call = Indirect_known_arity; alloc_mode } ->
+      called (Option.get (Apply.callee apply)) alloc_mode call_kind false
+    | C_call _ | Method _ | Effect _ -> None, call_kind, false
+  in
+  let updating_calling_convention =
+    match code_id_actually_called with
+    | None -> Not_changing_calling_convention
+    | Some code_id -> (
+      (* Format.eprintf "CODE ID %a: %a@." (Format.pp_print_option Simple.print)
+         (Apply.callee apply) Code_id.print code_id; *)
+      match Code_id.Map.find_opt code_id env.code_deps with
+      | None -> Not_changing_calling_convention
+      | Some _ ->
+        let cannot_change_calling_convention =
+          Dep_solver.cannot_change_calling_convention env.uses code_id
+        in
+        if cannot_change_calling_convention
+        then Not_changing_calling_convention
+        else Changing_calling_convention code_id)
+  in
+  let exn_continuation = Apply.exn_continuation apply in
+  let exn_continuation =
+    let exn_handler = Exn_continuation.exn_handler exn_continuation in
+    let extra_args =
+      let selected_extra_args =
+        let extra_args = Exn_continuation.extra_args exn_continuation in
+        (* try *)
+        let args_to_keep =
+          Continuation.Map.find exn_handler env.cont_params_to_keep |> List.tl
+          (* This contains the exn argument that is not part of the extra
+             args *)
+        in
+        get_args_with_kinds env args_to_keep (List.map fst extra_args)
+        (* with Not_found -> (* Not defined in cont_params_to_keep *)
+           extra_args *)
+      in
+      (* List.map (fun (simple, kind) -> rewrite_simple env simple, kind) *)
+      selected_extra_args
+    in
+    Exn_continuation.create ~exn_handler ~extra_args
+  in
+  (* TODO rewrite arities *)
+  (* XXX mshinwell: does this "rewrite arities" need to be done now? *)
+  match updating_calling_convention with
+  | Not_changing_calling_convention ->
+    (* Format.eprintf "NOT CHANGING CALLING CONVENTION %a@." Apply.print
+       apply; *)
+    let args = List.map (rewrite_simple env) (Apply.args apply) in
+    let args_arity = Apply.args_arity apply in
+    let return_arity = Apply.return_arity apply in
+    let make_apply =
+      Apply.create
+      (* Note here that callee is rewritten with [rewrite_simple_opt], which
+         will put [None] as the callee instead of a dummy value, as a dummy
+         value would then be further used in a later simplify pass to refine the
+         call kind and produce an invalid. *)
+        ~callee:(rewrite_simple_opt env (Apply.callee apply))
+        exn_continuation ~args ~args_arity ~return_arity
+        ~call_kind:new_call_kind (Apply.dbg apply)
+        ~inlined:(Apply.inlined apply)
+        ~inlining_state:(Apply.inlining_state apply)
+        ~probe:(Apply.probe apply) ~position:(Apply.position apply)
+        ~relative_history:(Apply.relative_history apply)
+    in
+    let func_decisions =
+      List.map
+        (fun kind -> Keep (Variable.create "function_return", kind))
+        (Flambda_arity.unarized_components return_arity)
+    in
+    make_apply_wrapper env make_apply (Apply.continuation apply) func_decisions
+  | Changing_calling_convention code_id ->
+    (* Format.eprintf "CHANGING CALLING CONVENTION %a %a@." Code_id.print
+       code_id Apply.print apply; *)
+    let args_from_unboxed_callee, callee =
+      match Apply.callee apply with
+      | Some callee when simple_is_unboxable env callee ->
+        let fields = get_simple_unboxable env callee in
+        let new_args =
+          fold_unboxed_with_kind
+            (fun kind v acc ->
+              (Simple.var v, K.With_subkind.anything kind) :: acc)
+            fields []
+        in
+        new_args, None
+      | (None | Some _) as callee ->
+        ( [],
+          (* Note here that callee is rewritten with [rewrite_simple_opt], which
+             will put [None] as the callee instead of a dummy value, as a dummy
+             value would then be further used in a later simplify pass to refine
+             the call kind and produce an invalid. *)
+          rewrite_simple_opt env callee )
+    in
+    let params_decisions =
+      match Code_id.Map.find_opt code_id env.function_params_to_keep with
+      | None -> assert false
+      | Some p -> p
+    in
+    let params_decisions =
+      Flambda_arity.group_by_parameter (Apply.args_arity apply) params_decisions
+    in
+    let args =
+      Flambda_arity.group_by_parameter (Apply.args_arity apply)
+        (Apply.args apply)
+    in
+    let args = List.map2 (get_args_with_kinds env) params_decisions args in
+    let args =
+      match args with
+      | [] -> assert false
+      | first :: rest -> (args_from_unboxed_callee @ first) :: rest
+    in
+    let args_arity =
+      let components_for args =
+        Flambda_arity.Component_for_creation.Unboxed_product
+          (List.map
+             (fun (_, k) -> Flambda_arity.Component_for_creation.Singleton k)
+             args)
+      in
+      Flambda_arity.create (List.map components_for args)
+    in
+    let return_decisions =
+      Code_id.Map.find code_id env.function_return_decision
+    in
+    let return_arity = Flambda_arity.unarize_t (get_arity return_decisions) in
+    let args = List.map fst (List.flatten args) in
+    let make_apply ~continuation =
+      Apply.create ~callee ~continuation exn_continuation ~args ~args_arity
+        ~return_arity ~call_kind:new_call_kind (Apply.dbg apply)
+        ~inlined:(Apply.inlined apply)
+        ~inlining_state:(Apply.inlining_state apply)
+        ~probe:(Apply.probe apply) ~position:(Apply.position apply)
+        ~relative_history:(Apply.relative_history apply)
+    in
+    make_apply_wrapper env make_apply (Apply.continuation apply)
+      return_decisions
+
 let rebuild_singleton_binding_which_is_being_unboxed env bv
     ~(defining_expr : Rev_expr.rev_named) ~hole =
   let to_bind =
@@ -1364,212 +1562,7 @@ and rebuild_expr (env : env) (rev_expr : Rev_expr.rev_expr) : RE.t =
         let expr = Expr.create_switch switch in
         let free_names = Switch_expr.free_names switch in
         RE.from_expr ~expr ~free_names
-    | Apply apply -> (
-      (* CR ncourant: we never rewrite alloc_mode. This is currently ok because
-         we never remove begin- or end-region primitives, but might be needed
-         later if we chose to handle them. *)
-      let call_kind =
-        let rewrite_simple = rewrite_simple env in
-        match Apply.call_kind apply with
-        | Function _ as ck -> ck
-        | Method { kind; obj; alloc_mode } ->
-          Call_kind.method_call kind ~obj:(rewrite_simple obj) alloc_mode
-        | C_call _ as ck -> ck
-        | Effect (Perform { eff }) ->
-          Call_kind.effect (Call_kind.Effect.perform ~eff:(rewrite_simple eff))
-        | Effect (Reperform { eff; cont; last_fiber }) ->
-          Call_kind.effect
-            (Call_kind.Effect.reperform ~eff:(rewrite_simple eff)
-               ~cont:(rewrite_simple cont)
-               ~last_fiber:(rewrite_simple last_fiber))
-        | Effect (Run_stack { stack; f; arg }) ->
-          Call_kind.effect
-            (Call_kind.Effect.run_stack ~stack:(rewrite_simple stack)
-               ~f:(rewrite_simple f) ~arg:(rewrite_simple arg))
-        | Effect (Resume { stack; f; arg; last_fiber }) ->
-          Call_kind.effect
-            (Call_kind.Effect.resume ~stack:(rewrite_simple stack)
-               ~f:(rewrite_simple f) ~arg:(rewrite_simple arg)
-               ~last_fiber:(rewrite_simple last_fiber))
-      in
-      let code_id_actually_called, new_call_kind, _should_break_call =
-        let called c alloc_mode call_kind was_indirect_unknown_arity =
-          let code_id =
-            Simple.pattern_match c
-              ~const:(fun _ -> None)
-              ~name:(fun name ~coercion:_ ->
-                Dep_solver.code_id_actually_called env.uses name)
-          in
-          match code_id with
-          | None -> None, call_kind, false
-          | Some (code_id, num_already_applied_params) ->
-            if num_already_applied_params <> 0 then failwith "todo";
-            let new_call_kind =
-              Call_kind.direct_function_call code_id alloc_mode
-            in
-            Some code_id, new_call_kind, was_indirect_unknown_arity
-        in
-        match call_kind with
-        | Function { function_call = Direct code_id; alloc_mode } -> (
-          match Apply.callee apply with
-          | Some c
-            when Simple.pattern_match'
-                   ~var:(fun _ ~coercion:_ -> true)
-                   ~const:(fun _ -> true)
-                   ~symbol:(fun s ~coercion:_ ->
-                     Compilation_unit.is_current (Symbol.compilation_unit s))
-                   c ->
-            let call_kind =
-              if Dep_solver.has_use env.uses (Code_id_or_name.code_id code_id)
-              then call_kind
-              else Call_kind.indirect_function_call_known_arity alloc_mode
-            in
-            called c alloc_mode call_kind false
-          | None | Some _ -> Some code_id, call_kind, false)
-        | Function { function_call = Indirect_unknown_arity; alloc_mode = _ } ->
-          (* called (Option.get (Apply.callee apply)) alloc_mode call_kind
-             true *)
-          None, call_kind, false
-        | Function { function_call = Indirect_known_arity; alloc_mode } ->
-          called (Option.get (Apply.callee apply)) alloc_mode call_kind false
-        | C_call _ | Method _ | Effect _ -> None, call_kind, false
-      in
-      let updating_calling_convention =
-        match code_id_actually_called with
-        | None -> Not_changing_calling_convention
-        | Some code_id -> (
-          (* Format.eprintf "CODE ID %a: %a@." (Format.pp_print_option
-             Simple.print) (Apply.callee apply) Code_id.print code_id; *)
-          match Code_id.Map.find_opt code_id env.code_deps with
-          | None -> Not_changing_calling_convention
-          | Some _ ->
-            let cannot_change_calling_convention =
-              Dep_solver.cannot_change_calling_convention env.uses code_id
-            in
-            if cannot_change_calling_convention
-            then Not_changing_calling_convention
-            else Changing_calling_convention code_id)
-      in
-      let exn_continuation = Apply.exn_continuation apply in
-      let exn_continuation =
-        let exn_handler = Exn_continuation.exn_handler exn_continuation in
-        let extra_args =
-          let selected_extra_args =
-            let extra_args = Exn_continuation.extra_args exn_continuation in
-            (* try *)
-            let args_to_keep =
-              Continuation.Map.find exn_handler env.cont_params_to_keep
-              |> List.tl
-              (* This contains the exn argument that is not part of the extra
-                 args *)
-            in
-            get_args_with_kinds env args_to_keep (List.map fst extra_args)
-            (* with Not_found -> (* Not defined in cont_params_to_keep *)
-               extra_args *)
-          in
-          (* List.map (fun (simple, kind) -> rewrite_simple env simple, kind) *)
-          selected_extra_args
-        in
-        Exn_continuation.create ~exn_handler ~extra_args
-      in
-      (* TODO rewrite arities *)
-      (* XXX mshinwell: does this "rewrite arities" need to be done now? *)
-      match updating_calling_convention with
-      | Not_changing_calling_convention ->
-        (* Format.eprintf "NOT CHANGING CALLING CONVENTION %a@." Apply.print
-           apply; *)
-        let args = List.map (rewrite_simple env) (Apply.args apply) in
-        let args_arity = Apply.args_arity apply in
-        let return_arity = Apply.return_arity apply in
-        let make_apply =
-          Apply.create
-          (* Note here that callee is rewritten with [rewrite_simple_opt], which
-             will put [None] as the callee instead of a dummy value, as a dummy
-             value would then be further used in a later simplify pass to refine
-             the call kind and produce an invalid. *)
-            ~callee:(rewrite_simple_opt env (Apply.callee apply))
-            exn_continuation ~args ~args_arity ~return_arity
-            ~call_kind:new_call_kind (Apply.dbg apply)
-            ~inlined:(Apply.inlined apply)
-            ~inlining_state:(Apply.inlining_state apply)
-            ~probe:(Apply.probe apply) ~position:(Apply.position apply)
-            ~relative_history:(Apply.relative_history apply)
-        in
-        let func_decisions =
-          List.map
-            (fun kind -> Keep (Variable.create "function_return", kind))
-            (Flambda_arity.unarized_components return_arity)
-        in
-        make_apply_wrapper env make_apply (Apply.continuation apply)
-          func_decisions
-      | Changing_calling_convention code_id ->
-        (* Format.eprintf "CHANGING CALLING CONVENTION %a %a@." Code_id.print
-           code_id Apply.print apply; *)
-        let args_from_unboxed_callee, callee =
-          match Apply.callee apply with
-          | Some callee when simple_is_unboxable env callee ->
-            let fields = get_simple_unboxable env callee in
-            let new_args =
-              fold_unboxed_with_kind
-                (fun kind v acc ->
-                  (Simple.var v, K.With_subkind.anything kind) :: acc)
-                fields []
-            in
-            new_args, None
-          | (None | Some _) as callee ->
-            ( [],
-              (* Note here that callee is rewritten with [rewrite_simple_opt],
-                 which will put [None] as the callee instead of a dummy value,
-                 as a dummy value would then be further used in a later simplify
-                 pass to refine the call kind and produce an invalid. *)
-              rewrite_simple_opt env callee )
-        in
-        let params_decisions =
-          match Code_id.Map.find_opt code_id env.function_params_to_keep with
-          | None -> assert false
-          | Some p -> p
-        in
-        let params_decisions =
-          Flambda_arity.group_by_parameter (Apply.args_arity apply)
-            params_decisions
-        in
-        let args =
-          Flambda_arity.group_by_parameter (Apply.args_arity apply)
-            (Apply.args apply)
-        in
-        let args = List.map2 (get_args_with_kinds env) params_decisions args in
-        let args =
-          match args with
-          | [] -> assert false
-          | first :: rest -> (args_from_unboxed_callee @ first) :: rest
-        in
-        let args_arity =
-          let components_for args =
-            Flambda_arity.Component_for_creation.Unboxed_product
-              (List.map
-                 (fun (_, k) ->
-                   Flambda_arity.Component_for_creation.Singleton k)
-                 args)
-          in
-          Flambda_arity.create (List.map components_for args)
-        in
-        let return_decisions =
-          Code_id.Map.find code_id env.function_return_decision
-        in
-        let return_arity =
-          Flambda_arity.unarize_t (get_arity return_decisions)
-        in
-        let args = List.map fst (List.flatten args) in
-        let make_apply ~continuation =
-          Apply.create ~callee ~continuation exn_continuation ~args ~args_arity
-            ~return_arity ~call_kind:new_call_kind (Apply.dbg apply)
-            ~inlined:(Apply.inlined apply)
-            ~inlining_state:(Apply.inlining_state apply)
-            ~probe:(Apply.probe apply) ~position:(Apply.position apply)
-            ~relative_history:(Apply.relative_history apply)
-        in
-        make_apply_wrapper env make_apply (Apply.continuation apply)
-          return_decisions)
+    | Apply apply -> rebuild_apply env apply
   in
   rebuild_holed env holed_expr expr
 
