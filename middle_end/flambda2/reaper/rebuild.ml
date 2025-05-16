@@ -82,9 +82,9 @@ let is_symbol_used (env : env) symbol =
 
 let is_var_used (env : env) var =
   let kind = Name.Map.find (Name.var var) env.kinds in
-  match[@ocaml.warning "-4"] kind with
-  | K.(Region | Rec_info) -> true
-  | _ -> is_used env (Code_id_or_name.var var)
+  match kind with
+  | Region | Rec_info -> true
+  | Value | Naked_number _ -> is_used env (Code_id_or_name.var var)
 
 let is_name_used (env : env) name =
   Name.pattern_match name ~symbol:(is_symbol_used env) ~var:(is_var_used env)
