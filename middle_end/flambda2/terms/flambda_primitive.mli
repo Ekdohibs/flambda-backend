@@ -313,6 +313,8 @@ type signed_or_unsigned =
 
 (** Primitives taking exactly zero arguments. *)
 type nullary_primitive =
+  (* CR mshinwell: try to remove [Invalid]; we probably shouldn't have two
+     mechanisms for propagating this. *)
   | Invalid of Flambda_kind.t
       (** Used when rebuilding a primitive that turns out to be invalid. This is
           easier to use than turning a whole let-binding into Invalid (which
