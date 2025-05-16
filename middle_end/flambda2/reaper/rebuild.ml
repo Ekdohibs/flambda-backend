@@ -1097,6 +1097,62 @@ and bind_fields fields arg_fields hole =
       RE.create_let bp (Named.create_simple (Simple.var arg)) ~body:hole)
     fields arg_fields hole
 
+and rebuild_static_const_or_code kinds env
+    ((bound_to : Bound_static.Pattern.t), static_const_or_code) =
+  match static_const_or_code with
+  | Deleted_code -> Static_const_or_code.deleted_code
+  | Code { params_and_body; code_metadata; free_names_of_params_and_body = _ }
+    ->
+    let is_my_closure_used = is_var_used env kinds params_and_body.my_closure in
+    let code_metadata =
+      if Bool.equal is_my_closure_used
+           (Code_metadata.is_my_closure_used code_metadata)
+      then code_metadata
+      else (
+        assert (not is_my_closure_used);
+        Code_metadata.with_is_my_closure_used is_my_closure_used code_metadata)
+    in
+    let params_and_body, code_metadata =
+      rebuild_function_params_and_body kinds env code_metadata params_and_body
+    in
+    let code =
+      Code.create_with_metadata ~params_and_body ~code_metadata
+        ~free_names_of_params_and_body:
+          (function_params_and_body_free_names params_and_body)
+    in
+    assert (
+      Compilation_unit.is_current
+        (Code_id.get_compilation_unit (Code.code_id code)));
+    all_code := Code_id.Map.add (Code.code_id code) code !all_code;
+    Static_const_or_code.create_code code
+  | Static_const (Set_of_closures set_of_closures) ->
+    let bound_to =
+      match bound_to with
+      | Set_of_closures function_slots -> Function_slot.Lmap.data function_slots
+      | Code _ | Block_like _ -> Misc.fatal_error "Expected Set_of_closures"
+    in
+    let bound_to = List.map Name.symbol bound_to in
+    let set_of_closures =
+      rewrite_set_of_closures env kinds ~bound:bound_to set_of_closures
+    in
+    SC.set_of_closures set_of_closures
+    |> Static_const_or_code.create_static_const
+  | Static_const (Other static_const) -> (
+    match static_const with
+    | Block _ | Boxed_float32 _ | Boxed_float _ | Boxed_int32 _ | Boxed_int64 _
+    | Boxed_nativeint _ | Boxed_vec128 _ | Immutable_float_block _
+    | Immutable_float_array _ | Immutable_float32_array _
+    | Immutable_int32_array _ | Immutable_int64_array _
+    | Immutable_nativeint_array _ | Immutable_vec128_array _
+    | Immutable_value_array _ | Empty_array _ | Mutable_string _
+    | Immutable_string _ ->
+      Static_const_or_code.create_static_const static_const
+    | Set_of_closures _ ->
+      Misc.fatal_errorf
+        "Set_of_closures is not permitted in conjunction with Other in the \
+         Static_const case:@ %a"
+        SC.print static_const)
+
 and rebuild_let_expr_holed (kinds : K.t Name.Map.t) (env : env)
     ~(bound_pattern : Bound_pattern.t) ~(defining_expr : Rev_expr.rev_named)
     ~parent ~hole : RE.t =
@@ -1146,75 +1202,11 @@ and rebuild_let_expr_holed (kinds : K.t Name.Map.t) (env : env)
               (List.combine (Bound_static.to_list bound_static) group)
           in
           let bound_static, _group = List.split bound_and_group in
-          let static_const_or_code
-              ((bound_to : Bound_static.Pattern.t), static_const_or_code) =
-            match static_const_or_code with
-            | Deleted_code -> Static_const_or_code.deleted_code
-            | Code
-                { params_and_body;
-                  code_metadata;
-                  free_names_of_params_and_body = _
-                } ->
-              let is_my_closure_used =
-                is_var_used env kinds params_and_body.my_closure
-              in
-              let code_metadata =
-                if Bool.equal is_my_closure_used
-                     (Code_metadata.is_my_closure_used code_metadata)
-                then code_metadata
-                else (
-                  assert (not is_my_closure_used);
-                  Code_metadata.with_is_my_closure_used is_my_closure_used
-                    code_metadata)
-              in
-              let params_and_body, code_metadata =
-                rebuild_function_params_and_body kinds env code_metadata
-                  params_and_body
-              in
-              let code =
-                Code.create_with_metadata ~params_and_body ~code_metadata
-                  ~free_names_of_params_and_body:
-                    (function_params_and_body_free_names params_and_body)
-              in
-              assert (
-                Compilation_unit.is_current
-                  (Code_id.get_compilation_unit (Code.code_id code)));
-              all_code := Code_id.Map.add (Code.code_id code) code !all_code;
-              Static_const_or_code.create_code code
-            | Static_const (Set_of_closures set_of_closures) ->
-              let bound_to =
-                match bound_to with
-                | Set_of_closures function_slots ->
-                  Function_slot.Lmap.data function_slots
-                | Code _ | Block_like _ ->
-                  Misc.fatal_error "Expected Set_of_closures"
-              in
-              let bound_to = List.map Name.symbol bound_to in
-              let set_of_closures =
-                rewrite_set_of_closures env kinds ~bound:bound_to
-                  set_of_closures
-              in
-              SC.set_of_closures set_of_closures
-              |> Static_const_or_code.create_static_const
-            | Static_const (Other static_const) -> (
-              match static_const with
-              | Block _ | Boxed_float32 _ | Boxed_float _ | Boxed_int32 _
-              | Boxed_int64 _ | Boxed_nativeint _ | Boxed_vec128 _
-              | Immutable_float_block _ | Immutable_float_array _
-              | Immutable_float32_array _ | Immutable_int32_array _
-              | Immutable_int64_array _ | Immutable_nativeint_array _
-              | Immutable_vec128_array _ | Immutable_value_array _
-              | Empty_array _ | Mutable_string _ | Immutable_string _ ->
-                Static_const_or_code.create_static_const static_const
-              | Set_of_closures _ ->
-                Misc.fatal_errorf
-                  "Set_of_closures is not permitted in conjunction with Other \
-                   in the Static_const case:@ %a"
-                  SC.print static_const)
-          in
           let group =
             Static_const_group.create
-              (List.map static_const_or_code bound_and_group)
+              (List.map
+                 (rebuild_static_const_or_code kinds env)
+                 bound_and_group)
           in
           ( Bound_pattern.static (Bound_static.create bound_static),
             Named.create_static_consts group )
