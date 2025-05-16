@@ -569,6 +569,14 @@ type change_calling_convention =
   | Not_changing_calling_convention
   | Changing_calling_convention of Code_id.t
 
+let bound_vars_will_be_unboxed env bvs =
+  List.exists
+    (fun bv ->
+      Option.is_some
+        (Dep_solver.get_unboxed_fields env.uses
+           (Code_id_or_name.var (Bound_var.var bv))))
+    bvs
+
 let function_params_and_body_free_names fpb =
   Function_params_and_body.pattern_match fpb
     ~f:(fun
@@ -1226,13 +1234,7 @@ and rebuild_let_expr_holed0 (kinds : K.t Name.Map.t) (env : env)
       bound_pattern, Named.create_set_of_closures set_of_closures
   in
   match[@ocaml.warning "-fragile-match"] bound_pattern with
-  | Bound_pattern.Set_of_closures bvs
-    when List.exists
-           (fun bv ->
-             Option.is_some
-               (Dep_solver.get_unboxed_fields env.uses
-                  (Code_id_or_name.var (Bound_var.var bv))))
-           bvs ->
+  | Bound_pattern.Set_of_closures bvs when bound_vars_will_be_unboxed env bvs ->
     assert (
       List.for_all
         (fun bv ->
@@ -1291,10 +1293,7 @@ and rebuild_let_expr_holed0 (kinds : K.t Name.Map.t) (env : env)
                 assert false)
             to_bind hole)
       hole bvs
-  | Bound_pattern.Singleton bv
-    when Option.is_some
-           (Dep_solver.get_unboxed_fields env.uses
-              (Code_id_or_name.var (Bound_var.var bv))) -> (
+  | Bound_pattern.Singleton bv when bound_vars_will_be_unboxed env [bv] -> (
     let to_bind =
       Option.get
         (Dep_solver.get_unboxed_fields env.uses
