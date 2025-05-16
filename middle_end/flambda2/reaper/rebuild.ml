@@ -24,10 +24,6 @@ module RE = Rebuilt_expr
 module SC = Static_const
 module Field = GFG.Field
 
-let all_slot_offsets = ref Slot_offsets.empty
-
-let all_code = ref Code_id.Map.empty
-
 type param_decision =
   | Keep of Variable.t * K.With_subkind.t
   | Delete
@@ -58,6 +54,11 @@ type env =
       Code_id.t -> Variable.t -> K.With_subkind.t -> param_decision;
     function_return_decision : param_decision list Code_id.Map.t;
     kinds : K.t Name.Map.t
+  }
+
+type rebuild_result =
+  { all_slot_offsets : Slot_offsets.t;
+    all_code : Code.t Code_id.Map.t
   }
 
 let freshen_decisions = function
@@ -284,7 +285,7 @@ let rewrite_simple_with_debuginfo env (simple : Simple.With_debuginfo.t) =
 let rewrite_simples_with_debuginfo env simples =
   List.map (rewrite_simple_with_debuginfo env) simples
 
-let rewrite_set_of_closures env ~(bound : Name.t list)
+let rewrite_set_of_closures env res ~(bound : Name.t list)
     ({ Rev_expr.function_decls; value_slots; alloc_mode } :
       Rev_expr.rev_set_of_closures) =
   let slot_is_used slot =
@@ -390,10 +391,14 @@ let rewrite_set_of_closures env ~(bound : Name.t list)
   let set_of_closures =
     Set_of_closures.create ~value_slots alloc_mode function_decls
   in
-  all_slot_offsets
-    := Slot_offsets.add_set_of_closures !all_slot_offsets ~is_phantom:false
-         set_of_closures;
-  set_of_closures
+  let res =
+    { res with
+      all_slot_offsets =
+        Slot_offsets.add_set_of_closures res.all_slot_offsets ~is_phantom:false
+          set_of_closures
+    }
+  in
+  set_of_closures, res
 
 let rewrite_static_const (env : env) (sc : SC.t) =
   match sc with
@@ -1199,8 +1204,8 @@ let rebuild_singleton_binding_whose_representation_is_being_changed env bp bv
     let defining_expr = rebuild_named_default_case env new_defining_expr in
     RE.create_let bp defining_expr ~body:hole
 
-let rebuild_set_of_closures_binding_whose_representation_is_being_changed env bp
-    bvs ~(orig_defining_expr : Rev_expr.rev_named) ~hole =
+let rebuild_set_of_closures_binding_whose_representation_is_being_changed env
+    res bp bvs ~(orig_defining_expr : Rev_expr.rev_named) ~hole =
   let bound = List.map (fun bv -> Name.var (Bound_var.var bv)) bvs in
   let set =
     match[@ocaml.warning "-fragile-match"] orig_defining_expr with
@@ -1211,8 +1216,9 @@ let rebuild_set_of_closures_binding_whose_representation_is_being_changed env bp
     | Set_of_closures set -> set
     | _ -> assert false
   in
-  let set_of_closures = rewrite_set_of_closures env ~bound set in
-  RE.create_let bp (Named.create_set_of_closures set_of_closures) ~body:hole
+  let set_of_closures, res = rewrite_set_of_closures env res ~bound set in
+  ( RE.create_let bp (Named.create_set_of_closures set_of_closures) ~body:hole,
+    res )
 
 let rebuild_make_block_default_case env (bp : Bound_pattern.t)
     ~(block_kind : P.Block_kind.t) ~mutability ~alloc_mode ~fields ~hole dbg =
@@ -1269,38 +1275,44 @@ let rebuild_make_block_default_case env (bp : Bound_pattern.t)
        dbg)
     ~body:hole
 
-let rebuild_let_expr_holed0 (env : env) ~(bound_pattern : Bound_pattern.t)
-    ~(defining_expr : Rev_expr.rev_named) ~new_defining_expr ~hole : RE.t =
+let rebuild_let_expr_holed0 (env : env) res ~(bound_pattern : Bound_pattern.t)
+    ~(defining_expr : Rev_expr.rev_named) ~new_defining_expr ~hole :
+    RE.t * rebuild_result =
   match (bound_pattern : Bound_pattern.t) with
   | Set_of_closures bvs when bound_vars_will_be_unboxed env bvs ->
-    rebuild_set_of_closures_binding_which_is_being_unboxed env bvs
-      ~defining_expr ~hole
+    ( rebuild_set_of_closures_binding_which_is_being_unboxed env bvs
+        ~defining_expr ~hole,
+      res )
   | Singleton bv when bound_vars_will_be_unboxed env [bv] ->
-    rebuild_singleton_binding_which_is_being_unboxed env bv ~defining_expr ~hole
+    ( rebuild_singleton_binding_which_is_being_unboxed env bv ~defining_expr
+        ~hole,
+      res )
   | Singleton bv when bound_vars_will_have_their_representation_changed env [bv]
     ->
-    rebuild_singleton_binding_whose_representation_is_being_changed env
-      bound_pattern bv ~orig_defining_expr:defining_expr ~new_defining_expr
-      ~hole
+    ( rebuild_singleton_binding_whose_representation_is_being_changed env
+        bound_pattern bv ~orig_defining_expr:defining_expr ~new_defining_expr
+        ~hole,
+      res )
   | Set_of_closures bvs
     when bound_vars_will_have_their_representation_changed env bvs ->
     rebuild_set_of_closures_binding_whose_representation_is_being_changed env
-      bound_pattern bvs ~orig_defining_expr:defining_expr ~hole
+      res bound_pattern bvs ~orig_defining_expr:defining_expr ~hole
   | Singleton _ | Set_of_closures _ | Static _ -> (
     match[@ocaml.warning "-4"] new_defining_expr with
     | Flambda.Prim
         (Variadic (Make_block (block_kind, mutability, alloc_mode), fields), dbg)
       ->
-      rebuild_make_block_default_case env bound_pattern ~block_kind ~mutability
-        ~alloc_mode ~fields ~hole dbg
+      ( rebuild_make_block_default_case env bound_pattern ~block_kind
+          ~mutability ~alloc_mode ~fields ~hole dbg,
+        res )
     | _ ->
       let defining_expr = rebuild_named_default_case env new_defining_expr in
-      RE.create_let bound_pattern defining_expr ~body:hole)
+      RE.create_let bound_pattern defining_expr ~body:hole, res)
 
-let rec default_defining_expr_for_rebuilding_let env
+let rec default_defining_expr_for_rebuilding_let env res
     (bound_pattern : Bound_pattern.t) (defining_expr : Rev_expr.rev_named) =
   match defining_expr with
-  | Named defining_expr -> bound_pattern, defining_expr
+  | Named defining_expr -> bound_pattern, defining_expr, res
   | Static_consts group ->
     let bound_static =
       match bound_pattern with
@@ -1341,12 +1353,19 @@ let rec default_defining_expr_for_rebuilding_let env
         (List.combine (Bound_static.to_list bound_static) group)
     in
     let bound_static, _group = List.split bound_and_group in
-    let group =
-      Static_const_group.create
-        (List.map (rebuild_static_const_or_code env) bound_and_group)
+    let res, group_members =
+      List.fold_left_map
+        (fun res pat_and_rev ->
+          let static_const_or_code, res =
+            rebuild_static_const_or_code env res pat_and_rev
+          in
+          res, static_const_or_code)
+        res bound_and_group
     in
+    let group = Static_const_group.create group_members in
     ( Bound_pattern.static (Bound_static.create bound_static),
-      Named.create_static_consts group )
+      Named.create_static_consts group,
+      res )
   | Set_of_closures set_of_closures ->
     let bound =
       match bound_pattern with
@@ -1356,24 +1375,31 @@ let rec default_defining_expr_for_rebuilding_let env
         (* Pattern is a set of closures *)
         assert false
     in
-    let set_of_closures = rewrite_set_of_closures env ~bound set_of_closures in
+    let set_of_closures, res =
+      rewrite_set_of_closures env res ~bound set_of_closures
+    in
     let is_phantom =
       Name_mode.is_phantom @@ Bound_pattern.name_mode bound_pattern
     in
-    all_slot_offsets
-      := Slot_offsets.add_set_of_closures !all_slot_offsets ~is_phantom
-           set_of_closures;
-    bound_pattern, Named.create_set_of_closures set_of_closures
+    let res =
+      { res with
+        all_slot_offsets =
+          Slot_offsets.add_set_of_closures res.all_slot_offsets ~is_phantom
+            set_of_closures
+      }
+    in
+    bound_pattern, Named.create_set_of_closures set_of_closures, res
 
-and rebuild_let_expr_holed (env : env) ~(bound_pattern : Bound_pattern.t)
-    ~(defining_expr : Rev_expr.rev_named) ~parent ~hole : RE.t =
-  let bound_pattern, new_defining_expr =
-    default_defining_expr_for_rebuilding_let env bound_pattern defining_expr
+and rebuild_let_expr_holed (env : env) res ~(bound_pattern : Bound_pattern.t)
+    ~(defining_expr : Rev_expr.rev_named) ~parent ~hole : RE.t * rebuild_result
+    =
+  let bound_pattern, new_defining_expr, res =
+    default_defining_expr_for_rebuilding_let env res bound_pattern defining_expr
   in
-  let subexpr =
+  let subexpr, res =
     match (bound_pattern : Bound_pattern.t) with
     | Set_of_closures _ | Static _ ->
-      rebuild_let_expr_holed0 env ~bound_pattern ~defining_expr
+      rebuild_let_expr_holed0 env res ~bound_pattern ~defining_expr
         ~new_defining_expr ~hole
     | Singleton v ->
       let v = Bound_var.var v in
@@ -1387,21 +1413,21 @@ and rebuild_let_expr_holed (env : env) ~(bound_pattern : Bound_pattern.t)
       in
       if is_begin_region || is_var_used env v
       then
-        rebuild_let_expr_holed0 env ~bound_pattern ~defining_expr
+        rebuild_let_expr_holed0 env res ~bound_pattern ~defining_expr
           ~new_defining_expr ~hole
-      else hole
+      else hole, res
   in
-  rebuild_holed env parent subexpr
+  rebuild_holed env res parent subexpr
 
-and rebuild_holed (env : env) (rev_expr : Rev_expr.rev_expr_holed) (hole : RE.t)
-    : RE.t =
+and rebuild_holed (env : env) res (rev_expr : Rev_expr.rev_expr_holed)
+    (hole : RE.t) : RE.t * rebuild_result =
   match rev_expr with
-  | Hole -> hole
+  | Hole -> hole, res
   | Let { bound_pattern; defining_expr; parent } ->
-    rebuild_let_expr_holed env ~bound_pattern ~defining_expr ~parent ~hole
+    rebuild_let_expr_holed env res ~bound_pattern ~defining_expr ~parent ~hole
   | Let_cont { cont; parent; handler } ->
     if not (Name_occurrences.mem_continuation hole.free_names cont)
-    then rebuild_holed env parent hole
+    then rebuild_holed env res parent hole
     else
       let { Rev_expr.bound_parameters; expr; is_exn_handler; is_cold } =
         handler
@@ -1409,13 +1435,13 @@ and rebuild_holed (env : env) (rev_expr : Rev_expr.rev_expr_holed) (hole : RE.t)
       let parameters_to_keep =
         Continuation.Map.find cont env.cont_params_to_keep
       in
-      let cont_handler =
-        let handler =
+      let cont_handler, res =
+        let handler, res =
           match
             List.filter (is_dead_var env)
               (Bound_parameters.vars bound_parameters)
           with
-          | [] -> rebuild_expr env expr
+          | [] -> rebuild_expr env res expr
           | _ :: _ as dead_vars ->
             let msg =
               Format.asprintf
@@ -1425,9 +1451,10 @@ and rebuild_holed (env : env) (rev_expr : Rev_expr.rev_expr_holed) (hole : RE.t)
                    Variable.print)
                 dead_vars
             in
-            RE.from_expr
-              ~expr:(Expr.create_invalid (Message msg))
-              ~free_names:Name_occurrences.empty
+            ( RE.from_expr
+                ~expr:(Expr.create_invalid (Message msg))
+                ~free_names:Name_occurrences.empty,
+              res )
         in
         let l = get_parameters parameters_to_keep in
         let l =
@@ -1444,14 +1471,15 @@ and rebuild_holed (env : env) (rev_expr : Rev_expr.rev_expr_holed) (hole : RE.t)
                   fields [])
             l
         in
-        RE.create_continuation_handler
-          (Bound_parameters.create l)
-          ~handler ~is_exn_handler ~is_cold
+        ( RE.create_continuation_handler
+            (Bound_parameters.create l)
+            ~handler ~is_exn_handler ~is_cold,
+          res )
       in
       let let_cont_expr =
         RE.create_non_recursive_let_cont cont cont_handler ~body:hole
       in
-      rebuild_holed env parent let_cont_expr
+      rebuild_holed env res parent let_cont_expr
   | Let_cont_rec { parent; handlers; invariant_params } ->
     (* TODO unboxed parameters *)
     let filter_params cont params =
@@ -1467,17 +1495,21 @@ and rebuild_holed (env : env) (rev_expr : Rev_expr.rev_expr_holed) (hole : RE.t)
       in
       Bound_parameters.create params
     in
-    let handlers =
-      Continuation.Map.mapi
-        (fun cont handler ->
+    let handlers, res =
+      Continuation.Map.fold
+        (fun cont handler (handlers, res) ->
           let { Rev_expr.bound_parameters; expr; is_exn_handler; is_cold } =
             handler
           in
           let bound_parameters = filter_params cont bound_parameters in
-          let handler = rebuild_expr env expr in
-          RE.create_continuation_handler bound_parameters ~handler
-            ~is_exn_handler ~is_cold)
+          let handler, res = rebuild_expr env res expr in
+          let cont_handler =
+            RE.create_continuation_handler bound_parameters ~handler
+              ~is_exn_handler ~is_cold
+          in
+          Continuation.Map.add cont cont_handler handlers, res)
         handlers
+        (Continuation.Map.empty, res)
     in
     let invariant_params =
       filter_params
@@ -1487,9 +1519,10 @@ and rebuild_holed (env : env) (rev_expr : Rev_expr.rev_expr_holed) (hole : RE.t)
     let let_cont_expr =
       RE.create_recursive_let_cont ~invariant_params handlers ~body:hole
     in
-    rebuild_holed env parent let_cont_expr
+    rebuild_holed env res parent let_cont_expr
 
-and rebuild_expr (env : env) (rev_expr : Rev_expr.rev_expr) : RE.t =
+and rebuild_expr (env : env) (res : rebuild_result)
+    (rev_expr : Rev_expr.rev_expr) : RE.t * rebuild_result =
   let { Rev_expr.expr; holed_expr } = rev_expr in
   let expr =
     match expr with
@@ -1536,9 +1569,9 @@ and rebuild_expr (env : env) (rev_expr : Rev_expr.rev_expr) : RE.t =
         RE.from_expr ~expr ~free_names
     | Apply apply -> rebuild_apply env apply
   in
-  rebuild_holed env holed_expr expr
+  rebuild_holed env res holed_expr expr
 
-and rebuild_function_params_and_body (env : env) code_metadata
+and rebuild_function_params_and_body (env : env) res code_metadata
     (params_and_body : Rev_expr.rev_params_and_body) =
   let { Rev_expr.return_continuation;
         exn_continuation;
@@ -1570,7 +1603,7 @@ and rebuild_function_params_and_body (env : env) code_metadata
       @ (my_closure :: Bound_parameters.vars params)
     in
     match List.filter (is_dead_var env) all_vars with
-    | [] -> rebuild_expr env body
+    | [] -> rebuild_expr env res body
     | _ :: _ as dead_vars ->
       let msg =
         Format.asprintf
@@ -1580,19 +1613,21 @@ and rebuild_function_params_and_body (env : env) code_metadata
              Variable.print)
           dead_vars
       in
-      RE.from_expr
-        ~expr:(Expr.create_invalid (Message msg))
-        ~free_names:Name_occurrences.empty
+      ( RE.from_expr
+          ~expr:(Expr.create_invalid (Message msg))
+          ~free_names:Name_occurrences.empty,
+        res )
   in
   match updating_calling_convention with
   | Not_changing_calling_convention ->
-    let body = rebuild_body () in
+    let body, res = rebuild_body () in
     (* Format.eprintf "REBUILD %a FREE %a@." Code_id.print code_id
        Name_occurrences.print body.free_names; *)
     ( Function_params_and_body.create ~return_continuation ~exn_continuation
         params ~body:body.expr ~free_names_of_body:(Known body.free_names)
         ~my_closure ~my_region ~my_ghost_region ~my_depth,
-      code_metadata )
+      code_metadata,
+      res )
   | Changing_calling_convention code_id ->
     let return_decisions =
       Code_id.Map.find code_id env.function_return_decision
@@ -1658,7 +1693,7 @@ and rebuild_function_params_and_body (env : env) code_metadata
       Code_metadata.with_never_called_indirectly true
         (Code_metadata.with_params_arity params_arity code_metadata)
     in
-    let body = rebuild_body () in
+    let body, res = rebuild_body () in
     (* Format.eprintf "REBUILD %a FREE %a@." Code_id.print code_id
        Name_occurrences.print body.free_names; *)
     (* assert (List.exists Fun.id (Continuation.Map.find return_continuation
@@ -1667,13 +1702,14 @@ and rebuild_function_params_and_body (env : env) code_metadata
         (Bound_parameters.create (List.flatten params))
         ~body:body.expr ~free_names_of_body:(Known body.free_names) ~my_closure
         ~my_region ~my_ghost_region ~my_depth,
-      code_metadata )
+      code_metadata,
+      res )
 
-and rebuild_static_const_or_code env
+and rebuild_static_const_or_code env res
     ( (bound_to : Bound_static.Pattern.t),
       (static_const_or_code : Rev_expr.rev_static_const_or_code) ) =
   match static_const_or_code with
-  | Deleted_code -> Static_const_or_code.deleted_code
+  | Deleted_code -> Static_const_or_code.deleted_code, res
   | Code { params_and_body; code_metadata; free_names_of_params_and_body = _ }
     ->
     let is_my_closure_used = is_var_used env params_and_body.my_closure in
@@ -1685,8 +1721,8 @@ and rebuild_static_const_or_code env
         assert (not is_my_closure_used);
         Code_metadata.with_is_my_closure_used is_my_closure_used code_metadata)
     in
-    let params_and_body, code_metadata =
-      rebuild_function_params_and_body env code_metadata params_and_body
+    let params_and_body, code_metadata, res =
+      rebuild_function_params_and_body env res code_metadata params_and_body
     in
     let code =
       Code.create_with_metadata ~params_and_body ~code_metadata
@@ -1696,8 +1732,12 @@ and rebuild_static_const_or_code env
     assert (
       Compilation_unit.is_current
         (Code_id.get_compilation_unit (Code.code_id code)));
-    all_code := Code_id.Map.add (Code.code_id code) code !all_code;
-    Static_const_or_code.create_code code
+    let res =
+      { res with
+        all_code = Code_id.Map.add (Code.code_id code) code res.all_code
+      }
+    in
+    Static_const_or_code.create_code code, res
   | Static_const (Set_of_closures set_of_closures) ->
     let bound_to =
       match bound_to with
@@ -1705,11 +1745,14 @@ and rebuild_static_const_or_code env
       | Code _ | Block_like _ -> Misc.fatal_error "Expected Set_of_closures"
     in
     let bound_to = List.map Name.symbol bound_to in
-    let set_of_closures =
-      rewrite_set_of_closures env ~bound:bound_to set_of_closures
+    let set_of_closures, res =
+      rewrite_set_of_closures env res ~bound:bound_to set_of_closures
     in
-    SC.set_of_closures set_of_closures
-    |> Static_const_or_code.create_static_const
+    let static_const_or_code =
+      SC.set_of_closures set_of_closures
+      |> Static_const_or_code.create_static_const
+    in
+    static_const_or_code, res
   | Static_const (Other static_const) -> (
     match static_const with
     | Block _ | Boxed_float32 _ | Boxed_float _ | Boxed_int32 _ | Boxed_int64 _
@@ -1719,7 +1762,7 @@ and rebuild_static_const_or_code env
     | Immutable_nativeint_array _ | Immutable_vec128_array _
     | Immutable_value_array _ | Empty_array _ | Mutable_string _
     | Immutable_string _ ->
-      Static_const_or_code.create_static_const static_const
+      Static_const_or_code.create_static_const static_const, res
     | Set_of_closures _ ->
       Misc.fatal_errorf
         "Set_of_closures is not permitted in conjunction with Other in the \
@@ -1737,8 +1780,6 @@ let rebuild ~(code_deps : Traverse_acc.code_dep Code_id.Map.t)
     ~(continuation_info : Traverse_acc.continuation_info Continuation.Map.t)
     ~fixed_arity_continuations kinds (solved_dep : DS.result) get_code_metadata
     holed =
-  all_slot_offsets := Slot_offsets.empty;
-  all_code := Code_id.Map.empty;
   let should_keep_function_param code_id =
     let cannot_change_calling_convention =
       DS.cannot_change_calling_convention solved_dep code_id
@@ -1841,11 +1882,15 @@ let rebuild ~(code_deps : Traverse_acc.code_dep Code_id.Map.t)
       kinds
     }
   in
-  let rebuilt_expr =
-    Profile.record_call ~accumulate:true "up" (fun () -> rebuild_expr env holed)
+  let res =
+    { all_slot_offsets = Slot_offsets.empty; all_code = Code_id.Map.empty }
+  in
+  let rebuilt_expr, { all_slot_offsets; all_code } =
+    Profile.record_call ~accumulate:true "up" (fun () ->
+        rebuild_expr env res holed)
   in
   { body = rebuilt_expr.expr;
     free_names = rebuilt_expr.free_names;
-    all_code = !all_code;
-    slot_offsets = !all_slot_offsets
+    all_code;
+    slot_offsets = all_slot_offsets
   }
