@@ -1234,7 +1234,7 @@ and rebuild_let_expr_holed0 (kinds : K.t Name.Map.t) (env : env)
       bound_pattern, Named.create_set_of_closures set_of_closures
   in
   match[@ocaml.warning "-fragile-match"] bound_pattern with
-  | Bound_pattern.Set_of_closures bvs when bound_vars_will_be_unboxed env bvs ->
+  | Set_of_closures bvs when bound_vars_will_be_unboxed env bvs ->
     assert (
       List.for_all
         (fun bv ->
@@ -1293,7 +1293,7 @@ and rebuild_let_expr_holed0 (kinds : K.t Name.Map.t) (env : env)
                 assert false)
             to_bind hole)
       hole bvs
-  | Bound_pattern.Singleton bv when bound_vars_will_be_unboxed env [bv] -> (
+  | Singleton bv when bound_vars_will_be_unboxed env [bv] -> (
     let to_bind =
       Option.get
         (Dep_solver.get_unboxed_fields env.uses
@@ -1428,7 +1428,7 @@ and rebuild_let_expr_holed0 (kinds : K.t Name.Map.t) (env : env)
         Format.printf "BOUM ? %a@." Named.print named;
         assert false)
     | _ -> assert false)
-  | Bound_pattern.Singleton bv
+  | Singleton bv
     when Option.is_some
            (Dep_solver.get_changed_representation env.uses
               (Code_id_or_name.var (Bound_var.var bv))) -> (
@@ -1540,7 +1540,7 @@ and rebuild_let_expr_holed0 (kinds : K.t Name.Map.t) (env : env)
     | _ ->
       let defining_expr = rewrite_named kinds env defining_expr' in
       RE.create_let bp defining_expr ~body:hole)
-  | Bound_pattern.Set_of_closures bvs
+  | Set_of_closures bvs
     when List.exists
            (fun bv ->
              Option.is_some
