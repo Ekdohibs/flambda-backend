@@ -148,6 +148,71 @@ let get_simple_unboxable env simple =
         (Dep_solver.get_unboxed_fields env.uses (Code_id_or_name.name name)))
     simple
 
+let simple_changed_repr env simple =
+  Simple.pattern_match
+    ~const:(fun _ -> false)
+    ~name:(fun name ~coercion:_ ->
+      Option.is_some
+        (Dep_solver.get_changed_representation env.uses
+           (Code_id_or_name.name name)))
+    simple
+
+let get_simple_changed_repr env simple =
+  Simple.pattern_match
+    ~const:(fun _ -> assert false)
+    ~name:(fun name ~coercion:_ ->
+      Option.get
+        (Dep_solver.get_changed_representation env.uses
+           (Code_id_or_name.name name)))
+    simple
+
+let get_parameters params_decisions =
+  List.fold_left
+    (fun acc param_decision ->
+      match param_decision with
+      | Delete -> acc
+      | Keep (var, kind) -> Bound_parameter.create var kind :: acc
+      | Unbox fields ->
+        fold_unboxed_with_kind
+          (fun kind v acc ->
+            Bound_parameter.create v (K.With_subkind.anything kind) :: acc)
+          fields acc)
+    [] params_decisions
+  |> List.rev
+
+let get_arity params_decisions =
+  let arity =
+    List.fold_left
+      (fun acc param_decision ->
+        match param_decision with
+        | Delete -> acc
+        | Keep (_, kind) -> kind :: acc
+        | Unbox fields ->
+          fold_unboxed_with_kind
+            (fun kind _ acc -> K.With_subkind.anything kind :: acc)
+            fields acc)
+      [] params_decisions
+    |> List.rev
+  in
+  Flambda_arity.(
+    create
+      [ Unboxed_product
+          (List.map (fun k -> Component_for_creation.Singleton k) arity) ])
+
+let is_dead_var env v =
+  let (kind : K.t) = Name.Map.find (Name.var v) env.kinds in
+  match kind with
+  | Region | Rec_info -> false
+  | Value | Naked_number _ ->
+    not (Dep_solver.has_source env.uses (Code_id_or_name.var v))
+
+let get_simple_kind env simple =
+  Simple.pattern_match'
+    ~const:(fun const -> Reg_width_const.kind const)
+    ~symbol:(fun _ ~coercion:_ -> K.value)
+    ~var:(fun var ~coercion:_ -> Name.Map.find (Name.var var) env.kinds)
+    simple
+
 let rewrite_simple (env : env) simple =
   Simple.pattern_match simple
     ~name:(fun name ~coercion:_ ->
@@ -177,6 +242,35 @@ let rewrite_simple_opt (env : env) = function
       ~name:(fun name ~coercion:_ ->
         if is_name_used env name then simpl else None)
       ~const:(fun _ -> simpl)
+
+let get_args env params_decisions args =
+  List.fold_left2
+    (fun acc arg param_decision ->
+      match param_decision with
+      | Delete -> acc
+      | Keep _ -> rewrite_simple env arg :: acc
+      | Unbox fields ->
+        let arg_fields = get_simple_unboxable env arg in
+        fold2_unboxed_subset_with_kind
+          (fun _kind _param arg_field acc -> Simple.var arg_field :: acc)
+          fields arg_fields acc)
+    [] args params_decisions
+  |> List.rev
+
+let get_args_with_kinds env params_decisions args =
+  List.fold_left2
+    (fun acc arg param_decision ->
+      match param_decision with
+      | Delete -> acc
+      | Keep (_, kind) -> (rewrite_simple env arg, kind) :: acc
+      | Unbox fields ->
+        let arg_fields = get_simple_unboxable env arg in
+        fold2_unboxed_subset_with_kind
+          (fun kind _param arg_field acc ->
+            (Simple.var arg_field, K.With_subkind.anything kind) :: acc)
+          fields arg_fields acc)
+    [] args params_decisions
+  |> List.rev
 
 let rewrite_or_variable default env (or_variable : _ Or_variable.t) =
   (* CR ncourant: rewrite unboxed variables *)
@@ -356,93 +450,6 @@ let rewrite_static_const_or_code env (sc : Static_const_or_code.t) =
 let rewrite_static_const_group env (group : Static_const_group.t) =
   Static_const_group.map ~f:(rewrite_static_const_or_code env) group
 
-let simple_changed_repr env simple =
-  Simple.pattern_match
-    ~const:(fun _ -> false)
-    ~name:(fun name ~coercion:_ ->
-      Option.is_some
-        (Dep_solver.get_changed_representation env.uses
-           (Code_id_or_name.name name)))
-    simple
-
-let get_simple_changed_repr env simple =
-  Simple.pattern_match
-    ~const:(fun _ -> assert false)
-    ~name:(fun name ~coercion:_ ->
-      Option.get
-        (Dep_solver.get_changed_representation env.uses
-           (Code_id_or_name.name name)))
-    simple
-
-let get_parameters params_decisions =
-  List.fold_left
-    (fun acc param_decision ->
-      match param_decision with
-      | Delete -> acc
-      | Keep (var, kind) -> Bound_parameter.create var kind :: acc
-      | Unbox fields ->
-        fold_unboxed_with_kind
-          (fun kind v acc ->
-            Bound_parameter.create v (K.With_subkind.anything kind) :: acc)
-          fields acc)
-    [] params_decisions
-  |> List.rev
-
-let get_args env params_decisions args =
-  List.fold_left2
-    (fun acc arg param_decision ->
-      match param_decision with
-      | Delete -> acc
-      | Keep _ -> rewrite_simple env arg :: acc
-      | Unbox fields ->
-        let arg_fields = get_simple_unboxable env arg in
-        fold2_unboxed_subset_with_kind
-          (fun _kind _param arg_field acc -> Simple.var arg_field :: acc)
-          fields arg_fields acc)
-    [] args params_decisions
-  |> List.rev
-
-let get_args_with_kinds env params_decisions args =
-  List.fold_left2
-    (fun acc arg param_decision ->
-      match param_decision with
-      | Delete -> acc
-      | Keep (_, kind) -> (rewrite_simple env arg, kind) :: acc
-      | Unbox fields ->
-        let arg_fields = get_simple_unboxable env arg in
-        fold2_unboxed_subset_with_kind
-          (fun kind _param arg_field acc ->
-            (Simple.var arg_field, K.With_subkind.anything kind) :: acc)
-          fields arg_fields acc)
-    [] args params_decisions
-  |> List.rev
-
-let get_arity params_decisions =
-  let arity =
-    List.fold_left
-      (fun acc param_decision ->
-        match param_decision with
-        | Delete -> acc
-        | Keep (_, kind) -> kind :: acc
-        | Unbox fields ->
-          fold_unboxed_with_kind
-            (fun kind _ acc -> K.With_subkind.anything kind :: acc)
-            fields acc)
-      [] params_decisions
-    |> List.rev
-  in
-  Flambda_arity.(
-    create
-      [ Unboxed_product
-          (List.map (fun k -> Component_for_creation.Singleton k) arity) ])
-
-let get_simple_kind env simple =
-  Simple.pattern_match'
-    ~const:(fun const -> Reg_width_const.kind const)
-    ~symbol:(fun _ ~coercion:_ -> K.value)
-    ~var:(fun var ~coercion:_ -> Name.Map.find (Name.var var) env.kinds)
-    simple
-
 let rebuild_named_default_case env (named : Named.t) =
   let[@local] rewrite_field_access arg field =
     let arg = get_simple_unboxable env arg in
@@ -519,13 +526,6 @@ let rebuild_named_default_case env (named : Named.t) =
   | Static_consts sc ->
     Named.create_static_consts (rewrite_static_const_group env sc)
   | Rec_info r -> Named.create_rec_info r
-
-let is_dead_var env v =
-  let (kind : K.t) = Name.Map.find (Name.var v) env.kinds in
-  match kind with
-  | Region | Rec_info -> false
-  | Value | Naked_number _ ->
-    not (Dep_solver.has_source env.uses (Code_id_or_name.var v))
 
 let rewrite_apply_cont_expr env ac =
   let cont = Apply_cont_expr.continuation ac in
