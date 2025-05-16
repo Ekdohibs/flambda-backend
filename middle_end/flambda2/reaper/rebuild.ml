@@ -17,6 +17,8 @@ open! Flambda.Import
 open! Rev_expr
 module Float = Numeric_types.Float_by_bit_pattern
 module Float32 = Numeric_types.Float32_by_bit_pattern
+module K = Flambda_kind
+module P = Flambda_primitive
 module RE = Rebuilt_expr
 module Field = Global_flow_graph.Field
 
@@ -27,15 +29,15 @@ let all_slot_offsets = ref Slot_offsets.empty
 let all_code = ref Code_id.Map.empty
 
 type param_decision =
-  | Keep of Variable.t * Flambda_kind.With_subkind.t
+  | Keep of Variable.t * K.With_subkind.t
   | Delete
   | Unbox of Variable.t Dep_solver.unboxed_fields Field.Map.t
 
 let print_param_decision ppf param_decision =
   match param_decision with
   | Keep (v, kind) ->
-    Format.fprintf ppf "Keep (%a, %a)" Variable.print v
-      Flambda_kind.With_subkind.print kind
+    Format.fprintf ppf "Keep (%a, %a)" Variable.print v K.With_subkind.print
+      kind
   | Delete -> Format.fprintf ppf "Delete"
   | Unbox fields ->
     Format.fprintf ppf "Unbox %a"
@@ -49,14 +51,11 @@ type env =
     (* TODO change names *)
     cont_params_to_keep : param_decision list Continuation.Map.t;
     should_keep_param :
-      Continuation.t ->
-      Variable.t ->
-      Flambda_kind.With_subkind.t ->
-      param_decision;
+      Continuation.t -> Variable.t -> K.With_subkind.t -> param_decision;
     (* TODO same here *)
     function_params_to_keep : param_decision list Code_id.Map.t;
     should_keep_function_param :
-      Code_id.t -> Variable.t -> Flambda_kind.With_subkind.t -> param_decision;
+      Code_id.t -> Variable.t -> K.With_subkind.t -> param_decision;
     function_return_decision : param_decision list Code_id.Map.t
   }
 
@@ -82,7 +81,7 @@ let is_symbol_used (env : env) symbol =
 let is_var_used (env : env) kinds var =
   let kind = Name.Map.find (Name.var var) kinds in
   match[@ocaml.warning "-4"] kind with
-  | Flambda_kind.(Region | Rec_info) -> true
+  | K.(Region | Rec_info) -> true
   | _ -> is_used env (Code_id_or_name.var var)
 
 let is_name_used (env : env) kinds name =
@@ -93,7 +92,7 @@ let poison_value = 0 (* 123456789 *)
 
 let poison kind = Simple.const_int_of_kind kind poison_value
 
-let rec fold_unboxed_with_kind (f : Flambda_kind.t -> 'a -> 'b -> 'b)
+let rec fold_unboxed_with_kind (f : K.t -> 'a -> 'b -> 'b)
     (fields : 'a Dep_solver.unboxed_fields Field.Map.t) acc =
   Field.Map.fold
     (fun field elt acc ->
@@ -118,8 +117,7 @@ let rec fold2_unboxed_subset (f : 'a -> 'b -> 'c -> 'c)
         fold2_unboxed_subset f f1 f2 acc)
       fields1 acc
 
-let rec fold2_unboxed_subset_with_kind
-    (f : Flambda_kind.t -> 'a -> 'b -> 'c -> 'c)
+let rec fold2_unboxed_subset_with_kind (f : K.t -> 'a -> 'b -> 'c -> 'c)
     (fields1 : 'a Dep_solver.unboxed_fields Field.Map.t)
     (fields2 : 'b Dep_solver.unboxed_fields Field.Map.t) acc =
   Field.Map.fold
@@ -167,7 +165,7 @@ let rewrite_simple kinds (env : env) simple =
           | Some k -> k
           | None ->
             if Name.is_symbol name
-            then Flambda_kind.value
+            then K.value
             else Misc.fatal_errorf "Unbound name %a" Name.print name
         in
         poison kind)
@@ -400,8 +398,7 @@ let get_parameters params_decisions =
       | Unbox fields ->
         fold_unboxed_with_kind
           (fun kind v acc ->
-            Bound_parameter.create v (Flambda_kind.With_subkind.anything kind)
-            :: acc)
+            Bound_parameter.create v (K.With_subkind.anything kind) :: acc)
           fields acc)
     [] params_decisions
   |> List.rev
@@ -430,8 +427,7 @@ let get_args_with_kinds kinds env params_decisions args =
         let arg_fields = get_simple_unboxable env arg in
         fold2_unboxed_subset_with_kind
           (fun kind _param arg_field acc ->
-            (Simple.var arg_field, Flambda_kind.With_subkind.anything kind)
-            :: acc)
+            (Simple.var arg_field, K.With_subkind.anything kind) :: acc)
           fields arg_fields acc)
     [] args params_decisions
   |> List.rev
@@ -445,7 +441,7 @@ let get_arity params_decisions =
         | Keep (_, kind) -> kind :: acc
         | Unbox fields ->
           fold_unboxed_with_kind
-            (fun kind _ acc -> Flambda_kind.With_subkind.anything kind :: acc)
+            (fun kind _ acc -> K.With_subkind.anything kind :: acc)
             fields acc)
       [] params_decisions
     |> List.rev
@@ -458,7 +454,7 @@ let get_arity params_decisions =
 let get_simple_kind kinds simple =
   Simple.pattern_match'
     ~const:(fun const -> Reg_width_const.kind const)
-    ~symbol:(fun _ ~coercion:_ -> Flambda_kind.value)
+    ~symbol:(fun _ ~coercion:_ -> K.value)
     ~var:(fun var ~coercion:_ -> Name.Map.find (Name.var var) kinds)
     simple
 
@@ -484,7 +480,7 @@ let rewrite_named kinds env (named : Named.t) =
         Misc.fatal_errorf "Trying to bind non-unboxed to unboxed"
       | Dep_solver.Not_unboxed (field, kind) ->
         Named.create_prim
-          (Flambda_primitive.Unary
+          (P.Unary
              ( Block_load
                  { field = Targetint_31_63.of_int field; kind; mut = Immutable },
                arg ))
@@ -497,7 +493,7 @@ let rewrite_named kinds env (named : Named.t) =
         Misc.fatal_errorf "Trying to bind non-unboxed to unboxed"
       | Dep_solver.Not_unboxed value_slot ->
         Named.create_prim
-          (Flambda_primitive.Unary
+          (P.Unary
              ( Project_value_slot
                  { value_slot;
                    project_from =
@@ -510,7 +506,7 @@ let rewrite_named kinds env (named : Named.t) =
   | Simple simple -> Named.create_simple (rewrite_simple kinds env simple)
   | Prim (Unary (Block_load { kind; field; _ }, arg), _dbg)
     when simple_is_unboxable env arg ->
-    let kind = Flambda_primitive.Block_access_kind.element_kind_for_load kind in
+    let kind = P.Block_access_kind.element_kind_for_load kind in
     let field =
       Global_flow_graph.Field.Block (Targetint_31_63.to_int field, kind)
     in
@@ -525,7 +521,7 @@ let rewrite_named kinds env (named : Named.t) =
     rewrite_field_access arg Global_flow_graph.Field.Get_tag
   | Prim (Unary (Block_load { kind; field; _ }, arg), dbg)
     when simple_changed_repr env arg ->
-    let kind = Flambda_primitive.Block_access_kind.element_kind_for_load kind in
+    let kind = P.Block_access_kind.element_kind_for_load kind in
     let field =
       Global_flow_graph.Field.Block (Targetint_31_63.to_int field, kind)
     in
@@ -540,7 +536,7 @@ let rewrite_named kinds env (named : Named.t) =
   | Prim (Unary (Get_tag, arg), dbg) when simple_changed_repr env arg ->
     rewrite_field_access_chg_repr arg Global_flow_graph.Field.Get_tag dbg
   | Prim (prim, dbg) ->
-    let prim = Flambda_primitive.map_args (rewrite_simple kinds env) prim in
+    let prim = P.map_args (rewrite_simple kinds env) prim in
     Named.create_prim prim dbg
   | Set_of_closures s -> Named.create_set_of_closures s (* Already rewritten *)
   | Static_consts sc ->
@@ -550,7 +546,7 @@ let rewrite_named kinds env (named : Named.t) =
 let is_dead_var env kinds v =
   let kind = Name.Map.find (Name.var v) kinds in
   match[@ocaml.warning "-4"] kind with
-  | Flambda_kind.(Region | Rec_info) -> false
+  | K.(Region | Rec_info) -> false
   | _ -> not (Dep_solver.has_source env.uses (Code_id_or_name.var v))
 
 let rewrite_apply_cont_expr kinds env ac =
@@ -609,8 +605,8 @@ let function_params_and_body_free_names fpb =
         (o2l my_region @ o2l my_ghost_region
         @ (my_closure :: my_depth :: Bound_parameters.vars params)))
 
-let rec rebuild_expr (kinds : Flambda_kind.t Name.Map.t) (env : env)
-    (rev_expr : rev_expr) : RE.t =
+let rec rebuild_expr (kinds : K.t Name.Map.t) (env : env) (rev_expr : rev_expr)
+    : RE.t =
   let { expr; holed_expr } = rev_expr in
   let expr =
     match expr with
@@ -828,9 +824,7 @@ let rec rebuild_expr (kinds : Flambda_kind.t Name.Map.t) (env : env)
                       | Keep (_, _), Keep (v, _) ->
                         i + 1, Simple.var v :: rev_args
                       | Keep (_, kind), Delete ->
-                        ( i + 1,
-                          poison (Flambda_kind.With_subkind.kind kind)
-                          :: rev_args )
+                        i + 1, poison (K.With_subkind.kind kind) :: rev_args
                       | Unbox fields_apply, Unbox fields_func ->
                         ( i + 1,
                           fold2_unboxed_subset_with_kind
@@ -905,7 +899,7 @@ let rec rebuild_expr (kinds : Flambda_kind.t Name.Map.t) (env : env)
             let new_args =
               fold_unboxed_with_kind
                 (fun kind v acc ->
-                  (Simple.var v, Flambda_kind.With_subkind.anything kind) :: acc)
+                  (Simple.var v, K.With_subkind.anything kind) :: acc)
                 fields []
             in
             new_args, None
@@ -968,8 +962,8 @@ let rec rebuild_expr (kinds : Flambda_kind.t Name.Map.t) (env : env)
   in
   rebuild_holed kinds env holed_expr expr
 
-and rebuild_function_params_and_body (kinds : Flambda_kind.t Name.Map.t)
-    (env : env) code_metadata (params_and_body : rev_params_and_body) =
+and rebuild_function_params_and_body (kinds : K.t Name.Map.t) (env : env)
+    code_metadata (params_and_body : rev_params_and_body) =
   let { return_continuation;
         exn_continuation;
         params;
@@ -1064,8 +1058,7 @@ and rebuild_function_params_and_body (kinds : Flambda_kind.t Name.Map.t)
       | Some fields ->
         ( fold_unboxed_with_kind
             (fun kind v acc ->
-              Bound_parameter.create v (Flambda_kind.With_subkind.anything kind)
-              :: acc)
+              Bound_parameter.create v (K.With_subkind.anything kind) :: acc)
             fields [],
           Code_metadata.with_is_my_closure_used false code_metadata )
     in
@@ -1109,7 +1102,7 @@ and bind_fields fields arg_fields hole =
       RE.create_let bp (Named.create_simple (Simple.var arg)) ~body:hole)
     fields arg_fields hole
 
-and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
+and rebuild_holed (kinds : K.t Name.Map.t) (env : env)
     (rev_expr : rev_expr_holed) (hole : RE.t) : RE.t =
   match rev_expr with
   | Up -> hole
@@ -1362,7 +1355,7 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
                       in
                       let named =
                         Named.create_prim
-                          (Flambda_primitive.Unary
+                          (P.Unary
                              ( Block_load
                                  { field = Targetint_31_63.of_int field;
                                    kind;
@@ -1384,7 +1377,7 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
                       in
                       let named =
                         Named.create_prim
-                          (Flambda_primitive.Unary
+                          (P.Unary
                              ( Project_value_slot
                                  { value_slot;
                                    project_from =
@@ -1410,8 +1403,7 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
                           if nth < List.length args
                           then
                             let arg = List.nth args nth in
-                            if Flambda_kind.equal field_kind
-                                 (get_simple_kind kinds arg)
+                            if K.equal field_kind (get_simple_kind kinds arg)
                             then arg
                             else poison field_kind
                           else poison field_kind
@@ -1421,9 +1413,7 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
                         else Either.Left arg
                       | Is_int -> Either.Left Simple.untagged_const_false
                       | Get_tag ->
-                        let tag, _ =
-                          Flambda_primitive.Block_kind.to_shape kind
-                        in
+                        let tag, _ = P.Block_kind.to_shape kind in
                         Either.Left
                           (Simple.untagged_const_int
                              (Tag.to_targetint_31_63 tag))
@@ -1455,8 +1445,7 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
                 let field =
                   Field.Block
                     ( Targetint_31_63.to_int field,
-                      Flambda_primitive.Block_access_kind.element_kind_for_load
-                        kind )
+                      P.Block_access_kind.element_kind_for_load kind )
                 in
                 load_field field arg dbg
               | Prim
@@ -1577,13 +1566,12 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
               in
               let named =
                 Named.create_prim
-                  (Flambda_primitive.Variadic
+                  (P.Variadic
                      ( Make_block
-                         ( Flambda_primitive.Block_kind.Values
+                         ( P.Block_kind.Values
                              ( Tag.Scannable.zero,
-                               List.map
-                                 (fun _ -> Flambda_kind.With_subkind.any_value)
-                                 args ),
+                               List.map (fun _ -> K.With_subkind.any_value) args
+                             ),
                            Immutable,
                            alloc_mode ),
                        args ))
@@ -1627,36 +1615,34 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
                 | Singleton v -> Name.var (Bound_var.var v)
                 | Set_of_closures _ | Static _ -> assert false
               in
-              let _tag, block_shape =
-                Flambda_primitive.Block_kind.to_shape block_kind
-              in
+              let _tag, block_shape = P.Block_kind.to_shape block_kind in
               let block_kind =
                 match block_kind with
                 | Mixed _ | Naked_floats -> block_kind
                 | Values (tag, subkinds) -> (
                   let ks =
-                    Flambda_kind.With_subkind.create Flambda_kind.value
-                      (Flambda_kind.With_subkind.Non_null_value_subkind.Variant
+                    K.With_subkind.create K.value
+                      (K.With_subkind.Non_null_value_subkind.Variant
                          { consts = Targetint_31_63.Set.empty;
                            non_consts =
                              Tag.Scannable.Map.singleton tag
                                (block_shape, subkinds)
                          })
-                      Flambda_kind.With_subkind.Nullable.Non_nullable
+                      K.With_subkind.Nullable.Non_nullable
                   in
                   let ks =
                     Dep_solver.rewrite_kind_with_subkind env.uses bound_name ks
                   in
                   let[@local] with_subkinds subkinds =
-                    Flambda_primitive.Block_kind.Values (tag, subkinds)
+                    P.Block_kind.Values (tag, subkinds)
                   in
                   let[@local] default () =
                     with_subkinds
                       (List.map
-                         (fun ks -> Flambda_kind.With_subkind.erase_subkind ks)
+                         (fun ks -> K.With_subkind.erase_subkind ks)
                          subkinds)
                   in
-                  match Flambda_kind.With_subkind.non_null_value_subkind ks with
+                  match K.With_subkind.non_null_value_subkind ks with
                   | Variant { consts = _; non_consts } -> (
                     match Tag.Scannable.Map.get_singleton non_consts with
                     | Some (_, (_, subkinds)) -> with_subkinds subkinds
@@ -1667,9 +1653,7 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
               let fields =
                 List.mapi
                   (fun i field ->
-                    let kind =
-                      Flambda_kind.Block_shape.element_kind block_shape i
-                    in
+                    let kind = K.Block_shape.element_kind block_shape i in
                     let f = Global_flow_graph.Field.Block (i, kind) in
                     if Dep_solver.field_used env.uses bound_name f
                     then rewrite_simple kinds env field
@@ -1698,7 +1682,7 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
       (* CR ncourant: we should probably properly track regions *)
       let is_begin_region =
         match let_.defining_expr with
-        | Named (Prim (prim, _)) -> Flambda_primitive.is_begin_region prim
+        | Named (Prim (prim, _)) -> P.is_begin_region prim
         | Named (Simple _ | Set_of_closures _ | Static_consts _ | Rec_info _)
         | Set_of_closures _ | Static_consts _ ->
           false
@@ -1746,8 +1730,7 @@ and rebuild_holed (kinds : Flambda_kind.t Name.Map.t) (env : env)
               | Some fields ->
                 fold_unboxed_with_kind
                   (fun kind v acc ->
-                    Bound_parameter.create v
-                      (Flambda_kind.With_subkind.anything kind)
+                    Bound_parameter.create v (K.With_subkind.anything kind)
                     :: acc)
                   fields [])
             l
