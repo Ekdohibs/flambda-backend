@@ -1368,7 +1368,7 @@ let rec default_defining_expr_for_rebuilding_let env res
       rewrite_set_of_closures env res ~bound set_of_closures
     in
     let is_phantom =
-      Name_mode.is_phantom @@ Bound_pattern.name_mode bound_pattern
+      Name_mode.is_phantom (Bound_pattern.name_mode bound_pattern)
     in
     let res =
       { res with
