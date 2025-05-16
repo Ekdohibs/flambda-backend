@@ -740,8 +740,8 @@ let rebuild_apply env apply =
   (* CR ncourant: we never rewrite alloc_mode. This is currently ok because we
      never remove begin- or end-region primitives, but might be needed later if
      we chose to handle them. *)
-  let call_kind = rewrite_call_kind env (Apply.call_kind apply) in
   let updating_calling_convention, call_kind =
+    let call_kind = rewrite_call_kind env (Apply.call_kind apply) in
     let code_id_actually_called, call_kind, _should_break_call =
       let called c alloc_mode call_kind was_indirect_unknown_arity =
         let code_id =
