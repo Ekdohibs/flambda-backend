@@ -1474,6 +1474,7 @@ and rebuild_singleton_binding_whose_representation_is_being_changed kinds env bp
     in
     RE.create_let bp named ~body:hole
   | _ ->
+    (* XXX mshinwell: when do we end up here? *)
     let defining_expr =
       rebuild_named_default_case kinds env new_defining_expr
     in
