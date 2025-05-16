@@ -712,34 +712,35 @@ let make_apply_wrapper env
     in
     RE.create_non_recursive_let_cont return_cont_wrapper cont_handler ~body
 
+let rewrite_call_kind env (call_kind : Call_kind.t) =
+  let rewrite_simple = rewrite_simple env in
+  match call_kind with
+  | Function _ as ck -> ck
+  | Method { kind; obj; alloc_mode } ->
+    Call_kind.method_call kind ~obj:(rewrite_simple obj) alloc_mode
+  | C_call _ as ck -> ck
+  | Effect (Perform { eff }) ->
+    Call_kind.effect (Call_kind.Effect.perform ~eff:(rewrite_simple eff))
+  | Effect (Reperform { eff; cont; last_fiber }) ->
+    Call_kind.effect
+      (Call_kind.Effect.reperform ~eff:(rewrite_simple eff)
+         ~cont:(rewrite_simple cont)
+         ~last_fiber:(rewrite_simple last_fiber))
+  | Effect (Run_stack { stack; f; arg }) ->
+    Call_kind.effect
+      (Call_kind.Effect.run_stack ~stack:(rewrite_simple stack)
+         ~f:(rewrite_simple f) ~arg:(rewrite_simple arg))
+  | Effect (Resume { stack; f; arg; last_fiber }) ->
+    Call_kind.effect
+      (Call_kind.Effect.resume ~stack:(rewrite_simple stack)
+         ~f:(rewrite_simple f) ~arg:(rewrite_simple arg)
+         ~last_fiber:(rewrite_simple last_fiber))
+
 let rebuild_apply env apply =
   (* CR ncourant: we never rewrite alloc_mode. This is currently ok because we
      never remove begin- or end-region primitives, but might be needed later if
      we chose to handle them. *)
-  let call_kind =
-    let rewrite_simple = rewrite_simple env in
-    match Apply.call_kind apply with
-    | Function _ as ck -> ck
-    | Method { kind; obj; alloc_mode } ->
-      Call_kind.method_call kind ~obj:(rewrite_simple obj) alloc_mode
-    | C_call _ as ck -> ck
-    | Effect (Perform { eff }) ->
-      Call_kind.effect (Call_kind.Effect.perform ~eff:(rewrite_simple eff))
-    | Effect (Reperform { eff; cont; last_fiber }) ->
-      Call_kind.effect
-        (Call_kind.Effect.reperform ~eff:(rewrite_simple eff)
-           ~cont:(rewrite_simple cont)
-           ~last_fiber:(rewrite_simple last_fiber))
-    | Effect (Run_stack { stack; f; arg }) ->
-      Call_kind.effect
-        (Call_kind.Effect.run_stack ~stack:(rewrite_simple stack)
-           ~f:(rewrite_simple f) ~arg:(rewrite_simple arg))
-    | Effect (Resume { stack; f; arg; last_fiber }) ->
-      Call_kind.effect
-        (Call_kind.Effect.resume ~stack:(rewrite_simple stack)
-           ~f:(rewrite_simple f) ~arg:(rewrite_simple arg)
-           ~last_fiber:(rewrite_simple last_fiber))
-  in
+  let call_kind = rewrite_call_kind env (Apply.call_kind apply) in
   let code_id_actually_called, new_call_kind, _should_break_call =
     let called c alloc_mode call_kind was_indirect_unknown_arity =
       let code_id =
