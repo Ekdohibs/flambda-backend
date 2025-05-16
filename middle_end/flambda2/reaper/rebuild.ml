@@ -577,6 +577,14 @@ let bound_vars_will_be_unboxed env bvs =
            (Code_id_or_name.var (Bound_var.var bv))))
     bvs
 
+let bound_vars_will_have_their_representation_changed env bvs =
+  List.exists
+    (fun bv ->
+      Option.is_some
+        (Dep_solver.get_changed_representation env.uses
+           (Code_id_or_name.var (Bound_var.var bv))))
+    bvs
+
 let function_params_and_body_free_names fpb =
   Function_params_and_body.pattern_match fpb
     ~f:(fun
@@ -1438,10 +1446,8 @@ and rebuild_let_expr_holed0 (kinds : K.t Name.Map.t) (env : env)
   | Singleton bv when bound_vars_will_be_unboxed env [bv] ->
     rebuild_singleton_binding_which_is_being_unboxed kinds env bv ~defining_expr
       ~hole
-  | Singleton bv
-    when Option.is_some
-           (Dep_solver.get_changed_representation env.uses
-              (Code_id_or_name.var (Bound_var.var bv))) -> (
+  | Singleton bv when bound_vars_will_have_their_representation_changed env [bv]
+    -> (
     (* TODO when this block is stored anywhere else, the subkind is no longer
        correct... we need to fix that somehow *)
     match defining_expr with
@@ -1551,12 +1557,7 @@ and rebuild_let_expr_holed0 (kinds : K.t Name.Map.t) (env : env)
       let defining_expr = rewrite_named kinds env defining_expr' in
       RE.create_let bp defining_expr ~body:hole)
   | Set_of_closures bvs
-    when List.exists
-           (fun bv ->
-             Option.is_some
-               (Dep_solver.get_changed_representation env.uses
-                  (Code_id_or_name.var (Bound_var.var bv))))
-           bvs ->
+    when bound_vars_will_have_their_representation_changed env bvs ->
     let bound = List.map (fun bv -> Name.var (Bound_var.var bv)) bvs in
     let set =
       match[@ocaml.warning "-fragile-match"] defining_expr with
