@@ -1161,6 +1161,67 @@ and rebuild_static_const_or_code kinds env
          Static_const case:@ %a"
         SC.print static_const)
 
+and rebuild_set_of_closures_binding_which_is_being_unboxed env bvs
+    ~(defining_expr : Rev_expr.rev_named) ~hole =
+  assert (
+    List.for_all
+      (fun bv ->
+        (not
+           (Dep_solver.has_use env.uses
+              (Code_id_or_name.var (Bound_var.var bv))))
+        || Option.is_some
+             (Dep_solver.get_unboxed_fields env.uses
+                (Code_id_or_name.var (Bound_var.var bv))))
+      bvs);
+  List.fold_left
+    (fun hole bv ->
+      if not
+           (Dep_solver.has_use env.uses
+              (Code_id_or_name.var (Bound_var.var bv)))
+      then hole
+      else
+        let to_bind =
+          Option.get
+            (Dep_solver.get_unboxed_fields env.uses
+               (Code_id_or_name.var (Bound_var.var bv)))
+        in
+        let value_slots =
+          match[@ocaml.warning "-fragile-match"] defining_expr with
+          | Named (Set_of_closures _set) ->
+            (* Possible ? *)
+            assert false
+            (* Set_of_closures.value_slots set *)
+          | Set_of_closures set -> set.value_slots
+          | _ -> assert false
+        in
+        Field.Map.fold
+          (fun (field : GFG.Field.t) var hole ->
+            match field with
+            | Value_slot value_slot ->
+              let arg = Value_slot.Map.find value_slot value_slots in
+              if simple_is_unboxable env arg
+              then
+                bind_fields var
+                  (Dep_solver.Unboxed (get_simple_unboxable env arg))
+                  hole
+              else
+                let var =
+                  match var with
+                  | Dep_solver.Not_unboxed var -> var
+                  | Dep_solver.Unboxed _ ->
+                    Misc.fatal_errorf "Trying to unbox non-unboxable"
+                in
+                let bp =
+                  Bound_pattern.singleton
+                    (Bound_var.create var Name_mode.normal)
+                in
+                RE.create_let bp (Named.create_simple arg) ~body:hole
+            | Block _ | Is_int | Get_tag | Function_slot _ | Code_of_closure
+            | Apply _ | Code_id_of_call_witness _ ->
+              assert false)
+          to_bind hole)
+    hole bvs
+
 and rebuild_let_expr_holed0 (kinds : K.t Name.Map.t) (env : env)
     ~(bound_pattern : Bound_pattern.t) ~(defining_expr : Rev_expr.rev_named)
     ~hole : RE.t =
@@ -1235,64 +1296,8 @@ and rebuild_let_expr_holed0 (kinds : K.t Name.Map.t) (env : env)
   in
   match[@ocaml.warning "-fragile-match"] bound_pattern with
   | Set_of_closures bvs when bound_vars_will_be_unboxed env bvs ->
-    assert (
-      List.for_all
-        (fun bv ->
-          (not
-             (Dep_solver.has_use env.uses
-                (Code_id_or_name.var (Bound_var.var bv))))
-          || Option.is_some
-               (Dep_solver.get_unboxed_fields env.uses
-                  (Code_id_or_name.var (Bound_var.var bv))))
-        bvs);
-    List.fold_left
-      (fun hole bv ->
-        if not
-             (Dep_solver.has_use env.uses
-                (Code_id_or_name.var (Bound_var.var bv)))
-        then hole
-        else
-          let to_bind =
-            Option.get
-              (Dep_solver.get_unboxed_fields env.uses
-                 (Code_id_or_name.var (Bound_var.var bv)))
-          in
-          let value_slots =
-            match defining_expr with
-            | Named (Set_of_closures _set) ->
-              (* Possible ? *)
-              assert false
-              (* Set_of_closures.value_slots set *)
-            | Set_of_closures set -> set.value_slots
-            | _ -> assert false
-          in
-          Field.Map.fold
-            (fun (field : GFG.Field.t) var hole ->
-              match field with
-              | Value_slot value_slot ->
-                let arg = Value_slot.Map.find value_slot value_slots in
-                if simple_is_unboxable env arg
-                then
-                  bind_fields var
-                    (Dep_solver.Unboxed (get_simple_unboxable env arg))
-                    hole
-                else
-                  let var =
-                    match var with
-                    | Dep_solver.Not_unboxed var -> var
-                    | Dep_solver.Unboxed _ ->
-                      Misc.fatal_errorf "Trying to unbox non-unboxable"
-                  in
-                  let bp =
-                    Bound_pattern.singleton
-                      (Bound_var.create var Name_mode.normal)
-                  in
-                  RE.create_let bp (Named.create_simple arg) ~body:hole
-              | Block _ | Is_int | Get_tag | Function_slot _ | Code_of_closure
-              | Apply _ | Code_id_of_call_witness _ ->
-                assert false)
-            to_bind hole)
-      hole bvs
+    rebuild_set_of_closures_binding_which_is_being_unboxed env bvs
+      ~defining_expr ~hole
   | Singleton bv when bound_vars_will_be_unboxed env [bv] -> (
     let to_bind =
       Option.get
