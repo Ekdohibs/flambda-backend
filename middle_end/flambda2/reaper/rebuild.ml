@@ -14,7 +14,6 @@
 (**************************************************************************)
 
 open! Flambda.Import
-open! Rev_expr
 module Float = Numeric_types.Float_by_bit_pattern
 module Float32 = Numeric_types.Float32_by_bit_pattern
 module GFG = Global_flow_graph
@@ -23,8 +22,6 @@ module P = Flambda_primitive
 module RE = Rebuilt_expr
 module SC = Static_const
 module Field = GFG.Field
-
-type rev_expr = Rev_expr.t
 
 let all_slot_offsets = ref Slot_offsets.empty
 
@@ -200,7 +197,8 @@ let rewrite_simples_with_debuginfo env simples =
   List.map (rewrite_simple_with_debuginfo env) simples
 
 let rewrite_set_of_closures env ~(bound : Name.t list)
-    ({ function_decls; value_slots; alloc_mode } : rev_set_of_closures) =
+    ({ Rev_expr.function_decls; value_slots; alloc_mode } :
+      Rev_expr.rev_set_of_closures) =
   let slot_is_used slot =
     List.exists
       (fun bound_name ->
@@ -1141,7 +1139,8 @@ let rec default_defining_expr_for_rebuilding_let env
     in
     let bound_and_group =
       List.filter_map
-        (fun ((p, e) as arg : Bound_static.Pattern.t * _) ->
+        (fun ((p, e) as arg :
+               Bound_static.Pattern.t * Rev_expr.rev_static_const_or_code) ->
           match p with
           | Code code_id ->
             if is_code_id_used env code_id
@@ -1153,7 +1152,7 @@ let rec default_defining_expr_for_rebuilding_let env
               | Static_const _ ->
                 (* Pattern is [Code _], so can't bind static const *)
                 assert false);
-              Some (p, Deleted_code))
+              Some (p, Rev_expr.Deleted_code))
           | Block_like sym -> if is_symbol_used env sym then Some arg else None
           | Set_of_closures m ->
             if Function_slot.Lmap.exists
@@ -1222,7 +1221,8 @@ and rebuild_let_expr_holed (env : env) ~(bound_pattern : Bound_pattern.t)
   in
   rebuild_holed env parent subexpr
 
-and rebuild_holed (env : env) (rev_expr : rev_expr_holed) (hole : RE.t) : RE.t =
+and rebuild_holed (env : env) (rev_expr : Rev_expr.rev_expr_holed) (hole : RE.t)
+    : RE.t =
   match rev_expr with
   | Hole -> hole
   | Let { bound_pattern; defining_expr; parent } ->
@@ -1231,7 +1231,9 @@ and rebuild_holed (env : env) (rev_expr : rev_expr_holed) (hole : RE.t) : RE.t =
     if not (Name_occurrences.mem_continuation hole.free_names cont)
     then rebuild_holed env parent hole
     else
-      let { bound_parameters; expr; is_exn_handler; is_cold } = handler in
+      let { Rev_expr.bound_parameters; expr; is_exn_handler; is_cold } =
+        handler
+      in
       let parameters_to_keep =
         Continuation.Map.find cont env.cont_params_to_keep
       in
@@ -1298,7 +1300,9 @@ and rebuild_holed (env : env) (rev_expr : rev_expr_holed) (hole : RE.t) : RE.t =
     let handlers =
       Continuation.Map.mapi
         (fun cont handler ->
-          let { bound_parameters; expr; is_exn_handler; is_cold } = handler in
+          let { Rev_expr.bound_parameters; expr; is_exn_handler; is_cold } =
+            handler
+          in
           let bound_parameters = filter_params cont bound_parameters in
           let handler = rebuild_expr env expr in
           RE.create_continuation_handler bound_parameters ~handler
@@ -1315,8 +1319,8 @@ and rebuild_holed (env : env) (rev_expr : rev_expr_holed) (hole : RE.t) : RE.t =
     in
     rebuild_holed env parent let_cont_expr
 
-and rebuild_expr (env : env) (rev_expr : rev_expr) : RE.t =
-  let { expr; holed_expr } = rev_expr in
+and rebuild_expr (env : env) (rev_expr : Rev_expr.rev_expr) : RE.t =
+  let { Rev_expr.expr; holed_expr } = rev_expr in
   let expr =
     match expr with
     | Invalid { message } ->
@@ -1570,8 +1574,8 @@ and rebuild_expr (env : env) (rev_expr : rev_expr) : RE.t =
   rebuild_holed env holed_expr expr
 
 and rebuild_function_params_and_body (env : env) code_metadata
-    (params_and_body : rev_params_and_body) =
-  let { return_continuation;
+    (params_and_body : Rev_expr.rev_params_and_body) =
+  let { Rev_expr.return_continuation;
         exn_continuation;
         params;
         body;
@@ -1701,7 +1705,8 @@ and rebuild_function_params_and_body (env : env) code_metadata
       code_metadata )
 
 and rebuild_static_const_or_code env
-    ((bound_to : Bound_static.Pattern.t), static_const_or_code) =
+    ( (bound_to : Bound_static.Pattern.t),
+      (static_const_or_code : Rev_expr.rev_static_const_or_code) ) =
   match static_const_or_code with
   | Deleted_code -> Static_const_or_code.deleted_code
   | Code { params_and_body; code_metadata; free_names_of_params_and_body = _ }
