@@ -108,10 +108,21 @@ let used_fields_rel = rel3 "used_fields" Cols.[n; f; n]
 let used_fields_top_rel = rel2 "used_fields_top" Cols.[n; f]
 
 let sources_rel = rel2 "sources" Cols.[n; n]
+(** [sources x y] y is a source of x, and there is an actual source for y *)
 
 let any_source_pred = rel1 "any_source" Cols.[n]
+(** [any_source x] the special extern value 'any_source' is a source of x
+    it represents the top for the sources.
+    It can be produced for instance by an argument from an escaping function
+    or the result of non axiomatized primitives and external symbols.
+    Right now functions coming from other files are considered unknown *)
 
 let field_sources_rel = rel3 "field_sources" Cols.[n; f; n]
+(** [field_sources x f y] y is a source of the field f of x,
+    and there is an actual source for y.
+    Exists only if [constructor x f y].
+    (this avoids the quadratic blowup of building the complete alias graph)
+*)
 
 let field_top_sources_rel = rel2 "field_top_sources" Cols.[n; f]
 
@@ -157,7 +168,9 @@ let datalog_schedule =
   let open Global_flow_graph in
   let open! Syntax in
   (* Reverse relations, because datalog does not implement a more efficient
-     representation yet. *)
+     representation yet.
+     Datalog iterates on the first key of a relation first. those reversed
+     relations allows to select a different key. *)
   let rev_alias =
     let$ [to_; from] = ["to_"; "from"] in
     [alias_rel to_ from] ==> rev_alias_rel from to_
