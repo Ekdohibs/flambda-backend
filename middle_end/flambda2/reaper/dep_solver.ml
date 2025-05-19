@@ -104,8 +104,22 @@ let usages_rel = rel2 "usages" Cols.[n; n]
 (** [usages x y] y is an alias of x, and there is an actual use for y *)
 
 let used_fields_rel = rel3 "used_fields" Cols.[n; f; n]
+(** [used_fields x f y] y is an use of the field f of x
+    and there is an actual use for y.
+    Exists only if [accessor y f x].
+    (this avoids the quadratic blowup of building the complete alias graph)
+*)
+
+let used_pred = Global_flow_graph.used_pred
+(** [used x] x is used in an uncontrolled way *)
 
 let used_fields_top_rel = rel2 "used_fields_top" Cols.[n; f]
+(** [used_fields_top x f] the field f of x is used in an uncontroled way.
+    It could be for instance, a value escaping the current compilation unit,
+    or passed as argument to an non axiomatized function or primitive.
+    Exists only if [accessor y f x] for some y.
+    (this avoids propagating large number of fields properties on many variables)
+*)
 
 let sources_rel = rel2 "sources" Cols.[n; n]
 (** [sources x y] y is a source of x, and there is an actual source for y *)
@@ -125,6 +139,8 @@ let field_sources_rel = rel3 "field_sources" Cols.[n; f; n]
 *)
 
 let field_top_sources_rel = rel2 "field_top_sources" Cols.[n; f]
+(** [field_top_sources x f] the special extern value is a source for the field f of x *)
+(** CR pchambart: is there a reason why this is called top an not any source ? *)
 
 let cofield_sources_rel = rel3 "cofield_sources" Cols.[n; cf; n]
 
