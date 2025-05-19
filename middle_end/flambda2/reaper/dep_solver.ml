@@ -110,7 +110,7 @@ let used_fields_rel = rel3 "used_fields" Cols.[n; f; n]
     (this avoids the quadratic blowup of building the complete alias graph)
 *)
 
-let used_pred = Global_flow_graph.used_pred
+let _used_pred = Global_flow_graph.used_pred
 (** [used x] x is used in an uncontrolled way *)
 
 let used_fields_top_rel = rel2 "used_fields_top" Cols.[n; f]
@@ -140,7 +140,7 @@ let field_sources_rel = rel3 "field_sources" Cols.[n; f; n]
 
 let field_top_sources_rel = rel2 "field_top_sources" Cols.[n; f]
 (** [field_top_sources x f] the special extern value is a source for the field f of x *)
-(** CR pchambart: is there a reason why this is called top an not any source ? *)
+(* CR pchambart: is there a reason why this is called top an not any source ? *)
 
 let cofield_sources_rel = rel3 "cofield_sources" Cols.[n; cf; n]
 
