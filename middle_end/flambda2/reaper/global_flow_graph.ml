@@ -225,9 +225,6 @@ module CoAccessor_rel =
 module CoConstructor_rel =
   Datalog.Schema.Relation3 (Code_id_or_name) (CoFieldC) (Code_id_or_name)
 module Used_pred = Datalog.Schema.Relation1 (Code_id_or_name)
-module Used_fields_top_rel = Datalog.Schema.Relation2 (Code_id_or_name) (FieldC)
-module Used_fields_rel =
-  Datalog.Schema.Relation3 (Code_id_or_name) (FieldC) (Code_id_or_name)
 
 type graph =
   { mutable alias_rel : Alias_rel.t;
@@ -284,11 +281,6 @@ let propagate_rel = Propagate_rel.create ~name:"propagate"
 
 let used_pred = Used_pred.create ~name:"used"
 
-let used_fields_top_rel = Used_fields_top_rel.create ~name:"used_fields_top"
-
-let used_fields_rel =
-  Datalog.create_relation ~name:"used_fields" Used_fields_rel.columns
-
 let to_datalog graph =
   Datalog.set_table alias_rel graph.alias_rel
   @@ Datalog.set_table use_rel graph.use_rel
@@ -335,11 +327,6 @@ let propagate_rel if_used to_ from =
   Datalog.atom propagate_rel [if_used; to_; from]
 
 let used_pred var = Datalog.atom used_pred [var]
-
-let used_fields_top_rel var field = Datalog.atom used_fields_top_rel [var; field]
-
-let used_fields_rel var field used_as =
-  Datalog.atom used_fields_rel [var; field; used_as]
 
 let create () =
   { alias_rel = Alias_rel.empty;

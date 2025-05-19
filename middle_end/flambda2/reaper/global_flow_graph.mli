@@ -93,10 +93,6 @@ val propagate_rel :
 
 val used_pred : (Code_id_or_name.t, _) rel1
 
-val used_fields_top_rel : (Code_id_or_name.t, int, _) rel2
-
-val used_fields_rel : (Code_id_or_name.t, int, Code_id_or_name.t, _) rel3
-
 val create : unit -> graph
 
 val add_opaque_let_dependency :

@@ -101,6 +101,11 @@ let rel3 name schema =
   fun x y z -> Datalog.atom r [x; y; z]
 
 let usages_rel = rel2 "usages" Cols.[n; n]
+(** [usages x y] y is an alias of x, and there is an actual use for y *)
+
+let used_fields_rel = rel3 "used_fields" Cols.[n; f; n]
+
+let used_fields_top_rel = rel2 "used_fields_top" Cols.[n; f]
 
 let sources_rel = rel2 "sources" Cols.[n; n]
 
@@ -483,7 +488,15 @@ let filter_field f x =
   let open! Syntax in
   filter (fun [x] -> f (Field.decode x)) [x]
 
-let get_all_usages =
+type usages = Usages of unit Code_id_or_name.Map.t [@@unboxed]
+
+(** Computes all usages of a set of variables (input).
+    Sets are represented as unit maps for convenience with datalog.
+    Usages is represented as a set of variables: those are the variables
+    where the input variables flow with live accessor.
+    
+    Function slots are considered as aliases for this analysis. *)
+let get_all_usages : Datalog.database -> unit Code_id_or_name.Map.t -> usages =
   (* CR-someday ncourant: once the datalog API supports something cleaner, use
      it. *)
   let out_tbl, out = rel1_r "out" Cols.[n] in
@@ -503,14 +516,22 @@ let get_all_usages =
   fun db s ->
     let db = Datalog.set_table in_tbl s db in
     let db = Datalog.Schedule.run (Datalog.Schedule.saturate rs) db in
-    Datalog.get_table out_tbl db
+    Usages (Datalog.get_table out_tbl db)
 
 let fieldc_map_to_field_map m =
   Global_flow_graph.FieldC.Map.fold
     (fun k r acc -> Field.Map.add (Field.decode k) r acc)
     m Field.Map.empty
 
-let get_fields =
+type field_usage =
+  | Used_as_top
+  | Used_as_vars of unit Code_id_or_name.Map.t
+
+(** For an usage set (argument s), compute the way its fields are used.
+    As function slots are transparent for [get_usages], functions slot
+    usages are ignored here.
+*)
+let get_fields : Datalog.database -> usages -> field_usage Field.Map.t =
   (* CR-someday ncourant: likewise here; I find this function particulartly
      ugly. *)
   let out_tbl1, out1 = rel1_r "out1" Cols.[f] in
@@ -531,7 +552,7 @@ let get_fields =
          filter_field (fun x -> Stdlib.not (is_function_slot x)) field ]
        ==> out2 field y) ]
   in
-  fun db s ->
+  fun db (Usages s) ->
     let db = Datalog.set_table in_tbl s db in
     let db =
       List.fold_left
@@ -546,8 +567,8 @@ let get_fields =
            | Some _, Some _ ->
              Misc.fatal_errorf "Got two results for field %a" Field.print
                (Field.decode k)
-           | Some (), None -> Some None
-           | None, Some m -> Some (Some m))
+           | Some (), None -> Some Used_as_top
+           | None, Some m -> Some (Used_as_vars m))
          (Datalog.get_table out_tbl1 db)
          (Datalog.get_table out_tbl2 db))
 
@@ -555,7 +576,8 @@ type set_of_closures_def =
   | Not_a_set_of_closures
   | Set_of_closures of (Function_slot.t * Code_id_or_name.t) list
 
-let get_set_of_closures_def =
+let get_set_of_closures_def :
+    Datalog.database -> Code_id_or_name.t -> set_of_closures_def =
   let q =
     Datalog.(
       compile [] (fun [] ->
@@ -581,8 +603,12 @@ let used_pred_query =
   let open! Global_flow_graph in
   mk_exists_query ["X"] [] (fun [x] [] -> [used_pred x])
 
+(* CR pchambart: should rename: mutiple potential top is_used_as_top (should be
+   obviously different from has use) *)
 let is_top db x = exists_with_parameters used_pred_query [x] db
 
+(* CR pchambart: field_used should rename to mean that this is the specific
+   field of a given variable. *)
 let has_use, field_used =
   let open! Global_flow_graph in
   let usages_query =
@@ -617,6 +643,8 @@ let has_source =
     exists_with_parameters any_source_query [x] db
     || exists_with_parameters has_source_query [x] db
 
+(* CR pchambart: Should rename to remove not local in the name (the notion does
+   not exists right now)*)
 let not_local_field_has_source =
   let open! Global_flow_graph in
   let any_source_query =
@@ -1116,8 +1144,8 @@ let rec rewrite_kind_with_subkind_not_top_not_bottom db flow_to kind =
                 in
                 match Field.Map.find_opt field fields with
                 | None -> (* maybe poison *) erase kind
-                | Some None -> (* top *) kind
-                | Some (Some flow_to) ->
+                | Some Used_as_top -> (* top *) kind
+                | Some (Used_as_vars flow_to) ->
                   rewrite_kind_with_subkind_not_top_not_bottom db flow_to kind)
               kinds
           in
@@ -1159,8 +1187,8 @@ let rec mk_unboxed_fields ~has_to_be_unboxed ~mk db usages name_prefix =
           Some (Not_unboxed (mk (Field.kind field) new_name))
         in
         match field_use with
-        | None -> default ()
-        | Some flow_to ->
+        | Used_as_top -> default ()
+        | Used_as_vars flow_to ->
           if Code_id_or_name.Map.is_empty flow_to
           then Misc.fatal_errorf "Empty set in [get_fields]";
           if Code_id_or_name.Map.for_all
