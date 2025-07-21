@@ -269,9 +269,7 @@ let minimize_extra_args_for_one_continuation ~(source_info : T.Acc.t)
             else
               ( Variable.Set.remove alias_var extra_args_for_aliases,
                 Aliased { alias_var; exception_param } ))
-          ~const:(fun _ ->
-            Misc.fatal_errorf
-              "[Data Flow] Exception param aliased to a constant")
+          ~const:(fun _ -> extra_args_for_aliases, Aliased_to_a_symbol)
           ~symbol:(fun _ ~coercion:_ ->
             extra_args_for_aliases, Aliased_to_a_symbol))
   in
