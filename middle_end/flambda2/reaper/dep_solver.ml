@@ -1252,8 +1252,14 @@ let datalog_rules =
        this rule will change in the future, when local value slots are properly
        tracked: a closure will only local value slots that has any_use will
        still be able to have its representation changed. *)
-    (let$ [x] = ["x"] in
-     [any_usage_pred x] ==> cannot_change_representation0 x);
+    (* (let$ [x] = ["x"] in [any_usage_pred x] ==> cannot_change_representation0
+       x); *)
+    (let$ [x; field; y] = ["x"; "field"; "y"] in
+     [ any_usage_pred x;
+       filter_field is_not_local_field field;
+       filter_field real_field field;
+       constructor_rel x field y ]
+     ==> cannot_change_representation0 x);
     (* If there exists an alias which has another source, and which uses any
        real field of our allocation, we cannot change the representation. This
        currently requires 4 rules due to the absence of disjunction in the
