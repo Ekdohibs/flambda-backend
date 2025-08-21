@@ -878,6 +878,31 @@ let get_fields : Datalog.database -> usages -> field_usage Field.Map.t =
          (Datalog.get_table out_tbl1 db)
          (Datalog.get_table out_tbl2 db))
 
+
+(*
+type vset = These of unit Code_id_or_name.Map.t | All
+
+let vset_of_var x = These (Code_id_or_name.Map.singleton x ())
+
+let possible_first_return_value : Datalog.database -> vset -> vset =
+  let out_tbl, out = rel1_r "out" Cols.[n] in
+  let in_tbl, in_ = rel1_r "in_" Cols.[n] in
+  let open! Syntax in
+  let open! Global_flow_graph in
+  let q1 = mk_exists_query [] ["x"] (fun [] [x] -> [any_source_pred x]) in
+  let q2 = mk_exists_query [] ["x"; "source"] (fun [] [x; source] -> [ in_ x; sources_rel x source; field_sources_top_rel source (Term.constant (Field.encode (Apply (Indirect_code_pointer, Normal 0))))]) in
+  let r = let$ [x; source; y] = ["x"; "source"; "y"] in [ in_ x; sources_rel x source; field_sources_rel source (Term.constant (Field.encode (Apply (Indirect_code_pointer, Normal 0)))) y ] ==> out y in
+  fun db s ->
+    match s with All -> All | These s ->
+    let db = Datalog.set_table in_tbl s db in
+    if exists_with_parameters q1 [] db || exists_with_parameters q2 [] db then All
+    else
+      let db = Datalog.Schedule.run (Datalog.Schedule.saturate [r]) db in
+      These (Datalog.get_table out_tbl db)
+*)
+
+
+
 type set_of_closures_def =
   | Not_a_set_of_closures
   | Set_of_closures of (Function_slot.t * Code_id_or_name.t) list
