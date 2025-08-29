@@ -904,6 +904,8 @@ module Rewriter : sig
   module Pattern : sig
     type 'a t = 'a pattern
 
+    val any : 'a t
+
     val var : Var.t -> 'a -> 'a t
 
     val untag : 'a t -> 'a t
@@ -940,6 +942,8 @@ module Rewriter : sig
       val create : Code_id.t -> rec_info:'a -> 'a t
     end
 
+    val unknown : Flambda_kind.t -> 'a t
+
     val tag_immediate : 'a -> 'a t
 
     val immutable_block :
@@ -960,27 +964,43 @@ module Rewriter : sig
       'a t
   end
 
-  type 'a representation =
-    | Unchanged
-    | Unknown
-    | Rewrite of 'a pattern * Var.t expr
+  module Rule : sig
+    type 'a t
+
+    val identity : 'a -> 'a t
+
+    val rewrite : 'a Pattern.t -> Var.t expr -> 'a t
+  end
 
   module Make (X : sig
     type t
 
     module Map : Container_types.Map with type key = t
 
-    val representation : t -> typing_env -> flambda_type -> t representation
+    val rewrite : t -> typing_env -> flambda_type -> t Rule.t
 
+    (** [block_slot t ofs env ty] returns the abstraction of a field at offset
+        [ofs] of a block with abstraction [t]. [ty] is the type of the field.
+
+        If a [tag] is provided, the block is guaranteed to have the
+        corresponding tag; otherwise, it could have any tag. *)
     val block_slot :
       ?tag:Tag.t -> t -> Target_ocaml_int.t -> typing_env -> flambda_type -> t
 
+    (** [array_slot t ofs env ty] returns the abstraction of an array field
+        at offset [ofs] of an array with abstraction [t]. [ty] is the type of
+        the field. *)
     val array_slot : t -> Target_ocaml_int.t -> typing_env -> flambda_type -> t
 
+    (** [value_slot t slot env ty] returns the abstraction of a value slot
+        [slot] of a closure with abstraction [t]. [ty] is the type of the value
+        slot. *)
     val value_slot : t -> Value_slot.t -> typing_env -> flambda_type -> t
 
-    val function_slot :
-      t -> Function_slot.t -> typing_env -> Closures_entry.t -> t
+    (** [function_slot t slot env ty] returns the abstraction of a function slot
+        [slot] of a closure with abstraction [t]. [ty] is the type of the
+        function slot (as a closure type). *)
+    val function_slot : t -> Function_slot.t -> typing_env -> flambda_type -> t
   end) : sig
     (** Rewrite the provided typing env.
 

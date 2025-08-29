@@ -1,12 +1,9 @@
-module TD = Type_descr
 module ET = Expand_head.Expanded_type
 module TE = Typing_env
 module TG = Type_grammar
 module MTC = More_type_creators
 module TI = Target_ocaml_int
-module RWC = Reg_width_const
 module ME = Meet_env
-module TEL = Typing_env_level
 module K = Flambda_kind
 
 type discriminant =
@@ -206,11 +203,14 @@ end = struct
 end
 
 type 'a pattern =
+  | Any
   | Keep of (Var.t * 'a)
   | Unbox of discriminant * 'a pattern Accessor.Map.t
 
 module Pattern : sig
   type 'a t = 'a pattern
+
+  val any : 'a t
 
   val var : Var.t -> 'a -> 'a t
 
@@ -235,6 +235,8 @@ module Pattern : sig
   val closure : 'a closure_field list -> 'a t
 end = struct
   type 'a t = 'a pattern
+
+  let any = Any
 
   let var var value = Keep (var, value)
 
@@ -270,6 +272,7 @@ end
 
 let rec fold_destructuring ~f destructuring env ty acc =
   match destructuring with
+  | Any -> acc
   | Keep id -> f id ty acc
   | Unbox (discriminant, accessors) ->
     let expanded = Expand_head.expand_head env ty in
@@ -290,13 +293,11 @@ module Function_type = struct
   type 'a t = 'a function_type
 
   let create code_id ~rec_info = { code_id; rec_info }
-
-  let code_id { code_id; _ } = code_id
-
-  let rec_info { rec_info; _ } = rec_info
 end
 
 type 'a expr =
+  | Identity of 'a
+  | Unknown of K.With_subkind.t
   | Tag_imm of 'a
   | Block of
       { is_unique : bool;
@@ -319,6 +320,12 @@ module Expr = struct
 
   module Function_type = Function_type
 
+  let var var = Identity var
+
+  let unknown kind = Unknown (K.With_subkind.anything kind)
+
+  let unknown_with_subkind kind = Unknown kind
+
   let tag_immediate naked = Tag_imm naked
 
   let immutable_block ~is_unique tag ~shape alloc_mode ~fields =
@@ -335,17 +342,24 @@ module Expr = struct
       }
 end
 
-type 'a representation =
-  | Unchanged
-  | Unknown
-  | Rewrite of 'a pattern * Var.t expr
+type 'a rewrite = Rewrite of 'a pattern * Var.t expr
+
+module Rule = struct
+  type 'a t = 'a rewrite
+
+  let id_var = Var.create ()
+
+  let identity metadata = Rewrite (Pattern.var id_var metadata, Expr.var id_var)
+
+  let rewrite pattern expr = Rewrite (pattern, expr)
+end
 
 module Make (X : sig
   type t
 
   module Map : Container_types.Map with type key = t
 
-  val representation : t -> TE.t -> TG.t -> t representation
+  val rewrite : t -> TE.t -> TG.t -> t rewrite
 
   val block_slot : ?tag:Tag.t -> t -> TI.t -> TE.t -> TG.t -> t
 
@@ -353,78 +367,49 @@ module Make (X : sig
 
   val value_slot : t -> Value_slot.t -> TE.t -> TG.t -> t
 
-  val function_slot : t -> Function_slot.t -> TE.t -> TG.closures_entry -> t
+  val function_slot : t -> Function_slot.t -> TE.t -> TG.t -> t
 end) =
 struct
   open Or_unknown.Let_syntax
 
-  type coercion_to_canonical = Coercion.t
-
   type u =
-    { aliases_of_names :
-        (Name.t * K.t * coercion_to_canonical) X.Map.t Name.Map.t;
-      names_to_process : (Name.t * X.t) list
+    { aliases_of_names : (Name.t * K.t) X.Map.t Name.Map.t;
+      names_to_process : (TG.t * X.t Rule.t * Name.t) list
     }
 
-  let create env live_names =
-    Name.Map.fold
-      (fun name (metadata, kind) { aliases_of_names; names_to_process } ->
-        let canonical =
-          TE.get_canonical_simple_ignoring_name_mode env (Simple.name name)
-        in
-        Simple.pattern_match canonical
-          ~const:(fun _ -> { aliases_of_names; names_to_process })
-          ~name:(fun canonical_name ~coercion:coercion_to_canonical ->
-            let aliases_of_names =
-              Name.Map.update canonical_name
-                (fun aliases_of_canonical_name ->
-                  let aliases_of_canonical_name =
-                    Option.value ~default:X.Map.empty aliases_of_canonical_name
-                  in
-                  (* Note that this might overwrite another alias with the same
-                     metadata, in which case we can keep the alias and the exact
-                     name that is used does not matter. *)
-                  Some
-                    (X.Map.add metadata
-                       (name, kind, coercion_to_canonical)
-                       aliases_of_canonical_name))
-                aliases_of_names
-            in
-            let names_to_process =
-              (canonical_name, metadata) :: names_to_process
-            in
-            { aliases_of_names; names_to_process }))
-      live_names
-      { aliases_of_names = Name.Map.empty; names_to_process = [] }
+  let empty = { aliases_of_names = Name.Map.empty; names_to_process = [] }
 
-  let get_canonical_with ({ aliases_of_names; names_to_process } as u) kind
+  let get_canonical_with ({ aliases_of_names; names_to_process } as u) env ty
       canonical metadata =
     match Name.Map.find_opt canonical aliases_of_names with
     | None ->
+      let kind = TG.kind ty in
       let aliases_of_names =
         Name.Map.add canonical
-          (X.Map.singleton metadata (canonical, kind, Coercion.id))
+          (X.Map.singleton metadata (canonical, kind))
           aliases_of_names
       in
-      let names_to_process = (canonical, metadata) :: names_to_process in
+      let rule = X.rewrite metadata env ty in
+      let names_to_process = (ty, rule, canonical) :: names_to_process in
       canonical, Coercion.id, { aliases_of_names; names_to_process }
     | Some aliases_of_name -> (
       match X.Map.find_opt metadata aliases_of_name with
-      | Some (name_with_metadata, _kind, coercion_to_name) ->
-        name_with_metadata, coercion_to_name, u
+      | Some (name_with_metadata, _kind) -> name_with_metadata, Coercion.id, u
       | None ->
+        let kind = TG.kind ty in
         let name_as_string =
           Name.pattern_match canonical ~var:Variable.name
             ~symbol:Symbol.linkage_name_as_string
         in
         let var' = Variable.create name_as_string kind in
         let aliases_of_name =
-          X.Map.add metadata (Name.var var', kind, Coercion.id) aliases_of_name
+          X.Map.add metadata (Name.var var', kind) aliases_of_name
         in
         let aliases_of_names =
           Name.Map.add canonical aliases_of_name aliases_of_names
         in
-        let names_to_process = (canonical, metadata) :: names_to_process in
+        let rule = X.rewrite metadata env ty in
+        let names_to_process = (ty, rule, Name.var var') :: names_to_process in
         Name.var var', Coercion.id, { aliases_of_names; names_to_process })
 
   let rec compute_transitive_used_accessors_expanded_head env acc metadata
@@ -512,24 +497,26 @@ struct
     | Known expanded -> expanded, !acc_ref
     | Unknown -> ET.unknown_like expanded, !acc_ref
 
-  and compute_transitive_used_accessors env acc metadata ty =
-    match X.representation metadata env ty with
-    | Unknown -> MTC.unknown_like ty, acc
+  and match_pattern pattern env ty acc =
+    fold_destructuring pattern env ty (Var.Map.empty, acc)
+      ~f:(fun (var, field_metadata) field_ty (sigma, acc) ->
+        let field_ty', acc =
+          compute_transitive_used_accessors env acc field_metadata field_ty
+        in
+        Var.Map.add var field_ty' sigma, acc)
+
+  and rewrite rw env acc ty =
+    match rw with
     | Rewrite (pattern, expr) -> (
-      let sigma, acc =
-        fold_destructuring pattern env ty (Var.Map.empty, acc)
-          ~f:(fun (var, field_metadata) field_ty (sigma, acc) ->
-            let field_ty', acc =
-              compute_transitive_used_accessors env acc field_metadata field_ty
-            in
-            Var.Map.add var field_ty' sigma, acc)
-      in
+      let sigma, acc = match_pattern pattern env ty acc in
       let subst var =
         match Var.Map.find_opt var sigma with
         | Some ty -> ty
         | None -> Misc.fatal_error "Not defined"
       in
       match expr with
+      | Identity var -> subst var, acc
+      | Unknown kind -> MTC.unknown_with_subkind kind, acc
       | Tag_imm field -> TG.tag_immediate (subst field), acc
       | Block { is_unique; tag; shape; alloc_mode; fields } ->
         let fields = List.map subst fields in
@@ -556,34 +543,35 @@ struct
         ( MTC.exactly_this_closure function_slot ~all_function_slots_in_set
             ~all_closure_types_in_set ~all_value_slots_in_set alloc_mode,
           acc ))
-    | Unchanged -> (
-      match TG.get_alias_opt ty with
-      | Some alias ->
-        let canonical =
-          TE.get_canonical_simple_exn ~min_name_mode:Name_mode.in_types env
-            alias
-        in
-        let canonical_with_metadata, acc =
-          Simple.pattern_match canonical
-            ~const:(fun _ -> canonical, acc)
-            ~name:(fun name ~coercion ->
-              let canonical_name, coercion_to_name, acc =
-                get_canonical_with acc (TG.kind ty) name metadata
-              in
-              let coercion =
-                Coercion.compose_exn coercion_to_name ~then_:coercion
-              in
-              let simple = Simple.name canonical_name in
-              Simple.with_coercion simple coercion, acc)
-        in
-        TG.alias_type_of (TG.kind ty) canonical_with_metadata, acc
-      | None ->
-        let expanded = Expand_head.expand_head env ty in
-        let expanded, acc =
-          compute_transitive_used_accessors_expanded_head env acc metadata
-            expanded
-        in
-        ET.to_type expanded, acc)
+
+  and compute_transitive_used_accessors env acc metadata ty =
+    match TG.get_alias_opt ty with
+    | Some alias ->
+      let canonical =
+        TE.get_canonical_simple_exn ~min_name_mode:Name_mode.in_types env alias
+      in
+      let canonical_with_metadata, acc =
+        Simple.pattern_match canonical
+          ~const:(fun _ -> canonical, acc)
+          ~name:(fun name ~coercion ->
+            let ty = TE.find env name (Some (TG.kind ty)) in
+            let canonical_name, coercion_to_name, acc =
+              get_canonical_with acc env ty name metadata
+            in
+            let coercion =
+              Coercion.compose_exn coercion_to_name ~then_:coercion
+            in
+            let simple = Simple.name canonical_name in
+            Simple.with_coercion simple coercion, acc)
+      in
+      TG.alias_type_of (TG.kind ty) canonical_with_metadata, acc
+    | None ->
+      let expanded = Expand_head.expand_head env ty in
+      let expanded, acc =
+        compute_transitive_used_accessors_expanded_head env acc metadata
+          expanded
+      in
+      ET.to_type expanded, acc
 
   and compute_transitive_used_accessors_head_of_kind_value env acc metadata head
       : TG.head_of_kind_value Or_unknown.t * _ =
@@ -778,13 +766,17 @@ struct
         (fun function_slot
              ({ maps_to; env_extension = _; index } : _ TG.row_like_case)
              (known_closures, acc) ->
-          (* TODO: rewrite index *)
-          let function_slot_metadata =
-            X.function_slot metadata function_slot env maps_to
+          let _function_type =
+            match
+              TG.Closures_entry.find_function_type maps_to ~exact:false
+                function_slot
+            with
+            | Unknown | Bottom -> None
+            | Ok function_type -> Some function_type
           in
           let maps_to, acc =
-            compute_transitive_used_accessors_closures_entry env acc
-              function_slot_metadata maps_to
+            compute_transitive_used_accessors_closures_entry
+              ~this_function_slot:function_slot env acc metadata maps_to
           in
           let row_like_case =
             TG.Row_like_case.create ~maps_to
@@ -801,7 +793,8 @@ struct
     in
     TG.Row_like_for_closures.create_raw ~known_closures ~other_closures, acc
 
-  and compute_transitive_used_accessors_closures_entry env acc metadata
+  and compute_transitive_used_accessors_closures_entry ~this_function_slot:_ env
+      acc metadata
       ({ function_types; closure_types; value_slot_types } : TG.closures_entry)
       =
     let function_types, acc =
@@ -811,6 +804,7 @@ struct
             match (function_type : _ Or_unknown_or_bottom.t) with
             | Unknown | Bottom -> function_type, acc
             | Ok function_type ->
+              (* XXX: Code_of_closure field *)
               (* Path does not change for function types within the entry *)
               let function_type, acc =
                 compute_transitive_used_accessors_function_type env acc metadata
@@ -823,13 +817,9 @@ struct
         (Function_slot.Map.empty, acc)
     in
     let closure_types, acc =
-      (* Path does not change for the closure_types product itself, but will
-         inside *)
       compute_transitive_used_accessors_function_slot_indexed_product env acc
         metadata closure_types
     in
-    (* Path does not change for the value_slot_types product itself, but will
-       inside *)
     let value_slot_types, acc =
       compute_transitive_used_accessors_value_slot_indexed_product env acc
         metadata value_slot_types
@@ -843,9 +833,16 @@ struct
       =
     let function_slot_components_by_index, acc =
       Function_slot.Map.fold
-        (fun function_slot t (function_slot_components_by_index, acc) ->
-          let t, acc = compute_transitive_used_accessors env acc metadata t in
-          ( Function_slot.Map.add function_slot t
+        (fun function_slot function_slot_ty
+             (function_slot_components_by_index, acc) ->
+          let function_slot_metadata =
+            X.function_slot metadata function_slot env function_slot_ty
+          in
+          let function_slot_ty', acc =
+            compute_transitive_used_accessors env acc function_slot_metadata
+              function_slot_ty
+          in
+          ( Function_slot.Map.add function_slot function_slot_ty'
               function_slot_components_by_index,
             acc ))
         function_slot_components_by_index
@@ -859,15 +856,15 @@ struct
       ({ value_slot_components_by_index } : TG.value_slot_indexed_product) =
     let value_slot_components_by_index, acc =
       Value_slot.Map.fold
-        (fun value_slot value_slot_type (value_slot_components_by_index, acc) ->
+        (fun value_slot value_slot_ty (value_slot_components_by_index, acc) ->
           let value_slot_metadata =
-            X.value_slot metadata value_slot env value_slot_type
+            X.value_slot metadata value_slot env value_slot_ty
           in
-          let value_slot_type', acc =
+          let value_slot_ty', acc =
             compute_transitive_used_accessors env acc value_slot_metadata
-              value_slot_type
+              value_slot_ty
           in
-          ( Value_slot.Map.add value_slot value_slot_type'
+          ( Value_slot.Map.add value_slot value_slot_ty'
               value_slot_components_by_index,
             acc ))
         value_slot_components_by_index
@@ -904,55 +901,57 @@ struct
       TE.create ~resolver:(TE.resolver env)
         ~get_imported_names:(TE.get_imported_names env)
     in
-    let acc = create env live_names in
+    let base_env, new_types, acc =
+      Name.Map.fold
+        (fun name (metadata, kind) (base_env, types, acc) ->
+          let ty = TG.alias_type_of kind (Simple.name name) in
+          let rule = X.rewrite metadata env ty in
+          let ty, acc = rewrite rule env acc ty in
+          let bound_name =
+            Name.pattern_match name
+              ~var:(fun var ->
+                Bound_name.create_var
+                  (Bound_var.create var Flambda_debug_uid.none Name_mode.normal))
+              ~symbol:Bound_name.create_symbol
+          in
+          let base_env = TE.add_definition base_env bound_name (TG.kind ty) in
+          base_env, Name.Map.add name ty types, acc)
+        live_names
+        (base_env, Name.Map.empty, empty)
+    in
     let rec loop { aliases_of_names; names_to_process } new_types =
       match names_to_process with
       | [] -> new_types, aliases_of_names
       | _ :: _ ->
         let new_types, acc =
           List.fold_left
-            (fun (new_types, acc) (name, metadata) ->
-              match Name.Map.find_opt name acc.aliases_of_names with
-              | None -> Misc.fatal_error "fail"
-              | Some aliases_of_name -> (
-                match X.Map.find_opt metadata aliases_of_name with
-                | None -> Misc.fatal_error "fail"
-                | Some (name_after_rewrite, kind, coercion_to_name) ->
-                  let ty = TE.find env name (Some kind) in
-                  let ty', acc =
-                    compute_transitive_used_accessors env acc metadata ty
-                  in
-                  let ty' =
-                    TG.apply_coercion ty' (Coercion.inverse coercion_to_name)
-                  in
-                  let new_types =
-                    Name.Map.add name_after_rewrite ty' new_types
-                  in
-                  new_types, acc))
+            (fun (new_types, acc) (ty, rule, name_after_rewrite) ->
+              let ty', acc = rewrite rule env acc ty in
+              let new_types = Name.Map.add name_after_rewrite ty' new_types in
+              new_types, acc)
             (new_types, { aliases_of_names; names_to_process = [] })
             names_to_process
         in
         loop acc new_types
     in
-    let new_types, aliases_of_names = loop acc Name.Map.empty in
+    let new_types, aliases_of_names = loop acc new_types in
     let base_env =
       Name.Map.fold
         (fun _name aliases_of_name base_env ->
           X.Map.fold
-            (fun _metadata (name_after_rewrite, kind, _coercion) base_env ->
-              let name_mode =
-                if Name.Map.mem name_after_rewrite live_names
-                then Name_mode.normal
-                else Name_mode.in_types
-              in
-              let bound_name =
-                Name.pattern_match name_after_rewrite
-                  ~var:(fun var ->
-                    Bound_name.create_var
-                      (Bound_var.create var Flambda_debug_uid.none name_mode))
-                  ~symbol:Bound_name.create_symbol
-              in
-              TE.add_definition base_env bound_name kind)
+            (fun _metadata (name_after_rewrite, kind) base_env ->
+              if Name.Map.mem name_after_rewrite live_names
+              then base_env
+              else
+                let bound_name =
+                  Name.pattern_match name_after_rewrite
+                    ~var:(fun var ->
+                      Bound_name.create_var
+                        (Bound_var.create var Flambda_debug_uid.none
+                           Name_mode.in_types))
+                    ~symbol:Bound_name.create_symbol
+                in
+                TE.add_definition base_env bound_name kind)
             aliases_of_name base_env)
         aliases_of_names base_env
     in
