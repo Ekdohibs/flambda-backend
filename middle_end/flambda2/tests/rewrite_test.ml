@@ -37,24 +37,27 @@ module Evenodd = struct
 end
 
 module Rewriter = Flambda2_types.Rewriter
+module Rule = Rewriter.Rule
 
-module Traverse = Flambda2_types.Rewriter.Make (struct
+module Traverse = Rewriter.Make (struct
   include Evenodd
 
-  let representation t env ty : _ Flambda2_types.Rewriter.representation =
+  let rewrite t env ty : _ Rule.t =
     match t with
-    | Unused -> Unknown
+    | Unused ->
+      Rule.rewrite Rewriter.Pattern.any
+        (Rewriter.Expr.unknown (Flambda2_types.kind ty))
     | Even | Odd -> (
       match Flambda2_types.prove_is_a_tagged_immediate env ty with
       | Proved () ->
         let var = Rewriter.Var.create () in
-        Rewrite
-          ( Rewriter.Pattern.var var Unused,
-            Rewriter.Expr.immutable_block ~is_unique:false Tag.zero
-              ~shape:(K.Block_shape.Scannable Value_only)
-              (Alloc_mode.For_types.unknown ())
-              ~fields:[var] )
-      | Unknown -> Unchanged)
+        Rule.rewrite
+          (Rewriter.Pattern.var var Unused)
+          (Rewriter.Expr.immutable_block ~is_unique:false Tag.zero
+             ~shape:(K.Block_shape.Scannable Value_only)
+             (Alloc_mode.For_types.unknown ())
+             ~fields:[var])
+      | Unknown -> Rule.identity t)
 
   let block_slot ?tag:_ t field env ty =
     let field = Target_ocaml_int.to_int field in
