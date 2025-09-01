@@ -1618,8 +1618,8 @@ let datalog_rules =
        filter
          (fun [f] ->
            match CoField.decode f with
-           | Param (Indirect_code_pointer, _) -> true
-           | Param (Direct_code_pointer, _) -> false)
+           | Param (Unknown_arity_code_pointer, _) -> true
+           | Param (Known_arity_code_pointer, _) -> false)
          [relation] ]
      ==> cannot_unbox0 allocation_id);
     (let$ [alias; allocation_id; relation; to_] =
