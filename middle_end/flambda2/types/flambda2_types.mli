@@ -909,6 +909,8 @@ module Rewriter : sig
 
     val value_slot : Value_slot.t -> 'a t -> 'a closure_field
 
+    val function_slot : Function_slot.t -> 'a t -> 'a closure_field
+
     val closure : 'a closure_field list -> 'a t
   end
 
@@ -938,7 +940,7 @@ module Rewriter : sig
     val exactly_this_closure :
       Function_slot.t ->
       all_function_slots_in_set:
-        'a Function_type.t Or_unknown_or_bottom.t Function_slot.Map.t ->
+        'a Function_type.t Or_unknown.t Function_slot.Map.t ->
       all_closure_types_in_set:'a Function_slot.Map.t ->
       all_value_slots_in_set:'a Value_slot.Map.t ->
       Alloc_mode.For_types.t ->
