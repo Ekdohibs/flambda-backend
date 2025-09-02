@@ -17,6 +17,7 @@ type accessor =
   | Block_field of TI.t * K.t
   | Array_field of TI.t * K.t
   | Value_slot of Value_slot.t
+  | Function_slot of Function_slot.t
 
 module Accessor = struct
   module T0 = struct
@@ -37,6 +38,9 @@ module Accessor = struct
       | Value_slot value_slot ->
         Format.fprintf ppf "@[<hov 1>(value_slot@ %a)@]" Value_slot.print
           value_slot
+      | Function_slot function_slot ->
+        Format.fprintf ppf "@[<hov 1>(value_slot@ %a)@]" Function_slot.print
+          function_slot
 
     let equal accessor1 accessor2 =
       match accessor1, accessor2 with
@@ -46,7 +50,12 @@ module Accessor = struct
       | Array_field (index1, kind1), Array_field (index2, kind2) ->
         TI.equal index1 index2 && K.equal kind1 kind2
       | Value_slot slot1, Value_slot slot2 -> Value_slot.equal slot1 slot2
-      | (Untag_imm | Block_field _ | Array_field _ | Value_slot _), _ -> false
+      | Function_slot slot1, Function_slot slot2 ->
+        Function_slot.equal slot1 slot2
+      | ( ( Untag_imm | Block_field _ | Array_field _ | Value_slot _
+          | Function_slot _ ),
+          _ ) ->
+        false
 
     let compare accessor1 accessor2 =
       match accessor1, accessor2 with
@@ -58,11 +67,15 @@ module Accessor = struct
         let c = TI.compare index1 index2 in
         if c <> 0 then c else K.compare kind1 kind2
       | Value_slot slot1, Value_slot slot2 -> Value_slot.compare slot1 slot2
-      | Untag_imm, (Block_field _ | Array_field _ | Value_slot _)
-      | Block_field _, (Array_field _ | Value_slot _)
-      | Array_field _, Value_slot _ ->
+      | Function_slot slot1, Function_slot slot2 ->
+        Function_slot.compare slot1 slot2
+      | ( Untag_imm,
+          (Block_field _ | Array_field _ | Value_slot _ | Function_slot _) )
+      | Block_field _, (Array_field _ | Value_slot _ | Function_slot _)
+      | Array_field _, (Value_slot _ | Function_slot _)
+      | Value_slot _, Function_slot _ ->
         -1
-      | (Block_field _ | Array_field _ | Value_slot _), _ -> 1
+      | (Block_field _ | Array_field _ | Value_slot _ | Function_slot _), _ -> 1
 
     let hash accessor =
       match accessor with
@@ -70,6 +83,7 @@ module Accessor = struct
       | Block_field (index, kind) -> Hashtbl.hash (0, TI.hash index, K.hash kind)
       | Array_field (index, kind) -> Hashtbl.hash (1, TI.hash index, K.hash kind)
       | Value_slot slot -> Hashtbl.hash (2, Value_slot.hash slot)
+      | Function_slot slot -> Hashtbl.hash (3, Function_slot.hash slot)
   end
 
   include T0
@@ -80,6 +94,8 @@ let unknown_accessor = function
   | Untag_imm -> TG.any_naked_immediate
   | Block_field (_, kind) | Array_field (_, kind) -> MTC.unknown kind
   | Value_slot value_slot -> MTC.unknown (Value_slot.kind value_slot)
+  | Function_slot function_slot ->
+    MTC.unknown (Function_slot.kind function_slot)
 
 let bottom_accessor accessor = MTC.bottom_like (unknown_accessor accessor)
 
@@ -134,11 +150,22 @@ and destructure_head_of_kind_value_non_null discriminant accessor head =
         then fields.(index)
         else bottom_accessor accessor))
   | ( Closure,
-      Value_slot _value_slot,
-      Closures { by_function_slot = _; alloc_mode = _ } ) ->
-    assert false
+      Value_slot value_slot,
+      Closures { by_function_slot; alloc_mode = _ } ) -> (
+    match TG.Row_like_for_closures.get_env_var by_function_slot value_slot with
+    | Unknown -> unknown_accessor accessor
+    | Known ty -> ty)
+  | ( Closure,
+      Function_slot function_slot,
+      Closures { by_function_slot; alloc_mode = _ } ) -> (
+    match
+      TG.Row_like_for_closures.get_closure by_function_slot function_slot
+    with
+    | Unknown -> unknown_accessor accessor
+    | Known ty -> ty)
   | ( (Tagged_immediate | Block _ | Array | Closure),
-      (Untag_imm | Block_field _ | Array_field _ | Value_slot _),
+      ( Untag_imm | Block_field _ | Array_field _ | Value_slot _
+      | Function_slot _ ),
       ( Variant _ | Mutable_block _ | Boxed_float32 _ | Boxed_float _
       | Boxed_int32 _ | Boxed_int64 _ | Boxed_nativeint _ | Boxed_vec128 _
       | Boxed_vec256 _ | Boxed_vec512 _ | Closures _ | String _ | Array _ ) ) ->
@@ -232,6 +259,8 @@ module Pattern : sig
 
   val value_slot : Value_slot.t -> 'a t -> 'a closure_field
 
+  val function_slot : Function_slot.t -> 'a t -> 'a closure_field
+
   val closure : 'a closure_field list -> 'a t
 end = struct
   type 'a t = 'a pattern
@@ -262,6 +291,8 @@ end = struct
   let array_field index kind t = accessor (Array_field (index, kind)) t
 
   let value_slot value_slot t = accessor (Value_slot value_slot) t
+
+  let function_slot function_slot t = accessor (Function_slot function_slot) t
 
   let block ?tag fields = unbox (Block tag) fields
 
@@ -309,7 +340,7 @@ type 'a expr =
   | Closure of
       { function_slot : Function_slot.t;
         all_function_slots_in_set :
-          'a function_type Or_unknown_or_bottom.t Function_slot.Map.t;
+          'a function_type Or_unknown.t Function_slot.Map.t;
         all_closure_types_in_set : 'a Function_slot.Map.t;
         all_value_slots_in_set : 'a Value_slot.Map.t;
         alloc_mode : Alloc_mode.For_types.t
@@ -530,7 +561,7 @@ struct
           } ->
         let all_function_slots_in_set =
           Function_slot.Map.map
-            (Or_unknown_or_bottom.map ~f:(fun { code_id; rec_info } ->
+            (Or_unknown.map ~f:(fun { code_id; rec_info } ->
                  TG.Function_type.create code_id ~rec_info:(subst rec_info)))
             all_function_slots_in_set
         in
@@ -801,16 +832,16 @@ struct
       Function_slot.Map.fold
         (fun function_slot function_type (function_types, acc) ->
           let function_type, acc =
-            match (function_type : _ Or_unknown_or_bottom.t) with
-            | Unknown | Bottom -> function_type, acc
-            | Ok function_type ->
+            match (function_type : _ Or_unknown.t) with
+            | Unknown -> function_type, acc
+            | Known function_type ->
               (* XXX: Code_of_closure field *)
               (* Path does not change for function types within the entry *)
               let function_type, acc =
                 compute_transitive_used_accessors_function_type env acc metadata
                   function_type
               in
-              Or_unknown_or_bottom.Ok function_type, acc
+              Or_unknown.Known function_type, acc
           in
           Function_slot.Map.add function_slot function_type function_types, acc)
         function_types
