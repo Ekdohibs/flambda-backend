@@ -994,15 +994,24 @@ module Rewriter : sig
         the field. *)
     val array_slot : t -> Target_ocaml_int.t -> typing_env -> flambda_type -> t
 
-    (** [value_slot t slot env ty] returns the abstraction of a value slot
-        [slot] of a closure with abstraction [t]. [ty] is the type of the value
-        slot. *)
-    val value_slot : t -> Value_slot.t -> typing_env -> flambda_type -> t
+    type set_of_closures
 
-    (** [function_slot t slot env ty] returns the abstraction of a function slot
-        [slot] of a closure with abstraction [t]. [ty] is the type of the
-        function slot (as a closure type). *)
-    val function_slot : t -> Function_slot.t -> typing_env -> flambda_type -> t
+    val set_of_closures :
+      t -> Function_slot.t -> typing_env -> Closures_entry.t -> set_of_closures
+
+    val rec_info :
+      typing_env ->
+      set_of_closures ->
+      Function_slot.t ->
+      Code_id.t ->
+      flambda_type ->
+      t
+
+    val value_slot :
+      set_of_closures -> Value_slot.t -> typing_env -> flambda_type -> t
+
+    val function_slot :
+      set_of_closures -> Function_slot.t -> typing_env -> flambda_type -> t
   end) : sig
     (** Rewrite the provided typing env.
 

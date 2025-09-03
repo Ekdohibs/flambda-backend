@@ -42,6 +42,8 @@ module Rule = Rewriter.Rule
 module Traverse = Rewriter.Make (struct
   include Evenodd
 
+  type set_of_closures = unit
+
   let rewrite t env ty : _ Rule.t =
     match t with
     | Unused ->
@@ -72,6 +74,10 @@ module Traverse = Rewriter.Make (struct
     else Unused
 
   let array_slot _ _ _ _ = Unused
+
+  let set_of_closures _ _ _ _ = ()
+
+  let rec_info _ _ _ _ _ = Unused
 
   let value_slot _ _ _ _ = Unused
 
