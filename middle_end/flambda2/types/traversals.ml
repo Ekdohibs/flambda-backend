@@ -396,9 +396,17 @@ module Make (X : sig
 
   val array_slot : t -> TI.t -> TE.t -> TG.t -> t
 
-  val value_slot : t -> Value_slot.t -> TE.t -> TG.t -> t
+  type set_of_closures
 
-  val function_slot : t -> Function_slot.t -> TE.t -> TG.t -> t
+  val set_of_closures :
+    t -> Function_slot.t -> TE.t -> TG.closures_entry -> set_of_closures
+
+  val rec_info :
+    TE.t -> set_of_closures -> Function_slot.t -> Code_id.t -> TG.t -> t
+
+  val value_slot : set_of_closures -> Value_slot.t -> TE.t -> TG.t -> t
+
+  val function_slot : set_of_closures -> Function_slot.t -> TE.t -> TG.t -> t
 end) =
 struct
   open Or_unknown.Let_syntax
@@ -797,17 +805,13 @@ struct
         (fun function_slot
              ({ maps_to; env_extension = _; index } : _ TG.row_like_case)
              (known_closures, acc) ->
-          let _function_type =
-            match
-              TG.Closures_entry.find_function_type maps_to ~exact:false
-                function_slot
-            with
-            | Unknown | Bottom -> None
-            | Ok function_type -> Some function_type
+          let set_of_closures_metadata =
+            X.set_of_closures metadata function_slot env maps_to
           in
           let maps_to, acc =
             compute_transitive_used_accessors_closures_entry
-              ~this_function_slot:function_slot env acc metadata maps_to
+              ~this_function_slot:function_slot env acc set_of_closures_metadata
+              maps_to
           in
           let row_like_case =
             TG.Row_like_case.create ~maps_to
@@ -839,7 +843,7 @@ struct
               (* Path does not change for function types within the entry *)
               let function_type, acc =
                 compute_transitive_used_accessors_function_type env acc metadata
-                  function_type
+                  function_slot function_type
               in
               Or_unknown.Known function_type, acc
           in
@@ -919,12 +923,13 @@ struct
     fields, acc
 
   and compute_transitive_used_accessors_function_type env acc metadata
-      ({ code_id; rec_info } : TG.function_type) =
-    (* Rec_info is not accessed via a slot *)
-    let rec_info, acc =
-      compute_transitive_used_accessors env acc metadata rec_info
+      function_slot ({ code_id; rec_info } : TG.function_type) =
+    let rec_info_metadata =
+      X.rec_info env metadata function_slot code_id rec_info
     in
-    (* Code id might need rewriting *)
+    let rec_info, acc =
+      compute_transitive_used_accessors env acc rec_info_metadata rec_info
+    in
     TG.Function_type.create code_id ~rec_info, acc
 
   let rewrite env live_names =

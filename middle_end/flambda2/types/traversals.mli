@@ -96,10 +96,28 @@ module Make (X : sig
   val array_slot :
     t -> Target_ocaml_int.t -> Typing_env.t -> Type_grammar.t -> t
 
-  val value_slot : t -> Value_slot.t -> Typing_env.t -> Type_grammar.t -> t
+  type set_of_closures
+
+  val set_of_closures :
+    t ->
+    Function_slot.t ->
+    Typing_env.t ->
+    Type_grammar.closures_entry ->
+    set_of_closures
+
+  val rec_info :
+    Typing_env.t ->
+    set_of_closures ->
+    Function_slot.t ->
+    Code_id.t ->
+    Type_grammar.t ->
+    t
+
+  val value_slot :
+    set_of_closures -> Value_slot.t -> Typing_env.t -> Type_grammar.t -> t
 
   val function_slot :
-    t -> Function_slot.t -> Typing_env.t -> Type_grammar.t -> t
+    set_of_closures -> Function_slot.t -> Typing_env.t -> Type_grammar.t -> t
 end) : sig
   (** Rewrite the provided typing env.
 
