@@ -18,6 +18,7 @@ type accessor =
   | Array_field of TI.t * K.t
   | Value_slot of Value_slot.t
   | Function_slot of Function_slot.t
+  | Rec_info of Function_slot.t
 
 module Accessor = struct
   module T0 = struct
@@ -39,7 +40,10 @@ module Accessor = struct
         Format.fprintf ppf "@[<hov 1>(value_slot@ %a)@]" Value_slot.print
           value_slot
       | Function_slot function_slot ->
-        Format.fprintf ppf "@[<hov 1>(value_slot@ %a)@]" Function_slot.print
+        Format.fprintf ppf "@[<hov 1>(function_slot@ %a)@]" Function_slot.print
+          function_slot
+      | Rec_info function_slot ->
+        Format.fprintf ppf "@[<hov 1>(rec_info@ %a)@]" Function_slot.print
           function_slot
 
     let equal accessor1 accessor2 =
@@ -52,8 +56,9 @@ module Accessor = struct
       | Value_slot slot1, Value_slot slot2 -> Value_slot.equal slot1 slot2
       | Function_slot slot1, Function_slot slot2 ->
         Function_slot.equal slot1 slot2
+      | Rec_info slot1, Rec_info slot2 -> Function_slot.equal slot1 slot2
       | ( ( Untag_imm | Block_field _ | Array_field _ | Value_slot _
-          | Function_slot _ ),
+          | Function_slot _ | Rec_info _ ),
           _ ) ->
         false
 
@@ -69,13 +74,20 @@ module Accessor = struct
       | Value_slot slot1, Value_slot slot2 -> Value_slot.compare slot1 slot2
       | Function_slot slot1, Function_slot slot2 ->
         Function_slot.compare slot1 slot2
+      | Rec_info slot1, Rec_info slot2 -> Function_slot.compare slot1 slot2
       | ( Untag_imm,
-          (Block_field _ | Array_field _ | Value_slot _ | Function_slot _) )
-      | Block_field _, (Array_field _ | Value_slot _ | Function_slot _)
-      | Array_field _, (Value_slot _ | Function_slot _)
-      | Value_slot _, Function_slot _ ->
+          ( Block_field _ | Array_field _ | Value_slot _ | Function_slot _
+          | Rec_info _ ) )
+      | ( Block_field _,
+          (Array_field _ | Value_slot _ | Function_slot _ | Rec_info _) )
+      | Array_field _, (Value_slot _ | Function_slot _ | Rec_info _)
+      | Value_slot _, (Function_slot _ | Rec_info _)
+      | Function_slot _, Rec_info _ ->
         -1
-      | (Block_field _ | Array_field _ | Value_slot _ | Function_slot _), _ -> 1
+      | ( ( Block_field _ | Array_field _ | Value_slot _ | Function_slot _
+          | Rec_info _ ),
+          _ ) ->
+        1
 
     let hash accessor =
       match accessor with
@@ -84,6 +96,7 @@ module Accessor = struct
       | Array_field (index, kind) -> Hashtbl.hash (1, TI.hash index, K.hash kind)
       | Value_slot slot -> Hashtbl.hash (2, Value_slot.hash slot)
       | Function_slot slot -> Hashtbl.hash (3, Function_slot.hash slot)
+      | Rec_info slot -> Hashtbl.hash (4, Function_slot.hash slot)
   end
 
   include T0
@@ -96,6 +109,7 @@ let unknown_accessor = function
   | Value_slot value_slot -> MTC.unknown (Value_slot.kind value_slot)
   | Function_slot function_slot ->
     MTC.unknown (Function_slot.kind function_slot)
+  | Rec_info _ -> MTC.unknown K.rec_info
 
 let bottom_accessor accessor = MTC.bottom_like (unknown_accessor accessor)
 
@@ -163,9 +177,21 @@ and destructure_head_of_kind_value_non_null discriminant accessor head =
     with
     | Unknown -> unknown_accessor accessor
     | Known ty -> ty)
+  | ( Closure,
+      Rec_info function_slot,
+      Closures { by_function_slot; alloc_mode = _ } ) -> (
+    match TG.Row_like_for_closures.get_single_tag by_function_slot with
+    | No_singleton -> unknown_accessor accessor
+    | Exact_closure (_tag, maps_to) | Incomplete_closure (_tag, maps_to) -> (
+      match
+        TG.Closures_entry.find_function_type maps_to ~exact:false function_slot
+      with
+      | Bottom -> bottom_accessor accessor
+      | Unknown -> unknown_accessor accessor
+      | Ok function_type -> TG.Function_type.rec_info function_type))
   | ( (Tagged_immediate | Block _ | Array | Closure),
       ( Untag_imm | Block_field _ | Array_field _ | Value_slot _
-      | Function_slot _ ),
+      | Function_slot _ | Rec_info _ ),
       ( Variant _ | Mutable_block _ | Boxed_float32 _ | Boxed_float _
       | Boxed_int32 _ | Boxed_int64 _ | Boxed_nativeint _ | Boxed_vec128 _
       | Boxed_vec256 _ | Boxed_vec512 _ | Closures _ | String _ | Array _ ) ) ->
@@ -257,6 +283,8 @@ module Pattern : sig
 
   type 'a closure_field
 
+  val rec_info : Function_slot.t -> 'a t -> 'a closure_field
+
   val value_slot : Value_slot.t -> 'a t -> 'a closure_field
 
   val function_slot : Function_slot.t -> 'a t -> 'a closure_field
@@ -289,6 +317,8 @@ end = struct
   let block_field index kind t = accessor (Block_field (index, kind)) t
 
   let array_field index kind t = accessor (Array_field (index, kind)) t
+
+  let rec_info function_slot t = accessor (Rec_info function_slot) t
 
   let value_slot value_slot t = accessor (Value_slot value_slot) t
 

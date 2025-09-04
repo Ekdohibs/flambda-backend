@@ -289,6 +289,10 @@ end
 module Closures_entry : sig
   type t
 
+  val find_function_type : t -> Function_slot.t -> Function_type.t Or_unknown.t
+
+  val function_slot_types : t -> flambda_type Function_slot.Map.t
+
   val value_slot_types : t -> flambda_type Value_slot.Map.t
 end
 
@@ -906,6 +910,8 @@ module Rewriter : sig
     val array : 'a array_field list -> 'a t
 
     type 'a closure_field
+
+    val rec_info : Function_slot.t -> 'a t -> 'a closure_field
 
     val value_slot : Value_slot.t -> 'a t -> 'a closure_field
 
