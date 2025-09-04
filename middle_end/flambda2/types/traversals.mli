@@ -31,6 +31,8 @@ module Pattern : sig
 
   type 'a closure_field
 
+  val rec_info : Function_slot.t -> 'a t -> 'a closure_field
+
   val value_slot : Value_slot.t -> 'a t -> 'a closure_field
 
   val function_slot : Function_slot.t -> 'a t -> 'a closure_field
