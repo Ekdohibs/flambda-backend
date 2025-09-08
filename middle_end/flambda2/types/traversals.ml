@@ -962,28 +962,37 @@ struct
     in
     TG.Function_type.create code_id ~rec_info, acc
 
-  let rewrite env live_names =
+  let rewrite env symbol_abstraction live_vars =
     let base_env =
       TE.create ~resolver:(TE.resolver env)
         ~get_imported_names:(TE.get_imported_names env)
     in
     let base_env, new_types, acc =
-      Name.Map.fold
-        (fun name (metadata, kind) (base_env, types, acc) ->
-          let ty = TG.alias_type_of kind (Simple.name name) in
+      Symbol.Set.fold
+        (fun symbol (base_env, types, acc) ->
+          let ty = TG.alias_type_of K.value (Simple.symbol symbol) in
+          let metadata = symbol_abstraction symbol in
+          let rule = X.rewrite metadata env ty in
+          let ty, acc = rewrite rule env acc ty in
+          let bound_name = Bound_name.create_symbol symbol in
+          let base_env = TE.add_definition base_env bound_name (TG.kind ty) in
+          base_env, Name.Map.add (Name.symbol symbol) ty types, acc)
+        (TE.defined_symbols env)
+        (base_env, Name.Map.empty, empty)
+    in
+    let base_env, new_types, acc =
+      Variable.Map.fold
+        (fun var (metadata, kind) (base_env, types, acc) ->
+          let ty = TG.alias_type_of kind (Simple.var var) in
           let rule = X.rewrite metadata env ty in
           let ty, acc = rewrite rule env acc ty in
           let bound_name =
-            Name.pattern_match name
-              ~var:(fun var ->
-                Bound_name.create_var
-                  (Bound_var.create var Flambda_debug_uid.none Name_mode.normal))
-              ~symbol:Bound_name.create_symbol
+            Bound_name.create_var
+              (Bound_var.create var Flambda_debug_uid.none Name_mode.normal)
           in
           let base_env = TE.add_definition base_env bound_name (TG.kind ty) in
-          base_env, Name.Map.add name ty types, acc)
-        live_names
-        (base_env, Name.Map.empty, empty)
+          base_env, Name.Map.add (Name.var var) ty types, acc)
+        live_vars (base_env, new_types, acc)
     in
     let rec loop { aliases_of_names; names_to_process } new_types =
       match names_to_process with
@@ -1006,18 +1015,18 @@ struct
         (fun _name aliases_of_name base_env ->
           X.Map.fold
             (fun _metadata (name_after_rewrite, kind) base_env ->
-              if Name.Map.mem name_after_rewrite live_names
-              then base_env
-              else
-                let bound_name =
-                  Name.pattern_match name_after_rewrite
-                    ~var:(fun var ->
+              Name.pattern_match name_after_rewrite
+                ~symbol:(fun _ -> base_env)
+                ~var:(fun var_after_rewrite ->
+                  if Variable.Map.mem var_after_rewrite live_vars
+                  then base_env
+                  else
+                    let bound_name =
                       Bound_name.create_var
-                        (Bound_var.create var Flambda_debug_uid.none
-                           Name_mode.in_types))
-                    ~symbol:Bound_name.create_symbol
-                in
-                TE.add_definition base_env bound_name kind)
+                        (Bound_var.create var_after_rewrite
+                           Flambda_debug_uid.none Name_mode.in_types)
+                    in
+                    TE.add_definition base_env bound_name kind))
             aliases_of_name base_env)
         aliases_of_names base_env
     in

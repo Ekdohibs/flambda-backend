@@ -127,5 +127,8 @@ end) : sig
         along with their abstraction. It must only contain symbols and variables
         with [Name_mode.normal] that exist in the provided typing env. *)
   val rewrite :
-    Typing_env.t -> (X.t * Flambda_kind.t) Name.Map.t -> Typing_env.t
+    Typing_env.t ->
+    (Symbol.t -> X.t) ->
+    (X.t * Flambda_kind.t) Variable.Map.t ->
+    Typing_env.t
 end

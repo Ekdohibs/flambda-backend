@@ -1005,6 +1005,10 @@ module Rewriter : sig
         The provided name map contains all the names that must be preserved,
         along with their abstraction. It must only contain symbols and variables
         with [Name_mode.normal] that exist in the provided typing env. *)
-    val rewrite : typing_env -> (X.t * Flambda_kind.t) Name.Map.t -> typing_env
+    val rewrite :
+      typing_env ->
+      (Symbol.t -> X.t) ->
+      (X.t * Flambda_kind.t) Variable.Map.t ->
+      typing_env
   end
 end
