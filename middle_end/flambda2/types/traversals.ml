@@ -403,14 +403,14 @@ module Expr = struct
       }
 end
 
-type 'a rewrite = Rewrite of 'a pattern * Var.t expr
+type 'a rewrite =
+  | Identity
+  | Rewrite of 'a pattern * Var.t expr
 
 module Rule = struct
   type 'a t = 'a rewrite
 
-  let id_var = Var.create ()
-
-  let identity metadata = Rewrite (Pattern.var id_var metadata, Expr.var id_var)
+  let identity = Identity
 
   let rewrite pattern expr = Rewrite (pattern, expr)
 end
@@ -576,6 +576,7 @@ struct
 
   and rewrite rw env acc ty =
     match rw with
+    | Identity -> ty, acc
     | Rewrite (pattern, expr) -> (
       let sigma, acc = match_pattern pattern env ty acc in
       let subst var =
