@@ -440,29 +440,28 @@ struct
 
   type u =
     { aliases_of_names : (Name.t * K.t) X.Map.t Name.Map.t;
-      names_to_process : (TG.t * X.t Rule.t * Name.t) list
+      names_to_process : (Name.t * X.t * K.t * Name.t) list
     }
 
   let empty = { aliases_of_names = Name.Map.empty; names_to_process = [] }
 
-  let get_canonical_with ({ aliases_of_names; names_to_process } as u) env ty
-      canonical metadata =
+  let get_canonical_with ({ aliases_of_names; names_to_process } as u) _env
+      canonical kind metadata =
     match Name.Map.find_opt canonical aliases_of_names with
     | None ->
-      let kind = TG.kind ty in
       let aliases_of_names =
         Name.Map.add canonical
           (X.Map.singleton metadata (canonical, kind))
           aliases_of_names
       in
-      let rule = X.rewrite metadata env ty in
-      let names_to_process = (ty, rule, canonical) :: names_to_process in
+      let names_to_process =
+        (canonical, metadata, kind, canonical) :: names_to_process
+      in
       canonical, Coercion.id, { aliases_of_names; names_to_process }
     | Some aliases_of_name -> (
       match X.Map.find_opt metadata aliases_of_name with
       | Some (name_with_metadata, _kind) -> name_with_metadata, Coercion.id, u
       | None ->
-        let kind = TG.kind ty in
         let name_as_string =
           Name.pattern_match canonical ~var:Variable.name
             ~symbol:Symbol.linkage_name_as_string
@@ -474,12 +473,12 @@ struct
         let aliases_of_names =
           Name.Map.add canonical aliases_of_name aliases_of_names
         in
-        let rule = X.rewrite metadata env ty in
-        let names_to_process = (ty, rule, Name.var var') :: names_to_process in
+        let names_to_process =
+          (canonical, metadata, kind, Name.var var') :: names_to_process
+        in
         Name.var var', Coercion.id, { aliases_of_names; names_to_process })
 
-  let rec compute_transitive_used_accessors_expanded_head env acc metadata
-      expanded =
+  let rec rewrite_expanded_head env acc metadata expanded =
     let acc_ref = ref acc in
     let expanded_or_unknown : _ Or_unknown.t =
       match ET.descr expanded with
@@ -487,76 +486,49 @@ struct
       | Bottom -> Known (ET.bottom_like expanded)
       | Ok (Value ty) ->
         let ty_result, new_acc =
-          compute_transitive_used_accessors_head_of_kind_value env !acc_ref
-            metadata ty
+          rewrite_head_of_kind_value env !acc_ref metadata ty
         in
         acc_ref := new_acc;
         let>+ ty = ty_result in
         ET.create_value ty
       | Ok (Naked_immediate head) ->
-        let>+ head =
-          compute_transitive_used_accessors_head_of_kind_naked_immediate head
-        in
+        let>+ head = rewrite_head_of_kind_naked_immediate head in
         ET.create_naked_immediate head
       | Ok (Naked_float32 head) ->
-        let>+ head =
-          compute_transitive_used_accessors_head_of_kind_naked_float32 head
-        in
+        let>+ head = rewrite_head_of_kind_naked_float32 head in
         ET.create_naked_float32 head
       | Ok (Naked_float head) ->
-        let>+ head =
-          compute_transitive_used_accessors_head_of_kind_naked_float head
-        in
+        let>+ head = rewrite_head_of_kind_naked_float head in
         ET.create_naked_float head
       | Ok (Naked_int8 head) ->
-        let>+ head =
-          compute_transitive_used_accessors_head_of_kind_naked_int8 head
-        in
+        let>+ head = rewrite_head_of_kind_naked_int8 head in
         ET.create_naked_int8 head
       | Ok (Naked_int16 head) ->
-        let>+ head =
-          compute_transitive_used_accessors_head_of_kind_naked_int16 head
-        in
+        let>+ head = rewrite_head_of_kind_naked_int16 head in
         ET.create_naked_int16 head
       | Ok (Naked_int32 head) ->
-        let>+ head =
-          compute_transitive_used_accessors_head_of_kind_naked_int32 head
-        in
+        let>+ head = rewrite_head_of_kind_naked_int32 head in
         ET.create_naked_int32 head
       | Ok (Naked_int64 head) ->
-        let>+ head =
-          compute_transitive_used_accessors_head_of_kind_naked_int64 head
-        in
+        let>+ head = rewrite_head_of_kind_naked_int64 head in
         ET.create_naked_int64 head
       | Ok (Naked_nativeint head) ->
-        let>+ head =
-          compute_transitive_used_accessors_head_of_kind_naked_nativeint head
-        in
+        let>+ head = rewrite_head_of_kind_naked_nativeint head in
         ET.create_naked_nativeint head
       | Ok (Naked_vec128 head) ->
-        let>+ head =
-          compute_transitive_used_accessors_head_of_kind_naked_vec128 head
-        in
+        let>+ head = rewrite_head_of_kind_naked_vec128 head in
         ET.create_naked_vec128 head
       | Ok (Naked_vec256 head) ->
-        let>+ head =
-          compute_transitive_used_accessors_head_of_kind_naked_vec256 head
-        in
+        let>+ head = rewrite_head_of_kind_naked_vec256 head in
         ET.create_naked_vec256 head
       | Ok (Naked_vec512 head) ->
-        let>+ head =
-          compute_transitive_used_accessors_head_of_kind_naked_vec512 head
-        in
+        let>+ head = rewrite_head_of_kind_naked_vec512 head in
         ET.create_naked_vec512 head
       | Ok (Rec_info head) ->
-        let>+ head =
-          compute_transitive_used_accessors_head_of_kind_rec_info head
-        in
+        let>+ head = rewrite_head_of_kind_rec_info head in
         ET.create_rec_info head
       | Ok (Region head) ->
-        let>+ head =
-          compute_transitive_used_accessors_head_of_kind_region head
-        in
+        let>+ head = rewrite_head_of_kind_region head in
         ET.create_region head
     in
     match expanded_or_unknown with
@@ -567,13 +539,20 @@ struct
     fold_destructuring pattern env ty (Var.Map.empty, acc)
       ~f:(fun (var, field_metadata) field_ty (sigma, acc) ->
         let field_ty', acc =
-          compute_transitive_used_accessors env acc field_metadata field_ty
+          rewrite_arbitrary_type env acc field_metadata field_ty
         in
         Var.Map.add var field_ty' sigma, acc)
 
-  and rewrite rw env acc ty =
-    match rw with
-    | Identity -> ty, acc
+  and rewrite_concrete_type_of env acc name kind abs =
+    let ty = TE.find env name (Some kind) in
+    rewrite env acc abs ty
+
+  and rewrite env acc abs ty =
+    match X.rewrite abs env ty with
+    | Identity ->
+      let expanded = Expand_head.expand_head env ty in
+      let expanded, acc = rewrite_expanded_head env acc abs expanded in
+      ET.to_type expanded, acc
     | Rewrite (pattern, expr) -> (
       let sigma, acc = match_pattern pattern env ty acc in
       let subst var =
@@ -610,7 +589,7 @@ struct
             ~all_closure_types_in_set ~all_value_slots_in_set alloc_mode,
           acc ))
 
-  and compute_transitive_used_accessors env acc metadata ty =
+  and rewrite_arbitrary_type env acc metadata ty =
     match TG.get_alias_opt ty with
     | Some alias ->
       let canonical =
@@ -620,9 +599,8 @@ struct
         Simple.pattern_match canonical
           ~const:(fun _ -> canonical, acc)
           ~name:(fun name ~coercion ->
-            let ty = TE.find env name (Some (TG.kind ty)) in
             let canonical_name, coercion_to_name, acc =
-              get_canonical_with acc env ty name metadata
+              get_canonical_with acc env name (TG.kind ty) metadata
             in
             let coercion =
               Coercion.compose_exn coercion_to_name ~then_:coercion
@@ -632,29 +610,24 @@ struct
       in
       TG.alias_type_of (TG.kind ty) canonical_with_metadata, acc
     | None ->
-      let rule = X.rewrite metadata env ty in
-      let ty', acc = rewrite rule env acc ty in
+      let ty', acc = rewrite env acc metadata ty in
       let expanded = Expand_head.expand_head env ty' in
-      let expanded, acc =
-        compute_transitive_used_accessors_expanded_head env acc metadata
-          expanded
-      in
+      let expanded, acc = rewrite_expanded_head env acc metadata expanded in
       ET.to_type expanded, acc
 
-  and compute_transitive_used_accessors_head_of_kind_value env acc metadata head
-      : TG.head_of_kind_value Or_unknown.t * _ =
+  and rewrite_head_of_kind_value env acc metadata head :
+      TG.head_of_kind_value Or_unknown.t * _ =
     let ({ non_null; is_null } : TG.head_of_kind_value) = head in
     match non_null with
     | Unknown | Bottom -> Known head, acc
     | Ok non_null ->
       let non_null, acc =
-        compute_transitive_used_accessors_head_of_kind_value_non_null env acc
-          metadata non_null
+        rewrite_head_of_kind_value_non_null env acc metadata non_null
       in
       Known { non_null = Ok non_null; is_null }, acc
 
-  and compute_transitive_used_accessors_head_of_kind_value_non_null env acc
-      metadata (head : TG.head_of_kind_value_non_null) =
+  and rewrite_head_of_kind_value_non_null env acc metadata
+      (head : TG.head_of_kind_value_non_null) =
     match head with
     | Variant { blocks; immediates; extensions = _; is_unique } ->
       let blocks, acc =
@@ -662,8 +635,7 @@ struct
         | Unknown -> blocks, acc
         | Known blocks ->
           let blocks, acc =
-            compute_transitive_used_accessors_row_like_for_blocks env acc
-              metadata blocks
+            rewrite_row_like_for_blocks env acc metadata blocks
           in
           Or_unknown.Known blocks, acc
       in
@@ -672,7 +644,7 @@ struct
         | Unknown -> immediates, acc
         | Known immediates ->
           let immediates, acc =
-            compute_transitive_used_accessors env acc metadata immediates
+            rewrite_arbitrary_type env acc metadata immediates
           in
           Or_unknown.Known immediates, acc
       in
@@ -682,48 +654,45 @@ struct
         acc )
     | Mutable_block { alloc_mode = _ } -> head, acc
     | Boxed_float32 (ty, alloc_mode) ->
-      let ty, acc = compute_transitive_used_accessors env acc metadata ty in
+      let ty, acc = rewrite_arbitrary_type env acc metadata ty in
       TG.Head_of_kind_value_non_null.create_boxed_float32 ty alloc_mode, acc
     | Boxed_float (ty, alloc_mode) ->
-      let ty, acc = compute_transitive_used_accessors env acc metadata ty in
+      let ty, acc = rewrite_arbitrary_type env acc metadata ty in
       TG.Head_of_kind_value_non_null.create_boxed_float ty alloc_mode, acc
     | Boxed_int32 (ty, alloc_mode) ->
-      let ty, acc = compute_transitive_used_accessors env acc metadata ty in
+      let ty, acc = rewrite_arbitrary_type env acc metadata ty in
       TG.Head_of_kind_value_non_null.create_boxed_int32 ty alloc_mode, acc
     | Boxed_int64 (ty, alloc_mode) ->
-      let ty, acc = compute_transitive_used_accessors env acc metadata ty in
+      let ty, acc = rewrite_arbitrary_type env acc metadata ty in
       TG.Head_of_kind_value_non_null.create_boxed_int64 ty alloc_mode, acc
     | Boxed_nativeint (ty, alloc_mode) ->
-      let ty, acc = compute_transitive_used_accessors env acc metadata ty in
+      let ty, acc = rewrite_arbitrary_type env acc metadata ty in
       TG.Head_of_kind_value_non_null.create_boxed_nativeint ty alloc_mode, acc
     | Boxed_vec128 (ty, alloc_mode) ->
-      let ty, acc = compute_transitive_used_accessors env acc metadata ty in
+      let ty, acc = rewrite_arbitrary_type env acc metadata ty in
       TG.Head_of_kind_value_non_null.create_boxed_vec128 ty alloc_mode, acc
     | Boxed_vec256 (ty, alloc_mode) ->
-      let ty, acc = compute_transitive_used_accessors env acc metadata ty in
+      let ty, acc = rewrite_arbitrary_type env acc metadata ty in
       TG.Head_of_kind_value_non_null.create_boxed_vec256 ty alloc_mode, acc
     | Boxed_vec512 (ty, alloc_mode) ->
-      let ty, acc = compute_transitive_used_accessors env acc metadata ty in
+      let ty, acc = rewrite_arbitrary_type env acc metadata ty in
       TG.Head_of_kind_value_non_null.create_boxed_vec512 ty alloc_mode, acc
     | Closures { by_function_slot; alloc_mode } ->
       let by_function_slot, acc =
-        compute_transitive_used_accessors_row_like_for_closures env acc metadata
-          by_function_slot
+        rewrite_row_like_for_closures env acc metadata by_function_slot
       in
       ( TG.Head_of_kind_value_non_null.create_closures by_function_slot
           alloc_mode,
         acc )
     | String _ -> head, acc
     | Array { element_kind; length; contents; alloc_mode } ->
-      let length, acc =
-        compute_transitive_used_accessors env acc metadata length
-      in
+      let length, acc = rewrite_arbitrary_type env acc metadata length in
       let contents, acc =
         match contents with
         | Known (Immutable { fields }) ->
           let fields, acc =
-            compute_transitive_used_accessors_int_indexed_product
-              ~slot:X.array_slot env acc metadata fields
+            rewrite_int_indexed_product ~slot:X.array_slot env acc metadata
+              fields
           in
           Or_unknown.Known (TG.Immutable { fields }), acc
         | Unknown | Known Mutable -> contents, acc
@@ -732,7 +701,7 @@ struct
           ~length contents alloc_mode,
         acc )
 
-  and compute_transitive_used_accessors_head_of_kind_naked_immediate
+  and rewrite_head_of_kind_naked_immediate
       (head : TG.head_of_kind_naked_immediate) : _ Or_unknown.t =
     match head with
     | Naked_immediates _ -> Or_unknown.Known head
@@ -740,55 +709,42 @@ struct
       (* CR bclement: replace with prove. *)
       Or_unknown.Unknown
 
-  and compute_transitive_used_accessors_head_of_kind_naked_float32 head :
-      _ Or_unknown.t =
+  and rewrite_head_of_kind_naked_float32 head : _ Or_unknown.t =
     Or_unknown.Known head
 
-  and compute_transitive_used_accessors_head_of_kind_naked_float head :
-      _ Or_unknown.t =
+  and rewrite_head_of_kind_naked_float head : _ Or_unknown.t =
     Or_unknown.Known head
 
-  and compute_transitive_used_accessors_head_of_kind_naked_int8 head :
-      _ Or_unknown.t =
+  and rewrite_head_of_kind_naked_int8 head : _ Or_unknown.t =
     Or_unknown.Known head
 
-  and compute_transitive_used_accessors_head_of_kind_naked_int16 head :
-      _ Or_unknown.t =
+  and rewrite_head_of_kind_naked_int16 head : _ Or_unknown.t =
     Or_unknown.Known head
 
-  and compute_transitive_used_accessors_head_of_kind_naked_int32 head :
-      _ Or_unknown.t =
+  and rewrite_head_of_kind_naked_int32 head : _ Or_unknown.t =
     Or_unknown.Known head
 
-  and compute_transitive_used_accessors_head_of_kind_naked_int64 head :
-      _ Or_unknown.t =
+  and rewrite_head_of_kind_naked_int64 head : _ Or_unknown.t =
     Or_unknown.Known head
 
-  and compute_transitive_used_accessors_head_of_kind_naked_nativeint head :
-      _ Or_unknown.t =
+  and rewrite_head_of_kind_naked_nativeint head : _ Or_unknown.t =
     Or_unknown.Known head
 
-  and compute_transitive_used_accessors_head_of_kind_naked_vec128 head :
-      _ Or_unknown.t =
+  and rewrite_head_of_kind_naked_vec128 head : _ Or_unknown.t =
     Or_unknown.Known head
 
-  and compute_transitive_used_accessors_head_of_kind_naked_vec256 head :
-      _ Or_unknown.t =
+  and rewrite_head_of_kind_naked_vec256 head : _ Or_unknown.t =
     Or_unknown.Known head
 
-  and compute_transitive_used_accessors_head_of_kind_naked_vec512 head :
-      _ Or_unknown.t =
+  and rewrite_head_of_kind_naked_vec512 head : _ Or_unknown.t =
     Or_unknown.Known head
 
-  and compute_transitive_used_accessors_head_of_kind_rec_info head :
-      _ Or_unknown.t =
+  and rewrite_head_of_kind_rec_info head : _ Or_unknown.t =
     Or_unknown.Known head
 
-  and compute_transitive_used_accessors_head_of_kind_region () : _ Or_unknown.t
-      =
-    Or_unknown.Known ()
+  and rewrite_head_of_kind_region () : _ Or_unknown.t = Or_unknown.Known ()
 
-  and compute_transitive_used_accessors_row_like_for_blocks env acc metadata
+  and rewrite_row_like_for_blocks env acc metadata
       ({ known_tags; other_tags; alloc_mode } : TG.row_like_for_blocks) =
     let known_tags, acc =
       Tag.Map.fold
@@ -798,7 +754,7 @@ struct
             | Unknown -> case, acc
             | Known { maps_to; env_extension = _; index } ->
               let maps_to, acc =
-                compute_transitive_used_accessors_int_indexed_product
+                rewrite_int_indexed_product
                   ~slot:(fun t index env ty -> X.block_slot ~tag t index env ty)
                   env acc metadata maps_to
               in
@@ -816,7 +772,7 @@ struct
       | Bottom -> Or_bottom.Bottom, acc
       | Ok { maps_to; env_extension = _; index } ->
         let maps_to, acc =
-          compute_transitive_used_accessors_int_indexed_product
+          rewrite_int_indexed_product
             ~slot:(fun t index env ty -> X.block_slot t index env ty)
             env acc metadata maps_to
         in
@@ -827,7 +783,7 @@ struct
     in
     TG.Row_like_for_blocks.create_raw ~known_tags ~other_tags ~alloc_mode, acc
 
-  and compute_transitive_used_accessors_row_like_for_closures env acc metadata
+  and rewrite_row_like_for_closures env acc metadata
       ({ known_closures; other_closures } : TG.row_like_for_closures) =
     let known_closures, acc =
       Function_slot.Map.fold
@@ -838,9 +794,8 @@ struct
             X.set_of_closures metadata function_slot env maps_to
           in
           let maps_to, acc =
-            compute_transitive_used_accessors_closures_entry
-              ~this_function_slot:function_slot env acc set_of_closures_metadata
-              maps_to
+            rewrite_closures_entry ~this_function_slot:function_slot env acc
+              set_of_closures_metadata maps_to
           in
           let row_like_case =
             TG.Row_like_case.create ~maps_to
@@ -857,8 +812,7 @@ struct
     in
     TG.Row_like_for_closures.create_raw ~known_closures ~other_closures, acc
 
-  and compute_transitive_used_accessors_closures_entry ~this_function_slot:_ env
-      acc metadata
+  and rewrite_closures_entry ~this_function_slot:_ env acc metadata
       ({ function_types; closure_types; value_slot_types } : TG.closures_entry)
       =
     let function_types, acc =
@@ -871,8 +825,8 @@ struct
               (* XXX: Code_of_closure field *)
               (* Path does not change for function types within the entry *)
               let function_type, acc =
-                compute_transitive_used_accessors_function_type env acc metadata
-                  function_slot function_type
+                rewrite_function_type env acc metadata function_slot
+                  function_type
               in
               Or_unknown.Known function_type, acc
           in
@@ -881,18 +835,15 @@ struct
         (Function_slot.Map.empty, acc)
     in
     let closure_types, acc =
-      compute_transitive_used_accessors_function_slot_indexed_product env acc
-        metadata closure_types
+      rewrite_function_slot_indexed_product env acc metadata closure_types
     in
     let value_slot_types, acc =
-      compute_transitive_used_accessors_value_slot_indexed_product env acc
-        metadata value_slot_types
+      rewrite_value_slot_indexed_product env acc metadata value_slot_types
     in
     ( TG.Closures_entry.create ~function_types ~closure_types ~value_slot_types,
       acc )
 
-  and compute_transitive_used_accessors_function_slot_indexed_product env acc
-      metadata
+  and rewrite_function_slot_indexed_product env acc metadata
       ({ function_slot_components_by_index } : TG.function_slot_indexed_product)
       =
     let function_slot_components_by_index, acc =
@@ -903,7 +854,7 @@ struct
             X.function_slot metadata function_slot env function_slot_ty
           in
           let function_slot_ty', acc =
-            compute_transitive_used_accessors env acc function_slot_metadata
+            rewrite_arbitrary_type env acc function_slot_metadata
               function_slot_ty
           in
           ( Function_slot.Map.add function_slot function_slot_ty'
@@ -915,8 +866,7 @@ struct
     ( TG.Product.Function_slot_indexed.create function_slot_components_by_index,
       acc )
 
-  and compute_transitive_used_accessors_value_slot_indexed_product env acc
-      metadata
+  and rewrite_value_slot_indexed_product env acc metadata
       ({ value_slot_components_by_index } : TG.value_slot_indexed_product) =
     let value_slot_components_by_index, acc =
       Value_slot.Map.fold
@@ -925,8 +875,7 @@ struct
             X.value_slot metadata value_slot env value_slot_ty
           in
           let value_slot_ty', acc =
-            compute_transitive_used_accessors env acc value_slot_metadata
-              value_slot_ty
+            rewrite_arbitrary_type env acc value_slot_metadata value_slot_ty
           in
           ( Value_slot.Map.add value_slot value_slot_ty'
               value_slot_components_by_index,
@@ -936,14 +885,13 @@ struct
     in
     TG.Product.Value_slot_indexed.create value_slot_components_by_index, acc
 
-  and compute_transitive_used_accessors_int_indexed_product ~slot env acc
-      metadata fields =
+  and rewrite_int_indexed_product ~slot env acc metadata fields =
     let (acc, _), fields =
       Array.fold_left_map
         (fun (acc, index) field_ty ->
           let field_metadata = slot metadata index env field_ty in
           let field_ty', acc =
-            compute_transitive_used_accessors env acc field_metadata field_ty
+            rewrite_arbitrary_type env acc field_metadata field_ty
           in
           (acc, TI.(add index one)), field_ty')
         (acc, TI.of_int 0)
@@ -951,13 +899,13 @@ struct
     in
     fields, acc
 
-  and compute_transitive_used_accessors_function_type env acc metadata
-      function_slot ({ code_id; rec_info } : TG.function_type) =
+  and rewrite_function_type env acc metadata function_slot
+      ({ code_id; rec_info } : TG.function_type) =
     let rec_info_metadata =
       X.rec_info env metadata function_slot code_id rec_info
     in
     let rec_info, acc =
-      compute_transitive_used_accessors env acc rec_info_metadata rec_info
+      rewrite_arbitrary_type env acc rec_info_metadata rec_info
     in
     TG.Function_type.create code_id ~rec_info, acc
 
@@ -969,10 +917,10 @@ struct
     let base_env, new_types, acc =
       Symbol.Set.fold
         (fun symbol (base_env, types, acc) ->
-          let ty = TG.alias_type_of K.value (Simple.symbol symbol) in
-          let metadata = symbol_abstraction symbol in
-          let rule = X.rewrite metadata env ty in
-          let ty, acc = rewrite rule env acc ty in
+          let abs = symbol_abstraction symbol in
+          let ty, acc =
+            rewrite_concrete_type_of env acc (Name.symbol symbol) K.value abs
+          in
           let bound_name = Bound_name.create_symbol symbol in
           let base_env = TE.add_definition base_env bound_name (TG.kind ty) in
           base_env, Name.Map.add (Name.symbol symbol) ty types, acc)
@@ -981,10 +929,10 @@ struct
     in
     let base_env, new_types, acc =
       Variable.Map.fold
-        (fun var (metadata, kind) (base_env, types, acc) ->
-          let ty = TG.alias_type_of kind (Simple.var var) in
-          let rule = X.rewrite metadata env ty in
-          let ty, acc = rewrite rule env acc ty in
+        (fun var (abs, kind) (base_env, types, acc) ->
+          let ty, acc =
+            rewrite_concrete_type_of env acc (Name.var var) kind abs
+          in
           let bound_name =
             Bound_name.create_var
               (Bound_var.create var Flambda_debug_uid.none Name_mode.normal)
@@ -999,9 +947,12 @@ struct
       | _ :: _ ->
         let new_types, acc =
           List.fold_left
-            (fun (new_types, acc) (ty, rule, name_after_rewrite) ->
-              let ty', acc = rewrite rule env acc ty in
-              let new_types = Name.Map.add name_after_rewrite ty' new_types in
+            (fun (new_types, acc)
+                 (name_before_rewrite, abs, kind, name_after_rewrite) ->
+              let ty, acc =
+                rewrite_concrete_type_of env acc name_before_rewrite kind abs
+              in
+              let new_types = Name.Map.add name_after_rewrite ty new_types in
               new_types, acc)
             (new_types, { aliases_of_names; names_to_process = [] })
             names_to_process
