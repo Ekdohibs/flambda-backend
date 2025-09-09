@@ -357,7 +357,6 @@ module Function_type = struct
 end
 
 type 'a expr =
-  | Identity of 'a
   | Unknown of K.With_subkind.t
   | Tag_imm of 'a
   | Block of
@@ -380,8 +379,6 @@ module Expr = struct
   type 'a t = 'a expr
 
   module Function_type = Function_type
-
-  let var var = Identity var
 
   let unknown kind = Unknown (K.With_subkind.anything kind)
 
@@ -585,7 +582,6 @@ struct
         | None -> Misc.fatal_error "Not defined"
       in
       match expr with
-      | Identity var -> subst var, acc
       | Unknown kind -> MTC.unknown_with_subkind kind, acc
       | Tag_imm field -> TG.tag_immediate (subst field), acc
       | Block { is_unique; tag; shape; alloc_mode; fields } ->
