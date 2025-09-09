@@ -51,6 +51,8 @@ module Expr : sig
     val create : Code_id.t -> rec_info:'a -> 'a t
   end
 
+  val var : 'a -> 'a t
+
   val unknown : Flambda_kind.t -> 'a t
 
   val unknown_with_subkind : Flambda_kind.With_subkind.t -> 'a t

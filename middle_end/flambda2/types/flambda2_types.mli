@@ -950,6 +950,8 @@ module Rewriter : sig
       val create : Code_id.t -> rec_info:'a -> 'a t
     end
 
+    val var : 'a -> 'a t
+
     val unknown : Flambda_kind.t -> 'a t
 
     val tag_immediate : 'a -> 'a t
