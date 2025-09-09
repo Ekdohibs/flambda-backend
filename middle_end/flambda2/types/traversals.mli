@@ -80,7 +80,7 @@ type 'a rewrite
 module Rule : sig
   type 'a t = 'a rewrite
 
-  val identity : 'a -> 'a t
+  val identity : 'a t
 
   val rewrite : 'a Pattern.t -> Var.t expr -> 'a t
 end

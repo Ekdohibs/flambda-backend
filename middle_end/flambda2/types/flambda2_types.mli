@@ -975,7 +975,7 @@ module Rewriter : sig
   module Rule : sig
     type 'a t
 
-    val identity : 'a -> 'a t
+    val identity : 'a t
 
     val rewrite : 'a Pattern.t -> Var.t expr -> 'a t
   end
