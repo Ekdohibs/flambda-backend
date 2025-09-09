@@ -635,7 +635,9 @@ struct
       in
       TG.alias_type_of (TG.kind ty) canonical_with_metadata, acc
     | None ->
-      let expanded = Expand_head.expand_head env ty in
+      let rule = X.rewrite metadata env ty in
+      let ty', acc = rewrite rule env acc ty in
+      let expanded = Expand_head.expand_head env ty' in
       let expanded, acc =
         compute_transitive_used_accessors_expanded_head env acc metadata
           expanded
