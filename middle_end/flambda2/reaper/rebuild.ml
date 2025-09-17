@@ -712,7 +712,7 @@ let make_apply_wrapper env
               in
               (* let direct_or_indirect = match Apply.call_kind apply with |
                  Function { function_call = Direct _; _ } -> error () | Function
-                 { function_call = Indirect_known_arity; _ } ->
+                 { function_call = Indirect_known_arity _; _ } ->
                  GFG.Known_arity_code_pointer | Function { function_call =
                  Indirect_unknown_arity; _ } | C_call _ | Method _ | Effect _ ->
                  GFG.Unknown_arity_code_pointer in let field = GFG.Field.Apply
@@ -874,20 +874,22 @@ let decide_whether_apply_needs_calling_convention_change env apply =
   let code_id_actually_called, call_kind, _should_break_call =
     let called c alloc_mode call_kind was_indirect_unknown_arity =
       assert (not was_indirect_unknown_arity);
-      let code_id =
+      let code_ids =
         Simple.pattern_match c
           ~const:(fun _ -> Or_unknown.Unknown)
           ~name:(fun name ~coercion:_ ->
             DS.code_id_actually_directly_called env.uses name)
       in
-      match code_id with
+      match code_ids with
       | Unknown -> None, call_kind, false
       | Known code_ids ->
         let singleton_code_id = Code_id.Set.get_singleton code_ids in
         let new_call_kind =
           match singleton_code_id with
           | Some code_id -> Call_kind.direct_function_call code_id alloc_mode
-          | None -> Call_kind.indirect_function_call_known_arity alloc_mode
+          | None ->
+            Call_kind.indirect_function_call_known_arity
+              ~code_ids:(Known code_ids) alloc_mode
         in
         singleton_code_id, new_call_kind, was_indirect_unknown_arity
     in
@@ -904,14 +906,11 @@ let decide_whether_apply_needs_calling_convention_change env apply =
                     those calls to [Indirect_known_arity]. *)
                  Compilation_unit.is_current (Symbol.compilation_unit s))
                c ->
-        let code_ids = Code_id.Set.singleton code_id in
         let call_kind =
-          if Code_id.Set.exists
-               (fun code_id ->
-                 Compilation_unit.is_current
-                   (Code_id.get_compilation_unit code_id))
-               code_ids
-          then Call_kind.indirect_function_call_known_arity alloc_mode
+          if Compilation_unit.is_current (Code_id.get_compilation_unit code_id)
+          then
+            Call_kind.indirect_function_call_known_arity ~code_ids:Unknown
+              alloc_mode
           else call_kind
         in
         called c alloc_mode call_kind false
@@ -919,8 +918,13 @@ let decide_whether_apply_needs_calling_convention_change env apply =
     | Function { function_call = Indirect_unknown_arity; alloc_mode = _ } ->
       (* called (Option.get (Apply.callee apply)) alloc_mode call_kind true *)
       None, call_kind, false
-    | Function { function_call = Indirect_known_arity; alloc_mode } ->
-      called (Option.get (Apply.callee apply)) alloc_mode call_kind false
+    | Function { function_call = Indirect_known_arity _; alloc_mode } ->
+      called
+        (Option.get (Apply.callee apply))
+        alloc_mode
+        (Call_kind.indirect_function_call_known_arity ~code_ids:Unknown
+           alloc_mode)
+        false
     | C_call _ | Method _ | Effect _ -> None, call_kind, false
   in
   match code_id_actually_called with
@@ -974,7 +978,7 @@ let rebuild_apply env apply =
        apply; *)
     let _callee_with_known_arity =
       match (call_kind : Call_kind.t) with
-      | Function { function_call = Direct _ | Indirect_known_arity; _ } -> (
+      | Function { function_call = Direct _ | Indirect_known_arity _; _ } -> (
         match Apply.callee apply with
         | None -> None
         | Some callee ->
