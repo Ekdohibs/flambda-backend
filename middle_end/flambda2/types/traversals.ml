@@ -565,11 +565,14 @@ struct
       in
       match expr with
       | Identity var -> subst var, acc
-      | Unknown kind -> MTC.unknown_with_subkind ~machine_width:(TE.machine_width env) kind, acc
+      | Unknown kind ->
+        MTC.unknown_with_subkind ~machine_width:(TE.machine_width env) kind, acc
       | Tag_imm field -> TG.tag_immediate (subst field), acc
       | Block { is_unique; tag; shape; alloc_mode; fields } ->
         let fields = List.map subst fields in
-        MTC.immutable_block ~machine_width:(TE.machine_width env) ~is_unique tag ~shape alloc_mode ~fields, acc
+        ( MTC.immutable_block ~machine_width:(TE.machine_width env) ~is_unique
+            tag ~shape alloc_mode ~fields,
+          acc )
       | Closure
           { function_slot;
             all_function_slots_in_set;
@@ -603,14 +606,28 @@ struct
         Simple.pattern_match canonical
           ~const:(fun _ -> canonical, acc)
           ~name:(fun name ~coercion ->
-            let canonical_name, coercion_to_name, acc =
-              get_canonical_with acc env name (TG.kind ty) metadata
-            in
-            let coercion =
-              Coercion.compose_exn coercion_to_name ~then_:coercion
-            in
-            let simple = Simple.name canonical_name in
-            Simple.with_coercion simple coercion, acc)
+            (* Do not rewrite the types of names coming from other compilation
+               units, since we can't re-define them and it's hard to think of a
+               situation where it would be useful anyways.
+
+               Note that simply skipping them here means that we lose any more
+               precise type that we would have for these variables in the
+               current compilation unit, but this should be rare at top level
+               (which is where this API is intended to be used). *)
+            if not
+                 (Compilation_unit.equal
+                    (Name.compilation_unit name)
+                    (Compilation_unit.get_current_exn ()))
+            then canonical, acc
+            else
+              let canonical_name, coercion_to_name, acc =
+                get_canonical_with acc env name (TG.kind ty) metadata
+              in
+              let coercion =
+                Coercion.compose_exn coercion_to_name ~then_:coercion
+              in
+              let simple = Simple.name canonical_name in
+              Simple.with_coercion simple coercion, acc)
       in
       TG.alias_type_of (TG.kind ty) canonical_with_metadata, acc
     | None ->
@@ -916,7 +933,8 @@ struct
   let rewrite env symbol_abstraction live_vars =
     let base_env =
       TE.create ~resolver:(TE.resolver env)
-        ~get_imported_names:(TE.get_imported_names env) ~machine_width:(TE.machine_width env)
+        ~get_imported_names:(TE.get_imported_names env)
+        ~machine_width:(TE.machine_width env)
     in
     let base_env, new_types, acc =
       Symbol.Set.fold
