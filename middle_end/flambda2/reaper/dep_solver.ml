@@ -43,7 +43,7 @@ let is_local_field (f : Field.t) =
     Compilation_unit.is_current (Value_slot.get_compilation_unit vs)
   | Function_slot fs ->
     Compilation_unit.is_current (Function_slot.get_compilation_unit fs)
-  | Block _ | Code_of_closure _ | Apply _ | Code_id_of_call_witness _ | Is_int
+  | Block _ | Code_of_closure _ | Apply _ | Code_id_of_call_witness | Is_int
   | Get_tag ->
     false
 
@@ -1032,7 +1032,7 @@ let get_one_field : Datalog.database -> Field.t -> usages -> field_usage =
     then Used_as_top
     else
       let db =
-        Datalog.set_table in_field_tbl (FieldC.Map.singleton field ()) db
+        Datalog.set_table in_field_tbl (Field.Encoded.Map.singleton field ()) db
       in
       let db = Datalog.Schedule.(run (saturate [r]) db) in
       Used_as_vars (Datalog.get_table out_tbl db)
@@ -1059,6 +1059,57 @@ let get_fields : Datalog.database -> usages -> field_usage Field.Map.t =
        ==> out2 field y) ]
   in
   fun db (Usages s) ->
+    let db = Datalog.set_table in_tbl s db in
+    let db =
+      List.fold_left
+        (fun db r -> Datalog.Schedule.(run (saturate [r])) db)
+        db rs
+    in
+    fieldc_map_to_field_map
+      (Field.Encoded.Map.merge
+         (fun k x y ->
+           match x, y with
+           | None, None -> assert false
+           | Some _, Some _ ->
+             Misc.fatal_errorf "Got two results for field %a" Field.print
+               (Field.decode k)
+           | Some (), None -> Some Used_as_top
+           | None, Some m -> Some (Used_as_vars m))
+         (Datalog.get_table out_tbl1 db)
+         (Datalog.get_table out_tbl2 db))
+
+let field_of_constructor_is_used =
+  rel2 "field_of_constructor_is_used" Cols.[n; f]
+
+let field_of_constructor_is_used_top =
+  rel2 "field_of_constructor_is_used_top" Cols.[n; f]
+
+let field_of_constructor_is_used_as =
+  rel3 "field_of_constructor_is_used" Cols.[n; f; n]
+
+let get_fields_usage_of_constructors :
+    Datalog.database -> unit Code_id_or_name.Map.t -> field_usage Field.Map.t =
+  (* CR-someday ncourant: likewise here; I find this function particulartly
+     ugly. *)
+  let out_tbl1, out1 = rel1_r "out1" Cols.[f] in
+  let out_tbl2, out2 = rel2_r "out2" Cols.[f; n] in
+  let in_tbl, in_ = rel1_r "in_" Cols.[n] in
+  let open! Syntax in
+  let open! Global_flow_graph in
+  let rs =
+    [ (let$ [x; field] = ["x"; "field"] in
+       [ in_ x;
+         field_of_constructor_is_used_top x field;
+         filter_field (fun x -> Stdlib.not (is_function_slot x)) field ]
+       ==> out1 field);
+      (let$ [x; field; y] = ["x"; "field"; "y"] in
+       [ in_ x;
+         field_of_constructor_is_used_as x field y;
+         not (out1 field);
+         filter_field (fun x -> Stdlib.not (is_function_slot x)) field ]
+       ==> out2 field y) ]
+  in
+  fun db s ->
     let db = Datalog.set_table in_tbl s db in
     let db =
       List.fold_left
@@ -1878,7 +1929,7 @@ module Rewriter = struct
         let db = Datalog.set_table in_tbl s db in
         let db =
           Datalog.set_table in_fs_tbl
-            (FieldC.Map.singleton
+            (Field.Encoded.Map.singleton
                (Field.encode (Function_slot current_function_slot))
                ())
             db
@@ -1887,8 +1938,8 @@ module Rewriter = struct
           Datalog.set_table in_all_fs_tbl
             (Function_slot.Map.fold
                (fun fs _ m ->
-                 FieldC.Map.add (Field.encode (Function_slot fs)) () m)
-               all_function_slots FieldC.Map.empty)
+                 Field.Encoded.Map.add (Field.encode (Function_slot fs)) () m)
+               all_function_slots Field.Encoded.Map.empty)
             db
         in
         let db = Datalog.Schedule.run (Datalog.Schedule.saturate rs) db in
@@ -1900,10 +1951,10 @@ module Rewriter = struct
           let known_arity = Datalog.get_table out_known_arity_tbl db in
           let unkwown_arity = Datalog.get_table out_unknown_arity_tbl db in
           ( Usages uses_for_value_slots,
-            FieldC.Map.fold
+            Field.Encoded.Map.fold
               (fun fs uses m ->
                 let known_arity_call, unknown_arity_call =
-                  FieldC.Map.mem fs known_arity, FieldC.Map.mem fs unkwown_arity
+                  Field.Encoded.Map.mem fs known_arity, Field.Encoded.Map.mem fs unkwown_arity
                 in
                 let calls =
                   if unknown_arity_call
