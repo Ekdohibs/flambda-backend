@@ -565,11 +565,14 @@ struct
       in
       match expr with
       | Identity var -> subst var, acc
-      | Unknown kind -> MTC.unknown_with_subkind kind, acc
+      | Unknown kind ->
+        MTC.unknown_with_subkind ~machine_width:(TE.machine_width env) kind, acc
       | Tag_imm field -> TG.tag_immediate (subst field), acc
       | Block { is_unique; tag; shape; alloc_mode; fields } ->
         let fields = List.map subst fields in
-        MTC.immutable_block ~is_unique tag ~shape alloc_mode ~fields, acc
+        ( MTC.immutable_block ~machine_width:(TE.machine_width env) ~is_unique
+            tag ~shape alloc_mode ~fields,
+          acc )
       | Closure
           { function_slot;
             all_function_slots_in_set;
@@ -897,8 +900,8 @@ struct
           let field_ty', acc =
             rewrite_arbitrary_type env acc field_metadata field_ty
           in
-          (acc, TI.(add index one)), field_ty')
-        (acc, TI.of_int 0)
+          (acc, TI.(add index (one (TE.machine_width env)))), field_ty')
+        (acc, TI.of_int (TE.machine_width env) 0)
         fields
     in
     fields, acc
@@ -917,6 +920,7 @@ struct
     let base_env =
       TE.create ~resolver:(TE.resolver env)
         ~get_imported_names:(TE.get_imported_names env)
+        ~machine_width:(TE.machine_width env)
     in
     let base_env, new_types, acc =
       Symbol.Set.fold
