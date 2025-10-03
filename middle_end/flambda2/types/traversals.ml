@@ -550,51 +550,51 @@ struct
     let ty = TE.find env name (Some kind) in
     rewrite env acc abs ty
 
+  and rewrite_expr ~machine_width sigma expr =
+    let subst var =
+      match Var.Map.find_opt var sigma with
+      | Some ty -> ty
+      | None -> Misc.fatal_error "Not defined"
+    in
+    match (expr : _ Expr.t) with
+    | Identity var -> subst var
+    | Unknown kind -> MTC.unknown_with_subkind ~machine_width kind
+    | Tag_imm field -> TG.tag_immediate (subst field)
+    | Block { is_unique; tag; shape; alloc_mode; fields } ->
+      let fields = List.map subst fields in
+      MTC.immutable_block ~machine_width ~is_unique tag ~shape alloc_mode
+        ~fields
+    | Closure
+        { function_slot;
+          all_function_slots_in_set;
+          all_closure_types_in_set;
+          all_value_slots_in_set;
+          alloc_mode
+        } ->
+      let all_function_slots_in_set =
+        Function_slot.Map.map
+          (Or_unknown.map ~f:(fun { code_id; rec_info } ->
+               TG.Function_type.create code_id ~rec_info:(subst rec_info)))
+          all_function_slots_in_set
+      in
+      let all_closure_types_in_set =
+        Function_slot.Map.map subst all_closure_types_in_set
+      in
+      let all_value_slots_in_set =
+        Value_slot.Map.map subst all_value_slots_in_set
+      in
+      MTC.exactly_this_closure function_slot ~all_function_slots_in_set
+        ~all_closure_types_in_set ~all_value_slots_in_set alloc_mode
+
   and rewrite env acc abs ty =
     match X.rewrite abs env ty with
     | Identity ->
       let expanded = Expand_head.expand_head env ty in
       let expanded, acc = rewrite_expanded_head env acc abs expanded in
       ET.to_type expanded, acc
-    | Rewrite (pattern, expr) -> (
+    | Rewrite (pattern, expr) ->
       let sigma, acc = match_pattern pattern env ty acc in
-      let subst var =
-        match Var.Map.find_opt var sigma with
-        | Some ty -> ty
-        | None -> Misc.fatal_error "Not defined"
-      in
-      match expr with
-      | Identity var -> subst var, acc
-      | Unknown kind ->
-        MTC.unknown_with_subkind ~machine_width:(TE.machine_width env) kind, acc
-      | Tag_imm field -> TG.tag_immediate (subst field), acc
-      | Block { is_unique; tag; shape; alloc_mode; fields } ->
-        let fields = List.map subst fields in
-        ( MTC.immutable_block ~machine_width:(TE.machine_width env) ~is_unique
-            tag ~shape alloc_mode ~fields,
-          acc )
-      | Closure
-          { function_slot;
-            all_function_slots_in_set;
-            all_closure_types_in_set;
-            all_value_slots_in_set;
-            alloc_mode
-          } ->
-        let all_function_slots_in_set =
-          Function_slot.Map.map
-            (Or_unknown.map ~f:(fun { code_id; rec_info } ->
-                 TG.Function_type.create code_id ~rec_info:(subst rec_info)))
-            all_function_slots_in_set
-        in
-        let all_closure_types_in_set =
-          Function_slot.Map.map subst all_closure_types_in_set
-        in
-        let all_value_slots_in_set =
-          Value_slot.Map.map subst all_value_slots_in_set
-        in
-        ( MTC.exactly_this_closure function_slot ~all_function_slots_in_set
-            ~all_closure_types_in_set ~all_value_slots_in_set alloc_mode,
-          acc ))
+      rewrite_expr ~machine_width:(TE.machine_width env) sigma expr, acc
 
   and rewrite_arbitrary_type env acc metadata ty =
     match TG.get_alias_opt ty with
@@ -930,6 +930,116 @@ struct
     in
     TG.Function_type.create code_id ~rec_info, acc
 
+  let rewrite_in_depth env acc new_types =
+    let rec loop { aliases_of_names; names_to_process } new_types =
+      match names_to_process with
+      | [] -> new_types, aliases_of_names
+      | _ :: _ ->
+        let new_types, acc =
+          List.fold_left
+            (fun (new_types, acc)
+                 (name_before_rewrite, abs, kind, name_after_rewrite) ->
+              let ty, acc =
+                rewrite_concrete_type_of env acc name_before_rewrite kind abs
+              in
+              let new_types = Name.Map.add name_after_rewrite ty new_types in
+              new_types, acc)
+            (new_types, { aliases_of_names; names_to_process = [] })
+            names_to_process
+        in
+        loop acc new_types
+    in
+    loop acc new_types
+
+  let rewrite_env_extension_with_extra_variables env live_vars extension bind_to
+      =
+    let base_env =
+      TE.create ~resolver:(TE.resolver env)
+        ~get_imported_names:(TE.get_imported_names env)
+        ~machine_width:(TE.machine_width env)
+    in
+    let base_env =
+      Symbol.Set.fold
+        (fun symbol base_env ->
+          let bound_name = Bound_name.create_symbol symbol in
+          let base_env = TE.add_definition base_env bound_name K.value in
+          base_env)
+        (TE.defined_symbols env) base_env
+    in
+    let env =
+      Variable.Map.fold
+        (fun var (_, kind) env ->
+          let bound_name =
+            Bound_name.create_var
+              (Bound_var.create var Flambda_debug_uid.none Name_mode.normal)
+          in
+          TE.add_definition env bound_name kind)
+        live_vars env
+    in
+    let env =
+      ME.use_meet_env env ~f:(fun env ->
+          ME.add_env_extension_with_extra_variables
+            ~meet_type:(Meet.meet_type ()) env extension)
+    in
+    let sbs, base_env, new_types, acc =
+      Variable.Map.fold
+        (fun var (thing, kind) (sbs, base_env, new_types, acc) ->
+          let name = Name.var var in
+          let ty = TE.find env name (Some kind) in
+          fold_destructuring thing env ty (sbs, base_env, new_types, acc)
+            ~f:(fun (var, (name, abs)) ty (sbs, base_env, new_types, acc) ->
+              (* CR bclement: use existing name if [ty] is an alias *)
+              let var' = Variable.create name (TG.kind ty) in
+              let ty', acc = rewrite env acc abs ty in
+              let bound_name =
+                Bound_name.create_var
+                  (Bound_var.create var' Flambda_debug_uid.none Name_mode.normal)
+              in
+              let base_env =
+                TE.add_definition base_env bound_name (TG.kind ty')
+              in
+              let new_types = Name.Map.add (Name.var var') ty' new_types in
+              Var.Map.add var (Name.var var', ty') sbs, base_env, new_types, acc))
+        live_vars
+        (Var.Map.empty, base_env, Name.Map.empty, empty)
+    in
+    let new_types, aliases_of_names = rewrite_in_depth env acc new_types in
+    let base_env =
+      Name.Map.fold
+        (fun _name aliases_of_name base_env ->
+          X.Map.fold
+            (fun _metadata (name_after_rewrite, kind) base_env ->
+              Name.pattern_match name_after_rewrite
+                ~symbol:(fun _ -> base_env)
+                ~var:(fun var_after_rewrite ->
+                  if TE.mem ~min_name_mode:Name_mode.in_types base_env
+                       (Name.var var_after_rewrite)
+                  then base_env
+                  else
+                    let bound_name =
+                      Bound_name.create_var
+                        (Bound_var.create var_after_rewrite
+                           Flambda_debug_uid.none Name_mode.in_types)
+                    in
+                    TE.add_definition base_env bound_name kind))
+            aliases_of_name base_env)
+        aliases_of_names base_env
+    in
+    let final_env =
+      ME.use_meet_env base_env ~f:(fun env ->
+          Name.Map.fold
+            (fun name ty env ->
+              ME.add_equation env name ty ~meet_type:(Meet.meet_type ()))
+            new_types env)
+    in
+    let subst var =
+      match Var.Map.find_opt var sbs with
+      | Some v -> v
+      | None -> Misc.fatal_error "Not defined"
+    in
+    Expand_head.make_suitable_for_environment final_env
+      (Everything_not_in final_env) (List.map subst bind_to)
+
   let rewrite env symbol_abstraction live_vars =
     let base_env =
       TE.create ~resolver:(TE.resolver env)
@@ -963,25 +1073,7 @@ struct
           base_env, Name.Map.add (Name.var var) ty types, acc)
         live_vars (base_env, new_types, acc)
     in
-    let rec loop { aliases_of_names; names_to_process } new_types =
-      match names_to_process with
-      | [] -> new_types, aliases_of_names
-      | _ :: _ ->
-        let new_types, acc =
-          List.fold_left
-            (fun (new_types, acc)
-                 (name_before_rewrite, abs, kind, name_after_rewrite) ->
-              let ty, acc =
-                rewrite_concrete_type_of env acc name_before_rewrite kind abs
-              in
-              let new_types = Name.Map.add name_after_rewrite ty new_types in
-              new_types, acc)
-            (new_types, { aliases_of_names; names_to_process = [] })
-            names_to_process
-        in
-        loop acc new_types
-    in
-    let new_types, aliases_of_names = loop acc new_types in
+    let new_types, aliases_of_names = rewrite_in_depth env acc new_types in
     let base_env =
       Name.Map.fold
         (fun _name aliases_of_name base_env ->

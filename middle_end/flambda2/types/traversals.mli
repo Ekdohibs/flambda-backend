@@ -133,4 +133,11 @@ end) : sig
     (Symbol.t -> X.t) ->
     (X.t * Flambda_kind.t) Variable.Map.t ->
     Typing_env.t
+
+  val rewrite_env_extension_with_extra_variables :
+    Typing_env.t ->
+    ((string * X.t) pattern * Flambda_kind.t) Variable.Map.t ->
+    Typing_env_extension.With_extra_variables.t ->
+    Var.t list ->
+    Typing_env_extension.With_extra_variables.t
 end
