@@ -985,12 +985,12 @@ struct
       Variable.Map.fold
         (fun var (thing, kind) (sbs, base_env, new_types, acc) ->
           let name = Name.var var in
-          let ty = TE.find env name (Some kind) in
+          let ty = TG.alias_type_of kind (Simple.name name) in
           fold_destructuring thing env ty (sbs, base_env, new_types, acc)
             ~f:(fun (var, (name, abs)) ty (sbs, base_env, new_types, acc) ->
               (* CR bclement: use existing name if [ty] is an alias *)
               let var' = Variable.create name (TG.kind ty) in
-              let ty', acc = rewrite env acc abs ty in
+              let ty', acc = rewrite_arbitrary_type env acc abs ty in
               let bound_name =
                 Bound_name.create_var
                   (Bound_var.create var' Flambda_debug_uid.none Name_mode.normal)
@@ -1034,12 +1034,20 @@ struct
     in
     let subst var =
       match Var.Map.find_opt var sbs with
-      | Some (v, ty) -> Name.var v, ty
+      | Some (v, ty) ->
+        Name.var v, ET.to_type (Expand_head.expand_head final_env ty)
       | None -> Misc.fatal_error "Not defined"
     in
-    ( Var.Map.map fst sbs,
+    let to_keep =
+      Var.Map.fold
+        (fun _ (var, _) acc -> Variable.Set.add var acc)
+        sbs Variable.Set.empty
+    in
+    let teev =
       Expand_head.make_suitable_for_environment final_env
-        (Everything_not_in final_env) (List.map subst bind_to) )
+        (All_variables_except to_keep) (List.map subst bind_to)
+    in
+    Var.Map.map fst sbs, teev
 
   let rewrite env symbol_abstraction live_vars =
     let base_env =
