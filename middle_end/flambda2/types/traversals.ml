@@ -999,7 +999,7 @@ struct
                 TE.add_definition base_env bound_name (TG.kind ty')
               in
               let new_types = Name.Map.add (Name.var var') ty' new_types in
-              Var.Map.add var (Name.var var', ty') sbs, base_env, new_types, acc))
+              Var.Map.add var (var', ty') sbs, base_env, new_types, acc))
         live_vars
         (Var.Map.empty, base_env, Name.Map.empty, empty)
     in
@@ -1034,11 +1034,12 @@ struct
     in
     let subst var =
       match Var.Map.find_opt var sbs with
-      | Some v -> v
+      | Some (v, ty) -> Name.var v, ty
       | None -> Misc.fatal_error "Not defined"
     in
-    Expand_head.make_suitable_for_environment final_env
-      (Everything_not_in final_env) (List.map subst bind_to)
+    ( Var.Map.map fst sbs,
+      Expand_head.make_suitable_for_environment final_env
+        (Everything_not_in final_env) (List.map subst bind_to) )
 
   let rewrite env symbol_abstraction live_vars =
     let base_env =

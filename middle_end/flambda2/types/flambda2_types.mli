@@ -921,6 +921,8 @@ module Rewriter : sig
   module Var : sig
     type t
 
+    module Map : Container_types.Map with type key = t
+
     val create : unit -> t
   end
 
@@ -1058,6 +1060,6 @@ module Rewriter : sig
       ((string * X.t) pattern * Flambda_kind.t) Variable.Map.t ->
       Typing_env_extension.With_extra_variables.t ->
       Var.t list ->
-      Typing_env_extension.With_extra_variables.t
+      Variable.t Var.Map.t * Typing_env_extension.With_extra_variables.t
   end
 end

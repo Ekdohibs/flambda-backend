@@ -2,6 +2,8 @@ module Var : sig
   type t
 
   val create : unit -> t
+
+  module Map : Container_types.Map with type key = t
 end
 
 type 'a pattern
@@ -139,5 +141,5 @@ end) : sig
     ((string * X.t) pattern * Flambda_kind.t) Variable.Map.t ->
     Typing_env_extension.With_extra_variables.t ->
     Var.t list ->
-    Typing_env_extension.With_extra_variables.t
+    Variable.t Var.Map.t * Typing_env_extension.With_extra_variables.t
 end
