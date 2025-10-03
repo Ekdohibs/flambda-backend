@@ -1187,9 +1187,6 @@ let has_use, _field_used =
       || exists_with_parameters used_field_top_query [x; field] db
       || exists_with_parameters used_field_query [x; field] db )
 
-let field_of_constructor_is_used =
-  rel2 "field_of_constructor_is_used" Cols.[n; f]
-
 let field_used =
   let field_of_constructor_is_used_query =
     mk_exists_query ["X"; "F"] [] (fun [x; f] [] ->
