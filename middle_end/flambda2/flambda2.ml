@@ -222,7 +222,7 @@ let lambda_to_flambda ~ppf_dump:ppf ~prefixname ~machine_width
             slot_offsets,
             final_typing_env,
             last_pass_name ) =
-        if Flambda_features.enable_reaper ()
+        if true || Flambda_features.enable_reaper ()
         then (
           let flambda, free_names, all_code, slot_offsets, final_typing_env =
             Profile.record_call ~accumulate:true "reaper" (fun () ->

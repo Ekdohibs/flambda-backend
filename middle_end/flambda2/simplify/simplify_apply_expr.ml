@@ -856,7 +856,10 @@ let simplify_direct_function_call ~simplify_expr dacc apply
   in
   match callee's_code_id with
   | Bottom ->
-    replace_apply_by_invalid dacc ~down_to_up (Closure_type_was_invalid apply)
+    Misc.fatal_errorf "Closure type was invalid %a %a@." Code_id.print
+      callee's_code_id_from_type Apply.print apply
+  (* replace_apply_by_invalid dacc ~down_to_up (Closure_type_was_invalid
+     apply) *)
   | Ok callee's_code_id ->
     let call_kind =
       Call_kind.direct_function_call callee's_code_id apply_alloc_mode

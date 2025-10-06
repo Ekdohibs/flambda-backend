@@ -1993,7 +1993,7 @@ module Rewriter = struct
     let[@local] forget_type () =
       Rule.rewrite Pattern.any (Expr.unknown (Flambda2_types.kind flambda_type))
     in
-    Format.eprintf "REWRITE usages = %a@." print_t0 usages;
+    (* Format.eprintf "REWRITE usages = %a@." print_t0 usages; *)
     if match usages with
        | Any_usage -> false
        | Usages m -> Code_id_or_name.Map.is_empty m
@@ -2023,7 +2023,7 @@ module Rewriter = struct
         let usages_for_value_slots, usages_of_function_slots =
           uses_for_set_of_closures db usages function_slot function_slot_types
         in
-        let[@local] no_representation_change function_slot value_slots_metadata
+        let no_representation_change function_slot value_slots_metadata
             function_slots_metadata_and_uses =
           let all_patterns = ref [] in
           let all_value_slots_in_set =
@@ -2134,13 +2134,9 @@ module Rewriter = struct
               let fields =
                 get_fields_usage_of_constructors db set_of_closures
               in
-              Format.eprintf "ZZZ: %a@."
-                (Field.Map.print (fun ff t ->
-                     match t with
-                     | Used_as_top -> Format.fprintf ff "Top"
-                     | Used_as_vars m ->
-                       Code_id_or_name.Map.print Unit.print ff m))
-                fields;
+              (* Format.eprintf "ZZZ: %a@." (Field.Map.print (fun ff t -> match
+                 t with | Used_as_top -> Format.fprintf ff "Top" | Used_as_vars
+                 m -> Code_id_or_name.Map.print Unit.print ff m)) fields; *)
               no_representation_change function_slot
                 (Value_slot.Map.mapi
                    (fun value_slot _value_slot_type ->
@@ -2173,10 +2169,9 @@ module Rewriter = struct
           let usages = get_direct_usages db vs in
           db, Usages usages)
     in
-    Format.eprintf "%a -[%d]-> %a@." print_t0 t
-      (Target_ocaml_int.to_int index)
-      print_t0 (snd r);
-    Format.eprintf "%a@." Flambda2_types.print flambda_type;
+    (* Format.eprintf "%a -[%d]-> %a@." print_t0 t (Target_ocaml_int.to_int
+       index) print_t0 (snd r); Format.eprintf "%a@." Flambda2_types.print
+       flambda_type; *)
     r
 
   let array_slot (db, _t) _index _typing_env _flambda_type =
@@ -2205,7 +2200,7 @@ end
 module TypesRewrite = Flambda2_types.Rewriter.Make (Rewriter)
 
 let rewrite_typing_env result ~unit_symbol vars_to_keep typing_env =
-  Format.eprintf "OLD typing env: %a@." Typing_env.print typing_env;
+  (* Format.eprintf "OLD typing env: %a@." Typing_env.print typing_env; *)
   let db = result.db in
   let symbol_metadata sym =
     if Symbol.equal sym unit_symbol
@@ -2237,12 +2232,12 @@ let rewrite_typing_env result ~unit_symbol vars_to_keep typing_env =
          (fun m v -> Variable.Map.add v (variable_metadata v) m)
          Variable.Map.empty vars_to_keep)
   in
-  Format.eprintf "NEW typing env: %a@." Typing_env.print r;
+  (* Format.eprintf "NEW typing env: %a@." Typing_env.print r; *)
   r
 
 let rewrite_result_types result ~old_typing_env func_params func_results
     result_types =
-  Format.eprintf "OLD result types: %a@." Result_types.print result_types;
+  (* Format.eprintf "OLD result types: %a@." Result_types.print result_types; *)
   let params, results, env_extension =
     Result_types.pattern_match result_types ~f:(fun ~params ~results tee ->
         params, results, tee)
@@ -2301,8 +2296,8 @@ let rewrite_result_types result ~old_typing_env func_params func_results
     Result_types.create ~params:(make_bp params_vars)
       ~results:(make_bp results_vars) new_env_extension
   in
-  Format.eprintf "NEW result\n   types: %a@." Result_types.print
-    new_result_types;
+  (* Format.eprintf "NEW result\n types: %a@." Result_types.print
+     new_result_types; *)
   new_result_types
 
 let rec mk_unboxed_fields ~has_to_be_unboxed ~mk db fields name_prefix =
@@ -2504,7 +2499,7 @@ let fixpoint (graph : Global_flow_graph.graph) =
     Format.eprintf "@.TO_CHG: %a@."
       (Code_id_or_name.Map.print pp_changed_representation)
       !changed_representation;
-  let no_unbox = Sys.getenv_opt "NOUNBOX" <> None in
+  let no_unbox = true || Sys.getenv_opt "NOUNBOX" <> None in
   { db;
     unboxed_fields = (if no_unbox then Code_id_or_name.Map.empty else !unboxed);
     changed_representation =
