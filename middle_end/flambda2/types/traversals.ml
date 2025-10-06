@@ -959,6 +959,9 @@ struct
         ~machine_width:(TE.machine_width env)
     in
     let base_env =
+      TE.with_code_age_relation base_env (TE.code_age_relation env)
+    in
+    let base_env =
       Symbol.Set.fold
         (fun symbol base_env ->
           let bound_name = Bound_name.create_symbol symbol in
@@ -1054,6 +1057,9 @@ struct
       TE.create ~resolver:(TE.resolver env)
         ~get_imported_names:(TE.get_imported_names env)
         ~machine_width:(TE.machine_width env)
+    in
+    let base_env =
+      TE.with_code_age_relation base_env (TE.code_age_relation env)
     in
     let base_env, new_types, acc =
       Symbol.Set.fold
