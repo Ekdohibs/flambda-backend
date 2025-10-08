@@ -59,22 +59,22 @@ module Expr : sig
 
   val unknown_with_subkind : Flambda_kind.With_subkind.t -> 'a t
 
-  val tag_immediate : 'a -> 'a t
+  val tag_immediate : 'a t -> 'a t
 
   val immutable_block :
     is_unique:bool ->
     Tag.t ->
     shape:Flambda_kind.Block_shape.t ->
     Alloc_mode.For_types.t ->
-    fields:'a list ->
+    fields:'a t list ->
     'a t
 
   val exactly_this_closure :
     Function_slot.t ->
     all_function_slots_in_set:
-      'a Function_type.t Or_unknown.t Function_slot.Map.t ->
-    all_closure_types_in_set:'a Function_slot.Map.t ->
-    all_value_slots_in_set:'a Value_slot.Map.t ->
+      'a t Function_type.t Or_unknown.t Function_slot.Map.t ->
+    all_closure_types_in_set:'a t Function_slot.Map.t ->
+    all_value_slots_in_set:'a t Value_slot.Map.t ->
     Alloc_mode.For_types.t ->
     'a t
 end

@@ -359,20 +359,20 @@ end
 type 'a expr =
   | Identity of 'a
   | Unknown of K.With_subkind.t
-  | Tag_imm of 'a
+  | Tag_imm of 'a expr
   | Block of
       { is_unique : bool;
         tag : Tag.t;
         shape : K.Block_shape.t;
         alloc_mode : Alloc_mode.For_types.t;
-        fields : 'a list
+        fields : 'a expr list
       }
   | Closure of
       { function_slot : Function_slot.t;
         all_function_slots_in_set :
-          'a function_type Or_unknown.t Function_slot.Map.t;
-        all_closure_types_in_set : 'a Function_slot.Map.t;
-        all_value_slots_in_set : 'a Value_slot.Map.t;
+          'a expr function_type Or_unknown.t Function_slot.Map.t;
+        all_closure_types_in_set : 'a expr Function_slot.Map.t;
+        all_value_slots_in_set : 'a expr Value_slot.Map.t;
         alloc_mode : Alloc_mode.For_types.t
       }
 
@@ -551,17 +551,16 @@ struct
     rewrite env acc abs ty
 
   and rewrite_expr ~machine_width sigma expr =
-    let subst var =
+    match (expr : _ expr) with
+    | Identity var -> (
       match Var.Map.find_opt var sigma with
       | Some ty -> ty
-      | None -> Misc.fatal_error "Not defined"
-    in
-    match (expr : _ Expr.t) with
-    | Identity var -> subst var
+      | None -> Misc.fatal_error "Not defined")
     | Unknown kind -> MTC.unknown_with_subkind ~machine_width kind
-    | Tag_imm field -> TG.tag_immediate (subst field)
+    | Tag_imm field ->
+      TG.tag_immediate (rewrite_expr ~machine_width sigma field)
     | Block { is_unique; tag; shape; alloc_mode; fields } ->
-      let fields = List.map subst fields in
+      let fields = List.map (rewrite_expr ~machine_width sigma) fields in
       MTC.immutable_block ~machine_width ~is_unique tag ~shape alloc_mode
         ~fields
     | Closure
@@ -574,14 +573,19 @@ struct
       let all_function_slots_in_set =
         Function_slot.Map.map
           (Or_unknown.map ~f:(fun { code_id; rec_info } ->
-               TG.Function_type.create code_id ~rec_info:(subst rec_info)))
+               TG.Function_type.create code_id
+                 ~rec_info:(rewrite_expr ~machine_width sigma rec_info)))
           all_function_slots_in_set
       in
       let all_closure_types_in_set =
-        Function_slot.Map.map subst all_closure_types_in_set
+        Function_slot.Map.map
+          (rewrite_expr ~machine_width sigma)
+          all_closure_types_in_set
       in
       let all_value_slots_in_set =
-        Value_slot.Map.map subst all_value_slots_in_set
+        Value_slot.Map.map
+          (rewrite_expr ~machine_width sigma)
+          all_value_slots_in_set
       in
       MTC.exactly_this_closure function_slot ~all_function_slots_in_set
         ~all_closure_types_in_set ~all_value_slots_in_set alloc_mode
