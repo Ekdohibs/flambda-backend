@@ -634,11 +634,7 @@ struct
               Simple.with_coercion simple coercion, acc)
       in
       TG.alias_type_of (TG.kind ty) canonical_with_metadata, acc
-    | None ->
-      let ty', acc = rewrite env acc metadata ty in
-      let expanded = Expand_head.expand_head env ty' in
-      let expanded, acc = rewrite_expanded_head env acc metadata expanded in
-      ET.to_type expanded, acc
+    | None -> rewrite env acc metadata ty
 
   and rewrite_head_of_kind_value env acc metadata head :
       TG.head_of_kind_value Or_unknown.t * _ =
