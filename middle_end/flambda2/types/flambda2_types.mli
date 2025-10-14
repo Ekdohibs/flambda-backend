@@ -1008,6 +1008,8 @@ module Rewriter : sig
   module Make (X : sig
     type t
 
+    val print : Format.formatter -> t -> unit
+
     module Map : Container_types.Map with type key = t
 
     val rewrite : t -> typing_env -> flambda_type -> t Rule.t

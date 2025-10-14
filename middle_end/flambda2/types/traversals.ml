@@ -6,6 +6,28 @@ module TI = Target_ocaml_int
 module ME = Meet_env
 module K = Flambda_kind
 
+module Friendly_name : sig
+  val print : Format.formatter -> int -> unit
+end = struct
+  (* This is used to generate unique names , it just needs to be somewhat
+     random, not necessarily secure in any way*)
+  let fasthash h =
+    let h = h lxor (h lsr 23) in
+    let h = h * 2388976653695081527 in
+    let h = h lxor (h lsr 47) in
+    h
+
+  let print ppf n =
+    let h = ref (fasthash n) in
+    for _ = 0 to 13 do
+      let c = (26 + (!h mod 26)) mod 26 in
+      let c = char_of_int (int_of_char 'a' + c) in
+      Format.pp_print_char ppf c;
+      h := !h / 26
+    done;
+    assert (!h = 0)
+end
+
 type discriminant =
   | Tagged_immediate
   | Block of Tag.t option
@@ -236,14 +258,18 @@ and destructure_block_field_row_like_block_case index kind
 module Var : sig
   type t
 
+  val print : Format.formatter -> t -> unit
+
   module Map : Container_types.Map with type key = t
 
   val create : unit -> t
 end = struct
   type t = int
 
+  let print = Friendly_name.print
+
   module Tree = Patricia_tree.Make (struct
-    let print ppf n = Format.fprintf ppf "x%d" n
+    let print = print
   end)
 
   module Map = Tree.Map
@@ -259,6 +285,12 @@ type 'a pattern =
   | Any
   | Keep of (Var.t * 'a)
   | Unbox of discriminant * 'a pattern Accessor.Map.t
+
+let rec print_pattern ppf = function
+  | Any -> Format.fprintf ppf "_"
+  | Keep (var, _) -> Var.print ppf var
+  | Unbox (_discriminant, accessors) ->
+    Accessor.Map.print print_pattern ppf accessors
 
 module Pattern : sig
   type 'a t = 'a pattern
@@ -350,8 +382,32 @@ type 'a function_type =
     rec_info : 'a
   }
 
+let print_field ?prefix:(print_prefix = Format.pp_print_space)
+    ?(is_default = fun _ -> false) ?label:(print_label = Format.pp_print_string)
+    ?sep:(print_sep = Format.pp_print_space) label prj print ppf r =
+  let f = prj r in
+  if not (is_default f)
+  then
+    Format.fprintf ppf "%a@[<hov 1>(%a%a%a)@]" print_prefix () print_label label
+      print_sep () print f
+
+let print_fields fields ppf r =
+  (Format.pp_print_list ~pp_sep:(fun _ppf () -> ()) (fun ppf fmt -> fmt ppf r))
+    ppf fields
+
+let print_record ?label:(print_label = Format.pp_print_string) label fields ppf
+    r =
+  Format.fprintf ppf "@[<hv 1>(%a%a)@]" print_label label (print_fields fields)
+    r
+
 module Function_type = struct
   type 'a t = 'a function_type
+
+  let print pp ppf { code_id; rec_info } =
+    print_record "function_type"
+      [ print_field "code_id" (fun () -> code_id) Code_id.print;
+        print_field "rec_info" (fun () -> rec_info) pp ]
+      ppf ()
 
   let create code_id ~rec_info = { code_id; rec_info }
 end
@@ -378,6 +434,39 @@ type 'a expr =
 
 module Expr = struct
   type 'a t = 'a expr
+
+  let rec print pp ppf = function
+    | Identity x -> pp ppf x
+    | Unknown kind ->
+      Format.fprintf ppf "@[<hv 1>(unknown@ %a)@]" K.With_subkind.print kind
+    | Tag_imm expr ->
+      Format.fprintf ppf "@[<hv 1>(tag_imm@ %a)@]" (print pp) expr
+    | Block _ -> Format.fprintf ppf "@[<hv 1>(block)@]"
+    | Closure
+        { function_slot;
+          all_function_slots_in_set;
+          all_closure_types_in_set;
+          all_value_slots_in_set;
+          alloc_mode
+        } ->
+      print_record "closure"
+        [ print_field "function_slot"
+            (fun () -> function_slot)
+            Function_slot.print;
+          print_field "all_function_slots_in_set"
+            (fun () -> all_function_slots_in_set)
+            (Function_slot.Map.print
+               (Or_unknown.print (Function_type.print (print pp))));
+          print_field "all_closure_types_in_set"
+            (fun () -> all_closure_types_in_set)
+            (Function_slot.Map.print (print pp));
+          print_field "all_value_slots_in_set"
+            (fun () -> all_value_slots_in_set)
+            (Value_slot.Map.print (print pp));
+          print_field "alloc_mode"
+            (fun () -> alloc_mode)
+            Alloc_mode.For_types.print ]
+        ppf ()
 
   module Function_type = Function_type
 
@@ -417,6 +506,8 @@ end
 
 module Make (X : sig
   type t
+
+  val print : Format.formatter -> t -> unit
 
   module Map : Container_types.Map with type key = t
 
@@ -548,14 +639,21 @@ struct
 
   and rewrite_concrete_type_of env acc name kind abs =
     let ty = TE.find env name (Some kind) in
-    rewrite env acc abs ty
+    try rewrite env acc abs ty
+    with Misc.Fatal_error as e ->
+      let bt = Printexc.get_raw_backtrace () in
+      Format.eprintf
+        "@[<v 2>@[Context@ is@ rewriting@ concrete@ type@ of@ %a@ with@ \
+         abstraction:@]@ @[%a@]@]@."
+        Name.print name X.print abs;
+      Printexc.raise_with_backtrace e bt
 
   and rewrite_expr ~machine_width sigma expr =
     match (expr : _ expr) with
     | Identity var -> (
       match Var.Map.find_opt var sigma with
       | Some ty -> ty
-      | None -> Misc.fatal_error "Not defined")
+      | None -> Misc.fatal_errorf "Variable is not defined: %a" Var.print var)
     | Unknown kind -> MTC.unknown_with_subkind ~machine_width kind
     | Tag_imm field ->
       TG.tag_immediate (rewrite_expr ~machine_width sigma field)
@@ -596,11 +694,20 @@ struct
       let expanded = Expand_head.expand_head env ty in
       let expanded, acc = rewrite_expanded_head env acc abs expanded in
       ET.to_type expanded, acc
-    | Rewrite (pattern, expr) ->
-      let sigma, acc = match_pattern pattern env ty acc in
-      rewrite_expr ~machine_width:(TE.machine_width env) sigma expr, acc
+    | Rewrite (pattern, expr) -> (
+      try
+        let sigma, acc = match_pattern pattern env ty acc in
+        rewrite_expr ~machine_width:(TE.machine_width env) sigma expr, acc
+      with Misc.Fatal_error as e ->
+        let bt = Printexc.get_raw_backtrace () in
+        Format.eprintf
+          "@[<v 2>Context is performing rewrite rule:@ @[%a ->@ %a@]@]@."
+          print_pattern pattern (Expr.print Var.print) expr;
+        Format.eprintf "@[<v>Context is rewriting type:@;<1 2>@[%a@]@]@."
+          TG.print ty;
+        Printexc.raise_with_backtrace e bt)
 
-  and rewrite_arbitrary_type env acc metadata ty =
+  and rewrite_arbitrary_type env acc abs ty =
     match TG.get_alias_opt ty with
     | Some alias ->
       let canonical =
@@ -625,7 +732,7 @@ struct
             then canonical, acc
             else
               let canonical_name, coercion_to_name, acc =
-                get_canonical_with acc env name (TG.kind ty) metadata
+                get_canonical_with acc env name (TG.kind ty) abs
               in
               let coercion =
                 Coercion.compose_exn coercion_to_name ~then_:coercion
@@ -634,7 +741,15 @@ struct
               Simple.with_coercion simple coercion, acc)
       in
       TG.alias_type_of (TG.kind ty) canonical_with_metadata, acc
-    | None -> rewrite env acc metadata ty
+    | None -> (
+      try rewrite env acc abs ty
+      with Misc.Fatal_error as e ->
+        let bt = Printexc.get_raw_backtrace () in
+        Format.eprintf
+          "@[<v 2>@[Context@ is@ rewriting@ anonymous@ nested@ type@ with@ \
+           abstraction:@]@ @[%a@]@]@."
+          X.print abs;
+        Printexc.raise_with_backtrace e bt)
 
   and rewrite_head_of_kind_value env acc metadata head :
       TG.head_of_kind_value Or_unknown.t * _ =
@@ -1039,7 +1154,7 @@ struct
       match Var.Map.find_opt var sbs with
       | Some (v, ty) ->
         Name.var v, ET.to_type (Expand_head.expand_head final_env ty)
-      | None -> Misc.fatal_error "Not defined"
+      | None -> Misc.fatal_error "Not defined [subst]"
     in
     let to_keep =
       Var.Map.fold
