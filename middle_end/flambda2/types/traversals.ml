@@ -1176,34 +1176,50 @@ struct
     let base_env =
       TE.with_code_age_relation base_env (TE.code_age_relation env)
     in
-    let base_env, new_types, acc =
+    let base_env, acc =
       Symbol.Set.fold
-        (fun symbol (base_env, types, acc) ->
+        (fun symbol (base_env, acc) ->
           let abs = symbol_abstraction symbol in
-          let ty, acc =
-            rewrite_concrete_type_of env acc (Name.symbol symbol) K.value abs
-          in
-          let bound_name = Bound_name.create_symbol symbol in
-          let base_env = TE.add_definition base_env bound_name (TG.kind ty) in
-          base_env, Name.Map.add (Name.symbol symbol) ty types, acc)
-        (TE.defined_symbols env)
-        (base_env, Name.Map.empty, empty)
+          match Name.Map.find_opt (Name.symbol symbol) acc.aliases_of_names with
+          | Some _ -> assert false
+          | None ->
+            let aliases_of_names =
+              Name.Map.add (Name.symbol symbol)
+                (X.Map.singleton abs (Name.symbol symbol, K.value))
+                acc.aliases_of_names
+            in
+            let names_to_process =
+              (Name.symbol symbol, abs, K.value, Name.symbol symbol)
+              :: acc.names_to_process
+            in
+            let bound_name = Bound_name.create_symbol symbol in
+            let base_env = TE.add_definition base_env bound_name K.value in
+            base_env, { aliases_of_names; names_to_process })
+        (TE.defined_symbols env) (base_env, empty)
     in
-    let base_env, new_types, acc =
+    let base_env, acc =
       Variable.Map.fold
-        (fun var (abs, kind) (base_env, types, acc) ->
-          let ty, acc =
-            rewrite_concrete_type_of env acc (Name.var var) kind abs
-          in
-          let bound_name =
-            Bound_name.create_var
-              (Bound_var.create var Flambda_debug_uid.none Name_mode.normal)
-          in
-          let base_env = TE.add_definition base_env bound_name (TG.kind ty) in
-          base_env, Name.Map.add (Name.var var) ty types, acc)
-        live_vars (base_env, new_types, acc)
+        (fun var (abs, kind) (base_env, acc) ->
+          match Name.Map.find_opt (Name.var var) acc.aliases_of_names with
+          | Some _ -> assert false
+          | None ->
+            let aliases_of_names =
+              Name.Map.add (Name.var var)
+                (X.Map.singleton abs (Name.var var, kind))
+                acc.aliases_of_names
+            in
+            let names_to_process =
+              (Name.var var, abs, kind, Name.var var) :: acc.names_to_process
+            in
+            let bound_name =
+              Bound_name.create_var
+                (Bound_var.create var Flambda_debug_uid.none Name_mode.normal)
+            in
+            let base_env = TE.add_definition base_env bound_name kind in
+            base_env, { aliases_of_names; names_to_process })
+        live_vars (base_env, acc)
     in
-    let new_types, aliases_of_names = rewrite_in_depth env acc new_types in
+    let new_types, aliases_of_names = rewrite_in_depth env acc Name.Map.empty in
     let base_env =
       Name.Map.fold
         (fun _name aliases_of_name base_env ->
