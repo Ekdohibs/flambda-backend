@@ -995,6 +995,15 @@ module Rewriter : sig
       all_value_slots_in_set:'a t Value_slot.Map.t ->
       Alloc_mode.For_types.t ->
       'a t
+
+    val at_least_this_closure :
+      Function_slot.t ->
+      at_least_these_function_slots:
+        'a t Function_type.t Or_unknown.t Function_slot.Map.t ->
+      at_least_these_closure_types:'a t Function_slot.Map.t ->
+      at_least_these_value_slots:'a t Value_slot.Map.t ->
+      Alloc_mode.For_types.t ->
+      'a t
   end
 
   module Rule : sig

@@ -424,11 +424,12 @@ type 'a expr =
         fields : 'a expr list
       }
   | Closure of
-      { function_slot : Function_slot.t;
-        all_function_slots_in_set :
+      { exact : bool;
+        function_slot : Function_slot.t;
+        function_slots_in_set :
           'a expr function_type Or_unknown.t Function_slot.Map.t;
-        all_closure_types_in_set : 'a expr Function_slot.Map.t;
-        all_value_slots_in_set : 'a expr Value_slot.Map.t;
+        closure_types_in_set : 'a expr Function_slot.Map.t;
+        value_slots_in_set : 'a expr Value_slot.Map.t;
         alloc_mode : Alloc_mode.For_types.t
       }
 
@@ -443,10 +444,11 @@ module Expr = struct
       Format.fprintf ppf "@[<hv 1>(tag_imm@ %a)@]" (print pp) expr
     | Block _ -> Format.fprintf ppf "@[<hv 1>(block)@]"
     | Closure
-        { function_slot;
-          all_function_slots_in_set;
-          all_closure_types_in_set;
-          all_value_slots_in_set;
+        { exact = true;
+          function_slot;
+          function_slots_in_set;
+          closure_types_in_set;
+          value_slots_in_set;
           alloc_mode
         } ->
       print_record "closure"
@@ -454,14 +456,40 @@ module Expr = struct
             (fun () -> function_slot)
             Function_slot.print;
           print_field "all_function_slots_in_set"
-            (fun () -> all_function_slots_in_set)
+            (fun () -> function_slots_in_set)
             (Function_slot.Map.print
                (Or_unknown.print (Function_type.print (print pp))));
           print_field "all_closure_types_in_set"
-            (fun () -> all_closure_types_in_set)
+            (fun () -> closure_types_in_set)
             (Function_slot.Map.print (print pp));
           print_field "all_value_slots_in_set"
-            (fun () -> all_value_slots_in_set)
+            (fun () -> value_slots_in_set)
+            (Value_slot.Map.print (print pp));
+          print_field "alloc_mode"
+            (fun () -> alloc_mode)
+            Alloc_mode.For_types.print ]
+        ppf ()
+    | Closure
+        { exact = false;
+          function_slot;
+          function_slots_in_set;
+          closure_types_in_set;
+          value_slots_in_set;
+          alloc_mode
+        } ->
+      print_record "closure"
+        [ print_field "function_slot"
+            (fun () -> function_slot)
+            Function_slot.print;
+          print_field "at_least_these_function_slots"
+            (fun () -> function_slots_in_set)
+            (Function_slot.Map.print
+               (Or_unknown.print (Function_type.print (print pp))));
+          print_field "at_least_these_closure_types"
+            (fun () -> closure_types_in_set)
+            (Function_slot.Map.print (print pp));
+          print_field "at_least_these_value_slots"
+            (fun () -> value_slots_in_set)
             (Value_slot.Map.print (print pp));
           print_field "alloc_mode"
             (fun () -> alloc_mode)
@@ -481,13 +509,29 @@ module Expr = struct
   let immutable_block ~is_unique tag ~shape alloc_mode ~fields =
     Block { is_unique; tag; shape; alloc_mode; fields }
 
-  let exactly_this_closure function_slot ~all_function_slots_in_set
-      ~all_closure_types_in_set ~all_value_slots_in_set alloc_mode =
+  let exactly_this_closure function_slot
+      ~all_function_slots_in_set:function_slots_in_set
+      ~all_closure_types_in_set:closure_types_in_set
+      ~all_value_slots_in_set:value_slots_in_set alloc_mode =
     Closure
-      { function_slot;
-        all_function_slots_in_set;
-        all_closure_types_in_set;
-        all_value_slots_in_set;
+      { exact = true;
+        function_slot;
+        function_slots_in_set;
+        closure_types_in_set;
+        value_slots_in_set;
+        alloc_mode
+      }
+
+  let at_least_this_closure function_slot
+      ~at_least_these_function_slots:function_slots_in_set
+      ~at_least_these_closure_types:closure_types_in_set
+      ~at_least_these_value_slots:value_slots_in_set alloc_mode =
+    Closure
+      { exact = true;
+        function_slot;
+        function_slots_in_set;
+        closure_types_in_set;
+        value_slots_in_set;
         alloc_mode
       }
 end
@@ -662,31 +706,41 @@ struct
       MTC.immutable_block ~machine_width ~is_unique tag ~shape alloc_mode
         ~fields
     | Closure
-        { function_slot;
-          all_function_slots_in_set;
-          all_closure_types_in_set;
-          all_value_slots_in_set;
+        { exact;
+          function_slot;
+          function_slots_in_set;
+          closure_types_in_set;
+          value_slots_in_set;
           alloc_mode
         } ->
-      let all_function_slots_in_set =
+      let function_slots_in_set =
         Function_slot.Map.map
           (Or_unknown.map ~f:(fun { code_id; rec_info } ->
                TG.Function_type.create code_id
                  ~rec_info:(rewrite_expr ~machine_width sigma rec_info)))
-          all_function_slots_in_set
+          function_slots_in_set
       in
-      let all_closure_types_in_set =
+      let closure_types_in_set =
         Function_slot.Map.map
           (rewrite_expr ~machine_width sigma)
-          all_closure_types_in_set
+          closure_types_in_set
       in
-      let all_value_slots_in_set =
+      let value_slots_in_set =
         Value_slot.Map.map
           (rewrite_expr ~machine_width sigma)
-          all_value_slots_in_set
+          value_slots_in_set
       in
-      MTC.exactly_this_closure function_slot ~all_function_slots_in_set
-        ~all_closure_types_in_set ~all_value_slots_in_set alloc_mode
+      if exact
+      then
+        MTC.exactly_this_closure function_slot
+          ~all_function_slots_in_set:function_slots_in_set
+          ~all_closure_types_in_set:closure_types_in_set
+          ~all_value_slots_in_set:value_slots_in_set alloc_mode
+      else
+        MTC.at_least_this_closure function_slot
+          ~at_least_these_function_slots:function_slots_in_set
+          ~at_least_these_closure_types:closure_types_in_set
+          ~at_least_these_value_slots:value_slots_in_set alloc_mode
 
   and rewrite env acc abs ty =
     match X.rewrite abs env ty with
