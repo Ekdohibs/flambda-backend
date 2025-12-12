@@ -40,7 +40,12 @@ type t =
     continuations_to_specialize : Continuation.Set.t;
     (* CR gbury: we could try and encode the set of continuations to specialize
        into the map below as the keys of the map *)
-    specialization_map : Continuation.t Continuation_callsite_map.t
+    specialization_map : Continuation.t Continuation_callsite_map.t;
+    function_specialization_map :
+      (* For now only to known code_ids *)
+      (* Mapping of value slots? *)
+      (* todo better data structure *)
+      (Code_id.t Or_unknown.t list * Code_id.t) list Code_id.Map.t
   }
 
 let print_lifted_cont ppf (denv, original_handlers) =
@@ -53,7 +58,8 @@ let [@ocamlformat "disable"] print ppf
         lifted_constants; flow_acc; demoted_exn_handlers; code_ids_to_remember;
         code_ids_to_never_delete; code_ids_never_simplified; slot_offsets; debuginfo_rewrites;
         are_lifting_conts; lifted_continuations; continuation_lifting_budget;
-        continuation_specialization_budget; continuations_to_specialize; specialization_map; } =
+        continuation_specialization_budget; continuations_to_specialize; specialization_map;
+        function_specialization_map } =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(denv@ %a)@]@ \
       @[<hov 1>(continuation_uses_env@ %a)@]@ \
@@ -72,7 +78,8 @@ let [@ocamlformat "disable"] print ppf
       @[<hov 1>(continuation_lifting_budget %d)@]@ \
       @[<hov 1>(continuation_specialization_budget %d)@]@ \
       @[<hov 1>(continuations_to_specialize %a)@]@ \
-      @[<hov 1>(specialization_map %a)@]\
+      @[<hov 1>(specialization_map %a)@]@ \
+      @[<hov 1>(function_specialization_map %a)@]\
       )@]"
     DE.print denv
     CUE.print continuation_uses_env
@@ -93,6 +100,13 @@ let [@ocamlformat "disable"] print ppf
     continuation_specialization_budget
     Continuation.Set.print continuations_to_specialize
     (Continuation.Map.print (Apply_cont_rewrite_id.Map.print Continuation.print)) specialization_map
+    (Code_id.Map.print (Format.pp_print_list
+      (fun ppf (args, code_id) ->
+        Format.fprintf ppf "(%a) -> %a"
+          (Format.pp_print_list (Or_unknown.print Code_id.print)) args
+          Code_id.print code_id
+      )
+    )) function_specialization_map
 
 let create denv slot_offsets continuation_uses_env =
   { denv;
@@ -113,7 +127,8 @@ let create denv slot_offsets continuation_uses_env =
     continuation_specialization_budget =
       Flambda_features.Expert.cont_spec_budget ();
     continuations_to_specialize = Continuation.Set.empty;
-    specialization_map = Continuation.Map.empty
+    specialization_map = Continuation.Map.empty;
+    function_specialization_map = Code_id.Map.empty
   }
 
 let denv t = t.denv
@@ -353,3 +368,14 @@ let add_specialization t id ~old ~specialized =
   { t with specialization_map }
 
 let specialization_map t = t.specialization_map
+
+let add_function_specialization t code_id args specialized_code_id =
+  let r = args, specialized_code_id in
+  let function_specialization_map =
+    Code_id.Map.update code_id
+      (function None -> Some [r] | Some l -> Some (r :: l))
+      t.function_specialization_map
+  in
+  { t with function_specialization_map }
+
+let function_specialization_map t = t.function_specialization_map
