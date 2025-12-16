@@ -88,7 +88,7 @@ val find_code : t -> Code_id.t -> code_dep
 val code_deps : t -> code_dep Code_id.Map.t
 
 (* Directly adding edges to the graph *)
-val add_flows : t -> to_:Code_id_or_name.t -> from:Code_id_or_name.t -> unit
+val add_flows : t -> into:Code_id_or_name.t -> from:Code_id_or_name.t -> unit
 
 val add_use_dep : t -> to_:Code_id_or_name.t -> from:Code_id_or_name.t -> unit
 
@@ -107,14 +107,14 @@ val add_parameter_dep :
 val add_propagate_dep :
   t ->
   if_used:Code_id_or_name.t ->
-  to_:Code_id_or_name.t ->
+  into:Code_id_or_name.t ->
   from:Code_id_or_name.t ->
   unit
 
 val add_flows_if_any_source_dep :
   t ->
   if_any_source:Code_id_or_name.t ->
-  to_:Code_id_or_name.t ->
+  into:Code_id_or_name.t ->
   from:Code_id_or_name.t ->
   unit
 

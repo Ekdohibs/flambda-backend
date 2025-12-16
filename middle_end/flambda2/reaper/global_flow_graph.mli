@@ -23,7 +23,7 @@ module Relations : sig
   type 'a term = 'a Datalog.Term.t
 
   val flows :
-    to_:Code_id_or_name.t term -> from:Code_id_or_name.t term -> _ atom
+    into:Code_id_or_name.t term -> from:Code_id_or_name.t term -> _ atom
 
   val use : to_:Code_id_or_name.t term -> from:Code_id_or_name.t term -> _ atom
 
@@ -53,13 +53,13 @@ module Relations : sig
 
   val propagate :
     if_used:Code_id_or_name.t term ->
-    to_:Code_id_or_name.t term ->
+    into:Code_id_or_name.t term ->
     from:Code_id_or_name.t term ->
     _ atom
 
   val flows_if_any_source :
     if_any_source:Code_id_or_name.t term ->
-    to_:Code_id_or_name.t term ->
+    into:Code_id_or_name.t term ->
     from:Code_id_or_name.t term ->
     _ atom
 
@@ -75,7 +75,8 @@ module Relations : sig
     _ atom
 end
 
-val add_flows : graph -> to_:Code_id_or_name.t -> from:Code_id_or_name.t -> unit
+val add_flows :
+  graph -> into:Code_id_or_name.t -> from:Code_id_or_name.t -> unit
 
 val add_use_dep :
   graph -> to_:Code_id_or_name.t -> from:Code_id_or_name.t -> unit
@@ -95,14 +96,14 @@ val add_parameter_dep :
 val add_propagate_dep :
   graph ->
   if_used:Code_id_or_name.t ->
-  to_:Code_id_or_name.t ->
+  into:Code_id_or_name.t ->
   from:Code_id_or_name.t ->
   unit
 
 val add_flows_if_any_source_dep :
   graph ->
   if_any_source:Code_id_or_name.t ->
-  to_:Code_id_or_name.t ->
+  into:Code_id_or_name.t ->
   from:Code_id_or_name.t ->
   unit
 

@@ -468,7 +468,7 @@ let cofield_usages = rel3 "cofield_usages" Cols.[n; cf; n]
 (* Reverse relations *)
 let rev_flows =
   let tbl = nrel "rev_flows" Cols.[n; n] in
-  fun ~from ~to_ -> tbl % [from; to_]
+  fun ~from ~into -> tbl % [from; into]
 
 let rev_use =
   let tbl = nrel "rev_use" Cols.[n; n] in
@@ -558,10 +558,10 @@ let datalog_schedule =
        first, those reversed relations allows to select a different key. Of
        these, only [flows] has both priorities, because it is the only of those
        relations that is extended after graph construction. *)
-    (let$ [to_; from] = ["to_"; "from"] in
-     [flows ~to_ ~from] ==> rev_flows ~from ~to_);
-    (let$$ [to_; from] = ["to_"; "from"] in
-     [flows ~to_ ~from] ==> rev_flows ~from ~to_);
+    (let$ [into; from] = ["into"; "from"] in
+     [flows ~into ~from] ==> rev_flows ~from ~into);
+    (let$$ [into; from] = ["into"; "from"] in
+     [flows ~into ~from] ==> rev_flows ~from ~into);
     (let$ [to_; from] = ["to_"; "from"] in
      [use ~to_ ~from] ==> rev_use ~from ~to_);
     (let$ [to_; relation; base] = ["to_"; "relation"; "base"] in
@@ -574,13 +574,13 @@ let datalog_schedule =
      [parameter ~base relation ~from] ==> rev_parameter ~from relation ~base);
     (* The [propagate] relation is part of the input of the solver, with the
        intended meaning of this rule, that is, an flows if [is_used] is used. *)
-    (let$ [if_used; to_; from] = ["if_used"; "to_"; "from"] in
-     [any_usage if_used; propagate ~if_used ~to_ ~from] ==> flows ~to_ ~from);
+    (let$ [if_used; into; from] = ["if_used"; "into"; "from"] in
+     [any_usage if_used; propagate ~if_used ~into ~from] ==> flows ~into ~from);
     (* Likewise, [flows_if_any_source] means an flows if [is_any_source] has any
        source. *)
-    (let$ [if_any_source; to_; from] = ["if_any_source"; "to_"; "from"] in
-     [any_source if_any_source; flows_if_any_source ~if_any_source ~to_ ~from]
-     ==> flows ~to_ ~from);
+    (let$ [if_any_source; into; from] = ["if_any_source"; "into"; "from"] in
+     [any_source if_any_source; flows_if_any_source ~if_any_source ~into ~from]
+     ==> flows ~into ~from);
     (* has_usage/has_source *)
     (let$ [x] = ["x"] in
      [any_usage x] ==> has_usage x);
@@ -604,14 +604,14 @@ let datalog_schedule =
 
        All those rules are constrained not to apply when any_usage is valid.
        (see [usages] definition comment) *)
-    (let$ [to_; from] = ["to_"; "from"] in
-     [flows ~to_ ~from; any_usage to_] ==> any_usage from);
+    (let$ [into; from] = ["into"; "from"] in
+     [flows ~into ~from; any_usage into] ==> any_usage from);
     (let$$ [to_; relation; base] = ["to_"; "relation"; "base"] in
      [accessor ~to_ relation ~base; has_usage to_] ==> nontop_usages base base);
     (let$$ [to_; relation; base] = ["to_"; "relation"; "base"] in
      [has_source to_; argument ~to_ relation ~base] ==> nontop_usages base base);
-    (let$$ [to_; from; usage] = ["to_"; "from"; "usage"] in
-     [nontop_usages to_ usage; flows ~to_ ~from] ==> nontop_usages from usage);
+    (let$$ [into; from; usage] = ["into"; "from"; "usage"] in
+     [nontop_usages into usage; flows ~into ~from] ==> nontop_usages from usage);
     (* accessor-usage *)
     (let$$ [to_; relation; base] = ["to_"; "relation"; "base"] in
      [ ~~(any_usage base);
@@ -636,23 +636,23 @@ let datalog_schedule =
      [~~(any_usage base); has_source to_; argument ~to_ relation ~base]
      ==> cofield_usages base relation to_);
     (* constructor-usages *)
-    (let$$ [base; base_use; relation; from; to_] =
-       ["base"; "base_use"; "relation"; "from"; "to_"]
+    (let$$ [base; base_use; relation; from; into] =
+       ["base"; "base_use"; "relation"; "from"; "into"]
      in
      [ ~~(any_usage from);
        ~~(field_usages_top base_use relation);
        constructor ~base relation ~from;
        nontop_usages base base_use;
-       field_usages base_use relation to_ ]
-     ==> flows ~to_ ~from);
-    (let$$ [base; base_use; relation; from; to_] =
-       ["base"; "base_use"; "relation"; "from"; "to_"]
+       field_usages base_use relation into ]
+     ==> flows ~into ~from);
+    (let$$ [base; base_use; relation; from; into] =
+       ["base"; "base_use"; "relation"; "from"; "into"]
      in
      [ when1 Field.is_local relation;
        constructor ~base relation ~from;
        usages base base_use;
-       field_usages base_use relation to_ ]
-     ==> flows ~to_ ~from);
+       field_usages base_use relation into ]
+     ==> flows ~into ~from);
     (let$ [base; base_use; relation; from] =
        ["base"; "base_use"; "relation"; "from"]
      in
@@ -673,17 +673,17 @@ let datalog_schedule =
     (let$ [base; relation; to_] = ["base"; "relation"; "to_"] in
      [any_source base; rev_argument ~base relation ~to_] ==> any_usage to_);
     (* sources: see explanation on usage *)
-    (let$ [from; to_] = ["from"; "to_"] in
-     [rev_flows ~from ~to_; any_source from] ==> any_source to_);
+    (let$ [from; into] = ["from"; "into"] in
+     [rev_flows ~from ~into; any_source from] ==> any_source into);
     (let$$ [from; relation; base] = ["from"; "relation"; "base"] in
      [has_source from; rev_constructor ~from relation ~base]
      ==> nontop_sources base base);
     (let$$ [from; relation; base] = ["from"; "relation"; "base"] in
      [has_usage from; rev_parameter ~from relation ~base]
      ==> nontop_sources base base);
-    (let$$ [from; to_; source] = ["from"; "to_"; "source"] in
-     [nontop_sources from source; rev_flows ~from ~to_]
-     ==> nontop_sources to_ source);
+    (let$$ [from; into; source] = ["from"; "into"; "source"] in
+     [nontop_sources from source; rev_flows ~from ~into]
+     ==> nontop_sources into source);
     (* constructor-sources *)
     (let$$ [from; relation; base] = ["from"; "relation"; "base"] in
      [ ~~(any_source base);
@@ -710,13 +710,13 @@ let datalog_schedule =
      [~~(any_source base); has_usage from; rev_parameter ~from relation ~base]
      ==> cofield_sources base relation from);
     (* parameter-uses *)
-    (let$$ [base; base_use; relation; from; to_] =
-       ["base"; "base_use"; "relation"; "from"; "to_"]
+    (let$$ [base; base_use; relation; from; into] =
+       ["base"; "base_use"; "relation"; "from"; "into"]
      in
      [ parameter ~base relation ~from;
        nontop_usages base base_use;
-       cofield_usages base_use relation to_ ]
-     ==> flows ~to_:from ~from:to_);
+       cofield_usages base_use relation into ]
+     ==> flows ~into:from ~from:into);
     (let$ [base; relation; from] = ["base"; "relation"; "from"] in
      [any_usage base; parameter ~base relation ~from] ==> any_source from);
     (* accessor-sources *)
@@ -728,7 +728,7 @@ let datalog_schedule =
        rev_accessor ~base relation ~to_;
        nontop_sources base base_source;
        field_sources base_source relation from ]
-     ==> flows ~to_ ~from);
+     ==> flows ~into:to_ ~from);
     (let$$ [base; base_source; relation; to_; from] =
        ["base"; "base_source"; "relation"; "to_"; "from"]
      in
@@ -736,7 +736,7 @@ let datalog_schedule =
        rev_accessor ~base relation ~to_;
        sources base base_source;
        field_sources base_source relation from ]
-     ==> flows ~to_ ~from);
+     ==> flows ~into:to_ ~from);
     (let$ [base; base_source; relation; to_] =
        ["base"; "base_source"; "relation"; "to_"]
      in
@@ -754,16 +754,16 @@ let datalog_schedule =
        rev_accessor ~base relation ~to_;
        when1 Field.is_local relation ]
      ==> reading_field relation to_);
-    (let$ [relation; from; to_] = ["relation"; "from"; "to_"] in
-     [escaping_field relation from; reading_field relation to_]
-     ==> flows ~to_ ~from);
+    (let$ [relation; from; into] = ["relation"; "from"; "into"] in
+     [escaping_field relation from; reading_field relation into]
+     ==> flows ~into ~from);
     (let$$ [base; base_source; relation; to_; from] =
        ["base"; "base_source"; "relation"; "to_"; "from"]
      in
      [ rev_argument ~base relation ~to_;
        nontop_sources base base_source;
        cofield_sources base_source relation from ]
-     ==> flows ~to_:from ~from:to_);
+     ==> flows ~into:from ~from:to_);
     (* use *)
     (let$ [to_; from] = ["to_"; "from"] in
      [has_usage to_; use ~to_ ~from] ==> any_usage from);

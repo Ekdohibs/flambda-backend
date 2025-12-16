@@ -115,7 +115,7 @@ module Relations = struct
    * base = Make_block { from_ } (constructor)
    * *)
 
-  let flows ~to_ ~from = Datalog.atom flows [to_; from]
+  let flows ~into ~from = Datalog.atom flows [into; from]
 
   let use ~to_ ~from = Datalog.atom use [to_; from]
 
@@ -129,10 +129,11 @@ module Relations = struct
   let parameter ~base relation ~from =
     Datalog.atom parameter [base; relation; from]
 
-  let propagate ~if_used ~to_ ~from = Datalog.atom propagate [if_used; to_; from]
+  let propagate ~if_used ~into ~from =
+    Datalog.atom propagate [if_used; into; from]
 
-  let flows_if_any_source ~if_any_source ~to_ ~from =
-    Datalog.atom flows_if_any_source [if_any_source; to_; from]
+  let flows_if_any_source ~if_any_source ~into ~from =
+    Datalog.atom flows_if_any_source [if_any_source; into; from]
 
   let any_usage var = Datalog.atom any_usage [var]
 
@@ -156,7 +157,8 @@ let create () =
     code_id_my_closure = NN.empty
   }
 
-let add_flows t ~to_ ~from = t.flows <- NN.add_or_replace [to_; from] () t.flows
+let add_flows t ~into ~from =
+  t.flows <- NN.add_or_replace [into; from] () t.flows
 
 let add_use_dep t ~to_ ~from = t.use <- NN.add_or_replace [to_; from] () t.use
 
@@ -172,12 +174,12 @@ let add_argument_dep t ~to_ relation ~base =
 let add_parameter_dep t ~base relation ~from =
   t.parameter <- NCN.add_or_replace [base; relation; from] () t.parameter
 
-let add_propagate_dep t ~if_used ~to_ ~from =
-  t.propagate <- NNN.add_or_replace [if_used; to_; from] () t.propagate
+let add_propagate_dep t ~if_used ~into ~from =
+  t.propagate <- NNN.add_or_replace [if_used; into; from] () t.propagate
 
-let add_flows_if_any_source_dep t ~if_any_source ~to_ ~from =
+let add_flows_if_any_source_dep t ~if_any_source ~into ~from =
   t.flows_if_any_source
-    <- NNN.add_or_replace [if_any_source; to_; from] () t.flows_if_any_source
+    <- NNN.add_or_replace [if_any_source; into; from] () t.flows_if_any_source
 
 let add_opaque_let_dependency t ~to_ ~from =
   let bound_to = Bound_pattern.free_names to_ in
