@@ -30,7 +30,7 @@ let apply_cont_deps denv acc apply_cont =
   let (Normal params) = params in
   List.iter2
     (fun param dep ->
-      Acc.add_alias acc
+      Acc.add_flows acc
         ~to_:(Code_id_or_name.var param)
         ~from:(Acc.simple_to_node acc ~denv dep))
     params args
@@ -186,7 +186,7 @@ and traverse_let denv acc let_expr : rev_expr =
       (Name.var (Bound_var.var (Bound_pattern.must_be_singleton bound_pattern)))
       s acc;
     default_bp (fun to_ ->
-        Acc.add_alias acc ~to_ ~from:(Acc.simple_to_node acc ~denv s))
+        Acc.add_flows acc ~to_ ~from:(Acc.simple_to_node acc ~denv s))
   | Rec_info _ -> default acc);
   let make_set_of_closures set_of_closures =
     let function_decls = Set_of_closures.function_decls set_of_closures in
@@ -269,7 +269,7 @@ and traverse_prim denv acc ~bound_pattern (prim : Flambda_primitive.t) ~default
     when reaper_test_opaque ->
     (* XXX TO REMOVE !!! *)
     let from = Acc.simple_to_node acc ~denv arg in
-    default_bp (fun to_ -> Acc.add_alias acc ~to_ ~from)
+    default_bp (fun to_ -> Acc.add_flows acc ~to_ ~from)
   | Unary (Project_function_slot { move_from = _; move_to }, block) ->
     let block = Acc.simple_to_node acc ~denv block in
     default_bp (fun to_ ->
@@ -293,7 +293,7 @@ and traverse_prim denv acc ~bound_pattern (prim : Flambda_primitive.t) ~default
     | Immutable | Immutable_unique -> ()
     | Mutable ->
       default_bp (fun to_ ->
-          Acc.add_alias acc ~to_
+          Acc.add_flows acc ~to_
             ~from:(Code_id_or_name.name denv.le_monde_exterieur)))
   | Unary (Is_int { variant_only = true }, arg) ->
     let name = Acc.simple_to_node acc ~denv arg in
@@ -392,7 +392,7 @@ and traverse_static_consts denv acc ~(bound_pattern : Bound_pattern.t) group =
           ~from:(Code_id_or_name.name denv.all_constants)
       | Set_of_closures _ -> assert false
       | _ ->
-        Acc.add_alias acc
+        Acc.add_flows acc
           ~to_:(Code_id_or_name.name name)
           ~from:(Code_id_or_name.name denv.all_constants))
 
@@ -540,7 +540,7 @@ and traverse_apply denv acc apply : rev_expr =
     | exn_param :: extra_params ->
       List.iter2
         (fun param (arg, _kind) ->
-          Acc.add_alias acc
+          Acc.add_flows acc
             ~to_:(Code_id_or_name.var param)
             ~from:(Acc.simple_to_node acc ~denv arg))
         extra_params extra_args;
@@ -607,9 +607,9 @@ and traverse_call_kind denv acc apply ~exn_arg ~return_args ~default_acc =
             Code_id_or_name.var
               (Variable.create "widget_if_any_source" Flambda_kind.rec_info)
           in
-          Acc.add_alias_if_any_source_dep acc ~if_any_source:callee ~from:callee
+          Acc.add_flows_if_any_source_dep acc ~if_any_source:callee ~from:callee
             ~to_:(Code_id_or_name.var callee_if_any_source);
-          Acc.add_alias_if_any_source_dep acc ~if_any_source:callee
+          Acc.add_flows_if_any_source_dep acc ~if_any_source:callee
             ~from:widget_if_any_source ~to_:call_widget;
           Some (Simple.var callee_if_any_source), widget_if_any_source)
         else callee, call_widget
@@ -797,7 +797,7 @@ and traverse_function_params_and_body acc code_id code ~return_continuation
   else
     List.iter2
       (fun param arg ->
-        Acc.add_alias acc
+        Acc.add_flows acc
           ~to_:(Code_id_or_name.var (Bound_parameter.var param))
           ~from:(Code_id_or_name.var arg))
       (Bound_parameters.to_list params)
@@ -805,7 +805,7 @@ and traverse_function_params_and_body acc code_id code ~return_continuation
   if is_opaque
   then Acc.add_cond_any_usage acc ~denv (Simple.var code_dep.my_closure)
   else
-    Acc.add_alias acc
+    Acc.add_flows acc
       ~to_:(Code_id_or_name.var my_closure)
       ~from:(Code_id_or_name.var code_dep.my_closure);
   let body = traverse denv acc body in

@@ -23,14 +23,14 @@ module NNN =
 module N = Datalog.Schema.Relation1 (Code_id_or_name)
 
 type graph =
-  { mutable alias : NN.t;
+  { mutable flows : NN.t;
     mutable use : NN.t;
     mutable accessor : NFN.t;
     mutable constructor : NFN.t;
     mutable coaccessor : NCN.t;
     mutable coconstructor : NCN.t;
     mutable propagate : NNN.t;
-    mutable alias_if_any_source : NNN.t;
+    mutable flows_if_any_source : NNN.t;
     mutable any_usage : N.t;
     mutable any_source : N.t;
     mutable code_id_my_closure : NN.t
@@ -54,7 +54,7 @@ let print_iter_edges ~print_edge graph =
         Cofield.Map.iter (fun _ m -> iter_inner color target m) m)
       m
   in
-  iter_nn "black" graph.alias;
+  iter_nn "black" graph.flows;
   iter_nn "red" graph.use;
   iter_nfn "green" graph.accessor;
   iter_nfn "blue" graph.constructor;
@@ -65,9 +65,9 @@ let print_iter_edges ~print_edge graph =
     graph.propagate;
   Code_id_or_name.Map.iter
     (fun _if_any_source m -> iter_nn "orange" m)
-    graph.alias_if_any_source
+    graph.flows_if_any_source
 
-let alias = NN.create ~name:"alias"
+let flows = NN.create ~name:"flows"
 
 let use = NN.create ~name:"use"
 
@@ -81,7 +81,7 @@ let coconstructor = NCN.create ~name:"coconstructor"
 
 let propagate = NNN.create ~name:"propagate"
 
-let alias_if_any_source = NNN.create ~name:"alias_if_any_source"
+let flows_if_any_source = NNN.create ~name:"flows_if_any_source"
 
 let any_usage = N.create ~name:"any_usage"
 
@@ -90,14 +90,14 @@ let any_source = N.create ~name:"any_source"
 let code_id_my_closure = NN.create ~name:"code_id_my_closure"
 
 let to_datalog graph =
-  Datalog.set_table alias graph.alias
+  Datalog.set_table flows graph.flows
   @@ Datalog.set_table use graph.use
   @@ Datalog.set_table accessor graph.accessor
   @@ Datalog.set_table constructor graph.constructor
   @@ Datalog.set_table coaccessor graph.coaccessor
   @@ Datalog.set_table coconstructor graph.coconstructor
   @@ Datalog.set_table propagate graph.propagate
-  @@ Datalog.set_table alias_if_any_source graph.alias_if_any_source
+  @@ Datalog.set_table flows_if_any_source graph.flows_if_any_source
   @@ Datalog.set_table any_usage graph.any_usage
   @@ Datalog.set_table any_source graph.any_source
   @@ Datalog.set_table code_id_my_closure graph.code_id_my_closure
@@ -109,13 +109,13 @@ module Relations = struct
   type 'a term = 'a Datalog.Term.t
 
   (* Naming:
-   * to_ = from; (alias)
+   * to_ = from; (flows)
    * to_ = [...] from (use)
    * to_ = base.relation (accessor)
    * base = Make_block { from_ } (constructor)
    * *)
 
-  let alias ~to_ ~from = Datalog.atom alias [to_; from]
+  let flows ~to_ ~from = Datalog.atom flows [to_; from]
 
   let use ~to_ ~from = Datalog.atom use [to_; from]
 
@@ -132,8 +132,8 @@ module Relations = struct
 
   let propagate ~if_used ~to_ ~from = Datalog.atom propagate [if_used; to_; from]
 
-  let alias_if_any_source ~if_any_source ~to_ ~from =
-    Datalog.atom alias_if_any_source [if_any_source; to_; from]
+  let flows_if_any_source ~if_any_source ~to_ ~from =
+    Datalog.atom flows_if_any_source [if_any_source; to_; from]
 
   let any_usage var = Datalog.atom any_usage [var]
 
@@ -144,20 +144,20 @@ module Relations = struct
 end
 
 let create () =
-  { alias = NN.empty;
+  { flows = NN.empty;
     use = NN.empty;
     accessor = NFN.empty;
     constructor = NFN.empty;
     coaccessor = NCN.empty;
     coconstructor = NCN.empty;
     propagate = NNN.empty;
-    alias_if_any_source = NNN.empty;
+    flows_if_any_source = NNN.empty;
     any_usage = N.empty;
     any_source = N.empty;
     code_id_my_closure = NN.empty
   }
 
-let add_alias t ~to_ ~from = t.alias <- NN.add_or_replace [to_; from] () t.alias
+let add_flows t ~to_ ~from = t.flows <- NN.add_or_replace [to_; from] () t.flows
 
 let add_use_dep t ~to_ ~from = t.use <- NN.add_or_replace [to_; from] () t.use
 
@@ -177,9 +177,9 @@ let add_coconstructor_dep t ~base relation ~from =
 let add_propagate_dep t ~if_used ~to_ ~from =
   t.propagate <- NNN.add_or_replace [if_used; to_; from] () t.propagate
 
-let add_alias_if_any_source_dep t ~if_any_source ~to_ ~from =
-  t.alias_if_any_source
-    <- NNN.add_or_replace [if_any_source; to_; from] () t.alias_if_any_source
+let add_flows_if_any_source_dep t ~if_any_source ~to_ ~from =
+  t.flows_if_any_source
+    <- NNN.add_or_replace [if_any_source; to_; from] () t.flows_if_any_source
 
 let add_opaque_let_dependency t ~to_ ~from =
   let bound_to = Bound_pattern.free_names to_ in

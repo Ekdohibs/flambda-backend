@@ -140,7 +140,7 @@ let add_code code_id dep t = t.code <- Code_id.Map.add code_id dep t.code
 
 let find_code t code_id = Code_id.Map.find code_id t.code
 
-let add_alias t ~to_ ~from = Graph.add_alias t.deps ~to_ ~from
+let add_flows t ~to_ ~from = Graph.add_flows t.deps ~to_ ~from
 
 let add_use_dep t ~to_ ~from = Graph.add_use_dep t.deps ~to_ ~from
 
@@ -159,8 +159,8 @@ let add_coconstructor_dep t ~base relation ~from =
 let add_propagate_dep t ~if_used ~to_ ~from =
   Graph.add_propagate_dep t.deps ~if_used ~to_ ~from
 
-let add_alias_if_any_source_dep t ~if_any_source ~to_ ~from =
-  Graph.add_alias_if_any_source_dep t.deps ~if_any_source ~to_ ~from
+let add_flows_if_any_source_dep t ~if_any_source ~to_ ~from =
+  Graph.add_flows_if_any_source_dep t.deps ~if_any_source ~to_ ~from
 
 let add_any_source t x = Graph.add_any_source t.deps x
 
@@ -187,9 +187,9 @@ let add_cond_any_source t ~(denv : Env.t) v =
       ~from:(Code_id_or_name.name denv.le_monde_exterieur)
       ~to_:v
 
-let cond_alias t ~(denv : Env.t) ~from ~to_ =
+let cond_flows t ~(denv : Env.t) ~from ~to_ =
   match denv.current_code_id with
-  | None -> add_alias t ~from ~to_
+  | None -> add_flows t ~from ~to_
   | Some code_id ->
     add_propagate_dep t ~if_used:(Code_id_or_name.code_id code_id) ~from ~to_
 
@@ -300,7 +300,7 @@ let make_known_arity_apply_widget t ~(denv : Env.t) ~params ~returns ~exn =
   let apply =
     Code_id_or_name.var (Variable.create "apply" Flambda_kind.rec_info)
   in
-  cond_alias t ~denv ~from:apply ~to_:witness;
+  cond_flows t ~denv ~from:apply ~to_:witness;
   apply
 
 let create_unknown_arity_call_witnesses t code_id ~is_tupled ~arity ~params
@@ -432,7 +432,7 @@ let make_unknown_arity_apply_widget t ~(denv : Env.t) ~arity ~params ~returns
   let apply =
     Code_id_or_name.var (Variable.create "apply" Flambda_kind.rec_info)
   in
-  cond_alias t ~denv ~from:apply ~to_:(List.hd witnesses);
+  cond_flows t ~denv ~from:apply ~to_:(List.hd witnesses);
   apply
 
 let record_set_of_closure_deps t =
@@ -490,14 +490,14 @@ let deps t ~all_constants =
            apply_call_witness
          } ->
       let code_dep = find_code t apply_code_id in
-      add_alias t ~from:code_dep.known_arity_call_witness
+      add_flows t ~from:code_dep.known_arity_call_witness
         ~to_:apply_call_witness;
       match apply_closure with
       | None -> ()
       | Some closure -> (
         match function_containing_apply_expr with
         | None ->
-          add_alias t
+          add_flows t
             ~to_:(Code_id_or_name.var code_dep.my_closure)
             ~from:(simple_to_node t ~all_constants closure)
         | Some code_id ->

@@ -24,7 +24,7 @@
    At its core, we have a graph with a given number of nodes (corresponding to
    variables in the input program), and three types of arrows between nodes:
 
-   - [alias], which means that a variable can flow to another variable,
+   - [flows], which means that a variable can flow to another variable,
 
    - [constructor], which means that a variable can flow to a given field of
    another variable,
@@ -71,13 +71,13 @@
    # Implementation of the core analysis
 
    We still consider only usages, as sources are symmetrical. One problem we
-   have is, in an alias chain, the $Lₓ$ will be repeated a large number of
-   times, leading to quadratic behaviour. To avoid this, we only represent
-   explicitely $Lₓ$ when $x$ is the source of an accessor. For other variables,
-   we represent it implicitely with a set $Uₓ$ of usages of $x$, corresponding
-   to accessors only, and such that $Lₓ = ⋃_{t ∈ Uₓ} Lₜ$. However, if a variable
-   has unknown usages, we do not represent $Uₓ$, as it would be useless once the
-   variable has unknown usages.
+   have is, in a flows chain, the $Lₓ$ will be repeated a large number of times,
+   leading to quadratic behaviour. To avoid this, we only represent explicitely
+   $Lₓ$ when $x$ is the source of an accessor. For other variables, we represent
+   it implicitely with a set $Uₓ$ of usages of $x$, corresponding to accessors
+   only, and such that $Lₓ = ⋃_{t ∈ Uₓ} Lₜ$. However, if a variable has unknown
+   usages, we do not represent $Uₓ$, as it would be useless once the variable
+   has unknown usages.
 
    In practice we have several Datalog relations to represent this: first,
    [any_usage x] means that [x] has unknown usages. Then, [usages x y] means
@@ -390,7 +390,7 @@ let rel3 name schema =
    [cofield_usages] and [cofield_sources]
 *)
 
-(** [usages x y] y is an alias of x, and there is an actual use for y.
+(** [usages x y] x flows to y, and there is an actual use for y.
 
     For performance reasons, we don't want to represent [usages x y] when
     x is top ([any_usage x] is valid). If x is top the any_usage predicate subsumes
@@ -406,7 +406,7 @@ let usages = rel2 "usages" Cols.[n; n]
 (** [field_usages x f y] y is an use of the field f of x
     and there is an actual use for y.
     Exists only if [accessor y f x].
-    (this avoids the quadratic blowup of building the complete alias graph)
+    (this avoids the quadratic blowup of building the complete flows graph)
 
     We avoid building this relation if [field_usages_top x f], but it is possible to have both
     [field_usages x f _] and [field_usages_top x f] depending on the resolution order.
@@ -449,7 +449,7 @@ let any_source = any_source
 (** [field_sources x f y] y is a source of the field f of x,
     and there is an actual source for y.
     Exists only if [constructor x f y].
-    (this avoids the quadratic blowup of building the complete alias graph)
+    (this avoids the quadratic blowup of building the complete flows graph)
 
     We avoid building this relation if [field_sources_top x f], but it is possible to have both
     [field_sources x f _] and [field_sources_top x f] depending on the resolution order.
@@ -466,8 +466,8 @@ let cofield_sources = rel3 "cofield_sources" Cols.[n; cf; n]
 let cofield_usages = rel3 "cofield_usages" Cols.[n; cf; n]
 
 (* Reverse relations *)
-let rev_alias =
-  let tbl = nrel "rev_alias" Cols.[n; n] in
+let rev_flows =
+  let tbl = nrel "rev_flows" Cols.[n; n] in
   fun ~from ~to_ -> tbl % [from; to_]
 
 let rev_use =
@@ -495,14 +495,14 @@ let rev_coaccessor =
 
    There are 5 different relations:
 
-   - [alias to_ from] corresponds to [let to_ = from]
+   - [flows to_ from] corresponds to [let to_ = from]
 
    - [accessor to_ relation base] corresponds to [let to_ = base.relation]
 
    - [constructor base relation from] corresponds to constructing a block [let
    base = { relation = from }]
 
-   - [propagate if_used to_ from] means [alias to_ from], but only if [is_used]
+   - [propagate if_used to_ from] means [flows to_ from], but only if [is_used]
    is used
 
    - [use to_ from] corresponds to [let to_ = f(from)], creating an arbitrary
@@ -521,7 +521,7 @@ let rev_coaccessor =
 
    The consequence of this is that we can consider them not to have [any_usage],
    nor to have [any_source], even if the block containing them has [any_usage]
-   or [any_source]. Instead, we need to add an alias from [x] to [y] if [x] if
+   or [any_source]. Instead, we need to add a flow from [x] to [y] if [x] if
    stored in a field of [source], [y] is read from the same field of [usage],
    and [source] might flow to [usage]. *)
 
@@ -556,12 +556,12 @@ let datalog_schedule =
   [ (* Reverse relations, because datalog does not implement a more efficient
        representation yet. Datalog iterates on the first key of a relation
        first, those reversed relations allows to select a different key. Of
-       these, only [alias] has both priorities, because it is the only of those
+       these, only [flows] has both priorities, because it is the only of those
        relations that is extended after graph construction. *)
     (let$ [to_; from] = ["to_"; "from"] in
-     [alias ~to_ ~from] ==> rev_alias ~from ~to_);
+     [flows ~to_ ~from] ==> rev_flows ~from ~to_);
     (let$$ [to_; from] = ["to_"; "from"] in
-     [alias ~to_ ~from] ==> rev_alias ~from ~to_);
+     [flows ~to_ ~from] ==> rev_flows ~from ~to_);
     (let$ [to_; from] = ["to_"; "from"] in
      [use ~to_ ~from] ==> rev_use ~from ~to_);
     (let$ [to_; relation; base] = ["to_"; "relation"; "base"] in
@@ -574,14 +574,14 @@ let datalog_schedule =
      [coconstructor ~base relation ~from]
      ==> rev_coconstructor ~from relation ~base);
     (* The [propagate] relation is part of the input of the solver, with the
-       intended meaning of this rule, that is, an alias if [is_used] is used. *)
+       intended meaning of this rule, that is, an flows if [is_used] is used. *)
     (let$ [if_used; to_; from] = ["if_used"; "to_"; "from"] in
-     [any_usage if_used; propagate ~if_used ~to_ ~from] ==> alias ~to_ ~from);
-    (* Likewise, [alias_if_any_source] means an alias if [is_any_source] has any
+     [any_usage if_used; propagate ~if_used ~to_ ~from] ==> flows ~to_ ~from);
+    (* Likewise, [flows_if_any_source] means an flows if [is_any_source] has any
        source. *)
     (let$ [if_any_source; to_; from] = ["if_any_source"; "to_"; "from"] in
-     [any_source if_any_source; alias_if_any_source ~if_any_source ~to_ ~from]
-     ==> alias ~to_ ~from);
+     [any_source if_any_source; flows_if_any_source ~if_any_source ~to_ ~from]
+     ==> flows ~to_ ~from);
     (* has_usage/has_source *)
     (let$ [x] = ["x"] in
      [any_usage x] ==> has_usage x);
@@ -596,9 +596,9 @@ let datalog_schedule =
        By convention the [base] name applies to something that represents a
        block value (something on which an accessor or a constructor applies)
 
-       usage_accessor and usage_coaccessor are the relation initialisation: they
-       define what we mean by 'actually using' something. usage_alias
-       propagatess usage to aliases.
+       The rules with conclusion [nontop_usages x x] are the relation
+       initialisation, they define what it is to actually use something. The
+       others are propagation of [usages] by [flows].
 
        An 'actual use' comes from either a top (any_usage predicate) or through
        an accessor (or coaccessor) on an used variable
@@ -606,14 +606,14 @@ let datalog_schedule =
        All those rules are constrained not to apply when any_usage is valid.
        (see [usages] definition comment) *)
     (let$ [to_; from] = ["to_"; "from"] in
-     [alias ~to_ ~from; any_usage to_] ==> any_usage from);
+     [flows ~to_ ~from; any_usage to_] ==> any_usage from);
     (let$$ [to_; relation; base] = ["to_"; "relation"; "base"] in
      [accessor ~to_ relation ~base; has_usage to_] ==> nontop_usages base base);
     (let$$ [to_; relation; base] = ["to_"; "relation"; "base"] in
      [has_source to_; coaccessor ~to_ relation ~base]
      ==> nontop_usages base base);
     (let$$ [to_; from; usage] = ["to_"; "from"; "usage"] in
-     [nontop_usages to_ usage; alias ~to_ ~from] ==> nontop_usages from usage);
+     [nontop_usages to_ usage; flows ~to_ ~from] ==> nontop_usages from usage);
     (* accessor-usage *)
     (let$$ [to_; relation; base] = ["to_"; "relation"; "base"] in
      [ ~~(any_usage base);
@@ -646,7 +646,7 @@ let datalog_schedule =
        constructor ~base relation ~from;
        nontop_usages base base_use;
        field_usages base_use relation to_ ]
-     ==> alias ~to_ ~from);
+     ==> flows ~to_ ~from);
     (let$$ [base; base_use; relation; from; to_] =
        ["base"; "base_use"; "relation"; "from"; "to_"]
      in
@@ -654,7 +654,7 @@ let datalog_schedule =
        constructor ~base relation ~from;
        usages base base_use;
        field_usages base_use relation to_ ]
-     ==> alias ~to_ ~from);
+     ==> flows ~to_ ~from);
     (let$ [base; base_use; relation; from] =
        ["base"; "base_use"; "relation"; "from"]
      in
@@ -676,7 +676,7 @@ let datalog_schedule =
      [any_source base; rev_coaccessor ~base relation ~to_] ==> any_usage to_);
     (* sources: see explanation on usage *)
     (let$ [from; to_] = ["from"; "to_"] in
-     [rev_alias ~from ~to_; any_source from] ==> any_source to_);
+     [rev_flows ~from ~to_; any_source from] ==> any_source to_);
     (let$$ [from; relation; base] = ["from"; "relation"; "base"] in
      [has_source from; rev_constructor ~from relation ~base]
      ==> nontop_sources base base);
@@ -684,7 +684,7 @@ let datalog_schedule =
      [has_usage from; rev_coconstructor ~from relation ~base]
      ==> nontop_sources base base);
     (let$$ [from; to_; source] = ["from"; "to_"; "source"] in
-     [nontop_sources from source; rev_alias ~from ~to_]
+     [nontop_sources from source; rev_flows ~from ~to_]
      ==> nontop_sources to_ source);
     (* constructor-sources *)
     (let$$ [from; relation; base] = ["from"; "relation"; "base"] in
@@ -720,7 +720,7 @@ let datalog_schedule =
      [ coconstructor ~base relation ~from;
        nontop_usages base base_use;
        cofield_usages base_use relation to_ ]
-     ==> alias ~to_:from ~from:to_);
+     ==> flows ~to_:from ~from:to_);
     (let$ [base; relation; from] = ["base"; "relation"; "from"] in
      [any_usage base; coconstructor ~base relation ~from] ==> any_source from);
     (* accessor-sources *)
@@ -732,7 +732,7 @@ let datalog_schedule =
        rev_accessor ~base relation ~to_;
        nontop_sources base base_source;
        field_sources base_source relation from ]
-     ==> alias ~to_ ~from);
+     ==> flows ~to_ ~from);
     (let$$ [base; base_source; relation; to_; from] =
        ["base"; "base_source"; "relation"; "to_"; "from"]
      in
@@ -740,7 +740,7 @@ let datalog_schedule =
        rev_accessor ~base relation ~to_;
        sources base base_source;
        field_sources base_source relation from ]
-     ==> alias ~to_ ~from);
+     ==> flows ~to_ ~from);
     (let$ [base; base_source; relation; to_] =
        ["base"; "base_source"; "relation"; "to_"]
      in
@@ -760,14 +760,14 @@ let datalog_schedule =
      ==> reading_field relation to_);
     (let$ [relation; from; to_] = ["relation"; "from"; "to_"] in
      [escaping_field relation from; reading_field relation to_]
-     ==> alias ~to_ ~from);
+     ==> flows ~to_ ~from);
     (let$$ [base; base_source; relation; to_; from] =
        ["base"; "base_source"; "relation"; "to_"; "from"]
      in
      [ rev_coaccessor ~base relation ~to_;
        nontop_sources base base_source;
        cofield_sources base_source relation from ]
-     ==> alias ~to_:from ~from:to_);
+     ==> flows ~to_:from ~from:to_);
     (* use *)
     (let$ [to_; from] = ["to_"; "from"] in
      [has_usage to_; use ~to_ ~from] ==> any_usage from);
@@ -1100,7 +1100,7 @@ type usages = Usages of unit Code_id_or_name.Map.t [@@unboxed]
     The reason for this is that for a given closure that is called, the
     [usages] do not usually include the uses of the closure inside the code of
     the closure itself. However, when we allocate a set of closures, we include
-    an alias between the allocated closures and their [my_closure] variable
+    an flows between the allocated closures and their [my_closure] variable
     inside the corresponding code. As such, the usages at an allocation point
     are always representative of all the uses, and as such, do not require to
     follow the calls.
