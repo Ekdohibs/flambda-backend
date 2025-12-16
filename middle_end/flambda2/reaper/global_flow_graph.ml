@@ -27,8 +27,8 @@ type graph =
     mutable use : NN.t;
     mutable accessor : NFN.t;
     mutable constructor : NFN.t;
-    mutable coaccessor : NCN.t;
-    mutable coconstructor : NCN.t;
+    mutable argument : NCN.t;
+    mutable parameter : NCN.t;
     mutable propagate : NNN.t;
     mutable flows_if_any_source : NNN.t;
     mutable any_usage : N.t;
@@ -58,8 +58,8 @@ let print_iter_edges ~print_edge graph =
   iter_nn "red" graph.use;
   iter_nfn "green" graph.accessor;
   iter_nfn "blue" graph.constructor;
-  iter_ncn "darkgreen" graph.coaccessor;
-  iter_ncn "darkblue" graph.coconstructor;
+  iter_ncn "darkgreen" graph.argument;
+  iter_ncn "darkblue" graph.parameter;
   Code_id_or_name.Map.iter
     (fun _if_used m -> iter_nn "purple" m)
     graph.propagate;
@@ -75,9 +75,9 @@ let accessor = NFN.create ~name:"accessor"
 
 let constructor = NFN.create ~name:"constructor"
 
-let coaccessor = NCN.create ~name:"coaccessor"
+let argument = NCN.create ~name:"argument"
 
-let coconstructor = NCN.create ~name:"coconstructor"
+let parameter = NCN.create ~name:"parameter"
 
 let propagate = NNN.create ~name:"propagate"
 
@@ -94,8 +94,8 @@ let to_datalog graph =
   @@ Datalog.set_table use graph.use
   @@ Datalog.set_table accessor graph.accessor
   @@ Datalog.set_table constructor graph.constructor
-  @@ Datalog.set_table coaccessor graph.coaccessor
-  @@ Datalog.set_table coconstructor graph.coconstructor
+  @@ Datalog.set_table argument graph.argument
+  @@ Datalog.set_table parameter graph.parameter
   @@ Datalog.set_table propagate graph.propagate
   @@ Datalog.set_table flows_if_any_source graph.flows_if_any_source
   @@ Datalog.set_table any_usage graph.any_usage
@@ -124,11 +124,10 @@ module Relations = struct
   let constructor ~base relation ~from =
     Datalog.atom constructor [base; relation; from]
 
-  let coaccessor ~to_ relation ~base =
-    Datalog.atom coaccessor [to_; relation; base]
+  let argument ~to_ relation ~base = Datalog.atom argument [to_; relation; base]
 
-  let coconstructor ~base relation ~from =
-    Datalog.atom coconstructor [base; relation; from]
+  let parameter ~base relation ~from =
+    Datalog.atom parameter [base; relation; from]
 
   let propagate ~if_used ~to_ ~from = Datalog.atom propagate [if_used; to_; from]
 
@@ -148,8 +147,8 @@ let create () =
     use = NN.empty;
     accessor = NFN.empty;
     constructor = NFN.empty;
-    coaccessor = NCN.empty;
-    coconstructor = NCN.empty;
+    argument = NCN.empty;
+    parameter = NCN.empty;
     propagate = NNN.empty;
     flows_if_any_source = NNN.empty;
     any_usage = N.empty;
@@ -167,12 +166,11 @@ let add_constructor_dep t ~base relation ~from =
 let add_accessor_dep t ~to_ relation ~base =
   t.accessor <- NFN.add_or_replace [to_; relation; base] () t.accessor
 
-let add_coaccessor_dep t ~to_ relation ~base =
-  t.coaccessor <- NCN.add_or_replace [to_; relation; base] () t.coaccessor
+let add_argument_dep t ~to_ relation ~base =
+  t.argument <- NCN.add_or_replace [to_; relation; base] () t.argument
 
-let add_coconstructor_dep t ~base relation ~from =
-  t.coconstructor
-    <- NCN.add_or_replace [base; relation; from] () t.coconstructor
+let add_parameter_dep t ~base relation ~from =
+  t.parameter <- NCN.add_or_replace [base; relation; from] () t.parameter
 
 let add_propagate_dep t ~if_used ~to_ ~from =
   t.propagate <- NNN.add_or_replace [if_used; to_; from] () t.propagate

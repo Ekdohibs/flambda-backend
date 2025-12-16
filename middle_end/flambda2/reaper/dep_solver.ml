@@ -135,7 +135,7 @@
 
    - Add an alias [let a = b]. This is the direction opposite to what would
    happen with constructors and accessors. Thus, for parameters, we use
-   coconstructors and coaccessors that put this alias in the opposite direction.
+   parameters and arguments that put this alias in the opposite direction.
 
    # Local fields
 
@@ -482,12 +482,12 @@ let rev_accessor =
   let tbl = nrel "rev_accessor" Cols.[n; f; n] in
   fun ~base relation ~to_ -> tbl % [base; relation; to_]
 
-let rev_coconstructor =
-  let tbl = nrel "rev_coconstructor" Cols.[n; cf; n] in
+let rev_parameter =
+  let tbl = nrel "rev_parameter" Cols.[n; cf; n] in
   fun ~from relation ~base -> tbl % [from; relation; base]
 
-let rev_coaccessor =
-  let tbl = nrel "rev_coaccessor" Cols.[n; cf; n] in
+let rev_argument =
+  let tbl = nrel "rev_argument" Cols.[n; cf; n] in
   fun ~base relation ~to_ -> tbl % [base; relation; to_]
 
 (* The program is abstracted as a series of relations concerning the reading and
@@ -569,10 +569,9 @@ let datalog_schedule =
     (let$ [base; relation; from] = ["base"; "relation"; "from"] in
      [constructor ~base relation ~from] ==> rev_constructor ~from relation ~base);
     (let$ [to_; relation; base] = ["to_"; "relation"; "base"] in
-     [coaccessor ~to_ relation ~base] ==> rev_coaccessor ~base relation ~to_);
+     [argument ~to_ relation ~base] ==> rev_argument ~base relation ~to_);
     (let$ [base; relation; from] = ["base"; "relation"; "from"] in
-     [coconstructor ~base relation ~from]
-     ==> rev_coconstructor ~from relation ~base);
+     [parameter ~base relation ~from] ==> rev_parameter ~from relation ~base);
     (* The [propagate] relation is part of the input of the solver, with the
        intended meaning of this rule, that is, an flows if [is_used] is used. *)
     (let$ [if_used; to_; from] = ["if_used"; "to_"; "from"] in
@@ -601,7 +600,7 @@ let datalog_schedule =
        others are propagation of [usages] by [flows].
 
        An 'actual use' comes from either a top (any_usage predicate) or through
-       an accessor (or coaccessor) on an used variable
+       an accessor (or argument) on an used variable
 
        All those rules are constrained not to apply when any_usage is valid.
        (see [usages] definition comment) *)
@@ -610,8 +609,7 @@ let datalog_schedule =
     (let$$ [to_; relation; base] = ["to_"; "relation"; "base"] in
      [accessor ~to_ relation ~base; has_usage to_] ==> nontop_usages base base);
     (let$$ [to_; relation; base] = ["to_"; "relation"; "base"] in
-     [has_source to_; coaccessor ~to_ relation ~base]
-     ==> nontop_usages base base);
+     [has_source to_; argument ~to_ relation ~base] ==> nontop_usages base base);
     (let$$ [to_; from; usage] = ["to_"; "from"; "usage"] in
      [nontop_usages to_ usage; flows ~to_ ~from] ==> nontop_usages from usage);
     (* accessor-usage *)
@@ -633,9 +631,9 @@ let datalog_schedule =
        ~~(field_usages_top base relation);
        accessor ~to_ relation ~base ]
      ==> field_usages base relation to_);
-    (* coaccessor-usages *)
+    (* argument-usages *)
     (let$$ [to_; relation; base] = ["to_"; "relation"; "base"] in
-     [~~(any_usage base); has_source to_; coaccessor ~to_ relation ~base]
+     [~~(any_usage base); has_source to_; argument ~to_ relation ~base]
      ==> cofield_usages base relation to_);
     (* constructor-usages *)
     (let$$ [base; base_use; relation; from; to_] =
@@ -673,7 +671,7 @@ let datalog_schedule =
        when1 Field.is_local relation ]
      ==> escaping_field relation from);
     (let$ [base; relation; to_] = ["base"; "relation"; "to_"] in
-     [any_source base; rev_coaccessor ~base relation ~to_] ==> any_usage to_);
+     [any_source base; rev_argument ~base relation ~to_] ==> any_usage to_);
     (* sources: see explanation on usage *)
     (let$ [from; to_] = ["from"; "to_"] in
      [rev_flows ~from ~to_; any_source from] ==> any_source to_);
@@ -681,7 +679,7 @@ let datalog_schedule =
      [has_source from; rev_constructor ~from relation ~base]
      ==> nontop_sources base base);
     (let$$ [from; relation; base] = ["from"; "relation"; "base"] in
-     [has_usage from; rev_coconstructor ~from relation ~base]
+     [has_usage from; rev_parameter ~from relation ~base]
      ==> nontop_sources base base);
     (let$$ [from; to_; source] = ["from"; "to_"; "source"] in
      [nontop_sources from source; rev_flows ~from ~to_]
@@ -707,22 +705,20 @@ let datalog_schedule =
        rev_constructor ~from relation ~base;
        nontop_sources from _var ]
      ==> field_sources base relation from);
-    (* coaccessor-sources *)
+    (* argument-sources *)
     (let$$ [from; relation; base] = ["from"; "relation"; "base"] in
-     [ ~~(any_source base);
-       has_usage from;
-       rev_coconstructor ~from relation ~base ]
+     [~~(any_source base); has_usage from; rev_parameter ~from relation ~base]
      ==> cofield_sources base relation from);
-    (* coconstructor-uses *)
+    (* parameter-uses *)
     (let$$ [base; base_use; relation; from; to_] =
        ["base"; "base_use"; "relation"; "from"; "to_"]
      in
-     [ coconstructor ~base relation ~from;
+     [ parameter ~base relation ~from;
        nontop_usages base base_use;
        cofield_usages base_use relation to_ ]
      ==> flows ~to_:from ~from:to_);
     (let$ [base; relation; from] = ["base"; "relation"; "from"] in
-     [any_usage base; coconstructor ~base relation ~from] ==> any_source from);
+     [any_usage base; parameter ~base relation ~from] ==> any_source from);
     (* accessor-sources *)
     (let$$ [base; base_source; relation; to_; from] =
        ["base"; "base_source"; "relation"; "to_"; "from"]
@@ -764,7 +760,7 @@ let datalog_schedule =
     (let$$ [base; base_source; relation; to_; from] =
        ["base"; "base_source"; "relation"; "to_"; "from"]
      in
-     [ rev_coaccessor ~base relation ~to_;
+     [ rev_argument ~base relation ~to_;
        nontop_sources base base_source;
        cofield_sources base_source relation from ]
      ==> flows ~to_:from ~from:to_);
@@ -1165,7 +1161,7 @@ type field_usage =
   | Used_as_top
   | Used_as_vars of unit Code_id_or_name.Map.t
 
-(** For an usage set (coaccessor s), compute the way its fields are used.
+(** For an usage set (argument s), compute the way its fields are used.
     As function slots are transparent for [get_usages], functions slot
     usages are ignored here.
 *)
@@ -1721,7 +1717,7 @@ let datalog_rules =
          ["alias"; "allocation_id"; "relation"; "call_witness"; "codeid"]
        in
        [ sources alias allocation_id;
-         rev_coconstructor ~from:alias relation ~base:call_witness;
+         rev_parameter ~from:alias relation ~base:call_witness;
          constructor ~base:call_witness
            !!Field.code_id_of_call_witness
            ~from:codeid;
@@ -1730,7 +1726,7 @@ let datalog_rules =
       (* Cannot unbox parameters of [Indirect_unknown_arity] calls, even if they
          do not escape. *)
       (* (let$ [usage; allocation_id; relation; _v] = ["usage"; "allocation_id";
-         "relation"; "_v"] in [ sources usage allocation_id; coaccessor usage
+         "relation"; "_v"] in [ sources usage allocation_id; argument usage
          relation _v; filter (fun [f] -> match CoField.decode f with | Param
          (Unknown_arity_code_pointer, _) -> true | Param
          (Known_arity_code_pointer, _) -> false) [relation] ] ==> cannot_unbox0

@@ -39,13 +39,13 @@ module Relations : sig
     from:Code_id_or_name.t term ->
     _ atom
 
-  val coaccessor :
+  val argument :
     to_:Code_id_or_name.t term ->
     Cofield.t term ->
     base:Code_id_or_name.t term ->
     _ atom
 
-  val coconstructor :
+  val parameter :
     base:Code_id_or_name.t term ->
     Cofield.t term ->
     from:Code_id_or_name.t term ->
@@ -86,10 +86,10 @@ val add_accessor_dep :
 val add_constructor_dep :
   graph -> base:Code_id_or_name.t -> Field.t -> from:Code_id_or_name.t -> unit
 
-val add_coaccessor_dep :
+val add_argument_dep :
   graph -> to_:Code_id_or_name.t -> Cofield.t -> base:Code_id_or_name.t -> unit
 
-val add_coconstructor_dep :
+val add_parameter_dep :
   graph -> base:Code_id_or_name.t -> Cofield.t -> from:Code_id_or_name.t -> unit
 
 val add_propagate_dep :
