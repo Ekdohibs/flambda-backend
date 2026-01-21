@@ -709,16 +709,17 @@ and traverse_code (acc : acc) (code_id : Code_id.t) (code : Code.t)
         ~is_my_closure_used:_
         ~my_region
         ~my_ghost_region
+        ~my_heap_region
         ~my_depth
         ~free_names_of_body:_
       ->
       traverse_function_params_and_body acc code_id code ~return_continuation
         ~exn_continuation params ~body ~my_closure ~my_region ~my_ghost_region
-        ~my_depth ~le_monde_exterieur ~all_constants)
+        ~my_heap_region ~my_depth ~le_monde_exterieur ~all_constants)
 
 and traverse_function_params_and_body acc code_id code ~return_continuation
     ~exn_continuation params ~body ~my_closure ~my_region ~my_ghost_region
-    ~le_monde_exterieur ~all_constants ~my_depth : rev_code =
+    ~my_heap_region ~le_monde_exterieur ~all_constants ~my_depth : rev_code =
   let code_metadata = Code.code_metadata code in
   let free_names_of_params_and_body = Code0.free_names code in
   (* Note: this significately degrades the analysis on zero_alloc code. However,
@@ -781,6 +782,7 @@ and traverse_function_params_and_body acc code_id code ~return_continuation
   Option.iter
     (fun region -> Acc.kind (Name.var region) Flambda_kind.region acc)
     my_ghost_region;
+  Acc.kind (Name.var my_heap_region) Flambda_kind.region acc;
   Acc.kind (Name.var my_depth) Flambda_kind.rec_info acc;
   if is_opaque
   then (
@@ -800,6 +802,7 @@ and traverse_function_params_and_body acc code_id code ~return_continuation
     any_source my_depth;
     Option.iter any_source my_region;
     Option.iter any_source my_ghost_region;
+    any_source my_heap_region;
     List.iter any_source (code_dep.exn :: code_dep.return))
   else
     List.iter2
@@ -824,6 +827,7 @@ and traverse_function_params_and_body acc code_id code ~return_continuation
       my_closure;
       my_region;
       my_ghost_region;
+      my_heap_region;
       my_depth
     }
   in

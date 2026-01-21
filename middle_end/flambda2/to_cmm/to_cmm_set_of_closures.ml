@@ -459,7 +459,10 @@ let transl_cold_attrib (cold : bool) : Cmm.codegen_option list =
 let params_and_body0 env res code_id ~result_arity ~fun_dbg
     ~zero_alloc_attribute ~return_continuation ~exn_continuation params ~body
     ~my_closure ~(is_my_closure_used : _ Or_unknown.t) ~my_region
-    ~my_ghost_region ~(translate_expr : translate_expr) =
+    ~my_ghost_region ~my_heap_region ~(translate_expr : translate_expr) =
+  (* [my_heap_region] will be used in the future when translating heap regions
+     for zero_alloc check *)
+  let () = ignore my_heap_region in
   let params =
     let is_my_closure_used =
       match is_my_closure_used with
@@ -585,6 +588,7 @@ let params_and_body env res code_id p ~result_arity ~fun_dbg
         ~is_my_closure_used
         ~my_region
         ~my_ghost_region
+        ~my_heap_region
         ~my_depth:_
         ~free_names_of_body:_
       ->
@@ -592,7 +596,7 @@ let params_and_body env res code_id p ~result_arity ~fun_dbg
         params_and_body0 env res code_id ~result_arity ~fun_dbg
           ~zero_alloc_attribute ~return_continuation ~exn_continuation params
           ~body ~my_closure ~is_my_closure_used ~my_region ~my_ghost_region
-          ~translate_expr
+          ~my_heap_region ~translate_expr
       with Misc.Fatal_error as e ->
         let bt = Printexc.get_raw_backtrace () in
         Format.eprintf
@@ -763,7 +767,7 @@ let let_dynamic_set_of_closures0 env res ~body ~bound_vars set
   let effs : Ece.t =
     ( Only_generative_effects Immutable,
       (match closure_alloc_mode with
-      | Heap -> No_coeffects
+      | Heap _ -> No_coeffects
       | Local _ -> Has_coeffects),
       Strict,
       Can_move_anywhere )

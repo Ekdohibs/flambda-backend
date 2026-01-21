@@ -23,6 +23,7 @@ val make_inlined_body :
   my_closure:'param ->
   my_region:Variable.t option ->
   my_ghost_region:Variable.t option ->
+  my_heap_region:Variable.t ->
   my_depth:Variable.t ->
   rec_info:Rec_info_expr.t ->
   body:'expr_with_acc ->

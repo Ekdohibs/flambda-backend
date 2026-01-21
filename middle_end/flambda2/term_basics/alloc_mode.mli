@@ -45,20 +45,24 @@ end
 module For_applications : sig
   (** Decisions on allocation locations for application expressions. *)
   type t = private
-    | Heap  (** Normal allocation on the OCaml heap. *)
+    | Heap of { heap_region : Variable.t }
+        (** Call that does not allocate in the caller's region. [heap_region] is
+            used to track allocations for the [@zero_alloc] attribute. *)
     | Local of
         { region : Variable.t;
-          ghost_region : Variable.t
-        }  (** Allocation on the local allocation stack in the given region. *)
+          ghost_region : Variable.t;
+          heap_region : Variable.t
+        }  (** Call that allocates in the supplied region. *)
 
   val print : Format.formatter -> t -> unit
 
   val compare : t -> t -> int
 
-  val heap : t
+  val heap : heap_region:Variable.t -> t
 
   (** Returns [Heap] if stack allocation is disabled! *)
-  val local : region:Variable.t -> ghost_region:Variable.t -> t
+  val local :
+    region:Variable.t -> ghost_region:Variable.t -> heap_region:Variable.t -> t
 
   val as_type : t -> For_types.t
 
@@ -66,6 +70,7 @@ module For_applications : sig
     Lambda.locality_mode ->
     current_region:Variable.t option ->
     current_ghost_region:Variable.t option ->
+    current_heap_region:Variable.t ->
     t
 
   include Contains_names.S with type t := t
@@ -76,7 +81,9 @@ end
 module For_allocations : sig
   (** Decisions on allocation locations *)
   type t = private
-    | Heap  (** Normal allocation on the OCaml heap. *)
+    | Heap of { heap_region : Variable.t }
+        (** Normal allocation on the OCaml heap. [heap_region] is used to track
+            allocations for [@zero_alloc] annotations *)
     | Local of { region : Variable.t }
         (** Allocation on the local allocation stack in the given region. *)
 
@@ -84,15 +91,18 @@ module For_allocations : sig
 
   val compare : t -> t -> int
 
-  val heap : t
+  val heap : heap_region:Variable.t -> t
 
   (** Returns [Heap] if stack allocation is disabled! *)
-  val local : region:Variable.t -> t
+  val local : region:Variable.t -> heap_region:Variable.t -> t
 
   val as_type : t -> For_types.t
 
   val from_lambda :
-    Lambda.locality_mode -> current_region:Variable.t option -> t
+    Lambda.locality_mode ->
+    current_region:Variable.t option ->
+    current_heap_region:Variable.t ->
+    t
 
   include Contains_names.S with type t := t
 

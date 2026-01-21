@@ -62,115 +62,161 @@ end
 
 module For_applications = struct
   type t =
-    | Heap
+    | Heap of { heap_region : Variable.t }
     | Local of
         { region : Variable.t;
-          ghost_region : Variable.t
+          ghost_region : Variable.t;
+          heap_region : Variable.t
         }
 
   let print ppf t =
     match t with
-    | Heap -> Format.pp_print_string ppf "Heap"
-    | Local { region; ghost_region } ->
-      Format.fprintf ppf "@[<hov 1>(Local (region@ %a)@ (ghost_region@ %a))@]"
-        Variable.print region Variable.print ghost_region
+    | Heap { heap_region } ->
+      Format.fprintf ppf "@[<hov 1>(Heap (heap_region@ %a))@]" Variable.print
+        heap_region
+    | Local { region; ghost_region; heap_region } ->
+      Format.fprintf ppf
+        "@[<hov 1>(Local (region@ %a)@ (ghost_region@ %a)@ (heap_region@ %a))@]"
+        Variable.print region Variable.print ghost_region Variable.print
+        heap_region
 
   let compare t1 t2 =
     match t1, t2 with
-    | Heap, Heap -> 0
-    | ( Local { region = region1; ghost_region = ghost_region1 },
-        Local { region = region2; ghost_region = ghost_region2 } ) ->
+    | Heap { heap_region = heap_region1 }, Heap { heap_region = heap_region2 }
+      ->
+      Variable.compare heap_region1 heap_region2
+    | ( Local
+          { region = region1;
+            ghost_region = ghost_region1;
+            heap_region = heap_region1
+          },
+        Local
+          { region = region2;
+            ghost_region = ghost_region2;
+            heap_region = heap_region2
+          } ) ->
       let c = Variable.compare region1 region2 in
-      if c <> 0 then c else Variable.compare ghost_region1 ghost_region2
-    | Heap, Local _ -> -1
-    | Local _, Heap -> 1
+      if c <> 0
+      then c
+      else
+        let c = Variable.compare ghost_region1 ghost_region2 in
+        if c <> 0 then c else Variable.compare heap_region1 heap_region2
+    | Heap _, Local _ -> -1
+    | Local _, Heap _ -> 1
 
-  let heap = Heap
+  let heap ~heap_region = Heap { heap_region }
 
-  let local ~region ~ghost_region =
+  let local ~region ~ghost_region ~heap_region =
     if Flambda_features.stack_allocation_enabled ()
-    then Local { region; ghost_region }
-    else Heap
+    then Local { region; ghost_region; heap_region }
+    else Heap { heap_region }
 
   let as_type t : For_types.t =
-    match t with Heap -> Heap | Local _ -> Heap_or_local
+    match t with Heap _ -> Heap | Local _ -> Heap_or_local
 
   let from_lambda (mode : Lambda.locality_mode) ~current_region
-      ~current_ghost_region =
+      ~current_ghost_region ~current_heap_region =
     if not (Flambda_features.stack_allocation_enabled ())
-    then Heap
+    then Heap { heap_region = current_heap_region }
     else
       match mode with
-      | Alloc_heap -> Heap
+      | Alloc_heap -> Heap { heap_region = current_heap_region }
       | Alloc_local -> (
         match current_region, current_ghost_region with
         | Some current_region, Some current_ghost_region ->
-          Local { region = current_region; ghost_region = current_ghost_region }
+          Local
+            { region = current_region;
+              ghost_region = current_ghost_region;
+              heap_region = current_heap_region
+            }
         | None, _ | _, None ->
           Misc.fatal_error "Local application without a region")
 
   let free_names t =
     match t with
-    | Heap -> Name_occurrences.empty
-    | Local { region; ghost_region } ->
+    | Heap { heap_region } ->
+      Name_occurrences.singleton_variable heap_region Name_mode.normal
+    | Local { region; ghost_region; heap_region } ->
       Name_occurrences.add_variable
-        (Name_occurrences.singleton_variable region Name_mode.normal)
-        ghost_region Name_mode.normal
+        (Name_occurrences.add_variable
+           (Name_occurrences.singleton_variable region Name_mode.normal)
+           ghost_region Name_mode.normal)
+        heap_region Name_mode.normal
 
   let apply_renaming t renaming =
     match t with
-    | Heap -> Heap
-    | Local { region; ghost_region } ->
+    | Heap { heap_region } ->
+      let heap_region' = Renaming.apply_variable renaming heap_region in
+      if heap_region == heap_region'
+      then t
+      else Heap { heap_region = heap_region' }
+    | Local { region; ghost_region; heap_region } ->
       let region' = Renaming.apply_variable renaming region in
       let ghost_region' = Renaming.apply_variable renaming ghost_region in
-      if region == region' && ghost_region == ghost_region'
+      let heap_region' = Renaming.apply_variable renaming heap_region in
+      if
+        region == region'
+        && ghost_region == ghost_region'
+        && heap_region == heap_region'
       then t
-      else Local { region = region'; ghost_region = ghost_region' }
+      else
+        Local
+          { region = region';
+            ghost_region = ghost_region';
+            heap_region = heap_region'
+          }
 
   let ids_for_export t =
     match t with
-    | Heap -> Ids_for_export.empty
-    | Local { region; ghost_region } ->
+    | Heap { heap_region } -> Ids_for_export.singleton_variable heap_region
+    | Local { region; ghost_region; heap_region } ->
       Ids_for_export.add_variable
-        (Ids_for_export.singleton_variable region)
-        ghost_region
+        (Ids_for_export.add_variable
+           (Ids_for_export.singleton_variable region)
+           ghost_region)
+        heap_region
 end
 
 module For_allocations = struct
   type t =
-    | Heap
+    | Heap of { heap_region : Variable.t }
     | Local of { region : Variable.t }
 
   let print ppf t =
     match t with
-    | Heap -> Format.pp_print_string ppf "Heap"
+    | Heap { heap_region } ->
+      Format.fprintf ppf "@[<hov 1>(Heap (heap_region@ %a))@]" Variable.print
+        heap_region
     | Local { region } ->
       Format.fprintf ppf "@[<hov 1>(Local (region@ %a))@]" Variable.print region
 
   let compare t1 t2 =
     match t1, t2 with
-    | Heap, Heap -> 0
+    | Heap { heap_region = heap_region1 }, Heap { heap_region = heap_region2 }
+      ->
+      Variable.compare heap_region1 heap_region2
     | Local { region = region1 }, Local { region = region2 } ->
       Variable.compare region1 region2
-    | Heap, Local _ -> -1
-    | Local _, Heap -> 1
+    | Heap _, Local _ -> -1
+    | Local _, Heap _ -> 1
 
-  let heap = Heap
+  let heap ~heap_region = Heap { heap_region }
 
-  let local ~region =
+  let local ~region ~heap_region =
     if Flambda_features.stack_allocation_enabled ()
     then Local { region }
-    else Heap
+    else Heap { heap_region }
 
   let as_type t : For_types.t =
-    match t with Heap -> Heap | Local _ -> Heap_or_local
+    match t with Heap _ -> Heap | Local _ -> Heap_or_local
 
-  let from_lambda (mode : Lambda.locality_mode) ~current_region =
+  let from_lambda (mode : Lambda.locality_mode) ~current_region
+      ~current_heap_region =
     if not (Flambda_features.stack_allocation_enabled ())
-    then Heap
+    then Heap { heap_region = current_heap_region }
     else
       match mode with
-      | Alloc_heap -> Heap
+      | Alloc_heap -> Heap { heap_region = current_heap_region }
       | Alloc_local -> (
         match current_region with
         | Some region -> Local { region }
@@ -178,20 +224,25 @@ module For_allocations = struct
 
   let free_names t =
     match t with
-    | Heap -> Name_occurrences.empty
+    | Heap { heap_region } ->
+      Name_occurrences.singleton_variable heap_region Name_mode.normal
     | Local { region } ->
       Name_occurrences.singleton_variable region Name_mode.normal
 
   let apply_renaming t renaming =
     match t with
-    | Heap -> Heap
+    | Heap { heap_region } ->
+      let heap_region' = Renaming.apply_variable renaming heap_region in
+      if heap_region == heap_region'
+      then t
+      else Heap { heap_region = heap_region' }
     | Local { region } ->
       let region' = Renaming.apply_variable renaming region in
       if region == region' then t else Local { region = region' }
 
   let ids_for_export t =
     match t with
-    | Heap -> Ids_for_export.empty
+    | Heap { heap_region } -> Ids_for_export.singleton_variable heap_region
     | Local { region } -> Ids_for_export.singleton_variable region
 end
 

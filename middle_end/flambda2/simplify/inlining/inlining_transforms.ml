@@ -129,7 +129,7 @@ let inline dacc ~apply ~unroll_to ~was_inline_always function_decl =
     | Invalid -> (* CR vlaviron: ? *) Rec_info_expr.do_not_inline
   in
   match region_inlined_into, Code.result_mode code with
-  | Heap, Alloc_local ->
+  | Heap _, Alloc_local ->
     (* The alloc_mode of the application and of the code are incompatible. This
        should have been prevented by the typer; therefore we are in GADT-caused
        unreachable code; we replace the inlined body by [Invalid]. *)
@@ -139,7 +139,7 @@ let inline dacc ~apply ~unroll_to ~was_inline_always function_decl =
     )
   | Local _, Alloc_heap (* This is allowed by subtyping *)
   | Local _, Alloc_local
-  | Heap, Alloc_heap ->
+  | Heap _, Alloc_heap ->
     let denv =
       DE.enter_inlined_apply ~called_code:code ~apply ~was_inline_always denv
     in
@@ -154,6 +154,7 @@ let inline dacc ~apply ~unroll_to ~was_inline_always function_decl =
           ~is_my_closure_used:_
           ~my_region
           ~my_ghost_region
+          ~my_heap_region
           ~my_depth
           ~free_names_of_body:_
         ->
@@ -161,8 +162,8 @@ let inline dacc ~apply ~unroll_to ~was_inline_always function_decl =
           make_inlined_body ~callee ~called_code_id:(Code.code_id code)
             ~region_inlined_into ~unroll_to
             ~params:(Bound_parameters.to_list params)
-            ~args ~my_closure ~my_region ~my_ghost_region ~my_depth ~rec_info
-            ~body ~exn_continuation ~return_continuation
+            ~args ~my_closure ~my_region ~my_ghost_region ~my_heap_region
+            ~my_depth ~rec_info ~body ~exn_continuation ~return_continuation
         in
         let expr =
           match Exn_continuation.extra_args apply_exn_continuation with

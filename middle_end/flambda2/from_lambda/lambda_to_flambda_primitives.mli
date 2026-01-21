@@ -29,5 +29,6 @@ val convert_and_bind :
   Debuginfo.t ->
   current_region:Variable.t option ->
   current_ghost_region:Variable.t option ->
+  current_heap_region:Variable.t ->
   (Acc.t -> Flambda.Named.t list -> Expr_with_acc.t) ->
   Expr_with_acc.t

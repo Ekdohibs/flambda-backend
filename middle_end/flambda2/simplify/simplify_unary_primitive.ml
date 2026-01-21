@@ -143,6 +143,14 @@ let simplify_unbox_number (boxable_number_kind : K.Boxable_number.t) dacc
       match alloc_mode with
       | Unknown | Proved (Local | Heap_or_local) -> dacc
       | Proved Heap ->
+        (* XXX per the design doc, we should use [my_heap_region] here.
+          However, I (ncourant) am unsure if just putting [my_heap_region] wouldn't
+          cause additionnal unwanted equations in the following case:
+        *)
+        (* boxed_x = box_float %another_heap_region x
+         * unboxed_x = unbox_float boxed_x
+         * reboxed_x = box_float %my_heap_region unboxed_x
+         *)
         DA.map_denv dacc ~f:(fun denv ->
             DE.add_cse denv
               (P.Eligible_for_cse.create_exn
@@ -912,6 +920,8 @@ let[@inline always] simplify_immutable_block_load0
                       "Block access kind disagrees with block shape from type");
                   Mixed (tag, shape)
               in
+              (* XXX per design doc but see potential problem in comment at the
+                 top *)
               let prim =
                 P.Eligible_for_cse.create
                   (Variadic

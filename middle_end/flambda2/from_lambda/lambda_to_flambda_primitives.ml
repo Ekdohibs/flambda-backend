@@ -584,63 +584,69 @@ let unbox_float32 (arg : H.simple_or_prim) : H.simple_or_prim =
   Prim (Unary (Unbox_number K.Boxable_number.Naked_float32, arg))
 
 let box_float32 (mode : L.locality_mode) (arg : H.expr_primitive)
-    ~current_region : H.expr_primitive =
+    ~current_region ~current_heap_region : H.expr_primitive =
   Unary
     ( Box_number
         ( K.Boxable_number.Naked_float32,
-          Alloc_mode.For_allocations.from_lambda mode ~current_region ),
+          Alloc_mode.For_allocations.from_lambda mode ~current_region
+            ~current_heap_region ),
       Prim arg )
 
 let box_float (mode : L.locality_mode) (arg : H.expr_primitive) ~current_region
-    : H.expr_primitive =
+    ~current_heap_region : H.expr_primitive =
   Unary
     ( Box_number
         ( K.Boxable_number.Naked_float,
-          Alloc_mode.For_allocations.from_lambda mode ~current_region ),
+          Alloc_mode.For_allocations.from_lambda mode ~current_region
+            ~current_heap_region ),
       Prim arg )
 
 let unbox_float (arg : H.simple_or_prim) : H.simple_or_prim =
   Prim (Unary (Unbox_number K.Boxable_number.Naked_float, arg))
 
-let box_bint bi mode (arg : H.expr_primitive) ~current_region : H.expr_primitive
-    =
+let box_bint bi mode (arg : H.expr_primitive) ~current_region
+    ~current_heap_region : H.expr_primitive =
   Unary
     ( Box_number
         ( boxable_number_of_boxed_integer bi,
-          Alloc_mode.For_allocations.from_lambda mode ~current_region ),
+          Alloc_mode.For_allocations.from_lambda mode ~current_region
+            ~current_heap_region ),
       Prim arg )
 
 let unbox_bint bi (arg : H.simple_or_prim) : H.simple_or_prim =
   Prim (Unary (Unbox_number (boxable_number_of_boxed_integer bi), arg))
 
-let box_vec128 mode (arg : H.expr_primitive) ~current_region : H.expr_primitive
-    =
+let box_vec128 mode (arg : H.expr_primitive) ~current_region
+    ~current_heap_region : H.expr_primitive =
   Unary
     ( Box_number
         ( Naked_vec128,
-          Alloc_mode.For_allocations.from_lambda mode ~current_region ),
+          Alloc_mode.For_allocations.from_lambda mode ~current_region
+            ~current_heap_region ),
       Prim arg )
 
 let unbox_vec128 (arg : H.simple_or_prim) : H.simple_or_prim =
   Prim (Unary (Unbox_number Naked_vec128, arg))
 
-let box_vec256 mode (arg : H.expr_primitive) ~current_region : H.expr_primitive
-    =
+let box_vec256 mode (arg : H.expr_primitive) ~current_region
+    ~current_heap_region : H.expr_primitive =
   Unary
     ( Box_number
         ( Naked_vec256,
-          Alloc_mode.For_allocations.from_lambda mode ~current_region ),
+          Alloc_mode.For_allocations.from_lambda mode ~current_region
+            ~current_heap_region ),
       Prim arg )
 
 let unbox_vec256 (arg : H.simple_or_prim) : H.simple_or_prim =
   Prim (Unary (Unbox_number Naked_vec256, arg))
 
-let box_vec512 mode (arg : H.expr_primitive) ~current_region : H.expr_primitive
-    =
+let box_vec512 mode (arg : H.expr_primitive) ~current_region
+    ~current_heap_region : H.expr_primitive =
   Unary
     ( Box_number
         ( Naked_vec512,
-          Alloc_mode.For_allocations.from_lambda mode ~current_region ),
+          Alloc_mode.For_allocations.from_lambda mode ~current_region
+            ~current_heap_region ),
       Prim arg )
 
 let unbox_vec512 (arg : H.simple_or_prim) : H.simple_or_prim =
@@ -879,7 +885,7 @@ let checked_bigstring_access ~dbg ~machine_width ~access_size ~primitive arg1
 let string_like_load ~dbg ~unsafe
     ~(access_size : Flambda_primitive.string_accessor_width) ~machine_width
     (kind : P.string_like_value) mode ~boxed string ~index_kind index
-    ~current_region =
+    ~current_region ~current_heap_region =
   let unsafe_load =
     let index = convert_index_to_untagged_int ~index ~index_kind in
     let wrap =
@@ -888,17 +894,29 @@ let string_like_load ~dbg ~unsafe
         assert (not boxed);
         tag_int
       | Thirty_two, Some mode ->
-        if boxed then box_bint Boxed_int32 mode ~current_region else Fun.id
+        if boxed
+        then box_bint Boxed_int32 mode ~current_region ~current_heap_region
+        else Fun.id
       | Single, Some mode ->
-        if boxed then box_float32 mode ~current_region else Fun.id
+        if boxed
+        then box_float32 mode ~current_region ~current_heap_region
+        else Fun.id
       | Sixty_four, Some mode ->
-        if boxed then box_bint Boxed_int64 mode ~current_region else Fun.id
+        if boxed
+        then box_bint Boxed_int64 mode ~current_region ~current_heap_region
+        else Fun.id
       | One_twenty_eight _, Some mode ->
-        if boxed then box_vec128 mode ~current_region else Fun.id
+        if boxed
+        then box_vec128 mode ~current_region ~current_heap_region
+        else Fun.id
       | Two_fifty_six _, Some mode ->
-        if boxed then box_vec256 mode ~current_region else Fun.id
+        if boxed
+        then box_vec256 mode ~current_region ~current_heap_region
+        else Fun.id
       | Five_twelve _, Some mode ->
-        if boxed then box_vec512 mode ~current_region else Fun.id
+        if boxed
+        then box_vec512 mode ~current_region ~current_heap_region
+        else Fun.id
       | (Eight | Sixteen), Some _
       | ( ( Thirty_two | Single | Sixty_four | One_twenty_eight _
           | Two_fifty_six _ | Five_twelve _ ),
@@ -919,8 +937,10 @@ let string_like_load ~dbg ~unsafe
     check_access ~dbg ~machine_width ~access_size ~primitive:unsafe_load string
       ~index_kind index
 
-let get_header obj mode ~current_region =
-  let wrap hd = box_bint Boxed_nativeint mode hd ~current_region in
+let get_header obj mode ~current_region ~current_heap_region =
+  let wrap hd =
+    box_bint Boxed_nativeint mode hd ~current_region ~current_heap_region
+  in
   wrap (Unary (Get_header, obj))
 
 (* Bytes-like set *)
@@ -1100,7 +1120,8 @@ let check_array_vector_access ~dbg ~machine_width ~array array_kind ~index
     ~dbg
 
 let array_like_load_vec ~dbg ~machine_width ~unsafe ~mode ~boxed ~current_region
-    ~(vec_kind : Vector_types.Kind.t) array_kind array ~index_kind index =
+    ~current_heap_region ~(vec_kind : Vector_types.Kind.t) array_kind array
+    ~index_kind index =
   let index = convert_index_to_tagged_int ~index ~index_kind in
   let load_kind, box =
     match vec_kind with
@@ -1112,7 +1133,9 @@ let array_like_load_vec ~dbg ~machine_width ~unsafe ~mode ~boxed ~current_region
     H.Binary (Array_load (array_kind, load_kind, Mutable), array, index)
   in
   let primitive =
-    if boxed then box mode ~current_region primitive else primitive
+    if boxed
+    then box mode ~current_region ~current_heap_region primitive
+    else primitive
   in
   if unsafe
   then primitive
@@ -1311,7 +1334,7 @@ let compute_array_indexes ~machine_width ~index ~num_elts =
 
 let rec array_load_unsafe ~machine_width ~array ~index
     ~(mut : Lambda.mutable_flag) array_kind (array_ref_kind : Array_ref_kind.t)
-    ~current_region : H.expr_primitive list =
+    ~current_region ~current_heap_region : H.expr_primitive list =
   (* CR mshinwell/ncourant: can we avoid taking [array_kind] here? *)
   let mut' : Mutability.t =
     match mut with
@@ -1322,7 +1345,7 @@ let rec array_load_unsafe ~machine_width ~array ~index
   | Naked_floats_to_be_boxed mode ->
     [ box_float mode
         (Binary (Array_load (array_kind, Naked_floats, mut'), array, index))
-        ~current_region ]
+        ~current_region ~current_heap_region ]
   | No_float_array_opt (Unboxed_product array_ref_kinds) ->
     let rec unarize_kind (array_ref_kind : Array_ref_kind.no_float_array_opt) :
         Array_ref_kind.t list =
@@ -1361,7 +1384,7 @@ let rec array_load_unsafe ~machine_width ~array ~index
     List.concat_map
       (fun (index, array_ref_kind) ->
         array_load_unsafe ~machine_width ~array ~index ~mut array_kind
-          array_ref_kind ~current_region)
+          array_ref_kind ~current_region ~current_heap_region)
       (List.combine indexes unarized)
   | No_float_array_opt
       (( Immediates | Gc_ignorable_values | Values | Naked_floats
@@ -1389,9 +1412,9 @@ let rec array_load_unsafe ~machine_width ~array ~index
     [Binary (Array_load (array_kind, array_load_kind, mut'), array, index)]
 
 let array_load_unsafe ~machine_width ~array ~index ~mut array_kind
-    array_load_kind ~current_region =
+    array_load_kind ~current_region ~current_heap_region =
   array_load_unsafe ~machine_width ~array ~index ~mut array_kind array_load_kind
-    ~current_region
+    ~current_region ~current_heap_region
   |> H.maybe_create_unboxed_product
 
 let rec array_set_unsafe ~machine_width dbg ~array ~index array_kind
@@ -1558,8 +1581,8 @@ let opaque ~machine_width layout arg ~middle_end_only : H.expr_primitive list =
     arg kinds
 
 let rec static_cast0 ~(src : L.any_locality_mode Scalar.t)
-    ~(dst : L.locality_mode Scalar.t) (arg : H.simple_or_prim) ~current_region :
-    H.simple_or_prim =
+    ~(dst : L.locality_mode Scalar.t) (arg : H.simple_or_prim) ~current_region
+    ~current_heap_region : H.simple_or_prim =
   match src, dst with
   | Value src, dst ->
     (* First, untag/unbox the value if necessary, then do the conversion. *)
@@ -1587,15 +1610,19 @@ let rec static_cast0 ~(src : L.any_locality_mode Scalar.t)
         Unary (Unbox_number Naked_float, arg)
     in
     static_cast (H.Prim arg) ~src:(Scalar.naked src) ~dst ~current_region
+      ~current_heap_region
   | src, Value dst -> (
     (* The inverse of the previous case: first do the conversion, then tag/box
        the result. *)
     let arg =
       let dst = Scalar.naked (Scalar.Width.ignore_locality dst) in
-      static_cast arg ~src ~dst ~current_region
+      static_cast arg ~src ~dst ~current_region ~current_heap_region
     in
     let box_number width mode : H.simple_or_prim =
-      let mode = Alloc_mode.For_allocations.from_lambda mode ~current_region in
+      let mode =
+        Alloc_mode.For_allocations.from_lambda mode ~current_region
+          ~current_heap_region
+      in
       Prim (Unary (Box_number (width, mode), arg))
     in
     match dst with
@@ -1630,10 +1657,11 @@ let rec static_cast0 ~(src : L.any_locality_mode Scalar.t)
     Prim (Unary (Num_conv { src; dst }, arg))
 
 and static_cast ~(src : L.any_locality_mode Scalar.t)
-    ~(dst : L.locality_mode Scalar.t) (arg : H.simple_or_prim) ~current_region =
+    ~(dst : L.locality_mode Scalar.t) (arg : H.simple_or_prim) ~current_region
+    ~current_heap_region =
   if Scalar.equal (fun _ _ -> true) src dst
   then arg
-  else static_cast0 ~src ~dst arg ~current_region
+  else static_cast0 ~src ~dst arg ~current_region ~current_heap_region
 
 let to_expr : H.simple_or_prim -> H.expr_primitive = function
   | Prim prim -> prim
@@ -1761,7 +1789,8 @@ let write_offset write_offset_kind layout mode ~machine_width ~ptr ~idx
 (* Primitive conversion *)
 let convert_lprim ~(machine_width : Target_system.Machine_width.t) ~big_endian
     (prim : L.primitive) (args : Simple.t list list) (dbg : Debuginfo.t)
-    ~current_region ~current_ghost_region : H.expr_primitive list =
+    ~current_region ~current_ghost_region ~current_heap_region :
+    H.expr_primitive list =
   let orig_args = args in
   let args =
     List.map (List.map (fun arg : H.simple_or_prim -> Simple arg)) args
@@ -1773,7 +1802,10 @@ let convert_lprim ~(machine_width : Target_system.Machine_width.t) ~big_endian
     [tag_int (Binary (Phys_equal eq, arg1, arg2))]
   | Pmakeblock (tag, mutability, shape, mode), _ ->
     let args = List.flatten args in
-    let mode = Alloc_mode.For_allocations.from_lambda mode ~current_region in
+    let mode =
+      Alloc_mode.For_allocations.from_lambda mode ~current_region
+        ~current_heap_region
+    in
     let tag = Tag.Scannable.create_exn tag in
     let shape =
       convert_block_shape ~machine_width shape ~num_fields:(List.length args)
@@ -1959,14 +1991,20 @@ let convert_lprim ~(machine_width : Target_system.Machine_width.t) ~big_endian
       [H.simple_i64_expr 0L])
   | Pmakefloatblock (mutability, mode), _ ->
     let args = List.flatten args in
-    let mode = Alloc_mode.For_allocations.from_lambda mode ~current_region in
+    let mode =
+      Alloc_mode.For_allocations.from_lambda mode ~current_region
+        ~current_heap_region
+    in
     let mutability = Mutability.from_lambda mutability in
     [ Variadic
         (Make_block (Naked_floats, mutability, mode), List.map unbox_float args)
     ]
   | Pmakeufloatblock (mutability, mode), _ ->
     let args = List.flatten args in
-    let mode = Alloc_mode.For_allocations.from_lambda mode ~current_region in
+    let mode =
+      Alloc_mode.For_allocations.from_lambda mode ~current_region
+        ~current_heap_region
+    in
     let mutability = Mutability.from_lambda mutability in
     [Variadic (Make_block (Naked_floats, mutability, mode), args)]
   | Pmakemixedblock (tag, mutability, shape, mode), _ ->
@@ -2004,14 +2042,20 @@ let convert_lprim ~(machine_width : Target_system.Machine_width.t) ~big_endian
           | Float_boxed _ -> unbox_float arg)
         args
     in
-    let mode = Alloc_mode.For_allocations.from_lambda mode ~current_region in
+    let mode =
+      Alloc_mode.For_allocations.from_lambda mode ~current_region
+        ~current_heap_region
+    in
     let mutability = Mutability.from_lambda mutability in
     let tag = Tag.Scannable.create_exn tag in
     let kind_shape = K.Mixed_block_shape.from_mixed_block_shape shape in
     [Variadic (Make_block (Mixed (tag, kind_shape), mutability, mode), args)]
   | Pmakearray (lambda_array_kind, mutability, mode), _ -> (
     let args = List.flatten args in
-    let mode = Alloc_mode.For_allocations.from_lambda mode ~current_region in
+    let mode =
+      Alloc_mode.For_allocations.from_lambda mode ~current_region
+        ~current_heap_region
+    in
     let array_kind = convert_array_kind lambda_array_kind in
     let mutability = Mutability.from_lambda mutability in
     match array_kind with
@@ -2035,8 +2079,12 @@ let convert_lprim ~(machine_width : Target_system.Machine_width.t) ~big_endian
       match args with
       | [] ->
         [ Variadic
-            (Make_array (Values, Immutable, Alloc_mode.For_allocations.heap), [])
-        ]
+            ( Make_array
+                ( Values,
+                  Immutable,
+                  Alloc_mode.For_allocations.heap
+                    ~heap_region:current_heap_region ),
+              [] ) ]
       | elt :: _ ->
         (* Test the first element to see if it's a boxed float: if it is, this
            array must be created as a flat float array. *)
@@ -2102,17 +2150,18 @@ let convert_lprim ~(machine_width : Target_system.Machine_width.t) ~big_endian
   | Pscalar (Unary unary), [[arg]] -> (
     match unary with
     | Static_cast { src; dst } ->
-      [to_expr (static_cast arg ~src ~dst ~current_region)]
+      [to_expr (static_cast arg ~src ~dst ~current_region ~current_heap_region)]
     | Integral (outer, op) ->
       let width = integral_width (Scalar.Integral.ignore_locality outer) in
       let outer = Scalar.integral outer in
       let arg =
-        static_cast arg ~current_region
+        static_cast arg ~current_region ~current_heap_region
           ~src:(Scalar.ignore_locality outer)
           ~dst:(integral_scalar width)
       in
       let maybe_wrap =
         static_cast ~src:(integral_scalar width) ~dst:outer ~current_region
+          ~current_heap_region
       in
       let result : H.expr_primitive =
         match op with
@@ -2134,10 +2183,11 @@ let convert_lprim ~(machine_width : Target_system.Machine_width.t) ~big_endian
       let arg =
         static_cast arg
           ~src:(Scalar.ignore_locality outer)
-          ~dst:(floating_scalar width) ~current_region
+          ~dst:(floating_scalar width) ~current_region ~current_heap_region
       in
       let maybe_wrap =
         static_cast ~src:(floating_scalar width) ~dst:outer ~current_region
+          ~current_heap_region
       in
       let result : H.expr_primitive =
         match op with
@@ -2151,7 +2201,7 @@ let convert_lprim ~(machine_width : Target_system.Machine_width.t) ~big_endian
       let width = integral_width (Scalar.Integral.ignore_locality outer) in
       let outer = Scalar.integral outer in
       let maybe_unwrap arg =
-        static_cast arg ~current_region
+        static_cast arg ~current_region ~current_heap_region
           ~src:(Scalar.ignore_locality outer)
           ~dst:(integral_scalar width)
       in
@@ -2159,6 +2209,7 @@ let convert_lprim ~(machine_width : Target_system.Machine_width.t) ~big_endian
       let arg2 = maybe_unwrap arg2 in
       let maybe_wrap =
         static_cast ~src:(integral_scalar width) ~dst:outer ~current_region
+          ~current_heap_region
       in
       let result : H.expr_primitive =
         match op with
@@ -2180,7 +2231,7 @@ let convert_lprim ~(machine_width : Target_system.Machine_width.t) ~big_endian
       let arg1 =
         static_cast arg1
           ~src:(Scalar.ignore_locality outer)
-          ~dst:(integral_scalar width) ~current_region
+          ~dst:(integral_scalar width) ~current_region ~current_heap_region
       in
       let arg2 =
         let int_scalar : _ Scalar.Integral.t = Value (Taggable Int) in
@@ -2188,10 +2239,11 @@ let convert_lprim ~(machine_width : Target_system.Machine_width.t) ~big_endian
         let src = match rhs with Int -> Scalar.integral int_scalar in
         static_cast arg2 ~src
           ~dst:(Scalar.integral naked_int_scalar)
-          ~current_region
+          ~current_region ~current_heap_region
       in
       let maybe_wrap =
         static_cast ~src:(integral_scalar width) ~dst:outer ~current_region
+          ~current_heap_region
       in
       let result : H.expr_primitive =
         match op with
@@ -2204,12 +2256,13 @@ let convert_lprim ~(machine_width : Target_system.Machine_width.t) ~big_endian
       let width = floating_width outer in
       let outer = Scalar.floating outer in
       let maybe_unwrap =
-        static_cast ~current_region
+        static_cast ~current_region ~current_heap_region
           ~src:(Scalar.ignore_locality outer)
           ~dst:(floating_scalar width)
       in
       let maybe_wrap =
         static_cast ~src:(floating_scalar width) ~dst:outer ~current_region
+          ~current_heap_region
       in
       let arg1 = maybe_unwrap arg1 in
       let arg2 = maybe_unwrap arg2 in
@@ -2224,8 +2277,8 @@ let convert_lprim ~(machine_width : Target_system.Machine_width.t) ~big_endian
     | Icmp (size, cmp) ->
       let width = integral_width size in
       let maybe_unwrap arg =
-        static_cast arg ~current_region ~src:(Scalar.integral size)
-          ~dst:(integral_scalar width)
+        static_cast arg ~current_region ~current_heap_region
+          ~src:(Scalar.integral size) ~dst:(integral_scalar width)
       in
       let arg1 = maybe_unwrap arg1 in
       let arg2 = maybe_unwrap arg2 in
@@ -2236,8 +2289,8 @@ let convert_lprim ~(machine_width : Target_system.Machine_width.t) ~big_endian
     | Fcmp (size, cmp) ->
       let width = floating_width size in
       let maybe_unwrap arg =
-        static_cast arg ~current_region ~src:(Scalar.floating size)
-          ~dst:(floating_scalar width)
+        static_cast arg ~current_region ~current_heap_region
+          ~src:(Scalar.floating size) ~dst:(floating_scalar width)
       in
       let arg1 = maybe_unwrap arg1 in
       let arg2 = maybe_unwrap arg2 in
@@ -2251,8 +2304,8 @@ let convert_lprim ~(machine_width : Target_system.Machine_width.t) ~big_endian
       in
       let width = integral_width size in
       let maybe_unwrap arg =
-        static_cast arg ~current_region ~src:(Scalar.integral size)
-          ~dst:(integral_scalar width)
+        static_cast arg ~current_region ~current_heap_region
+          ~src:(Scalar.integral size) ~dst:(integral_scalar width)
       in
       let arg1 = maybe_unwrap arg1 in
       let arg2 = maybe_unwrap arg2 in
@@ -2264,8 +2317,8 @@ let convert_lprim ~(machine_width : Target_system.Machine_width.t) ~big_endian
     | Three_way_compare_float size ->
       let width = floating_width size in
       let maybe_unwrap arg =
-        static_cast arg ~current_region ~src:(Scalar.floating size)
-          ~dst:(floating_scalar width)
+        static_cast arg ~current_region ~current_heap_region
+          ~src:(Scalar.floating size) ~dst:(floating_scalar width)
       in
       let arg1 = maybe_unwrap arg1 in
       let arg2 = maybe_unwrap arg2 in
@@ -2284,19 +2337,22 @@ let convert_lprim ~(machine_width : Target_system.Machine_width.t) ~big_endian
     [ Unary
         ( Box_number
             ( Naked_vec128,
-              Alloc_mode.For_allocations.from_lambda mode ~current_region ),
+              Alloc_mode.For_allocations.from_lambda mode ~current_region
+                ~current_heap_region ),
           arg ) ]
   | Pbox_vector (Boxed_vec256, mode), [[arg]] ->
     [ Unary
         ( Box_number
             ( Naked_vec256,
-              Alloc_mode.For_allocations.from_lambda mode ~current_region ),
+              Alloc_mode.For_allocations.from_lambda mode ~current_region
+                ~current_heap_region ),
           arg ) ]
   | Pbox_vector (Boxed_vec512, mode), [[arg]] ->
     [ Unary
         ( Box_number
             ( Naked_vec512,
-              Alloc_mode.For_allocations.from_lambda mode ~current_region ),
+              Alloc_mode.For_allocations.from_lambda mode ~current_region
+                ~current_heap_region ),
           arg ) ]
   | Punbox_unit, [[_]] -> [Unboxed_product []]
   | Pfield_computed sem, [[obj]; [field]] ->
@@ -2380,53 +2436,63 @@ let convert_lprim ~(machine_width : Target_system.Machine_width.t) ~big_endian
   | Pstringrefu, [[str]; [index]] ->
     [ string_like_load ~unsafe:true ~dbg ~machine_width ~access_size:Eight
         String None ~boxed:false str ~index_kind:Ptagged_int_index index
-        ~current_region ]
+        ~current_region ~current_heap_region ]
   | Pbytesrefu, [[bytes]; [index]] ->
     [ string_like_load ~unsafe:true ~dbg ~machine_width ~access_size:Eight Bytes
         None ~boxed:false bytes ~index_kind:Ptagged_int_index index
-        ~current_region ]
+        ~current_region ~current_heap_region ]
   | Pstringrefs, [[str]; [index]] ->
     [ string_like_load ~unsafe:false ~dbg ~machine_width ~access_size:Eight
         String ~boxed:false None str ~index_kind:Ptagged_int_index index
-        ~current_region ]
+        ~current_region ~current_heap_region ]
   | Pbytesrefs, [[bytes]; [index]] ->
     [ string_like_load ~unsafe:false ~dbg ~machine_width ~access_size:Eight
         Bytes ~boxed:false None bytes ~index_kind:Ptagged_int_index index
-        ~current_region ]
+        ~current_region ~current_heap_region ]
   | Pstring_load_16 { unsafe; index_kind }, [[str]; [index]] ->
     [ string_like_load ~unsafe ~dbg ~machine_width ~access_size:Sixteen String
-        ~boxed:false None str ~index_kind index ~current_region ]
+        ~boxed:false None str ~index_kind index ~current_region
+        ~current_heap_region ]
   | Pbytes_load_16 { unsafe; index_kind }, [[bytes]; [index]] ->
     [ string_like_load ~unsafe ~dbg ~machine_width ~access_size:Sixteen Bytes
-        ~boxed:false None bytes ~index_kind index ~current_region ]
+        ~boxed:false None bytes ~index_kind index ~current_region
+        ~current_heap_region ]
   | Pstring_load_32 { unsafe; index_kind; mode; boxed }, [[str]; [index]] ->
     [ string_like_load ~unsafe ~dbg ~machine_width ~access_size:Thirty_two
-        String ~boxed (Some mode) str ~index_kind index ~current_region ]
+        String ~boxed (Some mode) str ~index_kind index ~current_region
+        ~current_heap_region ]
   | Pstring_load_f32 { unsafe; index_kind; mode; boxed }, [[str]; [index]] ->
     [ string_like_load ~unsafe ~dbg ~machine_width ~access_size:Single String
-        ~boxed (Some mode) str ~index_kind index ~current_region ]
+        ~boxed (Some mode) str ~index_kind index ~current_region
+        ~current_heap_region ]
   | Pbytes_load_32 { unsafe; index_kind; mode; boxed }, [[bytes]; [index]] ->
     [ string_like_load ~unsafe ~dbg ~machine_width ~access_size:Thirty_two Bytes
-        ~boxed (Some mode) bytes ~index_kind index ~current_region ]
+        ~boxed (Some mode) bytes ~index_kind index ~current_region
+        ~current_heap_region ]
   | Pbytes_load_f32 { unsafe; index_kind; mode; boxed }, [[bytes]; [index]] ->
     [ string_like_load ~unsafe ~dbg ~machine_width ~access_size:Single Bytes
-        ~boxed (Some mode) bytes ~index_kind index ~current_region ]
+        ~boxed (Some mode) bytes ~index_kind index ~current_region
+        ~current_heap_region ]
   | Pstring_load_64 { unsafe; index_kind; mode; boxed }, [[str]; [index]] ->
     [ string_like_load ~unsafe ~dbg ~machine_width ~access_size:Sixty_four
-        String ~boxed (Some mode) str ~index_kind index ~current_region ]
+        String ~boxed (Some mode) str ~index_kind index ~current_region
+        ~current_heap_region ]
   | Pbytes_load_64 { unsafe; index_kind; mode; boxed }, [[bytes]; [index]] ->
     [ string_like_load ~unsafe ~dbg ~machine_width ~access_size:Sixty_four Bytes
-        ~boxed (Some mode) bytes ~index_kind index ~current_region ]
+        ~boxed (Some mode) bytes ~index_kind index ~current_region
+        ~current_heap_region ]
   | Pstring_load_vec { size; unsafe; index_kind; mode; boxed }, [[str]; [index]]
     ->
     [ string_like_load ~unsafe ~dbg ~machine_width
         ~access_size:(vec_accessor_width ~aligned:false size)
-        String ~boxed (Some mode) str ~index_kind index ~current_region ]
+        String ~boxed (Some mode) str ~index_kind index ~current_region
+        ~current_heap_region ]
   | Pbytes_load_vec { size; unsafe; index_kind; mode; boxed }, [[str]; [index]]
     ->
     [ string_like_load ~unsafe ~dbg ~machine_width
         ~access_size:(vec_accessor_width ~aligned:false size)
-        Bytes ~boxed (Some mode) str ~index_kind index ~current_region ]
+        Bytes ~boxed (Some mode) str ~index_kind index ~current_region
+        ~current_heap_region ]
   | Pbytes_set_16 { unsafe; index_kind }, [[bytes]; [index]; [new_value]] ->
     [ bytes_like_set ~unsafe ~dbg ~machine_width ~access_size:Sixteen Bytes
         ~boxed:false bytes ~index_kind index new_value ]
@@ -2478,7 +2544,7 @@ let convert_lprim ~(machine_width : Target_system.Machine_width.t) ~big_endian
         (Unary
            ( Block_load { kind = block_access; mut = mutability; field = imm },
              arg ))
-        ~current_region ]
+        ~current_region ~current_heap_region ]
   | Pufloatfield (field, sem), [[arg]] ->
     let imm = Target_ocaml_int.of_int machine_width field in
     check_non_negative_imm imm "Pufloatfield";
@@ -2523,7 +2589,7 @@ let convert_lprim ~(machine_width : Target_system.Machine_width.t) ~big_endian
         in
         match flattened_reordered_shape.(new_index) with
         | Float_boxed (mode : Lambda.locality_mode) ->
-          box_float mode block_access ~current_region
+          box_float mode block_access ~current_region ~current_heap_region
         | Value _ | Float64 | Float32 | Bits8 | Bits16 | Bits32 | Bits64
         | Vec128 | Vec256 | Vec512 | Word | Untagged_immediate ->
           block_access)
@@ -2626,7 +2692,7 @@ let convert_lprim ~(machine_width : Target_system.Machine_width.t) ~big_endian
     [ match_on_array_ref_kind ~array array_ref_kind
         (array_load_unsafe ~machine_width ~array ~mut
            ~index:(convert_index_to_tagged_int ~index ~index_kind)
-           ~current_region) ]
+           ~current_region ~current_heap_region) ]
   | Parrayrefs (array_ref_kind, index_kind, mut), [[array]; [index]] ->
     let array_length_kind = convert_array_ref_kind_for_length array_ref_kind in
     [ check_array_access ~dbg ~array array_length_kind ~index ~index_kind
@@ -2634,7 +2700,7 @@ let convert_lprim ~(machine_width : Target_system.Machine_width.t) ~big_endian
         (match_on_array_ref_kind ~array array_ref_kind
            (array_load_unsafe ~machine_width ~array ~mut
               ~index:(convert_index_to_tagged_int ~index ~index_kind)
-              ~current_region)) ]
+              ~current_region ~current_heap_region)) ]
   | Parraysetu (array_set_kind, index_kind), [[array]; [index]; new_values] ->
     [ match_on_array_set_kind ~array array_set_kind
         (array_set_unsafe ~machine_width dbg ~array
@@ -2740,9 +2806,12 @@ let convert_lprim ~(machine_width : Target_system.Machine_width.t) ~big_endian
   | Pint_as_pointer mode, [[arg]] ->
     (* This is not a stack allocation, but nonetheless has a region
        constraint. *)
+    (* CR ncourant: this will capture [current_heap_region] if stack allocation
+        is disabled, which could lead to zero_alloc failures. Should we special-case this
+        somewhere in the zero_alloc check? *)
     let mode =
       Alloc_mode.For_allocations.from_lambda mode
-        ~current_region:current_ghost_region
+        ~current_region:current_ghost_region ~current_heap_region
     in
     [Unary (Int_as_pointer mode, arg)]
   | Pbigarrayref (unsafe, num_dimensions, kind, layout), args -> (
@@ -2770,7 +2839,7 @@ let convert_lprim ~(machine_width : Target_system.Machine_width.t) ~big_endian
       in
       let box =
         bigarray_box_or_tag_raw_value_to_read kind
-          Alloc_mode.For_allocations.heap
+          (Alloc_mode.For_allocations.heap ~heap_region:current_heap_region)
       in
       [box (bigarray_load ~machine_width ~dbg ~unsafe kind layout b indexes)]
     | None, _ ->
@@ -2820,27 +2889,29 @@ let convert_lprim ~(machine_width : Target_system.Machine_width.t) ~big_endian
     [tag_int (Unary (Bigarray_length { dimension }, arg))]
   | Pbigstring_load_16 { unsafe; index_kind }, [[big_str]; [index]] ->
     [ string_like_load ~unsafe ~dbg ~machine_width ~access_size:Sixteen
-        Bigstring ~boxed:false None big_str ~index_kind index ~current_region ]
+        Bigstring ~boxed:false None big_str ~index_kind index ~current_region
+        ~current_heap_region ]
   | Pbigstring_load_32 { unsafe; index_kind; mode; boxed }, [[big_str]; [index]]
     ->
     [ string_like_load ~unsafe ~dbg ~machine_width ~access_size:Thirty_two
         Bigstring (Some mode) ~boxed big_str ~index_kind index ~current_region
-    ]
+        ~current_heap_region ]
   | Pbigstring_load_f32 { unsafe; index_kind; mode; boxed }, [[big_str]; [index]]
     ->
     [ string_like_load ~unsafe ~dbg ~machine_width ~access_size:Single Bigstring
-        (Some mode) ~boxed big_str ~index_kind index ~current_region ]
+        (Some mode) ~boxed big_str ~index_kind index ~current_region
+        ~current_heap_region ]
   | Pbigstring_load_64 { unsafe; index_kind; mode; boxed }, [[big_str]; [index]]
     ->
     [ string_like_load ~unsafe ~dbg ~machine_width ~access_size:Sixty_four
         Bigstring (Some mode) ~boxed big_str ~index_kind index ~current_region
-    ]
+        ~current_heap_region ]
   | ( Pbigstring_load_vec { size; unsafe; aligned; index_kind; mode; boxed },
       [[big_str]; [index]] ) ->
     [ string_like_load ~unsafe ~dbg ~machine_width
         ~access_size:(vec_accessor_width ~aligned size)
         Bigstring (Some mode) ~boxed big_str ~index_kind index ~current_region
-    ]
+        ~current_heap_region ]
   | Pbigstring_set_16 { unsafe; index_kind }, [[bigstring]; [index]; [new_value]]
     ->
     [ bytes_like_set ~unsafe ~dbg ~machine_width ~access_size:Sixteen Bigstring
@@ -2865,31 +2936,35 @@ let convert_lprim ~(machine_width : Target_system.Machine_width.t) ~big_endian
   | ( Pfloat_array_load_vec { size; unsafe; index_kind; mode; boxed },
       [[array]; [index]] ) ->
     check_float_array_optimisation_enabled "Pfloat_array_load_vec";
-    [ array_like_load_vec ~dbg ~machine_width ~current_region ~unsafe ~mode
-        ~boxed ~vec_kind:(vec_kind size) Naked_floats array ~index_kind index ]
+    [ array_like_load_vec ~dbg ~machine_width ~current_region
+        ~current_heap_region ~unsafe ~mode ~boxed ~vec_kind:(vec_kind size)
+        Naked_floats array ~index_kind index ]
   | ( Pfloatarray_load_vec { size; unsafe; index_kind; mode; boxed },
       [[array]; [index]] )
   | ( Punboxed_float_array_load_vec { size; unsafe; index_kind; mode; boxed },
       [[array]; [index]] ) ->
-    [ array_like_load_vec ~dbg ~machine_width ~current_region ~unsafe ~mode
-        ~boxed ~vec_kind:(vec_kind size) Naked_floats array ~index_kind index ]
+    [ array_like_load_vec ~dbg ~machine_width ~current_region
+        ~current_heap_region ~unsafe ~mode ~boxed ~vec_kind:(vec_kind size)
+        Naked_floats array ~index_kind index ]
   | ( Punboxed_float32_array_load_vec { size; unsafe; index_kind; mode; boxed },
       [[array]; [index]] ) ->
-    [ array_like_load_vec ~dbg ~machine_width ~current_region ~unsafe ~mode
-        ~boxed ~vec_kind:(vec_kind size) Naked_float32s array ~index_kind index
-    ]
+    [ array_like_load_vec ~dbg ~machine_width ~current_region
+        ~current_heap_region ~unsafe ~mode ~boxed ~vec_kind:(vec_kind size)
+        Naked_float32s array ~index_kind index ]
   | ( Pint_array_load_vec { size; unsafe; index_kind; mode; boxed },
       [[array]; [index]] ) ->
     (match machine_width with
     | Sixty_four -> ()
     | Thirty_two | Thirty_two_no_gc_tag_bit ->
       Misc.fatal_error "[Pint_array_load_vec]: immediates must be 64 bits.");
-    [ array_like_load_vec ~dbg ~machine_width ~current_region ~unsafe ~mode
-        ~boxed ~vec_kind:(vec_kind size) Immediates array ~index_kind index ]
+    [ array_like_load_vec ~dbg ~machine_width ~current_region
+        ~current_heap_region ~unsafe ~mode ~boxed ~vec_kind:(vec_kind size)
+        Immediates array ~index_kind index ]
   | ( Punboxed_int64_array_load_vec { size; unsafe; index_kind; mode; boxed },
       [[array]; [index]] ) ->
-    [ array_like_load_vec ~dbg ~machine_width ~current_region ~unsafe ~mode
-        ~boxed ~vec_kind:(vec_kind size) Naked_int64s array ~index_kind index ]
+    [ array_like_load_vec ~dbg ~machine_width ~current_region
+        ~current_heap_region ~unsafe ~mode ~boxed ~vec_kind:(vec_kind size)
+        Naked_int64s array ~index_kind index ]
   | ( Punboxed_nativeint_array_load_vec { size; unsafe; index_kind; mode; boxed },
       [[array]; [index]] ) ->
     (match machine_width with
@@ -2897,13 +2972,14 @@ let convert_lprim ~(machine_width : Target_system.Machine_width.t) ~big_endian
     | Thirty_two | Thirty_two_no_gc_tag_bit ->
       Misc.fatal_error
         "[Punboxed_nativeint_array_load_vec]: nativeint must be 64 bits.");
-    [ array_like_load_vec ~dbg ~machine_width ~current_region ~unsafe ~mode
-        ~boxed ~vec_kind:(vec_kind size) Naked_nativeints array ~index_kind
-        index ]
+    [ array_like_load_vec ~dbg ~machine_width ~current_region
+        ~current_heap_region ~unsafe ~mode ~boxed ~vec_kind:(vec_kind size)
+        Naked_nativeints array ~index_kind index ]
   | ( Punboxed_int32_array_load_vec { size; unsafe; index_kind; mode; boxed },
       [[array]; [index]] ) ->
-    [ array_like_load_vec ~dbg ~machine_width ~current_region ~unsafe ~mode
-        ~boxed ~vec_kind:(vec_kind size) Naked_int32s array ~index_kind index ]
+    [ array_like_load_vec ~dbg ~machine_width ~current_region
+        ~current_heap_region ~unsafe ~mode ~boxed ~vec_kind:(vec_kind size)
+        Naked_int32s array ~index_kind index ]
   | ( Pfloat_array_set_vec { size; unsafe; index_kind; boxed },
       [[array]; [index]; [new_value]] ) ->
     check_float_array_optimisation_enabled "Pfloat_array_set_vec";
@@ -2954,7 +3030,8 @@ let convert_lprim ~(machine_width : Target_system.Machine_width.t) ~big_endian
   | Pprobe_is_enabled { name; enabled_at_init }, [] ->
     [tag_int (Nullary (Probe_is_enabled { name; enabled_at_init }))]
   | Pobj_dup, [[v]] -> [Unary (Obj_dup, v)]
-  | Pget_header m, [[obj]] -> [get_header obj m ~current_region]
+  | Pget_header m, [[obj]] ->
+    [get_header obj m ~current_region ~current_heap_region]
   | Patomic_load_field { immediate_or_pointer }, [[atomic]; [field]] ->
     [ Binary
         ( Atomic_load_field
@@ -3196,13 +3273,13 @@ module Expr_with_acc = Closure_conversion_aux.Expr_with_acc
 
 let convert_and_bind acc ~big_endian exn_cont ~register_const0
     (prim : L.primitive) ~(args : Simple.t list list) (dbg : Debuginfo.t)
-    ~current_region ~current_ghost_region
+    ~current_region ~current_ghost_region ~current_heap_region
     (cont : Acc.t -> Flambda.Named.t list -> Expr_with_acc.t) : Expr_with_acc.t
     =
   let machine_width = Acc.machine_width acc in
   let exprs =
     convert_lprim ~machine_width ~big_endian prim args dbg ~current_region
-      ~current_ghost_region
+      ~current_ghost_region ~current_heap_region
   in
   H.bind_recs acc exn_cont ~register_const0
     (H.maybe_create_unboxed_product exprs)

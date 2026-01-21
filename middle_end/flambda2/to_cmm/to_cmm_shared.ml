@@ -533,13 +533,15 @@ let extended_machtype_of_return_arity arity =
     List.map extended_machtype_of_kind arity |> Array.concat
 
 let alloc_mode_for_applications_to_cmx t =
+  (* XXX regions for zero_alloc check *)
   match t with
   | Alloc_mode.For_applications.Local _ -> Cmx_format.Alloc_local
-  | Alloc_mode.For_applications.Heap -> Cmx_format.Alloc_heap
+  | Alloc_mode.For_applications.Heap _ -> Cmx_format.Alloc_heap
 
 let alloc_mode_for_allocations_to_cmm t =
+  (* XXX regions for zero_alloc check *)
   match t with
-  | Alloc_mode.For_allocations.Heap -> Cmm.Alloc_mode.Heap
+  | Alloc_mode.For_allocations.Heap _ -> Cmm.Alloc_mode.Heap
   | Alloc_mode.For_allocations.Local _ ->
     assert (Flambda_features.stack_allocation_enabled ());
     Cmm.Alloc_mode.Local

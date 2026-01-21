@@ -67,6 +67,7 @@ and rev_params_and_body =
     my_closure : Variable.t;
     my_region : Variable.t option;
     my_ghost_region : Variable.t option;
+    my_heap_region : Variable.t;
     my_depth : Variable.t
   }
 

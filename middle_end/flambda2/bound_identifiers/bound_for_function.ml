@@ -21,12 +21,13 @@ type t =
     my_closure : Variable.t;
     my_region : Variable.t option;
     my_ghost_region : Variable.t option;
+    my_heap_region : Variable.t;
     my_depth : Variable.t
   }
 
 let[@ocamlformat "disable"] print ppf
     { return_continuation; exn_continuation; params; my_closure; my_region;
-      my_ghost_region; my_depth } =
+      my_ghost_region; my_heap_region; my_depth } =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(return_continuation@ %a)@]@ \
       @[<hov 1>(exn_continuation@ %a)@]@ \
@@ -34,6 +35,7 @@ let[@ocamlformat "disable"] print ppf
       @[<hov 1>(my_closure@ %a)@]@ \
       @[<hov 1>(my_region@ %a)@]@ \
       @[<hov 1>(my_ghost_region@ %a)@]@ \
+      @[<hov 1>(my_heap_region@ %a)@]@ \
       @[<hov 1>(my_depth@ %a)@])@]"
     Continuation.print return_continuation
     Continuation.print exn_continuation
@@ -41,10 +43,11 @@ let[@ocamlformat "disable"] print ppf
     Variable.print my_closure
     (Format.pp_print_option Variable.print) my_region
     (Format.pp_print_option Variable.print) my_ghost_region
+    Variable.print my_heap_region
     Variable.print my_depth
 
 let create ~return_continuation ~exn_continuation ~params ~my_closure ~my_region
-    ~my_ghost_region ~my_depth =
+    ~my_ghost_region ~my_heap_region ~my_depth =
   Bound_parameters.check_no_duplicates params;
   (if Flambda_features.check_invariants ()
    then
@@ -59,7 +62,9 @@ let create ~return_continuation ~exn_continuation ~params ~my_closure ~my_region
              "[my_region] and [my_ghost_region] must be both present or both \
               absent"
        in
-       Variable.Set.of_list (my_closure :: my_depth :: regions), 2 + num_regions
+       ( Variable.Set.of_list
+           (my_closure :: my_depth :: my_heap_region :: regions),
+         3 + num_regions )
      in
      if
        Variable.Set.cardinal my_set <> expected_size
@@ -74,6 +79,7 @@ let create ~return_continuation ~exn_continuation ~params ~my_closure ~my_region
     my_closure;
     my_region;
     my_ghost_region;
+    my_heap_region;
     my_depth
   }
 
@@ -89,6 +95,8 @@ let my_region t = t.my_region
 
 let my_ghost_region t = t.my_ghost_region
 
+let my_heap_region t = t.my_heap_region
+
 let my_depth t = t.my_depth
 
 let free_names
@@ -98,6 +106,7 @@ let free_names
       my_closure;
       my_region;
       my_ghost_region;
+      my_heap_region;
       my_depth
     } =
   (* See [bound_continuations.ml] for why [add_traps] is [true]. *)
@@ -128,6 +137,9 @@ let free_names
           Name_mode.normal)
       my_ghost_region
   in
+  let free_names =
+    Name_occurrences.add_variable free_names my_heap_region Name_mode.normal
+  in
   Name_occurrences.add_variable free_names my_depth Name_mode.normal
 
 let apply_renaming
@@ -137,6 +149,7 @@ let apply_renaming
       my_closure;
       my_region;
       my_ghost_region;
+      my_heap_region;
       my_depth
     } renaming =
   let return_continuation =
@@ -151,6 +164,7 @@ let apply_renaming
   let my_ghost_region =
     Option.map (Renaming.apply_variable renaming) my_ghost_region
   in
+  let my_heap_region = Renaming.apply_variable renaming my_heap_region in
   let my_depth = Renaming.apply_variable renaming my_depth in
   (* CR mshinwell: this should have a phys-equal check *)
   { return_continuation;
@@ -159,6 +173,7 @@ let apply_renaming
     my_closure;
     my_region;
     my_ghost_region;
+    my_heap_region;
     my_depth
   }
 
@@ -169,6 +184,7 @@ let ids_for_export
       my_closure;
       my_region;
       my_ghost_region;
+      my_heap_region;
       my_depth
     } =
   let ids =
@@ -188,6 +204,7 @@ let ids_for_export
         Ids_for_export.add_variable ids my_ghost_region)
       my_ghost_region
   in
+  let ids = Ids_for_export.add_variable ids my_heap_region in
   Ids_for_export.add_variable ids my_depth
 
 let rename
@@ -197,6 +214,7 @@ let rename
       my_closure;
       my_region;
       my_ghost_region;
+      my_heap_region;
       my_depth
     } =
   { return_continuation = Continuation.rename return_continuation;
@@ -205,6 +223,7 @@ let rename
     my_closure = Variable.rename my_closure;
     my_region = Option.map (Variable.rename ?append:None) my_region;
     my_ghost_region = Option.map (Variable.rename ?append:None) my_ghost_region;
+    my_heap_region = Variable.rename my_heap_region;
     my_depth = Variable.rename my_depth
   }
 
@@ -217,6 +236,7 @@ let is_renamed_version_of t t' =
   && Option.equal Variable.is_renamed_version_of t.my_region t'.my_region
   && Option.equal Variable.is_renamed_version_of t.my_ghost_region
        t'.my_ghost_region
+  && Variable.is_renamed_version_of t.my_heap_region t'.my_heap_region
   && Variable.is_renamed_version_of t.my_depth t'.my_depth
 
 let renaming
@@ -226,6 +246,7 @@ let renaming
       my_closure = my_closure1;
       my_region = my_region1;
       my_ghost_region = my_ghost_region1;
+      my_heap_region = my_heap_region1;
       my_depth = my_depth1
     }
     ~guaranteed_fresh:
@@ -235,6 +256,7 @@ let renaming
         my_closure = my_closure2;
         my_region = my_region2;
         my_ghost_region = my_ghost_region2;
+        my_heap_region = my_heap_region2;
         my_depth = my_depth2
       } =
   let renaming =
@@ -271,5 +293,9 @@ let renaming
         ~guaranteed_fresh:my_ghost_region2
     | None, Some _ | Some _, None ->
       Misc.fatal_error "Mismatched [my_ghost_region] field in renaming"
+  in
+  let renaming =
+    Renaming.add_fresh_variable renaming my_heap_region1
+      ~guaranteed_fresh:my_heap_region2
   in
   Renaming.add_fresh_variable renaming my_depth1 ~guaranteed_fresh:my_depth2

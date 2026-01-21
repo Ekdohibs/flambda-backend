@@ -404,8 +404,8 @@ module Inlining = struct
         res
 
   let make_inlined_body acc ~callee ~called_code_id ~region_inlined_into ~params
-      ~args ~my_closure ~my_region ~my_ghost_region ~my_depth ~body
-      ~free_names_of_body ~exn_continuation ~return_continuation
+      ~args ~my_closure ~my_region ~my_ghost_region ~my_heap_region ~my_depth
+      ~body ~free_names_of_body ~exn_continuation ~return_continuation
       ~apply_exn_continuation ~apply_return_continuation ~apply_depth ~apply_dbg
       =
     let my_depth_duid = Flambda_debug_uid.none in
@@ -444,9 +444,10 @@ module Inlining = struct
       Inlining_helpers.make_inlined_body ~callee ~called_code_id
         ~region_inlined_into ~params ~args
         ~my_closure:(my_closure, my_closure_duid)
-        ~my_region ~my_ghost_region ~my_depth ~rec_info ~body:(acc, body)
-        ~exn_continuation ~return_continuation ~apply_exn_continuation
-        ~apply_return_continuation ~bind_params ~bind_depth ~apply_renaming
+        ~my_region ~my_ghost_region ~my_heap_region ~my_depth ~rec_info
+        ~body:(acc, body) ~exn_continuation ~return_continuation
+        ~apply_exn_continuation ~apply_return_continuation ~bind_params
+        ~bind_depth ~apply_renaming
     in
     let inlined_debuginfo =
       Inlined_debuginfo.create ~called_code_id ~apply_dbg
@@ -506,6 +507,7 @@ module Inlining = struct
           ~is_my_closure_used:_
           ~my_region
           ~my_ghost_region
+          ~my_heap_region
           ~my_depth
           ~free_names_of_body
         ->
@@ -520,9 +522,9 @@ module Inlining = struct
           make_inlined_body ~callee ~called_code_id:(Code.code_id code)
             ~region_inlined_into
             ~params:(Bound_parameters.vars_and_uids params)
-            ~args ~my_closure ~my_region ~my_ghost_region ~my_depth ~body
-            ~free_names_of_body ~exn_continuation ~return_continuation
-            ~apply_depth ~apply_dbg
+            ~args ~my_closure ~my_region ~my_ghost_region ~my_heap_region
+            ~my_depth ~body ~free_names_of_body ~exn_continuation
+            ~return_continuation ~apply_depth ~apply_dbg
         in
         let acc = Acc.with_free_names Name_occurrences.empty acc in
         let acc = Acc.increment_metrics cost_metrics acc in
@@ -701,7 +703,8 @@ let close_c_call0 acc env ~loc ~let_bound_ids_with_kinds
        Lambda.external_call_description) as prim_desc)
     ~(args : Simple.t list list) exn_continuation dbg
     ~(current_region : Variable.t option) ~current_ghost_region
-    (k : Acc.t -> Named.t list -> Expr_with_acc.t) : Expr_with_acc.t =
+    ~current_heap_region (k : Acc.t -> Named.t list -> Expr_with_acc.t) :
+    Expr_with_acc.t =
   if prim_is_layout_poly
   then
     Misc.fatal_errorf
@@ -723,18 +726,19 @@ let close_c_call0 acc env ~loc ~let_bound_ids_with_kinds
     match Lambda.locality_mode_of_primitive_description prim_desc with
     | None ->
       (* This happens when stack allocation is disabled. *)
-      Alloc_mode.For_applications.heap
+      Alloc_mode.For_applications.heap ~heap_region:current_heap_region
     | Some alloc_mode ->
       Alloc_mode.For_applications.from_lambda alloc_mode ~current_region
-        ~current_ghost_region
+        ~current_ghost_region ~current_heap_region
   in
   let alloc_mode =
     match Lambda.locality_mode_of_primitive_description prim_desc with
     | None ->
       (* This happens when stack allocation is disabled. *)
-      Alloc_mode.For_allocations.heap
+      Alloc_mode.For_allocations.heap ~heap_region:current_heap_region
     | Some alloc_mode ->
       Alloc_mode.For_allocations.from_lambda alloc_mode ~current_region
+        ~current_heap_region
   in
   let machine_width = Acc.machine_width acc in
   let unarized_params =
@@ -962,7 +966,7 @@ let close_c_call acc env ~loc ~let_bound_ids_with_kinds
         prim_is_layout_poly
       } :
        Lambda.external_call_description) as prim_desc) ~args exn_continuation
-    dbg ~current_region ~current_ghost_region k =
+    dbg ~current_region ~current_ghost_region ~current_heap_region k =
   let prim_desc =
     match !Clflags.jsir with
     | false -> prim_desc
@@ -1007,7 +1011,8 @@ let close_c_call acc env ~loc ~let_bound_ids_with_kinds
         ~is_layout_poly:prim_is_layout_poly
   in
   close_c_call0 acc env ~loc ~let_bound_ids_with_kinds prim_desc ~args
-    exn_continuation dbg ~current_region ~current_ghost_region k
+    exn_continuation dbg ~current_region ~current_ghost_region
+    ~current_heap_region k
 
 let close_exn_continuation acc env (exn_continuation : IR.exn_continuation) =
   let acc, extra_args =
@@ -1047,7 +1052,8 @@ let close_raise acc env ~raise_kind ~arg ~dbg exn_continuation =
 
 let close_effect_primitive acc env ~dbg exn_continuation
     (prim : Lambda.primitive) ~args ~let_bound_ids_with_kinds
-    (k : Acc.t -> Named.t list -> Expr_with_acc.t) : Expr_with_acc.t =
+    ~current_heap_region (k : Acc.t -> Named.t list -> Expr_with_acc.t) :
+    Expr_with_acc.t =
   if not Config.runtime5
   then Misc.fatal_error "Effect primitives are only supported on runtime5";
   (* CR mshinwell: share with close_c_call, above *)
@@ -1086,8 +1092,10 @@ let close_effect_primitive acc env ~dbg exn_continuation
         ~return_arity:
           (Flambda_arity.create_singletons
              [Flambda_kind.With_subkind.any_value])
-        ~call_kind ~alloc_mode:Alloc_mode.For_applications.heap dbg
-        ~inlined:Never_inlined
+        ~call_kind
+        ~alloc_mode:
+          (Alloc_mode.For_applications.heap ~heap_region:current_heap_region)
+        dbg ~inlined:Never_inlined
         ~inlining_state:(Inlining_state.default ~round:0)
         ~probe:None ~position:Normal
         ~relative_history:Inlining_history.Relative.empty
@@ -1137,8 +1145,8 @@ let close_effect_primitive acc env ~dbg exn_continuation
 let close_primitive acc env ~let_bound_ids_with_kinds named
     (prim : Lambda.primitive) ~args loc
     (exn_continuation : IR.exn_continuation option) ~current_region
-    ~current_ghost_region (k : Acc.t -> Named.t list -> Expr_with_acc.t) :
-    Expr_with_acc.t =
+    ~current_ghost_region ~current_heap_region
+    (k : Acc.t -> Named.t list -> Expr_with_acc.t) : Expr_with_acc.t =
   let orig_exn_continuation = exn_continuation in
   let acc, exn_continuation =
     match exn_continuation with
@@ -1161,7 +1169,8 @@ let close_primitive acc env ~let_bound_ids_with_kinds named
       | Some exn_continuation -> exn_continuation
     in
     close_c_call acc env ~loc ~let_bound_ids_with_kinds prim ~args
-      exn_continuation dbg ~current_region ~current_ghost_region k
+      exn_continuation dbg ~current_region ~current_ghost_region
+      ~current_heap_region k
   | Pgetglobal cu, [] ->
     if Compilation_unit.equal cu (Env.current_unit env)
     then
@@ -1269,11 +1278,11 @@ let close_primitive acc env ~let_bound_ids_with_kinds named
       | Some exn_continuation -> exn_continuation
     in
     close_effect_primitive acc env ~dbg exn_continuation prim ~args
-      ~let_bound_ids_with_kinds k
+      ~let_bound_ids_with_kinds ~current_heap_region k
   | prim, args ->
     Lambda_to_flambda_primitives.convert_and_bind acc exn_continuation
       ~big_endian:(Env.big_endian env) ~register_const0 prim ~args dbg
-      ~current_region ~current_ghost_region k
+      ~current_region ~current_ghost_region ~current_heap_region k
 
 let close_trap_action_opt trap_action =
   Option.map
@@ -3451,6 +3460,7 @@ let wrap_over_application acc env full_call (apply : IR.apply) ~remaining
     let alloc_mode =
       Alloc_mode.For_applications.from_lambda apply.mode
         ~current_region:apply_region ~current_ghost_region:apply_ghost_region
+        ~current_heap_region:apply_heap_region
     in
     let continuation =
       match needs_region with
