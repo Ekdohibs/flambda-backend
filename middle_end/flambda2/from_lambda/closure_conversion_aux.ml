@@ -62,6 +62,13 @@ module IR = struct
           obj : simple
         }
 
+  type alloc_mode =
+    | Heap
+    | Local of
+        { region : Ident.t;
+          ghost_region : Ident.t
+        }
+
   type apply =
     { kind : apply_kind;
       func : Ident.t;
@@ -73,8 +80,7 @@ module IR = struct
       inlined : Lambda.inlined_attribute;
       probe : Lambda.probe;
       mode : Lambda.locality_mode;
-      region : Ident.t option;
-      ghost_region : Ident.t option;
+      alloc_mode : alloc_mode;
       args_arity : [`Complex] Flambda_arity.t;
       return_arity : [`Unarized] Flambda_arity.t
     }
@@ -794,8 +800,7 @@ module Function_decls = struct
         calling_convention : calling_convention;
         return_continuation : Continuation.t;
         exn_continuation : IR.exn_continuation;
-        my_region : Ident.t option;
-        my_ghost_region : Ident.t option;
+        my_alloc_mode : IR.alloc_mode;
         body : Acc.t -> Env.t -> Acc.t * Flambda.Import.Expr.t;
         free_idents_of_body : Ident.Set.t;
         attr : Lambda.function_attribute;
@@ -808,7 +813,7 @@ module Function_decls = struct
 
     let create ~let_rec_ident ~let_rec_uid ~function_slot ~kind ~params
         ~params_arity ~removed_params ~return ~calling_convention
-        ~return_continuation ~exn_continuation ~my_region ~my_ghost_region ~body
+        ~return_continuation ~exn_continuation ~my_alloc_mode ~body
         ~(attr : Lambda.function_attribute) ~loc ~free_idents_of_body recursive
         ~closure_alloc_mode ~first_complex_local_param ~result_mode =
       let let_rec_ident =
@@ -816,18 +821,6 @@ module Function_decls = struct
         | None -> Ident.create_local "unnamed_function"
         | Some let_rec_ident -> let_rec_ident
       in
-      (match my_region, my_ghost_region with
-      | None, None -> ()
-      | Some _, Some _ -> ()
-      | _, _ ->
-        Misc.fatal_errorf
-          "Function %a has mismatched parameters my_region %a and \
-           my_ghost_region %a"
-          Ident.print let_rec_ident
-          (Format.pp_print_option Ident.print)
-          my_region
-          (Format.pp_print_option Ident.print)
-          my_ghost_region);
       { let_rec_ident;
         let_rec_uid;
         function_slot;
@@ -839,8 +832,7 @@ module Function_decls = struct
         calling_convention;
         return_continuation;
         exn_continuation;
-        my_region;
-        my_ghost_region;
+        my_alloc_mode;
         body;
         free_idents_of_body;
         attr;
@@ -871,9 +863,7 @@ module Function_decls = struct
 
     let exn_continuation t = t.exn_continuation
 
-    let my_region t = t.my_region
-
-    let my_ghost_region t = t.my_ghost_region
+    let my_alloc_mode t = t.my_alloc_mode
 
     let body t = t.body
 

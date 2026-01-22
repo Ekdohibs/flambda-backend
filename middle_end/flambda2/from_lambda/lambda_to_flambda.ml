@@ -327,9 +327,9 @@ let apply_cont_with_extra_args acc env ccenv ~dbg cont traps args =
 
 let wrap_return_continuation acc env ccenv (apply : IR.apply) =
   let extra_args = Env.extra_args_for_continuation env apply.continuation in
-  let close_current_region_early, region, ghost_region =
+  let close_current_region_early, alloc_mode =
     match apply.region_close with
-    | Rc_normal | Rc_nontail -> false, apply.region, apply.ghost_region
+    | Rc_normal | Rc_nontail -> false, apply.alloc_mode
     | Rc_close_at_apply -> (
       (* [Rc_close_at_apply] means that the application is in tail position with
          respect to the *current region*. Only that region should be closed
@@ -339,16 +339,18 @@ let wrap_return_continuation acc env ccenv (apply : IR.apply) =
          bring the current region stack in line with the return continuation's
          region stack. *)
       match Env.parent_region env with
-      | None -> true, None, None
+      | None -> true, IR.Heap
       | Some region_stack_elt ->
         ( true,
-          Some (Env.Region_stack_element.region region_stack_elt),
-          Some (Env.Region_stack_element.ghost_region region_stack_elt) ))
+          IR.Local
+            { region = Env.Region_stack_element.region region_stack_elt;
+              ghost_region =
+                Env.Region_stack_element.ghost_region region_stack_elt
+            } ))
   in
   let body acc ccenv continuation =
     match extra_args with
-    | [] ->
-      CC.close_apply acc ccenv { apply with continuation; region; ghost_region }
+    | [] -> CC.close_apply acc ccenv { apply with continuation; alloc_mode }
     | _ :: _ ->
       let wrapper_cont = Continuation.create () in
       let return_kinds = Flambda_arity.unarized_components apply.return_arity in
@@ -368,7 +370,7 @@ let wrap_return_continuation acc env ccenv (apply : IR.apply) =
       in
       let body acc ccenv =
         CC.close_apply acc ccenv
-          { apply with continuation = wrapper_cont; region; ghost_region }
+          { apply with continuation = wrapper_cont; alloc_mode }
       in
       (* CR mshinwell: Think about DWARF support for unboxed products, here and
          elsewhere. *)
@@ -873,6 +875,16 @@ let rec cps acc env ccenv (lam : L.lambda) (k : cps_continuation)
                       }
                     in
                     let current_region = Env.current_region env in
+                    let alloc_mode : IR.alloc_mode =
+                      match current_region with
+                      | None -> Heap
+                      | Some region ->
+                        Local
+                          { region = Env.Region_stack_element.region region;
+                            ghost_region =
+                              Env.Region_stack_element.ghost_region region
+                          }
+                    in
                     let apply : IR.apply =
                       { kind = Method { kind = meth_kind; obj };
                         func = meth;
@@ -884,12 +896,7 @@ let rec cps acc env ccenv (lam : L.lambda) (k : cps_continuation)
                         inlined = Default_inlined;
                         probe = None;
                         mode;
-                        region =
-                          Option.map Env.Region_stack_element.region
-                            current_region;
-                        ghost_region =
-                          Option.map Env.Region_stack_element.ghost_region
-                            current_region;
+                        alloc_mode;
                         args_arity = Flambda_arity.create args_arity;
                         return_arity =
                           Flambda_arity.unarize_t
@@ -1235,6 +1242,16 @@ and cps_tail_apply acc env ccenv ap_func ap_args ap_region_close ap_mode ap_loc
             }
           in
           let current_region = Env.current_region env in
+          let alloc_mode : IR.alloc_mode =
+            (* CR: Add Env.Region_stack_element.alloc_mode lol *)
+            match current_region with
+            | None -> Heap
+            | Some region ->
+              Local
+                { region = Env.Region_stack_element.region region;
+                  ghost_region = Env.Region_stack_element.ghost_region region
+                }
+          in
           let apply : IR.apply =
             { kind = Function;
               func;
@@ -1246,9 +1263,7 @@ and cps_tail_apply acc env ccenv ap_func ap_args ap_region_close ap_mode ap_loc
               inlined = ap_inlined;
               probe = ap_probe;
               mode = ap_mode;
-              region = Option.map Env.Region_stack_element.region current_region;
-              ghost_region =
-                Option.map Env.Region_stack_element.ghost_region current_region;
+              alloc_mode;
               args_arity = Flambda_arity.create args_arity;
               return_arity =
                 Flambda_arity.unarize_t
@@ -1508,17 +1523,16 @@ and cps_function env ~fid ~fuid ~(recursive : Recursive.t)
     | Some ids -> ids
     | None -> Lambda.free_variables body
   in
-  let my_region_stack_elt, my_region, my_ghost_region =
+  let my_region_stack_elt, my_alloc_mode =
     if contains_no_escaping_local_allocs
-    then None, None, None
+    then None, IR.Heap
     else
       let my_region = Ident.create_local "my_region" in
       let my_ghost_region = Ident.create_local "my_ghost_region" in
       ( Some
           (Env.Region_stack_element.create ~region:my_region
              ~ghost_region:my_ghost_region),
-        Some my_region,
-        Some my_ghost_region )
+        IR.Local { region = my_region; ghost_region = my_ghost_region } )
   in
   let new_env =
     Env.create ~current_unit:(Env.current_unit env)
@@ -1605,7 +1619,7 @@ and cps_function env ~fid ~fuid ~(recursive : Recursive.t)
   Function_decl.create ~let_rec_ident:(Some fid) ~let_rec_uid:fuid
     ~function_slot ~kind ~params ~params_arity ~removed_params ~return
     ~calling_convention ~return_continuation:body_cont ~exn_continuation
-    ~my_region ~my_ghost_region ~body ~attr ~loc ~free_idents_of_body recursive
+    ~my_alloc_mode ~body ~attr ~loc ~free_idents_of_body recursive
     ~closure_alloc_mode:mode ~first_complex_local_param ~result_mode:ret_mode
 
 and cps_switch acc env ccenv (switch : L.lambda_switch) ~condition_dbg

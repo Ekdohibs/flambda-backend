@@ -283,8 +283,7 @@ let function_params_and_body_free_names fpb =
         ~body:_
         ~my_closure
         ~is_my_closure_used:_
-        ~my_region
-        ~my_ghost_region
+        ~my_alloc_mode
         ~my_depth
         ~free_names_of_body
       ->
@@ -297,12 +296,15 @@ let function_params_and_body_free_names fpb =
       let f =
         Name_occurrences.remove_continuation f ~continuation:exn_continuation
       in
-      let o2l = function None -> [] | Some x -> [x] in
+      let regions =
+        match (my_alloc_mode : Alloc_mode.For_applications.t) with
+        | Heap -> []
+        | Local { region; ghost_region } -> [region; ghost_region]
+      in
       List.fold_left
         (fun f var -> Name_occurrences.remove_var f ~var)
         f
-        (o2l my_region @ o2l my_ghost_region
-        @ (my_closure :: my_depth :: Bound_parameters.vars params)))
+        (regions @ (my_closure :: my_depth :: Bound_parameters.vars params)))
 
 let get_simple_kind env simple =
   Simple.pattern_match'
@@ -1868,8 +1870,7 @@ and rebuild_function_params_and_body (env : env) res code_metadata
         params;
         body;
         my_closure;
-        my_region;
-        my_ghost_region;
+        my_alloc_mode;
         my_depth
       } =
     params_and_body
@@ -1889,11 +1890,12 @@ and rebuild_function_params_and_body (env : env) res code_metadata
         code_dep.return )
   in
   let rebuild_body () =
-    let all_vars =
-      Option.to_list my_region
-      @ Option.to_list my_ghost_region
-      @ (my_closure :: Bound_parameters.vars params)
+    let region_vars =
+      match (my_alloc_mode : Alloc_mode.For_applications.t) with
+      | Heap -> []
+      | Local { region; ghost_region } -> [region; ghost_region]
     in
+    let all_vars = region_vars @ (my_closure :: Bound_parameters.vars params) in
     match List.filter (is_dead_var env) all_vars with
     | [] -> rebuild_expr env res body
     | _ :: _ as dead_vars ->
@@ -1962,7 +1964,7 @@ and rebuild_function_params_and_body (env : env) res code_metadata
        Name_occurrences.print body.free_names; *)
     ( Function_params_and_body.create ~return_continuation ~exn_continuation
         params ~body:body.expr ~free_names_of_body:(Known body.free_names)
-        ~my_closure ~my_region ~my_ghost_region ~my_depth,
+        ~my_closure ~my_alloc_mode ~my_depth,
       code_metadata,
       res )
   | Changing_calling_convention code_id ->
@@ -2050,7 +2052,7 @@ and rebuild_function_params_and_body (env : env) res code_metadata
     ( Function_params_and_body.create ~return_continuation ~exn_continuation
         (Bound_parameters.create (List.flatten params))
         ~body:body.expr ~free_names_of_body:(Known body.free_names) ~my_closure
-        ~my_region ~my_ghost_region ~my_depth,
+        ~my_alloc_mode ~my_depth,
       code_metadata,
       res )
 

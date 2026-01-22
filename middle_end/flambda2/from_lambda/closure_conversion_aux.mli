@@ -66,6 +66,13 @@ module IR : sig
           obj : simple
         }
 
+  type alloc_mode =
+    | Heap
+    | Local of
+        { region : Ident.t;
+          ghost_region : Ident.t
+        }
+
   type apply =
     { kind : apply_kind;
       func : Ident.t;
@@ -77,8 +84,7 @@ module IR : sig
       inlined : Lambda.inlined_attribute;
       probe : Lambda.probe;
       mode : Lambda.locality_mode;
-      region : Ident.t option;
-      ghost_region : Ident.t option;
+      alloc_mode : alloc_mode;
       args_arity : [`Complex] Flambda_arity.t;
       return_arity : [`Unarized] Flambda_arity.t
     }
@@ -368,8 +374,7 @@ module Function_decls : sig
       calling_convention:calling_convention ->
       return_continuation:Continuation.t ->
       exn_continuation:IR.exn_continuation ->
-      my_region:Ident.t option ->
-      my_ghost_region:Ident.t option ->
+      my_alloc_mode:IR.alloc_mode ->
       body:(Acc.t -> Env.t -> Acc.t * Flambda.Import.Expr.t) ->
       attr:Lambda.function_attribute ->
       loc:Lambda.scoped_location ->
@@ -400,9 +405,7 @@ module Function_decls : sig
 
     val exn_continuation : t -> IR.exn_continuation
 
-    val my_region : t -> Ident.t option
-
-    val my_ghost_region : t -> Ident.t option
+    val my_alloc_mode : t -> IR.alloc_mode
 
     val body : t -> Acc.t -> Env.t -> Acc.t * Flambda.Import.Expr.t
 
