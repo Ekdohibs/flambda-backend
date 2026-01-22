@@ -42,6 +42,37 @@ module For_types : sig
   val to_lambda : t -> Lambda.locality_mode
 end
 
+module For_applications : sig
+  (** Decisions on allocation locations for application expressions. *)
+  type t = private
+    | Heap  (** Normal allocation on the OCaml heap. *)
+    | Local of
+        { region : Variable.t;
+          ghost_region : Variable.t
+        }  (** Allocation on the local allocation stack in the given region. *)
+
+  val compare : t -> t -> int
+
+  val heap : t
+
+  (** Returns [Heap] if stack allocation is disabled! *)
+  val local : region:Variable.t -> ghost_region:Variable.t -> t
+
+  val as_type : t -> For_types.t
+
+  val from_lambda :
+    Lambda.locality_mode ->
+    current_region:Variable.t option ->
+    current_ghost_region:Variable.t option ->
+    t
+
+  include Contains_names.S with type t := t
+
+  include Contains_ids.S with type t := t
+
+  include Bindable.S with type t := t
+end
+
 module For_allocations : sig
   (** Decisions on allocation locations *)
   type t = private
@@ -66,39 +97,6 @@ module For_allocations : sig
   include Contains_names.S with type t := t
 
   include Contains_ids.S with type t := t
-end
-
-module For_applications : sig
-  (** Decisions on allocation locations for application expressions. *)
-  type t = private
-    | Heap  (** Normal allocation on the OCaml heap. *)
-    | Local of
-        { region : Variable.t;
-          ghost_region : Variable.t
-        }  (** Allocation on the local allocation stack in the given region. *)
-
-  val compare : t -> t -> int
-
-  val heap : t
-
-  (** Returns [Heap] if stack allocation is disabled! *)
-  val local : region:Variable.t -> ghost_region:Variable.t -> t
-
-  val as_type : t -> For_types.t
-
-  val as_allocation : t -> For_allocations.t
-
-  val from_lambda :
-    Lambda.locality_mode ->
-    current_region:Variable.t option ->
-    current_ghost_region:Variable.t option ->
-    t
-
-  include Contains_names.S with type t := t
-
-  include Contains_ids.S with type t := t
-
-  include Bindable.S with type t := t
 end
 
 module For_assignments : sig
