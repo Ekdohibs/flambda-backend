@@ -406,11 +406,14 @@ let alloc_mode_for_allocations env (alloc : Fexpr.alloc_mode_for_allocations) =
 let alloc_mode_for_applications env (alloc : Fexpr.alloc_mode_for_applications)
     =
   match alloc with
-  | Heap -> Alloc_mode.For_applications.heap
+  | Heap ->
+    Alloc_mode.For_applications.heap
+      ~alloc_region:(Variable.create "my_alloc_region" Flambda_kind.region)
   | Local { region = r; ghost_region = r' } ->
     let r = find_region env r in
     let r' = find_region env r' in
     Alloc_mode.For_applications.local ~region:r ~ghost_region:r'
+      ~alloc_region:(Variable.create "my_alloc_region" Flambda_kind.region)
 
 let alloc_mode_for_assignments (alloc : Fexpr.alloc_mode_for_assignments) =
   match alloc with
@@ -955,6 +958,10 @@ let rec expr env (e : Fexpr.expr) : Flambda.Expr.t =
           let my_closure, _my_closure_duid, env =
             fresh_var env closure_var Flambda_kind.value
           in
+          (* CR bclement: will be removed anyway *)
+          let my_alloc_region =
+            Variable.create "my_alloc_region" Flambda_kind.region
+          in
           let my_region, _my_region_duid, env =
             fresh_var env region_var Flambda_kind.region
           in
@@ -981,8 +988,8 @@ let rec expr env (e : Fexpr.expr) : Flambda.Expr.t =
               (Bound_parameters.create params)
               ~body ~my_closure
               ~my_alloc_mode:
-                (Alloc_mode.For_applications.local ~region:my_region
-                   ~ghost_region:my_ghost_region)
+                (Alloc_mode.For_applications.local ~alloc_region:my_alloc_region
+                   ~region:my_region ~ghost_region:my_ghost_region)
               ~my_depth ~free_names_of_body:Unknown
           in
           let free_names =

@@ -775,8 +775,10 @@ and traverse_function_params_and_body acc code_id code ~return_continuation
   Bound_parameters.iter (fun bp -> Acc.bound_parameter_kind bp acc) params;
   Acc.kind (Name.var my_closure) Flambda_kind.value acc;
   (match (my_alloc_mode : Alloc_mode.For_applications.t) with
-  | Heap -> ()
-  | Local { region; ghost_region } ->
+  | Heap { alloc_region } ->
+    Acc.kind (Name.var alloc_region) Flambda_kind.region acc
+  | Local { alloc_region; region; ghost_region } ->
+    Acc.kind (Name.var alloc_region) Flambda_kind.region acc;
     Acc.kind (Name.var region) Flambda_kind.region acc;
     Acc.kind (Name.var ghost_region) Flambda_kind.region acc);
   Acc.kind (Name.var my_depth) Flambda_kind.rec_info acc;
@@ -797,8 +799,9 @@ and traverse_function_params_and_body acc code_id code ~return_continuation
     any_source my_closure;
     any_source my_depth;
     (match (my_alloc_mode : Alloc_mode.For_applications.t) with
-    | Heap -> ()
-    | Local { region; ghost_region } ->
+    | Heap { alloc_region } -> any_source alloc_region
+    | Local { alloc_region; region; ghost_region } ->
+      any_source alloc_region;
       any_source region;
       any_source ghost_region);
     List.iter any_source (code_dep.exn :: code_dep.return))
