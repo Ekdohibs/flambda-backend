@@ -404,9 +404,10 @@ module Inlining = struct
         res
 
   let make_inlined_body acc ~callee ~called_code_id ~region_inlined_into ~params
-      ~args ~my_closure ~my_alloc_mode ~my_depth ~body ~free_names_of_body
-      ~exn_continuation ~return_continuation ~apply_exn_continuation
-      ~apply_return_continuation ~apply_depth ~apply_dbg =
+      ~args ~my_closure ~my_region ~my_ghost_region ~my_depth ~body
+      ~free_names_of_body ~exn_continuation ~return_continuation
+      ~apply_exn_continuation ~apply_return_continuation ~apply_depth ~apply_dbg
+      =
     let my_depth_duid = Flambda_debug_uid.none in
     let my_closure_duid = Flambda_debug_uid.none in
     let rec_info =
@@ -443,9 +444,9 @@ module Inlining = struct
       Inlining_helpers.make_inlined_body ~callee ~called_code_id
         ~region_inlined_into ~params ~args
         ~my_closure:(my_closure, my_closure_duid)
-        ~my_alloc_mode ~my_depth ~rec_info ~body:(acc, body) ~exn_continuation
-        ~return_continuation ~apply_exn_continuation ~apply_return_continuation
-        ~bind_params ~bind_depth ~apply_renaming
+        ~my_region ~my_ghost_region ~my_depth ~rec_info ~body:(acc, body)
+        ~exn_continuation ~return_continuation ~apply_exn_continuation
+        ~apply_return_continuation ~bind_params ~bind_depth ~apply_renaming
     in
     let inlined_debuginfo =
       Inlined_debuginfo.create ~called_code_id ~apply_dbg
@@ -503,7 +504,8 @@ module Inlining = struct
           ~body
           ~my_closure
           ~is_my_closure_used:_
-          ~my_alloc_mode
+          ~my_region
+          ~my_ghost_region
           ~my_depth
           ~free_names_of_body
         ->
@@ -518,8 +520,9 @@ module Inlining = struct
           make_inlined_body ~callee ~called_code_id:(Code.code_id code)
             ~region_inlined_into
             ~params:(Bound_parameters.vars_and_uids params)
-            ~args ~my_closure ~my_alloc_mode ~my_depth ~body ~free_names_of_body
-            ~exn_continuation ~return_continuation ~apply_depth ~apply_dbg
+            ~args ~my_closure ~my_region ~my_ghost_region ~my_depth ~body
+            ~free_names_of_body ~exn_continuation ~return_continuation
+            ~apply_depth ~apply_dbg
         in
         let acc = Acc.with_free_names Name_occurrences.empty acc in
         let acc = Acc.increment_metrics cost_metrics acc in
@@ -1712,28 +1715,25 @@ let close_exact_or_unknown_apply acc env
        probe;
        mode;
        region_close;
-       alloc_mode;
+       region;
+       ghost_region;
        args_arity;
        return_arity
      } :
       IR.apply) callee_approx ~replace_region : Expr_with_acc.t =
   let callee = find_simple_from_id env func in
   let mode =
-    match replace_region with
-    | None ->
-      let convert_region region = fst (Env.find_var env region) in
-      begin match alloc_mode with
-      | Heap ->
-        Alloc_mode.For_applications.from_lambda mode ~current_region:None
-          ~current_ghost_region:None
-      | Local { region; ghost_region } ->
-        Alloc_mode.For_applications.from_lambda mode
-          ~current_region:(Some (convert_region region))
-          ~current_ghost_region:(Some (convert_region ghost_region))
-      end
-    | Some (region, ghost_region) ->
-      Alloc_mode.For_applications.from_lambda mode ~current_region:(Some region)
-        ~current_ghost_region:(Some ghost_region)
+    let current_region, current_ghost_region =
+      match replace_region with
+      | None ->
+        let convert_region region =
+          Option.map (fun region -> fst (Env.find_var env region)) region
+        in
+        convert_region region, convert_region ghost_region
+      | Some (region, ghost_region) -> Some region, Some ghost_region
+    in
+    Alloc_mode.For_applications.from_lambda mode ~current_region
+      ~current_ghost_region
   in
   let dbg = Debuginfo.from_location loc in
   let acc, call_kind, can_erase_callee =
@@ -2043,7 +2043,7 @@ let boxing_primitive (k : Function_decl.unboxing_kind) alloc_mode
       ( Make_block (Naked_floats, Immutable, alloc_mode),
         Simple.vars unboxed_variables )
 
-let compute_body_of_unboxed_function acc my_alloc_mode my_closure
+let compute_body_of_unboxed_function acc my_region my_closure
     ~unarized_params:params params_arity ~unarized_param_modes:param_modes
     function_slot compute_body return return_continuation unboxed_params
     unboxed_return unboxed_function_slot =
@@ -2071,12 +2071,7 @@ let compute_body_of_unboxed_function acc my_alloc_mode my_closure
         let body acc =
           let acc, body = body acc in
           let alloc_mode =
-            (* CR bclement: check if this is correct *)
-            Alloc_mode.For_allocations.from_lambda
-              ~current_region:
-                (match (my_alloc_mode : Alloc_mode.For_applications.t) with
-                | Heap -> None
-                | Local { region; ghost_region = _ } -> Some region)
+            Alloc_mode.For_allocations.from_lambda ~current_region:my_region
               (Alloc_mode.For_types.to_lambda param_mode)
           in
           let param_duid = Flambda_debug_uid.none in
@@ -2211,8 +2206,9 @@ let compute_body_of_unboxed_function acc my_alloc_mode my_closure
 
 let make_unboxed_function_wrapper acc function_slot ~unarized_params:params
     params_arity ~unarized_param_modes:param_modes return result_arity_main_code
-    code_id main_code_id decl loc external_env recursive cost_metrics dbg
-    is_tupled inlining_decision absolute_history relative_history main_code
+    code_id main_code_id decl loc external_env recursive
+    contains_no_escaping_local_allocs cost_metrics dbg is_tupled
+    inlining_decision absolute_history relative_history main_code
     by_function_slot function_code_ids unboxed_function_slot unboxed_params
     unboxed_return =
   (* The outside caller gave us the function slot and code ID meant for the
@@ -2225,13 +2221,15 @@ let make_unboxed_function_wrapper acc function_slot ~unarized_params:params
   let return_continuation = Continuation.create () in
   let exn_continuation = Continuation.create () in
   let my_closure = Variable.create "my_closure" K.value in
-  let my_alloc_mode =
-    match Function_decl.result_mode decl with
-    | Alloc_heap -> Alloc_mode.For_applications.heap
-    | Alloc_local ->
-      Alloc_mode.For_applications.local
-        ~region:(Variable.create "my_region" K.region)
-        ~ghost_region:(Variable.create "my_ghost_region" K.region)
+  let my_region =
+    if contains_no_escaping_local_allocs
+    then None
+    else Some (Variable.create "my_region" K.region)
+  in
+  let my_ghost_region =
+    if contains_no_escaping_local_allocs
+    then None
+    else Some (Variable.create "my_ghost_region" K.region)
   in
   let my_depth = Variable.create "my_depth" K.rec_info in
   let rec unbox_params params params_unboxing =
@@ -2303,8 +2301,11 @@ let make_unboxed_function_wrapper acc function_slot ~unarized_params:params
         (Exn_continuation.create ~exn_handler:exn_continuation ~extra_args:[])
         ~args ~args_arity ~return_arity:result_arity_main_code
         ~call_kind:(Call_kind.direct_function_call main_code_id)
-        ~alloc_mode:my_alloc_mode Debuginfo.none
-        ~inlined:Inlined_attribute.Default_inlined
+        ~alloc_mode:
+          (Alloc_mode.For_applications.from_lambda
+             (Function_decl.result_mode decl)
+             ~current_region:my_region ~current_ghost_region:my_ghost_region)
+        Debuginfo.none ~inlined:Inlined_attribute.Default_inlined
         ~inlining_state:(Inlining_state.default ~round:0)
         ~probe:None ~position:Normal
         ~relative_history:(Env.relative_history_from_scoped ~loc external_env)
@@ -2395,7 +2396,11 @@ let make_unboxed_function_wrapper acc function_slot ~unarized_params:params
         (Name_occurrences.remove_continuation free_names_of_body
            ~continuation:cont) )
   in
-  let alloc_mode = Alloc_mode.For_applications.as_allocation my_alloc_mode in
+  let alloc_mode =
+    Alloc_mode.For_allocations.from_lambda
+      (Function_decl.result_mode decl)
+      ~current_region:my_region
+  in
   let body, free_names_of_body =
     match unboxed_return with
     | None -> make_body return_continuation
@@ -2404,21 +2409,21 @@ let make_unboxed_function_wrapper acc function_slot ~unarized_params:params
   let wrapper_params_and_body =
     Function_params_and_body.create ~return_continuation ~exn_continuation
       params ~body ~free_names_of_body:(Known free_names_of_body) ~my_closure
-      ~my_alloc_mode ~my_depth
+      ~my_region ~my_ghost_region ~my_depth
   in
   let free_names_of_params_and_body =
     Name_occurrences.remove_continuation ~continuation:return_continuation
       (Name_occurrences.remove_continuation ~continuation:exn_continuation
          (Name_occurrences.remove_var ~var:my_closure
-            (Name_occurrences.diff
-               ~without:(Alloc_mode.For_applications.free_names my_alloc_mode)
-               (Name_occurrences.remove_var ~var:my_depth
-                  (List.fold_left
-                     (fun free_names param ->
-                       Name_occurrences.remove_var free_names
-                         ~var:(Bound_parameter.var param))
-                     free_names_of_body
-                     (Bound_parameters.to_list params))))))
+            (Name_occurrences.remove_var_opt ~var:my_region
+               (Name_occurrences.remove_var_opt ~var:my_ghost_region
+                  (Name_occurrences.remove_var ~var:my_depth
+                     (List.fold_left
+                        (fun free_names param ->
+                          Name_occurrences.remove_var free_names
+                            ~var:(Bound_parameter.var param))
+                        free_names_of_body
+                        (Bound_parameters.to_list params)))))))
   in
   let wrapper_code =
     Code.create code_id ~params_and_body:wrapper_params_and_body
@@ -2505,7 +2510,8 @@ let close_one_function acc ~code_id ~external_env ~by_function_slot
     Acc.push_closure_info acc ~return_continuation ~exn_continuation ~my_closure
       ~is_purely_tailrec:is_single_recursive_function ~code_id
   in
-  let my_alloc_mode = Function_decl.my_alloc_mode decl in
+  let my_region = Function_decl.my_region decl in
+  let my_ghost_region = Function_decl.my_ghost_region decl in
   let function_slot = Function_decl.function_slot decl in
   let my_depth = Variable.create "my_depth" K.rec_info in
   let next_depth = Variable.create "next_depth" K.rec_info in
@@ -2609,19 +2615,25 @@ let close_one_function acc ~code_id ~external_env ~by_function_slot
         env)
       unarized_params closure_env
   in
-  let closure_env, my_alloc_mode =
-    match my_alloc_mode with
-    | Heap -> closure_env, Alloc_mode.For_applications.heap
-    | Local { region = my_region; ghost_region = my_ghost_region } ->
+  let closure_env, my_region =
+    match my_region with
+    | None -> closure_env, None
+    | Some my_region ->
       let env, region =
         Env.add_var_like closure_env my_region Not_user_visible
           K.With_subkind.region
       in
-      let env, ghost_region =
-        Env.add_var_like env my_ghost_region Not_user_visible
+      env, Some region
+  in
+  let closure_env, my_ghost_region =
+    match my_ghost_region with
+    | None -> closure_env, None
+    | Some my_ghost_region ->
+      let env, region =
+        Env.add_var_like closure_env my_ghost_region Not_user_visible
           K.With_subkind.region
       in
-      env, Alloc_mode.For_applications.local ~region ~ghost_region
+      env, Some region
   in
   let closure_env = Env.with_depth closure_env my_depth in
   let closure_env, absolute_history, relative_history =
@@ -2738,10 +2750,9 @@ let close_one_function acc ~code_id ~external_env ~by_function_slot
         my_closure )
     | Unboxed_calling_convention
         (unboxed_params, unboxed_return, unboxed_function_slot) ->
-      compute_body_of_unboxed_function acc my_alloc_mode my_closure
-        ~unarized_params params_arity ~unarized_param_modes function_slot
-        compute_body return return_continuation unboxed_params unboxed_return
-        unboxed_function_slot
+      compute_body_of_unboxed_function acc my_region my_closure ~unarized_params
+        params_arity ~unarized_param_modes function_slot compute_body return
+        return_continuation unboxed_params unboxed_return unboxed_function_slot
   in
   let contains_subfunctions = Acc.seen_a_function acc in
   let cost_metrics = Acc.cost_metrics acc in
@@ -2765,28 +2776,24 @@ let close_one_function acc ~code_id ~external_env ~by_function_slot
   let params_and_body =
     Function_params_and_body.create ~return_continuation
       ~exn_continuation:(Exn_continuation.exn_handler exn_continuation)
-      main_code_unarized_params ~body ~my_closure ~my_alloc_mode ~my_depth
-      ~free_names_of_body:(Known free_names_of_body)
+      main_code_unarized_params ~body ~my_closure ~my_region ~my_ghost_region
+      ~my_depth ~free_names_of_body:(Known free_names_of_body)
   in
   let result_mode = Function_decl.result_mode decl in
-  (match my_alloc_mode with
-  | Local _ -> assert (not (Lambda.is_heap_mode result_mode))
-  | Heap -> assert (Lambda.is_heap_mode result_mode));
-  let remove_alloc_mode_from_free_names my_alloc_mode acc =
-    match (my_alloc_mode : Alloc_mode.For_applications.t) with
-    | Heap -> acc
-    | Local { region; ghost_region } ->
-      acc
-      |> Acc.remove_var_from_free_names region
-      |> Acc.remove_var_from_free_names ghost_region
-  in
+  (match my_region with
+  | Some _ -> assert (not (Lambda.is_heap_mode result_mode))
+  | None -> assert (Lambda.is_heap_mode result_mode));
+  (match my_ghost_region with
+  | Some _ -> assert (not (Lambda.is_heap_mode result_mode))
+  | None -> assert (Lambda.is_heap_mode result_mode));
   let acc =
     List.fold_left
       (fun acc param -> Acc.remove_var_from_free_names (BP.var param) acc)
       acc
       (Bound_parameters.to_list main_code_unarized_params)
     |> Acc.remove_var_from_free_names my_closure
-    |> remove_alloc_mode_from_free_names my_alloc_mode
+    |> Acc.remove_var_opt_from_free_names my_region
+    |> Acc.remove_var_opt_from_free_names my_ghost_region
     |> Acc.remove_var_from_free_names my_depth
     |> Acc.remove_continuation_from_free_names return_continuation
     |> Acc.remove_continuation_from_free_names
@@ -2816,6 +2823,11 @@ let close_one_function acc ~code_id ~external_env ~by_function_slot
     match calling_convention with
     | Normal_calling_convention -> code_id
     | Unboxed_calling_convention _ -> Code_id.rename code_id
+  in
+  let contains_no_escaping_local_allocs =
+    match Function_decl.result_mode decl with
+    | Alloc_heap -> false
+    | Alloc_local -> true
   in
   let main_code =
     Code.create main_code_id ~params_and_body
@@ -2854,7 +2866,8 @@ let close_one_function acc ~code_id ~external_env ~by_function_slot
         (unboxed_params, unboxed_return, unboxed_function_slot) ->
       make_unboxed_function_wrapper acc function_slot ~unarized_params
         params_arity ~unarized_param_modes return result_arity_main_code code_id
-        main_code_id decl loc external_env recursive cost_metrics dbg is_tupled
+        main_code_id decl loc external_env recursive
+        contains_no_escaping_local_allocs cost_metrics dbg is_tupled
         inlining_decision absolute_history relative_history main_code
         by_function_slot function_code_ids unboxed_function_slot unboxed_params
         unboxed_return
@@ -3297,14 +3310,20 @@ let wrap_partial_application acc env apply_continuation (apply : IR.apply)
   let all_args =
     provided @ List.map (fun (p : Function_decl.param) -> IR.Var p.name) params
   in
-  let my_alloc_mode : IR.alloc_mode =
+  let contains_no_escaping_local_allocs =
     match (result_mode : Lambda.locality_mode) with
-    | Alloc_heap -> Heap
-    | Alloc_local ->
-      Local
-        { region = Ident.create_local "my_region";
-          ghost_region = Ident.create_local "my_ghost_region "
-        }
+    | Alloc_heap -> true
+    | Alloc_local -> false
+  in
+  let my_region =
+    if contains_no_escaping_local_allocs
+    then None
+    else Some (Ident.create_local "my_region")
+  in
+  let my_ghost_region =
+    if contains_no_escaping_local_allocs
+    then None
+    else Some (Ident.create_local "my_ghost_region")
   in
   let fbody acc env =
     close_exact_or_unknown_apply acc env
@@ -3317,7 +3336,8 @@ let wrap_partial_application acc env apply_continuation (apply : IR.apply)
         inlined = Lambda.Default_inlined;
         mode = result_mode;
         return_arity = result_arity;
-        alloc_mode = my_alloc_mode
+        region = my_region;
+        ghost_region = my_ghost_region
       }
       (Some approx) ~replace_region:None
   in
@@ -3371,9 +3391,10 @@ let wrap_partial_application acc env apply_continuation (apply : IR.apply)
                })
           ~params ~params_arity ~removed_params:Ident.Set.empty
           ~return:result_arity ~calling_convention:Normal_calling_convention
-          ~return_continuation ~exn_continuation ~my_alloc_mode ~body:fbody
-          ~attr ~loc:apply.loc ~free_idents_of_body ~closure_alloc_mode
-          ~first_complex_local_param ~result_mode Recursive.Non_recursive ]
+          ~return_continuation ~exn_continuation ~my_region ~my_ghost_region
+          ~body:fbody ~attr ~loc:apply.loc ~free_idents_of_body
+          ~closure_alloc_mode ~first_complex_local_param ~result_mode
+          Recursive.Non_recursive ]
     in
     let body acc env =
       let arg = find_simple_from_id env wrapper_id in
@@ -3385,10 +3406,7 @@ let wrap_partial_application acc env apply_continuation (apply : IR.apply)
       Expr_with_acc.create_apply_cont acc apply_cont
     in
     close_let_rec acc env ~function_declarations ~body
-      ~current_region:
-        (match apply.alloc_mode with
-        | Heap -> None
-        | Local { region; ghost_region = _ } -> Some region)
+      ~current_region:apply.region
 
 let wrap_over_application acc env full_call (apply : IR.apply) ~remaining
     ~remaining_arity ~result_mode =
@@ -3414,12 +3432,11 @@ let wrap_over_application acc env full_call (apply : IR.apply) ~remaining
   in
   let apply_region, apply_ghost_region =
     match needs_region with
-    | None -> (
-      match apply.alloc_mode with
-      | Heap -> None, None
-      | Local { region; ghost_region } ->
-        ( Some (fst (Env.find_var env region)),
-          Some (fst (Env.find_var env ghost_region)) ))
+    | None ->
+      ( Option.map (fun region -> fst (Env.find_var env region)) apply.region,
+        Option.map
+          (fun region -> fst (Env.find_var env region))
+          apply.ghost_region )
     | Some (region, ghost_region, _) -> Some region, Some ghost_region
   in
   let perform_over_application acc =
