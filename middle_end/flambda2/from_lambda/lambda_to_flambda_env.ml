@@ -68,6 +68,17 @@ end = struct
   let ghost_region t = t.ghost_region
 end
 
+type alloc_region_to_close =
+  | Ignore
+  | Check
+  | Absorb_into of Ident.t
+
+type alloc_region_stack_element =
+  { alloc_region : Ident.t;
+    on_normal_exit : alloc_region_to_close;
+    on_exn_exit : alloc_region_to_close
+  }
+
 type t =
   { current_unit : Compilation_unit.t;
     machine_width : Target_system.Machine_width.t;
@@ -91,6 +102,9 @@ type t =
     region_closure_continuations :
       region_closure_continuation Region_stack_element.Map.t;
     my_alloc_region : Ident.t;
+    alloc_region_stack : alloc_region_stack_element list;
+    alloc_region_stack_in_cont_scope :
+      alloc_region_stack_element list Continuation.Map.t;
     ident_stamp_upon_starting : int
   }
 
@@ -117,6 +131,9 @@ let create ~current_unit ~machine_width ~return_continuation ~exn_continuation
       Continuation.Map.singleton return_continuation [];
     region_closure_continuations = Region_stack_element.Map.empty;
     my_alloc_region;
+    alloc_region_stack = [];
+    alloc_region_stack_in_cont_scope =
+      Continuation.Map.of_list [return_continuation, []; exn_continuation, []];
     ident_stamp_upon_starting
   }
 
@@ -202,6 +219,14 @@ let add_continuation t cont ~push_to_try_stack ~pop_region
   let region_stack_in_cont_scope =
     Continuation.Map.add cont region_stack t.region_stack_in_cont_scope
   in
+  let alloc_region_stack =
+    (* XXX *)
+    t.alloc_region_stack
+  in
+  let alloc_region_stack_in_cont_scope =
+    Continuation.Map.add cont alloc_region_stack
+      t.alloc_region_stack_in_cont_scope
+  in
   let body_env =
     let mutables_needed_by_continuations =
       Continuation.Map.add cont (mutables_in_scope t)
@@ -213,7 +238,8 @@ let add_continuation t cont ~push_to_try_stack ~pop_region
     { t with
       mutables_needed_by_continuations;
       try_stack;
-      region_stack_in_cont_scope
+      region_stack_in_cont_scope;
+      alloc_region_stack_in_cont_scope
     }
   in
   let current_values_of_mutables_in_scope =
@@ -353,7 +379,10 @@ let current_region t =
     | [] -> t.my_region
     | region_stack_elt :: _ -> Some region_stack_elt
 
-let current_alloc_region t = t.my_alloc_region
+let current_alloc_region t =
+  match t.alloc_region_stack with
+  | [] -> t.my_alloc_region
+  | { alloc_region; _ } :: _ -> alloc_region
 
 let parent_region t =
   if not (Flambda_features.stack_allocation_enabled ())
@@ -373,6 +402,17 @@ let region_stack_in_cont_scope t continuation =
   match Continuation.Map.find continuation t.region_stack_in_cont_scope with
   | exception Not_found ->
     Misc.fatal_errorf "No region stack recorded for handler %a"
+      Continuation.print continuation
+  | stack -> stack
+
+let alloc_region_stack t = t.alloc_region_stack
+
+let alloc_region_stack_in_cont_scope t continuation =
+  match
+    Continuation.Map.find continuation t.alloc_region_stack_in_cont_scope
+  with
+  | exception Not_found ->
+    Misc.fatal_errorf "No alloc region stack recorded for handler %a"
       Continuation.print continuation
   | stack -> stack
 

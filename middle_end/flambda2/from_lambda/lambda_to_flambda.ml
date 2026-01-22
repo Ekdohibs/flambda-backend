@@ -173,11 +173,56 @@ let compile_staticfail acc env ccenv ~(continuation : Continuation.t) ~args :
     | None, Some _ -> assert false
     (* see above *)
   in
+  let alloc_region_stack_now = Env.alloc_region_stack env in
+  let alloc_region_stack_at_handler =
+    Env.alloc_region_stack_in_cont_scope env continuation
+  in
+  let rec add_end_alloc_regions acc ~alloc_region_stack_now =
+    (* CR pchambart: This closes all the regions between region_stack_now and
+       region_stack_at_handler, but closing only the last one should be
+       sufficient. *)
+    let add_end_alloc_region alloc_region_stack_elt ~alloc_region_stack_now
+        after_everything =
+      let add_remaining_end_alloc_regions acc =
+        add_end_alloc_regions acc ~alloc_region_stack_now
+      in
+      let body = add_remaining_end_alloc_regions acc after_everything in
+      let _alloc_region = alloc_region_stack_elt.Env.alloc_region in
+      fun acc ccenv ->
+        match alloc_region_stack_elt.Env.on_normal_exit with
+        | Ignore -> body acc ccenv
+        | Check ->
+          (* CC.close_let acc ccenv [ ( Ident.create_local "unit",
+             Flambda_debug_uid.none, Flambda_kind.With_subkind.tagged_immediate
+             ) ] Not_user_visible (Check_alloc_region { region }) ~body *)
+          failwith "todo"
+        | Absorb_into _into -> failwith "todo"
+      (* CC.close_let acc ccenv [ ( Ident.create_local "unit",
+         Flambda_debug_uid.none, Flambda_kind.With_subkind.tagged_immediate ) ]
+         Not_user_visible (Absorb_alloc_region { region; into }) ~body *)
+    in
+    let no_end_alloc_region after_everything = after_everything in
+    match alloc_region_stack_now, alloc_region_stack_at_handler with
+    | [], [] -> no_end_alloc_region
+    | alloc_region1 :: alloc_region_stack_now, alloc_region2 :: _ ->
+      if
+        Ident.equal alloc_region1.Env.alloc_region
+          alloc_region2.Env.alloc_region
+      then no_end_alloc_region
+      else add_end_alloc_region alloc_region1 ~alloc_region_stack_now
+    | alloc_region :: alloc_region_stack_now, [] ->
+      add_end_alloc_region alloc_region ~alloc_region_stack_now
+    | [], _ :: _ -> assert false
+    (* see above *)
+  in
   add_pop_traps acc ~try_stack_now
     (fun acc ccenv ->
-      add_end_regions acc ~region_stack_now
+      add_end_alloc_regions acc ~alloc_region_stack_now
         (fun acc ccenv ->
-          CC.close_apply_cont acc ccenv ~dbg continuation None args)
+          add_end_regions acc ~region_stack_now
+            (fun acc ccenv ->
+              CC.close_apply_cont acc ccenv ~dbg continuation None args)
+            acc ccenv)
         acc ccenv)
     acc ccenv
 

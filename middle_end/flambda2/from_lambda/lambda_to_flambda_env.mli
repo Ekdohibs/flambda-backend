@@ -28,6 +28,17 @@ module Region_stack_element : sig
   val equal : t -> t -> bool
 end
 
+type alloc_region_to_close =
+  | Ignore
+  | Check
+  | Absorb_into of Ident.t
+
+type alloc_region_stack_element =
+  { alloc_region : Ident.t;
+    on_normal_exit : alloc_region_to_close;
+    on_exn_exit : alloc_region_to_close
+  }
+
 val create :
   current_unit:Compilation_unit.t ->
   machine_width:Target_system.Machine_width.t ->
@@ -195,6 +206,11 @@ val region_stack : t -> Region_stack_element.t list
 
 val region_stack_in_cont_scope :
   t -> Continuation.t -> Region_stack_element.t list
+
+val alloc_region_stack : t -> alloc_region_stack_element list
+
+val alloc_region_stack_in_cont_scope :
+  t -> Continuation.t -> alloc_region_stack_element list
 
 val pop_one_region : t -> t * Region_stack_element.t option
 
