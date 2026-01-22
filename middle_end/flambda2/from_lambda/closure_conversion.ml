@@ -720,7 +720,8 @@ let close_c_call0 acc env ~loc ~let_bound_ids_with_kinds
        Lambda.external_call_description) as prim_desc)
     ~(args : Simple.t list list) exn_continuation dbg
     ~(current_region : Variable.t option) ~current_ghost_region
-    (k : Acc.t -> Named.t list -> Expr_with_acc.t) : Expr_with_acc.t =
+    ~current_alloc_region (k : Acc.t -> Named.t list -> Expr_with_acc.t) :
+    Expr_with_acc.t =
   if prim_is_layout_poly
   then
     Misc.fatal_errorf
@@ -742,10 +743,10 @@ let close_c_call0 acc env ~loc ~let_bound_ids_with_kinds
     match Lambda.locality_mode_of_primitive_description prim_desc with
     | None ->
       (* This happens when stack allocation is disabled. *)
-      Alloc_mode.For_applications.heap
+      Alloc_mode.For_applications.heap ~alloc_region:current_alloc_region
     | Some alloc_mode ->
-      Alloc_mode.For_applications.from_lambda alloc_mode ~current_region
-        ~current_ghost_region
+      Alloc_mode.For_applications.from_lambda alloc_mode ~current_alloc_region
+        ~current_region ~current_ghost_region
   in
   let alloc_mode =
     match Lambda.locality_mode_of_primitive_description prim_desc with
@@ -1066,7 +1067,8 @@ let close_raise acc env ~raise_kind ~arg ~dbg exn_continuation =
 
 let close_effect_primitive acc env ~dbg exn_continuation
     (prim : Lambda.primitive) ~args ~let_bound_ids_with_kinds
-    (k : Acc.t -> Named.t list -> Expr_with_acc.t) : Expr_with_acc.t =
+    ~current_alloc_region (k : Acc.t -> Named.t list -> Expr_with_acc.t) :
+    Expr_with_acc.t =
   if not Config.runtime5
   then Misc.fatal_error "Effect primitives are only supported on runtime5";
   (* CR mshinwell: share with close_c_call, above *)
@@ -1105,8 +1107,10 @@ let close_effect_primitive acc env ~dbg exn_continuation
         ~return_arity:
           (Flambda_arity.create_singletons
              [Flambda_kind.With_subkind.any_value])
-        ~call_kind ~alloc_mode:Alloc_mode.For_applications.heap dbg
-        ~inlined:Never_inlined
+        ~call_kind
+        ~alloc_mode:
+          (Alloc_mode.For_applications.heap ~alloc_region:current_alloc_region)
+        dbg ~inlined:Never_inlined
         ~inlining_state:(Inlining_state.default ~round:0)
         ~probe:None ~position:Normal
         ~relative_history:Inlining_history.Relative.empty
@@ -1155,9 +1159,9 @@ let close_effect_primitive acc env ~dbg exn_continuation
 
 let close_primitive acc env ~let_bound_ids_with_kinds named
     (prim : Lambda.primitive) ~args loc
-    (exn_continuation : IR.exn_continuation option) ~current_region
-    ~current_ghost_region (k : Acc.t -> Named.t list -> Expr_with_acc.t) :
-    Expr_with_acc.t =
+    (exn_continuation : IR.exn_continuation option) ~current_alloc_region
+    ~current_region ~current_ghost_region
+    (k : Acc.t -> Named.t list -> Expr_with_acc.t) : Expr_with_acc.t =
   let orig_exn_continuation = exn_continuation in
   let acc, exn_continuation =
     match exn_continuation with
@@ -1180,7 +1184,8 @@ let close_primitive acc env ~let_bound_ids_with_kinds named
       | Some exn_continuation -> exn_continuation
     in
     close_c_call acc env ~loc ~let_bound_ids_with_kinds prim ~args
-      exn_continuation dbg ~current_region ~current_ghost_region k
+      exn_continuation dbg ~current_region ~current_ghost_region
+      ~current_alloc_region k
   | Pgetglobal cu, [] ->
     if Compilation_unit.equal cu (Env.current_unit env)
     then
@@ -1297,7 +1302,7 @@ let close_primitive acc env ~let_bound_ids_with_kinds named
       | Some exn_continuation -> exn_continuation
     in
     close_effect_primitive acc env ~dbg exn_continuation prim ~args
-      ~let_bound_ids_with_kinds k
+      ~let_bound_ids_with_kinds ~current_alloc_region k
   | prim, args ->
     Lambda_to_flambda_primitives.convert_and_bind acc exn_continuation
       ~big_endian:(Env.big_endian env) ~register_const0 prim ~args dbg
@@ -1355,13 +1360,16 @@ let close_named acc env ~let_bound_ids_with_kinds (named : IR.named)
     in
     Lambda_to_flambda_primitives_helpers.bind_recs acc None ~register_const0
       prim Debuginfo.none k
-  | Prim { prim; args; loc; exn_continuation; region; ghost_region } ->
+  | Prim
+      { prim; args; loc; exn_continuation; region; ghost_region; alloc_region }
+    ->
     let get_region_ident region =
       Option.map (fun region -> fst (Env.find_var env region)) region
     in
     close_primitive acc env ~let_bound_ids_with_kinds named prim ~args loc
       exn_continuation ~current_region:(get_region_ident region)
       ~current_ghost_region:(get_region_ident ghost_region)
+      ~current_alloc_region:(fst (Env.find_var env alloc_region))
       k
 
 type simplified_block_load =
@@ -1742,6 +1750,7 @@ let close_exact_or_unknown_apply acc env
        region_close;
        region;
        ghost_region;
+       alloc_region;
        args_arity;
        return_arity
      } :
@@ -1757,8 +1766,9 @@ let close_exact_or_unknown_apply acc env
         convert_region region, convert_region ghost_region
       | Some (region, ghost_region) -> Some region, Some ghost_region
     in
-    Alloc_mode.For_applications.from_lambda mode ~current_region
-      ~current_ghost_region
+    Alloc_mode.For_applications.from_lambda mode
+      ~current_alloc_region:(fst (Env.find_var env alloc_region))
+      ~current_region ~current_ghost_region
   in
   let dbg = Debuginfo.from_location loc in
   let acc, call_kind, can_erase_callee =
@@ -2246,6 +2256,7 @@ let make_unboxed_function_wrapper acc function_slot ~unarized_params:params
   let return_continuation = Continuation.create () in
   let exn_continuation = Continuation.create () in
   let my_closure = Variable.create "my_closure" K.value in
+  let my_alloc_region = Variable.create "my_alloc_region" K.region in
   let my_region =
     if contains_no_escaping_local_allocs
     then None
@@ -2329,7 +2340,8 @@ let make_unboxed_function_wrapper acc function_slot ~unarized_params:params
         ~alloc_mode:
           (Alloc_mode.For_applications.from_lambda
              (Function_decl.result_mode decl)
-             ~current_region:my_region ~current_ghost_region:my_ghost_region)
+             ~current_alloc_region:my_alloc_region ~current_region:my_region
+             ~current_ghost_region:my_ghost_region)
         Debuginfo.none ~inlined:Inlined_attribute.Default_inlined
         ~inlining_state:(Inlining_state.default ~round:0)
         ~probe:None ~position:Normal
@@ -2434,7 +2446,8 @@ let make_unboxed_function_wrapper acc function_slot ~unarized_params:params
   let my_alloc_mode =
     Alloc_mode.For_applications.from_lambda
       (Function_decl.result_mode decl)
-      ~current_region:my_region ~current_ghost_region:my_ghost_region
+      ~current_alloc_region:my_alloc_region ~current_region:my_region
+      ~current_ghost_region:my_ghost_region
   in
   let wrapper_params_and_body =
     Function_params_and_body.create ~return_continuation ~exn_continuation
@@ -2540,6 +2553,7 @@ let close_one_function acc ~code_id ~external_env ~by_function_slot
     Acc.push_closure_info acc ~return_continuation ~exn_continuation ~my_closure
       ~is_purely_tailrec:is_single_recursive_function ~code_id
   in
+  let my_alloc_region = Function_decl.my_alloc_region decl in
   let my_region = Function_decl.my_region decl in
   let my_ghost_region = Function_decl.my_ghost_region decl in
   let function_slot = Function_decl.function_slot decl in
@@ -2645,9 +2659,14 @@ let close_one_function acc ~code_id ~external_env ~by_function_slot
         env)
       unarized_params closure_env
   in
+  let closure_env, alloc_region =
+    Env.add_var_like closure_env my_alloc_region Not_user_visible
+      K.With_subkind.region
+  in
   let closure_env, my_region, my_ghost_region, my_alloc_mode =
     match my_region, my_ghost_region with
-    | None, None -> closure_env, None, None, Alloc_mode.For_applications.heap
+    | None, None ->
+      closure_env, None, None, Alloc_mode.For_applications.heap ~alloc_region
     | Some _, None | None, Some _ -> assert false (* This should never happen *)
     | Some my_region, Some my_ghost_region ->
       let env, region =
@@ -2661,7 +2680,7 @@ let close_one_function acc ~code_id ~external_env ~by_function_slot
       ( env,
         Some region,
         Some ghost_region,
-        Alloc_mode.For_applications.local ~region ~ghost_region )
+        Alloc_mode.For_applications.local ~alloc_region ~region ~ghost_region )
   in
   let closure_env = Env.with_depth closure_env my_depth in
   let closure_env, absolute_history, relative_history =
@@ -3343,6 +3362,7 @@ let wrap_partial_application acc env apply_continuation (apply : IR.apply)
     | Alloc_heap -> true
     | Alloc_local -> false
   in
+  let my_alloc_region = Ident.create_local "my_alloc_region" in
   let my_region =
     if contains_no_escaping_local_allocs
     then None
@@ -3419,8 +3439,8 @@ let wrap_partial_application acc env apply_continuation (apply : IR.apply)
                })
           ~params ~params_arity ~removed_params:Ident.Set.empty
           ~return:result_arity ~calling_convention:Normal_calling_convention
-          ~return_continuation ~exn_continuation ~my_region ~my_ghost_region
-          ~body:fbody ~attr ~loc:apply.loc ~free_idents_of_body
+          ~return_continuation ~exn_continuation ~my_alloc_region ~my_region
+          ~my_ghost_region ~body:fbody ~attr ~loc:apply.loc ~free_idents_of_body
           ~closure_alloc_mode ~first_complex_local_param ~result_mode
           Recursive.Non_recursive ]
     in
@@ -3458,6 +3478,7 @@ let wrap_over_application acc env full_call (apply : IR.apply) ~remaining
       Some (over_app_region, over_app_ghost_region, Continuation.create ())
     | Alloc_heap, Alloc_heap | Alloc_local, _ -> None
   in
+  let apply_alloc_region = fst (Env.find_var env apply.alloc_region) in
   let apply_region, apply_ghost_region =
     match needs_region with
     | None ->
@@ -3481,7 +3502,8 @@ let wrap_over_application acc env full_call (apply : IR.apply) ~remaining
     in
     let alloc_mode =
       Alloc_mode.For_applications.from_lambda apply.mode
-        ~current_region:apply_region ~current_ghost_region:apply_ghost_region
+        ~current_alloc_region:apply_alloc_region ~current_region:apply_region
+        ~current_ghost_region:apply_ghost_region
     in
     let continuation =
       match needs_region with

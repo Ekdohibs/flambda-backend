@@ -654,8 +654,17 @@ let rec cps acc env ccenv (lam : L.lambda) (k : cps_continuation)
           let ghost_region =
             Option.map Env.Region_stack_element.ghost_region current_region
           in
+          let alloc_region = todo in
           CC.close_let acc ccenv ids_with_kinds (is_user_visible env id)
-            (Prim { prim; args; loc; exn_continuation; region; ghost_region })
+            (Prim
+               { prim;
+                 args;
+                 loc;
+                 exn_continuation;
+                 region;
+                 ghost_region;
+                 alloc_region
+               })
             ~body)
         k_exn
     | Transformed lam ->
@@ -1761,6 +1770,7 @@ and cps_switch acc env ccenv (switch : L.lambda_switch) ~condition_dbg
             let ghost_region =
               Option.map Env.Region_stack_element.ghost_region current_region
             in
+            let alloc_region = todo in
             CC.close_let acc ccenv
               [ ( is_scrutinee_int,
                   is_scrutinee_int_duid,
@@ -1772,7 +1782,8 @@ and cps_switch acc env ccenv (switch : L.lambda_switch) ~condition_dbg
                    loc = Loc_unknown;
                    exn_continuation = None;
                    region;
-                   ghost_region
+                   ghost_region;
+                   alloc_region
                  })
               ~body
           in

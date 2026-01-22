@@ -181,8 +181,8 @@ let alloc_mode_for_allocations env (alloc : Alloc_mode.For_allocations.t) :
 let alloc_mode_for_applications env (alloc : Alloc_mode.For_applications.t) :
     Fexpr.alloc_mode_for_applications =
   match alloc with
-  | Heap -> Heap
-  | Local { region = r; ghost_region = r' } ->
+  | Heap { alloc_region = _ } -> (* TODO *) Heap
+  | Local { alloc_region = _; region = r; ghost_region = r' } ->
     let r = Env.find_region_exn env r in
     let r' = Env.find_region_exn env r' in
     Local { region = r; ghost_region = r' }
@@ -444,13 +444,23 @@ and static_let_expr env bound_static defining_expr body : Fexpr.expr =
                 (Bound_parameters.to_list params)
             in
             let closure_var, env = Env.bind_var env my_closure in
-            let region_var, ghost_region_var, env =
+            let _alloc_region_var, region_var, ghost_region_var, env =
               match my_alloc_mode with
-              | Heap -> nowhere "_region", nowhere "_ghost_region", env
-              | Local { region = my_region; ghost_region = my_ghost_region } ->
+              | Heap { alloc_region } ->
+                let alloc_region_var, env = Env.bind_var env alloc_region in
+                ( alloc_region_var,
+                  nowhere "_region",
+                  nowhere "_ghost_region",
+                  env )
+              | Local
+                  { alloc_region = my_alloc_region;
+                    region = my_region;
+                    ghost_region = my_ghost_region
+                  } ->
+                let alloc_region_var, env = Env.bind_var env my_alloc_region in
                 let region_var, env = Env.bind_var env my_region in
                 let ghost_region_var, env = Env.bind_var env my_ghost_region in
-                region_var, ghost_region_var, env
+                alloc_region_var, region_var, ghost_region_var, env
             in
             let depth_var, env = Env.bind_var env my_depth in
             let body = expr env body in
