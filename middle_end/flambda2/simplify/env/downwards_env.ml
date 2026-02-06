@@ -91,10 +91,14 @@ type t =
            generate a fresh [Lifted_cont_param] when we execute
            [define_variable]. Note that this set will always be a subset of the
            head of the defined_variables_by_scope field. *)
-    cost_of_lifting_continuations_out_of_current_one : int
-        (* This cost is the number of parameters that would have to be created
-           if we lifted all continuations that are defined in the current
-           continuation's handler. *)
+    cost_of_lifting_continuations_out_of_current_one : int;
+    (* This cost is the number of parameters that would have to be created if we
+       lifted all continuations that are defined in the current continuation's
+       handler. *)
+    targets_of_checked_continuations : Continuation.t Continuation.Map.t
+        (* For each checked continuation [let cont k2 = k1 with checks], this
+           maps [k2] to [k1], or the target thereof, if [k1] is itself a checked
+           continuation. *)
   }
 
 let [@ocamlformat "disable"] print ppf { round; machine_width; typing_env;
@@ -107,7 +111,7 @@ let [@ocamlformat "disable"] print ppf { round; machine_width; typing_env;
                 get_imported_code = _; inlining_history_tracker = _;
                 loopify_state; replay_history; specialization_cost; defined_variables_by_scope;
                 lifted = _; cost_of_lifting_continuations_out_of_current_one;
-                join_analysis;
+                join_analysis; targets_of_checked_continuations;
               } =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(round@ %d)@]@ \
@@ -131,7 +135,8 @@ let [@ocamlformat "disable"] print ppf { round; machine_width; typing_env;
       @[<hov 1>(specialization_cost@ %a)@]@ \
       @[<hov 1>(join_analysis@ %a)@]@ \
       @[<hov 1>(defined_variables_by_scope@ %a)@]@ \
-      @[<hov 1>(cost_of_lifting_continuation_out_of_current_one %d)@]\
+      @[<hov 1>(cost_of_lifting_continuation_out_of_current_one %d)@]@ \
+      @[<hov 1>(targets_of_checked_continuations@ %a)@]\
       )@]"
     round
     Target_system.Machine_width.print machine_width
@@ -156,6 +161,7 @@ let [@ocamlformat "disable"] print ppf { round; machine_width; typing_env;
       ~none:(fun ppf () -> Format.fprintf ppf "()")) join_analysis
     (Format.pp_print_list ~pp_sep:Format.pp_print_space Lifted_cont_params.print) defined_variables_by_scope
     cost_of_lifting_continuations_out_of_current_one
+    (Continuation.Map.print Continuation.print) targets_of_checked_continuations
 
 let define_continuations t conts =
   let replay_history =
@@ -239,7 +245,8 @@ let create ~round ~machine_width ~(resolver : resolver)
       defined_variables_by_scope = [Lifted_cont_params.empty];
       lifted = Variable.Set.empty;
       cost_of_lifting_continuations_out_of_current_one = 0;
-      join_analysis = None
+      join_analysis = None;
+      targets_of_checked_continuations = Continuation.Map.empty
     }
   in
   let my_region_duid = Flambda_debug_uid.none in
@@ -324,7 +331,8 @@ let enter_set_of_closures
       defined_variables_by_scope = _;
       lifted = _;
       cost_of_lifting_continuations_out_of_current_one = _;
-      join_analysis = _
+      join_analysis = _;
+      targets_of_checked_continuations = _
     } ~in_stub =
   let disable_inlining : Disable_inlining.t =
     if in_stub then Disable_inlining Stub else disable_inlining
@@ -353,7 +361,8 @@ let enter_set_of_closures
     join_analysis = None;
     defined_variables_by_scope = [Lifted_cont_params.empty];
     lifted = Variable.Set.empty;
-    cost_of_lifting_continuations_out_of_current_one = 0
+    cost_of_lifting_continuations_out_of_current_one = 0;
+    targets_of_checked_continuations = Continuation.Map.empty
   }
 
 let define_symbol t sym kind =
@@ -768,5 +777,6 @@ let denv_for_lifted_continuation ~denv_for_join ~denv =
     are_rebuilding_terms = denv.are_rebuilding_terms;
     closure_info = denv.closure_info;
     get_imported_code = denv.get_imported_code;
-    loopify_state = denv.loopify_state
+    loopify_state = denv.loopify_state;
+    targets_of_checked_continuations = denv.targets_of_checked_continuations
   }

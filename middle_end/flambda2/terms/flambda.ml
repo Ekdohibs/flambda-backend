@@ -92,6 +92,11 @@ and let_cont_expr =
         is_applied_with_traps : bool
       }
   | Recursive of recursive_let_cont_handlers
+  | With_check_actions of
+      { aliased_continuation : Continuation.t;
+        check_actions : unit list;
+        continuation_and_body : (Bound_continuation.t, expr) Name_abstraction.t
+      }
 
 and non_recursive_let_cont_handler =
   { continuation_and_body : (Bound_continuation.t, expr) Name_abstraction.t;
@@ -227,6 +232,30 @@ and apply_renaming_let_cont_expr let_cont renaming =
       apply_renaming_recursive_let_cont_handlers handlers renaming
     in
     if handlers == handlers' then let_cont else Recursive handlers'
+  | With_check_actions
+      { aliased_continuation; check_actions; continuation_and_body } ->
+    let aliased_continuation' =
+      Renaming.apply_continuation renaming aliased_continuation
+    in
+    let check_actions' =
+      Misc.Stdlib.List.map_sharing (fun () -> ()) check_actions
+    in
+    let continuation_and_body' =
+      Name_abstraction.apply_renaming
+        (module Bound_continuation)
+        continuation_and_body renaming ~apply_renaming_to_term:apply_renaming
+    in
+    if
+      aliased_continuation == aliased_continuation'
+      && check_actions == check_actions'
+      && continuation_and_body == continuation_and_body'
+    then let_cont
+    else
+      With_check_actions
+        { aliased_continuation = aliased_continuation';
+          check_actions = check_actions';
+          continuation_and_body = continuation_and_body'
+        }
 
 and apply_renaming_non_recursive_let_cont_handler
     { continuation_and_body; handler } renaming =
@@ -395,6 +424,20 @@ and ids_for_export_let_cont_expr t =
       { handler; num_free_occurrences = _; is_applied_with_traps = _ } ->
     ids_for_export_non_recursive_let_cont_handler handler
   | Recursive handlers -> ids_for_export_recursive_let_cont_handlers handlers
+  | With_check_actions
+      { aliased_continuation; check_actions; continuation_and_body } ->
+    let continuation_and_body_ids =
+      Name_abstraction.ids_for_export
+        (module Bound_continuation)
+        continuation_and_body ~ids_for_export_of_term:ids_for_export
+    in
+    let ids_for_export =
+      Ids_for_export.add_continuation continuation_and_body_ids
+        aliased_continuation
+    in
+    List.fold_left
+      (fun ids_for_export () -> ids_for_export)
+      ids_for_export check_actions
 
 and ids_for_export_non_recursive_let_cont_handler
     { continuation_and_body; handler } =
@@ -626,11 +669,9 @@ and print_let_cont_expr ppf t =
           | Let _ | Apply _ | Apply_cont _ | Switch _ | Invalid _ ->
             let_conts, body
         in
-        ( ( k,
-            Recursive.Non_recursive,
-            Bound_parameters.empty,
-            handler.handler,
-            num_free_occurrences )
+        ( (fun ppf ->
+            print_continuation_handler Recursive.Non_recursive
+              Bound_parameters.empty ppf k handler.handler num_free_occurrences)
           :: let_conts,
           body )
       in
@@ -649,11 +690,9 @@ and print_let_cont_expr ppf t =
         let new_let_conts =
           List.map
             (fun (k, handler) ->
-              ( k,
-                Recursive.Recursive,
-                invariant_params,
-                handler,
-                Or_unknown.Unknown ))
+              fun ppf ->
+               print_continuation_handler Recursive.Recursive invariant_params
+                 ppf k handler Or_unknown.Unknown)
             (Continuation.Lmap.bindings handlers)
         in
         new_let_conts @ let_conts, body
@@ -669,14 +708,37 @@ and print_let_cont_expr ppf t =
             ~apply_renaming_to_term:apply_renaming_continuations_handlers_t0
             ~f:(fun invariant_params handlers ->
               print ~body ~invariant_params handlers))
+    | With_check_actions
+        { aliased_continuation; check_actions; continuation_and_body } ->
+      let print k ~body =
+        let let_conts, body =
+          match descr body with
+          | Let_cont let_cont -> gather_let_conts let_conts let_cont
+          | Let _ | Apply _ | Apply_cont _ | Switch _ | Invalid _ ->
+            let_conts, body
+        in
+        ( (fun ppf ~first ->
+            let fprintf = Format.fprintf in
+            if not first then fprintf ppf "@ ";
+            List.iter (fun () -> ()) check_actions;
+            fprintf ppf "@[<hov 0>@[<hov 1>%t%a%t %t=%t@]@ @[<hov 0>%a@]@]"
+              Flambda_colours.continuation_definition Continuation.print k
+              Flambda_colours.pop Flambda_colours.elide Flambda_colours.pop
+              Continuation.print aliased_continuation)
+          :: let_conts,
+          body )
+      in
+      Name_abstraction.pattern_match_for_printing
+        (module Bound_continuation)
+        continuation_and_body ~apply_renaming_to_term:apply_renaming
+        ~f:(fun k body -> print k ~body)
   in
   let let_conts, body = gather_let_conts [] t in
   fprintf ppf "@[<v 1>(%a@;" print body;
   let first = ref true in
   List.iter
-    (fun (cont, recursive, invariant_params, handler, occurrences) ->
-      print_continuation_handler recursive invariant_params ppf cont handler
-        occurrences ~first:!first;
+    (fun print ->
+      print ppf ~first:!first;
       first := false)
     (List.rev let_conts);
   fprintf ppf ")@]"

@@ -94,6 +94,11 @@ and let_cont_expr = private
                 continuations that are applied with a trap action *)
       }
   | Recursive of recursive_let_cont_handlers
+  | With_check_actions of
+      { aliased_continuation : Continuation.t;
+        check_actions : unit list;
+        continuation_and_body : (Bound_continuation.t, expr) Name_abstraction.t
+      }
 
 and static_const_or_code = private
   | Code of function_params_and_body Code0.t
