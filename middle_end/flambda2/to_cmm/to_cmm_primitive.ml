@@ -1114,6 +1114,9 @@ let nullary_primitive _env res dbg prim =
   | Domain_index -> None, res, C.domain_index ~dbg
   | Poll -> None, res, C.poll ~dbg
   | Cpu_relax -> None, res, C.cpu_relax ~dbg
+  | Begin_alloc_region ->
+    (* TODO: C.beginallocregion *)
+    None, res, C.int ~dbg 0
 
 let imm_or_ptr : P.Block_access_field_kind.t -> Lambda.immediate_or_pointer =
  fun block_access_kind ->
@@ -1257,6 +1260,9 @@ let unary_primitive env res dbg f (_arg_simple : Simple.t option)
   | Make_lazy { lazy_tag; alloc_region = _ } ->
     let tag = Tag.to_int (P.Lazy_block_tag.to_tag lazy_tag) in
     None, res, C.make_alloc ~mode:Heap dbg ~tag [arg]
+  | Check_alloc_region ->
+    (* TODO *)
+    None, res, C.unit ~dbg
 
 let binary_primitive env dbg f (_x_simple : Simple.t option)
     (_y_simple : Simple.t option) (x : Cmm.expression) (y : Cmm.expression) =
@@ -1295,6 +1301,7 @@ let binary_primitive env dbg f (_x_simple : Simple.t option)
     let addr = C.add_int x y dbg in
     let memory_chunk = C.memory_chunk_of_kind kind in
     C.load ~dbg memory_chunk mut ~addr
+  | Absorb_alloc_region -> C.unit ~dbg
 
 let ternary_primitive _env dbg f (_x_simple : Simple.t option)
     (_y_simple : Simple.t option) (_z_simple : Simple.t option)

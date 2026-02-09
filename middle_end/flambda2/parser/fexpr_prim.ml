@@ -723,6 +723,11 @@ let poll = D.(nullary "%poll" ~params:param0 (fun _env () -> P.Poll))
 let cpu_relax =
   D.(nullary "%cpu_relax" ~params:param0 (fun _env () -> P.Cpu_relax))
 
+let begin_alloc_region =
+  D.(
+    nullary "%begin_alloc_region" ~params:param0 (fun _env () ->
+        P.Begin_alloc_region))
+
 (* Unaries *)
 let block_load =
   D.(
@@ -766,6 +771,11 @@ let peek =
   D.(
     unary "%peek" ~params:(positional standard_int_or_float)
       (fun _ standard_int_or_float -> P.Peek standard_int_or_float))
+
+let check_alloc_region =
+  D.(
+    unary "%check_alloc_region" ~params:param0 (fun _ () ->
+        P.Check_alloc_region))
 
 let get_tag = D.(unary "%get_tag" ~params:param0 (fun _ () -> P.Get_tag))
 
@@ -1109,6 +1119,11 @@ let poke =
     binary "%poke" ~params:(positional standard_int_or_float)
       (fun _ standard_int_or_float -> P.Poke standard_int_or_float))
 
+let absorb_alloc_region =
+  D.(
+    binary "%absorb_alloc_region" ~params:param0 (fun _ () ->
+        P.Absorb_alloc_region))
+
 (* Ternaries *)
 let array_set =
   let open D in
@@ -1301,6 +1316,7 @@ module OfFlambda = struct
     | Tls_get -> tls_get env ()
     | Poll -> poll env ()
     | Cpu_relax -> cpu_relax env ()
+    | Begin_alloc_region -> begin_alloc_region env ()
 
   let unop env (op : P.unary_primitive) =
     match op with
@@ -1345,6 +1361,7 @@ module OfFlambda = struct
     | Peek standard_int_or_float -> peek env standard_int_or_float
     | Duplicate_block { kind; alloc_region } ->
       duplicate_block env (kind, alloc_region)
+    | Check_alloc_region -> check_alloc_region env ()
 
   let binop env (op : P.binary_primitive) =
     match op with
@@ -1365,6 +1382,7 @@ module OfFlambda = struct
     | Bigarray_get_alignment align -> bigarray_get_alignment env align
     | Read_offset (kind, mutable_flag) -> read_offset env (kind, mutable_flag)
     | Poke standard_int_or_float -> poke env standard_int_or_float
+    | Absorb_alloc_region -> absorb_alloc_region env ()
 
   let ternop env (op : P.ternary_primitive) =
     match op with

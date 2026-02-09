@@ -201,7 +201,8 @@ let traverse_prim denv acc ~bound_pattern (prim : Flambda_primitive.t) ~default
         Acc.add_accessor_dep acc ~to_ Field.get_tag ~base:name)
   | Nullary
       ( Invalid _ | Optimised_out _ | Probe_is_enabled _ | Enter_inlined_apply _
-      | Dls_get | Tls_get | Domain_index | Poll | Cpu_relax )
+      | Dls_get | Tls_get | Domain_index | Poll | Cpu_relax | Begin_alloc_region
+        )
   | Unary
       ( ( Duplicate_block _ | Duplicate_array _
         | Is_int { variant_only = false }
@@ -211,13 +212,13 @@ let traverse_prim denv acc ~bound_pattern (prim : Flambda_primitive.t) ~default
         | Reinterpret_boxed_vector | Unbox_number _ | Box_number _
         | Untag_immediate | Tag_immediate | Is_boxed_float | Is_flat_float_array
         | End_region _ | End_try_region _ | Obj_dup _ | Get_header | Peek _
-        | Make_lazy _ ),
+        | Make_lazy _ | Check_alloc_region ),
         _ )
   | Binary
       ( ( Block_set _ | Array_load _ | String_or_bigstring_load _
         | Bigarray_load _ | Phys_equal _ | Int_arith _ | Int_shift _
         | Int_comp _ | Float_arith _ | Float_comp _ | Bigarray_get_alignment _
-        | Atomic_load_field _ | Poke _ | Read_offset _ ),
+        | Atomic_load_field _ | Poke _ | Read_offset _ | Absorb_alloc_region ),
         _,
         _ )
   | Ternary

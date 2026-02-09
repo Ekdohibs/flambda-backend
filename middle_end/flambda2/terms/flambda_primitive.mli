@@ -381,6 +381,7 @@ type nullary_primitive =
   | Cpu_relax
       (** Arch-specific pause. If poll insertion is disabled, also acts as a
           polling point. *)
+  | Begin_alloc_region  (** XXX comment *)
 
 (** Untagged binary integer arithmetic operations.
 
@@ -506,6 +507,7 @@ type unary_primitive =
       { lazy_tag : Lazy_block_tag.t;
         alloc_region : Variable.t
       }
+  | Check_alloc_region  (** XXX comment *)
 
 (** Whether a comparison is to yield a boolean result, as given by a particular
     comparison operator, or whether it is to behave in the manner of "compare"
@@ -567,6 +569,7 @@ type binary_primitive =
      deleting [Atomic_load_field] *)
   | Poke of Flambda_kind.Standard_int_or_float.t
   | Read_offset of Flambda_kind.With_subkind.t * Asttypes.mutable_flag
+  | Absorb_alloc_region  (** XXX comment *)
 
 (** Atomic arithmetic operations on integers. *)
 type int_atomic_op =

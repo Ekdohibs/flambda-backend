@@ -79,6 +79,7 @@ let _print_stack ppf stack =
    is also necessary for closing local allocation regions. *)
 let compile_staticfail acc env ccenv ~(continuation : Continuation.t) ~args :
     Expr_with_acc.t =
+  let add_end_alloc_regions = todo in
   let try_stack_at_handler = Env.get_try_stack_at_handler env continuation in
   let try_stack_now = Env.get_try_stack env in
   let dbg =
