@@ -1068,10 +1068,11 @@ type nullary_primitive =
   | Domain_index
   | Poll
   | Cpu_relax
+  | Begin_alloc_region
 
 let nullary_primitive_eligible_for_cse = function
   | Invalid _ | Optimised_out _ | Probe_is_enabled _ | Enter_inlined_apply _
-  | Dls_get | Tls_get | Domain_index | Poll | Cpu_relax ->
+  | Dls_get | Tls_get | Domain_index | Poll | Cpu_relax | Begin_alloc_region ->
     false
 
 let compare_nullary_primitive p1 p2 =
@@ -1086,6 +1087,7 @@ let compare_nullary_primitive p1 p2 =
     | Domain_index -> 6
     | Poll -> 7
     | Cpu_relax -> 8
+    | Begin_alloc_region -> 9
   in
   match p1, p2 with
   | Invalid k1, Invalid k2 -> K.compare k1 k2
@@ -1103,8 +1105,10 @@ let compare_nullary_primitive p1 p2 =
   | Domain_index, Domain_index -> 0
   | Poll, Poll -> 0
   | Cpu_relax, Cpu_relax -> 0
+  | Begin_alloc_region, Begin_alloc_region -> 0
   | ( ( Invalid _ | Optimised_out _ | Probe_is_enabled _ | Enter_inlined_apply _
-      | Dls_get | Tls_get | Domain_index | Poll | Cpu_relax ),
+      | Dls_get | Tls_get | Domain_index | Poll | Cpu_relax | Begin_alloc_region
+        ),
       _ ) ->
     Int.compare
       (nullary_primitive_numbering p1)
@@ -1133,6 +1137,7 @@ let print_nullary_primitive ppf p =
   | Domain_index -> Format.pp_print_string ppf "Domain_index"
   | Poll -> Format.pp_print_string ppf "Poll"
   | Cpu_relax -> Format.pp_print_string ppf "Cpu_relax"
+  | Begin_alloc_region -> Format.pp_print_string ppf "Begin_alloc_region"
 
 let result_kind_of_nullary_primitive p : result_kind =
   match p with
@@ -1143,6 +1148,7 @@ let result_kind_of_nullary_primitive p : result_kind =
   | Dls_get | Tls_get -> Singleton K.value
   | Domain_index -> Singleton K.naked_immediate
   | Poll | Cpu_relax -> Unit
+  | Begin_alloc_region -> Singleton K.region
 
 let coeffects_of_mode : Alloc_mode.For_allocations.t -> Coeffects.t = function
   | Local _ -> Coeffects.Has_coeffects
@@ -1166,11 +1172,13 @@ let effects_and_coeffects_of_nullary_primitive p : Effects_and_coeffects.t =
     No_effects, Has_coeffects, Strict, Can't_move_before_any_branch
   | Poll | Cpu_relax ->
     Arbitrary_effects, Has_coeffects, Strict, Can't_move_before_any_branch
+  | Begin_alloc_region ->
+    Only_generative_effects Mutable, No_coeffects, Strict, Can_move_anywhere
 
 let nullary_classify_for_printing p =
   match p with
   | Invalid _ | Optimised_out _ | Probe_is_enabled _ | Enter_inlined_apply _
-  | Dls_get | Tls_get | Domain_index | Poll | Cpu_relax ->
+  | Dls_get | Tls_get | Domain_index | Poll | Cpu_relax | Begin_alloc_region ->
     Neither
 
 module Reinterpret_64_bit_word = struct
@@ -1246,6 +1254,7 @@ type unary_primitive =
   | Get_header
   | Peek of Flambda_kind.Standard_int_or_float.t
   | Make_lazy of Lazy_block_tag.t
+  | Check_alloc_region
 
 (* Here and below, operations that are genuine projections shouldn't be eligible
    for CSE, since we deal with projections through types. *)
@@ -1279,7 +1288,9 @@ let unary_primitive_eligible_for_cse p ~arg =
     Simple.is_var arg
   | Project_function_slot _ | Project_value_slot _ -> false
   | Is_boxed_float | Is_flat_float_array -> true
-  | End_region _ | End_try_region _ | Obj_dup | Peek _ | Make_lazy _ -> false
+  | End_region _ | End_try_region _ | Obj_dup | Peek _ | Make_lazy _
+  | Check_alloc_region ->
+    false
 
 let compare_unary_primitive p1 p2 =
   let unary_primitive_numbering p =
@@ -1315,6 +1326,7 @@ let compare_unary_primitive p1 p2 =
     | Peek _ -> 28
     | Make_lazy _ -> 29
     | Reinterpret_boxed_vector -> 30
+    | Check_alloc_region -> 31
   in
   match p1, p2 with
   | ( Block_load { kind = kind1; mut = mut1; field = field1 },
@@ -1400,6 +1412,7 @@ let compare_unary_primitive p1 p2 =
     Flambda_kind.Standard_int_or_float.compare kind1 kind2
   | Make_lazy lazy_tag1, Make_lazy lazy_tag2 ->
     Lazy_block_tag.compare lazy_tag1 lazy_tag2
+  | Check_alloc_region, Check_alloc_region -> 0
   | ( ( Block_load _ | Duplicate_array _ | Duplicate_block _ | Is_int _
       | Is_null | Get_tag | String_length _ | Int_as_pointer _
       | Opaque_identity _ | Int_arith _ | Num_conv _ | Boolean_not
@@ -1408,7 +1421,7 @@ let compare_unary_primitive p1 p2 =
       | Untag_immediate | Tag_immediate | Project_function_slot _
       | Project_value_slot _ | Is_boxed_float | Is_flat_float_array
       | End_region _ | End_try_region _ | Obj_dup | Get_header | Peek _
-      | Make_lazy _ ),
+      | Make_lazy _ | Check_alloc_region ),
       _ ) ->
     Stdlib.compare (unary_primitive_numbering p1) (unary_primitive_numbering p2)
 
@@ -1478,6 +1491,7 @@ let print_unary_primitive ppf p =
       Flambda_kind.Standard_int_or_float.print_lowercase kind
   | Make_lazy lazy_tag ->
     fprintf ppf "@[<hov 1>(Make_lazy@ %a)@]" Lazy_block_tag.print lazy_tag
+  | Check_alloc_region -> fprintf ppf "Check_alloc_region"
 
 let arg_kind_of_unary_primitive p =
   match p with
@@ -1514,6 +1528,7 @@ let arg_kind_of_unary_primitive p =
   | Get_header -> K.value
   | Peek _ -> K.naked_nativeint
   | Make_lazy _ -> K.value
+  | Check_alloc_region -> K.region
 
 let result_kind_of_unary_primitive p : result_kind =
   match p with
@@ -1553,6 +1568,7 @@ let result_kind_of_unary_primitive p : result_kind =
   | Get_header -> Singleton K.naked_nativeint
   | Peek kind -> Singleton (K.Standard_int_or_float.to_kind kind)
   | Make_lazy _ -> Singleton K.value
+  | Check_alloc_region -> Unit
 
 let effects_and_coeffects_of_unary_primitive p : Effects_and_coeffects.t =
   match p with
@@ -1657,7 +1673,7 @@ let effects_and_coeffects_of_unary_primitive p : Effects_and_coeffects.t =
   | Is_boxed_float | Is_flat_float_array ->
     (* Tags on heap blocks are immutable. *)
     No_effects, No_coeffects, Strict, Can't_move_before_any_branch
-  | End_region _ | End_try_region _ ->
+  | End_region _ | End_try_region _ | Check_alloc_region ->
     (* These can't be [Only_generative_effects] or the primitives would get
        deleted without regard to prior uses of the region. Instead there are
        special cases in [Simplify_let_expr] and [Expr_builder] for this
@@ -1691,7 +1707,7 @@ let unary_classify_for_printing p =
   | Box_number _ | Tag_immediate | Int_as_pointer _ -> Constructive
   | Project_function_slot _ | Project_value_slot _ | Block_load _ -> Destructive
   | Is_boxed_float | Is_flat_float_array -> Neither
-  | End_region _ | End_try_region _ -> Neither
+  | End_region _ | End_try_region _ | Check_alloc_region -> Neither
   | Get_header -> Neither
   | Peek _ -> Neither
   | Make_lazy _ -> Constructive
@@ -1717,7 +1733,7 @@ let free_names_unary_primitive p =
   | Untag_immediate | Tag_immediate | Is_boxed_float | Is_flat_float_array
   | End_region _ | End_try_region _ | Obj_dup | Get_header
   | Peek (_ : Flambda_kind.Standard_int_or_float.t)
-  | Make_lazy _ ->
+  | Make_lazy _ | Check_alloc_region ->
     Name_occurrences.empty
 
 let apply_renaming_unary_primitive p renaming =
@@ -1740,7 +1756,7 @@ let apply_renaming_unary_primitive p renaming =
   | End_region _ | End_try_region _ | Project_function_slot _
   | Project_value_slot _ | Obj_dup | Get_header
   | Peek (_ : Flambda_kind.Standard_int_or_float.t)
-  | Make_lazy _ ->
+  | Make_lazy _ | Check_alloc_region ->
     p
 
 let ids_for_export_unary_primitive p =
@@ -1755,7 +1771,7 @@ let ids_for_export_unary_primitive p =
   | End_region _ | End_try_region _ | Project_function_slot _
   | Project_value_slot _ | Obj_dup | Get_header
   | Peek (_ : Flambda_kind.Standard_int_or_float.t)
-  | Make_lazy _ ->
+  | Make_lazy _ | Check_alloc_region ->
     Ids_for_export.empty
 
 type binary_int_arith_op =
@@ -1830,6 +1846,7 @@ type binary_primitive =
   | Atomic_load_field of Block_access_field_kind.t
   | Poke of Flambda_kind.Standard_int_or_float.t
   | Read_offset of Flambda_kind.With_subkind.t * Asttypes.mutable_flag
+  | Absorb_alloc_region
 
 let binary_primitive_eligible_for_cse p =
   match p with
@@ -1848,6 +1865,7 @@ let binary_primitive_eligible_for_cse p =
        effects_and_coeffects of unary primitives. *)
     Flambda_features.float_const_prop ()
   | Atomic_load_field (Any_value | Immediate) | Poke _ | Read_offset _ -> false
+  | Absorb_alloc_region -> false
 
 let compare_binary_primitive p1 p2 =
   let binary_primitive_numbering p =
@@ -1866,6 +1884,7 @@ let compare_binary_primitive p1 p2 =
     | Atomic_load_field _ -> 11
     | Poke _ -> 12
     | Read_offset _ -> 13
+    | Absorb_alloc_region -> 14
   in
   match p1, p2 with
   | ( Block_set { kind = kind1; init = init1; field = field1 },
@@ -1923,10 +1942,11 @@ let compare_binary_primitive p1 p2 =
   | Read_offset (kind1, mut1), Read_offset (kind2, mut2) ->
     let c = Array_load_kind.compare kind1 kind2 in
     if c <> 0 then c else Stdlib.compare mut1 mut2
+  | Absorb_alloc_region, Absorb_alloc_region -> 0
   | ( ( Block_set _ | Array_load _ | String_or_bigstring_load _
       | Bigarray_load _ | Phys_equal _ | Int_arith _ | Int_shift _ | Int_comp _
       | Float_arith _ | Float_comp _ | Bigarray_get_alignment _
-      | Atomic_load_field _ | Poke _ | Read_offset _ ),
+      | Atomic_load_field _ | Poke _ | Read_offset _ | Absorb_alloc_region ),
       _ ) ->
     Stdlib.compare
       (binary_primitive_numbering p1)
@@ -1974,6 +1994,7 @@ let print_binary_primitive ppf p =
   | Read_offset (kind, mut) ->
     fprintf ppf "@[(Read_offset@ %a %s)@]" Flambda_kind.With_subkind.print kind
       (match mut with Immutable -> "Immutable" | Mutable -> "Mutable")
+  | Absorb_alloc_region -> fprintf ppf "Absorb_alloc_region"
 
 let args_kind_of_binary_primitive p =
   match p with
@@ -2001,6 +2022,7 @@ let args_kind_of_binary_primitive p =
   | Atomic_load_field (Any_value | Immediate) -> K.value, K.value
   | Poke kind -> K.naked_nativeint, K.Standard_int_or_float.to_kind kind
   | Read_offset _ -> K.value, K.naked_int64
+  | Absorb_alloc_region -> K.region, K.region
 
 let result_kind_of_binary_primitive p : result_kind =
   match p with
@@ -2029,6 +2051,7 @@ let result_kind_of_binary_primitive p : result_kind =
   | Atomic_load_field (Any_value | Immediate) -> Singleton K.value
   | Poke _ -> Unit
   | Read_offset (kind, _) -> Singleton (K.With_subkind.kind kind)
+  | Absorb_alloc_region -> Unit
 
 let effects_and_coeffects_of_binary_primitive p : Effects_and_coeffects.t =
   match p with
@@ -2068,13 +2091,16 @@ let effects_and_coeffects_of_binary_primitive p : Effects_and_coeffects.t =
       match mut with Immutable -> No_coeffects | Mutable -> Has_coeffects
     in
     No_effects, coeffects, Strict, Can't_move_before_any_branch
+  | Absorb_alloc_region ->
+    Arbitrary_effects, Has_coeffects, Strict, Can't_move_before_any_branch
 
 let binary_classify_for_printing p =
   match p with
   | Array_load _ -> Destructive
   | Block_set _ | Phys_equal _ | Int_arith _ | Int_shift _ | Int_comp _
   | Float_arith _ | Float_comp _ | Bigarray_load _ | String_or_bigstring_load _
-  | Bigarray_get_alignment _ | Atomic_load_field _ | Poke _ | Read_offset _ ->
+  | Bigarray_get_alignment _ | Atomic_load_field _ | Poke _ | Read_offset _
+  | Absorb_alloc_region ->
     Neither
 
 let free_names_binary_primitive p =
@@ -2083,7 +2109,7 @@ let free_names_binary_primitive p =
   | Phys_equal _ | Int_arith _ | Int_shift _ | Int_comp _ | Float_arith _
   | Float_comp _ | Bigarray_get_alignment _ | Atomic_load_field _
   | Poke (_ : Flambda_kind.Standard_int_or_float.t)
-  | Read_offset _ ->
+  | Read_offset _ | Absorb_alloc_region ->
     Name_occurrences.empty
 
 let apply_renaming_binary_primitive p _renaming =
@@ -2092,7 +2118,7 @@ let apply_renaming_binary_primitive p _renaming =
   | Phys_equal _ | Int_arith _ | Int_shift _ | Int_comp _ | Float_arith _
   | Float_comp _ | Bigarray_get_alignment _ | Atomic_load_field _
   | Poke (_ : Flambda_kind.Standard_int_or_float.t)
-  | Read_offset _ ->
+  | Read_offset _ | Absorb_alloc_region ->
     p
 
 let ids_for_export_binary_primitive p =
@@ -2101,7 +2127,7 @@ let ids_for_export_binary_primitive p =
   | Phys_equal _ | Int_arith _ | Int_shift _ | Int_comp _ | Float_arith _
   | Float_comp _ | Bigarray_get_alignment _ | Atomic_load_field _
   | Poke (_ : Flambda_kind.Standard_int_or_float.t)
-  | Read_offset _ ->
+  | Read_offset _ | Absorb_alloc_region ->
     Ids_for_export.empty
 
 type int_atomic_op =
@@ -2698,7 +2724,8 @@ let free_names t =
   match t with
   | Nullary
       ( Invalid _ | Optimised_out _ | Probe_is_enabled _ | Enter_inlined_apply _
-      | Dls_get | Tls_get | Domain_index | Poll | Cpu_relax ) ->
+      | Dls_get | Tls_get | Domain_index | Poll | Cpu_relax | Begin_alloc_region
+        ) ->
     Name_occurrences.empty
   | Unary (prim, x0) ->
     Name_occurrences.union
@@ -2732,7 +2759,8 @@ let apply_renaming t renaming =
   match t with
   | Nullary
       ( Invalid _ | Optimised_out _ | Probe_is_enabled _ | Enter_inlined_apply _
-      | Dls_get | Tls_get | Domain_index | Poll | Cpu_relax ) ->
+      | Dls_get | Tls_get | Domain_index | Poll | Cpu_relax | Begin_alloc_region
+        ) ->
     t
   | Unary (prim, x0) ->
     let prim' = apply_renaming_unary_primitive prim renaming in
@@ -2771,7 +2799,8 @@ let ids_for_export t =
   match t with
   | Nullary
       ( Invalid _ | Optimised_out _ | Probe_is_enabled _ | Enter_inlined_apply _
-      | Dls_get | Tls_get | Domain_index | Poll | Cpu_relax ) ->
+      | Dls_get | Tls_get | Domain_index | Poll | Cpu_relax | Begin_alloc_region
+        ) ->
     Ids_for_export.empty
   | Unary (prim, x0) ->
     Ids_for_export.union

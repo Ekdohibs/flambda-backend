@@ -389,6 +389,7 @@ let nullary_prim_size prim =
   (* CR gbury: check this *)
   | Invalid _ -> 0
   | Optimised_out _ -> 0
+  | Begin_alloc_region -> 0
   | Probe_is_enabled { name = _; enabled_at_init = _ } -> 4
   | Enter_inlined_apply _ -> 0
   | Dls_get -> 1
@@ -450,6 +451,7 @@ let unary_prim_size ~machine_width prim =
   | Get_header -> 2
   | Peek _ -> 1
   | Make_lazy _ -> alloc_size + 1
+  | Check_alloc_region -> 0
 
 let binary_prim_size ~machine_width prim =
   match (prim : Flambda_primitive.binary_primitive) with
@@ -475,6 +477,7 @@ let binary_prim_size ~machine_width prim =
   | Atomic_load_field _ -> 1
   | Poke _ -> 1
   | Read_offset _ -> 1
+  | Absorb_alloc_region -> 0
 
 let ternary_prim_size ~machine_width prim =
   match (prim : Flambda_primitive.ternary_primitive) with
