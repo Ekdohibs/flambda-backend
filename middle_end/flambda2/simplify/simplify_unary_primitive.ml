@@ -971,6 +971,10 @@ let simplify_peek ~original_prim dacc ~original_term ~arg:_ ~arg_ty:_
     (P.result_kind' original_prim)
     ~original_term
 
+let simplify_check_alloc_region dacc ~original_term ~arg:_ ~arg_ty:_ ~result_var
+    =
+  SPR.create_unit dacc ~result_var ~original_term
+
 let simplify_unary_primitive dacc original_prim (prim : P.unary_primitive) ~arg
     ~arg_ty dbg ~result_var =
   let min_name_mode = Bound_var.name_mode result_var in
@@ -1036,5 +1040,6 @@ let simplify_unary_primitive dacc original_prim (prim : P.unary_primitive) ~arg
     | Get_header -> simplify_get_header ~original_prim
     | Peek _ -> simplify_peek ~original_prim
     | Make_lazy _ -> simplify_lazy ~original_prim
+    | Check_alloc_region -> simplify_check_alloc_region
   in
   simplifier dacc ~original_term ~arg ~arg_ty ~result_var

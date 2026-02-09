@@ -110,6 +110,7 @@ let nullary_exn ~env ~res (f : Flambda_primitive.nullary_primitive) =
     (* See [parse_bytecode.ml] in jsoo - treated as a noop *)
     no_op ~env ~res
   | Cpu_relax -> use_prim' (Extern "caml_ml_domain_cpu_relax")
+  | Begin_alloc_region -> no_op ~env ~res
 
 let get_tag ~env ~res x =
   let x, res = prim_arg ~env ~res x in
@@ -320,6 +321,7 @@ let unary_exn ~env ~res (f : Flambda_primitive.unary_primitive) x =
     in
     let var = Jsir.Var.fresh () in
     Some var, env, To_jsir_result.add_instr_exn res (Let (var, expr))
+  | Check_alloc_region -> no_op ~env ~res
 
 let binary_exn ~env ~res (f : Flambda_primitive.binary_primitive) x y =
   let use_prim' prim = use_prim' ~env ~res prim [x; y] in
@@ -512,6 +514,7 @@ let binary_exn ~env ~res (f : Flambda_primitive.binary_primitive) x y =
     (* CR selee: This is for block indices, which likely requires changes to
        JSOO to support. We will leave this for now. *)
     raise Primitive_not_supported
+  | Absorb_alloc_region -> no_op ~env ~res
 
 let ternary_exn ~env ~res (f : Flambda_primitive.ternary_primitive) x y z =
   let use_prim' prim = use_prim' ~env ~res prim [x; y; z] in

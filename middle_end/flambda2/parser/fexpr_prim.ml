@@ -359,6 +359,11 @@ let poll = D.(nullary "%poll" ~params:param0 (fun _env () -> P.Poll))
 let cpu_relax =
   D.(nullary "%cpu_relax" ~params:param0 (fun _env () -> P.Cpu_relax))
 
+let begin_alloc_region =
+  D.(
+    nullary "%begin_alloc_region" ~params:param0 (fun _env () ->
+        P.Begin_alloc_region))
+
 (* Unaries *)
 let block_load =
   D.(
@@ -384,6 +389,11 @@ let box_num =
 
 let tag_immediate =
   D.(unary "%tag_imm" ~params:param0 (fun _ () -> P.Tag_immediate))
+
+let check_alloc_region =
+  D.(
+    unary "%check_alloc_region" ~params:param0 (fun _ () ->
+        P.Check_alloc_region))
 
 let get_tag = D.(unary "%get_tag" ~params:param0 (fun _ () -> P.Get_tag))
 
@@ -671,6 +681,11 @@ let bigstring_load =
 
 let bigarray_get_alignment = todo "%bigarray_get_alignment"
 
+let absorb_alloc_region =
+  D.(
+    binary "%absorb_alloc_region" ~params:param0 (fun _ () ->
+        P.Absorb_alloc_region))
+
 (* Ternaries *)
 let array_set =
   D.(
@@ -803,6 +818,7 @@ module OfFlambda = struct
     | Tls_get -> tls_get env ()
     | Poll -> poll env ()
     | Cpu_relax -> cpu_relax env ()
+    | Begin_alloc_region -> begin_alloc_region env ()
 
   let unop env (op : P.unary_primitive) =
     match op with
@@ -838,6 +854,7 @@ module OfFlambda = struct
     | String_length String -> string_length env ()
     | String_length Bytes -> bytes_length env ()
     | Tag_immediate -> tag_immediate env ()
+    | Check_alloc_region -> check_alloc_region env ()
     | Duplicate_block _ | Obj_dup | Get_header | Peek _ ->
       todo
         (Format.asprintf "%a" P.Without_args.print (P.Without_args.Unary op))
@@ -860,6 +877,7 @@ module OfFlambda = struct
     | String_or_bigstring_load (Bytes, saw) -> bytes_load env saw
     | String_or_bigstring_load (Bigstring, saw) -> bigstring_load env saw
     | Bigarray_get_alignment align -> bigarray_get_alignment env align
+    | Absorb_alloc_region -> absorb_alloc_region env ()
     | Poke _ | Read_offset _ ->
       Misc.fatal_errorf "TODO: Binary primitive: %a" P.Without_args.print
         (P.Without_args.Binary op)
