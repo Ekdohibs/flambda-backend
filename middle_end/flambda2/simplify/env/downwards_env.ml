@@ -211,7 +211,7 @@ let create ~round ~machine_width ~(resolver : resolver)
     ~(get_imported_names : get_imported_names)
     ~(get_imported_code : get_imported_code) ~propagating_float_consts
     ~unit_toplevel_exn_continuation ~unit_toplevel_return_continuation
-    ~toplevel_my_region ~toplevel_my_ghost_region =
+    ~toplevel_my_region ~toplevel_my_ghost_region ~toplevel_my_alloc_region =
   let typing_env = TE.create ~machine_width ~resolver ~get_imported_names in
   let t =
     { round;
@@ -244,13 +244,25 @@ let create ~round ~machine_width ~(resolver : resolver)
   in
   let my_region_duid = Flambda_debug_uid.none in
   let my_ghost_region_duid = Flambda_debug_uid.none in
-  define_variable
-    (define_variable t
-       (Bound_var.create toplevel_my_region my_region_duid Name_mode.normal)
-       K.region)
-    (Bound_var.create toplevel_my_ghost_region my_ghost_region_duid
-       Name_mode.normal)
-    K.region
+  let my_alloc_region_duid = Flambda_debug_uid.none in
+  let t =
+    define_variable t
+      (Bound_var.create toplevel_my_region my_region_duid Name_mode.normal)
+      K.region
+  in
+  let t =
+    define_variable t
+      (Bound_var.create toplevel_my_ghost_region my_ghost_region_duid
+         Name_mode.normal)
+      K.region
+  in
+  let t =
+    define_variable t
+      (Bound_var.create toplevel_my_alloc_region my_alloc_region_duid
+         Name_mode.normal)
+      K.region
+  in
+  t
 
 let all_code t = t.all_code
 

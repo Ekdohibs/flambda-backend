@@ -28,12 +28,24 @@ module Region_stack_element : sig
   val equal : t -> t -> bool
 end
 
+type alloc_region_to_close =
+  | Ignore
+  | Check
+  | Absorb_into of Ident.t
+
+type alloc_region_stack_element =
+  { alloc_region : Ident.t;
+    on_normal_exit : alloc_region_to_close;
+    on_exn_exit : alloc_region_to_close
+  }
+
 val create :
   current_unit:Compilation_unit.t ->
   machine_width:Target_system.Machine_width.t ->
   return_continuation:Continuation.t ->
   exn_continuation:Continuation.t ->
   my_region:Region_stack_element.t option ->
+  my_alloc_region:Ident.t ->
   t
 
 val current_unit : t -> Compilation_unit.t
@@ -213,3 +225,5 @@ type region_closure_continuation = private
 
 val region_closure_continuation :
   t -> Region_stack_element.t -> region_closure_continuation
+
+val current_alloc_region : t -> Ident.t

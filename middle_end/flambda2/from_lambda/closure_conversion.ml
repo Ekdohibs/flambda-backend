@@ -2816,6 +2816,7 @@ let close_one_function acc ~code_id ~external_env ~by_function_slot
     |> Acc.remove_var_from_free_names my_closure
     |> Acc.remove_var_opt_from_free_names my_region
     |> Acc.remove_var_opt_from_free_names my_ghost_region
+    |> Acc.remove_var_from_free_names alloc_region
     |> Acc.remove_var_from_free_names my_depth
     |> Acc.remove_continuation_from_free_names return_continuation
     |> Acc.remove_continuation_from_free_names
@@ -3360,7 +3361,8 @@ let wrap_partial_application acc env apply_continuation (apply : IR.apply)
         mode = result_mode;
         return_arity = result_arity;
         region = my_region;
-        ghost_region = my_ghost_region
+        ghost_region = my_ghost_region;
+        alloc_region = my_alloc_region
       }
       (Some approx) ~replace_region:None
   in
@@ -3999,7 +4001,8 @@ let wrap_final_module_block acc env ~program ~prog_return_cont
 let close_program (type mode) ~(mode : mode Flambda_features.mode)
     ~machine_width ~big_endian ~cmx_loader ~compilation_unit ~module_repr
     ~program ~prog_return_cont ~exn_continuation ~toplevel_my_region
-    ~toplevel_my_ghost_region : mode close_program_result =
+    ~toplevel_my_ghost_region ~toplevel_my_alloc_region :
+    mode close_program_result =
   let env = Env.create ~big_endian in
   let module_symbol =
     Symbol.create_wrapped
@@ -4012,6 +4015,10 @@ let close_program (type mode) ~(mode : mode Flambda_features.mode)
   in
   let env, toplevel_my_ghost_region =
     Env.add_var_like env toplevel_my_ghost_region Not_user_visible
+      Flambda_kind.With_subkind.region
+  in
+  let env, toplevel_my_alloc_region =
+    Env.add_var_like env toplevel_my_alloc_region Not_user_visible
       Flambda_kind.With_subkind.region
   in
   let acc = Acc.create ~cmx_loader ~machine_width in
@@ -4076,8 +4083,8 @@ let close_program (type mode) ~(mode : mode Flambda_features.mode)
        offsets constraints accumulation is not needed in "normal" mode. *)
     let unit =
       Flambda_unit.create ~return_continuation:return_cont ~exn_continuation
-        ~toplevel_my_region ~toplevel_my_ghost_region ~body ~module_symbol
-        ~used_value_slots:Unknown
+        ~toplevel_my_region ~toplevel_my_ghost_region ~toplevel_my_alloc_region
+        ~body ~module_symbol ~used_value_slots:Unknown
     in
     { unit; code_slot_offsets; metadata = Normal }
   | Classic ->
@@ -4111,8 +4118,8 @@ let close_program (type mode) ~(mode : mode Flambda_features.mode)
     in
     let unit =
       Flambda_unit.create ~return_continuation:return_cont ~exn_continuation
-        ~toplevel_my_region ~toplevel_my_ghost_region ~body ~module_symbol
-        ~used_value_slots:(Known used_value_slots)
+        ~toplevel_my_region ~toplevel_my_ghost_region ~toplevel_my_alloc_region
+        ~body ~module_symbol ~used_value_slots:(Known used_value_slots)
     in
     { unit;
       code_slot_offsets;

@@ -649,7 +649,7 @@ let rec cps acc env ccenv (lam : L.lambda) (k : cps_continuation)
           let ghost_region =
             Option.map Env.Region_stack_element.ghost_region current_region
           in
-          let alloc_region = todo in
+          let alloc_region = Env.current_alloc_region env in
           CC.close_let acc ccenv ids_with_kinds (is_user_visible env id)
             (Prim
                { prim;
@@ -882,6 +882,7 @@ let rec cps acc env ccenv (lam : L.lambda) (k : cps_continuation)
                       }
                     in
                     let current_region = Env.current_region env in
+                    let current_alloc_region = Env.current_alloc_region env in
                     let apply : IR.apply =
                       { kind = Method { kind = meth_kind; obj };
                         func = meth;
@@ -899,6 +900,7 @@ let rec cps acc env ccenv (lam : L.lambda) (k : cps_continuation)
                         ghost_region =
                           Option.map Env.Region_stack_element.ghost_region
                             current_region;
+                        alloc_region = current_alloc_region;
                         args_arity = Flambda_arity.create args_arity;
                         return_arity =
                           Flambda_arity.unarize_t
@@ -1258,6 +1260,7 @@ and cps_tail_apply acc env ccenv ap_func ap_args ap_region_close ap_mode ap_loc
               region = Option.map Env.Region_stack_element.region current_region;
               ghost_region =
                 Option.map Env.Region_stack_element.ghost_region current_region;
+              alloc_region = Env.current_alloc_region env;
               args_arity = Flambda_arity.create args_arity;
               return_arity =
                 Flambda_arity.unarize_t
@@ -1529,10 +1532,12 @@ and cps_function env ~fid ~fuid ~(recursive : Recursive.t)
         Some my_region,
         Some my_ghost_region )
   in
+  let my_alloc_region = Ident.create_local "my_alloc_region" in
   let new_env =
     Env.create ~current_unit:(Env.current_unit env)
       ~machine_width:(Env.machine_width env) ~return_continuation:body_cont
       ~exn_continuation:body_exn_cont ~my_region:my_region_stack_elt
+      ~my_alloc_region
   in
   let exn_continuation : IR.exn_continuation =
     { exn_handler = body_exn_cont; extra_args = [] }
@@ -1614,8 +1619,9 @@ and cps_function env ~fid ~fuid ~(recursive : Recursive.t)
   Function_decl.create ~let_rec_ident:(Some fid) ~let_rec_uid:fuid
     ~function_slot ~kind ~params ~params_arity ~removed_params ~return
     ~calling_convention ~return_continuation:body_cont ~exn_continuation
-    ~my_region ~my_ghost_region ~body ~attr ~loc ~free_idents_of_body recursive
-    ~closure_alloc_mode:mode ~first_complex_local_param ~result_mode:ret_mode
+    ~my_region ~my_ghost_region ~my_alloc_region ~body ~attr ~loc
+    ~free_idents_of_body recursive ~closure_alloc_mode:mode
+    ~first_complex_local_param ~result_mode:ret_mode
 
 and cps_switch acc env ccenv (switch : L.lambda_switch) ~condition_dbg
     ~scrutinee (k : Continuation.t) (k_exn : Continuation.t) : Expr_with_acc.t =
@@ -1765,7 +1771,7 @@ and cps_switch acc env ccenv (switch : L.lambda_switch) ~condition_dbg
             let ghost_region =
               Option.map Env.Region_stack_element.ghost_region current_region
             in
-            let alloc_region = todo in
+            let alloc_region = Env.current_alloc_region env in
             CC.close_let acc ccenv
               [ ( is_scrutinee_int,
                   is_scrutinee_int_duid,
@@ -1807,9 +1813,13 @@ let lambda_to_flambda ~mode ~machine_width ~big_endian ~cmx_loader
   let toplevel_my_ghost_region =
     Ident.create_local "toplevel_my_ghost_region"
   in
+  let toplevel_my_alloc_region =
+    Ident.create_local "toplevel_my_alloc_region"
+  in
   let env =
     Env.create ~current_unit:compilation_unit ~machine_width
       ~return_continuation ~exn_continuation ~my_region:None
+      ~my_alloc_region:toplevel_my_alloc_region
   in
   let program acc ccenv =
     cps_tail acc env ccenv lam return_continuation exn_continuation
@@ -1817,4 +1827,4 @@ let lambda_to_flambda ~mode ~machine_width ~big_endian ~cmx_loader
   CC.close_program ~mode ~machine_width ~big_endian ~cmx_loader
     ~compilation_unit ~module_repr ~program
     ~prog_return_cont:return_continuation ~exn_continuation ~toplevel_my_region
-    ~toplevel_my_ghost_region
+    ~toplevel_my_ghost_region ~toplevel_my_alloc_region

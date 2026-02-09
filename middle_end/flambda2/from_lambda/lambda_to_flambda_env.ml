@@ -68,6 +68,17 @@ end = struct
   let ghost_region t = t.ghost_region
 end
 
+type alloc_region_to_close =
+  | Ignore
+  | Check
+  | Absorb_into of Ident.t
+
+type alloc_region_stack_element =
+  { alloc_region : Ident.t;
+    on_normal_exit : alloc_region_to_close;
+    on_exn_exit : alloc_region_to_close
+  }
+
 type t =
   { current_unit : Compilation_unit.t;
     machine_width : Target_system.Machine_width.t;
@@ -90,11 +101,15 @@ type t =
     region_stack_in_cont_scope : Region_stack_element.t list Continuation.Map.t;
     region_closure_continuations :
       region_closure_continuation Region_stack_element.Map.t;
+    my_alloc_region : Ident.t;
+    alloc_region_stack : alloc_region_stack_element list;
+    alloc_region_stack_in_cont_scope :
+      alloc_region_stack_element list Continuation.Map.t;
     ident_stamp_upon_starting : int
   }
 
 let create ~current_unit ~machine_width ~return_continuation ~exn_continuation
-    ~my_region =
+    ~my_region ~my_alloc_region =
   let mutables_needed_by_continuations =
     Continuation.Map.of_list
       [return_continuation, Ident.Set.empty; exn_continuation, Ident.Set.empty]
@@ -115,6 +130,10 @@ let create ~current_unit ~machine_width ~return_continuation ~exn_continuation
     region_stack_in_cont_scope =
       Continuation.Map.singleton return_continuation [];
     region_closure_continuations = Region_stack_element.Map.empty;
+    my_alloc_region;
+    alloc_region_stack = [];
+    alloc_region_stack_in_cont_scope =
+      Continuation.Map.of_list [return_continuation, []; exn_continuation, []];
     ident_stamp_upon_starting
   }
 
@@ -350,6 +369,11 @@ let current_region t =
     match t.region_stack with
     | [] -> t.my_region
     | region_stack_elt :: _ -> Some region_stack_elt
+
+let current_alloc_region t =
+  match t.alloc_region_stack with
+  | [] -> t.my_alloc_region
+  | { alloc_region; _ } :: _ -> alloc_region
 
 let parent_region t =
   if not (Flambda_features.stack_allocation_enabled ())

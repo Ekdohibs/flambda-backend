@@ -809,4 +809,7 @@ let conv comp_unit (fexpr : Fexpr.flambda_unit) : Flambda_unit.t =
     ~toplevel_my_region:toplevel_region
     ~toplevel_my_ghost_region:
       (Variable.create "my_ghost_region" Flambda_kind.region)
+    ~toplevel_my_alloc_region:
+      (Variable.create "my_alloc_region" Flambda_kind.region)
+      (* XXX *)
     ~body ~module_symbol ~used_value_slots:Unknown
