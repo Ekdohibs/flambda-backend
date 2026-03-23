@@ -326,15 +326,6 @@ let pp_result ppf res = Format.fprintf ppf "%a@." Datalog.print res.db
     [usages x x] is used to represent the actual use of x. *)
 let usages = rel2 "usages" Cols.[n; n]
 
-(** [field_usages x f y] y is an use of the field f of x. Exists only if
-    [accessor y f x]. (this avoids the quadratic blowup of building the complete
-    alias graph)
-
-    We avoid building this relation if [field_usages_top x f], but it is
-    possible to have both [field_usages x f _] and [field_usages_top x f]
-    depending on the resolution order. *)
-let field_usages = rel3 "field_usages" Cols.[n; f; n]
-
 (** [any_usage x] x is used in an uncontrolled way *)
 let any_usage = any_usage
 
@@ -366,23 +357,10 @@ let sources = rel2 "sources" Cols.[n; n]
     are considered unknown *)
 let any_source = any_source
 
-(** [field_sources x f y] y is a source of the field f of x. Exists only if
-    [constructor x f y]. (this avoids the quadratic blowup of building the
-    complete alias graph)
-
-    We avoid building this relation if [field_sources_top x f], but it is
-    possible to have both [field_sources x f _] and [field_sources_top x f]
-    depending on the resolution order. *)
-let field_sources = rel3 "field_sources" Cols.[n; f; n]
-
 (** [field_sources_top x f] the special extern value is a source for the field f
     of x *)
 let field_sources_top = rel2 "field_sources_top" Cols.[n; f]
 (* CR pchambart: is there a reason why this is called top an not any source ? *)
-
-let cofield_sources = rel3 "cofield_sources" Cols.[n; cf; n]
-
-let cofield_usages = rel3 "cofield_usages" Cols.[n; cf; n]
 
 (* Reverse relations *)
 let rev_alias =
@@ -544,22 +522,6 @@ let datalog_schedule =
        accessor ~to_ relation ~base;
        unless1 Field.is_local relation ]
      ==> field_usages_top base relation);
-    (let$$ [to_; relation; base] = ["to_"; "relation"; "base"] in
-     [ ~~(any_usage base);
-       any_usage to_;
-       accessor ~to_ relation ~base;
-       when1 Field.is_local relation ]
-     ==> field_usages base relation to_);
-    (let$$ [to_; relation; base] = ["to_"; "relation"; "base"] in
-     [ ~~(any_usage base);
-       ~~(any_usage to_);
-       ~~(field_usages_top base relation);
-       accessor ~to_ relation ~base ]
-     ==> field_usages base relation to_);
-    (* argument-usages *)
-    (let$$ [from; relation; base] = ["from"; "relation"; "base"] in
-     [~~(any_usage base); argument ~from relation ~base]
-     ==> cofield_usages base relation from);
     (* constructor-usages *)
     (let$$ [base; base_use; relation; from; to_] =
        ["base"; "base_use"; "relation"; "from"; "to_"]
@@ -568,7 +530,7 @@ let datalog_schedule =
        ~~(field_usages_top base_use relation);
        constructor ~base relation ~from;
        nontop_usages base base_use;
-       field_usages base_use relation to_ ]
+       rev_accessor ~base:base_use relation ~to_ ]
      ==> alias ~to_ ~from);
     (let$$ [base; base_use; relation; from; to_] =
        ["base"; "base_use"; "relation"; "from"; "to_"]
@@ -576,7 +538,7 @@ let datalog_schedule =
      [ when1 Field.is_local relation;
        constructor ~base relation ~from;
        usages base base_use;
-       field_usages base_use relation to_ ]
+       rev_accessor ~base:base_use relation ~to_ ]
      ==> alias ~to_ ~from);
     (let$ [base; base_use; relation; from] =
        ["base"; "base_use"; "relation"; "from"]
@@ -622,29 +584,13 @@ let datalog_schedule =
        rev_constructor ~from relation ~base;
        unless1 Field.is_local relation ]
      ==> field_sources_top base relation);
-    (let$$ [from; relation; base] = ["from"; "relation"; "base"] in
-     [ ~~(any_source base);
-       any_source from;
-       rev_constructor ~from relation ~base;
-       when1 Field.is_local relation ]
-     ==> field_sources base relation from);
-    (let$$ [from; relation; base] = ["from"; "relation"; "base"] in
-     [ ~~(any_source base);
-       ~~(field_sources_top base relation);
-       rev_constructor ~from relation ~base;
-       ~~(any_source from) ]
-     ==> field_sources base relation from);
-    (* parameter-sources *)
-    (let$$ [to_; relation; base] = ["to_"; "relation"; "base"] in
-     [~~(any_source base); rev_parameter ~to_ relation ~base]
-     ==> cofield_sources base relation to_);
     (* parameter-uses *)
     (let$$ [base; base_use; relation; to_; from] =
        ["base"; "base_use"; "relation"; "to_"; "from"]
      in
      [ parameter ~base relation ~to_;
        nontop_usages base base_use;
-       cofield_usages base_use relation from ]
+       rev_argument ~base:base_use relation ~from ]
      ==> alias ~to_ ~from);
     (let$ [base; relation; to_] = ["base"; "relation"; "to_"] in
      [any_usage base; parameter ~base relation ~to_] ==> any_source to_);
@@ -656,7 +602,7 @@ let datalog_schedule =
        ~~(field_sources_top base_source relation);
        rev_accessor ~base relation ~to_;
        nontop_sources base base_source;
-       field_sources base_source relation from ]
+       constructor ~base:base_source relation ~from ]
      ==> alias ~to_ ~from);
     (let$$ [base; base_source; relation; to_; from] =
        ["base"; "base_source"; "relation"; "to_"; "from"]
@@ -664,7 +610,7 @@ let datalog_schedule =
      [ when1 Field.is_local relation;
        rev_accessor ~base relation ~to_;
        sources base base_source;
-       field_sources base_source relation from ]
+       constructor ~base:base_source relation ~from ]
      ==> alias ~to_ ~from);
     (let$ [base; base_source; relation; to_] =
        ["base"; "base_source"; "relation"; "to_"]
@@ -694,7 +640,7 @@ let datalog_schedule =
      in
      [ rev_argument ~base relation ~from;
        nontop_sources base base_source;
-       cofield_sources base_source relation to_ ]
+       parameter ~base:base_source relation ~to_ ]
      ==> alias ~to_ ~from);
     (* use *)
     (let$ [to_; from] = ["to_"; "from"] in
@@ -766,7 +712,7 @@ let get_all_usages :
        ==> out % [y]);
       (let$ [x; field; y; z] = ["x"; "field"; "y"; "z"] in
        [ out % [x];
-         field_usages x field y;
+         rev_accessor ~base:x field ~to_:y;
          when1 Field.is_function_slot field;
          usages y z;
          has_usage z ]
@@ -809,7 +755,7 @@ let get_one_field : Datalog.database -> Field.t -> usages -> field_usage =
           [ ~~(One.flag used_as_top);
             in_ % [x];
             in_field % [field];
-            field_usages x field y;
+            rev_accessor ~base:x field ~to_:y;
             has_usage y ]
           ==> used_as_vars % [y]) ]
      in
@@ -830,7 +776,7 @@ let get_fields : Datalog.database -> usages -> field_usage Field.Map.t =
           ==> out1 % [field]);
          (let$ [x; field; y] = ["x"; "field"; "y"] in
           [ in_ % [x];
-            field_usages x field y;
+            rev_accessor ~base:x field ~to_:y;
             has_usage y;
             ~~(out1 % [field]);
             unless1 Field.is_function_slot field ]
@@ -972,7 +918,7 @@ let not_local_field_has_source =
   in
   let field_source_query =
     let^? [x; f], [s; v] = ["x"; "f"], ["s"; "v"] in
-    [sources x s; field_sources s f v; has_source v]
+    [sources x s; constructor ~base:s f ~from:v; has_source v]
   in
   fun db x field ->
     any_source_query [x] db
@@ -1031,7 +977,7 @@ let field_of_constructor_is_used_rules =
        in
        [ constructor ~base relation ~from;
          usages base usage;
-         field_usages usage relation v;
+         rev_accessor ~base:usage relation ~to_:v;
          any_usage v ]
        ==> and_
              [ field_of_constructor_is_used base relation;
@@ -1041,7 +987,7 @@ let field_of_constructor_is_used_rules =
        in
        [ constructor ~base relation ~from;
          usages base usage;
-         field_usages usage relation v;
+         rev_accessor ~base:usage relation ~to_:v;
          has_usage v ]
        ==> and_
              [ field_of_constructor_is_used base relation;
@@ -1130,7 +1076,7 @@ let datalog_rules =
       (let$ [usage; field; source1; source2; v] =
          ["usage"; "field"; "source1"; "source2"; "v"]
        in
-       [ field_usages usage field v;
+       [ rev_accessor ~base:usage field ~to_:v;
          has_usage v;
          when1 Field.is_local field;
          sources usage source1;
@@ -1162,7 +1108,7 @@ let datalog_rules =
          has_source alias_source;
          distinct Cols.n alias_source allocation_id;
          when1 Field.is_real_field field;
-         field_usages alias field v;
+         rev_accessor ~base:alias field ~to_:v;
          has_usage v ]
        ==> cannot_change_representation0 allocation_id);
       (let$ [allocation_id; alias; alias_source; field] =
@@ -1181,7 +1127,7 @@ let datalog_rules =
        [ usages allocation_id alias;
          any_source alias;
          when1 Field.is_real_field field;
-         field_usages alias field v;
+         rev_accessor ~base:alias field ~to_:v;
          has_usage v ]
        ==> cannot_change_representation0 allocation_id);
       (let$ [allocation_id; alias; field] =
@@ -1225,7 +1171,7 @@ let datalog_rules =
          sources alias alias_source;
          has_source alias_source;
          distinct Cols.n alias_source allocation_id;
-         field_usages alias !!Field.code_id_of_call_witness v;
+         rev_accessor ~base:alias !!Field.code_id_of_call_witness ~to_:v;
          has_usage v ]
        ==> cannot_change_witness_calling_convention allocation_id);
       (let$ [allocation_id; alias; alias_source] =
@@ -1240,7 +1186,7 @@ let datalog_rules =
       (let$ [allocation_id; alias; v] = ["allocation_id"; "alias"; "v"] in
        [ usages allocation_id alias;
          any_source alias;
-         field_usages alias !!Field.code_id_of_call_witness v;
+         rev_accessor ~base:alias !!Field.code_id_of_call_witness ~to_:v;
          has_usage v ]
        ==> cannot_change_witness_calling_convention allocation_id);
       (let$ [allocation_id; alias] = ["allocation_id"; "alias"] in
@@ -1637,14 +1583,14 @@ let get_single_field_source =
   in
   let q_any_source2 =
     let^? [block; field], [source] = ["block"; "field"], ["source"] in
-    [field_sources block field source; any_source source]
+    [constructor ~base:block field ~from:source; any_source source]
   in
   let q_source =
     query
       (let^$ [block; field], [field_source; source] =
          ["block"; "field"], ["field_source"; "source"]
        in
-       [ field_sources block field field_source;
+       [ constructor ~base:block field ~from:field_source;
          sources field_source source;
          has_source source ]
        =>? [source])
@@ -1908,7 +1854,7 @@ module Rewriter = struct
              ["fs"; "usage"; "field"; "field_usage"]
            in
            [ out2 % [fs; usage];
-             field_usages usage field field_usage;
+             rev_accessor ~base:usage field ~to_:field_usage;
              has_usage field_usage;
              when1 Field.is_value_slot field ]
            ==> out1 % [usage]);
@@ -1921,7 +1867,7 @@ module Rewriter = struct
              ["fs0"; "usage"; "fs"; "to_"; "fs_usage"]
            in
            [ out2 % [fs0; usage];
-             field_usages usage fs to_;
+             rev_accessor ~base:usage fs ~to_;
              in_all_fs % [fs];
              usages to_ fs_usage;
              has_usage fs_usage ]
@@ -1932,7 +1878,7 @@ module Rewriter = struct
            ==> known_arity % [fs]);
           (let$ [fs; usage; v] = ["fs"; "usage"; "v"] in
            [ out2 % [fs; usage];
-             field_usages usage !!Field.known_arity_call_witness v;
+             rev_accessor ~base:usage !!Field.known_arity_call_witness ~to_:v;
              has_usage v ]
            ==> known_arity % [fs]);
           (let$ [fs; usage] = ["fs"; "usage"] in
@@ -1941,7 +1887,7 @@ module Rewriter = struct
            ==> unknown_arity % [fs]);
           (let$ [fs; usage; v] = ["fs"; "usage"; "v"] in
            [ out2 % [fs; usage];
-             field_usages usage !!Field.unknown_arity_call_witness v;
+             rev_accessor ~base:usage !!Field.unknown_arity_call_witness ~to_:v;
              has_usage v ]
            ==> unknown_arity % [fs]);
           (let$ [fs; code_id; my_closure; usage] =
@@ -3297,14 +3243,14 @@ let get_field_sources :
           [ ~~(One.flag any);
             in_ % [x];
             in_field % [field];
-            field_sources x field y;
+            constructor ~base:x field ~from:y;
             any_source y ]
           ==> One.flag any);
          (let$ [x; field; y; z] = ["x"; "field"; "y"; "z"] in
           [ ~~(One.flag any);
             in_ % [x];
             in_field % [field];
-            field_sources x field y;
+            constructor ~base:x field ~from:y;
             sources y z;
             has_source z ]
           ==> out % [z]) ]
@@ -3320,7 +3266,10 @@ let cofield_has_use :
      let+ out =
        let@ out = fix1' (empty One.cols) in
        [ (let$ [x; field; y] = ["x"; "field"; "y"] in
-          [in_ % [x]; in_field % [field]; cofield_sources x field y; has_usage y]
+          [ in_ % [x];
+            in_field % [field];
+            parameter ~base:x field ~to_:y;
+            has_usage y ]
           ==> One.flag out) ]
      in
      One.to_bool out)
