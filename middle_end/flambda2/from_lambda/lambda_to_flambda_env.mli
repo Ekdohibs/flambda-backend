@@ -207,6 +207,11 @@ val region_stack : t -> Region_stack_element.t list
 val region_stack_in_cont_scope :
   t -> Continuation.t -> Region_stack_element.t list
 
+val alloc_region_stack : t -> alloc_region_stack_element list
+
+val alloc_region_stack_in_cont_scope :
+  t -> Continuation.t -> alloc_region_stack_element list
+
 val pop_one_region : t -> t * Region_stack_element.t option
 
 (** Hack for staticfail (which should eventually use

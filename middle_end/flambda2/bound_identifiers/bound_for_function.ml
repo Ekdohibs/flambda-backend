@@ -88,6 +88,10 @@ let my_ghost_region t =
   | Heap _ -> None
   | Local { ghost_region; _ } -> Some ghost_region
 
+let my_alloc_region t =
+  match t.my_alloc_mode with
+  | Heap { alloc_region } | Local { alloc_region; _ } -> alloc_region
+
 let my_alloc_mode t = t.my_alloc_mode
 
 let my_depth t = t.my_depth

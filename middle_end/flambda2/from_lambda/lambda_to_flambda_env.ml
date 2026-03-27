@@ -219,6 +219,14 @@ let add_continuation t cont ~push_to_try_stack ~pop_region
   let region_stack_in_cont_scope =
     Continuation.Map.add cont region_stack t.region_stack_in_cont_scope
   in
+  let alloc_region_stack =
+    (* XXX *)
+    t.alloc_region_stack
+  in
+  let alloc_region_stack_in_cont_scope =
+    Continuation.Map.add cont alloc_region_stack
+      t.alloc_region_stack_in_cont_scope
+  in
   let body_env =
     let mutables_needed_by_continuations =
       Continuation.Map.add cont (mutables_in_scope t)
@@ -230,7 +238,8 @@ let add_continuation t cont ~push_to_try_stack ~pop_region
     { t with
       mutables_needed_by_continuations;
       try_stack;
-      region_stack_in_cont_scope
+      region_stack_in_cont_scope;
+      alloc_region_stack_in_cont_scope
     }
   in
   let current_values_of_mutables_in_scope =
@@ -393,6 +402,17 @@ let region_stack_in_cont_scope t continuation =
   match Continuation.Map.find continuation t.region_stack_in_cont_scope with
   | exception Not_found ->
     Misc.fatal_errorf "No region stack recorded for handler %a"
+      Continuation.print continuation
+  | stack -> stack
+
+let alloc_region_stack t = t.alloc_region_stack
+
+let alloc_region_stack_in_cont_scope t continuation =
+  match
+    Continuation.Map.find continuation t.alloc_region_stack_in_cont_scope
+  with
+  | exception Not_found ->
+    Misc.fatal_errorf "No alloc region stack recorded for handler %a"
       Continuation.print continuation
   | stack -> stack
 
