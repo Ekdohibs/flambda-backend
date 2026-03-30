@@ -574,6 +574,7 @@ let rec cps acc env ccenv (lam : L.lambda) (k : cps_continuation)
         (Singleton Flambda_kind.With_subkind.any_value)
     in
     CC.close_let_rec acc ccenv ~function_declarations:[func] ~body
+      ~current_alloc_region:(Env.current_alloc_region env)
       ~current_region:
         (Env.current_region env |> Option.map Env.Region_stack_element.region)
   | Lmutlet (layout, id, _duid, defining_expr, body) ->
@@ -618,6 +619,7 @@ let rec cps acc env ccenv (lam : L.lambda) (k : cps_continuation)
       List.fold_left
         (fun body func acc ccenv ->
           CC.close_let_rec acc ccenv ~function_declarations:[func] ~body
+            ~current_alloc_region:(Env.current_alloc_region env)
             ~current_region:
               (Env.current_region env
               |> Option.map Env.Region_stack_element.region))
@@ -776,6 +778,7 @@ let rec cps acc env ccenv (lam : L.lambda) (k : cps_continuation)
     let function_declarations = cps_function_bindings env bindings in
     let body acc ccenv = cps acc env ccenv body k k_exn in
     CC.close_let_rec acc ccenv ~function_declarations ~body
+      ~current_alloc_region:(Env.current_alloc_region env)
       ~current_region:
         (Env.current_region env |> Option.map Env.Region_stack_element.region)
   | Lprim (prim, args, loc) -> (

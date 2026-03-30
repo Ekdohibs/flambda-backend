@@ -173,7 +173,7 @@ let recursive_flag (r : Recursive.t) : Fexpr.is_recursive =
 let alloc_mode_for_allocations env (alloc : Alloc_mode.For_allocations.t) :
     Fexpr.alloc_mode_for_allocations =
   match alloc with
-  | Heap -> Heap
+  | Heap _ -> Heap
   | Local { region = r } ->
     let r = Env.find_region_exn env r in
     Local { region = r }

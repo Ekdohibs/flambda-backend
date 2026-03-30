@@ -154,10 +154,10 @@ let or_variable f env (ov : _ Fexpr.or_variable) : _ Or_variable.t =
 
 let alloc_mode_for_allocations env (alloc : Fexpr.alloc_mode_for_allocations) =
   match alloc with
-  | Heap -> Alloc_mode.For_allocations.heap
+  | Heap -> Alloc_mode.For_allocations.heap ~alloc_region:(failwith "")
   | Local { region = r } ->
     let r = find_region env r in
-    Alloc_mode.For_allocations.local ~region:r
+    Alloc_mode.For_allocations.local ~region:r ~alloc_region:(failwith "")
 
 let alloc_mode_for_applications env (alloc : Fexpr.alloc_mode_for_applications)
     =

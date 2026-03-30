@@ -223,43 +223,52 @@ module For_applications = struct
            (Ids_for_export.singleton_variable region)
            ghost_region)
         alloc_region
+
+  let alloc_region t =
+    match t with
+    | Heap { alloc_region } | Local { alloc_region; _ } -> alloc_region
 end
 
 module For_allocations = struct
   type t =
-    | Heap
+    | Heap of { alloc_region : Variable.t }
     | Local of { region : Variable.t }
 
   let print ppf t =
     match t with
-    | Heap -> Format.pp_print_string ppf "Heap"
+    | Heap { alloc_region } ->
+      Format.fprintf ppf "@[<hov 1>(Heap (alloc_region@ %a))@]" Variable.print
+        alloc_region
     | Local { region } ->
       Format.fprintf ppf "@[<hov 1>(Local (region@ %a))@]" Variable.print region
 
   let compare t1 t2 =
     match t1, t2 with
-    | Heap, Heap -> 0
+    | ( Heap { alloc_region = alloc_region1 },
+        Heap { alloc_region = alloc_region2 } ) ->
+      Variable.compare alloc_region1 alloc_region2
     | Local { region = region1 }, Local { region = region2 } ->
       Variable.compare region1 region2
-    | Heap, Local _ -> -1
-    | Local _, Heap -> 1
+    | Heap _, Local _ -> -1
+    | Local _, Heap _ -> 1
 
-  let heap = Heap
+  let heap ~alloc_region = Heap { alloc_region }
 
-  let local ~region =
+  let local ~alloc_region ~region =
     if Flambda_features.stack_allocation_enabled ()
     then Local { region }
-    else Heap
+    else Heap { alloc_region }
 
   let as_type t : For_types.t =
-    match t with Heap -> Heap | Local _ -> Heap_or_local
+    match t with Heap _ -> Heap | Local _ -> Heap_or_local
 
-  let from_lambda (mode : Lambda.locality_mode) ~current_region =
+  let from_lambda (mode : Lambda.locality_mode) ~current_alloc_region
+      ~current_region =
     if not (Flambda_features.stack_allocation_enabled ())
-    then Heap
+    then Heap { alloc_region = current_alloc_region }
     else
       match mode with
-      | Alloc_heap -> Heap
+      | Alloc_heap -> Heap { alloc_region = current_alloc_region }
       | Alloc_local -> (
         match current_region with
         | Some region -> Local { region }
@@ -267,20 +276,25 @@ module For_allocations = struct
 
   let free_names t =
     match t with
-    | Heap -> Name_occurrences.empty
+    | Heap { alloc_region } ->
+      Name_occurrences.singleton_variable alloc_region Name_mode.normal
     | Local { region } ->
       Name_occurrences.singleton_variable region Name_mode.normal
 
   let apply_renaming t renaming =
     match t with
-    | Heap -> Heap
+    | Heap { alloc_region } ->
+      let alloc_region' = Renaming.apply_variable renaming alloc_region in
+      if alloc_region == alloc_region'
+      then t
+      else Heap { alloc_region = alloc_region' }
     | Local { region } ->
       let region' = Renaming.apply_variable renaming region in
       if region == region' then t else Local { region = region' }
 
   let ids_for_export t =
     match t with
-    | Heap -> Ids_for_export.empty
+    | Heap { alloc_region } -> Ids_for_export.singleton_variable alloc_region
     | Local { region } -> Ids_for_export.singleton_variable region
 end
 

@@ -752,9 +752,10 @@ let close_c_call0 acc env ~loc ~let_bound_ids_with_kinds
     match Lambda.locality_mode_of_primitive_description prim_desc with
     | None ->
       (* This happens when stack allocation is disabled. *)
-      Alloc_mode.For_allocations.heap
+      Alloc_mode.For_allocations.heap ~alloc_region:current_alloc_region
     | Some alloc_mode ->
-      Alloc_mode.For_allocations.from_lambda alloc_mode ~current_region
+      Alloc_mode.For_allocations.from_lambda alloc_mode ~current_alloc_region
+        ~current_region
   in
   let machine_width = Acc.machine_width acc in
   let unarized_params =
@@ -1306,7 +1307,7 @@ let close_primitive acc env ~let_bound_ids_with_kinds named
   | prim, args ->
     Lambda_to_flambda_primitives.convert_and_bind acc exn_continuation
       ~big_endian:(Env.big_endian env) ~register_const0 prim ~args dbg
-      ~current_region ~current_ghost_region k
+      ~current_alloc_region ~current_region ~current_ghost_region k
 
 let close_trap_action_opt trap_action =
   Option.map
@@ -1402,7 +1403,7 @@ let classify_fields_of_block env fields alloc_mode =
   let is_local =
     match (alloc_mode : Alloc_mode.For_allocations.t) with
     | Local _ -> true
-    | Heap -> false
+    | Heap _ -> false
   in
   let static_fields =
     List.fold_left
@@ -2078,7 +2079,7 @@ let boxing_primitive (k : Function_decl.unboxing_kind) alloc_mode
       ( Make_block (Naked_floats, Immutable, alloc_mode),
         Simple.vars unboxed_variables )
 
-let compute_body_of_unboxed_function acc my_region my_closure
+let compute_body_of_unboxed_function acc my_region my_alloc_region my_closure
     ~unarized_params:params params_arity ~unarized_param_modes:param_modes
     function_slot compute_body return return_continuation unboxed_params
     unboxed_return unboxed_function_slot =
@@ -2106,7 +2107,8 @@ let compute_body_of_unboxed_function acc my_region my_closure
         let body acc =
           let acc, body = body acc in
           let alloc_mode =
-            Alloc_mode.For_allocations.from_lambda ~current_region:my_region
+            Alloc_mode.For_allocations.from_lambda
+              ~current_alloc_region:my_alloc_region ~current_region:my_region
               (Alloc_mode.For_types.to_lambda param_mode)
           in
           let param_duid = Flambda_debug_uid.none in
@@ -2436,7 +2438,7 @@ let make_unboxed_function_wrapper acc function_slot ~unarized_params:params
   let alloc_mode =
     Alloc_mode.For_allocations.from_lambda
       (Function_decl.result_mode decl)
-      ~current_region:my_region
+      ~current_alloc_region:my_alloc_region ~current_region:my_region
   in
   let body, free_names_of_body =
     match unboxed_return with
@@ -2797,9 +2799,10 @@ let close_one_function acc ~code_id ~external_env ~by_function_slot
         my_closure )
     | Unboxed_calling_convention
         (unboxed_params, unboxed_return, unboxed_function_slot) ->
-      compute_body_of_unboxed_function acc my_region my_closure ~unarized_params
-        params_arity ~unarized_param_modes function_slot compute_body return
-        return_continuation unboxed_params unboxed_return unboxed_function_slot
+      compute_body_of_unboxed_function acc my_region alloc_region my_closure
+        ~unarized_params params_arity ~unarized_param_modes function_slot
+        compute_body return return_continuation unboxed_params unboxed_return
+        unboxed_function_slot
   in
   let contains_subfunctions = Acc.seen_a_function acc in
   let cost_metrics = Acc.cost_metrics acc in
@@ -2941,7 +2944,8 @@ let close_one_function acc ~code_id ~external_env ~by_function_slot
     ( Function_slot.Map.add function_slot approx by_function_slot,
       function_code_ids ) )
 
-let close_functions acc external_env ~current_region function_declarations =
+let close_functions acc external_env ~current_alloc_region ~current_region
+    function_declarations =
   let compilation_unit = Compilation_unit.get_current_exn () in
   let value_slots_from_idents =
     Ident.Set.fold
@@ -3163,7 +3167,7 @@ let close_functions acc external_env ~current_region function_declarations =
     Set_of_closures.create ~value_slots
       (Alloc_mode.For_allocations.from_lambda
          (Function_decls.alloc_mode function_declarations)
-         ~current_region)
+         ~current_alloc_region ~current_region)
       function_decls
   in
   let acc =
@@ -3193,7 +3197,9 @@ let close_functions acc external_env ~current_region function_declarations =
   else acc, Dynamic (set_of_closures, approximations)
 
 let close_let_rec acc env ~function_declarations
-    ~(body : Acc.t -> Env.t -> Expr_with_acc.t) ~current_region =
+    ~(body : Acc.t -> Env.t -> Expr_with_acc.t) ~current_alloc_region
+    ~current_region =
+  let current_alloc_region = fst (Env.find_var env current_alloc_region) in
   let current_region =
     Option.map (fun region -> fst (Env.find_var env region)) current_region
   in
@@ -3248,7 +3254,7 @@ let close_let_rec acc env ~function_declarations
   let acc, closed_functions =
     close_functions acc env
       (Function_decls.create function_declarations alloc_mode)
-      ~current_region
+      ~current_alloc_region ~current_region
   in
   match closed_functions with
   | Lifted symbols ->
@@ -3456,7 +3462,7 @@ let wrap_partial_application acc env apply_continuation (apply : IR.apply)
       Expr_with_acc.create_apply_cont acc apply_cont
     in
     close_let_rec acc env ~function_declarations ~body
-      ~current_region:apply.region
+      ~current_alloc_region:apply.alloc_region ~current_region:apply.region
 
 let wrap_over_application acc env full_call (apply : IR.apply) ~remaining
     ~remaining_arity ~result_mode =

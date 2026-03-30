@@ -1152,7 +1152,7 @@ let result_kind_of_nullary_primitive p : result_kind =
 
 let coeffects_of_mode : Alloc_mode.For_allocations.t -> Coeffects.t = function
   | Local _ -> Coeffects.Has_coeffects
-  | Heap -> Coeffects.No_coeffects
+  | Heap _ -> Coeffects.No_coeffects
 
 let effects_and_coeffects_of_nullary_primitive p : Effects_and_coeffects.t =
   match p with
@@ -1267,7 +1267,7 @@ let unary_primitive_eligible_for_cse p ~arg =
   | Array_length _ -> true
   | Bigarray_length _ -> false
   | String_length _ -> true
-  | Int_as_pointer m -> ( match m with Heap -> true | Local _ -> false)
+  | Int_as_pointer m -> ( match m with Heap _ -> true | Local _ -> false)
   | Opaque_identity _ -> false
   | Int_arith _ -> true
   | Float_arith _ ->
@@ -1281,7 +1281,7 @@ let unary_primitive_eligible_for_cse p ~arg =
     (* For the moment we don't CSE any local allocations. *)
     (* CR mshinwell: relax this in the future? *)
     false
-  | Box_number (_, Heap) | Tag_immediate ->
+  | Box_number (_, Heap _) | Tag_immediate ->
     (* Boxing or tagging of constants will yield values that can be lifted and
        if needs be deduplicated -- so there's no point in adding CSE variables
        to hold them. *)
@@ -1660,7 +1660,7 @@ let effects_and_coeffects_of_unary_primitive p : Effects_and_coeffects.t =
            begin/end region. Hence, it is not safe to force the allocation to be
            moved, so we cannot use the `Delay` mode for those. *)
         match alloc_mode with
-        | Heap -> Delay
+        | Heap _ -> Delay
         | Local _ -> Strict
       else Strict
     in
@@ -2458,7 +2458,7 @@ let variadic_primitive_eligible_for_cse p ~args =
   | Make_block (_, Mutable, _) | Make_array (_, Mutable, _) -> false
   | Make_block (_, Immutable_unique, _) | Make_array (_, Immutable_unique, _) ->
     false
-  | Make_block (_, Immutable, Heap) | Make_array (_, Immutable, Heap) ->
+  | Make_block (_, Immutable, Heap _) | Make_array (_, Immutable, Heap _) ->
     (* See comment in [unary_primitive_eligible_for_cse], above, on [Box_number]
        case. *)
     List.exists (fun arg -> Simple.is_var arg) args
@@ -2539,7 +2539,7 @@ let effects_and_coeffects_of_variadic_primitive p : Effects_and_coeffects.t =
   | Make_block (_, mut, alloc_mode) | Make_array (_, mut, alloc_mode) ->
     let coeffects : Coeffects.t =
       match alloc_mode with
-      | Heap -> Coeffects.No_coeffects
+      | Heap _ -> Coeffects.No_coeffects
       | Local _ -> Coeffects.Has_coeffects
     in
     Only_generative_effects mut, coeffects, Strict, Can't_move_before_any_branch

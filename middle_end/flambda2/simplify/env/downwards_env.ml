@@ -61,6 +61,7 @@ type t =
     at_unit_toplevel : bool;
     unit_toplevel_return_continuation : Continuation.t;
     unit_toplevel_exn_continuation : Continuation.t;
+    unit_toplevel_alloc_region : Variable.t;
     variables_defined_at_toplevel : Variable.Set.t;
     cse : CSE.t;
     comparison_results : Comparison_result.t Variable.Map.t;
@@ -103,7 +104,7 @@ let [@ocamlformat "disable"] print ppf { round; machine_width; typing_env;
                 at_unit_toplevel; unit_toplevel_exn_continuation;
                 variables_defined_at_toplevel; cse; comparison_results;
                 are_rebuilding_terms; closure_info;
-                unit_toplevel_return_continuation; all_code;
+                unit_toplevel_return_continuation; unit_toplevel_alloc_region; all_code;
                 get_imported_code = _; inlining_history_tracker = _;
                 loopify_state; replay_history; specialization_cost; defined_variables_by_scope;
                 lifted = _; cost_of_lifting_continuations_out_of_current_one;
@@ -120,6 +121,7 @@ let [@ocamlformat "disable"] print ppf { round; machine_width; typing_env;
       @[<hov 1>(at_unit_toplevel@ %b)@]@ \
       @[<hov 1>(unit_toplevel_return_continuation@ %a)@]@ \
       @[<hov 1>(unit_toplevel_exn_continuation@ %a)@]@ \
+      @[<hov 1>(unit_toplevel_alloc_region@ %a)@]@ \
       @[<hov 1>(variables_defined_at_toplevel@ %a)@]@ \
       @[<hov 1>(cse@ @[<hov 1>%a@])@]@ \
       @[<hov 1>(comparison_results@ @[<hov 1>%a@])@]@ \
@@ -143,6 +145,7 @@ let [@ocamlformat "disable"] print ppf { round; machine_width; typing_env;
     at_unit_toplevel
     Continuation.print unit_toplevel_return_continuation
     Continuation.print unit_toplevel_exn_continuation
+    Variable.print unit_toplevel_alloc_region
     Variable.Set.print variables_defined_at_toplevel
     CSE.print cse
     (Variable.Map.print Comparison_result.print) comparison_results
@@ -224,6 +227,7 @@ let create ~round ~machine_width ~(resolver : resolver)
       at_unit_toplevel = true;
       unit_toplevel_return_continuation;
       unit_toplevel_exn_continuation;
+      unit_toplevel_alloc_region = toplevel_my_alloc_region;
       variables_defined_at_toplevel = Variable.Set.empty;
       cse = CSE.empty;
       comparison_results = Variable.Map.empty;
@@ -284,6 +288,8 @@ let unit_toplevel_exn_continuation t = t.unit_toplevel_exn_continuation
 
 let unit_toplevel_return_continuation t = t.unit_toplevel_return_continuation
 
+let unit_toplevel_alloc_region t = t.unit_toplevel_alloc_region
+
 let at_unit_toplevel t = t.at_unit_toplevel
 
 let set_at_unit_toplevel_state t at_unit_toplevel = { t with at_unit_toplevel }
@@ -322,6 +328,7 @@ let enter_set_of_closures
       at_unit_toplevel = _;
       unit_toplevel_return_continuation;
       unit_toplevel_exn_continuation;
+      unit_toplevel_alloc_region;
       variables_defined_at_toplevel;
       cse = _;
       comparison_results = _;
@@ -351,6 +358,7 @@ let enter_set_of_closures
     at_unit_toplevel = false;
     unit_toplevel_return_continuation;
     unit_toplevel_exn_continuation;
+    unit_toplevel_alloc_region;
     variables_defined_at_toplevel;
     cse = CSE.empty;
     comparison_results = Variable.Map.empty;
@@ -599,11 +607,12 @@ let set_rebuild_terms t =
 
 let are_rebuilding_terms t = t.are_rebuilding_terms
 
-let enter_closure code_id ~return_continuation ~exn_continuation ~my_closure t =
+let enter_closure code_id ~return_continuation ~exn_continuation ~my_closure
+    ~my_alloc_region t =
   { t with
     closure_info =
       Closure_info.in_a_closure code_id ~return_continuation ~exn_continuation
-        ~my_closure
+        ~my_closure ~my_alloc_region
   }
 
 let closure_info t = t.closure_info
@@ -777,6 +786,7 @@ let denv_for_lifted_continuation ~denv_for_join ~denv =
     propagating_float_consts = denv.propagating_float_consts;
     unit_toplevel_return_continuation = denv.unit_toplevel_return_continuation;
     unit_toplevel_exn_continuation = denv.unit_toplevel_exn_continuation;
+    unit_toplevel_alloc_region = denv.unit_toplevel_alloc_region;
     are_rebuilding_terms = denv.are_rebuilding_terms;
     closure_info = denv.closure_info;
     get_imported_code = denv.get_imported_code;

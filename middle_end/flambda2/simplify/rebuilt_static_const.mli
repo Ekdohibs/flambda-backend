@@ -38,7 +38,11 @@ val create_code :
    values are not constructed unnecessarily. *)
 val create_code' : Code.t -> t
 
-val create_set_of_closures : Are_rebuilding_terms.t -> Set_of_closures.t -> t
+val create_set_of_closures :
+  unit_toplevel_alloc_region:Variable.t ->
+  Are_rebuilding_terms.t ->
+  Set_of_closures.t ->
+  t
 
 val create_block :
   Are_rebuilding_terms.t ->

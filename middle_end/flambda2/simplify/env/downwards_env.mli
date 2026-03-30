@@ -67,6 +67,8 @@ val unit_toplevel_return_continuation : t -> Continuation.t
 
 val unit_toplevel_exn_continuation : t -> Continuation.t
 
+val unit_toplevel_alloc_region : t -> Variable.t
+
 val increment_continuation_scope : t -> t
 
 val bump_current_level_scope : t -> t
@@ -201,6 +203,7 @@ val enter_closure :
   return_continuation:Continuation.t ->
   exn_continuation:Continuation.t ->
   my_closure:Variable.t ->
+  my_alloc_region:Variable.t ->
   t ->
   t
 

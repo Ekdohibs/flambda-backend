@@ -220,27 +220,28 @@ let init_or_assign =
 
 let alloc_mode_for_allocation =
   D.(
-    default ~def:Alloc_mode.For_allocations.heap
-    @@ either
-         [ case (labeled "local" string)
-             ~box:(fun env r ->
-               let region =
-                 if String.equal (unwrap_loc r) "toplevel"
-                 then env.toplevel_region
-                 else Fexpr_to_flambda_commons.find_var env r
-               in
-               Alloc_mode.For_allocations.local ~region)
-             ~unbox:(fun env -> function
-               | Alloc_mode.For_allocations.Local { region } ->
-                 let r =
-                   match
-                     Flambda_to_fexpr_commons.Env.find_region_exn env region
-                   with
-                   | Fexpr.Toplevel -> wrap_loc "toplevel"
-                   | Named s -> s
-                 in
-                 Some r
-               | Alloc_mode.For_allocations.Heap -> None) ])
+    (* default ~def: (Alloc_mode.For_allocations.heap
+       ~alloc_region:(Variable.create "" Flambda_kind.region)) @@ *)
+    either
+      [ case (labeled "local" string)
+          ~box:(fun env r ->
+            let region =
+              if String.equal (unwrap_loc r) "toplevel"
+              then env.toplevel_region
+              else Fexpr_to_flambda_commons.find_var env r
+            in
+            Alloc_mode.For_allocations.local ~region ~alloc_region:(failwith ""))
+          ~unbox:(fun env -> function
+            | Alloc_mode.For_allocations.Local { region } ->
+              let r =
+                match
+                  Flambda_to_fexpr_commons.Env.find_region_exn env region
+                with
+                | Fexpr.Toplevel -> wrap_loc "toplevel"
+                | Named s -> s
+              in
+              Some r
+            | Alloc_mode.For_allocations.Heap _ -> None) ])
 
 let boxable_number =
   D.constructor_flag

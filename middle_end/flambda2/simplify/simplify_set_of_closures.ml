@@ -104,6 +104,8 @@ let dacc_inside_function context ~outer_dacc ~params ~my_closure ~my_alloc_mode
       (DA.get_lifted_constants outer_dacc)
     |> DE.enter_closure code_id ~return_continuation ~exn_continuation
          ~my_closure
+         ~my_alloc_region:
+           (Alloc_mode.For_applications.alloc_region my_alloc_mode)
     |> DE.set_loopify_state loopify_state
     |> DE.increment_continuation_scope
   in
@@ -769,6 +771,7 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
     LC.create_set_of_closures denv ~closure_symbols_with_types
       ~symbol_projections
       (Rebuilt_static_const.create_set_of_closures
+         ~unit_toplevel_alloc_region:(DE.unit_toplevel_alloc_region denv)
          (DE.are_rebuilding_terms denv)
          set_of_closures)
   in
@@ -980,7 +983,7 @@ let type_value_slots_and_make_lifting_decision_for_one_set dacc
          with
          | Proved () -> true
          | Unknown -> false)
-       | Heap -> true
+       | Heap _ -> true
   in
   let value_slot_permits_lifting _value_slot simple =
     can_lift_coercion (Simple.coercion simple)
@@ -1039,6 +1042,7 @@ let simplify_lifted_set_of_closures0 dacc context ~closure_symbols
   in
   let set_of_closures_static_const =
     Rebuilt_static_const.create_set_of_closures
+      ~unit_toplevel_alloc_region:(DE.unit_toplevel_alloc_region (DA.denv dacc))
       (DA.are_rebuilding_terms dacc)
       set_of_closures
   in

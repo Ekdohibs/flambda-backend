@@ -724,9 +724,10 @@ let simplify_direct_partial_application ~simplify_expr dacc apply
         in
         let new_closure_alloc_mode =
           match (new_closure_alloc_mode : Alloc_mode.For_applications.t) with
-          | Heap { alloc_region = _ } -> Alloc_mode.For_allocations.heap
-          | Local { alloc_region = _; region; ghost_region = _ } ->
-            Alloc_mode.For_allocations.local ~region
+          | Heap { alloc_region } ->
+            Alloc_mode.For_allocations.heap ~alloc_region
+          | Local { alloc_region; region; ghost_region = _ } ->
+            Alloc_mode.For_allocations.local ~alloc_region ~region
         in
         ( Set_of_closures.create ~value_slots new_closure_alloc_mode
             function_decls,
