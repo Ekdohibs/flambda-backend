@@ -430,6 +430,8 @@ module Datalog_schedule = struct
 
   let ( let$$ ) x f = with_priority 1 x f
 
+  let ( << ) rule _name = rule
+
   let make_schedule l =
     Schedule.fixpoint
       (List.init 2 (fun i ->
@@ -443,39 +445,49 @@ module Datalog_schedule = struct
        these, only [alias] has both priorities, because it is the only of those
        relations that is extended after graph construction. *)
     [ (let$ [to_; from] = ["to_"; "from"] in
-       [alias ~to_ ~from] ==> rev_alias ~from ~to_);
+       [alias ~to_ ~from] ==> rev_alias ~from ~to_)
+      << "rev_alias1";
       (let$$ [to_; from] = ["to_"; "from"] in
-       [alias ~to_ ~from] ==> rev_alias ~from ~to_);
+       [alias ~to_ ~from] ==> rev_alias ~from ~to_)
+      << "rev_alias2";
       (let$ [to_; from] = ["to_"; "from"] in
-       [use ~to_ ~from] ==> rev_use ~from ~to_);
+       [use ~to_ ~from] ==> rev_use ~from ~to_)
+      << "rev_use";
       (let$ [to_; relation; base] = ["to_"; "relation"; "base"] in
-       [accessor ~to_ relation ~base] ==> rev_accessor ~base relation ~to_);
+       [accessor ~to_ relation ~base] ==> rev_accessor ~base relation ~to_)
+      << "rev_accessor";
       (let$ [base; relation; from] = ["base"; "relation"; "from"] in
        [constructor ~base relation ~from]
-       ==> rev_constructor ~from relation ~base);
+       ==> rev_constructor ~from relation ~base)
+      << "rev_constructor";
       (let$ [from; relation; base] = ["from"; "relation"; "base"] in
-       [argument ~from relation ~base] ==> rev_argument ~base relation ~from);
+       [argument ~from relation ~base] ==> rev_argument ~base relation ~from)
+      << "rev_argument";
       (let$ [base; relation; to_] = ["base"; "relation"; "to_"] in
-       [parameter ~base relation ~to_] ==> rev_parameter ~to_ relation ~base) ]
+       [parameter ~base relation ~to_] ==> rev_parameter ~to_ relation ~base)
+      << "rev_parameter" ]
 
   let alias_rules =
     [ (* The [propagate] relation is part of the input of the solver, with the
          intended meaning of this rule, that is, an alias if [is_used] is
          used. *)
       (let$ [if_used; to_; from] = ["if_used"; "to_"; "from"] in
-       [any_usage if_used; propagate ~if_used ~to_ ~from] ==> alias ~to_ ~from);
+       [any_usage if_used; propagate ~if_used ~to_ ~from] ==> alias ~to_ ~from)
+      << "propagate_to_alias";
       (* Likewise, [alias_if_any_source] means an alias if [is_any_source] has
          any source. *)
       (let$ [if_any_source; to_; from] = ["if_any_source"; "to_"; "from"] in
        [any_source if_any_source; alias_if_any_source ~if_any_source ~to_ ~from]
-       ==> alias ~to_ ~from);
+       ==> alias ~to_ ~from)
+      << "alias_if_any_source_to_alias";
       (let$$ [base; base_use; relation; from; to_] =
          ["base"; "base_use"; "relation"; "from"; "to_"]
        in
        [ constructor ~base relation ~from;
          nontop_usages base base_use;
          rev_accessor ~base:base_use relation ~to_ ]
-       ==> alias ~to_ ~from);
+       ==> alias ~to_ ~from)
+      << "constructor_usages";
       (let$$ [base; base_use; relation; from; to_] =
          ["base"; "base_use"; "relation"; "from"; "to_"]
        in
@@ -483,21 +495,24 @@ module Datalog_schedule = struct
          constructor ~base relation ~from;
          usages base base_use;
          rev_accessor ~base:base_use relation ~to_ ]
-       ==> alias ~to_ ~from);
+       ==> alias ~to_ ~from)
+      << "constructor_usages_local";
       (let$$ [base; base_use; relation; to_; from] =
          ["base"; "base_use"; "relation"; "to_"; "from"]
        in
        [ parameter ~base relation ~to_;
          nontop_usages base base_use;
          rev_argument ~base:base_use relation ~from ]
-       ==> alias ~to_ ~from);
+       ==> alias ~to_ ~from)
+      << "parameter_usages";
       (let$$ [base; base_source; relation; to_; from] =
          ["base"; "base_source"; "relation"; "to_"; "from"]
        in
        [ rev_accessor ~base relation ~to_;
          nontop_sources base base_source;
          constructor ~base:base_source relation ~from ]
-       ==> alias ~to_ ~from);
+       ==> alias ~to_ ~from)
+      << "accessor_sources";
       (let$$ [base; base_source; relation; to_; from] =
          ["base"; "base_source"; "relation"; "to_"; "from"]
        in
@@ -505,108 +520,135 @@ module Datalog_schedule = struct
          rev_accessor ~base relation ~to_;
          sources base base_source;
          constructor ~base:base_source relation ~from ]
-       ==> alias ~to_ ~from);
+       ==> alias ~to_ ~from)
+      << "accessor_sources_local";
       (let$ [relation; from; to_] = ["relation"; "from"; "to_"] in
        [escaping_field relation from; reading_field relation to_]
-       ==> alias ~to_ ~from);
+       ==> alias ~to_ ~from)
+      << "reading_escaping";
       (let$$ [base; base_source; relation; from; to_] =
          ["base"; "base_source"; "relation"; "from"; "to_"]
        in
        [ rev_argument ~base relation ~from;
          nontop_sources base base_source;
          parameter ~base:base_source relation ~to_ ]
-       ==> alias ~to_ ~from) ]
+       ==> alias ~to_ ~from)
+      << "argument_sources" ]
 
   let has_usage_rules =
     [ (let$ [x] = ["x"] in
-       [any_usage x] ==> has_usage x);
+       [any_usage x] ==> has_usage x)
+      << "any_usage_has_usage";
       (let$ [to_; from] = ["to_"; "from"] in
-       [has_usage to_; alias ~to_ ~from] ==> has_usage from);
+       [has_usage to_; alias ~to_ ~from] ==> has_usage from)
+      << "propagate_has_usage";
       (let$$ [to_; relation; base] = ["to_"; "relation"; "base"] in
-       [has_usage to_; accessor ~to_ relation ~base] ==> has_usage base);
+       [has_usage to_; accessor ~to_ relation ~base] ==> has_usage base)
+      << "accessor_has_usage";
       (let$$ [from; relation; base] = ["from"; "relation"; "base"] in
-       [has_source from; argument ~from relation ~base] ==> has_usage base) ]
+       [has_source from; argument ~from relation ~base] ==> has_usage base)
+      << "argument_has_usage" ]
 
   let has_source_rules =
     [ (let$ [x] = ["x"] in
-       [any_source x] ==> has_source x);
+       [any_source x] ==> has_source x)
+      << "any_source_has_source";
       (let$ [from; to_] = ["from"; "to_"] in
-       [has_source from; rev_alias ~from ~to_] ==> has_source to_);
+       [has_source from; rev_alias ~from ~to_] ==> has_source to_)
+      << "propagate_has_source";
       (let$$ [from; relation; base] = ["from"; "relation"; "base"] in
        [has_source from; rev_constructor ~from relation ~base]
-       ==> has_source base);
+       ==> has_source base)
+      << "constructor_has_source";
       (let$$ [to_; relation; base] = ["to_"; "relation"; "base"] in
        [has_usage to_; rev_parameter ~to_ relation ~base] ==> has_source base)
-    ]
+      << "parameter_has_source" ]
 
   let any_usage_rules =
     [ (let$ [to_; from] = ["to_"; "from"] in
-       [has_usage to_; use ~to_ ~from] ==> any_usage from);
+       [has_usage to_; use ~to_ ~from] ==> any_usage from)
+      << "use_any_usage";
       (let$ [to_; from] = ["to_"; "from"] in
-       [any_usage to_; alias ~to_ ~from] ==> any_usage from);
+       [any_usage to_; alias ~to_ ~from] ==> any_usage from)
+      << "propagate_any_usage";
       (let$ [base; relation; from] = ["base"; "relation"; "from"] in
        [ any_usage base;
          constructor ~base relation ~from;
          unless1 Field.is_local relation ]
-       ==> any_usage from);
+       ==> any_usage from)
+      << "constructor_any_usage";
       (let$ [base; relation; from] = ["base"; "relation"; "from"] in
        [any_source base; rev_argument ~base relation ~from] ==> any_usage from)
-    ]
+      << "argument_any_usage" ]
 
   let any_source_rules =
     [ (let$ [x] = ["x"] in
-       [zero_alloc_source x] ==> any_source x);
+       [zero_alloc_source x] ==> any_source x)
+      << "zero_alloc_any_source";
       (let$ [from; to_] = ["from"; "to_"] in
-       [rev_alias ~from ~to_; any_source from] ==> any_source to_);
+       [rev_alias ~from ~to_; any_source from] ==> any_source to_)
+      << "propagate_any_source";
       (let$ [base; relation; to_] = ["base"; "relation"; "to_"] in
-       [any_usage base; parameter ~base relation ~to_] ==> any_source to_);
+       [any_usage base; parameter ~base relation ~to_] ==> any_source to_)
+      << "parameter_any_source";
       (let$ [base; relation; to_] = ["base"; "relation"; "to_"] in
        [ any_source base;
          rev_accessor ~base relation ~to_;
          unless1 Field.is_local relation ]
-       ==> any_source to_);
+       ==> any_source to_)
+      << "accessor_any_source";
       (let$ [from; to_] = ["from"; "to_"] in
-       [has_source from; rev_use ~from ~to_] ==> any_source to_) ]
+       [has_source from; rev_use ~from ~to_] ==> any_source to_)
+      << "use_any_source" ]
 
   let usages_rules =
     [ (let$$ [to_; relation; base] = ["to_"; "relation"; "base"] in
-       [accessor ~to_ relation ~base] ==> nontop_usages base base);
+       [accessor ~to_ relation ~base] ==> nontop_usages base base)
+      << "accessor_usages";
       (let$$ [from; relation; base] = ["from"; "relation"; "base"] in
-       [argument ~from relation ~base] ==> nontop_usages base base);
+       [argument ~from relation ~base] ==> nontop_usages base base)
+      << "argument_usages";
       (let$$ [to_; from; usage] = ["to_"; "from"; "usage"] in
        [nontop_usages to_ usage; alias ~to_ ~from] ==> nontop_usages from usage)
-    ]
+      << "alias_usages" ]
 
   let sources_rules =
     [ (let$$ [from; relation; base] = ["from"; "relation"; "base"] in
-       [rev_constructor ~from relation ~base] ==> nontop_sources base base);
+       [rev_constructor ~from relation ~base] ==> nontop_sources base base)
+      << "constructor_sources";
       (let$$ [to_; relation; base] = ["to_"; "relation"; "base"] in
-       [rev_parameter ~to_ relation ~base] ==> nontop_sources base base);
+       [rev_parameter ~to_ relation ~base] ==> nontop_sources base base)
+      << "parameter_sources";
       (let$$ [from; to_; source] = ["from"; "to_"; "source"] in
        [nontop_sources from source; rev_alias ~from ~to_]
-       ==> nontop_sources to_ source) ]
+       ==> nontop_sources to_ source)
+      << "alias_sources" ]
 
   let local_rules =
     [ (let$ [base; relation; from] = ["base"; "relation"; "from"] in
        [ any_usage base;
          constructor ~base relation ~from;
          when1 Field.is_local relation ]
-       ==> escaping_field relation from);
+       ==> escaping_field relation from)
+      << "escaping_local_field";
       (let$ [base; relation; to_] = ["base"; "relation"; "to_"] in
        [ any_source base;
          rev_accessor ~base relation ~to_;
          when1 Field.is_local relation ]
-       ==> reading_field relation to_) ]
+       ==> reading_field relation to_)
+      << "reading_local_field" ]
 
   let zero_alloc_rules =
     [ (let$ [from; to_] = ["from"; "to_"] in
-       [rev_alias ~from ~to_; zero_alloc_source from] ==> zero_alloc_source to_);
+       [rev_alias ~from ~to_; zero_alloc_source from] ==> zero_alloc_source to_)
+      << "zero_alloc_alias";
       (let$ [base; relation; to_] = ["base"; "relation"; "to_"] in
        [zero_alloc_source base; rev_accessor ~base relation ~to_]
-       ==> zero_alloc_source to_);
+       ==> zero_alloc_source to_)
+      << "zero_alloc_accessor";
       (let$ [from; to_] = ["from"; "to_"] in
        [zero_alloc_source from; rev_use ~from ~to_] ==> zero_alloc_source to_)
-    ]
+      << "zero_alloc_use" ]
 
   let schedule =
     List.concat
