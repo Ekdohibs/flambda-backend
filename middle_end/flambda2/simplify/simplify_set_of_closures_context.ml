@@ -250,27 +250,16 @@ let create ~dacc_prior_to_sets ~simplify_function_body ~all_sets_of_closures
        knowing it prohibits us from inlining it. *)
     |> DE.set_rebuild_terms
   in
-  let free_depth_variables =
-    List.concat_map
-      (fun value_slot_types ->
-        Value_slot.Map.mapi
-          (fun _value_slot ty ->
-            let vars = TE.free_names_transitive (DE.typing_env denv) ty in
-            NO.fold_variables vars ~init:Variable.Set.empty
-              ~f:(fun free_depth_variables var ->
-                let ty =
-                  TE.find
-                    (DE.typing_env denv_inside_functions)
-                    (Name.var var) None
-                in
-                match T.kind ty with
-                | Rec_info -> Variable.Set.add var free_depth_variables
-                | Value | Naked_number _ | Region -> free_depth_variables))
-          value_slot_types
-        |> Value_slot.Map.data)
-      value_slot_types_all_sets
-    |> Variable.Set.union_list
-  in
+  let free_depth_variables = Variable.Set.empty in
+  (* List.concat_map (fun value_slot_types -> Value_slot.Map.mapi (fun
+     _value_slot ty -> let vars = TE.free_names_transitive (DE.typing_env denv)
+     ty in NO.fold_variables vars ~init:Variable.Set.empty ~f:(fun
+     free_depth_variables var -> let ty = TE.find (DE.typing_env
+     denv_inside_functions) (Name.var var) None in match T.kind ty with |
+     Rec_info -> Variable.Set.add var free_depth_variables | Value |
+     Naked_number _ | Region -> free_depth_variables)) value_slot_types |>
+     Value_slot.Map.data) value_slot_types_all_sets |> Variable.Set.union_list
+     in *)
   (* Pretend that any depth variables appearing free in the closure elements are
      bound to "never inline anything" in the function. This ensures that
      in-types depth variables do not end up in terms. *)
