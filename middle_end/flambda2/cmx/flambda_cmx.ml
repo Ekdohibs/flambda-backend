@@ -246,8 +246,8 @@ let prepare_cmx_file_contents ~final_typing_env ~module_symbol ~used_value_slots
     prepare_cmx ~module_symbol create_typing_env ~free_names_of_name
       ~used_value_slots ~canonicalise ~exported_offsets ~sections all_code
 
-let prepare_cmx_from_approx ~machine_width ~approxs ~module_symbol
-    ~exported_offsets ~used_value_slots ~sections all_code =
+let prepare_cmx_from_approx ~machine_width ~approxs ~sections ~module_symbol
+    ~used_value_slots ~exported_offsets all_code =
   if Flambda_features.opaque ()
   then Name_occurrences.singleton_symbol module_symbol Name_mode.normal, None
   else

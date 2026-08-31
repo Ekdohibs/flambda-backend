@@ -44,9 +44,9 @@ val prepare_cmx_file_contents :
 val prepare_cmx_from_approx :
   machine_width:Target_system.Machine_width.t ->
   approxs:Code_or_metadata.t Value_approximation.t Symbol.Map.t ->
-  module_symbol:Symbol.t ->
-  exported_offsets:Exported_offsets.t ->
-  used_value_slots:Value_slot.Set.t ->
   sections:File_sections.Builder.t ->
+  module_symbol:Symbol.t ->
+  used_value_slots:Value_slot.Set.t ->
+  exported_offsets:Exported_offsets.t ->
   Exported_code.t ->
   Name_occurrences.t * Flambda_cmx_format.raw option
