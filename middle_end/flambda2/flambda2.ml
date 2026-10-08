@@ -183,11 +183,12 @@ let flambda_to_flambda0 : type m.
         in
         let flambda, all_code, slot_offsets, final_typing_env =
           run_reaper ~ppf ~prefixname ~machine_width ~cmx_loader ~all_code
-            ~final_typing_env:(Some final_typing_env) ~free_names raw_flambda
+            ~final_typing_env ~free_names raw_flambda
         in
         let prepare_cmx ~module_symbol ~used_value_slots ~exported_offsets
             all_code =
-          Flambda_cmx.prepare_cmx_file_contents ~final_typing_env ~module_symbol
+          Flambda_cmx.prepare_cmx_file_contents
+            ~final_typing_env:(Some final_typing_env) ~module_symbol
             ~used_value_slots ~exported_offsets ~sections all_code
         in
         flambda, all_code, slot_offsets, prepare_cmx, "reaper"
@@ -242,7 +243,8 @@ let flambda_to_flambda0 : type m.
       in
       let prepare_cmx ~module_symbol ~used_value_slots ~exported_offsets
           all_code =
-        Flambda_cmx.prepare_cmx_file_contents ~final_typing_env ~module_symbol
+        Flambda_cmx.prepare_cmx_file_contents
+          ~final_typing_env:(Some final_typing_env) ~module_symbol
           ~used_value_slots ~exported_offsets ~sections all_code
       in
       flambda, all_code, slot_offsets, prepare_cmx, last_pass_name
