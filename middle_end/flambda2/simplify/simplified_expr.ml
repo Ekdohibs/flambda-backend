@@ -127,20 +127,21 @@ let notify_removed ~operation t =
 
 let mark_as_cold t = if t.is_cold then t else { t with is_cold = true }
 
-let simplified_let ~bindings_to_place ~removed_operations
+let simplified_defining_expr ~bindings_to_place ~removed_operations
     ~lifted_constants_from_defining_expr ~at_unit_toplevel ~closure_info
-    ~rewrite_id t =
+    ~rewrite_id =
+  { bindings_to_place;
+    removed_operations;
+    lifted_constants_from_defining_expr;
+    at_unit_toplevel;
+    closure_info;
+    rewrite_id
+  }
+
+let simplified_let simplified_defining_expr t =
   { t with
     simplified_lets_and_let_conts =
-      Simplified_let
-        ( { bindings_to_place;
-            removed_operations;
-            lifted_constants_from_defining_expr;
-            at_unit_toplevel;
-            closure_info;
-            rewrite_id
-          },
-          t.simplified_lets_and_let_conts )
+      Simplified_let (simplified_defining_expr, t.simplified_lets_and_let_conts)
   }
 
 let simplified_let_cont simplified_handlers t =

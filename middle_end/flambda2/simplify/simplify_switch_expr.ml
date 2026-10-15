@@ -1059,10 +1059,9 @@ let simplify_switch dacc switch ~down_to_up =
     let denv_at_use = DE.with_typing_env (DA.denv dacc) env_at_use in
     let dacc = DA.with_denv dacc denv_at_use in
     Simplify_apply_cont_expr.simplify_apply_cont dacc (Switch_arm.action arm)
-      ~down_to_up:(fun dacc simplified_expr ->
-        down_to_up dacc
-          (SE.notify_removed ~operation:Removed_operations.branch
-             simplified_expr))
+      ~down_to_up:
+        (Simplify_common.down_to_up_removed ~operation:Removed_operations.branch
+           down_to_up)
   | None ->
     let arms, dacc = TI.Map.fold simplify_arm arms (TI.Map.empty, dacc) in
     let dacc =
@@ -1091,6 +1090,6 @@ let simplify_switch dacc switch ~down_to_up =
     let shareable_constants = DA.shareable_constants dacc_before_switch in
     let typing_env_before_switch = DA.typing_env dacc_before_switch in
     let cse_before_switch = DE.cse (DA.denv dacc_before_switch) in
-    down_to_up dacc
+    Simplify_common.apply_down_to_up down_to_up dacc
       (SE.simplified_switch ~arms ~condition_dbg ~scrutinee ~scrutinee_ty
          ~shareable_constants ~typing_env_before_switch ~cse_before_switch)

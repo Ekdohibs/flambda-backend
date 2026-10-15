@@ -1450,15 +1450,19 @@ and simplify_handler ~simplify_expr ~is_recursive ~is_exn_handler
            (Bound_parameters.append invariant_params params))
       dacc
   in
-  simplify_expr dacc handler ~down_to_up:(fun dacc simplified_handler ->
-      let dacc = DA.map_flow_acc ~f:(Flow.Acc.exit_continuation cont) dacc in
-      let cont_uses_env_in_handler = DA.continuation_uses_env dacc in
-      let cont_uses_env_in_handler =
-        if is_recursive
-        then CUE.mark_non_inlinable cont_uses_env_in_handler
-        else cont_uses_env_in_handler
-      in
-      k dacc simplified_handler cont_uses_env_in_handler)
+  simplify_expr dacc handler
+    ~down_to_up:
+      (Simplify_common.down_to_up_of_func (fun dacc simplified_handler ->
+           let dacc =
+             DA.map_flow_acc ~f:(Flow.Acc.exit_continuation cont) dacc
+           in
+           let cont_uses_env_in_handler = DA.continuation_uses_env dacc in
+           let cont_uses_env_in_handler =
+             if is_recursive
+             then CUE.mark_non_inlinable cont_uses_env_in_handler
+             else cont_uses_env_in_handler
+           in
+           k dacc simplified_handler cont_uses_env_in_handler))
 
 and simplify_single_recursive_handler ~simplify_expr cont_uses_env_so_far
     ~invariant_params ~consts_lifted_after_fork all_handlers_set denv_to_reset
@@ -1787,7 +1791,7 @@ and after_downwards_traversal_of_body ~simplify_expr ~down_to_up
       (* wrapper continuations are not lifted, and will be duplicated and
          re-simplified for each specialized continuation, so we can just not
          simplify their handler *)
-      down_to_up dacc simplified_body
+      Simplify_common.apply_down_to_up down_to_up dacc simplified_body
     else
       (* In this case, we have decided to lift the continuation being bound out
          of its defining handler. Therefore we save the non-simplified version
@@ -1804,7 +1808,7 @@ and after_downwards_traversal_of_body ~simplify_expr ~down_to_up
       let dacc =
         DA.add_to_lifted_constant_accumulator dacc data.prior_lifted_constants
       in
-      down_to_up dacc simplified_body
+      Simplify_common.apply_down_to_up down_to_up dacc simplified_body
   | Not_lifting _ | Analyzing _ ->
     simplify_handlers data dacc ~simplify_expr ~down_to_up ~denv_for_join
       ~simplified_body
@@ -1812,7 +1816,7 @@ and after_downwards_traversal_of_body ~simplify_expr ~down_to_up
 and down_to_up_for_lifted_continuations ~simplify_expr ~denv_for_join
     lifted_conts ~down_to_up =
   match lifted_conts with
-  | [] -> down_to_up
+  | [] -> Simplify_common.apply_down_to_up down_to_up
   | (denv, handlers) :: other_lifted_handlers ->
     (* At this point, we are lifting a continuation k' with handler [handlers],
        out of a continuation k, and:
@@ -1831,7 +1835,8 @@ and down_to_up_for_lifted_continuations ~simplify_expr ~denv_for_join
       }
     in
     let down_to_up =
-      after_downwards_traversal_of_body ~simplify_expr data ~down_to_up
+      Simplify_common.down_to_up_of_func
+        (after_downwards_traversal_of_body ~simplify_expr data ~down_to_up)
     in
     down_to_up_for_lifted_continuations ~simplify_expr ~denv_for_join
       other_lifted_handlers ~down_to_up
@@ -1983,7 +1988,8 @@ let simplify_let_cont0 ~(simplify_expr : _ Simplify_common.expr_simplifier) dacc
   in
   simplify_expr dacc body
     ~down_to_up:
-      (after_downwards_traversal_of_body ~simplify_expr data ~down_to_up)
+      (Simplify_common.down_to_up_of_func
+         (after_downwards_traversal_of_body ~simplify_expr data ~down_to_up))
 
 let simplify_let_cont ~simplify_expr dacc let_cont ~down_to_up =
   (* This is the entry point to simplify a let cont expression. The only thing

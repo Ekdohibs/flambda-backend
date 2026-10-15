@@ -125,15 +125,16 @@ val notify_removed : operation:Removed_operations.t -> t -> t
 
 val mark_as_cold : t -> t
 
-val simplified_let :
+val simplified_defining_expr :
   bindings_to_place:Simplified_named.binding_to_place list ->
   removed_operations:Removed_operations.t ->
   lifted_constants_from_defining_expr:Lifted_constant_state.t ->
   at_unit_toplevel:bool ->
   closure_info:Closure_info.t ->
   rewrite_id:Named_rewrite_id.t ->
-  t ->
-  t
+  simplified_defining_expr
+
+val simplified_let : simplified_defining_expr -> t -> t
 
 val simplified_let_cont : simplified_let_cont_handlers -> t -> t
 

@@ -256,22 +256,21 @@ let simplify_direct_full_application ~simplify_expr ~rebuild_expr dacc apply
   match inlined with
   | Inline (dacc, inlined) ->
     let is_cold = Code_metadata.cold callee's_code_metadata in
-    let down_to_up dacc simplified_body =
-      let simplified_body =
-        if coming_from_indirect
-        then
-          SE.notify_removed
-            ~operation:Removed_operations.direct_call_of_indirect
-            simplified_body
-        else simplified_body
-      in
-      let simplified_body =
-        SE.notify_removed ~operation:Removed_operations.call simplified_body
-      in
-      let simplified_body =
-        if is_cold then SE.mark_as_cold simplified_body else simplified_body
-      in
-      down_to_up dacc simplified_body
+    let down_to_up =
+      if coming_from_indirect
+      then
+        Simplify_common.down_to_up_removed
+          ~operation:Removed_operations.direct_call_of_indirect down_to_up
+      else down_to_up
+    in
+    let down_to_up =
+      Simplify_common.down_to_up_removed ~operation:Removed_operations.call
+        down_to_up
+    in
+    let down_to_up =
+      if is_cold
+      then Simplify_common.down_to_up_mark_cold down_to_up
+      else down_to_up
     in
     simplify_expr dacc inlined ~down_to_up
   | Do_not_inline { erase_attribute } -> (
@@ -427,7 +426,7 @@ let simplify_direct_full_application ~simplify_expr ~rebuild_expr dacc apply
             ~operation:Removed_operations.direct_call_of_indirect expr
         else expr
       in
-      down_to_up dacc expr)
+      Simplify_common.apply_down_to_up down_to_up dacc expr)
 
 (* CR mshinwell: need to work out what to do for local alloc transformations
    when there are zero args. *)
@@ -830,18 +829,18 @@ let simplify_direct_partial_application ~simplify_expr dacc apply
       in
       expr, dacc
   in
-  let down_to_up dacc expr =
-    let expr =
-      if coming_from_indirect
-      then
-        SE.notify_removed ~operation:Removed_operations.direct_call_of_indirect
-          expr
-      else expr
-    in
-    (* Increase the counter of calls as the apply has been replaced by an
-       allocation of the partial set of closures. *)
-    let expr = SE.notify_removed ~operation:Removed_operations.call expr in
-    down_to_up dacc expr
+  (* Increase the counter of calls as the apply has been replaced by an
+     allocation of the partial set of closures. *)
+  let down_to_up =
+    Simplify_common.down_to_up_removed ~operation:Removed_operations.call
+      down_to_up
+  in
+  let down_to_up =
+    if coming_from_indirect
+    then
+      Simplify_common.down_to_up_removed
+        ~operation:Removed_operations.direct_call_of_indirect down_to_up
+    else down_to_up
   in
   simplify_expr dacc expr ~down_to_up
 
@@ -852,20 +851,18 @@ let simplify_direct_over_application ~simplify_expr dacc apply ~down_to_up
     Simplify_common.split_direct_over_application apply ~callee's_code_id
       ~callee's_code_metadata
   in
-  let down_to_up dacc expr =
-    let expr =
-      if coming_from_indirect
-      then
-        SE.notify_removed ~operation:Removed_operations.direct_call_of_indirect
-          expr
-      else expr
-    in
-    down_to_up dacc expr
+  let down_to_up =
+    if coming_from_indirect
+    then
+      Simplify_common.down_to_up_removed
+        ~operation:Removed_operations.direct_call_of_indirect down_to_up
+    else down_to_up
   in
   simplify_expr dacc expr ~down_to_up
 
 let replace_apply_by_invalid dacc ~down_to_up reason =
-  down_to_up dacc (SE.simplified_invalid reason)
+  Simplify_common.apply_down_to_up down_to_up dacc
+    (SE.simplified_invalid reason)
 
 let arity_mismatch ~(params_arity : [`Complex] Flambda_arity.t)
     ~(args_arity : [`Complex] Flambda_arity.t) =
@@ -956,7 +953,7 @@ let simplify_function_call_where_callee's_type_unavailable dacc apply
   let dacc =
     record_free_names_of_apply_as_used ~use_id ~exn_cont_use_id dacc apply
   in
-  down_to_up dacc
+  Simplify_common.apply_down_to_up down_to_up dacc
     (SE.simplified_apply apply ~use_id ~exn_cont_use_id ~is_cold:false)
 
 let simplify_direct_function_call ~simplify_expr ~rebuild_expr dacc apply
@@ -1170,7 +1167,8 @@ let simplify_function_call ~simplify_expr ~rebuild_expr dacc apply ~callee_ty
       ~down_to_up
   in
   let not_a_closure () =
-    down_to_up dacc (SE.simplified_invalid (Closure_type_was_invalid apply))
+    Simplify_common.apply_down_to_up down_to_up dacc
+      (SE.simplified_invalid (Closure_type_was_invalid apply))
   in
   (* CR-someday mshinwell: Should this be using [meet_shape], like for
      primitives? *)
@@ -1373,7 +1371,7 @@ let simplify_method_call dacc apply ~callee_ty ~kind:_ ~obj ~down_to_up =
     record_free_names_of_apply_as_used dacc ~use_id:(Some use_id)
       ~exn_cont_use_id apply
   in
-  down_to_up dacc
+  Simplify_common.apply_down_to_up down_to_up dacc
     (SE.simplified_apply apply ~use_id:(Some use_id) ~exn_cont_use_id
        ~is_cold:false)
 
@@ -1391,9 +1389,7 @@ let simplify_c_call ~simplify_expr dacc apply ~callee_ty ~arg_types ~down_to_up
   in
   match simplified with
   | Specialised (dacc, expr, operation) ->
-    let down_to_up dacc expr =
-      down_to_up dacc (SE.notify_removed ~operation expr)
-    in
+    let down_to_up = Simplify_common.down_to_up_removed ~operation down_to_up in
     simplify_expr dacc expr ~down_to_up
   | Unchanged { return_types } ->
     let dacc, use_id =
@@ -1433,7 +1429,7 @@ let simplify_c_call ~simplify_expr dacc apply ~callee_ty ~arg_types ~down_to_up
     let dacc =
       record_free_names_of_apply_as_used dacc ~use_id ~exn_cont_use_id apply
     in
-    down_to_up dacc
+    Simplify_common.apply_down_to_up down_to_up dacc
       (SE.simplified_apply apply ~use_id ~exn_cont_use_id ~is_cold:false)
   | Invalid ->
     replace_apply_by_invalid dacc ~down_to_up (Closure_type_was_invalid apply)
@@ -1501,7 +1497,7 @@ let simplify_effect_op dacc apply (op : Call_kind.Effect.t) ~down_to_up =
   let dacc =
     record_free_names_of_apply_as_used dacc ~use_id ~exn_cont_use_id apply
   in
-  down_to_up dacc
+  Simplify_common.apply_down_to_up down_to_up dacc
     (SE.simplified_apply apply ~use_id ~exn_cont_use_id ~is_cold:false)
 
 let simplify_apply ~simplify_expr ~rebuild_expr dacc apply ~down_to_up =

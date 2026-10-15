@@ -68,7 +68,7 @@ let speculative_inlining dacc ~apply ~function_type ~simplify_expr ~rebuild_expr
       dacc
   in
   let expr, dacc =
-    simplify_expr dacc expr ~down_to_up:(fun dacc expr -> expr, dacc)
+    simplify_expr dacc expr ~down_to_up:Simplify_common.down_to_up_id
   in
   let _, uacc =
     let exn_continuation = Apply.exn_continuation apply in

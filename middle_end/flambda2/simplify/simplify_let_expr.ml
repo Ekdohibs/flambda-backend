@@ -396,7 +396,7 @@ let simplify_let0 ~simplify_expr ~simplify_function_body dacc let_expr
        similar. To avoid this we don't traverse [body]. *)
     match simplify_named_result with
     | Invalid ->
-      down_to_up original_dacc
+      Simplify_common.apply_down_to_up down_to_up original_dacc
         (SE.notify_removed ~operation:removed_operations
            (SE.simplified_invalid
               (Defining_expr_of_let (bound_pattern, defining_expr))))
@@ -442,15 +442,15 @@ let simplify_let0 ~simplify_expr ~simplify_function_body dacc let_expr
          around the simplified body. [Simplify_named] will already have prepared
          [dacc] with the necessary bindings for the simplification of the
          body. *)
-      let down_to_up dacc simplified_body =
-        down_to_up dacc
-          (SE.simplified_let
-             ~bindings_to_place:
-               (Simplify_named_result.bindings_to_place simplify_named_result)
-             ~removed_operations ~lifted_constants_from_defining_expr
-             ~at_unit_toplevel ~closure_info ~rewrite_id simplified_body)
-      in
-      simplify_expr dacc body ~down_to_up)
+      simplify_expr dacc body
+        ~down_to_up:
+          (Simplify_common.down_to_up_let
+             (SE.simplified_defining_expr
+                ~bindings_to_place:
+                  (Simplify_named_result.bindings_to_place simplify_named_result)
+                ~removed_operations ~lifted_constants_from_defining_expr
+                ~at_unit_toplevel ~closure_info ~rewrite_id)
+             down_to_up))
 
 let simplify_let ~simplify_expr ~simplify_function_body dacc let_expr
     ~down_to_up =

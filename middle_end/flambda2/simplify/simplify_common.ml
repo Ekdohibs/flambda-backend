@@ -25,13 +25,49 @@ type 'a rebuild =
   after_rebuild:after_rebuild ->
   Rebuilt_expr.t * Upwards_acc.t
 
-type 'a down_to_up =
-  Downwards_acc.t -> 'a -> Simplified_expr.t * Downwards_acc.t
+type down_to_up =
+  | Id
+  | Mark_as_cold of down_to_up
+  | Removed_operations of Removed_operations.t * down_to_up
+  | Let of Simplified_expr.simplified_defining_expr * down_to_up
+  | Func of
+      (Downwards_acc.t ->
+      Simplified_expr.t ->
+      Simplified_expr.t * Downwards_acc.t)
+
+let rec apply_down_to_up down_to_up dacc simplified_expr =
+  match down_to_up with
+  | Id -> simplified_expr, dacc
+  | Mark_as_cold down_to_up ->
+    let simplified_expr = Simplified_expr.mark_as_cold simplified_expr in
+    apply_down_to_up down_to_up dacc simplified_expr
+  | Removed_operations (operation, down_to_up) ->
+    let simplified_expr =
+      Simplified_expr.notify_removed ~operation simplified_expr
+    in
+    apply_down_to_up down_to_up dacc simplified_expr
+  | Let (defining_expr, down_to_up) ->
+    let simplified_expr =
+      Simplified_expr.simplified_let defining_expr simplified_expr
+    in
+    apply_down_to_up down_to_up dacc simplified_expr
+  | Func down_to_up -> down_to_up dacc simplified_expr
+
+let down_to_up_id = Id
+
+let down_to_up_of_func down_to_up = Func down_to_up
+
+let down_to_up_mark_cold down_to_up = Mark_as_cold down_to_up
+
+let down_to_up_removed ~operation down_to_up =
+  Removed_operations (operation, down_to_up)
+
+let down_to_up_let defining_expr down_to_up = Let (defining_expr, down_to_up)
 
 type 'a expr_simplifier =
   Downwards_acc.t ->
   'a ->
-  down_to_up:Simplified_expr.t down_to_up ->
+  down_to_up:down_to_up ->
   Simplified_expr.t * Downwards_acc.t
 
 type simplify_toplevel =

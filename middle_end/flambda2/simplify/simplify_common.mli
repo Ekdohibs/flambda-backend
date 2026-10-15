@@ -48,8 +48,27 @@ type 'a rebuild =
     that the downwards pass has reached the end of some subexpression, at which
     point another subexpression can be traversed downwards, or (after all such
     subexpressions have been traversed) the upwards pass may begin. *)
-type 'a down_to_up =
-  Downwards_acc.t -> 'a -> Simplified_expr.t * Downwards_acc.t
+type down_to_up
+
+val apply_down_to_up :
+  down_to_up ->
+  Downwards_acc.t ->
+  Simplified_expr.t ->
+  Simplified_expr.t * Downwards_acc.t
+
+val down_to_up_id : down_to_up
+
+val down_to_up_of_func :
+  (Downwards_acc.t -> Simplified_expr.t -> Simplified_expr.t * Downwards_acc.t) ->
+  down_to_up
+
+val down_to_up_mark_cold : down_to_up -> down_to_up
+
+val down_to_up_removed :
+  operation:Removed_operations.t -> down_to_up -> down_to_up
+
+val down_to_up_let :
+  Simplified_expr.simplified_defining_expr -> down_to_up -> down_to_up
 
 (** The environments and accumulators for simplification are as follows:
 
@@ -75,7 +94,7 @@ type 'a down_to_up =
 type 'a expr_simplifier =
   Downwards_acc.t ->
   'a ->
-  down_to_up:Simplified_expr.t down_to_up ->
+  down_to_up:down_to_up ->
   Simplified_expr.t * Downwards_acc.t
 
 type simplify_toplevel =

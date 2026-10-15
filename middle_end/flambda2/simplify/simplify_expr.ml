@@ -82,7 +82,7 @@ let simplify_toplevel_common dacc simplify ~params ~implicit_params
     DA.record_continuation dacc exn_continuation
       (Flambda_arity.create [Singleton K.With_subkind.any_value])
   in
-  let expr, dacc = simplify dacc ~down_to_up:(fun dacc expr -> expr, dacc) in
+  let expr, dacc = simplify dacc ~down_to_up:Simplify_common.down_to_up_id in
   let expr, uacc =
     let dacc =
       DA.map_flow_acc dacc ~f:(Flow.Acc.exit_continuation dummy_toplevel_cont)
@@ -187,7 +187,8 @@ let rec simplify_expr dacc expr ~down_to_up :
   | Invalid { message } ->
     (* CR mshinwell: Make sure that a program can be simplified to just
        [Invalid]. *)
-    down_to_up dacc (Simplified_expr.simplified_invalid (Message message))
+    Simplify_common.apply_down_to_up down_to_up dacc
+      (Simplified_expr.simplified_invalid (Message message))
 
 and simplify_function_body dacc expr ~return_continuation ~return_arity
     ~exn_continuation ~(loopify_state : Loopify_state.t) ~params
