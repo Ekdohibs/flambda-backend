@@ -183,11 +183,13 @@ let add_constructor_dep t ~base relation ~from =
 let add_accessor_dep t ~to_ relation ~base =
   t.accessor <- NFN.add_or_replace [to_; relation; base] () t.accessor
 
-let add_argument_dep t ~from relation ~base =
-  t.argument <- NCN.add_or_replace [from; relation; base] () t.argument
+let add_argument_dep t ~from _relation ~base:_ =
+  (* t.argument <- NCN.add_or_replace [from; relation; base] () t.argument *)
+  t.any_usage <- N.add_or_replace [from] () t.any_usage
 
-let add_parameter_dep t ~base relation ~to_ =
-  t.parameter <- NCN.add_or_replace [base; relation; to_] () t.parameter
+let add_parameter_dep t ~base:_ _relation ~to_ =
+  (* t.parameter <- NCN.add_or_replace [base; relation; to_] () t.parameter *)
+  t.any_source <- N.add_or_replace [to_] () t.any_source
 
 let add_propagate_dep t ~if_used ~to_ ~from =
   t.propagate <- NNN.add_or_replace [if_used; to_; from] () t.propagate
