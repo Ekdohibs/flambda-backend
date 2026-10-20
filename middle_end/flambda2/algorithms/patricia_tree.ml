@@ -116,6 +116,10 @@ module type Tree = sig
 
   type (_, _) tree
 
+  type _ leaf
+
+  type _ branch
+
   (* A witness that ['a] is a valid type for a value stored in the tree. Maps
      will allow ['a] to be any value but sets will only allow [unit]. *)
   type 'a is_value [@@immediate]
@@ -131,7 +135,7 @@ module type Tree = sig
 
   (* A tree containing a single key-value pair. It has the entire key as a
      prefix. *)
-  val leaf : 'a is_value -> key -> 'a -> ('a, [< non_empty > `Leaf]) tree
+  val leaf : 'a is_value -> key -> 'a -> ('a, non_empty) tree
 
   (* A tree with the given prefix, the length of the prefix, and two subtrees.
      If the prefix is P, we require that [t0] has prefix P0 and [t1] has prefix
@@ -141,17 +145,17 @@ module type Tree = sig
     prefix_and_bit ->
     ('a, non_empty) tree ->
     ('a, non_empty) tree ->
-    ('a, [< non_empty > `Branch]) tree
+    ('a, non_empty) tree
 
-  val leaf_key : ('a, leaf) tree -> key
+  val leaf_key : 'a leaf -> key
 
-  val leaf_datum : ('a, leaf) tree -> 'a
+  val leaf_datum : 'a leaf -> 'a
 
-  val branch_prefix_and_bit : ('a, branch) tree -> prefix_and_bit
+  val branch_prefix_and_bit : 'a branch -> prefix_and_bit
 
-  val branch0 : ('a, branch) tree -> ('a, non_empty) tree
+  val branch0 : 'a branch -> ('a, non_empty) tree
 
-  val branch1 : ('a, branch) tree -> ('a, non_empty) tree
+  val branch1 : 'a branch -> ('a, non_empty) tree
 
   (* A view on a given internal node, corresponding to which of [leaf], or
      [branch] constructed it. Passing the fields back in as arguments will
@@ -160,8 +164,8 @@ module type Tree = sig
      and [Branch] constructors in [Set0] and [Map0] in order for the code to be
      correctly optimized. *)
   type 'a tree_descr =
-    | Leaf of ('a, leaf) tree
-    | Branch of ('a, branch) tree
+    | Leaf of 'a leaf
+    | Branch of 'a branch
 
   val tree_descr : ('a, non_empty) tree -> 'a tree_descr
 
@@ -237,25 +241,25 @@ module Set0 = struct
         prefix_and_bit * (unit, non_empty) tree * (unit, non_empty) tree
         -> (unit, [< non_empty > `Branch]) tree
 
-  let leaf_key (type a) (Leaf elt : (a, leaf) tree) = elt
+  type nonrec 'a leaf = ('a, leaf) tree
 
-  let leaf_datum (type a) (Leaf _ : (a, leaf) tree) : a = ()
+  type nonrec 'a branch = ('a, branch) tree
 
-  let branch_prefix_and_bit (type a)
-      (Branch (prefix_and_bit, _, _) : (a, branch) tree) =
+  let leaf_key (type a) (Leaf elt : a leaf) = elt
+
+  let leaf_datum (type a) (Leaf _ : a leaf) : a = ()
+
+  let branch_prefix_and_bit (type a) (Branch (prefix_and_bit, _, _) : a branch)
+      =
     prefix_and_bit
 
-  let branch0 (type a) (Branch (_, t0, _) : (a, branch) tree) :
-      (a, non_empty) tree =
-    t0
+  let branch0 (type a) (Branch (_, t0, _) : a branch) : (a, non_empty) tree = t0
 
-  let branch1 (type a) (Branch (_, _, t1) : (a, branch) tree) :
-      (a, non_empty) tree =
-    t1
+  let branch1 (type a) (Branch (_, _, t1) : a branch) : (a, non_empty) tree = t1
 
   type 'a tree_descr =
-    | Leaf of ('a, leaf) tree
-    | Branch of ('a, branch) tree
+    | Leaf of 'a leaf
+    | Branch of 'a branch
 
   let tree_descr (type a) (tree : (a, non_empty) tree) : a tree_descr =
     match tree with
@@ -369,6 +373,10 @@ module Map0 = struct
 
   type +!_ t = Tree : ('a, _) tree -> 'a t [@@unboxed]
 
+  type nonrec 'a leaf = ('a, leaf) tree
+
+  type nonrec 'a branch = ('a, branch) tree
+
   let[@inline always] of_tree t = Tree t
 
   type _ is_value = Any : 'a is_value
@@ -382,21 +390,21 @@ module Map0 = struct
   let[@inline always] branch prefix_and_bit t0 t1 =
     Branch (prefix_and_bit, t0, t1)
 
-  let leaf_key (Leaf (key, _) : (_, leaf) tree) = key
+  let leaf_key (Leaf (key, _) : _ leaf) = key
 
-  let leaf_datum (Leaf (_, datum) : (_, leaf) tree) = datum
+  let leaf_datum (Leaf (_, datum) : _ leaf) = datum
 
-  let branch_prefix_and_bit (type a)
-      (Branch (prefix_and_bit, _, _) : (a, branch) tree) =
+  let branch_prefix_and_bit (type a) (Branch (prefix_and_bit, _, _) : a branch)
+      =
     prefix_and_bit
 
-  let branch0 (type a) (Branch (_, t0, _) : (a, branch) tree) = t0
+  let branch0 (type a) (Branch (_, t0, _) : a branch) = t0
 
-  let branch1 (type a) (Branch (_, _, t1) : (a, branch) tree) = t1
+  let branch1 (type a) (Branch (_, _, t1) : a branch) = t1
 
   type 'a tree_descr =
-    | Leaf of ('a, leaf) tree
-    | Branch of ('a, branch) tree
+    | Leaf of 'a leaf
+    | Branch of 'a branch
 
   let tree_descr (type a) (tree : (a, non_empty) tree) : a tree_descr =
     match tree with
@@ -1496,8 +1504,8 @@ end = struct
     | Leaf leaf ->
       let i, d = leaf_descr leaf in
       if Callback.call p i d
-      then of_tree leaf, empty iv
-      else empty iv, of_tree leaf
+      then of_tree tree, empty iv
+      else empty iv, of_tree tree
     | Branch b ->
       let prefix_and_bit = branch_prefix_and_bit b in
       let left_true, left_false = partition_tree p (branch0 b) in
@@ -1974,7 +1982,7 @@ end = struct
 
           val current_key : 'a iterator -> key Or_null.t
 
-          val set_current : 'a iterator -> ('a, leaf) tree -> unit
+          val set_current : 'a iterator -> 'a leaf -> unit
 
           (** Push a new tree onto the initialized stack. Its depth is bounded
               by the number of branching bits, at most [Sys.int_size]. *)
@@ -2291,3 +2299,296 @@ struct
   end
 end
 [@@inline always]
+
+module HashedSet0 = struct
+  (* Note: the [Leaf] and [Branch] constructors need to be in the same order as
+     [tree_descr] in order for [tree_descr] below to be correctly optimized. *)
+
+  type _ tree0 =
+    | Leaf : key -> [< non_empty > `Leaf] tree0
+    | Branch : prefix_and_bit * int * int -> [< non_empty > `Branch] tree0
+
+  type any_tree0 = T0 : _ tree0 -> any_tree0 [@@unboxed]
+
+  type (_, _) tree = T : int -> (unit, non_empty) tree [@@unboxed]
+
+  type 'a leaf = L : [`Leaf] tree0 -> unit leaf [@@unboxed]
+
+  type 'a branch = B : [`Branch] tree0 -> unit branch [@@unboxed]
+
+  type 'a tree_descr =
+    | Leaf of 'a leaf
+    | Branch of 'a branch
+
+  let hash_seed =
+    let seed = Random.bits () in
+    if seed mod 2 = 0 then seed + 1 else seed
+
+  let hash3 a b c =
+    let r = (((a * hash_seed) + b) * hash_seed) + c in
+    r lxor (r lsr 17)
+
+  let hash_tree (T0 tree) =
+    match tree with
+    | Leaf key -> key
+    | Branch (prefix_and_bit, t1, t2) -> hash3 prefix_and_bit t1 t2
+
+  let equal_tree (T0 tree1) (T0 tree2) =
+    match tree1, tree2 with
+    | Leaf key1, Leaf key2 -> key1 = key2
+    | ( Branch (prefix_and_bit1, left1, right1),
+        Branch (prefix_and_bit2, left2, right2) ) ->
+      prefix_and_bit1 = prefix_and_bit2 && left1 = left2 && right1 = right2
+    | (Leaf _ | Branch _), _ -> false
+
+  module Tbl = struct
+    module HT = Hashtbl.Make (struct
+      type t = int
+
+      let hash (t : t) = t
+
+      let equal t1 t2 = t1 == t2
+    end)
+
+    (* CR-someday ncourant: we can maybe get better performances with a handmade
+       hashtable where each set takes several slots in the backing array. This
+       will however do for now. *)
+    type t = any_tree0 HT.t
+
+    let empty = 0
+
+    let create () : t =
+      let tbl = HT.create 20_000 in
+      (* Reserve an identifier for the empty table. For normal trees,
+         [prefix_and_bit] must always have at least one bit set, so [Branch (0,
+         0, 0)] can never collide with anything. *)
+      HT.add tbl empty (T0 (Branch (0, 0, 0)));
+      tbl
+
+    let add (t : t) elt =
+      let id = hash_tree elt in
+      match HT.find t id with
+      | exception Not_found ->
+        HT.add t id elt;
+        id
+      | existing_elt ->
+        if equal_tree elt existing_elt
+        then id
+        else
+          let rec loop id =
+            match HT.find t id with
+            | exception Not_found ->
+              HT.add t id elt;
+              id
+            | existing_elt ->
+              if equal_tree elt existing_elt then id else loop (id + 1)
+          in
+          loop (id + 1)
+
+    let find (t : t) id = HT.find t id
+  end
+
+  let tbl = Tbl.create ()
+
+  let leaf_key (type a) (L (Leaf elt) : a leaf) = elt
+
+  let leaf_datum (type a) (L _ : a leaf) : a = ()
+
+  let branch_prefix_and_bit (type a)
+      (B (Branch (prefix_and_bit, _, _)) : a branch) =
+    prefix_and_bit
+
+  let branch0 (type a) (B (Branch (_, t0, _)) : a branch) : (a, non_empty) tree
+      =
+    T t0
+
+  let branch1 (type a) (B (Branch (_, _, t1)) : a branch) : (a, non_empty) tree
+      =
+    T t1
+
+  let tree_descr (type a) (T tree : (a, non_empty) tree) : a tree_descr =
+    let (T0 tree) = Tbl.find tbl tree in
+    match tree with
+    | Leaf _ as tree -> Leaf (L tree)
+    | Branch _ as tree -> Branch (B tree)
+
+  type 'a descr =
+    | Empty
+    | Non_empty of ('a, non_empty) tree
+
+  type 'a t = Tree : ('a, _) tree -> 'a t [@@unboxed]
+
+  let[@inline] of_tree t = Tree t
+
+  let descr (type a) (Tree (T tree) : a t) : a descr =
+    if tree = Tbl.empty then Empty else Non_empty (T tree)
+
+  type 'a is_value = Unit : unit is_value
+
+  let[@inline always] is_value_of (type a) (Tree (T _) : a t) : a is_value =
+    Unit
+
+  let[@inline always] empty (type a) (Unit : a is_value) : a t =
+    Tree (T Tbl.empty)
+
+  let[@inline always] leaf (type a) (Unit : a is_value) elt (() : a) :
+      (a, _) tree =
+    T (Tbl.add tbl (T0 (Leaf elt)))
+
+  let[@inline always] branch (type a) prefix_and_bit
+      (T t0 : (a, non_empty) tree) (T t1 : (a, non_empty) tree) : (a, _) tree =
+    T (Tbl.add tbl (T0 (Branch (prefix_and_bit, t0, t1))))
+
+  module Binding = struct
+    type _ t = key
+
+    let[@inline always] create i _ = i
+
+    let[@inline always] key i = i
+
+    let[@inline always] value (type a) (Unit : a is_value) (_i : a t) : a = ()
+  end
+
+  module Callback = struct
+    type (_, 'b) t = key -> 'b
+
+    let[@inline always] of_func (type a) (Unit : a is_value)
+        (f : key -> a -> 'b) key =
+      (f [@inlined hint]) key ()
+
+    let[@inline always] call f key _ = f key
+  end
+
+  module Merge_callback = struct
+    type (_, _, 'c) t = 'c is_value
+
+    let[@inline always] call_union (type a) (Unit : a is_value) _ _ _ : a option
+        =
+      Some ()
+
+    let[@inline always] call_diff (type a) (Unit : a is_value) _ _ _ : a option
+        =
+      None
+  end
+
+  module Inter_callback = struct
+    type (_, _, 'c) t = 'c is_value
+
+    let[@inline always] call (type a) (Unit : a is_value) _ _ _ : a = ()
+  end
+
+  module Compare_callback = struct
+    type (_, _) t = unit
+
+    let[@inline always] call _ _ _ = 0
+  end
+
+  module Equal_callback = struct
+    type (_, _) t = unit
+
+    let[@inline always] call _ _ _ = true
+  end
+
+  module Split_callback = struct
+    type ('a, 'b) t = True : 'a is_value -> ('a, bool) t [@@unboxed]
+
+    let[@inline always] call (type a b) (True Unit : (a, b) t) (() : a) : b =
+      true
+  end
+end
+
+module HashedSet = struct
+  type elt = key
+
+  type t = unit t0
+
+  and 'a t0 = 'a HashedSet0.t
+
+  module Ops = Tree_operations (HashedSet0)
+  include Ops
+
+  let empty = HashedSet0.empty Unit
+
+  let singleton i = Ops.singleton Unit i ()
+
+  let add i t = Ops.add i () t
+
+  (* CR bclement: This should just be `Ops.union (fun _ _ _ -> Some ())` once we
+     have function specialisation, see the comment on
+     {!module-Merge_callback}. *)
+  let union t0 t1 = Ops.union (HashedSet0.is_value_of t0) t0 t1
+
+  let union_shared t0 t1 = Ops.union_shared (HashedSet0.is_value_of t0) t0 t1
+
+  let union_sharing t0 t1 = Ops.union_sharing (HashedSet0.is_value_of t0) t0 t1
+
+  let diff = Ops.diff_domains
+
+  (* CR bclement: This should just be `Ops.diff_sharing (fun _ _ _ -> None)`
+     once we have function specialisation, see the comment on
+     {!module-Merge_callback}. *)
+  let diff_sharing t0 t1 = Ops.diff_sharing (HashedSet0.is_value_of t0) t0 t1
+
+  let diff_shared t0 t1 = Ops.diff_shared (HashedSet0.is_value_of t0) t0 t1
+
+  let disjoint t0 t1 = not (Ops.inter_domain_is_non_empty t0 t1)
+
+  let inter t0 t1 = Ops.inter Unit (HashedSet0.is_value_of t0) t0 t1
+
+  let rec union_list ts =
+    match ts with [] -> empty | t :: ts -> union t (union_list ts)
+
+  let filter_map f t =
+    let rec loop f acc (t : (_, non_empty) HashedSet0.tree) =
+      match HashedSet0.tree_descr t with
+      | HashedSet0.Leaf leaf -> (
+        match f (HashedSet0.leaf_key leaf) with
+        | None -> acc
+        | Some j -> add j acc)
+      | HashedSet0.Branch branch ->
+        let t0 = HashedSet0.branch0 branch in
+        let t1 = HashedSet0.branch1 branch in
+        loop f (loop f acc t0) t1
+    in
+    match HashedSet0.descr t with
+    | Empty -> empty
+    | Non_empty t -> loop f empty t
+
+  let elements = Ops.to_list
+
+  let min_elt = Ops.min_binding
+
+  let min_elt_opt = Ops.min_binding_opt
+
+  let max_elt = Ops.max_binding
+
+  let max_elt_opt = Ops.max_binding_opt
+
+  let subset = Ops.subset_domain
+
+  (* CR bclement: This should just be `Ops.equal (fun _ _ -> true)` once we have
+     function specialisation, see the comment on {!module-Merge_callback}. *)
+  let equal t0 t1 = Ops.equal () t0 t1
+
+  (* CR bclement: This should just be `Ops.compare (fun _ _ -> 0)` once we have
+     function specialisation, see the comment on {!module-Merge_callback}. *)
+  let compare t0 t1 = Ops.compare () t0 t1
+
+  (* CR bclement: This should just be `Ops.split ~found:(fun _ -> true)` once we
+     have function specialisation, see the comment on
+     {!module-Merge_callback}. *)
+  let split i t =
+    Ops.split ~found:(True (HashedSet0.is_value_of t)) ~not_found:false i t
+
+  let find elt t = if mem elt t then elt else raise Not_found
+
+  let of_list l = Ops.of_list Unit l
+
+  let map f t = Ops.map_keys f t
+
+  let [@ocamlformat "disable"] print ppf s =
+    let elts ppf s = iter (fun e -> Format.fprintf ppf "@ %d" e) s in
+    Format.fprintf ppf "@[<1>{@[<1>%a@ @]}@]" elts s
+
+  let to_string s = Format.asprintf "%a" print s
+end

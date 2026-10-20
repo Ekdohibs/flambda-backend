@@ -37,3 +37,10 @@ end) : sig
     val valid : _ t -> bool
   end
 end
+
+module HashedSet : sig
+  include Container_types.Set with type elt = int
+
+  (** For testing; should always return [true] *)
+  val valid : t -> bool
+end
