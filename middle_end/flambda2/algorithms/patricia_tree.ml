@@ -599,6 +599,8 @@ module Tree_operations (Tree : Tree) : sig
 
   val map_keys : (key -> key) -> 'a t -> 'a t
 
+  val restrict_to_top_bits : num_bits:int -> top_bits:int -> 'a t -> 'a t
+
   val valid : 'a t -> bool
 end = struct
   include Tree
@@ -2073,6 +2075,30 @@ end = struct
     let iv = is_value_of t in
     fold (Callback.of_func iv (fun i d acc -> add (f i) d acc)) t (empty iv)
 
+  let restrict_to_top_bits ~num_bits ~top_bits t =
+    let iv = is_value_of t in
+    let shift = Sys.int_size - num_bits in
+    let prefix = top_bits lsl shift in
+    let bit = 1 lsl (shift - 1) in
+    let rec loop t =
+      match tree_descr t with
+      | Leaf l ->
+        if match_prefix (leaf_key l) prefix bit then of_tree t else empty iv
+      | Branch b ->
+        let prefix', bit' = unpack (branch_prefix_and_bit b) in
+        if higher bit' bit
+        then
+          if not (match_prefix prefix prefix' bit')
+          then empty iv
+          else if zero_bit prefix bit'
+          then loop (branch0 b)
+          else loop (branch1 b)
+        else if match_prefix prefix' prefix bit
+        then of_tree t
+        else empty iv
+    in
+    match descr t with Empty -> t | Non_empty t -> loop t
+
   let valid t =
     let rec check_deep prefix bit t =
       match tree_descr t with
@@ -2211,10 +2237,16 @@ module Map = struct
 
   let merge f t0 t1 = Ops.merge Any f t0 t1
 
-  (* CR-someday lmaurer: This should be doable as a fast map operation if we
-     generalize [Ops.map] by letting the returned tree be built by a different
-     [Tree] module *)
-  let keys map = fold (fun k _ set -> Set.add k set) map Set.empty
+  let keys (map : _ t) : Set.t =
+    let rec keys_tree : type a.
+        (a, non_empty) Map0.tree -> (unit, non_empty) Set0.tree = function
+      | Map0.Leaf (key, _) -> Set0.Leaf key
+      | Map0.Branch (prefix_and_bit, t0, t1) ->
+        Set0.Branch (prefix_and_bit, keys_tree t0, keys_tree t1)
+    in
+    match Map0.descr map with
+    | Empty -> Set.empty
+    | Non_empty tree -> Set0.of_tree (keys_tree tree)
 
   let data t = List.map snd (bindings t)
 

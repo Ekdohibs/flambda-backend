@@ -22,6 +22,11 @@ end) : sig
   module Set : sig
     include Container_types.Set with type elt = int and type t = set
 
+    (** [restrict_to_top_bits ~num_bits ~top_bits t] is the subset of [t] made
+        of the elements whose [num_bits] most significant bits are [top_bits].
+        Its cost only depends on [num_bits]. *)
+    val restrict_to_top_bits : num_bits:int -> top_bits:int -> t -> t
+
     (** For testing; should always return [true] *)
     val valid : t -> bool
   end
@@ -32,6 +37,9 @@ end) : sig
         with type key = int
          and type 'a t = 'a map
         with module Set = Set
+
+    (** See [Set.restrict_to_top_bits]. *)
+    val restrict_to_top_bits : num_bits:int -> top_bits:int -> 'a t -> 'a t
 
     (** For testing; should always return [true] *)
     val valid : _ t -> bool

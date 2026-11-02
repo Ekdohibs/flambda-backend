@@ -16,7 +16,7 @@
 
 module Id = Table_by_int_id.Id
 
-let continuation_flags = 0
+let continuation_flags = Int_ids.Flags.continuation
 
 let next_stamp =
   let next_stamp = ref 0 in

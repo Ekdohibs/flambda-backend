@@ -17,6 +17,8 @@
 module Id : sig
   type t = int
 
+  val flags_size_in_bits : int
+
   val flags : t -> int
 
   val compare : t -> t -> int

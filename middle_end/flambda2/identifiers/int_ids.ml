@@ -38,6 +38,22 @@ let simple_flags = 3
 
 let code_id_flags = 4
 
+module Flags = struct
+  let variable = var_flags
+
+  let symbol = symbol_flags
+
+  let const = const_flags
+
+  let simple = simple_flags
+
+  let code_id = code_id_flags
+
+  let continuation = 5
+
+  let field = 6
+end
+
 module Const_data = struct
   type t =
     | Naked_immediate of Target_ocaml_int.t

@@ -54,13 +54,15 @@ let create_raw ~final_typing_env ~all_code ~exported_offsets ~used_value_slots
   let exported_ids =
     Ids_for_export.union typing_env_exported_ids all_code_exported_ids
   in
-  let symbols = Symbol.export exported_ids.symbols in
-  let variables = Variable.export exported_ids.variables in
-  let simples = Simple.export exported_ids.simples in
-  let consts = Reg_width_const.export exported_ids.consts in
-  let code_ids = Code_id.export exported_ids.code_ids in
-  let continuations = Continuation.export exported_ids.continuations in
-  let fields = Field.export exported_ids.fields in
+  let symbols = Symbol.export (Ids_for_export.symbols exported_ids) in
+  let variables = Variable.export (Ids_for_export.variables exported_ids) in
+  let simples = Simple.export (Ids_for_export.simples exported_ids) in
+  let consts = Reg_width_const.export (Ids_for_export.consts exported_ids) in
+  let code_ids = Code_id.export (Ids_for_export.code_ids exported_ids) in
+  let continuations =
+    Continuation.export (Ids_for_export.continuations exported_ids)
+  in
+  let fields = Field.export (Ids_for_export.fields exported_ids) in
   let table_data =
     { symbols; variables; simples; consts; code_ids; continuations; fields }
   in

@@ -15,15 +15,7 @@
 
 module Simple = Int_ids.Simple
 
-type t = private
-  { symbols : Symbol.Set.t;
-    variables : Variable.Set.t;
-    simples : Simple.Set.t;
-    consts : Reg_width_const.Set.t;
-    code_ids : Code_id.Set.t;
-    continuations : Continuation.Set.t;
-    fields : Field.Set.t
-  }
+type t
 
 val empty : t
 
@@ -71,3 +63,20 @@ val add_field : t -> Field.t -> t
 val union : t -> t -> t
 
 val union_list : t list -> t
+
+(** The set must only contain identifiers built using [Table_by_int_id]. *)
+val of_int_set : Patricia_tree.set -> t
+
+val symbols : t -> Symbol.Set.t
+
+val variables : t -> Variable.Set.t
+
+val simples : t -> Simple.Set.t
+
+val consts : t -> Reg_width_const.Set.t
+
+val code_ids : t -> Code_id.Set.t
+
+val continuations : t -> Continuation.Set.t
+
+val fields : t -> Field.Set.t

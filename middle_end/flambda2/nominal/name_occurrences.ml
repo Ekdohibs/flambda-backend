@@ -14,721 +14,436 @@
 (*                                                                        *)
 (**************************************************************************)
 
-module For_one_variety_of_names_not_renamable (N : Container_types.S) : sig
-  type t
+module Id = Table_by_int_id.Id
+module Flags = Int_ids.Flags
 
-  val print : Format.formatter -> t -> unit
+(* The occurrences of one key, for up to three roles (e.g. a continuation can
+   occur normally, applied with traps, or in a trap action), packed in an
+   immediate.
 
-  val equal : t -> t -> bool
+   For each role there is a presence bit, in bits [0, 3), since a key can be
+   present without any occurrences after
+   [downgrade_occurrences_at_strictly_greater_name_mode].
 
-  val empty : t
+   For each role and name mode there is a saturating counter (0b00: zero, 0b01:
+   one, 0b11: more than one). Bits [3, 9) hold the counters for [Normal], bits
+   [9, 15) for [In_types] and bits [15, 21) for [Phantom], two bits per role.
 
-  val is_empty : t -> bool
+   The presence bits come first so that the most common values are small, and
+   marshalled compactly in .cmx files. *)
+module Counts = struct
+  type t = int
 
-  val singleton : N.t -> Name_mode.t -> t
+  let presence_mask = 0b111
 
-  val add : t -> N.t -> Name_mode.t -> t
+  let low_bits = 0x15555 lsl 3
 
-  val diff : t -> t -> t
+  let counters_mask = 0x3ffff lsl 3
 
-  val union : t -> t -> t
+  let[@inline] mode_shift (name_mode : Name_mode.t) =
+    match name_mode with Normal -> 3 | In_types -> 9 | Phantom -> 15
 
-  val keys : t -> N.Set.t
+  let[@inline] presence role = 1 lsl role
 
-  val map_keys : (N.t -> N.t) -> t -> t
+  let[@inline] counters_of_role role = (0b11 lsl (3 + (2 * role))) * 0x1041
 
-  val subset_domain : t -> t -> bool
+  let[@inline] normal_counter role = 0b11 lsl (3 + (2 * role))
 
-  val inter_domain_is_non_empty : t -> t -> bool
+  let[@inline] role_mask role = counters_of_role role lor presence role
 
-  val mem : t -> N.t -> bool
+  let[@inline] one role name_mode =
+    presence role lor (1 lsl (mode_shift name_mode + (2 * role)))
 
-  val remove : t -> N.t -> t
+  (* Saturating addition of all the counters at once *)
+  let[@inline] union t1 t2 = t1 lor t2 lor ((t1 land t2 land low_bits) lsl 1)
 
-  val count : t -> N.t -> Num_occurrences.t
+  let[@inline] increase t = t lor ((t land low_bits) lsl 1)
 
-  val count_normal : t -> N.t -> Num_occurrences.t
+  let[@inline] mem t role = t land presence role <> 0
 
-  val greatest_name_mode : t -> N.t -> Name_mode.Or_absent.t
+  let[@inline] mem_any t roles = t land roles <> 0
 
-  val downgrade_occurrences_at_strictly_greater_name_mode :
-    t -> Name_mode.t -> t
+  let[@inline] counter t role name_mode =
+    (t lsr (mode_shift name_mode + (2 * role))) land 0b11
 
-  val fold : t -> init:'a -> f:('a -> N.t -> 'a) -> 'a
+  (* [bits] has either zero, one or two bits set per counter. *)
+  let[@inline] num_occurrences bits : Num_occurrences.t =
+    if bits = 0
+    then Zero
+    else if bits land (bits - 1) = 0
+    then One
+    else More_than_one
 
-  val fold_with_mode : t -> init:'a -> f:('a -> N.t -> Name_mode.t -> 'a) -> 'a
+  let[@inline] count t role = num_occurrences (t land counters_of_role role)
 
-  val for_all : t -> f:(N.t -> bool) -> bool
+  let[@inline] count_normal t role =
+    num_occurrences (counter t role Name_mode.normal)
 
-  val filter : t -> f:(N.t -> bool) -> t
+  let[@inline] greatest_name_mode t role : Name_mode.Or_absent.t =
+    if counter t role Name_mode.normal <> 0
+    then Name_mode.Or_absent.present Name_mode.normal
+    else if counter t role Name_mode.in_types <> 0
+    then Name_mode.Or_absent.present Name_mode.in_types
+    else if counter t role Name_mode.phantom <> 0
+    then Name_mode.Or_absent.present Name_mode.phantom
+    else Name_mode.Or_absent.absent
 
-  val increase_counts : t -> t
-end = struct
-  module For_one_name : sig
-    type t
-
-    val print : Format.formatter -> t -> unit
-
-    val equal : t -> t -> bool
-
-    val one_occurrence : Name_mode.t -> t
-
-    val add : t -> Name_mode.t -> t
-
-    val num_occurrences : t -> int
-
-    val num_occurrences_normal : t -> int
-
-    val downgrade_occurrences_at_strictly_greater_name_mode :
-      t -> Name_mode.t -> t
-
-    val max_name_mode_opt : t -> Name_mode.t option
-
-    val union : t -> t -> t
-
-    val increase_count : t -> t
-  end = struct
-    (* CR mshinwell: Provide 32-bit implementation? Probably not worth it now I
-       suppose. *)
-
-    type t = int
-
-    let num_occurrences_normal t = t land 0xfffff
-
-    let num_occurrences_in_types t =
-      (* The constant is computed to avoid problems when the host system is 32
-         bit. *)
-      (t land (0xfffff lsl 20)) lsr 20
-
-    let num_occurrences_phantom t = (t land (0xfffff lsl 40)) lsr 40
-
-    let encode_normal_occurrences num =
-      assert (num >= 0 && num <= 0xfffff);
-      (* CR mshinwell: proper error *)
-      num
-
-    let encode_in_types_occurrences num =
-      assert (num >= 0 && num <= 0xfffff);
-      num lsl 20
-
-    let encode_phantom_occurrences num =
-      assert (num >= 0 && num <= 0xfffff);
-      num lsl 40
-
-    let without_normal_occurrences num = num land lnot 0xfffff
-
-    let without_in_types_occurrences num = num land lnot (0xfffff lsl 20)
-
-    let without_phantom_occurrences num = num land lnot (0xfffff lsl 40)
-
-    let to_map t =
-      Name_mode.Map.empty
-      |> Name_mode.Map.add Name_mode.normal (num_occurrences_normal t)
-      |> Name_mode.Map.add Name_mode.in_types (num_occurrences_in_types t)
-      |> Name_mode.Map.add Name_mode.phantom (num_occurrences_phantom t)
-
-    let [@ocamlformat "disable"] print ppf t =
-      Format.fprintf ppf "@[<hov 1>(\
-          @[<hov 1>(by_name_mode %a)@]\
-          )@]"
-        (Name_mode.Map.print Format.pp_print_int) (to_map t)
-
-    let equal t1 t2 = t1 == t2
-
-    let num_occurrences t =
-      num_occurrences_normal t + num_occurrences_in_types t
-      + num_occurrences_phantom t
-
-    let one_occurrence (name_mode : Name_mode.t) =
-      match name_mode with
-      | Normal -> encode_normal_occurrences 1
-      | In_types -> encode_in_types_occurrences 1
-      | Phantom -> encode_phantom_occurrences 1
-
-    let add t (name_mode : Name_mode.t) =
-      match name_mode with
-      | Normal ->
-        encode_normal_occurrences (1 + num_occurrences_normal t)
-        lor without_normal_occurrences t
-      | In_types ->
-        encode_in_types_occurrences (1 + num_occurrences_in_types t)
-        lor without_in_types_occurrences t
-      | Phantom ->
-        encode_phantom_occurrences (1 + num_occurrences_phantom t)
-        lor without_phantom_occurrences t
-
-    let downgrade_occurrences_at_strictly_greater_name_mode t
-        (max_name_mode : Name_mode.t) =
-      match max_name_mode with
-      | Normal -> t
-      | In_types ->
-        encode_in_types_occurrences
-          (num_occurrences_in_types t + num_occurrences_normal t)
-      | Phantom ->
-        encode_phantom_occurrences
-          (num_occurrences_phantom t + num_occurrences_normal t)
-
-    let max_name_mode_opt t =
-      let num_normal = num_occurrences_normal t in
-      if num_normal > 0
-      then Some Name_mode.normal
-      else
-        let num_in_types = num_occurrences_in_types t in
-        if num_in_types > 0
-        then Some Name_mode.in_types
-        else
-          let num_phantom = num_occurrences_phantom t in
-          if num_phantom > 0 then Some Name_mode.phantom else None
-
-    let union t1 t2 =
-      encode_normal_occurrences
-        (num_occurrences_normal t1 + num_occurrences_normal t2)
-      lor encode_in_types_occurrences
-            (num_occurrences_in_types t1 + num_occurrences_in_types t2)
-      lor encode_phantom_occurrences
-            (num_occurrences_phantom t1 + num_occurrences_phantom t2)
-
-    let increase_count t =
-      let increase_if_not_zero n = if n = 0 then n else succ n in
-      encode_normal_occurrences
-        (increase_if_not_zero (num_occurrences_normal t))
-      lor encode_in_types_occurrences
-            (increase_if_not_zero (num_occurrences_in_types t))
-      lor encode_phantom_occurrences
-            (increase_if_not_zero (num_occurrences_phantom t))
-  end
-
-  type t = For_one_name.t N.Map.t
-
-  let [@ocamlformat "disable"] print ppf t =
-    N.Map.print For_one_name.print ppf t
-
-  let equal t1 t2 = N.Map.equal For_one_name.equal t1 t2
-
-  let empty = N.Map.empty
-
-  let is_empty t = N.Map.is_empty t
-
-  let singleton name name_mode =
-    N.Map.singleton name (For_one_name.one_occurrence name_mode)
-
-  let add t name name_mode =
-    N.Map.update name
-      (function
-        | None -> Some (For_one_name.one_occurrence name_mode)
-        | Some for_one_name -> Some (For_one_name.add for_one_name name_mode))
-      t
-
-  let diff t1 t2 = N.Map.diff_domains t1 t2
-
-  let union t1 t2 =
-    N.Map.union_total
-      (fun _name for_one_name1 for_one_name2 ->
-        For_one_name.union for_one_name1 for_one_name2)
-      t1 t2
-
-  let keys t = N.Map.keys t
-
-  let map_keys = N.Map.map_keys
-
-  let subset_domain t1 t2 =
-    (* CR lmaurer: Add this operation to [Patricia_tree]. ([N.Map.keys] being
-       O(n lg n) makes this especially painful.) *)
-    N.Set.subset (N.Map.keys t1) (N.Map.keys t2)
-
-  let inter_domain_is_non_empty t1 t2 = N.Map.inter_domain_is_non_empty t1 t2
-
-  let mem t name = N.Map.mem name t
-
-  let remove t name = N.Map.remove name t
-
-  let count t name : Num_occurrences.t =
-    match N.Map.find name t with
-    | exception Not_found -> Zero
-    | for_one_name ->
-      let num_occurrences = For_one_name.num_occurrences for_one_name in
-      assert (num_occurrences >= 0);
-      if num_occurrences = 0
-      then Zero
-      else if num_occurrences = 1
-      then One
-      else More_than_one
-
-  let count_normal t name : Num_occurrences.t =
-    match N.Map.find name t with
-    | exception Not_found -> Zero
-    | for_one_name ->
-      let num_occurrences = For_one_name.num_occurrences_normal for_one_name in
-      assert (num_occurrences >= 0);
-      if num_occurrences = 0
-      then Zero
-      else if num_occurrences = 1
-      then One
-      else More_than_one
-
-  let greatest_name_mode t name : Name_mode.Or_absent.t =
-    match N.Map.find name t with
-    | exception Not_found -> Name_mode.Or_absent.absent
-    | for_one_name -> (
-      match For_one_name.max_name_mode_opt for_one_name with
-      | None -> Name_mode.Or_absent.absent
-      | Some name_mode -> Name_mode.Or_absent.present name_mode)
-
-  let fold t ~init ~f =
-    N.Map.fold (fun name _name_mode acc -> f acc name) t init
-
-  let fold_with_mode t ~init ~f =
-    N.Map.fold
-      (fun name name_mode acc ->
-        match For_one_name.max_name_mode_opt name_mode with
-        | Some name_mode -> f acc name name_mode
-        | None -> acc)
-      t init
-
-  let downgrade_occurrences_at_strictly_greater_name_mode t
-      (max_name_mode : Name_mode.t) =
-    (* CR-someday mshinwell: This can be condensed when the compiler removes the
-       closure allocation if [max_name_mode] is captured. *)
-    match max_name_mode with
+  let downgrade t (name_mode : Name_mode.t) =
+    match name_mode with
     | Normal -> t
-    | Phantom ->
-      N.Map.map_sharing
-        (fun for_one_name ->
-          For_one_name.downgrade_occurrences_at_strictly_greater_name_mode
-            for_one_name Name_mode.phantom)
-        t
-    | In_types ->
-      N.Map.map_sharing
-        (fun for_one_name ->
-          For_one_name.downgrade_occurrences_at_strictly_greater_name_mode
-            for_one_name Name_mode.in_types)
-        t
+    | In_types | Phantom ->
+      let shift = mode_shift name_mode in
+      let normal = t land (0x3f lsl 3) in
+      let other = ((t lsr shift) land 0x3f) lsl 3 in
+      t land presence_mask lor (union normal other lsl (shift - 3))
 
-  let for_all t ~f = N.Map.for_all (fun name _ -> f name) t
+  let[@inline] mask_of_present_roles t =
+    (if mem t 0 then role_mask 0 else 0)
+    lor (if mem t 1 then role_mask 1 else 0)
+    lor if mem t 2 then role_mask 2 else 0
 
-  let filter t ~f = N.Map.filter (fun name _ -> f name) t
+  (* Removes the roles present in [t2] from [t1] *)
+  let[@inline] diff t1 t2 =
+    let t = t1 land lnot (mask_of_present_roles t2) in
+    if t land presence_mask = 0 then None else Some t
 
-  let increase_counts t = N.Map.map For_one_name.increase_count t
+  let[@inline] present_roles_included t1 t2 =
+    t1 land presence_mask land lnot t2 = 0
+
+  let[@inline] present_roles_intersect t1 t2 =
+    t1 land t2 land presence_mask <> 0
+
+  (* Merges the occurrences of role 1 into role 0 *)
+  let promote_role_1 t =
+    let role_1 = t land role_mask 1 in
+    let role_0 =
+      ((role_1 land counters_mask) lsr 2) lor ((role_1 land presence_mask) lsr 1)
+    in
+    union (t land lnot (role_mask 1)) role_0
+
+  let print_counter ppf c =
+    Format.pp_print_string ppf
+      (match c with 0 -> "0" | 1 -> "1" | _ -> "many")
+
+  let print ppf t =
+    Format.fprintf ppf "@[<hov 1>(";
+    for role = 0 to 2 do
+      if mem t role
+      then
+        Format.fprintf ppf
+          "@[<hov 1>(role %d@ normal %a@ in_types %a@ phantom %a)@]" role
+          print_counter
+          (counter t role Name_mode.normal)
+          print_counter
+          (counter t role Name_mode.in_types)
+          print_counter
+          (counter t role Name_mode.phantom)
+    done;
+    Format.fprintf ppf ")@]"
 end
-[@@inline always]
 
-module For_one_variety_of_names (N : sig
-  include Container_types.S
+let print_key ppf key =
+  let flags = Id.flags key in
+  if flags = Flags.continuation
+  then Continuation.print ppf (Obj.magic key : Continuation.t)
+  else if flags = Flags.code_id
+  then Code_id.print ppf (Obj.magic key : Code_id.t)
+  else Name.print ppf (Obj.magic key : Name.t)
 
-  val apply_renaming : t -> Renaming.t -> t
-end) =
-struct
-  include For_one_variety_of_names_not_renamable (N)
+module M = Patricia_tree.Make (struct
+  let print = print_key
+end)
 
-  let affected_by_renaming t renaming =
-    (* CR lmaurer: This is ultimately just [N.Map.inter_domain_is_not_equal]. *)
-    not
-      (for_all ~f:(fun name -> N.equal name (N.apply_renaming name renaming)) t)
+module Make_ops (Map : Container_types.Map) = struct
+  let[@inline] add_counts map key counts =
+    Map.update key
+      (function
+        | None -> Some counts
+        | Some counts' -> Some (Counts.union counts counts'))
+      map
 
-  let apply_renaming t renaming =
-    if affected_by_renaming t renaming
-    then map_keys (fun name -> N.apply_renaming name renaming) t
-    else t
+  let[@inline] add map key role name_mode =
+    add_counts map key (Counts.one role name_mode)
+
+  let union map1 map2 =
+    Map.union_total (fun _ c1 c2 -> Counts.union c1 c2) map1 map2
+
+  let equal map1 map2 = Map.equal Int.equal map1 map2
+
+  let diff map1 map2 =
+    Map.diff_sharing (fun _ c1 c2 -> Counts.diff c1 c2) map1 map2
+
+  let subset_domain map1 map2 =
+    Map.for_all
+      (fun key c1 ->
+        match Map.find_or_null key map2 with
+        | Null -> false
+        | This c2 -> Counts.present_roles_included c1 c2)
+      map1
+
+  let inter_domain_is_non_empty map1 map2 =
+    Map.inter_domain_is_non_empty map1 map2
+    && Map.exists
+         (fun key c1 ->
+           match Map.find_or_null key map2 with
+           | Null -> false
+           | This c2 -> Counts.present_roles_intersect c1 c2)
+         map1
+
+  let downgrade map (name_mode : Name_mode.t) =
+    match name_mode with
+    | Normal -> map
+    | In_types | Phantom ->
+      Map.map_sharing (fun c -> Counts.downgrade c name_mode) map
+
+  let increase_counts map = Map.map_sharing Counts.increase map
+
+  let mem map key role =
+    match Map.find_or_null key map with
+    | Null -> false
+    | This c -> Counts.mem c role
+
+  let mem_any map key roles =
+    match Map.find_or_null key map with
+    | Null -> false
+    | This c -> Counts.mem_any c roles
+
+  let count map key role : Num_occurrences.t =
+    match Map.find_or_null key map with
+    | Null -> Zero
+    | This c -> Counts.count c role
+
+  let count_normal map key role : Num_occurrences.t =
+    match Map.find_or_null key map with
+    | Null -> Zero
+    | This c -> Counts.count_normal c role
+
+  let keys_with_any_role map roles =
+    Map.fold
+      (fun key c acc ->
+        if Counts.mem_any c roles then Map.Set.add key acc else acc)
+      map Map.Set.empty
+
+  let keys_at_normal_mode map normal_counters acc =
+    Map.fold
+      (fun key c acc ->
+        if c land normal_counters <> 0 then Map.Set.add key acc else acc)
+      map acc
 end
 
-module For_names = For_one_variety_of_names (struct
-  include Name
+module Ids = Make_ops (M.Map)
+module Function_slots = Make_ops (Function_slot.Map)
+module Value_slots = Make_ops (Value_slot.Map)
 
-  let apply_renaming t renaming = Renaming.apply_name renaming t
-end)
+let name_role = 0
 
-module For_continuations = For_one_variety_of_names (struct
-  include Continuation
+let continuation_role = 0
 
-  let apply_renaming t renaming = Renaming.apply_continuation renaming t
-end)
+let continuation_with_traps_role = 1
 
-module For_function_slots =
-  For_one_variety_of_names_not_renamable (Function_slot)
-module For_value_slots = For_one_variety_of_names_not_renamable (Value_slot)
+let continuation_in_trap_actions_role = 2
 
-module For_code_ids = For_one_variety_of_names (struct
-  include Code_id
+let code_id_role = 0
 
-  let apply_renaming t renaming = Renaming.apply_code_id renaming t
-end)
+let newer_version_of_code_id_role = 1
+
+let in_projections_role = 0
+
+let in_declarations_role = 1
+
+let[@inline] name_key (name : Name.t) = (name :> int)
+
+let[@inline] var_key (var : Variable.t) = (var :> int)
+
+let[@inline] symbol_key (symbol : Symbol.t) = (symbol :> int)
+
+let[@inline] continuation_key (cont : Continuation.t) = (cont :> int)
+
+let[@inline] code_id_key (code_id : Code_id.t) = (code_id :> int)
+
+let[@inline] restrict flags ids =
+  M.Map.restrict_to_top_bits ~num_bits:Id.flags_size_in_bits ~top_bits:flags ids
+
+let () = assert (Flags.variable lsr 1 = Flags.symbol lsr 1)
+
+(* The variables and symbols *)
+let[@inline] names_part ids =
+  M.Map.restrict_to_top_bits
+    ~num_bits:(Id.flags_size_in_bits - 1)
+    ~top_bits:(Flags.variable lsr 1) ids
+
+let[@inline] disjoint_union ids1 ids2 =
+  M.Map.union_total (fun _ c _ -> c) ids1 ids2
 
 type t =
-  { names : For_names.t;
-    continuations : For_continuations.t;
-    continuations_with_traps : For_continuations.t;
-    continuations_in_trap_actions : For_continuations.t;
-    function_slots_in_projections : For_function_slots.t;
-    value_slots_in_projections : For_value_slots.t;
-    function_slots_in_declarations : For_function_slots.t;
-    value_slots_in_declarations : For_value_slots.t;
-    code_ids : For_code_ids.t;
-    newer_version_of_code_ids : For_code_ids.t
-        (* [newer_version_of_code_ids] tracks those code IDs that occur in
-           "newer version of" fields (e.g. in
+  { ids : Counts.t M.Map.t;
+        (* Names, continuations and code IDs. The roles are:
+
+           - for continuations, [continuation_role],
+           [continuation_with_traps_role] and
+           [continuation_in_trap_actions_role];
+
+           - for code IDs, [code_id_role] and [newer_version_of_code_id_role]
+           (for code IDs that occur in "newer version of" fields, e.g. in
            [Flambda_static.Static_part.code]). *)
+    function_slots : Counts.t Function_slot.Map.t;
+    value_slots : Counts.t Value_slot.Map.t
+        (* The roles for slots are [in_projections_role] and
+           [in_declarations_role]. *)
   }
 
 let empty =
-  { names = For_names.empty;
-    continuations = For_continuations.empty;
-    continuations_with_traps = For_continuations.empty;
-    continuations_in_trap_actions = For_continuations.empty;
-    function_slots_in_projections = For_function_slots.empty;
-    value_slots_in_projections = For_value_slots.empty;
-    function_slots_in_declarations = For_function_slots.empty;
-    value_slots_in_declarations = For_value_slots.empty;
-    code_ids = For_code_ids.empty;
-    newer_version_of_code_ids = For_code_ids.empty
+  { ids = M.Map.empty;
+    function_slots = Function_slot.Map.empty;
+    value_slots = Value_slot.Map.empty
   }
+
+let is_empty { ids; function_slots; value_slots } =
+  M.Map.is_empty ids
+  && Function_slot.Map.is_empty function_slots
+  && Value_slot.Map.is_empty value_slots
+
+let[@inline] singleton_id key role name_mode =
+  { empty with ids = M.Map.singleton key (Counts.one role name_mode) }
 
 let singleton_continuation cont =
-  { empty with
-    continuations = For_continuations.singleton cont Name_mode.normal
-  }
+  singleton_id (continuation_key cont) continuation_role Name_mode.normal
 
 let singleton_continuation_in_trap_action cont =
-  { empty with
-    continuations_in_trap_actions =
-      For_continuations.singleton cont Name_mode.normal
-  }
+  singleton_id (continuation_key cont) continuation_in_trap_actions_role
+    Name_mode.normal
 
 let add_continuation t cont ~has_traps =
-  let continuations =
-    For_continuations.add t.continuations cont Name_mode.normal
-  in
-  let continuations_with_traps =
+  let counts = Counts.one continuation_role Name_mode.normal in
+  let counts =
     if has_traps
-    then For_continuations.add t.continuations_with_traps cont Name_mode.normal
-    else t.continuations_with_traps
+    then
+      Counts.union counts
+        (Counts.one continuation_with_traps_role Name_mode.normal)
+    else counts
   in
-  { t with continuations; continuations_with_traps }
+  { t with ids = Ids.add_counts t.ids (continuation_key cont) counts }
 
-let count_continuation t cont = For_continuations.count t.continuations cont
+let count_continuation t cont =
+  Ids.count t.ids (continuation_key cont) continuation_role
 
 let continuation_is_applied_with_traps t cont =
-  For_continuations.mem t.continuations_with_traps cont
+  Ids.mem t.ids (continuation_key cont) continuation_with_traps_role
 
-let count_variable t var = For_names.count t.names (Name.var var)
+let count_variable t var = Ids.count t.ids (var_key var) name_role
 
 let count_variable_normal_mode t var =
-  For_names.count_normal t.names (Name.var var)
+  Ids.count_normal t.ids (var_key var) name_role
 
 let singleton_variable var name_mode =
-  { empty with names = For_names.singleton (Name.var var) name_mode }
+  singleton_id (var_key var) name_role name_mode
 
 let add_variable t var name_mode =
-  { t with names = For_names.add t.names (Name.var var) name_mode }
+  { t with ids = Ids.add t.ids (var_key var) name_role name_mode }
 
 let add_symbol t sym name_mode =
-  { t with names = For_names.add t.names (Name.symbol sym) name_mode }
+  { t with ids = Ids.add t.ids (symbol_key sym) name_role name_mode }
 
 let add_name t name name_mode =
-  { t with names = For_names.add t.names name name_mode }
+  { t with ids = Ids.add t.ids (name_key name) name_role name_mode }
 
-let add_function_slot_in_projection t clos_id name_mode =
+let add_function_slot_in_projection t function_slot name_mode =
   { t with
-    function_slots_in_projections =
-      For_function_slots.add t.function_slots_in_projections clos_id name_mode
+    function_slots =
+      Function_slots.add t.function_slots function_slot in_projections_role
+        name_mode
   }
 
-let add_value_slot_in_projection t clos_var name_mode =
+let add_value_slot_in_projection t value_slot name_mode =
   { t with
-    value_slots_in_projections =
-      For_value_slots.add t.value_slots_in_projections clos_var name_mode
+    value_slots =
+      Value_slots.add t.value_slots value_slot in_projections_role name_mode
   }
 
-let add_function_slot_in_declaration t clos_id name_mode =
+let add_function_slot_in_declaration t function_slot name_mode =
   { t with
-    function_slots_in_declarations =
-      For_function_slots.add t.function_slots_in_declarations clos_id name_mode
+    function_slots =
+      Function_slots.add t.function_slots function_slot in_declarations_role
+        name_mode
   }
 
-let add_value_slot_in_declaration t clos_var name_mode =
+let add_value_slot_in_declaration t value_slot name_mode =
   { t with
-    value_slots_in_declarations =
-      For_value_slots.add t.value_slots_in_declarations clos_var name_mode
+    value_slots =
+      Value_slots.add t.value_slots value_slot in_declarations_role name_mode
   }
 
-let add_function_slot_in_types t clos_id =
+let in_types_in_both_roles =
+  Counts.union
+    (Counts.one in_projections_role Name_mode.in_types)
+    (Counts.one in_declarations_role Name_mode.in_types)
+
+let add_function_slot_in_types t function_slot =
   { t with
-    function_slots_in_declarations =
-      For_function_slots.add t.function_slots_in_declarations clos_id
-        Name_mode.in_types;
-    function_slots_in_projections =
-      For_function_slots.add t.function_slots_in_projections clos_id
-        Name_mode.in_types
+    function_slots =
+      Function_slots.add_counts t.function_slots function_slot
+        in_types_in_both_roles
   }
 
-let add_value_slot_in_types t clos_var =
+let add_value_slot_in_types t value_slot =
   { t with
-    value_slots_in_declarations =
-      For_value_slots.add t.value_slots_in_declarations clos_var
-        Name_mode.in_types;
-    value_slots_in_projections =
-      For_value_slots.add t.value_slots_in_projections clos_var
-        Name_mode.in_types
+    value_slots =
+      Value_slots.add_counts t.value_slots value_slot in_types_in_both_roles
   }
 
-let add_code_id t id name_mode =
-  { t with code_ids = For_code_ids.add t.code_ids id name_mode }
+let add_code_id t code_id name_mode =
+  { t with ids = Ids.add t.ids (code_id_key code_id) code_id_role name_mode }
 
-let singleton_code_id id name_mode = add_code_id empty id name_mode
+let singleton_code_id code_id name_mode =
+  singleton_id (code_id_key code_id) code_id_role name_mode
 
-let add_newer_version_of_code_id t id name_mode =
+let add_newer_version_of_code_id t code_id name_mode =
   { t with
-    newer_version_of_code_ids =
-      For_code_ids.add t.newer_version_of_code_ids id name_mode
+    ids =
+      Ids.add t.ids (code_id_key code_id) newer_version_of_code_id_role
+        name_mode
   }
 
 let singleton_symbol sym name_mode =
-  { empty with names = For_names.singleton (Name.symbol sym) name_mode }
+  singleton_id (symbol_key sym) name_role name_mode
 
 let singleton_name name name_mode =
-  { empty with names = For_names.singleton name name_mode }
+  singleton_id (name_key name) name_role name_mode
 
 let create_variables vars name_mode =
-  let names =
+  let counts = Counts.one name_role name_mode in
+  let ids =
     Variable.Set.fold
-      (fun var names -> For_names.add names (Name.var var) name_mode)
-      vars For_names.empty
+      (fun var ids -> M.Map.add (var_key var) counts ids)
+      vars M.Map.empty
   in
-  { empty with names }
+  { empty with ids }
 
 let create_names names name_mode =
-  let names =
+  let counts = Counts.one name_role name_mode in
+  let ids =
     Name.Set.fold
-      (fun name names -> For_names.add names name name_mode)
-      names For_names.empty
+      (fun name ids -> M.Map.add (name_key name) counts ids)
+      names M.Map.empty
   in
-  { empty with names }
+  { empty with ids }
 
-let[@inline] binary_conjunction ~for_names ~for_continuations
-    ~for_function_slots ~for_value_slots ~for_code_ids
-    { names = names1;
-      continuations = continuations1;
-      continuations_with_traps = continuations_with_traps1;
-      continuations_in_trap_actions = continuations_in_trap_actions1;
-      function_slots_in_projections = function_slots_in_projections1;
-      value_slots_in_projections = value_slots_in_projections1;
-      function_slots_in_declarations = function_slots_in_declarations1;
-      value_slots_in_declarations = value_slots_in_declarations1;
-      code_ids = code_ids1;
-      newer_version_of_code_ids = newer_version_of_code_ids1
-    }
-    { names = names2;
-      continuations = continuations2;
-      continuations_with_traps = continuations_with_traps2;
-      continuations_in_trap_actions = continuations_in_trap_actions2;
-      function_slots_in_projections = function_slots_in_projections2;
-      value_slots_in_projections = value_slots_in_projections2;
-      function_slots_in_declarations = function_slots_in_declarations2;
-      value_slots_in_declarations = value_slots_in_declarations2;
-      code_ids = code_ids2;
-      newer_version_of_code_ids = newer_version_of_code_ids2
-    } =
-  for_names names1 names2
-  && for_continuations continuations1 continuations2
-  && for_continuations continuations_with_traps1 continuations_with_traps2
-  && for_continuations continuations_in_trap_actions1
-       continuations_in_trap_actions2
-  && for_function_slots function_slots_in_projections1
-       function_slots_in_projections2
-  && for_value_slots value_slots_in_projections1 value_slots_in_projections2
-  && for_function_slots function_slots_in_declarations1
-       function_slots_in_declarations2
-  && for_value_slots value_slots_in_declarations1 value_slots_in_declarations2
-  && for_code_ids code_ids1 code_ids2
-  && for_code_ids newer_version_of_code_ids1 newer_version_of_code_ids2
+let diff_ids key c1 c2 =
+  (* Note special case here: code IDs in [t2] are also removed from the "newer
+     version of" code IDs in [t1]. *)
+  let c2 =
+    if Id.flags key = Flags.code_id && Counts.mem c2 code_id_role
+    then
+      Counts.union c2
+        (Counts.one newer_version_of_code_id_role Name_mode.normal)
+    else c2
+  in
+  Counts.diff c1 c2
 
-let[@inline] binary_disjunction ~for_names ~for_continuations
-    ~for_function_slots ~for_value_slots ~for_code_ids
-    { names = names1;
-      continuations = continuations1;
-      continuations_with_traps = continuations_with_traps1;
-      continuations_in_trap_actions = continuations_in_trap_actions1;
-      function_slots_in_projections = function_slots_in_projections1;
-      value_slots_in_projections = value_slots_in_projections1;
-      function_slots_in_declarations = function_slots_in_declarations1;
-      value_slots_in_declarations = value_slots_in_declarations1;
-      code_ids = code_ids1;
-      newer_version_of_code_ids = newer_version_of_code_ids1
-    }
-    { names = names2;
-      continuations = continuations2;
-      continuations_with_traps = continuations_with_traps2;
-      continuations_in_trap_actions = continuations_in_trap_actions2;
-      function_slots_in_projections = function_slots_in_projections2;
-      value_slots_in_projections = value_slots_in_projections2;
-      function_slots_in_declarations = function_slots_in_declarations2;
-      value_slots_in_declarations = value_slots_in_declarations2;
-      code_ids = code_ids2;
-      newer_version_of_code_ids = newer_version_of_code_ids2
-    } =
-  for_names names1 names2
-  || for_continuations continuations1 continuations2
-  || for_continuations continuations_with_traps1 continuations_with_traps2
-  || for_continuations continuations_in_trap_actions1
-       continuations_in_trap_actions2
-  || for_function_slots function_slots_in_projections1
-       function_slots_in_projections2
-  || for_value_slots value_slots_in_projections1 value_slots_in_projections2
-  || for_function_slots function_slots_in_declarations1
-       function_slots_in_declarations2
-  || for_value_slots value_slots_in_declarations1 value_slots_in_declarations2
-  || for_code_ids code_ids1 code_ids2
-  || for_code_ids newer_version_of_code_ids1 newer_version_of_code_ids2
-
-let[@inline] binary_op ~for_names ~for_continuations ~for_function_slots
-    ~for_value_slots ~for_code_ids
-    { names = names1;
-      continuations = continuations1;
-      continuations_with_traps = continuations_with_traps1;
-      continuations_in_trap_actions = continuations_in_trap_actions1;
-      function_slots_in_projections = function_slots_in_projections1;
-      value_slots_in_projections = value_slots_in_projections1;
-      function_slots_in_declarations = function_slots_in_declarations1;
-      value_slots_in_declarations = value_slots_in_declarations1;
-      code_ids = code_ids1;
-      newer_version_of_code_ids = newer_version_of_code_ids1
-    }
-    { names = names2;
-      continuations = continuations2;
-      continuations_with_traps = continuations_with_traps2;
-      continuations_in_trap_actions = continuations_in_trap_actions2;
-      function_slots_in_projections = function_slots_in_projections2;
-      value_slots_in_projections = value_slots_in_projections2;
-      function_slots_in_declarations = function_slots_in_declarations2;
-      value_slots_in_declarations = value_slots_in_declarations2;
-      code_ids = code_ids2;
-      newer_version_of_code_ids = newer_version_of_code_ids2
-    } =
-  let names = for_names names1 names2 in
-  let continuations = for_continuations continuations1 continuations2 in
-  let continuations_with_traps =
-    for_continuations continuations_with_traps1 continuations_with_traps2
-  in
-  let continuations_in_trap_actions =
-    for_continuations continuations_in_trap_actions1
-      continuations_in_trap_actions2
-  in
-  let function_slots_in_projections =
-    for_function_slots function_slots_in_projections1
-      function_slots_in_projections2
-  in
-  let value_slots_in_projections =
-    for_value_slots value_slots_in_projections1 value_slots_in_projections2
-  in
-  let function_slots_in_declarations =
-    for_function_slots function_slots_in_declarations1
-      function_slots_in_declarations2
-  in
-  let value_slots_in_declarations =
-    for_value_slots value_slots_in_declarations1 value_slots_in_declarations2
-  in
-  let code_ids = for_code_ids code_ids1 code_ids2 in
-  let newer_version_of_code_ids =
-    for_code_ids newer_version_of_code_ids1 newer_version_of_code_ids2
-  in
-  { names;
-    continuations;
-    continuations_with_traps;
-    continuations_in_trap_actions;
-    function_slots_in_projections;
-    value_slots_in_projections;
-    function_slots_in_declarations;
-    value_slots_in_declarations;
-    code_ids;
-    newer_version_of_code_ids
-  }
-
-let is_empty
-    { names;
-      continuations;
-      continuations_with_traps;
-      continuations_in_trap_actions;
-      function_slots_in_projections;
-      value_slots_in_projections;
-      function_slots_in_declarations;
-      value_slots_in_declarations;
-      code_ids;
-      newer_version_of_code_ids
-    } =
-  For_names.is_empty names
-  && For_continuations.is_empty continuations
-  && For_continuations.is_empty continuations_with_traps
-  && For_continuations.is_empty continuations_in_trap_actions
-  && For_function_slots.is_empty function_slots_in_projections
-  && For_value_slots.is_empty value_slots_in_projections
-  && For_function_slots.is_empty function_slots_in_declarations
-  && For_value_slots.is_empty value_slots_in_declarations
-  && For_code_ids.is_empty code_ids
-  && For_code_ids.is_empty newer_version_of_code_ids
-
-let diff
-    { names = names1;
-      continuations = continuations1;
-      continuations_with_traps = continuations_with_traps1;
-      continuations_in_trap_actions = continuations_in_trap_actions1;
-      function_slots_in_projections = function_slots_in_projections1;
-      value_slots_in_projections = value_slots_in_projections1;
-      function_slots_in_declarations = function_slots_in_declarations1;
-      value_slots_in_declarations = value_slots_in_declarations1;
-      code_ids = code_ids1;
-      newer_version_of_code_ids = newer_version_of_code_ids1
-    }
-    ~without:
-      { names = names2;
-        continuations = continuations2;
-        continuations_with_traps = continuations_with_traps2;
-        continuations_in_trap_actions = continuations_in_trap_actions2;
-        function_slots_in_projections = function_slots_in_projections2;
-        value_slots_in_projections = value_slots_in_projections2;
-        function_slots_in_declarations = function_slots_in_declarations2;
-        value_slots_in_declarations = value_slots_in_declarations2;
-        code_ids = code_ids2;
-        newer_version_of_code_ids = newer_version_of_code_ids2
-      } =
-  let names = For_names.diff names1 names2 in
-  let continuations = For_continuations.diff continuations1 continuations2 in
-  let continuations_with_traps =
-    For_continuations.diff continuations_with_traps1 continuations_with_traps2
-  in
-  let continuations_in_trap_actions =
-    For_continuations.diff continuations_in_trap_actions1
-      continuations_in_trap_actions2
-  in
-  let function_slots_in_projections =
-    For_function_slots.diff function_slots_in_projections1
-      function_slots_in_projections2
-  in
-  let value_slots_in_projections =
-    For_value_slots.diff value_slots_in_projections1 value_slots_in_projections2
-  in
-  let function_slots_in_declarations =
-    For_function_slots.diff function_slots_in_declarations1
-      function_slots_in_declarations2
-  in
-  let value_slots_in_declarations =
-    For_value_slots.diff value_slots_in_declarations1
-      value_slots_in_declarations2
-  in
-  let code_ids = For_code_ids.diff code_ids1 code_ids2 in
-  let newer_version_of_code_ids =
-    For_code_ids.diff newer_version_of_code_ids1
-      (* Note special case here: *)
-      (For_code_ids.union newer_version_of_code_ids2 code_ids2)
-  in
-  { names;
-    continuations;
-    continuations_with_traps;
-    continuations_in_trap_actions;
-    function_slots_in_projections;
-    value_slots_in_projections;
-    function_slots_in_declarations;
-    value_slots_in_declarations;
-    code_ids;
-    newer_version_of_code_ids
+let diff t1 ~without:t2 =
+  { ids = M.Map.diff_sharing diff_ids t1.ids t2.ids;
+    function_slots = Function_slots.diff t1.function_slots t2.function_slots;
+    value_slots = Value_slots.diff t1.value_slots t2.value_slots
   }
 
 let union t1 t2 =
@@ -737,507 +452,250 @@ let union t1 t2 =
   else if is_empty t2
   then t1
   else
-    binary_op ~for_names:For_names.union
-      ~for_continuations:For_continuations.union
-      ~for_function_slots:For_function_slots.union
-      ~for_value_slots:For_value_slots.union ~for_code_ids:For_code_ids.union t1
-      t2
+    { ids = Ids.union t1.ids t2.ids;
+      function_slots = Function_slots.union t1.function_slots t2.function_slots;
+      value_slots = Value_slots.union t1.value_slots t2.value_slots
+    }
 
 let equal t1 t2 =
-  binary_conjunction ~for_names:For_names.equal
-    ~for_continuations:For_continuations.equal
-    ~for_function_slots:For_function_slots.equal
-    ~for_value_slots:For_value_slots.equal ~for_code_ids:For_code_ids.equal t1
-    t2
+  Ids.equal t1.ids t2.ids
+  && Function_slots.equal t1.function_slots t2.function_slots
+  && Value_slots.equal t1.value_slots t2.value_slots
 
-let is_empty t = equal t empty
+let no_variables t = M.Map.is_empty (restrict Flags.variable t.ids)
 
-let no_variables t =
-  For_names.for_all t.names ~f:(fun var -> not (Name.is_var var))
+let continuation_roles =
+  Counts.presence continuation_role
+  lor Counts.presence continuation_in_trap_actions_role
 
-let no_continuations
-    { names = _;
-      continuations;
-      continuations_with_traps = _;
-      continuations_in_trap_actions;
-      function_slots_in_projections = _;
-      value_slots_in_projections = _;
-      function_slots_in_declarations = _;
-      value_slots_in_declarations = _;
-      code_ids = _;
-      newer_version_of_code_ids = _
-    } =
-  (* Note: continuations_with_traps is included in continuations *)
-  For_continuations.is_empty continuations
-  && For_continuations.is_empty continuations_in_trap_actions
+let no_continuations t =
+  (* Note: continuations with traps are included in continuations *)
+  M.Map.for_all
+    (fun _ c -> not (Counts.mem_any c continuation_roles))
+    (restrict Flags.continuation t.ids)
 
 let subset_domain t1 t2 =
-  binary_conjunction ~for_names:For_names.subset_domain
-    ~for_continuations:For_continuations.subset_domain
-    ~for_function_slots:For_function_slots.subset_domain
-    ~for_value_slots:For_value_slots.subset_domain
-    ~for_code_ids:For_code_ids.subset_domain t1 t2
+  Ids.subset_domain t1.ids t2.ids
+  && Function_slots.subset_domain t1.function_slots t2.function_slots
+  && Value_slots.subset_domain t1.value_slots t2.value_slots
 
 let inter_domain_is_non_empty t1 t2 =
-  binary_disjunction ~for_names:For_names.inter_domain_is_non_empty
-    ~for_continuations:For_continuations.inter_domain_is_non_empty
-    ~for_function_slots:For_function_slots.inter_domain_is_non_empty
-    ~for_value_slots:For_value_slots.inter_domain_is_non_empty
-    ~for_code_ids:For_code_ids.inter_domain_is_non_empty t1 t2
+  Ids.inter_domain_is_non_empty t1.ids t2.ids
+  || Function_slots.inter_domain_is_non_empty t1.function_slots
+       t2.function_slots
+  || Value_slots.inter_domain_is_non_empty t1.value_slots t2.value_slots
 
 let union_list ts = List.fold_left union empty ts
 
 let function_slots_in_normal_projections t =
-  For_function_slots.fold_with_mode t.function_slots_in_projections
-    ~init:Function_slot.Set.empty ~f:(fun acc function_slot name_mode ->
-      if Name_mode.is_normal name_mode
-      then Function_slot.Set.add function_slot acc
-      else acc)
+  Function_slots.keys_at_normal_mode t.function_slots
+    (Counts.normal_counter in_projections_role)
+    Function_slot.Set.empty
 
 let all_function_slots_at_normal_mode t =
-  let from_projections =
-    For_function_slots.fold_with_mode t.function_slots_in_projections
-      ~init:Function_slot.Set.empty ~f:(fun acc function_slot name_mode ->
-        if Name_mode.is_normal name_mode
-        then Function_slot.Set.add function_slot acc
-        else acc)
-  in
-  For_function_slots.fold_with_mode t.function_slots_in_declarations
-    ~init:from_projections ~f:(fun acc function_slot name_mode ->
-      if Name_mode.is_normal name_mode
-      then Function_slot.Set.add function_slot acc
-      else acc)
+  Function_slots.keys_at_normal_mode t.function_slots
+    (Counts.normal_counter in_projections_role
+    lor Counts.normal_counter in_declarations_role)
+    Function_slot.Set.empty
 
 let value_slots_in_normal_projections t =
-  For_value_slots.fold_with_mode t.value_slots_in_projections
-    ~init:Value_slot.Set.empty ~f:(fun acc value_slot name_mode ->
-      if Name_mode.is_normal name_mode
-      then Value_slot.Set.add value_slot acc
-      else acc)
+  Value_slots.keys_at_normal_mode t.value_slots
+    (Counts.normal_counter in_projections_role)
+    Value_slot.Set.empty
 
 let all_value_slots_at_normal_mode t =
-  let from_projections =
-    For_value_slots.fold_with_mode t.value_slots_in_projections
-      ~init:Value_slot.Set.empty ~f:(fun acc value_slot name_mode ->
-        if Name_mode.is_normal name_mode
-        then Value_slot.Set.add value_slot acc
-        else acc)
-  in
-  For_value_slots.fold_with_mode t.value_slots_in_declarations
-    ~init:from_projections ~f:(fun acc value_slot name_mode ->
-      if Name_mode.is_normal name_mode
-      then Value_slot.Set.add value_slot acc
-      else acc)
+  Value_slots.keys_at_normal_mode t.value_slots
+    (Counts.normal_counter in_projections_role
+    lor Counts.normal_counter in_declarations_role)
+    Value_slot.Set.empty
 
-let variables t = For_names.keys t.names |> Name.set_to_var_set
+let symbols t : Symbol.Set.t =
+  Obj.magic (M.Map.keys (restrict Flags.symbol t.ids))
 
-let symbols t = For_names.keys t.names |> Name.set_to_symbol_set
+let continuations_with_any_role t roles : Continuation.Set.t =
+  Obj.magic (Ids.keys_with_any_role (restrict Flags.continuation t.ids) roles)
 
-let continuations t = For_continuations.keys t.continuations
+let continuations t =
+  continuations_with_any_role t (Counts.presence continuation_role)
 
 let continuations_with_traps t =
-  For_continuations.keys t.continuations_with_traps
+  continuations_with_any_role t (Counts.presence continuation_with_traps_role)
 
 let continuations_including_in_trap_actions t =
-  Continuation.Set.union
-    (For_continuations.keys t.continuations)
-    (For_continuations.keys t.continuations_in_trap_actions)
+  continuations_with_any_role t continuation_roles
 
-let code_ids t = For_code_ids.keys t.code_ids
+let code_ids_with_any_role t roles : Code_id.Set.t =
+  Obj.magic (Ids.keys_with_any_role (restrict Flags.code_id t.ids) roles)
 
-let newer_version_of_code_ids t = For_code_ids.keys t.newer_version_of_code_ids
+let code_ids t = code_ids_with_any_role t (Counts.presence code_id_role)
 
-let code_ids_and_newer_version_of_code_ids t =
-  Code_id.Set.union (code_ids t) (newer_version_of_code_ids t)
+let newer_version_of_code_ids t =
+  code_ids_with_any_role t (Counts.presence newer_version_of_code_id_role)
 
-let mem_name t name = For_names.mem t.names name
+let code_ids_and_newer_version_of_code_ids t : Code_id.Set.t =
+  Obj.magic (M.Map.keys (restrict Flags.code_id t.ids))
 
-let mem_var t var = For_names.mem t.names (Name.var var)
+let mem_name t name = M.Map.mem (name_key name) t.ids
 
-let mem_symbol t symbol = For_names.mem t.names (Name.symbol symbol)
+let mem_var t var = M.Map.mem (var_key var) t.ids
 
-let mem_code_id t code_id = For_code_ids.mem t.code_ids code_id
+let mem_symbol t symbol = M.Map.mem (symbol_key symbol) t.ids
+
+let mem_code_id t code_id = Ids.mem t.ids (code_id_key code_id) code_id_role
 
 let mem_continuation t cont =
-  For_continuations.mem t.continuations cont
-  || For_continuations.mem t.continuations_in_trap_actions cont
+  Ids.mem_any t.ids (continuation_key cont) continuation_roles
 
 let value_slot_is_used_or_imported t value_slot =
   Value_slot.is_imported value_slot
-  || For_value_slots.mem t.value_slots_in_projections value_slot
+  || Value_slots.mem t.value_slots value_slot in_projections_role
 
-let remove_var t ~var =
-  if For_names.is_empty t.names
-  then t
-  else
-    let names = For_names.remove t.names (Name.var var) in
-    { t with names }
+let remove_key t key =
+  if M.Map.is_empty t.ids then t else { t with ids = M.Map.remove key t.ids }
+
+let remove_var t ~var = remove_key t (var_key var)
 
 let remove_var_opt t ~var =
   match var with None -> t | Some var -> remove_var t ~var
 
-let remove_symbol t ~symbol =
-  if For_names.is_empty t.names
-  then t
-  else
-    let names = For_names.remove t.names (Name.symbol symbol) in
-    { t with names }
-
-let remove_code_id t ~code_id =
-  if
-    For_code_ids.is_empty t.code_ids
-    && For_code_ids.is_empty t.newer_version_of_code_ids
-  then t
-  else
-    let code_ids = For_code_ids.remove t.code_ids code_id in
-    let newer_version_of_code_ids =
-      For_code_ids.remove t.newer_version_of_code_ids code_id
-    in
-    { t with code_ids; newer_version_of_code_ids }
-
 let remove_code_id_or_symbol t ~(code_id_or_symbol : Code_id_or_symbol.t) =
-  Code_id_or_symbol.pattern_match code_id_or_symbol
-    ~code_id:(fun code_id -> remove_code_id t ~code_id)
-    ~symbol:(fun symbol -> remove_symbol t ~symbol)
+  remove_key t (code_id_or_symbol :> int)
 
 let remove_continuation t ~continuation =
-  if
-    For_continuations.is_empty t.continuations
-    && For_continuations.is_empty t.continuations_in_trap_actions
-  then t
-  else
-    let continuations = For_continuations.remove t.continuations continuation in
-    let continuations_with_traps =
-      For_continuations.remove t.continuations_with_traps continuation
-    in
-    let continuations_in_trap_actions =
-      For_continuations.remove t.continuations_in_trap_actions continuation
-    in
-    { t with
-      continuations;
-      continuations_with_traps;
-      continuations_in_trap_actions
-    }
+  remove_key t (continuation_key continuation)
 
-let greatest_name_mode_var t var =
-  For_names.greatest_name_mode t.names (Name.var var)
+let greatest_name_mode_var t var : Name_mode.Or_absent.t =
+  match M.Map.find_or_null (var_key var) t.ids with
+  | Null -> Name_mode.Or_absent.absent
+  | This c -> Counts.greatest_name_mode c name_role
 
 let downgrade_occurrences_at_strictly_greater_name_mode
-    { names;
-      continuations;
-      continuations_with_traps;
-      continuations_in_trap_actions;
-      function_slots_in_projections;
-      value_slots_in_projections;
-      function_slots_in_declarations;
-      value_slots_in_declarations;
-      code_ids;
-      newer_version_of_code_ids
-    } max_name_mode =
-  (* CR mshinwell: Don't reallocate the record if nothing changed *)
-  let names =
-    For_names.downgrade_occurrences_at_strictly_greater_name_mode names
-      max_name_mode
-  in
-  let continuations =
-    For_continuations.downgrade_occurrences_at_strictly_greater_name_mode
-      continuations max_name_mode
-  in
-  let continuations_with_traps =
-    For_continuations.downgrade_occurrences_at_strictly_greater_name_mode
-      continuations_with_traps max_name_mode
-  in
-  let continuations_in_trap_actions =
-    For_continuations.downgrade_occurrences_at_strictly_greater_name_mode
-      continuations_in_trap_actions max_name_mode
-  in
-  let function_slots_in_projections =
-    For_function_slots.downgrade_occurrences_at_strictly_greater_name_mode
-      function_slots_in_projections max_name_mode
-  in
-  let value_slots_in_projections =
-    For_value_slots.downgrade_occurrences_at_strictly_greater_name_mode
-      value_slots_in_projections max_name_mode
-  in
-  let function_slots_in_declarations =
-    For_function_slots.downgrade_occurrences_at_strictly_greater_name_mode
-      function_slots_in_declarations max_name_mode
-  in
-  let value_slots_in_declarations =
-    For_value_slots.downgrade_occurrences_at_strictly_greater_name_mode
-      value_slots_in_declarations max_name_mode
-  in
+    ({ ids; function_slots; value_slots } as t) (max_name_mode : Name_mode.t) =
+  match max_name_mode with
+  | Normal -> t
+  | In_types | Phantom ->
+    { ids = Ids.downgrade ids max_name_mode;
+      function_slots = Function_slots.downgrade function_slots max_name_mode;
+      value_slots = Value_slots.downgrade value_slots max_name_mode
+    }
+
+let with_only_variables t = { empty with ids = restrict Flags.variable t.ids }
+
+let with_only_names t = { empty with ids = names_part t.ids }
+
+let with_only_names_and_code_ids_promoting_newer_version_of t =
   let code_ids =
-    For_code_ids.downgrade_occurrences_at_strictly_greater_name_mode code_ids
-      max_name_mode
+    M.Map.map_sharing Counts.promote_role_1 (restrict Flags.code_id t.ids)
   in
-  let newer_version_of_code_ids =
-    For_code_ids.downgrade_occurrences_at_strictly_greater_name_mode
-      newer_version_of_code_ids max_name_mode
-  in
-  { names;
-    continuations;
-    continuations_with_traps;
-    continuations_in_trap_actions;
-    function_slots_in_projections;
-    value_slots_in_projections;
-    function_slots_in_declarations;
-    value_slots_in_declarations;
-    code_ids;
-    newer_version_of_code_ids
-  }
+  { empty with ids = disjoint_union (names_part t.ids) code_ids }
 
-let with_only_variables { names; _ } =
-  let names = For_names.filter names ~f:Name.is_var in
-  { empty with names }
-
-let with_only_names { names; _ } = { empty with names }
-
-let with_only_names_and_code_ids_promoting_newer_version_of
-    { names; code_ids; newer_version_of_code_ids; _ } =
-  let code_ids = For_code_ids.union code_ids newer_version_of_code_ids in
-  { empty with names; code_ids }
-
-let without_names_or_continuations
-    { names = _;
-      continuations = _;
-      continuations_with_traps = _;
-      continuations_in_trap_actions = _;
-      function_slots_in_projections;
-      value_slots_in_projections;
-      function_slots_in_declarations;
-      value_slots_in_declarations;
-      code_ids;
-      newer_version_of_code_ids
-    } =
-  { empty with
-    function_slots_in_projections;
-    value_slots_in_projections;
-    function_slots_in_declarations;
-    value_slots_in_declarations;
-    code_ids;
-    newer_version_of_code_ids
-  }
+let without_names_or_continuations t =
+  { t with ids = restrict Flags.code_id t.ids }
 
 let without_code_ids t =
   { t with
-    code_ids = For_code_ids.empty;
-    newer_version_of_code_ids = For_code_ids.empty
+    ids = disjoint_union (names_part t.ids) (restrict Flags.continuation t.ids)
   }
 
-let fold_names t ~init ~f = For_names.fold t.names ~init ~f
+let fold_names t ~init ~f =
+  M.Map.fold
+    (fun key _ acc -> f acc (Obj.magic key : Name.t))
+    (names_part t.ids) init
 
 let fold_variables t ~init ~f =
-  For_names.fold t.names ~init ~f:(fun acc name ->
-      Name.pattern_match name ~var:(fun var -> f acc var) ~symbol:(fun _ -> acc))
+  M.Map.fold
+    (fun key _ acc -> f acc (Obj.magic key : Variable.t))
+    (restrict Flags.variable t.ids)
+    init
+
+let fold_continuations_with_role continuations role ~init ~f =
+  M.Map.fold
+    (fun key c acc ->
+      if Counts.mem c role then f acc (Obj.magic key : Continuation.t) else acc)
+    continuations init
 
 let fold_continuations_including_in_trap_actions t ~init ~f =
-  (* Note: continuations_with_traps is included in continuations *)
-  let init = For_continuations.fold t.continuations ~init ~f in
-  For_continuations.fold t.continuations_in_trap_actions ~init ~f
+  (* Note: continuations with traps are included in continuations *)
+  let continuations = restrict Flags.continuation t.ids in
+  let init =
+    fold_continuations_with_role continuations continuation_role ~init ~f
+  in
+  fold_continuations_with_role continuations continuation_in_trap_actions_role
+    ~init ~f
 
-let fold_code_ids t ~init ~f = For_code_ids.fold t.code_ids ~init ~f
+let fold_code_ids t ~init ~f =
+  M.Map.fold
+    (fun key c acc ->
+      if Counts.mem c code_id_role
+      then f acc (Obj.magic key : Code_id.t)
+      else acc)
+    (restrict Flags.code_id t.ids)
+    init
 
-let apply_renaming
-    ({ names;
-       continuations;
-       continuations_with_traps;
-       continuations_in_trap_actions;
-       function_slots_in_projections =
-         function_slots_in_projections_never_renamed;
-       value_slots_in_projections = value_slots_in_projections_never_renamed;
-       function_slots_in_declarations =
-         function_slots_in_declarations_never_renamed;
-       value_slots_in_declarations = value_slots_in_declarations_never_renamed;
-       code_ids;
-       newer_version_of_code_ids
-     } as t) renaming =
-  if Renaming.is_identity renaming
+let apply_renaming_to_key renaming key =
+  let flags = Id.flags key in
+  if flags = Flags.continuation
+  then
+    (Renaming.apply_continuation renaming (Obj.magic key : Continuation.t)
+      : Continuation.t
+      :> int)
+  else if flags = Flags.code_id
+  then
+    (Renaming.apply_code_id renaming (Obj.magic key : Code_id.t)
+      : Code_id.t
+      :> int)
+  else (Renaming.apply_name renaming (Obj.magic key : Name.t) : Name.t :> int)
+
+let ids_affected_by_renaming ids renaming =
+  not
+    (M.Map.for_all (fun key _ -> apply_renaming_to_key renaming key = key) ids)
+
+let apply_renaming t renaming =
+  if Renaming.is_identity renaming || M.Map.is_empty t.ids
   then t
   else
-    let names' = For_names.apply_renaming names renaming in
-    let continuations' =
-      For_continuations.apply_renaming continuations renaming
+    let rename part =
+      if ids_affected_by_renaming part renaming
+      then M.Map.map_keys (apply_renaming_to_key renaming) part
+      else part
     in
-    let continuations_with_traps' =
-      For_continuations.apply_renaming continuations_with_traps renaming
-    in
-    let continuations_in_trap_actions' =
-      For_continuations.apply_renaming continuations_in_trap_actions renaming
-    in
-    let code_ids' = For_code_ids.apply_renaming code_ids renaming in
-    let newer_version_of_code_ids' =
-      For_code_ids.apply_renaming newer_version_of_code_ids renaming
-    in
+    let names = names_part t.ids in
+    let continuations = restrict Flags.continuation t.ids in
+    let code_ids = restrict Flags.code_id t.ids in
+    let names' = rename names in
+    let continuations' = rename continuations in
+    let code_ids' = rename code_ids in
     if
       names == names'
       && continuations == continuations'
-      && continuations_with_traps == continuations_with_traps'
-      && continuations_in_trap_actions == continuations_in_trap_actions'
       && code_ids == code_ids'
-      && newer_version_of_code_ids == newer_version_of_code_ids'
     then t
     else
-      { names = names';
-        continuations = continuations';
-        continuations_with_traps = continuations_with_traps';
-        continuations_in_trap_actions = continuations_in_trap_actions';
-        function_slots_in_projections =
-          function_slots_in_projections_never_renamed;
-        value_slots_in_projections = value_slots_in_projections_never_renamed;
-        function_slots_in_declarations =
-          function_slots_in_declarations_never_renamed;
-        value_slots_in_declarations = value_slots_in_declarations_never_renamed;
-        code_ids = code_ids';
-        newer_version_of_code_ids = newer_version_of_code_ids'
+      { t with
+        ids = disjoint_union names' (disjoint_union continuations' code_ids')
       }
 
-let affected_by_renaming
-    { names;
-      continuations;
-      continuations_with_traps = _;
-      continuations_in_trap_actions;
-      function_slots_in_projections = _;
-      value_slots_in_projections = _;
-      function_slots_in_declarations = _;
-      value_slots_in_declarations = _;
-      code_ids;
-      newer_version_of_code_ids
-    } renaming =
-  For_names.affected_by_renaming names renaming
-  || For_continuations.affected_by_renaming continuations renaming
-  || For_continuations.affected_by_renaming continuations_in_trap_actions
-       renaming
-  || For_code_ids.affected_by_renaming code_ids renaming
-  || For_code_ids.affected_by_renaming newer_version_of_code_ids renaming
+let affected_by_renaming t renaming = ids_affected_by_renaming t.ids renaming
 
-let restrict_to_value_slots_and_function_slots
-    { names = _;
-      continuations = _;
-      continuations_with_traps = _;
-      continuations_in_trap_actions = _;
-      function_slots_in_projections;
-      value_slots_in_projections;
-      function_slots_in_declarations;
-      value_slots_in_declarations;
-      code_ids = _;
-      newer_version_of_code_ids = _
-    } =
-  { empty with
-    function_slots_in_projections;
-    value_slots_in_projections;
-    function_slots_in_declarations;
-    value_slots_in_declarations
+let restrict_to_value_slots_and_function_slots t = { t with ids = M.Map.empty }
+
+let ids_for_export t = Ids_for_export.of_int_set (M.Map.keys t.ids)
+
+let increase_counts { ids; function_slots; value_slots } =
+  { ids = Ids.increase_counts ids;
+    function_slots = Function_slots.increase_counts function_slots;
+    value_slots = Value_slots.increase_counts value_slots
   }
 
-let ids_for_export
-    ({ names = _;
-       continuations;
-       continuations_with_traps;
-       continuations_in_trap_actions;
-       function_slots_in_projections = _;
-       value_slots_in_projections = _;
-       function_slots_in_declarations = _;
-       value_slots_in_declarations = _;
-       code_ids;
-       newer_version_of_code_ids
-     } as t) =
-  let variables = variables t in
-  let symbols = symbols t in
-  let continuations =
-    Continuation.Set.union_list
-      [ For_continuations.keys continuations;
-        For_continuations.keys continuations_with_traps;
-        For_continuations.keys continuations_in_trap_actions ]
-  in
-  let code_ids =
-    Code_id.Set.union
-      (For_code_ids.keys code_ids)
-      (For_code_ids.keys newer_version_of_code_ids)
-  in
-  Ids_for_export.create ~variables ~symbols ~code_ids ~continuations ()
-
-let increase_counts
-    { names;
-      continuations;
-      continuations_with_traps;
-      continuations_in_trap_actions;
-      function_slots_in_projections;
-      value_slots_in_projections;
-      function_slots_in_declarations;
-      value_slots_in_declarations;
-      code_ids;
-      newer_version_of_code_ids
-    } =
-  let names = For_names.increase_counts names in
-  let continuations = For_continuations.increase_counts continuations in
-  let continuations_with_traps =
-    For_continuations.increase_counts continuations_with_traps
-  in
-  let continuations_in_trap_actions =
-    For_continuations.increase_counts continuations_in_trap_actions
-  in
-  let function_slots_in_projections =
-    For_function_slots.increase_counts function_slots_in_projections
-  in
-  let value_slots_in_projections =
-    For_value_slots.increase_counts value_slots_in_projections
-  in
-  let function_slots_in_declarations =
-    For_function_slots.increase_counts function_slots_in_declarations
-  in
-  let value_slots_in_declarations =
-    For_value_slots.increase_counts value_slots_in_declarations
-  in
-  let code_ids = For_code_ids.increase_counts code_ids in
-  let newer_version_of_code_ids =
-    For_code_ids.increase_counts newer_version_of_code_ids
-  in
-  { names;
-    continuations;
-    continuations_with_traps;
-    continuations_in_trap_actions;
-    function_slots_in_projections;
-    value_slots_in_projections;
-    function_slots_in_declarations;
-    value_slots_in_declarations;
-    code_ids;
-    newer_version_of_code_ids
-  }
-
-let [@ocamlformat "disable"] print ppf
-      ({ names;
-         continuations;
-         continuations_with_traps;
-         continuations_in_trap_actions;
-         function_slots_in_projections;
-         value_slots_in_projections;
-         function_slots_in_declarations;
-         value_slots_in_declarations;
-         code_ids;
-         newer_version_of_code_ids } as t) =
-  if is_empty t then
-    Format.fprintf ppf "no_occurrences"
+let print ppf ({ ids; function_slots; value_slots } as t) =
+  if is_empty t
+  then Format.fprintf ppf "no_occurrences"
   else
-  Format.fprintf ppf "@[<hov 1>\
-      @[<hov 1>(names %a)@]@ \
-      @[<hov 1>(continuations %a)@]@ \
-      @[<hov 1>(continuations_with_traps %a)@]@ \
-      @[<hov 1>(continuations_in_trap_actions %a)@]@ \
-      @[<hov 1>(function_slots_in_projections %a)@]@ \
-      @[<hov 1>(value_slots_in_projections %a)@]@ \
-      @[<hov 1>(function_slots_in_declarations %a)@]@ \
-      @[<hov 1>(value_slots_in_declarations %a)@]@ \
-      @[<hov 1>(code_ids %a)@] \
-      @[<hov 1>(newer_version_of_code_ids %a)@]@ \
-      @]"
-    For_names.print names
-    For_continuations.print continuations
-    For_continuations.print continuations_with_traps
-    For_continuations.print continuations_in_trap_actions
-    For_function_slots.print function_slots_in_projections
-    For_value_slots.print value_slots_in_projections
-    For_function_slots.print function_slots_in_declarations
-    For_value_slots.print value_slots_in_declarations
-    For_code_ids.print code_ids
-    For_code_ids.print newer_version_of_code_ids
+    Format.fprintf ppf
+      "@[<hov 1>@[<hov 1>(ids %a)@]@ @[<hov 1>(function_slots %a)@]@ @[<hov \
+       1>(value_slots %a)@]@]"
+      (M.Map.print Counts.print) ids
+      (Function_slot.Map.print Counts.print)
+      function_slots
+      (Value_slot.Map.print Counts.print)
+      value_slots

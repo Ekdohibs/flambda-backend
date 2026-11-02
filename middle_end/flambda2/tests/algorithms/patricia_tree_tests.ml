@@ -173,6 +173,20 @@ module Set_specs = struct
 
   let diff_with_self s = Set.is_empty (Set.diff s s)
 
+  let restrict_to_top_bits s =
+    List.for_all
+      (fun num_bits ->
+        List.for_all
+          (fun top_bits ->
+            let r = Set.restrict_to_top_bits ~num_bits ~top_bits s in
+            Set.valid r
+            && Set.equal r
+                 (Set.filter
+                    (fun e -> e lsr (Sys.int_size - num_bits) = top_bits)
+                    s))
+          (List.init (1 lsl num_bits) Fun.id))
+      [1; 2; 3]
+
   let diff_sharing_vs_diff s1 s2 =
     Set.equal (Set.diff_sharing s1 s2) (Set.diff s1 s2)
 
@@ -449,6 +463,25 @@ module Map_specs (V : Value) = struct
     result_by_iter = result_by_fold
 
   let filter_valid f m = Map.valid (Map.filter f m)
+
+  let keys m =
+    let keys = Map.keys m in
+    Set.valid keys
+    && Set.equal keys (Map.fold (fun k _ s -> Set.add k s) m Set.empty)
+
+  let restrict_to_top_bits m =
+    List.for_all
+      (fun num_bits ->
+        List.for_all
+          (fun top_bits ->
+            let r = Map.restrict_to_top_bits ~num_bits ~top_bits m in
+            Map.valid r
+            && Map.equal Value.equal r
+                 (Map.filter
+                    (fun k _ -> k lsr (Sys.int_size - num_bits) = top_bits)
+                    m))
+          (List.init (1 lsl num_bits) Fun.id))
+      [1; 2; 3]
 
   let filter_subset f m =
     let mf = Map.filter f m in
@@ -1103,6 +1136,7 @@ let () =
     c "diff is valid" diff_valid [set; set];
     c "diff" diff [set; set];
     c "diff with self" diff_with_self [set];
+    c "restrict_to_top_bits vs filter" restrict_to_top_bits [set];
     c "diff_sharing vs. diff" diff_sharing_vs_diff [set; set];
     c "diff_sharing of disjoint" diff_sharing_of_disjoint [set; set];
     c "diff_shared vs. diff" diff_shared_vs_diff [set; set];
@@ -1208,6 +1242,8 @@ let () =
     c "for_all vs. List.for_all" for_all_vs_list [key_and_value_to_bool; map];
     c "exists vs. List.exists" exists_vs_list [key_and_value_to_bool; map];
     c "filter is valid" filter_valid [key_and_value_to_bool; map];
+    c "keys vs fold" keys [map];
+    c "restrict_to_top_bits vs filter" restrict_to_top_bits [map];
     c "filter returns subset" filter_subset [key_and_value_to_bool; map];
     c "filter then find_opt" filter_find_opt
       [key_and_value_to_bool; map_and_binding];

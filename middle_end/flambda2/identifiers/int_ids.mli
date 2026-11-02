@@ -18,6 +18,24 @@
     [Reg_width_const], [Simple], [Code_id] and [Code_id_or_symbol]. These values
     are all represented as integers. *)
 
+(** The flags stored in the top bits of the integers representing identifiers,
+    which identify the kind of the identifier. *)
+module Flags : sig
+  val variable : int
+
+  val symbol : int
+
+  val const : int
+
+  val simple : int
+
+  val code_id : int
+
+  val continuation : int
+
+  val field : int
+end
+
 module Const : sig
   type t = private Table_by_int_id.Id.t
 

@@ -144,7 +144,7 @@ let print_view ppf = function
 module Table = Table_by_int_id.Make (struct
   type t = view
 
-  let flags = 0
+  let flags = Int_ids.Flags.field
 
   let print = print_view
 
