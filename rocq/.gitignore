@@ -12,3 +12,6 @@
 # The review document (make review).
 _review/
 review.pdf
+# The map of the proofs (rocq/proof-map.py).
+proof-map.pdf
+proof-map.tex
