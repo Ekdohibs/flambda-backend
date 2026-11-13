@@ -1,0 +1,20 @@
+(* A continuation with a parameter that is used only to be given to [first] as
+   the argument that it does not read. Simplify keeps the parameter; the reaper
+   removes it, and gives [first] a poison. *)
+let code inline(never) size(5) first (a, b) my_closure &my_region my_depth
+      -> k * e =
+  cont k (a)
+in
+let $Cont_unused_param_first = closure first @first &toplevel in
+let c = %opaque (1) in
+let x = %opaque (3) in
+let y = %opaque (4) in
+let s = %untag_imm (c) in
+switch s
+  | 0 -> join (x, y)
+  | 1 -> join (y, x)
+  where join (u, v) =
+    apply direct(first &toplevel) $Cont_unused_param_first (u, v) -> k1 * error
+  where k1 (r) =
+    let $camlCont_unused_param = Block 0 (r) in
+    cont done ($camlCont_unused_param)

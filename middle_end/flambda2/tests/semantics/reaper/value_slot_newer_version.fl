@@ -1,0 +1,37 @@
+(* A closure that Simplify does not lift (it is allocated in a region), whose
+   code reads its value slot [x], given to [call], which is not inlined and
+   calls it. The unit returns 3. The code of the closure is a newer version of
+   code that the unit binds as deleted, as in a term that Simplify has made
+   (closure_at_own_slot.fl of the directory above is such a term).
+
+   The compiler's reaper removes the value slot [x] of the closure, and makes
+   the body of its code [Invalid]: its traversal keeps only the value slots
+   that the free names given by Simplify project ([Traverse_env]
+   [should_keep_value_slot]), and those of this unit project none. The run of
+   its output is undefined. Without [newer_version_of] and the deleted code, the
+   free names have the slot, and the two rebuilds agree.
+
+   The variable [ended] differs too, for another reason: the conversion makes
+   the end of a region the unit value, as the model has no regions, where the
+   compiler's traversal gives the primitive a use that it does not track. *)
+let code add_x deleted in
+let code inline(never) size(6) call (g) my_closure &my_region my_depth
+      -> k * e =
+  apply &my_region g (1) -> k * e
+in
+let $Value_slot_newer_version_call = closure call @call &toplevel in
+let reg = %begin_region () in
+(let x = %opaque (2) in
+ let code size(4) newer_version_of(add_x) add_x_1 (y : imm tagged)
+       my_closure &my_region my_depth -> k * e : imm tagged =
+   let x = %project_value_slot.[add_x].[x] (my_closure) in
+   let r = %int_barith.`add` (x, y) in
+   cont k (r)
+ in
+ let f = closure add_x_1 @add_x &toplevel &reg with { x = x } in
+ apply direct(call &toplevel) $Value_slot_newer_version_call (f)
+   -> k1 * error)
+  where k1 (r : imm tagged) =
+    let ended = %end_region (reg) in
+    let $camlValue_slot_newer_version = Block 0 (r) in
+    cont done ($camlValue_slot_newer_version)

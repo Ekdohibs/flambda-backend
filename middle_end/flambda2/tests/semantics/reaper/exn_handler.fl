@@ -1,0 +1,28 @@
+(* An exception handler: [raises], which is not inlined, raises a block of two
+   fields, of which the handler reads the first. The exception continuation of
+   the call is the handler. *)
+let code inline(never) size(9) raises (x) my_closure &my_region my_depth
+      -> k * e =
+  let c = %int_comp.`lt` (x, 3) in
+  (switch c
+     | 0 -> raising
+     | 1 -> k (x)
+     where raising =
+       let bucket = %block.[`0`].my_region (x, 7) in
+       cont e pop(regular e) (bucket))
+in
+let $Exn_handler_raises = closure raises @raises &toplevel in
+let a = %opaque (5) in
+cont body push(handler)
+  where body =
+    (apply direct(raises &toplevel) $Exn_handler_raises (a)
+       -> returned * handler
+       where returned (r) =
+         cont leave pop(handler) (r))
+  where handler exn (e : val) =
+    let payload = %block_load.[`0`] (e) in
+    let r = %int_barith.`add` (payload, 100) in
+    cont leave (r)
+  where leave (r) =
+    let $camlExn_handler = Block 0 (r) in
+    cont done ($camlExn_handler)

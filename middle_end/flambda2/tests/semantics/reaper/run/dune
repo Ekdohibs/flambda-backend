@@ -1,0 +1,5 @@
+;; The rules that run the examples of the directory above and compare what
+;; the tool prints with their expected files. They are generated: see
+;; ../dune.
+
+(dynamic_include ../dune.inc)

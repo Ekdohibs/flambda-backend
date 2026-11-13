@@ -1,0 +1,15 @@
+(* Tupled code called at an unknown arity: the closure of [first] goes through
+   [%opaque], and the call gives it a tuple, of which it reads the first
+   component. *)
+let code size(1) tupled first (x, y) my_closure &my_region my_depth -> k * e =
+  cont k (x)
+in
+let $Tupled_unknown_arity_first = closure first &toplevel in
+let a = %opaque (1) in
+let b = %opaque (2) in
+let pair = %block.[`0`].`toplevel` (a, b) in
+let f = %opaque ($Tupled_unknown_arity_first) in
+apply &toplevel f (pair) -> k1 * error
+  where k1 (r) =
+    let $camlTupled_unknown_arity = Block 0 (r) in
+    cont done ($camlTupled_unknown_arity)

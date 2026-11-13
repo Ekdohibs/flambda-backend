@@ -1,0 +1,25 @@
+;; The reaper checked against its Rocq transcriptions: for each example X.fl,
+;; after Simplify, the compiler's reaper and the transcriptions extracted from
+;; middle_end/flambda2/rocq/FlambdaReaper*.v are run on the same unit, and the
+;; graphs, the solutions and the rebuilt terms are compared (see
+;; ../../tools/flreaper.ml). What the tool prints is kept in X.expected,
+;; beside X.fl; a difference that it finds is printed and kept there too. The
+;; tool fails only when the solution it computes for the model's graph does
+;; not pass the extracted checks.
+;;
+;; To add an example, add X.fl (its module symbol must match its name) and
+;; X.expected, and nothing else: `dune promote` writes X.expected. Each
+;; example is run on its own, as the compiler keeps its symbols from one unit
+;; to the next.
+;;
+;; The rules are made from the .fl files that are here by gen_rules.sh, and
+;; included by run/dune, as in the directory above.
+
+(rule
+ (deps
+  (glob_files *.fl)
+  (glob_files *.expected))
+ (action
+  (with-stdout-to
+   dune.inc
+   (run sh %{dep:gen_rules.sh} %{deps}))))

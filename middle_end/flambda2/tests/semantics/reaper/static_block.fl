@@ -1,0 +1,14 @@
+(* A static block whose field 1 nothing reads: [get_first], which is not
+   inlined, is given the symbol and reads its field 0. *)
+let code inline(never) size(5) get_first (p) my_closure &my_region my_depth
+      -> k * e =
+  let x = %block_load.[`0`] (p) in
+  cont k (x)
+in
+let $Static_block_get_first = closure get_first @get_first &toplevel in
+let $Static_block_pair = Block 0 (11, 22) in
+apply direct(get_first &toplevel) $Static_block_get_first ($Static_block_pair)
+  -> k1 * error
+  where k1 (r) =
+    let $camlStatic_block = Block 0 (r) in
+    cont done ($camlStatic_block)

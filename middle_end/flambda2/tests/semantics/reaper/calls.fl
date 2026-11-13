@@ -1,0 +1,24 @@
+(* A direct call and an indirect call. [double] is called directly; the
+   closure of [triple] goes through [%opaque] and is called indirectly, with an
+   unknown arity. Neither is inlined. *)
+let code inline(never) size(5) double (x) my_closure &my_region my_depth
+      -> k * e =
+  let y = %int_barith.`add` (x, x) in
+  cont k (y)
+in
+let code inline(never) size(5) triple (x) my_closure &my_region my_depth
+      -> k * e =
+  let y = %int_barith.`add` (x, x) in
+  let z = %int_barith.`add` (y, x) in
+  cont k (z)
+in
+let $Calls_double = closure double @double &toplevel in
+let $Calls_triple = closure triple @triple &toplevel in
+let a = %opaque (5) in
+let t = %opaque ($Calls_triple) in
+apply direct(double &toplevel) $Calls_double (a) -> k1 * error
+  where k1 (d) =
+    apply &toplevel t (d) -> k2 * error
+  where k2 (r) =
+    let $camlCalls = Block 0 (r) in
+    cont done ($camlCalls)

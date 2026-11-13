@@ -1,0 +1,19 @@
+(* A block with a field that nothing reads: [get_first], which is not inlined,
+   reads the field 0 of the block it is given, and nothing reads the field 1.
+   The reaper makes that field a poison. *)
+let code inline(never) size(5) get_first (p) my_closure &my_region my_depth
+      -> k * e =
+  let x = %block_load.[`0`] (p) in
+  cont k (x)
+in
+let $Block_unused_field_get_first =
+  closure get_first @get_first &toplevel
+in
+let a = %opaque (1) in
+let b = %opaque (2) in
+let p = %block.[`0`].`toplevel` (a, b) in
+apply direct(get_first &toplevel) $Block_unused_field_get_first (p)
+  -> k1 * error
+  where k1 (r) =
+    let $camlBlock_unused_field = Block 0 (r) in
+    cont done ($camlBlock_unused_field)

@@ -1,0 +1,26 @@
+(* A closure with two value slots, of which its code reads one, [n], and gives
+   the other, [m], to [ignore_second] as an argument that it does not read.
+   Neither piece of code is inlined, and the closure does not escape: it is
+   called directly. The reaper removes the projection of [m], and the slot. *)
+let code inline(never) size(5) ignore_second (a, b) my_closure &my_region
+      my_depth -> k * e =
+  cont k (a)
+in
+let $Closure_unused_slot_ignore_second =
+  closure ignore_second @ignore_second &toplevel
+in
+let code inline(never) size(10) add_n (x) my_closure &my_region my_depth
+      -> k * e =
+  let n = %project_value_slot.[add_n].[n] (my_closure) in
+  let m = %project_value_slot.[add_n].[m] (my_closure) in
+  let y = %int_barith.`add` (x, n) in
+  apply direct(ignore_second &my_region) $Closure_unused_slot_ignore_second
+    (y, m) -> k * e
+in
+let ten = %opaque (10) in
+let other = %opaque (20) in
+let f = closure add_n @add_n &toplevel with { m = other; n = ten } in
+apply direct(add_n &toplevel) f (32) -> k1 * error
+  where k1 (r) =
+    let $camlClosure_unused_slot = Block 0 (r) in
+    cont done ($camlClosure_unused_slot)

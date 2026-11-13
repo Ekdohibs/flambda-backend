@@ -1,0 +1,14 @@
+(* An unused [Let] that Simplify keeps: [y] is given to the code [first] as its
+   second argument, which [first] does not read. The reaper removes the [Let]
+   and gives the call a poison in its place. *)
+let code inline(never) size(5) first (a, b) my_closure &my_region my_depth
+      -> k * e =
+  cont k (a)
+in
+let $Unused_let_first = closure first @first &toplevel in
+let x = %opaque (1) in
+let y = %int_barith.`add` (x, 1) in
+apply direct(first &toplevel) $Unused_let_first (x, y) -> k1 * error
+  where k1 (r) =
+    let $camlUnused_let = Block 0 (r) in
+    cont done ($camlUnused_let)
