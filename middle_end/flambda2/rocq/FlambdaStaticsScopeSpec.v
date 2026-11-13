@@ -227,6 +227,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaTwinParamsSpec FlambdaValidateSpec
   FlambdaValidatorEquivarianceSpec.
 From OxCamlFlambda2 Require FlambdaBindConstParamsSpec.
+From OxCamlFlambda2 Require Import FlambdaUnaliasRecParamsSpec.
 From OxCamlFlambda2 Require Import FlambdaLiftObservedSpec.
 Import ListNotations.
 
@@ -414,3 +415,10 @@ Definition twin_params_keeps_scope_statement : Prop :=
 
 Definition bind_const_params_keeps_scope_statement : Prop :=
   keeps_scope FlambdaBindConstParamsSpec.bind_const_params.
+
+(* ======================================================================== *)
+(* A parameter of a loop that every turn passes on                          *)
+(* ======================================================================== *)
+
+Definition unalias_rec_params_keeps_scope_statement : Prop :=
+  keeps_scope unalias_rec_params.

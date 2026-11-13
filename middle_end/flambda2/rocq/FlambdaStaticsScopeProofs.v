@@ -53,6 +53,8 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaArmNumbersSpec FlambdaValidateSpec
   FlambdaValidatorEquivarianceSpec FlambdaScopedProofs
   FlambdaKeepsScopeProofs FlambdaStaticsScopeSpec.
+From OxCamlFlambda2 Require Import FlambdaUnaliasRecParamsSpec.
+From OxCamlFlambda2 Require FlambdaUnaliasRecParamsNamesProofs.
 From OxCamlFlambda2 Require FlambdaUnaliasParamsNamesProofs
   FlambdaWrapReturnsNamesProofs FlambdaUntagParamsNamesProofs
   FlambdaGiveScrutineeNamesProofs FlambdaArmNumbersNamesProofs
@@ -1981,3 +1983,13 @@ Proof. exact FlambdaTwinParamsNamesProofs.twin_params_scope. Qed.
 Theorem bind_const_params_keeps_scope :
   bind_const_params_keeps_scope_statement.
 Proof. exact FlambdaBindConstParamsNamesProofs.bind_const_params_scope. Qed.
+
+(* ======================================================================== *)
+(* A parameter of a loop that every turn passes on                          *)
+(* ======================================================================== *)
+
+Theorem unalias_rec_params_keeps_scope :
+  unalias_rec_params_keeps_scope_statement.
+Proof.
+  exact FlambdaUnaliasRecParamsNamesProofs.unalias_rec_params_scope.
+Qed.

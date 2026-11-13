@@ -396,6 +396,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaGiveScrutineeSpec FlambdaArmNumbersSpec FlambdaShadowParamsSpec
   FlambdaTwinParamsSpec FlambdaValidateSpec.
 From OxCamlFlambda2 Require FlambdaBindConstParamsSpec.
+From OxCamlFlambda2 Require Import FlambdaUnaliasRecParamsSpec.
 From OxCamlFlambda2Types Require Import FlambdaTypesSpec FlambdaAliasesSpec.
 From OxCamlFlambda2 Require Import FlambdaLiftObservedSpec.
 Import ListNotations.
@@ -992,6 +993,14 @@ Definition twin_params_equivariant_statement : Prop :=
    it keeps scope is in FlambdaStaticsScopeSpec.v. *)
 Definition bind_const_params_equivariant_statement : Prop :=
   rewrite_equivariant FlambdaBindConstParamsSpec.bind_const_params.
+
+(* Taking away a parameter of a loop that every turn passes on as it
+   is and that the loop is given one variable for
+   (FlambdaUnaliasRecParamsSpec.v). The applications are found by
+   tests of equality of names, and no name is made. That it keeps
+   scope is in FlambdaStaticsScopeSpec.v. *)
+Definition unalias_rec_params_equivariant_statement : Prop :=
+  rewrite_equivariant unalias_rec_params.
 
 (* FlambdaLoopifySpec.loopify_unit is given, for each code id to make
    a loop of, the continuation of the loop. The action: the

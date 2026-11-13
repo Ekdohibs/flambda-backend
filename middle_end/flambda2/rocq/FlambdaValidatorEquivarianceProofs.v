@@ -91,6 +91,8 @@ From OxCamlFlambda2 Require FlambdaKeepsScopeProofs FlambdaValidateScopeProofs
   FlambdaTwinParamsNamesProofs FlambdaBindConstParamsNamesProofs
   FlambdaAliasLetsProofs.
 From OxCamlFlambda2 Require FlambdaLiftContsNamesProofs.
+From OxCamlFlambda2 Require Import FlambdaUnaliasRecParamsSpec.
+From OxCamlFlambda2 Require FlambdaUnaliasRecParamsNamesProofs.
 From OxCamlFlambda2 Require Import FlambdaDemoteSpec.
 From OxCamlFlambda2 Require FlambdaDemoteProofs.
 From OxCamlFlambda2 Require Import FlambdaLiftObservedSpec.
@@ -5181,6 +5183,14 @@ Theorem bind_const_params_equivariant :
   bind_const_params_equivariant_statement.
 Proof.
   exact FlambdaBindConstParamsNamesProofs.bind_const_params_renamed.
+Qed.
+
+(* Taking away a parameter of a loop that every turn passes on: the
+   lemmas are in FlambdaUnaliasRecParamsNamesProofs.v. *)
+Theorem unalias_rec_params_equivariant :
+  unalias_rec_params_equivariant_statement.
+Proof.
+  exact FlambdaUnaliasRecParamsNamesProofs.unalias_rec_params_renamed.
 Qed.
 
 (* Following aliases into the handlers of recursive continuations. *)
