@@ -96,6 +96,14 @@
    return to a wrapper, and both rebuilt units refine the unit up to
    observation.
 
+   [exn_example_statement]: a unit whose code 50, which keeps its calling
+   convention, raises its parameter to a handler of the unit, which the
+   unit installs and gives the call as its exception continuation with
+   two extra arguments, with the tables of the least solution: it is of
+   the fragment, the two rebuilds and the variant of the fix rebuild it
+   alike, the extra argument whose parameter has no use dropped, and the
+   rebuilt unit refines the unit up to observation.
+
    The fragment ([calls_unboxing]), for the unboxed fields that the tables
    give ([unit_unboxed_fields]), the solution and the table:
    - The local unboxing of FlambdaReaperUnboxingRefinesSpec.v: an unboxed
@@ -109,10 +117,10 @@
      the fix ([handler_decisions], or the decisions of the results of
      code), whether the change of calling conventions keeps it, and its
      kind ([pdesc_ok]: an unboxed parameter with fields is kept, and is a
-     value); and by whether they may be applied or returned to: a handler
-     and the return continuation of code may be, the exception
-     continuation of code ([exn_pdescs]) is only that of the calls in its
-     body ([apply_cont_ok2], [exn_cont_ok]).
+     value); and by whether they may be returned to: a handler and the
+     return continuation of code may be, the exception continuation of
+     code is only raised to, by an [Apply_cont] or by a call
+     ([apply_cont_ok2], [exn_cont_ok]).
    - Closures: a [Let] of a closure of a set with no value slot, whose
      other closures are not projected ([closure_binding_ok]).
    - Code ([calls_code]): code of the unit keeps its [my_closure], which
@@ -121,19 +129,29 @@
      parameters as its arity, each
      unboxed as the parameter of its code dep is, at the same paths, or
      not unboxed if the code keeps its calling convention
-     ([code_param_ok]), does not raise (its exception continuation is
-     only that of the calls in its body), and its body is of the
-     fragment, with its return continuation described by the decisions
-     of its results: those of the change, or those of a continuation of
-     fixed arity ([Keep] or [Keep_unused]), which the first rebuild keeps
-     with no mask.
+     ([code_param_ok]), and its body is of the fragment, with its return
+     continuation described by the decisions of its results: those of
+     the change, or those of a continuation of fixed arity ([Keep] or
+     [Keep_unused]), which the first rebuild keeps with no mask. Its
+     exception continuation, which the first rebuild keeps with no mask
+     too, is described by the decision of a continuation of fixed arity
+     ([code_exn_decision]): kept, with a use or with none, so that the
+     code raises poison where the exception has no use; not unboxed.
    - Calls ([call_ok]): direct, of the code they are known to call, at
      the arities of that code (any number of groups of parameters and of
-     results), by a variable that is used and not unboxed, with no extra
-     argument for the exception continuation, which is a way out of the
-     unit or that of the code they are in ([exn_cont_ok]), returning to a
+     results), by a variable that is used and not unboxed, returning to a
      handler of the term or, in tail position, to the return continuation
-     of the code they are in. Each argument is given to a parameter of
+     of the code they are in. The exception continuation of a call
+     ([exn_cont_ok]) is a way out of the unit, to which the callee raises
+     an exception with a use, or the exception continuation of the code
+     the call is in, both with no extra argument; or a handler of the
+     term, with an extra argument for each of its other parameters, given
+     as [arg_ok] says. A way out, the exception continuation of code and
+     the first parameter of the handler take the exception of the callee
+     as the parameter of the continuation of a call takes a result
+     ([exn_param_ok], [result_ok]): the first rebuild keeps them, they
+     are not unboxed, and one with a use takes an exception that the
+     callee raises with a use. Each argument is given to a parameter of
      the code as [arg_ok] says; to code that keeps its calling
      convention, both rebuilds give the arguments that the callee uses as
      they are and the others as poison (FlambdaReaperRebuild.v,
@@ -287,30 +305,33 @@ Fixpoint args_ok2 (kinds : finite_map flambda_kind) (ps : list pdesc)
   end.
 
 (* [C] describes the continuations in scope, each with whether it may be
-   applied or returned to: a handler of the term or the return
-   continuation of code may be, the exception continuation of code
-   ([exn_pdescs]) is only that of the calls in its body. *)
+   returned to: a handler of the term or the return continuation of code
+   may be, the exception continuation of code is only raised to, by an
+   [Apply_cont] or by the calls in its body. *)
 Definition apply_cont_ok2 (kinds : finite_map flambda_kind)
     (C : finite_map (list pdesc * bool)) (ac : apply_cont) : bool :=
   match lookup (ac_continuation ac) C with
-  | Some (ps, true) => args_ok2 kinds ps (ac_args ac)
-  | Some (_, false) => false
+  | Some (ps, _) => args_ok2 kinds ps (ac_args ac)
   | None => forallb (plain_simple unboxed) (ac_args ac)
   end.
 
-(* The exception continuation of code, which the first rebuild keeps as
-   it is, described as a continuation of fixed arity whose parameter has
-   any use. *)
+(* A way out of the unit, as the exception continuation of a call: it
+   takes the exception as a parameter of fixed arity with a use. *)
 Definition exn_pdescs : list pdesc := [Pdesc (Decided (Keep Value)) true Value].
 
-(* The exception continuation [e] of a call: a way out of the unit, or that
-   of the code the call is in. *)
-Definition exn_cont_ok (C : finite_map (list pdesc * bool)) (e : continuation)
-    : bool :=
-  match lookup e C with
-  | None => true
-  | Some ([Pdesc (Decided (Keep Value)) true Value], false) => true
-  | Some _ => false
+(* The decision of the parameter of the exception continuation of code
+   [id] in the rebuild with unboxing ([code_continuation_decisions]), of a
+   continuation of fixed arity: kept, with a use or not. The first rebuild
+   keeps it as it is. [None] where it is unboxed. *)
+Definition code_exn_decision (id : code_id) : option decision :=
+  match lookup id code_deps with
+  | Some cd =>
+    match fixed_arity_decisions sol unboxed [cd_exn cd] [Value] with
+    | [Unbox _] => None
+    | [d] => Some d
+    | _ => None
+    end
+  | None => None
   end.
 
 (* The parameters of a handler, as the two rebuilds have them. *)
@@ -411,6 +432,36 @@ Definition result_ok (k r : pdesc) : bool :=
 Definition is_none {A : Type} (o : option A) : bool :=
   match o with None => true | Some _ => false end.
 
+(* The parameter [k] that takes the exception [r] of a callee: kept by the
+   first rebuild, not unboxed, and given the exception as the parameter of
+   the continuation of a call is given a result ([result_ok]), so that an
+   exception that the callee raises with no use reaches only a parameter
+   with no use. *)
+Definition exn_param_ok (k r : pdesc) : bool :=
+  pd_keep k && negb (is_unbox (pd_decision k)) && result_ok k r.
+
+(* The exception continuation [e] of a call, with the extra arguments
+   [extra], of code whose exception continuation is described by [r]: a
+   way out of the unit, which takes the exception as it is
+   ([exn_pdescs]); the exception continuation of the code the call is in;
+   or a handler of the term, whose first parameter takes the exception
+   and whose others the extra arguments, one each ([arg_ok]). There is no
+   extra argument but for a handler. *)
+Definition exn_cont_ok (kinds : finite_map flambda_kind)
+    (C : finite_map (list pdesc * bool)) (e : continuation) (r : pdesc)
+    (extra : list (simple * flambda_kind)) : bool :=
+  match lookup e C with
+  | None =>
+    forallb2 exn_param_ok exn_pdescs [r]
+    && match extra with [] => true | _ :: _ => false end
+  | Some ([k], false) =>
+    exn_param_ok k r && match extra with [] => true | _ :: _ => false end
+  | Some (k :: ps, true) =>
+    exn_param_ok k r && Nat.eqb (length extra) (length ps)
+    && args_ok2 kinds ps (map fst extra)
+  | Some _ => false
+  end.
+
 Definition call_ok (kinds : finite_map flambda_kind)
     (C : finite_map (list pdesc * bool)) (ap : apply_expr) : bool :=
   match ap_call_kind ap, ap_callee ap, code_id_actually_called F sol ap with
@@ -432,8 +483,12 @@ Definition call_ok (kinds : finite_map flambda_kind)
                 (length (unarize (cm_result_arity metadata)))
            && forallb pdesc_ok pds && forallb pdesc_ok rds
            && args_ok2 kinds pds (ap_args ap)
-           && match ap_exn_extra_args ap with [] => true | _ :: _ => false end
-           && exn_cont_ok C (ap_exn_continuation ap)
+           && match code_exn_decision id with
+              | Some d =>
+                exn_cont_ok kinds C (ap_exn_continuation ap)
+                  (Pdesc d true Value) (ap_exn_extra_args ap)
+              | None => false
+              end
            && match
                 code_change_u sol cannot_change code_deps unit_code_ids
                   unboxed id metadata
@@ -542,10 +597,16 @@ with calls_code (id : code_id) (c : code) {struct c} : bool :=
                  unboxed id)
          && plain_simple unboxed (Var my_closure)
          && negb (Pos.eqb ret exn)
-         && calls_expr
-              (rev ((my_closure, Value)
-                    :: with_kinds params (unarize (cm_params_arity metadata))))
-              [(ret, (rds, true)); (exn, (exn_pdescs, false))] body
+         && match code_exn_decision id with
+            | Some d =>
+              calls_expr
+                (rev ((my_closure, Value)
+                      :: with_kinds params
+                           (unarize (cm_params_arity metadata))))
+                [(ret, (rds, true)); (exn, ([Pdesc d true Value], false))]
+                body
+            | None => false
+            end
        | None => false
        end
   end.
@@ -815,3 +876,96 @@ Definition tail_example_statement : Prop :=
     = TailExample.rebuilt
   ∧ program_refines_observably TailExample.unit_expr TailExample.rebuilt_fixed
   ∧ program_refines_observably TailExample.unit_expr TailExample.rebuilt.
+
+(* An exception raised by code to a handler of the unit, with extra
+   arguments. The code 50, which keeps its calling convention (it is in
+   the table), raises its parameter. The unit installs the handler 20
+   and calls 50 with it as the exception continuation, with the extra
+   arguments 7 and 8 for its parameters after the exception; the handler
+   returns the first, and the second has no use. The tables are the
+   least solution of the rules (FlambdaReaperLeast.compute_least);
+   nothing is unboxed. *)
+Module ExnExample.
+
+Import FlambdaReaperUnboxing.Examples.
+Local Open Scope positive_scope.
+
+Definition call (callee : variable) (id : code_id) (args : list simple)
+    (k exn : continuation) (extra : list (simple * flambda_kind))
+    : apply_expr :=
+  {| ap_callee := Var callee; ap_call_kind := Direct id; ap_args := args;
+     ap_continuation := k; ap_exn_continuation := exn;
+     ap_exn_extra_args := extra;
+     ap_args_arity := [Singleton Value];
+     ap_return_arity := [Singleton Value] |}.
+
+Definition jump (k : continuation) (args : list simple)
+    (trap : option trap_action) : expr :=
+  Apply_cont {| ac_continuation := k; ac_args := args;
+                ac_trap_action := trap |}.
+
+(* The unit, the handler of the exception being [handler] with the
+   parameters [params], the extra arguments of the call [extra], and the
+   handler of the continuation of the call [return_handler]. *)
+Definition unit_with (params : list variable) (handler : expr)
+    (extra : list (simple * flambda_kind)) (return_handler : expr) : expr :=
+  Let_static
+    [Bind_code 50
+       (Code [40] 41 3 4
+          (make_code_metadata [Singleton Value] [Singleton Value])
+          (jump 4 [Var 40] (Some (Pop 4 None))))]
+    (Let 60 Value (Closure_of_set 70 [(70, 50)] [])
+       (Let_cont_non_recursive 20
+          (Handler params
+             (make_exn_handler_metadata (map (fun _ => Value) params))
+             handler)
+          (Let_cont_non_recursive 21
+             (Handler [32] (make_handler_metadata [Value]) return_handler)
+             (Let_cont_non_recursive 22
+                (Handler [] (make_handler_metadata [])
+                   (Apply (call 60 50 [int 5] 21 20 extra)))
+                (jump 22 [] (Some (Push 20))))))).
+
+Definition unit_expr : expr :=
+  unit_with [30; 31; 33] (return_to 1 [Var 31])
+    [(int 7, Value); (int 8, Value)]
+    (jump 1 [Var 32] (Some (Pop 20 None))).
+
+Definition facts : facts := traverse_unit Auto interface unit_expr.
+
+Definition tables : tables :=
+  match compute_least no_local facts 40 with
+  | Some T => T
+  | None => empty_tables
+  end.
+
+Definition cannot_change : list node := [c 50].
+
+Definition code_deps : finite_map code_dep :=
+  unit_code_deps Auto interface unit_expr.
+
+(* The rebuilt unit: the parameter 33 and the extra argument 8 are
+   dropped, and the continuation 21, which nothing returns to, is
+   [Invalid]. *)
+Definition rebuilt : expr :=
+  unit_with [30; 31] (return_to 1 [Var 31]) [(int 7, Value)] Invalid.
+
+End ExnExample.
+
+Definition exn_example_statement : Prop :=
+  calls_unboxing ExnExample.facts ExnExample.tables ExnExample.cannot_change
+    ExnExample.code_deps [] [] ExnExample.unit_expr
+  = true
+  ∧ check_unboxed_reads ExnExample.facts ExnExample.tables [] [] = true
+  ∧ rebuild_unit_cc_from_tables ExnExample.facts ExnExample.tables
+      ExnExample.cannot_change ExnExample.code_deps true ExnExample.unit_expr
+    = ExnExample.rebuilt
+  ∧ rebuild_unit_unbox_fixed ExnExample.facts ExnExample.tables
+      ExnExample.cannot_change ExnExample.code_deps [] [] true
+      ExnExample.unit_expr
+    = ExnExample.rebuilt
+  ∧ rebuild_unit_unbox_fixed_tail ExnExample.facts ExnExample.tables
+      ExnExample.cannot_change ExnExample.code_deps [] [] true
+      ExnExample.unit_expr
+    = ExnExample.rebuilt
+  ∧ program_refines_observably ExnExample.unit_expr ExnExample.rebuilt.

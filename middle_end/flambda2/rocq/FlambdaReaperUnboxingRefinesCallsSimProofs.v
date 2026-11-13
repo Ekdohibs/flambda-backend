@@ -48,12 +48,19 @@
    ([uc_call_wraps], [wrap_both_ok]). Through tail calls, the
    continuation of code is a handler under wrappers of either run, any
    number of them ([cont_rel_wrap_u], [cont_rel_wrap_both]), which
-   [cont_answered] answers by induction. The states are related in the
-   body of the unit ([related_main]), in the body of code called
-   ([related_call], with the frame of the caller), or as a call returns
-   ([related_pending]); [related2_answered] answers each step of the
-   first run by steps of the second, so that the relation is a shrinking
-   simulation. *)
+   [cont_answered] answers by induction. Code raises exceptions of one
+   shape ([cs_exn]: plain, or dead where the second run raises poison),
+   which a call gives to a way out, which takes them plain, to the
+   exception continuation of the code it is in, or to a handler, whose
+   other parameters take the extra arguments of the call
+   ([exn_call_rel]); the exception continuation of the callee is that
+   handler with the extra arguments ([cont_rel_extra]), which is no way
+   out, so that a dead exception never leaves the unit. The states are
+   related in the body of the unit ([related_main]), in the body of code
+   called ([related_call], with the frame of the caller), or as a call
+   returns ([related_pending]); [related2_answered] answers each step of
+   the first run by steps of the second, so that the relation is a
+   shrinking simulation. *)
 
 From Stdlib Require Import ZArith List Bool PeanoNat Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -135,13 +142,15 @@ Definition transport (sh sh' : list pshape) (KS : list flambda_kind)
 
 (* What code takes and returns: the shapes of the parameters and of the
    results that the first run keeps, the kinds of those results in the
-   first run, and the arities of the code in the second. *)
+   first run, the arities of the code in the second, and the shape of the
+   exceptions that it raises. *)
 Record code_shape : Type := Code_shape {
   cs_params : list pshape;
   cs_results : list pshape;
   cs_result_kinds : list flambda_kind;
   cs_params_arity : arity;
-  cs_result_arity : arity
+  cs_result_arity : arity;
+  cs_exn : pshape
 }.
 
 (* The kinds of the arguments in the second run, those of the first being
@@ -323,18 +332,12 @@ Definition ac_rel2 (K : finite_map kshape) (ac ac' : apply_cont) : Prop :=
   ∧ ac_trap_action ac' = ac_trap_action ac
   ∧ args_rel2 (kshape_at K (ac_continuation ac)) (ac_args ac) (ac_args ac').
 
-(* The exception continuation of a call: a way out, or that of the code
-   the call is in. *)
-Definition exn_kshape : kshape := Kshape [Psh_plain] [Value] false.
-
-Definition exn_ok (K : finite_map kshape) (e : continuation) : Prop :=
-  lookup e K = None ∨ lookup e K = Some exn_kshape.
-
-(* What two calls share, but for where they return: the code they call,
-   their callee, their arguments at the shapes of the parameters of the
-   code, the arities of the second those of the code in the second, as
-   many groups of arguments as the code has parameters, and an exception
-   continuation with no extra argument. *)
+(* What two calls share, but for where they return and the extra
+   arguments of their exception continuation: the code they call, their
+   callee, their arguments at the shapes of the parameters of the code,
+   the arities of the second those of the code in the second, as many
+   groups of arguments as the code has parameters, and the exception
+   continuation. *)
 Definition call_rel (ap ap' : apply_expr) (cs : code_shape) : Prop :=
   ∃ id : code_id,
     ap_call_kind ap = Direct id ∧ ap_call_kind ap' = Direct id
@@ -347,14 +350,34 @@ Definition call_rel (ap ap' : apply_expr) (cs : code_shape) : Prop :=
     ∧ length (ap_args_arity ap) = length (cs_params_arity cs)
     ∧ unarize (cs_params_arity cs)
       = shape_kinds (cs_params cs) (unarize (ap_args_arity ap))
-    ∧ ap_exn_continuation ap' = ap_exn_continuation ap
-    ∧ ap_exn_extra_args ap = [] ∧ ap_exn_extra_args ap' = [].
+    ∧ ap_exn_continuation ap' = ap_exn_continuation ap.
+
+(* The exception continuation of a call of code that raises exceptions of
+   the shape [o], with the extra arguments of the two calls: a way out,
+   which takes the exception plain, or the exception continuation of the
+   code the call is in, which takes it alone, with no extra argument; or a
+   handler, which is no way out, whose first parameter takes the
+   exception and whose others the extra arguments, one each. *)
+Definition exn_call_rel (K : finite_map kshape) (o : pshape)
+    (ap ap' : apply_expr) : Prop :=
+  (ap_exn_extra_args ap = [] ∧ ap_exn_extra_args ap' = []
+   ∧ (lookup (ap_exn_continuation ap) K = None ∧ o = Psh_plain
+      ∨ ∃ o_k : pshape,
+          lookup (ap_exn_continuation ap) K
+          = Some (Kshape [o_k] [Value] false)
+          ∧ fits o o_k))
+  ∨ ∃ (o_k : pshape) (sh : list pshape) (KS : list flambda_kind),
+      lookup (ap_exn_continuation ap) K
+      = Some (Kshape (o_k :: sh) (Value :: KS) true)
+      ∧ fits o o_k
+      ∧ args_rel2 sh (exn_extra_simples ap) (exn_extra_simples ap')
+      ∧ length (ap_exn_extra_args ap) = length KS.
 
 (* The continuations of the body of code. *)
 Definition code_K (c : code) (cs : code_shape) : finite_map kshape :=
   [(code_return_continuation c,
     Kshape (cs_results cs) (cs_result_kinds cs) true);
-   (code_exn_continuation c, exn_kshape)].
+   (code_exn_continuation c, Kshape [cs_exn cs] [Value] false)].
 
 (* What code of the two runs share but for their bodies. *)
 Definition code_frame (id : code_id) (c c' : code) (cs : code_shape)
@@ -463,7 +486,7 @@ Inductive uc : finite_map kshape -> expr -> expr -> Prop :=
   | uc_invalid (K : finite_map kshape) : uc K Invalid Invalid
   | uc_call (K : finite_map kshape) (ap ap' : apply_expr) (cs : code_shape)
       (k : continuation) (sh : list pshape) :
-    call_rel ap ap' cs -> exn_ok K (ap_exn_continuation ap) ->
+    call_rel ap ap' cs -> exn_call_rel K (cs_exn cs) ap ap' ->
     ap_continuation ap = k -> ap_continuation ap' = k ->
     lookup k K = Some (Kshape sh (cs_result_kinds cs) true) ->
     transport (cs_results cs) sh (cs_result_kinds cs) ->
@@ -472,7 +495,7 @@ Inductive uc : finite_map kshape -> expr -> expr -> Prop :=
       (cs : code_shape) (k : continuation) (sh : list pshape)
       (w : continuation) (wps : list variable) (wmd : handler_metadata)
       (wargs : list simple) :
-    call_rel ap ap' cs -> exn_ok K (ap_exn_continuation ap) ->
+    call_rel ap ap' cs -> exn_call_rel K (cs_exn cs) ap ap' ->
     ap_continuation ap = k -> ap_continuation ap' = w ->
     w <> ap_exn_continuation ap ->
     lookup k K = Some (Kshape sh (cs_result_kinds cs) true) ->
@@ -483,7 +506,7 @@ Inductive uc : finite_map kshape -> expr -> expr -> Prop :=
       (KS : list flambda_kind) (wc : continuation) (cps : list variable)
       (cmd : handler_metadata) (cargs : list simple) (w : continuation)
       (wps : list variable) (wmd : handler_metadata) (wargs : list simple) :
-    call_rel ap ap' cs -> exn_ok K (ap_exn_continuation ap) ->
+    call_rel ap ap' cs -> exn_call_rel K (cs_exn cs) ap ap' ->
     ap_continuation ap = wc -> ap_continuation ap' = w ->
     wc <> ap_exn_continuation ap -> w <> ap_exn_continuation ap ->
     lookup k K = Some (Kshape sh KS true) ->
@@ -576,6 +599,13 @@ Inductive cont_rel : kshape -> cont_value -> cont_value -> Prop :=
     cont_rel (Kshape sh_r (hm_params_kinds cmd) b)
       (wrapper_closure cps cmd k cargs cvars cconts)
       (wrapper_closure wps wmd k wargs wvars wconts)
+  | cont_rel_extra (o o' : pshape) (sh : list pshape)
+      (KS : list flambda_kind) (c c' : cont_value)
+      (extra extra' : list value) :
+    cont_rel (Kshape (o' :: sh) (Value :: KS) true) c c' -> fits o o' ->
+    length extra = length KS -> vrel sh extra extra' ->
+    cont_rel (Kshape [o] [Value] false) (with_extra_args c extra)
+      (with_extra_args c' extra')
 with conts_rel : finite_map kshape -> cont_env -> cont_env -> Prop :=
   | conts_rel_nil : conts_rel [] [] []
   | conts_rel_cons (k : continuation) (ksh : kshape) (c c' : cont_value)
@@ -602,8 +632,16 @@ Definition related_call (s t : state) : Prop :=
     ∧ cont_rel (Kshape (cs_results cs) (cs_result_kinds cs) true)
         (resolve (ap_continuation ap) (state_conts s))
         (resolve (ap_continuation ap') (state_conts t))
-    ∧ cont_rel exn_kshape (resolve (ap_exn_continuation ap) (state_conts s))
-        (resolve (ap_exn_continuation ap') (state_conts t))
+    ∧ (∀ extra : list value,
+         eval_simples (state_vars s) (exn_extra_simples ap) = Some extra ->
+         ∃ extra' : list value,
+           eval_simples (state_vars t) (exn_extra_simples ap') = Some extra'
+           ∧ cont_rel (Kshape [cs_exn cs] [Value] false)
+               (with_extra_args
+                  (resolve (ap_exn_continuation ap) (state_conts s)) extra)
+               (with_extra_args
+                  (resolve (ap_exn_continuation ap') (state_conts t))
+                  extra'))
     ∧ statics_rel (state_statics s) (state_statics t)
     ∧ state_heap s = empty_heap ∧ state_heap t = empty_heap
     ∧ state_reads s = state_reads t.
@@ -1427,7 +1465,8 @@ Proof.
     | ksh k _ Hhandler
     | sh_r sh_k KS b c wps wmd k wargs wvars wconts _ IH _
     | sh_r sh_k KS b cps cmd cargs cvars cconts wps wmd wargs wvars wconts k
-        _ _];
+        _ _
+    | o o' sh KS c c' extra extra' _ _ _ _ _];
     intros Hh vs S rd.
   - cbn [apply_cont_value]. rewrite Hmd.
     destruct (kinds_eqb (map kind_of_value vs) (map snd ps)) eqn:Hk;
@@ -1441,6 +1480,84 @@ Proof.
       [ | exact I ].
     destruct (bind_params _ _ _); [ | exact I ].
     apply kinds_eqb_eq in Hk. exact Hk.
+  - discriminate Hh.
+Qed.
+
+(* A continuation with extra arguments is applied to the values followed
+   by them. *)
+Lemma apply_with_extra_args (c : cont_value) (extra vs : list value)
+    (S : static_env) (hp : heap) (rd : read_record) :
+  apply_cont_value (with_extra_args c extra) vs S hp rd
+  = apply_cont_value c (vs ++ extra) S hp rd.
+Proof.
+  destruct extra as [ | w extra]; [ | reflexivity ].
+  cbn [with_extra_args]. rewrite app_nil_r. reflexivity.
+Qed.
+
+(* The exception, of one shape, followed by the extra arguments. *)
+Lemma vrel_one_extra (o : pshape) (sh : list pshape) (v : value)
+    (vs' extra extra' : list value) :
+  vrel [o] [v] vs' -> vrel sh extra extra' ->
+  vrel (o :: sh) (v :: extra) (vs' ++ extra').
+Proof.
+  intros H He. inversion H; subst;
+    match goal with H0 : vrel [] [] _ |- _ => inversion H0; subst end;
+    cbn [app]; rewrite ?app_nil_r; constructor; assumption.
+Qed.
+
+Lemma eval_simples_len (vars : env) (args : list simple) (vs : list value) :
+  eval_simples vars args = Some vs -> length vs = length args.
+Proof.
+  revert vs. induction args as [ | s args IH]; intros vs Hev; simpl in Hev.
+  - injection Hev as <-. reflexivity.
+  - destruct (eval_simple vars s); [ | discriminate Hev ].
+    destruct (eval_simples vars args) as [ws | ] eqn:Hws;
+      [ | discriminate Hev ].
+    injection Hev as <-. simpl. rewrite (IH ws eq_refl). reflexivity.
+Qed.
+
+Lemma forall2_fits_plain (sh sh' : list pshape) :
+  Forall2 fits sh sh' -> Forall (fun o => o = Psh_plain) sh' ->
+  Forall (fun o => o = Psh_plain) sh.
+Proof.
+  induction 1 as [ | a b sh sh' Hab _ IH]; intros Hall; [ constructor | ].
+  inversion Hall as [ | b0 l0 Hb Hl]; subst. constructor; [ | exact (IH Hl) ].
+  inversion Hab; reflexivity.
+Qed.
+
+(* A continuation is related at any shapes that fit its own. *)
+Lemma cont_rel_refit_fits (ksh : kshape) (sh_r : list pshape)
+    (c c' : cont_value) :
+  cont_rel M dead CS ksh c c' -> Forall2 fits sh_r (ks_shapes ksh) ->
+  cont_rel M dead CS (Kshape sh_r (ks_kinds ksh) (ks_handler ksh)) c c'.
+Proof.
+  intros Hc. destruct Hc as
+    [ksh sh0 ps ps' md md' h h' vars vars' K S0 conts conts' rec rec' Hps
+       Hfits Hmd Hmd' Hks Hhb Hvars Hconts Hrec
+    | ksh k Hplain Hhandler
+    | sh sh_k KS b0 c wps wmd k wargs wvars wconts Hin Hok
+    | sh sh_k KS b0 cps cmd cargs cvars cconts wps wmd wargs wvars wconts k
+        Hin Hok
+    | o o' sh KS c c' extra extra' Hin Hf0 Hl Hve];
+    intros Hf; cbn [ks_shapes ks_kinds ks_handler] in Hf |- *.
+  - apply (cont_rel_closure M dead CS
+             (Kshape sh_r (ks_kinds ksh) (ks_handler ksh)) sh0 ps ps' md md'
+             h h' vars vars' K S0 conts conts' rec rec');
+      try assumption.
+    cbn [ks_shapes ks_kinds].
+    exact (transport_trans _ _ _ _ (transport_fits _ _ _ Hf) Hfits).
+  - apply cont_rel_outer; [ exact (forall2_fits_plain _ _ Hf Hplain) | ].
+    exact Hhandler.
+  - eapply cont_rel_wrap_u; [ exact Hin | ].
+    intros vs vs' Hv Hk. apply Hok; [ exact (vrel_fits _ _ _ Hv _ Hf) | ].
+    exact Hk.
+  - eapply cont_rel_wrap_both; [ exact Hin | ].
+    intros vs vs' Hv Hk. apply Hok; [ exact (vrel_fits _ _ _ Hv _ Hf) | ].
+    exact Hk.
+  - inversion Hf as [ | o1 o2 l1 l2 Ho Hnil]; subst.
+    inversion Hnil; subst.
+    exact (cont_rel_extra M dead CS o1 o' sh KS c c' extra extra' Hin
+             (fits_trans _ _ _ Ho Hf0) Hl Hve).
 Qed.
 
 End Conts.
@@ -1531,7 +1648,8 @@ Proof.
     | ksh k Hplain Hhandler
     | sh_r sh_k KS b c wps wmd k wargs wvars wconts Hin IH Hok
     | sh_r sh_k KS b cps cmd cargs cvars cconts wps wmd wargs wvars wconts k
-        Hin _ Hok];
+        Hin _ Hok
+    | o o' sh KS c c' extra extra' Hin IH Hf Hl Hve];
     intros vs vs' S S' rd Hv Hst.
   - destruct (apply_cont_value
                 (Closure (Handler (map fst ps) md h) vars conts rec) vs S
@@ -1582,6 +1700,22 @@ Proof.
       split; [ reflexivity | split; [ reflexivity | ] ].
       split; [ reflexivity | split; [ exact Hin | ] ].
       split; [ exact Hargs | split; [ exact Hst | repeat split ] ].
+  - (* The exception, followed by the extra arguments. *)
+    rewrite !apply_with_extra_args.
+    pose proof (cont_rel_steps M dead CS _ _ _ Hin eq_refl (vs ++ extra) S rd)
+      as Hsteps.
+    destruct (apply_cont_value c (vs ++ extra) S empty_heap rd)
+      as [s1 | k0 ws hp rd1 | ] eqn:Ha; [ | contradiction | exact I ].
+    cbn [ks_kinds] in Hsteps.
+    apply (f_equal (@length flambda_kind)) in Hsteps.
+    rewrite length_map, length_app in Hsteps. cbn [length] in Hsteps.
+    destruct vs as [ | v [ | v0 vs]]; cbn [length] in Hsteps; [ lia | | lia ].
+    cbn [ks_shapes] in Hv.
+    pose proof (vrel_fits _ _ _ (vrel_one_extra o sh v vs' extra extra' Hv Hve)
+                  (o' :: sh) (Forall2_cons _ _ Hf (fits_list_refl sh)))
+      as Hv'.
+    specialize (IH (v :: extra) (vs' ++ extra') S S' rd Hv' Hst).
+    cbn [app] in Ha. rewrite Ha in IH. exact IH.
 Qed.
 
 (* A call related is answered by the call of related code. *)
@@ -1598,10 +1732,8 @@ Proof.
        state_reads] in *.
   subst p q hp hp' rd'.
   destruct Hcall as (id & Hkind & Hkind' & Hcs & Hcallee & Hcplain & Hargs
-                     & Hnd & Haa & Hra & Hlen & Hkinds & Hexn_eq & Hextra
-                     & Hextra').
-  rewrite (step_apply_no_extra_args ap vars conts S empty_heap rd Hextra).
-  rewrite (step_apply_no_extra_args ap' vars' conts' S' empty_heap rd Hextra').
+                     & Hnd & Haa & Hra & Hlen & Hkinds & Hexn_eq).
+  rewrite !step_apply.
   rewrite Hcallee, <- (plain_simple2_eval M dead vars vars' _ Hvars Hcplain).
   destruct (eval_simple vars (ap_callee ap)) as [callee | ] eqn:Hcv;
     [ | left; reflexivity ].
@@ -1610,6 +1742,10 @@ Proof.
   destruct (args_vrel M dead _ _ _ Hargs vars vars' vs Hvars Hvs)
     as (vs' & Hvs' & Hv).
   rewrite Hvs'.
+  destruct (eval_simples vars (exn_extra_simples ap)) as [extra | ] eqn:Hex;
+    [ | left; reflexivity ].
+  destruct (Hexn extra eq_refl) as (extra' & Hex' & Hexc).
+  rewrite Hex'.
   unfold call_function, run_call, shape_of_call.
   rewrite Hkind, Hkind'. cbn beta iota.
   unfold shape_of_closure_call.
@@ -1671,8 +1807,7 @@ Proof.
   split; [ exact Hrel | ].
   split; [ | split; [ exact (conj Hval (conj Hkeys Hcode)) | repeat split ] ].
   rewrite Hret_eq, Hexn_eq'. unfold code_K.
-
-  constructor; [ exact Hret | constructor; [ exact Hexn | constructor ] ].
+  constructor; [ exact Hret | constructor; [ exact Hexc | constructor ] ].
 Qed.
 
 
@@ -1700,7 +1835,8 @@ Proof.
     | ksh k _ Hhandler
     | sh sh_k KS b0 c wps wmd k wargs wvars wconts Hin Hok
     | sh sh_k KS b0 cps cmd cargs cvars cconts wps wmd wargs wvars wconts k
-        Hin Hok];
+        Hin Hok
+    | o o' sh KS c c' extra extra' Hin Hf0 Hl Hve];
     intros Hh Hf; cbn [ks_shapes ks_kinds ks_handler] in Hh, Hf |- *.
   - apply (cont_rel_closure M dead CS (Kshape sh_r (ks_kinds ksh) b) sh0 ps
              ps' md md' h h' vars vars' K S0 conts conts' rec rec');
@@ -1712,6 +1848,7 @@ Proof.
   - eapply cont_rel_wrap_both; [ exact Hin | ].
     intros vs vs' Hv Hk. apply Hok; [ | exact Hk ].
     apply Hf; [ exact Hv | apply kinds_eqb_eq; exact Hk ].
+  - discriminate Hh.
 Qed.
 
 Lemma cont_rel_refit (sh sh_r : list pshape) (KS : list flambda_kind)
@@ -1722,17 +1859,49 @@ Proof.
   intros Hc Hf. exact (cont_rel_refit_gen _ sh_r b c c' Hc eq_refl Hf).
 Qed.
 
+(* The exception continuations of related calls, with their extra
+   arguments, are related at the shape of the exceptions of the code. *)
 Lemma exn_rel (K : finite_map kshape) (conts conts' : cont_env)
-    (e : continuation) :
-  conts_rel M dead CS K conts conts' -> exn_ok K e ->
-  cont_rel M dead CS exn_kshape (resolve e conts) (resolve e conts').
+    (vars vars' : env) (o : pshape) (ap ap' : apply_expr) :
+  conts_rel M dead CS K conts conts' -> env_rel2 M dead vars vars' ->
+  exn_call_rel M dead K o ap ap' ->
+  ∀ extra : list value,
+    eval_simples vars (exn_extra_simples ap) = Some extra ->
+    ∃ extra' : list value,
+      eval_simples vars' (exn_extra_simples ap') = Some extra'
+      ∧ cont_rel M dead CS (Kshape [o] [Value] false)
+          (with_extra_args (resolve (ap_exn_continuation ap) conts) extra)
+          (with_extra_args (resolve (ap_exn_continuation ap) conts')
+             extra').
 Proof.
-  intros Hconts He.
-  destruct (resolve_rel2 M dead CS K conts conts' e Hconts)
-    as [(Hl & -> & ->) | (ksh & Hl & Hc)].
-  - apply cont_rel_outer; [ repeat constructor | reflexivity ].
-  - destruct He as [He | He]; rewrite He in Hl; [ discriminate Hl | ].
-    injection Hl as <-. exact Hc.
+  intros Hconts Hvars He extra Hextra.
+  destruct He as [(Hx & Hx' & He) | (o_k & sh & KS & Hl & Hf & Hargs & Hlen)].
+  - unfold exn_extra_simples in Hextra |- *. rewrite Hx in Hextra.
+    rewrite Hx'. cbn [map eval_simples] in Hextra. injection Hextra as <-.
+    exists [].
+    split; [ reflexivity | ]. cbn [with_extra_args].
+    destruct (resolve_rel2 M dead CS K conts conts' (ap_exn_continuation ap)
+                Hconts)
+      as [(Hl & -> & ->) | (ksh & Hl & Hc)].
+    + destruct He as [(_ & ->) | (o_k & He & _)];
+        [ | rewrite He in Hl; discriminate Hl ].
+      apply cont_rel_outer; [ repeat constructor | reflexivity ].
+    + destruct He as [(He & _) | (o_k & He & Hf)]; rewrite He in Hl;
+        [ discriminate Hl | ].
+      injection Hl as <-.
+      exact (cont_rel_refit_fits M dead CS _ [o] _ _ Hc
+               (Forall2_cons _ _ Hf (Forall2_nil _))).
+  - destruct (args_vrel M dead _ _ _ Hargs vars vars' extra Hvars Hextra)
+      as (extra' & Hextra' & Hve).
+    exists extra'. split; [ exact Hextra' | ].
+    destruct (resolve_rel2 M dead CS K conts conts' (ap_exn_continuation ap)
+                Hconts)
+      as [(Hl' & _) | (ksh & Hl' & Hc)]; rewrite Hl in Hl';
+      [ discriminate Hl' | ].
+    injection Hl' as <-.
+    apply (cont_rel_extra M dead CS o o_k sh KS); try assumption.
+    rewrite (eval_simples_len _ _ _ Hextra). unfold exn_extra_simples.
+    rewrite length_map. exact Hlen.
 Qed.
 
 Lemma find_arm_rel2 (K : finite_map kshape) (i : Z)
@@ -2158,17 +2327,17 @@ Proof.
           [ discriminate HK | ].
         injection HK as <-. exact (cont_rel_refit _ _ _ true _ _ Hck Hfits).
       - destruct Hcall as (id & _ & _ & _ & _ & _ & _ & _ & _ & _ & _ & _
-                           & Hexn_eq & _).
-        rewrite Hexn_eq.
-        split; [ exact (exn_rel K conts conts' _ Hconts Hexn) | ].
-        split; [ exact Hst | repeat split ]. }
+                           & Hexn_eq).
+        split; [ | split; [ exact Hst | repeat split ] ].
+        intros extra Hextra. rewrite Hexn_eq.
+        exact (exn_rel K conts conts' vars vars' _ ap ap' Hconts Hvars Hexn
+                 extra Hextra). }
     destruct (call_answered _ _ Hc) as [Hu | (s1 & t1 & Hs1 & Ht1 & Hrel)];
       rewrite ?Hu, ?Hs1; [ exact I | ].
     right. left. exists t1. split; [ exact Ht1 | left; exact Hrel ].
   - (* A call through a wrapper of the second run. *)
     destruct Hcall as (id & Hkind & Hkind' & Hcs & Hcallee & Hcplain & Hargs
-                       & Hnd & Haa & Hra & Hlen & Hkinds & Hexn_eq & Hextra
-                       & Hextra').
+                       & Hnd & Haa & Hra & Hlen & Hkinds & Hexn_eq).
     assert (Hc : related_call M dead CS
                    (State (Apply ap) vars conts statics empty_heap rcd)
                    (State (Apply ap') vars'
@@ -2188,10 +2357,12 @@ Proof.
           [ discriminate HK | ].
         injection HK as <-. exact (cont_rel_wrap_u M dead CS _ _ _ _ _ _ _ _ _
                                      _ _ Hck Hok).
-      - rewrite Hexn_eq, resolve_other
+      - split; [ | split; [ exact Hst | repeat split ] ].
+        intros extra Hextra.
+        rewrite Hexn_eq, resolve_other
           by (intros Heq; exact (Hwe (eq_sym Heq))).
-        split; [ exact (exn_rel K conts conts' _ Hconts Hexn) | ].
-        split; [ exact Hst | repeat split ]. }
+        exact (exn_rel K conts conts' vars vars' _ ap ap' Hconts Hvars Hexn
+                 extra Hextra). }
     destruct (call_answered _ _ Hc) as [Hu | (s1 & t1 & Hs1 & Ht1 & Hrel)];
       rewrite ?Hu, ?Hs1; [ exact I | ].
     right. right. right. exists t1, 0.
@@ -2200,8 +2371,7 @@ Proof.
     unfold wrapper_closure in Ht1. rewrite run_succ, Ht1. reflexivity.
   - (* A call through wrappers of both runs. *)
     destruct Hcall as (id & Hkind & Hkind' & Hcs & Hcallee & Hcplain & Hargs
-                       & Hnd & Haa & Hra & Hlen & Hkinds & Hexn_eq & Hextra
-                       & Hextra').
+                       & Hnd & Haa & Hra & Hlen & Hkinds & Hexn_eq).
     unfold wrap. rewrite step_let_cont_non_recursive.
     right. left. eexists. split; [ rewrite step_let_cont_non_recursive;
                                    reflexivity | ].
@@ -2219,11 +2389,13 @@ Proof.
       injection HK as <-. rewrite <- Hcmd.
       exact (cont_rel_wrap_both M dead CS _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ Hck
                Hok).
-    + rewrite Hexn_eq, !resolve_other
+    + split; [ | split; [ exact Hst | repeat split ] ].
+      intros extra Hextra.
+      rewrite Hexn_eq, !resolve_other
         by (intros Heq; first [ exact (Hwe (eq_sym Heq))
                               | exact (Hwce (eq_sym Heq)) ]).
-      split; [ exact (exn_rel K conts conts' _ Hconts Hexn) | ].
-      split; [ exact Hst | repeat split ].
+      exact (exn_rel K conts conts' vars vars' _ ap ap' Hconts Hvars Hexn
+               extra Hextra).
 Qed.
 
 Lemma related2_answered (s t : state) : R s t -> answered R eq measure s t.
