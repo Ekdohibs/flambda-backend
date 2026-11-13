@@ -276,6 +276,8 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   FlambdaPrimitiveSpec.v \
   FlambdaRangeProofs.v \
   FlambdaRangeSpec.v \
+  FlambdaReadsAfterProofs.v \
+  FlambdaReadsAfterSpec.v \
   FlambdaRecHandlersProofs.v \
   FlambdaRecHandlersSpec.v \
   FlambdaRecoverComparisonProofs.v \
