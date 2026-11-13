@@ -414,6 +414,73 @@ Proof.
     rewrite Hsource, Hcrr, Hunbox in Hcomplete'. exact Hcomplete'.
 Qed.
 
+(* The seeds of the fix are closed under its two rules: every allocation
+   that a rule concludes [cannot_unbox0] of is a seed. *)
+Lemma fix_seeds_closed : ∀ (F : facts) (T : tables) (cu0 : node -> bool),
+  (∀ x : node, x ∈ fix_seeds F T -> cu0 x = true) ->
+  fix_closed (graph_of_facts F) (solution_of_tables T) cu0.
+Proof.
+  intros F T cu0 Hseeds.
+  constructor; cbn [graph_of_facts g_accessor solution_of_tables s_usages
+                      s_sources s_has_source s_any_source s_has_usage].
+  - intros a alias s field v Hu Hs Hhs Hne Hacc Hhu.
+    apply Hseeds. unfold fix_seeds. apply in_or_app. left.
+    unfold other_source_reader_seeds. apply in_flat_map.
+    exists (a, alias). split; [ apply mem_pair_In; exact Hu | ].
+    cbn beta iota.
+    match goal with
+    | |- _ ∈ (if ?b then _ else _) =>
+        assert (Hb : b = true); [ | rewrite Hb; left; reflexivity ]
+    end.
+    apply andb_true_iff. split.
+    + apply existsb_exists. exists (alias, s).
+      split; [ apply mem_pair_In; exact Hs | ]. cbn beta iota.
+      rewrite node_eqb_refl, Hhs, (node_eqb_false _ _ Hne). reflexivity.
+    + unfold field_read_with_usage. apply existsb_exists.
+      exists (v, field, alias). split; [ exact Hacc | ]. cbn beta iota.
+      rewrite node_eqb_refl, Hhu. reflexivity.
+  - intros a alias field v Hu Hany Hacc Hhu.
+    apply Hseeds. unfold fix_seeds. apply in_or_app. right.
+    unfold any_source_reader_seeds. apply in_flat_map.
+    exists (a, alias). split; [ apply mem_pair_In; exact Hu | ].
+    cbn beta iota.
+    match goal with
+    | |- _ ∈ (if ?b then _ else _) =>
+        assert (Hb : b = true); [ | rewrite Hb; left; reflexivity ]
+    end.
+    rewrite Hany. cbn [andb]. unfold field_read_with_usage.
+    apply existsb_exists. exists (v, field, alias).
+    split; [ exact Hacc | ]. cbn beta iota.
+    rewrite node_eqb_refl, Hhu. reflexivity.
+Qed.
+
+Theorem check_to_unbox_fixed_sound : check_to_unbox_fixed_sound_statement.
+Proof.
+  intros is_local F T cannot_change max_unbox_size lambda_lifting to_unbox
+    Hcheck.
+  destruct (check_to_unbox_with_sound is_local F T cannot_change
+              max_unbox_size lambda_lifting (fix_seeds F T) to_unbox Hcheck)
+    as (crr0 & crr1 & crr & cu0 & cu & Hclosed & Hseeds & Hto & Hcomplete).
+  exists crr0, crr1, crr, cu0, cu.
+  split; [ exact Hclosed | ].
+  split; [ apply fix_seeds_closed; exact Hseeds | ].
+  split; assumption.
+Qed.
+
+Theorem check_to_change_representation_fixed_sound :
+  check_to_change_representation_fixed_sound_statement.
+Proof.
+  intros is_local F T cannot_change max_unbox_size lambda_lifting to_unbox
+    tcr Hcheck.
+  destruct (check_to_change_representation_with_sound is_local F T
+              cannot_change max_unbox_size lambda_lifting (fix_seeds F T)
+              to_unbox tcr Hcheck)
+    as (crr0 & crr1 & crr & cu0 & cu & Hclosed & Hseeds & Hrest).
+  exists crr0, crr1, crr, cu0, cu.
+  split; [ exact Hclosed | ].
+  split; [ apply fix_seeds_closed; exact Hseeds | exact Hrest ].
+Qed.
+
 Theorem check_sets_whole_sound : check_sets_whole_sound_statement.
 Proof.
   intros F T to_unbox tcr Hcheck x y f Hin Hslot Hx Hy.
@@ -425,6 +492,17 @@ Proof.
   apply Bool.eqb_prop in Hunbox. apply Bool.eqb_prop in Htcr.
   split; assumption.
 Qed.
+
+(* Each conjunct of the statement of an example: a computation, or a run
+   of at most [fuel] steps. The statement is unfolded first: [vm_compute]
+   of a run of any number of steps does not end. *)
+Ltac computed_conjuncts fuel :=
+  hnf; repeat match goal with |- _ ∧ _ => split end;
+  lazymatch goal with
+  | |- FlambdaSemanticsSpec.behaves _ _ =>
+      exists fuel; try exists no_reads; vm_compute; reflexivity
+  | |- _ => vm_compute; reflexivity
+  end.
 
 (* ======================================================================== *)
 (* A counterexample: lambda lifting and a dead callee                       *)
@@ -461,16 +539,10 @@ Qed.
 (* ======================================================================== *)
 
 Theorem kept_result_unboxed : kept_result_unboxed_statement.
-Proof.
-  split; [ intros [ | ]; vm_compute; auto 10 | ].
-  split; [ exists 20; try exists no_reads; vm_compute; reflexivity | ].
-  split; [ exists 20; try exists no_reads; vm_compute; reflexivity | ].
-  split; [ exists 20; try exists no_reads; vm_compute; reflexivity | ].
-  vm_compute. auto 10.
-Qed.
+Proof. computed_conjuncts 20%nat. Qed.
 
 Theorem kept_result_unboxed_cause : kept_result_unboxed_cause_statement.
-Proof. vm_compute. auto 10. Qed.
+Proof. computed_conjuncts 20%nat. Qed.
 
 (* ======================================================================== *)
 (* A fixed miscompile: a result unboxed by code and deleted by a            *)
@@ -492,17 +564,10 @@ Qed.
 (* ======================================================================== *)
 
 Theorem mixed_mutable_field : mixed_mutable_field_statement.
-Proof.
-  do 7 (split; [ vm_compute; reflexivity | ]).
-  split; [ exists 20; try exists no_reads; vm_compute; reflexivity | ].
-  split; [ exists 20; try exists no_reads; vm_compute; reflexivity | ].
-  do 4 (split; [ vm_compute; reflexivity | ]).
-  split; [ exists 20; try exists no_reads; vm_compute; reflexivity | ].
-  vm_compute. auto 10.
-Qed.
+Proof. computed_conjuncts 20%nat. Qed.
 
 Theorem mixed_mutable_field_cause : mixed_mutable_field_cause_statement.
-Proof. vm_compute. auto 10. Qed.
+Proof. computed_conjuncts 20%nat. Qed.
 
 (* ======================================================================== *)
 (* A counterexample: a block given to code that keeps its calling           *)
@@ -511,20 +576,11 @@ Proof. vm_compute. auto 10. Qed.
 
 Theorem escaping_parameter_argument :
   escaping_parameter_argument_statement.
-Proof.
-  do 7 (split; [ vm_compute; reflexivity | ]).
-  split; [ exists 20; try exists no_reads; vm_compute; reflexivity | ].
-  split; [ exists 20; try exists no_reads; vm_compute; reflexivity | ].
-  do 4 (split; [ vm_compute; reflexivity | ]).
-  split; [ exists 20; try exists no_reads; vm_compute; reflexivity | ].
-  split; [ vm_compute; reflexivity | ].
-  split; [ exists 20; try exists no_reads; vm_compute; reflexivity | ].
-  vm_compute. auto 10.
-Qed.
+Proof. computed_conjuncts 20%nat. Qed.
 
 Theorem escaping_parameter_argument_cause :
   escaping_parameter_argument_cause_statement.
-Proof. vm_compute. auto 20. Qed.
+Proof. computed_conjuncts 20%nat. Qed.
 
 (* ======================================================================== *)
 (* A counterexample: a result of code that keeps its calling convention,    *)
@@ -532,14 +588,7 @@ Proof. vm_compute. auto 20. Qed.
 (* ======================================================================== *)
 
 Theorem tail_result : tail_result_statement.
-Proof.
-  do 9 (split; [ vm_compute; reflexivity | ]).
-  split; [ exists 30; try exists no_reads; vm_compute; reflexivity | ].
-  split; [ exists 30; try exists no_reads; vm_compute; reflexivity | ].
-  do 5 (split; [ vm_compute; reflexivity | ]).
-  split; [ exists 30; try exists no_reads; vm_compute; reflexivity | ].
-  vm_compute. repeat split.
-Qed.
+Proof. computed_conjuncts 30%nat. Qed.
 
 Theorem tail_result_cause : tail_result_cause_statement.
-Proof. vm_compute. repeat split. Qed.
+Proof. computed_conjuncts 30%nat. Qed.

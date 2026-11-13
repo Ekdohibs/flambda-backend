@@ -36,14 +36,16 @@
    [perform_analysis0] puts in the table before running them, the units
    of the first four counterexamples below against their .fl (that of
    the second is [kept_result_unboxed] of FlambdaReaperUnboxing.v), that
-   of the fifth against the OCaml its comment gives,
-   [check_result_receivers], and [field_reader_seeds],
-   [check_field_readers], [tail_result_seeds], [check_tail_results],
-   [escaping_argument_seeds] and [check_escaping_arguments] of
-   FlambdaReaperUnboxing.v, against the fixes they are said to be,
-   [unboxing_relations_with] and [derive_to_unbox_with] of
-   FlambdaReaperUnboxing.v against [unboxing_relations] and
-   [derive_to_unbox],
+   of the fifth against the OCaml its comment gives, [fix_closed]
+   against the two rules of the fix below, and, of
+   FlambdaReaperUnboxing.v, [other_source_reader_seeds],
+   [any_source_reader_seeds], [fix_seeds] and [check_alias_readers]
+   against those rules, [Keep_unused], the cases of it in
+   [wrapper_args_u], [get_args], [get_args_with_kinds_u] and
+   [get_extra_args], [handler_decisions], [fixed_arity_decisions] and
+   [code_continuation_decisions] in the mode [fixed] against the rebuild
+   of the fix, and [unboxing_relations_with] and [derive_to_unbox_with]
+   against [unboxing_relations] and [derive_to_unbox],
    [unbox_dead_unit] against testsuite/tests/reaper/unbox_dead.ml,
    [wrapper_args_u_before_fix] against [make_apply_wrapper] of rebuild.ml
    before the fix that the example is of, and the statements. The checks are
@@ -153,36 +155,6 @@
    the unit pass every check, that the unit exits, and that rebuilt it
    goes wrong; [kept_result_unboxed_cause_statement] says why.
 
-   The fix: the analysis must not unbox an allocation that code returns
-   unless, at each call of the code, the name that the call gives it to,
-   the parameter of the continuation, is unboxed too.
-   [check_result_receivers] is what the fix asks of a table of
-   [to_unbox]. As a rule of [unboxing_rules], the fix is a seed of
-   [cannot_unbox0] like [cu0_result], the rule of unboxing_analysis.ml
-   that begins "An allocation that is one of the results of a function",
-   with the premises
-     [usages call_witness usage;
-      rev_accessor ~base:usage relation ~to_:v;
-      ~~(dominated_by_allocation_point allocation_id v)]
-   in place of
-     [constructor ~base:call_witness !!Field.code_id_of_call_witness
-        ~from:codeid;
-      cannot_change_calling_convention codeid]:
-   the first two find [v], a name that a call reads the result into, as
-   in the rule of [field_of_constructor_is_used] of
-   [post_processing_rules] that has them; the third, a negated premise on
-   a table of points_to_analysis.ml as the others of the rules are, says
-   that [v] is not unboxed with the allocation.
-   [kept_result_unboxed_statement] says too that the check rejects the
-   tables of the unit, and passes those of [unboxed_closure] and of the
-   four examples of blocks of FlambdaReaperUnboxing.v. In the unit, the
-   rule seeds [cannot_unbox0] with the block [x42] alone, as
-   [cu0_max_unbox_size] does with a size of 0 ([x42] has the one used
-   real field of the unit): the analysis with the fix gives the tables
-   with that size, those of the unit with [x42] left out of [to_unbox],
-   which pass every check and that of the fix, and whose rebuild exits as
-   the unit does.
-
    A miscompile of the compiler's reaper that the compiler has fixed, and
    the model with it, by "reaper: fix miscompilation with unused unboxed
    variables" (#7952): [unbox_dead_unit], the unit of the compiler's test
@@ -219,29 +191,6 @@
    exits with 3, and that rebuilt it goes wrong;
    [mixed_mutable_field_cause_statement] says why.
 
-   The fix: the analysis must not unbox an allocation stored in a field
-   that a use of the allocation that holds it reads into a name with a
-   use that the allocation does not dominate. As a rule of
-   [unboxing_rules], it is a seed of [cannot_unbox0]
-   ([field_reader_seeds]), with the premises
-     [sources alias allocation_id; has_source allocation_id;
-      constructor ~base relation ~from:alias; usages base usage;
-      rev_accessor ~base:usage relation ~to_:v; has_usage v;
-      ~~(dominated_by_allocation_point allocation_id v)]:
-   those of the rule of [field_of_constructor_is_used] of
-   [post_processing_rules] that has [usages], for a source of the field,
-   and the negated premise of the fix of [kept_result_unboxed].
-   [check_field_readers], what it asks of a table of [to_unbox], is
-   [check_result_receivers] for every field, not only the results of
-   calls, and for the names with a use only: [check_result_receivers]
-   rejects the tables of [unbox_dead_unit], whose [x32] has no use. A
-   field named by its mutability too, the other way, is a change of the
-   traversal that the model does not make. The statement says too that
-   the check rejects the tables of the unit and passes those of the
-   sound examples, and that with the seeds of the fix
-   ([unboxing_relations_with]) the tables are closed under the rules,
-   pass the check, and rebuild into a unit that exits with 3.
-
    A fourth counterexample, a crash of the compiler's reaper that the
    model shares: [escaping_argument_unit]
    (middle_end/flambda2/tests/semantics/reaper/
@@ -261,45 +210,6 @@
    rebuilt it goes wrong; [escaping_parameter_argument_cause_statement]
    says why.
 
-   The fix has two halves. The first: the analysis must not unbox an
-   allocation that dominates an argument of a call of code that cannot
-   change its calling convention, if the parameter has a use, whatever
-   its sources. As a rule of [unboxing_rules] (that of the compiler's fix
-   that begins "The previous rule misses parameters"), it is a seed of
-   [cannot_unbox0] ([escaping_argument_seeds]) like [cu0_parameter], with
-     [rev_argument ~base:apply relation ~from:arg;
-      sources apply call_witness;
-      parameter ~base:call_witness relation ~to_:param;
-      has_usage param;
-      allocation_point_dominator arg allocation_id]
-   in place of
-     [sources alias allocation_id; has_source allocation_id;
-      rev_parameter ~to_:alias relation ~base:call_witness]:
-   the argument, whose sources are recorded, and the witnesses that the
-   call may call, for the parameter. As the comment of the compiler's
-   rule says, the case [Not_changing_calling_convention] of
-   [rebuild_apply] passes the argument unchanged where the parameter has
-   a use, and an argument that the allocation does not dominate is kept,
-   and is given poison in its place, as it would be if the calling
-   convention could change. [check_escaping_arguments] is what it asks
-   of a table of [to_unbox]. The statement says that the check
-   rejects the tables of the unit and passes those of the sound
-   examples, and that with the seeds of the fix the tables are closed
-   under the rules, pass the check, and rebuild into a unit that exits as
-   the unit does. The second half, in rebuild.ml: [rewrite_simple] of
-   the arguments that the case [Not_changing_calling_convention] keeps,
-   which makes the unboxed one poison. The statement says that the
-   rebuilt unit is the unit without the block, whose variable it gives
-   the call, and that with poison for that argument it exits as the unit
-   does. The second half alone is sound only where the code uses the
-   parameter on no path that is taken: here, as the parameter is only
-   called in an arm that is not. Of the uses of a name of any source, the
-   rules let only a call leave the allocation unboxed (a real field read
-   forbids it by [crr0_any_source_usage], an escape by [cu0_any_usage]),
-   and a call of a block goes wrong in the input too; that a closure so
-   called is never unboxed is not proved. The first half is a check of
-   the tables, and needs none of this.
-
    A fifth counterexample, a miscompile of the model's reaper whose
    decisions the compiler's share: [tail_result_unit], the unit of the
    OCaml its comment gives. Code that cannot change its calling
@@ -307,41 +217,68 @@
    closures, keeps its results even if they have no use. Such code
    tail-calls code that returns a pair, whose result is unboxed as
    another call reads a field of it. The result of the first code has
-   any source, from an [Opaque_identity] in another arm, and no use: the
-   fix of [mixed_field_unit], which asks of the names with a use, does
-   not see it, and the rule [cu0_result], which reads the sources of the
-   results of code that cannot change, does not either, as those of a
-   name of any source are not recorded. [make_apply_wrapper] then has
-   the decision [Keep] of the result of the first code for a result that
-   the callee unboxes, and makes the tail call one that never returns.
-   The compiler's output of the OCaml runs as the input does; the
-   model's rebuild of the unit, whose arm of the tail call is taken, goes
-   wrong. [tail_result_statement] says that the tables of the unit pass
-   every check, and the checks of the two fixes above, that the unit
-   exits with 5, and that rebuilt it goes wrong;
+   any source, from an [Opaque_identity] in another arm, and no use; the
+   rule [cu0_result], which reads the sources of the results of code that
+   cannot change, does not see it, as those of a name of any source are
+   not recorded. [make_apply_wrapper] then has the decision [Keep] of the
+   result of the first code for a result that the callee unboxes, and
+   makes the tail call one that never returns. The compiler's output of
+   the OCaml runs as the input does; the model's rebuild of the unit,
+   whose arm of the tail call is taken, goes wrong.
+   [tail_result_statement] says that the tables of the unit pass every
+   check, that the unit exits with 5, and that rebuilt it goes wrong;
    [tail_result_cause_statement] says why.
 
-   The fix: the analysis must not unbox an allocation stored in a field
-   that a use of the allocation that holds it reads into a result of code
-   that cannot change its calling convention. As a rule of
-   [unboxing_rules] (that of the compiler's fix that begins "Likewise,
-   the results of code"), it is a seed of [cannot_unbox0]
-   ([tail_result_seeds]), with the premises of [field_reader_seeds] but
-   [has_usage v; ~~(dominated_by_allocation_point allocation_id v)], in
-   place of which it has
-     [rev_constructor ~from:v v_relation ~base:call_witness;
-      constructor ~base:call_witness !!Field.code_id_of_call_witness
-        ~from:codeid;
-      cannot_change_calling_convention codeid]
-   with [v_relation] a field [Return_of_call]: [v] is a result of such
-   code. [check_tail_results] is what it asks of a table of [to_unbox].
-   The statement says too that the check rejects the tables of the unit
-   and passes those of the sound examples and of the other
-   counterexamples with their fixes, and that with the seeds of the
-   three fixes ([derive_to_unbox_fixed]) the tables pass the checks of
-   the rules with them and that of the fix, and rebuild into a unit that
-   exits with 5; the cause statement, that the seeds of the two other
-   fixes leave the pair unboxed. *)
+   The fix, which is not on the branch, has two halves. The analysis has
+   two more rules that conclude [cannot_unbox0] ([fix_closed]): an
+   allocation is not unboxed if a field, of any kind, is read into a name
+   with a use from a use of the allocation that has another source, or
+   any source:
+     [usages allocation_id alias; sources alias alias_source;
+      has_source alias_source; distinct alias_source allocation_id;
+      rev_accessor ~base:alias field ~to_:v; has_usage v]
+     ==> cannot_unbox0 allocation_id
+     [usages allocation_id alias; any_source alias;
+      rev_accessor ~base:alias field ~to_:v; has_usage v]
+     ==> cannot_unbox0 allocation_id.
+   They are the rules [crr0_other_source] and [crr0_any_source_usage]
+   without [is_real_field], so that a call through such a use, which reads
+   the call witness off it, forbids the unboxing too. In the model they are
+   seeds of [cannot_unbox0] ([fix_seeds]), and [check_alias_readers] is
+   what they ask of a table of [to_unbox]. The rebuild has a flag
+   [unused] on the decision [Keep], for a parameter of a continuation
+   that is kept though it has no use: the first parameter of an
+   exception handler, and the parameters of the continuations of fixed
+   arity, the return and exception continuations of code, whose
+   decisions the model has in the mode of the fix only
+   ([fixed_arity_decisions]). Such a parameter ([Keep_unused]) is given
+   poison by an [Apply_cont] ([get_args]) and by the wrapper of a call
+   ([make_apply_wrapper]), whatever the callee does with the result. The
+   two rules are to forbid the unboxing of a result given to a parameter
+   kept with a use, which then has another source or any source; one
+   kept with no use takes poison. The mode [fixed] of [rebuild_expr_u] is
+   that rebuild
+   ([rebuild_unit_unbox_repr_fixed]). The fix also drops the callee of a
+   call of code that does not use its [my_closure]
+   ([Keep_my_closure { unused = true }]), which the model does not
+   transcribe: see FlambdaReaperUnboxing.v.
+
+   The fix repairs the five counterexamples, and the statements say so:
+   with the seeds of the two rules ([derive_to_unbox_fixed]) the tables
+   pass the checks of the rules with them ([check_to_unbox_fixed],
+   [check_to_change_representation_fixed]) and that of sets, and the
+   unit rebuilt in the mode of the fix exits as the unit does. The rules
+   forbid to unbox the allocation of [kept_result_unboxed] (the parameter
+   with another source is called), of [mixed_field_unit] (the mutable
+   read, of any source, is called) and of [escaping_argument_unit] (the
+   parameter of any source is called), and [check_alias_readers] rejects
+   the tables without the fix. The pair of [tail_result_unit] is still
+   unboxed, as the result of any source has no use: the decision of the
+   return continuation of the first code is [Keep_unused], and the tail
+   call returns poison to it. [check_alias_readers] passes the tables of
+   [unboxed_closure], of the four examples of blocks of
+   FlambdaReaperUnboxing.v, of [unbox_dead_unit] and of
+   [dead_callee_unit] with lambda lifting. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic.
@@ -580,7 +517,7 @@ Definition check_to_change_representation_sound_statement : Prop :=
            mem_node x tcr = true).
 
 (* The checks of the two tables for the rules with the allocations
-   [seeds] added to [cannot_unbox0], as the fixes below add them
+   [seeds] added to [cannot_unbox0], as the fix below adds them
    ([check_to_unbox_with] and [check_to_change_representation_with] of
    FlambdaReaperUnboxing.v): the statements above, for tables that have
    the seeds in [cannot_unbox0] too. *)
@@ -614,6 +551,75 @@ Definition check_to_change_representation_with_sound_statement : Prop :=
         (fun n => mem_node n cannot_change) max_unbox_size lambda_lifting
         crr0 crr1 crr cu0 cu
       ∧ (∀ x : node, In x seeds -> cu0 x = true)
+      ∧ (∀ x : node,
+           mem_node x to_unbox = true ->
+           s_has_usage (solution_of_tables T) x = true ∧ cu x = false)
+      ∧ (∀ x : node,
+           s_has_usage (solution_of_tables T) x = true ->
+           s_has_source (solution_of_tables T) x = true -> cu x = false ->
+           mem_node x to_unbox = true)
+      ∧ (∀ x : node,
+           mem_node x tcr = true ->
+           s_has_usage (solution_of_tables T) x = true ∧ crr x = false
+           ∧ mem_node x to_unbox = false)
+      ∧ (∀ x : node,
+           s_has_usage (solution_of_tables T) x = true ->
+           s_has_source (solution_of_tables T) x = true -> crr x = false ->
+           mem_node x to_unbox = false ->
+           mem_node x tcr = true).
+
+(* The two rules of the fix, which conclude [cannot_unbox0] of an
+   allocation from which, through a use of it that has another source or
+   any source, a field of any kind is read into a name with a use. *)
+Record fix_closed (G : graph) (S : solution) (cu0 : node -> bool) : Prop := {
+  cu0_other_source_read : ∀ allocation_id alias alias_source field v,
+    s_usages S allocation_id alias = true ->
+    s_sources S alias alias_source = true ->
+    s_has_source S alias_source = true -> alias_source <> allocation_id ->
+    g_accessor G v field alias -> s_has_usage S v = true ->
+    cu0 allocation_id = true;
+  cu0_any_source_read : ∀ allocation_id alias field v,
+    s_usages S allocation_id alias = true ->
+    s_any_source S alias = true -> g_accessor G v field alias ->
+    s_has_usage S v = true ->
+    cu0 allocation_id = true
+}.
+
+(* The checks of the two tables for the rules with the fix
+   ([check_to_unbox_fixed] and [check_to_change_representation_fixed] of
+   FlambdaReaperUnboxing.v): tables closed under the rules and the two
+   rules of the fix, and the agreements of [check_to_unbox_sound_statement]
+   and [check_to_change_representation_sound_statement]. *)
+Definition check_to_unbox_fixed_sound_statement : Prop :=
+  ∀ (is_local : field -> bool) (F : facts) (T : tables)
+    (cannot_change : list node) (max_unbox_size : nat)
+    (lambda_lifting : bool) (to_unbox : list node),
+    check_to_unbox_fixed is_local F T cannot_change max_unbox_size
+      lambda_lifting to_unbox = true ->
+    ∃ crr0 crr1 crr cu0 cu : node -> bool,
+      unboxing_closed is_local (graph_of_facts F) (solution_of_tables T)
+        (fun n => mem_node n cannot_change) max_unbox_size lambda_lifting
+        crr0 crr1 crr cu0 cu
+      ∧ fix_closed (graph_of_facts F) (solution_of_tables T) cu0
+      ∧ (∀ x : node,
+           mem_node x to_unbox = true ->
+           s_has_usage (solution_of_tables T) x = true ∧ cu x = false)
+      ∧ (∀ x : node,
+           s_has_usage (solution_of_tables T) x = true ->
+           s_has_source (solution_of_tables T) x = true -> cu x = false ->
+           mem_node x to_unbox = true).
+
+Definition check_to_change_representation_fixed_sound_statement : Prop :=
+  ∀ (is_local : field -> bool) (F : facts) (T : tables)
+    (cannot_change : list node) (max_unbox_size : nat)
+    (lambda_lifting : bool) (to_unbox tcr : list node),
+    check_to_change_representation_fixed is_local F T cannot_change
+      max_unbox_size lambda_lifting to_unbox tcr = true ->
+    ∃ crr0 crr1 crr cu0 cu : node -> bool,
+      unboxing_closed is_local (graph_of_facts F) (solution_of_tables T)
+        (fun n => mem_node n cannot_change) max_unbox_size lambda_lifting
+        crr0 crr1 crr cu0 cu
+      ∧ fix_closed (graph_of_facts F) (solution_of_tables T) cu0
       ∧ (∀ x : node,
            mem_node x to_unbox = true ->
            s_has_usage (solution_of_tables T) x = true ∧ cu x = false)
@@ -815,30 +821,6 @@ Definition lambda_lifting_dead_callee_cause_statement : Prop :=
 (* A counterexample: a result kept by a continuation and unboxed by code    *)
 (* ======================================================================== *)
 
-(* The fix, as what it asks of a table of [to_unbox]: an allocation to
-   unbox with a source that is a source of a result of code, a field
-   [Return_of_call] of a witness of the code (as in [cu0_result]),
-   dominates each name that a call of the code, a use of the witness,
-   reads that field into. *)
-Definition check_result_receivers (F : facts) (T : tables)
-    (dominated : list (node * node)) (to_unbox : list node) : bool :=
-  forallb
-    (fun '(call_witness, relation, alias) =>
-       negb (is_return_of_call relation)
-       || forallb
-            (fun '(alias', allocation_id) =>
-               negb (node_eqb alias alias')
-               || negb (mem_node allocation_id (t_has_source T))
-               || negb (mem_node allocation_id to_unbox)
-               || forallb
-                    (fun '(v, relation', usage) =>
-                       negb (field_eqb relation relation')
-                       || negb (mem_pair call_witness usage (t_usages T))
-                       || mem_pair allocation_id v dominated)
-                    (f_accessor F))
-            (t_sources T))
-    (f_constructor F).
-
 (* The unit [kept_result_unboxed] and its tables are those of
    FlambdaReaperUnboxing.v. *)
 Definition kept_result_cannot_change : list node :=
@@ -847,26 +829,27 @@ Definition kept_result_cannot_change : list node :=
 Definition kept_result_code_deps : finite_map code_dep :=
   unit_code_deps Auto interface kept_result_unboxed.
 
-(* The size of an unboxing without the fix, and with it: the fix seeds
-   [cannot_unbox0] with [x42] alone, as [cu0_max_unbox_size] does with a
-   size of 0. *)
-Definition kept_result_size (fixed : bool) : nat :=
-  if fixed then 0 else max_unbox_size.
-
 (* The tables of [to_unbox] and [to_change_representation] that the rules
-   give, without the fix and with it, and the unit rebuilt with them. *)
+   give, without the fix and with it, and the unit rebuilt with them, in
+   the mode of the rebuild without the fix and with it. *)
 Definition kept_result_to_unbox (fixed : bool) : list node :=
-  derive_to_unbox no_local kept_result_unboxed_facts
-    kept_result_unboxed_tables kept_result_cannot_change
-    (kept_result_size fixed) false.
+  if fixed
+  then
+    derive_to_unbox_fixed no_local kept_result_unboxed_facts
+      kept_result_unboxed_tables kept_result_cannot_change max_unbox_size
+      false
+  else
+    derive_to_unbox no_local kept_result_unboxed_facts
+      kept_result_unboxed_tables kept_result_cannot_change max_unbox_size
+      false.
 
 Definition kept_result_tcr (fixed : bool) : list node :=
   derive_to_change_representation no_local kept_result_unboxed_facts
-    kept_result_unboxed_tables kept_result_cannot_change
-    (kept_result_size fixed) false (kept_result_to_unbox fixed).
+    kept_result_unboxed_tables kept_result_cannot_change max_unbox_size false
+    (kept_result_to_unbox fixed).
 
 Definition kept_result_rebuilt (fixed : bool) : expr :=
-  rebuild_unit_unbox_repr no_local kept_result_unboxed_facts
+  rebuild_unit_unbox_repr_mode fixed no_local kept_result_unboxed_facts
     kept_result_unboxed_tables kept_result_cannot_change
     kept_result_code_deps kept_result_unboxed_dominated
     (kept_result_to_unbox fixed) (kept_result_tcr fixed) true
@@ -875,65 +858,68 @@ Definition kept_result_rebuilt (fixed : bool) : expr :=
 Definition kept_result_exit : behaviour :=
   Exits 1 [Value_const (Tagged_immediate 10)] empty_heap.
 
-(* Without the fix and with it, the tables pass every check. The unit
-   exits with 10; rebuilt without the fix, it goes wrong, and with it, it
-   exits with 10. The check of the fix rejects the tables without it, and
-   passes those with it, and those of [unboxed_closure] and of the four
-   examples of blocks. *)
+(* Without the fix, the tables pass every check; the unit exits with 10,
+   and rebuilt, it goes wrong. The check of the fix rejects the tables.
+   With the fix, the tables pass the checks of the rules with it and that
+   of sets, and the unit rebuilt in the mode of the fix exits with 10.
+   The check of the fix passes the tables of [unboxed_closure] and of the
+   four examples of blocks. *)
 Definition kept_result_unboxed_statement : Prop :=
-  (∀ fixed : bool,
-     let size := kept_result_size fixed in
-     let to_unbox := kept_result_to_unbox fixed in
-     let tcr := kept_result_tcr fixed in
-     check_closed no_local kept_result_unboxed_facts
-       kept_result_unboxed_tables = true
-     ∧ check_field_used_exact no_local kept_result_unboxed_facts
-         kept_result_unboxed_tables = true
-     ∧ check_cc_closed kept_result_unboxed_facts kept_result_unboxed_tables
-         kept_result_cannot_change = true
-     ∧ check_dominated kept_result_unboxed_tables
-         kept_result_unboxed_dominated = true
-     ∧ check_to_unbox no_local kept_result_unboxed_facts
-         kept_result_unboxed_tables kept_result_cannot_change size false
-         to_unbox = true
-     ∧ check_to_change_representation no_local kept_result_unboxed_facts
-         kept_result_unboxed_tables kept_result_cannot_change size false
-         to_unbox tcr = true
-     ∧ check_sets_whole kept_result_unboxed_facts kept_result_unboxed_tables
-         to_unbox tcr = true)
+  check_closed no_local kept_result_unboxed_facts kept_result_unboxed_tables
+  = true
+  ∧ check_field_used_exact no_local kept_result_unboxed_facts
+      kept_result_unboxed_tables = true
+  ∧ check_cc_closed kept_result_unboxed_facts kept_result_unboxed_tables
+      kept_result_cannot_change = true
+  ∧ check_dominated kept_result_unboxed_tables kept_result_unboxed_dominated
+    = true
+  ∧ check_to_unbox no_local kept_result_unboxed_facts
+      kept_result_unboxed_tables kept_result_cannot_change max_unbox_size
+      false (kept_result_to_unbox false) = true
+  ∧ check_to_change_representation no_local kept_result_unboxed_facts
+      kept_result_unboxed_tables kept_result_cannot_change max_unbox_size
+      false (kept_result_to_unbox false) (kept_result_tcr false) = true
+  ∧ check_sets_whole kept_result_unboxed_facts kept_result_unboxed_tables
+      (kept_result_to_unbox false) (kept_result_tcr false) = true
   ∧ behaves (FlambdaReaperTupledSpec.on_its_own kept_result_unboxed)
       kept_result_exit
   ∧ behaves (FlambdaReaperTupledSpec.on_its_own (kept_result_rebuilt false))
       Goes_wrong
+  ∧ check_alias_readers kept_result_unboxed_facts kept_result_unboxed_tables
+      (kept_result_to_unbox false) = false
+  ∧ check_to_unbox_fixed no_local kept_result_unboxed_facts
+      kept_result_unboxed_tables kept_result_cannot_change max_unbox_size
+      false (kept_result_to_unbox true) = true
+  ∧ check_to_change_representation_fixed no_local kept_result_unboxed_facts
+      kept_result_unboxed_tables kept_result_cannot_change max_unbox_size
+      false (kept_result_to_unbox true) (kept_result_tcr true) = true
+  ∧ check_sets_whole kept_result_unboxed_facts kept_result_unboxed_tables
+      (kept_result_to_unbox true) (kept_result_tcr true) = true
   ∧ behaves (FlambdaReaperTupledSpec.on_its_own (kept_result_rebuilt true))
       kept_result_exit
-  ∧ check_result_receivers kept_result_unboxed_facts
-      kept_result_unboxed_tables kept_result_unboxed_dominated
-      (kept_result_to_unbox false) = false
-  ∧ check_result_receivers kept_result_unboxed_facts
-      kept_result_unboxed_tables kept_result_unboxed_dominated
-      (kept_result_to_unbox true) = true
-  ∧ check_result_receivers unboxed_closure_facts unboxed_closure_tables
-      unboxed_closure_dominated [v 60] = true
-  ∧ check_result_receivers read_block_facts read_block_tables
-      [(v 10, v 10)] [v 10] = true
-  ∧ check_result_receivers block_to_continuation_facts
-      block_to_continuation_tables [(v 10, v 10); (v 10, v 30)] [v 10]
+  ∧ check_alias_readers unboxed_closure_facts unboxed_closure_tables [v 60]
     = true
-  ∧ check_result_receivers block_from_code_facts block_from_code_tables
-      block_from_code_dominated [v 42] = true
-  ∧ check_result_receivers nested_block_facts nested_block_tables
-      [(v 11, v 11); (v 10, v 10); (v 10, v 12)] [v 11; v 10] = true.
+  ∧ check_alias_readers read_block_facts read_block_tables [v 10] = true
+  ∧ check_alias_readers block_to_continuation_facts
+      block_to_continuation_tables [v 10] = true
+  ∧ check_alias_readers block_from_code_facts block_from_code_tables [v 42]
+    = true
+  ∧ check_alias_readers nested_block_facts nested_block_tables [v 11; v 10]
+    = true.
 
 (* Why. Without the fix, the block [x42] is unboxed, and dominates the
    result 3 of the code dep of 50, which the code then unboxes; [x32],
    which the call that returns to 21 reads that result into, has two
-   allocation points and is not unboxed: 21 keeps it. With the fix,
-   [x42] is left out of [to_unbox], and the rest is as it was. *)
+   allocation points and is not unboxed: 21 keeps it. [x32] is a use of
+   [x42] that has another source, [x61], and is called: [x42] is a seed
+   of the fix, and with the fix nothing is unboxed. *)
 Definition kept_result_unboxed_cause_statement : Prop :=
   kept_result_to_unbox false = [v 42]
   ∧ mem_pair (v 42) (m 3) kept_result_unboxed_dominated = true
   ∧ multiple_allocation_points kept_result_unboxed_tables (v 32) = true
+  ∧ mem_node (v 42)
+      (fix_seeds kept_result_unboxed_facts kept_result_unboxed_tables)
+    = true
   ∧ kept_result_to_unbox true = []
   ∧ kept_result_tcr true = kept_result_tcr false.
 
@@ -1025,7 +1011,8 @@ Definition unbox_dead_exit : behaviour :=
 
 (* [rev_args_or_invalid] of [make_apply_wrapper] before the fix, the
    match of [wrapper_args_u] in its old order: a result that the callee
-   unboxes and the continuation deletes is [None] ([Invalid]). *)
+   unboxes and the continuation deletes is [None] ([Invalid]). The
+   decision [Keep_unused], of a later fix, is as in [wrapper_args_u]. *)
 Fixpoint wrapper_args_u_before_fix (apply_decisions : list decision)
     (func : list (wrapper_decision * flambda_kind)) : option (list simple) :=
   match func with
@@ -1041,6 +1028,7 @@ Fixpoint wrapper_args_u_before_fix (apply_decisions : list decision)
     | None => None
     | Some rest =>
       match ad, fd with
+      | Keep_unused kind, _ => Some (Const (Poison kind) :: rest)
       | Unbox _, (Wrapper_keep _ | Wrapper_delete)
       | Decided _, Wrapper_unbox _ => None
       | Decided Delete, _ => Some rest
@@ -1147,12 +1135,6 @@ Definition unbox_dead_statement : Prop :=
 (* A counterexample: a field read immutably and mutably                     *)
 (* ======================================================================== *)
 
-(* The fix, as what it adds to [cannot_unbox0], is [field_reader_seeds]
-   of FlambdaReaperUnboxing.v, and what it asks of a table of
-   [to_unbox], [check_field_readers] there; the rules with its seeds are
-   [unboxing_relations_with] there, [to_unbox] for them
-   [derive_to_unbox_with]. *)
-
 (* [Block_load] of a value from a mutable field. *)
 Definition load_mutable (field : Z) (block : simple) : named :=
   Prim (Unary (Block_load (Block_access_values None None Any_value)
@@ -1241,17 +1223,16 @@ Definition mixed_field_code_deps : finite_map code_dep :=
 
 (* The seeds of the fix in the unit. *)
 Definition mixed_field_seeds : list node :=
-  field_reader_seeds mixed_field_facts mixed_field_tables
-    mixed_field_dominated.
+  fix_seeds mixed_field_facts mixed_field_tables.
 
 (* The tables of [to_unbox] and [to_change_representation] that the rules
-   give, without the fix and with its seeds, and the unit rebuilt with
-   them. *)
+   give, without the fix and with it, and the unit rebuilt with them, in
+   the mode of the rebuild without the fix and with it. *)
 Definition mixed_field_to_unbox (fixed : bool) : list node :=
   if fixed
   then
-    derive_to_unbox_with no_local mixed_field_facts mixed_field_tables
-      mixed_field_cannot_change max_unbox_size false mixed_field_seeds
+    derive_to_unbox_fixed no_local mixed_field_facts mixed_field_tables
+      mixed_field_cannot_change max_unbox_size false
   else
     derive_to_unbox no_local mixed_field_facts mixed_field_tables
       mixed_field_cannot_change max_unbox_size false.
@@ -1262,22 +1243,20 @@ Definition mixed_field_tcr (fixed : bool) : list node :=
     (mixed_field_to_unbox fixed).
 
 Definition mixed_field_rebuilt (fixed : bool) : expr :=
-  rebuild_unit_unbox_repr no_local mixed_field_facts mixed_field_tables
-    mixed_field_cannot_change mixed_field_code_deps mixed_field_dominated
-    (mixed_field_to_unbox fixed) (mixed_field_tcr fixed) true
-    mixed_field_unit.
+  rebuild_unit_unbox_repr_mode fixed no_local mixed_field_facts
+    mixed_field_tables mixed_field_cannot_change mixed_field_code_deps
+    mixed_field_dominated (mixed_field_to_unbox fixed)
+    (mixed_field_tcr fixed) true mixed_field_unit.
 
 Definition mixed_field_exit : behaviour :=
   Exits 1 [Value_const (Tagged_immediate 3)] empty_heap.
 
-(* The tables pass every check. The unit exits with 3; rebuilt, it goes
-   wrong. The check of the fix rejects the tables. With the seeds of the
-   fix, the tables are closed under the rules, pass the check of the fix
-   and that of sets, and the unit rebuilt with them exits with 3. The
-   check passes the tables of [unboxed_closure], of the four examples of
-   blocks of FlambdaReaperUnboxing.v, of [unbox_dead_unit], which
-   [check_result_receivers] rejects, and of [dead_callee_unit] with lambda
-   lifting. *)
+(* Without the fix, the tables pass every check; the unit exits with 3,
+   and rebuilt, it goes wrong. The check of the fix rejects the tables.
+   With the fix, the tables pass the checks of the rules with it and that
+   of sets, and the unit rebuilt in the mode of the fix exits with 3. The
+   check of the fix passes the tables of [unbox_dead_unit] and of
+   [dead_callee_unit] with lambda lifting. *)
 Definition mixed_mutable_field_statement : Prop :=
   check_closed no_local mixed_field_facts mixed_field_tables = true
   ∧ check_field_used_exact no_local mixed_field_facts mixed_field_tables
@@ -1297,43 +1276,30 @@ Definition mixed_mutable_field_statement : Prop :=
       mixed_field_exit
   ∧ behaves (FlambdaReaperTupledSpec.on_its_own (mixed_field_rebuilt false))
       Goes_wrong
-  ∧ check_field_readers mixed_field_facts mixed_field_tables
-      mixed_field_dominated (mixed_field_to_unbox false) = false
-  ∧ check_unboxing_closed no_local mixed_field_facts mixed_field_tables
+  ∧ check_alias_readers mixed_field_facts mixed_field_tables
+      (mixed_field_to_unbox false) = false
+  ∧ check_to_unbox_fixed no_local mixed_field_facts mixed_field_tables
       mixed_field_cannot_change max_unbox_size false
-      (unboxing_relations_with no_local mixed_field_facts mixed_field_tables
-         mixed_field_cannot_change max_unbox_size false mixed_field_seeds)
-    = true
-  ∧ check_field_readers mixed_field_facts mixed_field_tables
-      mixed_field_dominated (mixed_field_to_unbox true) = true
+      (mixed_field_to_unbox true) = true
+  ∧ check_to_change_representation_fixed no_local mixed_field_facts
+      mixed_field_tables mixed_field_cannot_change max_unbox_size false
+      (mixed_field_to_unbox true) (mixed_field_tcr true) = true
   ∧ check_sets_whole mixed_field_facts mixed_field_tables
       (mixed_field_to_unbox true) (mixed_field_tcr true) = true
   ∧ behaves (FlambdaReaperTupledSpec.on_its_own (mixed_field_rebuilt true))
       mixed_field_exit
-  ∧ check_field_readers unboxed_closure_facts unboxed_closure_tables
-      unboxed_closure_dominated [v 60] = true
-  ∧ check_field_readers read_block_facts read_block_tables [(v 10, v 10)]
-      [v 10] = true
-  ∧ check_field_readers block_to_continuation_facts
-      block_to_continuation_tables [(v 10, v 10); (v 10, v 30)] [v 10]
-    = true
-  ∧ check_field_readers block_from_code_facts block_from_code_tables
-      block_from_code_dominated [v 42] = true
-  ∧ check_field_readers nested_block_facts nested_block_tables
-      [(v 11, v 11); (v 10, v 10); (v 10, v 12)] [v 11; v 10] = true
-  ∧ check_field_readers unbox_dead_facts unbox_dead_tables
-      unbox_dead_dominated unbox_dead_to_unbox = true
-  ∧ check_result_receivers unbox_dead_facts unbox_dead_tables
-      unbox_dead_dominated unbox_dead_to_unbox = false
-  ∧ check_field_readers dead_callee_facts dead_callee_tables
-      dead_callee_dominated (dead_callee_to_unbox true) = true.
+  ∧ check_alias_readers unbox_dead_facts unbox_dead_tables
+      unbox_dead_to_unbox = true
+  ∧ check_alias_readers dead_callee_facts dead_callee_tables
+      (dead_callee_to_unbox true) = true.
 
 (* Why. Without the fix, the block [x11] and the pair [x10] are unboxed:
    [x10] dominates [x42], and [x11] dominates [x40], which the code
    unboxes to its field 0, a value; [x44], of any source, which reads the
-   same field 0, is dominated by nothing and kept. The seeds of the fix
-   are [x10]; with them, [x11] alone is unboxed, and the rest is as it
-   was. *)
+   same field 0, is dominated by nothing and kept. [x44] is a use of
+   [x10] of any source, and is called: [x10] is a seed of the fix, and
+   [x11] is not; with the fix, [x11] alone is unboxed, and the rest is as
+   it was. *)
 Definition mixed_mutable_field_cause_statement : Prop :=
   mixed_field_to_unbox false = [v 11; v 10]
   ∧ mem_pair (v 10) (v 42) mixed_field_dominated = true
@@ -1345,7 +1311,8 @@ Definition mixed_mutable_field_cause_statement : Prop :=
               [Decided (Keep Value)])]
   ∧ mem_node (v 44) (t_any_source mixed_field_tables) = true
   ∧ multiple_allocation_points mixed_field_tables (v 44) = true
-  ∧ mixed_field_seeds = [v 10]
+  ∧ mem_node (v 10) mixed_field_seeds = true
+  ∧ mem_node (v 11) mixed_field_seeds = false
   ∧ mixed_field_to_unbox true = [v 11]
   ∧ mixed_field_tcr true = mixed_field_tcr false.
 
@@ -1353,10 +1320,6 @@ Definition mixed_mutable_field_cause_statement : Prop :=
 (* A counterexample: a block given to code that keeps its calling           *)
 (* convention                                                               *)
 (* ======================================================================== *)
-
-(* The fix, as what it adds to [cannot_unbox0], is
-   [escaping_argument_seeds] of FlambdaReaperUnboxing.v, and what it asks
-   of a table of [to_unbox], [check_escaping_arguments] there. *)
 
 (* The unit of escaping_parameter_argument.fl, without [g]: the code 50
    is [f] without its parameter [w], whose [p] is [x40], and the [Switch]
@@ -1437,18 +1400,17 @@ Definition escaping_argument_code_deps : finite_map code_dep :=
 
 (* The seeds of the fix in the unit. *)
 Definition escaping_argument_seeds_of_unit : list node :=
-  escaping_argument_seeds escaping_argument_facts escaping_argument_tables
-    escaping_argument_cannot_change escaping_argument_dominated.
+  fix_seeds escaping_argument_facts escaping_argument_tables.
 
 (* The tables of [to_unbox] and [to_change_representation] that the rules
-   give, without the fix and with its seeds, and the unit rebuilt with
-   them. *)
+   give, without the fix and with it, and the unit rebuilt with them, in
+   the mode of the rebuild without the fix and with it. *)
 Definition escaping_argument_to_unbox (fixed : bool) : list node :=
   if fixed
   then
-    derive_to_unbox_with no_local escaping_argument_facts
+    derive_to_unbox_fixed no_local escaping_argument_facts
       escaping_argument_tables escaping_argument_cannot_change
-      max_unbox_size false escaping_argument_seeds_of_unit
+      max_unbox_size false
   else
     derive_to_unbox no_local escaping_argument_facts escaping_argument_tables
       escaping_argument_cannot_change max_unbox_size false.
@@ -1459,7 +1421,7 @@ Definition escaping_argument_tcr (fixed : bool) : list node :=
     false (escaping_argument_to_unbox fixed).
 
 Definition escaping_argument_rebuilt (fixed : bool) : expr :=
-  rebuild_unit_unbox_repr no_local escaping_argument_facts
+  rebuild_unit_unbox_repr_mode fixed no_local escaping_argument_facts
     escaping_argument_tables escaping_argument_cannot_change
     escaping_argument_code_deps escaping_argument_dominated
     (escaping_argument_to_unbox fixed) (escaping_argument_tcr fixed) true
@@ -1472,18 +1434,12 @@ Definition escaping_argument_exit : behaviour :=
         Value_const (Tagged_immediate 0)]]
     empty_heap.
 
-(* The tables pass every check. The unit exits with a block of the
-   closure and 0; rebuilt, it goes wrong. The check of the fix rejects
-   the tables. With the seeds of the fix, the tables are closed under the
-   rules, pass the check of the fix and that of sets, and the unit
-   rebuilt with them exits as the unit does. The rebuilt unit is the unit
-   without the [Let] of the pair, whose variable it gives the call; with
-   poison for argument, the other half of the fix, it exits as the unit
-   does. The check passes the tables of [unboxed_closure], of
-   [block_from_code], of [kept_result_unboxed] with its fix, of
-   [unbox_dead_unit] and of [dead_callee_unit] with lambda lifting, the
-   examples whose code cannot change its calling convention or whose
-   calls give an allocation. *)
+(* Without the fix, the tables pass every check; the unit exits with a
+   block of the closure and 0, and rebuilt, it goes wrong: the rebuilt
+   unit is the unit without the [Let] of the pair, whose variable it gives
+   the call. The check of the fix rejects the tables. With the fix, the
+   tables pass the checks of the rules with it and that of sets, and the
+   unit rebuilt in the mode of the fix exits as the unit does. *)
 Definition escaping_parameter_argument_statement : Prop :=
   check_closed no_local escaping_argument_facts escaping_argument_tables
     = true
@@ -1508,52 +1464,30 @@ Definition escaping_parameter_argument_statement : Prop :=
   ∧ behaves
       (FlambdaReaperTupledSpec.on_its_own (escaping_argument_rebuilt false))
       Goes_wrong
-  ∧ check_escaping_arguments escaping_argument_facts escaping_argument_tables
-      escaping_argument_cannot_change escaping_argument_dominated
+  ∧ escaping_argument_rebuilt false
+    = escaping_argument_with (Apply (call_50 [Var 10] 20))
+  ∧ check_alias_readers escaping_argument_facts escaping_argument_tables
       (escaping_argument_to_unbox false) = false
-  ∧ check_unboxing_closed no_local escaping_argument_facts
+  ∧ check_to_unbox_fixed no_local escaping_argument_facts
       escaping_argument_tables escaping_argument_cannot_change
-      max_unbox_size false
-      (unboxing_relations_with no_local escaping_argument_facts
-         escaping_argument_tables escaping_argument_cannot_change
-         max_unbox_size false escaping_argument_seeds_of_unit)
-    = true
-  ∧ check_escaping_arguments escaping_argument_facts escaping_argument_tables
-      escaping_argument_cannot_change escaping_argument_dominated
-      (escaping_argument_to_unbox true) = true
+      max_unbox_size false (escaping_argument_to_unbox true) = true
+  ∧ check_to_change_representation_fixed no_local escaping_argument_facts
+      escaping_argument_tables escaping_argument_cannot_change
+      max_unbox_size false (escaping_argument_to_unbox true)
+      (escaping_argument_tcr true) = true
   ∧ check_sets_whole escaping_argument_facts escaping_argument_tables
       (escaping_argument_to_unbox true) (escaping_argument_tcr true) = true
   ∧ behaves
       (FlambdaReaperTupledSpec.on_its_own (escaping_argument_rebuilt true))
-      escaping_argument_exit
-  ∧ escaping_argument_rebuilt false
-    = escaping_argument_with (Apply (call_50 [Var 10] 20))
-  ∧ behaves
-      (FlambdaReaperTupledSpec.on_its_own
-         (escaping_argument_with (Apply (call_50 [Const (Poison Value)] 20))))
-      escaping_argument_exit
-  ∧ check_escaping_arguments unboxed_closure_facts unboxed_closure_tables []
-      unboxed_closure_dominated [v 60] = true
-  ∧ check_escaping_arguments block_from_code_facts block_from_code_tables
-      (derive_cannot_change block_from_code_facts block_from_code_tables)
-      block_from_code_dominated [v 42] = true
-  ∧ check_escaping_arguments kept_result_unboxed_facts
-      kept_result_unboxed_tables kept_result_cannot_change
-      kept_result_unboxed_dominated (kept_result_to_unbox true) = true
-  ∧ check_escaping_arguments unbox_dead_facts unbox_dead_tables
-      unbox_dead_cannot_change unbox_dead_dominated unbox_dead_to_unbox
-    = true
-  ∧ check_escaping_arguments dead_callee_facts dead_callee_tables
-      dead_callee_cannot_change dead_callee_dominated
-      (dead_callee_to_unbox true) = true.
+      escaping_argument_exit.
 
 (* Why. Without the fix, the pair [x10] is unboxed, to no field. The code
    50 cannot change its calling convention, and its parameter 6, of
    which [x10] is an alias, has any source and no source recorded, so
    that [cu0_parameter] does not hold of [x10]. The call does not change
-   its calling convention, and the rebuilt unit has [x10] free. The seeds
-   of the fix are [x10]; with them, nothing is unboxed. Neither check
-   rejects the tables of the other counterexample. *)
+   its calling convention, and the rebuilt unit has [x10] free. [x40], a
+   use of [x10] of any source, is called: [x10] is a seed of the fix, and
+   with the fix nothing is unboxed. *)
 Definition escaping_parameter_argument_cause_statement : Prop :=
   escaping_argument_to_unbox false = [v 10]
   ∧ mem_node (c 50) escaping_argument_cannot_change = true
@@ -1568,22 +1502,15 @@ Definition escaping_parameter_argument_cause_statement : Prop :=
     = [(50, Not_changing_u)]
   ∧ free_variables_of_expr escaping_argument_unit = []
   ∧ free_variables_of_expr (escaping_argument_rebuilt false) = [10]
-  ∧ escaping_argument_seeds_of_unit = [v 10]
-  ∧ escaping_argument_to_unbox true = []
-  ∧ check_field_readers escaping_argument_facts escaping_argument_tables
-      escaping_argument_dominated (escaping_argument_to_unbox false) = true
-  ∧ check_escaping_arguments mixed_field_facts mixed_field_tables
-      mixed_field_cannot_change mixed_field_dominated
-      (mixed_field_to_unbox false) = true.
+  ∧ mem_pair (v 10) (v 40) (t_usages escaping_argument_tables) = true
+  ∧ mem_node (v 40) (t_any_source escaping_argument_tables) = true
+  ∧ mem_node (v 10) escaping_argument_seeds_of_unit = true
+  ∧ escaping_argument_to_unbox true = [].
 
 (* ======================================================================== *)
 (* A counterexample: a result of code that keeps its calling convention,    *)
 (* given by a tail call                                                     *)
 (* ======================================================================== *)
-
-(* The fix, as what it adds to [cannot_unbox0], is [tail_result_seeds]
-   of FlambdaReaperUnboxing.v, and what it asks of a table of
-   [to_unbox], [check_tail_results] there. *)
 
 (* An [Apply_cont] to [k] with [args], an arm of a [Switch]. *)
 Definition jump (k : continuation) (args : list simple) : apply_cont :=
@@ -1726,20 +1653,9 @@ Definition tail_result_dominated : list (node * node) :=
 Definition tail_result_code_deps : finite_map code_dep :=
   unit_code_deps Auto interface tail_result_unit.
 
-(* The seeds of the fix in the unit, and those of the two other fixes. *)
-Definition tail_result_seeds_of_unit : list node :=
-  tail_result_seeds tail_result_facts tail_result_tables
-    tail_result_cannot_change.
-
-Definition tail_result_other_seeds : list node :=
-  field_reader_seeds tail_result_facts tail_result_tables
-    tail_result_dominated
-  ++ escaping_argument_seeds tail_result_facts tail_result_tables
-       tail_result_cannot_change tail_result_dominated.
-
 (* The tables of [to_unbox] and [to_change_representation] that the rules
-   give, without the fixes and with the seeds of the three
-   ([derive_to_unbox_fixed]), and the unit rebuilt with them. *)
+   give, without the fix and with it, and the unit rebuilt with them, in
+   the mode of the rebuild without the fix and with it. *)
 Definition tail_result_to_unbox (fixed : bool) : list node :=
   if fixed
   then
@@ -1755,24 +1671,19 @@ Definition tail_result_tcr (fixed : bool) : list node :=
     (tail_result_to_unbox fixed).
 
 Definition tail_result_rebuilt (fixed : bool) : expr :=
-  rebuild_unit_unbox_repr no_local tail_result_facts tail_result_tables
-    tail_result_cannot_change tail_result_code_deps tail_result_dominated
-    (tail_result_to_unbox fixed) (tail_result_tcr fixed) true
-    tail_result_unit.
+  rebuild_unit_unbox_repr_mode fixed no_local tail_result_facts
+    tail_result_tables tail_result_cannot_change tail_result_code_deps
+    tail_result_dominated (tail_result_to_unbox fixed)
+    (tail_result_tcr fixed) true tail_result_unit.
 
 Definition tail_result_exit : behaviour :=
   Exits 1 [Value_const (Tagged_immediate 5)] empty_heap.
 
-(* The tables pass every check, and those of the two other fixes. The
-   unit exits with 5; rebuilt, it goes wrong. The check of the fix
-   rejects the tables. With the seeds of the three fixes, the tables of
-   [to_unbox] and [to_change_representation] pass the checks of the
-   rules with them, that of the fix and that of sets, and the unit
-   rebuilt with them exits with 5. The check passes the tables of
-   [unboxed_closure], of the four examples of blocks of
-   FlambdaReaperUnboxing.v, of [unbox_dead_unit], of [dead_callee_unit]
-   with lambda lifting, and of the three other counterexamples with
-   their fixes. *)
+(* Without the fix, the tables pass every check; the unit exits with 5,
+   and rebuilt, it goes wrong. The check of the fix passes the tables,
+   which the rules with the fix leave as they are: they pass the checks of
+   those rules and that of sets, and the unit rebuilt in the mode of the
+   fix exits with 5. *)
 Definition tail_result_statement : Prop :=
   check_closed no_local tail_result_facts tail_result_tables = true
   ∧ check_field_used_exact no_local tail_result_facts tail_result_tables
@@ -1788,58 +1699,31 @@ Definition tail_result_statement : Prop :=
       (tail_result_to_unbox false) (tail_result_tcr false) = true
   ∧ check_sets_whole tail_result_facts tail_result_tables
       (tail_result_to_unbox false) (tail_result_tcr false) = true
-  ∧ check_field_readers tail_result_facts tail_result_tables
-      tail_result_dominated (tail_result_to_unbox false) = true
-  ∧ check_escaping_arguments tail_result_facts tail_result_tables
-      tail_result_cannot_change tail_result_dominated
-      (tail_result_to_unbox false) = true
   ∧ behaves (FlambdaReaperTupledSpec.on_its_own tail_result_unit)
       tail_result_exit
   ∧ behaves (FlambdaReaperTupledSpec.on_its_own (tail_result_rebuilt false))
       Goes_wrong
-  ∧ check_tail_results tail_result_facts tail_result_tables
-      tail_result_cannot_change (tail_result_to_unbox false) = false
+  ∧ check_alias_readers tail_result_facts tail_result_tables
+      (tail_result_to_unbox false) = true
+  ∧ tail_result_to_unbox true = tail_result_to_unbox false
   ∧ check_to_unbox_fixed no_local tail_result_facts tail_result_tables
       tail_result_cannot_change max_unbox_size false
       (tail_result_to_unbox true) = true
   ∧ check_to_change_representation_fixed no_local tail_result_facts
       tail_result_tables tail_result_cannot_change max_unbox_size false
       (tail_result_to_unbox true) (tail_result_tcr true) = true
-  ∧ check_tail_results tail_result_facts tail_result_tables
-      tail_result_cannot_change (tail_result_to_unbox true) = true
   ∧ check_sets_whole tail_result_facts tail_result_tables
       (tail_result_to_unbox true) (tail_result_tcr true) = true
   ∧ behaves (FlambdaReaperTupledSpec.on_its_own (tail_result_rebuilt true))
-      tail_result_exit
-  ∧ check_tail_results unboxed_closure_facts unboxed_closure_tables []
-      [v 60] = true
-  ∧ check_tail_results read_block_facts read_block_tables [] [v 10] = true
-  ∧ check_tail_results block_to_continuation_facts
-      block_to_continuation_tables [] [v 10] = true
-  ∧ check_tail_results block_from_code_facts block_from_code_tables
-      (derive_cannot_change block_from_code_facts block_from_code_tables)
-      [v 42] = true
-  ∧ check_tail_results nested_block_facts nested_block_tables []
-      [v 11; v 10] = true
-  ∧ check_tail_results unbox_dead_facts unbox_dead_tables
-      unbox_dead_cannot_change unbox_dead_to_unbox = true
-  ∧ check_tail_results dead_callee_facts dead_callee_tables
-      dead_callee_cannot_change (dead_callee_to_unbox true) = true
-  ∧ check_tail_results kept_result_unboxed_facts kept_result_unboxed_tables
-      kept_result_cannot_change (kept_result_to_unbox true) = true
-  ∧ check_tail_results mixed_field_facts mixed_field_tables
-      mixed_field_cannot_change (mixed_field_to_unbox true) = true
-  ∧ check_tail_results escaping_argument_facts escaping_argument_tables
-      escaping_argument_cannot_change (escaping_argument_to_unbox true)
-    = true.
+      tail_result_exit.
 
-(* Why. Without the fixes, the pair [x42] is unboxed: it dominates the
-   result 3 of the code dep of 51, which the code then unboxes. The code
-   50 cannot change its calling convention, and keeps its result 9,
-   which has any source and no use: the tail call of 51 has the decision
-   [Keep] of 9 for a result that 51 unboxes. The seeds of the fix are
-   [x42]; with the seeds of the two other fixes alone, [x42] is still
-   unboxed, and with those of the three, nothing is. *)
+(* Why. The pair [x42] is unboxed: it dominates the result 3 of the code
+   dep of 51, which the code then unboxes. The code 50 cannot change its
+   calling convention, and keeps its result 9, which has any source and
+   no use: the tail call of 51 has the decision [Keep] of 9 for a result
+   that 51 unboxes. No use of [x42] has another source or any source:
+   [x42] is not a seed of the fix. In the mode of the fix, the decision
+   of 9 is [Keep_unused]. *)
 Definition tail_result_cause_statement : Prop :=
   tail_result_to_unbox false = [v 42]
   ∧ mem_pair (v 42) (m 3) tail_result_dominated = true
@@ -1852,8 +1736,11 @@ Definition tail_result_cause_statement : Prop :=
     = [(51, Changing_u [Decided (Keep Value)]
               [Unbox [(Field_block 0 Value, Not_unboxed 64)]]);
        (50, Not_changing_u); (52, Not_changing_u)]
-  ∧ tail_result_seeds_of_unit = [v 42]
-  ∧ derive_to_unbox_with no_local tail_result_facts tail_result_tables
-      tail_result_cannot_change max_unbox_size false tail_result_other_seeds
-    = [v 42]
-  ∧ tail_result_to_unbox true = [].
+  ∧ mem_node (v 42) (fix_seeds tail_result_facts tail_result_tables)
+    = false
+  ∧ fixed_arity_decisions (solution_of_tables tail_result_tables)
+      (fst (unit_unboxed_fields tail_result_facts tail_result_tables
+              tail_result_dominated (tail_result_to_unbox true)
+              tail_result_unit))
+      [m 9] [Value]
+    = [Keep_unused Value].

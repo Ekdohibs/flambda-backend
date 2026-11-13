@@ -75,11 +75,11 @@
      with an unboxed callee, with [Unbox] decisions and with
      [Unbox_my_closure], and [rebuild_function_params_and_body] with
      them.
-   It needs no review, but for the fixes proposed for faults of the
-   compiler's unboxing ([field_reader_seeds], [tail_result_seeds],
-   [escaping_argument_seeds], their checks and [unboxing_relations_with]),
-   which FlambdaReaperUnboxingSpec.v names for review with its
-   statements: that file says what the checks mean, and the test tool
+   It needs no review, but for the fix of faults of the compiler's
+   unboxing, which is not on the branch (the seeds of its rules, its
+   check, [unboxing_relations_with], [Keep_unused] and the mode [fixed]
+   of the rebuild), which FlambdaReaperUnboxingSpec.v names for review
+   with its statements: that file says what the checks mean, and the test tool
    compares the decisions and the rebuilt term with those of the
    compiler's reaper. It is extracted ([derive_dominated],
    [check_dominated], [derive_to_unbox], [check_to_unbox],
@@ -89,8 +89,9 @@
    [unit_unboxed_fields], [unit_changed_representations],
    [unit_calling_convention_changes_u], [unit_my_closure_decisions_u],
    [rebuild_unit_unbox], [rebuild_unit_unbox_repr], and, for the model
-   with the fixes, [fix_seeds], [derive_to_unbox_fixed],
-   [check_to_unbox_fixed] and [check_to_change_representation_fixed]).
+   with the fix, [fix_seeds], [derive_to_unbox_fixed],
+   [check_to_unbox_fixed], [check_to_change_representation_fixed] and
+   [rebuild_unit_unbox_repr_fixed]).
 
    What is transcribed is the reaper run with
    [-reaper-change-calling-conventions] and [-reaper-unbox], the
@@ -196,6 +197,21 @@
    the callee and a constant, has no use. FlambdaReaperUnboxingSpec.v
    has the unit.
 
+   The fix. Its two rules of the analysis are seeds of [cannot_unbox0]
+   ([fix_seeds]), with which the tables are computed again
+   ([unboxing_relations_with]). Its rebuild is the mode [fixed] of
+   [rebuild_expr_u]: the decision [Keep] of the compiler has a flag
+   [unused], which is [Keep_unused] here, for a parameter of a
+   continuation that is kept with no use, and such a parameter is given
+   poison by an [Apply_cont] and by the wrapper of a call, before the
+   case of a disagreement on unboxing. The compiler gives decisions to
+   every continuation, those of fixed arity included (the return and
+   exception continuations of code, whose parameters are those of the
+   code dep); the model gives decisions to these only in the mode of the
+   fix ([code_continuation_decisions]), where they make a difference:
+   without the flag, the decisions of fixed arity keep every parameter,
+   as the model does for a continuation without decisions.
+
    The deliberate differences from the OCaml, each where the model cannot
    follow it or does not have what it reads:
    - Where the OCaml stops with a fatal error, the model does something
@@ -243,6 +259,15 @@
      order of the closures, as the compiler's [Let] of the set does, and
      the projections are dropped; where its representation changes, the
      projections are at the new function slots.
+   - The fix drops the callee of a call of code that changes its calling
+     convention and does not use its [my_closure]
+     ([Keep_my_closure { unused = true }]). The model keeps it, as it does
+     the callee of a call under [Keep_my_closure] that has no use: its
+     calls have a callee, and its machine runs a call by the closure that
+     its callee is. The code does not read the closure, so that the call
+     runs as the compiler's does without it; the traversal gives the
+     callee of a call in code that is used a use, through the witness of
+     the call, so that its binding is kept.
    - A call whose callee is unboxed has no callee in the OCaml, whether
      the code unboxes its [my_closure] ([Unbox_my_closure]) or keeps it
      ([Keep_my_closure], [rewrite_simple_opt]); the model's calls always
@@ -1005,14 +1030,16 @@ Definition check_sets_whole (to_unbox tcr : list node) : bool :=
     (f_constructor F).
 
 (* ------------------------------------------------------------------------ *)
-(* The proposed fixes                                                       *)
+(* The fix                                                                  *)
 (* ------------------------------------------------------------------------ *)
 
-(* The fixes proposed for faults of the compiler's unboxing, which
-   FlambdaReaperUnboxingSpec.v states and says what they are: each is
-   seeds of [cannot_unbox0], allocations that a rule that is not the
-   compiler's forbids to unbox. They are here so that the test tool can
-   run the model with them ([derive_to_unbox_fixed]). *)
+(* The fix of the faults of the compiler's unboxing that
+   FlambdaReaperUnboxingSpec.v states, of which this is the half of the
+   analysis: two rules that conclude [cannot_unbox0], not on the branch,
+   whose seeds are allocations that they forbid to unbox. The half of the
+   rebuild is the mode [fixed] of [rebuild_expr_u] below. They are here
+   so that the test tool can run the model with the fix
+   ([derive_to_unbox_fixed], [rebuild_unit_unbox_repr_fixed]). *)
 
 (* The tables of the rules with the allocations [seeds] added to
    [cannot_unbox0], as a rule that concludes it from relations other than
@@ -1068,123 +1095,65 @@ Definition check_to_change_representation_with (seeds to_unbox tcr : list node)
           || mem_node x tcr)
        (t_has_usage T).
 
-(* The fix of a field read into a name that its source does not dominate
-   (FlambdaReaperUnboxingSpec.v, [mixed_mutable_field_statement]), as what
-   it adds to [cannot_unbox0]: an allocation with a source that is a
-   source of a field of [base] ([constructor]), which a use of [base]
-   reads into a name [v] with a use that the allocation does not
-   dominate. It subsumes the fix of [kept_result_unboxed]. *)
-Definition field_reader_seeds (dominated : list (node * node)) : list node :=
+(* [rev_accessor ~base:alias field ~to_:v; has_usage v] for any field
+   [field] and some [v]: unlike [real_field_read_with_usage], the fields
+   of calls too (a call witness read off a callee, a result read off a
+   witness). *)
+Definition field_read_with_usage (alias : node) : bool :=
+  existsb (fun '(v, _, base) => node_eqb base alias && has_usage v)
+    (f_accessor F).
+
+(* The first rule of the fix, as what it adds to [cannot_unbox0]: an
+   allocation with a use [alias] that has another source, and from which
+   a field is read into a name with a use,
+     [usages allocation_id alias; sources alias alias_source;
+      has_source alias_source; distinct alias_source allocation_id;
+      rev_accessor ~base:alias field ~to_:v; has_usage v]
+     ==> cannot_unbox0 allocation_id.
+   It is the fourth rule of [derived_cannot_change_representation0]
+   without [is_real_field]. *)
+Definition other_source_reader_seeds : list node :=
   flat_map
-    (fun '(base, relation, alias) =>
-       flat_map
-         (fun '(alias', allocation_id) =>
-            if node_eqb alias alias'
-               && has_source allocation_id
-               && existsb
-                    (fun '(v, relation', usage) =>
-                       field_eqb relation relation'
-                       && mem_pair base usage (t_usages T)
-                       && has_usage v
-                       && negb (mem_pair allocation_id v dominated))
-                    (f_accessor F)
-            then [allocation_id]
-            else [])
-         (t_sources T))
-    (f_constructor F).
-
-(* The same fix, as what it asks of a table of [to_unbox]: no allocation
-   that it adds to [cannot_unbox0] is unboxed. *)
-Definition check_field_readers (dominated : list (node * node))
-    (to_unbox : list node) : bool :=
-  forallb (fun x => negb (mem_node x to_unbox))
-    (field_reader_seeds dominated).
-
-(* The fix of a result kept by code that cannot change its calling
-   convention (FlambdaReaperUnboxingSpec.v, [tail_result_statement]), as
-   what it adds to [cannot_unbox0]: an allocation with a source that is
-   a source of a field of [base] ([constructor]), which a use of [base]
-   reads into a result of code that cannot change its calling
-   convention, a field [Return_of_call] of one of its witnesses, as a
-   tail call of that code does. The premises are those of
-   [field_reader_seeds], with such a result in place of a name with a
-   use that the allocation does not dominate: the results of that code
-   are kept even if they have no use. *)
-Definition tail_result_seeds : list node :=
-  flat_map
-    (fun '(base, relation, alias) =>
-       flat_map
-         (fun '(alias', allocation_id) =>
-            if node_eqb alias alias'
-               && has_source allocation_id
-               && existsb
-                    (fun '(v, relation', usage) =>
-                       field_eqb relation relation'
-                       && mem_pair base usage (t_usages T)
-                       && existsb
-                            (fun '(call_witness, v_relation, v') =>
-                               node_eqb v v'
-                               && is_return_of_call v_relation
-                               && witness_cannot_change call_witness)
-                            (f_constructor F))
-                    (f_accessor F)
-            then [allocation_id]
-            else [])
-         (t_sources T))
-    (f_constructor F).
-
-(* The same fix, as what it asks of a table of [to_unbox]: no allocation
-   that it adds to [cannot_unbox0] is unboxed. *)
-Definition check_tail_results (to_unbox : list node) : bool :=
-  forallb (fun x => negb (mem_node x to_unbox)) tail_result_seeds.
-
-(* The fix of a block given to code that keeps its calling convention
-   (FlambdaReaperUnboxingSpec.v,
-   [escaping_parameter_argument_statement]), the half of it that is of
-   the analysis, as what it adds to [cannot_unbox0], for a table
-   [dominated] of [dominated_by_allocation_point]: an allocation that
-   dominates an argument of a call ([argument]) that may call code that
-   cannot change its calling convention, a source of the callee of the
-   call, whose parameter at that argument has a use. *)
-Definition escaping_argument_seeds (dominated : list (node * node))
-    : list node :=
-  flat_map
-    (fun '(arg, i, apply) =>
+    (fun '(allocation_id, alias) =>
        if existsb
-            (fun '(apply', call_witness) =>
-               node_eqb apply apply' && witness_cannot_change call_witness
-               && existsb
-                    (fun '(call_witness', i', param) =>
-                       node_eqb call_witness call_witness' && Nat.eqb i i'
-                       && has_usage param)
-                    (f_parameter F))
+            (fun '(alias', alias_source) =>
+               node_eqb alias alias' && has_source alias_source
+               && negb (node_eqb alias_source allocation_id))
             (t_sources T)
-       then
-         flat_map
-           (fun '(allocation_id, arg') =>
-              if node_eqb arg arg' then [allocation_id] else [])
-           dominated
+          && field_read_with_usage alias
+       then [allocation_id]
        else [])
-    (f_argument F).
+    (t_usages T).
 
-(* The same fix, as what it asks of a table of [to_unbox]: no allocation
-   that it adds to [cannot_unbox0] is unboxed. *)
-Definition check_escaping_arguments (dominated : list (node * node))
-    (to_unbox : list node) : bool :=
-  forallb (fun x => negb (mem_node x to_unbox))
-    (escaping_argument_seeds dominated).
+(* The second rule of the fix: an allocation with a use [alias] of any
+   source, from which a field is read into a name with a use,
+     [usages allocation_id alias; any_source alias;
+      rev_accessor ~base:alias field ~to_:v; has_usage v]
+     ==> cannot_unbox0 allocation_id;
+   the fifth rule of [derived_cannot_change_representation0] without
+   [is_real_field]. *)
+Definition any_source_reader_seeds : list node :=
+  flat_map
+    (fun '(allocation_id, alias) =>
+       if any_source alias && field_read_with_usage alias
+       then [allocation_id]
+       else [])
+    (t_usages T).
 
-(* The seeds of the three fixes, for the table [dominated] that the rule
-   gives. *)
+(* The seeds of the two rules. *)
 Definition fix_seeds : list node :=
-  field_reader_seeds derive_dominated ++ tail_result_seeds
-  ++ escaping_argument_seeds derive_dominated.
+  other_source_reader_seeds ++ any_source_reader_seeds.
 
-(* [to_unbox] as the rules with the fixes give it, and the checks of a
-   table of [to_unbox] and of [to_change_representation] against those
-   rules. [check_to_unbox] rejects a table of [derive_to_unbox_fixed]
-   that differs from [derive_to_unbox]: it is not what the rules
-   without the fixes give. *)
+(* The fix, as what it asks of a table of [to_unbox]: no allocation that
+   it adds to [cannot_unbox0] is unboxed. *)
+Definition check_alias_readers (to_unbox : list node) : bool :=
+  forallb (fun x => negb (mem_node x to_unbox)) fix_seeds.
+
+(* [to_unbox] as the rules with the fix give it, and the checks of a table
+   of [to_unbox] and of [to_change_representation] against those rules.
+   [check_to_unbox] rejects a table of [derive_to_unbox_fixed] that
+   differs from [derive_to_unbox]: it is not what the rules without the
+   fix give. *)
 Definition derive_to_unbox_fixed : list node := derive_to_unbox_with fix_seeds.
 
 Definition check_to_unbox_fixed (to_unbox : list node) : bool :=
@@ -1816,17 +1785,21 @@ Definition unit_changed_representations (is_local : field -> bool)
 
 (* [Unboxing_analysis.param_decision]: one of
    FlambdaReaperCallingConventions.v, [Keep] or [Delete], or [Unbox] with
-   the unboxed fields of the parameter. *)
+   the unboxed fields of the parameter. In the mode of the fix,
+   [Keep_unused] is the [Keep] with [unused = true] of a parameter of a
+   continuation kept though it has no use, which is given poison; the
+   other [Keep]s are [unused = false]. *)
 Inductive decision : Type :=
   | Decided (d : param_decision)
-  | Unbox (fields : unboxed_fields).
+  | Unbox (fields : unboxed_fields)
+  | Keep_unused (kind : flambda_kind).
 
 (* The parameters that a decision makes of [x] ([get_parameters]): [x] if
    kept, the variables of its fields if unboxed. *)
 Definition decision_params (x : variable) (d : decision)
     : list (variable * flambda_kind) :=
   match d with
-  | Decided (Keep kind) => [(x, kind)]
+  | Decided (Keep kind) | Keep_unused kind => [(x, kind)]
   | Decided Delete => []
   | Unbox fields => fields_leaves fields
   end.
@@ -1928,7 +1901,7 @@ Definition ubind_variables (en : unbox_env)
 Definition is_kept_decision (d : decision) : bool :=
   match d with
   | Decided d => is_kept d
-  | Unbox _ => true
+  | Unbox _ | Keep_unused _ => true
   end.
 
 Definition ubind_continuations (en : unbox_env)
@@ -1990,7 +1963,8 @@ Fixpoint freshen_decisions (decisions : list (decision * flambda_kind))
     (next : positive) : list (wrapper_decision * flambda_kind) :=
   match decisions with
   | [] => []
-  | (Decided (Keep _), kind) :: decisions =>
+  | (Decided (Keep _), kind) :: decisions
+  | (Keep_unused _, kind) :: decisions =>
     (Wrapper_keep next, kind) :: freshen_decisions decisions (Pos.succ next)
   | (Decided Delete, kind) :: decisions =>
     (Wrapper_delete, kind) :: freshen_decisions decisions next
@@ -2022,7 +1996,9 @@ Definition wrapper_params (func : list (wrapper_decision * flambda_kind))
    otherwise [None] where one decision unboxes and the other does not
    ([Invalid]). A result beyond the decisions of the continuation, or of
    a continuation that has none, is kept, as a continuation of fixed
-   arity keeps it. *)
+   arity keeps it. In the mode of the fix, a result that the continuation
+   keeps with no use ([Keep_unused]) is poison, whatever the callee does
+   with it. *)
 Fixpoint wrapper_args_u (apply_decisions : list decision)
     (func : list (wrapper_decision * flambda_kind)) : option (list simple) :=
   match func with
@@ -2042,6 +2018,8 @@ Fixpoint wrapper_args_u (apply_decisions : list decision)
          unboxed variables" (#7952): before, a result that the callee
          unboxes and the continuation deletes was the case below. *)
       | Decided Delete, _ => Some rest
+      (* The fix: before the case of a disagreement on unboxing. *)
+      | Keep_unused kind, _ => Some (Const (Poison kind) :: rest)
       (* The case where the compiler stops with a fatal error if
          [has_any_source], a test that is [false] there ("CR ncourant:
          restore this check"). *)
@@ -2088,6 +2066,10 @@ Definition field_read (d : named) : option (field * simple) :=
 
 Section Rebuild.
 
+(* The mode: [false] for the rebuild of the compiler on the branch,
+   [true] for that of the fix, which gives poison for the parameters of
+   continuations that are kept with no use ([Keep_unused]). *)
+Variable fixed : bool.
 Variable F : facts.
 Variable sol : solution.
 Variable cannot_change : node -> bool.
@@ -2514,7 +2496,8 @@ Definition rebuild_changed_static_const (en : rebuild_env)
 
 (* [should_keep_param] of [rebuild]: an unboxed parameter is [Unbox] of
    its fields; any other is kept as FlambdaReaperRebuild.params_to_keep
-   says. *)
+   says, and in the mode of the fix, a parameter kept with no use (the
+   first of an exception handler) is [Keep_unused]. *)
 Definition handler_decisions (is_exn_handler : bool)
     (h : continuation_handler) : list decision :=
   match h with
@@ -2525,10 +2508,29 @@ Definition handler_decisions (is_exn_handler : bool)
          let '((x, kind), keep) := p in
          match unboxed_of_node (Node_variable x) with
          | Some fields => Unbox fields
-         | None => Decided (if keep then Keep kind else Delete)
+         | None =>
+           if fixed && keep && negb (is_var_used sol x kind)
+           then Keep_unused kind
+           else Decided (if keep then Keep kind else Delete)
          end)
       (combine bound (params_to_keep sol is_exn_handler bound))
   end.
+
+(* [should_keep_param] of [rebuild] for the continuations of fixed arity
+   that the model gives decisions, the return and exception
+   continuations of code, in the mode of the fix: every parameter is kept,
+   [Keep_unused] if it has no use, and an unboxed one is [Unbox]. *)
+Definition fixed_arity_decisions (nodes : list node)
+    (kinds : list flambda_kind) : list decision :=
+  map
+    (fun '(n, kind) =>
+       match unboxed_of_node n with
+       | Some fields => Unbox fields
+       | None =>
+         if is_node_used sol n kind then Decided (Keep kind)
+         else Keep_unused kind
+       end)
+    (combine nodes kinds).
 
 (* The arguments given to an unboxed parameter: the variables of the
    argument for the fields of the parameter. *)
@@ -2547,7 +2549,8 @@ Definition unboxed_args (fields : unboxed_fields) (arg : simple)
    and for those unboxed the variables of the argument; the arguments
    beyond the decisions are kept, as by FlambdaReaperRebuild.filter_kept.
    [None] where an argument given to an unboxed parameter is not unboxed
-   alike (a fatal error in the OCaml). *)
+   alike (a fatal error in the OCaml). A parameter kept with no use
+   ([Keep_unused]) is given poison. *)
 Fixpoint get_args (en : rebuild_env) (decisions : list decision)
     (args : list simple) : option (list simple) :=
   match args, decisions with
@@ -2560,6 +2563,7 @@ Fixpoint get_args (en : rebuild_env) (decisions : list decision)
     | Some rest =>
       match d with
       | Decided (Keep _) => Some (rewrite_simple sol_u en arg :: rest)
+      | Keep_unused kind => Some (Const (Poison kind) :: rest)
       | Decided Delete => Some rest
       | Unbox fields =>
         option_map (fun l => map fst l ++ rest) (unboxed_args fields arg)
@@ -2578,6 +2582,7 @@ Fixpoint get_args_with_kinds_u (en : rebuild_env) (decisions : list decision)
       match d with
       | Decided (Keep kind) =>
         Some ((rewrite_simple sol_u en arg, kind) :: rest)
+      | Keep_unused kind => Some ((Const (Poison kind), kind) :: rest)
       | Decided Delete => Some rest
       | Unbox fields =>
         option_map (fun l => l ++ rest) (unboxed_args fields arg)
@@ -2604,6 +2609,7 @@ Fixpoint get_extra_args (en : rebuild_env) (decisions : list decision)
     | Some rest =>
       match d with
       | Decided (Keep _) => Some ((rewrite_simple sol_u en s, kind) :: rest)
+      | Keep_unused kind' => Some ((Const (Poison kind'), kind') :: rest)
       | Decided Delete => Some rest
       | Unbox fields => option_map (fun l => l ++ rest) (unboxed_args fields s)
       end
@@ -2838,6 +2844,36 @@ Definition rebuild_apply_u (en : unbox_env) (ap : apply_expr) : expr :=
       end
     end.
 
+(* The decisions of the return and exception continuations of the code
+   [id], with [metadata] and the change of calling convention [change],
+   in the mode of the fix: for its results those of [change] if the code
+   changes its calling convention, and those of a continuation of fixed
+   arity otherwise; for its exception, those of a continuation of fixed
+   arity. Without a code dep (a fatal error in the OCaml), the decisions
+   of [change] alone. *)
+Definition code_continuation_decisions (id : code_id)
+    (metadata : code_metadata) (change : calling_convention_change_u)
+    (return_continuation exn_continuation : continuation)
+    : list (continuation * list decision) :=
+  let return_decisions :=
+    match change with
+    | Not_changing_u => []
+    | Changing_u _ return_decisions => [(return_continuation, return_decisions)]
+    end
+  in
+  match lookup id code_deps with
+  | Some cd =>
+    match change with
+    | Not_changing_u =>
+      [(return_continuation,
+        fixed_arity_decisions (cd_return cd)
+          (unarize (cm_result_arity metadata)))]
+    | Changing_u _ _ => return_decisions
+    end
+    ++ [(exn_continuation, fixed_arity_decisions [cd_exn cd] [Value])]
+  | None => return_decisions
+  end.
+
 (* The decision of a parameter of code that changes its calling
    convention, at the parameter ([rebuild_function_params_and_body]): an
    unboxed one has the fields of the parameter itself, which have the
@@ -2849,7 +2885,7 @@ Definition param_decision_at (x : variable) (d : decision) : decision :=
     | Some fields' => Unbox fields'
     | None => Unbox fields
     end
-  | Decided _ => d
+  | Decided _ | Keep_unused _ => d
   end.
 
 (* [rebuild_expr] of FlambdaReaperCallingConventions.v, with unboxing. *)
@@ -2968,7 +3004,10 @@ with rebuild_binding_u (en : unbox_env) (binding : static_binding)
 (* [rebuild_code] and [rebuild_function_params_and_body]: code that
    changes its calling convention has the parameters that its decisions
    make, the arities of [changed_code_metadata_u], and its return
-   continuation the decisions of its results. *)
+   continuation the decisions of its results. In the mode of the fix, the
+   return continuation of code that keeps its calling convention, and the
+   exception continuation of all code, have the decisions of continuations
+   of fixed arity, for the nodes of the code dep. *)
 with rebuild_code_u (id : code_id) (c : code) : code :=
   match c with
   | Code params my_closure return_continuation exn_continuation metadata
@@ -2979,12 +3018,18 @@ with rebuild_code_u (id : code_id) (c : code) : code :=
       :: with_kinds params (unarize (cm_params_arity metadata))
     in
     let en :=
-      match change with
-      | Not_changing_u => empty_unbox_env
-      | Changing_u _ return_decisions =>
+      if fixed
+      then
         ubind_continuations empty_unbox_env
-          [(return_continuation, return_decisions)]
-      end
+          (code_continuation_decisions id metadata change return_continuation
+             exn_continuation)
+      else
+        match change with
+        | Not_changing_u => empty_unbox_env
+        | Changing_u _ return_decisions =>
+          ubind_continuations empty_unbox_env
+            [(return_continuation, return_decisions)]
+        end
     in
     let body :=
       if existsb (fun '(x, kind) => is_dead_var sol x kind) bound
@@ -3026,18 +3071,25 @@ End Rebuild.
    [to_change_representation] ([tcr]), and the code deps of the
    traversal. The variables of the unboxed fields are the names after
    every name of the unit, and the wrappers the names after them; the new
-   slots are the names after every slot of the unit. *)
-Definition rebuild_unit_unbox_repr (is_local : field -> bool) (F : facts)
-    (T : tables) (cannot_change : list node)
-    (code_deps : finite_map code_dep) (dominated : list (node * node))
-    (to_unbox tcr : list node) (preserve_direct_calls : bool) (e : expr)
-    : expr :=
+   slots are the names after every slot of the unit. [fixed] is the mode
+   of [rebuild_expr_u]. *)
+Definition rebuild_unit_unbox_repr_mode (fixed : bool)
+    (is_local : field -> bool) (F : facts) (T : tables)
+    (cannot_change : list node) (code_deps : finite_map code_dep)
+    (dominated : list (node * node)) (to_unbox tcr : list node)
+    (preserve_direct_calls : bool) (e : expr) : expr :=
   let '(unboxed, next) := unit_unboxed_fields F T dominated to_unbox e in
-  rebuild_expr_u F (solution_of_tables T) (fun n => mem_node n cannot_change)
-    code_deps preserve_direct_calls (static_names code_ids_bound e)
-    (bound_code_metadata e) unboxed next
+  rebuild_expr_u fixed F (solution_of_tables T)
+    (fun n => mem_node n cannot_change) code_deps preserve_direct_calls
+    (static_names code_ids_bound e) (bound_code_metadata e) unboxed next
     (unit_changed_representations is_local F T dominated to_unbox tcr e)
     empty_unbox_env e.
+
+(* The rebuild of the compiler on the branch, and that of the fix. *)
+Definition rebuild_unit_unbox_repr := rebuild_unit_unbox_repr_mode false.
+
+Definition rebuild_unit_unbox_repr_fixed :=
+  rebuild_unit_unbox_repr_mode true.
 
 (* The rebuild with no change of representation: a set of closures that
    is not unboxed keeps its slots. *)

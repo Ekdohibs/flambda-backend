@@ -155,9 +155,9 @@
    poison is harmless, but the proof here does not show it. In the least
    solution, which the compiler computes, the parameter has no use and
    is deleted, but for the first parameter of an exception handler,
-   which the plain rebuild keeps anyway. The two checks of the fixes of
-   FlambdaReaperUnboxingSpec.v ([check_called_my_closure] and
-   [check_result_receivers]) are about calls and code. *)
+   which the plain rebuild keeps anyway. The check of the fix of
+   FlambdaReaperUnboxingSpec.v ([check_alias_readers]) is about calls and
+   code. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic.
@@ -1720,8 +1720,8 @@ Definition unboxed_reads_example_statement : Prop :=
    checks of the plain statement, those of the change of calling
    conventions ([check_cc_closed] with no code that cannot change,
    [check_apply_widgets], [check_witness_code_ids]), [check_dominated],
-   [check_to_unbox], and [check_result_receivers], the check of the fix
-   of FlambdaReaperUnboxingSpec.kept_result_unboxed; the unit is of
+   [check_to_unbox], and [check_alias_readers], the check of the fix of
+   FlambdaReaperUnboxingSpec.v; the unit is of
    [cc_fragment], and not of [local_unboxing], which has no call. The
    rules unbox [x10], which dominates the parameter [x40], and [x42],
    which dominates the result of the code dep and [x30]: the code 50
@@ -1856,8 +1856,8 @@ Definition unboxed_call_example_statement : Prop :=
     = true
   ∧ CallExample.to_unbox
     = [Node_variable 42%positive; Node_variable 10%positive]
-  ∧ FlambdaReaperUnboxingSpec.check_result_receivers CallExample.facts
-      CallExample.tables CallExample.dominated CallExample.to_unbox
+  ∧ check_alias_readers CallExample.facts CallExample.tables
+      CallExample.to_unbox
     = true
   ∧ local_unboxing CallExample.facts CallExample.tables
       CallExample.dominated CallExample.to_unbox CallExample.unit_expr
@@ -2022,8 +2022,8 @@ Definition unboxed_wrapper_example_statement : Prop :=
     = true
   ∧ WrapperExample.to_unbox
     = [Node_variable 42%positive; Node_variable 10%positive]
-  ∧ FlambdaReaperUnboxingSpec.check_result_receivers WrapperExample.facts
-      WrapperExample.tables WrapperExample.dominated WrapperExample.to_unbox
+  ∧ check_alias_readers WrapperExample.facts WrapperExample.tables
+      WrapperExample.to_unbox
     = true
   ∧ unit_calling_convention_changes_u WrapperExample.facts
       WrapperExample.tables WrapperExample.cannot_change
