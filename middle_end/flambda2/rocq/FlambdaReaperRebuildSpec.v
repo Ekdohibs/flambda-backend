@@ -29,8 +29,9 @@
    solution that passes the checks refines the unit.
 
    This file is to be reviewed: the checks [closure_free],
-   [no_code_no_slots], [no_code], [no_call], [exits_one_value] and
-   [results_kinded], the statements, and the examples, against
+   [no_code_no_slots], [no_code], [no_call], [direct_tail_calls],
+   [exits_one_value] and [results_kinded], the statements, and the
+   examples, against
    FlambdaReaperRebuild.v (the rebuild, which needs no review) and
    FlambdaReaperFlowSpec.v (the meaning of a solution). The proofs are
    in FlambdaReaperRebuildProofs.v, which needs no review.
@@ -136,10 +137,12 @@
      compiler's units, which are well-kinded, meet it; the model asks
      nothing of kinds otherwise (FlambdaWellKindedSpec.v).
    [rebuild_refines_observably_statement] is proved for the units that
-   meet [no_call] in place of [closure_free]: closures and static sets of
-   closures with value slots, projections of function slots and of
-   value slots, code (rebuilt, never called) and deleted code, but no
-   call. A unit without code meets it ([no_code_no_call_statement]), a
+   meet [direct_tail_calls] in place of [closure_free]: closures and
+   static sets of closures with value slots, projections of function
+   slots and of value slots, code and deleted code, and direct calls
+   that return to a way out of the unit or of the code they are in. A
+   unit without calls meets it ([no_call_direct_tail_calls_statement]),
+   a unit without code meets [no_call] ([no_code_no_call_statement]), a
    unit without value slots meets [no_code]
    ([no_code_no_slots_no_code_statement]), and so does a unit without
    closures ([closure_free_no_code_no_slots_statement]). The rebuild keeps
@@ -148,14 +151,27 @@
    with the projections that follow it ([projections_of_set]) if one of
    them has a use, and a static set if one of its symbols has one; it
    keeps code whose code id has a use, rebuilt, and deletes the rest,
-   which no run reads as no code is called. [no_code] asks
-   that a projection of a value slot be into a variable of a kind other
-   than [Region] and [Rec_info]: the rebuild keeps such a variable whether
-   or not it has a use ([is_var_used]), and the proof needs the use to
-   know that the value slot read is kept. The premise [results_kinded] is
-   not used yet. What remains is to drop [no_call]: calls (the masks of
-   the arguments, the wrappers, the callee, the rebuilt bodies of code
-   run).
+   which no call runs: a call reads the code id of its callee, which so
+   has a use. [no_code] asks that a projection of a value slot be into a
+   variable of a kind other than [Region] and [Rec_info]: the rebuild
+   keeps such a variable whether or not it has a use ([is_var_used]), and
+   the proof needs the use to know that the value slot read is kept.
+   [direct_tail_calls] asks of a call that it be direct; that neither its
+   return nor its exception continuation be a handler in scope, so that
+   the rebuild gives it no wrapper and what the code returns or raises
+   leaves the unit; that it pass no extra argument with the exception;
+   that it return one value, as the continuation of the unit takes one
+   ([exits_one_value]); and that its arguments be of kinds other than
+   [Region] and [Rec_info], for the same reason as the projections: the
+   rebuild gives poison to an argument at a parameter that has no use,
+   and the callee keeps a parameter of those kinds. The bodies of code
+   are checked with no handler in scope. The rebuild of a call keeps an
+   argument at a parameter that has a use, as it is (the argument then
+   has a use too, so it is still bound), gives the others poison, and
+   calls the rebuilt code directly or indirectly. The premise
+   [results_kinded] is not used yet. What remains: calls that return to
+   a handler (the wrapper of [make_apply_wrapper]), indirect calls, and
+   extra arguments of the exception.
    The statement holds of more than nothing ([example_statement]): a
    unit with a static block, a block one field of which no load reads, a
    [Let] with no use, and a continuation one parameter of which has no
@@ -166,7 +182,8 @@
    and a static set of closures, without value slots or code; and
    [value_slots_example_statement], up to observation, for a unit whose
    closures have value slots that the rebuild removes, and which exits
-   with a closure; [code_example_statement] for a unit with code. *)
+   with a closure; [code_example_statement] for a unit with code; and
+   [tail_call_example_statement] for a unit with a call. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -347,6 +364,69 @@ with handler_no_call (h : continuation_handler) : bool :=
 (* A unit without code meets it. *)
 Definition no_code_no_call_statement : Prop :=
   ∀ e : expr, no_code e = true -> no_call e = true.
+
+(* Direct tail calls: [no_call], and direct calls whose return and
+   exception continuations are not handlers in scope ([bound]), but ways
+   out of the unit or of the code the call is in; each passes no extra
+   argument with the exception, returns one value, and gives arguments
+   of kinds other than [Region] and [Rec_info]. The bodies of code are
+   checked with no handler in scope. What else a direct call is asked,
+   [in_flow_fragment] asks: the code it names, if the unit binds it, is
+   not tupled and has as many parameters as the call has arguments. *)
+Definition argument_kind_ok (kind : flambda_kind) : bool :=
+  match kind with
+  | Region | Rec_info => false
+  | Value | Naked_number _ => true
+  end.
+
+Definition direct_tail_call (bound : list continuation) (ap : apply_expr)
+    : bool :=
+  match ap_call_kind ap with
+  | Direct _ =>
+    negb (among (ap_continuation ap) bound)
+    && negb (among (ap_exn_continuation ap) bound)
+    && Nat.eqb (length (ap_exn_extra_args ap)) 0
+    && Nat.eqb (length (unarize (ap_return_arity ap))) 1
+    && forallb argument_kind_ok (unarize (ap_args_arity ap))
+  | Indirect => false
+  end.
+
+Fixpoint direct_tail_calls (bound : list continuation) (e : expr) : bool :=
+  match e with
+  | Let _ kind defining_expr body =>
+    named_no_code kind defining_expr && direct_tail_calls bound body
+  | Let_static bindings body =>
+    forallb binding_direct_tail_calls bindings
+    && direct_tail_calls bound body
+  | Let_cont_non_recursive k h body =>
+    handler_direct_tail_calls bound h && direct_tail_calls (k :: bound) body
+  | Let_cont_recursive handlers body =>
+    forallb
+      (fun '(_, h) =>
+         handler_direct_tail_calls (map fst handlers ++ bound) h)
+      handlers
+    && direct_tail_calls (map fst handlers ++ bound) body
+  | Apply ap => direct_tail_call bound ap
+  | Apply_cont _ | Switch _ _ | Invalid => true
+  end
+with handler_direct_tail_calls (bound : list continuation)
+    (h : continuation_handler) : bool :=
+  match h with
+  | Handler _ _ handler => direct_tail_calls bound handler
+  end
+with binding_direct_tail_calls (binding : static_binding) : bool :=
+  match binding with
+  | Bind_code _ c => code_direct_tail_calls c
+  | Bind_deleted_code _ | Bind_symbol _ _ => binding_no_code binding
+  end
+with code_direct_tail_calls (c : code) : bool :=
+  match c with
+  | Code _ _ _ _ _ body => direct_tail_calls [] body
+  end.
+
+(* A unit without calls meets it. *)
+Definition no_call_direct_tail_calls_statement : Prop :=
+  ∀ e : expr, no_call e = true -> direct_tail_calls [] e = true.
 
 (* ======================================================================== *)
 (* Exits                                                                    *)
@@ -1065,7 +1145,7 @@ Definition rebuild_refines_observably_statement : Prop :=
     is_local_slots_only is_local ->
     (∀ f : field, is_local f = false) ∨ projection_free e = true ->
     in_flow_fragment e = true ->
-    no_call e = true ->
+    direct_tail_calls [] e = true ->
     results_kinded [] [] e = true ->
     well_formed_unit u e = true ->
     exits_one_value u e = true ->
@@ -1525,3 +1605,121 @@ Definition results_kinded_needed_statement : Prop :=
   results_kinded [] [] WrapperKindsExample.unit_expr = false
   ∧ ~ program_refines_observably WrapperKindsExample.unit_expr
         WrapperKindsExample.rebuilt.
+
+(* The statement up to observation holds of a unit with a call: a direct
+   tail call of code of two parameters, the second of which has no use,
+   given a variable for each:
+
+     let code f50 (x40, x43) my_closure x41 return k3 exn k4 =
+       k3 x40                         ([x43] has no use)
+     in
+     let x10 = 7 in
+     let x12 = 8 in                   (no use)
+     let x11 = closure at 70 of { 70 = f50 } in
+     x11 (x10, x12) return k1 exn k2  (direct, to f50)
+
+   Its least solution passes the checks. The rebuild keeps the code and
+   the call, removes [x12] and gives the call poison for its second
+   argument; the two units exit with 7. *)
+Module TailCallExample.
+
+Local Open Scope positive_scope.
+
+Definition code50 : code :=
+  Code [40; 43] 41 3 4
+    (make_code_metadata [Singleton Value; Singleton Value] [Singleton Value])
+    (FlowExample.return_to 3 [Var 40]).
+
+Definition call (args : list simple) : apply_expr :=
+  {| ap_callee := Var 11; ap_call_kind := Direct 50; ap_args := args;
+     ap_continuation := 1; ap_exn_continuation := 2;
+     ap_exn_extra_args := [];
+     ap_args_arity := [Singleton Value; Singleton Value];
+     ap_return_arity := [Singleton Value] |}.
+
+Definition unit_expr : expr :=
+  Let_static [Bind_code 50 code50]
+    (Let 10 Value (Simple (Const (Tagged_immediate 7)))
+       (Let 12 Value (Simple (Const (Tagged_immediate 8)))
+          (Let 11 Value (Closure_of_set 70 [(70, 50)] [])
+             (Apply (call [Var 10; Var 12]))))).
+
+Definition solution : tables :=
+  {| t_alias :=
+       [(Node_made 1, Node_made 3); (Node_made 12, Node_made 14);
+        (Node_made 13, Node_code_id 50); (Node_made 14, Node_made 8);
+        (Node_made 2, Node_made 4); (Node_made 3, Node_variable 40);
+        (Node_made 5, Node_variable 11); (Node_made 6, Node_variable 10);
+        (Node_made 7, Node_variable 12);
+        (Node_variable 10, Node_all_constants);
+        (Node_variable 12, Node_all_constants);
+        (Node_variable 40, Node_made 6); (Node_variable 41, Node_made 5);
+        (Node_variable 43, Node_made 7)];
+     t_any_usage :=
+       [Node_all_constants; Node_code_id 50; Node_made 1; Node_made 13;
+        Node_made 2; Node_made 3; Node_made 4; Node_made 6; Node_variable 10;
+        Node_variable 40];
+     t_any_source :=
+       [Node_all_constants; Node_code_id 50; Node_made 1; Node_made 13;
+        Node_made 3; Node_made 6; Node_made 7; Node_variable 10;
+        Node_variable 12; Node_variable 40; Node_variable 43];
+     t_has_usage :=
+       [Node_all_constants; Node_code_id 50; Node_made 1; Node_made 12;
+        Node_made 13; Node_made 14; Node_made 2; Node_made 3; Node_made 4;
+        Node_made 6; Node_made 8; Node_variable 10; Node_variable 11;
+        Node_variable 40];
+     t_has_source :=
+       [Node_all_constants; Node_code_id 50; Node_made 1; Node_made 10;
+        Node_made 11; Node_made 12; Node_made 13; Node_made 14; Node_made 3;
+        Node_made 5; Node_made 6; Node_made 7; Node_made 8; Node_made 9;
+        Node_variable 10; Node_variable 11; Node_variable 12; Node_variable 40;
+        Node_variable 41; Node_variable 43];
+     t_usages :=
+       [(Node_made 12, Node_made 12); (Node_made 14, Node_made 12);
+        (Node_made 8, Node_made 12); (Node_variable 11, Node_variable 11)];
+     t_sources :=
+       [(Node_made 10, Node_made 10); (Node_made 11, Node_made 11);
+        (Node_made 12, Node_made 8); (Node_made 14, Node_made 8);
+        (Node_made 5, Node_variable 11); (Node_made 8, Node_made 8);
+        (Node_made 9, Node_made 9); (Node_variable 11, Node_variable 11);
+        (Node_variable 41, Node_variable 11)];
+     t_reading_field := [];
+     t_escaping_field := [];
+     t_field_used :=
+       [(Node_made 8, Field_code_id_of_call_witness);
+        (Node_made 8, Field_return_of_call (Normal 0%nat));
+        (Node_made 8, Field_return_of_call Exn);
+        (Node_variable 11, Field_call_witness Known_arity_code_pointer)] |}.
+
+Definition rebuilt : expr :=
+  Let_static [Bind_code 50 code50]
+    (Let 10 Value (Simple (Const (Tagged_immediate 7)))
+       (Let 11 Value (Closure_of_set 70 [(70, 50)] [])
+          (Apply (call [Var 10; Const (Poison Value)])))).
+
+End TailCallExample.
+
+Definition tail_call_example_statement : Prop :=
+  in_flow_fragment TailCallExample.unit_expr = true
+  ∧ direct_tail_calls [] TailCallExample.unit_expr = true
+  ∧ results_kinded [] [] TailCallExample.unit_expr = true
+  ∧ well_formed_unit FlowExample.interface TailCallExample.unit_expr = true
+  ∧ exits_one_value FlowExample.interface TailCallExample.unit_expr = true
+  ∧ check_closed FlowExample.is_local
+      (traverse_unit Never FlowExample.interface TailCallExample.unit_expr)
+      TailCallExample.solution
+    = true
+  ∧ check_field_used_exact FlowExample.is_local
+      (traverse_unit Never FlowExample.interface TailCallExample.unit_expr)
+      TailCallExample.solution
+    = true
+  ∧ rebuild_unit_from_tables
+      (traverse_unit Never FlowExample.interface TailCallExample.unit_expr)
+      TailCallExample.solution false TailCallExample.unit_expr
+    = TailCallExample.rebuilt
+  ∧ behaves
+      (State TailCallExample.unit_expr [] [] empty_static_env empty_heap)
+      (Exits 1%positive [Value_const (Tagged_immediate 7)] empty_heap)
+  ∧ behaves
+      (State TailCallExample.rebuilt [] [] empty_static_env empty_heap)
+      (Exits 1%positive [Value_const (Tagged_immediate 7)] empty_heap).
