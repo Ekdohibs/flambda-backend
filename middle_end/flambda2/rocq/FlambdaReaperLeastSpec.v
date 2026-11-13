@@ -88,15 +88,23 @@
      ([check_widgets_read_only], [least_apply_widgets_statement]). With
      the flag [Auto], the delayed facts of a call give aliases and any
      source to a node of their own ([add_apply],
-     [only_if_closure_any_source]), and the traversal of a unit is
-     expected to pass that check: the unit below does; that every unit
-     does is not proved. With [Always], or with [Never] for code that is
-     not of the unit, they give them to the node read off the closure,
-     and two calls of one closure that name two codes make the least
-     solution fail [check_apply_widgets]
-     ([widgets_counterexample_statement]: a unit of the fragment of the
-     statements, a call that runs and one in a handler that is never
-     applied, which names code that the unit does not bind).
+     [only_if_closure_any_source]), and the traversal of every unit
+     passes that check ([traverse_widgets_read_only_statement]), so that
+     the statement of the rebuild with changes of calling convention for
+     a least solution asks nothing of the graph
+     ([least_rebuild_cc_auto_refines_observably_statement]). With
+     [Always], or with [Never] for code that is not of the unit, they
+     give them to the node read off the closure, and two calls of one
+     closure that name two codes make the least solution fail
+     [check_apply_widgets] ([widgets_counterexample_statement]: a unit
+     of the fragment of the statements, a call that runs and one in a
+     handler that is never applied, which names code that the unit does
+     not bind). That unit is not a counterexample to the rebuild: the
+     delayed facts of the second call give the closure any usage too,
+     the code that it calls cannot change its calling convention, and
+     the rebuild refines the unit whatever the flag
+     ([widgets_counterexample_refines_statement]). That every unit is
+     rebuilt so with [Always] and [Never] is not proved.
    - [check_unboxed_reads] (FlambdaReaperUnboxingRefinesSpec.v): a least
      solution passes it where each read of a node that an allocation to
      unbox dominates is of a field that is not local, into a node that
@@ -107,6 +115,17 @@
      returns, has a source and a use, and the field that it reads none
      ([reads_counterexample_statement]). A well-formed unit may bind a
      variable twice: [binders_distinct] is of the names of one binder.
+     The compiler makes no such unit: it opens every binder at fresh
+     names, and the graph of the reaper has one node for a variable. A
+     unit of [local_unboxing] that binds each variable once
+     ([variables_bound_once]) passes the check, for any tables closed
+     under the rules and any allocations to unbox
+     ([bound_once_reads_read_only_statement]): the read of its [Let] is
+     then the one fact that puts something into its variable, but for
+     any source if it is mutable, and a mutable read of a node to unbox
+     is not of the fragment. So the statement of the rebuild with
+     unboxing for the least solution asks nothing of the graph of such a
+     unit ([least_rebuild_unbox_bound_once_refines_observably_statement]).
 
    The statements of the rebuild for the least solution
    ([least_rebuild_refines_observably_statement],
@@ -121,7 +140,9 @@
    ([derive_cannot_change], the least table that passes
    [check_cc_closed]; [derive_dominated]; [derive_to_unbox]); and, where
    a least solution may fail the check, the check of the graph that
-   gives it. *)
+   gives it; with [Auto], or for a unit that binds each variable once,
+   none ([least_rebuild_cc_auto_refines_observably_statement],
+   [least_rebuild_unbox_bound_once_refines_observably_statement]). *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -575,6 +596,54 @@ Definition widgets_counterexample_statement : Prop :=
       (traverse_unit Auto Examples.interface WidgetExample.unit_expr)
     = true.
 
+(* The failure of the check is not one of the rebuild: whatever the
+   flag, the rebuild with changes of calling convention of the unit of
+   [widgets_counterexample_statement], with any least solution, refines
+   the unit. With [Always] and [Never] the delayed facts of the call of
+   [f99], code of which there is no code dep, give [m 14] any source and
+   [s80] any usage ([apply_dep_facts]). The witness of known arity of
+   [f50] ([m 8]), in a field of [s80], has any usage, so that [f50] is
+   in the least table of [cannot_change_calling_convention] of any
+   tables closed under the rules. The call of [f50], which
+   [code_id_actually_directly_called] does not know to call it ([m 14]
+   has any source), keeps its arguments, and [f50] its parameters: the
+   rebuild is the one without changes of calling convention
+   (FlambdaReaperCallingConventionsSpec.
+   rebuild_unit_cc_unchanged_statement). With [Auto], [f50] changes,
+   and the call is known to call it. *)
+Definition widgets_counterexample_refines_statement : Prop :=
+  (∀ (flag : reaper_preserve_direct_calls) (T : tables),
+     flag <> Auto ->
+     check_closed Examples.no_local
+       (traverse_unit flag Examples.interface WidgetExample.unit_expr) T
+     = true ->
+     mem_node (Node_code_id 50%positive)
+       (derive_cannot_change
+          (traverse_unit flag Examples.interface WidgetExample.unit_expr) T)
+     = true)
+  ∧ ∀ (flag : reaper_preserve_direct_calls) (T : tables)
+      (preserve_direct_calls : bool),
+      least_solution Examples.no_local
+        (traverse_unit flag Examples.interface WidgetExample.unit_expr) T ->
+      program_refines_observably WidgetExample.unit_expr
+        (rebuild_unit_cc_from_tables
+           (traverse_unit flag Examples.interface WidgetExample.unit_expr) T
+           (derive_cannot_change
+              (traverse_unit flag Examples.interface WidgetExample.unit_expr)
+              T)
+           (unit_code_deps flag Examples.interface WidgetExample.unit_expr)
+           preserve_direct_calls WidgetExample.unit_expr).
+
+(* With [Auto] the traversal of every unit passes
+   [check_widgets_read_only]: the node that a call of known arity reads
+   off its callee is made by the call, and the delayed facts of the call
+   go to two other nodes that it makes ([add_apply]), so that nothing
+   but the read puts anything into it, and an alias that holds where the
+   callee has any source. Nothing is asked of the unit. *)
+Definition traverse_widgets_read_only_statement : Prop :=
+  ∀ (u : unit_interface) (e : expr),
+    check_widgets_read_only (traverse_unit Auto u e) = true.
+
 (* ======================================================================== *)
 (* [check_unboxed_reads]                                                    *)
 (* ======================================================================== *)
@@ -610,6 +679,87 @@ Definition least_unboxed_reads_statement : Prop :=
     check_unboxed_reads F T (derive_dominated T)
       (derive_to_unbox is_local F T cannot_change max_unbox_size
          lambda_lifting)
+    = true.
+
+(* The variables that a unit binds: those of its [Let]s, with what each
+   is bound to ([let_bindings]), and the parameters of its handlers and
+   of its code and the closures of its code ([param_variables]), the
+   bodies of code included. *)
+Fixpoint let_bindings (e : expr) : list (variable * named) :=
+  match e with
+  | Let x _ d body => (x, d) :: let_bindings body
+  | Let_static bindings body =>
+    flat_map binding_let_bindings bindings ++ let_bindings body
+  | Let_cont_non_recursive _ h body =>
+    handler_let_bindings h ++ let_bindings body
+  | Let_cont_recursive handlers body =>
+    flat_map (fun '(_, h) => handler_let_bindings h) handlers
+    ++ let_bindings body
+  | Apply _ | Apply_cont _ | Switch _ _ | Invalid => []
+  end
+with handler_let_bindings (h : continuation_handler)
+    : list (variable * named) :=
+  match h with
+  | Handler _ _ handler => let_bindings handler
+  end
+with binding_let_bindings (binding : static_binding)
+    : list (variable * named) :=
+  match binding with
+  | Bind_code _ c => code_let_bindings c
+  | Bind_deleted_code _ | Bind_symbol _ _ => []
+  end
+with code_let_bindings (c : code) : list (variable * named) :=
+  match c with
+  | Code _ _ _ _ _ body => let_bindings body
+  end.
+
+Fixpoint param_variables (e : expr) : list variable :=
+  match e with
+  | Let _ _ _ body => param_variables body
+  | Let_static bindings body =>
+    flat_map binding_param_variables bindings ++ param_variables body
+  | Let_cont_non_recursive _ h body =>
+    handler_param_variables h ++ param_variables body
+  | Let_cont_recursive handlers body =>
+    flat_map (fun '(_, h) => handler_param_variables h) handlers
+    ++ param_variables body
+  | Apply _ | Apply_cont _ | Switch _ _ | Invalid => []
+  end
+with handler_param_variables (h : continuation_handler) : list variable :=
+  match h with
+  | Handler params _ handler => params ++ param_variables handler
+  end
+with binding_param_variables (binding : static_binding) : list variable :=
+  match binding with
+  | Bind_code _ c => code_param_variables c
+  | Bind_deleted_code _ | Bind_symbol _ _ => []
+  end
+with code_param_variables (c : code) : list variable :=
+  match c with
+  | Code params my_closure _ _ _ body =>
+    my_closure :: params ++ param_variables body
+  end.
+
+(* Each variable is bound once in the unit. The units of the compiler
+   are so: every binder is opened at fresh names. FlambdaWellFormedSpec.
+   well_formed_unit does not ask it: [binders_distinct] is of the names
+   of one binder. *)
+Definition variables_bound_once (e : expr) : bool :=
+  distinct (map fst (let_bindings e) ++ param_variables e).
+
+(* A unit of the fragment of [local_unboxing] that binds each variable
+   once passes [check_reads_read_only], for tables closed under the rules
+   and any allocations to unbox. *)
+Definition bound_once_reads_read_only_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (to_unbox : list node),
+    is_local_slots_only is_local ->
+    variables_bound_once e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    local_unboxing (traverse_unit flag u e) T (derive_dominated T) to_unbox e
+    = true ->
+    check_reads_read_only is_local (traverse_unit flag u e)
+      (derive_dominated T) to_unbox
     = true.
 
 (* The unit of [unboxed_reads_example_statement], which returns a
@@ -674,7 +824,8 @@ Definition reads_counterexample_statement : Prop :=
       ShadowedReadExample.to_unbox
     = false
   ∧ check_unboxed_reads F T (derive_dominated T) ShadowedReadExample.to_unbox
-    = false.
+    = false
+  ∧ variables_bound_once e = false.
 
 (* ======================================================================== *)
 (* The statements of the rebuild for the least solution                     *)
@@ -735,6 +886,54 @@ Definition least_rebuild_unbox_refines_observably_statement : Prop :=
       (derive_dominated T)
       (least_to_unbox is_local (traverse_unit flag u e) T max_unbox_size
          lambda_lifting)
+    = true ->
+    program_refines_observably e
+      (rebuild_unit_unbox (traverse_unit flag u e) T
+         (derive_cannot_change (traverse_unit flag u e) T)
+         (unit_code_deps flag u e) (derive_dominated T)
+         (least_to_unbox is_local (traverse_unit flag u e) T max_unbox_size
+            lambda_lifting)
+         preserve_direct_calls e).
+
+(* With [Auto], the statement of the rebuild with changes of calling
+   convention for the least solution, without the check of the graph,
+   which the traversal passes ([traverse_widgets_read_only_statement]). *)
+Definition least_rebuild_cc_auto_refines_observably_statement : Prop :=
+  ∀ (is_local : field -> bool) (u : unit_interface) (e : expr) (T : tables)
+    (preserve_direct_calls : bool),
+    is_local_slots_only is_local ->
+    (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+    in_flow_fragment e = true ->
+    any_kind_arguments e = true ->
+    results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    exits_one_value u e = true ->
+    least_solution is_local (traverse_unit Auto u e) T ->
+    program_refines_observably e
+      (rebuild_unit_cc_from_tables (traverse_unit Auto u e) T
+         (derive_cannot_change (traverse_unit Auto u e) T)
+         (unit_code_deps Auto u e) preserve_direct_calls e).
+
+(* For a unit that binds each variable once, the statement of the
+   rebuild with unboxing for the least solution, without the check of the
+   graph ([bound_once_reads_read_only_statement]). *)
+Definition least_rebuild_unbox_bound_once_refines_observably_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (max_unbox_size : nat)
+    (lambda_lifting preserve_direct_calls : bool),
+    is_local_slots_only is_local ->
+    (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+    in_flow_fragment e = true ->
+    static_constants (unit_codes e) e = true ->
+    results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    exits_one_value u e = true ->
+    variables_bound_once e = true ->
+    least_solution is_local (traverse_unit flag u e) T ->
+    local_unboxing (traverse_unit flag u e) T (derive_dominated T)
+      (least_to_unbox is_local (traverse_unit flag u e) T max_unbox_size
+         lambda_lifting)
+      e
     = true ->
     program_refines_observably e
       (rebuild_unit_unbox (traverse_unit flag u e) T
