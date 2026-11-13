@@ -10,3 +10,14 @@ cont_unused_param.fl:
   the model's rebuild against the input: the same
   the compiler's output (14 steps): returns [0: 4]
   the compiler's output against the input: the same
+  with changes of calling convention:
+    the table of the code that keeps its calling convention: the model's passes the check, the compiler's, with its graph, passes it
+    the two tables on the 2 code ids of the unit: the same
+    the decisions on the 1 code ids of the unit: the same, 1 changing
+    code first: parameters [keep val, delete], results [keep val]
+    the model's rebuild and the compiler's output: the same up to bound names
+    the reaper's input (14 steps): returns [0: 4]
+    the model's rebuild (14 steps): returns [0: 4]
+    the model's rebuild against the input: the same
+    the compiler's output (14 steps): returns [0: 4]
+    the compiler's output against the input: the same

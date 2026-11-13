@@ -1,0 +1,20 @@
+(* A change of calling convention: [f], which is not inlined, does not read its
+   second parameter, and no caller reads its second result. It is called twice,
+   directly, through its closure, which does not escape. With changes of
+   calling convention, [f] loses the parameter and the result. *)
+let code inline(never) size(5) f (x, unused) my_closure &my_region my_depth
+      -> k * e : val * val =
+  let y = %int_barith.`add` (x, 1) in
+  cont k (y, x)
+in
+let $Cc_unused_param_result_f = closure f @f &toplevel in
+let a = %opaque (1) in
+let b = %opaque (2) in
+apply direct(f &toplevel) ($Cc_unused_param_result_f : _ -> val * val) (a, b)
+  -> k1 * error
+  where k1 (r, s) =
+    apply direct(f &toplevel) ($Cc_unused_param_result_f : _ -> val * val)
+      (r, b) -> k2 * error
+  where k2 (t, u) =
+    let $camlCc_unused_param_result = Block 0 (t) in
+    cont done ($camlCc_unused_param_result)

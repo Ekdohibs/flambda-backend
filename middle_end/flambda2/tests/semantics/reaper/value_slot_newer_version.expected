@@ -19,3 +19,14 @@ value_slot_newer_version.fl:
   the model's rebuild against the input: the same
   the compiler's output (9 steps): undefined
   the compiler's output against the input: DIFFERENT
+  with changes of calling convention:
+    the table of the code that keeps its calling convention: the model's passes the check, the compiler's, with its graph, passes it
+    the two tables on the 3 code ids of the unit: the same
+    the decisions on the 2 code ids of the unit: the same, 1 changing
+    code call: parameters [keep val], results [keep val]
+    the model's rebuild and the compiler's output: DIFFERENT terms
+    the reaper's input (14 steps): returns [0: 3]
+    the model's rebuild (13 steps): returns [0: 3]
+    the model's rebuild against the input: the same
+    the compiler's output (9 steps): undefined
+    the compiler's output against the input: DIFFERENT

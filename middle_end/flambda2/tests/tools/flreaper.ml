@@ -34,13 +34,14 @@
    An [.fl] file is read and given to Simplify as flsemantics.ml does it (the
    same normalisation of the text, the same test that the unit is well-formed),
    and the unit that Simplify returns, which is what the compiler's reaper is
-   given, is the unit of the comparison. The reaper is run in the mode in which
-   it changes no calling convention and unboxes nothing (the flags
+   given, is the unit of the comparison. The reaper is run in two modes, both
+   without unboxing: first changing no calling convention (the flags
    [-no-reaper-change-calling-conventions] and [-no-reaper-unbox], which the
-   tool sets whatever its command line says: [main]); the mode of
-   [-reaper-preserve-direct-calls] and of [-reaper-local-fields] is the one that
-   the command line gives, the compiler's default unless it says otherwise.
-   Then:
+   tool sets whatever its command line says: [main]), then changing calling
+   conventions, which is the last part of what is printed
+   ([compare_calling_conventions]); the mode of [-reaper-preserve-direct-calls]
+   and of [-reaper-local-fields] is the one that the command line gives, the
+   compiler's default unless it says otherwise. Then:
 
    - The unit is converted to a term of the model by the conversion of
    flsemantics.ml, and the extracted traversal
@@ -115,6 +116,9 @@ module Graph_spec = Flambda2_rocq_semantics.FlambdaReaperGraphSpec
 module Traversal = Flambda2_rocq_semantics.FlambdaReaperTraversal
 module Solution = Flambda2_rocq_semantics.FlambdaReaperSolution
 module Rebuild = Flambda2_rocq_semantics.FlambdaReaperRebuild
+
+module Cc = Flambda2_rocq_semantics.FlambdaReaperCallingConventions
+
 module Model_compare = Flambda2_rocq_semantics.FlambdaCompareSpec
 module Imports = Flambda2_rocq_semantics.FlambdaImportsSpec
 module Rocq_model = Flambda2_rocq_semantics.FlambdaModel
@@ -1001,7 +1005,13 @@ type compiler_side =
   { compiler_facts : Graph_spec.facts;
     compiler_tables : Graph_spec.tables;
     (* Whether every binder of the unit was related ([relate_variables]). *)
-    all_related : bool
+    all_related : bool;
+    (* What the decisions of calling conventions are made from: the database of
+       the solution, the code deps of the traversal, and the code ids met in the
+       graph, each with its node of the model. *)
+    solved : Datalog.database;
+    code_deps : Reaper.Traverse_acc.Code_dep.t Code_id.Map.t;
+    code_ids : (Code_id.t * Graph_spec.node) list
   }
 
 (* The compiler's graph of [unit] and its solution, read into the model's terms.
@@ -1030,7 +1040,16 @@ let compiler_graph (names : unit_names) (unit : Flambda_unit.t)
   let graph = GFG.to_datalog deps in
   let solved = PTA.perform_analysis graph ~analysis_scope:Current_unit in
   let made = Hashtbl.create 64 in
-  let node = model_node names ~variables ~made in
+  let code_ids = ref Code_id.Map.empty in
+  let node name =
+    let node = model_node names ~variables ~made name in
+    Code_id_or_name.pattern_match name
+      ~code_id:(fun code_id ->
+        code_ids := Code_id.Map.add code_id node !code_ids)
+      ~var:(fun _ -> ())
+      ~symbol:(fun _ -> ());
+    node
+  in
   let nodes l = List.map node l in
   let pairs l = List.map (fun (x, y) -> node x, node y) l in
   let module R = GFG.Relations in
@@ -1095,7 +1114,13 @@ let compiler_graph (names : unit_names) (unit : Flambda_unit.t)
           (read2 PTA.Relations.field_of_constructor_is_used solved)
     }
   in
-  { compiler_facts; compiler_tables; all_related }
+  { compiler_facts;
+    compiler_tables;
+    all_related;
+    solved;
+    code_deps = problem.code_deps;
+    code_ids = Code_id.Map.bindings !code_ids
+  }
 
 (* ---- The comparisons -------------------------------------------------- *)
 
@@ -1209,6 +1234,15 @@ let passes ok = if ok then "passes" else "FAILS"
 
 (* ---- The rebuild ------------------------------------------------------ *)
 
+(* The mode of [-reaper-preserve-direct-calls], as the traversal of the model
+   takes it. *)
+let preserve_direct_calls () : Traversal.reaper_preserve_direct_calls =
+  match Features.reaper_preserve_direct_calls () with
+  | Never -> Never
+  | Always -> Always
+  | Zero_alloc -> Zero_alloc
+  | Auto -> Auto
+
 let print_terms () =
   match Sys.getenv_opt "FLREAPER_PRINT_TERMS" with
   | None | Some "" -> false
@@ -1250,21 +1284,10 @@ let verdict (first : Flsemantics.outcome) (second : Flsemantics.outcome) =
    given the number of the first, as [Flsemantics.convert_both] does. A
    difference of the two terms, or of a run, is printed and is not a failure of
    the tool. Setting FLREAPER_PRINT_TERMS prints the three terms. *)
-let compare_rebuild ~(input : Flsemantics.converted)
-    ~(input_unit : Flambda_unit.t) ~(facts : Graph_spec.facts)
-    ~(tables : Graph_spec.tables) ~(compiler_output : Flambda_unit.t) =
-  let preserve_direct_calls =
-    match Features.reaper_preserve_direct_calls () with
-    | Auto | Always -> true
-    | Never | Zero_alloc -> false
-  in
-  let rebuilt : Flsemantics.converted =
-    { input with
-      body =
-        Rebuild.rebuild_unit_from_tables facts tables preserve_direct_calls
-          input.body
-    }
-  in
+let compare_rebuild ~indent ~(input : Flsemantics.converted)
+    ~(input_unit : Flambda_unit.t) ~(rebuilt_body : Rocq_model.expr)
+    ~(compiler_output : Flambda_unit.t) =
+  let rebuilt : Flsemantics.converted = { input with body = rebuilt_body } in
   Flsemantics.Continuations.alias
     (Flambda_unit.return_continuation compiler_output)
     ~same_as:(Flambda_unit.return_continuation input_unit);
@@ -1275,15 +1298,15 @@ let compare_rebuild ~(input : Flsemantics.converted)
     match Flsemantics.convert_unit compiler_output with
     | exception Flsemantics.Unsupported what ->
       Format.printf
-        "  the compiler's output: not converted, the model has not got %t@."
-        what;
+        "%sthe compiler's output: not converted, the model has not got %t@."
+        indent what;
       None
     | output -> Some output
   in
   (match output with
   | None -> ()
   | Some output ->
-    Format.printf "  the model's rebuild and the compiler's output: %s@."
+    Format.printf "%sthe model's rebuild and the compiler's output: %s@." indent
       (if Model_compare.expr_eqb [] [] rebuilt.body output.body
        then "the same up to bound names"
        else "DIFFERENT terms"));
@@ -1301,31 +1324,231 @@ let compare_rebuild ~(input : Flsemantics.converted)
   in
   let run ~title unit =
     let outcome, steps = Flsemantics.run ~statics unit in
-    Format.printf "  %s (%d steps): %a@." title steps Flsemantics.print_outcome
-      outcome;
+    Format.printf "%s%s (%d steps): %a@." indent title steps
+      Flsemantics.print_outcome outcome;
     outcome
   in
   let outcome_input = run ~title:"the reaper's input" input in
   let outcome_rebuilt = run ~title:"the model's rebuild" rebuilt in
-  Format.printf "  the model's rebuild against the input: %s@."
+  Format.printf "%sthe model's rebuild against the input: %s@." indent
     (verdict outcome_input outcome_rebuilt);
   Option.iter
     (fun output ->
       let outcome_output = run ~title:"the compiler's output" output in
-      Format.printf "  the compiler's output against the input: %s@."
+      Format.printf "%sthe compiler's output against the input: %s@." indent
         (verdict outcome_input outcome_output))
     output
 
-(* ---- One example ------------------------------------------------------ *)
+(* ---- Changes of calling convention ------------------------------------ *)
 
-(* The mode of [-reaper-preserve-direct-calls], as the traversal of the model
-   takes it. *)
-let preserve_direct_calls () : Traversal.reaper_preserve_direct_calls =
-  match Features.reaper_preserve_direct_calls () with
-  | Never -> Never
-  | Always -> Always
-  | Zero_alloc -> Zero_alloc
-  | Auto -> Auto
+let print_decision ppf (decision : Cc.param_decision) =
+  match decision with
+  | Keep kind -> Format.fprintf ppf "keep %s" (string_of_kind kind)
+  | Delete -> Format.fprintf ppf "delete"
+
+let print_change ppf (change : Cc.calling_convention_change option) =
+  let decisions =
+    Format.pp_print_list
+      ~pp_sep:(fun ppf () -> Format.fprintf ppf ", ")
+      print_decision
+  in
+  match change with
+  | None -> Format.fprintf ppf "an unboxing, which the model has not got"
+  | Some Not_changing_calling_convention -> Format.fprintf ppf "no change"
+  | Some (Changing_calling_convention (params, results)) ->
+    Format.fprintf ppf "parameters [%a], results [%a]" decisions params
+      decisions results
+
+(* A decision of the compiler ([Unboxing_analysis.param_decision]) as one of the
+   model, which has no [Unbox] and no subkind. *)
+let model_decision (decision : Reaper.Unboxing_analysis.param_decision) :
+    Cc.param_decision option =
+  match decision with
+  | Keep (_, kind) ->
+    Some
+      (Keep
+         (Flsemantics.convert_kind
+            (Flambda2_kinds.Flambda_kind.With_subkind.kind kind)))
+  | Delete -> Some Delete
+  | Unbox _ -> None
+
+let model_change (change : Reaper.Unboxing_analysis.calling_convention_change) :
+    Cc.calling_convention_change option =
+  match change with
+  | Not_changing_calling_convention -> Some Not_changing_calling_convention
+  | Changing_calling_convention { params_decisions; return_decisions; _ } -> (
+    let all decisions =
+      List.fold_right
+        (fun decision decisions ->
+          match model_decision decision, decisions with
+          | Some decision, Some decisions -> Some (decision :: decisions)
+          | None, _ | _, None -> None)
+        decisions (Some [])
+    in
+    match all params_decisions, all return_decisions with
+    | Some params, Some results ->
+      Some (Changing_calling_convention (params, results))
+    | None, _ | _, None -> None)
+
+(* The reaper with changes of calling convention and without unboxing
+   ([-reaper-change-calling-conventions -no-reaper-unbox]), on the same unit,
+   the same graphs and the same solutions as above: the analysis of
+   unboxing_analysis.ml adds to the solution only the table of the code whose
+   calling convention cannot change, which the traversal does not read.
+
+   The model's table is the least ([derive_cannot_change]), and must pass
+   [check_cc_closed], or the tool fails. The compiler's is read off its
+   decisions, as the transcription's header says: the table is not exported, but
+   [Unboxing_analysis.is_changing_calling_convention] is. A code id of the graph
+   is in it unless the traversal has a code dep for it and its calling
+   convention changes ([get_calling_convention_change] is a fatal error on code
+   of the unit that has none, deleted code). Both tables are checked with
+   [check_cc_closed], and compared on the code ids of the unit; the decisions of
+   the model ([unit_calling_convention_changes]) are compared with those of
+   [compute_code_changes], a code id of the unit that has no code dep having
+   none; and the model's rebuild ([rebuild_unit_cc_from_tables]) is compared
+   with what [Reaper.run] returns with the two flags, as [compare_rebuild] does.
+   The model reads every indirect call as one of unknown arity, which keeps the
+   code it may call from changing ([cc_code_id_unknown_arity]), where the
+   compiler's call of known arity does not; that difference is expected. *)
+let compare_calling_conventions ~(input : Flsemantics.converted)
+    ~(input_unit : Flambda_unit.t) ~(unit_code_ids : Graph_spec.node list)
+    ~(model_facts : Graph_spec.facts) ~(model_tables : Graph_spec.tables)
+    ~(compiler : compiler_side) ~cmx_loader
+    (simplified : Simplify.simplify_result) : bool =
+  let indent = "    " in
+  Oxcaml_flags.Flambda2.reaper_change_calling_conventions
+    := Oxcaml_flags.Set true;
+  Oxcaml_flags.Flambda2.reaper_unbox := Oxcaml_flags.Set false;
+  Format.printf "  with changes of calling convention:@.";
+  let flag = preserve_direct_calls () in
+  let interface = Flsemantics.interface input in
+  let model_table = Cc.derive_cannot_change model_facts model_tables in
+  let model_closed = Cc.check_cc_closed model_facts model_tables model_table in
+  let ua =
+    Reaper.Unboxing_analysis.perform_analysis compiler.solved
+      ~analysis_scope:Current_unit
+  in
+  let changes =
+    Reaper.Unboxing_analysis.compute_code_changes ua
+      ~analysis_scope:Current_unit
+      ~rewrite_kind_with_subkind:(fun _ kind -> kind)
+      ~rewrite_result_types:(fun ~my_closure:_ ~params:_ ~results:_ _ ->
+        Flambda2_lattices.Or_unknown_or_bottom.Unknown)
+      ~code_deps:compiler.code_deps
+  in
+  let compiler_change code_id =
+    if Code_id.Map.mem code_id compiler.code_deps
+    then
+      Reaper.Unboxing_analysis.get_calling_convention_change changes
+        ~analysis_scope:Current_unit code_id
+    else Reaper.Unboxing_analysis.Not_changing_calling_convention
+  in
+  let compiler_table =
+    List.filter_map
+      (fun (code_id, node) ->
+        match compiler_change code_id with
+        | Not_changing_calling_convention -> Some node
+        | Changing_calling_convention _ -> None)
+      compiler.code_ids
+  in
+  let compiler_closed =
+    Cc.check_cc_closed compiler.compiler_facts compiler.compiler_tables
+      compiler_table
+  in
+  Format.printf
+    "%sthe table of the code that keeps its calling convention: the model's %s \
+     the check, the compiler's, with its graph, %s it@."
+    indent (passes model_closed) (passes compiler_closed);
+  if model_closed
+  then (
+    let can_change table node =
+      if Graph_spec.mem_node node table then "keeps" else "may change"
+    in
+    (match
+       List.filter
+         (fun node ->
+           Graph_spec.mem_node node model_table
+           <> Graph_spec.mem_node node compiler_table)
+         unit_code_ids
+     with
+    | [] ->
+      Format.printf
+        "%sthe two tables on the %d code ids of the unit: the same@." indent
+        (List.length unit_code_ids)
+    | differences ->
+      List.iter
+        (fun node ->
+          Format.printf
+            "%s%a: model %s its calling convention, compiler %s it@." indent
+            print_node node
+            (can_change model_table node)
+            (can_change compiler_table node))
+        differences);
+    let deps = Cc.unit_code_deps flag interface input.body in
+    let model_decisions =
+      Cc.unit_calling_convention_changes model_tables model_table deps
+        input.body
+    in
+    let decisions =
+      List.map
+        (fun (id, model) ->
+          let compiler =
+            match Flsemantics.Code_ids.name_of id with
+            | Some code_id -> model_change (compiler_change code_id)
+            | None -> Some Cc.Not_changing_calling_convention
+          in
+          id, Some model, compiler)
+        model_decisions
+    in
+    let changing =
+      List.filter
+        (fun (_, model, _) ->
+          match model with
+          | Some (Cc.Changing_calling_convention _) -> true
+          | Some Cc.Not_changing_calling_convention | None -> false)
+        decisions
+    in
+    (match
+       List.filter (fun (_, model, compiler) -> model <> compiler) decisions
+     with
+    | [] ->
+      Format.printf
+        "%sthe decisions on the %d code ids of the unit: the same, %d \
+         changing@."
+        indent (List.length decisions) (List.length changing)
+    | differences ->
+      List.iter
+        (fun (id, model, compiler) ->
+          Format.printf "%s%a: model %a; compiler %a@." indent print_node
+            (Graph_spec.Node_code_id id) print_change model print_change
+            compiler)
+        differences);
+    List.iter
+      (fun (id, model, _) ->
+        Format.printf "%s%a: %a@." indent print_node
+          (Graph_spec.Node_code_id id) print_change model)
+      changing;
+    let preserve =
+      match Features.reaper_preserve_direct_calls () with
+      | Auto | Always -> true
+      | Never | Zero_alloc -> false
+    in
+    let rebuilt_body =
+      Cc.rebuild_unit_cc_from_tables model_facts model_tables model_table deps
+        preserve input.body
+    in
+    let reaped =
+      Reaper.Reaper.run ~machine_width:Sixty_four ~cmx_loader
+        ~all_code:simplified.all_code
+        ~final_typing_env:(With_types simplified.final_typing_env)
+        ~free_names:simplified.free_names simplified.unit
+    in
+    compare_rebuild ~indent ~input ~input_unit ~rebuilt_body
+      ~compiler_output:reaped.unit);
+  model_closed
+
+(* ---- One example ------------------------------------------------------ *)
 
 let print_graphs () =
   match Sys.getenv_opt "FLREAPER_PRINT_GRAPHS" with
@@ -1356,7 +1579,7 @@ let check ~filename ~cmx_loader (simplified : Simplify.simplify_result) : bool =
     let model_exact =
       Solution.check_field_used_exact is_local model_facts model_tables
     in
-    let { compiler_facts; compiler_tables; all_related } =
+    let ({ compiler_facts; compiler_tables; all_related; _ } as compiler) =
       compiler_graph names unit ~input:input.body
         ~free_names:simplified.free_names
     in
@@ -1398,17 +1621,36 @@ let check ~filename ~cmx_loader (simplified : Simplify.simplify_result) : bool =
       print_graph ~title:"the graph of the compiler" compiler_facts;
       print_tables ~title:"the compiler's solution" compiler_tables);
     let checked = model_closed && model_exact in
-    (if checked
-     then
-       let reaped =
-         Reaper.Reaper.run ~machine_width:Sixty_four ~cmx_loader
-           ~all_code:simplified.all_code
-           ~final_typing_env:(With_types simplified.final_typing_env)
-           ~free_names:simplified.free_names unit
-       in
-       compare_rebuild ~input ~input_unit:unit ~facts:model_facts
-         ~tables:model_tables ~compiler_output:reaped.unit);
-    checked
+    if not checked
+    then false
+    else
+      let reaped =
+        Reaper.Reaper.run ~machine_width:Sixty_four ~cmx_loader
+          ~all_code:simplified.all_code
+          ~final_typing_env:(With_types simplified.final_typing_env)
+          ~free_names:simplified.free_names unit
+      in
+      let preserve =
+        match Features.reaper_preserve_direct_calls () with
+        | Auto | Always -> true
+        | Never | Zero_alloc -> false
+      in
+      compare_rebuild ~indent:"  " ~input ~input_unit:unit
+        ~rebuilt_body:
+          (Rebuild.rebuild_unit_from_tables model_facts model_tables preserve
+             input.body)
+        ~compiler_output:reaped.unit;
+      compare_calling_conventions ~input ~input_unit:unit
+        ~unit_code_ids:
+          (List.filter
+             (fun (node : Graph_spec.node) ->
+               match node with
+               | Node_code_id _ -> true
+               | Node_variable _ | Node_symbol _ | Node_all_constants
+               | Node_made _ ->
+                 false)
+             (unit_nodes names))
+        ~model_facts ~model_tables ~compiler ~cmx_loader simplified
 
 (* The example in [filename], read and given to Simplify as flsemantics.ml does
    it ([Flsemantics.check_file]). Whether nothing made the tool fail. *)
@@ -1467,7 +1709,8 @@ let main () =
   Compenv.parse_arguments (ref Sys.argv) defer_file "flreaper";
   Location.read_clflags_from_env ();
   (* The reaper without changes of calling convention and without unboxing,
-     whatever the command line said: the model's rebuild is of that mode. *)
+     whatever the command line said, for the first comparison;
+     [compare_calling_conventions] sets the first flag for the second. *)
   Oxcaml_flags.Flambda2.reaper_change_calling_conventions
     := Oxcaml_flags.Set false;
   Oxcaml_flags.Flambda2.reaper_unbox := Oxcaml_flags.Set false;

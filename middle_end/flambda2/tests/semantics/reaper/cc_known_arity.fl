@@ -1,0 +1,26 @@
+(* The closure of [f] comes back from [pass], which is not inlined, so Simplify
+   does not know it, and is called with a known arity. The reaper knows that
+   only [f] is called there. The model reads an indirect call as one of unknown
+   arity, which keeps the code it calls from changing its calling convention
+   ([cc_code_id_unknown_arity]); the compiler's call of known arity does not,
+   so the two may differ here, as is expected. *)
+let code inline(never) size(1) pass (g) my_closure &my_region my_depth
+      -> k * e =
+  cont k (g)
+in
+let $Cc_known_arity_pass = closure pass @pass &toplevel in
+let code inline(never) size(5) f (x, unused) my_closure &my_region my_depth
+      -> k * e : val * val =
+  let y = %int_barith.`add` (x, 1) in
+  cont k (y, x)
+in
+let $Cc_known_arity_f = closure f @f &toplevel in
+let a = %opaque (1) in
+let b = %opaque (2) in
+apply direct(pass &toplevel) $Cc_known_arity_pass ($Cc_known_arity_f)
+  -> k0 * error
+  where k0 (g) =
+    apply &toplevel (g : val * val -> val * val) (a, b) -> k1 * error
+  where k1 (r, s) =
+    let $camlCc_known_arity = Block 0 (r) in
+    cont done ($camlCc_known_arity)

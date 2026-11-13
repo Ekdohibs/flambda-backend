@@ -1,0 +1,23 @@
+cc_wrapper.fl:
+  the graph: 68 facts in the model, 68 in the compiler
+  the model's solution: passes the check of closure, passes the check of field_of_constructor_is_used
+  the compiler's solution, with its graph: passes the check of closure, passes the check of field_of_constructor_is_used
+  the facts of the two graphs on the names of the unit: the same (16)
+  the two solutions on the 17 names of the unit: the same
+  the model's rebuild and the compiler's output: the same up to bound names
+  the reaper's input (17 steps): returns [0: 4]
+  the model's rebuild (19 steps): returns [0: 4]
+  the model's rebuild against the input: the same
+  the compiler's output (19 steps): returns [0: 4]
+  the compiler's output against the input: the same
+  with changes of calling convention:
+    the table of the code that keeps its calling convention: the model's passes the check, the compiler's, with its graph, passes it
+    the two tables on the 2 code ids of the unit: the same
+    the decisions on the 1 code ids of the unit: the same, 1 changing
+    code f: parameters [keep val, delete], results [keep val, keep val]
+    the model's rebuild and the compiler's output: the same up to bound names
+    the reaper's input (17 steps): returns [0: 4]
+    the model's rebuild (19 steps): returns [0: 4]
+    the model's rebuild against the input: the same
+    the compiler's output (19 steps): returns [0: 4]
+    the compiler's output against the input: the same

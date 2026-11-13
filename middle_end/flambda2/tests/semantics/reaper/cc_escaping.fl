@@ -1,0 +1,19 @@
+(* cc_unused_param_result.fl with the closure of [f] escaping: it is put in the
+   block of the unit, so other code may call it with the calling convention it
+   has, and it must keep it. *)
+let code inline(never) size(5) f (x, unused) my_closure &my_region my_depth
+      -> k * e : val * val =
+  let y = %int_barith.`add` (x, 1) in
+  cont k (y, x)
+in
+let $Cc_escaping_f = closure f @f &toplevel in
+let a = %opaque (1) in
+let b = %opaque (2) in
+apply direct(f &toplevel) ($Cc_escaping_f : _ -> val * val) (a, b)
+  -> k1 * error
+  where k1 (r, s) =
+    apply direct(f &toplevel) ($Cc_escaping_f : _ -> val * val) (r, b)
+      -> k2 * error
+  where k2 (t, u) =
+    let $camlCc_escaping = Block 0 (t, $Cc_escaping_f) in
+    cont done ($camlCc_escaping)
