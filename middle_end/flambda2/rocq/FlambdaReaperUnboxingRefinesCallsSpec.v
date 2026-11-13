@@ -25,9 +25,11 @@
  * DEALINGS IN THE SOFTWARE.                                                  *
  ******************************************************************************)
 
-(* The rebuild with unboxing, in the mode of the fix, refines its unit
-   across calls: code whose parameters and results are unboxed, called
-   directly, with or without the wrapper of [make_apply_wrapper].
+(* The rebuild with unboxing, in the mode of the fix and in that of its
+   variant, refines its unit across calls: code whose parameters and
+   results are unboxed, and code that keeps its calling convention, called
+   directly, in tail position or not, with or without the wrapper of
+   [make_apply_wrapper].
 
    This file is to be reviewed: the fragment ([calls_unboxing]), the
    statements and the examples, against FlambdaReaperUnboxing.v and
@@ -57,17 +59,25 @@
    the rebuilt unit refines the unit up to observation. It is that
    statement composed with the first.
 
+   [rebuild_unbox_fixed_tail_refines_cc_statement] and
+   [rebuild_unbox_fixed_tail_refines_observably_statement]: the same of
+   the variant of the fix ([rebuild_unit_unbox_fixed_tail]).
+
    [make_apply_wrapper_u] gives poison to a parameter of the continuation
    of a call kept with no use ([Keep_unused]) whatever the callee does
-   with the result. A variant passes a result that the callee keeps
-   through instead (so that the call needs no wrapper if that is all it
-   would do), and gives poison only for a result that the callee unboxes
-   or deletes. The statements are proved of the model as it is, the
-   fix; the proof of the one case where the two differ is that of either.
-   In this model a parameter of a handler is kept with no use only if it
-   is the first of an exception handler, which a well-formed unit never
-   makes the continuation of a call: the case is there for the first
-   statement only.
+   with the result. The variant (the mode [tail] of
+   FlambdaReaperUnboxing.v) passes a result that the callee keeps through
+   instead, so that the call needs no wrapper if that is all it would do,
+   and gives poison only for a result that the callee unboxes or deletes.
+   The two differ on a call whose continuation keeps a result with no use
+   and whose callee keeps it: in this model, a call in tail position from
+   code that keeps its calling convention and whose result has no use
+   (the first parameter of an exception handler is the other parameter
+   kept with no use, and a well-formed unit never makes such a handler the
+   continuation of a call). The fix returns to a wrapper that gives
+   poison, and the call is no longer in tail position; the variant leaves
+   it in tail position. Both refine the unit: the relation lets the
+   parameter be anything of its kind ([tail_example_statement]).
 
    [fixed_call_example_statement], [fixed_wrapper_example_statement]: the
    units of FlambdaReaperUnboxingRefinesSpec.CallExample (a call of code
@@ -77,6 +87,14 @@
    the test tool, are of the fragment, the rebuild in the mode of the fix
    makes the terms that the rebuild of the branch makes, and the rebuilt
    units refine the units up to observation.
+
+   [tail_example_statement]: a unit whose code 51, which keeps its calling
+   convention and whose result has no use, calls the code 50 in tail
+   position, with the tables of the least solution: it is of the fragment,
+   the variant of the fix rebuilds it as the change of calling conventions
+   alone does, with the call in tail position, the fix makes the call
+   return to a wrapper, and both rebuilt units refine the unit up to
+   observation.
 
    The fragment ([calls_unboxing]), for the unboxed fields that the tables
    give ([unit_unboxed_fields]), the solution and the table:
@@ -91,29 +109,42 @@
      the fix ([handler_decisions], or the decisions of the results of
      code), whether the change of calling conventions keeps it, and its
      kind ([pdesc_ok]: an unboxed parameter with fields is kept, and is a
-     value).
+     value); and by whether they may be applied or returned to: a handler
+     and the return continuation of code may be, the exception
+     continuation of code ([exn_pdescs]) is only that of the calls in its
+     body ([apply_cont_ok2], [exn_cont_ok]).
    - Closures: a [Let] of a closure of a set with no value slot, whose
      other closures are not projected ([closure_binding_ok]).
-   - Code ([calls_code]): every code of the unit changes its calling
-     convention ([code_pdescs]), keeps its [my_closure], which is not
-     unboxed, has as many parameters as its arity, each unboxed as the
-     parameter of its code dep is, at the same paths ([code_param_ok]),
-     does not raise ([exn] is not free in its body: an exception would
-     reach a way out of the unit), and its body is of the fragment, with
-     its return continuation described by the decisions of its results.
-     As the exception continuation of a call is not a handler of the
-     term, there is no call in the body of code.
+   - Code ([calls_code]): code of the unit keeps its [my_closure], which
+     is not unboxed, and changes its calling convention, or keeps it, is
+     not tupled and unboxes no result ([code_pdescs]). It has as many
+     parameters as its arity, each
+     unboxed as the parameter of its code dep is, at the same paths, or
+     not unboxed if the code keeps its calling convention
+     ([code_param_ok]), does not raise (its exception continuation is
+     only that of the calls in its body), and its body is of the
+     fragment, with its return continuation described by the decisions
+     of its results: those of the change, or those of a continuation of
+     fixed arity ([Keep] or [Keep_unused]), which the first rebuild keeps
+     with no mask.
    - Calls ([call_ok]): direct, of the code they are known to call, which
      has one group of parameters and one result, at the arities of that
      code, by a variable that is used and not unboxed, with no extra
-     argument for the exception continuation, which is not a handler of
-     the term, returning to a handler of the term ("results returned to
-     handlers": no tail call). Each argument is
-     given to a parameter of the code as [arg_ok] says. Each result is
-     given to a parameter of the handler of the same kind ([result_ok]):
-     one deleted or kept with no use, whatever the callee does with it;
-     one kept, of a result that the callee keeps or deletes; one unboxed,
-     of a result that the callee unboxes alike. Otherwise the call does
+     argument for the exception continuation, which is a way out of the
+     unit or that of the code they are in ([exn_cont_ok]), returning to a
+     handler of the term or, in tail position, to the return continuation
+     of the code they are in. Each argument is given to a parameter of
+     the code as [arg_ok] says; to code that keeps its calling
+     convention, both rebuilds give the arguments that the callee uses as
+     they are and the others as poison (FlambdaReaperRebuild.v,
+     [rebuild_arguments]), so the two must read the same uses and an
+     argument given as it is be a constant, a symbol or a name with a use
+     ([kept_args_ok]). Each result is given to a parameter of the
+     continuation of the same kind ([result_ok]): one deleted or kept with
+     no use, whatever the callee does with it; one kept, of a result that
+     the callee keeps (with a use, if the callee keeps its calling
+     convention) or deletes; one unboxed, of a result that the callee
+     unboxes alike. Otherwise the call does
      not return in the rebuild with unboxing ([wrapper_args_u] fails: the
      known faults of the branch, which the fix keeps from happening by
      the rules). A result that the callee unboxes with no field is,
@@ -134,7 +165,8 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaReaperGraphSpec FlambdaReaperTraversal FlambdaReaperSolution
   FlambdaReaperFlowSpec FlambdaReaperRebuild FlambdaReaperRebuildSpec
   FlambdaReaperCallingConventions FlambdaReaperUnboxing
-  FlambdaUnusedStaticsSpec FlambdaReaperUnboxingRefinesSpec.
+  FlambdaUnusedStaticsSpec FlambdaReaperUnboxingRefinesSpec
+  FlambdaReaperLeast.
 From OxCamlFlambda2 Require FlambdaReaperTupledSpec
   FlambdaReaperCallingConventionsSpec FlambdaReaperUnboxingSpec.
 Import ListNotations.
@@ -254,13 +286,31 @@ Fixpoint args_ok2 (kinds : finite_map flambda_kind) (ps : list pdesc)
   | p :: ps, a :: args => arg_ok kinds p a && args_ok2 kinds ps args
   end.
 
-(* [C] describes the continuations in scope, each with whether it is a
-   handler of the term. *)
+(* [C] describes the continuations in scope, each with whether it may be
+   applied or returned to: a handler of the term or the return
+   continuation of code may be, the exception continuation of code
+   ([exn_pdescs]) is only that of the calls in its body. *)
 Definition apply_cont_ok2 (kinds : finite_map flambda_kind)
     (C : finite_map (list pdesc * bool)) (ac : apply_cont) : bool :=
   match lookup (ac_continuation ac) C with
-  | Some (ps, _) => args_ok2 kinds ps (ac_args ac)
+  | Some (ps, true) => args_ok2 kinds ps (ac_args ac)
+  | Some (_, false) => false
   | None => forallb (plain_simple unboxed) (ac_args ac)
+  end.
+
+(* The exception continuation of code, which the first rebuild keeps as
+   it is, described as a continuation of fixed arity whose parameter has
+   any use. *)
+Definition exn_pdescs : list pdesc := [Pdesc (Decided (Keep Value)) true Value].
+
+(* The exception continuation [e] of a call: a way out of the unit, or that
+   of the code the call is in. *)
+Definition exn_cont_ok (C : finite_map (list pdesc * bool)) (e : continuation)
+    : bool :=
+  match lookup e C with
+  | None => true
+  | Some ([Pdesc (Decided (Keep Value)) true Value], false) => true
+  | Some _ => false
   end.
 
 (* The parameters of a handler, as the two rebuilds have them. *)
@@ -283,8 +333,17 @@ Fixpoint pdescs_of (ds : list decision) (keeps : list bool)
   | _, _, _ => []
   end.
 
-(* The parameters and the results of code [id] that changes its calling
-   convention, as the two rebuilds have them. *)
+Definition is_unbox (d : decision) : bool :=
+  match d with
+  | Unbox _ => true
+  | Decided _ | Keep_unused _ => false
+  end.
+
+(* The parameters and the results of code [id], as the two rebuilds have
+   them: for code that changes its calling convention, its decisions; for
+   code that keeps it, every parameter kept, and the decisions of its
+   return continuation, which has a fixed arity: none unboxes a result (a
+   caller would not expect it), and the code is not tupled. *)
 Definition code_pdescs (id : code_id) (metadata : code_metadata)
     : option (list pdesc * list pdesc) :=
   match
@@ -297,8 +356,42 @@ Definition code_pdescs (id : code_id) (metadata : code_metadata)
     Some (pdescs_of pd (map is_kept pd_cc) (unarize (cm_params_arity metadata)),
           pdescs_of rd (map is_kept rd_cc)
             (unarize (cm_result_arity metadata)))
+  | Not_changing_u, Not_changing_calling_convention =>
+    match lookup id code_deps with
+    | Some cd =>
+      let kinds := unarize (cm_result_arity metadata) in
+      let rd := fixed_arity_decisions sol unboxed (cd_return cd) kinds in
+      if cm_is_tupled metadata || existsb is_unbox rd
+      then None
+      else
+        Some (map (fun kind => Pdesc (Decided (Keep kind)) true kind)
+                (unarize (cm_params_arity metadata)),
+              pdescs_of rd (map (fun _ => true) rd) kinds)
+    | None => None
+    end
   | _, _ => None
   end.
+
+(* The arguments of a call of [f], of code that keeps its calling
+   convention, which both rebuilds give as they are where the callee uses
+   them and as poison elsewhere: the two read the same uses, the second
+   with the names unboxed taken to have none, and each argument given as
+   it is is a constant, a symbol or a name with a use. *)
+Definition kept_args_ok (f : variable) (args : list simple) : bool :=
+  let mask :=
+    arguments_used_by_known_arity_call F sol (Node_variable f) args
+  in
+  forallb2 Bool.eqb mask
+    (arguments_used_by_known_arity_call F
+       (solution_without_unboxed sol unboxed) (Node_variable f) args)
+  && forallb2
+       (fun keep a =>
+          negb keep
+          || match a with
+             | Var z => s_has_usage sol (Node_variable z)
+             | Symbol _ | Const _ => true
+             end)
+       mask args.
 
 (* The parameter [k] of the handler that a call returns to, given the
    result [r] of the callee. *)
@@ -342,7 +435,14 @@ Definition call_ok (kinds : finite_map flambda_kind)
            && forallb pdesc_ok pds && forallb pdesc_ok rds
            && args_ok2 kinds pds (ap_args ap)
            && match ap_exn_extra_args ap with [] => true | _ :: _ => false end
-           && is_none (lookup (ap_exn_continuation ap) C)
+           && exn_cont_ok C (ap_exn_continuation ap)
+           && match
+                code_change_u sol cannot_change code_deps unit_code_ids
+                  unboxed id metadata
+              with
+              | Not_changing_u => kept_args_ok f (ap_args ap)
+              | Changing_u _ _ => true
+              end
            && match lookup (ap_continuation ap) C with
               | Some (kps, true) => forallb2 result_ok kps rds
               | _ => false
@@ -444,11 +544,10 @@ with calls_code (id : code_id) (c : code) {struct c} : bool :=
                  unboxed id)
          && plain_simple unboxed (Var my_closure)
          && negb (Pos.eqb ret exn)
-         && negb (among exn (free_continuations_of_expr body))
          && calls_expr
               (rev ((my_closure, Value)
                     :: with_kinds params (unarize (cm_params_arity metadata))))
-              [(ret, (rds, false))] body
+              [(ret, (rds, true)); (exn, (exn_pdescs, false))] body
        | None => false
        end
   end.
@@ -485,6 +584,15 @@ Definition rebuild_unit_unbox_fixed (F : facts) (T : tables)
     (preserve_direct_calls : bool) (e : expr) : expr :=
   rebuild_unit_unbox_repr_fixed (fun _ => false) F T cannot_change code_deps
     dominated to_unbox [] preserve_direct_calls e.
+
+(* The same, in the variant of the fix that passes on a result that the
+   callee keeps to a parameter kept with no use. *)
+Definition rebuild_unit_unbox_fixed_tail (F : facts) (T : tables)
+    (cannot_change : list node) (code_deps : finite_map code_dep)
+    (dominated : list (node * node)) (to_unbox : list node)
+    (preserve_direct_calls : bool) (e : expr) : expr :=
+  rebuild_unit_unbox_repr_fixed_tail (fun _ => false) F T cannot_change
+    code_deps dominated to_unbox [] preserve_direct_calls e.
 
 (* ======================================================================== *)
 (* The statements                                                           *)
@@ -534,6 +642,50 @@ Definition rebuild_unbox_fixed_refines_observably_statement : Prop :=
       (rebuild_unit_unbox_fixed (traverse_unit flag u e) T cannot_change
          (unit_code_deps flag u e) dominated to_unbox preserve_direct_calls e).
 
+Definition rebuild_unbox_fixed_tail_refines_cc_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (dominated : list (node * node)) (to_unbox : list node)
+    (preserve_direct_calls : bool),
+    is_local_slots_only is_local ->
+    in_flow_fragment e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    calls_unboxing (traverse_unit flag u e) T cannot_change
+      (unit_code_deps flag u e) dominated to_unbox e
+    = true ->
+    check_unboxed_reads (traverse_unit flag u e) T dominated to_unbox = true ->
+    program_refines
+      (rebuild_unit_cc_from_tables (traverse_unit flag u e) T cannot_change
+         (unit_code_deps flag u e) preserve_direct_calls e)
+      (rebuild_unit_unbox_fixed_tail (traverse_unit flag u e) T cannot_change
+         (unit_code_deps flag u e) dominated to_unbox preserve_direct_calls e).
+
+Definition rebuild_unbox_fixed_tail_refines_observably_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (dominated : list (node * node)) (to_unbox : list node)
+    (preserve_direct_calls : bool),
+    is_local_slots_only is_local ->
+    (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+    in_flow_fragment e = true ->
+    any_kind_arguments e = true ->
+    results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    exits_one_value u e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+    check_cc_closed (traverse_unit flag u e) T cannot_change = true ->
+    FlambdaReaperCallingConventionsSpec.check_apply_widgets
+      (traverse_unit flag u e) T
+    = true ->
+    calls_unboxing (traverse_unit flag u e) T cannot_change
+      (unit_code_deps flag u e) dominated to_unbox e
+    = true ->
+    check_unboxed_reads (traverse_unit flag u e) T dominated to_unbox = true ->
+    program_refines_observably e
+      (rebuild_unit_unbox_fixed_tail (traverse_unit flag u e) T cannot_change
+         (unit_code_deps flag u e) dominated to_unbox preserve_direct_calls e).
+
 (* ======================================================================== *)
 (* Examples                                                                 *)
 (* ======================================================================== *)
@@ -567,3 +719,101 @@ Definition fixed_wrapper_example_statement : Prop :=
     = WrapperExample.rebuilt
   ∧ program_refines_observably WrapperExample.unit_expr
       WrapperExample.rebuilt.
+
+(* A tail call from code that keeps its calling convention and whose
+   result has no use: the code 51 calls the code 50, which it is given
+   the closure of, in tail position, and the unit ignores what 51
+   returns. Neither code changes its calling convention (both are in the
+   table), so the return continuation of 51 is kept with no use
+   ([Keep_unused]). The tables are the least solution of the rules
+   (FlambdaReaperLeast.compute_least); nothing is unboxed. *)
+Module TailExample.
+
+Import FlambdaReaperUnboxing.Examples.
+Local Open Scope positive_scope.
+
+Definition call (callee : variable) (id : code_id) (args : list simple)
+    (k exn : continuation) : apply_expr :=
+  {| ap_callee := Var callee; ap_call_kind := Direct id; ap_args := args;
+     ap_continuation := k; ap_exn_continuation := exn;
+     ap_exn_extra_args := [];
+     ap_args_arity := [Singleton Value];
+     ap_return_arity := [Singleton Value] |}.
+
+Definition metadata : code_metadata :=
+  make_code_metadata [Singleton Value] [Singleton Value].
+
+(* The code 50 returns its parameter; the code 51 calls 50 through its
+   parameter [x44] in tail position. *)
+Definition unit_with (body_50 body_51 : expr) (body : expr) : expr :=
+  Let_static
+    [Bind_code 50 (Code [40] 41 3 4 metadata body_50);
+     Bind_code 51 (Code [44] 45 5 6 metadata body_51)]
+    (Let 60 Value (Closure_of_set 70 [(70, 50)] [])
+       (Let 61 Value (Closure_of_set 71 [(71, 51)] []) body)).
+
+Definition unit_expr : expr :=
+  unit_with (return_to 3 [Var 40]) (Apply (call 44 50 [int 5] 5 6))
+    (Let_cont_non_recursive 20
+       (Handler [30] (make_handler_metadata [Value]) (return_to 1 [int 0]))
+       (Apply (call 61 51 [Var 60] 20 2))).
+
+Definition facts : facts := traverse_unit Auto interface unit_expr.
+
+Definition tables : tables :=
+  match compute_least no_local facts 40 with
+  | Some T => T
+  | None => empty_tables
+  end.
+
+Definition cannot_change : list node := [c 50; c 51].
+
+Definition code_deps : finite_map code_dep :=
+  unit_code_deps Auto interface unit_expr.
+
+(* The rebuilt unit, the body of 51 being [body_51]: the result of 50,
+   which has no use, is poison, and the call of 51 returns to a wrapper
+   that drops its result. *)
+Definition rebuilt_with (body_51 : expr) : expr :=
+  unit_with (return_to 3 [Const (Poison Value)]) body_51
+    (Let_cont_non_recursive 20
+       (Handler [] (make_handler_metadata []) (return_to 1 [int 0]))
+       (Let_cont_non_recursive 62
+          (Handler [62] (make_handler_metadata [Value]) (return_to 20 []))
+          (Apply (call 61 51 [Var 60] 62 2)))).
+
+(* With the change of calling conventions alone, and in the variant of
+   the fix, the call in 51 stays in tail position. *)
+Definition rebuilt : expr := rebuilt_with (Apply (call 44 50 [int 5] 5 6)).
+
+(* With the fix, it returns to a wrapper that gives poison to the return
+   continuation of 51. *)
+Definition rebuilt_fixed : expr :=
+  rebuilt_with
+    (Let_cont_non_recursive 62
+       (Handler [62] (make_handler_metadata [Value])
+          (return_to 5 [Const (Poison Value)]))
+       (Apply (call 44 50 [int 5] 62 6))).
+
+End TailExample.
+
+Definition tail_example_statement : Prop :=
+  calls_unboxing TailExample.facts TailExample.tables
+    TailExample.cannot_change TailExample.code_deps [] []
+    TailExample.unit_expr
+  = true
+  ∧ check_unboxed_reads TailExample.facts TailExample.tables [] [] = true
+  ∧ rebuild_unit_cc_from_tables TailExample.facts TailExample.tables
+      TailExample.cannot_change TailExample.code_deps true
+      TailExample.unit_expr
+    = TailExample.rebuilt
+  ∧ rebuild_unit_unbox_fixed TailExample.facts TailExample.tables
+      TailExample.cannot_change TailExample.code_deps [] [] true
+      TailExample.unit_expr
+    = TailExample.rebuilt_fixed
+  ∧ rebuild_unit_unbox_fixed_tail TailExample.facts TailExample.tables
+      TailExample.cannot_change TailExample.code_deps [] [] true
+      TailExample.unit_expr
+    = TailExample.rebuilt
+  ∧ program_refines_observably TailExample.unit_expr TailExample.rebuilt_fixed
+  ∧ program_refines_observably TailExample.unit_expr TailExample.rebuilt.

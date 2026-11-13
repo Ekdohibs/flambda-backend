@@ -1012,7 +1012,8 @@ Definition unbox_dead_exit : behaviour :=
 (* [rev_args_or_invalid] of [make_apply_wrapper] before the fix, the
    match of [wrapper_args_u] in its old order: a result that the callee
    unboxes and the continuation deletes is [None] ([Invalid]). The
-   decision [Keep_unused], of a later fix, is as in [wrapper_args_u]. *)
+   decision [Keep_unused], of a later fix, is as in [wrapper_args_u] in the
+   mode of that fix ([tail] [false]). *)
 Fixpoint wrapper_args_u_before_fix (apply_decisions : list decision)
     (func : list (wrapper_decision * flambda_kind)) : option (list simple) :=
   match func with
@@ -1124,7 +1125,8 @@ Definition unbox_dead_statement : Prop :=
   ∧ unbox_dead_rebuilt = unbox_dead_rebuilt_with (return_to 21 [])
   ∧ behaves (FlambdaReaperTupledSpec.on_its_own unbox_dead_rebuilt)
       unbox_dead_exit
-  ∧ wrapper_args_u [Decided Delete] unbox_dead_wrapper_decisions = Some []
+  ∧ wrapper_args_u false [Decided Delete] unbox_dead_wrapper_decisions
+    = Some []
   ∧ wrapper_args_u_before_fix [Decided Delete] unbox_dead_wrapper_decisions
     = None
   ∧ behaves

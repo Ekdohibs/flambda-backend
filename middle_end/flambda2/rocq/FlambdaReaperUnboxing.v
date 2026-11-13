@@ -90,8 +90,9 @@
    [unit_calling_convention_changes_u], [unit_my_closure_decisions_u],
    [rebuild_unit_unbox], [rebuild_unit_unbox_repr], and, for the model
    with the fix, [fix_seeds], [derive_to_unbox_fixed],
-   [check_to_unbox_fixed], [check_to_change_representation_fixed] and
-   [rebuild_unit_unbox_repr_fixed]).
+   [check_to_unbox_fixed], [check_to_change_representation_fixed],
+   [rebuild_unit_unbox_repr_fixed] and, for a variant of the fix,
+   [rebuild_unit_unbox_repr_fixed_tail]).
 
    What is transcribed is the reaper run with
    [-reaper-change-calling-conventions] and [-reaper-unbox], the
@@ -210,7 +211,14 @@
    code dep); the model gives decisions to these only in the mode of the
    fix ([code_continuation_decisions]), where they make a difference:
    without the flag, the decisions of fixed arity keep every parameter,
-   as the model does for a continuation without decisions.
+   as the model does for a continuation without decisions. The fix gives
+   poison to a parameter kept with no use whatever the callee returns, so
+   that a call in tail position, from code that keeps its calling
+   convention and whose result has no use, returns to a wrapper. A variant
+   ([tail], [rebuild_unit_unbox_repr_fixed_tail]) passes a result that the
+   callee keeps on as it is, and gives poison only for one that the
+   callee unboxes or deletes: the call needs no wrapper if that is all it
+   would do, and stays in tail position.
 
    The deliberate differences from the OCaml, each where the model cannot
    follow it or does not have what it reads:
@@ -1998,8 +2006,9 @@ Definition wrapper_params (func : list (wrapper_decision * flambda_kind))
    a continuation that has none, is kept, as a continuation of fixed
    arity keeps it. In the mode of the fix, a result that the continuation
    keeps with no use ([Keep_unused]) is poison, whatever the callee does
-   with it. *)
-Fixpoint wrapper_args_u (apply_decisions : list decision)
+   with it; in the variant [tail] of the fix, one that the callee keeps is
+   passed on as it is. *)
+Fixpoint wrapper_args_u (tail : bool) (apply_decisions : list decision)
     (func : list (wrapper_decision * flambda_kind)) : option (list simple) :=
   match func with
   | [] => Some []
@@ -2010,7 +2019,7 @@ Fixpoint wrapper_args_u (apply_decisions : list decision)
       | ad :: apply_decisions => (ad, apply_decisions)
       end
     in
-    match wrapper_args_u apply_decisions func with
+    match wrapper_args_u tail apply_decisions func with
     | None => None
     | Some rest =>
       match ad, fd with
@@ -2019,6 +2028,8 @@ Fixpoint wrapper_args_u (apply_decisions : list decision)
          unboxes and the continuation deletes was the case below. *)
       | Decided Delete, _ => Some rest
       (* The fix: before the case of a disagreement on unboxing. *)
+      | Keep_unused kind, Wrapper_keep x =>
+        Some ((if tail then Var x else Const (Poison kind)) :: rest)
       | Keep_unused kind, _ => Some (Const (Poison kind) :: rest)
       (* The case where the compiler stops with a fatal error if
          [has_any_source], a test that is [false] there ("CR ncourant:
@@ -2070,6 +2081,9 @@ Section Rebuild.
    [true] for that of the fix, which gives poison for the parameters of
    continuations that are kept with no use ([Keep_unused]). *)
 Variable fixed : bool.
+(* The variant of the fix: [wrapper_args_u] passes a result that the
+   callee keeps on to a parameter kept with no use. *)
+Variable tail : bool.
 Variable F : facts.
 Variable sol : solution.
 Variable cannot_change : node -> bool.
@@ -2757,7 +2771,7 @@ Definition make_apply_wrapper_u (en : unbox_env) (ap : apply_expr)
     | None => []
     end
   in
-  match wrapper_args_u apply_decisions func with
+  match wrapper_args_u tail apply_decisions func with
   | Some args =>
     if args_are_params args (map fst params)
     then Apply ap
@@ -3071,25 +3085,32 @@ End Rebuild.
    [to_change_representation] ([tcr]), and the code deps of the
    traversal. The variables of the unboxed fields are the names after
    every name of the unit, and the wrappers the names after them; the new
-   slots are the names after every slot of the unit. [fixed] is the mode
-   of [rebuild_expr_u]. *)
-Definition rebuild_unit_unbox_repr_mode (fixed : bool)
+   slots are the names after every slot of the unit. [fixed] and [tail]
+   are the modes of [rebuild_expr_u]. *)
+Definition rebuild_unit_unbox_repr_modes (fixed tail : bool)
     (is_local : field -> bool) (F : facts) (T : tables)
     (cannot_change : list node) (code_deps : finite_map code_dep)
     (dominated : list (node * node)) (to_unbox tcr : list node)
     (preserve_direct_calls : bool) (e : expr) : expr :=
   let '(unboxed, next) := unit_unboxed_fields F T dominated to_unbox e in
-  rebuild_expr_u fixed F (solution_of_tables T)
+  rebuild_expr_u fixed tail F (solution_of_tables T)
     (fun n => mem_node n cannot_change) code_deps preserve_direct_calls
     (static_names code_ids_bound e) (bound_code_metadata e) unboxed next
     (unit_changed_representations is_local F T dominated to_unbox tcr e)
     empty_unbox_env e.
 
-(* The rebuild of the compiler on the branch, and that of the fix. *)
+Definition rebuild_unit_unbox_repr_mode (fixed : bool) :=
+  rebuild_unit_unbox_repr_modes fixed false.
+
+(* The rebuild of the compiler on the branch, that of the fix, and that of
+   its variant. *)
 Definition rebuild_unit_unbox_repr := rebuild_unit_unbox_repr_mode false.
 
 Definition rebuild_unit_unbox_repr_fixed :=
   rebuild_unit_unbox_repr_mode true.
+
+Definition rebuild_unit_unbox_repr_fixed_tail :=
+  rebuild_unit_unbox_repr_modes true true.
 
 (* The rebuild with no change of representation: a set of closures that
    is not unboxed keeps its slots. *)
@@ -3626,7 +3647,7 @@ Example kept_result_unboxed_tables_checked :
 Proof. vm_compute. auto 10. Qed.
 
 Example kept_result_unboxed_wrapper :
-  rebuild_apply_u kept_result_unboxed_facts
+  rebuild_apply_u false kept_result_unboxed_facts
     (solution_of_tables kept_result_unboxed_tables)
     (fun n => mem_node n [c 51])
     (unit_code_deps Auto interface kept_result_unboxed) true [50; 51]

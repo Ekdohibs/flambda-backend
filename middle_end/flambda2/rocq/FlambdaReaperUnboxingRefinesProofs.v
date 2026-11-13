@@ -3642,7 +3642,7 @@ Definition plain_rebuild (en : rebuild_env) (e : expr) : expr :=
   rebuild_expr F sol preserve_direct_calls unit_code_ids first_fresh en e.
 
 Definition unbox_rebuild (en : unbox_env) (e : expr) : expr :=
-  rebuild_expr_u false F sol cannot_change code_deps preserve_direct_calls
+  rebuild_expr_u false false F sol cannot_change code_deps preserve_direct_calls
     unit_code_ids codes unboxed first_fresh_u [] en e.
 
 Definition is_decided (d : decision) : bool :=
@@ -4546,7 +4546,7 @@ Lemma unbox_rebuild_let_static (en : unbox_env)
   unbox_rebuild en (Let_static bindings body)
   = Let_static
       (flat_map
-         (rebuild_binding_u false F sol cannot_change code_deps
+         (rebuild_binding_u false false F sol cannot_change code_deps
             preserve_direct_calls unit_code_ids codes unboxed first_fresh_u []
             en)
          bindings)
@@ -4577,7 +4577,7 @@ Lemma unbox_rebuild_let_cont (en : unbox_env) (k : continuation)
     if among k (free_continuations_of_expr body)
     then
       Let_cont_non_recursive k
-        (rebuild_handler_u false F sol cannot_change code_deps
+        (rebuild_handler_u false false F sol cannot_change code_deps
            preserve_direct_calls unit_code_ids codes unboxed first_fresh_u []
            en true decisions h)
         body
@@ -4613,7 +4613,7 @@ Lemma unbox_rebuild_let_cont_rec (en : unbox_env)
       (map
          (fun '(k, h) =>
             (k,
-             rebuild_handler_u false F sol cannot_change code_deps
+             rebuild_handler_u false false F sol cannot_change code_deps
                preserve_direct_calls unit_code_ids codes unboxed
                first_fresh_u [] en false
                (handler_decisions false sol unboxed false h) h))
@@ -4637,8 +4637,9 @@ Proof. reflexivity. Qed.
 Lemma unbox_rebuild_handler (en : unbox_env) (dead : bool)
     (decisions : list decision) (params : list variable)
     (metadata : handler_metadata) (handler : expr) :
-  rebuild_handler_u false F sol cannot_change code_deps preserve_direct_calls
-    unit_code_ids codes unboxed first_fresh_u [] en dead decisions
+  rebuild_handler_u false false F sol cannot_change code_deps
+    preserve_direct_calls unit_code_ids codes unboxed first_fresh_u [] en dead
+    decisions
     (Handler params metadata handler)
   = let bound := with_kinds params (hm_params_kinds metadata) in
     let params := params_of_decisions bound decisions in
@@ -4661,8 +4662,8 @@ Lemma local_bindings_rebuilt (en : unbox_env)
     (bindings : list static_binding) :
   forallb (local_binding unboxed) bindings = true ->
   flat_map
-    (rebuild_binding_u false F sol cannot_change code_deps preserve_direct_calls
-       unit_code_ids codes unboxed first_fresh_u [] en)
+    (rebuild_binding_u false false F sol cannot_change code_deps
+       preserve_direct_calls unit_code_ids codes unboxed first_fresh_u [] en)
     bindings
   = flat_map
       (rebuild_binding F sol preserve_direct_calls unit_code_ids first_fresh
@@ -4714,7 +4715,7 @@ Lemma rebuild_ub :
              rebuild_handler F sol preserve_direct_calls unit_code_ids
                first_fresh (pen_of en C) dead (handler_mask sol is_exn h) h
              = Handler (map fst ps) metadata hp
-             ∧ rebuild_handler_u false F sol cannot_change code_deps
+             ∧ rebuild_handler_u false false F sol cannot_change code_deps
                  preserve_direct_calls unit_code_ids codes unboxed
                  first_fresh_u [] en dead
                  (handler_decisions false sol unboxed is_exn h) h
@@ -4779,7 +4780,7 @@ Proof.
       cbn [env_kinds kinds_env] in Hyused. rewrite Hyused.
       unfold rebuild_unboxed_binding.
       destruct (bind_fields_pairs fields fields_y
-                  (rebuild_expr_u false F sol cannot_change code_deps
+                  (rebuild_expr_u false false F sol cannot_change code_deps
                      preserve_direct_calls unit_code_ids codes unboxed
                      first_fresh_u [] (ubind_variables en [(x, Value)]) body)
                   Hflat)
@@ -4789,7 +4790,7 @@ Proof.
         with (fields_of unboxed y).
       rewrite Hy, Hl.
       destruct (lets_free_continuations (pairs_lets pairs)
-                  (rebuild_expr_u false F sol cannot_change code_deps
+                  (rebuild_expr_u false false F sol cannot_change code_deps
                      preserve_direct_calls unit_code_ids codes unboxed
                      first_fresh_u [] (ubind_variables en [(x, Value)]) body))
         as [Hfc Hbs].
@@ -4821,7 +4822,7 @@ Proof.
         injection Heq as -> ->; simpl in Hnamed_edges;
         destruct Hnamed_edges as [_ Hnamed_edges].
       * destruct (bind_block_fields_lets2 (ue_env en) x tag args' fields)
-          with (body := rebuild_expr_u false F sol cannot_change code_deps
+          with (body := rebuild_expr_u false false F sol cannot_change code_deps
                           preserve_direct_calls unit_code_ids codes unboxed
                           first_fresh_u [] (ubind_variables en [(x, Value)])
                           body)
@@ -4835,7 +4836,7 @@ Proof.
           exists i, a. repeat split; assumption. }
         unfold rebuild_unboxed_binding. rewrite Hl. cbn [rebuild_named].
         destruct (lets_free_continuations (concat ls)
-                    (rebuild_expr_u false F sol cannot_change code_deps
+                    (rebuild_expr_u false false F sol cannot_change code_deps
                        preserve_direct_calls unit_code_ids codes unboxed
                        first_fresh_u [] (ubind_variables en [(x, Value)])
                        body))
@@ -4849,7 +4850,7 @@ Proof.
       * destruct (bind_boxed_number_lets x bn c fields
                     (rebuild_named sol (ue_env en) x
                        (Prim (Unary (Box_number bn)) [c])) Hc)
-          with (body := rebuild_expr_u false F sol cannot_change code_deps
+          with (body := rebuild_expr_u false false F sol cannot_change code_deps
                           preserve_direct_calls unit_code_ids codes unboxed
                           first_fresh_u [] (ubind_variables en [(x, Value)])
                           body)
@@ -4865,7 +4866,7 @@ Proof.
         { intros f u Hin. exact (Hfields f u Hin). }
         unfold rebuild_unboxed_binding. rewrite Hl.
         destruct (lets_free_continuations (concat ls)
-                    (rebuild_expr_u false F sol cannot_change code_deps
+                    (rebuild_expr_u false false F sol cannot_change code_deps
                        preserve_direct_calls unit_code_ids codes unboxed
                        first_fresh_u [] (ubind_variables en [(x, Value)])
                        body))
@@ -4884,7 +4885,7 @@ Proof.
           with (fields_of unboxed y).
         rewrite Hy, Hny.
         destruct (bind_fields_pairs fields nested
-                    (rebuild_expr_u false F sol cannot_change code_deps
+                    (rebuild_expr_u false false F sol cannot_change code_deps
                        preserve_direct_calls unit_code_ids codes unboxed
                        first_fresh_u [] (ubind_variables en [(x, Value)])
                        body)
@@ -4892,7 +4893,7 @@ Proof.
           as (pairs & Hentries & Hl).
         rewrite Hl.
         destruct (lets_free_continuations (pairs_lets pairs)
-                    (rebuild_expr_u false F sol cannot_change code_deps
+                    (rebuild_expr_u false false F sol cannot_change code_deps
                        preserve_direct_calls unit_code_ids codes unboxed
                        first_fresh_u [] (ubind_variables en [(x, Value)])
                        body))
@@ -5063,7 +5064,7 @@ Proof.
         map
           (fun '(k, h) =>
              (k,
-              rebuild_handler_u false F sol cannot_change code_deps
+              rebuild_handler_u false false F sol cannot_change code_deps
                 preserve_direct_calls unit_code_ids codes unboxed
                 first_fresh_u [] (ubind_continuations en dss) false
                 (handler_decisions false sol unboxed false h) h))
@@ -5258,7 +5259,7 @@ Proof.
   pose proof (unit_unboxed_fields_fresh F T dominated to_unbox e)
     as [Hdistinct Hfresh].
   unfold rebuild_unit_unbox, rebuild_unit_unbox_repr,
-    rebuild_unit_unbox_repr_mode.
+    rebuild_unit_unbox_repr_mode, rebuild_unit_unbox_repr_modes.
   destruct (unit_unboxed_fields F T dominated to_unbox e) as [unboxed next]
     eqn:Hunboxed.
   cbn [fst] in Hlocal, Hdistinct, Hfresh.
@@ -5966,7 +5967,8 @@ Lemma wrapper_args_u_nil (rd : list param_decision) :
   ∀ (ks : list flambda_kind) (ads : list decision) (next : positive)
     (m : nat),
     keeps_prefix ads ks = true -> length (combine rd ks) <= m ->
-    wrapper_args_u ads (freshen_decisions (combine (map decided rd) ks) next)
+    wrapper_args_u false ads
+      (freshen_decisions (combine (map decided rd) ks) next)
     = Some (wrapper_args next (map is_kept_decision ads ++ repeat true m)
               (combine rd ks)).
 Proof.
@@ -6032,7 +6034,7 @@ Lemma wrapper_u_cc (en : unbox_env) (ap : apply_expr)
      lookup (ap_continuation ap) (ue_decisions en) = Some ds ->
      keeps_prefix ds ks = true) ->
   kinds_agree rd ks = true ->
-  make_apply_wrapper_u first_fresh en ap (combine (map decided rd) ks)
+  make_apply_wrapper_u false first_fresh en ap (combine (map decided rd) ks)
   = make_apply_wrapper_cc first_fresh (ue_env en) ap (combine rd ks).
 Proof.
   intros Hconts Hpre Hk. unfold make_apply_wrapper_u, make_apply_wrapper_cc,
@@ -6352,7 +6354,7 @@ Lemma rebuild_apply_nil (conts : finite_map (list flambda_kind))
     (en : unbox_env) (ap : apply_expr) :
   cinv conts en ->
   arities_match results_of code_deps conts (Apply ap) = true ->
-  rebuild_apply_u F sol cannot_change code_deps preserve_direct_calls
+  rebuild_apply_u false F sol cannot_change code_deps preserve_direct_calls
     unit_code_ids codes [] first_fresh en ap
   = rebuild_apply_cc F sol cannot_change code_deps preserve_direct_calls
       unit_code_ids codes first_fresh (ue_env en) ap.
@@ -6561,8 +6563,8 @@ Qed.
 (* The rebuilds. *)
 
 Abbreviation urb en e :=
-  (rebuild_expr_u false F sol cannot_change code_deps preserve_direct_calls
-     unit_code_ids codes [] first_fresh [] en e).
+  (rebuild_expr_u false false F sol cannot_change code_deps
+     preserve_direct_calls unit_code_ids codes [] first_fresh [] en e).
 Abbreviation crb en e :=
   (rebuild_expr_cc F sol cannot_change code_deps preserve_direct_calls
      unit_code_ids codes first_fresh en e).
@@ -6664,7 +6666,7 @@ Lemma rebuild_code_nil (id : code_id) (params : list variable)
   arities_match results_of code_deps [(ret, unarize (cm_result_arity md))]
     cbody
   = true ->
-  rebuild_code_u false F sol cannot_change code_deps preserve_direct_calls
+  rebuild_code_u false false F sol cannot_change code_deps preserve_direct_calls
     unit_code_ids codes [] first_fresh [] id (Code params mc ret exn md cbody)
   = rebuild_code_cc F sol cannot_change code_deps preserve_direct_calls
       unit_code_ids codes first_fresh id (Code params mc ret exn md cbody).
@@ -6710,7 +6712,7 @@ Lemma rebuild_nil :
          (dead is_exn : bool),
          cinv conts en ->
          handler_arities_match results_of code_deps conts h = true ->
-         rebuild_handler_u false F sol cannot_change code_deps
+         rebuild_handler_u false false F sol cannot_change code_deps
            preserve_direct_calls unit_code_ids codes [] first_fresh [] en dead
            (handler_decisions false sol [] is_exn h) h
          = rebuild_handler_cc F sol cannot_change code_deps
@@ -6906,8 +6908,8 @@ Lemma rebuild_unbox_without_unboxing (F : facts) (T : tables)
 Proof.
   intros Hnil Hm.
   unfold rebuild_unit_unbox, rebuild_unit_unbox_repr,
-    rebuild_unit_unbox_repr_mode, rebuild_unit_cc_from_tables,
-    rebuild_unit_cc.
+    rebuild_unit_unbox_repr_mode, rebuild_unit_unbox_repr_modes,
+    rebuild_unit_cc_from_tables, rebuild_unit_cc.
   destruct (unit_unboxed_fields F T dominated to_unbox e)
     as [unboxed next] eqn:Hu.
   cbn [fst] in Hnil. subst unboxed.

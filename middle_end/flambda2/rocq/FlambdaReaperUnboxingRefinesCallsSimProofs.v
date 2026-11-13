@@ -28,7 +28,8 @@
 (* The relation of the proofs of FlambdaReaperUnboxingRefinesCallsSpec.v
    between the unit rebuilt with the change of calling conventions alone
    (the first run) and the unit rebuilt with unboxing in the mode of the
-   fix (the second run), and that it is a simulation ([uc_refines]).
+   fix or of its variant (the second run), and that it is a simulation
+   ([uc_refines]).
 
    A parameter kept by the first run is, in the second ([pshape]): the
    same ([Psh_plain]); dead ([Psh_dead]), a variable with no use that is
@@ -36,13 +37,19 @@
    (the poison of [Keep_unused] or of a wrapper); or unboxed
    ([Psh_unboxed]), the variables of its fields, each the value at its
    path ([fields_vals]). A continuation is described by the shapes of its
-   parameters ([kshape]). A call relates its arguments as the shapes of
+   parameters ([kshape]), and by whether it is no way out: a handler of
+   the term, or the return continuation of code, which the first run
+   applies as a closure. A call relates its arguments as the shapes of
    the parameters of its code say ([call_rel], [args_rel2]) and returns to
-   a continuation whose shapes those of the results [transport] to,
-   directly ([uc_call]), through a wrapper of the second run
-   ([uc_call_wrap], [wrap_u_ok]) or through one of each run
-   ([uc_call_wraps], [wrap_both_ok]). The states are related in the body
-   of the unit ([related_main]), in the body of code called
+   a continuation that is no way out, a handler or, in tail position, the
+   return continuation of the code it is in, whose shapes those of the
+   results [transport] to, directly ([uc_call]), through a wrapper of the
+   second run ([uc_call_wrap], [wrap_u_ok]) or through one of each run
+   ([uc_call_wraps], [wrap_both_ok]). Through tail calls, the
+   continuation of code is a handler under wrappers of either run, any
+   number of them ([cont_rel_wrap_u], [cont_rel_wrap_both]), which
+   [cont_answered] answers by induction. The states are related in the
+   body of the unit ([related_main]), in the body of code called
    ([related_call], with the frame of the caller), or as a call returns
    ([related_pending]); [related2_answered] answers each step of the
    first run by steps of the second, so that the relation is a shrinking
@@ -77,7 +84,8 @@ Inductive pshape : Type :=
 
 (* What a continuation in scope takes: the shapes of the parameters that
    the first run keeps, their kinds in the first run, and whether it is
-   a handler of the term. *)
+   no way out: a handler of the term, or the return continuation of code,
+   which a call of the term gives a handler, through wrappers or not. *)
 Record kshape : Type := Kshape {
   ks_shapes : list pshape;
   ks_kinds : list flambda_kind;
@@ -345,7 +353,7 @@ Definition call_rel (ap ap' : apply_expr) (cs : code_shape) : Prop :=
 (* The continuations of the body of code. *)
 Definition code_K (c : code) (cs : code_shape) : finite_map kshape :=
   [(code_return_continuation c,
-    Kshape (cs_results cs) (cs_result_kinds cs) false);
+    Kshape (cs_results cs) (cs_result_kinds cs) true);
    (code_exn_continuation c, exn_kshape)].
 
 (* What code of the two runs share but for their bodies. *)
@@ -551,21 +559,21 @@ Inductive cont_rel : kshape -> cont_value -> cont_value -> Prop :=
     ks_handler ksh = false ->
     cont_rel ksh (Outer k) (Outer k)
   | cont_rel_wrap_u (sh_r sh_k : list pshape) (KS : list flambda_kind)
-      (c : cont_value) (wps : list variable) (wmd : handler_metadata)
-      (k : continuation) (wargs : list simple) (wvars : env)
-      (wconts : cont_env) :
+      (b : bool) (c : cont_value) (wps : list variable)
+      (wmd : handler_metadata) (k : continuation) (wargs : list simple)
+      (wvars : env) (wconts : cont_env) :
     cont_rel (Kshape sh_k KS true) c (resolve k wconts) ->
     wrap_u_ok sh_r sh_k KS wps wmd wargs ->
-    cont_rel (Kshape sh_r KS false) c
+    cont_rel (Kshape sh_r KS b) c
       (wrapper_closure wps wmd k wargs wvars wconts)
   | cont_rel_wrap_both (sh_r sh_k : list pshape) (KS : list flambda_kind)
-      (cps : list variable) (cmd : handler_metadata) (cargs : list simple)
-      (cvars : env) (cconts : cont_env) (wps : list variable)
-      (wmd : handler_metadata) (wargs : list simple) (wvars : env)
-      (wconts : cont_env) (k : continuation) :
+      (b : bool) (cps : list variable) (cmd : handler_metadata)
+      (cargs : list simple) (cvars : env) (cconts : cont_env)
+      (wps : list variable) (wmd : handler_metadata) (wargs : list simple)
+      (wvars : env) (wconts : cont_env) (k : continuation) :
     cont_rel (Kshape sh_k KS true) (resolve k cconts) (resolve k wconts) ->
     wrap_both_ok sh_r sh_k cps cmd cargs wps wmd wargs ->
-    cont_rel (Kshape sh_r (hm_params_kinds cmd) false)
+    cont_rel (Kshape sh_r (hm_params_kinds cmd) b)
       (wrapper_closure cps cmd k cargs cvars cconts)
       (wrapper_closure wps wmd k wargs wvars wconts)
 with conts_rel : finite_map kshape -> cont_env -> cont_env -> Prop :=
@@ -591,7 +599,7 @@ Definition related_call (s t : state) : Prop :=
     state_expr s = Apply ap ∧ state_expr t = Apply ap'
     ∧ call_rel ap ap' cs
     ∧ env_rel2 (state_vars s) (state_vars t)
-    ∧ cont_rel (Kshape (cs_results cs) (cs_result_kinds cs) false)
+    ∧ cont_rel (Kshape (cs_results cs) (cs_result_kinds cs) true)
         (resolve (ap_continuation ap) (state_conts s))
         (resolve (ap_continuation ap') (state_conts t))
     ∧ cont_rel exn_kshape (resolve (ap_exn_continuation ap) (state_conts s))
@@ -1402,27 +1410,37 @@ Proof.
       * exact (Hcode id0 c0 Hc0).
 Qed.
 
-(* A continuation of a handler of the term is a handler closure. *)
-Lemma handler_cont_inv (sh : list pshape) (KS : list flambda_kind)
-    (c c' : cont_value) :
-  cont_rel M dead CS (Kshape sh KS true) c c' ->
-  ∃ (sh0 : list pshape) (ps ps' : list (variable * flambda_kind))
-    (md md' : handler_metadata) (h h' : expr) (vars vars' : env)
-    (K S : finite_map kshape) (conts conts' : cont_env)
-    (rec rec' : list (continuation * continuation_handler)),
-    c = Closure (Handler (map fst ps) md h) vars conts rec
-    ∧ c' = Closure (Handler (map fst ps') md' h') vars' conts' rec'
-    ∧ params_rel2 M dead sh0 ps ps' ∧ transport sh sh0 KS
-    ∧ hm_params_kinds md = map snd ps ∧ hm_params_kinds md' = map snd ps'
-    ∧ KS = map snd ps
-    ∧ uc M dead CS (S ++ K) h h' ∧ env_rel2 M dead vars vars'
-    ∧ conts_rel M dead CS K conts conts'
-    ∧ uc_handlers M dead CS (S ++ K) rec rec' S.
+(* A continuation that is no way out is, in the first run, a closure that
+   takes values of its kinds. *)
+Lemma cont_rel_steps (ksh : kshape) (c c' : cont_value) :
+  cont_rel M dead CS ksh c c' -> ks_handler ksh = true ->
+  ∀ (vs : list value) (S : static_env) (rd : read_record),
+    match apply_cont_value c vs S empty_heap rd with
+    | Exit _ _ _ _ => False
+    | Step _ => map kind_of_value vs = ks_kinds ksh
+    | Undefined => True
+    end.
 Proof.
-  intros H. inversion H; subst; try discriminate.
-  do 15 eexists.
-  split; [ reflexivity | split; [ reflexivity | ] ].
-  repeat (split; [ eassumption | ]). eassumption.
+  induction 1 as
+    [ksh sh0 ps ps' md md' h h' vars vars' K S0 conts conts' rec rec' Hps
+       Hfits Hmd Hmd' Hks _ _ _ _
+    | ksh k _ Hhandler
+    | sh_r sh_k KS b c wps wmd k wargs wvars wconts _ IH _
+    | sh_r sh_k KS b cps cmd cargs cvars cconts wps wmd wargs wvars wconts k
+        _ _];
+    intros Hh vs S rd.
+  - cbn [apply_cont_value]. rewrite Hmd.
+    destruct (kinds_eqb (map kind_of_value vs) (map snd ps)) eqn:Hk;
+      [ | exact I ].
+    destruct (bind_params _ _ _); [ | exact I ].
+    apply kinds_eqb_eq in Hk. rewrite Hk, Hks. reflexivity.
+  - rewrite Hhandler in Hh. discriminate Hh.
+  - exact (IH eq_refl vs S rd).
+  - unfold wrapper_closure. cbn [apply_cont_value].
+    destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds cmd)) eqn:Hk;
+      [ | exact I ].
+    destruct (bind_params _ _ _); [ | exact I ].
+    apply kinds_eqb_eq in Hk. exact Hk.
 Qed.
 
 End Conts.
@@ -1507,13 +1525,13 @@ Lemma cont_answered (ksh : kshape) (c c' : cont_value) :
         ∧ run n t0 = Step t1 ∧ R s1 t1
     end.
 Proof.
-  intros Hc. destruct Hc as
+  intros Hc. induction Hc as
     [ksh sh0 ps ps' md md' h h' vars vars' K S0 conts conts' rec rec' Hps
        Hfits Hmd Hmd' Hks Hh Hvars Hconts Hrec
     | ksh k Hplain Hhandler
-    | sh_r sh_k KS c wps wmd k wargs wvars wconts Hin Hok
-    | sh_r sh_k KS cps cmd cargs cvars cconts wps wmd wargs wvars wconts k
-        Hin Hok];
+    | sh_r sh_k KS b c wps wmd k wargs wvars wconts Hin IH Hok
+    | sh_r sh_k KS b cps cmd cargs cvars cconts wps wmd wargs wvars wconts k
+        Hin _ Hok];
     intros vs vs' S S' rd Hv Hst.
   - destruct (apply_cont_value
                 (Closure (Handler (map fst ps) md h) vars conts rec) vs S
@@ -1531,38 +1549,22 @@ Proof.
       destruct (bind_params _ _ _); discriminate Ha.
   - rewrite (vrel_plain_eq _ _ _ Hv Hplain). cbn [apply_cont_value].
     exists rd. reflexivity.
-  - destruct (handler_cont_inv M dead CS sh_k KS c (resolve k wconts) Hin)
-      as (sh0 & ps & ps' & md & md' & h & h' & vars & vars' & K & S0 & conts
-          & conts' & rec & rec' & -> & Hc' & Hps & Hfits & Hmd & Hmd' & HKS
-          & Hh & Hvars & Hconts & Hrec).
-    destruct (apply_cont_value
-                (Closure (Handler (map fst ps) md h) vars conts rec) vs S
-                empty_heap rd)
-      as [s1 | k0 ws hp rd1 | ] eqn:Ha; [ | | exact I ].
-    + assert (Hkinds : map kind_of_value vs = KS).
-      { cbn [apply_cont_value] in Ha. rewrite Hmd in Ha.
-        destruct (kinds_eqb (map kind_of_value vs) (map snd ps)) eqn:Hk;
-          [ | discriminate Ha ].
-        apply kinds_eqb_eq in Hk. rewrite Hk, HKS. reflexivity. }
-      cbn [ks_shapes] in Hv.
-      destruct (Hok vs vs' Hv Hkinds) as [Hwk Hbind].
-      destruct (Hbind wvars) as (hv & vs'' & Hb & Hargs & Hv'').
-      rewrite HKS in Hfits.
-      destruct (closure_answered sh_k sh0 ps ps' md md' h h' vars vars' K S0
-                  conts conts' rec rec' vs vs'' S S' rd s1 Hps Hfits Hmd
-                  Hmd' Hh Hvars Hconts Hrec Hv'' Hst Ha)
-        as (t1 & Ht1 & Hrel).
-      eexists _, 1, t1. split.
-      * unfold wrapper_closure. cbn [apply_cont_value]. rewrite Hwk, Hb.
-        reflexivity.
-      * split; [ | left; exact Hrel ].
-        apply run_one. rewrite step_apply_cont. cbn [ac_args ac_continuation].
-        rewrite Hargs. unfold apply_continuation.
-        change (rec_closures [] wvars wconts ++ wconts) with wconts.
-        rewrite Hc'. exact Ht1.
-    + exfalso. cbn [apply_cont_value] in Ha.
-      destruct (kinds_eqb _ _); [ | discriminate Ha ].
-      destruct (bind_params _ _ _); discriminate Ha.
+  - pose proof (cont_rel_steps M dead CS _ _ _ Hin eq_refl vs S rd) as Hsteps.
+    destruct (apply_cont_value c vs S empty_heap rd)
+      as [s1 | k0 ws hp rd1 | ] eqn:Ha; [ | contradiction | exact I ].
+    cbn [ks_kinds] in Hsteps. cbn [ks_shapes] in Hv.
+    destruct (Hok vs vs' Hv Hsteps) as [Hwk Hbind].
+    destruct (Hbind wvars) as (hv & vs'' & Hb & Hargs & Hv'').
+    specialize (IH vs vs'' S S' rd Hv'' Hst). rewrite Ha in IH.
+    destruct IH as (t0 & n & t1 & Ht0 & Hn & Hrel).
+    eexists _, (Datatypes.S n), t1. split.
+    + unfold wrapper_closure. cbn [apply_cont_value]. rewrite Hwk, Hb.
+      reflexivity.
+    + split; [ | exact Hrel ].
+      rewrite run_succ, step_apply_cont. cbn [ac_args ac_continuation].
+      rewrite Hargs. unfold apply_continuation.
+      change (rec_closures [] wvars wconts ++ wconts) with wconts.
+      rewrite Ht0. exact Hn.
   - unfold wrapper_closure at 1. cbn [apply_cont_value].
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds cmd)) eqn:Hk;
       [ | exact I ].
@@ -1684,20 +1686,40 @@ Lemma resolve_other (k k' : continuation) (c : cont_value)
 Proof. intros H. unfold resolve. rewrite lookup_other by exact H. reflexivity.
 Qed.
 
-(* A handler continuation is related at any shapes that fit its own. *)
+(* A continuation that is no way out is related at any shapes that fit
+   its own. *)
+Lemma cont_rel_refit_gen (ksh : kshape) (sh_r : list pshape) (b : bool)
+    (c c' : cont_value) :
+  cont_rel M dead CS ksh c c' -> ks_handler ksh = true ->
+  transport sh_r (ks_shapes ksh) (ks_kinds ksh) ->
+  cont_rel M dead CS (Kshape sh_r (ks_kinds ksh) b) c c'.
+Proof.
+  intros Hc. destruct Hc as
+    [ksh sh0 ps ps' md md' h h' vars vars' K S0 conts conts' rec rec' Hps
+       Hfits Hmd Hmd' Hks Hhb Hvars Hconts Hrec
+    | ksh k _ Hhandler
+    | sh sh_k KS b0 c wps wmd k wargs wvars wconts Hin Hok
+    | sh sh_k KS b0 cps cmd cargs cvars cconts wps wmd wargs wvars wconts k
+        Hin Hok];
+    intros Hh Hf; cbn [ks_shapes ks_kinds ks_handler] in Hh, Hf |- *.
+  - apply (cont_rel_closure M dead CS (Kshape sh_r (ks_kinds ksh) b) sh0 ps
+             ps' md md' h h' vars vars' K S0 conts conts' rec rec');
+      try assumption.
+    cbn [ks_shapes ks_kinds]. exact (transport_trans _ _ _ _ Hf Hfits).
+  - rewrite Hhandler in Hh. discriminate Hh.
+  - eapply cont_rel_wrap_u; [ exact Hin | ].
+    intros vs vs' Hv Hk. apply Hok; [ exact (Hf _ _ Hv Hk) | exact Hk ].
+  - eapply cont_rel_wrap_both; [ exact Hin | ].
+    intros vs vs' Hv Hk. apply Hok; [ | exact Hk ].
+    apply Hf; [ exact Hv | apply kinds_eqb_eq; exact Hk ].
+Qed.
+
 Lemma cont_rel_refit (sh sh_r : list pshape) (KS : list flambda_kind)
     (b : bool) (c c' : cont_value) :
   cont_rel M dead CS (Kshape sh KS true) c c' -> transport sh_r sh KS ->
   cont_rel M dead CS (Kshape sh_r KS b) c c'.
 Proof.
-  intros Hc Hf.
-  destruct (handler_cont_inv M dead CS sh KS c c' Hc)
-    as (sh0 & ps & ps' & md & md' & h & h' & vars & vars' & K & S0 & conts
-        & conts' & rec & rec' & -> & -> & Hps & Hfits & Hmd & Hmd' & HKS
-        & Hh & Hvars & Hconts & Hrec).
-  apply (cont_rel_closure M dead CS (Kshape sh_r KS b) sh0 ps ps' md md' h h'
-           vars vars' K S0 conts conts' rec rec'); try assumption.
-  cbn [ks_shapes ks_kinds]. exact (transport_trans _ _ _ _ Hf Hfits).
+  intros Hc Hf. exact (cont_rel_refit_gen _ sh_r b c c' Hc eq_refl Hf).
 Qed.
 
 Lemma exn_rel (K : finite_map kshape) (conts conts' : cont_env)
@@ -2134,7 +2156,7 @@ Proof.
         destruct (resolve_rel2 M dead CS K conts conts' k Hconts)
           as [(HK & _) | (ksh & HK & Hck)]; rewrite Hlk in HK;
           [ discriminate HK | ].
-        injection HK as <-. exact (cont_rel_refit _ _ _ false _ _ Hck Hfits).
+        injection HK as <-. exact (cont_rel_refit _ _ _ true _ _ Hck Hfits).
       - destruct Hcall as (id & _ & _ & _ & _ & _ & _ & _ & _ & _ & _ & _
                            & Hexn_eq & _).
         rewrite Hexn_eq.
@@ -2165,7 +2187,7 @@ Proof.
           as [(HK & _) | (ksh & HK & Hck)]; rewrite Hlk in HK;
           [ discriminate HK | ].
         injection HK as <-. exact (cont_rel_wrap_u M dead CS _ _ _ _ _ _ _ _ _
-                                     _ Hck Hok).
+                                     _ _ Hck Hok).
       - rewrite Hexn_eq, resolve_other
           by (intros Heq; exact (Hwe (eq_sym Heq))).
         split; [ exact (exn_rel K conts conts' _ Hconts Hexn) | ].
@@ -2195,7 +2217,8 @@ Proof.
         as [(HK & _) | (ksh & HK & Hck)]; rewrite Hlk in HK;
         [ discriminate HK | ].
       injection HK as <-. rewrite <- Hcmd.
-      exact (cont_rel_wrap_both M dead CS _ _ _ _ _ _ _ _ _ _ _ _ _ _ Hck Hok).
+      exact (cont_rel_wrap_both M dead CS _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ Hck
+               Hok).
     + rewrite Hexn_eq, !resolve_other
         by (intros Heq; first [ exact (Hwe (eq_sym Heq))
                               | exact (Hwce (eq_sym Heq)) ]).
