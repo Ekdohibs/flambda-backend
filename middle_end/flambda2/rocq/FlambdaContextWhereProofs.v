@@ -37,9 +37,9 @@
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
-From OxCamlFlambda2 Require Import FlambdaModel FlambdaSemanticsSpec
-  FlambdaSemanticsProofs FlambdaWellFormedSpec FlambdaRangeSpec
-  FlambdaRangeProofs FlambdaContextSpec FlambdaContextProofs
+From OxCamlFlambda2 Require Import FlambdaModel FlambdaValueSpec
+  FlambdaSemanticsSpec FlambdaSemanticsProofs FlambdaWellFormedSpec
+  FlambdaRangeSpec FlambdaRangeProofs FlambdaContextSpec FlambdaContextProofs
   FlambdaContextWhereSpec.
 Import ListNotations.
 
@@ -90,39 +90,45 @@ Proof.
   exact (Hrefines vs handler_vars conts statics hp Hkinds Hbind).
 Qed.
 
-Lemma code_forwards (params : list variable) (my_closure : variable)
-    (ret exn : continuation) (metadata : code_metadata)
-    (source target : expr) (vs : list value) (callee : value)
-    (callee_vars : env) (return_to exn_to : cont_value)
-    (statics : static_env) (hp : heap) :
+(* The lemmas of FlambdaContextProofs.v give, of the callee, that it is
+   a closure of the code id that the bodies are related at. These two
+   relations do not depend on the code id, and the lemmas do not use
+   that. *)
+Lemma code_forwards (id : code_id) (params : list variable)
+    (my_closure : variable) (ret exn : continuation)
+    (metadata : code_metadata) (source target : expr) (vs : list value)
+    (callee : value) (callee_vars : env) (return_to exn_to : cont_value)
+    (statics : static_env) (hp : heap) (slots : list (value_slot * value)) :
   code_refines_from inv params my_closure ret exn metadata source target ->
   bind_params params vs [(my_closure, callee)] = Some callee_vars ->
   map kind_of_value vs = unarize (cm_params_arity metadata) ->
   kind_of_value callee = Value ->
+  closure_of statics callee = Some (id, slots) ->
   refines_from inv
     (State source callee_vars [(ret, return_to); (exn, exn_to)] statics hp)
     (State target callee_vars [(ret, return_to); (exn, exn_to)] statics hp).
 Proof.
-  intros Hrefines Hbind Hkinds Hvalue.
+  intros Hrefines Hbind Hkinds Hvalue _.
   exact
     (Hrefines vs callee callee_vars return_to exn_to statics hp Hbind Hkinds
        Hvalue).
 Qed.
 
-Lemma code_backwards (params : list variable) (my_closure : variable)
-    (ret exn : continuation) (metadata : code_metadata)
-    (target source : expr) (vs : list value) (callee : value)
-    (callee_vars : env) (return_to exn_to : cont_value)
-    (statics : static_env) (hp : heap) :
+Lemma code_backwards (id : code_id) (params : list variable)
+    (my_closure : variable) (ret exn : continuation)
+    (metadata : code_metadata) (target source : expr) (vs : list value)
+    (callee : value) (callee_vars : env) (return_to exn_to : cont_value)
+    (statics : static_env) (hp : heap) (slots : list (value_slot * value)) :
   code_refined_from params my_closure ret exn metadata target source ->
   bind_params params vs [(my_closure, callee)] = Some callee_vars ->
   map kind_of_value vs = unarize (cm_params_arity metadata) ->
   kind_of_value callee = Value ->
+  closure_of statics callee = Some (id, slots) ->
   refines_from inv
     (State source callee_vars [(ret, return_to); (exn, exn_to)] statics hp)
     (State target callee_vars [(ret, return_to); (exn, exn_to)] statics hp).
 Proof.
-  intros Hrefines Hbind Hkinds Hvalue.
+  intros Hrefines Hbind Hkinds Hvalue _.
   exact
     (Hrefines vs callee callee_vars return_to exn_to statics hp Hbind Hkinds
        Hvalue).
