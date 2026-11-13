@@ -4,6 +4,8 @@ exclave_after_local_work.ml
 exclave_pair.ml
 iarray_exported.ml
 iarray_in_function.ml
+iarray_length_of_any.ml
+iarray_length_of_any_not_inlined.ml
 iarray_literal.ml
 iarray_literal_measured_one_call_inlined.ml
 iarray_measured_one_call_inlined.ml

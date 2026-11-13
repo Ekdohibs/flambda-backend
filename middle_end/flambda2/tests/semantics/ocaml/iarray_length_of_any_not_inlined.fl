@@ -1,0 +1,30 @@
+let $camlIarray_length_of_any_not_inlined__first_const_0 = Block 0 () in
+(let code inline(never) size(6)
+       len_0 (a/34 : any array)
+         my_closure/35 &my_alloc_region/36 my_depth/37
+         -> k/14 * k/15
+         : imm tagged =
+   let next_depth/38 = rec_info (succ my_depth/37) in
+   let Parraylength/39 = %array_length.generic (a/34) in
+   cont k/14 (Parraylength/39)
+ in
+ let len/40 = closure len_0 @len &toplevel in
+ (let Pmakearray/45 = %array.`imm`.`toplevel` (1, 2, 3) in
+  apply direct(len_0 &toplevel)
+    (len/40 : _ -> imm tagged) (Pmakearray/45) -> k/16 * error)
+   where k/16 (n/41 : imm tagged) =
+     ((let Pmakearray/44 = %array.`imm`.`toplevel` (n/41, n/41) in
+       apply direct(len_0 &toplevel)
+         (len/40 : _ -> imm tagged) (Pmakearray/44) -> k/17 * error)
+        where k/17 (m/42 : imm tagged) =
+          let Pmakeblock/43 = %block.[`0`].`toplevel` (n/41, m/42) in
+          cont k/13 (Pmakeblock/43)))
+  where k/13 define_root_symbol (module_block/31) =
+    let field_0/32 = %block_load.tag[`0`].`size`[`2`].[`0`] (module_block/31)
+    in
+    let field_1/33 = %block_load.tag[`0`].`size`[`2`].[`1`] (module_block/31)
+    in
+    let $camlIarray_length_of_any_not_inlined =
+      Block 0 (field_0/32, field_1/33)
+    in
+    cont done ($camlIarray_length_of_any_not_inlined)

@@ -595,6 +595,8 @@ let convert_unary_primitive (p : P.unary_primitive) :
     Some (Array_length (Array_kind Array_gc_ignorable_values))
   | Array_length (Array_kind Values) ->
     Some (Array_length (Array_kind Array_values))
+  | Array_length Float_array_opt_dynamic ->
+    Some (Array_length Float_array_opt_dynamic)
   | Opaque_identity { middle_end_only = _; kind } ->
     Some (Opaque_identity (convert_kind kind))
   | Int_arith (kind, Not) ->

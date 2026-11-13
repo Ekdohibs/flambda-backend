@@ -1,0 +1,9 @@
+iarray_length_of_any.fl:
+  before Simplify (14 steps): returns [0: <fun>; 3]
+  after Simplify (4 steps): returns [0: <fun>; 3]
+  the check of kinds: passes before, passes after
+  calls outside code: 1 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated: the same once closures and blocks are lifted to symbols and the terms normalised
+  (asked of the term before normalised with the lengths and loads of its known immutable arrays read)

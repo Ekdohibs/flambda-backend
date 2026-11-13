@@ -1,0 +1,24 @@
+let $camlIarray_length_of_any__first_const_0 = Block 0 () in
+(let code size(6)
+       len_0 (a/30 : any array)
+         my_closure/31 &my_alloc_region/32 my_depth/33
+         -> k/12 * k/13
+         : imm tagged =
+   let next_depth/34 = rec_info (succ my_depth/33) in
+   let Parraylength/35 = %array_length.generic (a/30) in
+   cont k/12 (Parraylength/35)
+ in
+ let len/36 = closure len_0 @len &toplevel in
+ (let Pmakearray/39 = %array.`imm`.`toplevel` (1, 2, 3) in
+  apply direct(len_0 &toplevel)
+    (len/36 : _ -> imm tagged) (Pmakearray/39) -> k/14 * error)
+   where k/14 (n/37 : imm tagged) =
+     let Pmakeblock/38 = %block.[`0`].`toplevel` (len/36, n/37) in
+     cont k/11 (Pmakeblock/38))
+  where k/11 define_root_symbol (module_block/27) =
+    let field_0/28 = %block_load.tag[`0`].`size`[`2`].[`0`] (module_block/27)
+    in
+    let field_1/29 = %block_load.tag[`0`].`size`[`2`].[`1`] (module_block/27)
+    in
+    let $camlIarray_length_of_any = Block 0 (field_0/28, field_1/29) in
+    cont done ($camlIarray_length_of_any)
