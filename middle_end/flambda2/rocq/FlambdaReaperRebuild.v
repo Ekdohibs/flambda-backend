@@ -157,7 +157,9 @@
      [is_my_closure_used], [only_full_applications], [is_cold],
      debuginfo or message of [Invalid]; and nothing of what [rebuild]
      returns but the term ([exported_code], [slot_offsets], the typing
-     environment).
+     environment). Without phantom bindings, the rule of
+     [rebuild_let_expr_holed] that a phantom binding never makes code
+     dead has nothing to act on here.
    - A variable that is bound nowhere in the term is taken to be of kind
      [Value].
    - The arms of a [Switch] are gone through by their bindings that

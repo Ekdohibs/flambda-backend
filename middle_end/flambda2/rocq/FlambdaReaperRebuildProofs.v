@@ -3517,7 +3517,12 @@ Proof.
       destruct (eval_simples vars elements) as [vs | ] eqn:Hvs;
         [ | discriminate Hev ].
       cbv beta iota in Hev.
-      destruct Hb as (Hcons & _ & _ & _).
+      assert (Hcons : ∀ (i : nat) (e0 : simple),
+                nth_error elements i = Some e0 ->
+                g_constructor G (Node_symbol s) (Field_block i Value)
+                  (node_of_simple e0))
+        by (destruct elements;
+            [ intros [ | i ] e0 H; discriminate H | exact (proj1 Hb) ]).
       destruct Hst as (Hnone & Hblocks & Honly & Hcode).
       cbn [flat_map rebuild_binding_cc static_const_is_used
            rebuild_static_const].
@@ -10171,8 +10176,11 @@ Proof.
           [ intros a; apply add_facts_steady | intros; exact I ].
       + apply makes_steady;
           [ intros a; apply add_facts_steady | intros; exact I ].
-      + eapply makes_weaken;
-          [ | exact (block_deps_makes (Node_symbol s) elements) ].
+      + destruct elements as [ | el els ];
+          [ apply makes_steady;
+            [ intros a; apply add_facts_steady | intros; exact I ] | ].
+        eapply makes_weaken;
+          [ | exact (block_deps_makes (Node_symbol s) (el :: els)) ].
         intros; exact I. }
     assert (Hcode_env :
       ∀ (id : code_id) (params : list variable) (mc : variable)
@@ -11125,9 +11133,12 @@ Proof.
       - exact (proj1 (proj1 (static_set_makes env symbols s slot syms decls
                                vs Hbindings a0))).
       - exact (proj1 (proj1 (block_deps_makes (Node_symbol s) fields a0))).
+      - exact (proj1 (proj1 (boxed_number_makes s contents a0))).
       - exact (proj1 (proj1 (alias_constants_makes (Node_symbol s) a0))).
-      - exact (proj1 (proj1 (alias_constants_makes (Node_symbol s) a0))).
-      - exact (proj1 (proj1 (block_deps_makes (Node_symbol s) elements
+      - destruct elements as [ | el els ];
+          [ exact (proj1 (proj1 (alias_constants_makes (Node_symbol s) a0)))
+          | ].
+        exact (proj1 (proj1 (block_deps_makes (Node_symbol s) (el :: els)
                                a0))). }
     assert (Hle_c : acc_le a_s a_c).
     { apply fold_left_le. intros b a0 Hin.
@@ -11491,13 +11502,15 @@ Proof.
     - destruct Hb as (_ & His & _).
       exact (alloc_self is_local G sol Hc _ _ _ His
                (as_hs _ _ _ Hc _ (any_source_input _ _ _ Hc _ Hconsts))).
+    - exact (boxed_self is_local G sol Hc Hconsts _ _ Hb).
     - exact (any_source_self is_local G sol Hc _
                (alias_consts_any_source is_local G sol Hc Hconsts _ Hb)).
-    - exact (any_source_self is_local G sol Hc _
-               (alias_consts_any_source is_local G sol Hc Hconsts _ Hb)).
-    - destruct Hb as (_ & His & _).
-      exact (alloc_self is_local G sol Hc _ _ _ His
-               (as_hs _ _ _ Hc _ (any_source_input _ _ _ Hc _ Hconsts))). }
+    - destruct elements as [ | el els ].
+      + exact (any_source_self is_local G sol Hc _
+                 (alias_consts_any_source is_local G sol Hc Hconsts _ Hb)).
+      + destruct Hb as (_ & His & _).
+        exact (alloc_self is_local G sol Hc _ _ _ His
+                 (as_hs _ _ _ Hc _ (any_source_input _ _ _ Hc _ Hconsts))). }
   assert (Hsyms : ∀ s : symbol,
             noted s -> may_come_from sol (Node_symbol s) (Node_symbol s)).
   { intros s Hs.
@@ -12188,28 +12201,9 @@ Proof.
   split; exists 20; vm_compute; reflexivity.
 Qed.
 
-Theorem static_boxed_variable_needed :
-  static_boxed_variable_needed_statement.
+Theorem static_boxed_variable_example :
+  static_boxed_variable_example_statement.
 Proof.
   do 8 (split; [ vm_compute; reflexivity | ]).
-  intros [Hexits _].
-  assert (Hsource :
-    behaves
-      (State StaticBoxedVariableExample.unit_expr [] [] empty_static_env
-         empty_heap)
-      (Exits 1%positive
-         [Value_boxed_number
-            (Naked_float StaticConstantsExample.two_and_a_half)]
-         empty_heap)).
-  { exists 10. vm_compute. reflexivity. }
-  assert (Htarget :
-    behaves
-      (State StaticBoxedVariableExample.rebuilt [] [] empty_static_env
-         empty_heap)
-      (Exits 1%positive [Value_boxed_number (Naked_float 0)] empty_heap)).
-  { exists 10. vm_compute. reflexivity. }
-  destruct (Hexits _ _ _ Hsource) as (vs' & Ht & Hrel).
-  pose proof (behaviour_unique _ _ _ Ht Htarget) as Heq.
-  injection Heq as Hvs. subst vs'.
-  simpl in Hrel. destruct Hrel as [H _]. injection H as H. discriminate H.
+  split; exists 10; vm_compute; reflexivity.
 Qed.

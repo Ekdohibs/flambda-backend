@@ -68,9 +68,12 @@
      of the symbol is one that [n] may come from. What it points to is
      said once for the static environment ([statics_flow]), as for a
      block or a closure whose node is that of the symbol; an immutable
-     array that a symbol points to, as for a block; a boxed number or a
-     string, whose symbol the traversal aliases to the constants, only
-     that the symbol has any source;
+     array that a symbol points to, as for a block; a string, whose
+     symbol the traversal aliases to the constants, only that the symbol
+     has any source; a boxed number, that the symbol has any source (the
+     traversal aliases to the constants the symbol of a boxed number of
+     a variable), or that it holds the constants in the field of the
+     kind of the number that it holds;
    - an immutable array has no allocation in the graph (the traversal
      reads [Make_immutable_array] and [Array_load] as other primitives:
      the variable bound has any source and a use of each argument), so
@@ -606,8 +609,10 @@ Fixpoint flows (v : value) (n : node) {struct v} : Prop :=
    is the node of the symbol; and the symbol is an allocation of its
    own. The function slots of a static set lead to the symbols of its
    closures, each an allocation of its own. An immutable array holds its
-   elements as a block holds its fields. The symbol of a boxed number or
-   of a string has any source: what is read of it is a constant. *)
+   elements as a block holds its fields. The symbol of a string has any
+   source: what is read of it is a constant. The symbol of a boxed
+   number has any source, or holds the constants in the field of the
+   kind of its number, which is all that is read of it. *)
 Definition static_value_flows (s : symbol)
     (allocated : statically_allocated_value) : Prop :=
   may_come_from (Node_symbol s) (Node_symbol s)
@@ -643,8 +648,13 @@ Definition static_value_flows (s : symbol)
              g_constructor G (Node_symbol s) (Field_block i Value) from
              ∧ flows element from)
         0 elements
-    | Static_boxed_number _ | Static_string _ =>
+    | Static_boxed_number v =>
       s_any_source sol (Node_symbol s) = true
+      ∨ ∀ (c : const) (bn : boxable_number),
+          v = Value_const c -> is_number_of_kind bn c = true ->
+          g_constructor G (Node_symbol s) (Field_boxed_number bn)
+            Node_all_constants
+    | Static_string _ => s_any_source sol (Node_symbol s) = true
     | _ => False
     end.
 

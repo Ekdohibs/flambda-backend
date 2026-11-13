@@ -425,6 +425,15 @@ Definition block_edges (base : node) (fields : list simple) : Prop :=
   ∧ g_constructor G base Field_get_tag Node_all_constants
   ∧ simples_noted fields.
 
+(* The facts of a static boxed number of [s] ([boxed_number_facts]),
+   but the use of a variable, which says nothing of where values are. *)
+Definition boxed_edges (s : symbol) (contents : simple) : Prop :=
+  match boxed_number_kind contents with
+  | Some bn =>
+    g_constructor G (Node_symbol s) (Field_boxed_number bn) Node_all_constants
+  | None => g_alias G (Node_symbol s) Node_all_constants
+  end.
+
 Definition accessor_edges (x : variable) (f : field) (s : simple) : Prop :=
   g_accessor G (Node_variable x) f (node_of_simple s) ∧ simple_noted s.
 
@@ -725,9 +734,12 @@ with binding_edges (binding : static_binding) : Prop :=
   match binding with
   | Bind_symbol s (Static_const_block _ fields) =>
     block_edges (Node_symbol s) fields
+  | Bind_symbol s (Static_const_immutable_value_array []) =>
+    g_alias G (Node_symbol s) Node_all_constants
   | Bind_symbol s (Static_const_immutable_value_array elements) =>
     block_edges (Node_symbol s) elements
-  | Bind_symbol s (Static_const_boxed_number _)
+  | Bind_symbol s (Static_const_boxed_number contents) =>
+    boxed_edges s contents
   | Bind_symbol s (Static_const_immutable_string _) =>
     g_alias G (Node_symbol s) Node_all_constants
   | Bind_symbol s
@@ -1234,6 +1246,25 @@ Proof.
   left. reflexivity.
 Qed.
 
+Lemma boxed_number_makes (s : symbol) (contents : simple) :
+  makes [] (add_facts (boxed_number_facts (Node_symbol s) contents))
+    (fun a' => boxed_edges (acc_graph a') s contents).
+Proof.
+  apply makes_steady; [ intros a; apply add_facts_steady | ].
+  intros a a' Hle. unfold boxed_edges.
+  unfold boxed_number_facts in Hle.
+  destruct (boxed_number_kind contents) as [bn | ].
+  - apply facts_constructor. apply (add_facts_later _ _ _ _ Hle). left.
+    reflexivity.
+  - apply facts_alias. apply (add_facts_later _ _ _ _ Hle). left.
+    reflexivity.
+Qed.
+
+(* A constant of a kind of number is a boxed number of that kind. *)
+Lemma boxed_number_kind_of_kind (bn : boxable_number) (c : const) :
+  is_number_of_kind bn c = true -> boxed_number_kind (Const c) = Some bn.
+Proof. destruct bn, c; simpl; congruence. Qed.
+
 Lemma accessor_makes (x : variable) (f : field) (s : simple) :
   makes []
     (fun a => add_fact (Fact_accessor (Node_variable x) f (node_of_simple s))
@@ -1341,30 +1372,36 @@ Qed.
 (* The closures of a [Closure_of_set]: one for each function slot, the
    one at the slot of the [Let] being its variable. *)
 Lemma closures_of_set_spec (x : variable) (slot : function_slot)
+    (others : list (function_slot * variable))
     (fds : list (function_slot * code_id)) (a : acc) :
-  steady a (snd (closures_of_set x slot fds a))
-  ∧ map (fun '(f, _, id) => (f, id)) (fst (closures_of_set x slot fds a))
+  steady a (snd (closures_of_set x slot others fds a))
+  ∧ map (fun '(f, _, id) => (f, id))
+      (fst (closures_of_set x slot others fds a))
     = fds
   ∧ ∀ (f : function_slot) (name : node) (id : code_id),
-      (f, name, id) ∈ fst (closures_of_set x slot fds a) ->
+      (f, name, id) ∈ fst (closures_of_set x slot others fds a) ->
       f = slot -> name = Node_variable x.
 Proof.
   revert a. induction fds as [ | [f id] fds IH]; intros a.
   - split; [ apply steady_refl | split; [ reflexivity | intros ? ? ? [] ] ].
   - simpl.
-    assert (Hname : steady a (snd (if Pos.eqb f slot then (Node_variable x, a)
-                                   else fresh a))
-                    ∧ (f = slot ->
-                       fst (if Pos.eqb f slot then (Node_variable x, a)
-                            else fresh a) = Node_variable x)).
-    { destruct (Pos.eqb_spec f slot) as [-> | Hne].
+    set (named := if Pos.eqb f slot then (Node_variable x, a)
+                  else match lookup f others with
+                       | Some y => (Node_variable y, a)
+                       | None => fresh a
+                       end).
+    assert (Hname : steady a (snd named)
+                    ∧ (f = slot -> fst named = Node_variable x)).
+    { unfold named. destruct (Pos.eqb_spec f slot) as [-> | Hne].
       - split; [ apply steady_refl | reflexivity ].
-      - split; [ apply fresh_steady | intros Heq; contradiction ]. }
-    destruct (if Pos.eqb f slot then (Node_variable x, a) else fresh a)
-      as [name a1].
+      - split; [ | intros Heq; contradiction ].
+        destruct (lookup f others);
+          [ apply steady_refl | apply fresh_steady ]. }
+    destruct named as [name a1].
     destruct Hname as [Hs1 Hn1]. simpl in Hs1, Hn1.
     destruct (IH a1) as (Hs2 & Hmap & Hslot).
-    destruct (closures_of_set x slot fds a1) as [rest a2]. simpl in *.
+    destruct (closures_of_set x slot others fds a1) as [rest a2].
+    simpl in *.
     split; [ exact (steady_trans _ _ _ Hs1 Hs2) | ].
     split; [ f_equal; exact Hmap | ].
     intros f' name' id' [[= <- <- <-] | Hin] Heq; [ exact (Hn1 Heq) | ].
@@ -1485,9 +1522,11 @@ Lemma closure_of_set_makes (env : traverse_env) (x : variable)
 Proof.
   intros a. unfold traverse_closure_of_set.
   destruct (among slot (map fst (compact function_decls))) eqn:Hslot.
-  - destruct (closures_of_set_spec x slot (compact function_decls) a)
+  - destruct (closures_of_set_spec x slot (set_closures_of env x)
+                (compact function_decls) a)
       as (Hs & Hmap & Hname).
-    destruct (closures_of_set x slot (compact function_decls) a)
+    destruct (closures_of_set x slot (set_closures_of env x)
+                (compact function_decls) a)
       as [closures a1].
     simpl in Hs, Hmap, Hname.
     destruct (record_set_makes env
@@ -2608,9 +2647,12 @@ Definition static_binding_made (binding : static_binding) (a' : acc) : Prop :=
   match binding with
   | Bind_symbol s (Static_const_block _ fields) =>
     block_edges (acc_graph a') (acc_noted a') (Node_symbol s) fields
+  | Bind_symbol s (Static_const_immutable_value_array []) =>
+    g_alias (acc_graph a') (Node_symbol s) Node_all_constants
   | Bind_symbol s (Static_const_immutable_value_array elements) =>
     block_edges (acc_graph a') (acc_noted a') (Node_symbol s) elements
-  | Bind_symbol s (Static_const_boxed_number _)
+  | Bind_symbol s (Static_const_boxed_number contents) =>
+    boxed_edges (acc_graph a') s contents
   | Bind_symbol s (Static_const_immutable_string _) =>
     g_alias (acc_graph a') (Node_symbol s) Node_all_constants
   | Bind_symbol s
@@ -2720,9 +2762,12 @@ Proof.
         intros w x Hl' Hk. apply H3; [ exact Hl' | ].
         rewrite (should_keep env HK). exact Hk.
       - exact (block_deps_makes (Node_symbol s) fields).
+      - exact (boxed_number_makes s contents).
       - exact (alias_constants_makes (Node_symbol s)).
-      - exact (alias_constants_makes (Node_symbol s)).
-      - exact (block_deps_makes (Node_symbol s) elements). }
+      - destruct elements as [ | element elements ];
+          [ exact (alias_constants_makes (Node_symbol s))
+          | exact (block_deps_makes (Node_symbol s) (element :: elements)) ].
+    }
     destruct (Hstatic a_p) as [[Hle_s (ls & Hls & Hperm_s)] HPs].
     assert (Hls_nil : ls = []).
     { assert (Hnil : flat_map (fun _ : static_binding => @nil code_id)
@@ -3143,7 +3188,8 @@ Definition initial_env (flag : reaper_preserve_direct_calls)
      env_current_code_id := None;
      env_should_preserve_direct_calls := should_preserve_of_flag flag;
      env_value_slots_to_keep := projected_value_slots e;
-     env_unit_code_ids := static_names all_code_ids_of_binding e |}.
+     env_unit_code_ids := static_names all_code_ids_of_binding e;
+     env_set_closures := set_closures e |}.
 
 Lemma traverse_unit_eq (flag : reaper_preserve_direct_calls)
     (u : unit_interface) (e : expr) :
@@ -3973,6 +4019,35 @@ Proof.
   - intros _ u' Hu. left. exact Hu.
 Qed.
 
+(* The symbol of a static boxed number is an allocation of its own. *)
+Lemma boxed_self (s : symbol) (contents : simple) :
+  boxed_edges G s contents -> may_come_from sol (Node_symbol s) (Node_symbol s).
+Proof.
+  unfold boxed_edges. destruct (boxed_number_kind contents) as [bn | ].
+  - intros Hcons.
+    exact (alloc_self _ _ _ Hcons (as_hs _ _ _ Hc _ consts_any_source)).
+  - intros Hal. exact (any_source_self _ (alias_consts_any_source _ Hal)).
+Qed.
+
+(* What a static boxed number holds, as [statics_flow] says it. *)
+Lemma boxed_flows (vars : env) (s : symbol) (contents : simple) (v : value) :
+  boxed_edges G s contents -> eval_simple vars contents = Some v ->
+  as_ (Node_symbol s)
+  ∨ ∀ (c : const) (bn : boxable_number),
+      v = Value_const c -> is_number_of_kind bn c = true ->
+      g_constructor G (Node_symbol s) (Field_boxed_number bn)
+        Node_all_constants.
+Proof.
+  unfold boxed_edges. intros Hb Hv.
+  destruct (boxed_number_kind contents) as [bn | ] eqn:Hk.
+  - right. intros c bn' -> Hk'.
+    destruct contents as [x | sym | c']; try discriminate Hk.
+    simpl in Hv. injection Hv as ->.
+    rewrite (boxed_number_kind_of_kind _ _ Hk') in Hk. injection Hk as ->.
+    exact Hb.
+  - left. exact (alias_consts_any_source _ Hb).
+Qed.
+
 (* A node with any source, used only if [a] has any usage, may hold what
    comes from [a]. *)
 Lemma may_come_from_any (a n : node) :
@@ -4270,10 +4345,13 @@ Proof.
              Hedge
                      Ha Hfrom).
            not_local_field.
-        -- destruct (Hst s _ Hl) as [_ Has].
-           exact (any_source_accessor _ _ _ Hc _ _ _
-                    (proj1 (proj2 (proj2 Hv1)) Has) Hedge
-                    ltac:(not_local_field)).
+        -- destruct (Hst s _ Hl) as [_ [Has | Hcons]].
+           ++ exact (any_source_accessor _ _ _ Hc _ _ _
+                       (proj1 (proj2 (proj2 Hv1)) Has) Hedge
+                       ltac:(not_local_field)).
+           ++ refine (flows_read _ _ _ _ _ Hc _ _ _ _ _ (Value_const c) _
+                        (Hcons c bn eq_refl Hk) Hedge Hv1 consts_any_source).
+              not_local_field.
       * (* [Box_number] *)
         destruct v1 as [c | | | | | | | | ]; try discriminate Hev.
         destruct (is_number_of_kind bn c) eqn:Hk; [ | discriminate Hev ].
@@ -4482,8 +4560,8 @@ Proof.
         intros s' allocated Hl. simpl in Hl.
         destruct (Pos.eqb_spec s' s) as [-> | _];
           [ | exact (Hst s' allocated Hl) ].
-        injection Hl as <-. pose proof (alias_consts_any_source _ Hb) as Has.
-        split; [ exact (any_source_self _ Has) | exact Has ].
+        injection Hl as <-. split; [ exact (boxed_self _ _ Hb) | ].
+        exact (boxed_flows _ _ _ _ Hb Hv).
       * (* A static string. *)
         refine (IH _ Hbindings _ _ Heval); [ | exact Hcodes ].
         intros s' allocated Hl. simpl in Hl.
@@ -4498,11 +4576,18 @@ Proof.
         intros s' allocated Hl. simpl in Hl.
         destruct (Pos.eqb_spec s' s) as [-> | _];
           [ | exact (Hst s' allocated Hl) ].
-        injection Hl as <-. destruct Hb as (Hcons & His & Hgt & Hnoted).
-        split.
-        -- exact (alloc_self _ _ _ His (as_hs _ _ _ Hc _ consts_any_source)).
-        -- exact (proj2 (proj2 (block_structure_made _ _ _ _
-                    (conj Hcons (conj His (conj Hgt Hnoted))) Hvars Hvs))).
+        injection Hl as <-.
+        destruct elements as [ | element elements ].
+        -- (* The empty array, aliased to the constants. *)
+           simpl in Hvs. injection Hvs as <-.
+           pose proof (alias_consts_any_source _ Hb) as Has.
+           split; [ exact (any_source_self _ Has) | exact I ].
+        -- destruct Hb as (Hcons & His & Hgt & Hnoted).
+           split.
+           ++ exact (alloc_self _ _ _ His
+                       (as_hs _ _ _ Hc _ consts_any_source)).
+           ++ exact (proj2 (proj2 (block_structure_made _ _ _ _
+                       (conj Hcons (conj His (conj Hgt Hnoted))) Hvars Hvs))).
 Qed.
 
 (* The values that a [Let_static] of the fragment binds keep partial
@@ -7258,6 +7343,13 @@ Proof.
   split; [ exact (sub_constructor _ _ _ Hg) | exact Hn ].
 Qed.
 
+Lemma boxed_edges_mono (s : symbol) (contents : simple) :
+  boxed_edges G s contents -> boxed_edges G' s contents.
+Proof.
+  unfold boxed_edges. destruct (boxed_number_kind contents);
+    [ apply sub_constructor | apply sub_alias ].
+Qed.
+
 Lemma accessor_edges_mono (x : variable) (f : field) (s : simple) :
   accessor_edges G noted x f s -> accessor_edges G' noted x f s.
 Proof. intros [H Hn]. exact (conj (sub_accessor_var _ _ _ H) Hn). Qed.
@@ -7460,9 +7552,10 @@ Proof.
         try exact Hb.
       * exact (static_set_edges_mono _ _ _ _ _ Hb).
       * exact (block_edges_mono _ _ Hb).
+      * exact (boxed_edges_mono _ _ Hb).
       * exact (sub_alias _ _ Hb).
-      * exact (sub_alias _ _ Hb).
-      * exact (block_edges_mono _ _ Hb).
+      * destruct elements; [ exact (sub_alias _ _ Hb) | ].
+        exact (block_edges_mono _ _ Hb).
   - intros k h body IHh IH ctx ce [Hh Hbody]. simpl.
     exact (conj (IHh _ _ Hh) (IH _ _ Hbody)).
   - intros handlers body IHh IH ctx ce [Hhandlers Hbody]. simpl.
@@ -7559,16 +7652,19 @@ Proof.
       exact (alloc_self is_local G sol Hc _ _ _
                (sub_constructor G0 G Hsub _ _ _ His)
                (as_hs _ _ _ Hc _ (any_source_input _ _ _ Hc _ Hconsts))).
+    - exact (boxed_self is_local G sol Hc Hconsts _ _
+               (boxed_edges_mono G0 G Hsub _ _ Hb)).
     - exact (any_source_self is_local G sol Hc _
                (alias_consts_any_source is_local G sol Hc Hconsts _
                   (sub_alias G0 G Hsub _ _ Hb))).
-    - exact (any_source_self is_local G sol Hc _
-               (alias_consts_any_source is_local G sol Hc Hconsts _
-                  (sub_alias G0 G Hsub _ _ Hb))).
-    - destruct Hb as (_ & His & _).
-      exact (alloc_self is_local G sol Hc _ _ _
-               (sub_constructor G0 G Hsub _ _ _ His)
-               (as_hs _ _ _ Hc _ (any_source_input _ _ _ Hc _ Hconsts))). }
+    - destruct elements as [ | element elements ].
+      + exact (any_source_self is_local G sol Hc _
+                 (alias_consts_any_source is_local G sol Hc Hconsts _
+                    (sub_alias G0 G Hsub _ _ Hb))).
+      + destruct Hb as (_ & His & _).
+        exact (alloc_self is_local G sol Hc _ _ _
+                 (sub_constructor G0 G Hsub _ _ _ His)
+                 (as_hs _ _ _ Hc _ (any_source_input _ _ _ Hc _ Hconsts))). }
   assert (Hsyms : ∀ s : symbol,
             noted s -> may_come_from sol (Node_symbol s) (Node_symbol s)).
   { intros s Hs.

@@ -79,13 +79,42 @@
    cannot follow it or does not have what it reads:
    - Closures of a set. The model's [Let] binds one variable, to the
      closure at [slot] of a [Closure_of_set]; the compiler's binds one to
-     each closure of the set. The other closures of the set have a made
-     node each, made where the [Let] is traversed, which stands for the
-     variable the compiler binds to it; the facts of
-     [record_set_of_closures_deps] are given to these nodes as to that
-     variable. In the model the other closures are then bound by
-     [Project_function_slot] from the first (FlambdaModel.let_closures),
-     which gives accessor facts where the compiler binds them directly.
+     each closure of the set. In the model the other closures are bound
+     after it, each by a [Let] of its [Project_function_slot] from the
+     first (FlambdaModel.let_closures). The traversal reads that shape
+     as the compiler's [Let]: the closures of the set are the variable
+     of the [Let] and those of the projections that follow it
+     ([let_projections_of]), found for the whole unit before it is
+     traversed ([set_closures]), as the value slots to keep are; each
+     has the facts of [record_set_of_closures_deps], as the variable the
+     compiler binds to it. A closure that no such projection binds has a
+     made node, made where the [Let] is traversed. The projections are
+     then traversed as any other: each gives the accessor fact of its
+     variable from the first closure, which the compiler does not have;
+     by it, a use of the closure that the projection binds is a use of
+     the first closure and of its function slot. (Without it, the flow
+     proof would have to know the nodes that stand for the closures of
+     the value of the first closure, where [flows] only says that there
+     are some.)
+   - Static constants, read as [traverse_block_like_static_const] reads
+     them since it was made to keep the variables that they hold. A
+     block, and an immutable array of values with elements, has the
+     facts of a block. The compiler has no immutable array of no
+     element: [Static_const.immutable_value_array []] is [Empty_array],
+     which is aliased to [all_constants], as a string is; the model's
+     [Static_const_immutable_value_array []] stands for it (the
+     conversion of the tests makes it of [Empty_array]) and is aliased
+     too. A boxed number of a constant has the constructor fact of the
+     field of its kind, from [all_constants]. The model's boxed number
+     does not say its kind, which the compiler's constructor does
+     ([Boxed_float] and the others), and its semantics does not check
+     the kind of a variable: a boxed number of a variable is read as
+     the compiler reads the constants whose contents it does not track
+     (the arrays of naked numbers): its symbol is aliased to
+     [all_constants] and uses the variable, where the compiler gives
+     the variable as the field of the kind of the number. A boxed
+     number of a symbol, or of a constant of no kind of number, which
+     the compiler's do not hold, is only aliased ([boxed_number_facts]).
    - Static sets. A static set of closures is one [Bind_symbol] for each
      of its symbols (FlambdaModel.bind_closures). Each gives the facts of
      [record_set_of_closures_deps] whose base is its own symbol (the
@@ -386,13 +415,15 @@ Definition should_preserve_of_flag (flag : reaper_preserve_direct_calls)
 
 (* [Traverse_env.t], without what only the rebuild reads, and with the
    code ids that the unit binds, which stand for those of the current
-   unit. *)
+   unit, and the closures of the sets of the unit that projections bind
+   ([set_closures]). *)
 Record traverse_env : Type := Traverse_env {
   env_conts : finite_map (list node);
   env_current_code_id : option code_id;
   env_should_preserve_direct_calls : should_preserve_direct_calls;
   env_value_slots_to_keep : list value_slot;
-  env_unit_code_ids : list code_id
+  env_unit_code_ids : list code_id;
+  env_set_closures : finite_map (list (function_slot * variable))
 }.
 
 (* [Env.add_cont]. *)
@@ -402,7 +433,8 @@ Definition add_cont (env : traverse_env) (k : continuation) (params : list node)
      env_current_code_id := env_current_code_id env;
      env_should_preserve_direct_calls := env_should_preserve_direct_calls env;
      env_value_slots_to_keep := env_value_slots_to_keep env;
-     env_unit_code_ids := env_unit_code_ids env |}.
+     env_unit_code_ids := env_unit_code_ids env;
+     env_set_closures := env_set_closures env |}.
 
 (* [Traverse_env.should_keep_value_slot], for value slots of the unit. *)
 Definition should_keep_value_slot (env : traverse_env) (w : value_slot)
@@ -604,7 +636,8 @@ Definition code_env (env : traverse_env) (id : code_id)
      env_current_code_id := Some id;
      env_should_preserve_direct_calls := env_should_preserve_direct_calls env;
      env_value_slots_to_keep := env_value_slots_to_keep env;
-     env_unit_code_ids := env_unit_code_ids env |}.
+     env_unit_code_ids := env_unit_code_ids env;
+     env_set_closures := env_set_closures env |}.
 
 (* ======================================================================== *)
 (* Sets of closures                                                         *)
@@ -643,17 +676,62 @@ Definition record_set_of_closures_deps (env : traverse_env)
          a)
     closures a.
 
+(* The closures, other than the first, of a set whose first closure is
+   bound to [x] at [slot]: the variables of the projections from [x] of
+   the closures at [others] that begin [e], with their slots
+   (FlambdaModel.let_projections). *)
+Fixpoint let_projections_of (x : variable) (slot : function_slot)
+    (others : list function_slot) (e : expr)
+    : list (function_slot * variable) :=
+  match others, e with
+  | other :: others,
+    Let y _ (Project_function_slot move_from move_to (Var x')) body =>
+    if Pos.eqb x' x && Pos.eqb move_from slot && Pos.eqb move_to other
+       && negb (Pos.eqb y x)
+    then (other, y) :: let_projections_of x slot others body
+    else []
+  | _, _ => []
+  end.
+
+(* The closures of a set bound to [x] at [slot] by projections in [e], if
+   [x] is the first closure of the set ([let_closures]). *)
+Definition projected_set_closures (x : variable) (slot : function_slot)
+    (function_decls : list (function_slot * code_id)) (e : expr)
+    : list (function_slot * variable) :=
+  match function_decls with
+  | (first, _) :: others =>
+    if Pos.eqb first slot then let_projections_of x slot (map fst others) e
+    else []
+  | [] => []
+  end.
+
+(* The closures of the set of the [Let] of [x] that projections bind. *)
+Definition set_closures_of (env : traverse_env) (x : variable)
+    : list (function_slot * variable) :=
+  match lookup x (env_set_closures env) with
+  | Some others => others
+  | None => []
+  end.
+
 (* The closures of a [Closure_of_set] bound to [x] at [slot]: [x] for that
-   slot, a made node for each other. *)
+   slot, the variable of its projection for each slot of [others], a
+   made node for each other. *)
 Fixpoint closures_of_set (x : variable) (slot : function_slot)
+    (others : list (function_slot * variable))
     (function_decls : list (function_slot * code_id)) (a : acc)
     : list (function_slot * node * code_id) * acc :=
   match function_decls with
   | [] => ([], a)
   | (f, id) :: function_decls =>
     let '(name, a) :=
-      if Pos.eqb f slot then (Node_variable x, a) else fresh a in
-    let '(rest, a) := closures_of_set x slot function_decls a in
+      if Pos.eqb f slot then (Node_variable x, a)
+      else
+        match lookup f others with
+        | Some y => (Node_variable y, a)
+        | None => fresh a
+        end
+    in
+    let '(rest, a) := closures_of_set x slot others function_decls a in
     ((f, name, id) :: rest, a)
   end.
 
@@ -664,7 +742,8 @@ Definition traverse_closure_of_set (env : traverse_env) (x : variable)
   let function_decls := compact function_decls in
   if among slot (map fst function_decls)
   then
-    let '(closures, a) := closures_of_set x slot function_decls a in
+    let '(closures, a) :=
+      closures_of_set x slot (set_closures_of env x) function_decls a in
     record_set_of_closures_deps env
       (map (fun '(_, name, id) => (name, Some id)) closures)
       (map (fun '(f, name, _) => (f, name)) closures)
@@ -793,6 +872,31 @@ Definition traverse_named (env : traverse_env) (x : variable)
 (* Static constants                                                         *)
 (* ======================================================================== *)
 
+(* The kind of number of the contents of a static boxed number, if it is
+   a constant of a kind of number. *)
+Definition boxed_number_kind (contents : simple) : option boxable_number :=
+  match contents with
+  | Const c => boxable_number_of_kind (kind_of_const c)
+  | Var _ | Symbol _ => None
+  end.
+
+(* The facts of a static boxed number bound to [name]
+   ([add_boxed_number_dep]): a constant of a kind of number is its field
+   of that kind; anything else aliases [name] to the constants, and a
+   variable is used by it. *)
+Definition boxed_number_facts (name : node) (contents : simple)
+    : list fact :=
+  match boxed_number_kind contents with
+  | Some bn =>
+    [Fact_constructor name (Field_boxed_number bn) Node_all_constants]
+  | None =>
+    Fact_alias name Node_all_constants
+    :: match contents with
+       | Var x => [Fact_use name (Node_variable x)]
+       | Symbol _ | Const _ => []
+       end
+  end.
+
 (* [traverse_static_set_of_closures] and
    [traverse_block_like_static_const], for one binding. *)
 Definition traverse_static_binding (env : traverse_env)
@@ -809,9 +913,14 @@ Definition traverse_static_binding (env : traverse_env)
       record_set_of_closures_deps env [(name, lookup slot function_decls)]
         (map (fun '(f, sym) => (f, Node_symbol sym)) (compact closure_symbols))
         value_slots a
-    | Static_const_block _ fields
+    | Static_const_block _ fields => block_deps name fields a
+    (* [Empty_array]. *)
+    | Static_const_immutable_value_array [] =>
+      add_fact (Fact_alias name Node_all_constants) a
     | Static_const_immutable_value_array fields => block_deps name fields a
-    | Static_const_boxed_number _ | Static_const_immutable_string _ =>
+    | Static_const_boxed_number contents =>
+      add_facts (boxed_number_facts name contents) a
+    | Static_const_immutable_string _ =>
       add_fact (Fact_alias name Node_all_constants) a
     end
   end.
@@ -1203,6 +1312,46 @@ with code_projected_value_slots (c : code) : list value_slot :=
   | Code _ _ _ _ _ body => projected_value_slots body
   end.
 
+(* For the variable of each [Let] of a [Closure_of_set] of an expression,
+   the bodies of code included, the closures of its set that the
+   projections after it bind ([projected_set_closures]). *)
+Fixpoint set_closures (e : expr)
+    : finite_map (list (function_slot * variable)) :=
+  match e with
+  | Let x _ defining_expr body =>
+    match defining_expr with
+    | Closure_of_set slot function_decls _ =>
+      [(x, projected_set_closures x slot function_decls body)]
+    | Simple _ | Prim _ _ | Set_of_closures _ _ | Project_value_slot _ _
+    | Project_value_slot_from _ _ _ | Project_function_slot _ _ _ => []
+    end
+    ++ set_closures body
+  | Let_static bindings body =>
+    flat_map binding_set_closures bindings ++ set_closures body
+  | Let_cont_non_recursive _ h body =>
+    handler_set_closures h ++ set_closures body
+  | Let_cont_recursive handlers body =>
+    flat_map (fun '(_, h) => handler_set_closures h) handlers
+    ++ set_closures body
+  | Apply _ | Apply_cont _ | Switch _ _ | Invalid => []
+  end
+with handler_set_closures (h : continuation_handler)
+    : finite_map (list (function_slot * variable)) :=
+  match h with
+  | Handler _ _ handler => set_closures handler
+  end
+with binding_set_closures (binding : static_binding)
+    : finite_map (list (function_slot * variable)) :=
+  match binding with
+  | Bind_code _ c => code_set_closures c
+  | Bind_deleted_code _ | Bind_symbol _ _ => []
+  end
+with code_set_closures (c : code)
+    : finite_map (list (function_slot * variable)) :=
+  match c with
+  | Code _ _ _ _ _ body => set_closures body
+  end.
+
 (* The code ids that a binding binds, deleted code included: those of the
    current unit. *)
 Definition all_code_ids_of_binding (binding : static_binding)
@@ -1229,7 +1378,8 @@ Definition traverse_unit (flag : reaper_preserve_direct_calls)
        env_current_code_id := None;
        env_should_preserve_direct_calls := should_preserve_of_flag flag;
        env_value_slots_to_keep := projected_value_slots e;
-       env_unit_code_ids := static_names all_code_ids_of_binding e |}
+       env_unit_code_ids := static_names all_code_ids_of_binding e;
+       env_set_closures := set_closures e |}
   in
   let a := traverse env e a in
   let a := add_fact (Fact_any_usage dummy_toplevel_return) a in
@@ -1432,5 +1582,77 @@ Example traverse_exn_handler_and_effects :
      f_any_source_if_used := [];
      f_zero_alloc_source := [] |}.
 Proof. vm_compute. reflexivity. Qed.
+
+(* A set of two closures, at the slots 40 and 41, of code that the unit
+   does not bind, as [let_closures] binds it: 13 is the closure at 40,
+   and 14, bound by the projection from 13 that follows, the closure at
+   41. Each has the function slots of the set, as the variables that
+   the compiler binds to the closures have, and the call witnesses of
+   unknown code (the made nodes 3 and 4); the projection reads the slot
+   41 of 13. *)
+Definition two_closures : expr :=
+  match let_closures [13; 14] [(40, 20); (41, 21)] [] (return_to 1 [Var 14])
+  with
+  | Some e => e
+  | None => Invalid
+  end.
+
+Example traverse_two_closures :
+  f_accessor (traverse_unit Never interface two_closures)
+  = [(Node_variable 14, Field_function_slot 41, Node_variable 13)]
+  ∧ f_constructor (traverse_unit Never interface two_closures)
+    = [(Node_variable 13, Field_call_witness Known_arity_code_pointer,
+        Node_made 4);
+       (Node_variable 13, Field_call_witness Unknown_arity_code_pointer,
+        Node_made 4);
+       (Node_made 4, Field_code_id_of_call_witness, Node_variable 13);
+       (Node_variable 14, Field_call_witness Known_arity_code_pointer,
+        Node_made 3);
+       (Node_variable 14, Field_call_witness Unknown_arity_code_pointer,
+        Node_made 3);
+       (Node_made 3, Field_code_id_of_call_witness, Node_variable 14);
+       (Node_variable 14, Field_function_slot 40, Node_variable 13);
+       (Node_variable 14, Field_function_slot 41, Node_variable 14);
+       (Node_variable 13, Field_function_slot 40, Node_variable 13);
+       (Node_variable 13, Field_function_slot 41, Node_variable 14)].
+Proof. vm_compute. split; reflexivity. Qed.
+
+(* The empty array 50, which is aliased to the constants, and an array
+   51 that holds it, which has the facts of a block. *)
+Definition empty_array : expr :=
+  Let_static [Bind_symbol 50 (Static_const_immutable_value_array [])]
+    (Let_static
+       [Bind_symbol 51 (Static_const_immutable_value_array [Symbol 50])]
+       (return_to 1 [Symbol 51])).
+
+Example traverse_empty_array :
+  f_alias (traverse_unit Never interface empty_array)
+  = [(Node_made 1, Node_symbol 51); (Node_symbol 50, Node_all_constants)]
+  ∧ f_constructor (traverse_unit Never interface empty_array)
+    = [(Node_symbol 51, Field_block 0%nat Value, Node_symbol 50);
+       (Node_symbol 51, Field_is_int, Node_all_constants);
+       (Node_symbol 51, Field_get_tag, Node_all_constants)].
+Proof. vm_compute. split; reflexivity. Qed.
+
+(* Two static boxed floats: 52 of a constant, which has the field of
+   floats from the constants, and 53 of the variable 10, which is
+   aliased to the constants and uses 10. *)
+Definition boxed_numbers : expr :=
+  Let 10 (Naked_number Kind_naked_float) (Simple (Const (Naked_float 0)))
+    (Let_static
+       [Bind_symbol 52 (Static_const_boxed_number (Const (Naked_float 0)));
+        Bind_symbol 53 (Static_const_boxed_number (Var 10))]
+       (return_to 1 [Symbol 52; Symbol 53])).
+
+Example traverse_boxed_numbers :
+  f_constructor (traverse_unit Never interface boxed_numbers)
+  = [(Node_symbol 52, Field_boxed_number Boxable_naked_float,
+      Node_all_constants)]
+  ∧ f_use (traverse_unit Never interface boxed_numbers)
+    = [(Node_symbol 53, Node_variable 10)]
+  ∧ In (Node_symbol 53, Node_all_constants)
+      (f_alias (traverse_unit Never interface boxed_numbers)).
+Proof. vm_compute. split; [ reflexivity | split; [ reflexivity | ] ]. auto.
+Qed.
 
 End Examples.

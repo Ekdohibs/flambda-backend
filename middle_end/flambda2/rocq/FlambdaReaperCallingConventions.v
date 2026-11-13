@@ -784,7 +784,8 @@ Definition traverse_unit_acc (flag : reaper_preserve_direct_calls)
        env_current_code_id := None;
        env_should_preserve_direct_calls := should_preserve_of_flag flag;
        env_value_slots_to_keep := projected_value_slots e;
-       env_unit_code_ids := static_names all_code_ids_of_binding e |}
+       env_unit_code_ids := static_names all_code_ids_of_binding e;
+       env_set_closures := set_closures e |}
   in
   let a := traverse env e a in
   let a := add_fact (Fact_any_usage dummy_toplevel_return) a in

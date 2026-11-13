@@ -284,8 +284,9 @@
    which the model has no call kind for. [static_constants] asks the
    same, but lets the unit bind symbols to boxed numbers, to strings and
    to immutable arrays of values. The traversal reads an immutable array
-   as a block, its elements as fields, and a boxed number or a string
-   not at all, aliasing its symbol to the constants
+   as a block, its elements as fields, a string not at all, aliasing its
+   symbol to the constants, and a boxed number of a constant as a block
+   whose one field, of the kind of the number, holds the constants
    ([traverse_static_binding]). The rebuild keeps such a binding if its
    symbol has a use, with the elements of an array rewritten as any
    simple ([rewrite_simple]), and the contents of a boxed number by
@@ -295,16 +296,20 @@
    use; then so have its elements, which the rebuild keeps. A boxed
    number is read by
    [Unbox_number], which finds in the two runs what it holds. A boxed
-   number may not hold a variable: the traversal gives the variable no
-   use from it, and the rebuild replaces it by a zero, so that a unit that
-   unboxes such a number reads another in its rebuild
-   ([static_boxed_variable_needed_statement]). Outside classic mode the
-   compiler makes no static boxed number of a variable; in classic mode
-   closure conversion makes static blocks of floats whose fields are
-   variables ([Immutable_float_block]), which the model has not got, and
-   which traverse.ml and rebuild.ml read as they read a boxed number: the
-   reaper run in classic mode ([-X reaper-oclassic=1]) puts zeros in
-   place of such fields.
+   number of a variable is not in [static_constants]. The traversal used
+   to give such a variable no use from it, and the rebuild then replaced
+   it by a zero; it now aliases the symbol to the constants and gives
+   the variable a use from it, as traverse.ml does since it was made to
+   keep the variables that static constants hold, and the rebuild keeps
+   the variable when the symbol has a use
+   ([static_boxed_variable_example_statement]). The premise of
+   [static_constants] that excludes such a variable can now be dropped:
+   that is the next step, for the proof of the rebuild. Outside classic
+   mode the compiler makes no static boxed number of a variable; in
+   classic mode closure conversion makes static blocks of floats whose
+   fields are variables ([Immutable_float_block]), which the model has
+   not got, and which traverse.ml now reads as a block of naked floats,
+   whose fields the rebuild keeps where they are read.
    The statement holds of more than nothing ([example_statement]): a
    unit with a static block, a block one field of which no load reads, a
    [Let] with no use, and a continuation one parameter of which has no
@@ -327,9 +332,8 @@
    of tupled code, of a pair whose fields have no use; and
    [static_constants_example_statement] for a unit with a static boxed
    number, a string and immutable arrays, one of which is read and one
-   not, and [static_boxed_variable_needed_statement] for a unit whose
-   static boxed number holds a variable, which its rebuild reads as a
-   zero. *)
+   not, and [static_boxed_variable_example_statement] for a unit whose
+   static boxed number holds a variable, which its rebuild keeps. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -846,11 +850,10 @@ Definition generic_calls_tupled_calls_statement : Prop :=
 (* Static constants: [tupled_calls], but the unit may bind symbols to
    boxed numbers, to immutable strings and to immutable arrays of values
    too, as the compiler's units do. A boxed number holds a constant or a
-   symbol, not a variable: the traversal reads nothing of what a boxed
-   number holds ([traverse_static_binding] aliases its symbol to the
-   constants), so a variable there has no use from it, and the rebuild
-   puts a zero in its place ([rewrite_or_variable];
-   [static_boxed_variable_needed_statement]). *)
+   symbol, not a variable: the traversal gives a variable there a use
+   from the symbol, and the rebuild keeps it if it has one
+   ([rewrite_or_variable]; [static_boxed_variable_example_statement]),
+   but the proof of the rebuild does not follow it yet. *)
 Definition binding_static_constant (binding : static_binding) : bool :=
   match binding with
   | Bind_symbol _ (Static_const_boxed_number (Var _)) => false
@@ -1702,41 +1705,37 @@ Definition unit_expr : expr :=
 
 Definition solution : tables :=
   {| t_alias :=
-       [(Node_made 1, Node_variable 14); (Node_variable 11, Node_made 3);
+       [(Node_made 1, Node_variable 14); (Node_variable 11, Node_variable 11);
         (Node_variable 13, Node_symbol 81)];
      t_any_usage :=
-       [Node_all_constants; Node_made 1; Node_made 10; Node_made 2; Node_made 3;
-        Node_made 7; Node_made 8; Node_made 9; Node_symbol 80; Node_symbol 81;
+       [Node_all_constants; Node_made 1; Node_made 2; Node_made 6; Node_made 7;
+        Node_made 8; Node_made 9; Node_symbol 80; Node_symbol 81;
         Node_variable 10; Node_variable 11; Node_variable 13; Node_variable 14];
      t_any_source :=
-       [Node_all_constants; Node_made 10; Node_made 5; Node_made 6; Node_made 7;
+       [Node_all_constants; Node_made 4; Node_made 5; Node_made 6; Node_made 7;
         Node_made 8; Node_made 9];
      t_has_usage :=
-       [Node_all_constants; Node_made 1; Node_made 10; Node_made 2; Node_made 3;
-        Node_made 7; Node_made 8; Node_made 9; Node_symbol 80; Node_symbol 81;
+       [Node_all_constants; Node_made 1; Node_made 2; Node_made 6; Node_made 7;
+        Node_made 8; Node_made 9; Node_symbol 80; Node_symbol 81;
         Node_variable 10; Node_variable 11; Node_variable 13; Node_variable 14];
      t_has_source :=
-       [Node_all_constants; Node_made 1; Node_made 10; Node_made 3; Node_made 4;
-        Node_made 5; Node_made 6; Node_made 7; Node_made 8; Node_made 9;
-        Node_symbol 80; Node_symbol 81; Node_variable 10; Node_variable 11;
-        Node_variable 12; Node_variable 13; Node_variable 14];
-     t_usages :=
-       [(Node_symbol 80, Node_symbol 80); (Node_variable 10, Node_variable 10)];
+       [Node_all_constants; Node_made 1; Node_made 3; Node_made 4; Node_made 5;
+        Node_made 6; Node_made 7; Node_made 8; Node_made 9; Node_symbol 80;
+        Node_symbol 81; Node_variable 10; Node_variable 11; Node_variable 12;
+        Node_variable 13; Node_variable 14];
+     t_usages := [(Node_symbol 80, Node_symbol 80)];
      t_sources :=
        [(Node_made 1, Node_variable 14); (Node_made 3, Node_made 3);
-        (Node_made 4, Node_made 4); (Node_symbol 80, Node_symbol 80);
-        (Node_symbol 81, Node_symbol 81); (Node_variable 10, Node_variable 10);
-        (Node_variable 11, Node_made 3); (Node_variable 12, Node_variable 12);
+        (Node_symbol 80, Node_symbol 80); (Node_symbol 81, Node_symbol 81);
+        (Node_variable 10, Node_variable 10);
+        (Node_variable 11, Node_variable 11);
+        (Node_variable 12, Node_variable 12);
         (Node_variable 13, Node_symbol 81);
         (Node_variable 14, Node_variable 14)];
      t_reading_field := [];
      t_escaping_field := [];
      t_field_used :=
-       [(Node_made 10, Field_code_id_of_call_witness);
-        (Node_made 3, Field_call_witness Known_arity_code_pointer);
-        (Node_made 3, Field_call_witness Unknown_arity_code_pointer);
-        (Node_made 3, Field_function_slot 70);
-        (Node_made 3, Field_function_slot 71);
+       [(Node_made 6, Field_code_id_of_call_witness);
         (Node_made 7, Field_code_id_of_call_witness);
         (Node_made 8, Field_code_id_of_call_witness);
         (Node_made 9, Field_code_id_of_call_witness);
@@ -1752,6 +1751,10 @@ Definition solution : tables :=
         (Node_variable 10, Field_call_witness Unknown_arity_code_pointer);
         (Node_variable 10, Field_function_slot 70);
         (Node_variable 10, Field_function_slot 71);
+        (Node_variable 11, Field_call_witness Known_arity_code_pointer);
+        (Node_variable 11, Field_call_witness Unknown_arity_code_pointer);
+        (Node_variable 11, Field_function_slot 70);
+        (Node_variable 11, Field_function_slot 71);
         (Node_variable 14, Field_block 0%nat Value);
         (Node_variable 14, Field_block 1%nat Value);
         (Node_variable 14, Field_get_tag); (Node_variable 14, Field_is_int)] |}.
@@ -1858,48 +1861,48 @@ Definition unit_expr : expr :=
 Definition solution : tables :=
   {| t_alias :=
        [(Node_made 1, Node_variable 15); (Node_variable 10, Node_all_constants);
-        (Node_variable 12, Node_made 3); (Node_variable 13, Node_variable 10);
+        (Node_variable 12, Node_variable 12);
+        (Node_variable 13, Node_variable 10);
         (Node_variable 14, Node_all_constants);
         (Node_variable 9, Node_all_constants)];
      t_any_usage :=
        [Node_all_constants; Node_made 1; Node_made 2; Node_made 3; Node_made 4;
-        Node_made 5; Node_variable 10; Node_variable 11; Node_variable 13;
+        Node_variable 10; Node_variable 11; Node_variable 12; Node_variable 13;
         Node_variable 14; Node_variable 15];
      t_any_source :=
-       [Node_all_constants; Node_made 4; Node_made 5; Node_made 6; Node_made 7;
+       [Node_all_constants; Node_made 3; Node_made 4; Node_made 5; Node_made 6;
         Node_variable 10; Node_variable 13; Node_variable 14; Node_variable 9];
      t_has_usage :=
        [Node_all_constants; Node_made 1; Node_made 2; Node_made 3; Node_made 4;
-        Node_made 5; Node_symbol 81; Node_variable 10; Node_variable 11;
-        Node_variable 12; Node_variable 13; Node_variable 14; Node_variable 15];
+        Node_symbol 81; Node_variable 10; Node_variable 11; Node_variable 12;
+        Node_variable 13; Node_variable 14; Node_variable 15];
      t_has_source :=
        [Node_all_constants; Node_made 1; Node_made 3; Node_made 4; Node_made 5;
-        Node_made 6; Node_made 7; Node_symbol 80; Node_symbol 81;
-        Node_variable 10; Node_variable 11; Node_variable 12; Node_variable 13;
-        Node_variable 14; Node_variable 15; Node_variable 9];
-     t_usages :=
-       [(Node_symbol 81, Node_symbol 81); (Node_variable 12, Node_variable 12)];
+        Node_made 6; Node_symbol 80; Node_symbol 81; Node_variable 10;
+        Node_variable 11; Node_variable 12; Node_variable 13; Node_variable 14;
+        Node_variable 15; Node_variable 9];
+     t_usages := [(Node_symbol 81, Node_symbol 81)];
      t_sources :=
-       [(Node_made 1, Node_variable 15); (Node_made 3, Node_made 3);
-        (Node_symbol 80, Node_symbol 80); (Node_symbol 81, Node_symbol 81);
-        (Node_variable 11, Node_variable 11); (Node_variable 12, Node_made 3);
+       [(Node_made 1, Node_variable 15); (Node_symbol 80, Node_symbol 80);
+        (Node_symbol 81, Node_symbol 81); (Node_variable 11, Node_variable 11);
+        (Node_variable 12, Node_variable 12);
         (Node_variable 15, Node_variable 15)];
      t_reading_field := [];
      t_escaping_field := [];
      t_field_used :=
-       [(Node_made 3, Field_call_witness Known_arity_code_pointer);
-        (Node_made 3, Field_call_witness Unknown_arity_code_pointer);
-        (Node_made 3, Field_function_slot 70);
-        (Node_made 3, Field_function_slot 71);
-        (Node_made 3, Field_value_slot 60);
+       [(Node_made 3, Field_code_id_of_call_witness);
         (Node_made 4, Field_code_id_of_call_witness);
-        (Node_made 5, Field_code_id_of_call_witness);
         (Node_symbol 81, Field_value_slot 62);
         (Node_variable 11, Field_call_witness Known_arity_code_pointer);
         (Node_variable 11, Field_call_witness Unknown_arity_code_pointer);
         (Node_variable 11, Field_function_slot 70);
         (Node_variable 11, Field_function_slot 71);
         (Node_variable 11, Field_value_slot 60);
+        (Node_variable 12, Field_call_witness Known_arity_code_pointer);
+        (Node_variable 12, Field_call_witness Unknown_arity_code_pointer);
+        (Node_variable 12, Field_function_slot 70);
+        (Node_variable 12, Field_function_slot 71);
+        (Node_variable 12, Field_value_slot 60);
         (Node_variable 15, Field_block 0%nat Value);
         (Node_variable 15, Field_block 1%nat Value);
         (Node_variable 15, Field_block 2%nat Value);
@@ -3156,20 +3159,16 @@ Definition unit_expr : expr :=
 
 Definition solution : tables :=
   {| t_alias :=
-       [(Node_made 1, Node_variable 17); (Node_symbol 50, Node_all_constants);
-        (Node_symbol 51, Node_all_constants);
-        (Node_symbol 54, Node_all_constants);
+       [(Node_made 1, Node_variable 17); (Node_symbol 51, Node_all_constants);
         (Node_variable 10, Node_all_constants);
         (Node_variable 11, Node_all_constants)];
      t_any_usage :=
        [Node_all_constants; Node_made 1; Node_made 2; Node_symbol 50;
         Node_symbol 51; Node_symbol 52; Node_variable 10; Node_variable 13;
-        Node_variable 14; Node_variable 15; Node_variable 16;
-        Node_variable 17];
+        Node_variable 14; Node_variable 15; Node_variable 16; Node_variable 17];
      t_any_source :=
-       [Node_all_constants; Node_symbol 50; Node_symbol 51; Node_symbol 54;
-        Node_variable 10; Node_variable 11; Node_variable 12; Node_variable 13;
-        Node_variable 14; Node_variable 15];
+       [Node_all_constants; Node_symbol 51; Node_variable 10; Node_variable 11;
+        Node_variable 12; Node_variable 13; Node_variable 14; Node_variable 15];
      t_has_usage :=
        [Node_all_constants; Node_made 1; Node_made 2; Node_symbol 50;
         Node_symbol 51; Node_symbol 52; Node_variable 10; Node_variable 12;
@@ -3182,13 +3181,15 @@ Definition solution : tables :=
         Node_variable 15; Node_variable 16; Node_variable 17];
      t_usages := [(Node_variable 12, Node_variable 12)];
      t_sources :=
-       [(Node_made 1, Node_variable 17); (Node_symbol 52, Node_symbol 52);
-        (Node_symbol 53, Node_symbol 53); (Node_variable 16, Node_variable 16);
+       [(Node_made 1, Node_variable 17); (Node_symbol 50, Node_symbol 50);
+        (Node_symbol 52, Node_symbol 52); (Node_symbol 53, Node_symbol 53);
+        (Node_symbol 54, Node_symbol 54); (Node_variable 16, Node_variable 16);
         (Node_variable 17, Node_variable 17)];
      t_reading_field := [];
      t_escaping_field := [];
      t_field_used :=
-       [(Node_symbol 52, Field_block 0 Value);
+       [(Node_symbol 50, Field_boxed_number Boxable_naked_float);
+        (Node_symbol 52, Field_block 0 Value);
         (Node_symbol 52, Field_block 1 Value);
         (Node_symbol 52, Field_block 2 Value); (Node_symbol 52, Field_get_tag);
         (Node_symbol 52, Field_is_int);
@@ -3246,20 +3247,22 @@ Definition static_constants_example_statement : Prop :=
          empty_heap)
       (Exits 1%positive [StaticConstantsExample.result] empty_heap).
 
-(* A static boxed number may not hold a variable: the traversal gives the
-   variable no use from it ([traverse_static_binding]), and the rebuild
-   gives the number a zero in its place ([rewrite_or_variable]):
+(* A static boxed number of a variable: the traversal aliases the
+   symbol to the constants and gives the variable a use from it
+   ([traverse_static_binding]), and the rebuild keeps the variable, as
+   the symbol has a use ([rewrite_or_variable]):
 
-     let x10 = 2.5 in                   (a naked float; no use)
+     let x10 = 2.5 in                   (a naked float)
      let symbol s50 = box x10 in
      let x11 = unbox s50 in
      let x12 = box x11 in
      return x12
 
-   Its least solution passes the checks, and the unit exits with 2.5
-   boxed; the rebuild removes [x10] and binds [s50] to 0.0 boxed, and
-   the rebuilt unit exits with 0.0 boxed. The unit is of [tupled_calls]
-   and [static_constants] but for the variable. *)
+   Its least solution passes the checks; the rebuild changes nothing,
+   and the two units exit with 2.5 boxed. The unit is of [tupled_calls]
+   and [static_constants] but for the variable. (Before traverse.ml was
+   made to keep the variables of static constants, the variable had no
+   use, and the rebuild put 0.0 in its place.) *)
 Module StaticBoxedVariableExample.
 
 Local Open Scope positive_scope.
@@ -3281,19 +3284,18 @@ Definition solution : tables :=
        [(Node_made 1, Node_variable 12); (Node_symbol 50, Node_all_constants);
         (Node_variable 10, Node_all_constants)];
      t_any_usage :=
-       [Node_made 1; Node_made 2; Node_variable 11; Node_variable 12];
+       [Node_all_constants; Node_made 1; Node_made 2; Node_variable 10;
+        Node_variable 11; Node_variable 12];
      t_any_source :=
-       [Node_all_constants; Node_symbol 50; Node_variable 10;
-        Node_variable 11];
+       [Node_all_constants; Node_symbol 50; Node_variable 10; Node_variable 11];
      t_has_usage :=
        [Node_all_constants; Node_made 1; Node_made 2; Node_symbol 50;
-        Node_variable 11; Node_variable 12];
+        Node_variable 10; Node_variable 11; Node_variable 12];
      t_has_source :=
        [Node_all_constants; Node_made 1; Node_symbol 50; Node_variable 10;
         Node_variable 11; Node_variable 12];
      t_usages :=
-       [(Node_all_constants, Node_symbol 50);
-        (Node_symbol 50, Node_symbol 50)];
+       [(Node_all_constants, Node_symbol 50); (Node_symbol 50, Node_symbol 50)];
      t_sources :=
        [(Node_made 1, Node_variable 12); (Node_variable 12, Node_variable 12)];
      t_reading_field := [];
@@ -3301,12 +3303,14 @@ Definition solution : tables :=
      t_field_used :=
        [(Node_variable 12, Field_boxed_number Boxable_naked_float)] |}.
 
-Definition rebuilt : expr :=
-  Let_static [Bind_symbol 50 (StaticConstantsExample.boxed_float 0)] reads.
+Definition rebuilt : expr := unit_expr.
+
+Definition result : value :=
+  Value_boxed_number (Naked_float StaticConstantsExample.two_and_a_half).
 
 End StaticBoxedVariableExample.
 
-Definition static_boxed_variable_needed_statement : Prop :=
+Definition static_boxed_variable_example_statement : Prop :=
   in_flow_fragment StaticBoxedVariableExample.unit_expr = true
   ∧ static_constants (unit_codes StaticBoxedVariableExample.unit_expr)
       StaticBoxedVariableExample.unit_expr
@@ -3334,5 +3338,11 @@ Definition static_boxed_variable_needed_statement : Prop :=
       StaticBoxedVariableExample.solution false
       StaticBoxedVariableExample.unit_expr
     = StaticBoxedVariableExample.rebuilt
-  ∧ ~ program_refines_observably StaticBoxedVariableExample.unit_expr
-        StaticBoxedVariableExample.rebuilt.
+  ∧ behaves
+      (State StaticBoxedVariableExample.unit_expr [] [] empty_static_env
+         empty_heap)
+      (Exits 1%positive [StaticBoxedVariableExample.result] empty_heap)
+  ∧ behaves
+      (State StaticBoxedVariableExample.rebuilt [] [] empty_static_env
+         empty_heap)
+      (Exits 1%positive [StaticBoxedVariableExample.result] empty_heap).
