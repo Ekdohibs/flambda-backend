@@ -37,10 +37,15 @@
    (FlambdaValidateSpec.normalise_expr_before and
    [normalise_expr_params]). It is extracted and run with them. The
    tidying of the term before that follows the placing of
-   continuations applies it too ([tidy_expr_before]), after
-   FlambdaArmNumbersSpec.numbers_in_arms has put the number of an arm
-   for a scrutinee that the arm passes on: the arms of a [Switch] may
-   give their numbers only then.
+   continuations applies it too ([tidy_expr_before]), in the place
+   that it has in a round: after [fold_constants] and
+   [collapse_switches], before [remove_unused_conts]. There
+   FlambdaArmNumbersSpec.numbers_in_arms has first put the number of
+   an arm for the variable that the [Switch] tests, at the reads that
+   the header of FlambdaArmNumbersSpec.v lists, in the arm and in the
+   handler that only that arm applies, and the fold has folded what
+   that made constant: the arms of a [Switch] may give their numbers
+   only then.
 
    What Simplify does. Where the arms of a [Switch] all apply the same
    continuation with no trap action, and each argument is either the
