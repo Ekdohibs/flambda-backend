@@ -198,6 +198,19 @@ a `CR` at the place in the `Spec` file.
   the human's: whether the rule is to be his, or one under which the
   move of X5-3 is right, that bytes of which a view has been read are
   never written again.
+- **D50.** What a call of a C function shows of its arguments where
+  the model has no answer for it. The table of
+  `FlambdaExtcallSpec.v` answers fourteen comparisons, on two strings
+  or on two tagged immediates; a program that compares two lists
+  calls one of them outside that. Such a call is to be neither
+  undefined nor a raise, so the run would end there, and a statement
+  that relates the term before to the term after has to say what of
+  the two ends is the same: the arguments as values, what is
+  reachable from them, what they read as, or what every term that
+  could follow sees of them. Meanwhile no call of a C function has a
+  meaning in the model: the conversion refuses every one and nothing
+  uses the table. Open, and the human's: `requests/P1-c-calls.md`,
+  "The open choice", has the ways to answer and what each costs.
 
 ## Discrepancies with the compiler
 

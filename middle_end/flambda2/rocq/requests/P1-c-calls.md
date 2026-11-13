@@ -234,6 +234,171 @@ instead of accepting. R2 asks that a domain the model has not got be
 kept apart from a raise and from undefined, and has not approved the
 step above.
 
+## The open choice: what a call shows of its arguments
+
+Decision D50. Nothing of this section is built, and none of it is
+agreed as a design. Every count, cost and gain in it is an estimate:
+by a text search of the tree of c7fa0612cd, or counted by another
+stream on units that are not in this tree. None is a verified
+coverage.
+
+The orchestrator asked for a plan of way (A) with only what the
+table answers today, in which a call that the table does not answer
+ends the run in a way of its own; the plan was held, by the two
+reviewers who read it, on one question: what such an end shows of
+the arguments of the call. This section sets the question out, with
+the ways to answer it and what each would cost. The choice is the
+human's.
+
+### What is settled, and cheap
+
+- The table (`FlambdaExtcallSpec.v`): fourteen comparisons at the
+  signature of two values and a value. The seven on strings answer
+  on two strings; the seven polymorphic ones answer on two strings
+  or on two tagged immediates. Elsewhere the table has no answer.
+- A test of the table against the functions of the runtime on
+  generated arguments, and the repair of the reader of the text of
+  terms, which does not read a C call as the compiler prints it
+  (V2-1), are needed whatever is chosen. Neither is in this tree.
+- The machine side, as directions that the reviewer of the changes
+  to the core and the owner of calls found acceptable as scoped. It
+  is not a design that has passed, and it is not built. A call kind
+  for the fourteen functions. One form for such a call, a
+  restriction of the records of the model with a review comment of
+  its own: the conversion writes the constant 0 for the callee, and
+  the machine requires the callee to evaluate to the tagged
+  immediate 0; the arities are those of the signature. A step in
+  five cases: a record that is not of that form, undefined; an
+  argument of another kind, undefined (D10); an argument that is a
+  symbol bound to nothing, undefined (D8), and poison too, with the
+  qualification that what primitives are on poison is open; the
+  table answers, and the call returns the answer; otherwise the run
+  ends there, with the function, the arguments and the heap. That
+  end is not undefined, not a raise and not divergence. A name or a
+  signature outside the table stays refused by the conversion.
+- What that end costs by itself: a fourth way for a step to end. By
+  the text search, which is not a checked inventory: about 95 proof
+  files take the result of a step apart and gain a branch; 16
+  definitions and 12 statements gain a case; one statement
+  (`step_values_all_statement`) gains a premise. It would be the
+  widest change of constructors that the model has had.
+
+### The choice
+
+A program that compares two lists reaches a call that the table
+does not answer, and its run ends there in the model. A statement
+that relates the term before Simplify to the term after has to say
+something of the two ends. The pair that shows the difficulty:
+
+    before:  let static $s = Block 0 (0)  $t = Block 0 (0)
+             in  caml_equal ($s, $t)
+    after:   let static $s = Block 0 (0)  $t = Block 0 (1)
+             in  caml_equal ($s, $t)
+
+Both runs end at the call with the arguments `[$s; $t]` and the
+same heap. As values the arguments are equal: the same two symbols.
+What the symbols stand for differs, and the real function, which
+reads the blocks, answers true before and false after. (The
+reviewers' pair is `[$s; $s]`, with `$s` bound to `Block 0 (0)` and
+then to `Block 0 (1)`: there the real answers are the same, and
+what is lost is only what the argument stands for.) It is an
+example on paper: no pass is known to make it. At an exit such a
+pair is told apart by the comparisons that are under every
+continuation environment (the refinement of terms, and the forms
+with observers), because a continuation may read the block; the
+comparison of two units each run on its own does not look at it.
+Nothing follows a call that ends the run, so no continuation
+environment reaches it.
+
+Common to O1, O2 and O3 below: the cost of the fourth end, above.
+For the gain there is one figure, counted by another stream on 199
+units written for the purpose, taken without their `main` (not in
+this tree): 51 reach the comparison of the two terms today, 60
+would with the comparisons of strings, 68 with the polymorphic ones
+too. So 17 units more would reach the comparison. That is not 17
+verdicts (of the 51, 43 are validated at the default flags), and it
+is not a bound for other programs. Of the 200 whole units, with
+their `main`, none would: each also needs another unit when it
+runs. A list of 2,689 other units has no C call in the terms that
+are converted today; 168 of its outputs are of terms that are not
+read, and a C call may be among those.
+
+- **O1. Equal arguments, and everything reachable from them equal
+  as text**, through the two static environments and heaps. It
+  claims that the two runs stop at the same function on the same
+  data, code included. A lifted value or a rewritten function among
+  the arguments is a difference. Cost: a definition of "reachable
+  and equal". With the way a lifting is proved today (a check that
+  the term gives only symbols and constants where values are
+  compared by equality), most units that give a variable to a C
+  call would be refused; that is a limit of that way of proving,
+  not of the option. Gain: a handful of the 17 is expected, unless
+  that changes.
+- **O1', a variant: the arguments read the same to every depth.** A
+  value is read through its own static environment and heap: an
+  immediate, a string by its bytes, a block by its tag and fields,
+  a boxed number, an immutable array, and a function only as "a
+  function". The comparisons do not read code. A lifted block reads
+  as it did, so the comparisons that lift stay available, and the
+  pair above is told apart. What it forgets: which function, and
+  whether two arguments are the same allocation. The runtime can
+  see that: `caml_compare` answers at once on two pointers that are
+  the same, and raises on two different functions, so `compare f f`
+  may answer 0 where `compare f g` raises. Cyclic and mutable data
+  are not specified. So it is not established that this reading
+  keeps what the comparisons of the runtime do. Cost, an estimate:
+  one new `Spec` file (about 250 lines, proofs 400 to 600) and, for
+  each relation that a proof takes through a call, one law of the
+  reading. No theory about contexts. Gain: up to the 17.
+- **O2. The arguments compared by observers**, as the values of an
+  exit are: every term that could follow, applied to them. It tells
+  apart two functions that behave differently, which O1' does not;
+  against O1 it is not simply more, since equality of text is the
+  stricter of the two. Cost: the comparison is defined through
+  itself (an observer may reach such a call), so it needs a
+  well-founded design; the relation `refines` of the core would
+  depend on observers; and every proof that a pass refines would
+  owe a fact about contexts for which the tree has no theorem
+  (about 310 statements name a relation between two runs, by the
+  text search; not all of them are about passes). Gain: as O1'.
+- **O3. Nothing claimed of a run that reaches such a call**, and
+  the tool says so on the line of the unit. Cost: the least of the
+  three, as no law says what is kept at the end. What a wrong
+  compiler could then get away with: anything, on every run that
+  reaches such a call, including what the run does before the
+  call. The statements are about whole runs, so a run of the term
+  before that ends this way would license any term after, as an
+  undefined run does. (That is what the statements would allow; it
+  is not a claim that the validation as it is would accept every
+  such pair.)
+- **O4. Nothing in the machine until calls are events** (way (B):
+  a run is observed by the calls that it makes, and the environment
+  gives the results). What carries over: the table, its test, the
+  repair of the reader, the form of the call in the term, the case
+  in which the table answers. What does not: the fourth end and its
+  sweep, unless the design of events keeps it as "the environment
+  gives no answer". The question of this section does not go away:
+  with events it is what a call shows of its arguments, and O1, O1'
+  and O2 are three answers to it.
+
+### Recommendation
+
+O4 now; the two reviewers who read this section for its accuracy
+recommend the same. The gain of the first step is at most 17 units
+of the 199, none of the whole programs, and its price is the widest
+sweep that the model has had, part of which events would pay again.
+The table, its test and the repair of the reader go on. What a call
+shows of its arguments is to be decided, by the human, before the
+machine is given any call, whether calls get their meaning from the
+table or from events. O1' is the candidate that this stream would
+study first, with the limits said above; neither reviewer endorses
+it in advance. What stops those programs is elsewhere as well: by
+the same count, all 200 whole units use another unit when they run,
+and 93 the heap.
+
+Meanwhile no call of a C function has a meaning in the model, the
+conversion refuses every one, and nothing uses the table.
+
 ## `caml_fresh_oo_id`, for an exception that a unit declares
 
 Not in the table: it is not a function of its argument. This is for
@@ -306,12 +471,15 @@ exception, which is false.
 
 Asked of the human: (A) or (B) first; whether polymorphic comparison
 by structure is wanted now or only what Simplify specialises; for
-`caml_fresh_oo_id`, a counter or an answer that the term never reads.
+`caml_fresh_oo_id`, a counter or an answer that the term never reads;
+and, before the machine is given any call, what a call shows of its
+arguments (Decision D50; "The open choice", above).
 
 Read as a design by R2 (2026-11-12), whose points are taken above: a
 comparison of closures may raise and does not always; an unknown name
 or a call signature that the table has not got stays unconverted,
 which is not a static check of kinds; a raise is kept apart from a
 domain the model has not got; the limit of X5-3; what
-`caml_fresh_oo_id` needs. It is a request, and no meaning of a call
-is agreed.
+`caml_fresh_oo_id` needs. The section on the open choice was read
+for its accuracy by two reviewers (2026-11-13), and not as a design.
+It is a request, and no meaning of a call is agreed.
