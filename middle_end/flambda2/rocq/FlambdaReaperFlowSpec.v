@@ -30,17 +30,19 @@
 
    This file is to be reviewed: [may_come_from], [flows] and what is
    made of them ([state_flows], [exit_flows]), the fragment
-   ([in_flow_fragment]), and the statements. The proofs are in
-   FlambdaReaperFlowProofs.v, which needs no review.
+   ([in_flow_fragment] and what it is made of, [projection_free]), and
+   the statements. The proofs are in FlambdaReaperFlowProofs.v, which
+   needs no review.
 
    The rules of the reaper (FlambdaReaperGraphSpec.closed) speak of
    allocations: a node has [sources], the nodes of the allocations its
    value may come from, or [any_source]. The machine has no identity of
-   allocations: a block or a boxed number is its contents, and two made
-   alike are one value (FlambdaValueSpec.v). So what a value is at a
-   node cannot be read off the value. [flows v n], "the value [v] may be
-   at the node [n]", says instead that there is an allocation that [v]
-   may come from, and is defined by recursion on [v]:
+   allocations: a block, a boxed number or a closure is its contents,
+   and two made alike are one value (FlambdaValueSpec.v). So what a
+   value is at a node cannot be read off the value. [flows v n], "the
+   value [v] may be at the node [n]", says instead that there is an
+   allocation that [v] may come from, and is defined by recursion on
+   [v]:
    - a constant may be at a node that has any source: the traversal
      gives every constant the node [Node_all_constants], which has any
      source ([traverse_unit]), and the rules carry it along aliases and
@@ -52,18 +54,29 @@
      node [from] with the fact that [a] holds [from] in its field [i];
    - a boxed number likewise, with its one field, whose contents is a
      constant;
+   - a closure of a set may be at [n] if there are nodes for the
+     closures of the set ([sites]), that of its slot being one that [n]
+     may come from; each is an allocation of its own, has what [called]
+     asks for the code of its slot, holds the node of each closure of the
+     set in its function slot, and holds, in each value slot that the
+     traversal keeps ([kept]: those that a projection of the unit names,
+     [unit_kept]), a node at which the value of the slot may be. [called]
+     is a parameter: the statement takes [has_call_witness], that the
+     allocation has a call witness of known arity; the proof uses more,
+     the witness and [my_closure] of the code;
    - a symbol is an allocation of its own: it may be at [n] if the node
      of the symbol is one that [n] may come from. What it points to is
      said once for the static environment ([statics_flow]), as for a
-     block whose node is that of the symbol;
+     block or a closure whose node is that of the symbol;
    - an immutable array has no allocation in the graph (the traversal
      reads [Make_immutable_array] and [Array_load] as other primitives:
      the variable bound has any source and a use of each argument), so
      it may be at a node with any source whose elements are constants or
      may each be at a node that has any usage if the array's node has a
      usage;
-   - nothing else is in the fragment yet: closures, partial applications
-     and locations are not at any node.
+   - partial applications and locations are not in the fragment, and are
+     at no node; nor are the closures of the older form
+     ([Value_closure]).
    The allocation is existential, and need not be the same for the
    value at two nodes; but at each node there is one, and what the rules
    give of the node's sources is given of it. [flows] does not depend on
@@ -88,14 +101,25 @@
    ([read_field_used_statement]), so a field made poison is never read
    by a use.
 
-   The statement is about a fragment of the terms
-   ([in_flow_fragment]): a unit made of [Let]s of simples and of
-   primitives, [Let_cont]s, recursive or not, [Apply_cont]s, [Switch]es
-   and [Invalid], and [Let_static]s of blocks only. It has no call, no
-   closure, no projection, and no code. Every primitive is in it: those
-   that the traversal reads as a block made, a load, [Is_int], [Get_tag]
-   and the boxing and unboxing of a number, and the others, of which
-   the traversal knows only the arguments.
+   The statement is about a fragment of the terms ([in_flow_fragment]):
+   a unit made of [Let]s of simples, of primitives, of closures of sets
+   ([Closure_of_set]) and of projections from them
+   ([Project_value_slot_from], [Project_function_slot]), [Let_cont]s,
+   recursive or not, [Apply_cont]s, [Switch]es, [Invalid], direct calls,
+   and [Let_static]s of code, of blocks and of closures of static sets.
+   Every primitive is in it. A direct call has no extra argument for its
+   exception continuation, and the code it names, if the unit binds it,
+   is not tupled and has as many parameters as the call has arguments
+   (S7's hypothesis). The body of code binds nothing static, its two
+   continuations differ, and it applies only continuations in scope,
+   each to as many values as it has parameters, the return continuation
+   of the code to as many as the code has results and its exception
+   continuation to one ([conts_counted]); the closure symbols of a static
+   set are symbols that the unit binds, and its slot is among its
+   function slots; the code ids that the unit binds are distinct. Not in
+   it: indirect calls, partial applications and over-applications,
+   extra arguments of exception continuations, and the older forms of
+   sets of closures.
 
    For a unit in the fragment, and tables that pass the check of
    FlambdaReaperSolution.v ([check_closed], which is proved to imply
@@ -108,56 +132,219 @@
    the parameter of that continuation ([exit_flows],
    [unit_cont_nodes]: the made nodes 1 and 2, which have any usage,
    [unit_cont_nodes_used_statement]) ([flow_sound_statement]). The unit
-   need not be well-formed: a continuation applied where it is not in
-   scope is a way out of the term, for which the statement says
-   nothing, and nothing else of well-formedness is used.
+   need not be well-formed: a continuation applied at toplevel where it
+   is not in scope is a way out of the term, for which the statement
+   says nothing, and the conditions that the proof needs are those of
+   the fragment.
 
-   The statement holds of more than nothing: a unit of the fragment,
-   with a static block, a block made, two loads and a continuation, has
-   its least solution pass the check, and its run exits
-   ([example_statement]). *)
+   Local fields. The statement asks that no field is local, unless the
+   unit has no projection ([projection_free]). With local value slots it
+   does not hold, and the reaper is unsound: a closure stored in an
+   immutable array and loaded back has any source at its new node and
+   no alias to its allocation, so the read of a local value slot of it
+   gives what is read no source when nothing uses it, and the rebuild
+   replaces by [Invalid] an [Apply_cont] that passes it on
+   ([local_slot_counterexample_statement]: the least solution passes
+   the check, the unit exits, and the rebuilt unit goes wrong).
+
+   The statement holds of more than nothing: a unit with a static
+   block, a block made, two loads and a continuation
+   ([example_statement]), and a unit with code, a closure of it whose
+   value slot is read through [my_closure], and a direct call
+   ([call_example_statement]), each have their least solution pass the
+   check, and their runs exit. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaSemanticsSpec FlambdaWellFormedSpec FlambdaReaperGraphSpec
-  FlambdaReaperTraversal FlambdaReaperSolution FlambdaReaperSolutionSpec.
+  FlambdaReaperTraversal FlambdaReaperSolution FlambdaReaperSolutionSpec
+  FlambdaReaperRebuild.
 Import ListNotations.
 
 (* ======================================================================== *)
 (* The fragment                                                             *)
 (* ======================================================================== *)
 
+(* The code that a unit binds where its [Let_static]s are, as
+   [static_names] has the names. *)
+Fixpoint unit_codes (e : expr) : list (code_id * code) :=
+  match e with
+  | Let _ _ _ body => unit_codes body
+  | Let_static bindings body =>
+    flat_map
+      (fun binding =>
+         match binding with
+         | Bind_code id c => [(id, c)]
+         | Bind_deleted_code _ | Bind_symbol _ _ => []
+         end)
+      bindings
+    ++ unit_codes body
+  | Let_cont_non_recursive _ h body => handler_unit_codes h ++ unit_codes body
+  | Let_cont_recursive handlers body =>
+    flat_map (fun '(_, h) => handler_unit_codes h) handlers ++ unit_codes body
+  | Apply _ | Apply_cont _ | Switch _ _ | Invalid => []
+  end
+with handler_unit_codes (h : continuation_handler) : list (code_id * code) :=
+  match h with
+  | Handler _ _ handler => unit_codes handler
+  end.
+
+(* In the body of code, every continuation applied, or given to a call,
+   is bound, and is given as many values as the traversal has nodes for
+   its parameters: [ks] has the number of each continuation in scope. *)
+Definition count_ok (ks : finite_map nat) (k : continuation) (n : nat)
+    : bool :=
+  match lookup k ks with
+  | Some m => Nat.eqb m n
+  | None => false
+  end.
+
+Fixpoint conts_counted (ks : finite_map nat) (e : expr) : bool :=
+  match e with
+  | Let _ _ _ body | Let_static _ body => conts_counted ks body
+  | Let_cont_non_recursive k h body =>
+    handler_conts_counted ks h
+    && conts_counted ((k, length (handler_params h)) :: ks) body
+  | Let_cont_recursive handlers body =>
+    forallb
+      (fun '(_, h) =>
+         handler_conts_counted
+           (map (fun '(k, h) => (k, length (handler_params h))) handlers
+            ++ ks)
+           h)
+      handlers
+    && conts_counted
+         (map (fun '(k, h) => (k, length (handler_params h))) handlers ++ ks)
+         body
+  | Apply ap =>
+    count_ok ks (ap_continuation ap) (length (unarize (ap_return_arity ap)))
+    && count_ok ks (ap_exn_continuation ap) 1
+  | Apply_cont ac => count_ok ks (ac_continuation ac) (length (ac_args ac))
+  | Switch _ arms =>
+    forallb
+      (fun '(_, ac) => count_ok ks (ac_continuation ac) (length (ac_args ac)))
+      arms
+  | Invalid => true
+  end
+with handler_conts_counted (ks : finite_map nat) (h : continuation_handler)
+    : bool :=
+  match h with
+  | Handler _ _ handler => conts_counted ks handler
+  end.
+
 Definition named_in_flow_fragment (defining_expr : named) : bool :=
   match defining_expr with
-  | Simple _ | Prim _ _ => true
-  | Set_of_closures _ _ | Closure_of_set _ _ _ | Project_value_slot _ _
-  | Project_value_slot_from _ _ _ | Project_function_slot _ _ _ => false
+  | Simple _ | Prim _ _ | Closure_of_set _ _ _
+  | Project_value_slot_from _ _ _ | Project_function_slot _ _ _ => true
+  | Set_of_closures _ _ | Project_value_slot _ _ => false
   end.
 
-Definition binding_in_flow_fragment (binding : static_binding) : bool :=
-  match binding with
-  | Bind_symbol _ (Static_const_block _ _) => true
-  | _ => false
+(* A direct call, with no extra argument for its exception continuation,
+   of code that, if the unit binds it, is not tupled and has as many
+   parameters as the call has arguments. *)
+Definition apply_in_flow_fragment (codes : list (code_id * code))
+    (ap : apply_expr) : bool :=
+  match ap_call_kind ap with
+  | Direct id =>
+    no_exn_extra_args ap
+    && forallb
+         (fun '(id', c) =>
+            negb (Pos.eqb id id')
+            || (negb (code_is_tupled c)
+                && Nat.eqb (length (ap_args_arity ap))
+                     (length (code_params_arity c))))
+         codes
+  | Indirect => false
   end.
 
-Fixpoint in_flow_fragment (e : expr) : bool :=
+(* The terms of the fragment, given the code and the symbols that the
+   unit binds. *)
+Fixpoint flow_fragment (codes : list (code_id * code)) (symbols : list symbol)
+    (e : expr) : bool :=
   match e with
   | Let _ _ defining_expr body =>
-    named_in_flow_fragment defining_expr && in_flow_fragment body
+    named_in_flow_fragment defining_expr && flow_fragment codes symbols body
   | Let_static bindings body =>
-    forallb binding_in_flow_fragment bindings && in_flow_fragment body
+    forallb (binding_flow_fragment codes symbols) bindings
+    && flow_fragment codes symbols body
   | Let_cont_non_recursive _ h body =>
-    handler_in_flow_fragment h && in_flow_fragment body
+    handler_flow_fragment codes symbols h && flow_fragment codes symbols body
   | Let_cont_recursive handlers body =>
-    forallb (fun '(_, h) => handler_in_flow_fragment h) handlers
-    && in_flow_fragment body
-  | Apply _ => false
+    forallb (fun '(_, h) => handler_flow_fragment codes symbols h) handlers
+    && flow_fragment codes symbols body
+  | Apply ap => apply_in_flow_fragment codes ap
   | Apply_cont _ | Switch _ _ | Invalid => true
   end
-with handler_in_flow_fragment (h : continuation_handler) : bool :=
+with handler_flow_fragment (codes : list (code_id * code))
+    (symbols : list symbol) (h : continuation_handler) : bool :=
   match h with
-  | Handler _ _ handler => in_flow_fragment handler
+  | Handler _ _ handler => flow_fragment codes symbols handler
+  end
+with binding_flow_fragment (codes : list (code_id * code))
+    (symbols : list symbol) (binding : static_binding) : bool :=
+  match binding with
+  | Bind_symbol _ (Static_const_block _ _) => true
+  | Bind_symbol _
+      (Static_const_closure_of_set slot closure_symbols function_decls _) =>
+    is_bound slot function_decls
+    && forallb (fun '(_, s) => among s symbols) closure_symbols
+  | Bind_symbol _ _ => false
+  | Bind_code _ c => code_flow_fragment codes symbols c
+  | Bind_deleted_code _ => true
+  end
+with code_flow_fragment (codes : list (code_id * code))
+    (symbols : list symbol) (c : code) : bool :=
+  match c with
+  | Code _ _ return_continuation exn_continuation metadata body =>
+    negb (Pos.eqb return_continuation exn_continuation)
+    && negb (binds_statics body)
+    && conts_counted
+         [(exn_continuation, 1);
+          (return_continuation, length (unarize (cm_result_arity metadata)))]
+         body
+    && flow_fragment codes symbols body
+  end.
+
+(* The unit: its terms are of the fragment, and the code ids it binds are
+   distinct. *)
+Definition in_flow_fragment (e : expr) : bool :=
+  flow_fragment (unit_codes e) (static_names symbols_of_binding e) e
+  && distinct (static_names code_ids_of_binding e).
+
+(* No projection from a closure, in the unit or in its code. *)
+Definition named_projection_free (defining_expr : named) : bool :=
+  match defining_expr with
+  | Project_value_slot _ _ | Project_value_slot_from _ _ _
+  | Project_function_slot _ _ _ => false
+  | Simple _ | Prim _ _ | Set_of_closures _ _ | Closure_of_set _ _ _ => true
+  end.
+
+Fixpoint projection_free (e : expr) : bool :=
+  match e with
+  | Let _ _ defining_expr body =>
+    named_projection_free defining_expr && projection_free body
+  | Let_static bindings body =>
+    forallb binding_projection_free bindings && projection_free body
+  | Let_cont_non_recursive _ h body =>
+    handler_projection_free h && projection_free body
+  | Let_cont_recursive handlers body =>
+    forallb (fun '(_, h) => handler_projection_free h) handlers
+    && projection_free body
+  | Apply _ | Apply_cont _ | Switch _ _ | Invalid => true
+  end
+with handler_projection_free (h : continuation_handler) : bool :=
+  match h with
+  | Handler _ _ handler => projection_free handler
+  end
+with binding_projection_free (binding : static_binding) : bool :=
+  match binding with
+  | Bind_code _ c => code_projection_free c
+  | Bind_deleted_code _ | Bind_symbol _ _ => true
+  end
+with code_projection_free (c : code) : bool :=
+  match c with
+  | Code _ _ _ _ _ body => projection_free body
   end.
 
 (* ======================================================================== *)
@@ -168,6 +355,10 @@ Section Flow.
 
 Variable G : graph.
 Variable sol : solution.
+(* The value slots that the traversal gives constructor facts. *)
+Variable kept : value_slot -> bool.
+(* What the allocation of a closure has for the code of its slot. *)
+Variable called : node -> code_id -> Prop.
 
 (* The value at [n] may come from the allocation [a]. *)
 Definition may_come_from (a n : node) : Prop :=
@@ -189,7 +380,11 @@ Definition fields_from (P : nat -> value -> Prop)
     | field :: fields => P i field ∧ fields_from (S i) fields
     end.
 
-(* The value [v] may be at the node [n]. *)
+(* The value [v] may be at the node [n]. A closure of a set may be at
+   [n] if there are nodes for the closures of the set ([sites]), each an
+   allocation of its own with what [called] asks for the code of its
+   slot, the constructor facts of every function slot of the set, and
+   the values of the value slots kept. *)
 Fixpoint flows (v : value) (n : node) {struct v} : Prop :=
   match v with
   | Value_const _ => s_any_source sol n = true
@@ -220,13 +415,31 @@ Fixpoint flows (v : value) (n : node) {struct v} : Prop :=
                flows element m
                ∧ (s_has_usage sol n = true -> s_any_usage sol m = true))
         elements
-  | Value_closure _ _ | Value_closure_of_set _ _ _ | Value_location _
-  | Value_partial_application _ _ _ => False
+  | Value_closure_of_set slot function_decls value_slots =>
+    ∃ sites : function_slot -> node,
+      may_come_from (sites slot) n
+      ∧ ∀ (f : function_slot) (id : code_id),
+          lookup f function_decls = Some id ->
+          may_come_from (sites f) (sites f)
+          ∧ called (sites f) id
+          ∧ (∀ (g : function_slot) (id' : code_id),
+               lookup g function_decls = Some id' ->
+               g_constructor G (sites f) (Field_function_slot g) (sites g))
+          ∧ for_all_bindings
+              (fun w field =>
+                 kept w = true ->
+                 ∃ from : node,
+                   g_constructor G (sites f) (Field_value_slot w) from
+                   ∧ flows field from)
+              value_slots
+  | Value_closure _ _ | Value_location _ | Value_partial_application _ _ _ =>
+    False
   end.
 
-(* What a symbol points to, as for a block whose allocation is the node
-   of the symbol; and the symbol is an allocation of its own. Only
-   blocks are in the fragment. *)
+(* What a symbol points to, as for a block or a closure whose allocation
+   is the node of the symbol; and the symbol is an allocation of its
+   own. The function slots of a static set lead to the symbols of its
+   closures, each an allocation of its own. *)
 Definition static_value_flows (s : symbol)
     (allocated : statically_allocated_value) : Prop :=
   may_come_from (Node_symbol s) (Node_symbol s)
@@ -240,6 +453,21 @@ Definition static_value_flows (s : symbol)
                g_constructor G (Node_symbol s) (Field_block i Value) from
                ∧ flows field from)
           0 fields
+    | Static_closure_of_set slot closure_symbols function_decls value_slots =>
+      (∀ id : code_id,
+         lookup slot function_decls = Some id -> called (Node_symbol s) id)
+      ∧ (∀ (g : function_slot) (s' : symbol),
+           lookup g closure_symbols = Some s' ->
+           g_constructor G (Node_symbol s) (Field_function_slot g)
+             (Node_symbol s')
+           ∧ may_come_from (Node_symbol s') (Node_symbol s'))
+      ∧ for_all_bindings
+          (fun w field =>
+             kept w = true ->
+             ∃ from : node,
+               g_constructor G (Node_symbol s) (Field_value_slot w) from
+               ∧ flows field from)
+          value_slots
     | _ => False
     end.
 
@@ -294,6 +522,16 @@ Definition exit_flows (u : unit_interface) (k : continuation)
 
 End Flow.
 
+(* The value slots that the traversal of a unit keeps: those that a
+   projection names ([should_keep_value_slot]). *)
+Definition unit_kept (e : expr) (w : value_slot) : bool :=
+  among w (projected_value_slots e).
+
+(* The allocation of a closure has a call witness of known arity. *)
+Definition has_call_witness (G : graph) (a : node) (id : code_id) : Prop :=
+  ∃ witness : node,
+    g_constructor G a (Field_call_witness Known_arity_code_pointer) witness.
+
 (* ======================================================================== *)
 (* The statements                                                           *)
 (* ======================================================================== *)
@@ -302,15 +540,18 @@ Definition flow_sound_statement : Prop :=
   ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
     (u : unit_interface) (e : expr) (T : tables) (n : nat),
     is_local_slots_only is_local ->
+    (∀ f : field, is_local f = false) ∨ projection_free e = true ->
     in_flow_fragment e = true ->
     check_closed is_local (traverse_unit flag u e) T = true ->
     match run n (State e [] [] empty_static_env empty_heap) with
     | Step s =>
       state_flows (graph_of_facts (traverse_unit flag u e))
-        (solution_of_tables T) s
+        (solution_of_tables T) (unit_kept e)
+        (has_call_witness (graph_of_facts (traverse_unit flag u e))) s
     | Exit k vs _ =>
       exit_flows (graph_of_facts (traverse_unit flag u e))
-        (solution_of_tables T) u k vs
+        (solution_of_tables T) (unit_kept e)
+        (has_call_witness (graph_of_facts (traverse_unit flag u e))) u k vs
     | Undefined => True
     end.
 
@@ -325,9 +566,11 @@ Definition unit_cont_nodes_used_statement : Prop :=
 
 (* A node at which a value may be has a source. *)
 Definition flows_has_source_statement : Prop :=
-  ∀ (is_local : field -> bool) (G : graph) (sol : solution) (v : value)
-    (n : node),
-    closed is_local G sol -> flows G sol v n -> s_has_source sol n = true.
+  ∀ (is_local : field -> bool) (G : graph) (sol : solution)
+    (kept : value_slot -> bool) (called : node -> code_id -> Prop)
+    (v : value) (n : node),
+    closed is_local G sol -> flows G sol kept called v n ->
+    s_has_source sol n = true.
 
 (* A field that is read into a node that has a usage is used in every
    allocation that the value read may come from. *)
@@ -345,14 +588,15 @@ Definition read_field_used_statement : Prop :=
 (* And what the field holds may be where it is read into. *)
 Definition read_flows_statement : Prop :=
   ∀ (is_local : field -> bool) (G : graph) (sol : solution)
+    (kept : value_slot -> bool) (called : node -> code_id -> Prop)
     (a base to_ from : node) (f : field) (v : value),
     closed is_local G sol ->
     is_local f = false ->
     g_constructor G a f from ->
     g_accessor G to_ f base ->
     may_come_from sol a base ->
-    flows G sol v from ->
-    flows G sol v to_.
+    flows G sol kept called v from ->
+    flows G sol kept called v to_.
 
 (* ======================================================================== *)
 (* An example                                                               *)
@@ -444,3 +688,223 @@ Definition example_statement : Prop :=
        = false)
   ∧ run 7 (State FlowExample.unit_expr [] [] empty_static_env empty_heap)
     = Exit 1%positive [Value_const (Tagged_immediate 7)] empty_heap.
+
+(* A call. The code 20 returns the value slot 60 of its closure, read
+   through [my_closure] ([x31]); its parameter [x30] has no use. The
+   unit makes the closure [x10] of it, with the value slots 60 and 61,
+   of which no projection names 61, and calls it directly with 7,
+   returning through the continuation 5 to 1:
+
+     let code 20 (x30) my_closure x31 = return (x31.60) in
+     let x10 = closure 20 { 60 = 5; 61 = 6 } in
+     let_cont k5 x12 = return x12 in
+     x10 7 -> k5
+
+   The made nodes 1 and 2 are the parameters of the continuations of the
+   unit; 3 to 8 are the code dep of 20 (its result 3, its exception 4,
+   [my_closure] 5, its parameter 6, its witnesses 7 and 8); 9 to 11 are
+   the witness of the call, [called] and [apply]. In the least solution
+   (worked out from the rules, and checked to be least), the read of the
+   witness of known arity of [x10] makes the witness of the call an
+   alias of that of the code, and the code id used; [my_closure] is then
+   an alias of [x10], and the read of the slot 60 an alias of the
+   constant. The witness of the call is used, and the slot 60 of [x10];
+   the slot 61 has no constructor fact, as no projection names it. *)
+Module FlowCallExample.
+
+Local Open Scope positive_scope.
+
+Definition interface : unit_interface :=
+  {| unit_return := 1; unit_exn := 2 |}.
+
+Definition return_to (k : continuation) (args : list simple) : expr :=
+  Apply_cont {| ac_continuation := k; ac_args := args;
+                ac_trap_action := None |}.
+
+Definition code20 : code :=
+  Code [30] 31 3 4 (make_code_metadata [Singleton Value] [Singleton Value])
+    (Let 32 Value (Project_value_slot_from 40 60 (Var 31))
+       (return_to 3 [Var 32])).
+
+Definition call : apply_expr :=
+  {| ap_callee := Var 10; ap_call_kind := Direct 20;
+     ap_args := [Const (Tagged_immediate 7)];
+     ap_continuation := 5; ap_exn_continuation := 2; ap_exn_extra_args := [];
+     ap_args_arity := [Singleton Value];
+     ap_return_arity := [Singleton Value] |}.
+
+Definition unit_expr : expr :=
+  Let_static [Bind_code 20 code20]
+    (Let 10 Value
+       (Closure_of_set 40 [(40, 20)]
+          [(60, Const (Tagged_immediate 5)); (61, Const (Tagged_immediate 6))])
+       (Let_cont_non_recursive 5
+          (Handler [12] (make_handler_metadata [Value]) (return_to 1 [Var 12]))
+          (Apply call))).
+
+Definition is_local (f : field) : bool := false.
+
+Definition x10 : node := Node_variable 10.
+Definition x12 : node := Node_variable 12.
+Definition x30 : node := Node_variable 30.
+Definition x31 : node := Node_variable 31.
+Definition x32 : node := Node_variable 32.
+Definition code20_node : node := Node_code_id 20.
+Definition constants : node := Node_all_constants.
+Definition m (n : positive) : node := Node_made n.
+
+Definition solution : tables :=
+  {| t_alias :=
+       [(m 1, x12); (m 10, code20_node); (m 11, m 7); (m 2, m 4);
+        (m 3, x32); (m 5, x10); (m 6, constants); (m 9, m 11); (x12, m 3);
+        (x30, m 6); (x31, m 5); (x32, constants)];
+     t_any_usage :=
+       [constants; code20_node; m 1; m 10; m 2; m 3; m 4; x12; x32];
+     t_any_source :=
+       [constants; code20_node; m 1; m 10; m 3; m 6; x12; x30; x32];
+     t_has_usage :=
+       [constants; code20_node; m 1; m 10; m 11; m 2; m 3; m 4; m 5; m 7;
+        m 9; x10; x12; x31; x32];
+     t_has_source :=
+       [constants; code20_node; m 1; m 10; m 11; m 3; m 5; m 6; m 7; m 8;
+        m 9; x10; x12; x30; x31; x32];
+     t_usages :=
+       [(m 11, m 9); (m 5, x31); (m 7, m 9); (m 9, m 9); (x10, x10);
+        (x10, x31); (x31, x31)];
+     t_sources :=
+       [(m 11, m 7); (m 5, x10); (m 7, m 7); (m 8, m 8); (m 9, m 7);
+        (x10, x10); (x31, x10)];
+     t_reading_field := [];
+     t_escaping_field := [];
+     t_field_used :=
+       [(m 7, Field_code_id_of_call_witness);
+        (m 7, Field_return_of_call (Normal 0));
+        (m 7, Field_return_of_call Exn);
+        (x10, Field_call_witness Known_arity_code_pointer);
+        (x10, Field_value_slot 60)] |}.
+
+End FlowCallExample.
+
+(* The call example meets the premises of [flow_sound_statement], with
+   its least solution, and its run exits with 5. *)
+Definition call_example_statement : Prop :=
+  is_local_slots_only FlowCallExample.is_local
+  ∧ (∀ f : field, FlowCallExample.is_local f = false)
+  ∧ in_flow_fragment FlowCallExample.unit_expr = true
+  ∧ check_closed FlowCallExample.is_local
+      (traverse_unit Never FlowCallExample.interface FlowCallExample.unit_expr)
+      FlowCallExample.solution
+    = true
+  ∧ (∀ T : tables,
+       T ∈ one_fewer_tables FlowCallExample.solution ->
+       check_closed FlowCallExample.is_local
+         (traverse_unit Never FlowCallExample.interface
+            FlowCallExample.unit_expr) T
+       = false)
+  ∧ run 7 (State FlowCallExample.unit_expr [] [] empty_static_env empty_heap)
+    = Exit 1%positive [Value_const (Tagged_immediate 5)] empty_heap.
+
+(* Why local fields are kept out where a closure is projected from. The
+   value slot 60 is local. The closure [x10] goes into an immutable array
+   [x11] and is loaded back out of it into [x12], whose node has any
+   source and a use of [x11], but is not an alias of [x10]; the slot is
+   read into [x13], which is passed to the continuation 5, whose
+   parameter is not used:
+
+     let code 20 (x30) my_closure x31 = return x30 in
+     let x10 = closure 20 { 60 = 5 } in
+     let x11 = [| x10 |] in
+     let x12 = x11.(0) in
+     let x13 = x12.60 in
+     let_cont k5 x14 = return 0 in
+     k5 x13
+
+   Nothing reads [x13] in a way that is used, so [x10] has no usage, and
+   the slot 60 does not escape; [x12] has any source, so the read of a
+   local field gives [x13] only [reading_field]. In the least solution
+   [x13] has no source, and the rebuild (FlambdaReaperRebuild.v, which
+   transcribes rebuild.ml) replaces [k5 x13] by [Invalid]: the unit
+   exits, and what the reaper makes of it goes wrong. This is a case
+   where the reaper, with [-reaper-local-fields], is unsound. *)
+Module LocalSlotCounterexample.
+
+Local Open Scope positive_scope.
+
+Definition interface : unit_interface :=
+  {| unit_return := 1; unit_exn := 2 |}.
+
+Definition return_to (k : continuation) (args : list simple) : expr :=
+  Apply_cont {| ac_continuation := k; ac_args := args;
+                ac_trap_action := None |}.
+
+Definition code20 : code :=
+  Code [30] 31 3 4 (make_code_metadata [Singleton Value] [Singleton Value])
+    (return_to 3 [Var 30]).
+
+Definition unit_expr : expr :=
+  Let_static [Bind_code 20 code20]
+    (Let 10 Value (Closure_of_set 40 [(40, 20)] [(60, Const (Tagged_immediate
+      5))])
+       (Let 11 Value (Prim (Variadic (Make_immutable_array Array_values))
+                        [Var 10])
+          (Let 12 Value
+             (Prim (Binary (Array_load Array_values Load_values Immutable))
+                [Var 11; Const (Tagged_immediate 0)])
+             (Let 13 Value (Project_value_slot_from 40 60 (Var 12))
+                (Let_cont_non_recursive 5
+                   (Handler [14] (make_handler_metadata [Value])
+                      (return_to 1 [Const (Tagged_immediate 0)]))
+                   (return_to 5 [Var 13])))))).
+
+Definition is_local (f : field) : bool := field_eqb f (Field_value_slot 60).
+
+Definition v (n : positive) : node := Node_variable n.
+Definition m (n : positive) : node := Node_made n.
+
+Definition solution : tables :=
+  {| t_alias :=
+       [(v 14, v 13); (m 1, Node_all_constants); (m 3, v 30); (v 31, m 5);
+        (v 30, m 6)];
+     t_any_usage := [m 1; m 2; Node_all_constants];
+     t_any_source := [v 12; v 11; Node_code_id 20; Node_all_constants; m 1];
+     t_has_usage := [m 1; m 2; Node_all_constants];
+     t_has_source :=
+       [v 12; v 11; Node_code_id 20; Node_all_constants; m 1; v 10; m 7;
+        m 8];
+     t_usages := [(v 12, v 12)];
+     t_sources := [(v 10, v 10); (m 7, m 7); (m 8, m 8)];
+     t_reading_field := [(Field_value_slot 60, v 13)];
+     t_escaping_field := [];
+     t_field_used := [] |}.
+
+End LocalSlotCounterexample.
+
+(* The unit is of the fragment, its slot 60 is local, its least solution
+   passes the check, the unit exits, and the rebuilt unit goes wrong. *)
+Definition local_slot_counterexample_statement : Prop :=
+  is_local_slots_only LocalSlotCounterexample.is_local
+  ∧ in_flow_fragment LocalSlotCounterexample.unit_expr = true
+  ∧ check_closed LocalSlotCounterexample.is_local
+      (traverse_unit Never LocalSlotCounterexample.interface
+         LocalSlotCounterexample.unit_expr)
+      LocalSlotCounterexample.solution
+    = true
+  ∧ (∀ T : tables,
+       T ∈ one_fewer_tables LocalSlotCounterexample.solution ->
+       check_closed LocalSlotCounterexample.is_local
+         (traverse_unit Never LocalSlotCounterexample.interface
+            LocalSlotCounterexample.unit_expr) T
+       = false)
+  ∧ run 10
+      (State LocalSlotCounterexample.unit_expr [] [] empty_static_env
+         empty_heap)
+    = Exit 1%positive [Value_const (Tagged_immediate 0)] empty_heap
+  ∧ run 10
+      (State
+         (rebuild_unit_from_tables
+            (traverse_unit Never LocalSlotCounterexample.interface
+               LocalSlotCounterexample.unit_expr)
+            LocalSlotCounterexample.solution false
+            LocalSlotCounterexample.unit_expr)
+         [] [] empty_static_env empty_heap)
+    = Undefined.
