@@ -738,6 +738,11 @@ Owner: N3, on `flambda2-rocq/N3-equivariance` for the validator and on
   imports answer of renamed terms what they answer of the terms;
   the tests are those of `FlambdaValidateImportsSpec.v`, which stays
   its owner's)
+- `middle_end/flambda2/rocq/FlambdaValidateRelatedRename*` (the
+  second check of a unit, of `FlambdaValidateRelatedSpec.v`, answers
+  of renamed units what it answers of the units, and its liftings
+  made in turn keep scope and commute with renaming up to the names
+  that the rounds make; the check and its files stay their owner's)
 - `middle_end/flambda2/rocq/FlambdaCseEquivalent*` (the sharing of
   primitives of `FlambdaCseSpec.v` gives a term that is equivalent to
   the one it is given, which is what a rewrite of the term after
