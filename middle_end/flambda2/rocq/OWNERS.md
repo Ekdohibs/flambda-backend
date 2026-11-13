@@ -614,7 +614,9 @@ pass into the validator.
     written by hand, the term after given with `-after`; same stream)
   - `middle_end/flambda2/rocq/status/V3.md`
 - S6, unboxing of continuation parameters. Owner: unassigned.
-- S7, the reaper. Out of scope for now, unassigned.
+- S7, the reaper. Owner: S7, on the human's request (the plan kept it
+  for later; `status/S7.md` says why it is taken up and how).
+  - `middle_end/flambda2/rocq/FlambdaReaper*`
 
 ## V1: validator
 
