@@ -30,8 +30,9 @@
 
    This file is to be reviewed: the checks [closure_free],
    [no_code_no_slots], [no_code], [no_call], [direct_tail_calls],
-   [direct_calls], [only_direct_calls], [full_calls], [exits_one_value]
-   and [results_kinded], the statements, and the examples, against
+   [direct_calls], [only_direct_calls], [full_calls], [generic_calls],
+   [exits_one_value] and [results_kinded], the relation
+   [observed_equal], the statements, and the examples, against
    FlambdaReaperRebuild.v (the rebuild, which needs no review) and
    FlambdaReaperFlowSpec.v (the meaning of a solution). The proofs are
    in FlambdaReaperRebuildProofs.v, which needs no review.
@@ -117,8 +118,10 @@
    exits up to what the world outside the unit observes
    ([program_refines_observably], [observed_equal]): equal values,
    except that closures are compared without their value slots, inside
-   blocks, arrays, boxed numbers and partial applications too; symbols
-   are compared by name. Both choices answer a counterexample:
+   blocks, arrays, boxed numbers and partial applications too, and
+   partial applications without their arguments, which are compared by
+   kind; symbols are compared by name. These are choices of what is
+   observable, and each answers a counterexample:
    - A closure that reaches an exit loses the value slots that no
      projection of the unit names ([closure_exit_counterexample_statement]:
      exits are not equal). Nothing outside the unit can read them, and
@@ -126,6 +129,15 @@
      ([closure_exit_observed_statement]). A closure may reach an exit
      inside an exception raised by code, so no check of the
      [Apply_cont]s of the unit could keep closures from exits.
+   - A partial application that reaches an exit holds the arguments
+     that the call gave it, and the rebuild gives poison to an argument
+     at a parameter that has no use
+     ([partial_exit_counterexample_statement]: exits are not equal, nor
+     equal with the arguments compared as values,
+     [observed_equal_with_arguments]). Nothing outside the unit can read
+     them: at run time a partial application is a closure of
+     [caml_curryN], whose arguments only the code of the closure reads.
+     The exits are observed equal.
    - The wrapper that the rebuild gives a call ([make_apply_wrapper])
      tests the kinds of the return arity of the call, which the machine
      does not test of what code returns
@@ -138,13 +150,16 @@
      compiler's units, which are well-kinded, meet it; the model asks
      nothing of kinds otherwise (FlambdaWellKindedSpec.v).
    [rebuild_refines_observably_statement] is proved for the units that
-   meet [full_calls], of the code that they bind ([unit_codes]), in place
-   of [closure_free]: closures and static sets of closures with value
-   slots, projections of function slots and of value slots, code and
-   deleted code, and full calls, direct or of unknown arity, that
-   return, and raise, to a way out of the unit or of the code they are
-   in, or to a handler in scope. A unit of [only_direct_calls] meets it
-   ([only_direct_calls_full_calls_statement]); a unit of [direct_calls]
+   meet [generic_calls], of the code that they bind ([unit_codes]), in
+   place of [closure_free]: closures and static sets of closures with
+   value slots, projections of function slots and of value slots, code
+   and deleted code, and calls, direct or of unknown arity, full, partial
+   applications and over-applications, that return, and raise, to a way
+   out of the unit or of the code they are in, or to a handler in scope.
+   A unit of [full_calls] meets it
+   ([full_calls_generic_calls_statement]); a unit of [only_direct_calls]
+   meets [full_calls] ([only_direct_calls_full_calls_statement]); a unit
+   of [direct_calls]
    meets [only_direct_calls]
    ([direct_calls_only_direct_calls_statement]); a unit of direct tail
    calls meets [direct_calls]
@@ -226,9 +241,23 @@
    ([arguments_used_by_unknown_arity_call]), and gives the others
    poison. These witnesses are those of the code of the closure that the
    call runs, and stand for those of the call: an argument kept has a
-   use, and a parameter that has a use gets its argument. What remains:
-   partial applications, over-applications, and calls of tupled code of
-   unknown arity.
+   use, and a parameter that has a use gets its argument.
+   [generic_calls] asks the same, but lets a call of unknown arity give
+   the closure that it calls fewer arguments than its code has
+   parameters, or more, in a unit whose code is not tupled. A call with
+   fewer makes a partial application, which keeps the closure and the
+   arguments, and goes where the call returns; the arguments are masked
+   as those of any call, at the witnesses of the first groups of
+   parameters of the code. A later call of the partial application is a
+   call of the closure with all the arguments: the traversal reads it
+   from the first result of the last witness that the first call read,
+   the node where the partial application goes, so its own arguments
+   are masked at the next witnesses of the code. A call with more
+   arguments is a full call whose result is then called with the
+   arguments left; the rebuild masks these at the witnesses that come
+   after those of the code, from what the code returns. The code of a
+   closure partially applied has a use, as every witness of a call reads
+   the code id. What remains: calls of tupled code of unknown arity.
    The statement holds of more than nothing ([example_statement]): a
    unit with a static block, a block one field of which no load reads, a
    [Let] with no use, and a continuation one parameter of which has no
@@ -243,8 +272,10 @@
    [tail_call_example_statement] for a unit with a call;
    [wrapper_example_statement] for a unit with a call that returns to a
    handler through a wrapper; [raise_example_statement] for a unit with
-   a call that raises to a handler, with extra arguments; and
-   [indirect_example_statement] for a unit with an indirect call. *)
+   a call that raises to a handler, with extra arguments;
+   [indirect_example_statement] for a unit with an indirect call; and
+   [partial_call_example_statement] for a unit with a partial
+   application, completed by a second call. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -648,6 +679,57 @@ with code_full_calls (codes : list (code_id * code)) (c : code) : bool :=
 Definition only_direct_calls_full_calls_statement : Prop :=
   ∀ (codes : list (code_id * code)) (e : expr),
     only_direct_calls e = true -> full_calls codes e = true.
+
+(* Generic calls: [full_calls], but an indirect call may give the closure
+   that it calls fewer arguments than its code has parameters, or more,
+   if no code that the unit binds ([codes]) is tupled. A call with fewer
+   arguments makes a partial application, which an indirect call later
+   completes; one with more is a full call whose result is called with
+   the arguments left (FlambdaSemanticsSpec.shape_of_code_call). The
+   compiler's tupled code, called at unknown arity, takes its arguments
+   in a tuple, and is not covered yet. *)
+Definition generic_call (codes : list (code_id * code)) (ap : apply_expr)
+    : bool :=
+  forallb argument_kind_ok (unarize (ap_args_arity ap))
+  && match ap_call_kind ap with
+     | Direct _ => true
+     | Indirect => forallb (fun '(_, c) => negb (code_is_tupled c)) codes
+     end.
+
+Fixpoint generic_calls (codes : list (code_id * code)) (e : expr) : bool :=
+  match e with
+  | Let _ kind defining_expr body =>
+    named_no_code kind defining_expr && generic_calls codes body
+  | Let_static bindings body =>
+    forallb (binding_generic_calls codes) bindings && generic_calls codes body
+  | Let_cont_non_recursive _ h body =>
+    handler_generic_calls codes h && generic_calls codes body
+  | Let_cont_recursive handlers body =>
+    forallb (fun '(_, h) => handler_generic_calls codes h) handlers
+    && generic_calls codes body
+  | Apply ap => generic_call codes ap
+  | Apply_cont _ | Switch _ _ | Invalid => true
+  end
+with handler_generic_calls (codes : list (code_id * code))
+    (h : continuation_handler) : bool :=
+  match h with
+  | Handler _ _ handler => generic_calls codes handler
+  end
+with binding_generic_calls (codes : list (code_id * code))
+    (binding : static_binding) : bool :=
+  match binding with
+  | Bind_code _ c => code_generic_calls codes c
+  | Bind_deleted_code _ | Bind_symbol _ _ => binding_no_code binding
+  end
+with code_generic_calls (codes : list (code_id * code)) (c : code) : bool :=
+  match c with
+  | Code _ _ _ _ _ body => generic_calls codes body
+  end.
+
+(* A unit of [full_calls] meets it. *)
+Definition full_calls_generic_calls_statement : Prop :=
+  ∀ (codes : list (code_id * code)) (e : expr),
+    full_calls codes e = true -> generic_calls codes e = true.
 
 (* ======================================================================== *)
 (* Exits                                                                    *)
@@ -1210,7 +1292,10 @@ Definition values_related (R : value -> value -> Prop)
 
 (* What the world outside the unit can tell of two values is the same:
    they are equal, but for the value slots of closures, which only the
-   projections of the unit read. *)
+   projections of the unit read, and for the arguments of partial
+   applications, which only the code of the closure reads: a partial
+   application is compared by its closure and its arity, and its
+   arguments by kind. *)
 Fixpoint observed_equal (v v' : value) {struct v} : Prop :=
   match v, v' with
   | Value_const c, Value_const c' => c = c'
@@ -1227,7 +1312,35 @@ Fixpoint observed_equal (v v' : value) {struct v} : Prop :=
   | Value_partial_application callee args arity,
     Value_partial_application callee' args' arity' =>
     observed_equal callee callee'
-    ∧ values_related (fun w w' => observed_equal w w') args args'
+    ∧ map kind_of_value args = map kind_of_value args'
+    ∧ arity = arity'
+  | _, _ => False
+  end.
+
+(* [observed_equal], but with the arguments of partial applications
+   compared as values are: the relation that
+   [partial_exit_counterexample_statement] shows too fine. *)
+Fixpoint observed_equal_with_arguments (v v' : value) {struct v} : Prop :=
+  match v, v' with
+  | Value_const c, Value_const c' => c = c'
+  | Value_closure code _, Value_closure code' _ => code = code'
+  | Value_closure_of_set slot decls _, Value_closure_of_set slot' decls' _ =>
+    slot = slot' ∧ decls = decls'
+  | Value_symbol s, Value_symbol s' => s = s'
+  | Value_block tag fields, Value_block tag' fields' =>
+    tag = tag'
+    ∧ values_related (fun w w' => observed_equal_with_arguments w w') fields
+        fields'
+  | Value_immutable_array elements, Value_immutable_array elements' =>
+    values_related (fun w w' => observed_equal_with_arguments w w') elements
+      elements'
+  | Value_boxed_number c, Value_boxed_number c' => c = c'
+  | Value_location l, Value_location l' => l = l'
+  | Value_partial_application callee args arity,
+    Value_partial_application callee' args' arity' =>
+    observed_equal_with_arguments callee callee'
+    ∧ values_related (fun w w' => observed_equal_with_arguments w w') args
+        args'
     ∧ arity = arity'
   | _, _ => False
   end.
@@ -1366,7 +1479,7 @@ Definition rebuild_refines_observably_statement : Prop :=
     is_local_slots_only is_local ->
     (∀ f : field, is_local f = false) ∨ projection_free e = true ->
     in_flow_fragment e = true ->
-    full_calls (unit_codes e) e = true ->
+    generic_calls (unit_codes e) e = true ->
     results_kinded [] [] e = true ->
     well_formed_unit u e = true ->
     exits_one_value u e = true ->
@@ -2338,3 +2451,300 @@ Definition indirect_example_statement : Prop :=
   ∧ behaves
       (State IndirectExample.rebuilt [] [] empty_static_env empty_heap)
       (Exits 1%positive [Value_const (Tagged_immediate 8)] empty_heap).
+
+(* The statement up to observation holds of a unit with a partial
+   application, which [full_calls] does not allow: a call of unknown
+   arity gives a closure of code of two parameters one argument, and the
+   partial application that it makes goes to a handler, which calls it
+   with the other:
+
+     let code f50 (x40, x43) my_closure x41 return k3 exn k4 =
+       k3 x43                         ([x40] has no use)
+     in
+     let x10 = 7 in                   (no use)
+     let x12 = 8 in
+     let x11 = closure at 70 of { 70 = f50 } in
+     let k20 x21 =
+       x21 x12 return k1 exn k2       (indirect: the code runs)
+     in
+     x11 x10 return k20 exn k2        (indirect: a partial application)
+
+   Its least solution passes the checks. The first call reaches the
+   first witness of unknown arity of the code, whose parameter has no
+   use; the second, of the partial application, reaches the second
+   witness, whose parameter has one. The rebuild gives the first call
+   poison, removes [x10], and keeps the argument of the second. The
+   partial application of the rebuilt unit holds poison where that of
+   the unit holds 7, which the code does not read, and the two units
+   exit with 8. *)
+Module PartialCallExample.
+
+Local Open Scope positive_scope.
+
+Definition code50 : code :=
+  Code [40; 43] 41 3 4
+    (make_code_metadata [Singleton Value; Singleton Value] [Singleton Value])
+    (FlowExample.return_to 3 [Var 43]).
+
+(* An indirect call of [callee] with one argument, [arg]. *)
+Definition call (callee : variable) (arg : simple) (k : continuation)
+    : apply_expr :=
+  {| ap_callee := Var callee; ap_call_kind := Indirect; ap_args := [arg];
+     ap_continuation := k; ap_exn_continuation := 2;
+     ap_exn_extra_args := [];
+     ap_args_arity := [Singleton Value];
+     ap_return_arity := [Singleton Value] |}.
+
+Definition handler20 : continuation_handler :=
+  Handler [21] (make_handler_metadata [Value]) (Apply (call 21 (Var 12) 1)).
+
+Definition unit_expr : expr :=
+  Let_static [Bind_code 50 code50]
+    (Let 10 Value (Simple (Const (Tagged_immediate 7)))
+       (Let 12 Value (Simple (Const (Tagged_immediate 8)))
+          (Let 11 Value (Closure_of_set 70 [(70, 50)] [])
+             (Let_cont_non_recursive 20 handler20
+                (Apply (call 11 (Var 10) 20)))))).
+
+Definition solution : tables :=
+  {| t_alias :=
+       [(Node_made 1, Node_made 3); (Node_made 12, Node_code_id 50);
+        (Node_made 13, Node_made 14); (Node_made 14, Node_made 10);
+        (Node_made 15, Node_code_id 50); (Node_made 16, Node_made 17);
+        (Node_made 17, Node_made 9); (Node_made 2, Node_made 4);
+        (Node_made 3, Node_variable 43); (Node_made 5, Node_variable 11);
+        (Node_made 6, Node_variable 10); (Node_made 7, Node_variable 12);
+        (Node_variable 10, Node_all_constants);
+        (Node_variable 12, Node_all_constants);
+        (Node_variable 21, Node_made 11); (Node_variable 40, Node_made 6);
+        (Node_variable 41, Node_made 5); (Node_variable 43, Node_made 7)];
+     t_any_usage :=
+       [Node_all_constants; Node_code_id 50; Node_made 1; Node_made 12;
+        Node_made 15; Node_made 2; Node_made 3; Node_made 4; Node_made 7;
+        Node_variable 12; Node_variable 43];
+     t_any_source :=
+       [Node_all_constants; Node_code_id 50; Node_made 1; Node_made 12;
+        Node_made 15; Node_made 3; Node_made 6; Node_made 7; Node_variable 10;
+        Node_variable 12; Node_variable 40; Node_variable 43];
+     t_has_usage :=
+       [Node_all_constants; Node_code_id 50; Node_made 1; Node_made 10;
+        Node_made 11; Node_made 12; Node_made 13; Node_made 14; Node_made 15;
+        Node_made 16; Node_made 17; Node_made 2; Node_made 3; Node_made 4;
+        Node_made 7; Node_made 9; Node_variable 11; Node_variable 12;
+        Node_variable 21; Node_variable 43];
+     t_has_source :=
+       [Node_all_constants; Node_code_id 50; Node_made 1; Node_made 10;
+        Node_made 11; Node_made 12; Node_made 13; Node_made 14; Node_made 15;
+        Node_made 16; Node_made 17; Node_made 3; Node_made 5; Node_made 6;
+        Node_made 7; Node_made 8; Node_made 9; Node_variable 10;
+        Node_variable 11; Node_variable 12; Node_variable 21; Node_variable 40;
+        Node_variable 41; Node_variable 43];
+     t_usages :=
+       [(Node_made 10, Node_made 13); (Node_made 11, Node_variable 21);
+        (Node_made 13, Node_made 13); (Node_made 14, Node_made 13);
+        (Node_made 16, Node_made 16); (Node_made 17, Node_made 16);
+        (Node_made 9, Node_made 16); (Node_variable 11, Node_variable 11);
+        (Node_variable 21, Node_variable 21)];
+     t_sources :=
+       [(Node_made 10, Node_made 10); (Node_made 11, Node_made 11);
+        (Node_made 13, Node_made 10); (Node_made 14, Node_made 10);
+        (Node_made 16, Node_made 9); (Node_made 17, Node_made 9);
+        (Node_made 5, Node_variable 11); (Node_made 8, Node_made 8);
+        (Node_made 9, Node_made 9); (Node_variable 11, Node_variable 11);
+        (Node_variable 21, Node_made 11);
+        (Node_variable 41, Node_variable 11)];
+     t_reading_field := [];
+     t_escaping_field := [];
+     t_field_used :=
+       [(Node_made 10, Field_code_id_of_call_witness);
+        (Node_made 10, Field_return_of_call (Normal 0%nat));
+        (Node_made 10, Field_return_of_call Exn);
+        (Node_made 11, Field_call_witness Unknown_arity_code_pointer);
+        (Node_made 9, Field_code_id_of_call_witness);
+        (Node_made 9, Field_return_of_call (Normal 0%nat));
+        (Node_variable 11, Field_call_witness Unknown_arity_code_pointer)] |}.
+
+Definition rebuilt : expr :=
+  Let_static [Bind_code 50 code50]
+    (Let 12 Value (Simple (Const (Tagged_immediate 8)))
+       (Let 11 Value (Closure_of_set 70 [(70, 50)] [])
+          (Let_cont_non_recursive 20 handler20
+             (Apply (call 11 (Const (Poison Value)) 20))))).
+
+End PartialCallExample.
+
+Definition partial_call_example_statement : Prop :=
+  in_flow_fragment PartialCallExample.unit_expr = true
+  ∧ full_calls (unit_codes PartialCallExample.unit_expr)
+      PartialCallExample.unit_expr
+    = false
+  ∧ generic_calls (unit_codes PartialCallExample.unit_expr)
+      PartialCallExample.unit_expr
+    = true
+  ∧ results_kinded [] [] PartialCallExample.unit_expr = true
+  ∧ well_formed_unit FlowExample.interface PartialCallExample.unit_expr = true
+  ∧ exits_one_value FlowExample.interface PartialCallExample.unit_expr = true
+  ∧ check_closed FlowExample.is_local
+      (traverse_unit Never FlowExample.interface PartialCallExample.unit_expr)
+      PartialCallExample.solution
+    = true
+  ∧ check_field_used_exact FlowExample.is_local
+      (traverse_unit Never FlowExample.interface PartialCallExample.unit_expr)
+      PartialCallExample.solution
+    = true
+  ∧ rebuild_unit_from_tables
+      (traverse_unit Never FlowExample.interface PartialCallExample.unit_expr)
+      PartialCallExample.solution false PartialCallExample.unit_expr
+    = PartialCallExample.rebuilt
+  ∧ behaves
+      (State PartialCallExample.unit_expr [] [] empty_static_env empty_heap)
+      (Exits 1%positive [Value_const (Tagged_immediate 8)] empty_heap)
+  ∧ behaves
+      (State PartialCallExample.rebuilt [] [] empty_static_env empty_heap)
+      (Exits 1%positive [Value_const (Tagged_immediate 8)] empty_heap).
+
+(* [observed_equal] compares the arguments of a partial application by
+   kind only, and needs to: the rebuild gives poison to an argument at a
+   parameter that has no use, and so changes what a partial application
+   that leaves the unit holds. The unit
+
+     let code f50 (x40, x43) my_closure x41 return k3 exn k4 =
+       k3 x43                         ([x40] has no use)
+     in
+     let x10 = 7 in
+     let x11 = closure at 70 of { 70 = f50 } in
+     x11 x10 return k1 exn k2         (indirect, one argument of two)
+
+   meets the premises of [rebuild_refines_observably_statement], with
+   [generic_calls] for [full_calls], which it fails: its call is a
+   partial application. Its least solution passes the checks. The
+   rebuild finds the parameter [x40] without a use, gives the call
+   poison for [x10], and removes [x10]. The unit exits with the partial
+   application of the closure to 7, and the rebuilt unit with that of
+   the closure to poison: not equal, and not equal as
+   [observed_equal_with_arguments] compares them, which is
+   [observed_equal] but for arguments compared as values; but observed
+   equal. Nothing outside the unit can read the arguments: at run time a
+   partial application is a closure of [caml_curryN], whose arguments
+   only the code of the closure reads, as only the projections of the
+   unit read value slots. So comparing the arguments by kind is a choice
+   of what is observable, not a fault of the rebuild. *)
+Module PartialExitExample.
+
+Local Open Scope positive_scope.
+
+Definition code50 : code :=
+  Code [40; 43] 41 3 4
+    (make_code_metadata [Singleton Value; Singleton Value] [Singleton Value])
+    (FlowExample.return_to 3 [Var 43]).
+
+Definition call (args : list simple) : apply_expr :=
+  {| ap_callee := Var 11; ap_call_kind := Indirect; ap_args := args;
+     ap_continuation := 1; ap_exn_continuation := 2;
+     ap_exn_extra_args := [];
+     ap_args_arity := [Singleton Value];
+     ap_return_arity := [Singleton Value] |}.
+
+Definition unit_expr : expr :=
+  Let_static [Bind_code 50 code50]
+    (Let 10 Value (Simple (Const (Tagged_immediate 7)))
+       (Let 11 Value (Closure_of_set 70 [(70, 50)] [])
+          (Apply (call [Var 10])))).
+
+Definition solution : tables :=
+  {| t_alias :=
+       [(Node_made 1, Node_made 11); (Node_made 12, Node_code_id 50);
+        (Node_made 13, Node_made 14); (Node_made 14, Node_made 9);
+        (Node_made 3, Node_variable 43); (Node_made 5, Node_variable 11);
+        (Node_made 6, Node_variable 10);
+        (Node_variable 10, Node_all_constants);
+        (Node_variable 40, Node_made 6); (Node_variable 41, Node_made 5);
+        (Node_variable 43, Node_made 7)];
+     t_any_usage :=
+       [Node_code_id 50; Node_made 1; Node_made 10; Node_made 11; Node_made 12;
+        Node_made 2; Node_made 3; Node_made 4; Node_made 7; Node_variable 43];
+     t_any_source :=
+       [Node_all_constants; Node_code_id 50; Node_made 12; Node_made 3;
+        Node_made 6; Node_made 7; Node_variable 10; Node_variable 40;
+        Node_variable 43];
+     t_has_usage :=
+       [Node_code_id 50; Node_made 1; Node_made 10; Node_made 11; Node_made 12;
+        Node_made 13; Node_made 14; Node_made 2; Node_made 3; Node_made 4;
+        Node_made 7; Node_made 9; Node_variable 11; Node_variable 43];
+     t_has_source :=
+       [Node_all_constants; Node_code_id 50; Node_made 1; Node_made 10;
+        Node_made 11; Node_made 12; Node_made 13; Node_made 14; Node_made 3;
+        Node_made 5; Node_made 6; Node_made 7; Node_made 8; Node_made 9;
+        Node_variable 10; Node_variable 11; Node_variable 40; Node_variable 41;
+        Node_variable 43];
+     t_usages :=
+       [(Node_made 13, Node_made 13); (Node_made 14, Node_made 13);
+        (Node_made 9, Node_made 13); (Node_variable 11, Node_variable 11)];
+     t_sources :=
+       [(Node_made 1, Node_made 11); (Node_made 10, Node_made 10);
+        (Node_made 11, Node_made 11); (Node_made 13, Node_made 9);
+        (Node_made 14, Node_made 9); (Node_made 5, Node_variable 11);
+        (Node_made 8, Node_made 8); (Node_made 9, Node_made 9);
+        (Node_variable 11, Node_variable 11);
+        (Node_variable 41, Node_variable 11)];
+     t_reading_field := [];
+     t_escaping_field := [];
+     t_field_used :=
+       [(Node_made 10, Field_code_id_of_call_witness);
+        (Node_made 10, Field_return_of_call (Normal 0%nat));
+        (Node_made 10, Field_return_of_call Exn);
+        (Node_made 11, Field_call_witness Unknown_arity_code_pointer);
+        (Node_made 9, Field_code_id_of_call_witness);
+        (Node_made 9, Field_return_of_call (Normal 0%nat));
+        (Node_variable 11, Field_call_witness Unknown_arity_code_pointer)] |}.
+
+Definition rebuilt : expr :=
+  Let_static [Bind_code 50 code50]
+    (Let 11 Value (Closure_of_set 70 [(70, 50)] [])
+       (Apply (call [Const (Poison Value)]))).
+
+(* The partial application of the closure to [arg]. *)
+Definition result (arg : value) : value :=
+  Value_partial_application (Value_closure_of_set 70 [(70, 50)] []) [arg]
+    [Singleton Value].
+
+End PartialExitExample.
+
+Definition partial_exit_counterexample_statement : Prop :=
+  in_flow_fragment PartialExitExample.unit_expr = true
+  ∧ full_calls (unit_codes PartialExitExample.unit_expr)
+      PartialExitExample.unit_expr
+    = false
+  ∧ generic_calls (unit_codes PartialExitExample.unit_expr)
+      PartialExitExample.unit_expr
+    = true
+  ∧ results_kinded [] [] PartialExitExample.unit_expr = true
+  ∧ well_formed_unit FlowExample.interface PartialExitExample.unit_expr = true
+  ∧ exits_one_value FlowExample.interface PartialExitExample.unit_expr = true
+  ∧ check_closed FlowExample.is_local
+      (traverse_unit Never FlowExample.interface PartialExitExample.unit_expr)
+      PartialExitExample.solution
+    = true
+  ∧ check_field_used_exact FlowExample.is_local
+      (traverse_unit Never FlowExample.interface PartialExitExample.unit_expr)
+      PartialExitExample.solution
+    = true
+  ∧ rebuild_unit_from_tables
+      (traverse_unit Never FlowExample.interface PartialExitExample.unit_expr)
+      PartialExitExample.solution false PartialExitExample.unit_expr
+    = PartialExitExample.rebuilt
+  ∧ behaves
+      (State PartialExitExample.unit_expr [] [] empty_static_env empty_heap)
+      (Exits 1%positive
+         [PartialExitExample.result (Value_const (Tagged_immediate 7))]
+         empty_heap)
+  ∧ behaves
+      (State PartialExitExample.rebuilt [] [] empty_static_env empty_heap)
+      (Exits 1%positive
+         [PartialExitExample.result (Value_const (Poison Value))] empty_heap)
+  ∧ ~ values_related observed_equal_with_arguments
+        [PartialExitExample.result (Value_const (Tagged_immediate 7))]
+        [PartialExitExample.result (Value_const (Poison Value))]
+  ∧ values_related observed_equal
+      [PartialExitExample.result (Value_const (Tagged_immediate 7))]
+      [PartialExitExample.result (Value_const (Poison Value))].
