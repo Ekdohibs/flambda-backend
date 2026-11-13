@@ -1,21 +1,16 @@
 value_slot_newer_version.fl:
-  the graph: 64 facts in the model, 66 in the compiler
+  the graph: 65 facts in the model, 66 in the compiler
   the model's solution: passes the check of closure, passes the check of field_of_constructor_is_used
   the compiler's solution, with its graph: passes the check of closure, passes the check of field_of_constructor_is_used
-  the facts of the two graphs on the names of the unit: 16 in the model, 16 in the compiler, of which:
-    only in the model: alias ended/v3 = all_constants
+  the facts of the two graphs on the names of the unit: 17 in the model, 16 in the compiler, of which:
     only in the model: constructor f/v10 = { value slot x = x/v5 }
-    only in the compiler: any_usage ended/v3
-    only in the compiler: any_source ended/v3
-  the two solutions differ on 3 of the 16 names of the unit:
-    ended/v3: has_usage: model no, compiler yes
-    ended/v3: any_usage: model no, compiler yes
+  the two solutions differ on 2 of the 16 names of the unit:
     x/v6: has_source: model yes, compiler no
     x/v6: any_source: model yes, compiler no
     f/v10: field_of_constructor_is_used value slot x: model yes, compiler no
   the model's rebuild and the compiler's output: DIFFERENT terms
   the reaper's input (14 steps): returns [0: 3]
-  the model's rebuild (13 steps): returns [0: 3]
+  the model's rebuild (14 steps): returns [0: 3]
   the model's rebuild against the input: the same
   the compiler's output (9 steps): undefined
   the compiler's output against the input: DIFFERENT
@@ -26,7 +21,7 @@ value_slot_newer_version.fl:
     code call: parameters [keep val], results [keep val]
     the model's rebuild and the compiler's output: DIFFERENT terms
     the reaper's input (14 steps): returns [0: 3]
-    the model's rebuild (13 steps): returns [0: 3]
+    the model's rebuild (14 steps): returns [0: 3]
     the model's rebuild against the input: the same
     the compiler's output (9 steps): undefined
     the compiler's output against the input: DIFFERENT
@@ -41,7 +36,7 @@ value_slot_newer_version.fl:
     code call: parameters [keep val], results [keep val]
     the model's rebuild and the compiler's output: DIFFERENT terms
     the reaper's input (14 steps): returns [0: 3]
-    the model's rebuild (13 steps): returns [0: 3]
+    the model's rebuild (14 steps): returns [0: 3]
     the model's rebuild against the input: the same
     the compiler's output (9 steps): undefined
     the compiler's output against the input: DIFFERENT

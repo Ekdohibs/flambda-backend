@@ -101,12 +101,14 @@
    traversal reads as a call of unknown arity, so a unit with a call of known
    arity has another graph in the model, and the tool says so; and the closures
    of a set other than the first are bound in the model by projections of the
-   first, where the compiler binds them directly. From the conversion: the end
-   of a region is the unit value in the model, where the compiler's traversal
-   gives the primitive a use that it does not track; and a call that never
-   returns is a call that returns to a continuation of the conversion's, whose
-   parameters the model's rebuild may remove, so that the two rebuilt terms then
-   differ (tests/semantics/arity_text_never_returns.fl). *)
+   first, where the compiler binds them directly. From the conversion: a call
+   that never returns is a call that returns to a continuation of the
+   conversion's, whose parameters the model's rebuild may remove, so that the
+   two rebuilt terms then differ (tests/semantics/arity_text_never_returns.fl).
+   The end of a region, which the conversion makes the unit value, is given to
+   the model as a primitive of arbitrary effects, as the compiler's traversal
+   reads it, and the model's rebuild is given the unit value back
+   ([ends_as_effects]). *)
 
 (* The matches below on the compiler's types name the cases the model has and
    send every other to one answer; they are meant to stay as they are when the
@@ -809,8 +811,10 @@ let solve (f : Graph_spec.facts) : Graph_spec.tables =
 (* ---- The compiler's graph and solution ------------------------------- *)
 
 (* The variables that the compiler's traversal gave the binders of the unit,
-   each with the number that the conversion gave the same binder, and whether
-   every binder was related.
+   each with the number that the conversion gave the same binder; whether every
+   binder was related; and the variables of the model that are bound by the end
+   of a region that the conversion makes the unit value ([End_region], and the
+   ghost [End_try_region]: [ends_as_effects]).
 
    The traversal keeps, in the term it gives the rebuild ([Traverse.Skeleton.t]:
    a [Rev_expr.t] for the unit and one for each piece of code), every binder of
@@ -827,10 +831,12 @@ let solve (f : Graph_spec.facts) : Graph_spec.tables =
    related; their variables are then made nodes on the compiler's side, and the
    tool says so. *)
 let relate_variables (skeleton : Reaper.Traverse.Skeleton.t)
-    (input : Rocq_model.expr) : Numbers.positive Variable.Map.t * bool =
+    (input : Rocq_model.expr) :
+    Numbers.positive Variable.Map.t * bool * Numbers.positive list =
   let module Rev = Reaper.Rev_expr in
   let related = ref Variable.Map.empty in
   let complete = ref true in
+  let ends = ref [] in
   let relate x var = related := Variable.Map.add var x !related in
   let relate_all xs vars =
     if List.compare_lengths xs vars = 0
@@ -848,6 +854,14 @@ let relate_variables (skeleton : Reaper.Traverse.Skeleton.t)
         } ->
       true
     | Hole | Let _ | Let_cont _ | Let_cont_rec _ -> false
+  in
+  let is_end_of_region (named : Rev.rev_named) =
+    match named with
+    | Named
+        (Prim (Unary ((End_region _ | End_try_region { ghost = true }), _), _))
+      ->
+      true
+    | _ -> false
   in
   (* The binders of a [Rev_expr.t], the outermost first. *)
   let binders (e : Rev.rev_expr) =
@@ -869,9 +883,11 @@ let relate_variables (skeleton : Reaper.Traverse.Skeleton.t)
         relate x var;
         projections body vars rev
       | [] -> complete := false)
-    | Let (x, _, _, body), Let { bound_pattern = Singleton bound_var; _ } :: rev
+    | ( Let (x, _, _, body),
+        Let { bound_pattern = Singleton bound_var; defining_expr; _ } :: rev )
       ->
       relate x (Bound_var.var bound_var);
+      if is_end_of_region defining_expr then ends := x :: !ends;
       walk body rev
     | Let_static (bindings, body), Let { bound_pattern = Static _; _ } :: rev ->
       List.iter binding bindings;
@@ -928,7 +944,7 @@ let relate_variables (skeleton : Reaper.Traverse.Skeleton.t)
     | Bind_deleted_code _ | Bind_symbol _ -> ()
   in
   walk input (binders skeleton.toplevel_expr);
-  !related, !complete
+  !related, !complete, !ends
 
 (* The node of the model for a name of the compiler: the one that the conversion
    gave it, if it is a name of the unit ([variables] relates the variables of
@@ -1019,7 +1035,10 @@ type compiler_side =
     code_ids : (Code_id.t * Graph_spec.node) list;
     (* The node of the model of a name of the compiler's traversal, as the graph
        was read ([model_node]), for the tables of the unboxing. *)
-    compiler_node : Code_id_or_name.t -> Graph_spec.node
+    compiler_node : Code_id_or_name.t -> Graph_spec.node;
+    (* The variables of the model bound by the end of a region that the
+       conversion makes the unit value ([relate_variables]). *)
+    ends_of_regions : Numbers.positive list
   }
 
 (* The compiler's graph of [unit] and its solution, read into the model's terms.
@@ -1040,7 +1059,9 @@ let compiler_graph (names : unit_names) (unit : Flambda_unit.t)
   let problem, skeleton =
     Reaper.Traverse.run unit ~final_typing_env:Without_types ~free_names
   in
-  let variables, all_related = relate_variables skeleton input in
+  let variables, all_related, ends_of_regions =
+    relate_variables skeleton input
+  in
   let deps = problem.Reaper.Traverse.Problem.deps in
   GFG.add_any_usage deps problem.toplevel_return;
   Reaper.Traverse_acc.resolve_delayed_deps deps ~analysis_scope:Current_unit
@@ -1128,7 +1149,8 @@ let compiler_graph (names : unit_names) (unit : Flambda_unit.t)
     solved;
     code_deps = problem.code_deps;
     code_ids = Code_id.Map.bindings !code_ids;
-    compiler_node = node
+    compiler_node = node;
+    ends_of_regions
   }
 
 (* ---- The comparisons -------------------------------------------------- *)
@@ -1391,6 +1413,94 @@ let verdict (first : Flsemantics.outcome) (second : Flsemantics.outcome) =
   | Still_running, _ | _, Still_running -> "not decided"
   | _, _ -> if first = second then "the same" else "DIFFERENT"
 
+(* [e] with [named x d] for the defining expression [d] of each [Let] of a
+   variable [x], and [static c] for each static constant [c] bound to a
+   symbol. *)
+let rec map_term ~named ~static (e : Rocq_model.expr) : Rocq_model.expr =
+  let map = map_term ~named ~static in
+  let handler (Rocq_model.Handler (params, metadata, handler)) =
+    Rocq_model.Handler (params, metadata, map handler)
+  in
+  let binding (binding : Rocq_model.static_binding) : Rocq_model.static_binding
+      =
+    match binding with
+    | Bind_code (id, Code (params, my_closure, k, k_exn, metadata, body)) ->
+      Bind_code (id, Code (params, my_closure, k, k_exn, metadata, map body))
+    | Bind_symbol (symbol, const) -> Bind_symbol (symbol, static const)
+    | Bind_deleted_code _ -> binding
+  in
+  match e with
+  | Let (x, kind, defining_expr, body) ->
+    Let (x, kind, named x defining_expr, map body)
+  | Let_static (bindings, body) ->
+    Let_static (List.map binding bindings, map body)
+  | Let_cont_non_recursive (k, h, body) ->
+    Let_cont_non_recursive (k, handler h, map body)
+  | Let_cont_recursive (handlers, body) ->
+    Let_cont_recursive (List.map (fun (k, h) -> k, handler h) handlers, map body)
+  | Apply _ | Apply_cont _ | Switch _ | Invalid -> e
+
+(* The end of a region, which the conversion makes the unit value
+   ([Flsemantics.convert_let]), made a primitive of arbitrary effects that
+   returns the unit value: [Opaque_identity], which is what the conversion makes
+   of the end of the region of a handler. The compiler's traversal does not
+   track regions, and gives the variable that an end of a region binds the use
+   that it gives that of any primitive of arbitrary effects
+   ([Traverse.traverse_prim]), so that its rebuild keeps the [Let] wherever the
+   code around it is kept. The model's traversal does the same of
+   [Opaque_identity] ([prim_has_arbitrary_effects]); of the unit value it would
+   make an alias of the constants, whose [Let] the model's rebuild removes when
+   the variable is not used. So the term given the model has the primitive, and
+   [ends_as_converted] gives the unit value back to the model's rebuild, as the
+   conversion of the compiler's output has it. [ends] are the variables of these
+   [Let]s ([relate_variables]), which the model's rebuild keeps. *)
+let ends_as_effects ends =
+  map_term ~static:Fun.id ~named:(fun x (named : Rocq_model.named) ->
+      match named with
+      | Simple unit when List.mem x ends ->
+        Prim (Unary (Opaque_identity Kinds.Value), [unit])
+      | _ -> named)
+
+let ends_as_converted ends =
+  map_term ~static:Fun.id ~named:(fun x (named : Rocq_model.named) ->
+      match named with
+      | Prim (Unary (Opaque_identity _), [unit]) when List.mem x ends ->
+        Simple unit
+      | _ -> named)
+
+(* The value slots of each set of closures of [e] in the order in which the
+   conversion of the reaper's input lists them, which the model's rebuild keeps:
+   that of [Value_slot.compare] on the slots of the input
+   ([Flsemantics.convert_value_slots]). The compiler's output, where the
+   compiler has renamed the slots of a closure, lists them in the order of the
+   new slots, to which [undo_renamings] gives the numbers of the old; the slot
+   of the input of a number is the one it was first given to
+   ([Flsemantics.Value_slots.name_of]). The order of the slots of a set means
+   nothing, and the two terms are compared up to it. *)
+let slots_in_input_order =
+  let sort slots =
+    List.stable_sort
+      (fun (slot, _) (slot', _) ->
+        Option.compare Value_slot.compare
+          (Flsemantics.Value_slots.name_of slot)
+          (Flsemantics.Value_slots.name_of slot'))
+      slots
+  in
+  map_term
+    ~named:(fun _ (named : Rocq_model.named) ->
+      match named with
+      | Set_of_closures (id, slots) -> Set_of_closures (id, sort slots)
+      | Closure_of_set (slot, decls, slots) ->
+        Closure_of_set (slot, decls, sort slots)
+      | _ -> named)
+    ~static:(fun (const : Rocq_model.static_const) ->
+      match const with
+      | Static_const_set_of_closures (id, slots) ->
+        Static_const_set_of_closures (id, sort slots)
+      | Static_const_closure_of_set (slot, symbols, decls, slots) ->
+        Static_const_closure_of_set (slot, symbols, decls, sort slots)
+      | _ -> const)
+
 (* The rebuild of the model ([FlambdaReaperRebuild.rebuild_unit_from_tables],
    extracted) of [input], the term of the model that the reaper is given, with
    the graph of the model and its solution, which have passed the checks; beside
@@ -1407,15 +1517,20 @@ let verdict (first : Flsemantics.outcome) (second : Flsemantics.outcome) =
    is enough for the comparison: the reaper, changing no calling convention,
    gives no code a new code id, and the symbols are those of the unit. Should
    the two units have different return or exception continuations, the second is
-   given the number of the first, as [Flsemantics.convert_both] does. A
-   difference of the two terms, or of a run, is printed and is not a failure of
-   the tool. Setting FLREAPER_PRINT_TERMS prints the three terms. *)
-let compare_rebuild ~indent ~(input : Flsemantics.converted)
+   given the number of the first, as [Flsemantics.convert_both] does. The ends
+   of regions of [input] and of the model's rebuild, the variables [ends], are
+   given back the unit value ([ends_as_converted]), and the value slots of the
+   two terms put in one order ([slots_in_input_order]). A difference of the two
+   terms, or of a run, is printed and is not a failure of the tool. Setting
+   FLREAPER_PRINT_TERMS prints the three terms. *)
+let compare_rebuild ~indent ~ends ~(input : Flsemantics.converted)
     ~(input_unit : Flambda_unit.t) ~(rebuilt_body : Rocq_model.expr option)
     ~(compiler_output : Flambda_unit.t) =
+  let input = { input with body = ends_as_converted ends input.body } in
   let rebuilt =
     Option.map
-      (fun body : Flsemantics.converted -> { input with body })
+      (fun body : Flsemantics.converted ->
+        { input with body = slots_in_input_order (ends_as_converted ends body) })
       rebuilt_body
   in
   Flsemantics.Continuations.alias
@@ -1431,7 +1546,7 @@ let compare_rebuild ~indent ~(input : Flsemantics.converted)
         "%sthe compiler's output: not converted, the model has not got %t@."
         indent what;
       None
-    | output -> Some output
+    | output -> Some { output with body = slots_in_input_order output.body }
   in
   (match rebuilt, output with
   | None, _ | _, None -> ()
@@ -1692,8 +1807,8 @@ let compare_calling_conventions ~(input : Flsemantics.converted)
         ~final_typing_env:(With_types simplified.final_typing_env)
         ~free_names:simplified.free_names simplified.unit
     in
-    compare_rebuild ~indent ~input ~input_unit ~rebuilt_body
-      ~compiler_output:reaped.unit);
+    compare_rebuild ~indent ~ends:compiler.ends_of_regions ~input ~input_unit
+      ~rebuilt_body ~compiler_output:reaped.unit);
   model_closed
 
 (* ---- Unboxing --------------------------------------------------------- *)
@@ -1813,7 +1928,7 @@ let renames_only (repr : UA.changed_representation) =
    ([relate_variables]), the symbols and the code ids of the unit; the slots are
    the same for every name of a closure. *)
 let undo_renamings (names : unit_names) ~skeleton ~solution input =
-  let variables, _ = relate_variables skeleton input in
+  let variables, _, _ = relate_variables skeleton input in
   let undo name =
     match Reaper.Analysis.get_changed_representation solution name with
     | Some (Closure_representation (fields, function_slots, _)) ->
@@ -2221,8 +2336,8 @@ let compare_unboxing ~(names : unit_names) ~(input : Flsemantics.converted)
         Format.printf "%sthe compiler's reaper STOPPED on the unit (%s)@."
           indent (Printexc.to_string e)
       | reaped ->
-        compare_rebuild ~indent ~input ~input_unit ~rebuilt_body
-          ~compiler_output:reaped.unit);
+        compare_rebuild ~indent ~ends:compiler.ends_of_regions ~input
+          ~input_unit ~rebuilt_body ~compiler_output:reaped.unit);
       true
 
 (* ---- One example ------------------------------------------------------ *)
@@ -2244,6 +2359,23 @@ let check ~filename ~cmx_loader (simplified : Simplify.simplify_result) : bool =
   | input -> (
     let names = take_unit_names () in
     let known_arity_call = !Flsemantics.known_arity_call_met in
+    let compiler =
+      match
+        timed "the compiler's graph and solution" (fun () ->
+            compiler_graph names unit ~input:input.body
+              ~free_names:simplified.free_names)
+      with
+      | exception ((Misc.Fatal_error | Assert_failure _) as e) -> Error e
+      | compiler -> Ok compiler
+    in
+    (* The model is given the ends of regions as primitives of arbitrary effects
+       ([ends_as_effects]), which the compiler's skeleton finds. *)
+    let input =
+      match compiler with
+      | Ok { ends_of_regions; _ } ->
+        { input with body = ends_as_effects ends_of_regions input.body }
+      | Error _ -> input
+    in
     let model_facts =
       timed "the traversal of the model" (fun () ->
           Traversal.traverse_unit (preserve_direct_calls ())
@@ -2256,12 +2388,8 @@ let check ~filename ~cmx_loader (simplified : Simplify.simplify_result) : bool =
           ( Solution.check_closed is_local model_facts model_tables,
             Solution.check_field_used_exact is_local model_facts model_tables ))
     in
-    match
-      timed "the compiler's graph and solution" (fun () ->
-          compiler_graph names unit ~input:input.body
-            ~free_names:simplified.free_names)
-    with
-    | exception ((Misc.Fatal_error | Assert_failure _) as e) ->
+    match compiler with
+    | Error e ->
       (* The compiler's traversal is entitled to stop on a term that it was not
          made for (one that Simplify has made of a text that was already its
          output, for instance); that is said, and nothing is compared. *)
@@ -2269,7 +2397,7 @@ let check ~filename ~cmx_loader (simplified : Simplify.simplify_result) : bool =
         "%s: not compared: the compiler's reaper stopped on the unit (%s)@."
         filename (Printexc.to_string e);
       model_closed && model_exact
-    | { compiler_facts; compiler_tables; all_related; _ } as compiler ->
+    | Ok ({ compiler_facts; compiler_tables; all_related; _ } as compiler) ->
       let compiler_closed, compiler_exact =
         timed "the checks of the compiler's solution" (fun () ->
             ( Solution.check_closed is_local compiler_facts compiler_tables,
@@ -2323,7 +2451,8 @@ let check ~filename ~cmx_loader (simplified : Simplify.simplify_result) : bool =
           | Never | Zero_alloc -> false
         in
         timed "the rebuilds and the runs" (fun () ->
-            compare_rebuild ~indent:"  " ~input ~input_unit:unit
+            compare_rebuild ~indent:"  " ~ends:compiler.ends_of_regions ~input
+              ~input_unit:unit
               ~rebuilt_body:
                 (within_budget "the model's rebuild" ~indent:"  "
                    ~facts:model_facts ~input (fun () ->
