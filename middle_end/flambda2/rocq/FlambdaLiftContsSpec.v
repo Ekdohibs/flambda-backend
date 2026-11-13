@@ -102,6 +102,50 @@
      parameter of a handler binds, between its binding and an
      application of it, one of the parameters that it takes
      ([only_applied]).
+   And two tests of what the applications of [k] give, which the
+   equivalence does not need either. The validation is to apply the
+   pass to the two terms that it compares in the rounds of their
+   normalisations, which come before
+   FlambdaGiveScrutineeSpec.give_scrutinees; the tests keep the pass
+   from two places where it would then no longer find the two terms
+   the same:
+   - the tested parameter is not a scrutinee under another name
+     ([number_of_a_scrutinee]): there is no variable, among those
+     that the body of the [Let_cont] of [k] tests by a [Switch], that
+     at every application of [k] is known to be the number that the
+     application gives the tested parameter. What is known is what
+     FlambdaGiveScrutineeSpec.arm_fact finds, read off the text
+     alone ([still_known]): in an arm of a [Switch] on [x], [x] is
+     the number of the arm; in the handler of a non-recursive
+     continuation that only arms of one number of a [Switch] on [x]
+     apply, [x] is that number, where the body of its [Let_cont]
+     comes to that [Switch] through [Let]s, [Let_static]s and
+     non-recursive [Let_cont]s that do not bind the continuation
+     again and whose handlers do not mention it; nothing is known of
+     [x] under a [Let] of [x] or in a handler that has [x] among its
+     parameters. Simplify makes such a parameter for a test that
+     the source makes twice (FlambdaGiveScrutineeSpec.v says how),
+     where the term before tests the scrutinee itself the second
+     time; [give_scrutinees] makes the parameter the scrutinee again
+     once the continuations are placed, and the pass, coming before
+     it, would take the second test out of the term after only. The
+     [Let]s are gone through, as [arm_fact] does not, because the
+     term after has the [Let]s of the scrutinee under those
+     [Let_cont]s until the continuations are placed; so [x] need not
+     be in scope in that handler, and the test says nothing that a
+     proof could use. The test also holds where both terms have the
+     parameter, as for the result of a function that gives an
+     immediate exactly where its argument is one (a map over an
+     option): the pass is not made there either;
+   - every application of [k] gives a variable only for a parameter
+     that the arm of the number it gives names, once the
+     continuations are moved ([read_where_given]): an application
+     that then goes to its arm leaves no variable unread. Where it
+     would, the [Let] of that variable may be one that only the term
+     before can lose: FlambdaNormaliseSpec.remove_unused_lets
+     removes the [Let] of a block that nothing reads, and
+     FlambdaNormaliseSpec.named_defined, by which the term after
+     loses a [Let], accepts no primitive.
    Where one of these fails for any of them no continuation is moved
    out at that [Let_cont]: it keeps its handler and its body, which
    are those that the pass has made of the handler and the body of
@@ -135,7 +179,7 @@ From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaMapSpec FlambdaSemanticsSpec FlambdaNominalSpec
-  FlambdaNormaliseSpec FlambdaUnusedContsSpec.
+  FlambdaNormaliseSpec FlambdaUnusedContsSpec FlambdaGiveScrutineeSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -351,6 +395,228 @@ with handler_all_give_immediate (k : continuation) (i : nat)
   | Handler _ _ handler => all_give_immediate k i handler
   end.
 
+(* ======================================================================== *)
+(* Whether the tested parameter is a scrutinee under another name           *)
+(* ======================================================================== *)
+
+(* What is taken to be known where an application is: pairs [(x, c)],
+   the variable [x] being the number [c] there. A pair is added in the
+   arm of number [c] of a [Switch] on [x] ([in_arm]), and in the
+   handler of a continuation [k'] that only arms of number [c] of a
+   [Switch] on [x] apply ([facts_in]), where the body of the
+   [Let_cont] of [k'] comes to that [Switch] through [Let]s,
+   [Let_static]s and non-recursive [Let_cont]s that do not bind [k']
+   again and whose handlers do not mention it ([tested_through] for
+   the variable, [arm_through] for the number). The pairs of a
+   variable are dropped under a [Let] of it and in a handler that has
+   it among its parameters ([forgetting]). This is read off the text:
+   [x] need not be in scope in the handler of [k']. *)
+Fixpoint tested_through (e : expr) : option variable :=
+  match e with
+  | Switch (Var x) _ => Some x
+  | Let _ _ _ body | Let_static _ body | Let_cont_non_recursive _ _ body =>
+    tested_through body
+  | Let_cont_recursive _ _ | Apply _ | Apply_cont _ | Switch _ _ | Invalid =>
+    None
+  end.
+
+Fixpoint arm_through (k' : continuation) (body : expr) {struct body}
+    : option Z :=
+  match body with
+  | Switch _ arms =>
+    match first_arm_of k' arms with
+    | Some c => if only_arm k' c arms then Some c else None
+    | None => None
+    end
+  | Let _ _ _ body | Let_static _ body => arm_through k' body
+  | Let_cont_non_recursive k'' h body =>
+    if Pos.eqb k'' k' || cont_free_in_handler_b k' h then None
+    else arm_through k' body
+  | Let_cont_recursive _ _ | Apply _ | Apply_cont _ | Invalid => None
+  end.
+
+Definition facts_in (k' : continuation) (body : expr)
+    (known : list (variable * Z)) : list (variable * Z) :=
+  match tested_through body, arm_through k' body with
+  | Some x, Some c => (x, c) :: known
+  | _, _ => known
+  end.
+
+Definition forgetting (ys : list variable) (known : list (variable * Z))
+    : list (variable * Z) :=
+  filter (fun '(y, _) => negb (among y ys)) known.
+
+Definition in_arm (scrutinee : simple) (d : Z) (known : list (variable * Z))
+    : list (variable * Z) :=
+  match scrutinee with
+  | Var x => (x, d) :: known
+  | Symbol _ | Const _ => known
+  end.
+
+(* Of the variables [cands], those that an [Apply_cont] leaves: all of
+   them if it does not apply [k]; if it does, those that are known to
+   be the naked immediate that it gives at position [i], and none if
+   it gives something else there. *)
+Definition keep_known (k : continuation) (i : nat)
+    (known : list (variable * Z)) (ac : apply_cont) (cands : list variable)
+    : list variable :=
+  if Pos.eqb (ac_continuation ac) k
+  then
+    match nth_error (ac_args ac) i with
+    | Some (Const (Naked_immediate c)) =>
+      filter
+        (fun x => existsb (fun '(y, d) => Pos.eqb y x && Z.eqb d c) known)
+        cands
+    | _ => []
+    end
+  else cands.
+
+(* Of the variables [cands], those that every application of [k] in a
+   term leaves. The bodies of code are not gone into. *)
+Fixpoint still_known (k : continuation) (i : nat)
+    (known : list (variable * Z)) (e : expr) (cands : list variable)
+    {struct e} : list variable :=
+  match e with
+  | Let y _ _ body => still_known k i (forgetting [y] known) body cands
+  | Let_static _ body => still_known k i known body cands
+  | Let_cont_non_recursive k' h body =>
+    still_known k i known body
+      (handler_still_known k i (facts_in k' body known) h cands)
+  | Let_cont_recursive handlers body =>
+    still_known k i known body
+      (fold_right
+         (fun '(_, h) cands => handler_still_known k i known h cands)
+         cands handlers)
+  | Apply_cont ac => keep_known k i known ac cands
+  | Switch scrutinee arms =>
+    fold_right
+      (fun '(d, ac) cands =>
+         keep_known k i (in_arm scrutinee d known) ac cands)
+      cands arms
+  | Apply _ | Invalid => cands
+  end
+with handler_still_known (k : continuation) (i : nat)
+    (known : list (variable * Z)) (h : continuation_handler)
+    (cands : list variable) {struct h} : list variable :=
+  match h with
+  | Handler params _ handler =>
+    still_known k i (forgetting params known) handler cands
+  end.
+
+(* The variables that a term tests by a [Switch]. The bodies of code
+   are not gone into. *)
+Fixpoint scrutinees (e : expr) {struct e} : list variable :=
+  match e with
+  | Let _ _ _ body | Let_static _ body => scrutinees body
+  | Let_cont_non_recursive _ h body =>
+    handler_scrutinees h ++ scrutinees body
+  | Let_cont_recursive handlers body =>
+    flat_map (fun '(_, h) => handler_scrutinees h) handlers
+    ++ scrutinees body
+  | Switch (Var x) _ => [x]
+  | Apply _ | Apply_cont _ | Switch _ _ | Invalid => []
+  end
+with handler_scrutinees (h : continuation_handler) {struct h}
+    : list variable :=
+  match h with
+  | Handler _ _ handler => scrutinees handler
+  end.
+
+(* Whether one of the variables that [body] tests is, at every
+   application of [k] in [body], known to be the number that the
+   application gives at position [i]. *)
+Definition number_of_a_scrutinee (k : continuation) (i : nat) (body : expr)
+    : bool :=
+  match still_known k i [] body (scrutinees body) with
+  | [] => false
+  | _ :: _ => true
+  end.
+
+(* ======================================================================== *)
+(* Whether an application gives variables only where its arm reads them     *)
+(* ======================================================================== *)
+
+(* Every argument that is a variable is at the position of one of
+   [params] that is among the arguments of [target]. *)
+Fixpoint only_read_given (params : list variable) (args : list simple)
+    (target : apply_cont) : bool :=
+  match params, args with
+  | p :: params, a :: args =>
+    match a with
+    | Var _ =>
+      existsb
+        (fun b =>
+           match b with
+           | Var y => Pos.eqb y p
+           | Symbol _ | Const _ => false
+           end)
+        (ac_args target)
+    | Symbol _ | Const _ => true
+    end
+    && only_read_given params args target
+  | _, _ => true
+  end.
+
+(* If the [Apply_cont] applies [k], whose parameters are [params],
+   and gives a naked immediate at position [i], and [arms] has an arm
+   of that number: that it gives a variable only for a parameter that
+   the arm names. *)
+Definition gives_what_is_read (k : continuation) (i : nat)
+    (params : list variable) (arms : list (Z * apply_cont))
+    (ac : apply_cont) : bool :=
+  if Pos.eqb (ac_continuation ac) k
+  then
+    match nth_error (ac_args ac) i with
+    | Some (Const (Naked_immediate n)) =>
+      match find_arm n arms with
+      | Some target => only_read_given params (ac_args ac) target
+      | None => true
+      end
+    | _ => true
+    end
+  else true.
+
+(* The same of every [Apply_cont] of a term. The bodies of code are
+   not gone into. *)
+Fixpoint all_give_read (k : continuation) (i : nat)
+    (params : list variable) (arms : list (Z * apply_cont)) (e : expr)
+    {struct e} : bool :=
+  match e with
+  | Let _ _ _ body | Let_static _ body => all_give_read k i params arms body
+  | Let_cont_non_recursive _ h body =>
+    handler_all_give_read k i params arms h
+    && all_give_read k i params arms body
+  | Let_cont_recursive handlers body =>
+    forallb (fun '(_, h) => handler_all_give_read k i params arms h) handlers
+    && all_give_read k i params arms body
+  | Apply_cont ac => gives_what_is_read k i params arms ac
+  | Switch _ arms' =>
+    forallb (fun '(_, ac) => gives_what_is_read k i params arms ac) arms'
+  | Apply _ | Invalid => true
+  end
+with handler_all_give_read (k : continuation) (i : nat)
+    (params : list variable) (arms : list (Z * apply_cont))
+    (h : continuation_handler) {struct h} : bool :=
+  match h with
+  | Handler _ _ handler => all_give_read k i params arms handler
+  end.
+
+(* The same where the arms are those of [switch], the [Switch] that
+   is left of the handler of [k] once its continuations are moved
+   out. *)
+Definition read_where_given (k : continuation) (i : nat)
+    (params : list variable) (switch body : expr) : bool :=
+  match switch with
+  | Switch _ arms => all_give_read k i params arms body
+  | Let _ _ _ _ | Let_static _ _ | Let_cont_non_recursive _ _ _
+  | Let_cont_recursive _ _ | Apply _ | Apply_cont _ | Invalid =>
+    true
+  end.
+
+(* ======================================================================== *)
+(* The [Let_cont] with the continuations of its handler moved out           *)
+(* ======================================================================== *)
+
 (* The continuations moved, bound around a term, the first outermost. *)
 Definition bind_lifted (lifted : list (continuation * continuation_handler))
     (e : expr) : expr :=
@@ -358,7 +624,9 @@ Definition bind_lifted (lifted : list (continuation * continuation_handler))
 
 (* [Let_cont_non_recursive k h body] with the continuations that [h]
    binds on its way to its [Switch] moved out, where there is one and
-   the tests pass. *)
+   the tests pass: the tested parameter is not a scrutinee under
+   another name, and once the continuations are moved every
+   application of [k] gives variables only where its arm reads them. *)
 Definition lift_conts (k : continuation) (h : continuation_handler)
     (body : expr) : option expr :=
   match h with
@@ -369,15 +637,19 @@ Definition lift_conts (k : continuation) (h : continuation_handler)
          && distinct params
          && Nat.eqb (length (hm_params_kinds metadata)) (length params)
          && all_give_immediate k i body
+         && negb (number_of_a_scrutinee k i body)
       then
         match
           lift_spine body params (hm_params_kinds metadata) [] handler
         with
         | Some (j :: others, switch) =>
-          Some
-            (bind_lifted (j :: others)
-               (Let_cont_non_recursive k (Handler params metadata switch)
-                  body))
+          if read_where_given k i params switch body
+          then
+            Some
+              (bind_lifted (j :: others)
+                 (Let_cont_non_recursive k (Handler params metadata switch)
+                    body))
+          else None
         | Some ([], _) | None => None
         end
       else None

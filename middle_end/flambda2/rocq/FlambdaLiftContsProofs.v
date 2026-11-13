@@ -725,14 +725,17 @@ Proof.
   destruct
     (negb (hm_is_exn_handler metadata) && distinct params
      && Nat.eqb (length (hm_params_kinds metadata)) (length params)
-     && all_give_immediate k i body)
+     && all_give_immediate k i body
+     && negb (number_of_a_scrutinee k i body))
     eqn:Htests; [ | discriminate ].
+  apply andb_true_iff in Htests as [Htests _].
   apply andb_true_iff in Htests as [Htests _].
   apply andb_true_iff in Htests as [Htests Hlength].
   apply andb_true_iff in Htests as [_ Hparams].
   apply Nat.eqb_eq in Hlength.
   destruct (lift_spine body params (hm_params_kinds metadata) [] handler)
     as [[[ | first others] switch] | ] eqn:Hspine; try discriminate.
+  destruct (read_where_given k i params switch body); [ | discriminate ].
   intros [= <-].
   exact (lift_spine_equivalent k params metadata body Hparams Hlength handler
     [] (first :: others) switch Hspine).
