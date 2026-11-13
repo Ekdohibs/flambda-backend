@@ -206,6 +206,50 @@ Record graph : Type := Graph {
 }.
 
 (* ======================================================================== *)
+(* A finite graph                                                           *)
+(* ======================================================================== *)
+
+(* The graph as the traversal of FlambdaReaperTraversal.v makes it, and
+   as the test tool reads it off the compiler's
+   ([Global_flow_graph.graph]): one list of facts per relation, in the
+   order of the arguments of the Datalog atom. *)
+Record facts : Type := Facts {
+  f_alias : list (node * node);
+  f_use : list (node * node);
+  f_accessor : list (node * field * node);
+  f_constructor : list (node * field * node);
+  f_argument : list (node * nat * node);
+  f_parameter : list (node * nat * node);
+  f_propagate : list (node * node * node);
+  f_alias_if_any_source : list (node * node * node);
+  f_any_usage : list node;
+  f_any_source : list node;
+  f_any_source_if_used : list (node * node);
+  f_zero_alloc_source : list node
+}.
+
+Definition no_facts : facts :=
+  Facts [] [] [] [] [] [] [] [] [] [] [] [].
+
+(* The graph whose relations are the facts. *)
+Definition graph_of_facts (F : facts) : graph :=
+  {| g_alias := fun to_ from => In (to_, from) (f_alias F);
+     g_use := fun to_ from => In (to_, from) (f_use F);
+     g_accessor := fun to_ f base => In (to_, f, base) (f_accessor F);
+     g_constructor := fun base f from => In (base, f, from) (f_constructor F);
+     g_argument := fun from i base => In (from, i, base) (f_argument F);
+     g_parameter := fun base i to_ => In (base, i, to_) (f_parameter F);
+     g_propagate := fun if_used to_ from =>
+       In (if_used, to_, from) (f_propagate F);
+     g_alias_if_any_source := fun if_any_source to_ from =>
+       In (if_any_source, to_, from) (f_alias_if_any_source F);
+     g_any_usage := fun x => In x (f_any_usage F);
+     g_any_source := fun x => In x (f_any_source F);
+     g_any_source_if_used := fun if_used x =>
+       In (if_used, x) (f_any_source_if_used F);
+     g_zero_alloc_source := fun x => In x (f_zero_alloc_source F) |}.
+
+(* ======================================================================== *)
 (* The solution                                                             *)
 (* ======================================================================== *)
 
@@ -228,6 +272,55 @@ Record solution : Type := Solution {
   (* [field_of_constructor_is_used base relation]. *)
   s_field_used : node -> field -> bool
 }.
+
+(* Equality of nodes and of fields, as tests. *)
+Definition node_eqb (n n' : node) : bool :=
+  if node_eq_dec n n' then true else false.
+
+Definition field_eqb (f f' : field) : bool :=
+  if field_eq_dec f f' then true else false.
+
+(* The tables as the test tool reads them off the compiler's Datalog
+   database: the tuples of each relation. *)
+Record tables : Type := Tables {
+  t_alias : list (node * node);
+  t_any_usage : list node;
+  t_any_source : list node;
+  t_has_usage : list node;
+  t_has_source : list node;
+  t_usages : list (node * node);
+  t_sources : list (node * node);
+  t_reading_field : list (field * node);
+  t_escaping_field : list (field * node);
+  t_field_used : list (node * field)
+}.
+
+Definition mem_node (n : node) (l : list node) : bool :=
+  existsb (node_eqb n) l.
+
+Definition mem_pair (n m : node) (l : list (node * node)) : bool :=
+  existsb (fun p => node_eqb n (fst p) && node_eqb m (snd p)) l.
+
+Definition mem_field_node (f : field) (n : node) (l : list (field * node))
+    : bool :=
+  existsb (fun p => field_eqb f (fst p) && node_eqb n (snd p)) l.
+
+Definition mem_node_field (n : node) (f : field) (l : list (node * field))
+    : bool :=
+  existsb (fun p => node_eqb n (fst p) && field_eqb f (snd p)) l.
+
+(* The solution whose tables are these. *)
+Definition solution_of_tables (T : tables) : solution :=
+  {| s_alias := fun to_ from => mem_pair to_ from (t_alias T);
+     s_any_usage := fun x => mem_node x (t_any_usage T);
+     s_any_source := fun x => mem_node x (t_any_source T);
+     s_has_usage := fun x => mem_node x (t_has_usage T);
+     s_has_source := fun x => mem_node x (t_has_source T);
+     s_usages := fun x y => mem_pair x y (t_usages T);
+     s_sources := fun x y => mem_pair x y (t_sources T);
+     s_reading_field := fun f x => mem_field_node f x (t_reading_field T);
+     s_escaping_field := fun f x => mem_field_node f x (t_escaping_field T);
+     s_field_used := fun x f => mem_node_field x f (t_field_used T) |}.
 
 (* ======================================================================== *)
 (* The rules                                                                *)
