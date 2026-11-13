@@ -30,8 +30,8 @@
 
    This file is to be reviewed: the checks [closure_free],
    [no_code_no_slots], [no_code], [no_call], [direct_tail_calls],
-   [direct_calls], [only_direct_calls], [exits_one_value] and
-   [results_kinded], the statements, and the examples, against
+   [direct_calls], [only_direct_calls], [full_calls], [exits_one_value]
+   and [results_kinded], the statements, and the examples, against
    FlambdaReaperRebuild.v (the rebuild, which needs no review) and
    FlambdaReaperFlowSpec.v (the meaning of a solution). The proofs are
    in FlambdaReaperRebuildProofs.v, which needs no review.
@@ -110,10 +110,11 @@
    symbol, whatever its static block holds after the rebuild.
 
    The second slice of FlambdaReaperFlowSpec.v (closures, projections,
-   static sets, code, direct calls) is to be covered by another
-   statement, [rebuild_refines_observably_statement], whose premises
-   are those of [rebuild_refines_statement] and [results_kinded], and
-   which compares exits up to what the world outside the unit observes
+   static sets, code, direct calls), and the calls of unknown arity of
+   the third, are to be covered by another statement,
+   [rebuild_refines_observably_statement], whose premises are those of
+   [rebuild_refines_statement] and [results_kinded], and which compares
+   exits up to what the world outside the unit observes
    ([program_refines_observably], [observed_equal]): equal values,
    except that closures are compared without their value slots, inside
    blocks, arrays, boxed numbers and partial applications too; symbols
@@ -137,11 +138,14 @@
      compiler's units, which are well-kinded, meet it; the model asks
      nothing of kinds otherwise (FlambdaWellKindedSpec.v).
    [rebuild_refines_observably_statement] is proved for the units that
-   meet [only_direct_calls] in place of [closure_free]: closures and
-   static sets of closures with value slots, projections of function
-   slots and of value slots, code and deleted code, and direct calls
-   that return, and raise, to a way out of the unit or of the code they
-   are in, or to a handler in scope. A unit of [direct_calls] meets it
+   meet [full_calls], of the code that they bind ([unit_codes]), in place
+   of [closure_free]: closures and static sets of closures with value
+   slots, projections of function slots and of value slots, code and
+   deleted code, and full calls, direct or of unknown arity, that
+   return, and raise, to a way out of the unit or of the code they are
+   in, or to a handler in scope. A unit of [only_direct_calls] meets it
+   ([only_direct_calls_full_calls_statement]); a unit of [direct_calls]
+   meets [only_direct_calls]
    ([direct_calls_only_direct_calls_statement]); a unit of direct tail
    calls meets [direct_calls]
    ([direct_tail_calls_direct_calls_statement]); a unit without calls
@@ -206,8 +210,25 @@
    node with any usage, and is compared there as any exit is. The
    machine raises only where the term does (an [Apply_cont] of the
    exception continuation); an exception that the runtime raises in a
-   call of its own ([Sys.Break]) is not in the model. What remains:
-   indirect calls.
+   call of its own ([Sys.Break]) is not in the model. [full_calls] asks
+   the same, but lets a call be indirect, of unknown arity, in a unit
+   whose code is not tupled and has as many parameters as the call has
+   arguments: such a call is a full call of whatever closure it calls,
+   and no call of the unit makes a partial application or an
+   over-application. The traversal reads an indirect call by a witness
+   for each group of its arguments (one group for each parameter), the
+   first read from the call witness of unknown arity of the callee and
+   each other from the first result of the one before; and it gives code
+   a witness of unknown arity for each group of parameters, in a chain
+   of the same shape from the closure. The rebuild keeps the arguments
+   at the parameters that have a use of the witnesses that the sources
+   of the callee lead to, group by group
+   ([arguments_used_by_unknown_arity_call]), and gives the others
+   poison. These witnesses are those of the code of the closure that the
+   call runs, and stand for those of the call: an argument kept has a
+   use, and a parameter that has a use gets its argument. What remains:
+   partial applications, over-applications, and calls of tupled code of
+   unknown arity.
    The statement holds of more than nothing ([example_statement]): a
    unit with a static block, a block one field of which no load reads, a
    [Let] with no use, and a continuation one parameter of which has no
@@ -221,8 +242,9 @@
    with a closure; [code_example_statement] for a unit with code;
    [tail_call_example_statement] for a unit with a call;
    [wrapper_example_statement] for a unit with a call that returns to a
-   handler through a wrapper; and [raise_example_statement] for a unit
-   with a call that raises to a handler, with extra arguments. *)
+   handler through a wrapper; [raise_example_statement] for a unit with
+   a call that raises to a handler, with extra arguments; and
+   [indirect_example_statement] for a unit with an indirect call. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -569,6 +591,63 @@ with code_only_direct_calls (c : code) : bool :=
 Definition direct_calls_only_direct_calls_statement : Prop :=
   ∀ (bound : list continuation) (e : expr),
     direct_calls bound e = true -> only_direct_calls e = true.
+
+(* Full calls: [only_direct_calls], but a call may also be indirect, if
+   every code that the unit binds ([codes]) is not tupled and has as
+   many parameters as the call has arguments, counted by parameter. The
+   machine tells the shapes of a call apart by that number
+   (FlambdaSemanticsSpec.shape_of_code_call), and a call can only reach
+   code that the unit binds: so such a call is a full call of whatever
+   closure it calls, and no call of the unit makes a partial application
+   or an over-application. *)
+Definition full_call (codes : list (code_id * code)) (ap : apply_expr)
+    : bool :=
+  forallb argument_kind_ok (unarize (ap_args_arity ap))
+  && match ap_call_kind ap with
+     | Direct _ => true
+     | Indirect =>
+       forallb
+         (fun '(_, c) =>
+            negb (code_is_tupled c)
+            && Nat.eqb (length (code_params_arity c))
+                 (length (ap_args_arity ap)))
+         codes
+     end.
+
+Fixpoint full_calls (codes : list (code_id * code)) (e : expr) : bool :=
+  match e with
+  | Let _ kind defining_expr body =>
+    named_no_code kind defining_expr && full_calls codes body
+  | Let_static bindings body =>
+    forallb (binding_full_calls codes) bindings && full_calls codes body
+  | Let_cont_non_recursive _ h body =>
+    handler_full_calls codes h && full_calls codes body
+  | Let_cont_recursive handlers body =>
+    forallb (fun '(_, h) => handler_full_calls codes h) handlers
+    && full_calls codes body
+  | Apply ap => full_call codes ap
+  | Apply_cont _ | Switch _ _ | Invalid => true
+  end
+with handler_full_calls (codes : list (code_id * code))
+    (h : continuation_handler) : bool :=
+  match h with
+  | Handler _ _ handler => full_calls codes handler
+  end
+with binding_full_calls (codes : list (code_id * code))
+    (binding : static_binding) : bool :=
+  match binding with
+  | Bind_code _ c => code_full_calls codes c
+  | Bind_deleted_code _ | Bind_symbol _ _ => binding_no_code binding
+  end
+with code_full_calls (codes : list (code_id * code)) (c : code) : bool :=
+  match c with
+  | Code _ _ _ _ _ body => full_calls codes body
+  end.
+
+(* A unit of [only_direct_calls] meets it, whatever code it binds. *)
+Definition only_direct_calls_full_calls_statement : Prop :=
+  ∀ (codes : list (code_id * code)) (e : expr),
+    only_direct_calls e = true -> full_calls codes e = true.
 
 (* ======================================================================== *)
 (* Exits                                                                    *)
@@ -1287,7 +1366,7 @@ Definition rebuild_refines_observably_statement : Prop :=
     is_local_slots_only is_local ->
     (∀ f : field, is_local f = false) ∨ projection_free e = true ->
     in_flow_fragment e = true ->
-    only_direct_calls e = true ->
+    full_calls (unit_codes e) e = true ->
     results_kinded [] [] e = true ->
     well_formed_unit u e = true ->
     exits_one_value u e = true ->
@@ -2125,4 +2204,137 @@ Definition raise_example_statement : Prop :=
       (Exits 1%positive [Value_const (Tagged_immediate 8)] empty_heap)
   ∧ behaves
       (State RaiseExample.rebuilt [] [] empty_static_env empty_heap)
+      (Exits 1%positive [Value_const (Tagged_immediate 8)] empty_heap).
+
+(* The statement up to observation holds of a unit with an indirect
+   call, which [only_direct_calls] does not allow: a full call, of
+   unknown arity, of code of two parameters, the first of which has no
+   use, given a variable for each:
+
+     let code f50 (x40, x43) my_closure x41 return k3 exn k4 =
+       k3 x43                         ([x40] has no use)
+     in
+     let x10 = 7 in                   (no use)
+     let x12 = 8 in
+     let x11 = closure at 70 of { 70 = f50 } in
+     x11 (x10, x12) return k1 exn k2  (indirect)
+
+   Its least solution passes the checks. The traversal reads the call by
+   two witnesses, one for each parameter, and gives the code two
+   witnesses of unknown arity, the second the call witness of the first
+   result of the first. The rebuild finds the parameter of the first
+   without a use and that of the second used, gives the call poison for
+   its first argument, and removes [x10]. The two units exit with 8. *)
+Module IndirectExample.
+
+Local Open Scope positive_scope.
+
+Definition code50 : code :=
+  Code [40; 43] 41 3 4
+    (make_code_metadata [Singleton Value; Singleton Value] [Singleton Value])
+    (FlowExample.return_to 3 [Var 43]).
+
+Definition call (args : list simple) : apply_expr :=
+  {| ap_callee := Var 11; ap_call_kind := Indirect; ap_args := args;
+     ap_continuation := 1; ap_exn_continuation := 2;
+     ap_exn_extra_args := [];
+     ap_args_arity := [Singleton Value; Singleton Value];
+     ap_return_arity := [Singleton Value] |}.
+
+Definition unit_expr : expr :=
+  Let_static [Bind_code 50 code50]
+    (Let 10 Value (Simple (Const (Tagged_immediate 7)))
+       (Let 12 Value (Simple (Const (Tagged_immediate 8)))
+          (Let 11 Value (Closure_of_set 70 [(70, 50)] [])
+             (Apply (call [Var 10; Var 12]))))).
+
+Definition solution : tables :=
+  {| t_alias :=
+       [(Node_made 1, Node_made 3); (Node_made 12, Node_code_id 50);
+        (Node_made 13, Node_made 16); (Node_made 14, Node_made 10);
+        (Node_made 15, Node_made 11); (Node_made 16, Node_made 9);
+        (Node_made 2, Node_made 4); (Node_made 3, Node_variable 43);
+        (Node_made 5, Node_variable 11); (Node_made 6, Node_variable 10);
+        (Node_made 7, Node_variable 12);
+        (Node_variable 10, Node_all_constants);
+        (Node_variable 12, Node_all_constants);
+        (Node_variable 40, Node_made 6); (Node_variable 41, Node_made 5);
+        (Node_variable 43, Node_made 7)];
+     t_any_usage :=
+       [Node_all_constants; Node_code_id 50; Node_made 1; Node_made 12;
+        Node_made 2; Node_made 3; Node_made 4; Node_made 7; Node_variable 12;
+        Node_variable 43];
+     t_any_source :=
+       [Node_all_constants; Node_code_id 50; Node_made 1; Node_made 12;
+        Node_made 3; Node_made 6; Node_made 7; Node_variable 10;
+        Node_variable 12; Node_variable 40; Node_variable 43];
+     t_has_usage :=
+       [Node_all_constants; Node_code_id 50; Node_made 1; Node_made 10;
+        Node_made 11; Node_made 12; Node_made 13; Node_made 14; Node_made 15;
+        Node_made 16; Node_made 2; Node_made 3; Node_made 4; Node_made 7;
+        Node_made 9; Node_variable 11; Node_variable 12; Node_variable 43];
+     t_has_source :=
+       [Node_all_constants; Node_code_id 50; Node_made 1; Node_made 10;
+        Node_made 11; Node_made 12; Node_made 13; Node_made 14; Node_made 15;
+        Node_made 16; Node_made 3; Node_made 5; Node_made 6; Node_made 7;
+        Node_made 8; Node_made 9; Node_variable 10; Node_variable 11;
+        Node_variable 12; Node_variable 40; Node_variable 41;
+        Node_variable 43];
+     t_usages :=
+       [(Node_made 10, Node_made 14); (Node_made 11, Node_made 15);
+        (Node_made 13, Node_made 13); (Node_made 14, Node_made 14);
+        (Node_made 15, Node_made 15); (Node_made 16, Node_made 13);
+        (Node_made 9, Node_made 13); (Node_variable 11, Node_variable 11)];
+     t_sources :=
+       [(Node_made 10, Node_made 10); (Node_made 11, Node_made 11);
+        (Node_made 13, Node_made 9); (Node_made 14, Node_made 10);
+        (Node_made 15, Node_made 11); (Node_made 16, Node_made 9);
+        (Node_made 5, Node_variable 11); (Node_made 8, Node_made 8);
+        (Node_made 9, Node_made 9); (Node_variable 11, Node_variable 11);
+        (Node_variable 41, Node_variable 11)];
+     t_reading_field := [];
+     t_escaping_field := [];
+     t_field_used :=
+       [(Node_made 10, Field_code_id_of_call_witness);
+        (Node_made 10, Field_return_of_call (Normal 0%nat));
+        (Node_made 10, Field_return_of_call Exn);
+        (Node_made 11, Field_call_witness Unknown_arity_code_pointer);
+        (Node_made 9, Field_code_id_of_call_witness);
+        (Node_made 9, Field_return_of_call (Normal 0%nat));
+        (Node_variable 11, Field_call_witness Unknown_arity_code_pointer)] |}.
+
+Definition rebuilt : expr :=
+  Let_static [Bind_code 50 code50]
+    (Let 12 Value (Simple (Const (Tagged_immediate 8)))
+       (Let 11 Value (Closure_of_set 70 [(70, 50)] [])
+          (Apply (call [Const (Poison Value); Var 12])))).
+
+End IndirectExample.
+
+Definition indirect_example_statement : Prop :=
+  in_flow_fragment IndirectExample.unit_expr = true
+  ∧ only_direct_calls IndirectExample.unit_expr = false
+  ∧ full_calls (unit_codes IndirectExample.unit_expr)
+      IndirectExample.unit_expr
+    = true
+  ∧ results_kinded [] [] IndirectExample.unit_expr = true
+  ∧ well_formed_unit FlowExample.interface IndirectExample.unit_expr = true
+  ∧ exits_one_value FlowExample.interface IndirectExample.unit_expr = true
+  ∧ check_closed FlowExample.is_local
+      (traverse_unit Never FlowExample.interface IndirectExample.unit_expr)
+      IndirectExample.solution
+    = true
+  ∧ check_field_used_exact FlowExample.is_local
+      (traverse_unit Never FlowExample.interface IndirectExample.unit_expr)
+      IndirectExample.solution
+    = true
+  ∧ rebuild_unit_from_tables
+      (traverse_unit Never FlowExample.interface IndirectExample.unit_expr)
+      IndirectExample.solution false IndirectExample.unit_expr
+    = IndirectExample.rebuilt
+  ∧ behaves
+      (State IndirectExample.unit_expr [] [] empty_static_env empty_heap)
+      (Exits 1%positive [Value_const (Tagged_immediate 8)] empty_heap)
+  ∧ behaves
+      (State IndirectExample.rebuilt [] [] empty_static_env empty_heap)
       (Exits 1%positive [Value_const (Tagged_immediate 8)] empty_heap).
