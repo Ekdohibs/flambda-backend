@@ -83,6 +83,11 @@
    compared up to bound names, and run on the machine extracted from
    FlambdaSemanticsSpec.v beside the reaper's input ([compare_rebuild]).
 
+   - Where FLREAPER_LEAST is set, the first mode ends with the two solutions
+   tested against the least solution of the rules (FlambdaReaperLeastSpec.v),
+   which the extracted FlambdaReaperLeast.check_least tests and compute_least
+   computes ([compare_least]).
+
    This is a test and not a proof. What is trusted: the conversion of
    flsemantics.ml (its header says what that is), and, for the comparison only,
    the reading of the compiler's graph and solution here, which must send each
@@ -2759,6 +2764,310 @@ let run_with_fixes ~(names : unit_names) ~(input : Flsemantics.converted)
         ~compiler_output:None;
       true)
 
+(* ---- The least solution ---------------------------------------------- *)
+
+(* Where FLREAPER_LEAST is set, the end of the first mode compares the two
+   solutions with the least solution of the rules (FlambdaReaperLeastSpec.v),
+   whose guards [any_usage x = false] and [any_source x = false] are read off
+   the solution itself. The program of the rules is not stratified: the
+   compiler's schedule, which [solve] follows, reads a guard before a later
+   round makes it false, and keeps what the rule concluded, so that its tables
+   may hold stale tuples, [usages x _] with [any_usage x] or [sources x _] with
+   [any_source x], which no least solution has ([least_no_stale_statement]). It
+   is not printed by default, so that the expected files do not change with it,
+   and nothing depends on it.
+
+   The extracted [check_least] (proved to imply [least_solution]) is run on the
+   model's solution with the model's graph, and on the compiler's with its
+   graph; the extracted [compute_least] (proved to give a least solution where
+   it gives one) on each graph, and each solution is compared with the least
+   solution of its graph, tuple by tuple; last, the least solution of the
+   model's graph with the compiler's solution, on the tuples whose nodes are all
+   names of the unit, those that [compare_solutions] compares. The stale tuples
+   beyond the least are counted. Any other tuple of a solution that is not in
+   the least one is printed, and said NOT DERIVABLE where no reading of the
+   guards derives it: where the rules do not with every guard true ([saturate]
+   with the guards of the empty tables), which derive whatever any schedule
+   derives. Otherwise it is said whether a rule concludes it from the solution
+   with the guards of the solution; where none does, it was concluded with a
+   guard that is false at the end, as the stale tuples were. A tuple of the
+   least solution that is not in the other is printed too.
+
+   [check_least] and [compute_least] go through lists, each step of their
+   saturations is quadratic or cubic in the facts and the tuples, and there are
+   as many steps as the derivations are deep. They are not run where [(f +
+   t)^3], [f] the facts of the two graphs and [t] the tuples of the two
+   solutions, is above FLREAPER_LEAST_BUDGET, or thirty billion, some ten
+   seconds (FLREAPER_LEAST_ALWAYS runs them whatever the estimate). Their fuel
+   bounds the steps of a saturation and the rounds of [compute_least]: for
+   [check_least], one more than the tuples of the solution checked, which its
+   saturation stays within where the solution is closed; for [compute_least],
+   one more than the tuples of the two solutions; for the saturation with every
+   guard true, ten times that. *)
+
+module Least = Flambda2_rocq_semantics.FlambdaReaperLeast
+
+let least_wanted () =
+  match Sys.getenv_opt "FLREAPER_LEAST" with
+  | None | Some "" -> false
+  | Some _ -> true
+
+let least_budget () =
+  match
+    Option.bind (Sys.getenv_opt "FLREAPER_LEAST_BUDGET") float_of_string_opt
+  with
+  | Some budget -> budget
+  | None -> 3e10
+
+(* A tuple of the tables of a solution ([FlambdaReaperLeastSpec.atom]). *)
+type atom =
+  | Atom_alias of Graph_spec.node * Graph_spec.node
+  | Atom_any_usage of Graph_spec.node
+  | Atom_any_source of Graph_spec.node
+  | Atom_has_usage of Graph_spec.node
+  | Atom_has_source of Graph_spec.node
+  | Atom_usages of Graph_spec.node * Graph_spec.node
+  | Atom_sources of Graph_spec.node * Graph_spec.node
+  | Atom_reading_field of Graph_spec.field * Graph_spec.node
+  | Atom_escaping_field of Graph_spec.field * Graph_spec.node
+  | Atom_field_used of Graph_spec.node * Graph_spec.field
+
+let atoms_of (t : Graph_spec.tables) =
+  dedup
+    (List.map (fun (x, y) -> Atom_alias (x, y)) t.t_alias
+    @ List.map (fun x -> Atom_any_usage x) t.t_any_usage
+    @ List.map (fun x -> Atom_any_source x) t.t_any_source
+    @ List.map (fun x -> Atom_has_usage x) t.t_has_usage
+    @ List.map (fun x -> Atom_has_source x) t.t_has_source
+    @ List.map (fun (x, y) -> Atom_usages (x, y)) t.t_usages
+    @ List.map (fun (x, y) -> Atom_sources (x, y)) t.t_sources
+    @ List.map (fun (f, x) -> Atom_reading_field (f, x)) t.t_reading_field
+    @ List.map (fun (f, x) -> Atom_escaping_field (f, x)) t.t_escaping_field
+    @ List.map (fun (x, f) -> Atom_field_used (x, f)) t.t_field_used)
+
+let nodes_of_atom (atom : atom) =
+  match atom with
+  | Atom_alias (x, y) | Atom_usages (x, y) | Atom_sources (x, y) -> [x; y]
+  | Atom_any_usage x
+  | Atom_any_source x
+  | Atom_has_usage x
+  | Atom_has_source x
+  | Atom_reading_field (_, x)
+  | Atom_escaping_field (_, x)
+  | Atom_field_used (x, _) ->
+    [x]
+
+(* As [print_tables] prints them. *)
+let print_atom ppf (atom : atom) =
+  let node = print_node in
+  match atom with
+  | Atom_alias (x, y) -> Format.fprintf ppf "alias %a %a" node x node y
+  | Atom_any_usage x -> Format.fprintf ppf "any_usage %a" node x
+  | Atom_any_source x -> Format.fprintf ppf "any_source %a" node x
+  | Atom_has_usage x -> Format.fprintf ppf "has_usage %a" node x
+  | Atom_has_source x -> Format.fprintf ppf "has_source %a" node x
+  | Atom_usages (x, y) -> Format.fprintf ppf "usages %a %a" node x node y
+  | Atom_sources (x, y) -> Format.fprintf ppf "sources %a %a" node x node y
+  | Atom_reading_field (f, x) ->
+    Format.fprintf ppf "reading_field %a %a" print_field f node x
+  | Atom_escaping_field (f, x) ->
+    Format.fprintf ppf "escaping_field %a %a" print_field f node x
+  | Atom_field_used (x, f) ->
+    Format.fprintf ppf "field_of_constructor_is_used %a %a" node x print_field f
+
+(* The elements of [l] that are not in [l']. *)
+let not_in l l' =
+  let table = Hashtbl.create ((2 * List.length l') + 1) in
+  List.iter (fun x -> Hashtbl.replace table x ()) l';
+  List.filter (fun x -> not (Hashtbl.mem table x)) l
+
+(* Whether [atom], a tuple of [t], is stale: [usages x _] where [t] has
+   [any_usage x], or [sources x _] where it has [any_source x]. *)
+let is_stale (t : Graph_spec.tables) (atom : atom) =
+  match atom with
+  | Atom_usages (x, _) -> Graph_spec.mem_node x t.t_any_usage
+  | Atom_sources (x, _) -> Graph_spec.mem_node x t.t_any_source
+  | Atom_alias _ | Atom_any_usage _ | Atom_any_source _ | Atom_has_usage _
+  | Atom_has_source _ | Atom_reading_field _ | Atom_escaping_field _
+  | Atom_field_used _ ->
+    false
+
+(* The stale tuples among [atoms], as "N stale (U usages, S sources)". *)
+let print_stale ppf (atoms : atom list) =
+  let usages =
+    List.length
+      (List.filter
+         (fun (atom : atom) ->
+           match atom with Atom_usages _ -> true | _ -> false)
+         atoms)
+  in
+  Format.fprintf ppf "%d stale (%d usages, %d sources)" (List.length atoms)
+    usages
+    (List.length atoms - usages)
+
+(* What the rules conclude from the tuples of [t] in one step, the guards read
+   off [t] ([FlambdaReaperLeast.step] without the tuples of [t]). *)
+let conclusions facts (t : Graph_spec.tables) : Graph_spec.tables =
+  { t_alias = Least.new_alias is_local facts t t;
+    t_any_usage = Least.new_any_usage is_local facts t;
+    t_any_source = Least.new_any_source is_local facts t;
+    t_has_usage = Least.new_has_usage facts t;
+    t_has_source = Least.new_has_source facts t;
+    t_usages = Least.new_usages facts t t;
+    t_sources = Least.new_sources facts t t;
+    t_reading_field = Least.new_reading_field is_local facts t;
+    t_escaping_field = Least.new_escaping_field is_local facts t;
+    t_field_used = Least.new_field_used is_local facts t
+  }
+
+(* [solution] of the graph [facts] against [least], its least solution, if
+   [compute_least] found one: the tuples of [solution] beyond it, of which the
+   stale, and those of [least] that [solution] has not. *)
+let against_least ~indent ~graph ~solution_name ~facts ~fuel
+    ~(solution : Graph_spec.tables) (least : Graph_spec.tables option) =
+  match least with
+  | None ->
+    Format.printf "%sthe least solution of %s: NONE found (compute_least)@."
+      indent graph
+  | Some least -> (
+    let atoms = atoms_of solution in
+    let least_atoms = atoms_of least in
+    let beyond = not_in atoms least_atoms in
+    let missing = not_in least_atoms atoms in
+    let stale, others = List.partition (is_stale solution) beyond in
+    Format.printf "%sthe least solution of %s, %d tuples, and %s:" indent graph
+      (List.length least_atoms) solution_name;
+    match beyond, missing with
+    | [], [] -> Format.printf " the same@."
+    | _, [] when others = [] ->
+      Format.printf " the same, but for %a of %s@." print_stale stale
+        solution_name
+    | _ ->
+      Format.printf
+        " %d tuples of %s beyond the least, of which %a, and %d of the least \
+         missing@."
+        (List.length beyond) solution_name print_stale stale
+        (List.length missing);
+      let underivable =
+        not_in others
+          (atoms_of
+             (Least.saturate is_local facts Least.empty_tables fuel
+                Least.empty_tables))
+      in
+      let unconcluded = not_in others (atoms_of (conclusions facts solution)) in
+      List.iter
+        (fun atom ->
+          Format.printf "%s  only in %s: %a%s@." indent solution_name print_atom
+            atom
+            (if List.mem atom underivable
+             then " (NOT DERIVABLE)"
+             else if List.mem atom unconcluded
+             then " (no rule concludes it with the guards of the end)"
+             else " (a rule concludes it with the guards of the end)"))
+        others;
+      List.iter
+        (fun atom ->
+          Format.printf "%s  only in the least: %a@." indent print_atom atom)
+        missing)
+
+(* The least solution of the model's graph against the compiler's solution, on
+   the tuples whose nodes are all among [names], the names of the unit. *)
+let least_against_compiler ~indent ~(names : Graph_spec.node list)
+    ~(least : Graph_spec.tables option) ~(compiler : Graph_spec.tables) =
+  match least with
+  | None -> ()
+  | Some least -> (
+    let names =
+      let table = Hashtbl.create ((2 * List.length names) + 1) in
+      List.iter (fun node -> Hashtbl.replace table node ()) names;
+      Hashtbl.mem table
+    in
+    let on_names t =
+      List.filter
+        (fun atom -> List.for_all names (nodes_of_atom atom))
+        (atoms_of t)
+    in
+    let compiler_atoms = on_names compiler in
+    let least_atoms = on_names least in
+    let beyond = not_in compiler_atoms least_atoms in
+    let missing = not_in least_atoms compiler_atoms in
+    let stale, others = List.partition (is_stale compiler) beyond in
+    Format.printf
+      "%sthe least solution of the model's graph and the compiler's solution, \
+       on the names of the unit:"
+      indent;
+    match stale, others, missing with
+    | [], [], [] ->
+      Format.printf " the same, %d tuples@." (List.length least_atoms)
+    | _, [], [] ->
+      Format.printf " the same, %d tuples, but for %a of the compiler's@."
+        (List.length least_atoms) print_stale stale
+    | _ ->
+      Format.printf
+        " %d tuples in the least, %d in the compiler's, %d only in the \
+         compiler's, of which %a, %d only in the least@."
+        (List.length least_atoms)
+        (List.length compiler_atoms)
+        (List.length beyond) print_stale stale (List.length missing);
+      List.iter
+        (fun atom ->
+          Format.printf "%s  only in the compiler's: %a@." indent print_atom
+            atom)
+        others;
+      List.iter
+        (fun atom ->
+          Format.printf "%s  only in the least: %a@." indent print_atom atom)
+        missing)
+
+let compare_least ~indent ~names ~(model_facts : Graph_spec.facts)
+    ~(model_tables : Graph_spec.tables) ~(compiler_facts : Graph_spec.facts)
+    ~(compiler_tables : Graph_spec.tables) =
+  let facts = size model_facts + size compiler_facts in
+  let model_size = List.length (atoms_of model_tables) in
+  let compiler_size = List.length (atoms_of compiler_tables) in
+  let estimate = float_of_int (facts + model_size + compiler_size) ** 3. in
+  if
+    estimate > least_budget ()
+    && Option.is_none (Sys.getenv_opt "FLREAPER_LEAST_ALWAYS")
+  then
+    Format.printf
+      "%sthe least solution: NOT COMPUTED, as the graphs have %d facts and the \
+       solutions %d tuples, which makes it take some %.0e tests \
+       (FLREAPER_LEAST_ALWAYS computes it)@."
+      indent facts
+      (model_size + compiler_size)
+      estimate
+  else
+    let model_least_ok, compiler_least_ok =
+      timed "the checks of least solution" (fun () ->
+          ( Least.check_least is_local model_facts
+              (nat_of_int (model_size + 1))
+              model_tables,
+            Least.check_least is_local compiler_facts
+              (nat_of_int (compiler_size + 1))
+              compiler_tables ))
+    in
+    Format.printf
+      "%sthe check of least solution: the model's solution %s it, the \
+       compiler's, with its graph, %s it@."
+      indent (passes model_least_ok) (passes compiler_least_ok);
+    let fuel = nat_of_int (model_size + compiler_size + 1) in
+    let model_least, compiler_least =
+      timed "the least solutions" (fun () ->
+          ( Least.compute_least is_local model_facts fuel,
+            Least.compute_least is_local compiler_facts fuel ))
+    in
+    let derivable_fuel = nat_of_int (10 * (model_size + compiler_size + 1)) in
+    timed "the comparisons with the least solutions" (fun () ->
+        against_least ~indent ~graph:"the model's graph"
+          ~solution_name:"the model's solution" ~facts:model_facts
+          ~fuel:derivable_fuel ~solution:model_tables model_least;
+        against_least ~indent ~graph:"the compiler's graph"
+          ~solution_name:"the compiler's solution" ~facts:compiler_facts
+          ~fuel:derivable_fuel ~solution:compiler_tables compiler_least;
+        least_against_compiler ~indent ~names ~least:model_least
+          ~compiler:compiler_tables)
+
 (* ---- One example ------------------------------------------------------ *)
 
 let print_graphs () =
@@ -2901,6 +3210,10 @@ let check ~filename ~cmx_loader (simplified : Simplify.simplify_result) : bool =
                        (solution_of_tables model_tables)
                        preserve input.body))
               ~compiler_output:reaped);
+        if least_wanted ()
+        then
+          compare_least ~indent:"  " ~names:(unit_nodes names) ~model_facts
+            ~model_tables ~compiler_facts ~compiler_tables;
         let unit_code_ids =
           List.filter
             (fun (node : Graph_spec.node) ->
