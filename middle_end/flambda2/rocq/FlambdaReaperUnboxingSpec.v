@@ -36,9 +36,12 @@
    [perform_analysis0] puts in the table before running them, the units
    of the four counterexamples below against their .fl (that of the
    second is [kept_result_unboxed] of FlambdaReaperUnboxing.v),
-   [check_result_receivers], [field_reader_seeds] and
-   [escaping_argument_seeds] against the fixes they are said to be,
-   [unboxing_relations_with] against [unboxing_relations],
+   [check_result_receivers], and [field_reader_seeds],
+   [check_field_readers], [escaping_argument_seeds] and
+   [check_escaping_arguments] of FlambdaReaperUnboxing.v, against the
+   fixes they are said to be, [unboxing_relations_with] and
+   [derive_to_unbox_with] of FlambdaReaperUnboxing.v against
+   [unboxing_relations] and [derive_to_unbox],
    [unbox_dead_unit] against testsuite/tests/reaper/unbox_dead.ml,
    [wrapper_args_u_before_fix] against [make_apply_wrapper] of rebuild.ml
    before the fix that the example is of, and the statements. The checks are
@@ -506,6 +509,58 @@ Definition check_to_change_representation_sound_statement : Prop :=
       unboxing_closed is_local (graph_of_facts F) (solution_of_tables T)
         (fun n => mem_node n cannot_change) max_unbox_size lambda_lifting
         crr0 crr1 crr cu0 cu
+      ∧ (∀ x : node,
+           mem_node x to_unbox = true ->
+           s_has_usage (solution_of_tables T) x = true ∧ cu x = false)
+      ∧ (∀ x : node,
+           s_has_usage (solution_of_tables T) x = true ->
+           s_has_source (solution_of_tables T) x = true -> cu x = false ->
+           mem_node x to_unbox = true)
+      ∧ (∀ x : node,
+           mem_node x tcr = true ->
+           s_has_usage (solution_of_tables T) x = true ∧ crr x = false
+           ∧ mem_node x to_unbox = false)
+      ∧ (∀ x : node,
+           s_has_usage (solution_of_tables T) x = true ->
+           s_has_source (solution_of_tables T) x = true -> crr x = false ->
+           mem_node x to_unbox = false ->
+           mem_node x tcr = true).
+
+(* The checks of the two tables for the rules with the allocations
+   [seeds] added to [cannot_unbox0], as the fixes below add them
+   ([check_to_unbox_with] and [check_to_change_representation_with] of
+   FlambdaReaperUnboxing.v): the statements above, for tables that have
+   the seeds in [cannot_unbox0] too. *)
+Definition check_to_unbox_with_sound_statement : Prop :=
+  ∀ (is_local : field -> bool) (F : facts) (T : tables)
+    (cannot_change : list node) (max_unbox_size : nat)
+    (lambda_lifting : bool) (seeds to_unbox : list node),
+    check_to_unbox_with is_local F T cannot_change max_unbox_size
+      lambda_lifting seeds to_unbox = true ->
+    ∃ crr0 crr1 crr cu0 cu : node -> bool,
+      unboxing_closed is_local (graph_of_facts F) (solution_of_tables T)
+        (fun n => mem_node n cannot_change) max_unbox_size lambda_lifting
+        crr0 crr1 crr cu0 cu
+      ∧ (∀ x : node, In x seeds -> cu0 x = true)
+      ∧ (∀ x : node,
+           mem_node x to_unbox = true ->
+           s_has_usage (solution_of_tables T) x = true ∧ cu x = false)
+      ∧ (∀ x : node,
+           s_has_usage (solution_of_tables T) x = true ->
+           s_has_source (solution_of_tables T) x = true -> cu x = false ->
+           mem_node x to_unbox = true).
+
+Definition check_to_change_representation_with_sound_statement : Prop :=
+  ∀ (is_local : field -> bool) (F : facts) (T : tables)
+    (cannot_change : list node) (max_unbox_size : nat)
+    (lambda_lifting : bool) (seeds to_unbox tcr : list node),
+    check_to_change_representation_with is_local F T cannot_change
+      max_unbox_size lambda_lifting seeds to_unbox tcr = true ->
+    ∃ crr0 crr1 crr cu0 cu : node -> bool,
+      unboxing_closed is_local (graph_of_facts F) (solution_of_tables T)
+        (fun n => mem_node n cannot_change) max_unbox_size lambda_lifting
+        crr0 crr1 crr cu0 cu
+      ∧ (∀ x : node, In x seeds -> cu0 x = true)
       ∧ (∀ x : node,
            mem_node x to_unbox = true ->
            s_has_usage (solution_of_tables T) x = true ∧ cu x = false)
@@ -1036,74 +1091,14 @@ Definition unbox_dead_statement : Prop :=
       Goes_wrong.
 
 (* ======================================================================== *)
-(* The rules with seeds of a fix                                            *)
-(* ======================================================================== *)
-
-(* The tables of the rules with the allocations [seeds] added to
-   [cannot_unbox0], as a rule that concludes it from relations other than
-   itself adds them ([derived_cannot_unbox0_seeds]): before the rounds of
-   [cu0_stored], which are made again. The other tables are those of
-   [unboxing_relations], which no seed of [cannot_unbox0] changes. *)
-Definition unboxing_relations_with (is_local : field -> bool) (F : facts)
-    (T : tables) (cannot_change : list node) (max_unbox_size : nat)
-    (lambda_lifting : bool) (seeds : list node) : unboxing_tables :=
-  let R :=
-    unboxing_relations is_local F T cannot_change max_unbox_size
-      lambda_lifting
-  in
-  let cu0 :=
-    stored_rounds F T (ut_crr R) (S (length (t_sources T)))
-      (Keyed.dedup node_eqb (seeds ++ ut_cu0 R))
-  in
-  {| ut_crr0 := ut_crr0 R; ut_crr1 := ut_crr1 R; ut_crr := ut_crr R;
-     ut_cu0 := cu0;
-     ut_cu := Keyed.dedup node_eqb (cu0 ++ by_function_slots F cu0) |}.
-
-(* [derive_to_unbox] for those tables. *)
-Definition derive_to_unbox_with (is_local : field -> bool) (F : facts)
-    (T : tables) (cannot_change : list node) (max_unbox_size : nat)
-    (lambda_lifting : bool) (seeds : list node) : list node :=
-  let R :=
-    unboxing_relations_with is_local F T cannot_change max_unbox_size
-      lambda_lifting seeds
-  in
-  filter (fun x => negb (mem_node x (ut_cu R)))
-    (Keyed.dedup node_eqb (t_has_usage T)).
-
-(* ======================================================================== *)
 (* A counterexample: a field read immutably and mutably                     *)
 (* ======================================================================== *)
 
-(* The fix, as what it adds to [cannot_unbox0]: an allocation with a
-   source that is a source of a field of [base] ([constructor]), which a
-   use of [base] reads into a name [v] with a use that the allocation
-   does not dominate. *)
-Definition field_reader_seeds (F : facts) (T : tables)
-    (dominated : list (node * node)) : list node :=
-  flat_map
-    (fun '(base, relation, alias) =>
-       flat_map
-         (fun '(alias', allocation_id) =>
-            if node_eqb alias alias'
-               && mem_node allocation_id (t_has_source T)
-               && existsb
-                    (fun '(v, relation', usage) =>
-                       field_eqb relation relation'
-                       && mem_pair base usage (t_usages T)
-                       && mem_node v (t_has_usage T)
-                       && negb (mem_pair allocation_id v dominated))
-                    (f_accessor F)
-            then [allocation_id]
-            else [])
-         (t_sources T))
-    (f_constructor F).
-
-(* The fix, as what it asks of a table of [to_unbox]: no allocation that
-   it adds to [cannot_unbox0] is unboxed. *)
-Definition check_field_readers (F : facts) (T : tables)
-    (dominated : list (node * node)) (to_unbox : list node) : bool :=
-  forallb (fun x => negb (mem_node x to_unbox))
-    (field_reader_seeds F T dominated).
+(* The fix, as what it adds to [cannot_unbox0], is [field_reader_seeds]
+   of FlambdaReaperUnboxing.v, and what it asks of a table of
+   [to_unbox], [check_field_readers] there; the rules with its seeds are
+   [unboxing_relations_with] there, [to_unbox] for them
+   [derive_to_unbox_with]. *)
 
 (* [Block_load] of a value from a mutable field. *)
 Definition load_mutable (field : Z) (block : simple) : named :=
@@ -1306,36 +1301,9 @@ Definition mixed_mutable_field_cause_statement : Prop :=
 (* convention                                                               *)
 (* ======================================================================== *)
 
-(* The fix, as what it adds to [cannot_unbox0]: an allocation with a
-   source that is a source of an argument of a call ([argument]) that may
-   call code that cannot change its calling convention, a source of the
-   callee of the call. *)
-Definition escaping_argument_seeds (F : facts) (T : tables)
-    (cannot_change : list node) : list node :=
-  flat_map
-    (fun '(from, _, base) =>
-       if existsb
-            (fun '(base', call_witness) =>
-               node_eqb base base'
-               && witness_cannot_change F cannot_change call_witness)
-            (t_sources T)
-       then
-         flat_map
-           (fun '(from', allocation_id) =>
-              if node_eqb from from'
-                 && mem_node allocation_id (t_has_source T)
-              then [allocation_id]
-              else [])
-           (t_sources T)
-       else [])
-    (f_argument F).
-
-(* The fix, as what it asks of a table of [to_unbox]: no allocation that
-   it adds to [cannot_unbox0] is unboxed. *)
-Definition check_escaping_arguments (F : facts) (T : tables)
-    (cannot_change : list node) (to_unbox : list node) : bool :=
-  forallb (fun x => negb (mem_node x to_unbox))
-    (escaping_argument_seeds F T cannot_change).
+(* The fix, as what it adds to [cannot_unbox0], is
+   [escaping_argument_seeds] of FlambdaReaperUnboxing.v, and what it asks
+   of a table of [to_unbox], [check_escaping_arguments] there. *)
 
 (* The unit of escaping_parameter_argument.fl, without [g]: the code 50
    is [f] without its parameter [w], whose [p] is [x40], and the [Switch]

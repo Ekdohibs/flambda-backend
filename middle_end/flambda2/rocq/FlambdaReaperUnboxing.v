@@ -75,16 +75,21 @@
      with an unboxed callee, with [Unbox] decisions and with
      [Unbox_my_closure], and [rebuild_function_params_and_body] with
      them.
-   It needs no review: FlambdaReaperUnboxingSpec.v says what the checks
-   mean, and the test tool compares the decisions and the rebuilt term
-   with those of the compiler's reaper. It is extracted
-   ([derive_dominated], [check_dominated], [derive_to_unbox],
+   It needs no review, but for the fixes proposed for faults of the
+   compiler's unboxing ([field_reader_seeds], [escaping_argument_seeds],
+   their checks and [unboxing_relations_with]), which
+   FlambdaReaperUnboxingSpec.v names for review with its statements:
+   that file says what the checks mean, and the test tool compares the
+   decisions and the rebuilt term with those of the compiler's reaper. It
+   is extracted ([derive_dominated], [check_dominated], [derive_to_unbox],
    [check_to_unbox], [to_unbox_of_unboxed_names],
    [derive_to_change_representation], [check_to_change_representation],
    [to_change_representation_of_alloc_points], [check_sets_whole],
    [unit_unboxed_fields], [unit_changed_representations],
    [unit_calling_convention_changes_u], [unit_my_closure_decisions_u],
-   [rebuild_unit_unbox], [rebuild_unit_unbox_repr]).
+   [rebuild_unit_unbox], [rebuild_unit_unbox_repr], and, for the model
+   with the fixes, [fix_seeds], [derive_to_unbox_fixed],
+   [check_to_unbox_fixed] and [check_to_change_representation_fixed]).
 
    What is transcribed is the reaper run with
    [-reaper-change-calling-conventions] and [-reaper-unbox], the
@@ -989,6 +994,150 @@ Definition check_sets_whole (to_unbox tcr : list node) : bool :=
        || (Bool.eqb (mem_node x to_unbox) (mem_node y to_unbox)
            && Bool.eqb (mem_node x tcr) (mem_node y tcr)))
     (f_constructor F).
+
+(* ------------------------------------------------------------------------ *)
+(* The proposed fixes                                                       *)
+(* ------------------------------------------------------------------------ *)
+
+(* The fixes proposed for faults of the compiler's unboxing, which
+   FlambdaReaperUnboxingSpec.v states and says what they are: each is
+   seeds of [cannot_unbox0], allocations that a rule that is not the
+   compiler's forbids to unbox. They are here so that the test tool can
+   run the model with them ([derive_to_unbox_fixed]). *)
+
+(* The tables of the rules with the allocations [seeds] added to
+   [cannot_unbox0], as a rule that concludes it from relations other than
+   itself adds them ([derived_cannot_unbox0_seeds]): before the rounds of
+   [cu0_stored], which are made again. The other tables are those of
+   [unboxing_relations], which no seed of [cannot_unbox0] changes. *)
+Definition unboxing_relations_with (seeds : list node) : unboxing_tables :=
+  let R := unboxing_relations in
+  let cu0 :=
+    stored_rounds (ut_crr R) (S (length (t_sources T)))
+      (Keyed.dedup node_eqb (seeds ++ ut_cu0 R))
+  in
+  {| ut_crr0 := ut_crr0 R; ut_crr1 := ut_crr1 R; ut_crr := ut_crr R;
+     ut_cu0 := cu0;
+     ut_cu := Keyed.dedup node_eqb (cu0 ++ by_function_slots cu0) |}.
+
+(* [derive_to_unbox] for those tables. *)
+Definition derive_to_unbox_with (seeds : list node) : list node :=
+  let R := unboxing_relations_with seeds in
+  filter (fun x => negb (mem_node x (ut_cu R)))
+    (Keyed.dedup node_eqb (t_has_usage T)).
+
+(* [check_to_unbox] for those tables: they are closed under the rules and
+   have the seeds in [cannot_unbox0], so that they are closed under the
+   rules with the seeds; each allocation of [to_unbox] has a use and is
+   not in their [cannot_unbox], and each allocation with a use and a
+   source that is not in it is in [to_unbox]. *)
+Definition check_to_unbox_with (seeds to_unbox : list node) : bool :=
+  let R := unboxing_relations_with seeds in
+  check_unboxing_closed R
+  && forallb (fun x => mem_node x (ut_cu0 R)) seeds
+  && forallb (fun x => has_usage x && negb (mem_node x (ut_cu R))) to_unbox
+  && forallb
+       (fun x =>
+          negb (has_source x) || mem_node x (ut_cu R) || mem_node x to_unbox)
+       (t_has_usage T).
+
+(* [check_to_change_representation] for a table of [to_unbox] that passes
+   [check_to_unbox_with], the table of [cannot_change_representation]
+   being that of [unboxing_relations]. *)
+Definition check_to_change_representation_with (seeds to_unbox tcr : list node)
+    : bool :=
+  let R := unboxing_relations in
+  check_to_unbox_with seeds to_unbox
+  && forallb
+       (fun x =>
+          has_usage x && negb (mem_node x (ut_crr R))
+          && negb (mem_node x to_unbox))
+       tcr
+  && forallb
+       (fun x =>
+          negb (has_source x) || mem_node x (ut_crr R) || mem_node x to_unbox
+          || mem_node x tcr)
+       (t_has_usage T).
+
+(* The fix of a field read into a name that its source does not dominate
+   (FlambdaReaperUnboxingSpec.v, [mixed_mutable_field_statement]), as what
+   it adds to [cannot_unbox0]: an allocation with a source that is a
+   source of a field of [base] ([constructor]), which a use of [base]
+   reads into a name [v] with a use that the allocation does not
+   dominate. It subsumes the fix of [kept_result_unboxed]. *)
+Definition field_reader_seeds (dominated : list (node * node)) : list node :=
+  flat_map
+    (fun '(base, relation, alias) =>
+       flat_map
+         (fun '(alias', allocation_id) =>
+            if node_eqb alias alias'
+               && has_source allocation_id
+               && existsb
+                    (fun '(v, relation', usage) =>
+                       field_eqb relation relation'
+                       && mem_pair base usage (t_usages T)
+                       && has_usage v
+                       && negb (mem_pair allocation_id v dominated))
+                    (f_accessor F)
+            then [allocation_id]
+            else [])
+         (t_sources T))
+    (f_constructor F).
+
+(* The same fix, as what it asks of a table of [to_unbox]: no allocation
+   that it adds to [cannot_unbox0] is unboxed. *)
+Definition check_field_readers (dominated : list (node * node))
+    (to_unbox : list node) : bool :=
+  forallb (fun x => negb (mem_node x to_unbox))
+    (field_reader_seeds dominated).
+
+(* The fix of a block given to code that keeps its calling convention
+   (FlambdaReaperUnboxingSpec.v,
+   [escaping_parameter_argument_statement]), the half of it that is of
+   the analysis, as what it adds to [cannot_unbox0]: an allocation with a
+   source that is a source of an argument of a call ([argument]) that may
+   call code that cannot change its calling convention, a source of the
+   callee of the call. *)
+Definition escaping_argument_seeds : list node :=
+  flat_map
+    (fun '(from, _, base) =>
+       if existsb
+            (fun '(base', call_witness) =>
+               node_eqb base base' && witness_cannot_change call_witness)
+            (t_sources T)
+       then
+         flat_map
+           (fun '(from', allocation_id) =>
+              if node_eqb from from' && has_source allocation_id
+              then [allocation_id]
+              else [])
+           (t_sources T)
+       else [])
+    (f_argument F).
+
+(* The same fix, as what it asks of a table of [to_unbox]: no allocation
+   that it adds to [cannot_unbox0] is unboxed. *)
+Definition check_escaping_arguments (to_unbox : list node) : bool :=
+  forallb (fun x => negb (mem_node x to_unbox)) escaping_argument_seeds.
+
+(* The seeds of both fixes, for the table [dominated] that the rule
+   gives. *)
+Definition fix_seeds : list node :=
+  field_reader_seeds derive_dominated ++ escaping_argument_seeds.
+
+(* [to_unbox] as the rules with both fixes give it, and the checks of a
+   table of [to_unbox] and of [to_change_representation] against those
+   rules. [check_to_unbox] rejects a table of [derive_to_unbox_fixed]
+   that differs from [derive_to_unbox]: it is not what the rules
+   without the fixes give. *)
+Definition derive_to_unbox_fixed : list node := derive_to_unbox_with fix_seeds.
+
+Definition check_to_unbox_fixed (to_unbox : list node) : bool :=
+  check_to_unbox_with fix_seeds to_unbox.
+
+Definition check_to_change_representation_fixed (to_unbox tcr : list node)
+    : bool :=
+  check_to_change_representation_with fix_seeds to_unbox tcr.
 
 End Rules.
 
