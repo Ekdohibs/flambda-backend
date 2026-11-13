@@ -475,6 +475,30 @@ Definition rebuild_cc_refines_observably_statement : Prop :=
       (rebuild_unit_cc_from_tables (traverse_unit flag u e) T cannot_change
          (unit_code_deps flag u e) preserve_direct_calls e).
 
+(* The same of the units with the primitives of the heap
+   ([in_heap_fragment]), the exits compared up to a correspondence of
+   their locations, as
+   FlambdaReaperRebuildSpec.rebuild_refines_up_to_heap_statement says of
+   the rebuild without changes of calling convention. *)
+Definition rebuild_cc_refines_up_to_heap_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (preserve_direct_calls : bool),
+    is_local_slots_only is_local ->
+    (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+    in_heap_fragment e = true ->
+    any_kind_arguments e = true ->
+    results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    exits_one_value u e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+    check_cc_closed (traverse_unit flag u e) T cannot_change = true ->
+    check_apply_widgets (traverse_unit flag u e) T = true ->
+    program_refines_up_to_heap e
+      (rebuild_unit_cc_from_tables (traverse_unit flag u e) T cannot_change
+         (unit_code_deps flag u e) preserve_direct_calls e).
+
 (* ======================================================================== *)
 (* Runs of units whose code changes                                         *)
 (* ======================================================================== *)

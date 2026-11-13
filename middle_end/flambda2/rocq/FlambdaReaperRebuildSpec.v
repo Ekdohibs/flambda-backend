@@ -1865,6 +1865,34 @@ Definition rebuild_refines_observably_statement : Prop :=
       (rebuild_unit_from_tables (traverse_unit flag u e) T
          preserve_direct_calls e).
 
+(* ======================================================================== *)
+(* The statement with the heap                                              *)
+(* ======================================================================== *)
+
+(* [rebuild_refines_observably_statement] of the units of the wider
+   fragment, with the primitives of the heap ([in_heap_fragment]): the
+   exits are compared up to a correspondence of the locations of the two
+   runs ([program_refines_up_to_heap]). The rebuild removes the [Let] of
+   a cell whose variable has no use, so the second run allocates fewer
+   cells, at other locations, and keeps the fields of a cell that no load
+   reads as poison ([heap_rebuild_example_statement]). *)
+Definition rebuild_refines_up_to_heap_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables)
+    (preserve_direct_calls : bool),
+    is_local_slots_only is_local ->
+    (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+    in_heap_fragment e = true ->
+    any_kind_arguments e = true ->
+    results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    exits_one_value u e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+    program_refines_up_to_heap e
+      (rebuild_unit_from_tables (traverse_unit flag u e) T
+         preserve_direct_calls e).
+
 (* The fragment of [no_code_no_slots] holds of more than nothing: a unit
    with a set of two closures without value slots, and a static set of
    the same functions, both of deleted code:
