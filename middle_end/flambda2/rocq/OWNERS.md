@@ -747,6 +747,12 @@ Owner: N3, on `flambda2-rocq/N3-equivariance` for the validator and on
   primitives of `FlambdaCseSpec.v` gives a term that is equivalent to
   the one it is given, which is what a rewrite of the term after
   Simplify owes; `FlambdaCseSpec.v` and its proofs stay V2's)
+- `middle_end/flambda2/rocq/FlambdaValidateReadingRename*` (the
+  validation asked of the term before with its known arrays read, of
+  `FlambdaValidateReadingSpec.v`, answers of a renamed pair what it
+  answers of the pair, and what it is made of keeps scope and commutes
+  with renaming, up to the names made where the rounds make names; the
+  functions and their files stay their owner's)
 - `middle_end/flambda2/types/rocq/FlambdaEnvRename*` (the action of a
   renaming on a typing environment and on its levels, their free
   variables, and that the functions of `FlambdaTypingEnv.v` commute
