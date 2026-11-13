@@ -36,6 +36,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaMapProofs FlambdaSemanticsSpec FlambdaBindersSpec
   FlambdaNormaliseSpec FlambdaNormaliseProofs FlambdaUnusedContsSpec
   FlambdaUnusedContsProofs FlambdaDeadParamsSpec FlambdaForwardSpec
+  FlambdaForwardArmSpec
   FlambdaLoopAliasesSpec FlambdaLoopLetsSpec FlambdaLoopifySpec
   FlambdaParamAliasesSpec FlambdaRecHandlersSpec FlambdaShortcutSpec
   FlambdaSameHandlersSpec
@@ -1658,6 +1659,229 @@ Theorem forward_applications_with_keeps_scope :
 Proof.
   intros calls. apply keeps_scope_intro, forward_applications_with_scoped.
 Qed.
+
+(* An application made to go where an arm of the handler of its
+   continuation goes (FlambdaForwardArmSpec.v). The variables that an
+   application may come to name are those of the arms that are not
+   parameters of the handler, and the continuations those of the
+   arms. *)
+Definition arm_forward_variables (entry : continuation * option arm_entry)
+    : list variable :=
+  match snd entry with
+  | Some (params, _, _, arms, _) =>
+    without params
+      (flat_map (fun arm => free_variables_of_apply_cont (snd arm)) arms)
+  | None => []
+  end.
+
+Definition arm_forward_continuations
+    (entry : continuation * option arm_entry) : list continuation :=
+  match snd entry with
+  | Some (_, _, _, arms, _) =>
+    flat_map (fun arm => apply_cont_continuations (snd arm)) arms
+  | None => []
+  end.
+
+(* A continuation that has an entry has a handler that is a [Switch]
+   with the arms of the entry. *)
+Lemma arm_entry_of_some (kinded : bool) (params params' : list variable)
+    (metadata metadata' : handler_metadata) (handler body body' : expr)
+    (i : nat) (arms : list (Z * apply_cont)) :
+  arm_entry_of kinded params metadata handler body
+  = Some (params', metadata', i, arms, body') ->
+  params' = params ∧ ∃ p : variable, handler = Switch (Var p) arms.
+Proof.
+  unfold arm_entry_of. destruct handler; try discriminate.
+  match goal with
+  | |- match ?s with _ => _ end = _ -> _ => destruct s; try discriminate
+  end.
+  match goal with
+  | |- (if ?test then _ else _) = _ -> _ => destruct test; [ discriminate | ]
+  end.
+  match goal with
+  | |- match ?position with _ => _ end = _ -> _ =>
+    destruct position; [ | discriminate ]
+  end.
+  intros Hsome. injection Hsome as <- _ _ <- _. eauto.
+Qed.
+
+Lemma forward_to_arm_apply_cont_scope (kinded : bool) (G : kinds_in_scope)
+    (F : arm_forwards) (ac : apply_cont) :
+  incl
+    (free_variables_of_apply_cont (forward_to_arm_apply_cont kinded G F ac))
+    (free_variables_of_apply_cont ac ++ flat_map arm_forward_variables F)
+  ∧ incl
+      (apply_cont_continuations (forward_to_arm_apply_cont kinded G F ac))
+      (apply_cont_continuations ac ++ flat_map arm_forward_continuations F).
+Proof.
+  unfold forward_to_arm_apply_cont, arm_of_apply_cont.
+  destruct (lookup (ac_continuation ac) F)
+    as [[[[[[params metadata] i] arms] body] | ] | ] eqn:Hlookup;
+    try (split; apply incl_appl, incl_refl).
+  destruct (nth_error (ac_args ac) i) as [[x | sym | c] | ];
+    try (split; apply incl_appl, incl_refl).
+  destruct c as [n | | | | | | | | | | | | | | ];
+    try (split; apply incl_appl, incl_refl).
+  destruct (find_arm n arms) as [target | ] eqn:Hfind;
+    [ | split; apply incl_appl, incl_refl ].
+  destruct
+    (forwarding (ac_continuation ac) params metadata (Apply_cont target) body)
+    as [[params' target'] | ] eqn:Hforwarding;
+    [ | split; apply incl_appl, incl_refl ].
+  apply forwarding_some in Hforwarding.
+  destruct Hforwarding as [-> Htarget]. injection Htarget as <-.
+  match goal with
+  | |- context [if ?test then _ else _] => destruct test eqn:Htest
+  end;
+    [ | split; apply incl_appl, incl_refl ].
+  apply andb_true_iff in Htest. destruct Htest as [Htest _].
+  apply andb_true_iff in Htest. destruct Htest as [Htest _].
+  apply andb_true_iff in Htest. destruct Htest as [Hlength _].
+  apply Nat.eqb_eq in Hlength. apply lookup_in in Hlookup.
+  apply find_arm_In in Hfind. destruct Hfind as [j Hfind]. split.
+  - intros y Hy.
+    apply (forwarded_free params (ac_args ac) target Hlength), in_app_or
+      in Hy.
+    apply in_or_app. destruct Hy as [Hy | Hy]; [ left; exact Hy | right ].
+    apply in_flat_map.
+    exists (ac_continuation ac, Some (params, metadata, i, arms, body)).
+    split; [ exact Hlookup | ].
+    unfold arm_forward_variables. cbn [snd].
+    apply in_without in Hy. destruct Hy as [Hy Hparams].
+    apply in_without. split; [ | exact Hparams ].
+    apply in_flat_map. exists (j, target). split; [ exact Hfind | exact Hy ].
+  - intros j' Hj. apply in_or_app. right. apply in_flat_map.
+    exists (ac_continuation ac, Some (params, metadata, i, arms, body)).
+    split; [ exact Hlookup | ].
+    unfold arm_forward_continuations. cbn [snd].
+    apply in_flat_map. exists (j, target). split; [ exact Hfind | exact Hj ].
+Qed.
+
+Lemma arm_forwards_none_variables
+    (handlers : list (continuation * continuation_handler))
+    (F : arm_forwards) :
+  flat_map arm_forward_variables
+    (map (fun '(k, _) => (k, None)) handlers ++ F)
+  = flat_map arm_forward_variables F.
+Proof.
+  rewrite flat_map_app.
+  induction handlers as [ | [k h] handlers IH];
+    cbn [map flat_map arm_forward_variables snd app];
+    [ reflexivity | exact IH ].
+Qed.
+
+Lemma arm_forwards_none_continuations
+    (handlers : list (continuation * continuation_handler))
+    (F : arm_forwards) :
+  flat_map arm_forward_continuations
+    (map (fun '(k, _) => (k, None)) handlers ++ F)
+  = flat_map arm_forward_continuations F.
+Proof.
+  rewrite flat_map_app.
+  induction handlers as [ | [k h] handlers IH];
+    cbn [map flat_map arm_forward_continuations snd app];
+    [ reflexivity | exact IH ].
+Qed.
+
+Fixpoint forward_to_arms_scoped_among (e : expr) :
+  ∀ (kinded : bool) (G : kinds_in_scope) (F : arm_forwards),
+    scoped_among (flat_map arm_forward_variables F)
+      (flat_map arm_forward_continuations F) e
+      (forward_to_arms_under kinded G F e).
+Proof.
+  destruct e
+    as [x kind d body | bindings body | k [params metadata handler] body
+       | handlers body | ap | ac | scrutinee arms | ];
+    intros kinded G F;
+    cbn [forward_to_arms_under forward_to_arms_in_handler];
+    cbv zeta.
+  - apply scoped_among_let, forward_to_arms_scoped_among.
+  - apply scoped_among_let_static, forward_to_arms_scoped_among.
+  - pose proof
+      (forward_to_arms_scoped_among handler kinded
+         (params_in_scope params (hm_params_kinds metadata) G) F)
+      as Hhandler.
+    pose proof
+      (forward_to_arms_scoped_among body kinded G
+         ((k,
+           arm_entry_of kinded params metadata
+             (forward_to_arms_under kinded
+                (params_in_scope params (hm_params_kinds metadata) G) F
+                handler)
+             body)
+          :: F))
+      as Hbody.
+    cbn [flat_map] in Hbody.
+    refine
+      (scoped_among_let_cont _ _ _ _ k params metadata _ _ _ _ _ _ Hhandler
+         Hbody).
+    + unfold arm_forward_variables. cbn [snd].
+      destruct
+        (arm_entry_of kinded params metadata
+           (forward_to_arms_under kinded
+              (params_in_scope params (hm_params_kinds metadata) G) F
+              handler)
+           body)
+        as [[[[[params' metadata'] i] arms] body'] | ] eqn:Hentry;
+        [ | intros y [] ].
+      apply arm_entry_of_some in Hentry.
+      destruct Hentry as (-> & p & Hhandler'). rewrite Hhandler'. scope.
+      intros y Hy. apply in_without in Hy. destruct Hy as [Hy Hparams].
+      apply in_without. split; [ | exact Hparams ].
+      apply in_or_app. right. exact Hy.
+    + unfold arm_forward_continuations. cbn [snd].
+      destruct
+        (arm_entry_of kinded params metadata
+           (forward_to_arms_under kinded
+              (params_in_scope params (hm_params_kinds metadata) G) F
+              handler)
+           body)
+        as [[[[[params' metadata'] i] arms] body'] | ] eqn:Hentry;
+        [ | intros j [] ].
+      apply arm_entry_of_some in Hentry.
+      destruct Hentry as (_ & p & Hhandler'). rewrite Hhandler'. scope.
+      apply incl_refl.
+  - apply scoped_among_let_cont_recursive.
+    + rewrite map_map. apply map_ext. intros [k h]. reflexivity.
+    + rewrite <- (arm_forwards_none_variables handlers F),
+        <- (arm_forwards_none_continuations handlers F).
+      set (F' := _ ++ F). clearbody F'.
+      induction handlers as [ | [k [params metadata handler]] handlers IH];
+        cbn [map]; [ apply scoped_handlers_among_nil | ].
+      cbn [forward_to_arms_under forward_to_arms_in_handler].
+      apply scoped_handlers_among_cons;
+        [ apply forward_to_arms_scoped_among | exact IH ].
+    + rewrite <- (arm_forwards_none_variables handlers F),
+        <- (arm_forwards_none_continuations handlers F).
+      apply forward_to_arms_scoped_among.
+  - apply scoped_among_refl.
+  - intros _. scope.
+    destruct (forward_to_arm_apply_cont_scope kinded G F ac) as [Hv Hk].
+    split; [ reflexivity | split; assumption ].
+  - intros _. scope. split; [ reflexivity | split ].
+    + rewrite <- app_assoc. apply incl_app_app; [ apply incl_refl | ].
+      apply
+        (incl_flat_map_under
+           (fun arm => free_variables_of_apply_cont (snd arm))
+           (fun arm => free_variables_of_apply_cont (snd arm))).
+      intros arm. cbn [snd].
+      exact (proj1 (forward_to_arm_apply_cont_scope kinded G F (snd arm))).
+    + apply
+        (incl_flat_map_under (fun arm => apply_cont_continuations (snd arm))
+           (fun arm => apply_cont_continuations (snd arm))).
+      intros arm. cbn [snd].
+      exact (proj2 (forward_to_arm_apply_cont_scope kinded G F (snd arm))).
+  - apply scoped_among_refl.
+Qed.
+
+Lemma forward_to_arms_scoped (e : expr) : scoped e (forward_to_arms e).
+Proof.
+  apply scoped_among_none.
+  exact (forward_to_arms_scoped_among e false [] []).
+Qed.
+
+Theorem forward_to_arms_keeps_scope : forward_to_arms_keeps_scope_statement.
+Proof. apply keeps_scope_intro, forward_to_arms_scoped. Qed.
 
 (* A continuation whose handler is that of a continuation bound around
    it applies that one. The handler that is put names that continuation

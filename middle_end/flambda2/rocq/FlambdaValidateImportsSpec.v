@@ -443,7 +443,7 @@ Fixpoint known_free_in (statics : static_env) (rounds : nat)
    those after. *)
 Definition normalise_lifted_free_in (statics : static_env) (rounds : nat)
     (avoid : list continuation) (kept : list code_id) (e : expr) : bool :=
-  let e := iterate rounds normalise_params_round e in
+  let e := iterate rounds first_phase_round e in
   known_free_in statics rounds avoid kept e
   && known_free_in statics rounds avoid kept
        (guard_scope FlambdaSimplifyCarriedSpec.simplify_by_types_carried

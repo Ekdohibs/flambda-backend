@@ -140,7 +140,7 @@ Definition normalise_before_avoiding (avoid : list continuation)
     (iterate rounds (normalise_before_round_avoiding avoid kept)
        (guard_scope FlambdaSimplifyCarriedSpec.simplify_by_types_carried
           (iterate rounds (normalise_before_round_avoiding avoid kept)
-             (iterate rounds normalise_params_round e)))).
+             (iterate rounds first_phase_round e)))).
 
 (* One round of the reading: the loops of the term made, as
    FlambdaValidateSpec.validate_unit makes them first; the term

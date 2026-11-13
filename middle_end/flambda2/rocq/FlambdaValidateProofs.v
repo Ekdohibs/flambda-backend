@@ -40,6 +40,8 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaSemanticsSpec
   FlambdaDeadParamsSpec FlambdaDeadParamsProofs
   FlambdaForwardSpec FlambdaForwardProofs
   FlambdaForwardKindedSpec FlambdaForwardKindedProofs
+  FlambdaForwardArmSpec FlambdaForwardArmProofs
+  FlambdaLiftContsSpec FlambdaLiftContsProofs
   FlambdaIdentitiesSpec FlambdaIdentitiesProofs
   FlambdaMergeSwitchesSpec FlambdaMergeSwitchesProofs
   FlambdaMergeTablesSpec FlambdaMergeTablesProofs
@@ -81,6 +83,8 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaSemanticsSpec
   FlambdaHoistStaticsSpec FlambdaGuardScopeSpec FlambdaGuardScopeProofs
   FlambdaValidateSpec.
 From OxCamlFlambda2 Require FlambdaHoistStaticsProofs.
+From OxCamlFlambda2 Require FlambdaBindConstParamsSpec
+  FlambdaBindConstParamsProofs.
 From OxCamlFlambda2 Require FlambdaShadowParamsProofs FlambdaTwinParamsProofs.
 From OxCamlFlambda2 Require Import FlambdaDemoteSpec.
 From OxCamlFlambda2 Require Import FlambdaUnusedHeadStaticsSpec
@@ -127,6 +131,9 @@ Ltac equivalence_step :=
     | apply remove_unused_defined_lets_in_loops_equivalent
     | apply inline_tail_conts_kinded_equivalent
     | apply forward_kinded_equivalent
+    | apply forward_to_arms_kinded_equivalent
+    | apply FlambdaBindConstParamsProofs.bind_const_params_equivalent
+    | apply lift_handler_conts_equivalent
     | apply unalias_params_equivalent
     | apply give_scrutinees_equivalent
     | apply numbers_in_arms_equivalent
@@ -320,6 +327,39 @@ Proof.
     [ apply merge_tables_refines | apply normalise_code_params_refines ].
 Qed.
 
+(* What follows a round of the first phase: the continuations of a
+   handler bound outside it, and the applications made to go to the
+   arms. *)
+Lemma arms_expr_before_refines (e : expr) :
+  expr_refines e (arms_expr_before e).
+Proof.
+  unfold arms_expr_before.
+  eapply expr_refines_trans;
+    [ | apply expr_equivalent_refines, remove_unused_conts_equivalent ].
+  eapply expr_refines_trans; [ | apply forward_applications_refines ].
+  eapply expr_refines_trans; [ | apply forward_to_arms_refines ].
+  apply expr_equivalent_refines, lift_handler_conts_equivalent.
+Qed.
+
+Lemma arms_code_before_refines (body : expr) :
+  expr_refines body (arms_code_before body).
+Proof.
+  unfold arms_code_before.
+  exact (expr_refines_trans _ _ _
+    (rewrite_rec_handlers_refines _ arms_expr_before_refines body)
+    (arms_expr_before_refines _)).
+Qed.
+
+Lemma first_phase_round_refines (e : expr) :
+  expr_refines e (first_phase_round e).
+Proof.
+  unfold first_phase_round.
+  eapply expr_refines_trans;
+    [ | apply rewrite_code_refines, arms_code_before_refines ].
+  eapply expr_refines_trans;
+    [ apply normalise_params_round_refines | apply arms_code_before_refines ].
+Qed.
+
 Lemma iterate_refines (f : expr -> expr) :
   (∀ e : expr, expr_refines e (f e)) ->
   ∀ (rounds : nat) (e : expr), expr_refines e (iterate rounds f e).
@@ -339,7 +379,7 @@ Proof.
   eapply expr_refines_trans;
     [ | apply iterate_refines, normalise_before_inlined_refines ].
   eapply expr_refines_trans;
-    [ | apply iterate_refines, normalise_params_round_refines ].
+    [ | apply iterate_refines, first_phase_round_refines ].
   apply expr_equivalent_refines,
     FlambdaDemoteProofs.demote_handlers_equivalent.
 Qed.
@@ -367,6 +407,8 @@ Proof.
   eapply expr_equivalent_trans;
     [ | apply remove_unused_defined_lets_in_code_equivalent ].
   eapply expr_equivalent_trans;
+    [ | apply forward_to_arms_in_code_equivalent ].
+  eapply expr_equivalent_trans;
     [ | apply forward_kinded_in_code_equivalent ].
   eapply expr_equivalent_trans;
     [ | apply rewrite_code_equivalent, normalise_code_after_equivalent ].
@@ -390,7 +432,7 @@ Proof.
     [ | apply guard_scope_refines,
           FlambdaSimplifyCarriedProofs.simplify_by_types_carried_refines ].
   exact (expr_refines_trans _ _ _
-    (iterate_refines _ normalise_params_round_refines rounds e)
+    (iterate_refines _ first_phase_round_refines rounds e)
     (iterate_refines _ (normalise_before_round_refines kept) rounds _)).
 Qed.
 
@@ -744,7 +786,7 @@ Proof.
   intros e. unfold normalise_lifted.
   apply (refines_trans _ _ _
     (expr_refines_program _ _
-       (iterate_refines _ normalise_params_round_refines rounds e))).
+       (iterate_refines _ first_phase_round_refines rounds e))).
   apply (refines_trans _ _ _
     (iterate_lifted_program_refines rounds avoid kept _)).
   apply (refines_trans _ _ _

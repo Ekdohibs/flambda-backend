@@ -32,10 +32,12 @@
 
    This file is to be reviewed: [forward_to_arms],
    [forward_to_arms_kinded] and [forward_to_arms_in_code] with what
-   they are made of, and the three statements. Nothing applies the
-   three yet; the validation of middle_end/flambda2/tests/semantics/
-   is to apply them to the two terms that it compares, by a later
-   change.
+   they are made of, which are extracted and run by the validation of
+   middle_end/flambda2/tests/semantics/, and the three statements.
+   The validation applies [forward_to_arms] to the term before
+   (FlambdaValidateSpec.first_phase_round) and the other two to the
+   term after (FlambdaValidateSpec.inline_once_applied_after,
+   FlambdaValidateSpec.normalise_after_round).
 
    Where the handler of a non-recursive continuation [k] is a
    [Switch] on one of its parameters, an application of [k] that
@@ -83,9 +85,9 @@
    always that of the term before: an arm whose number no
    application gives may read a constant where the term before
    reads a parameter. The validation has no rewrite that makes
-   two such handlers the same. It is to make the applications of the
-   two terms go to their arms instead: where nothing then applies
-   [k] in either term, the two handlers can be removed.
+   two such handlers the same. It makes the applications of the two
+   terms go to their arms instead: where nothing then applies [k] in
+   either term, the two handlers are removed.
 
    Going down the term the pass keeps, for each non-recursive
    continuation in scope whose handler, once done itself, is a
@@ -167,6 +169,15 @@
    The tests of [forwarding] are on the syntax and may say that a
    name is bound again when it is not, never the reverse; an
    application is then left that could have gone to its arm.
+
+   Renaming: the functions here compare names by equality only and
+   bind none, so the passes commute with a renaming: that is
+   forward_to_arms_equivariant_statement,
+   forward_to_arms_kinded_equivariant_statement and
+   forward_to_arms_in_code_equivariant_statement of
+   FlambdaValidatorEquivarianceSpec.v. [forward_to_arms] keeps
+   scope: forward_to_arms_keeps_scope_statement of
+   FlambdaLoopsScopeSpec.v.
 
    The proofs are in FlambdaForwardArmProofs.v, which needs no
    review. *)

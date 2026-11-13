@@ -69,7 +69,9 @@
    continuations of the term as it is ([normalise_params_round]; in
    the code and in the loops of the term, the unboxing of a parameter
    knows the static blocks and boxed numbers of the static bindings in
-   scope, FlambdaUnboxInScopeSpec.v), then
+   scope, FlambdaUnboxInScopeSpec.v), each round followed by the
+   going of applications to the arms of a handler that tests what
+   they give ([first_phase_round]), then
    the rounds that inline the calls of known code
    ([normalise_before_round]), which the term after has too. Failing
    that, it removes from the term
@@ -363,7 +365,7 @@ From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaSemanticsSpec
   FlambdaCompareSpec FlambdaNormaliseSpec FlambdaBlockLoadSpec
   FlambdaCodeLetsSpec FlambdaCseSpec FlambdaDeadParamsSpec FlambdaForwardSpec
-  FlambdaForwardKindedSpec
+  FlambdaForwardKindedSpec FlambdaForwardArmSpec FlambdaLiftContsSpec
   FlambdaIdentitiesSpec FlambdaMergeSwitchesSpec FlambdaMergeTablesSpec
   FlambdaInlineSiblingsSpec FlambdaInlineTailSpec FlambdaLoopAliasesSpec
   FlambdaLoopLetsSpec
@@ -392,6 +394,7 @@ From OxCamlFlambda2 Require Import FlambdaStubCallsSpec.
 From OxCamlFlambda2 Require Import FlambdaNeverReturnsSpec.
 From OxCamlFlambda2 Require Import FlambdaUnusedHeadStaticsSpec.
 From OxCamlFlambda2 Require Import FlambdaSameHandlersSpec.
+From OxCamlFlambda2 Require FlambdaBindConstParamsSpec.
 From OxCamlFlambda2 Require Import FlambdaUnboxParamsSpec
   FlambdaUnboxInScopeSpec FlambdaUnboxLoopsSpec FlambdaUnboxTogetherSpec.
 From OxCamlFlambda2Types Require Import FlambdaAliasesSpec.
@@ -685,6 +688,47 @@ Definition normalise_params_round (e : expr) : expr :=
   rewrite_code_in_scope normalise_code_params_knowing no_facts
     (normalise_code_params (merge_tables e)).
 
+(* What follows that round in the first phase. The continuations that a
+   handler binds on its way to a [Switch] on one of its parameters are
+   bound outside the handler, where every application gives that
+   parameter a number (FlambdaLiftContsSpec.lift_handler_conts, an
+   equivalence), and an application that gives a number to the
+   parameter that the handler of its continuation tests goes where the
+   arm of that number goes (FlambdaForwardArmSpec.forward_to_arms, a
+   refinement). Then, as in the round, an application of a
+   continuation whose handler only applies another goes on
+   ([forward_applications]), and the continuations that are left
+   unused are removed. The forwarding comes at once: the round that
+   follows begins by putting a continuation that is applied once
+   where it is applied ([sink_let_conts], [inline_tail_conts]), and
+   a continuation that was bound outside the handler is applied once,
+   by the continuation of a branch, until the application of that one
+   is forwarded; the term before would be left with the continuations
+   of the branches where the term after has those that were bound
+   outside. All this is done in the term, in the handlers of its
+   recursive continuations and in the bodies of its code.
+
+   The round above has made the parameters that the handler tests
+   where it unboxed a variant, as Simplify does. In the units that
+   the step is for, Simplify has left the applications where they
+   were (the header of FlambdaForwardArmSpec.v says when it does
+   otherwise), and the term after has the first two rewrites, by
+   equivalences, in [inline_once_applied_after], which says why.
+   They are a step of their own here, and not in the round above, so
+   that the round is still what Simplify does to the parameters of
+   continuations: the examples of FlambdaUnboxVariantsExamplesSpec.v
+   state that rounds of it, or of [normalise_expr_params] that it is
+   made of, take a body before to the body that Simplify gave. *)
+Definition arms_expr_before (e : expr) : expr :=
+  remove_unused_conts
+    (forward_applications (forward_to_arms (lift_handler_conts e))).
+
+Definition arms_code_before (body : expr) : expr :=
+  arms_expr_before (rewrite_rec_handlers arms_expr_before body).
+
+Definition first_phase_round (e : expr) : expr :=
+  rewrite_code arms_code_before (arms_code_before (normalise_params_round e)).
+
 (* What ends the normalisation of the term before. The exception
    handlers that no call can raise to are made ordinary continuations
    and the trap actions that name them removed, in the term, its
@@ -702,7 +746,7 @@ Definition normalise_params_round (e : expr) : expr :=
    shortcut; so is the handler, if it only applies another. *)
 Definition demote_and_tidy (rounds : nat) (e : expr) : expr :=
   iterate rounds normalise_before_inlined
-    (iterate rounds normalise_params_round (demote_handlers [] e)).
+    (iterate rounds first_phase_round (demote_handlers [] e)).
 
 (* The term before is normalised in two phases. The first is what
    Simplify does to the continuations of the term as it is: the front
@@ -750,7 +794,7 @@ Definition normalise_before (rounds : nat) (kept : list code_id) (e : expr)
     (iterate rounds (normalise_before_round kept)
        (guard_scope FlambdaSimplifyCarriedSpec.simplify_by_types_carried
           (iterate rounds (normalise_before_round kept)
-             (iterate rounds normalise_params_round e)))).
+             (iterate rounds first_phase_round e)))).
 
 (* For the term after, what [normalise_expr_before] does first for the
    term before, with rewrites that are equivalences. A continuation
@@ -767,6 +811,38 @@ Definition normalise_before (rounds : nat) (kept : list code_id) (e : expr)
    whose handler binds the symbols of the unit among them. The term
    before can have lost both: its rounds have [sink_let_conts] and
    FlambdaNormaliseSpec.inline_tail_conts.
+
+   Then the continuations that a handler binds on its way to a
+   [Switch] on one of its parameters are bound outside the handler,
+   where every application gives that parameter a number
+   (FlambdaLiftContsSpec.lift_handler_conts); and an application
+   that gives a number to the parameter that the handler of its
+   continuation tests goes where the arm of that number goes, where
+   its arguments are known to have the kinds of the parameters
+   (FlambdaForwardArmSpec.forward_to_arms_kinded). Both are
+   equivalences. Where the applications give different numbers
+   Simplify has a path that does as much where its other tests pass,
+   enabled by a flag that no level of optimisation sets (the header
+   of FlambdaForwardArmSpec.v says which, and when Simplify decides
+   such a [Switch] without it). In the units that the two rewrites
+   are for it has left the continuation and its [Switch]; but it
+   knows in such a handler what the applications give, and the
+   handler that it leaves may differ from that of the term before in
+   an arm that no application comes to. The term before
+   has the two rewrites in each round of its first phase
+   ([first_phase_round]); where every application of the
+   continuation then goes to its arm, in both terms, the handler is
+   removed from both. An application that goes to an arm gives what
+   the arm gives with its own arguments put for the parameters of
+   the handler, so a continuation that the arm applies may then be
+   given, by every application, one constant or one symbol for a
+   parameter (the field of a block that one path built and the
+   handler matched). Such a parameter is taken away and bound to
+   what it is given at the head of the handler
+   (FlambdaBindConstParamsSpec.bind_const_params, an equivalence),
+   and the rewrites of the round fold what reads it; the term before
+   has the same in the next round of its first phase, from
+   FlambdaParamAliasesSpec.bind_aliased_params, which refines.
 
    Then an application of a continuation whose handler is one
    [Apply_cont] becomes that [Apply_cont], with the arguments put for
@@ -812,7 +888,11 @@ Definition inline_once_applied_after (e : expr) : expr :=
   remove_unused_conts
     (thread_switches
        (forward_kinded
-          (inline_tail_conts_kinded (sink_let_conts (remove_unused_conts e))))).
+          (FlambdaBindConstParamsSpec.bind_const_params
+             (forward_to_arms_kinded
+                (lift_handler_conts
+                   (inline_tail_conts_kinded
+                      (sink_let_conts (remove_unused_conts e)))))))).
 
 (* The same for the term after. Every rewrite is an equivalence.
    Before the aliases are followed, a [Let] of a variable to the
@@ -840,6 +920,9 @@ Definition inline_once_applied_after (e : expr) : expr :=
    the pass starts in the body of code with nothing known, and leaves
    an application that gives a continuation a parameter of the code
    (a function that returns its argument where a [try] has failed).
+   The same is done for the applications that
+   FlambdaForwardArmSpec.forward_to_arms_kinded makes go to an arm
+   ([forward_to_arms_in_code]).
    Then the unused [Let]s that are sure to have a value are removed
    (FlambdaCodeLetsSpec.remove_unused_defined_lets_in_code): where
    Simplify makes a loop of a function, it leaves such a [Let] of each
@@ -858,20 +941,21 @@ Definition normalise_code_after (body : expr) : expr :=
 
 Definition normalise_after_round (kept : list code_id) (e : expr) : expr :=
   remove_unused_defined_lets_in_code
-    (forward_kinded_in_code
-       (rewrite_code normalise_code_after
-          (merge_statics
-             (drop_deleted_code
-                (rewrite_rec_handlers normalise_expr_after
-                   (remove_unused_defined_lets_in_loops []
-                      (remove_unused_projections
-                         (fold_constants
-                            (inline_known_calls kept [] []
-                               (follow_aliases_in_loops []
-                                  (follow_aliases []
-                                     (merge_alias_lets
-                                        (inline_once_applied_after
-                                           e))))))))))))).
+    (forward_to_arms_in_code
+       (forward_kinded_in_code
+          (rewrite_code normalise_code_after
+             (merge_statics
+                (drop_deleted_code
+                   (rewrite_rec_handlers normalise_expr_after
+                      (remove_unused_defined_lets_in_loops []
+                         (remove_unused_projections
+                            (fold_constants
+                               (inline_known_calls kept [] []
+                                  (follow_aliases_in_loops []
+                                     (follow_aliases []
+                                        (merge_alias_lets
+                                           (inline_once_applied_after
+                                              e)))))))))))))).
 
 Definition normalise_after (rounds : nat) (kept : list code_id) (e : expr)
     : expr :=
@@ -984,7 +1068,7 @@ Definition normalise_lifted (rounds : nat) (avoid : list continuation)
   iterate rounds (normalise_lifted_round avoid kept)
     (guard_scope FlambdaSimplifyCarriedSpec.simplify_by_types_carried
        (iterate rounds (normalise_lifted_round avoid kept)
-          (iterate rounds normalise_params_round e))).
+          (iterate rounds first_phase_round e))).
 
 (* The return and the exception continuation of the unit of each of
    the liftings given: the names by which a lifting checks the unit

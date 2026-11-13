@@ -81,7 +81,7 @@ Proof.
     [ | apply guard_scope_refines,
           FlambdaSimplifyCarriedProofs.simplify_by_types_carried_refines ].
   exact (expr_refines_trans _ _ _
-    (iterate_refines _ normalise_params_round_refines rounds e)
+    (iterate_refines _ first_phase_round_refines rounds e)
     (iterate_refines _ (normalise_before_round_avoiding_refines avoid kept)
        rounds _)).
 Qed.

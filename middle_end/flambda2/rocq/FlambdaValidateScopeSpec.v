@@ -40,8 +40,9 @@
    comes first, where the parameters of continuations are dealt with
    and no call is inlined ([normalise_expr_params],
    [normalise_code_params]), with a round of that phase for the term as
-   a whole ([normalise_params_round]); then what a round of the term is
-   made of in the phase that inlines ([normalise_before_round]): the
+   a whole ([normalise_params_round]) and that round with the step
+   that follows it ([first_phase_round]); then what a round of the
+   term is made of in the phase that inlines ([normalise_before_round]): the
    inlining of the calls of known code
    (FlambdaNormaliseSpec.inline_calls) and of the calls of the other
    code of a group (FlambdaInlineSiblingsSpec.inline_sibling_calls),
@@ -90,6 +91,14 @@ Definition normalise_code_params_keeps_scope_statement : Prop :=
 
 Definition normalise_params_round_keeps_scope_statement : Prop :=
   keeps_scope normalise_params_round.
+
+(* That round and the step that follows it in the first phase, in the
+   term, the handlers of its recursive continuations and the bodies of
+   its code: the continuations of a handler bound outside it, the
+   applications made to go to the arms and then forwarded, and the
+   continuations left unused removed ([first_phase_round]). *)
+Definition first_phase_round_keeps_scope_statement : Prop :=
+  keeps_scope first_phase_round.
 
 (* ======================================================================== *)
 (* A round of the term before                                               *)

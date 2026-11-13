@@ -2,6 +2,7 @@ open Datatypes
 open FlambdaAliasLetsSpec
 open FlambdaAliasesSpec
 open FlambdaArmNumbersSpec
+open FlambdaBindConstParamsSpec
 open FlambdaBlockLoadSpec
 open FlambdaCodeLetsSpec
 open FlambdaCompareSpec
@@ -9,6 +10,7 @@ open FlambdaCseSpec
 open FlambdaDeadParamsSpec
 open FlambdaDemoteSpec
 open FlambdaFloatCodeSpec
+open FlambdaForwardArmSpec
 open FlambdaForwardKindedSpec
 open FlambdaForwardSpec
 open FlambdaGiveScrutineeSpec
@@ -23,6 +25,7 @@ open FlambdaKnownClosuresSpec
 open FlambdaKnownSlotsSpec
 open FlambdaKnownSymbolsSpec
 open FlambdaLiftAroundSpec
+open FlambdaLiftContsSpec
 open FlambdaLiftFromArmsSpec
 open FlambdaLiftFromCodeSpec
 open FlambdaLiftSpec
@@ -182,11 +185,27 @@ let normalise_params_round e =
   rewrite_code_in_scope normalise_code_params_knowing no_facts
     (normalise_code_params (merge_tables e))
 
+(** val arms_expr_before : expr -> expr **)
+
+let arms_expr_before e =
+  remove_unused_conts
+    (forward_applications (forward_to_arms (lift_handler_conts e)))
+
+(** val arms_code_before : expr -> expr **)
+
+let arms_code_before body =
+  arms_expr_before (rewrite_rec_handlers arms_expr_before body)
+
+(** val first_phase_round : expr -> expr **)
+
+let first_phase_round e =
+  rewrite_code arms_code_before (arms_code_before (normalise_params_round e))
+
 (** val demote_and_tidy : nat -> expr -> expr **)
 
 let demote_and_tidy rounds e =
   iterate rounds normalise_before_inlined
-    (iterate rounds normalise_params_round (demote_handlers [] e))
+    (iterate rounds first_phase_round (demote_handlers [] e))
 
 (** val normalise_before : nat -> code_id list -> expr -> expr **)
 
@@ -197,7 +216,7 @@ let normalise_before rounds kept e =
        (guard_scope simplify_by_types_carried
           (iterate rounds
              (normalise_before_round kept)
-             (iterate rounds normalise_params_round e))))
+             (iterate rounds first_phase_round e))))
 
 (** val inline_once_applied_after : expr -> expr **)
 
@@ -205,7 +224,11 @@ let inline_once_applied_after e =
   remove_unused_conts
     (thread_switches
        (forward_kinded
-          (inline_tail_conts_kinded (sink_let_conts (remove_unused_conts e)))))
+          (bind_const_params
+             (forward_to_arms_kinded
+                (lift_handler_conts
+                   (inline_tail_conts_kinded
+                      (sink_let_conts (remove_unused_conts e))))))))
 
 (** val normalise_expr_after : expr -> expr **)
 
@@ -226,19 +249,20 @@ let normalise_code_after body =
 
 let normalise_after_round kept e =
   remove_unused_defined_lets_in_code
-    (forward_kinded_in_code
-       (rewrite_code normalise_code_after
-          (merge_statics
-             (drop_deleted_code
-                (rewrite_rec_handlers normalise_expr_after
-                   (remove_unused_defined_lets_in_loops []
-                      (remove_unused_projections
-                         (fold_constants
-                            (inline_known_calls kept [] []
-                               (follow_aliases_in_loops []
-                                  (follow_aliases []
-                                     (merge_alias_lets
-                                        (inline_once_applied_after e)))))))))))))
+    (forward_to_arms_in_code
+       (forward_kinded_in_code
+          (rewrite_code normalise_code_after
+             (merge_statics
+                (drop_deleted_code
+                   (rewrite_rec_handlers normalise_expr_after
+                      (remove_unused_defined_lets_in_loops []
+                         (remove_unused_projections
+                            (fold_constants
+                               (inline_known_calls kept [] []
+                                  (follow_aliases_in_loops []
+                                     (follow_aliases []
+                                        (merge_alias_lets
+                                           (inline_once_applied_after e))))))))))))))
 
 (** val normalise_after : nat -> code_id list -> expr -> expr **)
 
@@ -300,7 +324,7 @@ let normalise_lifted rounds avoid kept e =
     (guard_scope simplify_by_types_carried
        (iterate rounds
           (normalise_lifted_round avoid kept)
-          (iterate rounds normalise_params_round e)))
+          (iterate rounds first_phase_round e)))
 
 (** val unit_continuations : lifting list -> continuation list **)
 

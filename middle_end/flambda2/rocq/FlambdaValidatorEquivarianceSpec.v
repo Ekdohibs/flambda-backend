@@ -229,7 +229,8 @@
    The normalisations of FlambdaValidateSpec.v: [iterate] of a rewrite
    that commutes, the three rounds of the first phase of the term
    before ([normalise_expr_params], [normalise_code_params],
-   [normalise_params_round]), [normalise_before_inlined],
+   [normalise_params_round]) and the last with the step that follows
+   it ([first_phase_round]), [normalise_before_inlined],
    [normalise_after], [without_statics], [demote_and_tidy], and, of
    those that the check applies to the term after,
    [without_head_statics] and [with_code_first]. And the calls of the
@@ -386,6 +387,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaLoopAliasesSpec FlambdaLoopLetsSpec FlambdaCodeLetsSpec
   FlambdaParamAliasesSpec
   FlambdaForwardSpec FlambdaForwardJumpsSpec FlambdaForwardKindedSpec
+  FlambdaForwardArmSpec
   FlambdaInlineTailSpec FlambdaLoopifySpec
   FlambdaDeadParamsSpec FlambdaRenameApartSpec FlambdaUnusedProjectionsSpec
   FlambdaUnaliasParamsSpec FlambdaWrapReturnsSpec FlambdaUntagParamsSpec
@@ -889,6 +891,20 @@ Definition forward_kinded_equivariant_statement : Prop :=
 Definition forward_kinded_in_code_equivariant_statement : Prop :=
   rewrite_equivariant forward_kinded_in_code.
 
+(* An application that gives a number to the parameter that the handler
+   of its continuation tests, made to go where the arm of that number
+   goes (FlambdaForwardArmSpec.v): with nothing asked of the kinds,
+   where the arguments are known to have the kinds of the parameters,
+   and the latter in the body of each piece of code. *)
+Definition forward_to_arms_equivariant_statement : Prop :=
+  rewrite_equivariant forward_to_arms.
+
+Definition forward_to_arms_kinded_equivariant_statement : Prop :=
+  rewrite_equivariant forward_to_arms_kinded.
+
+Definition forward_to_arms_in_code_equivariant_statement : Prop :=
+  rewrite_equivariant forward_to_arms_in_code.
+
 (* Inlining a continuation at the end of its scope, where its handler
    gives one kind for each parameter (FlambdaInlineTailSpec.v). *)
 Definition inline_tail_conts_kinded_equivariant_statement : Prop :=
@@ -998,6 +1014,11 @@ Definition normalise_code_params_equivariant_statement : Prop :=
 
 Definition normalise_params_round_equivariant_statement : Prop :=
   rewrite_equivariant normalise_params_round.
+
+(* That round and what follows it in the first phase
+   ([first_phase_round]). *)
+Definition first_phase_round_equivariant_statement : Prop :=
+  rewrite_equivariant first_phase_round.
 
 (* The round of the second phase of the term before Simplify once its
    calls are inlined and its binders have names of their own: it is
@@ -1432,7 +1453,8 @@ Definition rename_apart_commutes_up_to_statement : Prop :=
    commutes with renaming and keeps scope: the rewrites that a
    round is made of keep scope (FlambdaKeepsScopeSpec.v,
    FlambdaValidateScopeSpec.v), so does a round of the first phase
-   (FlambdaValidateScopeSpec.normalise_params_round_keeps_scope_statement),
+   with the step that follows it
+   (FlambdaValidateScopeSpec.first_phase_round_keeps_scope_statement),
    and so does a rewrite under that test, whatever the rewrite is
    (FlambdaValidateScopeSpec.guard_scope_keeps_scope_statement).
    The code whose calls are not inlined is named by code ids, which no

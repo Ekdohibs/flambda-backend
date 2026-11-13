@@ -44,6 +44,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaNormaliseSpec FlambdaNormaliseProofs FlambdaBlockLoadSpec
   FlambdaCseSpec FlambdaIdentitiesSpec FlambdaRenameApartSpec
   FlambdaUnboxSpec FlambdaUnusedContsSpec FlambdaForwardSpec
+  FlambdaForwardArmSpec FlambdaLiftContsSpec FlambdaLiftContsScopeProofs
   FlambdaLoopAliasesSpec FlambdaLoopLetsSpec FlambdaParamAliasesSpec
   FlambdaRecHandlersSpec FlambdaShortcutSpec FlambdaSameHandlersSpec
   FlambdaSinkContsSpec
@@ -112,7 +113,8 @@ Create HintDb scoped.
   follow_aliases_in_loops_scoped
   drop_unused_params_scoped drop_dead_params_scoped
   rewrite_rec_handlers_scoped bind_aliased_params_scoped
-  forward_applications_scoped remove_unused_defined_lets_in_loops_scoped
+  forward_applications_scoped forward_to_arms_scoped
+  lift_handler_conts_scoped remove_unused_defined_lets_in_loops_scoped
   unbox_variant_params_scoped share_known_projections_scoped
   recover_known_comparisons_scoped fold_same_comparisons_scoped
   wrap_returns_scoped untag_params_scoped
@@ -234,6 +236,27 @@ Qed.
 Theorem normalise_params_round_keeps_scope :
   normalise_params_round_keeps_scope_statement.
 Proof. apply keeps_scope_intro, normalise_params_round_scoped. Qed.
+
+(* What follows that round in the first phase, and the two together. *)
+Lemma arms_expr_before_scoped (e : expr) : scoped e (arms_expr_before e).
+Proof. unfold arms_expr_before. scoped_chain. Qed.
+
+#[export] Hint Resolve arms_expr_before_scoped : scoped.
+
+Lemma arms_code_before_scoped (body : expr) :
+  scoped body (arms_code_before body).
+Proof. unfold arms_code_before. scoped_chain. Qed.
+
+#[export] Hint Resolve arms_code_before_scoped : scoped.
+
+Lemma first_phase_round_scoped (e : expr) : scoped e (first_phase_round e).
+Proof. unfold first_phase_round. scoped_chain. Qed.
+
+#[export] Hint Resolve first_phase_round_scoped : scoped.
+
+Theorem first_phase_round_keeps_scope :
+  first_phase_round_keeps_scope_statement.
+Proof. apply keeps_scope_intro, first_phase_round_scoped. Qed.
 
 (* The demotion of exception handlers, with whatever names in scope
    (FlambdaDemoteScopeProofs), and as the validation applies it. *)

@@ -590,7 +590,7 @@ Proof.
       cbv zeta in Hknown.
       apply andb_true_iff in Hknown as [Hfirst Hsecond].
       apply (refines_trans _ _ _
-        (iterate_refines _ normalise_params_round_refines rounds _ [] []
+        (iterate_refines _ first_phase_round_refines rounds _ [] []
            (imports_statics imports) empty_heap)).
       apply (refines_trans _ _ _
         (iterate_lifted_unit_refines imports rounds avoid kept _ Hfirst)).

@@ -29,9 +29,12 @@
    bound outside the handler: a normalisation that is an equivalence.
 
    This file is to be reviewed: [lift_handler_conts] and what it is
-   made of, and the two statements. Nothing applies the pass yet; the
-   validation of middle_end/flambda2/tests/semantics/ is to apply it to
-   each of the two terms that it compares, by a later change.
+   made of, which are extracted and run by the validation of
+   middle_end/flambda2/tests/semantics/, and the two statements. The
+   validation applies the pass to each of the two terms that it
+   compares, each time just before it makes the applications go to
+   their arms (FlambdaForwardArmSpec.v); FlambdaValidateSpec.v says
+   where.
 
    Where a continuation [k] is given, by each of its applications, a
    constant for one of its parameters, and its handler tests that
@@ -103,12 +106,11 @@
      application of it, one of the parameters that it takes
      ([only_applied]).
    And two tests of what the applications of [k] give, which the
-   equivalence does not need either. The validation is to apply the
-   pass to the two terms that it compares in the rounds of their
-   normalisations, which come before
-   FlambdaGiveScrutineeSpec.give_scrutinees; the tests keep the pass
-   from two places where it would then no longer find the two terms
-   the same:
+   equivalence does not need either. The validation applies the pass
+   to the two terms that it compares before it applies
+   FlambdaGiveScrutineeSpec.give_scrutinees to them; the tests keep
+   the pass from two places where the validation would then no
+   longer find the two terms the same:
    - the tested parameter is not a scrutinee under another name
      ([number_of_a_scrutinee]): there is no variable, among those
      that the body of the [Let_cont] of [k] tests by a [Switch], that

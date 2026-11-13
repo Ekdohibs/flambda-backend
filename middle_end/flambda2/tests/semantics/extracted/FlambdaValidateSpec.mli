@@ -2,6 +2,7 @@ open Datatypes
 open FlambdaAliasLetsSpec
 open FlambdaAliasesSpec
 open FlambdaArmNumbersSpec
+open FlambdaBindConstParamsSpec
 open FlambdaBlockLoadSpec
 open FlambdaCodeLetsSpec
 open FlambdaCompareSpec
@@ -9,6 +10,7 @@ open FlambdaCseSpec
 open FlambdaDeadParamsSpec
 open FlambdaDemoteSpec
 open FlambdaFloatCodeSpec
+open FlambdaForwardArmSpec
 open FlambdaForwardKindedSpec
 open FlambdaForwardSpec
 open FlambdaGiveScrutineeSpec
@@ -23,6 +25,7 @@ open FlambdaKnownClosuresSpec
 open FlambdaKnownSlotsSpec
 open FlambdaKnownSymbolsSpec
 open FlambdaLiftAroundSpec
+open FlambdaLiftContsSpec
 open FlambdaLiftFromArmsSpec
 open FlambdaLiftFromCodeSpec
 open FlambdaLiftSpec
@@ -90,6 +93,12 @@ val normalise_code_params_knowing : facts -> expr -> expr
 val normalise_code_params : expr -> expr
 
 val normalise_params_round : expr -> expr
+
+val arms_expr_before : expr -> expr
+
+val arms_code_before : expr -> expr
+
+val first_phase_round : expr -> expr
 
 val demote_and_tidy : nat -> expr -> expr
 

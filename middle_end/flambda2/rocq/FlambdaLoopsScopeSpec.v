@@ -40,7 +40,10 @@
    FlambdaUnusedParamsSpec.drop_unused_params,
    FlambdaDeadParamsSpec.drop_dead_params,
    FlambdaParamAliasesSpec.bind_aliased_params,
-   FlambdaForwardSpec.forward_applications); the removal of the unused
+   FlambdaForwardSpec.forward_applications); the going of an
+   application to the arm of the number that it gives
+   (FlambdaForwardArmSpec.forward_to_arms), the way of taking that
+   pass that asks nothing of the kinds; the removal of the unused
    [Let]s that have a value, in loops too
    (FlambdaLoopLetsSpec.remove_unused_defined_lets_in_loops), whatever
    is taken to be in scope; the following of
@@ -59,14 +62,17 @@
 
    Closed code is all that is asked of a term, as [keeps_scope] asks
    it. Loopify binds a name that its caller gives: the code it makes is
-   closed whatever that name is, since the loop binds it. Two of the
+   closed whatever that name is, since the loop binds it. Three of the
    rewrites put a variable where it was not: [bind_aliased_params]
    binds a parameter, at the start of its handler, to what every
-   application gives it, and [forward_applications] gives an
-   application the arguments of the handler it goes to. Each keeps
+   application gives it, [forward_applications] gives an application
+   the arguments of the handler it goes to, and [forward_to_arms]
+   gives it those of the arm that it goes to, the arm that the
+   [Switch] of the handler has for the number given. Each keeps
    scope because the variable was free already: in the body of the
    [Let_cont], as an argument of an application there, or in the
-   handler.
+   handler. The continuation that an application is made to go to by
+   the last two was free in the handler too.
    [share_handlers] puts a continuation in a handler that did not
    name it: the one whose [Let_cont] the handler is under, which is
    bound there and so is not free in the term.
@@ -78,7 +84,8 @@ From Stdlib Require Import ZArith List.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaSemanticsSpec FlambdaBindersSpec FlambdaNormaliseSpec
-  FlambdaDeadParamsSpec FlambdaForwardSpec FlambdaLoopAliasesSpec
+  FlambdaDeadParamsSpec FlambdaForwardSpec FlambdaForwardArmSpec
+  FlambdaLoopAliasesSpec
   FlambdaLoopLetsSpec FlambdaLoopifySpec FlambdaParamAliasesSpec
   FlambdaRecHandlersSpec FlambdaShortcutSpec FlambdaSameHandlersSpec
   FlambdaSinkContsSpec FlambdaSinkUsesSpec
@@ -112,6 +119,12 @@ Definition forward_applications_keeps_scope_statement : Prop :=
    (FlambdaForwardSpec.forward_applications_with). *)
 Definition forward_applications_with_keeps_scope_statement : Prop :=
   ∀ calls : bool, keeps_scope (forward_applications_with calls).
+
+(* An application that gives a number goes to the arm of that number,
+   with nothing asked of the kinds
+   (FlambdaForwardArmSpec.forward_to_arms). *)
+Definition forward_to_arms_keeps_scope_statement : Prop :=
+  keeps_scope forward_to_arms.
 
 (* Whatever the variables that are taken to be in scope, and the kinds
    they are taken to have. *)

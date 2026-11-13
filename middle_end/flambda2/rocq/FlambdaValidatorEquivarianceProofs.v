@@ -62,6 +62,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaSameHandlersSpec FlambdaUnusedParamsSpec
   FlambdaLoopAliasesSpec FlambdaLoopLetsSpec FlambdaParamAliasesSpec
   FlambdaForwardSpec FlambdaForwardJumpsSpec FlambdaForwardKindedSpec
+  FlambdaForwardArmSpec
   FlambdaInlineTailSpec FlambdaDeadParamsSpec
   FlambdaCodeLetsSpec
   FlambdaLoopifySpec
@@ -88,6 +89,7 @@ From OxCamlFlambda2 Require FlambdaKeepsScopeProofs FlambdaValidateScopeProofs
   FlambdaArmNumbersNamesProofs FlambdaShadowParamsNamesProofs
   FlambdaTwinParamsNamesProofs FlambdaBindConstParamsNamesProofs
   FlambdaAliasLetsProofs.
+From OxCamlFlambda2 Require FlambdaLiftContsNamesProofs.
 From OxCamlFlambda2 Require Import FlambdaDemoteSpec.
 From OxCamlFlambda2 Require FlambdaDemoteProofs.
 From OxCamlFlambda2 Require Import FlambdaLiftObservedSpec.
@@ -4912,6 +4914,247 @@ Lemma forward_kinded_in_code_equivariant :
   rewrite_equivariant forward_kinded_in_code.
 Proof. exact forward_kinded_in_code_equivariant_aux. Qed.
 
+(* An application that goes to an arm of the handler of its
+   continuation (FlambdaForwardArmSpec.v). What is kept of a
+   continuation is renamed with the term: its parameters, its arms and
+   the body of its [Let_cont]. *)
+Definition rename_arm_entry (r : renaming) (entry : option arm_entry)
+    : option arm_entry :=
+  option_map
+    (fun '(params, metadata, i, arms, body) =>
+       (map (rename_variable r) params, metadata, i,
+        map (fun arm => (fst arm, rename_apply_cont r (snd arm))) arms,
+        rename_expr r body))
+    entry.
+
+Definition rename_arm_forwards (r : renaming) (F : arm_forwards)
+    : arm_forwards :=
+  map
+    (fun binding =>
+       (rename_continuation r (fst binding), rename_arm_entry r (snd binding)))
+    F.
+
+Lemma lookup_rename_arm_forwards (r : renaming) (F : arm_forwards)
+    (k : continuation) :
+  lookup (rename_continuation r k) (rename_arm_forwards r F)
+  = option_map (rename_arm_entry r) (lookup k F).
+Proof.
+  unfold rename_arm_forwards.
+  induction F as [ | [k' entry] F IH]; simpl; [ reflexivity | ].
+  rewrite rename_continuation_eqb.
+  destruct (Pos.eqb k k'); [ reflexivity | exact IH ].
+Qed.
+
+Lemma position_of_renamed (r : renaming) (x : variable)
+    (params : list variable) :
+  position_of (rename_variable r x) (map (rename_variable r) params)
+  = position_of x params.
+Proof.
+  induction params as [ | y params IH]; simpl; [ reflexivity | ].
+  rewrite rename_variable_eqb, IH. reflexivity.
+Qed.
+
+Lemma arm_entry_of_equivariant (r : renaming) (kinded : bool)
+    (params : list variable) (metadata : handler_metadata)
+    (handler body : expr) :
+  arm_entry_of kinded (map (rename_variable r) params) metadata
+    (rename_expr r handler) (rename_expr r body)
+  = rename_arm_entry r (arm_entry_of kinded params metadata handler body).
+Proof.
+  destruct handler as [ | | | | | | scrutinee arms | ]; try reflexivity.
+  destruct scrutinee as [p | sym | c]; try reflexivity.
+  cbn [rename_expr rename_simple arm_entry_of].
+  rewrite length_map, position_of_renamed.
+  destruct
+    (kinded
+     && negb (Nat.eqb (length params) (length (hm_params_kinds metadata))));
+    [ reflexivity | ].
+  destruct (position_of p params); reflexivity.
+Qed.
+
+Lemma forward_to_arm_apply_cont_equivariant (r : renaming) (kinded : bool)
+    (G : kinds_in_scope) (F : arm_forwards) (ac : apply_cont) :
+  forward_to_arm_apply_cont kinded (rename_kinds_in_scope r G)
+    (rename_arm_forwards r F) (rename_apply_cont r ac)
+  = rename_apply_cont r (forward_to_arm_apply_cont kinded G F ac).
+Proof.
+  unfold forward_to_arm_apply_cont, arm_of_apply_cont.
+  change (ac_continuation (rename_apply_cont r ac))
+    with (rename_continuation r (ac_continuation ac)).
+  change (ac_args (rename_apply_cont r ac))
+    with (map (rename_simple r) (ac_args ac)).
+  rewrite lookup_rename_arm_forwards.
+  destruct (lookup (ac_continuation ac) F)
+    as [[[[[[params metadata] i] arms] body] | ] | ];
+    try reflexivity.
+  cbn [option_map rename_arm_entry].
+  rewrite nth_error_map.
+  destruct (nth_error (ac_args ac) i) as [[x | sym | c] | ];
+    try reflexivity.
+  destruct c as [n | | | | | | | | | | | | | | ]; try reflexivity.
+  cbn [option_map rename_simple].
+  rewrite find_arm_renamed.
+  destruct (find_arm n arms) as [target | ]; [ | reflexivity ].
+  cbn [option_map].
+  pose proof
+    (forwarding_equivariant r (ac_continuation ac) params metadata
+       (Apply_cont target) body)
+    as Hforwarding.
+  cbn [rename_expr] in Hforwarding. rewrite Hforwarding.
+  destruct
+    (forwarding (ac_continuation ac) params metadata (Apply_cont target) body)
+    as [[params' target'] | ];
+    [ | reflexivity ].
+  cbn [rename_forward_entry option_map fst snd].
+  rewrite !length_map, !no_trap_action_renamed, have_kinds_equivariant.
+  destruct
+    (Nat.eqb (length (ac_args ac)) (length params') && no_trap_action ac
+     && no_trap_action target'
+     && (negb kinded
+         || have_kinds G (ac_args ac) (hm_params_kinds metadata)));
+    [ apply forwarded_equivariant | reflexivity ].
+Qed.
+
+Fixpoint forward_to_arms_under_equivariant (r : renaming) (e : expr) :
+  ∀ (kinded : bool) (G : kinds_in_scope) (F : arm_forwards),
+    forward_to_arms_under kinded (rename_kinds_in_scope r G)
+      (rename_arm_forwards r F) (rename_expr r e)
+    = rename_expr r (forward_to_arms_under kinded G F e)
+with forward_to_arms_in_handler_equivariant (r : renaming)
+    (h : continuation_handler) :
+  ∀ (kinded : bool) (G : kinds_in_scope) (F : arm_forwards),
+    forward_to_arms_in_handler kinded (rename_kinds_in_scope r G)
+      (rename_arm_forwards r F) (rename_handler r h)
+    = rename_handler r (forward_to_arms_in_handler kinded G F h).
+Proof.
+  - destruct e
+      as [ x kind d body | bindings body | k [params metadata handler] body
+         | handlers body | ap | ac | scrutinee arms | ];
+      intros kinded G F; try reflexivity.
+    + cbn [rename_expr forward_to_arms_under].
+      change ((rename_variable r x, kind) :: rename_kinds_in_scope r G)
+        with (rename_kinds_in_scope r ((x, kind) :: G)).
+      rewrite forward_to_arms_under_equivariant. reflexivity.
+    + cbn [rename_expr forward_to_arms_under].
+      rewrite forward_to_arms_under_equivariant. reflexivity.
+    + cbn [rename_expr rename_handler forward_to_arms_under]. cbv zeta.
+      rewrite params_in_scope_equivariant,
+        (forward_to_arms_under_equivariant r handler),
+        arm_entry_of_equivariant.
+      change
+        ((rename_continuation r k,
+          rename_arm_entry r
+            (arm_entry_of kinded params metadata
+               (forward_to_arms_under kinded
+                  (params_in_scope params (hm_params_kinds metadata) G) F
+                  handler)
+               body))
+         :: rename_arm_forwards r F)
+        with
+          (rename_arm_forwards r
+             ((k,
+               arm_entry_of kinded params metadata
+                 (forward_to_arms_under kinded
+                    (params_in_scope params (hm_params_kinds metadata) G) F
+                    handler)
+                 body)
+              :: F)).
+      rewrite (forward_to_arms_under_equivariant r body). reflexivity.
+    + cbn [rename_expr forward_to_arms_under]. cbv zeta.
+      assert (Hscope :
+        map (fun '(k, _) => (k, None))
+          (map (fun '(k, h) => (rename_continuation r k, rename_handler r h))
+             handlers)
+        ++ rename_arm_forwards r F
+        = rename_arm_forwards r
+            (map (fun '(k, _) => (k, None)) handlers ++ F)).
+      { unfold rename_arm_forwards. rewrite map_app, !map_map. f_equal.
+        apply map_ext. intros [k h]. reflexivity. }
+      rewrite Hscope. clear Hscope.
+      rewrite (forward_to_arms_under_equivariant r body). f_equal.
+      generalize (map (fun '(k, _) => (k, @None arm_entry)) handlers ++ F).
+      intros F'.
+      induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
+      rewrite (forward_to_arms_in_handler_equivariant r h kinded G F'), IH.
+      reflexivity.
+    + cbn [rename_expr forward_to_arms_under].
+      rewrite forward_to_arm_apply_cont_equivariant. reflexivity.
+    + cbn [rename_expr forward_to_arms_under]. f_equal.
+      rewrite !map_map. apply map_ext. intros [i ac]. cbn [fst snd].
+      rewrite forward_to_arm_apply_cont_equivariant. reflexivity.
+  - destruct h as [params metadata handler]. intros kinded G F.
+    cbn [rename_handler forward_to_arms_in_handler].
+    rewrite params_in_scope_equivariant, forward_to_arms_under_equivariant.
+    reflexivity.
+Qed.
+
+Lemma forward_to_arms_equivariant : rewrite_equivariant forward_to_arms.
+Proof.
+  intros r e. exact (forward_to_arms_under_equivariant r e false [] []).
+Qed.
+
+Lemma forward_to_arms_kinded_equivariant :
+  rewrite_equivariant forward_to_arms_kinded.
+Proof.
+  intros r e. exact (forward_to_arms_under_equivariant r e true [] []).
+Qed.
+
+(* The kinded pass in the bodies of code, with the kinds of what a call
+   binds. *)
+Lemma forward_to_arms_in_binding_equivariant (r : renaming)
+    (binding : static_binding) :
+  forward_to_arms_in_binding (rename_static_binding r binding)
+  = rename_static_binding r (forward_to_arms_in_binding binding).
+Proof.
+  destruct binding
+    as [id [params my_closure ret exn metadata body] | id | sym const];
+    try reflexivity.
+  cbn [rename_static_binding rename_code forward_to_arms_in_binding].
+  unfold code_in_scope.
+  change [(rename_variable r my_closure, Value)]
+    with (rename_kinds_in_scope r [(my_closure, Value)]).
+  rewrite params_in_scope_equivariant.
+  pose proof
+    (forward_to_arms_under_equivariant r body true
+       (params_in_scope params (unarize (cm_params_arity metadata))
+          [(my_closure, Value)])
+       [])
+    as Hbody.
+  cbn [rename_arm_forwards map] in Hbody.
+  rewrite Hbody. reflexivity.
+Qed.
+
+Fixpoint forward_to_arms_in_code_equivariant_aux (r : renaming) (e : expr) :
+  forward_to_arms_in_code (rename_expr r e)
+  = rename_expr r (forward_to_arms_in_code e)
+with forward_to_arms_in_code_handler_equivariant (r : renaming)
+    (h : continuation_handler) :
+  forward_to_arms_in_code_handler (rename_handler r h)
+  = rename_handler r (forward_to_arms_in_code_handler h).
+Proof.
+  - destruct e
+      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
+         | scrutinee arms | ];
+      simpl; try reflexivity.
+    + rewrite forward_to_arms_in_code_equivariant_aux. reflexivity.
+    + rewrite forward_to_arms_in_code_equivariant_aux, !map_map.
+      f_equal. apply map_ext.
+      exact (forward_to_arms_in_binding_equivariant r).
+    + rewrite forward_to_arms_in_code_handler_equivariant,
+        forward_to_arms_in_code_equivariant_aux.
+      reflexivity.
+    + rewrite forward_to_arms_in_code_equivariant_aux. f_equal.
+      induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
+      rewrite (forward_to_arms_in_code_handler_equivariant r h), IH.
+      reflexivity.
+  - destruct h as [params metadata handler]. simpl.
+    rewrite forward_to_arms_in_code_equivariant_aux. reflexivity.
+Qed.
+
+Lemma forward_to_arms_in_code_equivariant :
+  rewrite_equivariant forward_to_arms_in_code.
+Proof. exact forward_to_arms_in_code_equivariant_aux. Qed.
+
 (* Inlining a continuation at the end of its scope, where its handler
    gives one kind for each parameter. *)
 Fixpoint inline_tail_conts_kinded_equivariant_aux (r : renaming) (e : expr) :
@@ -5334,6 +5577,10 @@ Ltac rename_outwards :=
       | rewrite forward_applications_equivariant
       | rewrite forward_jumps_equivariant
       | rewrite forward_kinded_equivariant
+      | rewrite forward_to_arms_equivariant
+      | rewrite forward_to_arms_kinded_equivariant
+      | rewrite FlambdaBindConstParamsNamesProofs.bind_const_params_renamed
+      | rewrite FlambdaLiftContsNamesProofs.lift_handler_conts_renamed
       | rewrite unbox_variant_params_renamed
       | rewrite remove_unused_defined_lets_in_loops_closed_equivariant
       | rewrite inline_tail_conts_kinded_equivariant_aux
@@ -5477,6 +5724,29 @@ Proof.
     normalise_code_params_knowing_equivariant no_facts no_facts_only r _).
 Qed.
 
+(* What follows that round in the first phase, and the two together. *)
+Lemma arms_expr_before_equivariant : rewrite_equivariant arms_expr_before.
+Proof.
+  intros r e. unfold arms_expr_before. rename_outwards. reflexivity.
+Qed.
+
+Lemma arms_code_before_equivariant : rewrite_equivariant arms_code_before.
+Proof.
+  intros r e. unfold arms_code_before.
+  rewrite
+    (rewrite_rec_handlers_equivariant arms_expr_before
+       arms_expr_before_equivariant).
+  apply arms_expr_before_equivariant.
+Qed.
+
+Theorem first_phase_round_equivariant :
+  first_phase_round_equivariant_statement.
+Proof.
+  intros r e. unfold first_phase_round.
+  rewrite normalise_params_round_equivariant, arms_code_before_equivariant.
+  apply rewrite_code_equivariant, arms_code_before_equivariant.
+Qed.
+
 (* The demotion of exception handlers, as the validation applies it:
    with no name in scope; and with the rounds that follow it. *)
 Lemma demote_handlers_closed_equivariant :
@@ -5491,8 +5761,8 @@ Proof.
   intros rounds r e. unfold demote_and_tidy.
   rewrite demote_handlers_closed_equivariant.
   rewrite
-    (iterate_equivariant rounds normalise_params_round
-       normalise_params_round_equivariant).
+    (iterate_equivariant rounds first_phase_round
+       first_phase_round_equivariant).
   exact
     (iterate_equivariant rounds normalise_before_inlined
        normalise_before_inlined_equivariant r _).
@@ -5523,7 +5793,7 @@ Proof.
        normalise_expr_after_equivariant).
   rename_outwards.
   rewrite (rewrite_code_equivariant _ normalise_code_after_equivariant),
-    forward_kinded_in_code_equivariant.
+    forward_kinded_in_code_equivariant, forward_to_arms_in_code_equivariant.
   apply remove_unused_defined_lets_in_code_equivariant.
 Qed.
 
@@ -7337,26 +7607,26 @@ Qed.
 (* The first phase of the term before, however many times it is
    applied: it commutes with renaming and keeps scope. *)
 Lemma params_phase_scope (rounds : nat) :
-  keeps_scope (iterate rounds normalise_params_round).
+  keeps_scope (iterate rounds first_phase_round).
 Proof.
   exact
-    (keeps_scope_iterate rounds normalise_params_round
-       FlambdaValidateScopeProofs.normalise_params_round_keeps_scope).
+    (keeps_scope_iterate rounds first_phase_round
+       FlambdaValidateScopeProofs.first_phase_round_keeps_scope).
 Qed.
 
 Lemma params_phase_equivariant (rounds : nat) :
-  rewrite_equivariant (iterate rounds normalise_params_round).
+  rewrite_equivariant (iterate rounds first_phase_round).
 Proof.
   exact
-    (iterate_equivariant rounds normalise_params_round
-       normalise_params_round_equivariant).
+    (iterate_equivariant rounds first_phase_round
+       first_phase_round_equivariant).
 Qed.
 
 Lemma params_phase_up_to (rounds : nat) :
-  equivariant_up_to (iterate rounds normalise_params_round).
+  equivariant_up_to (iterate rounds first_phase_round).
 Proof.
   exact
-    (rewrite_equivariant_up_to (iterate rounds normalise_params_round)
+    (rewrite_equivariant_up_to (iterate rounds first_phase_round)
        (params_phase_equivariant rounds)).
 Qed.
 
@@ -7370,10 +7640,10 @@ Lemma demote_and_tidy_scope (rounds : nat) :
 Proof.
   exact
     (keeps_scope_compose
-       (fun e => iterate rounds normalise_params_round (demote_handlers [] e))
+       (fun e => iterate rounds first_phase_round (demote_handlers [] e))
        (iterate rounds normalise_before_inlined)
        (keeps_scope_compose (demote_handlers [])
-          (iterate rounds normalise_params_round)
+          (iterate rounds first_phase_round)
           FlambdaValidateScopeProofs.demote_handlers_closed_keeps_scope
           (params_phase_scope rounds))
        (keeps_scope_iterate rounds normalise_before_inlined
@@ -7393,13 +7663,13 @@ Qed.
 Definition two_phases (rounds : nat) (kept : list code_id) (e : expr)
     : expr :=
   iterate rounds (normalise_before_round kept)
-    (iterate rounds normalise_params_round e).
+    (iterate rounds first_phase_round e).
 
 Lemma two_phases_scope (rounds : nat) (kept : list code_id) :
   keeps_scope (two_phases rounds kept).
 Proof.
   exact
-    (keeps_scope_compose (iterate rounds normalise_params_round)
+    (keeps_scope_compose (iterate rounds first_phase_round)
        (iterate rounds (normalise_before_round kept))
        (params_phase_scope rounds)
        (keeps_scope_iterate rounds (normalise_before_round kept)
@@ -7410,7 +7680,7 @@ Lemma two_phases_up_to (rounds : nat) (kept : list code_id) :
   equivariant_up_to (two_phases rounds kept).
 Proof.
   exact
-    (equivariant_up_to_compose (iterate rounds normalise_params_round)
+    (equivariant_up_to_compose (iterate rounds first_phase_round)
        (iterate rounds (normalise_before_round kept))
        (params_phase_scope rounds)
        (keeps_scope_iterate rounds (normalise_before_round kept)
@@ -7664,7 +7934,7 @@ Definition lifted_and_types (rounds : nat) (avoid : list continuation)
     (kept : list code_id) (e : expr) : expr :=
   by_types
     (iterate rounds (normalise_lifted_round avoid kept)
-       (iterate rounds normalise_params_round e)).
+       (iterate rounds first_phase_round e)).
 
 Lemma lifted_rounds_scope (rounds : nat) (avoid : list continuation)
     (kept : list code_id) :
@@ -7694,9 +7964,9 @@ Proof.
     (keeps_scope_compose
        (fun e =>
           iterate rounds (normalise_lifted_round avoid kept)
-            (iterate rounds normalise_params_round e))
+            (iterate rounds first_phase_round e))
        by_types
-       (keeps_scope_compose (iterate rounds normalise_params_round)
+       (keeps_scope_compose (iterate rounds first_phase_round)
           (iterate rounds (normalise_lifted_round avoid kept))
           (params_phase_scope rounds)
           (lifted_rounds_scope rounds avoid kept))
@@ -7711,17 +7981,17 @@ Proof.
     (equivariant_up_to_avoiding_after
        (fun avoid e =>
           iterate rounds (normalise_lifted_round avoid kept)
-            (iterate rounds normalise_params_round e))
+            (iterate rounds first_phase_round e))
        by_types
        (fun avoid =>
-          keeps_scope_compose (iterate rounds normalise_params_round)
+          keeps_scope_compose (iterate rounds first_phase_round)
             (iterate rounds (normalise_lifted_round avoid kept))
             (params_phase_scope rounds)
             (lifted_rounds_scope rounds avoid kept))
        by_types_scope by_types_equivariant
        (equivariant_up_to_avoiding_before
           (fun avoid => iterate rounds (normalise_lifted_round avoid kept))
-          (iterate rounds normalise_params_round) (params_phase_scope rounds)
+          (iterate rounds first_phase_round) (params_phase_scope rounds)
           (params_phase_equivariant rounds) (lifted_rounds_up_to rounds kept))).
 Qed.
 

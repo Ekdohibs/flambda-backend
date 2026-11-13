@@ -93,7 +93,7 @@ let rec known_free_in statics rounds avoid kept e =
     code_id list -> expr -> bool **)
 
 let normalise_lifted_free_in statics rounds avoid kept e =
-  let e0 = iterate rounds normalise_params_round e in
+  let e0 = iterate rounds first_phase_round e in
   known_free_in statics rounds avoid kept e0
   && known_free_in statics rounds avoid kept
        (guard_scope simplify_by_types_carried

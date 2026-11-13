@@ -215,7 +215,7 @@ Proof.
   intros Hknown.
   apply andb_true_iff in Hknown as [Hfirst Hsecond].
   apply (refines_trans _ _ _
-    (iterate_refines _ normalise_params_round_refines rounds _ [] conts
+    (iterate_refines _ first_phase_round_refines rounds _ [] conts
        statics empty_heap)).
   apply (refines_trans _ _ _
     (iterate_lifted_refines_followed rounds avoid kept _ Hfirst)).

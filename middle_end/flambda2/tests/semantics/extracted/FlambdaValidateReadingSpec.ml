@@ -34,7 +34,7 @@ let normalise_before_avoiding avoid rounds kept e =
        (guard_scope simplify_by_types_carried
           (iterate rounds
              (normalise_before_round_avoiding avoid kept)
-             (iterate rounds normalise_params_round e))))
+             (iterate rounds first_phase_round e))))
 
 (** val reading_round : continuation list -> nat -> loopified -> code_id list ->
     expr -> expr **)
