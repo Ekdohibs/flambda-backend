@@ -68,7 +68,10 @@
    rebuild keeps the field, and binds what it holds. That is what [check_closed]
    is asked for; [is_local_slots_only] says that the fields of a block and of a
    boxed number are not local, and [in_flow_fragment] is the fragment in which
-   FlambdaReaperFlowProofs.v says what facts the traversal gives.
+   FlambdaReaperFlowProofs.v says what facts the traversal gives. That
+   fragment leaves out the primitives of the heap
+   (FlambdaReaperRebuildSpec.v says why), so the runs related have an
+   empty heap, on which a [Let] runs as [eval_named] says.
 
    [rebuild_unbox_refines_observably_statement]: with the premises of
    FlambdaReaperRebuildSpec.rebuild_refines_observably_statement, the

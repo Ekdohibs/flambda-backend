@@ -447,6 +447,7 @@ Definition prim_classified (p : prim) (args : list simple) : bool :=
   | Unary (Block_load _ _ _), [_] | Unary (Is_int true), [_]
   | Unary Get_tag, [_] | Unary (Box_number _), [_]
   | Unary (Unbox_number _), [_] => true
+  | Region_primitive Local_allocation, _ => true
   | _, _ => false
   end.
 
@@ -474,11 +475,14 @@ Definition default_prim_edges (x : variable) (args : list simple) : Prop :=
   ∧ ∀ from : node,
       from ∈ free_names_of_simples args -> g_use G (Node_variable x) from.
 
+(* Of a primitive that is not of the heap, as none of the fragment is
+   ([named_in_flow_fragment]). *)
 Definition prim_edges (x : variable) (p : prim) (args : list simple)
     : Prop :=
-  if prim_classified p args
-  then classified_prim_edges x p args
-  else default_prim_edges x args.
+  prim_of_heap p = false
+  ∧ if prim_classified p args
+    then classified_prim_edges x p args
+    else default_prim_edges x args.
 
 (* The closure of a set at the node [b], of the code [id]: its closure
    dep, its function slots and the value slots kept. *)
@@ -1299,21 +1303,33 @@ Lemma traverse_prim_default (env : traverse_env) (x : variable) (p : prim)
        else a).
 Proof.
   unfold prim_classified, traverse_prim.
-  destruct p as [u | b | v | h];
-    [ destruct u | destruct b | destruct v | destruct h ];
+  destruct p as [u | b | v | h | r];
+    [ destruct u | destruct b | destruct v | destruct h | destruct r ];
     repeat (match goal with b : bool |- _ => destruct b end);
     destruct args as [ | s1 [ | s2 args]]; intros H;
     try discriminate H; reflexivity.
 Qed.
 
 (* The facts of a primitive, by the cases of [traverse_prim]. *)
-Lemma traverse_prim_makes (env : traverse_env) (x : variable) (p : prim)
+Lemma makes_and_const (ids : list code_id) (step : acc -> acc) (Q : Prop)
+    (P : acc -> Prop) :
+  Q -> makes ids step P -> makes ids step (fun a' => Q ∧ P a').
+Proof.
+  intros HQ H a. destruct (H a) as [Hadds HP].
+  split; [ exact Hadds | intros a' Hle; exact (conj HQ (HP a' Hle)) ].
+Qed.
+
+(* The facts of a primitive, of the heap or not. *)
+Lemma traverse_prim_makes_any (env : traverse_env) (x : variable) (p : prim)
     (args : list simple) :
   makes [] (traverse_prim env x p args)
-    (fun a' => prim_edges (acc_graph a') (acc_noted a') x p args).
+    (fun a' =>
+       if prim_classified p args
+       then classified_prim_edges (acc_graph a') (acc_noted a') x p args
+       else default_prim_edges (acc_graph a') x args).
 Proof.
-  unfold prim_edges. destruct (prim_classified p args) eqn:Hcl.
-  - destruct p as [p' | b | v | h].
+  destruct (prim_classified p args) eqn:Hcl.
+  - destruct p as [p' | b | v | h | r].
     + destruct p' as [kind mut fld | [ | ] | | | ak | | ok | ik op | src dst
                      | | bn | bn | | | r];
         destruct args as [ | s1 [ | s2 args]]; simpl in Hcl;
@@ -1350,6 +1366,10 @@ Proof.
                   | discriminate Hcl ].
     + destruct h; try discriminate Hcl.
       exact (block_deps_makes (Node_variable x) args).
+    + (* [Local_allocation]: no fact. *)
+      destruct r; try discriminate Hcl.
+      apply makes_steady; [ intros a; apply steady_refl | ].
+      intros a a' _. destruct args; exact I.
   - apply (makes_ext [] (fun a =>
              add_facts
                (Fact_any_source (Node_variable x)
@@ -1368,6 +1388,16 @@ Proof.
       * intros from Hfrom. apply facts_use. apply (add_facts_later _ _ _ _ Hle).
         right. apply in_map_iff. exists from.
         split; [ reflexivity | exact Hfrom ].
+Qed.
+
+Lemma traverse_prim_makes (env : traverse_env) (x : variable) (p : prim)
+    (args : list simple) :
+  prim_of_heap p = false ->
+  makes [] (traverse_prim env x p args)
+    (fun a' => prim_edges (acc_graph a') (acc_noted a') x p args).
+Proof.
+  intros Hoff. unfold prim_edges. apply makes_and_const; [ exact Hoff | ].
+  apply traverse_prim_makes_any.
 Qed.
 
 (* ------------------------------------------------------------------------ *)
@@ -1588,6 +1618,7 @@ Proof.
       * apply (note_simple_noted s a a').
         exact (acc_le_trans _ _ _ (proj1 (add_facts_steady _ _)) Hle).
   - apply traverse_prim_makes.
+    destruct (prim_of_heap p); [ discriminate Hfrag | reflexivity ].
   - apply closure_of_set_makes.
   - eapply makes_weaken; [ | exact (accessor_makes x (Field_value_slot w)
                                        closure) ].
@@ -4092,6 +4123,30 @@ Proof.
   - injection Hs as <-. exact consts_any_source.
 Qed.
 
+(* The value of a variable is at its node, and so is no location:
+   neither is a value of the arguments of a primitive. *)
+Lemma env_flows_no_location (vars : env) (args : list simple)
+    (vs : list value) (l : location) :
+  env_flows_ vars -> eval_simples vars args = Some vs ->
+  Value_location l ∉ vs.
+Proof.
+  intros Hvars Hvs Hin.
+  destruct (eval_simples_in _ _ _ _ Hvs Hin) as (s & _ & Hs).
+  destruct s as [y | sym | c]; simpl in Hs.
+  - exact (Hvars y _ Hs).
+  - discriminate Hs.
+  - discriminate Hs.
+Qed.
+
+(* A [Let] of the fragment is not of a primitive of the heap. *)
+Lemma named_edges_not_heap (sr : Prop) (x : variable) (d : named) :
+  named_edges G noted deps keep sr x d ->
+  ∀ (q : heap_primitive) (args : list simple), d <> Prim (Heap q) args.
+Proof.
+  intros H q args ->. simpl in H. destruct H as [Hoff _].
+  discriminate Hoff.
+Qed.
+
 (* What is said of a block at an allocation. *)
 Definition block_structure (a : node) (fields : list value) : Prop :=
   g_constructor G a Field_is_int Node_all_constants
@@ -4281,10 +4336,10 @@ Proof.
     exact (simple_flows _ _ _ Hvars Hnoted Hev).
   - destruct (eval_simples vars args) as [vs | ] eqn:Hvs;
       [ | discriminate Hev ].
-    unfold prim_edges in Hedges.
+    unfold prim_edges in Hedges. destruct Hedges as [_ Hedges].
     destruct (prim_classified p args) eqn:Hcl;
       [ | exact (default_flows _ _ _ _ _ _ _ Hst Hvars Hedges Hcl Hvs Hev) ].
-    destruct p as [p' | b | p' | h].
+    destruct p as [p' | b | p' | h | r].
     + destruct p' as [kind mut fld | [ | ] | | | ak | | ok | ik op | src dst
                      | | bn | bn | | | r];
         destruct args as [ | s1 [ | s2 args]]; simpl in Hcl;
@@ -4377,6 +4432,9 @@ Proof.
       * exact (alloc_self _ _ _ His (as_hs _ _ _ Hc _ consts_any_source)).
       * exact (block_structure_made _ _ _ _
                  (conj Hcons (conj His (conj Hgt Hnoted))) Hvars Hvs).
+    + destruct (eval_prim_arity _ _ _ _ Hev)
+        as [(p' & v1 & Hp & _) | [(p' & v1 & v2 & Hp & _) | (p' & Hp & _)]];
+        discriminate Hp.
     + destruct (eval_prim_arity _ _ _ _ Hev)
         as [(p' & v1 & Hp & _) | [(p' & v1 & v2 & Hp & _) | (p' & Hp & _)]];
         discriminate Hp.
@@ -5180,7 +5238,7 @@ Definition flow_invariant (s : state) : Prop :=
 Definition result_ok (r : step_result) : Prop :=
   match r with
   | Step s' => flow_invariant s'
-  | Exit k vs _ => exit_flows G sol keep called u k vs
+  | Exit k vs _ _ => exit_flows G sol keep called u k vs
   | Undefined => True
   end.
 
@@ -5409,7 +5467,7 @@ Qed.
    and the continuations are at the nodes of the code. *)
 Lemma enter_code_ok (id : code_id) (c : code) (closure : value)
     (vs : list value) (callee_vars : env) (return_to exn_to : cont_value)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   lookup id (static_code statics) = Some c ->
   live (Some id) ->
   length vs = length (unarize (code_params_arity c)) ->
@@ -5430,7 +5488,7 @@ Lemma enter_code_ok (id : code_id) (c : code) (closure : value)
     (State (code_body c) callee_vars
        [(code_return_continuation c, return_to);
         (code_exn_continuation c, exn_to)]
-       statics hp).
+       statics hp rd).
 Proof.
   intros Hcode Hlive Hlen Hcd Hbind Hst Hcodes Hspa Hvs_pa Hcl_pa Hret_pa
     Hexn_pa.
@@ -5473,10 +5531,11 @@ Qed.
 
 Lemma call_code_not_exit (closure : value) (c : code) (vs : list value)
     (args_arity return_arity : arity) (return_to exn_to : cont_value)
-    (statics : static_env) (hp : heap) (k : continuation) (vs' : list value)
-    (hp' : heap) :
-  call_code closure c vs args_arity return_arity return_to exn_to statics hp
-  <> Exit k vs' hp'.
+    (statics : static_env) (hp : heap) (rd : read_record) (k : continuation)
+    (vs' : list value)
+    (hp' : heap) (rd' : read_record) :
+  call_code closure c vs args_arity return_arity return_to exn_to statics hp rd
+  <> Exit k vs' hp' rd'.
 Proof.
   unfold call_code. destruct (binds_statics (code_body c)); [ discriminate | ].
   destruct (negb _); [ discriminate | ].
@@ -5486,10 +5545,10 @@ Qed.
 (* A direct call of the fragment goes wrong, or runs the body of the code
    of its callee, which the unit binds. *)
 Lemma call_step (ap : apply_expr) (vars : env) (K : cont_env)
-    (statics : static_env) (hp : heap) (id : code_id) :
+    (statics : static_env) (hp : heap) (rd : read_record) (id : code_id) :
   ap_call_kind ap = Direct id ->
   apply_in_flow_fragment codes ap = true -> codes_ok statics ->
-  match step (State (Apply ap) vars K statics hp) with
+  match step (State (Apply ap) vars K statics hp rd) with
   | Step s' =>
     ∃ (callee : value) (vs extra : list value)
       (slots : list (value_slot * value)) (c : code) (callee_vars : env),
@@ -5508,8 +5567,8 @@ Lemma call_step (ap : apply_expr) (vars : env) (K : cont_env)
                [(code_return_continuation c, resolve (ap_continuation ap) K);
                 (code_exn_continuation c,
                  with_extra_args (resolve (ap_exn_continuation ap) K) extra)]
-               statics hp
-  | Exit _ _ _ => False
+               statics hp rd
+  | Exit _ _ _ _ => False
   | Undefined => True
   end.
 Proof.
@@ -5555,7 +5614,8 @@ Qed.
 
 (* The state that a direct call runs keeps the invariant. *)
 Lemma direct_call_ok (ctx : option code_id) (ap : apply_expr) (vars : env)
-    (statics : static_env) (hp : heap) (id : code_id) (callee : value)
+    (statics : static_env) (hp : heap) (rd : read_record) (id : code_id)
+    (callee : value)
     (vs : list value) (slots : list (value_slot * value)) (c : code)
     (callee_vars : env) (returns : list node) (exn : node)
     (return_to exn_to : cont_value) :
@@ -5582,7 +5642,7 @@ Lemma direct_call_ok (ctx : option code_id) (ap : apply_expr) (vars : env)
     (State (code_body c) callee_vars
        [(code_return_continuation c, return_to);
         (code_exn_continuation c, exn_to)]
-       statics hp).
+       statics hp rd).
 Proof.
   intros Hk Hedges Hnoted_callee Hnoted_args Hlive Hvars Hvars_pa Hst Hcodes
     Hspa Hret Hfits Hret_pa Hexn Hexn_pa Hcallee Hvs Hclosure Hcode Hkinds
@@ -5614,7 +5674,7 @@ Proof.
     not_local_field. }
   apply kinds_eqb_eq in Hkinds. apply kinds_per_parameter_eqb_eq in Hparams.
   apply unarize_per_parameter_eq in Hparams. apply arity_eqb_eq in Hresult.
-  apply (enter_code_ok id c callee vs callee_vars return_to exn_to statics hp
+  apply (enter_code_ok id c callee vs callee_vars return_to exn_to statics hp rd
            Hcode Hlive'); try assumption.
   - rewrite <- (length_map kind_of_value vs), Hkinds, Hparams. reflexivity.
   - intros cd' Hcd'. rewrite Hcd in Hcd'. injection Hcd' as <-.
@@ -5719,6 +5779,7 @@ Lemma closure_call_ok (closure : value) (m start : node)
     (applied vs : list value) (applied_arity args_arity return_arity : arity)
     (ws_p ws returns : list node) (exn : node)
     (return_to exn_to : cont_value) (statics : static_env) (hp : heap)
+    (rd : read_record)
     (shape : call_shape) :
   indirect_ok ->
   flows_ closure m -> pa_ok statics closure ->
@@ -5745,12 +5806,13 @@ Lemma closure_call_ok (closure : value) (m start : node)
   (∀ v : value,
      (∀ r : node, nth_error returns 0 = Some r -> flows_ v r) ->
      pa_ok statics v -> length (unarize return_arity) = 1 ->
-     result_ok (apply_cont_value return_to [v] statics hp)) ->
+     result_ok (apply_cont_value return_to [v] statics hp rd)) ->
   shape_of_closure_call statics closure Indirect (applied ++ vs)
     (applied_arity ++ args_arity) return_arity = Some shape ->
   result_ok
-    (run_call (fun partial => apply_cont_value return_to [partial] statics hp)
-       (Some shape) return_arity return_to exn_to statics hp).
+    (run_call (fun partial => apply_cont_value return_to [partial] statics hp
+      rd)
+       (Some shape) return_arity return_to exn_to statics hp rd).
 Proof.
   intros Hind Hm Hcl_pa Hlen_p Hchain_p Hargs_p Hend_p Hjk Hne Hpend Hlen_vs
     Happ_pa Hvs_pa Hret Hfits Hret_pa Hexn Hexn_pa Hst Hcodes Hspa Hpartial
@@ -5894,16 +5956,16 @@ Proof.
     unfold A in Hfull. rewrite length_app in Hfull.
     cbn [run_call].
     destruct (call_code closure c all A return_arity return_to exn_to statics
-                hp) as [s' | k' vs'' hp'' | ] eqn:Hcc;
-      [ | exfalso; exact (call_code_not_exit _ _ _ _ _ _ _ _ _ _ _ _ Hcc)
+                hp rd) as [s' | k' vs'' hp'' rd'' | ] eqn:Hcc;
+      [ | exfalso; exact (call_code_not_exit _ _ _ _ _ _ _ _ _ _ _ _ _ _ Hcc)
       | exact I ].
-    destruct (call_code_step _ _ _ _ _ _ _ _ _ _ Hcc)
+    destruct (call_code_step _ _ _ _ _ _ _ _ _ _ _ Hcc)
       as (callee_vars & _ & Hk1 & Hk2 & Hk3 & Hbind & ->).
     assert (HA : args_at wsA all A).
     { apply HargsA. rewrite <- (length_map kind_of_value all), Hk1.
       reflexivity. }
     apply (enter_code_ok id c closure all callee_vars return_to exn_to statics
-             hp Hcode Hlive); try assumption.
+             hp rd Hcode Hlive); try assumption.
     + rewrite <- (length_map kind_of_value all), Hk1.
       rewrite (unarize_per_parameter_eq _ _ Hk2). reflexivity.
     + intros cd' Hcd'. rewrite Hcd in Hcd'. injection Hcd' as <-.
@@ -5927,10 +5989,10 @@ Proof.
                 (Over_application (skipn size all)
                    (partially_apply A (nparams c))
                    return_arity return_to exn_to)
-                exn_to statics hp) as [s' | k' vs'' hp'' | ] eqn:Hcc;
-      [ | exfalso; exact (call_code_not_exit _ _ _ _ _ _ _ _ _ _ _ _ Hcc)
+                exn_to statics hp rd) as [s' | k' vs'' hp'' rd'' | ] eqn:Hcc;
+      [ | exfalso; exact (call_code_not_exit _ _ _ _ _ _ _ _ _ _ _ _ _ _ Hcc)
       | exact I ].
-    destruct (call_code_step _ _ _ _ _ _ _ _ _ _ Hcc)
+    destruct (call_code_step _ _ _ _ _ _ _ _ _ _ _ Hcc)
       as (callee_vars & _ & Hk1 & Hk2 & _ & Hbind & ->).
     assert (HA : args_at wsA all A).
     { apply HargsA. rewrite <- (length_map kind_of_value all), Hkinds.
@@ -5968,7 +6030,7 @@ Proof.
     apply (enter_code_ok id c closure (firstn size all) callee_vars
              (Over_application (skipn size all) (partially_apply A (nparams c))
                 return_arity return_to exn_to)
-             exn_to statics hp Hcode Hlive); try assumption.
+             exn_to statics hp rd Hcode Hlive); try assumption.
     + rewrite length_firstn, Nat.min_l by exact Hsize_le. reflexivity.
     + intros cd' Hcd'. rewrite Hcd in Hcd'. injection Hcd' as <-.
       split; [ | split; [ exact Hm_closure | split ] ].
@@ -6108,6 +6170,7 @@ Qed.
 Lemma tupled_call_ok (callee : value) (start : node) (vs : list value)
     (args_arity return_arity : arity) (ws returns : list node) (exn : node)
     (return_to exn_to : cont_value) (statics : static_env) (hp : heap)
+    (rd : read_record)
     (shape : call_shape) (id : code_id) (slots : list (value_slot * value))
     (c : code) :
   indirect_ok ->
@@ -6125,8 +6188,9 @@ Lemma tupled_call_ok (callee : value) (start : node) (vs : list value)
   shape_of_closure_call statics callee Indirect vs args_arity return_arity
   = Some shape ->
   result_ok
-    (run_call (fun partial => apply_cont_value return_to [partial] statics hp)
-       (Some shape) return_arity return_to exn_to statics hp).
+    (run_call (fun partial => apply_cont_value return_to [partial] statics hp
+      rd)
+       (Some shape) return_arity return_to exn_to statics hp rd).
 Proof.
   intros Hind Hflows Hpa Hclosure Hcode Htupled Hpend Hvs_pa Hret Hfits
     Hret_pa Hexn Hexn_pa Hst Hcodes Hspa Hshape.
@@ -6233,13 +6297,13 @@ Proof.
     rewrite app_nil_r.
     cbn [run_call].
     destruct (call_code callee c fields args' return_arity return_to exn_to
-                statics hp) as [s' | k' vs'' hp'' | ] eqn:Hcc;
-      [ | exfalso; exact (call_code_not_exit _ _ _ _ _ _ _ _ _ _ _ _ Hcc)
+                statics hp rd) as [s' | k' vs'' hp'' rd'' | ] eqn:Hcc;
+      [ | exfalso; exact (call_code_not_exit _ _ _ _ _ _ _ _ _ _ _ _ _ _ Hcc)
       | exact I ].
-    destruct (call_code_step _ _ _ _ _ _ _ _ _ _ Hcc)
+    destruct (call_code_step _ _ _ _ _ _ _ _ _ _ _ Hcc)
       as (callee_vars & _ & _ & _ & Hk3 & Hbind & ->).
     apply (enter_code_ok id c callee fields callee_vars return_to exn_to
-             statics hp Hcode Hlive); try assumption.
+             statics hp rd Hcode Hlive); try assumption.
     + first [ reflexivity
             | rewrite Hsize; first [ reflexivity | exact Hlen_f ] ].
     + intros cd' Hcd'. rewrite Hcd in Hcd'. injection Hcd' as <-.
@@ -6267,10 +6331,10 @@ Proof.
                 (code_result_arity c)
                 (Over_application rest rest_arity return_arity return_to
                    exn_to)
-                exn_to statics hp) as [s' | k' vs'' hp'' | ] eqn:Hcc;
-      [ | exfalso; exact (call_code_not_exit _ _ _ _ _ _ _ _ _ _ _ _ Hcc)
+                exn_to statics hp rd) as [s' | k' vs'' hp'' rd'' | ] eqn:Hcc;
+      [ | exfalso; exact (call_code_not_exit _ _ _ _ _ _ _ _ _ _ _ _ _ _ Hcc)
       | exact I ].
-    destruct (call_code_step _ _ _ _ _ _ _ _ _ _ Hcc)
+    destruct (call_code_step _ _ _ _ _ _ _ _ _ _ _ Hcc)
       as (callee_vars & _ & _ & _ & _ & Hbind & ->).
     (* The code returns one value. *)
     unfold partial_or_over_application in Hpoo.
@@ -6283,7 +6347,7 @@ Proof.
       try discriminate Lr.
     apply (enter_code_ok id c callee fields callee_vars
              (Over_application rest rest_arity return_arity return_to exn_to)
-             exn_to statics hp Hcode Hlive); try assumption.
+             exn_to statics hp rd Hcode Hlive); try assumption.
     + first [ reflexivity
             | rewrite Hsize; first [ reflexivity | exact Hlen_f ] ].
     + intros cd' Hcd'. rewrite Hcd in Hcd'. injection Hcd' as <-.
@@ -6341,7 +6405,8 @@ Qed.
 (* A call of unknown arity, of a closure or of a partial application. *)
 Lemma call_ok (callee : value) (start : node) (vs : list value)
     (args_arity return_arity : arity) (ws returns : list node) (exn : node)
-    (return_to exn_to : cont_value) (statics : static_env) (hp : heap) :
+    (return_to exn_to : cont_value) (statics : static_env) (hp : heap)
+    (rd : read_record) :
   indirect_ok ->
   flows_ callee start -> pa_ok statics callee ->
   (args_arity <> [] -> pending start ws vs args_arity returns exn) ->
@@ -6354,10 +6419,10 @@ Lemma call_ok (callee : value) (start : node) (vs : list value)
   (∀ v : value,
      (∀ r : node, nth_error returns 0 = Some r -> flows_ v r) ->
      pa_ok statics v -> length (unarize return_arity) = 1 ->
-     result_ok (apply_cont_value return_to [v] statics hp)) ->
+     result_ok (apply_cont_value return_to [v] statics hp rd)) ->
   result_ok
     (call_function callee Indirect vs args_arity return_arity return_to exn_to
-       statics hp).
+       statics hp rd).
 Proof.
   intros Hind Hflows Hpa Hpend Hvs_pa Hret Hfits Hret_pa Hexn Hexn_pa Hst
     Hcodes Hspa Hpartial.
@@ -6377,7 +6442,7 @@ Proof.
     destruct Hpa as (Hun & Hcl_pa & Happ_pa).
     apply (closure_call_ok closure m start applied vs applied_arity
              (a0 :: args_arity') return_arity ws_p ws returns exn return_to
-             exn_to statics hp shape Hind Hm Hcl_pa Hlen_p Hchain_p);
+             exn_to statics hp rd shape Hind Hm Hcl_pa Hlen_p Hchain_p);
       try assumption.
     + intros i x g kk w W p Hx Hpos Hw HW Hp.
       exact (fields_from_elim _ 0 _ i x Hargs_ff Hx g kk w W p Hpos Hw HW Hp).
@@ -6395,12 +6460,14 @@ Proof.
         as (id0 & slots0 & c0 & vs0 & a0' & Hclosure0 & Hcode0 & _ & _ & _).
       destruct (code_is_tupled c0) eqn:Htupled.
       { exact (tupled_call_ok callee start vs (a0 :: args_arity') return_arity
-                 ws returns exn return_to exn_to statics hp shape id0 slots0 c0
+                 ws returns exn return_to exn_to statics hp rd shape id0 slots0
+                   c0
                  Hind Hflows Hpa Hclosure0 Hcode0 Htupled
                  (Hpend ltac:(discriminate)) Hvs_pa Hret Hfits Hret_pa Hexn
                  Hexn_pa Hst Hcodes Hspa Hshape). }
       apply (closure_call_ok callee start start [] vs [] (a0 :: args_arity')
-               return_arity [] ws returns exn return_to exn_to statics hp shape
+               return_arity [] ws returns exn return_to exn_to statics hp rd
+                 shape
                Hind Hflows Hpa eq_refl I); try assumption.
       * intros i x g kk w W p Hx. destruct i; discriminate Hx.
       * intros y Hy. exact Hy.
@@ -6497,20 +6564,21 @@ Proof. intros H. inversion H; subst. auto. Qed.
 
 (* A continuation given values at its nodes. *)
 Lemma apply_ok (c : cont_value) :
-  ∀ (ns : list node) (vs : list value) (statics : static_env) (hp : heap),
+  ∀ (ns : list node) (vs : list value) (statics : static_env) (hp : heap) (rd :
+    read_record),
     cont_ok c ns -> cont_pa_ok statics c ->
     (∀ (i : nat) (v : value) (n : node),
        nth_error vs i = Some v -> nth_error ns i = Some n -> flows_ v n) ->
     every (pa_ok statics) vs ->
     fits c ns (length vs) ->
     statics_flow_ statics -> codes_ok statics -> statics_pa_ok statics ->
-    result_ok (apply_cont_value c vs statics hp).
+    result_ok (apply_cont_value c vs statics hp rd).
 Proof.
   induction c as [h vars K0 recursive | k | c IH extra
                  | remaining remaining_arity return_arity return_to exn_to
                      IHret IHexn]
     using cont_value_over_ind;
-    intros ns vs statics hp Hok Hpa Hvs Hvs_pa Hfits Hst Hcodes Hspa.
+    intros ns vs statics hp rd Hok Hpa Hvs Hvs_pa Hfits Hst Hcodes Hspa.
   - (* A handler. *)
     destruct (cont_ok_closure_inv _ _ _ _ _ Hok)
       as (ctx0 & ce0 & Hvars0 & Hconts0 & Hlive0 & Hrec & Hh & Hcount0 & Ht).
@@ -6584,12 +6652,12 @@ Proof.
     rewrite apply_cont_value_over_application.
     destruct vs as [ | v [ | v' vs']]; [ exact I | | exact I ].
     apply (call_ok v n0 remaining remaining_arity return_arity ws returns exn
-             return_to exn_to statics hp Hind); try assumption.
+             return_to exn_to statics hp rd Hind); try assumption.
     + apply Htr. exact (Hvs 0 v n eq_refl eq_refl).
     + exact (proj1 Hvs_pa).
     + intros _. exact Hpend.
     + intros v'' Hv'' Hv''_pa Hone.
-      apply (IHret returns [v''] statics hp Hret Hret_pa); try assumption.
+      apply (IHret returns [v''] statics hp rd Hret Hret_pa); try assumption.
       * intros [ | i] x r Hx Hr; [ injection Hx as <-; exact (Hv'' r Hr)
                                  | destruct i; discriminate Hx ].
       * split; [ exact Hv''_pa | exact I ].
@@ -6881,7 +6949,7 @@ Lemma step_flow_invariant (s : state) :
   flow_invariant s ->
   match step s with
   | Step s' => flow_invariant s'
-  | Exit k vs _ => exit_flows G sol keep called u k vs
+  | Exit k vs _ _ => exit_flows G sol keep called u k vs
   | Undefined => True
   end.
 Proof.
@@ -6893,11 +6961,15 @@ Proof.
        | scrutinee arms | ];
     simpl in He; unfold counted in Hcount; simpl in Hcount.
   - (* [Let] *)
-    rewrite step_let.
+    destruct He as [Hd Hbody].
+    rewrite step_let_eval;
+      [ | exact (named_edges_not_heap _ _ _ Hd)
+        | intros p args vs l _ Hvs;
+          exact (env_flows_no_location _ _ _ l Hvars Hvs) ].
     destruct (eval_named (state_statics s) (state_vars s) d) as [v | ] eqn:Hev;
       [ | exact I ].
     destruct (kind_eqb (kind_of_value v) kind); [ | exact I ].
-    destruct He as [Hd Hbody]. exists ctx, ce. simpl_state.
+    exists ctx, ce. simpl_state.
     split; [ exact Hbody | split; [ exact Hlive | split; [ exact Hcount | ] ] ].
     split; [ | split; [ exact Hconts | split; [ exact Hst | split;
       [ exact Hcodes | ] ] ] ].
@@ -6973,7 +7045,8 @@ Proof.
     destruct (ap_call_kind ap) as [id | ] eqn:Hkind.
     + (* A direct call. *)
       pose proof (call_step ap (state_vars s) (state_conts s) (state_statics s)
-                    (state_heap s) id Hkind Hfrag Hcodes) as Hstep.
+                    (state_heap s) (state_reads s) id Hkind Hfrag Hcodes) as
+                      Hstep.
       destruct (step _) as [s' | | ]; [ | contradiction | exact I ].
       destruct Hstep as (callee & vs & extra & slots & c & callee_vars
                          & Hcallee & Hvs & Hextra & Hclosure & Hcode & Hkinds
@@ -6983,7 +7056,8 @@ Proof.
                   Hconts HK_pa Hret Hexn Hextra)
         as ((Hret_ok & Hret_fits & Hret_pa) & Hexn_ok & Hexn_pa).
       exact (direct_call_ok ctx ap (state_vars s) (state_statics s)
-               (state_heap s) id callee vs slots c callee_vars returns exn _ _
+               (state_heap s) (state_reads s) id callee vs slots c callee_vars
+                 returns exn _ _
                Hkind Hcall Hnoted_callee Hnoted_args Hlive Hvars Hvars_pa Hst
                Hcodes Hspa Hret_ok Hret_fits Hret_pa Hexn_ok Hexn_pa Hcallee
                Hvs Hclosure Hcode Hkinds Hparams Hresult Hbind).
@@ -7017,10 +7091,11 @@ Proof.
                    (with_extra_args
                       (resolve (ap_exn_continuation ap) (state_conts s))
                       extra)
-                   (state_statics s) (state_heap s))).
+                   (state_statics s) (state_heap s) (state_reads s))).
       apply (call_ok callee (node_of_simple (ap_callee ap)) vs
                (ap_args_arity ap) (ap_return_arity ap) ws returns exn _ _
-               (state_statics s) (state_heap s) Hind); try assumption.
+               (state_statics s) (state_heap s) (state_reads s) Hind); try
+                 assumption.
       * exact (simple_flows _ _ _ Hvars Hnoted_callee Hcallee).
       * exact (simple_pa_ok _ _ _ _ Hvars_pa Hcallee).
       * intros Hne.
@@ -7029,7 +7104,7 @@ Proof.
                  Hch Hused Hcond Happly).
       * exact (simples_pa_ok _ _ _ _ Hvars_pa Hvs).
       * intros v Hv Hv_pa Hone.
-        apply (apply_ok _ returns [v] _ _ Hret_ok Hret_pa); try assumption.
+        apply (apply_ok _ returns [v] _ _ _ Hret_ok Hret_pa); try assumption.
         -- intros [ | i] x r Hx Hr; [ injection Hx as <-; exact (Hv r Hr)
                                     | destruct i; discriminate Hx ].
         -- split; [ exact Hv_pa | exact I ].
@@ -7046,8 +7121,8 @@ Proof.
       pose proof (apply_cont_fits ctx ce ac ns c Hcount Hns Htop) as Hfits.
       pose proof (apply_cont_args_flow _ _ _ _ _ Hvars He Hvs Hns) as Hargs.
       change (result_ok (apply_cont_value c vs (state_statics s)
-                           (state_heap s))).
-      apply (apply_ok c ns vs _ _ Hok (HK_pa _ c (lookup_in _ _ _ Hl)) Hargs);
+                           (state_heap s) (state_reads s))).
+      apply (apply_ok c ns vs _ _ _ Hok (HK_pa _ c (lookup_in _ _ _ Hl)) Hargs);
         try assumption.
       * exact (simples_pa_ok _ _ _ _ Hvars_pa Hvs).
       * rewrite Hlen_vs. exact Hfits.
@@ -7082,13 +7157,13 @@ Lemma run_flow_invariant (n : nat) (s : state) :
   flow_invariant s ->
   match run n s with
   | Step s' => flow_invariant s'
-  | Exit k vs _ => exit_flows G sol keep called u k vs
+  | Exit k vs _ _ => exit_flows G sol keep called u k vs
   | Undefined => True
   end.
 Proof.
   revert s. induction n as [ | n IH]; intros s Hs; [ exact Hs | ].
   rewrite run_succ. pose proof (step_flow_invariant s Hs) as Hstep.
-  destruct (step s) as [s' | k vs hp | ];
+  destruct (step s) as [s' | k vs hp rd | ];
     [ exact (IH s' Hstep) | exact Hstep | exact I ].
 Qed.
 
@@ -7102,7 +7177,7 @@ Qed.
 
 Lemma initial_flow_invariant (e : expr) :
   edges None (unit_conts u) e ->
-  flow_invariant (State e [] [] empty_static_env empty_heap).
+  flow_invariant (State e [] [] empty_static_env empty_heap no_reads).
 Proof.
   intros He. exists None, (unit_conts u). simpl_state.
   split; [ exact He | split; [ exact I | split; [ intros H; contradiction | ]
@@ -7377,7 +7452,8 @@ Proof. intros [H Hn]. exact (conj (sub_accessor_var _ _ _ H) Hn). Qed.
 Lemma prim_edges_mono (x : variable) (p : prim) (args : list simple) :
   prim_edges G noted x p args -> prim_edges G' noted x p args.
 Proof.
-  unfold prim_edges. destruct (prim_classified p args).
+  unfold prim_edges. intros [Hoff H]. split; [ exact Hoff | revert H ].
+  destruct (prim_classified p args).
   - unfold classified_prim_edges.
     repeat match goal with
            | |- context [match ?t with _ => _ end] => destruct t
@@ -7616,10 +7692,10 @@ Lemma flow_sound_gen (flag : reaper_preserve_direct_calls)
   (∀ f : field, is_local f = false) ∨ projection_free e = true ->
   in_flow_fragment e = true ->
   closed is_local G (solution_of_tables T) ->
-  match run n (State e [] [] empty_static_env empty_heap) with
+  match run n (State e [] [] empty_static_env empty_heap no_reads) with
   | Step s =>
     state_flows G (solution_of_tables T) (unit_kept e) (has_call_witness G) s
-  | Exit k vs _ =>
+  | Exit k vs _ _ =>
     exit_flows G (solution_of_tables T) (unit_kept e) (has_call_witness G) u
       k vs
   | Undefined => True
@@ -7700,8 +7776,8 @@ Proof.
                    (unit_kept e) (unit_codes e)
                    (static_names symbols_of_binding e) u e He))
     as Hrun.
-  destruct (run n (State e [] [] empty_static_env empty_heap)) as [s | k vs hp
-    | ].
+  destruct (run n (State e [] [] empty_static_env empty_heap no_reads))
+    as [s | k vs hp rd | ].
   - apply (state_flows_weaken _ _ _ (called_by G cds)).
     + apply called_witness.
     + exact (flow_invariant_flows _ _ _ _ _ _ _ _ _ _ _ Hrun).

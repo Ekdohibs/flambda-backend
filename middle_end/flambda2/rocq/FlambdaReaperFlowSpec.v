@@ -131,9 +131,15 @@
    [Invalid], calls, direct or not, with extra arguments for their
    exception continuations or not, and [Let_static]s of code, of blocks,
    of boxed numbers, of strings, of immutable arrays of values and of
-   closures of static sets. Every primitive is in it, and so are
-   partial applications and over-applications, which calls of unknown
-   arity make. The code that a direct call names, if the unit binds it,
+   closures of static sets. Every primitive is in it but those of the
+   heap ([prim_of_heap]), and so are partial applications and
+   over-applications, which calls of unknown arity make. The
+   primitives of the heap are left out: the machine runs them
+   (FlambdaHeapSpec.v), and the value of one that makes a cell is a
+   location, which is at no node. The primitives of regions are in it:
+   the machine gives none of them a value, so a run that reaches one
+   goes wrong there, and what they do (FlambdaRegionsSpec.v) is not
+   looked at. The code that a direct call names, if the unit binds it,
    is not tupled and has as many parameters as the call has arguments
    (S7's hypothesis); in a unit with an indirect call, code that is not
    tupled has parameters, and tupled code has parameters of one
@@ -307,9 +313,17 @@ with handler_conts_counted (ks : finite_map nat) (h : continuation_handler)
   | Handler _ _ handler => conts_counted ks handler
   end.
 
+(* A primitive of the heap (FlambdaPrimitiveModel.heap_primitive). *)
+Definition prim_of_heap (p : prim) : bool :=
+  match p with
+  | Heap _ => true
+  | Unary _ | Binary _ | Variadic _ | Region_primitive _ => false
+  end.
+
 Definition named_in_flow_fragment (defining_expr : named) : bool :=
   match defining_expr with
-  | Simple _ | Prim _ _ | Closure_of_set _ _ _
+  | Prim p _ => negb (prim_of_heap p)
+  | Simple _ | Closure_of_set _ _ _
   | Project_value_slot_from _ _ _ | Project_function_slot _ _ _ => true
   | Set_of_closures _ _ | Project_value_slot _ _ => false
   end.
@@ -739,12 +753,12 @@ Definition flow_sound_statement : Prop :=
     (∀ f : field, is_local f = false) ∨ projection_free e = true ->
     in_flow_fragment e = true ->
     check_closed is_local (traverse_unit flag u e) T = true ->
-    match run n (State e [] [] empty_static_env empty_heap) with
+    match run n (State e [] [] empty_static_env empty_heap no_reads) with
     | Step s =>
       state_flows (graph_of_facts (traverse_unit flag u e))
         (solution_of_tables T) (unit_kept e)
         (has_call_witness (graph_of_facts (traverse_unit flag u e))) s
-    | Exit k vs _ =>
+    | Exit k vs _ _ =>
       exit_flows (graph_of_facts (traverse_unit flag u e))
         (solution_of_tables T) (unit_kept e)
         (has_call_witness (graph_of_facts (traverse_unit flag u e))) u k vs
@@ -767,11 +781,11 @@ Definition flow_sound_without_keep_alive_statement : Prop :=
       graph_of_facts
         (FlambdaReaperTupledSpec.without_keep_alive (traverse_unit flag u e))
     in
-    match run n (State e [] [] empty_static_env empty_heap) with
+    match run n (State e [] [] empty_static_env empty_heap no_reads) with
     | Step s =>
       state_flows G (solution_of_tables T) (unit_kept e)
         (has_call_witness G) s
-    | Exit k vs _ =>
+    | Exit k vs _ _ =>
       exit_flows G (solution_of_tables T) (unit_kept e) (has_call_witness G)
         u k vs
     | Undefined => True
@@ -908,8 +922,9 @@ Definition example_statement : Prop :=
        check_closed FlowExample.is_local
          (traverse_unit Never FlowExample.interface FlowExample.unit_expr) T
        = false)
-  ∧ run 7 (State FlowExample.unit_expr [] [] empty_static_env empty_heap)
-    = Exit 1%positive [Value_const (Tagged_immediate 7)] empty_heap.
+  ∧ run 7 (State FlowExample.unit_expr [] [] empty_static_env
+             empty_heap no_reads)
+    = Exit 1%positive [Value_const (Tagged_immediate 7)] empty_heap no_reads.
 
 (* A call. The code 20 returns the value slot 60 of its closure, read
    through [my_closure] ([x31]); its parameter [x30] has no use. The
@@ -1023,8 +1038,9 @@ Definition call_example_statement : Prop :=
          (traverse_unit Never FlowCallExample.interface
             FlowCallExample.unit_expr) T
        = false)
-  ∧ run 7 (State FlowCallExample.unit_expr [] [] empty_static_env empty_heap)
-    = Exit 1%positive [Value_const (Tagged_immediate 5)] empty_heap.
+  ∧ run 7 (State FlowCallExample.unit_expr [] [] empty_static_env
+             empty_heap no_reads)
+    = Exit 1%positive [Value_const (Tagged_immediate 5)] empty_heap no_reads.
 
 (* Calls of unknown arity. The code 20 takes two parameters, one by one,
    and returns the second; the code 21 returns its parameter. The unit
@@ -1180,8 +1196,9 @@ Definition indirect_example_statement : Prop :=
             FlowIndirectExample.unit_expr) T
        = false)
   ∧ run 30
-      (State FlowIndirectExample.unit_expr [] [] empty_static_env empty_heap)
-    = Exit 1%positive [Value_const (Tagged_immediate 9)] empty_heap.
+      (State FlowIndirectExample.unit_expr [] [] empty_static_env
+         empty_heap no_reads)
+    = Exit 1%positive [Value_const (Tagged_immediate 9)] empty_heap no_reads.
 
 (* Why local fields are kept out where a closure is projected from. The
    value slot 60 is local. The closure [x10] goes into an immutable array
@@ -1276,8 +1293,8 @@ Definition local_slot_counterexample_statement : Prop :=
        = false)
   ∧ run 10
       (State LocalSlotCounterexample.unit_expr [] [] empty_static_env
-         empty_heap)
-    = Exit 1%positive [Value_const (Tagged_immediate 0)] empty_heap
+         empty_heap no_reads)
+    = Exit 1%positive [Value_const (Tagged_immediate 0)] empty_heap no_reads
   ∧ run 10
       (State
          (rebuild_unit_from_tables
@@ -1285,7 +1302,7 @@ Definition local_slot_counterexample_statement : Prop :=
                LocalSlotCounterexample.unit_expr)
             LocalSlotCounterexample.solution false
             LocalSlotCounterexample.unit_expr)
-         [] [] empty_static_env empty_heap)
+         [] [] empty_static_env empty_heap no_reads)
     = Undefined.
 
 (* The unit of FlambdaReaperTupledSpec.v, where the reaper with the two
@@ -1314,7 +1331,7 @@ Definition tupled_reverted_analysis_sound_statement : Prop :=
              FlambdaReaperTupledSpec.tupled_unit)
       with
       | Step s => state_flows G sol kept (has_call_witness G) s
-      | Exit k vs _ =>
+      | Exit k vs _ _ =>
         exit_flows G sol kept (has_call_witness G)
           FlambdaReaperTupledSpec.interface k vs
       | Undefined => True

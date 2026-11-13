@@ -87,7 +87,7 @@ Theorem without_keep_alive_rebuilt : without_keep_alive_rebuilt_statement.
 Proof. vm_compute. reflexivity. Qed.
 
 Theorem with_keep_alive_rebuild_runs : with_keep_alive_rebuild_runs_statement.
-Proof. split; exists 20; vm_compute; reflexivity. Qed.
+Proof. split; exists 20; try exists no_reads; vm_compute; reflexivity. Qed.
 
 Theorem unit_does_not_go_wrong : unit_does_not_go_wrong_statement.
 Proof.
@@ -117,7 +117,7 @@ Qed.
 
 Theorem without_keep_alive_rebuild_goes_wrong :
   without_keep_alive_rebuild_goes_wrong_statement.
-Proof. exists 20. vm_compute. reflexivity. Qed.
+Proof. exists 20; try exists no_reads. vm_compute. reflexivity. Qed.
 
 (* The state is the one that the run has reached after four steps: the
    [Let_static], the [Let_cont], the call of [pass] and its return. *)

@@ -73,7 +73,18 @@
    its arguments, [any_source], and for a primitive with arbitrary
    effects ([prim_has_arbitrary_effects], from
    terms/flambda_primitive.ml, [effects_and_coeffects]) the conditional
-   [any_usage] of the variable bound.
+   [any_usage] of the variable bound. The primitives of regions are of
+   the default case, as in the OCaml: [Begin_region] and
+   [Begin_try_region], with only generative effects, give the variable
+   of the region [any_source], and nothing else, as they have no
+   argument; [End_region] and [End_try_region], with arbitrary effects,
+   give theirs [any_source], the conditional [any_usage] and a use of
+   the region. [Local_allocation], which is no primitive of the
+   compiler, gives no fact: its [Let] binds again the variable of the
+   allocation just before it (FlambdaPrimitiveModel.region_primitive),
+   which keeps the facts of the allocation, as the variable of a local
+   allocation has them in the compiler, where the mode is a part of
+   the allocation.
 
    The deliberate differences from the OCaml, each where the model
    cannot follow it or does not have what it reads:
@@ -185,6 +196,19 @@
      closure of a set at a slot that the set does not have has none of
      the facts of the set; a static closure whose slot has no code has
      no closure dep.
+   - Regions. The model's [Begin_region] and [Begin_try_region] have no
+     parent region, where the compiler's default case gives a region a
+     use of its parent if it has one. The region of a local allocation
+     is an argument of the [Local_allocation] after it, of which the
+     traversal makes nothing; so does the compiler of the region of a
+     block, a boxed number or a set of closures, but its default case
+     gives a local [Make_array] a use of its region, which is among the
+     free names of the primitive. The two are uses of a region, which
+     the rebuild keeps whatever its uses ([is_var_used] of the kind
+     [Region]). The [Local_allocation] of a set of closures comes
+     between the [Let] of its first closure and the projections of the
+     others; [projected_set_closures] looks past it
+     ([after_local_allocation]).
    - The maps of the compiler are lists here: the value slots and the
      function declarations of a set, the closure symbols of a static
      set and the arms of a [Switch] are gone through by their bindings
@@ -693,6 +717,17 @@ Fixpoint let_projections_of (x : variable) (slot : function_slot)
   | _, _ => []
   end.
 
+(* What follows the [Let] of [Local_allocation] of [x] that begins [e],
+   if one does: the mode [Local] of the set bound to [x], which the
+   conversion puts between the [Let] of the first closure and the
+   projections of the others (FlambdaPrimitiveModel.region_primitive). *)
+Definition after_local_allocation (x : variable) (e : expr) : expr :=
+  match e with
+  | Let y _ (Prim (Region_primitive Local_allocation) (Var x' :: _)) body =>
+    if Pos.eqb y x && Pos.eqb x' x then body else e
+  | _ => e
+  end.
+
 (* The closures of a set bound to [x] at [slot] by projections in [e], if
    [x] is the first closure of the set ([let_closures]). *)
 Definition projected_set_closures (x : variable) (slot : function_slot)
@@ -700,7 +735,8 @@ Definition projected_set_closures (x : variable) (slot : function_slot)
     : list (function_slot * variable) :=
   match function_decls with
   | (first, _) :: others =>
-    if Pos.eqb first slot then let_projections_of x slot (map fst others) e
+    if Pos.eqb first slot
+    then let_projections_of x slot (map fst others) (after_local_allocation x e)
     else []
   | [] => []
   end.
@@ -789,6 +825,16 @@ Definition prim_has_arbitrary_effects (p : prim) : bool :=
     (* [writing_to_a_block], [writing_to_an_array]: arbitrary effects. *)
     | Block_set _ _ _ | Array_set _ _ => true
     end
+  | Region_primitive r =>
+    match r with
+    (* [Only_generative_effects]. *)
+    | Begin_region | Begin_try_region => false
+    (* [Arbitrary_effects]. *)
+    | End_region | End_try_region => true
+    (* No primitive of the compiler: [traverse_prim] reads it apart, and
+       never asks. *)
+    | Local_allocation => false
+    end
   end.
 
 (* The free names of the arguments of a primitive
@@ -838,6 +884,7 @@ Definition traverse_prim (env : traverse_env) (x : variable) (p : prim)
            (node_of_simple contents))
       (note_simple contents a)
   | Unary (Unbox_number bn), [arg] => accessor (Field_boxed_number bn) arg a
+  | Region_primitive Local_allocation, _ => a
   | _, _ =>
     let a :=
       if prim_has_arbitrary_effects p then cond_any_usage env (Var x) a else a

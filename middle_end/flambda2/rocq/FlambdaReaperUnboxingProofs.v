@@ -38,6 +38,8 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaReaperUnboxingSpec.
 Import ListNotations.
 
+Local Abbreviation no_reads := FlambdaValueSpec.no_reads.
+
 Lemma node_eqb_false : ∀ n n' : node, n <> n' -> node_eqb n n' = false.
 Proof.
   intros n n' Hne. destruct (node_eqb n n') eqn:Heq; [ | reflexivity ].
@@ -431,8 +433,8 @@ Qed.
 Theorem lambda_lifting_dead_callee : lambda_lifting_dead_callee_statement.
 Proof.
   split; [ intros [ | ]; vm_compute; auto 10 | ].
-  split; [ exists 20; vm_compute; reflexivity | ].
-  split; [ exists 20; vm_compute; reflexivity | ].
+  split; [ exists 20; try exists no_reads; vm_compute; reflexivity | ].
+  split; [ exists 20; try exists no_reads; vm_compute; reflexivity | ].
   exists
     (Code [40] 41 3 4
        (make_code_metadata [Unboxed_product [Singleton Value]]
@@ -440,14 +442,18 @@ Proof.
        (Apply_cont
           {| ac_continuation := 3; ac_args := [Var 40];
              ac_trap_action := None |}))%positive.
-  split; [ vm_compute; reflexivity | exists 20; vm_compute; reflexivity ].
+  split;
+    [ vm_compute; reflexivity
+    | exists 20; try exists no_reads; vm_compute; reflexivity ].
 Qed.
 
 Theorem lambda_lifting_dead_callee_cause :
   lambda_lifting_dead_callee_cause_statement.
 Proof.
   do 6 (split; [ vm_compute; reflexivity | ]).
-  split; [ exists 20; vm_compute; reflexivity | vm_compute; reflexivity ].
+  split;
+    [ exists 20; try exists no_reads; vm_compute; reflexivity
+    | vm_compute; reflexivity ].
 Qed.
 
 (* ======================================================================== *)
@@ -457,9 +463,9 @@ Qed.
 Theorem kept_result_unboxed : kept_result_unboxed_statement.
 Proof.
   split; [ intros [ | ]; vm_compute; auto 10 | ].
-  split; [ exists 20; vm_compute; reflexivity | ].
-  split; [ exists 20; vm_compute; reflexivity | ].
-  split; [ exists 20; vm_compute; reflexivity | ].
+  split; [ exists 20; try exists no_reads; vm_compute; reflexivity | ].
+  split; [ exists 20; try exists no_reads; vm_compute; reflexivity | ].
+  split; [ exists 20; try exists no_reads; vm_compute; reflexivity | ].
   vm_compute. auto 10.
 Qed.
 
@@ -474,11 +480,11 @@ Proof. vm_compute. auto 10. Qed.
 Theorem unbox_dead : unbox_dead_statement.
 Proof.
   do 12 (split; [ vm_compute; reflexivity | ]).
-  split; [ exists 20; vm_compute; reflexivity | ].
+  split; [ exists 20; try exists no_reads; vm_compute; reflexivity | ].
   split; [ vm_compute; reflexivity | ].
-  split; [ exists 20; vm_compute; reflexivity | ].
+  split; [ exists 20; try exists no_reads; vm_compute; reflexivity | ].
   do 2 (split; [ vm_compute; reflexivity | ]).
-  exists 20; vm_compute; reflexivity.
+  exists 20; try exists no_reads; vm_compute; reflexivity.
 Qed.
 
 (* ======================================================================== *)
@@ -488,10 +494,10 @@ Qed.
 Theorem mixed_mutable_field : mixed_mutable_field_statement.
 Proof.
   do 7 (split; [ vm_compute; reflexivity | ]).
-  split; [ exists 20; vm_compute; reflexivity | ].
-  split; [ exists 20; vm_compute; reflexivity | ].
+  split; [ exists 20; try exists no_reads; vm_compute; reflexivity | ].
+  split; [ exists 20; try exists no_reads; vm_compute; reflexivity | ].
   do 4 (split; [ vm_compute; reflexivity | ]).
-  split; [ exists 20; vm_compute; reflexivity | ].
+  split; [ exists 20; try exists no_reads; vm_compute; reflexivity | ].
   vm_compute. auto 10.
 Qed.
 
@@ -507,12 +513,12 @@ Theorem escaping_parameter_argument :
   escaping_parameter_argument_statement.
 Proof.
   do 7 (split; [ vm_compute; reflexivity | ]).
-  split; [ exists 20; vm_compute; reflexivity | ].
-  split; [ exists 20; vm_compute; reflexivity | ].
+  split; [ exists 20; try exists no_reads; vm_compute; reflexivity | ].
+  split; [ exists 20; try exists no_reads; vm_compute; reflexivity | ].
   do 4 (split; [ vm_compute; reflexivity | ]).
-  split; [ exists 20; vm_compute; reflexivity | ].
+  split; [ exists 20; try exists no_reads; vm_compute; reflexivity | ].
   split; [ vm_compute; reflexivity | ].
-  split; [ exists 20; vm_compute; reflexivity | ].
+  split; [ exists 20; try exists no_reads; vm_compute; reflexivity | ].
   vm_compute. auto 10.
 Qed.
 
@@ -528,10 +534,10 @@ Proof. vm_compute. auto 20. Qed.
 Theorem tail_result : tail_result_statement.
 Proof.
   do 9 (split; [ vm_compute; reflexivity | ]).
-  split; [ exists 30; vm_compute; reflexivity | ].
-  split; [ exists 30; vm_compute; reflexivity | ].
+  split; [ exists 30; try exists no_reads; vm_compute; reflexivity | ].
+  split; [ exists 30; try exists no_reads; vm_compute; reflexivity | ].
   do 5 (split; [ vm_compute; reflexivity | ]).
-  split; [ exists 30; vm_compute; reflexivity | ].
+  split; [ exists 30; try exists no_reads; vm_compute; reflexivity | ].
   vm_compute. repeat split.
 Qed.
 

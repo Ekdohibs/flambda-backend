@@ -92,7 +92,8 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaReaperUnboxingRefinesSpec.
 From OxCamlFlambda2 Require FlambdaReaperFlowProofs
   FlambdaReaperCallingConventionsProofs FlambdaFreshQuantifierSpec
-  FlambdaPrimitiveProofs FlambdaNameAbstractionSpec FlambdaRenameApartSpec.
+  FlambdaPrimitiveProofs FlambdaNameAbstractionSpec FlambdaRenameApartSpec
+  FlambdaHeapProofs.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -585,7 +586,9 @@ Inductive ub : finite_map (list (option unboxed_fields)) -> expr -> expr
     -> Prop :=
   | ub_let (K : finite_map (list (option unboxed_fields))) (x : variable)
       (kind : flambda_kind) (d : named) (body body' : expr) :
-    plain_variable M x = true -> named_plain d = true -> ub K body body' ->
+    plain_variable M x = true -> named_plain d = true ->
+    (∀ (q : heap_primitive) (args : list simple), d <> Prim (Heap q) args) ->
+    ub K body body' ->
     ub K (Let x kind d body) (Let x kind d body')
   | ub_alloc (K : finite_map (list (option unboxed_fields))) (x : variable)
       (d : named) (fields : unboxed_fields)
@@ -594,6 +597,7 @@ Inductive ub : finite_map (list (option unboxed_fields)) -> expr -> expr
     fields_of M x = Some fields ->
     among x (field_variables M) = false ->
     Forall2 (alloc_entry x d) fields ls ->
+    (∀ (q : heap_primitive) (args : list simple), d <> Prim (Heap q) args) ->
     ub K body body' ->
     ub K (Let x Value d body) (lets (concat ls) body')
   | ub_alias (K : finite_map (list (option unboxed_fields))) (x y : variable)
@@ -738,7 +742,8 @@ Definition related (s t : state) : Prop :=
   ∃ K : finite_map (list (option unboxed_fields)),
     ub K (state_expr s) (state_expr t) ∧ env_rel (state_vars s) (state_vars t)
     ∧ conts_rel K (state_conts s) (state_conts t)
-    ∧ state_statics s = state_statics t ∧ state_heap s = state_heap t.
+    ∧ state_statics s = state_statics t ∧ state_heap s = state_heap t
+    ∧ state_reads s = state_reads t ∧ state_heap s = empty_heap.
 
 End Related.
 
@@ -940,6 +945,70 @@ Proof.
   - rewrite (plain_simples_eval vars vars' args Hrel Hd). reflexivity.
 Qed.
 
+(* With an empty heap, a [Let] of no primitive of the heap runs as
+   [eval_named] says: a location among the values of its arguments would
+   be one that the heap does not bind. *)
+Lemma exec_named_empty_heap (statics : static_env) (rcd : read_record)
+    (vars : env) (d : named) (w : value) (hp1 : heap) (rcd1 : read_record) :
+  (∀ (q : heap_primitive) (args : list simple), d <> Prim (Heap q) args) ->
+  exec_named statics empty_heap rcd vars d = Some (w, hp1, rcd1) ->
+  eval_named statics vars d = Some w ∧ hp1 = empty_heap ∧ rcd1 = rcd.
+Proof.
+  intros Hnot Hx.
+  destruct d as [s | p args | | | | | ]; cbn [exec_named] in Hx.
+  2: { destruct (eval_simples vars args) as [vs | ] eqn:Hvs;
+         [ | discriminate Hx ].
+       cbn in Hx.
+       destruct (exec_prim statics empty_heap p vs) as [[v hp'] | ] eqn:He;
+         [ | discriminate Hx ].
+       cbn in Hx. injection Hx as <- <- <-.
+       assert (Hnoloc : ∀ l : location, Value_location l ∉ vs).
+       { intros l Hin. unfold exec_prim in He.
+         destruct (forallb (argument_bound statics empty_heap) vs) eqn:Hb;
+           [ | discriminate He ].
+         rewrite forallb_forall in Hb. specialize (Hb _ Hin).
+         cbv in Hb. discriminate Hb. }
+       assert (Hp : ∀ q : heap_primitive, p <> Heap q)
+         by (intros q ->; exact (Hnot q args eq_refl)).
+       rewrite (FlambdaHeapProofs.exec_prim_no_location statics empty_heap p vs
+         Hp
+                 Hnoloc) in He.
+       cbn [eval_named]. rewrite Hvs. cbn.
+       destruct (eval_prim statics p vs) as [v' | ]; cbn in He;
+         [ | discriminate He ].
+       injection He as <- <-. auto. }
+  all: lazymatch type of Hx with
+       | context [eval_named ?st ?vs ?dd] =>
+         destruct (eval_named st vs dd) as [v | ] eqn:Hev
+       end; cbn in Hx; [ | discriminate Hx ];
+       injection Hx as <- <- <-; auto.
+Qed.
+
+Lemma rebuild_named_not_heap (sol : solution) (en : rebuild_env)
+    (x : variable) (d : named) :
+  (∀ (q : heap_primitive) (args : list simple), d <> Prim (Heap q) args) ->
+  ∀ (q : heap_primitive) (args : list simple),
+    rebuild_named sol en x d <> Prim (Heap q) args.
+Proof.
+  intros Hnot q args' H.
+  destruct d as [s | p args | | | | | ]; cbn [rebuild_named] in H;
+    try discriminate H.
+  destruct (FlambdaReaperRebuildProofs.rebuild_named_prim sol en x p (Heap q)
+              args args' H) as [Hp _].
+  subst p. exact (Hnot q args eq_refl).
+Qed.
+
+Lemma named_plain_exec (statics : static_env) (hp : heap) (rcd : read_record)
+    (vars vars' : env) (d : named) :
+  env_rel M vars vars' -> named_plain M d = true ->
+  exec_named statics hp rcd vars d = exec_named statics hp rcd vars' d.
+Proof.
+  intros Hrel Hd. destruct d as [s | p args | | | | | ]; simpl in Hd |- *;
+    try discriminate Hd.
+  - rewrite (plain_simple_eval vars vars' s Hrel Hd). reflexivity.
+  - rewrite (plain_simples_eval vars vars' args Hrel Hd). reflexivity.
+Qed.
+
 Lemma local_bindings_eval (vars vars' : env) (bindings : list static_binding) :
   env_rel M vars vars' -> forallb (local_binding M) bindings = true ->
   ∀ statics : static_env,
@@ -1103,9 +1172,9 @@ Proof.
                      hs)
                   K K' ->
                 ub_handlers M K' hs hs' S)).
-  - intros K x kind d body body' Hx Hd _ IH K' Hagree.
-    apply ub_let; [ exact Hx | exact Hd | apply IH, Hagree ].
-  - intros K x d fields l body body' Hf Hxf Hl _ IH K' Hagree.
+  - intros K x kind d body body' Hx Hd Hnh _ IH K' Hagree.
+    apply ub_let; [ exact Hx | exact Hd | exact Hnh | apply IH, Hagree ].
+  - intros K x d fields l body body' Hf Hxf Hl Hoff _ IH K' Hagree.
     apply ub_alloc with (fields := fields); try assumption.
     apply IH, Hagree.
   - intros K x y fields fields_y ls body body' Hf Hxf Hy Hne Hl _ IH K'
@@ -1176,7 +1245,7 @@ Definition lets_variable (vks : variable * flambda_kind * simple) : variable :=
    which reads none of the variables bound. *)
 Lemma lets_run (l : list (variable * flambda_kind * simple)) :
   ∀ (body : expr) (vars : env) (conts : cont_env) (statics : static_env)
-    (hp : heap),
+    (hp : heap) (rcd : read_record),
     NoDup (map lets_variable l) ->
     (∀ (v : variable) (kind : flambda_kind) (s : simple) (v' : variable),
        (v, kind, s) ∈ l -> v' ∈ map lets_variable l -> s <> Var v') ->
@@ -1184,8 +1253,8 @@ Lemma lets_run (l : list (variable * flambda_kind * simple)) :
        (v, kind, s) ∈ l ->
        ∃ w : value, eval_simple vars s = Some w ∧ kind_of_value w = kind) ->
     ∃ vars1 : env,
-      run (length l) (State (lets l body) vars conts statics hp)
-      = Step (State body vars1 conts statics hp)
+      run (length l) (State (lets l body) vars conts statics hp rcd)
+      = Step (State body vars1 conts statics hp rcd)
       ∧ (∀ z : variable,
            z ∉ map lets_variable l -> lookup z vars1 = lookup z vars)
       ∧ (∀ (v : variable) (kind : flambda_kind) (s : simple) (w : value),
@@ -1193,11 +1262,12 @@ Lemma lets_run (l : list (variable * flambda_kind * simple)) :
            lookup v vars1 = Some w).
 Proof.
   induction l as [ | [[v kind] s] l IH]; intros body vars conts statics hp
-    Hnd Hread Heval.
+    rcd Hnd Hread Heval.
   - exists vars. split; [ reflexivity | ]. split; [ reflexivity | ].
     intros v kind s w [].
   - simpl in Hnd. inversion Hnd as [ | v0 l0 Hv Hnd' [Heq0 Heq1]]; subst.
-    destruct (IH (Let v kind (Simple s) body) vars conts statics hp Hnd')
+    destruct (IH (Let v kind (Simple s) body) vars conts statics hp rcd
+                Hnd')
       as (vars1 & Hrun & Hother & Hbound).
     { intros v1 kind1 s1 v' Hin Hv'. apply (Hread v1 kind1 s1 v');
         [ right; exact Hin | right; exact Hv' ]. }
@@ -1211,8 +1281,9 @@ Proof.
     exists ((v, w) :: vars1). split; [ | split ].
     + change (lets ((v, kind, s) :: l) body)
         with (lets l (Let v kind (Simple s) body)).
-      simpl length. rewrite <- Nat.add_1_r, run_add, Hrun, run_succ, step_let.
-      cbn [eval_named]. rewrite Hs, Hkind, kind_eqb_refl. reflexivity.
+      simpl length.
+      rewrite <- Nat.add_1_r, run_add, Hrun, run_succ, step_let_simple.
+      rewrite Hs, Hkind, kind_eqb_refl. reflexivity.
     + intros z Hz. rewrite lookup_other by (intros ->; apply Hz; left;
         reflexivity).
       apply Hother. intros Hin. apply Hz. right. exact Hin.
@@ -1240,7 +1311,7 @@ Lemma alloc_field_eval (statics : static_env) (vars : env) (d : named)
     ∧ kind_of_value w' = kind.
 Proof.
   intros Hd Hf. destruct d as [ | p args | | | | | ]; try contradiction.
-  destruct p as [p | p | p | p]; try contradiction.
+  destruct p as [p | p | p | p | p]; try contradiction.
   - destruct p; try contradiction.
     destruct args as [ | c [ | ]]; try contradiction.
     destruct Hf as (-> & -> & ->). simpl in Hd.
@@ -1287,7 +1358,7 @@ Lemma read_eval (statics : static_env) (vars : env) (d : named) (f : field)
 Proof.
   intros Hread Hd.
   destruct d as [ | p args | | | | | ]; try discriminate Hread.
-  destruct p as [p | p | p | p]; try discriminate Hread.
+  destruct p as [p | p | p | p | p]; try discriminate Hread.
   destruct args as [ | a [ | ]]; destruct p; try discriminate Hread;
     simpl in Hread; injection Hread as <- <-; simpl in Hd;
     destruct (eval_simple vars a) as [w0 | ]; try discriminate Hd;
@@ -1464,7 +1535,7 @@ Qed.
    and bind them as the relation asks. *)
 Lemma lets_case (vars vars' : env) (x : variable) (fields : unboxed_fields)
     (w : value) (l : list (variable * flambda_kind * simple)) (body : expr)
-    (conts : cont_env) (statics : static_env) (hp : heap) :
+    (conts : cont_env) (statics : static_env) (hp : heap) (rcd : read_record) :
   env_rel M vars vars' -> fields_of M x = Some fields ->
   map lets_variable l = leaf_variables fields ->
   (∀ (v : variable) (kind : flambda_kind) (s : simple) (v' : variable),
@@ -1478,12 +1549,12 @@ Lemma lets_case (vars vars' : env) (x : variable) (fields : unboxed_fields)
        (v, k, s) ∈ l ∧ eval_simple vars' s = Some w'
        ∧ path_value p w = Some w') ->
   ∃ vars1 : env,
-    run (length l) (State (lets l body) vars' conts statics hp)
-    = Step (State body vars1 conts statics hp)
+    run (length l) (State (lets l body) vars' conts statics hp rcd)
+    = Step (State body vars1 conts statics hp rcd)
     ∧ env_rel M ((x, w) :: vars) vars1.
 Proof.
   intros Hvars Hx Hvl Hread Heval Hpaths.
-  destruct (lets_run l body vars' conts statics hp)
+  destruct (lets_run l body vars' conts statics hp rcd)
     as (vars1 & Hrun & Hother & Hbound).
   - rewrite Hvl. exact (leaves_nodup M M_distinct x fields Hx).
   - intros v kind s v' Hin Hv'. rewrite Hvl in Hv'.
@@ -1521,7 +1592,7 @@ Lemma alloc_field_kind (d : named) (f : field) (kind : flambda_kind)
   alloc_field d f kind s -> kind = field_kind f.
 Proof.
   intros Hf. destruct d as [ | p args | | | | | ]; try contradiction.
-  destruct p as [p | p | p | p]; try contradiction.
+  destruct p as [p | p | p | p | p]; try contradiction.
   - destruct p; try contradiction.
     destruct args as [ | c [ | ]]; try contradiction.
     destruct Hf as (-> & -> & _). reflexivity.
@@ -1775,15 +1846,22 @@ Proof.
   - exact (IH ac Hfind).
 Qed.
 
+Lemma read_not_heap (d : named) (f : field) (s : simple) :
+  read_of d = Some (f, s) ->
+  ∀ (q : heap_primitive) (args : list simple), d <> Prim (Heap q) args.
+Proof. intros H q args ->. discriminate H. Qed.
+
 Lemma related_answered (s t : state) :
   related M s t -> answered (related M) eq measure s t.
 Proof.
-  destruct s as [p vars conts statics hp], t as [q vars' conts' statics' hp'].
-  intros (K & Hub & Hvars & Hconts & Hstatics & Hhp).
-  cbn [state_expr state_vars state_conts state_statics state_heap] in *.
-  subst statics' hp'. unfold answered. revert Hconts.
-  destruct Hub as [K x kind d body body' Hx Hd Hbody
-    | K x d fields ls body body' Hfields Hxf Hl Hbody
+  destruct s as [p vars conts statics hp rcd],
+    t as [q vars' conts' statics' hp' rcd'].
+  intros (K & Hub & Hvars & Hconts & Hstatics & Hhp & Hrcd & Hempty).
+  cbn [state_expr state_vars state_conts state_statics state_heap
+       state_reads] in *.
+  subst statics' hp' rcd' hp. unfold answered. revert Hconts.
+  destruct Hub as [K x kind d body body' Hx Hd Hnh Hbody
+    | K x d fields ls body body' Hfields Hxf Hl Hoff Hbody
     | K x y fields fields_y pairs body body' Hfields Hxf Hy Hne Hl Hbody
     | K x kind d f s y fields fields_y nested pairs body body' Hfields Hxf Hread
         Hs Hy Hne Hin Hl Hbody
@@ -1795,19 +1873,27 @@ Proof.
     | K scrutinee arms arms' Hscrutinee Harms
     | K ]; intros Hconts.
   - (* A [Let] of both. *)
-    rewrite step_let, (named_plain_eval M statics vars vars' d Hvars Hd).
-    destruct (eval_named statics vars' d) as [w | ] eqn:Hw; [ | exact I ].
+    rewrite step_let_exec,
+      (named_plain_exec M statics empty_heap rcd vars vars' d Hvars Hd).
+    destruct (exec_named statics empty_heap rcd vars' d) as [[[w hp1] rcd1] | ]
+      eqn:Hw; [ | exact I ].
+    destruct (exec_named_empty_heap statics rcd vars' d w hp1 rcd1 Hnh Hw)
+      as (_ & -> & ->).
     destruct (kind_eqb (kind_of_value w) kind) eqn:Hk; [ | exact I ].
-    right. left. eexists. split; [ rewrite step_let, Hw, Hk; reflexivity | ].
+    right. left. eexists.
+    split; [ rewrite step_let_exec, Hw, Hk; reflexivity | ].
     exists K. split; [ exact Hbody | ].
     split; [ exact (env_rel_bind M _ _ x w Hvars Hx) | ].
-    split; [ exact Hconts | split; reflexivity ].
+    split; [ exact Hconts | repeat split ].
   - (* The allocation of an unboxed variable. *)
-    rewrite step_let.
-    destruct (eval_named statics vars d) as [w | ] eqn:Hw; [ | exact I ].
+    rewrite step_let_exec.
+    destruct (exec_named statics empty_heap rcd vars d) as [[[w hp1] rcd1] | ]
+      eqn:Hx; [ | exact I ].
+    destruct (exec_named_empty_heap statics rcd vars d w hp1 rcd1 Hoff Hx)
+      as (Hw & -> & ->).
     destruct (kind_eqb (kind_of_value w) Value) eqn:Hk; [ | exact I ].
     destruct (lets_case vars vars' x fields w (concat ls) body' conts' statics
-                hp Hvars Hfields)
+                empty_heap rcd Hvars Hfields)
       as (vars1 & Hrun & Hrel).
     + exact (alloc_entries_variables x d fields ls Hl).
     + intros v kind s v' Hin Hv' ->.
@@ -1877,17 +1963,17 @@ Proof.
       * exists K. unfold related.
         cbn [state_expr state_vars state_conts state_statics state_heap].
         split; [ exact Hbody | split; [ exact Hrel | ] ].
-        split; [ exact Hconts | split; reflexivity ].
+        split; [ exact Hconts | repeat split ].
       * intros _. unfold measure. simpl. lia.
   - (* An alias of an unboxed variable. *)
-    rewrite step_let. cbn [eval_named eval_simple].
+    rewrite step_let_simple. cbn [eval_simple].
     destruct (lookup y vars) as [w | ] eqn:Hw; [ | exact I ].
     destruct (kind_eqb (kind_of_value w) Value) eqn:Hk; [ | exact I ].
     destruct (pairs_hold vars' fields fields_y w pairs Hl
                 (proj2 Hvars y fields_y w Hy Hw))
       as (Hfirsts & Hseconds & Hpaths).
     destruct (lets_case vars vars' x fields w (pairs_lets pairs) body' conts'
-                statics hp Hvars Hfields)
+                statics empty_heap rcd Hvars Hfields)
       as (vars1 & Hrun & Hrel).
     + rewrite pairs_lets_variables. exact Hfirsts.
     + intros v kind s v' Hin Hv' ->.
@@ -1908,11 +1994,15 @@ Proof.
       * exists K. unfold related.
         cbn [state_expr state_vars state_conts state_statics state_heap].
         split; [ exact Hbody | split; [ exact Hrel | ] ].
-        split; [ exact Hconts | split; reflexivity ].
+        split; [ exact Hconts | repeat split ].
       * intros _. unfold measure. simpl. lia.
   - (* The load of a field unboxed in turn. *)
-    rewrite step_let.
-    destruct (eval_named statics vars d) as [r | ] eqn:Hr; [ | exact I ].
+    rewrite step_let_exec.
+    destruct (exec_named statics empty_heap rcd vars d) as [[[r hp1] rcd1] | ]
+      eqn:Hxr; [ | exact I ].
+    destruct (exec_named_empty_heap statics rcd vars d r hp1 rcd1
+                (read_not_heap d f s Hread) Hxr)
+      as (Hr & -> & ->).
     destruct (kind_eqb (kind_of_value r) Value) eqn:Hk; [ | exact I ].
     destruct (read_eval statics vars d f s r Hread Hr)
       as (w0 & Hw0 & Hnc & Hfield).
@@ -1924,7 +2014,7 @@ Proof.
     destruct (pairs_hold vars' fields nested r pairs Hl Hhold)
       as (Hfirsts & Hseconds & Hpaths).
     destruct (lets_case vars vars' x fields r (pairs_lets pairs) body' conts'
-                statics hp Hvars Hfields)
+                statics empty_heap rcd Hvars Hfields)
       as (vars1 & Hrun & Hrel).
     + rewrite pairs_lets_variables. exact Hfirsts.
     + intros v kind0 s v' Hin0 Hv' ->.
@@ -1949,11 +2039,15 @@ Proof.
       * exists K. unfold related.
         cbn [state_expr state_vars state_conts state_statics state_heap].
         split; [ exact Hbody | split; [ exact Hrel | ] ].
-        split; [ exact Hconts | split; reflexivity ].
+        split; [ exact Hconts | repeat split ].
       * intros _. unfold measure. simpl. lia.
   - (* A read of a field. *)
-    rewrite step_let.
-    destruct (eval_named statics vars d) as [r | ] eqn:Hr; [ | exact I ].
+    rewrite step_let_exec.
+    destruct (exec_named statics empty_heap rcd vars d) as [[[r hp1] rcd1] | ]
+      eqn:Hxr; [ | exact I ].
+    destruct (exec_named_empty_heap statics rcd vars d r hp1 rcd1
+                (read_not_heap d f s Hread) Hxr)
+      as (Hr & -> & ->).
     destruct (kind_eqb (kind_of_value r) kind) eqn:Hk; [ | exact I ].
     destruct (read_eval statics vars d f s r Hread Hr)
       as (w0 & Hw0 & Hnc & Hfield).
@@ -1969,11 +2063,11 @@ Proof.
     injection Hpw as <-.
     rewrite <- (Hfield w1 eq_refl) in Hv.
     right. left. eexists. split.
-    + rewrite step_let. cbn [eval_named eval_simple]. rewrite Hv, Hk.
+    + rewrite step_let_simple. cbn [eval_simple]. rewrite Hv, Hk.
       reflexivity.
     + exists K. split; [ exact Hbody | ].
       split; [ exact (env_rel_bind M _ _ x r Hvars Hx) | ].
-      split; [ exact Hconts | split; reflexivity ].
+      split; [ exact Hconts | repeat split ].
   - (* A [Let_static]. *)
     rewrite step_let_static,
       (local_bindings_eval M vars vars' bindings Hvars Hbindings statics).
@@ -1982,12 +2076,12 @@ Proof.
     right. left. eexists.
     split; [ rewrite step_let_static, Hst; reflexivity | ].
     exists K. split; [ exact Hbody | split; [ exact Hvars | ] ].
-    split; [ exact Hconts | split; reflexivity ].
+    split; [ exact Hconts | repeat split ].
   - (* A non-recursive [Let_cont]. *)
     rewrite step_let_cont_non_recursive. right. left. eexists.
     split; [ rewrite step_let_cont_non_recursive; reflexivity | ].
     exists ((k, sh) :: K). split; [ exact Hbody | split; [ exact Hvars | ] ].
-    split; [ | split; reflexivity ].
+    split; [ | repeat split ].
     constructor; [ | exact Hconts ].
     exact (cont_rel_closure M sh ps ps' md md' h h' vars vars' K [] conts
              conts' [] [] Hps Hmd Hmd' Hh Hvars Hconts
@@ -2001,7 +2095,7 @@ Proof.
       destruct (handlers_bind_statics handlers') eqn:Hb';
         [ congruence | reflexivity ]. }
     exists (S ++ K). split; [ exact Hbody | split; [ exact Hvars | ] ].
-    split; [ apply rec_closures_rel; assumption | split; reflexivity ].
+    split; [ apply rec_closures_rel; assumption | repeat split ].
   - (* An [Apply_cont]. *)
     destruct Hac as (Hk & Htrap & Hargs).
     rewrite step_apply_cont.
@@ -2012,7 +2106,8 @@ Proof.
       as [(HK & Hc & Hc') | (sh & HK & Hc)].
     + unfold shapes_at in Hargs. rewrite HK in Hargs.
       destruct (args_rel_nil_inv _ _ Hargs) as [Heq Hplain].
-      rewrite Hc. cbn [apply_cont_value]. exists vs. split; [ | reflexivity ].
+      rewrite Hc. cbn [apply_cont_value]. exists vs, rcd.
+      split; [ | reflexivity ].
       rewrite step_apply_cont, Heq,
         <- (plain_simples_eval M vars vars' _ Hvars Hplain), Hvs.
       unfold apply_continuation. rewrite Hk, Hc'. reflexivity.
@@ -2036,7 +2131,7 @@ Proof.
         rewrite (proj2 (FlambdaSemanticsProofs.kinds_eqb_eq _ _) eq_refl), Hb'.
         reflexivity.
       * exists (S ++ Kc). split; [ exact Hh | split; [ exact Hrel | ] ].
-        split; [ apply rec_closures_rel; assumption | split; reflexivity ].
+        split; [ apply rec_closures_rel; assumption | repeat split ].
   - (* A [Switch]. *)
     rewrite step_switch,
       (plain_simple_eval M vars vars' scrutinee Hvars Hscrutinee).
@@ -2047,21 +2142,21 @@ Proof.
     right. left. eexists.
     split; [ rewrite step_switch, Hw, Hi, Harm'; reflexivity | ].
     exists K. split; [ constructor; exact Hac | ].
-    split; [ exact Hvars | split; [ exact Hconts | split; reflexivity ] ].
+    split; [ exact Hvars | split; [ exact Hconts | repeat split ] ].
   - rewrite step_invalid. exact I.
 Qed.
 
 (* Related terms, run on their own, refine each other. *)
 Lemma ub_refines (p q : expr) :
   ub M [] p q ->
-  refines (State p [] [] empty_static_env empty_heap)
-    (State q [] [] empty_static_env empty_heap).
+  refines (State p [] [] empty_static_env empty_heap no_reads)
+    (State q [] [] empty_static_env empty_heap no_reads).
 Proof.
   intros Hub. apply (shrinking_refines (related M) eq measure).
   - exact related_answered.
   - intros vs vs' ->. reflexivity.
   - exists []. split; [ exact Hub | split; [ apply env_rel_empty | ] ].
-    split; [ constructor | split; reflexivity ].
+    split; [ constructor | repeat split ].
 Qed.
 
 End Simulation.
@@ -2928,7 +3023,7 @@ Proof.
   intros Hd Hz. destruct kind; try discriminate Hd.
   destruct d as [s | p args | | | | | ]; try discriminate Hd;
     [ destruct s; try discriminate Hd; exact Hd | ].
-  destruct p as [p | p | p | p]; try discriminate Hd.
+  destruct p as [p | p | p | p | p]; try discriminate Hd.
   - destruct p; try discriminate Hd;
       destruct args as [ | c [ | ]]; try discriminate Hd; try exact Hd.
     apply andb_true_iff in Hd as [Hc Hfields].
@@ -3202,7 +3297,7 @@ Proof.
     - destruct (prim_has_arbitrary_effects p);
         [ apply rb_cond_any_usage, Ha | exact Ha ]. }
   cbv zeta.
-  destruct p as [p | p | p | p]; [ | exact Hdefault | | ].
+  destruct p as [p | p | p | p | p]; [ | exact Hdefault | | | ].
   - destruct p; destruct args as [ | s [ | s' args]]; try exact Hdefault;
       try destruct mut; try destruct variant_only; cbv beta iota;
       first
@@ -3215,6 +3310,7 @@ Proof.
             | rewrite note_simple_facts; exact Ha ] ].
   - destruct p; [ apply rb_block_deps, Ha | exact Hdefault ].
   - destruct p; try exact Hdefault. apply rb_block_deps, Ha.
+  - destruct p; try exact Hdefault. destruct args; exact Ha.
 Qed.
 
 Lemma rb_apply_cont_deps (env : traverse_env) (ac : apply_cont) (a : acc) :
@@ -3693,7 +3789,7 @@ Proof.
                    = map (rewrite_simple sol en) args).
     { apply map_ext_in. intros s Hs. apply rewrite_simple_u.
       rewrite forallb_forall in Hd. exact (Hd s Hs). }
-    destruct p as [p | p | p | p]; destruct p; simpl; rewrite ?Hmap;
+    destruct p as [p | p | p | p | p]; destruct p; simpl; rewrite ?Hmap;
       rewrite ?(rebuild_fields_u en (Node_variable x) args Hd 0);
       reflexivity.
 Qed.
@@ -3705,7 +3801,7 @@ Proof.
   intros Hd. destruct d as [s | p args | | | | | ]; simpl in Hd;
     try discriminate Hd.
   - simpl. apply rewrite_simple_plain, Hd.
-  - destruct p as [p | p | p | p]; simpl;
+  - destruct p as [p | p | p | p | p]; simpl;
       try (apply rewrite_simples_plain, Hd).
     + destruct p; simpl; try (apply rewrite_simples_plain, Hd).
       destruct (field_used sol _ _); simpl;
@@ -3891,7 +3987,7 @@ Proof.
     exists y, fields_y. split; [ reflexivity | ].
     split; [ intros ->; rewrite Pos.eqb_refl in Hne; discriminate Hne | ].
     split; [ exact Hy | split; [ exact Hflat | exact Hused ] ]. }
-  destruct p as [p | p | p | p]; try discriminate H.
+  destruct p as [p | p | p | p | p]; try discriminate H.
   - destruct p; try discriminate H.
     + destruct args as [ | [y | | ] [ | ]]; try discriminate H.
       right. right. right. apply andb_true_iff in H as [Hne H].
@@ -3957,7 +4053,7 @@ Proof.
     eqn:Hread.
   - intros H. right. unfold unboxed_read in Hread.
     destruct d as [ | prim args | | | | | ]; try discriminate Hread.
-    destruct prim as [p | | | ]; try discriminate Hread.
+    destruct prim as [p | | | | ]; try discriminate Hread.
     destruct args as [ | [y | | ] [ | ]]; try discriminate Hread;
       destruct p; try discriminate Hread;
       simpl in Hread;
@@ -4007,7 +4103,7 @@ Proof.
     by (intros l; apply map_ext; intros s; apply rewrite_simple_kinds, H).
   destruct d as [s | p args | | | | | ]; simpl;
     rewrite ?(rewrite_simple_kinds en1 en2 _ H); try reflexivity.
-  destruct p as [p | p | p | p]; destruct p; simpl; rewrite ?Hm;
+  destruct p as [p | p | p | p | p]; destruct p; simpl; rewrite ?Hm;
     rewrite ?(rebuild_fields_kinds en1 en2 _ args H 0); reflexivity.
 Qed.
 
@@ -4421,7 +4517,7 @@ Proof.
   - assert (Harg : plain_simple unboxed arg = true).
     { destruct d as [s0 | p args | | | | | ]; simpl in Hd; try discriminate Hd;
         [ discriminate Hread | ].
-      destruct p as [p | p | p | p]; simpl in Hread; try discriminate Hread.
+      destruct p as [p | p | p | p | p]; simpl in Hread; try discriminate Hread.
       destruct p; simpl in Hread; try discriminate Hread;
         destruct args as [ | a [ | ]]; simpl in Hread; try discriminate Hread;
         try (destruct variant_only; simpl in Hread; try discriminate Hread);
@@ -4706,9 +4802,13 @@ Proof.
         as [Hp | (p & y & f & fs & Heq & _)]; [ | discriminate Heq ].
       rewrite (rebuild_let_u_plain _ x kind _ _ Hp).
       split; [ | split; assumption ].
-      constructor; [ | apply named_plain_rebuilt, Hp | exact IHub ].
-      apply plain_variable_iff. unfold Keyed.is_bound.
-      unfold fields_of in Hx. rewrite Hx. split; [ reflexivity | exact Hxf ].
+      constructor; [ | apply named_plain_rebuilt, Hp | | exact IHub ].
+      { apply plain_variable_iff. unfold Keyed.is_bound.
+        unfold fields_of in Hx. rewrite Hx.
+        split; [ reflexivity | exact Hxf ]. }
+      apply rebuild_named_not_heap.
+      eapply FlambdaReaperFlowProofs.named_edges_not_heap.
+      exact Hnamed_edges.
     + (* An unboxed allocation, or the load of a field unboxed in turn. *)
       destruct (unboxed_binding_cases _ x kind _ fields Hbind)
         as (-> & [(tag & args' & Heq & Hfields)
@@ -4717,7 +4817,8 @@ Proof.
                      | (bk & mut & i & y & fy & nested & Heq & Hne & Hy & Hny
                         & Halike)]]]);
         [ | | discriminate Heq | ];
-        injection Heq as -> ->; simpl in Hnamed_edges.
+        injection Heq as -> ->; simpl in Hnamed_edges;
+        destruct Hnamed_edges as [_ Hnamed_edges].
       * destruct (bind_block_fields_lets2 (ue_env en) x tag args' fields)
           with (body := rebuild_expr_u F sol cannot_change code_deps
                           preserve_direct_calls unit_code_ids codes unboxed
@@ -4738,8 +4839,9 @@ Proof.
                        first_fresh_u [] (ubind_variables en [(x, Value)])
                        body))
           as [Hfc Hbs].
-        split; [ exact (ub_alloc unboxed _ x _ fields ls _ _ Hx Hxf Hentries
-                          IHub)
+        split; [ refine (ub_alloc unboxed _ x _ fields ls _ _ Hx Hxf Hentries
+                           _ IHub);
+                 intros q0 args0 Hq0; discriminate Hq0
                | ].
         cbn [free_continuations_of_expr binds_statics]. rewrite Hfc, Hbs.
         split; assumption.
@@ -4767,8 +4869,10 @@ Proof.
                        first_fresh_u [] (ubind_variables en [(x, Value)])
                        body))
           as [Hfc Hbs].
-        split; [ exact (ub_alloc unboxed _ x _ fields _ _ _ Hx Hxf Hentries
-                          IHub)
+        split; [ refine (ub_alloc unboxed _ x _ fields _ _ _ Hx Hxf Hentries
+                           _ IHub);
+                 intros q0 args0 Hq0; cbn [rebuild_named] in Hq0;
+                 destruct (field_used _ _ _); discriminate Hq0
                | ].
         cbn [free_continuations_of_expr binds_statics]. rewrite Hfc, Hbs.
         split; assumption.
@@ -4808,16 +4912,20 @@ Proof.
                   & Hfield)].
       * rewrite (rebuild_let_u_plain _ x kind _ _ Hp).
         split; [ | split; assumption ].
-        constructor; [ | apply named_plain_rebuilt, Hp | exact IHub ].
-        apply plain_variable_iff. unfold Keyed.is_bound.
-        unfold fields_of in Hx. rewrite Hx. split; [ reflexivity | exact Hxf ].
+        constructor; [ | apply named_plain_rebuilt, Hp | | exact IHub ].
+        { apply plain_variable_iff. unfold Keyed.is_bound.
+          unfold fields_of in Hx. rewrite Hx.
+          split; [ reflexivity | exact Hxf ]. }
+        apply rebuild_named_not_heap.
+        eapply FlambdaReaperFlowProofs.named_edges_not_heap.
+        exact Hnamed_edges.
       * rewrite Heq in Hnamed, Hnamed_edges |- *.
         rewrite (Hnamed (ue_env en)).
         assert (Hacc : g_accessor (graph_of_facts F) (Node_variable x) f
                          (Node_variable y)).
         { clear -Hread Hnamed_edges.
           destruct p'; try discriminate Hread; simpl in Hread;
-            injection Hread as <-; exact (proj1 Hnamed_edges). }
+            injection Hread as <-; exact (proj1 (proj2 Hnamed_edges)). }
         destruct (reads_found x y kind f fs Hx Hy Hacc Hdead Hused Hfield)
           as (v & Hv).
         unfold rebuild_let_u.
@@ -5313,7 +5421,7 @@ Proof.
   apply (refines_observably_refines _
            (State (rebuild_unit_from_tables (traverse_unit flag u e) T
                      preserve_direct_calls e)
-              [] [] empty_static_env empty_heap)).
+              [] [] empty_static_env empty_heap no_reads)).
   - exact (rebuild_refines_observably flag is_local u e T
              preserve_direct_calls Hlocal_slots Hprojections Hfragment Hstatic
              Hkinded Hwell_formed Hone Hclosed Hexact).
@@ -5327,7 +5435,7 @@ Proof.
   split.
   { intros f Hf. discriminate Hf. }
   do 12 (split; [ vm_compute; reflexivity | ]).
-  split; exists 20; vm_compute; reflexivity.
+  split; exists 20; try exists no_reads; vm_compute; reflexivity.
 Qed.
 
 Theorem fragment_examples : fragment_examples_statement.
@@ -5342,49 +5450,49 @@ Proof. vm_compute. repeat split. Qed.
 Theorem continuation_example : continuation_example_statement.
 Proof.
   do 12 (split; [ vm_compute; reflexivity | ]).
-  split; exists 20; vm_compute; reflexivity.
+  split; exists 20; try exists no_reads; vm_compute; reflexivity.
 Qed.
 
 Theorem spurious_keep_example : spurious_keep_example_statement.
 Proof.
   do 10 (split; [ vm_compute; reflexivity | ]).
-  split; exists 20; vm_compute; reflexivity.
+  split; exists 20; try exists no_reads; vm_compute; reflexivity.
 Qed.
 
 Theorem alias_example : alias_example_statement.
 Proof.
   do 12 (split; [ vm_compute; reflexivity | ]).
-  split; exists 20; vm_compute; reflexivity.
+  split; exists 20; try exists no_reads; vm_compute; reflexivity.
 Qed.
 
 Theorem loop_example : loop_example_statement.
 Proof.
   do 12 (split; [ vm_compute; reflexivity | ]).
-  split; exists 40; vm_compute; reflexivity.
+  split; exists 40; try exists no_reads; vm_compute; reflexivity.
 Qed.
 
 Theorem nested_example : nested_example_statement.
 Proof.
   do 12 (split; [ vm_compute; reflexivity | ]).
-  split; exists 20; vm_compute; reflexivity.
+  split; exists 20; try exists no_reads; vm_compute; reflexivity.
 Qed.
 
 Theorem nested_param_example : nested_param_example_statement.
 Proof.
   do 13 (split; [ vm_compute; reflexivity | ]).
-  split; exists 20; vm_compute; reflexivity.
+  split; exists 20; try exists no_reads; vm_compute; reflexivity.
 Qed.
 
 Theorem nested_alias_example : nested_alias_example_statement.
 Proof.
   do 13 (split; [ vm_compute; reflexivity | ]).
-  split; exists 20; vm_compute; reflexivity.
+  split; exists 20; try exists no_reads; vm_compute; reflexivity.
 Qed.
 
 Theorem deep_example : deep_example_statement.
 Proof.
   do 13 (split; [ vm_compute; reflexivity | ]).
-  split; exists 20; vm_compute; reflexivity.
+  split; exists 20; try exists no_reads; vm_compute; reflexivity.
 Qed.
 
 Theorem unboxed_call_example : unboxed_call_example_statement.
@@ -5392,8 +5500,8 @@ Proof.
   split.
   { intros f Hf. discriminate Hf. }
   do 19 (split; [ vm_compute; reflexivity | ]).
-  split; [ exists 20; vm_compute; reflexivity | ].
-  split; exists 20; vm_compute; reflexivity.
+  split; [ exists 20; try exists no_reads; vm_compute; reflexivity | ].
+  split; exists 20; try exists no_reads; vm_compute; reflexivity.
 Qed.
 
 Theorem unboxed_wrapper_example : unboxed_wrapper_example_statement.
@@ -5401,7 +5509,7 @@ Proof.
   split.
   { intros f Hf. discriminate Hf. }
   do 18 (split; [ vm_compute; reflexivity | ]).
-  split; exists 30; vm_compute; reflexivity.
+  split; exists 30; try exists no_reads; vm_compute; reflexivity.
 Qed.
 
 (* ======================================================================== *)
@@ -5487,7 +5595,7 @@ Lemma rebuild_named_nil (en : rebuild_env) (x : variable) (d : named) :
 Proof.
   destruct d as [s | p args | | | | | ]; cbn [rebuild_named];
     rewrite ?rewrite_simple_nil; try reflexivity.
-  destruct p as [p | p | p | p]; rewrite ?rewrite_simples_nil;
+  destruct p as [p | p | p | p | p]; rewrite ?rewrite_simples_nil;
     try reflexivity;
     destruct p; rewrite ?rebuild_fields_nil, ?rewrite_simples_nil;
     reflexivity.

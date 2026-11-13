@@ -254,6 +254,14 @@
      of which both are sources, is not; the call kept a closure whose
      binding the unboxing removed. FlambdaReaperUnboxingSpec.v has the
      unit.
+   - Regions. The [Let] of a [Local_allocation] binds again the variable
+     of the allocation just before it (FlambdaPrimitiveModel.v). Where
+     that variable is unboxed it is removed, as the mode of the
+     compiler goes with the allocation ([rebuild_unboxed_binding]);
+     where the representation of a closure changes it is kept, as the
+     closure is still made. Otherwise it is as in
+     FlambdaReaperRebuild.v, which says why a local set of closures is
+     rebuilt without the projections of its other closures.
    - The older forms [Set_of_closures] and [Static_const_set_of_closures]
      have no fact of a function slot (FlambdaReaperTraversal.v): to
      [get_set_of_closures_def] they are not sets, and they never change
@@ -2292,6 +2300,8 @@ Definition rebuild_unboxed_binding (en : rebuild_env)
         bind_fields (Unboxed to_bind) (Unboxed arg_fields) body
       | None => None
       end
+    (* The local allocation of [x] was unboxed by the [Let] before. *)
+    | Prim (Region_primitive Local_allocation) _ => Some body
     | _ => None
     end
   in
@@ -3588,13 +3598,15 @@ Proof. vm_compute. reflexivity. Qed.
 Example kept_result_unboxed_goes_wrong :
   FlambdaSemanticsSpec.run 100
     (FlambdaSemanticsSpec.State kept_result_unboxed [] []
-       FlambdaValueSpec.empty_static_env FlambdaValueSpec.empty_heap)
+       FlambdaValueSpec.empty_static_env FlambdaValueSpec.empty_heap
+         FlambdaValueSpec.no_reads)
   = FlambdaSemanticsSpec.Exit 1
       [FlambdaValueSpec.Value_const (Tagged_immediate 10)]
-      FlambdaValueSpec.empty_heap
+      FlambdaValueSpec.empty_heap FlambdaValueSpec.no_reads
   ∧ FlambdaSemanticsSpec.run 100
       (FlambdaSemanticsSpec.State kept_result_unboxed_rebuilt [] []
-         FlambdaValueSpec.empty_static_env FlambdaValueSpec.empty_heap)
+         FlambdaValueSpec.empty_static_env FlambdaValueSpec.empty_heap
+         FlambdaValueSpec.no_reads)
     = FlambdaSemanticsSpec.Undefined.
 Proof. vm_compute. auto. Qed.
 

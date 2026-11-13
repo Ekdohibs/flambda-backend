@@ -506,7 +506,8 @@ Definition two_calls_example_statement : Prop :=
     = [(50%positive,
         Changing_calling_convention [Keep Value; Delete]
           [Keep Value; Keep Value; Delete])]
-  ∧ behaves (State Examples.two_calls [] [] empty_static_env empty_heap)
+  ∧ behaves (State Examples.two_calls [] [] empty_static_env
+               empty_heap no_reads)
       (Exits 1%positive
          [Value_block 0
             [Value_const (Tagged_immediate 9);
@@ -518,7 +519,7 @@ Definition two_calls_example_statement : Prop :=
             Examples.two_calls_tables []
             (unit_code_deps Auto Examples.interface Examples.two_calls) true
             Examples.two_calls)
-         [] [] empty_static_env empty_heap)
+         [] [] empty_static_env empty_heap no_reads)
       (Exits 1%positive
          [Value_block 0
             [Value_const (Tagged_immediate 9);
@@ -700,10 +701,12 @@ Definition poison_result_example_statement : Prop :=
       true PoisonResultExample.unit_expr
     = PoisonResultExample.rebuilt
   ∧ behaves
-      (State PoisonResultExample.unit_expr [] [] empty_static_env empty_heap)
+      (State PoisonResultExample.unit_expr [] [] empty_static_env
+         empty_heap no_reads)
       (Exits 1%positive [Value_const (Tagged_immediate 5)] empty_heap)
   ∧ behaves
-      (State PoisonResultExample.rebuilt [] [] empty_static_env empty_heap)
+      (State PoisonResultExample.rebuilt [] [] empty_static_env
+         empty_heap no_reads)
       (Exits 1%positive [Value_const (Tagged_immediate 5)] empty_heap).
 
 (* A unit in which code that changes its calling convention calls code
@@ -897,10 +900,12 @@ Definition tail_escape_example_statement : Prop :=
       true TailEscapeExample.unit_expr
     = TailEscapeExample.rebuilt
   ∧ behaves
-      (State TailEscapeExample.unit_expr [] [] empty_static_env empty_heap)
+      (State TailEscapeExample.unit_expr [] [] empty_static_env
+         empty_heap no_reads)
       (Exits 1%positive [Value_const (Tagged_immediate 5)] empty_heap)
   ∧ behaves
-      (State TailEscapeExample.rebuilt [] [] empty_static_env empty_heap)
+      (State TailEscapeExample.rebuilt [] [] empty_static_env
+         empty_heap no_reads)
       (Exits 1%positive [Value_const (Tagged_immediate 5)] empty_heap).
 
 (* The unit of [PoisonResultExample] with a second parameter of [f52],
@@ -1042,10 +1047,12 @@ Definition masked_return_example_statement : Prop :=
       true MaskedReturnExample.unit_expr
     = MaskedReturnExample.rebuilt
   ∧ behaves
-      (State MaskedReturnExample.unit_expr [] [] empty_static_env empty_heap)
+      (State MaskedReturnExample.unit_expr [] [] empty_static_env
+         empty_heap no_reads)
       (Exits 1%positive [Value_const (Tagged_immediate 5)] empty_heap)
   ∧ behaves
-      (State MaskedReturnExample.rebuilt [] [] empty_static_env empty_heap)
+      (State MaskedReturnExample.rebuilt [] [] empty_static_env
+         empty_heap no_reads)
       (Exits 1%positive [Value_const (Tagged_immediate 5)] empty_heap).
 
 Definition cc_fragment_examples_statement : Prop :=
@@ -1208,7 +1215,7 @@ Definition spurious_widget_counterexample_statement : Prop :=
     = []
   ∧ behaves
       (State (SpuriousWidgetExample.rebuilt SpuriousWidgetExample.least true)
-         [] [] empty_static_env empty_heap)
+         [] [] empty_static_env empty_heap no_reads)
       (Exits 1%positive [Value_const (Tagged_immediate 9)] empty_heap)
   ∧ check_closed Examples.no_local SpuriousWidgetExample.unit_facts
       SpuriousWidgetExample.spurious
@@ -1232,7 +1239,7 @@ Definition spurious_widget_counterexample_statement : Prop :=
     = false
   ∧ behaves
       (State SpuriousWidgetExample.unit_expr [] [] empty_static_env
-         empty_heap)
+         empty_heap no_reads)
       (Exits 1%positive [Value_const (Tagged_immediate 9)] empty_heap)
   ∧ ∀ preserve_direct_calls : bool,
       ~ program_refines_observably SpuriousWidgetExample.unit_expr

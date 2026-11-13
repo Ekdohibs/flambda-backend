@@ -62,7 +62,12 @@
      unit of the fragment here has no projection and meets it; it is
      stated for the fragment to grow.
    - [in_flow_fragment]: the fragment in which FlambdaReaperFlowSpec.v
-     says what a solution means.
+     says what a solution means. It leaves out the primitives of the
+     heap, which the machine runs: the rebuild removes the [Let] of a
+     cell that has no use, and the two runs then exit with heaps that
+     differ, which [program_refines] compares (decision D40). It keeps
+     the primitives of regions, to which the machine gives no value: a
+     run that reaches one goes wrong, and the rebuild is then free.
    - [closure_free]: the part of that fragment for which the statement
      is proved. The rebuild of a set of closures (value slots removed,
      [Invalid] where a closure has no source) and of a call (masks of
@@ -1051,10 +1056,12 @@ Definition example_statement : Prop :=
       (traverse_unit Never FlowExample.interface RebuildExample.unit_expr)
       RebuildExample.solution false RebuildExample.unit_expr
     = RebuildExample.rebuilt
-  ∧ run 8 (State RebuildExample.unit_expr [] [] empty_static_env empty_heap)
-    = Exit 1%positive [Value_const (Tagged_immediate 7)] empty_heap
-  ∧ run 7 (State RebuildExample.rebuilt [] [] empty_static_env empty_heap)
-    = Exit 1%positive [Value_const (Tagged_immediate 7)] empty_heap.
+  ∧ run 8 (State RebuildExample.unit_expr [] [] empty_static_env
+             empty_heap no_reads)
+    = Exit 1%positive [Value_const (Tagged_immediate 7)] empty_heap no_reads
+  ∧ run 7 (State RebuildExample.rebuilt [] [] empty_static_env
+             empty_heap no_reads)
+    = Exit 1%positive [Value_const (Tagged_immediate 7)] empty_heap no_reads.
 
 (* ======================================================================== *)
 (* What the premises are for                                                *)
@@ -1311,16 +1318,18 @@ Definition closure_exit_counterexample_statement : Prop :=
       ClosureExitExample.solution false ClosureExitExample.unit_expr
     = ClosureExitExample.rebuilt
   ∧ run 4
-      (State ClosureExitExample.unit_expr [] [] empty_static_env empty_heap)
+      (State ClosureExitExample.unit_expr [] [] empty_static_env
+         empty_heap no_reads)
     = Exit 1%positive
         [Value_closure_of_set 70%positive [(70%positive, 50%positive)]
            [(60%positive, Value_const (Tagged_immediate 5))]]
-        empty_heap
+        empty_heap no_reads
   ∧ run 3
-      (State ClosureExitExample.rebuilt [] [] empty_static_env empty_heap)
+      (State ClosureExitExample.rebuilt [] [] empty_static_env
+         empty_heap no_reads)
     = Exit 1%positive
         [Value_closure_of_set 70%positive [(70%positive, 50%positive)] []]
-        empty_heap
+        empty_heap no_reads
   ∧ ~ program_refines ClosureExitExample.unit_expr ClosureExitExample.rebuilt.
 
 (* A call whose return continuation takes a value of another kind than
@@ -1436,10 +1445,12 @@ Definition wrapper_kinds_counterexample_statement : Prop :=
       WrapperKindsExample.solution false WrapperKindsExample.unit_expr
     = WrapperKindsExample.rebuilt
   ∧ run 6
-      (State WrapperKindsExample.unit_expr [] [] empty_static_env empty_heap)
-    = Exit 1%positive [Value_const (Tagged_immediate 0)] empty_heap
+      (State WrapperKindsExample.unit_expr [] [] empty_static_env
+         empty_heap no_reads)
+    = Exit 1%positive [Value_const (Tagged_immediate 0)] empty_heap no_reads
   ∧ run 6
-      (State WrapperKindsExample.rebuilt [] [] empty_static_env empty_heap)
+      (State WrapperKindsExample.rebuilt [] [] empty_static_env
+         empty_heap no_reads)
     = Undefined
   ∧ ~ program_refines WrapperKindsExample.unit_expr
         WrapperKindsExample.rebuilt.
@@ -1533,8 +1544,8 @@ Definition refines_observably (source target : state) : Prop :=
   ∧ (behaves target Goes_wrong -> behaves source Goes_wrong).
 
 Definition program_refines_observably (source target : expr) : Prop :=
-  refines_observably (State source [] [] empty_static_env empty_heap)
-    (State target [] [] empty_static_env empty_heap).
+  refines_observably (State source [] [] empty_static_env empty_heap no_reads)
+    (State target [] [] empty_static_env empty_heap no_reads).
 
 Definition refines_observably_of_refines_statement : Prop :=
   ∀ source target : state,
@@ -1789,10 +1800,11 @@ Definition closures_example_statement : Prop :=
       ClosuresExample.solution false ClosuresExample.unit_expr
     = ClosuresExample.rebuilt
   ∧ behaves
-      (State ClosuresExample.unit_expr [] [] empty_static_env empty_heap)
+      (State ClosuresExample.unit_expr [] [] empty_static_env
+         empty_heap no_reads)
       (Exits 1%positive [ClosuresExample.result] empty_heap)
   ∧ behaves
-      (State ClosuresExample.rebuilt [] [] empty_static_env empty_heap)
+      (State ClosuresExample.rebuilt [] [] empty_static_env empty_heap no_reads)
       (Exits 1%positive [ClosuresExample.result] empty_heap).
 
 (* The statement up to observation holds of more than nothing, and
@@ -1944,10 +1956,12 @@ Definition value_slots_example_statement : Prop :=
       ValueSlotsExample.solution false ValueSlotsExample.unit_expr
     = ValueSlotsExample.rebuilt
   ∧ behaves
-      (State ValueSlotsExample.unit_expr [] [] empty_static_env empty_heap)
+      (State ValueSlotsExample.unit_expr [] [] empty_static_env
+         empty_heap no_reads)
       (Exits 1%positive [ValueSlotsExample.source_result] empty_heap)
   ∧ behaves
-      (State ValueSlotsExample.rebuilt [] [] empty_static_env empty_heap)
+      (State ValueSlotsExample.rebuilt [] [] empty_static_env
+         empty_heap no_reads)
       (Exits 1%positive [ValueSlotsExample.rebuilt_result] empty_heap)
   ∧ observed_equal ValueSlotsExample.source_result
       ValueSlotsExample.rebuilt_result
@@ -2220,10 +2234,11 @@ Definition tail_call_example_statement : Prop :=
       TailCallExample.solution false TailCallExample.unit_expr
     = TailCallExample.rebuilt
   ∧ behaves
-      (State TailCallExample.unit_expr [] [] empty_static_env empty_heap)
+      (State TailCallExample.unit_expr [] [] empty_static_env
+         empty_heap no_reads)
       (Exits 1%positive [Value_const (Tagged_immediate 7)] empty_heap)
   ∧ behaves
-      (State TailCallExample.rebuilt [] [] empty_static_env empty_heap)
+      (State TailCallExample.rebuilt [] [] empty_static_env empty_heap no_reads)
       (Exits 1%positive [Value_const (Tagged_immediate 7)] empty_heap).
 
 (* The statement up to observation holds of a unit with a call that
@@ -2343,10 +2358,11 @@ Definition wrapper_example_statement : Prop :=
       WrapperExample.solution false WrapperExample.unit_expr
     = WrapperExample.rebuilt
   ∧ behaves
-      (State WrapperExample.unit_expr [] [] empty_static_env empty_heap)
+      (State WrapperExample.unit_expr [] [] empty_static_env
+         empty_heap no_reads)
       (Exits 1%positive [Value_const (Tagged_immediate 7)] empty_heap)
   ∧ behaves
-      (State WrapperExample.rebuilt [] [] empty_static_env empty_heap)
+      (State WrapperExample.rebuilt [] [] empty_static_env empty_heap no_reads)
       (Exits 1%positive [Value_const (Tagged_immediate 7)] empty_heap).
 
 (* The statement up to observation holds of a unit with a call whose
@@ -2481,10 +2497,10 @@ Definition raise_example_statement : Prop :=
       RaiseExample.solution false RaiseExample.unit_expr
     = RaiseExample.rebuilt
   ∧ behaves
-      (State RaiseExample.unit_expr [] [] empty_static_env empty_heap)
+      (State RaiseExample.unit_expr [] [] empty_static_env empty_heap no_reads)
       (Exits 1%positive [Value_const (Tagged_immediate 8)] empty_heap)
   ∧ behaves
-      (State RaiseExample.rebuilt [] [] empty_static_env empty_heap)
+      (State RaiseExample.rebuilt [] [] empty_static_env empty_heap no_reads)
       (Exits 1%positive [Value_const (Tagged_immediate 8)] empty_heap).
 
 (* The statement up to observation holds of a unit with an indirect
@@ -2614,10 +2630,11 @@ Definition indirect_example_statement : Prop :=
       IndirectExample.solution false IndirectExample.unit_expr
     = IndirectExample.rebuilt
   ∧ behaves
-      (State IndirectExample.unit_expr [] [] empty_static_env empty_heap)
+      (State IndirectExample.unit_expr [] [] empty_static_env
+         empty_heap no_reads)
       (Exits 1%positive [Value_const (Tagged_immediate 8)] empty_heap)
   ∧ behaves
-      (State IndirectExample.rebuilt [] [] empty_static_env empty_heap)
+      (State IndirectExample.rebuilt [] [] empty_static_env empty_heap no_reads)
       (Exits 1%positive [Value_const (Tagged_immediate 8)] empty_heap).
 
 (* The statement up to observation holds of a unit with a partial
@@ -2765,10 +2782,12 @@ Definition partial_call_example_statement : Prop :=
       PartialCallExample.solution false PartialCallExample.unit_expr
     = PartialCallExample.rebuilt
   ∧ behaves
-      (State PartialCallExample.unit_expr [] [] empty_static_env empty_heap)
+      (State PartialCallExample.unit_expr [] [] empty_static_env
+         empty_heap no_reads)
       (Exits 1%positive [Value_const (Tagged_immediate 8)] empty_heap)
   ∧ behaves
-      (State PartialCallExample.rebuilt [] [] empty_static_env empty_heap)
+      (State PartialCallExample.rebuilt [] [] empty_static_env
+         empty_heap no_reads)
       (Exits 1%positive [Value_const (Tagged_immediate 8)] empty_heap).
 
 (* [observed_equal] compares the arguments of a partial application by
@@ -2902,12 +2921,14 @@ Definition partial_exit_counterexample_statement : Prop :=
       PartialExitExample.solution false PartialExitExample.unit_expr
     = PartialExitExample.rebuilt
   ∧ behaves
-      (State PartialExitExample.unit_expr [] [] empty_static_env empty_heap)
+      (State PartialExitExample.unit_expr [] [] empty_static_env
+         empty_heap no_reads)
       (Exits 1%positive
          [PartialExitExample.result (Value_const (Tagged_immediate 7))]
          empty_heap)
   ∧ behaves
-      (State PartialExitExample.rebuilt [] [] empty_static_env empty_heap)
+      (State PartialExitExample.rebuilt [] [] empty_static_env
+         empty_heap no_reads)
       (Exits 1%positive
          [PartialExitExample.result (Value_const (Poison Value))] empty_heap)
   ∧ ~ values_related observed_equal_with_arguments
@@ -3077,10 +3098,12 @@ Definition tupled_call_example_statement : Prop :=
       TupledCallExample.solution false TupledCallExample.unit_expr
     = TupledCallExample.rebuilt
   ∧ behaves
-      (State TupledCallExample.unit_expr [] [] empty_static_env empty_heap)
+      (State TupledCallExample.unit_expr [] [] empty_static_env
+         empty_heap no_reads)
       (Exits 1%positive [Value_const (Tagged_immediate 8)] empty_heap)
   ∧ behaves
-      (State TupledCallExample.rebuilt [] [] empty_static_env empty_heap)
+      (State TupledCallExample.rebuilt [] [] empty_static_env
+         empty_heap no_reads)
       (Exits 1%positive [Value_const (Tagged_immediate 8)] empty_heap).
 
 (* The statement up to observation holds of a unit with static
@@ -3238,11 +3261,11 @@ Definition static_constants_example_statement : Prop :=
     = StaticConstantsExample.rebuilt
   ∧ behaves
       (State StaticConstantsExample.unit_expr [] [] empty_static_env
-         empty_heap)
+         empty_heap no_reads)
       (Exits 1%positive [StaticConstantsExample.result] empty_heap)
   ∧ behaves
       (State StaticConstantsExample.rebuilt [] [] empty_static_env
-         empty_heap)
+         empty_heap no_reads)
       (Exits 1%positive [StaticConstantsExample.result] empty_heap).
 
 (* A static boxed number of a variable: the traversal aliases the
@@ -3339,9 +3362,9 @@ Definition static_boxed_variable_example_statement : Prop :=
     = StaticBoxedVariableExample.rebuilt
   ∧ behaves
       (State StaticBoxedVariableExample.unit_expr [] [] empty_static_env
-         empty_heap)
+         empty_heap no_reads)
       (Exits 1%positive [StaticBoxedVariableExample.result] empty_heap)
   ∧ behaves
       (State StaticBoxedVariableExample.rebuilt [] [] empty_static_env
-         empty_heap)
+         empty_heap no_reads)
       (Exits 1%positive [StaticBoxedVariableExample.result] empty_heap).

@@ -150,10 +150,34 @@
      every argument given them is kept), where [rebuild] rebuilds all
      code first, in [ordered_code_ids], and binds deleted code where the
      code id has no use; the terms made are the same.
-   - The model has no phantom binding, no region ([is_begin_region],
-     the regions of code), no [Rec_info], no [Never_returns], no
-     subkinds (so [rewrite_kind_with_subkind] and [erase_subkind] change
-     nothing), no cost metrics, inlining decisions,
+   - Regions. A [Begin_region] or a [Begin_try_region] binds a variable
+     of the kind [Region], which [is_var_used] says is used, as the
+     OCaml says of every region variable: so its [Let] is kept, as
+     [is_begin_region] keeps it. The [Let] of an end of a region is
+     kept where its variable has a use, which the traversal gives it
+     wherever the code around it is used ([cond_any_usage]). The [Let]
+     of a [Local_allocation] binds again, at the same kind, the variable
+     of the allocation just before it (FlambdaPrimitiveModel.v): the
+     test that keeps or removes the [Let] of the allocation keeps or
+     removes it, and makes it [Invalid] where it makes that one so, so
+     it is kept exactly where the allocation is. (FlambdaReaperUnboxing.v
+     removes it where the allocation is unboxed.) Two differences
+     follow, on terms with regions only. Of a set of closures, the
+     [Local_allocation] comes between the [Let] of the first closure
+     and the projections of the others, where [projected_closures] does
+     not look: the projections are then rebuilt as any other, each kept
+     where it has a use, which is a use of the first closure (the
+     accessor fact of the projection) and so keeps the set and its
+     [Local_allocation]; rebuild.ml keeps every closure of a set it
+     keeps, and the model removes a projection that has no use. And
+     where a boxed number whose field has no use is made poison
+     ([rebuild_named]), the mode of the compiler goes with the
+     allocation, while the model keeps the [Local_allocation] after the
+     poison, of which the machine of FlambdaRegionsSpec.v has no step.
+   - The model has no phantom binding, no region of code, no
+     [Rec_info], no [Never_returns], no subkinds (so
+     [rewrite_kind_with_subkind] and [erase_subkind] change nothing), no
+     cost metrics, inlining decisions,
      [is_my_closure_used], [only_full_applications], [is_cold],
      debuginfo or message of [Invalid]; and nothing of what [rebuild]
      returns but the term ([exported_code], [slot_offsets], the typing

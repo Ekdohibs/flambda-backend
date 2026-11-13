@@ -446,25 +446,25 @@ Qed.
 Theorem two_calls_example : two_calls_example_statement.
 Proof.
   do 10 (split; [ vm_compute; reflexivity | ]).
-  split; exists 30; vm_compute; reflexivity.
+  split; exists 30; try exists no_reads; vm_compute; reflexivity.
 Qed.
 
 Theorem poison_result_example : poison_result_example_statement.
 Proof.
   do 11 (split; [ vm_compute; reflexivity | ]).
-  split; exists 30; vm_compute; reflexivity.
+  split; exists 30; try exists no_reads; vm_compute; reflexivity.
 Qed.
 
 Theorem masked_return_example : masked_return_example_statement.
 Proof.
   do 11 (split; [ vm_compute; reflexivity | ]).
-  split; exists 30; vm_compute; reflexivity.
+  split; exists 30; try exists no_reads; vm_compute; reflexivity.
 Qed.
 
 Theorem tail_escape_example : tail_escape_example_statement.
 Proof.
   do 14 (split; [ vm_compute; reflexivity | ]).
-  split; exists 30; vm_compute; reflexivity.
+  split; exists 30; try exists no_reads; vm_compute; reflexivity.
 Qed.
 
 Theorem cc_fragment_examples : cc_fragment_examples_statement.
@@ -474,14 +474,14 @@ Theorem spurious_widget_counterexample :
   spurious_widget_counterexample_statement.
 Proof.
   do 9 (split; [ vm_compute; reflexivity | ]).
-  split; [ exists 30; vm_compute; reflexivity | ].
+  split; [ exists 30; try exists no_reads; vm_compute; reflexivity | ].
   do 6 (split; [ vm_compute; reflexivity | ]).
   assert (Hsource :
     behaves
       (State SpuriousWidgetExample.unit_expr [] [] empty_static_env
-         empty_heap)
+         empty_heap no_reads)
       (Exits 1%positive [Value_const (Tagged_immediate 9)] empty_heap))
-    by (exists 30; vm_compute; reflexivity).
+    by (exists 30; try exists no_reads; vm_compute; reflexivity).
   split; [ exact Hsource | ].
   intros preserve_direct_calls (_ & _ & Hwrong).
   assert (Htarget :
@@ -489,9 +489,10 @@ Proof.
       (State
          (SpuriousWidgetExample.rebuilt SpuriousWidgetExample.spurious
             preserve_direct_calls)
-         [] [] empty_static_env empty_heap)
+         [] [] empty_static_env empty_heap no_reads)
       Goes_wrong)
-    by (exists 30; destruct preserve_direct_calls; vm_compute; reflexivity).
+    by (exists 30; try exists no_reads; destruct preserve_direct_calls;
+        vm_compute; reflexivity).
   pose proof (FlambdaSemanticsProofs.behaviour_unique _ _ _ (Hwrong Htarget)
                 Hsource) as Heq.
   discriminate Heq.
@@ -751,8 +752,8 @@ Lemma wstep_traverse_prim (env : traverse_env) (x : variable) (p : prim)
   wstep a (traverse_prim env x p args a).
 Proof.
   unfold traverse_prim.
-  destruct p as [ u | b | v | h ]; [ destruct u | destruct b | destruct v
-    | destruct h ]; wauto.
+  destruct p as [ u | b | v | h | r ]; [ destruct u | destruct b | destruct v
+    | destruct h | destruct r ]; wauto.
 Qed.
 
 Lemma wstep_record_set (env : traverse_env)

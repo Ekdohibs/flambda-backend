@@ -252,7 +252,7 @@ Definition tupled_unit : expr :=
 
 (* A term run on its own. *)
 Definition on_its_own (e : expr) : state :=
-  State e [] [] empty_static_env empty_heap.
+  State e [] [] empty_static_env empty_heap no_reads.
 
 (* ======================================================================== *)
 (* The two graphs and their solutions                                       *)
