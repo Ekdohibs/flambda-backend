@@ -1211,6 +1211,24 @@ removed it:
   itself an answer it is that one
   (`FlambdaPrimitiveSpec.phys_equal_same_statement`, C5's), and
   where it gives none the term before is undefined.
+- The comparison of two different predefined exceptions
+  (`handler_arm_never_taken.ml`, `name_then_wildcard.ml`,
+  `wrong_name_uncaught.ml`; T5b's sources). A handler has an arm
+  for an exception by name, and what is raised is another
+  predefined exception: the comparison is of two different symbols
+  that the unit imports. Simplify answers of two different symbols
+  that they differ (`prove_physical_equality` of
+  `middle_end/flambda2/types/provers.ml`): it folds the comparison
+  to false and drops the arm. The pass that folds a `Phys_equal` of
+  a simple against itself folds one of two different symbols to
+  the other answer, in the term before
+  (`FlambdaSameComparisonSpec.fold_same_comparison`). It is a
+  refinement: where the machine gives the comparison of two
+  different symbols an answer it is that one
+  (`FlambdaPrimitiveSpec.phys_equal_symbols_statement`, C5's), and
+  where it gives none the term before is undefined. The three
+  units were not validated before the pass had that case, and are
+  validated with their imports.
 - The argument of an exception that is raised at one place, in a
   branch (`exn_with_argument.ml`). The handler reads the length of
   the string that the exception carries, a string that the unit

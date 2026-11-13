@@ -1,0 +1,36 @@
+let $camlName_then_wildcard__first_const_0 = Block 0 () in
+(let try_region/38 = %begin_try_region () in
+ let try_ghost_region/39 = %begin_try_ghost_region () in
+ cont k/23 push(k/21)
+   where k/23 =
+     let Popaque/47 = %opaque (0) in
+     ((let prim/49 = %int_comp.ne (Popaque/47, 0) in
+       switch prim/49
+         | 0 -> k/25
+         | 1 -> k/26)
+        where k/26 =
+          cont k/24
+        where k/25 =
+          cont k/21 pop(regular k/21) ($`*predef*`.caml_exn_Division_by_zero)
+        where k/24 =
+          let int_div/48 = %int_barith.div (10, Popaque/47) in
+          cont k/22 (int_div/48))
+   where k/22 (body_result/46 : imm tagged) =
+     cont k/20 pop(k/21) (body_result/46)
+   where k/21 exn (exn/40 : val) =
+     let unit/41 = %end_try_region (try_region/38) in
+     let unit/42 = %end_try_ghost_region (try_ghost_region/39) in
+     let prim/43 = %phys_eq (exn/40, $`*predef*`.caml_exn_Not_found) in
+     let eq/44 = %tag_imm (prim/43) in
+     let untagged/45 = %untag_imm (eq/44) in
+     switch untagged/45
+       | 0 -> k/20 (2)
+       | 1 -> k/20 (1))
+  where k/20 (result/36 : imm tagged) =
+    let Pmakeblock/37 = %block.[`0`].`toplevel` (result/36) in
+    cont k/19 (Pmakeblock/37)
+  where k/19 define_root_symbol (module_block/34) =
+    let field_0/35 = %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/34)
+    in
+    let $camlName_then_wildcard = Block 0 (field_0/35) in
+    cont done ($camlName_then_wildcard)

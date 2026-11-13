@@ -1,0 +1,50 @@
+let $camlHandler_arm_never_taken__first_const_0 = Block 0 () in
+(let try_region/48 = %begin_try_region () in
+ let try_ghost_region/49 = %begin_try_ghost_region () in
+ cont k/33 push(k/27)
+   where k/33 =
+     ((let Popaque/60 = %opaque (3) in
+       let prim/61 = %int_comp.lt (Popaque/60, 5) in
+       let int_lessthan/62 = %tag_imm (prim/61) in
+       (let untagged/63 = %untag_imm (int_lessthan/62) in
+        switch untagged/63
+          | 0 -> k/32 (0)
+          | 1 -> k/35)
+         where k/35 =
+           cont k/34)
+        where k/34 =
+          cont k/27 pop(regular k/27) ($`*predef*`.caml_exn_Not_found))
+   where k/32 (body_result/59 : imm tagged) =
+     cont k/26 pop(k/27) (body_result/59)
+   where k/27 exn (exn/50 : val) =
+     let unit/51 = %end_try_region (try_region/48) in
+     let unit/52 = %end_try_ghost_region (try_ghost_region/49) in
+     ((let prim/56 = %phys_eq (exn/50, $`*predef*`.caml_exn_Division_by_zero)
+       in
+       let eq/57 = %tag_imm (prim/56) in
+       (let untagged/58 = %untag_imm (eq/57) in
+        switch untagged/58
+          | 0 -> k/31
+          | 1 -> k/26 (1))
+         where k/31 =
+           cont k/28)
+        where k/28 =
+          ((let prim/53 = %phys_eq (exn/50, $`*predef*`.caml_exn_Not_found)
+            in
+            let eq/54 = %tag_imm (prim/53) in
+            (let untagged/55 = %untag_imm (eq/54) in
+             switch untagged/55
+               | 0 -> k/30
+               | 1 -> k/26 (2))
+              where k/30 =
+                cont k/29)
+             where k/29 =
+               cont error pop(reraise error) (exn/50))))
+  where k/26 (result/46 : imm tagged) =
+    let Pmakeblock/47 = %block.[`0`].`toplevel` (result/46) in
+    cont k/25 (Pmakeblock/47)
+  where k/25 define_root_symbol (module_block/44) =
+    let field_0/45 = %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/44)
+    in
+    let $camlHandler_arm_never_taken = Block 0 (field_0/45) in
+    cont done ($camlHandler_arm_never_taken)

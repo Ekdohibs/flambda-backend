@@ -1,0 +1,11 @@
+wrong_name_uncaught.fl:
+  before Simplify, with its 2 imports (25 steps): raises
+                                                    <imported caml_exn_Not_found>
+  after Simplify, with its 2 imports (8 steps): raises
+                                                  <imported caml_exn_Not_found>
+  the check of kinds: passes before, passes after
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated with its imports: the same once closures and blocks are lifted to symbols and the terms normalised
+  the check of regions: passes before, passes after

@@ -1,0 +1,37 @@
+let $camlWrong_name_uncaught__first_const_0 = Block 0 () in
+(let try_region/37 = %begin_try_region () in
+ let try_ghost_region/38 = %begin_try_ghost_region () in
+ cont k/27 push(k/23)
+   where k/27 =
+     ((let Popaque/46 = %opaque (1) in
+       (let untagged/47 = %untag_imm (Popaque/46) in
+        switch untagged/47
+          | 0 -> k/26 (1)
+          | 1 -> k/29)
+         where k/29 =
+           cont k/28)
+        where k/28 =
+          cont k/23 pop(regular k/23) ($`*predef*`.caml_exn_Not_found))
+   where k/26 (body_result/45 : imm tagged) =
+     cont k/22 pop(k/23) (body_result/45)
+   where k/23 exn (exn/39 : val) =
+     let unit/40 = %end_try_region (try_region/37) in
+     let unit/41 = %end_try_ghost_region (try_ghost_region/38) in
+     ((let prim/42 = %phys_eq (exn/39, $`*predef*`.caml_exn_End_of_file) in
+       let eq/43 = %tag_imm (prim/42) in
+       (let untagged/44 = %untag_imm (eq/43) in
+        switch untagged/44
+          | 0 -> k/25
+          | 1 -> k/22 (0))
+         where k/25 =
+           cont k/24)
+        where k/24 =
+          cont error pop(reraise error) (exn/39)))
+  where k/22 (result/35 : imm tagged) =
+    let Pmakeblock/36 = %block.[`0`].`toplevel` (result/35) in
+    cont k/21 (Pmakeblock/36)
+  where k/21 define_root_symbol (module_block/33) =
+    let field_0/34 = %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/33)
+    in
+    let $camlWrong_name_uncaught = Block 0 (field_0/34) in
+    cont done ($camlWrong_name_uncaught)
