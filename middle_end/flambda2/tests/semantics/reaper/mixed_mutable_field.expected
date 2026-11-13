@@ -42,3 +42,19 @@ mixed_mutable_field.fl:
     the reaper's input (36 steps): returns [0: 3]
     the model's rebuild (10 steps): undefined
     the model's rebuild against the input: DIFFERENT
+  with unboxing and the proposed fixes:
+    Pmakeblock/v8 to unbox: without the fixes yes, with them no (a seed of the fixes)
+    the table of to_unbox: FAILS the check of the rules without the fixes, as expected, passes that of the rules with them
+    the table of to_change_representation: passes the check of the rules with the fixes
+    the check that sets of closures are unboxed or changed whole: the tables pass it
+    x/v3: {field 0 val}
+    Pmakeblock/v9: {field 0 val}
+    my_closure/v7: representation {}, with function slot f, at function slot f
+    my_closure/v11: representation {}, with function slot g, at function slot g
+    $camlMixed_mutable_field__f_1_0: representation {}, with function slot f, at function slot f
+    $camlMixed_mutable_field__g_0_1: representation {}, with function slot g, at function slot g
+    code f_0: parameters [keep val, unbox {field 0 val}], results [keep val]
+    code g_1: parameters [keep val], results [keep val]
+    the reaper's input (36 steps): returns [0: 3]
+    the model's rebuild (36 steps): returns [0: 3]
+    the model's rebuild against the input: the same

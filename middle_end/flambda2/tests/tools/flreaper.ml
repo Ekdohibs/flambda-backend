@@ -39,12 +39,14 @@
    [-no-reaper-change-calling-conventions] and [-no-reaper-unbox], which the
    tool sets whatever its command line says: [main]); then changing calling
    conventions ([compare_calling_conventions]); then changing calling
-   conventions and unboxing, the compiler's defaults ([compare_unboxing]), which
-   is the last part of what is printed. The mode of
-   [-reaper-preserve-direct-calls], of [-reaper-local-fields], of
-   [-reaper-max-unbox-size] and of [-X reaper-lambda-lifting] is the one that
-   the command line gives, the compiler's default unless it says otherwise.
-   Then:
+   conventions and unboxing, the compiler's defaults ([compare_unboxing]). Last,
+   where the fixes proposed for faults of the compiler's unboxing
+   (FlambdaReaperUnboxingSpec.v) change what the model unboxes, the model alone
+   is run with them ([run_with_fixes]), which is then the last part of what is
+   printed. The mode of [-reaper-preserve-direct-calls], of
+   [-reaper-local-fields], of [-reaper-max-unbox-size] and of [-X
+   reaper-lambda-lifting] is the one that the command line gives, the compiler's
+   default unless it says otherwise. Then:
 
    - The unit is converted to a term of the model by the conversion of
    flsemantics.ml, and the extracted traversal
@@ -2568,6 +2570,169 @@ let compare_unboxing ~(names : unit_names) ~(input : Flsemantics.converted)
             ~input_unit ~rebuilt_body ~compiler_output:reaped);
       true
 
+(* ---- Unboxing with the proposed fixes --------------------------------- *)
+
+(* The model alone, with the fixes proposed for faults of the compiler's
+   unboxing that FlambdaReaperUnboxingSpec.v states (the seeds of
+   [cannot_unbox0] of [FlambdaReaperUnboxing.fix_seeds]), in the mode of
+   [compare_unboxing]: the model's tables of [to_unbox] and
+   [to_change_representation] with the fixes ([derive_to_unbox_fixed]), and its
+   rebuild with them run against the input ([compare_rebuild], without the
+   compiler's output). This is printed only where the fixes change the table of
+   [to_unbox], so that it says nothing of the other units. The tables with the
+   fixes are not what the rules without them give, and [check_to_unbox] rejects
+   them where an allocation with a source is no longer unboxed: that is printed,
+   and is expected. They must pass the checks of the rules with the fixes
+   ([check_to_unbox_fixed], [check_to_change_representation_fixed]) and that of
+   sets of closures, or the tool fails. The allocations whose decisions differ
+   are printed, then what the model unboxes and changes, as [compare_unboxing]
+   prints it. *)
+let run_with_fixes ~(names : unit_names) ~(input : Flsemantics.converted)
+    ~(input_unit : Flambda_unit.t) ~ends ~(model_facts : Graph_spec.facts)
+    ~(model_tables : Graph_spec.tables) : bool =
+  let indent = "    " in
+  let max_unbox_size = nat_of_int (Features.reaper_max_unbox_size ()) in
+  let lambda_lifting = lambda_lifting () in
+  let cannot_change = Cc.derive_cannot_change model_facts model_tables in
+  let dominated = Unboxing.derive_dominated model_tables in
+  let to_unbox =
+    Unboxing.derive_to_unbox is_local model_facts model_tables cannot_change
+      max_unbox_size lambda_lifting
+  in
+  let to_unbox_fixed =
+    Unboxing.derive_to_unbox_fixed is_local model_facts model_tables
+      cannot_change max_unbox_size lambda_lifting
+  in
+  if dedup to_unbox = dedup to_unbox_fixed
+  then true
+  else (
+    Format.printf "  with unboxing and the proposed fixes:@.";
+    let tcr =
+      Unboxing.derive_to_change_representation is_local model_facts model_tables
+        cannot_change max_unbox_size lambda_lifting to_unbox
+    in
+    let tcr_fixed =
+      Unboxing.derive_to_change_representation is_local model_facts model_tables
+        cannot_change max_unbox_size lambda_lifting to_unbox_fixed
+    in
+    let seeds =
+      dedup (Unboxing.fix_seeds model_facts model_tables cannot_change)
+    in
+    let yes_no b = if b then "yes" else "no" in
+    let differences name without with_ =
+      List.iter
+        (fun x ->
+          if List.mem x without <> List.mem x with_
+          then
+            Format.printf "%s%a %s: without the fixes %s, with them %s%s@."
+              indent print_node x name
+              (yes_no (List.mem x without))
+              (yes_no (List.mem x with_))
+              (if List.mem x seeds then " (a seed of the fixes)" else ""))
+        (dedup (without @ with_))
+    in
+    differences "to unbox" to_unbox to_unbox_fixed;
+    differences "to change the representation of" tcr tcr_fixed;
+    let unfixed_ok =
+      Unboxing.check_to_unbox is_local model_facts model_tables cannot_change
+        max_unbox_size lambda_lifting to_unbox_fixed
+    in
+    let to_unbox_ok =
+      Unboxing.check_to_unbox_fixed is_local model_facts model_tables
+        cannot_change max_unbox_size lambda_lifting to_unbox_fixed
+    in
+    let tcr_ok =
+      Unboxing.check_to_change_representation_fixed is_local model_facts
+        model_tables cannot_change max_unbox_size lambda_lifting to_unbox_fixed
+        tcr_fixed
+    in
+    let whole_ok =
+      Unboxing.check_sets_whole model_facts model_tables to_unbox_fixed
+        tcr_fixed
+    in
+    Format.printf
+      "%sthe table of to_unbox: %s the check of the rules without the fixes%s, \
+       %s that of the rules with them@."
+      indent (passes unfixed_ok)
+      (if unfixed_ok then "" else ", as expected")
+      (passes to_unbox_ok);
+    Format.printf
+      "%sthe table of to_change_representation: %s the check of the rules with \
+       the fixes@."
+      indent (passes tcr_ok);
+    Format.printf
+      "%sthe check that sets of closures are unboxed or changed whole: the \
+       tables %s it@."
+      indent
+      (if whole_ok then "pass" else "FAIL");
+    if not (to_unbox_ok && tcr_ok && whole_ok)
+    then false
+    else
+      let unit_nodes = unit_nodes names in
+      let model_unboxed, _ =
+        Unboxing.unit_unboxed_fields model_facts model_tables dominated
+          to_unbox_fixed input.body
+      in
+      List.iter
+        (fun n ->
+          Option.iter
+            (fun fields ->
+              Format.printf "%s%a: %a@." indent print_node n print_shape
+                (model_shape fields))
+            (List.assoc_opt n model_unboxed))
+        unit_nodes;
+      let model_reprs =
+        Unboxing.unit_changed_representations is_local model_facts model_tables
+          dominated to_unbox_fixed tcr_fixed input.body
+      in
+      List.iter
+        (fun n ->
+          Option.iter
+            (fun repr ->
+              Format.printf "%s%a: representation %a@." indent print_node n
+                print_repr
+                (Some (model_repr_shape repr)))
+            (List.assoc_opt n model_reprs))
+        unit_nodes;
+      let deps =
+        Cc.unit_code_deps (preserve_direct_calls ())
+          (Flsemantics.interface input)
+          input.body
+      in
+      List.iter
+        (fun (id, change) ->
+          match model_change_shape change with
+          | Changing _ as shape ->
+            Format.printf "%s%a: %a@." indent print_node
+              (Graph_spec.Node_code_id id) print_change_shape shape
+          | Not_changing -> ())
+        (Unboxing.unit_calling_convention_changes_u model_facts model_tables
+           cannot_change deps dominated to_unbox_fixed input.body);
+      List.iter
+        (fun (id, fields) ->
+          Option.iter
+            (fun fields ->
+              Format.printf "%s%a: my_closure unboxed %a@." indent print_node
+                (Graph_spec.Node_code_id id) print_shape (model_shape fields))
+            fields)
+        (Unboxing.unit_my_closure_decisions_u model_facts model_tables
+           cannot_change deps dominated to_unbox_fixed input.body);
+      let preserve =
+        match Features.reaper_preserve_direct_calls () with
+        | Auto | Always -> true
+        | Never | Zero_alloc -> false
+      in
+      let rebuilt_body =
+        within_budget "the model's rebuild with the fixes" ~indent
+          ~facts:model_facts ~input (fun () ->
+            Unboxing.rebuild_unit_unbox_repr is_local model_facts model_tables
+              cannot_change deps dominated to_unbox_fixed tcr_fixed preserve
+              input.body)
+      in
+      compare_rebuild ~indent ~ends ~input ~input_unit ~rebuilt_body
+        ~compiler_output:None;
+      true)
+
 (* ---- One example ------------------------------------------------------ *)
 
 let print_graphs () =
@@ -2728,7 +2893,10 @@ let check ~filename ~cmx_loader (simplified : Simplify.simplify_result) : bool =
         cc_checked
         && timed "the unboxing" (fun () ->
             compare_unboxing ~names ~input ~input_unit:unit ~model_facts
-              ~model_tables ~compiler ~cmx_loader simplified))
+              ~model_tables ~compiler ~cmx_loader simplified)
+        && timed "the unboxing with the fixes" (fun () ->
+            run_with_fixes ~names ~input ~input_unit:unit
+              ~ends:compiler.ends_of_regions ~model_facts ~model_tables))
 
 (* The example in [filename], read and given to Simplify as flsemantics.ml does
    it ([Flsemantics.check_file]). Whether nothing made the tool fail. *)

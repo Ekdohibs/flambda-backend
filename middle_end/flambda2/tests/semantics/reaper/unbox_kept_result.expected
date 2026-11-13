@@ -45,3 +45,16 @@ unbox_kept_result.fl:
     the model's rebuild against the input: DIFFERENT
     the compiler's output (19 steps): undefined
     the compiler's output against the input: DIFFERENT
+  with unboxing and the proposed fixes:
+    p/v1 to unbox: without the fixes yes, with them no (a seed of the fixes)
+    the table of to_unbox: FAILS the check of the rules without the fixes, as expected, passes that of the rules with them
+    the table of to_change_representation: passes the check of the rules with the fixes
+    the check that sets of closures are unboxed or changed whole: the tables pass it
+    my_closure/v3: representation {}, with function slot make, at function slot make
+    my_closure/v5: representation {}, with function slot ident, at function slot ident
+    $Unbox_kept_result_make: representation {}, with function slot make, at function slot make
+    $Unbox_kept_result_ident: representation {}, with function slot ident, at function slot ident
+    code make: parameters [keep val], results [keep val]
+    the reaper's input (22 steps): returns [0: 10]
+    the model's rebuild (22 steps): returns [0: 10]
+    the model's rebuild against the input: the same
