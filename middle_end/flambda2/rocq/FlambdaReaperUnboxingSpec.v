@@ -68,16 +68,31 @@
      check computes them too, [cannot_unbox0] by rounds of its one
      recursive rule, and tests that they are closed, so that the table of
      the compiler passes.
+   - [check_to_change_representation] tests the same of a table of
+     [to_change_representation], the last rule, for a table of
+     [to_unbox] that passes its check
+     ([check_to_change_representation_sound_statement]): an allocation
+     changes its representation if and only if it has a use, is not in
+     [cannot_change_representation] and is not unboxed, leaving out
+     allocations with no source. Both ways are needed: a closure that
+     changes its representation wrongly may be read by code that expects
+     its old slots, and one that is left out keeps in a slot a block
+     unboxed on the assumption that the closure would hold its fields
+     (rule [cu0_stored]).
+   - [check_sets_whole] tests that the closures of a set that have a use
+     are unboxed alike and change their representation alike
+     ([check_sets_whole_sound_statement]): the rebuild unboxes a set, or
+     changes its representation, whole.
 
    [unboxing_closed] says that five tables, those of
    [cannot_change_representation0], [cannot_change_representation1],
    [cannot_change_representation], [cannot_unbox0] and [cannot_unbox],
    are closed under the rules, each a field named after the relation it
-   concludes and the rule. The rules of [to_change_representation], which
-   only closures meet, are not here: FlambdaReaperUnboxing.v leaves the
-   change of representation out. Nothing is said of a table that fails a
-   check; the examples of FlambdaReaperUnboxing.v have tables that the
-   checks reject, and tables that pass. *)
+   concludes and the rule; the rules of [to_unbox] and
+   [to_change_representation] are the statements of their checks.
+   Nothing is said of a table that fails a check; the examples of
+   FlambdaReaperUnboxing.v have tables that the checks reject, and tables
+   that pass. *)
 
 From Stdlib Require Import List Bool.
 From OxCamlStdlib Require Import OxCamlLogic.
@@ -283,3 +298,47 @@ Definition check_to_unbox_sound_statement : Prop :=
            s_has_usage (solution_of_tables T) x = true ->
            s_has_source (solution_of_tables T) x = true -> cu x = false ->
            mem_node x to_unbox = true).
+
+Definition check_to_change_representation_sound_statement : Prop :=
+  ∀ (is_local : field -> bool) (F : facts) (T : tables)
+    (cannot_change : list node) (max_unbox_size : nat)
+    (lambda_lifting : bool) (to_unbox tcr : list node),
+    check_to_change_representation is_local F T cannot_change max_unbox_size
+      lambda_lifting to_unbox tcr = true ->
+    ∃ crr0 crr1 crr cu0 cu : node -> bool,
+      unboxing_closed is_local (graph_of_facts F) (solution_of_tables T)
+        (fun n => mem_node n cannot_change) max_unbox_size lambda_lifting
+        crr0 crr1 crr cu0 cu
+      ∧ (∀ x : node,
+           mem_node x to_unbox = true ->
+           s_has_usage (solution_of_tables T) x = true ∧ cu x = false)
+      ∧ (∀ x : node,
+           s_has_usage (solution_of_tables T) x = true ->
+           s_has_source (solution_of_tables T) x = true -> cu x = false ->
+           mem_node x to_unbox = true)
+      ∧ (∀ x : node,
+           mem_node x tcr = true ->
+           s_has_usage (solution_of_tables T) x = true ∧ crr x = false
+           ∧ mem_node x to_unbox = false)
+      ∧ (∀ x : node,
+           s_has_usage (solution_of_tables T) x = true ->
+           s_has_source (solution_of_tables T) x = true -> crr x = false ->
+           mem_node x to_unbox = false ->
+           mem_node x tcr = true).
+
+(* ======================================================================== *)
+(* Sets of closures                                                         *)
+(* ======================================================================== *)
+
+(* Two closures of a set, one held by the other in a function slot, that
+   have a use are both unboxed or neither, and both change their
+   representation or neither. *)
+Definition check_sets_whole_sound_statement : Prop :=
+  ∀ (F : facts) (T : tables) (to_unbox tcr : list node),
+    check_sets_whole F T to_unbox tcr = true ->
+    ∀ (x y : node) (f : field),
+      g_constructor (graph_of_facts F) x f y -> is_function_slot f = true ->
+      s_has_usage (solution_of_tables T) x = true ->
+      s_has_usage (solution_of_tables T) y = true ->
+      mem_node x to_unbox = mem_node y to_unbox
+      ∧ mem_node x tcr = mem_node y tcr.

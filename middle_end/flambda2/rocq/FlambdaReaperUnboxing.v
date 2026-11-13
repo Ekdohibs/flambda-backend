@@ -26,46 +26,69 @@
  ******************************************************************************)
 
 (* The unboxing of the reaper, transcribed: which allocations are
-   unboxed, the variables that stand for their fields, and the rebuild of
-   the unit with them, the changes of calling convention included.
+   unboxed, the variables that stand for their fields, which closures
+   change their representation, and the rebuild of the unit with them,
+   the changes of calling convention included.
 
    This file transcribes, in middle_end/flambda2/reaper/:
    - points_to_analysis.ml: the rules of [post_processing_rules] that
      conclude [multiple_allocation_points] and
      [dominated_by_allocation_point] ([derive_dominated], and the check
      [check_dominated]); [get_direct_usages],
-     [add_usages_through_function_slots], [get_fields] and
-     [get_single_field_source];
-   - unboxing_analysis.ml: [unboxing_rules] but those of
-     [to_change_representation], with the seeds of [cannot_unbox0] of
-     [perform_analysis0] ([unboxing_relations], the checks
-     [check_unboxing_closed] and [check_to_unbox], and [derive_to_unbox]);
-     [has_to_be_unboxed], [mk_unboxed_fields] and the unboxed fields of
-     [perform_analysis0] ([unboxed_fields_of_names]); [param_decision]
-     with [Unbox], [arity_of_decisions], [get_arity_and_modes] and
+     [add_usages_through_function_slots], [get_fields],
+     [get_single_field_source], [get_set_of_closures_def]
+     ([set_function_slots]) and [get_fields_usage_of_constructors]
+     ([get_fields_of_constructors]), with the rules of
+     [field_of_constructor_is_used_top] and
+     [field_of_constructor_is_used_as] that it reads ([field_used_top],
+     [field_used_as]);
+   - unboxing_analysis.ml: [unboxing_rules], with the seeds of
+     [cannot_unbox0] of [perform_analysis0] ([unboxing_relations], the
+     checks [check_unboxing_closed], [check_to_unbox] and
+     [check_to_change_representation], [derive_to_unbox] and
+     [derive_to_change_representation]); [has_to_be_unboxed],
+     [mk_unboxed_fields] and the unboxed fields of [perform_analysis0]
+     ([unboxed_fields_of_names]); the [changed_representation] of
+     [perform_analysis0] for closures ([Closure_representation]:
+     [changed_representations]); [param_decision] with [Unbox],
+     [my_closure_param_decision] ([my_closure_decision_u]),
+     [arity_of_decisions], [get_arity_and_modes] and
      [compute_code_changes] ([code_change_u]);
    - rebuild.ml: [rewrite_simple] of an unboxed name ([poison]),
      [get_args], [get_args_with_kinds], [bind_fields],
      [bind_field_to_simple], [should_keep_param] of [rebuild]
      ([handler_decisions]), [rewrite_apply_cont_expr] ([get_args]),
-     [load_field_from_value_which_is_being_unboxed],
+     [load_field_from_value_which_is_being_unboxed] (of an unboxed value
+     and of a closure whose representation changes),
      [rebuild_singleton_binding_which_is_being_unboxed],
-     [rewrite_field_access] of [rebuild_named_default_case]
-     ([rebuild_let_u]), [freshen_decisions], [make_apply_wrapper] with
-     every pair of decisions, [rebuild_apply] with an unboxed callee and
-     with [Unbox] decisions, and [rebuild_function_params_and_body] with
+     [rebuild_set_of_closures_binding_which_is_being_unboxed]
+     ([rebuild_unboxed_set]), [rewrite_set_of_closures] with a change of
+     representation ([rebuild_set_u], [changed_value_slots]),
+     [rebuild_singleton_binding_whose_representation_is_being_changed]
+     of a closure ([rebuild_changed_binding]), [rewrite_field_access] and
+     [rewrite_field_access_chg_repr] of [rebuild_named_default_case]
+     ([rebuild_let_u]), the static sets of
+     [rebuild_let_expr_static_consts] whose representation changes
+     ([rebuild_changed_static_const]), [freshen_decisions],
+     [make_apply_wrapper] with every pair of decisions, [rebuild_apply]
+     with an unboxed callee, with [Unbox] decisions and with
+     [Unbox_my_closure], and [rebuild_function_params_and_body] with
      them.
    It needs no review: FlambdaReaperUnboxingSpec.v says what the checks
    mean, and the test tool compares the decisions and the rebuilt term
    with those of the compiler's reaper. It is extracted
    ([derive_dominated], [check_dominated], [derive_to_unbox],
-   [check_to_unbox], [to_unbox_of_unboxed_names], [unit_unboxed_fields],
-   [unit_calling_convention_changes_u], [rebuild_unit_unbox]).
+   [check_to_unbox], [to_unbox_of_unboxed_names],
+   [derive_to_change_representation], [check_to_change_representation],
+   [to_change_representation_of_alloc_points], [check_sets_whole],
+   [unit_unboxed_fields], [unit_changed_representations],
+   [unit_calling_convention_changes_u], [unit_my_closure_decisions_u],
+   [rebuild_unit_unbox], [rebuild_unit_unbox_repr]).
 
    What is transcribed is the reaper run with
    [-reaper-change-calling-conventions] and [-reaper-unbox], the
-   compiler's defaults, for blocks and boxed numbers. The flags that the
-   rules read are parameters: the local fields ([is_local]),
+   compiler's defaults, for blocks, boxed numbers and closures. The flags
+   that the rules read are parameters: the local fields ([is_local]),
    [-reaper-max-unbox-size] ([max_unbox_size]) and the extra option
    [reaper-lambda-lifting] ([lambda_lifting]).
 
@@ -87,6 +110,18 @@
    [cannot_change_calling_convention] is that of
    FlambdaReaperCallingConventions.v, checked there.
 
+   [to_change_representation] is not exported either; the changes of
+   representation are, by [Analysis.get_changed_representation], each
+   with the closure that the name is dominated by. The tool takes for
+   [to_change_representation] those closures that have a use
+   ([to_change_representation_of_alloc_points]), which finds every
+   allocation of the table that has a source and is a closure (the
+   others would have a [Block_representation], below); the check
+   [check_to_change_representation] tests it against the last rule, both
+   ways, with the tables that the model computes, and
+   [check_sets_whole] that the closures of a set with a use are unboxed
+   alike and change their representation alike.
+
    The unboxed fields. Each name dominated by an allocation to unbox has
    its own variables, one for each field read from it that is not
    unboxed in turn, as [perform_analysis0] makes them; the model gives
@@ -97,6 +132,22 @@
    through it ([Field.Map.ordered_fold]) to make parameters, arguments
    and [Let]s. The wrappers have the names after those
    (FlambdaReaperRebuild.v says how they are named).
+
+   The changes of representation. A closure of [to_change_representation]
+   gives its set a new representation ([changed_representations]): the
+   value slots that its closures have a use of
+   ([get_fields_of_constructors]), each a new value slot or, if what it
+   is read into is to be unboxed, unboxed in turn into new value slots
+   ([mk_unboxed_fields], whose leaves are here value slots), and a new
+   function slot for each of its function slots. Every name dominated by
+   a closure of the set has that representation, with the function slot
+   of that closure. The OCaml makes new slots of its own
+   ([Value_slot.create], [Function_slot.create]); the model picks its
+   own: the names after every slot of the unit ([fresh_name] of
+   [slots_of]), the value slots of a set in the order of the fields, then
+   its function slots, the sets in the order of the table [tcr]. The
+   test tool relates the compiler's new slots to the model's through the
+   two representations of each name, field for field.
 
    The rebuild. [rebuild_expr_u] is [rebuild_expr_cc] of
    FlambdaReaperCallingConventions.v case for case, with the unboxing.
@@ -110,9 +161,14 @@
    its parameters ([decision]: [Keep], [Delete] or [Unbox]) in place of
    the masks of FlambdaReaperRebuild.v, and code that changes its
    calling convention has [Unbox] decisions for the parameters and
-   results that the code dep has unboxed. With nothing unboxed, the
-   rebuild is that of FlambdaReaperCallingConventions.v (an example
-   below shows it on the examples of that file).
+   results that the code dep has unboxed, and the fields of its
+   [my_closure] for parameters if the code dep has it unboxed. A set of
+   closures that is unboxed binds the variables of the fields of its
+   closures; one whose representation changes is made with the new
+   slots, and a read from one of its closures is at the new slots. With
+   nothing unboxed and no change of representation, the rebuild is that
+   of FlambdaReaperCallingConventions.v (an example below shows it on the
+   examples of that file).
 
    [make_apply_wrapper] is transcribed as the compiler has it. Where the
    continuation of a call keeps a parameter for a result that the callee
@@ -163,23 +219,43 @@
      the rounds of [cannot_unbox0] are not done.
    - The relation [code_id_my_closure] is read off the term
      ([bound_code_my_closures]), the facts not having it.
+   - The new slots of a change of representation are the model's
+     (above).
+   - Sets of closures are [let_closures] (FlambdaReaperRebuild.v): the
+     [Let] of the first closure, and the projections of the others from
+     it. The closures of the set are the variable of the [Let] and those
+     of the projections. Where the set is unboxed, the [Let] binds the
+     variables of the fields of each of its closures with a use, in the
+     order of the closures, as the compiler's [Let] of the set does, and
+     the projections are dropped; where its representation changes, the
+     projections are at the new function slots.
+   - A call whose callee is unboxed ([Unbox_my_closure]) has no callee in
+     the OCaml; the model's calls always have one, and it is the poison
+     that [rewrite_simple] makes of the unboxed callee.
+   - The older forms [Set_of_closures] and [Static_const_set_of_closures]
+     have no fact of a function slot (FlambdaReaperTraversal.v): to
+     [get_set_of_closures_def] they are not sets, and they never change
+     their representation. They are unboxed as the other form is.
+   - Where the OCaml stops with a fatal error in a change of
+     representation or an unboxing of a closure, the model does something
+     defined: a field of the representation that the set has not, or
+     that is unboxed in one of the two and not in the other, is left out
+     of the set; a function slot that the representation has not stays;
+     a read of a field that the representation has not, or that is
+     unboxed in turn, is [Invalid]; a closure with a use of an unboxed
+     set that is not unboxed itself, a field of an unboxed closure that
+     the set has not, or a callee that is not unboxed for code that
+     unboxes its [my_closure], make the term [Invalid]; with no group of
+     parameters, the fields of [my_closure] or of the callee are left
+     out.
 
-   Left out: closures. The change of representation of closures
-   ([to_change_representation], [Closure_representation], the renaming
-   of their value and function slots in [rewrite_set_of_closures],
-   [rebuild_singleton_binding_whose_representation_is_being_changed],
-   [rewrite_field_access_chg_repr], the static sets of
-   [rebuild_let_expr_static_consts]), the unboxing of a set of closures
-   ([rebuild_set_of_closures_binding_which_is_being_unboxed]) and of
-   [my_closure] ([Unbox_my_closure], the fields of an unboxed callee
-   given as arguments). The model's decision of [my_closure] is
-   [Keep_my_closure], a set of closures is rebuilt as if no closure were
-   unboxed, and a projection of a value slot from an unboxed closure is
-   the variable of the slot. [Block_representation] is left out too: the
-   compiler makes one only for names that its traversal makes, which are
-   not in the term. The test tool reports a unit that unboxes a closure,
-   or changes the representation of a name of the term other than by
-   renaming the slots of a closure, as out of the model. *)
+   Left out: [Block_representation]. The compiler makes one for an
+   allocation that its traversal makes, such as the closure of a partial
+   application, and gives it to the names that the allocation dominates,
+   which may be names of the term: the model gives no representation to
+   an allocation of [tcr] that is not a closure of a set, and the tool
+   reports a unit that gives a [Block_representation] to a name of the
+   term as out of the model. *)
 
 From Stdlib Require Import ZArith List Bool PeanoNat.
 From OxCamlStdlib Require Import OxCamlLogic.
@@ -854,7 +930,60 @@ Definition check_to_unbox (to_unbox : list node) : bool :=
           negb (has_source x) || mem_node x (ut_cu R) || mem_node x to_unbox)
        (t_has_usage T).
 
+(* [to_change_representation] as the last rule gives it, for a table
+   [to_unbox]: what has a use, is not in [cannot_change_representation]
+   and is not to be unboxed. *)
+Definition derive_to_change_representation (to_unbox : list node)
+    : list node :=
+  let R := unboxing_relations in
+  filter
+    (fun x => negb (mem_node x (ut_crr R)) && negb (mem_node x to_unbox))
+    (Keyed.dedup node_eqb (t_has_usage T)).
+
+(* Whether a table [tcr] of [to_change_representation] is the relation
+   that the rule gives, for a table of [to_unbox] that passes
+   [check_to_unbox]: each allocation of [tcr] has a use, is not in the
+   table of [cannot_change_representation] that the model computes, and
+   is not in [to_unbox]; each allocation with a use and a source that is
+   in none of the three is in [tcr]. An allocation with no source, which
+   dominates no name, may be left out. *)
+Definition check_to_change_representation (to_unbox tcr : list node)
+    : bool :=
+  let R := unboxing_relations in
+  check_to_unbox to_unbox
+  && forallb
+       (fun x =>
+          has_usage x && negb (mem_node x (ut_crr R))
+          && negb (mem_node x to_unbox))
+       tcr
+  && forallb
+       (fun x =>
+          negb (has_source x) || mem_node x (ut_crr R) || mem_node x to_unbox
+          || mem_node x tcr)
+       (t_has_usage T).
+
+(* Whether the closures of a set that have a use are unboxed alike and
+   change their representation alike: the rebuild unboxes a set, or
+   changes its representation, whole. A closure of a set holds each
+   closure of the set in a function slot. *)
+Definition check_sets_whole (to_unbox tcr : list node) : bool :=
+  forallb
+    (fun '(x, f, y) =>
+       negb (is_function_slot f) || negb (has_usage x) || negb (has_usage y)
+       || (Bool.eqb (mem_node x to_unbox) (mem_node y to_unbox)
+           && Bool.eqb (mem_node x tcr) (mem_node y tcr)))
+    (f_constructor F).
+
 End Rules.
+
+(* [to_change_representation] from what the compiler exports: the
+   allocations with a use among those that [changed_representation] of
+   [perform_analysis0] gives with each name ([alloc_points]). For a set,
+   these are its closures, which go together. *)
+Definition to_change_representation_of_alloc_points (T : tables)
+    (alloc_points : list node) : list node :=
+  filter (fun x => mem_node x (t_has_usage T))
+    (Keyed.dedup node_eqb alloc_points).
 
 (* [to_unbox] from what the compiler exports: the allocations that
    dominate a name that [Analysis.get_unboxed_fields] unboxes ([names]).
@@ -978,6 +1107,66 @@ with handler_bound_code_my_closures (h : continuation_handler)
   match h with
   | Handler _ _ handler => bound_code_my_closures handler
   end.
+
+(* The slots, value and function, that a defining expression or a static
+   constant names. *)
+Definition slots_of_named (d : named) : list positive :=
+  match d with
+  | Set_of_closures _ value_slots => map fst value_slots
+  | Closure_of_set slot function_decls value_slots =>
+    slot :: map fst function_decls ++ map fst value_slots
+  | Project_value_slot w _ => [w]
+  | Project_value_slot_from project_from w _ => [project_from; w]
+  | Project_function_slot move_from move_to _ => [move_from; move_to]
+  | Simple _ | Prim _ _ => []
+  end.
+
+Definition slots_of_static_const (const : static_const) : list positive :=
+  match const with
+  | Static_const_set_of_closures _ value_slots => map fst value_slots
+  | Static_const_closure_of_set slot closure_symbols function_decls
+      value_slots =>
+    slot :: map fst closure_symbols ++ map fst function_decls
+    ++ map fst value_slots
+  | Static_const_block _ _ | Static_const_boxed_number _
+  | Static_const_immutable_string _
+  | Static_const_immutable_value_array _ => []
+  end.
+
+(* Every slot that the unit names, in its code too: the slots of a change
+   of representation are the names after them. *)
+Fixpoint slots_of (e : expr) : list positive :=
+  match e with
+  | Let _ _ d body => slots_of_named d ++ slots_of body
+  | Let_static bindings body =>
+    flat_map binding_slots bindings ++ slots_of body
+  | Let_cont_non_recursive _ h body => handler_slots h ++ slots_of body
+  | Let_cont_recursive handlers body =>
+    flat_map (fun '(_, h) => handler_slots h) handlers ++ slots_of body
+  | Apply _ | Apply_cont _ | Switch _ _ | Invalid => []
+  end
+with handler_slots (h : continuation_handler) : list positive :=
+  match h with
+  | Handler _ _ handler => slots_of handler
+  end
+with binding_slots (binding : static_binding) : list positive :=
+  match binding with
+  | Bind_code _ (Code _ _ _ _ _ body) => slots_of body
+  | Bind_deleted_code _ => []
+  | Bind_symbol _ const => slots_of_static_const const
+  end.
+
+(* [Unboxing_analysis.changed_representation] of a closure
+   ([Closure_representation]): the value slots of the set kept, each a
+   new slot or unboxed in turn into new slots ([cr_fields], whose leaves
+   are value slots); the new function slot of each function slot of the
+   set ([cr_function_slots]); and the function slot of the closure, before
+   the change ([cr_current]). *)
+Record closure_repr : Type := Closure_repr {
+  cr_fields : unboxed_fields;
+  cr_function_slots : list (function_slot * function_slot);
+  cr_current : function_slot
+}.
 
 Section Unboxed_fields.
 
@@ -1221,6 +1410,166 @@ Definition unboxed_fields_of_names (next : positive)
        else (acc, next))
     dominated ([], next).
 
+(* The changes of representation: the fields of a set of closures as
+   [get_fields_usage_of_constructors] gives them, read off the facts and
+   the tables by the rules of [field_of_constructor_is_used_top] and
+   [field_of_constructor_is_used_as] of [post_processing_rules]
+   (points_to_analysis.ml), which read the local fields. *)
+Variable is_local : field -> bool.
+
+(* The nodes that a field [f] of [usage] is read into, which have a use
+   ([rev_accessor ~base:usage f ~to_:v; has_usage v]), and whether one of
+   them has any usage. *)
+Definition read_into (usage : node) (f : field) : list node :=
+  flat_map
+    (fun '(v, f', usage') =>
+       if node_eqb usage usage' && field_eqb f f' && has_usage v
+       then [v]
+       else [])
+    (f_accessor F).
+
+Definition read_into_any_usage (usage : node) (f : field) : bool :=
+  existsb
+    (fun '(v, f', usage') =>
+       node_eqb usage usage' && field_eqb f f' && any_usage v)
+    (f_accessor F).
+
+Definition has_constructor (base : node) (f : field) : bool :=
+  existsb (fun '(base', f', _) => node_eqb base base' && field_eqb f f')
+    (f_constructor F).
+
+(* The uses of [base] ([usages base usage]), and, for a local field, the
+   names that it is a source of ([sources usage base]). *)
+Definition uses_of (base : node) : list node :=
+  flat_map (fun '(x, usage) => if node_eqb x base then [usage] else [])
+    (t_usages T).
+
+Definition sourced_by (base : node) : list node :=
+  flat_map (fun '(usage, x) => if node_eqb x base then [usage] else [])
+    (t_sources T).
+
+(* [field_of_constructor_is_used_top base f]: the four rules that
+   conclude it. *)
+Definition field_used_top (base : node) (f : field) : bool :=
+  has_constructor base f
+  && ((any_usage base && negb (is_local f))
+      || existsb (fun usage => read_into_any_usage usage f) (uses_of base)
+      || (any_usage base
+          && existsb (fun '(f', x) => field_eqb f f' && any_usage x)
+               (t_reading_field T))
+      || (is_local f && any_usage base
+          && existsb (fun usage => read_into_any_usage usage f)
+               (sourced_by base))).
+
+(* The [v] of [field_of_constructor_is_used_as base f v]: the three rules
+   that conclude it. *)
+Definition field_used_as (base : node) (f : field) : list node :=
+  if has_constructor base f
+  then
+    flat_map (fun usage => read_into usage f) (uses_of base)
+    ++ (if any_usage base
+        then
+          flat_map
+            (fun '(f', x) => if field_eqb f f' && has_usage x then [x] else [])
+            (t_reading_field T)
+        else [])
+    ++ (if is_local f && any_usage base
+        then flat_map (fun usage => read_into usage f) (sourced_by base)
+        else [])
+  else [].
+
+(* [get_fields_usage_of_constructors] of the closures [closures]: each
+   field of one of them other than a function slot, [Use_unknown] if
+   [field_used_top] holds of one, else the nodes of [field_used_as], if
+   any; in the order of the fields. *)
+Definition get_fields_of_constructors (closures : list node)
+    : list (field * field_use) :=
+  sort_fields
+    (flat_map
+       (fun f =>
+          if existsb (fun x => field_used_top x f) closures
+          then [(f, Use_unknown)]
+          else
+            match
+              Keyed.dedup node_eqb
+                (flat_map (fun x => field_used_as x f) closures)
+            with
+            | [] => []
+            | flow_to => [(f, Use_known flow_to)]
+            end)
+       (Keyed.dedup field_eqb
+          (flat_map
+             (fun '(base, f, _) =>
+                if mem_node base closures && negb (is_function_slot f)
+                then [f]
+                else [])
+             (f_constructor F)))).
+
+(* [get_set_of_closures_def]: each function slot of the set of which [x]
+   is a closure, with its closure; none if [x] is not a closure of a
+   set. *)
+Definition set_function_slots (x : node) : list (function_slot * node) :=
+  compact
+    (flat_map
+       (fun '(base, f, y) =>
+          match f with
+          | Field_function_slot fs => if node_eqb base x then [(fs, y)] else []
+          | _ => []
+          end)
+       (f_constructor F)).
+
+(* Each slot given a new one, the names from [next] on. *)
+Fixpoint rename_slots (slots : list function_slot) (next : positive)
+    : list (function_slot * function_slot) * positive :=
+  match slots with
+  | [] => ([], next)
+  | fs :: slots =>
+    let '(rest, next') := rename_slots slots (Pos.succ next) in
+    ((fs, next) :: rest, next')
+  end.
+
+(* [changed_representation] of [perform_analysis0], for the allocations
+   of the table [tcr] in its order: the first closure of a set met gives
+   the representation of the set, [mk_unboxed_fields] of the fields of
+   its closures with a new value slot for each field not unboxed in turn,
+   and a new function slot for each of its function slots; each name
+   dominated by a closure of the set has it, with the function slot of
+   that closure. The new slots are the names from [next] on: the value
+   slots in the order of the fields, then the function slots. Returns the
+   name after the last. An allocation that is not a closure of a set
+   would have a [Block_representation], which is left out. *)
+Definition changed_representations (tcr : list node) (next : positive)
+    : list (node * closure_repr) * positive :=
+  let '(acc, _, next) :=
+    fold_left
+      (fun '(acc, seen, next) x =>
+         if mem_node x seen
+         then (acc, seen, next)
+         else
+           match set_function_slots x with
+           | [] => (acc, seen, next)
+           | l =>
+             let '(fields, next) :=
+               mk_unboxed_fields (S (length to_unbox)) x
+                 (get_fields_of_constructors (map snd l)) next
+             in
+             let '(fss, next) := rename_slots (map fst l) next in
+             (acc
+              ++ flat_map
+                   (fun '(fs, f) =>
+                      flat_map
+                        (fun '(a, c) =>
+                           if node_eqb a f
+                           then [(c, Closure_repr fields fss fs)]
+                           else [])
+                        dominated)
+                   l,
+              seen ++ map snd l, next)
+           end)
+      tcr ([], [], next)
+  in
+  (acc, next).
+
 End Unboxed_fields.
 
 (* The unboxed fields of the names of the unit [e], with variables after
@@ -1230,6 +1579,16 @@ Definition unit_unboxed_fields (F : facts) (T : tables)
     : list (node * unboxed_fields) * positive :=
   unboxed_fields_of_names F T (bound_code_my_closures e) dominated to_unbox
     (fresh_name (names_of e)).
+
+(* The changes of representation of the names of the unit [e], for a
+   table [tcr] of [to_change_representation], with slots after every slot
+   of the unit. *)
+Definition unit_changed_representations (is_local : field -> bool)
+    (F : facts) (T : tables) (dominated : list (node * node))
+    (to_unbox tcr : list node) (e : expr) : list (node * closure_repr) :=
+  fst
+    (changed_representations F T (bound_code_my_closures e) dominated
+       to_unbox is_local tcr (fresh_name (slots_of e))).
 
 (* ======================================================================== *)
 (* The decisions: [compute_code_changes] with [Unbox]                       *)
@@ -1268,19 +1627,35 @@ Definition arity_of_grouped_decisions_u (groups : list (list decision))
     : arity :=
   map (fun ds => Unboxed_product (map Singleton (decisions_kinds ds))) groups.
 
+(* A list put at the front of the first group, as [compute_code_changes]
+   puts the decision of [my_closure] and [rebuild_apply] the fields of an
+   unboxed callee; with no group (a fatal error in the OCaml) it is left
+   out. *)
+Definition prepend_first {A : Type} (l : list A) (groups : list (list A))
+    : list (list A) :=
+  match groups with
+  | [] => []
+  | first :: rest => (l ++ first) :: rest
+  end.
+
 (* The metadata of code that changes its calling convention
-   ([compute_code_changes]). *)
+   ([compute_code_changes]), the decision of [my_closure] being
+   [my_closure_decision]: [Decided Delete] for [Keep_my_closure], whose
+   closure is not a parameter, and [Unbox] for [Unbox_my_closure]. *)
 Definition changed_code_metadata_u (metadata : code_metadata)
+    (my_closure_decision : decision)
     (params_decisions return_decisions : list decision) : code_metadata :=
   {| cm_params_arity :=
        arity_of_grouped_decisions_u
-         (group_by_parameter (cm_params_arity metadata) params_decisions);
+         (prepend_first [my_closure_decision]
+            (group_by_parameter (cm_params_arity metadata)
+               params_decisions));
      cm_result_arity := arity_of_decisions_u return_decisions;
      cm_is_tupled := false;
      cm_is_stub := cm_is_stub metadata |}.
 
 (* [Unboxing_analysis.calling_convention_change], without the decision of
-   [my_closure], which is [Keep_my_closure]. *)
+   [my_closure], which is apart ([my_closure_decision_u]). *)
 Inductive calling_convention_change_u : Type :=
   | Not_changing_u
   | Changing_u (params_decisions return_decisions : list decision).
@@ -1304,17 +1679,27 @@ Definition all_some {A : Type} (l : list (option A)) : option (list A) :=
    continuations in [ue_env]. *)
 Record unbox_env : Type := Unbox_env {
   ue_env : rebuild_env;
-  ue_decisions : finite_map (list decision)
+  ue_decisions : finite_map (list decision);
+  (* The projections of the closures of a set that are next are dropped:
+     the set is unboxed. *)
+  ue_drop_projections : bool
 }.
 
 Definition empty_unbox_env : unbox_env :=
-  {| ue_env := empty_env; ue_decisions := [] |}.
+  {| ue_env := empty_env; ue_decisions := []; ue_drop_projections := false |}.
+
+(* The variables bound, and the projections of the closures of a set that
+   are next, to be dropped if [drop]. *)
+Definition ubind_set (en : unbox_env) (bound : list (variable * flambda_kind))
+    (projections : list variable) (drop : bool) : unbox_env :=
+  {| ue_env := bind_variables_then (ue_env en) bound projections;
+     ue_decisions := ue_decisions en;
+     ue_drop_projections := drop |}.
 
 Definition ubind_variables_then (en : unbox_env)
     (bound : list (variable * flambda_kind)) (projections : list variable)
     : unbox_env :=
-  {| ue_env := bind_variables_then (ue_env en) bound projections;
-     ue_decisions := ue_decisions en |}.
+  ubind_set en bound projections false.
 
 Definition ubind_variables (en : unbox_env)
     (bound : list (variable * flambda_kind)) : unbox_env :=
@@ -1331,7 +1716,8 @@ Definition ubind_continuations (en : unbox_env)
   {| ue_env :=
        bind_continuations (ue_env en)
          (map (fun '(k, ds) => (k, map is_kept_decision ds)) bound);
-     ue_decisions := bound ++ ue_decisions en |}.
+     ue_decisions := bound ++ ue_decisions en;
+     ue_drop_projections := false |}.
 
 (* [get_simple_kind]. *)
 Definition simple_kind (en : rebuild_env) (s : simple) : flambda_kind :=
@@ -1490,6 +1876,9 @@ Variable codes : finite_map code_metadata.
 Variable unboxed : list (node * unboxed_fields).
 (* The first of the names of the wrappers. *)
 Variable first_fresh : positive.
+(* The changes of representation of the names
+   ([changed_representations]). *)
+Variable changed : list (node * closure_repr).
 
 (* [Analysis.get_unboxed_fields]. *)
 Definition unboxed_of_node (n : node) : option unboxed_fields :=
@@ -1502,6 +1891,31 @@ Definition unboxed_of (s : simple) : option unboxed_fields :=
   | Symbol sym => unboxed_of_node (Node_symbol sym)
   | Const _ => None
   end.
+
+(* [Analysis.get_changed_representation], and [get_simple_changed_repr]. *)
+Definition changed_of_node (n : node) : option closure_repr :=
+  Keyed.lookup node_eqb n changed.
+
+Definition changed_of (s : simple) : option closure_repr :=
+  match s with
+  | Var x => changed_of_node (Node_variable x)
+  | Symbol sym => changed_of_node (Node_symbol sym)
+  | Const _ => None
+  end.
+
+(* The new function slot of a function slot of the set ([Function_slot.Map.find
+   ... function_slots]); one that the set has not (a fatal error in the
+   OCaml) stays. *)
+Definition rename_function_slot (repr : closure_repr) (fs : function_slot)
+    : function_slot :=
+  match lookup fs (cr_function_slots repr) with
+  | Some fs' => fs'
+  | None => fs
+  end.
+
+(* The new function slot of the closure, which a projection names. *)
+Definition current_slot (repr : closure_repr) : function_slot :=
+  rename_function_slot repr (cr_current repr).
 
 Definition is_unboxed_name (n : node) : bool :=
   match n with
@@ -1615,7 +2029,29 @@ Definition load_unboxed_field (f : field) (arg : simple)
     | Some u => bind_fields (Unboxed to_bind) u body
     | None => None
     end
-  | None => None
+  | None =>
+    (* A value slot of a closure whose representation changes: the
+       variables of what is read are projections of the new slots of the
+       field. *)
+    match changed_of arg, f with
+    | Some repr, Field_value_slot _ =>
+      match Keyed.lookup field_eqb f (cr_fields repr) with
+      | Some u =>
+        match unboxed_field_pairs Value (Unboxed to_bind) u with
+        | Some pairs =>
+          Some
+            (fold_left
+               (fun body '(x, slot, kind) =>
+                  Let x kind
+                    (Project_value_slot_from (current_slot repr) slot arg)
+                    body)
+               pairs body)
+        | None => None
+        end
+      | None => None
+      end
+    | _, _ => None
+    end
   end.
 
 (* [rebuild_singleton_binding_which_is_being_unboxed]: the [Let] of a
@@ -1661,9 +2097,192 @@ Definition rebuild_let_u (en : rebuild_env) (x : variable)
       | Some (Not_unboxed v) => Let x kind (Simple (Var v)) body
       | Some (Unboxed _) | None => Invalid
       end
-    | None => Let x kind (rebuild_named sol_u en x d) body
+    | None =>
+      (* [rewrite_field_access_chg_repr]: a value slot of a closure whose
+         representation changes is projected at its new slot. *)
+      match changed_of arg, f with
+      | None, _ | Some _, Field_boxed_number _ =>
+        Let x kind (rebuild_named sol_u en x d) body
+      | Some repr, _ =>
+        match f, Keyed.lookup field_eqb f (cr_fields repr) with
+        | Field_value_slot _, Some (Not_unboxed slot) =>
+          Let x kind (Project_value_slot_from (current_slot repr) slot arg)
+            body
+        | _, _ => Invalid
+        end
+      end
     end
   | None => Let x kind (rebuild_named sol_u en x d) body
+  end.
+
+(* [rebuild_singleton_binding_whose_representation_is_being_changed]: a
+   projection of a closure is at the new function slots; anything else is
+   [rebuild_let_u]. *)
+Definition rebuild_changed_binding (en : rebuild_env) (repr : closure_repr)
+    (x : variable) (kind : flambda_kind) (d : named) (body : expr) : expr :=
+  match d with
+  | Project_function_slot move_from move_to arg =>
+    Let x kind
+      (Project_function_slot (rename_function_slot repr move_from)
+         (rename_function_slot repr move_to) arg)
+      body
+  | _ => rebuild_let_u en x kind d body
+  end.
+
+(* The value slots of a set whose representation changes
+   ([rewrite_set_of_closures]): for each field of the representation, in
+   its order, the new slot bound to the argument of the old slot, or the
+   new slots bound to the variables of that argument if it is unboxed. A
+   field that the set has not, or that is unboxed in one and not in the
+   other (a fatal error in the OCaml), is left out. *)
+Definition changed_value_slots (en : rebuild_env) (repr : closure_repr)
+    (value_slots : list (value_slot * simple)) : list (value_slot * simple) :=
+  flat_map
+    (fun '(f, u) =>
+       match f with
+       | Field_value_slot w =>
+         match lookup w value_slots with
+         | Some arg =>
+           match unboxed_of arg with
+           | Some arg_fields =>
+             match unboxed_field_pairs Value u (Unboxed arg_fields) with
+             | Some pairs => map (fun '(slot, x, _) => (slot, Var x)) pairs
+             | None => []
+             end
+           | None =>
+             match u with
+             | Not_unboxed slot => [(slot, rewrite_simple sol_u en arg)]
+             | Unboxed _ => []
+             end
+           end
+         | None => []
+         end
+       | _ => []
+       end)
+    (cr_fields repr).
+
+Definition rename_function_decls (repr : closure_repr)
+    (function_decls : list (function_slot * code_id))
+    : list (function_slot * code_id) :=
+  map (fun '(fs, id) => (rename_function_slot repr fs, id)) function_decls.
+
+(* [rewrite_set_of_closures] of the set bound to [x]: with the new
+   representation of [x] if it changes, as FlambdaReaperRebuild.rebuild_set
+   otherwise. *)
+Definition rebuild_set_u (en : rebuild_env) (x : variable) (d : named)
+    : named :=
+  match changed_of_node (Node_variable x), d with
+  | Some repr, Closure_of_set slot function_decls value_slots =>
+    Closure_of_set (rename_function_slot repr slot)
+      (rename_function_decls repr function_decls)
+      (changed_value_slots en repr value_slots)
+  | Some repr, Set_of_closures id value_slots =>
+    Set_of_closures id (changed_value_slots en repr value_slots)
+  | _, _ => rebuild_set sol_u en (set_closure_nodes F (Node_variable x)) d
+  end.
+
+(* The projection of a closure of a set from the first ([let_closures]),
+   at the new function slots if the representation of the set changes:
+   the compiler binds the closures of the set together. *)
+Definition rename_projection (d : named) : named :=
+  match d with
+  | Project_function_slot move_from move_to closure =>
+    match changed_of closure with
+    | Some repr =>
+      Project_function_slot (rename_function_slot repr move_from)
+        (rename_function_slot repr move_to) closure
+    | None => d
+    end
+  | _ => d
+  end.
+
+Definition set_value_slots (d : named) : list (value_slot * simple) :=
+  match d with
+  | Set_of_closures _ value_slots | Closure_of_set _ _ value_slots =>
+    value_slots
+  | _ => []
+  end.
+
+(* The fields of a closure of a set that is unboxed, each bound to the
+   argument of its value slot, or to the variables of that argument if it
+   is unboxed; a field that is not a value slot of the set is [None]. *)
+Definition bind_closure_fields (value_slots : list (value_slot * simple))
+    (to_bind : unboxed_fields) (body : expr) : option expr :=
+  fold_left
+    (fun acc '(f, u) =>
+       match acc, f with
+       | Some body, Field_value_slot w =>
+         match lookup w value_slots with
+         | Some arg =>
+           match unboxed_of arg with
+           | Some arg_fields => bind_fields u (Unboxed arg_fields) body
+           | None => bind_field_to_simple u Value arg body
+           end
+         | None => None
+         end
+       | _, _ => None
+       end)
+    to_bind (Some body).
+
+(* [rebuild_set_of_closures_binding_which_is_being_unboxed]: each closure
+   of the set that has a use, in the order of [bound], binds the
+   variables of its fields; the first is the innermost. A closure with a
+   use that is not unboxed (an assertion of the OCaml) makes it
+   [Invalid]. *)
+Definition rebuild_unboxed_set (bound : list variable)
+    (value_slots : list (value_slot * simple)) (body : expr) : expr :=
+  match
+    fold_left
+      (fun acc x =>
+         match acc with
+         | None => None
+         | Some body =>
+           if is_var_used sol x Value
+           then
+             match unboxed_of_node (Node_variable x) with
+             | Some to_bind => bind_closure_fields value_slots to_bind body
+             | None => None
+             end
+           else Some body
+         end)
+      bound (Some body)
+  with
+  | Some e => e
+  | None => Invalid
+  end.
+
+(* [rebuild_let_expr_static_consts] of a closure of a static set: the
+   representation of its set, if it changes, which keeps it. *)
+Definition static_set_repr (s : symbol) (const : static_const)
+    : option closure_repr :=
+  match const with
+  | Static_const_closure_of_set _ closure_symbols _ _ =>
+    fold_right
+      (fun '(_, sym) acc =>
+         match changed_of_node (Node_symbol sym) with
+         | Some repr => Some repr
+         | None => acc
+         end)
+      None closure_symbols
+  | Static_const_set_of_closures _ _ => changed_of_node (Node_symbol s)
+  | _ => None
+  end.
+
+(* [rewrite_set_of_closures] of a static set whose representation
+   changes, and the renaming of the function slots of its pattern. *)
+Definition rebuild_changed_static_const (en : rebuild_env)
+    (repr : closure_repr) (const : static_const) : static_const :=
+  match const with
+  | Static_const_closure_of_set slot closure_symbols function_decls
+      value_slots =>
+    Static_const_closure_of_set (rename_function_slot repr slot)
+      (map (fun '(fs, sym) => (rename_function_slot repr fs, sym))
+         closure_symbols)
+      (rename_function_decls repr function_decls)
+      (changed_value_slots en repr value_slots)
+  | Static_const_set_of_closures id value_slots =>
+    Static_const_set_of_closures id (changed_value_slots en repr value_slots)
+  | _ => const
   end.
 
 (* [should_keep_param] of [rebuild]: an unboxed parameter is [Unbox] of
@@ -1854,6 +2473,31 @@ Definition apply_change_u (ap : apply_expr) : calling_convention_change_u :=
   | None => Not_changing_u
   end.
 
+(* The decision of [my_closure] of [compute_code_changes], for code that
+   changes its calling convention: [Some] of the unboxed fields of the
+   [my_closure] of the code dep ([Unbox_my_closure]), or [None]
+   ([Keep_my_closure]). *)
+Definition my_closure_decision_u (id : code_id) : option unboxed_fields :=
+  if cannot_change_calling_convention cannot_change unit_code_ids id
+  then None
+  else
+    match lookup id code_deps with
+    | Some cd => unboxed_of_node (cd_my_closure cd)
+    | None => None
+    end.
+
+(* The decision of [my_closure] of the code that a call is known to
+   call. *)
+Definition apply_my_closure_u (ap : apply_expr) : option unboxed_fields :=
+  match code_id_actually_called F sol ap with
+  | Some id =>
+    match lookup id codes with
+    | Some _ => my_closure_decision_u id
+    | None => None
+    end
+  | None => None
+  end.
+
 (* [make_apply_wrapper], given the decisions of the callee for its
    results, each with the kind of the result in the return arity of the
    call: no wrapper if what the continuation of the call is given is what
@@ -1925,7 +2569,15 @@ Definition rebuild_apply_u (en : unbox_env) (ap : apply_expr) : expr :=
                (unarize (ap_return_arity ap)))
         end
       | Changing_u params_decisions return_decisions =>
+        (* [Unbox_my_closure]: the fields of the callee are given at the
+           front of the first group, and the call has no callee, which is
+           poison here (an unboxed name, [rewrite_simple]). *)
+        let callee_fields := apply_my_closure_u ap in
         match
+          match callee_fields with
+          | Some fields => unboxed_args fields (ap_callee ap)
+          | None => Some []
+          end,
           all_some
             (map
                (fun '(args, decisions) =>
@@ -1933,10 +2585,15 @@ Definition rebuild_apply_u (en : unbox_env) (ap : apply_expr) : expr :=
                (combine (group_by_parameter (ap_args_arity ap) (ap_args ap))
                   (group_by_parameter (ap_args_arity ap) params_decisions)))
         with
-        | None => Invalid
-        | Some groups =>
+        | None, _ | _, None => Invalid
+        | Some from_callee, Some groups =>
+          let groups := prepend_first from_callee groups in
           make_apply_wrapper_u en
-            {| ap_callee := ap_callee ap;
+            {| ap_callee :=
+                 match callee_fields with
+                 | Some _ => rewrite_simple sol_u (ue_env en) (ap_callee ap)
+                 | None => ap_callee ap
+                 end;
                ap_call_kind :=
                  rewrite_call_kind F sol preserve_direct_calls unit_code_ids
                    ap;
@@ -1971,11 +2628,15 @@ Fixpoint rebuild_expr_u (en : unbox_env) (e : expr) {struct e} : expr :=
   | Let x kind defining_expr body =>
     if is_pending_projection (ue_env en) x defining_expr
     then
-      Let x kind defining_expr
-        (rebuild_expr_u
-           (ubind_variables_then en [(x, kind)]
-              (tl (env_projections (ue_env en))))
-           body)
+      let body :=
+        rebuild_expr_u
+          (ubind_set en [(x, kind)] (tl (env_projections (ue_env en)))
+             (ue_drop_projections en))
+          body
+      in
+      if ue_drop_projections en
+      then body
+      else Let x kind (rename_projection defining_expr) body
     else
       match defining_expr with
       | Set_of_closures _ _ | Closure_of_set _ _ _ =>
@@ -1983,12 +2644,16 @@ Fixpoint rebuild_expr_u (en : unbox_env) (e : expr) {struct e} : expr :=
         if is_dead_var sol x kind
            || existsb (fun y => is_dead_var sol y Value) projections
         then Invalid
+        else if existsb (fun y => is_unboxed_name (Node_variable y))
+                  (x :: projections)
+        then
+          rebuild_unboxed_set (x :: projections)
+            (set_value_slots defining_expr)
+            (rebuild_expr_u (ubind_set en [(x, kind)] projections true) body)
         else if is_var_used sol x kind
                 || existsb (fun y => is_var_used sol y Value) projections
         then
-          Let x kind
-            (rebuild_set sol_u (ue_env en)
-               (set_closure_nodes F (Node_variable x)) defining_expr)
+          Let x kind (rebuild_set_u (ue_env en) x defining_expr)
             (rebuild_expr_u (ubind_variables_then en [(x, kind)] projections)
                body)
         else rebuild_expr_u (ubind_variables en [(x, kind)]) body
@@ -2002,7 +2667,13 @@ Fixpoint rebuild_expr_u (en : unbox_env) (e : expr) {struct e} : expr :=
           match unboxed_of_node (Node_variable x) with
           | Some to_bind =>
             rebuild_unboxed_binding (ue_env en) to_bind defining_expr body
-          | None => rebuild_let_u (ue_env en) x kind defining_expr body
+          | None =>
+            match changed_of_node (Node_variable x) with
+            | Some repr =>
+              rebuild_changed_binding (ue_env en) repr x kind defining_expr
+                body
+            | None => rebuild_let_u (ue_env en) x kind defining_expr body
+            end
           end
         else rebuild_expr_u (ubind_variables en [(x, kind)]) body
       end
@@ -2055,9 +2726,14 @@ with rebuild_binding_u (en : unbox_env) (binding : static_binding)
     else [Bind_deleted_code id]
   | Bind_deleted_code _ => [binding]
   | Bind_symbol s const =>
-    if static_const_is_used sol s const
-    then [Bind_symbol s (rebuild_static_const sol_u (ue_env en) s const)]
-    else []
+    match static_set_repr s const with
+    | Some repr =>
+      [Bind_symbol s (rebuild_changed_static_const (ue_env en) repr const)]
+    | None =>
+      if static_const_is_used sol s const
+      then [Bind_symbol s (rebuild_static_const sol_u (ue_env en) s const)]
+      else []
+    end
   end
 (* [rebuild_code] and [rebuild_function_params_and_body]: code that
    changes its calling convention has the parameters that its decisions
@@ -2090,32 +2766,57 @@ with rebuild_code_u (id : code_id) (c : code) : code :=
       Code params my_closure return_continuation exn_continuation metadata
         body
     | Changing_u params_decisions return_decisions =>
+      (* [Unbox_my_closure]: the fields of [my_closure] are parameters, in
+         front of the others. *)
+      let my_closure_decision :=
+        match my_closure_decision_u id with
+        | Some fields => param_decision_at my_closure (Unbox fields)
+        | None => Decided Delete
+        end
+      in
       Code
         (map fst
-           (flat_map (fun '(x, d) => decision_params x (param_decision_at x d))
-              (combine params params_decisions)))
+           (decision_params my_closure my_closure_decision
+            ++ flat_map
+                 (fun '(x, d) => decision_params x (param_decision_at x d))
+                 (combine params params_decisions)))
         my_closure return_continuation exn_continuation
-        (changed_code_metadata_u metadata params_decisions return_decisions)
+        (changed_code_metadata_u metadata my_closure_decision
+           params_decisions return_decisions)
         body
     end
   end.
 
 End Rebuild.
 
-(* [Rebuild.rebuild] with unboxing and changes of calling convention: the
-   rebuilt unit, given the facts of its graph, the solution, the tables of
-   [cannot_change_calling_convention], [dominated_by_allocation_point] and
-   [to_unbox], and the code deps of the traversal. The variables of the
-   unboxed fields are the names after every name of the unit, and the
-   wrappers the names after them. *)
+(* [Rebuild.rebuild] with unboxing, changes of calling convention and
+   changes of representation: the rebuilt unit, given the facts of its
+   graph, the solution, the tables of [cannot_change_calling_convention],
+   [dominated_by_allocation_point], [to_unbox] and
+   [to_change_representation] ([tcr]), and the code deps of the
+   traversal. The variables of the unboxed fields are the names after
+   every name of the unit, and the wrappers the names after them; the new
+   slots are the names after every slot of the unit. *)
+Definition rebuild_unit_unbox_repr (is_local : field -> bool) (F : facts)
+    (T : tables) (cannot_change : list node)
+    (code_deps : finite_map code_dep) (dominated : list (node * node))
+    (to_unbox tcr : list node) (preserve_direct_calls : bool) (e : expr)
+    : expr :=
+  let '(unboxed, next) := unit_unboxed_fields F T dominated to_unbox e in
+  rebuild_expr_u F (solution_of_tables T) (fun n => mem_node n cannot_change)
+    code_deps preserve_direct_calls (static_names code_ids_bound e)
+    (bound_code_metadata e) unboxed next
+    (unit_changed_representations is_local F T dominated to_unbox tcr e)
+    empty_unbox_env e.
+
+(* The rebuild with no change of representation: a set of closures that
+   is not unboxed keeps its slots. *)
 Definition rebuild_unit_unbox (F : facts) (T : tables)
     (cannot_change : list node) (code_deps : finite_map code_dep)
     (dominated : list (node * node)) (to_unbox : list node)
     (preserve_direct_calls : bool) (e : expr) : expr :=
-  let '(unboxed, next) := unit_unboxed_fields F T dominated to_unbox e in
-  rebuild_expr_u F (solution_of_tables T) (fun n => mem_node n cannot_change)
-    code_deps preserve_direct_calls (static_names code_ids_bound e)
-    (bound_code_metadata e) unboxed next empty_unbox_env e.
+  rebuild_unit_unbox_repr (fun _ => false) F T cannot_change code_deps
+    dominated to_unbox [] preserve_direct_calls e.
 
 (* The change of calling convention of each code of the unit, with
    unboxing, for the test tool to compare with the compiler's
@@ -2131,6 +2832,21 @@ Definition unit_calling_convention_changes_u (F : facts) (T : tables)
         code_change_u (solution_of_tables T)
           (fun n => mem_node n cannot_change) code_deps
           (static_names code_ids_bound e) unboxed id metadata))
+    (bound_code_metadata e).
+
+(* The decision of [my_closure] of each code of the unit
+   ([my_closure_decision_u]), for the test tool to compare with the
+   compiler's: [Some] of the unboxed fields for [Unbox_my_closure]. *)
+Definition unit_my_closure_decisions_u (F : facts) (T : tables)
+    (cannot_change : list node) (code_deps : finite_map code_dep)
+    (dominated : list (node * node)) (to_unbox : list node) (e : expr)
+    : list (code_id * option unboxed_fields) :=
+  let '(unboxed, _) := unit_unboxed_fields F T dominated to_unbox e in
+  map
+    (fun '(id, _) =>
+       (id,
+        my_closure_decision_u (fun n => mem_node n cannot_change) code_deps
+          (static_names code_ids_bound e) unboxed id))
     (bound_code_metadata e).
 
 (* ======================================================================== *)
@@ -2661,5 +3377,347 @@ Example kept_result_unboxed_goes_wrong :
          FlambdaValueSpec.empty_static_env FlambdaValueSpec.empty_heap)
     = FlambdaSemanticsSpec.Undefined.
 Proof. vm_compute. auto. Qed.
+
+(* ---- Closures ---------------------------------------------------------- *)
+
+Definition sym (s : positive) : node := Node_symbol s.
+
+(* A direct call of the code [id] through [callee], with the argument 9,
+   returning from the unit. *)
+Definition call (id : code_id) (callee : simple) : apply_expr :=
+  {| ap_callee := callee; ap_call_kind := Direct id; ap_args := [int 9];
+     ap_continuation := 1; ap_exn_continuation := 2;
+     ap_exn_extra_args := [];
+     ap_args_arity := [Singleton Value];
+     ap_return_arity := [Singleton Value] |}.
+
+(* The code 52 reads the value slot 80 of its closure [x41] into [x45],
+   and returns field 0 of that; its parameter is not used. The unit puts
+   the block [x10] in the slot 80 of the closure [x60] of a set, and
+   calls 52 through it. *)
+Definition code_52 : code :=
+  Code [40] 41 3 4 (make_code_metadata [Singleton Value] [Singleton Value])
+    (Let 45 Value (Project_value_slot_from 70 80 (Var 41))
+       (Let 46 Value (load 0 (Var 45)) (return_to 3 [Var 46]))).
+
+Definition block_in_slot : expr :=
+  Let_static [Bind_code 52 code_52]
+    (Let 10 Value (make_block [int 7; int 8])
+       (Let 60 Value (Closure_of_set 70 [(70, 52)] [(80, Var 10)])
+          (Apply (call 52 (Var 60))))).
+
+(* The code 53 returns the value slot 80 of its closure. The unit calls
+   it through the closure [x60], whose slot 80 holds 7, or through the
+   closure of a static set, bound to the symbol 90. *)
+Definition code_53 : code :=
+  Code [40] 41 3 4 (make_code_metadata [Singleton Value] [Singleton Value])
+    (Let 45 Value (Project_value_slot_from 70 80 (Var 41))
+       (return_to 3 [Var 45])).
+
+Definition unboxed_closure : expr :=
+  Let_static [Bind_code 53 code_53]
+    (Let 60 Value (Closure_of_set 70 [(70, 53)] [(80, int 7)])
+       (Apply (call 53 (Var 60)))).
+
+Definition static_set : expr :=
+  Let_static
+    [Bind_code 53 code_53;
+     Bind_symbol 90
+       (Static_const_closure_of_set 70 [(70, 90)] [(70, 53)] [(80, int 7)])]
+    (Apply (call 53 (Symbol 90))).
+
+Definition block_in_slot_facts : facts :=
+  traverse_unit Auto interface block_in_slot.
+
+Definition unboxed_closure_facts : facts :=
+  traverse_unit Auto interface unboxed_closure.
+
+Definition static_set_facts : facts :=
+  traverse_unit Auto interface static_set.
+
+(* The solutions of the three units, as the solver of the test tool
+   computes them. The code deps of the code of each have the result 3,
+   the exception 4, [my_closure] 5, the parameter 6 and the witnesses 7
+   (of known arity) and 8; the call makes the witness 9. *)
+Definition block_in_slot_tables : tables :=
+  {| t_alias := [(m 13, m 7); (m 5, m 12); (m 9, m 11); (m 3, v 46);
+       (v 41, m 5); (v 40, m 6); (m 11, m 7); (m 1, m 3); (m 2, m 4);
+       (m 10, c 52); (m 6, consts); (m 5, v 60); (v 45, v 10);
+       (v 46, consts)];
+     t_any_usage := [m 1; m 10; m 2; m 3; m 4; c 52; v 46; consts];
+     t_any_source := [c 52; consts; m 10; m 6; v 40; v 46; m 3; m 1];
+     t_has_usage := [m 1; m 10; m 2; m 9; m 11; m 7; m 3; m 4; c 52; v 46;
+       v 60; v 45; v 41; m 5; v 10; consts; m 12];
+     t_has_source := [c 52; consts; v 60; v 10; m 8; m 7; m 13; m 11; m 10;
+       m 6; m 9; v 40; m 5; v 41; v 45; v 46; m 3; m 1];
+     t_usages := [(v 60, v 60); (m 9, m 9); (v 45, v 45); (v 41, v 41);
+       (m 11, m 9); (m 5, v 41); (m 12, v 41); (m 7, m 9); (v 60, v 41);
+       (v 10, v 45)];
+     t_sources := [(v 60, v 60); (v 10, v 10); (m 8, m 8); (m 7, m 7);
+       (m 13, m 7); (m 11, m 7); (m 9, m 7); (m 5, v 60); (v 41, v 60);
+       (v 45, v 10)];
+     t_reading_field := [];
+     t_escaping_field := [];
+     t_field_used := [(v 60, known); (v 60, Field_value_slot 80);
+       (v 10, Field_block 0 Value); (m 7, result 0);
+       (m 7, Field_return_of_call Exn);
+       (m 7, Field_code_id_of_call_witness)] |}.
+
+Definition unboxed_closure_tables : tables :=
+  {| t_alias := [(m 13, m 7); (m 5, m 12); (m 9, m 11); (m 3, v 45);
+       (v 41, m 5); (v 40, m 6); (m 11, m 7); (m 1, m 3); (m 2, m 4);
+       (m 10, c 53); (m 6, consts); (m 5, v 60); (v 45, consts)];
+     t_any_usage := [m 1; m 10; m 2; m 3; m 4; c 53; v 45; consts];
+     t_any_source := [c 53; consts; m 10; m 6; v 40; v 45; m 3; m 1];
+     t_has_usage := [m 1; m 10; m 2; m 9; m 11; m 7; m 3; m 4; c 53; v 45;
+       v 60; v 41; m 5; consts; m 12];
+     t_has_source := [c 53; consts; v 60; m 8; m 7; m 13; m 11; m 10; m 6;
+       m 9; v 40; m 5; v 41; v 45; m 3; m 1];
+     t_usages := [(v 60, v 60); (m 9, m 9); (v 41, v 41); (m 11, m 9);
+       (m 5, v 41); (m 12, v 41); (m 7, m 9); (v 60, v 41)];
+     t_sources := [(v 60, v 60); (m 8, m 8); (m 7, m 7); (m 13, m 7);
+       (m 11, m 7); (m 9, m 7); (m 5, v 60); (v 41, v 60)];
+     t_reading_field := [];
+     t_escaping_field := [];
+     t_field_used := [(v 60, known); (v 60, Field_value_slot 80);
+       (m 7, result 0); (m 7, Field_return_of_call Exn);
+       (m 7, Field_code_id_of_call_witness)] |}.
+
+Definition static_set_tables : tables :=
+  {| t_alias := [(m 13, m 7); (m 5, m 12); (m 9, m 11); (m 3, v 45);
+       (v 41, m 5); (v 40, m 6); (m 11, m 7); (m 1, m 3); (m 2, m 4);
+       (m 10, c 53); (m 6, consts); (m 5, sym 90); (v 45, consts)];
+     t_any_usage := [m 1; m 10; m 2; m 3; m 4; c 53; v 45; consts];
+     t_any_source := [c 53; consts; m 10; m 6; v 40; v 45; m 3; m 1];
+     t_has_usage := [m 1; m 10; m 2; m 9; m 11; m 7; m 3; m 4; c 53; v 45;
+       sym 90; v 41; m 5; consts; m 12];
+     t_has_source := [c 53; consts; sym 90; m 8; m 7; m 13; m 11; m 10;
+       m 6; m 9; v 40; m 5; v 41; v 45; m 3; m 1];
+     t_usages := [(sym 90, sym 90); (m 9, m 9); (v 41, v 41); (m 11, m 9);
+       (m 5, v 41); (m 12, v 41); (m 7, m 9); (sym 90, v 41)];
+     t_sources := [(sym 90, sym 90); (m 8, m 8); (m 7, m 7); (m 13, m 7);
+       (m 11, m 7); (m 9, m 7); (m 5, sym 90); (v 41, sym 90)];
+     t_reading_field := [];
+     t_escaping_field := [];
+     t_field_used := [(sym 90, known); (sym 90, Field_value_slot 80);
+       (m 7, result 0); (m 7, Field_return_of_call Exn);
+       (m 7, Field_code_id_of_call_witness)] |}.
+
+Example closure_solutions :
+  check_closed no_local block_in_slot_facts block_in_slot_tables = true
+  ∧ check_field_used_exact no_local block_in_slot_facts block_in_slot_tables
+    = true
+  ∧ check_closed no_local unboxed_closure_facts unboxed_closure_tables = true
+  ∧ check_field_used_exact no_local unboxed_closure_facts
+      unboxed_closure_tables = true
+  ∧ check_closed no_local static_set_facts static_set_tables = true
+  ∧ check_field_used_exact no_local static_set_facts static_set_tables
+    = true.
+Proof. vm_compute. auto 10. Qed.
+
+(* A block in a slot of a closure whose set changes its representation.
+   The closure [x60] is called, and closures are not lambda-lifted: it
+   cannot be unboxed ([cu0_called]). It can change its representation:
+   it has a use, and nothing escapes. The block [x10] is unboxed, as the
+   set it is stored in changes its representation ([cu0_stored] does not
+   hold); it dominates [x45], which reads the slot. The made nodes 2 and
+   4 have a use and are in the table of [to_change_representation]; they
+   are not closures, have no source, and the compiler's table may leave
+   them out: the allocations of the
+   names that [changed_representation] gives, those of [x60], [x41] and
+   the [my_closure] 5 of the code dep, are [x60]. A table without [x60],
+   or with [x10], fails the check. *)
+Definition block_in_slot_dominated : list (node * node) :=
+  [(v 60, v 60); (v 10, v 10); (m 8, m 8); (m 7, m 7); (m 7, m 13);
+   (m 7, m 11); (m 7, m 9); (v 60, m 5); (v 60, v 41); (v 10, v 45)].
+
+Example block_in_slot_tables_checked :
+  derive_cannot_change block_in_slot_facts block_in_slot_tables = []
+  ∧ derive_dominated block_in_slot_tables = block_in_slot_dominated
+  ∧ derive_to_unbox no_local block_in_slot_facts block_in_slot_tables []
+      max_unbox_size false = [v 10]
+  ∧ derive_to_change_representation no_local block_in_slot_facts
+      block_in_slot_tables [] max_unbox_size false [v 10] = [m 2; m 4; v 60]
+  ∧ to_change_representation_of_alloc_points block_in_slot_tables
+      [v 60; v 60; v 60] = [v 60]
+  ∧ check_to_change_representation no_local block_in_slot_facts
+      block_in_slot_tables [] max_unbox_size false [v 10] [v 60] = true
+  ∧ check_to_change_representation no_local block_in_slot_facts
+      block_in_slot_tables [] max_unbox_size false [v 10] [m 2] = false
+  ∧ check_to_change_representation no_local block_in_slot_facts
+      block_in_slot_tables [] max_unbox_size false [v 10] [v 60; v 10]
+    = false
+  ∧ check_sets_whole block_in_slot_facts block_in_slot_tables [v 10] [v 60]
+    = true.
+Proof. vm_compute. auto 10. Qed.
+
+(* The unboxed fields: field 0 of [x10] is the variable 61, that of [x45]
+   62, the names after every name of the unit. The representation of the
+   set, which every name that [x60] dominates has: its slot 80 holds the
+   block unboxed, field 0 of which is the new value slot 81; its function
+   slot 70 is the new one 82. The slots of the unit are 70 and 80, and the
+   new ones the names after them, the value slots first. *)
+Definition block_in_slot_repr : closure_repr :=
+  {| cr_fields :=
+       [(Field_value_slot 80,
+         Unboxed [(Field_block 0 Value, Not_unboxed 81)])];
+     cr_function_slots := [(70, 82)];
+     cr_current := 70 |}.
+
+Example block_in_slot_representations :
+  unit_unboxed_fields block_in_slot_facts block_in_slot_tables
+    block_in_slot_dominated [v 10] block_in_slot
+  = ([(v 10, [(Field_block 0 Value, Not_unboxed 61)]);
+      (v 45, [(Field_block 0 Value, Not_unboxed 62)])], 63)
+  ∧ unit_changed_representations no_local block_in_slot_facts
+      block_in_slot_tables block_in_slot_dominated [v 10] [v 60]
+      block_in_slot
+    = [(v 60, block_in_slot_repr); (m 5, block_in_slot_repr);
+       (v 41, block_in_slot_repr)].
+Proof. vm_compute. auto. Qed.
+
+(* What rebuild.ml makes of the unit. The [Let] of the block binds the
+   variable 61 of its field 0 to 7. The set is made with the new slots
+   ([rewrite_set_of_closures]): the slot 81 holds the variable of field 0
+   of the block, and the function slot is 82. In the code, which deletes
+   its parameter, [x45] is unboxed and read from [x41], whose
+   representation changes: its variable 62 is the projection of the slot
+   81, at the function slot 82
+   ([load_field_from_value_which_is_being_unboxed]); the load into [x46]
+   is that variable ([rewrite_field_access]). *)
+Example rebuild_block_in_slot :
+  rebuild_unit_unbox_repr no_local block_in_slot_facts block_in_slot_tables
+    [] (unit_code_deps Auto interface block_in_slot) block_in_slot_dominated
+    [v 10] [v 60] true block_in_slot =
+  Let_static
+    [Bind_code 52
+       (Code [] 41 3 4
+          {| cm_params_arity := [Unboxed_product []];
+             cm_result_arity := [Unboxed_product [Singleton Value]];
+             cm_is_tupled := false;
+             cm_is_stub := false |}
+          (Let 62 Value (Project_value_slot_from 82 81 (Var 41))
+             (Let 46 Value (Simple (Var 62)) (return_to 3 [Var 46]))))]
+    (Let 61 Value (Simple (int 7))
+       (Let 60 Value (Closure_of_set 82 [(82, 52)] [(81, Var 61)])
+          (Apply
+             {| ap_callee := Var 60; ap_call_kind := Direct 52;
+                ap_args := []; ap_continuation := 1;
+                ap_exn_continuation := 2; ap_exn_extra_args := [];
+                ap_args_arity := [Unboxed_product []];
+                ap_return_arity := [Unboxed_product [Singleton Value]] |}))).
+Proof. vm_compute. reflexivity. Qed.
+
+(* An unboxed closure. With closures lambda-lifted, the closure [x60],
+   which is only called, is unboxed; without, it is not. It dominates
+   [x41] and the [my_closure] 5 of the code dep, whose slot 80 is the
+   variable 62: the decision of [my_closure] is [Unbox_my_closure]. *)
+Definition unboxed_closure_dominated : list (node * node) :=
+  derive_dominated unboxed_closure_tables.
+
+Example unboxed_closure_tables_checked :
+  derive_cannot_change unboxed_closure_facts unboxed_closure_tables = []
+  ∧ derive_to_unbox no_local unboxed_closure_facts unboxed_closure_tables []
+      max_unbox_size true = [v 60]
+  ∧ derive_to_unbox no_local unboxed_closure_facts unboxed_closure_tables []
+      max_unbox_size false = []
+  ∧ check_to_change_representation no_local unboxed_closure_facts
+      unboxed_closure_tables [] max_unbox_size true [v 60] [m 2; m 4] = true
+  ∧ check_sets_whole unboxed_closure_facts unboxed_closure_tables [v 60] []
+    = true
+  ∧ unit_unboxed_fields unboxed_closure_facts unboxed_closure_tables
+      unboxed_closure_dominated [v 60] unboxed_closure
+    = ([(v 60, [(Field_value_slot 80, Not_unboxed 61)]);
+        (m 5, [(Field_value_slot 80, Not_unboxed 62)]);
+        (v 41, [(Field_value_slot 80, Not_unboxed 63)])], 64)
+  ∧ unit_calling_convention_changes_u unboxed_closure_facts
+      unboxed_closure_tables [] (unit_code_deps Auto interface unboxed_closure)
+      unboxed_closure_dominated [v 60] unboxed_closure
+    = [(53, Changing_u [Decided Delete] [Decided (Keep Value)])]
+  ∧ unit_my_closure_decisions_u unboxed_closure_facts unboxed_closure_tables
+      [] (unit_code_deps Auto interface unboxed_closure)
+      unboxed_closure_dominated [v 60] unboxed_closure
+    = [(53, Some [(Field_value_slot 80, Not_unboxed 62)])].
+Proof. vm_compute. auto 10. Qed.
+
+(* What rebuild.ml makes of it. The set is not made: the variable 61 of
+   its slot 80 is bound to 7
+   ([rebuild_set_of_closures_binding_which_is_being_unboxed]). The code
+   has the variable 63 of the slot of its [my_closure] for parameter, in
+   front of the others, here none ([rebuild_function_params_and_body]),
+   and the projection is that variable. The call gives the variable of
+   the slot of the callee, at the front of the first group, and has no
+   callee ([rebuild_apply], [Unbox_my_closure]): here, poison. *)
+Example rebuild_unboxed_closure :
+  rebuild_unit_unbox_repr no_local unboxed_closure_facts
+    unboxed_closure_tables [] (unit_code_deps Auto interface unboxed_closure)
+    unboxed_closure_dominated [v 60] [m 2; m 4] true unboxed_closure =
+  Let_static
+    [Bind_code 53
+       (Code [63] 41 3 4
+          {| cm_params_arity := [Unboxed_product [Singleton Value]];
+             cm_result_arity := [Unboxed_product [Singleton Value]];
+             cm_is_tupled := false;
+             cm_is_stub := false |}
+          (Let 45 Value (Simple (Var 63)) (return_to 3 [Var 45])))]
+    (Let 61 Value (Simple (int 7))
+       (Apply
+          {| ap_callee := Const (Poison Value); ap_call_kind := Direct 53;
+             ap_args := [Var 61]; ap_continuation := 1;
+             ap_exn_continuation := 2; ap_exn_extra_args := [];
+             ap_args_arity := [Unboxed_product [Singleton Value]];
+             ap_return_arity := [Unboxed_product [Singleton Value]] |})).
+Proof. vm_compute. reflexivity. Qed.
+
+(* A static set. The symbol 90 cannot be unboxed ([cu0_symbol]), and
+   changes its representation: its slot 80, read into [x45], which the
+   unit returns, is the new value slot 81, and its function slot 70 the
+   new one 82. *)
+Definition static_set_repr : closure_repr :=
+  {| cr_fields := [(Field_value_slot 80, Not_unboxed 81)];
+     cr_function_slots := [(70, 82)];
+     cr_current := 70 |}.
+
+Example static_set_tables_checked :
+  derive_cannot_change static_set_facts static_set_tables = []
+  ∧ derive_to_unbox no_local static_set_facts static_set_tables []
+      max_unbox_size false = []
+  ∧ derive_to_change_representation no_local static_set_facts
+      static_set_tables [] max_unbox_size false [] = [m 2; m 4; sym 90]
+  ∧ check_to_change_representation no_local static_set_facts
+      static_set_tables [] max_unbox_size false [] [sym 90] = true
+  ∧ unit_changed_representations no_local static_set_facts static_set_tables
+      (derive_dominated static_set_tables) [] [sym 90] static_set
+    = [(sym 90, static_set_repr); (m 5, static_set_repr);
+       (v 41, static_set_repr)].
+Proof. vm_compute. auto 10. Qed.
+
+(* What rebuild.ml makes of it: the pattern of the set and its
+   function declarations have the new function slot
+   ([rebuild_let_expr_static_consts]), its value slots the new one
+   ([rewrite_set_of_closures]); the projection in the code is at the new
+   slots ([rewrite_field_access_chg_repr]). *)
+Example rebuild_static_set :
+  rebuild_unit_unbox_repr no_local static_set_facts static_set_tables []
+    (unit_code_deps Auto interface static_set)
+    (derive_dominated static_set_tables) [] [sym 90] true static_set =
+  Let_static
+    [Bind_code 53
+       (Code [] 41 3 4
+          {| cm_params_arity := [Unboxed_product []];
+             cm_result_arity := [Unboxed_product [Singleton Value]];
+             cm_is_tupled := false;
+             cm_is_stub := false |}
+          (Let 45 Value (Project_value_slot_from 82 81 (Var 41))
+             (return_to 3 [Var 45])));
+     Bind_symbol 90
+       (Static_const_closure_of_set 82 [(82, 90)] [(82, 53)] [(81, int 7)])]
+    (Apply
+       {| ap_callee := Symbol 90; ap_call_kind := Direct 53; ap_args := [];
+          ap_continuation := 1; ap_exn_continuation := 2;
+          ap_exn_extra_args := [];
+          ap_args_arity := [Unboxed_product []];
+          ap_return_arity := [Unboxed_product [Singleton Value]] |}).
+Proof. vm_compute. reflexivity. Qed.
 
 End Examples.

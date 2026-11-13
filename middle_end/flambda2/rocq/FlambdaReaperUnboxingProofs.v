@@ -285,3 +285,54 @@ Proof.
     specialize (Hcomplete x Husage). cbn beta in Hcu.
     rewrite Hsource, Hcu in Hcomplete. exact Hcomplete.
 Qed.
+
+Theorem check_to_change_representation_sound :
+  check_to_change_representation_sound_statement.
+Proof.
+  intros is_local F T cannot_change max_unbox_size lambda_lifting to_unbox
+    tcr Hcheck.
+  unfold check_to_change_representation, check_to_unbox in Hcheck.
+  cbv zeta in Hcheck.
+  set (R := unboxing_relations is_local F T cannot_change max_unbox_size
+              lambda_lifting) in Hcheck.
+  apply andb_true_iff in Hcheck as [Hcheck Hcomplete'].
+  apply andb_true_iff in Hcheck as [Hcheck Hto'].
+  apply andb_true_iff in Hcheck as [Hcheck Hcomplete].
+  apply andb_true_iff in Hcheck as [Hclosed Hto].
+  exists (fun n => mem_node n (ut_crr0 R)), (fun n => mem_node n (ut_crr1 R)),
+    (fun n => mem_node n (ut_crr R)), (fun n => mem_node n (ut_cu0 R)),
+    (fun n => mem_node n (ut_cu R)).
+  split; [ | split; [ | split; [ | split ] ] ].
+  - apply check_unboxing_closed_sound. exact Hclosed.
+  - intros x Hx. apply mem_node_In in Hx. rewrite forallb_forall in Hto.
+    specialize (Hto x Hx). apply andb_true_iff in Hto as [Husage Hcu].
+    split; [ exact Husage | apply negb_true_iff; exact Hcu ].
+  - intros x Husage Hsource Hcu.
+    cbn [solution_of_tables s_has_usage s_has_source] in Husage, Hsource.
+    apply mem_node_In in Husage. rewrite forallb_forall in Hcomplete.
+    specialize (Hcomplete x Husage). cbn beta in Hcu.
+    rewrite Hsource, Hcu in Hcomplete. exact Hcomplete.
+  - intros x Hx. apply mem_node_In in Hx. rewrite forallb_forall in Hto'.
+    specialize (Hto' x Hx).
+    apply andb_true_iff in Hto' as [Hto' Hunbox].
+    apply andb_true_iff in Hto' as [Husage Hcrr].
+    split; [ exact Husage | ].
+    split; apply negb_true_iff; assumption.
+  - intros x Husage Hsource Hcrr Hunbox.
+    cbn [solution_of_tables s_has_usage s_has_source] in Husage, Hsource.
+    apply mem_node_In in Husage. rewrite forallb_forall in Hcomplete'.
+    specialize (Hcomplete' x Husage). cbn beta in Hcrr.
+    rewrite Hsource, Hcrr, Hunbox in Hcomplete'. exact Hcomplete'.
+Qed.
+
+Theorem check_sets_whole_sound : check_sets_whole_sound_statement.
+Proof.
+  intros F T to_unbox tcr Hcheck x y f Hin Hslot Hx Hy.
+  unfold check_sets_whole in Hcheck. rewrite forallb_forall in Hcheck.
+  specialize (Hcheck _ Hin). cbn beta iota in Hcheck.
+  cbn [solution_of_tables s_has_usage] in Hx, Hy.
+  rewrite Hslot, Hx, Hy in Hcheck. cbn [negb orb] in Hcheck.
+  apply andb_true_iff in Hcheck as [Hunbox Htcr].
+  apply Bool.eqb_prop in Hunbox. apply Bool.eqb_prop in Htcr.
+  split; assumption.
+Qed.
