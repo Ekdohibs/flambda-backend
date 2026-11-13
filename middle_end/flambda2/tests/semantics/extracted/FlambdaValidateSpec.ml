@@ -40,6 +40,7 @@ open FlambdaModel
 open FlambdaNeverReturnsSpec
 open FlambdaNormaliseSpec
 open FlambdaParamAliasesSpec
+open FlambdaReadsAfterSpec
 open FlambdaRecHandlersSpec
 open FlambdaRecoverComparisonSpec
 open FlambdaRenameApartSpec
@@ -236,11 +237,13 @@ let inline_once_applied_after e =
 
 let normalise_expr_after e =
   remove_unused_defined_lets_in_loops []
-    (remove_unused_projections
-       (fold_constants
-          (follow_aliases_in_loops []
-             (follow_aliases []
-                (merge_alias_lets (inline_once_applied_after e))))))
+    (remove_constant_allocations
+       (remove_unused_projections
+          (fold_constants
+             (load_known_blocks_surely
+                (follow_aliases_in_loops []
+                   (follow_aliases []
+                      (merge_alias_lets (inline_once_applied_after e))))))))
 
 (** val normalise_code_after : expr -> expr **)
 
@@ -258,14 +261,16 @@ let normalise_after_round kept e =
                 (drop_deleted_code
                    (rewrite_rec_handlers normalise_expr_after
                       (remove_unused_defined_lets_in_loops []
-                         (remove_unused_projections
-                            (fold_constants
-                               (inline_known_sibling_calls kept
-                                  (inline_known_calls kept [] []
-                                     (follow_aliases_in_loops []
-                                        (follow_aliases []
-                                           (merge_alias_lets
-                                              (inline_once_applied_after e)))))))))))))))
+                         (remove_constant_allocations
+                            (remove_unused_projections
+                               (fold_constants
+                                  (load_known_blocks_surely
+                                     (inline_known_sibling_calls kept
+                                        (inline_known_calls kept [] []
+                                           (follow_aliases_in_loops []
+                                              (follow_aliases []
+                                                 (merge_alias_lets
+                                                    (inline_once_applied_after e)))))))))))))))))
 
 (** val normalise_after : nat -> code_id list -> expr -> expr **)
 

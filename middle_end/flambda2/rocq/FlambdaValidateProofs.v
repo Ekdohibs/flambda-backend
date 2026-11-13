@@ -70,7 +70,8 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaSemanticsSpec
   FlambdaUnboxLoopsSpec FlambdaUnboxLoopsProofs FlambdaUnboxTogetherSpec
   FlambdaUnusedContsSpec FlambdaUnusedContsProofs FlambdaUnusedParamsSpec
   FlambdaUnusedParamsProofs FlambdaUnusedProjectionsSpec
-  FlambdaUnusedProjectionsProofs FlambdaUnusedStaticsSpec
+  FlambdaUnusedProjectionsProofs FlambdaReadsAfterSpec
+  FlambdaReadsAfterProofs FlambdaUnusedStaticsSpec
   FlambdaUnusedStaticsProofs FlambdaLiftSpec FlambdaLiftProofs
   FlambdaLiftFromCodeSpec FlambdaLiftFromCodeProofs
   FlambdaLiftFromArmsSpec FlambdaLiftFromArmsProofs
@@ -122,6 +123,8 @@ Ltac equivalence_step :=
     | apply follow_aliases_equivalent
     | apply remove_unused_defined_lets_equivalent
     | apply remove_unused_projections_equivalent
+    | apply load_known_blocks_surely_equivalent
+    | apply remove_constant_allocations_equivalent
     | apply drop_deleted_code_equivalent
     | apply merge_statics_equivalent
     | apply inline_known_calls_equivalent

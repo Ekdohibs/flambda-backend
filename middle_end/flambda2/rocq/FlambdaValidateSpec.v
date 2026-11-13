@@ -383,6 +383,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaSemanticsSpec
   FlambdaStaticsOrderSpec FlambdaUnboxSpec FlambdaUnboxVariantsSpec
   FlambdaUnusedContsSpec
   FlambdaUnusedParamsSpec FlambdaUnusedProjectionsSpec
+  FlambdaReadsAfterSpec
   FlambdaUnusedStaticsSpec FlambdaWellFormedSpec FlambdaLiftSpec
   FlambdaUnusedSlotsSpec FlambdaKnownSymbolsSpec FlambdaKnownClosuresSpec
   FlambdaFloatCodeSpec FlambdaHoistCodeSpec FlambdaLoopifySpec
@@ -920,7 +921,17 @@ Definition inline_once_applied_after (e : expr) : expr :=
    (FlambdaUnusedProjectionsSpec.remove_unused_projections): the [Let]
    of a closure of a set that is not the first is one in the model
    (FlambdaModel.let_closures), and the term before loses it by a
-   refinement. Last in a round come two passes that go into the
+   refinement. Before the constants are folded, what a known block
+   holds is read where the read is sure to have a value
+   (FlambdaReadsAfterSpec.load_known_blocks_surely), and after the
+   unused projections an allocation of constants that nothing uses is
+   removed (FlambdaReadsAfterSpec.remove_constant_allocations):
+   Simplify leaves the load of a field of a block that a call it did
+   not inline is given, and the block with it; where the validation
+   inlines that call in the two terms, the term before loses both by
+   refinements (FlambdaBlockLoadSpec.load_known_blocks,
+   FlambdaNormaliseSpec.remove_unused_lets). Last in a round come two
+   passes that go into the
    bodies of code with the parameters of the code in scope, at the
    kinds of its arity. The applications that
    FlambdaForwardKindedSpec.forward_kinded forwards are forwarded
@@ -938,11 +949,14 @@ Definition inline_once_applied_after (e : expr) : expr :=
    is. *)
 Definition normalise_expr_after (e : expr) : expr :=
   remove_unused_defined_lets_in_loops []
-    (remove_unused_projections
-       (fold_constants
-          (follow_aliases_in_loops []
-             (follow_aliases []
-                (merge_alias_lets (inline_once_applied_after e)))))).
+    (remove_constant_allocations
+       (remove_unused_projections
+          (fold_constants
+             (load_known_blocks_surely
+                (follow_aliases_in_loops []
+                   (follow_aliases []
+                      (merge_alias_lets
+                         (inline_once_applied_after e)))))))).
 
 Definition normalise_code_after (body : expr) : expr :=
   rewrite_rec_handlers normalise_expr_after (normalise_expr_after body).
@@ -966,15 +980,17 @@ Definition normalise_after_round (kept : list code_id) (e : expr) : expr :=
                 (drop_deleted_code
                    (rewrite_rec_handlers normalise_expr_after
                       (remove_unused_defined_lets_in_loops []
-                         (remove_unused_projections
-                            (fold_constants
-                               (inline_known_sibling_calls kept
-                                  (inline_known_calls kept [] []
-                                     (follow_aliases_in_loops []
-                                        (follow_aliases []
-                                           (merge_alias_lets
-                                              (inline_once_applied_after
-                                                 e))))))))))))))).
+                         (remove_constant_allocations
+                            (remove_unused_projections
+                               (fold_constants
+                                  (load_known_blocks_surely
+                                     (inline_known_sibling_calls kept
+                                        (inline_known_calls kept [] []
+                                           (follow_aliases_in_loops []
+                                              (follow_aliases []
+                                                 (merge_alias_lets
+                                                    (inline_once_applied_after
+                                                       e))))))))))))))))).
 
 Definition normalise_after (rounds : nat) (kept : list code_id) (e : expr)
     : expr :=

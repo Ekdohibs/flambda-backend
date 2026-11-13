@@ -31,7 +31,8 @@
 
    This file is to be reviewed: [surely_value], [surely_immediate],
    [load_known_blocks_surely], [remove_constant_allocations] and what
-   they are made of, and the statements.
+   they are made of, which are extracted and run by the validation of
+   middle_end/flambda2/tests/semantics/; and the statements.
 
    The term before Simplify is normalised by refinements, among them
    FlambdaBlockLoadSpec.load_known_blocks, which puts what a field of a

@@ -40,6 +40,7 @@ open FlambdaModel
 open FlambdaNeverReturnsSpec
 open FlambdaNormaliseSpec
 open FlambdaParamAliasesSpec
+open FlambdaReadsAfterSpec
 open FlambdaRecHandlersSpec
 open FlambdaRecoverComparisonSpec
 open FlambdaRenameApartSpec
