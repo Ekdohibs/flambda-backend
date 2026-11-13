@@ -128,6 +128,8 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   FlambdaContextWhereSpec.v \
   FlambdaControlFlowProofs.v \
   FlambdaControlFlowSpec.v \
+  FlambdaCopyCodeProofs.v \
+  FlambdaCopyCodeSpec.v \
   FlambdaCseEquivalentProofs.v \
   FlambdaCseEquivalentSpec.v \
   FlambdaCseProofs.v \
