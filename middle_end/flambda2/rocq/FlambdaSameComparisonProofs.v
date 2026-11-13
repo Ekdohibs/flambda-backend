@@ -52,6 +52,15 @@ Lemma same_answer_naked_bool (op : equality_comparison) :
       end.
 Proof. destruct op; reflexivity. Qed.
 
+Lemma different_answer_naked_bool (op : equality_comparison) :
+  Value_const (different_answer op)
+  = naked_bool
+      match op with
+      | Phys_eq => false
+      | Phys_neq => true
+      end.
+Proof. destruct op; reflexivity. Qed.
+
 Theorem fold_same_comparison_sound : fold_same_comparison_sound_statement.
 Proof.
   intros statics vars d v Hd.
@@ -62,14 +71,24 @@ Proof.
   destruct p as [k lk m | w | op | k o | k o | k b]; try exact Hd.
   destruct args as [ | a [ | b [ | c args]]]; try exact Hd.
   cbn [fold_same_comparison].
-  destruct (FlambdaModel.simple_eq_dec a b) as [<- | Hne]; [ | exact Hd ].
-  cbn [eval_named eval_simples] in Hd. cbn [eval_named eval_simple].
-  destruct (eval_simple vars a) as [va | ]; [ | discriminate Hd ].
-  assert (Hprim
-    : eval_binary_primitive statics (Phys_equal op) va va = Some v)
-    by exact Hd.
-  rewrite same_answer_naked_bool.
-  rewrite (phys_equal_same statics op va v Hprim). reflexivity.
+  destruct (FlambdaModel.simple_eq_dec a b) as [<- | Hne].
+  - cbn [eval_named eval_simples] in Hd. cbn [eval_named eval_simple].
+    destruct (eval_simple vars a) as [va | ]; [ | discriminate Hd ].
+    assert (Hprim
+      : eval_binary_primitive statics (Phys_equal op) va va = Some v)
+      by exact Hd.
+    rewrite same_answer_naked_bool.
+    rewrite (phys_equal_same statics op va v Hprim). reflexivity.
+  - destruct a as [x1 | s1 | c1]; try exact Hd.
+    destruct b as [x2 | s2 | c2]; try exact Hd.
+    assert (Hsym : s1 <> s2) by (intros ->; apply Hne; reflexivity).
+    assert (Hprim
+      : eval_binary_primitive statics (Phys_equal op) (Value_symbol s1)
+          (Value_symbol s2)
+        = Some v)
+      by exact Hd.
+    cbn [eval_named eval_simple]. rewrite different_answer_naked_bool.
+    rewrite (phys_equal_symbols statics op s1 s2 v Hsym Hprim). reflexivity.
 Qed.
 
 (* ======================================================================== *)
@@ -172,6 +191,21 @@ Proof.
     exact (phys_equal_same statics op v r Hprim).
 Qed.
 
+Theorem phys_equal_symbols_heap : phys_equal_symbols_heap_statement.
+Proof.
+  intros statics h h' op s1 s2 result Hne. unfold exec_prim.
+  destruct (forallb (argument_bound statics h)
+              [Value_symbol s1; Value_symbol s2]);
+    [ | discriminate ].
+  rewrite exec_bound_phys_equal. cbn [is_location orb].
+  destruct (eval_prim statics (Binary (Phys_equal op))
+              [Value_symbol s1; Value_symbol s2]) as [r | ] eqn:Hprim;
+    [ | discriminate ].
+  cbv beta iota. intros [= <- <-]. split; [ | reflexivity ].
+  rewrite different_answer_naked_bool.
+  exact (phys_equal_symbols statics op s1 s2 r Hne Hprim).
+Qed.
+
 (* ======================================================================== *)
 (* The renamings                                                            *)
 (* ======================================================================== *)
@@ -192,8 +226,9 @@ Proof.
       as [_ | Hne]; [ reflexivity | elim Hne; reflexivity ].
   - destruct
       (FlambdaModel.simple_eq_dec (rename_simple r a) (rename_simple r b))
-      as [Heq | _]; [ | reflexivity ].
-    elim Hne. exact (rename_simple_injective r a b Heq).
+      as [Heq | _];
+      [ elim Hne; exact (rename_simple_injective r a b Heq) | ].
+    destruct a as [x1 | s1 | c1], b as [x2 | s2 | c2]; reflexivity.
 Qed.
 
 Fixpoint fold_same_comparisons_equivariant_aux (r : renaming) (e : expr) :

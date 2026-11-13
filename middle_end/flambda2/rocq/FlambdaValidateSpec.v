@@ -487,7 +487,8 @@ Fixpoint iterate (rounds : nat) (f : expr -> expr) (e : expr) : expr :=
    they are defined ([follow_aliases_in_loops]): among them a
    [Phys_equal] of a simple against itself becomes its answer, as
    Simplify makes it
-   (FlambdaSameComparisonSpec.fold_same_comparisons; it comes before
+   (FlambdaSameComparisonSpec.fold_same_comparisons, which makes a
+   [Phys_equal] of two different symbols its answer too; it comes before
    what follows the values, which puts the answer in the [Switch] that
    tests it, for the folding of constants that ends the round); a
    test against 0 of the result of a three-way comparison becomes the

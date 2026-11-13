@@ -7,6 +7,11 @@ open FlambdaPrimitiveModel
 let same_answer op =
   Naked_immediate (match op with Phys_eq -> Zpos Coq_xH | Phys_neq -> Z0)
 
+(** val different_answer : equality_comparison -> const **)
+
+let different_answer op =
+  Naked_immediate (match op with Phys_eq -> Z0 | Phys_neq -> Zpos Coq_xH)
+
 (** val fold_same_comparison : named -> named **)
 
 let fold_same_comparison d =
@@ -23,8 +28,16 @@ let fold_same_comparison d =
           | [] -> d
           | b :: l0 -> (
             match l0 with
-            | [] ->
-              if simple_eq_dec a b then Simple (Const (same_answer op)) else d
+            | [] -> (
+              if simple_eq_dec a b
+              then Simple (Const (same_answer op))
+              else
+                match a with
+                | Symbol _ -> (
+                  match b with
+                  | Symbol _ -> Simple (Const (different_answer op))
+                  | _ -> d)
+                | _ -> d)
             | _ :: _ -> d)))
       | _ -> d)
     | _ -> d)

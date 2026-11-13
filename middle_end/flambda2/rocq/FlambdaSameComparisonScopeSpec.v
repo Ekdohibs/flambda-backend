@@ -25,8 +25,8 @@
  * DEALINGS IN THE SOFTWARE.                                                  *
  ******************************************************************************)
 
-(* Making a [Phys_equal] of a simple against itself its answer keeps
-   scope.
+(* Making a [Phys_equal] of a simple against itself, or of two
+   different symbols, its answer keeps scope.
 
    This file is to be reviewed: the statement, against
    FlambdaValidatorEquivarianceSpec.keeps_scope and

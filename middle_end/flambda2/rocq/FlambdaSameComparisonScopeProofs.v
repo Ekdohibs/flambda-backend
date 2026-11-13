@@ -45,8 +45,9 @@ Proof.
   destruct p as [k lk m | w | op | k o | k o | k b]; try apply incl_refl.
   destruct args as [ | a [ | b [ | c args]]]; try apply incl_refl.
   cbn [fold_same_comparison].
-  destruct (FlambdaModel.simple_eq_dec a b); [ | apply incl_refl ].
-  intros x [].
+  destruct (FlambdaModel.simple_eq_dec a b); [ intros x [] | ].
+  destruct a as [x1 | s1 | c1], b as [x2 | s2 | c2];
+    first [ apply incl_refl | intros x [] ].
 Qed.
 
 Fixpoint fold_same_comparisons_scoped (e : expr) :
