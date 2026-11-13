@@ -82,16 +82,33 @@ unit made from OCaml.
 - **Regions.** Where a block, a boxed number or a closure does not
   escape, the compiler allocates it on the stack, in a region that it
   opens and closes around the expression (`Begin_region`,
-  `End_region`). The model has no regions and frees nothing. The
-  conversion drops the opening of a region, makes its closing return
-  the unit value, and converts what is allocated in it as if it were on
-  the heap. That is right for a unit in which nothing allocated in a
-  region is used after the region has ended, which the modes of the
-  type checker are there to ensure and nothing in the middle end
-  checks. It is assumed of the unit after Simplify as of the unit
-  before: a validation does not establish that Simplify keeps the uses
-  of a local allocation within the life of its region (discrepancy
-  V2-3). The regions around a `try` are dropped in the same way: the
+  `End_region`). The machine that a validation is about has no
+  regions and frees nothing. The conversion drops the opening of a
+  region, makes its closing return the unit value, and converts what
+  is allocated in it as if it were on the heap. A region that is a
+  parameter of a continuation is dropped, with the argument at its
+  place in every application of the continuation, and so is a `Let`
+  that binds a region to another; a region given anywhere else is
+  refused, and so is a call that returns or raises to a continuation
+  with such a parameter (`../region_param_ended_by_handler.fl` and
+  the three beside it, written by hand: Simplify makes such a
+  parameter where it lifts a handler out of another, with
+  `-flambda2-match-in-match`). That is right for a unit in which
+  nothing allocated in a region is used after the region has ended,
+  which the modes of the type checker are there to ensure and
+  nothing in the middle end checks. It is assumed of the unit after
+  Simplify as of the unit before: a validation does not establish
+  that Simplify keeps the uses of a local allocation within the life
+  of its region (discrepancy V2-3). The tool looks at that apart, on
+  the one run that it makes of each term. The two terms of a unit
+  that was compared are converted once more with their regions kept;
+  where either has a region that is not a ghost, or a local
+  allocation, each is run on a machine that has regions
+  (`FlambdaRegionsSpec.v`), and the tool prints the line "the check
+  of regions: passes before, passes after", or what failed or was
+  not run. No verdict depends on that line; `rocq/TRUST-LEDGER.md`,
+  "The check of regions", says what it rests on and what it does not
+  say. The regions around a `try` are dropped in the same way: the
   handler ends the regions that the body had open when it raised, and
   nothing allocated in one of them is assumed to be used after that.
   The `Let` by which the handler ends the region is kept, bound to
