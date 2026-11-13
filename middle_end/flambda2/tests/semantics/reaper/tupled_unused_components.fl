@@ -1,0 +1,25 @@
+(* Tupled code that uses neither component of its tuple, called at an unknown
+   arity: the closure of [ignore] goes through [pass], which is not inlined, so
+   the call is indirect, and nothing in the term reads the pair (the entry
+   point [caml_tuplify2] of the closure does). The reaper keeps the pair, with
+   poison for its fields. middle_end/flambda2/rocq/FlambdaReaperTupledSpec.v
+   has the same unit, and shows that it goes wrong once rebuilt without the
+   facts that keep the tuple alive. *)
+let code size(1) tupled ignore (a, b) my_closure &my_region my_depth
+      -> k * e =
+  cont k (1)
+in
+let code inline(never) size(1) pass (f) my_closure &my_region my_depth
+      -> k * e =
+  cont k (f)
+in
+let $Tupled_unused_components_ignore = closure ignore &toplevel in
+let $Tupled_unused_components_pass = closure pass &toplevel in
+let pair = %block.[`0`].`toplevel` (0, 0) in
+apply direct(pass &toplevel) $Tupled_unused_components_pass
+    ($Tupled_unused_components_ignore) -> k1 * error
+  where k1 (func) =
+    apply &toplevel func (pair) -> k2 * error
+  where k2 (r) =
+    let $camlTupled_unused_components = Block 0 (r) in
+    cont done ($camlTupled_unused_components)

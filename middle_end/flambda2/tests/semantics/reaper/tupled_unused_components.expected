@@ -1,0 +1,12 @@
+tupled_unused_components.fl:
+  the graph: 67 facts in the model, 67 in the compiler
+  the model's solution: passes the check of closure, passes the check of field_of_constructor_is_used
+  the compiler's solution, with its graph: passes the check of closure, passes the check of field_of_constructor_is_used
+  the facts of the two graphs on the names of the unit: the same (12)
+  the two solutions on the 16 names of the unit: the same
+  the model's rebuild and the compiler's output: the same up to bound names
+  the reaper's input (14 steps): returns [0: 1]
+  the model's rebuild (14 steps): returns [0: 1]
+  the model's rebuild against the input: the same
+  the compiler's output (14 steps): returns [0: 1]
+  the compiler's output against the input: the same
