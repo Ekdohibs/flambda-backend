@@ -39,7 +39,7 @@ here.
 | The comparison `expr_eqb` | `FlambdaCompareAlphaSpec.v` | N1 |
 | The rewrites of the normalisation, the passes for loops, the sharing of a handler that is the same as one bound around it, the parameters bound again at the head of their handlers and their twins, the parameters given one symbol or one constant bound at the head of their handlers, the applications made to go to the arm of the number that they give, the checks of well-formedness (exception handlers and trap actions among them), the check of kinds, the normalisation of the term after and the first phase of that of the term before | `FlambdaValidatorEquivarianceSpec.v` | N3 |
 | The normalisation of the term before and that of a term in which something was lifted: up to the names that a round makes. `validate_unit`: where the code of the term before is closed | `FlambdaValidatorEquivarianceSpec.v` | N3 |
-| Identities of primitives, lifting, lifting out of code, the binding of `my_closure`, ranges, sharing of primitives and of projections, the recovery of comparisons, folding at known symbols, unused and known value slots, the order of static bindings, the static closures in sight, code moved up, code and static bindings bound first, lifting out of the arms of a test, inlining within a group of code, the unboxing of parameters, of the reads of a loop and of the boxed numbers that continuations pass to one another, the merging of the arms of a `Switch` and their merging into a load from a table, the continuations that a handler binds on its way to its `Switch` bound outside it, the demotion of exception handlers, the rewrite of the calls of code that never returns, the fold of a `Phys_equal` of a simple against itself, the calls of the unit's other code made indirect in the code of a stub, the lifting to a group around, a `Let` of a variable to the variable just bound made one `Let` with it, the reading of a known immutable array, the sharing of the reads of two places that hold one variable, the inlining of the calls of known siblings in the term after | the `Spec` file of each pass | the owner of each |
+| Identities of primitives, lifting, lifting out of code, the binding of `my_closure`, ranges, sharing of primitives and of projections, the recovery of comparisons, folding at known symbols, unused and known value slots, the order of static bindings, the static closures in sight, code moved up, code and static bindings bound first, lifting out of the arms of a test, inlining within a group of code, the unboxing of parameters, of the reads of a loop and of the boxed numbers that continuations pass to one another, the merging of the arms of a `Switch` and their merging into a load from a table, the continuations that a handler binds on its way to its `Switch` bound outside it, the demotion of exception handlers, the rewrite of the calls of code that never returns, the fold of a `Phys_equal` of a simple against itself, the calls of the unit's other code made indirect in the code of a stub, the lifting to a group around, a `Let` of a variable to the variable just bound made one `Let` with it, the reading of a known immutable array, the sharing of the reads of two places that hold one variable, the inlining of the calls of known siblings in the term after, the copy of code for static sets of closures | the `Spec` file of each pass | the owner of each |
 | The second asking of the validation, `validate_unit_knowing`: where the code of the term before is closed | `FlambdaValidateKnowingSpec.v` | the owner of that file, N3 |
 | The tests that a verdict holds of a unit run from its imports: those that read static names alone, with no premise; those of a verdict, where the code of the term before is closed | `FlambdaValidateImportsRenameSpec.v` | N3 |
 | The second check of a unit, `validate_unit_related`: with no premise | `FlambdaValidateRelatedRenameSpec.v` | N3 |
@@ -1271,6 +1271,25 @@ sight (`FlambdaKnownClosuresSpec.v`), the move of code to the head of
 what it is in (`FlambdaFloatCodeSpec.v`), the binding first of the
 code of a unit (`FlambdaHoistCodeSpec.v`) and of its static bindings
 that need nothing from around them (`FlambdaHoistStaticsSpec.v`), the
+copy of code for static sets of closures
+(`FlambdaCopyCodeSpec.copy_static_code`: the code that a list pairs
+with new code ids is bound again under them, and the static sets of
+closures of the symbols given get the new ids; the new code ids are
+given to the pass, as a lifting is given its symbols, and the copy is
+made only where the check passes that the code ids to copy are
+distinct, that the new ones are distinct and that the unit binds none
+of the new (`copy_ok`, `binds_no_code`); the pass introduces no fresh
+variable, continuation or symbol names: a copy retains the binders of
+the code that it copies; a renaming moves no code id and no symbol, so
+the rewrite, the check and the copies made in turn commute with every
+renaming by an equation, what they are given being as it is
+(`copy_expr_equivariant_statement`,
+`binds_no_code_equivariant_statement`,
+`with_copies_equivariant_statement`); a lifting holds the copies to
+make, which are passed as they are when the lifting is renamed, and
+`with_lifting` and `with_lifting_observed` end with them, their
+statements keeping their texts; that the copies keep scope is a lemma
+of `FlambdaStaticsScopeProofs.v` and not a statement), the
 lifting out of the arms of a test (`FlambdaLiftFromArmsSpec.v`), the
 inlining, in the body of code, of the calls of the other code of its
 group (`FlambdaInlineSiblingsSpec.v`), and the same in the term
