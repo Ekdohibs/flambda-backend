@@ -94,6 +94,7 @@ From OxCamlFlambda2 Require Import FlambdaDemoteSpec.
 From OxCamlFlambda2 Require FlambdaDemoteProofs.
 From OxCamlFlambda2 Require Import FlambdaLiftObservedSpec.
 From OxCamlFlambda2 Require Import FlambdaKnownSlotsSpec.
+From OxCamlFlambda2 Require FlambdaKnownSiblingsProofs.
 From OxCamlFlambda2 Require FlambdaKnownSlotsProofs.
 From OxCamlFlambda2 Require FlambdaSharedReadsSpec FlambdaSharedReadsProofs.
 From OxCamlFlambda2 Require Import FlambdaStubCallsSpec.
@@ -5439,6 +5440,7 @@ Ltac rename_outwards :=
       | rewrite remove_unused_projections_equivariant
       | rewrite inline_calls_unknowing_equivariant
       | rewrite inline_known_calls_unknowing_equivariant
+      | rewrite FlambdaKnownSiblingsProofs.inline_known_sibling_calls_renamed
       | rewrite drop_deleted_code_equivariant_aux
       | rewrite merge_statics_equivariant_aux
       | rewrite sink_let_conts_equivariant_aux

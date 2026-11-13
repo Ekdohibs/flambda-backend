@@ -90,6 +90,8 @@ From OxCamlFlambda2 Require Import FlambdaDemoteSpec.
 From OxCamlFlambda2 Require Import FlambdaUnusedHeadStaticsSpec
   FlambdaUnusedHeadStaticsProofs.
 From OxCamlFlambda2 Require FlambdaDemoteProofs.
+From OxCamlFlambda2 Require Import FlambdaKnownSiblingsSpec
+  FlambdaKnownSiblingsProofs.
 From OxCamlFlambda2 Require Import FlambdaKnownSlotsSpec
   FlambdaKnownSlotsProofs.
 From OxCamlFlambda2 Require FlambdaSharedReadsProofs.
@@ -122,6 +124,7 @@ Ltac equivalence_step :=
     | apply drop_deleted_code_equivalent
     | apply merge_statics_equivalent
     | apply inline_known_calls_equivalent
+    | apply inline_known_sibling_calls_equivalent
     | apply thread_switches_equivalent
     | apply remove_unused_conts_equivalent
     | apply sink_let_conts_equivalent

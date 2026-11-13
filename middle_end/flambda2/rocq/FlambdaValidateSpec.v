@@ -387,6 +387,7 @@ From OxCamlFlambda2 Require Import FlambdaWrapReturnsSpec
   FlambdaUntagParamsSpec FlambdaGiveScrutineeSpec FlambdaArmNumbersSpec
   FlambdaShadowParamsSpec FlambdaTwinParamsSpec.
 From OxCamlFlambda2 Require Import FlambdaAliasLetsSpec.
+From OxCamlFlambda2 Require Import FlambdaKnownSiblingsSpec.
 From OxCamlFlambda2 Require Import FlambdaDemoteSpec.
 From OxCamlFlambda2 Require Import FlambdaKnownSlotsSpec.
 From OxCamlFlambda2 Require Import FlambdaSharedReadsSpec.
@@ -939,6 +940,16 @@ Definition normalise_expr_after (e : expr) : expr :=
 Definition normalise_code_after (body : expr) : expr :=
   rewrite_rec_handlers normalise_expr_after (normalise_expr_after body).
 
+(* A round of the term after. The calls of known code are inlined
+   where that is an equivalence
+   (FlambdaNormaliseSpec.inline_known_calls); then, in the body of
+   code, so are those of the other code of its group
+   (FlambdaKnownSiblingsSpec.inline_known_sibling_calls), which a
+   round of the term before inlines too
+   (FlambdaInlineSiblingsSpec.inline_sibling_calls): Simplify leaves
+   the call of a function in the code of another function of its
+   group, where it inlines the function at a call that is not in the
+   code of the group. *)
 Definition normalise_after_round (kept : list code_id) (e : expr) : expr :=
   remove_unused_defined_lets_in_code
     (forward_to_arms_in_code
@@ -950,12 +961,13 @@ Definition normalise_after_round (kept : list code_id) (e : expr) : expr :=
                       (remove_unused_defined_lets_in_loops []
                          (remove_unused_projections
                             (fold_constants
-                               (inline_known_calls kept [] []
-                                  (follow_aliases_in_loops []
-                                     (follow_aliases []
-                                        (merge_alias_lets
-                                           (inline_once_applied_after
-                                              e)))))))))))))).
+                               (inline_known_sibling_calls kept
+                                  (inline_known_calls kept [] []
+                                     (follow_aliases_in_loops []
+                                        (follow_aliases []
+                                           (merge_alias_lets
+                                              (inline_once_applied_after
+                                                 e))))))))))))))).
 
 Definition normalise_after (rounds : nat) (kept : list code_id) (e : expr)
     : expr :=

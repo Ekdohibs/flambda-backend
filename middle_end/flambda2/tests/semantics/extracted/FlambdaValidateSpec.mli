@@ -22,6 +22,7 @@ open FlambdaIdentitiesSpec
 open FlambdaInlineSiblingsSpec
 open FlambdaInlineTailSpec
 open FlambdaKnownClosuresSpec
+open FlambdaKnownSiblingsSpec
 open FlambdaKnownSlotsSpec
 open FlambdaKnownSymbolsSpec
 open FlambdaLiftAroundSpec

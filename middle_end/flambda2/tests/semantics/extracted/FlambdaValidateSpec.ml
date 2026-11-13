@@ -22,6 +22,7 @@ open FlambdaIdentitiesSpec
 open FlambdaInlineSiblingsSpec
 open FlambdaInlineTailSpec
 open FlambdaKnownClosuresSpec
+open FlambdaKnownSiblingsSpec
 open FlambdaKnownSlotsSpec
 open FlambdaKnownSymbolsSpec
 open FlambdaLiftAroundSpec
@@ -258,11 +259,12 @@ let normalise_after_round kept e =
                       (remove_unused_defined_lets_in_loops []
                          (remove_unused_projections
                             (fold_constants
-                               (inline_known_calls kept [] []
-                                  (follow_aliases_in_loops []
-                                     (follow_aliases []
-                                        (merge_alias_lets
-                                           (inline_once_applied_after e))))))))))))))
+                               (inline_known_sibling_calls kept
+                                  (inline_known_calls kept [] []
+                                     (follow_aliases_in_loops []
+                                        (follow_aliases []
+                                           (merge_alias_lets
+                                              (inline_once_applied_after e)))))))))))))))
 
 (** val normalise_after : nat -> code_id list -> expr -> expr **)
 
