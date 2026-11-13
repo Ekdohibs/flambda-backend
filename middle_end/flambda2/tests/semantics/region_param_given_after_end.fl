@@ -1,0 +1,26 @@
+(* For the check of regions: a region that has ended is given to a
+   continuation, whose handler allocates in it. The check fails where the region
+   is given, of both terms (decision D47). *)
+let code inline(never) loopify(never) size(40)
+      work_0 (x : imm tagged)
+        my_closure &my_alloc_region my_depth
+        -> k * e
+        : imm tagged =
+  let rgn = %begin_region () in
+  let u = %end_region (rgn) in
+  let c = %untag_imm (x) in
+  (switch c
+     | 0 -> j (rgn, 10)
+     | 1 -> j (rgn, 20))
+    where j (r : region, i : imm tagged) =
+      let p = %block.[`0`].my_alloc_region.local[r] (i, 1) in
+      let q = %opaque (p) in
+      let a = %block_load.[`0`] (q) in
+      cont k (a)
+in
+let $camlRegion_param_given_after_end__work_1 = closure work_0 @work &toplevel in
+apply direct(work_0 &toplevel)
+  ($camlRegion_param_given_after_end__work_1 : _ -> imm tagged) (1) -> k1 * error
+  where k1 (r : imm tagged) =
+    let $camlRegion_param_given_after_end = Block 0 (r) in
+    cont done ($camlRegion_param_given_after_end)

@@ -1,0 +1,29 @@
+(* For the check of regions: a region is given to a continuation as an
+   argument, with a ghost region beside it. The handler allocates a block in the
+   region, reads it and ends both. Both terms pass. The conversion drops the
+   parameter that is given the ghost, with the argument. *)
+let code inline(never) loopify(never) size(40)
+      work_0 (x : imm tagged)
+        my_closure &my_alloc_region my_depth
+        -> k * e
+        : imm tagged =
+  let rgn = %begin_region () in
+  let ghost = %begin_ghost_region () in
+  let c = %untag_imm (x) in
+  (switch c
+     | 0 -> j (rgn, ghost, 10)
+     | 1 -> j (rgn, ghost, 20))
+    where j (r : region, g : region, i : imm tagged) =
+      let p = %block.[`0`].my_alloc_region.local[r] (i, 1) in
+      let q = %opaque (p) in
+      let a = %block_load.[`0`] (q) in
+      let u = %end_region (r) in
+      let v = %end_ghost_region (g) in
+      cont k (a)
+in
+let $camlRegion_param_allocated_in__work_1 = closure work_0 @work &toplevel in
+apply direct(work_0 &toplevel)
+  ($camlRegion_param_allocated_in__work_1 : _ -> imm tagged) (1) -> k1 * error
+  where k1 (r : imm tagged) =
+    let $camlRegion_param_allocated_in = Block 0 (r) in
+    cont done ($camlRegion_param_allocated_in)

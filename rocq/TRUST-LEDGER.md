@@ -586,7 +586,16 @@ it gave back.
   that only applies another, and the validator forwarded to it where
   the compiler, whose handler ends the region first, has no shortcut
   (discrepancy C5-10).
-  A region variable used as a value is refused. *Tupled functions*: a direct
+  A region variable used as a value is refused. It is not used as a
+  value where it is given to a continuation at a parameter of the kind
+  `Region`, nor where a `Let` binds it to another variable of that
+  kind: the parameter, the argument at its place in every `Apply_cont`
+  of the continuation and the `Let` are dropped, and the parameter and
+  the variable are region variables from there on (`region_params`).
+  Simplify makes such a parameter where it lifts a handler out of
+  another (`-flambda2-match-in-match`). A call that returns or raises
+  to a continuation with such a parameter is refused.
+  *Tupled functions*: a direct
   call of tupled code that the unit binds is refused, and so is a call
   of known arity in a unit that binds tupled code (the entry above);
   it is what keeps a call that gives code the components from being
@@ -789,10 +798,13 @@ it gave back.
   more with regions kept; a unit that is not checked, or whose check
   failed, is not looked at. If that conversion was refused, the tool
   prints one line that says "not run" with the reason, and runs
-  nothing. If it met a region that is not a ghost or an allocation
-  whose mode is `Local`, each term is run on the machine of regions
-  from the imports, and the tool prints one line with what each run
-  came to. Otherwise there is no line. No verdict changes. *Trusted
+  nothing. If it went to its end and met neither a region that is not
+  a ghost nor an allocation whose mode is `Local`, there is no line.
+  Otherwise the tests below are made: where they pass, each term is
+  run on the machine of regions from the imports, and the tool prints
+  one line with what each run came to; where one fails, the line says
+  "not run" with the reason, and nothing is run. No verdict changes.
+  *Trusted
   of that conversion*: that it makes the model's `Begin_region`,
   `Begin_try_region`, `End_region` and `End_try_region` exactly where
   the term has the compiler's with `ghost = false`, the end on the
@@ -801,14 +813,33 @@ it gave back.
   allocations whose mode is `Local` (a block, an immutable array, a
   boxed number, the first closure of a set), with the variable of the
   region that the mode names, or with none where that region is the
-  one of the code that the allocation is in; and that everything else
-  is converted as for the check. What it leaves out is what the
+  one of the code that the allocation is in; that a parameter of a
+  continuation which is a region is kept, with the argument at its
+  place, unless a region that is a ghost reaches it, in which case the
+  parameter and the arguments at its place are dropped from the
+  converted term (`drop_ghost_regions`); and that a variable which a
+  `Let` binds to a region is made one variable with the region's own.
+  What it leaves out is what the
   machine has nothing for: ghost regions, the parent of a region, the
   `alloc_region` of a mode, the mode of a call and the result mode of
   code. It refuses a unit in which a region that is kept is used
-  anywhere else (as an argument of a continuation, say), or in which
+  anywhere else (as an argument of a call, say), or in which
   an end that is not a ghost is of a region that is not kept, and the
-  line then says "not run". The first symbol that the machine draws is a
+  line then says "not run". *Tested, and so not trusted*: that the
+  term which is run is the term that was compared, with its regions in
+  it. The model's `erase` (`FlambdaRegionsSpec.v`) drops the regions
+  from a term; of each of the two terms, `erase` of the term converted
+  with regions kept must be the term that was compared, up to bound
+  names (`FlambdaCompareSpec.expr_eqb`); where it is not, the line
+  says "not run", as a fault of the conversion. And the
+  model's `erasable` is asked of each term with the imports (no call
+  returns or raises to a continuation with a region parameter; no
+  poison constant of the kind `Region`); where it fails the line says
+  "not run" too. Nothing is run in either case. So
+  the second conversion is trusted only for what `erase` removes: where
+  it puts the five primitives and on which variables, and which region
+  parameters it keeps.
+  The first symbol that the machine draws is a
   number that the numbering has given to no symbol; that it is apart
   from the symbols of the two terms and of the imports is not trusted
   but tested, by the model's `region_names_fresh`. *What a line does
@@ -826,8 +857,10 @@ it gave back.
   "passes before, passes after" relates the two terms in nothing: the
   validation of the unit is still made with regions dropped (the entry
   above, decision D37). The counts that the environment variable
-  `FLSEMANTICS_REGION_COUNTS` asks for are for measures, and are in no
-  expected file; the count of allocations that name another region
+  `FLSEMANTICS_REGION_COUNTS` asks for are for measures; they are in
+  no expected file but those of
+  `middle_end/flambda2/tests/semantics/regions/`, whose rules set the
+  variable. The count of allocations that name another region
   sees only a region named by a variable, not the region of the code.
   *What the five primitives are to everything else.* The machine of
   `FlambdaSemanticsSpec.v` gives them no value: a run that comes to

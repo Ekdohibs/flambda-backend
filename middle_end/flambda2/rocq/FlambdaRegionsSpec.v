@@ -422,10 +422,17 @@
    region, in a [Local_allocation] or as an argument at a region
    parameter has no step on this machine where it does.
 
-   This is meant to be, [Let] for [Let] and argument for argument,
-   what the conversion of the test tool makes of a term where it
-   drops its regions: the conversion for the validation. Nothing here
-   states that, nor what the two runs have in common. *)
+   This is, [Let] for [Let] and argument for argument, what the
+   conversion of the test tool makes of a region that is not a ghost,
+   of an allocation whose mode is [Local] and of a region parameter
+   where it drops them: the conversion for the validation. The tool
+   converts each term twice, once for the validation and once with
+   regions kept, for this machine. It tests of every unit that it runs
+   here that [erase] of the second is the first, up to bound names
+   (FlambdaCompareSpec.expr_eqb), and that [erasable] holds of the
+   second and of the imports; it runs nothing here of a unit that
+   fails either. Nothing here states what the two runs have in
+   common. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.

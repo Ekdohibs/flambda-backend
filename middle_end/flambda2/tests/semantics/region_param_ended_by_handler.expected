@@ -1,0 +1,9 @@
+region_param_ended_by_handler.fl:
+  before Simplify (15 steps): returns [0: 21]
+  after Simplify (16 steps): returns [0: 21]
+  the check of kinds: passes before, passes after
+  calls outside code: 1 before, 1 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated: the same once normalised
+  the check of regions: passes before, passes after

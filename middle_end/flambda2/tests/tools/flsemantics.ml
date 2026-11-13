@@ -291,6 +291,7 @@ module Values = Flambda2_rocq_semantics.FlambdaValueSpec
 module Imports = Flambda2_rocq_semantics.FlambdaImportsSpec
 module Semantics = Flambda2_rocq_semantics.FlambdaSemanticsSpec
 module Regions = Flambda2_rocq_semantics.FlambdaRegionsSpec
+module Compare_terms = Flambda2_rocq_semantics.FlambdaCompareSpec
 module Normalise = Flambda2_rocq_semantics.FlambdaNormaliseSpec
 module Unused_statics = Flambda2_rocq_semantics.FlambdaUnusedStaticsSpec
 module Well_formed = Flambda2_rocq_semantics.FlambdaWellFormedSpec
@@ -802,7 +803,11 @@ let drop_depth_variable var =
    block after its region has ended has, here, the meaning it would have if the
    block were on the heap. What keeps a unit from passing for nothing: the
    region variables dropped are noted here, and one used as a value is refused
-   ([convert_variable]). The regions of exception handlers ([Begin_try_region],
+   ([convert_variable]). A region is not used as a value where it is given to a
+   continuation at a parameter of the kind [Region], or bound by a [Let] to
+   another variable of that kind: the parameter, the argument and the [Let] are
+   dropped, and the parameter and the variable are noted as region variables
+   ([region_params]). The regions of exception handlers ([Begin_try_region],
    [End_try_region]) are dropped in the same way. One is opened where a handler
    is installed, and the handler ends it, which ends every region that the body
    had open when it raised. So for a unit with a handler the assumption is
@@ -847,11 +852,15 @@ let drop_region_variable var =
    that of the end binds the unit value. So the end that is a ghost of a region
    that is kept ends nothing, as when the program runs.
 
-   Refused: a kept region used anywhere else (an argument, a parameter, a value
-   slot), as a region dropped is; an allocation in a region that is neither kept
-   nor the region of its code (a region that is a parameter of a continuation);
-   the end that is not a ghost of a region that is not kept (one that is a
-   parameter of a continuation, one that a ghost began, the region of the code),
+   A region may be a parameter of a continuation, and be given to it as an
+   argument: see [region_params], below. Another variable that a [Let] binds to
+   a region is given the number of the region's own variable, and its [Let] is
+   dropped: the two are one variable of the model.
+
+   Refused: a kept region used anywhere else (an argument of a call, a value
+   slot, a field), as a region dropped is; an allocation in a region that is
+   neither kept nor the region of its code; the end that is not a ghost of a
+   region that is not kept (one that a ghost began, the region of the code),
    which would otherwise be dropped without a word; and a local set of closures
    for which [let_closures] makes no [Let].
 
@@ -866,6 +875,48 @@ let kept_regions : Variable.Set.t ref = ref Variable.Set.empty
 let code_regions : Variable.Set.t ref = ref Variable.Set.empty
 
 let regions_met : bool ref = ref false
+
+(* A region as a parameter of a continuation. Simplify makes one where it lifts
+   a handler out of another: the region that the handler ends, or allocates in,
+   is given to it as an argument.
+
+   [region_params] has each continuation that a [Let_cont] binds, with, for its
+   parameters in order, whether each is of the kind [Region]. It is filled
+   before anything that the continuation is in scope of is converted.
+
+   With regions dropped, such a parameter is dropped, and noted as a region
+   variable; and the argument at its place is dropped from every [Apply_cont] of
+   the continuation, in the arms of a [Switch] too. The argument must be a
+   region variable. This is what FlambdaRegionsSpec.erase makes of the term
+   converted with regions kept, and [check_regions] tests that it is.
+
+   With regions kept, such a parameter is kept, as a kept region, and the
+   argument at its place is the variable of the region. A region variable that
+   is dropped with regions kept may be given too: a ghost, and also the regions
+   of code and of the unit, though the compiler is not known to give those. Its
+   variable is then noted ([ghost_regions]), and once the unit is converted the
+   parameters that such a variable reaches are dropped with their arguments
+   ([drop_ghost_regions]).
+
+   Refused, with regions kept or dropped: a region variable given anywhere but
+   at such a place (to a parameter of another kind, to the return or exception
+   continuation of code or of the unit), as any use of one as a value; anything
+   but a region variable at such a place; and a call that returns or raises to a
+   continuation with such a parameter. *)
+let region_params : bool list Continuation.Map.t ref =
+  ref Continuation.Map.empty
+
+let ghost_regions : Model.variable list ref = ref []
+
+let is_region_param (param : Bound_parameter.t) =
+  match Flambda_kind.With_subkind.kind (Bound_parameter.kind param) with
+  | Region -> true
+  | Value | Naked_number _ | Rec_info -> false
+
+let has_region_param k =
+  match Continuation.Map.find_opt k !region_params with
+  | Some places -> List.exists Fun.id places
+  | None -> false
 
 (* A variable where it is used as a value. *)
 let convert_variable var =
@@ -962,9 +1013,61 @@ let directly_called_code : Code_id.t list ref = ref []
 
 let known_arity_call_met : bool ref = ref false
 
+(* The region variable that a simple is, if it is one, kept or dropped. *)
+let region_variable_of (s : Simple.t) : Variable.t option =
+  Simple.pattern_match' s
+    ~var:(fun var ~coercion:_ ->
+      if
+        Variable.Set.mem var !kept_regions
+        || Variable.Set.mem var !region_variables
+      then Some var
+      else None)
+    ~symbol:(fun _ ~coercion:_ -> None)
+    ~const:(fun _ -> None)
+
+(* An argument given to a parameter that is a region; see [region_params]. *)
+let convert_region_argument (arg : Simple.t) : Model.simple option =
+  match region_variable_of arg with
+  | Some var when Variable.Set.mem var !kept_regions ->
+    Some (Model.Var (Variables.find var))
+  | Some var ->
+    if !keep_regions
+    then (
+      let var = Variables.find var in
+      ghost_regions := var :: !ghost_regions;
+      Some (Model.Var var))
+    else None
+  | None ->
+    if !keep_regions then regions_met := true;
+    unsupported "%a, which is not a region, given to a parameter that is one"
+      Simple.print arg
+
+(* The arguments of an [Apply_cont] of a continuation whose parameters are
+   regions at [places], in order as [convert_simples] converts them. *)
+let rec convert_arguments (places : bool list) (args : Simple.t list) :
+    Model.simple list =
+  match places, args with
+  | [], args -> convert_simples args
+  | _ :: _, [] -> []
+  | false :: places, arg :: args ->
+    let arg = convert_simple arg in
+    arg :: convert_arguments places args
+  | true :: places, arg :: args -> (
+    match convert_region_argument arg with
+    | Some arg -> arg :: convert_arguments places args
+    | None -> convert_arguments places args)
+
 let convert_apply_cont (ac : Apply_cont_expr.t) : Model.apply_cont =
-  { ac_continuation = Continuations.find (Apply_cont_expr.continuation ac);
-    ac_args = convert_simples (Apply_cont_expr.args ac);
+  let k = Apply_cont_expr.continuation ac in
+  let args = Apply_cont_expr.args ac in
+  let ac_continuation = Continuations.find k in
+  let ac_args =
+    match Continuation.Map.find_opt k !region_params with
+    | Some places -> convert_arguments places args
+    | None -> convert_simples args
+  in
+  { ac_continuation;
+    ac_args;
     ac_trap_action =
       Option.map convert_trap_action (Apply_cont_expr.trap_action ac)
   }
@@ -1022,6 +1125,8 @@ let reset_conversion () =
   region_variables := Variable.Set.empty;
   kept_regions := Variable.Set.empty;
   code_regions := Variable.Set.empty;
+  region_params := Continuation.Map.empty;
+  ghost_regions := [];
   tupled_code := [];
   directly_called_code := [];
   known_arity_call_met := false
@@ -1064,9 +1169,10 @@ let rec convert_expr (e : Flambda.Expr.t) : Model.expr =
   | Let_cont (Non_recursive { handler; _ }) ->
     Flambda.Non_recursive_let_cont_handler.pattern_match handler
       ~f:(fun k ~body ->
+        let handler = Flambda.Non_recursive_let_cont_handler.handler handler in
+        note_region_params k ~invariant_params:Bound_parameters.empty handler;
         let handler =
-          convert_handler ~invariant_params:Bound_parameters.empty
-            (Flambda.Non_recursive_let_cont_handler.handler handler)
+          convert_handler ~invariant_params:Bound_parameters.empty handler
         in
         Model.Let_cont_non_recursive
           (Continuations.find k, handler, convert_expr body))
@@ -1076,8 +1182,15 @@ let rec convert_expr (e : Flambda.Expr.t) : Model.expr =
         let handlers =
           Flambda.Continuation_handlers.to_map handlers
           |> Continuation.Lmap.bindings
-          |> List.map (fun (k, handler) ->
+        in
+        List.iter
+          (fun (k, handler) -> note_region_params k ~invariant_params handler)
+          handlers;
+        let handlers =
+          List.map
+            (fun (k, handler) ->
               Continuations.find k, convert_handler ~invariant_params handler)
+            handlers
         in
         Model.Let_cont_recursive (handlers, convert_expr body))
   | Apply apply -> convert_apply apply
@@ -1092,11 +1205,43 @@ let rec convert_expr (e : Flambda.Expr.t) : Model.expr =
     Model.Switch (convert_simple (Switch_expr.scrutinee switch), arms)
   | Invalid _ -> Model.Invalid
 
+(* The parameters of [handler] that are regions, noted for the continuation [k]
+   that it is bound to; see [region_params]. The handler is opened as for
+   printing, with the names that it has: only the kinds are read. *)
+and note_region_params k ~invariant_params
+    (handler : Flambda.Continuation_handler.t) =
+  Flambda.Continuation_handler.pattern_match_for_printing handler
+    ~f:(fun params ~handler:_ ->
+      let params = Bound_parameters.append invariant_params params in
+      region_params
+        := Continuation.Map.add k
+             (List.map is_region_param (Bound_parameters.to_list params))
+             !region_params)
+
 and convert_handler ~invariant_params (handler : Flambda.Continuation_handler.t)
     : Model.continuation_handler =
   let is_exn_handler = Flambda.Continuation_handler.is_exn_handler handler in
   Flambda.Continuation_handler.pattern_match handler ~f:(fun params ~handler ->
       let params = Bound_parameters.append invariant_params params in
+      (* The parameters that are regions; see [region_params]. *)
+      let params =
+        let regions, others =
+          List.partition is_region_param (Bound_parameters.to_list params)
+        in
+        if !keep_regions
+        then (
+          List.iter
+            (fun param ->
+              kept_regions
+                := Variable.Set.add (Bound_parameter.var param) !kept_regions)
+            regions;
+          params)
+        else (
+          List.iter
+            (fun param -> drop_region_variable (Bound_parameter.var param))
+            regions;
+          Bound_parameters.create others)
+      in
       let kinds = convert_params_kinds params in
       Model.Handler
         ( convert_params params,
@@ -1123,6 +1268,26 @@ and convert_let (pattern : Bound_pattern.t) (defining_expr : Flambda.Named.t)
   | Phantom -> unsupported "a phantom binding"
   | In_types -> unsupported "a binding of a variable that is for types only");
   match pattern, defining_expr with
+  | Singleton bound_var, Simple s
+    when Option.is_some (region_variable_of s)
+         && Flambda_kind.equal
+              (Variable.kind (Bound_var.var bound_var))
+              Flambda_kind.region ->
+    (* A variable of the kind [Region] bound to a region variable: another name
+       for the region. The [Let] is dropped. With regions dropped the variable
+       is noted as a region variable. With regions kept it is given the number
+       of the region, and is kept or not as the region is; see
+       [region_params]. *)
+    let var = Bound_var.var bound_var in
+    (match region_variable_of s with
+    | Some region when Variable.Set.mem region !kept_regions ->
+      Variables.alias var ~same_as:region;
+      kept_regions := Variable.Set.add var !kept_regions
+    | Some region ->
+      if !keep_regions then Variables.alias var ~same_as:region;
+      drop_region_variable var
+    | None -> assert false);
+    convert_expr body
   | Singleton bound_var, Simple s ->
     let var, kind = convert_bound_var bound_var in
     Model.Let (var, kind, Simple (convert_simple s), convert_expr body)
@@ -1478,6 +1643,17 @@ and convert_apply (apply : Apply_expr.t) : Model.expr =
       unsupported "the call %a" Apply_expr.print apply
   in
   let exn_continuation = Apply_expr.exn_continuation apply in
+  (* See [region_params]. *)
+  if
+    has_region_param (Exn_continuation.exn_handler exn_continuation)
+    ||
+    match Apply_expr.continuation apply with
+    | Return k -> has_region_param k
+    | Never_returns -> false
+  then
+    unsupported
+      "a call that returns or raises to a continuation with a parameter that \
+       is a region";
   let returning_to continuation : Model.apply_expr =
     { ap_callee = callee;
       ap_call_kind = call_kind;
@@ -5310,9 +5486,15 @@ type checked =
 (* Raised where a check has failed, after the line that says how is printed. *)
 exception Check_failed
 
+(* The two terms of the last unit that [check_or_raise] ran and compared, as it
+   ran them: converted with regions dropped, the prefix in front. For
+   [check_regions]. *)
+let terms_compared : (converted * converted) option ref = ref None
+
 let check_or_raise ~filename ~(units : (Compilation_unit.t * Digest.t) list)
     (before : Flambda_unit.t) (after : Flambda_unit.t) :
     Validate.validation option =
+  terms_compared := None;
   match convert_both ~units before after with
   | exception Unsupported what ->
     Format.printf "%s: not checked: the model has not got %s@." filename
@@ -5352,6 +5534,7 @@ let check_or_raise ~filename ~(units : (Compilation_unit.t * Digest.t) list)
     | None -> ());
     let before = with_prefix prefix before in
     let after = with_prefix prefix after in
+    terms_compared := Some (before, after);
     (match prefix.prefix_groups with
     | [] -> ()
     | _ :: _ ->
@@ -5418,6 +5601,178 @@ let check_or_raise ~filename ~(units : (Compilation_unit.t * Digest.t) list)
     Some validation
 
 (* ---- The check of regions --------------------------------------------- *)
+
+(* The parameters of continuations that a region which is a ghost reaches are
+   dropped from a term converted with regions kept, with the arguments at their
+   places; see [region_params]. Such a parameter is one that some [Apply_cont]
+   gives a variable noted in [ghost_regions], or gives another such parameter.
+   The machine of regions has nothing for a ghost, and nothing binds the
+   variable of one, so what is left has, at a parameter that is a region, only
+   regions that the term begins.
+
+   Refused: a parameter that is given a ghost by one [Apply_cont] and something
+   else by another; and a ghost, or a parameter dropped, that is still used
+   somewhere once that is done (the end that is not a ghost of such a parameter,
+   an allocation in it). *)
+let drop_ghost_regions (e : Model.expr) : Model.expr =
+  let ghosts : (int, unit) Hashtbl.t = Hashtbl.create 16 in
+  List.iter
+    (fun var -> Hashtbl.replace ghosts (int_of_positive var) ())
+    !ghost_regions;
+  if Hashtbl.length ghosts = 0
+  then e
+  else
+    let is_ghost_variable var = Hashtbl.mem ghosts (int_of_positive var) in
+    let is_ghost (s : Model.simple) =
+      match s with
+      | Var var -> is_ghost_variable var
+      | Symbol _ | Const _ -> false
+    in
+    (* The parameters of each continuation that a [Let_cont] binds, and every
+       [Apply_cont]. A continuation has one number in a converted term. *)
+    let params : (int, Model.variable list) Hashtbl.t = Hashtbl.create 16 in
+    let uses : Model.apply_cont list ref = ref [] in
+    let rec collect (e : Model.expr) =
+      match e with
+      | Let (_, _, _, body) -> collect body
+      | Let_static (bindings, body) ->
+        List.iter
+          (fun (binding : Model.static_binding) ->
+            match binding with
+            | Bind_code (_, Code (_, _, _, _, _, body)) -> collect body
+            | Bind_deleted_code _ | Bind_symbol _ -> ())
+          bindings;
+        collect body
+      | Let_cont_non_recursive (k, handler, body) ->
+        collect_handler k handler;
+        collect body
+      | Let_cont_recursive (handlers, body) ->
+        List.iter (fun (k, handler) -> collect_handler k handler) handlers;
+        collect body
+      | Apply_cont ac -> uses := ac :: !uses
+      | Switch (_, arms) -> List.iter (fun (_, ac) -> uses := ac :: !uses) arms
+      | Apply _ | Invalid -> ()
+    and collect_handler k (handler : Model.continuation_handler) =
+      match handler with
+      | Handler (handler_params, _, body) ->
+        Hashtbl.replace params (int_of_positive k) handler_params;
+        collect body
+    in
+    collect e;
+    let params_of (ac : Model.apply_cont) =
+      Hashtbl.find_opt params (int_of_positive ac.ac_continuation)
+    in
+    let changed = ref true in
+    while !changed do
+      changed := false;
+      List.iter
+        (fun (ac : Model.apply_cont) ->
+          match params_of ac with
+          | None -> ()
+          | Some handler_params ->
+            let rec reach handler_params args =
+              match handler_params, args with
+              | param :: handler_params, arg :: args ->
+                if is_ghost arg && not (is_ghost_variable param)
+                then (
+                  Hashtbl.replace ghosts (int_of_positive param) ();
+                  changed := true);
+                reach handler_params args
+              | [], _ | _, [] -> ()
+            in
+            reach handler_params ac.ac_args)
+        !uses
+    done;
+    let no_ghost (simples : Model.simple list) =
+      if List.exists is_ghost simples
+      then
+        unsupported
+          "a region that is a ghost, or a parameter that is given one, used \
+           otherwise than as an argument at a parameter that is a region"
+    in
+    let rec drop_at : 'a. Model.variable list -> 'a list -> 'a list =
+     fun handler_params l ->
+      match handler_params, l with
+      | [], l -> l
+      | _ :: _, [] -> []
+      | param :: handler_params, a :: l ->
+        if is_ghost_variable param
+        then drop_at handler_params l
+        else a :: drop_at handler_params l
+    in
+    let rewrite_apply_cont (ac : Model.apply_cont) : Model.apply_cont =
+      let ac_args =
+        match params_of ac with
+        | None -> ac.ac_args
+        | Some handler_params ->
+          let rec check handler_params args =
+            match handler_params, args with
+            | param :: handler_params, arg :: args ->
+              if is_ghost_variable param && not (is_ghost arg)
+              then
+                unsupported
+                  "a parameter that is a region, given a ghost by one \
+                   [Apply_cont] and something else by another";
+              check handler_params args
+            | [], _ | _, [] -> ()
+          in
+          check handler_params ac.ac_args;
+          drop_at handler_params ac.ac_args
+      in
+      no_ghost ac_args;
+      { ac with ac_args }
+    in
+    let rec rewrite (e : Model.expr) : Model.expr =
+      match e with
+      | Let (x, kind, defining_expr, body) ->
+        no_ghost (Regions.simples_of_named defining_expr);
+        Let (x, kind, defining_expr, rewrite body)
+      | Let_static (bindings, body) ->
+        let bindings =
+          List.map
+            (fun (binding : Model.static_binding) : Model.static_binding ->
+              no_ghost (Regions.simples_of_binding binding);
+              match binding with
+              | Bind_code
+                  (id, Code (code_params, my_closure, ret, exn, metadata, body))
+                ->
+                Bind_code
+                  ( id,
+                    Code
+                      (code_params, my_closure, ret, exn, metadata, rewrite body)
+                  )
+              | Bind_deleted_code _ | Bind_symbol _ -> binding)
+            bindings
+        in
+        Let_static (bindings, rewrite body)
+      | Let_cont_non_recursive (k, handler, body) ->
+        Let_cont_non_recursive (k, rewrite_handler handler, rewrite body)
+      | Let_cont_recursive (handlers, body) ->
+        Let_cont_recursive
+          ( List.map (fun (k, handler) -> k, rewrite_handler handler) handlers,
+            rewrite body )
+      | Apply ap ->
+        no_ghost
+          ((ap.ap_callee :: ap.ap_args) @ List.map fst ap.ap_exn_extra_args);
+        e
+      | Apply_cont ac -> Apply_cont (rewrite_apply_cont ac)
+      | Switch (scrutinee, arms) ->
+        no_ghost [scrutinee];
+        Switch
+          (scrutinee, List.map (fun (i, ac) -> i, rewrite_apply_cont ac) arms)
+      | Invalid -> e
+    and rewrite_handler (handler : Model.continuation_handler) :
+        Model.continuation_handler =
+      match handler with
+      | Handler (handler_params, metadata, body) ->
+        Handler
+          ( drop_at handler_params handler_params,
+            { metadata with
+              hm_params_kinds = drop_at handler_params metadata.hm_params_kinds
+            },
+            rewrite body )
+    in
+    rewrite e
 
 (* What the run of a unit on the machine of regions (FlambdaRegionsSpec.v) came
    to, with the number of steps made and the state before the step that was not
@@ -5487,7 +5842,8 @@ let region_outcome_shown (outcome : region_outcome) ~steps =
 
 (* The counts of a run, on a line of its own, where the environment asks for
    them ([FLSEMANTICS_REGION_COUNTS]): they are for a measure, and are in no
-   expected file. *)
+   expected file except those of tests/semantics/regions/, whose rules set the
+   variable. *)
 let print_region_counts which ~steps (state : Regions.region_state option) =
   match state with
   | None -> ()
@@ -5534,6 +5890,20 @@ let print_region_counts which ~steps (state : Regions.region_state option) =
    whatever its reason, the line gives it. A unit of which the second conversion
    went to its end and met nothing of regions has none, and gets no line.
 
+   Before anything is run, the two conversions are compared. The model's [erase]
+   (FlambdaRegionsSpec.v) drops the regions from a term that has them. Of each
+   of the two terms, [erase] of the term converted with regions kept must be the
+   term that [check_or_raise] ran and compared ([terms_compared]), up to bound
+   names (FlambdaCompareSpec.expr_eqb). So what is run here is the term that was
+   validated, with its regions in it, and not another. Where that fails the line
+   says so, and nothing is run: it is a fault of the conversion.
+
+   And each term, with the imports, must be one that [erase] is meant for (the
+   model's [erasable]): no call of it returns or raises to a continuation with a
+   parameter that is a region, which the conversion refuses already, and it has
+   no poison constant of the kind [Region]. Where that fails the line says so,
+   and nothing is run.
+
    It resets the conversion and converts both terms again. So once [check] has
    returned, the tables of the conversion ([Variables], [Symbols] and what
    [reset_conversion] clears) are those of this second conversion, and whatever
@@ -5550,6 +5920,7 @@ let print_region_counts which ~steps (state : Regions.region_state option) =
    still drops regions (decision D37). *)
 let check_regions ~(units : (Compilation_unit.t * Digest.t) list)
     (before : Flambda_unit.t) (after : Flambda_unit.t) : unit =
+  let compared = !terms_compared in
   regions_met := false;
   keep_regions := true;
   let converted =
@@ -5557,7 +5928,14 @@ let check_regions ~(units : (Compilation_unit.t * Digest.t) list)
       ~finally:(fun () -> keep_regions := false)
       (fun () ->
         reset_conversion ();
-        match convert_both ~units before after with
+        match
+          let before, after, prefix = convert_both ~units before after in
+          let kept (unit : converted) =
+            let unit = with_prefix prefix unit in
+            { unit with body = drop_ghost_regions unit.body }
+          in
+          kept before, kept after, prefix
+        with
         | exception Unsupported what -> Error (Format.asprintf "%t" what)
         | before, after, prefix -> Ok (before, after, prefix))
   in
@@ -5573,21 +5951,47 @@ let check_regions ~(units : (Compilation_unit.t * Digest.t) list)
           ~unmentioned:prefix.prefix_unmentioned ~hidden:prefix.prefix_hidden
       in
       let statics = Imports.imports_statics imports in
-      let before = with_prefix prefix before in
-      let after = with_prefix prefix after in
-      let outcome_before, steps_before, state_before =
-        run_regions ~statics before
+      (* The term that is run is to be, with its regions dropped by the model's
+         [erase], the term that was compared, up to bound names. *)
+      let erased_is_compared (kept : converted) (dropped : converted) =
+        Compare_terms.expr_eqb [] [] (Regions.erase [] kept.body) dropped.body
       in
-      let outcome_after, steps_after, state_after =
-        run_regions ~statics after
+      let the_terms_compared =
+        match compared with
+        | Some (dropped_before, dropped_after) ->
+          erased_is_compared before dropped_before
+          && erased_is_compared after dropped_after
+        | None -> false
       in
-      Format.printf "  the check of regions: %s before, %s after@."
-        (region_outcome_shown outcome_before ~steps:steps_before)
-        (region_outcome_shown outcome_after ~steps:steps_after);
-      if Sys.getenv_opt "FLSEMANTICS_REGION_COUNTS" <> None
-      then (
-        print_region_counts "before" ~steps:steps_before state_before;
-        print_region_counts "after" ~steps:steps_after state_after)
+      if not the_terms_compared
+      then
+        Format.printf
+          "  the check of regions: not run (a term converted with its regions \
+           kept is not, once they are dropped from it, the term that was \
+           compared, which is a fault of the conversion)@."
+      else if
+        not
+          (Regions.erasable before.body statics
+          && Regions.erasable after.body statics)
+      then
+        Format.printf
+          "  the check of regions: not run (a call returns or raises to a \
+           continuation with a parameter that is a region, or there is a \
+           poison constant of the kind of regions)@."
+      else
+        let outcome_before, steps_before, state_before =
+          run_regions ~statics before
+        in
+        let outcome_after, steps_after, state_after =
+          run_regions ~statics after
+        in
+        Format.printf "  the check of regions: %s before, %s after@."
+          (region_outcome_shown outcome_before ~steps:steps_before)
+          (region_outcome_shown outcome_after ~steps:steps_after);
+        if Sys.getenv_opt "FLSEMANTICS_REGION_COUNTS" <> None
+        then (
+          print_region_counts "before" ~steps:steps_before state_before;
+          print_region_counts "after" ~steps:steps_after state_after)
 
 (* The check of the two terms of a unit, the first as Simplify was given it and
    the second as Simplify returned it. It prints, under the name given, what the

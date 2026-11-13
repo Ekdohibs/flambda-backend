@@ -1,0 +1,11 @@
+region_param_loop.fl:
+  before Simplify (34 steps): returns [0: 6]
+  after Simplify (35 steps): returns [0: 6]
+  the check of kinds: passes before, passes after
+  calls outside code: 1 before, 1 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated: the same once normalised
+  the check of regions: passes before, passes after
+  the counts of regions before: steps=35 ends=1 local_allocations=3 local_uses=6 other_region=0 cut_by_end_region=0 cut_by_end_try_region=0 no_frame=0 plain_left=0 try_left=0 locals_left=0
+  the counts of regions after: steps=36 ends=0 local_allocations=3 local_uses=6 other_region=0 cut_by_end_region=0 cut_by_end_try_region=0 no_frame=0 plain_left=1 try_left=0 locals_left=3

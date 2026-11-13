@@ -1,0 +1,46 @@
+;; Controls of the check of regions that are run with its counts printed
+;; (see ../../tools/flsemantics.ml, "The check of regions"). The line of
+;; the check says of each term whether its run passes; the counts say
+;; what the run left: the ends of regions that it ran, the regions and
+;; the local allocations that were still there at its end. A region that
+;; nothing ends is not a fault of the check (decision D48), so it shows
+;; here and nowhere else.
+;;
+;; Each X.counts is what the tool prints, with FLSEMANTICS_REGION_COUNTS
+;; set, of ../X.fl or of X.fl here. `dune promote` updates it. The rules
+;; are written out below: add two for a new control.
+;;
+;; region_param_ended_by_handler and region_param_loop: Simplify deletes
+;; the end of a region that is a parameter of a continuation and that
+;; nothing else uses. Before, one end is run and nothing is left; after,
+;; no end is run, and the region and its allocations are left.
+
+(rule
+ (with-stdout-to
+  region_param_ended_by_handler.output
+  (setenv
+   FLSEMANTICS_REGION_COUNTS
+   1
+   (run
+    ../../tools/flsemantics.exe
+    %{dep:../region_param_ended_by_handler.fl}))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff
+   region_param_ended_by_handler.counts
+   region_param_ended_by_handler.output)))
+
+(rule
+ (with-stdout-to
+  region_param_loop.output
+  (setenv
+   FLSEMANTICS_REGION_COUNTS
+   1
+   (run ../../tools/flsemantics.exe %{dep:../region_param_loop.fl}))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff region_param_loop.counts region_param_loop.output)))

@@ -121,6 +121,10 @@ design out; that is the request, not the change.
   - `middle_end/flambda2/tests/semantics/region_*.fl` and their
     `.expected` files (the controls of the check of regions that the
     test tool makes with that machine)
+  - `middle_end/flambda2/tests/semantics/regions/` (controls of the
+    check of regions that are run with its counts printed, some with
+    the options of the compiler that make Simplify lift a handler, and
+    the rules that run them)
   - `middle_end/flambda2/tests/tools/flmodel_to_fexpr.ml` and
     `middle_end/flambda2/tests/tools/flroundtrip.ml` (a term of the
     model printed back as fexpr, and the round trip that checks the

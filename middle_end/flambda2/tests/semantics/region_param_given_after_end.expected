@@ -1,0 +1,9 @@
+region_param_given_after_end.fl:
+  before Simplify (14 steps): returns [0: 20]
+  after Simplify (15 steps): returns [0: 20]
+  the check of kinds: passes before, passes after
+  calls outside code: 1 before, 1 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated: the same once normalised
+  the check of regions: fails (a region that is not open is ended, named or given to a continuation, at step 9) before, fails (a region that is not open is ended, named or given to a continuation, at step 10) after
