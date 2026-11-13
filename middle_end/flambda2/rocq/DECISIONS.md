@@ -772,7 +772,11 @@ says so. Only the labels that this tree cites are listed.
   refuses; whether the answer is bottom then depends on the order of the
   identifiers of the variables, which are hashes. The binary meet and
   the n-way meet alike; the model is bottom. T4-10, found by proof,
-  reached by a run.
+  reached by a run. From OCaml source (generated programs whose joins
+  carry relations between values, not in this tree) the check is
+  reached with the n-way join only: the compiler then stops; it was
+  not reached with the binary join, and no program printed another
+  result at any setting.
 - **T7-14.** On a line of five equations on four values the model's meet
   answers bottom and neither meet of the compiler does, in each of the
   twenty-four orders of the identifiers of its four variables: a
@@ -795,6 +799,21 @@ says so. Only the labels that this tree cites are listed.
   marks its target bottom, and the meet of the variant then adds the
   empty level of that environment to the environment before the
   scope, which drops the mark.
+- **T7-16.** What the n-way meet and the n-way join answer depends on
+  the identifiers of the variables that they make themselves, which
+  are hashes of stamps. With the variables of a program the same at
+  every run, in one process, the answers differ from run to run:
+  which of two aliases is the canonical element (the one with the
+  smaller identifier), and, on a program of five values reduced from
+  a generated one, whether the environment is bottom (31 runs of
+  100; bottom is the precise answer, so the other is a loss of
+  precision). On 38 of 1499 generated programs of joins after meets.
+  Repeated executions of one executable on one input printed the
+  same in the trials (100 processes of 100). The model does not look
+  at the order of names. An inconsistency of the compiler; no wrong
+  result is known. Of the family of T7-10 and T7-13, which are about
+  the program's own variables. Found by runs that are not in this
+  tree; which fold over names decides was not traced.
 - **V2-1.** The fexpr printer prints a call of a C function, and a
   method call, without its allocation mode, in a form that the fexpr
   parser refuses.
