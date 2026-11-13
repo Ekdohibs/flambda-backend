@@ -1,0 +1,56 @@
+let $camlShared_read_two_closures__first_const_0 = Block 0 () in
+(let code size(4)
+       shift_0 (x/67 : imm tagged)
+         my_closure/68 &my_alloc_region/69 my_depth/70
+         -> k/20 * k/21
+         : imm tagged =
+   let next_depth/71 = rec_info (succ my_depth/70) in
+   let scale/72 = %project_value_slot.[shift].[scale] (my_closure/68) in
+   let int_add/73 = %int_barith.add (x/67, scale/72) in
+   cont k/20 (int_add/73)
+ in
+ let code size(6)
+       times_1 (x/74 : imm tagged)
+         my_closure/75 &my_alloc_region/76 my_depth/77
+         -> k/22 * k/23
+         : imm tagged =
+   let next_depth/78 = rec_info (succ my_depth/77) in
+   let scale/79 = %project_value_slot.[times].[scale_1] (my_closure/75) in
+   let int_mul/80 = %int_barith.mul (x/74, scale/79) in
+   cont k/22 (int_mul/80)
+ in
+ let code size(10)
+       both_2 (x/81 : imm tagged)
+         my_closure/82 &my_alloc_region/83 my_depth/84
+         -> k/24 * k/25
+         : imm tagged =
+   let next_depth/85 = rec_info (succ my_depth/84) in
+   let shift/86 = %project_value_slot.[both].[shift] (my_closure/82) in
+   let times/87 = %project_value_slot.[both].[times] (my_closure/82) in
+   apply direct(times_1 &my_alloc_region/83)
+     (times/87 : _ -> imm tagged) (x/81) -> k/26 * k/25
+     where k/26 (apply_result/88 : imm tagged) =
+       apply direct(shift_0 &my_alloc_region/83)
+         (shift/86 : _ -> imm tagged) (apply_result/88) -> k/24 * k/25
+ in
+ let scale/89 = %opaque (3) in
+ let shift/90 = closure shift_0 @shift &toplevel with { scale = scale/89 } in
+ let times/91 = closure times_1 @times &toplevel
+ with { scale_1 = scale/89 }
+ in
+ let both/92 = closure both_2 @both &toplevel
+ with { shift = shift/90; times = times/91 }
+ in
+ let Pmakeblock/93 = %block.[`0`].`toplevel` (shift/90, times/91, both/92) in
+ cont k/19 (Pmakeblock/93))
+  where k/19 define_root_symbol (module_block/63) =
+    let field_0/64 = %block_load.tag[`0`].`size`[`3`].[`0`] (module_block/63)
+    in
+    let field_1/65 = %block_load.tag[`0`].`size`[`3`].[`1`] (module_block/63)
+    in
+    let field_2/66 = %block_load.tag[`0`].`size`[`3`].[`2`] (module_block/63)
+    in
+    let $camlShared_read_two_closures =
+      Block 0 (field_0/64, field_1/65, field_2/66)
+    in
+    cont done ($camlShared_read_two_closures)

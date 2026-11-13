@@ -1,0 +1,45 @@
+let $camlShared_read_slot_and_field__first_const_0 = Block 0 () in
+(let code size(6)
+       of_items_0 (n/56 : imm tagged)
+         my_closure/57 &my_alloc_region/58 my_depth/59
+         -> k/18 * k/19
+         : imm tagged =
+   let next_depth/60 = rec_info (succ my_depth/59) in
+   let each/61 = %project_value_slot.[of_items].[each] (my_closure/57) in
+   let int_mul/62 = %int_barith.mul (n/56, each/61) in
+   cont k/18 (int_mul/62)
+ in
+ let code size(10)
+       cost_1 (boxes/63 : imm tagged)
+         my_closure/64 &my_alloc_region/65 my_depth/66
+         -> k/20 * k/21
+         : imm tagged =
+   let next_depth/67 = rec_info (succ my_depth/66) in
+   let Prices/68 = %project_value_slot.[cost].[Prices] (my_closure/64) in
+   let Pfield/69 = %block_load.[`0`] (Prices/68) in
+   (let Pfield/72 = %block_load.[`1`] (Prices/68) in
+    apply direct(of_items_0 &my_alloc_region/65)
+      (Pfield/72 : _ -> imm tagged) (boxes/63) -> k/22 * k/21)
+     where k/22 (apply_result/70 : imm tagged) =
+       let int_add/71 = %int_barith.add (apply_result/70, Pfield/69) in
+       cont k/20 (int_add/71)
+ in
+ (let each/76 = %opaque (5) in
+  let of_items/77 = closure of_items_0 @of_items &toplevel
+  with { each = each/76 }
+  in
+  let Pmakeblock/78 = %block.[`0`].`toplevel` (each/76, of_items/77) in
+  cont k/23 (Pmakeblock/78))
+   where k/23 (Prices/73 : val) =
+     let cost/74 = closure cost_1 @cost &toplevel
+     with { Prices = Prices/73 }
+     in
+     let Pmakeblock/75 = %block.[`0`].`toplevel` (Prices/73, cost/74) in
+     cont k/17 (Pmakeblock/75))
+  where k/17 define_root_symbol (module_block/53) =
+    let field_0/54 = %block_load.tag[`0`].`size`[`2`].[`0`] (module_block/53)
+    in
+    let field_1/55 = %block_load.tag[`0`].`size`[`2`].[`1`] (module_block/53)
+    in
+    let $camlShared_read_slot_and_field = Block 0 (field_0/54, field_1/55) in
+    cont done ($camlShared_read_slot_and_field)
