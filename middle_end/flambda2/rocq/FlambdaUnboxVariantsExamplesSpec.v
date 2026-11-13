@@ -215,10 +215,10 @@
 
    The validation runs the pass in the first phase of its
    normalisation of the term before
-   (FlambdaValidateSpec.normalise_expr_params). Five rounds of that
-   phase take each of the seven bodies of this file to the body after,
-   and the three of the other file too, [pair_built] among them, which
-   the round of that file does not validate
+   (FlambdaValidateSpec.normalise_expr_params). Five rounds of
+   normalise_expr_params take each of the seven bodies of this file to
+   the body after, and the three of the other file too, [pair_built]
+   among them, which the round of that file does not validate
    ([bodies_validated_by_first_phase_statement]). They take the body
    of [while_two_tests] to its body after as well
    ([while_two_tests_validated_statement]), so that body after refines
@@ -226,7 +226,11 @@
    of this file does not, as it binds no parameter that every
    application gives the same thing. The same is said of
    [shape_constant] ([shape_constant_validated_statement],
-   [shape_constant_refines_statement]).
+   [shape_constant_refines_statement]). In the validation each such
+   round for a whole term is followed by a step that these statements
+   do not have (FlambdaValidateSpec.first_phase_round): it makes the
+   applications of a join go to the arms of its Switch, which the
+   body that Simplify gave keeps.
 
    The last examples are whole terms, with a symbol that a function,
    or a loop, is given where it is bound. [constant_join] is the body
@@ -1015,8 +1019,9 @@ Definition earlier_examples_validated_statement : Prop :=
 (* The round of the validation                                              *)
 (* ======================================================================== *)
 
-(* Five rounds of the first phase of the validation, which has the
-   pass, take the body before to the body after, up to bound names. *)
+(* Five rounds of FlambdaValidateSpec.normalise_expr_params, which has
+   the pass, take the body before to the body after, up to bound
+   names. *)
 Definition validated_by_first_phase (before after : expr) : Prop :=
   expr_eqb [] [] (iterate 5 normalise_expr_params before) after = true.
 
@@ -1092,8 +1097,8 @@ Definition while_two_tests_after : expr :=
                 (Apply_cont (jump 3 [Var 14]))))
           (Switch (Var 16) [(0%Z, jump 3 [naked 0]); (1%Z, jump 4 [])]))).
 
-(* Five rounds of the first phase of the validation take the body
-   before to the body after. *)
+(* Five rounds of normalise_expr_params take the body before to the
+   body after. *)
 Definition while_two_tests_validated_statement : Prop :=
   validated_by_first_phase while_two_tests_before while_two_tests_after.
 
@@ -1217,8 +1222,10 @@ Definition constant_in_loop_after : expr :=
            constant_join_after)]
        (Apply_cont (jump 5 [Var 1; Var 2]))).
 
-(* Five rounds of the first phase for a whole term take the term before
-   to the term after, up to bound names. *)
+(* Five rounds of FlambdaValidateSpec.normalise_params_round (the round
+   of the first phase for a whole term, without the step that follows
+   it in first_phase_round) take the term before to the term after, up
+   to bound names. *)
 Definition validated_by_rounds (before after : expr) : Prop :=
   expr_eqb [] [] (iterate 5 normalise_params_round before) after = true.
 
