@@ -55,9 +55,10 @@
      [arity_of_decisions], [get_arity_and_modes] and
      [compute_code_changes] ([code_change_u]);
    - rebuild.ml: [rewrite_simple] of an unboxed name ([poison]),
-     [get_args], [get_args_with_kinds], [bind_fields],
-     [bind_field_to_simple], [should_keep_param] of [rebuild]
-     ([handler_decisions]), [rewrite_apply_cont_expr] ([get_args]),
+     [rewrite_simple_opt] of an unboxed callee, [get_args],
+     [get_args_with_kinds], [bind_fields], [bind_field_to_simple],
+     [should_keep_param] of [rebuild] ([handler_decisions]),
+     [rewrite_apply_cont_expr] ([get_args]),
      [load_field_from_value_which_is_being_unboxed] (of an unboxed value
      and of a closure whose representation changes),
      [rebuild_singleton_binding_which_is_being_unboxed],
@@ -229,9 +230,17 @@
      order of the closures, as the compiler's [Let] of the set does, and
      the projections are dropped; where its representation changes, the
      projections are at the new function slots.
-   - A call whose callee is unboxed ([Unbox_my_closure]) has no callee in
-     the OCaml; the model's calls always have one, and it is the poison
-     that [rewrite_simple] makes of the unboxed callee.
+   - A call whose callee is unboxed has no callee in the OCaml, whether
+     the code unboxes its [my_closure] ([Unbox_my_closure]) or keeps it
+     ([Keep_my_closure], [rewrite_simple_opt]); the model's calls always
+     have one, and it is the poison that [rewrite_simple] makes of the
+     unboxed callee. The compiler drops the callee under
+     [Keep_my_closure] since its fix of a crash with lambda lifting
+     (the commit "reaper: fix a few bugs"): two closures of one code,
+     each only called, are unboxed, and the [my_closure] of the code,
+     of which both are sources, is not; the call kept a closure whose
+     binding the unboxing removed. FlambdaReaperUnboxingSpec.v has the
+     unit.
    - The older forms [Set_of_closures] and [Static_const_set_of_closures]
      have no fact of a function slot (FlambdaReaperTraversal.v): to
      [get_set_of_closures_def] they are not sets, and they never change
@@ -2570,7 +2579,9 @@ Definition rebuild_apply_u (en : unbox_env) (ap : apply_expr) : expr :=
         end
       | Changing_u params_decisions return_decisions =>
         (* [Unbox_my_closure]: the fields of the callee are given at the
-           front of the first group, and the call has no callee, which is
+           front of the first group. A callee with unboxed fields is
+           dropped, with [Unbox_my_closure] or [Keep_my_closure]
+           ([rewrite_simple_opt]): the call has no callee, which is
            poison here (an unboxed name, [rewrite_simple]). *)
         let callee_fields := apply_my_closure_u ap in
         match
@@ -2590,7 +2601,7 @@ Definition rebuild_apply_u (en : unbox_env) (ap : apply_expr) : expr :=
           let groups := prepend_first from_callee groups in
           make_apply_wrapper_u en
             {| ap_callee :=
-                 match callee_fields with
+                 match unboxed_of (ap_callee ap) with
                  | Some _ => rewrite_simple sol_u (ue_env en) (ap_callee ap)
                  | None => ap_callee ap
                  end;

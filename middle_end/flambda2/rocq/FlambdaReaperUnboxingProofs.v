@@ -30,10 +30,11 @@
    statements of the counterexample are computed. Nothing here needs
    review. *)
 
-From Stdlib Require Import List Bool PeanoNat Lia.
+From Stdlib Require Import ZArith List Bool PeanoNat Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
-From OxCamlFlambda2 Require Import FlambdaMapSpec FlambdaMapProofs
-  FlambdaReaperGraphSpec FlambdaReaperSolutionProofs FlambdaReaperUnboxing
+From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
+  FlambdaMapSpec FlambdaMapProofs FlambdaReaperGraphSpec
+  FlambdaReaperSolutionProofs FlambdaReaperUnboxing
   FlambdaReaperUnboxingSpec.
 Import ListNotations.
 
@@ -347,13 +348,22 @@ Proof.
   split; [ intros [ | ]; vm_compute; auto 10 | ].
   split; [ exists 20; vm_compute; reflexivity | ].
   split; [ exists 20; vm_compute; reflexivity | ].
-  split; [ exists 20; vm_compute; reflexivity | ].
-  vm_compute. auto.
+  exists
+    (Code [40] 41 3 4
+       (make_code_metadata [Unboxed_product [Singleton Value]]
+          [Unboxed_product [Singleton Value]])
+       (Apply_cont
+          {| ac_continuation := 3; ac_args := [Var 40];
+             ac_trap_action := None |}))%positive.
+  split; [ vm_compute; reflexivity | exists 20; vm_compute; reflexivity ].
 Qed.
 
 Theorem lambda_lifting_dead_callee_cause :
   lambda_lifting_dead_callee_cause_statement.
-Proof. vm_compute. auto 10. Qed.
+Proof.
+  do 6 (split; [ vm_compute; reflexivity | ]).
+  split; [ exists 20; vm_compute; reflexivity | vm_compute; reflexivity ].
+Qed.
 
 (* ======================================================================== *)
 (* A counterexample: a result kept by a continuation and unboxed by code    *)
