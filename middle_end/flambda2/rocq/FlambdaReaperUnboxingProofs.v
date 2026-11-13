@@ -354,3 +354,19 @@ Qed.
 Theorem lambda_lifting_dead_callee_cause :
   lambda_lifting_dead_callee_cause_statement.
 Proof. vm_compute. auto 10. Qed.
+
+(* ======================================================================== *)
+(* A counterexample: a result kept by a continuation and unboxed by code    *)
+(* ======================================================================== *)
+
+Theorem kept_result_unboxed : kept_result_unboxed_statement.
+Proof.
+  split; [ intros [ | ]; vm_compute; auto 10 | ].
+  split; [ exists 20; vm_compute; reflexivity | ].
+  split; [ exists 20; vm_compute; reflexivity | ].
+  split; [ exists 20; vm_compute; reflexivity | ].
+  vm_compute. auto 10.
+Qed.
+
+Theorem kept_result_unboxed_cause : kept_result_unboxed_cause_statement.
+Proof. vm_compute. auto 10. Qed.

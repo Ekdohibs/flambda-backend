@@ -33,9 +33,11 @@
    middle_end/flambda2/reaper/points_to_analysis.ml, [unboxing_closed]
    against [unboxing_rules] of middle_end/flambda2/reaper/
    unboxing_analysis.ml and the seeds of [cannot_unbox0] that
-   [perform_analysis0] puts in the table before running them, the unit of
-   the counterexample below against its .fl, [check_called_my_closure]
-   against the fix it is said to be, and the statements. The checks are
+   [perform_analysis0] puts in the table before running them, the units
+   of the two counterexamples below against their .fl (that of the second
+   is [kept_result_unboxed] of FlambdaReaperUnboxing.v),
+   [check_called_my_closure] and [check_result_receivers] against the
+   fixes they are said to be, and the statements. The checks are
    FlambdaReaperUnboxing.v, which needs no review; the proofs are
    FlambdaReaperUnboxingProofs.v.
 
@@ -132,7 +134,53 @@
    its code. With lambda lifting, the rule seeds [cannot_unbox0] with the
    two closures of the unit and nothing else, as [cu0_called] does
    without: the analysis with the fix gives the tables without lambda
-   lifting, whose rebuild exits as the unit does. *)
+   lifting, whose rebuild exits as the unit does.
+
+   A second counterexample, a miscompile of the compiler's reaper that
+   the model shares: [kept_result_unboxed] of FlambdaReaperUnboxing.v
+   (middle_end/flambda2/tests/semantics/reaper/unbox_kept_result.fl,
+   whose comment gives the OCaml). The result of code is unboxed if one
+   allocation dominates it and has a use, which a call of the code whose
+   continuation reads a field of the result gives it. Another call may
+   return to a continuation whose parameter has another source, a
+   closure, and is only called: the parameter is dominated by no
+   allocation, and is kept. [make_apply_wrapper] of rebuild.ml then has
+   the decision [Keep] of the continuation for a result that the callee
+   unboxes, and makes the call one that never returns, the test that
+   would stop with a fatal error being stubbed ("CR ncourant: restore
+   this check"). [kept_result_unboxed_statement] says that the tables of
+   the unit pass every check, that the unit exits, and that rebuilt it
+   goes wrong; [kept_result_unboxed_cause_statement] says why.
+
+   The fix: the analysis must not unbox an allocation that code returns
+   unless, at each call of the code, the name that the call gives it to,
+   the parameter of the continuation, is unboxed too.
+   [check_result_receivers] is what the fix asks of a table of
+   [to_unbox]. As a rule of [unboxing_rules], the fix is a seed of
+   [cannot_unbox0] like [cu0_result], the rule of unboxing_analysis.ml
+   that begins "An allocation that is one of the results of a function",
+   with the premises
+     [usages call_witness usage;
+      rev_accessor ~base:usage relation ~to_:v;
+      ~~(dominated_by_allocation_point allocation_id v)]
+   in place of
+     [constructor ~base:call_witness !!Field.code_id_of_call_witness
+        ~from:codeid;
+      cannot_change_calling_convention codeid]:
+   the first two find [v], a name that a call reads the result into, as
+   in the rule of [field_of_constructor_is_used] of
+   [post_processing_rules] that has them; the third, a negated premise on
+   a table of points_to_analysis.ml as the others of the rules are, says
+   that [v] is not unboxed with the allocation.
+   [kept_result_unboxed_statement] says too that the check rejects the
+   tables of the unit, and passes those of [unboxed_closure] and of the
+   four examples of blocks of FlambdaReaperUnboxing.v. In the unit, the
+   rule seeds [cannot_unbox0] with the block [x42] alone, as
+   [cu0_max_unbox_size] does with a size of 0 ([x42] has the one used
+   real field of the unit): the analysis with the fix gives the tables
+   with that size, those of the unit with [x42] left out of [to_unbox],
+   which pass every check and that of the fix, and whose rebuild exits as
+   the unit does. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic.
@@ -555,3 +603,132 @@ Definition lambda_lifting_dead_callee_cause_statement : Prop :=
   ∧ free_variables_of_expr dead_callee_unit = []
   ∧ free_variables_of_expr (dead_callee_rebuilt true) = [61; 60]
   ∧ dead_callee_to_unbox false = [].
+
+(* ======================================================================== *)
+(* A counterexample: a result kept by a continuation and unboxed by code    *)
+(* ======================================================================== *)
+
+(* The fix, as what it asks of a table of [to_unbox]: an allocation to
+   unbox with a source that is a source of a result of code, a field
+   [Return_of_call] of a witness of the code (as in [cu0_result]),
+   dominates each name that a call of the code, a use of the witness,
+   reads that field into. *)
+Definition check_result_receivers (F : facts) (T : tables)
+    (dominated : list (node * node)) (to_unbox : list node) : bool :=
+  forallb
+    (fun '(call_witness, relation, alias) =>
+       negb (is_return_of_call relation)
+       || forallb
+            (fun '(alias', allocation_id) =>
+               negb (node_eqb alias alias')
+               || negb (mem_node allocation_id (t_has_source T))
+               || negb (mem_node allocation_id to_unbox)
+               || forallb
+                    (fun '(v, relation', usage) =>
+                       negb (field_eqb relation relation')
+                       || negb (mem_pair call_witness usage (t_usages T))
+                       || mem_pair allocation_id v dominated)
+                    (f_accessor F))
+            (t_sources T))
+    (f_constructor F).
+
+(* The unit [kept_result_unboxed] and its tables are those of
+   FlambdaReaperUnboxing.v. *)
+Definition kept_result_cannot_change : list node :=
+  derive_cannot_change kept_result_unboxed_facts kept_result_unboxed_tables.
+
+Definition kept_result_code_deps : finite_map code_dep :=
+  unit_code_deps Auto interface kept_result_unboxed.
+
+(* The size of an unboxing without the fix, and with it: the fix seeds
+   [cannot_unbox0] with [x42] alone, as [cu0_max_unbox_size] does with a
+   size of 0. *)
+Definition kept_result_size (fixed : bool) : nat :=
+  if fixed then 0 else max_unbox_size.
+
+(* The tables of [to_unbox] and [to_change_representation] that the rules
+   give, without the fix and with it, and the unit rebuilt with them. *)
+Definition kept_result_to_unbox (fixed : bool) : list node :=
+  derive_to_unbox no_local kept_result_unboxed_facts
+    kept_result_unboxed_tables kept_result_cannot_change
+    (kept_result_size fixed) false.
+
+Definition kept_result_tcr (fixed : bool) : list node :=
+  derive_to_change_representation no_local kept_result_unboxed_facts
+    kept_result_unboxed_tables kept_result_cannot_change
+    (kept_result_size fixed) false (kept_result_to_unbox fixed).
+
+Definition kept_result_rebuilt (fixed : bool) : expr :=
+  rebuild_unit_unbox_repr no_local kept_result_unboxed_facts
+    kept_result_unboxed_tables kept_result_cannot_change
+    kept_result_code_deps kept_result_unboxed_dominated
+    (kept_result_to_unbox fixed) (kept_result_tcr fixed) true
+    kept_result_unboxed.
+
+Definition kept_result_exit : behaviour :=
+  Exits 1 [Value_const (Tagged_immediate 10)] empty_heap.
+
+(* Without the fix and with it, the tables pass every check. The unit
+   exits with 10; rebuilt without the fix, it goes wrong, and with it, it
+   exits with 10. The check of the fix rejects the tables without it, and
+   passes those with it, and those of [unboxed_closure] and of the four
+   examples of blocks. *)
+Definition kept_result_unboxed_statement : Prop :=
+  (∀ fixed : bool,
+     let size := kept_result_size fixed in
+     let to_unbox := kept_result_to_unbox fixed in
+     let tcr := kept_result_tcr fixed in
+     check_closed no_local kept_result_unboxed_facts
+       kept_result_unboxed_tables = true
+     ∧ check_field_used_exact no_local kept_result_unboxed_facts
+         kept_result_unboxed_tables = true
+     ∧ check_cc_closed kept_result_unboxed_facts kept_result_unboxed_tables
+         kept_result_cannot_change = true
+     ∧ check_dominated kept_result_unboxed_tables
+         kept_result_unboxed_dominated = true
+     ∧ check_to_unbox no_local kept_result_unboxed_facts
+         kept_result_unboxed_tables kept_result_cannot_change size false
+         to_unbox = true
+     ∧ check_to_change_representation no_local kept_result_unboxed_facts
+         kept_result_unboxed_tables kept_result_cannot_change size false
+         to_unbox tcr = true
+     ∧ check_sets_whole kept_result_unboxed_facts kept_result_unboxed_tables
+         to_unbox tcr = true
+     ∧ check_called_my_closure kept_result_unboxed_facts
+         kept_result_unboxed_tables kept_result_code_deps
+         kept_result_unboxed_dominated to_unbox = true)
+  ∧ behaves (FlambdaReaperTupledSpec.on_its_own kept_result_unboxed)
+      kept_result_exit
+  ∧ behaves (FlambdaReaperTupledSpec.on_its_own (kept_result_rebuilt false))
+      Goes_wrong
+  ∧ behaves (FlambdaReaperTupledSpec.on_its_own (kept_result_rebuilt true))
+      kept_result_exit
+  ∧ check_result_receivers kept_result_unboxed_facts
+      kept_result_unboxed_tables kept_result_unboxed_dominated
+      (kept_result_to_unbox false) = false
+  ∧ check_result_receivers kept_result_unboxed_facts
+      kept_result_unboxed_tables kept_result_unboxed_dominated
+      (kept_result_to_unbox true) = true
+  ∧ check_result_receivers unboxed_closure_facts unboxed_closure_tables
+      unboxed_closure_dominated [v 60] = true
+  ∧ check_result_receivers read_block_facts read_block_tables
+      [(v 10, v 10)] [v 10] = true
+  ∧ check_result_receivers block_to_continuation_facts
+      block_to_continuation_tables [(v 10, v 10); (v 10, v 30)] [v 10]
+    = true
+  ∧ check_result_receivers block_from_code_facts block_from_code_tables
+      block_from_code_dominated [v 42] = true
+  ∧ check_result_receivers nested_block_facts nested_block_tables
+      [(v 11, v 11); (v 10, v 10); (v 10, v 12)] [v 11; v 10] = true.
+
+(* Why. Without the fix, the block [x42] is unboxed, and dominates the
+   result 3 of the code dep of 50, which the code then unboxes; [x32],
+   which the call that returns to 21 reads that result into, has two
+   allocation points and is not unboxed: 21 keeps it. With the fix,
+   [x42] is left out of [to_unbox], and the rest is as it was. *)
+Definition kept_result_unboxed_cause_statement : Prop :=
+  kept_result_to_unbox false = [v 42]
+  ∧ mem_pair (v 42) (m 3) kept_result_unboxed_dominated = true
+  ∧ multiple_allocation_points kept_result_unboxed_tables (v 32) = true
+  ∧ kept_result_to_unbox true = []
+  ∧ kept_result_tcr true = kept_result_tcr false.
