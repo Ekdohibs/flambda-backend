@@ -384,6 +384,8 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   FlambdaValidateKnowingSpec.v \
   FlambdaValidateProofs.v \
   FlambdaValidateReadingProofs.v \
+  FlambdaValidateReadingRenameProofs.v \
+  FlambdaValidateReadingRenameSpec.v \
   FlambdaValidateReadingSpec.v \
   FlambdaValidateRelatedProofs.v \
   FlambdaValidateRelatedRenameProofs.v \
