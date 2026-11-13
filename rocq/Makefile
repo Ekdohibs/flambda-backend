@@ -355,6 +355,9 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   FlambdaUnaliasParamsNamesProofs.v \
   FlambdaUnaliasParamsProofs.v \
   FlambdaUnaliasParamsSpec.v \
+  FlambdaUnaliasRecParamsNamesProofs.v \
+  FlambdaUnaliasRecParamsProofs.v \
+  FlambdaUnaliasRecParamsSpec.v \
   FlambdaUnboxInScopeProofs.v \
   FlambdaUnboxInScopeRenameProofs.v \
   FlambdaUnboxInScopeRenameSpec.v \
