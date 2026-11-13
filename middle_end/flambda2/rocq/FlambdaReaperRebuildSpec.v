@@ -29,8 +29,8 @@
    solution that passes the checks refines the unit.
 
    This file is to be reviewed: the checks [closure_free],
-   [no_code_no_slots], [no_code], [exits_one_value] and [results_kinded],
-   the statements, and the examples, against
+   [no_code_no_slots], [no_code], [no_call], [exits_one_value] and
+   [results_kinded], the statements, and the examples, against
    FlambdaReaperRebuild.v (the rebuild, which needs no review) and
    FlambdaReaperFlowSpec.v (the meaning of a solution). The proofs are
    in FlambdaReaperRebuildProofs.v, which needs no review.
@@ -130,23 +130,26 @@
      compiler's units, which are well-kinded, meet it; the model asks
      nothing of kinds otherwise (FlambdaWellKindedSpec.v).
    [rebuild_refines_observably_statement] is proved for the units that
-   meet [no_code] in place of [closure_free]: closures and static sets of
+   meet [no_call] in place of [closure_free]: closures and static sets of
    closures with value slots, projections of function slots and of
-   value slots, and deleted code, but no code and no call. A unit
-   without value slots meets it ([no_code_no_slots_no_code_statement]),
-   and so does a unit without closures
-   ([closure_free_no_code_no_slots_statement]). The rebuild keeps a value
-   slot of a set where one of the closures of the set has it used, with
-   the value it holds, which then has a use; it keeps a set with the
-   projections that follow it ([projections_of_set]) if one of them has
-   a use, and a static set if one of its symbols has one. [no_code] asks
+   value slots, code (rebuilt, never called) and deleted code, but no
+   call. A unit without code meets it ([no_code_no_call_statement]), a
+   unit without value slots meets [no_code]
+   ([no_code_no_slots_no_code_statement]), and so does a unit without
+   closures ([closure_free_no_code_no_slots_statement]). The rebuild keeps
+   a value slot of a set where one of the closures of the set has it
+   used, with the value it holds, which then has a use; it keeps a set
+   with the projections that follow it ([projections_of_set]) if one of
+   them has a use, and a static set if one of its symbols has one; it
+   keeps code whose code id has a use, rebuilt, and deletes the rest,
+   which no run reads as no code is called. [no_code] asks
    that a projection of a value slot be into a variable of a kind other
    than [Region] and [Rec_info]: the rebuild keeps such a variable whether
    or not it has a use ([is_var_used]), and the proof needs the use to
    know that the value slot read is kept. The premise [results_kinded] is
-   not used yet. What remains is to drop [no_code]: code and calls (the
-   masks of the arguments, the wrappers, the callee, the rebuilt bodies
-   of code).
+   not used yet. What remains is to drop [no_call]: calls (the masks of
+   the arguments, the wrappers, the callee, the rebuilt bodies of code
+   run).
    The statement holds of more than nothing ([example_statement]): a
    unit with a static block, a block one field of which no load reads, a
    [Let] with no use, and a continuation one parameter of which has no
@@ -157,7 +160,7 @@
    and a static set of closures, without value slots or code; and
    [value_slots_example_statement], up to observation, for a unit whose
    closures have value slots that the rebuild removes, and which exits
-   with a closure. *)
+   with a closure; [code_example_statement] for a unit with code. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -309,6 +312,35 @@ with handler_no_code (h : continuation_handler) : bool :=
 (* A unit without value slots meets it. *)
 Definition no_code_no_slots_no_code_statement : Prop :=
   ∀ e : expr, no_code_no_slots e = true -> no_code e = true.
+
+(* No call: [no_code], and [Let_static]s of code too, whose bodies meet
+   [no_code]. *)
+Definition binding_no_call (binding : static_binding) : bool :=
+  match binding with
+  | Bind_code _ c => no_code (code_body c)
+  | Bind_deleted_code _ | Bind_symbol _ _ => binding_no_code binding
+  end.
+
+Fixpoint no_call (e : expr) : bool :=
+  match e with
+  | Let _ kind defining_expr body =>
+    named_no_code kind defining_expr && no_call body
+  | Let_static bindings body =>
+    forallb binding_no_call bindings && no_call body
+  | Let_cont_non_recursive _ h body => handler_no_call h && no_call body
+  | Let_cont_recursive handlers body =>
+    forallb (fun '(_, h) => handler_no_call h) handlers && no_call body
+  | Apply _ => false
+  | Apply_cont _ | Switch _ _ | Invalid => true
+  end
+with handler_no_call (h : continuation_handler) : bool :=
+  match h with
+  | Handler _ _ handler => no_call handler
+  end.
+
+(* A unit without code meets it. *)
+Definition no_code_no_call_statement : Prop :=
+  ∀ e : expr, no_code e = true -> no_call e = true.
 
 (* ======================================================================== *)
 (* Exits                                                                    *)
@@ -1013,7 +1045,7 @@ Definition rebuild_refines_observably_statement : Prop :=
     is_local_slots_only is_local ->
     (∀ f : field, is_local f = false) ∨ projection_free e = true ->
     in_flow_fragment e = true ->
-    no_code e = true ->
+    no_call e = true ->
     results_kinded [] [] e = true ->
     well_formed_unit u e = true ->
     exits_one_value u e = true ->
@@ -1325,6 +1357,31 @@ Definition closure_exit_observed_statement : Prop :=
   results_kinded [] [] ClosureExitExample.unit_expr = true
   ∧ program_refines_observably ClosureExitExample.unit_expr
       ClosureExitExample.rebuilt.
+
+(* The statement up to observation holds of a unit with code: the unit
+   of [closure_exit_counterexample_statement], which binds code that it
+   does not call, meets its premises with its least solution; the
+   rebuild keeps the code, rebuilt, and removes the value slot. *)
+Definition code_example_statement : Prop :=
+  in_flow_fragment ClosureExitExample.unit_expr = true
+  ∧ no_call ClosureExitExample.unit_expr = true
+  ∧ results_kinded [] [] ClosureExitExample.unit_expr = true
+  ∧ well_formed_unit FlowExample.interface ClosureExitExample.unit_expr
+    = true
+  ∧ exits_one_value FlowExample.interface ClosureExitExample.unit_expr
+    = true
+  ∧ check_closed FlowExample.is_local
+      (traverse_unit Never FlowExample.interface ClosureExitExample.unit_expr)
+      ClosureExitExample.solution
+    = true
+  ∧ check_field_used_exact FlowExample.is_local
+      (traverse_unit Never FlowExample.interface ClosureExitExample.unit_expr)
+      ClosureExitExample.solution
+    = true
+  ∧ rebuild_unit_from_tables
+      (traverse_unit Never FlowExample.interface ClosureExitExample.unit_expr)
+      ClosureExitExample.solution false ClosureExitExample.unit_expr
+    = ClosureExitExample.rebuilt.
 
 (* The unit of [wrapper_kinds_counterexample_statement] fails
    [results_kinded], and its rebuild does not refine it even up to
