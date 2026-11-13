@@ -113,36 +113,53 @@
      ([number_of_a_scrutinee]): there is no variable, among those
      that the body of the [Let_cont] of [k] tests by a [Switch], that
      at every application of [k] is known to be the number that the
-     application gives the tested parameter. What is known is what
-     FlambdaGiveScrutineeSpec.arm_fact finds, read off the text
-     alone ([still_known]): in an arm of a [Switch] on [x], [x] is
-     the number of the arm; in the handler of a non-recursive
-     continuation that only arms of one number of a [Switch] on [x]
-     apply, [x] is that number, where the body of its [Let_cont]
-     comes to that [Switch] through [Let]s, [Let_static]s and
-     non-recursive [Let_cont]s that do not bind the continuation
-     again and whose handlers do not mention it; nothing is known of
-     [x] under a [Let] of [x] or in a handler that has [x] among its
-     parameters. Simplify makes such a parameter for a test that
-     the source makes twice (FlambdaGiveScrutineeSpec.v says how),
-     where the term before tests the scrutinee itself the second
-     time; [give_scrutinees] makes the parameter the scrutinee again
-     once the continuations are placed, and the pass, coming before
-     it, would take the second test out of the term after only. The
-     [Let]s are gone through, as [arm_fact] does not, because the
-     term after has the [Let]s of the scrutinee under those
-     [Let_cont]s until the continuations are placed; so [x] need not
-     be in scope in that handler, and the test says nothing that a
-     proof could use. The test also holds where both terms have the
-     parameter, as for the result of a function that gives an
-     immediate exactly where its argument is one (a map over an
-     option): the pass is not made there either;
-   - every application of [k] gives a variable only for a parameter
-     that the arm of the number it gives names, once the
+     application gives the tested parameter. What is known is a list
+     of pairs of a variable and a number, read off the text alone
+     ([still_known]). A pair is added in the two kinds of place
+     where FlambdaGiveScrutineeSpec.give_scrutinee finds a number
+     for a variable, the second taken wider: in an arm of a [Switch]
+     on [x], [x] is the number of the arm; in the handler of a
+     non-recursive continuation that only arms of one number of a
+     [Switch] on [x] apply, [x] is that number, where the body of
+     its [Let_cont] comes to that [Switch] through [Let]s,
+     [Let_static]s and non-recursive [Let_cont]s that do not bind
+     the continuation again and whose handlers do not mention it.
+     The pairs are not kept as that pass keeps what it knows, which
+     is one number or nothing: a pair is added to those that there
+     are and replaces none, and a variable counts as known to be a
+     number where any of its pairs says so ([keep_known]). So under
+     a [Switch] on [x] that is in an arm of another [Switch] on [x],
+     or in such a handler, [x] counts as known to be the number of
+     either. The pairs of [x] are dropped under a [Let] of [x] and
+     in a handler that has [x] among its parameters. Simplify makes
+     a tested parameter that is a scrutinee under another name for a
+     test that the source makes twice (FlambdaGiveScrutineeSpec.v
+     says how), where the term before tests the scrutinee itself the
+     second time; [give_scrutinees] makes the parameter the scrutinee
+     again once the continuations are placed, and the pass, coming
+     before it, would take the second test out of the term after
+     only. The [Let]s are gone through, as
+     FlambdaGiveScrutineeSpec.arm_fact does not, because the term
+     after has the [Let]s of the scrutinee under those [Let_cont]s
+     until the continuations are placed; so [x] need not be in scope
+     in that handler, and the test says nothing that a proof could
+     use. The test also holds where both terms have the parameter,
+     as for the result of a function that gives an immediate exactly
+     where its argument is one (a map over an option): the pass is
+     not made there either;
+   - every application of [k] that gives the number of an arm gives
+     a variable only for a parameter that the arm names, once the
      continuations are moved ([read_where_given]): an application
-     that then goes to its arm leaves no variable unread. Where it
-     would, the [Let] of that variable may be one that only the term
-     before can lose: FlambdaNormaliseSpec.remove_unused_lets
+     that then goes to its arm leaves no variable unread. The
+     arguments are taken with the parameters in order, as far as
+     both go, so an argument that has no parameter is not looked at;
+     and an application that gives a number that no arm has is not
+     looked at either. An application of either kind is undefined
+     if it is run, and the test does not keep the pass from a
+     [Let_cont] that has one. Where an application would leave a
+     variable unread, the [Let] of that variable may be one that
+     only the term before can lose:
+     FlambdaNormaliseSpec.remove_unused_lets
      removes the [Let] of a block that nothing reads, and
      FlambdaNormaliseSpec.named_defined, by which the term after
      loses a [Let], accepts no primitive.
@@ -407,10 +424,13 @@ with handler_all_give_immediate (k : continuation) (i : nat)
    [Let_cont] of [k'] comes to that [Switch] through [Let]s,
    [Let_static]s and non-recursive [Let_cont]s that do not bind [k']
    again and whose handlers do not mention it ([tested_through] for
-   the variable, [arm_through] for the number). The pairs of a
-   variable are dropped under a [Let] of it and in a handler that has
-   it among its parameters ([forgetting]). This is read off the text:
-   [x] need not be in scope in the handler of [k']. *)
+   the variable, [arm_through] for the number). A pair that is added
+   replaces none: a variable may have pairs of different numbers,
+   that of a [Switch] on it and that of another [Switch] on it that
+   the first is under. The pairs of a variable are dropped under a
+   [Let] of it and in a handler that has it among its parameters
+   ([forgetting]). This is read off the text: [x] need not be in
+   scope in the handler of [k']. *)
 Fixpoint tested_through (e : expr) : option variable :=
   match e with
   | Switch (Var x) _ => Some x
@@ -454,9 +474,9 @@ Definition in_arm (scrutinee : simple) (d : Z) (known : list (variable * Z))
   end.
 
 (* Of the variables [cands], those that an [Apply_cont] leaves: all of
-   them if it does not apply [k]; if it does, those that are known to
-   be the naked immediate that it gives at position [i], and none if
-   it gives something else there. *)
+   them if it does not apply [k]; if it does, those that some pair of
+   [known] says to be the naked immediate that it gives at position
+   [i], and none if it gives something else there. *)
 Definition keep_known (k : continuation) (i : nat)
     (known : list (variable * Z)) (ac : apply_cont) (cands : list variable)
     : list variable :=
@@ -536,8 +556,10 @@ Definition number_of_a_scrutinee (k : continuation) (i : nat) (body : expr)
 (* Whether an application gives variables only where its arm reads them     *)
 (* ======================================================================== *)
 
-(* Every argument that is a variable is at the position of one of
-   [params] that is among the arguments of [target]. *)
+(* The arguments taken with [params] in order, as far as both go:
+   every one of them that is a variable is at the position of a
+   parameter that is among the arguments of [target]. An argument
+   that has no parameter is not looked at. *)
 Fixpoint only_read_given (params : list variable) (args : list simple)
     (target : apply_cont) : bool :=
   match params, args with
@@ -560,7 +582,8 @@ Fixpoint only_read_given (params : list variable) (args : list simple)
 (* If the [Apply_cont] applies [k], whose parameters are [params],
    and gives a naked immediate at position [i], and [arms] has an arm
    of that number: that it gives a variable only for a parameter that
-   the arm names. *)
+   the arm names ([only_read_given]). It holds of every other
+   [Apply_cont]. *)
 Definition gives_what_is_read (k : continuation) (i : nat)
     (params : list variable) (arms : list (Z * apply_cont))
     (ac : apply_cont) : bool :=
