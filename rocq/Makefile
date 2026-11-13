@@ -377,6 +377,8 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   FlambdaUnusedStaticsProofs.v \
   FlambdaUnusedStaticsSpec.v \
   FlambdaValidateImportsProofs.v \
+  FlambdaValidateImportsRenameProofs.v \
+  FlambdaValidateImportsRenameSpec.v \
   FlambdaValidateImportsSpec.v \
   FlambdaValidateKnowingProofs.v \
   FlambdaValidateKnowingSpec.v \
