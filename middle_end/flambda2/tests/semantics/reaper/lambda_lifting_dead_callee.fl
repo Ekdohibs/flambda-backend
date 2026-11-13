@@ -13,12 +13,14 @@
    with an interface that exports r and s. Inlining top0 twice makes two
    sets of closures of the code of f3. Each closure is unboxed to no field
    (lambda lifting), but the my_closure of the code, which has no use and
-   two sources, is not; the decision on my_closure is then Keep_my_closure,
-   and rebuild_apply keeps as the callee of each call the closure, whose
-   binding the unboxing removed. The compiler stops in To_cmm ("not found
-   in env"; in a function, the check of free names stops it before); the
-   model's rebuild is the compiler's output, and both are undefined where
-   the unit returns. *)
+   two sources, is not, and the decision on my_closure is Keep_my_closure.
+   Before the commit "reaper: fix a few bugs", rebuild_apply kept as the
+   callee of each call the closure whose binding the unboxing removed, and
+   the compiler stopped in To_cmm ("not found in env"). Since, a callee
+   that has unboxed fields is dropped (rewrite_simple_opt), and the model,
+   which follows, rebuilds the same term. Both runs are undefined, as the
+   machine takes the closure of a call from its callee: a call with no
+   callee is not in the model. *)
 let $camlLambda_lifting_dead_callee__first_const_0 = Block 0 () in
 (let code inline(never) size(2)
        f3_1 (param/58 : imm tagged)

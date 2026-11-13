@@ -34,7 +34,7 @@ lambda_lifting_dead_callee.fl:
     the decisions on the 1 code ids of the unit: the same, 1 changing
     code f3_1: parameters [delete], results [delete]
     the decisions of my_closure on the 1 code ids of the unit: the same, 0 unboxed
-    the model's rebuild and the compiler's output: DIFFERENT terms
+    the model's rebuild and the compiler's output: the same up to bound names
     the reaper's input (21 steps): returns [0: 0; 0]
     the model's rebuild (5 steps): undefined
     the model's rebuild against the input: DIFFERENT
