@@ -90,12 +90,14 @@
    - [unboxed_binding_ok]: the unboxed fields of a block are fields of
      the block, of kind [Value], and the argument held there is of kind
      [Value] where the rebuild looks it up: a variable, holding a simple
-     of [plain_simple], or a field unboxed in turn, of one level only (its
-     fields are variables), holding another variable, unboxed alike and
-     used ([unboxed_arg_ok]); the unboxed field of a boxed number is its
-     contents, a variable; an alias is of another variable, unboxed alike
-     and used; the read of a field unboxed in turn is unboxed alike
-     ([fields_alike]). Otherwise the OCaml stops with a fatal error, or
+     of [plain_simple], or a field unboxed in turn, holding another
+     variable, unboxed alike and used ([unboxed_arg_ok]); the unboxed
+     field of a boxed number is its contents, a variable; an alias is of
+     another variable, unboxed alike and used; the read of a field
+     unboxed in turn is unboxed alike. Alike is at any depth: each field
+     is one of the other's, a variable as a variable and a field unboxed
+     in turn as one whose fields are alike ([fields_alike], the OCaml's
+     [fold2_subset_u]). Otherwise the OCaml stops with a fatal error, or
      the model makes a field poison or the [Let] [Invalid].
    - [plain_binding_ok]: a read that the rebuild keeps (its variable is
      used) reads a field that is unboxed, a variable. Otherwise the OCaml
@@ -104,19 +106,18 @@
      not follow from [check_closed]: a field read whose variable is used
      has a source in the least solution, and is then unboxed, but a
      solution that is closed and not least may say that it has none.
-   - [param_ok]: an unboxed parameter is of kind [Value], its unboxed
-     fields are variables ([flat_fields]: none is unboxed in turn), and
-     the plain rebuild keeps it ([handler_mask]) unless it has no field;
-     a handler has as many kinds as parameters. Where the plain rebuild
-     deletes a parameter that has fields, it deletes its argument too,
-     and the rebuild with unboxing gives the handler the fields: the
-     parameter has no use, and its fields are read from uses of it; only
-     a solution that is not least gives both.
+   - [param_ok]: an unboxed parameter is of kind [Value], and the plain
+     rebuild keeps it ([handler_mask]) unless it has no field; a handler
+     has as many kinds as parameters. Where the plain rebuild deletes a
+     parameter that has fields, it deletes its argument too, and the
+     rebuild with unboxing gives the handler the fields: the parameter
+     has no use, and its fields are read from uses of it; only a
+     solution that is not least gives both.
    - [args_ok]: an [Apply_cont] to a handler of the unit gives an
-     unboxed parameter a variable that is unboxed, that has each field of
-     the parameter as a variable ([unboxed_arg_ok]) and that is used
-     where the parameter is kept; it gives a simple of [plain_simple] to
-     a parameter that the plain rebuild keeps and that is not unboxed,
+     unboxed parameter a variable that is unboxed, that has the fields of
+     the parameter alike ([unboxed_arg_ok]), and that is used where the
+     parameter is kept; it gives a simple of [plain_simple] to a
+     parameter that the plain rebuild keeps and that is not unboxed,
      and anything to one that it deletes. Where an unboxed parameter is
      given anything else, the OCaml stops with a fatal error ([get_args]
      of [rewrite_apply_cont_expr]) and the model makes the [Apply_cont]
@@ -157,7 +158,8 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaReaperFlowSpec FlambdaReaperRebuild FlambdaReaperRebuildSpec
   FlambdaReaperCallingConventions FlambdaReaperUnboxing
   FlambdaUnusedStaticsSpec.
-From OxCamlFlambda2 Require FlambdaReaperTupledSpec.
+From OxCamlFlambda2 Require FlambdaReaperTupledSpec
+  FlambdaReaperCallingConventionsSpec FlambdaReaperUnboxingSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -188,44 +190,29 @@ Definition plain_simple (s : simple) : bool :=
 Definition kinds_env (kinds : finite_map flambda_kind) : rebuild_env :=
   {| env_conts := []; env_kinds := kinds; env_projections := [] |}.
 
-(* Unboxed fields that are variables, none unboxed in turn. *)
-Definition flat_fields (fields : unboxed_fields) : bool :=
-  forallb
-    (fun '(_, u) =>
-       match u with
-       | Not_unboxed _ => true
-       | Unboxed _ => false
-       end)
-    fields.
-
-(* The unboxed fields [fields] are among [fields_y], each as a variable in
-   both. *)
+(* The unboxed fields [fields] are among [fields_y], alike: each field of
+   [fields] is one of [fields_y], a variable as a variable, and a field
+   unboxed in turn as a field unboxed in turn whose fields are alike, at
+   any depth ([unboxed_field_pairs], the OCaml's [fold2_subset_u], does
+   not fail). *)
 Definition fields_alike (fields fields_y : unboxed_fields) : bool :=
-  forallb
-    (fun '(f, u) =>
-       match u, Keyed.lookup field_eqb f fields_y with
-       | Not_unboxed _, Some (Not_unboxed _) => true
-       | _, _ => false
-       end)
-    fields.
+  match unboxed_field_pairs Value (Unboxed fields) (Unboxed fields_y) with
+  | Some _ => true
+  | None => false
+  end.
 
 (* The argument [a] of a parameter unboxed with the fields [fields], which
-   the plain rebuild keeps if [keep]: a variable unboxed that has each of
-   the fields, as a variable, and that is used if the parameter is
-   kept. *)
+   the plain rebuild keeps if [keep], or the variable that an unboxed
+   variable is an alias of or that a field unboxed in turn holds ([keep]
+   then): a variable unboxed that has the fields alike, and that is used
+   if the parameter is kept. *)
 Definition unboxed_arg_ok (kinds : finite_map flambda_kind) (keep : bool)
     (fields : unboxed_fields) (a : simple) : bool :=
   match a with
   | Var y =>
     match fields_of y with
     | Some fields_y =>
-      forallb
-        (fun '(f, u) =>
-           match u, Keyed.lookup field_eqb f fields_y with
-           | Not_unboxed _, Some (Not_unboxed _) => true
-           | _, _ => false
-           end)
-        fields
+      fields_alike fields fields_y
       && (negb keep
           || is_var_used sol y (kind_of_variable (kinds_env kinds) y))
     | None => false
@@ -238,11 +225,10 @@ Definition unboxed_arg_ok (kinds : finite_map flambda_kind) (keep : bool)
    which each unboxed field is a field, holding an argument of kind
    [Value] where the rebuild looks it up, of [plain_simple] if the field
    is a variable, or else a variable unboxed alike other than [x], used,
-   whose fields the field has, each a variable; a boxed number, whose
-   unboxed field is its contents, a variable; another variable unboxed
-   alike, of which [x] is an alias, each field a variable; or the read of
-   a field of another unboxed variable that is unboxed in turn, alike,
-   each field a variable. *)
+   whose fields the field has, alike; a boxed number, whose unboxed field
+   is its contents, a variable; another variable unboxed alike, of which
+   [x] is an alias; or the read of a field of another unboxed variable
+   that is unboxed in turn, alike. *)
 Definition unboxed_binding_ok (kinds : finite_map flambda_kind)
     (x : variable) (kind : flambda_kind) (d : named) (fields : unboxed_fields)
     : bool :=
@@ -362,13 +348,13 @@ Definition apply_cont_ok (kinds : finite_map flambda_kind)
   end.
 
 (* A parameter [p] of a handler, of kind [kind], which the plain rebuild
-   keeps if [keep]: if it is unboxed, of kind [Value], its fields
-   variables, and kept unless it has none. *)
+   keeps if [keep]: if it is unboxed, of kind [Value], and kept unless it
+   has no field. *)
 Definition param_ok (p : variable) (kind : flambda_kind) (keep : bool)
     : bool :=
   match fields_of p with
   | Some fields =>
-    kind_eqb kind Value && flat_fields fields
+    kind_eqb kind Value
     && (keep || match fields with [] => true | _ :: _ => false end)
   | None => true
   end.
@@ -910,6 +896,360 @@ Definition nested_example_statement : Prop :=
   ∧ behaves (FlambdaReaperTupledSpec.on_its_own rebuilt)
       (Exits 1%positive [Value_const (Tagged_immediate 8)] empty_heap).
 
+(* A block in a block given to a handler whose parameter is unboxed
+   alike, with a field unboxed in turn:
+
+     let k20 x30 = (let x31 = x30.(0) in let x32 = x31.(1) in
+                    return x32) in
+     let x10 = [7; 8] in
+     let x11 = [x10] in
+     k20 x11
+
+   With the tables of the solver, which pass the checks, the rules unbox
+   [x11] and [x10], hence [x30] and [x31], which they dominate. Field 0
+   of [x11] and of [x30] is unboxed in turn, its field 1 the variables
+   33 and 35. The rebuild binds the variable of field 1 of [x10], 34, to
+   8, and 33 to 34, gives 33 to [k20], whose parameter is 35, binds the
+   variable of field 1 of [x31], 36, to 35, and [x32] to 36. The unit
+   and the rebuilt unit exit with 8. *)
+Module NestedParamExample.
+
+Import FlambdaReaperUnboxing.Examples.
+Local Open Scope positive_scope.
+
+Definition unit_expr : expr :=
+  Let_cont_non_recursive 20
+    (Handler [30] (make_handler_metadata [Value])
+       (Let 31 Value (load 0 (Var 30))
+          (Let 32 Value (load 1 (Var 31)) (return_to 1 [Var 32]))))
+    (Let 10 Value (make_block [int 7; int 8])
+       (Let 11 Value (make_block [Var 10]) (return_to 20 [Var 11]))).
+
+Definition facts : facts := traverse_unit Auto interface unit_expr.
+
+Definition tables : tables :=
+  {| t_alias := [(v 30, v 11); (m 1, v 32); (v 31, v 10); (v 32, consts)];
+     t_any_usage := [m 1; m 2; v 32; consts];
+     t_any_source := [consts; v 32; m 1];
+     t_has_usage := [m 1; m 2; v 32; v 31; v 30; v 11; v 10; consts];
+     t_has_source := [consts; v 11; v 10; v 30; v 31; v 32; m 1];
+     t_usages := [(v 31, v 31); (v 30, v 30); (v 11, v 30); (v 10, v 31)];
+     t_sources := [(v 11, v 11); (v 10, v 10); (v 30, v 11); (v 31, v 10)];
+     t_reading_field := [];
+     t_escaping_field := [];
+     t_field_used :=
+       [(v 11, Field_block 0 Value); (v 10, Field_block 1 Value)] |}.
+
+Definition cannot_change : list node := derive_cannot_change facts tables.
+
+Definition dominated : list (node * node) := derive_dominated tables.
+
+Definition to_unbox : list node :=
+  derive_to_unbox no_local facts tables cannot_change max_unbox_size false.
+
+Definition rebuilt : expr :=
+  Let_cont_non_recursive 20
+    (Handler [35] (make_handler_metadata [Value])
+       (Let 36 Value (Simple (Var 35))
+          (Let 32 Value (Simple (Var 36)) (return_to 1 [Var 32]))))
+    (Let 34 Value (Simple (int 8))
+       (Let 33 Value (Simple (Var 34)) (return_to 20 [Var 33]))).
+
+End NestedParamExample.
+
+Definition nested_param_example_statement : Prop :=
+  in_flow_fragment NestedParamExample.unit_expr = true
+  ∧ static_constants (unit_codes NestedParamExample.unit_expr)
+      NestedParamExample.unit_expr
+    = true
+  ∧ results_kinded [] [] NestedParamExample.unit_expr = true
+  ∧ well_formed_unit Examples.interface NestedParamExample.unit_expr = true
+  ∧ exits_one_value Examples.interface NestedParamExample.unit_expr = true
+  ∧ check_closed Examples.no_local NestedParamExample.facts
+      NestedParamExample.tables
+    = true
+  ∧ check_field_used_exact Examples.no_local NestedParamExample.facts
+      NestedParamExample.tables
+    = true
+  ∧ check_dominated NestedParamExample.tables NestedParamExample.dominated
+    = true
+  ∧ check_to_unbox Examples.no_local NestedParamExample.facts
+      NestedParamExample.tables NestedParamExample.cannot_change
+      Examples.max_unbox_size false NestedParamExample.to_unbox
+    = true
+  ∧ NestedParamExample.to_unbox
+    = [Node_variable 11%positive; Node_variable 10%positive]
+  ∧ fst
+      (unit_unboxed_fields NestedParamExample.facts NestedParamExample.tables
+         NestedParamExample.dominated NestedParamExample.to_unbox
+         NestedParamExample.unit_expr)
+    = [(Node_variable 11%positive,
+        [(Field_block 0 Value,
+          Unboxed [(Field_block 1 Value, Not_unboxed 33%positive)])]);
+       (Node_variable 10%positive,
+        [(Field_block 1 Value, Not_unboxed 34%positive)]);
+       (Node_variable 30%positive,
+        [(Field_block 0 Value,
+          Unboxed [(Field_block 1 Value, Not_unboxed 35%positive)])]);
+       (Node_variable 31%positive,
+        [(Field_block 1 Value, Not_unboxed 36%positive)])]
+  ∧ local_unboxing NestedParamExample.facts NestedParamExample.tables
+      NestedParamExample.dominated NestedParamExample.to_unbox
+      NestedParamExample.unit_expr
+    = true
+  ∧ rebuild_unit_unbox NestedParamExample.facts NestedParamExample.tables
+      NestedParamExample.cannot_change
+      (unit_code_deps Auto Examples.interface NestedParamExample.unit_expr)
+      NestedParamExample.dominated NestedParamExample.to_unbox true
+      NestedParamExample.unit_expr
+    = NestedParamExample.rebuilt
+  ∧ behaves (FlambdaReaperTupledSpec.on_its_own NestedParamExample.unit_expr)
+      (Exits 1%positive [Value_const (Tagged_immediate 8)] empty_heap)
+  ∧ behaves (FlambdaReaperTupledSpec.on_its_own NestedParamExample.rebuilt)
+      (Exits 1%positive [Value_const (Tagged_immediate 8)] empty_heap).
+
+(* An alias of an unboxed block whose field is unboxed in turn:
+
+     let x10 = [7; 8] in
+     let x11 = [x10] in
+     let x12 = x11 in
+     let x13 = x12.(0) in
+     let x14 = x13.(1) in
+     return x14
+
+   With the tables of the solver, which pass the checks, the rules unbox
+   [x11] and [x10], hence [x12] and [x13], which they dominate. Field 0
+   of [x11] and of [x12] is unboxed in turn, its field 1 the variables
+   15 and 17. The rebuild binds the variable of field 1 of [x10], 16, to
+   8, 15 to 16, 17 to 15 (the alias), the variable of field 1 of [x13],
+   18, to 17, and [x14] to 18. The unit and the rebuilt unit exit with
+   8. *)
+Module NestedAliasExample.
+
+Import FlambdaReaperUnboxing.Examples.
+Local Open Scope positive_scope.
+
+Definition unit_expr : expr :=
+  Let 10 Value (make_block [int 7; int 8])
+    (Let 11 Value (make_block [Var 10])
+       (Let 12 Value (Simple (Var 11))
+          (Let 13 Value (load 0 (Var 12))
+             (Let 14 Value (load 1 (Var 13)) (return_to 1 [Var 14]))))).
+
+Definition facts : facts := traverse_unit Auto interface unit_expr.
+
+Definition tables : tables :=
+  {| t_alias := [(m 1, v 14); (v 12, v 11); (v 13, v 10); (v 14, consts)];
+     t_any_usage := [m 1; m 2; v 14; consts];
+     t_any_source := [consts; v 14; m 1];
+     t_has_usage := [m 1; m 2; v 14; v 13; v 12; v 11; v 10; consts];
+     t_has_source := [consts; v 11; v 10; v 12; v 13; v 14; m 1];
+     t_usages := [(v 13, v 13); (v 12, v 12); (v 11, v 12); (v 10, v 13)];
+     t_sources := [(v 11, v 11); (v 10, v 10); (v 12, v 11); (v 13, v 10)];
+     t_reading_field := [];
+     t_escaping_field := [];
+     t_field_used :=
+       [(v 11, Field_block 0 Value); (v 10, Field_block 1 Value)] |}.
+
+Definition cannot_change : list node := derive_cannot_change facts tables.
+
+Definition dominated : list (node * node) := derive_dominated tables.
+
+Definition to_unbox : list node :=
+  derive_to_unbox no_local facts tables cannot_change max_unbox_size false.
+
+Definition rebuilt : expr :=
+  Let 16 Value (Simple (int 8))
+    (Let 15 Value (Simple (Var 16))
+       (Let 17 Value (Simple (Var 15))
+          (Let 18 Value (Simple (Var 17))
+             (Let 14 Value (Simple (Var 18)) (return_to 1 [Var 14]))))).
+
+End NestedAliasExample.
+
+Definition nested_alias_example_statement : Prop :=
+  in_flow_fragment NestedAliasExample.unit_expr = true
+  ∧ static_constants (unit_codes NestedAliasExample.unit_expr)
+      NestedAliasExample.unit_expr
+    = true
+  ∧ results_kinded [] [] NestedAliasExample.unit_expr = true
+  ∧ well_formed_unit Examples.interface NestedAliasExample.unit_expr = true
+  ∧ exits_one_value Examples.interface NestedAliasExample.unit_expr = true
+  ∧ check_closed Examples.no_local NestedAliasExample.facts
+      NestedAliasExample.tables
+    = true
+  ∧ check_field_used_exact Examples.no_local NestedAliasExample.facts
+      NestedAliasExample.tables
+    = true
+  ∧ check_dominated NestedAliasExample.tables NestedAliasExample.dominated
+    = true
+  ∧ check_to_unbox Examples.no_local NestedAliasExample.facts
+      NestedAliasExample.tables NestedAliasExample.cannot_change
+      Examples.max_unbox_size false NestedAliasExample.to_unbox
+    = true
+  ∧ NestedAliasExample.to_unbox
+    = [Node_variable 11%positive; Node_variable 10%positive]
+  ∧ fst
+      (unit_unboxed_fields NestedAliasExample.facts NestedAliasExample.tables
+         NestedAliasExample.dominated NestedAliasExample.to_unbox
+         NestedAliasExample.unit_expr)
+    = [(Node_variable 11%positive,
+        [(Field_block 0 Value,
+          Unboxed [(Field_block 1 Value, Not_unboxed 15%positive)])]);
+       (Node_variable 10%positive,
+        [(Field_block 1 Value, Not_unboxed 16%positive)]);
+       (Node_variable 12%positive,
+        [(Field_block 0 Value,
+          Unboxed [(Field_block 1 Value, Not_unboxed 17%positive)])]);
+       (Node_variable 13%positive,
+        [(Field_block 1 Value, Not_unboxed 18%positive)])]
+  ∧ local_unboxing NestedAliasExample.facts NestedAliasExample.tables
+      NestedAliasExample.dominated NestedAliasExample.to_unbox
+      NestedAliasExample.unit_expr
+    = true
+  ∧ rebuild_unit_unbox NestedAliasExample.facts NestedAliasExample.tables
+      NestedAliasExample.cannot_change
+      (unit_code_deps Auto Examples.interface NestedAliasExample.unit_expr)
+      NestedAliasExample.dominated NestedAliasExample.to_unbox true
+      NestedAliasExample.unit_expr
+    = NestedAliasExample.rebuilt
+  ∧ behaves (FlambdaReaperTupledSpec.on_its_own NestedAliasExample.unit_expr)
+      (Exits 1%positive [Value_const (Tagged_immediate 8)] empty_heap)
+  ∧ behaves (FlambdaReaperTupledSpec.on_its_own NestedAliasExample.rebuilt)
+      (Exits 1%positive [Value_const (Tagged_immediate 8)] empty_heap).
+
+(* Blocks nested two deep, given to a handler whose parameter is unboxed
+   alike:
+
+     let k20 x30 = (let x31 = x30.(0) in let x32 = x31.(0) in
+                    let x33 = x32.(1) in return x33) in
+     let x10 = [7; 8] in
+     let x11 = [x10] in
+     let x12 = [x11] in
+     k20 x12
+
+   With the tables of the solver, which pass the checks, the rules unbox
+   [x12], [x11] and [x10], hence [x30], [x31] and [x32], which they
+   dominate. Field 0 of [x12] and of [x30] is unboxed in turn, and so is
+   its field 0, whose field 1 is the variable 34, and 37. The rebuild
+   binds the variable of field 1 of [x10], 36, to 8, that of [x11], 35,
+   to 36, 34 to 35, gives 34 to [k20], whose parameter is 37, binds the
+   variables of [x31] and [x32], 38 and 39, to 37 and 38, and [x33] to
+   39. The unit and the rebuilt unit exit with 8. *)
+Module DeepExample.
+
+Import FlambdaReaperUnboxing.Examples.
+Local Open Scope positive_scope.
+
+Definition unit_expr : expr :=
+  Let_cont_non_recursive 20
+    (Handler [30] (make_handler_metadata [Value])
+       (Let 31 Value (load 0 (Var 30))
+          (Let 32 Value (load 0 (Var 31))
+             (Let 33 Value (load 1 (Var 32)) (return_to 1 [Var 33])))))
+    (Let 10 Value (make_block [int 7; int 8])
+       (Let 11 Value (make_block [Var 10])
+          (Let 12 Value (make_block [Var 11]) (return_to 20 [Var 12])))).
+
+Definition facts : facts := traverse_unit Auto interface unit_expr.
+
+Definition tables : tables :=
+  {| t_alias :=
+       [(v 30, v 12); (m 1, v 33); (v 31, v 11); (v 32, v 10);
+        (v 33, consts)];
+     t_any_usage := [m 1; m 2; v 33; consts];
+     t_any_source := [consts; v 33; m 1];
+     t_has_usage :=
+       [m 1; m 2; v 33; v 32; v 31; v 30; v 12; v 11; v 10; consts];
+     t_has_source :=
+       [consts; v 12; v 11; v 10; v 30; v 31; v 32; v 33; m 1];
+     t_usages :=
+       [(v 32, v 32); (v 31, v 31); (v 30, v 30); (v 12, v 30);
+        (v 11, v 31); (v 10, v 32)];
+     t_sources :=
+       [(v 12, v 12); (v 11, v 11); (v 10, v 10); (v 30, v 12);
+        (v 31, v 11); (v 32, v 10)];
+     t_reading_field := [];
+     t_escaping_field := [];
+     t_field_used :=
+       [(v 12, Field_block 0 Value); (v 11, Field_block 0 Value);
+        (v 10, Field_block 1 Value)] |}.
+
+Definition cannot_change : list node := derive_cannot_change facts tables.
+
+Definition dominated : list (node * node) := derive_dominated tables.
+
+Definition to_unbox : list node :=
+  derive_to_unbox no_local facts tables cannot_change max_unbox_size false.
+
+Definition rebuilt : expr :=
+  Let_cont_non_recursive 20
+    (Handler [37] (make_handler_metadata [Value])
+       (Let 38 Value (Simple (Var 37))
+          (Let 39 Value (Simple (Var 38))
+             (Let 33 Value (Simple (Var 39)) (return_to 1 [Var 33])))))
+    (Let 36 Value (Simple (int 8))
+       (Let 35 Value (Simple (Var 36))
+          (Let 34 Value (Simple (Var 35)) (return_to 20 [Var 34])))).
+
+End DeepExample.
+
+Definition deep_example_statement : Prop :=
+  in_flow_fragment DeepExample.unit_expr = true
+  ∧ static_constants (unit_codes DeepExample.unit_expr) DeepExample.unit_expr
+    = true
+  ∧ results_kinded [] [] DeepExample.unit_expr = true
+  ∧ well_formed_unit Examples.interface DeepExample.unit_expr = true
+  ∧ exits_one_value Examples.interface DeepExample.unit_expr = true
+  ∧ check_closed Examples.no_local DeepExample.facts DeepExample.tables
+    = true
+  ∧ check_field_used_exact Examples.no_local DeepExample.facts
+      DeepExample.tables
+    = true
+  ∧ check_dominated DeepExample.tables DeepExample.dominated = true
+  ∧ check_to_unbox Examples.no_local DeepExample.facts DeepExample.tables
+      DeepExample.cannot_change Examples.max_unbox_size false
+      DeepExample.to_unbox
+    = true
+  ∧ DeepExample.to_unbox
+    = [Node_variable 12%positive; Node_variable 11%positive;
+       Node_variable 10%positive]
+  ∧ fst
+      (unit_unboxed_fields DeepExample.facts DeepExample.tables
+         DeepExample.dominated DeepExample.to_unbox DeepExample.unit_expr)
+    = [(Node_variable 12%positive,
+        [(Field_block 0 Value,
+          Unboxed
+            [(Field_block 0 Value,
+              Unboxed [(Field_block 1 Value, Not_unboxed 34%positive)])])]);
+       (Node_variable 11%positive,
+        [(Field_block 0 Value,
+          Unboxed [(Field_block 1 Value, Not_unboxed 35%positive)])]);
+       (Node_variable 10%positive,
+        [(Field_block 1 Value, Not_unboxed 36%positive)]);
+       (Node_variable 30%positive,
+        [(Field_block 0 Value,
+          Unboxed
+            [(Field_block 0 Value,
+              Unboxed [(Field_block 1 Value, Not_unboxed 37%positive)])])]);
+       (Node_variable 31%positive,
+        [(Field_block 0 Value,
+          Unboxed [(Field_block 1 Value, Not_unboxed 38%positive)])]);
+       (Node_variable 32%positive,
+        [(Field_block 1 Value, Not_unboxed 39%positive)])]
+  ∧ local_unboxing DeepExample.facts DeepExample.tables DeepExample.dominated
+      DeepExample.to_unbox DeepExample.unit_expr
+    = true
+  ∧ rebuild_unit_unbox DeepExample.facts DeepExample.tables
+      DeepExample.cannot_change
+      (unit_code_deps Auto Examples.interface DeepExample.unit_expr)
+      DeepExample.dominated DeepExample.to_unbox true DeepExample.unit_expr
+    = DeepExample.rebuilt
+  ∧ behaves (FlambdaReaperTupledSpec.on_its_own DeepExample.unit_expr)
+      (Exits 1%positive [Value_const (Tagged_immediate 8)] empty_heap)
+  ∧ behaves (FlambdaReaperTupledSpec.on_its_own DeepExample.rebuilt)
+      (Exits 1%positive [Value_const (Tagged_immediate 8)] empty_heap).
+
 (* An alias of an unboxed block:
 
      let x10 = [7; 8] in
@@ -1147,3 +1487,536 @@ Definition fragment_examples_statement : Prop :=
        (v 10%positive, v 12%positive)]
       [v 11%positive; v 10%positive] Examples.nested_block
     = true.
+
+(* ======================================================================== *)
+(* An example with a call                                                   *)
+(* ======================================================================== *)
+
+(* Code whose parameter and result are unboxed, called directly, the call
+   returning to a handler:
+
+     code 50 x40 = (let x43 = x40.(1) in let x42 = [x43; 9] in
+                    return x42)
+     let x60 = closure of 50 in
+     let k20 x30 = (let x31 = x30.(0) in return x31) in
+     let x10 = [7; 8] in
+     x60 x10 -> k20
+
+   The tables are those of the solver of the test tool. They pass the
+   checks of the plain statement, those of the change of calling
+   conventions ([check_cc_closed] with no code that cannot change,
+   [check_apply_widgets], [check_witness_code_ids]), [check_dominated],
+   [check_to_unbox], and [check_result_receivers], the check of the fix
+   of FlambdaReaperUnboxingSpec.kept_result_unboxed; the unit is of
+   [cc_fragment], and not of [local_unboxing], which has no call. The
+   rules unbox [x10], which dominates the parameter [x40], and [x42],
+   which dominates the result of the code dep and [x30]: the code 50
+   changes its calling convention, its parameter unboxed with its field
+   1 and its result with its field 0. The rebuild binds the variable 61
+   of field 1 of [x10] to 8 and gives it to the call, a product of one
+   value; the code has the variable 66 of field 1 of [x40] for
+   parameter, which it reads in place of the load, binds the variable
+   62 of field 0 of [x42] to [x43] and returns it; [k20] has the
+   variable 64 of field 0 of [x30] for parameter, which it reads in
+   place of the load. The decisions of the call and of the callee for
+   the result agree, so there is no wrapper. The unit, the unit rebuilt
+   with the changes of calling convention alone
+   ([rebuild_unit_cc_from_tables], which keeps both blocks, poison in
+   the fields that are not read, and the code's parameter and result),
+   and the rebuilt unit exit with 8. *)
+Module CallExample.
+
+Import FlambdaReaperUnboxing.Examples.
+Local Open Scope positive_scope.
+
+Definition callee : code :=
+  Code [40] 41 3 4 (make_code_metadata [Singleton Value] [Singleton Value])
+    (Let 43 Value (load 1 (Var 40))
+       (Let 42 Value (make_block [Var 43; int 9]) (return_to 3 [Var 42]))).
+
+Definition unit_expr : expr :=
+  Let_static [Bind_code 50 callee]
+    (Let 60 Value (Closure_of_set 70 [(70, 50)] [])
+       (Let_cont_non_recursive 20
+          (Handler [30] (make_handler_metadata [Value])
+             (Let 31 Value (load 0 (Var 30)) (return_to 1 [Var 31])))
+          (Let 10 Value (make_block [int 7; int 8])
+             (Apply (call_50 [Var 10] 20))))).
+
+Definition facts : facts := traverse_unit Auto interface unit_expr.
+
+Definition tables : tables :=
+  {| t_alias :=
+       [(m 13, m 7); (m 5, m 12); (m 9, m 11); (m 1, v 31); (m 3, v 42);
+        (v 41, m 5); (v 40, m 6); (m 11, m 7); (v 30, m 3); (m 2, m 4);
+        (m 10, c 50); (m 6, v 10); (v 43, consts); (v 31, v 43); (m 5, v 60)];
+     t_any_usage := [m 1; m 10; m 2; v 31; m 4; c 50; v 43; consts];
+     t_any_source := [c 50; consts; m 10; v 43; v 31; m 1];
+     t_has_usage :=
+       [m 1; m 10; m 2; v 31; m 9; v 30; m 11; m 7; m 3; m 4; c 50; v 43; v 42;
+        consts; v 60; v 40; m 6; v 10];
+     t_has_source :=
+       [c 50; consts; v 10; v 60; v 42; m 8; m 7; m 13; m 3; m 11; v 30; m 10;
+        m 6; v 43; v 31; m 9; m 1; v 40; m 5; v 41];
+     t_usages :=
+       [(v 60, v 60); (m 9, m 9); (v 30, v 30); (v 40, v 40); (m 11, m 9);
+        (m 6, v 40); (m 7, m 9); (m 3, v 30); (v 10, v 40); (v 42, v 30)];
+     t_sources :=
+       [(v 60, v 60); (v 10, v 10); (v 42, v 42); (m 8, m 8); (m 7, m 7);
+        (m 13, m 7); (m 3, v 42); (m 11, m 7); (m 9, m 7); (v 30, v 42);
+        (m 6, v 10); (v 40, v 10); (m 5, v 60); (v 41, v 60)];
+     t_reading_field := [];
+     t_escaping_field := [];
+     t_field_used :=
+       [(v 60, known); (v 10, Field_block 1 Value);
+        (v 42, Field_block 0 Value); (m 7, result 0);
+        (m 7, Field_return_of_call Exn);
+        (m 7, Field_code_id_of_call_witness)] |}.
+
+Definition cannot_change : list node := derive_cannot_change facts tables.
+
+Definition dominated : list (node * node) := derive_dominated tables.
+
+Definition to_unbox : list node :=
+  derive_to_unbox no_local facts tables cannot_change max_unbox_size false.
+
+Definition code_deps : finite_map code_dep :=
+  unit_code_deps Auto interface unit_expr.
+
+Definition callee_rebuilt : code :=
+  Code [66] 41 3 4
+    {| cm_params_arity := [Unboxed_product [Singleton Value]];
+       cm_result_arity := [Unboxed_product [Singleton Value]];
+       cm_is_tupled := false;
+       cm_is_stub := false |}
+    (Let 43 Value (Simple (Var 66))
+       (Let 62 Value (Simple (Var 43)) (return_to 3 [Var 62]))).
+
+Definition rebuilt : expr :=
+  Let_static [Bind_code 50 callee_rebuilt]
+    (Let 60 Value (Closure_of_set 70 [(70, 50)] [])
+       (Let_cont_non_recursive 20
+          (Handler [64] (make_handler_metadata [Value])
+             (Let 31 Value (Simple (Var 64)) (return_to 1 [Var 31])))
+          (Let 61 Value (Simple (int 8))
+             (Apply
+                {| ap_callee := Var 60; ap_call_kind := Direct 50;
+                   ap_args := [Var 61]; ap_continuation := 20;
+                   ap_exn_continuation := 2; ap_exn_extra_args := [];
+                   ap_args_arity := [Unboxed_product [Singleton Value]];
+                   ap_return_arity := [Unboxed_product [Singleton Value]]
+                |})))).
+
+End CallExample.
+
+Definition unboxed_call_example_statement : Prop :=
+  is_local_slots_only Examples.no_local
+  ∧ in_flow_fragment CallExample.unit_expr = true
+  ∧ static_constants (unit_codes CallExample.unit_expr)
+      CallExample.unit_expr
+    = true
+  ∧ results_kinded [] [] CallExample.unit_expr = true
+  ∧ well_formed_unit Examples.interface CallExample.unit_expr = true
+  ∧ exits_one_value Examples.interface CallExample.unit_expr = true
+  ∧ check_closed Examples.no_local CallExample.facts CallExample.tables
+    = true
+  ∧ check_field_used_exact Examples.no_local CallExample.facts
+      CallExample.tables
+    = true
+  ∧ CallExample.cannot_change = []
+  ∧ check_cc_closed CallExample.facts CallExample.tables
+      CallExample.cannot_change
+    = true
+  ∧ FlambdaReaperCallingConventionsSpec.check_apply_widgets
+      CallExample.facts CallExample.tables
+    = true
+  ∧ FlambdaReaperCallingConventionsSpec.check_witness_code_ids
+      CallExample.facts
+    = true
+  ∧ FlambdaReaperCallingConventionsSpec.cc_fragment CallExample.unit_expr
+    = true
+  ∧ check_dominated CallExample.tables CallExample.dominated = true
+  ∧ check_to_unbox Examples.no_local CallExample.facts CallExample.tables
+      CallExample.cannot_change Examples.max_unbox_size false
+      CallExample.to_unbox
+    = true
+  ∧ CallExample.to_unbox
+    = [Node_variable 42%positive; Node_variable 10%positive]
+  ∧ FlambdaReaperUnboxingSpec.check_result_receivers CallExample.facts
+      CallExample.tables CallExample.dominated CallExample.to_unbox
+    = true
+  ∧ local_unboxing CallExample.facts CallExample.tables
+      CallExample.dominated CallExample.to_unbox CallExample.unit_expr
+    = false
+  ∧ unit_calling_convention_changes_u CallExample.facts CallExample.tables
+      CallExample.cannot_change CallExample.code_deps CallExample.dominated
+      CallExample.to_unbox CallExample.unit_expr
+    = [(50%positive,
+        Changing_u [Unbox [(Field_block 1 Value, Not_unboxed 65%positive)]]
+          [Unbox [(Field_block 0 Value, Not_unboxed 63%positive)]])]
+  ∧ rebuild_unit_unbox CallExample.facts CallExample.tables
+      CallExample.cannot_change CallExample.code_deps CallExample.dominated
+      CallExample.to_unbox true CallExample.unit_expr
+    = CallExample.rebuilt
+  ∧ behaves (FlambdaReaperTupledSpec.on_its_own CallExample.unit_expr)
+      (Exits 1%positive [Value_const (Tagged_immediate 8)] empty_heap)
+  ∧ behaves
+      (FlambdaReaperTupledSpec.on_its_own
+         (rebuild_unit_cc_from_tables CallExample.facts CallExample.tables
+            CallExample.cannot_change CallExample.code_deps true
+            CallExample.unit_expr))
+      (Exits 1%positive [Value_const (Tagged_immediate 8)] empty_heap)
+  ∧ behaves (FlambdaReaperTupledSpec.on_its_own CallExample.rebuilt)
+      (Exits 1%positive [Value_const (Tagged_immediate 8)] empty_heap).
+
+(* The same code called twice, the first call returning to a handler
+   that has no use of the result, and calling again, returning to the
+   handler that reads it:
+
+     let x10 = [7; 8] in
+     let k20 x30 = (let x31 = x30.(0) in return x31) in
+     let k21 x32 = x60 x10 -> k20 in
+     x60 x10 -> k21
+
+   The tables are those of the solver; they pass the same checks, and
+   the code changes as above. The plain rebuild deletes the parameter
+   [x32] of [k21], as it has no use; the callee unboxes the result: the
+   first call returns to a wrapper, the continuation 67, whose
+   parameter, the field of the result, is dropped ([make_apply_wrapper]:
+   a result that the continuation deletes is dropped, whatever the
+   callee does with it). The second call needs no wrapper. The unit and
+   the rebuilt unit exit with 8. *)
+Module WrapperExample.
+
+Import FlambdaReaperUnboxing.Examples.
+Local Open Scope positive_scope.
+
+Definition unit_expr : expr :=
+  Let_static [Bind_code 50 CallExample.callee]
+    (Let 60 Value (Closure_of_set 70 [(70, 50)] [])
+       (Let 10 Value (make_block [int 7; int 8])
+          (Let_cont_non_recursive 20
+             (Handler [30] (make_handler_metadata [Value])
+                (Let 31 Value (load 0 (Var 30)) (return_to 1 [Var 31])))
+             (Let_cont_non_recursive 21
+                (Handler [32] (make_handler_metadata [Value])
+                   (Apply (call_50 [Var 10] 20)))
+                (Apply (call_50 [Var 10] 21)))))).
+
+Definition facts : facts := traverse_unit Auto interface unit_expr.
+
+Definition tables : tables :=
+  {| t_alias :=
+       [(m 18, m 7); (m 5, m 17); (m 13, m 7); (m 5, m 12); (m 14, m 16);
+        (m 9, m 11); (m 1, v 31); (m 3, v 42); (v 41, m 5); (v 40, m 6);
+        (m 11, m 7); (m 16, m 7); (v 32, m 3); (v 30, m 3); (m 2, m 4);
+        (m 15, c 50); (m 10, c 50); (m 6, v 10); (v 43, consts); (v 31, v 43);
+        (m 5, v 60)];
+     t_any_usage := [m 1; m 15; m 10; m 2; v 31; m 4; c 50; v 43; consts];
+     t_any_source := [c 50; consts; m 15; m 10; v 43; v 31; m 1];
+     t_has_usage :=
+       [m 1; m 15; m 10; m 2; v 31; m 14; m 9; v 30; m 16; m 11; m 7; m 3; m 4;
+        c 50; v 43; v 42; consts; v 60; v 40; m 6; v 10];
+     t_has_source :=
+       [c 50; consts; v 10; v 60; v 42; m 8; m 7; m 18; m 13; m 3; m 11; m 16;
+        v 32; v 30; m 15; m 10; m 6; v 43; v 31; m 14; m 9; m 1; v 40; m 5;
+        v 41];
+     t_usages :=
+       [(v 60, v 60); (m 14, m 14); (m 9, m 9); (v 30, v 30); (v 40, v 40);
+        (m 16, m 14); (m 11, m 9); (m 6, v 40); (m 7, m 9); (m 7, m 14);
+        (m 3, v 30); (v 10, v 40); (v 42, v 30)];
+     t_sources :=
+       [(v 60, v 60); (v 10, v 10); (v 42, v 42); (m 8, m 8); (m 7, m 7);
+        (m 18, m 7); (m 13, m 7); (m 3, v 42); (m 11, m 7); (m 16, m 7);
+        (m 14, m 7); (m 9, m 7); (v 32, v 42); (v 30, v 42); (m 6, v 10);
+        (v 40, v 10); (m 5, v 60); (v 41, v 60)];
+     t_reading_field := [];
+     t_escaping_field := [];
+     t_field_used :=
+       [(v 60, known); (v 10, Field_block 1 Value);
+        (v 42, Field_block 0 Value); (m 7, result 0);
+        (m 7, Field_return_of_call Exn);
+        (m 7, Field_code_id_of_call_witness)] |}.
+
+Definition cannot_change : list node := derive_cannot_change facts tables.
+
+Definition dominated : list (node * node) := derive_dominated tables.
+
+Definition to_unbox : list node :=
+  derive_to_unbox no_local facts tables cannot_change max_unbox_size false.
+
+Definition code_deps : finite_map code_dep :=
+  unit_code_deps Auto interface unit_expr.
+
+(* The call of 50 with the variable of field 1 of [x10], returning to
+   [k]. *)
+Definition call_unboxed (k : continuation) : apply_expr :=
+  {| ap_callee := Var 60; ap_call_kind := Direct 50; ap_args := [Var 61];
+     ap_continuation := k; ap_exn_continuation := 2;
+     ap_exn_extra_args := [];
+     ap_args_arity := [Unboxed_product [Singleton Value]];
+     ap_return_arity := [Unboxed_product [Singleton Value]] |}.
+
+Definition rebuilt : expr :=
+  Let_static [Bind_code 50 CallExample.callee_rebuilt]
+    (Let 60 Value (Closure_of_set 70 [(70, 50)] [])
+       (Let 61 Value (Simple (int 8))
+          (Let_cont_non_recursive 20
+             (Handler [64] (make_handler_metadata [Value])
+                (Let 31 Value (Simple (Var 64)) (return_to 1 [Var 31])))
+             (Let_cont_non_recursive 21
+                (Handler [] (make_handler_metadata [])
+                   (Apply (call_unboxed 20)))
+                (Let_cont_non_recursive 67
+                   (Handler [67] (make_handler_metadata [Value])
+                      (return_to 21 []))
+                   (Apply (call_unboxed 67))))))).
+
+End WrapperExample.
+
+Definition unboxed_wrapper_example_statement : Prop :=
+  is_local_slots_only Examples.no_local
+  ∧ in_flow_fragment WrapperExample.unit_expr = true
+  ∧ static_constants (unit_codes WrapperExample.unit_expr)
+      WrapperExample.unit_expr
+    = true
+  ∧ results_kinded [] [] WrapperExample.unit_expr = true
+  ∧ well_formed_unit Examples.interface WrapperExample.unit_expr = true
+  ∧ exits_one_value Examples.interface WrapperExample.unit_expr = true
+  ∧ check_closed Examples.no_local WrapperExample.facts
+      WrapperExample.tables
+    = true
+  ∧ check_field_used_exact Examples.no_local WrapperExample.facts
+      WrapperExample.tables
+    = true
+  ∧ WrapperExample.cannot_change = []
+  ∧ check_cc_closed WrapperExample.facts WrapperExample.tables
+      WrapperExample.cannot_change
+    = true
+  ∧ FlambdaReaperCallingConventionsSpec.check_apply_widgets
+      WrapperExample.facts WrapperExample.tables
+    = true
+  ∧ FlambdaReaperCallingConventionsSpec.check_witness_code_ids
+      WrapperExample.facts
+    = true
+  ∧ FlambdaReaperCallingConventionsSpec.cc_fragment WrapperExample.unit_expr
+    = true
+  ∧ check_dominated WrapperExample.tables WrapperExample.dominated = true
+  ∧ check_to_unbox Examples.no_local WrapperExample.facts
+      WrapperExample.tables WrapperExample.cannot_change
+      Examples.max_unbox_size false WrapperExample.to_unbox
+    = true
+  ∧ WrapperExample.to_unbox
+    = [Node_variable 42%positive; Node_variable 10%positive]
+  ∧ FlambdaReaperUnboxingSpec.check_result_receivers WrapperExample.facts
+      WrapperExample.tables WrapperExample.dominated WrapperExample.to_unbox
+    = true
+  ∧ unit_calling_convention_changes_u WrapperExample.facts
+      WrapperExample.tables WrapperExample.cannot_change
+      WrapperExample.code_deps WrapperExample.dominated
+      WrapperExample.to_unbox WrapperExample.unit_expr
+    = [(50%positive,
+        Changing_u [Unbox [(Field_block 1 Value, Not_unboxed 65%positive)]]
+          [Unbox [(Field_block 0 Value, Not_unboxed 63%positive)]])]
+  ∧ rebuild_unit_unbox WrapperExample.facts WrapperExample.tables
+      WrapperExample.cannot_change WrapperExample.code_deps
+      WrapperExample.dominated WrapperExample.to_unbox true
+      WrapperExample.unit_expr
+    = WrapperExample.rebuilt
+  ∧ behaves (FlambdaReaperTupledSpec.on_its_own WrapperExample.unit_expr)
+      (Exits 1%positive [Value_const (Tagged_immediate 8)] empty_heap)
+  ∧ behaves (FlambdaReaperTupledSpec.on_its_own WrapperExample.rebuilt)
+      (Exits 1%positive [Value_const (Tagged_immediate 8)] empty_heap).
+
+(* ======================================================================== *)
+(* With nothing unboxed                                                     *)
+(* ======================================================================== *)
+
+(* A first piece of the calls (M4), by the route that compares the rebuild
+   with unboxing with the rebuild of FlambdaReaperCallingConventions.v
+   ([rebuild_unit_cc_from_tables], the same table of
+   [cannot_change_calling_convention]): where the unboxing unboxes nothing
+   ([unit_unboxed_fields] gives no name), the two make the same term
+   ([rebuild_unbox_without_unboxing_statement]), calls, code and wrappers
+   included, so that the rebuild with unboxing refines the unit wherever
+   the change of calling conventions is proved to
+   ([rebuild_unbox_without_unboxing_observably_statement], with the
+   premises of
+   FlambdaReaperCallingConventionsSpec.rebuild_cc_refines_observably_statement).
+
+   It holds of units whose lengths and kinds agree as those of the
+   compiler do ([arities_match]): each handler has as many kinds as
+   parameters; each code as many parameters as its arity has, unarized,
+   and no more than its code dep in [code_deps]; a call whose continuation
+   is a handler of the term, or the return continuation of its code
+   ([conts]: their kinds, or those of the results of the code), has
+   results whose kinds begin with those ([is_prefix]); and a call known to
+   call code of the unit ([call_results]) expects results of the kinds
+   that the code returns. Where these fail the two rebuilds differ, in
+   ways that the machine does not run past (the call or the continuation
+   goes wrong): FlambdaReaperRebuild.make_apply_wrapper (which the rebuild
+   of calling conventions uses for a callee that does not change) tests
+   every parameter of the continuation, make_apply_wrapper_cc and
+   make_apply_wrapper_u only as many as the call has results; the
+   parameters of the wrapper of make_apply_wrapper_cc have the kinds of
+   the decisions of the callee, those of make_apply_wrapper_u the kinds of
+   the return arity of the call; and the poison that wrapper_args_u gives
+   a result that the callee deletes has the kind of the continuation's
+   parameter, that of wrapper_args the kind of the call's result. *)
+
+(* [l] begins [l']. *)
+Fixpoint is_prefix (l l' : list flambda_kind) : bool :=
+  match l, l' with
+  | [], _ => true
+  | a :: l, b :: l' => kind_eqb a b && is_prefix l l'
+  | _ :: _, [] => false
+  end.
+
+(* The kinds of the parameters of a handler. *)
+Definition handler_kinds (h : continuation_handler) : list flambda_kind :=
+  match h with Handler _ metadata _ => hm_params_kinds metadata end.
+
+(* See above; [results] gives, for a call, the kinds of the results of
+   the code it is known to call ([call_results]). *)
+Fixpoint arities_match (results : apply_expr -> option (list flambda_kind))
+    (code_deps : finite_map code_dep) (conts : finite_map (list flambda_kind))
+    (e : expr) : bool :=
+  match e with
+  | Let _ _ _ body => arities_match results code_deps conts body
+  | Let_static bindings body =>
+    forallb
+      (fun binding =>
+         match binding with
+         | Bind_code id (Code params _ ret _ metadata cbody) =>
+           Nat.eqb (length params)
+             (length (unarize (cm_params_arity metadata)))
+           && match lookup id code_deps with
+              | Some cd => Nat.leb (length params) (length (cd_params cd))
+              | None => true
+              end
+           && arities_match results code_deps
+                [(ret, unarize (cm_result_arity metadata))] cbody
+         | Bind_deleted_code _ | Bind_symbol _ _ => true
+         end)
+      bindings
+    && arities_match results code_deps conts body
+  | Let_cont_non_recursive k h body =>
+    handler_arities_match results code_deps conts h
+    && arities_match results code_deps ((k, handler_kinds h) :: conts) body
+  | Let_cont_recursive handlers body =>
+    let conts :=
+      map (fun '(k, h) => (k, handler_kinds h)) handlers ++ conts
+    in
+    forallb
+      (fun '(_, h) => handler_arities_match results code_deps conts h)
+      handlers
+    && arities_match results code_deps conts body
+  | Apply ap =>
+    match lookup (ap_continuation ap) conts with
+    | Some ks => is_prefix ks (unarize (ap_return_arity ap))
+    | None => true
+    end
+    && match results ap with
+       | Some ks => kinds_eqb ks (unarize (ap_return_arity ap))
+       | None => true
+       end
+  | Apply_cont _ | Switch _ _ | Invalid => true
+  end
+with handler_arities_match
+    (results : apply_expr -> option (list flambda_kind))
+    (code_deps : finite_map code_dep) (conts : finite_map (list flambda_kind))
+    (h : continuation_handler) : bool :=
+  match h with
+  | Handler params metadata handler =>
+    Nat.eqb (length params) (length (hm_params_kinds metadata))
+    && arities_match results code_deps conts handler
+  end.
+
+(* The kinds of the results of the code that a call is known to call
+   ([code_id_actually_called]), among the code of the unit [e]. *)
+Definition call_results (F : facts) (T : tables) (e : expr)
+    (ap : apply_expr) : option (list flambda_kind) :=
+  match code_id_actually_called F (solution_of_tables T) ap with
+  | Some id =>
+    option_map (fun md => unarize (cm_result_arity md))
+      (lookup id (bound_code_metadata e))
+  | None => None
+  end.
+
+Definition rebuild_unbox_without_unboxing_statement : Prop :=
+  ∀ (F : facts) (T : tables) (cannot_change : list node)
+    (code_deps : finite_map code_dep) (dominated : list (node * node))
+    (to_unbox : list node) (preserve_direct_calls : bool) (e : expr),
+    fst (unit_unboxed_fields F T dominated to_unbox e) = [] ->
+    arities_match (call_results F T e) code_deps [] e = true ->
+    rebuild_unit_unbox F T cannot_change code_deps dominated to_unbox
+      preserve_direct_calls e
+    = rebuild_unit_cc_from_tables F T cannot_change code_deps
+        preserve_direct_calls e.
+
+Definition rebuild_unbox_without_unboxing_observably_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (dominated : list (node * node)) (to_unbox : list node)
+    (preserve_direct_calls : bool),
+    is_local_slots_only is_local ->
+    (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+    in_flow_fragment e = true ->
+    static_constants (unit_codes e) e = true ->
+    FlambdaReaperCallingConventionsSpec.check_cc_returns
+      (traverse_unit flag u e) T cannot_change (unit_code_deps flag u e) e
+    = true ->
+    results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    exits_one_value u e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+    check_cc_closed (traverse_unit flag u e) T cannot_change = true ->
+    FlambdaReaperCallingConventionsSpec.check_apply_widgets
+      (traverse_unit flag u e) T
+    = true ->
+    FlambdaReaperCallingConventionsSpec.check_witness_code_ids
+      (traverse_unit flag u e)
+    = true ->
+    fst (unit_unboxed_fields (traverse_unit flag u e) T dominated to_unbox e)
+    = [] ->
+    arities_match (call_results (traverse_unit flag u e) T e)
+      (unit_code_deps flag u e) [] e
+    = true ->
+    program_refines_observably e
+      (rebuild_unit_unbox (traverse_unit flag u e) T cannot_change
+         (unit_code_deps flag u e) dominated to_unbox preserve_direct_calls e).
+
+(* The premise holds of the units of the examples with calls, the two
+   above and those of FlambdaReaperCallingConventions.v and
+   FlambdaReaperUnboxing.v (where, unboxing nothing, the unit of
+   [kept_result_unboxed] is rebuilt as by the change of calling
+   conventions). *)
+Definition without_unboxing_examples_statement : Prop :=
+  arities_match
+    (call_results CallExample.facts CallExample.tables CallExample.unit_expr)
+    CallExample.code_deps [] CallExample.unit_expr
+  = true
+  ∧ arities_match
+      (call_results WrapperExample.facts WrapperExample.tables
+         WrapperExample.unit_expr)
+      WrapperExample.code_deps [] WrapperExample.unit_expr
+    = true
+  ∧ arities_match
+      (call_results FlambdaReaperCallingConventions.Examples.two_calls_facts
+         FlambdaReaperCallingConventions.Examples.two_calls_tables
+         FlambdaReaperCallingConventions.Examples.two_calls)
+      (unit_code_deps Auto FlambdaReaperCallingConventions.Examples.interface
+         FlambdaReaperCallingConventions.Examples.two_calls)
+      [] FlambdaReaperCallingConventions.Examples.two_calls
+    = true
+  ∧ arities_match
+      (call_results Examples.kept_result_unboxed_facts
+         Examples.kept_result_unboxed_tables Examples.kept_result_unboxed)
+      (unit_code_deps Auto Examples.interface Examples.kept_result_unboxed)
+      [] Examples.kept_result_unboxed
+    = true
+  ∧ fst
+      (unit_unboxed_fields CallExample.facts CallExample.tables
+         CallExample.dominated [] CallExample.unit_expr)
+    = [].

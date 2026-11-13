@@ -34,21 +34,23 @@
    unboxing makes [Let]s of the variables of its fields ([lets]: of what the
    allocation holds, of the variables of the fields of the variable it is an
    alias of, or, for a field unboxed in turn, of those of the variable that the
-   allocation holds there: [alloc_entry]), at a read of a field of it, which it
-   makes the variable of the field, at a read of a field unboxed in turn into an
-   unboxed variable ([ub_load]), at a handler, whose unboxed parameters it makes
-   the variables of their fields ([params_rel]), and at an [Apply_cont] to such
-   a handler, whose unboxed arguments it makes the variables of their fields
-   that the parameter has ([args_rel]). [ub] is indexed by the shapes of the
+   allocation holds there: [alloc_entry]), each to the variable at the same
+   path of fields of the other ([unboxed_field_pairs], [pairs_spec]), at any
+   depth, at a read of a field of it, which it makes the variable of the
+   field, at a read of a field unboxed in turn into an unboxed variable
+   ([ub_load]), at a handler, whose unboxed parameters it makes the variables
+   of their fields ([params_rel]), and at an [Apply_cont] to such a handler,
+   whose unboxed arguments it makes the variables of their fields that the
+   parameter has ([args_rel]). [ub] is indexed by the shapes of the
    parameters of the continuations in scope (which are unboxed, with which
    fields); those of continuations not free in a term do not matter
    ([ub_agree]). Related terms run alike ([ub_refines]), by a simulation of
    FlambdaReaperRebuildProofs.v ([shrinking_refines]): a step of the plain term
    is answered by as many steps as the unboxing makes [Let]s, none where it
    makes none; an unboxed variable bound in the plain run to a value has the
-   variables of its fields bound in the other to the fields of the value, and
-   those of the fields of a field unboxed in turn to the fields of that field
-   ([env_rel]), so that the arguments of an [Apply_cont] related are bound to
+   variables of its fields bound in the other to the values at their paths of
+   fields in the value ([upath], [path_value], [fields_hold], [env_rel]), so
+   that the arguments of an [Apply_cont] related are bound to
    parameters related ([bind_args_rel]). Immutable blocks and boxed numbers are
    values, so no heap is involved.
 
@@ -80,7 +82,9 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaReaperFlowSpec FlambdaReaperRebuildSpec FlambdaReaperRebuildProofs
   FlambdaReaperCallingConventions FlambdaReaperUnboxing
   FlambdaReaperUnboxingRefinesSpec.
-From OxCamlFlambda2 Require FlambdaReaperFlowProofs.
+From OxCamlFlambda2 Require FlambdaReaperFlowProofs
+  FlambdaReaperCallingConventionsProofs FlambdaFreshQuantifierSpec
+  FlambdaPrimitiveProofs FlambdaNameAbstractionSpec FlambdaRenameApartSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -264,6 +268,172 @@ with local_handler (kinds : finite_map flambda_kind)
 End Fragment.
 
 (* ======================================================================== *)
+(* The paths to the variables of unboxed fields, and their pairs           *)
+(* ======================================================================== *)
+
+(* [upath k u p v k']: the variable [v] of the unboxed field [u], of kind
+   [k], is at the path of fields [p], and of kind [k']. *)
+Inductive upath : flambda_kind -> unboxed_field -> list field -> variable
+    -> flambda_kind -> Prop :=
+  | upath_leaf (k : flambda_kind) (v : variable) :
+    upath k (Not_unboxed v) [] v k
+  | upath_field (k : flambda_kind) (fields : unboxed_fields) (f : field)
+      (u : unboxed_field) (p : list field) (v : variable)
+      (k' : flambda_kind) :
+    (f, u) ∈ fields -> upath (field_kind f) u p v k' ->
+    upath k (Unboxed fields) (f :: p) v k'.
+
+(* The [Let]s of the variables of [unboxed_field_pairs], each to the
+   other. *)
+Definition pairs_lets (pairs : list (variable * variable * flambda_kind))
+    : list (variable * flambda_kind * simple) :=
+  map (fun '(x, x', kind) => (x, kind, Var x')) pairs.
+
+Section Unboxed_field_ind.
+
+Variable P : unboxed_field -> Prop.
+Hypothesis P_not_unboxed : ∀ v : variable, P (Not_unboxed v).
+Hypothesis P_unboxed : ∀ fields : unboxed_fields,
+  (∀ (f : field) (u : unboxed_field), (f, u) ∈ fields -> P u) ->
+  P (Unboxed fields).
+
+Fixpoint unboxed_field_rec (u : unboxed_field) : P u :=
+  match u with
+  | Not_unboxed v => P_not_unboxed v
+  | Unboxed fields =>
+    P_unboxed fields
+      ((fix go (l : list (field * unboxed_field))
+           : ∀ (f : field) (u : unboxed_field), (f, u) ∈ l -> P u :=
+          match l with
+          | [] => fun f u H => match H with end
+          | (f0, u0) :: l =>
+            fun f u H =>
+              match H with
+              | or_introl Heq =>
+                match Heq in _ = fu return P (snd fu) with
+                | eq_refl => unboxed_field_rec u0
+                end
+              | or_intror H' => go l f u H'
+              end
+          end) fields)
+  end.
+
+End Unboxed_field_ind.
+
+Lemma upath_unboxed_kind (k k2 : flambda_kind) (fields : unboxed_fields)
+    (p : list field) (v : variable) (k' : flambda_kind) :
+  upath k (Unboxed fields) p v k' -> upath k2 (Unboxed fields) p v k'.
+Proof.
+  intros H. inversion H; subst. econstructor; eassumption.
+Qed.
+
+Lemma upath_cons (k : flambda_kind) (fu : field * unboxed_field)
+    (fields : unboxed_fields) (p : list field) (v : variable)
+    (k' : flambda_kind) :
+  upath k (Unboxed fields) p v k' -> upath k (Unboxed (fu :: fields)) p v k'.
+Proof.
+  intros H. inversion H; subst. econstructor; [ right; eassumption | ].
+  eassumption.
+Qed.
+
+Lemma upath_unboxed_inv (k : flambda_kind) (fields : unboxed_fields)
+    (p : list field) (v : variable) (k' : flambda_kind) :
+  upath k (Unboxed fields) p v k' ->
+  ∃ (f : field) (u : unboxed_field) (p0 : list field),
+    p = f :: p0 ∧ (f, u) ∈ fields ∧ upath (field_kind f) u p0 v k'.
+Proof. intros H. inversion H; subst. eexists _, _, _. eauto. Qed.
+
+Lemma upath_not_unboxed_inv (k : flambda_kind) (x : variable)
+    (p : list field) (v : variable) (k' : flambda_kind) :
+  upath k (Not_unboxed x) p v k' -> p = [] ∧ v = x ∧ k' = k.
+Proof. intros H. inversion H; subst. auto. Qed.
+
+Lemma field_eqb_decides : decides_equality field_eqb.
+Proof.
+  intros f f'. split; [ apply field_eqb_eq | intros <-; apply field_eqb_refl ].
+Qed.
+
+(* What [unboxed_field_pairs] pairs: the variables at the same path of
+   the two, of the kind at that path; each variable of the first, in
+   order. *)
+Lemma pairs_spec (u : unboxed_field) :
+  ∀ (k : flambda_kind) (u' : unboxed_field)
+    (pairs : list (variable * variable * flambda_kind)),
+    unboxed_field_pairs k u u' = Some pairs ->
+    (∀ (x x' : variable) (k' : flambda_kind),
+       (x, x', k') ∈ pairs ->
+       ∃ p : list field, upath k u p x k' ∧ upath k u' p x' k')
+    ∧ (∀ (p : list field) (v : variable) (k' : flambda_kind),
+         upath k u p v k' ->
+         ∃ v' : variable, (v, v', k') ∈ pairs ∧ upath k u' p v' k')
+    ∧ map (fun '(x, _, _) => x) pairs = map fst (unboxed_field_leaves k u)
+    ∧ map (fun '(_, _, k') => k') pairs
+      = map snd (unboxed_field_leaves k u).
+Proof.
+  induction u as [v | fields IH] using unboxed_field_rec;
+    intros k u' pairs Hp.
+  - destruct u' as [v' | fields']; [ | discriminate Hp ].
+    injection Hp as <-. split; [ | split; [ | split; reflexivity ] ].
+    + intros x x' k' [Heq | []]. injection Heq as <- <- <-.
+      exists []. split; constructor.
+    + intros p v0 k' Hpath. apply upath_not_unboxed_inv in Hpath
+        as (-> & -> & ->).
+      exists v'. split; [ left; reflexivity | constructor ].
+  - destruct u' as [v' | fields']; [ discriminate Hp | ].
+    revert pairs Hp. induction fields as [ | [f0 u0] rest IHrest];
+      intros pairs Hp.
+    + injection Hp as <-. split; [ intros x x' k' [] | ].
+      split; [ | split; reflexivity ].
+      intros p v k' Hpath. apply upath_unboxed_inv in Hpath
+        as (f & u & p0 & _ & [] & _).
+    + change (unboxed_field_pairs k (Unboxed ((f0, u0) :: rest))
+                (Unboxed fields'))
+        with (match Keyed.lookup field_eqb f0 fields' with
+              | Some u' =>
+                match unboxed_field_pairs (field_kind f0) u0 u',
+                      unboxed_field_pairs k (Unboxed rest) (Unboxed fields')
+                with
+                | Some p, Some q => Some (p ++ q)
+                | _, _ => None
+                end
+              | None => None
+              end) in Hp.
+      destruct (Keyed.lookup field_eqb f0 fields') as [u0' | ] eqn:Hl;
+        [ | discriminate Hp ].
+      pose proof (keyed_lookup_in field_eqb field_eqb_decides f0 _ fields'
+                    Hl) as Hin0.
+      destruct (unboxed_field_pairs (field_kind f0) u0 u0') as [p1 | ]
+        eqn:Hp1; [ | discriminate Hp ].
+      destruct (unboxed_field_pairs k (Unboxed rest) (Unboxed fields'))
+        as [q | ] eqn:Hq; [ | discriminate Hp ].
+      injection Hp as <-.
+      destruct (IH f0 u0 (or_introl eq_refl) (field_kind f0) u0' p1 Hp1)
+        as (Ha1 & Hb1 & Hc1 & Hd1).
+      destruct (IHrest (fun f u Hin => IH f u (or_intror Hin)) q eq_refl)
+        as (Ha2 & Hb2 & Hc2 & Hd2).
+      split; [ | split; [ | split ] ].
+      * intros x x' k' Hin. apply in_app_or in Hin as [Hin | Hin].
+        -- destruct (Ha1 x x' k' Hin) as (p & H1 & H2). exists (f0 :: p).
+           split; econstructor; try eassumption; left; reflexivity.
+        -- destruct (Ha2 x x' k' Hin) as (p & H1 & H2). exists p.
+           split; [ apply upath_cons; exact H1 | exact H2 ].
+      * intros p v k' Hpath.
+        apply upath_unboxed_inv in Hpath as (f & u & p0 & -> & Hin & Hp0).
+        destruct Hin as [Heq | Hin].
+        -- injection Heq as <- <-.
+           destruct (Hb1 p0 v k' Hp0) as (v' & Hv' & Hp0').
+           exists v'. split; [ apply in_or_app; left; exact Hv' | ].
+           econstructor; eassumption.
+        -- assert (Hr : upath k (Unboxed rest) (f :: p0) v k')
+             by (econstructor; eassumption).
+           destruct (Hb2 _ v k' Hr) as (v' & Hv' & Hp').
+           exists v'. split; [ apply in_or_app; right; exact Hv' | ].
+           exact Hp'.
+      * rewrite map_app, Hc1, Hc2. simpl. rewrite map_app. reflexivity.
+      * rewrite map_app, Hd1, Hd2. simpl. rewrite map_app. reflexivity.
+Qed.
+
+(* ======================================================================== *)
 (* Terms related by local unboxing                                          *)
 (* ======================================================================== *)
 
@@ -299,6 +469,17 @@ Definition field_value (f : field) (w : value) : option value :=
   | _, _ => None
   end.
 
+(* The value at a path of fields. *)
+Fixpoint path_value (p : list field) (w : value) : option value :=
+  match p with
+  | [] => Some w
+  | f :: p =>
+    match field_value f w with
+    | Some w1 => path_value p w1
+    | None => None
+    end
+  end.
+
 (* The read of a field: [Block_load] or [Unbox_number]. *)
 Definition read_of (d : named) : option (field * simple) :=
   match d with
@@ -327,16 +508,12 @@ Definition alloc_entry (x : variable) (d : named)
     ∃ (kind : flambda_kind) (s : simple),
       l = [(v, kind, s)] ∧ alloc_field d f kind s ∧ plain_simple M s = true
   | (f, Unboxed nested) =>
-    ∃ (b : variable) (fields_b : unboxed_fields),
+    ∃ (b : variable) (fields_b : unboxed_fields)
+      (pairs : list (variable * variable * flambda_kind)),
       alloc_field d f Value (Var b) ∧ fields_of M b = Some fields_b ∧ x <> b
-      ∧ Forall2
-          (fun (fu : field * unboxed_field)
-               (vks : variable * flambda_kind * simple) =>
-             let '(f, u) := fu in
-             let '(v, kind, s) := vks in
-             u = Not_unboxed v ∧ kind = field_kind f
-             ∧ ∃ v' : variable, s = Var v' ∧ (f, Not_unboxed v') ∈ fields_b)
-          nested l
+      ∧ unboxed_field_pairs Value (Unboxed nested) (Unboxed fields_b)
+        = Some pairs
+      ∧ l = pairs_lets pairs
   end.
 
 (* The parameters of a handler as each run has them, of the shapes [sh]:
@@ -354,7 +531,7 @@ Inductive params_rel : list (option unboxed_fields)
   | params_rel_unboxed (sh : list (option unboxed_fields)) (p : variable)
       (fields : unboxed_fields) (ps ps' : list (variable * flambda_kind)) :
     fields_of M p = Some fields -> among p (field_variables M) = false ->
-    flat_fields fields = true -> params_rel sh ps ps' ->
+    params_rel sh ps ps' ->
     params_rel (Some fields :: sh) ((p, Value) :: ps)
       (fields_leaves fields ++ ps').
 
@@ -375,16 +552,15 @@ Inductive args_rel : list (option unboxed_fields) -> list simple
     plain_simple M a = true -> args_rel sh args args' ->
     args_rel (None :: sh) (a :: args) (a :: args')
   | args_rel_unboxed (sh : list (option unboxed_fields))
-      (fields fields_y : unboxed_fields) (y : variable) (vs : list variable)
+      (fields fields_y : unboxed_fields) (y : variable)
+      (pairs : list (variable * variable * flambda_kind))
       (args args' : list simple) :
     fields_of M y = Some fields_y ->
-    Forall2
-      (fun (fu : field * unboxed_field) (v : variable) =>
-         (∃ v0 : variable, snd fu = Not_unboxed v0)
-         ∧ (fst fu, Not_unboxed v) ∈ fields_y)
-      fields vs ->
+    unboxed_field_pairs Value (Unboxed fields) (Unboxed fields_y)
+    = Some pairs ->
     args_rel sh args args' ->
-    args_rel (Some fields :: sh) (Var y :: args) (map Var vs ++ args').
+    args_rel (Some fields :: sh) (Var y :: args)
+      (map (fun '(_, x', _) => Var x') pairs ++ args').
 
 (* The shapes of the parameters of a continuation; one that is not bound
    is a way out, whose arguments are alike. *)
@@ -419,40 +595,30 @@ Inductive ub : finite_map (list (option unboxed_fields)) -> expr -> expr
     ub K (Let x Value d body) (lets (concat ls) body')
   | ub_alias (K : finite_map (list (option unboxed_fields))) (x y : variable)
       (fields fields_y : unboxed_fields)
-      (l : list (variable * flambda_kind * simple)) (body body' : expr) :
+      (pairs : list (variable * variable * flambda_kind))
+      (body body' : expr) :
     fields_of M x = Some fields ->
     among x (field_variables M) = false ->
     fields_of M y = Some fields_y -> x <> y ->
-    Forall2
-      (fun (fu : field * unboxed_field)
-           (vks : variable * flambda_kind * simple) =>
-         let '(f, u) := fu in
-         let '(v, kind, s) := vks in
-         u = Not_unboxed v ∧ kind = field_kind f
-         ∧ ∃ v' : variable, s = Var v' ∧ (f, Not_unboxed v') ∈ fields_y)
-      fields l ->
+    unboxed_field_pairs Value (Unboxed fields) (Unboxed fields_y)
+    = Some pairs ->
     ub K body body' ->
-    ub K (Let x Value (Simple (Var y)) body) (lets l body')
+    ub K (Let x Value (Simple (Var y)) body) (lets (pairs_lets pairs) body')
   | ub_load (K : finite_map (list (option unboxed_fields))) (x : variable)
       (kind : flambda_kind) (d : named) (f : field) (s : simple)
       (y : variable) (fields fields_y nested : unboxed_fields)
-      (l : list (variable * flambda_kind * simple)) (body body' : expr) :
+      (pairs : list (variable * variable * flambda_kind))
+      (body body' : expr) :
     fields_of M x = Some fields ->
     among x (field_variables M) = false ->
     read_of d = Some (f, s) ->
     (s = Var y ∨ ∃ k : flambda_kind, s = Const (Poison k)) ->
     fields_of M y = Some fields_y -> x <> y ->
     (f, Unboxed nested) ∈ fields_y ->
-    Forall2
-      (fun (fu : field * unboxed_field)
-           (vks : variable * flambda_kind * simple) =>
-         let '(f, u) := fu in
-         let '(v, kind, s) := vks in
-         u = Not_unboxed v ∧ kind = field_kind f
-         ∧ ∃ v' : variable, s = Var v' ∧ (f, Not_unboxed v') ∈ nested)
-      fields l ->
+    unboxed_field_pairs Value (Unboxed fields) (Unboxed nested)
+    = Some pairs ->
     ub K body body' ->
-    ub K (Let x Value d body) (lets l body')
+    ub K (Let x Value d body) (lets (pairs_lets pairs) body')
   | ub_read (K : finite_map (list (option unboxed_fields))) (x : variable)
       (kind : flambda_kind) (d : named) (f : field)
       (s : simple) (y v : variable) (fields : unboxed_fields)
@@ -520,30 +686,25 @@ with ub_handlers : finite_map (list (option unboxed_fields))
       ((k, Handler (map fst ps') metadata' handler') :: handlers')
       ((k, sh) :: S).
 
+(* The variables of the fields [fields] of a value [w], at any depth,
+   bound in [vars'] to the values at their paths, of their kinds. *)
+Definition fields_hold (vars' : env) (fields : unboxed_fields) (w : value)
+    : Prop :=
+  ∀ (p : list field) (v : variable) (k : flambda_kind),
+    upath Value (Unboxed fields) p v k ->
+    ∃ w' : value,
+      path_value p w = Some w' ∧ lookup v vars' = Some w'
+      ∧ kind_of_value w' = k.
+
 (* The environments: a variable of neither kind has one value in both;
-   an unboxed variable bound in the first has each of its fields unboxed
-   bound in the second to the field of its value, of the kind of the
-   field. *)
+   an unboxed variable bound in the first has the variables of its
+   fields bound in the second to the values at their paths in its
+   value. *)
 Definition env_rel (vars vars' : env) : Prop :=
   (∀ z : variable, plain_variable M z = true -> lookup z vars = lookup z vars')
-  ∧ (∀ (x : variable) (fields : unboxed_fields) (w : value),
-       fields_of M x = Some fields -> lookup x vars = Some w ->
-       ∀ (f : field) (v : variable),
-         (f, Not_unboxed v) ∈ fields ->
-         ∃ w' : value,
-           field_value f w = Some w' ∧ lookup v vars' = Some w'
-           ∧ kind_of_value w' = field_kind f)
-  ∧ (∀ (x : variable) (fields : unboxed_fields) (w : value),
-       fields_of M x = Some fields -> lookup x vars = Some w ->
-       ∀ (f : field) (nested : unboxed_fields),
-         (f, Unboxed nested) ∈ fields ->
-         ∃ w1 : value,
-           field_value f w = Some w1
-           ∧ ∀ (f' : field) (v : variable),
-               (f', Not_unboxed v) ∈ nested ->
-               ∃ w' : value,
-                 field_value f' w1 = Some w' ∧ lookup v vars' = Some w'
-                 ∧ kind_of_value w' = field_kind f').
+  ∧ ∀ (x : variable) (fields : unboxed_fields) (w : value),
+      fields_of M x = Some fields -> lookup x vars = Some w ->
+      fields_hold vars' fields w.
 
 Inductive cont_rel : list (option unboxed_fields) -> cont_value -> cont_value
     -> Prop :=
@@ -600,6 +761,11 @@ Lemma leaves_cons (f : field) (u : unboxed_field) (fields : unboxed_fields) :
   = unboxed_field_leaves (field_kind f) u ++ fields_leaves fields.
 Proof. reflexivity. Qed.
 
+Lemma leaf_variables_nested (f : field) (nested rest : unboxed_fields) :
+  leaf_variables ((f, Unboxed nested) :: rest)
+  = leaf_variables nested ++ leaf_variables rest.
+Proof. unfold leaf_variables. rewrite leaves_cons, map_app. reflexivity. Qed.
+
 Lemma leaf_in (fields : unboxed_fields) (f : field) (v : variable) :
   (f, Not_unboxed v) ∈ fields -> v ∈ leaf_variables fields.
 Proof.
@@ -639,51 +805,34 @@ Proof.
   discriminate.
 Qed.
 
-Lemma plain_not_field (z x : variable) (fields : unboxed_fields)
-    (f : field) :
-  plain_variable M z = true -> fields_of M x = Some fields ->
-  (f, Not_unboxed z) ∈ fields -> False.
+Lemma leaves_unboxed_in (k : flambda_kind) (fields : unboxed_fields)
+    (f : field) (u : unboxed_field) (v : variable) :
+  (f, u) ∈ fields -> v ∈ map fst (unboxed_field_leaves (field_kind f) u) ->
+  v ∈ map fst (unboxed_field_leaves k (Unboxed fields)).
 Proof.
-  intros Hz Hx Hin. apply plain_variable_iff in Hz as [_ Hz].
-  pose proof (field_variables_in x fields z Hx (leaf_in fields f z Hin))
-    as Hv.
-  apply among_In in Hv. rewrite Hv in Hz. discriminate.
+  induction fields as [ | [f0 u0] fields IH]; intros Hin Hv;
+    [ destruct Hin | ].
+  change (unboxed_field_leaves k (Unboxed ((f0, u0) :: fields)))
+    with (unboxed_field_leaves (field_kind f0) u0
+          ++ unboxed_field_leaves k (Unboxed fields)).
+  rewrite map_app. apply in_or_app. destruct Hin as [Heq | Hin];
+    [ injection Heq as -> ->; left; exact Hv | right; exact (IH Hin Hv) ].
 Qed.
 
-(* A variable of a field of a field unboxed in turn is a variable of the
-   fields. *)
-Lemma nested_leaf_in (fields : unboxed_fields) (f : field)
-    (nested : unboxed_fields) (f' : field) (v : variable) :
-  (f, Unboxed nested) ∈ fields -> (f', Not_unboxed v) ∈ nested ->
-  v ∈ leaf_variables fields.
+(* The variable at a path is a variable of the fields. *)
+Lemma upath_in_leaves (k : flambda_kind) (u : unboxed_field) (p : list field)
+    (v : variable) (k' : flambda_kind) :
+  upath k u p v k' -> v ∈ map fst (unboxed_field_leaves k u).
 Proof.
-  induction fields as [ | [f0 u] fields IH]; intros Hin Hv; [ destruct Hin | ].
-  unfold leaf_variables. rewrite leaves_cons, map_app. apply in_or_app.
-  destruct Hin as [Heq | Hin].
-  - injection Heq as -> ->. left. exact (leaf_in nested f' v Hv).
-  - right. exact (IH Hin Hv).
+  induction 1 as [k v | k fields f u p v k' Hin _ IH];
+    [ left; reflexivity | ].
+  exact (leaves_unboxed_in k fields f u v Hin IH).
 Qed.
 
-Lemma plain_not_nested_field (z x : variable) (fields : unboxed_fields)
-    (f : field) (nested : unboxed_fields) (f' : field) :
-  plain_variable M z = true -> fields_of M x = Some fields ->
-  (f, Unboxed nested) ∈ fields -> (f', Not_unboxed z) ∈ nested -> False.
-Proof.
-  intros Hz Hx Hin Hv. apply plain_variable_iff in Hz as [_ Hz].
-  pose proof (field_variables_in x fields z Hx
-                (nested_leaf_in fields f nested f' z Hin Hv))
-    as Hfv.
-  apply among_In in Hfv. rewrite Hfv in Hz. discriminate.
-Qed.
-
-Lemma flat_no_nested (fields : unboxed_fields) (f : field)
-    (nested : unboxed_fields) :
-  flat_fields fields = true -> (f, Unboxed nested) ∈ fields -> False.
-Proof.
-  intros Hflat Hin. unfold flat_fields in Hflat.
-  rewrite forallb_forall in Hflat.
-  specialize (Hflat _ Hin). discriminate Hflat.
-Qed.
+Lemma upath_leaf_in (fields : unboxed_fields) (p : list field)
+    (v : variable) (k : flambda_kind) :
+  upath Value (Unboxed fields) p v k -> v ∈ leaf_variables fields.
+Proof. apply upath_in_leaves. Qed.
 
 Lemma nodup_app_apart {A : Type} (l l' : list A) (a : A) :
   NoDup (l ++ l') -> a ∈ l -> a ∈ l' -> False.
@@ -808,132 +957,25 @@ Lemma env_rel_bind (vars vars' : env) (x : variable) (w : value) :
   env_rel M vars vars' -> plain_variable M x = true ->
   env_rel M ((x, w) :: vars) ((x, w) :: vars').
 Proof.
-  intros [Hplain [Hfields Hnested]] Hx. split; [ | split ].
+  intros [Hplain Hfields] Hx. split.
   - intros z Hz. rewrite !lookup_cons. destruct (Pos.eqb z x);
       [ reflexivity | exact (Hplain z Hz) ].
-  - intros y fields w0 Hy Hlookup f v Hin.
+  - intros y fields w0 Hy Hlookup p v k Hp.
     rewrite lookup_other in Hlookup
       by (intros ->; exact (plain_not_unboxed M x fields Hx Hy)).
-    destruct (Hfields y fields w0 Hy Hlookup f v Hin) as (w' & Hw' & Hv & Hk).
+    destruct (Hfields y fields w0 Hy Hlookup p v k Hp) as (w' & Hw' & Hv & Hk).
     exists w'. split; [ exact Hw' | split; [ | exact Hk ] ].
-    rewrite lookup_other; [ exact Hv | ].
-    intros ->. exact (plain_not_field M x y fields f Hx Hy Hin).
-  - intros y fields w0 Hy Hlookup f nested Hin.
-    rewrite lookup_other in Hlookup
-      by (intros ->; exact (plain_not_unboxed M x fields Hx Hy)).
-    destruct (Hnested y fields w0 Hy Hlookup f nested Hin) as (w1 & Hw1 & Hn).
-    exists w1. split; [ exact Hw1 | ]. intros f' v Hv.
-    destruct (Hn f' v Hv) as (w' & Hw' & Hl & Hk).
-    exists w'. split; [ exact Hw' | split; [ | exact Hk ] ].
-    rewrite lookup_other; [ exact Hl | ]. intros ->.
-    exact (plain_not_nested_field M x y fields f nested f' Hx Hy Hin Hv).
+    rewrite lookup_other; [ exact Hv | ]. intros ->.
+    apply plain_variable_iff in Hx as [_ Hx].
+    pose proof (field_variables_in M y fields x Hy
+                  (upath_leaf_in fields p x k Hp)) as Hfv.
+    apply among_In in Hfv. rewrite Hfv in Hx. discriminate.
 Qed.
 
 Lemma env_rel_empty : env_rel M [] [].
 Proof.
-  split; [ reflexivity | split ]; intros x fields w _ Hlookup;
-    discriminate Hlookup.
-Qed.
-
-Lemma leaf_variables_flat (f : field) (v : variable)
-    (fields : unboxed_fields) :
-  leaf_variables ((f, Not_unboxed v) :: fields) = v :: leaf_variables fields.
-Proof. reflexivity. Qed.
-
-(* The variables of the fields of [p], bound to the fields of [w]. *)
-Lemma bind_leaves (w : value) (fields : unboxed_fields) (ws : list value) :
-  Forall2
-    (fun (fu : field * unboxed_field) (w' : value) =>
-       (∃ v : variable, snd fu = Not_unboxed v)
-       ∧ field_value (fst fu) w = Some w'
-       ∧ kind_of_value w' = field_kind (fst fu))
-    fields ws ->
-  ∀ vars vars1 : env,
-    NoDup (leaf_variables fields) ->
-    bind_params (leaf_variables fields) ws vars = Some vars1 ->
-    (∀ z : variable,
-       z ∉ leaf_variables fields -> lookup z vars1 = lookup z vars)
-    ∧ ∀ (f : field) (v : variable),
-        (f, Not_unboxed v) ∈ fields ->
-        ∃ w' : value,
-          field_value f w = Some w' ∧ lookup v vars1 = Some w'
-          ∧ kind_of_value w' = field_kind f.
-Proof.
-  induction 1 as [ | [f u] w1 fields ws Hfu _ IH]; intros vars vars1 Hnd
-    Hbind.
-  - simpl in Hbind. injection Hbind as <-. split; [ reflexivity | ].
-    intros f v [].
-  - destruct Hfu as ((v1 & Hu) & Hw1 & Hk1). simpl in Hu, Hw1, Hk1. subst u.
-    rewrite leaf_variables_flat in Hnd, Hbind |- *.
-    inversion Hnd as [ | v0 l0 Hv1 Hnd' [Heq0 Heq1]]; subst.
-    simpl in Hbind.
-    destruct (IH _ _ Hnd' Hbind) as [Hother Hfields].
-    split.
-    + intros z Hz. rewrite Hother by (intros Hin; apply Hz; right; exact Hin).
-      rewrite lookup_other; [ reflexivity | ].
-      intros ->. apply Hz. left. reflexivity.
-    + intros f' v [Heq | Hin].
-      * injection Heq as -> ->. exists w1. split; [ exact Hw1 | ].
-        split; [ | exact Hk1 ]. rewrite (Hother v Hv1). apply lookup_head.
-      * exact (Hfields f' v Hin).
-Qed.
-
-Lemma forall2_in_l {A B : Type} (P : A -> B -> Prop) (l : list A)
-    (l' : list B) (a : A) :
-  Forall2 P l l' -> a ∈ l -> ∃ b : B, P a b.
-Proof.
-  induction 1 as [ | a0 b0 l l' H _ IH]; intros Hin; [ destruct Hin | ].
-  destruct Hin as [<- | Hin]; [ exists b0; exact H | exact (IH Hin) ].
-Qed.
-
-(* The parameter [p] unboxed bound to [w] in the first run, the
-   variables of its fields to the fields of [w] in the second. *)
-Lemma env_rel_bind_unboxed (vars vars' vars1 : env) (p : variable)
-    (fields : unboxed_fields) (w : value) (ws : list value) :
-  env_rel M vars vars' -> fields_of M p = Some fields ->
-  Forall2
-    (fun (fu : field * unboxed_field) (w' : value) =>
-       (∃ v : variable, snd fu = Not_unboxed v)
-       ∧ field_value (fst fu) w = Some w'
-       ∧ kind_of_value w' = field_kind (fst fu))
-    fields ws ->
-  bind_params (leaf_variables fields) ws vars' = Some vars1 ->
-  env_rel M ((p, w) :: vars) vars1.
-Proof.
-  intros [Hplain [Hfs Hnested]] Hp Hws Hbind.
-  destruct (bind_leaves w fields ws Hws vars' vars1
-              (leaves_nodup M M_distinct p fields Hp) Hbind)
-    as [Hother Hleaves].
-  split; [ | split ].
-  - intros z Hz. rewrite lookup_other
-      by (intros ->; exact (plain_not_unboxed M p fields Hz Hp)).
-    rewrite (Hplain z Hz), Hother; [ reflexivity | ].
-    intros Hin. apply plain_variable_iff in Hz as [_ Hz].
-    pose proof (field_variables_in M p fields z Hp Hin) as Hfv.
-    apply among_In in Hfv. rewrite Hfv in Hz. discriminate.
-  - intros x fx w0 Hx Hlookup f v Hin.
-    destruct (Pos.eq_dec x p) as [-> | Hne].
-    + rewrite lookup_head in Hlookup. injection Hlookup as <-.
-      rewrite Hp in Hx. injection Hx as <-. exact (Hleaves f v Hin).
-    + rewrite lookup_other in Hlookup by exact Hne.
-      destruct (Hfs x fx w0 Hx Hlookup f v Hin) as (w' & Hfw & Hv & Hk).
-      exists w'. split; [ exact Hfw | split; [ | exact Hk ] ].
-      rewrite Hother; [ exact Hv | ]. intros Hvp.
-      exact (leaves_apart M M_distinct x p fx fields v Hx Hp Hne
-               (leaf_in fx f v Hin) Hvp).
-  - intros x fx w0 Hx Hlookup f nested Hin.
-    destruct (Pos.eq_dec x p) as [-> | Hne].
-    + exfalso. rewrite Hp in Hx. injection Hx as <-.
-      destruct (forall2_in_l _ _ _ _ Hws Hin) as (w' & (v & Hv) & _).
-      discriminate Hv.
-    + rewrite lookup_other in Hlookup by exact Hne.
-      destruct (Hnested x fx w0 Hx Hlookup f nested Hin) as (w1 & Hw1 & Hn).
-      exists w1. split; [ exact Hw1 | ]. intros f' v Hv.
-      destruct (Hn f' v Hv) as (w' & Hfw & Hl & Hk).
-      exists w'. split; [ exact Hfw | split; [ | exact Hk ] ].
-      rewrite Hother; [ exact Hl | ]. intros Hvp.
-      exact (leaves_apart M M_distinct x p fx fields v Hx Hp Hne
-               (nested_leaf_in fx f nested f' v Hin Hv) Hvp).
+  split; [ reflexivity | ]. intros x fields w _ Hlookup.
+  discriminate Hlookup.
 Qed.
 
 Lemma resolve_rel (K : finite_map (list (option unboxed_fields)))
@@ -1063,8 +1105,9 @@ Proof.
   - intros K x d fields l body body' Hf Hxf Hl _ IH K' Hagree.
     apply ub_alloc with (fields := fields); try assumption.
     apply IH, Hagree.
-  - intros K x y fields fields_y l body body' Hf Hxf Hy Hne Hl _ IH K' Hagree.
-    apply (ub_alias M K' x y fields fields_y l); try assumption.
+  - intros K x y fields fields_y ls body body' Hf Hxf Hy Hne Hl _ IH K'
+      Hagree.
+    apply (ub_alias M K' x y fields fields_y ls); try assumption.
     apply IH, Hagree.
   - intros K x kind d f s y fields fields_y nested l body body' Hf Hxf Hr Hs
       Hy Hne Hin Hl _ IH K' Hagree.
@@ -1290,228 +1333,167 @@ Section Simulation.
 Variable M : list (node * unboxed_fields).
 Hypothesis M_distinct : distinct (field_variables M) = true.
 
-Definition alloc_entries (d : named) : unboxed_fields
-    -> list (variable * flambda_kind * simple) -> Prop :=
-  Forall2
-    (fun (fu : field * unboxed_field) (vks : variable * flambda_kind * simple)
-     =>
-       let '(f, u) := fu in
-       let '(v, kind, s) := vks in
-       u = Not_unboxed v ∧ alloc_field d f kind s ∧ plain_simple M s = true).
-
-Lemma alloc_entries_l (d : named) (fields : unboxed_fields)
-    (l : list (variable * flambda_kind * simple)) (v : variable)
-    (kind : flambda_kind) (s : simple) :
-  alloc_entries d fields l -> (v, kind, s) ∈ l ->
-  ∃ f : field,
-    (f, Not_unboxed v) ∈ fields ∧ alloc_field d f kind s
-    ∧ plain_simple M s = true.
+Lemma forall2_in_both {A B : Type} (P : A -> B -> Prop) (l : list A)
+    (l' : list B) (a : A) :
+  Forall2 P l l' -> a ∈ l -> ∃ b : B, b ∈ l' ∧ P a b.
 Proof.
-  induction 1 as [ | [f u] [[v' kind'] s'] fields l Hfu _ IH]; intros Hin;
-    [ destruct Hin | ].
-  destruct Hin as [Heq | Hin].
-  - injection Heq as -> -> ->. destruct Hfu as (-> & Hf & Hs).
-    exists f. split; [ left; reflexivity | split; assumption ].
-  - destruct (IH Hin) as (f' & Hin' & Hf & Hs).
-    exists f'. split; [ right; exact Hin' | split; assumption ].
+  induction 1 as [ | a0 b0 l l' H _ IH]; intros Hin; [ destruct Hin | ].
+  destruct Hin as [<- | Hin]; [ exists b0; split; [ left | ]; auto | ].
+  destruct (IH Hin) as (b & Hb & Hab). exists b. split; [ right | ]; auto.
 Qed.
 
-Lemma alloc_entries_r (d : named) (fields : unboxed_fields)
-    (l : list (variable * flambda_kind * simple)) (f : field)
-    (v : variable) :
-  alloc_entries d fields l -> (f, Not_unboxed v) ∈ fields ->
-  ∃ (kind : flambda_kind) (s : simple),
-    (v, kind, s) ∈ l ∧ alloc_field d f kind s ∧ plain_simple M s = true.
+Lemma forall2_concat_in {A B : Type} (P : A -> list B -> Prop) (l : list A)
+    (ls : list (list B)) (y : B) :
+  Forall2 P l ls -> y ∈ concat ls ->
+  ∃ (a : A) (l0 : list B), a ∈ l ∧ P a l0 ∧ y ∈ l0.
 Proof.
-  induction 1 as [ | [f' u] [[v' kind'] s'] fields l Hfu _ IH]; intros Hin;
-    [ destruct Hin | ].
-  destruct Hin as [Heq | Hin].
-  - injection Heq as -> ->. destruct Hfu as ([= ->] & Hf & Hs).
-    exists kind', s'. split; [ left; reflexivity | split; assumption ].
-  - destruct (IH Hin) as (kind & s & Hin' & Hf & Hs).
-    exists kind, s. split; [ right; exact Hin' | split; assumption ].
-Qed.
-
-Lemma alloc_entries_variables (d : named) (fields : unboxed_fields)
-    (l : list (variable * flambda_kind * simple)) :
-  alloc_entries d fields l -> map lets_variable l = leaf_variables fields.
-Proof.
-  induction 1 as [ | [f u] [[v kind] s] fields l Hfu _ IH]; [ reflexivity | ].
-  destruct Hfu as (-> & _ & _). unfold leaf_variables in *.
-  rewrite leaves_cons, map_app. simpl. rewrite IH. reflexivity.
-Qed.
-
-Definition alias_entries (fields_y : unboxed_fields) : unboxed_fields
-    -> list (variable * flambda_kind * simple) -> Prop :=
-  Forall2
-    (fun (fu : field * unboxed_field) (vks : variable * flambda_kind * simple)
-     =>
-       let '(f, u) := fu in
-       let '(v, kind, s) := vks in
-       u = Not_unboxed v ∧ kind = field_kind f
-       ∧ ∃ v' : variable, s = Var v' ∧ (f, Not_unboxed v') ∈ fields_y).
-
-Lemma alias_entries_l (fields_y fields : unboxed_fields)
-    (l : list (variable * flambda_kind * simple)) (v : variable)
-    (kind : flambda_kind) (s : simple) :
-  alias_entries fields_y fields l -> (v, kind, s) ∈ l ->
-  ∃ f : field,
-    (f, Not_unboxed v) ∈ fields ∧ kind = field_kind f
-    ∧ ∃ v' : variable, s = Var v' ∧ (f, Not_unboxed v') ∈ fields_y.
-Proof.
-  induction 1 as [ | [f u] [[v' kind'] s'] fields l Hfu _ IH]; intros Hin;
-    [ destruct Hin | ].
-  destruct Hin as [Heq | Hin].
-  - injection Heq as -> -> ->. destruct Hfu as (-> & Hk & Hs).
-    exists f. split; [ left; reflexivity | split; assumption ].
-  - destruct (IH Hin) as (f' & Hin' & Hk & Hs).
-    exists f'. split; [ right; exact Hin' | split; assumption ].
-Qed.
-
-Lemma alias_entries_r (fields_y fields : unboxed_fields)
-    (l : list (variable * flambda_kind * simple)) (f : field)
-    (v : variable) :
-  alias_entries fields_y fields l -> (f, Not_unboxed v) ∈ fields ->
-  ∃ (kind : flambda_kind) (s : simple),
-    (v, kind, s) ∈ l ∧ kind = field_kind f
-    ∧ ∃ v' : variable, s = Var v' ∧ (f, Not_unboxed v') ∈ fields_y.
-Proof.
-  induction 1 as [ | [f' u] [[v' kind'] s'] fields l Hfu _ IH]; intros Hin;
-    [ destruct Hin | ].
-  destruct Hin as [Heq | Hin].
-  - injection Heq as -> ->. destruct Hfu as ([= ->] & Hk & Hs).
-    exists kind', s'. split; [ left; reflexivity | split; assumption ].
-  - destruct (IH Hin) as (kind & s & Hin' & Hk & Hs).
-    exists kind, s. split; [ right; exact Hin' | split; assumption ].
-Qed.
-
-Lemma alias_entries_variables (fields_y fields : unboxed_fields)
-    (l : list (variable * flambda_kind * simple)) :
-  alias_entries fields_y fields l ->
-  map lets_variable l = leaf_variables fields.
-Proof.
-  induction 1 as [ | [f u] [[v kind] s] fields l Hfu _ IH]; [ reflexivity | ].
-  destruct Hfu as (-> & _ & _). unfold leaf_variables in *.
-  rewrite leaves_cons, map_app. simpl. rewrite IH. reflexivity.
-Qed.
-
-Lemma alias_entries_l' (fields_y fields : unboxed_fields)
-    (l : list (variable * flambda_kind * simple)) (f : field)
-    (nested : unboxed_fields) :
-  alias_entries fields_y fields l -> (f, Unboxed nested) ∈ fields -> False.
-Proof.
-  intros Hl Hin. destruct (forall2_in_l _ _ _ _ Hl Hin) as ([[v k] s] & Hu & _).
-  discriminate Hu.
-Qed.
-
-Lemma alloc_entry_flat (x : variable) (d : named) (fields : unboxed_fields)
-    (l : list (variable * flambda_kind * simple)) :
-  alloc_entries d fields l ->
-  Forall2 (alloc_entry M x d) fields (map (fun e => [e]) l)
-  ∧ concat (map (fun e => [e]) l) = l.
-Proof.
-  induction 1 as [ | [f u] [[v kind] s] fields l (-> & Hf & Hs) _ [IH IHc]];
-    [ split; [ constructor | reflexivity ] | ].
-  split; [ | cbn [map concat app]; rewrite IHc; reflexivity ].
-  constructor; [ | exact IH ]. exists kind, s.
-  split; [ reflexivity | split; assumption ].
-Qed.
-
-Lemma alloc_entries2_l (x : variable) (d : named) (fields : unboxed_fields)
-    (ls : list (list (variable * flambda_kind * simple))) (v : variable)
-    (kind : flambda_kind) (s : simple) :
-  Forall2 (alloc_entry M x d) fields ls -> (v, kind, s) ∈ concat ls ->
-  (∃ f : field,
-     (f, Not_unboxed v) ∈ fields ∧ alloc_field d f kind s
-     ∧ plain_simple M s = true)
-  ∨ ∃ (f : field) (nested : unboxed_fields) (b : variable)
-      (fields_b : unboxed_fields) (f' : field),
-      (f, Unboxed nested) ∈ fields ∧ alloc_field d f Value (Var b)
-      ∧ fields_of M b = Some fields_b ∧ x <> b
-      ∧ (f', Not_unboxed v) ∈ nested ∧ kind = field_kind f'
-      ∧ ∃ vb : variable, s = Var vb ∧ (f', Not_unboxed vb) ∈ fields_b.
-Proof.
-  induction 1 as [ | [f u] l fields ls Hfu _ IH]; intros Hin;
-    [ destruct Hin | ].
+  induction 1 as [ | a0 l0 l ls H _ IH]; intros Hin; [ destruct Hin | ].
   cbn [concat] in Hin. apply in_app_or in Hin as [Hin | Hin].
-  - destruct u as [v0 | nested]; cbn [alloc_entry] in Hfu.
-    + destruct Hfu as (kind0 & s0 & -> & Hf & Hs).
-      destruct Hin as [[= -> -> ->] | []].
-      left. exists f. split; [ left; reflexivity | split; assumption ].
-    + destruct Hfu as (b & fb & Hf & Hb & Hxb & Hl).
-      destruct (alias_entries_l fb nested l v kind s Hl Hin)
-        as (f' & Hin' & Hk & vb & Hs & Hinb).
-      right. exists f, nested, b, fb, f'.
-      split; [ left; reflexivity | ].
-      do 5 (split; [ assumption | ]). exists vb. split; assumption.
-  - destruct (IH Hin) as [(f' & Hin' & Hrest) | (f' & n & b & fb & f'' & Hin'
-                                                  & Hrest)].
-    + left. exists f'. split; [ right; exact Hin' | exact Hrest ].
-    + right. exists f', n, b, fb, f''. split; [ right; exact Hin' | ].
-      exact Hrest.
+  - exists a0, l0. split; [ left; reflexivity | split; assumption ].
+  - destruct (IH Hin) as (a & l1 & Ha & Hal & Hy).
+    exists a, l1. split; [ right; exact Ha | split; assumption ].
 Qed.
 
-Lemma alloc_entries2_flat (x : variable) (d : named) (fields : unboxed_fields)
-    (ls : list (list (variable * flambda_kind * simple))) (f : field)
-    (v : variable) :
-  Forall2 (alloc_entry M x d) fields ls -> (f, Not_unboxed v) ∈ fields ->
-  ∃ (kind : flambda_kind) (s : simple),
-    (v, kind, s) ∈ concat ls ∧ alloc_field d f kind s
-    ∧ plain_simple M s = true.
+Lemma in_pairs_lets (pairs : list (variable * variable * flambda_kind))
+    (v : variable) (kind : flambda_kind) (s : simple) :
+  (v, kind, s) ∈ pairs_lets pairs ->
+  ∃ v' : variable, s = Var v' ∧ (v, v', kind) ∈ pairs.
 Proof.
-  induction 1 as [ | [f0 u] l fields ls Hfu _ IH]; intros Hin;
-    [ destruct Hin | ].
-  cbn [concat]. destruct Hin as [Heq | Hin].
-  - injection Heq as -> ->. cbn [alloc_entry] in Hfu.
-    destruct Hfu as (kind & s & -> & Hf & Hs).
-    exists kind, s. split; [ left; reflexivity | split; assumption ].
-  - destruct (IH Hin) as (kind & s & Hin' & Hrest).
-    exists kind, s. split; [ apply in_or_app; right; exact Hin' | ].
-    exact Hrest.
+  unfold pairs_lets. intros Hin. apply in_map_iff in Hin
+    as ([[x x'] k] & Heq & Hin). injection Heq as -> -> <-.
+  exists x'. split; [ reflexivity | exact Hin ].
 Qed.
 
-Lemma alloc_entries2_nested (x : variable) (d : named)
-    (fields : unboxed_fields)
-    (ls : list (list (variable * flambda_kind * simple))) (f : field)
-    (nested : unboxed_fields) :
-  Forall2 (alloc_entry M x d) fields ls -> (f, Unboxed nested) ∈ fields ->
-  ∃ (b : variable) (fields_b : unboxed_fields),
-    alloc_field d f Value (Var b) ∧ fields_of M b = Some fields_b ∧ x <> b
-    ∧ ∀ (f' : field) (v : variable),
-        (f', Not_unboxed v) ∈ nested ->
-        ∃ vb : variable,
-          (v, field_kind f', Var vb) ∈ concat ls
-          ∧ (f', Not_unboxed vb) ∈ fields_b.
+Lemma pairs_in_lets (pairs : list (variable * variable * flambda_kind))
+    (v v' : variable) (kind : flambda_kind) :
+  (v, v', kind) ∈ pairs -> (v, kind, Var v') ∈ pairs_lets pairs.
 Proof.
-  induction 1 as [ | [f0 u] l fields ls Hfu _ IH]; intros Hin;
-    [ destruct Hin | ].
-  cbn [concat]. destruct Hin as [Heq | Hin].
-  - injection Heq as -> ->. cbn [alloc_entry] in Hfu.
-    destruct Hfu as (b & fb & Hf & Hb & Hxb & Hl).
-    exists b, fb. do 3 (split; [ assumption | ]).
-    intros f' v Hv.
-    destruct (alias_entries_r fb nested l f' v Hl Hv)
-      as (kind & s & Hin & -> & vb & -> & Hinb).
-    exists vb. split; [ apply in_or_app; left; exact Hin | exact Hinb ].
-  - destruct (IH Hin) as (b & fb & Hf & Hb & Hxb & Hall).
-    exists b, fb. do 3 (split; [ assumption | ]).
-    intros f' v Hv. destruct (Hall f' v Hv) as (vb & Hin' & Hinb).
-    exists vb. split; [ apply in_or_app; right; exact Hin' | exact Hinb ].
+  intros Hin. unfold pairs_lets.
+  apply (in_map (fun '(x, x', kind) => (x, kind, Var x')) _ _ Hin).
 Qed.
 
-Lemma alloc_entries2_variables (x : variable) (d : named)
-    (fields : unboxed_fields)
-    (ls : list (list (variable * flambda_kind * simple))) :
-  Forall2 (alloc_entry M x d) fields ls ->
-  map lets_variable (concat ls) = leaf_variables fields.
+Lemma pairs_lets_variables (pairs : list (variable * variable * flambda_kind))
+    : map lets_variable (pairs_lets pairs) = map (fun '(x, _, _) => x) pairs.
 Proof.
-  induction 1 as [ | [f u] l fields ls Hfu _ IH]; [ reflexivity | ].
-  cbn [concat]. rewrite map_app. unfold leaf_variables in *.
-  rewrite leaves_cons, map_app, IH. f_equal.
-  destruct u as [v | nested]; cbn [alloc_entry] in Hfu.
-  - destruct Hfu as (kind & s & -> & _). reflexivity.
-  - destruct Hfu as (b & fb & _ & _ & _ & Hl).
-    exact (alias_entries_variables fb nested l Hl).
+  unfold pairs_lets. rewrite map_map. apply map_ext.
+  intros [[x x'] k]. reflexivity.
+Qed.
+
+(* The fields of a value that a variable has, read through the pairs of
+   another variable's fields alike. *)
+Lemma pairs_hold (vars' : env) (fields fields_y : unboxed_fields)
+    (w : value) (pairs : list (variable * variable * flambda_kind)) :
+  unboxed_field_pairs Value (Unboxed fields) (Unboxed fields_y)
+  = Some pairs ->
+  fields_hold vars' fields_y w ->
+  map (fun '(x, _, _) => x) pairs = leaf_variables fields
+  ∧ (∀ (v v' : variable) (k : flambda_kind),
+       (v, v', k) ∈ pairs ->
+       v' ∈ leaf_variables fields_y
+       ∧ ∃ w' : value, lookup v' vars' = Some w' ∧ kind_of_value w' = k)
+  ∧ ∀ (p : list field) (v : variable) (k : flambda_kind),
+      upath Value (Unboxed fields) p v k ->
+      ∃ (v' : variable) (w' : value),
+        (v, v', k) ∈ pairs ∧ lookup v' vars' = Some w'
+        ∧ path_value p w = Some w'.
+Proof.
+  intros Hp Hhold.
+  destruct (pairs_spec (Unboxed fields) Value (Unboxed fields_y) pairs Hp)
+    as (Ha & Hb & Hc & _).
+  split; [ exact Hc | split ].
+  - intros v v' k Hin. destruct (Ha v v' k Hin) as (p & _ & Hp').
+    split; [ exact (upath_leaf_in fields_y p v' k Hp') | ].
+    destruct (Hhold p v' k Hp') as (w' & _ & Hl & Hk).
+    exists w'. split; assumption.
+  - intros p v k Hpath. destruct (Hb p v k Hpath) as (v' & Hin & Hp').
+    destruct (Hhold p v' k Hp') as (w' & Hpw & Hl & _).
+    exists v', w'. split; [ exact Hin | split; assumption ].
+Qed.
+
+(* A field unboxed in turn holds what is at its paths. *)
+Lemma fields_hold_nested (vars' : env) (fields_y nested : unboxed_fields)
+    (f : field) (w0 r : value) :
+  fields_hold vars' fields_y w0 -> (f, Unboxed nested) ∈ fields_y ->
+  (∀ w' : value, field_value f w0 = Some w' -> r = w') ->
+  fields_hold vars' nested r.
+Proof.
+  intros Hhold Hin Hfield p v k Hpath.
+  assert (Hp : upath Value (Unboxed fields_y) (f :: p) v k).
+  { econstructor; [ exact Hin | ].
+    exact (upath_unboxed_kind Value (field_kind f) nested p v k Hpath). }
+  destruct (Hhold _ v k Hp) as (w' & Hpw & Hl & Hk).
+  cbn [path_value] in Hpw.
+  destruct (field_value f w0) as [w1 | ] eqn:Hw1; [ | discriminate Hpw ].
+  rewrite <- (Hfield w1 eq_refl) in Hpw.
+  exists w'. split; [ exact Hpw | split; assumption ].
+Qed.
+
+(* An unboxed variable bound, the variables of its fields bound to the
+   values at their paths in its value. *)
+Lemma env_rel_bind_fields (vars vars' vars1 : env) (x : variable)
+    (fields : unboxed_fields) (w : value) :
+  env_rel M vars vars' -> fields_of M x = Some fields ->
+  (∀ z : variable,
+     z ∉ leaf_variables fields -> lookup z vars1 = lookup z vars') ->
+  fields_hold vars1 fields w ->
+  env_rel M ((x, w) :: vars) vars1.
+Proof.
+  intros [Hplain Hfs] Hx Hother Hhold. split.
+  - intros z Hz. rewrite lookup_other
+      by (intros ->; exact (plain_not_unboxed M x fields Hz Hx)).
+    rewrite (Hplain z Hz), Hother; [ reflexivity | ].
+    intros Hin. apply plain_variable_iff in Hz as [_ Hz].
+    pose proof (field_variables_in M x fields z Hx Hin) as Hfv.
+    apply among_In in Hfv. rewrite Hfv in Hz. discriminate.
+  - intros y fy w0 Hy Hlookup p v k Hp.
+    destruct (Pos.eq_dec y x) as [-> | Hne].
+    + rewrite lookup_head in Hlookup. injection Hlookup as <-.
+      rewrite Hx in Hy. injection Hy as <-. exact (Hhold p v k Hp).
+    + rewrite lookup_other in Hlookup by exact Hne.
+      destruct (Hfs y fy w0 Hy Hlookup p v k Hp) as (w' & Hpw & Hl & Hk).
+      exists w'. split; [ exact Hpw | split; [ | exact Hk ] ].
+      rewrite Hother; [ exact Hl | ]. intros Hvx.
+      exact (leaves_apart M M_distinct y x fy fields v Hy Hx Hne
+               (upath_leaf_in fy p v k Hp) Hvx).
+Qed.
+
+(* The [Let]s of the variables of the fields of an unboxed variable run,
+   and bind them as the relation asks. *)
+Lemma lets_case (vars vars' : env) (x : variable) (fields : unboxed_fields)
+    (w : value) (l : list (variable * flambda_kind * simple)) (body : expr)
+    (conts : cont_env) (statics : static_env) (hp : heap) :
+  env_rel M vars vars' -> fields_of M x = Some fields ->
+  map lets_variable l = leaf_variables fields ->
+  (∀ (v : variable) (kind : flambda_kind) (s : simple) (v' : variable),
+     (v, kind, s) ∈ l -> v' ∈ leaf_variables fields -> s <> Var v') ->
+  (∀ (v : variable) (kind : flambda_kind) (s : simple),
+     (v, kind, s) ∈ l ->
+     ∃ w' : value, eval_simple vars' s = Some w' ∧ kind_of_value w' = kind) ->
+  (∀ (p : list field) (v : variable) (k : flambda_kind),
+     upath Value (Unboxed fields) p v k ->
+     ∃ (s : simple) (w' : value),
+       (v, k, s) ∈ l ∧ eval_simple vars' s = Some w'
+       ∧ path_value p w = Some w') ->
+  ∃ vars1 : env,
+    run (length l) (State (lets l body) vars' conts statics hp)
+    = Step (State body vars1 conts statics hp)
+    ∧ env_rel M ((x, w) :: vars) vars1.
+Proof.
+  intros Hvars Hx Hvl Hread Heval Hpaths.
+  destruct (lets_run l body vars' conts statics hp)
+    as (vars1 & Hrun & Hother & Hbound).
+  - rewrite Hvl. exact (leaves_nodup M M_distinct x fields Hx).
+  - intros v kind s v' Hin Hv'. rewrite Hvl in Hv'.
+    exact (Hread v kind s v' Hin Hv').
+  - exact Heval.
+  - exists vars1. split; [ exact Hrun | ].
+    apply (env_rel_bind_fields vars vars' vars1 x fields w Hvars Hx).
+    + intros z Hz. apply Hother. rewrite Hvl. exact Hz.
+    + intros p v k Hp. destruct (Hpaths p v k Hp) as (s & w' & Hin & Hs & Hpw).
+      destruct (Heval v k s Hin) as (w'' & Hs' & Hk).
+      rewrite Hs in Hs'. injection Hs' as <-.
+      exists w'. split; [ exact Hpw | ].
+      split; [ exact (Hbound v k s w' Hin Hs) | exact Hk ].
 Qed.
 
 Lemma run_answer (R : state -> state -> Prop) (s s' t t' : state) (n : nat) :
@@ -1582,58 +1564,6 @@ Lemma args_rel_nil_inv (args args' : list simple) :
   args' = args ∧ forallb (plain_simple M) args = true.
 Proof. intros H. inversion H; subst. split; [ reflexivity | assumption ]. Qed.
 
-(* The variables of the fields of an unboxed argument, in the second
-   run, hold the fields of its value in the first. *)
-Lemma unboxed_args_eval (vars vars' : env) (y : variable)
-    (fields_y : unboxed_fields) (w : value) :
-  env_rel M vars vars' -> fields_of M y = Some fields_y ->
-  lookup y vars = Some w ->
-  ∀ (fields : unboxed_fields) (vs : list variable),
-    Forall2
-      (fun (fu : field * unboxed_field) (v : variable) =>
-         (∃ v0 : variable, snd fu = Not_unboxed v0)
-         ∧ (fst fu, Not_unboxed v) ∈ fields_y)
-      fields vs ->
-    ∃ ws : list value,
-      eval_simples vars' (map Var vs) = Some ws
-      ∧ Forall2
-          (fun (fu : field * unboxed_field) (w' : value) =>
-             (∃ v : variable, snd fu = Not_unboxed v)
-             ∧ field_value (fst fu) w = Some w'
-             ∧ kind_of_value w' = field_kind (fst fu))
-          fields ws.
-Proof.
-  intros Hrel Hy Hw. induction 1 as [ | fu v fields vs [Hfu Hin] _ IH].
-  - exists []. split; [ reflexivity | constructor ].
-  - destruct IH as (ws & Hws & Hall).
-    destruct (proj1 (proj2 Hrel) y fields_y w Hy Hw (fst fu) v Hin)
-      as (w' & Hfw & Hv & Hk).
-    exists (w' :: ws). split.
-    + cbn [map eval_simples eval_simple]. rewrite Hv, Hws. reflexivity.
-    + constructor; [ | exact Hall ]. split; [ exact Hfu | ].
-      split; assumption.
-Qed.
-
-Lemma flat_leaves_kinds (w : value) (fields : unboxed_fields)
-    (ws : list value) :
-  Forall2
-    (fun (fu : field * unboxed_field) (w' : value) =>
-       (∃ v : variable, snd fu = Not_unboxed v)
-       ∧ field_value (fst fu) w = Some w'
-       ∧ kind_of_value w' = field_kind (fst fu))
-    fields ws ->
-  map kind_of_value ws = map snd (fields_leaves fields)
-  ∧ ∀ vars : env,
-      ∃ vars1 : env, bind_params (leaf_variables fields) ws vars = Some vars1.
-Proof.
-  induction 1 as [ | [f u] w' fields ws ((v & Hu) & _ & Hk) _ IH].
-  - split; [ reflexivity | ]. intros vars. exists vars. reflexivity.
-  - simpl in Hu, Hk. subst u. destruct IH as [Hkinds Hbind].
-    rewrite leaf_variables_flat. rewrite leaves_cons. simpl.
-    rewrite Hk, Hkinds. split; [ reflexivity | ].
-    intros vars. exact (Hbind ((v, w') :: vars)).
-Qed.
-
 Lemma bind_params_app (l1 l2 : list variable) (vs1 vs2 : list value)
     (vars vars1 : env) :
   bind_params l1 vs1 vars = Some vars1 ->
@@ -1643,6 +1573,95 @@ Proof.
     simpl in Hb |- *; try discriminate Hb.
   - injection Hb as <-. reflexivity.
   - exact (IH vs1 _ Hb).
+Qed.
+
+Lemma in_concat_of {A : Type} (ls : list (list A)) (l : list A) (a : A) :
+  l ∈ ls -> a ∈ l -> a ∈ concat ls.
+Proof.
+  induction ls as [ | l0 ls IH]; intros Hl Ha; [ destruct Hl | ].
+  cbn [concat]. apply in_or_app. destruct Hl as [-> | Hl];
+    [ left; exact Ha | right; exact (IH Hl Ha) ].
+Qed.
+
+Lemma alloc_entries_variables (x : variable) (d : named)
+    (fields : unboxed_fields)
+    (ls : list (list (variable * flambda_kind * simple))) :
+  Forall2 (alloc_entry M x d) fields ls ->
+  map lets_variable (concat ls) = leaf_variables fields.
+Proof.
+  induction 1 as [ | [f u] l fields ls Hfu _ IH]; [ reflexivity | ].
+  cbn [concat]. rewrite map_app, IH. unfold leaf_variables.
+  rewrite leaves_cons, map_app. f_equal.
+  destruct u as [v | nested]; cbn [alloc_entry] in Hfu.
+  - destruct Hfu as (kind & s & -> & _). reflexivity.
+  - destruct Hfu as (b & fb & pairs & _ & _ & _ & Hpairs & ->).
+    rewrite pairs_lets_variables.
+    destruct (pairs_spec _ _ _ _ Hpairs) as (_ & _ & Hc & _).
+    rewrite Hc. reflexivity.
+Qed.
+
+(* The variables of the fields of an argument, in the second run. *)
+Lemma pairs_values (vars' : env)
+    (pairs : list (variable * variable * flambda_kind)) :
+  (∀ (v v' : variable) (k : flambda_kind),
+     (v, v', k) ∈ pairs ->
+     ∃ w' : value, lookup v' vars' = Some w' ∧ kind_of_value w' = k) ->
+  ∃ ws : list value,
+    eval_simples vars' (map (fun '(_, x', _) => Var x') pairs) = Some ws
+    ∧ map kind_of_value ws = map (fun '(_, _, k) => k) pairs
+    ∧ Forall2
+        (fun (vvk : variable * variable * flambda_kind) (w : value) =>
+           let '(_, x', _) := vvk in lookup x' vars' = Some w)
+        pairs ws.
+Proof.
+  induction pairs as [ | [[v v'] k] pairs IH]; intros Hp.
+  - exists []. split; [ reflexivity | split; [ reflexivity | constructor ] ].
+  - destruct (Hp v v' k (or_introl eq_refl)) as (w' & Hl & Hk).
+    destruct (IH (fun a b c Hin => Hp a b c (or_intror Hin)))
+      as (ws & Hws & Hks & Hall).
+    exists (w' :: ws). split; [ | split ].
+    + cbn [map eval_simples eval_simple]. rewrite Hl, Hws. reflexivity.
+    + simpl. rewrite Hk, Hks. reflexivity.
+    + constructor; assumption.
+Qed.
+
+(* The variables of the fields of a parameter bound to those values. *)
+Lemma bind_pairs (vars' : env)
+    (pairs : list (variable * variable * flambda_kind)) (ws : list value) :
+  Forall2
+    (fun (vvk : variable * variable * flambda_kind) (w : value) =>
+       let '(_, x', _) := vvk in lookup x' vars' = Some w)
+    pairs ws ->
+  (∀ vars : env,
+     ∃ vars1 : env,
+       bind_params (map (fun '(x, _, _) => x) pairs) ws vars = Some vars1)
+  ∧ ∀ vars vars1 : env,
+      NoDup (map (fun '(x, _, _) => x) pairs) ->
+      bind_params (map (fun '(x, _, _) => x) pairs) ws vars = Some vars1 ->
+      (∀ z : variable,
+         z ∉ map (fun '(x, _, _) => x) pairs ->
+         lookup z vars1 = lookup z vars)
+      ∧ ∀ (v v' : variable) (k : flambda_kind) (w : value),
+          (v, v', k) ∈ pairs -> lookup v' vars' = Some w ->
+          lookup v vars1 = Some w.
+Proof.
+  induction 1 as [ | [[v v'] k] w0 pairs ws Hw0 _ [IHb IH]].
+  - split; [ intros vars; exists vars; reflexivity | ].
+    intros vars vars1 _ Hb. simpl in Hb. injection Hb as <-.
+    split; [ reflexivity | ]. intros v v' k w [].
+  - split.
+    + intros vars. exact (IHb ((v, w0) :: vars)).
+    + intros vars vars1 Hnd Hb. cbn [map] in Hnd, Hb. simpl in Hb.
+      inversion Hnd as [ | v0 l0 Hv Hnd' [Heq0 Heq1]]; subst.
+      destruct (IH _ _ Hnd' Hb) as [Hother Hbound]. split.
+      * intros z Hz. rewrite Hother
+          by (intros Hin; apply Hz; right; exact Hin).
+        rewrite lookup_other; [ reflexivity | ].
+        intros ->. apply Hz. left. reflexivity.
+      * intros x x' k' w [Heq | Hin] Hl.
+        -- injection Heq as -> -> ->. rewrite Hl in Hw0. injection Hw0 as ->.
+           rewrite (Hother x Hv). apply lookup_head.
+        -- exact (Hbound x x' k' w Hin Hl).
 Qed.
 
 (* The arguments related, given to parameters related, are bound to
@@ -1662,7 +1681,7 @@ Lemma bind_args_rel (sh : list (option unboxed_fields))
       ∧ bind_params (map fst ps') vs' cv' = Some hv' ∧ env_rel M hv hv'.
 Proof.
   induction 1 as [args Hargs | o sh | sh a args args' Ha _ IH
-                 | sh fields fields_y y vs0 args args' Hy Hvs0 _ IH];
+                 | sh fields fields_y y pairs args args' Hy Hpairs _ IH];
     intros ps ps' vars vars' cv cv' hv vs Hps Hvars Hcv Heval Hkinds Hbind.
   - destruct (params_rel_nil_inv ps ps' Hps) as [-> ->].
     simpl in Hbind. destruct vs as [ | w vs]; [ | discriminate Hbind ].
@@ -1701,25 +1720,39 @@ Proof.
       [ | discriminate Heval ].
     injection Heval as <-. simpl in Hkinds. injection Hkinds as _ Hkinds.
     simpl in Hbind.
-    destruct (unboxed_args_eval vars vars' y fields_y w Hvars Hy Hw fields vs0
-                Hvs0)
-      as (ws & Hws & Hall).
-    destruct (flat_leaves_kinds w fields ws Hall) as [Hwk Hwb].
+    destruct (pairs_hold vars' fields fields_y w pairs Hpairs
+                (proj2 Hvars y fields_y w Hy Hw))
+      as (Hfirsts & Hseconds & Hpaths).
+    destruct (pairs_values vars' pairs
+                (fun v v' k Hin => proj2 (Hseconds v v' k Hin)))
+      as (ws & Hws & Hwk & Hall).
+    destruct (bind_pairs vars' pairs ws Hall) as [Hwb Hbound].
     destruct (Hwb cv') as (cv1 & Hcv1).
-    pose proof (env_rel_bind_unboxed M M_distinct cv cv' cv1 p fields w ws Hcv
-                  Hp Hall Hcv1)
-      as Hrel1.
+    assert (Hnd : NoDup (map (fun '(x, _, _) => x) pairs))
+      by (rewrite Hfirsts; exact (leaves_nodup M M_distinct p fields Hp)).
+    destruct (Hbound cv' cv1 Hnd Hcv1) as [Hother Hbv].
+    assert (Hrel1 : env_rel M ((p, w) :: cv) cv1).
+    { apply (env_rel_bind_fields cv cv' cv1 p fields w Hcv Hp).
+      - intros z Hz. apply Hother. rewrite Hfirsts. exact Hz.
+      - intros path v k Hpath.
+        destruct (Hpaths path v k Hpath) as (v' & w' & Hin & Hl & Hpw).
+        destruct (Hseconds v v' k Hin) as [_ (w'' & Hl' & Hk)].
+        rewrite Hl in Hl'. injection Hl' as <-.
+        exists w'. split; [ exact Hpw | ].
+        split; [ exact (Hbv v v' k w' Hin Hl) | exact Hk ]. }
     destruct (IH ps1 ps1' vars vars' ((p, w) :: cv) cv1 hv vs1 Hps1 Hvars
                 Hrel1 Hargs Hkinds Hbind)
       as (vs' & hv' & Hev' & Hk' & Hb' & Hrel).
+    destruct (pairs_spec (Unboxed fields) Value (Unboxed fields_y) pairs
+                Hpairs) as (_ & _ & _ & Hthirds).
     exists (ws ++ vs'), hv'. split.
     + rewrite FlambdaSemanticsProofs.eval_simples_app, Hws, Hev'.
       reflexivity.
-    + split; [ rewrite !map_app, Hwk, Hk'; reflexivity | ].
+    + split; [ rewrite !map_app, Hwk, Hk', Hthirds; reflexivity | ].
       split; [ | exact Hrel ].
       rewrite map_app. change (map fst (fields_leaves fields))
         with (leaf_variables fields).
-      rewrite (bind_params_app _ _ _ _ _ _ Hcv1). exact Hb'.
+      rewrite <- Hfirsts, (bind_params_app _ _ _ _ _ _ Hcv1). exact Hb'.
 Qed.
 
 Lemma find_arm_rel (K : finite_map (list (option unboxed_fields))) (i : Z)
@@ -1748,8 +1781,8 @@ Proof.
   subst statics' hp'. unfold answered. revert Hconts.
   destruct Hub as [K x kind d body body' Hx Hd Hbody
     | K x d fields ls body body' Hfields Hxf Hl Hbody
-    | K x y fields fields_y l body body' Hfields Hxf Hy Hne Hl Hbody
-    | K x kind d f s y fields fields_y nested l body body' Hfields Hxf Hread
+    | K x y fields fields_y pairs body body' Hfields Hxf Hy Hne Hl Hbody
+    | K x kind d f s y fields fields_y nested pairs body body' Hfields Hxf Hread
         Hs Hy Hne Hin Hl Hbody
     | K x kind d f s y v fields body body' Hx Hread Hs Hfields Hin Hbody
     | K bindings body body' Hbindings Hbody
@@ -1770,159 +1803,109 @@ Proof.
     rewrite step_let.
     destruct (eval_named statics vars d) as [w | ] eqn:Hw; [ | exact I ].
     destruct (kind_eqb (kind_of_value w) Value) eqn:Hk; [ | exact I ].
-    pose proof (alloc_entries2_variables x d fields ls Hl) as Hvl.
-    destruct (lets_run (concat ls) body' vars' conts' statics hp)
-      as (vars1 & Hrun & Hother & Hbound).
-    + rewrite Hvl. exact (leaves_nodup M M_distinct x fields Hfields).
-    + intros v kind s v' Hin Hv' ->. rewrite Hvl in Hv'.
-      destruct (alloc_entries2_l x d fields ls v kind (Var v') Hl Hin)
-        as [(f & _ & _ & Hplain)
-           | (f & nested & b & fb & f' & _ & _ & Hb & Hxb & _ & _ & vb & Heq
-              & Hinb)].
-      * simpl in Hplain. apply plain_variable_iff in Hplain as [_ Hnot].
+    destruct (lets_case vars vars' x fields w (concat ls) body' conts' statics
+                hp Hvars Hfields)
+      as (vars1 & Hrun & Hrel).
+    + exact (alloc_entries_variables x d fields ls Hl).
+    + intros v kind s v' Hin Hv' ->.
+      destruct (forall2_concat_in _ _ _ _ Hl Hin)
+        as ([f u] & l0 & _ & Hent & Hin0).
+      destruct u as [v0 | nested]; cbn [alloc_entry] in Hent.
+      * destruct Hent as (kind0 & s0 & -> & _ & Hplain).
+        destruct Hin0 as [Heq | []]. injection Heq as <- <- ->.
+        simpl in Hplain. apply plain_variable_iff in Hplain as [_ Hnot].
         pose proof (field_variables_in M x fields v' Hfields Hv') as Hfv.
         apply among_In in Hfv. rewrite Hfv in Hnot. discriminate.
-      * injection Heq as <-.
+      * destruct Hent as (b & fb & pairs & _ & Hb & Hxb & Hpairs & ->).
+        apply in_pairs_lets in Hin0 as (v'' & Heq & Hin').
+        injection Heq as <-.
+        destruct (pairs_spec _ _ _ _ Hpairs) as (Ha & _).
+        destruct (Ha v v' kind Hin') as (p & _ & Hp').
         exact (leaves_apart M M_distinct b x fb fields v' Hb Hfields
-                 (not_eq_sym Hxb) (leaf_in fb f' v' Hinb) Hv').
+                 (not_eq_sym Hxb) (upath_leaf_in fb p v' kind Hp') Hv').
     + intros v kind s Hin.
-      destruct (alloc_entries2_l x d fields ls v kind s Hl Hin)
-        as [(f & _ & Hf & Hplain)
-           | (f & nested & b & fb & f' & _ & Hf & Hb & _ & _ & -> & vb & ->
-              & Hinb)].
-      * destruct (alloc_field_eval statics vars d w f kind s Hw Hf)
+      destruct (forall2_concat_in _ _ _ _ Hl Hin)
+        as ([f u] & l0 & _ & Hent & Hin0).
+      destruct u as [v0 | nested]; cbn [alloc_entry] in Hent.
+      * destruct Hent as (kind0 & s0 & -> & Hf & Hplain).
+        destruct Hin0 as [Heq | []]. injection Heq as <- <- <-.
+        destruct (alloc_field_eval statics vars d w f kind0 s0 Hw Hf)
           as (w' & Hs & _ & Hkw).
         exists w'. split; [ | exact Hkw ].
-        rewrite <- (plain_simple_eval M vars vars' s Hvars Hplain). exact Hs.
-      * destruct (alloc_field_eval statics vars d w f Value (Var b) Hw Hf)
-          as (w1 & Hs & _ & _).
+        rewrite <- (plain_simple_eval M vars vars' s0 Hvars Hplain). exact Hs.
+      * destruct Hent as (b & fb & pairs & Hf & Hb & Hxb & Hpairs & ->).
+        destruct (alloc_field_eval statics vars d w f Value (Var b) Hw Hf)
+          as (wb & Hs & _ & _).
         simpl in Hs.
-        destruct (proj1 (proj2 Hvars) b fb w1 Hb Hs f' vb Hinb)
-          as (w' & _ & Hvb & Hkw).
-        exists w'. split; [ exact Hvb | exact Hkw ].
+        destruct (pairs_hold vars' nested fb wb pairs Hpairs
+                    (proj2 Hvars b fb wb Hb Hs))
+          as (_ & Hseconds & _).
+        apply in_pairs_lets in Hin0 as (v' & -> & Hin').
+        destruct (Hseconds v v' kind Hin') as [_ (w' & Hl' & Hk')].
+        exists w'. split; [ exact Hl' | exact Hk' ].
+    + intros p v k Hpath.
+      apply upath_unboxed_inv in Hpath as (f & u & p0 & -> & Hfu & Hp0).
+      destruct (forall2_in_both _ _ _ _ Hl Hfu) as (l0 & Hl0 & Hent).
+      destruct u as [v0 | nested]; cbn [alloc_entry] in Hent.
+      * apply upath_not_unboxed_inv in Hp0 as (-> & -> & ->).
+        destruct Hent as (kind0 & s0 & -> & Hf & Hplain).
+        pose proof (alloc_field_kind d f kind0 s0 Hf) as Hk0. subst kind0.
+        destruct (alloc_field_eval statics vars d w f (field_kind f) s0 Hw Hf)
+          as (w' & Hs & Hfw & _).
+        exists s0, w'. split; [ exact (in_concat_of _ _ _ Hl0 (or_introl
+                                                       eq_refl)) | ].
+        split; [ rewrite <- (plain_simple_eval M vars vars' s0 Hvars Hplain);
+                 exact Hs | ].
+        cbn [path_value]. rewrite Hfw. reflexivity.
+      * destruct Hent as (b & fb & pairs & Hf & Hb & Hxb & Hpairs & ->).
+        destruct (alloc_field_eval statics vars d w f Value (Var b) Hw Hf)
+          as (wb & Hs & Hfw & _).
+        simpl in Hs.
+        destruct (pairs_hold vars' nested fb wb pairs Hpairs
+                    (proj2 Hvars b fb wb Hb Hs))
+          as (_ & _ & Hpaths).
+        destruct (Hpaths p0 v k (upath_unboxed_kind _ Value _ _ _ _ Hp0))
+          as (v' & w' & Hin' & Hl' & Hpw).
+        exists (Var v'), w'.
+        split; [ exact (in_concat_of _ _ _ Hl0
+                          (pairs_in_lets pairs v v' k Hin')) | ].
+        split; [ exact Hl' | ]. cbn [path_value]. rewrite Hfw. exact Hpw.
     + apply (run_answer (related M) _ _ _ _ (length (concat ls)) Hrun).
       * exists K. unfold related.
         cbn [state_expr state_vars state_conts state_statics state_heap].
-        split; [ exact Hbody | ]. split; [ | split; [ exact Hconts | ] ];
-          [ | split; reflexivity ].
-        split; [ | split ].
-        -- intros z Hz.
-           rewrite lookup_other
-             by (intros ->; exact (plain_not_unboxed M x fields Hz Hfields)).
-           rewrite (proj1 Hvars z Hz). symmetry. apply Hother.
-           rewrite Hvl. intros Hzl. apply plain_variable_iff in Hz as [_ Hz].
-           pose proof (field_variables_in M x fields z Hfields Hzl) as Hfv.
-           apply among_In in Hfv. rewrite Hfv in Hz. discriminate.
-        -- intros y fy w0 Hy Hlookup f v Hfv.
-           destruct (Pos.eq_dec y x) as [-> | Hne].
-           ++ rewrite lookup_head in Hlookup. injection Hlookup as <-.
-              rewrite Hfields in Hy. injection Hy as <-.
-              destruct (alloc_entries2_flat x d fields ls f v Hl Hfv)
-                as (kind & s & Hin & Hf & Hplain).
-              destruct (alloc_field_eval statics vars d w f kind s Hw Hf)
-                as (w' & Hs & Hfw & Hkw).
-              exists w'. split; [ exact Hfw | ].
-              split; [ | rewrite Hkw; exact (alloc_field_kind d f kind s Hf) ].
-              apply (Hbound v kind s w' Hin).
-              rewrite <- (plain_simple_eval M vars vars' s Hvars Hplain).
-              exact Hs.
-           ++ rewrite lookup_other in Hlookup by exact Hne.
-              destruct (proj1 (proj2 Hvars) y fy w0 Hy Hlookup f v Hfv)
-                as (w' & Hfw & Hv & Hkv).
-              exists w'. split; [ exact Hfw | ].
-              split; [ | exact Hkv ]. rewrite Hother; [ exact Hv | ].
-              rewrite Hvl. intros Hvx.
-              exact (leaves_apart M M_distinct y x fy fields v Hy Hfields Hne
-                       (leaf_in fy f v Hfv) Hvx).
-        -- intros y fy w0 Hy Hlookup f nested Hfn.
-           destruct (Pos.eq_dec y x) as [-> | Hne].
-           ++ rewrite lookup_head in Hlookup. injection Hlookup as <-.
-              rewrite Hfields in Hy. injection Hy as <-.
-              destruct (alloc_entries2_nested x d fields ls f nested Hl Hfn)
-                as (b & fb & Hf & Hb & _ & Hall).
-              destruct (alloc_field_eval statics vars d w f Value (Var b) Hw
-                          Hf)
-                as (w1 & Hs & Hfw & _).
-              simpl in Hs. exists w1. split; [ exact Hfw | ].
-              intros f' v Hv. destruct (Hall f' v Hv) as (vb & Hin & Hinb).
-              destruct (proj1 (proj2 Hvars) b fb w1 Hb Hs f' vb Hinb)
-                as (w' & Hfw' & Hvb & Hkw).
-              exists w'. split; [ exact Hfw' | split; [ | exact Hkw ] ].
-              exact (Hbound v (field_kind f') (Var vb) w' Hin Hvb).
-           ++ rewrite lookup_other in Hlookup by exact Hne.
-              destruct (proj2 (proj2 Hvars) y fy w0 Hy Hlookup f nested Hfn)
-                as (w1 & Hw1 & Hn).
-              exists w1. split; [ exact Hw1 | ]. intros f' v Hv.
-              destruct (Hn f' v Hv) as (w' & Hfw & Hl' & Hkv).
-              exists w'. split; [ exact Hfw | split; [ | exact Hkv ] ].
-              rewrite Hother; [ exact Hl' | ]. rewrite Hvl. intros Hvx.
-              exact (leaves_apart M M_distinct y x fy fields v Hy Hfields Hne
-                       (nested_leaf_in fy f nested f' v Hfn Hv) Hvx).
+        split; [ exact Hbody | split; [ exact Hrel | ] ].
+        split; [ exact Hconts | split; reflexivity ].
       * intros _. unfold measure. simpl. lia.
   - (* An alias of an unboxed variable. *)
     rewrite step_let. cbn [eval_named eval_simple].
     destruct (lookup y vars) as [w | ] eqn:Hw; [ | exact I ].
     destruct (kind_eqb (kind_of_value w) Value) eqn:Hk; [ | exact I ].
-    pose proof (alias_entries_variables fields_y fields l Hl) as Hvl.
-    destruct (lets_run l body' vars' conts' statics hp)
-      as (vars1 & Hrun & Hother & Hbound).
-    + rewrite Hvl. exact (leaves_nodup M M_distinct x fields Hfields).
+    destruct (pairs_hold vars' fields fields_y w pairs Hl
+                (proj2 Hvars y fields_y w Hy Hw))
+      as (Hfirsts & Hseconds & Hpaths).
+    destruct (lets_case vars vars' x fields w (pairs_lets pairs) body' conts'
+                statics hp Hvars Hfields)
+      as (vars1 & Hrun & Hrel).
+    + rewrite pairs_lets_variables. exact Hfirsts.
     + intros v kind s v' Hin Hv' ->.
-      destruct (alias_entries_l fields_y fields l v kind (Var v') Hl Hin)
-        as (f & _ & _ & v'' & Heq & Hin').
-      injection Heq as <-. rewrite Hvl in Hv'.
+      apply in_pairs_lets in Hin as (v'' & Heq & Hin). injection Heq as <-.
+      destruct (Hseconds v v' kind Hin) as [Hleaf _].
       exact (leaves_apart M M_distinct y x fields_y fields v' Hy Hfields
-               (not_eq_sym Hne) (leaf_in fields_y f v' Hin') Hv').
+               (not_eq_sym Hne) Hleaf Hv').
     + intros v kind s Hin.
-      destruct (alias_entries_l fields_y fields l v kind s Hl Hin)
-        as (f & _ & -> & v' & -> & Hin').
-      destruct (proj1 (proj2 Hvars) y fields_y w Hy Hw f v' Hin')
-        as (w' & _ & Hv' & Hkw).
-      exists w'. split; [ exact Hv' | exact Hkw ].
-    + apply (run_answer (related M) _ _ _ _ (length l) Hrun).
+      apply in_pairs_lets in Hin as (v' & -> & Hin).
+      destruct (Hseconds v v' kind Hin) as [_ (w' & Hl' & Hk')].
+      exists w'. split; [ exact Hl' | exact Hk' ].
+    + intros p v k Hpath.
+      destruct (Hpaths p v k Hpath) as (v' & w' & Hin & Hl' & Hpw).
+      exists (Var v'), w'.
+      split; [ exact (pairs_in_lets pairs v v' k Hin) | ].
+      split; [ exact Hl' | exact Hpw ].
+    + apply (run_answer (related M) _ _ _ _ (length (pairs_lets pairs)) Hrun).
       * exists K. unfold related.
         cbn [state_expr state_vars state_conts state_statics state_heap].
-        split; [ exact Hbody | ]. split; [ | split; [ exact Hconts | ] ];
-          [ | split; reflexivity ].
-        split; [ | split ].
-        -- intros z Hz.
-           rewrite lookup_other
-             by (intros ->; exact (plain_not_unboxed M x fields Hz Hfields)).
-           rewrite (proj1 Hvars z Hz). symmetry. apply Hother.
-           rewrite Hvl. intros Hzl. apply plain_variable_iff in Hz as [_ Hz].
-           pose proof (field_variables_in M x fields z Hfields Hzl) as Hfv.
-           apply among_In in Hfv. rewrite Hfv in Hz. discriminate.
-        -- intros z fz w0 Hz Hlookup f v Hfv.
-           destruct (Pos.eq_dec z x) as [-> | Hne'].
-           ++ rewrite lookup_head in Hlookup. injection Hlookup as <-.
-              rewrite Hfields in Hz. injection Hz as <-.
-              destruct (alias_entries_r fields_y fields l f v Hl Hfv)
-                as (kind & s & Hin & -> & v' & -> & Hin').
-              destruct (proj1 (proj2 Hvars) y fields_y w Hy Hw f v' Hin')
-                as (w' & Hfw & Hv' & Hkw).
-              exists w'. split; [ exact Hfw | split; [ | exact Hkw ] ].
-              exact (Hbound v (field_kind f) (Var v') w' Hin Hv').
-           ++ rewrite lookup_other in Hlookup by exact Hne'.
-              destruct (proj1 (proj2 Hvars) z fz w0 Hz Hlookup f v Hfv)
-                as (w' & Hfw & Hv & Hkv).
-              exists w'. split; [ exact Hfw | ].
-              split; [ | exact Hkv ]. rewrite Hother; [ exact Hv | ].
-              rewrite Hvl. intros Hvx.
-              exact (leaves_apart M M_distinct z x fz fields v Hz Hfields Hne'
-                       (leaf_in fz f v Hfv) Hvx).
-        -- intros z fz w0 Hz Hlookup f nested Hfn.
-           destruct (Pos.eq_dec z x) as [-> | Hne'].
-           ++ exfalso. rewrite Hfields in Hz. injection Hz as <-.
-              exact (alias_entries_l' fields_y fields l f nested Hl Hfn).
-           ++ rewrite lookup_other in Hlookup by exact Hne'.
-              destruct (proj2 (proj2 Hvars) z fz w0 Hz Hlookup f nested Hfn)
-                as (w1 & Hw1 & Hn).
-              exists w1. split; [ exact Hw1 | ]. intros f' v Hv.
-              destruct (Hn f' v Hv) as (w' & Hfw & Hl' & Hkv).
-              exists w'. split; [ exact Hfw | split; [ | exact Hkv ] ].
-              rewrite Hother; [ exact Hl' | ]. rewrite Hvl. intros Hvx.
-              exact (leaves_apart M M_distinct z x fz fields v Hz Hfields Hne'
-                       (nested_leaf_in fz f nested f' v Hfn Hv) Hvx).
+        split; [ exact Hbody | split; [ exact Hrel | ] ].
+        split; [ exact Hconts | split; reflexivity ].
       * intros _. unfold measure. simpl. lia.
   - (* The load of a field unboxed in turn. *)
     rewrite step_let.
@@ -1933,69 +1916,37 @@ Proof.
     destruct Hs as [-> | (k & ->)];
       [ | simpl in Hw0; injection Hw0 as <-; exfalso; exact (Hnc _ eq_refl) ].
     simpl in Hw0.
-    destruct (proj2 (proj2 Hvars) y fields_y w0 Hy Hw0 f nested Hin)
-      as (w & Hw1 & Hn).
-    pose proof (Hfield w Hw1) as Hrw. subst r.
-    pose proof (alias_entries_variables nested fields l Hl) as Hvl.
-    destruct (lets_run l body' vars' conts' statics hp)
-      as (vars1 & Hrun & Hother & Hbound).
-    + rewrite Hvl. exact (leaves_nodup M M_distinct x fields Hfields).
+    pose proof (fields_hold_nested vars' fields_y nested f w0 r
+                  (proj2 Hvars y fields_y w0 Hy Hw0) Hin Hfield) as Hhold.
+    destruct (pairs_hold vars' fields nested r pairs Hl Hhold)
+      as (Hfirsts & Hseconds & Hpaths).
+    destruct (lets_case vars vars' x fields r (pairs_lets pairs) body' conts'
+                statics hp Hvars Hfields)
+      as (vars1 & Hrun & Hrel).
+    + rewrite pairs_lets_variables. exact Hfirsts.
     + intros v kind0 s v' Hin0 Hv' ->.
-      destruct (alias_entries_l nested fields l v kind0 (Var v') Hl Hin0)
-        as (f0 & _ & _ & v'' & Heq & Hin').
-      injection Heq as <-. rewrite Hvl in Hv'.
+      apply in_pairs_lets in Hin0 as (v'' & Heq & Hin0).
+      injection Heq as <-.
+      destruct (Hseconds v v' kind0 Hin0) as [Hleaf _].
       exact (leaves_apart M M_distinct y x fields_y fields v' Hy Hfields
                (not_eq_sym Hne)
-               (nested_leaf_in fields_y f nested f0 v' Hin Hin')
+               (leaves_unboxed_in Value fields_y f (Unboxed nested) v' Hin
+                  Hleaf)
                Hv').
     + intros v kind0 s Hin0.
-      destruct (alias_entries_l nested fields l v kind0 s Hl Hin0)
-        as (f0 & _ & -> & v' & -> & Hin').
-      destruct (Hn f0 v' Hin') as (w' & _ & Hv' & Hkw).
-      exists w'. split; [ exact Hv' | exact Hkw ].
-    + apply (run_answer (related M) _ _ _ _ (length l) Hrun).
+      apply in_pairs_lets in Hin0 as (v' & -> & Hin0).
+      destruct (Hseconds v v' kind0 Hin0) as [_ (w' & Hl' & Hk')].
+      exists w'. split; [ exact Hl' | exact Hk' ].
+    + intros p v k0 Hpath.
+      destruct (Hpaths p v k0 Hpath) as (v' & w' & Hin0 & Hl' & Hpw).
+      exists (Var v'), w'.
+      split; [ exact (pairs_in_lets pairs v v' k0 Hin0) | ].
+      split; [ exact Hl' | exact Hpw ].
+    + apply (run_answer (related M) _ _ _ _ (length (pairs_lets pairs)) Hrun).
       * exists K. unfold related.
         cbn [state_expr state_vars state_conts state_statics state_heap].
-        split; [ exact Hbody | ]. split; [ | split; [ exact Hconts | ] ];
-          [ | split; reflexivity ].
-        split; [ | split ].
-        -- intros z Hz.
-           rewrite lookup_other
-             by (intros ->; exact (plain_not_unboxed M x fields Hz Hfields)).
-           rewrite (proj1 Hvars z Hz). symmetry. apply Hother.
-           rewrite Hvl. intros Hzl. apply plain_variable_iff in Hz as [_ Hz].
-           pose proof (field_variables_in M x fields z Hfields Hzl) as Hfv.
-           apply among_In in Hfv. rewrite Hfv in Hz. discriminate.
-        -- intros z fz w0' Hz Hlookup f0 v Hfv.
-           destruct (Pos.eq_dec z x) as [-> | Hne'].
-           ++ rewrite lookup_head in Hlookup. injection Hlookup as <-.
-              rewrite Hfields in Hz. injection Hz as <-.
-              destruct (alias_entries_r nested fields l f0 v Hl Hfv)
-                as (kind0 & s & Hin0 & -> & v' & -> & Hin').
-              destruct (Hn f0 v' Hin') as (w' & Hfw & Hv' & Hkw).
-              exists w'. split; [ exact Hfw | split; [ | exact Hkw ] ].
-              exact (Hbound v (field_kind f0) (Var v') w' Hin0 Hv').
-           ++ rewrite lookup_other in Hlookup by exact Hne'.
-              destruct (proj1 (proj2 Hvars) z fz w0' Hz Hlookup f0 v Hfv)
-                as (w' & Hfw & Hv & Hkv).
-              exists w'. split; [ exact Hfw | ].
-              split; [ | exact Hkv ]. rewrite Hother; [ exact Hv | ].
-              rewrite Hvl. intros Hvx.
-              exact (leaves_apart M M_distinct z x fz fields v Hz Hfields Hne'
-                       (leaf_in fz f0 v Hfv) Hvx).
-        -- intros z fz w0' Hz Hlookup f0 nested0 Hfn.
-           destruct (Pos.eq_dec z x) as [-> | Hne'].
-           ++ exfalso. rewrite Hfields in Hz. injection Hz as <-.
-              exact (alias_entries_l' nested fields l f0 nested0 Hl Hfn).
-           ++ rewrite lookup_other in Hlookup by exact Hne'.
-              destruct (proj2 (proj2 Hvars) z fz w0' Hz Hlookup f0 nested0 Hfn)
-                as (w1 & Hw1' & Hn').
-              exists w1. split; [ exact Hw1' | ]. intros f' v Hv.
-              destruct (Hn' f' v Hv) as (w' & Hfw & Hl' & Hkv).
-              exists w'. split; [ exact Hfw | split; [ | exact Hkv ] ].
-              rewrite Hother; [ exact Hl' | ]. rewrite Hvl. intros Hvx.
-              exact (leaves_apart M M_distinct z x fz fields v Hz Hfields Hne'
-                       (nested_leaf_in fz f0 nested0 f' v Hfn Hv) Hvx).
+        split; [ exact Hbody | split; [ exact Hrel | ] ].
+        split; [ exact Hconts | split; reflexivity ].
       * intros _. unfold measure. simpl. lia.
   - (* A read of a field. *)
     rewrite step_let.
@@ -2006,9 +1957,14 @@ Proof.
     destruct Hs as [-> | (k & ->)];
       [ | simpl in Hw0; injection Hw0 as <-; exfalso; exact (Hnc _ eq_refl) ].
     simpl in Hw0.
-    destruct (proj1 (proj2 Hvars) y fields w0 Hfields Hw0 f v Hin)
-      as (w' & Hfw & Hv & _).
-    rewrite <- (Hfield w' Hfw) in Hv.
+    assert (Hp : upath Value (Unboxed fields) [f] v (field_kind f))
+      by (econstructor; [ exact Hin | constructor ]).
+    destruct (proj2 Hvars y fields w0 Hfields Hw0 [f] v _ Hp)
+      as (w' & Hpw & Hv & _).
+    cbn [path_value] in Hpw.
+    destruct (field_value f w0) as [w1 | ] eqn:Hfw; [ | discriminate Hpw ].
+    injection Hpw as <-.
+    rewrite <- (Hfield w1 eq_refl) in Hv.
     right. left. eexists. split.
     + rewrite step_let. cbn [eval_named eval_simple]. rewrite Hv, Hk.
       reflexivity.
@@ -2393,11 +2349,6 @@ Definition fresh_range (lo hi : positive) (fields : unboxed_fields) : Prop :=
   (lo <= hi)%positive ∧ NoDup (leaf_variables fields)
   ∧ ∀ v, v ∈ leaf_variables fields -> (lo <= v)%positive ∧ (v < hi)%positive.
 
-Lemma leaf_variables_cons_unboxed (f : field) (nested rest : unboxed_fields) :
-  leaf_variables ((f, Unboxed nested) :: rest)
-  = leaf_variables nested ++ leaf_variables rest.
-Proof. unfold leaf_variables. rewrite leaves_cons, map_app. reflexivity. Qed.
-
 Lemma leaf_variables_cons_var (f : field) (v : variable)
     (rest : unboxed_fields) :
   leaf_variables ((f, Not_unboxed v) :: rest) = v :: leaf_variables rest.
@@ -2422,7 +2373,7 @@ Proof.
     + constructor; [ | exact Hnd ]. intros Hv.
       destruct (Hrest v Hv) as [H1 _]. lia.
     + intros w [<- | Hw]; [ lia | ]. destruct (Hrest w Hw). lia.
-  - destruct Hu as (Hlm & Hnd' & Hnested). rewrite leaf_variables_cons_unboxed.
+  - destruct Hu as (Hlm & Hnd' & Hnested). rewrite leaf_variables_nested.
     split; [ lia | split ].
     + apply NoDup_app; [ exact Hnd' | exact Hnd | ].
       intros w Hw Hw'. destruct (Hnested w Hw). destruct (Hrest w Hw'). lia.
@@ -3494,58 +3445,18 @@ Proof.
     rewrite H; reflexivity.
 Qed.
 
-(* The fields of a block that is unboxed. *)
-Lemma bind_block_fields_lets (en : rebuild_env) (x : variable) (tag : Z)
-    (args : list simple) (fields : unboxed_fields) :
-  forallb (plain_simple unboxed) args = true ->
-  (∀ (f : field) (u : unboxed_field),
-     (f, u) ∈ fields ->
-     ∃ (i : nat) (v : variable) (a : simple),
-       f = Field_block i Value ∧ u = Not_unboxed v
-       ∧ nth_error args i = Some a
-       ∧ s_field_used sol (Node_variable x) f = true
-       ∧ kept_simple en a = true ∧ simple_kind en a = Value) ->
-  ∀ body : expr,
-    ∃ l : list (variable * flambda_kind * simple),
-      bind_block_fields unboxed en tag args fields body = Some (lets l body)
-      ∧ alloc_entries unboxed
-          (Prim (Variadic (Make_block (Block_kind_values tag)))
-             (rebuild_fields sol en (Node_variable x) 0 args))
-          fields l.
-Proof.
-  intros Hargs. unfold bind_block_fields.
-  induction fields as [ | [f u] fields IH]; intros Hfields body.
-  - exists []. split; [ reflexivity | constructor ].
-  - destruct (Hfields f u (or_introl eq_refl))
-      as (i & v & a & -> & -> & Hnth & Hused & Hkept & Hkind).
-    assert (Ha : plain_simple unboxed a = true).
-    { rewrite forallb_forall in Hargs. apply Hargs.
-      exact (nth_error_In _ _ Hnth). }
-    destruct (IH (fun f' u' Hin => Hfields f' u' (or_intror Hin))
-                (Let v Value (Simple a) body)) as (l & Hl & Hentries).
-    exists ((v, Value, a) :: l). split.
-    + simpl List.fold_left. rewrite Hnth, Hkind, kind_eqb_refl.
-      rewrite (plain_not_bound a Ha). exact Hl.
-    + constructor; [ | exact Hentries ].
-      split; [ reflexivity | split; [ | exact Ha ] ].
-      exists i. split; [ reflexivity | split; [ reflexivity | ] ].
-      rewrite (rebuild_fields_nth en _ args 0 i a Hnth). simpl.
-      unfold field_used. rewrite Hused, (kept_rewrite en a Hkept).
-      reflexivity.
-Qed.
-
 (* The field of a boxed number that is unboxed. *)
-Lemma bind_boxed_number_lets (bn : boxable_number) (c : simple)
-    (fields : unboxed_fields) (d : named) :
+Lemma bind_boxed_number_lets (x : variable) (bn : boxable_number)
+    (c : simple) (fields : unboxed_fields) (d : named) :
   plain_simple unboxed c = true ->
   (fields <> [] -> d = Prim (Unary (Box_number bn)) [c]) ->
   (∀ (f : field) (u : unboxed_field),
      (f, u) ∈ fields ->
      ∃ v : variable, f = Field_boxed_number bn ∧ u = Not_unboxed v) ->
   ∀ body : expr,
-    ∃ l : list (variable * flambda_kind * simple),
-      bind_boxed_number_field bn c fields body = Some (lets l body)
-      ∧ alloc_entries unboxed d fields l.
+    ∃ ls : list (list (variable * flambda_kind * simple)),
+      bind_boxed_number_field bn c fields body = Some (lets (concat ls) body)
+      ∧ Forall2 (alloc_entry unboxed x d) fields ls.
 Proof.
   intros Hc Hd. unfold bind_boxed_number_field.
   induction fields as [ | [f u] fields IH]; intros Hfields body.
@@ -3555,10 +3466,11 @@ Proof.
       by (apply Hd; discriminate).
     destruct (IH (fun _ => Hd') (fun f' u' Hin => Hfields f' u' (or_intror Hin))
                 (Let v (unboxed_kind bn) (Simple c) body))
-      as (l & Hl & Hentries).
-    exists ((v, unboxed_kind bn, c) :: l). split.
+      as (ls & Hl & Hentries).
+    exists ([(v, unboxed_kind bn, c)] :: ls). split.
     + simpl List.fold_left. rewrite Nat.eqb_refl. exact Hl.
-    + constructor; [ | exact Hentries ]. subst d.
+    + constructor; [ | exact Hentries ]. subst d. cbn [alloc_entry].
+      exists (unboxed_kind bn), c.
       split; [ reflexivity | split; [ | exact Hc ] ].
       split; [ reflexivity | split; reflexivity ].
 Qed.
@@ -3596,11 +3508,6 @@ Proof.
     simpl. rewrite (IH Hargs ds Hds).
     destruct d as [[kind | ] | fields]; simpl in Hd; try discriminate Hd;
       simpl; [ rewrite (rewrite_simple_u en a Ha) | ]; reflexivity.
-Qed.
-
-Lemma field_eqb_decides : decides_equality field_eqb.
-Proof.
-  intros f f'. split; [ apply field_eqb_eq | intros <-; apply field_eqb_refl ].
 Qed.
 
 Lemma map_fst_combine {A B : Type} (l : list A) (l' : list B) :
@@ -3664,14 +3571,7 @@ Lemma unboxed_binding_cases (kinds : finite_map flambda_kind) (x : variable)
               ∃ v : variable, f = Field_boxed_number bn ∧ u = Not_unboxed v)
      ∨ (∃ (y : variable) (fields_y : unboxed_fields),
           d = Simple (Var y) ∧ x <> y ∧ fields_of unboxed y = Some fields_y
-          ∧ forallb
-              (fun '(f, u) =>
-                 match u, Keyed.lookup field_eqb f fields_y with
-                 | Not_unboxed _, Some (Not_unboxed _) => true
-                 | _, _ => false
-                 end)
-              fields
-            = true
+          ∧ fields_alike fields fields_y = true
           ∧ is_var_used sol y (kind_of_variable (kinds_env kinds) y) = true)
      ∨ (∃ (bk : block_access_kind) (mut : mutability) (i : Z) (y : variable)
           (fields_y nested : unboxed_fields),
@@ -3844,71 +3744,24 @@ Proof.
 Qed.
 
 (* The variables of the fields of an argument unboxed alike. *)
-Lemma unboxed_args_flat (fields : unboxed_fields) (y : variable)
+Lemma unboxed_args_pairs (fields : unboxed_fields) (y : variable)
     (fields_y : unboxed_fields) :
   fields_of unboxed y = Some fields_y ->
-  forallb
-    (fun '(f, u) =>
-       match u, Keyed.lookup field_eqb f fields_y with
-       | Not_unboxed _, Some (Not_unboxed _) => true
-       | _, _ => false
-       end)
-    fields
-  = true ->
-  ∃ (l : list (simple * flambda_kind)) (vs : list variable),
-    unboxed_args unboxed fields (Var y) = Some l ∧ map fst l = map Var vs
-    ∧ Forall2
-        (fun (fu : field * unboxed_field) (v : variable) =>
-           (∃ v0 : variable, snd fu = Not_unboxed v0)
-           ∧ (fst fu, Not_unboxed v) ∈ fields_y)
-        fields vs.
+  fields_alike fields fields_y = true ->
+  ∃ pairs : list (variable * variable * flambda_kind),
+    unboxed_field_pairs Value (Unboxed fields) (Unboxed fields_y)
+    = Some pairs
+    ∧ unboxed_args unboxed fields (Var y)
+      = Some (map (fun '(_, x, kind) => (Var x, kind)) pairs).
 Proof.
-  intros Hy Hf. unfold unboxed_args. cbn [unboxed_of].
+  intros Hy Hf. unfold fields_alike in Hf.
+  destruct (unboxed_field_pairs Value (Unboxed fields) (Unboxed fields_y))
+    as [pairs | ] eqn:Hp; [ | discriminate Hf ].
+  exists pairs. split; [ reflexivity | ].
+  unfold unboxed_args. cbn [unboxed_of].
   change (unboxed_of_node unboxed (Node_variable y))
     with (fields_of unboxed y).
-  rewrite Hy.
-  enough (H : ∃ (pairs : list (variable * variable * flambda_kind))
-                (vs : list variable),
-             unboxed_field_pairs Value (Unboxed fields) (Unboxed fields_y)
-             = Some pairs
-             ∧ map (fun '(_, x, _) => x) pairs = vs
-             ∧ Forall2
-                 (fun (fu : field * unboxed_field) (v : variable) =>
-                    (∃ v0 : variable, snd fu = Not_unboxed v0)
-                    ∧ (fst fu, Not_unboxed v) ∈ fields_y)
-                 fields vs).
-  { destruct H as (pairs & vs & -> & Hvs & Hall).
-    exists (map (fun '(_, x, kind) => (Var x, kind)) pairs), vs.
-    split; [ reflexivity | split; [ | exact Hall ] ].
-    rewrite <- Hvs, !map_map. apply map_ext. intros [[a b] c]. reflexivity. }
-  induction fields as [ | [f u] fields IH]; simpl in Hf.
-  - exists [], []. split; [ reflexivity | split; [ reflexivity | ] ].
-    constructor.
-  - apply andb_true_iff in Hf as [Hfu Hf].
-    destruct (IH Hf) as (pairs & vs & Hp & Hvs & Hall).
-    destruct u as [v0 | nested]; [ | discriminate Hfu ].
-    destruct (Keyed.lookup field_eqb f fields_y) as [[v | ] | ] eqn:Hl;
-      try discriminate Hfu.
-    exists ((v0, v, field_kind f) :: pairs), (v :: vs).
-    split; [ | split ].
-    + change (unboxed_field_pairs Value
-                (Unboxed ((f, Not_unboxed v0) :: fields))
-                (Unboxed fields_y))
-        with (match Keyed.lookup field_eqb f fields_y with
-              | Some u' =>
-                match unboxed_field_pairs (field_kind f) (Not_unboxed v0) u',
-                      unboxed_field_pairs Value (Unboxed fields)
-                        (Unboxed fields_y)
-                with
-                | Some p, Some q => Some (p ++ q)
-                | _, _ => None
-                end
-              | None => None
-              end).
-      rewrite Hl, Hp. reflexivity.
-    + simpl. rewrite Hvs. reflexivity.
-    + constructor; [ | exact Hall ]. split; [ exists v0; reflexivity | ].
-      exact (keyed_lookup_in field_eqb field_eqb_decides f _ fields_y Hl).
+  rewrite Hy, Hp. reflexivity.
 Qed.
 
 (* The arguments of an [Apply_cont] to a handler of the unit. *)
@@ -3945,18 +3798,20 @@ Proof.
         destruct (fields_of unboxed y) as [fields_y | ] eqn:Hy;
           [ | discriminate Ha ].
         apply andb_true_iff in Ha as [Hflat Hused].
-        destruct (unboxed_args_flat fields y fields_y Hy Hflat)
-          as (l & vs & Hl & Hlvs & Hall).
-        rewrite Hl. cbn [option_map]. rewrite Hlvs.
-        exists (map Var vs ++ rest). split; [ reflexivity | ].
+        destruct (unboxed_args_pairs fields y fields_y Hy Hflat)
+          as (pairs & Hpairs & Hl).
+        rewrite Hl. cbn [option_map].
+        exists (map (fun '(_, x', _) => Var x') pairs ++ rest).
+        split; [ rewrite map_map; do 2 f_equal; apply map_ext;
+                 intros [[a b] k]; reflexivity | ].
         destruct keep.
         -- cbn [app]. simpl in Hused. unfold kinds_env in Hused.
            cbn [rewrite_simple]. unfold kind_of_variable in Hused |- *.
            cbn [env_kinds] in Hused. rewrite Hused.
-           exact (args_rel_unboxed unboxed _ fields fields_y y vs _ _ Hy Hall
-                    Hrel).
+           exact (args_rel_unboxed unboxed _ fields fields_y y pairs _ _ Hy
+                    Hpairs Hrel).
         -- destruct Hkeep as [Hk | ->]; [ discriminate Hk | ].
-           inversion Hall. subst vs. exact Hrel.
+           cbn in Hpairs. injection Hpairs as <-. exact Hrel.
       * destruct Hd as [[-> ->] | [(kind & ->) ->]].
         -- exists rest. split; [ reflexivity | exact Hrel ].
         -- simpl in Ha. exists (rewrite_simple sol_u en a :: rest).
@@ -4060,8 +3915,7 @@ Proof.
     unfold FlambdaReaperUnboxingRefinesSpec.param_ok in Hx.
     cbn [map fst combine flat_map shape_of_param].
     destruct (fields_of unboxed x) as [fields | ] eqn:Hf.
-    + apply andb_true_iff in Hx as [Hx Hkeep].
-      apply andb_true_iff in Hx as [Hkind Hflat].
+    + apply andb_true_iff in Hx as [Hkind Hkeep].
       apply kind_eqb_eq in Hkind. subst kind.
       split.
       * destruct keep.
@@ -4135,54 +3989,6 @@ Proof.
   - apply IHhs. intros k' h' Hin. apply (Hhs k' h'). right. exact Hin.
 Qed.
 
-Lemma pairs_flat (fields fields_y : unboxed_fields) :
-  forallb
-    (fun '(f, u) =>
-       match u, Keyed.lookup field_eqb f fields_y with
-       | Not_unboxed _, Some (Not_unboxed _) => true
-       | _, _ => false
-       end)
-    fields
-  = true ->
-  ∃ pairs : list (variable * variable * flambda_kind),
-    unboxed_field_pairs Value (Unboxed fields) (Unboxed fields_y)
-    = Some pairs
-    ∧ Forall2
-        (fun (fu : field * unboxed_field)
-             (vvk : variable * variable * flambda_kind) =>
-           let '(v, v', kind) := vvk in
-           snd fu = Not_unboxed v ∧ kind = field_kind (fst fu)
-           ∧ (fst fu, Not_unboxed v') ∈ fields_y)
-        fields pairs.
-Proof.
-  induction fields as [ | [f u] fields IH]; intros Hf; simpl in Hf.
-  - exists []. split; [ reflexivity | constructor ].
-  - apply andb_true_iff in Hf as [Hfu Hf].
-    destruct (IH Hf) as (pairs & Hp & Hall).
-    destruct u as [v0 | nested]; [ | discriminate Hfu ].
-    destruct (Keyed.lookup field_eqb f fields_y) as [[v | ] | ] eqn:Hl;
-      try discriminate Hfu.
-    exists ((v0, v, field_kind f) :: pairs). split.
-    + change (unboxed_field_pairs Value
-                (Unboxed ((f, Not_unboxed v0) :: fields))
-                (Unboxed fields_y))
-        with (match Keyed.lookup field_eqb f fields_y with
-              | Some u' =>
-                match unboxed_field_pairs (field_kind f) (Not_unboxed v0) u',
-                      unboxed_field_pairs Value (Unboxed fields)
-                        (Unboxed fields_y)
-                with
-                | Some p, Some q => Some (p ++ q)
-                | _, _ => None
-                end
-              | None => None
-              end).
-      rewrite Hl, Hp. reflexivity.
-    + constructor; [ | exact Hall ].
-      split; [ reflexivity | split; [ reflexivity | ] ].
-      exact (keyed_lookup_in field_eqb field_eqb_decides f _ fields_y Hl).
-Qed.
-
 Lemma lets_of_pairs (pairs : list (variable * variable * flambda_kind)) :
   ∀ body : expr,
     List.fold_left
@@ -4195,29 +4001,21 @@ Proof.
   simpl. rewrite IH. reflexivity.
 Qed.
 
-(* The fields of an alias of an unboxed variable. *)
-Lemma bind_fields_lets (fields fields_y : unboxed_fields) (body : expr) :
-  forallb
-    (fun '(f, u) =>
-       match u, Keyed.lookup field_eqb f fields_y with
-       | Not_unboxed _, Some (Not_unboxed _) => true
-       | _, _ => false
-       end)
-    fields
-  = true ->
-  ∃ l : list (variable * flambda_kind * simple),
-    bind_fields (Unboxed fields) (Unboxed fields_y) body = Some (lets l body)
-    ∧ alias_entries fields_y fields l.
+(* The fields of a variable unboxed alike: an alias, the field of a
+   block unboxed in turn, or the load of such a field. *)
+Lemma bind_fields_pairs (fields fields_y : unboxed_fields) (body : expr) :
+  fields_alike fields fields_y = true ->
+  ∃ pairs : list (variable * variable * flambda_kind),
+    unboxed_field_pairs Value (Unboxed fields) (Unboxed fields_y)
+    = Some pairs
+    ∧ bind_fields (Unboxed fields) (Unboxed fields_y) body
+      = Some (lets (pairs_lets pairs) body).
 Proof.
-  intros Hf. destruct (pairs_flat fields fields_y Hf) as (pairs & Hp & Hall).
-  exists (map (fun '(x, x', kind) => (x, kind, Var x')) pairs).
-  split; [ unfold bind_fields; rewrite Hp, lets_of_pairs; reflexivity | ].
-  unfold alias_entries. clear -Hall.
-  induction Hall as [ | [f u] [[v v'] kind] fields pairs (Hu & Hk & Hin) _ IH];
-    [ constructor | ].
-  cbn [map]. constructor; [ | exact IH ].
-  simpl in Hu, Hk, Hin. split; [ exact Hu | split; [ exact Hk | ] ].
-  exists v'. split; [ reflexivity | exact Hin ].
+  unfold fields_alike. intros Hf.
+  destruct (unboxed_field_pairs Value (Unboxed fields) (Unboxed fields_y))
+    as [pairs | ] eqn:Hp; [ | discriminate Hf ].
+  exists pairs. split; [ reflexivity | ].
+  unfold bind_fields. rewrite Hp, lets_of_pairs. reflexivity.
 Qed.
 
 Lemma lets_app (l l' : list (variable * flambda_kind * simple))
@@ -4275,18 +4073,20 @@ Proof.
         split; [ reflexivity | split; [ | exact Ha ] ].
         exists i.
         split; [ reflexivity | split; [ reflexivity | exact Hfield ] ].
-    + destruct (bind_fields_lets nested fb body Halike) as (l & Hl & Hal).
+    + destruct (bind_fields_pairs nested fb body Halike)
+        as (pairs & Hp & Hl).
       destruct (IH (fun f' u' Hin => Hfields f' u' (or_intror Hin))
-                  (lets l body)) as (ls & Hls & Hentries).
-      exists (l :: ls). split.
+                  (lets (pairs_lets pairs) body)) as (ls & Hls & Hentries).
+      exists (pairs_lets pairs :: ls). split.
       * simpl List.fold_left. rewrite Hnth, Hkind, kind_eqb_refl.
         cbn [unboxed_of].
         change (unboxed_of_node unboxed (Node_variable b))
           with (fields_of unboxed b).
         rewrite Hb, Hl, Hls. cbn [concat]. rewrite lets_app. reflexivity.
       * constructor; [ | exact Hentries ].
-        cbn [alloc_entry]. exists b, fb.
-        split; [ | split; [ exact Hb | split; [ exact Hxb | exact Hal ] ] ].
+        cbn [alloc_entry]. exists b, fb, pairs.
+        split; [ | split; [ exact Hb | split; [ exact Hxb | ] ] ];
+          [ | split; [ exact Hp | reflexivity ] ].
         exists i.
         split; [ reflexivity | split; [ reflexivity | exact Hfield ] ].
 Qed.
@@ -4585,23 +4385,23 @@ Proof.
       unfold kind_of_variable in Hyused |- *.
       cbn [env_kinds kinds_env] in Hyused. rewrite Hyused.
       unfold rebuild_unboxed_binding.
-      destruct (bind_fields_lets fields fields_y
+      destruct (bind_fields_pairs fields fields_y
                   (rebuild_expr_u F sol cannot_change code_deps
                      preserve_direct_calls unit_code_ids codes unboxed
                      first_fresh_u [] (ubind_variables en [(x, Value)]) body)
                   Hflat)
-        as (l & Hl & Hentries).
+        as (pairs & Hentries & Hl).
       cbn [unboxed_of].
       change (unboxed_of_node unboxed (Node_variable y))
         with (fields_of unboxed y).
       rewrite Hy, Hl.
-      destruct (lets_free_continuations l
+      destruct (lets_free_continuations (pairs_lets pairs)
                   (rebuild_expr_u F sol cannot_change code_deps
                      preserve_direct_calls unit_code_ids codes unboxed
                      first_fresh_u [] (ubind_variables en [(x, Value)]) body))
         as [Hfc Hbs].
-      split; [ exact (ub_alias unboxed _ x y fields fields_y l _ _ Hx Hxf Hy
-                        Hne Hentries IHub)
+      split; [ exact (ub_alias unboxed _ x y fields fields_y pairs _ _ Hx Hxf
+                        Hy Hne Hentries IHub)
              | ].
       cbn [free_continuations_of_expr binds_statics]. rewrite Hfc, Hbs.
       split; assumption.
@@ -4647,14 +4447,14 @@ Proof.
                | ].
         cbn [free_continuations_of_expr binds_statics]. rewrite Hfc, Hbs.
         split; assumption.
-      * destruct (bind_boxed_number_lets bn c fields
+      * destruct (bind_boxed_number_lets x bn c fields
                     (rebuild_named sol (ue_env en) x
                        (Prim (Unary (Box_number bn)) [c])) Hc)
           with (body := rebuild_expr_u F sol cannot_change code_deps
                           preserve_direct_calls unit_code_ids codes unboxed
                           first_fresh_u [] (ubind_variables en [(x, Value)])
                           body)
-          as (l & Hl & Hentries).
+          as (ls & Hl & Hentries).
         { intros Hne. destruct fields as [ | [f u] fields]; [ easy | ].
           destruct (Hfields f u (or_introl eq_refl)) as (v & -> & ->).
           destruct (field_kept x _ _ (Not_unboxed v) c (ue_env en) Hx
@@ -4665,16 +4465,13 @@ Proof.
           rewrite (kept_rewrite _ c Hkept). reflexivity. }
         { intros f u Hin. exact (Hfields f u Hin). }
         unfold rebuild_unboxed_binding. rewrite Hl.
-        destruct (lets_free_continuations l
+        destruct (lets_free_continuations (concat ls)
                     (rebuild_expr_u F sol cannot_change code_deps
                        preserve_direct_calls unit_code_ids codes unboxed
                        first_fresh_u [] (ubind_variables en [(x, Value)])
                        body))
           as [Hfc Hbs].
-        destruct (alloc_entry_flat unboxed x _ fields l Hentries)
-          as [Hentries2 Hconcat].
-        split; [ rewrite <- Hconcat at 1;
-                 exact (ub_alloc unboxed _ x _ fields _ _ _ Hx Hxf Hentries2
+        split; [ exact (ub_alloc unboxed _ x _ fields _ _ _ Hx Hxf Hentries
                           IHub)
                | ].
         cbn [free_continuations_of_expr binds_statics]. rewrite Hfc, Hbs.
@@ -4685,15 +4482,15 @@ Proof.
         change (unboxed_of_node unboxed (Node_variable y))
           with (fields_of unboxed y).
         rewrite Hy, Hny.
-        destruct (bind_fields_lets fields nested
+        destruct (bind_fields_pairs fields nested
                     (rebuild_expr_u F sol cannot_change code_deps
                        preserve_direct_calls unit_code_ids codes unboxed
                        first_fresh_u [] (ubind_variables en [(x, Value)])
                        body)
                     Halike)
-          as (l & Hl & Hentries).
+          as (pairs & Hentries & Hl).
         rewrite Hl.
-        destruct (lets_free_continuations l
+        destruct (lets_free_continuations (pairs_lets pairs)
                     (rebuild_expr_u F sol cannot_change code_deps
                        preserve_direct_calls unit_code_ids codes unboxed
                        first_fresh_u [] (ubind_variables en [(x, Value)])
@@ -4702,7 +4499,7 @@ Proof.
         split.
         -- apply (ub_load unboxed _ x Value _ (Field_block (Z.to_nat i) Value)
                     (rewrite_simple sol (ue_env en) (Var y)) y fields fy
-                    nested l); try assumption.
+                    nested pairs); try assumption.
            ++ reflexivity.
            ++ simpl. destruct (is_var_used sol y _); [ left; reflexivity | ].
               right. eexists. reflexivity.
@@ -5183,3 +4980,1469 @@ Proof.
   do 12 (split; [ vm_compute; reflexivity | ]).
   split; exists 20; vm_compute; reflexivity.
 Qed.
+
+Theorem nested_param_example : nested_param_example_statement.
+Proof.
+  do 13 (split; [ vm_compute; reflexivity | ]).
+  split; exists 20; vm_compute; reflexivity.
+Qed.
+
+Theorem nested_alias_example : nested_alias_example_statement.
+Proof.
+  do 13 (split; [ vm_compute; reflexivity | ]).
+  split; exists 20; vm_compute; reflexivity.
+Qed.
+
+Theorem deep_example : deep_example_statement.
+Proof.
+  do 13 (split; [ vm_compute; reflexivity | ]).
+  split; exists 20; vm_compute; reflexivity.
+Qed.
+
+Theorem unboxed_call_example : unboxed_call_example_statement.
+Proof.
+  split.
+  { intros f Hf. discriminate Hf. }
+  do 19 (split; [ vm_compute; reflexivity | ]).
+  split; [ exists 20; vm_compute; reflexivity | ].
+  split; exists 20; vm_compute; reflexivity.
+Qed.
+
+Theorem unboxed_wrapper_example : unboxed_wrapper_example_statement.
+Proof.
+  split.
+  { intros f Hf. discriminate Hf. }
+  do 18 (split; [ vm_compute; reflexivity | ]).
+  split; exists 30; vm_compute; reflexivity.
+Qed.
+
+(* ======================================================================== *)
+(* With nothing unboxed                                                     *)
+(* ======================================================================== *)
+
+(* The rebuild with unboxing that unboxes nothing is the rebuild of
+   FlambdaReaperCallingConventions.v: the solution without unboxed names
+   is the solution, pointwise ([usage_nil] and the lemmas that follow,
+   without extensionality); the decisions are those of the change of
+   calling conventions, as [Decided] ([code_change_nil],
+   [apply_change_nil], [handler_decisions_nil]); the wrappers agree
+   ([wrapper_u_cc], [wrapper_cc_plain]) where the kinds and lengths of
+   [arities_match] hold, which [cinv] carries for the continuations in
+   scope; [rebuild_nil] by induction on the term, code bodies included. *)
+Module WithoutUnboxing.
+
+Import FlambdaFreshQuantifierSpec FlambdaPrimitiveProofs.
+
+Definition is_decided (d : decision) : bool :=
+  match d with
+  | Decided _ => true
+  | Unbox _ => false
+  end.
+
+Section Without.
+
+Variable F : facts.
+Variable sol : solution.
+Variable cannot_change : node -> bool.
+Variable code_deps : finite_map code_dep.
+Variable preserve_direct_calls : bool.
+Variable unit_code_ids : list code_id.
+Variable codes : finite_map code_metadata.
+Variable first_fresh : positive.
+
+Abbreviation solu := (solution_without_unboxed sol []).
+
+Lemma usage_nil (n : node) : s_has_usage solu n = s_has_usage sol n.
+Proof. destruct n; cbn; rewrite ?andb_true_r; reflexivity. Qed.
+
+Lemma var_used_nil (x : variable) (kind : flambda_kind) :
+  is_var_used solu x kind = is_var_used sol x kind.
+Proof. destruct kind; cbn; rewrite ?andb_true_r; reflexivity. Qed.
+
+Lemma rewrite_simple_nil (en : rebuild_env) (s : simple) :
+  rewrite_simple solu en s = rewrite_simple sol en s.
+Proof.
+  destruct s as [x | sym | c]; cbn [rewrite_simple]; [ | | reflexivity ].
+  - rewrite var_used_nil. reflexivity.
+  - unfold is_symbol_used. rewrite usage_nil. reflexivity.
+Qed.
+
+Lemma rewrite_simples_nil (en : rebuild_env) (l : list simple) :
+  map (rewrite_simple solu en) l = map (rewrite_simple sol en) l.
+Proof. apply map_ext. intros s. apply rewrite_simple_nil. Qed.
+
+Lemma rewrite_or_variable_nil (en : rebuild_env) (s : simple) :
+  rewrite_or_variable solu en s = rewrite_or_variable sol en s.
+Proof.
+  destruct s as [x | sym | c]; cbn [rewrite_or_variable]; try reflexivity.
+  rewrite var_used_nil. reflexivity.
+Qed.
+
+Lemma rebuild_fields_nil (en : rebuild_env) (base : node) (l : list simple) :
+  ∀ i : nat, rebuild_fields solu en base i l = rebuild_fields sol en base i l.
+Proof.
+  induction l as [ | s l IH]; intros i; [ reflexivity | ].
+  cbn [rebuild_fields]. rewrite IH, rewrite_simple_nil. reflexivity.
+Qed.
+
+Lemma rebuild_value_slots_nil (en : rebuild_env) (bound : list node)
+    (l : list (value_slot * simple)) :
+  rebuild_value_slots solu en bound l = rebuild_value_slots sol en bound l.
+Proof.
+  induction l as [ | [w s] l IH]; [ reflexivity | ].
+  unfold rebuild_value_slots in *. cbn [flat_map]. rewrite IH.
+  rewrite rewrite_simple_nil. reflexivity.
+Qed.
+
+Lemma rebuild_named_nil (en : rebuild_env) (x : variable) (d : named) :
+  rebuild_named solu en x d = rebuild_named sol en x d.
+Proof.
+  destruct d as [s | p args | | | | | ]; cbn [rebuild_named];
+    rewrite ?rewrite_simple_nil; try reflexivity.
+  destruct p as [p | p | p | p]; rewrite ?rewrite_simples_nil;
+    try reflexivity;
+    destruct p; rewrite ?rebuild_fields_nil, ?rewrite_simples_nil;
+    reflexivity.
+Qed.
+
+Lemma rebuild_set_nil (en : rebuild_env) (bound : list node) (d : named) :
+  rebuild_set solu en bound d = rebuild_set sol en bound d.
+Proof.
+  destruct d; cbn [rebuild_set]; rewrite ?rebuild_value_slots_nil;
+    reflexivity.
+Qed.
+
+Lemma rebuild_static_const_nil (en : rebuild_env) (s : symbol)
+    (c : static_const) :
+  rebuild_static_const solu en s c = rebuild_static_const sol en s c.
+Proof.
+  destruct c; cbn [rebuild_static_const];
+    rewrite ?rebuild_value_slots_nil, ?rebuild_fields_nil,
+      ?rewrite_or_variable_nil, ?rewrite_simples_nil; reflexivity.
+Qed.
+
+Lemma cofield_nil (in_ : node -> bool) (i : nat) :
+  cofield_has_use F solu in_ i = cofield_has_use F sol in_ i.
+Proof.
+  unfold cofield_has_use. induction (f_parameter F) as [ | [[x j] y] l IH];
+    [ reflexivity | ].
+  cbn [existsb]. rewrite IH, usage_nil. reflexivity.
+Qed.
+
+Lemma arguments_used_by_call_nil (ep : closure_entry_point)
+    (na : list nat) :
+  ∀ cs : allocation_sources,
+    arguments_used_by_call F solu ep cs na
+    = arguments_used_by_call F sol ep cs na.
+Proof.
+  induction na as [ | n na IH]; intros cs; [ reflexivity | ].
+  cbn [arguments_used_by_call]. destruct cs as [ | mem]; [ reflexivity | ].
+  change (get_field_sources F solu) with (get_field_sources F sol).
+  destruct (get_field_sources F sol mem (Field_call_witness ep))
+    as [ | ws]; [ reflexivity | ].
+  f_equal; [ apply map_ext; intros i; apply cofield_nil | ].
+  destruct na; [ reflexivity | apply IH ].
+Qed.
+
+Lemma rebuild_arguments_nil (en : rebuild_env) (ap : apply_expr) :
+  rebuild_arguments F solu en ap = rebuild_arguments F sol en ap.
+Proof.
+  unfold rebuild_arguments. destruct (ap_callee ap);
+    [ | | apply rewrite_simples_nil ];
+    unfold arguments_used_by_known_arity_call,
+      arguments_used_by_unknown_arity_call;
+    change (get_direct_sources solu) with (get_direct_sources sol);
+    rewrite !arguments_used_by_call_nil; reflexivity.
+Qed.
+
+Definition decided (d : param_decision) : decision := Decided d.
+
+Lemma decisions_u_nil (nodes : list node) (kinds : list flambda_kind) :
+  decisions_u sol [] nodes kinds = map decided (decisions_of sol nodes kinds).
+Proof.
+  unfold decisions_u, decisions_of. rewrite map_map. apply map_ext.
+  intros [n k]. reflexivity.
+Qed.
+
+Lemma code_change_nil (id : code_id) (md : code_metadata) :
+  code_change_u sol cannot_change code_deps unit_code_ids [] id md
+  = match
+      code_calling_convention_change sol cannot_change code_deps
+        unit_code_ids id md
+    with
+    | Not_changing_calling_convention => Not_changing_u
+    | Changing_calling_convention pd rd =>
+      Changing_u (map decided pd) (map decided rd)
+    end.
+Proof.
+  unfold code_change_u, code_calling_convention_change.
+  destruct (cannot_change_calling_convention cannot_change unit_code_ids id);
+    [ reflexivity | ].
+  destruct (lookup id code_deps); [ | reflexivity ].
+  rewrite !decisions_u_nil. reflexivity.
+Qed.
+
+Lemma my_closure_nil (id : code_id) :
+  my_closure_decision_u cannot_change code_deps unit_code_ids [] id = None.
+Proof.
+  unfold my_closure_decision_u.
+  destruct (cannot_change_calling_convention cannot_change unit_code_ids id);
+    [ reflexivity | ].
+  destruct (lookup id code_deps); reflexivity.
+Qed.
+
+Lemma apply_my_closure_nil (ap : apply_expr) :
+  apply_my_closure_u F sol cannot_change code_deps unit_code_ids codes [] ap
+  = None.
+Proof.
+  unfold apply_my_closure_u.
+  destruct (code_id_actually_called F sol ap); [ | reflexivity ].
+  destruct (lookup _ codes); [ apply my_closure_nil | reflexivity ].
+Qed.
+
+Lemma apply_change_nil (ap : apply_expr) :
+  apply_change_u F sol cannot_change code_deps unit_code_ids codes [] ap
+  = match
+      apply_calling_convention_change F sol cannot_change code_deps
+        unit_code_ids codes ap
+    with
+    | Not_changing_calling_convention => Not_changing_u
+    | Changing_calling_convention pd rd =>
+      Changing_u (map decided pd) (map decided rd)
+    end.
+Proof.
+  unfold apply_change_u, apply_calling_convention_change,
+    get_calling_convention_change.
+  destruct (code_id_actually_called F sol ap); [ | reflexivity ].
+  destruct (lookup _ codes); [ apply code_change_nil | reflexivity ].
+Qed.
+
+Lemma get_args_with_kinds_nil (en : rebuild_env) (args : list simple) :
+  ∀ ds : list param_decision,
+    get_args_with_kinds_u sol [] en (map decided ds) args
+    = Some (get_args_with_kinds sol en ds args).
+Proof.
+  induction args as [ | a args IH]; intros [ | d ds]; try reflexivity.
+  cbn [map get_args_with_kinds_u]. rewrite IH.
+  unfold get_args_with_kinds. cbn [combine flat_map].
+  destruct d as [kind | ]; cbn [decided]; [ | reflexivity ].
+  rewrite rewrite_simple_nil. reflexivity.
+Qed.
+
+Lemma group_by_sizes_map {A B : Type} (f : A -> B) (sizes : list nat) :
+  ∀ l : list A,
+    group_by_sizes sizes (map f l) = map (map f) (group_by_sizes sizes l).
+Proof.
+  induction sizes as [ | n sizes IH]; intros l; [ reflexivity | ].
+  cbn [group_by_sizes map]. rewrite firstn_map, skipn_map, IH. reflexivity.
+Qed.
+
+Lemma group_by_parameter_map {A B : Type} (f : A -> B) (a : arity)
+    (l : list A) :
+  group_by_parameter a (map f l) = map (map f) (group_by_parameter a l).
+Proof. apply group_by_sizes_map. Qed.
+
+Lemma all_some_cons {A : Type} (o : option A) (l : list (option A)) :
+  all_some (o :: l)
+  = match o, all_some l with
+    | Some a, Some acc => Some (a :: acc)
+    | _, _ => None
+    end.
+Proof. reflexivity. Qed.
+
+Lemma all_some_groups (en : rebuild_env) (l1 : list (list simple)) :
+  ∀ l2 : list (list param_decision),
+    all_some
+      (map
+         (fun '(args, decisions) =>
+            get_args_with_kinds_u sol [] en decisions args)
+         (combine l1 (map (map decided) l2)))
+    = Some
+        (map
+           (fun '(args, decisions) => get_args_with_kinds sol en decisions args)
+           (combine l1 l2)).
+Proof.
+  induction l1 as [ | a l1 IH]; intros [ | ds l2]; try reflexivity.
+  cbn [map combine]. rewrite all_some_cons, IH. cbn beta iota.
+  rewrite get_args_with_kinds_nil. reflexivity.
+Qed.
+
+Lemma prepend_nil {A : Type} (groups : list (list A)) :
+  prepend_first [] groups = groups.
+Proof. destruct groups; reflexivity. Qed.
+
+Lemma decisions_kinds_nil (ds : list param_decision) :
+  decisions_kinds (map decided ds) = kept_kinds ds.
+Proof.
+  induction ds as [ | [k | ] ds IH]; [ reflexivity | | ];
+    cbn [map decisions_kinds flat_map]; unfold decisions_kinds in IH;
+    rewrite IH; reflexivity.
+Qed.
+
+Lemma arity_of_decisions_nil (ds : list param_decision) :
+  arity_of_decisions_u (map decided ds) = arity_of_decisions ds.
+Proof.
+  unfold arity_of_decisions_u, arity_of_decisions.
+  rewrite decisions_kinds_nil. reflexivity.
+Qed.
+
+Lemma arity_of_grouped_nil (gs : list (list param_decision)) :
+  arity_of_grouped_decisions_u
+    (prepend_first [Decided Delete] (map (map decided) gs))
+  = arity_of_grouped_decisions gs.
+Proof.
+  unfold arity_of_grouped_decisions_u, arity_of_grouped_decisions.
+  destruct gs as [ | g gs]; [ reflexivity | ].
+  cbn [map prepend_first app]. f_equal.
+  - change (decisions_kinds (Decided Delete :: map decided g))
+      with (decisions_kinds (map decided g)).
+    rewrite decisions_kinds_nil. reflexivity.
+  - rewrite map_map. apply map_ext. intros g'.
+    rewrite decisions_kinds_nil. reflexivity.
+Qed.
+
+Lemma get_extra_args_nil (en : rebuild_env)
+    (args : list (simple * flambda_kind)) :
+  ∀ ds : list decision,
+    forallb is_decided ds = true ->
+    get_extra_args sol [] en ds args
+    = Some (filter_kept (map is_kept_decision ds)
+              (map (fun '(s, kind) => (rewrite_simple sol en s, kind)) args)).
+Proof.
+  induction args as [ | [s k] args IH]; intros ds Hds;
+    [ destruct ds; reflexivity | ].
+  destruct ds as [ | d ds].
+  - cbn [get_extra_args]. rewrite (IH [] eq_refl), rewrite_simple_nil.
+    reflexivity.
+  - cbn [forallb] in Hds. apply andb_true_iff in Hds as [Hd Hds].
+    cbn [get_extra_args]. rewrite (IH ds Hds).
+    destruct d as [[kind | ] | fields]; cbn in Hd; try discriminate Hd;
+      cbn; rewrite ?rewrite_simple_nil; reflexivity.
+Qed.
+
+Lemma get_args_nil (en : rebuild_env) (args : list simple) :
+  ∀ ds : list decision,
+    forallb is_decided ds = true ->
+    get_args sol [] en ds args
+    = Some (filter_kept (map is_kept_decision ds)
+              (map (rewrite_simple sol en) args)).
+Proof.
+  induction args as [ | a args IH]; intros ds Hds;
+    [ destruct ds; reflexivity | ].
+  destruct ds as [ | d ds].
+  - cbn [get_args]. rewrite (IH [] eq_refl), rewrite_simple_nil.
+    reflexivity.
+  - cbn [forallb] in Hds. apply andb_true_iff in Hds as [Hd Hds].
+    cbn [get_args]. rewrite (IH ds Hds).
+    destruct d as [[kind | ] | fields]; cbn in Hd; try discriminate Hd;
+      cbn; rewrite ?rewrite_simple_nil; reflexivity.
+Qed.
+
+(* The wrappers. *)
+
+Definition kinds_agree (rd : list param_decision) (ks : list flambda_kind)
+    : bool :=
+  forallb
+    (fun '(d, kind) =>
+       match d with
+       | Keep k => kind_eqb k kind
+       | Delete => true
+       end)
+    (combine rd ks).
+
+Lemma freshen_params (rd : list param_decision) :
+  ∀ (ks : list flambda_kind) (next : positive),
+    kinds_agree rd ks = true ->
+    wrapper_params (freshen_decisions (combine (map decided rd) ks) next)
+    = combine
+        (names_from (length (kept_kinds (map fst (combine rd ks)))) next)
+        (kept_kinds (map fst (combine rd ks))).
+Proof.
+  induction rd as [ | [k | ] rd IH]; intros [ | kind ks] next Hk;
+    try reflexivity; unfold kinds_agree in Hk; cbn [combine forallb] in Hk;
+    apply andb_true_iff in Hk as [Hk0 Hk].
+  - apply kind_eqb_eq in Hk0. subst kind.
+    cbn [map combine freshen_decisions decided]. unfold wrapper_params.
+    cbn [flat_map]. fold (wrapper_params
+      (freshen_decisions (combine (map decided rd) ks) (Pos.succ next))).
+    rewrite (IH ks (Pos.succ next) Hk). reflexivity.
+  - cbn [map combine freshen_decisions decided]. unfold wrapper_params.
+    cbn [flat_map app]. fold (wrapper_params
+      (freshen_decisions (combine (map decided rd) ks) next)).
+    rewrite (IH ks next Hk). reflexivity.
+Qed.
+
+Lemma wrapper_args_vars (fd : list (param_decision * flambda_kind)) :
+  ∀ (mask : list bool) (next y : positive),
+    Var y ∈ wrapper_args next mask fd -> (next <= y)%positive.
+Proof.
+  induction fd as [ | [[k | ] kind] fd IH]; intros [ | keep mask] next y Hin;
+    cbn [wrapper_args] in Hin; try destruct Hin.
+  - destruct keep; cbn [app] in Hin.
+    + destruct Hin as [[= <-] | Hin]; [ lia | ].
+      specialize (IH mask (Pos.succ next) y Hin). lia.
+    + specialize (IH mask (Pos.succ next) y Hin). lia.
+  - destruct keep; cbn [app] in Hin.
+    + destruct Hin as [Heq | Hin]; [ discriminate Heq | ].
+      exact (IH mask next y Hin).
+    + exact (IH mask next y Hin).
+Qed.
+
+Lemma args_are_params_wrapper (fd : list (param_decision * flambda_kind)) :
+  ∀ (mask : list bool) (next : positive),
+    length fd <= length mask ->
+    args_are_params (wrapper_args next mask fd)
+      (names_from (length (kept_kinds (map fst fd))) next)
+    = forallb (fun '(keep, (d, _)) => Bool.eqb keep (is_kept d))
+        (combine mask fd).
+Proof.
+  induction fd as [ | [[k | ] kind] fd IH]; intros [ | keep mask] next Hlen;
+    cbn [length] in Hlen; try lia; try reflexivity.
+  - cbn [wrapper_args map kept_kinds flat_map fst app length names_from
+         combine forallb is_kept].
+    change (flat_map _ (map fst fd)) with (kept_kinds (map fst fd)).
+    destruct keep; cbn [app Bool.eqb andb].
+    + cbn [args_are_params]. rewrite Pos.eqb_refl, IH by lia. reflexivity.
+    + destruct (wrapper_args (Pos.succ next) mask fd) as [ | [y | | ] l]
+        eqn:Hw; try reflexivity.
+      cbn [args_are_params].
+      assert (Hy : (Pos.succ next <= y)%positive)
+        by (apply (wrapper_args_vars fd mask); rewrite Hw; left;
+            reflexivity).
+      destruct (Pos.eqb_spec y next); [ lia | reflexivity ].
+  - cbn [wrapper_args map kept_kinds flat_map fst app combine forallb
+         is_kept].
+    change (flat_map _ (map fst fd)) with (kept_kinds (map fst fd)).
+    destruct keep; cbn [app Bool.eqb andb]; [ reflexivity | ].
+    apply IH. lia.
+Qed.
+
+Lemma wrapper_args_firstn (fd : list (param_decision * flambda_kind)) :
+  ∀ (l : list bool) (next : positive),
+    wrapper_args next (firstn (length fd) l) fd = wrapper_args next l fd.
+Proof.
+  induction fd as [ | [[k | ] kind] fd IH]; intros [ | b l] next;
+    try reflexivity; cbn [length firstn wrapper_args]; rewrite IH;
+    reflexivity.
+Qed.
+
+Lemma combine_firstn {A : Type} (fd : list A) :
+  ∀ l : list bool, combine (firstn (length fd) l) fd = combine l fd.
+Proof.
+  induction fd as [ | a fd IH]; intros [ | b l]; try reflexivity.
+  cbn [length firstn combine]. rewrite IH. reflexivity.
+Qed.
+
+Fixpoint keeps_prefix (ads : list decision) (ks : list flambda_kind)
+    : bool :=
+  match ads, ks with
+  | [], _ => true
+  | Decided (Keep k) :: ads, k' :: ks => kind_eqb k k' && keeps_prefix ads ks
+  | Decided Delete :: ads, _ :: ks => keeps_prefix ads ks
+  | _, _ => false
+  end.
+
+Lemma keeps_prefix_decided (ads : list decision) :
+  ∀ ks : list flambda_kind,
+    keeps_prefix ads ks = true -> forallb is_decided ads = true.
+Proof.
+  induction ads as [ | [[k | ] | fields] ads IH]; intros [ | k' ks] H;
+    cbn in H |- *; try discriminate H; try reflexivity.
+  - apply andb_true_iff in H as [_ H]. exact (IH ks H).
+  - exact (IH ks H).
+Qed.
+
+Lemma keeps_prefix_length (ads : list decision) :
+  ∀ ks : list flambda_kind,
+    keeps_prefix ads ks = true -> length ads <= length ks.
+Proof.
+  induction ads as [ | [[k | ] | fields] ads IH]; intros [ | k' ks] H;
+    cbn in H |- *; try discriminate H; try lia.
+  - apply andb_true_iff in H as [_ H]. specialize (IH ks H). lia.
+  - specialize (IH ks H). lia.
+Qed.
+
+Lemma wrapper_args_u_nil (rd : list param_decision) :
+  ∀ (ks : list flambda_kind) (ads : list decision) (next : positive)
+    (m : nat),
+    keeps_prefix ads ks = true -> length (combine rd ks) <= m ->
+    wrapper_args_u ads (freshen_decisions (combine (map decided rd) ks) next)
+    = Some (wrapper_args next (map is_kept_decision ads ++ repeat true m)
+              (combine rd ks)).
+Proof.
+  induction rd as [ | d rd IH]; intros ks ads next m Hads Hm.
+  - destruct ads, m; reflexivity.
+  - destruct ks as [ | kind ks];
+      [ destruct ads as [ | ? [ | ]], m; reflexivity | ].
+    cbn [length combine] in Hm.
+    destruct ads as [ | ad ads].
+    + destruct m as [ | m]; [ lia | ].
+      cbn [map app repeat].
+      destruct d as [k | ]; cbn [map combine freshen_decisions decided
+                                 wrapper_args_u wrapper_args];
+        rewrite (IH ks [] _ m eq_refl ltac:(lia)); reflexivity.
+    + destruct ad as [[kind' | ] | fields]; cbn [keeps_prefix] in Hads;
+        try discriminate Hads;
+        [ apply andb_true_iff in Hads as [Hk Hads];
+          apply kind_eqb_eq in Hk; subst kind' | ];
+        cbn [map app];
+        destruct d as [k | ]; cbn [map combine freshen_decisions decided
+                                   wrapper_args_u wrapper_args];
+          rewrite (IH ks ads _ m Hads ltac:(lia)); reflexivity.
+Qed.
+
+Lemma lookup_map_values' {A B : Type} (f : A -> B) (k : positive)
+    (l : list (positive * A)) :
+  lookup k (map (fun '(k', a) => (k', f a)) l) = option_map f (lookup k l).
+Proof.
+  induction l as [ | [k' a] l IH]; [ reflexivity | ]. cbn [map].
+  rewrite !lookup_cons. destruct (Pos.eqb k k'); [ reflexivity | exact IH ].
+Qed.
+
+Lemma names_from_length (n : nat) :
+  ∀ x : positive, length (names_from n x) = n.
+Proof. induction n as [ | n IH]; intros x; cbn; [ | rewrite IH ]; reflexivity.
+Qed.
+
+Lemma map_fst_combine' {A B : Type} (l : list A) (l' : list B) :
+  length l = length l' -> map fst (combine l l') = l.
+Proof.
+  revert l'. induction l as [ | a l IH]; intros [ | b l'] H; cbn in H |- *;
+    try discriminate H; [ reflexivity | ].
+  rewrite IH by lia. reflexivity.
+Qed.
+
+Lemma map_snd_combine' {A B : Type} (l : list A) (l' : list B) :
+  length l = length l' -> map snd (combine l l') = l'.
+Proof.
+  revert l'. induction l as [ | a l IH]; intros [ | b l'] H; cbn in H |- *;
+    try discriminate H; [ reflexivity | ].
+  rewrite IH by lia. reflexivity.
+Qed.
+
+Lemma firstn_length_app {A : Type} (n : nat) (l l' : list A) :
+  n <= length (l ++ l') -> length (firstn n (l ++ l')) = n.
+Proof. intros H. rewrite length_firstn. lia. Qed.
+
+Lemma wrapper_u_cc (en : unbox_env) (ap : apply_expr)
+    (rd : list param_decision) (ks : list flambda_kind) :
+  env_conts (ue_env en)
+  = map (fun '(k, ds) => (k, map is_kept_decision ds)) (ue_decisions en) ->
+  (∀ ds : list decision,
+     lookup (ap_continuation ap) (ue_decisions en) = Some ds ->
+     keeps_prefix ds ks = true) ->
+  kinds_agree rd ks = true ->
+  make_apply_wrapper_u first_fresh en ap (combine (map decided rd) ks)
+  = make_apply_wrapper_cc first_fresh (ue_env en) ap (combine rd ks).
+Proof.
+  intros Hconts Hpre Hk. unfold make_apply_wrapper_u, make_apply_wrapper_cc,
+    apply_decisions.
+  rewrite Hconts, lookup_map_values'.
+  set (ads := match lookup (ap_continuation ap) (ue_decisions en) with
+              | Some ds => ds
+              | None => []
+              end).
+  assert (Hads : keeps_prefix ads ks = true)
+    by (unfold ads; destruct (lookup _ (ue_decisions en)) eqn:Hl;
+        [ exact (Hpre _ eq_refl) | reflexivity ]).
+  replace (match option_map (map is_kept_decision)
+                   (lookup (ap_continuation ap) (ue_decisions en)) with
+           | Some mask => mask
+           | None => []
+           end)
+    with (map is_kept_decision ads)
+    by (unfold ads; destruct (lookup _ (ue_decisions en)); reflexivity).
+  set (fd := combine rd ks).
+  rewrite (wrapper_args_u_nil rd ks ads first_fresh (length fd) Hads
+             (le_n _)).
+  rewrite (freshen_params rd ks first_fresh Hk). fold fd.
+  rewrite map_fst_combine', map_snd_combine' by apply names_from_length.
+  set (L := map is_kept_decision ads ++ repeat true (length fd)).
+  rewrite <- (wrapper_args_firstn fd L first_fresh).
+  rewrite (args_are_params_wrapper fd (firstn (length fd) L) first_fresh)
+    by (unfold L; rewrite firstn_length_app; [ lia | ];
+        rewrite length_app, repeat_length; lia).
+  reflexivity.
+Qed.
+
+Lemma kept_kinds_keep (ks : list flambda_kind) :
+  kept_kinds (map fst (combine (map Keep ks) ks)) = ks.
+Proof.
+  induction ks as [ | k ks IH]; [ reflexivity | ]. cbn. unfold kept_kinds in IH.
+  rewrite IH. reflexivity.
+Qed.
+
+Lemma forallb_keep (ks : list flambda_kind) :
+  ∀ l : list bool,
+    forallb (fun '(keep, (d, _)) => Bool.eqb keep (is_kept d))
+      (combine l (combine (map Keep ks) ks))
+    = forallb (fun b => b) (firstn (length ks) l).
+Proof.
+  induction ks as [ | k ks IH]; intros [ | b l]; try reflexivity.
+  cbn [map combine forallb length firstn is_kept]. rewrite IH.
+  destruct b; reflexivity.
+Qed.
+
+Lemma forallb_firstn_pad (mask : list bool) :
+  ∀ n : nat,
+    length mask <= n ->
+    forallb (fun b => b) (firstn n (mask ++ repeat true n))
+    = forallb (fun b => b) mask.
+Proof.
+  enough (H : ∀ m n : nat,
+             length mask <= n ->
+             forallb (fun b => b) (firstn n (mask ++ repeat true m))
+             = forallb (fun b => b) mask).
+  { intros n Hn. exact (H n n Hn). }
+  induction mask as [ | b mask IH]; intros m n Hn.
+  - cbn [app]. clear Hn. revert n. induction m as [ | m IHm]; intros n;
+      [ destruct n; reflexivity | ].
+    destruct n as [ | n]; [ reflexivity | ]. cbn. apply (IHm n).
+  - destruct n as [ | n]; cbn [length] in Hn; [ lia | ].
+    cbn [app firstn forallb]. rewrite (IH m n) by lia. reflexivity.
+Qed.
+
+Lemma wrapper_args_keep (ks : list flambda_kind) :
+  ∀ (l : list bool) (next : positive),
+    length ks <= length l ->
+    wrapper_args next l (combine (map Keep ks) ks)
+    = filter_kept l (map Var (names_from (length ks) next)).
+Proof.
+  induction ks as [ | k ks IH]; intros [ | b l] next Hlen;
+    cbn [length] in Hlen; try lia; try reflexivity.
+  cbn [map combine wrapper_args names_from length filter_kept].
+  rewrite IH by lia. destruct b; reflexivity.
+Qed.
+
+Lemma filter_kept_firstn {A : Type} (xs : list A) :
+  ∀ l : list bool, filter_kept (firstn (length xs) l) xs = filter_kept l xs.
+Proof.
+  induction xs as [ | x xs IH]; intros [ | b l]; try reflexivity.
+  cbn [length firstn filter_kept]. rewrite IH. reflexivity.
+Qed.
+
+Lemma filter_kept_pad {A : Type} (mask : list bool) :
+  ∀ (m : nat) (xs : list A),
+    filter_kept (mask ++ repeat true m) xs = filter_kept mask xs.
+Proof.
+  induction mask as [ | b mask IH]; intros m xs.
+  - cbn [app]. revert xs. induction m as [ | m IHm]; intros [ | x xs];
+      try reflexivity.
+    cbn [repeat filter_kept]. rewrite IHm. destruct xs; reflexivity.
+  - destruct xs as [ | x xs]; [ reflexivity | ].
+    cbn [app filter_kept]. rewrite IH. reflexivity.
+Qed.
+
+Lemma wrapper_cc_plain (en : rebuild_env) (ap : apply_expr)
+    (ks : list flambda_kind) :
+  ks = unarize (ap_return_arity ap) ->
+  (∀ mask : list bool,
+     lookup (ap_continuation ap) (env_conts en) = Some mask ->
+     length mask <= length ks) ->
+  make_apply_wrapper_cc first_fresh en ap (combine (map Keep ks) ks)
+  = make_apply_wrapper first_fresh en ap.
+Proof.
+  intros Hks Hlen. unfold make_apply_wrapper_cc, make_apply_wrapper,
+    apply_decisions.
+  rewrite <- Hks.
+  assert (Hn : length (combine (map Keep ks) ks) = length ks)
+    by (rewrite length_combine, length_map; lia).
+  rewrite Hn, forallb_keep, kept_kinds_keep.
+  rewrite firstn_firstn, Nat.min_id.
+  destruct (lookup (ap_continuation ap) (env_conts en)) as [mask | ] eqn:Hl.
+  - specialize (Hlen mask eq_refl).
+    rewrite (forallb_firstn_pad mask (length ks) Hlen).
+    destruct (forallb (fun b => b) mask); [ reflexivity | ].
+    rewrite wrapper_args_keep
+      by (rewrite firstn_length_app; [ lia | ];
+          rewrite length_app, repeat_length; lia).
+    set (xs := map Var (names_from (length ks) first_fresh)).
+    assert (Hxs : length xs = length ks)
+      by (unfold xs; rewrite length_map; apply names_from_length).
+    rewrite <- Hxs, filter_kept_firstn, filter_kept_pad. reflexivity.
+  - rewrite (forallb_firstn_pad [] (length ks) ltac:(cbn; lia)).
+    reflexivity.
+Qed.
+
+(* Continuations and calls. *)
+
+Record cinv (conts : finite_map (list flambda_kind)) (en : unbox_env)
+    : Prop := {
+  ci_drop : ue_drop_projections en = false;
+  ci_conts :
+    env_conts (ue_env en)
+    = map (fun '(k, ds) => (k, map is_kept_decision ds)) (ue_decisions en);
+  ci_prefix :
+    ∀ (k : continuation) (ds : list decision),
+      lookup k (ue_decisions en) = Some ds ->
+      ∃ ks : list flambda_kind,
+        lookup k conts = Some ks ∧ keeps_prefix ds ks = true
+}.
+
+Lemma filter_kept_nil {A : Type} (l : list A) : filter_kept [] l = l.
+Proof. induction l as [ | a l IH]; cbn; [ | rewrite IH ]; reflexivity. Qed.
+
+Lemma lookup_conts (conts : finite_map (list flambda_kind)) (en : unbox_env)
+    (k : continuation) :
+  cinv conts en ->
+  lookup k (env_conts (ue_env en))
+  = option_map (map is_kept_decision) (lookup k (ue_decisions en)).
+Proof. intros Hinv. rewrite (ci_conts _ _ Hinv). apply lookup_map_values'.
+Qed.
+
+Lemma decided_of (conts : finite_map (list flambda_kind)) (en : unbox_env)
+    (k : continuation) (ds : list decision) :
+  cinv conts en -> lookup k (ue_decisions en) = Some ds ->
+  forallb is_decided ds = true.
+Proof.
+  intros Hinv Hl. destruct (ci_prefix _ _ Hinv k ds Hl) as (ks & _ & Hp).
+  exact (keeps_prefix_decided ds ks Hp).
+Qed.
+
+Lemma forallb_tl {A : Type} (p : A -> bool) (l : list A) :
+  forallb p l = true -> forallb p (tl l) = true.
+Proof. destruct l; cbn; [ reflexivity | ]. intros H.
+  apply andb_true_iff in H as [_ H]. exact H. Qed.
+
+Lemma exn_args_nil (conts : finite_map (list flambda_kind))
+    (en : unbox_env) (ap : apply_expr) :
+  cinv conts en ->
+  rebuild_exn_extra_args_u sol [] en ap
+  = Some (rebuild_exn_extra_args sol (ue_env en) ap).
+Proof.
+  intros Hinv. unfold rebuild_exn_extra_args_u, rebuild_exn_extra_args.
+  rewrite (lookup_conts conts en _ Hinv).
+  destruct (lookup (ap_exn_continuation ap) (ue_decisions en)) as [ds | ]
+    eqn:Hl; cbn [option_map].
+  - rewrite (get_extra_args_nil _ _ (tl ds)
+               (forallb_tl _ _ (decided_of conts en _ ds Hinv Hl))).
+    destruct ds; reflexivity.
+  - rewrite (get_extra_args_nil _ _ [] eq_refl). cbn [map].
+    rewrite filter_kept_nil. reflexivity.
+Qed.
+
+Lemma rewrite_apply_cont_nil (conts : finite_map (list flambda_kind))
+    (en : unbox_env) (ac : apply_cont) :
+  cinv conts en ->
+  rewrite_apply_cont_u sol [] en ac = rewrite_apply_cont sol (ue_env en) ac.
+Proof.
+  intros Hinv. unfold rewrite_apply_cont_u, rewrite_apply_cont.
+  destruct (existsb (simple_has_no_source sol) (ac_args ac));
+    [ reflexivity | ].
+  rewrite (lookup_conts conts en _ Hinv).
+  destruct (lookup (ac_continuation ac) (ue_decisions en)) as [ds | ]
+    eqn:Hl; cbn [option_map].
+  - rewrite (get_args_nil _ _ ds (decided_of conts en _ ds Hinv Hl)).
+    reflexivity.
+  - rewrite rewrite_simples_nil. reflexivity.
+Qed.
+
+Lemma rebuild_apply_cont_nil (conts : finite_map (list flambda_kind))
+    (en : unbox_env) (ac : apply_cont) :
+  cinv conts en ->
+  rebuild_apply_cont_u sol [] en ac = rebuild_apply_cont sol (ue_env en) ac.
+Proof.
+  intros Hinv. unfold rebuild_apply_cont_u, rebuild_apply_cont.
+  rewrite (rewrite_apply_cont_nil conts en ac Hinv). reflexivity.
+Qed.
+
+Lemma rebuild_switch_nil (conts : finite_map (list flambda_kind))
+    (en : unbox_env) (scrutinee : simple) (arms : list (Z * apply_cont)) :
+  cinv conts en ->
+  rebuild_switch_u sol [] en scrutinee arms
+  = rebuild_switch sol (ue_env en) scrutinee arms.
+Proof.
+  intros Hinv. unfold rebuild_switch_u, rebuild_switch.
+  rewrite rewrite_simple_nil.
+  assert (Harms :
+            ∀ l : list (Z * apply_cont),
+              flat_map
+                (fun '(d, ac) =>
+                   match rewrite_apply_cont_u sol [] en ac with
+                   | Some ac => [(d, ac)]
+                   | None => []
+                   end)
+                l
+              = flat_map
+                  (fun '(d, ac) =>
+                     match rewrite_apply_cont sol (ue_env en) ac with
+                     | Some ac => [(d, ac)]
+                     | None => []
+                     end)
+                  l).
+  { induction l as [ | [d ac] l IH]; [ reflexivity | ]. cbn [flat_map].
+    rewrite IH, (rewrite_apply_cont_nil conts en ac Hinv). reflexivity. }
+  rewrite Harms. reflexivity.
+Qed.
+
+Lemma keeps_prefix_trans (ds : list decision) :
+  ∀ ks ks' : list flambda_kind,
+    keeps_prefix ds ks = true -> is_prefix ks ks' = true ->
+    keeps_prefix ds ks' = true.
+Proof.
+  induction ds as [ | [[k | ] | fields] ds IH]; intros [ | a ks] [ | b ks']
+    H1 H2; cbn in H1, H2 |- *; try discriminate; try reflexivity.
+  - apply andb_true_iff in H1 as [Hk H1]. apply andb_true_iff in H2 as [Ha H2].
+    apply kind_eqb_eq in Hk, Ha. subst.
+    rewrite (proj2 (kind_eqb_eq b b) eq_refl).
+    exact (IH ks ks' H1 H2).
+  - apply andb_true_iff in H2 as [_ H2]. exact (IH ks ks' H1 H2).
+Qed.
+
+Lemma keep_map_combine (ks : list flambda_kind) :
+  map (fun kind => (Decided (Keep kind), kind)) ks
+  = combine (map decided (map Keep ks)) ks.
+Proof. induction ks as [ | k ks IH]; cbn; [ | rewrite IH ]; reflexivity. Qed.
+
+Lemma kinds_agree_keep (ks : list flambda_kind) :
+  kinds_agree (map Keep ks) ks = true.
+Proof.
+  induction ks as [ | k ks IH]; [ reflexivity | ]. unfold kinds_agree in *.
+  cbn. rewrite IH, (proj2 (kind_eqb_eq k k) eq_refl). reflexivity.
+Qed.
+
+Lemma kinds_agree_decisions (nodes : list node) :
+  ∀ ks : list flambda_kind,
+    kinds_agree (decisions_of sol nodes ks) ks = true.
+Proof.
+  induction nodes as [ | n nodes IH]; intros [ | k ks]; try reflexivity.
+  unfold kinds_agree, decisions_of in *. cbn [combine map forallb].
+  rewrite IH. destruct (is_node_used sol n k); cbn;
+    [ rewrite (proj2 (kind_eqb_eq k k) eq_refl) | ]; reflexivity.
+Qed.
+
+Lemma keeps_prefix_decisions (nodes : list node) :
+  ∀ ks : list flambda_kind,
+    keeps_prefix (map decided (decisions_of sol nodes ks)) ks = true.
+Proof.
+  induction nodes as [ | n nodes IH]; intros [ | k ks]; try reflexivity.
+  unfold decisions_of in *. cbn [combine map].
+  destruct (is_node_used sol n k); cbn [decided keeps_prefix];
+    [ rewrite (proj2 (kind_eqb_eq k k) eq_refl) | ]; apply IH.
+Qed.
+
+Definition results_of (ap : apply_expr) : option (list flambda_kind) :=
+  match code_id_actually_called F sol ap with
+  | Some id =>
+    option_map (fun md => unarize (cm_result_arity md)) (lookup id codes)
+  | None => None
+  end.
+
+Lemma changing_return (ap : apply_expr) (pd rd : list param_decision) :
+  apply_calling_convention_change F sol cannot_change code_deps
+    unit_code_ids codes ap
+  = Changing_calling_convention pd rd ->
+  ∃ (nodes : list node) (ks : list flambda_kind),
+    results_of ap = Some ks ∧ rd = decisions_of sol nodes ks.
+Proof.
+  unfold apply_calling_convention_change, get_calling_convention_change,
+    code_calling_convention_change, results_of.
+  destruct (code_id_actually_called F sol ap) as [id | ]; [ | discriminate ].
+  destruct (lookup id codes) as [md | ]; [ | discriminate ].
+  destruct (cannot_change_calling_convention cannot_change unit_code_ids id);
+    [ discriminate | ].
+  destruct (lookup id code_deps) as [cd | ]; [ | discriminate ].
+  intros [= _ <-]. eexists _, _. split; reflexivity.
+Qed.
+
+Lemma unboxed_of_nil (s : simple) : unboxed_of [] s = None.
+Proof. destruct s; reflexivity. Qed.
+
+Lemma rebuild_apply_nil (conts : finite_map (list flambda_kind))
+    (en : unbox_env) (ap : apply_expr) :
+  cinv conts en ->
+  arities_match results_of code_deps conts (Apply ap) = true ->
+  rebuild_apply_u F sol cannot_change code_deps preserve_direct_calls
+    unit_code_ids codes [] first_fresh en ap
+  = rebuild_apply_cc F sol cannot_change code_deps preserve_direct_calls
+      unit_code_ids codes first_fresh (ue_env en) ap.
+Proof.
+  intros Hinv Hap. cbn [arities_match] in Hap.
+  apply andb_true_iff in Hap as [Hk Hres].
+  set (ks := unarize (ap_return_arity ap)) in *.
+  assert (Hpre : ∀ ds : list decision,
+             lookup (ap_continuation ap) (ue_decisions en) = Some ds ->
+             keeps_prefix ds ks = true).
+  { intros ds Hl. destruct (ci_prefix _ _ Hinv _ ds Hl) as (ks0 & Hl0 & Hp).
+    rewrite Hl0 in Hk. exact (keeps_prefix_trans ds ks0 ks Hp Hk). }
+  unfold rebuild_apply_u, rebuild_apply_cc.
+  rewrite (exn_args_nil conts en ap Hinv), apply_change_nil.
+  destruct (apply_calling_convention_change F sol cannot_change code_deps
+              unit_code_ids codes ap) as [ | pd rd] eqn:Hch.
+  - unfold rebuild_apply.
+    destruct (simple_is_dead sol (ue_env en) (ap_callee ap)
+              || existsb (simple_is_dead sol (ue_env en)) (ap_args ap));
+      [ reflexivity | ].
+    rewrite unboxed_of_nil, rebuild_arguments_nil, keep_map_combine.
+    rewrite wrapper_u_cc;
+      [ | exact (ci_conts _ _ Hinv) | exact Hpre | apply kinds_agree_keep ].
+    apply wrapper_cc_plain; [ reflexivity | ].
+    cbn [ap_continuation]. intros mask Hl.
+    rewrite (lookup_conts conts en _ Hinv) in Hl.
+    destruct (lookup (ap_continuation ap) (ue_decisions en)) as [ds | ]
+      eqn:Hds; [ | discriminate Hl ].
+    injection Hl as <-. rewrite length_map.
+    exact (keeps_prefix_length ds ks (Hpre ds eq_refl)).
+  - destruct (simple_is_dead sol (ue_env en) (ap_callee ap)
+              || existsb (simple_is_dead sol (ue_env en)) (ap_args ap));
+      [ reflexivity | ].
+    rewrite apply_my_closure_nil, group_by_parameter_map, all_some_groups,
+      prepend_nil, unboxed_of_nil, arity_of_decisions_nil.
+    destruct (changing_return ap pd rd Hch) as (nodes & ks0 & Hr & ->).
+    rewrite Hr in Hres. apply FlambdaSemanticsProofs.kinds_eqb_eq in Hres.
+    subst ks0.
+    apply wrapper_u_cc;
+      [ exact (ci_conts _ _ Hinv) | exact Hpre | apply kinds_agree_decisions ].
+
+Qed.
+
+(* Handlers. *)
+
+Definition decide_param (p : (variable * flambda_kind) * bool) : decision :=
+  let '((_, kind), keep) := p in Decided (if keep then Keep kind else Delete).
+
+Lemma handler_decisions_nil (is_exn : bool) (params : list variable)
+    (md : handler_metadata) (handler : expr) :
+  handler_decisions sol [] is_exn (Handler params md handler)
+  = map decide_param
+      (combine (with_kinds params (hm_params_kinds md))
+         (handler_mask sol is_exn (Handler params md handler))).
+Proof.
+  unfold handler_decisions, handler_mask. apply map_ext.
+  intros [[x kind] keep]. reflexivity.
+Qed.
+
+Lemma kept_decide_params (bound : list (variable * flambda_kind)) :
+  ∀ mask : list bool,
+    length mask = length bound ->
+    map is_kept_decision (map decide_param (combine bound mask)) = mask.
+Proof.
+  induction bound as [ | b bound IH]; intros [ | keep mask] Hlen;
+    cbn in Hlen |- *; try lia; try reflexivity.
+  destruct b as [x kind]. rewrite IH by lia. destruct keep; reflexivity.
+Qed.
+
+Lemma with_kinds_length' (params : list variable) :
+  ∀ kinds : list flambda_kind, length (with_kinds params kinds) = length params.
+Proof.
+  induction params as [ | p params IH]; intros [ | k kinds]; cbn;
+    rewrite ?IH; reflexivity.
+Qed.
+
+Lemma mask_length (is_exn : bool) (params : list variable)
+    (md : handler_metadata) (handler : expr) :
+  length (handler_mask sol is_exn (Handler params md handler))
+  = length (with_kinds params (hm_params_kinds md)).
+Proof. unfold handler_mask, params_to_keep. apply length_map. Qed.
+
+Lemma kept_handler_decisions (is_exn : bool) (h : continuation_handler) :
+  map is_kept_decision (handler_decisions sol [] is_exn h)
+  = handler_mask sol is_exn h.
+Proof.
+  destruct h as [params md handler]. rewrite handler_decisions_nil.
+  apply kept_decide_params. apply mask_length.
+Qed.
+
+Lemma with_kinds_combine' (params : list variable)
+    (kinds : list flambda_kind) :
+  length params = length kinds ->
+  with_kinds params kinds = combine params kinds.
+Proof.
+  revert kinds. induction params as [ | p params IH]; intros [ | k kinds] Hlen;
+    cbn in Hlen |- *; try discriminate Hlen; [ reflexivity | ].
+  rewrite IH by lia. reflexivity.
+Qed.
+
+Lemma keeps_prefix_params (params : list variable) :
+  ∀ (kinds : list flambda_kind) (mask : list bool),
+    length params = length kinds -> length mask = length params ->
+    keeps_prefix (map decide_param (combine (combine params kinds) mask))
+      kinds
+    = true.
+Proof.
+  induction params as [ | p params IH]; intros [ | k kinds] [ | keep mask]
+    H1 H2; cbn in H1, H2 |- *; try lia; try reflexivity.
+  destruct keep; cbn [keeps_prefix];
+    [ rewrite (proj2 (kind_eqb_eq k k) eq_refl) | ]; apply IH; lia.
+Qed.
+
+Lemma keeps_prefix_handler (is_exn : bool) (h : continuation_handler) :
+  length (handler_variables h) = length (handler_kinds h) ->
+  keeps_prefix (handler_decisions sol [] is_exn h) (handler_kinds h) = true.
+Proof.
+  destruct h as [params md handler]. cbn [handler_variables handler_kinds].
+  intros Hlen. rewrite handler_decisions_nil.
+  pose proof (mask_length is_exn params md handler) as Hm.
+  rewrite with_kinds_combine' in Hm |- * by exact Hlen.
+  apply keeps_prefix_params; [ exact Hlen | ].
+  rewrite Hm, length_combine. lia.
+Qed.
+
+Lemma params_of_decide (bound : list (variable * flambda_kind)) :
+  ∀ mask : list bool,
+    length mask = length bound ->
+    params_of_decisions bound (map decide_param (combine bound mask))
+    = filter_kept mask bound.
+Proof.
+  induction bound as [ | [x kind] bound IH]; intros [ | keep mask] Hlen;
+    cbn in Hlen |- *; try lia; try reflexivity.
+  rewrite IH by lia. destruct keep; reflexivity.
+Qed.
+
+Lemma filter_kept_combine_fst {A B : Type} (l : list A) :
+  ∀ (l' : list B) (mask : list bool),
+    length l = length l' ->
+    map fst (filter_kept mask (combine l l')) = filter_kept mask l.
+Proof.
+  induction l as [ | a l IH]; intros [ | b l'] [ | keep mask] Hlen;
+    cbn in Hlen |- *; try lia; try reflexivity.
+  - rewrite IH by lia. reflexivity.
+  - destruct keep; cbn; rewrite IH by lia; reflexivity.
+Qed.
+
+Lemma filter_kept_combine_snd {A B : Type} (l : list A) :
+  ∀ (l' : list B) (mask : list bool),
+    length l = length l' ->
+    map snd (filter_kept mask (combine l l')) = filter_kept mask l'.
+Proof.
+  induction l as [ | a l IH]; intros [ | b l'] [ | keep mask] Hlen;
+    cbn in Hlen |- *; try lia; try reflexivity.
+  - rewrite IH by lia. reflexivity.
+  - destruct keep; cbn; rewrite IH by lia; reflexivity.
+Qed.
+
+(* Code. *)
+
+Lemma changing_code (id : code_id) (md : code_metadata)
+    (pd rd : list param_decision) :
+  code_calling_convention_change sol cannot_change code_deps unit_code_ids id
+    md
+  = Changing_calling_convention pd rd ->
+  ∃ cd : code_dep,
+    lookup id code_deps = Some cd
+    ∧ pd = decisions_of sol (cd_params cd) (unarize (cm_params_arity md))
+    ∧ rd = decisions_of sol (cd_return cd) (unarize (cm_result_arity md)).
+Proof.
+  unfold code_calling_convention_change.
+  destruct (cannot_change_calling_convention cannot_change unit_code_ids id);
+    [ discriminate | ].
+  destruct (lookup id code_deps) as [cd | ]; [ | discriminate ].
+  intros [= <- <-]. exists cd. split; [ reflexivity | split; reflexivity ].
+Qed.
+
+Lemma decisions_of_length (nodes : list node) (ks : list flambda_kind) :
+  length (decisions_of sol nodes ks) = Nat.min (length nodes) (length ks).
+Proof. unfold decisions_of. rewrite length_map. apply length_combine. Qed.
+
+Lemma code_params_nil (params : list variable) :
+  ∀ pd : list param_decision,
+    length params <= length pd ->
+    map fst
+      (flat_map (fun '(x, d) => decision_params x (param_decision_at [] x d))
+         (combine params (map decided pd)))
+    = filter_kept (map is_kept pd) params.
+Proof.
+  induction params as [ | p params IH]; intros [ | d pd] Hlen;
+    cbn in Hlen |- *; try lia; try reflexivity.
+  destruct d as [k | ]; cbn; rewrite IH by lia; reflexivity.
+Qed.
+
+Lemma metadata_nil (md : code_metadata) (pd rd : list param_decision) :
+  changed_code_metadata_u md (Decided Delete) (map decided pd)
+    (map decided rd)
+  = changed_code_metadata md pd rd.
+Proof.
+  unfold changed_code_metadata_u, changed_code_metadata.
+  rewrite group_by_parameter_map, arity_of_grouped_nil, arity_of_decisions_nil.
+  reflexivity.
+Qed.
+
+(* The rebuilds. *)
+
+Abbreviation urb en e :=
+  (rebuild_expr_u F sol cannot_change code_deps preserve_direct_calls
+     unit_code_ids codes [] first_fresh [] en e).
+Abbreviation crb en e :=
+  (rebuild_expr_cc F sol cannot_change code_deps preserve_direct_calls
+     unit_code_ids codes first_fresh en e).
+
+Lemma cinv_bind (conts : finite_map (list flambda_kind)) (en : unbox_env)
+    (bound : list (variable * flambda_kind)) (projections : list variable) :
+  cinv conts en -> cinv conts (ubind_set en bound projections false).
+Proof.
+  intros [Hd Hc Hp]. split; [ reflexivity | exact Hc | exact Hp ].
+Qed.
+
+Lemma cinv_cont (conts : finite_map (list flambda_kind)) (en : unbox_env)
+    (k : continuation) (ds : list decision) (ks : list flambda_kind) :
+  cinv conts en -> keeps_prefix ds ks = true ->
+  cinv ((k, ks) :: conts) (ubind_continuations en [(k, ds)]).
+Proof.
+  intros [Hd Hc Hp] Hds. split; [ reflexivity | | ].
+  - cbn [ubind_continuations ue_env env_conts bind_continuations
+         ue_decisions map app].
+    rewrite Hc. reflexivity.
+  - intros k' ds'. cbn [ubind_continuations ue_decisions app].
+    rewrite !lookup_cons. destruct (Pos.eqb k' k).
+    + intros [= <-]. exists ks. split; [ reflexivity | exact Hds ].
+    + apply Hp.
+Qed.
+
+Lemma lookup_handlers {B : Type} (f : continuation_handler -> B)
+    (k : continuation) (handlers : list (continuation * continuation_handler)) :
+  lookup k (map (fun '(k, h) => (k, f h)) handlers)
+  = option_map f (lookup k handlers).
+Proof.
+  induction handlers as [ | [k' h] l IH]; [ reflexivity | ]. cbn [map].
+  rewrite !lookup_cons. destruct (Pos.eqb k k'); [ reflexivity | exact IH ].
+Qed.
+
+Lemma cinv_rec (conts : finite_map (list flambda_kind)) (en : unbox_env)
+    (handlers : list (continuation * continuation_handler)) :
+  cinv conts en ->
+  (∀ (k : continuation) (h : continuation_handler),
+     (k, h) ∈ handlers ->
+     length (handler_variables h) = length (handler_kinds h)) ->
+  cinv (map (fun '(k, h) => (k, handler_kinds h)) handlers ++ conts)
+    (ubind_continuations en
+       (map (fun '(k, h) => (k, handler_decisions sol [] false h)) handlers)).
+Proof.
+  intros [Hd Hc Hp] Hlen. split; [ reflexivity | | ].
+  - cbn [ubind_continuations ue_env env_conts bind_continuations
+         ue_decisions]. rewrite Hc, map_app. reflexivity.
+  - intros k ds. cbn [ubind_continuations ue_decisions].
+    rewrite !lookup_app.
+    rewrite (lookup_handlers (handler_decisions sol [] false) k handlers),
+      (lookup_handlers handler_kinds k handlers).
+    destruct (lookup k handlers) as [h | ] eqn:Hl; cbn [option_map].
+    + intros [= <-]. exists (handler_kinds h). split; [ reflexivity | ].
+      apply keeps_prefix_handler. apply (Hlen k h).
+      exact (lookup_in k h handlers Hl).
+    + apply Hp.
+Qed.
+
+Lemma unboxed_names_nil (l : list variable) :
+  existsb (fun y => is_unboxed_name [] (Node_variable y)) l = false.
+Proof. induction l as [ | y l IH]; [ reflexivity | exact IH ]. Qed.
+
+Lemma rename_projection_nil (d : named) : rename_projection [] d = d.
+Proof.
+  destruct d as [ | | | | | | m m' closure]; try reflexivity.
+  destruct closure; reflexivity.
+Qed.
+
+Lemma rebuild_let_u_nil (en : rebuild_env) (x : variable)
+    (kind : flambda_kind) (d : named) (body : expr) :
+  rebuild_let_u sol [] [] en x kind d body
+  = Let x kind (rebuild_named sol en x d) body.
+Proof.
+  unfold rebuild_let_u. rewrite rebuild_named_nil.
+  destruct (field_read d) as [[f arg] | ]; [ | reflexivity ].
+  rewrite unboxed_of_nil. destruct arg; reflexivity.
+Qed.
+
+Lemma static_set_repr_nil (s : symbol) (const : static_const) :
+  static_set_repr [] s const = None.
+Proof.
+  destruct const as [ | slot closure_symbols function_decls value_slots
+                    | | | | ]; try reflexivity.
+  cbn [static_set_repr]. induction closure_symbols as [ | [? ?] l IH];
+    [ reflexivity | exact IH ].
+Qed.
+
+Lemma rebuild_code_nil (id : code_id) (params : list variable)
+    (mc : variable) (ret exn : continuation) (md : code_metadata)
+    (cbody : expr) :
+  (∀ (conts : finite_map (list flambda_kind)) (en : unbox_env),
+     cinv conts en -> arities_match results_of code_deps conts cbody = true ->
+     urb en cbody = crb (ue_env en) cbody) ->
+  length params = length (unarize (cm_params_arity md)) ->
+  (∀ cd : code_dep,
+     lookup id code_deps = Some cd -> length params <= length (cd_params cd)) ->
+  arities_match results_of code_deps [(ret, unarize (cm_result_arity md))]
+    cbody
+  = true ->
+  rebuild_code_u F sol cannot_change code_deps preserve_direct_calls
+    unit_code_ids codes [] first_fresh [] id (Code params mc ret exn md cbody)
+  = rebuild_code_cc F sol cannot_change code_deps preserve_direct_calls
+      unit_code_ids codes first_fresh id (Code params mc ret exn md cbody).
+Proof.
+  intros Hbody Hp Hcd Hm. cbn [rebuild_code_u rebuild_code_cc].
+  rewrite code_change_nil.
+  destruct (code_calling_convention_change sol cannot_change code_deps
+              unit_code_ids id md) as [ | pd rd] eqn:Hc.
+  - f_equal. destruct (existsb _ _); [ reflexivity | ].
+    apply (Hbody [(ret, unarize (cm_result_arity md))]); [ | exact Hm ].
+    split; [ reflexivity | reflexivity | ].
+    intros k ds Hl. discriminate Hl.
+  - rewrite my_closure_nil.
+    destruct (changing_code id md pd rd Hc) as (cd & Hcdl & -> & ->).
+    f_equal.
+    + cbn [decision_params app]. apply code_params_nil.
+      rewrite decisions_of_length. specialize (Hcd cd Hcdl). lia.
+    + apply metadata_nil.
+    + destruct (existsb _ _); [ reflexivity | ].
+      replace (map is_kept (decisions_of sol (cd_return cd)
+                              (unarize (cm_result_arity md))))
+        with (map is_kept_decision
+                (map decided (decisions_of sol (cd_return cd)
+                                (unarize (cm_result_arity md)))))
+        by (rewrite map_map; reflexivity).
+      apply (Hbody [(ret, unarize (cm_result_arity md))]); [ | exact Hm ].
+      split; [ reflexivity | reflexivity | ].
+      intros k ds. cbn [ubind_variables ubind_variables_then ubind_set
+                        ue_decisions ubind_continuations empty_unbox_env app].
+      rewrite lookup_cons.
+      destruct (Pos.eqb_spec k ret) as [-> | _]; [ | discriminate ].
+      intros [= <-]. exists (unarize (cm_result_arity md)).
+      split; [ apply lookup_head | apply keeps_prefix_decisions ].
+Qed.
+
+Lemma rebuild_nil :
+  (∀ e : expr,
+     ∀ (conts : finite_map (list flambda_kind)) (en : unbox_env),
+       cinv conts en -> arities_match results_of code_deps conts e = true ->
+       urb en e = crb (ue_env en) e)
+  ∧ (∀ h : continuation_handler,
+       ∀ (conts : finite_map (list flambda_kind)) (en : unbox_env)
+         (dead is_exn : bool),
+         cinv conts en ->
+         handler_arities_match results_of code_deps conts h = true ->
+         rebuild_handler_u F sol cannot_change code_deps preserve_direct_calls
+           unit_code_ids codes [] first_fresh [] en dead
+           (handler_decisions sol [] is_exn h) h
+         = rebuild_handler_cc F sol cannot_change code_deps
+             preserve_direct_calls unit_code_ids codes first_fresh
+             (ue_env en) dead (handler_mask sol is_exn h) h).
+Proof.
+  apply FlambdaReaperFlowProofs.expr_handler_ind.
+  - (* Let *)
+    intros x kind d body IH conts en Hinv Hm. cbn [arities_match] in Hm.
+    cbn [rebuild_expr_u rebuild_expr_cc].
+    destruct (is_pending_projection (ue_env en) x d).
+    + rewrite (ci_drop _ _ Hinv), rename_projection_nil. f_equal.
+      apply (IH conts); [ apply cinv_bind, Hinv | exact Hm ].
+    + destruct d as [s | p args | id vs | slot decls vs | w c | pf w c
+                     | m m' c];
+        try (destruct (is_dead_var sol x kind); [ reflexivity | ];
+             destruct (is_var_used sol x kind);
+             [ unfold unboxed_of_node, changed_of_node; cbn [Keyed.lookup];
+               rewrite rebuild_let_u_nil; f_equal;
+               apply (IH conts); [ apply cinv_bind, Hinv | exact Hm ]
+             | apply (IH conts); [ apply cinv_bind, Hinv | exact Hm ] ]).
+      all: destruct (is_dead_var sol x kind || _); [ reflexivity | ];
+        rewrite unboxed_names_nil;
+        destruct (is_var_used sol x kind || _);
+        [ unfold rebuild_set_u, changed_of_node; cbn [Keyed.lookup];
+          rewrite rebuild_set_nil; f_equal;
+          apply (IH conts); [ apply cinv_bind, Hinv | exact Hm ]
+        | apply (IH conts); [ apply cinv_bind, Hinv | exact Hm ] ].
+  - (* Let_static *)
+    intros bindings body Hcodes IH conts en Hinv Hm.
+    cbn [arities_match] in Hm. apply andb_true_iff in Hm as [Hb Hm].
+    cbn [rebuild_expr_u rebuild_expr_cc]. f_equal.
+    + rewrite forallb_forall in Hb. clear IH Hm.
+      induction bindings as [ | b bindings IHb]; [ reflexivity | ].
+      cbn [flat_map]. f_equal.
+      * destruct b as [id c | id | s const].
+        -- cbn [rebuild_binding_u rebuild_binding_cc].
+           destruct (is_code_id_used sol id); [ | reflexivity ].
+           destruct c as [params mc ret exn md cbody].
+           specialize (Hb _ (or_introl eq_refl)). cbn beta iota in Hb.
+           apply andb_true_iff in Hb as [Hb Hm].
+           apply andb_true_iff in Hb as [Hp Hcd].
+           apply Nat.eqb_eq in Hp.
+           f_equal. f_equal.
+           apply rebuild_code_nil; [ | exact Hp | | exact Hm ].
+           ++ exact (Hcodes id (Code params mc ret exn md cbody)
+                       (or_introl eq_refl)).
+           ++ intros cd Hl. rewrite Hl in Hcd. apply Nat.leb_le, Hcd.
+        -- reflexivity.
+        -- cbn [rebuild_binding_u rebuild_binding_cc].
+           rewrite static_set_repr_nil, rebuild_static_const_nil.
+           reflexivity.
+      * apply IHb.
+        -- intros id c Hin. apply (Hcodes id c). right. exact Hin.
+        -- intros x Hin. apply Hb. right. exact Hin.
+    + apply (IH conts); [ apply cinv_bind, Hinv | exact Hm ].
+  - (* Let_cont_non_recursive *)
+    intros k h body IHh IH conts en Hinv Hm. cbn [arities_match] in Hm.
+    apply andb_true_iff in Hm as [Hh Hm].
+    cbn [rebuild_expr_u rebuild_expr_cc].
+    assert (Hlen : length (handler_variables h) = length (handler_kinds h))
+      by (destruct h; cbn in Hh |- *; apply andb_true_iff in Hh as [Hh _];
+          apply Nat.eqb_eq, Hh).
+    pose proof (cinv_cont conts en k _ _ Hinv
+                  (keeps_prefix_handler (handler_is_exn_handler h) h Hlen))
+      as Hinv'.
+    rewrite (IH _ _ Hinv' Hm). cbn [ubind_continuations ue_env map].
+    rewrite kept_handler_decisions.
+    destruct (among k _); [ | reflexivity ].
+    f_equal. exact (IHh conts en true _ Hinv Hh).
+  - (* Let_cont_recursive *)
+    intros handlers body IHh IH conts en Hinv Hm.
+    cbn [arities_match] in Hm. apply andb_true_iff in Hm as [Hhs Hm].
+    rewrite forallb_forall in Hhs.
+    assert (Hlen : ∀ k h, (k, h) ∈ handlers ->
+                     length (handler_variables h) = length (handler_kinds h)).
+    { intros k h Hin. specialize (Hhs _ Hin). destruct h; cbn in Hhs |- *.
+      apply andb_true_iff in Hhs as [Hhs _]. apply Nat.eqb_eq, Hhs. }
+    pose proof (cinv_rec conts en handlers Hinv Hlen) as Hinv'.
+    cbn [rebuild_expr_u rebuild_expr_cc].
+    assert (Henv :
+              ue_env
+                (ubind_continuations en
+                   (map (fun '(k, h) => (k, handler_decisions sol [] false h))
+                      handlers))
+              = bind_continuations (ue_env en)
+                  (map (fun '(k, h) => (k, handler_mask sol false h))
+                     handlers)).
+    { cbn [ubind_continuations ue_env]. f_equal. rewrite map_map.
+      apply map_ext. intros [k h]. rewrite kept_handler_decisions.
+      reflexivity. }
+    rewrite <- Henv. f_equal.
+    + apply map_ext_in. intros [k h] Hin. f_equal.
+      apply (IHh k h Hin _ _ false false Hinv'). exact (Hhs _ Hin).
+    + exact (IH _ _ Hinv' Hm).
+  - (* Apply *)
+    intros ap conts en Hinv Hm. cbn [rebuild_expr_u rebuild_expr_cc].
+    exact (rebuild_apply_nil conts en ap Hinv Hm).
+  - intros ac conts en Hinv _. cbn [rebuild_expr_u rebuild_expr_cc].
+    exact (rebuild_apply_cont_nil conts en ac Hinv).
+  - intros scrutinee arms conts en Hinv _.
+    cbn [rebuild_expr_u rebuild_expr_cc].
+    exact (rebuild_switch_nil conts en scrutinee arms Hinv).
+  - intros conts en _ _. reflexivity.
+  - (* Handler *)
+    intros params md handler IH conts en dead is_exn Hinv Hh.
+    cbn [handler_arities_match] in Hh. apply andb_true_iff in Hh as [Hl Hm].
+    apply Nat.eqb_eq in Hl.
+    cbn [rebuild_handler_u rebuild_handler_cc].
+    rewrite handler_decisions_nil.
+    rewrite params_of_decide by apply mask_length.
+    rewrite with_kinds_combine' by exact Hl.
+    rewrite filter_kept_combine_fst, filter_kept_combine_snd by exact Hl.
+    f_equal. destruct (dead && _); [ reflexivity | ].
+    apply (IH conts); [ apply cinv_bind, Hinv | exact Hm ].
+Qed.
+
+End Without.
+
+Lemma fold_prefix {A B C : Type} (g : list A * B -> C -> list A * B)
+    (Hg : ∀ (acc : list A) (n : B) (c : C),
+            g (acc, n) c = (acc, n)
+            ∨ ∃ (y : A) (n' : B), g (acc, n) c = (acc ++ [y], n'))
+    (l : list C) :
+  ∀ (acc : list A) (n : B),
+    ∃ extra : list A, fst (List.fold_left g l (acc, n)) = acc ++ extra.
+Proof.
+  induction l as [ | c l IH]; intros acc n.
+  - exists []. rewrite app_nil_r. reflexivity.
+  - cbn [List.fold_left].
+    destruct (Hg acc n c) as [H | (y & n' & H)]; rewrite H.
+    + exact (IH acc n).
+    + destruct (IH (acc ++ [y]) n') as (extra & He). exists (y :: extra).
+      rewrite He, <- app_assoc. reflexivity.
+Qed.
+
+Lemma fold_nil_next {A B C : Type} (g : list A * B -> C -> list A * B)
+    (Hg : ∀ (acc : list A) (n : B) (c : C),
+            g (acc, n) c = (acc, n)
+            ∨ ∃ (y : A) (n' : B), g (acc, n) c = (acc ++ [y], n'))
+    (l : list C) :
+  ∀ (acc : list A) (n : B),
+    fst (List.fold_left g l (acc, n)) = [] ->
+    snd (List.fold_left g l (acc, n)) = n.
+Proof.
+  induction l as [ | c l IH]; intros acc n Hnil; [ reflexivity | ].
+  cbn [List.fold_left] in Hnil |- *.
+  destruct (Hg acc n c) as [H | (y & n' & H)]; rewrite H in Hnil |- *.
+  - exact (IH acc n Hnil).
+  - exfalso. destruct (fold_prefix g Hg l (acc ++ [y]) n') as (extra & He).
+    rewrite He in Hnil. destruct acc; discriminate Hnil.
+Qed.
+
+Lemma unit_unboxed_next (F : facts) (T : tables)
+    (dominated : list (node * node)) (to_unbox : list node) (e : expr)
+    (next : positive) :
+  unit_unboxed_fields F T dominated to_unbox e = ([], next) ->
+  next = FlambdaNameAbstractionSpec.fresh_name
+    (FlambdaRenameApartSpec.names_of e).
+Proof.
+  unfold unit_unboxed_fields, unboxed_fields_of_names. intros H.
+  match type of H with
+  | List.fold_left ?g _ _ = _ =>
+    assert (Hg : ∀ acc n c,
+               g (acc, n) c = (acc, n)
+               ∨ ∃ y n', g (acc, n) c = (acc ++ [y], n'))
+  end.
+  { intros acc n [a x]. cbn beta iota.
+    destruct (_ && _); [ right | left; reflexivity ].
+    match goal with
+    | |- context [match ?t with pair _ _ => _ end] =>
+      destruct t as [fields n']
+    end.
+    eexists _, _. reflexivity. }
+  pose proof (fold_nil_next _ Hg dominated []
+                (FlambdaNameAbstractionSpec.fresh_name
+                   (FlambdaRenameApartSpec.names_of e)))
+    as Hn.
+  rewrite H in Hn. exact (Hn eq_refl).
+Qed.
+
+Lemma rebuild_unbox_without_unboxing (F : facts) (T : tables)
+    (cannot_change : list node) (code_deps : finite_map code_dep)
+    (dominated : list (node * node)) (to_unbox : list node)
+    (preserve_direct_calls : bool) (e : expr) :
+  fst (unit_unboxed_fields F T dominated to_unbox e) = [] ->
+  arities_match (call_results F T e) code_deps [] e = true ->
+  rebuild_unit_unbox F T cannot_change code_deps dominated to_unbox
+    preserve_direct_calls e
+  = rebuild_unit_cc_from_tables F T cannot_change code_deps
+      preserve_direct_calls e.
+Proof.
+  intros Hnil Hm.
+  unfold rebuild_unit_unbox, rebuild_unit_unbox_repr,
+    rebuild_unit_cc_from_tables, rebuild_unit_cc.
+  destruct (unit_unboxed_fields F T dominated to_unbox e)
+    as [unboxed next] eqn:Hu.
+  cbn [fst] in Hnil. subst unboxed.
+  rewrite <- (unit_unboxed_next F T dominated to_unbox e next Hu).
+  change (unit_changed_representations (fun _ => false) F T dominated
+            to_unbox [] e)
+    with (@nil (node * closure_repr)).
+  exact (proj1 (rebuild_nil F (solution_of_tables T)
+                  (fun n => mem_node n cannot_change) code_deps
+                  preserve_direct_calls
+                  (FlambdaWellFormedSpec.static_names code_ids_bound e)
+                  (bound_code_metadata e) next)
+           e [] empty_unbox_env
+           ltac:(split; [ reflexivity | reflexivity | discriminate ]) Hm).
+Qed.
+
+End WithoutUnboxing.
+
+Theorem rebuild_unbox_without_unboxing :
+  rebuild_unbox_without_unboxing_statement.
+Proof.
+  intros F T cannot_change code_deps dominated to_unbox preserve_direct_calls e.
+  apply WithoutUnboxing.rebuild_unbox_without_unboxing.
+Qed.
+
+Theorem rebuild_unbox_without_unboxing_observably :
+  rebuild_unbox_without_unboxing_observably_statement.
+Proof.
+  intros flag is_local u e T cannot_change dominated to_unbox
+    preserve_direct_calls Hlocal Hproj Hfrag Hstatic Hcc Hkinded Hwf Hone
+    Hclosed Hexact Hcc_closed Hwidgets Hwitness Hnil Hm.
+  rewrite (rebuild_unbox_without_unboxing (traverse_unit flag u e) T
+             cannot_change (unit_code_deps flag u e) dominated to_unbox
+             preserve_direct_calls e Hnil Hm).
+  exact (FlambdaReaperCallingConventionsProofs.rebuild_cc_refines_observably
+           flag is_local u e T cannot_change preserve_direct_calls Hlocal
+           Hproj Hfrag Hstatic Hcc Hkinded Hwf Hone Hclosed Hexact Hcc_closed
+           Hwidgets Hwitness).
+Qed.
+
+Theorem without_unboxing_examples : without_unboxing_examples_statement.
+Proof. vm_compute. auto. Qed.
