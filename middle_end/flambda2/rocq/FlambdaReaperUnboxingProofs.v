@@ -519,3 +519,21 @@ Qed.
 Theorem escaping_parameter_argument_cause :
   escaping_parameter_argument_cause_statement.
 Proof. vm_compute. auto 20. Qed.
+
+(* ======================================================================== *)
+(* A counterexample: a result of code that keeps its calling convention,    *)
+(* given by a tail call                                                     *)
+(* ======================================================================== *)
+
+Theorem tail_result : tail_result_statement.
+Proof.
+  do 9 (split; [ vm_compute; reflexivity | ]).
+  split; [ exists 30; vm_compute; reflexivity | ].
+  split; [ exists 30; vm_compute; reflexivity | ].
+  do 5 (split; [ vm_compute; reflexivity | ]).
+  split; [ exists 30; vm_compute; reflexivity | ].
+  vm_compute. repeat split.
+Qed.
+
+Theorem tail_result_cause : tail_result_cause_statement.
+Proof. vm_compute. repeat split. Qed.

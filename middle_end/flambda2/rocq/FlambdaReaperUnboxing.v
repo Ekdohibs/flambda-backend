@@ -76,13 +76,14 @@
      [Unbox_my_closure], and [rebuild_function_params_and_body] with
      them.
    It needs no review, but for the fixes proposed for faults of the
-   compiler's unboxing ([field_reader_seeds], [escaping_argument_seeds],
-   their checks and [unboxing_relations_with]), which
-   FlambdaReaperUnboxingSpec.v names for review with its statements:
-   that file says what the checks mean, and the test tool compares the
-   decisions and the rebuilt term with those of the compiler's reaper. It
-   is extracted ([derive_dominated], [check_dominated], [derive_to_unbox],
-   [check_to_unbox], [to_unbox_of_unboxed_names],
+   compiler's unboxing ([field_reader_seeds], [tail_result_seeds],
+   [escaping_argument_seeds], their checks and [unboxing_relations_with]),
+   which FlambdaReaperUnboxingSpec.v names for review with its
+   statements: that file says what the checks mean, and the test tool
+   compares the decisions and the rebuilt term with those of the
+   compiler's reaper. It is extracted ([derive_dominated],
+   [check_dominated], [derive_to_unbox], [check_to_unbox],
+   [to_unbox_of_unboxed_names],
    [derive_to_change_representation], [check_to_change_representation],
    [to_change_representation_of_alloc_points], [check_sets_whole],
    [unit_unboxed_fields], [unit_changed_representations],
@@ -1091,41 +1092,87 @@ Definition check_field_readers (dominated : list (node * node))
   forallb (fun x => negb (mem_node x to_unbox))
     (field_reader_seeds dominated).
 
+(* The fix of a result kept by code that cannot change its calling
+   convention (FlambdaReaperUnboxingSpec.v, [tail_result_statement]), as
+   what it adds to [cannot_unbox0]: an allocation with a source that is
+   a source of a field of [base] ([constructor]), which a use of [base]
+   reads into a result of code that cannot change its calling
+   convention, a field [Return_of_call] of one of its witnesses, as a
+   tail call of that code does. The premises are those of
+   [field_reader_seeds], with such a result in place of a name with a
+   use that the allocation does not dominate: the results of that code
+   are kept even if they have no use. *)
+Definition tail_result_seeds : list node :=
+  flat_map
+    (fun '(base, relation, alias) =>
+       flat_map
+         (fun '(alias', allocation_id) =>
+            if node_eqb alias alias'
+               && has_source allocation_id
+               && existsb
+                    (fun '(v, relation', usage) =>
+                       field_eqb relation relation'
+                       && mem_pair base usage (t_usages T)
+                       && existsb
+                            (fun '(call_witness, v_relation, v') =>
+                               node_eqb v v'
+                               && is_return_of_call v_relation
+                               && witness_cannot_change call_witness)
+                            (f_constructor F))
+                    (f_accessor F)
+            then [allocation_id]
+            else [])
+         (t_sources T))
+    (f_constructor F).
+
+(* The same fix, as what it asks of a table of [to_unbox]: no allocation
+   that it adds to [cannot_unbox0] is unboxed. *)
+Definition check_tail_results (to_unbox : list node) : bool :=
+  forallb (fun x => negb (mem_node x to_unbox)) tail_result_seeds.
+
 (* The fix of a block given to code that keeps its calling convention
    (FlambdaReaperUnboxingSpec.v,
    [escaping_parameter_argument_statement]), the half of it that is of
-   the analysis, as what it adds to [cannot_unbox0]: an allocation with a
-   source that is a source of an argument of a call ([argument]) that may
-   call code that cannot change its calling convention, a source of the
-   callee of the call. *)
-Definition escaping_argument_seeds : list node :=
+   the analysis, as what it adds to [cannot_unbox0], for a table
+   [dominated] of [dominated_by_allocation_point]: an allocation that
+   dominates an argument of a call ([argument]) that may call code that
+   cannot change its calling convention, a source of the callee of the
+   call, whose parameter at that argument has a use. *)
+Definition escaping_argument_seeds (dominated : list (node * node))
+    : list node :=
   flat_map
-    (fun '(from, _, base) =>
+    (fun '(arg, i, apply) =>
        if existsb
-            (fun '(base', call_witness) =>
-               node_eqb base base' && witness_cannot_change call_witness)
+            (fun '(apply', call_witness) =>
+               node_eqb apply apply' && witness_cannot_change call_witness
+               && existsb
+                    (fun '(call_witness', i', param) =>
+                       node_eqb call_witness call_witness' && Nat.eqb i i'
+                       && has_usage param)
+                    (f_parameter F))
             (t_sources T)
        then
          flat_map
-           (fun '(from', allocation_id) =>
-              if node_eqb from from' && has_source allocation_id
-              then [allocation_id]
-              else [])
-           (t_sources T)
+           (fun '(allocation_id, arg') =>
+              if node_eqb arg arg' then [allocation_id] else [])
+           dominated
        else [])
     (f_argument F).
 
 (* The same fix, as what it asks of a table of [to_unbox]: no allocation
    that it adds to [cannot_unbox0] is unboxed. *)
-Definition check_escaping_arguments (to_unbox : list node) : bool :=
-  forallb (fun x => negb (mem_node x to_unbox)) escaping_argument_seeds.
+Definition check_escaping_arguments (dominated : list (node * node))
+    (to_unbox : list node) : bool :=
+  forallb (fun x => negb (mem_node x to_unbox))
+    (escaping_argument_seeds dominated).
 
-(* The seeds of both fixes, for the table [dominated] that the rule
+(* The seeds of the three fixes, for the table [dominated] that the rule
    gives. *)
 Definition fix_seeds : list node :=
-  field_reader_seeds derive_dominated ++ escaping_argument_seeds.
+  field_reader_seeds derive_dominated ++ tail_result_seeds
+  ++ escaping_argument_seeds derive_dominated.
 
-(* [to_unbox] as the rules with both fixes give it, and the checks of a
+(* [to_unbox] as the rules with the fixes give it, and the checks of a
    table of [to_unbox] and of [to_change_representation] against those
    rules. [check_to_unbox] rejects a table of [derive_to_unbox_fixed]
    that differs from [derive_to_unbox]: it is not what the rules

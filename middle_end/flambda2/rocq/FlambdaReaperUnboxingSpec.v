@@ -34,14 +34,16 @@
    against [unboxing_rules] of middle_end/flambda2/reaper/
    unboxing_analysis.ml and the seeds of [cannot_unbox0] that
    [perform_analysis0] puts in the table before running them, the units
-   of the four counterexamples below against their .fl (that of the
-   second is [kept_result_unboxed] of FlambdaReaperUnboxing.v),
+   of the first four counterexamples below against their .fl (that of
+   the second is [kept_result_unboxed] of FlambdaReaperUnboxing.v), that
+   of the fifth against the OCaml its comment gives,
    [check_result_receivers], and [field_reader_seeds],
-   [check_field_readers], [escaping_argument_seeds] and
-   [check_escaping_arguments] of FlambdaReaperUnboxing.v, against the
-   fixes they are said to be, [unboxing_relations_with] and
-   [derive_to_unbox_with] of FlambdaReaperUnboxing.v against
-   [unboxing_relations] and [derive_to_unbox],
+   [check_field_readers], [tail_result_seeds], [check_tail_results],
+   [escaping_argument_seeds] and [check_escaping_arguments] of
+   FlambdaReaperUnboxing.v, against the fixes they are said to be,
+   [unboxing_relations_with] and [derive_to_unbox_with] of
+   FlambdaReaperUnboxing.v against [unboxing_relations] and
+   [derive_to_unbox],
    [unbox_dead_unit] against testsuite/tests/reaper/unbox_dead.ml,
    [wrapper_args_u_before_fix] against [make_apply_wrapper] of rebuild.ml
    before the fix that the example is of, and the statements. The checks are
@@ -260,19 +262,27 @@
    says why.
 
    The fix has two halves. The first: the analysis must not unbox an
-   allocation that is a source of an argument of a call of code that
-   cannot change its calling convention, whatever the sources of the
-   parameter. As a rule of [unboxing_rules], it is a seed of
+   allocation that dominates an argument of a call of code that cannot
+   change its calling convention, if the parameter has a use, whatever
+   its sources. As a rule of [unboxing_rules] (that of the compiler's fix
+   that begins "The previous rule misses parameters"), it is a seed of
    [cannot_unbox0] ([escaping_argument_seeds]) like [cu0_parameter], with
-     [sources arg allocation_id; has_source allocation_id;
-      argument ~from:arg relation ~base:apply;
-      sources apply call_witness]
+     [rev_argument ~base:apply relation ~from:arg;
+      sources apply call_witness;
+      parameter ~base:call_witness relation ~to_:param;
+      has_usage param;
+      allocation_point_dominator arg allocation_id]
    in place of
      [sources alias allocation_id; has_source allocation_id;
       rev_parameter ~to_:alias relation ~base:call_witness]:
    the argument, whose sources are recorded, and the witnesses that the
-   call may call, for the parameter. [check_escaping_arguments] is what
-   it asks of a table of [to_unbox]. The statement says that the check
+   call may call, for the parameter. As the comment of the compiler's
+   rule says, the case [Not_changing_calling_convention] of
+   [rebuild_apply] passes the argument unchanged where the parameter has
+   a use, and an argument that the allocation does not dominate is kept,
+   and is given poison in its place, as it would be if the calling
+   convention could change. [check_escaping_arguments] is what it asks
+   of a table of [to_unbox]. The statement says that the check
    rejects the tables of the unit and passes those of the sound
    examples, and that with the seeds of the fix the tables are closed
    under the rules, pass the check, and rebuild into a unit that exits as
@@ -288,7 +298,50 @@
    forbids it by [crr0_any_source_usage], an escape by [cu0_any_usage]),
    and a call of a block goes wrong in the input too; that a closure so
    called is never unboxed is not proved. The first half is a check of
-   the tables, and needs none of this. *)
+   the tables, and needs none of this.
+
+   A fifth counterexample, a miscompile of the model's reaper whose
+   decisions the compiler's share: [tail_result_unit], the unit of the
+   OCaml its comment gives. Code that cannot change its calling
+   convention, as it is called at unknown arity through a join of
+   closures, keeps its results even if they have no use. Such code
+   tail-calls code that returns a pair, whose result is unboxed as
+   another call reads a field of it. The result of the first code has
+   any source, from an [Opaque_identity] in another arm, and no use: the
+   fix of [mixed_field_unit], which asks of the names with a use, does
+   not see it, and the rule [cu0_result], which reads the sources of the
+   results of code that cannot change, does not either, as those of a
+   name of any source are not recorded. [make_apply_wrapper] then has
+   the decision [Keep] of the result of the first code for a result that
+   the callee unboxes, and makes the tail call one that never returns.
+   The compiler's output of the OCaml runs as the input does; the
+   model's rebuild of the unit, whose arm of the tail call is taken, goes
+   wrong. [tail_result_statement] says that the tables of the unit pass
+   every check, and the checks of the two fixes above, that the unit
+   exits with 5, and that rebuilt it goes wrong;
+   [tail_result_cause_statement] says why.
+
+   The fix: the analysis must not unbox an allocation stored in a field
+   that a use of the allocation that holds it reads into a result of code
+   that cannot change its calling convention. As a rule of
+   [unboxing_rules] (that of the compiler's fix that begins "Likewise,
+   the results of code"), it is a seed of [cannot_unbox0]
+   ([tail_result_seeds]), with the premises of [field_reader_seeds] but
+   [has_usage v; ~~(dominated_by_allocation_point allocation_id v)], in
+   place of which it has
+     [rev_constructor ~from:v v_relation ~base:call_witness;
+      constructor ~base:call_witness !!Field.code_id_of_call_witness
+        ~from:codeid;
+      cannot_change_calling_convention codeid]
+   with [v_relation] a field [Return_of_call]: [v] is a result of such
+   code. [check_tail_results] is what it asks of a table of [to_unbox].
+   The statement says too that the check rejects the tables of the unit
+   and passes those of the sound examples and of the other
+   counterexamples with their fixes, and that with the seeds of the
+   three fixes ([derive_to_unbox_fixed]) the tables pass the checks of
+   the rules with them and that of the fix, and rebuild into a unit that
+   exits with 5; the cause statement, that the seeds of the two other
+   fixes leave the pair unboxed. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic.
@@ -1385,7 +1438,7 @@ Definition escaping_argument_code_deps : finite_map code_dep :=
 (* The seeds of the fix in the unit. *)
 Definition escaping_argument_seeds_of_unit : list node :=
   escaping_argument_seeds escaping_argument_facts escaping_argument_tables
-    escaping_argument_cannot_change.
+    escaping_argument_cannot_change escaping_argument_dominated.
 
 (* The tables of [to_unbox] and [to_change_representation] that the rules
    give, without the fix and with its seeds, and the unit rebuilt with
@@ -1456,8 +1509,8 @@ Definition escaping_parameter_argument_statement : Prop :=
       (FlambdaReaperTupledSpec.on_its_own (escaping_argument_rebuilt false))
       Goes_wrong
   ∧ check_escaping_arguments escaping_argument_facts escaping_argument_tables
-      escaping_argument_cannot_change (escaping_argument_to_unbox false)
-    = false
+      escaping_argument_cannot_change escaping_argument_dominated
+      (escaping_argument_to_unbox false) = false
   ∧ check_unboxing_closed no_local escaping_argument_facts
       escaping_argument_tables escaping_argument_cannot_change
       max_unbox_size false
@@ -1466,8 +1519,8 @@ Definition escaping_parameter_argument_statement : Prop :=
          max_unbox_size false escaping_argument_seeds_of_unit)
     = true
   ∧ check_escaping_arguments escaping_argument_facts escaping_argument_tables
-      escaping_argument_cannot_change (escaping_argument_to_unbox true)
-    = true
+      escaping_argument_cannot_change escaping_argument_dominated
+      (escaping_argument_to_unbox true) = true
   ∧ check_sets_whole escaping_argument_facts escaping_argument_tables
       (escaping_argument_to_unbox true) (escaping_argument_tcr true) = true
   ∧ behaves
@@ -1480,17 +1533,19 @@ Definition escaping_parameter_argument_statement : Prop :=
          (escaping_argument_with (Apply (call_50 [Const (Poison Value)] 20))))
       escaping_argument_exit
   ∧ check_escaping_arguments unboxed_closure_facts unboxed_closure_tables []
-      [v 60] = true
+      unboxed_closure_dominated [v 60] = true
   ∧ check_escaping_arguments block_from_code_facts block_from_code_tables
       (derive_cannot_change block_from_code_facts block_from_code_tables)
-      [v 42] = true
+      block_from_code_dominated [v 42] = true
   ∧ check_escaping_arguments kept_result_unboxed_facts
       kept_result_unboxed_tables kept_result_cannot_change
-      (kept_result_to_unbox true) = true
+      kept_result_unboxed_dominated (kept_result_to_unbox true) = true
   ∧ check_escaping_arguments unbox_dead_facts unbox_dead_tables
-      unbox_dead_cannot_change unbox_dead_to_unbox = true
+      unbox_dead_cannot_change unbox_dead_dominated unbox_dead_to_unbox
+    = true
   ∧ check_escaping_arguments dead_callee_facts dead_callee_tables
-      dead_callee_cannot_change (dead_callee_to_unbox true) = true.
+      dead_callee_cannot_change dead_callee_dominated
+      (dead_callee_to_unbox true) = true.
 
 (* Why. Without the fix, the pair [x10] is unboxed, to no field. The code
    50 cannot change its calling convention, and its parameter 6, of
@@ -1518,4 +1573,287 @@ Definition escaping_parameter_argument_cause_statement : Prop :=
   ∧ check_field_readers escaping_argument_facts escaping_argument_tables
       escaping_argument_dominated (escaping_argument_to_unbox false) = true
   ∧ check_escaping_arguments mixed_field_facts mixed_field_tables
-      mixed_field_cannot_change (mixed_field_to_unbox false) = true.
+      mixed_field_cannot_change mixed_field_dominated
+      (mixed_field_to_unbox false) = true.
+
+(* ======================================================================== *)
+(* A counterexample: a result of code that keeps its calling convention,    *)
+(* given by a tail call                                                     *)
+(* ======================================================================== *)
+
+(* The fix, as what it adds to [cannot_unbox0], is [tail_result_seeds]
+   of FlambdaReaperUnboxing.v, and what it asks of a table of
+   [to_unbox], [check_tail_results] there. *)
+
+(* An [Apply_cont] to [k] with [args], an arm of a [Switch]. *)
+Definition jump (k : continuation) (args : list simple) : apply_cont :=
+  {| ac_continuation := k; ac_args := args; ac_trap_action := None |}.
+
+(* The unit of the OCaml
+     let g n = (n, n)
+     let f n = if b then g n else Sys.opaque_identity 0
+     let f2 _ = 1
+     let k = if c then f else f2
+     let () = ignore (k 3); print_int (fst (g 5))
+   with [g], [f] and [f2] not inlined. The code 51 is [g], whose pair is
+   [x42]. The code 50 is [f]: it reads [g] from the value slot 80 of its
+   closure into [x45], and the [Switch] on a constant stands for the
+   test of [b], whose arm 27, the tail call of [g], is taken; the arm 26
+   returns the result of an [Opaque_identity]. The code 52 is [f2]. The
+   unit joins the closures [x60] of [f] and [x62] of [f2] at the
+   parameter [x30] of 20, which calls it with 3 at unknown arity,
+   returning to 21; 21 calls [g] directly through its closure [x61] with
+   5, returning to 22, which reads field 0 of the pair and returns it. *)
+Definition tail_g_code : code :=
+  Code [40] 41 3 4 (make_code_metadata [Singleton Value] [Singleton Value])
+    (Let 42 Value (make_block [Var 40; Var 40]) (return_to 3 [Var 42])).
+
+Definition tail_call_g : apply_expr :=
+  {| ap_callee := Var 45; ap_call_kind := Direct 51; ap_args := [Var 43];
+     ap_continuation := 5; ap_exn_continuation := 6;
+     ap_exn_extra_args := [];
+     ap_args_arity := [Singleton Value];
+     ap_return_arity := [Singleton Value] |}.
+
+Definition tail_f_code : code :=
+  Code [43] 44 5 6 (make_code_metadata [Singleton Value] [Singleton Value])
+    (Let 45 Value (Project_value_slot_from 70 80 (Var 44))
+       (Let_cont_non_recursive 26
+          (Handler [] no_params
+             (Let 46 Value (Prim (Unary (Opaque_identity Value)) [int 0])
+                (return_to 5 [Var 46])))
+          (Let_cont_non_recursive 27
+             (Handler [] no_params (Apply tail_call_g))
+             (Switch (Const (Naked_immediate 1))
+                [(0%Z, goto 26); (1%Z, goto 27)])))).
+
+Definition tail_f2_code : code :=
+  Code [47] 48 7 8 (make_code_metadata [Singleton Value] [Singleton Value])
+    (return_to 7 [int 1]).
+
+Definition tail_call_k : apply_expr :=
+  {| ap_callee := Var 30; ap_call_kind := Indirect; ap_args := [int 3];
+     ap_continuation := 21; ap_exn_continuation := 2;
+     ap_exn_extra_args := [];
+     ap_args_arity := [Singleton Value];
+     ap_return_arity := [Singleton Value] |}.
+
+Definition tail_call_g_5 : apply_expr :=
+  {| ap_callee := Var 61; ap_call_kind := Direct 51; ap_args := [int 5];
+     ap_continuation := 22; ap_exn_continuation := 2;
+     ap_exn_extra_args := [];
+     ap_args_arity := [Singleton Value];
+     ap_return_arity := [Singleton Value] |}.
+
+Definition tail_result_unit : expr :=
+  Let_static [Bind_code 51 tail_g_code; Bind_code 50 tail_f_code;
+              Bind_code 52 tail_f2_code]
+    (Let 61 Value (Closure_of_set 71 [(71, 51)] [])
+       (Let 60 Value (Closure_of_set 70 [(70, 50)] [(80, Var 61)])
+          (Let 62 Value (Closure_of_set 72 [(72, 52)] [])
+             (Let_cont_non_recursive 22
+                (Handler [32] (make_handler_metadata [Value])
+                   (Let 33 Value (load 0 (Var 32)) (return_to 1 [Var 33])))
+                (Let_cont_non_recursive 21
+                   (Handler [31] (make_handler_metadata [Value])
+                      (Apply tail_call_g_5))
+                   (Let_cont_non_recursive 20
+                      (Handler [30] (make_handler_metadata [Value])
+                         (Apply tail_call_k))
+                      (Switch (Const (Naked_immediate 1))
+                         [(0%Z, jump 20 [Var 62]);
+                          (1%Z, jump 20 [Var 60])]))))))).
+
+Definition tail_result_facts : facts :=
+  traverse_unit Auto interface tail_result_unit.
+
+(* The solution of the unit, as the solver of the test tool computes it.
+   The code dep of 51 has the result 3, an alias of [x42], and the
+   witness 7 of known arity; that of 50 has the result 9, which has any
+   source, from the [Opaque_identity], and no use, and the witness 14 of
+   unknown arity. The tail call 21 of 51, a use of 7, reads its field
+   [result 0] into 9. *)
+Definition tail_result_tables : tables :=
+  {| t_alias := [(m 30, m 7); (m 5, m 29); (v 30, v 60); (v 30, v 62);
+       (m 32, m 33); (m 26, m 28); (m 1, v 33); (m 15, consts); (v 48, m 17);
+       (v 47, m 18); (m 9, v 46); (v 44, m 11); (v 43, m 12); (m 3, v 42);
+       (v 41, m 5); (v 40, m 6); (m 28, m 7); (m 33, m 14); (m 33, m 20);
+       (m 2, m 16); (v 31, m 15); (m 31, c 52); (m 2, m 10); (v 31, m 9);
+       (m 31, c 50); (v 32, m 3); (m 2, m 4); (m 27, c 51); (m 18, consts);
+       (m 12, consts); (m 6, consts); (v 33, v 40); (m 5, v 61); (m 11, v 60);
+       (m 17, v 62); (m 25, m 7); (m 5, m 24); (m 21, m 23); (v 45, v 61);
+       (m 23, m 7); (m 9, m 3); (m 10, m 4); (m 22, c 51); (m 6, v 43)];
+     t_any_usage := [m 1; consts; m 31; m 27; m 22; m 2; v 33; v 46; m 16;
+       c 52; m 10; c 50; m 4; c 51; v 40; m 6; v 43; m 12];
+     t_any_source := [v 46; c 52; c 50; c 51; consts; m 15; m 9; v 31; m 31;
+       m 27; m 18; m 12; m 6; v 47; v 43; v 40; v 33; m 1; m 22];
+     t_has_usage := [m 1; consts; m 31; m 27; m 22; m 2; v 33; m 32; m 26;
+       v 32; m 21; m 33; m 28; m 7; m 14; m 20; m 16; c 52; m 10; c 50; m 3;
+       m 4; c 51; v 40; v 46; v 42; m 6; m 23; v 30; v 61; v 45; v 44; v 60;
+       v 62; m 11; v 43; m 12];
+     t_has_source := [v 46; c 52; c 50; c 51; consts; m 15; m 9; v 62; v 60;
+       v 61; v 42; m 20; m 19; m 14; m 13; m 8; m 7; m 30; v 30; m 3; m 28;
+       m 33; v 31; m 31; v 32; m 27; m 18; m 12; m 6; m 32; m 26; v 47; v 43;
+       v 40; v 33; m 5; m 11; m 17; m 25; m 1; v 48; v 44; v 41; v 45; m 23;
+       m 22; m 21];
+     t_usages := [(v 30, v 30); (m 32, m 32); (v 61, v 61); (m 26, m 26);
+       (v 32, v 32); (v 45, v 45); (m 21, m 21); (v 44, v 44); (v 60, v 30);
+       (v 62, v 30); (m 33, m 32); (m 28, m 26); (m 11, v 44); (m 7, m 26);
+       (m 14, m 32); (m 20, m 32); (m 3, v 32); (v 42, v 32); (v 60, v 44);
+       (m 23, m 21); (v 61, v 45); (m 7, m 21)];
+     t_sources := [(v 61, v 61); (v 60, v 60); (v 62, v 62); (v 42, v 42);
+       (m 20, m 20); (m 19, m 19); (m 14, m 14); (m 13, m 13); (m 8, m 8);
+       (m 7, m 7); (m 30, m 7); (v 30, v 60); (v 30, v 62); (m 3, v 42);
+       (m 28, m 7); (m 33, m 14); (m 33, m 20); (m 32, m 20); (m 32, m 14);
+       (m 26, m 7); (v 32, v 42); (m 5, v 61); (m 11, v 60); (m 17, v 62);
+       (m 25, m 7); (v 48, v 62); (v 44, v 60); (v 41, v 61); (v 45, v 61);
+       (m 23, m 7); (m 21, m 7)];
+     t_reading_field := [];
+     t_escaping_field := [];
+     t_field_used := [(v 61, known); (v 60, unknown); (v 62, unknown);
+       (v 60, Field_value_slot 80); (v 42, Field_block 0 Value);
+       (m 20, Field_return_of_call Exn); (m 20, Field_code_id_of_call_witness);
+       (m 14, Field_return_of_call Exn); (m 14, Field_code_id_of_call_witness);
+       (m 7, result 0); (m 7, Field_return_of_call Exn);
+       (m 7, Field_code_id_of_call_witness)] |}.
+
+Definition tail_result_cannot_change : list node :=
+  derive_cannot_change tail_result_facts tail_result_tables.
+
+Definition tail_result_dominated : list (node * node) :=
+  derive_dominated tail_result_tables.
+
+Definition tail_result_code_deps : finite_map code_dep :=
+  unit_code_deps Auto interface tail_result_unit.
+
+(* The seeds of the fix in the unit, and those of the two other fixes. *)
+Definition tail_result_seeds_of_unit : list node :=
+  tail_result_seeds tail_result_facts tail_result_tables
+    tail_result_cannot_change.
+
+Definition tail_result_other_seeds : list node :=
+  field_reader_seeds tail_result_facts tail_result_tables
+    tail_result_dominated
+  ++ escaping_argument_seeds tail_result_facts tail_result_tables
+       tail_result_cannot_change tail_result_dominated.
+
+(* The tables of [to_unbox] and [to_change_representation] that the rules
+   give, without the fixes and with the seeds of the three
+   ([derive_to_unbox_fixed]), and the unit rebuilt with them. *)
+Definition tail_result_to_unbox (fixed : bool) : list node :=
+  if fixed
+  then
+    derive_to_unbox_fixed no_local tail_result_facts tail_result_tables
+      tail_result_cannot_change max_unbox_size false
+  else
+    derive_to_unbox no_local tail_result_facts tail_result_tables
+      tail_result_cannot_change max_unbox_size false.
+
+Definition tail_result_tcr (fixed : bool) : list node :=
+  derive_to_change_representation no_local tail_result_facts
+    tail_result_tables tail_result_cannot_change max_unbox_size false
+    (tail_result_to_unbox fixed).
+
+Definition tail_result_rebuilt (fixed : bool) : expr :=
+  rebuild_unit_unbox_repr no_local tail_result_facts tail_result_tables
+    tail_result_cannot_change tail_result_code_deps tail_result_dominated
+    (tail_result_to_unbox fixed) (tail_result_tcr fixed) true
+    tail_result_unit.
+
+Definition tail_result_exit : behaviour :=
+  Exits 1 [Value_const (Tagged_immediate 5)] empty_heap.
+
+(* The tables pass every check, and those of the two other fixes. The
+   unit exits with 5; rebuilt, it goes wrong. The check of the fix
+   rejects the tables. With the seeds of the three fixes, the tables of
+   [to_unbox] and [to_change_representation] pass the checks of the
+   rules with them, that of the fix and that of sets, and the unit
+   rebuilt with them exits with 5. The check passes the tables of
+   [unboxed_closure], of the four examples of blocks of
+   FlambdaReaperUnboxing.v, of [unbox_dead_unit], of [dead_callee_unit]
+   with lambda lifting, and of the three other counterexamples with
+   their fixes. *)
+Definition tail_result_statement : Prop :=
+  check_closed no_local tail_result_facts tail_result_tables = true
+  ∧ check_field_used_exact no_local tail_result_facts tail_result_tables
+    = true
+  ∧ check_cc_closed tail_result_facts tail_result_tables
+      tail_result_cannot_change = true
+  ∧ check_dominated tail_result_tables tail_result_dominated = true
+  ∧ check_to_unbox no_local tail_result_facts tail_result_tables
+      tail_result_cannot_change max_unbox_size false
+      (tail_result_to_unbox false) = true
+  ∧ check_to_change_representation no_local tail_result_facts
+      tail_result_tables tail_result_cannot_change max_unbox_size false
+      (tail_result_to_unbox false) (tail_result_tcr false) = true
+  ∧ check_sets_whole tail_result_facts tail_result_tables
+      (tail_result_to_unbox false) (tail_result_tcr false) = true
+  ∧ check_field_readers tail_result_facts tail_result_tables
+      tail_result_dominated (tail_result_to_unbox false) = true
+  ∧ check_escaping_arguments tail_result_facts tail_result_tables
+      tail_result_cannot_change tail_result_dominated
+      (tail_result_to_unbox false) = true
+  ∧ behaves (FlambdaReaperTupledSpec.on_its_own tail_result_unit)
+      tail_result_exit
+  ∧ behaves (FlambdaReaperTupledSpec.on_its_own (tail_result_rebuilt false))
+      Goes_wrong
+  ∧ check_tail_results tail_result_facts tail_result_tables
+      tail_result_cannot_change (tail_result_to_unbox false) = false
+  ∧ check_to_unbox_fixed no_local tail_result_facts tail_result_tables
+      tail_result_cannot_change max_unbox_size false
+      (tail_result_to_unbox true) = true
+  ∧ check_to_change_representation_fixed no_local tail_result_facts
+      tail_result_tables tail_result_cannot_change max_unbox_size false
+      (tail_result_to_unbox true) (tail_result_tcr true) = true
+  ∧ check_tail_results tail_result_facts tail_result_tables
+      tail_result_cannot_change (tail_result_to_unbox true) = true
+  ∧ check_sets_whole tail_result_facts tail_result_tables
+      (tail_result_to_unbox true) (tail_result_tcr true) = true
+  ∧ behaves (FlambdaReaperTupledSpec.on_its_own (tail_result_rebuilt true))
+      tail_result_exit
+  ∧ check_tail_results unboxed_closure_facts unboxed_closure_tables []
+      [v 60] = true
+  ∧ check_tail_results read_block_facts read_block_tables [] [v 10] = true
+  ∧ check_tail_results block_to_continuation_facts
+      block_to_continuation_tables [] [v 10] = true
+  ∧ check_tail_results block_from_code_facts block_from_code_tables
+      (derive_cannot_change block_from_code_facts block_from_code_tables)
+      [v 42] = true
+  ∧ check_tail_results nested_block_facts nested_block_tables []
+      [v 11; v 10] = true
+  ∧ check_tail_results unbox_dead_facts unbox_dead_tables
+      unbox_dead_cannot_change unbox_dead_to_unbox = true
+  ∧ check_tail_results dead_callee_facts dead_callee_tables
+      dead_callee_cannot_change (dead_callee_to_unbox true) = true
+  ∧ check_tail_results kept_result_unboxed_facts kept_result_unboxed_tables
+      kept_result_cannot_change (kept_result_to_unbox true) = true
+  ∧ check_tail_results mixed_field_facts mixed_field_tables
+      mixed_field_cannot_change (mixed_field_to_unbox true) = true
+  ∧ check_tail_results escaping_argument_facts escaping_argument_tables
+      escaping_argument_cannot_change (escaping_argument_to_unbox true)
+    = true.
+
+(* Why. Without the fixes, the pair [x42] is unboxed: it dominates the
+   result 3 of the code dep of 51, which the code then unboxes. The code
+   50 cannot change its calling convention, and keeps its result 9,
+   which has any source and no use: the tail call of 51 has the decision
+   [Keep] of 9 for a result that 51 unboxes. The seeds of the fix are
+   [x42]; with the seeds of the two other fixes alone, [x42] is still
+   unboxed, and with those of the three, nothing is. *)
+Definition tail_result_cause_statement : Prop :=
+  tail_result_to_unbox false = [v 42]
+  ∧ mem_pair (v 42) (m 3) tail_result_dominated = true
+  ∧ mem_node (c 50) tail_result_cannot_change = true
+  ∧ mem_node (m 9) (t_any_source tail_result_tables) = true
+  ∧ mem_node (m 9) (t_has_usage tail_result_tables) = false
+  ∧ unit_calling_convention_changes_u tail_result_facts tail_result_tables
+      tail_result_cannot_change tail_result_code_deps tail_result_dominated
+      (tail_result_to_unbox false) tail_result_unit
+    = [(51, Changing_u [Decided (Keep Value)]
+              [Unbox [(Field_block 0 Value, Not_unboxed 64)]]);
+       (50, Not_changing_u); (52, Not_changing_u)]
+  ∧ tail_result_seeds_of_unit = [v 42]
+  ∧ derive_to_unbox_with no_local tail_result_facts tail_result_tables
+      tail_result_cannot_change max_unbox_size false tail_result_other_seeds
+    = [v 42]
+  ∧ tail_result_to_unbox true = [].
