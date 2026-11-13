@@ -7867,10 +7867,10 @@ Proof.
           (demote_and_tidy_known_round_scope rounds))).
 Qed.
 
-Lemma demote_and_tidy_known_equivariant (rounds : nat) :
-  rewrite_equivariant (demote_and_tidy_known rounds).
+Theorem demote_and_tidy_known_equivariant :
+  demote_and_tidy_known_equivariant_statement.
 Proof.
-  intros r e. unfold demote_and_tidy_known.
+  intros rounds r e. unfold demote_and_tidy_known.
   rewrite demote_and_tidy_equivariant.
   exact
     (iterate_equivariant rounds (demote_and_tidy_known_round rounds)

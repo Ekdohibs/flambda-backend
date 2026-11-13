@@ -231,14 +231,15 @@
    before ([normalise_expr_params], [normalise_code_params],
    [normalise_params_round]) and the last with the step that follows
    it ([first_phase_round]), [normalise_before_inlined],
-   [normalise_after], [without_statics], [demote_and_tidy], and, of
-   those that the check applies to the term after,
-   [without_head_statics] and [with_code_first]. And the calls of the
-   term before taken on when its rounds are over, or the term as it
-   is ([with_returns]), with the test by which the check chooses
-   ([keeps_a_return]): taken or not, the rewrite commutes with
-   renaming and keeps scope, and the test answers the same of a term
-   renamed (the last section). And [placed], which the check
+   [normalise_after], [without_statics], [demote_and_tidy],
+   [demote_and_tidy_known], and, of those that the check applies to
+   the term after, [without_head_statics] and [with_code_first]. And
+   the calls of the term before taken on when its rounds are over, or
+   the term as it is ([with_returns]), with the test by which the
+   check chooses ([keeps_a_return]): taken or not, the rewrite
+   commutes with renaming and keeps scope, and the test answers the
+   same of a term renamed (the last section). And [placed], which
+   the check
    applies once to each term that it compares after the first
    comparison, which is of the two terms as they are given: it is
    FlambdaSinkUsesSpec.sink_conts_to_uses in the term, in the handlers
@@ -1071,6 +1072,16 @@ Definition without_head_statics_equivariant_statement : Prop :=
    (FlambdaValidateSpec.demote_and_tidy): they make no name. *)
 Definition demote_and_tidy_equivariant_statement : Prop :=
   ∀ rounds : nat, rewrite_equivariant (demote_and_tidy rounds).
+
+(* What ends the liftings made in turn
+   (FlambdaValidateSpec.demote_and_tidy_known): that demotion with its
+   rounds, and then rounds that use what is known of the static
+   closures in sight and of the symbols that the unit binds, and read
+   the value slots that are known, each followed by the demotion with
+   its rounds again. No call is inlined in them and nothing is renamed
+   apart: they make no name. *)
+Definition demote_and_tidy_known_equivariant_statement : Prop :=
+  ∀ rounds : nat, rewrite_equivariant (demote_and_tidy_known rounds).
 
 (* The unit with all its code bound first, which the check applies to
    the term after: the conditions of FlambdaHoistCodeSpec.hoist_code
