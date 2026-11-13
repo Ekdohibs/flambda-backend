@@ -426,6 +426,10 @@ pass into the validator.
   - `middle_end/flambda2/rocq/FlambdaHoistStatics*` (the static bindings
     that need nothing from around them bound first, for a unit run on
     its own; same stream)
+  - `middle_end/flambda2/rocq/FlambdaSharedReads*` (in code, a second
+    read, from symbols, of a variable that one group of static bindings
+    put in two places of its constants is the variable of the first
+    read; same stream)
   - `middle_end/flambda2/rocq/FlambdaSimulationProofs.v` (simulations in
     which one step is answered by one or more; same stream, and used by
     the loops of V4)
