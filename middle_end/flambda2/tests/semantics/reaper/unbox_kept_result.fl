@@ -1,0 +1,50 @@
+(* The case of [make_apply_wrapper] (rebuild.ml) where the continuation of a
+   call keeps a result that the callee unboxes, as [kept_result_unboxed] of
+   FlambdaReaperUnboxing.v. [make], which is not inlined, returns a block of
+   its parameter and 8. The arm 2 calls it and reads field 0 of the result,
+   so that the result of [make] is unboxed. The arm 0, which is taken, calls
+   it returning to [k21], whose parameter [g] is also given the closure of
+   [ident] by the arm 1: [g] has two sources, is only called (by the arm 1 of
+   the switch of [k21], not taken) and is kept. The unit returns 10.
+
+   The decisions [Keep] of [k21] and [Unbox] of [make] do not match, and the
+   check [has_any_source] that would make that a fatal error is stubbed to
+   [false] ("CR ncourant: restore this check"): the compiler makes the call
+   one that never returns, which the conversion reads as a call returning to
+   a continuation whose handler is [Invalid], and the model, which transcribes
+   it, likewise. The call returns, and the runs of both rebuilds are
+   undefined: a miscompile of the compiler's reaper, which the model shares. *)
+let code inline(never) size(5) make (x) my_closure &my_region my_depth
+      -> k * e =
+  let p = %block.[`0`].my_region (x, 8) in
+  cont k (p)
+in
+let code inline(never) size(5) ident (x) my_closure &my_region my_depth
+      -> k * e =
+  cont k (x)
+in
+let $Unbox_kept_result_make = closure make @make &toplevel in
+let $Unbox_kept_result_ident = closure ident @ident &toplevel in
+let o = %opaque (0) in
+let c = %untag_imm (o) in
+(switch c
+   | 0 -> k23
+   | 1 -> k24
+   | 2 -> k25
+   where k23 =
+     apply direct(make &toplevel) $Unbox_kept_result_make (9) -> k21 * error
+   where k24 = cont k21 ($Unbox_kept_result_ident)
+   where k25 =
+     apply direct(make &toplevel) $Unbox_kept_result_make (9) -> k20 * error)
+  where k20 (r) =
+    let y = %block_load.mut.[`0`] (r) in
+    cont finish (y)
+  where k21 (g) =
+    (switch c
+       | 0 -> k26
+       | 1 -> k27
+       where k26 = cont finish (10)
+       where k27 = apply &toplevel g (3) -> finish * error)
+  where finish (v) =
+    let $camlUnbox_kept_result = Block 0 (v) in
+    cont done ($camlUnbox_kept_result)

@@ -1,0 +1,42 @@
+unbox_nested_block.fl:
+  the graph: 45 facts in the model, 45 in the compiler
+  the model's solution: passes the check of closure, passes the check of field_of_constructor_is_used
+  the compiler's solution, with its graph: passes the check of closure, passes the check of field_of_constructor_is_used
+  the facts of the two graphs on the names of the unit: the same (17)
+  the two solutions on the 13 names of the unit: the same
+  the model's rebuild and the compiler's output: the same up to bound names
+  the reaper's input (12 steps): returns [0: 7]
+  the model's rebuild (12 steps): returns [0: 7]
+  the model's rebuild against the input: the same
+  the compiler's output (12 steps): returns [0: 7]
+  the compiler's output against the input: the same
+  with changes of calling convention:
+    the table of the code that keeps its calling convention: the model's passes the check, the compiler's, with its graph, passes it
+    the two tables on the 2 code ids of the unit: the same
+    the decisions on the 1 code ids of the unit: the same, 1 changing
+    code make: parameters [keep val], results [keep val]
+    the model's rebuild and the compiler's output: the same up to bound names
+    the reaper's input (12 steps): returns [0: 7]
+    the model's rebuild (12 steps): returns [0: 7]
+    the model's rebuild against the input: the same
+    the compiler's output (12 steps): returns [0: 7]
+    the compiler's output against the input: the same
+  with unboxing:
+    the compiler changes the representation of 1 names that its traversal made, which are not in the term
+    the compiler renames the slots of 1 closures (a change of representation that only renames), which the conversion of its output undoes
+    the table of dominated_by_allocation_point: the model's passes the check, the compiler's, with its graph, passes it
+    the table of to_unbox: the model's passes the check, the compiler's, with its graph, passes it
+    the two pairs of tables on the names of the unit: the same, 7 names dominated by an allocation, 2 allocations to unbox
+    the unboxed fields of the 13 names of the unit: the same, 4 unboxed
+    p/v1: {field 0 val}
+    q/v2: {field 0 val: {field 0 val}}
+    s/v6: {field 0 val}
+    r/v8: {field 0 val: {field 0 val}}
+    the decisions on the 1 code ids of the unit: the same, 1 changing
+    code make: parameters [keep val], results [unbox {field 0 val: {field 0 val}}]
+    the model's rebuild and the compiler's output: the same up to bound names
+    the reaper's input (12 steps): returns [0: 7]
+    the model's rebuild (12 steps): returns [0: 7]
+    the model's rebuild against the input: the same
+    the compiler's output (12 steps): returns [0: 7]
+    the compiler's output against the input: the same

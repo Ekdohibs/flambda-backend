@@ -1,0 +1,24 @@
+(* A block allocated and only read: [make], which is not inlined, returns a
+   block of its parameter and 8, and [get], which is not inlined, reads its
+   field 0. The block is unboxed: [make] returns the field instead of the
+   block, and [get] takes it instead of the block. (A block allocated and read
+   in one function is not seen by the reaper: Simplify removes it.) *)
+let code inline(never) size(5) make (x) my_closure &my_region my_depth
+      -> k * e =
+  let p = %block.[`0`].my_region (x, 8) in
+  cont k (p)
+in
+let code inline(never) size(5) get (p) my_closure &my_region my_depth
+      -> k * e =
+  let x = %block_load.[`0`] (p) in
+  cont k (x)
+in
+let $Unbox_read_block_make = closure make @make &toplevel in
+let $Unbox_read_block_get = closure get @get &toplevel in
+let a = %opaque (7) in
+apply direct(make &toplevel) $Unbox_read_block_make (a) -> k1 * error
+  where k1 (q) =
+    apply direct(get &toplevel) $Unbox_read_block_get (q) -> k2 * error
+  where k2 (r) =
+    let $camlUnbox_read_block = Block 0 (r) in
+    cont done ($camlUnbox_read_block)

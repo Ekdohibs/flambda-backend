@@ -24,3 +24,18 @@ cc_known_arity.fl:
     the model's rebuild against the input: the same
     the compiler's output (18 steps): returns [0: 2]
     the compiler's output against the input: the same
+  with unboxing:
+    the compiler changes the representation of 4 names that its traversal made, which are not in the term
+    the compiler renames the slots of 2 closures (a change of representation that only renames), which the conversion of its output undoes
+    the table of dominated_by_allocation_point: the model's passes the check, the compiler's, with its graph, passes it
+    the table of to_unbox: the model's passes the check, the compiler's, with its graph, passes it
+    the two pairs of tables on the names of the unit: the same, 7 names dominated by an allocation, 0 allocations to unbox
+    the unboxed fields of the 20 names of the unit: the same, 0 unboxed
+    code f: model no change; compiler parameters [keep val, delete], results [keep val, delete]
+    code pass: parameters [keep val], results [keep val]
+    the model's rebuild and the compiler's output: DIFFERENT terms
+    the reaper's input (18 steps): returns [0: 2]
+    the model's rebuild (20 steps): returns [0: 2]
+    the model's rebuild against the input: the same
+    the compiler's output (18 steps): returns [0: 2]
+    the compiler's output against the input: the same

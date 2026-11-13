@@ -22,3 +22,19 @@ closure_unused_slot.fl:
     the model's rebuild against the input: the same
     the compiler's output (14 steps): returns [0: 42]
     the compiler's output against the input: the same
+  with unboxing:
+    the compiler changes the representation of 2 names that its traversal made, which are not in the term
+    the compiler renames the slots of 2 closures (a change of representation that only renames), which the conversion of its output undoes
+    the table of dominated_by_allocation_point: the model's passes the check, the compiler's, with its graph, passes it
+    the table of to_unbox: the model's passes the check, the compiler's, with its graph, passes it
+    the two pairs of tables on the names of the unit: the same, 5 names dominated by an allocation, 0 allocations to unbox
+    the unboxed fields of the 19 names of the unit: the same, 0 unboxed
+    the decisions on the 2 code ids of the unit: the same, 2 changing
+    code ignore_second: parameters [keep val, delete], results [keep val]
+    code add_n: parameters [keep val], results [keep val]
+    the model's rebuild and the compiler's output: the same up to bound names
+    the reaper's input (15 steps): returns [0: 42]
+    the model's rebuild (14 steps): returns [0: 42]
+    the model's rebuild against the input: the same
+    the compiler's output (14 steps): returns [0: 42]
+    the compiler's output against the input: the same

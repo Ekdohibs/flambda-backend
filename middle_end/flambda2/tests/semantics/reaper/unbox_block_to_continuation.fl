@@ -1,0 +1,29 @@
+(* A block given to a continuation and read in its handler: [make], which is
+   not inlined, returns a block of its parameter and 8, and is called twice;
+   the two results are given to the continuation [h], which reads field 0 of
+   its parameter. The parameter of [h] has a single allocation point, the
+   block of [make], so it is unboxed with the results of [make]. (The two
+   calls keep Simplify from making [h] read the block directly.) *)
+let code inline(never) size(5) make (x) my_closure &my_region my_depth
+      -> k * e =
+  let p = %block.[`0`].my_region (x, 8) in
+  cont k (p)
+in
+let $Unbox_block_to_continuation_make = closure make @make &toplevel in
+let a = %opaque (7) in
+let b = %opaque (9) in
+let o = %opaque (0) in
+let c = %untag_imm (o) in
+apply direct(make &toplevel) $Unbox_block_to_continuation_make (a)
+  -> k1 * error
+  where k1 (q1) =
+    (apply direct(make &toplevel) $Unbox_block_to_continuation_make (b)
+       -> k2 * error
+       where k2 (q2) =
+         (switch c
+            | 0 -> h (q1)
+            | 1 -> h (q2)))
+  where h (r) =
+    let y = %block_load.[`0`] (r) in
+    let $camlUnbox_block_to_continuation = Block 0 (y) in
+    cont done ($camlUnbox_block_to_continuation)

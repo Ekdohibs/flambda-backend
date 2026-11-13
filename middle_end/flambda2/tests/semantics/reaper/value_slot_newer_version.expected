@@ -30,3 +30,18 @@ value_slot_newer_version.fl:
     the model's rebuild against the input: the same
     the compiler's output (9 steps): undefined
     the compiler's output against the input: DIFFERENT
+  with unboxing:
+    the compiler changes the representation of 3 names that its traversal made, which are not in the term
+    the compiler renames the slots of 2 closures (a change of representation that only renames), which the conversion of its output undoes
+    the table of dominated_by_allocation_point: the model's passes the check, the compiler's, with its graph, passes it
+    the table of to_unbox: the model's passes the check, the compiler's, with its graph, passes it
+    the two pairs of tables on the names of the unit: the same, 6 names dominated by an allocation, 0 allocations to unbox
+    the unboxed fields of the 16 names of the unit: the same, 0 unboxed
+    the decisions on the 2 code ids of the unit: the same, 1 changing
+    code call: parameters [keep val], results [keep val]
+    the model's rebuild and the compiler's output: DIFFERENT terms
+    the reaper's input (14 steps): returns [0: 3]
+    the model's rebuild (13 steps): returns [0: 3]
+    the model's rebuild against the input: the same
+    the compiler's output (9 steps): undefined
+    the compiler's output against the input: DIFFERENT

@@ -20,3 +20,15 @@ tupled_unknown_arity.fl:
     the model's rebuild against the input: the same
     the compiler's output (11 steps): returns [0: 1]
     the compiler's output against the input: the same
+  with unboxing:
+    the table of dominated_by_allocation_point: the model's passes the check, the compiler's, with its graph, passes it
+    the table of to_unbox: the model's passes the check, the compiler's, with its graph, passes it
+    the two pairs of tables on the names of the unit: the same, 4 names dominated by an allocation, 0 allocations to unbox
+    the unboxed fields of the 13 names of the unit: the same, 0 unboxed
+    the decisions on the 1 code ids of the unit: the same, 0 changing
+    the model's rebuild and the compiler's output: the same up to bound names
+    the reaper's input (11 steps): returns [0: 1]
+    the model's rebuild (11 steps): returns [0: 1]
+    the model's rebuild against the input: the same
+    the compiler's output (11 steps): returns [0: 1]
+    the compiler's output against the input: the same

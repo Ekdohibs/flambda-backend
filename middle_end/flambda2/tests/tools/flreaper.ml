@@ -34,14 +34,17 @@
    An [.fl] file is read and given to Simplify as flsemantics.ml does it (the
    same normalisation of the text, the same test that the unit is well-formed),
    and the unit that Simplify returns, which is what the compiler's reaper is
-   given, is the unit of the comparison. The reaper is run in two modes, both
-   without unboxing: first changing no calling convention (the flags
+   given, is the unit of the comparison. The reaper is run in three modes: first
+   changing no calling convention and unboxing nothing (the flags
    [-no-reaper-change-calling-conventions] and [-no-reaper-unbox], which the
-   tool sets whatever its command line says: [main]), then changing calling
-   conventions, which is the last part of what is printed
-   ([compare_calling_conventions]); the mode of [-reaper-preserve-direct-calls]
-   and of [-reaper-local-fields] is the one that the command line gives, the
-   compiler's default unless it says otherwise. Then:
+   tool sets whatever its command line says: [main]); then changing calling
+   conventions ([compare_calling_conventions]); then changing calling
+   conventions and unboxing, the compiler's defaults ([compare_unboxing]), which
+   is the last part of what is printed. The mode of
+   [-reaper-preserve-direct-calls], of [-reaper-local-fields], of
+   [-reaper-max-unbox-size] and of [-X reaper-lambda-lifting] is the one that
+   the command line gives, the compiler's default unless it says otherwise.
+   Then:
 
    - The unit is converted to a term of the model by the conversion of
    flsemantics.ml, and the extracted traversal
@@ -119,6 +122,7 @@ module Rebuild = Flambda2_rocq_semantics.FlambdaReaperRebuild
 
 module Cc = Flambda2_rocq_semantics.FlambdaReaperCallingConventions
 
+module Unboxing = Flambda2_rocq_semantics.FlambdaReaperUnboxing
 module Model_compare = Flambda2_rocq_semantics.FlambdaCompareSpec
 module Imports = Flambda2_rocq_semantics.FlambdaImportsSpec
 module Rocq_model = Flambda2_rocq_semantics.FlambdaModel
@@ -127,6 +131,7 @@ module Datatypes = Flambda2_rocq_library.Datatypes
 module Numbers = Flambda2_rocq_library.BinNums
 module Reaper = Flambda2_reaper
 module PTA = Flambda2_reaper.Points_to_analysis
+module UA = Flambda2_reaper.Unboxing_analysis
 module GFG = Flambda2_reaper.Global_flow_graph
 module Datalog = Flambda2_datalog.Datalog
 module Features = Flambda2_ui.Flambda_features
@@ -1011,7 +1016,10 @@ type compiler_side =
        graph, each with its node of the model. *)
     solved : Datalog.database;
     code_deps : Reaper.Traverse_acc.Code_dep.t Code_id.Map.t;
-    code_ids : (Code_id.t * Graph_spec.node) list
+    code_ids : (Code_id.t * Graph_spec.node) list;
+    (* The node of the model of a name of the compiler's traversal, as the graph
+       was read ([model_node]), for the tables of the unboxing. *)
+    compiler_node : Code_id_or_name.t -> Graph_spec.node
   }
 
 (* The compiler's graph of [unit] and its solution, read into the model's terms.
@@ -1119,7 +1127,8 @@ let compiler_graph (names : unit_names) (unit : Flambda_unit.t)
     all_related;
     solved;
     code_deps = problem.code_deps;
-    code_ids = Code_id.Map.bindings !code_ids
+    code_ids = Code_id.Map.bindings !code_ids;
+    compiler_node = node
   }
 
 (* ---- The comparisons -------------------------------------------------- *)
@@ -1687,6 +1696,535 @@ let compare_calling_conventions ~(input : Flsemantics.converted)
       ~compiler_output:reaped.unit);
   model_closed
 
+(* ---- Unboxing --------------------------------------------------------- *)
+
+(* The value of the extra option [-X reaper-lambda-lifting], which
+   unboxing_analysis.ml reads and does not export: the last setting of the
+   command line, or else of OCAMLPARAM ([Xreaper-lambda-lifting=1]), and [false]
+   if there is none, as its default is. *)
+let lambda_lifting () =
+  let prefix = "reaper-lambda-lifting=" in
+  let value s =
+    if String.starts_with ~prefix s
+    then
+      Some
+        (String.sub s (String.length prefix)
+           (String.length s - String.length prefix))
+    else None
+  in
+  let from_param =
+    match Sys.getenv_opt "OCAMLPARAM" with
+    | None -> []
+    | Some param ->
+      List.filter_map
+        (fun s ->
+          if String.starts_with ~prefix:"X" s
+          then value (String.sub s 1 (String.length s - 1))
+          else None)
+        (String.split_on_char ',' param)
+  in
+  let rec from_argv = function
+    | "-X" :: s :: rest -> Option.to_list (value s) @ from_argv rest
+    | _ :: rest -> from_argv rest
+    | [] -> []
+  in
+  match List.rev (from_param @ from_argv (Array.to_list Sys.argv)) with
+  | "1" :: _ -> true
+  | _ -> false
+
+(* The shape of unboxed fields: which fields are variables and which are unboxed
+   in turn, the variables left out, as the two sides name them differently. The
+   fields are in the order of [compare] on the fields of the model. *)
+type shape = Fields of (Graph_spec.field * shape option) list
+
+let rec model_shape (fields : Unboxing.unboxed_fields) =
+  Fields
+    (List.sort compare
+       (List.map
+          (fun (field, (u : Unboxing.unboxed_field)) ->
+            ( field,
+              match u with
+              | Not_unboxed _ -> None
+              | Unboxed fields -> Some (model_shape fields) ))
+          fields))
+
+let rec compiler_shape : 'a. 'a UA.Unboxed_fields.t -> shape =
+ fun fields ->
+  Fields
+    (List.sort compare
+       (List.map
+          (fun (field, (u : _ UA.Unboxed_fields.u)) ->
+            ( model_field field,
+              match u with
+              | Not_unboxed _ -> None
+              | Unboxed fields -> Some (compiler_shape fields) ))
+          (Field.Map.bindings fields)))
+
+let rec print_shape ppf (Fields fields) =
+  Format.fprintf ppf "{%a}"
+    (Format.pp_print_list
+       ~pp_sep:(fun ppf () -> Format.fprintf ppf "; ")
+       (fun ppf (field, shape) ->
+         match shape with
+         | None -> print_field ppf field
+         | Some shape ->
+           Format.fprintf ppf "%a: %a" print_field field print_shape shape))
+    fields
+
+let print_unboxed ppf (shape : shape option) =
+  match shape with
+  | None -> Format.fprintf ppf "not unboxed"
+  | Some shape -> print_shape ppf shape
+
+(* Whether unboxed fields read a slot of a closure: the fields of an unboxed set
+   of closures. *)
+let rec reads_a_slot : 'a. 'a UA.Unboxed_fields.t -> bool =
+ fun fields ->
+  Field.Map.exists
+    (fun field (u : _ UA.Unboxed_fields.u) ->
+      (match Field.view field with
+        | Value_slot _ | Function_slot _ -> true
+        | _ -> false)
+      ||
+      match u with
+      | Not_unboxed _ -> false
+      | Unboxed fields -> reads_a_slot fields)
+    fields
+
+(* Whether a change of representation only renames: that of a closure whose
+   value slots, each kept or not, are not unboxed in turn, which gives each slot
+   a new one of the same kind ([Unboxing_analysis.perform_analysis0]). The model
+   has no change of representation, and rebuilds the closure with its slots. *)
+let renames_only (repr : UA.changed_representation) =
+  match repr with
+  | Block_representation _ -> false
+  | Closure_representation (fields, _, _) ->
+    Field.Map.for_all
+      (fun field (u : _ UA.Unboxed_fields.u) ->
+        match Field.view field, u with
+        | Value_slot _, Not_unboxed _ -> true
+        | _ -> false)
+      fields
+
+(* The renaming of slots of the solution of [Reaper.run] undone in the
+   conversion of its output: each new slot is given the number of the slot that
+   it renames ([Flsemantics.Value_slots.alias]). The solution is that of the
+   traversal of [skeleton], whose names are the variables of the skeleton
+   ([relate_variables]), the symbols and the code ids of the unit; the slots are
+   the same for every name of a closure. *)
+let undo_renamings (names : unit_names) ~skeleton ~solution input =
+  let variables, _ = relate_variables skeleton input in
+  let undo name =
+    match Reaper.Analysis.get_changed_representation solution name with
+    | Some (Closure_representation (fields, function_slots, _)) ->
+      Field.Map.iter
+        (fun field (u : _ UA.Unboxed_fields.u) ->
+          match Field.view field, u with
+          | Value_slot old, Not_unboxed renamed ->
+            Flsemantics.Value_slots.alias renamed ~same_as:old
+          | _ -> ())
+        fields;
+      Function_slot.Map.iter
+        (fun old renamed ->
+          Flsemantics.Function_slots.alias renamed ~same_as:old)
+        function_slots
+    | Some (Block_representation _) | None -> ()
+  in
+  Variable.Map.iter (fun var _ -> undo (Code_id_or_name.var var)) variables;
+  Symbol.Map.iter
+    (fun symbol _ -> undo (Code_id_or_name.symbol symbol))
+    names.symbols;
+  Code_id.Map.iter
+    (fun code_id _ -> undo (Code_id_or_name.code_id code_id))
+    names.code_ids
+
+(* A decision of either side, its variables left out. *)
+type decision_shape =
+  | Keep_d of Kinds.flambda_kind
+  | Delete_d
+  | Unbox_d of shape
+
+type change_shape =
+  | Not_changing
+  | Changing of decision_shape list * decision_shape list
+
+let model_change_shape (change : Unboxing.calling_convention_change_u) =
+  let decision (d : Unboxing.decision) =
+    match d with
+    | Decided (Keep kind) -> Keep_d kind
+    | Decided Delete -> Delete_d
+    | Unbox fields -> Unbox_d (model_shape fields)
+  in
+  match change with
+  | Not_changing_u -> Not_changing
+  | Changing_u (params, results) ->
+    Changing (List.map decision params, List.map decision results)
+
+let compiler_change_shape (change : UA.calling_convention_change) =
+  let decision (d : UA.param_decision) =
+    match d with
+    | Keep (_, kind) ->
+      Keep_d
+        (Flsemantics.convert_kind
+           (Flambda2_kinds.Flambda_kind.With_subkind.kind kind))
+    | Delete -> Delete_d
+    | Unbox fields -> Unbox_d (compiler_shape fields)
+  in
+  match change with
+  | Not_changing_calling_convention -> Not_changing
+  | Changing_calling_convention { params_decisions; return_decisions; _ } ->
+    Changing
+      (List.map decision params_decisions, List.map decision return_decisions)
+
+let print_change_shape ppf (change : change_shape) =
+  let decision ppf (d : decision_shape) =
+    match d with
+    | Keep_d kind -> Format.fprintf ppf "keep %s" (string_of_kind kind)
+    | Delete_d -> Format.fprintf ppf "delete"
+    | Unbox_d shape -> Format.fprintf ppf "unbox %a" print_shape shape
+  in
+  let decisions =
+    Format.pp_print_list
+      ~pp_sep:(fun ppf () -> Format.fprintf ppf ", ")
+      decision
+  in
+  match change with
+  | Not_changing -> Format.fprintf ppf "no change"
+  | Changing (params, results) ->
+    Format.fprintf ppf "parameters [%a], results [%a]" decisions params
+      decisions results
+
+(* The reaper with changes of calling convention and unboxing
+   ([-reaper-change-calling-conventions -reaper-unbox], the compiler's
+   defaults), on the same unit, the same graphs and the same solutions as above:
+   the analysis of unboxing_analysis.ml adds to the database of the solution
+   relations of its own, which are not read here but through what it exports.
+
+   The compiler's tables, read off its database as FlambdaReaperUnboxing.v's
+   header says: [dominated_by_allocation_point], exported, in the order
+   (allocation, name); [to_unbox], not exported, the allocations that dominate a
+   name with unboxed fields ([to_unbox_of_unboxed_names]); and the table of the
+   code that keeps its calling convention, read off the decisions as
+   [compare_calling_conventions] reads it. They are checked with
+   [check_dominated] and [check_to_unbox] on the compiler's own graph and
+   solution, which is printed and nothing depends on it. The model's tables are
+   the least ([derive_cannot_change], [derive_dominated], [derive_to_unbox]),
+   and must pass the same checks, or the tool fails. The two pairs of tables are
+   compared on the names of the unit, the model's [to_unbox] on the allocations
+   with a source, which are all that the compiler's lets be found.
+
+   Then the unboxed fields of the names of the unit ([unit_unboxed_fields] and
+   [Analysis.get_unboxed_fields], which is the map that
+   [Unboxing_analysis.perform_analysis] returns) are compared by shape, the
+   decisions of the code of the unit ([unit_calling_convention_changes_u] and
+   [get_calling_convention_change]) likewise, and the model's rebuild
+   ([rebuild_unit_unbox]) with what [Reaper.run] returns, as [compare_rebuild]
+   does. The made nodes of the two graphs do not correspond, and are not
+   compared.
+
+   The model has no change of representation and no unboxing of closures. The
+   compiler changes the representation of every closure that it may and does not
+   unbox, which, for a closure whose value slots are not unboxed in turn, only
+   gives its slots new names: the tool undoes that renaming in the conversion of
+   the compiler's output ([undo_renamings]) and compares the rest. A unit for
+   which the compiler changes the representation of a name of the unit otherwise
+   ([Analysis.get_changed_representation]), or unboxes a closure (an allocation
+   that is a set of closures, fields that are slots, or the decision
+   [Unbox_my_closure]), is said to be out of the model, and nothing is compared.
+   A change of representation of a name that the compiler's traversal made, and
+   that is not in the term, is said and makes no difference. *)
+let compare_unboxing ~(names : unit_names) ~(input : Flsemantics.converted)
+    ~(input_unit : Flambda_unit.t) ~(model_facts : Graph_spec.facts)
+    ~(model_tables : Graph_spec.tables) ~(compiler : compiler_side) ~cmx_loader
+    (simplified : Simplify.simplify_result) : bool =
+  let indent = "    " in
+  Oxcaml_flags.Flambda2.reaper_change_calling_conventions
+    := Oxcaml_flags.Set true;
+  Oxcaml_flags.Flambda2.reaper_unbox := Oxcaml_flags.Set true;
+  Format.printf "  with unboxing:@.";
+  let flag = preserve_direct_calls () in
+  let interface = Flsemantics.interface input in
+  let max_unbox_size = nat_of_int (Features.reaper_max_unbox_size ()) in
+  let lambda_lifting = lambda_lifting () in
+  let ua = UA.perform_analysis compiler.solved ~analysis_scope:Current_unit in
+  let changes =
+    UA.compute_code_changes ua ~analysis_scope:Current_unit
+      ~rewrite_kind_with_subkind:(fun _ kind -> kind)
+      ~rewrite_result_types:(fun ~my_closure:_ ~params:_ ~results:_ _ ->
+        Flambda2_lattices.Or_unknown_or_bottom.Unknown)
+      ~code_deps:compiler.code_deps
+  in
+  let compiler_change code_id =
+    if Code_id.Map.mem code_id compiler.code_deps
+    then
+      UA.get_calling_convention_change changes ~analysis_scope:Current_unit
+        code_id
+    else UA.Not_changing_calling_convention
+  in
+  let dominated_raw =
+    read2
+      (fun x y -> PTA.Relations.dominated_by_allocation_point x y)
+      compiler.solved
+  in
+  let unboxed_raw = Code_id_or_name.Map.bindings ua.unboxed_fields in
+  let is_unboxed x = Code_id_or_name.Map.mem x ua.unboxed_fields in
+  let closure_unboxed =
+    List.exists
+      (fun (a, x) ->
+        is_unboxed x
+        &&
+        match PTA.get_set_of_closures_def compiler.solved a with
+        | Set_of_closures _ -> true
+        | Not_a_set_of_closures -> false)
+      dominated_raw
+    || List.exists (fun (_, fields) -> reads_a_slot fields) unboxed_raw
+    || Code_id.Map.exists
+         (fun code_id _ ->
+           match compiler_change code_id with
+           | Changing_calling_convention
+               { my_closure_decision = Unbox_my_closure _; _ } ->
+             true
+           | _ -> false)
+         compiler.code_deps
+  in
+  let changed, changed_made =
+    List.partition
+      (fun (name, _) -> is_unit_node (compiler.compiler_node name))
+      (Code_id_or_name.Map.bindings ua.changed_representation)
+  in
+  if changed_made <> []
+  then
+    Format.printf
+      "%sthe compiler changes the representation of %d names that its \
+       traversal made, which are not in the term@."
+      indent (List.length changed_made);
+  if not (List.for_all (fun (_, (repr, _)) -> renames_only repr) changed)
+  then (
+    Format.printf
+      "%sOUT OF THE MODEL: the compiler changes the representation of %d names \
+       of the unit, not only renaming the slots of closures@."
+      indent (List.length changed);
+    true)
+  else if closure_unboxed
+  then (
+    Format.printf "%sOUT OF THE MODEL: the compiler unboxes a closure@." indent;
+    true)
+  else
+    let node = compiler.compiler_node in
+    let dominated_c = List.map (fun (a, x) -> node a, node x) dominated_raw in
+    let names_c =
+      List.filter_map
+        (fun (_, x) -> if is_unboxed x then Some (node x) else None)
+        dominated_raw
+    in
+    let to_unbox_c = Unboxing.to_unbox_of_unboxed_names dominated_c names_c in
+    (match
+       List.sort_uniq Code_id_or_name.compare
+         (List.map (fun (_, (_, closure)) -> closure) changed)
+     with
+    | [] -> ()
+    | closures ->
+      Format.printf
+        "%sthe compiler renames the slots of %d closures (a change of \
+         representation that only renames), which the conversion of its output \
+         undoes@."
+        indent (List.length closures));
+    let cannot_change_c =
+      List.filter_map
+        (fun (code_id, node) ->
+          match compiler_change code_id with
+          | Not_changing_calling_convention -> Some node
+          | Changing_calling_convention _ -> None)
+        compiler.code_ids
+    in
+    let compiler_dominated_ok =
+      Unboxing.check_dominated compiler.compiler_tables dominated_c
+    in
+    let compiler_to_unbox_ok =
+      Unboxing.check_to_unbox is_local compiler.compiler_facts
+        compiler.compiler_tables cannot_change_c max_unbox_size lambda_lifting
+        to_unbox_c
+    in
+    let cannot_change_m = Cc.derive_cannot_change model_facts model_tables in
+    let dominated_m = Unboxing.derive_dominated model_tables in
+    let to_unbox_m =
+      Unboxing.derive_to_unbox is_local model_facts model_tables cannot_change_m
+        max_unbox_size lambda_lifting
+    in
+    let model_dominated_ok =
+      Unboxing.check_dominated model_tables dominated_m
+    in
+    let model_to_unbox_ok =
+      Unboxing.check_to_unbox is_local model_facts model_tables cannot_change_m
+        max_unbox_size lambda_lifting to_unbox_m
+    in
+    Format.printf
+      "%sthe table of dominated_by_allocation_point: the model's %s the check, \
+       the compiler's, with its graph, %s it@."
+      indent
+      (passes model_dominated_ok)
+      (passes compiler_dominated_ok);
+    Format.printf
+      "%sthe table of to_unbox: the model's %s the check, the compiler's, with \
+       its graph, %s it@."
+      indent (passes model_to_unbox_ok)
+      (passes compiler_to_unbox_ok);
+    if not (model_dominated_ok && model_to_unbox_ok)
+    then false
+    else
+      let unit_nodes = unit_nodes names in
+      let yes_no b = if b then "yes" else "no" in
+      let pairs l =
+        dedup (List.filter (fun (a, x) -> is_unit_node a && is_unit_node x) l)
+      in
+      let dm = pairs dominated_m in
+      let dc = pairs dominated_c in
+      let has_source x = Graph_spec.mem_node x model_tables.t_has_source in
+      let tm =
+        dedup (List.filter (fun x -> is_unit_node x && has_source x) to_unbox_m)
+      in
+      let tc = dedup (List.filter is_unit_node to_unbox_c) in
+      (match
+         ( List.filter
+             (fun p -> List.mem p dm <> List.mem p dc)
+             (dedup (dm @ dc)),
+           List.filter
+             (fun x -> List.mem x tm <> List.mem x tc)
+             (dedup (tm @ tc)) )
+       with
+      | [], [] ->
+        Format.printf
+          "%sthe two pairs of tables on the names of the unit: the same, %d \
+           names dominated by an allocation, %d allocations to unbox@."
+          indent (List.length dm) (List.length tm)
+      | dominated, to_unbox ->
+        List.iter
+          (fun ((a, x) as p) ->
+            Format.printf "%s%a dominated by %a: model %s, compiler %s@." indent
+              print_node x print_node a
+              (yes_no (List.mem p dm))
+              (yes_no (List.mem p dc)))
+          dominated;
+        List.iter
+          (fun x ->
+            Format.printf "%s%a to unbox: model %s, compiler %s@." indent
+              print_node x
+              (yes_no (List.mem x tm))
+              (yes_no (List.mem x tc)))
+          to_unbox);
+      let model_unboxed, _ =
+        Unboxing.unit_unboxed_fields model_facts model_tables dominated_m
+          to_unbox_m input.body
+      in
+      let compiler_unboxed =
+        List.filter_map
+          (fun (x, fields) ->
+            let n = node x in
+            if is_unit_node n then Some (n, compiler_shape fields) else None)
+          unboxed_raw
+      in
+      let fields =
+        List.map
+          (fun n ->
+            ( n,
+              Option.map model_shape (List.assoc_opt n model_unboxed),
+              List.assoc_opt n compiler_unboxed ))
+          unit_nodes
+      in
+      (match List.filter (fun (_, m, c) -> m <> c) fields with
+      | [] ->
+        Format.printf
+          "%sthe unboxed fields of the %d names of the unit: the same, %d \
+           unboxed@."
+          indent (List.length unit_nodes)
+          (List.length (List.filter (fun (_, m, _) -> m <> None) fields))
+      | differences ->
+        List.iter
+          (fun (n, m, c) ->
+            Format.printf "%s%a: model %a; compiler %a@." indent print_node n
+              print_unboxed m print_unboxed c)
+          differences);
+      List.iter
+        (fun (n, m, _) ->
+          match m with
+          | None -> ()
+          | Some shape ->
+            Format.printf "%s%a: %a@." indent print_node n print_shape shape)
+        fields;
+      let deps = Cc.unit_code_deps flag interface input.body in
+      let decisions =
+        List.map
+          (fun (id, model) ->
+            let compiler =
+              match Flsemantics.Code_ids.name_of id with
+              | Some code_id -> compiler_change_shape (compiler_change code_id)
+              | None -> Not_changing
+            in
+            id, model_change_shape model, compiler)
+          (Unboxing.unit_calling_convention_changes_u model_facts model_tables
+             cannot_change_m deps dominated_m to_unbox_m input.body)
+      in
+      let changing =
+        List.filter
+          (fun (_, model, _) ->
+            match model with Changing _ -> true | Not_changing -> false)
+          decisions
+      in
+      (match
+         List.filter (fun (_, model, compiler) -> model <> compiler) decisions
+       with
+      | [] ->
+        Format.printf
+          "%sthe decisions on the %d code ids of the unit: the same, %d \
+           changing@."
+          indent (List.length decisions) (List.length changing)
+      | differences ->
+        List.iter
+          (fun (id, model, compiler) ->
+            Format.printf "%s%a: model %a; compiler %a@." indent print_node
+              (Graph_spec.Node_code_id id) print_change_shape model
+              print_change_shape compiler)
+          differences);
+      List.iter
+        (fun (id, model, _) ->
+          Format.printf "%s%a: %a@." indent print_node
+            (Graph_spec.Node_code_id id) print_change_shape model)
+        changing;
+      let preserve =
+        match Features.reaper_preserve_direct_calls () with
+        | Auto | Always -> true
+        | Never | Zero_alloc -> false
+      in
+      let rebuilt_body =
+        within_budget "the model's rebuild" ~indent ~facts:model_facts ~input
+          (fun () ->
+            Unboxing.rebuild_unit_unbox model_facts model_tables cannot_change_m
+              deps dominated_m to_unbox_m preserve input.body)
+      in
+      (match
+         let problem, skeleton =
+           Reaper.Traverse.run simplified.unit
+             ~final_typing_env:(With_types simplified.final_typing_env)
+             ~free_names:simplified.free_names
+         in
+         let solution =
+           Reaper.Analysis.solve problem ~analysis_scope:Current_unit
+         in
+         let reaped =
+           Reaper.Rebuild.rebuild ~machine_width:Sixty_four ~cmx_loader
+             ~all_code:simplified.all_code ~skeleton ~solution
+         in
+         undo_renamings names ~skeleton ~solution input.body;
+         reaped
+       with
+      | exception (Misc.Fatal_error as e) ->
+        Format.printf "%sthe compiler's reaper STOPPED on the unit (%s)@."
+          indent (Printexc.to_string e)
+      | reaped ->
+        compare_rebuild ~indent ~input ~input_unit ~rebuilt_body
+          ~compiler_output:reaped.unit);
+      true
+
 (* ---- One example ------------------------------------------------------ *)
 
 let print_graphs () =
@@ -1793,18 +2331,25 @@ let check ~filename ~cmx_loader (simplified : Simplify.simplify_result) : bool =
                        (solution_of_tables model_tables)
                        preserve input.body))
               ~compiler_output:reaped.unit);
-        timed "the changes of calling convention" (fun () ->
-            compare_calling_conventions ~input ~input_unit:unit
-              ~unit_code_ids:
-                (List.filter
-                   (fun (node : Graph_spec.node) ->
-                     match node with
-                     | Node_code_id _ -> true
-                     | Node_variable _ | Node_symbol _ | Node_all_constants
-                     | Node_made _ ->
-                       false)
-                   (unit_nodes names))
-              ~model_facts ~model_tables ~compiler ~cmx_loader simplified))
+        let unit_code_ids =
+          List.filter
+            (fun (node : Graph_spec.node) ->
+              match node with
+              | Node_code_id _ -> true
+              | Node_variable _ | Node_symbol _ | Node_all_constants
+              | Node_made _ ->
+                false)
+            (unit_nodes names)
+        in
+        let cc_checked =
+          timed "the changes of calling convention" (fun () ->
+              compare_calling_conventions ~input ~input_unit:unit ~unit_code_ids
+                ~model_facts ~model_tables ~compiler ~cmx_loader simplified)
+        in
+        cc_checked
+        && timed "the unboxing" (fun () ->
+            compare_unboxing ~names ~input ~input_unit:unit ~model_facts
+              ~model_tables ~compiler ~cmx_loader simplified))
 
 (* The example in [filename], read and given to Simplify as flsemantics.ml does
    it ([Flsemantics.check_file]). Whether nothing made the tool fail. *)
@@ -1864,7 +2409,8 @@ let main () =
   Location.read_clflags_from_env ();
   (* The reaper without changes of calling convention and without unboxing,
      whatever the command line said, for the first comparison;
-     [compare_calling_conventions] sets the first flag for the second. *)
+     [compare_calling_conventions] sets the first flag for the second, and
+     [compare_unboxing] both for the third. *)
   Oxcaml_flags.Flambda2.reaper_change_calling_conventions
     := Oxcaml_flags.Set false;
   Oxcaml_flags.Flambda2.reaper_unbox := Oxcaml_flags.Set false;

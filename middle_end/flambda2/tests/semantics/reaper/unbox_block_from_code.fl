@@ -1,0 +1,16 @@
+(* A block returned by code whose calling convention changes, and read by the
+   caller: [make], which is not inlined, returns a block of its parameter and
+   8, and the unit reads field 0 of what it returns. [make] returns the field
+   instead of the block. *)
+let code inline(never) size(5) make (x) my_closure &my_region my_depth
+      -> k * e =
+  let p = %block.[`0`].my_region (x, 8) in
+  cont k (p)
+in
+let $Unbox_block_from_code_make = closure make @make &toplevel in
+let a = %opaque (9) in
+apply direct(make &toplevel) $Unbox_block_from_code_make (a) -> k1 * error
+  where k1 (q) =
+    let y = %block_load.mut.[`0`] (q) in
+    let $camlUnbox_block_from_code = Block 0 (y) in
+    cont done ($camlUnbox_block_from_code)
