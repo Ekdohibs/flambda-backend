@@ -54,6 +54,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaSemanticsSpec
   FlambdaValidateSpec FlambdaValidateProofs
   FlambdaValidateKnowingSpec FlambdaValidateKnowingProofs
   FlambdaImportsSpec FlambdaImportsProofs FlambdaValidateImportsSpec.
+From OxCamlFlambda2 Require FlambdaSharedReadsProofs.
 From OxCamlFlambda2 Require FlambdaHoistStaticsProofs.
 From OxCamlFlambda2Types Require FlambdaSimplifyCarriedSpec
   FlambdaSimplifyCarriedProofs.
@@ -474,12 +475,18 @@ Proof.
       apply (refines_trans _ _ _ Hgiven_refines).
       apply (refines_trans _ _ _
         (fold_known_unit_refines_imports imports given folded Hfold Hgiven)).
-      exact (FlambdaKnownSlotsProofs.read_known_slots_refines_imports imports
-               folded).
+      apply (refines_trans _ _ _
+        (FlambdaKnownSlotsProofs.read_known_slots_refines_imports imports
+           folded)).
+      exact (FlambdaSharedReadsProofs.share_static_reads_refines_imports
+               imports _).
     - split; [ | exact Hfree ].
       apply (refines_trans _ _ _ Hgiven_refines).
-      exact (FlambdaKnownSlotsProofs.read_known_slots_refines_imports imports
-               given). }
+      apply (refines_trans _ _ _
+        (FlambdaKnownSlotsProofs.read_known_slots_refines_imports imports
+           given)).
+      exact (FlambdaSharedReadsProofs.share_static_reads_refines_imports
+               imports _). }
   destruct Hround as [Hround Hrest].
   destruct (expr_eqb [] [] e (normalise_lifted_round avoid kept e));
     [ exact Hround | ].
@@ -524,6 +531,9 @@ Proof.
       apply (refines_trans _ _ _
         (FlambdaKnownSlotsProofs.read_known_slots_refines_imports imports
            folded)).
+      apply (refines_trans _ _ _
+        (FlambdaSharedReadsProofs.share_static_reads_refines_imports imports
+           _)).
       exact (demote_and_tidy_refines inner _ [] [] (imports_statics imports)
                empty_heap).
     - split; [ | exact Hfree ].
@@ -531,6 +541,9 @@ Proof.
       apply (refines_trans _ _ _
         (FlambdaKnownSlotsProofs.read_known_slots_refines_imports imports
            given)).
+      apply (refines_trans _ _ _
+        (FlambdaSharedReadsProofs.share_static_reads_refines_imports imports
+           _)).
       exact (demote_and_tidy_refines inner _ [] [] (imports_statics imports)
                empty_heap). }
   destruct Hround as [Hround Hrest].

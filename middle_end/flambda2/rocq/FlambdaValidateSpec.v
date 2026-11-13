@@ -115,11 +115,18 @@
    replacing the projection of a value slot that every set of
    closures of the unit gives the same symbol or constant by that
    symbol or constant, where the symbol is in scope and the code is
-   not that of a stub
-   (FlambdaKnownSlotsSpec.read_known_slots; [normalise_lifted]): in
+   not that of a stub (FlambdaKnownSlotsSpec.read_known_slots): in
    the code of a closure that a function makes, the slot that holds a
    function of the unit is the symbol of that function once the
-   function is lifted. Between those rounds and the same rounds once
+   function is lifted; and by making the read of a place of a static
+   constant the variable of an earlier read, where that variable is
+   still in scope and the two places are of the constants of one
+   group of static bindings, which gave them one variable
+   (FlambdaSharedReadsSpec.share_static_reads; [normalise_lifted]):
+   where the code of a function reads a value that is computed when
+   the unit runs, once through its own closure and once through the
+   block of its module, the second read is the variable of the first.
+   Between those rounds and the same rounds once
    more it applies the rewrites from the types, as the normalisation
    of the term before does. Every round of that normalisation, after each
    of the liftings, makes no name that is the return or the exception
@@ -381,6 +388,7 @@ From OxCamlFlambda2 Require Import FlambdaWrapReturnsSpec
 From OxCamlFlambda2 Require Import FlambdaAliasLetsSpec.
 From OxCamlFlambda2 Require Import FlambdaDemoteSpec.
 From OxCamlFlambda2 Require Import FlambdaKnownSlotsSpec.
+From OxCamlFlambda2 Require Import FlambdaSharedReadsSpec.
 From OxCamlFlambda2 Require Import FlambdaStubCallsSpec.
 From OxCamlFlambda2 Require Import FlambdaNeverReturnsSpec.
 From OxCamlFlambda2 Require Import FlambdaUnusedHeadStaticsSpec.
@@ -952,7 +960,9 @@ Definition with_known (e : expr) : expr :=
    round followed by the use of what is known of the static closures in
    sight, of what the unit binds its symbols to, and of the value slots
    that every set of closures of the unit gives one symbol or
-   constant.
+   constant, and by the sharing of the reads of the places that one
+   group of static bindings gave one variable
+   (FlambdaSharedReadsSpec.share_static_reads).
 
    Between those rounds and the same rounds once more come the
    rewrites that Simplify makes from the types, under the same test
@@ -968,9 +978,11 @@ Definition with_known (e : expr) : expr :=
    that comparison. *)
 Definition normalise_lifted_round (avoid : list continuation)
     (kept : list code_id) (e : expr) : expr :=
-  read_known_slots
-    (with_known
-       (use_known_closures (normalise_before_round_avoiding avoid kept e))).
+  share_static_reads
+    (read_known_slots
+       (with_known
+          (use_known_closures
+             (normalise_before_round_avoiding avoid kept e)))).
 
 Definition normalise_lifted (rounds : nat) (avoid : list continuation)
     (kept : list code_id) (e : expr) : expr :=
@@ -1003,13 +1015,15 @@ Definition unit_continuations (Ls : list lifting) : list continuation :=
    [normalise_lifted_round] uses after its round is used here, in
    rounds of its own, each followed by [demote_and_tidy] again: what
    is known of the static closures in sight, what the unit binds its
-   symbols to, and the value slots that every set of closures of the
-   unit gives one symbol or constant. No call is inlined and nothing
-   is renamed apart, so these rounds make no name; a call that they
-   make direct stays a call. *)
+   symbols to, the value slots that every set of closures of the
+   unit gives one symbol or constant, and the places that one group
+   of static bindings gave one variable. No call is inlined and
+   nothing is renamed apart, so these rounds make no name; a call
+   that they make direct stays a call. *)
 Definition demote_and_tidy_known_round (rounds : nat) (e : expr) : expr :=
   demote_and_tidy rounds
-    (read_known_slots (with_known (use_known_closures e))).
+    (share_static_reads
+       (read_known_slots (with_known (use_known_closures e)))).
 
 Definition demote_and_tidy_known (rounds : nat) (e : expr) : expr :=
   iterate rounds (demote_and_tidy_known_round rounds)

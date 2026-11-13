@@ -93,6 +93,7 @@ From OxCamlFlambda2 Require FlambdaDemoteProofs.
 From OxCamlFlambda2 Require Import FlambdaLiftObservedSpec.
 From OxCamlFlambda2 Require Import FlambdaKnownSlotsSpec.
 From OxCamlFlambda2 Require FlambdaKnownSlotsProofs.
+From OxCamlFlambda2 Require FlambdaSharedReadsSpec FlambdaSharedReadsProofs.
 From OxCamlFlambda2 Require Import FlambdaStubCallsSpec.
 From OxCamlFlambda2 Require FlambdaStubCallsProofs.
 From OxCamlFlambda2 Require Import FlambdaNeverReturnsSpec.
@@ -7522,24 +7523,38 @@ Proof.
   exact FlambdaStaticsScopeProofs.read_known_slots_anywhere_keeps_scope.
 Qed.
 
+Lemma share_static_reads_scope :
+  keeps_scope FlambdaSharedReadsSpec.share_static_reads.
+Proof. exact FlambdaSharedReadsProofs.share_static_reads_keeps_scope. Qed.
+
+Lemma share_static_reads_rewrite_equivariant :
+  rewrite_equivariant FlambdaSharedReadsSpec.share_static_reads.
+Proof. exact FlambdaSharedReadsProofs.share_static_reads_equivariant. Qed.
+
 Definition use_known (e : expr) : expr :=
-  read_known_slots (with_known (use_known_closures e)).
+  FlambdaSharedReadsSpec.share_static_reads
+    (read_known_slots (with_known (use_known_closures e))).
 
 Lemma use_known_scope : keeps_scope use_known.
 Proof.
   exact
-    (keeps_scope_compose (fun e => with_known (use_known_closures e))
-       read_known_slots
-       (keeps_scope_compose use_known_closures with_known
-          use_known_closures_scope with_known_scope)
-       read_known_slots_scope).
+    (keeps_scope_compose
+       (fun e => read_known_slots (with_known (use_known_closures e)))
+       FlambdaSharedReadsSpec.share_static_reads
+       (keeps_scope_compose (fun e => with_known (use_known_closures e))
+          read_known_slots
+          (keeps_scope_compose use_known_closures with_known
+             use_known_closures_scope with_known_scope)
+          read_known_slots_scope)
+       share_static_reads_scope).
 Qed.
 
 Lemma use_known_equivariant : rewrite_equivariant use_known.
 Proof.
   intros r e. unfold use_known.
-  rewrite use_known_closures_rewrite_equivariant, with_known_equivariant.
-  apply read_known_slots_rewrite_equivariant.
+  rewrite use_known_closures_rewrite_equivariant, with_known_equivariant,
+    read_known_slots_rewrite_equivariant.
+  apply share_static_reads_rewrite_equivariant.
 Qed.
 
 (* What ends the normalisation of a term in which something was
@@ -7559,7 +7574,8 @@ Lemma demote_and_tidy_known_round_equivariant (rounds : nat) :
 Proof.
   intros r e. unfold demote_and_tidy_known_round.
   rewrite use_known_closures_rewrite_equivariant, with_known_equivariant,
-    read_known_slots_rewrite_equivariant.
+    read_known_slots_rewrite_equivariant,
+    share_static_reads_rewrite_equivariant.
   apply demote_and_tidy_equivariant.
 Qed.
 

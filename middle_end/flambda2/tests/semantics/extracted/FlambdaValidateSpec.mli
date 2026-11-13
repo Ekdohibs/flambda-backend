@@ -43,6 +43,7 @@ open FlambdaSameComparisonSpec
 open FlambdaSameHandlersSpec
 open FlambdaShadowParamsSpec
 open FlambdaShareProjectionsSpec
+open FlambdaSharedReadsSpec
 open FlambdaShortcutSpec
 open FlambdaSimplifyCarriedSpec
 open FlambdaSinkContsSpec

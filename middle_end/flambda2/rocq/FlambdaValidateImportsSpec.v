@@ -122,7 +122,8 @@
      of the tables that a lifting puts at the head of the unit
      (FlambdaUnusedHeadStaticsSpec.add_head_tables) and of what is
      done to a lifted term (FlambdaKnownSymbolsSpec,
-     FlambdaKnownSlotsSpec, FlambdaUnusedSlotsSpec,
+     FlambdaKnownSlotsSpec, FlambdaSharedReadsSpec,
+     FlambdaUnusedSlotsSpec,
      FlambdaHoistCodeSpec, FlambdaHoistStaticsSpec), from the static
      environment of the imports. From the imports that verdict is the
      last section of this file;
@@ -138,8 +139,9 @@
    them, at the static environment of the imports. The law of each
    pass that the validation of a lifted term makes is stated from the
    imports in the file of the pass. Those of the rounds, of the
-   removal of value slots, of the code taken first and of the reading
-   of value slots that are known ask nothing there. Those of the four
+   removal of value slots, of the code taken first, of the reading
+   of value slots that are known and of the sharing of the reads of
+   two places that hold one variable ask nothing there. Those of the four
    liftings ask that the imports bind no name that the term lifted
    binds; those of the use of what the unit binds its symbols to and
    of the static bindings taken first ask it of the term that the
@@ -172,7 +174,8 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaSemanticsSpec
   FlambdaStubCallsSpec FlambdaNeverReturnsSpec
   FlambdaLiftSpec FlambdaLiftFromCodeSpec FlambdaLiftFromArmsSpec
   FlambdaLiftAroundSpec FlambdaKnownSymbolsSpec FlambdaKnownClosuresSpec
-  FlambdaKnownSlotsSpec FlambdaHoistCodeSpec FlambdaHoistStaticsSpec
+  FlambdaKnownSlotsSpec FlambdaSharedReadsSpec FlambdaHoistCodeSpec
+  FlambdaHoistStaticsSpec
   FlambdaFloatCodeSpec FlambdaGuardScopeSpec
   FlambdaValidateSpec FlambdaValidateKnowingSpec
   FlambdaImportsSpec.
@@ -429,8 +432,9 @@ Fixpoint known_free_in (statics : static_env) (rounds : nat)
     in
     match fold_known_unit given with
     | Some folded =>
-      static_names_free_in statics given && rest (read_known_slots folded)
-    | None => rest (read_known_slots given)
+      static_names_free_in statics given
+      && rest (share_static_reads (read_known_slots folded))
+    | None => rest (share_static_reads (read_known_slots given))
     end
   end.
 
@@ -464,8 +468,12 @@ Fixpoint tidy_known_free_in (statics : static_env) (inner rounds : nat)
     match fold_known_unit given with
     | Some folded =>
       static_names_free_in statics given
-      && rest (demote_and_tidy inner (read_known_slots folded))
-    | None => rest (demote_and_tidy inner (read_known_slots given))
+      && rest
+           (demote_and_tidy inner
+              (share_static_reads (read_known_slots folded)))
+    | None =>
+      rest
+        (demote_and_tidy inner (share_static_reads (read_known_slots given)))
     end
   end.
 
@@ -530,7 +538,8 @@ Definition head_removal_free_in (statics : static_env) (D : dropped)
      that the verdict is of the second, [statics_first_free_in] of
      both terms that the second compares.
    Nothing is asked for the removal of value slots, for the code taken
-   first, or for the reading of value slots that are known: their laws
+   first, for the reading of value slots that are known, or for the
+   sharing of the reads of two places that hold one variable: their laws
    from the imports have no premise. Nor for the calls of the lifted
    term that are taken on when its rounds are over
    (FlambdaValidateSpec.with_returns, under the choice that

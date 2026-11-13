@@ -41,6 +41,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaSemanticsSpec
   FlambdaUnusedSlotsObservedSpec FlambdaUnusedSlotsObservedProofs
   FlambdaHoistStaticsSpec FlambdaHoistStaticsObservedSpec
   FlambdaHoistStaticsObservedProofs FlambdaValidateRelatedSpec.
+From OxCamlFlambda2 Require FlambdaSharedReadsProofs.
 From OxCamlFlambda2Types Require FlambdaSimplifyCarriedSpec
   FlambdaSimplifyCarriedProofs.
 Import ListNotations.
@@ -185,12 +186,18 @@ Proof.
       apply (refines_trans _ _ _
         (fold_known_unit_refines_observed imports conts given folded Hfold
            Hgiven Hobservers)).
-      exact (read_known_slots_refines_observed imports conts folded
-               Hobservers).
+      apply (refines_trans _ _ _
+        (read_known_slots_refines_observed imports conts folded
+           Hobservers)).
+      exact (FlambdaSharedReadsProofs.share_static_reads_refines_observed
+               imports conts _ Hobservers).
     - split; [ | exact Hfree ].
       apply (refines_trans _ _ _ Hgiven_refines).
-      exact (read_known_slots_refines_observed imports conts given
-               Hobservers). }
+      apply (refines_trans _ _ _
+        (read_known_slots_refines_observed imports conts given
+           Hobservers)).
+      exact (FlambdaSharedReadsProofs.share_static_reads_refines_observed
+               imports conts _ Hobservers). }
   destruct Hround as [Hround Hrest].
   destruct (expr_eqb [] [] e (normalise_lifted_round avoid kept e));
     [ exact Hround | ].
@@ -257,12 +264,18 @@ Proof.
       apply (refines_trans _ _ _
         (read_known_slots_refines_observed imports conts folded
            Hobservers)).
+      apply (refines_trans _ _ _
+        (FlambdaSharedReadsProofs.share_static_reads_refines_observed
+           imports conts _ Hobservers)).
       exact (demote_and_tidy_refines inner _ [] conts statics empty_heap).
     - split; [ | exact Hfree ].
       apply (refines_trans _ _ _ Hgiven_refines).
       apply (refines_trans _ _ _
         (read_known_slots_refines_observed imports conts given
            Hobservers)).
+      apply (refines_trans _ _ _
+        (FlambdaSharedReadsProofs.share_static_reads_refines_observed
+           imports conts _ Hobservers)).
       exact (demote_and_tidy_refines inner _ [] conts statics empty_heap). }
   destruct Hround as [Hround Hrest].
   destruct (expr_eqb [] [] e (demote_and_tidy_known_round inner e));

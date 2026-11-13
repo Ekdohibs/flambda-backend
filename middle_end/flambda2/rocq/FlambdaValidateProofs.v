@@ -89,6 +89,7 @@ From OxCamlFlambda2 Require Import FlambdaUnusedHeadStaticsSpec
 From OxCamlFlambda2 Require FlambdaDemoteProofs.
 From OxCamlFlambda2 Require Import FlambdaKnownSlotsSpec
   FlambdaKnownSlotsProofs.
+From OxCamlFlambda2 Require FlambdaSharedReadsProofs.
 From OxCamlFlambda2 Require Import FlambdaStubCallsSpec
   FlambdaStubCallsProofs.
 From OxCamlFlambda2 Require Import FlambdaNeverReturnsSpec
@@ -728,7 +729,8 @@ Proof.
     apply (refines_trans _ _ _
       (expr_refines_program _ _ (use_known_closures_refines _))).
     apply (refines_trans _ _ _ (with_known_program_refines _)).
-    apply read_known_slots_program_refines. }
+    apply (refines_trans _ _ _ (read_known_slots_program_refines _)).
+    apply FlambdaSharedReadsProofs.share_static_reads_program_refines. }
   induction rounds as [ | rounds IH]; intros e; cbn [iterate];
     [ apply refines_refl | ].
   cbv zeta.
@@ -766,6 +768,8 @@ Proof.
     (expr_refines_program _ _ (use_known_closures_refines _))).
   apply (refines_trans _ _ _ (with_known_program_refines _)).
   apply (refines_trans _ _ _ (read_known_slots_program_refines _)).
+  apply (refines_trans _ _ _
+    (FlambdaSharedReadsProofs.share_static_reads_program_refines _)).
   apply expr_refines_program, demote_and_tidy_refines.
 Qed.
 

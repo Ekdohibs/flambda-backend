@@ -43,6 +43,7 @@ open FlambdaSameComparisonSpec
 open FlambdaSameHandlersSpec
 open FlambdaShadowParamsSpec
 open FlambdaShareProjectionsSpec
+open FlambdaSharedReadsSpec
 open FlambdaShortcutSpec
 open FlambdaSimplifyCarriedSpec
 open FlambdaSinkContsSpec
@@ -288,9 +289,10 @@ let with_known e = match fold_known_unit e with Some e' -> e' | None -> e
     expr **)
 
 let normalise_lifted_round avoid kept e =
-  read_known_slots
-    (with_known
-       (use_known_closures (normalise_before_round_avoiding avoid kept e)))
+  share_static_reads
+    (read_known_slots
+       (with_known
+          (use_known_closures (normalise_before_round_avoiding avoid kept e))))
 
 (** val normalise_lifted : nat -> continuation list -> code_id list -> expr ->
     expr **)
@@ -311,7 +313,8 @@ let unit_continuations ls =
 (** val demote_and_tidy_known_round : nat -> expr -> expr **)
 
 let demote_and_tidy_known_round rounds e =
-  demote_and_tidy rounds (read_known_slots (with_known (use_known_closures e)))
+  demote_and_tidy rounds
+    (share_static_reads (read_known_slots (with_known (use_known_closures e))))
 
 (** val demote_and_tidy_known : nat -> expr -> expr **)
 

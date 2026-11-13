@@ -14,6 +14,7 @@ open FlambdaLiftSpec
 open FlambdaLoopifySpec
 open FlambdaModel
 open FlambdaNeverReturnsSpec
+open FlambdaSharedReadsSpec
 open FlambdaSimplifyCarriedSpec
 open FlambdaStaticsOrderSpec
 open FlambdaStubCallsSpec

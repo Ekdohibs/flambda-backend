@@ -14,6 +14,7 @@ open FlambdaLiftSpec
 open FlambdaLoopifySpec
 open FlambdaModel
 open FlambdaNeverReturnsSpec
+open FlambdaSharedReadsSpec
 open FlambdaSimplifyCarriedSpec
 open FlambdaStaticsOrderSpec
 open FlambdaStubCallsSpec
@@ -84,8 +85,9 @@ let rec known_free_in statics rounds avoid kept e =
     in
     match fold_known_unit given with
     | Some folded ->
-      static_names_free_in statics given && rest (read_known_slots folded)
-    | None -> rest (read_known_slots given))
+      static_names_free_in statics given
+      && rest (share_static_reads (read_known_slots folded))
+    | None -> rest (share_static_reads (read_known_slots given)))
 
 (** val normalise_lifted_free_in : static_env -> nat -> continuation list ->
     code_id list -> expr -> bool **)
@@ -113,8 +115,12 @@ let rec tidy_known_free_in statics inner rounds e =
     match fold_known_unit given with
     | Some folded ->
       static_names_free_in statics given
-      && rest (demote_and_tidy inner (read_known_slots folded))
-    | None -> rest (demote_and_tidy inner (read_known_slots given)))
+      && rest
+           (demote_and_tidy inner
+              (share_static_reads (read_known_slots folded)))
+    | None ->
+      rest (demote_and_tidy inner (share_static_reads (read_known_slots given)))
+    )
 
 (** val demote_and_tidy_known_free_in : static_env -> nat -> expr -> bool **)
 
