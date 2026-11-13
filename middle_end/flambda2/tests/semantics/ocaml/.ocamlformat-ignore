@@ -5,8 +5,13 @@ exclave_pair.ml
 iarray_exported.ml
 iarray_in_function.ml
 iarray_literal.ml
+iarray_literal_measured_one_call_inlined.ml
+iarray_measured_one_call_inlined.ml
+iarray_of_variable_measured_one_call_inlined.ml
+iarray_of_variable_read_one_call_inlined.ml
 iarray_phys_equal.ml
 iarray_read_in_function.ml
+iarray_read_one_call_inlined.ml
 ignored_second_of_pair.ml
 inl_callee_region_twice.ml
 late_three_values_interleaved.ml

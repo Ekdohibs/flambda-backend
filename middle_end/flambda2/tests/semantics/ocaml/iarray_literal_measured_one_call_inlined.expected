@@ -1,0 +1,8 @@
+iarray_literal_measured_one_call_inlined.fl:
+  before Simplify (27 steps): returns [0: 4; 5; 2]
+  after Simplify (18 steps): returns [0: 4; 5; 2]
+  the check of kinds: passes before, passes after
+  calls outside code: 3 before, 2 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated: the same once closures and blocks are lifted to symbols and the terms normalised

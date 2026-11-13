@@ -1,0 +1,57 @@
+let $camlIarray_measured_one_call_inlined__first_const_0 = Block 0 () in
+(let code inline(never) size(8)
+       make_0 (x/67 : imm tagged)
+         my_closure/68 &my_alloc_region/69 my_depth/70
+         -> k/26 * k/27
+         : imm array =
+   let next_depth/71 = rec_info (succ my_depth/70) in
+   let Pmakearray/72 = %array.`imm`.my_alloc_region/69 (x/67, x/67) in
+   cont k/26 (Pmakearray/72)
+ in
+ let code inline(never) size(3)
+       len_1 (a/73 : imm array)
+         my_closure/74 &my_alloc_region/75 my_depth/76
+         -> k/28 * k/29
+         : imm tagged =
+   let next_depth/77 = rec_info (succ my_depth/76) in
+   let Parraylength/78 = %array_length.`imm` (a/73) in
+   cont k/28 (Parraylength/78)
+ in
+ let code size(3)
+       g_2 (x/79 : imm tagged)
+         my_closure/80 &my_alloc_region/81 my_depth/82
+         -> k/30 * k/31
+         : imm tagged =
+   let next_depth/83 = rec_info (succ my_depth/82) in
+   let int_add/84 = %int_barith.add (x/79, 1) in
+   cont k/30 (int_add/84)
+ in
+ let make/85 = closure make_0 @make &toplevel in
+ let len/86 = closure len_1 @len &toplevel in
+ let g/87 = closure g_2 @g &toplevel in
+ apply direct(g_2 &toplevel) (g/87 : _ -> imm tagged) (3) -> k/32 * error
+   where k/32 (a/88 : imm tagged) =
+     ((let Popaque/93 = %opaque (4) in
+       apply direct(g_2 &toplevel) inlined(never)
+         (g/87 : _ -> imm tagged) (Popaque/93) -> k/33 * error)
+        where k/33 (b/89 : imm tagged) =
+          (apply direct(make_0 &toplevel)
+             (make/85 : _ -> imm array) (5) -> k/35 * error
+             where k/35 (apply_result/92 : imm array) =
+               apply direct(len_1 &toplevel)
+                 (len/86 : _ -> imm tagged) (apply_result/92) -> k/34 * error
+             where k/34 (n/90 : imm tagged) =
+               let Pmakeblock/91 = %block.[`0`].`toplevel` (a/88, b/89, n/90)
+               in
+               cont k/25 (Pmakeblock/91))))
+  where k/25 define_root_symbol (module_block/63) =
+    let field_0/64 = %block_load.tag[`0`].`size`[`3`].[`0`] (module_block/63)
+    in
+    let field_1/65 = %block_load.tag[`0`].`size`[`3`].[`1`] (module_block/63)
+    in
+    let field_2/66 = %block_load.tag[`0`].`size`[`3`].[`2`] (module_block/63)
+    in
+    let $camlIarray_measured_one_call_inlined =
+      Block 0 (field_0/64, field_1/65, field_2/66)
+    in
+    cont done ($camlIarray_measured_one_call_inlined)

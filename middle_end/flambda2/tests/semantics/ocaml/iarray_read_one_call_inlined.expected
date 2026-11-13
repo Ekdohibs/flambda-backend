@@ -1,0 +1,8 @@
+iarray_read_one_call_inlined.fl:
+  before Simplify (31 steps): returns [0: 4; 5; 5]
+  after Simplify (23 steps): returns [0: 4; 5; 5]
+  the check of kinds: passes before, passes after
+  calls outside code: 4 before, 3 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated: the same once normalised and unused static bindings removed, at the head of the term after too

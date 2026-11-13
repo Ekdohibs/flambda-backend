@@ -1,0 +1,60 @@
+let $camlIarray_of_variable_measured_one_call_inlined__first_const_0 =
+  Block 0 ()
+in
+(let code inline(never) size(8)
+       make_0 (x/69 : imm tagged)
+         my_closure/70 &my_alloc_region/71 my_depth/72
+         -> k/26 * k/27
+         : imm array =
+   let next_depth/73 = rec_info (succ my_depth/72) in
+   let Pmakearray/74 = %array.`imm`.my_alloc_region/71 (x/69, x/69) in
+   cont k/26 (Pmakearray/74)
+ in
+ let code inline(never) size(3)
+       len_1 (a/75 : imm array)
+         my_closure/76 &my_alloc_region/77 my_depth/78
+         -> k/28 * k/29
+         : imm tagged =
+   let next_depth/79 = rec_info (succ my_depth/78) in
+   let Parraylength/80 = %array_length.`imm` (a/75) in
+   cont k/28 (Parraylength/80)
+ in
+ let code size(3)
+       g_2 (x/81 : imm tagged)
+         my_closure/82 &my_alloc_region/83 my_depth/84
+         -> k/30 * k/31
+         : imm tagged =
+   let next_depth/85 = rec_info (succ my_depth/84) in
+   let int_add/86 = %int_barith.add (x/81, 1) in
+   cont k/30 (int_add/86)
+ in
+ let make/87 = closure make_0 @make &toplevel in
+ let len/88 = closure len_1 @len &toplevel in
+ let g/89 = closure g_2 @g &toplevel in
+ apply direct(g_2 &toplevel) (g/89 : _ -> imm tagged) (3) -> k/32 * error
+   where k/32 (a/90 : imm tagged) =
+     ((let Popaque/96 = %opaque (4) in
+       apply direct(g_2 &toplevel) inlined(never)
+         (g/89 : _ -> imm tagged) (Popaque/96) -> k/33 * error)
+        where k/33 (b/91 : imm tagged) =
+          ((let Popaque/95 = %opaque (5) in
+            apply direct(make_0 &toplevel)
+              (make/87 : _ -> imm array) (Popaque/95) -> k/35 * error)
+             where k/35 (apply_result/94 : imm array) =
+               apply direct(len_1 &toplevel)
+                 (len/88 : _ -> imm tagged) (apply_result/94) -> k/34 * error
+             where k/34 (n/92 : imm tagged) =
+               let Pmakeblock/93 = %block.[`0`].`toplevel` (a/90, b/91, n/92)
+               in
+               cont k/25 (Pmakeblock/93))))
+  where k/25 define_root_symbol (module_block/65) =
+    let field_0/66 = %block_load.tag[`0`].`size`[`3`].[`0`] (module_block/65)
+    in
+    let field_1/67 = %block_load.tag[`0`].`size`[`3`].[`1`] (module_block/65)
+    in
+    let field_2/68 = %block_load.tag[`0`].`size`[`3`].[`2`] (module_block/65)
+    in
+    let $camlIarray_of_variable_measured_one_call_inlined =
+      Block 0 (field_0/66, field_1/67, field_2/68)
+    in
+    cont done ($camlIarray_of_variable_measured_one_call_inlined)

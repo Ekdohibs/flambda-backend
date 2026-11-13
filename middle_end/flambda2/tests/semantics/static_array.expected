@@ -5,4 +5,4 @@ static_array.fl:
   calls outside code: 0 before, 0 after
   the same
   calls outside code once those of known code are inlined: 0
-  validated: the same once normalised
+  validated: the same once closures and blocks are lifted to symbols and the terms normalised
