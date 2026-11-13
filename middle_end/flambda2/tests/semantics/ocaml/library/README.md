@@ -105,8 +105,9 @@ fixed-width integers (`int64_identities`, `int64_laws_more`,
 reader of the text of terms, which stops on a naked integer outside
 63 bits (discrepancy C1-11). The verdicts above are not touched: the
 check of a unit reads no text of its term after. The round trip of
-the conversion does, and stops on those four; no rule runs it on this
-directory (`../../roundtrip/README.md`).
+the conversion does, and says of the term after of those four that
+it is not read back; its rules run on this directory and keep the
+four answers (`../../roundtrip/README.md`).
 
 The sources with the syntax of immutable arrays are not formatted
 (`../.ocamlformat-ignore`).

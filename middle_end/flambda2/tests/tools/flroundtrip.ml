@@ -52,15 +52,15 @@
    not, or something that fexpr writes and its parser reads differently; - "not
    printable", with the reason: the term has something that fexpr cannot write,
    or that the printer does not cover; - "not read back": the compiler's parser,
-   or its conversion of fexpr to Flambda, fails on the text printed, or the text
-   printed is one that the normalisation below refuses; - "names not read back",
-   with the reason: the term read back uses a symbol, a code id or a slot whose
-   name is not one that the printer makes, or two of them have one name or one
-   number. This is a mistake of the printer or of the conversion; - "not
-   converted", with the reason: the unit of the file has something that the
-   model has not got, or its text is one that the normalisation below refuses;
-   "not converted back" is the same of the unit read back, and is a mistake of
-   the printer.
+   or its conversion of fexpr to Flambda, fails on the text printed, with an
+   error that it reports or with an exception, or the text printed is one that
+   the normalisation below refuses; - "names not read back", with the reason:
+   the term read back uses a symbol, a code id or a slot whose name is not one
+   that the printer makes, or two of them have one name or one number. This is a
+   mistake of the printer or of the conversion; - "not converted", with the
+   reason: the unit of the file has something that the model has not got, or its
+   text is one that the normalisation below refuses; "not converted back" is the
+   same of the unit read back, and is a mistake of the printer.
 
    A unit read from a text is first normalised as the check of a unit normalises
    it (flsemantics.ml, [with_lost_kinds]): each [Opaque_identity], whose kind
@@ -391,6 +391,11 @@ let read_back (conversion : conversion) ~comp_unit text :
     (fun () ->
       Out_channel.with_open_text file (fun out -> output_string out text);
       match Parse_flambda.parse_fexpr file with
+      | exception exn ->
+        (* The parser itself can raise, where it makes a constant of what it
+           read: so it does of a naked integer outside 63 bits that stands in an
+           expression (label C1-11). That is no error that it reports. *)
+        Error ("the parser of fexpr fails: " ^ Printexc.to_string exn)
       | Error (Parsing_error (msg, loc)) ->
         Error
           (Format.asprintf "syntax error at line %d: %s" loc.loc_start.pos_lnum

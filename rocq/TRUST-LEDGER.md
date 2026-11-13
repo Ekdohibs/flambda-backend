@@ -222,13 +222,15 @@ it gave back.
   no text of it. The compiler's text of the term after of each is
   not read. And the round trip of the conversion, which reads back
   a text of the term after, says "round trip the same" of the unit
-  of the file and then ends on that exception, with status 2, where
-  it says "not read back" of a text that the parser refuses in
-  words. No rule of the tests runs the round trip on that
-  directory. That was seen with the tool of the tree that first had
-  those units together with all that came in with them. It is a
-  stop and no verdict, and nothing of what is said of the round trip
-  holds of the term after of those four units.
+  of the file and "not read back" of the unit after Simplify, with
+  the exception of the parser named: its rules run on that
+  directory and keep the four answers as expected files
+  (`tests/semantics/roundtrip`). Until the tool made that line of an
+  exception of the parser, it ended on the exception there, with
+  status 2, and no rule ran the round trip on that directory: that
+  was seen with the tool of the tree that first had those units
+  together with all that came in with them. Nothing of what is said
+  of the round trip holds of the term after of those four units.
   Two primitive annotations are also lost by the text; the tool
   reconstructs the second from the argument and leaves the first. The
   printer writes both forms

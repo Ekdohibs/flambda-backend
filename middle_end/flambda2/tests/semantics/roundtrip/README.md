@@ -7,7 +7,8 @@ compiler's parser, converts what it read, and compares the two terms of
 the model with the model's comparison (`../../tools/flroundtrip.ml`). It
 does the same of the unit that Simplify makes of the one in the file.
 The rules of this directory run it on every example of the directory
-above and of `../ocaml`; `dune` says how the answers are checked.
+above, of `../ocaml` and of `../ocaml/library`; `dune` says how the
+answers are checked.
 A unit read from a text, the unit of the file and each unit read
 back, is first normalised as the check of a unit normalises it
 (`with_lost_kinds` in `../../tools/flsemantics.ml`): each
@@ -39,10 +40,45 @@ in the order of the term.
 
 ## Answers that are not "round trip the same"
 
-Each would have a file here with what the tool prints, and its reason
-below. There is none today.
+Each has a file here with what the tool prints, and its reason below.
+There are four, of units of `../ocaml/library`:
+`ocaml_library_int64_identities.expected`,
+`ocaml_library_int64_laws_more.expected`,
+`ocaml_library_nativeint_identities.expected` and
+`ocaml_library_nativeint_laws_more.expected`. In each the round trip
+is the same of the unit of the file, and the unit after Simplify is
+"not read back: the parser of fexpr fails", with the exception
+`Failure("int_of_string")`.
 
-There was one, `kinds_direct_naked.fl` after Simplify, until a unit
+The term after Simplify of each has a naked 64-bit or native integer
+at an end of its range as the argument of a continuation
+(`k (-9223372036854775808L)`), where Simplify has removed the box of
+two numbers that meet. The printer of fexpr writes such a number with
+all its digits and its suffix. The parser gives the digits of a
+constant that stands in an expression to `int_of_string` before it
+looks at the suffix (`middle_end/flambda2/parser/flambda_parser.mly`,
+`make_const_int`), and that fails outside 63 bits (discrepancy
+C1-11). The exception comes out of the parser itself and is no error
+that it reports; `read_back` (`../../tools/flroundtrip.ml`) makes its
+line of it as it does of one. The term before of each of the four has
+the same numbers as static data, which the parser reads another way
+(`make_boxed_const_int`).
+
+It is a limit of fexpr and not a fault of the conversion or of the
+printer of the model, which writes the number that the term has; the
+compiler's own text of the term after of each of the four stops the
+parser at the same place. The round trip says nothing of the term
+after of those four units. The check of a unit reads no text of its
+term after, so their verdicts are not touched. The other sixteen
+units of that directory are the same before and after Simplify.
+
+Until `read_back` made that line, the tool ended on the exception at
+the term after of those four, with status 2 and no second line, and
+no rule ran the round trip on that directory: it was seen when the
+round trip was run there by hand, with the tool of the tree that
+first had those units together with all that came in with them.
+
+There was another, `kinds_direct_naked.fl` after Simplify, until a unit
 read from a text was given the arity of the arguments of its calls.
 Simplify makes the call of `$Add_naked` a direct call of its code, at
 the arity of two naked immediates. The printer writes that arity; the
@@ -55,40 +91,6 @@ still there: the round trip no longer shows it, as the unit read back
 is given the arity of the parameters of the code before it is
 converted. What the round trip shows of such a call is that the
 conversion and the printer agree once that is done.
-
-## Units on which the round trip stops
-
-The rules of this directory do not run the round trip on
-`../ocaml/library`. Run by hand on its twenty units, with the tool of
-the tree that first had them together with all that came in with
-them, it is the same before and after Simplify for sixteen. For four
-(`int64_identities.fl`,
-`int64_laws_more.fl`, `nativeint_identities.fl`,
-`nativeint_laws_more.fl`) it says "round trip the same" of the unit of
-the file, and then the tool ends on an exception that it does not
-catch, `Failure "int_of_string"`, with status 2 and no second line.
-
-The term after Simplify of each has a naked 64-bit or native integer
-at an end of its range as the argument of a continuation
-(`k (-9223372036854775808L)`), where Simplify has removed the box of
-two numbers that meet. The printer of fexpr writes such a number with
-all its digits and its suffix. The parser gives the digits of a
-constant that stands in an expression to `int_of_string` before it
-looks at the suffix (`middle_end/flambda2/parser/flambda_parser.mly`,
-`make_const_int`), and that fails outside 63 bits (discrepancy
-C1-11). The exception comes out of the parser itself: `read_back`
-(`../../tools/flroundtrip.ml`) makes a line "not read back" of what
-the parser reports as an error and of what the conversion raises, and
-not of that. The term before of each of the four has the same
-numbers as static data, which the parser reads another way
-(`make_boxed_const_int`).
-
-It is a limit of fexpr and not a fault of the conversion or of the
-printer of the model, which writes the number that the term has; the
-compiler's own text of the term after of each of the four stops the
-parser at the same place. The round trip says nothing of the term
-after of those four units. The check of a unit reads no text of its
-term after, so their verdicts are not touched.
 
 ## What cannot be printed
 

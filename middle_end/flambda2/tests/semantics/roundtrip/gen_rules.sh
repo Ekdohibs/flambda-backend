@@ -2,10 +2,12 @@
 
 # Writes the dune rules that take each example through fexpr and back, for
 # run/dune to include (see dune). The arguments are the .fl files of the
-# directory above and of ../ocaml, and the .expected files that are here. The
-# rules are for run/, so they name the files with one more ../ .
+# directory above, of ../ocaml and of ../ocaml/library, and the .expected
+# files that are here. The rules are for run/, so they name the files with
+# one more ../ .
 #
-# An example ../X.fl has the name X, and ../ocaml/X.fl the name ocaml_X. If
+# An example ../X.fl has the name X, ../ocaml/X.fl the name ocaml_X and
+# ../ocaml/library/X.fl the name ocaml_library_X. If
 # NAME.expected is here, what the tool prints is compared with it. If not,
 # the tool must print that the round trip is the same, or that the example is
 # not converted (check.sh).
@@ -21,7 +23,9 @@ for file in "$@"; do
 done
 
 for file in "$@"; do
+  # A star of a pattern takes a slash too, so the longer directory is first.
   case "$file" in
+  ../ocaml/library/*.fl) name="ocaml_library_$(basename "$file" .fl)" ;;
   ../ocaml/*.fl) name="ocaml_$(basename "$file" .fl)" ;;
   ../*.fl) name="$(basename "$file" .fl)" ;;
   *) continue ;;
