@@ -1,0 +1,49 @@
+unbox_block_in_value_slot.fl:
+  the graph: 85 facts in the model, 85 in the compiler
+  the model's solution: passes the check of closure, passes the check of field_of_constructor_is_used
+  the compiler's solution, with its graph: passes the check of closure, passes the check of field_of_constructor_is_used
+  the facts of the two graphs on the names of the unit: the same (26)
+  the two solutions on the 22 names of the unit: the same
+  the model's rebuild and the compiler's output: the same up to bound names
+  the reaper's input (19 steps): returns [0: 47]
+  the model's rebuild (19 steps): returns [0: 47]
+  the model's rebuild against the input: the same
+  the compiler's output (19 steps): returns [0: 47]
+  the compiler's output against the input: the same
+  with changes of calling convention:
+    the table of the code that keeps its calling convention: the model's passes the check, the compiler's, with its graph, passes it
+    the two tables on the 4 code ids of the unit: the same
+    the decisions on the 2 code ids of the unit: the same, 2 changing
+    code sum_fields: parameters [keep val], results [keep val]
+    code run: parameters [keep val, keep val], results [keep val]
+    the model's rebuild and the compiler's output: the same up to bound names
+    the reaper's input (19 steps): returns [0: 47]
+    the model's rebuild (19 steps): returns [0: 47]
+    the model's rebuild against the input: the same
+    the compiler's output (19 steps): returns [0: 47]
+    the compiler's output against the input: the same
+  with unboxing:
+    the compiler changes the representation of 2 names that its traversal made, which are not in the term
+    the table of dominated_by_allocation_point: the model's passes the check, the compiler's, with its graph, passes it
+    the table of to_unbox: the model's passes the check, the compiler's, with its graph, passes it
+    the table of to_change_representation: the model's passes the check, the compiler's, with its graph, passes it
+    the check that sets of closures are unboxed or changed whole: the model's tables pass it, the compiler's, with its graph, pass it
+    the three pairs of tables on the names of the unit: the same, 7 names dominated by an allocation, 1 allocations to unbox, 2 to change the representation of
+    the unboxed fields of the 22 names of the unit: the same, 2 unboxed
+    p/v1: {field 0 val; field 1 val}
+    p/v8: {field 0 val; field 1 val}
+    the changes of representation of the 22 names of the unit: the same, 4 changed
+    my_closure/v7: representation {value slot p: {field 0 val; field 1 val}}, with function slot sum_fields, at function slot sum_fields
+    f/v9: representation {value slot p: {field 0 val; field 1 val}}, with function slot sum_fields, at function slot sum_fields
+    my_closure/v12: representation {}, with function slot run, at function slot run
+    $Unbox_block_in_value_slot_run: representation {}, with function slot run, at function slot run
+    the decisions on the 2 code ids of the unit: the same, 2 changing
+    code sum_fields: parameters [keep val], results [keep val]
+    code run: parameters [keep val, keep val], results [keep val]
+    the decisions of my_closure on the 2 code ids of the unit: the same, 0 unboxed
+    the model's rebuild and the compiler's output: the same up to bound names
+    the reaper's input (19 steps): returns [0: 47]
+    the model's rebuild (21 steps): returns [0: 47]
+    the model's rebuild against the input: the same
+    the compiler's output (21 steps): returns [0: 47]
+    the compiler's output against the input: the same

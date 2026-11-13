@@ -9,7 +9,9 @@
    that the free names given by Simplify project ([Traverse_env]
    [should_keep_value_slot]), and those of this unit project none. The run of
    its output is undefined. Without [newer_version_of] and the deleted code, the
-   free names have the slot, and the two rebuilds agree.
+   free names have the slot, and the two rebuilds agree. With unboxing, the
+   closure changes its representation on both sides, in the model with the
+   slot [x] and in the compiler without it.
 
    This is an artefact of the text, not a fault of the reaper: the reader
    gives the code it reads no free names (parser/fexpr_to_flambda.ml, "This

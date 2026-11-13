@@ -23,13 +23,22 @@ tupled_unused_components.fl:
     the compiler's output against the input: the same
   with unboxing:
     the compiler changes the representation of 4 names that its traversal made, which are not in the term
-    the compiler renames the slots of 2 closures (a change of representation that only renames), which the conversion of its output undoes
     the table of dominated_by_allocation_point: the model's passes the check, the compiler's, with its graph, passes it
     the table of to_unbox: the model's passes the check, the compiler's, with its graph, passes it
-    the two pairs of tables on the names of the unit: the same, 8 names dominated by an allocation, 0 allocations to unbox
+    the table of to_change_representation: the model's passes the check, the compiler's, with its graph, passes it
+    the check that sets of closures are unboxed or changed whole: the model's tables pass it, the compiler's, with its graph, pass it
+    the three pairs of tables on the names of the unit: the same, 8 names dominated by an allocation, 0 allocations to unbox, 2 to change the representation of
     the unboxed fields of the 16 names of the unit: the same, 0 unboxed
+    the changes of representation of the 16 names of the unit: the same, 6 changed
+    my_closure/v1: representation {}, with function slot ignore, at function slot ignore
+    f/v4: representation {}, with function slot ignore, at function slot ignore
+    my_closure/v5: representation {}, with function slot pass, at function slot pass
+    func/v7: representation {}, with function slot ignore, at function slot ignore
+    $Tupled_unused_components_ignore: representation {}, with function slot ignore, at function slot ignore
+    $Tupled_unused_components_pass: representation {}, with function slot pass, at function slot pass
     the decisions on the 2 code ids of the unit: the same, 1 changing
     code pass: parameters [keep val], results [keep val]
+    the decisions of my_closure on the 2 code ids of the unit: the same, 0 unboxed
     the model's rebuild and the compiler's output: the same up to bound names
     the reaper's input (14 steps): returns [0: 1]
     the model's rebuild (14 steps): returns [0: 1]

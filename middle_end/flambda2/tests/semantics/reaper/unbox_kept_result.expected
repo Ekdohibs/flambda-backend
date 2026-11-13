@@ -23,15 +23,22 @@ unbox_kept_result.fl:
     the compiler's output against the input: the same
   with unboxing:
     the compiler changes the representation of 2 names that its traversal made, which are not in the term
-    the compiler renames the slots of 2 closures (a change of representation that only renames), which the conversion of its output undoes
     the table of dominated_by_allocation_point: the model's passes the check, the compiler's, with its graph, passes it
     the table of to_unbox: the model's passes the check, the compiler's, with its graph, passes it
-    the two pairs of tables on the names of the unit: the same, 7 names dominated by an allocation, 1 allocations to unbox
+    the table of to_change_representation: the model's passes the check, the compiler's, with its graph, passes it
+    the check that sets of closures are unboxed or changed whole: the model's tables pass it, the compiler's, with its graph, pass it
+    the three pairs of tables on the names of the unit: the same, 7 names dominated by an allocation, 1 allocations to unbox, 2 to change the representation of
     the unboxed fields of the 19 names of the unit: the same, 2 unboxed
     p/v1: {field 0 val}
     r/v11: {field 0 val}
+    the changes of representation of the 19 names of the unit: the same, 4 changed
+    my_closure/v3: representation {}, with function slot make, at function slot make
+    my_closure/v5: representation {}, with function slot ident, at function slot ident
+    $Unbox_kept_result_make: representation {}, with function slot make, at function slot make
+    $Unbox_kept_result_ident: representation {}, with function slot ident, at function slot ident
     the decisions on the 2 code ids of the unit: the same, 1 changing
     code make: parameters [keep val], results [unbox {field 0 val}]
+    the decisions of my_closure on the 2 code ids of the unit: the same, 0 unboxed
     the model's rebuild and the compiler's output: the same up to bound names
     the reaper's input (22 steps): returns [0: 10]
     the model's rebuild (19 steps): undefined

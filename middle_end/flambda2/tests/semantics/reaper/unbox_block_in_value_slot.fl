@@ -1,0 +1,31 @@
+(* A closure whose value slot [p] holds a block of the parameters of [run],
+   and whose code reads the two fields of the block. Neither piece of code is
+   inlined, and the closure does not escape: [run] calls it directly. The
+   block, which is only read, is unboxed. Closures are not lambda-lifted (the
+   default), so the closure is not unboxed: its representation changes. The
+   slot [p] of the set is unboxed into two new value slots, one for each field
+   of the block, the function slot of the set is renamed, and the code reads
+   the new slots in place of the block. The unit returns 47. *)
+let code inline(never) size(10) sum_fields (x) my_closure &my_region my_depth
+      -> k * e =
+  let p = %project_value_slot.[sum_fields].[p] (my_closure) in
+  let a = %block_load.[`0`] (p) in
+  let b = %block_load.[`1`] (p) in
+  let s = %int_barith.`add` (a, b) in
+  let r = %int_barith.`add` (s, x) in
+  cont k (r)
+in
+let code inline(never) size(10) run (a, b) my_closure &my_region my_depth
+      -> k * e =
+  let p = %block.[`0`].my_region (a, b) in
+  let f = closure sum_fields @sum_fields &my_region with { p = p } in
+  apply direct(sum_fields &my_region) f (32) -> k * e
+in
+let $Unbox_block_in_value_slot_run = closure run @run &toplevel in
+let a = %opaque (7) in
+let b = %opaque (8) in
+apply direct(run &toplevel) $Unbox_block_in_value_slot_run (a, b)
+  -> k1 * error
+  where k1 (r) =
+    let $camlUnbox_block_in_value_slot = Block 0 (r) in
+    cont done ($camlUnbox_block_in_value_slot)

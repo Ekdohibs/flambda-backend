@@ -1468,22 +1468,18 @@ let ends_as_converted ends =
         Simple unit
       | _ -> named)
 
-(* The value slots of each set of closures of [e] in the order in which the
-   conversion of the reaper's input lists them, which the model's rebuild keeps:
-   that of [Value_slot.compare] on the slots of the input
-   ([Flsemantics.convert_value_slots]). The compiler's output, where the
-   compiler has renamed the slots of a closure, lists them in the order of the
-   new slots, to which [undo_renamings] gives the numbers of the old; the slot
-   of the input of a number is the one it was first given to
-   ([Flsemantics.Value_slots.name_of]). The order of the slots of a set means
-   nothing, and the two terms are compared up to it. *)
-let slots_in_input_order =
+(* The value slots of each set of closures of [e] in the order of their numbers.
+   The conversion lists the value slots of a set in the order of
+   [Value_slot.compare] ([Flsemantics.convert_value_slots]), which the model's
+   rebuild keeps, and the compiler's output, where the compiler has changed the
+   representation of a closure, in the order of its new slots, which
+   [relate_slots] gives the numbers of the model's. The order of the slots of a
+   set means nothing, and the two terms are compared up to it. *)
+let slots_in_order =
   let sort slots =
     List.stable_sort
       (fun (slot, _) (slot', _) ->
-        Option.compare Value_slot.compare
-          (Flsemantics.Value_slots.name_of slot)
-          (Flsemantics.Value_slots.name_of slot'))
+        Int.compare (int_of_positive slot) (int_of_positive slot'))
       slots
   in
   map_term
@@ -1520,8 +1516,8 @@ let slots_in_input_order =
    given the number of the first, as [Flsemantics.convert_both] does. The ends
    of regions of [input] and of the model's rebuild, the variables [ends], are
    given back the unit value ([ends_as_converted]), and the value slots of the
-   two terms put in one order ([slots_in_input_order]). A difference of the two
-   terms, or of a run, is printed and is not a failure of the tool. Setting
+   two terms put in one order ([slots_in_order]). A difference of the two terms,
+   or of a run, is printed and is not a failure of the tool. Setting
    FLREAPER_PRINT_TERMS prints the three terms. *)
 let compare_rebuild ~indent ~ends ~(input : Flsemantics.converted)
     ~(input_unit : Flambda_unit.t) ~(rebuilt_body : Rocq_model.expr option)
@@ -1530,7 +1526,7 @@ let compare_rebuild ~indent ~ends ~(input : Flsemantics.converted)
   let rebuilt =
     Option.map
       (fun body : Flsemantics.converted ->
-        { input with body = slots_in_input_order (ends_as_converted ends body) })
+        { input with body = slots_in_order (ends_as_converted ends body) })
       rebuilt_body
   in
   Flsemantics.Continuations.alias
@@ -1546,7 +1542,7 @@ let compare_rebuild ~indent ~ends ~(input : Flsemantics.converted)
         "%sthe compiler's output: not converted, the model has not got %t@."
         indent what;
       None
-    | output -> Some { output with body = slots_in_input_order output.body }
+    | output -> Some { output with body = slots_in_order output.body }
   in
   (match rebuilt, output with
   | None, _ | _, None -> ()
@@ -1891,67 +1887,102 @@ let print_unboxed ppf (shape : shape option) =
   | None -> Format.fprintf ppf "not unboxed"
   | Some shape -> print_shape ppf shape
 
-(* Whether unboxed fields read a slot of a closure: the fields of an unboxed set
-   of closures. *)
-let rec reads_a_slot : 'a. 'a UA.Unboxed_fields.t -> bool =
- fun fields ->
-  Field.Map.exists
-    (fun field (u : _ UA.Unboxed_fields.u) ->
-      (match Field.view field with
-        | Value_slot _ | Function_slot _ -> true
-        | _ -> false)
-      ||
-      match u with
-      | Not_unboxed _ -> false
-      | Unboxed fields -> reads_a_slot fields)
-    fields
+(* A change of representation of a closure, its new slots left out: the shape of
+   the fields of its set, the numbers of the old function slots of the set, and
+   that of the function slot of the closure. *)
+type repr_shape =
+  { repr_fields : shape;
+    repr_function_slots : int list;
+    repr_current : int
+  }
 
-(* Whether a change of representation only renames: that of a closure whose
-   value slots, each kept or not, are not unboxed in turn, which gives each slot
-   a new one of the same kind ([Unboxing_analysis.perform_analysis0]). The model
-   has no change of representation, and rebuilds the closure with its slots. *)
-let renames_only (repr : UA.changed_representation) =
+let model_repr_shape (repr : Unboxing.closure_repr) =
+  { repr_fields = model_shape repr.cr_fields;
+    repr_function_slots =
+      List.sort_uniq compare
+        (List.map (fun (old, _) -> int_of_positive old) repr.cr_function_slots);
+    repr_current = int_of_positive repr.cr_current
+  }
+
+let compiler_repr_shape (repr : UA.changed_representation) =
   match repr with
-  | Block_representation _ -> false
-  | Closure_representation (fields, _, _) ->
-    Field.Map.for_all
-      (fun field (u : _ UA.Unboxed_fields.u) ->
-        match Field.view field, u with
-        | Value_slot _, Not_unboxed _ -> true
-        | _ -> false)
-      fields
+  | Block_representation _ -> None
+  | Closure_representation (fields, function_slots, current) ->
+    let number slot = int_of_positive (Flsemantics.Function_slots.find slot) in
+    Some
+      { repr_fields = compiler_shape fields;
+        repr_function_slots =
+          List.sort_uniq compare
+            (List.map
+               (fun (old, _) -> number old)
+               (Function_slot.Map.bindings function_slots));
+        repr_current = number current
+      }
 
-(* The renaming of slots of the solution of [Reaper.run] undone in the
-   conversion of its output: each new slot is given the number of the slot that
-   it renames ([Flsemantics.Value_slots.alias]). The solution is that of the
+let print_repr ppf (repr : repr_shape option) =
+  let slot ppf n =
+    print_field ppf (Field_function_slot (Flsemantics.positive_of_int n))
+  in
+  match repr with
+  | None -> Format.fprintf ppf "not changed"
+  | Some { repr_fields; repr_function_slots; repr_current } ->
+    Format.fprintf ppf "%a, with %a, at %a" print_shape repr_fields
+      (Format.pp_print_list
+         ~pp_sep:(fun ppf () -> Format.fprintf ppf ", ")
+         slot)
+      repr_function_slots slot repr_current
+
+(* The new slots of the solution of [Reaper.run] given the numbers of the
+   model's ([model_reprs]: [unit_changed_representations]) in the conversion of
+   its output ([Flsemantics.Value_slots.set]). The two representations of each
+   name of the unit are gone through field by field: the new value slot of the
+   compiler at a field is given the number of the model's at the same field, and
+   the new function slot of the compiler for an old one, the number of the
+   model's for the same old one. A new slot that is not related keeps a number
+   of its own, and the two terms differ there. The solution is that of the
    traversal of [skeleton], whose names are the variables of the skeleton
    ([relate_variables]), the symbols and the code ids of the unit; the slots are
-   the same for every name of a closure. *)
-let undo_renamings (names : unit_names) ~skeleton ~solution input =
+   the same for every name of a set. *)
+let relate_slots (names : unit_names) ~model_reprs ~skeleton ~solution input =
   let variables, _, _ = relate_variables skeleton input in
-  let undo name =
-    match Reaper.Analysis.get_changed_representation solution name with
-    | Some (Closure_representation (fields, function_slots, _)) ->
-      Field.Map.iter
-        (fun field (u : _ UA.Unboxed_fields.u) ->
-          match Field.view field, u with
-          | Value_slot old, Not_unboxed renamed ->
-            Flsemantics.Value_slots.alias renamed ~same_as:old
-          | _ -> ())
-        fields;
+  let rec relate_fields (compiler : Value_slot.t UA.Unboxed_fields.t)
+      (model : Unboxing.unboxed_fields) =
+    Field.Map.iter
+      (fun field (u : _ UA.Unboxed_fields.u) ->
+        match u, List.assoc_opt (model_field field) model with
+        | Not_unboxed slot, Some (Not_unboxed w) ->
+          Flsemantics.Value_slots.set slot w
+        | Unboxed compiler, Some (Unboxed model) -> relate_fields compiler model
+        | (Not_unboxed _ | Unboxed _), _ -> ())
+      compiler
+  in
+  let relate name node =
+    match
+      ( Reaper.Analysis.get_changed_representation solution name,
+        List.assoc_opt node model_reprs )
+    with
+    | ( Some (Closure_representation (fields, function_slots, _)),
+        Some (repr : Unboxing.closure_repr) ) ->
+      relate_fields fields repr.cr_fields;
       Function_slot.Map.iter
         (fun old renamed ->
-          Flsemantics.Function_slots.alias renamed ~same_as:old)
+          match
+            List.assoc_opt
+              (Flsemantics.Function_slots.find old)
+              repr.cr_function_slots
+          with
+          | Some f -> Flsemantics.Function_slots.set renamed f
+          | None -> ())
         function_slots
-    | Some (Block_representation _) | None -> ()
+    | (Some (Block_representation _ | Closure_representation _) | None), _ -> ()
   in
-  Variable.Map.iter (fun var _ -> undo (Code_id_or_name.var var)) variables;
+  Variable.Map.iter
+    (fun var v -> relate (Code_id_or_name.var var) (Graph_spec.Node_variable v))
+    variables;
   Symbol.Map.iter
-    (fun symbol _ -> undo (Code_id_or_name.symbol symbol))
-    names.symbols;
-  Code_id.Map.iter
-    (fun code_id _ -> undo (Code_id_or_name.code_id code_id))
-    names.code_ids
+    (fun symbol s ->
+      relate (Code_id_or_name.symbol symbol) (Graph_spec.Node_symbol s))
+    names.symbols
 
 (* A decision of either side, its variables left out. *)
 type decision_shape =
@@ -2018,36 +2049,50 @@ let print_change_shape ppf (change : change_shape) =
    The compiler's tables, read off its database as FlambdaReaperUnboxing.v's
    header says: [dominated_by_allocation_point], exported, in the order
    (allocation, name); [to_unbox], not exported, the allocations that dominate a
-   name with unboxed fields ([to_unbox_of_unboxed_names]); and the table of the
-   code that keeps its calling convention, read off the decisions as
+   name with unboxed fields ([to_unbox_of_unboxed_names]);
+   [to_change_representation], not exported, the allocations with a use that the
+   changes of representation give with each name, made names included
+   ([to_change_representation_of_alloc_points]); and the table of the code that
+   keeps its calling convention, read off the decisions as
    [compare_calling_conventions] reads it. They are checked with
-   [check_dominated] and [check_to_unbox] on the compiler's own graph and
-   solution, which is printed and nothing depends on it. The model's tables are
-   the least ([derive_cannot_change], [derive_dominated], [derive_to_unbox]),
-   and must pass the same checks, or the tool fails. The two pairs of tables are
-   compared on the names of the unit, the model's [to_unbox] on the allocations
-   with a source, which are all that the compiler's lets be found.
+   [check_dominated], [check_to_unbox], [check_to_change_representation] and
+   [check_sets_whole] on the compiler's own graph and solution, which is printed
+   and nothing depends on it. The model's tables are the least
+   ([derive_cannot_change], [derive_dominated], [derive_to_unbox],
+   [derive_to_change_representation]), and must pass the same checks, or the
+   tool fails. The pairs of tables are compared on the names of the unit, the
+   two of [to_unbox] and of [to_change_representation] on the allocations with a
+   source, which are all that the compiler's let be found.
 
    Then the unboxed fields of the names of the unit ([unit_unboxed_fields] and
    [Analysis.get_unboxed_fields], which is the map that
-   [Unboxing_analysis.perform_analysis] returns) are compared by shape, the
-   decisions of the code of the unit ([unit_calling_convention_changes_u] and
-   [get_calling_convention_change]) likewise, and the model's rebuild
-   ([rebuild_unit_unbox]) with what [Reaper.run] returns, as [compare_rebuild]
-   does. The made nodes of the two graphs do not correspond, and are not
-   compared.
+   [Unboxing_analysis.perform_analysis] returns) are compared by shape; the
+   changes of representation of closures ([unit_changed_representations] and
+   [Closure_representation]) likewise, with the old function slots of the set
+   and the function slot of the closure; the decisions of the code of the unit
+   ([unit_calling_convention_changes_u] and [get_calling_convention_change])
+   likewise, and their decisions of [my_closure] ([unit_my_closure_decisions_u],
+   [None] for [Keep_my_closure]). The model's rebuild
+   ([rebuild_unit_unbox_repr]) is compared with what [Reaper.run] returns, as
+   [compare_rebuild] does: the new slots of the compiler are given the numbers
+   of the model's ([relate_slots]), and a call with no callee, which the
+   compiler makes of a call of a closure that it unboxes, the poison that the
+   model's rebuild gives it ([Flsemantics.poison_missing_callee]). The made
+   nodes of the two graphs do not correspond, and are not compared. The machine
+   runs a call by the closure that its callee is
+   (FlambdaSemanticsSpec.shape_of_closure_call), so the runs of the two rebuilds
+   of a unit whose code unboxes its [my_closure] are undefined at the first call
+   of that code, and say nothing of it
+   (tests/semantics/ocaml/nomark_local_mutual.fl, with [-reaper-local-fields -X
+   reaper-lambda-lifting=1]).
 
-   The model has no change of representation and no unboxing of closures. The
-   compiler changes the representation of every closure that it may and does not
-   unbox, which, for a closure whose value slots are not unboxed in turn, only
-   gives its slots new names: the tool undoes that renaming in the conversion of
-   the compiler's output ([undo_renamings]) and compares the rest. A unit for
-   which the compiler changes the representation of a name of the unit otherwise
-   ([Analysis.get_changed_representation]), or unboxes a closure (an allocation
-   that is a set of closures, fields that are slots, or the decision
-   [Unbox_my_closure]), is said to be out of the model, and nothing is compared.
-   A change of representation of a name that the compiler's traversal made, and
-   that is not in the term, is said and makes no difference. *)
+   The model has no [Block_representation], which the compiler makes for an
+   allocation that is not a set of closures, such as the closure of a partial
+   application that its traversal makes: a unit for which it gives one to a name
+   of the unit (tests/semantics/ocaml/over_application_three_stages.fl, by
+   default) is said to be out of the model, and nothing is compared. A change of
+   representation of a name that the compiler's traversal made, and that is not
+   in the term, is said and makes no difference. *)
 let compare_unboxing ~(names : unit_names) ~(input : Flsemantics.converted)
     ~(input_unit : Flambda_unit.t) ~(model_facts : Graph_spec.facts)
     ~(model_tables : Graph_spec.tables) ~(compiler : compiler_side) ~cmx_loader
@@ -2083,25 +2128,6 @@ let compare_unboxing ~(names : unit_names) ~(input : Flsemantics.converted)
   in
   let unboxed_raw = Code_id_or_name.Map.bindings ua.unboxed_fields in
   let is_unboxed x = Code_id_or_name.Map.mem x ua.unboxed_fields in
-  let closure_unboxed =
-    List.exists
-      (fun (a, x) ->
-        is_unboxed x
-        &&
-        match PTA.get_set_of_closures_def compiler.solved a with
-        | Set_of_closures _ -> true
-        | Not_a_set_of_closures -> false)
-      dominated_raw
-    || List.exists (fun (_, fields) -> reads_a_slot fields) unboxed_raw
-    || Code_id.Map.exists
-         (fun code_id _ ->
-           match compiler_change code_id with
-           | Changing_calling_convention
-               { my_closure_decision = Unbox_my_closure _; _ } ->
-             true
-           | _ -> false)
-         compiler.code_deps
-  in
   let changed, changed_made =
     List.partition
       (fun (name, _) -> is_unit_node (compiler.compiler_node name))
@@ -2113,18 +2139,26 @@ let compare_unboxing ~(names : unit_names) ~(input : Flsemantics.converted)
       "%sthe compiler changes the representation of %d names that its \
        traversal made, which are not in the term@."
       indent (List.length changed_made);
-  if not (List.for_all (fun (_, (repr, _)) -> renames_only repr) changed)
-  then (
+  match
+    List.filter
+      (fun (_, ((repr : UA.changed_representation), _)) ->
+        match repr with
+        | Block_representation _ -> true
+        | Closure_representation _ -> false)
+      changed
+  with
+  | _ :: _ as blocks ->
     Format.printf
-      "%sOUT OF THE MODEL: the compiler changes the representation of %d names \
-       of the unit, not only renaming the slots of closures@."
-      indent (List.length changed);
-    true)
-  else if closure_unboxed
-  then (
-    Format.printf "%sOUT OF THE MODEL: the compiler unboxes a closure@." indent;
-    true)
-  else
+      "%sOUT OF THE MODEL: the compiler gives the representation of a block to \
+       %d names of the unit:@."
+      indent (List.length blocks);
+    List.iter
+      (fun (x, (_, a)) ->
+        Format.printf "%s  %a, of the allocation %a@." indent print_node
+          (compiler.compiler_node x) print_node (compiler.compiler_node a))
+      blocks;
+    true
+  | [] ->
     let node = compiler.compiler_node in
     let dominated_c = List.map (fun (a, x) -> node a, node x) dominated_raw in
     let names_c =
@@ -2133,17 +2167,12 @@ let compare_unboxing ~(names : unit_names) ~(input : Flsemantics.converted)
         dominated_raw
     in
     let to_unbox_c = Unboxing.to_unbox_of_unboxed_names dominated_c names_c in
-    (match
-       List.sort_uniq Code_id_or_name.compare
-         (List.map (fun (_, (_, closure)) -> closure) changed)
-     with
-    | [] -> ()
-    | closures ->
-      Format.printf
-        "%sthe compiler renames the slots of %d closures (a change of \
-         representation that only renames), which the conversion of its output \
-         undoes@."
-        indent (List.length closures));
+    let tcr_c =
+      Unboxing.to_change_representation_of_alloc_points compiler.compiler_tables
+        (List.map
+           (fun (_, (_, a)) -> node a)
+           (Code_id_or_name.Map.bindings ua.changed_representation))
+    in
     let cannot_change_c =
       List.filter_map
         (fun (code_id, node) ->
@@ -2160,11 +2189,24 @@ let compare_unboxing ~(names : unit_names) ~(input : Flsemantics.converted)
         compiler.compiler_tables cannot_change_c max_unbox_size lambda_lifting
         to_unbox_c
     in
+    let compiler_tcr_ok =
+      Unboxing.check_to_change_representation is_local compiler.compiler_facts
+        compiler.compiler_tables cannot_change_c max_unbox_size lambda_lifting
+        to_unbox_c tcr_c
+    in
+    let compiler_whole_ok =
+      Unboxing.check_sets_whole compiler.compiler_facts compiler.compiler_tables
+        to_unbox_c tcr_c
+    in
     let cannot_change_m = Cc.derive_cannot_change model_facts model_tables in
     let dominated_m = Unboxing.derive_dominated model_tables in
     let to_unbox_m =
       Unboxing.derive_to_unbox is_local model_facts model_tables cannot_change_m
         max_unbox_size lambda_lifting
+    in
+    let tcr_m =
+      Unboxing.derive_to_change_representation is_local model_facts model_tables
+        cannot_change_m max_unbox_size lambda_lifting to_unbox_m
     in
     let model_dominated_ok =
       Unboxing.check_dominated model_tables dominated_m
@@ -2173,18 +2215,33 @@ let compare_unboxing ~(names : unit_names) ~(input : Flsemantics.converted)
       Unboxing.check_to_unbox is_local model_facts model_tables cannot_change_m
         max_unbox_size lambda_lifting to_unbox_m
     in
+    let model_tcr_ok =
+      Unboxing.check_to_change_representation is_local model_facts model_tables
+        cannot_change_m max_unbox_size lambda_lifting to_unbox_m tcr_m
+    in
+    let model_whole_ok =
+      Unboxing.check_sets_whole model_facts model_tables to_unbox_m tcr_m
+    in
+    let table name model compiler =
+      Format.printf
+        "%sthe table of %s: the model's %s the check, the compiler's, with its \
+         graph, %s it@."
+        indent name (passes model) (passes compiler)
+    in
+    table "dominated_by_allocation_point" model_dominated_ok
+      compiler_dominated_ok;
+    table "to_unbox" model_to_unbox_ok compiler_to_unbox_ok;
+    table "to_change_representation" model_tcr_ok compiler_tcr_ok;
     Format.printf
-      "%sthe table of dominated_by_allocation_point: the model's %s the check, \
-       the compiler's, with its graph, %s it@."
+      "%sthe check that sets of closures are unboxed or changed whole: the \
+       model's tables %s it, the compiler's, with its graph, %s it@."
       indent
-      (passes model_dominated_ok)
-      (passes compiler_dominated_ok);
-    Format.printf
-      "%sthe table of to_unbox: the model's %s the check, the compiler's, with \
-       its graph, %s it@."
-      indent (passes model_to_unbox_ok)
-      (passes compiler_to_unbox_ok);
-    if not (model_dominated_ok && model_to_unbox_ok)
+      (if model_whole_ok then "pass" else "FAIL")
+      (if compiler_whole_ok then "pass" else "FAIL");
+    if
+      not
+        (model_dominated_ok && model_to_unbox_ok && model_tcr_ok
+       && model_whole_ok)
     then false
     else
       let unit_nodes = unit_nodes names in
@@ -2195,24 +2252,26 @@ let compare_unboxing ~(names : unit_names) ~(input : Flsemantics.converted)
       let dm = pairs dominated_m in
       let dc = pairs dominated_c in
       let has_source x = Graph_spec.mem_node x model_tables.t_has_source in
-      let tm =
-        dedup (List.filter (fun x -> is_unit_node x && has_source x) to_unbox_m)
+      let with_source l =
+        dedup (List.filter (fun x -> is_unit_node x && has_source x) l)
       in
+      let tm = with_source to_unbox_m in
       let tc = dedup (List.filter is_unit_node to_unbox_c) in
+      let rm = with_source tcr_m in
+      let rc = with_source tcr_c in
+      let differ m c = List.filter (fun x -> List.mem x m <> List.mem x c) in
       (match
-         ( List.filter
-             (fun p -> List.mem p dm <> List.mem p dc)
-             (dedup (dm @ dc)),
-           List.filter
-             (fun x -> List.mem x tm <> List.mem x tc)
-             (dedup (tm @ tc)) )
+         ( differ dm dc (dedup (dm @ dc)),
+           differ tm tc (dedup (tm @ tc)),
+           differ rm rc (dedup (rm @ rc)) )
        with
-      | [], [] ->
+      | [], [], [] ->
         Format.printf
-          "%sthe two pairs of tables on the names of the unit: the same, %d \
-           names dominated by an allocation, %d allocations to unbox@."
-          indent (List.length dm) (List.length tm)
-      | dominated, to_unbox ->
+          "%sthe three pairs of tables on the names of the unit: the same, %d \
+           names dominated by an allocation, %d allocations to unbox, %d to \
+           change the representation of@."
+          indent (List.length dm) (List.length tm) (List.length rm)
+      | dominated, to_unbox, to_change ->
         List.iter
           (fun ((a, x) as p) ->
             Format.printf "%s%a dominated by %a: model %s, compiler %s@." indent
@@ -2226,7 +2285,15 @@ let compare_unboxing ~(names : unit_names) ~(input : Flsemantics.converted)
               print_node x
               (yes_no (List.mem x tm))
               (yes_no (List.mem x tc)))
-          to_unbox);
+          to_unbox;
+        List.iter
+          (fun x ->
+            Format.printf
+              "%s%a to change the representation of: model %s, compiler %s@."
+              indent print_node x
+              (yes_no (List.mem x rm))
+              (yes_no (List.mem x rc)))
+          to_change);
       let model_unboxed, _ =
         Unboxing.unit_unboxed_fields model_facts model_tables dominated_m
           to_unbox_m input.body
@@ -2266,6 +2333,45 @@ let compare_unboxing ~(names : unit_names) ~(input : Flsemantics.converted)
           | Some shape ->
             Format.printf "%s%a: %a@." indent print_node n print_shape shape)
         fields;
+      let model_reprs =
+        Unboxing.unit_changed_representations is_local model_facts model_tables
+          dominated_m to_unbox_m tcr_m input.body
+      in
+      let compiler_reprs =
+        List.filter_map
+          (fun (x, (repr, _)) ->
+            Option.map (fun shape -> node x, shape) (compiler_repr_shape repr))
+          changed
+      in
+      let reprs =
+        List.map
+          (fun n ->
+            ( n,
+              Option.map model_repr_shape (List.assoc_opt n model_reprs),
+              List.assoc_opt n compiler_reprs ))
+          unit_nodes
+      in
+      (match List.filter (fun (_, m, c) -> m <> c) reprs with
+      | [] ->
+        Format.printf
+          "%sthe changes of representation of the %d names of the unit: the \
+           same, %d changed@."
+          indent (List.length unit_nodes)
+          (List.length (List.filter (fun (_, m, _) -> m <> None) reprs))
+      | differences ->
+        List.iter
+          (fun (n, m, c) ->
+            Format.printf "%s%a: representation: model %a; compiler %a@." indent
+              print_node n print_repr m print_repr c)
+          differences);
+      List.iter
+        (fun (n, m, _) ->
+          match m with
+          | None -> ()
+          | Some _ ->
+            Format.printf "%s%a: representation %a@." indent print_node n
+              print_repr m)
+        reprs;
       let deps = Cc.unit_code_deps flag interface input.body in
       let decisions =
         List.map
@@ -2305,6 +2411,50 @@ let compare_unboxing ~(names : unit_names) ~(input : Flsemantics.converted)
           Format.printf "%s%a: %a@." indent print_node
             (Graph_spec.Node_code_id id) print_change_shape model)
         changing;
+      let my_closures =
+        List.map
+          (fun (id, model) ->
+            let compiler =
+              match
+                Option.map compiler_change (Flsemantics.Code_ids.name_of id)
+              with
+              | Some
+                  (Changing_calling_convention
+                     { my_closure_decision = Unbox_my_closure fields; _ }) ->
+                Some (compiler_shape fields)
+              | Some
+                  ( Changing_calling_convention
+                      { my_closure_decision = Keep_my_closure; _ }
+                  | Not_changing_calling_convention )
+              | None ->
+                None
+            in
+            id, Option.map model_shape model, compiler)
+          (Unboxing.unit_my_closure_decisions_u model_facts model_tables
+             cannot_change_m deps dominated_m to_unbox_m input.body)
+      in
+      (match List.filter (fun (_, m, c) -> m <> c) my_closures with
+      | [] ->
+        Format.printf
+          "%sthe decisions of my_closure on the %d code ids of the unit: the \
+           same, %d unboxed@."
+          indent (List.length my_closures)
+          (List.length (List.filter (fun (_, m, _) -> m <> None) my_closures))
+      | differences ->
+        List.iter
+          (fun (id, m, c) ->
+            Format.printf "%s%a: my_closure: model %a; compiler %a@." indent
+              print_node (Graph_spec.Node_code_id id) print_unboxed m
+              print_unboxed c)
+          differences);
+      List.iter
+        (fun (id, m, _) ->
+          match m with
+          | None -> ()
+          | Some shape ->
+            Format.printf "%s%a: my_closure unboxed %a@." indent print_node
+              (Graph_spec.Node_code_id id) print_shape shape)
+        my_closures;
       let preserve =
         match Features.reaper_preserve_direct_calls () with
         | Auto | Always -> true
@@ -2313,8 +2463,9 @@ let compare_unboxing ~(names : unit_names) ~(input : Flsemantics.converted)
       let rebuilt_body =
         within_budget "the model's rebuild" ~indent ~facts:model_facts ~input
           (fun () ->
-            Unboxing.rebuild_unit_unbox model_facts model_tables cannot_change_m
-              deps dominated_m to_unbox_m preserve input.body)
+            Unboxing.rebuild_unit_unbox_repr is_local model_facts model_tables
+              cannot_change_m deps dominated_m to_unbox_m tcr_m preserve
+              input.body)
       in
       (match
          let problem, skeleton =
@@ -2329,15 +2480,19 @@ let compare_unboxing ~(names : unit_names) ~(input : Flsemantics.converted)
            Reaper.Rebuild.rebuild ~machine_width:Sixty_four ~cmx_loader
              ~all_code:simplified.all_code ~skeleton ~solution
          in
-         undo_renamings names ~skeleton ~solution input.body;
+         relate_slots names ~model_reprs ~skeleton ~solution input.body;
          reaped
        with
       | exception (Misc.Fatal_error as e) ->
         Format.printf "%sthe compiler's reaper STOPPED on the unit (%s)@."
           indent (Printexc.to_string e)
       | reaped ->
-        compare_rebuild ~indent ~ends:compiler.ends_of_regions ~input
-          ~input_unit ~rebuilt_body ~compiler_output:reaped.unit);
+        Flsemantics.poison_missing_callee := true;
+        Fun.protect
+          ~finally:(fun () -> Flsemantics.poison_missing_callee := false)
+          (fun () ->
+            compare_rebuild ~indent ~ends:compiler.ends_of_regions ~input
+              ~input_unit ~rebuilt_body ~compiler_output:reaped.unit));
       true
 
 (* ---- One example ------------------------------------------------------ *)
@@ -2347,12 +2502,32 @@ let print_graphs () =
   | None | Some "" -> false
   | Some _ -> true
 
+(* The conversion of [unit] with its slots numbered in the compiler's order
+   ([Value_slot.compare] and [Function_slot.compare]), for the order of the
+   fields of the model reads their numbers ([FlambdaReaperUnboxing.field_lt]):
+   the unit is converted once to find its slots, and again with them numbered
+   first, in that order. *)
+let convert_in_slot_order unit =
+  Flsemantics.reset_conversion ();
+  ignore (Flsemantics.convert_unit unit : Flsemantics.converted);
+  let value_slots = Flsemantics.Value_slots.bindings () in
+  let function_slots = Flsemantics.Function_slots.bindings () in
+  Flsemantics.reset_conversion ();
+  List.iter
+    (fun (slot, _) ->
+      ignore (Flsemantics.find_value_slot slot : Numbers.positive))
+    value_slots;
+  List.iter
+    (fun (slot, _) ->
+      ignore (Flsemantics.Function_slots.find slot : Numbers.positive))
+    function_slots;
+  Flsemantics.convert_unit unit
+
 (* The comparison on the unit that Simplify returned. Whether it found nothing
    that makes the tool fail. *)
 let check ~filename ~cmx_loader (simplified : Simplify.simplify_result) : bool =
   let unit = simplified.unit in
-  Flsemantics.reset_conversion ();
-  match Flsemantics.convert_unit unit with
+  match convert_in_slot_order unit with
   | exception Flsemantics.Unsupported what ->
     Format.printf "%s: not checked: the model has not got %t@." filename what;
     true

@@ -27,13 +27,23 @@ value_slot_newer_version.fl:
     the compiler's output against the input: DIFFERENT
   with unboxing:
     the compiler changes the representation of 3 names that its traversal made, which are not in the term
-    the compiler renames the slots of 2 closures (a change of representation that only renames), which the conversion of its output undoes
     the table of dominated_by_allocation_point: the model's passes the check, the compiler's, with its graph, passes it
     the table of to_unbox: the model's passes the check, the compiler's, with its graph, passes it
-    the two pairs of tables on the names of the unit: the same, 6 names dominated by an allocation, 0 allocations to unbox
+    the table of to_change_representation: the model's passes the check, the compiler's, with its graph, passes it
+    the check that sets of closures are unboxed or changed whole: the model's tables pass it, the compiler's, with its graph, pass it
+    the three pairs of tables on the names of the unit: the same, 6 names dominated by an allocation, 0 allocations to unbox, 2 to change the representation of
     the unboxed fields of the 16 names of the unit: the same, 0 unboxed
+    g/v1: representation: model {value slot x}, with function slot add_x, at function slot add_x; compiler {}, with function slot add_x, at function slot add_x
+    my_closure/v9: representation: model {value slot x}, with function slot add_x, at function slot add_x; compiler {}, with function slot add_x, at function slot add_x
+    f/v10: representation: model {value slot x}, with function slot add_x, at function slot add_x; compiler {}, with function slot add_x, at function slot add_x
+    g/v1: representation {value slot x}, with function slot add_x, at function slot add_x
+    my_closure/v2: representation {}, with function slot call, at function slot call
+    my_closure/v9: representation {value slot x}, with function slot add_x, at function slot add_x
+    f/v10: representation {value slot x}, with function slot add_x, at function slot add_x
+    $Value_slot_newer_version_call: representation {}, with function slot call, at function slot call
     the decisions on the 2 code ids of the unit: the same, 1 changing
     code call: parameters [keep val], results [keep val]
+    the decisions of my_closure on the 2 code ids of the unit: the same, 0 unboxed
     the model's rebuild and the compiler's output: DIFFERENT terms
     the reaper's input (14 steps): returns [0: 3]
     the model's rebuild (14 steps): returns [0: 3]

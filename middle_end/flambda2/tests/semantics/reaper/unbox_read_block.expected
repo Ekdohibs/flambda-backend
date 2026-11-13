@@ -24,17 +24,24 @@ unbox_read_block.fl:
     the compiler's output against the input: the same
   with unboxing:
     the compiler changes the representation of 2 names that its traversal made, which are not in the term
-    the compiler renames the slots of 2 closures (a change of representation that only renames), which the conversion of its output undoes
     the table of dominated_by_allocation_point: the model's passes the check, the compiler's, with its graph, passes it
     the table of to_unbox: the model's passes the check, the compiler's, with its graph, passes it
-    the two pairs of tables on the names of the unit: the same, 8 names dominated by an allocation, 1 allocations to unbox
+    the table of to_change_representation: the model's passes the check, the compiler's, with its graph, passes it
+    the check that sets of closures are unboxed or changed whole: the model's tables pass it, the compiler's, with its graph, pass it
+    the three pairs of tables on the names of the unit: the same, 8 names dominated by an allocation, 1 allocations to unbox, 2 to change the representation of
     the unboxed fields of the 17 names of the unit: the same, 3 unboxed
     p/v1: {field 0 val}
     p/v5: {field 0 val}
     q/v9: {field 0 val}
+    the changes of representation of the 17 names of the unit: the same, 4 changed
+    my_closure/v3: representation {}, with function slot make, at function slot make
+    my_closure/v6: representation {}, with function slot get, at function slot get
+    $Unbox_read_block_make: representation {}, with function slot make, at function slot make
+    $Unbox_read_block_get: representation {}, with function slot get, at function slot get
     the decisions on the 2 code ids of the unit: the same, 2 changing
     code make: parameters [keep val], results [unbox {field 0 val}]
     code get: parameters [unbox {field 0 val}], results [keep val]
+    the decisions of my_closure on the 2 code ids of the unit: the same, 0 unboxed
     the model's rebuild and the compiler's output: the same up to bound names
     the reaper's input (16 steps): returns [0: 7]
     the model's rebuild (16 steps): returns [0: 7]
