@@ -1067,7 +1067,25 @@ it gave back.
 - **What the tool reports**, in the same file (`check`, `run`,
   `observe`): that it calls `validate_unit` on the two terms converted
   or, where that does not validate them, `validate_unit_knowing` on the
-  same two terms, and prints the answer as it is. The comparison of the
+  same two terms, and prints the answer as it is. Where neither
+  validates them for any of the lists of calls that the tool
+  tries, it calls
+  `FlambdaValidateReadingSpec.validate_unit_reading` on the same
+  two terms converted or, where that does not validate them,
+  `validate_unit_knowing_reading` on the same. Where one of them
+  validates them, it prints that answer as it is, with one line
+  more under it, which begins "(asked of the term before". Those
+  two functions ask
+  `validate_unit` and `validate_unit_knowing` of the term after
+  and of a term that they make of the term before
+  (`FlambdaValidateReadingSpec.before_read`: the term before with
+  the lengths and the loads at constant indices of its known
+  immutable arrays read, and normalised); what is proved of them
+  is of the two terms that they are given
+  (`validate_unit_reading_sound_statement`,
+  `validate_unit_knowing_reading_sound_statement`), as the term
+  that they make refines the term before under all environments
+  (`normalise_reading_refines_statement`). The comparison of the
   two runs that it also prints is a test of one run, and no theorem is
   about it.
   For a unit that has imports (the entry "Symbols that a unit does not
@@ -1158,7 +1176,22 @@ it gave back.
   The call is written beside each asking, with the arguments of that
   asking, and the tool reads the one of the asking that it made last;
   where a unit is validated, the asking made last is the one whose
-  verdict is reported. Where the test accepts the verdict, the line
+  verdict is reported. For a verdict of one of the two functions
+  of `FlambdaValidateReadingSpec.v` the theorem from the imports
+  (`validate_unit_reading_verdict_imports_statement`,
+  `validate_unit_knowing_reading_verdict_imports_statement`) has
+  the same two tests, asked of the term after and of the term that
+  `before_read` gives for the term before, with the rounds, the
+  loops, the liftings and the list of calls of the asking, and not
+  of the term before as converted. The tool computes that term
+  itself, by `before_read` as it is extracted, and gives it to the
+  test with the verdict that it reports. Trusted of that call
+  besides: that the arguments which the tool gives `before_read`
+  there are those of the asking whose verdict it reports. The
+  term that the tool computes by the same function for its
+  guesses, with nothing lifted, is not trusted: the theorem holds
+  whatever is guessed. Where the test accepts the verdict, the
+  line
   begins "validated with its imports", and the verdict is of the two
   runs that the tool shows. Where the validator accepts and the test
   does not, what is validated is
