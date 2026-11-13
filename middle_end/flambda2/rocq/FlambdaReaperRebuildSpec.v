@@ -30,9 +30,8 @@
 
    This file is to be reviewed: the checks [closure_free],
    [no_code_no_slots], [no_code], [no_call], [direct_tail_calls],
-   [direct_calls], [exits_one_value] and [results_kinded], the
-   statements, and the
-   examples, against
+   [direct_calls], [only_direct_calls], [exits_one_value] and
+   [results_kinded], the statements, and the examples, against
    FlambdaReaperRebuild.v (the rebuild, which needs no review) and
    FlambdaReaperFlowSpec.v (the meaning of a solution). The proofs are
    in FlambdaReaperRebuildProofs.v, which needs no review.
@@ -138,11 +137,13 @@
      compiler's units, which are well-kinded, meet it; the model asks
      nothing of kinds otherwise (FlambdaWellKindedSpec.v).
    [rebuild_refines_observably_statement] is proved for the units that
-   meet [direct_calls] in place of [closure_free]: closures and static
-   sets of closures with value slots, projections of function slots and
-   of value slots, code and deleted code, and direct calls that return
-   to a way out of the unit or of the code they are in, or to a handler
-   in scope. A unit of direct tail calls meets it
+   meet [only_direct_calls] in place of [closure_free]: closures and
+   static sets of closures with value slots, projections of function
+   slots and of value slots, code and deleted code, and direct calls
+   that return, and raise, to a way out of the unit or of the code they
+   are in, or to a handler in scope. A unit of [direct_calls] meets it
+   ([direct_calls_only_direct_calls_statement]); a unit of direct tail
+   calls meets [direct_calls]
    ([direct_tail_calls_direct_calls_statement]); a unit without calls
    meets [direct_tail_calls] ([no_call_direct_tail_calls_statement]),
    a unit without code meets [no_call] ([no_code_no_call_statement]), a
@@ -186,9 +187,27 @@
    ([in_flow_fragment]). The rebuild of a call keeps an argument at a
    parameter that has a use, as it is (the argument then has a use too,
    so it is still bound), gives the others poison, and calls the rebuilt
-   code directly or indirectly. What remains: calls whose exception
-   continuation is a handler in scope, extra arguments of the exception,
-   and indirect calls.
+   code directly or indirectly. [only_direct_calls] asks the same, but
+   lets the exception continuation of a call be a handler in scope, to
+   which the call may give extra arguments: what the code raises, and
+   what the code that it calls in tail position raises, reaches the
+   handler, followed by the extra arguments. [well_formed_unit] asks
+   the rest ([unit_exn_handlers_well_formed]): such a handler is an
+   exception handler of a non-recursive [Let_cont], whose first
+   parameter, the exception, the rebuild keeps ([params_to_keep]); and
+   no call gives extra arguments to a continuation that the unit, or the
+   code it is in, does not bind, as these take the exception alone. The
+   traversal gives the exception any source, and any usage where the
+   code it is in is used ([exn_handler_deps]), so what an exception
+   holds reaches the handler whole. The rebuild gives the handler the
+   extra arguments at the parameters it keeps ([rebuild_exn_extra_args]),
+   and removes the others, which have no use. An exception leaves the
+   unit only through the exception continuation of the unit, alone, at a
+   node with any usage, and is compared there as any exit is. The
+   machine raises only where the term does (an [Apply_cont] of the
+   exception continuation); an exception that the runtime raises in a
+   call of its own ([Sys.Break]) is not in the model. What remains:
+   indirect calls.
    The statement holds of more than nothing ([example_statement]): a
    unit with a static block, a block one field of which no load reads, a
    [Let] with no use, and a continuation one parameter of which has no
@@ -200,9 +219,10 @@
    [value_slots_example_statement], up to observation, for a unit whose
    closures have value slots that the rebuild removes, and which exits
    with a closure; [code_example_statement] for a unit with code;
-   [tail_call_example_statement] for a unit with a call; and
+   [tail_call_example_statement] for a unit with a call;
    [wrapper_example_statement] for a unit with a call that returns to a
-   handler through a wrapper. *)
+   handler through a wrapper; and [raise_example_statement] for a unit
+   with a call that raises to a handler, with extra arguments. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -502,6 +522,53 @@ with code_direct_calls (c : code) : bool :=
 Definition direct_tail_calls_direct_calls_statement : Prop :=
   ∀ (bound : list continuation) (e : expr),
     direct_tail_calls bound e = true -> direct_calls bound e = true.
+
+(* Only direct calls: [direct_calls], but the exception continuation of a
+   call may be a handler in scope, to which the call may pass extra
+   arguments. A call is asked only to be direct and to give arguments of
+   kinds other than [Region] and [Rec_info]. Where a call raises,
+   [well_formed_unit] says the rest ([unit_exn_handlers_well_formed]): a
+   handler that a call raises to is an exception handler of a
+   non-recursive [Let_cont], and a call gives extra arguments to no
+   continuation that the unit, or the code it is in, does not bind. *)
+Definition only_direct_call (ap : apply_expr) : bool :=
+  match ap_call_kind ap with
+  | Direct _ => forallb argument_kind_ok (unarize (ap_args_arity ap))
+  | Indirect => false
+  end.
+
+Fixpoint only_direct_calls (e : expr) : bool :=
+  match e with
+  | Let _ kind defining_expr body =>
+    named_no_code kind defining_expr && only_direct_calls body
+  | Let_static bindings body =>
+    forallb binding_only_direct_calls bindings && only_direct_calls body
+  | Let_cont_non_recursive _ h body =>
+    handler_only_direct_calls h && only_direct_calls body
+  | Let_cont_recursive handlers body =>
+    forallb (fun '(_, h) => handler_only_direct_calls h) handlers
+    && only_direct_calls body
+  | Apply ap => only_direct_call ap
+  | Apply_cont _ | Switch _ _ | Invalid => true
+  end
+with handler_only_direct_calls (h : continuation_handler) : bool :=
+  match h with
+  | Handler _ _ handler => only_direct_calls handler
+  end
+with binding_only_direct_calls (binding : static_binding) : bool :=
+  match binding with
+  | Bind_code _ c => code_only_direct_calls c
+  | Bind_deleted_code _ | Bind_symbol _ _ => binding_no_code binding
+  end
+with code_only_direct_calls (c : code) : bool :=
+  match c with
+  | Code _ _ _ _ _ body => only_direct_calls body
+  end.
+
+(* A unit of [direct_calls] meets it. *)
+Definition direct_calls_only_direct_calls_statement : Prop :=
+  ∀ (bound : list continuation) (e : expr),
+    direct_calls bound e = true -> only_direct_calls e = true.
 
 (* ======================================================================== *)
 (* Exits                                                                    *)
@@ -1220,7 +1287,7 @@ Definition rebuild_refines_observably_statement : Prop :=
     is_local_slots_only is_local ->
     (∀ f : field, is_local f = false) ∨ projection_free e = true ->
     in_flow_fragment e = true ->
-    direct_calls [] e = true ->
+    only_direct_calls e = true ->
     results_kinded [] [] e = true ->
     well_formed_unit u e = true ->
     exits_one_value u e = true ->
@@ -1921,3 +1988,141 @@ Definition wrapper_example_statement : Prop :=
   ∧ behaves
       (State WrapperExample.rebuilt [] [] empty_static_env empty_heap)
       (Exits 1%positive [Value_const (Tagged_immediate 7)] empty_heap).
+
+(* The statement up to observation holds of a unit with a call whose
+   exception continuation is a handler in scope, to which it passes extra
+   arguments, which [direct_calls] does not allow: code that raises its
+   parameter, called with the extra arguments 8 and 9 for a handler that
+   has no use for the second:
+
+     let code f50 x40 my_closure x41 return k3 exn k4 = raise k4 x40 in
+     let x11 = closure at 70 of { 70 = f50 } in
+     let_cont exn k20 x32 x33 x34 = return x33 in    ([x34] has no use)
+     let_cont k22 x35 = (pop k20) return x35 in
+     let_cont k21 = x11 7 return k22 exn k20 8 9 in  (direct, to f50)
+     (push k20) k21
+
+   Its least solution passes the checks. The rebuild removes [x34] from
+   the handler and 9 from the extra arguments of the call, and keeps the
+   exception [x32]; [x35] has no source, as the code does not return,
+   and the handler of [k22] is [Invalid]. The code raises 7 to [k20],
+   and the two units exit with 8. *)
+Module RaiseExample.
+
+Local Open Scope positive_scope.
+
+Definition code50 : code :=
+  Code [40] 41 3 4 (make_code_metadata [Singleton Value] [Singleton Value])
+    (Apply_cont
+       {| ac_continuation := 4; ac_args := [Var 40];
+          ac_trap_action := Some (Pop 4 (Some Regular)) |}).
+
+Definition call (extras : list simple) : apply_expr :=
+  {| ap_callee := Var 11; ap_call_kind := Direct 50;
+     ap_args := [Const (Tagged_immediate 7)];
+     ap_continuation := 22; ap_exn_continuation := 20;
+     ap_exn_extra_args := map (fun s => (s, Value)) extras;
+     ap_args_arity := [Singleton Value];
+     ap_return_arity := [Singleton Value] |}.
+
+(* The unit, with the parameters of [k20], the handler of [k22] and the
+   extra arguments of the call. *)
+Definition unit_with (params : list variable) (handler22 : expr)
+    (extras : list simple) : expr :=
+  Let_static [Bind_code 50 code50]
+    (Let 11 Value (Closure_of_set 70 [(70, 50)] [])
+       (Let_cont_non_recursive 20
+          (Handler params
+             (make_exn_handler_metadata (map (fun _ => Value) params))
+             (FlowExample.return_to 1 [Var 33]))
+          (Let_cont_non_recursive 22
+             (Handler [35] (make_handler_metadata [Value]) handler22)
+             (Let_cont_non_recursive 21
+                (Handler [] (make_handler_metadata []) (Apply (call extras)))
+                (Apply_cont
+                   {| ac_continuation := 21; ac_args := [];
+                      ac_trap_action := Some (Push 20) |}))))).
+
+Definition unit_expr : expr :=
+  unit_with [32; 33; 34]
+    (Apply_cont
+       {| ac_continuation := 1; ac_args := [Var 35];
+          ac_trap_action := Some (Pop 20 None) |})
+    [Const (Tagged_immediate 8); Const (Tagged_immediate 9)].
+
+Definition solution : tables :=
+  {| t_alias :=
+       [(Node_made 1, Node_variable 33); (Node_made 1, Node_variable 35);
+        (Node_made 10, Node_code_id 50); (Node_made 11, Node_made 7);
+        (Node_made 4, Node_variable 40); (Node_made 5, Node_variable 11);
+        (Node_made 6, Node_all_constants); (Node_made 9, Node_made 11);
+        (Node_variable 32, Node_made 4);
+        (Node_variable 33, Node_all_constants);
+        (Node_variable 34, Node_all_constants);
+        (Node_variable 35, Node_made 3); (Node_variable 40, Node_made 6);
+        (Node_variable 41, Node_made 5)];
+     t_any_usage :=
+       [Node_all_constants; Node_code_id 50; Node_made 1; Node_made 10;
+        Node_made 2; Node_made 3; Node_made 4; Node_made 6; Node_variable 32;
+        Node_variable 33; Node_variable 35; Node_variable 40];
+     t_any_source :=
+       [Node_all_constants; Node_code_id 50; Node_made 1; Node_made 10;
+        Node_made 4; Node_made 6; Node_variable 32; Node_variable 33;
+        Node_variable 34; Node_variable 40];
+     t_has_usage :=
+       [Node_all_constants; Node_code_id 50; Node_made 1; Node_made 10;
+        Node_made 11; Node_made 2; Node_made 3; Node_made 4; Node_made 6;
+        Node_made 7; Node_made 9; Node_variable 11; Node_variable 32;
+        Node_variable 33; Node_variable 35; Node_variable 40];
+     t_has_source :=
+       [Node_all_constants; Node_code_id 50; Node_made 1; Node_made 10;
+        Node_made 11; Node_made 4; Node_made 5; Node_made 6; Node_made 7;
+        Node_made 8; Node_made 9; Node_variable 11; Node_variable 32;
+        Node_variable 33; Node_variable 34; Node_variable 40;
+        Node_variable 41];
+     t_usages :=
+       [(Node_made 11, Node_made 9); (Node_made 7, Node_made 9);
+        (Node_made 9, Node_made 9); (Node_variable 11, Node_variable 11)];
+     t_sources :=
+       [(Node_made 11, Node_made 7); (Node_made 5, Node_variable 11);
+        (Node_made 7, Node_made 7); (Node_made 8, Node_made 8);
+        (Node_made 9, Node_made 7); (Node_variable 11, Node_variable 11);
+        (Node_variable 41, Node_variable 11)];
+     t_reading_field := [];
+     t_escaping_field := [];
+     t_field_used :=
+       [(Node_made 7, Field_code_id_of_call_witness);
+        (Node_made 7, Field_return_of_call (Normal 0%nat));
+        (Node_made 7, Field_return_of_call Exn);
+        (Node_variable 11, Field_call_witness Known_arity_code_pointer)] |}.
+
+Definition rebuilt : expr :=
+  unit_with [32; 33] Invalid [Const (Tagged_immediate 8)].
+
+End RaiseExample.
+
+Definition raise_example_statement : Prop :=
+  in_flow_fragment RaiseExample.unit_expr = true
+  ∧ direct_calls [] RaiseExample.unit_expr = false
+  ∧ only_direct_calls RaiseExample.unit_expr = true
+  ∧ results_kinded [] [] RaiseExample.unit_expr = true
+  ∧ well_formed_unit FlowExample.interface RaiseExample.unit_expr = true
+  ∧ exits_one_value FlowExample.interface RaiseExample.unit_expr = true
+  ∧ check_closed FlowExample.is_local
+      (traverse_unit Never FlowExample.interface RaiseExample.unit_expr)
+      RaiseExample.solution
+    = true
+  ∧ check_field_used_exact FlowExample.is_local
+      (traverse_unit Never FlowExample.interface RaiseExample.unit_expr)
+      RaiseExample.solution
+    = true
+  ∧ rebuild_unit_from_tables
+      (traverse_unit Never FlowExample.interface RaiseExample.unit_expr)
+      RaiseExample.solution false RaiseExample.unit_expr
+    = RaiseExample.rebuilt
+  ∧ behaves
+      (State RaiseExample.unit_expr [] [] empty_static_env empty_heap)
+      (Exits 1%positive [Value_const (Tagged_immediate 8)] empty_heap)
+  ∧ behaves
+      (State RaiseExample.rebuilt [] [] empty_static_env empty_heap)
+      (Exits 1%positive [Value_const (Tagged_immediate 8)] empty_heap).
