@@ -29,8 +29,8 @@
    solution that passes the checks refines the unit.
 
    This file is to be reviewed: the checks [closure_free],
-   [no_code_no_slots], [exits_one_value] and [results_kinded], the
-   statements, and the examples, against
+   [no_code_no_slots], [no_code], [exits_one_value] and [results_kinded],
+   the statements, and the examples, against
    FlambdaReaperRebuild.v (the rebuild, which needs no review) and
    FlambdaReaperFlowSpec.v (the meaning of a solution). The proofs are
    in FlambdaReaperRebuildProofs.v, which needs no review.
@@ -129,24 +129,24 @@
      even observably ([results_kinded_needed_statement]). The
      compiler's units, which are well-kinded, meet it; the model asks
      nothing of kinds otherwise (FlambdaWellKindedSpec.v).
-   For now [rebuild_refines_observably_statement] is stated and proved
-   for the units that meet [no_code_no_slots] in place of
-   [closure_free]: closures and static sets of closures without value
-   slots, projections of function slots, and deleted code, but no code
-   and no call. A unit without closures meets it
-   ([closure_free_no_code_no_slots_statement]). Of such a unit the
-   rebuild is an exact refinement, which is one up to observation
-   ([refines_observably_of_refines_statement]): a closure without value
-   slots is the same in the two runs; the rebuild keeps a set with the
+   [rebuild_refines_observably_statement] is proved for the units that
+   meet [no_code] in place of [closure_free]: closures and static sets of
+   closures with value slots, projections of function slots and of
+   value slots, and deleted code, but no code and no call. A unit
+   without value slots meets it ([no_code_no_slots_no_code_statement]),
+   and so does a unit without closures
+   ([closure_free_no_code_no_slots_statement]). The rebuild keeps a value
+   slot of a set where one of the closures of the set has it used, with
+   the value it holds, which then has a use; it keeps a set with the
    projections that follow it ([projections_of_set]) if one of them has
-   a use, and a static set if one of its symbols has one; and a
-   projection from a symbol has a use only if the symbol has. The
-   premise [results_kinded] is not used yet. What remains is to drop
-   [no_code_no_slots]: value slots, of which closures differ in the two
-   runs, related then only up to observation; and code and calls (the
+   a use, and a static set if one of its symbols has one. [no_code] asks
+   that a projection of a value slot be into a variable of a kind other
+   than [Region] and [Rec_info]: the rebuild keeps such a variable whether
+   or not it has a use ([is_var_used]), and the proof needs the use to
+   know that the value slot read is kept. The premise [results_kinded] is
+   not used yet. What remains is to drop [no_code]: code and calls (the
    masks of the arguments, the wrappers, the callee, the rebuilt bodies
    of code).
-
    The statement holds of more than nothing ([example_statement]): a
    unit with a static block, a block one field of which no load reads, a
    [Let] with no use, and a continuation one parameter of which has no
@@ -154,7 +154,10 @@
    field poison, removes the [Let], the parameter and the argument
    given to it; and the unit exits with 7, as the rebuilt unit does.
    [closures_example_statement] does the same for a unit with closures
-   and a static set of closures, without value slots or code. *)
+   and a static set of closures, without value slots or code; and
+   [value_slots_example_statement], up to observation, for a unit whose
+   closures have value slots that the rebuild removes, and which exits
+   with a closure. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -253,6 +256,59 @@ with handler_no_code_no_slots (h : continuation_handler) : bool :=
 (* A unit without closures meets it. *)
 Definition closure_free_no_code_no_slots_statement : Prop :=
   ∀ e : expr, closure_free e = true -> no_code_no_slots e = true.
+
+(* No call and no code: [Let]s of simples, of primitives, of closures of
+   sets, of projections of function slots and, into a variable of a kind
+   other than [Region] and [Rec_info], of value slots; [Let_static]s of
+   blocks, of deleted code and of closures of static sets, each bound to
+   the symbol that its set names for its slot; [Let_cont]s,
+   [Apply_cont]s, [Switch]es and [Invalid]. *)
+Definition named_no_code (kind : flambda_kind) (defining_expr : named)
+    : bool :=
+  match defining_expr with
+  | Simple _ | Prim _ _ | Closure_of_set _ _ _ | Project_function_slot _ _ _ =>
+    true
+  | Project_value_slot_from _ _ _ =>
+    match kind with
+    | Region | Rec_info => false
+    | Value | Naked_number _ => true
+    end
+  | Set_of_closures _ _ | Project_value_slot _ _ => false
+  end.
+
+Definition binding_no_code (binding : static_binding) : bool :=
+  match binding with
+  | Bind_symbol _ (Static_const_block _ _) | Bind_deleted_code _ => true
+  | Bind_symbol s (Static_const_closure_of_set slot closure_symbols
+                     function_decls _) =>
+    is_bound slot function_decls
+    && match lookup slot closure_symbols with
+       | Some s' => Pos.eqb s' s
+       | None => false
+       end
+  | _ => false
+  end.
+
+Fixpoint no_code (e : expr) : bool :=
+  match e with
+  | Let _ kind defining_expr body =>
+    named_no_code kind defining_expr && no_code body
+  | Let_static bindings body =>
+    forallb binding_no_code bindings && no_code body
+  | Let_cont_non_recursive _ h body => handler_no_code h && no_code body
+  | Let_cont_recursive handlers body =>
+    forallb (fun '(_, h) => handler_no_code h) handlers && no_code body
+  | Apply _ => false
+  | Apply_cont _ | Switch _ _ | Invalid => true
+  end
+with handler_no_code (h : continuation_handler) : bool :=
+  match h with
+  | Handler _ _ handler => no_code handler
+  end.
+
+(* A unit without value slots meets it. *)
+Definition no_code_no_slots_no_code_statement : Prop :=
+  ∀ e : expr, no_code_no_slots e = true -> no_code e = true.
 
 (* ======================================================================== *)
 (* Exits                                                                    *)
@@ -957,7 +1013,7 @@ Definition rebuild_refines_observably_statement : Prop :=
     is_local_slots_only is_local ->
     (∀ f : field, is_local f = false) ∨ projection_free e = true ->
     in_flow_fragment e = true ->
-    no_code_no_slots e = true ->
+    no_code e = true ->
     results_kinded [] [] e = true ->
     well_formed_unit u e = true ->
     exits_one_value u e = true ->
@@ -1104,6 +1160,164 @@ Definition closures_example_statement : Prop :=
   ∧ behaves
       (State ClosuresExample.rebuilt [] [] empty_static_env empty_heap)
       (Exits 1%positive [ClosuresExample.result] empty_heap).
+
+(* The statement up to observation holds of more than nothing, and
+   compares exits up to the value slots: a unit with a set of closures
+   with two value slots, of which a projection reads one, and a static
+   set with two, of which a projection reads one; the unit exits with a
+   block of the two values read and of the closure:
+
+     let deleted_code f50 and f51 in
+     let symbol s80 = closure at 70 of { 70 = f50; 71 = f51 }
+                      with { w62 = 7; w63 = 8 }
+     and symbol s81 = closure at 71 of the same in
+     let x10 = 5 in
+     let x9 = 6 in
+     let x11 = closure at 70 of { 70 = f50; 71 = f51 }
+               with { w60 = x10; w61 = x9 } in
+     let x12 = x11 moved from 70 to 71 in
+     let x13 = w60 of x12 at 71 in
+     let x14 = w62 of s81 at 71 in
+     let x15 = { x13; x14; x11 } in
+     return x15
+
+   Its least solution passes the checks. The rebuild removes the value
+   slots that no projection reads ([w61], [w63]) and [x9]; the unit exits
+   with a closure that holds 5 and 6, the rebuilt unit with one that
+   holds 5, observed equal. *)
+Module ValueSlotsExample.
+
+Local Open Scope positive_scope.
+
+Definition function_decls : list (function_slot * code_id) :=
+  [(70, 50); (71, 51)].
+
+Definition closure_symbols : list (function_slot * symbol) :=
+  [(70, 80); (71, 81)].
+
+Definition tagged (n : Z) : simple := Const (Tagged_immediate n).
+
+Definition static_set (value_slots : list (value_slot * simple))
+    : list static_binding :=
+  [Bind_deleted_code 50; Bind_deleted_code 51;
+   Bind_symbol 80
+     (Static_const_closure_of_set 70 closure_symbols function_decls
+        value_slots);
+   Bind_symbol 81
+     (Static_const_closure_of_set 71 closure_symbols function_decls
+        value_slots)].
+
+Definition reads (value_slots : list (value_slot * simple)) : expr :=
+  Let 11 Value (Closure_of_set 70 function_decls value_slots)
+    (Let 12 Value (Project_function_slot 70 71 (Var 11))
+       (Let 13 Value (Project_value_slot_from 71 60 (Var 12))
+          (Let 14 Value (Project_value_slot_from 71 62 (Symbol 81))
+             (Let 15 Value
+                (FlowExample.make_block [Var 13; Var 14; Var 11])
+                (FlowExample.return_to 1 [Var 15]))))).
+
+Definition unit_expr : expr :=
+  Let_static (static_set [(62, tagged 7); (63, tagged 8)])
+    (Let 10 Value (Simple (tagged 5))
+       (Let 9 Value (Simple (tagged 6))
+          (reads [(60, Var 10); (61, Var 9)]))).
+
+Definition solution : tables :=
+  {| t_alias :=
+       [(Node_made 1, Node_variable 15); (Node_variable 10, Node_all_constants);
+        (Node_variable 12, Node_made 3); (Node_variable 13, Node_variable 10);
+        (Node_variable 14, Node_all_constants);
+        (Node_variable 9, Node_all_constants)];
+     t_any_usage :=
+       [Node_all_constants; Node_made 1; Node_made 2; Node_made 3; Node_made 4;
+        Node_made 5; Node_variable 10; Node_variable 11; Node_variable 13;
+        Node_variable 14; Node_variable 15];
+     t_any_source :=
+       [Node_all_constants; Node_made 4; Node_made 5; Node_made 6; Node_made 7;
+        Node_variable 10; Node_variable 13; Node_variable 14; Node_variable 9];
+     t_has_usage :=
+       [Node_all_constants; Node_made 1; Node_made 2; Node_made 3; Node_made 4;
+        Node_made 5; Node_symbol 81; Node_variable 10; Node_variable 11;
+        Node_variable 12; Node_variable 13; Node_variable 14; Node_variable 15];
+     t_has_source :=
+       [Node_all_constants; Node_made 1; Node_made 3; Node_made 4; Node_made 5;
+        Node_made 6; Node_made 7; Node_symbol 80; Node_symbol 81;
+        Node_variable 10; Node_variable 11; Node_variable 12; Node_variable 13;
+        Node_variable 14; Node_variable 15; Node_variable 9];
+     t_usages :=
+       [(Node_symbol 81, Node_symbol 81); (Node_variable 12, Node_variable 12)];
+     t_sources :=
+       [(Node_made 1, Node_variable 15); (Node_made 3, Node_made 3);
+        (Node_symbol 80, Node_symbol 80); (Node_symbol 81, Node_symbol 81);
+        (Node_variable 11, Node_variable 11); (Node_variable 12, Node_made 3);
+        (Node_variable 15, Node_variable 15)];
+     t_reading_field := [];
+     t_escaping_field := [];
+     t_field_used :=
+       [(Node_made 3, Field_call_witness Known_arity_code_pointer);
+        (Node_made 3, Field_call_witness Unknown_arity_code_pointer);
+        (Node_made 3, Field_function_slot 70);
+        (Node_made 3, Field_function_slot 71);
+        (Node_made 3, Field_value_slot 60);
+        (Node_made 4, Field_code_id_of_call_witness);
+        (Node_made 5, Field_code_id_of_call_witness);
+        (Node_symbol 81, Field_value_slot 62);
+        (Node_variable 11, Field_call_witness Known_arity_code_pointer);
+        (Node_variable 11, Field_call_witness Unknown_arity_code_pointer);
+        (Node_variable 11, Field_function_slot 70);
+        (Node_variable 11, Field_function_slot 71);
+        (Node_variable 11, Field_value_slot 60);
+        (Node_variable 15, Field_block 0%nat Value);
+        (Node_variable 15, Field_block 1%nat Value);
+        (Node_variable 15, Field_block 2%nat Value);
+        (Node_variable 15, Field_get_tag); (Node_variable 15, Field_is_int)] |}.
+
+Definition rebuilt : expr :=
+  Let_static (static_set [(62, tagged 7)])
+    (Let 10 Value (Simple (tagged 5)) (reads [(60, Var 10)])).
+
+Definition result (value_slots : list (value_slot * value)) : value :=
+  Value_block 0
+    [Value_const (Tagged_immediate 5); Value_const (Tagged_immediate 7);
+     Value_closure_of_set 70 function_decls value_slots].
+
+Definition source_result : value :=
+  result [(60, Value_const (Tagged_immediate 5));
+          (61, Value_const (Tagged_immediate 6))].
+
+Definition rebuilt_result : value :=
+  result [(60, Value_const (Tagged_immediate 5))].
+
+End ValueSlotsExample.
+
+Definition value_slots_example_statement : Prop :=
+  in_flow_fragment ValueSlotsExample.unit_expr = true
+  ∧ no_code ValueSlotsExample.unit_expr = true
+  ∧ results_kinded [] [] ValueSlotsExample.unit_expr = true
+  ∧ well_formed_unit FlowExample.interface ValueSlotsExample.unit_expr
+    = true
+  ∧ exits_one_value FlowExample.interface ValueSlotsExample.unit_expr = true
+  ∧ check_closed FlowExample.is_local
+      (traverse_unit Never FlowExample.interface ValueSlotsExample.unit_expr)
+      ValueSlotsExample.solution
+    = true
+  ∧ check_field_used_exact FlowExample.is_local
+      (traverse_unit Never FlowExample.interface ValueSlotsExample.unit_expr)
+      ValueSlotsExample.solution
+    = true
+  ∧ rebuild_unit_from_tables
+      (traverse_unit Never FlowExample.interface ValueSlotsExample.unit_expr)
+      ValueSlotsExample.solution false ValueSlotsExample.unit_expr
+    = ValueSlotsExample.rebuilt
+  ∧ behaves
+      (State ValueSlotsExample.unit_expr [] [] empty_static_env empty_heap)
+      (Exits 1%positive [ValueSlotsExample.source_result] empty_heap)
+  ∧ behaves
+      (State ValueSlotsExample.rebuilt [] [] empty_static_env empty_heap)
+      (Exits 1%positive [ValueSlotsExample.rebuilt_result] empty_heap)
+  ∧ observed_equal ValueSlotsExample.source_result
+      ValueSlotsExample.rebuilt_result
+  ∧ ValueSlotsExample.source_result <> ValueSlotsExample.rebuilt_result.
 
 (* The unit of [closure_exit_counterexample_statement] meets
    [results_kinded], and its rebuild refines it up to observation. *)
