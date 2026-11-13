@@ -1,0 +1,69 @@
+(* flreaper: -O3 -X reaper-lambda-lifting=1 *)
+(* A crash of the compiler's reaper with lambda lifting, which the model
+   shares. The unit is made by ../ocaml/from_ocaml.sh of
+
+     external opaque : 'a -> 'a = "%opaque"
+     let[@inline always] top0 (x2 : int) =
+       let[@inline never][@local never] f3 () = x2 in
+       let _ = f3 () in
+       0
+     let r = top0 (opaque 5)
+     let s = top0 (opaque 6)
+
+   with an interface that exports r and s. Inlining top0 twice makes two
+   sets of closures of the code of f3. Each closure is unboxed to no field
+   (lambda lifting), but the my_closure of the code, which has no use and
+   two sources, is not; the decision on my_closure is then Keep_my_closure,
+   and rebuild_apply keeps as the callee of each call the closure, whose
+   binding the unboxing removed. The compiler stops in To_cmm ("not found
+   in env"; in a function, the check of free names stops it before); the
+   model's rebuild is the compiler's output, and both are undefined where
+   the unit returns. *)
+let $camlLambda_lifting_dead_callee__first_const_0 = Block 0 () in
+(let code inline(never) size(2)
+       f3_1 (param/58 : imm tagged)
+         my_closure/59 &my_alloc_region/60 my_depth/61
+         -> k/22 * k/23
+         : imm tagged =
+   let next_depth/62 = rec_info (succ my_depth/61) in
+   let x2/63 = %project_value_slot.[f3].[x2] (my_closure/59) in
+   cont k/22 (x2/63)
+ in
+ let code inline(always) size(18)
+       top0_0 (x2/64 : imm tagged)
+         my_closure/65 &my_alloc_region/66 my_depth/67
+         -> k/24 * k/25
+         : imm tagged =
+   let next_depth/68 = rec_info (succ my_depth/67) in
+   let region/69 = %begin_region () in
+   let ghost_region/70 = %begin_ghost_region () in
+   (let f3/74 = closure f3_1 @f3 &my_alloc_region/66 &region/69
+    with { x2 = x2/64 }
+    in
+    apply direct(f3_1 &my_alloc_region/66)
+      (f3/74 : _ -> imm tagged) (0) -> k/27 * k/25
+      where k/27 (apply_result/75 : imm tagged) =
+        cont k/26 (0))
+     where k/26 (region_return/71 : imm tagged) =
+       let unit/72 = %end_region (region/69) in
+       let unit/73 = %end_ghost_region (ghost_region/70) in
+       cont k/24 (region_return/71)
+ in
+ let top0/76 = closure top0_0 @top0 &toplevel in
+ (let Popaque/81 = %opaque (5) in
+  apply direct(top0_0 &toplevel)
+    (top0/76 : _ -> imm tagged) (Popaque/81) -> k/28 * error)
+   where k/28 (r/77 : imm tagged) =
+     ((let Popaque/80 = %opaque (6) in
+       apply direct(top0_0 &toplevel)
+         (top0/76 : _ -> imm tagged) (Popaque/80) -> k/29 * error)
+        where k/29 (s/78 : imm tagged) =
+          let Pmakeblock/79 = %block.[`0`].`toplevel` (r/77, s/78) in
+          cont k/21 (Pmakeblock/79)))
+  where k/21 define_root_symbol (module_block/55) =
+    let field_0/56 = %block_load.tag[`0`].`size`[`2`].[`0`] (module_block/55)
+    in
+    let field_1/57 = %block_load.tag[`0`].`size`[`2`].[`1`] (module_block/55)
+    in
+    let $camlLambda_lifting_dead_callee = Block 0 (field_0/56, field_1/57) in
+    cont done ($camlLambda_lifting_dead_callee)
