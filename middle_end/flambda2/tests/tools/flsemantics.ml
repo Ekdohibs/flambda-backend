@@ -220,6 +220,27 @@
    is made from fewer units than were read, a line names the units read. A unit
    for which no .cmx was read has no prefix and no such line.
 
+   The known arrays read. Where every attempt of the validation has refused a
+   unit, the attempts are made again, for the same lists of calls in the same
+   order and with both askings, of FlambdaValidateReadingSpec.v:
+   validate_unit_reading in the place of [validate_unit] and
+   validate_unit_knowing_reading in the place of [validate_unit_knowing], each
+   given the two terms as converted. They ask the two functions of the term
+   after and of the term before that FlambdaValidateReadingSpec.before_read
+   gives: its loops made and then, in rounds, the length of an immutable array
+   that it makes or binds to a symbol made a constant and a load from one at a
+   constant index made the element (FlambdaArrayLoadSpec.load_known_arrays,
+   which refines, is not an equivalence, and is not in the rounds of
+   [validate_unit]), and the term normalised as [validate_unit] normalises the
+   term before. What they accept is validated:
+   validate_unit_reading_sound_statement and the three statements beside it are
+   of the term before as it was given. The tool computes the term that
+   before_read gives itself as well: the guesses are made from it, and the test
+   of the verdict from the imports is made of it, as those statements have that
+   test. The line under the verdict then begins "(asked of the term before".
+   This comes before the second check, which is asked only where these attempts
+   refuse the unit too, and of the two terms as converted.
+
    The second check. Where every attempt of the validation that the tool makes
    has refused a unit, and the run of the term before that is shown is not
    reported undefined, the tool asks
@@ -280,6 +301,7 @@ module Validate_imports = Flambda2_rocq_semantics.FlambdaValidateImportsSpec
 module Lift = Flambda2_rocq_semantics.FlambdaLiftSpec
 module Lift_observed = Flambda2_rocq_semantics.FlambdaLiftObservedSpec
 module Validate_related = Flambda2_rocq_semantics.FlambdaValidateRelatedSpec
+module Validate_reading = Flambda2_rocq_semantics.FlambdaValidateReadingSpec
 module My_closure = Flambda2_rocq_semantics.FlambdaMyClosureSpec
 module Unused_slots = Flambda2_rocq_semantics.FlambdaUnusedSlotsSpec
 module Float_code = Flambda2_rocq_semantics.FlambdaFloatCodeSpec
@@ -4482,21 +4504,52 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
      computed only where it is read. *)
   let statics_of_imports = Imports.imports_statics imports in
   let last_asking_holds = ref (fun () -> false) in
-  let attempt ?(again = true) kept =
+  let attempt ?(again = true) ~reading kept =
+    (* [reading]: the attempt is of the term before with its known arrays read.
+       The functions asked are the two of FlambdaValidateReadingSpec.v, each
+       given the term before as converted, as the two of an attempt that is not
+       [reading] are. They give [validate_unit] and [validate_unit_knowing], for
+       the term before, the term that FlambdaValidateReadingSpec.before_read
+       makes of it, given the rounds, the loops, the liftings and the list of
+       this attempt. That term is computed here too. [term] is it with nothing
+       lifted, for the guesses, which are made from it: the liftings are not
+       guessed yet, and they change the term only by the continuations that its
+       rounds are told not to name, which are those of the unit of the term
+       before whatever the liftings are. [read liftings] is it for the liftings
+       of an asking, for the test of the verdict of that asking from the
+       imports, which the statements of that file have of that term. Of an
+       attempt that is not [reading] both are the term before as converted. *)
+    let read liftings =
+      if reading
+      then
+        { before with
+          body =
+            Validate_reading.before_read rounds loops liftings kept before.body
+        }
+      else before
+    in
+    let term = read [nothing_lifted] in
+    let validate_unit, validate_unit_knowing =
+      if reading
+      then
+        ( Validate_reading.validate_unit_reading,
+          Validate_reading.validate_unit_knowing_reading )
+      else Validate.validate_unit, Validate_knowing.validate_unit_knowing
+    in
     let first =
       ask
         (fun unused slots liftings ->
           let validation =
-            Validate.validate_unit rounds unused slots loops liftings kept
-              before.body after.body
+            validate_unit rounds unused slots loops liftings kept before.body
+              after.body
           in
           (last_asking_holds
              := fun () ->
                   Validate_imports.verdict_holds_from statics_of_imports rounds
-                    unused slots loops liftings kept before.body after.body
-                    validation);
+                    unused slots loops liftings kept (read liftings).body
+                    after.body validation);
           validation)
-        before after kept
+        term after kept
     in
     match first with
     | Not_validated, _, _, _, _ when again -> (
@@ -4512,16 +4565,16 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
         ask
           (fun unused slots liftings ->
             let validation =
-              Validate_knowing.validate_unit_knowing rounds unused slots loops
-                liftings kept before.body after.body
+              validate_unit_knowing rounds unused slots loops liftings kept
+                before.body after.body
             in
             (last_asking_holds
                := fun () ->
                     Validate_imports.verdict_knowing_holds_from
                       statics_of_imports rounds unused slots loops liftings kept
-                      before.body after.body validation);
+                      (read liftings).body after.body validation);
             validation)
-          (knowing (Validate.normalise_before_round_avoiding avoid kept) before)
+          (knowing (Validate.normalise_before_round_avoiding avoid kept) term)
           (knowing (Validate.normalise_after_round kept) after)
           kept
       with
@@ -4572,11 +4625,11 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
       (fun code_id -> not (List.mem code_id once_looped_guess))
       first_guess
   in
-  let first = attempt first_guess in
-  let attempts, (validation, _, _, slots_removed, _) =
+  let attempts_of ~reading =
+    let first = attempt ~reading first_guess in
     match first with
     | Not_validated, _, _, _, _ -> (
-      let second = attempt recursive in
+      let second = attempt ~reading recursive in
       let two =
         [ ( "leaving the calls of recursive code and of the code that the term \
              after calls",
@@ -4585,7 +4638,7 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
       in
       match second with
       | Not_validated, _, _, _, _ when another_guess ->
-        let third = attempt ~again:false once_looped_guess in
+        let third = attempt ~again:false ~reading once_looped_guess in
         ( two
           @ [ ( "leaving the calls of the code that is recursive once the \
                  loops are made and of the code that the term after calls",
@@ -4607,6 +4660,45 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
         _,
         _ ) ->
       [], first
+  in
+  (* The attempts, of the term before as it is; and, where they all refuse the
+     unit, the same of the term before with its known arrays read. [read] says
+     that the verdict is of an attempt of the second kind. The three lists of
+     calls to leave are, for both kinds, those made above from the term before
+     as converted: they are guesses. Where both kinds refuse the unit, the pairs
+     of terms of both are kept to be shown, and the second check, below, is
+     asked of the two terms as converted. *)
+  let read = ref false in
+  let attempts, (validation, _, _, slots_removed, _) =
+    match attempts_of ~reading:false with
+    | attempts, (Not_validated, _, _, _, _) -> (
+      match attempts_of ~reading:true with
+      | attempts_read, ((Not_validated, _, _, _, _) as refused) ->
+        ( attempts
+          @ List.map
+              (fun (which, pair) ->
+                which ^ ", of the term before with its known arrays read", pair)
+              attempts_read,
+          refused )
+      | ( _,
+          ( ( Same_up_to_bound_names | Same_once_normalised
+            | Same_once_unused_statics_removed | Same_once_head_statics_removed
+            | Same_once_lifted ),
+            _,
+            _,
+            _,
+            _ ) ) as accepted ->
+        read := true;
+        accepted)
+    | ( _,
+        ( ( Same_up_to_bound_names | Same_once_normalised
+          | Same_once_unused_statics_removed | Same_once_head_statics_removed
+          | Same_once_lifted ),
+          _,
+          _,
+          _,
+          _ ) ) as accepted ->
+      accepted
   in
   (* Whether the verdict is of the two runs that were shown. It is for a unit
      that imports nothing. For a unit that has imports it is where the model
@@ -4690,6 +4782,11 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
     Format.printf
       "  (at the second asking, of the two terms normalised with what their \
        symbols are bound to used)@.";
+  if !read
+  then
+    Format.printf
+      "  (asked of the term before normalised with the lengths and loads of \
+       its known immutable arrays read)@.";
   (* The second check, FlambdaValidateRelatedSpec.validate_unit_related, of the
      two terms and the imports, for each list of calls that the attempts above
      were made with, in their order. The liftings are guessed as for the
