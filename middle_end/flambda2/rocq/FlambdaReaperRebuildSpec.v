@@ -101,6 +101,19 @@
    number there keeps its contents; and a symbol is compared as a
    symbol, whatever its static block holds after the rebuild.
 
+   The second slice of FlambdaReaperFlowSpec.v (closures, projections,
+   static sets, code, direct calls) is not covered: two units of it,
+   which meet every premise but [closure_free], have rebuilds that do not
+   refine them. A closure that reaches an exit loses the value slots
+   that no projection names ([closure_exit_counterexample_statement]):
+   an exact comparison of exits needs a premise that no closure reaches
+   one, or the exits are to be compared up to the value slots that the
+   unit cannot read. And the wrapper that the rebuild gives a call tests
+   the kinds of the return arity of the call, which the machine does not
+   test of what code returns ([wrapper_kinds_counterexample_statement]):
+   a premise that the return arity of a call agrees with the parameters
+   of its return continuation is needed.
+
    The statement holds of more than nothing ([example_statement]): a
    unit with a static block, a block one field of which no load reads, a
    [Let] with no use, and a continuation one parameter of which has no
@@ -444,3 +457,245 @@ Definition field_used_exact_needed_statement : Prop :=
     = UnreadFieldExample.rebuilt
   ∧ ~ program_refines UnreadFieldExample.unit_expr
         UnreadFieldExample.rebuilt.
+
+(* ======================================================================== *)
+(* What the second slice of the fragment needs                              *)
+(* ======================================================================== *)
+
+(* The statement does not carry over as it stands to the units with
+   closures, code and calls ([in_flow_fragment] without
+   [closure_free]): each of the two units below meets every premise of
+   [rebuild_refines_statement] but [closure_free], no field is local and
+   it has no projection, its tables (worked out by iterating the rules
+   on its graph) pass the two checks, and its rebuild does not refine
+   it. *)
+
+(* A closure that reaches an exit through a variable:
+
+     let code f50 x40 = return x40 in       (bound by a [Let_static])
+     let x10 = 5 in
+     let x11 = closure f50 with { w60 = x10 } in
+     return x11
+
+   No projection names [w60], so the traversal gives the closure no fact
+   of its value slot ([unit_kept]), no rule says it used, and the
+   rebuild removes it ([rebuild_value_slots]). The unit exits with a
+   closure that holds 5 in [w60], the rebuilt unit with one that holds
+   nothing. Nothing in the unit can read the slot, so no observation of
+   the closure tells the two apart; but exits are compared as values. A
+   closure may also leave the unit inside an exception raised by code,
+   through the exception continuation of a call, which no check of the
+   [Apply_cont]s of the unit sees. *)
+Module ClosureExitExample.
+
+Local Open Scope positive_scope.
+
+Definition identity_code : code :=
+  Code [40] 41 3 4
+    (make_code_metadata [Singleton Value] [Singleton Value])
+    (FlowExample.return_to 3 [Var 40]).
+
+Definition unit_expr : expr :=
+  Let_static [Bind_code 50 identity_code]
+    (Let 10 Value (Simple (Const (Tagged_immediate 5)))
+       (Let 11 Value (Closure_of_set 70 [(70, 50)] [(60, Var 10)])
+          (FlowExample.return_to 1 [Var 11]))).
+
+Definition solution : tables :=
+  {| t_alias :=
+       [(Node_made 1, Node_variable 11); (Node_made 3, Node_variable 40);
+        (Node_made 5, Node_variable 11); (Node_variable 10, Node_all_constants);
+        (Node_variable 40, Node_made 6); (Node_variable 41, Node_made 5)];
+     t_any_usage :=
+       [Node_code_id 50; Node_made 1; Node_made 2; Node_made 3; Node_made 4;
+        Node_made 6; Node_made 7; Node_made 8; Node_variable 11;
+        Node_variable 40];
+     t_any_source :=
+       [Node_all_constants; Node_code_id 50; Node_made 3; Node_made 6;
+        Node_variable 10; Node_variable 40];
+     t_has_usage :=
+       [Node_code_id 50; Node_made 1; Node_made 2; Node_made 3; Node_made 4;
+        Node_made 6; Node_made 7; Node_made 8; Node_variable 11;
+        Node_variable 40];
+     t_has_source :=
+       [Node_all_constants; Node_code_id 50; Node_made 1; Node_made 3;
+        Node_made 5; Node_made 6; Node_made 7; Node_made 8; Node_variable 10;
+        Node_variable 11; Node_variable 40; Node_variable 41];
+     t_usages := [];
+     t_sources :=
+       [(Node_made 1, Node_variable 11); (Node_made 5, Node_variable 11);
+        (Node_made 7, Node_made 7); (Node_made 8, Node_made 8);
+        (Node_variable 11, Node_variable 11);
+        (Node_variable 41, Node_variable 11)];
+     t_reading_field := [];
+     t_escaping_field := [];
+     t_field_used :=
+       [(Node_made 7, Field_code_id_of_call_witness);
+        (Node_made 7, Field_return_of_call (Normal 0%nat));
+        (Node_made 7, Field_return_of_call Exn);
+        (Node_made 8, Field_code_id_of_call_witness);
+        (Node_made 8, Field_return_of_call (Normal 0%nat));
+        (Node_made 8, Field_return_of_call Exn);
+        (Node_variable 11, Field_call_witness Known_arity_code_pointer);
+        (Node_variable 11, Field_call_witness Unknown_arity_code_pointer);
+        (Node_variable 11, Field_function_slot 70)] |}.
+
+Definition rebuilt : expr :=
+  Let_static [Bind_code 50 identity_code]
+    (Let 11 Value (Closure_of_set 70 [(70, 50)] [])
+       (FlowExample.return_to 1 [Var 11])).
+
+End ClosureExitExample.
+
+Definition closure_exit_counterexample_statement : Prop :=
+  in_flow_fragment ClosureExitExample.unit_expr = true
+  ∧ projection_free ClosureExitExample.unit_expr = true
+  ∧ well_formed_unit FlowExample.interface ClosureExitExample.unit_expr
+    = true
+  ∧ exits_one_value FlowExample.interface ClosureExitExample.unit_expr
+    = true
+  ∧ check_closed FlowExample.is_local
+      (traverse_unit Never FlowExample.interface ClosureExitExample.unit_expr)
+      ClosureExitExample.solution
+    = true
+  ∧ check_field_used_exact FlowExample.is_local
+      (traverse_unit Never FlowExample.interface ClosureExitExample.unit_expr)
+      ClosureExitExample.solution
+    = true
+  ∧ rebuild_unit_from_tables
+      (traverse_unit Never FlowExample.interface ClosureExitExample.unit_expr)
+      ClosureExitExample.solution false ClosureExitExample.unit_expr
+    = ClosureExitExample.rebuilt
+  ∧ run 4
+      (State ClosureExitExample.unit_expr [] [] empty_static_env empty_heap)
+    = Exit 1%positive
+        [Value_closure_of_set 70%positive [(70%positive, 50%positive)]
+           [(60%positive, Value_const (Tagged_immediate 5))]]
+        empty_heap
+  ∧ run 3
+      (State ClosureExitExample.rebuilt [] [] empty_static_env empty_heap)
+    = Exit 1%positive
+        [Value_closure_of_set 70%positive [(70%positive, 50%positive)] []]
+        empty_heap
+  ∧ ~ program_refines ClosureExitExample.unit_expr ClosureExitExample.rebuilt.
+
+(* A call whose return continuation takes a value of another kind than
+   the return arity of the call:
+
+     let code f50 x40 = return (naked 5) in   (result arity: one value)
+     let x60 = closure f50 in
+     let_cont k20 (x32 : naked immediate) = return 0 in
+     f50 x60 9 -> k20
+
+   The code returns a naked immediate though its result arity is a
+   value: the machine compares the arity of the call with that of the
+   code, not with what is returned ([call_code]), and the handler of
+   [k20] takes it. [x32] has no use, so the rebuild has the call return
+   to a wrapper ([make_apply_wrapper], the continuation 61), whose
+   parameter has the kind of the return arity of the call: the wrapper
+   refuses the naked immediate, and the rebuilt unit goes wrong where
+   the unit returns 0. The compiler's units are well-kinded and do not
+   have such a call; the model asks nothing of the kinds of a unit. *)
+Module WrapperKindsExample.
+
+Local Open Scope positive_scope.
+
+Definition naked_code : code :=
+  Code [40] 41 3 4
+    (make_code_metadata [Singleton Value] [Singleton Value])
+    (FlowExample.return_to 3 [Const (Naked_immediate 5)]).
+
+Definition call_to (k : continuation) : apply_expr :=
+  {| ap_callee := Var 60; ap_call_kind := Direct 50;
+     ap_args := [Const (Tagged_immediate 9)]; ap_continuation := k;
+     ap_exn_continuation := 2; ap_exn_extra_args := [];
+     ap_args_arity := [Singleton Value];
+     ap_return_arity := [Singleton Value] |}.
+
+Definition unit_expr : expr :=
+  Let_static [Bind_code 50 naked_code]
+    (Let 60 Value (Closure_of_set 70 [(70, 50)] [])
+       (Let_cont_non_recursive 20
+          (Handler [32]
+             (make_handler_metadata [Naked_number Kind_naked_immediate])
+             (FlowExample.return_to 1 [Const (Tagged_immediate 0)]))
+          (Apply (call_to 20)))).
+
+Definition solution : tables :=
+  {| t_alias :=
+       [(Node_made 1, Node_all_constants); (Node_made 10, Node_code_id 50);
+        (Node_made 11, Node_made 7); (Node_made 2, Node_made 4);
+        (Node_made 3, Node_all_constants); (Node_made 5, Node_variable 60);
+        (Node_made 6, Node_all_constants); (Node_made 9, Node_made 11);
+        (Node_variable 32, Node_made 3); (Node_variable 40, Node_made 6);
+        (Node_variable 41, Node_made 5)];
+     t_any_usage :=
+       [Node_all_constants; Node_code_id 50; Node_made 1; Node_made 10;
+        Node_made 2; Node_made 4];
+     t_any_source :=
+       [Node_all_constants; Node_code_id 50; Node_made 1; Node_made 10;
+        Node_made 3; Node_made 6; Node_variable 32; Node_variable 40];
+     t_has_usage :=
+       [Node_all_constants; Node_code_id 50; Node_made 1; Node_made 10;
+        Node_made 11; Node_made 2; Node_made 4; Node_made 7; Node_made 9;
+        Node_variable 60];
+     t_has_source :=
+       [Node_all_constants; Node_code_id 50; Node_made 1; Node_made 10;
+        Node_made 11; Node_made 3; Node_made 5; Node_made 6; Node_made 7;
+        Node_made 8; Node_made 9; Node_variable 32; Node_variable 40;
+        Node_variable 41; Node_variable 60];
+     t_usages :=
+       [(Node_made 11, Node_made 9); (Node_made 7, Node_made 9);
+        (Node_made 9, Node_made 9); (Node_variable 60, Node_variable 60)];
+     t_sources :=
+       [(Node_made 11, Node_made 7); (Node_made 5, Node_variable 60);
+        (Node_made 7, Node_made 7); (Node_made 8, Node_made 8);
+        (Node_made 9, Node_made 7); (Node_variable 41, Node_variable 60);
+        (Node_variable 60, Node_variable 60)];
+     t_reading_field := [];
+     t_escaping_field := [];
+     t_field_used :=
+       [(Node_made 7, Field_code_id_of_call_witness);
+        (Node_made 7, Field_return_of_call Exn);
+        (Node_variable 60, Field_call_witness Known_arity_code_pointer)] |}.
+
+Definition rebuilt : expr :=
+  Let_static [Bind_code 50 naked_code]
+    (Let 60 Value (Closure_of_set 70 [(70, 50)] [])
+       (Let_cont_non_recursive 20
+          (Handler [] (make_handler_metadata [])
+             (FlowExample.return_to 1 [Const (Tagged_immediate 0)]))
+          (Let_cont_non_recursive 61
+             (Handler [61] (make_handler_metadata [Value])
+                (FlowExample.return_to 20 []))
+             (Apply (call_to 61))))).
+
+End WrapperKindsExample.
+
+Definition wrapper_kinds_counterexample_statement : Prop :=
+  in_flow_fragment WrapperKindsExample.unit_expr = true
+  ∧ projection_free WrapperKindsExample.unit_expr = true
+  ∧ well_formed_unit FlowExample.interface WrapperKindsExample.unit_expr
+    = true
+  ∧ exits_one_value FlowExample.interface WrapperKindsExample.unit_expr
+    = true
+  ∧ check_closed FlowExample.is_local
+      (traverse_unit Never FlowExample.interface WrapperKindsExample.unit_expr)
+      WrapperKindsExample.solution
+    = true
+  ∧ check_field_used_exact FlowExample.is_local
+      (traverse_unit Never FlowExample.interface WrapperKindsExample.unit_expr)
+      WrapperKindsExample.solution
+    = true
+  ∧ rebuild_unit_from_tables
+      (traverse_unit Never FlowExample.interface WrapperKindsExample.unit_expr)
+      WrapperKindsExample.solution false WrapperKindsExample.unit_expr
+    = WrapperKindsExample.rebuilt
+  ∧ run 6
+      (State WrapperKindsExample.unit_expr [] [] empty_static_env empty_heap)
+    = Exit 1%positive [Value_const (Tagged_immediate 0)] empty_heap
+  ∧ run 6
+      (State WrapperKindsExample.rebuilt [] [] empty_static_env empty_heap)
+    = Undefined
+  ∧ ~ program_refines WrapperKindsExample.unit_expr
+        WrapperKindsExample.rebuilt.

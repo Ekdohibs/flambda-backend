@@ -3233,3 +3233,45 @@ Proof.
   pose proof (behaviour_unique _ _ _ (Hexits _ _ _ Hsource) Htarget) as Heq.
   discriminate Heq.
 Qed.
+
+Theorem closure_exit_counterexample : closure_exit_counterexample_statement.
+Proof.
+  do 9 (split; [ vm_compute; reflexivity | ]).
+  intros [Hexits _].
+  assert (Hsource :
+    behaves
+      (State ClosureExitExample.unit_expr [] [] empty_static_env empty_heap)
+      (Exits 1%positive
+         [Value_closure_of_set 70%positive [(70%positive, 50%positive)]
+            [(60%positive, Value_const (Tagged_immediate 5))]]
+         empty_heap)).
+  { exists 4. vm_compute. reflexivity. }
+  assert (Htarget :
+    behaves
+      (State ClosureExitExample.rebuilt [] [] empty_static_env empty_heap)
+      (Exits 1%positive
+         [Value_closure_of_set 70%positive [(70%positive, 50%positive)] []]
+         empty_heap)).
+  { exists 3. vm_compute. reflexivity. }
+  pose proof (behaviour_unique _ _ _ (Hexits _ _ _ Hsource) Htarget) as Heq.
+  inversion Heq.
+Qed.
+
+Theorem wrapper_kinds_counterexample :
+  wrapper_kinds_counterexample_statement.
+Proof.
+  do 9 (split; [ vm_compute; reflexivity | ]).
+  intros [Hexits _].
+  assert (Hsource :
+    behaves
+      (State WrapperKindsExample.unit_expr [] [] empty_static_env empty_heap)
+      (Exits 1%positive [Value_const (Tagged_immediate 0)] empty_heap)).
+  { exists 6. vm_compute. reflexivity. }
+  assert (Htarget :
+    behaves
+      (State WrapperKindsExample.rebuilt [] [] empty_static_env empty_heap)
+      Goes_wrong).
+  { exists 6. vm_compute. reflexivity. }
+  pose proof (behaviour_unique _ _ _ (Hexits _ _ _ Hsource) Htarget) as Heq.
+  discriminate Heq.
+Qed.
