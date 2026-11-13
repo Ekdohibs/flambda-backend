@@ -162,6 +162,87 @@ a `CR` at the place in the `Spec` file.
   validation and changes none of it: the tool prints what it accepts
   on a line of its own under "not validated", and such a unit is in
   no count of the units validated. Open: the human's to choose.
+- **D44.** What a region is on the machine that has them
+  (`FlambdaRegionsSpec.v`). Chosen: what the program does. There is one
+  stack; a local allocation lives as long as the newest region when it
+  is made, whatever region its mode names; the end of a region ends
+  every region begun since; a raise, a `Push` and a `Pop` are not
+  events of the region machine. A local allocation is a fresh symbol
+  bound to what was made, which is bound to nothing once its region is
+  gone; one made with no region on the stack is bound for ever, and
+  counted. The conversion from Lambda relies on the same: a region in
+  tail position of another has no end of its own on that way out, and
+  the end of the outer one ends it (`lambda_to_flambda.ml`, the case
+  `Lregion`: "we will jump directly to the region closure continuation
+  for the outermost open region"). The other choice: an allocation
+  lives as long as the region that it names, and a value carries a
+  mark of where it is. Then a term in which a name is wrong or an end
+  is lost has a defined run in which a value lives that the program
+  has freed, a region that the front end leaves to the end of another
+  never ends, and every proof about values is done again. Decided, for
+  the review of the human.
+- **D45.** The step that evaluates a simple whose value was allocated
+  in a region that is gone is undefined, whatever is then done with the
+  value; so is one that evaluates the variable of a region anywhere but
+  at its end or in the mode of an allocation. A value made since a
+  `try` was entered is dead once the handler has ended the region of
+  the `try`, though the region that it names is open. The program asks
+  less: a use of what was freed goes wrong where the freed space has
+  been written again (a later local allocation, the poison of a
+  debugging runtime), where the collector has stopped tracing and
+  updating the fields of the freed block, or where a root that is
+  still live makes the collector look at the freed space. The other
+  choice is that only a primitive, a call or a `Switch` that reads the
+  value is undefined: then a dead pointer may be kept, passed and
+  stored. Decided, for the review of the human.
+- **D46.** An allocation on the heap that holds a local value which is
+  still in a region is undefined: a block, an array or a closure made
+  by a `Let` whose mode is not `Local`, and every static constant that
+  the term binds. The program makes it. It goes wrong if the value is
+  reached through it after its region is gone, and it can go wrong if
+  a collection runs while the local value is reachable only through
+  the heap block: the collector does not follow that edge into the
+  local stack. The other
+  choice is to say nothing where it is made and leave it to D45 where
+  it is used: then a heap block may point into the local stack. Not
+  asked of the value that the machine makes for a partial application.
+  Decided, for the review of the human.
+- **D47.** The end of a region that is not on the stack (ended twice,
+  or after the end of a region begun before it) is undefined, and so is
+  a local allocation whose mode names such a region. The end of a
+  region that is not the newest is defined, and ends those above it.
+  The normal ways out of a `try` leave its mark; the end of a try
+  region is the end of a region. The program has no such test: a
+  region is the number that its begin read, and the end writes it
+  back, whatever was done since. The other choice is to follow the
+  program there too, with the pointer of the local stack as a number
+  in the state: then a region ended twice is a defined run. Decided,
+  for the review of the human.
+- **D48.** What the machine of regions does not check. Leaving code
+  with a region of its own still on the stack, by a return or by a
+  raise, is not undefined, and is not found: the model's code does not
+  say whether its function returns something local, and the handler of
+  a `try` ends what a raise leaves. The exception that a raise carries
+  is not asked to be on the heap at the raise: that is asked where it
+  is built (D46) and where it is used (D45). A local allocation that
+  names another region than the newest that is not of a `try` is not
+  undefined either. Neither is found where it happens. The test tool
+  counts what it can: the regions left when the run of a unit ends and
+  the local allocations still in them; the regions ended by the end of
+  another; and the allocations that name, by a variable, another
+  region than that one (an allocation that names the region of its
+  code is not counted, whatever is open). A count is not a fault by
+  itself: the front end has a region ended by the end of another on
+  purpose (D44), and Simplify, where it splits an application with too
+  many arguments, begins the ghost region by a begin that is not a
+  ghost (`simplify_common.ml`), which is one more region for the end
+  of the first to end. A count is looked at where Simplify adds to
+  it. Ghost regions, the parent of a region, the modes of calls and
+  the `alloc_region`s are not in the terms that the machine runs. The
+  other choice is that a region which nothing ends is a fault of the
+  term; it needs the result mode of code in the model. Decided, for
+  the review of the human.
+
 - **D49.** A view of mutable data as immutable:
   `Bytes.unsafe_to_string` and `%array_to_iarray`. Ruled, in the
   source's terms: "Regarding Bytes.unsafe_to_string, the semantics of
