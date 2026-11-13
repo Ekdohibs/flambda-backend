@@ -218,6 +218,31 @@ anything about SSA executions. `rocq/TRUST-LEDGER.md` lists every axiom,
 each group with its reason, and `make -s -C rocq assumptions` fails if an
 axiom appears that it does not list.
 
+### 2.5 Changed definitions and prototype builds
+
+A build with `make -k` finds proof scripts that fail; it does not identify
+which statements the new definitions make false. A failed proof may only
+need a repair, for example another case after a constructor is added.
+Conversely, if a prototype sets aside a failing lemma by assuming it,
+proofs that use it can still compile even when its statement is false.
+Their success is conditional on that assumption, not evidence that their
+statements survived the change.
+
+Do not use the list of build failures as the inventory of affected
+statements. A prototype's report must list the previously proved
+statements reached by its changed definitions, say which were read
+against those definitions and which were not, and record every proof
+bypass and the limits of the build. Unchanged statement text does not
+mean unchanged premises or conclusions when a definition it uses changes.
+
+Every statement that the report calls false must have a concrete
+counterexample whose computations are checked against the prototype's
+new definitions, with its premises justified and its conclusion refuted.
+That check must not rely on a bypassed proof or a new assumption. A
+suspected failure not so checked remains an open finding, not a
+refutation. None of this authorises landing a proof bypass or weakening
+a statement to make a build pass.
+
 ## 3. The loop passes
 
 Both passes work on the natural loops of a finished graph, and their
