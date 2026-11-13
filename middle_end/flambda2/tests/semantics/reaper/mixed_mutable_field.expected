@@ -1,0 +1,44 @@
+mixed_mutable_field.fl:
+  the graph: 106 facts in the model, 106 in the compiler
+  the model's solution: passes the check of closure, passes the check of field_of_constructor_is_used
+  the compiler's solution, with its graph: passes the check of closure, passes the check of field_of_constructor_is_used
+  the facts of the two graphs on the names of the unit: the same (29)
+  the two solutions on the 24 names of the unit: the same
+  the model's rebuild and the compiler's output: the same up to bound names
+  the reaper's input (36 steps): returns [0: 3]
+  the model's rebuild (36 steps): returns [0: 3]
+  the model's rebuild against the input: the same
+  the compiler's output (36 steps): returns [0: 3]
+  the compiler's output against the input: the same
+  with changes of calling convention:
+    the table of the code that keeps its calling convention: the model's passes the check, the compiler's, with its graph, passes it
+    the two tables on the 4 code ids of the unit: the same
+    the decisions on the 2 code ids of the unit: the same, 2 changing
+    code f_0: parameters [keep val, keep val], results [keep val]
+    code g_1: parameters [keep val], results [keep val]
+    the model's rebuild and the compiler's output: the same up to bound names
+    the reaper's input (36 steps): returns [0: 3]
+    the model's rebuild (36 steps): returns [0: 3]
+    the model's rebuild against the input: the same
+    the compiler's output (36 steps): returns [0: 3]
+    the compiler's output against the input: the same
+  with unboxing:
+    the compiler's analysis STOPPED on the unit (Misc.Fatal_error)
+    the table of dominated_by_allocation_point: the model's passes the check
+    the table of to_unbox: the model's passes the check
+    the table of to_change_representation: the model's passes the check
+    the check that sets of closures are unboxed or changed whole: the model's tables pass it
+    *match*/v1: {field 0 val}
+    x/v3: {field 0 val}
+    Pmakeblock/v8: {field 0 val}
+    Pmakeblock/v9: {field 0 val}
+    my_closure/v7: representation {}, with function slot f, at function slot f
+    my_closure/v11: representation {}, with function slot g, at function slot g
+    $camlMixed_mutable_field__f_1_0: representation {}, with function slot f, at function slot f
+    $camlMixed_mutable_field__g_0_1: representation {}, with function slot g, at function slot g
+    code f_0: parameters [keep val, unbox {field 0 val}], results [keep val]
+    code g_1: parameters [keep val], results [keep val]
+    the compiler's reaper STOPPED on the unit (Misc.Fatal_error)
+    the reaper's input (36 steps): returns [0: 3]
+    the model's rebuild (10 steps): undefined
+    the model's rebuild against the input: DIFFERENT

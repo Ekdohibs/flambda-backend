@@ -91,28 +91,30 @@
    which is checked; the traversal and the rebuild of the model, which are
    compared. A difference between the two solutions, the two graphs, the two
    rebuilt terms or the runs is a result and not a failure of the tool: it is
-   printed, and kept in the expected file of the example. The tool fails when
-   the model's solution does not pass the checks, which is a fault of [solve] or
-   of the checks; the model's rebuild is then not run.
+   printed, and kept in the expected file of the example. So is a fatal error of
+   the compiler's analysis or of its reaper, in any of the three modes: it is
+   said, and the model's side goes on alone, its rebuild run against the input
+   ([unless_stopped]). The tool fails when the model's solution does not pass
+   the checks, which is a fault of [solve] or of the checks; the model's rebuild
+   is then not run.
 
    Known differences, from the status of S7
    (middle_end/flambda2/rocq/status/S7.md) and the header of
    FlambdaReaperTraversal.v: the model has one kind of indirect call, which its
    traversal reads as a call of unknown arity, so a unit with a call of known
-   arity has another graph in the model, and the tool says so; the closures
-   of a set other than the first are bound in the model by projections of the
-   first, each of which adds to the model's graph one accessor fact that the
-   compiler's has not (the closures themselves have the same facts in both);
-   and a static boxed number of a variable is aliased to the constants and
-   uses the variable, where the compiler gives the variable as the field of
-   the number's kind. From the conversion: a call
-   that never returns is a call that returns to a continuation of the
-   conversion's, whose parameters the model's rebuild may remove, so that the
-   two rebuilt terms then differ (tests/semantics/arity_text_never_returns.fl).
-   The end of a region, which the conversion makes the unit value, is given to
-   the model as a primitive of arbitrary effects, as the compiler's traversal
-   reads it, and the model's rebuild is given the unit value back
-   ([ends_as_effects]). *)
+   arity has another graph in the model, and the tool says so; the closures of a
+   set other than the first are bound in the model by projections of the first,
+   each of which adds to the model's graph one accessor fact that the compiler's
+   has not (the closures themselves have the same facts in both); and a static
+   boxed number of a variable is aliased to the constants and uses the variable,
+   where the compiler gives the variable as the field of the number's kind. From
+   the conversion: a call that never returns is a call that returns to a
+   continuation of the conversion's, whose parameters the model's rebuild may
+   remove, so that the two rebuilt terms then differ
+   (tests/semantics/arity_text_never_returns.fl). The end of a region, which the
+   conversion makes the unit value, is given to the model as a primitive of
+   arbitrary effects, as the compiler's traversal reads it, and the model's
+   rebuild is given the unit value back ([ends_as_effects]). *)
 
 (* The matches below on the compiler's types name the cases the model has and
    send every other to one answer; they are meant to stay as they are when the
@@ -1365,6 +1367,26 @@ let within_budget name ~indent ~facts ~(input : Flsemantics.converted) f =
       indent groups estimate;
     None)
 
+(* [Some (f ())], or [None] where the compiler stops in [f] on a fatal error
+   (one of [Misc.fatal_error] or a failed assertion), which is said as the
+   compiler's [what] having stopped. What the model computes does not depend on
+   it, and goes on. *)
+let unless_stopped ~indent what f =
+  match f () with
+  | exception ((Misc.Fatal_error | Assert_failure _) as e) ->
+    Format.printf "%sthe compiler's %s STOPPED on the unit (%s)@." indent what
+      (Printexc.to_string e);
+    None
+  | result -> Some result
+
+(* What a check of the model says of a table of the compiler, where the
+   compiler's analysis did not stop. *)
+let compiler_passes ppf (ok : bool option) =
+  Option.iter
+    (fun ok ->
+      Format.fprintf ppf ", the compiler's, with its graph, %s it" (passes ok))
+    ok
+
 (* A solution whose relations are those of [tables], as
    [FlambdaReaperGraphSpec.solution_of_tables] gives them, answered from hash
    tables instead of by going through the lists, which makes the extracted
@@ -1505,7 +1527,8 @@ let slots_in_order =
    extracted) of [input], the term of the model that the reaper is given, with
    the graph of the model and its solution, which have passed the checks; beside
    it, [compiler_output], the unit that the compiler's reaper returned,
-   converted to the model. The two terms are compared up to bound names
+   converted to the model, or [None] where the compiler stopped, the model's
+   rebuild being then run alone. The two terms are compared up to bound names
    ([FlambdaCompareSpec.expr_eqb], the comparison of the validation of
    flsemantics.ml), and the three are run on the machine, the outcome of each
    rebuild being compared with that of the input as flsemantics.ml compares the
@@ -1525,7 +1548,7 @@ let slots_in_order =
    FLREAPER_PRINT_TERMS prints the three terms. *)
 let compare_rebuild ~indent ~ends ~(input : Flsemantics.converted)
     ~(input_unit : Flambda_unit.t) ~(rebuilt_body : Rocq_model.expr option)
-    ~(compiler_output : Flambda_unit.t) =
+    ~(compiler_output : Flambda_unit.t option) =
   let input = { input with body = ends_as_converted ends input.body } in
   let rebuilt =
     Option.map
@@ -1533,20 +1556,21 @@ let compare_rebuild ~indent ~ends ~(input : Flsemantics.converted)
         { input with body = slots_in_order (ends_as_converted ends body) })
       rebuilt_body
   in
-  Flsemantics.Continuations.alias
-    (Flambda_unit.return_continuation compiler_output)
-    ~same_as:(Flambda_unit.return_continuation input_unit);
-  Flsemantics.Continuations.alias
-    (Flambda_unit.exn_continuation compiler_output)
-    ~same_as:(Flambda_unit.exn_continuation input_unit);
   let output =
-    match Flsemantics.convert_unit compiler_output with
-    | exception Flsemantics.Unsupported what ->
-      Format.printf
-        "%sthe compiler's output: not converted, the model has not got %t@."
-        indent what;
-      None
-    | output -> Some { output with body = slots_in_order output.body }
+    Option.bind compiler_output (fun compiler_output ->
+        Flsemantics.Continuations.alias
+          (Flambda_unit.return_continuation compiler_output)
+          ~same_as:(Flambda_unit.return_continuation input_unit);
+        Flsemantics.Continuations.alias
+          (Flambda_unit.exn_continuation compiler_output)
+          ~same_as:(Flambda_unit.exn_continuation input_unit);
+        match Flsemantics.convert_unit compiler_output with
+        | exception Flsemantics.Unsupported what ->
+          Format.printf
+            "%sthe compiler's output: not converted, the model has not got %t@."
+            indent what;
+          None
+        | output -> Some { output with body = slots_in_order output.body })
   in
   (match rebuilt, output with
   | None, _ | _, None -> ()
@@ -1680,19 +1704,20 @@ let compare_calling_conventions ~(input : Flsemantics.converted)
   let interface = Flsemantics.interface input in
   let model_table = Cc.derive_cannot_change model_facts model_tables in
   let model_closed = Cc.check_cc_closed model_facts model_tables model_table in
-  let ua =
-    Reaper.Unboxing_analysis.perform_analysis compiler.solved
-      ~analysis_scope:Current_unit
-  in
   let changes =
-    Reaper.Unboxing_analysis.compute_code_changes ua
-      ~analysis_scope:Current_unit
-      ~rewrite_kind_with_subkind:(fun _ kind -> kind)
-      ~rewrite_result_types:(fun ~my_closure:_ ~params:_ ~results:_ _ ->
-        Flambda2_lattices.Or_unknown_or_bottom.Unknown)
-      ~code_deps:compiler.code_deps
+    unless_stopped ~indent "analysis" (fun () ->
+        let ua =
+          Reaper.Unboxing_analysis.perform_analysis compiler.solved
+            ~analysis_scope:Current_unit
+        in
+        Reaper.Unboxing_analysis.compute_code_changes ua
+          ~analysis_scope:Current_unit
+          ~rewrite_kind_with_subkind:(fun _ kind -> kind)
+          ~rewrite_result_types:(fun ~my_closure:_ ~params:_ ~results:_ _ ->
+            Flambda2_lattices.Or_unknown_or_bottom.Unknown)
+          ~code_deps:compiler.code_deps)
   in
-  let compiler_change code_id =
+  let compiler_change changes code_id =
     if Code_id.Map.mem code_id compiler.code_deps
     then
       Reaper.Unboxing_analysis.get_calling_convention_change changes
@@ -1700,89 +1725,97 @@ let compare_calling_conventions ~(input : Flsemantics.converted)
     else Reaper.Unboxing_analysis.Not_changing_calling_convention
   in
   let compiler_table =
-    List.filter_map
-      (fun (code_id, node) ->
-        match compiler_change code_id with
-        | Not_changing_calling_convention -> Some node
-        | Changing_calling_convention _ -> None)
-      compiler.code_ids
-  in
-  let compiler_closed =
-    Cc.check_cc_closed compiler.compiler_facts compiler.compiler_tables
-      compiler_table
+    Option.map
+      (fun changes ->
+        List.filter_map
+          (fun (code_id, node) ->
+            match compiler_change changes code_id with
+            | Not_changing_calling_convention -> Some node
+            | Changing_calling_convention _ -> None)
+          compiler.code_ids)
+      changes
   in
   Format.printf
     "%sthe table of the code that keeps its calling convention: the model's %s \
-     the check, the compiler's, with its graph, %s it@."
-    indent (passes model_closed) (passes compiler_closed);
+     the check%a@."
+    indent (passes model_closed) compiler_passes
+    (Option.map
+       (Cc.check_cc_closed compiler.compiler_facts compiler.compiler_tables)
+       compiler_table);
   if model_closed
   then (
     let can_change table node =
       if Graph_spec.mem_node node table then "keeps" else "may change"
     in
-    (match
-       List.filter
-         (fun node ->
-           Graph_spec.mem_node node model_table
-           <> Graph_spec.mem_node node compiler_table)
-         unit_code_ids
-     with
-    | [] ->
-      Format.printf
-        "%sthe two tables on the %d code ids of the unit: the same@." indent
-        (List.length unit_code_ids)
-    | differences ->
-      List.iter
-        (fun node ->
+    Option.iter
+      (fun compiler_table ->
+        match
+          List.filter
+            (fun node ->
+              Graph_spec.mem_node node model_table
+              <> Graph_spec.mem_node node compiler_table)
+            unit_code_ids
+        with
+        | [] ->
           Format.printf
-            "%s%a: model %s its calling convention, compiler %s it@." indent
-            print_node node
-            (can_change model_table node)
-            (can_change compiler_table node))
-        differences);
+            "%sthe two tables on the %d code ids of the unit: the same@." indent
+            (List.length unit_code_ids)
+        | differences ->
+          List.iter
+            (fun node ->
+              Format.printf
+                "%s%a: model %s its calling convention, compiler %s it@." indent
+                print_node node
+                (can_change model_table node)
+                (can_change compiler_table node))
+            differences)
+      compiler_table;
     let deps = Cc.unit_code_deps flag interface input.body in
     let model_decisions =
       Cc.unit_calling_convention_changes model_tables model_table deps
         input.body
     in
-    let decisions =
-      List.map
-        (fun (id, model) ->
-          let compiler =
-            match Flsemantics.Code_ids.name_of id with
-            | Some code_id -> model_change (compiler_change code_id)
-            | None -> Some Cc.Not_changing_calling_convention
-          in
-          id, Some model, compiler)
-        model_decisions
-    in
     let changing =
       List.filter
-        (fun (_, model, _) ->
+        (fun (_, (model : Cc.calling_convention_change)) ->
           match model with
-          | Some (Cc.Changing_calling_convention _) -> true
-          | Some Cc.Not_changing_calling_convention | None -> false)
-        decisions
+          | Changing_calling_convention _ -> true
+          | Not_changing_calling_convention -> false)
+        model_decisions
     in
-    (match
-       List.filter (fun (_, model, compiler) -> model <> compiler) decisions
-     with
-    | [] ->
-      Format.printf
-        "%sthe decisions on the %d code ids of the unit: the same, %d \
-         changing@."
-        indent (List.length decisions) (List.length changing)
-    | differences ->
-      List.iter
-        (fun (id, model, compiler) ->
-          Format.printf "%s%a: model %a; compiler %a@." indent print_node
-            (Graph_spec.Node_code_id id) print_change model print_change
-            compiler)
-        differences);
+    Option.iter
+      (fun changes ->
+        let decisions =
+          List.map
+            (fun (id, model) ->
+              let compiler =
+                match Flsemantics.Code_ids.name_of id with
+                | Some code_id -> model_change (compiler_change changes code_id)
+                | None -> Some Cc.Not_changing_calling_convention
+              in
+              id, Some model, compiler)
+            model_decisions
+        in
+        match
+          List.filter (fun (_, model, compiler) -> model <> compiler) decisions
+        with
+        | [] ->
+          Format.printf
+            "%sthe decisions on the %d code ids of the unit: the same, %d \
+             changing@."
+            indent (List.length decisions) (List.length changing)
+        | differences ->
+          List.iter
+            (fun (id, model, compiler) ->
+              Format.printf "%s%a: model %a; compiler %a@." indent print_node
+                (Graph_spec.Node_code_id id) print_change model print_change
+                compiler)
+            differences)
+      changes;
     List.iter
-      (fun (id, model, _) ->
+      (fun (id, model) ->
         Format.printf "%s%a: %a@." indent print_node
-          (Graph_spec.Node_code_id id) print_change model)
+          (Graph_spec.Node_code_id id) print_change (Some model))
       changing;
     let preserve =
       match Features.reaper_preserve_direct_calls () with
@@ -1802,13 +1835,15 @@ let compare_calling_conventions ~(input : Flsemantics.converted)
             cannot_change deps preserve input.body)
     in
     let reaped =
-      Reaper.Reaper.run ~machine_width:Sixty_four ~cmx_loader
-        ~all_code:simplified.all_code
-        ~final_typing_env:(With_types simplified.final_typing_env)
-        ~free_names:simplified.free_names simplified.unit
+      unless_stopped ~indent "reaper" (fun () ->
+          (Reaper.Reaper.run ~machine_width:Sixty_four ~cmx_loader
+             ~all_code:simplified.all_code
+             ~final_typing_env:(With_types simplified.final_typing_env)
+             ~free_names:simplified.free_names simplified.unit)
+            .unit)
     in
     compare_rebuild ~indent ~ends:compiler.ends_of_regions ~input ~input_unit
-      ~rebuilt_body ~compiler_output:reaped.unit);
+      ~rebuilt_body ~compiler_output:reaped);
   model_closed
 
 (* ---- Unboxing --------------------------------------------------------- *)
@@ -2044,6 +2079,21 @@ let print_change_shape ppf (change : change_shape) =
     Format.fprintf ppf "parameters [%a], results [%a]" decisions params
       decisions results
 
+(* What the compiler's unboxing analysis computes, read into the model's terms,
+   and what the checks of the model say of its tables ([compare_unboxing]). *)
+type compiler_unboxing =
+  { dominated : (Graph_spec.node * Graph_spec.node) list;
+    to_unbox : Graph_spec.node list;
+    to_change_representation : Graph_spec.node list;
+    dominated_ok : bool;
+    to_unbox_ok : bool;
+    to_change_representation_ok : bool;
+    whole_ok : bool;
+    unboxed : (Graph_spec.node * shape) list;
+    reprs : (Graph_spec.node * repr_shape) list;
+    change : Code_id.t -> UA.calling_convention_change
+  }
+
 (* The reaper with changes of calling convention and unboxing
    ([-reaper-change-calling-conventions -reaper-unbox], the compiler's
    defaults), on the same unit, the same graphs and the same solutions as above:
@@ -2110,39 +2160,36 @@ let compare_unboxing ~(names : unit_names) ~(input : Flsemantics.converted)
   let interface = Flsemantics.interface input in
   let max_unbox_size = nat_of_int (Features.reaper_max_unbox_size ()) in
   let lambda_lifting = lambda_lifting () in
-  let ua = UA.perform_analysis compiler.solved ~analysis_scope:Current_unit in
-  let changes =
-    UA.compute_code_changes ua ~analysis_scope:Current_unit
-      ~rewrite_kind_with_subkind:(fun _ kind -> kind)
-      ~rewrite_result_types:(fun ~my_closure:_ ~params:_ ~results:_ _ ->
-        Flambda2_lattices.Or_unknown_or_bottom.Unknown)
-      ~code_deps:compiler.code_deps
+  let node = compiler.compiler_node in
+  let analysis =
+    unless_stopped ~indent "analysis" (fun () ->
+        let ua =
+          UA.perform_analysis compiler.solved ~analysis_scope:Current_unit
+        in
+        ( ua,
+          UA.compute_code_changes ua ~analysis_scope:Current_unit
+            ~rewrite_kind_with_subkind:(fun _ kind -> kind)
+            ~rewrite_result_types:(fun ~my_closure:_ ~params:_ ~results:_ _ ->
+              Flambda2_lattices.Or_unknown_or_bottom.Unknown)
+            ~code_deps:compiler.code_deps ))
   in
-  let compiler_change code_id =
-    if Code_id.Map.mem code_id compiler.code_deps
-    then
-      UA.get_calling_convention_change changes ~analysis_scope:Current_unit
-        code_id
-    else UA.Not_changing_calling_convention
+  let changed =
+    match analysis with
+    | None -> []
+    | Some (ua, _) ->
+      let changed, changed_made =
+        List.partition
+          (fun (name, _) -> is_unit_node (node name))
+          (Code_id_or_name.Map.bindings ua.changed_representation)
+      in
+      if changed_made <> []
+      then
+        Format.printf
+          "%sthe compiler changes the representation of %d names that its \
+           traversal made, which are not in the term@."
+          indent (List.length changed_made);
+      changed
   in
-  let dominated_raw =
-    read2
-      (fun x y -> PTA.Relations.dominated_by_allocation_point x y)
-      compiler.solved
-  in
-  let unboxed_raw = Code_id_or_name.Map.bindings ua.unboxed_fields in
-  let is_unboxed x = Code_id_or_name.Map.mem x ua.unboxed_fields in
-  let changed, changed_made =
-    List.partition
-      (fun (name, _) -> is_unit_node (compiler.compiler_node name))
-      (Code_id_or_name.Map.bindings ua.changed_representation)
-  in
-  if changed_made <> []
-  then
-    Format.printf
-      "%sthe compiler changes the representation of %d names that its \
-       traversal made, which are not in the term@."
-      indent (List.length changed_made);
   match
     List.filter
       (fun (_, ((repr : UA.changed_representation), _)) ->
@@ -2159,48 +2206,88 @@ let compare_unboxing ~(names : unit_names) ~(input : Flsemantics.converted)
     List.iter
       (fun (x, (_, a)) ->
         Format.printf "%s  %a, of the allocation %a@." indent print_node
-          (compiler.compiler_node x) print_node (compiler.compiler_node a))
+          (node x) print_node (node a))
       blocks;
     true
   | [] ->
-    let node = compiler.compiler_node in
-    let dominated_c = List.map (fun (a, x) -> node a, node x) dominated_raw in
-    let names_c =
-      List.filter_map
-        (fun (_, x) -> if is_unboxed x then Some (node x) else None)
-        dominated_raw
-    in
-    let to_unbox_c = Unboxing.to_unbox_of_unboxed_names dominated_c names_c in
-    let tcr_c =
-      Unboxing.to_change_representation_of_alloc_points compiler.compiler_tables
-        (List.map
-           (fun (_, (_, a)) -> node a)
-           (Code_id_or_name.Map.bindings ua.changed_representation))
-    in
-    let cannot_change_c =
-      List.filter_map
-        (fun (code_id, node) ->
-          match compiler_change code_id with
-          | Not_changing_calling_convention -> Some node
-          | Changing_calling_convention _ -> None)
-        compiler.code_ids
-    in
-    let compiler_dominated_ok =
-      Unboxing.check_dominated compiler.compiler_tables dominated_c
-    in
-    let compiler_to_unbox_ok =
-      Unboxing.check_to_unbox is_local compiler.compiler_facts
-        compiler.compiler_tables cannot_change_c max_unbox_size lambda_lifting
-        to_unbox_c
-    in
-    let compiler_tcr_ok =
-      Unboxing.check_to_change_representation is_local compiler.compiler_facts
-        compiler.compiler_tables cannot_change_c max_unbox_size lambda_lifting
-        to_unbox_c tcr_c
-    in
-    let compiler_whole_ok =
-      Unboxing.check_sets_whole compiler.compiler_facts compiler.compiler_tables
-        to_unbox_c tcr_c
+    let compiler_side =
+      Option.map
+        (fun ((ua : UA.result), changes) ->
+          let change code_id =
+            if Code_id.Map.mem code_id compiler.code_deps
+            then
+              UA.get_calling_convention_change changes
+                ~analysis_scope:Current_unit code_id
+            else UA.Not_changing_calling_convention
+          in
+          let dominated_raw =
+            read2
+              (fun x y -> PTA.Relations.dominated_by_allocation_point x y)
+              compiler.solved
+          in
+          let dominated =
+            List.map (fun (a, x) -> node a, node x) dominated_raw
+          in
+          let unboxed_names =
+            List.filter_map
+              (fun (_, x) ->
+                if Code_id_or_name.Map.mem x ua.unboxed_fields
+                then Some (node x)
+                else None)
+              dominated_raw
+          in
+          let to_unbox =
+            Unboxing.to_unbox_of_unboxed_names dominated unboxed_names
+          in
+          let to_change_representation =
+            Unboxing.to_change_representation_of_alloc_points
+              compiler.compiler_tables
+              (List.map
+                 (fun (_, (_, a)) -> node a)
+                 (Code_id_or_name.Map.bindings ua.changed_representation))
+          in
+          let cannot_change =
+            List.filter_map
+              (fun (code_id, node) ->
+                match change code_id with
+                | Not_changing_calling_convention -> Some node
+                | Changing_calling_convention _ -> None)
+              compiler.code_ids
+          in
+          { dominated;
+            to_unbox;
+            to_change_representation;
+            dominated_ok =
+              Unboxing.check_dominated compiler.compiler_tables dominated;
+            to_unbox_ok =
+              Unboxing.check_to_unbox is_local compiler.compiler_facts
+                compiler.compiler_tables cannot_change max_unbox_size
+                lambda_lifting to_unbox;
+            to_change_representation_ok =
+              Unboxing.check_to_change_representation is_local
+                compiler.compiler_facts compiler.compiler_tables cannot_change
+                max_unbox_size lambda_lifting to_unbox to_change_representation;
+            whole_ok =
+              Unboxing.check_sets_whole compiler.compiler_facts
+                compiler.compiler_tables to_unbox to_change_representation;
+            unboxed =
+              List.filter_map
+                (fun (x, fields) ->
+                  let n = node x in
+                  if is_unit_node n
+                  then Some (n, compiler_shape fields)
+                  else None)
+                (Code_id_or_name.Map.bindings ua.unboxed_fields);
+            reprs =
+              List.filter_map
+                (fun (x, (repr, _)) ->
+                  Option.map
+                    (fun shape -> node x, shape)
+                    (compiler_repr_shape repr))
+                changed;
+            change
+          })
+        analysis
     in
     let cannot_change_m = Cc.derive_cannot_change model_facts model_tables in
     let dominated_m = Unboxing.derive_dominated model_tables in
@@ -2227,21 +2314,25 @@ let compare_unboxing ~(names : unit_names) ~(input : Flsemantics.converted)
       Unboxing.check_sets_whole model_facts model_tables to_unbox_m tcr_m
     in
     let table name model compiler =
-      Format.printf
-        "%sthe table of %s: the model's %s the check, the compiler's, with its \
-         graph, %s it@."
-        indent name (passes model) (passes compiler)
+      Format.printf "%sthe table of %s: the model's %s the check%a@." indent
+        name (passes model) compiler_passes
+        (Option.map compiler compiler_side)
     in
-    table "dominated_by_allocation_point" model_dominated_ok
-      compiler_dominated_ok;
-    table "to_unbox" model_to_unbox_ok compiler_to_unbox_ok;
-    table "to_change_representation" model_tcr_ok compiler_tcr_ok;
+    table "dominated_by_allocation_point" model_dominated_ok (fun c ->
+        c.dominated_ok);
+    table "to_unbox" model_to_unbox_ok (fun c -> c.to_unbox_ok);
+    table "to_change_representation" model_tcr_ok (fun c ->
+        c.to_change_representation_ok);
+    let pass ok = if ok then "pass" else "FAIL" in
     Format.printf
       "%sthe check that sets of closures are unboxed or changed whole: the \
-       model's tables %s it, the compiler's, with its graph, %s it@."
-      indent
-      (if model_whole_ok then "pass" else "FAIL")
-      (if compiler_whole_ok then "pass" else "FAIL");
+       model's tables %s it%t@."
+      indent (pass model_whole_ok) (fun ppf ->
+        Option.iter
+          (fun c ->
+            Format.fprintf ppf ", the compiler's, with its graph, %s it"
+              (pass c.whole_ok))
+          compiler_side);
     if
       not
         (model_dominated_ok && model_to_unbox_ok && model_tcr_ok
@@ -2253,211 +2344,192 @@ let compare_unboxing ~(names : unit_names) ~(input : Flsemantics.converted)
       let pairs l =
         dedup (List.filter (fun (a, x) -> is_unit_node a && is_unit_node x) l)
       in
-      let dm = pairs dominated_m in
-      let dc = pairs dominated_c in
       let has_source x = Graph_spec.mem_node x model_tables.t_has_source in
       let with_source l =
         dedup (List.filter (fun x -> is_unit_node x && has_source x) l)
       in
-      let tm = with_source to_unbox_m in
-      let tc = dedup (List.filter is_unit_node to_unbox_c) in
-      let rm = with_source tcr_m in
-      let rc = with_source tcr_c in
       let differ m c = List.filter (fun x -> List.mem x m <> List.mem x c) in
-      (match
-         ( differ dm dc (dedup (dm @ dc)),
-           differ tm tc (dedup (tm @ tc)),
-           differ rm rc (dedup (rm @ rc)) )
-       with
-      | [], [], [] ->
-        Format.printf
-          "%sthe three pairs of tables on the names of the unit: the same, %d \
-           names dominated by an allocation, %d allocations to unbox, %d to \
-           change the representation of@."
-          indent (List.length dm) (List.length tm) (List.length rm)
-      | dominated, to_unbox, to_change ->
-        List.iter
-          (fun ((a, x) as p) ->
-            Format.printf "%s%a dominated by %a: model %s, compiler %s@." indent
-              print_node x print_node a
-              (yes_no (List.mem p dm))
-              (yes_no (List.mem p dc)))
-          dominated;
-        List.iter
-          (fun x ->
-            Format.printf "%s%a to unbox: model %s, compiler %s@." indent
-              print_node x
-              (yes_no (List.mem x tm))
-              (yes_no (List.mem x tc)))
-          to_unbox;
-        List.iter
-          (fun x ->
+      Option.iter
+        (fun c ->
+          let dm = pairs dominated_m in
+          let dc = pairs c.dominated in
+          let tm = with_source to_unbox_m in
+          let tc = dedup (List.filter is_unit_node c.to_unbox) in
+          let rm = with_source tcr_m in
+          let rc = with_source c.to_change_representation in
+          match
+            ( differ dm dc (dedup (dm @ dc)),
+              differ tm tc (dedup (tm @ tc)),
+              differ rm rc (dedup (rm @ rc)) )
+          with
+          | [], [], [] ->
             Format.printf
-              "%s%a to change the representation of: model %s, compiler %s@."
-              indent print_node x
-              (yes_no (List.mem x rm))
-              (yes_no (List.mem x rc)))
-          to_change);
+              "%sthe three pairs of tables on the names of the unit: the same, \
+               %d names dominated by an allocation, %d allocations to unbox, \
+               %d to change the representation of@."
+              indent (List.length dm) (List.length tm) (List.length rm)
+          | dominated, to_unbox, to_change ->
+            List.iter
+              (fun ((a, x) as p) ->
+                Format.printf "%s%a dominated by %a: model %s, compiler %s@."
+                  indent print_node x print_node a
+                  (yes_no (List.mem p dm))
+                  (yes_no (List.mem p dc)))
+              dominated;
+            List.iter
+              (fun x ->
+                Format.printf "%s%a to unbox: model %s, compiler %s@." indent
+                  print_node x
+                  (yes_no (List.mem x tm))
+                  (yes_no (List.mem x tc)))
+              to_unbox;
+            List.iter
+              (fun x ->
+                Format.printf
+                  "%s%a to change the representation of: model %s, compiler \
+                   %s@."
+                  indent print_node x
+                  (yes_no (List.mem x rm))
+                  (yes_no (List.mem x rc)))
+              to_change)
+        compiler_side;
+      (* Each comparison below is of the model's results, by name or code id
+         [n], with the compiler's ([compiler c n]), and is made where the
+         compiler's analysis did not stop; the model's results are listed after
+         it whatever the compiler did. *)
+      let compare_with_compiler model compiler ~same ~differ =
+        Option.iter
+          (fun c ->
+            match
+              List.filter_map
+                (fun (n, m) ->
+                  let x = compiler c n in
+                  if m <> x then Some (n, m, x) else None)
+                model
+            with
+            | [] -> same ()
+            | differences -> List.iter differ differences)
+          compiler_side
+      in
+      let count l = List.length (List.filter (fun (_, m) -> m <> None) l) in
       let model_unboxed, _ =
         Unboxing.unit_unboxed_fields model_facts model_tables dominated_m
           to_unbox_m input.body
       in
-      let compiler_unboxed =
-        List.filter_map
-          (fun (x, fields) ->
-            let n = node x in
-            if is_unit_node n then Some (n, compiler_shape fields) else None)
-          unboxed_raw
-      in
       let fields =
         List.map
-          (fun n ->
-            ( n,
-              Option.map model_shape (List.assoc_opt n model_unboxed),
-              List.assoc_opt n compiler_unboxed ))
+          (fun n -> n, Option.map model_shape (List.assoc_opt n model_unboxed))
           unit_nodes
       in
-      (match List.filter (fun (_, m, c) -> m <> c) fields with
-      | [] ->
-        Format.printf
-          "%sthe unboxed fields of the %d names of the unit: the same, %d \
-           unboxed@."
-          indent (List.length unit_nodes)
-          (List.length (List.filter (fun (_, m, _) -> m <> None) fields))
-      | differences ->
-        List.iter
-          (fun (n, m, c) ->
-            Format.printf "%s%a: model %a; compiler %a@." indent print_node n
-              print_unboxed m print_unboxed c)
-          differences);
+      compare_with_compiler fields
+        (fun c n -> List.assoc_opt n c.unboxed)
+        ~same:(fun () ->
+          Format.printf
+            "%sthe unboxed fields of the %d names of the unit: the same, %d \
+             unboxed@."
+            indent (List.length unit_nodes) (count fields))
+        ~differ:(fun (n, m, c) ->
+          Format.printf "%s%a: model %a; compiler %a@." indent print_node n
+            print_unboxed m print_unboxed c);
       List.iter
-        (fun (n, m, _) ->
-          match m with
-          | None -> ()
-          | Some shape ->
-            Format.printf "%s%a: %a@." indent print_node n print_shape shape)
+        (fun (n, m) ->
+          Option.iter
+            (Format.printf "%s%a: %a@." indent print_node n print_shape)
+            m)
         fields;
       let model_reprs =
         Unboxing.unit_changed_representations is_local model_facts model_tables
           dominated_m to_unbox_m tcr_m input.body
       in
-      let compiler_reprs =
-        List.filter_map
-          (fun (x, (repr, _)) ->
-            Option.map (fun shape -> node x, shape) (compiler_repr_shape repr))
-          changed
-      in
       let reprs =
         List.map
           (fun n ->
-            ( n,
-              Option.map model_repr_shape (List.assoc_opt n model_reprs),
-              List.assoc_opt n compiler_reprs ))
+            n, Option.map model_repr_shape (List.assoc_opt n model_reprs))
           unit_nodes
       in
-      (match List.filter (fun (_, m, c) -> m <> c) reprs with
-      | [] ->
-        Format.printf
-          "%sthe changes of representation of the %d names of the unit: the \
-           same, %d changed@."
-          indent (List.length unit_nodes)
-          (List.length (List.filter (fun (_, m, _) -> m <> None) reprs))
-      | differences ->
-        List.iter
-          (fun (n, m, c) ->
-            Format.printf "%s%a: representation: model %a; compiler %a@." indent
-              print_node n print_repr m print_repr c)
-          differences);
+      compare_with_compiler reprs
+        (fun c n -> List.assoc_opt n c.reprs)
+        ~same:(fun () ->
+          Format.printf
+            "%sthe changes of representation of the %d names of the unit: the \
+             same, %d changed@."
+            indent (List.length unit_nodes) (count reprs))
+        ~differ:(fun (n, m, c) ->
+          Format.printf "%s%a: representation: model %a; compiler %a@." indent
+            print_node n print_repr m print_repr c);
       List.iter
-        (fun (n, m, _) ->
-          match m with
-          | None -> ()
-          | Some _ ->
+        (fun (n, m) ->
+          if Option.is_some m
+          then
             Format.printf "%s%a: representation %a@." indent print_node n
               print_repr m)
         reprs;
       let deps = Cc.unit_code_deps flag interface input.body in
       let decisions =
         List.map
-          (fun (id, model) ->
-            let compiler =
-              match Flsemantics.Code_ids.name_of id with
-              | Some code_id -> compiler_change_shape (compiler_change code_id)
-              | None -> Not_changing
-            in
-            id, model_change_shape model, compiler)
+          (fun (id, model) -> id, model_change_shape model)
           (Unboxing.unit_calling_convention_changes_u model_facts model_tables
              cannot_change_m deps dominated_m to_unbox_m input.body)
       in
       let changing =
         List.filter
-          (fun (_, model, _) ->
+          (fun (_, model) ->
             match model with Changing _ -> true | Not_changing -> false)
           decisions
       in
-      (match
-         List.filter (fun (_, model, compiler) -> model <> compiler) decisions
-       with
-      | [] ->
-        Format.printf
-          "%sthe decisions on the %d code ids of the unit: the same, %d \
-           changing@."
-          indent (List.length decisions) (List.length changing)
-      | differences ->
-        List.iter
-          (fun (id, model, compiler) ->
-            Format.printf "%s%a: model %a; compiler %a@." indent print_node
-              (Graph_spec.Node_code_id id) print_change_shape model
-              print_change_shape compiler)
-          differences);
+      compare_with_compiler decisions
+        (fun c id ->
+          match Flsemantics.Code_ids.name_of id with
+          | Some code_id -> compiler_change_shape (c.change code_id)
+          | None -> Not_changing)
+        ~same:(fun () ->
+          Format.printf
+            "%sthe decisions on the %d code ids of the unit: the same, %d \
+             changing@."
+            indent (List.length decisions) (List.length changing))
+        ~differ:(fun (id, model, compiler) ->
+          Format.printf "%s%a: model %a; compiler %a@." indent print_node
+            (Graph_spec.Node_code_id id) print_change_shape model
+            print_change_shape compiler);
       List.iter
-        (fun (id, model, _) ->
+        (fun (id, model) ->
           Format.printf "%s%a: %a@." indent print_node
             (Graph_spec.Node_code_id id) print_change_shape model)
         changing;
       let my_closures =
         List.map
-          (fun (id, model) ->
-            let compiler =
-              match
-                Option.map compiler_change (Flsemantics.Code_ids.name_of id)
-              with
-              | Some
-                  (Changing_calling_convention
-                     { my_closure_decision = Unbox_my_closure fields; _ }) ->
-                Some (compiler_shape fields)
-              | Some
-                  ( Changing_calling_convention
-                      { my_closure_decision = Keep_my_closure; _ }
-                  | Not_changing_calling_convention )
-              | None ->
-                None
-            in
-            id, Option.map model_shape model, compiler)
+          (fun (id, model) -> id, Option.map model_shape model)
           (Unboxing.unit_my_closure_decisions_u model_facts model_tables
              cannot_change_m deps dominated_m to_unbox_m input.body)
       in
-      (match List.filter (fun (_, m, c) -> m <> c) my_closures with
-      | [] ->
-        Format.printf
-          "%sthe decisions of my_closure on the %d code ids of the unit: the \
-           same, %d unboxed@."
-          indent (List.length my_closures)
-          (List.length (List.filter (fun (_, m, _) -> m <> None) my_closures))
-      | differences ->
-        List.iter
-          (fun (id, m, c) ->
-            Format.printf "%s%a: my_closure: model %a; compiler %a@." indent
-              print_node (Graph_spec.Node_code_id id) print_unboxed m
-              print_unboxed c)
-          differences);
+      compare_with_compiler my_closures
+        (fun c id ->
+          match Option.map c.change (Flsemantics.Code_ids.name_of id) with
+          | Some
+              (Changing_calling_convention
+                 { my_closure_decision = Unbox_my_closure fields; _ }) ->
+            Some (compiler_shape fields)
+          | Some
+              ( Changing_calling_convention
+                  { my_closure_decision = Keep_my_closure; _ }
+              | Not_changing_calling_convention )
+          | None ->
+            None)
+        ~same:(fun () ->
+          Format.printf
+            "%sthe decisions of my_closure on the %d code ids of the unit: the \
+             same, %d unboxed@."
+            indent (List.length my_closures) (count my_closures))
+        ~differ:(fun (id, m, c) ->
+          Format.printf "%s%a: my_closure: model %a; compiler %a@." indent
+            print_node (Graph_spec.Node_code_id id) print_unboxed m
+            print_unboxed c);
       List.iter
-        (fun (id, m, _) ->
-          match m with
-          | None -> ()
-          | Some shape ->
-            Format.printf "%s%a: my_closure unboxed %a@." indent print_node
-              (Graph_spec.Node_code_id id) print_shape shape)
+        (fun (id, m) ->
+          Option.iter
+            (Format.printf "%s%a: my_closure unboxed %a@." indent print_node
+               (Graph_spec.Node_code_id id) print_shape)
+            m)
         my_closures;
       let preserve =
         match Features.reaper_preserve_direct_calls () with
@@ -2471,32 +2543,29 @@ let compare_unboxing ~(names : unit_names) ~(input : Flsemantics.converted)
               cannot_change_m deps dominated_m to_unbox_m tcr_m preserve
               input.body)
       in
-      (match
-         let problem, skeleton =
-           Reaper.Traverse.run simplified.unit
-             ~final_typing_env:(With_types simplified.final_typing_env)
-             ~free_names:simplified.free_names
-         in
-         let solution =
-           Reaper.Analysis.solve problem ~analysis_scope:Current_unit
-         in
-         let reaped =
-           Reaper.Rebuild.rebuild ~machine_width:Sixty_four ~cmx_loader
-             ~all_code:simplified.all_code ~skeleton ~solution
-         in
-         relate_slots names ~model_reprs ~skeleton ~solution input.body;
-         reaped
-       with
-      | exception (Misc.Fatal_error as e) ->
-        Format.printf "%sthe compiler's reaper STOPPED on the unit (%s)@."
-          indent (Printexc.to_string e)
-      | reaped ->
-        Flsemantics.poison_missing_callee := true;
-        Fun.protect
-          ~finally:(fun () -> Flsemantics.poison_missing_callee := false)
-          (fun () ->
-            compare_rebuild ~indent ~ends:compiler.ends_of_regions ~input
-              ~input_unit ~rebuilt_body ~compiler_output:reaped.unit));
+      let reaped =
+        unless_stopped ~indent "reaper" (fun () ->
+            let problem, skeleton =
+              Reaper.Traverse.run simplified.unit
+                ~final_typing_env:(With_types simplified.final_typing_env)
+                ~free_names:simplified.free_names
+            in
+            let solution =
+              Reaper.Analysis.solve problem ~analysis_scope:Current_unit
+            in
+            let reaped =
+              Reaper.Rebuild.rebuild ~machine_width:Sixty_four ~cmx_loader
+                ~all_code:simplified.all_code ~skeleton ~solution
+            in
+            relate_slots names ~model_reprs ~skeleton ~solution input.body;
+            reaped.unit)
+      in
+      Flsemantics.poison_missing_callee := true;
+      Fun.protect
+        ~finally:(fun () -> Flsemantics.poison_missing_callee := false)
+        (fun () ->
+          compare_rebuild ~indent ~ends:compiler.ends_of_regions ~input
+            ~input_unit ~rebuilt_body ~compiler_output:reaped);
       true
 
 (* ---- One example ------------------------------------------------------ *)
@@ -2619,10 +2688,12 @@ let check ~filename ~cmx_loader (simplified : Simplify.simplify_result) : bool =
       then false
       else
         let reaped =
-          Reaper.Reaper.run ~machine_width:Sixty_four ~cmx_loader
-            ~all_code:simplified.all_code
-            ~final_typing_env:(With_types simplified.final_typing_env)
-            ~free_names:simplified.free_names unit
+          unless_stopped ~indent:"  " "reaper" (fun () ->
+              (Reaper.Reaper.run ~machine_width:Sixty_four ~cmx_loader
+                 ~all_code:simplified.all_code
+                 ~final_typing_env:(With_types simplified.final_typing_env)
+                 ~free_names:simplified.free_names unit)
+                .unit)
         in
         let preserve =
           match Features.reaper_preserve_direct_calls () with
@@ -2638,7 +2709,7 @@ let check ~filename ~cmx_loader (simplified : Simplify.simplify_result) : bool =
                      Rebuild.rebuild_unit model_facts
                        (solution_of_tables model_tables)
                        preserve input.body))
-              ~compiler_output:reaped.unit);
+              ~compiler_output:reaped);
         let unit_code_ids =
           List.filter
             (fun (node : Graph_spec.node) ->

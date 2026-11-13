@@ -1,0 +1,78 @@
+(* A field read immutably at one type and mutably at another, under a GADT.
+   The unit is made by ../ocaml/from_ocaml.sh of
+
+     type r1 = { a : int * int }
+     type r2 = { mutable b : int -> int }
+     type _ w = A : r1 w | B : r2 w
+     external opaque : 'a -> 'a = "%opaque"
+     external ( + ) : int -> int -> int = "%addint"
+     let[@inline never] f : type t. t w -> t -> int = fun w x ->
+       match w with A -> (let (p, _) = x.a in p) | B -> x.b 3
+     let[@inline never] g n = f A { a = (n, n) }
+     let r = g (opaque 1) + g (opaque 2)
+
+   with an interface that exports r. Field 0 of x is read immutably in the
+   arm A, where the pair that it holds is unboxed, and mutably in the arm B,
+   where it is called. The reaper names a field by its index and kind, not
+   its mutability, so the two reads are of one field, which flows to both an
+   unboxed and a kept variable. With unboxing, the compiler's analysis stops
+   on it ("flows to both unboxed and non-unboxed variables",
+   [mk_unboxed_fields] of unboxing_analysis.ml), and so does its reaper. The
+   model does not stop: its tables pass its checks, and it unboxes the
+   parameter x of f to its field 0, a value, and also the pair, read as
+   [*match*] in the arm A, so that nothing is left to give f as that field.
+   Its rebuild makes the call of f in g, and the arm A of f, [Invalid]: the
+   unit returns 3, and the run of the model's rebuild is undefined. *)
+let $camlMixed_mutable_field__first_const_0 = Block 0 () in
+(let code inline(never) size(23)
+       f_0 (w/59 : imm tagged, x/60 : val)
+         my_closure/61 &my_alloc_region/62 my_depth/63
+         -> k/26 * k/27
+         : imm tagged =
+   let next_depth/64 = rec_info (succ my_depth/63) in
+   (let untagged/68 = %untag_imm (w/59) in
+    switch untagged/68
+      | 0 -> k/30
+      | 1 -> k/31)
+     where k/31 =
+       cont k/28
+     where k/30 =
+       cont k/29
+     where k/29 =
+       let `*match*/66` = %block_load.[`0`] (x/60) in
+       let Pmixedfield/67 = %block_load.[`0`] (`*match*/66`) in
+       cont k/26 (Pmixedfield/67)
+     where k/28 =
+       let Pfield/65 = %block_load.mut.[`0`] (x/60) in
+       apply &my_alloc_region/62 Pfield/65 (3) -> k/26 * k/27
+ in
+ let code inline(never) size(18)
+       g_1 (n/69 : imm tagged)
+         my_closure/70 &my_alloc_region/71 my_depth/72
+         -> k/32 * k/33
+         : imm tagged =
+   let next_depth/73 = rec_info (succ my_depth/72) in
+   let f/74 = %project_value_slot.[g].[f] (my_closure/70) in
+   let Pmakeblock/75 = %block.[`0`].my_alloc_region/71 (n/69, n/69) in
+   let Pmakeblock/76 = %block.[`0`].my_alloc_region/71 (Pmakeblock/75) in
+   apply direct(f_0 &my_alloc_region/71)
+     (f/74 : _ -> imm tagged) (0, Pmakeblock/76) -> k/32 * k/33
+ in
+ let f/77 = closure f_0 @f &toplevel in
+ let g/78 = closure g_1 @g &toplevel with { f = f/77 } in
+ (let Popaque/84 = %opaque (2) in
+  apply direct(g_1 &toplevel)
+    (g/78 : _ -> imm tagged) (Popaque/84) -> k/34 * error)
+   where k/34 (apply_result/79 : imm tagged) =
+     ((let Popaque/83 = %opaque (1) in
+       apply direct(g_1 &toplevel)
+         (g/78 : _ -> imm tagged) (Popaque/83) -> k/35 * error)
+        where k/35 (apply_result/80 : imm tagged) =
+          let r/81 = %int_barith.add (apply_result/80, apply_result/79) in
+          let Pmakeblock/82 = %block.[`0`].`toplevel` (r/81) in
+          cont k/25 (Pmakeblock/82)))
+  where k/25 define_root_symbol (module_block/57) =
+    let field_0/58 = %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/57)
+    in
+    let $camlMixed_mutable_field = Block 0 (field_0/58) in
+    cont done ($camlMixed_mutable_field)

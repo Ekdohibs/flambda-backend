@@ -1,0 +1,65 @@
+(* A block that the caller unboxes and passes to code that keeps its calling
+   convention. The unit is made by ../ocaml/from_ocaml.sh of
+
+     type _ w = P : (int * int) w | F : (int -> int) w
+     external opaque : 'a -> 'a = "%opaque"
+     let[@inline never] f : type a. a w -> a -> int = fun w p ->
+       match w with F -> p 3 | P -> 0
+     let[@inline never] g n = f P (n, n)
+     let r = g (opaque 5)
+
+   with no interface, so that f is exported and keeps its calling
+   convention. The parameter p of f is only called, which no block can be,
+   so the pair that g gives it has no use that keeps it, and is unboxed, to
+   no fields. With unboxing, the case [Not_changing_calling_convention] of
+   [rebuild_apply] (rebuild.ml) passes the argument, whose decision is
+   [Keep], unrewritten, and the compiler's reaper stops ("Incorrect free
+   names") on the variable of the pair, which is no longer bound. The model
+   shares the bug: its rebuild removes the pair and passes its variable to
+   f, free, and its run is undefined where the unit returns its block. *)
+let $camlEscaping_parameter_argument__first_const_0 = Block 0 () in
+(let code inline(never) size(18)
+       f_0 (w/51 : imm tagged, p/52 : val)
+         my_closure/53 &my_alloc_region/54 my_depth/55
+         -> k/20 * k/21
+         : imm tagged =
+   let next_depth/56 = rec_info (succ my_depth/55) in
+   (let untagged/57 = %untag_imm (w/51) in
+    switch untagged/57
+      | 0 -> k/20 (0)
+      | 1 -> k/23)
+     where k/23 =
+       cont k/22
+     where k/22 =
+       apply &my_alloc_region/54 p/52 (3) -> k/20 * k/21
+ in
+ let code inline(never) size(12)
+       g_1 (n/58 : imm tagged)
+         my_closure/59 &my_alloc_region/60 my_depth/61
+         -> k/24 * k/25
+         : imm tagged =
+   let next_depth/62 = rec_info (succ my_depth/61) in
+   let f/63 = %project_value_slot.[g].[f] (my_closure/59) in
+   let Pmakeblock/64 = %block.[`0`].my_alloc_region/60 (n/58, n/58) in
+   apply direct(f_0 &my_alloc_region/60)
+     (f/63 : _ -> imm tagged) (0, Pmakeblock/64) -> k/24 * k/25
+ in
+ let f/65 = closure f_0 @f &toplevel in
+ let g/66 = closure g_1 @g &toplevel with { f = f/65 } in
+ (let Popaque/69 = %opaque (5) in
+  apply direct(g_1 &toplevel)
+    (g/66 : _ -> imm tagged) (Popaque/69) -> k/26 * error)
+   where k/26 (r/67 : imm tagged) =
+     let Pmakeblock/68 = %block.[`0`].`toplevel` (f/65, g/66, r/67) in
+     cont k/19 (Pmakeblock/68))
+  where k/19 define_root_symbol (module_block/47) =
+    let field_0/48 = %block_load.tag[`0`].`size`[`3`].[`0`] (module_block/47)
+    in
+    let field_1/49 = %block_load.tag[`0`].`size`[`3`].[`1`] (module_block/47)
+    in
+    let field_2/50 = %block_load.tag[`0`].`size`[`3`].[`2`] (module_block/47)
+    in
+    let $camlEscaping_parameter_argument =
+      Block 0 (field_0/48, field_1/49, field_2/50)
+    in
+    cont done ($camlEscaping_parameter_argument)
