@@ -11,6 +11,15 @@
    its output is undefined. Without [newer_version_of] and the deleted code, the
    free names have the slot, and the two rebuilds agree.
 
+   This is an artefact of the text, not a fault of the reaper: the reader
+   gives the code it reads no free names (parser/fexpr_to_flambda.ml, "This
+   needs fixing"), and Simplify takes code that is the newer version of other
+   code for code it has already simplified, whose projections of value slots
+   it does not see again (simplify_static_const.ml, [old_code_ids]). The term
+   that the compiler gives Simplify has no such code: the same unit written in
+   OCaml, compiled with the reaper, keeps the slot, and the tool finds no
+   difference on the term that the compiler gives Simplify for it.
+
    The variable [ended] differs too, for another reason: the conversion makes
    the end of a region the unit value, as the model has no regions, where the
    compiler's traversal gives the primitive a use that it does not track. *)

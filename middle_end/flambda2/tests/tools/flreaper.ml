@@ -1243,6 +1243,123 @@ let preserve_direct_calls () : Traversal.reaper_preserve_direct_calls =
   | Zero_alloc -> Zero_alloc
   | Auto -> Auto
 
+(* The processor time that each part of the comparison of a unit takes, printed
+   on the standard error where FLREAPER_TIMES is set, so that the expected files
+   do not depend on it. *)
+let timed name f =
+  match Sys.getenv_opt "FLREAPER_TIMES" with
+  | None | Some "" -> f ()
+  | Some _ ->
+    let start = Sys.time () in
+    let result = f () in
+    Printf.eprintf "flreaper: %s: %.2fs\n%!" name (Sys.time () -. start);
+    result
+
+(* The extracted rebuild can take a time exponential in the number of groups of
+   arguments of a call of unknown arity:
+   [FlambdaReaperRebuild.get_field_sources] returns its set of sources as a
+   predicate made of the one it is given, so that [arguments_used_by_call], for
+   a call of [k] groups, tests a predicate that goes through the constructor
+   facts [2k - 1] times nested, for each parameter fact. So the rebuild of the
+   model is not run where that estimate, for the call of the most groups, is
+   above [rebuild_budget ()] tests: FLREAPER_REBUILD_BUDGET, or a hundred
+   million, which is some ten seconds (where FLREAPER_REBUILD_ALWAYS is set, it
+   is run whatever the estimate). The estimate depends on the term and the graph
+   only, so what is printed does not depend on the machine. The rebuild would
+   not need this if the sets of sources were lists of nodes, computed once,
+   rather than predicates. *)
+let rebuild_budget () =
+  match
+    Option.bind (Sys.getenv_opt "FLREAPER_REBUILD_BUDGET") float_of_string_opt
+  with
+  | Some budget -> budget
+  | None -> 1e8
+
+let rec max_groups_of_unknown_calls (e : Rocq_model.expr) =
+  let in_handler (Rocq_model.Handler (_, _, handler)) =
+    max_groups_of_unknown_calls handler
+  in
+  let in_binding (binding : Rocq_model.static_binding) =
+    match binding with
+    | Bind_code (_, Code (_, _, _, _, _, body)) ->
+      max_groups_of_unknown_calls body
+    | Bind_deleted_code _ | Bind_symbol _ -> 0
+  in
+  let max_of l = List.fold_left max 0 l in
+  match e with
+  | Let (_, _, _, body) -> max_groups_of_unknown_calls body
+  | Let_static (bindings, body) ->
+    max
+      (max_of (List.map in_binding bindings))
+      (max_groups_of_unknown_calls body)
+  | Let_cont_non_recursive (_, handler, body) ->
+    max (in_handler handler) (max_groups_of_unknown_calls body)
+  | Let_cont_recursive (handlers, body) ->
+    max
+      (max_of (List.map (fun (_, handler) -> in_handler handler) handlers))
+      (max_groups_of_unknown_calls body)
+  | Apply { ap_call_kind = Indirect; ap_args_arity; _ } ->
+    List.length ap_args_arity
+  | Apply { ap_call_kind = Direct _; _ } | Apply_cont _ | Switch _ | Invalid ->
+    0
+
+(* The estimate above, and whether it is within the budget. *)
+let rebuild_estimate (facts : Graph_spec.facts) (e : Rocq_model.expr) =
+  let groups = max_groups_of_unknown_calls e in
+  let constructors = float_of_int (max 1 (List.length facts.f_constructor)) in
+  let parameters = float_of_int (max 1 (List.length facts.f_parameter)) in
+  let estimate =
+    if groups <= 1
+    then 0.
+    else parameters *. (constructors ** float_of_int ((2 * groups) - 1))
+  in
+  ( groups,
+    estimate,
+    estimate <= rebuild_budget ()
+    || Option.is_some (Sys.getenv_opt "FLREAPER_REBUILD_ALWAYS") )
+
+let within_budget name ~indent ~facts ~(input : Flsemantics.converted) f =
+  let groups, estimate, allowed = rebuild_estimate facts input.body in
+  if allowed
+  then Some (timed name f)
+  else (
+    Format.printf
+      "%sthe model's rebuild: NOT RUN, as a call of unknown arity has %d \
+       groups of arguments, which makes it take some %.0e tests \
+       (FLREAPER_REBUILD_ALWAYS runs it)@."
+      indent groups estimate;
+    None)
+
+(* A solution whose relations are those of [tables], as
+   [FlambdaReaperGraphSpec.solution_of_tables] gives them, answered from hash
+   tables instead of by going through the lists, which makes the extracted
+   rebuild quadratic in the size of the tables. [solution_of_tables] tests
+   membership with [node_eqb] and [field_eqb], which decide the structural
+   equality of these values, as [Hashtbl.mem] does. Trusted, for speed only. *)
+let solution_of_tables (t : Graph_spec.tables) : Graph_spec.solution =
+  let set l =
+    let table = Hashtbl.create ((2 * List.length l) + 1) in
+    List.iter (fun x -> Hashtbl.replace table x ()) l;
+    Hashtbl.mem table
+  in
+  let alias = set t.t_alias in
+  let usages = set t.t_usages in
+  let sources = set t.t_sources in
+  let reading_field = set t.t_reading_field in
+  let escaping_field = set t.t_escaping_field in
+  let field_used = set t.t_field_used in
+  { s_alias = (fun to_ from -> alias (to_, from));
+    s_any_usage = set t.t_any_usage;
+    s_any_source = set t.t_any_source;
+    s_has_usage = set t.t_has_usage;
+    s_has_source = set t.t_has_source;
+    s_usages = (fun x y -> usages (x, y));
+    s_sources = (fun x y -> sources (x, y));
+    s_reading_field = (fun f x -> reading_field (f, x));
+    s_escaping_field = (fun f x -> escaping_field (f, x));
+    s_field_used = (fun x f -> field_used (x, f))
+  }
+
 let print_terms () =
   match Sys.getenv_opt "FLREAPER_PRINT_TERMS" with
   | None | Some "" -> false
@@ -1285,9 +1402,13 @@ let verdict (first : Flsemantics.outcome) (second : Flsemantics.outcome) =
    difference of the two terms, or of a run, is printed and is not a failure of
    the tool. Setting FLREAPER_PRINT_TERMS prints the three terms. *)
 let compare_rebuild ~indent ~(input : Flsemantics.converted)
-    ~(input_unit : Flambda_unit.t) ~(rebuilt_body : Rocq_model.expr)
+    ~(input_unit : Flambda_unit.t) ~(rebuilt_body : Rocq_model.expr option)
     ~(compiler_output : Flambda_unit.t) =
-  let rebuilt : Flsemantics.converted = { input with body = rebuilt_body } in
+  let rebuilt =
+    Option.map
+      (fun body : Flsemantics.converted -> { input with body })
+      rebuilt_body
+  in
   Flsemantics.Continuations.alias
     (Flambda_unit.return_continuation compiler_output)
     ~same_as:(Flambda_unit.return_continuation input_unit);
@@ -1303,17 +1424,22 @@ let compare_rebuild ~indent ~(input : Flsemantics.converted)
       None
     | output -> Some output
   in
-  (match output with
-  | None -> ()
-  | Some output ->
+  (match rebuilt, output with
+  | None, _ | _, None -> ()
+  | Some rebuilt, Some output ->
     Format.printf "%sthe model's rebuild and the compiler's output: %s@." indent
-      (if Model_compare.expr_eqb [] [] rebuilt.body output.body
+      (if
+         timed "the comparison of the terms" (fun () ->
+             Model_compare.expr_eqb [] [] rebuilt.body output.body)
        then "the same up to bound names"
        else "DIFFERENT terms"));
   if print_terms ()
   then (
     print_term ~title:"the reaper's input" input.body;
-    print_term ~title:"the model's rebuild" rebuilt.body;
+    Option.iter
+      (fun (rebuilt : Flsemantics.converted) ->
+        print_term ~title:"the model's rebuild" rebuilt.body)
+      rebuilt;
     Option.iter
       (fun (output : Flsemantics.converted) ->
         print_term ~title:"the compiler's output" output.body)
@@ -1323,15 +1449,20 @@ let compare_rebuild ~indent ~(input : Flsemantics.converted)
       (Flsemantics.imports ~bound:[] ~unmentioned:[] ~hidden:[])
   in
   let run ~title unit =
-    let outcome, steps = Flsemantics.run ~statics unit in
+    let outcome, steps =
+      timed ("the run of " ^ title) (fun () -> Flsemantics.run ~statics unit)
+    in
     Format.printf "%s%s (%d steps): %a@." indent title steps
       Flsemantics.print_outcome outcome;
     outcome
   in
   let outcome_input = run ~title:"the reaper's input" input in
-  let outcome_rebuilt = run ~title:"the model's rebuild" rebuilt in
-  Format.printf "%sthe model's rebuild against the input: %s@." indent
-    (verdict outcome_input outcome_rebuilt);
+  Option.iter
+    (fun rebuilt ->
+      let outcome_rebuilt = run ~title:"the model's rebuild" rebuilt in
+      Format.printf "%sthe model's rebuild against the input: %s@." indent
+        (verdict outcome_input outcome_rebuilt))
+    rebuilt;
   Option.iter
     (fun output ->
       let outcome_output = run ~title:"the compiler's output" output in
@@ -1535,8 +1666,16 @@ let compare_calling_conventions ~(input : Flsemantics.converted)
       | Never | Zero_alloc -> false
     in
     let rebuilt_body =
-      Cc.rebuild_unit_cc_from_tables model_facts model_tables model_table deps
-        preserve input.body
+      within_budget "the model's rebuild" ~indent ~facts:model_facts ~input
+        (fun () ->
+          let cannot_change =
+            let table = Hashtbl.create 16 in
+            List.iter (fun node -> Hashtbl.replace table node ()) model_table;
+            Hashtbl.mem table
+          in
+          Cc.rebuild_unit_cc model_facts
+            (solution_of_tables model_tables)
+            cannot_change deps preserve input.body)
     in
     let reaped =
       Reaper.Reaper.run ~machine_width:Sixty_four ~cmx_loader
@@ -1564,93 +1703,108 @@ let check ~filename ~cmx_loader (simplified : Simplify.simplify_result) : bool =
   | exception Flsemantics.Unsupported what ->
     Format.printf "%s: not checked: the model has not got %t@." filename what;
     true
-  | input ->
+  | input -> (
     let names = take_unit_names () in
     let known_arity_call = !Flsemantics.known_arity_call_met in
     let model_facts =
-      Traversal.traverse_unit (preserve_direct_calls ())
-        (Flsemantics.interface input)
-        input.body
+      timed "the traversal of the model" (fun () ->
+          Traversal.traverse_unit (preserve_direct_calls ())
+            (Flsemantics.interface input)
+            input.body)
     in
-    let model_tables = solve model_facts in
-    let model_closed =
-      Solution.check_closed is_local model_facts model_tables
+    let model_tables = timed "the solver" (fun () -> solve model_facts) in
+    let model_closed, model_exact =
+      timed "the checks of the model's solution" (fun () ->
+          ( Solution.check_closed is_local model_facts model_tables,
+            Solution.check_field_used_exact is_local model_facts model_tables ))
     in
-    let model_exact =
-      Solution.check_field_used_exact is_local model_facts model_tables
-    in
-    let ({ compiler_facts; compiler_tables; all_related; _ } as compiler) =
-      compiler_graph names unit ~input:input.body
-        ~free_names:simplified.free_names
-    in
-    let compiler_closed =
-      Solution.check_closed is_local compiler_facts compiler_tables
-    in
-    let compiler_exact =
-      Solution.check_field_used_exact is_local compiler_facts compiler_tables
-    in
-    Format.printf "%s:@." filename;
-    if known_arity_call
-    then
+    match
+      timed "the compiler's graph and solution" (fun () ->
+          compiler_graph names unit ~input:input.body
+            ~free_names:simplified.free_names)
+    with
+    | exception ((Misc.Fatal_error | Assert_failure _) as e) ->
+      (* The compiler's traversal is entitled to stop on a term that it was not
+         made for (one that Simplify has made of a text that was already its
+         output, for instance); that is said, and nothing is compared. *)
       Format.printf
-        "  the unit has a call of known arity, which the model reads as one of \
-         unknown arity: the two graphs differ there@.";
-    if not all_related
-    then
+        "%s: not compared: the compiler's reaper stopped on the unit (%s)@."
+        filename (Printexc.to_string e);
+      model_closed && model_exact
+    | { compiler_facts; compiler_tables; all_related; _ } as compiler ->
+      let compiler_closed, compiler_exact =
+        timed "the checks of the compiler's solution" (fun () ->
+            ( Solution.check_closed is_local compiler_facts compiler_tables,
+              Solution.check_field_used_exact is_local compiler_facts
+                compiler_tables ))
+      in
+      Format.printf "%s:@." filename;
+      if known_arity_call
+      then
+        Format.printf
+          "  the unit has a call of known arity, which the model reads as one \
+           of unknown arity: the two graphs differ there@.";
+      if not all_related
+      then
+        Format.printf
+          "  NOT ALL the variables of the compiler's traversal could be \
+           related to those of the model: the term of the model and the \
+           compiler's skeleton differ in shape@.";
+      Format.printf "  the graph: %d facts in the model, %d in the compiler@."
+        (size model_facts) (size compiler_facts);
       Format.printf
-        "  NOT ALL the variables of the compiler's traversal could be related \
-         to those of the model: the term of the model and the compiler's \
-         skeleton differ in shape@.";
-    Format.printf "  the graph: %d facts in the model, %d in the compiler@."
-      (size model_facts) (size compiler_facts);
-    Format.printf
-      "  the model's solution: %s the check of closure, %s the check of \
-       field_of_constructor_is_used@."
-      (passes model_closed) (passes model_exact);
-    Format.printf
-      "  the compiler's solution, with its graph: %s the check of closure, %s \
-       the check of field_of_constructor_is_used@."
-      (passes compiler_closed) (passes compiler_exact);
-    compare_graphs ~model:model_facts ~compiler:compiler_facts;
-    compare_solutions ~names:(unit_nodes names) ~model:model_tables
-      ~compiler:compiler_tables;
-    if print_graphs ()
-    then (
-      print_graph ~title:"the graph of the model" model_facts;
-      print_tables ~title:"the model's solution" model_tables;
-      print_graph ~title:"the graph of the compiler" compiler_facts;
-      print_tables ~title:"the compiler's solution" compiler_tables);
-    let checked = model_closed && model_exact in
-    if not checked
-    then false
-    else
-      let reaped =
-        Reaper.Reaper.run ~machine_width:Sixty_four ~cmx_loader
-          ~all_code:simplified.all_code
-          ~final_typing_env:(With_types simplified.final_typing_env)
-          ~free_names:simplified.free_names unit
-      in
-      let preserve =
-        match Features.reaper_preserve_direct_calls () with
-        | Auto | Always -> true
-        | Never | Zero_alloc -> false
-      in
-      compare_rebuild ~indent:"  " ~input ~input_unit:unit
-        ~rebuilt_body:
-          (Rebuild.rebuild_unit_from_tables model_facts model_tables preserve
-             input.body)
-        ~compiler_output:reaped.unit;
-      compare_calling_conventions ~input ~input_unit:unit
-        ~unit_code_ids:
-          (List.filter
-             (fun (node : Graph_spec.node) ->
-               match node with
-               | Node_code_id _ -> true
-               | Node_variable _ | Node_symbol _ | Node_all_constants
-               | Node_made _ ->
-                 false)
-             (unit_nodes names))
-        ~model_facts ~model_tables ~compiler ~cmx_loader simplified
+        "  the model's solution: %s the check of closure, %s the check of \
+         field_of_constructor_is_used@."
+        (passes model_closed) (passes model_exact);
+      Format.printf
+        "  the compiler's solution, with its graph: %s the check of closure, \
+         %s the check of field_of_constructor_is_used@."
+        (passes compiler_closed) (passes compiler_exact);
+      compare_graphs ~model:model_facts ~compiler:compiler_facts;
+      compare_solutions ~names:(unit_nodes names) ~model:model_tables
+        ~compiler:compiler_tables;
+      if print_graphs ()
+      then (
+        print_graph ~title:"the graph of the model" model_facts;
+        print_tables ~title:"the model's solution" model_tables;
+        print_graph ~title:"the graph of the compiler" compiler_facts;
+        print_tables ~title:"the compiler's solution" compiler_tables);
+      let checked = model_closed && model_exact in
+      if not checked
+      then false
+      else
+        let reaped =
+          Reaper.Reaper.run ~machine_width:Sixty_four ~cmx_loader
+            ~all_code:simplified.all_code
+            ~final_typing_env:(With_types simplified.final_typing_env)
+            ~free_names:simplified.free_names unit
+        in
+        let preserve =
+          match Features.reaper_preserve_direct_calls () with
+          | Auto | Always -> true
+          | Never | Zero_alloc -> false
+        in
+        timed "the rebuilds and the runs" (fun () ->
+            compare_rebuild ~indent:"  " ~input ~input_unit:unit
+              ~rebuilt_body:
+                (within_budget "the model's rebuild" ~indent:"  "
+                   ~facts:model_facts ~input (fun () ->
+                     Rebuild.rebuild_unit model_facts
+                       (solution_of_tables model_tables)
+                       preserve input.body))
+              ~compiler_output:reaped.unit);
+        timed "the changes of calling convention" (fun () ->
+            compare_calling_conventions ~input ~input_unit:unit
+              ~unit_code_ids:
+                (List.filter
+                   (fun (node : Graph_spec.node) ->
+                     match node with
+                     | Node_code_id _ -> true
+                     | Node_variable _ | Node_symbol _ | Node_all_constants
+                     | Node_made _ ->
+                       false)
+                   (unit_nodes names))
+              ~model_facts ~model_tables ~compiler ~cmx_loader simplified))
 
 (* The example in [filename], read and given to Simplify as flsemantics.ml does
    it ([Flsemantics.check_file]). Whether nothing made the tool fail. *)
