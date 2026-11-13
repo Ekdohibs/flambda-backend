@@ -801,7 +801,7 @@ The check given imports:
 | `exported_function_raises.ml` | an exported function raises `Not_found`, and a second catches it by name, with the arm that the front end adds, which raises again the variable caught (source by T5b) | related once lifted, with its imports; unused value slots removed |
 | `throw_variable_kept.ml` | a function that raises the exception that it is given, and stays a function; two handlers by name (source by T5b) | related once lifted, with its imports; no value slots removed |
 
-`pair_join.ml`, of the table above, is a unit that the check refuses:
+`pair_kept.ml`, of the table above, is a unit that the check refuses:
 what the tool prints of it ends with the line "not validated". Of the
 terms written by hand in the directory above, `../uncaught.fl` has
 the line, with no import and no value slot removed: it leaves by its
@@ -847,13 +847,24 @@ the line with no import.
    check answers of each of the four ("Related once lifted, and not
    validated", above); they are counted as not validated.
 2. A pair that is a parameter of the function, unboxed where two
-   branches meet (three units). One branch gives the parameter, and
+   branches meet (two units). One branch gives the parameter, and
    Simplify loads its fields at that use, which only the subkind of
-   the parameter justifies; the model has no subkinds, so the term
-   after is less defined than the term before and no rewrite can be
-   proved (`pair_join.ml`, `pair_kept.ml`; discrepancy T6-7).
-   `pair_loop.ml` is the same at the entry of a loop, whose parameter
-   Simplify unboxes from its subkind without looking at the uses.
+   the parameter justifies; the model has no subkinds, so the code
+   of the term after is less defined than that of the term before
+   and no rewrite of it can be proved (`pair_kept.ml`; discrepancy
+   T6-7). `pair_loop.ml` is the same at the entry of a loop, whose
+   parameter Simplify unboxes from its subkind without looking at
+   the uses. In `pair_kept.ml` the function is not recursive, so
+   the validation also compares the two terms with its two calls
+   inlined. There the term before is left with the block of the
+   module alone. The term after has, before that block, the two
+   pairs that the function returns, which nothing uses, each with
+   a field that is a symbol, and it keeps its static bindings: an
+   allocation that nothing uses is removed from the term after
+   only where its fields are constants
+   (`FlambdaReadsAfterSpec.remove_constant_allocations`).
+   `pair_join.ml`, which was the third unit, is validated by that
+   comparison: the last entry of the list below.
 
 What the model has not got, and the conversion refuses: floating-point
 arithmetic (`float_add.ml`), mutable arrays (`array_literal.ml`),
@@ -1794,6 +1805,25 @@ removed it:
   copy that passes that check. Only static sets get copies: a
   closure that a `Let` makes and that Simplify gives new code is
   left (`status/C3.md`).
+- A pair read where two paths meet, in a function that is called
+  twice and that the unit does not export (`pair_join.ml`; P1's
+  rewrite). The function is marked never to be inlined. Simplify
+  keeps its two calls, and in its code unboxes the parameter of the
+  continuation where the two paths meet: at the path that gives the
+  pair it loads the two fields, which only the subkind of the
+  parameter justifies (T6-7; item 2 above). The unit is validated,
+  and that says nothing of the unboxing. The validation inlines the
+  two calls in the two terms; nothing then calls the code of the
+  function, and the code is removed from both terms with the unused
+  static bindings, so the code in which Simplify unboxes is never
+  compared. What is compared is the copies of its body. In the term
+  after, the copy of the path that gives the pair loads the two
+  fields of a pair of constants that a static binding holds, and a
+  round of the term after now reads what a known block holds where
+  the read is sure to have a value
+  (`FlambdaReadsAfterSpec.load_known_blocks_surely`, an
+  equivalence); the term before has the same from
+  `FlambdaBlockLoadSpec.load_known_blocks`, which refines.
 
 A count over 600 units made at random is in `census/README.md`, with
 one over 240 more that have exceptions, loops and recursive functions.
