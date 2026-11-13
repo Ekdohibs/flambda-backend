@@ -740,6 +740,11 @@ Owner: N3, on `flambda2-rocq/N3-equivariance` for the validator and on
   for the validation to apply to either of its terms; and the lemmas
   for its laws of renaming and of scope, which are stated in the
   files above)
+- `middle_end/flambda2/rocq/FlambdaUnaliasRecParams*` (a parameter of
+  a loop that every turn passes on, and that the loop is given one
+  variable for, is that variable: an equivalence, written for the
+  validation to apply to either of its terms; and the lemmas for its
+  laws of renaming and of scope, which are stated in the files above)
 - `middle_end/flambda2/rocq/FlambdaWrapReturns*` (a parameter that
   its handler does not use, of a continuation that a call returns to,
   is removed, and the call returns to a wrapper, as Simplify makes

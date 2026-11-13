@@ -30,7 +30,7 @@
 
    One parameter of one continuation first, then the pass. For the one
    parameter, the term and its result run side by side under a
-   relation of states ([state_rel]): the same expression outside the
+   relation of states ([site_rel]): the same expression outside the
    scope of the continuation; inside it, an expression and the same
    with the argument dropped, under continuations that hold the handler
    and the handler without the parameter. The two runs go in step
@@ -45,7 +45,21 @@
    gives one simple, a variable, a symbol or a constant
    ([all_give_simple]): the check of the pass is the case of a variable
    ([all_give_var_simple]), and FlambdaBindConstParamsProofs.v takes
-   the other two from here. *)
+   the other two from here.
+
+   It is also proved for the one continuation of a recursive
+   [Let_cont] ([loop]), for FlambdaUnaliasRecParamsProofs.v. The
+   closure of the continuation then holds itself, so an application of
+   it is met in its own handler too, and there the argument is the
+   parameter and not what the applications outside give. The relation
+   therefore carries, for an expression in the scope of the
+   continuation, the simple that the applications in that expression
+   give ([given]), which holds what the simple given from outside held
+   where the [Let_cont] was run. Outside the handler it is the simple
+   given from outside. In the handler of a loop it is the parameter:
+   the application that entered the handler gave that value, to the
+   parameter in the first run, and in the second the [Let] at the head
+   of the handler reads it. *)
 
 From Stdlib Require Import ZArith List Bool Arith Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -574,36 +588,64 @@ Qed.
 
 Section Site.
 
-(* The continuation, the position of the parameter, the variable, the
-   symbol or the constant that every application gives it, and the
-   handler; the variables and the continuations under which the
-   [Let_cont] runs. *)
-Variables (k : continuation) (i : nat) (s0 : simple) (p : variable)
-  (kind : flambda_kind) (params : list variable)
+(* Whether the continuation is the one continuation of a recursive
+   [Let_cont]; the continuation, the position of the parameter, the
+   variable, the symbol or the constant that every application outside
+   the handler gives it, and the handler; the variables and the
+   continuations under which the [Let_cont] runs. In the handler of a
+   loop every application gives the parameter. The simple is none of
+   the parameters that are left; it may be the variable that has the
+   name of the parameter itself. *)
+Variables (loop : bool) (k : continuation) (i : nat) (s0 : simple)
+  (p : variable) (kind : flambda_kind) (params : list variable)
   (metadata : handler_metadata) (handler : expr) (vars0 : env)
   (conts0 : cont_env).
 
 Hypothesis Hparam : nth_error params i = Some p.
 Hypothesis Hkind : nth_error (hm_params_kinds metadata) i = Some kind.
-Hypothesis Hx : simple_among s0 params = false.
+Hypothesis Hx : simple_among s0 (drop_nth i params) = false.
 Hypothesis Hfresh : among p (drop_nth i params) = false.
+Hypothesis Hturns :
+  loop = true -> all_give_simple k i (Var p) true handler = true.
 
-Definition the_closure : cont_value :=
-  Closure (Handler params metadata handler) vars0 conts0 [].
+(* The handlers that a closure of [k] holds: its own, in a loop. *)
+Definition site_group (h : continuation_handler)
+    : list (continuation * continuation_handler) :=
+  if loop then [(k, h)] else [].
 
-Definition the_closure_binding : cont_value :=
-  Closure
-    (Handler (drop_nth i params)
-       {| hm_params_kinds := drop_nth i (hm_params_kinds metadata);
-          hm_is_exn_handler := false |}
-       (Let p kind (Simple s0) handler))
-    vars0 conts0 [].
+(* What follows the [Let] at the head of the handler of the result:
+   in a loop the handler is in the scope of [k]. *)
+Definition site_body : expr :=
+  if loop then drop_arg k i handler else handler.
 
-Definition handlers_give (ok : bool)
+Definition site_handler : continuation_handler :=
+  Handler params metadata handler.
+
+Definition site_handler_binding : continuation_handler :=
+  Handler (drop_nth i params)
+    {| hm_params_kinds := drop_nth i (hm_params_kinds metadata);
+       hm_is_exn_handler := false |}
+    (Let p kind (Simple s0) site_body).
+
+Definition site_closure : cont_value :=
+  Closure site_handler vars0 conts0 (site_group site_handler).
+
+Definition site_closure_binding : cont_value :=
+  Closure site_handler_binding vars0 conts0
+    (site_group site_handler_binding).
+
+(* The continuations under which the two handlers run. *)
+Definition site_conts : cont_env :=
+  rec_closures (site_group site_handler) vars0 conts0 ++ conts0.
+
+Definition site_conts_binding : cont_env :=
+  rec_closures (site_group site_handler_binding) vars0 conts0 ++ conts0.
+
+Definition handlers_give (given : simple) (ok : bool)
     (handlers : list (continuation * continuation_handler)) : bool :=
   forallb
     (fun '(k', h) =>
-       negb (Pos.eqb k' k) && handler_all_give_simple k i s0 ok h)
+       negb (Pos.eqb k' k) && handler_all_give_simple k i given ok h)
     handlers.
 
 (* What a continuation name other than [k] stands for in the two runs:
@@ -612,8 +654,10 @@ Definition handlers_give (ok : bool)
    the scope of [k] and of that handler with the argument dropped,
    under continuations that have the two closures of [k]; or two so
    related with the same extra arguments; or what is left of the same
-   over-application. [ok] says that the simple is, where the handler
-   was defined, what it was where [k] was. *)
+   over-application. [given] is the simple that the applications of
+   [k] in the handler give, and [ok] says that it holds, where the
+   handler was defined, what the simple given from outside held where
+   [k] was. *)
 Inductive cont_rel : cont_value -> cont_value -> Prop :=
   | Rel_same (c : cont_value) : cont_rel c c
   | Rel_plain (hh : continuation_handler) (dv dv' : env) (dc dc' : cont_env)
@@ -621,15 +665,15 @@ Inductive cont_rel : cont_value -> cont_value -> Prop :=
     agree dv dv' ->
     (∀ k1 : continuation, cont_rel (resolve k1 dc) (resolve k1 dc')) ->
     cont_rel (Closure hh dv dc recursive) (Closure hh dv' dc' recursive)
-  | Rel_inside (ok : bool) (hh : continuation_handler) (dv dv' : env)
-      (dc dc' : cont_env)
+  | Rel_inside (given : simple) (ok : bool) (hh : continuation_handler)
+      (dv dv' : env) (dc dc' : cont_env)
       (recursive : list (continuation * continuation_handler)) :
     agree dv dv' ->
-    (ok = true -> eval_simple dv s0 = eval_simple vars0 s0) ->
-    handler_all_give_simple k i s0 ok hh = true ->
-    handlers_give ok recursive = true ->
-    resolve k dc = the_closure ->
-    resolve k dc' = the_closure_binding ->
+    (ok = true -> eval_simple dv given = eval_simple vars0 s0) ->
+    handler_all_give_simple k i given ok hh = true ->
+    handlers_give given ok recursive = true ->
+    resolve k dc = site_closure ->
+    resolve k dc' = site_closure_binding ->
     (∀ k1 : continuation,
       k1 <> k -> cont_rel (resolve k1 dc) (resolve k1 dc')) ->
     cont_rel (Closure hh dv dc recursive)
@@ -650,30 +694,32 @@ Inductive cont_rel : cont_value -> cont_value -> Prop :=
 Definition conts_plain (conts conts' : cont_env) : Prop :=
   ∀ k1 : continuation, cont_rel (resolve k1 conts) (resolve k1 conts').
 
-Definition conts_inside (conts conts' : cont_env) : Prop :=
-  resolve k conts = the_closure
-  ∧ resolve k conts' = the_closure_binding
+Definition conts_in_site (conts conts' : cont_env) : Prop :=
+  resolve k conts = site_closure
+  ∧ resolve k conts' = site_closure_binding
   ∧ ∀ k1 : continuation,
       k1 <> k -> cont_rel (resolve k1 conts) (resolve k1 conts').
 
 (* Two states: the same expression, outside the scope of [k]; or, in
-   it, an expression and the same with the argument dropped. *)
-Inductive state_rel : state -> state -> Prop :=
+   it, an expression and the same with the argument dropped, where
+   the applications of [k] in the expression give [given]. *)
+Inductive site_rel : state -> state -> Prop :=
   | Rel_state_plain (e : expr) (vars vars' : env) (conts conts' : cont_env)
       (statics : static_env) (hp : heap) :
     agree vars vars' ->
     conts_plain conts conts' ->
-    state_rel (State e vars conts statics hp) (State e vars' conts' statics hp)
-  | Rel_state_in_scope (ok : bool) (e : expr) (vars vars' : env)
-      (conts conts' : cont_env) (statics : static_env) (hp : heap) :
+    site_rel (State e vars conts statics hp) (State e vars' conts' statics hp)
+  | Rel_state_in_scope (given : simple) (ok : bool) (e : expr)
+      (vars vars' : env) (conts conts' : cont_env) (statics : static_env)
+      (hp : heap) :
     agree vars vars' ->
-    (ok = true -> eval_simple vars s0 = eval_simple vars0 s0) ->
-    all_give_simple k i s0 ok e = true ->
-    conts_inside conts conts' ->
-    state_rel (State e vars conts statics hp)
+    (ok = true -> eval_simple vars given = eval_simple vars0 s0) ->
+    all_give_simple k i given ok e = true ->
+    conts_in_site conts conts' ->
+    site_rel (State e vars conts statics hp)
       (State (drop_arg k i e) vars' conts' statics hp).
 
-Lemma state_rel_refl (s : state) : state_rel s s.
+Lemma site_rel_refl (s : state) : site_rel s s.
 Proof.
   destruct s as [e vars conts statics hp].
   apply Rel_state_plain; [ apply agree_refl | intros k1; apply Rel_same ].
@@ -700,13 +746,13 @@ Proof.
   apply Rel_plain; assumption.
 Qed.
 
-Lemma handlers_give_lookup (ok : bool)
+Lemma handlers_give_lookup (given : simple) (ok : bool)
     (handlers : list (continuation * continuation_handler)) :
-  handlers_give ok handlers = true ->
+  handlers_give given ok handlers = true ->
   lookup k handlers = None
   ∧ ∀ (k1 : continuation) (hh : continuation_handler),
       lookup k1 handlers = Some hh ->
-      handler_all_give_simple k i s0 ok hh = true.
+      handler_all_give_simple k i given ok hh = true.
 Proof.
   unfold handlers_give.
   induction handlers as [ | [k' hh'] handlers IH]; cbn [forallb].
@@ -720,25 +766,26 @@ Proof.
       destruct (Pos.eqb k1 k'); [ intros [= <-]; exact Hhh | apply Hothers ].
 Qed.
 
-Lemma rec_conts_inside (ok : bool)
+Lemma rec_conts_in_site (given : simple) (ok : bool)
     (handlers : list (continuation * continuation_handler))
     (vars vars' : env) (conts conts' : cont_env) :
   agree vars vars' ->
-  (ok = true -> eval_simple vars s0 = eval_simple vars0 s0) ->
-  handlers_give ok handlers = true ->
-  conts_inside conts conts' ->
-  conts_inside (rec_closures handlers vars conts ++ conts)
+  (ok = true -> eval_simple vars given = eval_simple vars0 s0) ->
+  handlers_give given ok handlers = true ->
+  conts_in_site conts conts' ->
+  conts_in_site (rec_closures handlers vars conts ++ conts)
     (rec_closures (drop_handlers k i handlers) vars' conts' ++ conts').
 Proof.
   intros Hvars Hok Hgive (Hk & Hk' & Hconts).
-  destruct (handlers_give_lookup ok handlers Hgive) as [Hnone Hothers].
+  destruct (handlers_give_lookup given ok handlers Hgive)
+    as [Hnone Hothers].
   split; [ | split ].
   - rewrite resolve_rec_closures, Hnone. exact Hk.
   - rewrite resolve_rec_closures, lookup_drop_handlers, Hnone. exact Hk'.
   - intros k1 Hne. rewrite !resolve_rec_closures, lookup_drop_handlers.
     destruct (lookup k1 handlers) as [hh | ] eqn:Hlookup; cbn [option_map];
       [ | exact (Hconts k1 Hne) ].
-    apply (Rel_inside ok); try assumption.
+    apply (Rel_inside given ok); try assumption.
     exact (Hothers k1 hh Hlookup).
 Qed.
 
@@ -749,7 +796,7 @@ Lemma call_code_rel (closure : value) (c : code) (vs : list value)
     (statics : static_env) (hp : heap) :
   cont_rel return_to return_to' ->
   cont_rel exn_to exn_to' ->
-  result_related state_rel
+  result_related site_rel
     (call_code closure c vs args_arity return_arity return_to exn_to statics hp)
     (call_code closure c vs args_arity return_arity return_to' exn_to'
        statics hp).
@@ -776,10 +823,10 @@ Lemma run_call_rel (shape : option call_shape) (return_arity : arity)
   cont_rel return_to return_to' ->
   cont_rel exn_to exn_to' ->
   (∀ partial : value,
-    result_related state_rel
+    result_related site_rel
       (apply_cont_value return_to [partial] statics hp)
       (apply_cont_value return_to' [partial] statics hp)) ->
-  result_related state_rel
+  result_related site_rel
     (run_call (fun partial => apply_cont_value return_to [partial] statics hp)
        shape return_arity return_to exn_to statics hp)
     (run_call (fun partial => apply_cont_value return_to' [partial] statics hp)
@@ -801,19 +848,20 @@ Lemma apply_cont_value_rel (c c' : cont_value) (statics : static_env)
     (hp : heap) :
   cont_rel c c' ->
   ∀ vs : list value,
-    result_related state_rel (apply_cont_value c vs statics hp)
+    result_related site_rel (apply_cont_value c vs statics hp)
       (apply_cont_value c' vs statics hp).
 Proof.
   intros Hc.
   induction Hc
     as [c
        | [ps m he] dv dv' dc dc' recursive Hdv Hdc _
-       | ok [ps m he] dv dv' dc dc' recursive Hdv Hok Hgive Hrec Hk Hk' Hdc _
+       | given ok [ps m he] dv dv' dc dc' recursive Hdv Hok Hgive Hrec Hk Hk'
+           Hdc _
        | c c' extra Hc IHc
        | remaining remaining_arity return_arity return_to return_to' exn_to
            exn_to' Hreturn IHreturn Hraise _];
     intros vs.
-  - apply result_related_refl, state_rel_refl.
+  - apply result_related_refl, site_rel_refl.
   - simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds m));
       [ | exact I ].
@@ -831,14 +879,14 @@ Proof.
       (bind_params ps vs dv') as [bound' | ]; try contradiction;
       [ | exact I ].
     simpl.
-    apply (Rel_state_in_scope (ok && negb (simple_among s0 ps)));
+    apply (Rel_state_in_scope given (ok && negb (simple_among given ps)));
       [ exact Hbind | | | ].
     + intros Hboth. apply andb_true_iff in Hboth as [Hok' Hnot].
       apply negb_true_iff in Hnot.
-      rewrite (eval_simple_bind_params_out ps vs dv bound s0 Hnot Hbound).
+      rewrite (eval_simple_bind_params_out ps vs dv bound given Hnot Hbound).
       exact (Hok Hok').
     + exact Hgive.
-    + apply (rec_conts_inside ok); try assumption.
+    + apply (rec_conts_in_site given ok); try assumption.
       split; [ exact Hk | split; [ exact Hk' | exact Hdc ] ].
   - exact (IHc (vs ++ extra)).
   - rewrite !apply_cont_value_over_application.
@@ -854,7 +902,7 @@ Lemma call_function_rel (callee : value) (call_kind : call_kind)
     (statics : static_env) (hp : heap) :
   cont_rel return_to return_to' ->
   cont_rel exn_to exn_to' ->
-  result_related state_rel
+  result_related site_rel
     (call_function callee call_kind vs args_arity return_arity return_to
        exn_to statics hp)
     (call_function callee call_kind vs args_arity return_arity return_to'
@@ -867,11 +915,11 @@ Qed.
 
 (* The two closures of [k], applied. *)
 Lemma apply_the_closure (vs : list value) (statics : static_env) (hp : heap) :
-  apply_cont_value the_closure vs statics hp
+  apply_cont_value site_closure vs statics hp
   = if kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata)
     then
       match bind_params params vs vars0 with
-      | Some bound => Step (State handler bound conts0 statics hp)
+      | Some bound => Step (State handler bound site_conts statics hp)
       | None => Undefined
       end
     else Undefined.
@@ -879,14 +927,15 @@ Proof. reflexivity. Qed.
 
 Lemma apply_the_closure_binding (vs : list value) (statics : static_env)
     (hp : heap) :
-  apply_cont_value the_closure_binding vs statics hp
+  apply_cont_value site_closure_binding vs statics hp
   = if kinds_eqb (map kind_of_value vs)
          (drop_nth i (hm_params_kinds metadata))
     then
       match bind_params (drop_nth i params) vs vars0 with
       | Some bound =>
         Step
-          (State (Let p kind (Simple s0) handler) bound conts0 statics hp)
+          (State (Let p kind (Simple s0) site_body) bound site_conts_binding
+             statics hp)
       | None => Undefined
       end
     else Undefined.
@@ -919,12 +968,13 @@ Proof.
 Qed.
 
 (* What the first step of the handler of the second closure of [k]
-   reads: the simple, which no parameter is. *)
+   reads: the simple, which none of the parameters that are left
+   is. *)
 Lemma eval_given (rest : list value) (bound : env) :
   bind_params (drop_nth i params) rest vars0 = Some bound ->
   eval_simple bound s0 = eval_simple vars0 s0.
 Proof.
-  apply eval_simple_bind_params_out, simple_among_drop_nth_false, Hx.
+  apply eval_simple_bind_params_out, Hx.
 Qed.
 
 (* The second state has taken the step of the application of [k], and
@@ -932,42 +982,49 @@ Qed.
    step, to related states. *)
 Definition pending (s u' : state) : Prop :=
   (step s = Undefined ∧ step u' = Undefined)
-  ∨ ∃ t t'' : state, step s = Step t ∧ step u' = Step t'' ∧ state_rel t t''.
+  ∨ ∃ t t'' : state, step s = Step t ∧ step u' = Step t'' ∧ site_rel t t''.
 
-(* The application of [k]: the first run to all the arguments, the
-   second to all but one. *)
-Lemma site_applied (vars : env) (rest : list value) (statics : static_env)
-    (hp : heap) (args : list simple) :
-  nth_error args i = Some s0 ->
-  eval_simple vars s0 = eval_simple vars0 s0 ->
+(* The application of [k], which gives a simple that holds what the
+   simple given from outside held: the first run to all the arguments,
+   the second to all but one. *)
+Lemma site_applied (given : simple) (vars : env) (rest : list value)
+    (statics : static_env) (hp : heap) (args : list simple) :
+  nth_error args i = Some given ->
+  eval_simple vars given = eval_simple vars0 s0 ->
   eval_simples vars (drop_nth i args) = Some rest ->
   let first :=
     match eval_simples vars args with
-    | Some vs => apply_cont_value the_closure vs statics hp
+    | Some vs => apply_cont_value site_closure vs statics hp
     | None => Undefined
     end
   in
   (first = Undefined
-   ∧ apply_cont_value the_closure_binding rest statics hp = Undefined)
+   ∧ apply_cont_value site_closure_binding rest statics hp = Undefined)
   ∨ ∃ bound : env,
-      apply_cont_value the_closure_binding rest statics hp
-      = Step (State (Let p kind (Simple s0) handler) bound conts0 statics hp)
+      apply_cont_value site_closure_binding rest statics hp
+      = Step
+          (State (Let p kind (Simple s0) site_body) bound site_conts_binding
+             statics hp)
       ∧ ((first = Undefined
           ∧ step
-              (State (Let p kind (Simple s0) handler) bound conts0 statics hp)
+              (State (Let p kind (Simple s0) site_body) bound
+                 site_conts_binding statics hp)
             = Undefined)
          ∨ ∃ (bound0 : env) (v : value),
-             first = Step (State handler bound0 conts0 statics hp)
+             first = Step (State handler bound0 site_conts statics hp)
              ∧ step
-                 (State (Let p kind (Simple s0) handler) bound conts0 statics
-                    hp)
-               = Step (State handler ((p, v) :: bound) conts0 statics hp)
-             ∧ agree bound0 ((p, v) :: bound)).
+                 (State (Let p kind (Simple s0) site_body) bound
+                    site_conts_binding statics hp)
+               = Step
+                   (State site_body ((p, v) :: bound) site_conts_binding
+                      statics hp)
+             ∧ agree bound0 ((p, v) :: bound)
+             ∧ eval_simple vars0 s0 = Some v).
 Proof.
   intros Hnth Hgiven Hrest first. rewrite apply_the_closure_binding.
-  destruct (eval_simple vars s0) as [v | ] eqn:Hv.
+  destruct (eval_simple vars given) as [v | ] eqn:Hv.
   - (* the simple has a value *)
-    destruct (eval_simples_with_nth i args vars s0 v rest Hnth Hv Hrest)
+    destruct (eval_simples_with_nth i args vars given v rest Hnth Hv Hrest)
       as (vs & Hvs & Hnth_v & Hdrop).
     subst first. rewrite Hvs, apply_the_closure. subst rest.
     pose proof
@@ -994,7 +1051,9 @@ Proof.
              (proj2 Hkinds (conj Hrest_kinds Hkind_v))).
            destruct (bind_params params vs vars0) as [bound0 | ];
              [ | contradiction ].
-           exists bound0, v. auto.
+           exists bound0, v.
+           split; [ reflexivity | split; [ reflexivity | ] ].
+           split; [ exact Hbind | reflexivity ].
         -- left. split; [ | reflexivity ].
            destruct
              (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata))
@@ -1016,7 +1075,7 @@ Proof.
     assert (Hfirst : first = Undefined).
     { subst first.
       destruct (eval_simples vars args) as [vs | ] eqn:Hvs; [ | reflexivity ].
-      destruct (eval_simples_nth_value i args vars vs s0 Hvs Hnth)
+      destruct (eval_simples_nth_value i args vars vs given Hvs Hnth)
         as (v & Hv' & _).
       congruence. }
     destruct
@@ -1031,16 +1090,54 @@ Proof.
     rewrite (eval_given _ _ Hbound), <- Hgiven. reflexivity.
 Qed.
 
+(* The continuations under which the handler of a loop runs have the
+   two closures of [k], and are otherwise those of the [Let_cont]. *)
+Lemma loop_conts_in_site :
+  loop = true -> conts_in_site site_conts site_conts_binding.
+Proof.
+  intros Hloop.
+  unfold conts_in_site, site_conts, site_conts_binding, site_closure,
+    site_closure_binding, site_group.
+  rewrite Hloop, !resolve_rec_closures, !lookup_cons, Pos.eqb_refl.
+  split; [ reflexivity | split; [ reflexivity | ] ].
+  intros k1 Hne. rewrite !resolve_rec_closures, !lookup_cons.
+  destruct (Pos.eqb_spec k1 k) as [-> | _]; [ contradiction | ].
+  apply Rel_same.
+Qed.
+
+(* The two handlers entered, the second past its [Let]. Where [k] is
+   not a loop its handler is outside its scope. In a loop the
+   applications of [k] in the handler give the parameter, which holds
+   what was given. *)
+Lemma site_entered (bound0 bound : env) (v : value) (statics : static_env)
+    (hp : heap) :
+  agree bound0 ((p, v) :: bound) ->
+  eval_simple vars0 s0 = Some v ->
+  site_rel (State handler bound0 site_conts statics hp)
+    (State site_body ((p, v) :: bound) site_conts_binding statics hp).
+Proof.
+  intros Hb Hv. destruct loop eqn:Hloop.
+  - unfold site_body. rewrite Hloop.
+    apply (Rel_state_in_scope (Var p) true handler);
+      [ exact Hb | | exact (Hturns eq_refl)
+      | exact (loop_conts_in_site Hloop) ].
+    intros _. cbn [eval_simple].
+    rewrite (Hb p), lookup_cons, Pos.eqb_refl. symmetry. exact Hv.
+  - unfold site_body, site_conts, site_conts_binding, site_group.
+    rewrite Hloop. apply Rel_state_plain; [ exact Hb | ].
+    intros k1. apply Rel_same.
+Qed.
+
 (* Two related states step together, or the first is at an application
    of [k]. *)
 Lemma unalias_step (s s' : state) :
-  state_rel s s' ->
-  result_related state_rel (step s) (step s')
+  site_rel s s' ->
+  result_related site_rel (step s) (step s')
   ∨ ∃ u' : state, step s' = Step u' ∧ pending s u'.
 Proof.
   intros
     [e vars vars' conts conts' statics hp Hvars Hconts
-    | ok e vars vars' conts conts' statics hp Hvars Hok Hgive
+    | given ok e vars vars' conts conts' statics hp Hvars Hok Hgive
         (Hk & Hk' & Hconts)].
   - (* outside the scope of [k] *)
     left.
@@ -1088,7 +1185,7 @@ Proof.
       simpl. apply Rel_state_plain; assumption.
     + rewrite !step_invalid. exact I.
   - (* in the scope of [k] *)
-    assert (Hinside : conts_inside conts conts')
+    assert (Hinside : conts_in_site conts conts')
       by (split; [ exact Hk | split; [ exact Hk' | exact Hconts ] ]).
     destruct e as [y kind1 d body | bindings body | k1 hh body
                   | handlers body | ap | ac | scrutinee arms | ];
@@ -1099,7 +1196,7 @@ Proof.
       destruct (eval_named statics vars d) as [v | ]; [ | exact I ].
       destruct (kind_eqb (kind_of_value v) kind1); [ | exact I ].
       simpl.
-      apply (Rel_state_in_scope (ok && negb (binds_simple s0 y)));
+      apply (Rel_state_in_scope given (ok && negb (binds_simple given y)));
         [ apply agree_cons, Hvars | | exact Hgive | exact Hinside ].
       intros Hboth. apply andb_true_iff in Hboth as [Hok' Hne].
       apply negb_true_iff in Hne.
@@ -1109,20 +1206,20 @@ Proof.
         (eval_static_bindings_agree vars vars' bindings (fun z _ => Hvars z)
            statics).
       destruct (eval_static_bindings vars bindings statics); [ | exact I ].
-      simpl. apply (Rel_state_in_scope ok); assumption.
+      simpl. apply (Rel_state_in_scope given ok); assumption.
     + left. rewrite !step_let_cont_non_recursive. simpl.
       apply andb_true_iff in Hgive as [Hgive Hbody].
       apply andb_true_iff in Hgive as [Hne Hhh].
       apply negb_true_iff, Pos.eqb_neq in Hne.
-      apply (Rel_state_in_scope ok);
+      apply (Rel_state_in_scope given ok);
         [ exact Hvars | exact Hok | exact Hbody | ].
       split; [ | split ].
       * rewrite resolve_other by congruence. exact Hk.
       * rewrite resolve_other by congruence. exact Hk'.
       * intros k2 Hk2. destruct (Pos.eq_dec k2 k1) as [-> | Hne'].
         -- rewrite !resolve_head.
-           exact (Rel_inside ok hh vars vars' conts conts' [] Hvars Hok Hhh
-             eq_refl Hk Hk' Hconts).
+           exact (Rel_inside given ok hh vars vars' conts conts' [] Hvars
+             Hok Hhh eq_refl Hk Hk' Hconts).
         -- rewrite !(resolve_other k2 k1) by exact Hne'.
            exact (Hconts k2 Hk2).
     + left. rewrite !step_let_cont_recursive.
@@ -1130,9 +1227,9 @@ Proof.
       rewrite drop_handlers_bind_statics.
       destruct (handlers_bind_statics handlers); [ exact I | ].
       simpl. apply andb_true_iff in Hgive as [Hhandlers Hbody].
-      apply (Rel_state_in_scope ok);
+      apply (Rel_state_in_scope given ok);
         [ exact Hvars | exact Hok | exact Hbody | ].
-      apply (rec_conts_inside ok); assumption.
+      apply (rec_conts_in_site given ok); assumption.
     + left. apply andb_true_iff in Hgive as [Hreturn Hraise].
       apply negb_true_iff, Pos.eqb_neq in Hreturn, Hraise.
       rewrite !step_apply,
@@ -1152,10 +1249,10 @@ Proof.
       unfold drop_arg_of.
       destruct (Pos.eqb_spec (ac_continuation ac) k) as [Hac | Hac].
       * (* of [k] *)
-        destruct (nth_error (ac_args ac) i) as [given | ] eqn:Hnth;
+        destruct (nth_error (ac_args ac) i) as [arg | ] eqn:Hnth;
           [ | discriminate ].
         apply andb_true_iff in Hgive as [Hok' Hy].
-        destruct (simple_eq_dec given s0) as [-> | ]; [ | discriminate ].
+        destruct (simple_eq_dec arg given) as [-> | ]; [ | discriminate ].
         specialize (Hok Hok').
         rewrite !step_apply_cont. cbn [ac_args ac_continuation].
         rewrite
@@ -1165,10 +1262,12 @@ Proof.
         destruct (eval_simples vars (drop_nth i (ac_args ac))) as [rest | ]
           eqn:Hrest.
         -- destruct
-             (site_applied vars rest statics hp (ac_args ac) Hnth Hok Hrest)
+             (site_applied given vars rest statics hp (ac_args ac) Hnth Hok
+                Hrest)
              as [[Hfirst Hsecond]
                 | (bound & Hsecond
-                   & [[Hfirst Hnext] | (bound0 & v & Hfirst & Hnext & Hb)])].
+                   & [[Hfirst Hnext]
+                     | (bound0 & v & Hfirst & Hnext & Hb & Hv)])].
            ++ left. rewrite Hfirst, Hsecond. exact I.
            ++ right. eexists. split; [ exact Hsecond | ].
               left. rewrite step_apply_cont. unfold apply_continuation.
@@ -1177,8 +1276,7 @@ Proof.
               right. eexists. eexists. rewrite step_apply_cont.
               unfold apply_continuation. rewrite Hac, Hk.
               split; [ exact Hfirst | split; [ exact Hnext | ] ].
-              apply Rel_state_plain; [ exact Hb | ].
-              intros k1. apply Rel_same.
+              exact (site_entered bound0 bound v statics hp Hb Hv).
         -- left.
            destruct (eval_simples vars (ac_args ac)) as [vs | ] eqn:Hvs;
              [ | exact I ].
@@ -1197,7 +1295,7 @@ Proof.
       rewrite find_arm_drop.
       destruct (find_arm j arms) as [ac | ] eqn:Hfind; [ | exact I ].
       simpl.
-      apply (Rel_state_in_scope ok (Apply_cont ac));
+      apply (Rel_state_in_scope given ok (Apply_cont ac));
         [ exact Hvars | exact Hok | | exact Hinside ].
       rewrite forallb_forall in Hgive.
       exact (Hgive (j, ac) (find_arm_in j arms ac Hfind)).
@@ -1205,9 +1303,9 @@ Proof.
 Qed.
 
 (* The second run answers the first with one step or two. *)
-Lemma site_refines (s s' : state) : state_rel s s' -> refines s s'.
+Lemma site_refines (s s' : state) : site_rel s s' -> refines s s'.
 Proof.
-  apply (stuttering_refines state_rel (fun _ vs vs' => vs' = vs));
+  apply (stuttering_refines site_rel (fun _ vs vs' => vs' = vs));
     [ | intros last vs vs' Hsame; exact Hsame ].
   clear s s'. intros s s' Hrel.
   destruct (unalias_step s s' Hrel)
@@ -1226,11 +1324,11 @@ Qed.
 
 (* The first run answers the second, which takes one step more at an
    application of [k]. *)
-Lemma site_refined (s s' : state) : state_rel s s' -> refines s' s.
+Lemma site_refined (s s' : state) : site_rel s s' -> refines s' s.
 Proof.
   intros Hrel.
   apply
-    (lagging_refines (fun a b => state_rel b a) (fun u a => pending a u));
+    (lagging_refines (fun a b => site_rel b a) (fun u a => pending a u));
     [ | | exact Hrel ]; clear s s' Hrel.
   - intros s' s Hrel.
     destruct (unalias_step s s' Hrel) as [Hlock | (u' & Hstep' & Hpending)].
@@ -1246,7 +1344,7 @@ Proof.
     + rewrite Hu. exists t. auto.
 Qed.
 
-Lemma simple_site_equivalent (s s' : state) : state_rel s s' -> equivalent s s'.
+Lemma simple_site_equivalent (s s' : state) : site_rel s s' -> equivalent s s'.
 Proof.
   intros Hrel.
   exact (refines_antisymmetric s s' (site_refines s s' Hrel)
@@ -1254,6 +1352,41 @@ Proof.
 Qed.
 
 End Site.
+
+(* The two closures of a continuation that is not a loop. *)
+Definition the_closure (params : list variable) (metadata : handler_metadata)
+    (handler : expr) (vars0 : env) (conts0 : cont_env) : cont_value :=
+  Closure (Handler params metadata handler) vars0 conts0 [].
+
+Definition the_closure_binding (i : nat) (s0 : simple) (p : variable)
+    (kind : flambda_kind) (params : list variable)
+    (metadata : handler_metadata) (handler : expr) (vars0 : env)
+    (conts0 : cont_env) : cont_value :=
+  Closure
+    (Handler (drop_nth i params)
+       {| hm_params_kinds := drop_nth i (hm_params_kinds metadata);
+          hm_is_exn_handler := false |}
+       (Let p kind (Simple s0) handler))
+    vars0 conts0 [].
+
+Lemma not_a_loop (P : Prop) : false = true -> P.
+Proof. discriminate. Qed.
+
+(* The relations for a continuation that is not a loop, under the
+   names and with the arguments that they had when the site was of
+   such a continuation only. *)
+Definition conts_inside (k : continuation) (i : nat) (s0 : simple)
+    (p : variable) (kind : flambda_kind) (params : list variable)
+    (metadata : handler_metadata) (handler : expr) (vars0 : env)
+    (conts0 conts conts' : cont_env) : Prop :=
+  conts_in_site false k i s0 p kind params metadata handler vars0 conts0
+    conts conts'.
+
+Definition state_rel (k : continuation) (i : nat) (s0 : simple)
+    (p : variable) (kind : flambda_kind) (params : list variable)
+    (metadata : handler_metadata) (handler : expr) (vars0 : env)
+    (conts0 : cont_env) (s s' : state) : Prop :=
+  site_rel false k i s0 p kind params metadata handler vars0 conts0 s s'.
 
 (* ======================================================================== *)
 (* The site, of the terms                                                   *)
@@ -1293,10 +1426,11 @@ Proof.
        statics hp));
     [ | apply equivalent_sym, step_equivalent, step_let_cont_non_recursive ].
   apply
-    (simple_site_equivalent k i s p kind params metadata handler vars conts
-       Hparam Hkind Hs Hfresh).
-  apply (Rel_state_in_scope k i s p kind params metadata handler vars conts
-    true);
+    (simple_site_equivalent false k i s p kind params metadata handler vars
+       conts Hparam Hkind (simple_among_drop_nth_false i s params Hs) Hfresh
+       (not_a_loop _)).
+  apply (Rel_state_in_scope false k i s p kind params metadata handler vars
+    conts s true);
     [ apply agree_refl | reflexivity | exact Hgive | ].
   split; [ apply resolve_head | split; [ apply resolve_head | ] ].
   intros k1 Hne. rewrite !(resolve_other k1 k) by exact Hne. apply Rel_same.
@@ -1324,8 +1458,9 @@ Lemma Rel_state_inside (k : continuation) (i : nat) (x p : variable)
     (State (drop_arg k i e) vars' conts' statics hp).
 Proof.
   intros Hvars Hok Hgive Hinside. rewrite all_give_var_simple in Hgive.
-  exact (Rel_state_in_scope k i (Var x) p kind params metadata handler vars0
-    conts0 ok e vars vars' conts conts' statics hp Hvars Hok Hgive Hinside).
+  exact (Rel_state_in_scope false k i (Var x) p kind params metadata handler
+    vars0 conts0 (Var x) ok e vars vars' conts conts' statics hp Hvars Hok
+    Hgive Hinside).
 Qed.
 
 Lemma site_equivalent (k : continuation) (i : nat) (x p : variable)
@@ -1341,8 +1476,9 @@ Lemma site_equivalent (k : continuation) (i : nat) (x p : variable)
     equivalent s s'.
 Proof.
   intros Hparam Hkind Hx Hfresh.
-  exact (simple_site_equivalent k i (Var x) p kind params metadata handler
-    vars0 conts0 Hparam Hkind Hx Hfresh).
+  exact (simple_site_equivalent false k i (Var x) p kind params metadata
+    handler vars0 conts0 Hparam Hkind
+    (simple_among_drop_nth_false i (Var x) params Hx) Hfresh (not_a_loop _)).
 Qed.
 
 (* ======================================================================== *)
