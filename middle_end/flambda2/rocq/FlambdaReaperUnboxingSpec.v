@@ -34,9 +34,11 @@
    against [unboxing_rules] of middle_end/flambda2/reaper/
    unboxing_analysis.ml and the seeds of [cannot_unbox0] that
    [perform_analysis0] puts in the table before running them, the units
-   of the two counterexamples below against their .fl (that of the second
-   is [kept_result_unboxed] of FlambdaReaperUnboxing.v),
-   [check_result_receivers] against the fix it is said to be,
+   of the four counterexamples below against their .fl (that of the
+   second is [kept_result_unboxed] of FlambdaReaperUnboxing.v),
+   [check_result_receivers], [field_reader_seeds] and
+   [escaping_argument_seeds] against the fixes they are said to be,
+   [unboxing_relations_with] against [unboxing_relations],
    [unbox_dead_unit] against testsuite/tests/reaper/unbox_dead.ml,
    [wrapper_args_u_before_fix] against [make_apply_wrapper] of rebuild.ml
    before the fix that the example is of, and the statements. The checks are
@@ -192,14 +194,105 @@
    exits, and that rebuilt it exits as the unit does; and that the match
    of [wrapper_args_u] in its order before the fix
    ([wrapper_args_u_before_fix]) gives no arguments for that call, whose
-   wrapper is then [Invalid], with which the rebuilt unit goes wrong. *)
+   wrapper is then [Invalid], with which the rebuilt unit goes wrong.
+
+   A third counterexample, on which the compiler's reaper stops and the
+   model's miscompiles: [mixed_field_unit]
+   (middle_end/flambda2/tests/semantics/reaper/mixed_mutable_field.fl,
+   whose comment gives the OCaml). A field is named by its index and its
+   kind, not its mutability: under a GADT, a field read immutably at one
+   type and mutably at another is one field. The pair that the field
+   holds dominates the immutable read, and is unboxed; the mutable read
+   has any source (the traversal makes the result of a mutable load so),
+   and is kept. The compiler stops in [mk_unboxed_fields] of
+   unboxing_analysis.ml ("flows to both unboxed and non-unboxed
+   variables"). The model does not: it unboxes the block that holds the
+   pair, and the parameter of the code that it dominates, to that field,
+   a value, which no longer exists; its rebuild makes the call, and the
+   arm that reads the pair, [Invalid]. [mixed_mutable_field_statement]
+   says that the tables of the unit pass every check, that the unit
+   exits with 3, and that rebuilt it goes wrong;
+   [mixed_mutable_field_cause_statement] says why.
+
+   The fix: the analysis must not unbox an allocation stored in a field
+   that a use of the allocation that holds it reads into a name with a
+   use that the allocation does not dominate. As a rule of
+   [unboxing_rules], it is a seed of [cannot_unbox0]
+   ([field_reader_seeds]), with the premises
+     [sources alias allocation_id; has_source allocation_id;
+      constructor ~base relation ~from:alias; usages base usage;
+      rev_accessor ~base:usage relation ~to_:v; has_usage v;
+      ~~(dominated_by_allocation_point allocation_id v)]:
+   those of the rule of [field_of_constructor_is_used] of
+   [post_processing_rules] that has [usages], for a source of the field,
+   and the negated premise of the fix of [kept_result_unboxed].
+   [check_field_readers], what it asks of a table of [to_unbox], is
+   [check_result_receivers] for every field, not only the results of
+   calls, and for the names with a use only: [check_result_receivers]
+   rejects the tables of [unbox_dead_unit], whose [x32] has no use. A
+   field named by its mutability too, the other way, is a change of the
+   traversal that the model does not make. The statement says too that
+   the check rejects the tables of the unit and passes those of the
+   sound examples, and that with the seeds of the fix
+   ([unboxing_relations_with]) the tables are closed under the rules,
+   pass the check, and rebuild into a unit that exits with 3.
+
+   A fourth counterexample, a crash of the compiler's reaper that the
+   model shares: [escaping_argument_unit]
+   (middle_end/flambda2/tests/semantics/reaper/
+   escaping_parameter_argument.fl, whose comment gives the OCaml). Code
+   that cannot change its calling convention, as it escapes, has a
+   parameter of any source, which it only calls (in an arm that a GADT
+   makes dead); a call of the code gives it a block, which nothing else
+   uses. The rule that forbids to unbox it, [cu0_parameter] (with its CR
+   in unboxing_analysis.ml), reads the sources of the parameter, and
+   those of a name of any source are not recorded: the block is unboxed.
+   The case [Not_changing_calling_convention] of [rebuild_apply]
+   (rebuild.ml) passes the argument, whose decision is [Keep], as it is:
+   the compiler stops ("Incorrect free names"), and the model's rebuild
+   gives the call the variable of the block, whose binding it removed,
+   and goes wrong. [escaping_parameter_argument_statement] says that the
+   tables of the unit pass every check, that the unit exits, and that
+   rebuilt it goes wrong; [escaping_parameter_argument_cause_statement]
+   says why.
+
+   The fix has two halves. The first: the analysis must not unbox an
+   allocation that is a source of an argument of a call of code that
+   cannot change its calling convention, whatever the sources of the
+   parameter. As a rule of [unboxing_rules], it is a seed of
+   [cannot_unbox0] ([escaping_argument_seeds]) like [cu0_parameter], with
+     [sources arg allocation_id; has_source allocation_id;
+      argument ~from:arg relation ~base:apply;
+      sources apply call_witness]
+   in place of
+     [sources alias allocation_id; has_source allocation_id;
+      rev_parameter ~to_:alias relation ~base:call_witness]:
+   the argument, whose sources are recorded, and the witnesses that the
+   call may call, for the parameter. [check_escaping_arguments] is what
+   it asks of a table of [to_unbox]. The statement says that the check
+   rejects the tables of the unit and passes those of the sound
+   examples, and that with the seeds of the fix the tables are closed
+   under the rules, pass the check, and rebuild into a unit that exits as
+   the unit does. The second half, in rebuild.ml: [rewrite_simple] of
+   the arguments that the case [Not_changing_calling_convention] keeps,
+   which makes the unboxed one poison. The statement says that the
+   rebuilt unit is the unit without the block, whose variable it gives
+   the call, and that with poison for that argument it exits as the unit
+   does. The second half alone is sound only where the code uses the
+   parameter on no path that is taken: here, as the parameter is only
+   called in an arm that is not. Of the uses of a name of any source, the
+   rules let only a call leave the allocation unboxed (a real field read
+   forbids it by [crr0_any_source_usage], an escape by [cu0_any_usage]),
+   and a call of a block goes wrong in the input too; that a closure so
+   called is never unboxed is not proved. The first half is a check of
+   the tables, and needs none of this. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic.
 From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
-  FlambdaMapSpec FlambdaBindersSpec FlambdaValueSpec FlambdaSemanticsSpec
-  FlambdaReaperTraversal FlambdaReaperSolution FlambdaReaperRebuild
-  FlambdaReaperCallingConventions FlambdaReaperGraphSpec
+  FlambdaPrimitiveModel FlambdaMapSpec FlambdaBindersSpec FlambdaValueSpec
+  FlambdaSemanticsSpec FlambdaReaperTraversal FlambdaReaperSolution
+  FlambdaReaperRebuild FlambdaReaperCallingConventions FlambdaReaperGraphSpec
   FlambdaReaperUnboxing.
 From OxCamlFlambda2 Require FlambdaReaperTupledSpec.
 Import ListNotations.
@@ -941,3 +1034,520 @@ Definition unbox_dead_statement : Prop :=
   ∧ behaves
       (FlambdaReaperTupledSpec.on_its_own (unbox_dead_rebuilt_with Invalid))
       Goes_wrong.
+
+(* ======================================================================== *)
+(* The rules with seeds of a fix                                            *)
+(* ======================================================================== *)
+
+(* The tables of the rules with the allocations [seeds] added to
+   [cannot_unbox0], as a rule that concludes it from relations other than
+   itself adds them ([derived_cannot_unbox0_seeds]): before the rounds of
+   [cu0_stored], which are made again. The other tables are those of
+   [unboxing_relations], which no seed of [cannot_unbox0] changes. *)
+Definition unboxing_relations_with (is_local : field -> bool) (F : facts)
+    (T : tables) (cannot_change : list node) (max_unbox_size : nat)
+    (lambda_lifting : bool) (seeds : list node) : unboxing_tables :=
+  let R :=
+    unboxing_relations is_local F T cannot_change max_unbox_size
+      lambda_lifting
+  in
+  let cu0 :=
+    stored_rounds F T (ut_crr R) (S (length (t_sources T)))
+      (Keyed.dedup node_eqb (seeds ++ ut_cu0 R))
+  in
+  {| ut_crr0 := ut_crr0 R; ut_crr1 := ut_crr1 R; ut_crr := ut_crr R;
+     ut_cu0 := cu0;
+     ut_cu := Keyed.dedup node_eqb (cu0 ++ by_function_slots F cu0) |}.
+
+(* [derive_to_unbox] for those tables. *)
+Definition derive_to_unbox_with (is_local : field -> bool) (F : facts)
+    (T : tables) (cannot_change : list node) (max_unbox_size : nat)
+    (lambda_lifting : bool) (seeds : list node) : list node :=
+  let R :=
+    unboxing_relations_with is_local F T cannot_change max_unbox_size
+      lambda_lifting seeds
+  in
+  filter (fun x => negb (mem_node x (ut_cu R)))
+    (Keyed.dedup node_eqb (t_has_usage T)).
+
+(* ======================================================================== *)
+(* A counterexample: a field read immutably and mutably                     *)
+(* ======================================================================== *)
+
+(* The fix, as what it adds to [cannot_unbox0]: an allocation with a
+   source that is a source of a field of [base] ([constructor]), which a
+   use of [base] reads into a name [v] with a use that the allocation
+   does not dominate. *)
+Definition field_reader_seeds (F : facts) (T : tables)
+    (dominated : list (node * node)) : list node :=
+  flat_map
+    (fun '(base, relation, alias) =>
+       flat_map
+         (fun '(alias', allocation_id) =>
+            if node_eqb alias alias'
+               && mem_node allocation_id (t_has_source T)
+               && existsb
+                    (fun '(v, relation', usage) =>
+                       field_eqb relation relation'
+                       && mem_pair base usage (t_usages T)
+                       && mem_node v (t_has_usage T)
+                       && negb (mem_pair allocation_id v dominated))
+                    (f_accessor F)
+            then [allocation_id]
+            else [])
+         (t_sources T))
+    (f_constructor F).
+
+(* The fix, as what it asks of a table of [to_unbox]: no allocation that
+   it adds to [cannot_unbox0] is unboxed. *)
+Definition check_field_readers (F : facts) (T : tables)
+    (dominated : list (node * node)) (to_unbox : list node) : bool :=
+  forallb (fun x => negb (mem_node x to_unbox))
+    (field_reader_seeds F T dominated).
+
+(* [Block_load] of a value from a mutable field. *)
+Definition load_mutable (field : Z) (block : simple) : named :=
+  Prim (Unary (Block_load (Block_access_values None None Any_value)
+                 Mutable field)) [block].
+
+(* A call of [callee] with 3, from code that returns to 3 and raises to
+   4. *)
+Definition call_with_3 (callee : variable) : apply_expr :=
+  {| ap_callee := Var callee; ap_call_kind := Indirect; ap_args := [int 3];
+     ap_continuation := 3; ap_exn_continuation := 4;
+     ap_exn_extra_args := [];
+     ap_args_arity := [Singleton Value];
+     ap_return_arity := [Singleton Value] |}.
+
+(* The unit of mixed_mutable_field.fl, without [g] and the module block:
+   the code 50 is [f] without its parameter [w], whose [x] is [x40], and
+   the [Switch] on a constant stands for the match on [w], whose arm 26,
+   [A], is taken. The arm 26 reads field 0 of [x40] immutably into [x42],
+   [*match*], and field 0 of that into [x43], [p], which it returns; the
+   arm 27, [B], reads field 0 of [x40] mutably into [x44], [x.b], and
+   calls it with 3. The unit calls 50 through [x60] with [x11], a block
+   of the pair [x10] of 3 and 3, as [g] does, and returns what it
+   returns. *)
+Definition mixed_field_code : code :=
+  Code [40] 41 3 4 (make_code_metadata [Singleton Value] [Singleton Value])
+    (Let_cont_non_recursive 26
+       (Handler [] no_params
+          (Let 42 Value (load 0 (Var 40))
+             (Let 43 Value (load 0 (Var 42)) (return_to 3 [Var 43]))))
+       (Let_cont_non_recursive 27
+          (Handler [] no_params
+             (Let 44 Value (load_mutable 0 (Var 40))
+                (Apply (call_with_3 44))))
+          (Switch (Const (Naked_immediate 0))
+             [(0%Z, goto 26); (1%Z, goto 27)]))).
+
+Definition mixed_field_unit : expr :=
+  Let_static [Bind_code 50 mixed_field_code]
+    (Let 60 Value (Closure_of_set 70 [(70, 50)] [])
+       (Let 10 Value (make_block [int 3; int 3])
+          (Let 11 Value (make_block [Var 10])
+             (Apply (call_50 [Var 11] 1))))).
+
+Definition mixed_field_facts : facts :=
+  traverse_unit Auto interface mixed_field_unit.
+
+(* The solution of the unit, as the solver of the test tool computes it.
+   The code dep of 50 has the result 3, [my_closure] 5, the parameter 6
+   and the witness 7 of known arity. [x40] has the source [x11], [x42]
+   the source [x10]; [x44], the result of a mutable load, has any source,
+   and is a use of [x10] too. *)
+Definition mixed_field_tables : tables :=
+  {| t_alias := [(m 16, m 7); (m 5, m 15); (m 12, m 14); (m 3, v 43);
+       (v 41, m 5); (v 40, m 6); (m 14, m 7); (m 1, m 3); (m 2, m 4);
+       (m 13, c 50); (m 6, v 11); (v 42, v 10); (v 44, v 10); (v 43, consts);
+       (m 5, v 60); (m 10, m 11)];
+     t_any_usage := [m 1; m 13; m 9; m 2; consts; m 3; m 4; c 50; v 43];
+     t_any_source := [v 44; c 50; consts; m 11; m 13; v 43; m 3; m 1; m 10;
+       m 4; m 9; m 2];
+     t_has_usage := [m 1; m 13; m 9; m 2; m 12; m 10; m 14; m 7; m 3; m 4;
+       c 50; consts; v 43; m 11; v 60; v 44; v 40; v 42; m 6; v 11; v 10];
+     t_has_source := [v 44; c 50; consts; m 11; v 11; v 10; v 60; m 8; m 7;
+       m 16; m 14; m 13; m 6; v 42; v 43; m 12; m 3; v 40; m 1; m 5; m 10; m 4;
+       m 9; v 41; m 2];
+     t_usages := [(v 60, v 60); (m 12, m 12); (v 44, v 44); (m 10, m 10);
+       (v 40, v 40); (v 42, v 42); (m 14, m 12); (m 6, v 40); (m 7, m 12);
+       (v 11, v 40); (v 10, v 42); (v 10, v 44); (m 11, m 10)];
+     t_sources := [(v 60, v 60); (v 11, v 11); (v 10, v 10); (m 8, m 8);
+       (m 7, m 7); (m 16, m 7); (m 14, m 7); (m 12, m 7); (m 6, v 11);
+       (v 40, v 11); (v 42, v 10); (m 5, v 60); (v 41, v 60)];
+     t_reading_field := [];
+     t_escaping_field := [];
+     t_field_used := [(v 60, known); (v 11, Field_block 0 Value);
+       (v 10, Field_block 0 Value); (m 7, result 0);
+       (m 7, Field_return_of_call Exn);
+       (m 7, Field_code_id_of_call_witness)] |}.
+
+Definition mixed_field_cannot_change : list node :=
+  derive_cannot_change mixed_field_facts mixed_field_tables.
+
+Definition mixed_field_dominated : list (node * node) :=
+  derive_dominated mixed_field_tables.
+
+Definition mixed_field_code_deps : finite_map code_dep :=
+  unit_code_deps Auto interface mixed_field_unit.
+
+(* The seeds of the fix in the unit. *)
+Definition mixed_field_seeds : list node :=
+  field_reader_seeds mixed_field_facts mixed_field_tables
+    mixed_field_dominated.
+
+(* The tables of [to_unbox] and [to_change_representation] that the rules
+   give, without the fix and with its seeds, and the unit rebuilt with
+   them. *)
+Definition mixed_field_to_unbox (fixed : bool) : list node :=
+  if fixed
+  then
+    derive_to_unbox_with no_local mixed_field_facts mixed_field_tables
+      mixed_field_cannot_change max_unbox_size false mixed_field_seeds
+  else
+    derive_to_unbox no_local mixed_field_facts mixed_field_tables
+      mixed_field_cannot_change max_unbox_size false.
+
+Definition mixed_field_tcr (fixed : bool) : list node :=
+  derive_to_change_representation no_local mixed_field_facts
+    mixed_field_tables mixed_field_cannot_change max_unbox_size false
+    (mixed_field_to_unbox fixed).
+
+Definition mixed_field_rebuilt (fixed : bool) : expr :=
+  rebuild_unit_unbox_repr no_local mixed_field_facts mixed_field_tables
+    mixed_field_cannot_change mixed_field_code_deps mixed_field_dominated
+    (mixed_field_to_unbox fixed) (mixed_field_tcr fixed) true
+    mixed_field_unit.
+
+Definition mixed_field_exit : behaviour :=
+  Exits 1 [Value_const (Tagged_immediate 3)] empty_heap.
+
+(* The tables pass every check. The unit exits with 3; rebuilt, it goes
+   wrong. The check of the fix rejects the tables. With the seeds of the
+   fix, the tables are closed under the rules, pass the check of the fix
+   and that of sets, and the unit rebuilt with them exits with 3. The
+   check passes the tables of [unboxed_closure], of the four examples of
+   blocks of FlambdaReaperUnboxing.v, of [unbox_dead_unit], which
+   [check_result_receivers] rejects, and of [dead_callee_unit] with lambda
+   lifting. *)
+Definition mixed_mutable_field_statement : Prop :=
+  check_closed no_local mixed_field_facts mixed_field_tables = true
+  ∧ check_field_used_exact no_local mixed_field_facts mixed_field_tables
+    = true
+  ∧ check_cc_closed mixed_field_facts mixed_field_tables
+      mixed_field_cannot_change = true
+  ∧ check_dominated mixed_field_tables mixed_field_dominated = true
+  ∧ check_to_unbox no_local mixed_field_facts mixed_field_tables
+      mixed_field_cannot_change max_unbox_size false
+      (mixed_field_to_unbox false) = true
+  ∧ check_to_change_representation no_local mixed_field_facts
+      mixed_field_tables mixed_field_cannot_change max_unbox_size false
+      (mixed_field_to_unbox false) (mixed_field_tcr false) = true
+  ∧ check_sets_whole mixed_field_facts mixed_field_tables
+      (mixed_field_to_unbox false) (mixed_field_tcr false) = true
+  ∧ behaves (FlambdaReaperTupledSpec.on_its_own mixed_field_unit)
+      mixed_field_exit
+  ∧ behaves (FlambdaReaperTupledSpec.on_its_own (mixed_field_rebuilt false))
+      Goes_wrong
+  ∧ check_field_readers mixed_field_facts mixed_field_tables
+      mixed_field_dominated (mixed_field_to_unbox false) = false
+  ∧ check_unboxing_closed no_local mixed_field_facts mixed_field_tables
+      mixed_field_cannot_change max_unbox_size false
+      (unboxing_relations_with no_local mixed_field_facts mixed_field_tables
+         mixed_field_cannot_change max_unbox_size false mixed_field_seeds)
+    = true
+  ∧ check_field_readers mixed_field_facts mixed_field_tables
+      mixed_field_dominated (mixed_field_to_unbox true) = true
+  ∧ check_sets_whole mixed_field_facts mixed_field_tables
+      (mixed_field_to_unbox true) (mixed_field_tcr true) = true
+  ∧ behaves (FlambdaReaperTupledSpec.on_its_own (mixed_field_rebuilt true))
+      mixed_field_exit
+  ∧ check_field_readers unboxed_closure_facts unboxed_closure_tables
+      unboxed_closure_dominated [v 60] = true
+  ∧ check_field_readers read_block_facts read_block_tables [(v 10, v 10)]
+      [v 10] = true
+  ∧ check_field_readers block_to_continuation_facts
+      block_to_continuation_tables [(v 10, v 10); (v 10, v 30)] [v 10]
+    = true
+  ∧ check_field_readers block_from_code_facts block_from_code_tables
+      block_from_code_dominated [v 42] = true
+  ∧ check_field_readers nested_block_facts nested_block_tables
+      [(v 11, v 11); (v 10, v 10); (v 10, v 12)] [v 11; v 10] = true
+  ∧ check_field_readers unbox_dead_facts unbox_dead_tables
+      unbox_dead_dominated unbox_dead_to_unbox = true
+  ∧ check_result_receivers unbox_dead_facts unbox_dead_tables
+      unbox_dead_dominated unbox_dead_to_unbox = false
+  ∧ check_field_readers dead_callee_facts dead_callee_tables
+      dead_callee_dominated (dead_callee_to_unbox true) = true.
+
+(* Why. Without the fix, the block [x11] and the pair [x10] are unboxed:
+   [x10] dominates [x42], and [x11] dominates [x40], which the code
+   unboxes to its field 0, a value; [x44], of any source, which reads the
+   same field 0, is dominated by nothing and kept. The seeds of the fix
+   are [x10]; with them, [x11] alone is unboxed, and the rest is as it
+   was. *)
+Definition mixed_mutable_field_cause_statement : Prop :=
+  mixed_field_to_unbox false = [v 11; v 10]
+  ∧ mem_pair (v 10) (v 42) mixed_field_dominated = true
+  ∧ mem_pair (v 11) (v 40) mixed_field_dominated = true
+  ∧ unit_calling_convention_changes_u mixed_field_facts mixed_field_tables
+      mixed_field_cannot_change mixed_field_code_deps mixed_field_dominated
+      (mixed_field_to_unbox false) mixed_field_unit
+    = [(50, Changing_u [Unbox [(Field_block 0 Value, Not_unboxed 63)]]
+              [Decided (Keep Value)])]
+  ∧ mem_node (v 44) (t_any_source mixed_field_tables) = true
+  ∧ multiple_allocation_points mixed_field_tables (v 44) = true
+  ∧ mixed_field_seeds = [v 10]
+  ∧ mixed_field_to_unbox true = [v 11]
+  ∧ mixed_field_tcr true = mixed_field_tcr false.
+
+(* ======================================================================== *)
+(* A counterexample: a block given to code that keeps its calling           *)
+(* convention                                                               *)
+(* ======================================================================== *)
+
+(* The fix, as what it adds to [cannot_unbox0]: an allocation with a
+   source that is a source of an argument of a call ([argument]) that may
+   call code that cannot change its calling convention, a source of the
+   callee of the call. *)
+Definition escaping_argument_seeds (F : facts) (T : tables)
+    (cannot_change : list node) : list node :=
+  flat_map
+    (fun '(from, _, base) =>
+       if existsb
+            (fun '(base', call_witness) =>
+               node_eqb base base'
+               && witness_cannot_change F cannot_change call_witness)
+            (t_sources T)
+       then
+         flat_map
+           (fun '(from', allocation_id) =>
+              if node_eqb from from'
+                 && mem_node allocation_id (t_has_source T)
+              then [allocation_id]
+              else [])
+           (t_sources T)
+       else [])
+    (f_argument F).
+
+(* The fix, as what it asks of a table of [to_unbox]: no allocation that
+   it adds to [cannot_unbox0] is unboxed. *)
+Definition check_escaping_arguments (F : facts) (T : tables)
+    (cannot_change : list node) (to_unbox : list node) : bool :=
+  forallb (fun x => negb (mem_node x to_unbox))
+    (escaping_argument_seeds F T cannot_change).
+
+(* The unit of escaping_parameter_argument.fl, without [g]: the code 50
+   is [f] without its parameter [w], whose [p] is [x40], and the [Switch]
+   on a constant stands for the match on [w], whose arm 26, [P], is
+   taken. The arm 26 returns 0; the arm 27, [F], calls [x40] with 3. The
+   unit calls 50 through [x60] with the pair [x10] of 5 and 5, returning
+   to 20, which returns a block of [x60] and the result, as the module
+   block holds [f] and [r]: [x60] escapes, and the code 50 cannot change
+   its calling convention. [escaping_argument_with e] has [e] in the
+   scope of 20. *)
+Definition escaping_argument_code : code :=
+  Code [40] 41 3 4 (make_code_metadata [Singleton Value] [Singleton Value])
+    (Let_cont_non_recursive 26
+       (Handler [] no_params (return_to 3 [int 0]))
+       (Let_cont_non_recursive 27
+          (Handler [] no_params (Apply (call_with_3 40)))
+          (Switch (Const (Naked_immediate 0))
+             [(0%Z, goto 26); (1%Z, goto 27)]))).
+
+Definition escaping_argument_with (e : expr) : expr :=
+  Let_static [Bind_code 50 escaping_argument_code]
+    (Let 60 Value (Closure_of_set 70 [(70, 50)] [])
+       (Let_cont_non_recursive 20
+          (Handler [30] (make_handler_metadata [Value])
+             (Let 31 Value (make_block [Var 60; Var 30])
+                (return_to 1 [Var 31])))
+          e)).
+
+Definition escaping_argument_unit : expr :=
+  escaping_argument_with
+    (Let 10 Value (make_block [int 5; int 5])
+       (Apply (call_50 [Var 10] 20))).
+
+Definition escaping_argument_facts : facts :=
+  traverse_unit Auto interface escaping_argument_unit.
+
+(* The solution of the unit, as the solver of the test tool computes it.
+   The code dep of 50 has the parameter 6 and the witness 7 of known
+   arity, of any usage; the call is 12, whose argument is [x10]. The
+   parameter 6 and [x40] have any source, and no source recorded; 6 is
+   an alias of [x10]. *)
+Definition escaping_argument_tables : tables :=
+  {| t_alias := [(m 16, m 7); (m 5, m 15); (m 12, m 14); (m 1, v 31);
+       (m 3, consts); (v 41, m 5); (v 40, m 6); (m 5, v 60); (m 10, m 11);
+       (m 14, m 7); (v 30, m 3); (m 2, m 4); (m 13, c 50); (m 6, v 10)];
+     t_any_usage := [m 1; m 13; m 9; m 2; v 31; v 60; v 30; consts; m 7; m 8;
+       m 4; m 3; c 50];
+     t_any_source := [c 50; consts; m 3; m 6; v 40; m 11; m 10; m 4; m 9; v 30;
+       m 2; m 13];
+     t_has_usage := [m 1; m 13; m 9; m 2; v 31; v 60; v 30; consts; m 7; m 8;
+       m 4; m 3; c 50; m 12; m 10; m 14; m 11; v 40; m 6; v 10];
+     t_has_source := [c 50; consts; m 3; m 6; v 40; m 11; m 10; m 4; m 9; v 10;
+       v 31; v 60; m 8; m 7; m 16; m 1; m 5; m 14; v 30; m 2; m 13; m 12;
+       v 41];
+     t_usages := [(m 12, m 12); (v 40, v 40); (m 10, m 10); (m 14, m 12);
+       (m 6, v 40); (m 11, m 10); (v 10, v 40)];
+     t_sources := [(v 60, v 60); (v 10, v 10); (v 31, v 31); (m 8, m 8);
+       (m 7, m 7); (m 16, m 7); (m 1, v 31); (m 5, v 60); (v 41, v 60);
+       (m 14, m 7); (m 12, m 7)];
+     t_reading_field := [];
+     t_escaping_field := [];
+     t_field_used := [(v 60, known); (v 60, unknown);
+       (v 31, Field_block 0 Value); (v 31, Field_block 1 Value);
+       (v 31, Field_is_int); (v 31, Field_get_tag);
+       (v 60, Field_function_slot 70); (m 8, Field_return_of_call Exn);
+       (m 8, result 0); (m 8, Field_code_id_of_call_witness); (m 7, result 0);
+       (m 7, Field_return_of_call Exn);
+       (m 7, Field_code_id_of_call_witness)] |}.
+
+Definition escaping_argument_cannot_change : list node :=
+  derive_cannot_change escaping_argument_facts escaping_argument_tables.
+
+Definition escaping_argument_dominated : list (node * node) :=
+  derive_dominated escaping_argument_tables.
+
+Definition escaping_argument_code_deps : finite_map code_dep :=
+  unit_code_deps Auto interface escaping_argument_unit.
+
+(* The seeds of the fix in the unit. *)
+Definition escaping_argument_seeds_of_unit : list node :=
+  escaping_argument_seeds escaping_argument_facts escaping_argument_tables
+    escaping_argument_cannot_change.
+
+(* The tables of [to_unbox] and [to_change_representation] that the rules
+   give, without the fix and with its seeds, and the unit rebuilt with
+   them. *)
+Definition escaping_argument_to_unbox (fixed : bool) : list node :=
+  if fixed
+  then
+    derive_to_unbox_with no_local escaping_argument_facts
+      escaping_argument_tables escaping_argument_cannot_change
+      max_unbox_size false escaping_argument_seeds_of_unit
+  else
+    derive_to_unbox no_local escaping_argument_facts escaping_argument_tables
+      escaping_argument_cannot_change max_unbox_size false.
+
+Definition escaping_argument_tcr (fixed : bool) : list node :=
+  derive_to_change_representation no_local escaping_argument_facts
+    escaping_argument_tables escaping_argument_cannot_change max_unbox_size
+    false (escaping_argument_to_unbox fixed).
+
+Definition escaping_argument_rebuilt (fixed : bool) : expr :=
+  rebuild_unit_unbox_repr no_local escaping_argument_facts
+    escaping_argument_tables escaping_argument_cannot_change
+    escaping_argument_code_deps escaping_argument_dominated
+    (escaping_argument_to_unbox fixed) (escaping_argument_tcr fixed) true
+    escaping_argument_unit.
+
+Definition escaping_argument_exit : behaviour :=
+  Exits 1
+    [Value_block 0
+       [Value_closure_of_set 70 [(70, 50)] [];
+        Value_const (Tagged_immediate 0)]]
+    empty_heap.
+
+(* The tables pass every check. The unit exits with a block of the
+   closure and 0; rebuilt, it goes wrong. The check of the fix rejects
+   the tables. With the seeds of the fix, the tables are closed under the
+   rules, pass the check of the fix and that of sets, and the unit
+   rebuilt with them exits as the unit does. The rebuilt unit is the unit
+   without the [Let] of the pair, whose variable it gives the call; with
+   poison for argument, the other half of the fix, it exits as the unit
+   does. The check passes the tables of [unboxed_closure], of
+   [block_from_code], of [kept_result_unboxed] with its fix, of
+   [unbox_dead_unit] and of [dead_callee_unit] with lambda lifting, the
+   examples whose code cannot change its calling convention or whose
+   calls give an allocation. *)
+Definition escaping_parameter_argument_statement : Prop :=
+  check_closed no_local escaping_argument_facts escaping_argument_tables
+    = true
+  ∧ check_field_used_exact no_local escaping_argument_facts
+      escaping_argument_tables = true
+  ∧ check_cc_closed escaping_argument_facts escaping_argument_tables
+      escaping_argument_cannot_change = true
+  ∧ check_dominated escaping_argument_tables escaping_argument_dominated
+    = true
+  ∧ check_to_unbox no_local escaping_argument_facts escaping_argument_tables
+      escaping_argument_cannot_change max_unbox_size false
+      (escaping_argument_to_unbox false) = true
+  ∧ check_to_change_representation no_local escaping_argument_facts
+      escaping_argument_tables escaping_argument_cannot_change
+      max_unbox_size false (escaping_argument_to_unbox false)
+      (escaping_argument_tcr false) = true
+  ∧ check_sets_whole escaping_argument_facts escaping_argument_tables
+      (escaping_argument_to_unbox false) (escaping_argument_tcr false)
+    = true
+  ∧ behaves (FlambdaReaperTupledSpec.on_its_own escaping_argument_unit)
+      escaping_argument_exit
+  ∧ behaves
+      (FlambdaReaperTupledSpec.on_its_own (escaping_argument_rebuilt false))
+      Goes_wrong
+  ∧ check_escaping_arguments escaping_argument_facts escaping_argument_tables
+      escaping_argument_cannot_change (escaping_argument_to_unbox false)
+    = false
+  ∧ check_unboxing_closed no_local escaping_argument_facts
+      escaping_argument_tables escaping_argument_cannot_change
+      max_unbox_size false
+      (unboxing_relations_with no_local escaping_argument_facts
+         escaping_argument_tables escaping_argument_cannot_change
+         max_unbox_size false escaping_argument_seeds_of_unit)
+    = true
+  ∧ check_escaping_arguments escaping_argument_facts escaping_argument_tables
+      escaping_argument_cannot_change (escaping_argument_to_unbox true)
+    = true
+  ∧ check_sets_whole escaping_argument_facts escaping_argument_tables
+      (escaping_argument_to_unbox true) (escaping_argument_tcr true) = true
+  ∧ behaves
+      (FlambdaReaperTupledSpec.on_its_own (escaping_argument_rebuilt true))
+      escaping_argument_exit
+  ∧ escaping_argument_rebuilt false
+    = escaping_argument_with (Apply (call_50 [Var 10] 20))
+  ∧ behaves
+      (FlambdaReaperTupledSpec.on_its_own
+         (escaping_argument_with (Apply (call_50 [Const (Poison Value)] 20))))
+      escaping_argument_exit
+  ∧ check_escaping_arguments unboxed_closure_facts unboxed_closure_tables []
+      [v 60] = true
+  ∧ check_escaping_arguments block_from_code_facts block_from_code_tables
+      (derive_cannot_change block_from_code_facts block_from_code_tables)
+      [v 42] = true
+  ∧ check_escaping_arguments kept_result_unboxed_facts
+      kept_result_unboxed_tables kept_result_cannot_change
+      (kept_result_to_unbox true) = true
+  ∧ check_escaping_arguments unbox_dead_facts unbox_dead_tables
+      unbox_dead_cannot_change unbox_dead_to_unbox = true
+  ∧ check_escaping_arguments dead_callee_facts dead_callee_tables
+      dead_callee_cannot_change (dead_callee_to_unbox true) = true.
+
+(* Why. Without the fix, the pair [x10] is unboxed, to no field. The code
+   50 cannot change its calling convention, and its parameter 6, of
+   which [x10] is an alias, has any source and no source recorded, so
+   that [cu0_parameter] does not hold of [x10]. The call does not change
+   its calling convention, and the rebuilt unit has [x10] free. The seeds
+   of the fix are [x10]; with them, nothing is unboxed. Neither check
+   rejects the tables of the other counterexample. *)
+Definition escaping_parameter_argument_cause_statement : Prop :=
+  escaping_argument_to_unbox false = [v 10]
+  ∧ mem_node (c 50) escaping_argument_cannot_change = true
+  ∧ mem_pair (m 6) (v 10) (t_alias escaping_argument_tables) = true
+  ∧ mem_node (m 6) (t_any_source escaping_argument_tables) = true
+  ∧ existsb (fun '(x, _) => node_eqb x (m 6))
+      (t_sources escaping_argument_tables) = false
+  ∧ unit_calling_convention_changes_u escaping_argument_facts
+      escaping_argument_tables escaping_argument_cannot_change
+      escaping_argument_code_deps escaping_argument_dominated
+      (escaping_argument_to_unbox false) escaping_argument_unit
+    = [(50, Not_changing_u)]
+  ∧ free_variables_of_expr escaping_argument_unit = []
+  ∧ free_variables_of_expr (escaping_argument_rebuilt false) = [10]
+  ∧ escaping_argument_seeds_of_unit = [v 10]
+  ∧ escaping_argument_to_unbox true = []
+  ∧ check_field_readers escaping_argument_facts escaping_argument_tables
+      escaping_argument_dominated (escaping_argument_to_unbox false) = true
+  ∧ check_escaping_arguments mixed_field_facts mixed_field_tables
+      mixed_field_cannot_change (mixed_field_to_unbox false) = true.

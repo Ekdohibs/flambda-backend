@@ -395,3 +395,42 @@ Proof.
   do 2 (split; [ vm_compute; reflexivity | ]).
   exists 20; vm_compute; reflexivity.
 Qed.
+
+(* ======================================================================== *)
+(* A counterexample: a field read immutably and mutably                     *)
+(* ======================================================================== *)
+
+Theorem mixed_mutable_field : mixed_mutable_field_statement.
+Proof.
+  do 7 (split; [ vm_compute; reflexivity | ]).
+  split; [ exists 20; vm_compute; reflexivity | ].
+  split; [ exists 20; vm_compute; reflexivity | ].
+  do 4 (split; [ vm_compute; reflexivity | ]).
+  split; [ exists 20; vm_compute; reflexivity | ].
+  vm_compute. auto 10.
+Qed.
+
+Theorem mixed_mutable_field_cause : mixed_mutable_field_cause_statement.
+Proof. vm_compute. auto 10. Qed.
+
+(* ======================================================================== *)
+(* A counterexample: a block given to code that keeps its calling           *)
+(* convention                                                               *)
+(* ======================================================================== *)
+
+Theorem escaping_parameter_argument :
+  escaping_parameter_argument_statement.
+Proof.
+  do 7 (split; [ vm_compute; reflexivity | ]).
+  split; [ exists 20; vm_compute; reflexivity | ].
+  split; [ exists 20; vm_compute; reflexivity | ].
+  do 4 (split; [ vm_compute; reflexivity | ]).
+  split; [ exists 20; vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | ].
+  split; [ exists 20; vm_compute; reflexivity | ].
+  vm_compute. auto 10.
+Qed.
+
+Theorem escaping_parameter_argument_cause :
+  escaping_parameter_argument_cause_statement.
+Proof. vm_compute. auto 20. Qed.
