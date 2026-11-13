@@ -64,7 +64,15 @@
    fields come from"), the graph of the unit reads no function slot and
    makes no call ([closure_free_reads_blocks]) so that each such use is a
    use of the variable, and the facts of the allocation are those of
-   FlambdaReaperFlowProofs.expr_edges. The variables of the fields are
+   FlambdaReaperFlowProofs.expr_edges. A read that the rebuild keeps of
+   an unboxed variable finds its field ([reads_found]), by
+   [check_unboxed_reads]: the variable read into has a use, so that the
+   field is among those read from the uses of the variable
+   ([get_fields_found]; the variable has no [any_usage], so that it is
+   one of its uses), the field of the allocation has a source, and the
+   variable read into is not to be unboxed, so that the field is a
+   variable ([mk_unboxed_fields_lookup], [unboxed_fields_of_names_dom],
+   [unboxed_fields_of_names_bound]). The variables of the fields are
    fresh ([unit_unboxed_fields_fresh]), so that the checks of the
    fragment hold with "plain" read as "neither unboxed nor the variable
    of a field" ([strong_local]), which is what the relation asks. The
@@ -171,12 +179,7 @@ Definition unboxed_binding_ok (kinds : finite_map flambda_kind)
 Definition plain_binding_ok (x : variable) (kind : flambda_kind) (d : named)
     : bool :=
   match unboxed_read unboxed d with
-  | Some (f, fields) =>
-    negb (is_var_used sol x kind)
-    || match Keyed.lookup field_eqb f fields with
-       | Some (Not_unboxed _) => true
-       | _ => false
-       end
+  | Some _ => read_shape_ok kind d
   | None =>
     match d with
     | Simple s => plain_simple s
@@ -2329,6 +2332,291 @@ Proof.
   apply (Hgen dominated [] next). intros y fs [].
 Qed.
 
+(* The converses, for the reads that the rebuild keeps. *)
+Lemma insert_field_in_r {A : Type} (f : field) (a : A)
+    (l : list (field * A)) (x : field * A) :
+  x = (f, a) ∨ x ∈ l -> x ∈ insert_field f a l.
+Proof.
+  induction l as [ | [f' a'] l IH]; simpl;
+    [ intros [-> | []]; left; reflexivity | ].
+  destruct (field_lt f f'); simpl.
+  - intros [-> | Hin]; [ left; reflexivity | right; exact Hin ].
+  - intros [-> | [-> | Hin]]; [ right; apply IH; left; reflexivity
+                              | left; reflexivity
+                              | right; apply IH; right; exact Hin ].
+Qed.
+
+Lemma sort_fields_in_r {A : Type} (l : list (field * A)) (x : field * A) :
+  x ∈ l -> x ∈ sort_fields l.
+Proof.
+  unfold sort_fields. induction l as [ | [f a] l IH]; simpl; [ easy | ].
+  intros [<- | Hin]; apply insert_field_in_r;
+    [ left; reflexivity | right; exact (IH Hin) ].
+Qed.
+
+Lemma dedup_in_r (l : list node) (x : node) :
+  x ∈ l -> x ∈ Keyed.dedup node_eqb l.
+Proof.
+  rewrite <- !(keyed_among_in node node_eqb node_eqb_decides).
+  rewrite (keyed_among_dedup node node_eqb node_eqb_decides).
+  exact (fun H => H).
+Qed.
+
+Lemma get_direct_usages_self (x : node) :
+  mem_pair x x (t_usages T) = true -> mem_node x (t_has_usage T) = true ->
+  x ∈ get_direct_usages T [x].
+Proof.
+  intros Hus Hhu. unfold get_direct_usages. apply dedup_in_r.
+  apply in_flat_map. exists (x, x).
+  split; [ apply mem_pair_In; exact Hus | ].
+  simpl. rewrite node_eqb_refl, Hhu. left. reflexivity.
+Qed.
+
+(* A field read off one of [uses] into a node [w] with a use is among
+   the fields of [get_fields], and each time with [w] among the nodes it
+   flows to, if they are known. *)
+Lemma get_fields_found (uses : list node) (w base : node) (f : field) :
+  (w, f, base) ∈ f_accessor F -> mem_node base uses = true ->
+  is_function_slot f = false -> mem_node w (t_has_usage T) = true ->
+  (∃ use : field_use, (f, use) ∈ get_fields F T uses)
+  ∧ ∀ use : field_use,
+      (f, use) ∈ get_fields F T uses ->
+      use = Use_unknown
+      ∨ ∃ flow_to : list node, use = Use_known flow_to ∧ w ∈ flow_to.
+Proof.
+  intros Hacc Hbase Hfs Hw. unfold get_fields.
+  set (reads := filter
+                  (fun '(_, f, base) =>
+                     mem_node base uses && negb (is_function_slot f))
+                  (f_accessor F)).
+  assert (Hr : (w, f, base) ∈ reads).
+  { unfold reads. apply filter_In. split; [ exact Hacc | ].
+    rewrite Hbase, Hfs. reflexivity. }
+  set (read_into := flat_map
+                      (fun '(v, f', _) => if field_eqb f f' then [v] else [])
+                      reads).
+  assert (Hw_in : w ∈ read_into).
+  { unfold read_into. apply in_flat_map. exists (w, f, base).
+    split; [ exact Hr | ]. rewrite field_eqb_refl. left. reflexivity. }
+  assert (Hw_flow : w ∈ Keyed.dedup node_eqb
+                          (filter (fun v => mem_node v (t_has_usage T))
+                             read_into)).
+  { apply dedup_in_r. apply filter_In. split; [ exact Hw_in | exact Hw ]. }
+  split.
+  - destruct (existsb (fun v => mem_node v (t_any_usage T)) read_into)
+      eqn:Hany.
+    + exists Use_unknown. apply sort_fields_in_r. apply in_flat_map.
+      exists f. split.
+      * apply (keyed_among_in field field_eqb field_eqb_decides).
+        rewrite (keyed_among_dedup field field_eqb field_eqb_decides).
+        apply (keyed_among_in field field_eqb field_eqb_decides).
+        apply in_map_iff. exists (w, f, base). split; [ reflexivity | ].
+        exact Hr.
+      * fold read_into. rewrite Hany. left. reflexivity.
+    + destruct (Keyed.dedup node_eqb
+                  (filter (fun v => mem_node v (t_has_usage T)) read_into))
+        as [ | w0 l] eqn:Hdedup; [ destruct Hw_flow | ].
+      exists (Use_known (w0 :: l)). apply sort_fields_in_r.
+      apply in_flat_map. exists f. split.
+      * apply (keyed_among_in field field_eqb field_eqb_decides).
+        rewrite (keyed_among_dedup field field_eqb field_eqb_decides).
+        apply (keyed_among_in field field_eqb field_eqb_decides).
+        apply in_map_iff. exists (w, f, base). split; [ reflexivity | ].
+        exact Hr.
+      * fold read_into. rewrite Hany, Hdedup. left. reflexivity.
+  - intros use Hin. apply sort_fields_in in Hin.
+    apply in_flat_map in Hin as (f0 & _ & Hin).
+    destruct (existsb (fun v => mem_node v (t_any_usage T))
+                (flat_map
+                   (fun '(v, f', _) => if field_eqb f0 f' then [v] else [])
+                   reads)) eqn:Hany.
+    + destruct Hin as [[= -> <-] | []]. left. reflexivity.
+    + destruct (Keyed.dedup node_eqb
+                  (filter (fun v => mem_node v (t_has_usage T))
+                     (flat_map
+                        (fun '(v, f', _) =>
+                           if field_eqb f0 f' then [v] else [])
+                        reads)))
+        as [ | w0 l] eqn:Hdedup; [ destruct Hin | ].
+      destruct Hin as [[= -> <-] | []]. right. exists (w0 :: l).
+      split; [ reflexivity | ]. fold read_into in Hdedup.
+      rewrite <- Hdedup. exact Hw_flow.
+Qed.
+
+(* A field given to [mk_unboxed_fields] that has a source, and that is
+   not read into names all to be unboxed, is a variable. *)
+Lemma mk_unboxed_fields_lookup (fuel : nat) (block : node) (f : field) :
+  is_data_field f = true ->
+  get_single_field_source F T block f <> No_source ->
+  ∀ (fields : list (field * field_use)) (next : positive),
+    (∃ use : field_use, (f, use) ∈ fields) ->
+    (∀ use : field_use,
+       (f, use) ∈ fields ->
+       use = Use_unknown
+       ∨ ∃ flow_to : list node,
+           use = Use_known flow_to
+           ∧ forallb (has_to_be_unboxed dominated to_unbox) flow_to
+             = false) ->
+    ∃ v : variable,
+      Keyed.lookup field_eqb f
+        (fst (mk_unboxed_fields F T code_my_closures dominated to_unbox fuel
+                block fields next))
+      = Some (Not_unboxed v).
+Proof.
+  intros Hdata Hsource.
+  destruct fuel as [ | fuel]; cbn [mk_unboxed_fields];
+    (induction fields as [ | [f' use] fields IH]; intros next Hex Hall;
+     [ destruct Hex as (use & []) | ]);
+    (destruct (field_eq_dec f' f) as [-> | Hne]).
+  1, 3:
+    destruct (Hall use (or_introl eq_refl)) as [-> | (flow_to & -> & Hft)];
+    rewrite Hdata; simpl;
+    destruct (get_single_field_source F T block f) eqn:Hs;
+    try contradiction;
+    (try rewrite Hft);
+    match goal with
+    | |- context [let '(_, _) := ?c in _] => destruct c as [rest next1]
+    end;
+    simpl; rewrite field_eqb_refl; eexists; reflexivity.
+  all:
+    (assert (Hex' : ∃ use0, (f, use0) ∈ fields)
+       by (destruct Hex as (use0 & [[= <- _] | Hin]);
+           [ contradiction | exists use0; exact Hin ]));
+    (assert (Hall' : ∀ use0, (f, use0) ∈ fields ->
+              use0 = Use_unknown
+              ∨ ∃ flow_to, use0 = Use_known flow_to
+                           ∧ forallb (has_to_be_unboxed dominated to_unbox)
+                               flow_to = false)
+       by (intros use0 Hin; apply Hall; right; exact Hin));
+    match goal with
+    | |- context [let '(_, _) := ?c in _] => destruct c as [u0 next0]
+    end;
+    match goal with
+    | |- context [let '(_, _) := ?c in _] =>
+      destruct c as [rest next1] eqn:Hrest
+    end;
+    destruct (IH next0 Hex' Hall') as (v & Hv);
+    rewrite Hrest in Hv; simpl in Hv; exists v;
+    destruct u0 as [u0 | ]; simpl; [ | exact Hv ];
+    destruct (field_eqb f f') eqn:Hff;
+    [ apply field_eqb_eq in Hff; congruence | exact Hv ].
+Qed.
+
+(* The unboxed fields of a name, from an allocation to unbox that
+   dominates it. *)
+Lemma unboxed_fields_of_names_dom (next : positive) (x : node)
+    (fields : unboxed_fields) :
+  (x, fields)
+    ∈ fst (unboxed_fields_of_names F T code_my_closures dominated to_unbox
+             next) ->
+  ∃ (a : node) (next' : positive),
+    (a, x) ∈ dominated ∧ mem_node a to_unbox = true
+    ∧ fields
+      = fst (mk_unboxed_fields F T code_my_closures dominated to_unbox
+               (S (length to_unbox)) a
+               (get_fields F T
+                  (add_usages_through_function_slots F T code_my_closures true
+                     (get_direct_usages T [x])))
+               next').
+Proof.
+  unfold unboxed_fields_of_names.
+  assert (Hgen : ∀ (l : list (node * node))
+                   (acc : list (node * unboxed_fields)) (n : positive),
+    (∀ p, p ∈ l -> p ∈ dominated) ->
+    (∀ y fs, (y, fs) ∈ acc ->
+       ∃ a next',
+         (a, y) ∈ dominated ∧ mem_node a to_unbox = true
+         ∧ fs = fst (mk_unboxed_fields F T code_my_closures dominated
+                       to_unbox (S (length to_unbox)) a
+                       (get_fields F T
+                          (add_usages_through_function_slots F T
+                             code_my_closures true (get_direct_usages T [y])))
+                       next')) ->
+    ∀ y fs,
+      (y, fs) ∈ fst (List.fold_left
+                       (fun '(acc, next) '(a, x) =>
+                          if mem_node a to_unbox
+                             && negb (existsb (fun '(y, _) => node_eqb x y)
+                                        acc)
+                          then
+                            let '(fields, next) :=
+                              name_unboxed_fields F T code_my_closures
+                                dominated to_unbox a x next
+                            in
+                            (acc ++ [(x, fields)], next)
+                          else (acc, next))
+                       l (acc, n)) ->
+      ∃ a next',
+        (a, y) ∈ dominated ∧ mem_node a to_unbox = true
+        ∧ fs = fst (mk_unboxed_fields F T code_my_closures dominated to_unbox
+                      (S (length to_unbox)) a
+                      (get_fields F T
+                         (add_usages_through_function_slots F T
+                            code_my_closures true (get_direct_usages T [y])))
+                      next')).
+  { induction l as [ | [a x'] l IH]; intros acc n Hl Hacc; [ exact Hacc | ].
+    simpl. destruct (mem_node a to_unbox) eqn:Ha; simpl;
+      [ | apply IH; [ intros p Hp; apply Hl; right; exact Hp | exact Hacc ] ].
+    destruct (negb _); [ | apply IH;
+                           [ intros p Hp; apply Hl; right; exact Hp
+                           | exact Hacc ] ].
+    unfold name_unboxed_fields.
+    destruct (mk_unboxed_fields _ _ _ _ _ _ _ _ n) as [fs0 n0] eqn:Hmk.
+    apply IH; [ intros p Hp; apply Hl; right; exact Hp | ].
+    intros y fs Hin. apply in_app_or in Hin as [Hin | [Heq | []]].
+    - exact (Hacc y fs Hin).
+    - injection Heq as <- <-. exists a, n.
+      split; [ apply Hl; left; reflexivity | split; [ exact Ha | ] ].
+      rewrite Hmk. reflexivity. }
+  apply (Hgen dominated [] next); [ exact (fun p Hp => Hp) | ].
+  intros y fs [].
+Qed.
+
+(* Each name that an allocation to unbox dominates has unboxed fields. *)
+Lemma unboxed_fields_of_names_bound (next : positive) (a x : node) :
+  (a, x) ∈ dominated -> mem_node a to_unbox = true ->
+  x ∈ map fst (fst (unboxed_fields_of_names F T code_my_closures dominated
+                      to_unbox next)).
+Proof.
+  intros Hin Ha. unfold unboxed_fields_of_names.
+  assert (Hgen : ∀ (l : list (node * node))
+                   (acc : list (node * unboxed_fields)) (n : positive),
+    x ∈ map fst acc ∨ (a, x) ∈ l ->
+    x ∈ map fst
+          (fst (List.fold_left
+                  (fun '(acc, next) '(a, x) =>
+                     if mem_node a to_unbox
+                        && negb (existsb (fun '(y, _) => node_eqb x y) acc)
+                     then
+                       let '(fields, next) :=
+                         name_unboxed_fields F T code_my_closures dominated
+                           to_unbox a x next
+                       in
+                       (acc ++ [(x, fields)], next)
+                     else (acc, next))
+                  l (acc, n)))).
+  { induction l as [ | [a' x'] l IH]; intros acc n H;
+      [ destruct H as [H | []]; exact H | ].
+    simpl.
+    destruct (mem_node a' to_unbox
+              && negb (existsb (fun '(y, _) => node_eqb x' y) acc))
+      eqn:Htest.
+    - unfold name_unboxed_fields.
+      destruct (mk_unboxed_fields _ _ _ _ _ _ _ _ n) as [fs0 n0].
+      apply IH. rewrite map_app.
+      destruct H as [H | [[= -> ->] | H]];
+        [ left; apply in_or_app; left; exact H
+        | left; apply in_or_app; right; left; reflexivity
+        | right; exact H ].
+    - apply IH.
+      destruct H as [H | [[= -> ->] | H]]; [ left; exact H | | right; exact H ].
+      left. rewrite Ha in Htest. simpl in Htest.
+      apply negb_false_iff in Htest. apply existsb_exists in Htest
+        as ([y fs] & Hy & Heq). apply node_eqb_eq in Heq. subst y.
+      apply in_map_iff. exists (x, fs). split; [ reflexivity | exact Hy ]. }
+  apply Hgen. right. exact Hin.
+Qed.
+
 End Provenance.
 
 (* ======================================================================== *)
@@ -2664,10 +2952,10 @@ Proof.
 Qed.
 
 Lemma strong_plain_binding (x : variable) (kind : flambda_kind) (d : named) :
-  FlambdaReaperUnboxingRefinesSpec.plain_binding_ok unboxed sol x kind d
+  FlambdaReaperUnboxingRefinesSpec.plain_binding_ok unboxed x kind d
   = true ->
   (∀ z, z ∈ variables_in_named d -> fresh z) ->
-  plain_binding_ok unboxed sol x kind d = true.
+  plain_binding_ok unboxed x kind d = true.
 Proof.
   unfold plain_binding_ok, FlambdaReaperUnboxingRefinesSpec.plain_binding_ok.
   destruct (unboxed_read unboxed d) as [[f fields] | ]; [ easy | ].
@@ -3199,6 +3487,16 @@ Hypothesis fields_read : ∀ (x : variable) (fields : unboxed_fields)
     g_accessor (graph_of_facts F) w f base
     ∧ s_usages sol (Node_variable x) base = true
     ∧ s_has_usage sol w = true.
+(* A read that the rebuild keeps, into a variable that is not unboxed,
+   of an unboxed variable, finds its field among the unboxed ones, a
+   variable ([check_unboxed_reads]). *)
+Hypothesis reads_found : ∀ (x y : variable) (kind : flambda_kind)
+    (f : field) (fields : unboxed_fields),
+  fields_of unboxed x = None -> fields_of unboxed y = Some fields ->
+  g_accessor (graph_of_facts F) (Node_variable x) f (Node_variable y) ->
+  is_dead_var sol x kind = false -> is_var_used sol x kind = true ->
+  kind = Value ∨ (∃ nk : naked_number_kind, kind = Naked_number nk) ->
+  ∃ v : variable, Keyed.lookup field_eqb f fields = Some (Not_unboxed v).
 
 Abbreviation edges ce e :=
   (FlambdaReaperFlowProofs.expr_edges (graph_of_facts F) noted deps cds
@@ -3642,7 +3940,7 @@ Qed.
 (* The [Let] of a variable that is not unboxed, as the fragment has
    it. *)
 Lemma plain_binding_cases (x : variable) (kind : flambda_kind) (d : named) :
-  plain_binding_ok unboxed sol x kind d = true ->
+  plain_binding_ok unboxed x kind d = true ->
   named_plain unboxed d = true
   ∨ ∃ (p : unary_primitive) (y : variable) (f : field)
       (fields : unboxed_fields),
@@ -3653,9 +3951,7 @@ Lemma plain_binding_cases (x : variable) (kind : flambda_kind) (d : named) :
            rebuild_named sol en x d
            = Prim (Unary p) [rewrite_simple sol en (Var y)])
       ∧ fields_of unboxed y = Some fields
-      ∧ (is_var_used sol x kind = true ->
-         ∃ v : variable,
-           Keyed.lookup field_eqb f fields = Some (Not_unboxed v)).
+      ∧ (kind = Value ∨ ∃ nk : naked_number_kind, kind = Naked_number nk).
 Proof.
   unfold plain_binding_ok. destruct (unboxed_read unboxed d) as [[f fields] | ]
     eqn:Hread.
@@ -3671,9 +3967,8 @@ Proof.
       (split; [ reflexivity | split; [ reflexivity | split;
         [ intros s; reflexivity | split; [ intros en; reflexivity | ] ] ] ]);
       (split; [ exact Hy | ]);
-      intros Hused; rewrite Hused in H; simpl in H;
-      destruct (Keyed.lookup field_eqb _ fs) as [[v | ] | ]; try discriminate H;
-      exists v; reflexivity.
+      (destruct kind as [ | nk | | ]; try discriminate H;
+       [ left; reflexivity | right; exists nk; reflexivity ]).
   - intros H. left. destruct d; exact H.
 Qed.
 
@@ -4366,7 +4661,8 @@ Proof.
         destruct d; try discriminate Hp; eauto. }
     destruct IH as (IHub & IHfc & IHbs).
     destruct Hd as [(s0 & ->) | (p & args & ->)]; cbn beta iota;
-      (destruct (is_dead_var sol x kind); [ exact (ub_result_invalid _) | ]);
+      (destruct (is_dead_var sol x kind) eqn:Hdead;
+       [ exact (ub_result_invalid _) | ]);
       (destruct (is_var_used sol x kind) eqn:Hused;
        [ | split; [ exact IHub | split; assumption ] ]);
       change (unboxed_of_node unboxed (Node_variable x))
@@ -4515,8 +4811,15 @@ Proof.
         constructor; [ | apply named_plain_rebuilt, Hp | exact IHub ].
         apply plain_variable_iff. unfold Keyed.is_bound.
         unfold fields_of in Hx. rewrite Hx. split; [ reflexivity | exact Hxf ].
-      * rewrite Heq in Hnamed |- *. rewrite (Hnamed (ue_env en)).
-        destruct (Hfield Hused) as (v & Hv).
+      * rewrite Heq in Hnamed, Hnamed_edges |- *.
+        rewrite (Hnamed (ue_env en)).
+        assert (Hacc : g_accessor (graph_of_facts F) (Node_variable x) f
+                         (Node_variable y)).
+        { clear -Hread Hnamed_edges.
+          destruct p'; try discriminate Hread; simpl in Hread;
+            injection Hread as <-; exact (proj1 Hnamed_edges). }
+        destruct (reads_found x y kind f fs Hx Hy Hacc Hdead Hused Hfield)
+          as (v & Hv).
         unfold rebuild_let_u.
         assert (Hfr : field_read (Prim (Unary p') [Var y]) = Some (f, Var y)).
         { clear -Hread. destruct p'; try discriminate Hread; exact Hread. }
@@ -4839,7 +5142,7 @@ Theorem rebuild_unbox_refines_rebuild :
   rebuild_unbox_refines_rebuild_statement.
 Proof.
   intros flag is_local u e T cannot_change code_deps dominated to_unbox
-    preserve_direct_calls Hslots Hfragment Hclosed Hlocal.
+    preserve_direct_calls Hslots Hfragment Hclosed Hlocal Hcheck.
   set (F := traverse_unit flag u e) in *.
   unfold local_unboxing in Hlocal.
   pose proof (unit_unboxed_fields_fresh F T dominated to_unbox e)
@@ -4891,6 +5194,85 @@ Proof.
     exists w, base. split; [ exact Hacc | split; [ exact Hus | ] ].
     destruct Hw as [Hw | Hw]; [ | exact Hw ].
     exact (has_usage_any _ _ _ Hcl _ Hw). }
+  assert (Hreads_found :
+    ∀ (x y : variable) (kind : flambda_kind) (f : field)
+      (fields : unboxed_fields),
+      fields_of unboxed x = None -> fields_of unboxed y = Some fields ->
+      g_accessor (graph_of_facts F) (Node_variable x) f (Node_variable y) ->
+      is_dead_var (solution_of_tables T) x kind = false ->
+      is_var_used (solution_of_tables T) x kind = true ->
+      kind = Value ∨ (∃ nk : naked_number_kind, kind = Naked_number nk) ->
+      ∃ v : variable,
+        Keyed.lookup field_eqb f fields = Some (Not_unboxed v)).
+  { intros x y kind f fields Hx Hy Hacc Hdead Hused Hkind.
+    assert (Hsx : mem_node (Node_variable x) (t_has_source T) = true).
+    { unfold is_dead_var in Hdead.
+      destruct Hkind as [-> | (nk & ->)]; simpl in Hdead;
+        apply negb_false_iff in Hdead; exact Hdead. }
+    assert (Hux : mem_node (Node_variable x) (t_has_usage T) = true).
+    { unfold is_var_used in Hused.
+      destruct Hkind as [-> | (nk & ->)]; exact Hused. }
+    unfold unit_unboxed_fields in Hunboxed.
+    assert (Hhx : has_to_be_unboxed dominated to_unbox (Node_variable x)
+                  = false).
+    { destruct (has_to_be_unboxed dominated to_unbox (Node_variable x))
+        eqn:Hh; [ | reflexivity ].
+      unfold has_to_be_unboxed in Hh.
+      apply existsb_exists in Hh as ([a x'] & Hin & Htest).
+      apply andb_true_iff in Htest as [Hx' Ha].
+      apply node_eqb_eq in Hx'. subst x'.
+      pose proof (unboxed_fields_of_names_bound F T
+                    (bound_code_my_closures e) dominated to_unbox
+                    (fresh_name (names_of e)) a (Node_variable x) Hin Ha)
+        as Hb.
+      rewrite Hunboxed in Hb. cbn [fst] in Hb. unfold fields_of in Hx.
+      exfalso.
+      exact (keyed_lookup_none_not_in node_eqb node_eqb_decides _ _ Hx Hb). }
+    apply (fields_of_in unboxed) in Hy.
+    assert (Hy' : (Node_variable y, fields)
+                  ∈ fst (unboxed_fields_of_names F T
+                           (bound_code_my_closures e) dominated to_unbox
+                           (fresh_name (names_of e))))
+      by (rewrite Hunboxed; exact Hy).
+    destruct (unboxed_fields_of_names_dom F T _ dominated to_unbox _ _ _ Hy')
+      as (a & next' & Hdom & Ha & ->).
+    unfold check_unboxed_reads in Hcheck. rewrite forallb_forall in Hcheck.
+    specialize (Hcheck _ Hacc). cbn beta iota in Hcheck.
+    rewrite Hsx, Hux, Hhx in Hcheck. simpl in Hcheck.
+    rewrite forallb_forall in Hcheck. specialize (Hcheck _ Hdom).
+    cbn beta iota in Hcheck. rewrite node_eqb_refl, Ha in Hcheck.
+    simpl in Hcheck. apply andb_true_iff in Hcheck as [Hnau Hsrc].
+    apply negb_true_iff in Hnau.
+    assert (Hblock : is_block_like_field f = true).
+    { rewrite forallb_forall in Hreads. exact (Hreads _ Hacc). }
+    assert (Hfs : is_function_slot f = false)
+      by (destruct f; try discriminate Hblock; reflexivity).
+    assert (Hdata : is_data_field f = true)
+      by (destruct f; try discriminate Hblock; reflexivity).
+    assert (Hus : mem_pair (Node_variable y) (Node_variable y) (t_usages T)
+                  = true)
+      by exact (usages_accessor _ _ _ Hcl _ _ _ Hacc Hnau).
+    assert (Hhu : mem_node (Node_variable y) (t_has_usage T) = true)
+      by exact (has_usage_accessor _ _ _ Hcl _ _ _ Hux Hacc).
+    assert (Huses : mem_node (Node_variable y)
+                      (add_usages_through_function_slots F T
+                         (bound_code_my_closures e) true
+                         (get_direct_usages T [Node_variable y]))
+                    = true).
+    { rewrite (add_usages_none F T _ Hreads). apply mem_node_In.
+      apply get_direct_usages_self; assumption. }
+    destruct (get_fields_found F T _ _ _ _ Hacc Huses Hfs Hux)
+      as [Hex Hall].
+    apply (mk_unboxed_fields_lookup F T _ dominated to_unbox _ a f Hdata).
+    - intros Hno. rewrite Hno in Hsrc. discriminate Hsrc.
+    - exact Hex.
+    - intros use Hin.
+      destruct (Hall use Hin) as [-> | (flow_to & -> & Hw)];
+        [ left; reflexivity | right ].
+      exists flow_to. split; [ reflexivity | ].
+      destruct (forallb _ flow_to) eqn:Hft; [ | reflexivity ].
+      rewrite forallb_forall in Hft. rewrite (Hft _ Hw) in Hhx.
+      discriminate Hhx. }
   destruct (proj1 (rebuild_ub F (solution_of_tables T)
                      (fun n => mem_node n cannot_change) code_deps
                      preserve_direct_calls (static_names code_ids_bound e)
@@ -4898,7 +5280,7 @@ Proof.
                      (fresh_name (names_of e)) next noted deps cds
                      (unit_kept e) (unit_codes e)
                      (static_names symbols_of_binding e) is_local Hcl Hslots
-                     Hfields_read)
+                     Hfields_read Hreads_found)
               e empty_unbox_env [] (unit_conts u) uinv_empty (Forall2_nil _)
               Hloc' Hedges)
     as (Hub & _ & _).
@@ -4927,7 +5309,7 @@ Theorem rebuild_unbox_refines_observably :
 Proof.
   intros flag is_local u e T cannot_change dominated to_unbox
     preserve_direct_calls Hlocal_slots Hprojections Hfragment Hstatic Hkinded
-    Hwell_formed Hone Hclosed Hexact Hlocal.
+    Hwell_formed Hone Hclosed Hexact Hlocal Hcheck.
   apply (refines_observably_refines _
            (State (rebuild_unit_from_tables (traverse_unit flag u e) T
                      preserve_direct_calls e)
@@ -4937,7 +5319,7 @@ Proof.
              Hkinded Hwell_formed Hone Hclosed Hexact).
   - exact (rebuild_unbox_refines_rebuild flag is_local u e T cannot_change
              (unit_code_deps flag u e) dominated to_unbox preserve_direct_calls
-             Hlocal_slots Hfragment Hclosed Hlocal).
+             Hlocal_slots Hfragment Hclosed Hlocal Hcheck).
 Qed.
 
 Theorem local_example : local_example_statement.
@@ -4950,6 +5332,12 @@ Qed.
 
 Theorem fragment_examples : fragment_examples_statement.
 Proof. vm_compute. auto. Qed.
+
+Theorem unboxed_reads_examples : unboxed_reads_examples_statement.
+Proof. vm_compute. repeat split. Qed.
+
+Theorem unboxed_reads_example : unboxed_reads_example_statement.
+Proof. vm_compute. repeat split. Qed.
 
 Theorem continuation_example : continuation_example_statement.
 Proof.

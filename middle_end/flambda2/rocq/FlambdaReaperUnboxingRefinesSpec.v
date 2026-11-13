@@ -48,7 +48,9 @@
    ([FlambdaReaperRebuild.rebuild_unit_from_tables]), run on its own
    ([program_refines]), if the unboxing that the tables of
    [dominated_by_allocation_point] and [to_unbox] give is local
-   ([local_unboxing]). The two rebuilds make the same term but for the [Let] of
+   ([local_unboxing]) and the reads that the rebuild keeps of the names
+   unboxed find their fields ([check_unboxed_reads]). The two rebuilds make
+   the same term but for the [Let] of
    an unboxed variable, which the unboxing makes [Let]s of the variables of its
    fields, each bound to what the allocation holds there or, for an alias, to
    the variable of the field of the variable it is an alias of, and, for a field
@@ -99,13 +101,17 @@
      in turn as one whose fields are alike ([fields_alike], the OCaml's
      [fold2_subset_u]). Otherwise the OCaml stops with a fatal error, or
      the model makes a field poison or the [Let] [Invalid].
-   - [plain_binding_ok]: a read that the rebuild keeps (its variable is
-     used) reads a field that is unboxed, a variable. Otherwise the OCaml
-     stops with a fatal error ([rewrite_field_access]) and the model
-     makes the read [Invalid]. This one is about the solution and does
-     not follow from [check_closed]: a field read whose variable is used
-     has a source in the least solution, and is then unboxed, but a
-     solution that is closed and not least may say that it has none.
+   - [plain_binding_ok]: a read of an unboxed variable is not from a
+     mutable field and is into a value or a naked number
+     ([read_shape_ok]). That such a read, if the rebuild keeps it (its
+     variable has a source and a use), reads a field that is unboxed, a
+     variable, is not asked of the fragment but of the solution
+     ([check_unboxed_reads], a premise of the statements). Otherwise the
+     OCaml stops with a fatal error ([rewrite_field_access]) and the
+     model makes the read [Invalid]. It does not follow from
+     [check_closed]: a solution that is closed and not least may give
+     the variable read into a source and the field read none
+     ([unboxed_reads_example_statement]); the least solution passes it.
    - [param_ok]: an unboxed parameter is of kind [Value], and the plain
      rebuild keeps it ([handler_mask]) unless it has no field; a handler
      has as many kinds as parameters. Where the plain rebuild deletes a
@@ -159,7 +165,8 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaReaperCallingConventions FlambdaReaperUnboxing
   FlambdaUnusedStaticsSpec.
 From OxCamlFlambda2 Require FlambdaReaperTupledSpec
-  FlambdaReaperCallingConventionsSpec FlambdaReaperUnboxingSpec.
+  FlambdaReaperCallingConventionsSpec FlambdaReaperUnboxingSpec
+  FlambdaReaperSolutionSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -293,18 +300,28 @@ Definition unboxed_read (d : named) : option (field * unboxed_fields) :=
   | _ => None
   end.
 
+(* The read [d] of an unboxed variable into a variable of kind [kind]:
+   into a value or a naked number (whose use and source the solution
+   has), and not from a mutable field (the traversal gives a mutable
+   read any source, whatever the field holds, so that the least solution
+   may fail [check_unboxed_reads] at a mutable read, in code that never
+   runs, of a field with no source; the OCaml makes such a read
+   [Invalid]). *)
+Definition read_shape_ok (kind : flambda_kind) (d : named) : bool :=
+  match kind, d with
+  | Region, _ | Rec_info, _ => false
+  | _, Prim (Unary (Block_load _ Mutable _)) _ => false
+  | _, _ => true
+  end.
+
 (* The [Let] of [x], which is not unboxed: a read of an unboxed variable
-   that, if the rebuild keeps it, reads a field unboxed as a variable; or
-   a simple or a primitive of simples of [plain_simple]. *)
+   of [read_shape_ok]; or a simple or a primitive of simples of
+   [plain_simple]. That a read that the rebuild keeps reads a field
+   unboxed as a variable is [check_unboxed_reads], of the solution. *)
 Definition plain_binding_ok (x : variable) (kind : flambda_kind) (d : named)
     : bool :=
   match unboxed_read d with
-  | Some (f, fields) =>
-    negb (is_var_used sol x kind)
-    || match Keyed.lookup field_eqb f fields with
-       | Some (Not_unboxed _) => true
-       | _ => false
-       end
+  | Some _ => read_shape_ok kind d
   | None =>
     match d with
     | Simple s => plain_simple s
@@ -421,6 +438,40 @@ Definition local_unboxing (F : facts) (T : tables)
   let unboxed := fst (unit_unboxed_fields F T dominated to_unbox e) in
   local_expr unboxed (solution_of_tables T) [] [] e.
 
+(* The reads that the rebuild keeps of a name unboxed find their field
+   ([rewrite_field_access] does not stop with a fatal error): for each
+   read [(x, f, y)] of the graph into a node [x] that has a source and a
+   use and that no allocation to unbox dominates, of a node [y] that an
+   allocation [a] to unbox dominates, [y] has no [any_usage] and the
+   field [f] of [a] has a source ([get_single_field_source] is not
+   [No_source]). The compiler's tables pass it, on the units of the
+   fragment: [a] is not to be unboxed if [y], an alias of it, has any
+   usage ([cannot_unbox0]); and in the least solution, a source of [x],
+   read immutably off [y] (whose only allocation with a source is [a],
+   [check_dominated]), is one of a node held in the field [f] of an
+   allocation that [y] may be ([alias_accessor_source] or
+   [alias_constructor_usage]), hence of [a], so that the field of [a]
+   has a source: a node that the least solution gives a source, and not
+   [any_source], has among its [sources] an allocation with a source.
+   A solution closed under the rules but not least may give [x] a
+   source and the field none ([unboxed_reads_example_statement]). *)
+Definition check_unboxed_reads (F : facts) (T : tables)
+    (dominated : list (node * node)) (to_unbox : list node) : bool :=
+  forallb
+    (fun '(x, f, y) =>
+       negb (mem_node x (t_has_source T) && mem_node x (t_has_usage T)
+             && negb (has_to_be_unboxed dominated to_unbox x))
+       || forallb
+            (fun '(a, y') =>
+               negb (node_eqb y y' && mem_node a to_unbox)
+               || (negb (mem_node y (t_any_usage T))
+                   && match get_single_field_source F T a f with
+                      | No_source => false
+                      | One_source _ | Many_sources => true
+                      end))
+            dominated)
+    (f_accessor F).
+
 (* ======================================================================== *)
 (* The statements                                                           *)
 (* ======================================================================== *)
@@ -434,6 +485,7 @@ Definition rebuild_unbox_refines_rebuild_statement : Prop :=
     in_flow_fragment e = true ->
     check_closed is_local (traverse_unit flag u e) T = true ->
     local_unboxing (traverse_unit flag u e) T dominated to_unbox e = true ->
+    check_unboxed_reads (traverse_unit flag u e) T dominated to_unbox = true ->
     program_refines
       (rebuild_unit_from_tables (traverse_unit flag u e) T
          preserve_direct_calls e)
@@ -455,6 +507,7 @@ Definition rebuild_unbox_refines_observably_statement : Prop :=
     check_closed is_local (traverse_unit flag u e) T = true ->
     check_field_used_exact is_local (traverse_unit flag u e) T = true ->
     local_unboxing (traverse_unit flag u e) T dominated to_unbox e = true ->
+    check_unboxed_reads (traverse_unit flag u e) T dominated to_unbox = true ->
     program_refines_observably e
       (rebuild_unit_unbox (traverse_unit flag u e) T cannot_change
          (unit_code_deps flag u e) dominated to_unbox preserve_direct_calls e).
@@ -1487,6 +1540,164 @@ Definition fragment_examples_statement : Prop :=
        (v 10%positive, v 12%positive)]
       [v 11%positive; v 10%positive] Examples.nested_block
     = true.
+
+(* ======================================================================== *)
+(* The reads find their fields                                              *)
+(* ======================================================================== *)
+
+(* [check_unboxed_reads] holds of the tables of the examples above, as
+   the solver of the test tool or the rules give them, with their tables
+   of [dominated_by_allocation_point] and [to_unbox]. It is not vacuous
+   there: in [LocalExample], for one, the rebuild keeps the reads of
+   [x10] and [x11], unboxed, into [x31], [x12] and [x13]. *)
+Definition unboxed_reads_examples_statement : Prop :=
+  let v (x : positive) : node := Node_variable x in
+  let to_unbox (F : facts) (T : tables) : list node :=
+    derive_to_unbox Examples.no_local F T (derive_cannot_change F T)
+      Examples.max_unbox_size false
+  in
+  check_unboxed_reads LocalExample.facts LocalExample.tables
+    LocalExample.dominated LocalExample.to_unbox
+  = true
+  ∧ check_unboxed_reads ContinuationExample.facts ContinuationExample.tables
+      ContinuationExample.dominated ContinuationExample.to_unbox
+    = true
+  ∧ check_unboxed_reads LoopExample.facts LoopExample.tables
+      LoopExample.dominated LoopExample.to_unbox
+    = true
+  ∧ check_unboxed_reads Examples.nested_block_facts
+      Examples.nested_block_tables
+      (derive_dominated Examples.nested_block_tables)
+      (to_unbox Examples.nested_block_facts Examples.nested_block_tables)
+    = true
+  ∧ check_unboxed_reads NestedParamExample.facts NestedParamExample.tables
+      NestedParamExample.dominated NestedParamExample.to_unbox
+    = true
+  ∧ check_unboxed_reads NestedAliasExample.facts NestedAliasExample.tables
+      NestedAliasExample.dominated NestedAliasExample.to_unbox
+    = true
+  ∧ check_unboxed_reads DeepExample.facts DeepExample.tables
+      DeepExample.dominated DeepExample.to_unbox
+    = true
+  ∧ check_unboxed_reads AliasExample.facts AliasExample.tables
+      AliasExample.dominated AliasExample.to_unbox
+    = true
+  ∧ check_unboxed_reads SpuriousKeepExample.facts SpuriousKeepExample.least
+      (derive_dominated SpuriousKeepExample.least)
+      (SpuriousKeepExample.to_unbox SpuriousKeepExample.least)
+    = true
+  ∧ check_unboxed_reads SpuriousKeepExample.facts SpuriousKeepExample.tables
+      (derive_dominated SpuriousKeepExample.tables)
+      (SpuriousKeepExample.to_unbox SpuriousKeepExample.tables)
+    = true
+  ∧ check_unboxed_reads Examples.read_block_facts Examples.read_block_tables
+      [(v 10%positive, v 10%positive)] [v 10%positive]
+    = true
+  ∧ check_unboxed_reads Examples.block_to_continuation_facts
+      Examples.block_to_continuation_tables
+      [(v 10%positive, v 10%positive); (v 10%positive, v 30%positive)]
+      [v 10%positive]
+    = true.
+
+(* A table closed under the rules, and not least, that fails
+   [check_unboxed_reads] where the least solution passes it: a read, in a
+   handler that is never applied, of a block whose field holds the
+   parameter, which has no source:
+
+     let rec k20 x30 = (let x31 = [x30] in let x32 = x31.(0) in
+                        return x32) in
+     return 7
+
+   The least solution ([least], whose tables less any one tuple are not
+   closed) gives [x30], hence [x32], no source: the [Let] of [x32] is
+   [Invalid] for both rebuilds. The table [tables] is [least] with a
+   source for [x32]; it is closed and passes the other checks, the rules
+   unbox [x31] in both, and the unit is of the fragment for both. With
+   [tables], [x32] has a source and a use, the field 0 of [x31] none, so
+   that it is not unboxed: the plain rebuild keeps the read, and the
+   rebuild with unboxing makes it [Invalid] (the OCaml stops with a fatal
+   error in [rewrite_field_access]). The handler never runs, so that the
+   two rebuilds behave alike. *)
+Module DeadReadExample.
+
+Import FlambdaReaperUnboxing.Examples.
+Local Open Scope positive_scope.
+
+Definition unit_expr : expr :=
+  Let_cont_recursive
+    [(20%positive,
+      Handler [30] (make_handler_metadata [Value])
+        (Let 31 Value (make_block [Var 30])
+           (Let 32 Value (load 0 (Var 31))
+              (return_to 1 [Var 32]))))]
+    (return_to 1 [int 7]).
+
+Definition facts : facts := traverse_unit Auto interface unit_expr.
+
+Definition least : tables :=
+  {| t_alias := [(m 1, consts); (m 1, v 32); (v 32, v 30)];
+     t_any_usage := [m 1; m 2; consts; v 32; v 30];
+     t_any_source := [consts; m 1];
+     t_has_usage := [m 1; m 2; consts; v 32; v 30; v 31];
+     t_has_source := [consts; m 1; v 31];
+     t_usages := [(v 31, v 31)];
+     t_sources := [(v 31, v 31)];
+     t_reading_field := [];
+     t_escaping_field := [];
+     t_field_used := [(v 31, Field_block 0 Value)] |}.
+
+Definition tables : tables :=
+  {| t_alias := t_alias least;
+     t_any_usage := t_any_usage least;
+     t_any_source := t_any_source least;
+     t_has_usage := t_has_usage least;
+     t_has_source := v 32 :: t_has_source least;
+     t_usages := t_usages least;
+     t_sources := t_sources least;
+     t_reading_field := [];
+     t_escaping_field := [];
+     t_field_used := t_field_used least |}.
+
+Definition to_unbox (T : FlambdaReaperGraphSpec.tables) : list node :=
+  derive_to_unbox no_local facts T (derive_cannot_change facts T)
+    max_unbox_size false.
+
+Definition handler_with (body : expr) : expr :=
+  Let_cont_recursive
+    [(20%positive, Handler [30] (make_handler_metadata [Value]) body)]
+    (return_to 1 [int 7]).
+
+End DeadReadExample.
+
+Definition unboxed_reads_example_statement : Prop :=
+  let F := DeadReadExample.facts in
+  let L := DeadReadExample.least in
+  let T := DeadReadExample.tables in
+  let e := DeadReadExample.unit_expr in
+  let to_unbox := DeadReadExample.to_unbox in
+  in_flow_fragment e = true
+  ∧ check_closed Examples.no_local F L = true
+  ∧ forallb (fun T' => negb (check_closed Examples.no_local F T'))
+      (FlambdaReaperSolutionSpec.one_fewer_tables L)
+    = true
+  ∧ check_field_used_exact Examples.no_local F L = true
+  ∧ to_unbox L = [Node_variable 31%positive]
+  ∧ local_unboxing F L (derive_dominated L) (to_unbox L) e = true
+  ∧ check_unboxed_reads F L (derive_dominated L) (to_unbox L) = true
+  ∧ check_closed Examples.no_local F T = true
+  ∧ check_field_used_exact Examples.no_local F T = true
+  ∧ check_dominated T (derive_dominated T) = true
+  ∧ check_to_unbox Examples.no_local F T (derive_cannot_change F T)
+      Examples.max_unbox_size false (to_unbox T)
+    = true
+  ∧ to_unbox T = [Node_variable 31%positive]
+  ∧ local_unboxing F T (derive_dominated T) (to_unbox T) e = true
+  ∧ check_unboxed_reads F T (derive_dominated T) (to_unbox T) = false
+  ∧ rebuild_unit_from_tables F T true e = e
+  ∧ rebuild_unit_unbox F T (derive_cannot_change F T)
+      (unit_code_deps Auto Examples.interface e) (derive_dominated T)
+      (to_unbox T) true e
+    = DeadReadExample.handler_with Invalid.
 
 (* ======================================================================== *)
 (* An example with a call                                                   *)
