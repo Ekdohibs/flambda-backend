@@ -282,9 +282,8 @@ Fixpoint rel (v : value) (n : node) (v' : value) {struct v} : Prop :=
     v' = v ∧ may_come_from sol (Node_symbol s) n
     ∧ (s_has_usage sol n = true -> s_has_usage sol (Node_symbol s) = true)
   | Value_immutable_array _ => v' = v ∧ s_any_source sol n = true
-  | Value_closure_of_set _ _ _ => v' = v
-  | Value_closure _ _ | Value_location _ | Value_partial_application _ _ _ =>
-    False
+  | Value_closure_of_set _ _ _ | Value_partial_application _ _ _ => v' = v
+  | Value_closure _ _ | Value_location _ => False
   end.
 
 (* A field of a block that may come from [a]. *)
@@ -305,6 +304,7 @@ Proof.
   - intros [-> _]. reflexivity.
   - intros (a & bn & from & _ & _ & _ & ->).
     destruct (s_field_used sol a (Field_boxed_number bn)); reflexivity.
+  - intros ->. reflexivity.
 Qed.
 
 Lemma rel_tagged (v : value) (n : node) (v' : value) :
@@ -318,6 +318,7 @@ Proof.
   - intros [-> _]. reflexivity.
   - intros (a & bn & from & _ & _ & _ & ->).
     destruct (s_field_used sol a (Field_boxed_number bn)); reflexivity.
+  - intros ->. reflexivity.
 Qed.
 
 (* What the second run has is not a symbol unless the first has it. *)
@@ -332,6 +333,7 @@ Proof.
   - intros [Heq _]. discriminate Heq.
   - intros (a & bn & from & _ & _ & _ & Heq).
     destruct (s_field_used sol a (Field_boxed_number bn)); discriminate Heq.
+  - intros Heq. discriminate Heq.
 Qed.
 
 Variable is_local : field -> bool.
@@ -368,6 +370,7 @@ Proof.
     exact (any_source_alias _ _ _ Hc _ _ Hal Has).
   - intros (a & bn & from' & Ha & Hrest). exists a, bn, from'.
     split; [ exact (may_come_from_alias _ _ _ Hc _ _ _ Hal Ha) | exact Hrest ].
+  - exact (fun H => H).
 Qed.
 
 (* To a node with any source that has a usage only if [m] has any
@@ -389,6 +392,7 @@ Proof.
   - intros (a & bn & from' & Ha & Hrest). exists a, bn, from'.
     split; [ exact (may_come_from_escape _ _ _ Hc _ _ _ Has Hm Ha)
            | exact Hrest ].
+  - exact (fun H => H).
 Qed.
 
 (* The read of the field [f] of a value that may come from [a], as
@@ -451,6 +455,7 @@ Proof.
       rewrite (field_used_any_usage _ _ _ Hc _ _ _ Hcons (Hau Hn)
                  (boxed_field_not_local bn)).
       reflexivity.
+    + intros ->. reflexivity.
 Qed.
 
 (* A value at a node with any usage is related to itself. *)
@@ -488,6 +493,7 @@ Proof.
       rewrite (field_used_any_usage _ _ _ Hc _ _ _ Hcons (Hau Hn)
                  (boxed_field_not_local bn)).
       reflexivity.
+    + intros _ _. reflexivity.
 Qed.
 
 (* The fields of a block whose allocation has any usage are kept. *)
@@ -883,6 +889,7 @@ Proof.
   - destruct Hrel as [-> _]. exact Hb.
   - destruct Hrel as (a & bn & from & _ & _ & _ & ->).
     destruct (s_field_used sol a (Field_boxed_number bn)); reflexivity.
+  - rewrite Hrel. exact Hb.
 Qed.
 
 (* A symbol among the arguments of a primitive in the second run is

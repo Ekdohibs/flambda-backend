@@ -74,9 +74,25 @@
      it may be at a node with any source whose elements are constants or
      may each be at a node that has any usage if the array's node has a
      usage;
-   - partial applications and locations are not in the fragment, and are
-     at no node; nor are the closures of the older form
-     ([Value_closure]).
+   - a partial application may be at [n] if its closure may be at some
+     node [m] and there are nodes [ws] for the witnesses of the calls
+     that gave it its arguments, one for each group of them (one group
+     for each parameter of its arity, [group_position]): the first
+     stands for each witness of unknown arity of an allocation at [m],
+     and each other for each such witness of an allocation that the
+     call before returns ([call_chain]); each argument may be at every
+     parameter that the witness of its group stands for, at its place
+     in the group; and what the last call returns, of which there is
+     something, is an allocation that [n] may come from ([chain_end]).
+     That is how the traversal reads a call of unknown arity: a witness
+     for each group of arguments, read from the call witness of unknown
+     arity of the callee, and then from the first result of the witness
+     before ([make_unknown_arity_apply_widget]); and code has a witness
+     for each group of parameters, the first result of each but the
+     last being an allocation whose call witness is the next one
+     ([create_unknown_arity_non_tupled_call_witnesses]);
+   - locations are not in the fragment, and are at no node; nor are the
+     closures of the older form ([Value_closure]).
    The allocation is existential, and need not be the same for the
    value at two nodes; but at each node there is one, and what the rules
    give of the node's sources is given of it. [flows] does not depend on
@@ -105,21 +121,38 @@
    a unit made of [Let]s of simples, of primitives, of closures of sets
    ([Closure_of_set]) and of projections from them
    ([Project_value_slot_from], [Project_function_slot]), [Let_cont]s,
-   recursive or not, [Apply_cont]s, [Switch]es, [Invalid], direct calls,
-   and [Let_static]s of code, of blocks and of closures of static sets.
-   Every primitive is in it. A direct call has no extra argument for its
-   exception continuation, and the code it names, if the unit binds it,
+   recursive or not, [Apply_cont]s (raises among them), [Switch]es,
+   [Invalid], calls, direct or not, with extra arguments for their
+   exception continuations or not, and [Let_static]s of code, of blocks
+   and of closures of static sets. Every primitive is in it, and so are
+   partial applications and over-applications, which calls of unknown
+   arity make. The code that a direct call names, if the unit binds it,
    is not tupled and has as many parameters as the call has arguments
-   (S7's hypothesis). The body of code binds nothing static, its two
-   continuations differ, and it applies only continuations in scope,
-   each to as many values as it has parameters, the return continuation
-   of the code to as many as the code has results and its exception
-   continuation to one ([conts_counted]); the closure symbols of a static
-   set are symbols that the unit binds, and its slot is among its
-   function slots; the code ids that the unit binds are distinct. Not in
-   it: indirect calls, partial applications and over-applications,
-   extra arguments of exception continuations, and the older forms of
-   sets of closures.
+   (S7's hypothesis); a unit with an indirect call has no tupled code,
+   and no code without parameters. The body of code binds nothing
+   static, its two continuations differ, and it applies only
+   continuations in scope, each to as many values as it has parameters,
+   the return continuation of the code to as many as the code has
+   results, and its exception continuation, or that of a call, to one
+   and the extra arguments of the call ([conts_counted]); the closure
+   symbols of a static set are symbols that the unit binds, and its
+   slot is among its function slots; the code ids that the unit binds
+   are distinct. Not in it: the older forms of sets of closures, and
+   indirect calls in a unit with tupled code, which the traversal reads
+   by a witness of its own ([create_unknown_arity_tupled_call_witnesses])
+   that is not done here.
+
+   Code without parameters is not in the fragment where a call may be
+   of unknown arity: the traversal gives it one witness, as if for one
+   group of none ([at_least_one_group]; a fatal error in the OCaml),
+   while the machine runs a call of it with arguments as an
+   over-application, all the arguments going to what the code returns.
+   The graph gives the first group of arguments to the one witness of
+   the code, which has no parameter, and reads the result of the call
+   off that witness: with one group, the result of the call is taken to
+   be what the code returns, and not what that returns when called with
+   the arguments; with more, what the code returns is called with all
+   the groups but the first.
 
    For a unit in the fragment, and tables that pass the check of
    FlambdaReaperSolution.v ([check_closed], which is proved to imply
@@ -151,8 +184,15 @@
    block, a block made, two loads and a continuation
    ([example_statement]), and a unit with code, a closure of it whose
    value slot is read through [my_closure], and a direct call
-   ([call_example_statement]), each have their least solution pass the
-   check, and their runs exit. *)
+   ([call_example_statement]), and a unit with a partial application,
+   an over-application of it and extra arguments for an exception
+   continuation ([indirect_example_statement]), each have their least
+   solution pass the check, and their runs exit.
+
+   The statement says nothing of the values that a continuation keeps
+   for a call: the extra arguments of an exception continuation, and
+   the arguments that an over-application has yet to give; the proof
+   has them where the calls put them. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -219,7 +259,8 @@ Fixpoint conts_counted (ks : finite_map nat) (e : expr) : bool :=
          body
   | Apply ap =>
     count_ok ks (ap_continuation ap) (length (unarize (ap_return_arity ap)))
-    && count_ok ks (ap_exn_continuation ap) 1
+    && count_ok ks (ap_exn_continuation ap)
+         (S (length (ap_exn_extra_args ap)))
   | Apply_cont ac => count_ok ks (ac_continuation ac) (length (ac_args ac))
   | Switch _ arms =>
     forallb
@@ -240,22 +281,26 @@ Definition named_in_flow_fragment (defining_expr : named) : bool :=
   | Set_of_closures _ _ | Project_value_slot _ _ => false
   end.
 
-(* A direct call, with no extra argument for its exception continuation,
-   of code that, if the unit binds it, is not tupled and has as many
-   parameters as the call has arguments. *)
+(* A direct call of code that, if the unit binds it, is not tupled and
+   has as many parameters as the call has arguments; an indirect call in
+   a unit whose code is not tupled and has parameters. *)
 Definition apply_in_flow_fragment (codes : list (code_id * code))
     (ap : apply_expr) : bool :=
   match ap_call_kind ap with
   | Direct id =>
-    no_exn_extra_args ap
-    && forallb
-         (fun '(id', c) =>
-            negb (Pos.eqb id id')
-            || (negb (code_is_tupled c)
-                && Nat.eqb (length (ap_args_arity ap))
-                     (length (code_params_arity c))))
-         codes
-  | Indirect => false
+    forallb
+      (fun '(id', c) =>
+         negb (Pos.eqb id id')
+         || (negb (code_is_tupled c)
+             && Nat.eqb (length (ap_args_arity ap))
+                  (length (code_params_arity c))))
+      codes
+  | Indirect =>
+    forallb
+      (fun '(_, c) =>
+         negb (code_is_tupled c)
+         && negb (Nat.eqb (length (code_params_arity c)) 0))
+      codes
   end.
 
 (* The terms of the fragment, given the code and the symbols that the
@@ -351,6 +396,27 @@ with code_projection_free (c : code) : bool :=
 (* Where a value may be                                                     *)
 (* ======================================================================== *)
 
+(* The size of each group of the arguments of a call made at the arity
+   [a]: one group for each parameter, of as many arguments as the
+   parameter has components ([FlambdaReaperTraversal.group_by_parameter]).
+   *)
+Definition arity_sizes (a : arity) : list nat :=
+  map (@length flambda_kind) (unarize_per_parameter a).
+
+(* The group of the argument at [i], counted from 0, and its place in
+   the group, for groups of [sizes]. *)
+Fixpoint group_position (sizes : list nat) (i : nat) : option (nat * nat) :=
+  match sizes with
+  | [] => None
+  | size :: sizes =>
+    if Nat.ltb i size then Some (0, i)
+    else
+      match group_position sizes (i - size) with
+      | Some (g, k) => Some (S g, k)
+      | None => None
+      end
+  end.
+
 Section Flow.
 
 Variable G : graph.
@@ -371,6 +437,40 @@ Definition may_come_from (a n : node) : Prop :=
        s_usages sol n u = true ->
        s_usages sol a u = true ∨ s_any_usage sol a = true).
 
+(* The witness [w] of a call of unknown arity stands for each witness
+   of unknown arity of an allocation that [P] holds of, if that witness
+   is an allocation of its own: it may come from it. *)
+Definition called_from (P : node -> Prop) (w : node) : Prop :=
+  ∀ y W : node,
+    P y ->
+    g_constructor G y (Field_call_witness Unknown_arity_code_pointer) W ->
+    may_come_from W W -> may_come_from W w.
+
+(* The allocation [y] may be the first result of a witness that [w]
+   stands for. *)
+Definition returned_at (w y : node) : Prop :=
+  ∃ W R : node,
+    may_come_from W w
+    ∧ g_constructor G W (Field_return_of_call (Normal 0)) R
+    ∧ may_come_from y R.
+
+(* The witnesses [ws] of the calls that a closure has been through, one
+   for each group of arguments: the first stands for those of the
+   allocations that [P] holds of, and each other for those of what the
+   call before returns. *)
+Fixpoint call_chain (P : node -> Prop) (ws : list node) : Prop :=
+  match ws with
+  | [] => True
+  | w :: ws => called_from P w ∧ call_chain (returned_at w) ws
+  end.
+
+(* The allocations that the last of the calls returns. *)
+Fixpoint chain_end (P : node -> Prop) (ws : list node) : node -> Prop :=
+  match ws with
+  | [] => P
+  | w :: ws => chain_end (returned_at w) ws
+  end.
+
 (* [P i field] of each field of a list, the first at [i]. *)
 Definition fields_from (P : nat -> value -> Prop)
     : nat -> list value -> Prop :=
@@ -384,7 +484,12 @@ Definition fields_from (P : nat -> value -> Prop)
    [n] if there are nodes for the closures of the set ([sites]), each an
    allocation of its own with what [called] asks for the code of its
    slot, the constructor facts of every function slot of the set, and
-   the values of the value slots kept. *)
+   the values of the value slots kept. A partial application may be at
+   [n] if its closure may be at some node [m], the witnesses [ws] of the
+   calls that gave it its arguments read from [m] and from what each
+   call returns, each argument may be at the parameters of the
+   witnesses of its group, and what the last call returns may be at
+   [n]. *)
 Fixpoint flows (v : value) (n : node) {struct v} : Prop :=
   match v with
   | Value_const _ => s_any_source sol n = true
@@ -432,8 +537,24 @@ Fixpoint flows (v : value) (n : node) {struct v} : Prop :=
                    g_constructor G (sites f) (Field_value_slot w) from
                    ∧ flows field from)
               value_slots
-  | Value_closure _ _ | Value_location _ | Value_partial_application _ _ _ =>
-    False
+  | Value_partial_application closure args args_arity =>
+    ∃ (m : node) (ws : list node),
+      flows closure m
+      ∧ length ws = length args_arity
+      ∧ call_chain (fun y => may_come_from y m) ws
+      ∧ (∃ y : node, chain_end (fun y => may_come_from y m) ws y)
+      ∧ (∀ y : node,
+           chain_end (fun y => may_come_from y m) ws y -> may_come_from y n)
+      ∧ fields_from
+          (fun i arg =>
+             ∀ (g k : nat) (w W p : node),
+               group_position (arity_sizes args_arity) i = Some (g, k) ->
+               nth_error ws g = Some w ->
+               may_come_from W w ->
+               g_parameter G W k p ->
+               flows arg p)
+          0 args
+  | Value_closure _ _ | Value_location _ => False
   end.
 
 (* What a symbol points to, as for a block or a closure whose allocation
@@ -481,15 +602,24 @@ Definition env_flows (vars : env) : Prop :=
   ∀ (x : variable) (v : value),
     lookup x vars = Some v -> flows v (Node_variable x).
 
-(* The environments that a continuation keeps. Only handlers and ways
-   out are in the fragment. *)
+(* The environments that a continuation keeps, and the continuations
+   that a call keeps, for extra arguments and for an over-application.
+   *)
 Inductive cont_flows : cont_value -> Prop :=
   | Closure_flows (h : continuation_handler) (vars : env) (conts : cont_env)
       (recursive : list (continuation * continuation_handler)) :
     env_flows vars ->
     (∀ (k : continuation) (c : cont_value), (k, c) ∈ conts -> cont_flows c) ->
     cont_flows (Closure h vars conts recursive)
-  | Outer_flows (k : continuation) : cont_flows (Outer k).
+  | Outer_flows (k : continuation) : cont_flows (Outer k)
+  | Extra_args_flows (c : cont_value) (extra : list value) :
+    cont_flows c -> cont_flows (Extra_args c extra)
+  | Over_application_flows (remaining : list value)
+      (remaining_arity return_arity : arity) (return_to exn_to : cont_value) :
+    cont_flows return_to -> cont_flows exn_to ->
+    cont_flows
+      (Over_application remaining remaining_arity return_arity return_to
+         exn_to).
 
 Definition state_flows (s : state) : Prop :=
   env_flows (state_vars s)
@@ -803,6 +933,163 @@ Definition call_example_statement : Prop :=
        = false)
   ∧ run 7 (State FlowCallExample.unit_expr [] [] empty_static_env empty_heap)
     = Exit 1%positive [Value_const (Tagged_immediate 5)] empty_heap.
+
+(* Calls of unknown arity. The code 20 takes two parameters, one by one,
+   and returns the second; the code 21 returns its parameter. The unit
+   makes the closures [x10] of 20 and [x11] of 21 and applies [x10] to
+   7, which makes a partial application [x12]; it then applies [x12] to
+   [x11] and 9: the code 20 runs with 7 and [x11] and returns [x11],
+   which is called with 9, an over-application. The exception
+   continuation of that call has an extra argument, 3:
+
+     let code 20 (x30) (x31) my_closure x32 = return x31 in
+     let code 21 (x40) my_closure x41 = return x40 in
+     let x10 = closure 20 in
+     let x11 = closure 21 in
+     let_cont k5 x12 =
+       let_cont exn k8 x14 x15 = raise x14 in
+       x12 x11 9 -> return, k8 (3)
+     in
+     x10 7 -> k5, raise
+
+   The code dep of 20 has the made nodes 3 to 11: its witnesses of
+   unknown arity are 9 and 10, and 11 is the first result of 9, whose
+   call witness of unknown arity is 10; that of 21 has 12 to 17, its
+   witness of unknown arity being 17. The call of [x10] has the witness
+   24, read from [x10] through 25; the call of [x12] has the witness 19,
+   read from [x12] through 22, and 20, read from the first result of 19
+   (21). In the least solution the partial application [x12] has the
+   source 11, so 19 stands for 10, the second witness of 20; the first
+   result of 19 has the source [x11], so 20 stands for 17, the witness of
+   21; and the result of the unit, at 1, is a constant. *)
+Module FlowIndirectExample.
+
+Local Open Scope positive_scope.
+
+Definition interface : unit_interface :=
+  {| unit_return := 1; unit_exn := 2 |}.
+
+Definition return_to (k : continuation) (args : list simple) : expr :=
+  Apply_cont {| ac_continuation := k; ac_args := args;
+                ac_trap_action := None |}.
+
+Definition code20 : code :=
+  Code [30; 31] 32 3 4
+    (make_code_metadata [Singleton Value; Singleton Value] [Singleton Value])
+    (return_to 3 [Var 31]).
+
+Definition code21 : code :=
+  Code [40] 41 6 7 (make_code_metadata [Singleton Value] [Singleton Value])
+    (return_to 6 [Var 40]).
+
+Definition partial_call : apply_expr :=
+  {| ap_callee := Var 10; ap_call_kind := Indirect;
+     ap_args := [Const (Tagged_immediate 7)];
+     ap_continuation := 5; ap_exn_continuation := 2; ap_exn_extra_args := [];
+     ap_args_arity := [Singleton Value];
+     ap_return_arity := [Singleton Value] |}.
+
+Definition over_call : apply_expr :=
+  {| ap_callee := Var 12; ap_call_kind := Indirect;
+     ap_args := [Var 11; Const (Tagged_immediate 9)];
+     ap_continuation := 1; ap_exn_continuation := 8;
+     ap_exn_extra_args := [(Const (Tagged_immediate 3), Value)];
+     ap_args_arity := [Singleton Value; Singleton Value];
+     ap_return_arity := [Singleton Value] |}.
+
+Definition unit_expr : expr :=
+  Let_static [Bind_code 20 code20; Bind_code 21 code21]
+    (Let 10 Value (Closure_of_set 50 [(50, 20)] [])
+       (Let 11 Value (Closure_of_set 51 [(51, 21)] [])
+          (Let_cont_non_recursive 5
+             (Handler [12] (make_handler_metadata [Value])
+                (Let_cont_non_recursive 8
+                   (Handler [14; 15] (make_exn_handler_metadata [Value; Value])
+                      (return_to 2 [Var 14]))
+                   (Apply over_call)))
+             (Apply partial_call)))).
+
+Definition is_local (f : field) : bool := false.
+
+Definition v (n : positive) : node := Node_variable n.
+Definition m (n : positive) : node := Node_made n.
+Definition code20_node : node := Node_code_id 20.
+Definition code21_node : node := Node_code_id 21.
+Definition constants : node := Node_all_constants.
+
+Definition solution : tables :=
+  {| t_alias :=
+       [(m 1, m 12); (m 12, v 40); (m 14, v 11); (m 15, constants);
+        (m 18, code20_node); (m 18, code21_node); (m 19, m 22); (m 2, v 14);
+        (m 20, m 17); (m 21, m 3); (m 22, m 10); (m 23, code20_node);
+        (m 24, m 25); (m 25, m 9); (m 3, v 31); (m 5, v 10); (m 6, constants);
+        (m 7, v 11); (v 12, m 11); (v 14, m 13); (v 14, m 4);
+        (v 15, constants); (v 30, m 6); (v 31, m 7); (v 32, m 5);
+        (v 40, m 15); (v 41, m 14)];
+     t_any_usage :=
+       [constants; code20_node; code21_node; m 1; m 12; m 13; m 15; m 18; m 2;
+        m 23; m 4; v 14; v 40];
+     t_any_source :=
+       [constants; code20_node; code21_node; m 1; m 12; m 15; m 18; m 2; m 23;
+        m 6; v 14; v 15; v 30; v 40];
+     t_has_usage :=
+       [constants; code20_node; code21_node; m 1; m 10; m 11; m 12; m 13;
+        m 15; m 17; m 18; m 19; m 2; m 20; m 21; m 22; m 23; m 24; m 25; m 3;
+        m 4; m 7; m 9; v 10; v 11; v 12; v 14; v 31; v 40];
+     t_has_source :=
+       [constants; code20_node; code21_node; m 1; m 10; m 11; m 12; m 14;
+        m 15; m 16; m 17; m 18; m 19; m 2; m 20; m 21; m 22; m 23; m 24; m 25;
+        m 3; m 5; m 6; m 7; m 8; m 9; v 10; v 11; v 12; v 14; v 15; v 30;
+        v 31; v 32; v 40; v 41];
+     t_usages :=
+       [(m 10, m 19); (m 11, v 12); (m 17, m 20); (m 19, m 19); (m 20, m 20);
+        (m 21, m 21); (m 22, m 19); (m 24, m 24); (m 25, m 24); (m 3, m 21);
+        (m 7, m 21); (m 9, m 24); (v 10, v 10); (v 11, m 21); (v 12, v 12);
+        (v 31, m 21)];
+     t_sources :=
+       [(m 10, m 10); (m 11, m 11); (m 14, v 11); (m 16, m 16); (m 17, m 17);
+        (m 19, m 10); (m 20, m 17); (m 21, v 11); (m 22, m 10); (m 24, m 9);
+        (m 25, m 9); (m 3, v 11); (m 5, v 10); (m 7, v 11); (m 8, m 8);
+        (m 9, m 9); (v 10, v 10); (v 11, v 11); (v 12, m 11); (v 31, v 11);
+        (v 32, v 10); (v 41, v 11)];
+     t_reading_field := [];
+     t_escaping_field := [];
+     t_field_used :=
+       [(m 10, Field_code_id_of_call_witness);
+        (m 10, Field_return_of_call (Normal 0));
+        (m 10, Field_return_of_call Exn);
+        (m 11, Field_call_witness Unknown_arity_code_pointer);
+        (m 17, Field_code_id_of_call_witness);
+        (m 17, Field_return_of_call (Normal 0));
+        (m 17, Field_return_of_call Exn);
+        (m 9, Field_code_id_of_call_witness);
+        (m 9, Field_return_of_call (Normal 0));
+        (v 10, Field_call_witness Unknown_arity_code_pointer);
+        (v 11, Field_call_witness Unknown_arity_code_pointer)] |}.
+
+End FlowIndirectExample.
+
+(* The example of calls of unknown arity meets the premises of
+   [flow_sound_statement], with its least solution, and its run exits
+   with 9. *)
+Definition indirect_example_statement : Prop :=
+  is_local_slots_only FlowIndirectExample.is_local
+  ∧ (∀ f : field, FlowIndirectExample.is_local f = false)
+  ∧ in_flow_fragment FlowIndirectExample.unit_expr = true
+  ∧ check_closed FlowIndirectExample.is_local
+      (traverse_unit Never FlowIndirectExample.interface
+         FlowIndirectExample.unit_expr)
+      FlowIndirectExample.solution
+    = true
+  ∧ (∀ T : tables,
+       T ∈ one_fewer_tables FlowIndirectExample.solution ->
+       check_closed FlowIndirectExample.is_local
+         (traverse_unit Never FlowIndirectExample.interface
+            FlowIndirectExample.unit_expr) T
+       = false)
+  ∧ run 30
+      (State FlowIndirectExample.unit_expr [] [] empty_static_env empty_heap)
+    = Exit 1%positive [Value_const (Tagged_immediate 9)] empty_heap.
 
 (* Why local fields are kept out where a closure is projected from. The
    value slot 60 is local. The closure [x10] goes into an immutable array
