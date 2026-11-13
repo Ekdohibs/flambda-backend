@@ -75,6 +75,18 @@ From OxCamlFlambda2 Require Import FlambdaMapSpec FlambdaModel
   FlambdaValidateReadingSpec FlambdaInlineCallsAtSpec
   FlambdaValidateInliningSpec FlambdaCopyLetsSpec
   FlambdaValidateCopyingSpec FlambdaValidateDemotedSpec.
+From OxCamlFlambda2 Require FlambdaReaperCallingConventions.
+From OxCamlFlambda2 Require FlambdaReaperFixFailsSpec.
+From OxCamlFlambda2 Require FlambdaReaperFlowSpec.
+From OxCamlFlambda2 Require FlambdaReaperLeast.
+From OxCamlFlambda2 Require FlambdaReaperNeverReturnsSpec.
+From OxCamlFlambda2 Require FlambdaReaperRebuild.
+From OxCamlFlambda2 Require FlambdaReaperSolution.
+From OxCamlFlambda2 Require FlambdaReaperTraversal.
+From OxCamlFlambda2 Require FlambdaReaperTypes.
+From OxCamlFlambda2 Require FlambdaReaperTypesTraversalSpec.
+From OxCamlFlambda2 Require FlambdaReaperUnboxing.
+From OxCamlFlambda2 Require FlambdaReaperWrapperSpec.
 From OxCamlFlambda2Types Require Import FlambdaAliasesSpec.
 From OxCamlFlambda2Types Require Import FlambdaBindingTime.
 From OxCamlFlambda2Types Require Import FlambdaJoinEnv.
@@ -182,6 +194,65 @@ Separate Extraction
   FlambdaProvers.Provers.prove_unique_fully_constructed_immutable_heap_block
   FlambdaProvers.Provers.prove_unique_tag_and_size
   FlambdaProvers.Provers.prove_variant_like
+  FlambdaReaperCallingConventions.check_cc_closed
+  FlambdaReaperCallingConventions.derive_cannot_change
+  FlambdaReaperCallingConventions.rebuild_unit_cc
+  FlambdaReaperCallingConventions.rebuild_unit_cc_from_tables
+  FlambdaReaperCallingConventions.unit_calling_convention_changes
+  FlambdaReaperCallingConventions.unit_code_deps
+  FlambdaReaperFixFailsSpec.callees_promised
+  FlambdaReaperFixFailsSpec.results_within_callees
+  FlambdaReaperFixFailsSpec.results_within_codes
+  FlambdaReaperFixFailsSpec.unknown_calls_have_args
+  FlambdaReaperFlowSpec.conts_counted
+  FlambdaReaperFlowSpec.in_flow_fragment
+  FlambdaReaperFlowSpec.projection_free
+  FlambdaReaperLeast.check_least
+  FlambdaReaperLeast.compute_least
+  FlambdaReaperNeverReturnsSpec.keys_and_groups_ok
+  FlambdaReaperRebuild.rebuild_unit
+  FlambdaReaperRebuild.rebuild_unit_from_tables
+  FlambdaReaperSolution.check_closed
+  FlambdaReaperSolution.check_field_used_exact
+  FlambdaReaperTraversal.traverse_unit
+  FlambdaReaperTypes.all_fixes
+  FlambdaReaperTypes.compiler_fixes
+  FlambdaReaperTypes.landed_fixes
+  FlambdaReaperTypes.plain_context
+  FlambdaReaperTypes.rebuild_unit_cc_with_types
+  FlambdaReaperTypes.rebuild_unit_cc_with_types_from_tables
+  FlambdaReaperTypes.rebuild_unit_unbox_repr_fixed_with_types
+  FlambdaReaperTypes.rebuild_unit_unbox_repr_with_types
+  FlambdaReaperTypes.rebuild_unit_with_types
+  FlambdaReaperTypes.rebuild_unit_with_types_from_tables
+  FlambdaReaperTypes.rewrite_result_type
+  FlambdaReaperTypes.rewrite_result_types
+  FlambdaReaperTypes.rewrite_symbol_type
+  FlambdaReaperTypes.rewrite_typing_env
+  FlambdaReaperTypesTraversalSpec.check_closures_unaliased
+  FlambdaReaperUnboxing.check_dominated
+  FlambdaReaperUnboxing.check_sets_whole
+  FlambdaReaperUnboxing.check_to_change_representation
+  FlambdaReaperUnboxing.check_to_change_representation_fixed
+  FlambdaReaperUnboxing.check_to_unbox
+  FlambdaReaperUnboxing.check_to_unbox_fixed
+  FlambdaReaperUnboxing.derive_dominated
+  FlambdaReaperUnboxing.derive_to_change_representation
+  FlambdaReaperUnboxing.derive_to_unbox
+  FlambdaReaperUnboxing.derive_to_unbox_fixed
+  FlambdaReaperUnboxing.fix_seeds
+  FlambdaReaperUnboxing.rebuild_unit_unbox
+  FlambdaReaperUnboxing.rebuild_unit_unbox_repr
+  FlambdaReaperUnboxing.rebuild_unit_unbox_repr_fixed
+  FlambdaReaperUnboxing.rebuild_unit_unbox_repr_fixed_fails
+  FlambdaReaperUnboxing.to_change_representation_of_alloc_points
+  FlambdaReaperUnboxing.to_unbox_of_unboxed_names
+  FlambdaReaperUnboxing.unit_calling_convention_changes_u
+  FlambdaReaperUnboxing.unit_changed_representations
+  FlambdaReaperUnboxing.unit_my_closure_decisions_u
+  FlambdaReaperUnboxing.unit_unboxed_fields
+  FlambdaReaperWrapperSpec.plain_kinds
+  FlambdaReaperWrapperSpec.unit_counts
   FlambdaReify.Reify.reify
   FlambdaSimplifyStaticsSpec.add_static_bindings
   FlambdaSimplifyStaticsSpec.static_const_type_in

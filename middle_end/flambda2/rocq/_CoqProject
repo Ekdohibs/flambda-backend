@@ -30,6 +30,7 @@
 -Q rewrites/lets OxCamlFlambda2
 -Q validation/checks OxCamlFlambda2
 -Q validation/names OxCamlFlambda2
+-Q reaper OxCamlFlambda2
 -Q types/grammar OxCamlFlambda2Types
 -Q types/env OxCamlFlambda2Types
 -Q types/aliases OxCamlFlambda2Types
