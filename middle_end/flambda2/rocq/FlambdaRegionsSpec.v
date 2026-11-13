@@ -77,6 +77,8 @@
      region begun since that is still there, as the write of the
      pointer does.
    - A raise does nothing to the stack.
+   - An [Apply_cont] may give a region to a continuation, as an
+     argument. That does nothing to the stack either.
 
    The program has no stack of marks, and makes no test that a region
    is still there: a region is the number that its begin read. The
@@ -136,10 +138,54 @@
    would pass a mark on where it reads nothing (a [Let] of a simple,
    an argument, a value slot, a field of a static block); this machine
    has no step where a simple that [step] is about to evaluate has a
-   mark for its value: the test of decision D45 refuses it, as a
-   drawn symbol that nothing binds ([value_usable]). A mark is read in
-   two places only: by the primitive that ends its region, and by a
-   [Local_allocation] that names it.
+   mark for its value, but for an argument that gives a region to a
+   continuation (below). A mark is not a value that may be evaluated
+   ([value_usable]): it is a drawn symbol that nothing binds. Apart
+   from being given to a continuation, it is read in two places only:
+   by the primitive that ends its region, and by a [Local_allocation]
+   that names it.
+
+   A REGION GIVEN TO A CONTINUATION
+
+   Simplify may make the variable of a region a parameter of a
+   continuation. Where it lifts a handler out of another, which it
+   does with [-flambda2-match-in-match], what the handler uses of the
+   other becomes its parameters, and the region that it ends or
+   allocates in is one of them. When the program runs, that is a
+   number given as an argument.
+
+   Here an [Apply_cont] may have, for an argument, a mark that is on
+   the stack, at a parameter that the handler of the continuation
+   gives the kind [Region] ([region_places]). The parameter is bound
+   to the mark ([region_apply_cont]); the stack is left as it is. The
+   end of the region, and a [Local_allocation] that names it, read the
+   mark through the parameter as through the variable that the begin
+   bound. [step] has no step for such an [Apply_cont]: for it a mark is
+   a symbol, of the kind [Value].
+
+   That is all that may be done with a region. A mark that is on the
+   stack and that a step evaluates anywhere else has no step
+   ([Region_used_as_value]): as the callee or an argument of a call, in
+   a block or a closure, given to a way out of the term or to a
+   parameter of another kind. And of the symbols that the machine
+   drew, only a mark that is on the stack may be given at a parameter
+   of the kind [Region]: a region that is gone has no step there
+   (decision D47).
+
+   A value that may be evaluated and is given at such a parameter is
+   left to [step], as before. [step] refuses it for its kind, unless
+   it is a poison constant of the kind [Region], the one value that
+   FlambdaValueSpec.kind_of_value gives that kind. Such a constant is
+   no region: the parameter is bound to it, and its end, or a
+   [Local_allocation] that names it, has no step. The conversion gives
+   nothing but the variable of a region at such a parameter.
+
+   The machine does not tell the handler that a call returns to from
+   another. So code that gave a mark to its return continuation would
+   have a step, where the call returns to a handler whose parameter is
+   of the kind [Region]. No term of the compiler is known to do that,
+   and the conversion refuses a call that returns or raises to such a
+   handler ([calls_return_no_region]).
 
    The symbols drawn, for marks and for local allocations, are
    [rs_base], its successor, and so on. [region_names_fresh] is the
@@ -153,22 +199,32 @@
 
    - Decision D45. A simple that the step evaluates
      ([evaluated_simples]) whose value is a symbol that this machine
-     drew and that is not bound in [live_statics]: a local allocation
-     whose frame is gone, or a mark. This is more than the program
-     asks. A use of what was freed goes wrong where the freed space
-     has been written again, by a later local allocation or by the
-     poison of a debugging runtime; where the collector has stopped
-     tracing and updating the fields of the freed block; or where a
-     root that is still live makes the collector look at the freed
-     space.
+     drew, that is not bound in [live_statics] and that is the mark of
+     no frame: a local allocation whose frame is gone. This is more
+     than the program asks. A use of what was freed goes wrong where
+     the freed space has been written again, by a later local
+     allocation or by the poison of a debugging runtime; where the
+     collector has stopped tracing and updating the fields of the
+     freed block; or where a root that is still live makes the
+     collector look at the freed space. The mark of a region that is
+     gone is such a symbol too, and the machine does not tell it from
+     a local allocation: where it is evaluated it is refused under
+     this rule, but at a parameter that is a region (D47, below).
+   - A mark that is on the stack and that a step evaluates anywhere
+     but as an argument at a parameter that is a region
+     ([Region_used_as_value]). Nothing freed is used there; the
+     machine has no meaning for a region as a value.
    - Decision D46. An allocation on the heap one of whose arguments is
      a local value that is in a frame ([value_local]): a [Let] of an
      allocation with no [Local_allocation] after it, and every
      [Let_static]. A local allocation is not asked this: what it holds
      is in a frame at or below its own, and lives as long.
-   - Decision D47. The end of a region whose mark is in no frame, and
-     a [Local_allocation] that names such a region. The program has no
-     such test: it writes whatever pointer the region read.
+   - Decision D47. The end of a region whose mark is in no frame; a
+     [Local_allocation] that names such a region; and an [Apply_cont]
+     that gives, at a parameter that is a region, a symbol that the
+     machine drew, that nothing binds and that is the mark of no
+     frame. The program has no such test: it writes whatever pointer
+     the region read, and passes it on.
    - Where [step] has none.
 
    What is not undefined: leaving code, by a return or by a raise,
@@ -195,7 +251,9 @@
      constants bound; none for code, whose body is not run there;
    - [Apply]: the callee, the arguments, the extra arguments of the
      exception continuation;
-   - [Apply_cont]: the arguments (a trap action has no simple);
+   - [Apply_cont]: the arguments (a trap action has no simple). One
+     of them may be at the place of a region ([region_places]); no
+     other simple is;
    - [Switch]: the scrutinee (the arguments of the arm are those of
      the [Apply_cont] that the next step runs);
    - the two [Let_cont] and [Invalid]: none.
@@ -239,8 +297,8 @@
       [eval_value_slots], the arguments of a call and of an
       [Apply_cont], and [call_code] for [my_closure], pass a symbol on
       without reading it. No symbol of the term is one that the
-      machine drew ([region_names_fresh]), and the test of D45 is made
-      of every simple before [step] is asked.
+      machine drew ([region_names_fresh]), and the test of the simples
+      ([simples_fault]) is made before [step] is asked.
    7. [FlambdaSemanticsSpec.eval_static_bindings] refuses a symbol that
       the static environment binds already. Here a [Let_static] is run
       on the static environment of the term, without the local
@@ -317,8 +375,57 @@
      state. So [gone_stays_gone_statement] is a law of one step, under
      a premise on the state before that step, and nothing here says
      that the premise holds of every state of a run.
-   - That the plain run of a term with its regions dropped is what
-     its run here comes to. None of the statements is that. *)
+   - That the run of a term with its regions dropped ([erase]) on the
+     machine of FlambdaSemanticsSpec.v is what its run here comes to.
+     None of the statements is that.
+
+   THE TERM WITH ITS REGIONS DROPPED ([erase])
+
+   The validation is given terms with their regions dropped (decision
+   D37). [erase] is that, as a function of the model, of a term that
+   has them:
+   - The [Let] of a [Begin_region] or of a [Begin_try_region] is
+     dropped: its variable is bound to nothing.
+   - The [Let] of an [End_region] binds the unit value. That of an
+     [End_try_region] binds it through [Opaque_identity].
+   - The [Let] of a [Local_allocation] applied to a variable binds that
+     variable again, under the name that the [Let] gives; if the name
+     is that of the variable, the [Let] is dropped.
+   - A parameter of a handler that is of the kind [Region] is dropped,
+     with its kind, and so is the argument at its place in every
+     [Apply_cont] of the continuation that a [Let_cont] binds to the
+     handler, in the arms of a [Switch] too.
+   - Everything else is as it was, and the same is done in the
+     handlers, in the bodies of code, and under every [Let].
+   A begin or an end that is not applied as above (a begin with an
+   argument, an end with none) is left: neither machine has a step
+   for it. A [Local_allocation] is erased by its first argument
+   alone, whatever follows it: [erase] does not test that it is as
+   the conversion makes it ([marker_of]), and this machine has no
+   step for one that is not.
+
+   An [Apply_cont] of a continuation that no [Let_cont] of the body
+   binds is left as it is: the return or exception continuation of
+   code, a way out of the term. So [erase] is meant for a term in
+   which no call returns or raises to a handler that has a region
+   parameter ([calls_return_no_region]); of another term the erased
+   one would give the handler a value that it has no parameter for.
+   And it is meant for a term, and a static environment, that have no
+   poison constant of the kind [Region] ([no_region_poison],
+   [statics_no_region_poison]): given at a region parameter, such a
+   constant is a value that the handler may go on to evaluate, where
+   the erased handler has no parameter for it. [erasable] is the two
+   tests together.
+
+   The term that [erase] gives does not bind the variable of a region.
+   A term that uses that variable anywhere but at the end of its
+   region, in a [Local_allocation] or as an argument at a region
+   parameter has no step on this machine where it does.
+
+   This is meant to be, [Let] for [Let] and argument for argument,
+   what the conversion of the test tool makes of a term where it
+   drops its regions: the conversion for the validation. Nothing here
+   states that, nor what the two runs have in common. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
@@ -622,6 +729,60 @@ Definition marker_of (x : variable) (body : expr) : marker :=
   end.
 
 (* ======================================================================== *)
+(* A region given to a continuation                                         *)
+(* ======================================================================== *)
+
+(* A mark that is on the stack: a symbol that may not be evaluated
+   ([value_usable]) and is the mark of a frame. *)
+Definition value_open_mark (rs : region_state) (v : value) : bool :=
+  match v with
+  | Value_symbol m => negb (value_usable rs v) && on_stack m (rs_frames rs)
+  | _ => false
+  end.
+
+Definition simple_open_mark (rs : region_state) (s : simple) : bool :=
+  match eval_simple (state_vars (rs_state rs)) s with
+  | Some v => value_open_mark rs v
+  | None => false
+  end.
+
+(* Which parameters of a handler are regions: those of the kind
+   [Region], by the kinds that the handler gives its parameters. *)
+Definition region_params (h : continuation_handler) : list bool :=
+  map (fun kind => kind_eqb kind Region) (handler_kinds h).
+
+(* For the simples that the step of a state evaluates
+   ([evaluated_simples]), in order, whether each is at the place of a
+   region. Only an argument of an [Apply_cont] can be: where the
+   continuation is bound, in the state, to a handler, the argument is
+   at the place of a region if the parameter at its place is one
+   ([region_params]). The handler is the one that the machine finds
+   when it applies the continuation ([resolve]), and the kind is the
+   one that this handler gives the parameter; nothing is read from the
+   [Apply_cont]. No argument of a continuation that is not bound to a
+   handler is at the place of a region: a way out of the term, a
+   continuation with extra arguments, what is left of an
+   over-application. An argument beyond the handler's list of the
+   kinds of its parameters is not either. *)
+Definition region_places (rs : region_state) : list bool :=
+  match state_expr (rs_state rs) with
+  | Apply_cont ac =>
+    match resolve (ac_continuation ac) (state_conts (rs_state rs)) with
+    | Closure h _ _ _ => region_params h
+    | _ => []
+    end
+  | _ => []
+  end.
+
+(* The kind of a value, for a parameter that it is given to: a mark
+   that is on the stack is of the kind [Region], and any other value of
+   the kind that FlambdaValueSpec.kind_of_value gives it, which is
+   [Region] of a poison constant of that kind and of nothing else. *)
+Definition region_kind_of_value (rs : region_state) (v : value)
+    : flambda_kind :=
+  if value_open_mark rs v then Region else kind_of_value v.
+
+(* ======================================================================== *)
 (* Steps                                                                    *)
 (* ======================================================================== *)
 
@@ -633,6 +794,9 @@ Inductive region_fault : Type :=
   | Heap_holds_local
   (* Decision D47. *)
   | Region_not_open
+  (* A mark that is on the stack, evaluated where no region is to be
+     given. *)
+  | Region_used_as_value
   (* A primitive of regions that is not as the conversion makes it. *)
   | Not_of_the_conversion
   (* [step] has none. *)
@@ -902,17 +1066,98 @@ Definition count_uses (rs : region_state) : region_state :=
    handler, using it is D45. It would be wrong if a region that
    nothing ends is to be a fault of the term. Decision D48. *)
 
-(* One step. First the test of D45, of every simple that [step] would
-   evaluate. Then, by the form of the expression: a primitive that
-   begins or ends a region; a [Let] with a [Local_allocation] after it;
-   another [Let], with the test of D46 if it allocates; a
-   [Let_static], with the test of D46; and for the rest the step of
-   [step]. *)
+(* The test of the simples that a step evaluates: the first of them,
+   in order, that may not be evaluated where it is, with the reason.
+   [places] says of each whether it is at the place of a region
+   ([region_places]); one beyond [places] is not.
+   - A value that may be evaluated ([value_usable]) passes, wherever it
+     is. At the place of a region it is not what the parameter is to be
+     given, and the step that applies the continuation has none, for
+     the kinds, unless the value is a poison constant of the kind
+     [Region].
+   - A mark that is on the stack passes at the place of a region, and
+     has no step anywhere else ([Region_used_as_value]).
+   - What is left is a symbol that the machine drew, that nothing
+     binds and that is the mark of no frame: a local allocation whose
+     frame is gone, or the mark of a region that is gone. The machine
+     does not tell the two apart. At the place of a region it is taken
+     to be a region (decision D47), anywhere else a value (decision
+     D45). *)
+
+(* CR mshinwell: giving a region whose mark is in no frame to a
+   continuation, at a parameter that is a region, is undefined, as
+   ending it is. The program passes the number that the region read,
+   and nothing goes wrong there: a handler that does nothing with the
+   number is harmless. It is so here so that the check says that a
+   region is gone where the region is given, and does not wait for its
+   end or for an allocation in it. That relies on the life that a
+   region is meant to have, and refuses a path on which the handler
+   ignores the region. It would be wrong if the compiler gives a
+   region that has ended to a handler that, on that path, does nothing
+   with it. Decision D47. *)
+Fixpoint simples_fault (rs : region_state) (simples : list simple)
+    (places : list bool) : option region_fault :=
+  match simples with
+  | [] => None
+  | s :: simples =>
+    let place := hd false places in
+    if simple_usable rs s then simples_fault rs simples (tl places)
+    else if simple_open_mark rs s
+    then
+      if place then simples_fault rs simples (tl places)
+      else Some Region_used_as_value
+    else Some (if place then Region_not_open else Dead_value_used)
+  end.
+
+(* An [Apply_cont] one of whose arguments is a mark that is on the
+   stack. Where the continuation is bound to a handler this is
+   FlambdaSemanticsSpec.apply_cont_value, but for the kind of a value:
+   a mark that is on the stack is of the kind [Region]
+   ([region_kind_of_value]), where [step] has it of the kind [Value],
+   as any symbol. So the handler must have a parameter of the kind
+   [Region] at the place of each mark, and the parameter is bound to
+   the mark. The frames, the counter and the static environment are
+   left as they are: giving a region ends nothing and begins nothing.
+   Where the continuation is not bound to a handler this is
+   [plain_step]; [region_step] does not come here then, as the test of
+   the simples has refused the mark. *)
+Definition region_apply_cont (rs : region_state) (ac : apply_cont)
+    : region_step_result :=
+  let s := rs_state rs in
+  match resolve (ac_continuation ac) (state_conts s) with
+  | Closure (Handler params metadata handler) def_vars def_conts recursive =>
+    match eval_simples (state_vars s) (ac_args ac) with
+    | Some vs =>
+      if kinds_eqb (map (region_kind_of_value rs) vs)
+           (hm_params_kinds metadata)
+      then
+        match bind_params params vs def_vars with
+        | Some handler_vars =>
+          Region_step
+            (Region_state
+               (State handler handler_vars
+                  (rec_closures recursive def_vars def_conts ++ def_conts)
+                  (state_statics s) (state_heap s))
+               (rs_frames rs) (rs_base rs) (rs_next rs) (rs_counts rs))
+        | None => Region_undefined No_plain_step
+        end
+      else Region_undefined No_plain_step
+    | None => Region_undefined No_plain_step
+    end
+  | _ => plain_step rs
+  end.
+
+(* One step. First the test of every simple that [step] would evaluate
+   ([simples_fault]). Then, by the form of the expression: a primitive
+   that begins or ends a region; a [Let] with a [Local_allocation]
+   after it; another [Let], with the test of D46 if it allocates; a
+   [Let_static], with the test of D46; an [Apply_cont] that gives a
+   region ([region_apply_cont]); and for the rest the step of [step]. *)
 Definition region_step (rs : region_state) : region_step_result :=
   let e := state_expr (rs_state rs) in
-  if negb (forallb (simple_usable rs) (evaluated_simples e))
-  then Region_undefined Dead_value_used
-  else
+  match simples_fault rs (evaluated_simples e) (region_places rs) with
+  | Some fault => Region_undefined fault
+  | None =>
     let rs := count_uses rs in
     match e with
     | Let x kind (Prim (Region_primitive p) args) body =>
@@ -938,8 +1183,13 @@ Definition region_step (rs : region_state) : region_step_result :=
       if existsb (simple_local rs) (evaluated_simples e)
       then Region_undefined Heap_holds_local
       else static_step rs
+    | Apply_cont ac =>
+      if existsb (simple_open_mark rs) (ac_args ac)
+      then region_apply_cont rs ac
+      else plain_step rs
     | _ => plain_step rs
-    end.
+    end
+  end.
 
 (* At most [fuel] steps. *)
 Fixpoint region_run (fuel : nat) (rs : region_state) : region_step_result :=
@@ -1059,11 +1309,277 @@ Definition region_names_fresh (base : symbol) (e : expr)
   expr_below base e && statics_below base statics.
 
 (* ======================================================================== *)
+(* The term with its regions dropped                                        *)
+(* ======================================================================== *)
+
+(* The unit value, as a simple. *)
+Definition unit_simple : simple := Const (Tagged_immediate 0).
+
+(* What the [Let] of a primitive of regions becomes: nothing, where the
+   [Let] is dropped; or a defining expression. A begin or an end that
+   is not applied as the conversion applies it is left. A
+   [Local_allocation] whose first argument is a variable is erased
+   whatever its other arguments are. *)
+Definition erase_region_primitive (x : variable) (p : region_primitive)
+    (args : list simple) : option named :=
+  match p, args with
+  | (Begin_region | Begin_try_region), [] => None
+  | End_region, [_] => Some (Simple unit_simple)
+  | End_try_region, [_] =>
+    Some (Prim (Unary (Opaque_identity Value)) [unit_simple])
+  | Local_allocation, Var y :: _ =>
+    if Pos.eqb x y then None else Some (Simple (Var y))
+  | _, _ => Some (Prim (Region_primitive p) args)
+  end.
+
+(* The elements of a list that are not at the place of a region.
+   [places] says of each, in order, whether it is; one beyond [places]
+   is not, and is kept. *)
+Fixpoint drop_regions {A : Type} (places : list bool) (l : list A) : list A :=
+  match places, l with
+  | [], _ => l
+  | _ :: _, [] => []
+  | place :: places, a :: l =>
+    if place then drop_regions places l else a :: drop_regions places l
+  end.
+
+(* The continuations in scope that a [Let_cont] of the expression
+   binds, each with [region_params] of its handler; the first of a name
+   counts. The return and exception continuations of code, and the
+   ways out of the term, are not among them. *)
+Definition region_conts : Type := list (continuation * list bool).
+
+(* An [Apply_cont] without the arguments that it gives to the region
+   parameters of its continuation. *)
+Definition erase_apply_cont (conts : region_conts) (ac : apply_cont)
+    : apply_cont :=
+  match lookup (ac_continuation ac) conts with
+  | Some places =>
+    Apply_cont_expr (ac_continuation ac) (drop_regions places (ac_args ac))
+      (ac_trap_action ac)
+  | None => ac
+  end.
+
+(* The term with its regions dropped. [conts] is as above: every
+   continuation that a [Let_cont] binds is put in it, whether its
+   handler has a region parameter or not, so that it hides one of the
+   same name bound further out. The body of code is erased with none in
+   scope. *)
+Fixpoint erase (conts : region_conts) (e : expr) : expr :=
+  match e with
+  | Let x kind (Prim (Region_primitive p) args) body =>
+    match erase_region_primitive x p args with
+    | None => erase conts body
+    | Some defining_expr => Let x kind defining_expr (erase conts body)
+    end
+  | Let x kind defining_expr body =>
+    Let x kind defining_expr (erase conts body)
+  | Let_static bindings body =>
+    Let_static (map erase_binding bindings) (erase conts body)
+  | Let_cont_non_recursive k h body =>
+    Let_cont_non_recursive k (erase_handler conts h)
+      (erase ((k, region_params h) :: conts) body)
+  | Let_cont_recursive handlers body =>
+    let conts' :=
+      map (fun '(k, h) => (k, region_params h)) handlers ++ conts
+    in
+    Let_cont_recursive
+      (map (fun '(k, h) => (k, erase_handler conts' h)) handlers)
+      (erase conts' body)
+  | Apply _ | Invalid => e
+  | Apply_cont ac => Apply_cont (erase_apply_cont conts ac)
+  | Switch scrutinee arms =>
+    Switch scrutinee
+      (map (fun '(i, ac) => (i, erase_apply_cont conts ac)) arms)
+  end
+with erase_handler (conts : region_conts) (h : continuation_handler)
+    : continuation_handler :=
+  match h with
+  | Handler params metadata handler =>
+    let places :=
+      map (fun kind => kind_eqb kind Region) (hm_params_kinds metadata)
+    in
+    Handler (drop_regions places params)
+      (Handler_metadata (drop_regions places (hm_params_kinds metadata))
+         (hm_is_exn_handler metadata))
+      (erase conts handler)
+  end
+with erase_binding (binding : static_binding) : static_binding :=
+  match binding with
+  | Bind_code id c => Bind_code id (erase_code c)
+  | Bind_deleted_code _ | Bind_symbol _ _ => binding
+  end
+with erase_code (c : code) : code :=
+  match c with
+  | Code params my_closure return_continuation exn_continuation metadata
+      body =>
+    Code params my_closure return_continuation exn_continuation metadata
+      (erase [] body)
+  end.
+
+(* A static environment with the regions of its code dropped. *)
+Definition erase_statics (statics : static_env) : static_env :=
+  Static_env (map (fun '(id, c) => (id, erase_code c)) (static_code statics))
+    (static_values statics).
+
+(* A continuation that is not one of [conts] with a region parameter. *)
+Definition takes_no_region (conts : region_conts) (k : continuation) : bool :=
+  match lookup k conts with
+  | Some places => negb (existsb (fun place => place) places)
+  | None => true
+  end.
+
+(* No call of the expression, of its handlers or of the code that it
+   binds returns or raises to a continuation that has a region
+   parameter. [conts] is as for [erase]. See the header: [erase] is
+   meant for such a term only. *)
+Fixpoint calls_return_no_region (conts : region_conts) (e : expr) : bool :=
+  match e with
+  | Let _ _ _ body => calls_return_no_region conts body
+  | Let_static bindings body =>
+    forallb binding_returns_no_region bindings
+    && calls_return_no_region conts body
+  | Let_cont_non_recursive k h body =>
+    handler_returns_no_region conts h
+    && calls_return_no_region ((k, region_params h) :: conts) body
+  | Let_cont_recursive handlers body =>
+    let conts' :=
+      map (fun '(k, h) => (k, region_params h)) handlers ++ conts
+    in
+    forallb (fun '(_, h) => handler_returns_no_region conts' h) handlers
+    && calls_return_no_region conts' body
+  | Apply ap =>
+    takes_no_region conts (ap_continuation ap)
+    && takes_no_region conts (ap_exn_continuation ap)
+  | Apply_cont _ | Switch _ _ | Invalid => true
+  end
+with handler_returns_no_region (conts : region_conts)
+    (h : continuation_handler) : bool :=
+  match h with
+  | Handler _ _ handler => calls_return_no_region conts handler
+  end
+with binding_returns_no_region (binding : static_binding) : bool :=
+  match binding with
+  | Bind_code _ c => code_returns_no_region c
+  | Bind_deleted_code _ | Bind_symbol _ _ => true
+  end
+with code_returns_no_region (c : code) : bool :=
+  match c with
+  | Code _ _ _ _ _ body => calls_return_no_region [] body
+  end.
+
+Definition statics_return_no_region (statics : static_env) : bool :=
+  forallb (fun '(_, c) => code_returns_no_region c) (static_code statics).
+
+(* A constant that is not the poison constant of the kind [Region]: the
+   one constant, and with a mark the one value, that a parameter of
+   that kind can be given. *)
+Definition const_no_region_poison (c : const) : bool :=
+  match c with
+  | Poison kind => negb (kind_eqb kind Region)
+  | _ => true
+  end.
+
+Definition simple_no_region_poison (s : simple) : bool :=
+  match s with
+  | Const c => const_no_region_poison c
+  | Var _ | Symbol _ => true
+  end.
+
+Definition apply_cont_no_region_poison (ac : apply_cont) : bool :=
+  forallb simple_no_region_poison (ac_args ac).
+
+(* No simple of the expression, of its handlers or of the code that it
+   binds is the poison constant of the kind [Region]. *)
+Fixpoint no_region_poison (e : expr) : bool :=
+  match e with
+  | Let _ _ defining_expr body =>
+    forallb simple_no_region_poison (simples_of_named defining_expr)
+    && no_region_poison body
+  | Let_static bindings body =>
+    forallb binding_no_region_poison bindings && no_region_poison body
+  | Let_cont_non_recursive _ h body =>
+    handler_no_region_poison h && no_region_poison body
+  | Let_cont_recursive handlers body =>
+    forallb (fun '(_, h) => handler_no_region_poison h) handlers
+    && no_region_poison body
+  | Apply ap =>
+    forallb simple_no_region_poison
+      (ap_callee ap :: ap_args ap ++ exn_extra_simples ap)
+  | Apply_cont ac => apply_cont_no_region_poison ac
+  | Switch scrutinee arms =>
+    simple_no_region_poison scrutinee
+    && forallb (fun '(_, ac) => apply_cont_no_region_poison ac) arms
+  | Invalid => true
+  end
+with handler_no_region_poison (h : continuation_handler) : bool :=
+  match h with
+  | Handler _ _ handler => no_region_poison handler
+  end
+with binding_no_region_poison (binding : static_binding) : bool :=
+  match binding with
+  | Bind_code _ c => code_no_region_poison c
+  | Bind_deleted_code _ => true
+  | Bind_symbol _ const =>
+    forallb simple_no_region_poison (simples_of_static_const const)
+  end
+with code_no_region_poison (c : code) : bool :=
+  match c with
+  | Code _ _ _ _ _ body => no_region_poison body
+  end.
+
+Fixpoint value_no_region_poison (v : value) : bool :=
+  match v with
+  | Value_const c | Value_boxed_number c => const_no_region_poison c
+  | Value_location _ | Value_symbol _ => true
+  | Value_closure _ value_slots | Value_closure_of_set _ _ value_slots =>
+    forallb (fun '(_, v) => value_no_region_poison v) value_slots
+  | Value_block _ fields => forallb value_no_region_poison fields
+  | Value_immutable_array elements =>
+    forallb value_no_region_poison elements
+  | Value_partial_application callee args _ =>
+    value_no_region_poison callee && forallb value_no_region_poison args
+  end.
+
+Definition allocated_no_region_poison
+    (allocated : statically_allocated_value) : bool :=
+  match allocated with
+  | Static_closure _ value_slots
+  | Static_closure_of_set _ _ _ value_slots =>
+    forallb (fun '(_, v) => value_no_region_poison v) value_slots
+  | Static_block _ fields => forallb value_no_region_poison fields
+  | Static_boxed_number contents => value_no_region_poison contents
+  | Static_string _ | Static_imported _ => true
+  | Static_immutable_array elements =>
+    forallb value_no_region_poison elements
+  end.
+
+(* No code and no value of the static environment has the poison
+   constant of the kind [Region]. *)
+Definition statics_no_region_poison (statics : static_env) : bool :=
+  forallb (fun '(_, c) => code_no_region_poison c) (static_code statics)
+  && forallb (fun '(_, allocated) => allocated_no_region_poison allocated)
+       (static_values statics).
+
+(* The terms that [erase] is meant for, with the static environment
+   that they are run in: no call returns or raises to a handler that
+   has a region parameter, and there is no poison constant of the kind
+   [Region]. See the header. *)
+Definition erasable (e : expr) (statics : static_env) : bool :=
+  calls_return_no_region [] e
+  && statics_return_no_region statics
+  && no_region_poison e
+  && statics_no_region_poison statics.
+
+(* ======================================================================== *)
 (* Statements                                                               *)
 (* ======================================================================== *)
 
-(* An expression at whose head this machine does nothing of its own: no
-   primitive of regions, and no [Local_allocation] after its [Let]. *)
+(* An expression that has nothing of regions at its head: no primitive
+   of regions, and no [Local_allocation] after its [Let]. It is a test
+   of the expression alone: an [Apply_cont] passes it whatever its
+   arguments are, and with no frame none of them is a mark on the
+   stack. *)
 Definition head_plain (e : expr) : bool :=
   match e with
   | Let _ _ (Prim (Region_primitive _) _) _ => false
@@ -1160,3 +1676,12 @@ Definition step_keeps_statics_statement : Prop :=
     (∀ (bindings : list static_binding) (body : expr),
       state_expr s <> Let_static bindings body) ->
     state_statics s' = state_statics s.
+
+(* The step of an [Apply_cont] that gives a region is that of [step]
+   where it gives none: [region_apply_cont] differs from [plain_step]
+   by the kind of a mark that is on the stack, and by nothing else. *)
+Definition region_apply_cont_plain_statement : Prop :=
+  ∀ (rs : region_state) (ac : apply_cont),
+    state_expr (rs_state rs) = Apply_cont ac ->
+    existsb (simple_open_mark rs) (ac_args ac) = false ->
+    region_apply_cont rs ac = plain_step rs.

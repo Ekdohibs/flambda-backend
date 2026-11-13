@@ -6,4 +6,4 @@ region_ended_twice.fl:
   the same
   calls outside code once those of known code are inlined: 0
   validated: the same once normalised
-  the check of regions: fails (a region that is not open is ended or named, at step 9) before, fails (a region that is not open is ended or named, at step 10) after
+  the check of regions: fails (a region that is not open is ended, named or given to a continuation, at step 9) before, fails (a region that is not open is ended, named or given to a continuation, at step 10) after

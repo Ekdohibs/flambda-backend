@@ -270,10 +270,44 @@ let marker_of x = function
     | _ -> No_marker)
   | _ -> No_marker
 
+(** val value_open_mark : region_state -> value -> bool **)
+
+let value_open_mark rs v =
+  match v with
+  | Value_symbol m -> negb (value_usable rs v) && on_stack m rs.rs_frames
+  | _ -> false
+
+(** val simple_open_mark : region_state -> simple -> bool **)
+
+let simple_open_mark rs s =
+  match eval_simple rs.rs_state.state_vars s with
+  | Some v -> value_open_mark rs v
+  | None -> false
+
+(** val region_params : continuation_handler -> bool list **)
+
+let region_params h = map (fun kind -> kind_eqb kind Region) (handler_kinds h)
+
+(** val region_places : region_state -> bool list **)
+
+let region_places rs =
+  match rs.rs_state.state_expr with
+  | Apply_cont ac -> (
+    match resolve ac.ac_continuation rs.rs_state.state_conts with
+    | Closure (h, _, _, _) -> region_params h
+    | _ -> [])
+  | _ -> []
+
+(** val region_kind_of_value : region_state -> value -> flambda_kind **)
+
+let region_kind_of_value rs v =
+  if value_open_mark rs v then Region else kind_of_value v
+
 type region_fault =
   | Dead_value_used
   | Heap_holds_local
   | Region_not_open
+  | Region_used_as_value
   | Not_of_the_conversion
   | No_plain_step
 
@@ -526,13 +560,62 @@ let count_uses rs =
       count_local_uses = add uses counts.count_local_uses
     }
 
+(** val simples_fault : region_state -> simple list -> bool list -> region_fault
+    option **)
+
+let rec simples_fault rs simples places =
+  match simples with
+  | [] -> None
+  | s :: simples0 ->
+    let place = hd false places in
+    if simple_usable rs s
+    then simples_fault rs simples0 (tl places)
+    else if simple_open_mark rs s
+    then
+      if place
+      then simples_fault rs simples0 (tl places)
+      else Some Region_used_as_value
+    else Some (if place then Region_not_open else Dead_value_used)
+
+(** val region_apply_cont : region_state -> apply_cont -> region_step_result **)
+
+let region_apply_cont rs ac =
+  let s = rs.rs_state in
+  match resolve ac.ac_continuation s.state_conts with
+  | Closure (h, def_vars, def_conts, recursive) -> (
+    let (Handler (params, metadata, handler)) = h in
+    match eval_simples s.state_vars ac.ac_args with
+    | Some vs ->
+      if kinds_eqb (map (region_kind_of_value rs) vs) metadata.hm_params_kinds
+      then
+        match bind_params params vs def_vars with
+        | Some handler_vars ->
+          Region_step
+            { rs_state =
+                { state_expr = handler;
+                  state_vars = handler_vars;
+                  state_conts =
+                    app (rec_closures recursive def_vars def_conts) def_conts;
+                  state_statics = s.state_statics;
+                  state_heap = s.state_heap
+                };
+              rs_frames = rs.rs_frames;
+              rs_base = rs.rs_base;
+              rs_next = rs.rs_next;
+              rs_counts = rs.rs_counts
+            }
+        | None -> Region_undefined No_plain_step
+      else Region_undefined No_plain_step
+    | None -> Region_undefined No_plain_step)
+  | _ -> plain_step rs
+
 (** val region_step : region_state -> region_step_result **)
 
 let region_step rs =
   let e = rs.rs_state.state_expr in
-  if negb (forallb (simple_usable rs) (evaluated_simples e))
-  then Region_undefined Dead_value_used
-  else
+  match simples_fault rs (evaluated_simples e) (region_places rs) with
+  | Some fault -> Region_undefined fault
+  | None -> (
     let rs0 = count_uses rs in
     match e with
     | Let (x, kind, defining_expr, body) -> (
@@ -590,7 +673,11 @@ let region_step rs =
       if existsb (simple_local rs0) (evaluated_simples e)
       then Region_undefined Heap_holds_local
       else static_step rs0
-    | _ -> plain_step rs0
+    | Apply_cont ac ->
+      if existsb (simple_open_mark rs0) ac.ac_args
+      then region_apply_cont rs0 ac
+      else plain_step rs0
+    | _ -> plain_step rs0)
 
 (** val initial_region_state : expr -> static_env -> symbol -> region_state **)
 

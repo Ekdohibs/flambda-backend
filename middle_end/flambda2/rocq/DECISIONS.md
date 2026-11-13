@@ -184,7 +184,10 @@ a `CR` at the place in the `Spec` file.
 - **D45.** The step that evaluates a simple whose value was allocated
   in a region that is gone is undefined, whatever is then done with the
   value; so is one that evaluates the variable of a region anywhere but
-  at its end or in the mode of an allocation. A value made since a
+  at its end, in the mode of an allocation, or as an argument given to
+  a continuation at a parameter that is a region (a region that is
+  open and is evaluated anywhere else is refused under a name of its
+  own, as nothing freed is used there). A value made since a
   `try` was entered is dead once the handler has ended the region of
   the `try`, though the region that it names is open. The program asks
   less: a use of what was freed goes wrong where the freed space has
@@ -208,8 +211,11 @@ a `CR` at the place in the `Spec` file.
   asked of the value that the machine makes for a partial application.
   Decided, for the review of the human.
 - **D47.** The end of a region that is not on the stack (ended twice,
-  or after the end of a region begun before it) is undefined, and so is
-  a local allocation whose mode names such a region. The end of a
+  or after the end of a region begun before it) is undefined, and so
+  are a local allocation whose mode names such a region and an
+  `Apply_cont` that gives such a region to a continuation, at a
+  parameter that is a region (the program passes the number, and a
+  handler that does nothing with it is harmless). The end of a
   region that is not the newest is defined, and ends those above it.
   The normal ways out of a `try` leave its mark; the end of a try
   region is the end of a region. The program has no such test: a

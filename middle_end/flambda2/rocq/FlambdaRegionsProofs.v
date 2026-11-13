@@ -110,6 +110,35 @@ Proof.
   rewrite (simple_local_no_frames rs s Hframes). exact IH.
 Qed.
 
+Lemma value_open_mark_no_frames (rs : region_state) (v : value) :
+  rs_frames rs = [] -> value_open_mark rs v = false.
+Proof.
+  unfold value_open_mark. intros ->. destruct v; try reflexivity.
+  apply andb_false_r.
+Qed.
+
+Lemma existsb_simple_open_mark_no_frames (rs : region_state)
+    (l : list simple) :
+  rs_frames rs = [] -> existsb (simple_open_mark rs) l = false.
+Proof.
+  intros Hframes. induction l as [ | s l IH]; simpl; [ reflexivity | ].
+  rewrite IH, orb_false_r. unfold simple_open_mark.
+  destruct (eval_simple (state_vars (rs_state rs)) s);
+    [ apply value_open_mark_no_frames; exact Hframes | reflexivity ].
+Qed.
+
+(* The test of the simples passes where each may be evaluated. *)
+Lemma simples_fault_usable (rs : region_state) (simples : list simple) :
+  ∀ places : list bool,
+    forallb (simple_usable rs) simples = true ->
+    simples_fault rs simples places = None.
+Proof.
+  induction simples as [ | s simples IH]; intros places; simpl;
+    [ reflexivity | ].
+  intros Husable. apply andb_true_iff in Husable as [Hs Husable].
+  rewrite Hs. apply IH. exact Husable.
+Qed.
+
 Lemma plain_step_no_frames (rs : region_state) :
   rs_frames rs = [] ->
   (∀ (bindings : list static_binding) (body : expr),
@@ -128,7 +157,7 @@ Qed.
 Theorem region_step_plain : region_step_plain_statement.
 Proof.
   intros rs Hframes Hhead Husable.
-  unfold region_step. rewrite Husable. cbn [negb]. cbv zeta.
+  unfold region_step. rewrite (simples_fault_usable _ _ _ Husable). cbv zeta.
   set (rs1 := count_uses rs).
   assert (Hframes1 : rs_frames rs1 = []) by exact Hframes.
   assert (Hplain :
@@ -169,6 +198,8 @@ Proof.
   - rewrite Hlocal. unfold static_step.
     change (rs_state rs1) with (rs_state rs).
     destruct (step (rs_state rs)); reflexivity.
+  - rewrite (existsb_simple_open_mark_no_frames rs1 (ac_args ac) Hframes1).
+    apply Hplain. intros bindings0 body0. try rewrite He. discriminate.
 Qed.
 
 (* ======================================================================== *)
@@ -326,6 +357,29 @@ Proof.
     rewrite Hframes; split; reflexivity.
 Qed.
 
+Lemma region_apply_cont_shape (rs rs' : region_state) (ac : apply_cont) :
+  (∀ (bindings : list static_binding) (body : expr),
+    state_expr (rs_state rs) <> Let_static bindings body) ->
+  ends_region (state_expr (rs_state rs)) = false ->
+  region_apply_cont rs ac = Region_step rs' ->
+  rs_base rs' = rs_base rs ∧ step_shape rs rs'.
+Proof.
+  intros Hnot Hends. unfold region_apply_cont.
+  destruct (resolve (ac_continuation ac) (state_conts (rs_state rs)))
+    as [[params metadata handler] def_vars def_conts recursive | k | c extra
+       | remaining remaining_arity return_arity return_to exn_to];
+    try (apply plain_step_shape; assumption).
+  destruct (eval_simples (state_vars (rs_state rs)) (ac_args ac)) as [vs | ];
+    [ | discriminate ].
+  destruct
+    (kinds_eqb (map (region_kind_of_value rs) vs) (hm_params_kinds metadata));
+    [ | discriminate ].
+  destruct (bind_params params vs def_vars) as [handler_vars | ];
+    [ | discriminate ].
+  intros [= <-]. split; [ reflexivity | ].
+  apply Shape_plain; try reflexivity. exact Hends.
+Qed.
+
 (* The components that [count_uses] leaves. *)
 Lemma count_uses_shape (rs rs' : region_state) :
   rs_base rs' = rs_base (count_uses rs) ∧ step_shape (count_uses rs) rs' ->
@@ -353,9 +407,8 @@ Lemma region_step_shape (rs rs' : region_state) :
 Proof.
   unfold region_step. cbv zeta.
   destruct
-    (negb
-       (forallb (simple_usable rs)
-          (evaluated_simples (state_expr (rs_state rs)))));
+    (simples_fault rs (evaluated_simples (state_expr (rs_state rs)))
+       (region_places rs));
     [ discriminate | ].
   intros Hstep. apply count_uses_shape. revert Hstep.
   set (rs1 := count_uses rs).
@@ -402,6 +455,13 @@ Proof.
          (evaluated_simples (Let_static bindings body)));
       [ discriminate | ].
     apply (static_step_shape _ _ bindings body). exact He.
+  - destruct (existsb (simple_open_mark rs1) (ac_args ac)).
+    + apply region_apply_cont_shape;
+        [ intros bindings0 body0; try rewrite He; discriminate
+        | rewrite He; reflexivity ].
+    + apply plain_step_shape;
+        [ intros bindings0 body0; try rewrite He; discriminate
+        | rewrite He; reflexivity ].
 Qed.
 
 (* ======================================================================== *)
@@ -625,4 +685,59 @@ Proof.
       rewrite <- app_assoc.
       apply lookup_app_none. split; [ exact Hbindings | ].
       apply lookup_app_none. split; assumption.
+Qed.
+
+(* ======================================================================== *)
+(* A region given to a continuation                                         *)
+(* ======================================================================== *)
+
+(* Where no argument is a mark on the stack, the kinds of the values are
+   those of FlambdaValueSpec.kind_of_value. *)
+Lemma region_kinds_plain (rs : region_state) (args : list simple) :
+  ∀ vs : list value,
+    eval_simples (state_vars (rs_state rs)) args = Some vs ->
+    existsb (simple_open_mark rs) args = false ->
+    map (region_kind_of_value rs) vs = map kind_of_value vs.
+Proof.
+  induction args as [ | s args IH]; intros vs; simpl.
+  - intros [= <-] _. reflexivity.
+  - unfold simple_open_mark at 1.
+    destruct (eval_simple (state_vars (rs_state rs)) s) as [v | ]; simpl;
+      [ | discriminate ].
+    destruct (eval_simples (state_vars (rs_state rs)) args) as [vs0 | ];
+      simpl; [ | discriminate ].
+    intros [= <-] Hmarks. apply orb_false_iff in Hmarks as [Hv Hmarks].
+    simpl. unfold region_kind_of_value at 1. rewrite Hv. f_equal.
+    apply IH; [ reflexivity | exact Hmarks ].
+Qed.
+
+Theorem region_apply_cont_plain : region_apply_cont_plain_statement.
+Proof.
+  intros rs ac He Hmarks. unfold region_apply_cont.
+  destruct (resolve (ac_continuation ac) (state_conts (rs_state rs)))
+    as [[params metadata handler] def_vars def_conts recursive | k | c extra
+       | remaining remaining_arity return_arity return_to exn_to]
+    eqn:Hresolve;
+    try reflexivity.
+  unfold plain_step.
+  destruct (eval_simples (state_vars (rs_state rs)) (ac_args ac)) as [vs | ]
+    eqn:Hargs.
+  - rewrite (region_kinds_plain _ _ _ Hargs Hmarks).
+    destruct rs as [[e vars conts statics hp] frames base next counts].
+    cbn [rs_state rs_frames rs_base rs_next rs_counts state_expr state_vars
+         state_conts state_statics state_heap] in *.
+    subst e. unfold with_statics.
+    cbn [state_expr state_vars state_conts state_statics state_heap].
+    rewrite step_apply_cont, Hargs. unfold apply_continuation.
+    rewrite Hresolve. cbn [apply_cont_value].
+    destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
+      [ | reflexivity ].
+    destruct (bind_params params vs def_vars) as [handler_vars | ];
+      reflexivity.
+  - destruct rs as [[e vars conts statics hp] frames base next counts].
+    cbn [rs_state rs_frames rs_base rs_next rs_counts state_expr state_vars
+         state_conts state_statics state_heap] in *.
+    subst e. unfold with_statics.
+    cbn [state_expr state_vars state_conts state_statics state_heap].
+    rewrite step_apply_cont, Hargs. reflexivity.
 Qed.

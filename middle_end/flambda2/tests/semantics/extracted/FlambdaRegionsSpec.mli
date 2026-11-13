@@ -93,10 +93,21 @@ type marker =
 
 val marker_of : variable -> expr -> marker
 
+val value_open_mark : region_state -> value -> bool
+
+val simple_open_mark : region_state -> simple -> bool
+
+val region_params : continuation_handler -> bool list
+
+val region_places : region_state -> bool list
+
+val region_kind_of_value : region_state -> value -> flambda_kind
+
 type region_fault =
   | Dead_value_used
   | Heap_holds_local
   | Region_not_open
+  | Region_used_as_value
   | Not_of_the_conversion
   | No_plain_step
 
@@ -168,6 +179,11 @@ val local_allocation :
   region_step_result
 
 val count_uses : region_state -> region_state
+
+val simples_fault :
+  region_state -> simple list -> bool list -> region_fault option
+
+val region_apply_cont : region_state -> apply_cont -> region_step_result
 
 val region_step : region_state -> region_step_result
 

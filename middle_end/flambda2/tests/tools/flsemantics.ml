@@ -5463,7 +5463,8 @@ let run_regions ~(statics : Values.static_env) (unit : converted) :
             steps,
             Some state )
         | Region_undefined
-            ((Dead_value_used | Heap_holds_local | Region_not_open) as fault) ->
+            (( Dead_value_used | Heap_holds_local | Region_not_open
+             | Region_used_as_value ) as fault) ->
           Region_fails fault, steps, Some state
     in
     go 0 (Regions.initial_region_state unit.body statics base)
@@ -5477,7 +5478,9 @@ let region_outcome_shown (outcome : region_outcome) ~steps =
       | Dead_value_used ->
         "a value allocated in a region is used after the region is gone"
       | Heap_holds_local -> "an allocation on the heap holds a local value"
-      | Region_not_open -> "a region that is not open is ended or named"
+      | Region_not_open ->
+        "a region that is not open is ended, named or given to a continuation"
+      | Region_used_as_value -> "a region is used as a value"
       | Not_of_the_conversion | No_plain_step -> assert false)
       steps
   | Region_not_run why -> Printf.sprintf "not run (%s)" why
