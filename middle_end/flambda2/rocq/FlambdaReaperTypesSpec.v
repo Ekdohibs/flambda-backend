@@ -32,7 +32,9 @@
    [rebuilt_value] and [statics_rebuilt] (what the rebuild makes of a
    value and of the static environment), the fragment
    ([closure_free_type], [type_in_fragment], [env_in_fragment]),
-   [copies_valued], the statements, and the examples, against
+   [copies_valued], [rebuild_exit_relation] (what the statement of the
+   two runs asks of the simulation of the rebuild), the statements, and
+   the examples, against
    FlambdaReaperTypes.v (the rewriting, which needs no review),
    FlambdaReaperFlowSpec.v (where values may be) and
    FlambdaReaperRebuildSpec.v (what the rebuild does). The meaning of a
@@ -107,6 +109,35 @@
      [copies_valued] allows, if the symbol is bound in the first run and
      an allocation of its own there ([statics_allocated], which
      FlambdaReaperFlowSpec.statics_flow gives).
+   - [rewrite_result_type_sound_statement]: the type that the result
+     types of code give a parameter or a result, rewritten as
+     [rewrite_result_types] rewrites it under the metadata of the
+     variable of the code, holds of what the second run has at that
+     variable, if its type held of the value of the first run there.
+     It is the type of the copy that [rewrite_result_types] makes, to
+     which the new parameter is an alias. Of the runs, it asks the values
+     of the variable in the two, related, as the simulation has them at
+     a return of code.
+   - [exported_types_sound_statement]: the statement of the two runs.
+     Where the unit exits, from a state whose static environment and a
+     valuation satisfy a typing environment of the fragment, the rebuilt
+     unit exits through the same continuation, and the type of each
+     symbol bound, rewritten, holds of the symbol in the static
+     environment of that exit. It is proved from the second statement and
+     [rebuild_exit_relation], which it takes as a premise: what it asks
+     of the simulation of FlambdaReaperRebuildProofs.v, that the
+     static environments of the two exits are related by
+     [statics_rebuilt], and that every symbol bound in the first is an
+     allocation of its own. [rebuild_exit_relation] is stated here and
+     not proved; it is to be proved under the premises of
+     FlambdaReaperRebuildSpec.rebuild_refines_observably_statement, from
+     [statics_rel] and [flow_invariant], which [related] has at every
+     state. [statics_rebuilt] asks two things that [statics_rel] does not
+     say: the fields of a block at their own kind, where [rel] has them
+     all of kind value, which they are in the blocks of the traversal;
+     and a use at the node of each field used, which [field_used_exact]
+     gives where an allocation holds one node in each field, as the
+     allocations of the traversal do.
    - [boxed_fix_needed_statement] and [alias_fix_needed_statement]: the
      first statement is false without the fix of a boxed number whose
      contents have no use, and without that of the aliases under a
@@ -116,7 +147,12 @@
      FlambdaReaperSolution.v. The program of the second, compiled from
      OCaml, gives a wrong type in the .cmx file: the type of a block says
      two fields are one name where the rebuild has kept the first and
-     made the second poison.
+     made the second poison. [boxed_result_fix_needed_statement]: the
+     statement of result types is false without the first fix, on a
+     result that is the box: the compiler's [rewrite_result_types] gives
+     it the type of the box, which the rebuild makes poison (compiled
+     from OCaml, [-flambda2-result-types-all-functions] exports such a
+     result type; no use of it was found that goes wrong).
    - [rewrite_keeps_null_statement]: [Null], which every rebuild keeps
      as it is, has every type that it had, rewritten, of any type,
      closure types included, under any metadata and any solution, with
@@ -129,7 +165,9 @@
      matches on the symbol takes the branch of [This]: it prints 2
      where the program prints [null].
    - [example_statement]: the rewriting of an environment of two symbols
-     and a block, computed.
+     and a block, computed; [result_types_example_statement]: the
+     rewriting of the result types of code that returns the box, with
+     the fixes and as the compiler has it.
 
    What is left out:
    - Closures: the types of closures (and so the fault of
@@ -144,21 +182,19 @@
      alias in the case of another tag of a variant, whose fields have the
      metadata of the fields of the case taken); there the copy is to have
      no value.
-   - The link with the runs: that the static environments of the unit
-     and of its rebuild, where they exit, are related by
-     [statics_rebuilt], and that every symbol bound is an allocation of
-     its own ([statics_allocated]). The simulation of
-     FlambdaReaperRebuildProofs.v relates them ([statics_rel],
-     [flow_invariant]) at every state, where the second differs from
-     [statics_rebuilt] as above.
-   - The result types of code ([rewrite_result_types]), and the
-     unboxing. *)
+   - The proof of [rebuild_exit_relation] (see above), and for result
+     types, the relation of the values of the two runs at a return of
+     code.
+   - Unboxing: the rewriting of the types of the closures whose
+     representation changes, and of parameters and results that are
+     unboxed. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaMapSpec FlambdaPrimitiveSpec FlambdaSemanticsSpec
-  FlambdaReaperGraphSpec FlambdaReaperSolution FlambdaReaperFlowSpec
+  FlambdaWellFormedSpec FlambdaReaperGraphSpec FlambdaReaperTraversal
+  FlambdaReaperSolution FlambdaReaperRebuild FlambdaReaperFlowSpec
   FlambdaReaperTypes.
 From OxCamlFlambda2Types Require Import FlambdaTypeGrammar
   FlambdaTypeMeaningSpec FlambdaBindingTime FlambdaTypingEnv
@@ -449,6 +485,104 @@ Definition rewrite_symbol_type_sound_statement : Prop :=
       (rewrite_symbol_type all_fixes (plain_context is_local F T sets) tenv
          canon s).
 
+(* The type that the result types of code give a parameter or a result,
+   [type_var], which holds of its value [v] in the first run (the
+   environment of the result types has a type for it), rewritten
+   under the metadata of the variable of the code [code_var] as
+   [rewrite_result_types] rewrites it, holds of what the second run has
+   at that variable; with the fixes [fx]. *)
+Definition rewrite_result_type_sound_with (fx : fixes) : Prop :=
+  ∀ (is_local : field -> bool) (F : facts) (T : tables)
+    (sets : list set_of_closures) (tenv : Typing_env.t) (canon : canon_fn)
+    (statics statics' : static_env) (valuation valuation' : env)
+    (code_var type_var : variable) (v v' : value),
+    closed is_local (graph_of_facts F) (solution_of_tables T) ->
+    is_local_slots_only is_local ->
+    typing_env_satisfied_strictly statics valuation tenv ->
+    env_in_fragment valuation tenv ->
+    statics_allocated (solution_of_tables T) statics ->
+    statics_rebuilt (graph_of_facts F) (solution_of_tables T) statics
+      statics' ->
+    copies_valued tenv canon valuation valuation' ->
+    Typing_env.find tenv (Name_var type_var) None <> None ->
+    lookup type_var valuation = Some v ->
+    rebuilt_value (graph_of_facts F) (solution_of_tables T) v
+      (Node_variable code_var) v' ->
+    type_satisfied statics' valuation' v'
+      (rewrite_result_type fx (plain_context is_local F T sets) tenv canon
+         code_var type_var).
+
+Definition rewrite_result_type_sound_statement : Prop :=
+  rewrite_result_type_sound_with all_fixes.
+
+(* ======================================================================== *)
+(* The two runs                                                             *)
+(* ======================================================================== *)
+
+(* What the statement of the two runs asks of the simulation of the
+   rebuild (FlambdaReaperRebuildProofs.v, [related]): where the run of
+   the unit [e] exits, from a state whose static environment is
+   [statics], the run of the rebuilt unit [e'] exits through the same
+   continuation, with the same heap, from a state whose static
+   environment [statics'] [statics_rebuilt] relates to [statics]; and
+   every symbol that [statics] binds is an allocation of its own
+   ([statics_allocated], which FlambdaReaperFlowSpec.statics_flow
+   gives). It is to be proved under the premises of
+   FlambdaReaperRebuildSpec.rebuild_refines_observably_statement, from
+   [statics_rel] and [flow_invariant], which [related] has at every
+   state, and is not proved here: [statics_rebuilt] asks two things that
+   [statics_rel] does not say (see the header). *)
+Definition rebuild_exit_relation (G : graph) (sol : solution) (e e' : expr)
+    : Prop :=
+  ∀ (n : nat) (s : state) (k : continuation) (vs : list value) (hp : heap)
+    (rd : read_record),
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
+    step s = Exit k vs hp rd ->
+    statics_allocated sol (state_statics s)
+    ∧ ∃ (m : nat) (t : state) (vs' : list value) (rd' : read_record),
+        run m (State e' [] [] empty_static_env empty_heap no_reads) = Step t
+        ∧ step t = Exit k vs' hp rd'
+        ∧ statics_rebuilt G sol (state_statics s) (state_statics t).
+
+(* The types that the reaper exports for the symbols of a unit hold of
+   them where the rebuilt unit exits: where the unit exits from a state
+   whose static environment and a valuation satisfy a typing environment
+   of the fragment, the rebuilt unit exits through the same continuation,
+   and the type of each symbol bound, rewritten, holds of the symbol
+   there, given [rebuild_exit_relation]. *)
+Definition exported_types_sound_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables)
+    (preserve_direct_calls : bool) (sets : list set_of_closures)
+    (tenv : Typing_env.t) (canon : canon_fn) (valuation valuation' : env)
+    (n : nat) (s : state) (k : continuation) (vs : list value) (hp : heap)
+    (rd : read_record) (sym : symbol)
+    (allocated : statically_allocated_value),
+    is_local_slots_only is_local ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    rebuild_exit_relation (graph_of_facts (traverse_unit flag u e))
+      (solution_of_tables T) e
+      (rebuild_unit_from_tables (traverse_unit flag u e) T
+         preserve_direct_calls e) ->
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
+    step s = Exit k vs hp rd ->
+    typing_env_satisfied_strictly (state_statics s) valuation tenv ->
+    env_in_fragment valuation tenv ->
+    copies_valued tenv canon valuation valuation' ->
+    lookup sym (static_values (state_statics s)) = Some allocated ->
+    ∃ (m : nat) (t : state) (vs' : list value) (rd' : read_record),
+      run m
+        (State
+           (rebuild_unit_from_tables (traverse_unit flag u e) T
+              preserve_direct_calls e)
+           [] [] empty_static_env empty_heap no_reads)
+      = Step t
+      ∧ step t = Exit k vs' hp rd'
+      ∧ type_satisfied (state_statics t) valuation' (Value_symbol sym)
+          (rewrite_symbol_type all_fixes
+             (plain_context is_local (traverse_unit flag u e) T sets) tenv
+             canon sym).
+
 (* ======================================================================== *)
 (* The fixes that are needed                                                *)
 (* ======================================================================== *)
@@ -536,6 +670,21 @@ End AliasCounterexample.
 
 (* Without the fix of boxed numbers, and without that of aliases, the
    first statement is false; so it is of the compiler. *)
+(* The same box as the result of code: the result types give the
+   parameter [x20] of the result types the type [box_number], and the
+   code returns [x10]. *)
+Module BoxedResultCounterexample.
+
+Definition tenv : Typing_env.t :=
+  Typing_env.replace_equation
+    (Typing_env.add_variable_definition Typing_env.create 20%positive Value
+       Name_mode.normal)
+    (Name_var 20%positive) BoxedCounterexample.boxed_type.
+
+Definition valuation : env := [(20%positive, BoxedCounterexample.boxed)].
+
+End BoxedResultCounterexample.
+
 Definition boxed_fix_needed_statement : Prop :=
   ~ rewrite_type_sound_with (Fixes false true true true).
 
@@ -544,6 +693,9 @@ Definition alias_fix_needed_statement : Prop :=
 
 Definition compiler_rewrite_unsound_statement : Prop :=
   ~ rewrite_type_sound_with compiler_fixes.
+
+Definition boxed_result_fix_needed_statement : Prop :=
+  ~ rewrite_result_type_sound_with (Fixes false true true true).
 
 (* ======================================================================== *)
 (* Null keeps its types                                                     *)
@@ -682,3 +834,25 @@ Definition example_statement : Prop :=
   ∧ rewrite_typing_env all_fixes RewriteExample.context RewriteExample.tenv
     = [(Name_symbol 50%positive, RewriteExample.rewritten_s50);
        (Name_symbol 51%positive, unknown Value)].
+
+(* The result types of code that returns the box of
+   [BoxedCounterexample], kept: the new parameter [x21] is an alias to the
+   copy of [x20], whose type is forgotten to that of a value that is not
+   null; the compiler keeps the type of the box, which the rebuild makes
+   poison. *)
+Definition result_types_example_statement : Prop :=
+  let context :=
+    plain_context BoxedCounterexample.is_local BoxedCounterexample.graph
+      BoxedCounterexample.solution []
+  in
+  rewrite_result_types all_fixes context BoxedResultCounterexample.tenv
+    [(10%positive, Keep, 20%positive)] []
+  = Rewritten_result_types [21%positive] [] [20%positive]
+      [(Name_var 21%positive, alias_type_of Value (Var 20%positive));
+       (Name_var 20%positive, any_non_null_value)]
+  ∧ rr_equations
+      (rewrite_result_types compiler_fixes context
+         BoxedResultCounterexample.tenv [(10%positive, Keep, 20%positive)]
+         [])
+    = [(Name_var 21%positive, alias_type_of Value (Var 20%positive));
+       (Name_var 20%positive, BoxedCounterexample.boxed_type)].

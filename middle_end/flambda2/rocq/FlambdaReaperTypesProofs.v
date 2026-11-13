@@ -39,7 +39,9 @@ From Stdlib Require Import ZArith List Bool Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList OxCamlOption.
 From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaMapSpec FlambdaMapProofs FlambdaValueSpec FlambdaPrimitiveSpec
-  FlambdaSemanticsSpec FlambdaReaperGraphSpec FlambdaReaperSolution
+  FlambdaPrimitiveProofs FlambdaSemanticsSpec FlambdaWellFormedSpec
+  FlambdaReaperGraphSpec FlambdaReaperTraversal FlambdaReaperRebuild
+  FlambdaReaperSolution
   FlambdaReaperSolutionSpec FlambdaReaperSolutionProofs
   FlambdaReaperFlowSpec FlambdaReaperTypes FlambdaReaperTypesSpec.
 From OxCamlFlambda2Types Require Import FlambdaTypeGrammar
@@ -47,7 +49,8 @@ From OxCamlFlambda2Types Require Import FlambdaTypeGrammar
   FlambdaBindingTime FlambdaTypingEnv FlambdaTypingEnvSpec
   FlambdaTypingEnvProofs FlambdaExpandHead FlambdaExpandHeadSpec
   FlambdaExpandHeadProofs FlambdaTypeAccessSpec FlambdaProvers
-  FlambdaTypeMeaningBoolSpec FlambdaTypeMeaningBoolProofs.
+  FlambdaTypeMeaningBoolSpec FlambdaTypeMeaningBoolProofs
+  FlambdaEnvAliases FlambdaEnvAliasesSpec FlambdaEnvAliasesProofs.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -1432,6 +1435,72 @@ Proof.
 Qed.
 
 (* ======================================================================== *)
+(* The result types of code                                                 *)
+(* ======================================================================== *)
+
+Lemma kind_bottom (k : flambda_kind) : kind (bottom k) = k.
+Proof. destruct k as [ | [] | | ]; reflexivity. Qed.
+
+(* The type of a name found at no kind is found at its own. *)
+Lemma find_with_kind (tenv : Typing_env.t) (n : name) (ty : flambda_type) :
+  Typing_env.find tenv n None = Some ty ->
+  Typing_env.find tenv n (Some (kind ty)) = Some ty.
+Proof.
+  unfold Typing_env.find, Typing_env.find_with_binding_time_and_mode'.
+  destruct (Keyed.lookup name_eqb n (Typing_env.names_to_types tenv))
+    as [[ty0 bt] | ] eqn:Hl.
+  - cbn [Typing_env.check_optional_kind_matches].
+    destruct (Typing_env.is_bottom tenv); cbn; intros [= <-];
+      [ rewrite kind_bottom | ]; rewrite kind_eqb_refl; reflexivity.
+  - destruct n as [x | sym]; [ discriminate | ].
+    cbn [Typing_env.check_optional_kind_matches andb].
+    destruct (among sym (Typing_env.defined_symbols tenv)); [ | discriminate ].
+    cbn. intros [= <-]. reflexivity.
+Qed.
+
+Theorem rewrite_result_type_sound : rewrite_result_type_sound_statement.
+Proof.
+  intros is_local F T sets tenv canon statics statics' valuation valuation'
+    code_var type_var v v' Hc Hlocal Henv Hfrag Halloc Hst Hcopies Hfind Hl
+    Hv.
+  unfold rewrite_result_type, rewrite_concrete_type_of, kind_of_name.
+  destruct (Typing_env.find tenv (Name_var type_var) None) as [ty0 | ] eqn:Hf;
+    [ | contradiction ].
+  unfold concrete_type_of. rewrite (find_with_kind tenv _ ty0 Hf).
+  pose proof (find_fragment valuation tenv Hfrag _ _ ty0 Hf) as Hfr.
+  pose proof (find_satisfied_strictly statics valuation tenv (Name_var type_var)
+                None ty0 v Henv Hf Hl) as Hsat.
+  pose proof (metadata_for_name_at (plain_context is_local F T sets)
+                (Node_variable code_var)) as [Hat Hhu].
+  apply (proj2 (rewrite_sound all_fixes eq_refl eq_refl is_local F T sets tenv
+                  canon statics statics' valuation valuation' Hc Hlocal Henv
+                  Hfrag Halloc Hst Hcopies (rewrite_fuel tenv ty0))
+           _ ty0 v v' Hfr);
+    [ | exact Hsat ].
+  right. exists (Node_variable code_var).
+  split; [ exact Hv | split; [ exact Hat | exact Hhu ] ].
+Qed.
+
+(* ======================================================================== *)
+(* The two runs                                                             *)
+(* ======================================================================== *)
+
+Theorem exported_types_sound : exported_types_sound_statement.
+Proof.
+  intros flag is_local u e T preserve_direct_calls sets tenv canon valuation
+    valuation' n s k vs hp rd sym allocated Hlocal Hcheck Hrel Hrun Hstep
+    Henv Hfrag Hcopies Hl.
+  destruct (Hrel n s k vs hp rd Hrun Hstep)
+    as [Halloc (m & t & vs' & rd' & Hrun' & Hstep' & Hst)].
+  exists m, t, vs', rd'. split; [ exact Hrun' | split; [ exact Hstep' | ] ].
+  exact (rewrite_symbol_type_sound is_local (traverse_unit flag u e) T sets
+           tenv canon (state_statics s) (state_statics t) valuation
+           valuation' sym allocated
+           (check_closed_sound is_local _ T Hcheck) Hlocal Henv Hfrag Halloc
+           Hst Hcopies Hl).
+Qed.
+
+(* ======================================================================== *)
 (* The fixes that are needed                                                *)
 (* ======================================================================== *)
 
@@ -1504,6 +1573,59 @@ Proof. apply boxed_counterexample. reflexivity. Qed.
 
 Theorem compiler_rewrite_unsound : compiler_rewrite_unsound_statement.
 Proof. apply boxed_counterexample. reflexivity. Qed.
+
+Theorem boxed_result_fix_needed : boxed_result_fix_needed_statement.
+Proof.
+  intros H. unfold rewrite_result_type_sound_with in H.
+  set (valuation := BoxedResultCounterexample.valuation).
+  set (tenv := BoxedResultCounterexample.tenv).
+  assert (Hlookup : ∀ (n : name) (ty : flambda_type)
+                      (bt : Binding_time.With_name_mode.t),
+             Keyed.lookup name_eqb n (Typing_env.names_to_types tenv)
+             = Some (ty, bt) ->
+             n = Name_var 20%positive
+             ∧ (ty = BoxedCounterexample.boxed_type ∨ ty = unknown Value)).
+  { intros n ty bt Hl.
+    apply (keyed_lookup_in name_eqb name_eqb_eq) in Hl.
+    vm_compute in Hl.
+    destruct Hl as [[= <- <- _] | [[= <- <- _] | []]];
+      split; auto. }
+  assert (Henv : typing_env_satisfied_strictly empty_static_env valuation tenv).
+  { split; [ vm_compute; reflexivity | split ].
+    - intros n ty bt w Hl Hw. right.
+      destruct (Hlookup n ty bt Hl) as [-> [-> | ->]];
+        vm_compute in Hw; injection Hw as <-;
+        apply type_satisfied_b_iff; vm_compute; reflexivity.
+    - change (Typing_env.aliases tenv) with Aliases.empty.
+      apply empty_respected. }
+  pose proof (H BoxedCounterexample.is_local BoxedCounterexample.graph
+                BoxedCounterexample.solution [] tenv (fun n _ _ => n)
+                empty_static_env empty_static_env valuation valuation
+                10%positive 20%positive BoxedCounterexample.boxed
+                BoxedCounterexample.rebuilt) as Hsound.
+  clear H.
+  apply type_satisfied_b_iff in Hsound.
+  - vm_compute in Hsound. discriminate Hsound.
+  - apply check_closed_sound. vm_compute. reflexivity.
+  - intros f Hf. discriminate Hf.
+  - exact Henv.
+  - intros n ty bt Hl. destruct (Hlookup n ty bt Hl) as [_ [-> | ->]];
+      [ | apply unknown_fragment ].
+    split; [ vm_compute; reflexivity | ].
+    intros s k w Hin. vm_compute in Hin. destruct Hin.
+  - intros s allocated Hl. discriminate Hl.
+  - intros s allocated Hl. discriminate Hl.
+  - intros s x k m Hcan. unfold value_of_name.
+    exact (get_canonical_simple_satisfied _ _ _ _ _ _ _ _ Henv Hcan).
+  - vm_compute. discriminate.
+  - reflexivity.
+  - cbn [rebuilt_value].
+    exists BoxedCounterexample.x10, Boxable_naked_float, Node_all_constants.
+    split; [ apply may_come_from_self; vm_compute; auto | ].
+    split; [ vm_compute; reflexivity | ].
+    split; [ reflexivity | ].
+    split; [ cbn; left; reflexivity | vm_compute; reflexivity ].
+Qed.
 
 Theorem alias_fix_needed : alias_fix_needed_statement.
 Proof.
@@ -1783,4 +1905,7 @@ Qed.
 (* ======================================================================== *)
 
 Theorem example : example_statement.
+Proof. split; vm_compute; reflexivity. Qed.
+
+Theorem result_types_example : result_types_example_statement.
 Proof. split; vm_compute; reflexivity. Qed.

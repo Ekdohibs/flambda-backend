@@ -26,8 +26,9 @@
  ******************************************************************************)
 
 (* The rewriting of the types that the reaper exports, transcribed: the
-   types of the symbols of the unit, which the .cmx file carries, given
-   the flow graph of the unit and the solution of the reaper's rules.
+   types of the symbols of the unit, which the .cmx file carries, and the
+   result types of code, given the flow graph of the unit and the
+   solution of the reaper's rules.
 
    This file transcribes middle_end/flambda2/reaper/types_rewriter.ml
    (the metadata, [follow_field], [join_metadata], [metadata_for_name],
@@ -35,11 +36,14 @@
    rewriter is given to ([Traversals.Make], in
    middle_end/flambda2/types/traversals.ml: [rewrite_arbitrary_type],
    [rewrite], the rewriting of the heads, [destructure_expanded_head],
-   [get_canonical_with], [rewrite_in_depth] and [rewrite]), and the
+   [get_canonical_with], [rewrite_in_depth] and [rewrite]), with
+   [rewrite_result_types] and the part of
+   [rewrite_env_extension_with_extra_variables] that it calls, and the
    queries of points_to_analysis.ml that the rewriter calls. It needs no
    review: what the rewritten types mean is stated in
    FlambdaReaperTypesSpec.v and proved in FlambdaReaperTypesProofs.v. It
-   is extracted ([rewrite_typing_env], [rewrite_symbol_type]).
+   is extracted ([rewrite_typing_env], [rewrite_symbol_type],
+   [rewrite_result_types], [rewrite_result_type]).
 
    The inputs. The facts of the graph and the tables of the solution
    (FlambdaReaperGraphSpec.v), as the queries go through them: every set
@@ -118,8 +122,13 @@
      of its new representation ([patterns_for_unboxed_fields]); the
      model forgets the type in both cases.
    - [rewrite_kind_with_subkind]: the model has no subkinds.
-   - [rewrite_result_types], and [rewrite_env_extension_with_extra_variables]:
-     the result types of code are not rewritten here.
+   - In [rewrite_result_types], the parameters and results that are
+     unboxed, and the parameters that the fields of an unboxed
+     [my_closure] become; and the environment of the result types is an
+     input, where the compiler adds the extension to the environment of
+     the unit by meet, and the extension it gives back is the equations
+     and the existential copies, where the compiler makes it with
+     [make_suitable_for_environment].
    - [Rec_info]: function types have no [rec_info] in the grammar, so the
      patterns [Pattern.rec_info] are not there; coercions are not there.
    - Array types and [array_slot]: the grammar has no [Array].
@@ -1399,6 +1408,31 @@ Definition canon_of (acc : names_acc) : canon_fn :=
     | None => n
     end.
 
+(* [Points_to_analysis.keep_or_delete]: what the change of calling
+   convention does with a parameter or a result of code. *)
+Inductive keep_or_delete : Type :=
+  | Keep
+  | Delete.
+
+(* The result types of code, rewritten ([Result_types.t], as
+   [rewrite_result_types] makes it): the new variables of the parameters
+   and of the results kept, the variables of the copies, which are
+   existential, and the equations. *)
+Record rewritten_result_types : Type := Rewritten_result_types {
+  rr_params : list variable;
+  rr_results : list variable;
+  rr_existentials : list variable;
+  rr_equations : list (name * flambda_type)
+}.
+
+(* The elements of a list, each with a number, from [first]. *)
+Fixpoint number_from {A : Type} (first : positive) (l : list A)
+    : list (positive * A) :=
+  match l with
+  | [] => []
+  | a :: l => (first, a) :: number_from (Pos.succ first) l
+  end.
+
 (* ======================================================================== *)
 (* The typing environment ([rewrite_in_depth], [rewrite])                   *)
 (* ======================================================================== *)
@@ -1506,5 +1540,92 @@ Definition rewrite_symbol_type (canon : canon_fn) (s : symbol)
     : flambda_type :=
   rewrite_concrete_type_of canon (Name_symbol s) Value
     (metadata_for_name ctx (Node_symbol s)).
+
+(* ======================================================================== *)
+(* The result types of code ([rewrite_result_types])                       *)
+(* ======================================================================== *)
+
+(* The kind of a name, read off its type ([Variable.kind]). *)
+Definition kind_of_name (n : name) : flambda_kind :=
+  match Typing_env.find tenv n None with
+  | Some ty => kind ty
+  | None => Value
+  end.
+
+(* The type of the copy that [rewrite_result_types] makes of a parameter
+   or a result that the code keeps: the type that the result types give
+   the parameter of the result types [type_var], read in the environment
+   of the result types, rewritten under the metadata of the variable of
+   the code [code_var] ([variable_pattern], [Keep]). *)
+Definition rewrite_result_type (canon : canon_fn) (code_var type_var : variable)
+    : flambda_type :=
+  rewrite_concrete_type_of canon (Name_var type_var)
+    (kind_of_name (Name_var type_var))
+    (metadata_for_name ctx (Node_variable code_var)).
+
+(* The alias that the new variable of a parameter or a result kept is
+   given, before it is rewritten: [alias_type_of kind typev]. *)
+Definition result_alias (type_var : variable) : flambda_type :=
+  alias_type_of (kind_of_name (Name_var type_var)) (Var type_var).
+
+(* [rewrite_result_types], without unboxing. [tenv] is the environment of
+   the result types: the environment of the unit at the end, with the
+   parameters and the results of the result types defined and the
+   equations of their extension added. Each parameter and each result is
+   given with the variable of the code and the decision of the change of
+   calling convention ([Keep] everywhere when it does not change); one
+   that is deleted is dropped, and one that is kept gets a new variable,
+   numbered from [first_fresh], whose type is the alias to it rewritten
+   under the metadata of the variable of the code
+   ([rewrite_env_extension_with_extra_variables]: [fold_destructuring] of
+   [Pattern.var], then [rewrite_arbitrary_type]); the copies that these
+   reach are processed as those of the environment ([rewrite_in_depth]),
+   and are the existential variables of the extension. *)
+Definition rewrite_result_types
+    (params results : list (variable * keep_or_delete * variable))
+    : rewritten_result_types :=
+  let kept (l : list (variable * keep_or_delete * variable)) :=
+    flat_map
+      (fun t =>
+         let '(code_var, decision, type_var) := t in
+         match decision with
+         | Keep => [(code_var, type_var)]
+         | Delete => []
+         end)
+      l
+  in
+  let kept_params := kept params in
+  let kept_results := kept results in
+  let numbered := number_from first_fresh_of_env (kept_params ++ kept_results)
+  in
+  let next := Pos.of_nat (Pos.to_nat first_fresh_of_env + length numbered) in
+  let acc :=
+    fold_left
+      (fun acc t =>
+         let '(_, (code_var, type_var)) := t in
+         let ty := result_alias type_var in
+         fold_left get_canonical_with
+           (reached_arbitrary fx ctx tenv (rewrite_fuel tenv ty)
+              (metadata_for_name ctx (Node_variable code_var)) ty)
+           acc)
+      numbered (Names_acc [] [] next)
+  in
+  let bindings :=
+    map
+      (fun t =>
+         let '(new_var, (code_var, type_var)) := t in
+         let ty := result_alias type_var in
+         (Name_var new_var,
+          rewrite_arbitrary fx ctx tenv (canon_of acc) (rewrite_fuel tenv ty)
+            (metadata_for_name ctx (Node_variable code_var)) ty))
+      numbered
+  in
+  let '(copies, _) := rewrite_in_depth rounds_of_env acc [] in
+  Rewritten_result_types (map fst (firstn (length kept_params) numbered))
+    (map fst (skipn (length kept_params) numbered))
+    (flat_map
+       (fun p => match fst p with Name_var x => [x] | Name_symbol _ => [] end)
+       copies)
+    (bindings ++ copies).
 
 End Env.
