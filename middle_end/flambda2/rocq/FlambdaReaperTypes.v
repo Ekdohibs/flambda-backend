@@ -1,0 +1,1510 @@
+(******************************************************************************
+ *                                  OxCaml                                    *
+ * -------------------------------------------------------------------------- *
+ *                               MIT License                                  *
+ *                                                                            *
+ * Copyright (c) 2026 Jane Street Group LLC                                   *
+ * opensource-contacts@janestreet.com                                         *
+ *                                                                            *
+ * Permission is hereby granted, free of charge, to any person obtaining a    *
+ * copy of this software and associated documentation files (the "Software"), *
+ * to deal in the Software without restriction, including without limitation  *
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,   *
+ * and/or sell copies of the Software, and to permit persons to whom the      *
+ * Software is furnished to do so, subject to the following conditions:       *
+ *                                                                            *
+ * The above copyright notice and this permission notice shall be included    *
+ * in all copies or substantial portions of the Software.                     *
+ *                                                                            *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL    *
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER *
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING    *
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
+ * DEALINGS IN THE SOFTWARE.                                                  *
+ ******************************************************************************)
+
+(* The rewriting of the types that the reaper exports, transcribed: the
+   types of the symbols of the unit, which the .cmx file carries, given
+   the flow graph of the unit and the solution of the reaper's rules.
+
+   This file transcribes middle_end/flambda2/reaper/types_rewriter.ml
+   (the metadata, [follow_field], [join_metadata], [metadata_for_name],
+   the module [Rewriter], [rewrite_typing_env]), the traversal that the
+   rewriter is given to ([Traversals.Make], in
+   middle_end/flambda2/types/traversals.ml: [rewrite_arbitrary_type],
+   [rewrite], the rewriting of the heads, [destructure_expanded_head],
+   [get_canonical_with], [rewrite_in_depth] and [rewrite]), and the
+   queries of points_to_analysis.ml that the rewriter calls. It needs no
+   review: what the rewritten types mean is stated in
+   FlambdaReaperTypesSpec.v and proved in FlambdaReaperTypesProofs.v. It
+   is extracted ([rewrite_typing_env], [rewrite_symbol_type]).
+
+   The inputs. The facts of the graph and the tables of the solution
+   (FlambdaReaperGraphSpec.v), as the queries go through them: every set
+   of nodes that a query computes is a list, deduplicated, and every
+   existential is over a list of facts or of tuples. The relations
+   [field_of_constructor_is_used_top] and [field_of_constructor_is_used_as]
+   of the post-processing rules of points_to_analysis.ml, which the
+   tables have not, are computed from the facts and the tables by the
+   rules that derive them ([field_used_top], [field_used_as]). The sets
+   of closures of the unit ([sets_of_closures_by_function_slot]) are a
+   list of sets, each the node and the code id of the closure at each of
+   its function slots. The typing environment is the core's
+   ([FlambdaTypingEnv.Typing_env.t]); the rewriter reads it through
+   [Typing_env.find], [Typing_env.get_canonical_simple_exn],
+   [expand_head] and [Provers.meet_single_closures_entry] of the core.
+
+   The faults. Four rules of the compiler are not sound, and a flag of
+   [fixes] gives each the fix proposed ([all_fixes]; [compiler_fixes] is
+   the compiler, all off):
+   - [fix_boxed]: a boxed number whose contents no use reads is made
+     poison by the rebuild ([rebuild.ml], [reaper_unused_boxed_number]),
+     and [Rewriter.rewrite] keeps its type ([Rule.identity] for a value
+     that is not a closure). The fix forgets the type where
+     [follow_field] of the field of the contents forgets it, as
+     [rewrite_boxed_number_kind] does of the subkind.
+   - [fix_alias]: under a metadata that forgets the type, an alias is
+     still rewritten into one to the copy of its name for that metadata
+     ([rewrite_arbitrary_type], [get_canonical_with]), and one copy
+     stands for every position of the name under that metadata, though
+     the rebuild may have made one of them poison and kept another. The
+     fix rewrites such an alias to the unknown type.
+   - [fix_refine]: where [refine_sets_of_closures] recovers the sources
+     of a closure from its usages, it keeps only the sets whose closure
+     is among them; [join_metadata] makes a closure that escapes
+     ([usages_of] gives [None]) contribute no usage, so the recovered
+     sources may miss its set. The fix keeps, there, the sets whose
+     closure has any usage.
+   - [fix_null]: the closure case of [Rewriter.rewrite] makes its type
+     with [MTC.at_least_this_closure], which is not null; a closure type
+     that may be null loses that. The fix keeps the nullability.
+
+   The deliberate differences from the OCaml:
+   - Fatal errors. A fatal error of the compiler, or an assertion that
+     fails, is a case here like any other, and the model gives the
+     unknown type there: [follow_field] of [No_source] or of
+     [At_least_one_source_no_usages] gives
+     [At_least_one_source_no_usages]; a [None] of the core's functions
+     of types (a name not bound, a canonical element that is an alias)
+     gives the unknown type; [X.set_of_closures] (a closure type that the
+     rule leaves to the traversal) gives the unknown type.
+   - The names of the copies. [get_canonical_with] names the copy of a
+     name for a metadata while the type is rewritten. Here the aliases
+     that the rewriting of a type reaches are listed first ([reached],
+     which goes through the type as [rewrite] does), named in that
+     order, and the type is then rewritten with the names
+     ([rewrite], given [canon]). Fresh variables are numbered from
+     [first_fresh], above every variable of the environment.
+   - Fuel. The recursion of [rewrite] has fuel, the depth of the types
+     of the environment and of the type, which is enough: a type is
+     expanded at its head only, and only there is the type of another
+     name read ([rewrite_fuel]). The rounds of [rewrite_in_depth] have
+     fuel too; a copy left unprocessed has no equation, as the compiler
+     gives one only to those it processes.
+   - [Many_sources_usages] holds a list of nodes; two are the same
+     metadata when they are the same set ([metadata_eqb]), as the
+     compiler compares the keys of two maps.
+   - [Function_slot.Map.choose] in [follow_field_for_set_of_closures]
+     takes the first closure of the list.
+
+   What is left out:
+   - The sets of closures whose representation changes (unboxing). The
+     model takes the closures that change from [rc_changed]; where one
+     of the sets kept by [refine_sets_of_closures] changes, the
+     compiler forgets the type if there are several or one may be
+     external, and otherwise rewrites the type of the closure into one
+     of its new representation ([patterns_for_unboxed_fields]); the
+     model forgets the type in both cases.
+   - [rewrite_kind_with_subkind]: the model has no subkinds.
+   - [rewrite_result_types], and [rewrite_env_extension_with_extra_variables]:
+     the result types of code are not rewritten here.
+   - [Rec_info]: function types have no [rec_info] in the grammar, so the
+     patterns [Pattern.rec_info] are not there; coercions are not there.
+   - Array types and [array_slot]: the grammar has no [Array].
+   - One compilation unit: every symbol, slot and code id is of the unit,
+     so [has_local_fields] is that the closure type has a slot, and no
+     name is left as it is for being of another unit. *)
+
+From Stdlib Require Import ZArith List Bool.
+From OxCamlStdlib Require Import OxCamlOption.
+From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
+  FlambdaMapSpec FlambdaReaperGraphSpec.
+From OxCamlFlambda2Types Require Import FlambdaTypeGrammar FlambdaBindingTime
+  FlambdaTypingEnv FlambdaExpandHead FlambdaTypeAccessSpec FlambdaProvers.
+Import ListNotations.
+
+(* ======================================================================== *)
+(* Fixes                                                                    *)
+(* ======================================================================== *)
+
+(* Which of the fixes of the header are on. *)
+Record fixes : Type := Fixes {
+  fix_boxed : bool;
+  fix_alias : bool;
+  fix_refine : bool;
+  fix_null : bool
+}.
+
+(* The compiler. *)
+Definition compiler_fixes : fixes := Fixes false false false false.
+
+(* Every fix. *)
+Definition all_fixes : fixes := Fixes true true true true.
+
+(* ======================================================================== *)
+(* The context                                                              *)
+(* ======================================================================== *)
+
+(* A set of closures: the node and the code id of the closure at each of
+   its function slots. *)
+Definition set_of_closures : Type :=
+  list (function_slot * (node * Or_unknown.t code_id)).
+
+(* [Types_rewriter.rewrite_context]: the facts of the graph, the tables
+   of the solution, the local fields, the sets of closures of the unit,
+   and the closures whose representation changes. *)
+Record rewrite_context : Type := Rewrite_context {
+  rc_facts : facts;
+  rc_tables : tables;
+  rc_is_local : field -> bool;
+  rc_sets_of_closures : list set_of_closures;
+  rc_changed : list node
+}.
+
+(* The context of the rebuild without unboxing: no closure changes. *)
+Definition plain_context (is_local : field -> bool) (F : facts) (T : tables)
+    (sets : list set_of_closures) : rewrite_context :=
+  Rewrite_context F T is_local sets [].
+
+(* ======================================================================== *)
+(* Sets of nodes                                                            *)
+(* ======================================================================== *)
+
+(* The nodes of a list, each once. *)
+Definition dedup_nodes (l : list node) : list node := Keyed.dedup node_eqb l.
+
+(* Two lists of nodes are the same set. *)
+Definition same_nodes (l l' : list node) : bool :=
+  forallb (fun x => mem_node x l') l && forallb (fun x => mem_node x l) l'.
+
+(* [Map.inter] of sets of nodes. *)
+Definition inter_nodes (l l' : list node) : list node :=
+  filter (fun x => mem_node x l') l.
+
+(* [Map.subset_domain]. *)
+Definition subset_nodes (l l' : list node) : bool :=
+  forallb (fun x => mem_node x l') l.
+
+Definition is_nil {A : Type} (l : list A) : bool :=
+  match l with
+  | [] => true
+  | _ :: _ => false
+  end.
+
+(* ======================================================================== *)
+(* Queries of the solution (points_to_analysis.ml)                          *)
+(* ======================================================================== *)
+
+Section Queries.
+
+Variable ctx : rewrite_context.
+
+Local Abbreviation F := (rc_facts ctx).
+Local Abbreviation T := (rc_tables ctx).
+
+Definition has_use (x : node) : bool := mem_node x (t_has_usage T).
+Definition any_usage (x : node) : bool := mem_node x (t_any_usage T).
+Definition any_source (x : node) : bool := mem_node x (t_any_source T).
+Definition has_source (x : node) : bool := mem_node x (t_has_source T).
+
+(* [field_used]: [field_of_constructor_is_used]. *)
+Definition field_used (x : node) (f : field) : bool :=
+  mem_node_field x f (t_field_used T).
+
+(* The uses of a node, and its sources, as the tables have them; and the
+   nodes of which it is a source. *)
+Definition usages_of (x : node) : list node :=
+  map snd (filter (fun p => node_eqb (fst p) x) (t_usages T)).
+
+Definition sources_of (x : node) : list node :=
+  map snd (filter (fun p => node_eqb (fst p) x) (t_sources T)).
+
+Definition sourced_by (x : node) : list node :=
+  map fst (filter (fun p => node_eqb (snd p) x) (t_sources T)).
+
+(* The nodes that [base] holds in its field [f]. *)
+Definition constructors_of (base : node) (f : field) : list node :=
+  map (fun t => let '(_, _, from) := t in from)
+    (filter (fun t => let '(b, f', _) := t in node_eqb b base && field_eqb f' f)
+       (f_constructor F)).
+
+(* The nodes that the field [f] of [base] is read into. *)
+Definition accessors_of (f : field) (base : node) : list node :=
+  map (fun t => let '(to_, _, _) := t in to_)
+    (filter (fun t => let '(_, f', b) := t in field_eqb f' f && node_eqb b base)
+       (f_accessor F)).
+
+(* [get_direct_usages]: the uses, that have a use, of the nodes given. *)
+Definition get_direct_usages (xs : list node) : list node :=
+  dedup_nodes (flat_map (fun x => filter has_use (usages_of x)) xs).
+
+(* [get_usages]. *)
+Definition get_usages (x : node) : or_unknown_or_bottom (list node) :=
+  if negb (has_use x) then Bottom
+  else if any_usage x then Unknown
+  else Ok (get_direct_usages [x]).
+
+(* The sources of a node that have a source. *)
+Definition allocation_points (x : node) : list node :=
+  dedup_nodes (filter has_source (sources_of x)).
+
+(* [get_single_source], through [multiple_allocation_points] and
+   [allocation_point_dominator]: [Ok] of the one source, if there is one
+   and the node has not any source. *)
+Definition get_single_source (x : node) : or_unknown_or_bottom node :=
+  if negb (has_source x) then Bottom
+  else if any_source x then Unknown
+  else
+    match allocation_points x with
+    | [y] => Ok y
+    | _ => Unknown
+    end.
+
+(* [Points_to_analysis.single_field_source]. *)
+Inductive single_field_source : Type :=
+  | Field_no_source
+  | Field_one_source (source : node)
+  | Field_many_sources.
+
+(* [get_single_field_source]. *)
+Definition get_single_field_source (block : node) (f : field)
+    : single_field_source :=
+  let froms := constructors_of block f in
+  if existsb any_source froms then Field_many_sources
+  else
+    match
+      dedup_nodes (flat_map (fun from => filter has_source (sources_of from))
+                     froms)
+    with
+    | [] => Field_no_source
+    | [s] => Field_one_source s
+    | _ => Field_many_sources
+    end.
+
+(* [get_one_field_usage]: what the field [f] of the uses given is read
+   into. *)
+Definition get_one_field_usage (f : field) (usages : list node)
+    : or_unknown_or_bottom (list node) :=
+  let readers := flat_map (accessors_of f) usages in
+  if existsb any_usage readers then Unknown
+  else
+    match dedup_nodes (filter has_use readers) with
+    | [] => Bottom
+    | ys => Ok ys
+    end.
+
+(* [field_of_constructor_is_used_top], by the rules of
+   [post_processing_rules] that derive it. *)
+Definition field_used_top (base : node) (f : field) : bool :=
+  negb (is_nil (constructors_of base f))
+  && ((any_usage base && negb (rc_is_local ctx f))
+      || existsb (fun u => existsb any_usage (accessors_of f u))
+           (usages_of base)
+      || (any_usage base
+          && existsb (fun p => field_eqb (fst p) f && any_usage (snd p))
+               (t_reading_field T))
+      || (rc_is_local ctx f && any_usage base
+          && existsb (fun u => existsb any_usage (accessors_of f u))
+               (sourced_by base))).
+
+(* [field_of_constructor_is_used_as], likewise: the nodes it holds of. *)
+Definition field_used_as (base : node) (f : field) : list node :=
+  if is_nil (constructors_of base f) then []
+  else
+    dedup_nodes
+      (flat_map (fun u => filter has_use (accessors_of f u)) (usages_of base)
+       ++ (if any_usage base
+           then
+             map snd
+               (filter (fun p => field_eqb (fst p) f && has_use (snd p))
+                  (t_reading_field T))
+           else [])
+       ++ (if rc_is_local ctx f && any_usage base
+           then
+             flat_map (fun u => filter has_use (accessors_of f u))
+               (sourced_by base)
+           else [])).
+
+(* [get_one_field_usage_of_constructors]. *)
+Definition get_one_field_usage_of_constructors (cs : list node) (f : field)
+    : or_unknown_or_bottom (list node) :=
+  if existsb (fun c => field_used_top c f) cs then Unknown
+  else
+    match dedup_nodes (flat_map (fun c => field_used_as c f) cs) with
+    | [] => Bottom
+    | ys => Ok ys
+    end.
+
+(* [Points_to_analysis.sources]. *)
+Inductive allocation_sources : Type :=
+  | Sources_any
+  | Sources_known (sources : list node).
+
+(* [get_direct_sources]. *)
+Definition get_direct_sources (xs : list node) : allocation_sources :=
+  if existsb any_source xs then Sources_any
+  else
+    Sources_known
+      (dedup_nodes (flat_map (fun x => filter has_source (sources_of x)) xs)).
+
+(* One round of the rules of
+   [compute_usages_by_function_slots_not_following_known_arity_calls]:
+   from a use [x] at a function slot, the uses of what a function slot
+   [g] of [x] is read into, at [g]. *)
+Definition function_slot_usages_step (out : list (function_slot * node))
+    : list (function_slot * node) :=
+  flat_map
+    (fun p =>
+       flat_map
+         (fun t =>
+            let '(y, f, b) := t in
+            match f with
+            | Field_function_slot g =>
+              if node_eqb b (snd p)
+              then map (fun z => (g, z)) (filter has_use (usages_of y))
+              else []
+            | _ => []
+            end)
+         (f_accessor F))
+    out.
+
+Definition mem_slot_node (p : function_slot * node)
+    (l : list (function_slot * node)) : bool :=
+  existsb (fun q => Pos.eqb (fst p) (fst q) && node_eqb (snd p) (snd q)) l.
+
+(* The rounds, to the fixpoint. Each round that is not the last adds a
+   pair of a function slot read by an accessor and of a use: the fuel of
+   [compute_usages_by_function_slots] is their number. *)
+Fixpoint function_slot_usages_fix (fuel : nat)
+    (out : list (function_slot * node)) : list (function_slot * node) :=
+  match fuel with
+  | O => out
+  | S fuel =>
+    let next :=
+      filter (fun p => negb (mem_slot_node p out))
+        (function_slot_usages_step out)
+    in
+    if is_nil next then out
+    else function_slot_usages_fix fuel (next ++ out)
+  end.
+
+(* [compute_usages_by_function_slots_not_following_known_arity_calls]. *)
+Definition compute_usages_by_function_slots (usages : list node)
+    (current : function_slot)
+    : Or_unknown.t (list (function_slot * list node)) :=
+  let out :=
+    function_slot_usages_fix
+      (S (length (f_accessor F) * length (t_usages T)))
+      (map (fun x => (current, x)) usages)
+  in
+  if existsb (fun p => any_usage (snd p)) out then Or_unknown.Unknown
+  else
+    Or_unknown.Known
+      (map
+         (fun g =>
+            (g, dedup_nodes
+                  (map snd (filter (fun p => Pos.eqb (fst p) g) out))))
+         (dedup (map fst out))).
+
+End Queries.
+
+(* ======================================================================== *)
+(* Metadata                                                                 *)
+(* ======================================================================== *)
+
+(* [Types_rewriter.rewrite_metadata]: what is known of the sources and of
+   the usages of the value that a type is of. *)
+Inductive rewrite_metadata : Type :=
+  | No_source
+  | Single_source (source : node)
+  | Many_sources_any_usage
+  | Many_sources_usages (usages : list node)
+  | At_least_one_source_no_usages.
+
+(* [compare_metadata], as a test of equality. *)
+Definition metadata_eqb (m m' : rewrite_metadata) : bool :=
+  match m, m' with
+  | No_source, No_source => true
+  | Single_source s, Single_source s' => node_eqb s s'
+  | Many_sources_any_usage, Many_sources_any_usage => true
+  | Many_sources_usages u, Many_sources_usages u' => same_nodes u u'
+  | At_least_one_source_no_usages, At_least_one_source_no_usages => true
+  | _, _ => false
+  end.
+
+(* The metadata under which [Rewriter.rewrite] forgets the type:
+   [At_least_one_source_no_usages], [Many_sources_usages] of no usage, and
+   [No_source], which it makes unknown too. *)
+Definition forgets (m : rewrite_metadata) : bool :=
+  match m with
+  | No_source | At_least_one_source_no_usages => true
+  | Many_sources_usages usages => is_nil usages
+  | Single_source _ | Many_sources_any_usage => false
+  end.
+
+Section Metadata.
+
+Variable ctx : rewrite_context.
+
+(* [for_usages] in [follow_field]. *)
+Definition for_usages (usages : list node) (f : field) : rewrite_metadata :=
+  match get_one_field_usage ctx f usages with
+  | Unknown => Many_sources_any_usage
+  | Bottom => At_least_one_source_no_usages
+  | Ok vars => Many_sources_usages (get_direct_usages ctx vars)
+  end.
+
+(* [follow_field]: the metadata of what the field [f] holds. *)
+Definition follow_field (m : rewrite_metadata) (f : field)
+    : rewrite_metadata :=
+  match m with
+  | No_source | At_least_one_source_no_usages =>
+    At_least_one_source_no_usages
+  | Many_sources_any_usage => Many_sources_any_usage
+  | Many_sources_usages usages => for_usages usages f
+  | Single_source source =>
+    if negb (field_used ctx source f) then At_least_one_source_no_usages
+    else
+      match get_single_field_source ctx source f with
+      | Field_no_source => No_source
+      | Field_one_source s => Single_source s
+      | Field_many_sources =>
+        match get_usages ctx source with
+        | Unknown => Many_sources_any_usage
+        | Bottom => At_least_one_source_no_usages
+        | Ok usages => for_usages usages f
+        end
+      end
+  end.
+
+(* [usages_of] in [join_metadata]: [None] is unknown. *)
+Definition usages_of_metadata (m : rewrite_metadata) : option (list node) :=
+  match m with
+  | Single_source source =>
+    match get_usages ctx source with
+    | Unknown => None
+    | Ok usages => Some usages
+    | Bottom => Some []
+    end
+  | Many_sources_any_usage => None
+  | Many_sources_usages usages => Some usages
+  | No_source | At_least_one_source_no_usages => Some []
+  end.
+
+Definition join_usages (x y : rewrite_metadata) : rewrite_metadata :=
+  match usages_of_metadata x, usages_of_metadata y with
+  | None, None => Many_sources_any_usage
+  | Some u, None | None, Some u => Many_sources_usages u
+  | Some u1, Some u2 => Many_sources_usages (inter_nodes u1 u2)
+  end.
+
+(* [join_metadata]. *)
+Definition join_metadata (x y : rewrite_metadata) : rewrite_metadata :=
+  match x, y with
+  | No_source, _ => y
+  | _, No_source => x
+  | At_least_one_source_no_usages, _ | _, At_least_one_source_no_usages =>
+    At_least_one_source_no_usages
+  | Single_source s1, Single_source s2 =>
+    if node_eqb s1 s2 then x else join_usages x y
+  | _, _ => join_usages x y
+  end.
+
+(* [metadata_for_name]. *)
+Definition metadata_for_name (n : node) : rewrite_metadata :=
+  match get_single_source ctx n with
+  | Bottom => No_source
+  | Ok source =>
+    if has_use ctx n then Single_source source
+    else At_least_one_source_no_usages
+  | Unknown =>
+    match get_usages ctx n with
+    | Bottom => At_least_one_source_no_usages
+    | Unknown => Many_sources_any_usage
+    | Ok usages => Many_sources_usages usages
+    end
+  end.
+
+End Metadata.
+
+(* The node of a name. *)
+Definition node_of_name (n : name) : node :=
+  match n with
+  | Name_var x => Node_variable x
+  | Name_symbol s => Node_symbol s
+  end.
+
+(* ======================================================================== *)
+(* Closures (the closure case of [Rewriter.rewrite])                        *)
+(* ======================================================================== *)
+
+(* [Rewriter.must_be_local]. *)
+Inductive must_be_local : Type :=
+  | Must_be_local
+  | Can_be_external.
+
+(* The metadata of the value slots and of the function slots of a set of
+   closures, each function slot with whether its code id is to be erased.
+   *)
+Definition slots_metadata : Type :=
+  list (value_slot * rewrite_metadata)
+  * list (function_slot * (rewrite_metadata * bool)).
+
+(* [Map.inter] of maps keyed by slots. *)
+Definition inter_slots {A B C : Type} (f : A -> B -> C) (l : finite_map A)
+    (l' : finite_map B) : finite_map C :=
+  flat_map
+    (fun p =>
+       match lookup (fst p) l' with
+       | Some b => [(fst p, f (snd p) b)]
+       | None => []
+       end)
+    (compact l).
+
+Section Closures.
+
+Variable fx : fixes.
+Variable ctx : rewrite_context.
+
+(* The closure of a set at a function slot. *)
+Definition closure_at (set : set_of_closures) (g : function_slot) : node :=
+  match lookup g set with
+  | Some (closure, _) => closure
+  | None => Node_all_constants
+  end.
+
+Definition intersect_all (sets : list (list node)) : list node :=
+  match sets with
+  | [] => []
+  | first :: rest => fold_left inter_nodes rest first
+  end.
+
+(* [refine_sets_of_closures]: the sets of closures of the unit that the
+   closure at [current] may come from, and whether it may also come
+   from outside the unit. *)
+Definition refine_sets_of_closures (t0 : rewrite_metadata)
+    (current : function_slot)
+    (code_ids_of_function_slots : list (function_slot * Or_unknown.t code_id))
+    (mbl : must_be_local) : list set_of_closures * must_be_local :=
+  let can_be_source_for_this_type (set : set_of_closures) :=
+    forallb (fun p => is_bound (fst p) set) code_ids_of_function_slots
+  in
+  let candidates :=
+    filter can_be_source_for_this_type
+      (filter (fun set => is_bound current set) (rc_sets_of_closures ctx))
+  in
+  let for_known_sources (sources : list node) (recovered : bool) :=
+    (filter
+       (fun set =>
+          mem_node (closure_at set current) sources
+          || (recovered && fix_refine fx
+              && any_usage ctx (closure_at set current)))
+       candidates,
+     Must_be_local)
+  in
+  let for_any_source_with_usages (usages_or_top : option (list node)) :=
+    (filter
+       (fun set =>
+          let candidate_source := closure_at set current in
+          any_usage ctx candidate_source
+          || match usages_or_top with
+             | None => false
+             | Some usages =>
+               subset_nodes usages
+                 (get_direct_usages ctx [candidate_source])
+             end)
+       candidates,
+     mbl)
+  in
+  match t0 with
+  | No_source | At_least_one_source_no_usages => ([], mbl)
+  | Many_sources_any_usage => for_any_source_with_usages None
+  | Many_sources_usages s =>
+    let usages_sources :=
+      flat_map
+        (fun usage =>
+           match get_direct_sources ctx [usage] with
+           | Sources_any => []
+           | Sources_known sources => [sources]
+           end)
+        s
+    in
+    if is_nil usages_sources then for_any_source_with_usages (Some s)
+    else for_known_sources (intersect_all usages_sources) true
+  | Single_source source => for_known_sources [source] false
+  end.
+
+(* [follow_field_for_set_of_closures]; [None] is [raise Exit]. *)
+Definition follow_field_for_set_of_closures (set : list (function_slot * node))
+    (w : value_slot) : option rewrite_metadata :=
+  let f := Field_value_slot w in
+  if forallb (fun p => negb (field_used ctx (snd p) f)) set
+  then Some At_least_one_source_no_usages
+  else
+    match set with
+    | [] => Some At_least_one_source_no_usages
+    | (_, c0) :: _ =>
+      match get_single_field_source ctx c0 f with
+      | Field_no_source => None
+      | Field_one_source s => Some (Single_source s)
+      | Field_many_sources =>
+        match get_one_field_usage_of_constructors ctx (map snd set) f with
+        | Unknown => Some Many_sources_any_usage
+        | Bottom => Some At_least_one_source_no_usages
+        | Ok vars => Some (Many_sources_usages (get_direct_usages ctx vars))
+        end
+      end
+  end.
+
+(* The metadata of the slots of a set of closures, from the set, or
+   [None] if it is not a source ([from_local_sets_of_closures]). *)
+Definition slots_of_local_set (value_slot_types : list value_slot)
+    (function_slot_types : list function_slot) (set : set_of_closures)
+    : option slots_metadata :=
+  let nodes := map (fun p => (fst p, fst (snd p))) set in
+  let fix value_slots (ws : list value_slot)
+      : option (list (value_slot * rewrite_metadata)) :=
+    match ws with
+    | [] => Some []
+    | w :: ws =>
+      match follow_field_for_set_of_closures nodes w, value_slots ws with
+      | None, _ | _, None => None
+      | Some At_least_one_source_no_usages, Some rest => Some rest
+      | Some m, Some rest => Some ((w, m) :: rest)
+      end
+    end
+  in
+  match value_slots value_slot_types with
+  | None => None
+  | Some vs =>
+    Some
+      (vs,
+       map
+         (fun g =>
+            let source := closure_at set g in
+            (g,
+             (Single_source source,
+              negb
+                (field_used ctx source
+                   (Field_call_witness Known_arity_code_pointer)
+                 || field_used ctx source
+                      (Field_call_witness Unknown_arity_code_pointer)))))
+         function_slot_types)
+  end.
+
+(* [from_external_sources]. *)
+Definition slots_of_external_sources (usages : rewrite_metadata)
+    (current : function_slot) (value_slot_types : list value_slot)
+    (function_slot_types : list function_slot) : option slots_metadata :=
+  let any_usage :=
+    Some
+      (map (fun w => (w, Many_sources_any_usage)) value_slot_types,
+       map (fun g => (g, (Many_sources_any_usage, false)))
+         function_slot_types)
+  in
+  match usages with
+  | Many_sources_usages usages =>
+    match compute_usages_by_function_slots ctx usages current with
+    | Or_unknown.Unknown => any_usage
+    | Or_unknown.Known by_function_slot =>
+      let all_usages := dedup_nodes (flat_map snd by_function_slot) in
+      Some
+        (map
+           (fun w =>
+              (w,
+               follow_field ctx (Many_sources_usages all_usages)
+                 (Field_value_slot w)))
+           value_slot_types,
+         flat_map
+           (fun g =>
+              match lookup g by_function_slot with
+              | Some usages => [(g, (Many_sources_usages usages, false))]
+              | None => []
+              end)
+           function_slot_types)
+    end
+  | _ => any_usage
+  end.
+
+(* The join of the metadata of the slots of two sets. *)
+Definition join_slots (a b : slots_metadata) : slots_metadata :=
+  (inter_slots (join_metadata ctx) (fst a) (fst b),
+   inter_slots
+     (fun x y => (join_metadata ctx (fst x) (fst y), snd x || snd y))
+     (snd a) (snd b)).
+
+(* What the closure case rewrites a closure type to: its function slot,
+   its allocation mode, the code ids that it keeps, the metadata of the
+   closures of its set and of its value slots, and whether it may be
+   null (for [fix_null]). *)
+Record closure_rewrite : Type := Closure_rewrite {
+  cr_slot : function_slot;
+  cr_alloc_mode : Alloc_mode.t;
+  cr_function_types : list (function_slot * Or_unknown.t code_id);
+  cr_closure_types : list (function_slot * rewrite_metadata);
+  cr_value_slots : list (value_slot * rewrite_metadata);
+  cr_maybe_null : bool
+}.
+
+(* What [Rewriter.rewrite] answers: [Rule.identity], [Rule.rewrite] to
+   the unknown type, or the rule of a closure. *)
+Inductive rule : Type :=
+  | Rule_identity
+  | Rule_forget
+  | Rule_closure (spec : closure_rewrite).
+
+(* The code id of a function slot that the entry has
+   ([Flambda2_types.Closures_entry.find_function_type]). *)
+Definition entry_code_id (entry : closures_entry) (g : function_slot)
+    : Or_unknown.t code_id :=
+  match closures_entry_find_function_type entry false g with
+  | Ok ft => Or_unknown.Known (function_type_code_id ft)
+  | Unknown | Bottom => Or_unknown.Unknown
+  end.
+
+(* The closure case of [Rewriter.rewrite], once
+   [meet_single_closures_entry] has answered. *)
+Definition closure_rule (usages : rewrite_metadata) (slot : function_slot)
+    (alloc_mode : Alloc_mode.t) (entry : closures_entry) (maybe_null : bool)
+    : rule :=
+  match entry with
+  | Closures_entry _ closure_types value_slot_types =>
+    let value_slots := domain value_slot_types in
+    let function_slots := domain closure_types in
+    let code_ids := map (fun g => (g, entry_code_id entry g)) function_slots in
+    let has_local_fields :=
+      negb (is_nil value_slots) || negb (is_nil function_slots)
+    in
+    let mbl :=
+      if has_local_fields
+         || existsb
+              (fun p =>
+                 match snd p with
+                 | Or_unknown.Known _ => true
+                 | Or_unknown.Unknown => false
+                 end)
+              code_ids
+      then Must_be_local
+      else Can_be_external
+    in
+    let '(local_sets, mbl) :=
+      refine_sets_of_closures usages slot code_ids mbl
+    in
+    if existsb
+         (fun set =>
+            existsb (fun p => mem_node (fst (snd p)) (rc_changed ctx)) set)
+         local_sets
+    then Rule_forget
+    else
+      let from_local :=
+        flat_map
+          (fun set =>
+             match slots_of_local_set value_slots function_slots set with
+             | Some s => [s]
+             | None => []
+             end)
+          local_sets
+      in
+      let from_external :=
+        match mbl with
+        | Must_be_local => None
+        | Can_be_external =>
+          slots_of_external_sources usages slot value_slots function_slots
+        end
+      in
+      let from_everything :=
+        match from_external with
+        | None => from_local
+        | Some s => s :: from_local
+        end
+      in
+      match from_everything with
+      | [] => Rule_forget
+      | first :: rest =>
+        let '(vs, fs) := fold_left join_slots rest first in
+        Rule_closure
+          (Closure_rewrite slot alloc_mode
+             (map
+                (fun p : function_slot * (rewrite_metadata * bool) =>
+                   (fst p,
+                    if snd (snd p) then Or_unknown.Unknown
+                    else entry_code_id entry (fst p)))
+                fs)
+             (map
+                (fun p : function_slot * (rewrite_metadata * bool) =>
+                   (fst p, fst (snd p)))
+                fs)
+             vs maybe_null)
+      end
+  end.
+
+(* Whether the head of a type, expanded, may be null. *)
+Definition expanded_maybe_null (tenv : Typing_env.t) (ty : flambda_type)
+    : bool :=
+  match expand_head tenv ty with
+  | Some expanded =>
+    match Expanded_type.descr expanded with
+    | Ok (Expanded_type.Head_value (Head_of_kind_value _ (Maybe_null _))) =>
+      true
+    | _ => false
+    end
+  | None => false
+  end.
+
+(* [Rewriter.rewrite]. *)
+Definition rewrite_rule (tenv : Typing_env.t) (usages : rewrite_metadata)
+    (ty : flambda_type) : rule :=
+  if forgets usages then Rule_forget
+  else
+    match kind ty with
+    | Rec_info | Region | Naked_number _ => Rule_identity
+    | Value =>
+      match Provers.meet_single_closures_entry tenv ty with
+      | Some Meet_shortcut.Invalid => Rule_identity
+      | Some Meet_shortcut.Need_meet | None => Rule_forget
+      | Some (Meet_shortcut.Known_result (slot, alloc_mode, entry, _)) =>
+        closure_rule usages slot alloc_mode entry
+          (expanded_maybe_null tenv ty)
+      end
+    end.
+
+End Closures.
+
+(* ======================================================================== *)
+(* The traversal ([Traversals.Make])                                        *)
+(* ======================================================================== *)
+
+(* [destructure_expanded_head] at the discriminant [Closure], for the
+   accessor of a value slot ([get_env_var]) or of a function slot
+   ([get_closure]). The kind of a value slot is not in the model; the
+   unknown type there is at kind value, and is not reached, as the
+   value slots destructured are those of the entry. *)
+Definition destructure_closure
+    (get : row_like_for_closures -> option (Or_unknown.t flambda_type))
+    (expanded : option Expanded_type.t) : flambda_type :=
+  match expanded with
+  | None => unknown Value
+  | Some expanded =>
+    match Expanded_type.descr expanded with
+    | Unknown => unknown Value
+    | Bottom => bottom Value
+    | Ok (Expanded_type.Head_value (Head_of_kind_value non_null _)) =>
+      match non_null with
+      | Unknown => unknown Value
+      | Bottom => bottom Value
+      | Ok (Closures by_function_slot _) =>
+        match get by_function_slot with
+        | Some (Or_unknown.Known ty) => ty
+        | Some Or_unknown.Unknown | None => unknown Value
+        end
+      | Ok _ => bottom Value
+      end
+    | Ok _ => unknown Value
+    end
+  end.
+
+(* A copy of a name for a metadata, at a kind: what [get_canonical_with]
+   gives. *)
+Definition canon_fn : Type := name -> flambda_kind -> rewrite_metadata -> name.
+
+Section Rewrite.
+
+Variable fx : fixes.
+Variable ctx : rewrite_context.
+Variable tenv : Typing_env.t.
+Variable canon : canon_fn.
+
+(* [block_slot]: the metadata of the field [i] of a block whose field
+   type is [ty]. *)
+Definition block_slot (m : rewrite_metadata) (i : nat) (ty : flambda_type)
+    : rewrite_metadata :=
+  follow_field ctx m (Field_block i (kind ty)).
+
+(* [rewrite_int_indexed_product] with [block_slot]. The argument [rw]
+   stands for [rewrite_arbitrary_type] in this and the definitions that
+   follow, as the recursion is through it. *)
+Definition rewrite_fields
+    (rw : rewrite_metadata -> flambda_type -> flambda_type)
+    (m : rewrite_metadata) (tys : list flambda_type) : list flambda_type :=
+  map (fun p => rw (block_slot m (fst p) (snd p)) (snd p))
+    (combine (seq 0 (length tys)) tys).
+
+(* [rewrite_row_like_for_blocks]: the fields of each case, the
+   environment extensions dropped. *)
+Definition rewrite_block_case
+    (rw : rewrite_metadata -> flambda_type -> flambda_type)
+    (m : rewrite_metadata) (case : row_like_block_case) : row_like_block_case :=
+  Row_like_case (rewrite_fields rw m (case_maps_to case)) (case_index case)
+    empty_env_extension.
+
+Definition rewrite_row_like_for_blocks
+    (rw : rewrite_metadata -> flambda_type -> flambda_type)
+    (m : rewrite_metadata) (blocks : row_like_for_blocks)
+    : row_like_for_blocks :=
+  match blocks with
+  | Row_like_for_blocks known_tags other_tags alloc_mode =>
+    Row_like_for_blocks
+      (Keyed.map_values
+         (fun case =>
+            match case with
+            | Or_unknown.Unknown => Or_unknown.Unknown
+            | Or_unknown.Known case =>
+              Or_unknown.Known (rewrite_block_case rw m case)
+            end)
+         known_tags)
+      match other_tags with
+      | Or_bottom.Bottom => Or_bottom.Bottom
+      | Or_bottom.Ok case => Or_bottom.Ok (rewrite_block_case rw m case)
+      end
+      alloc_mode
+  end.
+
+(* [rewrite_head_of_kind_value_non_null]: the variables [is_int] and
+   [get_tag] and the extensions of a variant are dropped. A closure type
+   is the rule's to rewrite: if it gets here, the compiler stops in
+   [X.set_of_closures], unless the structure has no case. *)
+Definition rewrite_head_of_kind_value_non_null
+    (rw : rewrite_metadata -> flambda_type -> flambda_type)
+    (m : rewrite_metadata) (head : head_of_kind_value_non_null)
+    : or_unknown_or_bottom head_of_kind_value_non_null :=
+  match head with
+  | Variant _ immediates _ blocks _ is_unique =>
+    Ok
+      (Variant None
+         match immediates with
+         | Or_unknown.Unknown => Or_unknown.Unknown
+         | Or_unknown.Known ty => Or_unknown.Known (rw m ty)
+         end
+         None
+         match blocks with
+         | Or_unknown.Unknown => Or_unknown.Unknown
+         | Or_unknown.Known blocks =>
+           Or_unknown.Known (rewrite_row_like_for_blocks rw m blocks)
+         end
+         No_extensions is_unique)
+  | Mutable_block _ | String _ => Ok head
+  | Boxed_number k contents alloc_mode =>
+    if fix_boxed fx && forgets (follow_field ctx m (Field_boxed_number k))
+    then Unknown
+    else Ok (Boxed_number k (rw m contents) alloc_mode)
+  | Closures (Row_like_for_closures []) _ => Ok head
+  | Closures _ _ => Unknown
+  end.
+
+(* [rewrite_head_of_kind_value]: the variable [is_null] is dropped. *)
+Definition rewrite_head_of_kind_value
+    (rw : rewrite_metadata -> flambda_type -> flambda_type)
+    (m : rewrite_metadata) (head : head_of_kind_value) : head_of_kind_value :=
+  match head with
+  | Head_of_kind_value non_null is_null =>
+    Head_of_kind_value
+      match non_null with
+      | Unknown => Unknown
+      | Bottom => Bottom
+      | Ok head => rewrite_head_of_kind_value_non_null rw m head
+      end
+      match is_null with
+      | Not_null => Not_null
+      | Maybe_null _ => Maybe_null None
+      end
+  end.
+
+(* [rewrite_expanded_head], then [Expanded_type.to_type]: the relations
+   of a naked immediate are dropped. *)
+Definition rewrite_expanded_head
+    (rw : rewrite_metadata -> flambda_type -> flambda_type)
+    (m : rewrite_metadata) (expanded : Expanded_type.t) : flambda_type :=
+  match Expanded_type.descr expanded with
+  | Unknown => unknown (Expanded_type.kind expanded)
+  | Bottom => bottom (Expanded_type.kind expanded)
+  | Ok (Expanded_type.Head_value head) =>
+    Type_value (Ok (No_alias (rewrite_head_of_kind_value rw m head)))
+  | Ok (Expanded_type.Head_naked_immediate head) =>
+    Type_naked_immediate
+      (Ok (No_alias (Head_of_kind_naked_immediate (naked_immediates head) [])))
+  | Ok (Expanded_type.Head_naked_number k numbers) =>
+    Type_naked_number k (Ok (No_alias numbers))
+  | Ok (Expanded_type.Head_rec_info head) => Type_rec_info (Ok (No_alias head))
+  | Ok (Expanded_type.Head_region head) => Type_region (Ok (No_alias head))
+  end.
+
+(* A type that is not an alias, rewritten as [rewrite] does under
+   [Rule.identity]: a type that is a constant becomes an alias to it. *)
+Definition rewrite_identity
+    (rw : rewrite_metadata -> flambda_type -> flambda_type)
+    (m : rewrite_metadata) (ty : flambda_type) : flambda_type :=
+  match expand_head tenv ty with
+  | None => unknown (kind ty)
+  | Some expanded =>
+    let ty' := rewrite_expanded_head rw m expanded in
+    match must_be_singleton ty' with
+    | Some (Some c) => alias_type_of (kind ty') (Const c)
+    | _ => ty'
+    end
+  end.
+
+(* The rule of a closure, applied: [match_pattern] and [rewrite_expr] for
+   [Expr.at_least_this_closure]. *)
+Definition rewrite_closure
+    (rw : rewrite_metadata -> flambda_type -> flambda_type)
+    (spec : closure_rewrite) (ty : flambda_type) : flambda_type :=
+  let expanded := expand_head tenv ty in
+  let ty' :=
+    at_least_this_closure (cr_slot spec)
+      (map
+         (fun p =>
+            (fst p,
+             match snd p with
+             | Or_unknown.Known code => Or_unknown.Known (Function_type code)
+             | Or_unknown.Unknown => Or_unknown.Unknown
+             end))
+         (cr_function_types spec))
+      (map
+         (fun p =>
+            (fst p,
+             rw (snd p)
+               (destructure_closure
+                  (fun c => row_like_for_closures_get_closure c (fst p))
+                  expanded)))
+         (cr_closure_types spec))
+      (map
+         (fun p =>
+            (fst p,
+             rw (snd p)
+               (destructure_closure
+                  (fun c => row_like_for_closures_get_env_var c (fst p))
+                  expanded)))
+         (cr_value_slots spec))
+      (cr_alloc_mode spec)
+  in
+  if fix_null fx && cr_maybe_null spec
+  then
+    match ty' with
+    | Type_value (Ok (No_alias (Head_of_kind_value non_null _))) =>
+      Type_value (Ok (No_alias (Head_of_kind_value non_null (Maybe_null None))))
+    | _ => ty'
+    end
+  else ty'.
+
+(* [rewrite_arbitrary_type] and [rewrite]. *)
+Fixpoint rewrite_arbitrary (fuel : nat) (m : rewrite_metadata)
+    (ty : flambda_type) {struct fuel} : flambda_type :=
+  match fuel with
+  | O => unknown (kind ty)
+  | S fuel =>
+    match get_alias_opt ty with
+    | Some alias =>
+      match
+        Typing_env.get_canonical_simple_exn tenv (Some Name_mode.in_types)
+          None alias
+      with
+      | Some (Some (Const c)) => rewrite fuel m (type_for_const c)
+      | Some (Some (Var x)) =>
+        if fix_alias fx && forgets m then unknown (kind ty)
+        else
+          alias_type_of (kind ty)
+            (simple_of_name (canon (Name_var x) (kind ty) m))
+      | Some (Some (Symbol s)) =>
+        if fix_alias fx && forgets m then unknown (kind ty)
+        else
+          alias_type_of (kind ty)
+            (simple_of_name (canon (Name_symbol s) (kind ty) m))
+      | Some None | None => unknown (kind ty)
+      end
+    | None => rewrite fuel m ty
+    end
+  end
+
+with rewrite (fuel : nat) (m : rewrite_metadata) (ty : flambda_type)
+    {struct fuel} : flambda_type :=
+  match fuel with
+  | O => unknown (kind ty)
+  | S fuel =>
+    match rewrite_rule fx ctx tenv m ty with
+    | Rule_forget => unknown (kind ty)
+    | Rule_identity => rewrite_identity (rewrite_arbitrary fuel) m ty
+    | Rule_closure spec => rewrite_closure (rewrite_arbitrary fuel) spec ty
+    end
+  end.
+
+End Rewrite.
+
+(* ======================================================================== *)
+(* The aliases that a rewriting reaches                                     *)
+(* ======================================================================== *)
+
+(* A name at a kind under a metadata: what [get_canonical_with] is asked
+   for. *)
+Definition reach : Type := name * flambda_kind * rewrite_metadata.
+
+Section Reached.
+
+Variable fx : fixes.
+Variable ctx : rewrite_context.
+Variable tenv : Typing_env.t.
+
+(* What [rewrite_fields] and the functions after it reach, given what
+   [rw] reaches. *)
+Definition reached_fields (rw : rewrite_metadata -> flambda_type -> list reach)
+    (m : rewrite_metadata) (tys : list flambda_type) : list reach :=
+  flat_map (fun p => rw (block_slot ctx m (fst p) (snd p)) (snd p))
+    (combine (seq 0 (length tys)) tys).
+
+Definition reached_row_like_for_blocks
+    (rw : rewrite_metadata -> flambda_type -> list reach)
+    (m : rewrite_metadata) (blocks : row_like_for_blocks) : list reach :=
+  match blocks with
+  | Row_like_for_blocks known_tags other_tags _ =>
+    flat_map
+      (fun p =>
+         match snd p with
+         | Or_unknown.Unknown => []
+         | Or_unknown.Known case => reached_fields rw m (case_maps_to case)
+         end)
+      known_tags
+    ++ match other_tags with
+       | Or_bottom.Bottom => []
+       | Or_bottom.Ok case => reached_fields rw m (case_maps_to case)
+       end
+  end.
+
+Definition reached_head_of_kind_value_non_null
+    (rw : rewrite_metadata -> flambda_type -> list reach)
+    (m : rewrite_metadata) (head : head_of_kind_value_non_null) : list reach :=
+  match head with
+  | Variant _ immediates _ blocks _ _ =>
+    match blocks with
+    | Or_unknown.Unknown => []
+    | Or_unknown.Known blocks => reached_row_like_for_blocks rw m blocks
+    end
+    ++ match immediates with
+       | Or_unknown.Unknown => []
+       | Or_unknown.Known ty => rw m ty
+       end
+  | Mutable_block _ | String _ | Closures _ _ => []
+  | Boxed_number k contents _ =>
+    if fix_boxed fx && forgets (follow_field ctx m (Field_boxed_number k))
+    then []
+    else rw m contents
+  end.
+
+Definition reached_identity
+    (rw : rewrite_metadata -> flambda_type -> list reach)
+    (m : rewrite_metadata) (ty : flambda_type) : list reach :=
+  match expand_head tenv ty with
+  | Some expanded =>
+    match Expanded_type.descr expanded with
+    | Ok (Expanded_type.Head_value (Head_of_kind_value (Ok head) _)) =>
+      reached_head_of_kind_value_non_null rw m head
+    | _ => []
+    end
+  | None => []
+  end.
+
+Definition reached_closure (rw : rewrite_metadata -> flambda_type -> list reach)
+    (spec : closure_rewrite) (ty : flambda_type) : list reach :=
+  let expanded := expand_head tenv ty in
+  flat_map
+    (fun p =>
+       rw (snd p)
+         (destructure_closure
+            (fun c => row_like_for_closures_get_closure c (fst p)) expanded))
+    (cr_closure_types spec)
+  ++ flat_map
+       (fun p =>
+          rw (snd p)
+            (destructure_closure
+               (fun c => row_like_for_closures_get_env_var c (fst p))
+               expanded))
+       (cr_value_slots spec).
+
+(* The aliases that [rewrite_arbitrary] and [rewrite] give to [canon],
+   in the order of the compiler's traversal. *)
+Fixpoint reached_arbitrary (fuel : nat) (m : rewrite_metadata)
+    (ty : flambda_type) {struct fuel} : list reach :=
+  match fuel with
+  | O => []
+  | S fuel =>
+    match get_alias_opt ty with
+    | Some alias =>
+      match
+        Typing_env.get_canonical_simple_exn tenv (Some Name_mode.in_types)
+          None alias
+      with
+      | Some (Some (Const c)) => reached fuel m (type_for_const c)
+      | Some (Some (Var x)) =>
+        if fix_alias fx && forgets m then [] else [(Name_var x, kind ty, m)]
+      | Some (Some (Symbol s)) =>
+        if fix_alias fx && forgets m then []
+        else [(Name_symbol s, kind ty, m)]
+      | Some None | None => []
+      end
+    | None => reached fuel m ty
+    end
+  end
+
+with reached (fuel : nat) (m : rewrite_metadata) (ty : flambda_type)
+    {struct fuel} : list reach :=
+  match fuel with
+  | O => []
+  | S fuel =>
+    match rewrite_rule fx ctx tenv m ty with
+    | Rule_forget => []
+    | Rule_identity => reached_identity (reached_arbitrary fuel) m ty
+    | Rule_closure spec => reached_closure (reached_arbitrary fuel) spec ty
+    end
+  end.
+
+End Reached.
+
+(* ======================================================================== *)
+(* Fuel                                                                     *)
+(* ======================================================================== *)
+
+(* The greatest of a list of numbers. *)
+Definition list_max (l : list nat) : nat := fold_right Nat.max 0 l.
+
+(* The depth of a type: of nesting of types in types. *)
+Fixpoint type_depth (t : flambda_type) : nat :=
+  match t with
+  | Type_value (Ok (No_alias (Head_of_kind_value (Ok head) _))) =>
+    S (non_null_depth head)
+  | Type_value _ | Type_naked_immediate _ | Type_naked_number _ _
+  | Type_rec_info _ | Type_region _ => 1
+  end
+
+with non_null_depth (head : head_of_kind_value_non_null) : nat :=
+  match head with
+  | Variant _ immediates _ blocks _ _ =>
+    S (Nat.max
+         match immediates with
+         | Or_unknown.Known ty => type_depth ty
+         | Or_unknown.Unknown => 0
+         end
+         match blocks with
+         | Or_unknown.Known blocks => blocks_depth blocks
+         | Or_unknown.Unknown => 0
+         end)
+  | Boxed_number _ contents _ => S (type_depth contents)
+  | Closures closures _ => S (closures_depth closures)
+  | Mutable_block _ | String _ => 1
+  end
+
+with blocks_depth (blocks : row_like_for_blocks) : nat :=
+  match blocks with
+  | Row_like_for_blocks known_tags other_tags _ =>
+    Nat.max
+      (list_max
+         (map
+            (fun p =>
+               match snd p with
+               | Or_unknown.Known case =>
+                 list_max (map type_depth (case_maps_to case))
+               | Or_unknown.Unknown => 0
+               end)
+            known_tags))
+      match other_tags with
+      | Or_bottom.Ok case => list_max (map type_depth (case_maps_to case))
+      | Or_bottom.Bottom => 0
+      end
+  end
+
+with closures_depth (closures : row_like_for_closures) : nat :=
+  match closures with
+  | Row_like_for_closures known_closures =>
+    list_max
+      (map
+         (fun p =>
+            match case_maps_to (snd p) with
+            | Closures_entry _ closure_types value_slot_types =>
+              Nat.max
+                (list_max (map (fun q => type_depth (snd q)) closure_types))
+                (list_max (map (fun q => type_depth (snd q)) value_slot_types))
+            end)
+         known_closures)
+  end.
+
+(* The deepest type of the environment. *)
+Definition env_depth (tenv : Typing_env.t) : nat :=
+  list_max (map (fun p => type_depth (fst (snd p)))
+              (Typing_env.names_to_types tenv)).
+
+(* The fuel of the rewriting of a type: its depth, or that of the type
+   it is expanded to at its head, and a step for each of the two
+   functions at each level, and for the type of a constant. *)
+Definition rewrite_fuel (tenv : Typing_env.t) (ty : flambda_type) : nat :=
+  2 * (type_depth ty + env_depth tenv) + 4.
+
+(* ======================================================================== *)
+(* The copies of names ([get_canonical_with])                               *)
+(* ======================================================================== *)
+
+(* The accumulator of [Traversals.Make]: the copies of each name, by
+   metadata, the copies yet to be given an equation (each with the name
+   it copies, its metadata and its kind), and the next fresh variable. *)
+Record names_acc : Type := Names_acc {
+  aliases_of_names : Keyed.finite_map name (list (rewrite_metadata * name));
+  names_to_process : list (name * rewrite_metadata * flambda_kind * name);
+  next_fresh : positive
+}.
+
+Fixpoint lookup_metadata {A : Type} (m : rewrite_metadata)
+    (l : list (rewrite_metadata * A)) : option A :=
+  match l with
+  | [] => None
+  | (m', a) :: l => if metadata_eqb m m' then Some a else lookup_metadata m l
+  end.
+
+(* [get_canonical_with]: the first metadata of a name has the name
+   itself, each other a fresh variable. *)
+Definition get_canonical_with (acc : names_acc) (r : reach) : names_acc :=
+  let '(canonical, k, m) := r in
+  match Keyed.lookup name_eqb canonical (aliases_of_names acc) with
+  | None =>
+    Names_acc ((canonical, [(m, canonical)]) :: aliases_of_names acc)
+      ((canonical, m, k, canonical) :: names_to_process acc) (next_fresh acc)
+  | Some aliases =>
+    match lookup_metadata m aliases with
+    | Some _ => acc
+    | None =>
+      let x' := Name_var (next_fresh acc) in
+      Names_acc ((canonical, (m, x') :: aliases) :: aliases_of_names acc)
+        ((canonical, m, k, x') :: names_to_process acc)
+        (Pos.succ (next_fresh acc))
+    end
+  end.
+
+(* The copy of a name for a metadata that the accumulator has, or the
+   name itself. *)
+Definition canon_of (acc : names_acc) : canon_fn :=
+  fun n _ m =>
+    match Keyed.lookup name_eqb n (aliases_of_names acc) with
+    | Some aliases =>
+      match lookup_metadata m aliases with
+      | Some n' => n'
+      | None => n
+      end
+    | None => n
+    end.
+
+(* ======================================================================== *)
+(* The typing environment ([rewrite_in_depth], [rewrite])                   *)
+(* ======================================================================== *)
+
+Section Env.
+
+Variable fx : fixes.
+Variable ctx : rewrite_context.
+Variable tenv : Typing_env.t.
+
+(* [rewrite_concrete_type_of]: the type of a name, rewritten. *)
+Definition concrete_type_of (n : name) (k : flambda_kind) : flambda_type :=
+  match Typing_env.find tenv n (Some k) with
+  | Some ty => ty
+  | None => unknown k
+  end.
+
+Definition rewrite_concrete_type_of (canon : canon_fn) (n : name)
+    (k : flambda_kind) (m : rewrite_metadata) : flambda_type :=
+  let ty := concrete_type_of n k in
+  rewrite fx ctx tenv canon (rewrite_fuel tenv ty) m ty.
+
+Definition reached_concrete_type_of (n : name) (k : flambda_kind)
+    (m : rewrite_metadata) : list reach :=
+  let ty := concrete_type_of n k in
+  reached fx ctx tenv (rewrite_fuel tenv ty) m ty.
+
+(* [rewrite_in_depth]: each round names the copies that the types of the
+   names to process reach, then rewrites these types with the names. *)
+Fixpoint rewrite_in_depth (fuel : nat) (acc : names_acc)
+    (new_types : list (name * flambda_type))
+    : list (name * flambda_type) * names_acc :=
+  match fuel with
+  | O => (new_types, acc)
+  | S fuel =>
+    match names_to_process acc with
+    | [] => (new_types, acc)
+    | to_process =>
+      let acc0 := Names_acc (aliases_of_names acc) [] (next_fresh acc) in
+      let acc1 :=
+        fold_left
+          (fun acc t =>
+             let '(before, m, k, _) := t in
+             fold_left get_canonical_with (reached_concrete_type_of before k m)
+               acc)
+          to_process acc0
+      in
+      let types :=
+        map
+          (fun t =>
+             let '(before, m, k, after) := t in
+             (after, rewrite_concrete_type_of (canon_of acc1) before k m))
+          to_process
+      in
+      rewrite_in_depth fuel acc1 (new_types ++ types)
+    end
+  end.
+
+(* A variable above every variable of the environment. *)
+Definition first_fresh_of_env : positive :=
+  Pos.succ
+    (fold_right Pos.max 1%positive
+       (flat_map
+          (fun p =>
+             match fst p with
+             | Name_var x => [x]
+             | Name_symbol _ => []
+             end
+             ++ free_variables (fst (snd p)))
+          (Typing_env.names_to_types tenv))).
+
+(* The rounds of [rewrite_in_depth]: one for each name of the
+   environment, and one more. *)
+Definition rounds_of_env : nat :=
+  S (length (Typing_env.names_to_types tenv)
+     + length (Typing_env.defined_symbols tenv)).
+
+(* [rewrite], the function of [Traversals.Make] that
+   [Types_rewriter.rewrite_typing_env] calls: each symbol is processed
+   with its metadata, under its own name. The equations of the
+   environment of the .cmx file, one for each name processed (the
+   compiler adds them to an environment where the symbols and the
+   copies are defined). *)
+Definition rewrite_typing_env : list (name * flambda_type) :=
+  let symbols := Typing_env.defined_symbols tenv in
+  let acc :=
+    Names_acc
+      (map
+         (fun s =>
+            (Name_symbol s,
+             [(metadata_for_name ctx (Node_symbol s), Name_symbol s)]))
+         symbols)
+      (map
+         (fun s =>
+            (Name_symbol s, metadata_for_name ctx (Node_symbol s), Value,
+             Name_symbol s))
+         symbols)
+      first_fresh_of_env
+  in
+  fst (rewrite_in_depth rounds_of_env acc []).
+
+(* The type of a symbol, rewritten as [rewrite_typing_env] rewrites it,
+   given the copies of the names it reaches. *)
+Definition rewrite_symbol_type (canon : canon_fn) (s : symbol)
+    : flambda_type :=
+  rewrite_concrete_type_of canon (Name_symbol s) Value
+    (metadata_for_name ctx (Node_symbol s)).
+
+End Env.
