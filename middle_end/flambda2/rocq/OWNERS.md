@@ -575,7 +575,10 @@ units with loops (`while`, `for`, tail-recursive functions).
   continuation whose handler only applies another;
   `FlambdaForwardJumps*` is the case of no parameters, which is an
   equivalence, and `FlambdaForwardKinded*` that of arguments known to
-  have the kinds of the parameters, an equivalence too)
+  have the kinds of the parameters, an equivalence too;
+  `FlambdaForwardArm*` is an application that gives a number to the
+  parameter that the handler tests, which goes to the arm of that
+  number)
 - `middle_end/flambda2/rocq/FlambdaRoundsProofs.v` (a tool of proof:
   simulations by rounds of one or more steps of each run)
 - `middle_end/flambda2/rocq/FlambdaInlineTail*` (that

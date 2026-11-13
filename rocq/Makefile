@@ -148,6 +148,8 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   FlambdaExtcallSpec.v \
   FlambdaFloatCodeProofs.v \
   FlambdaFloatCodeSpec.v \
+  FlambdaForwardArmProofs.v \
+  FlambdaForwardArmSpec.v \
   FlambdaForwardJumpsProofs.v \
   FlambdaForwardJumpsSpec.v \
   FlambdaForwardKindedProofs.v \
