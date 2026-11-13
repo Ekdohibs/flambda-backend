@@ -290,21 +290,21 @@
    ([traverse_static_binding]). The rebuild keeps such a binding if its
    symbol has a use, with the elements of an array rewritten as any
    simple ([rewrite_simple]), and the contents of a boxed number by
-   [rewrite_or_variable], which keeps a constant or a symbol. An array
+   [rewrite_or_variable], which keeps a constant, a symbol, and a
+   variable that has a use. An array
    is read only by primitives of the default case ([Array_load],
    [Array_length]), which give it any usage if what they read has a
    use; then so have its elements, which the rebuild keeps. A boxed
    number is read by
    [Unbox_number], which finds in the two runs what it holds. A boxed
-   number of a variable is not in [static_constants]. The traversal used
-   to give such a variable no use from it, and the rebuild then replaced
-   it by a zero; it now aliases the symbol to the constants and gives
-   the variable a use from it, as traverse.ml does since it was made to
-   keep the variables that static constants hold, and the rebuild keeps
-   the variable when the symbol has a use
-   ([static_boxed_variable_example_statement]). The premise of
-   [static_constants] that excludes such a variable can now be dropped:
-   that is the next step, for the proof of the rebuild. Outside classic
+   number may hold a variable too. The traversal used to give such a
+   variable no use from it, and the rebuild then replaced it by a zero;
+   it now aliases the symbol to the constants and gives the variable a
+   use from it, as traverse.ml does since it was made to keep the
+   variables that static constants hold, so the rebuild keeps the
+   variable when the symbol has a use, and the boxed number holds in
+   each run what the variable holds there
+   ([static_boxed_variable_example_statement]). Outside classic
    mode the compiler makes no static boxed number of a variable; in
    classic mode closure conversion makes static blocks of floats whose
    fields are variables ([Immutable_float_block]), which the model has
@@ -849,14 +849,12 @@ Definition generic_calls_tupled_calls_statement : Prop :=
 
 (* Static constants: [tupled_calls], but the unit may bind symbols to
    boxed numbers, to immutable strings and to immutable arrays of values
-   too, as the compiler's units do. A boxed number holds a constant or a
-   symbol, not a variable: the traversal gives a variable there a use
+   too, as the compiler's units do. A boxed number holds a constant, a
+   symbol or a variable: the traversal gives a variable there a use
    from the symbol, and the rebuild keeps it if it has one
-   ([rewrite_or_variable]; [static_boxed_variable_example_statement]),
-   but the proof of the rebuild does not follow it yet. *)
+   ([rewrite_or_variable]; [static_boxed_variable_example_statement]). *)
 Definition binding_static_constant (binding : static_binding) : bool :=
   match binding with
-  | Bind_symbol _ (Static_const_boxed_number (Var _)) => false
   | Bind_symbol _ (Static_const_boxed_number _)
   | Bind_symbol _ (Static_const_immutable_string _)
   | Bind_symbol _ (Static_const_immutable_value_array _) => true
@@ -3259,10 +3257,11 @@ Definition static_constants_example_statement : Prop :=
      return x12
 
    Its least solution passes the checks; the rebuild changes nothing,
-   and the two units exit with 2.5 boxed. The unit is of [tupled_calls]
-   and [static_constants] but for the variable. (Before traverse.ml was
-   made to keep the variables of static constants, the variable had no
-   use, and the rebuild put 0.0 in its place.) *)
+   and the two units exit with 2.5 boxed. The unit is of
+   [static_constants], and meets the premises of
+   [rebuild_refines_observably_statement]. (Before traverse.ml was made
+   to keep the variables of static constants, the variable had no use,
+   and the rebuild put 0.0 in its place.) *)
 Module StaticBoxedVariableExample.
 
 Local Open Scope positive_scope.
@@ -3314,7 +3313,7 @@ Definition static_boxed_variable_example_statement : Prop :=
   in_flow_fragment StaticBoxedVariableExample.unit_expr = true
   ∧ static_constants (unit_codes StaticBoxedVariableExample.unit_expr)
       StaticBoxedVariableExample.unit_expr
-    = false
+    = true
   ∧ results_kinded [] [] StaticBoxedVariableExample.unit_expr = true
   ∧ well_formed_unit FlowExample.interface
       StaticBoxedVariableExample.unit_expr

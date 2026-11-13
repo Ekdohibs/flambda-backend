@@ -2057,14 +2057,19 @@ Qed.
 
 (* A boxed number, a string or an immutable array that the first run
    binds to [s], and what the second binds to [s] ([found]): nothing, or
-   the same but for the elements of an array, which are related
-   ([element_rel]) if [s] has any usage; and something if [s] has a
-   use. *)
+   the same but for the contents of a boxed number, which are the same or
+   [sim] (those of a variable with any usage), and the elements of an
+   array, which are related ([element_rel]) if [s] has any usage; and
+   something if [s] has a use. *)
 Definition static_other_rel (s : symbol)
     (allocated : statically_allocated_value)
     (found : option statically_allocated_value) : Prop :=
   match allocated with
-  | Static_boxed_number _ | Static_string _ =>
+  | Static_boxed_number v =>
+    found = None
+    ∨ ∃ v' : value,
+        found = Some (Static_boxed_number v') ∧ (v' = v ∨ sim v v')
+  | Static_string _ =>
     found = None ∨ found = Some allocated
   | Static_immutable_array elements =>
     found = None
@@ -2347,7 +2352,8 @@ Proof.
       destruct allocated as [ | | | c | bytes | els | ];
         try (exfalso; exact Ho); destruct Ho as [Hn | Ho];
         try (rewrite Hn; reflexivity);
-        [ rewrite Ho; reflexivity | rewrite Ho; reflexivity | ].
+        [ destruct Ho as (c' & Ho & _); rewrite Ho; reflexivity
+        | rewrite Ho; reflexivity | ].
       destruct Ho as (els' & Ho & _). rewrite Ho. reflexivity.
     + rewrite (Hnone s Hl). reflexivity.
   - discriminate Hb.
@@ -2400,6 +2406,16 @@ Proof.
   - exact (IH _ _ Hrest).
 Qed.
 
+(* What a boxed number holds in the second run: the same as in the
+   first, or what is not a constant in either. *)
+Lemma boxed_contents_cases (c c' : value) :
+  c' = c ∨ sim c c' -> c' = c ∨ ∀ k : const, c <> Value_const k.
+Proof.
+  intros [-> | Hsim]; [ left; reflexivity | ].
+  destruct c; cbn [sim] in Hsim;
+    try (left; exact Hsim); right; intros k Hk; discriminate Hk.
+Qed.
+
 (* What a symbol with any usage is bound to in the two runs. *)
 Lemma statics_au (statics statics' : static_env) (s : symbol) :
   statics_rel statics statics' ->
@@ -2427,9 +2443,14 @@ Lemma statics_au (statics statics' : static_env) (s : symbol) :
             (decls : list (function_slot * code_id))
             (vs : list (value_slot * value)),
             allocated = Static_closure_of_set slot syms decls vs)
-       ∨ (((∃ c : value, allocated = Static_boxed_number c)
-           ∨ (∃ bytes : list Z, allocated = Static_string bytes))
-          ∧ lookup s (static_values statics') = Some allocated)
+       ∨ (∃ c c' : value,
+            allocated = Static_boxed_number c
+            ∧ lookup s (static_values statics')
+              = Some (Static_boxed_number c')
+            ∧ (c' = c ∨ sim c c'))
+       ∨ (∃ bytes : list Z,
+            allocated = Static_string bytes
+            ∧ lookup s (static_values statics') = Some allocated)
        ∨ ∃ elements elements' : list value,
            allocated = Static_immutable_array elements
            ∧ lookup s (static_values statics')
@@ -2459,9 +2480,10 @@ Proof.
     destruct allocated as [ | | | c | bytes | els | ];
       try (exfalso; exact Ho);
       (destruct Ho as [Hn | Ho]; [ destruct (Hbound Hhu Hn) | ]).
-    + left. split; [ left; exists c; reflexivity | exact Ho ].
-    + left. split; [ right; exists bytes; reflexivity | exact Ho ].
-    + right. destruct Ho as (els' & Hs & Hf). exists els, els'.
+    + left. destruct Ho as (c' & Hs & Hc'). exists c, c'.
+      split; [ reflexivity | split; [ exact Hs | exact Hc' ] ].
+    + right. left. exists bytes. split; [ reflexivity | exact Ho ].
+    + right. right. destruct Ho as (els' & Hs & Hf). exists els, els'.
       split; [ reflexivity | split; [ exact Hs | ] ].
       exact (Forall2_impl _ element_rel_sim (Hf Hau)).
 Qed.
@@ -2741,6 +2763,9 @@ Proof.
     + destruct Hrel as (_ & _ & Hhu).
       destruct (Hbound (Hhu (has_usage_accessor _ _ _ Hc _ _ _ Hx Hacc)) Hn).
     + destruct Hrel as (-> & _ & _).
+      destruct Hs' as (c' & Hs' & Hc').
+      assert (Hcc : c' = Value_const c) by (destruct Hc' as [H | H]; exact H).
+      subst c'.
       assert (Hbx' : boxed_number_of statics' (Value_symbol s)
                      = boxed_number_of statics (Value_symbol s))
         by (simpl; rewrite Hs', Hl; reflexivity).
@@ -2948,15 +2973,20 @@ Proof.
       * destruct (Honly allocated eq_refl)
           as [(t0 & f0 & ->)
              | [(sl & sy & de & vs0 & ->)
-               | [[[(c & ->) | (bytes & ->)] Hl']
-                 | (els & els' & -> & Hl' & Hf)]]].
+               | [(c & c' & -> & Hl' & Hc')
+                 | [(bytes & -> & Hl') | (els & els' & -> & Hl' & Hf)]]]].
         -- destruct (Hblk t0 f0 eq_refl) as (fields' & Hl' & Hf).
            repeat split; simpl; rewrite ?Hl, ?Hl'; try obs_close.
            intros t f Hb. injection Hb as <- <-. exists fields'.
            split; [ reflexivity | exact (values_related_Forall2 _ _ Hf) ].
         -- destruct (Hclo sl sy de vs0 eq_refl) as (vs' & Hl').
            repeat split; simpl; rewrite ?Hl, ?Hl'; obs_close.
-        -- repeat split; simpl; rewrite ?Hl, ?Hl'; obs_close.
+        -- destruct (boxed_contents_cases c c' Hc') as [-> | Hnc];
+             [ repeat split; simpl; rewrite ?Hl, ?Hl'; obs_close | ].
+           repeat split; simpl; rewrite ?Hl, ?Hl'; try obs_close.
+           intros c0 Hc0. exfalso.
+           destruct c; simpl in Hc0; try discriminate Hc0.
+           exact (Hnc _ eq_refl).
         -- repeat split; simpl; rewrite ?Hl, ?Hl'; obs_close.
         -- repeat split; simpl; rewrite ?Hl, ?Hl'; try obs_close.
            intros e Ha. injection Ha as <-. exists els'.
@@ -3803,13 +3833,8 @@ Proof.
            destruct (Pos.eqb s' s);
              [ injection Hl' as <-; left; eexists _, _; reflexivity
              | exact (Honly s' allocated Hl') ].
-    + (* A static boxed number, of a symbol or of a constant. *)
-      assert (Hcontents :
-                rewrite_or_variable sol en contents = contents
-                ∧ eval_simple vars' contents = eval_simple vars contents)
-        by (destruct contents;
-            [ discriminate Hnc | split; reflexivity | split; reflexivity ]).
-      destruct Hcontents as [Hr Hv'].
+    + (* A static boxed number. A variable in it has a use from the
+         symbol, and is kept with it. *)
       destruct (lookup s (static_values statics)) eqn:Hl;
         [ discriminate Hev | ].
       cbn [eval_static_const] in Hev.
@@ -3819,10 +3844,28 @@ Proof.
       destruct Hst as (Hnone & Hblocks & Honly & Hcode).
       cbn [flat_map rebuild_binding_cc static_const_is_used
            rebuild_static_const].
-      rewrite Hr. unfold is_symbol_used.
+      unfold is_symbol_used.
       destruct (s_has_usage sol (Node_symbol s)) eqn:Hu.
-      * cbn [app eval_static_bindings]. rewrite (Hnone s Hl).
-        cbn [eval_static_const]. rewrite Hv'; try rewrite Hv. cbv beta iota.
+      * assert (Hcontents :
+                  ∃ v' : value,
+                    eval_simple vars' (rewrite_or_variable sol en contents)
+                    = Some v'
+                    ∧ (v' = v ∨ sim v v')).
+        { destruct contents as [x | sym | c];
+            [ | exists v; split; [ exact Hv | left; reflexivity ] .. ].
+          pose proof (any_usage_use _ _ _ Hc _ _ Hu (proj2 Hb x eq_refl))
+            as Hx.
+          pose proof (au_hu _ _ _ Hc _ Hx) as Hhx.
+          destruct (proj2 (Henv x v Hv) (is_var_used_hu x _ Hhx))
+            as (v' & Hl' & Hrel).
+          exists v'. split.
+          - cbn [rewrite_or_variable]. rewrite (is_var_used_hu x _ Hhx).
+            exact Hl'.
+          - right. exact (rel_au_sim G sol keep called (exact = true) True
+              is_local Hc Hlocal _ _ _ Hx Hrel). }
+        destruct Hcontents as (v' & Hv' & Hvv).
+        cbn [app eval_static_bindings]. rewrite (Hnone s Hl).
+        cbn [eval_static_const]. rewrite Hv'. cbv beta iota.
         refine (IH _ _ _ Hfrag Hbindings _ Hev).
         split; [ | split; [ | split; [ | intros id'; exact (Hcode id') ] ] ].
         -- intros s' Hl'. simpl in Hl' |- *.
@@ -3833,7 +3876,8 @@ Proof.
         -- intros s' allocated Hl'. simpl in Hl' |- *.
            destruct (Pos.eqb s' s); [ | exact (Honly s' allocated Hl') ].
            injection Hl' as <-. right. right.
-           split; [ right; reflexivity | intros _; discriminate ].
+           split; [ right; exists v'; split; [ reflexivity | exact Hvv ]
+                  | intros _; discriminate ].
       * cbn [app]. refine (IH _ _ _ Hfrag Hbindings _ Hev).
         split; [ | split; [ | split; [ | intros id'; exact (Hcode id') ] ] ].
         -- intros s' Hl'. simpl in Hl'.

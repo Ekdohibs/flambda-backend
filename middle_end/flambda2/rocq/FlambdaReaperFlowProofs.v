@@ -76,10 +76,10 @@
      statement says ([flows_weaken]).
    The facts of a term that the proof reads ([expr_edges]) are in every
    graph that has those of the traversal but uses by other nodes than
-   variables and reads of [Is_int] into other nodes than variables
-   ([graph_sub], [expr_edges_mono]); so the statement holds of any such
-   graph and a solution closed for it ([flow_sound_gen]), the graph
-   without the two facts that keep a tuple alive among them. *)
+   variables and symbols and reads of [Is_int] into other nodes than
+   variables ([graph_sub], [expr_edges_mono]); so the statement holds of
+   any such graph and a solution closed for it ([flow_sound_gen]), the
+   graph without the two facts that keep a tuple alive among them. *)
 
 From Stdlib Require Import ZArith List Bool Arith Lia Permutation.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
@@ -425,13 +425,15 @@ Definition block_edges (base : node) (fields : list simple) : Prop :=
   ∧ g_constructor G base Field_get_tag Node_all_constants
   ∧ simples_noted fields.
 
-(* The facts of a static boxed number of [s] ([boxed_number_facts]),
-   but the use of a variable, which says nothing of where values are. *)
+(* The facts of a static boxed number of [s] ([boxed_number_facts]). *)
 Definition boxed_edges (s : symbol) (contents : simple) : Prop :=
   match boxed_number_kind contents with
   | Some bn =>
     g_constructor G (Node_symbol s) (Field_boxed_number bn) Node_all_constants
-  | None => g_alias G (Node_symbol s) Node_all_constants
+  | None =>
+    g_alias G (Node_symbol s) Node_all_constants
+    ∧ ∀ x : variable,
+        contents = Var x -> g_use G (Node_symbol s) (Node_variable x)
   end.
 
 Definition accessor_edges (x : variable) (f : field) (s : simple) : Prop :=
@@ -1256,8 +1258,11 @@ Proof.
   destruct (boxed_number_kind contents) as [bn | ].
   - apply facts_constructor. apply (add_facts_later _ _ _ _ Hle). left.
     reflexivity.
-  - apply facts_alias. apply (add_facts_later _ _ _ _ Hle). left.
-    reflexivity.
+  - split.
+    + apply facts_alias. apply (add_facts_later _ _ _ _ Hle). left.
+      reflexivity.
+    + intros x ->. apply facts_use. apply (add_facts_later _ _ _ _ Hle).
+      right. left. reflexivity.
 Qed.
 
 (* A constant of a kind of number is a boxed number of that kind. *)
@@ -4026,7 +4031,8 @@ Proof.
   unfold boxed_edges. destruct (boxed_number_kind contents) as [bn | ].
   - intros Hcons.
     exact (alloc_self _ _ _ Hcons (as_hs _ _ _ Hc _ consts_any_source)).
-  - intros Hal. exact (any_source_self _ (alias_consts_any_source _ Hal)).
+  - intros [Hal _].
+    exact (any_source_self _ (alias_consts_any_source _ Hal)).
 Qed.
 
 (* What a static boxed number holds, as [statics_flow] says it. *)
@@ -4045,7 +4051,7 @@ Proof.
     simpl in Hv. injection Hv as ->.
     rewrite (boxed_number_kind_of_kind _ _ Hk') in Hk. injection Hk as ->.
     exact Hb.
-  - left. exact (alias_consts_any_source _ Hb).
+  - left. exact (alias_consts_any_source _ (proj1 Hb)).
 Qed.
 
 (* A node with any source, used only if [a] has any usage, may hold what
@@ -7245,13 +7251,16 @@ Qed.
 (* ======================================================================== *)
 
 (* What the facts of a term read of a graph is in [G']: every fact but
-   uses by other nodes than variables and reads of [Is_int] into other
-   nodes than variables, which are the two facts that keep the tuple of
-   a call of tupled code alive. *)
+   uses by other nodes than variables and symbols and reads of [Is_int]
+   into other nodes than variables, which are the two facts that keep
+   the tuple of a call of tupled code alive. *)
 Definition graph_sub (G G' : graph) : Prop :=
   (∀ a b : node, g_alias G a b -> g_alias G' a b)
-  ∧ (∀ (x : variable) (b : node),
-       g_use G (Node_variable x) b -> g_use G' (Node_variable x) b)
+  ∧ (∀ a b : node,
+       g_use G a b ->
+       (∃ x : variable, a = Node_variable x)
+       ∨ (∃ s : symbol, a = Node_symbol s) ->
+       g_use G' a b)
   ∧ (∀ (t : node) (f : field) (b : node),
        g_accessor G t f b ->
        f <> Field_is_int ∨ (∃ x : variable, t = Node_variable x) ->
@@ -7275,7 +7284,8 @@ Lemma without_keep_alive_sub (F : facts) :
 Proof.
   unfold graph_sub, FlambdaReaperTupledSpec.without_keep_alive. cbn.
   split; [ auto | split; [ | split; [ | auto 10 ] ] ].
-  - intros x b H. apply filter_In. split; [ exact H | reflexivity ].
+  - intros a b H Hcond. apply filter_In. split; [ exact H | ].
+    destruct Hcond as [(x & ->) | (s & ->)]; reflexivity.
   - intros t f b H Hcond. apply filter_In. split; [ exact H | ].
     destruct Hcond as [Hf | (x & ->)]; [ | reflexivity ].
     destruct t; try reflexivity. destruct f; try reflexivity. contradiction.
@@ -7298,7 +7308,15 @@ Proof. apply Hsub. Qed.
 
 Lemma sub_use (x : variable) (b : node) :
   g_use G (Node_variable x) b -> g_use G' (Node_variable x) b.
-Proof. apply Hsub. Qed.
+Proof.
+  intros H. apply (proj1 (proj2 Hsub)); [ exact H | left; eexists; eauto ].
+Qed.
+
+Lemma sub_use_symbol (s : symbol) (b : node) :
+  g_use G (Node_symbol s) b -> g_use G' (Node_symbol s) b.
+Proof.
+  intros H. apply (proj1 (proj2 Hsub)); [ exact H | right; eexists; eauto ].
+Qed.
 
 Lemma sub_accessor (t : node) (f : field) (b : node) :
   f <> Field_is_int -> g_accessor G t f b -> g_accessor G' t f b.
@@ -7347,7 +7365,9 @@ Lemma boxed_edges_mono (s : symbol) (contents : simple) :
   boxed_edges G s contents -> boxed_edges G' s contents.
 Proof.
   unfold boxed_edges. destruct (boxed_number_kind contents);
-    [ apply sub_constructor | apply sub_alias ].
+    [ apply sub_constructor | ].
+  intros [Hal Huse]. split; [ exact (sub_alias _ _ Hal) | ].
+  intros x Hx. exact (sub_use_symbol _ _ (Huse x Hx)).
 Qed.
 
 Lemma accessor_edges_mono (x : variable) (f : field) (s : simple) :
