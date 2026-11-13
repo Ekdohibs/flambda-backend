@@ -5,4 +5,4 @@ rec_helper_called_outside.fl:
   calls outside code: 2 before, 1 after
   the same
   calls outside code once those of known code are inlined: 0
-  not validated
+  validated: the same once closures and blocks are lifted to symbols and the terms normalised

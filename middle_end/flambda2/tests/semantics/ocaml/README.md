@@ -713,7 +713,6 @@ before. What each shows, and what its validation uses besides:
 | `pair_kept.ml` | 35, 33 | as `pair_join.ml` |
 | `pair_loop.ml` | 192, 85 | as `pair_join.ml`, at the entry of a loop, whose parameter Simplify unboxes from its subkind without looking at the uses (T6-7) |
 | `raise_parameter.ml` | 11, 7 | as `exported_function_raises.ml` |
-| `rec_helper_called_outside.ml` | 27, 13 | two functions defined together, neither of them recursive: Simplify inlines the second where the unit calls it and leaves the call of it in the code of the first. The validation inlines no call of code that the term after still calls, so it inlines neither: the calls that are not inlined are chosen by code and not by call (V2; `status/V2.md`, a known limit, here in a source with no attribute at a call) |
 | `reraise_in_kept_function.ml` | 47, 35 | as `exported_function_raises.ml` |
 | `throw_variable_kept.ml` | 49, 31 | as `exported_function_raises.ml` |
 
@@ -790,17 +789,6 @@ the line with no import.
    proved (`pair_join.ml`, `pair_kept.ml`; discrepancy T6-7).
    `pair_loop.ml` is the same at the entry of a loop, whose parameter
    Simplify unboxes from its subkind without looking at the uses.
-3. A function that Simplify inlines at one of its calls and not at
-   another (`rec_helper_called_outside.ml`, T3's source). Two
-   functions are defined together with `let rec .. and ..`, neither
-   of them recursive; the first calls the second, and the unit calls
-   both. Simplify inlines the second where the unit calls it and
-   leaves the call of it in the code of the first. The validation is
-   told which calls not to inline by code and not by call: it
-   inlines no call of code that the term after still calls, so the
-   term before keeps, at the head of the unit, a call that the term
-   after has not. It is the limit that `status/V2.md` describes,
-   here in a source that has no attribute at a call.
 
 What the model has not got, and the conversion refuses: floating-point
 arithmetic (`float_add.ml`), mutable arrays (`array_literal.ml`),
@@ -1633,6 +1621,26 @@ removed it:
   handler has none and the arguments are known to have the kinds of
   the parameters, and the application keeps its own
   (`FlambdaForwardKindedSpec.forward_kinded_apply_cont`).
+- A function that Simplify inlines where the unit calls it and
+  leaves in the code of another function of its group
+  (`rec_helper_called_outside.ml`, T3's source, and
+  `rec_helper_among_three.ml`; V2's). Functions are defined
+  together with `let rec .. and ..`, none of them recursive, and
+  the first calls the second. Simplify inlines the second where the
+  unit calls it and leaves the call of it in the code of the first.
+  A round of the term before inlined that call too, by its pass for
+  the code of a group
+  (`FlambdaInlineSiblingsSpec.inline_sibling_calls`); a round of the
+  term after had no such pass, and the code of the first was not
+  the same in the two terms. A round of the term after now inlines,
+  in the body of code, the calls of the other code of its group
+  whose callee is a symbol that the group binds to a closure of the
+  code called
+  (`FlambdaKnownSiblingsSpec.inline_known_sibling_calls`, an
+  equivalence). In the second unit a third function of the group
+  has the type of the second and another body. The limit that
+  `status/V2.md` describes stays: the calls to leave are chosen by
+  code and not by call.
 
 A count over 600 units made at random is in `census/README.md`, with
 one over 240 more that have exceptions, loops and recursive functions.

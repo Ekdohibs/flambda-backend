@@ -1,0 +1,8 @@
+rec_helper_among_three.fl:
+  before Simplify (29 steps): returns [0: <fun>; <fun>; <fun>; 23]
+  after Simplify (10 steps): returns [0: <fun>; <fun>; <fun>; 23]
+  the check of kinds: passes before, passes after
+  calls outside code: 2 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated: the same once closures and blocks are lifted to symbols and the terms normalised

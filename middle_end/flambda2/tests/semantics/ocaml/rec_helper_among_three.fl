@@ -1,0 +1,70 @@
+let $camlRec_helper_among_three__first_const_0 = Block 0 () in
+(let code size(7)
+       second_1 (x/80 : imm tagged)
+         my_closure/81 &my_alloc_region/82 my_depth/83
+         -> k/22 * k/23
+         : imm tagged =
+   let next_depth/84 = rec_info (succ my_depth/83) in
+   let first/85 = %project_function_slot.[second].[first] (my_closure/81) in
+   let third/86 = %project_function_slot.[second].[third] (my_closure/81) in
+   let int_mul/87 = %int_barith.mul (x/80, 3) in
+   cont k/22 (int_mul/87)
+ in
+ let code size(8)
+       first_0 (x/88 : imm tagged)
+         my_closure/89 &my_alloc_region/90 my_depth/91
+         -> k/24 * k/25
+         : imm tagged =
+   let next_depth/92 = rec_info (succ my_depth/91) in
+   let second/93 = %project_function_slot.[first].[second] (my_closure/89) in
+   let third/94 = %project_function_slot.[first].[third] (my_closure/89) in
+   let int_add/95 = %int_barith.add (x/88, 1) in
+   apply direct(second_1 &my_alloc_region/90)
+     (second/93 ~ depth my_depth/91 -> next_depth/92 : _ -> imm tagged)
+       (int_add/95)
+       -> k/24 * k/25
+ in
+ let code size(7)
+       third_2 (x/96 : imm tagged)
+         my_closure/97 &my_alloc_region/98 my_depth/99
+         -> k/26 * k/27
+         : imm tagged =
+   let next_depth/100 = rec_info (succ my_depth/99) in
+   let first/101 = %project_function_slot.[third].[first] (my_closure/97) in
+   let second/102 = %project_function_slot.[third].[second] (my_closure/97)
+   in
+   let int_mul/103 = %int_barith.mul (x/96, 5) in
+   cont k/26 (int_mul/103)
+ in
+ let first/104 = closure first_0 @first &toplevel
+ and second/105 = closure second_1 @second &toplevel
+ and third/106 = closure third_2 @third &toplevel
+ in
+ (let Popaque/111 = %opaque (4) in
+  apply direct(third_2 &toplevel)
+    (third/106 : _ -> imm tagged) (Popaque/111) -> k/28 * error)
+   where k/28 (apply_result/107 : imm tagged) =
+     (apply direct(second_1 &toplevel)
+        (second/105 : _ -> imm tagged) (1) -> k/29 * error
+        where k/29 (apply_result/108 : imm tagged) =
+          let result/109 =
+            %int_barith.add (apply_result/108, apply_result/107)
+          in
+          let Pmakeblock/110 =
+            %block.[`0`].`toplevel`
+              (first/104, second/105, third/106, result/109)
+          in
+          cont k/21 (Pmakeblock/110)))
+  where k/21 define_root_symbol (module_block/75) =
+    let field_0/76 = %block_load.tag[`0`].`size`[`4`].[`0`] (module_block/75)
+    in
+    let field_1/77 = %block_load.tag[`0`].`size`[`4`].[`1`] (module_block/75)
+    in
+    let field_2/78 = %block_load.tag[`0`].`size`[`4`].[`2`] (module_block/75)
+    in
+    let field_3/79 = %block_load.tag[`0`].`size`[`4`].[`3`] (module_block/75)
+    in
+    let $camlRec_helper_among_three =
+      Block 0 (field_0/76, field_1/77, field_2/78, field_3/79)
+    in
+    cont done ($camlRec_helper_among_three)
