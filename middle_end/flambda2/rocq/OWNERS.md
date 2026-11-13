@@ -140,6 +140,10 @@ design out; that is the request, not the change.
   - `middle_end/flambda2/rocq/FlambdaStubCalls*` (in the code of a
     stub, the direct calls of the unit's other code are made indirect,
     for the validator; S4's once it is staffed)
+  - `middle_end/flambda2/rocq/FlambdaCopyCode*` (code of the unit
+    copied under new code ids for static sets of closures that
+    Simplify gave new code, for the validator; S4's once it is
+    staffed)
   - `middle_end/flambda2/rocq/status/C3.md`
   - the examples `middle_end/flambda2/tests/semantics/set_*.fl`,
     `apply_partial*.fl`, `apply_over*.fl`, `tupled_apply*.fl` and

@@ -1123,7 +1123,11 @@ it gave back.
   and where, for a lifting that is given a table to put at the head
   of the unit, no import is a symbol that the groups at the head of
   the unit bind once that step is done, whether the table is put or
-  not. The test computes
+  not. Of the copies of code that end a lifting
+  (`FlambdaCopyCodeSpec.with_copies`) the test asks nothing: their
+  law from the imports (`with_copies_refines_imports_statement`) has
+  no premise, and a lifting that asks for no copy gives the term
+  that it gave (`with_copies_none_statement`). The test computes
   those terms a second time, as the validation does; it is
   sufficient, not necessary. The rounds that follow the demotion
   are those of `FlambdaValidateSpec.demote_and_tidy_known`, and
@@ -1729,6 +1733,11 @@ checked by an extracted function, and `validate_unit_sound` and
   read) by `lift_from_code_unit`; the `Let`s of the handlers that are
   not at toplevel, to bind at the head of the unit (the field
   `lifted_to_head`), by `lift_to_head_unit`.
+- Which code of the term before to copy, under which new code ids, and
+  the static sets of closures of which symbols get the copies (the
+  field `code_copied` of the same guess): checked by
+  `FlambdaCopyCodeSpec.copy_static_code`, which makes no copy where
+  its check (`copy_ok`) fails.
 - Which value slots Simplify removed from the static sets of closures
   (`unused_slots_guess`): checked by `drop_unused_slots`.
 - Which code Simplify made a loop of, with a name for the loop of each
