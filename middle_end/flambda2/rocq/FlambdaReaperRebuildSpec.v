@@ -31,8 +31,8 @@
    This file is to be reviewed: the checks [closure_free],
    [no_code_no_slots], [no_code], [no_call], [direct_tail_calls],
    [direct_calls], [only_direct_calls], [full_calls], [generic_calls],
-   [tupled_calls], [static_constants], [exits_one_value] and
-   [results_kinded], the relation
+   [tupled_calls], [static_constants], [any_kind_arguments],
+   [exits_one_value] and [results_kinded], the relation
    [observed_equal], the statements, and the examples, against
    FlambdaReaperRebuild.v (the rebuild, which needs no review) and
    FlambdaReaperFlowSpec.v (the meaning of a solution). The proofs are
@@ -156,14 +156,16 @@
      compiler's units, which are well-kinded, meet it; the model asks
      nothing of kinds otherwise (FlambdaWellKindedSpec.v).
    [rebuild_refines_observably_statement] is proved for the units that
-   meet [static_constants], of the code that they bind ([unit_codes]),
-   in place of [closure_free]: closures and static sets of closures with
-   value slots, static boxed numbers, strings and immutable arrays,
-   projections of function slots and of value slots, code,
-   tupled or not, and deleted code, and calls, direct or of unknown
-   arity, full, partial applications and over-applications, that return,
-   and raise, to a way out of the unit or of the code they are in, or to
-   a handler in scope. A unit of [tupled_calls] meets it
+   meet [any_kind_arguments], in place of [closure_free]: closures and
+   static sets of closures with value slots, static boxed numbers,
+   strings and immutable arrays, projections of function slots and of
+   value slots, code, tupled or not, and deleted code, and calls, direct
+   or of unknown arity, full, partial applications and
+   over-applications, with arguments of any kind, that return, and
+   raise, to a way out of the unit or of the code they are in, or to a
+   handler in scope. A unit of [static_constants] meets it
+   ([static_constants_any_kind_arguments_statement]); a unit of
+   [tupled_calls] meets [static_constants]
    ([tupled_calls_static_constants_statement]); a unit of
    [generic_calls] meets [tupled_calls]
    ([generic_calls_tupled_calls_statement]); a unit of [full_calls]
@@ -187,18 +189,23 @@
    keeps code whose code id has a use, rebuilt, and deletes the rest,
    which no call runs: a call reads the code id of its callee, which so
    has a use. [no_code] asks that a projection of a value slot be into a
-   variable of a kind other than [Region] and [Rec_info]: the rebuild
-   keeps such a variable whether or not it has a use ([is_var_used]), and
-   the proof needs the use to know that the value slot read is kept.
+   variable of a kind other than [Region] and [Rec_info], and so does
+   every check after it: the rebuild keeps such a variable whether or
+   not it has a use ([is_var_used]), and not the value slot that it
+   reads if it has none, so the rebuilt unit goes wrong where the unit
+   exits ([region_projection_needed_statement]). The compiler makes no
+   value slot of those kinds.
    [direct_tail_calls] asks of a call that it be direct; that neither its
    return nor its exception continuation be a handler in scope, so that
    the rebuild gives it no wrapper and what the code returns or raises
    leaves the unit; that it pass no extra argument with the exception;
    that it return one value, as the continuation of the unit takes one
    ([exits_one_value]); and that its arguments be of kinds other than
-   [Region] and [Rec_info], for the same reason as the projections: the
-   rebuild gives poison to an argument at a parameter that has no use,
-   and the callee keeps a parameter of those kinds. The bodies of code
+   [Region] and [Rec_info]: the rebuild gives poison to an argument at a
+   parameter that has no use, and the callee keeps a parameter of those
+   kinds. Every check up to [static_constants] asks it of the arguments
+   of a call; [any_kind_arguments] does not, as the poison of those
+   kinds is the only value they have. The bodies of code
    are checked with no handler in scope. [direct_calls] asks the same,
    but lets a call return to a handler in scope, with as many values as
    the call says: what the code returns, and what the code that it calls
@@ -315,6 +322,17 @@
    fields are variables ([Immutable_float_block]), which the model has
    not got, and which traverse.ml now reads as a block of naked floats,
    whose fields the rebuild keeps where they are read.
+   [any_kind_arguments] asks the same, but lets a call give arguments of
+   the kinds [Region] and [Rec_info]. The only value of each of those
+   kinds is its poison constant, and the machine tests the kinds of the
+   arguments of a call; so where the rebuild gives such an argument
+   poison of its kind, at a parameter that has no use, it gives the
+   value the argument has, and the code, which keeps a parameter of
+   those kinds whatever its use, binds it alike in the two runs. The
+   compiler's calls give no argument of those kinds: a call has its
+   region in its mode of allocation ([Apply_expr.return_mode]), and code
+   its region apart from its parameters
+   ([Bound_for_function.my_region]).
    The statement holds of more than nothing ([example_statement]): a
    unit with a static block, a block one field of which no load reads, a
    [Let] with no use, and a continuation one parameter of which has no
@@ -338,7 +356,10 @@
    [static_constants_example_statement] for a unit with a static boxed
    number, a string and immutable arrays, one of which is read and one
    not, and [static_boxed_variable_example_statement] for a unit whose
-   static boxed number holds a variable, which its rebuild keeps. *)
+   static boxed number holds a variable, which its rebuild keeps; and
+   [region_argument_example_statement] for a unit with a call that gives
+   a region at a parameter that has no use, which its rebuild makes
+   poison. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -903,6 +924,56 @@ with code_static_constants (codes : list (code_id * code)) (c : code)
 Definition tupled_calls_static_constants_statement : Prop :=
   ∀ (codes : list (code_id * code)) (e : expr),
     tupled_calls codes e = true -> static_constants codes e = true.
+
+(* Arguments of any kind: [static_constants], but a call may give
+   arguments of the kinds [Region] and [Rec_info] too, and a call is
+   asked nothing that [in_flow_fragment] does not ask (the test of
+   [tupled_call] on the code of an indirect call is one that
+   [in_flow_fragment] makes). The only value of the kind [Region] is
+   its poison constant, and so of [Rec_info]
+   (FlambdaValueSpec.kind_of_value: a value that is not a constant is of
+   kind [Value]); the machine tests the kinds of the arguments of a call
+   against its arity ([call_code], [shape_of_code_call], [detuple]). So
+   the poison that the rebuild gives such an argument at a parameter
+   that has no use ([poison_argument], of the kind of the variable) is
+   the value that the argument has, and the code, which keeps a
+   parameter of those kinds whatever its use ([is_var_used]), has it
+   bound to the same value in the two runs. A projection of a value slot
+   into a variable of those kinds is still left out ([named_no_code]):
+   the rebuild keeps the variable whatever its use, and not the slot
+   that it reads, which has no use if the variable has none
+   ([region_projection_needed_statement]). *)
+Fixpoint any_kind_arguments (e : expr) : bool :=
+  match e with
+  | Let _ kind defining_expr body =>
+    named_no_code kind defining_expr && any_kind_arguments body
+  | Let_static bindings body =>
+    forallb binding_any_kind_arguments bindings && any_kind_arguments body
+  | Let_cont_non_recursive _ h body =>
+    handler_any_kind_arguments h && any_kind_arguments body
+  | Let_cont_recursive handlers body =>
+    forallb (fun '(_, h) => handler_any_kind_arguments h) handlers
+    && any_kind_arguments body
+  | Apply _ | Apply_cont _ | Switch _ _ | Invalid => true
+  end
+with handler_any_kind_arguments (h : continuation_handler) : bool :=
+  match h with
+  | Handler _ _ handler => any_kind_arguments handler
+  end
+with binding_any_kind_arguments (binding : static_binding) : bool :=
+  match binding with
+  | Bind_code _ c => code_any_kind_arguments c
+  | Bind_deleted_code _ | Bind_symbol _ _ => binding_static_constant binding
+  end
+with code_any_kind_arguments (c : code) : bool :=
+  match c with
+  | Code _ _ _ _ _ body => any_kind_arguments body
+  end.
+
+(* A unit of [static_constants] meets it. *)
+Definition static_constants_any_kind_arguments_statement : Prop :=
+  ∀ (codes : list (code_id * code)) (e : expr),
+    static_constants codes e = true -> any_kind_arguments e = true.
 
 (* ======================================================================== *)
 (* Exits                                                                    *)
@@ -1658,7 +1729,7 @@ Definition rebuild_refines_observably_statement : Prop :=
     is_local_slots_only is_local ->
     (∀ f : field, is_local f = false) ∨ projection_free e = true ->
     in_flow_fragment e = true ->
-    static_constants (unit_codes e) e = true ->
+    any_kind_arguments e = true ->
     results_kinded [] [] e = true ->
     well_formed_unit u e = true ->
     exits_one_value u e = true ->
@@ -3368,3 +3439,224 @@ Definition static_boxed_variable_example_statement : Prop :=
       (State StaticBoxedVariableExample.rebuilt [] [] empty_static_env
          empty_heap no_reads)
       (Exits 1%positive [StaticBoxedVariableExample.result] empty_heap).
+
+(* ======================================================================== *)
+(* Arguments and projections of the kinds Region and Rec_info               *)
+(* ======================================================================== *)
+
+(* A call that gives an argument of the kind [Region] at a parameter
+   that has no use:
+
+     let code f50 (x40 : region) x43 =
+       let x44 : region = x40 in      (no use; kept, as a region)
+       return x43
+     in
+     let x13 : region = poison in     (kept, as a region)
+     let x11 = closure f50 in
+     f50 x11 x13 7
+
+   [x40] has no use, so the rebuild gives the call the poison of the
+   kind of [x13] in its place ([poison_argument]), which is the value
+   that [x13] has: the code binds [x40], and then [x44], to the same
+   value in the two runs. The unit meets [any_kind_arguments], not
+   [static_constants]; it exits with 7, as the rebuilt unit does. *)
+Module RegionArgumentExample.
+
+Local Open Scope positive_scope.
+
+Definition region_code : code :=
+  Code [40; 43] 41 3 4
+    (make_code_metadata [Singleton Region; Singleton Value] [Singleton Value])
+    (Let 44 Region (Simple (Var 40)) (FlowExample.return_to 3 [Var 43])).
+
+Definition call (arg : simple) : apply_expr :=
+  {| ap_callee := Var 11; ap_call_kind := Direct 50;
+     ap_args := [arg; Const (Tagged_immediate 7)]; ap_continuation := 1;
+     ap_exn_continuation := 2; ap_exn_extra_args := [];
+     ap_args_arity := [Singleton Region; Singleton Value];
+     ap_return_arity := [Singleton Value] |}.
+
+Definition unit_with (arg : simple) : expr :=
+  Let_static [Bind_code 50 region_code]
+    (Let 13 Region (Simple (Const (Poison Region)))
+       (Let 11 Value (Closure_of_set 70 [(70, 50)] []) (Apply (call arg)))).
+
+Definition unit_expr : expr := unit_with (Var 13).
+
+Definition solution : tables :=
+  {| t_alias :=
+       [(Node_made 1, Node_made 3); (Node_made 12, Node_made 14);
+        (Node_made 13, Node_code_id 50); (Node_made 14, Node_made 8);
+        (Node_made 2, Node_made 4); (Node_made 3, Node_variable 43);
+        (Node_made 5, Node_variable 11); (Node_made 6, Node_variable 13);
+        (Node_made 7, Node_all_constants);
+        (Node_variable 13, Node_all_constants);
+        (Node_variable 40, Node_made 6); (Node_variable 41, Node_made 5);
+        (Node_variable 43, Node_made 7); (Node_variable 44, Node_variable 40)];
+     t_any_usage :=
+       [Node_all_constants; Node_code_id 50; Node_made 1; Node_made 13;
+        Node_made 2; Node_made 3; Node_made 4; Node_made 7; Node_variable 43];
+     t_any_source :=
+       [Node_all_constants; Node_code_id 50; Node_made 1; Node_made 13;
+        Node_made 3; Node_made 6; Node_made 7; Node_variable 13;
+        Node_variable 40; Node_variable 43; Node_variable 44];
+     t_has_usage :=
+       [Node_all_constants; Node_code_id 50; Node_made 1; Node_made 12;
+        Node_made 13; Node_made 14; Node_made 2; Node_made 3; Node_made 4;
+        Node_made 7; Node_made 8; Node_variable 11; Node_variable 43];
+     t_has_source :=
+       [Node_all_constants; Node_code_id 50; Node_made 1; Node_made 10;
+        Node_made 11; Node_made 12; Node_made 13; Node_made 14; Node_made 3;
+        Node_made 5; Node_made 6; Node_made 7; Node_made 8; Node_made 9;
+        Node_variable 11; Node_variable 13; Node_variable 40; Node_variable 41;
+        Node_variable 43; Node_variable 44];
+     t_usages :=
+       [(Node_made 12, Node_made 12); (Node_made 14, Node_made 12);
+        (Node_made 8, Node_made 12); (Node_variable 11, Node_variable 11)];
+     t_sources :=
+       [(Node_made 10, Node_made 10); (Node_made 11, Node_made 11);
+        (Node_made 12, Node_made 8); (Node_made 14, Node_made 8);
+        (Node_made 5, Node_variable 11); (Node_made 8, Node_made 8);
+        (Node_made 9, Node_made 9); (Node_variable 11, Node_variable 11);
+        (Node_variable 41, Node_variable 11)];
+     t_reading_field := [];
+     t_escaping_field := [];
+     t_field_used :=
+       [(Node_made 8, Field_code_id_of_call_witness);
+        (Node_made 8, Field_return_of_call (Normal 0%nat));
+        (Node_made 8, Field_return_of_call Exn);
+        (Node_variable 11, Field_call_witness Known_arity_code_pointer)] |}.
+
+Definition rebuilt : expr := unit_with (Const (Poison Region)).
+
+End RegionArgumentExample.
+
+Definition region_argument_example_statement : Prop :=
+  in_flow_fragment RegionArgumentExample.unit_expr = true
+  ∧ static_constants (unit_codes RegionArgumentExample.unit_expr)
+      RegionArgumentExample.unit_expr
+    = false
+  ∧ any_kind_arguments RegionArgumentExample.unit_expr = true
+  ∧ results_kinded [] [] RegionArgumentExample.unit_expr = true
+  ∧ well_formed_unit FlowExample.interface RegionArgumentExample.unit_expr
+    = true
+  ∧ exits_one_value FlowExample.interface RegionArgumentExample.unit_expr
+    = true
+  ∧ check_closed FlowExample.is_local
+      (traverse_unit Never FlowExample.interface
+         RegionArgumentExample.unit_expr)
+      RegionArgumentExample.solution
+    = true
+  ∧ check_field_used_exact FlowExample.is_local
+      (traverse_unit Never FlowExample.interface
+         RegionArgumentExample.unit_expr)
+      RegionArgumentExample.solution
+    = true
+  ∧ rebuild_unit_from_tables
+      (traverse_unit Never FlowExample.interface
+         RegionArgumentExample.unit_expr)
+      RegionArgumentExample.solution false RegionArgumentExample.unit_expr
+    = RegionArgumentExample.rebuilt
+  ∧ behaves
+      (State RegionArgumentExample.unit_expr [] [] empty_static_env
+         empty_heap no_reads)
+      (Exits 1%positive [Value_const (Tagged_immediate 7)] empty_heap)
+  ∧ behaves
+      (State RegionArgumentExample.rebuilt [] [] empty_static_env
+         empty_heap no_reads)
+      (Exits 1%positive [Value_const (Tagged_immediate 7)] empty_heap).
+
+(* A projection of a value slot into a variable of the kind [Region]
+   that has no use:
+
+     let x10 = closure at 70 of { 70 = f50 }
+       with { w60 = poison (region); w61 = 7 } in
+     let x11 : region = x10.(70).w60 in      (no use)
+     let x12 = x10.(70).w61 in
+     return x12
+
+   [x10] has a use only through [x12], so [w61] is used and [w60] is
+   not: the rebuild removes [w60] from the set ([rebuild_value_slots]),
+   but keeps the [Let] of [x11], as it keeps every variable of the kind
+   [Region] ([is_var_used]), and makes it neither [Invalid] nor poison
+   ([is_dead_var] is false of a region). The unit exits with 7; the
+   rebuilt unit goes wrong at the projection of a slot that its closure
+   has not got. The unit meets every premise of
+   [rebuild_refines_observably_statement] but [any_kind_arguments]
+   ([named_no_code]), with its least solution; [Rec_info] is alike. The
+   compiler makes no value slot of these kinds: closure conversion makes
+   value slots of the free variables of functions, which are of the
+   kinds of the layouts of Lambda, and Simplify of the arguments of a
+   partial application; the backend stops on one
+   (to_cmm_shared.ml, [memory_chunk_of_kind], which
+   to_cmm_set_of_closures.ml asks of every value slot). The rebuild of
+   the compiler does the same as the model's (rebuild.ml,
+   [raw_is_var_used], [is_dead_var]). *)
+Module RegionProjectionExample.
+
+Local Open Scope positive_scope.
+
+Definition unit_expr : expr :=
+  Let 10 Value
+    (Closure_of_set 70 [(70, 50)]
+       [(60, Const (Poison Region)); (61, Const (Tagged_immediate 7))])
+    (Let 11 Region (Project_value_slot_from 70 60 (Var 10))
+       (Let 12 Value (Project_value_slot_from 70 61 (Var 10))
+          (FlowExample.return_to 1 [Var 12]))).
+
+Definition solution : tables :=
+  {| t_alias :=
+       [(Node_made 1, Node_variable 12);
+        (Node_variable 11, Node_all_constants);
+        (Node_variable 12, Node_all_constants)];
+     t_any_usage :=
+       [Node_all_constants; Node_made 1; Node_made 2; Node_variable 12];
+     t_any_source :=
+       [Node_all_constants; Node_made 1; Node_made 3; Node_variable 11;
+        Node_variable 12];
+     t_has_usage :=
+       [Node_all_constants; Node_made 1; Node_made 2; Node_variable 10;
+        Node_variable 12];
+     t_has_source :=
+       [Node_all_constants; Node_made 1; Node_made 3; Node_variable 10;
+        Node_variable 11; Node_variable 12];
+     t_usages := [(Node_variable 10, Node_variable 10)];
+     t_sources := [(Node_variable 10, Node_variable 10)];
+     t_reading_field := [];
+     t_escaping_field := [];
+     t_field_used := [(Node_variable 10, Field_value_slot 61)] |}.
+
+Definition rebuilt : expr :=
+  Let 10 Value
+    (Closure_of_set 70 [(70, 50)] [(61, Const (Tagged_immediate 7))])
+    (Let 11 Region (Project_value_slot_from 70 60 (Var 10))
+       (Let 12 Value (Project_value_slot_from 70 61 (Var 10))
+          (FlowExample.return_to 1 [Var 12]))).
+
+End RegionProjectionExample.
+
+Definition region_projection_needed_statement : Prop :=
+  in_flow_fragment RegionProjectionExample.unit_expr = true
+  ∧ any_kind_arguments RegionProjectionExample.unit_expr = false
+  ∧ results_kinded [] [] RegionProjectionExample.unit_expr = true
+  ∧ well_formed_unit FlowExample.interface RegionProjectionExample.unit_expr
+    = true
+  ∧ exits_one_value FlowExample.interface RegionProjectionExample.unit_expr
+    = true
+  ∧ check_closed FlowExample.is_local
+      (traverse_unit Never FlowExample.interface
+         RegionProjectionExample.unit_expr)
+      RegionProjectionExample.solution
+    = true
+  ∧ check_field_used_exact FlowExample.is_local
+      (traverse_unit Never FlowExample.interface
+         RegionProjectionExample.unit_expr)
+      RegionProjectionExample.solution
+    = true
+  ∧ rebuild_unit_from_tables
+      (traverse_unit Never FlowExample.interface
+         RegionProjectionExample.unit_expr)
+      RegionProjectionExample.solution false RegionProjectionExample.unit_expr
+    = RegionProjectionExample.rebuilt
+  ∧ ~ program_refines_observably RegionProjectionExample.unit_expr
+        RegionProjectionExample.rebuilt.

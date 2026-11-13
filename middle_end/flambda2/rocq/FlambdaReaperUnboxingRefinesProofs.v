@@ -5423,7 +5423,8 @@ Proof.
                      preserve_direct_calls e)
               [] [] empty_static_env empty_heap no_reads)).
   - exact (rebuild_refines_observably flag is_local u e T
-             preserve_direct_calls Hlocal_slots Hprojections Hfragment Hstatic
+             preserve_direct_calls Hlocal_slots Hprojections Hfragment
+             (static_constants_any_kind_arguments _ e Hstatic)
              Hkinded Hwell_formed Hone Hclosed Hexact).
   - exact (rebuild_unbox_refines_rebuild flag is_local u e T cannot_change
              (unit_code_deps flag u e) dominated to_unbox preserve_direct_calls
@@ -6936,8 +6937,8 @@ Proof.
              preserve_direct_calls e Hnil Hm).
   exact (FlambdaReaperCallingConventionsProofs.rebuild_cc_refines_observably
            flag is_local u e T cannot_change preserve_direct_calls Hlocal
-           Hproj Hfrag Hstatic Hkinded Hwf Hone Hclosed Hexact Hcc_closed
-           Hwidgets).
+           Hproj Hfrag (static_constants_any_kind_arguments _ e Hstatic)
+           Hkinded Hwf Hone Hclosed Hexact Hcc_closed Hwidgets).
 Qed.
 
 Theorem without_unboxing_examples : without_unboxing_examples_statement.

@@ -463,7 +463,7 @@ Definition rebuild_cc_refines_observably_statement : Prop :=
     is_local_slots_only is_local ->
     (∀ f : field, is_local f = false) ∨ projection_free e = true ->
     in_flow_fragment e = true ->
-    static_constants (unit_codes e) e = true ->
+    any_kind_arguments e = true ->
     results_kinded [] [] e = true ->
     well_formed_unit u e = true ->
     exits_one_value u e = true ->

@@ -45,7 +45,9 @@
      expression of the second is the rebuild of that of the first;
    - the variables of the first run that the rebuild keeps bound in the
      second to related values ([env_ok], [rel]): the same constants and
-     symbols, a block with the same tag and as many fields, each field
+     symbols (a constant at a node with any source, but the poison of
+     [Region] and [Rec_info], which is anywhere), a block with the same
+     tag and as many fields, each field
      that is used related and the others poison, a boxed number or
      poison where its contents
      is not used, an array of elements related at nodes with any usage,
@@ -76,8 +78,8 @@
      ([expr_ok]): its [Switch]es are on what has any usage, or in code on
      what the code id uses, it gives the continuations of the unit one
      value and those of code as many as counted, it meets the check
-     ([checked]: [no_code_no_slots] if [exact], otherwise the calls of
-     [tupled_calls] and the static constants of [static_constants]), it
+     ([checked]: [no_code_no_slots] if [exact], otherwise the static
+     constants and the projections of [any_kind_arguments]), it
      does not name the continuation of the wrappers,
      its calls that return to handlers in scope return values of their
      kinds, and its calls that raise to handlers in scope raise to
@@ -97,10 +99,11 @@
    [Switch] has any usage ([traverse_scrutinees]), so that the rebuild
    keeps it; and the two facts that keep the tuple of a call of tupled
    code alive ([tupled_kept], from [prepare_code]: [traverse_keeps],
-   [traverse_unit_keeps]). The rebuild keeps every variable of kind [Region] or
-   [Rec_info] ([is_var_used]), used or not; in the fragment such a
-   variable holds a constant, given by a simple or by the identity, the
-   same in the two runs ([region_rel]).
+   [traverse_unit_keeps]). The rebuild keeps every variable of kind
+   [Region] or [Rec_info] ([is_var_used]), used or not; such a variable
+   holds the poison of its kind, the only value of the kind
+   ([region_value]), given by a simple, by the identity or by a call,
+   the same in the two runs ([region_rel], [rel_region_argument]).
 
    A direct call is answered by the call of the rebuilt code
    ([direct_answered], [call_entered]), after the binding of the wrapper
@@ -634,25 +637,30 @@ Fixpoint witness_chain (P : node -> Prop) (g : nat) (W : node) : Prop :=
   end.
 
 (* The value [v] of the first run may be at the node [n], and [v'] is
-   what the second run has for it. A block has in the second run its
-   tag, each field used related, and poison in the others. A closure
-   has the nodes of the closures of its set ([sites]) as
-   FlambdaReaperFlowSpec.flows has them;
-   in the second run it is of the same set, with the value slots that the
-   rebuild keeps ([exact]: all), and a value slot kept and used at one of
-   these nodes is related there. The elements of an immutable array are
-   related at nodes with any usage. A partial application, if the runs
-   may have any, has its closure related at some node [m] that has a use,
-   and observed equal, and an arity of one parameter at least, of kinds
-   other than [Region] and [Rec_info]; what the last of the witnesses
-   that its groups reach from the allocations that [m] may come from
-   returns first may come to [n]; and it has in the second run arguments
-   of the same kinds, each related at the parameters that have a use of
-   the witnesses that its group reaches: those that the code of the
-   closure reads. *)
+   what the second run has for it. A constant is the same in the second
+   run, at a node with any source; the poison of the kinds [Region] and
+   [Rec_info], which is the only value of those kinds, may be at any
+   node, as the rebuild gives it for an argument of those kinds at a
+   parameter that has no use, which the code keeps. A block has in the
+   second run its tag, each field used related, and poison in the
+   others. A closure has the nodes of the closures of its set ([sites])
+   as FlambdaReaperFlowSpec.flows has them; in the second run it is of
+   the same set, with the value slots that the rebuild keeps ([exact]:
+   all), and a value slot kept and used at one of these nodes is related
+   there. The elements of an immutable array are related at nodes with
+   any usage. A partial application, if the runs may have any, has its
+   closure related at some node [m] that has a use, and observed equal,
+   and an arity of one parameter at least; what the last of the
+   witnesses that its groups reach from the allocations that [m] may
+   come from returns first may come to [n]; and it has in the second run
+   arguments of the same kinds, each related at the parameters that have
+   a use of the witnesses that its group reaches: those that the code of
+   the closure reads. *)
 Fixpoint rel (v : value) (n : node) (v' : value) {struct v} : Prop :=
   match v with
-  | Value_const _ => s_any_source sol n = true ∧ v' = v
+  | Value_const c =>
+    (argument_kind_ok (kind_of_const c) = true -> s_any_source sol n = true)
+    ∧ v' = v
   | Value_block tag fields =>
     ∃ (a : node) (fields' : list value),
       may_come_from sol a n
@@ -721,7 +729,6 @@ Fixpoint rel (v : value) (n : node) (v' : value) {struct v} : Prop :=
         ∧ s_has_usage sol m = true
         ∧ observed_equal closure closure'
         ∧ args_arity <> []
-        ∧ forallb argument_kind_ok (unarize args_arity) = true
         ∧ (∀ (g : nat) (W R y : node),
              S g = length args_arity ->
              witness_chain
@@ -889,7 +896,7 @@ Lemma rel_alias (v : value) (to_ from : node) (v' : value) :
 Proof.
   intros Hal. destruct v; cbn [rel]; not_rel.
   - intros [Has ->]. split; [ | reflexivity ].
-    exact (any_source_alias _ _ _ Hc _ _ Hal Has).
+    intros Hk. exact (any_source_alias _ _ _ Hc _ _ Hal (Has Hk)).
   - intros (sites & vs' & Ha & Hrest). exists sites, vs'.
     split; [ exact (may_come_from_alias _ _ _ Hc _ _ _ Hal Ha) | exact Hrest ].
   - intros (-> & Ha & Hhu). split; [ reflexivity | split ].
@@ -902,9 +909,9 @@ Proof.
   - intros (a & bn & from' & Ha & Hrest). exists a, bn, from'.
     split; [ exact (may_come_from_alias _ _ _ Hc _ _ _ Hal Ha) | exact Hrest ].
   - intros [Hp (m & closure' & args' & Hv' & Hex & Hcl & Hhm & Ho & Hne
-                 & Hak & Hend & Hrest)].
+                 & Hend & Hrest)].
     split; [ exact Hp | ]. exists m, closure', args'.
-    do 7 (split; [ assumption | ]). split; [ | exact Hrest ].
+    do 6 (split; [ assumption | ]). split; [ | exact Hrest ].
     intros g W R y Hg HW HR HyR Hyy.
     exact (may_come_from_alias _ _ _ Hc _ _ _ Hal
              (Hend g W R y Hg HW HR HyR Hyy)).
@@ -916,7 +923,7 @@ Lemma rel_escape (v : value) (to_ m : node) (v' : value) :
   as_ to_ -> (hu to_ -> au m) -> rel v m v' -> rel v to_ v'.
 Proof.
   intros Has Hm. destruct v; cbn [rel]; not_rel.
-  - intros [_ ->]. split; [ exact Has | reflexivity ].
+  - intros [_ ->]. split; [ intros _; exact Has | reflexivity ].
   - intros (sites & vs' & Ha & Hrest). exists sites, vs'.
     split; [ exact (may_come_from_escape _ _ _ Hc _ _ _ Has Hm Ha)
            | exact Hrest ].
@@ -932,9 +939,9 @@ Proof.
     split; [ exact (may_come_from_escape _ _ _ Hc _ _ _ Has Hm Ha)
            | exact Hrest ].
   - intros [Hp (m' & closure' & args' & Hv' & Hex & Hcl & Hhm & Ho & Hne
-                 & Hak & Hend & Hrest)].
+                 & Hend & Hrest)].
     split; [ exact Hp | ]. exists m', closure', args'.
-    do 7 (split; [ assumption | ]). split; [ | exact Hrest ].
+    do 6 (split; [ assumption | ]). split; [ | exact Hrest ].
     intros g W R y Hg HW HR HyR Hyy.
     exact (may_come_from_escape _ _ _ Hc _ _ _ Has Hm
              (Hend g W R y Hg HW HR HyR Hyy)).
@@ -1013,8 +1020,7 @@ Proof.
     reflexivity.
   - intros l n v' _ [].
   - intros callee args arity _ _ n v' _
-      [Hp (m & closure' & args' & -> & Hex & _ & _ & Ho & _ & _ & _ & Hk
-           & _)].
+      [Hp (m & closure' & args' & -> & Hex & _ & _ & Ho & _ & _ & Hk & _)].
     split; [ exact Hp | ]. exists closure', args'.
     split; [ reflexivity | split; [ exact Hex | split; assumption ] ].
 Qed.
@@ -1091,9 +1097,9 @@ Definition named_plain (d : named) : bool :=
 (* The check of the units of the proof: [no_code_no_slots] if the
    rebuild is compared exactly ([exact]); otherwise [no_call], with code
    whose body is of the check, the static constants of
-   [static_constants], and the calls of [tupled_calls], of the code
-   [codes] of the unit (where they go is [exits_bound] and
-   [raises_kept]). *)
+   [static_constants], and any call (where calls go is [exits_bound]
+   and [raises_kept]; what they call, [in_flow_fragment]). [codes] is
+   not read. *)
 Definition named_checked (exact : bool) (kind : flambda_kind) (d : named)
     : bool :=
   if exact then named_no_code_no_slots d else named_no_code kind d.
@@ -1109,7 +1115,7 @@ Fixpoint checked (exact : bool) (codes : list (code_id * code)) (e : expr)
   | Let_cont_recursive handlers body =>
     forallb (fun '(_, h) => handler_checked exact codes h) handlers
     && checked exact codes body
-  | Apply ap => negb exact && tupled_call codes ap
+  | Apply _ => negb exact
   | Apply_cont _ | Switch _ _ | Invalid => true
   end
 with handler_checked (exact : bool) (codes : list (code_id * code))
@@ -2274,6 +2280,36 @@ Qed.
 (* Environments                                                             *)
 (* ------------------------------------------------------------------------ *)
 
+(* A value of the kind [Region] or [Rec_info] is the poison of that
+   kind. *)
+Lemma region_value (v : value) :
+  argument_kind_ok (kind_of_value v) = false ->
+  v = Value_const (Poison (kind_of_value v)).
+Proof.
+  destruct v as [c | | | | | | | | ]; simpl; try discriminate.
+  destruct c; simpl; try discriminate. reflexivity.
+Qed.
+
+(* An argument of the kind [Region] or [Rec_info], among arguments of the
+   same kinds in the two runs, is the same in the two, and related at
+   any node. *)
+Lemma rel_region_argument (vs vs' : list value) (v v' : value) (i : nat)
+    (n : node) :
+  argument_kind_ok (kind_of_value v) = false ->
+  map kind_of_value vs' = map kind_of_value vs ->
+  nth_error vs i = Some v -> nth_error vs' i = Some v' -> rel v n v'.
+Proof.
+  intros Hk Hkinds Hv Hv'.
+  assert (Hkv' : kind_of_value v' = kind_of_value v).
+  { apply (f_equal (fun l => nth_error l i)) in Hkinds.
+    rewrite !nth_error_map, Hv, Hv' in Hkinds. injection Hkinds as E.
+    exact E. }
+  rewrite (region_value v' ltac:(rewrite Hkv'; exact Hk)),
+    (region_value v Hk), Hkv'.
+  cbn [rel kind_of_const]. split; [ | reflexivity ].
+  intros H. rewrite H in Hk. discriminate Hk.
+Qed.
+
 (* Every variable of the first run has its kind in [kinds], and, if the
    rebuild keeps it, is bound in the second to a related value. *)
 Definition env_ok (kinds : finite_map flambda_kind) (vars vars' : env)
@@ -2297,7 +2333,7 @@ Lemma element_rel_at (w w' : value) (x : variable) :
   element_rel w w' -> as_ (Node_variable x) -> rel w (Node_variable x) w'.
 Proof.
   intros [(-> & [(c & ->) | (s & -> & Hs)]) | (m & Hm & Hrel)] Hx.
-  - cbn [rel]. split; [ exact Hx | reflexivity ].
+  - cbn [rel]. split; [ intros _; exact Hx | reflexivity ].
   - cbn [rel]. split; [ reflexivity | split ].
     + exact (may_come_from_any is_local G sol Hc _ _ Hx (fun _ => Hs)).
     + intros _. exact (au_hu _ _ _ Hc _ Hs).
@@ -2468,7 +2504,7 @@ Proof.
   - injection Hs as <-. exists (Value_const c).
     split; [ reflexivity | split; [ reflexivity | ] ].
     intros _. split; [ reflexivity | ].
-    split; [ exact (consts_any_source is_local G sol Hc Hconsts)
+    split; [ intros _; exact (consts_any_source is_local G sol Hc Hconsts)
            | reflexivity ].
 Qed.
 
@@ -3407,13 +3443,13 @@ Proof.
   destruct (default_prim_cases statics' p args vs' v' Hcl Hlen' Hev')
     as [(c' & ->) | Ht].
   { rewrite (sim_const_r _ _ Hsim). cbn [rel].
-    split; [ exact Hasx | reflexivity ]. }
+    split; [ intros _; exact Hasx | reflexivity ]. }
   destruct (default_prim_cases statics p args vs v Hcl Hlen Hev)
     as [(c & ->) | [(k & -> & ->) | [(ak & lk & mut & arr & idx & elements
                                        & -> & -> & Harr & Hload)
                                      | (ak & -> & ->)]]].
   - cbn [sim] in Hsim. subst v'. cbn [rel].
-    split; [ exact Hasx | reflexivity ].
+    split; [ intros _; exact Hasx | reflexivity ].
   - destruct Ht as [(k' & _ & ->) | [(ak' & lk' & mut' & arr' & idx'
                                      & elements' & Hp & _) | (ak' & Hp & _)]];
       [ | discriminate Hp | discriminate Hp ].
@@ -3479,7 +3515,8 @@ Lemma region_rel (en : rebuild_env) (vars vars' : env)
 Proof.
   intros Henv Hfrag Hedges Hev Hk Hflows.
   destruct (not_value_const v (region_not_value _ Hk)) as (c & ->).
-  exists (Value_const c). split; [ | split; [ exact Hflows | reflexivity ] ].
+  exists (Value_const c).
+  split; [ | split; [ intros _; exact Hflows | reflexivity ] ].
   destruct d as [s | p args | | | | | ]; simpl in Hfrag; try discriminate Hfrag;
     simpl in Hedges.
   - destruct Hedges as [_ Hnoted]. cbn [eval_named rebuild_named] in Hev |- *.
@@ -3766,7 +3803,8 @@ Proof.
            rewrite (is_int_rel statics statics' v1 v1' _ Hst Hrel Hs1_hu).
            exists v. split; [ exact Hev | ].
            destruct (eval_is_int statics true v1); [ | discriminate Hev ].
-           injection Hev as <-. split; [ exact Hflows | reflexivity ].
+           injection Hev as <-.
+           split; [ intros _; exact Hflows | reflexivity ].
         -- (* [Get_tag] *)
            exists v.
            split; [ exact (get_tag_rel statics statics' v1 v1' v _ Hst Hrel
@@ -3774,7 +3812,8 @@ Proof.
            cbn [eval_unary_primitive] in Hev.
            destruct (block_of statics v1) as [[tag fields] | ];
              [ | discriminate Hev ].
-           injection Hev as <-. split; [ exact Hflows | reflexivity ].
+           injection Hev as <-.
+           split; [ intros _; exact Hflows | reflexivity ].
         -- (* [Unbox_number] *)
            exists v.
            split; [ exact (unbox_rel statics statics' x _ bn v1 v1' v Hst
@@ -3783,7 +3822,8 @@ Proof.
            destruct (boxed_number_of statics v1) as [c | ];
              [ | discriminate Hev ].
            destruct (is_number_of_kind bn c); [ | discriminate Hev ].
-           injection Hev as <-. split; [ exact Hflows | reflexivity ].
+           injection Hev as <-.
+           split; [ intros _; exact Hflows | reflexivity ].
       * discriminate Hcl.
       * destruct vp as [[tag] | ak]; [ | discriminate Hcl ].
         rewrite eval_prim_variadic in Hev. cbn [rebuild_named].
@@ -5454,7 +5494,6 @@ with over_rel : node -> cont_value -> cont_value -> Prop :=
       (ws returns : list node) (exn : node) :
     exact = false -> indirect_codes -> hu n0 ->
     remaining_arity <> [] ->
-    forallb argument_kind_ok (unarize remaining_arity) = true ->
     length ws = length remaining_arity ->
     args_rel (from_node n0) remaining_arity remaining remaining' ->
     call_reads (from_node n0) ws returns exn ->
@@ -10652,11 +10691,7 @@ Proof.
   { intros E. apply not_true_iff_false in Hfresh. apply Hfresh.
     apply among_In. cbn [continuations_of continuations_in_apply].
     right. left. exact E. }
-  apply andb_true_iff in Hcf as [Hexf0 Hcall_ok].
-  apply negb_true_iff in Hexf0.
-  unfold tupled_call in Hcall_ok.
-  apply andb_true_iff in Hcall_ok as [Hargs_kinds _].
-  rewrite forallb_forall in Hargs_kinds.
+  apply negb_true_iff in Hcf as Hexf0.
   unfold call_edges in Hcall. rewrite Hkind in Hcall.
   destruct Hcall as (witness & apply_node & called_node & Hargs & Hretacc
                      & Hexnacc & Hcalled & Hused & Hcond & Happly).
@@ -10862,9 +10897,33 @@ Proof.
         nth_error (map is_kept pd) i = Some true
         ∧ rel v (Node_variable p) v').
     { intros i p v v' Hp Hv Hv' Hu.
-      assert (Hkv : argument_kind_ok (kind_of_value v) = true).
-      { apply Hargs_kinds. rewrite <- Hk1. apply in_map.
-        exact (nth_error_In _ _ Hv). }
+      destruct (argument_kind_ok (kind_of_value v)) eqn:Hkv.
+      2: { (* The poison of [Region] or [Rec_info]: the code keeps the
+              parameter, and the argument is the same in the two runs. *)
+           destruct (nth_error (cd_params cd) i) as [q | ] eqn:Hq.
+           2: { exfalso. apply nth_error_None in Hq.
+                assert (i < length params)
+                  by (apply nth_error_Some; congruence).
+                rewrite Lp, <- Hk2, <- Hk1, length_map, <- Lvs in Hq. lia. }
+           split;
+             [ | exact (rel_region_argument vs vs' v v' i _ Hkv Hkinds' Hv
+                          Hv') ].
+           assert (Hkind_i : nth_error (unarize md.(cm_params_arity)) i
+                             = Some (kind_of_value v)).
+           { rewrite <- Hk2, <- Hk1, nth_error_map, Hv. reflexivity. }
+           assert (Hi : i < length pd).
+           { rewrite Hpd, length_decisions_of, Lp, Nat.min_id.
+             apply nth_error_Some. congruence. }
+           destruct (nth_error pd i) as [d | ] eqn:Hd;
+             [ | apply nth_error_None in Hd; lia ].
+           rewrite nth_error_map, Hd. cbn [option_map]. f_equal.
+           rewrite Hpd in Hd.
+           destruct (decisions_of_nth _ _ _ _ _ Hd)
+             as (n & kind & Hn & Hk' & ->).
+           rewrite Hkind_i in Hk'. injection Hk' as <-.
+           unfold is_node_used.
+           destruct (kind_of_value v); simpl in Hkv; try discriminate Hkv;
+             reflexivity. }
       assert (Hhu_p : hu (Node_variable p)).
       { destruct (kind_of_value v); simpl in Hkv, Hu;
           try discriminate Hkv; exact Hu. }
@@ -11008,9 +11067,10 @@ Proof.
     assert (Hi : i < length params)
       by (apply nth_error_Some; congruence).
     split; [ exact (nth_error_repeat_lt true _ _ Hi) | ].
-    assert (Hkv : argument_kind_ok (kind_of_value v) = true).
-    { apply Hargs_kinds. rewrite <- Hk1. apply in_map.
-      exact (nth_error_In _ _ Hv). }
+    destruct (argument_kind_ok (kind_of_value v)) eqn:Hkv.
+    2: { (* The poison of [Region] or [Rec_info], the same in the two
+            runs. *)
+         exact (rel_region_argument vs vs' v v' i _ Hkv Hkinds' Hv Hv'). }
     assert (Hhu_p : hu (Node_variable p)).
     { destruct (kind_of_value v); simpl in Hkv, Hu;
         try discriminate Hkv; exact Hu. }
@@ -11176,7 +11236,6 @@ Definition called_ok (rt : cont_value) : Prop :=
     (exn : node) (statics statics' : static_env) (hp : heap)
     (rcd rcd' : read_record),
     exact = false -> indirect_codes -> hu N -> a <> [] ->
-    forallb argument_kind_ok (unarize a) = true ->
     length ws = length a ->
     rel callee N callee' -> pa_ok statics callee ->
     args_rel (from_node N) a vs vs' -> every (pa_ok statics) vs ->
@@ -11197,7 +11256,6 @@ Lemma over_rel_inv (n0 : node) (c c' : cont_value) :
     c = Over_application rem ra ret rt et
     ∧ c' = Over_application rem' ra ret rt' et'
     ∧ exact = false ∧ indirect_codes ∧ hu n0 ∧ ra <> []
-    ∧ forallb argument_kind_ok (unarize ra) = true
     ∧ length ws = length ra
     ∧ args_rel (from_node n0) ra rem rem'
     ∧ call_reads (from_node n0) ws returns exn
@@ -11206,7 +11264,7 @@ Lemma over_rel_inv (n0 : node) (c c' : cont_value) :
 Proof.
   intros H.
   destruct H as [n0 rem rem' ra ret rt rt' et et' ws returns exn H1 H2 H3 H4
-                   H5 H6 H7 H8 H9 H10].
+                   H5 H6 H7 H8 H9].
   exists rem, rem', ra, ret, rt, rt', et, et', ws, returns, exn.
   repeat (split; [ assumption || reflexivity | ]). assumption.
 Qed.
@@ -11998,7 +12056,6 @@ Lemma closure_called (rt rt' et et' : cont_value) (closure closure' : value)
     (hp : heap) (rcd rcd' : read_record) (shape : call_shape) :
   returned_ok rt ->
   exact = false -> indirect_codes -> a <> [] ->
-  forallb argument_kind_ok (unarize (aa ++ a)) = true ->
   length ws = length a ->
   rel closure M closure' -> hu M -> pa_ok statics closure ->
   (∀ (g : nat) (W : node),
@@ -12031,7 +12088,7 @@ Lemma closure_called (rt rt' et et' : cont_value) (closure closure' : value)
           (aa ++ a) ret)
        ret rt' et' statics' hp rcd').
 Proof.
-  intros Hret_ok Hexf Hunt Hne Hak Hlen_ws Hrel_c HhuM Hcl_pa Hshift Haa Ha
+  intros Hret_ok Hexf Hunt Hne Hlen_ws Hrel_c HhuM Hcl_pa Hshift Haa Ha
     Hlen_or Hjk Hreads Hret Hrt_pa Hexn Hall_pa Hst Hcodes Hsflow Hshape
     Hflow'.
   assert (Hnl_code : is_local Field_code_id_of_call_witness = false)
@@ -12141,7 +12198,6 @@ Proof.
     ∀ (all all' : list value) (A : arity),
       args_rel (from_node M) A all all' ->
       map kind_of_value all = unarize A ->
-      forallb argument_kind_ok (unarize A) = true ->
       (∀ i g kk : nat,
          group_position (arity_sizes (cm_params_arity md)) i = Some (g, kk)
          -> group_position (arity_sizes A) i = Some (g, kk)) ->
@@ -12152,12 +12208,13 @@ Proof.
         is_var_used sol p (kind_of_value v) = true ->
         nth_error (repeat true (length params)) i = Some true
         ∧ rel v (Node_variable p) v').
-  { intros all all' A HA Hkall HakA Hpos_eq Hlenp i p v v' Hp Hv Hv' Hu.
+  { intros all all' A HA Hkall Hpos_eq Hlenp i p v v' Hp Hv Hv' Hu.
     assert (Hi : i < length params) by (apply nth_error_Some; congruence).
     split; [ exact (nth_error_repeat_lt true _ _ Hi) | ].
-    assert (Hkv : argument_kind_ok (kind_of_value v) = true).
-    { rewrite forallb_forall in HakA. apply HakA. rewrite <- Hkall.
-      apply in_map. exact (nth_error_In _ _ Hv). }
+    destruct (argument_kind_ok (kind_of_value v)) eqn:Hkv.
+    2: { (* The poison of [Region] or [Rec_info], the same in the two
+            runs. *)
+         exact (rel_region_argument all all' v v' i _ Hkv (proj1 HA) Hv Hv'). }
     assert (Hhu_p : hu (Node_variable p)).
     { destruct (kind_of_value v); simpl in Hkv, Hu;
         try discriminate Hkv; exact Hu. }
@@ -12261,7 +12318,7 @@ Proof.
                 (repeat true (length params)) [(mc, Value)] [(mc, closure)]
                 [(mc, closure')] callee_vars (Henv0_of Hlive') Hlen'
                 (repeat_length _ _)
-                (Hparams _ _ _ HA Hk1 Hak Hpos_eq Hlenp) Hbind)
+                (Hparams _ _ _ HA Hk1 Hpos_eq Hlenp) Hbind)
       as (callee_vars' & Hbind' & Hok').
     rewrite !filter_kept_all in Hbind'.
     rewrite (shape_rebuilt statics statics' closure closure' id slots slots'
@@ -12397,7 +12454,6 @@ Proof.
                Hexf Hunt Hhu_R0).
       - unfold partially_apply. intros E. apply (f_equal (@length _)) in E.
         rewrite length_skipn, length_app in E. simpl in E. lia.
-      - unfold partially_apply. exact (forallb_unarize_skipn _ _ _ Hak).
       - unfold partially_apply. rewrite !length_skipn, Hlen_ws, length_app.
         unfold j. lia.
       - exact Hrem.
@@ -12444,7 +12500,7 @@ Proof.
           by (apply nth_error_Some; congruence).
         rewrite length_firstn in Hl. lia. }
       rewrite nth_error_firstn_lt in Hv, Hv' by exact Hi.
-      refine (Hparams _ _ _ HA Hkinds Hak _ Hlenp i p0 v v' Hp0 Hv Hv' Hu).
+      refine (Hparams _ _ _ HA Hkinds _ Hlenp i p0 v v' Hp0 Hv Hv' Hu).
       intros i' g kk H. rewrite Hsizes in H.
       rewrite <- (firstn_skipn p (arity_sizes (aa ++ a))).
       rewrite group_position_app_l; [ exact H | ].
@@ -12532,7 +12588,6 @@ Proof.
       split.
       { intros E. apply (f_equal (@length _)) in E. rewrite length_app in E.
         destruct a; [ contradiction | simpl in E; lia ]. }
-      split; [ exact Hak | ].
       split; [ | exact HA ].
       intros g W R y Hg HW HR HyR Hyy.
       assert (Hg' : g = length aa + pred (length a)).
@@ -12627,7 +12682,6 @@ Lemma tupled_called (rt rt' et et' : cont_value) (callee callee' : value)
   call_reads (from_node N) ws returns exn ->
   ret_ok cont_rel over_rel returns ret rt rt' ->
   way_out cont_rel over_rel [exn] et et' ->
-  forallb argument_kind_ok (unarize a) = true ->
   statics_rel statics statics' ->
   codes_ok is_local G noted deps cds keep codes symbols statics ->
   statics_flow_ statics ->
@@ -12643,7 +12697,7 @@ Lemma tupled_called (rt rt' et et' : cont_value) (callee callee' : value)
        ret rt' et' statics' hp rcd').
 Proof.
   intros Hexf Hunt Hlen_ws Hrel_c HhuN Ha Hclosure Hcode Htupled Hreads Hret
-    Hexn Hak Hst Hcodes Hsflow Hshape Hflow'.
+    Hexn Hst Hcodes Hsflow Hshape Hflow'.
   assert (Hnl_code : is_local Field_code_id_of_call_witness = false)
     by (apply (not_local is_local Hlocal); intros; discriminate).
   assert (Hnl_exn : is_local (Field_return_of_call Exn) = false)
@@ -12976,7 +13030,6 @@ Proof.
     { apply (Over_rel R0 _ _ _ ret rt rt' et et' (w2 :: ws'') returns exn
                Hexf Hunt Hhu_R0).
       - discriminate.
-      - exact (forallb_unarize_skipn _ 1 _ Hak).
       - exact Hlen_ws.
       - exact Hrem.
       - split; [ | split; [ | split; [ | split; [ | split ] ] ] ].
@@ -13038,7 +13091,7 @@ Qed.
 Lemma called_of_returned (rt : cont_value) : returned_ok rt -> called_ok rt.
 Proof.
   intros Hret_ok N callee callee' vs vs' a ret rt' et et' ws returns exn
-    statics statics' hp rcd rcd' Hexf Hunt HhuN Hne Hak Hlen_ws Hrel_c Hpa Ha
+    statics statics' hp rcd rcd' Hexf Hunt HhuN Hne Hlen_ws Hrel_c Hpa Ha
       Hvs_pa
     Hreads Hret Hrt_pa Hexn Hst Hcodes Hsflow Hflow'.
   unfold call_function in Hflow' |- *.
@@ -13056,15 +13109,14 @@ Proof.
       [ | discriminate Hshape ].
     destruct Hrel_c
       as [_ (m & closure' & applied' & -> & _ & Hrel_cl & Hhum & _ & Hne_aa
-             & Hak_aa & Hend & Haa)].
+             & Hend & Haa)].
     destruct Hpa as (Hun & Hcl_pa & Happ_pa).
     unfold shape_of_call. cbn [partial_application_of].
     rewrite (proj1 Ha), Hk.
     apply (closure_called rt rt' et et' closure closure' m N applied applied'
              vs vs' aa (a0 :: a1) ret ws returns exn statics statics' hp rcd
                rcd' shape
-             Hret_ok Hexf Hunt Hne (forallb_unarize_app _ _ _ Hak_aa Hak)
-             Hlen_ws Hrel_cl Hhum Hcl_pa).
+             Hret_ok Hexf Hunt Hne Hlen_ws Hrel_cl Hhum Hcl_pa).
     + apply (wchain_shift_end _ N (length aa) Hend).
       intros E. apply length_zero_iff_nil in E. contradiction.
     + exact Haa.
@@ -13104,11 +13156,11 @@ Proof.
                returns exn statics statics' hp rcd rcd' shape id0 slots0 c0 Hexf
                  Hunt
                Hlen_ws Hrel_c HhuN Ha Hclosure0 Hcode0 Htupled0 Hreads Hret
-               Hexn Hak Hst Hcodes Hsflow Hshape' Hflow'). }
+               Hexn Hst Hcodes Hsflow Hshape' Hflow'). }
     apply (closure_called rt rt' et et' callee callee' N N [] [] vs vs' []
              a ret ws returns exn statics statics' hp rcd rcd' shape Hret_ok
                Hexf Hunt
-             Hne Hak Hlen_ws Hrel_c HhuN Hpa).
+             Hne Hlen_ws Hrel_c HhuN Hpa).
     + intros g W HW. exact HW.
     + split; [ reflexivity | exact I ].
     + exact Ha.
@@ -13149,14 +13201,14 @@ Proof.
             & exn & E & Ec' & Hrest);
       try discriminate E.
     intros Hrel_v Hpa_v Hc_pa Hst Hcodes Hsflow Hflow'.
-    destruct Hrest as (Hexf & Hunt & Hhu0 & Hne & Hak & Hlen & Hargs & Hreads
+    destruct Hrest as (Hexf & Hunt & Hhu0 & Hne & Hlen & Hargs & Hreads
                        & Hret & Hexn).
     subst c'. injection E as <- <- <- <- <-.
     inversion Hc_pa as [ | | | rem0 ra0 ret0 rt1 et1 Hrem_pa Hrt_pa Het_pa];
       subst.
     pose proof (called_of_returned rt IHrt) as Hcalled.
     exact (Hcalled n0 v v' remaining rem' ra ret rt0' et et0' ws returns exn
-             statics statics' hp rcd rcd' Hexf Hunt Hhu0 Hne Hak Hlen Hrel_v
+             statics statics' hp rcd rcd' Hexf Hunt Hhu0 Hne Hlen Hrel_v
                Hpa_v
              Hargs Hrem_pa Hreads Hret Hrt_pa Hexn Hst Hcodes Hsflow Hflow'). }
   split; [ exact Hr | exact (called_of_returned c Hr) ].
@@ -13490,10 +13542,7 @@ Proof.
   { intros E. apply not_true_iff_false in Hfresh. apply Hfresh.
     apply among_In. cbn [continuations_of continuations_in_apply].
     right. left. exact E. }
-  apply andb_true_iff in Hcf as [Hnex Hcall_ok].
-  apply negb_true_iff in Hnex.
-  unfold tupled_call in Hcall_ok. rewrite Hkind in Hcall_ok.
-  apply andb_true_iff in Hcall_ok as [Hargs_kinds _].
+  apply negb_true_iff in Hcf as Hnex.
   assert (Hunt : indirect_codes).
   { intros id c Hin.
     pose proof Hfrag_ap as Hall. unfold apply_in_flow_fragment in Hall.
@@ -13943,8 +13992,7 @@ Proof.
         with (Apply (with_continuation ap' (ap_continuation ap))).
       rewrite (Hstep2 (ap_continuation ap) conts' eq_refl).
       apply (Hcalled N callee callee' vs vs' _ _ _ _ _ ws nsx exn statics
-               statics' hp rcd rcd' Hnex Hunt Hhu_callee Hne_a Hargs_kinds
-                 Hlen_wa
+               statics' hp rcd rcd' Hnex Hunt Hhu_callee Hne_a Hlen_wa
                Hrel_c Hpa_c Ha_rel Hvs_pa Hreads);
         [ | exact Hrt_pa | exact Hway_exn | exact Hst | exact Hcodes
           | exact Hsflow | exact Hrf ].
@@ -13968,7 +14016,7 @@ Proof.
              apply Pos.eqb_neq in Hff_exn. rewrite Hff_exn. reflexivity. }
         apply (Hcalled N callee callee' vs vs' _ _ _ _ _ ws nsx
                  exn statics statics' hp rcd rcd' Hnex Hunt Hhu_callee Hne_a
-                 Hargs_kinds Hlen_wa Hrel_c Hpa_c Ha_rel Hvs_pa Hreads);
+                 Hlen_wa Hrel_c Hpa_c Ha_rel Hvs_pa Hreads);
           [ | exact Hrt_pa | exact Hway_exn | exact Hst | exact Hcodes
             | exact Hsflow | exact Hrf ].
         apply Hret_r. intros ns' Hlen' Htr.
@@ -13998,7 +14046,7 @@ Proof.
       with (Apply (with_continuation ap' (ap_continuation ap))).
     rewrite (Hstep2 (ap_continuation ap) conts' eq_refl).
     apply (Hcalled N callee callee' vs vs' _ _ _ _ _ ws ns exn statics
-             statics' hp rcd rcd' Hnex Hunt Hhu_callee Hne_a Hargs_kinds Hlen_wa
+             statics' hp rcd rcd' Hnex Hunt Hhu_callee Hne_a Hlen_wa
                Hrel_c
              Hpa_c Ha_rel Hvs_pa Hreads);
       [ | exact Hrt_pa | exact Hway_exn | exact Hst | exact Hcodes
@@ -14050,7 +14098,6 @@ Proof.
       rewrite (Hstep2 (ap_continuation ap) conts' eq_refl).
       apply (Hcalled N callee callee' vs vs' _ _ _ _ _ ws (cont_params c0)
                exn statics statics' hp rcd rcd' Hnex Hunt Hhu_callee Hne_a
-                 Hargs_kinds
                Hlen_wa Hrel_c Hpa_c Ha_rel Hvs_pa Hreads);
         [ | exact Hrt_pa | exact Hway_exn | exact Hst | exact Hcodes
           | exact Hsflow | exact Hrf ].
@@ -14065,7 +14112,7 @@ Proof.
              apply Pos.eqb_neq in Hff_exn. rewrite Hff_exn. reflexivity. }
         apply (Hcalled N callee callee' vs vs' _ _ _ _ _ ws (cont_params c0)
                  exn statics statics' hp rcd rcd' Hnex Hunt Hhu_callee Hne_a
-                 Hargs_kinds Hlen_wa Hrel_c Hpa_c Ha_rel Hvs_pa Hreads);
+                 Hlen_wa Hrel_c Hpa_c Ha_rel Hvs_pa Hreads);
           [ | exact Hrt_pa | exact Hway_exn | exact Hst | exact Hcodes
             | exact Hsflow | exact Hrf ].
         apply Hret_h. right.
@@ -16341,7 +16388,38 @@ Proof.
     apply andb_true_iff in H as [Hhs Hb]. rewrite (IH Hb), andb_true_r.
     rewrite forallb_forall in Hhs |- *. intros [k h] Hin.
     exact (IHh k h Hin (Hhs _ Hin)).
-  - intros ap H. exact H.
+  - intros ap _. reflexivity.
+  - reflexivity.
+  - reflexivity.
+  - reflexivity.
+  - intros params metadata handler IH H. exact (IH H).
+Qed.
+
+(* So is that of the statement with arguments of any kind. *)
+Lemma any_kind_arguments_checked (codes : list (code_id * code)) :
+  (∀ e : expr, any_kind_arguments e = true -> checked false codes e = true)
+  ∧ (∀ h : continuation_handler,
+       handler_any_kind_arguments h = true ->
+       handler_checked false codes h = true).
+Proof.
+  apply expr_handler_ind; simpl.
+  - intros x kind d body IH H.
+    apply andb_true_iff in H as [Hd Hb]. rewrite Hd. exact (IH Hb).
+  - intros bindings body Hcodes IH H.
+    apply andb_true_iff in H as [Hbs Hb]. rewrite (IH Hb), andb_true_r.
+    rewrite forallb_forall in Hbs |- *. intros b Hin. specialize (Hbs b Hin).
+    destruct b as [id c | id | s const]; simpl in Hbs |- *;
+      [ | reflexivity | exact Hbs ].
+    pose proof (Hcodes id c Hin) as IHc.
+    destruct c as [params mc ret exn md cbody]. exact (IHc Hbs).
+  - intros k h body IHh IH H.
+    apply andb_true_iff in H as [Hh Hb]. rewrite (IHh Hh), (IH Hb).
+    reflexivity.
+  - intros handlers body IHh IH H.
+    apply andb_true_iff in H as [Hhs Hb]. rewrite (IH Hb), andb_true_r.
+    rewrite forallb_forall in Hhs |- *. intros [k h] Hin.
+    exact (IHh k h Hin (Hhs _ Hin)).
+  - intros ap _. reflexivity.
   - reflexivity.
   - reflexivity.
   - reflexivity.
@@ -16639,6 +16717,41 @@ Proof.
   - intros params metadata handler IH H. exact (IH H).
 Qed.
 
+Theorem static_constants_any_kind_arguments :
+  static_constants_any_kind_arguments_statement.
+Proof.
+  intros codes.
+  enough (H : (∀ e : expr,
+                 static_constants codes e = true ->
+                 any_kind_arguments e = true)
+              ∧ (∀ h : continuation_handler,
+                   handler_static_constants codes h = true ->
+                   handler_any_kind_arguments h = true))
+    by exact (proj1 H).
+  apply expr_handler_ind; simpl.
+  - intros x kind d body IH H.
+    apply andb_true_iff in H as [Hd Hb]. rewrite Hd. exact (IH Hb).
+  - intros bindings body Hcodes IH H.
+    apply andb_true_iff in H as [Hbs Hb]. rewrite (IH Hb), andb_true_r.
+    rewrite forallb_forall in Hbs |- *. intros b Hin. specialize (Hbs b Hin).
+    destruct b as [id c | id | s const]; simpl in Hbs |- *;
+      [ | exact Hbs | exact Hbs ].
+    pose proof (Hcodes id c Hin) as IHc.
+    destruct c as [params mc ret exn md cbody]. exact (IHc Hbs).
+  - intros k h body IHh IH H.
+    apply andb_true_iff in H as [Hh Hb]. rewrite (IHh Hh), (IH Hb).
+    reflexivity.
+  - intros handlers body IHh IH H.
+    apply andb_true_iff in H as [Hhs Hb]. rewrite (IH Hb), andb_true_r.
+    rewrite forallb_forall in Hhs |- *. intros [k h] Hin.
+    exact (IHh k h Hin (Hhs _ Hin)).
+  - intros ap _. reflexivity.
+  - reflexivity.
+  - reflexivity.
+  - reflexivity.
+  - intros params metadata handler IH H. exact (IH H).
+Qed.
+
 Theorem rebuild_refines : rebuild_refines_statement.
 Proof.
   intros flag is_local u e T b Hlocal Hslots Hfrag Hcf Hwf Hexits Hcheck
@@ -16799,7 +16912,7 @@ Proof.
     intros k l Hl. discriminate Hl. }
   exact (proj1 (rebuild_refines_checked false flag is_local u e T b Hlocal
                   Hslots Hfrag
-                  (proj1 (static_constants_checked (unit_codes e)) e Hdc)
+                  (proj1 (any_kind_arguments_checked (unit_codes e)) e Hdc)
                   Hkinded Hwf Hexits Hcheck Hcheck_exact (fun _ => Hrk))).
 Qed.
 
@@ -16967,4 +17080,30 @@ Theorem static_boxed_variable_example :
 Proof.
   do 8 (split; [ vm_compute; reflexivity | ]).
   split; exists 10; try exists no_reads; vm_compute; reflexivity.
+Qed.
+
+Theorem region_argument_example : region_argument_example_statement.
+Proof.
+  do 9 (split; [ vm_compute; reflexivity | ]).
+  split; exists 10; try exists no_reads; vm_compute; reflexivity.
+Qed.
+
+Theorem region_projection_needed : region_projection_needed_statement.
+Proof.
+  do 8 (split; [ vm_compute; reflexivity | ]).
+  intros (_ & _ & Hwrong).
+  assert (Hs :
+    behaves
+      (State RegionProjectionExample.unit_expr [] [] empty_static_env
+         empty_heap no_reads)
+      (Exits 1%positive [Value_const (Tagged_immediate 7)] empty_heap))
+    by (exists 5; try exists no_reads; vm_compute; reflexivity).
+  assert (Ht :
+    behaves
+      (State RegionProjectionExample.rebuilt [] [] empty_static_env
+         empty_heap no_reads)
+      Goes_wrong)
+    by (exists 5; try exists no_reads; vm_compute; reflexivity).
+  pose proof (behaviour_unique _ _ _ Hs (Hwrong Ht)) as Heq.
+  discriminate Heq.
 Qed.

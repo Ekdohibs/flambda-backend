@@ -151,9 +151,21 @@
    and the extra arguments of the call ([conts_counted]); the closure
    symbols of a static set are symbols that the unit binds, and its
    slot is among its function slots; the code ids that the unit binds
-   are distinct. Not in it: the older forms of sets of closures, and
-   direct calls of tupled code (the compiler's are in the convention of
-   the code, which the model has no call kind for).
+   are distinct. Not in it: the older forms of sets of closures
+   ([Set_of_closures], [Static_const_set_of_closures], and
+   [Project_value_slot], which reads a value slot from a closure at any
+   function slot), and direct calls of tupled code (the compiler's are
+   in the convention of the code, which the model has no call kind
+   for). The older forms are the model's first presentation of a set of
+   closures, from before function slots; no conversion of a term of the
+   compiler makes them (tests/tools/flsemantics.ml, which makes
+   [Closure_of_set], [Static_const_closure_of_set] and
+   [Project_value_slot_from] of every set and projection), and
+   FlambdaModel.v is to lose them. Their closures are values of other
+   forms ([Value_closure], [Static_closure]), to which the traversal
+   gives no constructor fact of a function slot: [flows] would need a
+   case of its own for them, and each of the two simulations a case for
+   each step that makes, projects from or calls one.
 
    Tupled code. Every call of a closure of tupled code gives it one
    argument, the tuple, whose fields the machine reads, one for each
