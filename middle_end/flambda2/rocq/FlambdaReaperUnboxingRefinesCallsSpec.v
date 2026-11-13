@@ -127,9 +127,9 @@
      of its results: those of the change, or those of a continuation of
      fixed arity ([Keep] or [Keep_unused]), which the first rebuild keeps
      with no mask.
-   - Calls ([call_ok]): direct, of the code they are known to call, which
-     has one group of parameters and one result, at the arities of that
-     code, by a variable that is used and not unboxed, with no extra
+   - Calls ([call_ok]): direct, of the code they are known to call, at
+     the arities of that code (any number of groups of parameters and of
+     results), by a variable that is used and not unboxed, with no extra
      argument for the exception continuation, which is a way out of the
      unit or that of the code they are in ([exn_cont_ok]), returning to a
      handler of the term or, in tail position, to the return continuation
@@ -422,8 +422,6 @@ Definition call_ok (kinds : finite_map flambda_kind)
          | Some (pds, rds) =>
            arity_eqb (ap_args_arity ap) (cm_params_arity metadata)
            && arity_eqb (ap_return_arity ap) (cm_result_arity metadata)
-           && Nat.eqb (length (cm_params_arity metadata)) 1
-           && Nat.eqb (length (unarize (cm_result_arity metadata))) 1
            && is_none
                 (my_closure_decision_u cannot_change code_deps unit_code_ids
                    unboxed id)
