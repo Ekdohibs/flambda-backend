@@ -217,6 +217,9 @@
    the second phase of the term before applies once it has settled
    the term, on either side of
    FlambdaRenameApartSpec.rename_apart_avoiding. And
+   FlambdaBindConstParamsSpec.bind_const_params, which takes away a
+   parameter that every application gives one symbol or one constant,
+   as [unalias_params] does for a variable. And
    FlambdaLoopifySpec.loopify_unit, which the validation applies to
    the term before, after the first comparison and before any rewrite
    that makes names: it is given, for the code ids to make loops of,
@@ -388,6 +391,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaUnaliasParamsSpec FlambdaWrapReturnsSpec FlambdaUntagParamsSpec
   FlambdaGiveScrutineeSpec FlambdaArmNumbersSpec FlambdaShadowParamsSpec
   FlambdaTwinParamsSpec FlambdaValidateSpec.
+From OxCamlFlambda2 Require FlambdaBindConstParamsSpec.
 From OxCamlFlambda2Types Require Import FlambdaTypesSpec FlambdaAliasesSpec.
 From OxCamlFlambda2 Require Import FlambdaLiftObservedSpec.
 Import ListNotations.
@@ -952,6 +956,14 @@ Definition shadow_params_equivariant_statement : Prop :=
    That it keeps scope is in FlambdaStaticsScopeSpec.v. *)
 Definition twin_params_equivariant_statement : Prop :=
   rewrite_equivariant twin_params.
+
+(* Taking away a parameter of a continuation that every application
+   gives one symbol or one constant (FlambdaBindConstParamsSpec.v).
+   The applications are found by tests of equality of names, a
+   renaming moves no symbol and no constant, and no name is made. That
+   it keeps scope is in FlambdaStaticsScopeSpec.v. *)
+Definition bind_const_params_equivariant_statement : Prop :=
+  rewrite_equivariant FlambdaBindConstParamsSpec.bind_const_params.
 
 (* FlambdaLoopifySpec.loopify_unit is given, for each code id to make
    a loop of, the continuation of the loop. The action: the

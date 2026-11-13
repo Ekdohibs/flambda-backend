@@ -200,6 +200,12 @@
      is under both. The twins are then untagged as
      FlambdaUntagParamsSpec.untag_params untags
      ([twin_params_keeps_scope_statement]).
+   - FlambdaBindConstParamsSpec.bind_const_params takes away a
+     parameter of a continuation that every application gives one
+     symbol or one constant, and has the handler begin with a [Let]
+     of the parameter to it. The [Let] mentions no variable and binds
+     the parameter; the applications lose an argument and mention no
+     continuation more ([bind_const_params_keeps_scope_statement]).
 
    Nothing is asked of a term but that its code is closed, which
    [keeps_scope] itself asks, and nothing of what a rewrite is given.
@@ -220,6 +226,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaGiveScrutineeSpec FlambdaArmNumbersSpec FlambdaShadowParamsSpec
   FlambdaTwinParamsSpec FlambdaValidateSpec
   FlambdaValidatorEquivarianceSpec.
+From OxCamlFlambda2 Require FlambdaBindConstParamsSpec.
 From OxCamlFlambda2 Require Import FlambdaLiftObservedSpec.
 Import ListNotations.
 
@@ -400,3 +407,10 @@ Definition shadow_params_keeps_scope_statement : Prop :=
 
 Definition twin_params_keeps_scope_statement : Prop :=
   keeps_scope twin_params.
+
+(* ======================================================================== *)
+(* A parameter that every application gives one symbol or one constant      *)
+(* ======================================================================== *)
+
+Definition bind_const_params_keeps_scope_statement : Prop :=
+  keeps_scope FlambdaBindConstParamsSpec.bind_const_params.

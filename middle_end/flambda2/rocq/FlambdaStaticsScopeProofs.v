@@ -56,7 +56,8 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
 From OxCamlFlambda2 Require FlambdaUnaliasParamsNamesProofs
   FlambdaWrapReturnsNamesProofs FlambdaUntagParamsNamesProofs
   FlambdaGiveScrutineeNamesProofs FlambdaArmNumbersNamesProofs
-  FlambdaShadowParamsNamesProofs FlambdaTwinParamsNamesProofs.
+  FlambdaShadowParamsNamesProofs FlambdaTwinParamsNamesProofs
+  FlambdaBindConstParamsNamesProofs.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -1884,3 +1885,11 @@ Proof. exact FlambdaShadowParamsNamesProofs.shadow_params_scope. Qed.
 
 Theorem twin_params_keeps_scope : twin_params_keeps_scope_statement.
 Proof. exact FlambdaTwinParamsNamesProofs.twin_params_scope. Qed.
+
+(* ======================================================================== *)
+(* A parameter that every application gives one symbol or one constant      *)
+(* ======================================================================== *)
+
+Theorem bind_const_params_keeps_scope :
+  bind_const_params_keeps_scope_statement.
+Proof. exact FlambdaBindConstParamsNamesProofs.bind_const_params_scope. Qed.
