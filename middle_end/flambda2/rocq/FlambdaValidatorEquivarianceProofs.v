@@ -99,6 +99,7 @@ From OxCamlFlambda2 Require FlambdaKnownSlotsProofs.
 From OxCamlFlambda2 Require FlambdaSharedReadsSpec FlambdaSharedReadsProofs.
 From OxCamlFlambda2 Require Import FlambdaStubCallsSpec.
 From OxCamlFlambda2 Require FlambdaStubCallsProofs.
+From OxCamlFlambda2 Require FlambdaCopyCodeProofs.
 From OxCamlFlambda2 Require Import FlambdaNeverReturnsSpec.
 From OxCamlFlambda2 Require FlambdaNeverReturnsProofs
   FlambdaNeverReturnsScopeProofs.
@@ -6191,6 +6192,8 @@ Lemma with_lifting_renamed (r : renaming) (L : lifting) (e : expr) :
   = rename_expr r (with_lifting L e).
 Proof.
   unfold with_lifting. cbv zeta.
+  change (code_copied (rename_lifting r L)) with (code_copied L).
+  rewrite FlambdaCopyCodeProofs.with_copies_equivariant. f_equal.
   change (tables_put (rename_lifting r L)) with (tables_put L).
   rewrite <- add_head_tables_renamed. f_equal.
   change (lifting_unit (rename_lifting r L))
@@ -6289,6 +6292,8 @@ Lemma with_lifting_observed_renamed (r : renaming) (L : lifting) (e : expr) :
 Proof.
   unfold with_lifting_observed, liftings_observed, around_observed,
     lets_observed, out_of_code_observed, to_head_observed.
+  change (code_copied (rename_lifting r L)) with (code_copied L).
+  rewrite FlambdaCopyCodeProofs.with_copies_equivariant. f_equal.
   change (tables_put (rename_lifting r L)) with (tables_put L).
   rewrite <- add_head_tables_renamed. f_equal.
   change (lifting_unit (rename_lifting r L))

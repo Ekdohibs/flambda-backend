@@ -2226,6 +2226,23 @@ let unused_statics (e : Model.expr) : Unused_statics.dropped =
    one closure that captures nothing, Simplify has one symbol for both, and
    FlambdaLiftFromCodeSpec.once_each puts one binding for the two.
 
+   A closure that no symbol of the term after fits by its code, outside code or
+   in one of the two places above, is given a symbol whose set of closures has
+   the same function slots, value slots that agree and, for each function whose
+   code is not the same, code that the term before does not bind. Simplify gives
+   a set of closures new code where it simplifies it; where it has met one set
+   twice, in a function that stays and in a copy of the body of that function
+   that it inlined, the term after has the code of the term before for the first
+   and new code for the second. The guess then asks for a copy of the old code
+   under each new code id, for the symbols of that set
+   (FlambdaCopyCodeSpec.copy_static_code, the last step of
+   FlambdaValidateSpec.with_lifting). Where a function is inlined at two places,
+   each of the two closures has new code of its own, and the guess asks for two
+   copies of the one code, each for its symbol. Nothing is believed of this
+   either: FlambdaCopyCodeSpec.copy_ok checks what a copy needs, and the
+   comparison of the two terms whether the copy, once normalised, is the code
+   that the term after has.
+
    A closure outside code that no symbol of the term after fits, whose value
    slots hold symbols, constants or variables that the guess has made aliases of
    symbols, and that the term after does not make by a [Let] either, is given
@@ -2496,6 +2513,46 @@ let lifting_guess ~unit ~(banned : (Lift.path * Model.symbol) list) ~around
     in_term before;
     !held
   in
+  (* For the copies of code: the code that the term before binds; whether two
+     sets have the same function slots and, where the code is not the same, code
+     of the second that the term before does not bind; and whether each value
+     slot of the second set is one of the first that agrees with it. The copies
+     asked for, each a list of code ids paired with new ones and the symbols of
+     the set that gets the new ones. *)
+  let code_bound_before =
+    let _, bound = static_names before in
+    List.filter_map
+      (function Code_name id -> Some id | Symbol_name _ -> None)
+      bound
+  in
+  let newly_coded decls decls' =
+    List.length decls = List.length decls'
+    && List.for_all2
+         (fun (slot, code) (slot', code') ->
+           slot = slot'
+           && (code = code' || not (List.mem code' code_bound_before)))
+         decls decls'
+  in
+  let slots_agree slots slots' =
+    List.for_all
+      (fun (slot', field') ->
+        match List.assoc_opt slot' slots with
+        | Some field -> fields_agree [field] [field']
+        | None -> false)
+      slots'
+  in
+  let copies = ref [] in
+  let copy ids symbols =
+    if not (List.mem (ids, symbols) !copies)
+    then copies := (ids, symbols) :: !copies
+  in
+  let copied_ids decls decls' =
+    List.concat
+      (List.map2
+         (fun (_, code) (_, code') ->
+           if code = code' then [] else [code, code'])
+         decls decls')
+  in
   let lets = ref [] in
   let lift x path (target : Lift.lift_to) =
     lets := (path, target) :: !lets;
@@ -2536,23 +2593,58 @@ let lifting_guess ~unit ~(banned : (Lift.path * Model.symbol) list) ~around
       (match d with
       | Set_of_closures (code, slots) when plain_slots slots -> (
         match
-          take path (fun (const : Model.static_const) ->
-              match const with
-              | Static_const_set_of_closures (code', slots') ->
-                code = code'
-                && List.for_all (fun slot' -> List.mem slot' slots) slots'
-              | _ -> false)
+          match
+            take path (fun (const : Model.static_const) ->
+                match const with
+                | Static_const_set_of_closures (code', slots') ->
+                  code = code'
+                  && List.for_all (fun slot' -> List.mem slot' slots) slots'
+                | _ -> false)
+          with
+          | Some _ as taken -> taken
+          | None -> (
+            (* No symbol has this code: one whose closure has code that the term
+               before does not bind, with a copy asked for. *)
+            match
+              take path (fun (const : Model.static_const) ->
+                  match const with
+                  | Static_const_set_of_closures (code', slots') ->
+                    (not (List.mem code' code_bound_before))
+                    && List.for_all (fun slot' -> List.mem slot' slots) slots'
+                  | _ -> false)
+            with
+            | Some (sym, Static_const_set_of_closures (code', _)) as taken ->
+              copy [code, code'] [sym];
+              taken
+            | taken -> taken)
         with
         | Some (sym, _) -> lift_out (Lift.Lift_to_symbol sym)
         | None -> ())
       | Closure_of_set (_, decls, slots) when plain_slots slots -> (
         match
-          take path (fun (const : Model.static_const) ->
-              match const with
-              | Static_const_closure_of_set (_, _, decls', slots') ->
-                decls = decls'
-                && List.for_all (fun slot' -> List.mem slot' slots) slots'
-              | _ -> false)
+          match
+            take path (fun (const : Model.static_const) ->
+                match const with
+                | Static_const_closure_of_set (_, _, decls', slots') ->
+                  decls = decls'
+                  && List.for_all (fun slot' -> List.mem slot' slots) slots'
+                | _ -> false)
+          with
+          | Some _ as taken -> taken
+          | None -> (
+            match
+              take path (fun (const : Model.static_const) ->
+                  match const with
+                  | Static_const_closure_of_set (_, _, decls', slots') ->
+                    newly_coded decls decls'
+                    && List.for_all (fun slot' -> List.mem slot' slots) slots'
+                  | _ -> false)
+            with
+            | Some (_, Static_const_closure_of_set (_, symbols, decls', _)) as
+              taken ->
+              copy (copied_ids decls decls') (List.map snd symbols);
+              taken
+            | taken -> taken)
         with
         | Some (_, Static_const_closure_of_set (_, symbols, _, _)) ->
           to_give
@@ -2626,21 +2718,58 @@ let lifting_guess ~unit ~(banned : (Lift.path * Model.symbol) list) ~around
       (match d with
       | Simple ((Symbol _ | Const _) as known) ->
         known_simples := (x, known) :: !known_simples
-      | Set_of_closures (code, _) -> (
+      | Set_of_closures (code, slots) -> (
         match
-          take path (fun (const : Model.static_const) ->
-              match const with
-              | Static_const_set_of_closures (code', _) -> code = code'
-              | _ -> false)
+          match
+            take path (fun (const : Model.static_const) ->
+                match const with
+                | Static_const_set_of_closures (code', _) -> code = code'
+                | _ -> false)
+          with
+          | Some _ as taken -> taken
+          | None -> (
+            (* No symbol to give has this code: one whose closure has code that
+               the term before does not bind, with a copy asked for. *)
+            match
+              take path (fun (const : Model.static_const) ->
+                  match const with
+                  | Static_const_set_of_closures (code', slots') ->
+                    (not (List.mem code' code_bound_before))
+                    && slots_agree slots slots'
+                  | _ -> false)
+            with
+            | Some (sym, Static_const_set_of_closures (code', _)) as taken ->
+              copy [code, code'] [sym];
+              taken
+            | taken -> taken)
         with
         | Some (sym, _) -> lift x path (Lift_to_symbol sym)
         | None -> ())
       | Closure_of_set (slot, decls, slots) -> (
         match
-          take path (fun (const : Model.static_const) ->
-              match const with
-              | Static_const_closure_of_set (_, _, decls', _) -> decls = decls'
-              | _ -> false)
+          match
+            take path (fun (const : Model.static_const) ->
+                match const with
+                | Static_const_closure_of_set (_, _, decls', _) ->
+                  decls = decls'
+                | _ -> false)
+          with
+          | Some _ as taken -> taken
+          | None -> (
+            (* The same of a set whose function slots are named: a copy for each
+               function whose code is not the same. *)
+            match
+              take path (fun (const : Model.static_const) ->
+                  match const with
+                  | Static_const_closure_of_set (_, _, decls', slots') ->
+                    newly_coded decls decls' && slots_agree slots slots'
+                  | _ -> false)
+            with
+            | Some (_, Static_const_closure_of_set (_, symbols, decls', _)) as
+              taken ->
+              copy (copied_ids decls decls') (List.map snd symbols);
+              taken
+            | taken -> taken)
         with
         | Some (_, Static_const_closure_of_set (_, symbols, _, _)) ->
           (* The symbols of the other closures of the set go with it. *)
@@ -2815,7 +2944,8 @@ let lifting_guess ~unit ~(banned : (Lift.path * Model.symbol) list) ~around
       lifted_to_head = to_head;
       lifted_around = [];
       groups_put = [];
-      tables_put = []
+      tables_put = [];
+      code_copied = List.rev !copies
     }
   in
   (* [known] has the symbols that the groups around a place bind, each with its
@@ -4206,7 +4336,8 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
       lifted_to_head = [];
       lifted_around = [];
       groups_put = [];
-      tables_put = []
+      tables_put = [];
+      code_copied = []
     }
   in
   (* The code to loopify. *)

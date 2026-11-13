@@ -33,7 +33,10 @@
    This file is to be reviewed: [copy_static_code] and what it is made
    of, against what Simplify does (below); the check; and the
    statements, the last two of which are the rewrite computed on a
-   small unit whose code is copied twice.
+   small unit whose code is copied twice. [copy_static_code] is
+   extracted and run by the validation of
+   middle_end/flambda2/tests/semantics/, on the term before, with
+   each lifting (FlambdaValidateSpec.with_lifting).
 
    What Simplify does. It gives new code to every set of closures that
    it simplifies, wherever the set stands: a new code id for each

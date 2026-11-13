@@ -89,6 +89,7 @@ From OxCamlFlambda2 Require FlambdaShadowParamsProofs FlambdaTwinParamsProofs.
 From OxCamlFlambda2 Require Import FlambdaDemoteSpec.
 From OxCamlFlambda2 Require Import FlambdaUnusedHeadStaticsSpec
   FlambdaUnusedHeadStaticsProofs.
+From OxCamlFlambda2 Require Import FlambdaCopyCodeSpec FlambdaCopyCodeProofs.
 From OxCamlFlambda2 Require FlambdaDemoteProofs.
 From OxCamlFlambda2 Require Import FlambdaKnownSiblingsSpec
   FlambdaKnownSiblingsProofs.
@@ -687,6 +688,11 @@ Proof.
     | Some e' => e'
     | None => lifted
     end).
+  apply
+    (refines_trans _
+       (State (add_head_tables (tables_put L) around) [] [] empty_static_env
+          empty_heap));
+    [ | exact (with_copies_program_refines (code_copied L) _) ].
   apply (refines_trans _ (State around [] [] empty_static_env empty_heap));
     [ | exact (add_head_tables_program_refines (tables_put L) around) ].
   apply (refines_trans _ (State at_head [] [] empty_static_env empty_heap)).
@@ -719,12 +725,13 @@ Proof.
 Qed.
 
 (* With no [Let] to make an alias of a symbol bound around it, no
-   group to put and no table to bind, [with_lifting] is its first
-   three liftings. *)
+   group to put, no table to bind and no code to copy, [with_lifting]
+   is its first three liftings. *)
 Lemma with_lifting_nothing_around (L : lifting) (e : expr) :
   lifted_around L = [] ->
   groups_put L = [] ->
   tables_put L = [] ->
+  code_copied L = [] ->
   with_lifting L e
   = (let at_head :=
        match lift_to_head_unit (lifting_unit L) (lifted_to_head L) e with
@@ -745,8 +752,9 @@ Lemma with_lifting_nothing_around (L : lifting) (e : expr) :
      | None => out_of_code
      end).
 Proof.
-  intros Haround Hgroups Htables. unfold with_lifting. cbv zeta.
-  rewrite Haround, Hgroups, Htables. cbn [add_head_tables].
+  intros Haround Hgroups Htables Hcopied. unfold with_lifting. cbv zeta.
+  rewrite Haround, Hgroups, Htables, Hcopied.
+  cbn [add_head_tables with_copies].
   apply FlambdaLiftAroundProofs.lift_around_unit_nothing.
 Qed.
 

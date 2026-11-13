@@ -1,3 +1,4 @@
+open FlambdaCopyCodeSpec
 open FlambdaLiftAroundSpec
 open FlambdaLiftFromArmsSpec
 open FlambdaLiftFromCodeSpec

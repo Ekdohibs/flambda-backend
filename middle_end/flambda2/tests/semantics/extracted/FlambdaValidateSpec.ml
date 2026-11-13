@@ -6,6 +6,7 @@ open FlambdaBindConstParamsSpec
 open FlambdaBlockLoadSpec
 open FlambdaCodeLetsSpec
 open FlambdaCompareSpec
+open FlambdaCopyCodeSpec
 open FlambdaCseSpec
 open FlambdaDeadParamsSpec
 open FlambdaDemoteSpec
@@ -302,7 +303,7 @@ let with_lifting l e =
     | Some e' -> e'
     | None -> e2
   in
-  add_head_tables l.tables_put e3
+  with_copies l.code_copied (add_head_tables l.tables_put e3)
 
 (** val with_known : expr -> expr **)
 

@@ -368,7 +368,10 @@ Definition tables_free_in (statics : static_env) (L : lifting) (e : expr)
   end.
 
 (* That, of each of the four liftings of [with_lifting L e], and the
-   test of the tables. The terms are those of [with_lifting]. *)
+   test of the tables. The terms are those of [with_lifting]. The
+   copies of code that end [with_lifting] ask nothing of the
+   environment
+   (FlambdaCopyCodeSpec.with_copies_refines_imports_statement). *)
 Definition lifting_free_in (statics : static_env) (L : lifting) (e : expr)
     : bool :=
   let to_head := lift_to_head_unit (lifting_unit L) (lifted_to_head L) e in

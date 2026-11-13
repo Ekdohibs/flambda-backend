@@ -6,6 +6,7 @@ open FlambdaBindConstParamsSpec
 open FlambdaBlockLoadSpec
 open FlambdaCodeLetsSpec
 open FlambdaCompareSpec
+open FlambdaCopyCodeSpec
 open FlambdaCseSpec
 open FlambdaDeadParamsSpec
 open FlambdaDemoteSpec

@@ -43,7 +43,8 @@ type lifting =
     lifted_to_head : (path * lift_to) list;
     lifted_around : (path * lift_to) list;
     groups_put : (path * path list) list;
-    tables_put : (symbol * simple list) list
+    tables_put : (symbol * simple list) list;
+    code_copied : ((code_id * code_id) list * symbol list) list
   }
 
 val lift_named : lift_to -> named -> (static_binding list * symbol) option

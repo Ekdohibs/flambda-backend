@@ -45,7 +45,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaStaticsOrderSpec
   FlambdaMyClosureSpec FlambdaWellFormedSpec FlambdaLiftSpec
   FlambdaLiftFromCodeSpec FlambdaLiftFromArmsSpec FlambdaLiftAroundSpec
-  FlambdaLiftObservedSpec
+  FlambdaLiftObservedSpec FlambdaCopyCodeSpec
   FlambdaHoistStaticsSpec
   FlambdaUnusedSlotsSpec FlambdaKnownSymbolsSpec FlambdaKnownClosuresSpec
   FlambdaKnownSlotsSpec FlambdaStubCallsSpec FlambdaStaticsInScopeSpec
@@ -852,10 +852,96 @@ Proof.
   split; [ exact Hclosed | split; apply incl_refl ].
 Qed.
 
+(* The copies of code for static sets of closures
+   (FlambdaCopyCodeSpec.with_copies): the code bound a second time is
+   closed if the code is, a static set has the value slots that it
+   had, and a call has its callee and its arguments. *)
+Lemma scoped_bindings_cons_code_twice (id id' id'' : code_id) (c c' : code)
+    (bindings bindings' : list static_binding) :
+  scoped_code c c' ->
+  scoped_bindings bindings bindings' ->
+  scoped_bindings (Bind_code id c :: bindings)
+    (Bind_code id' c' :: Bind_code id'' c' :: bindings').
+Proof.
+  intros Hc Hbindings Hclosed. cbn [forallb flat_map] in Hclosed |- *.
+  scope_in Hclosed. scope.
+  apply andb_true_iff in Hclosed. destruct Hclosed as [Hfirst Hrest].
+  destruct (Hbindings Hrest) as (Hrest' & Hv & Hk).
+  destruct (code_is_closed_free c' (Hc Hfirst)) as [Hv' Hk'].
+  rewrite (Hc Hfirst), Hrest', Hv', Hk'.
+  split; [ reflexivity | split; apply incl_appr; assumption ].
+Qed.
+
+Lemma copy_call_scoped (ids : list (code_id * code_id))
+    (symbols : list symbol) (ap : apply_expr) :
+  scoped (Apply ap) (Apply (copy_call ids symbols ap)).
+Proof.
+  destruct ap as [callee kind args k exn extra args_arity return_arity].
+  unfold copy_call. cbn [ap_call_kind ap_callee].
+  destruct kind as [id | ]; [ | apply scoped_refl ].
+  destruct callee as [x | s | c];
+    [ destruct (lookup id ids) | destruct (among s symbols)
+    | destruct (lookup id ids) ];
+    try apply scoped_refl;
+    intros Hclosed; split; try exact Hclosed; split; apply incl_refl.
+Qed.
+
+Fixpoint copy_expr_scoped (ids : list (code_id * code_id))
+    (symbols : list symbol) (e : expr) {struct e} :
+  scoped e (copy_expr ids symbols e)
+with copy_handler_scoped (ids : list (code_id * code_id))
+    (symbols : list symbol) (h : continuation_handler) {struct h} :
+  scoped_handler h (copy_handler ids symbols h)
+with copy_code_scoped (ids : list (code_id * code_id))
+    (symbols : list symbol) (c : code) {struct c} :
+  scoped_code c (copy_code ids symbols c).
+Proof.
+  - destruct e as [x kind d body | bindings body | k h body | handlers body
+                  | ap | ac | scrutinee arms | ];
+      cbn [copy_expr]; try apply scoped_refl.
+    + apply scoped_let; [ apply incl_refl | apply copy_expr_scoped ].
+    + apply scoped_let_static; [ | apply copy_expr_scoped ].
+      induction bindings as [ | binding bindings IH]; cbn [flat_map];
+        [ apply scoped_bindings_nil | ].
+      destruct binding as [id c | id | sym const]; cbn [copy_binding app].
+      * destruct (lookup id ids) as [id' | ]; cbn [app];
+          [ apply scoped_bindings_cons_code_twice
+          | apply scoped_bindings_cons_code ];
+          solve [ apply copy_code_scoped | exact IH ].
+      * apply scoped_bindings_cons_same, IH.
+      * apply scoped_bindings_cons_symbol; [ | exact IH ].
+        destruct (among sym symbols); [ | apply incl_refl ].
+        destruct const; apply incl_refl.
+    + apply scoped_let_cont;
+        [ apply copy_handler_scoped | apply copy_expr_scoped ].
+    + apply scoped_let_cont_recursive; [ | | apply copy_expr_scoped ].
+      * rewrite map_map. apply map_ext. intros [k h]. reflexivity.
+      * induction handlers as [ | [k h] handlers IH]; cbn [map];
+          [ apply scoped_handlers_nil | ].
+        apply scoped_handlers_cons;
+          [ apply copy_handler_scoped | exact IH ].
+    + apply copy_call_scoped.
+  - destruct h as [params metadata handler]. cbn [copy_handler].
+    apply scoped_handler_intro, copy_expr_scoped.
+  - destruct c as [params my_closure ret exn metadata body].
+    cbn [copy_code]. apply scoped_code_intro, copy_expr_scoped.
+Qed.
+
+Lemma with_copies_scoped
+    (copies : list (list (code_id * code_id) * list symbol)) :
+  ∀ e : expr, scoped e (with_copies copies e).
+Proof.
+  induction copies as [ | [ids symbols] copies IH]; intros e;
+    cbn [with_copies]; [ apply scoped_refl | ].
+  unfold copy_static_code. destruct (copy_ok ids e); [ | apply IH ].
+  exact (scoped_trans _ _ _ (copy_expr_scoped ids symbols e) (IH _)).
+Qed.
+
 Theorem with_lifting_keeps_scope : with_lifting_keeps_scope_statement.
 Proof.
   intros L. apply keeps_scope_intro. intros e.
   unfold with_lifting. cbv zeta.
+  eapply scoped_trans; [ | apply with_copies_scoped ].
   eapply scoped_trans; [ | apply add_head_tables_scoped ].
   eapply scoped_trans; [ apply lift_to_head_unit_scoped | ].
   eapply scoped_trans; [ apply lift_from_code_unit_scoped | ].
@@ -915,6 +1001,7 @@ Theorem with_lifting_observed_keeps_scope :
 Proof.
   intros L. apply keeps_scope_intro. intros e.
   unfold with_lifting_observed, liftings_observed.
+  eapply scoped_trans; [ | apply with_copies_scoped ].
   eapply scoped_trans; [ | apply add_head_tables_scoped ].
   eapply scoped_trans; [ apply to_head_observed_scoped | ].
   eapply scoped_trans; [ apply out_of_code_observed_scoped | ].

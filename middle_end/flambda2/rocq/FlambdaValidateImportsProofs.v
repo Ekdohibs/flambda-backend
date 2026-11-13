@@ -58,6 +58,7 @@ From OxCamlFlambda2 Require FlambdaSharedReadsProofs.
 From OxCamlFlambda2 Require FlambdaHoistStaticsProofs.
 From OxCamlFlambda2Types Require FlambdaSimplifyCarriedSpec
   FlambdaSimplifyCarriedProofs.
+From OxCamlFlambda2 Require FlambdaCopyCodeProofs.
 From OxCamlFlambda2 Require Import FlambdaStubCallsSpec
   FlambdaStubCallsProofs.
 From OxCamlFlambda2 Require Import FlambdaNeverReturnsSpec
@@ -399,6 +400,12 @@ Proof.
   apply andb_true_iff in Hfree as [Hfree Haround_free].
   apply andb_true_iff in Hfree as [Hfree Hlift_free].
   apply andb_true_iff in Hfree as [Hhead_free Hout_free].
+  apply
+    (refines_trans _
+       (State (add_head_tables (tables_put L) around) [] [] statics
+          empty_heap));
+    [ | exact (FlambdaCopyCodeProofs.with_copies_refines_imports imports
+                 (code_copied L) _) ].
   apply (refines_trans _ (State around [] [] statics empty_heap));
     [ | revert Htables; unfold tables_free_in;
         destruct (tables_put L) as [ | table tables];

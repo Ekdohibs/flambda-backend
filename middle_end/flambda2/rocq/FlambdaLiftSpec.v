@@ -276,14 +276,18 @@ Fixpoint rec_handlers_bindings
    [Let_cont]s before which such a group is put, by their paths, each
    with the paths of the [Let]s whose bindings make the group; and
    the tables to bind at the head of the unit, each a symbol with the
-   elements of an immutable array, which lift no [Let]. The last
-   five are not read here: the first two are for
+   elements of an immutable array, which lift no [Let]; and the
+   copies of code to make, each a list of code ids paired with new
+   ones and the symbols of the static sets of closures that get the
+   new ones, which lift no [Let] either. The last six are not read
+   here: the first two are for
    FlambdaLiftFromCodeSpec.lift_from_code_unit and
    FlambdaLiftFromArmsSpec.lift_to_head_unit, which the validation
    applies before [lift_unit], the next two for
    FlambdaLiftAroundSpec.lift_around_unit, which it applies after,
-   and the last for FlambdaUnusedHeadStaticsSpec.add_head_tables,
-   which it applies last of all. *)
+   the fifth for FlambdaUnusedHeadStaticsSpec.add_head_tables, which
+   it applies after that, and the last for
+   FlambdaCopyCodeSpec.with_copies, which it applies last of all. *)
 Record lifting : Type := Lifting {
   lifting_unit : unit_interface;
   lifted_lets : list (path * lift_to);
@@ -292,7 +296,8 @@ Record lifting : Type := Lifting {
   lifted_to_head : list (path * lift_to);
   lifted_around : list (path * lift_to);
   groups_put : list (path * list path);
-  tables_put : list (symbol * list simple)
+  tables_put : list (symbol * list simple);
+  code_copied : list (list (code_id * code_id) * list symbol)
 }.
 
 (* ======================================================================== *)

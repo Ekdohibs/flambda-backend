@@ -59,7 +59,14 @@
    (FlambdaUnusedHeadStaticsSpec.add_head_tables_refines_under_statement).
    What may follow a unit names no symbol and no code id and binds
    nothing static, so no set of names occurs in it
-   ([observers_free_of]). *)
+   ([observers_free_of]).
+
+   The copies of code after the tables: their statement is of a unit
+   that something follows
+   (FlambdaCopyCodeSpec.with_copies_refines_observed_statement), and
+   asks nothing of the imports; the unit under the copies binds no
+   more than the unit with them
+   (FlambdaCopyCodeProofs.free_in_under_copies). *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -72,6 +79,8 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaLiftSpec FlambdaLiftProofs FlambdaLiftFromCodeSpec
   FlambdaLiftFromCodeProofs FlambdaLiftFromArmsSpec FlambdaLiftFromArmsProofs
   FlambdaLiftAroundSpec FlambdaLiftAroundProofs FlambdaLiftObservedSpec.
+From OxCamlFlambda2 Require Import FlambdaCopyCodeSpec.
+From OxCamlFlambda2 Require FlambdaCopyCodeProofs.
 From OxCamlFlambda2 Require FlambdaValidateImportsProofs.
 Import ListNotations.
 
@@ -410,9 +419,16 @@ Qed.
 Theorem with_lifting_observed_refines :
   with_lifting_observed_refines_statement.
 Proof.
-  intros imports L e. cbv zeta. intros Hhead Hcode Hlets Hall.
+  intros imports L e. cbv zeta. intros Hhead Hcode Hlets Hcopied.
   unfold with_lifting_observed in *.
+  pose proof (FlambdaCopyCodeProofs.free_in_under_copies _ _ _ Hcopied)
+    as Hall.
   pose proof (free_in_under_tables _ _ _ Hall) as Haround.
+  refine
+    (refines_under_observers_trans [] _ _ e
+       (add_head_tables (tables_put L) (liftings_observed L e)) _ _
+       (FlambdaCopyCodeProofs.with_copies_refines_under imports []
+          (code_copied L) _)).
   refine
     (refines_under_observers_trans [] _ _ e (liftings_observed L e) _ _ _).
   - exact (liftings_observed_refines imports L e Hhead Hcode Hlets Haround).

@@ -107,7 +107,13 @@
    symbols bound to immutable arrays of constants and symbols, which
    Simplify binds where it makes a load of a [Switch] whose arms give
    constants, and which the term before has not
-   (FlambdaUnusedHeadStaticsSpec.add_head_tables). It
+   (FlambdaUnusedHeadStaticsSpec.add_head_tables). Then it gives the
+   static sets of closures of the symbols given the copies of code
+   given: where Simplify has given a set that it lifts new code,
+   beside the code of the term before, which another closure keeps,
+   the term before gets the same code under the new code ids, for
+   that set (FlambdaCopyCodeSpec.copy_static_code, which says what
+   Simplify does there and what is checked). It
    normalises the result, each round followed by using
    what is known of the static closures whose bindings are in sight
    (FlambdaKnownClosuresSpec.use_known_closures: a value slot is read,
@@ -392,6 +398,7 @@ From OxCamlFlambda2 Require Import FlambdaDemoteSpec.
 From OxCamlFlambda2 Require Import FlambdaKnownSlotsSpec.
 From OxCamlFlambda2 Require Import FlambdaSharedReadsSpec.
 From OxCamlFlambda2 Require Import FlambdaStubCallsSpec.
+From OxCamlFlambda2 Require Import FlambdaCopyCodeSpec.
 From OxCamlFlambda2 Require Import FlambdaNeverReturnsSpec.
 From OxCamlFlambda2 Require Import FlambdaUnusedHeadStaticsSpec.
 From OxCamlFlambda2 Require Import FlambdaSameHandlersSpec.
@@ -1001,14 +1008,21 @@ Definition without_head_statics (D : dropped) (e : expr) : expr :=
    of FlambdaLiftAroundSpec.lift_around_unit hold of what that gives.
    Where the conditions of one do not hold, it is not made. The paths
    of each are paths in the term that it is given: the first puts the
-   unit under a group of static bindings, if it lifts anything. Last
-   of all, the tables given are bound in a group at the head of the
+   unit under a group of static bindings, if it lifts anything. After
+   those, the tables given are bound in a group at the head of the
    unit, where the checks of
    FlambdaUnusedHeadStaticsSpec.add_head_tables pass: Simplify binds
    such a table where it makes a load of a [Switch] whose arms give
    constants, and a round that makes the same load of the term before
-   needs the table in scope. As it comes last, no path of the
-   liftings before it is a path in a term that has the group. *)
+   needs the table in scope. As it comes after them, no path of the
+   liftings before it is a path in a term that has the group. Last of
+   all, the copies of code given are made, each where the check of
+   FlambdaCopyCodeSpec.copy_static_code passes: a list of code ids,
+   each paired with a new one, and the symbols of the static sets of
+   closures that get the new ones. As it comes last, those symbols
+   may be ones that the liftings before it have just bound; it is
+   given no path. With no copy given, the result is what it was
+   without this step (FlambdaCopyCodeSpec.with_copies_none_statement). *)
 Definition with_lifting (L : lifting) (e : expr) : expr :=
   let e :=
     match lift_to_head_unit (lifting_unit L) (lifted_to_head L) e with
@@ -1036,7 +1050,7 @@ Definition with_lifting (L : lifting) (e : expr) : expr :=
     | None => e
     end
   in
-  add_head_tables (tables_put L) e.
+  with_copies (code_copied L) (add_head_tables (tables_put L) e).
 
 (* What the unit binds its symbols to used wherever they are, if it
    binds each of them to one constant. *)

@@ -81,14 +81,18 @@
    FlambdaValidateSpec.with_lifting with the four functions here in
    place of the four with the test: it ends by binding the tables that
    the guess gives at the head of the unit
-   (FlambdaUnusedHeadStaticsSpec.add_head_tables). The four in turn are
+   (FlambdaUnusedHeadStaticsSpec.add_head_tables), and then by giving
+   the static sets of closures the copies of code that the guess asks
+   (FlambdaCopyCodeSpec.with_copies). The four in turn are
    stated as each is ([liftings_observed_refines_statement]), and so is
    [with_lifting_observed]
    ([with_lifting_observed_refines_statement]): the tables bound at
    the head refine the term under continuations in which their symbols
    do not occur
    (FlambdaUnusedHeadStaticsSpec.add_head_tables_refines_under_statement),
-   and what may follow a unit names no symbol.
+   and what may follow a unit names no symbol; the copies refine the
+   term under what may follow a unit, which names no code id either
+   (FlambdaCopyCodeSpec.with_copies_refines_observed_statement).
    That [with_lifting_observed] commutes with renaming and keeps scope
    is in FlambdaValidatorEquivarianceSpec.v and
    FlambdaStaticsScopeSpec.v, beside the same of [with_lifting].
@@ -106,7 +110,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaSemanticsSpec FlambdaWellFormedSpec FlambdaImportsSpec
   FlambdaObserversSpec FlambdaMyClosureSpec FlambdaLiftSpec
   FlambdaLiftFromCodeSpec FlambdaLiftFromArmsSpec FlambdaLiftAroundSpec
-  FlambdaUnusedHeadStaticsSpec.
+  FlambdaUnusedHeadStaticsSpec FlambdaCopyCodeSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -197,10 +201,11 @@ Definition liftings_observed (L : lifting) (e : expr) : expr :=
     (lets_observed L (out_of_code_observed L (to_head_observed L e))).
 
 (* FlambdaValidateSpec.with_lifting without the test of the exits: the
-   four in turn, and then the tables of the guess bound at the head of
-   the unit. *)
+   four in turn, then the tables of the guess bound at the head of the
+   unit, and then the copies of code of the guess. *)
 Definition with_lifting_observed (L : lifting) (e : expr) : expr :=
-  add_head_tables (tables_put L) (liftings_observed L e).
+  with_copies (code_copied L)
+    (add_head_tables (tables_put L) (liftings_observed L e)).
 
 (* ======================================================================== *)
 (* The statements                                                           *)
@@ -253,10 +258,11 @@ Definition liftings_observed_refines_statement : Prop :=
     static_names_free_in statics (liftings_observed L e) = true ->
     refines_under_observers [] statics empty_heap e (liftings_observed L e).
 
-(* The same with the tables of the guess bound at the head after: the
-   lifting without the test of the exits gives the unit, up to what may
-   follow a unit. The premise on the fourth lifting is now of the whole
-   result, which binds what the fourth gives and the tables. *)
+(* The same with the tables of the guess bound at the head after, and
+   then its copies of code: the lifting without the test of the exits
+   gives the unit, up to what may follow a unit. The premise on the
+   fourth lifting is now of the whole result, which binds what the
+   fourth gives, the tables and the copies. *)
 Definition with_lifting_observed_refines_statement : Prop :=
   ∀ (imports : list (symbol * import_class)) (L : lifting) (e : expr),
     let statics := imports_statics imports in

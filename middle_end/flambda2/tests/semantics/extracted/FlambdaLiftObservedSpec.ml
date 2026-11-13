@@ -1,3 +1,4 @@
+open FlambdaCopyCodeSpec
 open FlambdaLiftAroundSpec
 open FlambdaLiftFromArmsSpec
 open FlambdaLiftFromCodeSpec
@@ -80,4 +81,5 @@ let liftings_observed l e =
 (** val with_lifting_observed : lifting -> expr -> expr **)
 
 let with_lifting_observed l e =
-  add_head_tables l.tables_put (liftings_observed l e)
+  with_copies l.code_copied
+    (add_head_tables l.tables_put (liftings_observed l e))
