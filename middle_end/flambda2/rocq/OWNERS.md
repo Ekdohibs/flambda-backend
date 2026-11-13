@@ -375,6 +375,8 @@ pass into the validator.
     first function without the test of the environment at every
     `Let`: it carries what is known of the environment, as the second
     does, and is proved equal to the first; the validation calls it)
+  - `middle_end/flambda2/types/rocq/FlambdaSimplifyArms*` (the arms of
+    a `Switch`, each rewritten under what its arm knows)
 - S2, switch. Owner of the first three slices: T1, on
   `flambda2-rocq/T1-grammar`; the rest unassigned.
   - `middle_end/flambda2/types/rocq/FlambdaSimplifySwitch*` (the arms
@@ -491,6 +493,19 @@ stays C0's for now.
   another term has them; V1's once it is staffed)
 - `middle_end/flambda2/rocq/FlambdaRenameApart*` (another: every binder
   of a term given a name of its own; V1's once it is staffed)
+- `middle_end/flambda2/rocq/FlambdaAliasLets*` (another: in the term
+  after, a `Let` of a variable to the variable that the `Let` around it
+  has just bound is made one `Let` with it)
+- `middle_end/flambda2/rocq/FlambdaInlineSiblings*` (another: in the
+  body of code, the direct calls of the other code of its group are
+  inlined, for the term before; a refinement)
+- `middle_end/flambda2/rocq/FlambdaKnownSiblings*` (another: the same
+  calls, where the callee is a symbol that the group binds to a closure
+  of the code called, inlined as an equivalence, for the term after)
+- `middle_end/flambda2/rocq/FlambdaUnusedProjections*` (another: in the
+  term after, the `Let` of the projection of a function slot that
+  nothing uses, from a closure that a `Let` around it has made, is
+  removed)
 - `middle_end/flambda2/rocq/requests/V2-missing-constructs.md`
 
 ## V3: converter
