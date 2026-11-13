@@ -83,8 +83,16 @@
    rules says it is used, so what the proofs need of a kept field is
    that one of them applied.
 
+   The zero-alloc check is not modelled: [any_source_zero_alloc] reads
+   the input [zero_alloc_source] only, where points_to_analysis.ml
+   ([zero_alloc_rules]) first extends it along aliases, accessors and
+   uses. Along an alias or a use [closed] gives the same; along the
+   accessor of a local field it does not, so [closed] is weaker there
+   than the compiler's rules, and the compiler's solution still meets
+   it. The traversal of the model makes no zero-alloc source.
+
    Not here: the rules of the unboxing analysis
-   (unboxing_analysis.ml), the zero-alloc check, and the relations
+   (unboxing_analysis.ml), and the relations
    [allocation_point_dominator], [multiple_allocation_points],
    [field_of_constructor_is_used_top] and
    [field_of_constructor_is_used_as], which only the unboxing and the
