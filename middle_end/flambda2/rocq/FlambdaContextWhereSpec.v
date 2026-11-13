@@ -29,7 +29,7 @@
    rewrite is sound only from the states that it can be run from.
 
    This file is to be reviewed: [kept_by_step], [handler_refines_from],
-   [code_refines_from] and the statements.
+   [code_refines_from], [code_refines_from_called] and the statements.
 
    FlambdaContextSpec.v says that a rewrite which is a refinement under
    all environments may be applied under any binder. Most rewrites of
@@ -98,6 +98,17 @@
      handlers must agree on whether they bind something static.
    - [let_static_code_refines_from_statement]: the body of code bound by
      a [Let_static], with the same condition.
+   - [let_static_code_refines_from_called_statement]: the same, with
+     less asked of the two bodies. They are asked the two things only
+     in the states in which, besides, the callee is a closure whose
+     code is the code id that the [Let_static] binds the body to
+     ([code_refines_from_called]). A call finds the body that it runs
+     by the code id of its callee
+     (FlambdaSemanticsSpec.shape_of_closure_call, which looks the code
+     up at the code id that FlambdaValueSpec.closure_of gives), so the
+     body bound to a code id comes to run in no other state. Two
+     bodies that have the premise of [code_refines_from] have this
+     one, for every code id: so this statement gives the one above.
    - [let_static_code_refines_where_statement]: the last, for a
      condition [ok] on the static environment that extensions keep. The
      body need only refine at a call: under its parameters bound to
@@ -125,8 +136,8 @@
 
 From Stdlib Require Import ZArith List.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
-From OxCamlFlambda2 Require Import FlambdaModel FlambdaSemanticsSpec
-  FlambdaWellFormedSpec FlambdaRangeSpec.
+From OxCamlFlambda2 Require Import FlambdaModel FlambdaValueSpec
+  FlambdaSemanticsSpec FlambdaWellFormedSpec FlambdaRangeSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -178,6 +189,34 @@ Definition code_refines_from (inv : state -> Prop) (params : list variable)
     bind_params params vs [(my_closure, callee)] = Some callee_vars ->
     map kind_of_value vs = unarize (cm_params_arity metadata) ->
     kind_of_value callee = Value ->
+    (inv
+       (State source callee_vars [(ret, return_to); (exn, exn_to)] statics hp)
+     <-> inv
+           (State target callee_vars [(ret, return_to); (exn, exn_to)]
+              statics hp))
+    ∧ (inv
+         (State source callee_vars [(ret, return_to); (exn, exn_to)] statics hp)
+       ->
+       refines
+         (State source callee_vars [(ret, return_to); (exn, exn_to)] statics hp)
+         (State target callee_vars [(ret, return_to); (exn, exn_to)]
+            statics hp)).
+
+(* The same for the body of the code that is bound to the code id [id],
+   asked of fewer states: those in which, besides, the callee is a
+   closure whose code is [id], whatever its value slots are. The static
+   environment is that of the state in which the body runs. *)
+Definition code_refines_from_called (inv : state -> Prop) (id : code_id)
+    (params : list variable) (my_closure : variable)
+    (ret exn : continuation) (metadata : code_metadata)
+    (source target : expr) : Prop :=
+  ∀ (vs : list value) (callee : value) (callee_vars : env)
+    (return_to exn_to : cont_value) (statics : static_env) (hp : heap)
+    (value_slots : list (value_slot * value)),
+    bind_params params vs [(my_closure, callee)] = Some callee_vars ->
+    map kind_of_value vs = unarize (cm_params_arity metadata) ->
+    kind_of_value callee = Value ->
+    closure_of statics callee = Some (id, value_slots) ->
     (inv
        (State source callee_vars [(ret, return_to); (exn, exn_to)] statics hp)
      <-> inv
@@ -282,6 +321,56 @@ Definition let_static_code_refines_from_statement : Prop :=
     binds_statics code_body = binds_statics code_body' ->
     code_refines_from inv params my_closure ret exn metadata code_body
       code_body' ->
+    refines
+      (State
+         (Let_static
+            (before
+             ++ Bind_code id
+                  (Code params my_closure ret exn metadata code_body)
+             :: after)
+            body)
+         vars conts statics hp)
+      (State
+         (Let_static
+            (before
+             ++ Bind_code id
+                  (Code params my_closure ret exn metadata code_body')
+             :: after)
+            body)
+         vars conts statics hp).
+
+(* The same, where the two bodies are asked the two things only in the
+   states in which the callee is, besides, a closure whose code is
+   [id], the code id that the [Let_static] binds the body to. *)
+Definition let_static_code_refines_from_called_statement : Prop :=
+  ∀ (inv : state -> Prop) (before : list static_binding) (id : code_id)
+    (params : list variable) (my_closure : variable)
+    (ret exn : continuation) (metadata : code_metadata)
+    (code_body code_body' : expr) (after : list static_binding)
+    (body : expr) (vars : env) (conts : cont_env) (statics : static_env)
+      (hp : heap),
+    kept_by_step inv ->
+    inv
+      (State
+         (Let_static
+            (before
+             ++ Bind_code id
+                  (Code params my_closure ret exn metadata code_body)
+             :: after)
+            body)
+         vars conts statics hp) ->
+    inv
+      (State
+         (Let_static
+            (before
+             ++ Bind_code id
+                  (Code params my_closure ret exn metadata code_body')
+             :: after)
+            body)
+         vars conts statics hp) ->
+    binds_statics code_body = binds_statics code_body' ->
+    code_refines_from_called inv id params my_closure ret exn metadata
+      code_body code_body' ->
     refines
       (State
          (Let_static

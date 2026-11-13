@@ -243,3 +243,112 @@ Proof.
     simpl. rewrite Htarget, Hbody. reflexivity.
   - apply handler_refines_from_in_range; assumption.
 Qed.
+
+(* ======================================================================== *)
+(* The body of code, from the states in which the callee has its code       *)
+(* ======================================================================== *)
+
+Section Called.
+
+Variable inv : state -> Prop.
+
+(* From the target to the source. *)
+Definition code_refined_from_called (id : code_id) (params : list variable)
+    (my_closure : variable) (ret exn : continuation)
+    (metadata : code_metadata) (target source : expr) : Prop :=
+  code_refines_from_called inv id params my_closure ret exn metadata source
+    target.
+
+(* The lemmas of FlambdaContextProofs.v give that the callee is a
+   closure of the code id that the bodies are related at, which is what
+   the premise asks for. *)
+Lemma code_forwards_called (id : code_id) (params : list variable)
+    (my_closure : variable) (ret exn : continuation)
+    (metadata : code_metadata) (source target : expr) (vs : list value)
+    (callee : value) (callee_vars : env) (return_to exn_to : cont_value)
+    (statics : static_env) (hp : heap) (slots : list (value_slot * value)) :
+  code_refines_from_called inv id params my_closure ret exn metadata source
+    target ->
+  bind_params params vs [(my_closure, callee)] = Some callee_vars ->
+  map kind_of_value vs = unarize (cm_params_arity metadata) ->
+  kind_of_value callee = Value ->
+  closure_of statics callee = Some (id, slots) ->
+  refines_from inv
+    (State source callee_vars [(ret, return_to); (exn, exn_to)] statics hp)
+    (State target callee_vars [(ret, return_to); (exn, exn_to)] statics hp).
+Proof.
+  intros Hrefines Hbind Hkinds Hvalue Hclosure.
+  exact
+    (Hrefines vs callee callee_vars return_to exn_to statics hp slots Hbind
+       Hkinds Hvalue Hclosure).
+Qed.
+
+Lemma code_backwards_called (id : code_id) (params : list variable)
+    (my_closure : variable) (ret exn : continuation)
+    (metadata : code_metadata) (target source : expr) (vs : list value)
+    (callee : value) (callee_vars : env) (return_to exn_to : cont_value)
+    (statics : static_env) (hp : heap) (slots : list (value_slot * value)) :
+  code_refined_from_called id params my_closure ret exn metadata target
+    source ->
+  bind_params params vs [(my_closure, callee)] = Some callee_vars ->
+  map kind_of_value vs = unarize (cm_params_arity metadata) ->
+  kind_of_value callee = Value ->
+  closure_of statics callee = Some (id, slots) ->
+  refines_from inv
+    (State source callee_vars [(ret, return_to); (exn, exn_to)] statics hp)
+    (State target callee_vars [(ret, return_to); (exn, exn_to)] statics hp).
+Proof.
+  intros Hrefines Hbind Hkinds Hvalue Hclosure.
+  exact
+    (Hrefines vs callee callee_vars return_to exn_to statics hp slots Hbind
+       Hkinds Hvalue Hclosure).
+Qed.
+
+End Called.
+
+Theorem let_static_code_refines_from_called
+  : let_static_code_refines_from_called_statement.
+Proof.
+  intros inv before id params my_closure ret exn metadata code_body
+    code_body' after body vars conts statics hp Hstep Hinv Hinv' Hbinds Hcode.
+  exact
+    (FlambdaContextProofs.let_static_code_refines_from inv Hstep _ _ _ _
+       (handler_forwards inv) (handler_backwards inv)
+       (code_forwards_called inv) (code_backwards_called inv) before id
+       params my_closure ret exn metadata code_body code_body' after body
+       vars conts statics hp Hinv Hinv' Hbinds Hcode Hcode).
+Qed.
+
+(* Two bodies that have the premise of [code_refines_from] have that of
+   [code_refines_from_called], for every code id: the second is asked of
+   fewer states. *)
+Lemma code_refines_from_called_of_from (inv : state -> Prop) (id : code_id)
+    (params : list variable) (my_closure : variable)
+    (ret exn : continuation) (metadata : code_metadata)
+    (source target : expr) :
+  code_refines_from inv params my_closure ret exn metadata source target ->
+  code_refines_from_called inv id params my_closure ret exn metadata source
+    target.
+Proof.
+  intros Hrefines vs callee callee_vars return_to exn_to statics hp
+    value_slots Hbind Hkinds Hvalue _.
+  exact
+    (Hrefines vs callee callee_vars return_to exn_to statics hp Hbind Hkinds
+       Hvalue).
+Qed.
+
+(* So [let_static_code_refines_from_called_statement] gives
+   [let_static_code_refines_from_statement]. *)
+Lemma let_static_code_refines_from_of_called :
+  let_static_code_refines_from_called_statement ->
+  let_static_code_refines_from_statement.
+Proof.
+  intros Hcalled inv before id params my_closure ret exn metadata code_body
+    code_body' after body vars conts statics hp Hstep Hinv Hinv' Hbinds
+    Hbody.
+  exact
+    (Hcalled inv before id params my_closure ret exn metadata code_body
+       code_body' after body vars conts statics hp Hstep Hinv Hinv' Hbinds
+       (code_refines_from_called_of_from inv id params my_closure ret exn
+          metadata code_body code_body' Hbody)).
+Qed.
