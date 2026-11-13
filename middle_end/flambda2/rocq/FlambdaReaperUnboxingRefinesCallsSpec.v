@@ -1,0 +1,569 @@
+(******************************************************************************
+ *                                  OxCaml                                    *
+ * -------------------------------------------------------------------------- *
+ *                               MIT License                                  *
+ *                                                                            *
+ * Copyright (c) 2026 Jane Street Group LLC                                   *
+ * opensource-contacts@janestreet.com                                         *
+ *                                                                            *
+ * Permission is hereby granted, free of charge, to any person obtaining a    *
+ * copy of this software and associated documentation files (the "Software"), *
+ * to deal in the Software without restriction, including without limitation  *
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,   *
+ * and/or sell copies of the Software, and to permit persons to whom the      *
+ * Software is furnished to do so, subject to the following conditions:       *
+ *                                                                            *
+ * The above copyright notice and this permission notice shall be included    *
+ * in all copies or substantial portions of the Software.                     *
+ *                                                                            *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL    *
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER *
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING    *
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
+ * DEALINGS IN THE SOFTWARE.                                                  *
+ ******************************************************************************)
+
+(* The rebuild with unboxing, in the mode of the fix, refines its unit
+   across calls: code whose parameters and results are unboxed, called
+   directly, with or without the wrapper of [make_apply_wrapper].
+
+   This file is to be reviewed: the fragment ([calls_unboxing]), the
+   statements and the examples, against FlambdaReaperUnboxing.v and
+   FlambdaReaperCallingConventionsSpec.v. The proofs are in
+   FlambdaReaperUnboxingRefinesCallsProofs.v, which needs no review.
+
+   [rebuild_unbox_fixed_refines_cc_statement]: for a unit [e] of the
+   fragment of FlambdaReaperFlowSpec.v ([in_flow_fragment]), tables [T]
+   closed under the rules ([check_closed]) and any table of
+   [cannot_change_calling_convention] ([cannot_change]), the unit rebuilt
+   with unboxing in the mode of the fix ([rebuild_unit_unbox_fixed]: no
+   change of representation of closures) refines the unit rebuilt with
+   the change of calling conventions alone, from the same table
+   ([rebuild_unit_cc_from_tables]), run on its own ([program_refines]),
+   if the unit is of [calls_unboxing] and the reads that the rebuild
+   keeps of the names unboxed find their fields ([check_unboxed_reads]).
+   The two rebuilt terms are the same but for the unboxing (as in
+   FlambdaReaperUnboxingRefinesSpec.v), the parameters that the rebuild
+   with unboxing keeps with no use ([Keep_unused]), to which it gives
+   poison, the calls of code whose parameters or results are unboxed,
+   which give the variables of the fields of their arguments and return
+   those of their results, and the wrappers of the calls.
+
+   [rebuild_unbox_fixed_refines_observably_statement]: with the premises
+   of
+   FlambdaReaperCallingConventionsSpec.rebuild_cc_refines_observably_statement,
+   the rebuilt unit refines the unit up to observation. It is that
+   statement composed with the first.
+
+   [make_apply_wrapper_u] gives poison to a parameter of the continuation
+   of a call kept with no use ([Keep_unused]) whatever the callee does
+   with the result. A variant passes a result that the callee keeps
+   through instead (so that the call needs no wrapper if that is all it
+   would do), and gives poison only for a result that the callee unboxes
+   or deletes. The statements are proved of the model as it is, the
+   fix; the proof of the one case where the two differ is that of either.
+   In this model a parameter of a handler is kept with no use only if it
+   is the first of an exception handler, which a well-formed unit never
+   makes the continuation of a call: the case is there for the first
+   statement only.
+
+   [fixed_call_example_statement], [fixed_wrapper_example_statement]: the
+   units of FlambdaReaperUnboxingRefinesSpec.CallExample (a call of code
+   whose parameter and result are unboxed, with no wrapper) and
+   WrapperExample (the same code called twice, once through a wrapper
+   that drops the field of the result), with the tables of the solver of
+   the test tool, are of the fragment, the rebuild in the mode of the fix
+   makes the terms that the rebuild of the branch makes, and the rebuilt
+   units refine the units up to observation.
+
+   The fragment ([calls_unboxing]), for the unboxed fields that the tables
+   give ([unit_unboxed_fields]), the solution and the table:
+   - The local unboxing of FlambdaReaperUnboxingRefinesSpec.v: an unboxed
+     variable is bound to a block, a boxed number, an alias or the read of
+     a field unboxed in turn ([unboxed_binding_ok]), or is a parameter,
+     and is otherwise only read ([plain_binding_ok]) or given to a
+     parameter unboxed alike ([arg_ok]). No kind is [Region] or [Rec_info]
+     ([kind_ok]).
+   - The continuations in scope are described by their parameters
+     ([pdesc]): the decision of the rebuild with unboxing in the mode of
+     the fix ([handler_decisions], or the decisions of the results of
+     code), whether the change of calling conventions keeps it, and its
+     kind ([pdesc_ok]: an unboxed parameter with fields is kept, and is a
+     value).
+   - Closures: a [Let] of a closure of a set with no value slot, whose
+     other closures are not projected ([closure_binding_ok]).
+   - Code ([calls_code]): every code of the unit changes its calling
+     convention ([code_pdescs]), keeps its [my_closure], which is not
+     unboxed, has as many parameters as its arity, each unboxed as the
+     parameter of its code dep is, at the same paths ([code_param_ok]),
+     does not raise ([exn] is not free in its body: an exception would
+     reach a way out of the unit), and its body is of the fragment, with
+     its return continuation described by the decisions of its results.
+     As the exception continuation of a call is not a handler of the
+     term, there is no call in the body of code.
+   - Calls ([call_ok]): direct, of the code they are known to call, which
+     has one group of parameters and one result, at the arities of that
+     code, by a variable that is used and not unboxed, with no extra
+     argument for the exception continuation, which is not a handler of
+     the term, returning to a handler of the term ("results returned to
+     handlers": no tail call). Each argument is
+     given to a parameter of the code as [arg_ok] says. Each result is
+     given to a parameter of the handler of the same kind ([result_ok]):
+     one deleted or kept with no use, whatever the callee does with it;
+     one kept, of a result that the callee keeps or deletes; one unboxed,
+     of a result that the callee unboxes alike. Otherwise the call does
+     not return in the rebuild with unboxing ([wrapper_args_u] fails: the
+     known faults of the branch, which the fix keeps from happening by
+     the rules). A result that the callee unboxes with no field is,
+     besides, given to a parameter deleted only if the change of calling
+     conventions deletes the result too, and to one unboxed only if that
+     change keeps the result and the parameter alike: otherwise it makes
+     a wrapper where the rebuild with unboxing does not, which the proof
+     does not relate.
+   - [check_unboxed_uses]: no use of an unboxed name is called or has a
+     function slot read from it, so that [add_usages_through_function_slots]
+     adds no use to the fields of an unboxed name. *)
+
+From Stdlib Require Import ZArith List Bool.
+From OxCamlStdlib Require Import OxCamlLogic.
+From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
+  FlambdaMapSpec FlambdaValueSpec FlambdaSemanticsSpec FlambdaWellFormedSpec
+  FlambdaBindersSpec
+  FlambdaReaperGraphSpec FlambdaReaperTraversal FlambdaReaperSolution
+  FlambdaReaperFlowSpec FlambdaReaperRebuild FlambdaReaperRebuildSpec
+  FlambdaReaperCallingConventions FlambdaReaperUnboxing
+  FlambdaUnusedStaticsSpec FlambdaReaperUnboxingRefinesSpec.
+From OxCamlFlambda2 Require FlambdaReaperTupledSpec
+  FlambdaReaperCallingConventionsSpec FlambdaReaperUnboxingSpec.
+Import ListNotations.
+
+(* ======================================================================== *)
+(* The fragment                                                             *)
+(* ======================================================================== *)
+
+(* A parameter of a continuation: its decision in the rebuild with
+   unboxing, in the mode of the fix, whether the change of calling
+   conventions keeps it, and its kind. *)
+Record pdesc : Type := Pdesc {
+  pd_decision : decision;
+  pd_keep : bool;
+  pd_kind : flambda_kind
+}.
+
+(* The paths of the leaves of unboxed fields, in the order of
+   [unboxed_field_leaves]. *)
+Fixpoint ufield_paths (kind : flambda_kind) (u : unboxed_field) {struct u}
+    : list (list field * flambda_kind) :=
+  match u with
+  | Not_unboxed _ => [([], kind)]
+  | Unboxed fields =>
+    (fix go (fields : list (field * unboxed_field))
+         : list (list field * flambda_kind) :=
+       match fields with
+       | [] => []
+       | (f, u) :: fields =>
+         map (fun pk => (f :: fst pk, snd pk)) (ufield_paths (field_kind f) u)
+         ++ go fields
+       end) fields
+  end.
+
+Definition fields_paths (fields : unboxed_fields)
+    : list (list field * flambda_kind) :=
+  ufield_paths Value (Unboxed fields).
+
+Fixpoint fields_list_eqb (p p' : list field) : bool :=
+  match p, p' with
+  | [], [] => true
+  | f :: p, f' :: p' => field_eqb f f' && fields_list_eqb p p'
+  | _, _ => false
+  end.
+
+Fixpoint paths_eqb (l l' : list (list field * flambda_kind)) : bool :=
+  match l, l' with
+  | [], [] => true
+  | (p, k) :: l, (p', k') :: l' =>
+    fields_list_eqb p p' && kind_eqb k k' && paths_eqb l l'
+  | _, _ => false
+  end.
+
+(* Two unboxings of the same shape: their leaves at the same paths, in
+   the same order. *)
+Definition same_paths (fields fields' : unboxed_fields) : bool :=
+  paths_eqb (fields_paths fields) (fields_paths fields').
+
+(* An unboxing with no variable, at any depth. *)
+Definition no_leaves (fields : unboxed_fields) : bool :=
+  match fields_leaves fields with [] => true | _ :: _ => false end.
+
+Definition kind_ok (kind : flambda_kind) : bool :=
+  match kind with
+  | Value | Naked_number _ => true
+  | Region | Rec_info => false
+  end.
+
+Fixpoint forallb2 {A B : Type} (p : A -> B -> bool) (l : list A)
+    (l' : list B) : bool :=
+  match l, l' with
+  | [], [] => true
+  | a :: l, b :: l' => p a b && forallb2 p l l'
+  | _, _ => false
+  end.
+
+Section Fragment.
+
+Variable F : facts.
+Variable sol : solution.
+Variable cannot_change : node -> bool.
+Variable code_deps : finite_map code_dep.
+Variable unit_code_ids : list code_id.
+Variable codes : finite_map code_metadata.
+Variable unboxed : list (node * unboxed_fields).
+
+(* The decision of a parameter agrees with what the change of calling
+   conventions keeps and with its kind: a parameter unboxed to some
+   variable is kept, and is a value. *)
+Definition pdesc_ok (p : pdesc) : bool :=
+  kind_ok (pd_kind p)
+  && match pd_decision p with
+     | Decided (Keep kind) | Keep_unused kind =>
+       pd_keep p && kind_eqb kind (pd_kind p)
+     | Decided Delete => negb (pd_keep p)
+     | Unbox fields =>
+       kind_eqb (pd_kind p) Value && (pd_keep p || no_leaves fields)
+     end.
+
+(* The argument [a] of a parameter [p]: unboxed alike, and used if the
+   change of calling conventions keeps the parameter, for an unboxed
+   parameter; not an unboxed name for a parameter kept; anything for a
+   parameter deleted or kept with no use. *)
+Definition arg_ok (kinds : finite_map flambda_kind) (p : pdesc) (a : simple)
+    : bool :=
+  match pd_decision p with
+  | Unbox fields => unboxed_arg_ok unboxed sol kinds (pd_keep p) fields a
+  | Decided (Keep _) => plain_simple unboxed a
+  | Decided Delete | Keep_unused _ => true
+  end.
+
+Fixpoint args_ok2 (kinds : finite_map flambda_kind) (ps : list pdesc)
+    (args : list simple) : bool :=
+  match ps, args with
+  | [], _ => forallb (plain_simple unboxed) args
+  | _ :: _, [] => true
+  | p :: ps, a :: args => arg_ok kinds p a && args_ok2 kinds ps args
+  end.
+
+(* [C] describes the continuations in scope, each with whether it is a
+   handler of the term. *)
+Definition apply_cont_ok2 (kinds : finite_map flambda_kind)
+    (C : finite_map (list pdesc * bool)) (ac : apply_cont) : bool :=
+  match lookup (ac_continuation ac) C with
+  | Some (ps, _) => args_ok2 kinds ps (ac_args ac)
+  | None => forallb (plain_simple unboxed) (ac_args ac)
+  end.
+
+(* The parameters of a handler, as the two rebuilds have them. *)
+Definition handler_pdescs (is_exn : bool) (h : continuation_handler)
+    : list pdesc :=
+  match h with
+  | Handler _ metadata _ =>
+    map (fun '(d, keep, kind) => Pdesc d keep kind)
+      (combine
+         (combine (handler_decisions true sol unboxed is_exn h)
+            (handler_mask sol is_exn h))
+         (hm_params_kinds metadata))
+  end.
+
+Fixpoint pdescs_of (ds : list decision) (keeps : list bool)
+    (kinds : list flambda_kind) : list pdesc :=
+  match ds, keeps, kinds with
+  | d :: ds, keep :: keeps, kind :: kinds =>
+    Pdesc d keep kind :: pdescs_of ds keeps kinds
+  | _, _, _ => []
+  end.
+
+(* The parameters and the results of code [id] that changes its calling
+   convention, as the two rebuilds have them. *)
+Definition code_pdescs (id : code_id) (metadata : code_metadata)
+    : option (list pdesc * list pdesc) :=
+  match
+    code_change_u sol cannot_change code_deps unit_code_ids unboxed id
+      metadata,
+    code_calling_convention_change sol cannot_change code_deps unit_code_ids
+      id metadata
+  with
+  | Changing_u pd rd, Changing_calling_convention pd_cc rd_cc =>
+    Some (pdescs_of pd (map is_kept pd_cc) (unarize (cm_params_arity metadata)),
+          pdescs_of rd (map is_kept rd_cc)
+            (unarize (cm_result_arity metadata)))
+  | _, _ => None
+  end.
+
+(* The parameter [k] of the handler that a call returns to, given the
+   result [r] of the callee. *)
+Definition result_ok (k r : pdesc) : bool :=
+  kind_eqb (pd_kind k) (pd_kind r)
+  && match pd_decision k, pd_decision r with
+     | Decided Delete, Unbox fields_r =>
+       negb (no_leaves fields_r && pd_keep r)
+     | Decided Delete, _ | Keep_unused _, _ => true
+     | Decided (Keep _), Decided _ => true
+     | Unbox fields_k, Unbox fields_r =>
+       fields_alike fields_k fields_r
+       && (negb (no_leaves fields_r) || Bool.eqb (pd_keep k) (pd_keep r))
+     | _, _ => false
+     end.
+
+Definition is_none {A : Type} (o : option A) : bool :=
+  match o with None => true | Some _ => false end.
+
+Definition call_ok (kinds : finite_map flambda_kind)
+    (C : finite_map (list pdesc * bool)) (ap : apply_expr) : bool :=
+  match ap_call_kind ap, ap_callee ap, code_id_actually_called F sol ap with
+  | Direct id, Var f, Some id' =>
+    Pos.eqb id id' && plain_simple unboxed (Var f) && is_var_used sol f Value
+    && match lookup id codes with
+       | Some metadata =>
+         match code_pdescs id metadata with
+         | Some (pds, rds) =>
+           arity_eqb (ap_args_arity ap) (cm_params_arity metadata)
+           && arity_eqb (ap_return_arity ap) (cm_result_arity metadata)
+           && Nat.eqb (length (cm_params_arity metadata)) 1
+           && Nat.eqb (length (unarize (cm_result_arity metadata))) 1
+           && is_none
+                (my_closure_decision_u cannot_change code_deps unit_code_ids
+                   unboxed id)
+           && Nat.eqb (length (ap_args ap)) (length pds)
+           && Nat.eqb (length pds)
+                (length (unarize (cm_params_arity metadata)))
+           && Nat.eqb (length rds)
+                (length (unarize (cm_result_arity metadata)))
+           && forallb pdesc_ok pds && forallb pdesc_ok rds
+           && args_ok2 kinds pds (ap_args ap)
+           && match ap_exn_extra_args ap with [] => true | _ :: _ => false end
+           && is_none (lookup (ap_exn_continuation ap) C)
+           && match lookup (ap_continuation ap) C with
+              | Some (kps, true) => forallb2 result_ok kps rds
+              | _ => false
+              end
+         | None => false
+         end
+       | None => false
+       end
+  | _, _, _ => false
+  end.
+
+(* The [Let] of a closure, not unboxed: of a set with no value slot,
+   whose other closures are not projected. *)
+Definition closure_binding_ok (x : variable) (d : named) (body : expr)
+    : bool :=
+  match d with
+  | Closure_of_set slot decls [] =>
+    negb (is_none (lookup slot decls))
+    && match projections_of_set x d body with [] => true | _ :: _ => false end
+  | _ => false
+  end.
+
+(* A parameter [x] of code, whose code dep's parameter is [p]: unboxed at
+   the same paths if [p] is, otherwise not unboxed. *)
+Definition code_param_ok (x : variable) (p : pdesc) : bool :=
+  match pd_decision p with
+  | Unbox fields =>
+    match fields_of unboxed x with
+    | Some fields_x => same_paths fields fields_x
+    | None => false
+    end
+  | Decided _ | Keep_unused _ => plain_simple unboxed (Var x)
+  end.
+
+Fixpoint calls_expr (kinds : finite_map flambda_kind)
+    (C : finite_map (list pdesc * bool)) (e : expr) {struct e} : bool :=
+  match e with
+  | Let x kind d body =>
+    kind_ok kind
+    && match fields_of unboxed x with
+       | Some fields => unboxed_binding_ok unboxed sol kinds x kind d fields
+       | None =>
+         plain_binding_ok unboxed x kind d || closure_binding_ok x d body
+       end
+    && calls_expr ((x, kind) :: kinds) C body
+  | Let_static bindings body =>
+    forallb calls_binding bindings && calls_expr kinds C body
+  | Let_cont_non_recursive k h body =>
+    let ps := handler_pdescs (handler_is_exn_handler h) h in
+    calls_handler kinds C ps h && calls_expr kinds ((k, (ps, true)) :: C) body
+  | Let_cont_recursive handlers body =>
+    let C' :=
+      map (fun '(k, h) => (k, (handler_pdescs false h, true))) handlers ++ C
+    in
+    forallb
+      (fun '(_, h) => calls_handler kinds C' (handler_pdescs false h) h)
+      handlers
+    && calls_expr kinds C' body
+  | Apply ap => call_ok kinds C ap
+  | Apply_cont ac => apply_cont_ok2 kinds C ac
+  | Switch scrutinee arms =>
+    plain_simple unboxed scrutinee
+    && forallb (fun '(_, ac) => apply_cont_ok2 kinds C ac) arms
+  | Invalid => true
+  end
+with calls_handler (kinds : finite_map flambda_kind)
+    (C : finite_map (list pdesc * bool)) (ps : list pdesc)
+    (h : continuation_handler) {struct h} : bool :=
+  match h with
+  | Handler params metadata handler =>
+    Nat.eqb (length params) (length (hm_params_kinds metadata))
+    && forallb kind_ok (hm_params_kinds metadata)
+    && forallb pdesc_ok ps
+    && calls_expr (rev (combine params (hm_params_kinds metadata)) ++ kinds) C
+         handler
+  end
+with calls_binding (binding : static_binding) {struct binding} : bool :=
+  match binding with
+  | Bind_code id c => calls_code id c
+  | Bind_deleted_code _ => true
+  | Bind_symbol _ _ => local_binding unboxed binding
+  end
+with calls_code (id : code_id) (c : code) {struct c} : bool :=
+  match c with
+  | Code params my_closure ret exn metadata body =>
+    match lookup id codes with
+    | Some metadata' => code_metadata_eqb metadata metadata'
+    | None => false
+    end
+    && match code_pdescs id metadata with
+       | Some (pds, rds) =>
+         Nat.eqb (length params) (length pds)
+         && Nat.eqb (length pds) (length (unarize (cm_params_arity metadata)))
+         && Nat.eqb (length rds) (length (unarize (cm_result_arity metadata)))
+         && forallb pdesc_ok pds && forallb pdesc_ok rds
+         && forallb2 code_param_ok params pds
+         && is_none
+              (my_closure_decision_u cannot_change code_deps unit_code_ids
+                 unboxed id)
+         && plain_simple unboxed (Var my_closure)
+         && negb (Pos.eqb ret exn)
+         && negb (among exn (free_continuations_of_expr body))
+         && calls_expr
+              (rev ((my_closure, Value)
+                    :: with_kinds params (unarize (cm_params_arity metadata))))
+              [(ret, (rds, false))] body
+       | None => false
+       end
+  end.
+
+End Fragment.
+
+(* No use of an unboxed name is read but as a field of a block or of a
+   boxed number: none is called, and no function slot is read from
+   one. *)
+Definition check_unboxed_uses (F : facts) (T : tables)
+    (unboxed : list (node * unboxed_fields)) : bool :=
+  forallb
+    (fun '(_, f, base) =>
+       is_block_like_field f
+       || forallb (fun '(x, _) => negb (mem_pair x base (t_usages T))) unboxed)
+    (f_accessor F).
+
+(* The unit [e] is of the fragment, for the unboxing that the tables give
+   from its graph [F], and the table [cannot_change]. *)
+Definition calls_unboxing (F : facts) (T : tables) (cannot_change : list node)
+    (code_deps : finite_map code_dep) (dominated : list (node * node))
+    (to_unbox : list node) (e : expr) : bool :=
+  let unboxed := fst (unit_unboxed_fields F T dominated to_unbox e) in
+  calls_expr F (solution_of_tables T) (fun n => mem_node n cannot_change)
+    code_deps (static_names code_ids_bound e) (bound_code_metadata e) unboxed
+    [] [] e
+  && check_unboxed_uses F T unboxed.
+
+(* The rebuild with unboxing in the mode of the fix, with no change of
+   representation. *)
+Definition rebuild_unit_unbox_fixed (F : facts) (T : tables)
+    (cannot_change : list node) (code_deps : finite_map code_dep)
+    (dominated : list (node * node)) (to_unbox : list node)
+    (preserve_direct_calls : bool) (e : expr) : expr :=
+  rebuild_unit_unbox_repr_fixed (fun _ => false) F T cannot_change code_deps
+    dominated to_unbox [] preserve_direct_calls e.
+
+(* ======================================================================== *)
+(* The statements                                                           *)
+(* ======================================================================== *)
+
+Definition rebuild_unbox_fixed_refines_cc_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (dominated : list (node * node)) (to_unbox : list node)
+    (preserve_direct_calls : bool),
+    is_local_slots_only is_local ->
+    in_flow_fragment e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    calls_unboxing (traverse_unit flag u e) T cannot_change
+      (unit_code_deps flag u e) dominated to_unbox e
+    = true ->
+    check_unboxed_reads (traverse_unit flag u e) T dominated to_unbox = true ->
+    program_refines
+      (rebuild_unit_cc_from_tables (traverse_unit flag u e) T cannot_change
+         (unit_code_deps flag u e) preserve_direct_calls e)
+      (rebuild_unit_unbox_fixed (traverse_unit flag u e) T cannot_change
+         (unit_code_deps flag u e) dominated to_unbox preserve_direct_calls e).
+
+Definition rebuild_unbox_fixed_refines_observably_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (dominated : list (node * node)) (to_unbox : list node)
+    (preserve_direct_calls : bool),
+    is_local_slots_only is_local ->
+    (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+    in_flow_fragment e = true ->
+    any_kind_arguments e = true ->
+    results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    exits_one_value u e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+    check_cc_closed (traverse_unit flag u e) T cannot_change = true ->
+    FlambdaReaperCallingConventionsSpec.check_apply_widgets
+      (traverse_unit flag u e) T
+    = true ->
+    calls_unboxing (traverse_unit flag u e) T cannot_change
+      (unit_code_deps flag u e) dominated to_unbox e
+    = true ->
+    check_unboxed_reads (traverse_unit flag u e) T dominated to_unbox = true ->
+    program_refines_observably e
+      (rebuild_unit_unbox_fixed (traverse_unit flag u e) T cannot_change
+         (unit_code_deps flag u e) dominated to_unbox preserve_direct_calls e).
+
+(* ======================================================================== *)
+(* Examples                                                                 *)
+(* ======================================================================== *)
+
+Definition fixed_call_example_statement : Prop :=
+  calls_unboxing CallExample.facts CallExample.tables
+    CallExample.cannot_change CallExample.code_deps CallExample.dominated
+    CallExample.to_unbox CallExample.unit_expr
+  = true
+  ∧ check_unboxed_reads CallExample.facts CallExample.tables
+      CallExample.dominated CallExample.to_unbox
+    = true
+  ∧ rebuild_unit_unbox_fixed CallExample.facts CallExample.tables
+      CallExample.cannot_change CallExample.code_deps CallExample.dominated
+      CallExample.to_unbox true CallExample.unit_expr
+    = CallExample.rebuilt
+  ∧ program_refines_observably CallExample.unit_expr CallExample.rebuilt.
+
+Definition fixed_wrapper_example_statement : Prop :=
+  calls_unboxing WrapperExample.facts WrapperExample.tables
+    WrapperExample.cannot_change WrapperExample.code_deps
+    WrapperExample.dominated WrapperExample.to_unbox WrapperExample.unit_expr
+  = true
+  ∧ check_unboxed_reads WrapperExample.facts WrapperExample.tables
+      WrapperExample.dominated WrapperExample.to_unbox
+    = true
+  ∧ rebuild_unit_unbox_fixed WrapperExample.facts WrapperExample.tables
+      WrapperExample.cannot_change WrapperExample.code_deps
+      WrapperExample.dominated WrapperExample.to_unbox true
+      WrapperExample.unit_expr
+    = WrapperExample.rebuilt
+  ∧ program_refines_observably WrapperExample.unit_expr
+      WrapperExample.rebuilt.
