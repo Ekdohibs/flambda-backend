@@ -69,8 +69,17 @@
      call returns and raises through the last witness of the code, an
      over-application returns to the rest of the chain, and a partial
      application is at the first result of the last witness of the call
-     ([call_ok], [apply_ok]). [called_by] gives the closures a call
-     witness, which is what the statement says ([flows_weaken]). *)
+     ([call_ok], [apply_ok]). A call of tupled code gives the tuple to
+     the one witness of the code, whose parameter has the fields of the
+     tuple read into the parameters of the code ([tupled_call_ok]).
+     [called_by] gives the closures a call witness, which is what the
+     statement says ([flows_weaken]).
+   The facts of a term that the proof reads ([expr_edges]) are in every
+   graph that has those of the traversal but uses by other nodes than
+   variables and reads of [Is_int] into other nodes than variables
+   ([graph_sub], [expr_edges_mono]); so the statement holds of any such
+   graph and a solution closed for it ([flow_sound_gen]), the graph
+   without the two facts that keep a tuple alive among them. *)
 
 From Stdlib Require Import ZArith List Bool Arith Lia Permutation.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
@@ -79,7 +88,8 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaWellFormedSpec FlambdaReaperGraphSpec FlambdaReaperTraversal
   FlambdaReaperSolution FlambdaReaperSolutionSpec
   FlambdaReaperSolutionProofs FlambdaReaperFlowSpec.
-From OxCamlFlambda2 Require FlambdaHeapProofs FlambdaPrimitiveProofs.
+From OxCamlFlambda2 Require FlambdaHeapProofs FlambdaPrimitiveProofs
+  FlambdaTupledProofs FlambdaReaperTupledProofs.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -603,6 +613,24 @@ Fixpoint code_chain_edges (id : code_id) (returns : list node) (exn : node)
     ∧ code_chain_edges id returns exn rest
   end.
 
+(* The witness of unknown arity of the tupled code [id]
+   ([create_unknown_arity_tupled_call_witnesses]): it gives the results
+   and the exception, and the parameters of the code are read off the
+   fields of its one parameter. The two facts that keep the tuple alive
+   are not here: nothing below reads them. *)
+Definition tupled_witness_edges (id : code_id) (cd : code_dep) : Prop :=
+  ∃ w untuple : node,
+    cd_unknown_arity_call_witnesses cd = [w]
+    ∧ (∀ (i : nat) (r : node),
+         nth_error (cd_return cd) i = Some r ->
+         g_constructor G w (Field_return_of_call (Normal i)) r)
+    ∧ g_constructor G w (Field_return_of_call Exn) (cd_exn cd)
+    ∧ g_constructor G w Field_code_id_of_call_witness (Node_code_id id)
+    ∧ g_parameter G w 0 untuple
+    ∧ ∀ (i : nat) (p : node),
+        nth_error (cd_params cd) i = Some p ->
+        g_accessor G p (Field_block i Value) untuple.
+
 (* A call, with the nodes of its results ([returns]) and of its
    exception ([exn]): a direct call reads them off its witness, which
    reads the call witness of known arity of the callee; an indirect one
@@ -723,6 +751,7 @@ with code_edges (id : code_id) (c : code) : Prop :=
                    (group_by_parameter (cm_params_arity metadata)
                       (cd_params cd)))
                 (cd_unknown_arity_call_witnesses cd)))
+      ∧ (cm_is_tupled metadata = true -> tupled_witness_edges id cd)
       ∧ length (cd_params cd) = length (unarize (cm_params_arity metadata))
       ∧ length (cd_return cd) = length (unarize (cm_result_arity metadata))
       ∧ g_alias G (Node_variable my_closure) (cd_my_closure cd)
@@ -2154,7 +2183,11 @@ Lemma prepare_code_spec (id : code_id) (c : code) (a : acc) :
              (combine
                 (at_least_one_group
                    (group_by_parameter (code_params_arity c) (cd_params cd)))
-                (cd_unknown_arity_call_witnesses cd))).
+                (cd_unknown_arity_call_witnesses cd)))
+    ∧ (code_is_tupled c = true ->
+       ∀ a' : acc,
+         acc_le (prepare_code id c a) a' ->
+         tupled_witness_edges (acc_graph a') id cd).
 Proof.
   unfold prepare_code.
   destruct (fresh_list (length (code_result_kinds c)) a) as [returns a1]
@@ -2213,6 +2246,45 @@ Proof.
     simpl in Lf. injection E7 as <- <-.
     split; [ exact Lf | intros a' Hle ].
     exact (code_chain_deps_spec _ _ _ _ _ _ Hle). }
+  assert (Htupled :
+    code_is_tupled c = true ->
+    ∃ W U : node,
+      unknown = [W]
+      ∧ ∀ a' : acc,
+          acc_le a7 a' ->
+          (∀ (i : nat) (r : node),
+             nth_error returns i = Some r ->
+             g_constructor (acc_graph a') W (Field_return_of_call (Normal i))
+               r)
+          ∧ g_constructor (acc_graph a') W (Field_return_of_call Exn) exn
+          ∧ g_constructor (acc_graph a') W Field_code_id_of_call_witness
+              (Node_code_id id)
+          ∧ g_parameter (acc_graph a') W 0 U
+          ∧ ∀ (i : nat) (p : node),
+              nth_error params i = Some p ->
+              g_accessor (acc_graph a') p (Field_block i Value) U).
+  { intros Ht. unfold create_unknown_arity_call_witnesses in E7.
+    rewrite Ht in E7.
+    unfold create_unknown_arity_tupled_call_witnesses in E7.
+    destruct (fresh a6) as [W b1] eqn:F1.
+    destruct (fresh b1) as [U b2] eqn:F2.
+    destruct (fresh b2) as [Kp b3] eqn:F3.
+    injection E7 as <- <-. exists W, U. split; [ reflexivity | ].
+    intros a' Hle. split; [ | split; [ | split; [ | split ] ] ].
+    - intros i r Hr. apply facts_constructor.
+      apply (add_facts_later _ _ _ _ Hle). apply in_or_app. left.
+      apply in_map_iff. exists (i, r).
+      split; [ reflexivity | exact (indexed_nth _ _ _ Hr) ].
+    - apply facts_constructor. apply (add_facts_later _ _ _ _ Hle).
+      apply in_or_app. right. left. reflexivity.
+    - apply facts_constructor. apply (add_facts_later _ _ _ _ Hle).
+      apply in_or_app. right. right. left. reflexivity.
+    - apply facts_parameter. apply (add_facts_later _ _ _ _ Hle).
+      apply in_or_app. right. right. right. left. reflexivity.
+    - intros i p Hp. apply facts_accessor.
+      apply (add_facts_later _ _ _ _ Hle). apply in_or_app. right.
+      right. right. right. apply in_or_app. left. apply in_map_iff.
+      exists (i, p). split; [ reflexivity | exact (indexed_nth _ _ _ Hp) ]. }
   set (a8 := add_fact (Fact_any_source (Node_code_id id)) a7).
   assert (S : steady a a8).
   { refine (steady_trans _ _ _ S1 (steady_trans _ _ _ S2
@@ -2230,11 +2302,23 @@ Proof.
   { repeat split; simpl; auto. }
   split; [ exact (acc_le_trans _ _ _ (proj1 S) Hle8) | ].
   split; [ exact L4 | split; [ exact L1 | ] ].
-  split; [ | intros Ht; destruct (Hunknown Ht) as [Lu Hu]; simpl;
-             split; [ exact Lu | ] ];
-    [ | intros a' Hle; apply Hu;
-        refine (acc_le_trans _ _ _ (proj1 (add_facts_steady _ _)) _);
-        exact (acc_le_trans _ _ _ Hle8 Hle) ].
+  assert (Hle7 : ∀ a' : acc,
+            acc_le
+              (add_code_dep id
+                 {| cd_params := params; cd_my_closure := mc;
+                    cd_return := returns; cd_exn := exn;
+                    cd_known_arity_call_witness := w;
+                    cd_unknown_arity_call_witnesses := unknown |} a8) a' ->
+            acc_le a7 a').
+  { intros a' Hle. refine (acc_le_trans _ _ _ (proj1 (add_facts_steady _ _))
+                             _).
+    exact (acc_le_trans _ _ _ Hle8 Hle). }
+  split; [ | split ].
+  2: { intros Ht. destruct (Hunknown Ht) as [Lu Hu]. simpl.
+       split; [ exact Lu | intros a' Hle; exact (Hu a' (Hle7 a' Hle)) ]. }
+  2: { intros Ht. destruct (Htupled Ht) as (W & U & HWu & Hf).
+       intros a' Hle. simpl. exists W, U. split; [ exact HWu | ].
+       exact (Hf a' (Hle7 a' Hle)). }
   intros a' Hle. pose proof (acc_le_trans _ _ _ Hle8 Hle) as Hle'.
   assert (Hle6 : acc_le a6 a').
   { refine (acc_le_trans _ _ _ (proj1 S7) _).
@@ -2267,7 +2351,8 @@ Definition code_dep_made (id : code_id) (c : code) (cd : code_dep) (a' : acc)
        (combine
           (at_least_one_group
              (group_by_parameter (code_params_arity c) (cd_params cd)))
-          (cd_unknown_arity_call_witnesses cd))).
+          (cd_unknown_arity_call_witnesses cd)))
+  ∧ (code_is_tupled c = true -> tupled_witness_edges (acc_graph a') id cd).
 
 Definition code_dep_lengths (c : code) (cd : code_dep) : Prop :=
   length (cd_params cd) = length (code_params_kinds c)
@@ -2312,15 +2397,16 @@ Proof.
                         code_dep_made id c cd a').
     { destruct b as [id c | id | s const]; simpl.
       - destruct (prepare_code_spec id c a)
-          as (cd & Hcds & Hle & L1 & L2 & Hw & Hu).
+          as (cd & Hcds & Hle & L1 & L2 & Hw & Hu & Htu).
         exists [(id, cd)]. split; [ exact Hcds | split; [ reflexivity | ] ].
         split; [ exact Hle | ].
         intros id' c' [= <- <-]. exists cd. split; [ left; reflexivity | ].
         split.
         + split; [ exact L1 | split; [ exact L2 | ] ].
           intros Ht. exact (proj1 (Hu Ht)).
-        + intros a' Hle'. split; [ exact (Hw a' Hle') | ].
-          intros Ht. exact (proj2 (Hu Ht) a' Hle').
+        + intros a' Hle'. split; [ exact (Hw a' Hle') | split ].
+          * intros Ht. exact (proj2 (Hu Ht) a' Hle').
+          * intros Ht. exact (Htu Ht a' Hle').
       - exists []. split; [ reflexivity | split; [ reflexivity | ] ].
         split; [ apply acc_le_refl | intros ? ? ? ; discriminate ].
       - exists []. split; [ reflexivity | split; [ reflexivity | ] ].
@@ -2729,15 +2815,17 @@ Proof.
           exists (Bind_code id (Code params mc ret exn metadata cbody)).
           split; [ exact Hin | left; reflexivity ]. }
         exists cd. split; [ | split; [ | split; [ | split; [ | split;
-          [ | split; [ | split; [ | split; [ | split; [ | split ] ] ] ] ] ] ] ]
-          ].
+          [ | split; [ | split; [ | split; [ | split; [ | split; [ | split ]
+          ] ] ] ] ] ] ] ] ].
         -- apply (proj2 (proj2 (proj2 Hle_c))).
            apply (proj2 (proj2 (proj2 (proj1 Hs_c)))).
            apply (proj2 (proj2 (proj2 Hle_s))). rewrite Hl.
            apply in_or_app. left. exact Hcd.
         -- exact (proj1 (Hw a' (acc_le_trans _ _ _ Hle_s Hle_sc))).
         -- intros Ht. split; [ exact (Lu Ht) | ].
-           exact (proj2 (Hw a' (acc_le_trans _ _ _ Hle_s Hle_sc)) Ht).
+           exact (proj1 (proj2 (Hw a' (acc_le_trans _ _ _ Hle_s Hle_sc))) Ht).
+        -- intros Ht.
+           exact (proj2 (proj2 (Hw a' (acc_le_trans _ _ _ Hle_s Hle_sc))) Ht).
         -- exact L1.
         -- exact L2.
         -- exact Hmc.
@@ -3448,14 +3536,16 @@ Proof. destruct a; [ contradiction | reflexivity ]. Qed.
 (* ------------------------------------------------------------------------ *)
 
 (* What the run keeps of each partial application: that it has fewer
-   groups of arguments than its code has parameters. A call made it so,
-   and the static environment only grows. *)
+   groups of arguments than its code has parameters, and that the code
+   is not tupled. A call made it so, and the static environment only
+   grows. *)
 Definition unsaturated (statics : static_env) (closure : value) (a : arity)
     : Prop :=
   ∃ (id : code_id) (slots : list (value_slot * value)) (c : code),
     closure_of statics closure = Some (id, slots)
     ∧ lookup id (static_code statics) = Some c
-    ∧ length a < length (code_params_arity c).
+    ∧ length a < length (code_params_arity c)
+    ∧ code_is_tupled c = false.
 
 Fixpoint pa_ok (statics : static_env) (v : value) {struct v} : Prop :=
   match v with
@@ -3552,10 +3642,11 @@ Proof.
   - auto.
   - intros closure args a IHc IHargs (Hun & Hcl & Hargs).
     split; [ | split; [ exact (IHc Hcl) | ] ].
-    + destruct Hun as (id & slots & c & Hof & Hcode & Hlt).
+    + destruct Hun as (id & slots & c & Hof & Hcode & Hlt & Hnt).
       exists id, slots, c.
       split; [ exact (closure_of_le _ _ _ _ _ Hle Hof) | ].
-      split; [ exact (proj2 Hle _ _ Hcode) | exact Hlt ].
+      split; [ exact (proj2 Hle _ _ Hcode) | split; [ exact Hlt | exact Hnt ]
+      ].
     + revert Hargs. apply every_impl. intros x Hx.
       rewrite Forall_forall in IHargs. exact (IHargs x Hx).
 Qed.
@@ -4440,10 +4531,15 @@ Definition target_length (c : cont_value) : option nat :=
 Definition fits (c : cont_value) (ns : list node) (n : nat) : Prop :=
   n = length ns ∨ ∃ t : nat, target_length c = Some t ∧ t <= length ns.
 
-(* The code of a unit with a call of unknown arity. *)
+(* The code of a unit with a call of unknown arity: if not tupled, it
+   has parameters; if tupled, its parameters are of one component
+   each. *)
 Definition indirect_ok : Prop :=
   ∀ (id : code_id) (c : code),
-    (id, c) ∈ codes -> code_is_tupled c = false ∧ code_params_arity c <> [].
+    (id, c) ∈ codes ->
+    if code_is_tupled c
+    then singleton_params (code_params_arity c) = true
+    else code_params_arity c <> [].
 
 (* The values [vs], in groups by the arity [a], are at the parameters
    of the witnesses that the nodes [ws] stand for. *)
@@ -5075,15 +5171,16 @@ Lemma code_facts (statics : static_env) (id : code_id) (c : code) :
                 (at_least_one_group
                    (group_by_parameter (code_params_arity c) (cd_params cd)))
                 (cd_unknown_arity_call_witnesses cd)))
+      ∧ (code_is_tupled c = true -> tupled_witness_edges G id cd)
       ∧ length (cd_params cd) = length (unarize (code_params_arity c))
       ∧ length (cd_return cd) = length (unarize (code_result_arity c)).
 Proof.
   intros Hcodes Hcode. destruct (Hcodes id c Hcode) as [Hin Hedges].
   split; [ exact Hin | ].
   destruct c as [params mc ret exn metadata body].
-  destruct Hedges as (cd & Hcd & _ & Hu & Lp & Lr & _).
+  destruct Hedges as (cd & Hcd & _ & Hu & Ht & Lp & Lr & _).
   exists cd. split; [ exact (lookup_nodup_in _ _ _ Hnd Hcd) | ].
-  split; [ exact Hu | split; [ exact Lp | exact Lr ] ].
+  split; [ exact Hu | split; [ exact Ht | split; [ exact Lp | exact Lr ] ] ].
 Qed.
 
 (* The state that a full call runs keeps the invariant, if the values
@@ -5117,7 +5214,7 @@ Proof.
     Hexn_pa.
   destruct (Hcodes id c Hcode) as [_ Hedges].
   destruct c as [params mc ret exn_k metadata cbody].
-  destruct Hedges as (cd & Hcd_in & _ & _ & Lp & Lr & Hmc & Hps & Hne
+  destruct Hedges as (cd & Hcd_in & _ & _ & _ & Lp & Lr & Hmc & Hps & Hne
                       & Hbinds & Hcounted_body & Hbody).
   destruct (Hcd cd (lookup_nodup_in _ _ _ Hnd Hcd_in))
     as (Hparams & Hclosure & Hret & Hexn).
@@ -5271,7 +5368,8 @@ Proof.
   unfold call_edges in Hedges. rewrite Hk in Hedges.
   destruct Hedges as (witness & apply_node & called_node & Hargs & Hretacc
                       & Hexnacc & Hcalled & Hused & Hcond & Happly).
-  destruct (code_facts _ _ _ Hcodes Hcode) as (_ & cd & Hcd & _ & Lp & Lr).
+  destruct (code_facts _ _ _ Hcodes Hcode)
+    as (_ & cd & Hcd & _ & _ & Lp & Lr).
   destruct (Hcds id cd Hcd) as (Hpar & Hretc & Hexnc & Hcodeid & Hasid).
   set (w := cd_known_arity_call_witness cd) in *.
   pose proof (simple_flows _ _ _ Hvars Hnoted_callee Hcallee) as Hfcallee.
@@ -5411,7 +5509,7 @@ Lemma closure_call_ok (closure : value) (m start : node)
   (∀ (id : code_id) (slots : list (value_slot * value)) (c : code),
      closure_of statics closure = Some (id, slots) ->
      lookup id (static_code statics) = Some c ->
-     length applied_arity < nparams c) ->
+     length applied_arity < nparams c ∧ code_is_tupled c = false) ->
   args_arity <> [] ->
   pending start ws vs args_arity returns exn ->
   length applied = length (unarize applied_arity)
@@ -5440,11 +5538,12 @@ Proof.
     as (id & slots & c & vs' & args_arity' & Hclosure & Hcode & _ & Hafc
         & Hcall).
   destruct (code_facts _ _ _ Hcodes Hcode)
-    as (Hin_codes & cd & Hcd & Hunk & Lp & Lr).
-  destruct (Hind id c Hin_codes) as [Htupled Hparams_ne].
+    as (Hin_codes & cd & Hcd & Hunk & _ & Lp & Lr).
+  destruct (Hjk id slots c Hclosure Hcode) as [Hjk' Htupled].
+  pose proof (Hind id c Hin_codes) as Hparams_ne.
+  rewrite Htupled in Hparams_ne.
   rewrite (arguments_for_code_not_tupled _ _ _ _ Htupled) in Hafc.
   injection Hafc as <- <-.
-  pose proof (Hjk id slots c Hclosure Hcode) as Hjk'.
   destruct (Hunk Htupled) as [Lu Hcch].
   rewrite (group_by_parameter_groups _ _ Hparams_ne) in Lu, Hcch.
   rewrite length_group_by_sizes, length_arity_sizes in Lu.
@@ -5735,6 +5834,260 @@ Proof.
       apply is_one_param_of_kind_value_eq in Hpoo. rewrite Hpoo. reflexivity.
 Qed.
 
+Lemma singleton_params_length (a : arity) :
+  singleton_params a = true -> length (unarize a) = length a.
+Proof.
+  unfold unarize. induction a as [ | [k | components] a IH]; simpl;
+    [ reflexivity | intros H; f_equal; exact (IH H) | discriminate ].
+Qed.
+
+Lemma firstn_length_app {A : Type} (l1 l2 : list A) :
+  firstn (length l1) (l1 ++ l2) = l1.
+Proof. induction l1 as [ | x l1 IH]; simpl; [ reflexivity | f_equal; exact IH ].
+Qed.
+
+Lemma skipn_length_app {A : Type} (l1 l2 : list A) :
+  skipn (length l1) (l1 ++ l2) = l2.
+Proof. induction l1 as [ | x l1 IH]; simpl; [ reflexivity | exact IH ]. Qed.
+
+(* The fields of a block of an environment with partial applications as
+   the run keeps them. *)
+Lemma block_fields_pa_ok (statics : static_env) (v : value) (tag : Z)
+    (fields : list value) :
+  pa_ok statics v -> statics_pa_ok statics ->
+  block_of statics v = Some (tag, fields) -> every (pa_ok statics) fields.
+Proof.
+  intros Hv Hst Hb. destruct v; simpl in Hb, Hv; try discriminate.
+  - destruct (lookup s (static_values statics)) as [allocated | ] eqn:E;
+      [ | discriminate ].
+    specialize (Hst s allocated E).
+    destruct allocated; try discriminate. injection Hb as <- <-. exact Hst.
+  - injection Hb as <- <-. exact Hv.
+Qed.
+
+(* The fields of a tuple: those of a block, or none. *)
+Lemma tuple_fields_block (statics : static_env) (size : nat) (tuple : value)
+    (fields : list value) :
+  tuple_fields statics size tuple = Some fields ->
+  length fields = size
+  ∧ (fields = [] ∨ block_of statics tuple = Some (0%Z, fields)).
+Proof.
+  intros H. destruct size as [ | size].
+  - injection H as <-. split; [ reflexivity | left; reflexivity ].
+  - destruct (proj1 (FlambdaTupledProofs.tuple_is_block statics (S size)
+                       tuple fields ltac:(discriminate)) H)
+      as (Hb & Hlen & _).
+    split; [ exact Hlen | right; exact Hb ].
+Qed.
+
+(* A call of a closure of tupled code: the code takes the fields of the
+   tuple, its first argument; with more arguments, it is an
+   over-application, whose result is called with the others. *)
+Lemma tupled_call_ok (callee : value) (start : node) (vs : list value)
+    (args_arity return_arity : arity) (ws returns : list node) (exn : node)
+    (return_to exn_to : cont_value) (statics : static_env) (hp : heap)
+    (shape : call_shape) (id : code_id) (slots : list (value_slot * value))
+    (c : code) :
+  indirect_ok ->
+  flows_ callee start -> pa_ok statics callee ->
+  closure_of statics callee = Some (id, slots) ->
+  lookup id (static_code statics) = Some c ->
+  code_is_tupled c = true ->
+  pending start ws vs args_arity returns exn ->
+  every (pa_ok statics) vs ->
+  cont_ok return_to returns ->
+  fits return_to returns (length (unarize return_arity)) ->
+  cont_pa_ok statics return_to ->
+  cont_ok exn_to [exn] -> cont_pa_ok statics exn_to ->
+  statics_flow_ statics -> codes_ok statics -> statics_pa_ok statics ->
+  shape_of_closure_call statics callee Indirect vs args_arity return_arity
+  = Some shape ->
+  result_ok
+    (run_call (fun partial => apply_cont_value return_to [partial] statics hp)
+       (Some shape) return_arity return_to exn_to statics hp).
+Proof.
+  intros Hind Hflows Hpa Hclosure Hcode Htupled Hpend Hvs_pa Hret Hfits
+    Hret_pa Hexn Hexn_pa Hst Hcodes Hspa Hshape.
+  destruct Hpend as (Hlen_ws & Hchain & Hargs & Hreturns & Hraises & Huses).
+  destruct (shape_of_closure_call_cases _ _ _ _ _ _ _ Hshape)
+    as (id' & slots' & c' & vs' & args' & Hclosure' & Hcode' & _ & Hafc
+        & Hcall).
+  rewrite Hclosure in Hclosure'. injection Hclosure' as <- <-.
+  rewrite Hcode in Hcode'. injection Hcode' as <-.
+  destruct (code_facts _ _ _ Hcodes Hcode)
+    as (Hin_codes & cd & Hcd & _ & Htw & Lp & Lr).
+  pose proof (Hind id c Hin_codes) as Hsingle. rewrite Htupled in Hsingle.
+  pose proof (singleton_params_length _ Hsingle) as Hsize.
+  destruct (Htw Htupled)
+    as (W & U & HWs & Hretc & Hexnc & Hcodeid & HparW & Hacc).
+  (* The arguments as the code takes them. *)
+  unfold arguments_for_code in Hafc. rewrite Htupled in Hafc.
+  unfold detuple in Hafc.
+  destruct vs as [ | tuple rest]; [ discriminate Hafc | ].
+  destruct args_arity as [ | first rest_arity]; [ discriminate Hafc | ].
+  destruct (kinds_eqb (map kind_of_value (tuple :: rest))
+              (unarize (first :: rest_arity))) eqn:Hk1;
+    [ | discriminate Hafc ].
+  destruct (kinds_eqb (unarize_component first) [Value]) eqn:Hk2;
+    [ | discriminate Hafc ].
+  cbn [negb andb] in Hafc.
+  destruct (tuple_fields statics (cardinal_unarized (code_params_arity c))
+              tuple) as [fields | ] eqn:Hfields; [ | discriminate Hafc ].
+  injection Hafc as <- <-.
+  apply kinds_eqb_eq in Hk1. apply kinds_eqb_eq in Hk2.
+  destruct (tuple_fields_block _ _ _ _ Hfields) as [Hlen_f Hblock].
+  unfold cardinal_unarized in Hlen_f. rewrite Hsize in Hlen_f.
+  assert (Hlen_rest : length rest = length (unarize rest_arity)).
+  { assert (H := f_equal (@length flambda_kind) Hk1). simpl in H.
+    rewrite length_map in H. unfold unarize in H. simpl in H.
+    rewrite length_app, Hk2 in H. simpl in H. fold (unarize rest_arity) in H.
+    lia. }
+  assert (Hsizes : arity_sizes (first :: rest_arity)
+                   = 1 :: arity_sizes rest_arity).
+  { unfold arity_sizes, unarize_per_parameter. simpl. rewrite Hk2.
+    reflexivity. }
+  destruct ws as [ | w1 ws']; [ discriminate Hlen_ws | ].
+  simpl in Hlen_ws. injection Hlen_ws as Hlen_ws.
+  (* The witness of the code. *)
+  destruct (Hcds id cd Hcd) as (_ & _ & _ & _ & Has_id).
+  assert (HW_self : may_come_from sol W W).
+  { apply (alloc_self _ _ _ Hcodeid).
+    exact (as_hs _ _ _ Hc _ (any_source_input _ _ _ Hc _ Has_id)). }
+  destruct (closure_alloc _ _ _ _ _ Hst Hflows Hclosure)
+    as (b & Hb & Hfb & Hcalled_b).
+  unfold called_by, closure_dep_facts in Hcalled_b. simpl in Hcalled_b.
+  rewrite Hcd in Hcalled_b. destruct Hcalled_b as (Hprop & _ & Hcw).
+  rewrite HWs in Hcw.
+  assert (HW : may_come_from sol W w1).
+  { exact (proj1 Hchain b W Hb (Hcw W eq_refl) HW_self). }
+  assert (Hlive : live (Some id)).
+  { exact (Huses 0 w1 W id eq_refl HW Hcodeid). }
+  (* The tuple is at [untuple_var], and its fields at the parameters. *)
+  assert (Htuple : flows_ tuple U).
+  { apply (Hargs 0 tuple 0 0 w1 W U eq_refl); [ | reflexivity | exact HW
+                                              | exact HparW ].
+    rewrite Hsizes. reflexivity. }
+  assert (Hparams : ∀ (i : nat) (x : value) (p : node),
+            nth_error fields i = Some x ->
+            nth_error (cd_params cd) i = Some p ->
+            flows_ x p).
+  { intros i x p Hx Hp. destruct Hblock as [-> | Hblock];
+      [ destruct i; discriminate Hx | ].
+    destruct (block_of_flows _ _ _ _ _ Hst Htuple Hblock)
+      as (a & Ha & _ & _ & Hfs).
+    destruct (fields_from_elim _ 0 _ i x Hfs Hx) as (from & Hcons & Hfrom).
+    refine (flows_read _ _ _ _ _ Hc a U p from _ x _ Hcons (Hacc i p Hp) Ha
+              Hfrom).
+    not_local_field. }
+  assert (Hfields_pa : every (pa_ok statics) fields).
+  { destruct Hblock as [-> | Hblock]; [ exact I | ].
+    exact (block_fields_pa_ok _ _ _ _ (proj1 Hvs_pa) Hspa Hblock). }
+  assert (Hm_closure : flows_ callee (cd_my_closure cd)).
+  { apply (flows_alias _ _ _ _ _ Hc callee _ b
+             (alias_propagate _ _ _ Hc _ _ _ Hlive Hprop)).
+    exact Hfb. }
+  assert (Hexn_code : cont_ok exn_to [cd_exn cd]).
+  { apply (cont_ok_compose exn_to [exn] [cd_exn cd] Hexn);
+      [ | left; reflexivity ].
+    intros [ | i] n' n Hn' Hn v Hv; [ | destruct i; discriminate Hn' ].
+    injection Hn' as <-. injection Hn as <-.
+    exact (Hraises 0 w1 W _ v eq_refl HW Hexnc Hv). }
+  unfold cardinal_unarized in Hcall. rewrite Hsize, <- Hlen_f in Hcall.
+  set (args' := arity_of_kinds (repeat Value (length fields)) ++ rest_arity)
+    in *.
+  assert (Hlen_args : length args' = length fields + length rest_arity).
+  { unfold args', arity_of_kinds. rewrite length_app, length_map,
+      repeat_length. reflexivity. }
+  destruct (shape_of_code_call_cases _ _ _ _ _ _ Hcall)
+    as [[Hfull ->] | [(Hover & Hkinds & Hpoo & ->)
+                     | (_ & _ & _ & Hnt & _)]];
+    [ | | rewrite Htupled in Hnt; discriminate Hnt ].
+  - (* A full call: the tuple was the only argument. *)
+    assert (rest_arity = []) as ->.
+    { destruct rest_arity; [ reflexivity | ].
+      rewrite Hlen_args, <- Hlen_f in Hfull. simpl in Hfull. lia. }
+    destruct rest as [ | v0 rest]; [ | discriminate Hlen_rest ].
+    destruct ws' as [ | w2 ws'']; [ | discriminate Hlen_ws ].
+    rewrite app_nil_r.
+    cbn [run_call].
+    destruct (call_code callee c fields args' return_arity return_to exn_to
+                statics hp) as [s' | k' vs'' hp'' | ] eqn:Hcc;
+      [ | exfalso; exact (call_code_not_exit _ _ _ _ _ _ _ _ _ _ _ _ Hcc)
+      | exact I ].
+    destruct (call_code_step _ _ _ _ _ _ _ _ _ _ Hcc)
+      as (callee_vars & _ & _ & _ & Hk3 & Hbind & ->).
+    apply (enter_code_ok id c callee fields callee_vars return_to exn_to
+             statics hp Hcode Hlive); try assumption.
+    + first [ reflexivity
+            | rewrite Hsize; first [ reflexivity | exact Hlen_f ] ].
+    + intros cd' Hcd'. rewrite Hcd in Hcd'. injection Hcd' as <-.
+      split; [ exact Hparams | split; [ exact Hm_closure | split;
+        [ | exact Hexn_code ] ] ].
+      apply (cont_ok_compose return_to returns (cd_return cd) Hret).
+      * intros i r' r Hr' Hr v Hv.
+        exact (proj1 (Hreturns w1 eq_refl) i r W r' v Hr HW (Hretc i r' Hr')
+                 Hv).
+      * destruct Hfits as [Hf | Hf]; [ left | right; exact Hf ].
+        rewrite Lr, <- Hk3, Hf. reflexivity.
+  - (* An over-application: what the code returns is called with the
+       arguments after the tuple. *)
+    cbn [run_call].
+    unfold cardinal_unarized in *. rewrite Hsize, <- Hlen_f in *.
+    rewrite firstn_length_app, skipn_length_app.
+    assert (Hskip_args : partially_apply args' (length fields) = rest_arity).
+    { unfold partially_apply, args', arity_of_kinds.
+      replace (length fields)
+        with (length (map Singleton (repeat Value (length fields)))) at 1
+        by (rewrite length_map, repeat_length; reflexivity).
+      apply skipn_length_app. }
+    rewrite Hskip_args.
+    destruct (call_code callee c fields (firstn (length fields) args')
+                (code_result_arity c)
+                (Over_application rest rest_arity return_arity return_to
+                   exn_to)
+                exn_to statics hp) as [s' | k' vs'' hp'' | ] eqn:Hcc;
+      [ | exfalso; exact (call_code_not_exit _ _ _ _ _ _ _ _ _ _ _ _ Hcc)
+      | exact I ].
+    destruct (call_code_step _ _ _ _ _ _ _ _ _ _ Hcc)
+      as (callee_vars & _ & _ & _ & _ & Hbind & ->).
+    (* The code returns one value. *)
+    unfold partial_or_over_application in Hpoo.
+    apply andb_true_iff in Hpoo as [_ Hpoo].
+    destruct (Nat.ltb_spec (length (code_params_arity c)) (length args'))
+      as [_ | Hge]; [ | lia ].
+    apply is_one_param_of_kind_value_eq in Hpoo.
+    rewrite Hpoo in Lr. simpl in Lr.
+    destruct (cd_return cd) as [ | R0 [ | R1 rr]] eqn:Ecr;
+      try discriminate Lr.
+    apply (enter_code_ok id c callee fields callee_vars
+             (Over_application rest rest_arity return_arity return_to exn_to)
+             exn_to statics hp Hcode Hlive); try assumption.
+    + first [ reflexivity
+            | rewrite Hsize; first [ reflexivity | exact Hlen_f ] ].
+    + intros cd' Hcd'. rewrite Hcd in Hcd'. injection Hcd' as <-.
+      split; [ exact Hparams | split; [ exact Hm_closure | split;
+        [ | exact Hexn_code ] ] ].
+      rewrite Ecr.
+      apply (Over_ok rest rest_arity return_arity return_to exn_to R0 R0 []
+               ws' returns exn Hind);
+        [ intros v Hv; exact Hv | | exact Hret | exact Hfits | exact Hexn ].
+      split; [ exact Hlen_ws | split; [ | split; [ | split; [ | split ] ] ] ].
+      * destruct Hchain as [_ Hchain'].
+        refine (call_chain_mono _ _ _ _ Hchain').
+        intros y Hy. exists W, R0.
+        split; [ exact HW | split; [ exact (Hretc 0 R0 eq_refl) | exact Hy ] ].
+      * pose proof (args_at_skipn _ _ _ 1 Hargs) as H.
+        rewrite Hsizes in H. exact H.
+      * intros wl Hwl. apply Hreturns.
+        rewrite <- (nth_error_skipn_last (w1 :: ws') 1) by (simpl; lia).
+        exact Hwl.
+      * intros g w W' E v Hw HW' HE Hv.
+        exact (Hraises (S g) w W' E v Hw HW' HE Hv).
+      * intros g w W' id' Hw HW' Hcodeid'.
+        exact (Huses (S g) w W' id' Hw HW' Hcodeid').
+    + apply Over_pa; [ exact (proj2 Hvs_pa) | exact Hret_pa | exact Hexn_pa ].
+Qed.
+
 (* A call of no argument of a closure of code that has parameters goes
    wrong. *)
 Lemma no_arg_call (statics : static_env) (callee : value) (vs : list value)
@@ -5748,7 +6101,10 @@ Proof.
   destruct (shape_of_closure_call_cases _ _ _ _ _ _ _ Hshape)
     as (id & slots & c & vs' & args_arity' & _ & Hcode & _ & Hafc & Hcall).
   destruct (Hcodes id c Hcode) as [Hin _].
-  destruct (Hind id c Hin) as [Htupled Hne].
+  pose proof (Hind id c Hin) as Hne.
+  destruct (code_is_tupled c) eqn:Htupled.
+  { unfold arguments_for_code in Hafc. rewrite Htupled in Hafc.
+    unfold detuple in Hafc. destruct vs; discriminate Hafc. }
   rewrite (arguments_for_code_not_tupled _ _ _ _ Htupled) in Hafc.
   injection Hafc as <- <-.
   destruct (shape_of_code_call_cases _ _ _ _ _ _ Hcall)
@@ -5804,24 +6160,35 @@ Proof.
     + intros i x g kk w W p Hx Hpos Hw HW Hp.
       exact (fields_from_elim _ 0 _ i x Hargs_ff Hx g kk w W p Hpos Hw HW Hp).
     + intros id sl c Hof Hcode.
-      destruct Hun as (id' & sl' & c' & Hof' & Hcode' & Hlt).
+      destruct Hun as (id' & sl' & c' & Hof' & Hcode' & Hlt & Hnt).
       rewrite Hof in Hof'. injection Hof' as <- <-.
-      rewrite Hcode in Hcode'. injection Hcode' as <-. exact Hlt.
+      rewrite Hcode in Hcode'. injection Hcode' as <-. auto.
     + discriminate.
     + apply Hpend. discriminate.
     + right. apply kinds_eqb_eq in Hk. rewrite <- Hk, length_map.
       reflexivity.
   - destruct args_arity as [ | a0 args_arity'].
     + exfalso. exact (no_arg_call _ _ _ _ _ Hind Hcodes Hshape).
-    + apply (closure_call_ok callee start start [] vs [] (a0 :: args_arity')
+    + destruct (shape_of_closure_call_cases _ _ _ _ _ _ _ Hshape)
+        as (id0 & slots0 & c0 & vs0 & a0' & Hclosure0 & Hcode0 & _ & _ & _).
+      destruct (code_is_tupled c0) eqn:Htupled.
+      { exact (tupled_call_ok callee start vs (a0 :: args_arity') return_arity
+                 ws returns exn return_to exn_to statics hp shape id0 slots0 c0
+                 Hind Hflows Hpa Hclosure0 Hcode0 Htupled
+                 (Hpend ltac:(discriminate)) Hvs_pa Hret Hfits Hret_pa Hexn
+                 Hexn_pa Hst Hcodes Hspa Hshape). }
+      apply (closure_call_ok callee start start [] vs [] (a0 :: args_arity')
                return_arity [] ws returns exn return_to exn_to statics hp shape
                Hind Hflows Hpa eq_refl I); try assumption.
       * intros i x g kk w W p Hx. destruct i; discriminate Hx.
       * intros y Hy. exact Hy.
-      * intros id sl c Hof Hcode. simpl.
-        destruct (Hcodes id c Hcode) as [Hin _].
-        destruct (Hind id c Hin) as [_ Hne].
-        destruct (code_params_arity c); [ contradiction | simpl; lia ].
+      * intros id sl c Hof Hcode.
+        rewrite Hclosure0 in Hof. injection Hof as <- <-.
+        rewrite Hcode0 in Hcode. injection Hcode as <-.
+        destruct (Hcodes id0 c0 Hcode0) as [Hin _].
+        pose proof (Hind id0 c0 Hin) as Hne. rewrite Htupled in Hne.
+        split; [ | exact Htupled ].
+        destruct (code_params_arity c0); [ contradiction | simpl; lia ].
       * discriminate.
       * apply Hpend. discriminate.
       * left. reflexivity.
@@ -6418,9 +6785,9 @@ Proof.
       { intros id c Hin. unfold apply_in_flow_fragment in Hfrag.
         rewrite Hkind in Hfrag. rewrite forallb_forall in Hfrag.
         specialize (Hfrag (id, c) Hin). simpl in Hfrag.
-        apply andb_true_iff in Hfrag as [Ht Hp].
-        apply negb_true_iff in Ht. apply negb_true_iff in Hp.
-        split; [ exact Ht | intros H; rewrite H in Hp; discriminate Hp ]. }
+        destruct (code_is_tupled c); [ exact Hfrag | ].
+        apply negb_true_iff in Hfrag.
+        intros H; rewrite H in Hfrag; discriminate Hfrag. }
       change (result_ok
                 (call_function callee Indirect vs (ap_args_arity ap)
                    (ap_return_arity ap)
@@ -6654,32 +7021,391 @@ Qed.
 (* The statements                                                           *)
 (* ======================================================================== *)
 
-Theorem flow_sound : flow_sound_statement.
+(* ======================================================================== *)
+(* Without the two facts that keep a tuple alive                            *)
+(* ======================================================================== *)
+
+(* What the facts of a term read of a graph is in [G']: every fact but
+   uses by other nodes than variables and reads of [Is_int] into other
+   nodes than variables, which are the two facts that keep the tuple of
+   a call of tupled code alive. *)
+Definition graph_sub (G G' : graph) : Prop :=
+  (∀ a b : node, g_alias G a b -> g_alias G' a b)
+  ∧ (∀ (x : variable) (b : node),
+       g_use G (Node_variable x) b -> g_use G' (Node_variable x) b)
+  ∧ (∀ (t : node) (f : field) (b : node),
+       g_accessor G t f b ->
+       f <> Field_is_int ∨ (∃ x : variable, t = Node_variable x) ->
+       g_accessor G' t f b)
+  ∧ (∀ (a : node) (f : field) (b : node),
+       g_constructor G a f b -> g_constructor G' a f b)
+  ∧ (∀ (a : node) (i : nat) (b : node),
+       g_argument G a i b -> g_argument G' a i b)
+  ∧ (∀ (a : node) (i : nat) (b : node),
+       g_parameter G a i b -> g_parameter G' a i b)
+  ∧ (∀ a b c : node, g_propagate G a b c -> g_propagate G' a b c)
+  ∧ (∀ a : node, g_any_usage G a -> g_any_usage G' a)
+  ∧ (∀ a : node, g_any_source G a -> g_any_source G' a).
+
+Lemma graph_sub_refl (G : graph) : graph_sub G G.
+Proof. repeat split; auto. Qed.
+
+Lemma without_keep_alive_sub (F : facts) :
+  graph_sub (graph_of_facts F)
+    (graph_of_facts (FlambdaReaperTupledSpec.without_keep_alive F)).
 Proof.
-  intros flag is_local u e T n Hlocal Hslots Hfrag Hcheck.
-  pose proof (check_closed_sound is_local _ _ Hcheck) as Hc.
+  unfold graph_sub, FlambdaReaperTupledSpec.without_keep_alive. cbn.
+  split; [ auto | split; [ | split; [ | auto 10 ] ] ].
+  - intros x b H. apply filter_In. split; [ exact H | reflexivity ].
+  - intros t f b H Hcond. apply filter_In. split; [ exact H | ].
+    destruct Hcond as [Hf | (x & ->)]; [ | reflexivity ].
+    destruct t; try reflexivity. destruct f; try reflexivity. contradiction.
+Qed.
+
+Section Mono.
+
+Variables G G' : graph.
+Hypothesis Hsub : graph_sub G G'.
+Variable noted : symbol -> Prop.
+Variable deps : closure_dep -> Prop.
+Variable cds : finite_map code_dep.
+Variable keep : value_slot -> bool.
+Variable codes : list (code_id * code).
+Variable symbols : list symbol.
+Variable slots_read : Prop.
+
+Lemma sub_alias (a b : node) : g_alias G a b -> g_alias G' a b.
+Proof. apply Hsub. Qed.
+
+Lemma sub_use (x : variable) (b : node) :
+  g_use G (Node_variable x) b -> g_use G' (Node_variable x) b.
+Proof. apply Hsub. Qed.
+
+Lemma sub_accessor (t : node) (f : field) (b : node) :
+  f <> Field_is_int -> g_accessor G t f b -> g_accessor G' t f b.
+Proof. intros Hf H. apply (proj1 (proj2 (proj2 Hsub)) t f b H). auto. Qed.
+
+Lemma sub_accessor_var (x : variable) (f : field) (b : node) :
+  g_accessor G (Node_variable x) f b -> g_accessor G' (Node_variable x) f b.
+Proof.
+  intros H. apply (proj1 (proj2 (proj2 Hsub)) _ f b H). right. eauto.
+Qed.
+
+Lemma sub_constructor (a : node) (f : field) (b : node) :
+  g_constructor G a f b -> g_constructor G' a f b.
+Proof. apply Hsub. Qed.
+
+Lemma sub_argument (a : node) (i : nat) (b : node) :
+  g_argument G a i b -> g_argument G' a i b.
+Proof. apply Hsub. Qed.
+
+Lemma sub_parameter (a : node) (i : nat) (b : node) :
+  g_parameter G a i b -> g_parameter G' a i b.
+Proof. apply Hsub. Qed.
+
+Lemma sub_propagate (a b c : node) :
+  g_propagate G a b c -> g_propagate G' a b c.
+Proof. apply Hsub. Qed.
+
+Lemma sub_any_usage (a : node) : g_any_usage G a -> g_any_usage G' a.
+Proof. apply Hsub. Qed.
+
+Lemma sub_any_source (a : node) : g_any_source G a -> g_any_source G' a.
+Proof. apply Hsub. Qed.
+
+Ltac not_is_int := discriminate.
+
+Lemma block_edges_mono (base : node) (fields : list simple) :
+  block_edges G noted base fields -> block_edges G' noted base fields.
+Proof.
+  intros (Hf & Hi & Hg & Hn).
+  split; [ intros i s H; exact (sub_constructor _ _ _ (Hf i s H)) | ].
+  split; [ exact (sub_constructor _ _ _ Hi) | ].
+  split; [ exact (sub_constructor _ _ _ Hg) | exact Hn ].
+Qed.
+
+Lemma accessor_edges_mono (x : variable) (f : field) (s : simple) :
+  accessor_edges G noted x f s -> accessor_edges G' noted x f s.
+Proof. intros [H Hn]. exact (conj (sub_accessor_var _ _ _ H) Hn). Qed.
+
+Lemma prim_edges_mono (x : variable) (p : prim) (args : list simple) :
+  prim_edges G noted x p args -> prim_edges G' noted x p args.
+Proof.
+  unfold prim_edges. destruct (prim_classified p args).
+  - unfold classified_prim_edges.
+    repeat match goal with
+           | |- context [match ?t with _ => _ end] => destruct t
+           end;
+      first [ exact (fun H => H) | apply block_edges_mono
+            | apply accessor_edges_mono
+            | intros [Hc Hn]; exact (conj (sub_constructor _ _ _ Hc) Hn) ].
+  - intros [Has Huse]. split; [ exact (sub_any_source _ Has) | ].
+    intros from Hin. exact (sub_use _ _ (Huse from Hin)).
+Qed.
+
+Lemma closure_edges_mono (b : node) (id : code_id)
+    (function_decls : list (function_slot * code_id))
+    (sites : function_slot -> node) (value_slots : list (value_slot * simple)) :
+  closure_edges G noted deps keep b id function_decls sites value_slots ->
+  closure_edges G' noted deps keep b id function_decls sites value_slots.
+Proof.
+  intros (Hdep & Hfs & Hvs). split; [ exact Hdep | split ].
+  - intros g id' Hg. exact (sub_constructor _ _ _ (Hfs g id' Hg)).
+  - intros w s Hw Hk. destruct (Hvs w s Hw Hk) as [Hc Hn].
+    exact (conj (sub_constructor _ _ _ Hc) Hn).
+Qed.
+
+Lemma named_edges_mono (x : variable) (d : named) :
+  named_edges G noted deps keep slots_read x d ->
+  named_edges G' noted deps keep slots_read x d.
+Proof.
+  destruct d as [s | p args | code vs | slot decls vs | slot closure
+                | from w closure | from to_ closure]; simpl.
+  - intros [H Hn]. exact (conj (sub_alias _ _ H) Hn).
+  - apply prim_edges_mono.
+  - auto.
+  - intros H id0 Hid0. destruct (H id0 Hid0) as (sites & Hx & Hall).
+    exists sites. split; [ exact Hx | ].
+    intros f id Hf. exact (closure_edges_mono _ _ _ _ _ (Hall f id Hf)).
+  - auto.
+  - intros (Ha & Hk & Hs). exact (conj (accessor_edges_mono _ _ _ Ha)
+                                    (conj Hk Hs)).
+  - intros (Ha & Hs). exact (conj (accessor_edges_mono _ _ _ Ha) Hs).
+Qed.
+
+Lemma static_set_edges_mono (s : symbol) (slot : function_slot)
+    (closure_symbols : list (function_slot * symbol))
+    (function_decls : list (function_slot * code_id))
+    (value_slots : list (value_slot * simple)) :
+  static_set_edges G noted deps keep symbols s slot closure_symbols
+    function_decls value_slots ->
+  static_set_edges G' noted deps keep symbols s slot closure_symbols
+    function_decls value_slots.
+Proof.
+  intros (Hb & Hdep & Hfs & Hvs).
+  split; [ exact Hb | split; [ exact Hdep | split ] ].
+  - intros g s' Hg. destruct (Hfs g s' Hg) as [Hc Ha].
+    exact (conj (sub_constructor _ _ _ Hc) Ha).
+  - intros w x Hw Hk. destruct (Hvs w x Hw Hk) as [Hc Hn].
+    exact (conj (sub_constructor _ _ _ Hc) Hn).
+Qed.
+
+Lemma known_witness_edges_mono (id : code_id) (cd : code_dep) :
+  known_witness_edges G id cd -> known_witness_edges G' id cd.
+Proof.
+  intros (Hp & Hr & He & Hc & Has).
+  split; [ intros i p H; exact (sub_parameter _ _ _ (Hp i p H)) | ].
+  split; [ intros i r H; exact (sub_constructor _ _ _ (Hr i r H)) | ].
+  split; [ exact (sub_constructor _ _ _ He) | ].
+  split; [ exact (sub_constructor _ _ _ Hc) | exact (sub_any_source _ Has) ].
+Qed.
+
+Lemma tupled_witness_edges_mono (id : code_id) (cd : code_dep) :
+  tupled_witness_edges G id cd -> tupled_witness_edges G' id cd.
+Proof.
+  intros (w & U & Heq & Hr & He & Hc & Hp & Hacc).
+  exists w, U. split; [ exact Heq | ].
+  split; [ intros i r H; exact (sub_constructor _ _ _ (Hr i r H)) | ].
+  split; [ exact (sub_constructor _ _ _ He) | ].
+  split; [ exact (sub_constructor _ _ _ Hc) | ].
+  split; [ exact (sub_parameter _ _ _ Hp) | ].
+  intros i p H. apply sub_accessor; [ not_is_int | exact (Hacc i p H) ].
+Qed.
+
+Lemma code_chain_edges_mono (id : code_id) (returns : list node) (exn : node)
+    (L : list (list node * node)) :
+  code_chain_edges G id returns exn L -> code_chain_edges G' id returns exn L.
+Proof.
+  induction L as [ | [first w] L IH]; [ auto | ].
+  intros (Hp & Hc & Hnext & HL).
+  split; [ intros k p H; exact (sub_parameter _ _ _ (Hp k p H)) | ].
+  split; [ exact (sub_constructor _ _ _ Hc) | split; [ | exact (IH HL) ] ].
+  destruct L as [ | [first' w'] L'].
+  - destruct Hnext as [He Hr]. split; [ exact (sub_constructor _ _ _ He) | ].
+    intros i r H. exact (sub_constructor _ _ _ (Hr i r H)).
+  - destruct Hnext as (v & Hv & Hvw). exists v.
+    exact (conj (sub_constructor _ _ _ Hv) (sub_constructor _ _ _ Hvw)).
+Qed.
+
+Lemma caller_chain_edges_mono (returns : list node) (exn called : node)
+    (L : list (list simple * node)) :
+  caller_chain_edges G returns exn called L ->
+  caller_chain_edges G' returns exn called L.
+Proof.
+  induction L as [ | [first w] L IH]; [ auto | ].
+  intros (Ha & He & Hc & Hnext & HL).
+  split; [ intros k s H; exact (sub_argument _ _ _ (Ha k s H)) | ].
+  split; [ apply sub_accessor; [ not_is_int | exact He ] | ].
+  split; [ apply sub_accessor; [ not_is_int | exact Hc ] | ].
+  split; [ | exact (IH HL) ].
+  destruct L as [ | [first' w'] L'].
+  - intros i r H. apply sub_accessor; [ not_is_int | exact (Hnext i r H) ].
+  - destruct Hnext as (v & Hv & Hvw). exists v.
+    split; (apply sub_accessor; [ not_is_int | assumption ]).
+Qed.
+
+Lemma cond_alias_edge_mono (ctx : option code_id) (to_ from : node) :
+  cond_alias_edge G ctx to_ from -> cond_alias_edge G' ctx to_ from.
+Proof.
+  destruct ctx; simpl; [ apply sub_propagate | apply sub_alias ].
+Qed.
+
+Lemma apply_cont_edges_mono (ce : finite_map (list node)) (ac : apply_cont) :
+  apply_cont_edges G noted ce ac -> apply_cont_edges G' noted ce ac.
+Proof.
+  intros [Ha Hn]. split; [ | exact Hn ].
+  intros params Hp p s Hin. exact (sub_alias _ _ (Ha params Hp p s Hin)).
+Qed.
+
+Lemma apply_edges_mono (ctx : option code_id) (ce : finite_map (list node))
+    (ap : apply_expr) :
+  apply_edges G noted codes ctx ce ap -> apply_edges G' noted codes ctx ce ap.
+Proof.
+  intros (Hfrag & Hnc & Hna & returns & exn & Hret & Hexn & Hcall).
+  split; [ exact Hfrag | split; [ exact Hnc | split; [ exact Hna | ] ] ].
+  exists returns, exn. split; [ exact Hret | split ].
+  - intros p params H. destruct (Hexn p params H) as (Heq & Hn & Ha).
+    split; [ exact Heq | split; [ exact Hn | ] ].
+    intros q s Hin. exact (sub_alias _ _ (Ha q s Hin)).
+  - unfold call_edges in Hcall |- *.
+    destruct (ap_call_kind ap).
+    + destruct Hcall as (witness & apply_node & called_node & Hargs & Hrets
+                         & Hexnacc & Hcalled & Hused & Hcond & Happly).
+      exists witness, apply_node, called_node.
+      split; [ intros i s H; exact (sub_argument _ _ _ (Hargs i s H)) | ].
+      split; [ intros i r H;
+               apply sub_accessor; [ not_is_int | exact (Hrets i r H) ] | ].
+      split; [ apply sub_accessor; [ not_is_int | exact Hexnacc ] | ].
+      split; [ apply sub_accessor; [ not_is_int | exact Hcalled ] | ].
+      split; [ exact (sub_any_usage _ Hused) | ].
+      split; [ exact (cond_alias_edge_mono _ _ _ Hcond) | ].
+      apply sub_accessor; [ not_is_int | exact Happly ].
+    + destruct Hcall as (ws & apply_node & called_node & Hlen & Hch & Hused
+                         & Hcond & Happly).
+      exists ws, apply_node, called_node.
+      split; [ exact Hlen | split;
+        [ exact (caller_chain_edges_mono _ _ _ _ Hch) | ] ].
+      split; [ exact (sub_any_usage _ Hused) | split ].
+      * intros w Hw. exact (cond_alias_edge_mono _ _ _ (Hcond w Hw)).
+      * apply sub_accessor; [ not_is_int | exact Happly ].
+Qed.
+
+Lemma expr_edges_mono :
+  (∀ (e : expr) (ctx : option code_id) (ce : finite_map (list node)),
+     expr_edges G noted deps cds keep codes symbols slots_read ctx ce e ->
+     expr_edges G' noted deps cds keep codes symbols slots_read ctx ce e)
+  ∧ (∀ (h : continuation_handler) (ctx : option code_id)
+       (ce : finite_map (list node)),
+       handler_edges G noted deps cds keep codes symbols slots_read ctx ce h ->
+       handler_edges G' noted deps cds keep codes symbols slots_read ctx ce h).
+Proof.
+  apply expr_handler_ind.
+  - intros x kind d body IH ctx ce [Hd Hbody]. simpl.
+    exact (conj (named_edges_mono _ _ Hd) (IH _ _ Hbody)).
+  - intros bindings body IHcode IH ctx ce [Hbindings Hbody]. simpl.
+    split; [ | exact (IH _ _ Hbody) ].
+    revert Hbindings. apply every_impl. intros b Hin Hb.
+    destruct b as [id c | id | s const]; simpl in Hb |- *.
+    + destruct Hb as [Hin_codes Hcode]. split; [ exact Hin_codes | ].
+      specialize (IHcode id c Hin).
+      destruct c as [params mc ret exn metadata cbody]. simpl in IHcode.
+      destruct Hcode as (cd & Hcd & Hkw & Hunk & Htw & Lp & Lr & Hmc & Hps
+                         & Hne & Hbinds & Hcounted & Hbody').
+      exists cd. split; [ exact Hcd | ].
+      split; [ exact (known_witness_edges_mono _ _ Hkw) | ].
+      split; [ intros Ht; destruct (Hunk Ht) as [Lu Hch];
+               exact (conj Lu (code_chain_edges_mono _ _ _ _ Hch)) | ].
+      split; [ intros Ht; exact (tupled_witness_edges_mono _ _ (Htw Ht)) | ].
+      split; [ exact Lp | split; [ exact Lr | ] ].
+      split; [ exact (sub_alias _ _ Hmc) | ].
+      split; [ intros p q H; exact (sub_alias _ _ (Hps p q H)) | ].
+      split; [ exact Hne | split; [ exact Hbinds | ] ].
+      split; [ exact Hcounted | exact (IHcode _ _ Hbody') ].
+    + exact Hb.
+    + destruct const as [ | slot syms decls vs | t fields | | | ];
+        try exact Hb.
+      * exact (static_set_edges_mono _ _ _ _ _ Hb).
+      * exact (block_edges_mono _ _ Hb).
+  - intros k h body IHh IH ctx ce [Hh Hbody]. simpl.
+    exact (conj (IHh _ _ Hh) (IH _ _ Hbody)).
+  - intros handlers body IHh IH ctx ce [Hhandlers Hbody]. simpl.
+    split; [ | exact (IH _ _ Hbody) ].
+    revert Hhandlers. apply every_impl. intros [k h] Hin Hh.
+    exact (IHh k h Hin _ _ Hh).
+  - intros ap ctx ce H. exact (apply_edges_mono _ _ _ H).
+  - intros ac ctx ce H. exact (apply_cont_edges_mono _ _ H).
+  - intros scrutinee arms ctx ce H. simpl in H |- *.
+    revert H. apply every_impl. intros [i ac] _ H.
+    exact (apply_cont_edges_mono _ _ H).
+  - intros ctx ce H. exact H.
+  - intros params metadata handler IH ctx ce H. exact (IH _ _ H).
+Qed.
+
+Lemma closure_dep_facts_mono (d : closure_dep) :
+  closure_dep_facts G cds d -> closure_dep_facts G' cds d.
+Proof.
+  unfold closure_dep_facts.
+  destruct (lookup (cld_closure_code_id d) cds) as [cd | ].
+  - intros (Hp & Hk & Hu).
+    split; [ exact (sub_propagate _ _ _ Hp) | ].
+    split; [ exact (sub_constructor _ _ _ Hk) | ].
+    intros w Hw. exact (sub_constructor _ _ _ (Hu w Hw)).
+  - intros (w & Has & Hk). exists w.
+    exact (conj (sub_any_source _ Has) (sub_constructor _ _ _ Hk)).
+Qed.
+
+End Mono.
+
+(* The statement, of every graph that has the facts that the proof reads
+   of the graph of the unit. *)
+Lemma flow_sound_gen (flag : reaper_preserve_direct_calls)
+    (is_local : field -> bool) (u : unit_interface) (e : expr) (T : tables)
+    (n : nat) (G : graph) :
+  graph_sub (graph_of_facts (traverse_unit flag u e)) G ->
+  is_local_slots_only is_local ->
+  (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+  in_flow_fragment e = true ->
+  closed is_local G (solution_of_tables T) ->
+  match run n (State e [] [] empty_static_env empty_heap) with
+  | Step s =>
+    state_flows G (solution_of_tables T) (unit_kept e) (has_call_witness G) s
+  | Exit k vs _ =>
+    exit_flows G (solution_of_tables T) (unit_kept e) (has_call_witness G) u
+      k vs
+  | Undefined => True
+  end.
+Proof.
+  intros Hsub Hlocal Hslots Hfrag Hc.
   destruct (traverse_unit_facts flag u e (∀ f : field, is_local f = false)
               Hfrag Hslots)
-    as (noted & deps & cds & He & Hconsts & Himported & _ & Hdeps & Hnd
+    as (noted & deps & cds & He0 & Hconsts0 & Himported & _ & Hdeps0 & Hnd
         & Hkeys).
-  set (G := graph_of_facts (traverse_unit flag u e)) in *.
+  set (G0 := graph_of_facts (traverse_unit flag u e)) in *.
   set (sol := solution_of_tables T) in *.
-  pose proof (static_names_edges G noted deps cds (unit_kept e) (unit_codes e)
-                (static_names symbols_of_binding e)
+  pose proof (static_names_edges G0 noted deps cds (unit_kept e)
+                (unit_codes e) (static_names symbols_of_binding e)
                 (∀ f : field, is_local f = false)) as [Hnames _].
-  destruct (Hnames e None (unit_conts u) He) as [Hsym_names Hcode_names].
+  destruct (Hnames e None (unit_conts u) He0) as [Hsym_names Hcode_names].
+  pose proof (proj1 (expr_edges_mono G0 G Hsub noted deps cds (unit_kept e)
+                       (unit_codes e) (static_names symbols_of_binding e)
+                       (∀ f : field, is_local f = false))
+                e None (unit_conts u) He0) as He.
+  pose proof (sub_any_source G0 G Hsub _ Hconsts0) as Hconsts.
+  assert (Hdeps : ∀ d : closure_dep, deps d -> closure_dep_facts G cds d).
+  { intros d Hd. exact (closure_dep_facts_mono G0 G Hsub cds d (Hdeps0 d Hd)).
+  }
   (* The code deps of the unit have the facts of their witnesses. *)
   assert (Hcds : ∀ (id : code_id) (cd : code_dep),
             lookup id cds = Some cd -> known_witness_edges G id cd).
   { intros id cd Hl.
     assert (Hid : id ∈ static_names code_ids_of_binding e).
-    { apply Hkeys. apply (in_map fst (cds) (id, cd)). exact (lookup_in _ _ _
-      Hl). }
+    { apply Hkeys. apply (in_map fst (cds) (id, cd)).
+      exact (lookup_in _ _ _ Hl). }
     destruct (Hcode_names id Hid) as (c & _ & Hcode).
     destruct c as [params mc ret exn metadata body].
     destruct Hcode as (cd' & Hin' & Hw & _).
     rewrite (lookup_nodup_in _ _ _ Hnd Hin') in Hl. injection Hl as <-.
-    exact Hw. }
+    exact (known_witness_edges_mono G0 G Hsub _ _ Hw). }
   (* The symbols of the unit are allocations of their own. *)
   assert (Hunit_syms : ∀ s : symbol,
             among s (static_names symbols_of_binding e) = true ->
@@ -6693,7 +7419,8 @@ Proof.
       exact (called_alloc is_local G sol cds Hc Hcds _ _
                (Hdeps _ (Hdep id eq_refl))).
     - destruct Hb as (_ & His & _).
-      exact (alloc_self is_local G sol Hc _ _ _ His
+      exact (alloc_self is_local G sol Hc _ _ _
+               (sub_constructor G0 G Hsub _ _ _ His)
                (as_hs _ _ _ Hc _ (any_source_input _ _ _ Hc _ Hconsts))). }
   assert (Hsyms : ∀ s : symbol,
             noted s -> may_come_from sol (Node_symbol s) (Node_symbol s)).
@@ -6701,7 +7428,8 @@ Proof.
     destruct (among s (static_names symbols_of_binding e)) eqn:Hunit;
       [ exact (Hunit_syms s Hunit) | ].
     apply (may_come_from_self is_local G sol _ Hc).
-    exact (any_source_input _ _ _ Hc _ (Himported s Hs Hunit)). }
+    exact (any_source_input _ _ _ Hc _
+             (sub_any_source G0 G Hsub _ (Himported s Hs Hunit))). }
   pose proof (run_flow_invariant is_local G sol noted deps cds (unit_kept e)
                 (unit_codes e) (static_names symbols_of_binding e) u Hc Hlocal
                 Hconsts Hsyms Hunit_syms Hdeps Hnd Hcds n _
@@ -6718,6 +7446,21 @@ Proof.
     apply (flows_weaken _ _ _ (called_by G cds)); [ apply called_witness | ].
     exact (Hrun i v p Hv Hp).
   - exact I.
+Qed.
+
+Theorem flow_sound : flow_sound_statement.
+Proof.
+  intros flag is_local u e T n Hlocal Hslots Hfrag Hcheck.
+  exact (flow_sound_gen flag is_local u e T n _ (graph_sub_refl _) Hlocal
+           Hslots Hfrag (check_closed_sound is_local _ _ Hcheck)).
+Qed.
+
+Theorem flow_sound_without_keep_alive :
+  flow_sound_without_keep_alive_statement.
+Proof.
+  intros flag is_local u e T n Hlocal Hslots Hfrag Hcheck.
+  exact (flow_sound_gen flag is_local u e T n _ (without_keep_alive_sub _)
+           Hlocal Hslots Hfrag (check_closed_sound is_local _ _ Hcheck)).
 Qed.
 
 Theorem unit_cont_nodes_used : unit_cont_nodes_used_statement.
@@ -6779,4 +7522,22 @@ Proof.
   split; [ vm_compute; reflexivity | ].
   split; [ apply all_fail; vm_compute; reflexivity | ].
   split; vm_compute; reflexivity.
+Qed.
+
+Theorem tupled_reverted_analysis_sound :
+  tupled_reverted_analysis_sound_statement.
+Proof.
+  assert (Hfrag : in_flow_fragment FlambdaReaperTupledSpec.tupled_unit = true)
+    by (vm_compute; reflexivity).
+  split; [ exact Hfrag | ]. cbv zeta. intros n.
+  destruct (FlambdaReaperTupledProofs.without_keep_alive_solution_passes
+              FlambdaReaperTupledSpec.no_local_fields
+              (or_introl eq_refl)) as [Hcheck _].
+  exact (flow_sound_without_keep_alive Auto
+           FlambdaReaperTupledSpec.no_local_fields
+           FlambdaReaperTupledSpec.interface FlambdaReaperTupledSpec.tupled_unit
+           FlambdaReaperTupledSpec.without_keep_alive_solution n
+           ltac:(intros f H; discriminate H) (or_introl (fun f => eq_refl))
+           Hfrag
+           Hcheck).
 Qed.

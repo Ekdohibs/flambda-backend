@@ -128,8 +128,9 @@
    partial applications and over-applications, which calls of unknown
    arity make. The code that a direct call names, if the unit binds it,
    is not tupled and has as many parameters as the call has arguments
-   (S7's hypothesis); a unit with an indirect call has no tupled code,
-   and no code without parameters. The body of code binds nothing
+   (S7's hypothesis); in a unit with an indirect call, code that is not
+   tupled has parameters, and tupled code has parameters of one
+   component each. The body of code binds nothing
    static, its two continuations differ, and it applies only
    continuations in scope, each to as many values as it has parameters,
    the return continuation of the code to as many as the code has
@@ -138,14 +139,38 @@
    symbols of a static set are symbols that the unit binds, and its
    slot is among its function slots; the code ids that the unit binds
    are distinct. Not in it: the older forms of sets of closures, and
-   indirect calls in a unit with tupled code, which the traversal reads
-   by a witness of its own ([create_unknown_arity_tupled_call_witnesses])
-   that is not done here.
+   direct calls of tupled code (the compiler's are in the convention of
+   the code, which the model has no call kind for).
 
-   Code without parameters is not in the fragment where a call may be
-   of unknown arity: the traversal gives it one witness, as if for one
-   group of none ([at_least_one_group]; a fatal error in the OCaml),
-   while the machine runs a call of it with arguments as an
+   Tupled code. Every call of a closure of tupled code gives it one
+   argument, the tuple, whose fields the machine reads, one for each
+   parameter (FlambdaSemanticsSpec.arguments_for_code, [tuple_fields]);
+   such a call never makes a partial application. The traversal gives
+   tupled code one witness of unknown arity, whose one parameter
+   ([untuple_var]) has the parameters of the code read off its fields
+   ([create_unknown_arity_tupled_call_witnesses]), and two facts more,
+   which keep the tuple alive: a read of [Is_int] of [untuple_var] and a
+   use of it by the code id. Those two only add uses, and the proof of
+   the statement does not read them: it holds of the graph without
+   them too ([flow_sound_without_keep_alive_statement], with
+   FlambdaReaperTupledSpec.without_keep_alive). So in
+   FlambdaReaperTupledSpec.v, where the reaper with the two facts
+   removed is unsound, what goes wrong is the rebuild, not the
+   analysis: on that unit, the solution of the graph without the two
+   facts has every value of the run where it says
+   ([tupled_reverted_analysis_sound_statement]), and the rebuild with
+   it gives the code poison for the tuple, which has no fields. The
+   analysis says where values may be; that a tuple must stay a block of
+   as many fields as the code has parameters, whatever is in them, is a
+   need of the entry point of tupled code, which reads every field, and
+   it is the two facts that tell the rebuild so.
+
+   Code without parameters that is not tupled is not in the fragment
+   where a call may be of unknown arity (tupled code without parameters
+   is: its one witness takes the tuple, which every call gives it). The
+   traversal gives such code one witness, as if for one group of none
+   ([at_least_one_group]; a fatal error in the OCaml), while the
+   machine runs a call of it with arguments as an
    over-application, all the arguments going to what the code returns.
    The graph gives the first group of arguments to the one witness of
    the code, which has no parameter, and reads the result of the call
@@ -200,6 +225,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaSemanticsSpec FlambdaWellFormedSpec FlambdaReaperGraphSpec
   FlambdaReaperTraversal FlambdaReaperSolution FlambdaReaperSolutionSpec
   FlambdaReaperRebuild.
+From OxCamlFlambda2 Require FlambdaReaperTupledSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -281,9 +307,20 @@ Definition named_in_flow_fragment (defining_expr : named) : bool :=
   | Set_of_closures _ _ | Project_value_slot _ _ => false
   end.
 
+(* An arity of parameters of one component each. *)
+Definition singleton_params (a : arity) : bool :=
+  forallb
+    (fun component =>
+       match component with
+       | Singleton _ => true
+       | Unboxed_product _ => false
+       end)
+    a.
+
 (* A direct call of code that, if the unit binds it, is not tupled and
    has as many parameters as the call has arguments; an indirect call in
-   a unit whose code is not tupled and has parameters. *)
+   a unit whose code, if not tupled, has parameters, and if tupled, has
+   parameters of one component each. *)
 Definition apply_in_flow_fragment (codes : list (code_id * code))
     (ap : apply_expr) : bool :=
   match ap_call_kind ap with
@@ -298,8 +335,9 @@ Definition apply_in_flow_fragment (codes : list (code_id * code))
   | Indirect =>
     forallb
       (fun '(_, c) =>
-         negb (code_is_tupled c)
-         && negb (Nat.eqb (length (code_params_arity c)) 0))
+         if code_is_tupled c
+         then singleton_params (code_params_arity c)
+         else negb (Nat.eqb (length (code_params_arity c)) 0))
       codes
   end.
 
@@ -682,6 +720,32 @@ Definition flow_sound_statement : Prop :=
       exit_flows (graph_of_facts (traverse_unit flag u e))
         (solution_of_tables T) (unit_kept e)
         (has_call_witness (graph_of_facts (traverse_unit flag u e))) u k vs
+    | Undefined => True
+    end.
+
+(* The same, of the graph without the two facts that keep the tuple of a
+   call of tupled code alive (FlambdaReaperTupledSpec.without_keep_alive):
+   the facts that the statement rests on are in it. *)
+Definition flow_sound_without_keep_alive_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (n : nat),
+    is_local_slots_only is_local ->
+    (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+    in_flow_fragment e = true ->
+    check_closed is_local
+      (FlambdaReaperTupledSpec.without_keep_alive (traverse_unit flag u e)) T
+    = true ->
+    let G :=
+      graph_of_facts
+        (FlambdaReaperTupledSpec.without_keep_alive (traverse_unit flag u e))
+    in
+    match run n (State e [] [] empty_static_env empty_heap) with
+    | Step s =>
+      state_flows G (solution_of_tables T) (unit_kept e)
+        (has_call_witness G) s
+    | Exit k vs _ =>
+      exit_flows G (solution_of_tables T) (unit_kept e) (has_call_witness G)
+        u k vs
     | Undefined => True
     end.
 
@@ -1195,3 +1259,35 @@ Definition local_slot_counterexample_statement : Prop :=
             LocalSlotCounterexample.unit_expr)
          [] [] empty_static_env empty_heap)
     = Undefined.
+
+(* The unit of FlambdaReaperTupledSpec.v, where the reaper with the two
+   facts that keep a tuple alive removed is unsound: it calls a closure
+   of tupled code at unknown arity with a pair of which the code uses
+   nothing. It is in the fragment, and the solution of its graph
+   without the two facts, which passes the check
+   (FlambdaReaperTupledSpec.without_keep_alive_solution_passes_statement),
+   has every value of its run where it says; yet the unit rebuilt with
+   that solution goes wrong
+   (FlambdaReaperTupledSpec.without_keep_alive_rebuild_goes_wrong_statement).
+   So the analysis is sound without the two facts, and the unsoundness
+   is in the rebuild, which makes poison of the pair. *)
+Definition tupled_reverted_analysis_sound_statement : Prop :=
+  in_flow_fragment FlambdaReaperTupledSpec.tupled_unit = true
+  ∧ let G := graph_of_facts FlambdaReaperTupledSpec.without_keep_alive_graph
+    in
+    let sol :=
+      solution_of_tables FlambdaReaperTupledSpec.without_keep_alive_solution
+    in
+    let kept := unit_kept FlambdaReaperTupledSpec.tupled_unit in
+    ∀ n : nat,
+      match
+        run n
+          (FlambdaReaperTupledSpec.on_its_own
+             FlambdaReaperTupledSpec.tupled_unit)
+      with
+      | Step s => state_flows G sol kept (has_call_witness G) s
+      | Exit k vs _ =>
+        exit_flows G sol kept (has_call_witness G)
+          FlambdaReaperTupledSpec.interface k vs
+      | Undefined => True
+      end.
