@@ -2200,16 +2200,19 @@ Hypothesis Hcode_id_of_witness :
 
 Abbreviation slots := (∀ f : field, is_local f = false).
 Abbreviation called := (called_by G cds).
-Abbreviation flows_ := (flows G sol keep called).
-Abbreviation env_flows_ := (env_flows G sol keep called).
-Abbreviation statics_flow_ := (statics_flow G sol keep called).
+(* The first run of the statements here makes no cell, and has no
+   location. *)
+Abbreviation no_loc := (fun _ : location => @None node).
+Abbreviation flows_ := (flows G sol keep called no_loc).
+Abbreviation env_flows_ := (env_flows G sol keep called no_loc).
+Abbreviation statics_flow_ := (statics_flow G sol keep called no_loc).
 Abbreviation edges :=
-  (expr_edges G noted deps cds keep codes symbols slots).
+  (expr_edges G noted deps cds keep codes symbols slots False).
 Abbreviation handler_edges_ :=
-  (handler_edges G noted deps cds keep codes symbols slots).
+  (handler_edges G noted deps cds keep codes symbols slots False).
 Abbreviation binding_edges_ :=
-  (binding_edges G noted deps cds keep codes symbols slots).
-Abbreviation named_edges_ := (named_edges G noted deps keep slots).
+  (binding_edges G noted deps cds keep codes symbols slots False).
+Abbreviation named_edges_ := (named_edges G noted deps keep slots False).
 Abbreviation as_ n := (s_any_source sol n = true).
 Abbreviation au n := (s_any_usage sol n = true).
 Abbreviation hs n := (s_has_source sol n = true).
@@ -3091,7 +3094,8 @@ Proof.
   destruct v1 as [c | | | | | | | | ]; try discriminate Hev.
   destruct (is_number_of_kind bn c) eqn:Hk; [ | discriminate Hev ].
   injection Hev as <-.
-  pose proof (simple_flows is_local G sol noted cds keep Hc Hconsts Hsyms _ _ _
+  pose proof (simple_flows is_local G sol noted cds keep no_loc Hc Hconsts
+      Hsyms _ _ _
                 Hvars Hnoted Hs1) as Hflows1.
   assert (Hself : may_come_from sol (Node_variable x) (Node_variable x)).
   { exact (alloc_self is_local G sol Hc _ _ _ Hcons
@@ -3503,9 +3507,10 @@ Qed.
    value is a constant, of a simple or of the identity, the same in the
    two runs. *)
 Lemma region_rel (en : rebuild_env) (vars vars' : env)
-    (statics statics' : static_env) (x : variable) (d : named) (v : value) :
+    (statics statics' : static_env) (x : variable) (d : named) (v : value)
+    {ctx : option code_id} :
   env_ok (env_kinds en) vars vars' ->
-  named_closure_free d = true -> named_edges_ x d ->
+  named_closure_free d = true -> named_edges_ ctx x d ->
   eval_named statics vars d = Some v ->
   kind_of_value v = Region ∨ kind_of_value v = Rec_info ->
   flows_ v (Node_variable x) ->
@@ -3590,12 +3595,13 @@ Qed.
    function slot of a closure, of the same set in the two runs; a value
    slot used, kept by the rebuild. *)
 Lemma closure_named_rel (en : rebuild_env) (vars vars' : env)
-    (statics statics' : static_env) (x : variable) (d : named) (v : value) :
+    (statics statics' : static_env) (x : variable) (d : named) (v : value)
+    {ctx : option code_id} :
   env_ok (env_kinds en) vars vars' ->
   statics_rel statics statics' -> env_flows_ vars -> statics_flow_ statics ->
   named_no_code (kind_of_value v) d = true -> named_plain d = true ->
   named_closure_free d = false ->
-  named_edges_ x d ->
+  named_edges_ ctx x d ->
   eval_named statics vars d = Some v ->
   is_var_used sol x (kind_of_value v) = true ->
   ∃ v' : value,
@@ -3676,7 +3682,8 @@ Proof.
     destruct Hedges as ((Hacc & Hnoted) & Hslots).
     cbn [eval_named rebuild_named] in Hev |- *.
     destruct (eval_simple vars c) as [vc | ] eqn:Hvc; [ | discriminate Hev ].
-    pose proof (simple_flows is_local G sol noted cds keep Hc Hconsts Hsyms _ _
+    pose proof (simple_flows is_local G sol noted cds keep no_loc Hc Hconsts
+        Hsyms _ _
                   _ Hvars Hnoted Hvc) as Hfc.
     destruct (rewrite_simple_eval en vars vars' c vc Henv Hnoted Hvc)
       as (vc' & Hs' & _ & Hkept).
@@ -3739,11 +3746,12 @@ Qed.
 
 (* The value of a [Let] that the rebuild keeps, in the second run. *)
 Lemma named_rel (en : rebuild_env) (vars vars' : env)
-    (statics statics' : static_env) (x : variable) (d : named) (v : value) :
+    (statics statics' : static_env) (x : variable) (d : named) (v : value)
+    {ctx : option code_id} :
   env_ok (env_kinds en) vars vars' ->
   statics_rel statics statics' -> env_flows_ vars -> statics_flow_ statics ->
   named_checked exact (kind_of_value v) d = true -> named_plain d = true ->
-  named_edges_ x d ->
+  named_edges_ ctx x d ->
   eval_named statics vars d = Some v ->
   flows_ v (Node_variable x) ->
   is_var_used sol x (kind_of_value v) = true ->
@@ -4898,8 +4906,9 @@ Proof.
   intros Hvars Hnoted Hvs. apply not_true_iff_false. intros Hex.
   apply existsb_exists in Hex as (s & Hin & Hno).
   destruct (eval_simples_member vars args vs s Hvs Hin) as (w & Hw).
-  pose proof (flows_hs is_local G sol keep called Hc _ _
-                (simple_flows is_local G sol noted cds keep Hc Hconsts Hsyms _ _
+  pose proof (flows_hs is_local G sol keep called no_loc Hc _ _
+                (simple_flows is_local G sol noted cds keep no_loc Hc Hconsts
+                    Hsyms _ _
                    _ Hvars (Hnoted s Hin) Hw)) as Hhs.
   destruct s; simpl in Hno, Hhs; try discriminate Hno;
     rewrite Hhs in Hno; discriminate Hno.
@@ -4937,7 +4946,8 @@ Proof.
   destruct (bind_params_bound params vs vars hv x Hbind
               (or_introl (with_kinds_in _ _ _ _ Hin)))
     as (w & Hw).
-  pose proof (flows_hs is_local G sol keep called Hc _ _ (Hhv x w Hw)) as Hhs.
+  pose proof (flows_hs is_local G sol keep called no_loc Hc _ _ (Hhv x w Hw))
+      as Hhs.
   unfold is_dead_var in Hdead. rewrite Hhs in Hdead.
   destruct kind; discriminate Hdead.
 Qed.
@@ -5526,7 +5536,8 @@ Definition pending_ok (en : rebuild_env) (vars vars' : env) (e : expr)
    the continuations named and the static environments are related; the
    heaps are the same; and the first expression is as the unit asks. *)
 Definition related (s t : state) : Prop :=
-  flow_invariant is_local G sol noted deps cds keep codes symbols u s
+  flow_invariant is_local G sol noted deps cds keep codes symbols u False
+    no_loc s
   ∧ ∃ (ctx : option code_id) (en : rebuild_env)
       (ce : finite_map (list node)) (rets : finite_map (list flambda_kind)),
       edges ctx ce (state_expr s)
@@ -5748,9 +5759,9 @@ Ltac related_intro :=
   intros [Hflow (ctx & en & ce & rets & He & Ht & Henv & Hconts & Hst & Hheap
                  & Hok & Hpend)];
   pose proof (step_flow_invariant is_local G sol noted deps cds keep codes
-                symbols u Hc Hlocal Hconsts Hsyms Hunit_syms Hdeps Hnd Hcds _
-                Hflow) as Hflow';
-  pose proof (flow_invariant_flows _ _ _ _ _ _ _ _ _ _ _ Hflow)
+                symbols u False no_loc Hc Hlocal Hconsts Hsyms Hunit_syms Hdeps
+                Hnd Hcds _ (fun H => H) (fun _ => eq_refl) Hflow) as Hflow';
+  pose proof (flow_invariant_flows _ _ _ _ _ _ _ _ _ _ _ _ _ Hflow)
     as (Hvars & _ & Hsflow);
   simpl_state; simpl in He.
 
@@ -5843,12 +5854,13 @@ Proof.
   destruct (Hothers o (or_introl eq_refl)) as (id1 & Hl1).
   assert (Hfy : flows_ (Value_closure_of_set o decls vs) (Node_variable y)).
   { destruct (Hall slot id0 Hslot) as (_ & _ & Hfs & _).
-    apply (flows_read is_local G sol keep called Hc _ _ _ _ _ _ (Hslots _)
+    apply (flows_read is_local G sol keep called no_loc Hc _ _ _ _ _ _ (Hslots
+        _)
              (Hfs o id1 Hl1) Hacc Hn).
     simpl. exists sites.
     split; [ exact (proj1 (Hall o id1 Hl1)) | exact Hall ]. }
   unfold is_dead_var.
-  rewrite (flows_hs is_local G sol keep called Hc _ _ Hfy). simpl.
+  rewrite (flows_hs is_local G sol keep called no_loc Hc _ _ Hfy). simpl.
   exact (IH ctx ce body (fun o' Hin => Hothers o' (or_intror Hin)) Hbody).
 Qed.
 
@@ -5991,7 +6003,7 @@ Proof.
              d = Prim p args -> eval_simples vars args = Some vs ->
              Value_location l ∉ vs)
     by (intros p args vs l _ Hvs; eapply env_flows_no_location;
-        [ exact Hvars | exact Hvs ]).
+        [ reflexivity | exact Hvars | exact Hvs ]).
   unfold answered.
   rewrite (step_let_eval _ _ _ _ _ _ _ _ _ Hnoheap Hnoloc) in Hflow' |- *.
   destruct (eval_named statics vars d) as [v | ] eqn:Hev; [ | exact I ].
@@ -6004,11 +6016,12 @@ Proof.
   destruct (kind_eqb (kind_of_value v) kind) eqn:Hkind; [ | exact I ].
   apply kind_eqb_eq in Hkind. subst kind.
   assert (Hflows : flows_ v (Node_variable x)).
-  { destruct (flow_invariant_flows _ _ _ _ _ _ _ _ _ _ _ Hflow')
+  { destruct (flow_invariant_flows _ _ _ _ _ _ _ _ _ _ _ _ _ Hflow')
       as [Hvars' _].
     apply Hvars'. simpl. rewrite Pos.eqb_refl. reflexivity. }
   assert (Hnotdead : is_dead_var sol x (kind_of_value v) = false).
-  { pose proof (flows_hs is_local G sol keep called Hc _ _ Hflows) as Hhs.
+  { pose proof (flows_hs is_local G sol keep called no_loc Hc _ _ Hflows) as
+      Hhs.
     unfold is_dead_var. rewrite Hhs.
     destruct (kind_of_value v); reflexivity. }
   destruct (pending_let en vars vars' x (kind_of_value v) d body Hpend)
@@ -6689,7 +6702,8 @@ Lemma handler_entered (mask : list bool) (c c'' : cont_value)
      rel v (Node_variable p) v') ->
   match apply_cont_value c vs statics hp rcd with
   | Step s' =>
-    flow_invariant is_local G sol noted deps cds keep codes symbols u s' ->
+    flow_invariant is_local G sol noted deps cds keep codes symbols u False
+    no_loc s' ->
     map kind_of_value vs = cont_kinds c
     ∧ ∃ t' : state,
         apply_cont_value c'' (filter_kept mask vs') statics' hp rcd' = Step t'
@@ -6714,7 +6728,7 @@ Proof.
     assert (Hlen_h : length params = length (hm_params_kinds metadata))
       by (rewrite <- (bind_params_length _ _ _ _ Hbind), <- Hkb, length_map;
           reflexivity);
-    destruct (flow_invariant_flows _ _ _ _ _ _ _ _ _ _ _ Hflow')
+    destruct (flow_invariant_flows _ _ _ _ _ _ _ _ _ _ _ _ _ Hflow')
       as [Hhv _];
     simpl_state;
     pose proof (params_not_dead params (hm_params_kinds metadata) vs vars1 hv
@@ -7743,8 +7757,9 @@ Lemma simple_not_dead (en : rebuild_env) (vars vars' : env) (s : simple)
   simple_is_dead sol en s = false.
 Proof.
   intros Hvars Hnoted Hs.
-  pose proof (flows_hs is_local G sol keep called Hc _ _
-                (simple_flows is_local G sol noted cds keep Hc Hconsts Hsyms _
+  pose proof (flows_hs is_local G sol keep called no_loc Hc _ _
+                (simple_flows is_local G sol noted cds keep no_loc Hc Hconsts
+                    Hsyms _
                    _ _ Hvars Hnoted Hs)) as Hhs.
   destruct s as [x | sym | c]; simpl in Hhs |- *; [ | rewrite Hhs; reflexivity
     | reflexivity ].
@@ -7881,7 +7896,7 @@ Proof.
   destruct (bind_params_bound params vs [(mc, callee)] hv mc Hbind)
     as (w & Hw);
     [ right; exists callee; simpl; rewrite Pos.eqb_refl; reflexivity | ].
-  pose proof (flows_hs is_local G sol keep called Hc _ _ (Hhv mc w Hw))
+  pose proof (flows_hs is_local G sol keep called no_loc Hc _ _ (Hhv mc w Hw))
     as Hhs.
   unfold is_dead_var. rewrite Hhs. reflexivity.
 Qed.
@@ -7990,7 +8005,7 @@ Proof.
   destruct (bind_params_bound params vs [(mc, callee)] hv mc Hbind)
     as (w & Hw);
     [ right; exists callee; simpl; rewrite Pos.eqb_refl; reflexivity | ].
-  pose proof (flows_hs is_local G sol keep called Hc _ _ (Hhv mc w Hw))
+  pose proof (flows_hs is_local G sol keep called no_loc Hc _ _ (Hhv mc w Hw))
     as Hhs.
   unfold is_dead_var. rewrite Hhs. reflexivity.
 Qed.
@@ -9045,7 +9060,7 @@ Lemma indirect_call_step (ap : apply_expr) (vars : env) (K : cont_env)
      (id, c) ∈ codes ->
      code_is_tupled c = false
      ∧ length (code_params_arity c) = length (ap_args_arity ap)) ->
-  codes_ok is_local G noted deps cds keep codes symbols statics ->
+  codes_ok is_local G noted deps cds keep codes symbols False statics ->
   (∀ callee : value,
      eval_simple vars (ap_callee ap) = Some callee ->
      partial_application_of callee = None) ->
@@ -9150,7 +9165,8 @@ Lemma code_entered (id : code_id) (params : list variable) (mc : variable)
     (callee_vars callee_vars' : env) (rt rt' et et' : cont_value)
     (statics statics' : static_env) (hp : heap) (rcd rcd' : read_record) :
   unchanged id (Code params mc ret exn_k md cbody) ->
-  flow_invariant is_local G sol noted deps cds keep codes symbols u
+  flow_invariant is_local G sol noted deps cds keep codes symbols u False
+    no_loc
     (State cbody callee_vars [(ret, rt); (exn_k, et)] statics hp rcd) ->
   statics_rel statics statics' ->
   scrutinees_used G (Some id) cbody ->
@@ -9178,7 +9194,7 @@ Proof.
   intros Hun Hflow' Hst Hscr_c Hcf_c Hraises_c Hclosed_c Hkinded_c Hfresh_c
     Hne Hcounted Hbody Lr Hkp Hbind Hok' Hlive' Hway_ret Hway_exn'.
   assert (Hheap : hp = hp) by reflexivity.
-  pose proof (flow_invariant_flows _ _ _ _ _ _ _ _ _ _ _ Hflow')
+  pose proof (flow_invariant_flows _ _ _ _ _ _ _ _ _ _ _ _ _ Hflow')
     as (Hcvars & _).
   simpl_state.
   set (en' := bind_variables FlambdaReaperRebuild.empty_env
@@ -9263,7 +9279,8 @@ Lemma code_entered_cc (id : code_id) (params : list variable) (mc : variable)
     (callee_vars callee_vars' : env) (rt rt' et et' : cont_value)
     (statics statics' : static_env) (hp : heap) (rcd rcd' : read_record) :
   changing id (Code params mc ret exn_k md cbody) pd rd ->
-  flow_invariant is_local G sol noted deps cds keep codes symbols u
+  flow_invariant is_local G sol noted deps cds keep codes symbols u False
+    no_loc
     (State cbody callee_vars [(ret, rt); (exn_k, et)] statics hp rcd) ->
   statics_rel statics statics' ->
   scrutinees_used G (Some id) cbody ->
@@ -9298,7 +9315,7 @@ Proof.
     Hraise Hrc Hne Hcounted Hbody Lr Hkp Hbind Hok' Hlive' Lrd Hret
     Hway_exn'.
   assert (Hheap : hp = hp) by reflexivity.
-  pose proof (flow_invariant_flows _ _ _ _ _ _ _ _ _ _ _ Hflow')
+  pose proof (flow_invariant_flows _ _ _ _ _ _ _ _ _ _ _ _ _ Hflow')
     as (Hcvars & _).
   simpl_state.
   set (en' := bind_variables
@@ -9409,7 +9426,8 @@ Lemma code_entered_ret (id : code_id) (params : list variable) (mc : variable)
     (callee_vars callee_vars' : env) (rt rt' et et' : cont_value)
     (statics statics' : static_env) (hp : heap) (rcd rcd' : read_record) :
   unchanged id (Code params mc ret exn_k md cbody) ->
-  flow_invariant is_local G sol noted deps cds keep codes symbols u
+  flow_invariant is_local G sol noted deps cds keep codes symbols u False
+    no_loc
     (State cbody callee_vars [(ret, rt); (exn_k, et)] statics hp rcd) ->
   statics_rel statics statics' ->
   scrutinees_used G (Some id) cbody ->
@@ -9445,7 +9463,7 @@ Proof.
     Hraise Hrc Hne Hcounted Hbody Lr Hkp Hbind Hok' Hlive' Hret
     Hway_exn'.
   assert (Hheap : hp = hp) by reflexivity.
-  pose proof (flow_invariant_flows _ _ _ _ _ _ _ _ _ _ _ Hflow')
+  pose proof (flow_invariant_flows _ _ _ _ _ _ _ _ _ _ _ _ _ Hflow')
     as (Hcvars & _).
   simpl_state.
   set (en' := bind_variables FlambdaReaperRebuild.empty_env
@@ -9602,7 +9620,8 @@ Lemma call_entered (ap : apply_expr) (vars vars' : env)
   eval_simples vars' (map (rewrite_simple sol en) (exn_extra_simples ap))
   = Some extra' ->
   map kind_of_value extra' = map kind_of_value extra ->
-  flow_invariant is_local G sol noted deps cds keep codes symbols u
+  flow_invariant is_local G sol noted deps cds keep codes symbols u False
+    no_loc
     (State cbody callee_vars
        [(ret, resolve (ap_continuation ap) conts);
         (exn_k,
@@ -9793,7 +9812,7 @@ Proof.
     - exact Hk2b.
     - exact Hk3b.
     - exact Hbind'. }
-  pose proof (flow_invariant_flows _ _ _ _ _ _ _ _ _ _ _ Hflow')
+  pose proof (flow_invariant_flows _ _ _ _ _ _ _ _ _ _ _ _ _ Hflow')
     as (Hcvars & _).
   simpl_state.
   set (en' := bind_variables FlambdaReaperRebuild.empty_env
@@ -10146,7 +10165,8 @@ Lemma call_entered_cc (ap : apply_expr) (vars vars' : env)
   eval_simples vars' (map (rewrite_simple sol en) (exn_extra_simples ap))
   = Some extra' ->
   map kind_of_value extra' = map kind_of_value extra ->
-  flow_invariant is_local G sol noted deps cds keep codes symbols u
+  flow_invariant is_local G sol noted deps cds keep codes symbols u False
+    no_loc
     (State cbody callee_vars
        [(ret, resolve (ap_continuation ap) conts);
         (exn_k,
@@ -10354,7 +10374,7 @@ Proof.
       rewrite Hpd. symmetry.
       apply kept_kinds_decisions_of. exact Lp.
     - exact Hbind'. }
-  pose proof (flow_invariant_flows _ _ _ _ _ _ _ _ _ _ _ Hflow')
+  pose proof (flow_invariant_flows _ _ _ _ _ _ _ _ _ _ _ _ _ Hflow')
     as (Hcvars & _).
   simpl_state.
   set (en' := bind_variables FlambdaReaperRebuild.empty_env
@@ -10696,7 +10716,8 @@ Proof.
   destruct Hcall as (witness & apply_node & called_node & Hargs & Hretacc
                      & Hexnacc & Hcalled & Hused & Hcond & Happly).
   pose proof Hflow as (ctx0 & ce0 & _ & _ & _ & _ & _ & _ & Hcodes & _).
-  pose proof (call_step is_local G noted deps cds keep codes symbols ap vars
+  pose proof (call_step is_local G noted deps cds keep codes symbols False ap
+      vars
                 conts statics hp rcd id Hkind Hfrag_ap Hcodes) as Hcs.
   unfold answered. revert Hflow' Hcs.
   destruct (step (State (Apply ap) vars conts statics hp rcd))
@@ -10737,7 +10758,7 @@ Proof.
   destruct (rel_closure_of statics statics' callee callee' _ id slots Hst
               Hrel_c Hhu_callee Hclosure)
     as (slots' & Hclosure').
-  destruct (code_facts is_local G noted deps cds keep codes symbols Hnd
+  destruct (code_facts is_local G noted deps cds keep codes symbols False Hnd
               statics id c Hcodes Hcode)
     as (Hin_codes & cd & Hcd & _ & _ & Lp & Lr).
   destruct (Hcds id cd Hcd) as (Hpar & Hretc & Hexnc & Hcodeid & Hasid).
@@ -10961,8 +10982,9 @@ Proof.
                       (kept_of_hu en _
                          (known_mask_kept _ witness apply_node _ i s Happly
                             Hal_wa (Hargs i s Hs) Hm))) as Hrel_s.
-        pose proof (flows_hs is_local G sol keep called Hc _ _
-                      (simple_flows is_local G sol noted cds keep Hc Hconsts
+        pose proof (flows_hs is_local G sol keep called no_loc Hc _ _
+                      (simple_flows is_local G sol noted cds keep no_loc Hc
+                          Hconsts
                          Hsyms _ _ _ Hvars
                          (Hnoted_args s (nth_error_In _ _ Hs)) Hsv))
           as Hhs.
@@ -11086,8 +11108,9 @@ Proof.
                Hhu_q).
       apply nth_error_Some. congruence. }
     pose proof (Hrels' i s v v' Hs Hv Hv' Hm) as Hrel_s.
-    pose proof (flows_hs is_local G sol keep called Hc _ _
-                  (simple_flows is_local G sol noted cds keep Hc Hconsts Hsyms
+    pose proof (flows_hs is_local G sol keep called no_loc Hc _ _
+                  (simple_flows is_local G sol noted cds keep no_loc Hc Hconsts
+                      Hsyms
                      _ _ _ Hvars (Hnoted_args s (nth_error_In _ _ Hs)) Hsv))
       as Hhs.
     apply (rel_alias G sol keep called (exact = true) True is_local Hc _ _ _ _
@@ -11125,7 +11148,8 @@ Qed.
 Definition result_flow (r : step_result) : Prop :=
   match r with
   | Step s' =>
-    flow_invariant is_local G sol noted deps cds keep codes symbols u s'
+    flow_invariant is_local G sol noted deps cds keep codes symbols u False
+    no_loc s'
   | _ => True
   end.
 
@@ -11219,7 +11243,7 @@ Definition returned_ok (c : cont_value) : Prop :=
     (statics statics' : static_env) (hp : heap) (rcd rcd' : read_record),
     way_out cont_rel over_rel ns c c' -> at_nodes ns vs vs' ->
     statics_rel statics statics' ->
-    codes_ok is_local G noted deps cds keep codes symbols statics ->
+    codes_ok is_local G noted deps cds keep codes symbols False statics ->
     statics_flow_ statics ->
     every (pa_ok statics) vs -> cont_pa_ok statics c ->
     result_flow (apply_cont_value c vs statics hp rcd) ->
@@ -11243,7 +11267,7 @@ Definition called_ok (rt : cont_value) : Prop :=
     ret_ok cont_rel over_rel returns ret rt rt' -> cont_pa_ok statics rt ->
     way_out cont_rel over_rel [exn] et et' ->
     statics_rel statics statics' ->
-    codes_ok is_local G noted deps cds keep codes symbols statics ->
+    codes_ok is_local G noted deps cds keep codes symbols False statics ->
     statics_flow_ statics ->
     result_flow (call_function callee Indirect vs a ret rt et statics hp rcd) ->
     result_rel (call_function callee Indirect vs a ret rt et statics hp rcd)
@@ -11277,7 +11301,7 @@ Lemma returned_cases (c : cont_value) :
      over_rel n0 c c' -> rel v n0 v' -> pa_ok statics v ->
      cont_pa_ok statics c ->
      statics_rel statics statics' ->
-     codes_ok is_local G noted deps cds keep codes symbols statics ->
+     codes_ok is_local G noted deps cds keep codes symbols False statics ->
      statics_flow_ statics ->
      result_flow (apply_cont_value c [v] statics hp rcd) ->
      result_rel (apply_cont_value c [v] statics hp rcd)
@@ -11591,7 +11615,7 @@ Lemma ret_answered (m : list bool) (K : list flambda_kind) (ns : list node)
   map kind_of_value vs = K ->
   at_nodes ns vs vs' ->
   statics_rel statics statics' ->
-  codes_ok is_local G noted deps cds keep codes symbols statics ->
+  codes_ok is_local G noted deps cds keep codes symbols False statics ->
   statics_flow_ statics ->
   every (pa_ok statics) vs -> cont_pa_ok statics c ->
   result_flow (apply_cont_value c vs statics hp rcd) ->
@@ -11908,7 +11932,7 @@ Lemma returned_either (c : cont_value) :
         (map kind_of_value vs) ns c c' ->
     at_nodes ns vs vs' ->
     statics_rel statics statics' ->
-    codes_ok is_local G noted deps cds keep codes symbols statics ->
+    codes_ok is_local G noted deps cds keep codes symbols False statics ->
     statics_flow_ statics ->
     every (pa_ok statics) vs -> cont_pa_ok statics c ->
     result_flow (apply_cont_value c vs statics hp rcd) ->
@@ -12038,7 +12062,8 @@ Proof.
 Qed.
 
 Lemma result_flow_of_ok (r : step_result) :
-  result_ok is_local G sol noted deps cds keep codes symbols u r ->
+  result_ok is_local G sol noted deps cds keep codes symbols u False no_loc
+    r ->
   result_flow r.
 Proof.
   destruct r as [s' | | ]; [ exact (fun H => H) | intros _; exact I
@@ -12073,7 +12098,7 @@ Lemma closure_called (rt rt' et et' : cont_value) (closure closure' : value)
   way_out cont_rel over_rel [exn] et et' ->
   every (pa_ok statics) (applied ++ vs) ->
   statics_rel statics statics' ->
-  codes_ok is_local G noted deps cds keep codes symbols statics ->
+  codes_ok is_local G noted deps cds keep codes symbols False statics ->
   statics_flow_ statics ->
   shape_of_closure_call statics closure Indirect (applied ++ vs) (aa ++ a) ret
   = Some shape ->
@@ -12097,7 +12122,7 @@ Proof.
     by (apply (not_local is_local Hlocal); intros; discriminate).
   destruct (shape_of_closure_call_cases _ _ _ _ _ _ _ Hshape)
     as (id & slots & c & all0 & A0 & Hclosure & Hcode & _ & Hafc & Hcall).
-  destruct (code_facts is_local G noted deps cds keep codes symbols Hnd
+  destruct (code_facts is_local G noted deps cds keep codes symbols False Hnd
               statics id c Hcodes Hcode)
     as (Hin_codes & cd & Hcd & Hunk & _ & Lp & Lr).
   destruct (Hjk id slots c Hclosure Hcode) as [Hlt_aa Htupled].
@@ -12683,7 +12708,7 @@ Lemma tupled_called (rt rt' et et' : cont_value) (callee callee' : value)
   ret_ok cont_rel over_rel returns ret rt rt' ->
   way_out cont_rel over_rel [exn] et et' ->
   statics_rel statics statics' ->
-  codes_ok is_local G noted deps cds keep codes symbols statics ->
+  codes_ok is_local G noted deps cds keep codes symbols False statics ->
   statics_flow_ statics ->
   shape_of_closure_call statics callee Indirect vs a ret = Some shape ->
   result_flow
@@ -12707,7 +12732,7 @@ Proof.
         & Hcall).
   rewrite Hclosure in Hclosure0. injection Hclosure0 as <- <-.
   rewrite Hcode in Hcode0. injection Hcode0 as <-.
-  destruct (code_facts is_local G noted deps cds keep codes symbols Hnd
+  destruct (code_facts is_local G noted deps cds keep codes symbols False Hnd
               statics id c Hcodes Hcode)
     as (Hin_codes & cd & Hcd & _ & Htw & Lp & Lr).
   pose proof (Hunt id c Hin_codes) as Hsingle. rewrite Htupled in Hsingle.
@@ -13386,7 +13411,7 @@ Lemma call_function_kinds (callee : value) (vs : list value) (a ret : arity)
     (rt et : cont_value) (statics : static_env) (hp : heap)
     (rcd : read_record) :
   indirect_codes ->
-  codes_ok is_local G noted deps cds keep codes symbols statics ->
+  codes_ok is_local G noted deps cds keep codes symbols False statics ->
   map kind_of_value vs <> unarize a ->
   call_function callee Indirect vs a ret rt et statics hp rcd = Undefined.
 Proof.
@@ -13660,7 +13685,8 @@ Proof.
   rewrite Hrw_c in Hcallee'.
   set (N := node_of_simple (ap_callee ap)) in *.
   (* The chain of the call. *)
-  destruct (indirect_pending is_local G sol noted cds keep Hc Hlocal Hconsts
+  destruct (indirect_pending is_local G sol noted cds keep no_loc Hc Hlocal
+      Hconsts
               Hsyms ctx ap vars vs returns exn ws apply_node called_node Hlive
               Hvars Hnoted_args Hvs Hne_a Hlen_ws Hch Hused Hcond Happly)
     as (Hlen_p & Hchain & _ & _ & _ & _).
@@ -13825,8 +13851,9 @@ Proof.
         [ rewrite Has in E; discriminate E | ].
       rewrite Hsy, (proj1 Hyy). reflexivity. }
     pose proof (Hrels' i s v v' Hs Hv Hv' Hm) as Hrel_s.
-    pose proof (flows_hs is_local G sol keep called Hc _ _
-                  (simple_flows is_local G sol noted cds keep Hc Hconsts Hsyms
+    pose proof (flows_hs is_local G sol keep called no_loc Hc _ _
+                  (simple_flows is_local G sol noted cds keep no_loc Hc Hconsts
+                      Hsyms
                      _ _ _ Hvars (Hnoted_args s (nth_error_In _ _ Hs)) Hsv))
       as Hhs.
     exact (rel_argument W w p (node_of_simple s) k v v'
@@ -14185,7 +14212,7 @@ Proof.
       exact (shrinking_refines related exits_related measure related_answered
                _ _ (fun vs vs' => exits_related_eq vs vs' Hx) Hrel). }
   split; [ exact (initial_flow_invariant is_local G sol noted deps cds keep
-                    codes symbols u e He) | ].
+                    codes symbols u False no_loc e He) | ].
   exists None, FlambdaReaperRebuild.empty_env, (unit_conts u), [].
   simpl_state.
   split; [ exact He | split; [ reflexivity | ] ].
@@ -14331,9 +14358,9 @@ Proof.
     apply andb_true_iff in Hcf as [Hd Hbody].
     apply named_checked_no_code in Hd.
     assert (Hmk : makes [] (traverse_named env x d) (fun _ => True)).
-    { destruct (named_in_flow_fragment d) eqn:Hd'.
+    { destruct (named_in_flow_fragment false d) eqn:Hd'.
       - eapply makes_weaken; [ intros; exact I | ].
-        exact (traverse_named_makes env True x d Hd' (fun _ => I)
+        exact (traverse_named_makes env True false x d Hd' (fun _ => I)
                  (fun w Hw => Hkeep w (in_or_app _ _ _ (or_introl Hw)))).
       - destruct d as [ | p args | | | | | ]; try discriminate Hd;
           try discriminate Hd'.
@@ -15282,7 +15309,7 @@ Qed.
 Lemma traverse_keeps (codes : list (code_id * code)) (symbols : list symbol)
     (K : list value_slot) (slots_read : Prop) :
   (∀ e : expr,
-     flow_fragment codes symbols e = true ->
+     flow_fragment false codes symbols e = true ->
      distinct (static_names code_ids_of_binding e) = true ->
      (∀ w : value_slot, w ∈ projected_value_slots e -> among w K = true) ->
      slots_read ∨ projection_free e = true ->
@@ -15292,7 +15319,7 @@ Lemma traverse_keeps (codes : list (code_id * code)) (symbols : list symbol)
        ∀ a a' : acc,
          acc_le (traverse env e a) a' -> kept_alive (unit_codes e) a')
   ∧ (∀ h : continuation_handler,
-       handler_flow_fragment codes symbols h = true ->
+       handler_flow_fragment false codes symbols h = true ->
        distinct (handler_static_names code_ids_of_binding h) = true ->
        (∀ w : value_slot,
           w ∈ handler_projected_value_slots h -> among w K = true) ->
@@ -15304,7 +15331,7 @@ Lemma traverse_keeps (codes : list (code_id * code)) (symbols : list symbol)
            acc_le (traverse_handler env h a) a' ->
            kept_alive (handler_unit_codes h) a').
 Proof.
-  destruct (traverse_makes codes symbols K slots_read) as [Hmk Hmkh].
+  destruct (traverse_makes codes symbols K slots_read false) as [Hmk Hmkh].
   apply expr_handler_ind.
   - (* [Let] *)
     intros x kind d body IH Hfrag Hdist Hproj Hslots Hcodes_in env HK a a'
@@ -15465,7 +15492,7 @@ Proof.
                ++ unit_codes body) a').
     assert (Hprem : ∀ (k : continuation) (h : continuation_handler),
               (k, h) ∈ handlers ->
-              handler_flow_fragment codes symbols h = true
+              handler_flow_fragment false codes symbols h = true
               ∧ distinct (handler_static_names code_ids_of_binding h) = true
               ∧ (∀ w : value_slot,
                    w ∈ handler_projected_value_slots h -> among w K = true)
@@ -15537,7 +15564,7 @@ Lemma traverse_unit_keeps (flag : reaper_preserve_direct_calls)
     (cds : finite_map code_dep),
     expr_edges (graph_of_facts (traverse_unit flag u e)) noted deps cds
       (unit_kept e) (unit_codes e) (static_names symbols_of_binding e)
-      slots_read None (unit_conts u) e
+      slots_read False None (unit_conts u) e
     ∧ g_any_source (graph_of_facts (traverse_unit flag u e)) Node_all_constants
     ∧ (∀ s : symbol,
          noted s ->
@@ -15563,7 +15590,7 @@ Proof.
   rewrite traverse_unit_eq.
   destruct (proj1 (traverse_makes (unit_codes e)
                      (static_names symbols_of_binding e)
-                     (projected_value_slots e) slots_read) e Hfrag Hdist
+                     (projected_value_slots e) slots_read false) e Hfrag Hdist
               (fun w Hw => proj2 (among_In w _) Hw) Hslots (fun x Hx => Hx)
               (initial_env flag u e) eq_refl initial_acc)
     as [[Hle4 (l & Hl & Hperm)] Hedges].
@@ -16036,7 +16063,7 @@ Proof.
   (* What FlambdaReaperFlowProofs.flow_sound derives of the graph. *)
   pose proof (static_names_edges G noted deps cds (unit_kept e) (unit_codes e)
                 (static_names symbols_of_binding e)
-                (∀ f : field, is_local f = false)) as [Hnames _].
+                (∀ f : field, is_local f = false) False) as [Hnames _].
   destruct (Hnames e None (unit_conts u) He) as [Hsym_names Hcode_names].
   assert (Hcds : ∀ (id : code_id) (cd : code_dep),
             lookup id cds = Some cd -> known_witness_edges G id cd).
@@ -16227,7 +16254,7 @@ Proof.
   (* What FlambdaReaperFlowProofs.flow_sound derives of the graph. *)
   pose proof (static_names_edges G noted deps cds (unit_kept e) (unit_codes e)
                 (static_names symbols_of_binding e)
-                (∀ f : field, is_local f = false)) as [Hnames _].
+                (∀ f : field, is_local f = false) False) as [Hnames _].
   destruct (Hnames e None (unit_conts u) He) as [Hsym_names Hcode_names].
   assert (Hcds : ∀ (id : code_id) (cd : code_dep),
             lookup id cds = Some cd -> known_witness_edges G id cd).
@@ -17106,4 +17133,129 @@ Proof.
     by (exists 5; try exists no_reads; vm_compute; reflexivity).
   pose proof (behaviour_unique _ _ _ Hs (Hwrong Ht)) as Heq.
   discriminate Heq.
+Qed.
+
+(* ======================================================================== *)
+(* Refinement up to observation, with the heap                              *)
+(* ======================================================================== *)
+
+Lemma values_related_impl (R R' : value -> value -> Prop) (l l' : list value) :
+  (∀ v v' : value, v ∈ l -> R v v' -> R' v v') ->
+  values_related R l l' -> values_related R' l l'.
+Proof.
+  revert l'. induction l as [ | v l IH]; intros [ | v' l'] H; simpl; auto.
+  intros [Hv Hl]. split; [ exact (H v v' (or_introl eq_refl) Hv) | ].
+  apply IH; [ | exact Hl ]. intros w w' Hw. exact (H w w' (or_intror Hw)).
+Qed.
+
+(* Observed equal values are observed equal with each location related to
+   itself. *)
+Lemma observed_equal_at_eq :
+  ∀ v v' : value, observed_equal v v' -> observed_equal_at eq v v'.
+Proof.
+  intros v. pattern v. apply FlambdaHeapProofs.value_induction; clear v;
+    intros; destruct v'; cbn [observed_equal observed_equal_at] in *;
+    try contradiction; try assumption.
+  - destruct H0 as [Htag Hfields]. split; [ exact Htag | ].
+    revert Hfields. apply values_related_impl. intros w w' Hw.
+    rewrite Forall_forall in H. exact (H w Hw w').
+  - revert H0. apply values_related_impl. intros w w' Hw.
+    rewrite Forall_forall in H. exact (H w Hw w').
+  - destruct H1 as (Hc & Hk & Ha). split; [ exact (H _ Hc) | ].
+    split; assumption.
+Qed.
+
+Lemma observed_equal_at_refl : ∀ v : value, observed_equal_at eq v v.
+Proof. intros v. apply observed_equal_at_eq, observed_equal_refl. Qed.
+
+Lemma values_observed_at_refl (l : list value) :
+  values_related (observed_equal_at eq) l l.
+Proof.
+  induction l as [ | v l IH]; simpl; [ exact I | ].
+  split; [ apply observed_equal_at_refl | exact IH ].
+Qed.
+
+(* Equal heaps are observed equal with each location related to
+   itself. *)
+Lemma heaps_observed_equal_refl (hp : heap) : heaps_observed_equal eq hp hp.
+Proof.
+  split; [ intros l l1 l2 <- <-; reflexivity | ].
+  split; [ intros l1 l2 l' -> <-; reflexivity | ].
+  intros l l' <-. destruct (lookup l hp) as [[mut tag fields | kind els] | ];
+    simpl; [ | | exact I ].
+  - split; [ reflexivity | split; [ reflexivity | ] ].
+    apply values_observed_at_refl.
+  - split; [ reflexivity | apply values_observed_at_refl ].
+Qed.
+
+Lemma exits_observed_equal_of (vs vs' : list value) (hp : heap) :
+  values_related observed_equal vs vs' -> exits_observed_equal vs hp vs' hp.
+Proof.
+  intros H. exists eq. split; [ apply heaps_observed_equal_refl | ].
+  revert H. apply values_related_impl. intros v v' _.
+  apply observed_equal_at_eq.
+Qed.
+
+Theorem refines_up_to_heap_of_refines_observably :
+  refines_up_to_heap_of_refines_observably_statement.
+Proof.
+  intros source target (Hexits & Hback & Hwrong).
+  split; [ | split; [ | exact Hwrong ] ].
+  - intros k vs hp Hb. destruct (Hexits k vs hp Hb) as (vs' & Ht & Hrel).
+    exists vs', hp. split; [ exact Ht | exact (exits_observed_equal_of _ _ _
+        Hrel) ].
+  - intros k vs' hp Hb.
+    destruct (Hback k vs' hp Hb) as [(vs & Hs & Hrel) | Hw]; [ left | right ].
+    + exists vs, hp. split; [ exact Hs | exact (exits_observed_equal_of _ _ _
+        Hrel) ].
+    + exact Hw.
+Qed.
+
+Theorem heap_rebuild_example : heap_rebuild_example_statement.
+Proof.
+  split; [ vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | ].
+  assert (Hs :
+    behaves
+      (State FlowHeapExample.unit_expr [] [] empty_static_env empty_heap
+         no_reads)
+      (Exits 1%positive [FlowHeapExample.result]
+         FlowHeapExample.heap_at_exit))
+    by (exists 8; try exists no_reads; vm_compute; reflexivity).
+  assert (Ht :
+    behaves
+      (State HeapRebuildExample.rebuilt [] [] empty_static_env empty_heap
+         no_reads)
+      (Exits 1%positive [HeapRebuildExample.result]
+         HeapRebuildExample.heap_at_exit))
+    by (exists 7; try exists no_reads; vm_compute; reflexivity).
+  split.
+  - (* The heaps differ: no exit of the rebuilt unit has the unit's. *)
+    intros (Hexits & _ & _).
+    destruct (Hexits _ _ _ Hs) as (vs' & Hb & _).
+    pose proof (behaviour_unique _ _ _ Ht Hb) as Heq.
+    injection Heq as _ Hheap. vm_compute in Hheap. discriminate Hheap.
+  - (* The location 3 of the first run is the location 2 of the
+       second. *)
+    assert (Hobs :
+      exits_observed_equal [FlowHeapExample.result]
+        FlowHeapExample.heap_at_exit [HeapRebuildExample.result]
+        HeapRebuildExample.heap_at_exit).
+    { exists (fun l l' => l = 3%positive ∧ l' = 2%positive). split.
+      - split; [ intros l l1 l2 [_ ->] [_ ->]; reflexivity | ].
+        split; [ intros l1 l2 l' [-> _] [-> _]; reflexivity | ].
+        intros l l' [-> ->]. vm_compute.
+        split; [ reflexivity | split; [ reflexivity | split; [ reflexivity
+                                                            | exact I ] ] ].
+      - vm_compute. repeat split. }
+    unfold program_refines_up_to_heap, refines_up_to_heap.
+    split; [ | split ].
+    + intros k vs hp Hb. pose proof (behaviour_unique _ _ _ Hs Hb) as Heq.
+      injection Heq as <- <- <-. do 2 eexists. split; [ exact Ht | exact Hobs ].
+    + intros k vs' hp' Hb. pose proof (behaviour_unique _ _ _ Ht Hb) as Heq.
+      injection Heq as <- <- <-. left. do 2 eexists.
+      split; [ exact Hs | exact Hobs ].
+    + intros Hw. pose proof (behaviour_unique _ _ _ Ht Hw) as Heq.
+      discriminate Heq.
 Qed.

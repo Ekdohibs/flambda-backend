@@ -32,8 +32,10 @@
    [no_code_no_slots], [no_code], [no_call], [direct_tail_calls],
    [direct_calls], [only_direct_calls], [full_calls], [generic_calls],
    [tupled_calls], [static_constants], [any_kind_arguments],
-   [exits_one_value] and [results_kinded], the relation
-   [observed_equal], the statements, and the examples, against
+   [exits_one_value] and [results_kinded], the relations
+   [observed_equal] and [observed_equal_at], with what is made of the
+   latter ([refines_up_to_heap]), the statements, and the examples,
+   against
    FlambdaReaperRebuild.v (the rebuild, which needs no review) and
    FlambdaReaperFlowSpec.v (the meaning of a solution). The proofs are
    in FlambdaReaperRebuildProofs.v, which needs no review.
@@ -62,12 +64,19 @@
      unit of the fragment here has no projection and meets it; it is
      stated for the fragment to grow.
    - [in_flow_fragment]: the fragment in which FlambdaReaperFlowSpec.v
-     says what a solution means. It leaves out the primitives of the
-     heap, which the machine runs: the rebuild removes the [Let] of a
-     cell that has no use, and the two runs then exit with heaps that
-     differ, which [program_refines] compares (decision D40). It keeps
-     the primitives of regions, to which the machine gives no value: a
-     run that reaches one goes wrong, and the rebuild is then free.
+     said what a solution means, before it said it of the heap
+     ([in_heap_fragment], which is wider). It leaves out the primitives
+     of the heap, which the machine runs: the rebuild removes the [Let]
+     of a cell that has no use, and the two runs then exit with heaps
+     that differ, which [program_refines] compares (decision D40). What
+     an exit is to be compared up to, then, is [refines_up_to_heap]
+     (below, "Refinement up to observation, with the heap"), which
+     relates the exits of the example with the heap
+     ([heap_rebuild_example_statement]) where [refines_observably] does
+     not; the statements ask [in_flow_fragment] until the simulation of
+     the two runs relates their heaps. It keeps the primitives of
+     regions, to which the machine gives no value: a run that reaches
+     one goes wrong, and the rebuild is then free.
    - [closure_free]: the part of that fragment for which the statement
      is proved. The rebuild of a set of closures (value slots removed,
      [Invalid] where a closure has no source) and of a call (masks of
@@ -1621,6 +1630,123 @@ Definition program_refines_observably (source target : expr) : Prop :=
 Definition refines_observably_of_refines_statement : Prop :=
   ∀ source target : state,
     refines source target -> refines_observably source target.
+
+(* ======================================================================== *)
+(* Refinement up to observation, with the heap                              *)
+(* ======================================================================== *)
+
+(* The machine runs the primitives of the heap, and an exit has a heap,
+   which [refines] and [refines_observably] compare by equality, locations
+   included (decision D40, the interim and strict choice). The rebuild
+   removes the [Let] of a cell that has no use, so the two runs make
+   other cells, at other locations: the rebuilt unit of
+   [heap_rebuild_example_statement] exits with one cell fewer, the
+   location of a cell that its exit holds is another, and a field that no
+   load reads is poison in a cell that it keeps. What the world outside
+   the unit can tell of an exit, when it can read the cells that the
+   values of the exit reach, is compared instead ([refines_up_to_heap]),
+   up to a correspondence [β] between the locations of the two runs:
+   - the values are compared by [observed_equal], a location by [β];
+   - [β] is one to one, and relates cells of the same mutability and
+     tag, or kind, whose contents are compared alike, each relating the
+     locations that it holds by [β];
+   - [β] need relate no other location. So a cell that no value of the
+     exit reaches through what is compared (fields of blocks, elements
+     of arrays and of cells, the closure of a partial application; not
+     the value slots of a closure, nor the arguments of a partial
+     application, which [observed_equal] compares by kind) is not
+     compared: a cell that the rebuild removed, which nothing compared
+     holds, nor the fields that it made poison, of cells that only the
+     unit reads.
+   This is a choice of what is observable, for the human to review. It
+   is the comparison that D40 intends, that of the prototype of the heap
+   (FlambdaHeapMachineSpec.outcome_related: a partial bijection between
+   the locations of the two runs, which constrains only what the values
+   reach), with values compared by [observed_equal] rather than by
+   equality, and with no static environment, which an exit here does not
+   carry (decision D57). It is weaker than the interim comparison of
+   D40: two exits with the same heap and values observed equal are
+   observed equal with [β] the identity
+   ([refines_up_to_heap_of_refines_observably_statement]). *)
+
+(* [observed_equal], with the locations of the two runs related by
+   [β]. *)
+Fixpoint observed_equal_at (β : location -> location -> Prop) (v v' : value)
+    {struct v} : Prop :=
+  match v, v' with
+  | Value_const c, Value_const c' => c = c'
+  | Value_closure code _, Value_closure code' _ => code = code'
+  | Value_closure_of_set slot decls _, Value_closure_of_set slot' decls' _ =>
+    slot = slot' ∧ decls = decls'
+  | Value_symbol s, Value_symbol s' => s = s'
+  | Value_block tag fields, Value_block tag' fields' =>
+    tag = tag'
+    ∧ values_related (fun w w' => observed_equal_at β w w') fields fields'
+  | Value_immutable_array elements, Value_immutable_array elements' =>
+    values_related (fun w w' => observed_equal_at β w w') elements elements'
+  | Value_boxed_number c, Value_boxed_number c' => c = c'
+  | Value_location l, Value_location l' => β l l'
+  | Value_partial_application callee args arity,
+    Value_partial_application callee' args' arity' =>
+    observed_equal_at β callee callee'
+    ∧ map kind_of_value args = map kind_of_value args'
+    ∧ arity = arity'
+  | _, _ => False
+  end.
+
+(* Two cells that only their locations tell apart. *)
+Definition cells_observed_equal (β : location -> location -> Prop)
+    (c c' : cell) : Prop :=
+  match c, c' with
+  | Cell_block mut tag fields, Cell_block mut' tag' fields' =>
+    mut = mut' ∧ tag = tag'
+    ∧ values_related (observed_equal_at β) fields fields'
+  | Cell_array kind elements, Cell_array kind' elements' =>
+    kind = kind' ∧ values_related (observed_equal_at β) elements elements'
+  | _, _ => False
+  end.
+
+(* [β] relates the locations of two heaps one to one, each to one bound
+   to a cell observed equal, or both to none. *)
+Definition heaps_observed_equal (β : location -> location -> Prop)
+    (hp hp' : heap) : Prop :=
+  (∀ l l1 l2 : location, β l l1 -> β l l2 -> l1 = l2)
+  ∧ (∀ l1 l2 l' : location, β l1 l' -> β l2 l' -> l1 = l2)
+  ∧ ∀ l l' : location,
+      β l l' ->
+      match lookup l hp, lookup l' hp' with
+      | Some c, Some c' => cells_observed_equal β c c'
+      | None, None => True
+      | _, _ => False
+      end.
+
+(* Two exits that the world outside the unit cannot tell apart. *)
+Definition exits_observed_equal (vs : list value) (hp : heap)
+    (vs' : list value) (hp' : heap) : Prop :=
+  ∃ β : location -> location -> Prop,
+    heaps_observed_equal β hp hp' ∧ values_related (observed_equal_at β) vs vs'.
+
+(* [refines_observably], with the exits compared by
+   [exits_observed_equal]. *)
+Definition refines_up_to_heap (source target : state) : Prop :=
+  (∀ (k : continuation) (vs : list value) (hp : heap),
+     behaves source (Exits k vs hp) ->
+     ∃ (vs' : list value) (hp' : heap),
+       behaves target (Exits k vs' hp') ∧ exits_observed_equal vs hp vs' hp')
+  ∧ (∀ (k : continuation) (vs' : list value) (hp' : heap),
+       behaves target (Exits k vs' hp') ->
+       (∃ (vs : list value) (hp : heap),
+          behaves source (Exits k vs hp) ∧ exits_observed_equal vs hp vs' hp')
+       ∨ behaves source Goes_wrong)
+  ∧ (behaves target Goes_wrong -> behaves source Goes_wrong).
+
+Definition program_refines_up_to_heap (source target : expr) : Prop :=
+  refines_up_to_heap (State source [] [] empty_static_env empty_heap no_reads)
+    (State target [] [] empty_static_env empty_heap no_reads).
+
+Definition refines_up_to_heap_of_refines_observably_statement : Prop :=
+  ∀ source target : state,
+    refines_observably source target -> refines_up_to_heap source target.
 
 (* ======================================================================== *)
 (* What code returns, and what calls return to                              *)
@@ -3660,3 +3786,73 @@ Definition region_projection_needed_statement : Prop :=
     = RegionProjectionExample.rebuilt
   ∧ ~ program_refines_observably RegionProjectionExample.unit_expr
         RegionProjectionExample.rebuilt.
+
+(* ======================================================================== *)
+(* An example with the heap                                                 *)
+(* ======================================================================== *)
+
+(* The unit of FlambdaReaperFlowSpec.FlowHeapExample, rebuilt with its
+   least solution: the [Let] of [x10], which has no use, is removed, and
+   field 1 of the cell of [x12], which no load reads, is poison:
+
+     let x11 = mutable { 3 } in
+     let x12 = mutable { 1; poison } in
+     let x13 = x11.(0) <- 5 in
+     let x14 = x12.(0) in
+     let x15 = x11.(0) in
+     let x16 = { x14; x15; x11 } in
+     return x16
+
+   The rebuilt unit exits with a block that holds the location 2, where
+   the unit's holds 3, and with a heap of two cells. The exits are not
+   related by [refines_observably], which compares heaps by equality
+   (decision D40), and are by [refines_up_to_heap], with the location 3
+   of the first run related to 2 of the second. *)
+Module HeapRebuildExample.
+
+Local Open Scope positive_scope.
+
+Definition rebuilt : expr :=
+  Let 11 Value (FlowHeapExample.make_cell [FlowHeapExample.tagged 3])
+    (Let 12 Value
+       (FlowHeapExample.make_cell
+          [FlowHeapExample.tagged 1; Const (Poison Value)])
+       (Let 13 Value
+          (Prim (Heap (Block_set FlowHeapExample.access Assignment 0))
+             [Var 11; FlowHeapExample.tagged 5])
+          (Let 14 Value (FlowHeapExample.load (Var 12))
+             (Let 15 Value (FlowHeapExample.load (Var 11))
+                (Let 16 Value
+                   (FlowExample.make_block [Var 14; Var 15; Var 11])
+                   (FlowExample.return_to 1 [Var 16])))))).
+
+Definition result : value :=
+  Value_block 0
+    [Value_const (Tagged_immediate 1); Value_const (Tagged_immediate 5);
+     Value_location 2].
+
+Definition heap_at_exit : heap :=
+  [(2, FlowHeapExample.cell [5%Z]);
+   (3, Cell_block Cell_mutable 0
+         [Value_const (Tagged_immediate 1); Value_const (Poison Value)]);
+   (2, FlowHeapExample.cell [3%Z])].
+
+End HeapRebuildExample.
+
+Definition heap_rebuild_example_statement : Prop :=
+  check_field_used_exact FlowHeapExample.is_local
+    (traverse_unit Never FlowExample.interface FlowHeapExample.unit_expr)
+    FlowHeapExample.solution
+  = true
+  ∧ rebuild_unit_from_tables
+      (traverse_unit Never FlowExample.interface FlowHeapExample.unit_expr)
+      FlowHeapExample.solution false FlowHeapExample.unit_expr
+    = HeapRebuildExample.rebuilt
+  ∧ run 7 (State HeapRebuildExample.rebuilt [] [] empty_static_env empty_heap
+             no_reads)
+    = Exit 1%positive [HeapRebuildExample.result]
+        HeapRebuildExample.heap_at_exit no_reads
+  ∧ ~ program_refines_observably FlowHeapExample.unit_expr
+        HeapRebuildExample.rebuilt
+  ∧ program_refines_up_to_heap FlowHeapExample.unit_expr
+      HeapRebuildExample.rebuilt.

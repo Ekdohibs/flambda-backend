@@ -29,10 +29,11 @@
    values of a run may be.
 
    This file is to be reviewed: [may_come_from], [flows] and what is
-   made of them ([state_flows], [exit_flows]), the fragment
-   ([in_flow_fragment] and what it is made of, [projection_free]), and
-   the statements. The proofs are in FlambdaReaperFlowProofs.v, which
-   needs no review.
+   made of them ([escapes], [cell_flows], [heap_flows], [state_flows],
+   [exit_flows]), the fragments ([in_heap_fragment], [in_flow_fragment]
+   and what they are made of, [projection_free]), and the statements.
+   The proofs are in FlambdaReaperFlowProofs.v, which needs no
+   review.
 
    The rules of the reaper (FlambdaReaperGraphSpec.closed) speak of
    allocations: a node has [sources], the nodes of the allocations its
@@ -97,8 +98,11 @@
      for each group of parameters, the first result of each but the
      last being an allocation whose call witness is the next one
      ([create_unknown_arity_non_tupled_call_witnesses]);
-   - locations are not in the fragment, and are at no node; nor are the
-     closures of the older form ([Value_closure]).
+   - a location may be at [n] if [located], which gives the cells of the
+     run their allocations, gives it an allocation that [n] may come
+     from: the node of the variable of the [Let] that made the cell
+     (below, "The heap"); the closures of the older form
+     ([Value_closure]) are at no node.
    The allocation is existential, and need not be the same for the
    value at two nodes; but at each node there is one, and what the rules
    give of the node's sources is given of it. [flows] does not depend on
@@ -123,7 +127,7 @@
    ([read_field_used_statement]), so a field made poison is never read
    by a use.
 
-   The statement is about a fragment of the terms ([in_flow_fragment]):
+   The statement is about a fragment of the terms ([in_heap_fragment]):
    a unit made of [Let]s of simples, of primitives, of closures of sets
    ([Closure_of_set]) and of projections from them
    ([Project_value_slot_from], [Project_function_slot]), [Let_cont]s,
@@ -131,12 +135,14 @@
    [Invalid], calls, direct or not, with extra arguments for their
    exception continuations or not, and [Let_static]s of code, of blocks,
    of boxed numbers, of strings, of immutable arrays of values and of
-   closures of static sets. Every primitive is in it but those of the
-   heap ([prim_of_heap]), and so are partial applications and
-   over-applications, which calls of unknown arity make. The
-   primitives of the heap are left out: the machine runs them
-   (FlambdaHeapSpec.v), and the value of one that makes a cell is a
-   location, which is at no node. The primitives of regions are in it:
+   closures of static sets. Every primitive is in it, those of the heap
+   ([prim_of_heap]) among them, and so are partial applications and
+   over-applications, which calls of unknown arity make.
+   [in_flow_fragment], the fragment of the statements before the
+   machine ran the primitives of the heap, leaves those out, and is
+   narrower ([in_flow_fragment_in_heap_fragment_statement]); the
+   statements of the rebuild and of the unboxing still ask it
+   (FlambdaReaperRebuildSpec.v). The primitives of regions are in it:
    the machine gives none of them a value, so a run that reaches one
    goes wrong there, and what they do (FlambdaRegionsSpec.v) is not
    looked at. The code that a direct call names, if the unit binds it,
@@ -210,11 +216,15 @@
    ([traverse_unit]), every state of the run of the unit has every
    variable at its node, the variables of the environments that its
    continuations keep at theirs, and its static environment as the
-   graph says ([state_flows]); and an exit through a continuation of
-   the unit has each of its values at the node that the traversal gives
-   the parameter of that continuation ([exit_flows],
+   graph says, and each cell of its heap holds what the allocation
+   that [located] gives it says ([state_flows]); and an exit through a
+   continuation of the unit has each of its values at the node that the
+   traversal gives the parameter of that continuation ([exit_flows],
    [unit_cont_nodes]: the made nodes 1 and 2, which have any usage,
-   [unit_cont_nodes_used_statement]) ([flow_sound_statement]). The unit
+   [unit_cont_nodes_used_statement]), and its heap as [heap_flows] says
+   ([flow_sound_statement]). [located] is existential: for each number
+   of steps there is one, which gives each location that the run makes
+   the node of the variable of its [Let]. The unit
    need not be well-formed: a continuation applied at toplevel where it
    is not in scope is a way out of the term, for which the statement
    says nothing, and the conditions that the proof needs are those of
@@ -236,8 +246,41 @@
    value slot is read through [my_closure], and a direct call
    ([call_example_statement]), and a unit with a partial application,
    an over-application of it and extra arguments for an exception
-   continuation ([indirect_example_statement]), each have their least
-   solution pass the check, and their runs exit.
+   continuation ([indirect_example_statement]), and a unit with three
+   cells, one of which has no use, a store into another, and a load
+   from a field of the third whose other field no load reads
+   ([heap_example_statement]), each have their least solution pass the
+   check, and their runs exit.
+
+   The heap. A cell is made by [Make_block_with_identity], which the
+   traversal reads as a block ([block_deps]: the node of its variable
+   has the constructor facts of its fields, and of [Is_int] and
+   [Get_tag]), or by [Make_mutable_array], a primitive of the default
+   case (its variable has any source and uses its arguments). The node
+   of the variable of its [Let] is its allocation, and [located] gives
+   it to the location of the cell. A cell holds what its allocation says
+   ([cell_flows]):
+   - a block, in each field, a value at the node of that field in the
+     allocation, as an immutable block does; or, if it is mutable and
+     its allocation has any usage, a value that escapes ([escapes]: a
+     constant, or a value at a node with any usage). A store
+     ([Block_set]) has arbitrary effects: its variable has any usage
+     where the code it is in is used ([cond_any_usage]), and it uses its
+     arguments, so the block it stores into, and its allocation, has any
+     usage, and so has what it stores. A load of a field that may change
+     ([Block_load] marked [Mutable]) gives its variable any source, at
+     which a value that escapes may be, and reads the field of the
+     allocation as any load does ([Field_block]);
+   - an array, constants and values at nodes that have any usage if its
+     allocation has: its primitives are of the default case, so a load
+     ([Array_load]) uses the array, which so has any usage when what is
+     loaded has a usage, and a store ([Array_set]) has arbitrary effects
+     and uses the array and what it stores.
+   A primitive that reads a cell otherwise ([Get_tag], [Is_int] and
+   [Is_null], [Array_length], [Phys_equal], [Opaque_identity]) gives a
+   constant, which is at its variable of the default case or read off
+   the constructor facts of the allocation, or the location, at a
+   variable that uses it.
 
    The statement says nothing of the values that a continuation keeps
    for a call: the extra arguments of an exception continuation, and
@@ -332,9 +375,11 @@ Definition prim_of_heap (p : prim) : bool :=
   | Unary _ | Binary _ | Variadic _ | Region_primitive _ => false
   end.
 
-Definition named_in_flow_fragment (defining_expr : named) : bool :=
+(* A [Let] of the fragment: a primitive of the heap only if [heap]. *)
+Definition named_in_flow_fragment (heap : bool) (defining_expr : named)
+    : bool :=
   match defining_expr with
-  | Prim p _ => negb (prim_of_heap p)
+  | Prim p _ => heap || negb (prim_of_heap p)
   | Simple _ | Closure_of_set _ _ _
   | Project_value_slot_from _ _ _ | Project_function_slot _ _ _ => true
   | Set_of_closures _ _ | Project_value_slot _ _ => false
@@ -375,29 +420,32 @@ Definition apply_in_flow_fragment (codes : list (code_id * code))
   end.
 
 (* The terms of the fragment, given the code and the symbols that the
-   unit binds. *)
-Fixpoint flow_fragment (codes : list (code_id * code)) (symbols : list symbol)
-    (e : expr) : bool :=
+   unit binds, with the primitives of the heap if [heap]. *)
+Fixpoint flow_fragment (heap : bool) (codes : list (code_id * code))
+    (symbols : list symbol) (e : expr) : bool :=
   match e with
   | Let _ _ defining_expr body =>
-    named_in_flow_fragment defining_expr && flow_fragment codes symbols body
+    named_in_flow_fragment heap defining_expr
+    && flow_fragment heap codes symbols body
   | Let_static bindings body =>
-    forallb (binding_flow_fragment codes symbols) bindings
-    && flow_fragment codes symbols body
+    forallb (binding_flow_fragment heap codes symbols) bindings
+    && flow_fragment heap codes symbols body
   | Let_cont_non_recursive _ h body =>
-    handler_flow_fragment codes symbols h && flow_fragment codes symbols body
+    handler_flow_fragment heap codes symbols h
+    && flow_fragment heap codes symbols body
   | Let_cont_recursive handlers body =>
-    forallb (fun '(_, h) => handler_flow_fragment codes symbols h) handlers
-    && flow_fragment codes symbols body
+    forallb (fun '(_, h) => handler_flow_fragment heap codes symbols h)
+      handlers
+    && flow_fragment heap codes symbols body
   | Apply ap => apply_in_flow_fragment codes ap
   | Apply_cont _ | Switch _ _ | Invalid => true
   end
-with handler_flow_fragment (codes : list (code_id * code))
+with handler_flow_fragment (heap : bool) (codes : list (code_id * code))
     (symbols : list symbol) (h : continuation_handler) : bool :=
   match h with
-  | Handler _ _ handler => flow_fragment codes symbols handler
+  | Handler _ _ handler => flow_fragment heap codes symbols handler
   end
-with binding_flow_fragment (codes : list (code_id * code))
+with binding_flow_fragment (heap : bool) (codes : list (code_id * code))
     (symbols : list symbol) (binding : static_binding) : bool :=
   match binding with
   | Bind_symbol _ (Static_const_block _ _) => true
@@ -409,10 +457,10 @@ with binding_flow_fragment (codes : list (code_id * code))
     is_bound slot function_decls
     && forallb (fun '(_, s) => among s symbols) closure_symbols
   | Bind_symbol _ _ => false
-  | Bind_code _ c => code_flow_fragment codes symbols c
+  | Bind_code _ c => code_flow_fragment heap codes symbols c
   | Bind_deleted_code _ => true
   end
-with code_flow_fragment (codes : list (code_id * code))
+with code_flow_fragment (heap : bool) (codes : list (code_id * code))
     (symbols : list symbol) (c : code) : bool :=
   match c with
   | Code _ _ return_continuation exn_continuation metadata body =>
@@ -422,13 +470,18 @@ with code_flow_fragment (codes : list (code_id * code))
          [(exn_continuation, 1);
           (return_continuation, length (unarize (cm_result_arity metadata)))]
          body
-    && flow_fragment codes symbols body
+    && flow_fragment heap codes symbols body
   end.
 
-(* The unit: its terms are of the fragment, and the code ids it binds are
-   distinct. *)
+(* The unit: its terms are of the fragment, without the primitives of
+   the heap, and the code ids it binds are distinct. *)
 Definition in_flow_fragment (e : expr) : bool :=
-  flow_fragment (unit_codes e) (static_names symbols_of_binding e) e
+  flow_fragment false (unit_codes e) (static_names symbols_of_binding e) e
+  && distinct (static_names code_ids_of_binding e).
+
+(* The same with the primitives of the heap: the wider check. *)
+Definition in_heap_fragment (e : expr) : bool :=
+  flow_fragment true (unit_codes e) (static_names symbols_of_binding e) e
   && distinct (static_names code_ids_of_binding e).
 
 (* No projection from a closure, in the unit or in its code. *)
@@ -499,6 +552,11 @@ Variable sol : solution.
 Variable kept : value_slot -> bool.
 (* What the allocation of a closure has for the code of its slot. *)
 Variable called : node -> code_id -> Prop.
+(* The allocation of the cell that each location is bound to, if the
+   run has made it: the node of the variable of the [Let] that made it
+   (the machine has no identity of allocations, but a cell has one, its
+   location, which is given an allocation once). *)
+Variable located : location -> option node.
 
 (* The value at [n] may come from the allocation [a]. *)
 Definition may_come_from (a n : node) : Prop :=
@@ -628,7 +686,12 @@ Fixpoint flows (v : value) (n : node) {struct v} : Prop :=
                g_parameter G W k p ->
                flows arg p)
           0 args
-  | Value_closure _ _ | Value_location _ => False
+  | Value_location l =>
+    match located l with
+    | Some a => may_come_from a n
+    | None => False
+    end
+  | Value_closure _ _ => False
   end.
 
 (* What a symbol points to, as for a block or a closure whose allocation
@@ -689,6 +752,51 @@ Definition statics_flow (statics : static_env) : Prop :=
     lookup s (static_values statics) = Some allocated ->
     static_value_flows s allocated.
 
+(* A value that escapes: a constant, or a value that may be at a node with
+   any usage. Such a value may be at every node with any source. *)
+Definition escapes (v : value) : Prop :=
+  (∃ c : const, v = Value_const c)
+  ∨ ∃ m : node, flows v m ∧ s_any_usage sol m = true.
+
+(* What a cell holds, as its allocation [a] says. A block made with an
+   identity holds in each field what may be at the node of that field in
+   [a], as an immutable block does; or, if it is mutable and [a] has any
+   usage, a value stored there, which escapes: a store gives what it
+   stores any usage, and the block it stores into (a primitive with
+   arbitrary effects, whose variable has any usage where the code it is
+   in is used, and which uses its arguments). An array holds constants,
+   and values at nodes that have any usage if [a] has: the traversal
+   reads every primitive of an array as one of the default case, so the
+   variable of the array uses its elements, a load uses the array, and
+   a store uses the array and what it stores. *)
+Definition cell_flows (a : node) (c : cell) : Prop :=
+  match c with
+  | Cell_block mut _ fields =>
+    g_constructor G a Field_is_int Node_all_constants
+    ∧ g_constructor G a Field_get_tag Node_all_constants
+    ∧ fields_from
+        (fun i field =>
+           ∃ from : node,
+             g_constructor G a (Field_block i Value) from
+             ∧ (flows field from
+                ∨ (mut = Cell_mutable ∧ s_any_usage sol a = true
+                   ∧ escapes field)))
+        0 fields
+  | Cell_array _ elements =>
+    every
+      (fun element =>
+         (∃ c : const, element = Value_const c)
+         ∨ ∃ m : node,
+             flows element m
+             ∧ (s_any_usage sol a = true -> s_any_usage sol m = true))
+      elements
+  end.
+
+(* Every cell of the heap that has an allocation holds what it says. *)
+Definition heap_flows (h : heap) : Prop :=
+  ∀ (l : location) (c : cell) (a : node),
+    lookup l h = Some c -> located l = Some a -> cell_flows a c.
+
 (* Every variable is at its node. *)
 Definition env_flows (vars : env) : Prop :=
   ∀ (x : variable) (v : value),
@@ -717,7 +825,8 @@ Definition state_flows (s : state) : Prop :=
   env_flows (state_vars s)
   ∧ (∀ (k : continuation) (c : cont_value),
        (k, c) ∈ state_conts s -> cont_flows c)
-  ∧ statics_flow (state_statics s).
+  ∧ statics_flow (state_statics s)
+  ∧ heap_flows (state_heap s).
 
 (* The nodes of the parameters of the continuations of the unit, as
    [traverse_unit] starts the traversal with them: the made node 1 is
@@ -763,19 +872,21 @@ Definition flow_sound_statement : Prop :=
     (u : unit_interface) (e : expr) (T : tables) (n : nat),
     is_local_slots_only is_local ->
     (∀ f : field, is_local f = false) ∨ projection_free e = true ->
-    in_flow_fragment e = true ->
+    in_heap_fragment e = true ->
     check_closed is_local (traverse_unit flag u e) T = true ->
-    match run n (State e [] [] empty_static_env empty_heap no_reads) with
-    | Step s =>
-      state_flows (graph_of_facts (traverse_unit flag u e))
-        (solution_of_tables T) (unit_kept e)
-        (has_call_witness (graph_of_facts (traverse_unit flag u e))) s
-    | Exit k vs _ _ =>
-      exit_flows (graph_of_facts (traverse_unit flag u e))
-        (solution_of_tables T) (unit_kept e)
-        (has_call_witness (graph_of_facts (traverse_unit flag u e))) u k vs
-    | Undefined => True
-    end.
+    let G := graph_of_facts (traverse_unit flag u e) in
+    ∃ located : location -> option node,
+      match run n (State e [] [] empty_static_env empty_heap no_reads) with
+      | Step s =>
+        state_flows G (solution_of_tables T) (unit_kept e)
+          (has_call_witness G) located s
+      | Exit k vs hp _ =>
+        exit_flows G (solution_of_tables T) (unit_kept e)
+          (has_call_witness G) located u k vs
+        ∧ heap_flows G (solution_of_tables T) (unit_kept e)
+            (has_call_witness G) located hp
+      | Undefined => True
+      end.
 
 (* The same, of the graph without the two facts that keep the tuple of a
    call of tupled code alive (FlambdaReaperTupledSpec.without_keep_alive):
@@ -785,7 +896,7 @@ Definition flow_sound_without_keep_alive_statement : Prop :=
     (u : unit_interface) (e : expr) (T : tables) (n : nat),
     is_local_slots_only is_local ->
     (∀ f : field, is_local f = false) ∨ projection_free e = true ->
-    in_flow_fragment e = true ->
+    in_heap_fragment e = true ->
     check_closed is_local
       (FlambdaReaperTupledSpec.without_keep_alive (traverse_unit flag u e)) T
     = true ->
@@ -793,22 +904,30 @@ Definition flow_sound_without_keep_alive_statement : Prop :=
       graph_of_facts
         (FlambdaReaperTupledSpec.without_keep_alive (traverse_unit flag u e))
     in
-    match run n (State e [] [] empty_static_env empty_heap no_reads) with
-    | Step s =>
-      state_flows G (solution_of_tables T) (unit_kept e)
-        (has_call_witness G) s
-    | Exit k vs _ _ =>
-      exit_flows G (solution_of_tables T) (unit_kept e) (has_call_witness G)
-        u k vs
-    | Undefined => True
-    end.
+    ∃ located : location -> option node,
+      match run n (State e [] [] empty_static_env empty_heap no_reads) with
+      | Step s =>
+        state_flows G (solution_of_tables T) (unit_kept e)
+          (has_call_witness G) located s
+      | Exit k vs hp _ =>
+        exit_flows G (solution_of_tables T) (unit_kept e)
+          (has_call_witness G) located u k vs
+        ∧ heap_flows G (solution_of_tables T) (unit_kept e)
+            (has_call_witness G) located hp
+      | Undefined => True
+      end.
+
+(* The wider check holds of every unit of the narrower: the old premise
+   of the statements implies the new. *)
+Definition in_flow_fragment_in_heap_fragment_statement : Prop :=
+  ∀ e : expr, in_flow_fragment e = true -> in_heap_fragment e = true.
 
 (* The nodes of the continuations of the unit are those the traversal
    gives any usage. *)
 Definition unit_cont_nodes_used_statement : Prop :=
   ∀ (flag : reaper_preserve_direct_calls) (u : unit_interface) (e : expr)
     (k : continuation) (p : node),
-    in_flow_fragment e = true ->
+    in_heap_fragment e = true ->
     p ∈ unit_cont_nodes u k ->
     g_any_usage (graph_of_facts (traverse_unit flag u e)) p.
 
@@ -816,8 +935,8 @@ Definition unit_cont_nodes_used_statement : Prop :=
 Definition flows_has_source_statement : Prop :=
   ∀ (is_local : field -> bool) (G : graph) (sol : solution)
     (kept : value_slot -> bool) (called : node -> code_id -> Prop)
-    (v : value) (n : node),
-    closed is_local G sol -> flows G sol kept called v n ->
+    (located : location -> option node) (v : value) (n : node),
+    closed is_local G sol -> flows G sol kept called located v n ->
     s_has_source sol n = true.
 
 (* A field that is read into a node that has a usage is used in every
@@ -837,14 +956,15 @@ Definition read_field_used_statement : Prop :=
 Definition read_flows_statement : Prop :=
   ∀ (is_local : field -> bool) (G : graph) (sol : solution)
     (kept : value_slot -> bool) (called : node -> code_id -> Prop)
-    (a base to_ from : node) (f : field) (v : value),
+    (located : location -> option node) (a base to_ from : node) (f : field)
+    (v : value),
     closed is_local G sol ->
     is_local f = false ->
     g_constructor G a f from ->
     g_accessor G to_ f base ->
     may_come_from sol a base ->
-    flows G sol kept called v from ->
-    flows G sol kept called v to_.
+    flows G sol kept called located v from ->
+    flows G sol kept called located v to_.
 
 (* ======================================================================== *)
 (* An example                                                               *)
@@ -924,7 +1044,7 @@ End FlowExample.
    least solution, and its run exits with 7. *)
 Definition example_statement : Prop :=
   is_local_slots_only FlowExample.is_local
-  ∧ in_flow_fragment FlowExample.unit_expr = true
+  ∧ in_heap_fragment FlowExample.unit_expr = true
   ∧ check_closed FlowExample.is_local
       (traverse_unit Never FlowExample.interface FlowExample.unit_expr)
       FlowExample.solution
@@ -1039,7 +1159,7 @@ End FlowCallExample.
 Definition call_example_statement : Prop :=
   is_local_slots_only FlowCallExample.is_local
   ∧ (∀ f : field, FlowCallExample.is_local f = false)
-  ∧ in_flow_fragment FlowCallExample.unit_expr = true
+  ∧ in_heap_fragment FlowCallExample.unit_expr = true
   ∧ check_closed FlowCallExample.is_local
       (traverse_unit Never FlowCallExample.interface FlowCallExample.unit_expr)
       FlowCallExample.solution
@@ -1195,7 +1315,7 @@ End FlowIndirectExample.
 Definition indirect_example_statement : Prop :=
   is_local_slots_only FlowIndirectExample.is_local
   ∧ (∀ f : field, FlowIndirectExample.is_local f = false)
-  ∧ in_flow_fragment FlowIndirectExample.unit_expr = true
+  ∧ in_heap_fragment FlowIndirectExample.unit_expr = true
   ∧ check_closed FlowIndirectExample.is_local
       (traverse_unit Never FlowIndirectExample.interface
          FlowIndirectExample.unit_expr)
@@ -1291,7 +1411,7 @@ End LocalSlotCounterexample.
    passes the check, the unit exits, and the rebuilt unit goes wrong. *)
 Definition local_slot_counterexample_statement : Prop :=
   is_local_slots_only LocalSlotCounterexample.is_local
-  ∧ in_flow_fragment LocalSlotCounterexample.unit_expr = true
+  ∧ in_heap_fragment LocalSlotCounterexample.unit_expr = true
   ∧ check_closed LocalSlotCounterexample.is_local
       (traverse_unit Never LocalSlotCounterexample.interface
          LocalSlotCounterexample.unit_expr)
@@ -1329,7 +1449,7 @@ Definition local_slot_counterexample_statement : Prop :=
    So the analysis is sound without the two facts, and the unsoundness
    is in the rebuild, which makes poison of the pair. *)
 Definition tupled_reverted_analysis_sound_statement : Prop :=
-  in_flow_fragment FlambdaReaperTupledSpec.tupled_unit = true
+  in_heap_fragment FlambdaReaperTupledSpec.tupled_unit = true
   ∧ let G := graph_of_facts FlambdaReaperTupledSpec.without_keep_alive_graph
     in
     let sol :=
@@ -1337,14 +1457,142 @@ Definition tupled_reverted_analysis_sound_statement : Prop :=
     in
     let kept := unit_kept FlambdaReaperTupledSpec.tupled_unit in
     ∀ n : nat,
-      match
-        run n
-          (FlambdaReaperTupledSpec.on_its_own
-             FlambdaReaperTupledSpec.tupled_unit)
-      with
-      | Step s => state_flows G sol kept (has_call_witness G) s
-      | Exit k vs _ _ =>
-        exit_flows G sol kept (has_call_witness G)
-          FlambdaReaperTupledSpec.interface k vs
-      | Undefined => True
-      end.
+      ∃ located : location -> option node,
+        match
+          run n
+            (FlambdaReaperTupledSpec.on_its_own
+               FlambdaReaperTupledSpec.tupled_unit)
+        with
+        | Step s => state_flows G sol kept (has_call_witness G) located s
+        | Exit k vs hp _ =>
+          exit_flows G sol kept (has_call_witness G) located
+            FlambdaReaperTupledSpec.interface k vs
+          ∧ heap_flows G sol kept (has_call_witness G) located hp
+        | Undefined => True
+        end.
+
+(* ======================================================================== *)
+(* An example with the heap                                                 *)
+(* ======================================================================== *)
+
+(* The unit
+
+     let x10 = mutable { 7 } in             (no use)
+     let x11 = mutable { 3 } in             (stored into, reaches the exit)
+     let x12 = mutable { 1; 2 } in          (field 0 read, field 1 not)
+     let x13 = x11.(0) <- 5 in
+     let x14 = x12.(0) in                   (a mutable load: 1)
+     let x15 = x11.(0) in                   (a mutable load: 5)
+     let x16 = { x14; x15; x11 } in
+     return x16
+
+   is of the fragment with the primitives of the heap, and not of the
+   fragment without them. Its least solution, as the test tool's solver
+   computes it: the store has any usage, and so has [x11], which it
+   uses, and every field of the cell made at [x11]; field 0 of the cell
+   made at [x12] is used, by the load into [x14], and field 1 is not;
+   [x10] has no use. The run exits with the block, whose third field is
+   the location of the cell of [x11], and with a heap of three cells. *)
+Module FlowHeapExample.
+
+Local Open Scope positive_scope.
+
+Definition is_local (f : field) : bool := false.
+
+Definition access : block_access_kind :=
+  Block_access_values None None Any_value.
+
+Definition tagged (n : Z) : simple := Const (Tagged_immediate n).
+
+Definition make_cell (fields : list simple) : named :=
+  Prim (Heap (Make_block_with_identity Cell_mutable 0)) fields.
+
+Definition load (block : simple) : named :=
+  Prim (Unary (Block_load access Mutable 0)) [block].
+
+Definition unit_expr : expr :=
+  Let 10 Value (make_cell [tagged 7])
+    (Let 11 Value (make_cell [tagged 3])
+       (Let 12 Value (make_cell [tagged 1; tagged 2])
+          (Let 13 Value
+             (Prim (Heap (Block_set access Assignment 0)) [Var 11; tagged 5])
+             (Let 14 Value (load (Var 12))
+                (Let 15 Value (load (Var 11))
+                   (Let 16 Value
+                      (FlowExample.make_block [Var 14; Var 15; Var 11])
+                      (FlowExample.return_to 1 [Var 16]))))))).
+
+Definition solution : tables :=
+  {| t_alias :=
+       [(Node_made 1, Node_variable 16);
+        (Node_variable 14, Node_all_constants);
+        (Node_variable 15, Node_all_constants)];
+     t_any_usage :=
+       [Node_all_constants; Node_made 1; Node_made 2; Node_variable 11;
+        Node_variable 13; Node_variable 14; Node_variable 15;
+        Node_variable 16];
+     t_any_source :=
+       [Node_all_constants; Node_variable 13; Node_variable 14;
+        Node_variable 15];
+     t_has_usage :=
+       [Node_all_constants; Node_made 1; Node_made 2; Node_variable 11;
+        Node_variable 12; Node_variable 13; Node_variable 14; Node_variable 15;
+        Node_variable 16];
+     t_has_source :=
+       [Node_all_constants; Node_made 1; Node_variable 10; Node_variable 11;
+        Node_variable 12; Node_variable 13; Node_variable 14; Node_variable 15;
+        Node_variable 16];
+     t_usages := [(Node_variable 12, Node_variable 12)];
+     t_sources :=
+       [(Node_made 1, Node_variable 16); (Node_variable 10, Node_variable 10);
+        (Node_variable 11, Node_variable 11);
+        (Node_variable 12, Node_variable 12);
+        (Node_variable 16, Node_variable 16)];
+     t_reading_field := [];
+     t_escaping_field := [];
+     t_field_used :=
+       [(Node_variable 11, Field_block 0 Value);
+        (Node_variable 11, Field_get_tag); (Node_variable 11, Field_is_int);
+        (Node_variable 12, Field_block 0 Value);
+        (Node_variable 16, Field_block 0 Value);
+        (Node_variable 16, Field_block 1 Value);
+        (Node_variable 16, Field_block 2 Value);
+        (Node_variable 16, Field_get_tag);
+        (Node_variable 16, Field_is_int)] |}.
+
+Definition cell (fields : list Z) : cell :=
+  Cell_block Cell_mutable 0 (map (fun n => Value_const (Tagged_immediate n))
+                               fields).
+
+Definition result : value :=
+  Value_block 0
+    [Value_const (Tagged_immediate 1); Value_const (Tagged_immediate 5);
+     Value_location 3].
+
+Definition heap_at_exit : heap :=
+  [(3, cell [5%Z]); (4, cell [1%Z; 2%Z]); (3, cell [3%Z]); (2, cell [7%Z])].
+
+End FlowHeapExample.
+
+(* The example meets the premises of [flow_sound_statement], with its
+   least solution, but not those of the statements without the
+   primitives of the heap; its run exits with the block and three
+   cells. *)
+Definition heap_example_statement : Prop :=
+  is_local_slots_only FlowHeapExample.is_local
+  ∧ in_heap_fragment FlowHeapExample.unit_expr = true
+  ∧ in_flow_fragment FlowHeapExample.unit_expr = false
+  ∧ check_closed FlowHeapExample.is_local
+      (traverse_unit Never FlowExample.interface FlowHeapExample.unit_expr)
+      FlowHeapExample.solution
+    = true
+  ∧ (∀ T : tables,
+       T ∈ one_fewer_tables FlowHeapExample.solution ->
+       check_closed FlowHeapExample.is_local
+         (traverse_unit Never FlowExample.interface FlowHeapExample.unit_expr)
+         T
+       = false)
+  ∧ run 8 (State FlowHeapExample.unit_expr [] [] empty_static_env empty_heap
+             no_reads)
+    = Exit 1%positive [FlowHeapExample.result] FlowHeapExample.heap_at_exit
+        no_reads.

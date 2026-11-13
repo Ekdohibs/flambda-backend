@@ -57,7 +57,20 @@
      what the closure deps give closures ([called_by]); and each partial
      application has fewer groups of arguments than its code has
      parameters ([pa_ok]), which no graph fact can say. Each step keeps
-     it ([step_flow_invariant]). A direct call reads the witness of the
+     it, and the cells of the heap hold what [heap_flows] says, and
+     partial applications as [pa_ok] says ([heap_ok],
+     [step_flow_invariant_heap]); a step other than a [Let] does not
+     change the heap ([step_flow_invariant_core]). A [Let] of a primitive
+     runs it by [exec_prim] ([exec_prim_cases]): as [eval_prim] does,
+     and then as before ([named_flows]); or a primitive of the heap,
+     whose fresh location is given the node of its variable
+     ([alloc_ok]), or which stores into a cell whose allocation, then,
+     has any usage, as what is stored has; or a read of a cell, whose
+     allocation [located] gives ([prim_exec_flows]). [located] is
+     fixed for the whole run: it is built from the run of [n] steps,
+     each location being given the variable of the [Let] that makes it,
+     which no later step rebinds, as the heap only grows
+     ([located_exists]). A direct call reads the witness of the
      code through the closure, which gives the parameters their
      arguments and the continuations of the call the results
      ([direct_call_ok]). A call of unknown arity has a witness for each
@@ -103,13 +116,20 @@ Variable G : graph.
 Variable sol : solution.
 Variable kept : value_slot -> bool.
 Variable called : node -> code_id -> Prop.
+Variable located : location -> option node.
 Hypothesis Hc : closed is_local G sol.
 
 Abbreviation as_ n := (s_any_source sol n = true).
 Abbreviation au n := (s_any_usage sol n = true).
 Abbreviation hs n := (s_has_source sol n = true).
 Abbreviation hu n := (s_has_usage sol n = true).
-Abbreviation flows_ := (flows G sol kept called).
+Abbreviation flows_ := (flows G sol kept called located).
+
+(* The case of a location, whose allocation is given by [located]. *)
+Ltac location_case :=
+  match goal with
+  | |- context [located ?l] => destruct (located l); [ | intros [] ]
+  end.
 
 (* Leaves the cases of [flows] that are not in the fragment. *)
 Ltac not_in_fragment :=
@@ -181,6 +201,7 @@ Proof.
       intros Hhu. apply Hu. exact (has_usage_alias _ _ _ Hc _ _ Hhu Hal).
   - intros (a & bn & from' & Ha & Hrest). exists a, bn, from'.
     split; [ exact (may_come_from_alias _ _ _ Hal Ha) | exact Hrest ].
+  - location_case. apply may_come_from_alias. exact Hal.
   - intros (m & ws & Hm & Hlen & Hchain & Hex & Hend & Hargs).
     exists m, ws. do 4 (split; [ assumption | ]). split; [ | exact Hargs ].
     intros y Hy. exact (may_come_from_alias _ _ _ Hal (Hend y Hy)).
@@ -205,6 +226,7 @@ Proof.
     intros Hhu. apply Hu, au_hu, Hm, Hhu.
   - intros (a & bn & from' & Ha & Hrest). exists a, bn, from'.
     split; [ exact (may_come_from_escape _ _ _ Has Hm Ha) | exact Hrest ].
+  - location_case. exact (may_come_from_escape _ _ _ Has Hm).
   - intros (m' & ws & Hm' & Hlen & Hchain & Hex & Hend & Hargs).
     exists m', ws. do 4 (split; [ assumption | ]). split; [ | exact Hargs ].
     intros y Hy. exact (may_come_from_escape _ _ _ Has Hm (Hend y Hy)).
@@ -220,6 +242,7 @@ Proof.
   - intros (a & (Hhs & _) & _). exact Hhs.
   - intros (Has & _). exact (as_hs _ Has).
   - intros (a & bn & from & (Hhs & _) & _). exact Hhs.
+  - location_case. intros (Hhs & _). exact Hhs.
   - intros (m & ws & _ & _ & _ & (y & Hy) & Hend & _).
     exact (proj1 (Hend y Hy)).
 Qed.
@@ -364,8 +387,8 @@ End Carry.
 
 Theorem flows_has_source : flows_has_source_statement.
 Proof.
-  intros is_local G sol kept called v n Hc.
-  exact (flows_hs is_local G sol kept called Hc v n).
+  intros is_local G sol kept called located v n Hc.
+  exact (flows_hs is_local G sol kept called located Hc v n).
 Qed.
 
 Theorem read_field_used : read_field_used_statement.
@@ -376,8 +399,9 @@ Qed.
 
 Theorem read_flows : read_flows_statement.
 Proof.
-  intros is_local G sol kept called a base to_ from f v Hc.
-  exact (flows_read is_local G sol kept called Hc a base to_ from f v).
+  intros is_local G sol kept called located a base to_ from f v Hc.
+  exact (flows_read is_local G sol kept called located Hc a base to_ from f
+           v).
 Qed.
 
 (* ======================================================================== *)
@@ -407,6 +431,8 @@ Variable codes : list (code_id * code).
 Variable symbols : list symbol.
 (* Whether the reads of value and function slots are not local. *)
 Variable slots_read : Prop.
+(* Whether the primitives of the heap are in the term. *)
+Variable heap_prims : Prop.
 
 Definition simple_noted (s : simple) : Prop :=
   match s with
@@ -475,11 +501,30 @@ Definition default_prim_edges (x : variable) (args : list simple) : Prop :=
   ∧ ∀ from : node,
       from ∈ free_names_of_simples args -> g_use G (Node_variable x) from.
 
-(* Of a primitive that is not of the heap, as none of the fragment is
-   ([named_in_flow_fragment]). *)
-Definition prim_edges (x : variable) (p : prim) (args : list simple)
-    : Prop :=
-  prim_of_heap p = false
+(* [cond_any_usage] in the code [ctx]. *)
+Definition cond_use_edge (ctx : option code_id) (n : node) : Prop :=
+  match ctx with
+  | None => g_any_usage G n
+  | Some id => g_use G (Node_code_id id) n
+  end.
+
+(* A load of a field that may change: its variable has any source. *)
+Definition prim_loads_mutable (p : prim) : bool :=
+  match p with
+  | Unary (Block_load _ Mutable _) => true
+  | _ => false
+  end.
+
+(* Of a primitive, in the code [ctx]: not of the heap unless [heap]
+   ([named_in_flow_fragment]); used by the code where it has arbitrary
+   effects; with any source if it loads a mutable field; and its facts,
+   by the case of [traverse_prim]. *)
+Definition prim_edges (ctx : option code_id) (x : variable) (p : prim)
+    (args : list simple) : Prop :=
+  ((prim_of_heap p = false ∨ heap_prims)
+   ∧ (prim_has_arbitrary_effects p = true ->
+      cond_use_edge ctx (Node_variable x))
+   ∧ (prim_loads_mutable p = true -> g_any_source G (Node_variable x)))
   ∧ if prim_classified p args
     then classified_prim_edges x p args
     else default_prim_edges x args.
@@ -510,11 +555,12 @@ Definition set_edges (x : variable) (slot : function_slot)
           lookup f function_decls = Some id ->
           closure_edges (sites f) id function_decls sites value_slots.
 
-Definition named_edges (x : variable) (defining_expr : named) : Prop :=
+Definition named_edges (ctx : option code_id) (x : variable)
+    (defining_expr : named) : Prop :=
   match defining_expr with
   | Simple s =>
     g_alias G (Node_variable x) (node_of_simple s) ∧ simple_noted s
-  | Prim p args => prim_edges x p args
+  | Prim p args => prim_edges ctx x p args
   | Closure_of_set slot function_decls value_slots =>
     set_edges x slot function_decls value_slots
   | Project_value_slot_from _ w closure =>
@@ -715,7 +761,7 @@ Fixpoint expr_edges (ctx : option code_id) (ce : finite_map (list node))
     (e : expr) : Prop :=
   match e with
   | Let x _ defining_expr body =>
-    named_edges x defining_expr ∧ expr_edges ctx ce body
+    named_edges ctx x defining_expr ∧ expr_edges ctx ce body
   | Let_static bindings body =>
     every binding_edges bindings ∧ expr_edges ctx ce body
   | Let_cont_non_recursive k h body =>
@@ -1390,14 +1436,78 @@ Proof.
         split; [ reflexivity | exact Hfrom ].
 Qed.
 
-Lemma traverse_prim_makes (env : traverse_env) (x : variable) (p : prim)
-    (args : list simple) :
-  prim_of_heap p = false ->
-  makes [] (traverse_prim env x p args)
-    (fun a' => prim_edges (acc_graph a') (acc_noted a') x p args).
+(* [cond_any_usage] makes the edge of its code. *)
+Lemma cond_any_usage_later (env : traverse_env) (s : simple) (a a' : acc) :
+  acc_le (cond_any_usage env s a) a' ->
+  cond_use_edge (acc_graph a') (env_current_code_id env) (node_of_simple s).
 Proof.
-  intros Hoff. unfold prim_edges. apply makes_and_const; [ exact Hoff | ].
-  apply traverse_prim_makes_any.
+  unfold cond_any_usage, cond_use_edge.
+  destruct (env_current_code_id env); intros Hle.
+  - apply facts_use. apply (add_facts_later _ _ _ _ Hle). left. reflexivity.
+  - apply facts_any_usage. apply (add_facts_later _ _ _ _ Hle). left.
+    reflexivity.
+Qed.
+
+(* A primitive that [traverse_prim] reads in a way of its own has no
+   arbitrary effects. *)
+Lemma classified_no_effects (p : prim) (args : list simple) :
+  prim_classified p args = true -> prim_has_arbitrary_effects p = false.
+Proof.
+  destruct p as [u | b | v | h | r];
+    [ destruct u | destruct b | destruct v | destruct h | destruct r ];
+    repeat (match goal with b : bool |- _ => destruct b end);
+    destruct args as [ | s1 [ | s2 args]]; intros H;
+    try discriminate H; reflexivity.
+Qed.
+
+(* The use of the variable of a primitive with arbitrary effects by the
+   code it is in, and any source for the variable of a load of a mutable
+   field. *)
+Lemma traverse_prim_side (env : traverse_env) (x : variable) (p : prim)
+    (args : list simple) :
+  makes [] (traverse_prim env x p args)
+    (fun a' =>
+       (prim_has_arbitrary_effects p = true ->
+        cond_use_edge (acc_graph a') (env_current_code_id env)
+          (Node_variable x))
+       ∧ (prim_loads_mutable p = true ->
+          g_any_source (acc_graph a') (Node_variable x))).
+Proof.
+  intros a. split; [ exact (proj1 (traverse_prim_makes_any env x p args a)) | ].
+  intros a' Hle.
+  destruct (prim_classified p args) eqn:Hcl.
+  - split; [ intros Heff; rewrite (classified_no_effects p args Hcl) in Heff;
+             discriminate Heff | ].
+    intros Hmut.
+    destruct p as [p' | | | | ]; try discriminate Hmut.
+    destruct p' as [kind mut fld | | | | | | | | | | | | | | ];
+      try discriminate Hmut.
+    destruct mut; try discriminate Hmut.
+    destruct args as [ | s1 [ | s2 args]]; try discriminate Hcl.
+    apply facts_any_source. apply (add_facts_later _ _ _ _ Hle). left.
+    reflexivity.
+  - rewrite (traverse_prim_default env x p args a Hcl) in Hle. split.
+    + intros Heff. rewrite Heff in Hle.
+      exact (cond_any_usage_later env (Var x) a a'
+               (acc_le_trans _ _ _ (proj1 (add_facts_steady _ _)) Hle)).
+    + intros _. apply facts_any_source. apply (add_facts_later _ _ _ _ Hle).
+      left. reflexivity.
+Qed.
+
+Lemma traverse_prim_makes (heap_prims : Prop) (env : traverse_env)
+    (x : variable) (p : prim) (args : list simple) :
+  prim_of_heap p = false ∨ heap_prims ->
+  makes [] (traverse_prim env x p args)
+    (fun a' =>
+       prim_edges (acc_graph a') (acc_noted a') heap_prims
+         (env_current_code_id env) x p args).
+Proof.
+  intros Hoff a. unfold prim_edges.
+  destruct (traverse_prim_side env x p args a) as [Hadds Hside].
+  destruct (traverse_prim_makes_any env x p args a) as [_ Hany].
+  split; [ exact Hadds | intros a' Hle ].
+  split; [ | exact (Hany a' Hle) ].
+  split; [ exact Hoff | exact (Hside a' Hle) ].
 Qed.
 
 (* ------------------------------------------------------------------------ *)
@@ -1594,8 +1704,8 @@ Qed.
 
 (* The facts of a [Let] of the fragment. *)
 Lemma traverse_named_makes (env : traverse_env) (slots_read : Prop)
-    (x : variable) (defining_expr : named) :
-  named_in_flow_fragment defining_expr = true ->
+    (hb : bool) (x : variable) (defining_expr : named) :
+  named_in_flow_fragment hb defining_expr = true ->
   (named_projection_free defining_expr = false -> slots_read) ->
   (∀ w : value_slot,
      w ∈ projected_value_slots_of_named defining_expr ->
@@ -1603,7 +1713,8 @@ Lemma traverse_named_makes (env : traverse_env) (slots_read : Prop)
   makes [] (traverse_named env x defining_expr)
     (fun a' =>
        named_edges (acc_graph a') (acc_noted a') (acc_deps a')
-         (should_keep_value_slot env) slots_read x defining_expr).
+         (should_keep_value_slot env) slots_read (if hb then True else False)
+         (env_current_code_id env) x defining_expr).
 Proof.
   destruct defining_expr as [s | p args | | slot decls vs | | from w closure
                             | move_from move_to closure];
@@ -1618,6 +1729,7 @@ Proof.
       * apply (note_simple_noted s a a').
         exact (acc_le_trans _ _ _ (proj1 (add_facts_steady _ _)) Hle).
   - apply traverse_prim_makes.
+    destruct hb; [ right; exact I | left ].
     destruct (prim_of_heap p); [ discriminate Hfrag | reflexivity ].
   - apply closure_of_set_makes.
   - eapply makes_weaken; [ | exact (accessor_makes x (Field_value_slot w)
@@ -2670,13 +2782,16 @@ Variable codes : list (code_id * code).
 Variable symbols : list symbol.
 Variable K : list value_slot.
 Variable slots_read : Prop.
+(* Whether the primitives of the heap are in the fragment. *)
+Variable hb : bool.
 
 Abbreviation keep := (fun w : value_slot => among w K).
+Abbreviation heap_prims := (if hb then True else False).
 
 Definition edges_in (ctx : option code_id) (ce : finite_map (list node))
     (e : expr) (a' : acc) : Prop :=
   expr_edges (acc_graph a') (acc_noted a') (acc_deps a') (acc_code_deps a')
-    keep codes symbols slots_read ctx ce e.
+    keep codes symbols slots_read heap_prims ctx ce e.
 
 (* What a static binding makes before code is traversed. *)
 Definition static_binding_made (binding : static_binding) (a' : acc) : Prop :=
@@ -2708,7 +2823,7 @@ Qed.
 (* The facts of a term of the fragment, and of a handler. *)
 Lemma traverse_makes :
   (∀ e : expr,
-     flow_fragment codes symbols e = true ->
+     flow_fragment hb codes symbols e = true ->
      distinct (static_names code_ids_of_binding e) = true ->
      (∀ w : value_slot, w ∈ projected_value_slots e -> keep w = true) ->
      slots_read ∨ projection_free e = true ->
@@ -2718,7 +2833,7 @@ Lemma traverse_makes :
        makes (static_names code_ids_of_binding e) (traverse env e)
          (edges_in (env_current_code_id env) (env_conts env) e))
   ∧ (∀ h : continuation_handler,
-       handler_flow_fragment codes symbols h = true ->
+       handler_flow_fragment hb codes symbols h = true ->
        distinct (handler_static_names code_ids_of_binding h) = true ->
        (∀ w : value_slot,
           w ∈ handler_projected_value_slots h -> keep w = true) ->
@@ -2730,7 +2845,7 @@ Lemma traverse_makes :
            (traverse_handler env h)
            (fun a' =>
               handler_edges (acc_graph a') (acc_noted a') (acc_deps a')
-                (acc_code_deps a') keep codes symbols slots_read
+                (acc_code_deps a') keep codes symbols slots_read heap_prims
                 (env_current_code_id env) (env_conts env) h)).
 Proof.
   apply expr_handler_ind.
@@ -2741,7 +2856,7 @@ Proof.
     assert (Hsd : named_projection_free d = false -> slots_read).
     { intros Hnp. destruct (slots_and_l _ _ _ Hslots) as [H | H];
         [ exact H | congruence ]. }
-    pose proof (traverse_named_makes env slots_read x d Hd Hsd) as Hn.
+    pose proof (traverse_named_makes env slots_read hb x d Hd Hsd) as Hn.
     refine (makes_compose _ _ _ _ _ _ (makes_weaken _ _ _ _ _ (Hn _))
               (IH Hbody Hdist _ (slots_and_r _ _ _ Hslots) Hcodes_in env HK)).
     + intros a' H. unfold named_edges in H |- *.
@@ -2988,7 +3103,7 @@ Proof.
            ∀ kh, kh ∈ handlers ->
              (fun '(_, h) =>
                 handler_edges (acc_graph a') (acc_noted a') (acc_deps a')
-                  (acc_code_deps a') keep codes symbols slots_read
+                  (acc_code_deps a') keep codes symbols slots_read heap_prims
                   (env_current_code_id env') (env_conts env') h) kh)).
     { apply fold_left_makes. intros [k h] Hin.
       apply (IHh k h Hin (Hhandlers _ Hin)).
@@ -3151,29 +3266,34 @@ Qed.
 Lemma static_names_edges (G : graph) (noted : symbol -> Prop)
     (deps : closure_dep -> Prop) (cds : finite_map code_dep)
     (keep : value_slot -> bool) (codes : list (code_id * code))
-    (symbols : list symbol) (slots_read : Prop) :
+    (symbols : list symbol) (slots_read heap_prims : Prop) :
   (∀ e : expr,
      ∀ (ctx : option code_id) (ce : finite_map (list node)),
-       expr_edges G noted deps cds keep codes symbols slots_read ctx ce e ->
+       expr_edges G noted deps cds keep codes symbols slots_read heap_prims
+         ctx ce e ->
        (∀ s : symbol, s ∈ static_names symbols_of_binding e ->
           ∃ const : static_const,
             binding_edges G noted deps cds keep codes symbols slots_read
+              heap_prims
               (Bind_symbol s const))
        ∧ ∀ id : code_id, id ∈ static_names code_ids_of_binding e ->
            ∃ c : code,
              binding_edges G noted deps cds keep codes symbols slots_read
+              heap_prims
                (Bind_code id c))
   ∧ (∀ h : continuation_handler,
        ∀ (ctx : option code_id) (ce : finite_map (list node)),
-         handler_edges G noted deps cds keep codes symbols slots_read ctx ce h
-           ->
+         handler_edges G noted deps cds keep codes symbols slots_read
+           heap_prims ctx ce h ->
          (∀ s : symbol, s ∈ handler_static_names symbols_of_binding h ->
             ∃ const : static_const,
               binding_edges G noted deps cds keep codes symbols slots_read
+              heap_prims
                 (Bind_symbol s const))
          ∧ ∀ id : code_id, id ∈ handler_static_names code_ids_of_binding h ->
              ∃ c : code,
                binding_edges G noted deps cds keep codes symbols slots_read
+              heap_prims
                  (Bind_code id c)).
 Proof.
   apply expr_handler_ind; simpl.
@@ -3238,15 +3358,16 @@ Lemma traverse_unit_eq (flag : reaper_preserve_direct_calls)
 Proof. reflexivity. Qed.
 
 (* What the proofs need of the graph of a unit of the fragment. *)
-Lemma traverse_unit_facts (flag : reaper_preserve_direct_calls)
-    (u : unit_interface) (e : expr) (slots_read : Prop) :
-  in_flow_fragment e = true ->
+Lemma traverse_unit_facts_gen (flag : reaper_preserve_direct_calls)
+    (u : unit_interface) (e : expr) (slots_read : Prop) (hb : bool) :
+  flow_fragment hb (unit_codes e) (static_names symbols_of_binding e) e
+  && distinct (static_names code_ids_of_binding e) = true ->
   slots_read ∨ projection_free e = true ->
   ∃ (noted : symbol -> Prop) (deps : closure_dep -> Prop)
     (cds : finite_map code_dep),
     expr_edges (graph_of_facts (traverse_unit flag u e)) noted deps cds
       (unit_kept e) (unit_codes e) (static_names symbols_of_binding e)
-      slots_read None (unit_conts u) e
+      slots_read (if hb then True else False) None (unit_conts u) e
     ∧ g_any_source (graph_of_facts (traverse_unit flag u e)) Node_all_constants
     ∧ (∀ s : symbol,
          noted s ->
@@ -3267,7 +3388,7 @@ Proof.
   rewrite traverse_unit_eq.
   destruct (proj1 (traverse_makes (unit_codes e)
                      (static_names symbols_of_binding e)
-                     (projected_value_slots e) slots_read) e Hfrag Hdist
+                     (projected_value_slots e) slots_read hb) e Hfrag Hdist
               (fun w Hw => proj2 (among_In w _) Hw) Hslots (fun x Hx => Hx)
               (initial_env flag u e) eq_refl initial_acc)
     as [[Hle4 (l & Hl & Hperm)] Hedges].
@@ -3302,6 +3423,60 @@ Proof.
   - intros id Hid. rewrite Hcds in Hid.
     exact (Permutation_in _ Hperm Hid).
 Qed.
+
+(* The facts of a unit of the fragment without the primitives of the
+   heap, and with them. *)
+Lemma traverse_unit_facts (flag : reaper_preserve_direct_calls)
+    (u : unit_interface) (e : expr) (slots_read : Prop) :
+  in_flow_fragment e = true ->
+  slots_read ∨ projection_free e = true ->
+  ∃ (noted : symbol -> Prop) (deps : closure_dep -> Prop)
+    (cds : finite_map code_dep),
+    expr_edges (graph_of_facts (traverse_unit flag u e)) noted deps cds
+      (unit_kept e) (unit_codes e) (static_names symbols_of_binding e)
+      slots_read False None (unit_conts u) e
+    ∧ g_any_source (graph_of_facts (traverse_unit flag u e)) Node_all_constants
+    ∧ (∀ s : symbol,
+         noted s ->
+         among s (static_names symbols_of_binding e) = false ->
+         g_any_source (graph_of_facts (traverse_unit flag u e))
+           (Node_symbol s))
+    ∧ (∀ (k : continuation) (p : node),
+         p ∈ unit_cont_nodes u k ->
+         g_any_usage (graph_of_facts (traverse_unit flag u e)) p)
+    ∧ (∀ d : closure_dep,
+         deps d ->
+         closure_dep_facts (graph_of_facts (traverse_unit flag u e)) cds d)
+    ∧ NoDup (map fst cds)
+    ∧ (∀ id : code_id,
+         id ∈ map fst cds -> id ∈ static_names code_ids_of_binding e).
+Proof. exact (traverse_unit_facts_gen flag u e slots_read false). Qed.
+
+Lemma traverse_unit_facts_heap (flag : reaper_preserve_direct_calls)
+    (u : unit_interface) (e : expr) (slots_read : Prop) :
+  in_heap_fragment e = true ->
+  slots_read ∨ projection_free e = true ->
+  ∃ (noted : symbol -> Prop) (deps : closure_dep -> Prop)
+    (cds : finite_map code_dep),
+    expr_edges (graph_of_facts (traverse_unit flag u e)) noted deps cds
+      (unit_kept e) (unit_codes e) (static_names symbols_of_binding e)
+      slots_read True None (unit_conts u) e
+    ∧ g_any_source (graph_of_facts (traverse_unit flag u e)) Node_all_constants
+    ∧ (∀ s : symbol,
+         noted s ->
+         among s (static_names symbols_of_binding e) = false ->
+         g_any_source (graph_of_facts (traverse_unit flag u e))
+           (Node_symbol s))
+    ∧ (∀ (k : continuation) (p : node),
+         p ∈ unit_cont_nodes u k ->
+         g_any_usage (graph_of_facts (traverse_unit flag u e)) p)
+    ∧ (∀ d : closure_dep,
+         deps d ->
+         closure_dep_facts (graph_of_facts (traverse_unit flag u e)) cds d)
+    ∧ NoDup (map fst cds)
+    ∧ (∀ id : code_id,
+         id ∈ map fst cds -> id ∈ static_names code_ids_of_binding e).
+Proof. exact (traverse_unit_facts_gen flag u e slots_read true). Qed.
 
 (* ======================================================================== *)
 (* The primitives of the default case                                       *)
@@ -3970,6 +4145,17 @@ Proof.
       injection Hev as <-; first [ exact Hwpa | exact I ].
 Qed.
 
+Lemma fields_from_impl (P Q : nat -> value -> Prop) (k : nat)
+    (fields : list value) :
+  (∀ (i : nat) (field : value), field ∈ fields -> P i field -> Q i field) ->
+  fields_from P k fields -> fields_from Q k fields.
+Proof.
+  revert k. induction fields as [ | field fields IH]; intros k H; simpl;
+    [ auto | ].
+  intros [Hf Hfs]. split; [ exact (H k field (or_introl eq_refl) Hf) | ].
+  apply IH; [ | exact Hfs ]. intros i f Hin. exact (H i f (or_intror Hin)).
+Qed.
+
 Section Run.
 
 Variable is_local : field -> bool.
@@ -3982,6 +4168,10 @@ Variable keep : value_slot -> bool.
 Variable codes : list (code_id * code).
 Variable symbols : list symbol.
 Variable u : unit_interface.
+(* Whether the primitives of the heap are in the term. *)
+Variable heap_prims : Prop.
+(* The allocation of each location of the run. *)
+Variable located : location -> option node.
 Hypothesis Hc : closed is_local G sol.
 Hypothesis Hlocal : is_local_slots_only is_local.
 Hypothesis Hconsts : g_any_source G Node_all_constants.
@@ -3998,9 +4188,10 @@ Hypothesis Hcds :
 
 Abbreviation slots := (∀ f : field, is_local f = false).
 Abbreviation called := (called_by G cds).
-Abbreviation flows_ := (flows G sol keep called).
-Abbreviation env_flows_ := (env_flows G sol keep called).
-Abbreviation statics_flow_ := (statics_flow G sol keep called).
+Abbreviation flows_ := (flows G sol keep called located).
+Abbreviation env_flows_ := (env_flows G sol keep called located).
+Abbreviation statics_flow_ := (statics_flow G sol keep called located).
+Abbreviation heap_flows_ := (heap_flows G sol keep called located).
 Abbreviation as_ n := (s_any_source sol n = true).
 Abbreviation au n := (s_any_usage sol n = true).
 Abbreviation hu n := (s_has_usage sol n = true).
@@ -4123,28 +4314,39 @@ Proof.
   - injection Hs as <-. exact consts_any_source.
 Qed.
 
-(* The value of a variable is at its node, and so is no location:
-   neither is a value of the arguments of a primitive. *)
+(* The value of a variable is at its node, and so is no location that
+   has no allocation: none is a value of the arguments of a primitive. *)
 Lemma env_flows_no_location (vars : env) (args : list simple)
     (vs : list value) (l : location) :
-  env_flows_ vars -> eval_simples vars args = Some vs ->
+  located l = None -> env_flows_ vars -> eval_simples vars args = Some vs ->
   Value_location l ∉ vs.
 Proof.
-  intros Hvars Hvs Hin.
+  intros Hnone Hvars Hvs Hin.
   destruct (eval_simples_in _ _ _ _ Hvs Hin) as (s & _ & Hs).
   destruct s as [y | sym | c]; simpl in Hs.
-  - exact (Hvars y _ Hs).
+  - pose proof (Hvars y _ Hs) as H. simpl in H. rewrite Hnone in H.
+    exact H.
   - discriminate Hs.
   - discriminate Hs.
 Qed.
 
-(* A [Let] of the fragment is not of a primitive of the heap. *)
-Lemma named_edges_not_heap (sr : Prop) (x : variable) (d : named) :
-  named_edges G noted deps keep sr x d ->
+(* A [Let] of a term without the primitives of the heap is not of one. *)
+Lemma named_edges_not_heap (sr : Prop) (ctx : option code_id) (x : variable)
+    (d : named) :
+  named_edges G noted deps keep sr False ctx x d ->
   ∀ (q : heap_primitive) (args : list simple), d <> Prim (Heap q) args.
 Proof.
-  intros H q args ->. simpl in H. destruct H as [Hoff _].
+  intros H q args ->. simpl in H. destruct H as [[[Hoff | []] _] _].
   discriminate Hoff.
+Qed.
+
+Lemma named_edges_no_heap (sr : Prop) (ctx : option code_id) (x : variable)
+    (d : named) :
+  ~ heap_prims -> named_edges G noted deps keep sr heap_prims ctx x d ->
+  ∀ (q : heap_primitive) (args : list simple), d <> Prim (Heap q) args.
+Proof.
+  intros Hnh H q args ->. simpl in H.
+  destruct H as [[[Hoff | Hh] _] _]; [ discriminate Hoff | exact (Hnh Hh) ].
 Qed.
 
 (* What is said of a block at an allocation. *)
@@ -4224,7 +4426,8 @@ Lemma read_const (a base : node) (x : variable) (f : field) (c : const) :
   as_ (Node_variable x).
 Proof.
   intros Hl Hcons Hacc Ha.
-  exact (flows_read _ _ _ keep called Hc _ _ _ _ _ (Value_const c) Hl Hcons
+  exact (flows_read _ _ _ keep called located Hc _ _ _ _ _ (Value_const c) Hl
+           Hcons
     Hacc Ha
            consts_any_source).
 Qed.
@@ -4278,7 +4481,7 @@ Proof.
     destruct (Harg s v Hin Hs)
       as [(c & ->) | [(y & Hy & Hu) | (sym & -> & Hu)]].
     + exact Hasx.
-    + exact (flows_escape _ _ _ _ _ Hc _ _ _ Hasx Hu Hy).
+    + exact (flows_escape _ _ _ _ _ _ Hc _ _ _ Hasx Hu Hy).
     + exact (may_come_from_any _ _ Hasx Hu).
   - (* A load from an immutable array. *)
     destruct (eval_simples_in _ _ _ _ Hvs (or_introl eq_refl))
@@ -4290,7 +4493,7 @@ Proof.
       destruct Hy as [_ Hall].
       destruct (proj1 (every_in _ _ _) Hall v Hin)
         as [(c & ->) | (m & Hm & Hmu)]; [ exact Hasx | ].
-      apply (flows_escape _ _ _ _ _ Hc v _ m Hasx); [ | exact Hm ].
+      apply (flows_escape _ _ _ _ _ _ Hc v _ m Hasx); [ | exact Hm ].
       intros Hhu. apply Hmu, (au_hu _ _ _ Hc), Hu, Hhu.
     + (* A static array: its symbol has any usage if [x] has a use. *)
       assert (Hau : hu (Node_variable x) -> au (Node_symbol sym)).
@@ -4302,7 +4505,7 @@ Proof.
       destruct (In_nth_error _ _ Hin) as (i & Hi).
       destruct (fields_from_elim _ 0 _ i v (proj2 (Hst sym _ Hl)) Hi)
         as (from & Hcons & Hfrom).
-      apply (flows_escape _ _ _ _ _ Hc v _ from Hasx); [ | exact Hfrom ].
+      apply (flows_escape _ _ _ _ _ _ Hc v _ from Hasx); [ | exact Hfrom ].
       intros Hhu.
       exact (any_usage_constructor _ _ _ Hc _ _ _ (Hau Hhu) Hcons
                ltac:(not_local_field)).
@@ -4320,10 +4523,10 @@ Proof.
 Qed.
 
 (* The value of a [Let] is at the node of its variable. *)
-Lemma named_flows (statics : static_env) (vars : env) (x : variable)
-    (d : named) (v : value) :
+Lemma named_flows (statics : static_env) (vars : env) (ctx : option code_id)
+    (x : variable) (d : named) (v : value) :
   statics_flow_ statics -> env_flows_ vars ->
-  named_edges G noted deps keep slots x d ->
+  named_edges G noted deps keep slots heap_prims ctx x d ->
   eval_named statics vars d = Some v ->
   flows_ v (Node_variable x).
 Proof.
@@ -4332,7 +4535,7 @@ Proof.
                | move_from move_to closure];
     simpl in Hedges; try contradiction; simpl in Hev.
   - destruct Hedges as [Hal Hnoted].
-    apply (flows_alias _ _ _ _ _ Hc v _ _ (alias_input _ _ _ Hc _ _ Hal)).
+    apply (flows_alias _ _ _ _ _ _ Hc v _ _ (alias_input _ _ _ Hc _ _ Hal)).
     exact (simple_flows _ _ _ Hvars Hnoted Hev).
   - destruct (eval_simples vars args) as [vs | ] eqn:Hvs;
       [ | discriminate Hev ].
@@ -4366,7 +4569,7 @@ Proof.
           as (a & Ha & _ & _ & Hfields).
         destruct (fields_from_elim _ _ _ _ _ Hfields Hnth)
           as (from & Hcons & Hfrom).
-        refine (flows_read _ _ _ _ _ Hc _ _ _ _ _ _ _ Hcons Hedge Ha Hfrom).
+        refine (flows_read _ _ _ _ _ _ Hc _ _ _ _ _ _ _ Hcons Hedge Ha Hfrom).
         not_local_field.
       * (* [Is_int] *)
         unfold option_map, eval_is_int in Hev.
@@ -4402,7 +4605,7 @@ Proof.
         destruct (boxed_number_of_cases _ _ _ Hbx) as [-> | (s & -> & Hl)].
         -- destruct Hv1 as (a & bn' & from & Ha & Hk' & Hcons & Hfrom).
            rewrite (is_number_of_kind_unique _ _ _ Hk' Hk) in Hcons.
-           refine (flows_read _ _ _ _ _ Hc _ _ _ _ _ (Value_const c) _ Hcons
+           refine (flows_read _ _ _ _ _ _ Hc _ _ _ _ _ (Value_const c) _ Hcons
              Hedge
                      Ha Hfrom).
            not_local_field.
@@ -4410,7 +4613,7 @@ Proof.
            ++ exact (any_source_accessor _ _ _ Hc _ _ _
                        (proj1 (proj2 (proj2 Hv1)) Has) Hedge
                        ltac:(not_local_field)).
-           ++ refine (flows_read _ _ _ _ _ Hc _ _ _ _ _ (Value_const c) _
+           ++ refine (flows_read _ _ _ _ _ _ Hc _ _ _ _ _ (Value_const c) _
                         (Hcons c bn eq_refl Hk) Hedge Hv1 consts_any_source).
               not_local_field.
       * (* [Box_number] *)
@@ -4485,7 +4688,7 @@ Proof.
       destruct (Hall from id0 Hl0) as (_ & _ & _ & Hvs).
       destruct (proj1 (for_all_bindings_lookup _ _ _) Hvs w v Hw Hk)
         as (from' & Hcons & Hfrom).
-      exact (flows_read _ _ _ _ _ Hc _ _ _ _ _ v (Hslots _) Hcons Hacc Hn
+      exact (flows_read _ _ _ _ _ _ Hc _ _ _ _ _ v (Hslots _) Hcons Hacc Hn
                Hfrom).
     + destruct (lookup s (static_values statics))
         as [[ | slot0 syms0 decls0 slots0 | | | | | ] | ] eqn:Hls;
@@ -4497,7 +4700,7 @@ Proof.
         destruct (Hst s _ Hls) as (_ & _ & _ & Hvs).
         destruct (proj1 (for_all_bindings_lookup _ _ _) Hvs w v Hw Hk)
           as (from' & Hcons & Hfrom).
-        exact (flows_read _ _ _ _ _ Hc _ _ _ _ _ v (Hslots _) Hcons Hacc Hfc
+        exact (flows_read _ _ _ _ _ _ Hc _ _ _ _ _ v (Hslots _) Hcons Hacc Hfc
                  Hfrom).
   - (* [Project_function_slot] *)
     destruct Hedges as ((Hacc & Hnoted) & Hslots).
@@ -4517,7 +4720,7 @@ Proof.
       injection Hev as <-.
       destruct Hfc as (sites & Hn & Hall).
       destruct (Hall move_from id0 Hl0) as (_ & _ & Hfs & _).
-      apply (flows_read _ _ _ _ _ Hc _ _ _ _ _ _ (Hslots _) (Hfs move_to id1
+      apply (flows_read _ _ _ _ _ _ Hc _ _ _ _ _ _ (Hslots _) (Hfs move_to id1
         Hl1)
                Hacc Hn).
       simpl. exists sites.
@@ -4536,7 +4739,7 @@ Proof.
         injection Hev as <-.
         destruct (Hst s _ Hls) as (_ & _ & Hfs & _).
         destruct (Hfs move_to s' Hs') as [Hcons Hself].
-        exact (flows_read _ _ _ _ _ Hc _ _ _ _ _ (Value_symbol s') (Hslots _)
+        exact (flows_read _ _ _ _ _ _ Hc _ _ _ _ _ (Value_symbol s') (Hslots _)
                  Hcons Hacc Hfc Hself).
 Qed.
 
@@ -4544,11 +4747,12 @@ Qed.
 (* Static bindings                                                          *)
 (* ------------------------------------------------------------------------ *)
 
-Abbreviation edges := (expr_edges G noted deps cds keep codes symbols slots).
+Abbreviation edges :=
+  (expr_edges G noted deps cds keep codes symbols slots heap_prims).
 Abbreviation handler_edges_ :=
-  (handler_edges G noted deps cds keep codes symbols slots).
+  (handler_edges G noted deps cds keep codes symbols slots heap_prims).
 Abbreviation binding_edges_ :=
-  (binding_edges G noted deps cds keep codes symbols slots).
+  (binding_edges G noted deps cds keep codes symbols slots heap_prims).
 
 (* The code bound so far is the code of the unit, as the graph has it. *)
 Definition codes_ok (statics : static_env) : Prop :=
@@ -4964,9 +5168,9 @@ Lemma conts_ok_flows :
   (∀ (ctx : option code_id) (K : cont_env) (ce : finite_map (list node)),
      conts_ok ctx K ce ->
      ∀ (k : continuation) (c : cont_value),
-       (k, c) ∈ K -> cont_flows G sol keep called c)
+       (k, c) ∈ K -> cont_flows G sol keep called located c)
   ∧ (∀ (c : cont_value) (ns : list node),
-       cont_ok c ns -> cont_flows G sol keep called c).
+       cont_ok c ns -> cont_flows G sol keep called located c).
 Proof.
   apply conts_ok_comb.
   - intros k c [].
@@ -5189,7 +5393,7 @@ Lemma apply_cont_args_flow (vars : env) (ce : finite_map (list node))
 Proof.
   intros Hvars [Haliases Hnoted] Hvs Hparams i v p Hv Hp.
   destruct (eval_simples_nth _ _ _ _ _ Hvs Hv) as (s & Hs & Hsv).
-  apply (flows_alias _ _ _ _ _ Hc v _ (node_of_simple s)).
+  apply (flows_alias _ _ _ _ _ _ Hc v _ (node_of_simple s)).
   - apply (alias_input _ _ _ Hc). apply (Haliases params Hparams p s).
     exact (nth_error_combine _ _ _ _ _ Hp Hs).
   - exact (simple_flows _ _ _ Hvars (Hnoted s (nth_error_In _ _ Hs)) Hsv).
@@ -5238,7 +5442,7 @@ Definition flow_invariant (s : state) : Prop :=
 Definition result_ok (r : step_result) : Prop :=
   match r with
   | Step s' => flow_invariant s'
-  | Exit k vs _ _ => exit_flows G sol keep called u k vs
+  | Exit k vs _ _ => exit_flows G sol keep called located u k vs
   | Undefined => True
   end.
 
@@ -5508,10 +5712,10 @@ Proof.
     + simpl in Hold. destruct (Pos.eqb_spec y mc) as [-> | _];
         [ | discriminate Hold ].
       injection Hold as <-.
-      exact (flows_alias _ _ _ _ _ Hc _ _ _ (alias_input _ _ _ Hc _ _ Hmc)
+      exact (flows_alias _ _ _ _ _ _ Hc _ _ _ (alias_input _ _ _ Hc _ _ Hmc)
                Hclosure).
     + destruct (nth_error (cd_params cd) i) as [p | ] eqn:Hp.
-      * apply (flows_alias _ _ _ _ _ Hc v _ p).
+      * apply (flows_alias _ _ _ _ _ _ Hc v _ p).
         -- apply (alias_input _ _ _ Hc). apply Hps.
            exact (nth_error_combine _ _ _ _ _ Hy_nth Hp).
         -- exact (Hparams i v p Hv_nth Hp).
@@ -5685,15 +5889,15 @@ Proof.
                     Hsx) as Hfs.
       refine (argument_transfer _ _ _ Hc (flows_ x) w witness p
                 (node_of_simple s) i _ _ Hw (Hargs i s Hs) (Hpar i p Hp)
-                (flows_hs _ _ _ _ _ Hc _ _ Hfs) Hfs).
-      * intros x' y'. exact (flows_alias _ _ _ _ _ Hc x x' y').
-      * intros x' m. exact (flows_escape _ _ _ _ _ Hc x x' m).
-    + apply (flows_alias _ _ _ _ _ Hc callee _ b
+                (flows_hs _ _ _ _ _ _ Hc _ _ Hfs) Hfs).
+      * intros x' y'. exact (flows_alias _ _ _ _ _ _ Hc x x' y').
+      * intros x' m. exact (flows_escape _ _ _ _ _ _ Hc x x' m).
+    + apply (flows_alias _ _ _ _ _ _ Hc callee _ b
                (alias_propagate _ _ _ Hc _ _ _ Hlive' Hprop)).
       exact Hfb.
     + apply (cont_ok_compose return_to returns (cd_return cd) Hret).
       * intros i r' r Hr' Hr v Hv.
-        refine (flows_read _ _ _ _ _ Hc w witness r r' _ v _ (Hretc i r' Hr')
+        refine (flows_read _ _ _ _ _ _ Hc w witness r r' _ v _ (Hretc i r' Hr')
                   (Hretacc i r Hr) Hw Hv).
         not_local_field.
       * destruct Hfits as [Hf | Hf]; [ left | right; exact Hf ].
@@ -5702,7 +5906,7 @@ Proof.
         [ | left; reflexivity ].
       intros [ | i] n' n Hn' Hn v Hv; [ | destruct i; discriminate Hn' ].
       injection Hn' as <-. injection Hn as <-.
-      refine (flows_read _ _ _ _ _ Hc w witness exn (cd_exn cd) _ v _ Hexnc
+      refine (flows_read _ _ _ _ _ _ Hc w witness exn (cd_exn cd) _ v _ Hexnc
                 Hexnacc Hw Hv).
       not_local_field.
   - exact (simples_pa_ok _ _ _ _ Hvars_pa Hvs).
@@ -5944,7 +6148,7 @@ Proof.
     rewrite HwsA in Hwk by lia.
     exact (Hraises _ wk Wk _ v Hwk HWk Hexnc Hv). }
   assert (Hm_closure : flows_ closure (cd_my_closure cd)).
-  { apply (flows_alias _ _ _ _ _ Hc closure _ b
+  { apply (flows_alias _ _ _ _ _ _ Hc closure _ b
              (alias_propagate _ _ _ Hc _ _ _ Hlive Hprop)).
     exact Hfb. }
   assert (Hall_pa : every (pa_ok statics) all)
@@ -6262,14 +6466,14 @@ Proof.
     destruct (block_of_flows _ _ _ _ _ Hst Htuple Hblock)
       as (a & Ha & _ & _ & Hfs).
     destruct (fields_from_elim _ 0 _ i x Hfs Hx) as (from & Hcons & Hfrom).
-    refine (flows_read _ _ _ _ _ Hc a U p from _ x _ Hcons (Hacc i p Hp) Ha
+    refine (flows_read _ _ _ _ _ _ Hc a U p from _ x _ Hcons (Hacc i p Hp) Ha
               Hfrom).
     not_local_field. }
   assert (Hfields_pa : every (pa_ok statics) fields).
   { destruct Hblock as [-> | Hblock]; [ exact I | ].
     exact (block_fields_pa_ok _ _ _ _ (proj1 Hvs_pa) Hspa Hblock). }
   assert (Hm_closure : flows_ callee (cd_my_closure cd)).
-  { apply (flows_alias _ _ _ _ _ Hc callee _ b
+  { apply (flows_alias _ _ _ _ _ _ Hc callee _ b
              (alias_propagate _ _ _ Hc _ _ _ Hlive Hprop)).
     exact Hfb. }
   assert (Hexn_code : cont_ok exn_to [cd_exn cd]).
@@ -6751,9 +6955,9 @@ Proof.
     pose proof (simple_flows _ _ _ Hvars (Hnoted s (nth_error_In _ _ Hs)) Hsx)
       as Hfs.
     refine (argument_transfer _ _ _ Hc (flows_ x) W w p (node_of_simple s) kk
-              _ _ HW (Hargs kk s Hs') Hp (flows_hs _ _ _ _ _ Hc _ _ Hfs) Hfs).
-    + intros x' y'. exact (flows_alias _ _ _ _ _ Hc x x' y').
-    + intros x' m. exact (flows_escape _ _ _ _ _ Hc x x' m).
+              _ _ HW (Hargs kk s Hs') Hp (flows_hs _ _ _ _ _ _ Hc _ _ Hfs) Hfs).
+    + intros x' y'. exact (flows_alias _ _ _ _ _ _ Hc x x' y').
+    + intros x' m. exact (flows_escape _ _ _ _ _ _ Hc x x' m).
   - intros w Hw.
     destruct (Hnth _ _ Hw) as (grp & Hgw).
     destruct (caller_chain_nth _ _ _ _ _ _ _ Hch Hgw)
@@ -6763,7 +6967,7 @@ Proof.
       destruct ws; [ discriminate Hw | simpl; lia ]. }
     specialize (Hlast HS). split.
     + intros i r W R v Hr HW HR Hv.
-      refine (flows_read _ _ _ _ _ Hc W w r R _ v _ HR (Hlast i r Hr) HW Hv).
+      refine (flows_read _ _ _ _ _ _ Hc W w r R _ v _ HR (Hlast i r Hr) HW Hv).
       not_local_field.
     + intros r y Hr (W & R & HW & HR & Hy).
       refine (may_come_from_read _ _ _ Hc y W w r R _ _ HR (Hlast 0 r Hr) HW
@@ -6772,7 +6976,7 @@ Proof.
   - intros g w W E v Hw HW HE Hv.
     destruct (Hnth _ _ Hw) as (grp & Hgw).
     destruct (caller_chain_nth _ _ _ _ _ _ _ Hch Hgw) as (_ & Hexnacc & _).
-    refine (flows_read _ _ _ _ _ Hc W w exn E _ v _ HE Hexnacc HW Hv).
+    refine (flows_read _ _ _ _ _ _ Hc W w exn E _ v _ HE Hexnacc HW Hv).
     not_local_field.
   - intros g w W id Hw HW Hcodeid.
     destruct (Hnth _ _ Hw) as (grp & Hgw).
@@ -6895,7 +7099,7 @@ Proof.
       + rewrite Hlen_extra. exact Hfits.
       + intros i v n Hv Hn.
         destruct (eval_simples_nth _ _ _ _ _ Hextra Hv) as (s & Hs & Hsv).
-        apply (flows_alias _ _ _ _ _ Hc v _ (node_of_simple s)).
+        apply (flows_alias _ _ _ _ _ _ Hc v _ (node_of_simple s)).
         * apply (alias_input _ _ _ Hc). apply Haliases.
           exact (nth_error_combine _ _ _ _ _ Hn Hs).
         * exact (simple_flows _ _ _ Hvars (Hnoted s (nth_error_In _ _ Hs))
@@ -6943,17 +7147,589 @@ Proof.
   - right. exists (length ns). split; [ exact (Htop eq_refl) | lia ].
 Qed.
 
+(* ------------------------------------------------------------------------ *)
+(* The heap                                                                 *)
+(* ------------------------------------------------------------------------ *)
+
+(* What a primitive of the heap allocates. *)
+Definition heap_allocates (q : heap_primitive) : bool :=
+  match q with
+  | Make_block_with_identity _ _ | Make_mutable_array _ => true
+  | Block_set _ _ _ | Array_set _ _ => false
+  end.
+
+(* The location that the [Let] of a state allocates is given the node of
+   its variable. *)
+Definition alloc_ok (s : state) : Prop :=
+  ∀ (x : variable) (kind : flambda_kind) (q : heap_primitive)
+    (args : list simple) (body : expr),
+    state_expr s = Let x kind (Prim (Heap q) args) body ->
+    heap_allocates q = true ->
+    located (fresh_location (state_heap s)) = Some (Node_variable x).
+
+(* The partial applications that the cells hold are as the run makes
+   them. *)
+Definition heap_pa_ok (statics : static_env) (hp : heap) : Prop :=
+  ∀ (l : location) (c : cell) (v : value),
+    lookup l hp = Some c -> v ∈ values_of_cell c -> pa_ok statics v.
+
+(* The invariant of the heap of a state. *)
+Definition heap_ok (s : state) : Prop :=
+  heap_flows_ (state_heap s) ∧ heap_pa_ok (state_statics s) (state_heap s).
+
+Lemma flows_location (l : location) (n : node) :
+  flows_ (Value_location l) n ->
+  ∃ a : node, located l = Some a ∧ may_come_from sol a n.
+Proof.
+  simpl. destruct (located l) as [a | ]; [ intros H; exists a; auto | ].
+  intros [].
+Qed.
+
+(* A location among the values of the arguments is that of a variable. *)
+Lemma location_simple (vars : env) (s : simple) (l : location) :
+  eval_simple vars s = Some (Value_location l) -> ∃ y : variable, s = Var y.
+Proof.
+  destruct s as [y | sym | c]; simpl; [ eauto | discriminate | discriminate ].
+Qed.
+
+(* The variable of a primitive with arbitrary effects, in code that is
+   used, has any usage. *)
+Lemma cond_use_live (ctx : option code_id) (n : node) :
+  live ctx -> cond_use_edge G ctx n -> au n.
+Proof.
+  unfold live, cond_use_edge. destruct ctx as [id | ].
+  - intros Hlive Huse.
+    exact (any_usage_use _ _ _ Hc _ _ (au_hu _ _ _ Hc _ Hlive) Huse).
+  - intros _ H. exact (any_usage_input _ _ _ Hc _ H).
+Qed.
+
+(* What an argument of a primitive of the default case holds is a
+   constant, or a value at a node that has any usage where the variable
+   of the primitive has a usage. *)
+Lemma simple_used (statics : static_env) (vars : env) (x : variable)
+    (args : list simple) (s : simple) (v : value) :
+  statics_flow_ statics -> env_flows_ vars -> s ∈ args ->
+  (∀ from : node,
+     from ∈ free_names_of_simples args -> g_use G (Node_variable x) from) ->
+  (∀ sym : symbol,
+     s = Symbol sym -> lookup sym (static_values statics) <> None) ->
+  eval_simple vars s = Some v ->
+  (∃ c : const, v = Value_const c)
+  ∨ ∃ m : node, flows_ v m ∧ (hu (Node_variable x) -> au m).
+Proof.
+  intros Hst Hvars Hin Huse Hbound Hs.
+  destruct s as [y | sym | c]; simpl in Hs.
+  - right. exists (Node_variable y). split; [ exact (Hvars y v Hs) | ].
+    intros Hhu.
+    exact (any_usage_use _ _ _ Hc _ _ Hhu (Huse _ (free_names_var _ _ Hin))).
+  - injection Hs as <-. right. exists (Node_symbol sym). split.
+    + destruct (lookup sym (static_values statics)) as [allocated | ] eqn:Hl;
+        [ | destruct (Hbound sym eq_refl Hl) ].
+      exact (proj1 (Hst sym allocated Hl)).
+    + intros Hhu.
+      exact (any_usage_use _ _ _ Hc _ _ Hhu
+               (Huse _ (free_names_symbol _ _ Hin))).
+  - injection Hs as <-. left. eexists. reflexivity.
+Qed.
+
+Lemma simple_escapes (statics : static_env) (vars : env) (x : variable)
+    (args : list simple) (s : simple) (v : value) :
+  statics_flow_ statics -> env_flows_ vars -> s ∈ args ->
+  (∀ from : node,
+     from ∈ free_names_of_simples args -> g_use G (Node_variable x) from) ->
+  (∀ sym : symbol,
+     s = Symbol sym -> lookup sym (static_values statics) <> None) ->
+  au (Node_variable x) ->
+  eval_simple vars s = Some v ->
+  escapes G sol keep called located v.
+Proof.
+  intros Hst Hvars Hin Huse Hbound Hau Hs.
+  destruct (simple_used _ _ _ _ _ _ Hst Hvars Hin Huse Hbound Hs)
+    as [Hconst | (m & Hm & Hmu)]; [ left; exact Hconst | ].
+  right. exists m. split; [ exact Hm | exact (Hmu (au_hu _ _ _ Hc _ Hau)) ].
+Qed.
+
+(* A value that escapes may be at every node with any source. *)
+Lemma escapes_flows (v : value) (n : node) :
+  escapes G sol keep called located v -> as_ n -> flows_ v n.
+Proof.
+  intros [(c & ->) | (m & Hm & Hau)] Has; [ exact Has | ].
+  exact (flows_escape _ _ _ _ _ _ Hc v n m Has (fun _ => Hau) Hm).
+Qed.
+
+Lemma fields_from_replace (P : nat -> value -> Prop) (k i : nat)
+    (new : value) (fields fields' : list value) :
+  fields_from P k fields -> replace_nth i new fields = Some fields' ->
+  (∀ old : value,
+     nth_error fields i = Some old -> P (k + i) old -> P (k + i) new) ->
+  fields_from P k fields'.
+Proof.
+  revert k i fields'.
+  induction fields as [ | f fields IH]; intros k i fields' Hf Hr Hnew;
+    [ destruct i; discriminate Hr | ].
+  destruct i as [ | i]; simpl in Hr.
+  - injection Hr as <-. destruct Hf as [Hf Hfs]. split; [ | exact Hfs ].
+    specialize (Hnew f eq_refl). rewrite Nat.add_0_r in Hnew.
+    exact (Hnew Hf).
+  - destruct (replace_nth i new fields) as [l' | ] eqn:E; [ | discriminate Hr ].
+    injection Hr as <-. destruct Hf as [Hf Hfs]. split; [ exact Hf | ].
+    apply (IH (S k) i l' Hfs E). intros old Hold HP.
+    replace (S k + i) with (k + S i) in * by lia.
+    exact (Hnew old Hold HP).
+Qed.
+
+Lemma store_field_replace (kind : block_access_kind) (field : Z)
+    (new : value) (tag : Z) (fields fields' : list value) :
+  store_field kind field new tag fields = Some fields' ->
+  replace_nth (Z.to_nat field) new fields = Some fields'.
+Proof.
+  unfold store_field. destruct kind.
+  match goal with |- (if ?b then _ else _) = _ -> _ => destruct b end;
+    [ exact (fun H => H) | discriminate ].
+Qed.
+
+Lemma load_field_nth (kind : block_access_kind) (field : Z) (tag : Z)
+    (fields : list value) (v : value) :
+  load_field kind field tag fields = Some v ->
+  nth_error fields (Z.to_nat field) = Some v.
+Proof.
+  unfold load_field. destruct kind.
+  match goal with |- (if ?b then _ else _) = _ -> _ => destruct b end;
+    [ | discriminate ].
+  destruct (nth_error fields (Z.to_nat field)) as [w | ];
+    [ | discriminate ].
+  match goal with |- (if ?b then _ else _) = _ -> _ => destruct b end;
+    [ | discriminate ].
+  exact (fun H => H).
+Qed.
+
+(* What a primitive does: what [eval_prim] gives it, the heap as it
+   came; or one of the heap; or a read of the cell of a location that is
+   its first argument; or a comparison with a location, a constant. *)
+Lemma exec_prim_cases (statics : static_env) (h h' : heap) (p : prim)
+    (vs : list value) (v : value) :
+  exec_prim statics h p vs = Some (v, h') ->
+  (eval_prim statics p vs = Some v ∧ h' = h)
+  ∨ (∃ q : heap_primitive, p = Heap q)
+  ∨ (∃ (up : unary_primitive) (l : location) (c : cell),
+       p = Unary up ∧ vs = [Value_location l] ∧ lookup l h = Some c
+       ∧ exec_unary_on_cell up l c = Some v ∧ h' = h)
+  ∨ (∃ (op : equality_comparison) (c : const),
+       p = Binary (Phys_equal op) ∧ v = Value_const c ∧ h' = h)
+  ∨ (∃ (b : binary_primitive) (l : location) (c : cell) (v2 : value),
+       p = Binary b ∧ vs = [Value_location l; v2] ∧ lookup l h = Some c
+       ∧ exec_binary_on_cell b l c v2 = Some v ∧ h' = h).
+Proof.
+  unfold exec_prim.
+  destruct (forallb (argument_bound statics h) vs); [ | discriminate ].
+  unfold exec_bound_prim.
+  Local Ltac eval_case :=
+    let H := fresh "H" in
+    intros H; cbv beta iota zeta in H;
+    repeat match type of H with
+           | context [match ?w with _ => _ end] =>
+             is_var w; destruct w; cbv beta iota zeta in H
+           end;
+    revert H;
+    match goal with
+    | |- context [eval_prim ?st ?p ?vs] =>
+      let E := fresh "E" in
+      destruct (eval_prim st p vs) eqn:E; intros H; cbv beta iota zeta in H;
+      [ injection H as <- <-; left; split;
+        [ first [ exact E | reflexivity ] | reflexivity ]
+      | discriminate H ]
+    end.
+  destruct p as [up | b | vp | q | r];
+    [ | | eval_case | intros _; right; left; eexists; reflexivity
+    | eval_case ].
+  - destruct vs as [ | v1 [ | v2 vs]]; [ eval_case | | eval_case ].
+    destruct v1; try eval_case.
+    intros H. destruct (lookup l h) as [c | ] eqn:Hl; simpl in H;
+      [ | discriminate H ].
+    destruct (exec_unary_on_cell up l c) as [w | ] eqn:Hw; simpl in H;
+      [ | discriminate H ].
+    injection H as <- <-. right; right; left. exists up, l, c. auto.
+  - destruct vs as [ | v1 [ | v2 [ | v3 vs]]]; [ eval_case | eval_case | |
+      destruct b; eval_case ].
+    destruct b as [ak lk lm | w | op | ik op | ik op | ik bh ];
+      destruct v1; try eval_case;
+      intros H; cbv beta iota zeta in H; revert H.
+    (* What is left: [Phys_equal], and a location as first argument. *)
+    all: first
+      [ match goal with
+        | |- context [if ?c then _ else _] =>
+          destruct c;
+          [ match goal with
+            | |- context [eval_phys_equal_location ?st ?x ?y] =>
+              destruct (eval_phys_equal_location st x y); intros H;
+              cbv beta iota zeta in H;
+              [ injection H as <- <-; right; right; right; left;
+                do 2 eexists; split; [ reflexivity | split; reflexivity ]
+              | discriminate H ]
+            end
+          | eval_case ]
+        end
+      | match goal with
+        | |- context [lookup ?l ?h] =>
+          destruct (lookup l h) as [c | ] eqn:Hl; intros H;
+          cbv beta iota zeta in H; [ revert H | discriminate H ];
+          match goal with
+          | |- context [exec_binary_on_cell ?b l c ?v2] =>
+            destruct (exec_binary_on_cell b l c v2) eqn:Hw; intros H;
+            cbv beta iota zeta in H;
+            [ injection H as <- <-; right; right; right; right;
+              exists b, l, c, v2; auto
+            | discriminate H ]
+          end
+        end ].
+Qed.
+
+(* The cell of a location that a primitive reads, through the variable
+   [y] that holds it. *)
+Lemma read_location (vars : env) (args : list simple) (l : location)
+    (rest : list value) :
+  env_flows_ vars ->
+  eval_simples vars args = Some (Value_location l :: rest) ->
+  ∃ (y : variable) (args' : list simple) (a : node),
+    args = Var y :: args' ∧ located l = Some a
+    ∧ may_come_from sol a (Node_variable y)
+    ∧ flows_ (Value_location l) (Node_variable y).
+Proof.
+  intros Hvars Hvs.
+  destruct args as [ | s1 args']; simpl in Hvs; [ discriminate Hvs | ].
+  destruct (eval_simple vars s1) as [w | ] eqn:Hs1; [ | discriminate Hvs ].
+  destruct (eval_simples vars args') as [ws | ]; [ | discriminate Hvs ].
+  injection Hvs as -> _.
+  destruct (location_simple _ _ _ Hs1) as (y & ->).
+  pose proof (Hvars y _ Hs1) as Hy.
+  destruct (flows_location _ _ Hy) as (a & Ha & Hay).
+  exists y, args', a. auto.
+Qed.
+
+(* The value of a [Let] of a primitive is at its variable, and the heap
+   after holds what it says. *)
+Lemma prim_exec_flows (statics : static_env) (vars : env) (hp hp' : heap)
+    (ctx : option code_id) (x : variable) (p : prim) (args : list simple)
+    (vs : list value) (v : value) :
+  statics_flow_ statics -> env_flows_ vars -> heap_flows_ hp -> live ctx ->
+  named_edges G noted deps keep slots heap_prims ctx x (Prim p args) ->
+  (∀ q : heap_primitive,
+     p = Heap q -> heap_allocates q = true ->
+     located (fresh_location hp) = Some (Node_variable x)) ->
+  eval_simples vars args = Some vs ->
+  exec_prim statics hp p vs = Some (v, hp') ->
+  flows_ v (Node_variable x) ∧ heap_flows_ hp'.
+Proof.
+  intros Hst Hvars Hheap Hlive Hnamed Halloc Hvs Hexec.
+  pose proof Hnamed as Hedges.
+  simpl in Hedges. unfold prim_edges in Hedges.
+  destruct Hedges as [(_ & Heff & Hmut) Hedges].
+  (* The symbols among the arguments are bound. *)
+  assert (Hbound : ∀ (s : simple) (sym : symbol),
+            s ∈ args -> s = Symbol sym ->
+            lookup sym (static_values statics) <> None).
+  { intros s sym Hin ->.
+    apply (FlambdaHeapProofs.exec_prim_symbols_bound _ _ _ _ _ _ _ Hexec).
+    destruct (In_nth_error _ _ Hin) as (i & Hi).
+    destruct (nth_error vs i) as [w | ] eqn:Hw.
+    - destruct (eval_simples_nth _ _ _ _ _ Hvs Hw) as (s & Hs & Hsw).
+      rewrite Hi in Hs. injection Hs as <-. simpl in Hsw.
+      injection Hsw as <-. exact (nth_error_In _ _ Hw).
+    - apply nth_error_None in Hw.
+      rewrite (eval_simples_length _ _ _ Hvs) in Hw.
+      assert (Hlt : i < length args)
+        by (apply nth_error_Some; rewrite Hi; discriminate).
+      lia. }
+  destruct (exec_prim_cases _ _ _ _ _ _ Hexec)
+    as [[Hev ->] | [(q & ->) | [(up & l & c & -> & -> & Hl & Hcell & ->)
+       | [(op & k & -> & -> & ->)
+         | (b & l & c & v2 & -> & -> & Hl & Hcell & ->)]]]].
+  - (* As [eval_prim] has it. *)
+    split; [ | exact Hheap ].
+    apply (named_flows statics vars ctx x (Prim p args) v Hst Hvars Hnamed).
+    simpl. rewrite Hvs. exact Hev.
+  - (* A primitive of the heap. *)
+    unfold exec_prim, exec_bound_prim in Hexec.
+    destruct (forallb (argument_bound statics hp) vs); [ | discriminate ].
+    destruct q as [mut tag | kind init fld | kind | kind set_kind];
+      cbn [exec_heap_primitive] in Hexec.
+    + (* An allocation of a block. *)
+      destruct (forallb (fun w => kind_eqb (kind_of_value w) Value) vs);
+        [ | discriminate Hexec ].
+      injection Hexec as <- <-.
+      pose proof (Halloc _ eq_refl eq_refl) as Hx.
+      simpl in Hedges. destruct Hedges as (Hcons & His & Hgt & Hnoted).
+      split.
+      * simpl. rewrite Hx.
+        exact (alloc_self _ _ _ His (as_hs _ _ _ Hc _ consts_any_source)).
+      * intros l' c' a Hl' Ha. rewrite lookup_cons in Hl'.
+        destruct (Pos.eqb_spec l' (fresh_location hp)) as [-> | _];
+          [ | exact (Hheap l' c' a Hl' Ha) ].
+        injection Hl' as <-. rewrite Hx in Ha. injection Ha as <-.
+        destruct (block_structure_made _ _ _ _
+                    (conj Hcons (conj His (conj Hgt Hnoted))) Hvars Hvs)
+          as (_ & _ & Hfields).
+        split; [ exact His | split; [ exact Hgt | ] ].
+        revert Hfields. apply fields_from_impl.
+        intros i field _ (from & Hcf & Hf). exists from.
+        split; [ exact Hcf | left; exact Hf ].
+    + (* A store into a block. *)
+      destruct vs as [ | v1 [ | new [ | v3 vs]]]; try discriminate Hexec.
+      destruct v1; try discriminate Hexec.
+      destruct (lookup l hp) as [[[ | ] tag fields | ak elements] | ] eqn:Hl;
+        try discriminate Hexec.
+      destruct (store_field kind fld new tag fields) as [fields' | ] eqn:Hsf;
+        simpl in Hexec; [ | discriminate Hexec ].
+      injection Hexec as <- <-.
+      simpl in Hedges. destruct Hedges as [Has Huse].
+      pose proof (cond_use_live ctx _ Hlive (Heff eq_refl)) as Hau.
+      destruct (read_location _ _ _ _ Hvars Hvs)
+        as (y & args' & a & -> & Ha & Hay & _).
+      assert (Haua : au a).
+      { apply (proj1 (proj2 (proj2 (proj2 Hay)))).
+        exact (any_usage_use _ _ _ Hc _ _ (au_hu _ _ _ Hc _ Hau)
+                 (Huse _ (or_introl eq_refl))). }
+      destruct (eval_simples_nth _ _ _ 1 new Hvs eq_refl) as (s2 & Hs2 & Hev2).
+      assert (Hesc : escapes G sol keep called located new).
+      { apply (simple_escapes statics vars x (Var y :: args') s2 new Hst Hvars
+                 (nth_error_In _ _ Hs2) Huse); [ | exact Hau | exact Hev2 ].
+        intros sym Hsym. exact (Hbound s2 sym (nth_error_In _ _ Hs2) Hsym). }
+      split; [ exact (any_source_input _ _ _ Hc _ Has) | ].
+      intros l' c' a' Hl' Ha'. rewrite lookup_cons in Hl'.
+      destruct (Pos.eqb_spec l' l) as [-> | _];
+        [ | exact (Hheap l' c' a' Hl' Ha') ].
+      injection Hl' as <-. rewrite Ha in Ha'. injection Ha' as <-.
+      destruct (Hheap l _ a Hl Ha) as (His & Hgt & Hfields).
+      split; [ exact His | split; [ exact Hgt | ] ].
+      apply (fields_from_replace _ 0 (Z.to_nat fld) new fields fields' Hfields
+               (store_field_replace _ _ _ _ _ _ Hsf)).
+      intros old _ (from & Hcons & _). exists from.
+      split; [ exact Hcons | right ].
+      split; [ reflexivity | split; [ exact Haua | exact Hesc ] ].
+    + (* An allocation of an array. *)
+      destruct vs as [ | v0 vs0]; [ discriminate Hexec | ].
+      destruct (array_made kind (v0 :: vs0)) as [elements | ] eqn:Ham;
+        simpl in Hexec; [ | discriminate Hexec ].
+      injection Hexec as <- <-.
+      destruct (FlambdaPrimitiveProofs.array_made_of_arguments _ _ _ Ham)
+        as [-> _].
+      pose proof (Halloc _ eq_refl eq_refl) as Hx.
+      simpl in Hedges. destruct Hedges as [Has Huse].
+      split.
+      * simpl. rewrite Hx.
+        exact (any_source_self _ (any_source_input _ _ _ Hc _ Has)).
+      * intros l' c' a Hl' Ha. rewrite lookup_cons in Hl'.
+        destruct (Pos.eqb_spec l' (fresh_location hp)) as [-> | _];
+          [ | exact (Hheap l' c' a Hl' Ha) ].
+        injection Hl' as <-. rewrite Hx in Ha. injection Ha as <-.
+        unfold cell_flows. apply (every_in _ _ _). intros w Hw.
+        destruct (eval_simples_in _ _ _ _ Hvs Hw) as (s & Hin & Hs).
+        destruct (simple_used statics vars x args s w Hst Hvars Hin Huse
+                    (fun sym Hsym => Hbound s sym Hin Hsym) Hs)
+          as [Hconst | (m & Hm & Hmu)]; [ left; exact Hconst | ].
+        right. exists m. split; [ exact Hm | ].
+        intros Hau. exact (Hmu (au_hu _ _ _ Hc _ Hau)).
+    + (* A store into an array. *)
+      destruct vs as [ | v1 [ | idx [ | new [ | v4 vs]]]];
+        try discriminate Hexec.
+      destruct v1; try discriminate Hexec.
+      destruct (lookup l hp) as [[mut tag fields | ak elements] | ] eqn:Hl;
+        try discriminate Hexec.
+      destruct (array_stored set_kind ak elements idx new) as [elements' | ]
+        eqn:Has'; simpl in Hexec; [ | discriminate Hexec ].
+      injection Hexec as <- <-.
+      simpl in Hedges. destruct Hedges as [Has Huse].
+      pose proof (cond_use_live ctx _ Hlive (Heff eq_refl)) as Hau.
+      destruct (read_location _ _ _ _ Hvars Hvs)
+        as (y & args' & a & -> & Ha & Hay & _).
+      destruct (eval_simples_nth _ _ _ 2 new Hvs eq_refl) as (s3 & Hs3 & Hev3).
+      destruct (simple_used statics vars x (Var y :: args') s3 new Hst Hvars
+                  (nth_error_In _ _ Hs3) Huse
+                  (fun sym Hsym => Hbound s3 sym (nth_error_In _ _ Hs3) Hsym)
+                  Hev3)
+        as [Hconst | (m & Hm & Hmu)].
+      * split; [ exact (any_source_input _ _ _ Hc _ Has) | ].
+        intros l' c' a' Hl' Ha'. rewrite lookup_cons in Hl'.
+        destruct (Pos.eqb_spec l' l) as [-> | _];
+          [ | exact (Hheap l' c' a' Hl' Ha') ].
+        injection Hl' as <-. rewrite Ha in Ha'. injection Ha' as <-.
+        pose proof (Hheap l _ a Hl Ha) as Hold.
+        unfold cell_flows in Hold |- *.
+        apply (every_in _ _ _). intros w Hw.
+        destruct (FlambdaPrimitiveProofs.array_stored_elements _ _ _ _ _ _ Has')
+          as (_ & _ & Hstored).
+        destruct (Hstored w Hw) as [-> | Hin]; [ left; exact Hconst | ].
+        exact (proj1 (every_in _ _ _) Hold w Hin).
+      * split; [ exact (any_source_input _ _ _ Hc _ Has) | ].
+        intros l' c' a' Hl' Ha'. rewrite lookup_cons in Hl'.
+        destruct (Pos.eqb_spec l' l) as [-> | _];
+          [ | exact (Hheap l' c' a' Hl' Ha') ].
+        injection Hl' as <-. rewrite Ha in Ha'. injection Ha' as <-.
+        pose proof (Hheap l _ a Hl Ha) as Hold.
+        unfold cell_flows in Hold |- *.
+        apply (every_in _ _ _). intros w Hw.
+        destruct (FlambdaPrimitiveProofs.array_stored_elements _ _ _ _ _ _ Has')
+          as (_ & _ & Hstored).
+        destruct (Hstored w Hw) as [-> | Hin];
+          [ | exact (proj1 (every_in _ _ _) Hold w Hin) ].
+        right. exists m. split; [ exact Hm | ].
+        intros _. exact (Hmu (au_hu _ _ _ Hc _ Hau)).
+  - (* A unary primitive reads the cell of a location. *)
+    split; [ | exact Hheap ].
+    destruct (read_location _ _ _ _ Hvars Hvs)
+      as (y & args' & a & -> & Ha & Hay & Hy).
+    destruct args' as [ | s' args'];
+      [ | pose proof (eval_simples_length _ _ _ Hvs) as Hlen;
+          simpl in Hlen; discriminate Hlen ].
+    pose proof (Hheap l c a Hl Ha) as Hcf.
+    (* A constant at a variable of the default case. *)
+    Local Ltac const_at_default Hedges :=
+      simpl in Hedges; destruct Hedges as [Has _];
+      exact (any_source_input _ _ _ Hc _ Has).
+    destruct c as [mut tag fields | ak elements];
+      cbn [exec_unary_on_cell] in Hcell.
+    + destruct up as [kind lmut fld | [ | ] | | | ak | | ok | ik op | src dst
+                    | | bn | bn | | | r];
+        try discriminate Hcell.
+      * (* [Block_load] *)
+        destruct (load_allowed lmut mut) eqn:Hla; [ | discriminate Hcell ].
+        pose proof (load_field_nth _ _ _ _ _ Hcell) as Hnth.
+        destruct Hcf as (_ & _ & Hfields).
+        destruct (fields_from_elim _ _ _ _ _ Hfields Hnth)
+          as (from & Hcons & [Hfrom | (Hm & _ & Hesc)]).
+        -- simpl in Hedges. destruct Hedges as [Hacc _].
+           refine (flows_read _ _ _ _ _ _ Hc _ _ _ _ _ _ _ Hcons Hacc Hay
+                     Hfrom).
+           not_local_field.
+        -- subst mut. destruct lmut; try discriminate Hla.
+           apply (escapes_flows v _ Hesc).
+           exact (any_source_input _ _ _ Hc _ (Hmut eq_refl)).
+      * (* [Is_int] of a variant *)
+        injection Hcell as <-. destruct Hcf as (His & _ & _).
+        simpl in Hedges. destruct Hedges as [Hacc _].
+        refine (read_const a _ x Field_is_int (Naked_immediate 0) _ His Hacc
+                  Hay).
+        not_local_field.
+      * injection Hcell as <-. const_at_default Hedges.
+      * injection Hcell as <-. const_at_default Hedges.
+      * (* [Get_tag] *)
+        injection Hcell as <-. destruct Hcf as (_ & Hgt & _).
+        simpl in Hedges. destruct Hedges as [Hacc _].
+        refine (read_const a _ x Field_get_tag (Naked_immediate tag) _ Hgt
+                  Hacc Hay).
+        not_local_field.
+      * (* [Opaque_identity] *)
+        destruct (kind_eqb ok Value); [ | discriminate Hcell ].
+        injection Hcell as <-.
+        simpl in Hedges. destruct Hedges as [Has Huse].
+        apply (flows_escape _ _ _ _ _ _ Hc _ _ (Node_variable y)
+                 (any_source_input _ _ _ Hc _ Has)); [ | exact Hy ].
+        intros Hhu.
+        exact (any_usage_use _ _ _ Hc _ _ Hhu (Huse _ (or_introl eq_refl))).
+    + destruct up as [kind lmut fld | [ | ] | | | ak' | | ok | ik op | src dst
+                    | | bn | bn | | | r];
+        try discriminate Hcell.
+      * injection Hcell as <-. const_at_default Hedges.
+      * injection Hcell as <-. const_at_default Hedges.
+      * unfold array_length_of in Hcell.
+        destruct (in_range _ _); [ | discriminate Hcell ].
+        injection Hcell as <-. const_at_default Hedges.
+      * (* [Opaque_identity] *)
+        destruct (kind_eqb ok Value); [ | discriminate Hcell ].
+        injection Hcell as <-.
+        simpl in Hedges. destruct Hedges as [Has Huse].
+        apply (flows_escape _ _ _ _ _ _ Hc _ _ (Node_variable y)
+                 (any_source_input _ _ _ Hc _ Has)); [ | exact Hy ].
+        intros Hhu.
+        exact (any_usage_use _ _ _ Hc _ _ Hhu (Huse _ (or_introl eq_refl))).
+  - (* A comparison with a location. *)
+    split; [ | exact Hheap ]. const_at_default Hedges.
+  - (* A load from an array. *)
+    split; [ | exact Hheap ].
+    destruct (read_location _ _ _ _ Hvars Hvs)
+      as (y & args' & a & -> & Ha & Hay & _).
+    pose proof (Hheap l c a Hl Ha) as Hcf.
+    destruct c as [mut tag fields | ak elements];
+      [ destruct b; discriminate Hcell | ].
+    destruct b as [ak' lk lm | w | op | ik op | ik op | ik bh ];
+      cbn [exec_binary_on_cell] in Hcell; try discriminate Hcell.
+    destruct (load_allowed lm Cell_mutable); [ | discriminate Hcell ].
+    destruct (FlambdaPrimitiveProofs.array_loaded_element _ _ _ _ Hcell)
+      as [Hin _].
+    simpl in Hedges. destruct Hedges as [Has Huse].
+    destruct (proj1 (every_in _ _ _) Hcf v Hin)
+      as [(k & ->) | (m & Hm & Hmu)];
+      [ exact (any_source_input _ _ _ Hc _ Has) | ].
+    apply (flows_escape _ _ _ _ _ _ Hc v _ m
+             (any_source_input _ _ _ Hc _ Has)); [ | exact Hm ].
+    intros Hhu. apply Hmu. apply (proj1 (proj2 (proj2 (proj2 Hay)))).
+    exact (any_usage_use _ _ _ Hc _ _ Hhu (Huse _ (or_introl eq_refl))).
+Qed.
+
+(* What the cells hold is as the run makes it after a primitive. *)
+Lemma prim_exec_pa_ok (statics : static_env) (vars : env) (hp hp' : heap)
+    (p : prim) (args : list simple) (vs : list value) (v : value) :
+  env_pa_ok statics vars -> statics_pa_ok statics ->
+  heap_pa_ok statics hp ->
+  eval_simples vars args = Some vs ->
+  exec_prim statics hp p vs = Some (v, hp') ->
+  pa_ok statics v ∧ heap_pa_ok statics hp'.
+Proof.
+  intros Hvars Hst Hheap Hvs Hexec.
+  pose proof (simples_pa_ok _ _ _ _ Hvars Hvs) as Hvs_pa.
+  assert (Hcase : (∃ q : heap_primitive, p = Heap q)
+                  ∨ ∀ q : heap_primitive, p <> Heap q).
+  { destruct p as [up | b | vp | q | r];
+      [ right | right | right | left; exists q; reflexivity | right ];
+      intros q' H; discriminate H. }
+  destruct Hcase as [(q & ->) | Hnot].
+  - destruct (FlambdaHeapProofs.exec_prim_adds _ _ _ _ _ _ Hexec)
+      as [(c & Hc_vals & -> & ->)
+         | (l & rest & new & c & c' & i & -> & Hl & Hcw & -> & ->)].
+    + split; [ exact I | ].
+      intros l' c'' w Hl' Hw. rewrite lookup_cons in Hl'.
+      destruct (Pos.eqb l' (fresh_location hp));
+        [ injection Hl' as <- | exact (Hheap _ _ _ Hl' Hw) ].
+      rewrite Hc_vals in Hw. exact (proj1 (every_in _ _ _) Hvs_pa w Hw).
+    + split; [ exact I | ].
+      intros l' c'' w Hl' Hw. rewrite lookup_cons in Hl'.
+      destruct (Pos.eqb l' l);
+        [ injection Hl' as <- | exact (Hheap _ _ _ Hl' Hw) ].
+      destruct (FlambdaHeapProofs.cell_with_values _ _ _ _ _ Hcw Hw)
+        as [-> | Hin]; [ | exact (Hheap _ _ _ Hl Hin) ].
+      apply (proj1 (every_in _ _ _) Hvs_pa). right. apply in_or_app.
+      right. left. reflexivity.
+  - pose proof (FlambdaHeapProofs.exec_prim_heap _ _ _ _ _ _ Hnot Hexec)
+      as Heq.
+    subst hp'. split; [ | exact Hheap ].
+    refine (FlambdaHeapProofs.exec_prim_preserves_given (pa_ok statics)
+              statics hp hp p vs v _ _ _ _ _ Hnot _ _ Hexec).
+    + intros c. split; exact I.
+    + intros tag fields. simpl. apply (every_in _ _ _).
+    + intros elements. simpl. apply (every_in _ _ _).
+    + intros s tag fields _ Hs w Hw. specialize (Hst s _ Hs). simpl in Hst.
+      exact (proj1 (every_in _ _ _) Hst w Hw).
+    + intros s elements _ Hs w Hw. specialize (Hst s _ Hs). simpl in Hst.
+      exact (proj1 (every_in _ _ _) Hst w Hw).
+    + exact (proj1 (every_in _ _ _) Hvs_pa).
+    + intros l c w _ Hl Hw. exact (Hheap l c w Hl Hw).
+Qed.
+
 (* A step keeps the invariant, and an exit has its values at the nodes
-   of the continuation of the unit. *)
-Lemma step_flow_invariant (s : state) :
+   of the continuation of the unit: at a [Let] if the state holds no
+   location and the term no primitive of the heap. *)
+Lemma step_flow_invariant_core (s : state) :
+  (∀ (x : variable) (kind : flambda_kind) (d : named) (body : expr),
+     state_expr s <> Let x kind d body)
+  ∨ (~ heap_prims ∧ ∀ l : location, located l = None) ->
   flow_invariant s ->
   match step s with
   | Step s' => flow_invariant s'
-  | Exit k vs _ _ => exit_flows G sol keep called u k vs
+  | Exit k vs _ _ => exit_flows G sol keep called located u k vs
   | Undefined => True
   end.
 Proof.
-  intros (ctx & ce & He & Hlive & Hcount & Hvars & Hconts & Hst & Hcodes
+  intros Hcase (ctx & ce & He & Hlive & Hcount & Hvars & Hconts & Hst & Hcodes
           & Hvars_pa & Hspa & HK_pa).
   rewrite (state_eta s).
   destruct (state_expr s)
@@ -6961,11 +7737,13 @@ Proof.
        | scrutinee arms | ];
     simpl in He; unfold counted in Hcount; simpl in Hcount.
   - (* [Let] *)
+    destruct Hcase as [Hnot | [Hnh Hnl]];
+      [ destruct (Hnot x kind d body eq_refl) | ].
     destruct He as [Hd Hbody].
     rewrite step_let_eval;
-      [ | exact (named_edges_not_heap _ _ _ Hd)
+      [ | exact (named_edges_no_heap _ _ _ _ Hnh Hd)
         | intros p args vs l _ Hvs;
-          exact (env_flows_no_location _ _ _ l Hvars Hvs) ].
+          exact (env_flows_no_location _ _ _ l (Hnl l) Hvars Hvs) ].
     destruct (eval_named (state_statics s) (state_vars s) d) as [v | ] eqn:Hev;
       [ | exact I ].
     destruct (kind_eqb (kind_of_value v) kind); [ | exact I ].
@@ -6974,7 +7752,8 @@ Proof.
     split; [ | split; [ exact Hconts | split; [ exact Hst | split;
       [ exact Hcodes | ] ] ] ].
     + intros y w Hy. simpl in Hy. destruct (Pos.eqb_spec y x) as [-> | _].
-      * injection Hy as <-. exact (named_flows _ _ _ _ _ Hst Hvars Hd Hev).
+      * injection Hy as <-.
+        exact (named_flows _ _ _ _ _ _ Hst Hvars Hd Hev).
       * exact (Hvars y w Hy).
     + split; [ | split; [ exact Hspa | exact HK_pa ] ].
       intros y w Hy. simpl in Hy. destruct (Pos.eqb_spec y x) as [-> | _].
@@ -7153,22 +7932,265 @@ Proof.
     rewrite step_invalid. exact I.
 Qed.
 
-Lemma run_flow_invariant (n : nat) (s : state) :
+(* The step of a term without the primitives of the heap, in a state
+   that holds no location. *)
+Lemma step_flow_invariant (s : state) :
+  ~ heap_prims -> (∀ l : location, located l = None) ->
   flow_invariant s ->
-  match run n s with
+  match step s with
   | Step s' => flow_invariant s'
-  | Exit k vs _ _ => exit_flows G sol keep called u k vs
+  | Exit k vs _ _ => exit_flows G sol keep called located u k vs
   | Undefined => True
   end.
 Proof.
-  revert s. induction n as [ | n IH]; intros s Hs; [ exact Hs | ].
-  rewrite run_succ. pose proof (step_flow_invariant s Hs) as Hstep.
-  destruct (step s) as [s' | k vs hp rd | ];
-    [ exact (IH s' Hstep) | exact Hstep | exact I ].
+  intros Hnh Hnl.
+  exact (step_flow_invariant_core s (or_intror (conj Hnh Hnl))).
+Qed.
+
+(* The static environment of a state only grows. *)
+Lemma statics_le_refl (statics : static_env) : statics_le statics statics.
+Proof. split; auto. Qed.
+
+Lemma call_code_statics (closure : value) (c : code) (vs : list value)
+    (args_arity return_arity : arity) (return_to exn_to : cont_value)
+    (statics : static_env) (hp : heap) (rd : read_record) (s' : state) :
+  call_code closure c vs args_arity return_arity return_to exn_to statics hp rd
+  = Step s' ->
+  state_statics s' = statics.
+Proof.
+  unfold call_code.
+  destruct (binds_statics (code_body c)); [ discriminate | ].
+  destruct (negb _); [ discriminate | ].
+  destruct (bind_params _ _ _); [ | discriminate ].
+  intros [= <-]. reflexivity.
+Qed.
+
+Lemma run_call_statics (return_partial : value -> step_result)
+    (shape : option call_shape) (return_arity : arity)
+    (return_to exn_to : cont_value) (statics : static_env) (hp : heap)
+    (rd : read_record) (s' : state) :
+  (∀ (partial : value) (s' : state),
+    return_partial partial = Step s' -> state_statics s' = statics) ->
+  run_call return_partial shape return_arity return_to exn_to statics hp rd
+  = Step s' ->
+  state_statics s' = statics.
+Proof.
+  intros Hpartial.
+  destruct shape
+    as [[closure c vs args_arity
+        | closure c vs remaining args_arity remaining_arity | partial] | ];
+    simpl.
+  - apply call_code_statics.
+  - apply call_code_statics.
+  - apply Hpartial.
+  - discriminate.
+Qed.
+
+Lemma apply_cont_value_statics (c : cont_value) (vs : list value)
+    (statics : static_env) (hp : heap) (rd : read_record) (s' : state) :
+  apply_cont_value c vs statics hp rd = Step s' -> state_statics s' = statics.
+Proof.
+  revert vs s'.
+  induction c
+    as [handler vars conts recursive | k | c IH extra
+       | remaining remaining_arity return_arity return_to IHreturn exn_to
+           IHexn];
+    intros vs s'; simpl.
+  - destruct handler as [params metadata handler].
+    destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
+      [ | discriminate ].
+    destruct (bind_params params vs vars); [ | discriminate ].
+    intros [= <-]. reflexivity.
+  - discriminate.
+  - apply IH.
+  - destruct vs as [ | v [ | v2 vs]]; try discriminate.
+    apply run_call_statics. intros partial s0. apply IHreturn.
+Qed.
+
+Lemma call_function_statics (callee : value) (kind : call_kind)
+    (vs : list value) (args_arity return_arity : arity)
+    (return_to exn_to : cont_value) (statics : static_env) (hp : heap)
+    (rd : read_record) (s' : state) :
+  call_function callee kind vs args_arity return_arity return_to exn_to
+    statics hp rd
+  = Step s' ->
+  state_statics s' = statics.
+Proof.
+  unfold call_function. apply run_call_statics. intros partial s0.
+  apply apply_cont_value_statics.
+Qed.
+
+Lemma step_statics_le (s s' : state) :
+  step s = Step s' -> statics_le (state_statics s) (state_statics s').
+Proof.
+  rewrite (state_eta s).
+  destruct (state_expr s)
+    as [x kind d body | bindings body | k h body | handlers body | ap | ac
+       | scrutinee arms | ]; simpl_state.
+  - rewrite step_let_exec.
+    destruct (exec_named _ _ _ _ d) as [[[v hp'] rd'] | ];
+      [ | discriminate ].
+    destruct (kind_eqb _ _); [ | discriminate ].
+    intros [= <-]. apply statics_le_refl.
+  - rewrite step_let_static.
+    destruct (eval_static_bindings _ _ _) as [statics' | ] eqn:Hb;
+      [ | discriminate ].
+    intros [= <-]. exact (eval_static_bindings_le _ _ _ _ Hb).
+  - rewrite step_let_cont_non_recursive. intros [= <-].
+    apply statics_le_refl.
+  - rewrite step_let_cont_recursive.
+    destruct (handlers_bind_statics handlers); [ discriminate | ].
+    intros [= <-]. apply statics_le_refl.
+  - rewrite step_apply.
+    destruct (eval_simple _ (ap_callee ap)); [ | discriminate ].
+    destruct (eval_simples _ (ap_args ap)); [ | discriminate ].
+    destruct (eval_simples _ (exn_extra_simples ap)); [ | discriminate ].
+    intros Hstep. rewrite (call_function_statics _ _ _ _ _ _ _ _ _ _ _ Hstep).
+    apply statics_le_refl.
+  - rewrite step_apply_cont.
+    destruct (eval_simples _ (ac_args ac)) as [vs | ]; [ | discriminate ].
+    intros Hstep. unfold apply_continuation in Hstep.
+    rewrite (apply_cont_value_statics _ _ _ _ _ _ Hstep).
+    apply statics_le_refl.
+  - rewrite step_switch.
+    destruct (eval_simple _ scrutinee) as [v | ]; [ | discriminate ].
+    destruct (naked_immediate_of_value v) as [i | ]; [ | discriminate ].
+    destruct (find_arm i arms) as [ac | ]; [ | discriminate ].
+    intros [= <-]. apply statics_le_refl.
+  - rewrite step_invalid. discriminate.
+Qed.
+
+Lemma heap_pa_ok_le (statics statics' : static_env) (hp : heap) :
+  statics_le statics statics' -> heap_pa_ok statics hp ->
+  heap_pa_ok statics' hp.
+Proof.
+  intros Hle H l c v Hl Hv. exact (pa_ok_le _ _ _ Hle (H l c v Hl Hv)).
+Qed.
+
+(* What a step comes to keeps the invariant and that of the heap, or
+   exits as the unit says with a heap that holds what it says. *)
+Definition result_heap_ok (r : step_result) : Prop :=
+  match r with
+  | Step s' => flow_invariant s' ∧ heap_ok s'
+  | Exit k vs hp _ => exit_flows G sol keep called located u k vs
+                      ∧ heap_flows_ hp
+  | Undefined => True
+  end.
+
+(* A step of a [Let]: the value is at the variable, and the heap after
+   holds what it says. *)
+Lemma let_flow_invariant (x : variable) (kind : flambda_kind) (d : named)
+    (body : expr) (vars : env) (conts : cont_env) (statics : static_env)
+    (hp : heap) (rd : read_record) :
+  flow_invariant (State (Let x kind d body) vars conts statics hp rd) ->
+  heap_ok (State (Let x kind d body) vars conts statics hp rd) ->
+  alloc_ok (State (Let x kind d body) vars conts statics hp rd) ->
+  result_heap_ok (step (State (Let x kind d body) vars conts statics hp rd)).
+Proof.
+  intros (ctx & ce & He & Hlive & Hcount & Hvars & Hconts & Hst & Hcodes
+          & Hvars_pa & Hspa & HK_pa) [Hheap Hhpa] Halloc.
+  simpl_state. simpl in He. unfold counted in Hcount. simpl in Hcount.
+  destruct He as [Hd Hbody].
+  rewrite step_let_exec.
+  destruct (exec_named statics hp rd vars d) as [[[v hp'] rd'] | ] eqn:Hexec;
+    [ | exact I ].
+  destruct (kind_eqb (kind_of_value v) kind); [ | exact I ].
+  assert (Hv : flows_ v (Node_variable x) ∧ heap_flows_ hp'
+               ∧ pa_ok statics v ∧ heap_pa_ok statics hp').
+  { destruct d as [s0 | p args | | | | | ];
+      try (rewrite exec_named_not_prim in Hexec;
+           [ | intros p' args' Hp; discriminate Hp ];
+           destruct (eval_named _ _ _) as [w | ] eqn:Hev; simpl in Hexec;
+           [ injection Hexec as <- <- <- | discriminate Hexec ];
+           split; [ exact (named_flows _ _ _ _ _ _ Hst Hvars Hd Hev) | ];
+           split; [ exact Hheap | ];
+           split; [ exact (named_pa_ok _ _ _ _ Hvars_pa Hspa Hev)
+                  | exact Hhpa ]).
+    apply exec_named_prim_some in Hexec as (vs & Hvs & Hprim & _).
+    destruct (prim_exec_flows statics vars hp hp' ctx x p args vs v Hst Hvars
+                Hheap Hlive Hd
+                (fun q Hq Hal => Halloc x kind q args body
+                                   ltac:(rewrite Hq; reflexivity) Hal)
+                Hvs Hprim)
+      as [Hf Hh].
+    destruct (prim_exec_pa_ok statics vars hp hp' p args vs v Hvars_pa Hspa
+                Hhpa Hvs Hprim)
+      as [Hp Hhp].
+    auto. }
+  destruct Hv as (Hvx & Hheap' & Hpa & Hhpa').
+  split; [ | split; [ exact Hheap' | exact Hhpa' ] ].
+  exists ctx, ce. simpl_state.
+  split; [ exact Hbody | split; [ exact Hlive | split; [ exact Hcount | ] ] ].
+  split; [ | split; [ exact Hconts | split; [ exact Hst | split;
+    [ exact Hcodes | ] ] ] ].
+  - intros y w Hy. simpl in Hy. destruct (Pos.eqb_spec y x) as [-> | _].
+    + injection Hy as <-. exact Hvx.
+    + exact (Hvars y w Hy).
+  - split; [ | split; [ exact Hspa | exact HK_pa ] ].
+    intros y w Hy. simpl in Hy. destruct (Pos.eqb_spec y x) as [-> | _].
+    + injection Hy as <-. exact Hpa.
+    + exact (Hvars_pa y w Hy).
+Qed.
+
+(* A step keeps the invariant and that of the heap. *)
+Lemma step_flow_invariant_heap (s : state) :
+  flow_invariant s -> heap_ok s -> alloc_ok s -> result_heap_ok (step s).
+Proof.
+  intros Hinv Hh Halloc.
+  destruct (state_expr s) as [x kind d body | | | | | | | ] eqn:Hexpr.
+  1: { destruct s as [e vars conts statics hp rd]. simpl in Hexpr.
+       subst e.
+       exact (let_flow_invariant _ _ _ _ _ _ _ _ _ Hinv Hh Halloc). }
+  all: assert (Hnot : ∀ (x : variable) (kind : flambda_kind) (d : named)
+                        (body : expr), state_expr s <> Let x kind d body)
+         by (intros x' kind' d' body' Hl; rewrite Hexpr in Hl;
+             discriminate Hl).
+  all: pose proof (step_flow_invariant_core s (or_introl Hnot) Hinv)
+         as Hcore.
+  all: destruct Hh as [Hheap Hhpa].
+  all: unfold result_heap_ok;
+       destruct (step s) as [s' | k0 vs0 hp0 rd0 | ] eqn:Hstep;
+       [ | | exact I ].
+  all: try (split; [ exact Hcore | ];
+            rewrite (FlambdaSemanticsProofs.step_exit_heap _ _ _ _ _ Hstep);
+            exact Hheap).
+  all: split; [ exact Hcore | ].
+  all: destruct (FlambdaSemanticsProofs.step_heap s s' Hstep)
+         as [Heq | (x0 & kind0 & d0 & body0 & v0 & Hlet & _)];
+       [ | rewrite Hexpr in Hlet; discriminate Hlet ].
+  all: split; [ rewrite Heq; exact Hheap | ].
+  all: rewrite Heq;
+       exact (heap_pa_ok_le _ _ _ (step_statics_le _ _ Hstep) Hhpa).
+Qed.
+
+Lemma run_flow_invariant (n : nat) (s : state) :
+  (∀ (i : nat) (s' : state), i < n -> run i s = Step s' -> alloc_ok s') ->
+  flow_invariant s -> heap_ok s ->
+  match run n s with
+  | Step s' => flow_invariant s' ∧ heap_ok s'
+  | Exit k vs hp _ =>
+    exit_flows G sol keep called located u k vs ∧ heap_flows_ hp
+  | Undefined => True
+  end.
+Proof.
+  revert s. induction n as [ | n IH]; intros s Halloc Hs Hh;
+    [ exact (conj Hs Hh) | ].
+  rewrite run_succ.
+  pose proof (step_flow_invariant_heap s Hs Hh
+                (Halloc 0 s (Nat.lt_0_succ n) eq_refl)) as Hstep.
+  destruct (step s) as [s' | k vs hp rd | ] eqn:E; [ | exact Hstep | exact I ].
+  destruct Hstep as [Hs' Hh'].
+  apply (IH s'); [ | exact Hs' | exact Hh' ].
+  intros i s'' Hi Hrun. apply (Halloc (S i) s''); [ lia | ].
+  rewrite run_succ, E. exact Hrun.
 Qed.
 
 Lemma flow_invariant_flows (s : state) :
-  flow_invariant s -> state_flows G sol keep called s.
+  flow_invariant s ->
+  env_flows_ (state_vars s)
+  ∧ (∀ (k : continuation) (c : cont_value),
+       (k, c) ∈ state_conts s -> cont_flows G sol keep called located c)
+  ∧ statics_flow_ (state_statics s).
 Proof.
   intros (ctx & ce & _ & _ & _ & Hvars & Hconts & Hst & _).
   split; [ exact Hvars | ].
@@ -7190,30 +8212,29 @@ Proof.
   split; [ intros s allocated Hs; discriminate Hs | intros k c [] ].
 Qed.
 
+Lemma initial_heap_ok (e : expr) :
+  heap_ok (State e [] [] empty_static_env empty_heap no_reads).
+Proof.
+  split; [ intros l c a Hl; discriminate Hl
+         | intros l c v Hl; discriminate Hl ].
+Qed.
+
 End Run.
 
 (* ======================================================================== *)
 (* What the closures are said to have                                       *)
 (* ======================================================================== *)
 
-Lemma fields_from_impl (P Q : nat -> value -> Prop) (k : nat)
-    (fields : list value) :
-  (∀ (i : nat) (field : value), field ∈ fields -> P i field -> Q i field) ->
-  fields_from P k fields -> fields_from Q k fields.
-Proof.
-  revert k. induction fields as [ | field fields IH]; intros k H; simpl;
-    [ auto | ].
-  intros [Hf Hfs]. split; [ exact (H k field (or_introl eq_refl) Hf) | ].
-  apply IH; [ | exact Hfs ]. intros i f Hin. exact (H i f (or_intror Hin)).
-Qed.
 
 (* Where a value may be, with less said of the allocations of
    closures. *)
 Lemma flows_weaken (G : graph) (sol : solution) (keep : value_slot -> bool)
-    (called called' : node -> code_id -> Prop) :
+    (called called' : node -> code_id -> Prop)
+    (located : location -> option node) :
   (∀ (b : node) (id : code_id), called b id -> called' b id) ->
   ∀ (v : value) (n : node),
-    flows G sol keep called v n -> flows G sol keep called' v n.
+    flows G sol keep called located v n
+    -> flows G sol keep called' located v n.
 Proof.
   intros Hcalled v. pattern v.
   apply FlambdaHeapProofs.value_induction; clear v; simpl.
@@ -7253,19 +8274,49 @@ Proof.
     exact (IHargs x Hin p (H g k w W p Hpos Hw HW Hp)).
 Qed.
 
+(* What a heap holds, with less said of the allocations of closures. *)
+Lemma heap_flows_weaken (G : graph) (sol : solution)
+    (keep : value_slot -> bool) (called called' : node -> code_id -> Prop)
+    (located : location -> option node) (hp : heap) :
+  (∀ (b : node) (id : code_id), called b id -> called' b id) ->
+  heap_flows G sol keep called located hp ->
+  heap_flows G sol keep called' located hp.
+Proof.
+  intros Hcalled H l c a Hl Ha. specialize (H l c a Hl Ha).
+  destruct c as [mut tag fields | kind elements]; simpl in H |- *.
+  - destruct H as (His & Hgt & Hfields).
+    split; [ exact His | split; [ exact Hgt | ] ].
+    revert Hfields. apply fields_from_impl.
+    intros i field _ (from & Hcons & [Hf | (Hm & Hau & Hesc)]).
+    + exists from. split; [ exact Hcons | left ].
+      exact (flows_weaken _ _ _ _ _ _ Hcalled _ _ Hf).
+    + exists from. split; [ exact Hcons | right ].
+      split; [ exact Hm | split; [ exact Hau | ] ].
+      destruct Hesc as [Hconst | (m & Hfm & Hau')]; [ left; exact Hconst | ].
+      right. exists m.
+      exact (conj (flows_weaken _ _ _ _ _ _ Hcalled _ _ Hfm) Hau').
+  - revert H. apply every_impl.
+    intros element _ [Hconst | (m & Hm & Hu)]; [ left; exact Hconst | ].
+    right. exists m.
+    exact (conj (flows_weaken _ _ _ _ _ _ Hcalled _ _ Hm) Hu).
+Qed.
+
 Lemma state_flows_weaken (G : graph) (sol : solution)
     (keep : value_slot -> bool) (called called' : node -> code_id -> Prop)
-    (s : state) :
+    (located : location -> option node) (s : state) :
   (∀ (b : node) (id : code_id), called b id -> called' b id) ->
-  state_flows G sol keep called s -> state_flows G sol keep called' s.
+  state_flows G sol keep called located s ->
+  state_flows G sol keep called' located s.
 Proof.
-  intros Hcalled (Hvars & Hconts & Hst).
+  intros Hcalled (Hvars & Hconts & Hst & Hheap).
   assert (Henv : ∀ vars : env,
-            env_flows G sol keep called vars ->
-            env_flows G sol keep called' vars).
-  { intros vars H x v Hx. exact (flows_weaken _ _ _ _ _ Hcalled _ _ (H x v
+            env_flows G sol keep called located vars ->
+            env_flows G sol keep called' located vars).
+  { intros vars H x v Hx. exact (flows_weaken _ _ _ _ _ _ Hcalled _ _ (H x v
     Hx)). }
-  split; [ exact (Henv _ Hvars) | split ].
+  split; [ exact (Henv _ Hvars) | ].
+  split; [ | split;
+    [ | exact (heap_flows_weaken _ _ _ _ _ _ _ Hcalled Hheap) ] ].
   - intros k c Hin. specialize (Hconts k c Hin). clear Hin.
     induction Hconts as [h vars conts recursive Hv _ IH | k' | c extra _ IH
                         | remaining ra rta return_to exn_to _ IHret _ IHexn].
@@ -7283,15 +8334,17 @@ Proof.
       revert Hvs. apply keyed_for_all_bindings_impl.
       intros w field _ H Hk. destruct (H Hk) as (from & Hcons & Hfrom).
       exists from. split; [ exact Hcons | ].
-      exact (flows_weaken _ _ _ _ _ Hcalled _ _ Hfrom).
+      exact (flows_weaken _ _ _ _ _ _ Hcalled _ _ Hfrom).
     + destruct Hrest as (His & Hgt & Hfields).
       split; [ exact His | split; [ exact Hgt | ] ].
       revert Hfields. apply fields_from_impl.
       intros i field _ (from & Hcons & Hfrom). exists from.
-      split; [ exact Hcons | exact (flows_weaken _ _ _ _ _ Hcalled _ _ Hfrom) ].
+      split;
+        [ exact Hcons | exact (flows_weaken _ _ _ _ _ _ Hcalled _ _ Hfrom) ].
     + revert Hrest. apply fields_from_impl.
       intros i field _ (from & Hcons & Hfrom). exists from.
-      split; [ exact Hcons | exact (flows_weaken _ _ _ _ _ Hcalled _ _ Hfrom) ].
+      split;
+        [ exact Hcons | exact (flows_weaken _ _ _ _ _ _ Hcalled _ _ Hfrom) ].
 Qed.
 
 Lemma called_witness (G : graph) (cds : finite_map code_dep) (b : node)
@@ -7326,15 +8379,17 @@ Qed.
 (* ======================================================================== *)
 
 (* What the facts of a term read of a graph is in [G']: every fact but
-   uses by other nodes than variables and symbols and reads of [Is_int]
-   into other nodes than variables, which are the two facts that keep
-   the tuple of a call of tupled code alive. *)
+   uses of other nodes than variables by other nodes than variables and
+   symbols, and reads of [Is_int] into other nodes than variables, which
+   are the two facts that keep the tuple of a call of tupled code
+   alive. *)
 Definition graph_sub (G G' : graph) : Prop :=
   (∀ a b : node, g_alias G a b -> g_alias G' a b)
   ∧ (∀ a b : node,
        g_use G a b ->
        (∃ x : variable, a = Node_variable x)
-       ∨ (∃ s : symbol, a = Node_symbol s) ->
+       ∨ (∃ s : symbol, a = Node_symbol s)
+       ∨ (∃ y : variable, b = Node_variable y) ->
        g_use G' a b)
   ∧ (∀ (t : node) (f : field) (b : node),
        g_accessor G t f b ->
@@ -7360,7 +8415,12 @@ Proof.
   unfold graph_sub, FlambdaReaperTupledSpec.without_keep_alive. cbn.
   split; [ auto | split; [ | split; [ | auto 10 ] ] ].
   - intros a b H Hcond. apply filter_In. split; [ exact H | ].
-    destruct Hcond as [(x & ->) | (s & ->)]; reflexivity.
+    destruct Hcond as [(x & ->) | [(s & ->) | (y & ->)]]; try reflexivity.
+    destruct a; try reflexivity.
+    all: simpl; apply negb_true_iff;
+      unfold FlambdaReaperTupledSpec.keep_alive_nodes;
+      induction (f_accessor F) as [ | [[t f] b'] l IH]; [ reflexivity | ];
+      simpl; destruct t; try exact IH; destruct f; exact IH.
   - intros t f b H Hcond. apply filter_In. split; [ exact H | ].
     destruct Hcond as [Hf | (x & ->)]; [ | reflexivity ].
     destruct t; try reflexivity. destruct f; try reflexivity. contradiction.
@@ -7377,9 +8437,16 @@ Variable keep : value_slot -> bool.
 Variable codes : list (code_id * code).
 Variable symbols : list symbol.
 Variable slots_read : Prop.
+Variable heap_prims : Prop.
 
 Lemma sub_alias (a b : node) : g_alias G a b -> g_alias G' a b.
 Proof. apply Hsub. Qed.
+
+Lemma sub_use_of_var (a : node) (y : variable) :
+  g_use G a (Node_variable y) -> g_use G' a (Node_variable y).
+Proof.
+  intros H. apply (proj1 (proj2 Hsub)); [ exact H | right; right; eauto ].
+Qed.
 
 Lemma sub_use (x : variable) (b : node) :
   g_use G (Node_variable x) b -> g_use G' (Node_variable x) b.
@@ -7390,7 +8457,7 @@ Qed.
 Lemma sub_use_symbol (s : symbol) (b : node) :
   g_use G (Node_symbol s) b -> g_use G' (Node_symbol s) b.
 Proof.
-  intros H. apply (proj1 (proj2 Hsub)); [ exact H | right; eexists; eauto ].
+  intros H. apply (proj1 (proj2 Hsub)); [ exact H | right; left; eauto ].
 Qed.
 
 Lemma sub_accessor (t : node) (f : field) (b : node) :
@@ -7449,10 +8516,17 @@ Lemma accessor_edges_mono (x : variable) (f : field) (s : simple) :
   accessor_edges G noted x f s -> accessor_edges G' noted x f s.
 Proof. intros [H Hn]. exact (conj (sub_accessor_var _ _ _ H) Hn). Qed.
 
-Lemma prim_edges_mono (x : variable) (p : prim) (args : list simple) :
-  prim_edges G noted x p args -> prim_edges G' noted x p args.
+Lemma prim_edges_mono (ctx : option code_id) (x : variable) (p : prim)
+    (args : list simple) :
+  prim_edges G noted heap_prims ctx x p args ->
+  prim_edges G' noted heap_prims ctx x p args.
 Proof.
-  unfold prim_edges. intros [Hoff H]. split; [ exact Hoff | revert H ].
+  unfold prim_edges. intros [(Hoff & Heff & Hmut) H].
+  split; [ split; [ exact Hoff | split ] | revert H ].
+  { intros He. specialize (Heff He). unfold cond_use_edge in Heff |- *.
+    destruct ctx;
+      [ exact (sub_use_of_var _ _ Heff) | exact (sub_any_usage _ Heff) ]. }
+  { intros Hm. exact (sub_any_source _ (Hmut Hm)). }
   destruct (prim_classified p args).
   - unfold classified_prim_edges.
     repeat match goal with
@@ -7477,9 +8551,9 @@ Proof.
     exact (conj (sub_constructor _ _ _ Hc) Hn).
 Qed.
 
-Lemma named_edges_mono (x : variable) (d : named) :
-  named_edges G noted deps keep slots_read x d ->
-  named_edges G' noted deps keep slots_read x d.
+Lemma named_edges_mono (ctx : option code_id) (x : variable) (d : named) :
+  named_edges G noted deps keep slots_read heap_prims ctx x d ->
+  named_edges G' noted deps keep slots_read heap_prims ctx x d.
 Proof.
   destruct d as [s | p args | code vs | slot decls vs | slot closure
                 | from w closure | from to_ closure]; simpl.
@@ -7614,16 +8688,20 @@ Qed.
 
 Lemma expr_edges_mono :
   (∀ (e : expr) (ctx : option code_id) (ce : finite_map (list node)),
-     expr_edges G noted deps cds keep codes symbols slots_read ctx ce e ->
-     expr_edges G' noted deps cds keep codes symbols slots_read ctx ce e)
+     expr_edges G noted deps cds keep codes symbols slots_read heap_prims ctx ce
+       e ->
+     expr_edges G' noted deps cds keep codes symbols slots_read heap_prims ctx
+       ce e)
   ∧ (∀ (h : continuation_handler) (ctx : option code_id)
        (ce : finite_map (list node)),
-       handler_edges G noted deps cds keep codes symbols slots_read ctx ce h ->
-       handler_edges G' noted deps cds keep codes symbols slots_read ctx ce h).
+       handler_edges G noted deps cds keep codes symbols slots_read heap_prims
+         ctx ce h ->
+       handler_edges G' noted deps cds keep codes symbols slots_read heap_prims
+         ctx ce h).
 Proof.
   apply expr_handler_ind.
   - intros x kind d body IH ctx ce [Hd Hbody]. simpl.
-    exact (conj (named_edges_mono _ _ Hd) (IH _ _ Hbody)).
+    exact (conj (named_edges_mono _ _ _ Hd) (IH _ _ Hbody)).
   - intros bindings body IHcode IH ctx ce [Hbindings Hbody]. simpl.
     split; [ | exact (IH _ _ Hbody) ].
     revert Hbindings. apply every_impl. intros b Hin Hb.
@@ -7684,37 +8762,148 @@ End Mono.
 
 (* The statement, of every graph that has the facts that the proof reads
    of the graph of the unit. *)
+(* ======================================================================== *)
+(* The allocations of the locations of a run                                *)
+(* ======================================================================== *)
+
+(* The variable of the [Let] that a state allocates with, if it does. *)
+Definition allocating_var (s : state) : option variable :=
+  match state_expr s with
+  | Let x _ (Prim (Heap q) _) _ => if heap_allocates q then Some x else None
+  | _ => None
+  end.
+
+(* A step that allocates binds the fresh location. *)
+Lemma allocating_binds (s s1 : state) (x : variable) :
+  allocating_var s = Some x -> step s = Step s1 ->
+  lookup (fresh_location (state_heap s)) (state_heap s1) <> None.
+Proof.
+  destruct s as [e vars conts statics hp rd]. unfold allocating_var.
+  simpl_state.
+  destruct e as [y kind d body | | | | | | | ]; try discriminate.
+  destruct d as [ | p args | | | | | ]; try discriminate.
+  destruct p as [ | | | q | ]; try discriminate.
+  destruct (heap_allocates q) eqn:Hq; [ intros [= <-] | discriminate ].
+  rewrite step_let_exec.
+  destruct (exec_named statics hp rd vars (Prim (Heap q) args))
+    as [[[v hp'] rd'] | ] eqn:Hexec; [ | discriminate ].
+  destruct (kind_eqb _ _); [ intros [= <-] | discriminate ]. simpl_state.
+  apply exec_named_prim_some in Hexec as (vs & _ & Hprim & _).
+  unfold exec_prim, exec_bound_prim in Hprim.
+  destruct (forallb _ _); [ | discriminate Hprim ].
+  destruct q; try discriminate Hq; cbn [exec_heap_primitive] in Hprim.
+  - destruct (forallb _ _); [ | discriminate Hprim ].
+    injection Hprim as _ <-. rewrite lookup_cons, Pos.eqb_refl. discriminate.
+  - destruct vs as [ | v0 vs0]; [ discriminate Hprim | ].
+    destruct (array_made _ _); simpl in Hprim; [ | discriminate Hprim ].
+    injection Hprim as _ <-. rewrite lookup_cons, Pos.eqb_refl. discriminate.
+Qed.
+
+Lemma heap_evolves_bound (h h' : heap) (l : location) :
+  heap_evolves h h' -> lookup l h <> None -> lookup l h' <> None.
+Proof.
+  intros [Hb Ha] Hl.
+  destruct (lookup l h) as [[mut tag fields | kind elements] | ] eqn:E;
+    [ | | contradiction ].
+  - destruct (Hb l mut tag fields E) as (fields' & H' & _). rewrite H'.
+    discriminate.
+  - destruct (Ha l kind elements E) as (elements' & H' & _). rewrite H'.
+    discriminate.
+Qed.
+
+(* A location bound stays bound along a run. *)
+Lemma run_keeps_bound (i : nat) (s s' : state) (l : location) :
+  run i s = Step s' -> lookup l (state_heap s) <> None ->
+  lookup l (state_heap s') <> None.
+Proof.
+  revert s. induction i as [ | i IH]; intros s Hrun Hl.
+  - simpl in Hrun. injection Hrun as <-. exact Hl.
+  - rewrite run_succ in Hrun.
+    destruct (step s) as [s1 | | ] eqn:E; try discriminate Hrun.
+    apply (IH s1 Hrun).
+    exact (heap_evolves_bound _ _ _ (step_evolves s s1 E) Hl).
+Qed.
+
+(* The first [n] steps of a run allocate each location once, at the
+   [Let] of a variable, whose node the location is given. *)
+Lemma located_exists (n : nat) (s : state) :
+  ∃ located : location -> option node,
+    ∀ (i : nat) (s' : state), i < n -> run i s = Step s' ->
+      alloc_ok located s'.
+Proof.
+  revert s. induction n as [ | n IH]; intros s.
+  - exists (fun _ => None). intros i s' Hi. lia.
+  - set (L0 := fun (L : location -> option node) (l : location) =>
+                 match allocating_var s with
+                 | Some x =>
+                   if Pos.eqb l (fresh_location (state_heap s))
+                   then Some (Node_variable x) else L l
+                 | None => L l
+                 end).
+    assert (H0 : ∀ L : location -> option node, alloc_ok (L0 L) s).
+    { intros L x kind q args body Hexpr Hq. unfold L0, allocating_var.
+      rewrite Hexpr, Hq, Pos.eqb_refl. reflexivity. }
+    destruct (step s) as [s1 | k vs hp rd | ] eqn:E.
+    + destruct (IH s1) as (L1 & HL1).
+      exists (L0 L1). intros [ | i] s' Hi Hrun.
+      * simpl in Hrun. injection Hrun as <-. apply H0.
+      * rewrite run_succ, E in Hrun.
+        pose proof (HL1 i s' ltac:(lia) Hrun) as Hok.
+        intros x kind q args body Hexpr Hq.
+        rewrite <- (Hok x kind q args body Hexpr Hq).
+        unfold L0. destruct (allocating_var s) as [y | ] eqn:Hy;
+          [ | reflexivity ].
+        destruct (Pos.eqb_spec (fresh_location (state_heap s'))
+                    (fresh_location (state_heap s))) as [Heq | _];
+          [ | reflexivity ].
+        exfalso.
+        pose proof (run_keeps_bound i s1 s' _ Hrun
+                      (allocating_binds s s1 y Hy E)) as Hb.
+        rewrite <- Heq in Hb.
+        exact (Hb (FlambdaHeapProofs.fresh_location _)).
+    + exists (L0 (fun _ => None)). intros [ | i] s' Hi Hrun.
+      * simpl in Hrun. injection Hrun as <-. apply H0.
+      * rewrite run_succ, E in Hrun. discriminate Hrun.
+    + exists (L0 (fun _ => None)). intros [ | i] s' Hi Hrun.
+      * simpl in Hrun. injection Hrun as <-. apply H0.
+      * rewrite run_succ, E in Hrun. discriminate Hrun.
+Qed.
+
 Lemma flow_sound_gen (flag : reaper_preserve_direct_calls)
     (is_local : field -> bool) (u : unit_interface) (e : expr) (T : tables)
     (n : nat) (G : graph) :
   graph_sub (graph_of_facts (traverse_unit flag u e)) G ->
   is_local_slots_only is_local ->
   (∀ f : field, is_local f = false) ∨ projection_free e = true ->
-  in_flow_fragment e = true ->
+  in_heap_fragment e = true ->
   closed is_local G (solution_of_tables T) ->
-  match run n (State e [] [] empty_static_env empty_heap no_reads) with
-  | Step s =>
-    state_flows G (solution_of_tables T) (unit_kept e) (has_call_witness G) s
-  | Exit k vs _ _ =>
-    exit_flows G (solution_of_tables T) (unit_kept e) (has_call_witness G) u
-      k vs
-  | Undefined => True
-  end.
+  ∃ located : location -> option node,
+    match run n (State e [] [] empty_static_env empty_heap no_reads) with
+    | Step s =>
+      state_flows G (solution_of_tables T) (unit_kept e) (has_call_witness G)
+        located s
+    | Exit k vs hp _ =>
+      exit_flows G (solution_of_tables T) (unit_kept e) (has_call_witness G)
+        located u k vs
+      ∧ heap_flows G (solution_of_tables T) (unit_kept e)
+          (has_call_witness G) located hp
+    | Undefined => True
+    end.
 Proof.
   intros Hsub Hlocal Hslots Hfrag Hc.
-  destruct (traverse_unit_facts flag u e (∀ f : field, is_local f = false)
-              Hfrag Hslots)
+  destruct (traverse_unit_facts_heap flag u e
+              (∀ f : field, is_local f = false) Hfrag Hslots)
     as (noted & deps & cds & He0 & Hconsts0 & Himported & _ & Hdeps0 & Hnd
         & Hkeys).
   set (G0 := graph_of_facts (traverse_unit flag u e)) in *.
   set (sol := solution_of_tables T) in *.
   pose proof (static_names_edges G0 noted deps cds (unit_kept e)
                 (unit_codes e) (static_names symbols_of_binding e)
-                (∀ f : field, is_local f = false)) as [Hnames _].
+                (∀ f : field, is_local f = false) True) as [Hnames _].
   destruct (Hnames e None (unit_conts u) He0) as [Hsym_names Hcode_names].
   pose proof (proj1 (expr_edges_mono G0 G Hsub noted deps cds (unit_kept e)
                        (unit_codes e) (static_names symbols_of_binding e)
-                       (∀ f : field, is_local f = false))
+                       (∀ f : field, is_local f = false) True)
                 e None (unit_conts u) He0) as He.
   pose proof (sub_any_source G0 G Hsub _ Hconsts0) as Hconsts.
   assert (Hdeps : ∀ d : closure_dep, deps d -> closure_dep_facts G cds d).
@@ -7769,21 +8958,32 @@ Proof.
     apply (may_come_from_self is_local G sol _ Hc).
     exact (any_source_input _ _ _ Hc _
              (sub_any_source G0 G Hsub _ (Himported s Hs Hunit))). }
+  destruct (located_exists n (State e [] [] empty_static_env empty_heap
+                                no_reads))
+    as (located & Hloc).
+  exists located.
   pose proof (run_flow_invariant is_local G sol noted deps cds (unit_kept e)
-                (unit_codes e) (static_names symbols_of_binding e) u Hc Hlocal
-                Hconsts Hsyms Hunit_syms Hdeps Hnd Hcds n _
+                (unit_codes e) (static_names symbols_of_binding e) u True
+                located Hc Hlocal Hconsts Hsyms Hunit_syms Hdeps Hnd Hcds n _
+                Hloc
                 (initial_flow_invariant is_local G sol noted deps cds
                    (unit_kept e) (unit_codes e)
-                   (static_names symbols_of_binding e) u e He))
+                   (static_names symbols_of_binding e) u True located e He)
+                ltac:(apply initial_heap_ok))
     as Hrun.
   destruct (run n (State e [] [] empty_static_env empty_heap no_reads))
     as [s | k vs hp rd | ].
-  - apply (state_flows_weaken _ _ _ (called_by G cds)).
-    + apply called_witness.
-    + exact (flow_invariant_flows _ _ _ _ _ _ _ _ _ _ _ Hrun).
-  - intros i v p Hv Hp.
-    apply (flows_weaken _ _ _ (called_by G cds)); [ apply called_witness | ].
-    exact (Hrun i v p Hv Hp).
+  - destruct Hrun as [Hinv [Hheap _]].
+    destruct (flow_invariant_flows _ _ _ _ _ _ _ _ _ _ _ _ _ Hinv)
+      as (Hvars & Hconts & Hst).
+    apply (state_flows_weaken _ _ _ (called_by G cds));
+      [ apply called_witness | ].
+    exact (conj Hvars (conj Hconts (conj Hst Hheap))).
+  - destruct Hrun as [Hexit Hheap]. split.
+    + intros i v p Hv Hp.
+      apply (flows_weaken _ _ _ (called_by G cds)); [ apply called_witness | ].
+      exact (Hexit i v p Hv Hp).
+    + exact (heap_flows_weaken _ _ _ _ _ _ _ (called_witness G cds) Hheap).
   - exact I.
 Qed.
 
@@ -7805,10 +9005,57 @@ Qed.
 Theorem unit_cont_nodes_used : unit_cont_nodes_used_statement.
 Proof.
   intros flag u e k p Hfrag Hp.
-  destruct (traverse_unit_facts flag u e True Hfrag (or_introl I))
+  destruct (traverse_unit_facts_heap flag u e True Hfrag (or_introl I))
     as (_ & _ & _ & _ & _ & _ & Hused & _).
   exact (Hused k p Hp).
 Qed.
+
+(* The fragment with the primitives of the heap has every term of the
+   fragment without them. *)
+Lemma flow_fragment_heap :
+  (∀ (e : expr) (codes : list (code_id * code)) (symbols : list symbol),
+     flow_fragment false codes symbols e = true ->
+     flow_fragment true codes symbols e = true)
+  ∧ (∀ (h : continuation_handler) (codes : list (code_id * code))
+       (symbols : list symbol),
+       handler_flow_fragment false codes symbols h = true ->
+       handler_flow_fragment true codes symbols h = true).
+Proof.
+  apply expr_handler_ind; simpl.
+  - intros x kind d body IH codes symbols H.
+    apply andb_true_iff in H as [Hd H]. rewrite (IH _ _ H), andb_true_r.
+    destruct d; simpl in Hd |- *; first [ reflexivity | exact Hd ].
+  - intros bindings body IHcode IH codes symbols H.
+    apply andb_true_iff in H as [Hb H]. rewrite (IH _ _ H), andb_true_r.
+    rewrite forallb_forall in Hb |- *. intros b Hin. specialize (Hb b Hin).
+    destruct b as [id c | id | sym const]; simpl in Hb |- *;
+      [ | reflexivity | exact Hb ].
+    destruct c as [params my_closure ret exn metadata body']. simpl in *.
+    apply andb_true_iff in Hb as [Hb Hbody'].
+    pose proof (IHcode id _ Hin _ _ Hbody') as Hb'. simpl in Hb'.
+    rewrite Hb', Hb. reflexivity.
+  - intros k h body IHh IH codes symbols H.
+    apply andb_true_iff in H as [Hh H].
+    rewrite (IHh _ _ Hh), (IH _ _ H). reflexivity.
+  - intros handlers body IHh IH codes symbols H.
+    apply andb_true_iff in H as [Hh H]. rewrite (IH _ _ H), andb_true_r.
+    rewrite forallb_forall in Hh |- *. intros [k h] Hin.
+    exact (IHh k h Hin _ _ (Hh (k, h) Hin)).
+  - auto.
+  - auto.
+  - auto.
+  - auto.
+  - auto.
+Qed.
+
+Theorem in_flow_fragment_in_heap_fragment :
+  in_flow_fragment_in_heap_fragment_statement.
+Proof.
+  intros e H. unfold in_flow_fragment, in_heap_fragment in *.
+  apply andb_true_iff in H as [Hf Hd].
+  rewrite (proj1 flow_fragment_heap e _ _ Hf), Hd. reflexivity.
+Qed.
+
 
 (* ======================================================================== *)
 (* Examples                                                                 *)
@@ -7866,7 +9113,7 @@ Qed.
 Theorem tupled_reverted_analysis_sound :
   tupled_reverted_analysis_sound_statement.
 Proof.
-  assert (Hfrag : in_flow_fragment FlambdaReaperTupledSpec.tupled_unit = true)
+  assert (Hfrag : in_heap_fragment FlambdaReaperTupledSpec.tupled_unit = true)
     by (vm_compute; reflexivity).
   split; [ exact Hfrag | ]. cbv zeta. intros n.
   destruct (FlambdaReaperTupledProofs.without_keep_alive_solution_passes
@@ -7879,4 +9126,14 @@ Proof.
            ltac:(intros f H; discriminate H) (or_introl (fun f => eq_refl))
            Hfrag
            Hcheck).
+Qed.
+
+Theorem heap_example : heap_example_statement.
+Proof.
+  split; [ intros f Hf; discriminate Hf | ].
+  split; [ vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | ].
+  split; [ apply all_fail; vm_compute; reflexivity | ].
+  vm_compute. reflexivity.
 Qed.

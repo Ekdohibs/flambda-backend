@@ -3596,7 +3596,7 @@ Hypothesis reads_found : ∀ (x y : variable) (kind : flambda_kind)
 
 Abbreviation edges ce e :=
   (FlambdaReaperFlowProofs.expr_edges (graph_of_facts F) noted deps cds
-     kept_slots codes0 symbols True None ce e).
+     kept_slots codes0 symbols True False None ce e).
 
 (* A simple that [rewrite_simple] keeps. *)
 Definition kept_simple (en : rebuild_env) (s : simple) : bool :=
@@ -4707,7 +4707,7 @@ Lemma rebuild_ub :
            (handler_mask sol is_exn h) h
          = true ->
          FlambdaReaperFlowProofs.handler_edges (graph_of_facts F) noted deps
-           cds kept_slots codes0 symbols True None ce h ->
+           cds kept_slots codes0 symbols True False None ce h ->
          ∀ dead : bool,
            ∃ (ps ps' : list (variable * flambda_kind))
              (metadata metadata' : handler_metadata) (hp hu : expr),
