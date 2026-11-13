@@ -112,9 +112,10 @@
    off a node have the same sources ([check_apply_widgets]), which the
    rules derive of them but a table closed under the rules need not
    have; without it, a call of code that changes is not known to call it
-   and goes wrong ([spurious_widget_counterexample_statement]). And it
-   asks of the facts that each witness give one code id
-   ([check_witness_code_ids]), which the traversal makes so. *)
+   and goes wrong ([spurious_widget_counterexample_statement]). That each
+   witness of the facts give one code id ([check_witness_code_ids]) is
+   not asked: the traversal makes it so of every unit
+   ([traverse_witness_code_ids_statement]). *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic.
@@ -290,8 +291,10 @@ Definition cc_fragment (e : expr) : bool :=
           && no_call_returns_to (code_return_continuation c) (code_body c))
        (unit_codes e).
 
-(* Each call witness gives one code id: the traversal makes the
-   witnesses of each code, and only they give a code id. *)
+(* Each call witness gives one code id. The traversal gives a witness a
+   code id once, where it makes it: the witnesses of code of the unit
+   give its code id, and the witness of a closure whose code is not of
+   the unit gives the closure ([traverse_witness_code_ids_statement]). *)
 Definition check_witness_code_ids (F : facts) : bool :=
   forallb
     (fun '(w, f, c) =>
@@ -303,6 +306,11 @@ Definition check_witness_code_ids (F : facts) : bool :=
                || node_eqb c' c)
             (f_constructor F))
     (f_constructor F).
+
+(* The facts of every unit pass [check_witness_code_ids]. *)
+Definition traverse_witness_code_ids_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (u : unit_interface) (e : expr),
+    check_witness_code_ids (traverse_unit flag u e) = true.
 
 (* The witnesses of known arity that calls read off a node have the same
    sources in the table: [code_id_actually_directly_called] reads them
@@ -443,10 +451,11 @@ Definition check_cc_returns (F : facts) (T : tables)
    FlambdaReaperRebuildSpec.rebuild_refines_observably_statement says of
    the rebuild without, with a table that passes [check_cc_closed], and a
    table of the solution whose witnesses read off a node agree
-   ([check_apply_widgets]), from facts whose witnesses give one code id
-   each ([check_witness_code_ids]). A call in tail position in code that
-   changes may call code that changes, code that does not, or be of
-   unknown arity: [check_cc_returns] is not asked. *)
+   ([check_apply_widgets]). That the witnesses of the facts give one code
+   id each ([check_witness_code_ids]) is not asked: the traversal makes
+   it so ([traverse_witness_code_ids_statement]). A call in tail position
+   in code that changes may call code that changes, code that does not,
+   or be of unknown arity: [check_cc_returns] is not asked. *)
 Definition rebuild_cc_refines_observably_statement : Prop :=
   ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
     (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
@@ -462,7 +471,6 @@ Definition rebuild_cc_refines_observably_statement : Prop :=
     check_field_used_exact is_local (traverse_unit flag u e) T = true ->
     check_cc_closed (traverse_unit flag u e) T cannot_change = true ->
     check_apply_widgets (traverse_unit flag u e) T = true ->
-    check_witness_code_ids (traverse_unit flag u e) = true ->
     program_refines_observably e
       (rebuild_unit_cc_from_tables (traverse_unit flag u e) T cannot_change
          (unit_code_deps flag u e) preserve_direct_calls e).

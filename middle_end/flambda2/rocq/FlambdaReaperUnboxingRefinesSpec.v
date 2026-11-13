@@ -2183,9 +2183,6 @@ Definition rebuild_unbox_without_unboxing_observably_statement : Prop :=
     FlambdaReaperCallingConventionsSpec.check_apply_widgets
       (traverse_unit flag u e) T
     = true ->
-    FlambdaReaperCallingConventionsSpec.check_witness_code_ids
-      (traverse_unit flag u e)
-    = true ->
     fst (unit_unboxed_fields (traverse_unit flag u e) T dominated to_unbox e)
     = [] ->
     arities_match (call_results (traverse_unit flag u e) T e)

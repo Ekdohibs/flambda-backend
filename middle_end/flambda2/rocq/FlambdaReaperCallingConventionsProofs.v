@@ -32,10 +32,11 @@
    of calling convention is
    FlambdaReaperRebuildProofs.rebuild_cc_refines_checked, given what the
    checks of the table and of the facts say ([check_cc_closed_sound],
-   [check_apply_widgets_sound], [check_witness_code_ids_sound]). Nothing
-   here needs review. *)
+   [check_apply_widgets_sound], [check_witness_code_ids_sound]); the
+   facts of the traversal pass the last ([traverse_witness_code_ids]).
+   Nothing here needs review. *)
 
-From Stdlib Require Import ZArith List Bool.
+From Stdlib Require Import ZArith List Bool Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaWellFormedSpec FlambdaSemanticsSpec FlambdaReaperGraphSpec
@@ -43,7 +44,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaReaperTraversal FlambdaReaperRebuild
   FlambdaReaperCallingConventions FlambdaReaperCallingConventionsSpec.
 From OxCamlFlambda2 Require FlambdaReaperRebuildProofs FlambdaSemanticsProofs
-  FlambdaReaperFlowSpec.
+  FlambdaReaperFlowSpec FlambdaReaperFlowProofs.
 Import ListNotations.
 
 Section Witnesses.
@@ -519,11 +520,604 @@ Proof.
   exact Hcheck.
 Qed.
 
+(* ======================================================================== *)
+(* The traversal makes each witness give one code id                        *)
+(* ======================================================================== *)
+
+(* The witnesses that give a code id in the facts of an accumulator are
+   made nodes before its counter, each giving one. *)
+Definition wci_inv (a : acc) : Prop :=
+  (∀ w c,
+     Fact_constructor w Field_code_id_of_call_witness c ∈ acc_facts a ->
+     ∃ n, w = Node_made n ∧ (n < acc_next a)%positive)
+  ∧ (∀ w c c',
+       Fact_constructor w Field_code_id_of_call_witness c ∈ acc_facts a ->
+       Fact_constructor w Field_code_id_of_call_witness c' ∈ acc_facts a ->
+       c' = c).
+
+(* A step of the traversal keeps [wci_inv] and its counter grows. *)
+Definition wstep (a a' : acc) : Prop :=
+  (acc_next a <= acc_next a')%positive ∧ (wci_inv a -> wci_inv a').
+
+Lemma wstep_refl (a : acc) : wstep a a.
+Proof. split; [ lia | auto ]. Qed.
+
+Lemma wstep_trans (a a' a'' : acc) :
+  wstep a a' -> wstep a' a'' -> wstep a a''.
+Proof. intros [H1 H2] [H3 H4]. split; [ lia | auto ]. Qed.
+
+Definition no_wci (l : list fact) : Prop :=
+  ∀ w c, ~ Fact_constructor w Field_code_id_of_call_witness c ∈ l.
+
+(* Facts added whose witnesses that give a code id are made by the step
+   and all give the same one. *)
+Lemma wstep_add (a a' : acc) (l : list fact) (c0 : node) :
+  acc_facts a' = l ++ acc_facts a ->
+  (acc_next a <= acc_next a')%positive ->
+  (∀ w c, Fact_constructor w Field_code_id_of_call_witness c ∈ l ->
+     c = c0 ∧ ∃ n, w = Node_made n ∧ (acc_next a <= n)%positive
+                 ∧ (n < acc_next a')%positive) ->
+  wstep a a'.
+Proof.
+  intros Hf Hle Hl. split; [ exact Hle | ].
+  intros [Hmade Hfun]. unfold wci_inv. rewrite Hf. split.
+  - intros w c Hin. apply in_app_or in Hin. destruct Hin as [Hin | Hin].
+    + destruct (Hl _ _ Hin) as (_ & n & -> & _ & Hn). exists n. auto.
+    + destruct (Hmade _ _ Hin) as (n & -> & Hn). exists n.
+      split; [ reflexivity | lia ].
+  - intros w c c' Hin Hin'. apply in_app_or in Hin.
+    apply in_app_or in Hin'.
+    destruct Hin as [Hin | Hin], Hin' as [Hin' | Hin'].
+    + destruct (Hl _ _ Hin) as [-> _]. destruct (Hl _ _ Hin') as [-> _].
+      reflexivity.
+    + exfalso. destruct (Hl _ _ Hin) as (_ & n & -> & Hn & _).
+      destruct (Hmade _ _ Hin') as (n' & Heq & Hn'). injection Heq as <-.
+      lia.
+    + exfalso. destruct (Hl _ _ Hin') as (_ & n & -> & Hn & _).
+      destruct (Hmade _ _ Hin) as (n' & Heq & Hn'). injection Heq as <-.
+      lia.
+    + exact (Hfun _ _ _ Hin Hin').
+Qed.
+
+Lemma wstep_clean (a a' : acc) (l : list fact) :
+  acc_facts a' = l ++ acc_facts a ->
+  (acc_next a <= acc_next a')%positive -> no_wci l -> wstep a a'.
+Proof.
+  intros Hf Hle Hl. apply (wstep_add a a' l Node_all_constants Hf Hle).
+  intros w c Hin. destruct (Hl w c Hin).
+Qed.
+
+Lemma wstep_same (a a' : acc) :
+  acc_facts a' = acc_facts a -> (acc_next a <= acc_next a')%positive ->
+  wstep a a'.
+Proof.
+  intros Hf Hle. apply (wstep_clean a a' []); [ exact Hf | exact Hle | ].
+  intros w c [].
+Qed.
+
+Lemma wstep_add_facts (l : list fact) (a : acc) :
+  no_wci l -> wstep a (add_facts l a).
+Proof.
+  intros Hl. apply (wstep_clean _ _ l); [ reflexivity | cbn; lia | exact Hl ].
+Qed.
+
+Ltac wci_split H :=
+  repeat match type of H with
+  | In _ (_ ++ _) => apply in_app_or in H; destruct H as [H | H]
+  | In _ (map _ _) =>
+    let y := fresh "y" in
+    apply in_map_iff in H; destruct H as [y [H _]]
+  | In _ (flat_map _ _) =>
+    let y := fresh "y" in
+    apply in_flat_map in H; destruct H as [y [_ H]]
+  | In _ (_ :: _) => destruct H as [H | H]
+  | In _ [] => destruct H
+  | In _ (match ?t with _ => _ end) => destruct t
+  end.
+
+Ltac wci_close H :=
+  repeat match goal with y : prod _ _ |- _ => destruct y end;
+  cbn in H; try congruence.
+
+Ltac no_wci_tac :=
+  let w := fresh "w" in let c := fresh "c" in let H := fresh "H" in
+  intros w c H; wci_split H; wci_close H.
+
+Lemma wstep_fresh (a : acc) : wstep a (snd (fresh a)).
+Proof. apply wstep_same; cbn; [ reflexivity | lia ]. Qed.
+
+Lemma fresh_list_spec (n : nat) (a : acc) :
+  acc_facts (snd (fresh_list n a)) = acc_facts a
+  ∧ (acc_next a <= acc_next (snd (fresh_list n a)))%positive
+  ∧ ∀ x, x ∈ fst (fresh_list n a) ->
+      ∃ m, x = Node_made m ∧ (acc_next a <= m)%positive
+           ∧ (m < acc_next (snd (fresh_list n a)))%positive.
+Proof.
+  revert a. induction n as [ | n IH]; intros a; cbn [fresh_list].
+  - cbn. split; [ reflexivity | split; [ lia | intros x [] ] ].
+  - destruct (fresh a) as [x a1] eqn:E1.
+    assert (Hf1 : acc_facts a1 = acc_facts a
+                  ∧ acc_next a1 = Pos.succ (acc_next a)
+                  ∧ x = Node_made (acc_next a)).
+    { unfold fresh in E1. injection E1 as <- <-. cbn. auto. }
+    destruct Hf1 as (Hf1 & Hn1 & ->).
+    destruct (IH a1) as (H1 & H2 & H3).
+    destruct (fresh_list n a1) as [xs a2] eqn:E2. cbn [fst snd] in *.
+    split; [ congruence | split; [ lia | ] ].
+    intros y [<- | Hy].
+    + exists (acc_next a). split; [ reflexivity | lia ].
+    + destruct (H3 y Hy) as (m & -> & Hm1 & Hm2). exists m.
+      split; [ reflexivity | lia ].
+Qed.
+
+Lemma wstep_fresh_list (n : nat) (a : acc) : wstep a (snd (fresh_list n a)).
+Proof.
+  destruct (fresh_list_spec n a) as (H1 & H2 & _). apply wstep_same; assumption.
+Qed.
+
+Lemma wstep_note_simple (s : simple) (a : acc) : wstep a (note_simple s a).
+Proof. destruct s; apply wstep_same; cbn; (reflexivity || lia). Qed.
+
+Lemma wstep_fold {A : Type} (f : acc -> A -> acc) (l : list A) (a : acc) :
+  (∀ x a, x ∈ l -> wstep a (f a x)) -> wstep a (List.fold_left f l a).
+Proof.
+  revert a. induction l as [ | x l IH]; intros a H; cbn.
+  - apply wstep_refl.
+  - eapply wstep_trans; [ apply H; left; reflexivity | ].
+    apply IH. intros y b Hy. apply H. right. exact Hy.
+Qed.
+
+Lemma wstep_note_simples (l : list simple) (a : acc) :
+  wstep a (note_simples l a).
+Proof. apply wstep_fold. intros s b _. apply wstep_note_simple. Qed.
+
+Lemma wstep_push_apply_dep (d : apply_dep) (a : acc) :
+  wstep a (push_apply_dep d a).
+Proof. apply wstep_same; cbn; [ reflexivity | lia ]. Qed.
+
+Lemma wstep_push_closure_dep (d : closure_dep) (a : acc) :
+  wstep a (push_closure_dep d a).
+Proof. apply wstep_same; cbn; [ reflexivity | lia ]. Qed.
+
+Lemma wstep_add_code_dep (id : code_id) (cd : code_dep) (a : acc) :
+  wstep a (add_code_dep id cd a).
+Proof. apply wstep_same; cbn; [ reflexivity | lia ]. Qed.
+
+Create HintDb wci discriminated.
+#[local] Hint Resolve wstep_fresh wstep_fresh_list wstep_note_simple
+  wstep_note_simples wstep_push_apply_dep wstep_push_closure_dep
+  wstep_add_code_dep : wci.
+
+(* A chain of steps, from the last. *)
+Ltac wauto :=
+  cbv zeta;
+  match goal with
+  | |- wstep ?a ?a => apply wstep_refl
+  | |- wstep ?a (snd (?x, ?y)) => change (wstep a y); wauto
+  | |- wstep ?a (add_facts ?l ?b) =>
+    apply (wstep_trans a b); [ wauto | apply wstep_add_facts; no_wci_tac ]
+  | |- wstep ?a (add_fact ?f ?b) =>
+    apply (wstep_trans a b); [ wauto | apply wstep_add_facts; no_wci_tac ]
+  | |- wstep ?a (snd (match ?t with _ => _ end)) =>
+    lazymatch type of t with
+    | (_ * acc)%type =>
+      let Hs := fresh "Hs" in
+      assert (Hs : wstep a (snd t)) by wauto;
+      let x := fresh "x" in let b := fresh "b" in let E := fresh "E" in
+      destruct t as [x b] eqn:E; try rewrite E in Hs; cbn [snd] in Hs;
+      apply (wstep_trans a b); [ exact Hs | wauto ]
+    | _ => destruct t; wauto
+    end
+  | |- wstep ?a (match ?t with _ => _ end) =>
+    lazymatch type of t with
+    | (_ * acc)%type =>
+      let Hs := fresh "Hs" in
+      assert (Hs : wstep a (snd t)) by wauto;
+      let x := fresh "x" in let b := fresh "b" in let E := fresh "E" in
+      destruct t as [x b] eqn:E; try rewrite E in Hs; cbn [snd] in Hs;
+      apply (wstep_trans a b); [ exact Hs | wauto ]
+    | _ => destruct t; wauto
+    end
+  | |- wstep ?a (snd (?g ?b)) =>
+    apply (wstep_trans a b); [ wauto | solve [ eauto with wci ] ]
+  | |- wstep ?a (?g ?b) =>
+    apply (wstep_trans a b); [ wauto | solve [ eauto with wci ] ]
+  end.
+
+Lemma wstep_cond_any_usage (env : traverse_env) (s : simple) (a : acc) :
+  wstep a (cond_any_usage env s a).
+Proof. unfold cond_any_usage. wauto. Qed.
+
+Lemma wstep_cond_alias (env : traverse_env) (from to_ : node) (a : acc) :
+  wstep a (cond_alias env from to_ a).
+Proof. unfold cond_alias. wauto. Qed.
+
+Lemma wstep_find_cont (env : traverse_env) (k : continuation) (n : nat)
+    (a : acc) :
+  wstep a (snd (find_cont env k n a)).
+Proof. unfold find_cont. wauto. Qed.
+
+#[local] Hint Resolve wstep_cond_any_usage wstep_cond_alias wstep_find_cont
+  : wci.
+
+Lemma wstep_block_deps (base : node) (fields : list simple) (a : acc) :
+  wstep a (block_deps base fields a).
+Proof. unfold block_deps. wauto. Qed.
+
+#[local] Hint Resolve wstep_block_deps : wci.
+
+Lemma wstep_traverse_prim (env : traverse_env) (x : variable) (p : prim)
+    (args : list simple) (a : acc) :
+  wstep a (traverse_prim env x p args a).
+Proof.
+  unfold traverse_prim.
+  destruct p as [ u | b | v | h ]; [ destruct u | destruct b | destruct v
+    | destruct h ]; wauto.
+Qed.
+
+Lemma wstep_record_set (env : traverse_env)
+    (closures : list (node * option code_id))
+    (function_slots : list (function_slot * node))
+    (value_slots : list (value_slot * simple)) (a : acc) :
+  wstep a (record_set_of_closures_deps env closures function_slots
+             value_slots a).
+Proof.
+  unfold record_set_of_closures_deps. apply wstep_fold.
+  intros [base code] b _. wauto.
+Qed.
+
+Lemma wstep_closures_of_set (x : variable) (slot : function_slot)
+    (others : list (function_slot * variable))
+    (function_decls : list (function_slot * code_id)) (a : acc) :
+  wstep a (snd (closures_of_set x slot others function_decls a)).
+Proof.
+  revert a. induction function_decls as [ | [f id] decls IH]; intros a;
+    cbn [closures_of_set].
+  - apply wstep_refl.
+  - destruct (if Pos.eqb f slot then _ else _) as [name b] eqn:E.
+    assert (Hb : wstep a b).
+    { destruct (Pos.eqb f slot);
+        [ injection E as _ <-; apply wstep_refl | ].
+      destruct (lookup f others);
+        [ injection E as _ <-; apply wstep_refl | ].
+      pose proof (wstep_fresh a) as H. rewrite E in H. exact H. }
+    specialize (IH b).
+    destruct (closures_of_set x slot others decls b) as [rest c].
+    exact (wstep_trans _ _ _ Hb IH).
+Qed.
+
+#[local] Hint Resolve wstep_traverse_prim wstep_record_set
+  wstep_closures_of_set : wci.
+
+Lemma wstep_traverse_named (env : traverse_env) (x : variable)
+    (defining_expr : named) (a : acc) :
+  wstep a (traverse_named env x defining_expr a).
+Proof.
+  unfold traverse_named, traverse_closure_of_set.
+  destruct defining_expr; wauto.
+Qed.
+
+Lemma wstep_traverse_static_binding (env : traverse_env)
+    (binding : static_binding) (a : acc) :
+  wstep a (traverse_static_binding env binding a).
+Proof.
+  unfold traverse_static_binding, boxed_number_facts.
+  destruct binding as [ | | s const]; [ wauto | wauto | ].
+  destruct const; wauto.
+Qed.
+
+Lemma fresh_eq (a : acc) :
+  fresh a = (Node_made (acc_next a), snd (fresh a))
+  ∧ acc_facts (snd (fresh a)) = acc_facts a
+  ∧ acc_next (snd (fresh a)) = Pos.succ (acc_next a).
+Proof. cbn. auto. Qed.
+
+Lemma wstep_known_witness (id : code_id) (params returns : list node)
+    (exn : node) (a : acc) :
+  wstep a (snd (create_known_arity_call_witness id params returns exn a)).
+Proof.
+  unfold create_known_arity_call_witness.
+  destruct (fresh_eq a) as (E & Hf & Hn).
+  destruct (fresh a) as [w b] eqn:E'. injection E as ->.
+  cbn [snd] in Hf, Hn.
+  cbv zeta. cbn [snd].
+  eapply (wstep_add _ _ _ (Node_code_id id));
+    [ cbn; rewrite Hf; reflexivity | cbn; lia | ].
+  intros w' c H. wci_split H; wci_close H.
+  injection H as <- <-. split; [ reflexivity | ].
+  exists (acc_next a). cbn. split; [ reflexivity | lia ].
+Qed.
+
+Lemma wstep_tupled_witnesses (id : code_id) (params returns : list node)
+    (exn : node) (a : acc) :
+  wstep a
+    (snd (create_unknown_arity_tupled_call_witnesses id params returns exn
+            a)).
+Proof.
+  unfold create_unknown_arity_tupled_call_witnesses.
+  destruct (fresh_eq a) as (E & Hf & Hn).
+  destruct (fresh a) as [w b] eqn:E'. injection E as ->.
+  cbn [snd] in Hf, Hn.
+  destruct (fresh_eq b) as (E2 & Hf2 & Hn2).
+  destruct (fresh b) as [u b2] eqn:E2'. injection E2 as ->.
+  cbn [snd] in Hf2, Hn2.
+  destruct (fresh_eq b2) as (E3 & Hf3 & Hn3).
+  destruct (fresh b2) as [k b3] eqn:E3'. injection E3 as ->.
+  cbn [snd] in Hf3, Hn3.
+  cbv zeta. cbn [snd].
+  eapply (wstep_add _ _ _ (Node_code_id id));
+    [ cbn; rewrite Hf3, Hf2, Hf; reflexivity | cbn; lia | ].
+  intros w' c H. wci_split H; wci_close H.
+  injection H as <- <-. split; [ reflexivity | ].
+  exists (acc_next a). cbn. split; [ reflexivity | lia ].
+Qed.
+
+Lemma unknown_arity_witness_deps_spec (id : code_id) (returns : list node)
+    (exn : node) (pw : list (list node * node)) (a : acc) :
+  ∃ l,
+    acc_facts (unknown_arity_witness_deps id returns exn pw a)
+    = l ++ acc_facts a
+    ∧ (acc_next a
+       <= acc_next (unknown_arity_witness_deps id returns exn pw a))%positive
+    ∧ ∀ w c, Fact_constructor w Field_code_id_of_call_witness c ∈ l ->
+        c = Node_code_id id ∧ w ∈ map snd pw.
+Proof.
+  revert a. induction pw as [ | [first witness] rest IH]; intros a;
+    cbn [unknown_arity_witness_deps].
+  - exists []. split; [ reflexivity | split; [ lia | intros w c [] ] ].
+  - destruct rest as [ | [g nw] rest'].
+    + eexists. split;
+        [ cbn [acc_facts add_facts]; rewrite app_assoc; reflexivity | ].
+      split; [ cbn; lia | ].
+      intros w c H. wci_split H; wci_close H.
+      injection H as <- <-. split; [ reflexivity | left; reflexivity ].
+    + cbv zeta.
+      match goal with
+      | |- context [fresh ?t] => destruct (fresh_eq t) as (E & Hf & Hn)
+      end.
+      destruct (fresh _) as [v b] eqn:E'. injection E as ->.
+      cbn [snd] in Hf, Hn.
+      match goal with
+      | |- context [unknown_arity_witness_deps id returns exn _ ?t] =>
+        destruct (IH t) as (l & Hl & Hle & Hw)
+      end.
+      eexists. split.
+      * rewrite Hl. cbn [acc_facts add_facts]. rewrite Hf.
+        cbn [acc_facts add_facts]. rewrite !app_assoc. reflexivity.
+      * cbn [acc_next add_facts] in Hle, Hn.
+        split; [ cbn [acc_next add_facts]; lia | ].
+        intros w c H. wci_split H; wci_close H;
+          first
+            [ destruct (Hw _ _ H) as [-> Hin];
+              split; [ reflexivity | right; exact Hin ]
+            | injection H as <- <-;
+              split; [ reflexivity | left; reflexivity ] ].
+Qed.
+
+Lemma wstep_non_tupled_witnesses (id : code_id) (params_arity : arity)
+    (params returns : list node) (exn : node) (a : acc) :
+  wstep a
+    (snd (create_unknown_arity_non_tupled_call_witnesses id params_arity
+            params returns exn a)).
+Proof.
+  unfold create_unknown_arity_non_tupled_call_witnesses. cbv zeta.
+  set (groups := at_least_one_group _).
+  destruct (fresh_list_spec (length groups) a) as (Hf & Hn & Hm).
+  destruct (fresh_list (length groups) a) as [ws b] eqn:E.
+  cbn [fst snd] in Hf, Hn, Hm.
+  destruct (unknown_arity_witness_deps_spec id returns exn
+              (combine groups ws) b) as (l & Hl & Hle & Hw).
+  cbn [snd].
+  apply (wstep_add _ _ l (Node_code_id id));
+    [ rewrite Hl, Hf; reflexivity | lia | ].
+  intros w c H. destruct (Hw _ _ H) as [-> Hin].
+  split; [ reflexivity | ].
+  apply in_map_iff in Hin. destruct Hin as [[g w'] [Heq Hin]].
+  cbn in Heq. subst w'. apply in_combine_r in Hin.
+  destruct (Hm _ Hin) as (m & -> & H1 & H2).
+  exists m. split; [ reflexivity | lia ].
+Qed.
+
+Lemma wstep_unknown_witnesses (id : code_id) (is_tupled : bool)
+    (params_arity : arity) (params returns : list node) (exn : node)
+    (a : acc) :
+  wstep a
+    (snd (create_unknown_arity_call_witnesses id is_tupled params_arity
+            params returns exn a)).
+Proof.
+  unfold create_unknown_arity_call_witnesses. destruct is_tupled;
+    [ apply wstep_tupled_witnesses | apply wstep_non_tupled_witnesses ].
+Qed.
+
+#[local] Hint Resolve wstep_known_witness wstep_unknown_witnesses : wci.
+
+Lemma wstep_prepare_binding (binding : static_binding) (a : acc) :
+  wstep a (prepare_binding binding a).
+Proof.
+  destruct binding; cbn [prepare_binding]; [ | apply wstep_refl
+    | apply wstep_refl ].
+  unfold prepare_code. wauto.
+Qed.
+
+Lemma wstep_known_widget (env : traverse_env) (ap : apply_expr)
+    (returns : list node) (exn : node) (a : acc) :
+  wstep a (snd (make_known_arity_apply_widget env ap returns exn a)).
+Proof. unfold make_known_arity_apply_widget. wauto. Qed.
+
+Lemma wstep_unknown_apply_deps (returns : list node) (exn called : node)
+    (aw : list (list simple * node)) (a : acc) :
+  wstep a (unknown_arity_apply_deps returns exn called aw a).
+Proof.
+  revert a. induction aw as [ | [first witness] rest IH]; intros a;
+    cbn [unknown_arity_apply_deps].
+  - apply wstep_refl.
+  - destruct rest as [ | [g nw] rest']; wauto.
+Qed.
+
+#[local] Hint Resolve wstep_known_widget wstep_unknown_apply_deps : wci.
+
+Lemma wstep_unknown_widget (env : traverse_env) (ap : apply_expr)
+    (returns : list node) (exn : node) (a : acc) :
+  wstep a (snd (make_unknown_arity_apply_widget env ap returns exn a)).
+Proof. unfold make_unknown_arity_apply_widget. wauto. Qed.
+
+Lemma wstep_add_apply (env : traverse_env) (id : code_id)
+    (callee call_widget : node) (b : bool) (a : acc) :
+  wstep a (add_apply env id callee call_widget b a).
+Proof. unfold add_apply. wauto. Qed.
+
+#[local] Hint Resolve wstep_unknown_widget wstep_add_apply : wci.
+
+Lemma wstep_traverse_apply (env : traverse_env) (ap : apply_expr) (a : acc) :
+  wstep a (traverse_apply env ap a).
+Proof. unfold traverse_apply, traverse_call_kind. wauto. Qed.
+
+Lemma wstep_apply_cont_deps (env : traverse_env) (ac : apply_cont)
+    (a : acc) :
+  wstep a (apply_cont_deps env ac a).
+Proof. unfold apply_cont_deps. wauto. Qed.
+
+Lemma wstep_traverse_switch (env : traverse_env) (scrutinee : simple)
+    (arms : list (Z * apply_cont)) (a : acc) :
+  wstep a (traverse_switch env scrutinee arms a).
+Proof.
+  unfold traverse_switch.
+  apply (wstep_trans a (cond_any_usage env scrutinee a));
+    [ apply wstep_cond_any_usage | ].
+  apply wstep_fold. intros [i ac] b _. apply wstep_apply_cont_deps.
+Qed.
+
+Lemma wstep_exn_handler_deps (env : traverse_env) (h : continuation_handler)
+    (a : acc) :
+  wstep a (exn_handler_deps env h a).
+Proof. unfold exn_handler_deps. destruct h as [[ | p ps] md body]; wauto. Qed.
+
+Lemma wstep_traverse :
+  (∀ e env a, wstep a (traverse env e a))
+  ∧ (∀ h env a, wstep a (traverse_handler env h a)).
+Proof.
+  apply FlambdaReaperFlowProofs.expr_handler_ind.
+  - intros x kind d body IH env a. cbn [traverse].
+    exact (wstep_trans _ _ _ (wstep_traverse_named env x d a) (IH _ _)).
+  - intros bindings body IHc IH env a. cbn [traverse]. cbv zeta.
+    eapply wstep_trans; [ | apply IH ].
+    eapply wstep_trans; [ | apply wstep_fold ].
+    + eapply wstep_trans; [ | apply wstep_fold ].
+      * apply wstep_fold. intros b a' _. apply wstep_prepare_binding.
+      * intros b a' _. apply wstep_traverse_static_binding.
+    + intros [id c | id | s const] a' Hin; cbn [traverse_binding];
+        [ | apply wstep_refl | apply wstep_refl ].
+      destruct c as [params mc ret exn md cbody]. cbn [traverse_code].
+      destruct (lookup id (acc_code_deps a')) as [cd | ];
+        [ | apply wstep_refl ].
+      eapply wstep_trans;
+        [ | apply (IHc id (Code params mc ret exn md cbody) Hin) ].
+      apply wstep_add_facts. no_wci_tac.
+  - intros k h body IHh IH env a. cbn [traverse]. cbv zeta.
+    eapply wstep_trans; [ | apply IH ].
+    eapply wstep_trans; [ | apply wstep_exn_handler_deps ].
+    apply IHh.
+  - intros handlers body IHh IH env a. cbn [traverse]. cbv zeta.
+    eapply wstep_trans; [ | apply IH ].
+    apply wstep_fold. intros [k h] a' Hin. apply (IHh k h Hin).
+  - intros ap env a. apply wstep_traverse_apply.
+  - intros ac env a. apply wstep_apply_cont_deps.
+  - intros scrutinee arms env a. apply wstep_traverse_switch.
+  - intros env a. apply wstep_refl.
+  - intros params md handler IH env a. cbn [traverse_handler]. apply IH.
+Qed.
+
+Lemma wstep_add_closure_dep (code_deps : finite_map code_dep)
+    (d : closure_dep) (a : acc) :
+  wstep a (add_closure_dep code_deps d a).
+Proof.
+  unfold add_closure_dep. destruct (lookup _ code_deps) as [cd | ].
+  - wauto.
+  - destruct (fresh_eq a) as (E & Hf & Hn).
+    destruct (fresh a) as [w b] eqn:E'. injection E as ->.
+    cbn [snd] in Hf, Hn.
+    eapply (wstep_add _ _ _ (cld_let_bound_name_of_the_closure d));
+      [ cbn [acc_facts add_facts]; rewrite Hf; reflexivity
+      | cbn [acc_next add_facts]; lia | ].
+    intros w' c H. wci_split H; wci_close H.
+    injection H as <- <-. split; [ reflexivity | ].
+    exists (acc_next a). split; [ reflexivity | cbn [acc_next add_facts]; lia ].
+Qed.
+
+Lemma wstep_resolve_delayed_deps (unit_symbols : list symbol) (a : acc) :
+  wstep a (resolve_delayed_deps unit_symbols a).
+Proof.
+  unfold resolve_delayed_deps. cbv zeta.
+  eapply wstep_trans; [ | apply wstep_add_facts; no_wci_tac ].
+  eapply wstep_trans; [ | apply wstep_fold ].
+  - apply wstep_add_facts.
+    intros w c H. apply in_flat_map in H. destruct H as [d [_ H]].
+    unfold apply_dep_facts, alias_for_caller in H.
+    destruct (ad_function_containing_apply_expr d);
+      wci_split H; wci_close H.
+  - intros d b _. apply wstep_add_closure_dep.
+Qed.
+
+Lemma f_constructor_facts_of_list (l : list fact) (w : node) (f : field)
+    (c : node) :
+  (w, f, c) ∈ f_constructor (facts_of_list l) -> Fact_constructor w f c ∈ l.
+Proof.
+  cbn [facts_of_list f_constructor]. intros H. apply in_flat_map in H.
+  destruct H as [fct [Hin H]].
+  destruct fct; cbn in H; try contradiction.
+  destruct H as [H | []]. injection H as -> -> ->. exact Hin.
+Qed.
+
+(* The traversal makes each witness give one code id. *)
+Lemma traverse_unit_witness_code_ids (flag : reaper_preserve_direct_calls)
+    (u : unit_interface) (e : expr) (w c c' : node) :
+  (w, Field_code_id_of_call_witness, c)
+    ∈ f_constructor (traverse_unit flag u e) ->
+  (w, Field_code_id_of_call_witness, c')
+    ∈ f_constructor (traverse_unit flag u e) ->
+  c' = c.
+Proof.
+  unfold traverse_unit. cbv zeta. cbn [fresh].
+  match goal with
+  | |- context [facts_of_list (acc_facts ?X)] =>
+    assert (Hw : wstep empty_acc X)
+  end.
+  { eapply wstep_trans; [ | apply wstep_resolve_delayed_deps ].
+    eapply wstep_trans; [ | apply wstep_add_facts; no_wci_tac ].
+    eapply wstep_trans; [ | apply (proj1 wstep_traverse) ].
+    apply (wstep_clean _ _ [Fact_any_usage (Node_made 2);
+                            Fact_any_source Node_all_constants]);
+      [ reflexivity | cbn; lia | no_wci_tac ]. }
+  intros H H'. apply f_constructor_facts_of_list in H, H'.
+  refine (proj2 (proj2 Hw _) _ _ _ H H').
+  split; cbn; intros; contradiction.
+Qed.
+
+Theorem traverse_witness_code_ids : traverse_witness_code_ids_statement.
+Proof.
+  intros flag u e. unfold check_witness_code_ids. apply forallb_forall.
+  intros [[w f] c] Hin. cbv beta iota.
+  unfold field_eqb at 1.
+  destruct (field_eq_dec f Field_code_id_of_call_witness) as [-> | ];
+    [ | reflexivity ].
+  cbn [negb orb]. apply forallb_forall.
+  intros [[w' f'] c'] Hin'. cbv beta iota.
+  unfold node_eqb at 1, field_eqb.
+  destruct (node_eq_dec w' w) as [-> | ]; [ | reflexivity ].
+  destruct (field_eq_dec f' Field_code_id_of_call_witness) as [-> | ];
+    [ | reflexivity ].
+  cbn [andb negb orb]. unfold node_eqb.
+  destruct (node_eq_dec c' c) as [ | Hne ]; [ reflexivity | ].
+  exfalso. apply Hne.
+  exact (traverse_unit_witness_code_ids _ _ _ _ _ _ Hin Hin').
+Qed.
+
 Theorem rebuild_cc_refines_observably :
   rebuild_cc_refines_observably_statement.
 Proof.
   intros flag is_local u e T cannot_change b Hlocal Hslots Hfrag Hdc Hrk
-    Hwf Hexits Hcheck Hcheck_exact Hccc Hwid Hcid.
+    Hwf Hexits Hcheck Hcheck_exact Hccc Hwid.
+  pose proof (traverse_witness_code_ids flag u e) as Hcid.
   assert (Hkinded : FlambdaReaperRebuildProofs.calls_kinded [] e = true).
   { apply (proj1 FlambdaReaperRebuildProofs.calls_kinded_of_results e [] []
              [] Hrk).
