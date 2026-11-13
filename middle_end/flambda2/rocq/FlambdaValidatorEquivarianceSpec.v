@@ -391,6 +391,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaForwardArmSpec
   FlambdaInlineTailSpec FlambdaLoopifySpec
   FlambdaDeadParamsSpec FlambdaRenameApartSpec FlambdaUnusedProjectionsSpec
+  FlambdaReadsAfterSpec
   FlambdaUnaliasParamsSpec FlambdaWrapReturnsSpec FlambdaUntagParamsSpec
   FlambdaGiveScrutineeSpec FlambdaArmNumbersSpec FlambdaShadowParamsSpec
   FlambdaTwinParamsSpec FlambdaValidateSpec.
@@ -590,6 +591,16 @@ Definition load_blocks_knowing_equivariant_statement : Prop :=
 (* The pass as the validation runs it, with nothing known. *)
 Definition load_known_blocks_equivariant_statement : Prop :=
   rewrite_equivariant load_known_blocks.
+
+(* The same of the read of a known block that the term after is given
+   (FlambdaReadsAfterSpec.load_known_blocks_surely). *)
+Definition load_blocks_knowing_surely_equivariant_statement : Prop :=
+  ∀ (r : renaming) (known : known_blocks) (e : expr),
+    load_blocks_knowing_surely (rename_known_blocks r known) (rename_expr r e)
+    = rename_expr r (load_blocks_knowing_surely known e).
+
+Definition load_known_blocks_surely_equivariant_statement : Prop :=
+  rewrite_equivariant load_known_blocks_surely.
 
 (* ======================================================================== *)
 (* FlambdaUnboxSpec.v: what is known of wrapped numbers                     *)

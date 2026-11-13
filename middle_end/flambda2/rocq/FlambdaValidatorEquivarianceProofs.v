@@ -75,7 +75,8 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaMergeTablesSpec FlambdaMergeTablesProofs FlambdaStaticsOrderSpec
   FlambdaStaticsOrderProofs FlambdaRenameApartSpec FlambdaRenameApartProofs
   FlambdaInlineSiblingsSpec FlambdaInlineSiblingsProofs
-  FlambdaUnusedProjectionsSpec FlambdaUnboxVariantsSpec
+  FlambdaUnusedProjectionsSpec FlambdaReadsAfterSpec
+  FlambdaUnboxVariantsSpec
   FlambdaUnaliasParamsSpec FlambdaWrapReturnsSpec FlambdaUntagParamsSpec
   FlambdaGiveScrutineeSpec FlambdaArmNumbersSpec FlambdaValidateSpec
   FlambdaValidatorEquivarianceSpec FlambdaValidatorEquivarianceBaseProofs.
@@ -96,6 +97,7 @@ From OxCamlFlambda2 Require Import FlambdaLiftObservedSpec.
 From OxCamlFlambda2 Require Import FlambdaKnownSlotsSpec.
 From OxCamlFlambda2 Require FlambdaKnownSiblingsProofs.
 From OxCamlFlambda2 Require FlambdaKnownSlotsProofs.
+From OxCamlFlambda2 Require FlambdaReadsAfterProofs.
 From OxCamlFlambda2 Require FlambdaSharedReadsSpec FlambdaSharedReadsProofs.
 From OxCamlFlambda2 Require Import FlambdaStubCallsSpec.
 From OxCamlFlambda2 Require FlambdaStubCallsProofs.
@@ -1382,6 +1384,82 @@ Theorem load_known_blocks_equivariant :
   load_known_blocks_equivariant_statement.
 Proof.
   intros r e. exact (load_blocks_knowing_equivariant_aux r e no_blocks).
+Qed.
+
+(* The read of a known block that the term after is given. *)
+Lemma of_known_block_surely_equivariant (r : renaming)
+    (p : unary_primitive) (block : known_block) :
+  of_known_block_surely p (rename_known_block r block)
+  = option_map (rename_simple r) (of_known_block_surely p block).
+Proof.
+  unfold of_known_block_surely.
+  destruct p; try reflexivity.
+  rewrite of_known_block_equivariant.
+  match goal with
+  | |- context [of_known_block ?p block] =>
+    destruct (of_known_block p block) as [contents | ]
+  end;
+    cbn [option_map]; [ | reflexivity ].
+  rewrite FlambdaReadsAfterProofs.surely_value_renamed.
+  destruct (surely_value contents); reflexivity.
+Qed.
+
+Lemma load_known_named_surely_equivariant (r : renaming) (known : known_blocks)
+    (d : named) :
+  load_known_named_surely (rename_known_blocks r known) (rename_named r d)
+  = rename_named r (load_known_named_surely known d).
+Proof.
+  destruct d as [s | p args | | | | | ]; try reflexivity.
+  cbn [rename_named load_known_named_surely]. rewrite unary_applied_equivariant.
+  destruct (unary_applied p args) as [[p' block] | ]; cbn [option_map fst snd];
+    [ | reflexivity ].
+  rewrite known_block_of_equivariant.
+  destruct (known_block_of known block) as [made | ]; cbn [option_map];
+    [ | reflexivity ].
+  rewrite of_known_block_surely_equivariant.
+  destruct (of_known_block_surely p' made); reflexivity.
+Qed.
+
+Fixpoint load_blocks_knowing_surely_equivariant_aux (r : renaming) (e : expr) :
+  ∀ known : known_blocks,
+    load_blocks_knowing_surely (rename_known_blocks r known) (rename_expr r e)
+    = rename_expr r (load_blocks_knowing_surely known e)
+with load_blocks_in_handler_surely_equivariant (r : renaming)
+    (h : continuation_handler) :
+  ∀ known : known_blocks,
+    load_blocks_in_handler_surely (rename_known_blocks r known)
+      (rename_handler r h)
+    = rename_handler r (load_blocks_in_handler_surely known h).
+Proof.
+  - destruct e
+      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
+         | scrutinee arms | ];
+      intros known; try reflexivity;
+      cbn [rename_expr load_blocks_knowing_surely].
+    + rewrite load_known_named_surely_equivariant, known_under_let_equivariant,
+        load_blocks_knowing_surely_equivariant_aux.
+      reflexivity.
+    + rewrite known_under_statics_equivariant,
+        load_blocks_knowing_surely_equivariant_aux.
+      reflexivity.
+    + rewrite load_blocks_in_handler_surely_equivariant,
+        load_blocks_knowing_surely_equivariant_aux.
+      reflexivity.
+    + rewrite load_blocks_knowing_surely_equivariant_aux. reflexivity.
+  - destruct h as [params metadata handler]. intros known.
+    cbn [rename_handler load_blocks_in_handler_surely].
+    rewrite forget_vars_equivariant, load_blocks_knowing_surely_equivariant_aux.
+    reflexivity.
+Qed.
+
+Theorem load_blocks_knowing_surely_equivariant :
+  load_blocks_knowing_surely_equivariant_statement.
+Proof. intros r known e. apply load_blocks_knowing_surely_equivariant_aux. Qed.
+
+Theorem load_known_blocks_surely_equivariant :
+  load_known_blocks_surely_equivariant_statement.
+Proof.
+  intros r e. exact (load_blocks_knowing_surely_equivariant_aux r e no_blocks).
 Qed.
 
 (* ======================================================================== *)
@@ -5439,6 +5517,8 @@ Ltac rename_outwards :=
       | rewrite remove_unused_lets_equivariant_aux
       | rewrite remove_unused_defined_lets_closed_equivariant
       | rewrite remove_unused_projections_equivariant
+      | rewrite load_known_blocks_surely_equivariant
+      | rewrite FlambdaReadsAfterProofs.remove_constant_allocations_equivariant
       | rewrite inline_calls_unknowing_equivariant
       | rewrite inline_known_calls_unknowing_equivariant
       | rewrite FlambdaKnownSiblingsProofs.inline_known_sibling_calls_renamed
