@@ -93,16 +93,19 @@ Import ListNotations.
 Section Shrinking.
 
 Variable R : state -> state -> Prop.
+Variable E : list value -> list value -> Prop.
 Variable measure : state -> nat.
 
 (* A step of the first state is answered by the second: nothing is asked
-   if it is undefined, or if the state it comes to is; an exit, by the
-   same exit in one step; a step, by one step to a related state, or by
-   none, to a state related to the second, if the measure goes down. *)
+   if it is undefined, or if the state it comes to is; an exit, by an
+   exit in one step through the same continuation, with the same heap
+   and values related by [E]; a step, by one step to a related state,
+   or by none, to a state related to the second, if the measure goes
+   down. *)
 Definition answered (s t : state) : Prop :=
   match step s with
   | Undefined => True
-  | Exit k vs hp => step t = Exit k vs hp
+  | Exit k vs hp => ∃ vs' : list value, step t = Exit k vs' hp ∧ E vs vs'
   | Step s' =>
     step s' = Undefined
     ∨ (∃ t' : state, step t = Step t' ∧ R s' t')
@@ -111,10 +114,11 @@ Definition answered (s t : state) : Prop :=
 
 Hypothesis R_answered : ∀ s t : state, R s t -> answered s t.
 
-(* An exit of the first run is one of the second. *)
+(* An exit of the first run is one of the second, with related values. *)
 Lemma shrinking_exit (n : nat) :
   ∀ (s t : state) (k : continuation) (vs : list value) (hp : heap),
-    R s t -> run n s = Exit k vs hp -> ∃ m : nat, run m t = Exit k vs hp.
+    R s t -> run n s = Exit k vs hp ->
+    ∃ (m : nat) (vs' : list value), run m t = Exit k vs' hp ∧ E vs vs'.
 Proof.
   induction n as [ | n IH]; intros s t k vs hp Hrel Hrun;
     [ discriminate Hrun | ].
@@ -124,19 +128,32 @@ Proof.
   - destruct Ha as [Hund | [(t' & Ht & Hrel') | (_ & Hrel')]].
     + destruct n as [ | n]; [ discriminate Hrun | ].
       rewrite run_succ, Hund in Hrun. discriminate Hrun.
-    + destruct (IH s' t' k vs hp Hrel' Hrun) as [m Hm].
-      exists (S m). rewrite run_succ, Ht. exact Hm.
+    + destruct (IH s' t' k vs hp Hrel' Hrun) as (m & vs2 & Hm & HE).
+      exists (S m), vs2. rewrite run_succ, Ht. split; [ exact Hm | exact HE ].
     + exact (IH s' t k vs hp Hrel' Hrun).
-  - injection Hrun as <- <- <-. exists 1. rewrite run_succ, Ha. reflexivity.
+  - injection Hrun as <- <- <-. destruct Ha as (vs2 & Ha & HE).
+    exists 1, vs2. rewrite run_succ, Ha. split; [ reflexivity | exact HE ].
   - discriminate Hrun.
 Qed.
 
-(* If the second run has ended, the first ends the same way or goes
-   wrong: each step of the first uses up one of the second, or lowers
-   the measure. *)
+(* Behaviours of the two runs that correspond: exits through the same
+   continuation, with the same heap and values related by [E]; or
+   both going wrong. *)
+Definition behaviour_related (b b' : behaviour) : Prop :=
+  match b, b' with
+  | Exits k vs hp, Exits k' vs' hp' => k = k' ∧ hp = hp' ∧ E vs vs'
+  | Goes_wrong, Goes_wrong => True
+  | _, _ => False
+  end.
+
+(* If the second run has ended, the first ends in a corresponding way or
+   goes wrong: each step of the first uses up one of the second, or
+   lowers the measure. *)
 Lemma shrinking_ends (m : nat) :
   ∀ (s t : state) (b : behaviour),
-    R s t -> ended (run m t) b -> behaves s b ∨ behaves s Goes_wrong.
+    R s t -> ended (run m t) b ->
+    (∃ b0 : behaviour, behaves s b0 ∧ behaviour_related b0 b)
+    ∨ behaves s Goes_wrong.
 Proof.
   induction m as [m IHm] using (well_founded_induction lt_wf).
   intros s. remember (measure s) as k eqn:Hk. revert s Hk.
@@ -149,29 +166,92 @@ Proof.
     + destruct m as [ | m]; [ destruct b; contradiction | ].
       rewrite run_succ, Ht in Hended.
       destruct (IHm m (Nat.lt_succ_diag_r m) s' t' b Hrel' Hended)
-        as [Hb | Hw]; [ left | right ]; apply step_behaves; rewrite Hs;
-        assumption.
+        as [(b0 & Hb & Hbr) | Hw];
+        [ left; exists b0; split; [ | exact Hbr ] | right ];
+        apply step_behaves; rewrite Hs; assumption.
     + subst k.
       destruct (IHk (measure s') Hlt s' eq_refl t b Hrel' Hended)
-        as [Hb | Hw]; [ left | right ]; apply step_behaves; rewrite Hs;
-        assumption.
-  - destruct m as [ | m]; [ destruct b; contradiction | ].
+        as [(b0 & Hb & Hbr) | Hw];
+        [ left; exists b0; split; [ | exact Hbr ] | right ];
+        apply step_behaves; rewrite Hs; assumption.
+  - destruct Ha as (vs' & Ha & HE).
+    destruct m as [ | m]; [ destruct b; contradiction | ].
     rewrite run_succ, Ha in Hended. apply ended_exit in Hended. subst b.
-    left. apply step_behaves. rewrite Hs. reflexivity.
+    left. exists (Exits k' vs hp). split.
+    + apply step_behaves. rewrite Hs. reflexivity.
+    + split; [ reflexivity | split; [ reflexivity | exact HE ] ].
   - right. apply step_behaves. rewrite Hs. reflexivity.
 Qed.
 
-Lemma shrinking_refines (s t : state) : R s t -> refines s t.
+Lemma shrinking_refines (s t : state) :
+  (∀ vs vs' : list value, E vs vs' -> vs' = vs) -> R s t -> refines s t.
 Proof.
-  intros Hrel. split.
+  intros HE Hrel. split.
   - intros k vs hp [n Hn].
-    destruct (shrinking_exit n s t k vs hp Hrel Hn) as [m Hm].
-    exists m. exact Hm.
+    destruct (shrinking_exit n s t k vs hp Hrel Hn) as (m & vs' & Hm & Hvs).
+    rewrite (HE _ _ Hvs) in Hm. exists m. exact Hm.
   - intros b Hterm Hb. destruct (behaves_ended t b Hterm Hb) as [m Hm].
-    exact (shrinking_ends m s t b Hrel Hm).
+    destruct (shrinking_ends m s t b Hrel Hm) as [(b0 & Hb0 & Hbr) | Hw];
+      [ left | right; exact Hw ].
+    destruct b0 as [k vs hp | | ]; destruct b as [k' vs' hp' | | ];
+      try contradiction; [ | exact Hb0 ].
+    destruct Hbr as (<- & <- & Hvs). rewrite (HE _ _ Hvs). exact Hb0.
+Qed.
+
+Lemma shrinking_refines_observably (s t : state) :
+  (∀ vs vs' : list value, E vs vs' -> values_related observed_equal vs vs') ->
+  R s t -> refines_observably s t.
+Proof.
+  intros HE Hrel. split; [ | split ].
+  - intros k vs hp [n Hn].
+    destruct (shrinking_exit n s t k vs hp Hrel Hn) as (m & vs' & Hm & Hvs).
+    exists vs'. split; [ exists m; exact Hm | exact (HE _ _ Hvs) ].
+  - intros k vs' hp Hb.
+    destruct (behaves_ended t (Exits k vs' hp) ltac:(discriminate) Hb)
+      as [m Hm].
+    destruct (shrinking_ends m s t _ Hrel Hm) as [(b0 & Hb0 & Hbr) | Hw];
+      [ left | right; exact Hw ].
+    destruct b0 as [k0 vs hp0 | | ]; try contradiction.
+    destruct Hbr as (-> & -> & Hvs). exists vs.
+    split; [ exact Hb0 | exact (HE _ _ Hvs) ].
+  - intros Hb.
+    destruct (behaves_ended t Goes_wrong ltac:(discriminate) Hb) as [m Hm].
+    destruct (shrinking_ends m s t _ Hrel Hm) as [(b0 & Hb0 & Hbr) | Hw];
+      [ | exact Hw ].
+    destruct b0; try contradiction. exact Hb0.
 Qed.
 
 End Shrinking.
+
+Lemma values_related_refl (l : list value) :
+  Forall (fun v => observed_equal v v) l -> values_related observed_equal l l.
+Proof.
+  induction 1 as [ | v l Hv _ IH]; simpl; [ exact I | split; assumption ].
+Qed.
+
+Lemma observed_equal_refl : ∀ v : value, observed_equal v v.
+Proof.
+  apply FlambdaHeapProofs.value_induction; cbn [observed_equal].
+  - reflexivity.
+  - reflexivity.
+  - split; reflexivity.
+  - reflexivity.
+  - intros tag fields IH. split; [ reflexivity | ].
+    exact (values_related_refl fields IH).
+  - intros elements IH. exact (values_related_refl elements IH).
+  - reflexivity.
+  - reflexivity.
+  - intros callee args arity Hcallee IH.
+    split; [ exact Hcallee | split; [ exact (values_related_refl args IH)
+                                    | reflexivity ] ].
+Qed.
+
+Lemma values_observed_refl (l : list value) :
+  values_related observed_equal l l.
+Proof.
+  apply values_related_refl, Forall_forall. intros v _.
+  apply observed_equal_refl.
+Qed.
 
 (* ======================================================================== *)
 (* Lists                                                                    *)
@@ -2561,6 +2641,18 @@ Qed.
 (* Steps                                                                    *)
 (* ------------------------------------------------------------------------ *)
 
+(* The values of the exits of the two runs. *)
+Definition exits_related (vs vs' : list value) : Prop :=
+  values_related (fun v v' => observed_equal v v' ∧ v' = v) vs vs'.
+
+Lemma exits_related_eq (vs vs' : list value) :
+  exits_related vs vs' -> vs' = vs.
+Proof.
+  revert vs'. induction vs as [ | v vs IH]; intros [ | v' vs'] H;
+    simpl in H; try contradiction; [ reflexivity | ].
+  destruct H as [[_ ->] H]. rewrite (IH vs' H). reflexivity.
+Qed.
+
 (* Each construct: a step of the first run is answered by the second. *)
 
 Ltac related_intro :=
@@ -2674,7 +2766,8 @@ Lemma let_answered (x : variable) (kind : flambda_kind) (d : named)
     (statics statics' : static_env) (hp hp' : heap) (e' : expr) :
   related (State (Let x kind d body) vars conts statics hp)
     (State e' vars' conts' statics' hp') ->
-  answered related measure (State (Let x kind d body) vars conts statics hp)
+  answered related exits_related measure
+    (State (Let x kind d body) vars conts statics hp)
     (State e' vars' conts' statics' hp').
 Proof.
   related_intro. destruct He as [Hd Hbody_edges].
@@ -2816,7 +2909,7 @@ Lemma let_static_answered (bindings : list static_binding) (body : expr)
     (statics statics' : static_env) (hp hp' : heap) (e' : expr) :
   related (State (Let_static bindings body) vars conts statics hp)
     (State e' vars' conts' statics' hp') ->
-  answered related measure
+  answered related exits_related measure
     (State (Let_static bindings body) vars conts statics hp)
     (State e' vars' conts' statics' hp').
 Proof.
@@ -2849,7 +2942,7 @@ Lemma let_cont_non_recursive_answered (k : continuation)
     (e' : expr) :
   related (State (Let_cont_non_recursive k h body) vars conts statics hp)
     (State e' vars' conts' statics' hp') ->
-  answered related measure
+  answered related exits_related measure
     (State (Let_cont_non_recursive k h body) vars conts statics hp)
     (State e' vars' conts' statics' hp').
 Proof.
@@ -2987,7 +3080,7 @@ Lemma let_cont_recursive_answered
     (statics statics' : static_env) (hp hp' : heap) (e' : expr) :
   related (State (Let_cont_recursive handlers body) vars conts statics hp)
     (State e' vars' conts' statics' hp') ->
-  answered related measure
+  answered related exits_related measure
     (State (Let_cont_recursive handlers body) vars conts statics hp)
     (State e' vars' conts' statics' hp').
 Proof.
@@ -3073,7 +3166,8 @@ Lemma apply_cont_answered (ac : apply_cont) (vars vars' : env)
     (e' : expr) :
   related (State (Apply_cont ac) vars conts statics hp)
     (State e' vars' conts' statics' hp') ->
-  answered related measure (State (Apply_cont ac) vars conts statics hp)
+  answered related exits_related measure
+    (State (Apply_cont ac) vars conts statics hp)
     (State e' vars' conts' statics' hp').
 Proof.
   related_intro. pose proof He as Hedges. destruct He as [Haliases Hnoted].
@@ -3098,7 +3192,7 @@ Proof.
        | (mask & c & c' & Hmask & Hc_ & Hc'_ & Hce & Hcrel)].
   - (* An exit: one value, at a node with any usage. *)
     rewrite Hmnone, Hvs', Hnone, Hnone'. cbn [apply_cont_value].
-    rewrite Hheap. f_equal.
+    rewrite Hheap. eexists. split; [ reflexivity | ].
     destruct Hok as [Hone _]. cbn [exits_one_value] in Hone.
     unfold apply_cont_exits_one_value in Hone.
     replace (among (ac_continuation ac) [unit_return u; unit_exn u])
@@ -3123,7 +3217,8 @@ Proof.
                   (any_usage_input _ _ _ Hc _ (Hunit _ p Hpin)) Hal) as Hau.
     pose proof (Hrels 0 a w w' eq_refl eq_refl eq_refl
                   (kept_of_hu en a (au_hu _ _ _ Hc _ Hau))) as Hrel.
-    rewrite (rel_au G sol is_local Hc Hlocal _ _ _ Hau Hrel). reflexivity.
+    rewrite (rel_au G sol is_local Hc Hlocal _ _ _ Hau Hrel).
+    split; [ split; [ apply observed_equal_refl | reflexivity ] | exact I ].
   - (* A handler. *)
     rewrite Hmask, (eval_simples_filter_kept vars' mask _ _ Hvs'), Hc_, Hc'_.
     rewrite Hc_ in Hflow'.
@@ -3251,7 +3346,8 @@ Lemma switch_answered (scrutinee : simple) (arms : list (Z * apply_cont))
     (statics statics' : static_env) (hp hp' : heap) (e' : expr) :
   related (State (Switch scrutinee arms) vars conts statics hp)
     (State e' vars' conts' statics' hp') ->
-  answered related measure (State (Switch scrutinee arms) vars conts statics hp)
+  answered related exits_related measure
+    (State (Switch scrutinee arms) vars conts statics hp)
     (State e' vars' conts' statics' hp').
 Proof.
   related_intro.
@@ -3303,7 +3399,7 @@ Qed.
 
 (* A step of the first run is answered by the second. *)
 Lemma related_answered (s t : state) :
-  related s t -> answered related measure s t.
+  related s t -> answered related exits_related measure s t.
 Proof.
   rewrite (state_eta s), (state_eta t).
   destruct (state_expr s)
@@ -3332,7 +3428,8 @@ Lemma unit_refines (e : expr) :
        empty_heap).
 Proof.
   intros He Hfree Hok.
-  apply (shrinking_refines related measure related_answered).
+  apply (shrinking_refines related exits_related measure related_answered);
+    [ exact exits_related_eq | ].
   split; [ exact (initial_flow_invariant is_local G sol noted deps cds keep
                     codes symbols u e He) | ].
   exists FlambdaReaperRebuild.empty_env, (unit_conts u). simpl_state.
@@ -3791,36 +3888,6 @@ Qed.
 (* ======================================================================== *)
 (* Refinement up to observation                                             *)
 (* ======================================================================== *)
-
-Lemma values_related_refl (l : list value) :
-  Forall (fun v => observed_equal v v) l -> values_related observed_equal l l.
-Proof.
-  induction 1 as [ | v l Hv _ IH]; simpl; [ exact I | split; assumption ].
-Qed.
-
-Lemma observed_equal_refl : ∀ v : value, observed_equal v v.
-Proof.
-  apply FlambdaHeapProofs.value_induction; cbn [observed_equal].
-  - reflexivity.
-  - reflexivity.
-  - split; reflexivity.
-  - reflexivity.
-  - intros tag fields IH. split; [ reflexivity | ].
-    exact (values_related_refl fields IH).
-  - intros elements IH. exact (values_related_refl elements IH).
-  - reflexivity.
-  - reflexivity.
-  - intros callee args arity Hcallee IH.
-    split; [ exact Hcallee | split; [ exact (values_related_refl args IH)
-                                    | reflexivity ] ].
-Qed.
-
-Lemma values_observed_refl (l : list value) :
-  values_related observed_equal l l.
-Proof.
-  apply values_related_refl, Forall_forall. intros v _.
-  apply observed_equal_refl.
-Qed.
 
 Theorem refines_observably_of_refines :
   refines_observably_of_refines_statement.
