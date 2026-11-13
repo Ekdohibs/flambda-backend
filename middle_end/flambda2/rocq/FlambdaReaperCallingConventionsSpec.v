@@ -74,7 +74,7 @@
    the one is to be carried to the other, for the code that does not
    change.
 
-   Where code changes, the rebuilt unit runs as the unit does on three
+   Where code changes, the rebuilt unit runs as the unit does on four
    units, each of which meets the premises of
    FlambdaReaperRebuildSpec.rebuild_refines_observably_statement, with
    its least table, which passes [check_cc_closed]: the unit of
@@ -88,20 +88,25 @@
    ([poison_result_example_statement]); and the same unit with both codes
    changing, the call in tail position returning to the return
    continuation of the code it is in, which takes the results that both
-   keep ([masked_return_example_statement]).
+   keep ([masked_return_example_statement]); and a unit in which code
+   that changes calls in tail position code that does not, [let f x y =
+   g x] with [g] called at unknown arity too, so that the call returns
+   through the wrapper of [make_apply_wrapper] to the return continuation
+   of [f], which keeps the first result only
+   ([tail_escape_example_statement]).
 
    The rebuild with changes of calling convention refines its unit
    ([rebuild_cc_refines_observably_statement]) as the rebuild without
-   does (FlambdaReaperRebuildSpec.rebuild_refines_observably_statement),
-   for now on the units whose code that changes is returned to as
-   [check_cc_returns] says: a call in tail position in it is known to
-   call code that changes. Calls return anywhere else: to the
-   continuations of the unit, in tail position in code that does not
-   change, and in chains of calls in tail position through code that
-   changes, keeping other results or not. The three units above are
-   instances ([two_calls_refines_statement],
+   does (FlambdaReaperRebuildSpec.rebuild_refines_observably_statement).
+   Calls return anywhere: to the continuations of the unit, to handlers,
+   and in tail position, in code that changes or not, to code that
+   changes or not or of unknown arity, in chains of calls through code
+   that changes, keeping other results or not. An earlier step asked
+   that a call in tail position in code that changes be known to call
+   code that changes ([check_cc_returns]); the statement no longer asks
+   it. The four units above are instances ([two_calls_refines_statement],
    [poison_result_refines_statement],
-   [masked_return_refines_statement]).
+   [masked_return_refines_statement], [tail_escape_refines_statement]).
    The statement asks of the table more than that it be closed and pass
    [check_cc_closed]: that the witnesses of known arity that calls read
    off a node have the same sources ([check_apply_widgets]), which the
@@ -331,15 +336,14 @@ Variable code_deps : finite_map code_dep.
 Variable unit_code_ids : list code_id.
 Variable codes : finite_map code_metadata.
 
-(* What returns in [e] to [r], the return continuation of code that
-   changes its calling convention, whose results are of the kinds [K],
-   the variables having the kinds [E]: an [Apply_cont] gives it simples
-   of the kinds [K]; a call returns to it only if it is known to call
-   code that changes, and has the return arity [K]. Under a [Let_cont]
-   that binds [r] again, nothing; nor in a handler that does not have as
-   many kinds as parameters, which is never entered. The kinds are those
-   that [FlambdaReaperRebuildSpec.results_kinded] checks: what is asked
-   of the unit is [tail_calls_known]. *)
+(* What returns in [e] to [r], the return continuation of code, whose
+   results are of the kinds [K], the variables having the kinds [E]: an
+   [Apply_cont] gives it simples of the kinds [K]; a call that returns
+   to it, to code that changes its calling convention or not, or of
+   unknown arity, has the return arity [K]. Under a [Let_cont] that
+   binds [r] again, nothing; nor in a handler that does not have as many
+   kinds as parameters, which is never entered. The kinds are those that
+   [FlambdaReaperRebuildSpec.results_kinded] checks. *)
 Fixpoint ret_calls_ok (E : finite_map flambda_kind) (r : continuation)
     (K : list flambda_kind) (e : expr) : bool :=
   match e with
@@ -354,14 +358,7 @@ Fixpoint ret_calls_ok (E : finite_map flambda_kind) (r : continuation)
         && ret_calls_ok E r K body)
   | Apply ap =>
     negb (Pos.eqb (ap_continuation ap) r)
-    || (kinds_eqb K (unarize (ap_return_arity ap))
-        && match
-             apply_calling_convention_change F sol cannot_change code_deps
-               unit_code_ids codes ap
-           with
-           | Changing_calling_convention _ _ => true
-           | Not_changing_calling_convention => false
-           end)
+    || kinds_eqb K (unarize (ap_return_arity ap))
   | Apply_cont ac =>
     negb (Pos.eqb (ac_continuation ac) r) || simples_of_kinds E (ac_args ac) K
   | Switch _ arms =>
@@ -414,7 +411,8 @@ End Returns.
 
 (* The code of the unit that changes its calling convention: a call in
    tail position in it is known to call code that changes
-   ([tail_calls_known]). *)
+   ([tail_calls_known]). An earlier premise of
+   [rebuild_cc_refines_observably_statement], no longer asked. *)
 Definition check_cc_returns (F : facts) (T : tables)
     (cannot_change : list node) (code_deps : finite_map code_dep) (e : expr)
     : bool :=
@@ -446,9 +444,9 @@ Definition check_cc_returns (F : facts) (T : tables)
    the rebuild without, with a table that passes [check_cc_closed], and a
    table of the solution whose witnesses read off a node agree
    ([check_apply_widgets]), from facts whose witnesses give one code id
-   each ([check_witness_code_ids]), for the units whose code that changes
-   is returned to as [check_cc_returns] says: a call in tail position in
-   code that changes is known to call code that changes. *)
+   each ([check_witness_code_ids]). A call in tail position in code that
+   changes may call code that changes, code that does not, or be of
+   unknown arity: [check_cc_returns] is not asked. *)
 Definition rebuild_cc_refines_observably_statement : Prop :=
   ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
     (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
@@ -457,9 +455,6 @@ Definition rebuild_cc_refines_observably_statement : Prop :=
     (∀ f : field, is_local f = false) ∨ projection_free e = true ->
     in_flow_fragment e = true ->
     static_constants (unit_codes e) e = true ->
-    check_cc_returns (traverse_unit flag u e) T cannot_change
-      (unit_code_deps flag u e) e
-    = true ->
     results_kinded [] [] e = true ->
     well_formed_unit u e = true ->
     exits_one_value u e = true ->
@@ -701,6 +696,203 @@ Definition poison_result_example_statement : Prop :=
       (Exits 1%positive [Value_const (Tagged_immediate 5)] empty_heap)
   ∧ behaves
       (State PoisonResultExample.rebuilt [] [] empty_static_env empty_heap)
+      (Exits 1%positive [Value_const (Tagged_immediate 5)] empty_heap).
+
+(* A unit in which code that changes its calling convention calls code
+   that does not in tail position: [let f x y = g x], with [g] returning
+   two results. The code [f52] is called directly only, and loses its
+   second parameter, which has no use, and its second result, which its
+   caller does not use. The code [g51] is called at unknown arity too
+   (the call of [x12]), so it keeps its calling convention. The call of
+   [g51] in the body of [f52] returns to the return continuation [k5] of
+   [f52], which keeps the first result only: the rebuild gives it the
+   wrapper of [make_apply_wrapper] (the continuation 48), which applies
+   [k5] to the first result. Its least solution, as the solver of the
+   test tool computes it, passes the checks; [check_cc_returns] excluded
+   it. *)
+Module TailEscapeExample.
+
+Local Open Scope positive_scope.
+Import FlambdaReaperCallingConventions.Examples.
+
+Definition code_51 : code :=
+  Code [40] 45 3 4
+    (make_code_metadata [Singleton Value] [Singleton Value; Singleton Value])
+    (return_to 3 [Var 40; Const (Tagged_immediate 7)]).
+
+Definition call_51 (k : continuation) : apply_expr :=
+  {| ap_callee := Var 47; ap_call_kind := Direct 51; ap_args := [Var 42];
+     ap_continuation := k; ap_exn_continuation := 6; ap_exn_extra_args := [];
+     ap_args_arity := [Singleton Value];
+     ap_return_arity := [Singleton Value; Singleton Value] |}.
+
+Definition code_52 : code :=
+  Code [42; 43] 46 5 6
+    (make_code_metadata [Singleton Value; Singleton Value]
+       [Singleton Value; Singleton Value])
+    (Let 47 Value (Project_function_slot 71 70 (Var 46)) (Apply (call_51 5))).
+
+Definition call_52 : apply_expr :=
+  {| ap_callee := Var 11; ap_call_kind := Direct 52;
+     ap_args := [Const (Tagged_immediate 5); Const (Tagged_immediate 8)];
+     ap_continuation := 21; ap_exn_continuation := 2; ap_exn_extra_args := [];
+     ap_args_arity := [Singleton Value; Singleton Value];
+     ap_return_arity := [Singleton Value; Singleton Value] |}.
+
+Definition call_12 (k : continuation) : apply_expr :=
+  {| ap_callee := Var 12; ap_call_kind := Indirect; ap_args := [Var 31];
+     ap_continuation := k; ap_exn_continuation := 2; ap_exn_extra_args := [];
+     ap_args_arity := [Singleton Value];
+     ap_return_arity := [Singleton Value; Singleton Value] |}.
+
+Definition unit_expr : expr :=
+  Let_static [Bind_code 51 code_51; Bind_code 52 code_52]
+    (Let 11 Value (Closure_of_set 71 [(70, 51); (71, 52)] [])
+       (Let 12 Value (Project_function_slot 71 70 (Var 11))
+          (Let_cont_non_recursive 20
+             (Handler [30; 33] (make_handler_metadata [Value; Value])
+                (return_to 1 [Var 30]))
+             (Let_cont_non_recursive 21
+                (Handler [31; 32] (make_handler_metadata [Value; Value])
+                   (Apply (call_12 20)))
+                (Apply call_52))))).
+
+Definition unit_facts : facts := traverse_unit Auto interface unit_expr.
+
+Definition solution : tables :=
+  {| t_alias :=
+       [(m 33, m 16); (m 13, m 32); (m 29, m 31); (m 27, m 28); (m 1, v 30);
+        (v 46, m 13); (v 42, m 14); (v 43, m 15); (m 3, v 40); (m 4, consts);
+        (v 45, m 6); (v 40, m 7); (m 31, m 16); (v 12, m 25); (m 28, m 9);
+        (v 31, m 10); (v 32, m 11); (m 2, m 12); (m 30, c 52); (m 14, consts);
+        (m 15, consts); (m 2, m 5); (v 30, m 3); (v 33, m 4); (m 26, c 51);
+        (m 7, v 31); (m 6, m 25); (m 13, v 11); (m 24, m 8); (m 6, m 23);
+        (m 20, m 22); (v 47, m 25); (m 22, m 8); (m 10, m 3); (m 11, m 4);
+        (m 12, m 5); (m 21, c 51); (m 7, v 42)];
+     t_any_usage :=
+       [m 1; m 30; m 26; m 21; m 2; v 30; m 12; c 52; m 5; m 3; c 51; v 40; m 7;
+        v 31; m 10; v 42; m 14; consts];
+     t_any_source :=
+       [c 52; c 51; consts; m 4; m 30; m 14; m 15; v 33; m 26; v 42; v 43; m 11;
+        m 21; m 7; v 40; v 32; m 3; v 30; m 10; m 1; v 31];
+     t_has_usage :=
+       [m 1; m 30; m 26; m 21; m 2; v 30; m 29; m 27; m 20; m 31; m 28; m 16;
+        m 9; m 12; c 52; m 5; m 3; c 51; v 40; m 7; v 31; m 22; m 10; v 11;
+        v 12; v 47; v 46; m 13; m 25; m 8; v 42; m 32; m 14; consts];
+     t_has_source :=
+       [c 52; c 51; consts; m 4; v 11; m 25; m 18; m 19; m 17; m 16; m 9; m 8;
+        m 33; m 31; v 12; m 28; m 30; m 14; m 15; v 33; m 26; m 29; m 27; v 42;
+        v 43; m 6; m 13; m 24; v 46; v 45; v 47; m 22; m 11; m 21; m 7; v 40;
+        v 32; m 20; m 3; v 30; m 10; m 1; v 31];
+     t_usages :=
+       [(v 11, v 11); (m 29, m 29); (v 12, v 12); (m 27, m 27); (v 47, v 47);
+        (m 20, m 20); (v 46, v 46); (m 31, m 29); (m 28, m 27); (m 13, v 46);
+        (m 32, v 46); (m 16, m 29); (m 25, v 12); (m 9, m 27); (v 11, v 46);
+        (m 22, m 20); (m 25, v 47); (m 8, m 20)];
+     t_sources :=
+       [(m 25, m 25); (v 11, v 11); (m 18, m 18); (m 17, m 17); (m 19, m 19);
+        (m 16, m 16); (m 9, m 9); (m 8, m 8); (m 33, m 16); (m 31, m 16);
+        (v 12, m 25); (m 29, m 16); (m 28, m 9); (m 27, m 9); (m 6, m 25);
+        (m 13, v 11); (m 24, m 8); (v 46, v 11); (v 45, m 25); (v 47, m 25);
+        (m 22, m 8); (m 20, m 8)];
+     t_reading_field := [];
+     t_escaping_field := [];
+     t_field_used :=
+       [(m 25, known); (m 25, unknown); (v 11, known);
+        (v 11, Field_function_slot 70); (m 16, result 0);
+        (m 16, Field_return_of_call Exn); (m 16, Field_code_id_of_call_witness);
+        (m 9, Field_return_of_call Exn); (m 9, result 0);
+        (m 9, Field_code_id_of_call_witness); (m 8, result 0);
+        (m 8, Field_return_of_call Exn);
+        (m 8, Field_code_id_of_call_witness)] |}.
+
+(* The wrapper of [make_apply_wrapper] over [k]: it takes the two
+   results, and gives [k] the first. *)
+Definition wrapper_over (k : continuation) (body : expr) : expr :=
+  Let_cont_non_recursive 48
+    (Handler [48; 49] (make_handler_metadata [Value; Value])
+       (return_to k [Var 48]))
+    body.
+
+Definition rebuilt : expr :=
+  Let_static
+    [Bind_code 51 code_51;
+     Bind_code 52
+       (Code [42] 46 5 6
+          {| cm_params_arity :=
+               [Unboxed_product [Singleton Value]; Unboxed_product []];
+             cm_result_arity := [Unboxed_product [Singleton Value]];
+             cm_is_tupled := false;
+             cm_is_stub := false |}
+          (Let 47 Value (Project_function_slot 71 70 (Var 46))
+             (wrapper_over 5 (Apply (call_51 48)))))]
+    (Let 11 Value (Closure_of_set 71 [(70, 51); (71, 52)] [])
+       (Let 12 Value (Project_function_slot 71 70 (Var 11))
+          (Let_cont_non_recursive 20
+             (Handler [30] (make_handler_metadata [Value])
+                (return_to 1 [Var 30]))
+             (Let_cont_non_recursive 21
+                (Handler [31] (make_handler_metadata [Value])
+                   (wrapper_over 20 (Apply (call_12 48))))
+                (Apply
+                   {| ap_callee := Var 11; ap_call_kind := Direct 52;
+                      ap_args := [Const (Tagged_immediate 5)];
+                      ap_continuation := 21; ap_exn_continuation := 2;
+                      ap_exn_extra_args := [];
+                      ap_args_arity :=
+                        [Unboxed_product [Singleton Value];
+                         Unboxed_product []];
+                      ap_return_arity :=
+                        [Unboxed_product [Singleton Value]] |}))))).
+
+End TailEscapeExample.
+
+Definition tail_escape_example_statement : Prop :=
+  in_flow_fragment TailEscapeExample.unit_expr = true
+  ∧ static_constants (unit_codes TailEscapeExample.unit_expr)
+      TailEscapeExample.unit_expr
+    = true
+  ∧ results_kinded [] [] TailEscapeExample.unit_expr = true
+  ∧ well_formed_unit Examples.interface TailEscapeExample.unit_expr = true
+  ∧ exits_one_value Examples.interface TailEscapeExample.unit_expr = true
+  ∧ check_closed Examples.no_local TailEscapeExample.unit_facts
+      TailEscapeExample.solution
+    = true
+  ∧ check_field_used_exact Examples.no_local TailEscapeExample.unit_facts
+      TailEscapeExample.solution
+    = true
+  ∧ derive_cannot_change TailEscapeExample.unit_facts
+      TailEscapeExample.solution
+    = [Node_code_id 51%positive]
+  ∧ check_cc_closed TailEscapeExample.unit_facts
+      TailEscapeExample.solution [Node_code_id 51%positive]
+    = true
+  ∧ check_apply_widgets TailEscapeExample.unit_facts
+      TailEscapeExample.solution
+    = true
+  ∧ check_witness_code_ids TailEscapeExample.unit_facts = true
+  ∧ unit_calling_convention_changes TailEscapeExample.solution
+      [Node_code_id 51%positive]
+      (unit_code_deps Auto Examples.interface TailEscapeExample.unit_expr)
+      TailEscapeExample.unit_expr
+    = [(51%positive, Not_changing_calling_convention);
+       (52%positive,
+        Changing_calling_convention [Keep Value; Delete] [Keep Value; Delete])]
+  ∧ check_cc_returns TailEscapeExample.unit_facts TailEscapeExample.solution
+      [Node_code_id 51%positive]
+      (unit_code_deps Auto Examples.interface TailEscapeExample.unit_expr)
+      TailEscapeExample.unit_expr
+    = false
+  ∧ rebuild_unit_cc_from_tables TailEscapeExample.unit_facts
+      TailEscapeExample.solution [Node_code_id 51%positive]
+      (unit_code_deps Auto Examples.interface TailEscapeExample.unit_expr)
+      true TailEscapeExample.unit_expr
+    = TailEscapeExample.rebuilt
+  ∧ behaves
+      (State TailEscapeExample.unit_expr [] [] empty_static_env empty_heap)
+      (Exits 1%positive [Value_const (Tagged_immediate 5)] empty_heap)
+  ∧ behaves
+      (State TailEscapeExample.rebuilt [] [] empty_static_env empty_heap)
       (Exits 1%positive [Value_const (Tagged_immediate 5)] empty_heap).
 
 (* The unit of [PoisonResultExample] with a second parameter of [f52],
@@ -1068,3 +1260,12 @@ Definition masked_return_refines_statement : Prop :=
        MaskedReturnExample.solution []
        (unit_code_deps Auto Examples.interface MaskedReturnExample.unit_expr)
        true MaskedReturnExample.unit_expr).
+
+(* The same of the unit of [tail_escape_example_statement], where a call
+   in tail position in code that changes calls code that does not. *)
+Definition tail_escape_refines_statement : Prop :=
+  program_refines_observably TailEscapeExample.unit_expr
+    (rebuild_unit_cc_from_tables TailEscapeExample.unit_facts
+       TailEscapeExample.solution [Node_code_id 51%positive]
+       (unit_code_deps Auto Examples.interface TailEscapeExample.unit_expr)
+       true TailEscapeExample.unit_expr).

@@ -6433,14 +6433,14 @@ Theorem rebuild_unbox_without_unboxing_observably :
   rebuild_unbox_without_unboxing_observably_statement.
 Proof.
   intros flag is_local u e T cannot_change dominated to_unbox
-    preserve_direct_calls Hlocal Hproj Hfrag Hstatic Hcc Hkinded Hwf Hone
+    preserve_direct_calls Hlocal Hproj Hfrag Hstatic Hkinded Hwf Hone
     Hclosed Hexact Hcc_closed Hwidgets Hwitness Hnil Hm.
   rewrite (rebuild_unbox_without_unboxing (traverse_unit flag u e) T
              cannot_change (unit_code_deps flag u e) dominated to_unbox
              preserve_direct_calls e Hnil Hm).
   exact (FlambdaReaperCallingConventionsProofs.rebuild_cc_refines_observably
            flag is_local u e T cannot_change preserve_direct_calls Hlocal
-           Hproj Hfrag Hstatic Hcc Hkinded Hwf Hone Hclosed Hexact Hcc_closed
+           Hproj Hfrag Hstatic Hkinded Hwf Hone Hclosed Hexact Hcc_closed
            Hwidgets Hwitness).
 Qed.
 

@@ -460,6 +460,12 @@ Proof.
   split; exists 30; vm_compute; reflexivity.
 Qed.
 
+Theorem tail_escape_example : tail_escape_example_statement.
+Proof.
+  do 14 (split; [ vm_compute; reflexivity | ]).
+  split; exists 30; vm_compute; reflexivity.
+Qed.
+
 Theorem cc_fragment_examples : cc_fragment_examples_statement.
 Proof. vm_compute. repeat split. Qed.
 
@@ -516,8 +522,8 @@ Qed.
 Theorem rebuild_cc_refines_observably :
   rebuild_cc_refines_observably_statement.
 Proof.
-  intros flag is_local u e T cannot_change b Hlocal Hslots Hfrag Hdc Hccf
-    Hrk Hwf Hexits Hcheck Hcheck_exact Hccc Hwid Hcid.
+  intros flag is_local u e T cannot_change b Hlocal Hslots Hfrag Hdc Hrk
+    Hwf Hexits Hcheck Hcheck_exact Hccc Hwid Hcid.
   assert (Hkinded : FlambdaReaperRebuildProofs.calls_kinded [] e = true).
   { apply (proj1 FlambdaReaperRebuildProofs.calls_kinded_of_results e [] []
              [] Hrk).
@@ -528,8 +534,7 @@ Proof.
                   b Hlocal Hslots Hfrag
                   (proj1 (FlambdaReaperRebuildProofs.static_constants_checked
                             (FlambdaReaperFlowSpec.unit_codes e)) e Hdc)
-                  Hkinded Hwf Hexits Hcheck Hcheck_exact
-                  (check_cc_returns_sound _ _ _ _ _ Hccf) Hrk Hcl
+                  Hkinded Hwf Hexits Hcheck Hcheck_exact Hrk Hcl
                   (check_apply_widgets_sound _ _ Hwid)
                   (check_witness_code_ids_sound _ Hcid))).
 Qed.
@@ -559,6 +564,16 @@ Proof.
   apply (rebuild_cc_refines_observably Auto Examples.no_local
            Examples.interface MaskedReturnExample.unit_expr
            MaskedReturnExample.solution [] true);
+    try (vm_compute; reflexivity).
+  - intros f H. discriminate H.
+  - left. intros f. reflexivity.
+Qed.
+
+Theorem tail_escape_refines : tail_escape_refines_statement.
+Proof.
+  apply (rebuild_cc_refines_observably Auto Examples.no_local
+           Examples.interface TailEscapeExample.unit_expr
+           TailEscapeExample.solution [Node_code_id 51%positive] true);
     try (vm_compute; reflexivity).
   - intros f H. discriminate H.
   - left. intros f. reflexivity.

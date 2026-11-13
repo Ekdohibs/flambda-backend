@@ -1963,9 +1963,6 @@ Definition rebuild_unbox_without_unboxing_observably_statement : Prop :=
     (∀ f : field, is_local f = false) ∨ projection_free e = true ->
     in_flow_fragment e = true ->
     static_constants (unit_codes e) e = true ->
-    FlambdaReaperCallingConventionsSpec.check_cc_returns
-      (traverse_unit flag u e) T cannot_change (unit_code_deps flag u e) e
-    = true ->
     results_kinded [] [] e = true ->
     well_formed_unit u e = true ->
     exits_one_value u e = true ->
