@@ -37,10 +37,13 @@ here.
 | That a term makes no immutable array and that a state is free of arrays (it holds no array value and may come to run nothing that makes one); the refinement of expressions of the machine of `FlambdaHeapMachineSpec.v` restricted to the closed whole source states that are free of arrays | `FlambdaNoArrayValueSpec.v` | the owner of that file |
 | The free names; the three conditions on binders; `alpha_equivalent` | `FlambdaAlphaSpec.v` | N1 |
 | The comparison `expr_eqb` | `FlambdaCompareAlphaSpec.v` | N1 |
-| The rewrites of the normalisation, the passes for loops, the sharing of a handler that is the same as one bound around it, the parameters bound again at the head of their handlers and their twins, the checks of well-formedness (exception handlers and trap actions among them), the check of kinds, the normalisation of the term after and the first phase of that of the term before | `FlambdaValidatorEquivarianceSpec.v` | N3 |
+| The rewrites of the normalisation, the passes for loops, the sharing of a handler that is the same as one bound around it, the parameters bound again at the head of their handlers and their twins, the parameters given one symbol or one constant bound at the head of their handlers, the applications made to go to the arm of the number that they give, the checks of well-formedness (exception handlers and trap actions among them), the check of kinds, the normalisation of the term after and the first phase of that of the term before | `FlambdaValidatorEquivarianceSpec.v` | N3 |
 | The normalisation of the term before and that of a term in which something was lifted: up to the names that a round makes. `validate_unit`: where the code of the term before is closed | `FlambdaValidatorEquivarianceSpec.v` | N3 |
-| Identities of primitives, lifting, lifting out of code, the binding of `my_closure`, ranges, sharing of primitives and of projections, the recovery of comparisons, folding at known symbols, unused and known value slots, the order of static bindings, the static closures in sight, code moved up, code and static bindings bound first, lifting out of the arms of a test, inlining within a group of code, the unboxing of parameters, of the reads of a loop and of the boxed numbers that continuations pass to one another, the merging of the arms of a `Switch` and their merging into a load from a table, the continuations that a handler binds on its way to its `Switch` bound outside it, the demotion of exception handlers, the rewrite of the calls of code that never returns, the fold of a `Phys_equal` of a simple against itself, the calls of the unit's other code made indirect in the code of a stub, the lifting to a group around, a `Let` of a variable to the variable just bound made one `Let` with it, the reading of a known immutable array | the `Spec` file of each pass | the owner of each |
+| Identities of primitives, lifting, lifting out of code, the binding of `my_closure`, ranges, sharing of primitives and of projections, the recovery of comparisons, folding at known symbols, unused and known value slots, the order of static bindings, the static closures in sight, code moved up, code and static bindings bound first, lifting out of the arms of a test, inlining within a group of code, the unboxing of parameters, of the reads of a loop and of the boxed numbers that continuations pass to one another, the merging of the arms of a `Switch` and their merging into a load from a table, the continuations that a handler binds on its way to its `Switch` bound outside it, the demotion of exception handlers, the rewrite of the calls of code that never returns, the fold of a `Phys_equal` of a simple against itself, the calls of the unit's other code made indirect in the code of a stub, the lifting to a group around, a `Let` of a variable to the variable just bound made one `Let` with it, the reading of a known immutable array, the sharing of the reads of two places that hold one variable, the inlining of the calls of known siblings in the term after | the `Spec` file of each pass | the owner of each |
 | The second asking of the validation, `validate_unit_knowing`: where the code of the term before is closed | `FlambdaValidateKnowingSpec.v` | the owner of that file, N3 |
+| The tests that a verdict holds of a unit run from its imports: those that read static names alone, with no premise; those of a verdict, where the code of the term before is closed | `FlambdaValidateImportsRenameSpec.v` | N3 |
+| The second check of a unit, `validate_unit_related`: with no premise | `FlambdaValidateRelatedRenameSpec.v` | N3 |
+| The validation asked of the term before with its known arrays read, `validate_unit_reading` and `validate_unit_knowing_reading`: where the code of the term before is closed | `FlambdaValidateReadingRenameSpec.v` | N3 |
 | Typing environments and their levels, extensions, aliases, types, provers | the types library (`FlambdaEnvRenameSpec.v`, `FlambdaTypeRenameSpec.v`, `FlambdaEnvAliasesRenamingSpec.v`, `FlambdaTypingEnvExtensionSpec.v`, `FlambdaProversRenameSpec.v`) | N3 and the owners |
 | The model of Simplify: the function that rewrites a term from the types, the same with pruning, the rewrites of a `Switch`, following aliases with the aliases of the library | the types library (section 7 has the files) | the owners of those files |
 | The meet of types and of expanded types, and the functions that add to a typing environment, given a join that commutes with renaming; with the join that forgets, with no premise | the types library (`FlambdaMeetRenameSpec.v`) | the owner of the meet, N3 |
@@ -49,7 +52,10 @@ here.
 The rows down to that of the rewrites of the normalisation are
 equations, or equivalences, that hold of every state and of every
 term. The row after it is not, nor the second asking of the
-validation: a round of the term before makes names.
+validation, nor the tests of a verdict from the imports, nor the
+validation with the known arrays read: a round of the term before
+makes names. The second check has no premise: it tests itself that the
+code of the two units is closed.
 
 **What has a finite support.** Every expression and every state
 (`FlambdaStateSupportSpec.v`); a state with a stack (the same file); a
@@ -111,10 +117,9 @@ section 7, has the reason for each and what it would take.
 **Owed.** That the join of typing environments, with one source of
 new names, answers the renamed answer up to the variables that it
 makes (section 7); the functions on types that have no statement
-yet; the rows of the table above; that the second check of a unit
-answers the same on renamed terms (section 7); and, when a step of
-the machine comes to allocate, the proofs about a step under a
-permutation of locations again (section 4).
+yet; the rows of the table above; and, when a step of the machine
+comes to allocate, the proofs about a step under a permutation of
+locations again (section 4).
 
 ## 1. The names
 
@@ -750,7 +755,36 @@ action there too, where the handler's own application has none, and
 with it the continuation that the action names;
 `forward_kinded_equivariant_statement` and
 `forward_kinded_in_code_equivariant_statement` have the texts that
-they had); the
+they had);
+an application that gives a number to the parameter that the handler
+of its continuation tests, made to go where the arm of that number
+goes (`FlambdaForwardArmSpec.v`: with nothing asked of the kinds,
+`forward_to_arms`; where the arguments are known to have the kinds of
+the parameters, `forward_to_arms_kinded`, and that in the bodies of
+code, `forward_to_arms_in_code`; the pass compares names by equality
+only, binds none and makes none: the application that it puts is that
+of the arm with the arguments put for the parameters of the handler,
+where the tests of `FlambdaForwardSpec.forwarding` pass of the arm, as
+of a handler that would be that arm alone;
+`forward_to_arms_equivariant_statement`,
+`forward_to_arms_kinded_equivariant_statement` and
+`forward_to_arms_in_code_equivariant_statement`, each an equation that
+holds of every term; that the first keeps scope,
+`FlambdaLoopsScopeSpec.forward_to_arms_keeps_scope_statement`; the
+other two have no statement that they keep scope, and are applied to
+the term after only, where no round makes a name); the binding, at the
+head of its handler, of a parameter that is given one symbol or one
+constant (`FlambdaBindConstParamsSpec.bind_const_params`: a parameter
+of a non-recursive continuation, not an exception handler, that every
+application gives one symbol or one constant is taken away and bound
+at the head of the handler, by a `Let` of the parameter's own name; it
+compares names by equality only and makes none;
+`bind_const_params_equivariant_statement`, an equation with no
+premise; that it keeps scope,
+`FlambdaStaticsScopeSpec.bind_const_params_keeps_scope_statement`,
+scope not counting the symbol that the `Let` may mention; the
+normalisation of the term after applies it, just after the
+applications are made to go to their arms); the
 removal, in the body of code, of the unused `Let`s of its parameters
 (`FlambdaCodeLetsSpec.v`); the removal of a parameter that its
 handler does not use, of a continuation that a call returns to, the
@@ -794,7 +828,21 @@ the
 test for inlining a call that gives tupled code a tuple; the demotion
 of exception handlers with the rounds that tidy after it
 (`demote_and_tidy`); the normalisation of the term after and the
-first phase of that of the term before; the calls of the term before
+first phase of that of the term before, a round of which is the
+round of the parameters followed by a step
+(`FlambdaValidateSpec.first_phase_round`: after
+`normalise_params_round`, in the term, in the handlers of its
+recursive continuations and in the bodies of its code, the
+continuations that a handler binds on its way to its `Switch` are
+bound outside it, the applications are made to go to their arms and
+are then forwarded, and the continuations left unused are removed;
+it makes no name, commutes
+with every renaming by an equation,
+`first_phase_round_equivariant_statement`, and keeps scope,
+`FlambdaValidateScopeSpec.first_phase_round_keeps_scope_statement`;
+the first phase of the term before, that of a term in which
+something was lifted and the rounds that tidy after the demotion are
+rounds of it); the calls of the term before
 taken on when its rounds are over, or the term as it is
 (`FlambdaValidateSpec.with_returns`: taken or not, it commutes with
 every renaming by an equation and keeps scope,
@@ -897,9 +945,11 @@ lifting the validation reads the known value slots once more, with
 every symbol that the unit binds taken to be in scope
 (`FlambdaKnownSlotsSpec.read_known_slots_anywhere`), and then uses
 what is known of the symbols once more, in rounds that make no name
-(`FlambdaValidateSpec.demote_and_tidy_known`): that the rounds
-commute with every renaming and keep scope are lemmas of
-`FlambdaValidatorEquivarianceProofs.v` and not statements, and the
+(`FlambdaValidateSpec.demote_and_tidy_known`): the rounds commute
+with every renaming by an equation with no premise
+(`demote_and_tidy_known_equivariant_statement`); that they keep
+scope is a lemma of `FlambdaValidatorEquivarianceProofs.v` and not a
+statement, and the
 two statements of `lifted_in_turn`, whose texts are as they were, are
 of the function with that read and those rounds; and
 `with_statics_first`, which reads the continuations of the units: it
@@ -911,21 +961,55 @@ where its checks pass (`FlambdaValidateSpec.without_head_statics`), is
 stated there too: an equation, for every set of names to remove
 (`without_head_statics_equivariant_statement`); the checks read the
 same of a term renamed, as a renaming moves no symbol and no code id.
-The premise that some statements of a unit run from its imports add
-(`FlambdaImportsSpec.static_names_free_in`) is a test on symbols and
-code ids only; no statement says it of a term renamed. The tests
-that a verdict holds of a unit run from a static environment
-(`FlambdaValidateImportsSpec.verdict_holds_from`,
-`verdict_knowing_holds_from`, and what they are made of) compute
-again terms that `validate_unit` computes, those it compares among
-them, and ask that test, or
-`FlambdaUnusedHeadStaticsSpec.head_free_in`, which is on symbols and
-code ids too, of some of them. Where they compare two terms it is by
-`FlambdaCompareSpec.expr_eqb` with no names paired, as
-`validate_unit` and `FlambdaValidateSpec.iterate` do. They make no
-name and rename nothing but in the steps of the validation that they
-compute again; no statement says what they answer of a pair of terms
-renamed.
+`FlambdaImportsSpec.static_names_free_in`,
+`FlambdaUnusedHeadStaticsSpec.head_free_in` and
+`FlambdaValidateImportsSpec.head_removal_free_in` read symbols and
+code ids only, and answer of a term renamed what they answer of the
+term, with no premise (`FlambdaValidateImportsRenameSpec.v`:
+`static_names_free_in_equivariant_statement`,
+`head_free_in_equivariant_statement`,
+`head_removal_free_in_equivariant_statement`). The tests that a
+verdict holds of a unit run from a static environment
+(`verdict_holds_from`, `verdict_knowing_holds_from`, and what they are
+made of) compute again terms that `validate_unit` computes; where the
+rounds make names the renamed computation has those terms under
+another renaming, which a test on static names does not tell from the
+first. Of what they are made of, the tests that go through no round
+that makes a name have no premise that the code is closed
+(`demote_and_tidy_known_free_in_equivariant_statement`,
+`holds_from_equivariant_statement`, and
+`statics_first_free_in_renamed_alike_statement`, where the term is
+under a second renaming that does to the continuations of the units of
+the liftings what the first does); those that go through such rounds
+are stated where the code of the term is closed
+(`known_free_in_equivariant_statement`,
+`normalise_lifted_free_in_equivariant_statement`;
+`lifted_free_in_renamed_alike_statement`, where the term is under a
+second renaming that does to the continuations to avoid what the first
+does, the two continuations of the unit of each lifting being among
+them; `lifted_holds_from_renamed_alike_statement`, where the term
+before is under a second renaming that does to its free names, and to
+the continuations of the units of the liftings and of the loops, what
+the first does). Each of the tests of a verdict answers of the renamed
+terms what it answers of the terms, where the code of the term before
+is closed (`verdict_holds_from_equivariant_statement`,
+`verdict_knowing_holds_from_equivariant_statement`, and with a second
+renaming of the term before
+`verdict_holds_from_renamed_alike_statement`); so, with the laws of
+the two verdicts, whether a unit is validated with its imports does
+not depend on the names of its variables and continuations, where the
+code of the term before is closed
+(`validate_unit_holds_from_equivariant_statement`,
+`validate_unit_knowing_holds_from_equivariant_statement`). Nothing is
+stated of `statics_free_of`, which reads a static environment and no
+term. In these statements, and in those below of the second check and
+of the validation asked with the known arrays read, what is given that
+holds continuations is renamed with the terms, by the first renaming
+where there are two: the liftings, the continuations given for the
+loops, and the continuations to avoid. The static environment that a
+test from the imports is given, the imports that the second check is
+given, the names to remove and the value slots are the same on the two
+sides: a renaming moves no symbol and no code id.
 By the same prover, in the types library (`FlambdaEnvRenameSpec.v`):
 the functions of typing environments.
 
@@ -1018,16 +1102,29 @@ comparisons of lifted terms of `validate_unit`, with the liftings made
 without the test of the exits (`lifted_in_turn_observed`, which ends
 as `lifted_in_turn` does). Its two statements are about what may
 follow a unit, over the whole class `observer slots` at the value
-slots given, and over no smaller one. Nothing is stated of the check
-under renaming: no statement says that it answers the same on a pair
-of terms and on the pair renamed.
-`validate_unit_equivariant_statement` is not that statement, as the
-check is another function, and the statements of section 4 on what may
-follow a unit are about the relations that it concludes and not about
-its answer. It is owed. It makes names where `validate_unit` does, in
-the rounds that follow a lifting, which are given the continuations of
-the units of the liftings to avoid, and it asks that the code of the
-two units be closed. The test tool asks the check only of a unit
+slots given, and over no smaller one. The check answers of the two
+units renamed what it answers of the two units
+(`FlambdaValidateRelatedRenameSpec.v`:
+`validate_unit_related_equivariant_statement`), and the same where
+the term before is under a second renaming that renames its free
+names, and the continuations of the units of the liftings and of the
+loops, as the first does
+(`validate_unit_related_renamed_alike_statement`). Neither has a
+premise that the code is closed: the check tests that of both units
+itself and answers `Not_related` where it fails. Its liftings made
+in turn keep scope and commute with renaming up to the names that
+the rounds make (`lifted_in_turn_observed_keeps_scope_statement`,
+`lifted_in_turn_observed_equivariant_up_to_statement`), as those of
+`validate_unit` do, and their test on static names answers the same
+of a term whose code is closed, under a second renaming that does to
+the continuations to avoid what the first does, the two
+continuations of the unit of each lifting being among them
+(`lifted_observed_free_in_renamed_alike_statement`). The statements
+are of the checking function as it is defined, not of what is proved
+of a pair that it accepts. It makes names where `validate_unit`
+does, in the rounds that follow a lifting, which are given the
+continuations of the units of the liftings to avoid. The test tool
+asks the check only of a unit
 that it reports as not validated, and prints what the check accepts
 on a line of its own, which has not the word "validated"; such a
 unit stays not validated and is in no count of the units validated.
@@ -1089,8 +1186,43 @@ symbols and the numbers of elements as they are; the pass makes no
 name and compares variables and symbols by equality only; that it
 keeps scope,
 `FlambdaArrayLoadScopeSpec.load_known_arrays_keeps_scope_statement`;
-a round of the term before applies it, after the reading of known
-blocks), the
+no round of the validation applies it; `FlambdaValidateReadingSpec.v`
+has it beside the validation: `validate_unit_reading` and
+`validate_unit_knowing_reading` ask `validate_unit` and
+`validate_unit_knowing` of the term before with its known arrays read
+(`before_read`, `normalise_reading`: rounds of `reading_round`, each
+of which makes the loops of the term, normalises it as the term before
+is normalised, and reads the arrays in the term, in the handlers of
+its recursive continuations and in the bodies of its code,
+`read_arrays`; a round that reads nothing, by the comparison up to
+bound names, gives the term back as it was); the reading makes no name
+of its own, and the rounds of the normalisation in it are given, as
+names that they are not to make, the continuations of the units of the
+liftings and those given for the loops (`normalise_before_avoiding`),
+as the second asking gives them to its rounds; the laws under renaming
+are in `FlambdaValidateReadingRenameSpec.v`: the read commutes with
+every renaming by an equation and keeps scope
+(`read_arrays_equivariant_statement`,
+`read_arrays_keeps_scope_statement`); the normalisation of a round
+keeps scope and commutes with renaming up to the names that it makes,
+the second renaming doing to the continuations given what the first
+does (`normalise_before_avoiding_keeps_scope_statement`,
+`normalise_before_avoiding_equivariant_up_to_statement`); a round, the
+rounds and the term that the two functions give keep scope
+(`reading_round_keeps_scope_statement`,
+`normalise_reading_keeps_scope_statement`,
+`before_read_keeps_scope_statement`), and of a renamed term whose code
+is closed each gives its result under a second renaming, which does to
+the free names of that result and to the continuations to avoid what
+the first does (`reading_round_renamed_statement`;
+`normalise_reading_renamed_statement`, where the continuations of the
+loops are among those to avoid; `before_read_renamed_statement`, which
+asks no such thing, the function giving them to avoid); and the two
+functions answer the same on a pair of terms and on the pair renamed,
+the liftings and the continuations given for the loops renamed with
+it, where the code of the term before is closed
+(`validate_unit_reading_equivariant_statement`,
+`validate_unit_knowing_reading_equivariant_statement`)), the
 removal of unused
 value slots (`FlambdaUnusedSlotsSpec.v`), the reading of a value slot
 that every set of closures of the unit gives the same symbol or
@@ -1105,6 +1237,28 @@ scope,
 `FlambdaStaticsInScopeSpec.statics_in_scope`: it may put a symbol
 where the unit binds that symbol only later
 (`read_known_slots_anywhere_out_of_scope_statement`)), the
+sharing of the reads of two places of the static constants of one
+group that hold one variable (`FlambdaSharedReadsSpec.v`:
+`share_static_reads_equivariant_statement`, an equation that holds of
+every term, what is known being read from the term and so renamed with
+it; of the function that it is made of,
+`share_reads_equivariant_statement`, with what is known and the reads
+made renamed with the term by `rename_held` and `rename_reads_made`,
+which rename the variables and leave the symbols and the places as
+they are; that it keeps scope,
+`share_static_reads_keeps_scope_statement`, which is `keeps_scope`
+written out, that file coming before the one that defines it; that
+what it gives passes `FlambdaStaticsInScopeSpec.statics_in_scope`
+where the term does, `share_static_reads_in_scope_statement`, and of
+the function that it is made of the same of `expr_statics_in_scope`,
+at the symbols and the code ids in scope around the term,
+`share_reads_in_scope_statement`; the pass makes no name: a read of a
+place becomes the variable of an earlier read of a place that the
+group gave the same variable, and an earlier read is forgotten where
+its variable is bound again; a round of the normalisation of a term in
+which something was lifted applies it, after the reading of known
+value slots, and so does a round of those that follow the last
+lifting), the
 direct calls of the unit's code that is not a stub, made indirect in
 the code of a stub
 (`FlambdaStubCallsSpec.v`: `demote_stub_calls_equivariant_statement`,
@@ -1119,7 +1273,17 @@ code of a unit (`FlambdaHoistCodeSpec.v`) and of its static bindings
 that need nothing from around them (`FlambdaHoistStaticsSpec.v`), the
 lifting out of the arms of a test (`FlambdaLiftFromArmsSpec.v`), the
 inlining, in the body of code, of the calls of the other code of its
-group (`FlambdaInlineSiblingsSpec.v`), the unboxing of the parameters
+group (`FlambdaInlineSiblingsSpec.v`), and the same in the term
+after, where the callee is a symbol that the group binds to a closure
+of the code called
+(`FlambdaKnownSiblingsSpec.inline_known_sibling_calls`: it compares
+code ids and symbols and makes no name, the copy of a body having the
+names that the body binds, so that a body copied twice binds its
+names twice; `inline_known_sibling_calls_renamed_statement`, an
+equation that holds of every term and every list of code to leave; it
+has no statement that it keeps scope, and it is applied by a round of
+the term after only, where no round makes a name), the unboxing of
+the parameters
 of continuations and of variants (`FlambdaUnboxParamsRenameSpec.v`,
 `FlambdaUnboxVariantsRenameSpec.v`, each with the statement that the
 pass keeps scope), the unboxing of the reads of a loop
@@ -1170,7 +1334,17 @@ moved keeps its name and takes, under their own names, the
 parameters of the handler that it may read, so no name is made;
 `lift_handler_conts_equivariant_statement`, an equation that holds of
 every term; that it keeps scope, `FlambdaLiftContsScopeSpec.v`;
-nothing applies the pass yet), the demotion of the
+two tests more keep the pass from a `Let_cont`,
+`number_of_a_scrutinee` and `read_where_given`: they read the term,
+compare names by equality only and make none, and the first counts
+a variable that a `Switch` tests as the number of an arm, by its
+name alone, in the handler of the continuation that the arm applies,
+where that variable need not be in scope, as its header says; a test
+can only keep the pass from a place, and the two statements have the
+texts that they had; a round of the first phase of the term before
+applies the pass, and so does the normalisation of the term after,
+each just before the applications are made to go to their arms), the
+demotion of the
 exception handlers that no call names (`FlambdaDemoteSpec.v`, with
 the list of continuations that it is given renamed; that it keeps
 scope is `FlambdaDemoteScopeSpec.v`), the rewrite of the calls of
