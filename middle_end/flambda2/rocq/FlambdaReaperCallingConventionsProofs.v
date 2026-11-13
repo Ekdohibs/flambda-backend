@@ -28,15 +28,22 @@
 (* The proofs of FlambdaReaperCallingConventionsSpec.v: the check of
    FlambdaReaperCallingConventions.v implies what it is said to mean, and
    the table it derives is the least, and the rebuild where no code
-   changes is that of FlambdaReaperRebuild.v. Nothing here needs review. *)
+   changes is that of FlambdaReaperRebuild.v. The refinement with changes
+   of calling convention is
+   FlambdaReaperRebuildProofs.rebuild_cc_refines_checked, given what the
+   checks of the table and of the facts say ([check_cc_closed_sound],
+   [check_apply_widgets_sound], [check_witness_code_ids_sound]). Nothing
+   here needs review. *)
 
-From Stdlib Require Import List Bool.
+From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
-  FlambdaWellFormedSpec FlambdaReaperGraphSpec FlambdaReaperSolutionProofs
+  FlambdaWellFormedSpec FlambdaSemanticsSpec FlambdaReaperGraphSpec
+  FlambdaReaperSolutionProofs
   FlambdaReaperTraversal FlambdaReaperRebuild
   FlambdaReaperCallingConventions FlambdaReaperCallingConventionsSpec.
-From OxCamlFlambda2 Require FlambdaReaperRebuildProofs.
+From OxCamlFlambda2 Require FlambdaReaperRebuildProofs FlambdaSemanticsProofs
+  FlambdaReaperFlowSpec.
 Import ListNotations.
 
 Section Witnesses.
@@ -346,6 +353,76 @@ Proof.
                call_witness n Hin Hused Hcode).
 Qed.
 
+(* The witnesses of known arity that calls read off a node have the same
+   sources in a table that passes [check_apply_widgets]. *)
+Lemma check_apply_widgets_sound (F : facts) (T : tables) :
+  check_apply_widgets F T = true ->
+  ∀ a a' n y : node,
+    g_accessor (graph_of_facts F) a
+      (Field_call_witness Known_arity_code_pointer) n ->
+    g_accessor (graph_of_facts F) a'
+      (Field_call_witness Known_arity_code_pointer) n ->
+    (s_any_source (solution_of_tables T) a' = true ->
+     s_any_source (solution_of_tables T) a = true)
+    ∧ (s_sources (solution_of_tables T) a' y = true ->
+       s_sources (solution_of_tables T) a y = true).
+Proof.
+  intros Hcheck a a' n y Ha Ha'. cbn [graph_of_facts g_accessor] in Ha, Ha'.
+  cbn [solution_of_tables s_any_source s_sources].
+  unfold check_apply_widgets in Hcheck. rewrite forallb_forall in Hcheck.
+  specialize (Hcheck _ Ha'). cbv beta iota in Hcheck.
+  rewrite forallb_forall in Hcheck. specialize (Hcheck _ Ha).
+  cbv beta iota in Hcheck.
+  assert (Hfield : field_eqb (Field_call_witness Known_arity_code_pointer)
+                     (Field_call_witness Known_arity_code_pointer)
+                   = true).
+  { unfold field_eqb. destruct (field_eq_dec _ _); [ reflexivity | ].
+    contradiction. }
+  assert (Hnode : node_eqb n n = true).
+  { unfold node_eqb. destruct (node_eq_dec n n); [ reflexivity | ].
+    contradiction. }
+  rewrite Hfield, Hnode in Hcheck. cbn [andb negb orb] in Hcheck.
+  apply andb_true_iff in Hcheck as [Has Hsrc].
+  split.
+  - intros H. rewrite H in Has. destruct (mem_node a (t_any_source T));
+      [ reflexivity | discriminate Has ].
+  - intros H. rewrite forallb_forall in Hsrc.
+    apply mem_pair_In in H. specialize (Hsrc _ H). cbv beta iota in Hsrc.
+    assert (Ha'a' : node_eqb a' a' = true).
+    { unfold node_eqb. destruct (node_eq_dec a' a'); [ reflexivity | ].
+      contradiction. }
+    rewrite Ha'a' in Hsrc. exact Hsrc.
+Qed.
+
+(* A witness gives one code id where [check_witness_code_ids] passes. *)
+Lemma check_witness_code_ids_sound (F : facts) :
+  check_witness_code_ids F = true ->
+  ∀ (w : node) (id id' : code_id),
+    g_constructor (graph_of_facts F) w Field_code_id_of_call_witness
+      (Node_code_id id) ->
+    g_constructor (graph_of_facts F) w Field_code_id_of_call_witness
+      (Node_code_id id') ->
+    id' = id.
+Proof.
+  intros Hcheck w id id' H H'. cbn [graph_of_facts g_constructor] in H, H'.
+  unfold check_witness_code_ids in Hcheck. rewrite forallb_forall in Hcheck.
+  specialize (Hcheck _ H). cbv beta iota in Hcheck.
+  assert (Hfield : field_eqb Field_code_id_of_call_witness
+                     Field_code_id_of_call_witness = true).
+  { unfold field_eqb. destruct (field_eq_dec _ _); [ reflexivity | ].
+    contradiction. }
+  assert (Hw : node_eqb w w = true).
+  { unfold node_eqb. destruct (node_eq_dec w w); [ reflexivity | ].
+    contradiction. }
+  rewrite Hfield in Hcheck. cbn [negb orb] in Hcheck.
+  rewrite forallb_forall in Hcheck. specialize (Hcheck _ H').
+  cbv beta iota in Hcheck. rewrite Hw, Hfield in Hcheck.
+  cbn [andb negb orb] in Hcheck.
+  unfold node_eqb in Hcheck.
+  destruct (node_eq_dec (Node_code_id id') (Node_code_id id)) as [E | _];
+    [ injection E as E; exact E | discriminate Hcheck ].
+Qed.
+
 (* ======================================================================== *)
 (* The rebuild with no change of calling convention                         *)
 (* ======================================================================== *)
@@ -381,4 +458,64 @@ Theorem masked_return_example : masked_return_example_statement.
 Proof.
   do 11 (split; [ vm_compute; reflexivity | ]).
   split; exists 30; vm_compute; reflexivity.
+Qed.
+
+Theorem cc_fragment_examples : cc_fragment_examples_statement.
+Proof. vm_compute. repeat split. Qed.
+
+Theorem spurious_widget_counterexample :
+  spurious_widget_counterexample_statement.
+Proof.
+  do 9 (split; [ vm_compute; reflexivity | ]).
+  split; [ exists 30; vm_compute; reflexivity | ].
+  do 5 (split; [ vm_compute; reflexivity | ]).
+  assert (Hsource :
+    behaves
+      (State SpuriousWidgetExample.unit_expr [] [] empty_static_env
+         empty_heap)
+      (Exits 1%positive [Value_const (Tagged_immediate 9)] empty_heap))
+    by (exists 30; vm_compute; reflexivity).
+  split; [ exact Hsource | ].
+  intros preserve_direct_calls (_ & _ & Hwrong).
+  assert (Htarget :
+    behaves
+      (State
+         (SpuriousWidgetExample.rebuilt SpuriousWidgetExample.spurious
+            preserve_direct_calls)
+         [] [] empty_static_env empty_heap)
+      Goes_wrong)
+    by (exists 30; destruct preserve_direct_calls; vm_compute; reflexivity).
+  pose proof (FlambdaSemanticsProofs.behaviour_unique _ _ _ (Hwrong Htarget)
+                Hsource) as Heq.
+  discriminate Heq.
+Qed.
+
+Theorem rebuild_cc_refines_observably :
+  rebuild_cc_refines_observably_statement.
+Proof.
+  intros flag is_local u e T cannot_change b Hlocal Hslots Hfrag Hdc Hccf
+    Hrk Hwf Hexits Hcheck Hcheck_exact Hccc Hwid Hcid.
+  assert (Hkinded : FlambdaReaperRebuildProofs.calls_kinded [] e = true).
+  { apply (proj1 FlambdaReaperRebuildProofs.calls_kinded_of_results e [] []
+             [] Hrk).
+    intros k l Hl. discriminate Hl. }
+  destruct (check_cc_closed_sound _ _ _ Hccc) as (ccw & Hcl).
+  exact (proj1 (FlambdaReaperRebuildProofs.rebuild_cc_refines_checked false
+                  flag is_local u e T (fun n => mem_node n cannot_change) ccw
+                  b Hlocal Hslots Hfrag
+                  (proj1 (FlambdaReaperRebuildProofs.static_constants_checked
+                            (FlambdaReaperFlowSpec.unit_codes e)) e Hdc)
+                  Hkinded Hwf Hexits Hcheck Hcheck_exact Hccf Hcl
+                  (check_apply_widgets_sound _ _ Hwid)
+                  (check_witness_code_ids_sound _ Hcid))).
+Qed.
+
+Theorem two_calls_refines : two_calls_refines_statement.
+Proof.
+  apply (rebuild_cc_refines_observably Auto Examples.no_local
+           Examples.interface Examples.two_calls Examples.two_calls_tables []
+           true);
+    try (vm_compute; reflexivity).
+  - intros f H. discriminate H.
+  - left. intros f. reflexivity.
 Qed.

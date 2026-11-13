@@ -88,7 +88,24 @@
    ([poison_result_example_statement]); and the same unit with both codes
    changing, the call in tail position returning to the return
    continuation of the code it is in, which takes the results that both
-   keep ([masked_return_example_statement]). *)
+   keep ([masked_return_example_statement]).
+
+   The rebuild with changes of calling convention refines its unit
+   ([rebuild_cc_refines_observably_statement]) as the rebuild without
+   does (FlambdaReaperRebuildSpec.rebuild_refines_observably_statement),
+   for now on the units whose calls return to handlers ([cc_fragment]):
+   no call of the unit returns to a continuation of the unit, no call of
+   code to a continuation of the code, none raises to the return
+   continuation of its code. The two units in which code calls in tail
+   position are not of it; [two_calls] is ([two_calls_refines_statement]).
+   The statement asks of the table more than that it be closed and pass
+   [check_cc_closed]: that the witnesses of known arity that calls read
+   off a node have the same sources ([check_apply_widgets]), which the
+   rules derive of them but a table closed under the rules need not
+   have; without it, a call of code that changes is not known to call it
+   and goes wrong ([spurious_widget_counterexample_statement]). And it
+   asks of the facts that each witness give one code id
+   ([check_witness_code_ids]), which the traversal makes so. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic.
@@ -197,6 +214,139 @@ Definition rebuild_unit_cc_unchanged_statement : Prop :=
        cannot_change (Node_code_id id) = true) ->
     rebuild_unit_cc F sol cannot_change code_deps preserve_direct_calls e
     = rebuild_unit F sol preserve_direct_calls e.
+
+(* ======================================================================== *)
+(* The fragment                                                             *)
+(* ======================================================================== *)
+
+(* No call of [e] returns or raises to [ret]. *)
+Fixpoint no_call_returns_to (ret : continuation) (e : expr) : bool :=
+  match e with
+  | Let _ _ _ body | Let_static _ body => no_call_returns_to ret body
+  | Let_cont_non_recursive _ h body =>
+    handler_no_call_returns_to ret h && no_call_returns_to ret body
+  | Let_cont_recursive handlers body =>
+    forallb (fun '(_, h) => handler_no_call_returns_to ret h) handlers
+    && no_call_returns_to ret body
+  | Apply ap =>
+    negb (Pos.eqb (ap_continuation ap) ret
+          || Pos.eqb (ap_exn_continuation ap) ret)
+  | Apply_cont _ | Switch _ _ | Invalid => true
+  end
+with handler_no_call_returns_to (ret : continuation)
+    (h : continuation_handler) : bool :=
+  match h with
+  | Handler _ _ handler => no_call_returns_to ret handler
+  end.
+
+(* Every call of [e] returns to a continuation that [e] binds, or that
+   [bound] has. *)
+Fixpoint calls_return_to_handlers (bound : list continuation) (e : expr)
+    : bool :=
+  match e with
+  | Let _ _ _ body | Let_static _ body => calls_return_to_handlers bound body
+  | Let_cont_non_recursive k h body =>
+    handler_calls_return_to_handlers bound h
+    && calls_return_to_handlers (k :: bound) body
+  | Let_cont_recursive handlers body =>
+    forallb
+      (fun '(_, h) =>
+         handler_calls_return_to_handlers (map fst handlers ++ bound) h)
+      handlers
+    && calls_return_to_handlers (map fst handlers ++ bound) body
+  | Apply ap => among (ap_continuation ap) bound
+  | Apply_cont _ | Switch _ _ | Invalid => true
+  end
+with handler_calls_return_to_handlers (bound : list continuation)
+    (h : continuation_handler) : bool :=
+  match h with
+  | Handler _ _ handler => calls_return_to_handlers bound handler
+  end.
+
+(* The units whose calls return to handlers: no call of the unit returns
+   to a continuation of the unit, nor one of code to a continuation of
+   the code, and none raises to the return continuation of its code. In
+   particular, the code makes no call in tail position. A step of the
+   proof that the rebuild with changes of calling convention refines,
+   which the unit of [two_calls_example_statement] meets, and those of
+   [poison_result_example_statement] and
+   [masked_return_example_statement] do not
+   ([cc_fragment_examples_statement]). *)
+Definition cc_fragment (e : expr) : bool :=
+  calls_return_to_handlers [] e
+  && forallb
+       (fun '(_, c) =>
+          calls_return_to_handlers [] (code_body c)
+          && no_call_returns_to (code_return_continuation c) (code_body c))
+       (unit_codes e).
+
+(* Each call witness gives one code id: the traversal makes the
+   witnesses of each code, and only they give a code id. *)
+Definition check_witness_code_ids (F : facts) : bool :=
+  forallb
+    (fun '(w, f, c) =>
+       negb (field_eqb f Field_code_id_of_call_witness)
+       || forallb
+            (fun '(w', f', c') =>
+               negb (node_eqb w' w
+                     && field_eqb f' Field_code_id_of_call_witness)
+               || node_eqb c' c)
+            (f_constructor F))
+    (f_constructor F).
+
+(* The witnesses of known arity that calls read off a node have the same
+   sources in the table: [code_id_actually_directly_called] reads them
+   all, the rules of [cannot_change_calling_convention] those of the
+   calls of code that is used. Each is read off the node by its call
+   only, so the rules derive the same of all
+   ([spurious_widget_counterexample_statement]). *)
+Definition check_apply_widgets (F : facts) (T : tables) : bool :=
+  forallb
+    (fun '(a, f, n) =>
+       forallb
+         (fun '(a', f', n') =>
+            negb
+              (field_eqb f (Field_call_witness Known_arity_code_pointer)
+               && field_eqb f' f && node_eqb n' n)
+            || (Bool.eqb (mem_node a (t_any_source T))
+                  (mem_node a' (t_any_source T))
+                && forallb
+                     (fun '(x, y) =>
+                        negb (node_eqb x a) || mem_pair a' y (t_sources T))
+                     (t_sources T)))
+         (f_accessor F))
+    (f_accessor F).
+
+(* ======================================================================== *)
+(* The rebuild with changes of calling convention refines                    *)
+(* ======================================================================== *)
+
+(* The rebuild with changes of calling convention refines its unit, as
+   FlambdaReaperRebuildSpec.rebuild_refines_observably_statement says of
+   the rebuild without, for the units of [cc_fragment], with a table that
+   passes [check_cc_closed], and a table of the solution whose witnesses
+   read off a node agree ([check_apply_widgets]), from facts whose
+   witnesses give one code id each ([check_witness_code_ids]). *)
+Definition rebuild_cc_refines_observably_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (preserve_direct_calls : bool),
+    is_local_slots_only is_local ->
+    (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+    in_flow_fragment e = true ->
+    static_constants (unit_codes e) e = true ->
+    cc_fragment e = true ->
+    results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    exits_one_value u e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+    check_cc_closed (traverse_unit flag u e) T cannot_change = true ->
+    check_apply_widgets (traverse_unit flag u e) T = true ->
+    check_witness_code_ids (traverse_unit flag u e) = true ->
+    program_refines_observably e
+      (rebuild_unit_cc_from_tables (traverse_unit flag u e) T cannot_change
+         (unit_code_deps flag u e) preserve_direct_calls e).
 
 (* ======================================================================== *)
 (* Runs of units whose code changes                                         *)
@@ -573,3 +723,199 @@ Definition masked_return_example_statement : Prop :=
   ∧ behaves
       (State MaskedReturnExample.rebuilt [] [] empty_static_env empty_heap)
       (Exits 1%positive [Value_const (Tagged_immediate 5)] empty_heap).
+
+Definition cc_fragment_examples_statement : Prop :=
+  cc_fragment Examples.two_calls = true
+  ∧ check_apply_widgets Examples.two_calls_facts Examples.two_calls_tables
+    = true
+  ∧ check_witness_code_ids Examples.two_calls_facts = true
+  ∧ cc_fragment PoisonResultExample.unit_expr = false
+  ∧ check_apply_widgets PoisonResultExample.unit_facts
+      PoisonResultExample.solution
+    = true
+  ∧ cc_fragment MaskedReturnExample.unit_expr = false
+  ∧ check_apply_widgets MaskedReturnExample.unit_facts
+      MaskedReturnExample.solution
+    = true.
+
+(* A closed table with which the rebuild with changes of calling
+   convention does not refine its unit:
+
+     let code f50 x40 x42 my_closure x41 return k3 exn k4 = k3 x40 in
+     let code f51 x43 my_closure x44 return k5 exn k6 =  (never called)
+       let_cont k7 x45 = k5 x45 in
+       s80 x43 x43 return k7 exn k6               (direct, to f50)
+     in
+     let symbol s80 = closure at 70 of { 70 = f50 } in
+     let_cont k20 x30 = return x30 in
+     s80 9 7 return k20 exn k2                    (direct, to f50)
+
+   [x42] has no use, and [f50] loses it. With the least solution, as the
+   solver of the test tool computes it ([least]), no code is in the
+   least table, and the call of the unit is known to call [f50]
+   ([code_id_actually_called]): it gives the first argument only, and
+   the rebuilt unit exits as the unit does. The table [spurious] is
+   [least] with one node more of [any_source]: the witness that the call
+   in [f51] reads off [s80] (the node 20, of
+   [Field_call_witness Known_arity_code_pointer]). It is closed, as
+   nothing reads that node but through an alias that holds only where
+   [f51] is used, which it is not; and it passes [check_cc_closed] with
+   no code in the table, as the rules read the witnesses of the calls
+   only through that alias. But [code_id_actually_directly_called] reads
+   every witness read off [s80], that of [f51] included, and finds one
+   with any source: the call of the unit is not known to call [f50], is
+   rebuilt by [FlambdaReaperRebuild.rebuild_apply], with its two
+   arguments, and calls the rebuilt [f50], which takes one. The rebuilt
+   unit goes wrong, whatever [preserve_direct_calls].
+
+   So the refinement with changes of calling convention needs more of
+   the table than [check_closed] and [check_cc_closed]: the witnesses
+   read off a node with the same field have the same sources, as the
+   rules derive the same of them ([check_apply_widgets], which [least]
+   passes and [spurious] fails). *)
+Module SpuriousWidgetExample.
+
+Local Open Scope positive_scope.
+Import FlambdaReaperCallingConventions.Examples.
+
+Definition s80 : node := Node_symbol 80.
+
+Definition code_50 : code :=
+  Code [40; 42] 41 3 4
+    (make_code_metadata [Singleton Value; Singleton Value] [Singleton Value])
+    (return_to 3 [Var 40]).
+
+Definition call_50 (args : list simple) (k k_exn : continuation)
+    : apply_expr :=
+  {| ap_callee := Symbol 80; ap_call_kind := Direct 50; ap_args := args;
+     ap_continuation := k; ap_exn_continuation := k_exn;
+     ap_exn_extra_args := [];
+     ap_args_arity := [Singleton Value; Singleton Value];
+     ap_return_arity := [Singleton Value] |}.
+
+Definition code_51 : code :=
+  Code [43] 44 5 6 (make_code_metadata [Singleton Value] [Singleton Value])
+    (Let_cont_non_recursive 7
+       (Handler [45] (make_handler_metadata [Value]) (return_to 5 [Var 45]))
+       (Apply (call_50 [Var 43; Var 43] 7 6))).
+
+Definition unit_expr : expr :=
+  Let_static
+    [Bind_code 50 code_50; Bind_code 51 code_51;
+     Bind_symbol 80 (Static_const_closure_of_set 70 [(70, 80)] [(70, 50)] [])]
+    (Let_cont_non_recursive 20
+       (Handler [30] (make_handler_metadata [Value]) (return_to 1 [Var 30]))
+       (Apply
+          (call_50 [Const (Tagged_immediate 9); Const (Tagged_immediate 7)]
+             20 2))).
+
+Definition unit_facts : facts := traverse_unit Auto interface unit_expr.
+
+Definition least : tables :=
+  {| t_alias :=
+       [(m 27, m 8); (m 5, m 26); (m 23, m 25); (m 1, v 30); (m 12, v 45);
+        (v 44, m 14); (v 43, m 15); (m 3, v 40); (v 41, m 5); (v 40, m 6);
+        (v 42, m 7); (m 20, m 8); (m 25, m 8); (v 30, m 3); (m 2, m 4);
+        (m 24, c 50); (m 6, consts); (m 7, consts); (m 5, s80)];
+     t_any_usage :=
+       [m 1; m 24; m 19; m 2; v 30; m 3; m 4; c 50; v 40; m 6; consts];
+     t_any_source :=
+       [c 51; c 50; consts; m 24; m 6; m 7; v 40; v 42; m 3; v 30; m 1];
+     t_has_usage :=
+       [m 1; m 24; m 19; m 2; v 30; m 23; m 18; m 25; m 8; m 3; m 4; c 50; v 40;
+        m 6; consts; s80];
+     t_has_source :=
+       [c 51; c 50; consts; s80; m 17; m 16; m 10; m 11; m 9; m 8;
+        m 27; m 20; m 25; m 24; m 6; m 7; m 23; v 40; v 42; m 5; m 3; v 41;
+        v 30; m 1];
+     t_usages :=
+       [(s80, s80); (m 23, m 23); (m 18, m 18);
+        (m 25, m 23); (m 8, m 23)];
+     t_sources :=
+       [(s80, s80); (m 17, m 17); (m 16, m 16);
+        (m 10, m 10); (m 9, m 9); (m 11, m 11); (m 8, m 8); (m 27, m 8);
+        (m 20, m 8); (m 25, m 8); (m 23, m 8); (m 5, s80);
+        (v 41, s80)];
+     t_reading_field := [];
+     t_escaping_field := [];
+     t_field_used :=
+       [(s80, known); (m 8, result 0);
+        (m 8, Field_return_of_call Exn);
+        (m 8, Field_code_id_of_call_witness)] |}.
+
+Definition spurious : tables :=
+  {| t_alias := t_alias least; t_any_usage := t_any_usage least;
+     t_any_source := m 20 :: t_any_source least;
+     t_has_usage := t_has_usage least; t_has_source := t_has_source least;
+     t_usages := t_usages least; t_sources := t_sources least;
+     t_reading_field := t_reading_field least;
+     t_escaping_field := t_escaping_field least;
+     t_field_used := t_field_used least |}.
+
+(* The rebuilt unit, with no code in the table. *)
+Definition rebuilt (T : tables) (preserve_direct_calls : bool) : expr :=
+  rebuild_unit_cc_from_tables unit_facts T []
+    (unit_code_deps Auto interface unit_expr) preserve_direct_calls
+    unit_expr.
+
+End SpuriousWidgetExample.
+
+Definition spurious_widget_counterexample_statement : Prop :=
+  in_flow_fragment SpuriousWidgetExample.unit_expr = true
+  ∧ static_constants (unit_codes SpuriousWidgetExample.unit_expr)
+      SpuriousWidgetExample.unit_expr
+    = true
+  ∧ cc_fragment SpuriousWidgetExample.unit_expr = true
+  ∧ results_kinded [] [] SpuriousWidgetExample.unit_expr = true
+  ∧ well_formed_unit Examples.interface SpuriousWidgetExample.unit_expr
+    = true
+  ∧ exits_one_value Examples.interface SpuriousWidgetExample.unit_expr
+    = true
+  ∧ check_closed Examples.no_local SpuriousWidgetExample.unit_facts
+      SpuriousWidgetExample.least
+    = true
+  ∧ check_field_used_exact Examples.no_local SpuriousWidgetExample.unit_facts
+      SpuriousWidgetExample.least
+    = true
+  ∧ derive_cannot_change SpuriousWidgetExample.unit_facts
+      SpuriousWidgetExample.least
+    = []
+  ∧ behaves
+      (State (SpuriousWidgetExample.rebuilt SpuriousWidgetExample.least true)
+         [] [] empty_static_env empty_heap)
+      (Exits 1%positive [Value_const (Tagged_immediate 9)] empty_heap)
+  ∧ check_closed Examples.no_local SpuriousWidgetExample.unit_facts
+      SpuriousWidgetExample.spurious
+    = true
+  ∧ check_field_used_exact Examples.no_local SpuriousWidgetExample.unit_facts
+      SpuriousWidgetExample.spurious
+    = true
+  ∧ check_cc_closed SpuriousWidgetExample.unit_facts
+      SpuriousWidgetExample.spurious []
+    = true
+  ∧ check_apply_widgets SpuriousWidgetExample.unit_facts
+      SpuriousWidgetExample.least
+    = true
+  ∧ check_apply_widgets SpuriousWidgetExample.unit_facts
+      SpuriousWidgetExample.spurious
+    = false
+  ∧ behaves
+      (State SpuriousWidgetExample.unit_expr [] [] empty_static_env
+         empty_heap)
+      (Exits 1%positive [Value_const (Tagged_immediate 9)] empty_heap)
+  ∧ ∀ preserve_direct_calls : bool,
+      ~ program_refines_observably SpuriousWidgetExample.unit_expr
+          (SpuriousWidgetExample.rebuilt SpuriousWidgetExample.spurious
+             preserve_direct_calls).
+
+(* The unit [two_calls] meets the premises of
+   [rebuild_cc_refines_observably_statement] (with
+   [two_calls_example_statement] and [cc_fragment_examples_statement]):
+   its rebuild, in which code changes its calling convention, refines
+   it. *)
+Definition two_calls_refines_statement : Prop :=
+  program_refines_observably Examples.two_calls
+    (rebuild_unit_cc_from_tables Examples.two_calls_facts
+       Examples.two_calls_tables []
+       (unit_code_deps Auto Examples.interface Examples.two_calls) true
+       Examples.two_calls).
