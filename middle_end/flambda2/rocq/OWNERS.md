@@ -684,6 +684,12 @@ Owner: N3, on `flambda2-rocq/N3-equivariance` for the validator and on
   variable: an equivalence, written for the validation to apply to
   either of its terms; and the lemmas for its laws of renaming and of
   scope, which are stated in the files above)
+- `middle_end/flambda2/rocq/FlambdaBindConstParams*` (a parameter of
+  a continuation that every application gives one symbol or one
+  constant is that symbol or that constant: an equivalence, written
+  for the validation to apply to either of its terms; and the lemmas
+  for its laws of renaming and of scope, which are stated in the
+  files above)
 - `middle_end/flambda2/rocq/FlambdaWrapReturns*` (a parameter that
   its handler does not use, of a continuation that a call returns to,
   is removed, and the call returns to a wrapper, as Simplify makes
