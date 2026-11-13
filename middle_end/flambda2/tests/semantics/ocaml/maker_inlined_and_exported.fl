@@ -1,0 +1,48 @@
+let $camlMaker_inlined_and_exported__first_const_0 = Block 0 () in
+(let code size(4)
+       `fn[maker_inlined_and_exported.ml:15,10--19]_1` (x/49 : imm tagged)
+         my_closure/50 &my_alloc_region/51 my_depth/52
+         -> k/18 * k/19
+         : imm tagged =
+   let next_depth/53 = rec_info (succ my_depth/52) in
+   let k/54 =
+     %project_value_slot.[`fn[maker_inlined_and_exported.ml:15,10--19]`].[k]
+       (my_closure/50)
+   in
+   let int_add/55 = %int_barith.add (x/49, k/54) in
+   cont k/18 (int_add/55)
+ in
+ let code inline(always) size(13)
+       adder_0 (k/56 : imm tagged)
+         my_closure/57 &my_alloc_region/58 my_depth/59
+         -> k/20 * k/21
+         : val =
+   let next_depth/60 = rec_info (succ my_depth/59) in
+   let `fn[maker_inlined_and_exported.ml:15,10--19]/61` =
+     closure `fn[maker_inlined_and_exported.ml:15,10--19]_1`
+       @`fn[maker_inlined_and_exported.ml:15,10--19]` &my_alloc_region/58
+   with { k = k/56 }
+   in
+   cont k/20 (`fn[maker_inlined_and_exported.ml:15,10--19]/61`)
+ in
+ let adder/62 = closure adder_0 @adder &toplevel in
+ apply direct(adder_0 &toplevel) (adder/62 : _ -> val) (3) -> k/22 * error
+   where k/22 (add_three/63 : val) =
+     ((let Popaque/66 = %opaque (4) in
+       apply &toplevel add_three/63 (Popaque/66) -> k/23 * error)
+        where k/23 (result/64 : imm tagged) =
+          let Pmakeblock/65 =
+            %block.[`0`].`toplevel` (adder/62, add_three/63, result/64)
+          in
+          cont k/17 (Pmakeblock/65)))
+  where k/17 define_root_symbol (module_block/45) =
+    let field_0/46 = %block_load.tag[`0`].`size`[`3`].[`0`] (module_block/45)
+    in
+    let field_1/47 = %block_load.tag[`0`].`size`[`3`].[`1`] (module_block/45)
+    in
+    let field_2/48 = %block_load.tag[`0`].`size`[`3`].[`2`] (module_block/45)
+    in
+    let $camlMaker_inlined_and_exported =
+      Block 0 (field_0/46, field_1/47, field_2/48)
+    in
+    cont done ($camlMaker_inlined_and_exported)
