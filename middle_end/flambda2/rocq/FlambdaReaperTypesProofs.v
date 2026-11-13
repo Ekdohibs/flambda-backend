@@ -42,7 +42,20 @@
    [usages_carry_sources]); the metadata of its value slots holds where
    they are ([follow_field_for_set_at]), and the join of the slots of
    the sets kept describes what that of the set does
-   ([fold_join_covered]). The counterexamples are computed. *)
+   ([fold_join_covered]). The counterexamples are computed.
+
+   The result types of an unboxed variable of code
+   ([rewrite_unboxed_result_type_sound]) are proved level by level of
+   its unboxing ([leaves_sound]): at a level, a value of the first run
+   comes from the one allocation of the level ([level_ok]), a field
+   that the uses read is used by that allocation and its metadata holds
+   where it is held ([level_field_used], [level_metadata_at]), and the
+   type at a field of the type of a value holds of the field
+   ([destructure_field_sound]). The fields unboxed in turn are those
+   that the analysis unboxes ([mk_shape], [mk_unboxed_fields_nested]),
+   read into names that it unboxes ([unboxed_fields_of_names_has]),
+   whose uses [check_unboxed_uses] keeps from reaching closures
+   ([add_usages_of_unboxed]). *)
 
 From Stdlib Require Import ZArith List Bool Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList OxCamlOption.
@@ -61,6 +74,9 @@ From OxCamlFlambda2Types Require Import FlambdaTypeGrammar
   FlambdaExpandHeadProofs FlambdaTypeAccessSpec FlambdaProvers
   FlambdaTypeMeaningBoolSpec FlambdaTypeMeaningBoolProofs
   FlambdaEnvAliases FlambdaEnvAliasesSpec FlambdaEnvAliasesProofs.
+From OxCamlFlambda2 Require FlambdaReaperUnboxing
+  FlambdaReaperUnboxingRefinesCallsSpec FlambdaReaperUnboxingRefinesProofs
+  FlambdaReaperUnboxingRefinesCallsSimProofs.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -3469,3 +3485,1382 @@ Proof. split; vm_compute; reflexivity. Qed.
 
 Theorem result_types_example : result_types_example_statement.
 Proof. split; vm_compute; reflexivity. Qed.
+
+(* ======================================================================== *)
+(* Unboxed parameters and results                                           *)
+(* ======================================================================== *)
+
+Module U := FlambdaReaperUnboxing.
+Module URP := FlambdaReaperUnboxingRefinesProofs.
+Module UCS := FlambdaReaperUnboxingRefinesCallsSpec.
+
+Section Unboxing_facts.
+
+Variable F : facts.
+Variable T : tables.
+Variable cm : finite_map variable.
+Variable dominated : list (node * node).
+Variable to_unbox : list node.
+
+(* A name that an allocation to unbox dominates has unboxed fields. *)
+Lemma unboxed_fields_of_names_has (next : positive) (y : node) :
+  U.has_to_be_unboxed dominated to_unbox y = true ->
+  ∃ fs : U.unboxed_fields,
+    (y, fs) ∈ fst (U.unboxed_fields_of_names F T cm dominated to_unbox next).
+Proof.
+  unfold U.unboxed_fields_of_names, U.has_to_be_unboxed.
+  intros Hy. apply existsb_exists in Hy as ([a y'] & Hin & Hy).
+  apply andb_true_iff in Hy as [Hyy Ha]. apply node_eqb_eq in Hyy. subst y'.
+  assert (Hgen : ∀ (l : list (node * node))
+                   (acc : list (node * U.unboxed_fields)) (n : positive),
+    (∃ fs, (y, fs) ∈ acc)
+    ∨ (∃ a, (a, y) ∈ l ∧ mem_node a to_unbox = true) ->
+    ∃ fs,
+      (y, fs) ∈ fst (List.fold_left
+                       (fun '(acc, next) '(a, x) =>
+                          if mem_node a to_unbox
+                             && negb (existsb (fun '(y, _) => node_eqb x y)
+                                        acc)
+                          then
+                            let '(fields, next) :=
+                              U.name_unboxed_fields F T cm dominated to_unbox
+                                a x next
+                            in
+                            (acc ++ [(x, fields)], next)
+                          else (acc, next))
+                       l (acc, n))).
+  { induction l as [ | [a0 x0] l IH]; intros acc n Hacc.
+    - destruct Hacc as [Hacc | (a' & [] & _)]. exact Hacc.
+    - cbn [List.fold_left].
+      destruct (mem_node a0 to_unbox
+                && negb (existsb (fun '(y, _) => node_eqb x0 y) acc))
+        eqn:Hc.
+      + destruct (U.name_unboxed_fields F T cm dominated to_unbox a0 x0 n)
+          as [fields n'].
+        apply IH.
+        destruct Hacc as [(fs & Hfs) | (a' & [Heq | Hl] & Ha')].
+        * left. exists fs. apply in_or_app. left. exact Hfs.
+        * injection Heq as -> ->. left. exists fields. apply in_or_app.
+          right. left. reflexivity.
+        * right. exists a'. auto.
+      + apply IH.
+        destruct Hacc as [(fs & Hfs) | (a' & [Heq | Hl] & Ha')].
+        * left. exists fs. exact Hfs.
+        * injection Heq as -> ->. rewrite Ha' in Hc.
+          cbn [andb] in Hc. apply negb_false_iff in Hc.
+          apply existsb_exists in Hc
+            as ([y' fs] & Hfs & Hyy). apply node_eqb_eq in Hyy. subst y'.
+          left. exists fs. exact Hfs.
+        * right. exists a'. auto. }
+  apply (Hgen dominated [] next). right. exists a. auto.
+Qed.
+
+(* A field unboxed in turn: read into names all to unbox, and unboxed as
+   the fields of its source read from their uses. *)
+Lemma mk_unboxed_fields_nested (fuel : nat) (block : node) :
+  ∀ (fields : list (field * U.field_use)) (next : positive) (f : field)
+    (nested : U.unboxed_fields),
+    (f, U.Unboxed nested)
+      ∈ fst (U.mk_unboxed_fields F T cm dominated to_unbox fuel block fields
+               next) ->
+    ∃ (flow_to : list node) (fuel' : nat) (source : node) (next' : positive),
+      (f, U.Use_known flow_to) ∈ fields
+      ∧ forallb (U.has_to_be_unboxed dominated to_unbox) flow_to = true
+      ∧ nested
+        = fst (U.mk_unboxed_fields F T cm dominated to_unbox fuel' source
+                 (U.get_fields F T
+                    (U.add_usages_through_function_slots F T cm true
+                       (U.get_direct_usages T flow_to)))
+                 next').
+Proof.
+  destruct fuel as [ | fuel]; cbn [U.mk_unboxed_fields];
+    (induction fields as [ | [f' use] fields IH]; intros next f nested Hin;
+     [ destruct Hin | ]);
+    cbn beta iota zeta in Hin;
+    repeat match type of Hin with
+    | context [match ?c with _ => _ end] =>
+      lazymatch c with
+      | (_, _) => fail
+      | _ => destruct c eqn:?
+      end
+    end;
+    simpl in Hin.
+  all: try (destruct Hin as [Heq | Hin]; [ discriminate Heq | ]).
+  all: try (match goal with
+            | H : ?g = (?rest, _), Hin : _ ∈ ?rest |- _ =>
+              assert (Hin' : (f, U.Unboxed nested) ∈ fst g)
+                by (rewrite H; exact Hin);
+              destruct (IH _ f nested Hin')
+                as (flow_to' & fuel' & s' & n' & H1 & H2 & H3);
+              exists flow_to', fuel', s', n';
+              split; [ right; exact H1 | split; assumption ]
+            end).
+  all: repeat match goal with
+         | H : (if ?c then _ else _) = (_, _) |- _ => destruct c eqn:?
+         | H : (match ?c with _ => _ end) = (_, _) |- _ =>
+           lazymatch c with
+           | (_, _) => fail
+           | _ => destruct c eqn:?
+           end
+         end.
+  all: repeat match goal with
+         | H : (_, _) = (_, _) |- _ => injection H as; subst
+         | H : None = Some _ |- _ => discriminate H
+         end.
+  all: try (destruct Hin as [Heq | Hin]; [ discriminate Heq | ]).
+  all: try (match goal with
+            | H : ?g = (?rest, _), Hin : _ ∈ ?rest |- _ =>
+              assert (Hin' : (f, U.Unboxed nested) ∈ fst g)
+                by (rewrite H; exact Hin);
+              destruct (IH _ f nested Hin')
+                as (flow_to' & fuel' & s' & n' & H1 & H2 & H3);
+              exists flow_to', fuel', s', n';
+              split; [ right; exact H1 | split; assumption ]
+            end).
+  all: destruct Hin as [Heq | Hin];
+    [ injection Heq as -> ->;
+      match goal with
+      | H : U.mk_unboxed_fields _ _ _ _ _ ?fu ?so _ ?ne = (_, _),
+        Hf : forallb _ ?fl = true |- _ =>
+        exists fl, fu, so, ne;
+        split; [ left; reflexivity
+               | split; [ exact Hf | rewrite H; reflexivity ] ]
+      end
+    | ].
+  all: match goal with
+       | H : ?g = (?rest, _), Hin : _ ∈ ?rest |- _ =>
+         assert (Hin' : (f, U.Unboxed nested) ∈ fst g)
+           by (rewrite H; exact Hin);
+         destruct (IH _ f nested Hin')
+           as (flow_to' & fuel' & s' & n' & H1 & H2 & H3);
+         exists flow_to', fuel', s', n';
+         split; [ right; exact H1 | split; assumption ]
+       end.
+Qed.
+
+(* The uses of the names of [unboxed]: with [check_unboxed_uses], the
+   closures among them add nothing. *)
+Lemma add_usages_of_unboxed (unboxed : list (node * U.unboxed_fields))
+    (follow : bool) (out : list node) :
+  UCS.check_unboxed_uses F T unboxed = true ->
+  (∀ u : node,
+     u ∈ out ->
+     ∃ (x : node) (fs : U.unboxed_fields),
+       (x, fs) ∈ unboxed ∧ mem_pair x u (t_usages T) = true) ->
+  U.add_usages_through_function_slots F T cm follow out = out.
+Proof.
+  intros Huses Hout.
+  assert (Hblock : ∀ x, x ∈ out ->
+            ∀ y f base, (y, f, base) ∈ f_accessor F ->
+              node_eqb base x = true -> U.is_block_like_field f = true).
+  { intros x Hx y f base Hacc Hb. apply node_eqb_eq in Hb. subst base.
+    destruct (Hout x Hx) as (n & fs & Hn & Hpair).
+    unfold UCS.check_unboxed_uses in Huses. rewrite forallb_forall in Huses.
+    specialize (Huses _ Hacc). cbn beta iota in Huses.
+    apply orb_true_iff in Huses as [Hf | Hall]; [ exact Hf | ].
+    rewrite forallb_forall in Hall. specialize (Hall _ Hn).
+    cbn beta iota in Hall. rewrite Hpair in Hall. discriminate Hall. }
+  clear Hout.
+  assert (Hnone : U.usages_through_function_slots F T cm follow out = []).
+  { destruct (U.usages_through_function_slots F T cm follow out)
+      as [ | z rest] eqn:E; [ reflexivity | exfalso ].
+    assert (Hz : z ∈ U.usages_through_function_slots F T cm follow out)
+      by (rewrite E; left; reflexivity).
+    clear E. unfold U.usages_through_function_slots in Hz.
+    apply in_flat_map in Hz as (x & Hx & Hz).
+    apply in_app_or in Hz as [Hz | Hz];
+      [ destruct follow; [ | destruct Hz ] | ];
+      apply in_flat_map in Hz as ([[y f] base] & Hacc & Hz);
+      cbn beta iota in Hz;
+      match type of Hz with
+      | _ ∈ (if ?c then _ else _) => destruct c eqn:Ht; [ | destruct Hz ]
+      end;
+      apply andb_true_iff in Ht as [Hb Hf];
+      pose proof (Hblock x Hx y f base Hacc Hb) as Hbl;
+      destruct f; try discriminate Hbl; discriminate Hf. }
+  unfold U.add_usages_through_function_slots. simpl. rewrite Hnone.
+  reflexivity.
+Qed.
+
+(* [get_fields] reads the nodes given as a set. *)
+Lemma get_fields_ext (uses uses' : list node) :
+  (∀ z : node, mem_node z uses = mem_node z uses') ->
+  U.get_fields F T uses = U.get_fields F T uses'.
+Proof.
+  intros H. unfold U.get_fields.
+  match goal with
+  | |- U.sort_fields (flat_map _ (Keyed.dedup _ (map _ (filter ?p ?l))))
+       = U.sort_fields (flat_map _ (Keyed.dedup _ (map _ (filter ?q ?l)))) =>
+    replace (filter p l) with (filter q l); [ reflexivity | ]
+  end.
+  apply filter_ext. intros [[y f] base]. rewrite H. reflexivity.
+Qed.
+
+(* A field of [get_fields] is there once, with one use. *)
+Lemma get_fields_functional (uses : list node) (f : field)
+    (use use' : U.field_use) :
+  (f, use) ∈ U.get_fields F T uses -> (f, use') ∈ U.get_fields F T uses ->
+  use = use'.
+Proof.
+  unfold U.get_fields. cbv zeta. intros H1 H2.
+  apply URP.sort_fields_in, in_flat_map in H1 as (f1 & _ & H1).
+  apply URP.sort_fields_in, in_flat_map in H2 as (f2 & _ & H2).
+  repeat match goal with
+         | H : _ ∈ (if ?c then _ else _) |- _ => destruct c eqn:?
+         | H : _ ∈ (match ?c with _ => _ end) |- _ => destruct c eqn:?
+         end;
+    repeat match goal with
+           | H : _ ∈ [] |- _ => destruct H
+           | H : _ ∈ [_] |- _ =>
+             destruct H as [H | []]; injection H as ? ?; subst
+           end;
+    try reflexivity; try congruence.
+Qed.
+
+(* The use of a field of [get_fields]: of a reader that has any usage, or
+   the readers with a use, of which none has any usage. *)
+Lemma get_fields_use (uses : list node) (f : field) (use : U.field_use) :
+  (f, use) ∈ U.get_fields F T uses ->
+  match use with
+  | U.Use_unknown =>
+    ∃ y u : node,
+      g_accessor (graph_of_facts F) y f u ∧ mem_node u uses = true
+      ∧ s_any_usage (solution_of_tables T) y = true
+  | U.Use_known flow_to =>
+    flow_to <> [] ∧ is_function_slot f = false
+    ∧ (∀ y u : node,
+         g_accessor (graph_of_facts F) y f u -> mem_node u uses = true ->
+         is_function_slot f = false ->
+         s_any_usage (solution_of_tables T) y = false)
+    ∧ ∀ y : node,
+        y ∈ flow_to ->
+        s_has_usage (solution_of_tables T) y = true
+        ∧ ∃ u : node,
+            g_accessor (graph_of_facts F) y f u ∧ mem_node u uses = true
+  end.
+Proof.
+  unfold U.get_fields. intros Hin.
+  apply URP.sort_fields_in, in_flat_map in Hin as (f0 & _ & Hin).
+  match type of Hin with
+  | _ ∈ (if existsb _ ?ri then _ else _) =>
+    remember ri as read_into eqn:Hri
+  end.
+  assert (Hri_iff : ∀ y : node,
+            y ∈ read_into
+            <-> ∃ base : node,
+                  (y, f0, base) ∈ f_accessor F ∧ mem_node base uses = true
+                  ∧ is_function_slot f0 = false).
+  { intros y. subst read_into. rewrite in_flat_map. split.
+    - intros ([[v f'] base] & Hr & Hv). apply filter_In in Hr as [Hr Ht].
+      cbn beta iota in Hv, Ht.
+      destruct (field_eqb f0 f') eqn:Hf; [ | destruct Hv ].
+      destruct Hv as [<- | []]. apply field_eqb_eq in Hf. subst f'.
+      apply andb_true_iff in Ht as [Hb Hfs]. exists base.
+      split; [ exact Hr | split; [ exact Hb | ] ].
+      apply negb_true_iff. exact Hfs.
+    - intros (base & Hr & Hb & Hfs). exists (y, f0, base). split.
+      + apply filter_In. split; [ exact Hr | ]. cbn beta iota.
+        rewrite Hb, Hfs. reflexivity.
+      + cbn beta iota. rewrite field_eqb_refl. left. reflexivity. }
+  clear Hri.
+  destruct (existsb (fun v => mem_node v (t_any_usage T)) read_into)
+    eqn:Hany.
+  - destruct Hin as [Heq | []]. injection Heq as -> <-.
+    apply existsb_exists in Hany as (y & Hy & Hau).
+    destruct (proj1 (Hri_iff y) Hy) as (base & Hr & Hb & _).
+    exists y, base. split; [ exact Hr | split; [ exact Hb | exact Hau ] ].
+  - destruct (Keyed.dedup node_eqb
+                (filter (fun v => mem_node v (t_has_usage T)) read_into))
+      as [ | y0 l] eqn:Hdedup; [ destruct Hin | ].
+    destruct Hin as [Heq | []]. injection Heq as -> <-.
+    split; [ discriminate | split; [ | split ] ].
+    + assert (Hy0 : y0 ∈ Keyed.dedup node_eqb
+                      (filter (fun v => mem_node v (t_has_usage T))
+                         read_into))
+        by (rewrite Hdedup; left; reflexivity).
+      apply URP.dedup_in, filter_In in Hy0 as [Hy0 _].
+      destruct (proj1 (Hri_iff y0) Hy0) as (base & _ & _ & Hfs).
+      exact Hfs.
+    + intros y u Hacc Hu Hfs. apply not_true_iff_false. intros Hau.
+      apply not_true_iff_false in Hany. apply Hany. apply existsb_exists.
+      exists y. split; [ | exact Hau ]. apply Hri_iff.
+      exists u. split; [ exact Hacc | split; [ exact Hu | exact Hfs ] ].
+    + intros y Hy. rewrite <- Hdedup in Hy. apply URP.dedup_in in Hy.
+      apply filter_In in Hy as [Hy Hhu].
+      destruct (proj1 (Hri_iff y) Hy) as (base & Hr & Hb & _).
+      split; [ exact Hhu | ]. exists base. split; [ exact Hr | exact Hb ].
+Qed.
+
+End Unboxing_facts.
+
+(* The queries of Types.v and of FlambdaReaperUnboxing.v agree. *)
+Lemma direct_usages_agree (ctx : rewrite_context) (xs : list node) (z : node) :
+  z ∈ get_direct_usages ctx xs
+  <-> z ∈ U.get_direct_usages (rc_tables ctx) xs.
+Proof.
+  rewrite get_direct_usages_iff. unfold U.get_direct_usages.
+  split.
+  - intros (x & Hx & Hxz & Hhz). apply URP.dedup_in_r, in_flat_map.
+    exists (x, z). cbn [solution_of_tables s_usages s_has_usage] in Hxz, Hhz.
+    split; [ apply mem_pair_In; exact Hxz | ].
+    apply mem_node_In in Hx. rewrite Hx, Hhz. left. reflexivity.
+  - intros Hz. apply URP.dedup_in, in_flat_map in Hz as ([x y] & Hin & Hz).
+    destruct (mem_node x xs && mem_node y (t_has_usage (rc_tables ctx)))
+      eqn:Ht; [ | destruct Hz ].
+    destruct Hz as [<- | []]. apply andb_true_iff in Ht as [Hx Hy].
+    exists x. split; [ apply mem_node_In; exact Hx | ].
+    cbn [solution_of_tables s_usages s_has_usage].
+    split; [ apply mem_pair_In; exact Hin | exact Hy ].
+Qed.
+
+Lemma mem_node_iff_eq (l l' : list node) :
+  (∀ z : node, z ∈ l <-> z ∈ l') -> ∀ z : node, mem_node z l = mem_node z l'.
+Proof.
+  intros H z. destruct (mem_node z l) eqn:H1; destruct (mem_node z l') eqn:H2;
+    try reflexivity; apply mem_node_In in H1 || apply mem_node_In in H2.
+  - apply H, mem_node_In in H1. congruence.
+  - apply H, mem_node_In in H2. congruence.
+Qed.
+
+(* A field with one source has a node at that field. *)
+Lemma get_single_field_source_one_constructor (ctx : rewrite_context)
+    (a : node) (f : field) (s : node) :
+  get_single_field_source ctx a f = Field_one_source s ->
+  ∃ from : node, g_constructor (graph_of_facts (rc_facts ctx)) a f from.
+Proof.
+  unfold get_single_field_source.
+  destruct (existsb (any_source ctx) (constructors_of ctx a f));
+    [ discriminate | ].
+  destruct (dedup_nodes
+              (flat_map (fun from => filter (has_source ctx)
+                                       (sources_of ctx from))
+                 (constructors_of ctx a f)))
+    as [ | s0 [ | s1 rest]] eqn:Hl; try discriminate.
+  intros _. assert (Hs0 : s0 ∈ dedup_nodes
+                            (flat_map (fun from => filter (has_source ctx)
+                                                     (sources_of ctx from))
+                               (constructors_of ctx a f)))
+    by (rewrite Hl; left; reflexivity).
+  apply In_dedup_nodes, in_flat_map in Hs0 as (from & Hfrom & _).
+  exists from. apply constructors_of_iff. exact Hfrom.
+Qed.
+
+(* The fields of two blocks related position by position. *)
+Lemma fields_rebuilt_nth (P : nat -> value -> value -> Prop) :
+  ∀ (fields fields' : list value) (k i : nat) (x' : value),
+    fields_rebuilt P k fields fields' -> nth_error fields' i = Some x' ->
+    ∃ x : value, nth_error fields i = Some x ∧ P (k + i) x x'.
+Proof.
+  induction fields as [ | x fields IH]; intros [ | y fields'] k i x' H Hn;
+    cbn [fields_rebuilt] in H; try contradiction.
+  - destruct i; discriminate Hn.
+  - destruct H as [Hxy H]. destruct i as [ | i]; cbn in Hn.
+    + injection Hn as <-. exists x. split; [ reflexivity | ].
+      rewrite Nat.add_0_r. exact Hxy.
+    + destruct (IH fields' (S k) i x' H Hn) as (z & Hz & Hp).
+      exists z. split; [ exact Hz | ]. rewrite <- Nat.add_succ_comm.
+      exact Hp.
+Qed.
+
+Section Rebuilt_inv.
+
+Variable G : graph.
+Variable sol : solution.
+
+(* What the first run has where the second has a block. *)
+Lemma rebuilt_block_inv (w : value) (n : node) (tag : Z)
+    (fields' : list value) :
+  rebuilt_value G sol w n (Value_block tag fields') ->
+  ∃ (fields : list value) (a : node),
+    w = Value_block tag fields ∧ may_come_from sol a n
+    ∧ s_has_source sol a = true
+    ∧ fields_rebuilt (field_rebuilt G sol (rebuilt_value G sol) a) 0 fields
+        fields'.
+Proof.
+  destruct w as [c | code vs | slot decls vs | s | tag0 fields0 | elements
+                | c | l | callee args arity];
+    cbn [rebuilt_value]; intros H.
+  - destruct H as [_ H]. discriminate H.
+  - contradiction.
+  - destruct H as (sites & vs' & H & _). discriminate H.
+  - destruct H as [H _]. discriminate H.
+  - destruct H as (a & fields1 & Hm & Hh & Heq & Hf).
+    injection Heq as -> ->. exists fields0, a. auto.
+  - destruct H as (elements' & H). discriminate H.
+  - destruct H as (a & bn & from & _ & _ & _ & _ & H).
+    destruct (s_field_used sol a (Field_boxed_number bn)); discriminate H.
+  - contradiction.
+  - destruct H as (closure' & args' & H). discriminate H.
+Qed.
+
+(* What the first run has where the second has a boxed number. *)
+Lemma rebuilt_boxed_inv (w : value) (n : node) (c : const) :
+  rebuilt_value G sol w n (Value_boxed_number c) -> w = Value_boxed_number c.
+Proof.
+  destruct w as [c0 | code vs | slot decls vs | s | tag0 fields0 | elements
+                | c0 | l | callee args arity];
+    cbn [rebuilt_value]; intros H.
+  - destruct H as [_ H]. discriminate H.
+  - contradiction.
+  - destruct H as (sites & vs' & H & _). discriminate H.
+  - destruct H as [H _]. discriminate H.
+  - destruct H as (a & fields1 & _ & _ & H & _). discriminate H.
+  - destruct H as (elements' & H). discriminate H.
+  - destruct H as (a & bn & from & _ & _ & _ & _ & H).
+    destruct (s_field_used sol a (Field_boxed_number bn));
+      [ symmetry; exact H | discriminate H ].
+  - contradiction.
+  - destruct H as (closure' & args' & H). discriminate H.
+Qed.
+
+End Rebuilt_inv.
+
+(* The paths of the leaves of an unboxing are not empty below its root. *)
+Lemma unboxed_field_paths_cons (kind : flambda_kind)
+    (fields : U.unboxed_fields) (p : list field) (k : flambda_kind) :
+  (p, k) ∈ unboxed_field_paths kind (U.Unboxed fields) -> p <> [].
+Proof.
+  cbn [unboxed_field_paths].
+  induction fields as [ | [f u] fields IH]; intros Hin; [ destruct Hin | ].
+  apply in_app_or in Hin as [Hin | Hin]; [ | exact (IH Hin) ].
+  apply in_map_iff in Hin as (pk & Heq & _). injection Heq as <- _.
+  discriminate.
+Qed.
+
+(* The leaves of the pattern are those of the unboxing, in order. *)
+Lemma unboxed_leaves_paths (ctx : rewrite_context)
+    (cm : finite_map variable) :
+  ∀ (u : U.unboxed_field) (kind : flambda_kind) (uses : list node)
+    (block : node),
+    map (fun l => let '(p, k, _) := l in (p, k))
+      (unboxed_leaves ctx cm kind uses block u)
+    = unboxed_field_paths kind u.
+Proof.
+  refine (URP.unboxed_field_rec _ _ _).
+  - intros v kind uses block. reflexivity.
+  - intros fields IH kind uses block. cbn [unboxed_leaves unboxed_field_paths].
+    set (fg := forgets_class _). clearbody fg.
+    set (reads := U.get_fields _ _ _). clearbody reads.
+    revert IH. induction fields as [ | [f u] fields IHl]; intros IH;
+      [ reflexivity | ].
+    cbn beta iota. rewrite map_app.
+    f_equal; [ | exact (IHl (fun f' u' H => IH f' u' (or_intror H))) ].
+    assert (Hforgot : map (fun l => let '(p, k, _) := l in (p, k))
+                        (forgotten_leaves f u)
+                      = map (fun pk => (f :: fst pk, snd pk))
+                          (unboxed_field_paths
+                             (FlambdaReaperUnboxing.field_kind f) u)).
+    { unfold forgotten_leaves. rewrite map_map. reflexivity. }
+    destruct (Keyed.lookup field_eqb f reads) as [use | ]; [ | exact Hforgot ].
+    destruct fg; [ exact Hforgot | ].
+    destruct u as [v | nested]; [ reflexivity | ].
+    destruct use as [ | flow_to]; [ exact Hforgot | ].
+    destruct (get_single_field_source ctx block f) as [ | s | ];
+      try exact Hforgot.
+    rewrite map_map.
+    rewrite <- (IH f (U.Unboxed nested) (or_introl eq_refl)
+                  (FlambdaReaperUnboxing.field_kind f)
+                  (get_direct_usages ctx flow_to) s).
+    rewrite map_map. apply map_ext. intros [[p k] m]. reflexivity.
+Qed.
+
+(* ======================================================================== *)
+(* The types of the leaves                                                  *)
+(* ======================================================================== *)
+
+Section Destructure.
+
+Variable statics : static_env.
+Variable valuation : env.
+Variable tenv : Typing_env.t.
+Hypothesis Henv : typing_env_satisfied_strictly statics valuation tenv.
+Hypothesis Hfrag : env_in_fragment valuation tenv.
+
+(* The type of a field of a block or of a boxed number, destructured from
+   an expanded type of the value. *)
+Lemma destructure_field_sound (f : field) (e0 : Expanded_type.t)
+    (w w1 : value) :
+  type_satisfied statics valuation w (Expanded_type.to_type e0) ->
+  type_in_fragment valuation (Expanded_type.to_type e0) ->
+  field_of_value f w = Some w1 ->
+  (∀ bn : boxable_number,
+     f = Field_boxed_number bn -> kind_of_value w1 = unboxed_kind bn) ->
+  type_in_fragment valuation (destructure_field f (Some e0))
+  ∧ (type_satisfied statics valuation w1 (destructure_field f (Some e0))
+     ∨ destructure_field f (Some e0) = unknown (U.field_kind f)).
+Proof.
+  intros Hsat Hfr Hfv Hbk.
+  assert (Hunk : type_in_fragment valuation (unknown (U.field_kind f))
+                 ∧ (type_satisfied statics valuation w1
+                      (unknown (U.field_kind f))
+                    ∨ unknown (U.field_kind f) = unknown (U.field_kind f)))
+    by (split; [ apply unknown_fragment | right; reflexivity ]).
+  destruct f as [i k | ws | g | ep | | | bn | r | ];
+    cbn [field_of_value] in Hfv; try discriminate Hfv.
+  - (* a field of a block *)
+    destruct w as [ | | | | tag fields | | | | ]; try discriminate Hfv.
+    destruct e0 as [kd [ | h | ]];
+      cbn [destructure_field Expanded_type.descr Expanded_type.to_type
+        Expanded_type.kind] in *;
+      [ exact Hunk | | exact (False_ind _ (bottom_satisfied _ _ _ _ Hsat)) ].
+    destruct h as [hv | hi | kn ns | hr | hreg]; try exact Hunk.
+    destruct hv as [non_null is_null].
+    rewrite type_satisfied_value in Hsat. cbn [descr_satisfied] in Hsat.
+    rewrite head_of_kind_value_satisfied_eq in Hsat.
+    destruct Hsat as [[Hnull _] | [_ [Hsat _]]]; [ discriminate Hnull | ].
+    destruct non_null as [ | head | ]; [ exact Hunk | | contradiction ].
+    pose proof (head_fragment valuation head is_null Hfr) as Hhfr.
+    destruct head as [is_int imms get_tag blocks exts uniq | am | kb ct am
+                     | closures am | strs];
+      cbn [destructure_non_null unknown_accessor bottom_accessor].
+    + rewrite variant_satisfied in Hsat.
+      destruct Hsat as [(i0 & Hi & _) | (tag' & fields' & Hblock & _ & _ & Hb
+                                          & _)];
+        [ discriminate Hi | ].
+      cbn [block_of] in Hblock. injection Hblock as <- <-.
+      destruct blocks as [row | ]; [ | exact Hunk ].
+      pose proof (blocks_fragment valuation is_int imms get_tag row exts uniq
+                    Hhfr) as [Hcf Hal].
+      destruct row as [known other am].
+      rewrite row_like_for_blocks_find_iff in Hb.
+      unfold destructure_block_field.
+      assert (Hcase : ∀ case : row_like_block_case,
+                (∀ ty, ty ∈ case_maps_to case -> type_in_fragment valuation ty)
+                -> row_like_block_case_satisfied statics valuation tag fields
+                     case ->
+                type_in_fragment valuation
+                  match nth_error (case_maps_to case) i with
+                  | Some ty => ty
+                  | None => unknown k
+                  end
+                ∧ (type_satisfied statics valuation w1
+                     match nth_error (case_maps_to case) i with
+                     | Some ty => ty
+                     | None => unknown k
+                     end
+                   ∨ match nth_error (case_maps_to case) i with
+                     | Some ty => ty
+                     | None => unknown k
+                     end = unknown k)).
+      { intros case Hcfr (_ & Hfs & _).
+        destruct (nth_error (case_maps_to case) i) as [ty | ] eqn:Hn.
+        - split; [ exact (Hcfr ty (nth_error_In _ _ Hn)) | left ].
+          exact (proj1 (fields_satisfied_nth _ _ _) Hfs i ty w1 Hn Hfv).
+        - split; [ apply unknown_fragment | right; reflexivity ]. }
+      destruct other as [case | ].
+      * destruct known as [ | p known'].
+        -- exact (Hcase case (other_case_fragment valuation [] case am Hcf Hal)
+                    Hb).
+        -- exact Hunk.
+      * destruct known as [ | [t [case | ]] [ | p known']]; try exact Hunk.
+        cbn [Keyed.lookup] in Hb.
+        destruct (Z.eqb tag t) eqn:Ht; [ | contradiction ].
+        exact (Hcase case (known_case_fragment valuation _ _ am t case Hcf Hal
+                             (or_introl eq_refl))
+                 Hb).
+    + exact Hunk.
+    + rewrite boxed_number_satisfied in Hsat.
+      destruct Hsat as (c & Hc & _). discriminate Hc.
+    + rewrite closures_satisfied in Hsat.
+      destruct Hsat as (slot & fs & vs & Hcl & _). discriminate Hcl.
+    + rewrite string_satisfied in Hsat.
+      destruct Hsat as (bytes & Hs & _). discriminate Hs.
+  - (* the contents of a boxed number *)
+    destruct w as [ | | | | | | c | | ]; try discriminate Hfv.
+    injection Hfv as <-. specialize (Hbk bn eq_refl). cbn in Hbk.
+    destruct e0 as [kd [ | h | ]];
+      cbn [destructure_field Expanded_type.descr Expanded_type.to_type
+        Expanded_type.kind] in *;
+      [ exact Hunk | | exact (False_ind _ (bottom_satisfied _ _ _ _ Hsat)) ].
+    destruct h as [hv | hi | kn ns | hr | hreg]; try exact Hunk.
+    destruct hv as [non_null is_null].
+    rewrite type_satisfied_value in Hsat. cbn [descr_satisfied] in Hsat.
+    rewrite head_of_kind_value_satisfied_eq in Hsat.
+    destruct Hsat as [[Hnull _] | [_ [Hsat _]]]; [ discriminate Hnull | ].
+    destruct non_null as [ | head | ]; [ exact Hunk | | contradiction ].
+    pose proof (head_fragment valuation head is_null Hfr) as Hhfr.
+    destruct head as [is_int imms get_tag blocks exts uniq | am | kb ct am
+                     | closures am | strs];
+      cbn [destructure_non_null unknown_accessor bottom_accessor].
+    + rewrite variant_satisfied in Hsat.
+      destruct Hsat as [(i0 & Hi & _) | (tag' & fields' & Hblock & _)];
+        [ discriminate Hi | discriminate Hblock ].
+    + rewrite mutable_block_head_satisfied in Hsat. contradiction.
+    + rewrite boxed_number_satisfied in Hsat.
+      destruct Hsat as (c' & Hc & Hkc & Hct).
+      cbn [boxed_number_of] in Hc.
+      unfold boxable_contents in Hc.
+      destruct (boxable_number_of_const c); [ | discriminate Hc ].
+      injection Hc as <-.
+      destruct (kind_eqb (unboxed_kind bn) (unboxed_kind kb)) eqn:Hkk.
+      * split; [ exact (contents_fragment valuation kb ct am Hhfr) | left ].
+        exact Hct.
+      * exfalso. rewrite <- Hbk, Hkc, kind_eqb_refl in Hkk. discriminate Hkk.
+    + rewrite closures_satisfied in Hsat.
+      destruct Hsat as (slot & fs & vs & Hcl & _). discriminate Hcl.
+    + rewrite string_satisfied in Hsat.
+      destruct Hsat as (bytes & Hs & _). discriminate Hs.
+Qed.
+
+End Destructure.
+
+Section Unboxed_sound.
+
+Variable fx : fixes.
+Hypothesis Hfix_boxed : fix_boxed fx = true.
+Hypothesis Hfix_alias : fix_alias fx = true.
+Hypothesis Hfix_refine : fix_refine fx = true.
+Hypothesis Hfix_null : fix_null fx = true.
+
+Variable is_local : field -> bool.
+Variable F : facts.
+Variable T : tables.
+Variable sets : list set_of_closures.
+Variable tenv : Typing_env.t.
+Variable canon : canon_fn.
+Variables statics statics' : static_env.
+Variables valuation valuation' : env.
+Variable dominated : list (node * node).
+Variable to_unbox : list node.
+Variable e : expr.
+
+Local Abbreviation ctx := (plain_context is_local F T sets).
+Local Abbreviation G := (graph_of_facts F).
+Local Abbreviation sol := (solution_of_tables T).
+Local Abbreviation cm := (U.bound_code_my_closures e).
+Local Abbreviation unboxed :=
+  (fst (U.unit_unboxed_fields F T dominated to_unbox e)).
+
+Hypothesis Hleast : least_solution is_local F T.
+Hypothesis Hlocal : is_local_slots_only is_local.
+Hypothesis Hsets : sets_of_graph G sets.
+Hypothesis Hkinds : block_fields_of_one_kind G.
+Hypothesis Henv : typing_env_satisfied_strictly statics valuation tenv.
+Hypothesis Hfrag : env_in_fragment valuation tenv.
+Hypothesis Halloc : statics_allocated sol statics.
+Hypothesis Hst : statics_rebuilt G sol statics statics'.
+Hypothesis Hcopies : copies_valued tenv canon valuation valuation'.
+Hypothesis Huses : UCS.check_unboxed_uses F T unboxed = true.
+
+Lemma unboxed_closed : closed is_local G sol.
+Proof. exact (least_closed_tables is_local F T Hleast). Qed.
+
+Local Abbreviation Hcl := unboxed_closed.
+
+Lemma rw_sound_arbitrary (fuel : nat) :
+  rw_sound F T statics statics' valuation valuation'
+    (rewrite_arbitrary fx ctx tenv canon fuel).
+Proof.
+  exact (proj1 (rewrite_sound fx Hfix_boxed Hfix_alias Hfix_refine Hfix_null
+                  is_local F T sets tenv canon statics statics' valuation
+                  valuation' Hcl Hleast Hlocal Hsets Henv Hfrag Halloc
+                  Hst
+                  Hcopies fuel)).
+Qed.
+
+Lemma rw_forgets_arbitrary (fuel : nat) :
+  rw_forgets statics statics' valuation valuation'
+    (rewrite_arbitrary fx ctx tenv canon fuel).
+Proof.
+  exact (proj1 (rewrite_forgets fx Hfix_alias is_local F T sets tenv canon
+                  statics statics' valuation valuation' Henv fuel)).
+Qed.
+
+Lemma unboxed_not_local_block (i : nat) (k : flambda_kind) :
+  is_local (Field_block i k) = false.
+Proof.
+  destruct (is_local (Field_block i k)) eqn:H; [ | reflexivity ].
+  destruct (Hlocal _ H) as [(w & Hw) | (g & Hg)]; discriminate.
+Qed.
+
+(* The type of a leaf, rewritten. *)
+Definition leaf_rewritten (ty : flambda_type) (l : unboxed_leaf)
+    : flambda_type :=
+  let '(path, k, m) := l in
+  match m with
+  | None =>
+    rewrite_arbitrary fx ctx tenv canon (rewrite_fuel tenv (unknown k))
+      At_least_one_source_no_usages (unknown k)
+  | Some m =>
+    rewrite_arbitrary fx ctx tenv canon
+      (rewrite_fuel tenv (destructure_path tenv path ty)) m
+      (destructure_path tenv path ty)
+  end.
+
+(* A type at a level of the unboxing: what it expands to is of the
+   fragment, and it holds of the value of the first run there, or is
+   unknown. *)
+Definition ty_ok (w : value) (ty : flambda_type) : Prop :=
+  (∀ e0 : Expanded_type.t,
+     expand_head tenv ty = Some e0 ->
+     type_in_fragment valuation (Expanded_type.to_type e0))
+  ∧ (type_satisfied statics valuation w ty ∨ ∃ k, ty = unknown k).
+
+(* A level of the unboxing: a value at [n] comes from the allocation [b]
+   only, [n] has a use, and [uses] are uses of [n] with a use, which are
+   uses of names unboxed. *)
+Definition level_ok (n b : node) (uses : list node) : Prop :=
+  (∀ a : node, may_come_from sol a n -> s_has_source sol a = true -> a = b)
+  ∧ s_has_usage sol n = true
+  ∧ (s_any_usage sol n = true ∨ ∀ u : node, u ∈ uses -> s_usages sol n u = true)
+  ∧ (∀ u : node, u ∈ uses -> s_has_usage sol u = true)
+  ∧ (∀ u : node,
+       u ∈ uses ->
+       ∃ (x : node) (fs : U.unboxed_fields),
+         (x, fs) ∈ unboxed ∧ mem_pair x u (t_usages T) = true).
+
+(* The fields at a level are those that the analysis makes of the fields
+   read from the uses. *)
+Definition mk_shape (uses : list node) (fields : U.unboxed_fields) : Prop :=
+  ∃ (fuel : nat) (block : node) (next : positive),
+    fields
+    = fst (U.mk_unboxed_fields F T cm dominated to_unbox fuel block
+             (U.get_fields F T uses) next).
+
+Lemma level_reads (n b : node) (uses : list node) :
+  level_ok n b uses ->
+  U.get_fields (rc_facts ctx) (rc_tables ctx)
+    (U.add_usages_through_function_slots (rc_facts ctx) (rc_tables ctx) cm
+       true uses)
+  = U.get_fields (rc_facts ctx) (rc_tables ctx) uses.
+Proof.
+  intros (_ & _ & _ & _ & Hu).
+  change (rc_facts ctx) with F. change (rc_tables ctx) with T.
+  rewrite (add_usages_of_unboxed F T cm unboxed true uses Huses Hu).
+  reflexivity.
+Qed.
+
+(* The uses of the level are uses of its allocation, or it has any
+   usage. *)
+Lemma level_uses (n b : node) (uses : list node) (u : node) :
+  level_ok n b uses -> may_come_from sol b n -> u ∈ uses ->
+  s_usages sol b u = true ∨ s_any_usage sol b = true.
+Proof.
+  intros (_ & Hhu & Hus & _) (_ & _ & _ & Hau & Hmu) Hu.
+  destruct Hus as [Han | Hus]; [ right; exact (Hau Han) | ].
+  exact (Hmu Hhu u (Hus u Hu)).
+Qed.
+
+(* A field read from the uses of a level is used by its allocation. *)
+Lemma level_field_used (n b : node) (uses : list node) (f : field)
+    (use : U.field_use) (from : node) :
+  level_ok n b uses -> may_come_from sol b n -> g_constructor G b f from ->
+  is_local f = false -> (f, use) ∈ U.get_fields F T uses ->
+  s_field_used sol b f = true.
+Proof.
+  intros Hl Hm Hcons Hloc Hin.
+  destruct (URP.get_fields_in F T uses f use Hin)
+    as (y & u & Hacc & Hu & Hy).
+  apply mem_node_In in Hu.
+  destruct (level_uses n b uses u Hl Hm Hu) as [Hbu | Hab].
+  - apply (field_used_usage _ _ _ Hcl b f from u y Hcons Hbu Hacc).
+    destruct Hy as [Hy | Hy]; [ | exact Hy ].
+    exact (has_usage_any _ _ _ Hcl y Hy).
+  - exact (field_used_any_usage _ _ _ Hcl b f from Hcons Hab Hloc).
+Qed.
+
+(* The metadata of a leaf holds where its field is held. *)
+Lemma level_metadata_at (n b : node) (uses : list node) (f : field)
+    (use : U.field_use) (from : node) :
+  level_ok n b uses -> may_come_from sol b n -> g_constructor G b f from ->
+  is_local f = false -> (f, use) ∈ U.get_fields F T uses ->
+  metadata_at sol (pattern_metadata ctx (get_single_field_source ctx b f) use)
+    from.
+Proof.
+  intros Hl Hm Hcons Hloc Hin.
+  pose proof (get_single_field_source_spec ctx b f) as Hs.
+  cbn [plain_context rc_tables rc_facts] in Hs.
+  pose proof (get_fields_use F T uses f use Hin) as Hu.
+  unfold pattern_metadata.
+  destruct (get_single_field_source ctx b f) as [ | s | ].
+  - intros a Ha Hhs. exfalso. destruct (Hs from Hcons) as [Hnas Hno].
+    destruct Ha as (_ & [Has | Hsrc] & _); [ congruence | ].
+    exact (Hno a Hsrc Hhs).
+  - intros a Ha Hhs. cbn [describes]. destruct (Hs from Hcons) as [Hnas Hone].
+    destruct Ha as (_ & [Has | Hsrc] & _); [ congruence | ].
+    exact (Hone a Hsrc Hhs).
+  - (* the uses of what the field is read into *)
+    assert (Hfrom_any : ∀ y u : node,
+              g_accessor G y f u -> mem_node u uses = true ->
+              s_any_usage sol b = false ->
+              s_alias sol y from = true).
+    { intros y u Hacc Hu' Hnb. apply mem_node_In in Hu'.
+      destruct (level_uses n b uses u Hl Hm Hu') as [Hbu | Hab];
+        [ | congruence ].
+      exact (alias_constructor_usage _ _ _ Hcl b u f y from Hcons Hbu Hnb
+               Hacc). }
+    destruct use as [ | flow_to].
+    + destruct Hu as (y & u & Hacc & Hu' & Hay).
+      assert (Hafrom : s_any_usage sol from = true).
+      { destruct (s_any_usage sol b) eqn:Hab.
+        - exact (any_usage_constructor _ _ _ Hcl b f from Hab Hcons Hloc).
+        - exact (any_usage_alias _ _ _ Hcl y from Hay
+                   (Hfrom_any y u Hacc Hu' eq_refl)). }
+      intros a Ha _. destruct Ha as (_ & _ & _ & Hau & _).
+      cbn [describes]. exact (Hau Hafrom).
+    + destruct Hu as (_ & Hfs & Hnot_any & Hys).
+      intros a Ha _. cbn [describes].
+      destruct (s_any_usage sol a) eqn:Haa; [ left; reflexivity | right ].
+      destruct Ha as (_ & _ & _ & Hau & Hmu).
+      assert (Hnf : s_any_usage sol from = false).
+      { apply not_true_iff_false. intros H. rewrite (Hau H) in Haa.
+        discriminate Haa. }
+      assert (Hnb : s_any_usage sol b = false).
+      { apply not_true_iff_false. intros H.
+        rewrite (any_usage_constructor _ _ _ Hcl b f from H Hcons Hloc)
+          in Hnf.
+        discriminate Hnf. }
+      intros z Hz. apply get_direct_usages_iff in Hz as (y & Hy & Hyz & Hhz).
+      cbn [plain_context rc_tables rc_facts] in Hyz, Hhz.
+      destruct (Hys y Hy) as (Hhy & u & Hacc & Hu').
+      pose proof (Hfrom_any y u Hacc Hu' Hnb) as Halias.
+      pose proof (usages_alias _ _ _ Hcl y from z Hyz
+                    (Hnot_any y u Hacc Hu' Hfs) Halias Hnf) as Hfz.
+      pose proof (has_usage_alias _ _ _ Hcl y from Hhy Halias) as Hhf.
+      destruct (Hmu Hhf z Hfz) as [Haz | Haz]; [ | congruence ].
+      split; [ exact Haz | exact Hhz ].
+Qed.
+
+Lemma expand_unknown (k : flambda_kind) :
+  expand_head tenv (unknown k) = Some (Expanded_type.create_unknown k).
+Proof. destruct k as [ | [] | | ]; reflexivity. Qed.
+
+(* The alias to a name expands to a type of the fragment. *)
+Lemma expand_alias_fragment (t : flambda_type) (s : simple)
+    (e0 : Expanded_type.t) :
+  get_alias_opt t = Some s -> expand_head tenv t = Some e0 ->
+  type_in_fragment valuation (Expanded_type.to_type e0).
+Proof.
+  intros Ha. unfold expand_head. rewrite Ha.
+  destruct (Typing_env.get_canonical_simple_exn tenv
+              (Some Name_mode.in_types) None s)
+    as [[c | ] | ]; cbn; [ | | discriminate ].
+  - unfold expand_head_of_alias_type. destruct c as [x | sym | c].
+    + destruct (Typing_env.find tenv (Name_var x) (Some (kind t)))
+        as [ty | ] eqn:Hf; cbn; [ | discriminate ].
+      intros He. exact (of_non_alias_fragment valuation ty e0 He
+                          (find_fragment valuation tenv Hfrag _ _ ty Hf)).
+    + destruct (Typing_env.find tenv (Name_symbol sym) (Some (kind t)))
+        as [ty | ] eqn:Hf; cbn; [ | discriminate ].
+      intros He. exact (of_non_alias_fragment valuation ty e0 He
+                          (find_fragment valuation tenv Hfrag _ _ ty Hf)).
+    + intros [= <-]. apply create_const_fragment.
+  - intros He. apply (of_non_alias_fragment valuation _ e0 He).
+    apply unknown_fragment.
+Qed.
+
+Lemma ty_ok_of (w : value) (ty : flambda_type) :
+  type_in_fragment valuation ty ->
+  (type_satisfied statics valuation w ty ∨ ∃ k, ty = unknown k) ->
+  ty_ok w ty.
+Proof.
+  intros Hfr Hsat. split; [ | exact Hsat ].
+  intros e0 He. exact (expand_head_fragment valuation tenv Hfrag ty e0 He Hfr).
+Qed.
+
+(* One field down. *)
+Lemma ty_step (f : field) (w w1 : value) (ty : flambda_type) :
+  ty_ok w ty -> field_of_value f w = Some w1 ->
+  (∀ bn : boxable_number,
+     f = Field_boxed_number bn -> kind_of_value w1 = unboxed_kind bn) ->
+  type_in_fragment valuation (destructure_field f (expand_head tenv ty))
+  ∧ (type_satisfied statics valuation w1
+       (destructure_field f (expand_head tenv ty))
+     ∨ destructure_field f (expand_head tenv ty) = unknown (U.field_kind f)).
+Proof.
+  intros [Hexp Hsat] Hfv Hbk.
+  assert (Hua : unknown_accessor f = unknown (U.field_kind f)).
+  { clear -Hfv. destruct f; cbn [field_of_value] in Hfv; try discriminate Hfv;
+      reflexivity. }
+  assert (Hunk : type_in_fragment valuation (unknown_accessor f)
+                 ∧ (type_satisfied statics valuation w1 (unknown_accessor f)
+                    ∨ unknown_accessor f = unknown (U.field_kind f)))
+    by (rewrite Hua; split; [ apply unknown_fragment | right; reflexivity ]).
+  destruct Hsat as [Hsat | (k & ->)].
+  - destruct (expand_head tenv ty) as [e0 | ] eqn:He; [ | exact Hunk ].
+    exact (destructure_field_sound statics valuation f e0 w w1
+             (expand_head_sound statics valuation tenv ty e0 w Henv Hsat He)
+             (Hexp e0 eq_refl) Hfv Hbk).
+  - rewrite expand_unknown. exact Hunk.
+Qed.
+
+(* The leaves with no variable. *)
+Lemma forgotten_sound (ty : flambda_type) (P : list (list field * flambda_kind))
+    (ws : list value) (w_mid : value) :
+  Forall2
+    (fun (pk : list field * flambda_kind) (w' : value) =>
+       value_at_path (fst pk) w_mid = Some w' ∧ kind_of_value w' = snd pk)
+    P ws ->
+  Forall2
+    (fun (l : unboxed_leaf) (w' : value) =>
+       type_satisfied statics' valuation' w' (leaf_rewritten ty l))
+    (map (fun pk => (fst pk, snd pk, None)) P) ws.
+Proof.
+  induction 1 as [ | [p k] w' P ws [_ Hk] _ IH]; constructor; [ | exact IH ].
+  cbn [leaf_rewritten fst snd] in *.
+  apply (rw_forgets_arbitrary _ At_least_one_source_no_usages (unknown k) w'
+           w' eq_refl (unknown_fragment valuation k));
+    [ apply unknown_satisfied; exact Hk | reflexivity ].
+Qed.
+
+Lemma forgotten_leaves_eq (f : field) (u : U.unboxed_field) :
+  forgotten_leaves f u
+  = map (fun pk => (fst pk, snd pk, None))
+      (map (fun pk => (f :: fst pk, snd pk))
+         (unboxed_field_paths (U.field_kind f) u)).
+Proof. unfold forgotten_leaves. rewrite map_map. reflexivity. Qed.
+
+(* A leaf that is a field of the allocation of a level. *)
+Lemma leaf_sound (n b : node) (uses : list node) (f : field)
+    (use : U.field_use) (w w_mid w' : value) (ty : flambda_type) :
+  level_ok n b uses -> rebuilt_value G sol w n w_mid -> ty_ok w ty ->
+  (f, use) ∈ U.get_fields F T uses ->
+  value_at_path [f] w_mid = Some w' -> kind_of_value w' = U.field_kind f ->
+  type_satisfied statics' valuation' w'
+    (rewrite_arbitrary fx ctx tenv canon
+       (rewrite_fuel tenv (destructure_field f (expand_head tenv ty)))
+       (pattern_metadata ctx (get_single_field_source ctx b f) use)
+       (destructure_field f (expand_head tenv ty))).
+Proof.
+  intros Hl Hrv Hty Hin Hv Hk. cbn [value_at_path] in Hv.
+  destruct (field_of_value f w_mid) as [w1 | ] eqn:Hfv; [ | discriminate Hv ].
+  injection Hv as ->.
+  destruct f as [i k | | | | | | bn | | ]; cbn [field_of_value] in Hfv;
+    try discriminate Hfv.
+  - destruct w_mid as [ | | | | tag fields' | | | | ]; try discriminate Hfv.
+    destruct (rebuilt_block_inv G sol w n tag fields' Hrv)
+      as (fields & a & -> & Hma & Hha & Hfields).
+    pose proof (proj1 Hl a Hma Hha) as ->.
+    destruct (fields_rebuilt_nth _ fields fields' 0 i w' Hfields Hfv)
+      as (field & Hn & Hfr).
+    cbn [Nat.add] in Hfr.
+    pose proof (field_rebuilt_kind G sol b i field w' Hfr) as Hkf.
+    destruct Hfr as (from & Hcons & Hused & _).
+    cbn [U.field_kind] in Hk. rewrite Hkf in Hk. subst k.
+    pose proof (level_field_used n b uses _ use from Hl Hma Hcons
+                  (unboxed_not_local_block _ _) Hin) as Hfu.
+    destruct (Hused Hfu) as [Hhu Hrv'].
+    destruct (ty_step (Field_block i (kind_of_value field))
+                (Value_block tag fields) field ty Hty Hn
+                (fun bn H => ltac:(discriminate H))) as [Hfr1 Hsat1].
+    assert (Hsat : type_satisfied statics valuation field
+                     (destructure_field (Field_block i (kind_of_value field))
+                        (expand_head tenv ty))).
+    { destruct Hsat1 as [Hsat1 | ->]; [ exact Hsat1 | ].
+      apply unknown_satisfied. reflexivity. }
+    apply (rw_sound_arbitrary _ _ _ field w' Hfr1); [ | exact Hsat ].
+    right. exists from.
+    split; [ exact Hrv' | split; [ | intros _; exact Hhu ] ].
+    exact (level_metadata_at n b uses _ use from Hl Hma Hcons
+             (unboxed_not_local_block _ _) Hin).
+  - destruct w_mid as [ | | | | | | c | | ]; try discriminate Hfv.
+    injection Hfv as <-.
+    pose proof (rebuilt_boxed_inv G sol w n c Hrv) as ->.
+    destruct (ty_step (Field_boxed_number bn) (Value_boxed_number c)
+                (Value_const c) ty Hty eq_refl
+                (fun bn' H => ltac:(injection H as <-; exact Hk)))
+      as [Hfr1 Hsat1].
+    assert (Hsat : type_satisfied statics valuation (Value_const c)
+                     (destructure_field (Field_boxed_number bn)
+                        (expand_head tenv ty))).
+    { destruct Hsat1 as [Hsat1 | Heq]; [ exact Hsat1 | rewrite Heq ].
+      apply unknown_satisfied. exact Hk. }
+    apply (rw_sound_arbitrary _ _ _ (Value_const c) (Value_const c) Hfr1);
+      [ | exact Hsat ].
+    left. exists c. split; reflexivity.
+Qed.
+
+(* The names that the uses read from are uses of are unboxed. *)
+Lemma unboxed_has (y : node) :
+  U.has_to_be_unboxed dominated to_unbox y = true ->
+  ∃ fs : U.unboxed_fields, (y, fs) ∈ unboxed.
+Proof.
+  intros Hy. unfold U.unit_unboxed_fields.
+  exact (unboxed_fields_of_names_has F T cm dominated to_unbox _ y Hy).
+Qed.
+
+Lemma paths_step (f : field) (w_mid field' : value)
+    (P : list (list field * flambda_kind)) (ws : list value) :
+  field_of_value f w_mid = Some field' ->
+  Forall2
+    (fun (pk : list field * flambda_kind) (w' : value) =>
+       value_at_path (fst pk) w_mid = Some w' ∧ kind_of_value w' = snd pk)
+    (map (fun pk => (f :: fst pk, snd pk)) P) ws ->
+  Forall2
+    (fun (pk : list field * flambda_kind) (w' : value) =>
+       value_at_path (fst pk) field' = Some w' ∧ kind_of_value w' = snd pk)
+    P ws.
+Proof.
+  intros Hfv. revert ws. induction P as [ | pk P IH]; intros ws H;
+    inversion H; subst; constructor; [ | exact (IH _ H4) ].
+  destruct H2 as [Hv Hk]. cbn [value_at_path fst] in Hv. rewrite Hfv in Hv.
+  split; [ exact Hv | exact Hk ].
+Qed.
+
+Lemma Forall2_prefix (f : field) (ty : flambda_type) (L : list unboxed_leaf)
+    (ws : list value) :
+  Forall2
+    (fun (l : unboxed_leaf) (w' : value) =>
+       type_satisfied statics' valuation' w'
+         (leaf_rewritten (destructure_field f (expand_head tenv ty)) l))
+    L ws ->
+  Forall2
+    (fun (l : unboxed_leaf) (w' : value) =>
+       type_satisfied statics' valuation' w' (leaf_rewritten ty l))
+    (map (fun l => let '(p, k, m) := l in (f :: p, k, m)) L) ws.
+Proof.
+  induction 1 as [ | [[p k] m] w' L ws H _ IH]; constructor; [ | exact IH ].
+  destruct m; exact H.
+Qed.
+
+(* The level of a field unboxed in turn. *)
+Lemma nested_level (n b : node) (uses : list node) (i : nat)
+    (flow_to : list node) (s from : node) :
+  level_ok n b uses -> may_come_from sol b n ->
+  g_constructor G b (Field_block i Value) from ->
+  s_has_usage sol from = true ->
+  get_single_field_source ctx b (Field_block i Value)
+  = Field_one_source s ->
+  (Field_block i Value, U.Use_known flow_to) ∈ U.get_fields F T uses ->
+  forallb (U.has_to_be_unboxed dominated to_unbox) flow_to = true ->
+  level_ok from s (get_direct_usages ctx flow_to).
+Proof.
+  intros Hl Hmb Hcons Hhf Hsrc Hin Hall.
+  pose proof (get_single_field_source_spec ctx b (Field_block i Value)) as Hs.
+  rewrite Hsrc in Hs. cbn [plain_context rc_tables rc_facts] in Hs.
+  destruct (Hs from Hcons) as [Hnas Hone].
+  pose proof (get_fields_use F T uses _ _ Hin) as (_ & Hfs & Hnot_any & Hys).
+  split; [ | split; [ exact Hhf | split; [ | split ] ] ].
+  - intros a Ha Hha. destruct Ha as (_ & [Has | Hsrc'] & _);
+      [ congruence | exact (Hone a Hsrc' Hha) ].
+  - destruct (s_any_usage sol from) eqn:Haf; [ left; reflexivity | right ].
+    assert (Hnb : s_any_usage sol b = false).
+    { apply not_true_iff_false. intros H.
+      rewrite (any_usage_constructor _ _ _ Hcl b _ from H Hcons
+                 (unboxed_not_local_block i Value)) in Haf.
+      discriminate Haf. }
+    intros z Hz. apply get_direct_usages_iff in Hz as (y & Hy & Hyz & _).
+    cbn [plain_context rc_tables rc_facts] in Hyz.
+    destruct (Hys y Hy) as (_ & u & Hacc & Hu).
+    pose proof Hu as Hu'. apply mem_node_In in Hu'.
+    destruct (level_uses n b uses u Hl Hmb Hu') as [Hbu | Hab];
+      [ | congruence ].
+    pose proof (alias_constructor_usage _ _ _ Hcl b u _ y from Hcons Hbu
+                  Hnb
+                  Hacc) as Halias.
+    exact (usages_alias _ _ _ Hcl y from z Hyz
+             (Hnot_any y u Hacc Hu Hfs)
+             Halias Haf).
+  - intros z Hz. apply get_direct_usages_iff in Hz as (_ & _ & _ & Hhz).
+    exact Hhz.
+  - intros z Hz. apply get_direct_usages_iff in Hz as (y & Hy & Hyz & _).
+    rewrite forallb_forall in Hall.
+    destruct (unboxed_has y (Hall y Hy)) as (fs & Hfs').
+    exists y, fs. split; [ exact Hfs' | exact Hyz ].
+Qed.
+
+(* The fields read from the uses of a name, as the analysis reads them. *)
+Lemma nested_shape (flow_to : list node) (fuel : nat) (s : node)
+    (next : positive) :
+  forallb (U.has_to_be_unboxed dominated to_unbox) flow_to = true ->
+  mk_shape (get_direct_usages ctx flow_to)
+    (fst (U.mk_unboxed_fields F T cm dominated to_unbox fuel s
+            (U.get_fields F T
+               (U.add_usages_through_function_slots F T cm true
+                  (U.get_direct_usages T flow_to)))
+            next)).
+Proof.
+  intros Hall. exists fuel, s, next.
+  rewrite (add_usages_of_unboxed F T cm unboxed true _ Huses).
+  - rewrite (get_fields_ext F T (U.get_direct_usages T flow_to)
+               (get_direct_usages ctx flow_to)); [ reflexivity | ].
+    apply mem_node_iff_eq. intros z.
+    rewrite (direct_usages_agree ctx flow_to z). reflexivity.
+  - intros z Hz. apply (direct_usages_agree ctx) in Hz.
+    apply get_direct_usages_iff in Hz as (y & Hy & Hyz & _).
+    rewrite forallb_forall in Hall.
+    destruct (unboxed_has y (Hall y Hy)) as (fs & Hfs').
+    exists y, fs. split; [ exact Hfs' | exact Hyz ].
+Qed.
+
+Definition leaf_value_rel (w_mid : value) (pk : list field * flambda_kind)
+    (w' : value)
+    : Prop :=
+  value_at_path (fst pk) w_mid = Some w' ∧ kind_of_value w' = snd pk.
+
+Definition leaf_type_rel (ty : flambda_type) (l : unboxed_leaf) (w' : value)
+    : Prop :=
+  type_satisfied statics' valuation' w' (leaf_rewritten ty l).
+
+(* The leaves of every level. *)
+Lemma leaves_sound :
+  ∀ u : U.unboxed_field,
+    match u with
+    | U.Not_unboxed _ => True
+    | U.Unboxed fields =>
+      ∀ (kind : flambda_kind) (uses : list node) (b n : node)
+        (w w_mid : value) (ty : flambda_type) (ws : list value),
+        level_ok n b uses -> mk_shape uses fields ->
+        rebuilt_value G sol w n w_mid -> ty_ok w ty ->
+        Forall2 (leaf_value_rel w_mid)
+          (unboxed_field_paths kind (U.Unboxed fields)) ws ->
+        Forall2 (leaf_type_rel ty)
+          (unboxed_leaves ctx cm kind uses b (U.Unboxed fields))
+          ws
+    end.
+Proof.
+  refine (URP.unboxed_field_rec _ _ _); [ intros; exact I | ].
+  intros fields IH kind uses b n w w_mid ty ws Hl Hmk Hrv Hty Hp.
+  destruct Hmk as (fuel & blk & next & Hfields).
+  assert (Hnested :
+    ∀ (f : field) (nested : U.unboxed_fields),
+      (f, U.Unboxed nested) ∈ fields ->
+      ∃ (flow_to : list node) (fuel' : nat) (source : node)
+        (next' : positive),
+        (f, U.Use_known flow_to) ∈ U.get_fields F T uses
+        ∧ forallb (U.has_to_be_unboxed dominated to_unbox) flow_to = true
+        ∧ nested
+          = fst (U.mk_unboxed_fields F T cm dominated to_unbox fuel' source
+                   (U.get_fields F T
+                      (U.add_usages_through_function_slots F T cm true
+                         (U.get_direct_usages T flow_to)))
+                   next')).
+  { intros f nested Hin. rewrite Hfields in Hin.
+    exact (mk_unboxed_fields_nested F T cm dominated to_unbox fuel blk _ next
+             f nested Hin). }
+  clear Hfields fuel blk next.
+  cbn [unboxed_leaves unboxed_field_paths] in Hp |- *.
+  rewrite (level_reads n b uses Hl).
+  set (fg := forgets_class _). clearbody fg.
+  revert IH Hnested ws Hp.
+  induction fields as [ | [f u] fields IHl]; intros IH Hnested ws Hp.
+  { inversion Hp. constructor. }
+  cbn beta iota in Hp |- *.
+  apply Forall2_app_inv_l in Hp as (ws1 & ws2 & Hp1 & Hp2 & ->).
+  apply Forall2_app.
+  2: { apply IHl; [ intros f' u' H; exact (IH f' u' (or_intror H))
+                  | intros f' n' H; exact (Hnested f' n' (or_intror H))
+                  | exact Hp2 ]. }
+  clear IHl Hp2.
+  assert (Hforgot : Forall2 (leaf_type_rel ty) (forgotten_leaves f u) ws1).
+  { rewrite forgotten_leaves_eq. exact (forgotten_sound ty _ ws1 w_mid Hp1). }
+  destruct (Keyed.lookup field_eqb f
+              (U.get_fields (rc_facts ctx) (rc_tables ctx) uses))
+    as [use | ] eqn:Hlk; [ | exact Hforgot ].
+  apply (keyed_lookup_in field_eqb URP.field_eqb_decides) in Hlk.
+  change (U.get_fields (rc_facts ctx) (rc_tables ctx) uses)
+    with (U.get_fields F T uses) in Hlk.
+  destruct fg; [ exact Hforgot | ].
+  destruct u as [v | nested].
+  - (* a leaf *)
+    cbn [unboxed_field_paths map fst snd] in Hp1.
+    inversion Hp1 as [ | pk w' P ws' [Hv Hk] Hnil]; subst.
+    inversion Hnil; subst.
+    constructor; [ | constructor ].
+    exact (leaf_sound n b uses f use w w_mid w' ty Hl Hrv Hty Hlk Hv Hk).
+  - (* a field unboxed in turn *)
+    destruct use as [ | flow_to]; [ exact Hforgot | ].
+    destruct (get_single_field_source ctx b f) as [ | s | ] eqn:Hsrc;
+      try exact Hforgot.
+    destruct ws1 as [ | w0 ws1].
+    { pose proof (unboxed_leaves_paths ctx cm (U.Unboxed nested)
+                    (U.field_kind f) (get_direct_usages ctx flow_to) s)
+        as Hstrip.
+      inversion Hp1 as [Hnil | ]. symmetry in Hnil.
+      apply map_eq_nil in Hnil.
+      change (unboxed_field_paths (U.field_kind f) (U.Unboxed nested) = [])
+        in Hnil.
+      rewrite Hnil in Hstrip. apply map_eq_nil in Hstrip.
+      rewrite Hstrip. constructor. }
+    destruct (unboxed_field_paths (U.field_kind f) (U.Unboxed nested))
+      as [ | [p0 k0] P] eqn:Hpaths; [ inversion Hp1 | ].
+    pose proof (unboxed_field_paths_cons (U.field_kind f) nested p0 k0)
+      as Hp0. rewrite Hpaths in Hp0. specialize (Hp0 (or_introl eq_refl)).
+    inversion Hp1 as [ | pk w' P' ws' [Hv0 _] _]; subst.
+    cbn [value_at_path fst] in Hv0.
+    destruct (field_of_value f w_mid) as [field' | ] eqn:Hfv;
+      [ | discriminate Hv0 ].
+    destruct p0 as [ | f2 p0]; [ contradiction | ].
+    cbn [value_at_path] in Hv0.
+    destruct (field_of_value f2 field') as [x2 | ] eqn:Hf2;
+      [ clear Hv0 | discriminate Hv0 ].
+    destruct f as [i k | | | | | | bn | | ]; cbn [field_of_value] in Hfv;
+      try discriminate Hfv.
+    2: { destruct w_mid; try discriminate Hfv. injection Hfv as <-.
+         destruct f2; discriminate Hf2. }
+    destruct w_mid as [ | | | | tag fields' | | | | ]; try discriminate Hfv.
+    destruct (rebuilt_block_inv G sol w n tag fields' Hrv)
+      as (fields0 & a & -> & Hma & Hha & Hfields0).
+    pose proof (proj1 Hl a Hma Hha) as ->.
+    destruct (fields_rebuilt_nth _ fields0 fields' 0 i field' Hfields0 Hfv)
+      as (field & Hn & Hfr).
+    cbn [Nat.add] in Hfr.
+    destruct Hfr as (from & Hcons & Hused & Hunused).
+    assert (Hfu : s_field_used sol b (Field_block i (kind_of_value field))
+                  = true).
+    { destruct (s_field_used sol b (Field_block i (kind_of_value field)))
+        eqn:Hfu; [ reflexivity | ].
+      rewrite (Hunused eq_refl) in Hf2. destruct f2; discriminate Hf2. }
+    destruct (Hused Hfu) as [Hhf Hrv'].
+    assert (Hkv : kind_of_value field = Value).
+    { rewrite <- (rebuilt_value_kind G sol field from field' Hrv').
+      destruct field'; try (destruct f2; discriminate Hf2); reflexivity. }
+    rewrite Hkv in Hcons.
+    destruct (get_single_field_source_one_constructor ctx b _ s Hsrc)
+      as (from_k & Hcons_k).
+    pose proof (Hkinds b from_k from i k Value Hcons_k Hcons) as ->.
+    destruct (Hnested _ nested (or_introl eq_refl))
+      as (flow_to' & fuel' & s' & next' & Hin' & Hall & Hnested_eq).
+    pose proof (get_fields_functional F T uses _ _ _ Hlk Hin') as Heq.
+    injection Heq as <-.
+    pose proof (IH _ (U.Unboxed nested) (or_introl eq_refl)) as IHn.
+    cbn beta iota in IHn.
+    rewrite <- Hpaths in Hp1.
+    apply Forall2_prefix.
+    apply (IHn (U.field_kind (Field_block i Value))
+             (get_direct_usages ctx flow_to) s from field field').
+    + exact (nested_level n b uses i flow_to s from Hl Hma Hcons Hhf Hsrc
+               Hlk Hall).
+    + rewrite Hnested_eq. exact (nested_shape flow_to fuel' s' next' Hall).
+    + exact Hrv'.
+    + destruct (ty_step (Field_block i Value) (Value_block tag fields0) field
+                  ty Hty Hn (fun bn H => ltac:(discriminate H)))
+        as [Hfr1 Hsat1].
+      apply (ty_ok_of field _ Hfr1).
+      destruct Hsat1 as [Hsat1 | Heq]; [ left; exact Hsat1 | right ].
+      exists Value. exact Heq.
+    + exact (paths_step (Field_block i Value) (Value_block tag fields')
+               field' _ _ Hfv Hp1).
+Qed.
+
+(* A value with a field below it is of kind value. *)
+Lemma path_kind_value (v v_mid w0 : value) (n : node) (f : field)
+    (p : list field) :
+  rebuilt_value G sol v n v_mid -> value_at_path (f :: p) v_mid = Some w0 ->
+  kind_of_value v = Value.
+Proof.
+  intros Hrv Hp. cbn [value_at_path] in Hp.
+  destruct (field_of_value f v_mid) as [x | ] eqn:Hfv; [ | discriminate Hp ].
+  destruct f; cbn [field_of_value] in Hfv; try discriminate Hfv;
+    destruct v_mid; try discriminate Hfv.
+  - destruct (rebuilt_block_inv G sol v n _ _ Hrv) as (fs & a & -> & _).
+    reflexivity.
+  - rewrite (rebuilt_boxed_inv G sol v n _ Hrv). reflexivity.
+Qed.
+
+Lemma Forall2_sat_map (g : unboxed_leaf -> flambda_type)
+    (leaves : list unboxed_leaf) (ws : list value) :
+  Forall2 (fun l w' => type_satisfied statics' valuation' w' (g l)) leaves ws ->
+  Forall2 (type_satisfied statics' valuation') ws (map g leaves).
+Proof. induction 1; constructor; assumption. Qed.
+
+Lemma rewrite_unboxed_result_type_sound_in (code_var type_var : variable)
+    (fields : U.unboxed_fields) (v v_mid : value) (ws : list value) :
+  Keyed.lookup node_eqb (Node_variable code_var) unboxed = Some fields ->
+  lookup type_var valuation = Some v ->
+  rebuilt_value G sol v (Node_variable code_var) v_mid ->
+  unboxed_values fields v_mid ws ->
+  Forall2 (type_satisfied statics' valuation') ws
+    (rewrite_unboxed_result_type fx ctx tenv cm canon code_var type_var
+       fields).
+Proof.
+  intros Hlk Hv Hrv Hws.
+  assert (Heq : rewrite_unboxed_result_type fx ctx tenv cm canon code_var
+                  type_var fields
+                = map (leaf_rewritten (result_alias tenv type_var))
+                    (unboxed_var_leaves ctx cm code_var fields)).
+  { unfold rewrite_unboxed_result_type, unboxed_leaf_types. rewrite map_map.
+    apply map_ext. intros [[p k] [m | ]]; reflexivity. }
+  rewrite Heq. apply Forall2_sat_map.
+  unfold unboxed_values in Hws.
+  change (UCS.fields_paths fields)
+    with (unboxed_field_paths Value (U.Unboxed fields)) in Hws.
+  apply (keyed_lookup_in node_eqb node_eqb_decides) in Hlk.
+  unfold unboxed_var_leaves. cbv zeta.
+  pose proof (get_usages_spec ctx (Node_variable code_var)) as Hgus.
+  pose proof (get_single_source_spec ctx (Node_variable code_var)) as Hgss.
+  cbn [plain_context rc_tables rc_facts] in Hgus, Hgss.
+  destruct (get_usages ctx (Node_variable code_var)) as [ | usages | ];
+    [ exact (forgotten_sound _ _ ws v_mid Hws) | |
+      exact (forgotten_sound _ _ ws v_mid Hws) ].
+  destruct (get_single_source ctx (Node_variable code_var)) as [ | ap | ];
+    [ exact (forgotten_sound _ _ ws v_mid Hws) | |
+      exact (forgotten_sound _ _ ws v_mid Hws) ].
+  destruct Hgus as (Hhu & Hnau & Hus). destruct Hgss as (Hhs & Hnas & Hone).
+  destruct ws as [ | w0 ws].
+  { inversion Hws as [Hnil | ]. symmetry in Hnil.
+    change (unboxed_field_paths Value (U.Unboxed fields) = []) in Hnil.
+    pose proof (unboxed_leaves_paths ctx cm (U.Unboxed fields) Value usages ap)
+      as Hstrip.
+    rewrite Hnil in Hstrip. apply map_eq_nil in Hstrip.
+    rewrite Hstrip. constructor. }
+  assert (Hkv : kind_of_value v = Value).
+  { destruct (unboxed_field_paths Value (U.Unboxed fields))
+      as [ | [p0 k0] P] eqn:Hpaths; [ inversion Hws | ].
+    pose proof (unboxed_field_paths_cons Value fields p0 k0) as Hp0.
+    rewrite Hpaths in Hp0. specialize (Hp0 (or_introl eq_refl)).
+    inversion Hws as [ | pk w' P' ws' [Hv0 _] _]; subst.
+    destruct p0 as [ | f0 p0]; [ contradiction | ].
+    exact (path_kind_value v v_mid w0 _ f0 p0 Hrv Hv0). }
+  apply (leaves_sound (U.Unboxed fields) Value usages ap
+           (Node_variable code_var) v v_mid).
+  - split; [ | split; [ exact Hhu | split; [ | split ] ] ].
+    + intros a (_ & [Has | Hsrc] & _) Hha; [ congruence | ].
+      exact (Hone a Hsrc Hha).
+    + right. intros u Hu. exact (proj1 (proj1 (Hus u) Hu)).
+    + intros u Hu. exact (proj2 (proj1 (Hus u) Hu)).
+    + intros u Hu. exists (Node_variable code_var), fields.
+      split; [ exact Hlk | exact (proj1 (proj1 (Hus u) Hu)) ].
+  - destruct (URP.unboxed_fields_of_names_in F T cm dominated to_unbox _
+                (Node_variable code_var) fields Hlk)
+      as (a & next' & Hf).
+    exists (S (length to_unbox)), a, next'. rewrite Hf.
+    rewrite (add_usages_of_unboxed F T cm unboxed true _ Huses).
+    + rewrite (get_fields_ext F T
+                 (U.get_direct_usages T [Node_variable code_var]) usages);
+        [ reflexivity | ].
+      apply mem_node_iff_eq. intros z.
+      rewrite <- (direct_usages_agree ctx [Node_variable code_var] z).
+      rewrite get_direct_usages_iff, (Hus z). split.
+      * intros (x & [<- | []] & Hxz & Hhz). split; assumption.
+      * intros [Hxz Hhz]. exists (Node_variable code_var).
+        split; [ left; reflexivity | split; assumption ].
+    + intros z Hz. exists (Node_variable code_var), fields.
+      split; [ exact Hlk | ].
+      exact (proj1 (URP.get_direct_usages_in T _ z Hz)).
+  - exact Hrv.
+  - unfold result_alias. split.
+    + intros e0 He.
+      apply (expand_alias_fragment
+               (alias_type_of (kind_of_name tenv (Name_var type_var))
+                  (Var type_var))
+               (Var type_var) e0); [ | exact He ].
+      destruct (kind_of_name tenv (Name_var type_var)) as [ | [] | | ];
+        reflexivity.
+    + left. apply alias_satisfied. split; [ exact Hv | ].
+      unfold kind_of_name.
+      destruct (Typing_env.find tenv (Name_var type_var) None)
+        as [ty0 | ] eqn:Hf; [ | exact Hkv ].
+      exact (type_satisfied_kind _ _ _ _
+               (find_satisfied_strictly statics valuation tenv
+                  (Name_var type_var) None ty0 v Henv Hf Hv)).
+  - exact Hws.
+Qed.
+
+End Unboxed_sound.
+
+(* [unboxed_values] is the relation of the simulation of the unboxing. *)
+Lemma unboxed_values_fields_vals (fields : U.unboxed_fields) (w : value)
+    (ws : list value) :
+  unboxed_values fields w ws
+  <-> FlambdaReaperUnboxingRefinesCallsSimProofs.fields_vals fields w ws.
+Proof. reflexivity. Qed.
+
+Theorem rewrite_unboxed_result_type_sound :
+  rewrite_unboxed_result_type_sound_statement.
+Proof.
+  intros is_local F T sets dominated to_unbox e tenv canon statics statics'
+    valuation valuation' code_var type_var fields v v_mid ws Hleast Hlocal
+    Hsets Hkinds Henv Hfrag Halloc Hst Hcopies Huses Hlk Hv Hrv Hws.
+  eapply rewrite_unboxed_result_type_sound_in; try eassumption; reflexivity.
+Qed.

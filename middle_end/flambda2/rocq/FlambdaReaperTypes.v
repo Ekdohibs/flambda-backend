@@ -39,11 +39,18 @@
    [get_canonical_with], [rewrite_in_depth] and [rewrite]), with
    [rewrite_result_types] and the part of
    [rewrite_env_extension_with_extra_variables] that it calls, and the
-   queries of points_to_analysis.ml that the rewriter calls. It needs no
-   review: what the rewritten types mean is stated in
-   FlambdaReaperTypesSpec.v and proved in FlambdaReaperTypesProofs.v. It
-   is extracted ([rewrite_typing_env], [rewrite_symbol_type],
-   [rewrite_result_types], [rewrite_result_type]).
+   queries of points_to_analysis.ml that the rewriter calls. With the
+   unboxing of FlambdaReaperUnboxing.v, it transcribes the result types
+   of the parameters and results that are unboxed and of the fields of an
+   unboxed [my_closure] ([rewrite_result_types_u]): the patterns that
+   [Rewriter.patterns_for_unboxed_fields] makes of them, with no function
+   slot ([classify_field_map], [unboxed_leaves]), and their
+   [fold_destructuring] with [destructure_expanded_head] at the accessors
+   of the patterns ([destructure_field]). It needs no review: what the
+   rewritten types mean is stated in FlambdaReaperTypesSpec.v and proved
+   in FlambdaReaperTypesProofs.v. It is extracted ([rewrite_typing_env],
+   [rewrite_symbol_type], [rewrite_result_types],
+   [rewrite_result_type]); what is of the unboxing is not.
 
    The inputs. The facts of the graph and the tables of the solution
    (FlambdaReaperGraphSpec.v), as the queries go through them: every set
@@ -112,6 +119,19 @@
      compiler compares the keys of two maps.
    - [Function_slot.Map.choose] in [follow_field_for_set_of_closures]
      takes the first closure of the list.
+   - The unboxed fields. Where [rewrite_result_types] or
+     [patterns_for_unboxed_fields] stop with a fatal error, the leaves
+     concerned have no variable, and their type is the unknown type of
+     their kind: an unboxed variable with no allocation or no known use,
+     a field that the unboxing has and that is not read, a field
+     unboxed in turn that has not one source or is read into a name with
+     any usage, and every field where the fields read are of distinct
+     subkinds. [Tag.Map.get_singleton] of the tags of a block is a list
+     of one binding; a [None] of [expand_head] and a head that is not of
+     kind value (a fatal error) give the unknown type of the accessor.
+     The uses of [add_usages_through_function_slots] through calls of
+     known arity read [code_id_my_closure] off the term
+     ([bound_code_my_closures]), as FlambdaReaperUnboxing.v does.
 
    What is left out:
    - The sets of closures whose representation changes (unboxing). The
@@ -119,16 +139,15 @@
      of the sets kept by [refine_sets_of_closures] changes, the
      compiler forgets the type if there are several or one may be
      external, and otherwise rewrites the type of the closure into one
-     of its new representation ([patterns_for_unboxed_fields]); the
-     model forgets the type in both cases.
+     of its new representation ([Expr.exactly_this_closure] at the new
+     slots, the value slots by [patterns_for_unboxed_fields] with the
+     function slots); the model forgets the type in both cases.
    - [rewrite_kind_with_subkind]: the model has no subkinds.
-   - In [rewrite_result_types], the parameters and results that are
-     unboxed, and the parameters that the fields of an unboxed
-     [my_closure] become; and the environment of the result types is an
-     input, where the compiler adds the extension to the environment of
-     the unit by meet, and the extension it gives back is the equations
-     and the existential copies, where the compiler makes it with
-     [make_suitable_for_environment].
+   - In [rewrite_result_types], the environment of the result types is
+     an input, where the compiler adds the extension to the environment
+     of the unit by meet, and the extension it gives back is the
+     equations and the existential copies, where the compiler makes it
+     with [make_suitable_for_environment].
    - [Rec_info]: function types have no [rec_info] in the grammar, so the
      patterns [Pattern.rec_info] are not there; coercions are not there.
    - Array types and [array_slot]: the grammar has no [Array].
@@ -140,6 +159,7 @@ From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlOption.
 From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaMapSpec FlambdaReaperGraphSpec.
+From OxCamlFlambda2 Require FlambdaReaperUnboxing.
 From OxCamlFlambda2Types Require Import FlambdaTypeGrammar FlambdaBindingTime
   FlambdaTypingEnv FlambdaExpandHead FlambdaTypeAccessSpec FlambdaProvers.
 Import ListNotations.
@@ -1629,3 +1649,402 @@ Definition rewrite_result_types
     (bindings ++ copies).
 
 End Env.
+
+(* ======================================================================== *)
+(* Unboxed parameters and results ([patterns_for_unboxed_fields])          *)
+(* ======================================================================== *)
+
+(* [Field.kind]. *)
+Local Abbreviation field_kind := FlambdaReaperUnboxing.field_kind.
+
+(* The paths of the leaves of an unboxing, each with the kind of its last
+   field, in the order of [Unboxed_fields.fold_with_kind]. *)
+Fixpoint unboxed_field_paths (kind : flambda_kind)
+    (u : FlambdaReaperUnboxing.unboxed_field) {struct u}
+    : list (list field * flambda_kind) :=
+  match u with
+  | FlambdaReaperUnboxing.Not_unboxed _ => [([], kind)]
+  | FlambdaReaperUnboxing.Unboxed fields =>
+    (fix paths (fields : list (field * FlambdaReaperUnboxing.unboxed_field))
+         : list (list field * flambda_kind) :=
+       match fields with
+       | [] => []
+       | (f, u) :: fields =>
+         map (fun pk => (f :: fst pk, snd pk))
+           (unboxed_field_paths (field_kind f) u)
+         ++ paths fields
+       end) fields
+  end.
+
+(* The classification of the fields of an unboxing
+   ([classify_field_map]): the indices of the fields of a block met so
+   far. *)
+Inductive field_class : Type :=
+  | Class_empty
+  | Class_distinct_subkinds
+  | Class_boxed_number
+  | Class_block (indices : list nat)
+  | Class_closure.
+
+Definition classify_step (acc : field_class) (f : field) : field_class :=
+  match acc with
+  | Class_distinct_subkinds | Class_boxed_number => Class_distinct_subkinds
+  | Class_empty | Class_block _ | Class_closure =>
+    match f with
+    | Field_call_witness _ | Field_return_of_call _
+    | Field_code_id_of_call_witness =>
+      Class_distinct_subkinds
+    | Field_boxed_number _ =>
+      match acc with
+      | Class_empty => Class_boxed_number
+      | _ => Class_distinct_subkinds
+      end
+    | Field_value_slot _ | Field_function_slot _ =>
+      match acc with
+      | Class_empty | Class_closure => Class_closure
+      | _ => Class_distinct_subkinds
+      end
+    | Field_is_int | Field_get_tag =>
+      match acc with
+      | Class_empty => Class_block []
+      | Class_block indices => Class_block indices
+      | _ => Class_distinct_subkinds
+      end
+    | Field_block i _ =>
+      match acc with
+      | Class_empty => Class_block [i]
+      | Class_block indices =>
+        if existsb (Nat.eqb i) indices then Class_distinct_subkinds
+        else Class_block (i :: indices)
+      | _ => Class_distinct_subkinds
+      end
+    end
+  end.
+
+Definition classify_field_map (fields : list field) : field_class :=
+  fold_left classify_step fields Class_empty.
+
+(* The classes under which [patterns_for_unboxed_fields] binds no
+   variable ([forget]). *)
+Definition forgets_class (c : field_class) : bool :=
+  match c with
+  | Class_empty | Class_distinct_subkinds => true
+  | Class_boxed_number | Class_block _ | Class_closure => false
+  end.
+
+(* A leaf of the pattern of an unboxing: its path, its kind, and the
+   metadata of its variable, [None] where the compiler binds none. *)
+Definition unboxed_leaf : Type :=
+  list field * flambda_kind * option rewrite_metadata.
+
+(* [forget]: the leaves of a field, with no variable. *)
+Definition forgotten_leaves (f : field)
+    (u : FlambdaReaperUnboxing.unboxed_field) : list unboxed_leaf :=
+  map (fun pk => (f :: fst pk, snd pk, None))
+    (unboxed_field_paths (field_kind f) u).
+
+Section Unboxed.
+
+Variable fx : fixes.
+Variable ctx : rewrite_context.
+Variable tenv : Typing_env.t.
+(* The relation [code_id_my_closure] (FlambdaReaperUnboxing.v,
+   [bound_code_my_closures]). *)
+Variable code_my_closures : finite_map variable.
+
+Local Abbreviation F := (rc_facts ctx).
+Local Abbreviation T := (rc_tables ctx).
+
+(* The metadata of a pattern variable: the [~var] that
+   [rewrite_result_types] gives [patterns_for_unboxed_fields]. *)
+Definition pattern_metadata (source : single_field_source)
+    (use : FlambdaReaperUnboxing.field_use) : rewrite_metadata :=
+  match source, use with
+  | Field_no_source, _ => No_source
+  | Field_one_source s, _ => Single_source s
+  | Field_many_sources, FlambdaReaperUnboxing.Use_unknown =>
+    Many_sources_any_usage
+  | Field_many_sources, FlambdaReaperUnboxing.Use_known flow_to =>
+    Many_sources_usages (get_direct_usages ctx flow_to)
+  end.
+
+(* [patterns_for_unboxed_fields] with no function slot, for the fields
+   [u] of an allocation [block] whose uses are [uses]: the leaves of its
+   pattern, in the order of the fields. [get_fields] gives the fields
+   read; a field that the unboxing has and that is not read, which the
+   OCaml stops at with a fatal error, has no variable, as have all where
+   the fields read are of distinct subkinds. A field unboxed in turn is
+   from its one source, with the uses of what it is read into; where it
+   has not one source, or is read into names of which one has any
+   usage (fatal errors), its leaves have no variable. *)
+Fixpoint unboxed_leaves (kind : flambda_kind) (uses : list node)
+    (block : node) (u : FlambdaReaperUnboxing.unboxed_field) {struct u}
+    : list unboxed_leaf :=
+  match u with
+  | FlambdaReaperUnboxing.Not_unboxed _ => [([], kind, None)]
+  | FlambdaReaperUnboxing.Unboxed fields =>
+    let reads :=
+      FlambdaReaperUnboxing.get_fields F T
+        (FlambdaReaperUnboxing.add_usages_through_function_slots F T
+           code_my_closures true uses)
+    in
+    let forget :=
+      forgets_class
+        (classify_field_map
+           (filter (fun f => Keyed.is_bound field_eqb f reads)
+              (map fst fields)))
+    in
+    (fix leaves
+         (fields : list (field * FlambdaReaperUnboxing.unboxed_field))
+         : list unboxed_leaf :=
+       match fields with
+       | [] => []
+       | (f, u) :: fields =>
+         match Keyed.lookup field_eqb f reads with
+         | None => forgotten_leaves f u
+         | Some use =>
+           if forget then forgotten_leaves f u
+           else
+             let source := get_single_field_source ctx block f in
+             match u with
+             | FlambdaReaperUnboxing.Not_unboxed _ =>
+               [([f], field_kind f, Some (pattern_metadata source use))]
+             | FlambdaReaperUnboxing.Unboxed _ =>
+               match use, source with
+               | FlambdaReaperUnboxing.Use_known flow_to,
+                 Field_one_source s =>
+                 map (fun l => let '(p, k, m) := l in (f :: p, k, m))
+                   (unboxed_leaves (field_kind f)
+                      (get_direct_usages ctx flow_to) s u)
+               | _, _ => forgotten_leaves f u
+               end
+             end
+         end
+         ++ leaves fields
+       end) fields
+  end.
+
+(* The leaves of an unboxed variable of code, [code_var], from its
+   allocation ([get_single_source]) and its uses ([get_usages]); with
+   no allocation or no known use (fatal errors), none has a
+   variable. *)
+Definition unboxed_var_leaves (code_var : variable)
+    (fields : FlambdaReaperUnboxing.unboxed_fields) : list unboxed_leaf :=
+  let x := Node_variable code_var in
+  match get_usages ctx x, get_single_source ctx x with
+  | Ok usages, Ok allocation_point =>
+    unboxed_leaves Value usages allocation_point
+      (FlambdaReaperUnboxing.Unboxed fields)
+  | _, _ =>
+    map (fun pk => (fst pk, snd pk, None))
+      (unboxed_field_paths Value (FlambdaReaperUnboxing.Unboxed fields))
+  end.
+
+(* [unknown_accessor] and [bottom_accessor] of traversals.ml. *)
+Definition unknown_accessor (f : field) : flambda_type :=
+  match f with
+  | Field_is_int => any_naked_bool
+  | _ => unknown (field_kind f)
+  end.
+
+Definition bottom_accessor (f : field) : flambda_type :=
+  bottom (field_kind f).
+
+(* [destructure_block_field_row_like_for_blocks] with no tag, and
+   [destructure_block_field_row_like_block_case]. A map of tags is a
+   singleton if it is a list of one binding. *)
+Definition destructure_block_field (i : nat) (k : flambda_kind)
+    (blocks : row_like_for_blocks) : flambda_type :=
+  let of_case (case : row_like_block_case) :=
+    match nth_error (case_maps_to case) i with
+    | Some ty => ty
+    | None => unknown k
+    end
+  in
+  match blocks with
+  | Row_like_for_blocks known_tags other_tags _ =>
+    match other_tags with
+    | Or_bottom.Ok case =>
+      match known_tags with
+      | [] => of_case case
+      | _ :: _ => unknown k
+      end
+    | Or_bottom.Bottom =>
+      match known_tags with
+      | [(_, Or_unknown.Known case)] => of_case case
+      | _ => unknown k
+      end
+    end
+  end.
+
+(* [destructure_head_of_kind_value_non_null] at the accessor of a field
+   of the patterns of [patterns_for_unboxed_fields]: a field of a block
+   ([Pattern.block], with no tag), [Is_int], [Get_tag], the contents of
+   a boxed number ([Pattern.boxed_number]) and a value slot
+   ([Pattern.closure]). A field of another sort is not destructured. *)
+Definition destructure_non_null (f : field)
+    (head : head_of_kind_value_non_null) : flambda_type :=
+  match f, head with
+  | Field_block _ _, Mutable_block _ => unknown_accessor f
+  | Field_block i k, Variant _ _ _ blocks _ _ =>
+    match blocks with
+    | Or_unknown.Unknown => unknown_accessor f
+    | Or_unknown.Known blocks => destructure_block_field i k blocks
+    end
+  | Field_is_int, (Mutable_block _ | Variant _ _ _ _ _ _) =>
+    this_naked_immediate 0
+  | Field_get_tag, Mutable_block _ => unknown_accessor f
+  | Field_get_tag, Variant _ _ get_tag _ _ _ =>
+    match get_tag with
+    | None => unknown_accessor f
+    | Some x => alias_type_of (Naked_number Kind_naked_immediate) (Var x)
+    end
+  | Field_boxed_number bn, Boxed_number k contents _ =>
+    if kind_eqb (unboxed_kind bn) (unboxed_kind k) then contents
+    else bottom_accessor f
+  | Field_value_slot w, Closures closures _ =>
+    match row_like_for_closures_get_env_var closures w with
+    | Some (Or_unknown.Known ty) => ty
+    | Some Or_unknown.Unknown | None => unknown_accessor f
+    end
+  | (Field_function_slot _ | Field_call_witness _ | Field_return_of_call _
+     | Field_code_id_of_call_witness), _ =>
+    unknown_accessor f
+  | _, _ => bottom_accessor f
+  end.
+
+(* [destructure_expanded_head] at the accessor of a field. A head that
+   is not of kind value (a fatal error) and a [None] of [expand_head]
+   give the unknown type. *)
+Definition destructure_field (f : field) (expanded : option Expanded_type.t)
+    : flambda_type :=
+  match expanded with
+  | None => unknown_accessor f
+  | Some expanded =>
+    match Expanded_type.descr expanded with
+    | Unknown => unknown_accessor f
+    | Bottom => bottom_accessor f
+    | Ok (Expanded_type.Head_value (Head_of_kind_value non_null _)) =>
+      match non_null with
+      | Unknown => unknown_accessor f
+      | Bottom => bottom_accessor f
+      | Ok head => destructure_non_null f head
+      end
+    | Ok _ => unknown_accessor f
+    end
+  end.
+
+(* [fold_destructuring] along a path: the type of a leaf. *)
+Fixpoint destructure_path (path : list field) (ty : flambda_type)
+    : flambda_type :=
+  match path with
+  | [] => ty
+  | f :: path =>
+    destructure_path path (destructure_field f (expand_head tenv ty))
+  end.
+
+(* The metadata and the type to rewrite of each leaf of an unboxed
+   variable of code [code_var], whose type in the result types is that of
+   [type_var]: the type of the leaf in [fold_destructuring] of the alias
+   to [type_var]; a leaf with no variable has the unknown type, under a
+   metadata that forgets. *)
+Definition unboxed_leaf_types (code_var type_var : variable)
+    (fields : FlambdaReaperUnboxing.unboxed_fields)
+    : list (rewrite_metadata * flambda_type) :=
+  map
+    (fun l =>
+       let '(path, k, m) := l in
+       match m with
+       | None => (At_least_one_source_no_usages, unknown k)
+       | Some m => (m, destructure_path path (result_alias tenv type_var))
+       end)
+    (unboxed_var_leaves code_var fields).
+
+(* The types that [rewrite_result_types] gives the new parameters of an
+   unboxed variable of code, one for each field of the unboxing, in the
+   order of [Unboxed_fields.fold_with_kind]: the type of each leaf,
+   rewritten under its metadata ([rewrite_arbitrary_type] in
+   [rewrite_env_extension_with_extra_variables]), given the copies of
+   the names it reaches. *)
+Definition rewrite_unboxed_result_type (canon : canon_fn)
+    (code_var type_var : variable)
+    (fields : FlambdaReaperUnboxing.unboxed_fields) : list flambda_type :=
+  map
+    (fun p =>
+       rewrite_arbitrary fx ctx tenv canon (rewrite_fuel tenv (snd p)) (fst p)
+         (snd p))
+    (unboxed_leaf_types code_var type_var fields).
+
+(* [rewrite_result_types] with unboxing: [unboxed] has the unboxed fields
+   of the names that the unboxing gives fields
+   ([context.unboxing.unboxed_fields]). A parameter or a result whose
+   variable of code is unboxed has a new variable for each field, with
+   its type ([unboxed_leaf_types]), whatever the change of calling
+   convention decides of it; the others are as in
+   [rewrite_result_types]. The parameters start with the variables of
+   the fields of [my_closure] if it is unboxed, which have no equation
+   ([unbox_my_closure_vars]). *)
+Definition rewrite_result_types_u
+    (unboxed : list (node * FlambdaReaperUnboxing.unboxed_fields))
+    (my_closure : variable)
+    (params results : list (variable * keep_or_delete * variable))
+    : rewritten_result_types :=
+  let items (l : list (variable * keep_or_delete * variable)) :=
+    flat_map
+      (fun t =>
+         let '(code_var, decision, type_var) := t in
+         match Keyed.lookup node_eqb (Node_variable code_var) unboxed with
+         | Some fields => unboxed_leaf_types code_var type_var fields
+         | None =>
+           match decision with
+           | Keep =>
+             [(metadata_for_name ctx (Node_variable code_var),
+               result_alias tenv type_var)]
+           | Delete => []
+           end
+         end)
+      l
+  in
+  let param_items := items params in
+  let result_items := items results in
+  let numbered :=
+    number_from (first_fresh_of_env tenv) (param_items ++ result_items)
+  in
+  let next :=
+    Pos.of_nat (Pos.to_nat (first_fresh_of_env tenv) + length numbered)
+  in
+  let acc :=
+    fold_left
+      (fun acc t =>
+         let '(_, (m, ty)) := t in
+         fold_left get_canonical_with
+           (reached_arbitrary fx ctx tenv (rewrite_fuel tenv ty) m ty) acc)
+      numbered (Names_acc [] [] next)
+  in
+  let bindings :=
+    map
+      (fun t =>
+         let '(new_var, (m, ty)) := t in
+         (Name_var new_var,
+          rewrite_arbitrary fx ctx tenv (canon_of acc) (rewrite_fuel tenv ty)
+            m ty))
+      numbered
+  in
+  let '(copies, _) := rewrite_in_depth fx ctx tenv (rounds_of_env tenv) acc []
+  in
+  let my_closure_vars :=
+    match Keyed.lookup node_eqb (Node_variable my_closure) unboxed with
+    | Some fields => map fst (FlambdaReaperUnboxing.fields_leaves fields)
+    | None => []
+    end
+  in
+  Rewritten_result_types
+    (my_closure_vars
+     ++ map fst (firstn (length param_items) numbered))
+    (map fst (skipn (length param_items) numbered))
+    (flat_map
+       (fun p => match fst p with Name_var x => [x] | Name_symbol _ => [] end)
+       copies)
+    (bindings ++ copies).
+
+End Unboxed.

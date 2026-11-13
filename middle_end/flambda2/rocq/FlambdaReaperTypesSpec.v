@@ -34,8 +34,9 @@
    and [value_slot_rebuilt] for closures), the fragment ([shaped_type],
    [type_in_fragment], [env_in_fragment]), [sets_of_graph],
    [copies_valued], [rebuild_exit_relation] (what the statement of the
-   two runs asks of the simulation of the rebuild), the statements, and
-   the examples, against
+   two runs asks of the simulation of the rebuild), [unboxed_values] and
+   [block_fields_of_one_kind] (for unboxed variables of code), the
+   statements, and the examples, against
    FlambdaReaperTypes.v (the rewriting, which needs no review),
    FlambdaReaperFlowSpec.v (where values may be),
    FlambdaReaperLeastSpec.v (the least solution) and
@@ -166,6 +167,34 @@
      which the new parameter is an alias. Of the runs, it asks the values
      of the variable in the two, related, as the simulation has them at
      a return of code.
+   - [rewrite_unboxed_result_type_sound_statement]: the same of a
+     parameter or a result whose variable of code the unboxing of
+     FlambdaReaperUnboxing.v unboxes ([unit_unboxed_fields]): the code
+     rebuilt with unboxing has a new parameter or result for each of its
+     fields, to which [rewrite_result_types_u] gives the type at that
+     field of the type of the variable ([fold_destructuring]), rewritten
+     under the metadata that [patterns_for_unboxed_fields] gives the
+     field. Each holds of the value of that variable in the run of the
+     unit rebuilt with unboxing ([rebuild_unit_unbox_repr_fixed] and
+     [_fixed_tail], with no change of representation). Of the runs, it
+     asks the value [v_mid] that the run of the unit rebuilt without
+     unboxing has at the variable, related to the value of the first run
+     there as for a variable kept ([rebuilt_value]), and the values [ws]
+     of the variables of the fields in the run with unboxing, the values
+     at their paths in [v_mid] ([unboxed_values], the relation
+     [fields_vals] of the simulation of
+     FlambdaReaperUnboxingRefinesCallsSimProofs.v). It asks of the unit,
+     as the fragment of FlambdaReaperUnboxingRefinesCallsSpec.v does,
+     that no use of a name unboxed is called or has a function slot read
+     from it ([check_unboxed_uses]): [patterns_for_unboxed_fields] reads
+     the fields of the uses of the variable and of the closures read
+     from them and called ([add_usages_through_function_slots]), and a
+     field read only from the latter need not be one that the
+     allocation uses, nor its metadata hold where it is. It asks of the
+     graph that an allocation hold a field of a block at one kind
+     ([block_fields_of_one_kind]), as the traversal gives: the field
+     unboxed in turn is read at the kind of the read, and its source
+     is taken among what the allocation holds at that kind.
    - [exported_types_sound_statement]: the statement of the two runs.
      Where the unit exits, from a state whose static environment and a
      valuation satisfy a typing environment of the fragment, the rebuilt
@@ -255,11 +284,15 @@
      metadata of the fields of the case taken); there the copy is to have
      no value.
    - The proof of [rebuild_exit_relation] (see above), and for result
-     types, the relation of the values of the two runs at a return of
-     code.
+     types, the relation of the values of the runs at a return of code
+     (of the two runs, and for an unboxed variable, of the three).
    - Unboxing: the rewriting of the types of the closures whose
-     representation changes, and of parameters and results that are
-     unboxed. *)
+     representation changes, which the model forgets (FlambdaReaperTypes.v
+     says what the compiler does), and so the rebuild with a change of
+     representation; the unboxing of closures and of names whose uses
+     are called (not of [check_unboxed_uses]); the fields of an unboxed
+     [my_closure], which the result types give no equation, so that
+     there is nothing to state of them. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -268,6 +301,8 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaWellFormedSpec FlambdaReaperGraphSpec FlambdaReaperTraversal
   FlambdaReaperSolution FlambdaReaperRebuild FlambdaReaperFlowSpec
   FlambdaReaperLeastSpec FlambdaReaperTypes.
+From OxCamlFlambda2 Require FlambdaReaperUnboxing
+  FlambdaReaperUnboxingRefinesCallsSpec.
 From OxCamlFlambda2Types Require Import FlambdaTypeGrammar
   FlambdaTypeMeaningSpec FlambdaBindingTime FlambdaTypingEnv
   FlambdaTypingEnvSpec.
@@ -692,6 +727,100 @@ Definition rewrite_result_type_sound_with (fx : fixes) : Prop :=
 
 Definition rewrite_result_type_sound_statement : Prop :=
   rewrite_result_type_sound_with all_fixes.
+
+(* The field [f] of a value: a field of a block, or the contents of a
+   boxed number (as FlambdaReaperUnboxingRefinesProofs.field_value). *)
+Definition field_of_value (f : field) (w : value) : option value :=
+  match f, w with
+  | Field_block i _, Value_block _ fields => nth_error fields i
+  | Field_boxed_number _, Value_boxed_number c => Some (Value_const c)
+  | _, _ => None
+  end.
+
+(* The value at a path of fields. *)
+Fixpoint value_at_path (path : list field) (w : value) : option value :=
+  match path with
+  | [] => Some w
+  | f :: path =>
+    match field_of_value f w with
+    | Some w1 => value_at_path path w1
+    | None => None
+    end
+  end.
+
+(* The values [ws] of the variables of the unboxed fields [fields] of a
+   value [w]: in the order of the leaves of [fields], the value at the
+   path of each, of its kind. It is
+   FlambdaReaperUnboxingRefinesCallsSimProofs.fields_vals, how the
+   simulation of the rebuild with unboxing relates a value of the
+   rebuild without to the values of the variables of its fields. *)
+Definition unboxed_values (fields : FlambdaReaperUnboxing.unboxed_fields)
+    (w : value) (ws : list value) : Prop :=
+  Forall2
+    (fun (pk : list field * flambda_kind) (w' : value) =>
+       value_at_path (fst pk) w = Some w' ∧ kind_of_value w' = snd pk)
+    (FlambdaReaperUnboxingRefinesCallsSpec.fields_paths fields) ws.
+
+(* An allocation holds the field of a block at a position at one kind,
+   as those of the traversal do, which are all of kind value
+   (FlambdaReaperTraversal.v). *)
+Definition block_fields_of_one_kind (G : graph) : Prop :=
+  ∀ (a from from' : node) (i : nat) (k k' : flambda_kind),
+    g_constructor G a (Field_block i k) from ->
+    g_constructor G a (Field_block i k') from' -> k = k'.
+
+(* The types that the result types of code give the new parameters of an
+   unboxed variable of code [code_var], one for each of its fields
+   [fields], rewritten as [rewrite_result_types_u] rewrites them from the
+   type of [type_var], hold of the values of the variables of the fields
+   in the run of the unit rebuilt with unboxing, if the type of
+   [type_var] held of the value [v] of the first run there. The unboxing
+   is that of the analysis ([unit_unboxed_fields]), and no use of a name
+   unboxed is called or has a function slot read from it
+   ([check_unboxed_uses], of the fragment of
+   FlambdaReaperUnboxingRefinesCallsSpec.v). Of the runs, it asks the
+   value of the variable in the rebuild without unboxing, [v_mid],
+   related to [v] as the simulation of the rebuild relates them
+   ([rebuilt_value]), and the values of the variables of the fields
+   in the rebuild with unboxing, [ws], related to [v_mid] as the
+   simulation of the unboxing relates them ([unboxed_values]). *)
+Definition rewrite_unboxed_result_type_sound_with (fx : fixes) : Prop :=
+  ∀ (is_local : field -> bool) (F : facts) (T : tables)
+    (sets : list set_of_closures) (dominated : list (node * node))
+    (to_unbox : list node) (e : expr) (tenv : Typing_env.t)
+    (canon : canon_fn) (statics statics' : static_env)
+    (valuation valuation' : env) (code_var type_var : variable)
+    (fields : FlambdaReaperUnboxing.unboxed_fields) (v v_mid : value)
+    (ws : list value),
+    least_solution is_local F T ->
+    is_local_slots_only is_local ->
+    sets_of_graph (graph_of_facts F) sets ->
+    block_fields_of_one_kind (graph_of_facts F) ->
+    typing_env_satisfied_strictly statics valuation tenv ->
+    env_in_fragment valuation tenv ->
+    statics_allocated (solution_of_tables T) statics ->
+    statics_rebuilt (graph_of_facts F) (solution_of_tables T) statics
+      statics' ->
+    copies_valued tenv canon valuation valuation' ->
+    FlambdaReaperUnboxingRefinesCallsSpec.check_unboxed_uses F T
+      (fst (FlambdaReaperUnboxing.unit_unboxed_fields F T dominated to_unbox
+              e))
+    = true ->
+    Keyed.lookup node_eqb (Node_variable code_var)
+      (fst (FlambdaReaperUnboxing.unit_unboxed_fields F T dominated to_unbox
+              e))
+    = Some fields ->
+    lookup type_var valuation = Some v ->
+    rebuilt_value (graph_of_facts F) (solution_of_tables T) v
+      (Node_variable code_var) v_mid ->
+    unboxed_values fields v_mid ws ->
+    Forall2 (type_satisfied statics' valuation') ws
+      (rewrite_unboxed_result_type fx (plain_context is_local F T sets) tenv
+         (FlambdaReaperUnboxing.bound_code_my_closures e) canon code_var
+         type_var fields).
+
+Definition rewrite_unboxed_result_type_sound_statement : Prop :=
+  rewrite_unboxed_result_type_sound_with all_fixes.
 
 (* ======================================================================== *)
 (* The two runs                                                             *)
