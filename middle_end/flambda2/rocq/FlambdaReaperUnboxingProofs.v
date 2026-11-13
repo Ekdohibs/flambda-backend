@@ -26,8 +26,9 @@
  ******************************************************************************)
 
 (* The proofs of FlambdaReaperUnboxingSpec.v: the checks of
-   FlambdaReaperUnboxing.v imply what they are said to mean. Nothing here
-   needs review. *)
+   FlambdaReaperUnboxing.v imply what they are said to mean, and the
+   statements of the counterexample are computed. Nothing here needs
+   review. *)
 
 From Stdlib Require Import List Bool PeanoNat Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -336,3 +337,20 @@ Proof.
   apply Bool.eqb_prop in Hunbox. apply Bool.eqb_prop in Htcr.
   split; assumption.
 Qed.
+
+(* ======================================================================== *)
+(* A counterexample: lambda lifting and a dead callee                       *)
+(* ======================================================================== *)
+
+Theorem lambda_lifting_dead_callee : lambda_lifting_dead_callee_statement.
+Proof.
+  split; [ intros [ | ]; vm_compute; auto 10 | ].
+  split; [ exists 20; vm_compute; reflexivity | ].
+  split; [ exists 20; vm_compute; reflexivity | ].
+  split; [ exists 20; vm_compute; reflexivity | ].
+  vm_compute. auto.
+Qed.
+
+Theorem lambda_lifting_dead_callee_cause :
+  lambda_lifting_dead_callee_cause_statement.
+Proof. vm_compute. auto 10. Qed.
