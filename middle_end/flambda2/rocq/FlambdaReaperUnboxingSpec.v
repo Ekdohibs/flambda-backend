@@ -36,8 +36,10 @@
    [perform_analysis0] puts in the table before running them, the units
    of the two counterexamples below against their .fl (that of the second
    is [kept_result_unboxed] of FlambdaReaperUnboxing.v),
-   [check_result_receivers] against the fix it is said to be, and the
-   statements. The checks are
+   [check_result_receivers] against the fix it is said to be,
+   [unbox_dead_unit] against testsuite/tests/reaper/unbox_dead.ml,
+   [wrapper_args_u_before_fix] against [make_apply_wrapper] of rebuild.ml
+   before the fix that the example is of, and the statements. The checks are
    FlambdaReaperUnboxing.v, which needs no review; the proofs are
    FlambdaReaperUnboxingProofs.v.
 
@@ -172,7 +174,25 @@
    real field of the unit): the analysis with the fix gives the tables
    with that size, those of the unit with [x42] left out of [to_unbox],
    which pass every check and that of the fix, and whose rebuild exits as
-   the unit does. *)
+   the unit does.
+
+   A miscompile of the compiler's reaper that the compiler has fixed, and
+   the model with it, by "reaper: fix miscompilation with unused unboxed
+   variables" (#7952): [unbox_dead_unit], the unit of the compiler's test
+   testsuite/tests/reaper/unbox_dead.ml with a block for the boxed float.
+   The result of code is unboxed, as a call of the code reads a field of
+   it. Another call returns to a continuation that has another use, from
+   the other branch of a conditional, with a constant: its parameter has
+   two sources and is not unboxed, and has no use, and is deleted.
+   [make_apply_wrapper] then has the decision [Delete] of the
+   continuation for a result that the callee unboxes; before the fix, it
+   took that for a disagreement on unboxing and made the call one that
+   never returns, and it now drops the result. [unbox_dead_statement]
+   says that the tables of the unit pass every check, that the unit
+   exits, and that rebuilt it exits as the unit does; and that the match
+   of [wrapper_args_u] in its order before the fix
+   ([wrapper_args_u_before_fix]) gives no arguments for that call, whose
+   wrapper is then [Invalid], with which the rebuilt unit goes wrong. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic.
@@ -715,3 +735,209 @@ Definition kept_result_unboxed_cause_statement : Prop :=
   ∧ multiple_allocation_points kept_result_unboxed_tables (v 32) = true
   ∧ kept_result_to_unbox true = []
   ∧ kept_result_tcr true = kept_result_tcr false.
+
+(* ======================================================================== *)
+(* A fixed miscompile: a result unboxed by code and deleted by a            *)
+(* continuation                                                             *)
+(* ======================================================================== *)
+
+(* The unit of testsuite/tests/reaper/unbox_dead.ml, with a block for the
+   boxed float: the code 50 returns a block of its parameter and 8. The
+   unit calls it returning to 20, which reads field 0 of the block into
+   [x31]. The arm 1 of a [Switch], taken at run time, calls it again
+   returning to 21, as the arm 0 jumps to 21 with 3; 21 does not use its
+   parameter [x32], and returns [x31]. *)
+Definition unbox_dead_unit : expr :=
+  Let_static [Bind_code 50 code_50]
+    (Let 60 Value (Closure_of_set 70 [(70, 50)] [])
+       (Let_cont_non_recursive 20
+          (Handler [30] (make_handler_metadata [Value])
+             (Let 31 Value (load 0 (Var 30))
+                (Let_cont_non_recursive 21
+                   (Handler [32] (make_handler_metadata [Value])
+                      (return_to 1 [Var 31]))
+                   (Let_cont_non_recursive 26
+                      (Handler [] no_params (return_to 21 [int 3]))
+                      (Let_cont_non_recursive 27
+                         (Handler [] no_params (Apply (call_50 [int 9] 21)))
+                         (Switch (Const (Naked_immediate 1))
+                            [(0%Z, goto 26); (1%Z, goto 27)]))))))
+          (Apply (call_50 [int 9] 20)))).
+
+Definition unbox_dead_facts : facts :=
+  traverse_unit Auto interface unbox_dead_unit.
+
+(* The solution of the unit, as the solver of the test tool computes it.
+   The code dep of 50 is as in [kept_result_unboxed]. [x32] has the
+   sources 3, a constant, and the result 3 of the code dep, which the
+   block [x42] dominates; [x32] has no use. *)
+Definition unbox_dead_tables : tables :=
+  {| t_alias := [(m 18, m 7); (m 5, m 17); (m 13, m 7); (m 5, m 12);
+       (m 14, m 16); (m 9, m 11); (v 32, consts); (m 1, v 31); (m 3, v 42);
+       (v 41, m 5); (v 40, m 6); (m 11, m 7); (m 16, m 7); (v 30, m 3);
+       (v 32, m 3); (m 2, m 4); (m 15, c 50); (m 10, c 50); (m 6, consts);
+       (v 31, v 40); (m 5, v 60)];
+     t_any_usage := [m 1; m 15; consts; m 10; m 2; v 31; m 4; c 50; v 40; m 6];
+     t_any_source := [c 50; consts; v 32; m 15; m 10; m 6; v 40; v 31; m 1];
+     t_has_usage := [m 1; m 15; consts; m 10; m 2; v 31; m 14; m 9; v 30; m 16;
+       m 11; m 7; m 3; m 4; c 50; v 40; v 42; m 6; v 60];
+     t_has_source := [c 50; consts; v 32; v 60; v 42; m 8; m 7; m 18; m 13;
+       m 3; m 11; m 16; v 30; m 15; m 10; m 6; m 14; m 9; v 40; v 31; m 5; m 1;
+       v 41];
+     t_usages := [(v 60, v 60); (m 14, m 14); (m 9, m 9); (v 30, v 30);
+       (m 16, m 14); (m 11, m 9); (m 7, m 9); (m 7, m 14); (m 3, v 30);
+       (v 42, v 30)];
+     t_sources := [(v 60, v 60); (v 42, v 42); (m 8, m 8); (m 7, m 7);
+       (m 18, m 7); (m 13, m 7); (m 3, v 42); (m 11, m 7); (m 16, m 7);
+       (m 14, m 7); (m 9, m 7); (v 30, v 42); (m 5, v 60); (v 41, v 60)];
+     t_reading_field := [];
+     t_escaping_field := [];
+     t_field_used := [(v 60, known); (v 42, Field_block 0 Value);
+       (m 7, result 0); (m 7, Field_return_of_call Exn);
+       (m 7, Field_code_id_of_call_witness)] |}.
+
+Definition unbox_dead_cannot_change : list node :=
+  derive_cannot_change unbox_dead_facts unbox_dead_tables.
+
+Definition unbox_dead_dominated : list (node * node) :=
+  derive_dominated unbox_dead_tables.
+
+Definition unbox_dead_to_unbox : list node :=
+  derive_to_unbox no_local unbox_dead_facts unbox_dead_tables
+    unbox_dead_cannot_change max_unbox_size false.
+
+Definition unbox_dead_tcr : list node :=
+  derive_to_change_representation no_local unbox_dead_facts
+    unbox_dead_tables unbox_dead_cannot_change max_unbox_size false
+    unbox_dead_to_unbox.
+
+Definition unbox_dead_code_deps : finite_map code_dep :=
+  unit_code_deps Auto interface unbox_dead_unit.
+
+Definition unbox_dead_rebuilt : expr :=
+  rebuild_unit_unbox_repr no_local unbox_dead_facts unbox_dead_tables
+    unbox_dead_cannot_change unbox_dead_code_deps unbox_dead_dominated
+    unbox_dead_to_unbox unbox_dead_tcr true unbox_dead_unit.
+
+Definition unbox_dead_exit : behaviour :=
+  Exits 1 [Value_const (Tagged_immediate 9)] empty_heap.
+
+(* [rev_args_or_invalid] of [make_apply_wrapper] before the fix, the
+   match of [wrapper_args_u] in its old order: a result that the callee
+   unboxes and the continuation deletes is [None] ([Invalid]). *)
+Fixpoint wrapper_args_u_before_fix (apply_decisions : list decision)
+    (func : list (wrapper_decision * flambda_kind)) : option (list simple) :=
+  match func with
+  | [] => Some []
+  | (fd, kind) :: func =>
+    let '(ad, apply_decisions) :=
+      match apply_decisions with
+      | [] => (Decided (Keep kind), [])
+      | ad :: apply_decisions => (ad, apply_decisions)
+      end
+    in
+    match wrapper_args_u_before_fix apply_decisions func with
+    | None => None
+    | Some rest =>
+      match ad, fd with
+      | Unbox _, (Wrapper_keep _ | Wrapper_delete)
+      | Decided _, Wrapper_unbox _ => None
+      | Decided Delete, _ => Some rest
+      | Decided (Keep _), Wrapper_keep x => Some (Var x :: rest)
+      | Decided (Keep kind), Wrapper_delete =>
+        Some (Const (Poison kind) :: rest)
+      | Unbox fields_apply, Wrapper_unbox fields_func =>
+        match
+          unboxed_field_pairs Value (Unboxed fields_apply)
+            (Unboxed fields_func)
+        with
+        | Some pairs => Some (map (fun '(_, x, _) => Var x) pairs ++ rest)
+        | None => None
+        end
+      end
+    end
+  end.
+
+(* The decisions of the callee 50 for its result, freshened for the
+   wrapper of the call that returns to 21, whose decision is [Delete]. *)
+Definition unbox_dead_wrapper_decisions
+    : list (wrapper_decision * flambda_kind) :=
+  freshen_decisions [(Unbox [(Field_block 0 Value, Not_unboxed 62)], Value)]
+    64.
+
+(* The calls of the rebuilt unit, and the rebuilt unit with [h] for the
+   handler of the wrapper 64 of the call that returns to 21: that handler
+   jumps to 21 with no argument since the fix, and was [Invalid] before
+   it. The closure [x60] changes its representation, to the function
+   slot 71; the code returns the variable 61 of the field of its result,
+   and 20 has the variable 63 of the field of [x30] for parameter. *)
+Definition unbox_dead_call (k : continuation) : expr :=
+  Apply
+    {| ap_callee := Var 60; ap_call_kind := Direct 50; ap_args := [int 9];
+       ap_continuation := k; ap_exn_continuation := 2;
+       ap_exn_extra_args := [];
+       ap_args_arity := [Unboxed_product [Singleton Value]];
+       ap_return_arity := [Unboxed_product [Singleton Value]] |}.
+
+Definition unbox_dead_rebuilt_with (h : expr) : expr :=
+  Let_static [Bind_code 50 code_50_unboxed]
+    (Let 60 Value (Closure_of_set 71 [(71, 50)] [])
+       (Let_cont_non_recursive 20
+          (Handler [63] (make_handler_metadata [Value])
+             (Let 31 Value (Simple (Var 63))
+                (Let_cont_non_recursive 21
+                   (Handler [] no_params (return_to 1 [Var 31]))
+                   (Let_cont_non_recursive 26
+                      (Handler [] no_params (return_to 21 []))
+                      (Let_cont_non_recursive 27
+                         (Handler [] no_params
+                            (Let_cont_non_recursive 64
+                               (Handler [64] (make_handler_metadata [Value])
+                                  h)
+                               (unbox_dead_call 64)))
+                         (Switch (Const (Naked_immediate 1))
+                            [(0%Z, goto 26); (1%Z, goto 27)]))))))
+          (unbox_dead_call 20))).
+
+(* The tables pass every check; [x42] is unboxed, and so is the result of
+   the code, which it dominates; [x32], of two sources, is not, and has
+   no use. The unit exits with 9, and so does it rebuilt. The rebuilt
+   unit is [unbox_dead_rebuilt_with] the jump to 21: before the fix,
+   [rev_args_or_invalid] had no arguments for the call that returns to
+   21, whose wrapper was then [Invalid], and the rebuilt unit went
+   wrong. *)
+Definition unbox_dead_statement : Prop :=
+  check_closed no_local unbox_dead_facts unbox_dead_tables = true
+  ∧ check_field_used_exact no_local unbox_dead_facts unbox_dead_tables
+    = true
+  ∧ check_cc_closed unbox_dead_facts unbox_dead_tables
+      unbox_dead_cannot_change = true
+  ∧ check_dominated unbox_dead_tables unbox_dead_dominated = true
+  ∧ check_to_unbox no_local unbox_dead_facts unbox_dead_tables
+      unbox_dead_cannot_change max_unbox_size false unbox_dead_to_unbox
+    = true
+  ∧ check_to_change_representation no_local unbox_dead_facts
+      unbox_dead_tables unbox_dead_cannot_change max_unbox_size false
+      unbox_dead_to_unbox unbox_dead_tcr = true
+  ∧ check_sets_whole unbox_dead_facts unbox_dead_tables unbox_dead_to_unbox
+      unbox_dead_tcr = true
+  ∧ unbox_dead_to_unbox = [v 42]
+  ∧ mem_pair (v 42) (m 3) unbox_dead_dominated = true
+  ∧ multiple_allocation_points unbox_dead_tables (v 32) = true
+  ∧ mem_node (v 32) (t_has_usage unbox_dead_tables) = false
+  ∧ unit_calling_convention_changes_u unbox_dead_facts unbox_dead_tables
+      unbox_dead_cannot_change unbox_dead_code_deps unbox_dead_dominated
+      unbox_dead_to_unbox unbox_dead_unit
+    = [(50, Changing_u [Decided (Keep Value)]
+              [Unbox [(Field_block 0 Value, Not_unboxed 62)]])]
+  ∧ behaves (FlambdaReaperTupledSpec.on_its_own unbox_dead_unit)
+      unbox_dead_exit
+  ∧ unbox_dead_rebuilt = unbox_dead_rebuilt_with (return_to 21 [])
+  ∧ behaves (FlambdaReaperTupledSpec.on_its_own unbox_dead_rebuilt)
+      unbox_dead_exit
+  ∧ wrapper_args_u [Decided Delete] unbox_dead_wrapper_decisions = Some []
+  ∧ wrapper_args_u_before_fix [Decided Delete] unbox_dead_wrapper_decisions
+    = None
+  ∧ behaves
+      (FlambdaReaperTupledSpec.on_its_own (unbox_dead_rebuilt_with Invalid))
+      Goes_wrong.

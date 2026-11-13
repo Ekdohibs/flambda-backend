@@ -380,3 +380,18 @@ Qed.
 
 Theorem kept_result_unboxed_cause : kept_result_unboxed_cause_statement.
 Proof. vm_compute. auto 10. Qed.
+
+(* ======================================================================== *)
+(* A fixed miscompile: a result unboxed by code and deleted by a            *)
+(* continuation                                                             *)
+(* ======================================================================== *)
+
+Theorem unbox_dead : unbox_dead_statement.
+Proof.
+  do 12 (split; [ vm_compute; reflexivity | ]).
+  split; [ exists 20; vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | ].
+  split; [ exists 20; vm_compute; reflexivity | ].
+  do 2 (split; [ vm_compute; reflexivity | ]).
+  exists 20; vm_compute; reflexivity.
+Qed.

@@ -181,7 +181,14 @@
    is kept. The model makes the call return to a continuation whose
    handler is [Invalid], which is how the conversion of the test tool
    reads a call that never returns; [kept_result_unboxed] below is such a
-   unit, which returns 10, and whose rebuild goes wrong.
+   unit, which returns 10, and whose rebuild goes wrong. A result that
+   the continuation deletes is dropped, whatever the callee does with it,
+   since the fix "reaper: fix miscompilation with unused unboxed
+   variables" (#7952); before, a result that the callee unboxes and the
+   continuation deletes made the call one that never returns too, a
+   miscompile where a parameter with two sources, the unboxed result of
+   the callee and a constant, has no use. FlambdaReaperUnboxingSpec.v
+   has the unit.
 
    The deliberate differences from the OCaml, each where the model cannot
    follow it or does not have what it reads:
@@ -1806,10 +1813,12 @@ Definition wrapper_params (func : list (wrapper_decision * flambda_kind))
 
 (* [rev_args_or_invalid] of [make_apply_wrapper]: for each result, what
    the continuation of the call is given, by the decision of the
-   continuation for its parameter and that of the callee; [None] where
-   one decision unboxes and the other does not ([Invalid]). A result
-   beyond the decisions of the continuation, or of a continuation that has
-   none, is kept, as a continuation of fixed arity keeps it. *)
+   continuation for its parameter and that of the callee. A result that
+   the continuation deletes is dropped, whatever the callee does with it;
+   otherwise [None] where one decision unboxes and the other does not
+   ([Invalid]). A result beyond the decisions of the continuation, or of
+   a continuation that has none, is kept, as a continuation of fixed
+   arity keeps it. *)
 Fixpoint wrapper_args_u (apply_decisions : list decision)
     (func : list (wrapper_decision * flambda_kind)) : option (list simple) :=
   match func with
@@ -1825,12 +1834,15 @@ Fixpoint wrapper_args_u (apply_decisions : list decision)
     | None => None
     | Some rest =>
       match ad, fd with
+      (* First since the fix "reaper: fix miscompilation with unused
+         unboxed variables" (#7952): before, a result that the callee
+         unboxes and the continuation deletes was the case below. *)
+      | Decided Delete, _ => Some rest
       (* The case where the compiler stops with a fatal error if
          [has_any_source], a test that is [false] there ("CR ncourant:
          restore this check"). *)
       | Unbox _, (Wrapper_keep _ | Wrapper_delete)
-      | Decided _, Wrapper_unbox _ => None
-      | Decided Delete, _ => Some rest
+      | Decided (Keep _), Wrapper_unbox _ => None
       | Decided (Keep _), Wrapper_keep x => Some (Var x :: rest)
       | Decided (Keep kind), Wrapper_delete =>
         Some (Const (Poison kind) :: rest)
@@ -2512,10 +2524,11 @@ Definition apply_my_closure_u (ap : apply_expr) : option unboxed_fields :=
    call: no wrapper if what the continuation of the call is given is what
    the callee returns, in order; otherwise the call returns to a wrapper,
    the continuation [first_fresh], whose parameters are what the callee
-   returns. Where the two decisions disagree on unboxing, the compiler
-   makes a call that never returns, which the conversion of the test tool
-   writes as a call returning to a continuation whose handler is
-   [Invalid]: the wrapper, with that handler. *)
+   returns. Where the two decisions disagree on unboxing a result that
+   the continuation does not delete, the compiler makes a call that never
+   returns, which the conversion of the test tool writes as a call
+   returning to a continuation whose handler is [Invalid]: the wrapper,
+   with that handler. *)
 Definition make_apply_wrapper_u (en : unbox_env) (ap : apply_expr)
     (func_decisions : list (decision * flambda_kind)) : expr :=
   let func := freshen_decisions func_decisions first_fresh in
