@@ -1123,14 +1123,27 @@ it gave back.
   read the test asks nothing: its law from the imports
   (`read_known_slots_anywhere_refines_imports_statement`) has no
   premise. The demotion and the rounds are given the term read, and
-  their test is asked of that term. Nothing was asked after the
+  their test is asked of that term. Each round of the validation
+  of the lifted term, after each lifting and after the demotion,
+  goes on, once it has read the known value slots, to make the read
+  of a place of a static constant the variable of an earlier read,
+  where one group of static bindings gave the two places one
+  variable (`FlambdaSharedReadsSpec.share_static_reads`). For that
+  the test
+  asks nothing: its law from the imports
+  (`share_static_reads_refines_imports_statement`) has no premise.
+  The rounds that follow, and their tests, are given the term so
+  rewritten. Nothing was asked after the
   last lifting when the validation did not use, after the demotion,
   what the unit binds its symbols to; and when it used that and did
   not read first, the test was asked of the term that the last
-  lifting leaves. So for this verdict the test is not the one that
-  it was before either change, and the validation that gives the
-  verdict is not either. No inclusion of the verdicts accepted
-  from the imports before either change is claimed or proved, in
+  lifting leaves; and when the rounds did not share the reads of
+  two places, the tests of the later rounds were asked of terms
+  that kept those reads. So for this verdict the test is not the
+  one that it was before any of these changes, and the validation
+  that gives the verdict is not either. No inclusion of the
+  verdicts accepted from the imports before any of them is claimed
+  or proved, in
   either direction: a unit that had this verdict from its imports
   could lose it, and a unit that had not could have it. The
   theorem is of no verdict that does
@@ -1705,12 +1718,14 @@ to it.
 soundness either. The converter gives code the compiler's flag
 (`Code.stub`), but no theorem assumes that this flag is right. The
 machine and the checks of well-formedness do not read it. The
-comparison reads it and is stricter for a fixed pair of terms. Two
+comparison reads it and is stricter for a fixed pair of terms. Three
 rewrites of the validation read it:
 `FlambdaKnownSlotsSpec.read_known_slots`, through `read_slots` under
-its checks, and `FlambdaStubCallsSpec.demote_stub_calls`. Their
-refinement statements hold whatever the flag says: the first for a
-unit run on its own, the second under all environments. A wrong flag
+its checks, `FlambdaStubCallsSpec.demote_stub_calls`, and
+`FlambdaSharedReadsSpec.share_static_reads`, which leaves the code of
+a stub as it is. Their refinement statements hold whatever the flag
+says: the first and the third for a unit run on its own, the second
+under all environments. A wrong flag
 can change which pairs are validated, but does not make an accepted
 pair unsound in the model. The absence of lost verdicts measured at
 the default flags on the sets named in
