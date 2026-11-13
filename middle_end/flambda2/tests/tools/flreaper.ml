@@ -113,10 +113,15 @@
    the conversion: a call that never returns is a call that returns to a
    continuation of the conversion's, whose parameters the model's rebuild may
    remove, so that the two rebuilt terms then differ
-   (tests/semantics/arity_text_never_returns.fl). The end of a region, which the
-   conversion makes the unit value, is given to the model as a primitive of
-   arbitrary effects, as the compiler's traversal reads it, and the model's
-   rebuild is given the unit value back ([ends_as_effects]). *)
+   (tests/semantics/arity_text_never_returns.fl). The units are converted with
+   their regions dropped, as for the validation of flsemantics.ml (decision
+   D37): the model's primitives of regions, which its traversal reads as the
+   compiler's reads them, are made only by the conversion for the machine of
+   regions, which the tool does not use, so the regions themselves are not
+   compared. The end of a region, which the conversion makes the unit value, is
+   given to the model as a primitive of arbitrary effects, as the compiler's
+   traversal reads it, and the model's rebuild is given the unit value back
+   ([ends_as_effects]). *)
 
 (* The matches below on the compiler's types name the cases the model has and
    send every other to one answer; they are meant to stay as they are when the
@@ -1481,7 +1486,15 @@ let rec map_term ~named ~static (e : Rocq_model.expr) : Rocq_model.expr =
    the variable is not used. So the term given the model has the primitive, and
    [ends_as_converted] gives the unit value back to the model's rebuild, as the
    conversion of the compiler's output has it. [ends] are the variables of these
-   [Let]s ([relate_variables]), which the model's rebuild keeps. *)
+   [Let]s ([relate_variables]), which the model's rebuild keeps.
+
+   The model's own [End_region] is read by its traversal as the compiler reads
+   the end of a region, but the conversion makes it only for the machine of
+   regions ([Flsemantics.keep_regions]), with the begins of the regions and the
+   modes of the allocations, which the machine run here has no step for and
+   which the walk of [relate_variables] does not expect; and that conversion
+   refuses units that this one takes. So the tool keeps the conversion of the
+   validation, and this. *)
 let ends_as_effects ends =
   map_term ~static:Fun.id ~named:(fun x (named : Rocq_model.named) ->
       match named with
