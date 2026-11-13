@@ -102,6 +102,9 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   FlambdaArrayLoadScopeProofs.v \
   FlambdaArrayLoadScopeSpec.v \
   FlambdaArrayLoadSpec.v \
+  FlambdaBindConstParamsNamesProofs.v \
+  FlambdaBindConstParamsProofs.v \
+  FlambdaBindConstParamsSpec.v \
   FlambdaBindersProofs.v \
   FlambdaBindersSpec.v \
   FlambdaBlockLoadProofs.v \
