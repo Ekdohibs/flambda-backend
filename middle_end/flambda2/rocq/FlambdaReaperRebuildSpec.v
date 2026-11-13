@@ -31,7 +31,7 @@
    This file is to be reviewed: the checks [closure_free],
    [no_code_no_slots], [no_code], [no_call], [direct_tail_calls],
    [direct_calls], [only_direct_calls], [full_calls], [generic_calls],
-   [exits_one_value] and [results_kinded], the relation
+   [tupled_calls], [exits_one_value] and [results_kinded], the relation
    [observed_equal], the statements, and the examples, against
    FlambdaReaperRebuild.v (the rebuild, which needs no review) and
    FlambdaReaperFlowSpec.v (the meaning of a solution). The proofs are
@@ -150,13 +150,15 @@
      compiler's units, which are well-kinded, meet it; the model asks
      nothing of kinds otherwise (FlambdaWellKindedSpec.v).
    [rebuild_refines_observably_statement] is proved for the units that
-   meet [generic_calls], of the code that they bind ([unit_codes]), in
+   meet [tupled_calls], of the code that they bind ([unit_codes]), in
    place of [closure_free]: closures and static sets of closures with
-   value slots, projections of function slots and of value slots, code
-   and deleted code, and calls, direct or of unknown arity, full, partial
-   applications and over-applications, that return, and raise, to a way
-   out of the unit or of the code they are in, or to a handler in scope.
-   A unit of [full_calls] meets it
+   value slots, projections of function slots and of value slots, code,
+   tupled or not, and deleted code, and calls, direct or of unknown
+   arity, full, partial applications and over-applications, that return,
+   and raise, to a way out of the unit or of the code they are in, or to
+   a handler in scope. A unit of [generic_calls] meets it
+   ([generic_calls_tupled_calls_statement]); a unit of [full_calls]
+   meets [generic_calls]
    ([full_calls_generic_calls_statement]); a unit of [only_direct_calls]
    meets [full_calls] ([only_direct_calls_full_calls_statement]); a unit
    of [direct_calls]
@@ -257,7 +259,25 @@
    arguments left; the rebuild masks these at the witnesses that come
    after those of the code, from what the code returns. The code of a
    closure partially applied has a use, as every witness of a call reads
-   the code id. What remains: calls of tupled code of unknown arity.
+   the code id. [tupled_calls] asks the same, but lets the code of the
+   unit be tupled, with parameters of one component each. A call of a
+   closure of tupled code gives the code a tuple, of which the code takes
+   the fields, followed by the arguments after the tuple: a full call, or
+   an over-application. The traversal gives tupled code one witness of
+   unknown arity, whose one parameter is the tuple, the parameters of the
+   code being read off its fields, and two facts more, which keep the
+   tuple alive: a read of [Is_int] of the tuple, used by the code id. The
+   code has a use, as the call reads its code id, so the tuple has one,
+   though no field of it may have one: the rebuild keeps it, a block of
+   as many fields, poison where a field has no use, which the machine
+   reads as it reads the tuple of the code, and the call keeps it as its
+   argument. Without the two facts, the rebuild of a call of a tuple no
+   field of which has a use gives the call poison for the tuple, and goes
+   wrong (FlambdaReaperTupledSpec.v). The arguments after the tuple are
+   masked at the witnesses that come after that of the code, from what
+   the code returns. A direct call of tupled code is not in
+   [in_flow_fragment]: the compiler's is in the convention of the code,
+   which the model has no call kind for.
    The statement holds of more than nothing ([example_statement]): a
    unit with a static block, a block one field of which no load reads, a
    [Let] with no use, and a continuation one parameter of which has no
@@ -273,9 +293,11 @@
    [wrapper_example_statement] for a unit with a call that returns to a
    handler through a wrapper; [raise_example_statement] for a unit with
    a call that raises to a handler, with extra arguments;
-   [indirect_example_statement] for a unit with an indirect call; and
+   [indirect_example_statement] for a unit with an indirect call;
    [partial_call_example_statement] for a unit with a partial
-   application, completed by a second call. *)
+   application, completed by a second call; and
+   [tupled_call_example_statement] for a unit with an over-application
+   of tupled code, of a pair whose fields have no use. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -687,7 +709,7 @@ Definition only_direct_calls_full_calls_statement : Prop :=
    completes; one with more is a full call whose result is called with
    the arguments left (FlambdaSemanticsSpec.shape_of_code_call). The
    compiler's tupled code, called at unknown arity, takes its arguments
-   in a tuple, and is not covered yet. *)
+   in a tuple: [tupled_calls] lets the code be tupled. *)
 Definition generic_call (codes : list (code_id * code)) (ap : apply_expr)
     : bool :=
   forallb argument_kind_ok (unarize (ap_args_arity ap))
@@ -730,6 +752,64 @@ with code_generic_calls (codes : list (code_id * code)) (c : code) : bool :=
 Definition full_calls_generic_calls_statement : Prop :=
   ∀ (codes : list (code_id * code)) (e : expr),
     full_calls codes e = true -> generic_calls codes e = true.
+
+(* Tupled calls: [generic_calls], but the code that the unit binds
+   ([codes]) may be tupled, if its parameters are of one component each,
+   as those of the compiler's tupled code are, a tuple having a field for
+   each ([in_flow_fragment] asks it too, of a unit with a call of unknown
+   arity). A call of a closure of tupled code gives it a tuple, of which
+   the code takes the fields, followed by the arguments after the tuple
+   (FlambdaSemanticsSpec.arguments_for_code): a full call, or an
+   over-application, never a partial application. The compiler calls
+   tupled code so at unknown arity only; its direct call of tupled code
+   is in the convention of the code, which [in_flow_fragment] leaves
+   out. *)
+Definition tupled_call (codes : list (code_id * code)) (ap : apply_expr)
+    : bool :=
+  forallb argument_kind_ok (unarize (ap_args_arity ap))
+  && match ap_call_kind ap with
+     | Direct _ => true
+     | Indirect =>
+       forallb
+         (fun '(_, c) =>
+            negb (code_is_tupled c) || singleton_params (code_params_arity c))
+         codes
+     end.
+
+Fixpoint tupled_calls (codes : list (code_id * code)) (e : expr) : bool :=
+  match e with
+  | Let _ kind defining_expr body =>
+    named_no_code kind defining_expr && tupled_calls codes body
+  | Let_static bindings body =>
+    forallb (binding_tupled_calls codes) bindings && tupled_calls codes body
+  | Let_cont_non_recursive _ h body =>
+    handler_tupled_calls codes h && tupled_calls codes body
+  | Let_cont_recursive handlers body =>
+    forallb (fun '(_, h) => handler_tupled_calls codes h) handlers
+    && tupled_calls codes body
+  | Apply ap => tupled_call codes ap
+  | Apply_cont _ | Switch _ _ | Invalid => true
+  end
+with handler_tupled_calls (codes : list (code_id * code))
+    (h : continuation_handler) : bool :=
+  match h with
+  | Handler _ _ handler => tupled_calls codes handler
+  end
+with binding_tupled_calls (codes : list (code_id * code))
+    (binding : static_binding) : bool :=
+  match binding with
+  | Bind_code _ c => code_tupled_calls codes c
+  | Bind_deleted_code _ | Bind_symbol _ _ => binding_no_code binding
+  end
+with code_tupled_calls (codes : list (code_id * code)) (c : code) : bool :=
+  match c with
+  | Code _ _ _ _ _ body => tupled_calls codes body
+  end.
+
+(* A unit of [generic_calls] meets it. *)
+Definition generic_calls_tupled_calls_statement : Prop :=
+  ∀ (codes : list (code_id * code)) (e : expr),
+    generic_calls codes e = true -> tupled_calls codes e = true.
 
 (* ======================================================================== *)
 (* Exits                                                                    *)
@@ -1479,7 +1559,7 @@ Definition rebuild_refines_observably_statement : Prop :=
     is_local_slots_only is_local ->
     (∀ f : field, is_local f = false) ∨ projection_free e = true ->
     in_flow_fragment e = true ->
-    generic_calls (unit_codes e) e = true ->
+    tupled_calls (unit_codes e) e = true ->
     results_kinded [] [] e = true ->
     well_formed_unit u e = true ->
     exits_one_value u e = true ->
@@ -2748,3 +2828,169 @@ Definition partial_exit_counterexample_statement : Prop :=
   ∧ values_related observed_equal
       [PartialExitExample.result (Value_const (Tagged_immediate 7))]
       [PartialExitExample.result (Value_const (Poison Value))].
+
+(* The statement up to observation holds of a unit with a call of tupled
+   code, which [generic_calls] does not allow: a call of unknown arity
+   gives a closure of tupled code of two parameters a pair, and one
+   argument more, and the code uses neither component of the pair:
+
+     let code f51 x44 my_closure x45 return k5 exn k6 = k5 x44
+     and code f50 (x40, x43) my_closure x41 return k3 exn k4 =
+       let x46 = closure at 71 of { 71 = f51 } in
+       k3 x46                         (tupled: [x40], [x43] have no use)
+     in
+     let x10 = 7 in
+     let x13 = [x10; x10] in          (the pair, a block of tag 0)
+     let x11 = closure at 70 of { 70 = f50 } in
+     let x12 = 8 in
+     x11 x13 x12 return k1 exn k2     (indirect: an over-application)
+
+   The machine gives the code the fields of the pair, and calls what the
+   code returns, a closure of [f51], with [x12]. The least solution passes
+   the checks. No field of the pair has a use, but the two facts that
+   keep the tuple alive give one to the parameter of the witness of
+   unknown arity of [f50], whose code id has one: the rebuild keeps the
+   pair, as a block of poison, and the call keeps it as its argument; it
+   removes [x10]. The two units exit with 8. *)
+Module TupledCallExample.
+
+Local Open Scope positive_scope.
+
+Definition code51 : code :=
+  Code [44] 45 5 6 (make_code_metadata [Singleton Value] [Singleton Value])
+    (FlowExample.return_to 5 [Var 44]).
+
+Definition code50 : code :=
+  Code [40; 43] 41 3 4
+    (make_tupled_code_metadata [Singleton Value; Singleton Value]
+       [Singleton Value])
+    (Let 46 Value (Closure_of_set 71 [(71, 51)] [])
+       (FlowExample.return_to 3 [Var 46])).
+
+Definition call : apply_expr :=
+  {| ap_callee := Var 11; ap_call_kind := Indirect;
+     ap_args := [Var 13; Var 12];
+     ap_continuation := 1; ap_exn_continuation := 2;
+     ap_exn_extra_args := [];
+     ap_args_arity := [Singleton Value; Singleton Value];
+     ap_return_arity := [Singleton Value] |}.
+
+Definition unit_expr : expr :=
+  Let_static [Bind_code 51 code51; Bind_code 50 code50]
+    (Let 10 Value (Simple (Const (Tagged_immediate 7)))
+       (Let 13 Value (FlowExample.make_block [Var 10; Var 10])
+          (Let 11 Value (Closure_of_set 70 [(70, 50)] [])
+             (Let 12 Value (Simple (Const (Tagged_immediate 8)))
+                (Apply call))))).
+
+Definition solution : tables :=
+  {| t_alias :=
+       [(Node_made 1, Node_made 3); (Node_made 11, Node_variable 11);
+        (Node_made 12, Node_variable 10); (Node_made 13, Node_variable 10);
+        (Node_made 16, Node_variable 13); (Node_made 17, Node_all_constants);
+        (Node_made 18, Node_code_id 50); (Node_made 18, Node_code_id 51);
+        (Node_made 19, Node_made 22); (Node_made 2, Node_made 10);
+        (Node_made 2, Node_made 4); (Node_made 20, Node_made 8);
+        (Node_made 21, Node_made 9); (Node_made 22, Node_made 15);
+        (Node_made 3, Node_variable 44); (Node_made 5, Node_variable 46);
+        (Node_made 6, Node_variable 12); (Node_made 9, Node_variable 46);
+        (Node_variable 10, Node_all_constants);
+        (Node_variable 12, Node_all_constants);
+        (Node_variable 40, Node_made 12); (Node_variable 41, Node_made 11);
+        (Node_variable 43, Node_made 13); (Node_variable 44, Node_made 6);
+        (Node_variable 45, Node_made 5)];
+     t_any_usage :=
+       [Node_all_constants; Node_code_id 50; Node_code_id 51; Node_made 1;
+        Node_made 10; Node_made 17; Node_made 18; Node_made 2; Node_made 3;
+        Node_made 4; Node_made 6; Node_variable 12; Node_variable 44];
+     t_any_source :=
+       [Node_all_constants; Node_code_id 50; Node_code_id 51; Node_made 1;
+        Node_made 12; Node_made 13; Node_made 17; Node_made 18; Node_made 3;
+        Node_made 6; Node_variable 10; Node_variable 12; Node_variable 40;
+        Node_variable 43; Node_variable 44];
+     t_has_usage :=
+       [Node_all_constants; Node_code_id 50; Node_code_id 51; Node_made 1;
+        Node_made 10; Node_made 15; Node_made 16; Node_made 17; Node_made 18;
+        Node_made 19; Node_made 2; Node_made 20; Node_made 21; Node_made 22;
+        Node_made 3; Node_made 4; Node_made 6; Node_made 8; Node_made 9;
+        Node_variable 11; Node_variable 12; Node_variable 13; Node_variable 44;
+        Node_variable 46];
+     t_has_source :=
+       [Node_all_constants; Node_code_id 50; Node_code_id 51; Node_made 1;
+        Node_made 11; Node_made 12; Node_made 13; Node_made 14; Node_made 15;
+        Node_made 16; Node_made 17; Node_made 18; Node_made 19; Node_made 20;
+        Node_made 21; Node_made 22; Node_made 3; Node_made 5; Node_made 6;
+        Node_made 7; Node_made 8; Node_made 9; Node_variable 10;
+        Node_variable 11; Node_variable 12; Node_variable 13; Node_variable 40;
+        Node_variable 41; Node_variable 43; Node_variable 44; Node_variable 45;
+        Node_variable 46];
+     t_usages :=
+       [(Node_made 15, Node_made 19); (Node_made 16, Node_made 16);
+        (Node_made 19, Node_made 19); (Node_made 20, Node_made 20);
+        (Node_made 21, Node_made 21); (Node_made 22, Node_made 19);
+        (Node_made 8, Node_made 20); (Node_made 9, Node_made 21);
+        (Node_variable 11, Node_variable 11); (Node_variable 13, Node_made 16);
+        (Node_variable 46, Node_made 21)];
+     t_sources :=
+       [(Node_made 11, Node_variable 11); (Node_made 14, Node_made 14);
+        (Node_made 15, Node_made 15); (Node_made 16, Node_variable 13);
+        (Node_made 19, Node_made 15); (Node_made 20, Node_made 8);
+        (Node_made 21, Node_variable 46); (Node_made 22, Node_made 15);
+        (Node_made 5, Node_variable 46); (Node_made 7, Node_made 7);
+        (Node_made 8, Node_made 8); (Node_made 9, Node_variable 46);
+        (Node_variable 11, Node_variable 11);
+        (Node_variable 13, Node_variable 13);
+        (Node_variable 41, Node_variable 11);
+        (Node_variable 45, Node_variable 46);
+        (Node_variable 46, Node_variable 46)];
+     t_reading_field := [];
+     t_escaping_field := [];
+     t_field_used :=
+       [(Node_made 15, Field_code_id_of_call_witness);
+        (Node_made 15, Field_return_of_call (Normal 0%nat));
+        (Node_made 15, Field_return_of_call Exn);
+        (Node_made 8, Field_code_id_of_call_witness);
+        (Node_made 8, Field_return_of_call (Normal 0%nat));
+        (Node_made 8, Field_return_of_call Exn);
+        (Node_variable 11, Field_call_witness Unknown_arity_code_pointer);
+        (Node_variable 13, Field_is_int);
+        (Node_variable 46, Field_call_witness Unknown_arity_code_pointer)] |}.
+
+Definition rebuilt : expr :=
+  Let_static [Bind_code 51 code51; Bind_code 50 code50]
+    (Let 13 Value
+       (FlowExample.make_block [Const (Poison Value); Const (Poison Value)])
+       (Let 11 Value (Closure_of_set 70 [(70, 50)] [])
+          (Let 12 Value (Simple (Const (Tagged_immediate 8))) (Apply call)))).
+
+End TupledCallExample.
+
+Definition tupled_call_example_statement : Prop :=
+  in_flow_fragment TupledCallExample.unit_expr = true
+  ∧ generic_calls (unit_codes TupledCallExample.unit_expr)
+      TupledCallExample.unit_expr
+    = false
+  ∧ tupled_calls (unit_codes TupledCallExample.unit_expr)
+      TupledCallExample.unit_expr
+    = true
+  ∧ results_kinded [] [] TupledCallExample.unit_expr = true
+  ∧ well_formed_unit FlowExample.interface TupledCallExample.unit_expr = true
+  ∧ exits_one_value FlowExample.interface TupledCallExample.unit_expr = true
+  ∧ check_closed FlowExample.is_local
+      (traverse_unit Never FlowExample.interface TupledCallExample.unit_expr)
+      TupledCallExample.solution
+    = true
+  ∧ check_field_used_exact FlowExample.is_local
+      (traverse_unit Never FlowExample.interface TupledCallExample.unit_expr)
+      TupledCallExample.solution
+    = true
+  ∧ rebuild_unit_from_tables
+      (traverse_unit Never FlowExample.interface TupledCallExample.unit_expr)
+      TupledCallExample.solution false TupledCallExample.unit_expr
+    = TupledCallExample.rebuilt
+  ∧ behaves
+      (State TupledCallExample.unit_expr [] [] empty_static_env empty_heap)
+      (Exits 1%positive [Value_const (Tagged_immediate 8)] empty_heap)
+  ∧ behaves
+      (State TupledCallExample.rebuilt [] [] empty_static_env empty_heap)
+      (Exits 1%positive [Value_const (Tagged_immediate 8)] empty_heap).
