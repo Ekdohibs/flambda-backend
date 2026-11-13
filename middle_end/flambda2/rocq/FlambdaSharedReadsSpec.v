@@ -111,9 +111,10 @@
    ([share_read_sound_statement]); where it has none the unit was
    undefined. So the unit rewritten refines the unit, run on its own
    ([share_static_reads_program_refines_statement]). It is not an
-   equivalence: a read that has no value in the unit (of a symbol
-   that is not bound yet, or of a load whose access kind the block
-   does not meet) has one once it is the variable of another.
+   equivalence: a read that has no value in the unit (a load whose
+   access kind the block does not meet, or a projection that names a
+   function slot at which the closure is not) has one once it is the
+   variable of another.
 
    The check reads a constant as the machine does ([place_held]): the
    value slot of a closure is the first that the constant lists for
