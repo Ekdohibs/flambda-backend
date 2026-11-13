@@ -62,7 +62,8 @@ From OxCamlFlambda2 Require Import FlambdaMapSpec FlambdaModel
   FlambdaImportsSpec
   FlambdaLoopifySpec FlambdaMergeSwitchesSpec FlambdaNormaliseSpec
   FlambdaParamAliasesSpec
-  FlambdaRecHandlersSpec FlambdaRenameApartSpec FlambdaShortcutSpec
+  FlambdaRecHandlersSpec FlambdaRegionsSpec FlambdaRenameApartSpec
+  FlambdaShortcutSpec
   FlambdaSinkContsSpec FlambdaSinkUsesSpec FlambdaStaticsInScopeSpec
   FlambdaStaticsOrderSpec
   FlambdaUnboxSpec
@@ -228,6 +229,7 @@ Separate Extraction
   forward_kinded
   forward_kinded_in_code
   imports_statics
+  initial_region_state
   inline_calls
   inline_known_calls
   inline_tail_conts
@@ -252,6 +254,8 @@ Separate Extraction
   normalise_knowing
   numbers_in_range
   partial_or_over_application
+  region_names_fresh
+  region_step
   remove_unused_conts
   remove_unused_defined_lets
   remove_unused_defined_lets_in_code

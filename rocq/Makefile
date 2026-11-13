@@ -282,6 +282,8 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   FlambdaRecoverComparisonScopeProofs.v \
   FlambdaRecoverComparisonScopeSpec.v \
   FlambdaRecoverComparisonSpec.v \
+  FlambdaRegionsProofs.v \
+  FlambdaRegionsSpec.v \
   FlambdaRenameApartProofs.v \
   FlambdaRenameApartSpec.v \
   FlambdaSameComparisonProofs.v \
