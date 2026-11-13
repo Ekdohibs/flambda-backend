@@ -60,8 +60,6 @@ From OxCamlFlambda2 Require Import FlambdaDemoteSpec.
 From OxCamlFlambda2 Require FlambdaDemoteScopeProofs.
 From OxCamlFlambda2 Require Import FlambdaShareProjectionsSpec
   FlambdaShareProjectionsScopeProofs.
-From OxCamlFlambda2 Require Import FlambdaArrayLoadSpec
-  FlambdaArrayLoadScopeProofs.
 From OxCamlFlambda2 Require Import FlambdaWrapReturnsSpec
   FlambdaWrapReturnsNamesProofs.
 From OxCamlFlambda2 Require Import FlambdaUntagParamsSpec
@@ -109,7 +107,6 @@ Create HintDb scoped.
   apply_identities_scoped inline_tail_conts_scoped thread_switches_scoped
   drop_deleted_code_scoped merge_statics_scoped rewrite_code_scoped
   load_known_blocks_scoped unbox_known_numbers_scoped
-  load_known_arrays_scoped
   share_known_primitives_scoped follow_aliases_scoped sink_let_conts_scoped
   shortcut_switches_scoped share_handlers_scoped
   follow_aliases_in_loops_scoped

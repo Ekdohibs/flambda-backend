@@ -2,7 +2,6 @@ open Datatypes
 open FlambdaAliasLetsSpec
 open FlambdaAliasesSpec
 open FlambdaArmNumbersSpec
-open FlambdaArrayLoadSpec
 open FlambdaBlockLoadSpec
 open FlambdaCodeLetsSpec
 open FlambdaCompareSpec
@@ -98,8 +97,7 @@ let normalise_expr_before e =
                (share_known_primitives
                   (recover_known_comparisons
                      (fold_same_comparisons
-                        (unbox_known_numbers
-                           (load_known_arrays (load_known_blocks e0)))))))))
+                        (unbox_known_numbers (load_known_blocks e0))))))))
   in
   wrap_returns
     (drop_unused_params
@@ -162,8 +160,7 @@ let normalise_expr_params_knowing known e =
             (unbox_variants_knowing known
                (follow_aliases_in_loops []
                   (follow_aliases []
-                     (unbox_known_numbers
-                        (load_known_arrays (load_known_blocks e1))))))))
+                     (unbox_known_numbers (load_known_blocks e1)))))))
   in
   drop_dead_params
     (bind_aliased_params

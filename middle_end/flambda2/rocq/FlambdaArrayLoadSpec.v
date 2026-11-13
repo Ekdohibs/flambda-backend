@@ -101,9 +101,8 @@
    handler of a non-recursive continuation is gone into, with what is
    known where it is defined; the handlers of recursive ones and the
    bodies of code are left as they are
-   (FlambdaRecHandlersSpec.rewrite_rec_handlers and
-   FlambdaNormaliseSpec.rewrite_code take a round of the validation
-   into them, with nothing known there).
+   (FlambdaValidateReadingSpec.read_arrays applies the pass in them
+   too, with nothing known there).
 
    The result refines the term ([load_known_arrays_refines_statement]).
    It is not claimed to be equivalent to it: a load has no value where
@@ -113,6 +112,11 @@
    keeps the range check of the primitive: where the number of the
    elements is not a tagged immediate, the primitive is left as it
    is.
+
+   It is not a step of the rounds of
+   FlambdaValidateSpec.validate_unit: FlambdaValidateReadingSpec.v
+   says why, and has the function that asks the validation of a term
+   before so read.
 
    It commutes with renaming, when what it knows is renamed with the
    term ([load_arrays_knowing_equivariant_statement],
@@ -344,7 +348,8 @@ Definition load_arrays_knowing_equivariant_statement : Prop :=
     load_arrays_knowing (rename_known_arrays r known) (rename_expr r e)
     = rename_expr r (load_arrays_knowing known e).
 
-(* The pass as the validation runs it, with nothing known. *)
+(* The pass with nothing known, as FlambdaValidateReadingSpec.v
+   applies it. *)
 Definition load_known_arrays_equivariant_statement : Prop :=
   ∀ (r : renaming) (e : expr),
     load_known_arrays (rename_expr r e)

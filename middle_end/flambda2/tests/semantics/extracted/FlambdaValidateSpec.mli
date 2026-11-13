@@ -2,7 +2,6 @@ open Datatypes
 open FlambdaAliasLetsSpec
 open FlambdaAliasesSpec
 open FlambdaArmNumbersSpec
-open FlambdaArrayLoadSpec
 open FlambdaBlockLoadSpec
 open FlambdaCodeLetsSpec
 open FlambdaCompareSpec

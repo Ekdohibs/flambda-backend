@@ -44,7 +44,11 @@
 
    The statement is in a file of its own, and not in
    FlambdaArrayLoadSpec.v, because [keeps_scope] is defined after the
-   validator, which applies the rewrite.
+   validator. The rewrite is not a step of the rounds of the
+   validator (FlambdaValidateReadingSpec.v says why), so the proof
+   about those rounds does not use this statement. A law under
+   renaming of the function of that file, which applies the rewrite,
+   would.
 
    The proof is in FlambdaArrayLoadScopeProofs.v, which needs no
    review. *)
