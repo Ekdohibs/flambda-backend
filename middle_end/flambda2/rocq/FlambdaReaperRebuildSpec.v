@@ -31,7 +31,8 @@
    This file is to be reviewed: the checks [closure_free],
    [no_code_no_slots], [no_code], [no_call], [direct_tail_calls],
    [direct_calls], [only_direct_calls], [full_calls], [generic_calls],
-   [tupled_calls], [exits_one_value] and [results_kinded], the relation
+   [tupled_calls], [static_constants], [exits_one_value] and
+   [results_kinded], the relation
    [observed_equal], the statements, and the examples, against
    FlambdaReaperRebuild.v (the rebuild, which needs no review) and
    FlambdaReaperFlowSpec.v (the meaning of a solution). The proofs are
@@ -150,13 +151,16 @@
      compiler's units, which are well-kinded, meet it; the model asks
      nothing of kinds otherwise (FlambdaWellKindedSpec.v).
    [rebuild_refines_observably_statement] is proved for the units that
-   meet [tupled_calls], of the code that they bind ([unit_codes]), in
-   place of [closure_free]: closures and static sets of closures with
-   value slots, projections of function slots and of value slots, code,
+   meet [static_constants], of the code that they bind ([unit_codes]),
+   in place of [closure_free]: closures and static sets of closures with
+   value slots, static boxed numbers, strings and immutable arrays,
+   projections of function slots and of value slots, code,
    tupled or not, and deleted code, and calls, direct or of unknown
    arity, full, partial applications and over-applications, that return,
    and raise, to a way out of the unit or of the code they are in, or to
-   a handler in scope. A unit of [generic_calls] meets it
+   a handler in scope. A unit of [tupled_calls] meets it
+   ([tupled_calls_static_constants_statement]); a unit of
+   [generic_calls] meets [tupled_calls]
    ([generic_calls_tupled_calls_statement]); a unit of [full_calls]
    meets [generic_calls]
    ([full_calls_generic_calls_statement]); a unit of [only_direct_calls]
@@ -277,7 +281,30 @@
    masked at the witnesses that come after that of the code, from what
    the code returns. A direct call of tupled code is not in
    [in_flow_fragment]: the compiler's is in the convention of the code,
-   which the model has no call kind for.
+   which the model has no call kind for. [static_constants] asks the
+   same, but lets the unit bind symbols to boxed numbers, to strings and
+   to immutable arrays of values. The traversal reads an immutable array
+   as a block, its elements as fields, and a boxed number or a string
+   not at all, aliasing its symbol to the constants
+   ([traverse_static_binding]). The rebuild keeps such a binding if its
+   symbol has a use, with the elements of an array rewritten as any
+   simple ([rewrite_simple]), and the contents of a boxed number by
+   [rewrite_or_variable], which keeps a constant or a symbol. An array
+   is read only by primitives of the default case ([Array_load],
+   [Array_length]), which give it any usage if what they read has a
+   use; then so have its elements, which the rebuild keeps. A boxed
+   number is read by
+   [Unbox_number], which finds in the two runs what it holds. A boxed
+   number may not hold a variable: the traversal gives the variable no
+   use from it, and the rebuild replaces it by a zero, so that a unit that
+   unboxes such a number reads another in its rebuild
+   ([static_boxed_variable_needed_statement]). Outside classic mode the
+   compiler makes no static boxed number of a variable; in classic mode
+   closure conversion makes static blocks of floats whose fields are
+   variables ([Immutable_float_block]), which the model has not got, and
+   which traverse.ml and rebuild.ml read as they read a boxed number: the
+   reaper run in classic mode ([-X reaper-oclassic=1]) puts zeros in
+   place of such fields.
    The statement holds of more than nothing ([example_statement]): a
    unit with a static block, a block one field of which no load reads, a
    [Let] with no use, and a continuation one parameter of which has no
@@ -295,9 +322,14 @@
    a call that raises to a handler, with extra arguments;
    [indirect_example_statement] for a unit with an indirect call;
    [partial_call_example_statement] for a unit with a partial
-   application, completed by a second call; and
+   application, completed by a second call;
    [tupled_call_example_statement] for a unit with an over-application
-   of tupled code, of a pair whose fields have no use. *)
+   of tupled code, of a pair whose fields have no use; and
+   [static_constants_example_statement] for a unit with a static boxed
+   number, a string and immutable arrays, one of which is read and one
+   not, and [static_boxed_variable_needed_statement] for a unit whose
+   static boxed number holds a variable, which its rebuild reads as a
+   zero. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -810,6 +842,61 @@ with code_tupled_calls (codes : list (code_id * code)) (c : code) : bool :=
 Definition generic_calls_tupled_calls_statement : Prop :=
   ∀ (codes : list (code_id * code)) (e : expr),
     generic_calls codes e = true -> tupled_calls codes e = true.
+
+(* Static constants: [tupled_calls], but the unit may bind symbols to
+   boxed numbers, to immutable strings and to immutable arrays of values
+   too, as the compiler's units do. A boxed number holds a constant or a
+   symbol, not a variable: the traversal reads nothing of what a boxed
+   number holds ([traverse_static_binding] aliases its symbol to the
+   constants), so a variable there has no use from it, and the rebuild
+   puts a zero in its place ([rewrite_or_variable];
+   [static_boxed_variable_needed_statement]). *)
+Definition binding_static_constant (binding : static_binding) : bool :=
+  match binding with
+  | Bind_symbol _ (Static_const_boxed_number (Var _)) => false
+  | Bind_symbol _ (Static_const_boxed_number _)
+  | Bind_symbol _ (Static_const_immutable_string _)
+  | Bind_symbol _ (Static_const_immutable_value_array _) => true
+  | _ => binding_no_code binding
+  end.
+
+Fixpoint static_constants (codes : list (code_id * code)) (e : expr)
+    : bool :=
+  match e with
+  | Let _ kind defining_expr body =>
+    named_no_code kind defining_expr && static_constants codes body
+  | Let_static bindings body =>
+    forallb (binding_static_constants codes) bindings
+    && static_constants codes body
+  | Let_cont_non_recursive _ h body =>
+    handler_static_constants codes h && static_constants codes body
+  | Let_cont_recursive handlers body =>
+    forallb (fun '(_, h) => handler_static_constants codes h) handlers
+    && static_constants codes body
+  | Apply ap => tupled_call codes ap
+  | Apply_cont _ | Switch _ _ | Invalid => true
+  end
+with handler_static_constants (codes : list (code_id * code))
+    (h : continuation_handler) : bool :=
+  match h with
+  | Handler _ _ handler => static_constants codes handler
+  end
+with binding_static_constants (codes : list (code_id * code))
+    (binding : static_binding) : bool :=
+  match binding with
+  | Bind_code _ c => code_static_constants codes c
+  | Bind_deleted_code _ | Bind_symbol _ _ => binding_static_constant binding
+  end
+with code_static_constants (codes : list (code_id * code)) (c : code)
+    : bool :=
+  match c with
+  | Code _ _ _ _ _ body => static_constants codes body
+  end.
+
+(* A unit of [tupled_calls] meets it. *)
+Definition tupled_calls_static_constants_statement : Prop :=
+  ∀ (codes : list (code_id * code)) (e : expr),
+    tupled_calls codes e = true -> static_constants codes e = true.
 
 (* ======================================================================== *)
 (* Exits                                                                    *)
@@ -1559,7 +1646,7 @@ Definition rebuild_refines_observably_statement : Prop :=
     is_local_slots_only is_local ->
     (∀ f : field, is_local f = false) ∨ projection_free e = true ->
     in_flow_fragment e = true ->
-    tupled_calls (unit_codes e) e = true ->
+    static_constants (unit_codes e) e = true ->
     results_kinded [] [] e = true ->
     well_formed_unit u e = true ->
     exits_one_value u e = true ->
@@ -2994,3 +3081,258 @@ Definition tupled_call_example_statement : Prop :=
   ∧ behaves
       (State TupledCallExample.rebuilt [] [] empty_static_env empty_heap)
       (Exits 1%positive [Value_const (Tagged_immediate 8)] empty_heap).
+
+(* The statement up to observation holds of a unit with static
+   constants, which [tupled_calls] does not allow: a boxed float, a
+   string, and two immutable arrays, the first of which is read and the
+   second not, and a boxed float that nothing reads:
+
+     let x10 = 7 in
+     let x11 = 5 in                     (no use)
+     let symbol s50 = box 2.5           (read through s52)
+     and symbol s51 = "ok"              (its length is read)
+     and symbol s52 = [| x10; s50; s51 |]
+     and symbol s53 = [| x11; 4 |]      (not read)
+     and symbol s54 = box 1.0 in        (not read)
+     let x12 = s52.(1) in               (an [Array_load]: s50)
+     let x13 = unbox x12 in
+     let x14 = length s51 in
+     let x15 = tag x14 in
+     let x16 = box x13 in
+     let x17 = { x15; x16 } in
+     return x17
+
+   Its least solution passes the checks. The load gives the array [s52]
+   any usage, so each of its elements has any usage, [x10] and the two
+   symbols among them, whose bindings the rebuild keeps, [x10] as it is,
+   though the load reads the element at 1 only; the rebuild removes
+   [s53], [s54], whose symbols have no use, and [x11]. The two units exit
+   with the same block, of 2 and of 2.5 boxed. *)
+Module StaticConstantsExample.
+
+Local Open Scope positive_scope.
+
+Definition naked_float : flambda_kind := Naked_number Kind_naked_float.
+
+(* 2.5 and 1.0, as the bits of their doubles. *)
+Definition two_and_a_half : Z := 4612811918334230528.
+Definition one : Z := 4607182418800017408.
+
+Definition boxed_float (bits : Z) : static_const :=
+  Static_const_boxed_number (Const (Naked_float bits)).
+
+Definition array_load : named :=
+  Prim (Binary (Array_load Array_values Load_values Immutable))
+    [Symbol 52; Const (Tagged_immediate 1)].
+
+Definition reads : expr :=
+  Let 12 Value array_load
+    (Let 13 naked_float
+       (Prim (Unary (Unbox_number Boxable_naked_float)) [Var 12])
+       (Let 14 (Naked_number Kind_naked_immediate)
+          (Prim (Unary String_length) [Symbol 51])
+          (Let 15 Value (Prim (Unary Tag_immediate) [Var 14])
+             (Let 16 Value
+                (Prim (Unary (Box_number Boxable_naked_float)) [Var 13])
+                (Let 17 Value (FlowExample.make_block [Var 15; Var 16])
+                   (FlowExample.return_to 1 [Var 17])))))).
+
+Definition read_constants : list static_binding :=
+  [Bind_symbol 50 (boxed_float two_and_a_half);
+   Bind_symbol 51 (Static_const_immutable_string [111%Z; 107%Z]);
+   Bind_symbol 52
+     (Static_const_immutable_value_array [Var 10; Symbol 50; Symbol 51])].
+
+Definition unit_expr : expr :=
+  Let 10 Value (Simple (Const (Tagged_immediate 7)))
+    (Let 11 Value (Simple (Const (Tagged_immediate 5)))
+       (Let_static
+          (read_constants
+           ++ [Bind_symbol 53
+                 (Static_const_immutable_value_array
+                    [Var 11; Const (Tagged_immediate 4)]);
+               Bind_symbol 54 (boxed_float one)])
+          reads)).
+
+Definition solution : tables :=
+  {| t_alias :=
+       [(Node_made 1, Node_variable 17); (Node_symbol 50, Node_all_constants);
+        (Node_symbol 51, Node_all_constants);
+        (Node_symbol 54, Node_all_constants);
+        (Node_variable 10, Node_all_constants);
+        (Node_variable 11, Node_all_constants)];
+     t_any_usage :=
+       [Node_all_constants; Node_made 1; Node_made 2; Node_symbol 50;
+        Node_symbol 51; Node_symbol 52; Node_variable 10; Node_variable 13;
+        Node_variable 14; Node_variable 15; Node_variable 16;
+        Node_variable 17];
+     t_any_source :=
+       [Node_all_constants; Node_symbol 50; Node_symbol 51; Node_symbol 54;
+        Node_variable 10; Node_variable 11; Node_variable 12; Node_variable 13;
+        Node_variable 14; Node_variable 15];
+     t_has_usage :=
+       [Node_all_constants; Node_made 1; Node_made 2; Node_symbol 50;
+        Node_symbol 51; Node_symbol 52; Node_variable 10; Node_variable 12;
+        Node_variable 13; Node_variable 14; Node_variable 15; Node_variable 16;
+        Node_variable 17];
+     t_has_source :=
+       [Node_all_constants; Node_made 1; Node_symbol 50; Node_symbol 51;
+        Node_symbol 52; Node_symbol 53; Node_symbol 54; Node_variable 10;
+        Node_variable 11; Node_variable 12; Node_variable 13; Node_variable 14;
+        Node_variable 15; Node_variable 16; Node_variable 17];
+     t_usages := [(Node_variable 12, Node_variable 12)];
+     t_sources :=
+       [(Node_made 1, Node_variable 17); (Node_symbol 52, Node_symbol 52);
+        (Node_symbol 53, Node_symbol 53); (Node_variable 16, Node_variable 16);
+        (Node_variable 17, Node_variable 17)];
+     t_reading_field := [];
+     t_escaping_field := [];
+     t_field_used :=
+       [(Node_symbol 52, Field_block 0 Value);
+        (Node_symbol 52, Field_block 1 Value);
+        (Node_symbol 52, Field_block 2 Value); (Node_symbol 52, Field_get_tag);
+        (Node_symbol 52, Field_is_int);
+        (Node_variable 16, Field_boxed_number Boxable_naked_float);
+        (Node_variable 17, Field_block 0 Value);
+        (Node_variable 17, Field_block 1 Value);
+        (Node_variable 17, Field_get_tag);
+        (Node_variable 17, Field_is_int)] |}.
+
+Definition rebuilt : expr :=
+  Let 10 Value (Simple (Const (Tagged_immediate 7)))
+    (Let_static read_constants reads).
+
+Definition result : value :=
+  Value_block 0
+    [Value_const (Tagged_immediate 2);
+     Value_boxed_number (Naked_float two_and_a_half)].
+
+End StaticConstantsExample.
+
+Definition static_constants_example_statement : Prop :=
+  in_flow_fragment StaticConstantsExample.unit_expr = true
+  ∧ tupled_calls (unit_codes StaticConstantsExample.unit_expr)
+      StaticConstantsExample.unit_expr
+    = false
+  ∧ static_constants (unit_codes StaticConstantsExample.unit_expr)
+      StaticConstantsExample.unit_expr
+    = true
+  ∧ results_kinded [] [] StaticConstantsExample.unit_expr = true
+  ∧ well_formed_unit FlowExample.interface StaticConstantsExample.unit_expr
+    = true
+  ∧ exits_one_value FlowExample.interface StaticConstantsExample.unit_expr
+    = true
+  ∧ check_closed FlowExample.is_local
+      (traverse_unit Never FlowExample.interface
+         StaticConstantsExample.unit_expr)
+      StaticConstantsExample.solution
+    = true
+  ∧ check_field_used_exact FlowExample.is_local
+      (traverse_unit Never FlowExample.interface
+         StaticConstantsExample.unit_expr)
+      StaticConstantsExample.solution
+    = true
+  ∧ rebuild_unit_from_tables
+      (traverse_unit Never FlowExample.interface
+         StaticConstantsExample.unit_expr)
+      StaticConstantsExample.solution false StaticConstantsExample.unit_expr
+    = StaticConstantsExample.rebuilt
+  ∧ behaves
+      (State StaticConstantsExample.unit_expr [] [] empty_static_env
+         empty_heap)
+      (Exits 1%positive [StaticConstantsExample.result] empty_heap)
+  ∧ behaves
+      (State StaticConstantsExample.rebuilt [] [] empty_static_env
+         empty_heap)
+      (Exits 1%positive [StaticConstantsExample.result] empty_heap).
+
+(* A static boxed number may not hold a variable: the traversal gives the
+   variable no use from it ([traverse_static_binding]), and the rebuild
+   gives the number a zero in its place ([rewrite_or_variable]):
+
+     let x10 = 2.5 in                   (a naked float; no use)
+     let symbol s50 = box x10 in
+     let x11 = unbox s50 in
+     let x12 = box x11 in
+     return x12
+
+   Its least solution passes the checks, and the unit exits with 2.5
+   boxed; the rebuild removes [x10] and binds [s50] to 0.0 boxed, and
+   the rebuilt unit exits with 0.0 boxed. The unit is of [tupled_calls]
+   and [static_constants] but for the variable. *)
+Module StaticBoxedVariableExample.
+
+Local Open Scope positive_scope.
+
+Definition reads : expr :=
+  Let 11 StaticConstantsExample.naked_float
+    (Prim (Unary (Unbox_number Boxable_naked_float)) [Symbol 50])
+    (Let 12 Value (Prim (Unary (Box_number Boxable_naked_float)) [Var 11])
+       (FlowExample.return_to 1 [Var 12])).
+
+Definition unit_expr : expr :=
+  Let 10 StaticConstantsExample.naked_float
+    (Simple (Const (Naked_float StaticConstantsExample.two_and_a_half)))
+    (Let_static [Bind_symbol 50 (Static_const_boxed_number (Var 10))]
+       reads).
+
+Definition solution : tables :=
+  {| t_alias :=
+       [(Node_made 1, Node_variable 12); (Node_symbol 50, Node_all_constants);
+        (Node_variable 10, Node_all_constants)];
+     t_any_usage :=
+       [Node_made 1; Node_made 2; Node_variable 11; Node_variable 12];
+     t_any_source :=
+       [Node_all_constants; Node_symbol 50; Node_variable 10;
+        Node_variable 11];
+     t_has_usage :=
+       [Node_all_constants; Node_made 1; Node_made 2; Node_symbol 50;
+        Node_variable 11; Node_variable 12];
+     t_has_source :=
+       [Node_all_constants; Node_made 1; Node_symbol 50; Node_variable 10;
+        Node_variable 11; Node_variable 12];
+     t_usages :=
+       [(Node_all_constants, Node_symbol 50);
+        (Node_symbol 50, Node_symbol 50)];
+     t_sources :=
+       [(Node_made 1, Node_variable 12); (Node_variable 12, Node_variable 12)];
+     t_reading_field := [];
+     t_escaping_field := [];
+     t_field_used :=
+       [(Node_variable 12, Field_boxed_number Boxable_naked_float)] |}.
+
+Definition rebuilt : expr :=
+  Let_static [Bind_symbol 50 (StaticConstantsExample.boxed_float 0)] reads.
+
+End StaticBoxedVariableExample.
+
+Definition static_boxed_variable_needed_statement : Prop :=
+  in_flow_fragment StaticBoxedVariableExample.unit_expr = true
+  ∧ static_constants (unit_codes StaticBoxedVariableExample.unit_expr)
+      StaticBoxedVariableExample.unit_expr
+    = false
+  ∧ results_kinded [] [] StaticBoxedVariableExample.unit_expr = true
+  ∧ well_formed_unit FlowExample.interface
+      StaticBoxedVariableExample.unit_expr
+    = true
+  ∧ exits_one_value FlowExample.interface
+      StaticBoxedVariableExample.unit_expr
+    = true
+  ∧ check_closed FlowExample.is_local
+      (traverse_unit Never FlowExample.interface
+         StaticBoxedVariableExample.unit_expr)
+      StaticBoxedVariableExample.solution
+    = true
+  ∧ check_field_used_exact FlowExample.is_local
+      (traverse_unit Never FlowExample.interface
+         StaticBoxedVariableExample.unit_expr)
+      StaticBoxedVariableExample.solution
+    = true
+  ∧ rebuild_unit_from_tables
+      (traverse_unit Never FlowExample.interface
+         StaticBoxedVariableExample.unit_expr)
+      StaticBoxedVariableExample.solution false
+      StaticBoxedVariableExample.unit_expr
+    = StaticBoxedVariableExample.rebuilt
+  ∧ ~ program_refines_observably StaticBoxedVariableExample.unit_expr
+        StaticBoxedVariableExample.rebuilt.

@@ -725,6 +725,11 @@ with binding_edges (binding : static_binding) : Prop :=
   match binding with
   | Bind_symbol s (Static_const_block _ fields) =>
     block_edges (Node_symbol s) fields
+  | Bind_symbol s (Static_const_immutable_value_array elements) =>
+    block_edges (Node_symbol s) elements
+  | Bind_symbol s (Static_const_boxed_number _)
+  | Bind_symbol s (Static_const_immutable_string _) =>
+    g_alias G (Node_symbol s) Node_all_constants
   | Bind_symbol s
       (Static_const_closure_of_set slot closure_symbols function_decls
          value_slots) =>
@@ -1218,6 +1223,15 @@ Proof.
       apply in_or_app. right. right. left. reflexivity.
     + apply (note_simples_noted fields a a').
       exact (acc_le_trans _ _ _ (proj1 (add_facts_steady _ _)) Hle).
+Qed.
+
+Lemma alias_constants_makes (base : node) :
+  makes [] (add_fact (Fact_alias base Node_all_constants))
+    (fun a' => g_alias (acc_graph a') base Node_all_constants).
+Proof.
+  apply makes_steady; [ intros a; apply add_facts_steady | ].
+  intros a a' Hle. apply facts_alias. apply (add_facts_later _ _ _ _ Hle).
+  left. reflexivity.
 Qed.
 
 Lemma accessor_makes (x : variable) (f : field) (s : simple) :
@@ -2594,6 +2608,11 @@ Definition static_binding_made (binding : static_binding) (a' : acc) : Prop :=
   match binding with
   | Bind_symbol s (Static_const_block _ fields) =>
     block_edges (acc_graph a') (acc_noted a') (Node_symbol s) fields
+  | Bind_symbol s (Static_const_immutable_value_array elements) =>
+    block_edges (acc_graph a') (acc_noted a') (Node_symbol s) elements
+  | Bind_symbol s (Static_const_boxed_number _)
+  | Bind_symbol s (Static_const_immutable_string _) =>
+    g_alias (acc_graph a') (Node_symbol s) Node_all_constants
   | Bind_symbol s
       (Static_const_closure_of_set slot closure_symbols function_decls
          value_slots) =>
@@ -2689,7 +2708,8 @@ Proof.
         (fun a' => ∀ b, b ∈ bindings -> static_binding_made b a')).
     { apply fold_left_makes. intros b Hin.
       specialize (Hbindings b Hin).
-      destruct b as [id c | id | s [ | slot syms decls vs | t fields | | | ]];
+      destruct b as [id c | id | s [ | slot syms decls vs | t fields
+                                   | contents | bytes | elements ]];
         simpl in Hbindings; try discriminate Hbindings;
         try (apply makes_steady; [ intros; apply steady_refl
                                  | intros; exact I ]).
@@ -2699,7 +2719,10 @@ Proof.
         split; [ exact H0 | split; [ exact H1 | split; [ exact H2 | ] ] ].
         intros w x Hl' Hk. apply H3; [ exact Hl' | ].
         rewrite (should_keep env HK). exact Hk.
-      - exact (block_deps_makes (Node_symbol s) fields). }
+      - exact (block_deps_makes (Node_symbol s) fields).
+      - exact (alias_constants_makes (Node_symbol s)).
+      - exact (alias_constants_makes (Node_symbol s)).
+      - exact (block_deps_makes (Node_symbol s) elements). }
     destruct (Hstatic a_p) as [[Hle_s (ls & Hls & Hperm_s)] HPs].
     assert (Hls_nil : ls = []).
     { assert (Hnil : flat_map (fun _ : static_binding => @nil code_id)
@@ -2835,6 +2858,9 @@ Proof.
         -- exact Hcounted.
         -- exact Hbody'.
       * exact I.
+      * exact (HPs a' Hle_sc _ Hin).
+      * exact (HPs a' Hle_sc _ Hin).
+      * exact (HPs a' Hle_sc _ Hin).
       * exact (HPs a' Hle_sc _ Hin).
       * exact (HPs a' Hle_sc _ Hin).
   - (* [Let_cont_non_recursive] *)
@@ -3912,6 +3938,26 @@ Ltac not_local_field := apply not_local; intros; discriminate.
 Lemma consts_any_source : as_ Node_all_constants.
 Proof. exact (any_source_input _ _ _ Hc _ Hconsts). Qed.
 
+(* A node aliased to the constants has any source, and a node with any
+   source is an allocation of its own. *)
+Lemma alias_consts_any_source (a : node) :
+  g_alias G a Node_all_constants -> as_ a.
+Proof.
+  intros Hal.
+  exact (any_source_alias _ _ _ Hc _ _ (alias_input _ _ _ Hc _ _ Hal)
+           consts_any_source).
+Qed.
+
+Lemma any_source_self (a : node) : as_ a -> may_come_from sol a a.
+Proof.
+  intros Has. split; [ | split; [ | split; [ | split ] ] ].
+  - exact (as_hs _ _ _ Hc _ Has).
+  - left. exact Has.
+  - auto.
+  - auto.
+  - intros _ u' Hu. left. exact Hu.
+Qed.
+
 (* A node with a constructor fact whose field has a source is an
    allocation of its own. *)
 Lemma alloc_self (a : node) (f : field) (from : node) :
@@ -4110,7 +4156,20 @@ Proof.
         as [(c & ->) | (m & Hm & Hmu)]; [ exact Hasx | ].
       apply (flows_escape _ _ _ _ _ Hc v _ m Hasx); [ | exact Hm ].
       intros Hhu. apply Hmu, (au_hu _ _ _ Hc), Hu, Hhu.
-    + destruct (Hst sym _ Hl) as [_ []].
+    + (* A static array: its symbol has any usage if [x] has a use. *)
+      assert (Hau : hu (Node_variable x) -> au (Node_symbol sym)).
+      { destruct (Harg s _ Hins Hs)
+          as [(c & Hc') | [(y & Hy & Hu) | (sym' & Hsym & Hu)]];
+          [ discriminate Hc' | | ].
+        - intros Hhu. exact (proj1 (proj2 (proj2 (proj2 Hy))) (Hu Hhu)).
+        - injection Hsym as <-. exact Hu. }
+      destruct (In_nth_error _ _ Hin) as (i & Hi).
+      destruct (fields_from_elim _ 0 _ i v (proj2 (Hst sym _ Hl)) Hi)
+        as (from & Hcons & Hfrom).
+      apply (flows_escape _ _ _ _ _ Hc v _ from Hasx); [ | exact Hfrom ].
+      intros Hhu.
+      exact (any_usage_constructor _ _ _ Hc _ _ _ (Hau Hhu) Hcons
+               ltac:(not_local_field)).
   - (* An immutable array made. *)
     split; [ exact Hasx | ]. apply (every_in _ _ _). intros w Hw.
     destruct (eval_simples_in _ _ _ _ Hvs Hw) as (s & Hin & Hs).
@@ -4211,7 +4270,10 @@ Proof.
              Hedge
                      Ha Hfrom).
            not_local_field.
-        -- destruct (Hst s _ Hl) as [_ []].
+        -- destruct (Hst s _ Hl) as [_ Has].
+           exact (any_source_accessor _ _ _ Hc _ _ _
+                    (proj1 (proj2 (proj2 Hv1)) Has) Hedge
+                    ltac:(not_local_field)).
       * (* [Box_number] *)
         destruct v1 as [c | | | | | | | | ]; try discriminate Hev.
         destruct (is_number_of_kind bn c) eqn:Hk; [ | discriminate Hev ].
@@ -4374,7 +4436,8 @@ Proof.
           [ injection Hl as <-; exact Hb | exact (Hcodes id' c' Hl) ].
     + exact (IH _ Hbindings Hst Hcodes Heval).
     + destruct (lookup s (static_values statics)); [ discriminate Heval | ].
-      destruct const as [ | slot syms decls vs | t fields | | | ];
+      destruct const as [ | slot syms decls vs | t fields | contents | bytes
+                         | elements ];
         simpl in Hb; try contradiction; simpl in Heval.
       * (* A static closure of a set. *)
         destruct (lookup slot decls) as [id0 | ] eqn:Hslot;
@@ -4412,6 +4475,34 @@ Proof.
         -- exact (alloc_self _ _ _ His (as_hs _ _ _ Hc _ consts_any_source)).
         -- exact (block_structure_made _ _ _ _
                     (conj Hcons (conj His (conj Hgt Hnoted))) Hvars Hvs).
+      * (* A static boxed number. *)
+        destruct (eval_simple vars contents) as [v | ] eqn:Hv;
+          [ | discriminate Heval ].
+        refine (IH _ Hbindings _ _ Heval); [ | exact Hcodes ].
+        intros s' allocated Hl. simpl in Hl.
+        destruct (Pos.eqb_spec s' s) as [-> | _];
+          [ | exact (Hst s' allocated Hl) ].
+        injection Hl as <-. pose proof (alias_consts_any_source _ Hb) as Has.
+        split; [ exact (any_source_self _ Has) | exact Has ].
+      * (* A static string. *)
+        refine (IH _ Hbindings _ _ Heval); [ | exact Hcodes ].
+        intros s' allocated Hl. simpl in Hl.
+        destruct (Pos.eqb_spec s' s) as [-> | _];
+          [ | exact (Hst s' allocated Hl) ].
+        injection Hl as <-. pose proof (alias_consts_any_source _ Hb) as Has.
+        split; [ exact (any_source_self _ Has) | exact Has ].
+      * (* A static immutable array. *)
+        destruct (eval_simples vars elements) as [vs | ] eqn:Hvs;
+          [ | discriminate Heval ].
+        refine (IH _ Hbindings _ _ Heval); [ | exact Hcodes ].
+        intros s' allocated Hl. simpl in Hl.
+        destruct (Pos.eqb_spec s' s) as [-> | _];
+          [ | exact (Hst s' allocated Hl) ].
+        injection Hl as <-. destruct Hb as (Hcons & His & Hgt & Hnoted).
+        split.
+        -- exact (alloc_self _ _ _ His (as_hs _ _ _ Hc _ consts_any_source)).
+        -- exact (proj2 (proj2 (block_structure_made _ _ _ _
+                    (conj Hcons (conj His (conj Hgt Hnoted))) Hvars Hvs))).
 Qed.
 
 (* The values that a [Let_static] of the fragment binds keep partial
@@ -4453,7 +4544,8 @@ Proof.
     + exact (IH statics Hbindings Hvars Hst Heval).
     + destruct (lookup s (static_values statics)) eqn:Hl;
         [ discriminate Heval | ].
-      destruct const as [ | slot syms decls vs | t fields | | | ];
+      destruct const as [ | slot syms decls vs | t fields | contents | bytes
+                         | elements ];
         simpl in Hb; try contradiction; simpl in Heval.
       * destruct (lookup slot decls) as [id0 | ]; [ | discriminate Heval ].
         destruct (eval_value_slots vars vs) as [vvs | ] eqn:Hvvs;
@@ -4471,6 +4563,45 @@ Proof.
         injection H as <-. right. simpl.
         exact (value_slots_pa_ok _ _ _ _ (env_pa_ok_le _ _ _ Hle Hvars) Hvvs).
       * destruct (eval_simples vars fields) as [vs | ] eqn:Hvs;
+          [ | discriminate Heval ].
+        match type of Heval with
+        | eval_static_bindings _ _ ?statics1 = _ =>
+          assert (Hle : statics_le statics statics1)
+        end.
+        { split; [ | intros id c H; exact H ].
+          intros s' a H. simpl.
+          destruct (Pos.eqb_spec s' s) as [-> | _]; [ congruence | exact H ]. }
+        apply (Hstep _ Hle); [ | exact Heval ].
+        intros s' a H. simpl in H.
+        destruct (Pos.eqb_spec s' s) as [-> | _]; [ | left; exact H ].
+        injection H as <-. right. simpl.
+        exact (simples_pa_ok _ _ _ _ (env_pa_ok_le _ _ _ Hle Hvars) Hvs).
+      * destruct (eval_simple vars contents) as [v | ] eqn:Hv;
+          [ | discriminate Heval ].
+        match type of Heval with
+        | eval_static_bindings _ _ ?statics1 = _ =>
+          assert (Hle : statics_le statics statics1)
+        end.
+        { split; [ | intros id c H; exact H ].
+          intros s' a H. simpl.
+          destruct (Pos.eqb_spec s' s) as [-> | _]; [ congruence | exact H ]. }
+        apply (Hstep _ Hle); [ | exact Heval ].
+        intros s' a H. simpl in H.
+        destruct (Pos.eqb_spec s' s) as [-> | _]; [ | left; exact H ].
+        injection H as <-. right. simpl.
+        exact (simple_pa_ok _ _ _ _ (env_pa_ok_le _ _ _ Hle Hvars) Hv).
+      * match type of Heval with
+        | eval_static_bindings _ _ ?statics1 = _ =>
+          assert (Hle : statics_le statics statics1)
+        end.
+        { split; [ | intros id c H; exact H ].
+          intros s' a H. simpl.
+          destruct (Pos.eqb_spec s' s) as [-> | _]; [ congruence | exact H ]. }
+        apply (Hstep _ Hle); [ | exact Heval ].
+        intros s' a H. simpl in H.
+        destruct (Pos.eqb_spec s' s) as [-> | _]; [ | left; exact H ].
+        injection H as <-. right. exact I.
+      * destruct (eval_simples vars elements) as [vs | ] eqn:Hvs;
           [ | discriminate Heval ].
         match type of Heval with
         | eval_static_bindings _ _ ?statics1 = _ =>
@@ -6992,6 +7123,9 @@ Proof.
       revert Hfields. apply fields_from_impl.
       intros i field _ (from & Hcons & Hfrom). exists from.
       split; [ exact Hcons | exact (flows_weaken _ _ _ _ _ Hcalled _ _ Hfrom) ].
+    + revert Hrest. apply fields_from_impl.
+      intros i field _ (from & Hcons & Hfrom). exists from.
+      split; [ exact Hcons | exact (flows_weaken _ _ _ _ _ Hcalled _ _ Hfrom) ].
 Qed.
 
 Lemma called_witness (G : graph) (cds : finite_map code_dep) (b : node)
@@ -7326,6 +7460,9 @@ Proof.
         try exact Hb.
       * exact (static_set_edges_mono _ _ _ _ _ Hb).
       * exact (block_edges_mono _ _ Hb).
+      * exact (sub_alias _ _ Hb).
+      * exact (sub_alias _ _ Hb).
+      * exact (block_edges_mono _ _ Hb).
   - intros k h body IHh IH ctx ce [Hh Hbody]. simpl.
     exact (conj (IHh _ _ Hh) (IH _ _ Hbody)).
   - intros handlers body IHh IH ctx ce [Hhandlers Hbody]. simpl.
@@ -7418,6 +7555,16 @@ Proof.
       destruct (lookup slot decls) as [id | ] eqn:Hl; [ | discriminate Hslot ].
       exact (called_alloc is_local G sol cds Hc Hcds _ _
                (Hdeps _ (Hdep id eq_refl))).
+    - destruct Hb as (_ & His & _).
+      exact (alloc_self is_local G sol Hc _ _ _
+               (sub_constructor G0 G Hsub _ _ _ His)
+               (as_hs _ _ _ Hc _ (any_source_input _ _ _ Hc _ Hconsts))).
+    - exact (any_source_self is_local G sol Hc _
+               (alias_consts_any_source is_local G sol Hc Hconsts _
+                  (sub_alias G0 G Hsub _ _ Hb))).
+    - exact (any_source_self is_local G sol Hc _
+               (alias_consts_any_source is_local G sol Hc Hconsts _
+                  (sub_alias G0 G Hsub _ _ Hb))).
     - destruct Hb as (_ & His & _).
       exact (alloc_self is_local G sol Hc _ _ _
                (sub_constructor G0 G Hsub _ _ _ His)

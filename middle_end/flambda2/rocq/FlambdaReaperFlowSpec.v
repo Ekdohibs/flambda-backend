@@ -67,7 +67,10 @@
    - a symbol is an allocation of its own: it may be at [n] if the node
      of the symbol is one that [n] may come from. What it points to is
      said once for the static environment ([statics_flow]), as for a
-     block or a closure whose node is that of the symbol;
+     block or a closure whose node is that of the symbol; an immutable
+     array that a symbol points to, as for a block; a boxed number or a
+     string, whose symbol the traversal aliases to the constants, only
+     that the symbol has any source;
    - an immutable array has no allocation in the graph (the traversal
      reads [Make_immutable_array] and [Array_load] as other primitives:
      the variable bound has any source and a use of each argument), so
@@ -123,8 +126,9 @@
    ([Project_value_slot_from], [Project_function_slot]), [Let_cont]s,
    recursive or not, [Apply_cont]s (raises among them), [Switch]es,
    [Invalid], calls, direct or not, with extra arguments for their
-   exception continuations or not, and [Let_static]s of code, of blocks
-   and of closures of static sets. Every primitive is in it, and so are
+   exception continuations or not, and [Let_static]s of code, of blocks,
+   of boxed numbers, of strings, of immutable arrays of values and of
+   closures of static sets. Every primitive is in it, and so are
    partial applications and over-applications, which calls of unknown
    arity make. The code that a direct call names, if the unit binds it,
    is not tupled and has as many parameters as the call has arguments
@@ -368,6 +372,9 @@ with binding_flow_fragment (codes : list (code_id * code))
     (symbols : list symbol) (binding : static_binding) : bool :=
   match binding with
   | Bind_symbol _ (Static_const_block _ _) => true
+  | Bind_symbol _ (Static_const_boxed_number _) => true
+  | Bind_symbol _ (Static_const_immutable_string _) => true
+  | Bind_symbol _ (Static_const_immutable_value_array _) => true
   | Bind_symbol _
       (Static_const_closure_of_set slot closure_symbols function_decls _) =>
     is_bound slot function_decls
@@ -598,7 +605,9 @@ Fixpoint flows (v : value) (n : node) {struct v} : Prop :=
 (* What a symbol points to, as for a block or a closure whose allocation
    is the node of the symbol; and the symbol is an allocation of its
    own. The function slots of a static set lead to the symbols of its
-   closures, each an allocation of its own. *)
+   closures, each an allocation of its own. An immutable array holds its
+   elements as a block holds its fields. The symbol of a boxed number or
+   of a string has any source: what is read of it is a constant. *)
 Definition static_value_flows (s : symbol)
     (allocated : statically_allocated_value) : Prop :=
   may_come_from (Node_symbol s) (Node_symbol s)
@@ -627,6 +636,15 @@ Definition static_value_flows (s : symbol)
                g_constructor G (Node_symbol s) (Field_value_slot w) from
                ∧ flows field from)
           value_slots
+    | Static_immutable_array elements =>
+      fields_from
+        (fun i element =>
+           ∃ from : node,
+             g_constructor G (Node_symbol s) (Field_block i Value) from
+             ∧ flows element from)
+        0 elements
+    | Static_boxed_number _ | Static_string _ =>
+      s_any_source sol (Node_symbol s) = true
     | _ => False
     end.
 
