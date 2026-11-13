@@ -425,7 +425,7 @@ Definition prim_reads_heap (p : prim) : bool :=
       | Array_length _) =>
     true
   | Binary (Phys_equal _ | Array_load _ _ _) => true
-  | Unary _ | Binary _ | Variadic _ => false
+  | Unary _ | Binary _ | Variadic _ | Region_primitive _ => false
   end.
 
 (* Only a primitive of the heap changes the heap. *)
@@ -483,7 +483,10 @@ Inductive coeffects : Type :=
   | No_coeffects
   | Has_coeffects.
 
-(* [Flambda_primitive.effects_and_coeffects], its first component. *)
+(* [Flambda_primitive.effects_and_coeffects], its first component.
+   [Local_allocation] is no primitive of the compiler
+   (FlambdaPrimitiveModel.region_primitive) and is given the strongest:
+   arbitrary effects, and a coeffect below. *)
 Definition effects_of_prim (p : prim) : effects :=
   match p with
   | Unary (Opaque_identity _) => Arbitrary_effects
@@ -498,6 +501,10 @@ Definition effects_of_prim (p : prim) : effects :=
   | Heap (Block_set _ _ _) => Arbitrary_effects
   | Heap (Make_mutable_array _) => Only_generative_effects Mutable
   | Heap (Array_set _ _) => Arbitrary_effects
+  | Region_primitive (Begin_region | Begin_try_region) =>
+    Only_generative_effects Mutable
+  | Region_primitive (End_region | End_try_region | Local_allocation) =>
+    Arbitrary_effects
   end.
 
 (* Its second component. *)
@@ -506,6 +513,7 @@ Definition coeffects_of_prim (p : prim) : coeffects :=
   | Unary (Opaque_identity _) => Has_coeffects
   | Unary (Block_load _ Mutable _) => Has_coeffects
   | Binary (Array_load _ _ Mutable) => Has_coeffects
+  | Region_primitive _ => Has_coeffects
   | _ => No_coeffects
   end.
 

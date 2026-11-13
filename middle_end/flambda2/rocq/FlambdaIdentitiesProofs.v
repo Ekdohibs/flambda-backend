@@ -435,7 +435,7 @@ Lemma binary_applied_spec (p : prim) (args : list simple)
   binary_applied p args = Some (b, arg1, arg2) ->
   p = Binary b ∧ args = [arg1; arg2].
 Proof.
-  destruct p as [u | b' | variadic | heap]; try discriminate.
+  destruct p as [u | b' | variadic | heap | rp]; try discriminate.
   destruct args as [ | a1 [ | a2 [ | a3 args]]]; try discriminate.
   intros [= <- <- <-]. auto.
 Qed.
@@ -584,7 +584,7 @@ Proof.
   destruct d as [s | p args | code slots | fslot decls slots | slot closure
     | pfrom slot closure | move_from move_to closure];
     try reflexivity.
-  destruct p as [u | b | variadic | heap]; try reflexivity.
+  destruct p as [u | b | variadic | heap | rp]; try reflexivity.
   destruct args as [ | arg1 [ | arg2 [ | arg3 args]]]; try reflexivity.
   cbn [rename_named map identity_named binary_applied].
   rewrite identity_of_binary_equivariant.

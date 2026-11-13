@@ -3104,7 +3104,7 @@ Proof.
   intros Hvs Hexec. apply exec_prim_bound in Hexec as [Hbound Hexec].
   unfold exec_prim. rewrite (related_arguments_bound _ _ Hvs Hbound).
   clear Hbound. revert Hexec.
-  destruct p as [p | p | p | p].
+  destruct p as [p | p | p | p | rp].
   - destruct Hvs as [ | v v' vs vs' Hv Hvs];
       [ exact (related_exec_pure (Unary p) [] [] result h1 (Forall2_nil _))
       | ].
@@ -3245,6 +3245,7 @@ Proof.
       simpl. eexists. eexists. exists r.
       split;
         [ reflexivity | apply exec_related_write; [ exact Hl | simpl; auto ] ].
+  - intros Hexec. discriminate Hexec.
 Qed.
 
 (* Evaluation under related environments. *)

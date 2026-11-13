@@ -58,7 +58,7 @@ Proof.
   destruct d as [s | p args | code slots | fslot decls slots | slot closure
     | pfrom slot closure | move_from move_to closure];
     try exact Hd.
-  destruct p as [p | p | p | p]; try exact Hd.
+  destruct p as [p | p | p | p | rp]; try exact Hd.
   destruct p as [k lk m | w | op | k o | k o | k b]; try exact Hd.
   destruct args as [ | a [ | b [ | c args]]]; try exact Hd.
   cbn [fold_same_comparison].
@@ -182,7 +182,7 @@ Lemma fold_same_comparison_equivariant (r : renaming) (d : named) :
 Proof.
   destruct d as [s | p args | code slots | fslot decls slots | slot closure
     | pfrom slot closure | move_from move_to closure]; try reflexivity.
-  destruct p as [p | p | p | p]; try reflexivity.
+  destruct p as [p | p | p | p | rp]; try reflexivity.
   destruct p as [k lk m | w | op | k o | k o | k b]; try reflexivity.
   destruct args as [ | a [ | b [ | c args]]]; try reflexivity.
   cbn [rename_named map fold_same_comparison].

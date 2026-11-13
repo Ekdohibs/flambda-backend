@@ -183,7 +183,7 @@ Proof.
     - exact (Hvars (x, array) (lookup_in _ _ _ Hlookup)).
     - exact (Hsymbols (sym, array) (lookup_in _ _ _ Hlookup)). }
   unfold of_known_array in Hresult.
-  destruct p as [u | b | vp | hp]; try discriminate Hresult.
+  destruct p as [u | b | vp | hp | rp]; try discriminate Hresult.
   - destruct u; try discriminate Hresult.
     destruct args as [ | a [ | a' args]]; try discriminate Hresult.
     destruct (known_array_of known a) as [array | ];

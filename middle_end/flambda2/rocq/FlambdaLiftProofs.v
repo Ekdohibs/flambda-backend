@@ -1259,7 +1259,7 @@ Proof.
       refine (slots_lifted_extend _ _ _ _ _ Hvs).
       exact (statics_extend_symbol statics' sym _
                (Hfresh sym (or_introl eq_refl))). }
-    destruct p as [p | p | p | p]; simpl in Hlift; try discriminate.
+    destruct p as [p | p | p | p | rp]; simpl in Hlift; try discriminate.
     + (* A boxed number. *)
       destruct p; simpl in Hlift; try discriminate.
       destruct args as [ | contents [ | arg args]]; simpl in Hlift;
@@ -1362,7 +1362,7 @@ Proof.
   - destruct d as [ | p args | code slots | | | | ]; simpl in Hlift;
       try discriminate.
     2: { injection Hlift as <- <-. reflexivity. }
-    destruct p as [p | p | p | p]; simpl in Hlift; try discriminate.
+    destruct p as [p | p | p | p | rp]; simpl in Hlift; try discriminate.
     + destruct p; simpl in Hlift; try discriminate.
       destruct args as [ | contents [ | arg args]]; simpl in Hlift;
         try discriminate.
@@ -3288,7 +3288,7 @@ Proof.
     destruct d as [s | p args | code slots | fslot decls slots | slot closure
       | pfrom slot closure | move_from move_to closure];
     simpl; try reflexivity.
-  - destruct p as [p | p | p | p]; try reflexivity.
+  - destruct p as [p | p | p | p | rp]; try reflexivity.
     + destruct p; try reflexivity.
       destruct args as [ | contents [ | arg args]]; reflexivity.
     + destruct p as [[tag] | kind]; reflexivity.

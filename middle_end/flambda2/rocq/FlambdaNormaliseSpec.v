@@ -515,7 +515,7 @@ with var_free_in_handler_b (x : variable) (h : continuation_handler) : bool :=
    or store is among what may be removed. *)
 Definition prim_may_fold (p : prim) : bool :=
   match p with
-  | Unary (Opaque_identity _) | Heap _ => false
+  | Unary (Opaque_identity _) | Heap _ | Region_primitive _ => false
   | Unary _ | Binary _ | Variadic _ => true
   end.
 

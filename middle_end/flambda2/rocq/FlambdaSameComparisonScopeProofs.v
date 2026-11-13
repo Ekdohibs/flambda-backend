@@ -41,7 +41,7 @@ Lemma fold_same_comparison_free (d : named) :
     (free_variables_of_named d).
 Proof.
   destruct d as [s | p args | | | | | ]; try apply incl_refl.
-  destruct p as [p | p | p | p]; try apply incl_refl.
+  destruct p as [p | p | p | p | rp]; try apply incl_refl.
   destruct p as [k lk m | w | op | k o | k o | k b]; try apply incl_refl.
   destruct args as [ | a [ | b [ | c args]]]; try apply incl_refl.
   cbn [fold_same_comparison].

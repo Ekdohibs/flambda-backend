@@ -261,7 +261,7 @@ Qed.
 Lemma tag_of_some (d : named) (n : variable) :
   tag_of d = Some n -> d = Prim (Unary Tag_immediate) [Var n].
 Proof.
-  destruct d as [s | [[] | | | ] [ | [x | sym | c] [ | a args]] | | | | | ];
+  destruct d as [s | [[] | | | | ] [ | [x | sym | c] [ | a args]] | | | | | ];
     simpl; try discriminate.
   intros [= ->]. reflexivity.
 Qed.
@@ -840,7 +840,7 @@ Qed.
 Lemma untag_of_some (d : named) (p : variable) :
   untag_of d = Some p -> d = Prim (Unary Untag_immediate) [Var p].
 Proof.
-  destruct d as [s | [[] | | | ] [ | [x | sym | c] [ | a args]] | | | | | ];
+  destruct d as [s | [[] | | | | ] [ | [x | sym | c] [ | a args]] | | | | | ];
     simpl; try discriminate.
   intros [= ->]. reflexivity.
 Qed.

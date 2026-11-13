@@ -811,7 +811,7 @@ Proof.
     split;
       [ exact (eval_prim_no_array_value statics p vs v Hp Hstatics Hvs Heval)
       | exact Hheap ]. }
-  destruct p as [p | p | p | p]; try exact Hpure.
+  destruct p as [p | p | p | p | rp]; try exact Hpure.
   - destruct vs as [ | v [ | v2 vs]]; try exact Hpure.
     2: { destruct v; simpl; discriminate. }
     rewrite exec_bound_prim_unary.

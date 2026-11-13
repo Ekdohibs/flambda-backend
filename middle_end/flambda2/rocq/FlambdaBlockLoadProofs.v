@@ -203,7 +203,7 @@ Proof.
   destruct d as [s | p args | code slots | fslot decls slots | slot closure
     | pfrom slot closure | move_from move_to closure];
     try discriminate.
-  destruct p as [u | b | v | hp]; try discriminate.
+  destruct p as [u | b | v | hp | rp]; try discriminate.
   destruct v as [kind | kind]; [ | discriminate ]. destruct kind as [tag].
   simpl. intros [= <-]. exists args. auto.
 Qed.
@@ -346,7 +346,7 @@ Lemma unary_applied_spec (p : prim) (args : list simple)
   unary_applied p args = Some (u, arg) -> p = Unary u ∧ args = [arg].
 Proof.
   unfold unary_applied.
-  destruct p as [u' | b | v | hp]; try discriminate.
+  destruct p as [u' | b | v | hp | rp]; try discriminate.
   destruct args as [ | arg' [ | s args]]; try discriminate.
   intros [= -> ->]. auto.
 Qed.

@@ -686,7 +686,7 @@ Proof.
   destruct (identity_of_binary p' arg1 arg2) as [d' | ] eqn:Hidentity;
     [ | apply incl_refl ].
   unfold binary_applied in Happlied.
-  destruct p as [ | p0 | | ]; try discriminate.
+  destruct p as [ | p0 | | | ]; try discriminate.
   destruct args as [ | a1 [ | a2 [ | a3 args]]]; try discriminate.
   injection Happlied as -> -> ->.
   cbn [free_variables_of_named]. unfold free_variables_of_simples.

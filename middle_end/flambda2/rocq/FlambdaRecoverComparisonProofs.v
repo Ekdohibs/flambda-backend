@@ -158,7 +158,7 @@ Lemma comparison_held_sound (u : variable)
       operands)).
 Proof.
   destruct entry as [y [p args]].
-  destruct p as [ p | [ | | | | | kind' [c | s']] | p | p ];
+  destruct p as [ p | [ | | | | | kind' [c | s']] | p | p | rp ];
     cbn [comparison_held]; try discriminate.
   destruct (Pos.eqb_spec u y) as [<- | _]; [ | discriminate ].
   intros [= <- <- <-]. reflexivity.
@@ -172,7 +172,7 @@ Lemma tagged_comparison_held_sound (known : computed) (t : variable)
     ∧ first_known (comparison_held u) known = Some held.
 Proof.
   destruct entry as [y [p args]].
-  destruct p as [ [ ] | p | p | p ]; cbn [tagged_comparison_held];
+  destruct p as [ [ ] | p | p | p | rp ]; cbn [tagged_comparison_held];
     try discriminate.
   destruct args as [ | [u | sym | c] [ | arg args]]; try discriminate.
   destruct (Pos.eqb_spec t y) as [<- | _]; [ | discriminate ].
@@ -256,7 +256,7 @@ Lemma tested_eval (statics : static_env) (p : prim) (c : int_comparison)
   = Some (naked_bool (eval_int_comparison 63 c x y)).
 Proof.
   intros Htested Hx Hy.
-  destruct p as [ p | [ | | [ | ] | | | [ ] [c' | s]] | p | p ];
+  destruct p as [ p | [ | | [ | ] | | | [ ] [c' | s]] | p | p | rp ];
     cbn [tested] in Htested; try discriminate; injection Htested as <-;
     rewrite eval_prim_binary; cbn [eval_binary_primitive];
     try unfold eval_phys_equal; cbn [int_of_value int_width];
@@ -459,7 +459,7 @@ Lemma comparison_held_renamed (r : renaming) (u : variable)
   = option_map (rename_comparison r) (comparison_held u entry).
 Proof.
   destruct entry as [y [p args]].
-  destruct p as [ p | [ | | | | | kind [c | s]] | p | p ];
+  destruct p as [ p | [ | | | | | kind [c | s]] | p | p | rp ];
     try reflexivity.
   cbn [rename_entry fst snd comparison_held].
   rewrite rename_variable_eqb. destruct (Pos.eqb u y); reflexivity.
@@ -472,7 +472,7 @@ Lemma tagged_comparison_held_renamed (r : renaming) (known : computed)
   = option_map (rename_comparison r) (tagged_comparison_held known t entry).
 Proof.
   destruct entry as [y [p args]].
-  destruct p as [ [ ] | p | p | p ]; try reflexivity.
+  destruct p as [ [ ] | p | p | p | rp ]; try reflexivity.
   destruct args as [ | [u | sym | c] [ | arg args]]; try reflexivity.
   cbn [rename_entry fst snd map rename_simple tagged_comparison_held].
   rewrite rename_variable_eqb. destruct (Pos.eqb t y); [ | reflexivity ].

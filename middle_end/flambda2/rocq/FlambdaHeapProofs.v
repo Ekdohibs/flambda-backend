@@ -339,7 +339,7 @@ Proof.
   { intros p' l. destruct (lookup l h) as [c | ]; simpl; [ | discriminate ].
     destruct (exec_unary_on_cell p' l c); simpl; [ | discriminate ].
     intros [= _ <-]. reflexivity. }
-  destruct p as [p | p | p | p].
+  destruct p as [p | p | p | p | rp].
   - destruct vs as [ | v1 [ | v2 vs]]; try exact Hpure;
       destruct v1; try exact Hpure.
     apply Hcell.
@@ -356,13 +356,14 @@ Proof.
       intros [= _ <-]. reflexivity.
   - exact Hpure.
   - exfalso. exact (Hnot_heap p eq_refl).
+  - exact Hpure.
 Qed.
 
 Theorem exec_prim_evolves : exec_prim_evolves_statement.
 Proof.
   intros statics h h' p vs v Hexec.
   apply exec_prim_bound in Hexec as [_ Hexec].
-  destruct p as [p | p | p | p].
+  destruct p as [p | p | p | p | rp].
   4: { exact (exec_heap_primitive_evolves _ _ _ _ _ _ Hexec). }
   all: apply exec_bound_prim_not_heap in Hexec;
     [ subst h'; apply heap_evolves_refl
@@ -373,7 +374,7 @@ Theorem exec_prim_arrays : exec_prim_arrays_statement.
 Proof.
   intros statics h h' p vs v Harrays Hexec.
   apply exec_prim_bound in Hexec as [_ Hexec].
-  destruct p as [p | p | p | p].
+  destruct p as [p | p | p | p | rp].
   4: {
     change (exec_bound_prim statics h (Heap p) vs)
       with (exec_heap_primitive statics h p vs) in Hexec.
@@ -465,7 +466,7 @@ Theorem no_effects : no_effects_statement.
 Proof.
   intros statics h h' p vs v Heffects Hexec.
   apply exec_prim_bound in Hexec as [_ Hexec].
-  destruct p as [p | p | p | p].
+  destruct p as [p | p | p | p | rp].
   4: { destruct p as [[ | ] tag | kind init field | kind | kind set_kind];
        discriminate Heffects. }
   all: apply exec_bound_prim_not_heap in Hexec;
@@ -476,7 +477,7 @@ Theorem only_generative_effects : only_generative_effects_statement.
 Proof.
   intros statics h h' p vs v mut Heffects Hexec.
   apply exec_prim_bound in Hexec as [_ Hexec].
-  destruct p as [p | p | p | p].
+  destruct p as [p | p | p | p | rp].
   4: {
     right.
     destruct p as [cell_mut tag | kind init field | kind | kind set_kind];
@@ -494,6 +495,7 @@ Proof.
       injection Hexec as <- <-.
       split; [ simpl in Heffects; injection Heffects as <-; discriminate | ].
       split; [ reflexivity | eexists; reflexivity ]. }
+  4: { destruct vs; discriminate Hexec. }
   all: left; split;
     [ | apply exec_bound_prim_not_heap in Hexec;
         [ exact Hexec | intros p' Hheap; discriminate Hheap ] ].
@@ -514,7 +516,7 @@ Proof.
                = Some (v, h2)).
   { destruct (eval_prim statics p vs); simpl; [ | discriminate ].
     intros [= <- _]. reflexivity. }
-  destruct p as [p | p | p | p].
+  destruct p as [p | p | p | p | rp].
   - destruct vs as [ | v1 [ | v2 vs]]; try exact (Hpure Hexec);
       destruct v1 as [c | code slots | fslot decls slots | s | tag fields
       | elements | c | l | callee0 applied applied_arity];
@@ -565,6 +567,7 @@ Proof.
   - exact (Hpure Hexec).
   - destruct p as [[ | ] tag | kind init field | kind | kind set_kind];
       discriminate Heffects.
+  - destruct rp; discriminate Heffects.
 Qed.
 
 Theorem mutable_load_not_stable : mutable_load_not_stable_statement.
@@ -1050,7 +1053,7 @@ Proof.
       [ exact Hmemory | exact (eval_prim_closed _ _ _ _ _ Hmemory Hvs Heval) ].
   }
   destruct Hmemory as [Hheap Hstatics].
-  destruct p as [p | p | p | p]; try exact Hpure.
+  destruct p as [p | p | p | p | rp]; try exact Hpure.
   - destruct vs as [ | v [ | v2 vs]]; try exact Hpure.
     2: { destruct v; simpl; discriminate. }
     rewrite exec_bound_prim_unary.
@@ -1272,7 +1275,8 @@ Lemma exec_bound_prim_eval_prim (statics : static_env) (h : heap) (p : prim)
     Some (v, h).
 Proof.
   intros Hreads.
-  destruct p as [p | p | p | q]; [ | | reflexivity | discriminate Hreads ].
+  destruct p as [p | p | p | q | rp];
+    [ | | reflexivity | discriminate Hreads | reflexivity ].
   - destruct vs as [ | v0 [ | v1 vs]];
       [ reflexivity | | destruct v0; reflexivity ].
     rewrite exec_bound_prim_unary.
@@ -1349,8 +1353,8 @@ Proof.
             ∀ (v1 : value) (l : location) (rest : list value),
               vs = v1 :: Value_location l :: rest -> False).
   { intros v1 l rest ->. apply (Hnone l). right. left. reflexivity. }
-  destruct p as [p | p | p | q];
-    [ | | reflexivity | contradiction (Hnot q eq_refl) ].
+  destruct p as [p | p | p | q | rp];
+    [ | | reflexivity | contradiction (Hnot q eq_refl) | reflexivity ].
   - destruct vs as [ | v0 [ | v1 vs]];
       [ reflexivity | | destruct v0; reflexivity ].
     destruct v0; try reflexivity.
@@ -1420,7 +1424,7 @@ Proof.
               heap_values_all P ((l, c) :: h)).
   { intros l c Hc l0 c0 v [[= <- <-] | Hin] Hv;
       [ exact (Hc v Hv) | exact (Hheap l0 c0 v Hin Hv) ]. }
-  destruct p as [p | p | p | p]; try exact Hpure.
+  destruct p as [p | p | p | p | rp]; try exact Hpure.
   - destruct vs as [ | v [ | v2 vs]]; try exact Hpure.
     2: { destruct v; simpl; discriminate. }
     rewrite exec_bound_prim_unary.

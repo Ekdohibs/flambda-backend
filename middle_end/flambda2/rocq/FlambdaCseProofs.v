@@ -118,7 +118,7 @@ Lemma tagged_again_spec (x : variable) (p : prim) (args : list simple)
     ∧ entry = (t, (Unary Tag_immediate, [Var x])).
 Proof.
   unfold tagged_again.
-  destruct p as [u | | | ]; try contradiction.
+  destruct p as [u | | | | ]; try contradiction.
   destruct u; try contradiction.
   destruct args as [ | [t | s | c] [ | arg args]]; try contradiction.
   intros [<- | []]. exists t. auto.
@@ -416,7 +416,7 @@ Lemma tagged_again_renamed (r : renaming) (x : variable) (p : prim)
       (tagged_again x p args).
 Proof.
   unfold tagged_again.
-  destruct p as [u | | | ]; try reflexivity.
+  destruct p as [u | | | | ]; try reflexivity.
   destruct u; try reflexivity.
   destruct args as [ | [t | s | c] [ | arg args]]; reflexivity.
 Qed.

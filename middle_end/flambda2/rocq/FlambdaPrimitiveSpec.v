@@ -1357,6 +1357,7 @@ Definition prim_in_range (p : prim) : bool :=
   | Binary p => binary_primitive_in_range p
   | Variadic p => variadic_primitive_in_range p
   | Heap p => heap_primitive_in_range p
+  | Region_primitive _ => true
   end.
 
 (* A value is in range: its constants are, and the tags of its blocks,
@@ -1487,6 +1488,17 @@ Definition result_kind_of_heap_primitive (p : heap_primitive)
     Value
   end.
 
+(* The kinds of the results of the primitives of regions: a region for
+   the two that begin one, and a value for the others (the unit value
+   for the two that end one, the allocation itself for
+   [Local_allocation]). *)
+Definition result_kind_of_region_primitive (p : region_primitive)
+    : flambda_kind :=
+  match p with
+  | Begin_region | Begin_try_region => Region
+  | End_region | End_try_region | Local_allocation => Value
+  end.
+
 (* [Flambda_primitive.result_kind']: the kind of the variable that a
    [Let] binds to the primitive. *)
 Definition prim_result_kind (p : prim) : flambda_kind :=
@@ -1495,6 +1507,7 @@ Definition prim_result_kind (p : prim) : flambda_kind :=
   | Binary p => result_kind_of_binary_primitive p
   | Variadic p => result_kind_of_variadic_primitive p
   | Heap p => result_kind_of_heap_primitive p
+  | Region_primitive p => result_kind_of_region_primitive p
   end.
 
 (* Whether arguments of these kinds are as many as the primitive takes,

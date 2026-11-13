@@ -433,7 +433,7 @@ Proof.
       simpl in Hconst. rewrite Hslots' in Hconst. simpl in Hconst.
       injection Hconst as <-.
       exact (Lifted_to_unnamed_closure _ code vs vs' sym Hsym Hvs). }
-    destruct p as [p | p | p | p]; simpl in Hlift; try discriminate.
+    destruct p as [p | p | p | p | rp]; simpl in Hlift; try discriminate.
     + (* A boxed number. *)
       destruct p; simpl in Hlift; try discriminate.
       destruct args as [ | contents [ | arg args]]; simpl in Hlift;

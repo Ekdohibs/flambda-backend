@@ -207,7 +207,7 @@ Lemma unbox_of_renamed (r : renaming) (boxed : boxable_number) (d : named) :
   unbox_of boxed (rename_named r d)
   = option_map (rename_variable r) (unbox_of boxed d).
 Proof.
-  destruct d as [s | [[] | | | ] [ | [x | sym | c] [ | a args]] | | | | | ];
+  destruct d as [s | [[] | | | | ] [ | [x | sym | c] [ | a args]] | | | | | ];
     try reflexivity.
   cbn [rename_named map rename_simple unbox_of].
   match goal with
@@ -555,7 +555,7 @@ Proof.
       cbn [rename_expr unboxed_sorts]; try reflexivity.
     + rewrite unboxed_sorts_renamed.
       destruct d
-        as [s | [[] | | | ] [ | [x | sym | c] [ | a args]] | | | | | ];
+        as [s | [[] | | | | ] [ | [x | sym | c] [ | a args]] | | | | | ];
         reflexivity.
     + apply unboxed_sorts_renamed.
     + rewrite handler_unboxed_sorts_renamed, unboxed_sorts_renamed.

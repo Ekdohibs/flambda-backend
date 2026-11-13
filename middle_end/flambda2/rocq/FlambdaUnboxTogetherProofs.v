@@ -77,7 +77,7 @@ Qed.
 Lemma unbox_of_some (boxed : boxable_number) (d : named) (p : variable) :
   unbox_of boxed d = Some p -> d = Prim (Unary (Unbox_number boxed)) [Var p].
 Proof.
-  destruct d as [s | [[] | | | ] [ | [x | sym | c] [ | a args]] | | | | | ];
+  destruct d as [s | [[] | | | | ] [ | [x | sym | c] [ | a args]] | | | | | ];
     cbn [unbox_of]; try discriminate.
   match goal with
   | |- context [kind_eqb (unboxed_kind ?b) (unboxed_kind boxed)] =>

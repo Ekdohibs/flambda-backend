@@ -152,7 +152,7 @@ Proof.
     [a | q args | code slots | fslot decls slots | slot closure
     | from slot closure | move_from move_to closure];
     simpl; try discriminate.
-  - destruct q as [u | b | va | h]; try discriminate.
+  - destruct q as [u | b | va | h | rp]; try discriminate.
     destruct u; try discriminate.
     destruct mut, args as [ | [x | sym | c] [ | arg args]]; simpl;
       try discriminate;
@@ -1933,7 +1933,7 @@ Proof.
     [a | q args | code slots | fslot decls slots | slot closure
     | from slot closure | move_from move_to closure];
     cbn [rename_named read_of]; try reflexivity.
-  - destruct q as [u | b | va | h]; try reflexivity.
+  - destruct q as [u | b | va | h | rp]; try reflexivity.
     destruct u; try reflexivity.
     destruct mut, args as [ | [x | sym | c] [ | arg args]]; reflexivity.
   - destruct closure as [x | sym | c]; reflexivity.

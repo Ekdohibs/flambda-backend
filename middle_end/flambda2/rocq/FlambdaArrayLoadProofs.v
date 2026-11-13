@@ -139,7 +139,7 @@ Proof.
   destruct d as [s | p args | code slots | fslot decls slots | slot closure
     | pfrom slot closure | move_from move_to closure];
     try discriminate.
-  destruct p as [u | b | v | hp]; try discriminate.
+  destruct p as [u | b | v | hp | rp]; try discriminate.
   destruct v as [kind | kind]; [ discriminate | ].
   simpl. intros [= <-]. exists kind, args. auto.
 Qed.
@@ -264,7 +264,7 @@ Lemma of_known_array_sound (known : known_arrays) (vars : env)
   eval_simple vars result = Some v.
 Proof.
   intros Hhold Hresult Hd. unfold of_known_array in Hresult.
-  destruct p as [u | b | vp | hp]; try discriminate Hresult.
+  destruct p as [u | b | vp | hp | rp]; try discriminate Hresult.
   - (* [Array_length] *)
     destruct u; try discriminate Hresult.
     destruct args as [ | a [ | a' args]]; try discriminate Hresult.
@@ -485,7 +485,7 @@ Lemma array_made_by_equivariant (r : renaming) (d : named) :
   = option_map (rename_known_array r) (array_made_by d).
 Proof.
   destruct d as [s | p args | | | | | ]; try reflexivity.
-  destruct p as [p | p | [kind | kind] | p]; try reflexivity.
+  destruct p as [p | p | [kind | kind] | p | rp]; try reflexivity.
   simpl. unfold rename_known_array. rewrite !map_map. reflexivity.
 Qed.
 
@@ -563,7 +563,7 @@ Lemma of_known_array_equivariant (r : renaming) (known : known_arrays)
     (map (rename_simple r) args)
   = option_map (rename_simple r) (of_known_array known p args).
 Proof.
-  destruct p as [u | b | vp | hp]; try reflexivity.
+  destruct p as [u | b | vp | hp | rp]; try reflexivity.
   - destruct u; try reflexivity.
     destruct args as [ | a [ | a' args]]; try reflexivity.
     cbn [of_known_array map]. rewrite known_array_of_equivariant.

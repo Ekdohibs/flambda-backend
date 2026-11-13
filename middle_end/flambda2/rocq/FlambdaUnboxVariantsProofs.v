@@ -570,7 +570,7 @@ Proof.
   destruct d as [s | pr args | code slots | fslot decls slots | slot closure
     | pfrom slot closure | move_from move_to closure];
     try discriminate.
-  destruct pr as [u | b | v | hp]; try discriminate.
+  destruct pr as [u | b | v | hp | rp]; try discriminate.
   destruct args as [ | [x | sym | c] [ | arg args]]; try discriminate.
   destruct
     (wanted u && reads_a_box u && negb (among x bound)
@@ -681,7 +681,7 @@ Lemma reads_same_spec (p : unary_primitive) (x : variable) (d : named) :
   reads_same p x d = true -> d = Prim (Unary p) [Var x].
 Proof.
   destruct d as [s | pr args | | | | | ]; try discriminate.
-  destruct pr as [p' | b | v | hp]; try discriminate.
+  destruct pr as [p' | b | v | hp | rp]; try discriminate.
   destruct args as [ | [x' | sym | c] [ | arg args]]; try discriminate.
   cbn [reads_same]. intros Hsame.
   apply andb_true_iff in Hsame as [Hp Hx].
@@ -702,7 +702,7 @@ Lemma read_of_same_eval (f : variable) (same : list variable) (u : value)
 Proof.
   intros Hf Hsame.
   destruct d as [s | pr args | | | | | ]; try reflexivity.
-  destruct pr as [p' | b | v | hp]; try reflexivity.
+  destruct pr as [p' | b | v | hp | rp]; try reflexivity.
   destruct args as [ | [z | sym | c] [ | arg args]]; try reflexivity.
   cbn [read_of_same]. destruct (among z same) eqn:Hz; [ | reflexivity ].
   cbn [eval_named eval_simples eval_simple]. rewrite Hf, (Hsame z Hz).

@@ -1048,7 +1048,7 @@ Proof.
   destruct d as [s | p args | code slots | slot decls slots | slot closure
                 | pfrom slot closure | move_from move_to closure];
     try apply incl_refl.
-  destruct p as [p | p | p | p]; try apply incl_refl.
+  destruct p as [p | p | p | p | rp]; try apply incl_refl.
   destruct p; try apply incl_refl.
   destruct mut; try apply incl_refl;
     (destruct args as [ | [x | sym | c] [ | arg args]]; try apply incl_refl;

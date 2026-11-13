@@ -299,7 +299,7 @@ Definition simple_known (statics : static_env) (s : simple) : bool :=
 Definition reads_string (p : prim) : bool :=
   match p with
   | Binary (String_or_bigstring_load _) => true
-  | Unary _ | Binary _ | Variadic _ | Heap _ => false
+  | Unary _ | Binary _ | Variadic _ | Heap _ | Region_primitive _ => false
   end.
 
 (* A primitive that may be folded, or a projection, all of whose

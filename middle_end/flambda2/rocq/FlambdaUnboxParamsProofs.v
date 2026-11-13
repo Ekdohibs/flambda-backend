@@ -314,7 +314,7 @@ Proof.
   intros Hhold Hd. unfold reads_under_let.
   pose proof (all_computed_forget known vars statics x v Hhold) as Hforgot.
   destruct d as [s | p args | | | | | ]; try exact Hforgot.
-  destruct p as [p | | | ]; try exact Hforgot.
+  destruct p as [p | | | | ]; try exact Hforgot.
   destruct args as [ | [y | sym | c] [ | arg args]]; try exact Hforgot.
   destruct (reads_a_box p && negb (Pos.eqb x y)) eqn:Hread;
     [ | exact Hforgot ].
@@ -1869,7 +1869,7 @@ Proof.
     as [ s | pr args | code slots | fslot decls slots | slot closure
        | pfrom slot closure | move_from move_to closure ];
     try (simpl; apply refines_refl).
-  destruct pr as [p | b | v | hp]; try (simpl; apply refines_refl).
+  destruct pr as [p | b | v | hp | rp]; try (simpl; apply refines_refl).
   destruct args as [ | arg args]; try (simpl; apply refines_refl).
   destruct arg as [x | sym | c]; try (simpl; apply refines_refl).
   destruct args as [ | arg' args]; try (simpl; apply refines_refl).

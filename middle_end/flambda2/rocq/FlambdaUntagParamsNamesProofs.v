@@ -124,7 +124,7 @@ Qed.
 Lemma tag_of_renamed (r : renaming) (d : named) :
   tag_of (rename_named r d) = option_map (rename_variable r) (tag_of d).
 Proof.
-  destruct d as [s | [[] | | | ] [ | [x | sym | c] [ | a args]] | | | | | ];
+  destruct d as [s | [[] | | | | ] [ | [x | sym | c] [ | a args]] | | | | | ];
     reflexivity.
 Qed.
 
@@ -176,7 +176,7 @@ Qed.
 Lemma untag_of_renamed (r : renaming) (d : named) :
   untag_of (rename_named r d) = option_map (rename_variable r) (untag_of d).
 Proof.
-  destruct d as [s | [[] | | | ] [ | [x | sym | c] [ | a args]] | | | | | ];
+  destruct d as [s | [[] | | | | ] [ | [x | sym | c] [ | a args]] | | | | | ];
     reflexivity.
 Qed.
 

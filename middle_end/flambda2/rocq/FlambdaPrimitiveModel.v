@@ -50,7 +50,12 @@
      [Make_immutable_array]);
    - under [Heap], with the primitives of C4's prototype: [Make_array]
      of a mutable array of values (here [Make_mutable_array]), and the
-     ternary [Array_set] into one.
+     ternary [Array_set] into one;
+   - under [Region_primitive], the primitives of regions that are not
+     ghosts, [Begin_region], [Begin_try_region], [End_region] and
+     [End_try_region], and [Local_allocation], which is no primitive of
+     the compiler. The machine of FlambdaSemanticsSpec.v gives none of
+     them a value; FlambdaRegionsSpec.v says what they do.
    Every other primitive is left out. The conversion from the compiler's
    terms must refuse a primitive that is not here, and a primitive whose
    fields have a value that is not here; it must never approximate one.
@@ -64,7 +69,9 @@
      from one on the heap, and the conversion of the test tool, which
      drops the regions, reads a local one as an ordinary one where it
      converts the primitive (decision D37, which is open;
-     rocq/TRUST-LEDGER.md, "Regions").
+     rocq/TRUST-LEDGER.md, "Regions"). The machine of
+     FlambdaRegionsSpec.v is told that an allocation is local by the
+     primitive [Local_allocation] after it.
    - [Make_block] has no mutability: it is that of immutable blocks
      ([Immutable], not [Immutable_unique]), and the conversion must
      refuse the others. So every block of the model is immutable.
@@ -330,10 +337,42 @@ Inductive heap_primitive : Type :=
   (* [Array_set (kind, set_kind)]: ternary. *)
   | Array_set (kind : array_kind) (set_kind : array_set_kind).
 
+(* The primitives of regions, under one constructor of [prim]. The
+   machine of FlambdaSemanticsSpec.v gives none of them a value: a term
+   that has one is for the machine of FlambdaRegionsSpec.v, which says
+   what each does, and the conversion of the test tool makes them for
+   the run on that machine only.
+
+   [Begin_region] and [Begin_try_region] are the compiler's variadic
+   primitives of those names with [ghost = false], and take no
+   argument: the parent region that the compiler's may be given is not
+   here, as nothing runs for it. [End_region] and [End_try_region] are
+   the compiler's unary primitives with [ghost = false], on the
+   variable of the region. The compiler's four with [ghost = true] are
+   not here: nothing runs for them either.
+
+   [Local_allocation] is no primitive of the compiler. The allocation
+   primitives and the sets of closures of the model have no allocation
+   mode, so the mode [Local] of an allocation is said by a second
+   [Let], put directly after that of the allocation:
+   [Local_allocation] applied to the variable of the allocation, and
+   then to the variable of the region that the mode names, if the
+   conversion has one for it (it has none for the region of the code
+   that the allocation is in, for which nothing is passed when the
+   program runs). The conversion has the second [Let] bind the same
+   variable again. *)
+Inductive region_primitive : Type :=
+  | Begin_region
+  | Begin_try_region
+  | End_region
+  | End_try_region
+  | Local_allocation.
+
 (* [Flambda_primitive.Without_args.t]: a primitive without its
    arguments. *)
 Inductive prim : Type :=
   | Unary (p : unary_primitive)
   | Binary (p : binary_primitive)
   | Variadic (p : variadic_primitive)
-  | Heap (p : heap_primitive).
+  | Heap (p : heap_primitive)
+  | Region_primitive (p : region_primitive).

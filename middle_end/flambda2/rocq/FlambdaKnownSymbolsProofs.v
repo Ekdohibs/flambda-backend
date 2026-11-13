@@ -363,7 +363,7 @@ Proof.
   destruct d as [s | p args | code slots | fslot decls slots | slot closure
     | pfrom slot closure | move_from move_to closure];
     try exact (fun H => H).
-  destruct p as [p | p | p | p]; try exact (fun H => H).
+  destruct p as [p | p | p | p | rp]; try exact (fun H => H).
   destruct p; try exact (fun H => H).
   destruct args as [ | [x | s | c] [ | arg args]]; try exact (fun H => H);
     try (destruct mut; exact (fun H => H)).
@@ -1748,7 +1748,7 @@ Proof.
   destruct d as [s | p args | code slots | fslot decls slots | slot closure
     | pfrom slot closure | move_from move_to closure];
     try reflexivity.
-  destruct p as [p | p | p | p]; try reflexivity.
+  destruct p as [p | p | p | p | rp]; try reflexivity.
   destruct p; try reflexivity.
   destruct args as [ | [x | s | c] [ | arg args]];
     try (destruct mut; reflexivity).

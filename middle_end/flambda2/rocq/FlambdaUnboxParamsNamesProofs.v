@@ -153,7 +153,7 @@ Lemma reads_under_let_renamed (r : renaming) (known : computed)
 Proof.
   unfold reads_under_let. rewrite forget_computed_renamed.
   destruct d as [s | p args | | | | | ]; try reflexivity.
-  destruct p as [p | | | ]; try reflexivity.
+  destruct p as [p | | | | ]; try reflexivity.
   destruct args as [ | [y | sym | c] [ | arg args]]; try reflexivity.
   cbn [rename_named map rename_simple]. rewrite rename_variable_eqb.
   destruct (reads_a_box p && negb (Pos.eqb x y)); reflexivity.
@@ -418,7 +418,7 @@ Proof.
     as [ s | pr args | code slots | fslot decls slots | slot closure
        | pfrom slot closure | move_from move_to closure ];
     try reflexivity.
-  destruct pr as [p | b | v | hp]; try reflexivity.
+  destruct pr as [p | b | v | hp | rp]; try reflexivity.
   destruct args as [ | arg args]; try reflexivity.
   destruct arg as [x | sym | c]; try reflexivity.
   destruct args as [ | arg' args]; try reflexivity.
@@ -819,7 +819,7 @@ Lemma param_read_renamed (r : renaming) (wanted : unary_primitive -> bool)
   = param_read wanted params bound f d.
 Proof.
   destruct d as [s | pr args | | | | | ]; try reflexivity.
-  destruct pr as [p | b | v | hp]; try reflexivity.
+  destruct pr as [p | b | v | hp | rp]; try reflexivity.
   destruct args as [ | [x | sym | c] [ | arg args]]; try reflexivity.
   cbn [param_read rename_named map rename_simple].
   rewrite !among_rename_variable, position_renamed. reflexivity.
@@ -831,7 +831,7 @@ Lemma load_read_renamed (r : renaming) (d : named) :
       (load_read d).
 Proof.
   destruct d as [s | pr args | | | | | ]; try reflexivity.
-  destruct pr as [p | b | v | hp]; try reflexivity.
+  destruct pr as [p | b | v | hp | rp]; try reflexivity.
   destruct p; try reflexivity.
   destruct args as [ | [x | sym | c] [ | arg args]]; reflexivity.
 Qed.
@@ -1067,7 +1067,7 @@ Lemma reads_same_renamed (r : renaming) (p : unary_primitive) (x : variable)
   reads_same p (rename_variable r x) (rename_named r d) = reads_same p x d.
 Proof.
   destruct d as [s | pr args | | | | | ]; try reflexivity.
-  destruct pr as [p' | b | v | hp]; try reflexivity.
+  destruct pr as [p' | b | v | hp | rp]; try reflexivity.
   destruct args as [ | [x' | sym | c] [ | arg args]]; try reflexivity.
   cbn [reads_same rename_named map rename_simple].
   rewrite rename_variable_eqb. reflexivity.
@@ -1080,7 +1080,7 @@ Lemma read_of_same_renamed (r : renaming) (f : variable)
   = rename_named r (read_of_same f same d).
 Proof.
   destruct d as [s | pr args | | | | | ]; try reflexivity.
-  destruct pr as [p' | b | v | hp]; try reflexivity.
+  destruct pr as [p' | b | v | hp | rp]; try reflexivity.
   destruct args as [ | [z | sym | c] [ | arg args]]; try reflexivity.
   cbn [read_of_same rename_named map rename_simple].
   rewrite among_rename_variable. destruct (among z same); reflexivity.
@@ -1497,7 +1497,7 @@ Lemma reads_var_named_renamed (r : renaming) (x : variable) (d : named) :
   = reads_var_named x d.
 Proof.
   destruct d as [s | pr args | | | | | ]; try reflexivity.
-  destruct pr as [p' | b | v | hp]; try reflexivity.
+  destruct pr as [p' | b | v | hp | rp]; try reflexivity.
   destruct args as [ | [z | sym | c] [ | arg args]]; try reflexivity.
   cbn [reads_var_named rename_named map rename_simple].
   rewrite rename_variable_eqb. reflexivity.
@@ -1658,7 +1658,7 @@ Proof.
     exact (forget_computed_within names x known Hreads entry Hin). }
   unfold reads_under_let.
   destruct d as [s | p args | | | | | ]; try exact Hforgot.
-  destruct p as [p | | | ]; try exact Hforgot.
+  destruct p as [p | | | | ]; try exact Hforgot.
   destruct args as [ | [y | sym | c] [ | arg args]]; try exact Hforgot.
   destruct (reads_a_box p && negb (Pos.eqb x y)); [ | exact Hforgot ].
   intros entry [<- | Hin]; [ left; reflexivity | exact (Hforgot entry Hin) ].
@@ -2025,7 +2025,7 @@ Proof.
     as [ s | pr args | code slots | fslot decls slots | slot closure
        | pfrom slot closure | move_from move_to closure ];
     try (simpl; apply scoped_under_refl).
-  destruct pr as [p | b | v | hp]; try (simpl; apply scoped_under_refl).
+  destruct pr as [p | b | v | hp | rp]; try (simpl; apply scoped_under_refl).
   destruct args as [ | arg args]; try (simpl; apply scoped_under_refl).
   destruct arg as [x | sym | c]; try (simpl; apply scoped_under_refl).
   destruct args as [ | arg' args]; try (simpl; apply scoped_under_refl).
@@ -2505,7 +2505,7 @@ Proof.
   destruct (reads_same p x (read_of_same f same d)).
   - intros z [<- | []]. left. reflexivity.
   - destruct d as [s | pr args | | | | | ]; try (apply incl_tl, incl_refl).
-    destruct pr as [p' | b | v | hp]; try (apply incl_tl, incl_refl).
+    destruct pr as [p' | b | v | hp | rp]; try (apply incl_tl, incl_refl).
     destruct args as [ | [z | sym | c] [ | arg args]];
       try (apply incl_tl, incl_refl).
     cbn [read_of_same].

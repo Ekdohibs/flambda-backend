@@ -102,12 +102,13 @@ Lemma eval_prim_arity (statics : static_env) (p : prim) (vs : list value)
   ∨ (∃ p' : variadic_primitive,
       p = Variadic p' ∧ eval_variadic_primitive statics p' vs = Some v).
 Proof.
-  destruct p as [p | p | p | p].
+  destruct p as [p | p | p | p | rp].
   - destruct vs as [ | v1 [ | v2 vs]]; simpl; try discriminate.
     intros Heval. left. exists p, v1. auto.
   - destruct vs as [ | v1 [ | v2 [ | v3 vs]]]; simpl; try discriminate.
     intros Heval. right. left. exists p, v1, v2. auto.
   - rewrite eval_prim_variadic. intros Heval. right. right. exists p. auto.
+  - destruct vs; discriminate.
   - destruct vs; discriminate.
 Qed.
 
@@ -518,8 +519,8 @@ Qed.
 Theorem eval_prim_static_values : eval_prim_static_values_statement.
 Proof.
   intros statics statics' p vs Hsame.
-  destruct p as [p | p | p | p];
-    [ | | exact (eval_variadic_primitive_static_values _ _ p vs Hsame) | ];
+  destruct p as [p | p | p | p | rp];
+    [ | | exact (eval_variadic_primitive_static_values _ _ p vs Hsame) | | ];
     destruct vs as [ | v1 [ | v2 [ | v3 vs]]]; simpl; try reflexivity.
   - apply eval_unary_primitive_static_values. intros s ->.
     apply Hsame. left. reflexivity.
@@ -1228,9 +1229,9 @@ Qed.
 Theorem eval_prim_statics_extend : eval_prim_statics_extend_statement.
 Proof.
   intros statics statics' p vs v Hextend.
-  destruct p as [p | p | p | p];
+  destruct p as [p | p | p | p | rp];
     [ | | exact (eval_variadic_primitive_statics_extend _ _ p vs v Hextend)
-    | ];
+    | | ];
     destruct vs as [ | v1 [ | v2 [ | v3 vs]]]; simpl;
     try exact (fun H => H).
   - apply eval_unary_primitive_statics_extend. intros s allocated ->.

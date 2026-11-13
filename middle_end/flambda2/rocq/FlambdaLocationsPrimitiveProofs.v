@@ -473,7 +473,7 @@ Lemma exec_bound_prim_permuted_exactly (p : permutation)
   = option_map (permute_value_and_heap p)
       (exec_bound_prim statics h prim vs).
 Proof.
-  intros Hbinds. destruct prim as [u | b | vp | hp].
+  intros Hbinds. destruct prim as [u | b | vp | hp | rp].
   - destruct vs as [ | v [ | v2 vs]].
     + exact (pure_permuted p statics h (Unary u) []).
     + change (map (permute_value p) [v]) with [permute_value p v].
@@ -504,6 +504,7 @@ Proof.
       * exact (pure_permuted p statics h (Binary b) vs).
   - exact (pure_permuted p statics h (Variadic vp) vs).
   - exact (exec_heap_write_permuted p statics h hp vs Hbinds).
+  - exact (pure_permuted p statics h (Region_primitive rp) vs).
 Qed.
 
 Theorem exec_prim_permuted_exactly : exec_prim_permuted_exactly_statement.
@@ -590,7 +591,7 @@ Proof.
     split; [ intros l; apply after_allocation_agrees | ].
     unfold exec_prim. rewrite arguments_bound_permute.
     destruct (forallb (argument_bound statics h) vs); [ | reflexivity ].
-    destruct prim as [u | b | vp | hp]; try discriminate.
+    destruct prim as [u | b | vp | hp | rp]; try discriminate.
     exact (exec_heap_allocation_permuted p statics h hp vs Hbinds Hheap Hvs).
   - exists p.
     split;
@@ -705,7 +706,7 @@ Proof.
             ∀ (h0 : heap) (c : const),
               locations_bound h0 (locations_of_value (Value_const c))).
   { intros h0 c l [ ]. }
-  destruct prim as [u | b | vp | hp]; try exact Hpure.
+  destruct prim as [u | b | vp | hp | rp]; try exact Hpure.
   - destruct vs as [ | v0 [ | v2 vs]]; try exact Hpure.
     2: { destruct v0; exact Hpure. }
     rewrite exec_bound_prim_unary.
