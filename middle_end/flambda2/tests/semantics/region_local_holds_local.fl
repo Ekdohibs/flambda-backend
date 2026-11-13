@@ -1,0 +1,25 @@
+(* For the check of regions: a block in a region holds another block of the
+   same region, which is read through it while the region is open. Only an
+   allocation on the heap is asked to hold nothing local (decision D46): the
+   check passes of both terms. *)
+let code inline(never) loopify(never) size(20)
+      work_0 (x : imm tagged)
+        my_closure &my_alloc_region my_depth
+        -> k * e
+        : imm tagged =
+  let rgn = %begin_region () in
+  let p = %block.[`0`].my_alloc_region.local[rgn] (x, 1) in
+  let p' = %opaque (p) in
+  let q = %block.[`0`].my_alloc_region.local[rgn] (p', 2) in
+  let q' = %opaque (q) in
+  let rin = %block_load.[`0`] (q') in
+  let a = %block_load.[`0`] (rin) in
+  let u1 = %end_region (rgn) in
+  cont k (a)
+in
+let $camlRegion_local_holds_local__work_1 = closure work_0 @work &toplevel in
+apply direct(work_0 &toplevel)
+  ($camlRegion_local_holds_local__work_1 : _ -> imm tagged) (41) -> k1 * error
+  where k1 (r : imm tagged) =
+    let $camlRegion_local_holds_local = Block 0 (r) in
+    cont done ($camlRegion_local_holds_local)

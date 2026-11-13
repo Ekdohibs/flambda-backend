@@ -32,4 +32,8 @@ module Nat = struct
     match n with
     | O -> O
     | S n' -> ( match m with O -> O | S m' -> S (min n' m'))
+
+  (** val iter : nat -> ('a1 -> 'a1) -> 'a1 -> 'a1 **)
+
+  let rec iter n f x = match n with O -> x | S n0 -> f (iter n0 f x)
 end

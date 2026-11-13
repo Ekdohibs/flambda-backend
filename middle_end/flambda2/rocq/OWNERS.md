@@ -118,6 +118,9 @@ design out; that is the request, not the change.
     regions beside that of `FlambdaSemanticsSpec.v`, which says where
     a value allocated in a region is used after the region is gone,
     and its statements; on `flambda2-rocq/C2-regions`)
+  - `middle_end/flambda2/tests/semantics/region_*.fl` and their
+    `.expected` files (the controls of the check of regions that the
+    test tool makes with that machine)
   - `middle_end/flambda2/tests/tools/flmodel_to_fexpr.ml` and
     `middle_end/flambda2/tests/tools/flroundtrip.ml` (a term of the
     model printed back as fexpr, and the round trip that checks the

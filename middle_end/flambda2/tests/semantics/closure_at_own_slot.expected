@@ -6,3 +6,4 @@ closure_at_own_slot.fl:
   the same
   calls outside code once those of known code are inlined: 1
   validated: the same once normalised
+  the check of regions: passes before, passes after

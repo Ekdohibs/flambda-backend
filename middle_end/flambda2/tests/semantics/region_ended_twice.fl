@@ -1,0 +1,21 @@
+(* For the check of regions: a region is ended twice. The check fails at the
+   second end, of both terms (decision D47). *)
+let code inline(never) loopify(never) size(20)
+      work_0 (x : imm tagged)
+        my_closure &my_alloc_region my_depth
+        -> k * e
+        : imm tagged =
+  let rgn = %begin_region () in
+  let p = %block.[`0`].my_alloc_region.local[rgn] (x, 1) in
+  let q = %opaque (p) in
+  let a = %block_load.[`0`] (q) in
+  let u1 = %end_region (rgn) in
+  let u2 = %end_region (rgn) in
+  cont k (a)
+in
+let $camlRegion_ended_twice__work_1 = closure work_0 @work &toplevel in
+apply direct(work_0 &toplevel)
+  ($camlRegion_ended_twice__work_1 : _ -> imm tagged) (41) -> k1 * error
+  where k1 (r : imm tagged) =
+    let $camlRegion_ended_twice = Block 0 (r) in
+    cont done ($camlRegion_ended_twice)

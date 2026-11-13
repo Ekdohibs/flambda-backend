@@ -128,8 +128,16 @@ type heap_primitive =
   | Make_mutable_array of array_kind
   | Array_set of array_kind * array_set_kind
 
+type region_primitive =
+  | Begin_region
+  | Begin_try_region
+  | End_region
+  | End_try_region
+  | Local_allocation
+
 type prim =
   | Unary of unary_primitive
   | Binary of binary_primitive
   | Variadic of variadic_primitive
   | Heap of heap_primitive
+  | Region_primitive of region_primitive

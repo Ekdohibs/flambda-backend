@@ -1,0 +1,22 @@
+(* For the check of regions: a block on the heap is made of a block that is in
+   a region still open. The check fails where the heap block is made, of both
+   terms (decision D46). *)
+let code inline(never) loopify(never) size(20)
+      work_0 (x : imm tagged)
+        my_closure &my_alloc_region my_depth
+        -> k * e
+        : imm tagged =
+  let rgn = %begin_region () in
+  let p = %block.[`0`].my_alloc_region.local[rgn] (x, 1) in
+  let q = %opaque (p) in
+  let h = %block.[`0`].my_alloc_region (q, 2) in
+  let o = %opaque (h) in
+  let u1 = %end_region (rgn) in
+  cont k (x)
+in
+let $camlRegion_heap_holds_local__work_1 = closure work_0 @work &toplevel in
+apply direct(work_0 &toplevel)
+  ($camlRegion_heap_holds_local__work_1 : _ -> imm tagged) (41) -> k1 * error
+  where k1 (r : imm tagged) =
+    let $camlRegion_heap_holds_local = Block 0 (r) in
+    cont done ($camlRegion_heap_holds_local)

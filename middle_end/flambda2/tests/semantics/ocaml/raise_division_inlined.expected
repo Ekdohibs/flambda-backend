@@ -6,3 +6,4 @@ raise_division_inlined.fl:
   the same
   calls outside code once those of known code are inlined: 0
   validated with its imports: the same once normalised and unused static bindings removed, at the head of the term after too
+  the check of regions: passes before, passes after

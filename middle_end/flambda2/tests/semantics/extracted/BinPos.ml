@@ -37,9 +37,17 @@ module Pos = struct
     | Coq_xO p0 -> ( match q with Coq_xO q0 -> eqb p0 q0 | _ -> false)
     | Coq_xH -> ( match q with Coq_xH -> true | _ -> false)
 
+  (** val leb : positive -> positive -> bool **)
+
+  let leb x y = match compare x y with Gt -> false | _ -> true
+
   (** val max : positive -> positive -> positive **)
 
   let max p p' = match compare p p' with Gt -> p | _ -> p'
+
+  (** val ltb : positive -> positive -> bool **)
+
+  let ltb x y = match compare x y with Lt -> true | _ -> false
 
   (** val eq_dec : positive -> positive -> bool **)
 

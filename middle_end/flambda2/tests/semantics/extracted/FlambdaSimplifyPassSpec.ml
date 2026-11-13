@@ -484,7 +484,7 @@ let simplify_named tenv = function
                     | _ :: _ -> Not_known)))
               | _ :: _ -> Not_known)))
         | Variadic p0 -> simplify_variadic p0 tys
-        | Heap _ -> Not_known
+        | _ -> Not_known
       else Becomes_invalid
     | None -> Not_known)
   | Set_of_closures (code, value_slots) -> (

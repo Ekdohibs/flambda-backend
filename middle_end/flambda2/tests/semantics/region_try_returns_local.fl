@@ -1,0 +1,31 @@
+(* For the check of regions: the body of a [try] makes a block in the region
+   around the [try] and returns it. Nothing ends the region of the [try] on
+   that way out, so the block is still there when it is read; the end of the
+   region around then ends both. The check passes of both terms. *)
+let code inline(never) loopify(never) size(30)
+      work_0 (x : imm tagged)
+        my_closure &my_alloc_region my_depth
+        -> k * e
+        : imm tagged =
+  let rgn = %begin_region () in
+  let try_rgn = %begin_try_region () in
+  (cont kbody push(khandler)
+     where kbody =
+       let p = %block.[`0`].my_alloc_region.local[rgn] (x, 1) in
+       let q = %opaque (p) in
+       cont kafter pop(khandler) (q)
+     where kafter (v : val) =
+       let a = %block_load.[`0`] (v) in
+       let u2 = %end_region (rgn) in
+       cont k (a)
+     where khandler exn (ex : val) =
+       let u1 = %end_try_region (try_rgn) in
+       let u3 = %end_region (rgn) in
+       cont k (0))
+in
+let $camlRegion_try_returns_local__work_1 = closure work_0 @work &toplevel in
+apply direct(work_0 &toplevel)
+  ($camlRegion_try_returns_local__work_1 : _ -> imm tagged) (41) -> k1 * error
+  where k1 (r : imm tagged) =
+    let $camlRegion_try_returns_local = Block 0 (r) in
+    cont done ($camlRegion_try_returns_local)

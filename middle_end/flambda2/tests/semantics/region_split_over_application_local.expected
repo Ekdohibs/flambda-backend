@@ -1,0 +1,9 @@
+region_split_over_application_local.fl:
+  before Simplify (24 steps): returns [0: 41]
+  after Simplify (27 steps): returns [0: 41]
+  the check of kinds: passes before, passes after
+  calls outside code: 1 before, 1 after
+  the same
+  calls outside code once those of known code are inlined: 1
+  validated: the same once normalised
+  the check of regions: fails (a value allocated in a region is used after the region is gone, at step 20) before, fails (a value allocated in a region is used after the region is gone, at step 23) after

@@ -6,3 +6,4 @@ var_twelve_mixed.fl:
   the same
   calls outside code once those of known code are inlined: 0
   validated: the same once closures and blocks are lifted to symbols, the tables of the term after bound in the term before and the terms normalised
+  the check of regions: passes before, passes after

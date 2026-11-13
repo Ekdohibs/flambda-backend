@@ -511,6 +511,10 @@ let prim region (p : Primitives.prim) (args : Model.simple list) : F.prim =
     | Heap _ ->
       not_printable
         "a primitive of the heap, which the conversion does not make"
+    | Region_primitive _ ->
+      not_printable
+        "a primitive of regions, which the conversion makes for the machine of \
+         regions only"
   in
   { op with params = List.map (in_region region) op.params }, simples args
 

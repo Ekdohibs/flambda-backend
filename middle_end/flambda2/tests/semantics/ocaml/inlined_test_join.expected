@@ -6,3 +6,4 @@ inlined_test_join.fl:
   the same
   calls outside code once those of known code are inlined: 0
   validated: the same once normalised and unused static bindings removed
+  the check of regions: passes before, passes after

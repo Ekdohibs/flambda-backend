@@ -6,3 +6,4 @@ partial_in_a_pair.fl:
   the same
   calls outside code once those of known code are inlined: 0
   validated: the same once closures and blocks are lifted to symbols, the terms normalised and unused value slots removed
+  the check of regions: passes before, passes after

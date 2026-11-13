@@ -1,0 +1,9 @@
+region_other_region_named.fl:
+  before Simplify (11 steps): returns [0: 41]
+  after Simplify (11 steps): returns [0: 41]
+  the check of kinds: passes before, passes after
+  calls outside code: 1 before, 1 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated: the same once normalised
+  the check of regions: fails (a value allocated in a region is used after the region is gone, at step 9) before, passes after

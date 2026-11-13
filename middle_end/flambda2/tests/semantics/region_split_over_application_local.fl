@@ -1,0 +1,58 @@
+(* For the check of regions: region_split_over_application.fl as it must not be
+   made, the case that the comment of
+   [Simplify_common.split_direct_over_application] excludes. The second call
+   returns a block in the region of its caller, which is another region begun
+   before; the region begun for the split is ended when that call returns. The
+   block was made on top of the stack, in the region begun for the split, and
+   the end of that region frees it, whatever region the call names. The check
+   fails where the block is then read, of both terms (decisions D44 and
+   D45). *)
+let code inline(never) loopify(never) size(4)
+      second_4 (z : imm tagged)
+        my_closure &my_alloc_region &my_region &my_ghost_region my_depth
+        -> k * e
+        : val stack =
+  let y = %project_value_slot.[second].[y] (my_closure) in
+  let pair = %block.[`0`].my_alloc_region.local[my_region] (y, z) in
+  cont k (pair)
+in
+
+let code inline(never) loopify(never) size(4)
+      first_2 (y : imm tagged)
+        my_closure &my_alloc_region &my_region &my_ghost_region my_depth
+        -> k * e
+        : val stack =
+  let second = closure second_4 @second &my_alloc_region &my_region
+  with { y = y }
+  in
+  cont k (second)
+in
+let $camlRegion_split_over_application_local__first_3 = closure first_2 @first &toplevel in
+let code inline(never) loopify(never) size(30)
+      work_0 (x : imm tagged)
+        my_closure &my_alloc_region my_depth
+        -> k * e
+        : imm tagged =
+  let rout = %begin_region () in
+  let grout = %begin_ghost_region () in
+  let rgn = %begin_region () in
+  let grgn = %begin_ghost_region () in
+  apply direct(first_2 &my_alloc_region &rgn &grgn)
+    ($camlRegion_split_over_application_local__first_3 : _ -> val) (x) -> k2 * e
+    where k2 (second : val) =
+      apply &my_alloc_region &rout &grout second (1) -> k3 * e
+    where k3 (pair : val) =
+      let u1 = %end_region (rgn) in
+      let u2 = %end_ghost_region (grgn) in
+      let q = %opaque (pair) in
+      let a = %block_load.[`0`] (q) in
+      let u3 = %end_region (rout) in
+      let u4 = %end_ghost_region (grout) in
+      cont k (a)
+in
+let $camlRegion_split_over_application_local__work_1 = closure work_0 @work &toplevel in
+apply direct(work_0 &toplevel)
+  ($camlRegion_split_over_application_local__work_1 : _ -> imm tagged) (41) -> k1 * error
+  where k1 (r : imm tagged) =
+    let $camlRegion_split_over_application_local = Block 0 (r) in
+    cont done ($camlRegion_split_over_application_local)

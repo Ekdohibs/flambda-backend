@@ -6,3 +6,4 @@ try_nested.fl:
   the same
   calls outside code once those of known code are inlined: 0
   validated with its imports: the same once normalised and unused static bindings removed
+  the check of regions: passes before, passes after

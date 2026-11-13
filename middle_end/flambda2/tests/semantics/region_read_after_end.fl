@@ -1,0 +1,24 @@
+(* For the check of regions: region_local_read.fl with the region ended before
+   the block is read. The load evaluates a value whose region is gone, and the
+   check fails there, of both terms (decision D45). The run that drops regions
+   returns 42 all the same. *)
+let code inline(never) loopify(never) size(20)
+      work_0 (x : imm tagged)
+        my_closure &my_alloc_region my_depth
+        -> k * e
+        : imm tagged =
+  let rgn = %begin_region () in
+  let p = %block.[`0`].my_alloc_region.local[rgn] (x, 1) in
+  let q = %opaque (p) in
+  let u1 = %end_region (rgn) in
+  let a = %block_load.[`0`] (q) in
+  let b = %block_load.[`1`] (q) in
+  let s = %int_barith.add (a, b) in
+  cont k (s)
+in
+let $camlRegion_read_after_end__work_1 = closure work_0 @work &toplevel in
+apply direct(work_0 &toplevel)
+  ($camlRegion_read_after_end__work_1 : _ -> imm tagged) (41) -> k1 * error
+  where k1 (r : imm tagged) =
+    let $camlRegion_read_after_end = Block 0 (r) in
+    cont done ($camlRegion_read_after_end)

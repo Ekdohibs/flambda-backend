@@ -10,7 +10,11 @@ module Pos : sig
 
   val eqb : positive -> positive -> bool
 
+  val leb : positive -> positive -> bool
+
   val max : positive -> positive -> positive
+
+  val ltb : positive -> positive -> bool
 
   val eq_dec : positive -> positive -> bool
 end

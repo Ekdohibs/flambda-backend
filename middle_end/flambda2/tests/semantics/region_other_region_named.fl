@@ -1,0 +1,26 @@
+(* For the check of regions: an allocation names the outer of two regions that
+   are open, and is read after the inner one has ended. It was made on top of
+   the stack, so the end of the inner region freed it, whatever it names: the
+   check fails at the load, of the term before (decisions D44 and D45). The
+   term after passes: Simplify removes the inner region, which no allocation
+   names, so nothing ends before the load. *)
+let code inline(never) loopify(never) size(20)
+      work_0 (x : imm tagged)
+        my_closure &my_alloc_region my_depth
+        -> k * e
+        : imm tagged =
+  let rout = %begin_region () in
+  let rin = %begin_region () in
+  let p = %block.[`0`].my_alloc_region.local[rout] (x, 1) in
+  let q = %opaque (p) in
+  let u1 = %end_region (rin) in
+  let a = %block_load.[`0`] (q) in
+  let u2 = %end_region (rout) in
+  cont k (a)
+in
+let $camlRegion_other_region_named__work_1 = closure work_0 @work &toplevel in
+apply direct(work_0 &toplevel)
+  ($camlRegion_other_region_named__work_1 : _ -> imm tagged) (41) -> k1 * error
+  where k1 (r : imm tagged) =
+    let $camlRegion_other_region_named = Block 0 (r) in
+    cont done ($camlRegion_other_region_named)

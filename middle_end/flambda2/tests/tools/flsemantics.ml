@@ -290,6 +290,7 @@ module Model = Flambda2_rocq_semantics.FlambdaModel
 module Values = Flambda2_rocq_semantics.FlambdaValueSpec
 module Imports = Flambda2_rocq_semantics.FlambdaImportsSpec
 module Semantics = Flambda2_rocq_semantics.FlambdaSemanticsSpec
+module Regions = Flambda2_rocq_semantics.FlambdaRegionsSpec
 module Normalise = Flambda2_rocq_semantics.FlambdaNormaliseSpec
 module Unused_statics = Flambda2_rocq_semantics.FlambdaUnusedStaticsSpec
 module Well_formed = Flambda2_rocq_semantics.FlambdaWellFormedSpec
@@ -330,6 +331,12 @@ let rec positive_of_int n : Numbers.positive =
 
 let rec nat_of_int n : Flambda2_rocq_semantics.Datatypes.nat =
   if n <= 0 then O else S (nat_of_int (n - 1))
+
+let int_of_nat (n : Flambda2_rocq_semantics.Datatypes.nat) =
+  let rec count acc (n : Flambda2_rocq_semantics.Datatypes.nat) =
+    match n with O -> acc | S n -> count (acc + 1) n
+  in
+  count 0 n
 
 let rec int_of_positive (p : Numbers.positive) =
   match p with
@@ -817,12 +824,59 @@ let region_variables : Variable.Set.t ref = ref Variable.Set.empty
 let drop_region_variable var =
   region_variables := Variable.Set.add var !region_variables
 
+(* The conversion for the run on the machine of regions (FlambdaRegionsSpec.v),
+   which is made after the check and changes nothing of it: the terms that are
+   run, compared and validated are converted with [keep_regions] unset, as
+   above. While it is set:
+
+   A [Begin_region] or a [Begin_try_region] that is not a ghost is the model's
+   primitive of that name, with no argument (the parent is dropped), and its
+   variable is kept ([kept_regions]).
+
+   An [End_region] or an [End_try_region] that is not a ghost, of a region that
+   is kept, is the model's primitive on the variable of the region.
+
+   An allocation whose mode is [Local] (a block, an immutable array, a boxed
+   number, a set of closures) is followed by a [Let] of the same variable to
+   [Local_allocation], applied to the variable and to the variable of the region
+   that the mode names. The region of the code that the allocation is in
+   ([code_regions]) is named by nothing: no variable is bound to it when the
+   code runs.
+
+   What is a ghost is converted as above: the [Let] of the begin is dropped and
+   that of the end binds the unit value. So the end that is a ghost of a region
+   that is kept ends nothing, as when the program runs.
+
+   Refused: a kept region used anywhere else (an argument, a parameter, a value
+   slot), as a region dropped is; an allocation in a region that is neither kept
+   nor the region of its code (a region that is a parameter of a continuation);
+   the end that is not a ghost of a region that is not kept (one that is a
+   parameter of a continuation, one that a ghost began, the region of the code),
+   which would otherwise be dropped without a word; and a local set of closures
+   for which [let_closures] makes no [Let].
+
+   The modes of calls, the [alloc_region]s and the result mode of code are not
+   converted. [regions_met] says whether a conversion with [keep_regions] set
+   met something of the first three paragraphs, or refused something for
+   them. *)
+let keep_regions : bool ref = ref false
+
+let kept_regions : Variable.Set.t ref = ref Variable.Set.empty
+
+let code_regions : Variable.Set.t ref = ref Variable.Set.empty
+
+let regions_met : bool ref = ref false
+
 (* A variable where it is used as a value. *)
 let convert_variable var =
   if Variable.Set.mem var !depth_variables
   then unsupported "the depth variable %a used as a value" Variable.print var;
   if Variable.Set.mem var !region_variables
   then unsupported "the region variable %a used as a value" Variable.print var;
+  if Variable.Set.mem var !kept_regions
+  then (
+    regions_met := true;
+    unsupported "the region variable %a used as a value" Variable.print var);
   Variables.find var
 
 (* CR mshinwell: the coercions are dropped; see [depth_variables]. *)
@@ -966,9 +1020,41 @@ let reset_conversion () =
   superseded_code := [];
   loopify_marked := [];
   region_variables := Variable.Set.empty;
+  kept_regions := Variable.Set.empty;
+  code_regions := Variable.Set.empty;
   tupled_code := [];
   directly_called_code := [];
   known_arity_call_met := false
+
+(* The region that the mode of an allocation names, if the mode is [Local]. *)
+let local_region (mode : Alloc_mode.For_allocations.t) : Variable.t option =
+  match mode with Heap _ -> None | Local { region; _ } -> Some region
+
+let local_region_of_prim (prim : P.t) : Variable.t option =
+  match prim with
+  | Variadic (Make_block (_, _, mode), _)
+  | Variadic (Make_array (_, _, mode), _)
+  | Unary (Box_number (_, mode), _) ->
+    local_region mode
+  | Nullary _ | Unary _ | Binary _ | Ternary _ | Quaternary _ | Variadic _ ->
+    None
+
+(* [Local_allocation] of the variable [var], which the [Let] before it binds to
+   an allocation in [region]. *)
+let local_allocation (var : Model.variable) (region : Variable.t) : Model.named
+    =
+  regions_met := true;
+  let named : Model.simple list =
+    if Variable.Set.mem region !code_regions
+    then []
+    else if Variable.Set.mem region !kept_regions
+    then [Var (Variables.find region)]
+    else
+      unsupported
+        "an allocation in %a, which is not a region that the term begins"
+        Variable.print region
+  in
+  Prim (Region_primitive Local_allocation, Var var :: named)
 
 let rec convert_expr (e : Flambda.Expr.t) : Model.expr =
   match Flambda.Expr.descr e with
@@ -1043,6 +1129,26 @@ and convert_let (pattern : Bound_pattern.t) (defining_expr : Flambda.Named.t)
   | ( Singleton bound_var,
       Prim
         ( Variadic
+            ( (( Begin_region { ghost = false }
+               | Begin_try_region { ghost = false } ) as p),
+              _ ),
+          _ ) )
+    when !keep_regions ->
+    (* For the machine of regions; see [keep_regions]. *)
+    regions_met := true;
+    let var = Bound_var.var bound_var in
+    kept_regions := Variable.Set.add var !kept_regions;
+    let p : Primitives.region_primitive =
+      match p with Begin_try_region _ -> Begin_try_region | _ -> Begin_region
+    in
+    Model.Let
+      ( Variables.find var,
+        Kinds.Region,
+        Prim (Region_primitive p, []),
+        convert_expr body )
+  | ( Singleton bound_var,
+      Prim
+        ( Variadic
             ((Begin_region { ghost = _ } | Begin_try_region { ghost = _ }), _),
           _ ) ) ->
     (* CR mshinwell: the binding of a region is dropped, and with it the region
@@ -1063,21 +1169,62 @@ and convert_let (pattern : Bound_pattern.t) (defining_expr : Flambda.Named.t)
         ~symbol:(fun _ ~coercion:_ -> false)
         ~const:(fun _ -> false)
     in
-    if not is_region
-    then unsupported "the end of %a, which is not a region" Simple.print region;
+    (* For the machine of regions; see [keep_regions]. *)
+    let kept_region =
+      Simple.pattern_match' region
+        ~var:(fun var ~coercion:_ ->
+          if Variable.Set.mem var !kept_regions then Some var else None)
+        ~symbol:(fun _ ~coercion:_ -> None)
+        ~const:(fun _ -> None)
+    in
+    if not (is_region || Option.is_some kept_region)
+    then (
+      if !keep_regions then regions_met := true;
+      unsupported "the end of %a, which is not a region" Simple.print region);
+    (* For the machine of regions: an end that runs must not be dropped. *)
+    let is_ghost =
+      match defining_expr with
+      | Prim (Unary (End_region { ghost }, _), _)
+      | Prim (Unary (End_try_region { ghost }, _), _) ->
+        ghost
+      | _ -> true
+    in
+    if !keep_regions && (not is_ghost) && Option.is_none kept_region
+    then (
+      regions_met := true;
+      unsupported
+        "the end, which is not a ghost, of %a, which no begin that is not a \
+         ghost made"
+        Simple.print region);
     let var, kind = convert_bound_var bound_var in
     let unit : Model.simple = Const (Tagged_immediate (z_of_int 0)) in
     let defining_expr : Model.named =
-      match defining_expr with
-      | Prim (Unary (End_try_region { ghost = false }, _), _) ->
+      match defining_expr, kept_region with
+      | Prim (Unary (End_region { ghost = false }, _), _), Some region ->
+        Prim (Region_primitive End_region, [Var (Variables.find region)])
+      | Prim (Unary (End_try_region { ghost = false }, _), _), Some region ->
+        Prim (Region_primitive End_try_region, [Var (Variables.find region)])
+      | Prim (Unary (End_try_region { ghost = false }, _), _), None ->
         Prim (Unary (Opaque_identity (convert_kind Flambda_kind.value)), [unit])
-      | _ -> Simple unit
+      | _, _ -> Simple unit
     in
     Model.Let (var, kind, defining_expr, convert_expr body)
+  | Singleton bound_var, Prim (prim, _)
+    when !keep_regions && Option.is_some (local_region_of_prim prim) ->
+    (* For the machine of regions; see [keep_regions]. *)
+    let var, kind = convert_bound_var bound_var in
+    let allocation = convert_prim prim in
+    let local =
+      match local_region_of_prim prim with
+      | Some region -> local_allocation var region
+      | None -> assert false
+    in
+    Model.Let
+      (var, kind, allocation, Model.Let (var, kind, local, convert_expr body))
   | Singleton bound_var, Prim (prim, _) ->
     let var, kind = convert_bound_var bound_var in
     Model.Let (var, kind, convert_prim prim, convert_expr body)
-  | Set_of_closures bound_vars, Set_of_closures (set, _) -> (
+  | Set_of_closures bound_vars, Set_of_closures (set, mode) -> (
     let function_decls, slots = convert_set_of_closures set in
     (* [let_closures] gives each variable the kind [Value]. *)
     let bound_vars =
@@ -1092,7 +1239,22 @@ and convert_let (pattern : Bound_pattern.t) (defining_expr : Flambda.Named.t)
     match
       Model.let_closures bound_vars function_decls slots (convert_expr body)
     with
-    | Some e -> e
+    | Some e -> (
+      (* For the machine of regions: the [Local_allocation] goes after the [Let]
+         of the first closure, from which [let_closures] projects the others;
+         see [keep_regions]. *)
+      match e, local_region mode with
+      | Let (var, kind, closure, projections), Some region when !keep_regions ->
+        Model.Let
+          ( var,
+            kind,
+            closure,
+            Model.Let (var, kind, local_allocation var region, projections) )
+      | _, Some _ when !keep_regions ->
+        regions_met := true;
+        unsupported "the local set of closures %a, which binds nothing"
+          Bound_pattern.print pattern
+      | _, _ -> e)
     | None -> unsupported "the binding %a" Bound_pattern.print pattern)
   | Static bound_static, Static_consts group ->
     let bindings =
@@ -1262,7 +1424,10 @@ and convert_code (code : Flambda.Function_params_and_body.t Code0.t) :
       | Maybe_alloc_stack { alloc_region; region; ghost_region } ->
         drop_region_variable alloc_region;
         drop_region_variable region;
-        drop_region_variable ghost_region);
+        drop_region_variable ghost_region;
+        (* For the machine of regions; see [keep_regions]. *)
+        if !keep_regions
+        then code_regions := Variable.Set.add region !code_regions);
       (* The arity that calls are compared with is that of the metadata of the
          code; unarized, it must give the kinds of the parameters. *)
       let params_arity = convert_arity (Code0.params_arity code) in
@@ -1942,6 +2107,14 @@ let print_prim ppf (p : Primitives.prim) =
   | Heap _ ->
     (* The converter makes no primitive of the heap. *)
     Format.pp_print_string ppf "<primitive of the heap>"
+  | Region_primitive p ->
+    Format.pp_print_string ppf
+      (match p with
+      | Begin_region -> "Begin_region"
+      | Begin_try_region -> "Begin_try_region"
+      | End_region -> "End_region"
+      | End_try_region -> "End_try_region"
+      | Local_allocation -> "Local_allocation")
 
 let print_named ppf (d : Model.named) =
   match d with
@@ -5244,6 +5417,175 @@ let check_or_raise ~filename ~(units : (Compilation_unit.t * Digest.t) list)
     if not ok then raise Check_failed;
     Some validation
 
+(* ---- The check of regions --------------------------------------------- *)
+
+(* What the run of a unit on the machine of regions (FlambdaRegionsSpec.v) came
+   to, with the number of steps made and the state before the step that was not
+   made, or the state that the run left by. *)
+type region_outcome =
+  | Region_passes
+      (** The run left through a continuation that is not bound, and no step
+          before was refused. *)
+  | Region_fails of Regions.region_fault
+      (** A step was refused by one of the rules of regions. *)
+  | Region_not_run of string
+      (** Nothing is said: the reason is the conversion's, or the run had no
+          step for a reason that is not of regions, or it was not over when the
+          steps allowed ran out. *)
+
+let run_regions ~(statics : Values.static_env) (unit : converted) :
+    region_outcome * int * Regions.region_state option =
+  (* A symbol that no symbol of the two units or of the prefix has: the first
+     that the machine draws. The test that it is so is the model's. *)
+  let base = Symbols.fresh () in
+  if not (Regions.region_names_fresh base unit.body statics)
+  then
+    ( Region_not_run
+        "the symbols that the machine would draw are not apart from those of \
+         the term",
+      0,
+      None )
+  else
+    let rec go steps (state : Regions.region_state) =
+      if steps >= fuel
+      then Region_not_run "no answer in the steps allowed", steps, Some state
+      else
+        match Regions.region_step state with
+        | Region_step state -> go (steps + 1) state
+        | Region_exit (_, _, state) -> Region_passes, steps, Some state
+        | Region_undefined No_plain_step ->
+          ( Region_not_run "the run is undefined for another reason",
+            steps,
+            Some state )
+        | Region_undefined Not_of_the_conversion ->
+          ( Region_not_run
+              "a primitive of regions is not as the conversion makes it",
+            steps,
+            Some state )
+        | Region_undefined
+            ((Dead_value_used | Heap_holds_local | Region_not_open) as fault) ->
+          Region_fails fault, steps, Some state
+    in
+    go 0 (Regions.initial_region_state unit.body statics base)
+
+let region_outcome_shown (outcome : region_outcome) ~steps =
+  match outcome with
+  | Region_passes -> "passes"
+  | Region_fails fault ->
+    Printf.sprintf "fails (%s, at step %d)"
+      (match fault with
+      | Dead_value_used ->
+        "a value allocated in a region is used after the region is gone"
+      | Heap_holds_local -> "an allocation on the heap holds a local value"
+      | Region_not_open -> "a region that is not open is ended or named"
+      | Not_of_the_conversion | No_plain_step -> assert false)
+      steps
+  | Region_not_run why -> Printf.sprintf "not run (%s)" why
+
+(* The counts of a run, on a line of its own, where the environment asks for
+   them ([FLSEMANTICS_REGION_COUNTS]): they are for a measure, and are in no
+   expected file. *)
+let print_region_counts which ~steps (state : Regions.region_state option) =
+  match state with
+  | None -> ()
+  | Some state ->
+    let counts = state.rs_counts in
+    let frames_left kind =
+      List.length
+        (List.filter
+           (fun (frame : Regions.frame) -> frame.frame_kind = kind)
+           state.rs_frames)
+    in
+    let locals_left =
+      List.fold_left
+        (fun n (frame : Regions.frame) -> n + List.length frame.frame_locals)
+        0 state.rs_frames
+    in
+    Format.printf
+      "  the counts of regions %s: steps=%d ends=%d local_allocations=%d \
+       local_uses=%d other_region=%d cut_by_end_region=%d \
+       cut_by_end_try_region=%d no_frame=%d plain_left=%d try_left=%d \
+       locals_left=%d@."
+      which steps
+      (int_of_nat counts.count_ends)
+      (int_of_nat counts.count_local_allocations)
+      (int_of_nat counts.count_local_uses)
+      (int_of_nat counts.count_other_region)
+      (int_of_nat counts.count_cut_by_end_region)
+      (int_of_nat counts.count_cut_by_end_try_region)
+      (int_of_nat counts.count_no_frame)
+      (frames_left Plain_mark) (frames_left Try_mark) locals_left
+
+(* The check of regions, after everything else: the two terms are converted
+   again with regions and the modes of allocations kept ([keep_regions]), and
+   each is run on the machine of regions from the imports. It changes no
+   verdict.
+
+   It is made only of a unit that was compared: [check] calls it where
+   [check_or_raise] has returned a validation, and not of a unit that is not
+   checked or whose check failed. It then prints one line if the second
+   conversion met something of regions (a region that is not a ghost, or an
+   allocation whose mode is [Local]: [regions_met]), or if it was refused. The
+   first conversion of the same terms was not refused, and the two differ only
+   where [keep_regions] is read, so a refusal of the second is one for regions;
+   whatever its reason, the line gives it. A unit of which the second conversion
+   went to its end and met nothing of regions has none, and gets no line.
+
+   It resets the conversion and converts both terms again. So once [check] has
+   returned, the tables of the conversion ([Variables], [Symbols] and what
+   [reset_conversion] clears) are those of this second conversion, and whatever
+   is linked with this file and reads them after [check] reads those.
+
+   CR mshinwell: the line says of each term whether its run on the machine of
+   FlambdaRegionsSpec.v reached its end with no value allocated in a region used
+   after the region was gone, no allocation on the heap holding such a value,
+   and no region ended or named that was not open (decisions D44 to D48). It is
+   of the one run that the machine makes, from the imports and with no argument:
+   a path that the run does not take is not looked at. It is of the term and not
+   of the code: the backend may still move a load after the end of a region. And
+   "passes before, passes after" relates the two runs in nothing: the validation
+   still drops regions (decision D37). *)
+let check_regions ~(units : (Compilation_unit.t * Digest.t) list)
+    (before : Flambda_unit.t) (after : Flambda_unit.t) : unit =
+  regions_met := false;
+  keep_regions := true;
+  let converted =
+    Fun.protect
+      ~finally:(fun () -> keep_regions := false)
+      (fun () ->
+        reset_conversion ();
+        match convert_both ~units before after with
+        | exception Unsupported what -> Error (Format.asprintf "%t" what)
+        | before, after, prefix -> Ok (before, after, prefix))
+  in
+  if !regions_met || Result.is_error converted
+  then
+    match converted with
+    | Error what ->
+      Format.printf
+        "  the check of regions: not run (the model has not got %s)@." what
+    | Ok (before, after, prefix) ->
+      let imports =
+        imports ~bound:prefix.prefix_symbols
+          ~unmentioned:prefix.prefix_unmentioned ~hidden:prefix.prefix_hidden
+      in
+      let statics = Imports.imports_statics imports in
+      let before = with_prefix prefix before in
+      let after = with_prefix prefix after in
+      let outcome_before, steps_before, state_before =
+        run_regions ~statics before
+      in
+      let outcome_after, steps_after, state_after =
+        run_regions ~statics after
+      in
+      Format.printf "  the check of regions: %s before, %s after@."
+        (region_outcome_shown outcome_before ~steps:steps_before)
+        (region_outcome_shown outcome_after ~steps:steps_after);
+      if Sys.getenv_opt "FLSEMANTICS_REGION_COUNTS" <> None
+      then (
+        print_region_counts "before" ~steps:steps_before state_before;
+        print_region_counts "after" ~steps:steps_after state_after)
+
 (* The check of the two terms of a unit, the first as Simplify was given it and
    the second as Simplify returned it. It prints, under the name given, what the
    command line prints of a unit, and exits nowhere.
@@ -5259,7 +5601,9 @@ let check ~filename ~(units : (Compilation_unit.t * Digest.t) list)
   match check_or_raise ~filename ~units before after with
   | exception Check_failed -> Failed
   | None -> Not_checked
-  | Some validation -> Compared validation
+  | Some validation ->
+    check_regions ~units before after;
+    Compared validation
 
 (* The text of fexpr has no syntax for the mode of a parameter of code, and the
    reader gives every parameter the mode heap ([Fexpr_to_flambda]). In the

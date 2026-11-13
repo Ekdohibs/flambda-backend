@@ -133,6 +133,8 @@ val result_kind_of_variadic_primitive : variadic_primitive -> flambda_kind
 
 val result_kind_of_heap_primitive : heap_primitive -> flambda_kind
 
+val result_kind_of_region_primitive : region_primitive -> flambda_kind
+
 val prim_result_kind : prim -> flambda_kind
 
 val prim_args_well_kinded : prim -> flambda_kind list -> bool

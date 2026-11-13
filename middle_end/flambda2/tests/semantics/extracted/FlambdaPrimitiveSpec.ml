@@ -638,7 +638,7 @@ let eval_prim statics p vs =
         | [] -> eval_binary_primitive statics p0 v1 v2
         | _ :: _ -> None)))
   | Variadic p0 -> eval_variadic_primitive statics p0 vs
-  | Heap _ -> None
+  | _ -> None
 
 (** val tag_in_range : coq_Z -> bool **)
 
@@ -753,6 +753,7 @@ let prim_in_range = function
   | Binary p0 -> binary_primitive_in_range p0
   | Variadic p0 -> variadic_primitive_in_range p0
   | Heap p0 -> heap_primitive_in_range p0
+  | Region_primitive _ -> true
 
 (** val naked_immediate_kind : flambda_kind **)
 
@@ -827,6 +828,13 @@ let result_kind_of_variadic_primitive _ = Value
 
 let result_kind_of_heap_primitive _ = Value
 
+(** val result_kind_of_region_primitive : region_primitive -> flambda_kind **)
+
+let result_kind_of_region_primitive = function
+  | Begin_region -> Region
+  | Begin_try_region -> Region
+  | _ -> Value
+
 (** val prim_result_kind : prim -> flambda_kind **)
 
 let prim_result_kind = function
@@ -834,6 +842,7 @@ let prim_result_kind = function
   | Binary p0 -> result_kind_of_binary_primitive p0
   | Variadic p0 -> result_kind_of_variadic_primitive p0
   | Heap p0 -> result_kind_of_heap_primitive p0
+  | Region_primitive p0 -> result_kind_of_region_primitive p0
 
 (** val prim_args_well_kinded : prim -> flambda_kind list -> bool **)
 
@@ -862,7 +871,7 @@ let prim_args_well_kinded p kinds =
     forallb
       (fun kind -> kind_eqb kind (args_kind_of_variadic_primitive p0))
       kinds
-  | Heap _ -> false
+  | _ -> false
 
 (** val prim_eq_dec : prim -> prim -> bool **)
 
@@ -2758,6 +2767,18 @@ let prim_eq_dec p p' =
                 | _ -> false))
             | _ -> false))
         | _ -> false))
+    | _ -> false)
+  | Region_primitive p0 -> (
+    match p' with
+    | Region_primitive p1 -> (
+      match p0 with
+      | Begin_region -> ( match p1 with Begin_region -> true | _ -> false)
+      | Begin_try_region -> (
+        match p1 with Begin_try_region -> true | _ -> false)
+      | End_region -> ( match p1 with End_region -> true | _ -> false)
+      | End_try_region -> ( match p1 with End_try_region -> true | _ -> false)
+      | Local_allocation -> (
+        match p1 with Local_allocation -> true | _ -> false))
     | _ -> false)
 
 (** val prim_eqb : prim -> prim -> bool **)

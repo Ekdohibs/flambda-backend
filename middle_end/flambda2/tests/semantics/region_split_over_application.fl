@@ -1,0 +1,58 @@
+(* For the check of regions: the term that Simplify is meant to make when it
+   splits an application with too many arguments of a function that returns a
+   local closure, where the whole application returns something on the heap
+   ([Simplify_common.split_direct_over_application]): a region is begun, the
+   function is called with its own arguments and returns the closure in that
+   region, the closure is called with the rest, and the region is ended when
+   that call returns. The second call returns an integer. The check passes of
+   both terms.
+
+   This is the form that is meant, with the ghost region begun by a begin that
+   is a ghost. Simplify as it is begins it by a begin that is not a ghost, and
+   ends it by an end that is: one more region begun when the program runs,
+   which the end of the first ends. On the machine of regions that is one more
+   frame, cut by the end of another region and counted so; nothing is used after
+   it is gone. *)
+let code inline(never) loopify(never) size(4)
+      second_4 (z : imm tagged)
+        my_closure &my_alloc_region my_depth
+        -> k * e
+        : imm tagged =
+  let y = %project_value_slot.[second].[y] (my_closure) in
+  let sum = %int_barith.add (y, z) in
+  cont k (sum)
+in
+
+let code inline(never) loopify(never) size(4)
+      first_2 (y : imm tagged)
+        my_closure &my_alloc_region &my_region &my_ghost_region my_depth
+        -> k * e
+        : val stack =
+  let second = closure second_4 @second &my_alloc_region &my_region
+  with { y = y }
+  in
+  cont k (second)
+in
+let $camlRegion_split_over_application__first_3 = closure first_2 @first &toplevel in
+let code inline(never) loopify(never) size(30)
+      work_0 (x : imm tagged)
+        my_closure &my_alloc_region my_depth
+        -> k * e
+        : imm tagged =
+  let rgn = %begin_region () in
+  let grgn = %begin_ghost_region () in
+  apply direct(first_2 &my_alloc_region &rgn &grgn)
+    ($camlRegion_split_over_application__first_3 : _ -> val) (x) -> k2 * e
+    where k2 (second : val) =
+      apply &my_alloc_region second (1) -> k3 * e
+    where k3 (sum : imm tagged) =
+      let u1 = %end_region (rgn) in
+      let u2 = %end_ghost_region (grgn) in
+      cont k (sum)
+in
+let $camlRegion_split_over_application__work_1 = closure work_0 @work &toplevel in
+apply direct(work_0 &toplevel)
+  ($camlRegion_split_over_application__work_1 : _ -> imm tagged) (41) -> k1 * error
+  where k1 (r : imm tagged) =
+    let $camlRegion_split_over_application = Block 0 (r) in
+    cont done ($camlRegion_split_over_application)

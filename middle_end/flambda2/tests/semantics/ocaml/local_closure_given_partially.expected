@@ -6,3 +6,4 @@ local_closure_given_partially.fl:
   the same
   calls outside code once those of known code are inlined: 4
   validated: the same once closures and blocks are lifted to symbols and the terms normalised
+  the check of regions: passes before, passes after

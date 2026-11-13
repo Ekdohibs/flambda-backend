@@ -1,0 +1,40 @@
+(* For the check of regions: a function that returns a block in the region of
+   its caller is called with a region open, and the block is read before the
+   region ends. Before Simplify the allocation is in the code of the function
+   and names the region of that code, for which nothing is passed: it goes on
+   top of the stack, which is the caller's region. Simplify inlines the
+   function, and the allocation then names the caller's region. The check
+   passes of both terms. *)
+let code inline(always) size(4)
+      make_2 (y : imm tagged)
+        my_closure &my_alloc_region &my_region &my_ghost_region my_depth
+        -> k * e
+        : [ 0 of imm tagged * imm tagged ] stack =
+  let p = %block.[`0`].my_alloc_region.local[my_region] (y, 1) in
+  cont k (p)
+in
+let $camlRegion_inlined_local_result__make_3 = closure make_2 @make &toplevel in
+let code inline(never) loopify(never) size(30)
+      work_0 (x : imm tagged)
+        my_closure &my_alloc_region my_depth
+        -> k * e
+        : imm tagged =
+  let rgn = %begin_region () in
+  let grgn = %begin_ghost_region () in
+  apply direct(make_2 &my_alloc_region &rgn &grgn)
+    ($camlRegion_inlined_local_result__make_3 : _ -> [ 0 of imm tagged * imm tagged ])
+      (x)
+      -> k2 * e
+    where k2 (p : [ 0 of imm tagged * imm tagged ]) =
+      let q = %opaque (p) in
+      let a = %block_load.[`0`] (q) in
+      let u1 = %end_region (rgn) in
+      let u2 = %end_ghost_region (grgn) in
+      cont k (a)
+in
+let $camlRegion_inlined_local_result__work_1 = closure work_0 @work &toplevel in
+apply direct(work_0 &toplevel)
+  ($camlRegion_inlined_local_result__work_1 : _ -> imm tagged) (41) -> k1 * error
+  where k1 (r : imm tagged) =
+    let $camlRegion_inlined_local_result = Block 0 (r) in
+    cont done ($camlRegion_inlined_local_result)

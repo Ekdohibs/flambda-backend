@@ -7,3 +7,4 @@ closure_at_other_slot.fl:
   calls outside code once those of known code are inlined: 1
   validated: the same once normalised
   the term before is undefined in the model, so the validation says nothing of this unit
+  the check of regions: not run (the run is undefined for another reason) before, not run (the run is undefined for another reason) after

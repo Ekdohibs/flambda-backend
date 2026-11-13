@@ -10,4 +10,6 @@ module Nat : sig
   val max : nat -> nat -> nat
 
   val min : nat -> nat -> nat
+
+  val iter : nat -> ('a1 -> 'a1) -> 'a1 -> 'a1
 end

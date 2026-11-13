@@ -782,6 +782,63 @@ it gave back.
   values. No term with such an incorrect fact is exhibited here; their
   being copied or computed by the compiler is not a proof of that
   agreement supplied by the validation.
+- **The check of regions**, in the same file (`keep_regions`,
+  `check_regions`, `run_regions`), with the machine of
+  `middle_end/flambda2/rocq/FlambdaRegionsSpec.v`. After everything
+  else, the two terms of a unit that was compared are converted once
+  more with regions kept; a unit that is not checked, or whose check
+  failed, is not looked at. If that conversion was refused, the tool
+  prints one line that says "not run" with the reason, and runs
+  nothing. If it met a region that is not a ghost or an allocation
+  whose mode is `Local`, each term is run on the machine of regions
+  from the imports, and the tool prints one line with what each run
+  came to. Otherwise there is no line. No verdict changes. *Trusted
+  of that conversion*: that it makes the model's `Begin_region`,
+  `Begin_try_region`, `End_region` and `End_try_region` exactly where
+  the term has the compiler's with `ghost = false`, the end on the
+  variable of the region that the term ends; that it puts
+  `Local_allocation` directly after the `Let` of exactly the
+  allocations whose mode is `Local` (a block, an immutable array, a
+  boxed number, the first closure of a set), with the variable of the
+  region that the mode names, or with none where that region is the
+  one of the code that the allocation is in; and that everything else
+  is converted as for the check. What it leaves out is what the
+  machine has nothing for: ghost regions, the parent of a region, the
+  `alloc_region` of a mode, the mode of a call and the result mode of
+  code. It refuses a unit in which a region that is kept is used
+  anywhere else (as an argument of a continuation, say), or in which
+  an end that is not a ghost is of a region that is not kept, and the
+  line then says "not run". The first symbol that the machine draws is a
+  number that the numbering has given to no symbol; that it is apart
+  from the symbols of the two terms and of the imports is not trusted
+  but tested, by the model's `region_names_fresh`. *What a line does
+  not say.* "passes" is of the one run that the machine makes, from
+  the imports and with no argument: a path that the run does not take
+  is not looked at, and a run in which nothing local is made says
+  nothing. It is of the term and not of the code: the backend may
+  still move a load after the end of a region (`To_cmm_expr` flushes
+  what it has delayed before an `End_region`, and not before an
+  `End_try_region`). It says nothing of a region that nothing ends, of
+  an allocation that names another region than the newest that is not
+  of a `try`, of the closure that a partial application makes, nor of
+  blocks with an identity, which are not converted (decisions D44 to
+  D48). And
+  "passes before, passes after" relates the two terms in nothing: the
+  validation of the unit is still made with regions dropped (the entry
+  above, decision D37). The counts that the environment variable
+  `FLSEMANTICS_REGION_COUNTS` asks for are for measures, and are in no
+  expected file; the count of allocations that name another region
+  sees only a region named by a variable, not the region of the code.
+  *What the five primitives are to everything else.* The machine of
+  `FlambdaSemanticsSpec.v` gives them no value: a run that comes to
+  the `Let` of one is undefined there. A term that only contains one,
+  in an arm or in code that the run does not reach, runs as before.
+  So a statement about `step` or about the validation is also about
+  terms that have them, and where it is a refinement it says nothing
+  of a run of the term before that is undefined in that way. That is
+  harmless only because the conversion for the check and for the
+  validation makes none of them; they are made by the second
+  conversion alone.
 - **Calls that never return**, in the same file (`convert_apply`). A
   call whose result continuation is `Never_returns`, whatever its call
   kind among those that the conversion takes (a method call, a C call
