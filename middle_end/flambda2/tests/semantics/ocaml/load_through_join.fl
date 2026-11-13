@@ -1,0 +1,85 @@
+let $camlLoad_through_join__first_const_0 = Block 0 () in
+(let code inline(always) size(35)
+       sum_0
+         (x/86 :
+            [ 0 of imm tagged |1 of imm tagged * imm tagged
+            |2 of imm tagged * imm tagged * imm tagged ])
+         my_closure/87 &my_alloc_region/88 my_depth/89
+         -> k/34 * k/35
+         : imm tagged =
+   let next_depth/90 = rec_info (succ my_depth/89) in
+   (let prim/100 = %get_tag (x/86) in
+    let scrutinee_tag/101 = %tag_imm (prim/100) in
+    let untagged/102 = %untag_imm (scrutinee_tag/101) in
+    switch untagged/102
+      | 0 -> k/36
+      | 1 -> k/37
+      | 2 -> k/38)
+     where k/38 =
+       let Pfield/95 = %block_load.[`2`] (x/86) in
+       let Pfield/96 = %block_load.[`1`] (x/86) in
+       let Pfield/97 = %block_load.[`0`] (x/86) in
+       let int_add/98 = %int_barith.add (Pfield/97, Pfield/96) in
+       let int_add/99 = %int_barith.add (int_add/98, Pfield/95) in
+       cont k/34 (int_add/99)
+     where k/37 =
+       let Pfield/92 = %block_load.[`1`] (x/86) in
+       let Pfield/93 = %block_load.[`0`] (x/86) in
+       let int_add/94 = %int_barith.add (Pfield/93, Pfield/92) in
+       cont k/34 (int_add/94)
+     where k/36 =
+       let Pfield/91 = %block_load.[`0`] (x/86) in
+       cont k/34 (Pfield/91)
+ in
+ let code size(33)
+       f_1 (c/103 : imm tagged, n/104 : imm tagged)
+         my_closure/105 &my_alloc_region/106 my_depth/107
+         -> k/39 * k/40
+         : imm tagged =
+   let next_depth/108 = rec_info (succ my_depth/107) in
+   let sum/109 = %project_value_slot.[f].[sum] (my_closure/105) in
+   (let untagged/113 = %untag_imm (c/103) in
+    switch untagged/113
+      | 0 -> k/44
+      | 1 -> k/45)
+     where k/45 =
+       cont k/42
+     where k/44 =
+       cont k/43
+     where k/43 =
+       let Pmakeblock/112 = %block.[`1`].my_alloc_region/106 (n/104, 1) in
+       cont k/41 (Pmakeblock/112)
+     where k/42 =
+       let Pmakeblock/111 = %block.[`0`].my_alloc_region/106 (n/104) in
+       cont k/41 (Pmakeblock/111)
+     where k/41
+             (v/110 :
+                [ 0 of imm tagged |1 of imm tagged * imm tagged
+                |2 of imm tagged * imm tagged * imm tagged ]) =
+       apply direct(sum_0 &my_alloc_region/106)
+         (sum/109 : _ -> imm tagged) (v/110) -> k/39 * k/40
+ in
+ let sum/114 = closure sum_0 @sum &toplevel in
+ let f/115 = closure f_1 @f &toplevel with { sum = sum/114 } in
+ (let Popaque/122 = %opaque (4) in
+  let Popaque/123 = %opaque (0) in
+  apply direct(f_1 &toplevel)
+    (f/115 : _ -> imm tagged) (Popaque/123, Popaque/122) -> k/46 * error)
+   where k/46 (apply_result/116 : imm tagged) =
+     ((let Popaque/120 = %opaque (4) in
+       let Popaque/121 = %opaque (1) in
+       apply direct(f_1 &toplevel)
+         (f/115 : _ -> imm tagged) (Popaque/121, Popaque/120) -> k/47 * error)
+        where k/47 (apply_result/117 : imm tagged) =
+          let result/118 =
+            %int_barith.add (apply_result/117, apply_result/116)
+          in
+          let Pmakeblock/119 = %block.[`0`].`toplevel` (f/115, result/118) in
+          cont k/33 (Pmakeblock/119)))
+  where k/33 define_root_symbol (module_block/83) =
+    let field_0/84 = %block_load.tag[`0`].`size`[`2`].[`0`] (module_block/83)
+    in
+    let field_1/85 = %block_load.tag[`0`].`size`[`2`].[`1`] (module_block/83)
+    in
+    let $camlLoad_through_join = Block 0 (field_0/84, field_1/85) in
+    cont done ($camlLoad_through_join)

@@ -1,0 +1,51 @@
+let $camlSame_constant_after_loop__first_const_0 = Block 0 () in
+(let Popaque/74 = %opaque (1) in
+ let prim/75 = %int_comp.lt (Popaque/74, 2) in
+ let int_lessthan/76 = %tag_imm (prim/75) in
+ (let untagged/77 = %untag_imm (int_lessthan/76) in
+  switch untagged/77
+    | 0 -> k/32
+    | 1 -> k/24 (1))
+   where k/32 =
+     cont k/25)
+  where k/25 =
+    (cont k/26 (0)
+       where k/26 (let_mutable/58 : imm tagged) =
+         (cont k/27 (7, let_mutable/58)
+            where k/27
+                    (let_mutable/59 : imm tagged,
+                     i_17_unboxed0/60 : imm tagged) =
+              (cont k/29 (i_17_unboxed0/60, let_mutable/59)
+                 where rec k/29
+                             (i_17_unboxed0/66 : imm tagged,
+                              acc_18_unboxed0/67 : imm tagged) =
+                   let prim/68 = %int_comp.lt (i_17_unboxed0/66, 4) in
+                   let while_cond_result/69 = %tag_imm (prim/68) in
+                   ((let untagged/73 = %untag_imm (while_cond_result/69) in
+                     switch untagged/73
+                       | 0 -> k/28 (0, i_17_unboxed0/66, acc_18_unboxed0/67)
+                       | 1 -> k/31)
+                      where k/31 =
+                        cont k/30 (i_17_unboxed0/66, acc_18_unboxed0/67)
+                      where k/30
+                              (i_17_unboxed0/70 : imm tagged,
+                               acc_18_unboxed0/71 : imm tagged) =
+                        let int_add/72 =
+                          %int_barith.add (i_17_unboxed0/70, 1)
+                        in
+                        cont k/29 (int_add/72, acc_18_unboxed0/71))
+                 where k/28
+                         (staticcatch_result/61 : imm tagged,
+                          i_17_unboxed0/62 : imm tagged,
+                          acc_18_unboxed0/63 : imm tagged) =
+                   let prim/64 = %phys_ne (9, acc_18_unboxed0/63) in
+                   let noteq/65 = %tag_imm (prim/64) in
+                   cont k/24 (noteq/65))))
+  where k/24 (result/56 : imm tagged) =
+    let Pmakeblock/57 = %block.[`0`].`toplevel` (result/56) in
+    cont k/23 (Pmakeblock/57)
+  where k/23 define_root_symbol (module_block/54) =
+    let field_0/55 = %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/54)
+    in
+    let $camlSame_constant_after_loop = Block 0 (field_0/55) in
+    cont done ($camlSame_constant_after_loop)

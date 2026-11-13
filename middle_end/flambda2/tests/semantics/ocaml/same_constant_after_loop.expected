@@ -1,0 +1,8 @@
+same_constant_after_loop.fl:
+  before Simplify (15 steps): returns [0: 1]
+  after Simplify (7 steps): returns [0: 1]
+  the check of kinds: passes before, passes after
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated: the same once normalised and unused static bindings removed
