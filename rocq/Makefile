@@ -296,6 +296,8 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   FlambdaShareProjectionsScopeProofs.v \
   FlambdaShareProjectionsScopeSpec.v \
   FlambdaShareProjectionsSpec.v \
+  FlambdaSharedReadsProofs.v \
+  FlambdaSharedReadsSpec.v \
   FlambdaShortcutProofs.v \
   FlambdaShortcutSpec.v \
   FlambdaSimulationProofs.v \
