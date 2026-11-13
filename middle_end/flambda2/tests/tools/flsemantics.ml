@@ -514,6 +514,13 @@ struct
     ignore (find same_as : Numbers.positive);
     numbers := Map.add id (Map.find same_as !numbers) !numbers
 
+  (* Gives [id] [number], one that a name of the model has; the names numbered
+     after have greater numbers. *)
+  let set id number =
+    let n = int_of_positive number in
+    numbers := Map.add id n !numbers;
+    next := max !next (n + 1)
+
   (* Forgets every name numbered so far. *)
   let reset () =
     numbers := Map.empty;
@@ -1579,6 +1586,11 @@ let rec convert_arguments (places : bool list) (args : Simple.t list) :
     | Some arg -> arg :: convert_arguments places args
     | None -> convert_arguments places args)
 
+(* Whether a call with no callee, which the reaper makes of a call whose callee
+   it unboxes, is given the poison of kind value as its callee, as the rebuild
+   of the model has it (flreaper.ml); otherwise it is refused. *)
+let poison_missing_callee : bool ref = ref false
+
 let convert_apply_cont (ac : Apply_cont_expr.t) : Model.apply_cont =
   let k = Apply_cont_expr.continuation ac in
   let args = Apply_cont_expr.args ac in
@@ -2524,7 +2536,10 @@ and convert_apply (apply : Apply_expr.t) : Model.expr =
   let callee =
     match Apply_expr.callee apply with
     | Some callee -> convert_simple callee
-    | None -> unsupported "a call with no callee"
+    | None ->
+      if !poison_missing_callee
+      then Model.Const (Poison Value)
+      else unsupported "a call with no callee"
   in
   let args_arity = convert_arity (Apply_expr.args_arity apply) in
   let return_arity = convert_arity (Apply_expr.return_arity apply) in
