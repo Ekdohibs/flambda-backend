@@ -99,9 +99,13 @@
    (middle_end/flambda2/rocq/status/S7.md) and the header of
    FlambdaReaperTraversal.v: the model has one kind of indirect call, which its
    traversal reads as a call of unknown arity, so a unit with a call of known
-   arity has another graph in the model, and the tool says so; and the closures
+   arity has another graph in the model, and the tool says so; the closures
    of a set other than the first are bound in the model by projections of the
-   first, where the compiler binds them directly. From the conversion: a call
+   first, each of which adds to the model's graph one accessor fact that the
+   compiler's has not (the closures themselves have the same facts in both);
+   and a static boxed number of a variable is aliased to the constants and
+   uses the variable, where the compiler gives the variable as the field of
+   the number's kind. From the conversion: a call
    that never returns is a call that returns to a continuation of the
    conversion's, whose parameters the model's rebuild may remove, so that the
    two rebuilt terms then differ (tests/semantics/arity_text_never_returns.fl).
