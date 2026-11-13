@@ -1,0 +1,94 @@
+(* A tail call that the fix of the unboxing makes a call that is not in tail
+   position. The unit is made by ../ocaml/from_ocaml.sh of
+
+     external opaque : 'a -> 'a = "%opaque"
+     external ( - ) : int -> int -> int = "%subint"
+     external ( == ) : 'a -> 'a -> bool = "%eq"
+     let r =
+       let[@inline never] rec ping n = if n == 0 then 0 else pong (n - 1)
+       and[@inline never] pong n = if n == 0 then 0 else ping (n - 1) in
+       let f = if opaque true then ping else pong in
+       let _ = f 3 in
+       1
+
+   with an interface that exports r. ping and pong are called at unknown
+   arity through the join f, so neither can change its calling convention,
+   and the result of neither has a use. Each calls the other in tail
+   position. Without the fix the call passes its result on as it is, and is
+   left in tail position. With the fix, the parameter of the return
+   continuation of each code is kept with no use ([Keep { unused = true }]),
+   and [make_apply_wrapper] gives it poison, whatever the callee returns:
+   the call returns to a wrapper that passes the poison on, and is no longer
+   in tail position. The model, which transcribes the fix, does the same: in
+   the last section, its rebuild with the fix runs in more steps than its
+   rebuild without it. The same program with the standard library, ping and
+   pong called with 100_000_000, stops on Stack_overflow when compiled with
+   the fix and the reaper, and runs without the fix. *)
+let $camlFix_tail_call__first_const_0 = Block 0 () in
+(let code rec inline(never) size(23)
+       ping_0 (n/70 : imm tagged)
+         my_closure/71 &my_alloc_region/72 my_depth/73
+         -> k/30 * k/31
+         : imm tagged =
+   let next_depth/74 = rec_info (succ my_depth/73) in
+   let pong/75 = %project_function_slot.[ping].[pong] (my_closure/71) in
+   (let prim/77 = %phys_eq (n/70, 0) in
+    let eq/78 = %tag_imm (prim/77) in
+    (let untagged/79 = %untag_imm (eq/78) in
+     switch untagged/79
+       | 0 -> k/33
+       | 1 -> k/30 (0))
+      where k/33 =
+        cont k/32)
+     where k/32 =
+       let int_sub/76 = %int_barith.sub (n/70, 1) in
+       apply direct(pong_1 &my_alloc_region/72)
+         (pong/75 ~ depth my_depth/73 -> next_depth/74 : _ -> imm tagged)
+           (int_sub/76)
+           -> k/30 * k/31
+ and code rec inline(never) size(23)
+       pong_1 (n/80 : imm tagged)
+         my_closure/81 &my_alloc_region/82 my_depth/83
+         -> k/34 * k/35
+         : imm tagged =
+   let next_depth/84 = rec_info (succ my_depth/83) in
+   let ping/85 = %project_function_slot.[pong].[ping] (my_closure/81) in
+   (let prim/87 = %phys_eq (n/80, 0) in
+    let eq/88 = %tag_imm (prim/87) in
+    (let untagged/89 = %untag_imm (eq/88) in
+     switch untagged/89
+       | 0 -> k/37
+       | 1 -> k/34 (0))
+      where k/37 =
+        cont k/36)
+     where k/36 =
+       let int_sub/86 = %int_barith.sub (n/80, 1) in
+       apply direct(ping_0 &my_alloc_region/82)
+         (ping/85 ~ depth my_depth/83 -> next_depth/84 : _ -> imm tagged)
+           (int_sub/86)
+           -> k/34 * k/35
+ in
+ (let region/92 = %begin_region () in
+  let ghost_region/93 = %begin_ghost_region () in
+  (let ping/97 = closure ping_0 @ping &toplevel &region/92
+   and pong/98 = closure pong_1 @pong &toplevel &region/92
+   in
+   (let Popaque/101 = %opaque (1) in
+    let untagged/102 = %untag_imm (Popaque/101) in
+    switch untagged/102
+      | 0 -> k/40 (pong/98)
+      | 1 -> k/40 (ping/97))
+     where k/40 (f/99 : val) =
+       (apply &toplevel f/99 (3) -> k/41 * error
+          where k/41 (apply_result/100 : imm tagged) =
+            cont k/39 (1)))
+    where k/39 (region_return/94 : imm tagged) =
+      let unit/95 = %end_region (region/92) in
+      let unit/96 = %end_ghost_region (ghost_region/93) in
+      cont k/38 (region_return/94))
+   where k/38 (r/90 : imm tagged) =
+     let Pmakeblock/91 = %block.[`0`].`toplevel` (r/90) in
+     cont k/29 (Pmakeblock/91))
+  where k/29 define_root_symbol (module_block/69) =
+    let $camlFix_tail_call = Block 0 (1) in
+    cont done ($camlFix_tail_call)

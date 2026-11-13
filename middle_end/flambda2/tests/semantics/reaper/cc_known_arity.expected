@@ -48,3 +48,18 @@ cc_known_arity.fl:
     the model's rebuild against the input: the same
     the compiler's output (18 steps): returns [0: 2]
     the compiler's output against the input: the same
+  with unboxing and the fix:
+    the fix changes no table, and changes the rebuild
+    the table of to_unbox: passes the check of the rules without the fix, passes that of the rules with it
+    the table of to_change_representation: passes the check of the rules with the fix
+    the check that sets of closures are unboxed or changed whole: the tables pass it
+    g/v1: representation {}, with function slot f, at function slot f
+    my_closure/v2: representation {}, with function slot pass, at function slot pass
+    my_closure/v5: representation {}, with function slot f, at function slot f
+    g/v12: representation {}, with function slot f, at function slot f
+    $Cc_known_arity_pass: representation {}, with function slot pass, at function slot pass
+    $Cc_known_arity_f: representation {}, with function slot f, at function slot f
+    code pass: parameters [keep val], results [keep val]
+    the reaper's input (18 steps): returns [0: 2]
+    the model's rebuild (20 steps): returns [0: 2]
+    the model's rebuild against the input: the same

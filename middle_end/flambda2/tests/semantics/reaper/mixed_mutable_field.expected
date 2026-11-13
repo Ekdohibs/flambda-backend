@@ -42,10 +42,10 @@ mixed_mutable_field.fl:
     the reaper's input (36 steps): returns [0: 3]
     the model's rebuild (10 steps): undefined
     the model's rebuild against the input: DIFFERENT
-  with unboxing and the proposed fixes:
-    Pmakeblock/v8 to unbox: without the fixes yes, with them no (a seed of the fixes)
-    the table of to_unbox: FAILS the check of the rules without the fixes, as expected, passes that of the rules with them
-    the table of to_change_representation: passes the check of the rules with the fixes
+  with unboxing and the fix:
+    Pmakeblock/v8 to unbox: without the fix yes, with it no (a seed of the fix)
+    the table of to_unbox: FAILS the check of the rules without the fix, as expected, passes that of the rules with it
+    the table of to_change_representation: passes the check of the rules with the fix
     the check that sets of closures are unboxed or changed whole: the tables pass it
     x/v3: {field 0 val}
     Pmakeblock/v9: {field 0 val}
