@@ -102,17 +102,37 @@
    symbol, whatever its static block holds after the rebuild.
 
    The second slice of FlambdaReaperFlowSpec.v (closures, projections,
-   static sets, code, direct calls) is not covered: two units of it,
-   which meet every premise but [closure_free], have rebuilds that do not
-   refine them. A closure that reaches an exit loses the value slots
-   that no projection names ([closure_exit_counterexample_statement]):
-   an exact comparison of exits needs a premise that no closure reaches
-   one, or the exits are to be compared up to the value slots that the
-   unit cannot read. And the wrapper that the rebuild gives a call tests
-   the kinds of the return arity of the call, which the machine does not
-   test of what code returns ([wrapper_kinds_counterexample_statement]):
-   a premise that the return arity of a call agrees with the parameters
-   of its return continuation is needed.
+   static sets, code, direct calls) is to be covered by another
+   statement, [rebuild_refines_observably_statement], whose premises
+   are those of [rebuild_refines_statement] and [results_kinded], and
+   which compares exits up to what the world outside the unit observes
+   ([program_refines_observably], [observed_equal]): equal values,
+   except that closures are compared without their value slots, inside
+   blocks, arrays, boxed numbers and partial applications too; symbols
+   are compared by name. Both choices answer a counterexample:
+   - A closure that reaches an exit loses the value slots that no
+     projection of the unit names ([closure_exit_counterexample_statement]:
+     exits are not equal). Nothing outside the unit can read them, and
+     the exits are equal up to them
+     ([closure_exit_observed_statement]). A closure may reach an exit
+     inside an exception raised by code, so no check of the
+     [Apply_cont]s of the unit could keep closures from exits.
+   - The wrapper that the rebuild gives a call ([make_apply_wrapper])
+     tests the kinds of the return arity of the call, which the machine
+     does not test of what code returns
+     ([wrapper_kinds_counterexample_statement]). [results_kinded] asks
+     that each code apply its return continuation to simples of the
+     kinds of its result arity, and that the return continuation of
+     each call, where the term binds it, take the kinds of the return
+     arity of the call; the counterexample fails it, and is not refined
+     even observably ([results_kinded_needed_statement]). The
+     compiler's units, which are well-kinded, meet it; the model asks
+     nothing of kinds otherwise (FlambdaWellKindedSpec.v).
+   For now [rebuild_refines_observably_statement] keeps the premise
+   [closure_free] and follows from [rebuild_refines_statement], as an
+   exact refinement is one up to observation
+   ([refines_observably_of_refines_statement]); the premise is to go as
+   the proof covers closures and calls.
 
    The statement holds of more than nothing ([example_statement]): a
    unit with a static block, a block one field of which no load reads, a
@@ -698,4 +718,201 @@ Definition wrapper_kinds_counterexample_statement : Prop :=
       (State WrapperKindsExample.rebuilt [] [] empty_static_env empty_heap)
     = Undefined
   ∧ ~ program_refines WrapperKindsExample.unit_expr
+        WrapperKindsExample.rebuilt.
+
+(* ======================================================================== *)
+(* Refinement up to observation                                             *)
+(* ======================================================================== *)
+
+(* [R] of the elements at each position of two lists of one length. *)
+Definition values_related (R : value -> value -> Prop)
+    : list value -> list value -> Prop :=
+  fix values_related (l l' : list value) {struct l} : Prop :=
+    match l, l' with
+    | [], [] => True
+    | v :: l, v' :: l' => R v v' ∧ values_related l l'
+    | _, _ => False
+    end.
+
+(* What the world outside the unit can tell of two values is the same:
+   they are equal, but for the value slots of closures, which only the
+   projections of the unit read. *)
+Fixpoint observed_equal (v v' : value) {struct v} : Prop :=
+  match v, v' with
+  | Value_const c, Value_const c' => c = c'
+  | Value_closure code _, Value_closure code' _ => code = code'
+  | Value_closure_of_set slot decls _, Value_closure_of_set slot' decls' _ =>
+    slot = slot' ∧ decls = decls'
+  | Value_symbol s, Value_symbol s' => s = s'
+  | Value_block tag fields, Value_block tag' fields' =>
+    tag = tag' ∧ values_related (fun w w' => observed_equal w w') fields fields'
+  | Value_immutable_array elements, Value_immutable_array elements' =>
+    values_related (fun w w' => observed_equal w w') elements elements'
+  | Value_boxed_number c, Value_boxed_number c' => c = c'
+  | Value_location l, Value_location l' => l = l'
+  | Value_partial_application callee args arity,
+    Value_partial_application callee' args' arity' =>
+    observed_equal callee callee'
+    ∧ values_related (fun w w' => observed_equal w w') args args'
+    ∧ arity = arity'
+  | _, _ => False
+  end.
+
+(* [refines], with the exits of the two states compared by
+   [observed_equal]: an exit of the source is one of the target through
+   the same continuation, with values observed equal and the same heap;
+   the target ends only as the source does, or where the source goes
+   wrong. *)
+Definition refines_observably (source target : state) : Prop :=
+  (∀ (k : continuation) (vs : list value) (hp : heap),
+     behaves source (Exits k vs hp) ->
+     ∃ vs' : list value,
+       behaves target (Exits k vs' hp)
+       ∧ values_related observed_equal vs vs')
+  ∧ (∀ (k : continuation) (vs' : list value) (hp : heap),
+       behaves target (Exits k vs' hp) ->
+       (∃ vs : list value,
+          behaves source (Exits k vs hp)
+          ∧ values_related observed_equal vs vs')
+       ∨ behaves source Goes_wrong)
+  ∧ (behaves target Goes_wrong -> behaves source Goes_wrong).
+
+Definition program_refines_observably (source target : expr) : Prop :=
+  refines_observably (State source [] [] empty_static_env empty_heap)
+    (State target [] [] empty_static_env empty_heap).
+
+Definition refines_observably_of_refines_statement : Prop :=
+  ∀ source target : state,
+    refines source target -> refines_observably source target.
+
+(* ======================================================================== *)
+(* What code returns, and what calls return to                              *)
+(* ======================================================================== *)
+
+Definition simple_kind (kinds : finite_map flambda_kind) (s : simple)
+    : option flambda_kind :=
+  match s with
+  | Var x => lookup x kinds
+  | Symbol _ => Some Value
+  | Const c => Some (kind_of_const c)
+  end.
+
+(* The simples have, one for one, the kinds [expected]. *)
+Fixpoint simples_of_kinds (kinds : finite_map flambda_kind)
+    (args : list simple) (expected : list flambda_kind) : bool :=
+  match args, expected with
+  | [], [] => true
+  | s :: args, k :: expected =>
+    match simple_kind kinds s with
+    | Some k' => kind_eqb k' k && simples_of_kinds kinds args expected
+    | None => false
+    end
+  | _, _ => false
+  end.
+
+Definition handler_kinds (h : continuation_handler) : list flambda_kind :=
+  match h with
+  | Handler _ metadata _ => hm_params_kinds metadata
+  end.
+
+(* An [Apply_cont] of the return continuation of the code it is in
+   gives it simples of the kinds of the result arity. *)
+Definition returns_kinded (kinds : finite_map flambda_kind)
+    (ks : finite_map (bool * list flambda_kind)) (ac : apply_cont) : bool :=
+  match lookup (ac_continuation ac) ks with
+  | Some (true, expected) => simples_of_kinds kinds (ac_args ac) expected
+  | _ => true
+  end.
+
+(* [kinds] has the kinds of the variables in scope, [ks] the kinds of the
+   parameters of the continuations in scope that the term binds, each
+   with whether it is the return continuation of the code: each code
+   applies its return continuation to simples of the kinds of its result
+   arity, and the return continuation of each call, where the term binds
+   it, takes the kinds of the return arity of the call. *)
+Fixpoint results_kinded (kinds : finite_map flambda_kind)
+    (ks : finite_map (bool * list flambda_kind)) (e : expr) : bool :=
+  match e with
+  | Let x kind _ body => results_kinded ((x, kind) :: kinds) ks body
+  | Let_static bindings body =>
+    forallb binding_results_kinded bindings && results_kinded kinds ks body
+  | Let_cont_non_recursive k h body =>
+    handler_results_kinded kinds ks h
+    && results_kinded kinds ((k, (false, handler_kinds h)) :: ks) body
+  | Let_cont_recursive handlers body =>
+    forallb
+      (fun '(_, h) =>
+         handler_results_kinded kinds
+           (map (fun '(k, h) => (k, (false, handler_kinds h))) handlers ++ ks)
+           h)
+      handlers
+    && results_kinded kinds
+         (map (fun '(k, h) => (k, (false, handler_kinds h))) handlers ++ ks)
+         body
+  | Apply ap =>
+    match lookup (ap_continuation ap) ks with
+    | Some (_, expected) => kinds_eqb expected (unarize (ap_return_arity ap))
+    | None => true
+    end
+  | Apply_cont ac => returns_kinded kinds ks ac
+  | Switch _ arms => forallb (fun '(_, ac) => returns_kinded kinds ks ac) arms
+  | Invalid => true
+  end
+with handler_results_kinded (kinds : finite_map flambda_kind)
+    (ks : finite_map (bool * list flambda_kind)) (h : continuation_handler)
+    : bool :=
+  match h with
+  | Handler params metadata handler =>
+    results_kinded (rev (combine params (hm_params_kinds metadata)) ++ kinds)
+      ks handler
+  end
+with binding_results_kinded (binding : static_binding) : bool :=
+  match binding with
+  | Bind_code _ c => code_results_kinded c
+  | Bind_deleted_code _ | Bind_symbol _ _ => true
+  end
+with code_results_kinded (c : code) : bool :=
+  match c with
+  | Code params my_closure return_continuation _ metadata body =>
+    results_kinded
+      (rev (combine params (unarize (cm_params_arity metadata)))
+       ++ [(my_closure, Value)])
+      [(return_continuation, (true, unarize (cm_result_arity metadata)))]
+      body
+  end.
+
+(* ======================================================================== *)
+(* The statement up to observation                                          *)
+(* ======================================================================== *)
+
+Definition rebuild_refines_observably_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables)
+    (preserve_direct_calls : bool),
+    is_local_slots_only is_local ->
+    (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+    in_flow_fragment e = true ->
+    closure_free e = true ->
+    results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    exits_one_value u e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+    program_refines_observably e
+      (rebuild_unit_from_tables (traverse_unit flag u e) T
+         preserve_direct_calls e).
+
+(* The unit of [closure_exit_counterexample_statement] meets
+   [results_kinded], and its rebuild refines it up to observation. *)
+Definition closure_exit_observed_statement : Prop :=
+  results_kinded [] [] ClosureExitExample.unit_expr = true
+  ∧ program_refines_observably ClosureExitExample.unit_expr
+      ClosureExitExample.rebuilt.
+
+(* The unit of [wrapper_kinds_counterexample_statement] fails
+   [results_kinded], and its rebuild does not refine it even up to
+   observation. *)
+Definition results_kinded_needed_statement : Prop :=
+  results_kinded [] [] WrapperKindsExample.unit_expr = false
+  ∧ ~ program_refines_observably WrapperKindsExample.unit_expr
         WrapperKindsExample.rebuilt.

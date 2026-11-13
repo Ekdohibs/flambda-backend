@@ -68,7 +68,11 @@
    keeps it. The rebuild keeps every variable of kind [Region] or
    [Rec_info] ([is_var_used]), used or not; in the fragment such a
    variable holds a constant, given by a simple or by the identity, the
-   same in the two runs ([region_rel]). *)
+   same in the two runs ([region_rel]).
+
+   The statement up to observation ([rebuild_refines_observably]) follows
+   for now from the exact one, as [observed_equal] is reflexive
+   ([refines_observably_of_refines]). *)
 
 From Stdlib Require Import ZArith List Bool Arith Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
@@ -3273,5 +3277,115 @@ Proof.
       Goes_wrong).
   { exists 6. vm_compute. reflexivity. }
   pose proof (behaviour_unique _ _ _ (Hexits _ _ _ Hsource) Htarget) as Heq.
+  discriminate Heq.
+Qed.
+
+(* ======================================================================== *)
+(* Refinement up to observation                                             *)
+(* ======================================================================== *)
+
+Lemma values_related_refl (l : list value) :
+  Forall (fun v => observed_equal v v) l -> values_related observed_equal l l.
+Proof.
+  induction 1 as [ | v l Hv _ IH]; simpl; [ exact I | split; assumption ].
+Qed.
+
+Lemma observed_equal_refl : ∀ v : value, observed_equal v v.
+Proof.
+  apply FlambdaHeapProofs.value_induction; cbn [observed_equal].
+  - reflexivity.
+  - reflexivity.
+  - split; reflexivity.
+  - reflexivity.
+  - intros tag fields IH. split; [ reflexivity | ].
+    exact (values_related_refl fields IH).
+  - intros elements IH. exact (values_related_refl elements IH).
+  - reflexivity.
+  - reflexivity.
+  - intros callee args arity Hcallee IH.
+    split; [ exact Hcallee | split; [ exact (values_related_refl args IH)
+                                    | reflexivity ] ].
+Qed.
+
+Lemma values_observed_refl (l : list value) :
+  values_related observed_equal l l.
+Proof.
+  apply values_related_refl, Forall_forall. intros v _.
+  apply observed_equal_refl.
+Qed.
+
+Theorem refines_observably_of_refines :
+  refines_observably_of_refines_statement.
+Proof.
+  intros s t [Hexits Hends]. split; [ | split ].
+  - intros k vs hp Hs. exists vs.
+    split; [ exact (Hexits k vs hp Hs) | apply values_observed_refl ].
+  - intros k vs' hp Ht.
+    destruct (Hends (Exits k vs' hp) ltac:(discriminate) Ht) as [Hs | Hw].
+    + left. exists vs'. split; [ exact Hs | apply values_observed_refl ].
+    + right. exact Hw.
+  - intros Ht.
+    destruct (Hends Goes_wrong ltac:(discriminate) Ht) as [Hs | Hw];
+      assumption.
+Qed.
+
+Theorem rebuild_refines_observably : rebuild_refines_observably_statement.
+Proof.
+  intros flag is_local u e T b Hlocal Hslots Hfrag Hcf _ Hwf Hexits Hcheck
+    Hcheck_exact.
+  apply refines_observably_of_refines.
+  exact (rebuild_refines flag is_local u e T b Hlocal Hslots Hfrag Hcf Hwf
+           Hexits Hcheck Hcheck_exact).
+Qed.
+
+Theorem closure_exit_observed : closure_exit_observed_statement.
+Proof.
+  split; [ vm_compute; reflexivity | ].
+  assert (Hs :
+    behaves
+      (State ClosureExitExample.unit_expr [] [] empty_static_env empty_heap)
+      (Exits 1%positive
+         [Value_closure_of_set 70%positive [(70%positive, 50%positive)]
+            [(60%positive, Value_const (Tagged_immediate 5))]]
+         empty_heap))
+    by (exists 4; vm_compute; reflexivity).
+  assert (Ht :
+    behaves
+      (State ClosureExitExample.rebuilt [] [] empty_static_env empty_heap)
+      (Exits 1%positive
+         [Value_closure_of_set 70%positive [(70%positive, 50%positive)] []]
+         empty_heap))
+    by (exists 3; vm_compute; reflexivity).
+  assert (Hobs :
+    values_related observed_equal
+      [Value_closure_of_set 70%positive [(70%positive, 50%positive)]
+         [(60%positive, Value_const (Tagged_immediate 5))]]
+      [Value_closure_of_set 70%positive [(70%positive, 50%positive)] []])
+    by (cbn; repeat split).
+  unfold program_refines_observably, refines_observably.
+  split; [ | split ].
+  - intros k vs hp Hb. pose proof (behaviour_unique _ _ _ Hs Hb) as Heq.
+    injection Heq as <- <- <-. eexists. split; [ exact Ht | exact Hobs ].
+  - intros k vs' hp Hb. pose proof (behaviour_unique _ _ _ Ht Hb) as Heq.
+    injection Heq as <- <- <-. left. eexists. split; [ exact Hs | exact Hobs ].
+  - intros Hw. pose proof (behaviour_unique _ _ _ Ht Hw) as Heq.
+    discriminate Heq.
+Qed.
+
+Theorem results_kinded_needed : results_kinded_needed_statement.
+Proof.
+  split; [ vm_compute; reflexivity | ].
+  intros (_ & _ & Hwrong).
+  assert (Hs :
+    behaves
+      (State WrapperKindsExample.unit_expr [] [] empty_static_env empty_heap)
+      (Exits 1%positive [Value_const (Tagged_immediate 0)] empty_heap))
+    by (exists 6; vm_compute; reflexivity).
+  assert (Ht :
+    behaves
+      (State WrapperKindsExample.rebuilt [] [] empty_static_env empty_heap)
+      Goes_wrong)
+    by (exists 6; vm_compute; reflexivity).
+  pose proof (behaviour_unique _ _ _ Hs (Hwrong Ht)) as Heq.
   discriminate Heq.
 Qed.
