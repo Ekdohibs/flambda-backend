@@ -1893,6 +1893,15 @@ Definition rebuild_refines_up_to_heap_statement : Prop :=
       (rebuild_unit_from_tables (traverse_unit flag u e) T
          preserve_direct_calls e).
 
+(* The statement with the heap gives the one before it: on a unit of
+   [in_flow_fragment], which [in_heap_fragment] holds of
+   (FlambdaReaperFlowSpec.in_flow_fragment_in_heap_fragment_statement),
+   neither run makes a cell, so their exits have the empty heap and no
+   location, and two such exits observed equal up to a correspondence
+   of locations are observed equal with the same heap. *)
+Definition rebuild_refines_up_to_heap_flow_statement : Prop :=
+  rebuild_refines_up_to_heap_statement -> rebuild_refines_observably_statement.
+
 (* The fragment of [no_code_no_slots] holds of more than nothing: a unit
    with a set of two closures without value slots, and a static set of
    the same functions, both of deleted code:

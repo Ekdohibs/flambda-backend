@@ -1160,6 +1160,24 @@ Proof.
               (check_witness_code_ids_sound _ Hcid))).
 Qed.
 
+Theorem rebuild_cc_refines_up_to_heap_flow :
+  rebuild_cc_refines_up_to_heap_flow_statement.
+Proof.
+  intros HN flag is_local u e T cannot_change b Hlocal Hslots Hfrag Hdc Hrk
+    Hwf Hexits Hcheck Hcheck_exact Hccc Hwid.
+  pose proof (proj1 (FlambdaReaperRebuildProofs.flow_fragment_free _ _) e
+                (proj1 (FlambdaReaperRebuildProofs.in_fragment_parts false e
+                          Hfrag))) as He.
+  apply FlambdaReaperRebuildProofs.up_to_heap_free_observably;
+    [ exact He | | ].
+  - exact (proj1 (FlambdaReaperRebuildProofs.rebuild_cc_free _ _ _ _ _ _ _ _)
+             e He _).
+  - exact (HN flag is_local u e T cannot_change b Hlocal Hslots
+             (FlambdaReaperFlowProofs.in_flow_fragment_in_heap_fragment e
+                Hfrag)
+             Hdc Hrk Hwf Hexits Hcheck Hcheck_exact Hccc Hwid).
+Qed.
+
 Theorem two_calls_refines : two_calls_refines_statement.
 Proof.
   apply (rebuild_cc_refines_observably Auto Examples.no_local

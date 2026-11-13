@@ -838,7 +838,10 @@ Definition rewrite_unboxed_result_type_sound_statement : Prop :=
    FlambdaReaperRebuildSpec.rebuild_refines_observably_statement, from
    [statics_rel] and [flow_invariant], which [related] has at every
    state, and is not proved here: [statics_rebuilt] asks things that
-   [statics_rel] does not say (see the header). *)
+   [statics_rel] does not say (see the header). Under those premises
+   alone it is false of a unit whose static block holds a value of
+   another kind than [Value] ([naked_field_exit_relation_statement]);
+   what it asks but [statics_rebuilt] holds ([rebuild_exits_statement]). *)
 Definition rebuild_exit_relation (G : graph) (sol : solution) (e e' : expr)
     : Prop :=
   ∀ (n : nat) (s : state) (k : continuation) (vs : list value) (hp : heap)
@@ -1248,3 +1251,144 @@ Definition result_types_example_statement : Prop :=
          [])
     = [(Name_var 21%positive, alias_type_of Value (Var 20%positive));
        (Name_var 20%positive, BoxedCounterexample.boxed_type)].
+
+(* ======================================================================== *)
+(* The exit relation and the rebuild                                        *)
+(* ======================================================================== *)
+
+(* [rebuild_exit_relation] does not follow from the premises of
+   FlambdaReaperRebuildSpec.rebuild_refines_observably_statement, even
+   with the least solution and each variable bound once: a field of a
+   static block may hold a value of a kind other than [Value]
+   (FlambdaSemanticsSpec.eval_static_const tests no kind, and neither
+   [in_flow_fragment] nor [well_formed_unit] looks at one), the traversal
+   gives every field of a block the kind value
+   (FlambdaReaperTraversal.block_deps), and [field_rebuilt] asks for a
+   constructor at the kind of the field. The symbol [s50] is bound to a
+   block of a naked immediate, and the unit returns it:
+
+     let symbol s50 = { #3 } in
+     return s50
+
+   The gap is the model's: a static block of the compiler has a shape,
+   and its traversal gives each field the kind that the shape gives it
+   (reaper/traverse.ml, [traverse_block_like_static_const], by
+   [Static_const.block_field_kind]), as [field_rebuilt] reads it; the
+   model's static block has no shape, the blocks of its fragment being
+   blocks of values (FlambdaWellKindedSpec.v), and nothing makes a unit
+   keep to that. So the statement needs a premise that the static blocks
+   of the unit hold values. *)
+Module NakedFieldExample.
+
+Local Open Scope positive_scope.
+
+Definition unit_expr : expr :=
+  Let_static
+    [Bind_symbol 50 (Static_const_block 0 [Const (Naked_immediate 3)])]
+    (FlowExample.return_to 1 [Symbol 50]).
+
+Definition facts : facts :=
+  traverse_unit Never FlowExample.interface unit_expr.
+
+Definition s50 : node := Node_symbol 50.
+Definition returned : node := Node_made 1.
+Definition raised : node := Node_made 2.
+Definition constants : node := Node_all_constants.
+
+Definition solution : tables :=
+  {| t_alias := [(returned, s50)];
+     t_any_usage := [constants; s50; raised; returned];
+     t_any_source := [constants];
+     t_has_usage := [constants; s50; returned; raised];
+     t_has_source := [returned; s50; constants];
+     t_usages := [];
+     t_sources := [(returned, s50); (s50, s50)];
+     t_reading_field := []; t_escaping_field := [];
+     t_field_used :=
+       [(s50, Field_get_tag); (s50, Field_is_int); (s50, Field_block 0 Value)]
+  |}.
+
+(* The state from which the unit exits. *)
+Definition exit_state : state :=
+  State (FlowExample.return_to 1 [Symbol 50]) [] []
+    {| static_code := [];
+       static_values := [(50, Static_block 0 [Value_const (Naked_immediate 3)])]
+    |}
+    empty_heap no_reads.
+
+End NakedFieldExample.
+
+(* The unit meets the premises of [rebuild_refines_observably_statement],
+   with its least solution, binds each variable once, and exits from
+   [exit_state] returning [s50]; [sets_of_graph] holds of no set, the graph
+   having no constructor at a function slot. Still, whatever the rebuild,
+   [rebuild_exit_relation] fails. *)
+Definition naked_field_exit_relation_statement : Prop :=
+  least_solution FlowExample.is_local NakedFieldExample.facts
+    NakedFieldExample.solution
+  ∧ is_local_slots_only FlowExample.is_local
+  ∧ (∀ f : field, FlowExample.is_local f = false)
+  ∧ in_flow_fragment NakedFieldExample.unit_expr = true
+  ∧ FlambdaReaperRebuildSpec.any_kind_arguments NakedFieldExample.unit_expr
+    = true
+  ∧ FlambdaReaperRebuildSpec.results_kinded [] [] NakedFieldExample.unit_expr
+    = true
+  ∧ well_formed_unit FlowExample.interface NakedFieldExample.unit_expr = true
+  ∧ FlambdaReaperRebuildSpec.exits_one_value FlowExample.interface
+      NakedFieldExample.unit_expr
+    = true
+  ∧ variables_bound_once NakedFieldExample.unit_expr = true
+  ∧ check_closed FlowExample.is_local NakedFieldExample.facts
+      NakedFieldExample.solution
+    = true
+  ∧ check_field_used_exact FlowExample.is_local NakedFieldExample.facts
+      NakedFieldExample.solution
+    = true
+  ∧ sets_of_graph (graph_of_facts NakedFieldExample.facts) []
+  ∧ run 1 (State NakedFieldExample.unit_expr [] [] empty_static_env
+             empty_heap no_reads)
+    = Step NakedFieldExample.exit_state
+  ∧ step NakedFieldExample.exit_state
+    = Exit 1%positive [Value_symbol 50%positive] empty_heap no_reads
+  ∧ ∀ preserve_direct_calls : bool,
+      ~ rebuild_exit_relation (graph_of_facts NakedFieldExample.facts)
+          (solution_of_tables NakedFieldExample.solution)
+          NakedFieldExample.unit_expr
+          (rebuild_unit_from_tables NakedFieldExample.facts
+             NakedFieldExample.solution preserve_direct_calls
+             NakedFieldExample.unit_expr).
+
+(* What [rebuild_exit_relation] asks but [statics_rebuilt] holds under the
+   premises of [rebuild_refines_observably_statement]: every symbol bound
+   where the unit exits is an allocation of its own (from
+   FlambdaReaperFlowSpec.flow_sound_statement), and the rebuilt unit exits
+   through the same continuation with the same heap (from
+   [rebuild_refines_observably_statement]). What is left is
+   [statics_rebuilt] of the static environments of the two states that
+   exit, which [naked_field_exit_relation_statement] makes false of some
+   units. *)
+Definition rebuild_exits_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables)
+    (preserve_direct_calls : bool) (n : nat) (s : state)
+    (k : continuation) (vs : list value) (hp : heap) (rd : read_record),
+    is_local_slots_only is_local ->
+    (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+    in_flow_fragment e = true ->
+    FlambdaReaperRebuildSpec.any_kind_arguments e = true ->
+    FlambdaReaperRebuildSpec.results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    FlambdaReaperRebuildSpec.exits_one_value u e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
+    step s = Exit k vs hp rd ->
+    statics_allocated (solution_of_tables T) (state_statics s)
+    ∧ ∃ (m : nat) (t : state) (vs' : list value) (rd' : read_record),
+        run m
+          (State
+             (rebuild_unit_from_tables (traverse_unit flag u e) T
+                preserve_direct_calls e)
+             [] [] empty_static_env empty_heap no_reads)
+        = Step t
+        ∧ step t = Exit k vs' hp rd'.

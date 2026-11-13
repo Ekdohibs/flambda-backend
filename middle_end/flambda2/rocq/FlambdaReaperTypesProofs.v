@@ -4864,3 +4864,72 @@ Proof.
     Hsets Hkinds Henv Hfrag Halloc Hst Hcopies Huses Hlk Hv Hrv Hws.
   eapply rewrite_unboxed_result_type_sound_in; try eassumption; reflexivity.
 Qed.
+
+(* ======================================================================== *)
+(* The exit relation and the rebuild                                        *)
+(* ======================================================================== *)
+
+From OxCamlFlambda2 Require FlambdaSemanticsProofs FlambdaReaperFlowProofs
+  FlambdaReaperRebuildProofs.
+
+Theorem naked_field_exit_relation : naked_field_exit_relation_statement.
+Proof.
+  split; [ apply (compute_least_sound _ _ 20); vm_compute; reflexivity | ].
+  split; [ intros f Hf; discriminate Hf | ].
+  split; [ intros f; reflexivity | ].
+  do 8 (split; [ vm_compute; reflexivity | ]).
+  split.
+  - (* The graph has no constructor at a function slot. *)
+    intros decls sites slot id Hl Hsites. exfalso.
+    assert (Hb : is_bound slot decls = true)
+      by (unfold is_bound; rewrite Hl; reflexivity).
+    pose proof (proj2 (Hsites slot id Hl slot (sites slot))
+                  (conj Hb eq_refl)) as Hcons.
+    vm_compute in Hcons.
+    destruct Hcons as [H | [H | [H | []]]]; discriminate H.
+  - split; [ vm_compute; reflexivity | ].
+    split; [ vm_compute; reflexivity | ].
+    intros b Hrel.
+    destruct (Hrel 1 NakedFieldExample.exit_state 1%positive
+                [Value_symbol 50%positive] empty_heap no_reads
+                ltac:(vm_compute; reflexivity) ltac:(vm_compute; reflexivity))
+      as [_ (m & t & vs' & rd' & _ & _ & Hst)].
+    destruct (Hst 50%positive
+                (Static_block 0 [Value_const (Naked_immediate 3)])
+                eq_refl ltac:(vm_compute; reflexivity))
+      as (fields' & _ & Hfields).
+    destruct fields' as [ | field' fields'];
+      cbn [fields_rebuilt] in Hfields; [ exact Hfields | ].
+    destruct Hfields as [(from & Hcons & _) _].
+    vm_compute in Hcons.
+    destruct Hcons as [H | [H | [H | []]]]; discriminate H.
+Qed.
+
+Theorem rebuild_exits : rebuild_exits_statement.
+Proof.
+  intros flag is_local u e T b n s k vs hp rd Hlocal Hslots Hfrag Hany Hrk
+    Hwf Hexits Hcheck Hexact Hrun Hstep.
+  split.
+  - destruct (FlambdaReaperFlowProofs.flow_sound flag is_local u e T n Hlocal
+                Hslots
+                (FlambdaReaperFlowProofs.in_flow_fragment_in_heap_fragment e
+                   Hfrag)
+                Hcheck)
+      as (located & Hflows).
+    rewrite Hrun in Hflows. destruct Hflows as (_ & _ & Hst & _).
+    intros x allocated Hl. exact (proj1 (Hst x allocated Hl)).
+  - destruct (FlambdaReaperRebuildProofs.rebuild_refines_observably flag
+                is_local u e T b Hlocal Hslots Hfrag Hany Hrk Hwf Hexits
+                Hcheck Hexact)
+      as [Hfwd _].
+    assert (Hb : behaves (State e [] [] empty_static_env empty_heap no_reads)
+                   (Exits k vs hp)).
+    { exists (S n), rd. replace (S n) with (n + 1) by lia.
+      rewrite FlambdaSemanticsProofs.run_add, Hrun,
+        FlambdaSemanticsProofs.run_succ, Hstep.
+      reflexivity. }
+    destruct (Hfwd k vs hp Hb) as (vs' & (m & rd' & Hm) & _).
+    destruct (FlambdaReaperRebuildProofs.run_exit_state m _ k vs' hp rd' Hm)
+      as (m' & t & Ht & Hexit).
+    exists m', t, vs', rd'. split; assumption.
+Qed.

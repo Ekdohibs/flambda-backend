@@ -242,6 +242,7 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaFreshQuantifierSpec FlambdaRenameApartSpec
   FlambdaReaperRebuild FlambdaReaperRebuildSpec
   FlambdaReaperCallingConventions FlambdaReaperCallingConventionsSpec.
+From OxCamlFlambda2 Require FlambdaHeapFreeSpec FlambdaHeapFreeProofs.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -2339,6 +2340,54 @@ Proof.
     + apply step_behaves. rewrite Hs. reflexivity.
     + split; [ reflexivity | exact HE ].
   - right. apply step_behaves. rewrite Hs. reflexivity.
+Qed.
+
+(* A state of the first run within the [N] steps that does not go wrong
+   is related to one that the second run reaches. *)
+Lemma bshrinking_reach (n : nat) :
+  ∀ (i : nat) (s t s1 : state),
+    i + n < N -> R i s t -> run n s = Step s1 -> step s1 <> Undefined ->
+    ∃ (j m : nat) (t1 : state), j < N ∧ run m t = Step t1 ∧ R j s1 t1.
+Proof.
+  induction n as [ | n IH]; intros i s t s1 Hle Hrel Hrun Hs1.
+  - simpl in Hrun. injection Hrun as Heq. subst s1.
+    exists i, 0, t. split; [ lia | split; [ reflexivity | exact Hrel ] ].
+  - rewrite run_succ in Hrun.
+    pose proof (R_answered i s t ltac:(lia) Hrel) as Ha.
+    unfold answered_h in Ha.
+    destruct (step s) as [s' | k' vs' hp' rd0 | ] eqn:Hs;
+      [ | discriminate Hrun | discriminate Hrun ].
+    destruct Ha as [Hund | [(t' & Ht & Hrel') | [(_ & Hrel')
+                                                | (t' & n0 & Ht & Hrel')]]].
+    + destruct n as [ | n].
+      * simpl in Hrun. injection Hrun as Heq. subst s1. contradiction.
+      * rewrite run_succ, Hund in Hrun. discriminate Hrun.
+    + destruct (IH (S i) s' t' s1 ltac:(lia) Hrel' Hrun Hs1)
+        as (j & m & t1 & Hj & Hm & Hr).
+      exists j, (S m), t1. rewrite run_succ, Ht. auto.
+    + exact (IH (S i) s' t s1 ltac:(lia) Hrel' Hrun Hs1).
+    + destruct (IH (S i) s' t' s1 ltac:(lia) Hrel' Hrun Hs1)
+        as (j & m & t1 & Hj & Hm & Hr).
+      exists j, (S (S n0) + m), t1. rewrite run_add, Ht. auto.
+Qed.
+
+(* [bshrinking_exit], keeping the relation: the state from which the
+   first run exits is related to the one from which the second does. *)
+Lemma bshrinking_exit_related (n : nat) (s0 t0 s : state)
+    (k : continuation) (vs : list value) (hp : heap) (rd : read_record) :
+  n < N -> R 0 s0 t0 -> run n s0 = Step s -> step s = Exit k vs hp rd ->
+  ∃ (j m : nat) (t : state) (vs' : list value) (hp' : heap)
+    (rd' : read_record),
+    run m t0 = Step t ∧ step t = Exit k vs' hp' rd' ∧ E vs hp vs' hp'
+    ∧ R j s t.
+Proof.
+  intros Hn H0 Hrun Hstep.
+  destruct (bshrinking_reach n 0 s0 t0 s ltac:(lia) H0 Hrun
+              ltac:(rewrite Hstep; discriminate))
+    as (j & m & t & Hj & Hm & Hr).
+  pose proof (R_answered j s t Hj Hr) as Ha. unfold answered_h in Ha.
+  rewrite Hstep in Ha. destruct Ha as (vs' & hp' & rd' & Ht & HE).
+  exists j, m, t, vs', hp', rd'. auto.
 Qed.
 
 End ShrinkingHeap.
@@ -16821,6 +16870,44 @@ Proof.
   - intros i s t [Hrun _]. exact (run_measure_bound e i s Hrun).
 Qed.
 
+(* An exit of the first run is from a state related to the one from
+   which the second exits, through the same continuation, the exits
+   related. *)
+Lemma unit_exit_related (e : expr) :
+  edges None (unit_conts u) e ->
+  (∀ k : continuation, k ∈ free_continuations_of_expr e -> unit_cont k) ->
+  expr_ok None [] FlambdaReaperRebuild.empty_env (unit_conts u) [] e ->
+  ∀ (n : nat) (s : state) (k : continuation) (vs : list value) (hp : heap)
+    (rd : read_record),
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
+    step s = Exit k vs hp rd ->
+    ∃ (L : location -> option node) (m : nat) (t : state)
+      (vs' : list value) (hp' : heap) (rd' : read_record),
+      run m
+        (State (rebuild FlambdaReaperRebuild.empty_env e) [] []
+           empty_static_env empty_heap no_reads)
+      = Step t
+      ∧ step t = Exit k vs' hp' rd' ∧ exits_rel vs hp vs' hp'
+      ∧ related L s t.
+Proof.
+  intros He Hfree Hok n s k vs hp rd Hrun Hstep.
+  set (s0 := State e [] [] empty_static_env empty_heap no_reads) in *.
+  destruct (located_exists (S n) s0) as (L & HL).
+  set (Rn := fun (i : nat) (s t : state) => run i s0 = Step s ∧ related L s t).
+  assert (Hans : ∀ (i : nat) (s t : state),
+            i < S n -> Rn i s t -> answered_h exits_rel measure (Rn (S i)) s t).
+  { intros i s1 t1 Hi [Hrun1 Hrel1].
+    apply (answered_h_mono exits_rel measure (related L)).
+    - intros s' t' Hstep' Hrel'. split; [ | exact Hrel' ].
+      exact (run_then_step i s0 s1 s' Hrun1 Hstep').
+    - exact (related_answered L s1 t1 Hrel1 (HL i s1 Hi Hrun1)). }
+  destruct (bshrinking_exit_related exits_rel measure (S n) Rn Hans n s0 _ s
+              k vs hp rd ltac:(lia)
+              (conj eq_refl (initial_related L e He Hfree Hok)) Hrun Hstep)
+    as (j & m & t & vs' & hp' & rd' & Hm & Ht & HE & _ & Hrel).
+  exists L, m, t, vs', hp', rd'. auto.
+Qed.
+
 End Run.
 
 (* ======================================================================== *)
@@ -19590,6 +19677,660 @@ Proof.
               Hkinded Hwf Hexits Hcheck Hcheck_exact (fun _ => Hrk))).
 Qed.
 
+(* ======================================================================== *)
+(* Units without the primitives of the heap                                 *)
+(* ======================================================================== *)
+
+(* A value without a location. *)
+Definition no_location (v : value) : Prop := value_closed empty_heap v.
+
+Lemma no_location_iff (v : value) :
+  no_location v <-> locations_of_value v = [].
+Proof.
+  unfold no_location, value_closed. split.
+  - intros H. destruct (locations_of_value v) as [ | l ls]; [ reflexivity | ].
+    discriminate (H l (or_introl eq_refl)).
+  - intros H l Hl. rewrite H in Hl. destruct Hl.
+Qed.
+
+Lemma app_nil_iff {A : Type} (l l' : list A) :
+  l ++ l' = [] <-> l = [] ∧ l' = [].
+Proof.
+  split; [ apply app_eq_nil | intros [-> ->]; reflexivity ].
+Qed.
+
+Lemma flat_map_nil_iff {A B : Type} (f : A -> list B) (l : list A) :
+  flat_map f l = [] <-> ∀ a : A, a ∈ l -> f a = [].
+Proof.
+  induction l as [ | a l IH]; simpl; [ split; [ intros _ a [] | auto ] | ].
+  rewrite app_nil_iff, IH. split.
+  - intros [H1 H2] b [<- | Hb]; [ exact H1 | exact (H2 b Hb) ].
+  - intros H. split; [ apply H; left; reflexivity | ].
+    intros b Hb. apply H. right. exact Hb.
+Qed.
+
+Lemma no_location_slots (slots : list (value_slot * value)) :
+  flat_map (fun slot => locations_of_value (snd slot)) slots = []
+  <-> ∀ (w : value_slot) (v : value), (w, v) ∈ slots -> no_location v.
+Proof.
+  rewrite flat_map_nil_iff. split.
+  - intros H w v Hin. apply no_location_iff. exact (H (w, v) Hin).
+  - intros H [w v] Hin. apply no_location_iff. exact (H w v Hin).
+Qed.
+
+Lemma no_location_list (vs : list value) :
+  flat_map locations_of_value vs = [] <-> ∀ v : value, v ∈ vs -> no_location v.
+Proof.
+  rewrite flat_map_nil_iff. split; intros H v Hv; apply no_location_iff;
+    [ exact (H v Hv) | exact (H v Hv) ].
+Qed.
+
+(* What a static environment binds holds no location. *)
+Definition statics_no_location (statics : static_env) : Prop :=
+  ∀ (s : symbol) (a : statically_allocated_value) (v : value),
+    lookup s (static_values statics) = Some a -> v ∈ values_of_static a ->
+    no_location v.
+
+Definition env_no_location (vars : env) : Prop :=
+  ∀ (x : variable) (v : value), lookup x vars = Some v -> no_location v.
+
+Lemma env_no_location_of (vars : env) :
+  env_values_all no_location vars -> env_no_location vars.
+Proof.
+  intros H x v Hx. unfold env_values_all in H. rewrite Forall_forall in H.
+  exact (H (x, v) (lookup_in _ _ _ Hx)).
+Qed.
+
+Lemma statics_no_location_of (statics : static_env) :
+  Forall (fun binding => (fun a => ∀ v : value, v ∈ values_of_static a ->
+                                     no_location v) (snd binding))
+    (static_values statics) ->
+  statics_no_location statics.
+Proof.
+  intros H s a v Hs Hv. rewrite Forall_forall in H.
+  exact (H (s, a) (lookup_in _ _ _ Hs) v Hv).
+Qed.
+
+Lemma eval_simple_no_location (vars : env) (s : simple) (v : value) :
+  env_no_location vars -> eval_simple vars s = Some v -> no_location v.
+Proof.
+  intros Hvars Hs. destruct s as [x | sym | c]; cbn [eval_simple] in Hs.
+  - exact (Hvars x v Hs).
+  - injection Hs as <-. apply no_location_iff. reflexivity.
+  - injection Hs as <-. apply no_location_iff. reflexivity.
+Qed.
+
+Lemma eval_simples_no_location (vars : env) :
+  env_no_location vars ->
+  ∀ (args : list simple) (vs : list value),
+    eval_simples vars args = Some vs -> ∀ v : value, v ∈ vs -> no_location v.
+Proof.
+  intros Hvars. induction args as [ | s args IH]; intros vs Hvs v Hv;
+    cbn [eval_simples] in Hvs.
+  - injection Hvs as <-. destruct Hv.
+  - destruct (eval_simple vars s) as [w | ] eqn:Hs; [ | discriminate ].
+    destruct (eval_simples vars args) as [ws | ] eqn:Hws; [ | discriminate ].
+    injection Hvs as <-. destruct Hv as [<- | Hv];
+      [ exact (eval_simple_no_location vars s _ Hvars Hs)
+      | exact (IH ws eq_refl v Hv) ].
+Qed.
+
+Lemma eval_value_slots_no_location (vars : env) :
+  env_no_location vars ->
+  ∀ (slots : list (value_slot * simple)) (vs : list (value_slot * value)),
+    eval_value_slots vars slots = Some vs ->
+    ∀ (w : value_slot) (v : value), (w, v) ∈ vs -> no_location v.
+Proof.
+  intros Hvars. induction slots as [ | [w0 s] slots IH]; intros vs Hvs w v Hv;
+    cbn [eval_value_slots] in Hvs.
+  - injection Hvs as <-. destruct Hv.
+  - destruct (eval_simple vars s) as [x | ] eqn:Hs; [ | discriminate ].
+    destruct (eval_value_slots vars slots) as [xs | ] eqn:Hxs;
+      [ | discriminate ].
+    injection Hvs as <-. destruct Hv as [E | Hv].
+    + injection E as <- <-. exact (eval_simple_no_location vars s _ Hvars Hs).
+    + exact (IH xs eq_refl w v Hv).
+Qed.
+
+(* The value slots of a closure without a location, or of one that a
+   symbol is bound to. *)
+Lemma closure_in_set_no_location (statics : static_env) (v : value)
+    (slot : function_slot) (decls : list (function_slot * code_id))
+    (slots : list (value_slot * value)) :
+  statics_no_location statics -> no_location v ->
+  closure_in_set statics v = Some (slot, decls, slots) ->
+  ∀ (w : value_slot) (x : value), (w, x) ∈ slots -> no_location x.
+Proof.
+  intros Hst Hv Hcl w x Hin. apply no_location_iff in Hv.
+  destruct v as [ | code vs | sl ds vs | s | | | | | ];
+    cbn [closure_in_set] in Hcl; try discriminate Hcl.
+  - injection Hcl as _ _ <-. cbn [locations_of_value] in Hv.
+    exact (proj1 (no_location_slots vs) Hv w x Hin).
+  - destruct (lookup sl ds); [ | discriminate Hcl ].
+    injection Hcl as _ _ <-. cbn [locations_of_value] in Hv.
+    exact (proj1 (no_location_slots vs) Hv w x Hin).
+  - destruct (lookup s (static_values statics)) as [a | ] eqn:Hs;
+      [ | discriminate Hcl ].
+    destruct a as [code vs | sl syms ds vs | | | | | ]; try discriminate Hcl.
+    + injection Hcl as _ _ <-.
+      apply (Hst s _ x Hs). cbn [values_of_static].
+      exact (in_map snd _ (w, x) Hin).
+    + destruct (lookup sl ds); [ | discriminate Hcl ].
+      injection Hcl as _ _ <-.
+      apply (Hst s _ x Hs). cbn [values_of_static].
+      exact (in_map snd _ (w, x) Hin).
+Qed.
+
+Lemma closure_of_no_location (statics : static_env) (v : value)
+    (code : code_id) (slots : list (value_slot * value)) :
+  statics_no_location statics -> no_location v ->
+  closure_of statics v = Some (code, slots) ->
+  ∀ (w : value_slot) (x : value), (w, x) ∈ slots -> no_location x.
+Proof.
+  intros Hst Hv Hcl w x Hin. apply no_location_iff in Hv.
+  destruct v as [ | c vs | sl ds vs | s | | | | | ];
+    cbn [closure_of] in Hcl; try discriminate Hcl.
+  - injection Hcl as _ <-. cbn [locations_of_value] in Hv.
+    exact (proj1 (no_location_slots vs) Hv w x Hin).
+  - destruct (lookup sl ds); [ | discriminate Hcl ].
+    injection Hcl as _ <-. cbn [locations_of_value] in Hv.
+    exact (proj1 (no_location_slots vs) Hv w x Hin).
+  - destruct (lookup s (static_values statics)) as [a | ] eqn:Hs;
+      [ | discriminate Hcl ].
+    destruct a as [c vs | sl syms ds vs | | | | | ]; try discriminate Hcl.
+    + injection Hcl as _ <-.
+      apply (Hst s _ x Hs). cbn [values_of_static].
+      exact (in_map snd _ (w, x) Hin).
+    + destruct (lookup sl ds); [ | discriminate Hcl ].
+      injection Hcl as _ <-.
+      apply (Hst s _ x Hs). cbn [values_of_static].
+      exact (in_map snd _ (w, x) Hin).
+Qed.
+
+Lemma lookup_in_slots (w : value_slot) (slots : list (value_slot * value))
+    (x : value) :
+  lookup w slots = Some x -> (w, x) ∈ slots.
+Proof. exact (lookup_in w x slots). Qed.
+
+(* A named expression other than a primitive, run on values without a
+   location, has none. *)
+Lemma eval_named_no_location (statics : static_env) (vars : env) (d : named)
+    (v : value) :
+  statics_no_location statics -> env_no_location vars ->
+  (∀ (p : prim) (args : list simple), d <> Prim p args) ->
+  eval_named statics vars d = Some v -> no_location v.
+Proof.
+  intros Hst Hvars Hnp Hev.
+  destruct d as [s | p args | code vsl | slot decls vsl | w cl | from w cl
+                | mf mt cl ];
+    cbn [eval_named] in Hev.
+  - exact (eval_simple_no_location vars s v Hvars Hev).
+  - destruct (Hnp p args eq_refl).
+  - destruct (eval_value_slots vars vsl) as [vs | ] eqn:Hvs;
+      [ | discriminate Hev ].
+    injection Hev as <-. apply no_location_iff. cbn [locations_of_value].
+    apply no_location_slots.
+    exact (eval_value_slots_no_location vars Hvars vsl vs Hvs).
+  - destruct (lookup slot decls); [ | discriminate Hev ].
+    destruct (eval_value_slots vars vsl) as [vs | ] eqn:Hvs;
+      [ | discriminate Hev ].
+    injection Hev as <-. apply no_location_iff. cbn [locations_of_value].
+    apply no_location_slots.
+    exact (eval_value_slots_no_location vars Hvars vsl vs Hvs).
+  - destruct (eval_simple vars cl) as [c | ] eqn:Hc; [ | discriminate Hev ].
+    destruct (closure_of statics c) as [[code slots] | ] eqn:Hcl;
+      [ | discriminate Hev ].
+    exact (closure_of_no_location statics c code slots Hst
+             (eval_simple_no_location vars cl c Hvars Hc) Hcl w v
+             (lookup_in_slots w slots v Hev)).
+  - destruct (eval_simple vars cl) as [c | ] eqn:Hc; [ | discriminate Hev ].
+    unfold project_value_slot in Hev.
+    destruct (closure_in_set statics c) as [[[atf decls] slots] | ] eqn:Hcl;
+      [ | discriminate Hev ].
+    destruct (Pos.eqb atf from); [ | discriminate Hev ].
+    exact (closure_in_set_no_location statics c atf decls slots Hst
+             (eval_simple_no_location vars cl c Hvars Hc) Hcl w v
+             (lookup_in_slots w slots v Hev)).
+  - destruct (eval_simple vars cl) as [c | ] eqn:Hc; [ | discriminate Hev ].
+    pose proof (eval_simple_no_location vars cl c Hvars Hc) as Hcn.
+    unfold project_function_slot in Hev.
+    destruct c as [ | code vs | sl ds vs | s | | | | | ]; try discriminate Hev.
+    + destruct (Pos.eqb mf unnamed_function_slot);
+        [ | discriminate Hev ].
+      destruct (Pos.eqb mt unnamed_function_slot); [ | discriminate Hev ].
+      injection Hev as <-. exact Hcn.
+    + destruct (Pos.eqb sl mf); [ | discriminate Hev ].
+      destruct (lookup sl ds); [ | discriminate Hev ].
+      destruct (lookup mt ds); [ | discriminate Hev ].
+      injection Hev as <-. exact Hcn.
+    + destruct (lookup s (static_values statics)) as [a | ];
+        [ | discriminate Hev ].
+      destruct a as [ | sl syms ds vs | | | | | ]; try discriminate Hev.
+      * destruct (Pos.eqb mf unnamed_function_slot);
+          [ | discriminate Hev ].
+        destruct (Pos.eqb mt unnamed_function_slot); [ | discriminate Hev ].
+        injection Hev as <-. exact Hcn.
+      * destruct (Pos.eqb sl mf); [ | discriminate Hev ].
+        destruct (lookup sl ds); [ | discriminate Hev ].
+        destruct (lookup mt ds); [ | discriminate Hev ].
+        destruct (lookup mt syms); [ | discriminate Hev ].
+        injection Hev as <-. apply no_location_iff. reflexivity.
+Qed.
+
+Lemma eval_static_bindings_no_location (vars : env) :
+  env_no_location vars ->
+  ∀ (bindings : list static_binding) (statics statics' : static_env),
+    (∀ (s : symbol) (a : statically_allocated_value) (v : value),
+       (s, a) ∈ static_values statics -> v ∈ values_of_static a ->
+       no_location v) ->
+    eval_static_bindings vars bindings statics = Some statics' ->
+    ∀ (s : symbol) (a : statically_allocated_value) (v : value),
+      (s, a) ∈ static_values statics' -> v ∈ values_of_static a ->
+      no_location v.
+Proof.
+  intros Hvars. induction bindings as [ | b bindings IH];
+    intros statics statics' Hst Hev; cbn [eval_static_bindings] in Hev.
+  - injection Hev as <-. exact Hst.
+  - destruct b as [id c | id | sym const].
+    + destruct (lookup id (static_code statics)); [ discriminate Hev | ].
+      exact (IH (Static_env ((id, c) :: static_code statics)
+                   (static_values statics)) statics' Hst Hev).
+    + exact (IH statics statics' Hst Hev).
+    + destruct (lookup sym (static_values statics)); [ discriminate Hev | ].
+      destruct (eval_static_const vars const) as [a | ] eqn:Ha;
+        [ | discriminate Hev ].
+      refine (IH _ statics' _ Hev).
+      intros s a' v [E | Hin] Hv; [ | exact (Hst s a' v Hin Hv) ].
+      injection E as <- <-.
+      destruct const as [code vsl | slot syms decls vsl | tag fields
+                        | contents | bytes | elements ];
+        cbn [eval_static_const] in Ha.
+      * destruct (eval_value_slots vars vsl) as [vs | ] eqn:Hvs;
+          [ | discriminate Ha ].
+        injection Ha as <-. cbn [values_of_static] in Hv.
+        apply in_map_iff in Hv as ([w x] & <- & Hin).
+        exact (eval_value_slots_no_location vars Hvars vsl vs Hvs w x Hin).
+      * destruct (lookup slot decls); [ | discriminate Ha ].
+        destruct (eval_value_slots vars vsl) as [vs | ] eqn:Hvs;
+          [ | discriminate Ha ].
+        injection Ha as <-. cbn [values_of_static] in Hv.
+        apply in_map_iff in Hv as ([w x] & <- & Hin).
+        exact (eval_value_slots_no_location vars Hvars vsl vs Hvs w x Hin).
+      * destruct (eval_simples vars fields) as [vs | ] eqn:Hvs;
+          [ | discriminate Ha ].
+        injection Ha as <-.
+        exact (eval_simples_no_location vars Hvars fields vs Hvs v Hv).
+      * destruct (eval_simple vars contents) as [w | ] eqn:Hw;
+          [ | discriminate Ha ].
+        injection Ha as <-. destruct Hv as [<- | []].
+        exact (eval_simple_no_location vars contents _ Hvars Hw).
+      * injection Ha as <-. destruct Hv.
+      * destruct (eval_simples vars elements) as [vs | ] eqn:Hvs;
+          [ | discriminate Ha ].
+        injection Ha as <-.
+        exact (eval_simples_no_location vars Hvars elements vs Hvs v Hv).
+Qed.
+
+(* No value of a state holds a location, and its heap is empty. *)
+Definition state_no_location (s : state) : Prop :=
+  state_values_all (fun _ v => no_location v)
+    (fun _ a => ∀ v : value, v ∈ values_of_static a -> no_location v) s
+  ∧ state_heap s = empty_heap.
+
+Lemma partial_no_location (callee : value) (args : list value)
+    (args_arity : arity) :
+  no_location (Value_partial_application callee args args_arity)
+  <-> no_location callee ∧ Forall no_location args.
+Proof.
+  rewrite (no_location_iff (Value_partial_application _ _ _)).
+  cbn [locations_of_value].
+  rewrite app_nil_iff, no_location_list, Forall_forall, <- no_location_iff.
+  reflexivity.
+Qed.
+
+Lemma no_location_holds_of (statics : static_env) :
+  statics_no_location statics ->
+  holds_of_numbers no_location ∧ holds_of_blocks no_location
+  ∧ holds_of_arrays no_location
+  ∧ holds_in_static_blocks statics no_location
+  ∧ holds_in_static_arrays statics no_location.
+Proof.
+  intros Hst. split; [ | split; [ | split; [ | split ] ] ].
+  - intros c. rewrite !no_location_iff. split; reflexivity.
+  - intros tag fields. rewrite no_location_iff. cbn [locations_of_value].
+    exact (no_location_list fields).
+  - intros elements. rewrite no_location_iff. cbn [locations_of_value].
+    exact (no_location_list elements).
+  - intros s tag fields _ Hs v Hv. exact (Hst s _ v Hs Hv).
+  - intros s elements _ Hs v Hv. exact (Hst s _ v Hs Hv).
+Qed.
+
+(* A step of a state of a term without the primitives of the heap keeps
+   both, and an exit has the empty heap and values without a location. *)
+Lemma free_step_no_location (s : state) :
+  FlambdaHeapFreeProofs.state_free s -> state_no_location s ->
+  match step s with
+  | Step s' => FlambdaHeapFreeProofs.state_free s' ∧ state_no_location s'
+  | Exit _ vs hp _ => hp = empty_heap ∧ Forall no_location vs
+  | Undefined => True
+  end.
+Proof.
+  intros Hfree [Hall Hheap].
+  pose proof Hall as (Hvars & Hconts & Hstatics & Hhv).
+  assert (Hvn : env_no_location (state_vars s))
+    by exact (env_no_location_of _ Hvars).
+  assert (Hsn : statics_no_location (state_statics s))
+    by exact (statics_no_location_of _ Hstatics).
+  destruct (no_location_holds_of _ Hsn) as (Hn & Hb & Ha & Hsb & Hsa).
+  assert (Hgen :
+    match step s with
+    | Step s' =>
+      state_values_all (fun _ v => no_location v)
+        (fun _ a => ∀ v : value, v ∈ values_of_static a -> no_location v) s'
+    | Exit _ vs _ _ => Forall (fun v => no_location v) vs
+    | Undefined => True
+    end).
+  { apply (step_values_all (fun _ v => no_location v)
+             (fun _ a => ∀ v : value, v ∈ values_of_static a ->
+                         no_location v) s
+             (fun _ => partial_no_location) Hall).
+    - intros size tuple fields Ht Hf.
+      apply (tuple_fields_forall _ (state_statics s) size tuple fields);
+        [ | exact Hf ].
+      intros field v Hprim.
+      refine (eval_prim_preserves no_location (state_statics s) _ [tuple] v
+                Hn Hb Ha Hsb Hsa _ Hprim).
+      intros w [<- | []]. exact Ht.
+    - intros x kind d body v hp' rd' Hexpr Hexec.
+      destruct Hfree as (He & _ & _). rewrite Hexpr in He.
+      cbn [FlambdaHeapFreeSpec.expr_free_of_heap] in He.
+      apply andb_true_iff in He as [Hd _]. apply negb_true_iff in Hd.
+      rewrite Hheap in Hexec.
+      destruct d as [s0 | p args | | | | | ];
+        try (rewrite exec_named_not_prim in Hexec;
+             [ | intros p' args' E; discriminate E ];
+             destruct (eval_named _ _ _) as [w | ] eqn:Hev;
+             cbn in Hexec; [ | discriminate Hexec ];
+             injection Hexec as <- <- _;
+             split; [ | apply heap_values_all_empty ];
+             refine (eval_named_no_location _ _ _ w Hsn Hvn _ Hev);
+             intros p' args' E; discriminate E).
+      apply exec_named_prim_some in Hexec as (vs & Hvs & Hprim & _).
+      assert (Hnh : ∀ q : heap_primitive, p <> Heap q)
+        by (intros q ->; discriminate Hd).
+      pose proof (FlambdaHeapProofs.exec_prim_heap _ _ _ _ _ _ Hnh Hprim)
+        as ->.
+      split; [ | apply heap_values_all_empty ].
+      refine (proj2 (FlambdaHeapProofs.exec_prim_closed _ _ _ _ _ _ _ _
+                       Hprim)).
+      + split; [ intros l c w Hl; discriminate Hl | ].
+        intros s0 a w Hs Hw. exact (Hsn s0 a w Hs Hw).
+      + exact (eval_simples_no_location _ Hvn args vs Hvs).
+    - intros bindings body statics' _ Hev.
+      split; [ intros v Hv; exact Hv | ].
+      apply Forall_forall. intros [s0 a] Hin v Hv.
+      refine (eval_static_bindings_no_location _ Hvn bindings _ statics' _
+                Hev s0 a v Hin Hv).
+      intros s1 a1 w Hin1 Hw. rewrite Forall_forall in Hstatics.
+      exact (Hstatics (s1, a1) Hin1 w Hw).
+    - intros ap callee vs extra _ Hc Hvs Hx.
+      split; [ exact (eval_simple_no_location _ _ _ Hvn Hc) | ].
+      split; apply Forall_forall;
+        [ exact (eval_simples_no_location _ Hvn _ _ Hvs)
+        | exact (eval_simples_no_location _ Hvn _ _ Hx) ].
+    - intros ac vs _ Hvs. apply Forall_forall.
+      exact (eval_simples_no_location _ Hvn _ _ Hvs). }
+  destruct (step s) as [s' | k vs hp rd | ] eqn:Hstep; [ | | exact I ].
+  - destruct (FlambdaHeapFreeProofs.free_step s s' Hfree Hstep)
+      as [Hfree' Hheap'].
+    split; [ exact Hfree' | split; [ exact Hgen | ] ].
+    rewrite Hheap'. exact Hheap.
+  - split; [ | exact Hgen ].
+    rewrite (step_exit_heap _ _ _ _ _ Hstep). exact Hheap.
+Qed.
+
+(* So an exit of the run of a unit without the primitives of the heap
+   has the empty heap and values without a location. *)
+Lemma free_exit_no_location (e : expr) (n : nat) (k : continuation)
+    (vs : list value) (hp : heap) (rd : read_record) :
+  FlambdaHeapFreeSpec.expr_free_of_heap e = true ->
+  run n (State e [] [] empty_static_env empty_heap no_reads)
+  = Exit k vs hp rd ->
+  hp = empty_heap ∧ Forall no_location vs.
+Proof.
+  intros He.
+  assert (Hgen : ∀ (n : nat) (s : state),
+            FlambdaHeapFreeProofs.state_free s -> state_no_location s ->
+            run n s = Exit k vs hp rd ->
+            hp = empty_heap ∧ Forall no_location vs).
+  { induction n0 as [ | n0 IH]; intros s Hfree Hnl Hrun;
+      [ discriminate Hrun | ].
+    rewrite run_succ in Hrun. pose proof (free_step_no_location s Hfree Hnl)
+      as Hs.
+    destruct (step s) as [s' | k' vs' hp' rd' | ] eqn:Hstep;
+      [ | | discriminate Hrun ].
+    - exact (IH s' (proj1 Hs) (proj2 Hs) Hrun).
+    - injection Hrun as <- <- <- <-. exact Hs. }
+  apply (Hgen n).
+  - split; [ exact He | split; [ constructor | ] ].
+    intros id c Hl. discriminate Hl.
+  - split; [ | reflexivity ].
+    split; [ constructor | split; [ exact I | split; [ constructor | ] ] ].
+    apply heap_values_all_empty.
+Qed.
+
+(* Up to a correspondence of locations, a value without one is observed
+   equal. *)
+Lemma observed_equal_at_no_location (β : location -> location -> Prop) :
+  ∀ v v' : value,
+    no_location v -> observed_equal_at β v v' -> observed_equal v v'.
+Proof.
+  intros v. pattern v. apply FlambdaHeapProofs.value_induction; clear v;
+    intros; rewrite no_location_iff in *; cbn [locations_of_value] in *;
+    destruct v'; cbn [observed_equal observed_equal_at] in *;
+    try contradiction; try assumption.
+  - destruct H1 as [Htag Hfields]. split; [ exact Htag | ].
+    revert Hfields. apply values_related_impl. intros w w' Hw.
+    rewrite Forall_forall in H. apply (H w Hw w').
+    apply (proj1 (no_location_list fields) H0 w Hw).
+  - revert H1. apply values_related_impl. intros w w' Hw.
+    rewrite Forall_forall in H. apply (H w Hw w').
+    apply (proj1 (no_location_list elements) H0 w Hw).
+  - discriminate H.
+  - destruct H2 as (Hc & Hk & Ha). split; [ | split; assumption ].
+    apply app_eq_nil in H1 as [H1 _].
+    apply (H _ (proj2 (no_location_iff _) H1) Hc).
+Qed.
+
+(* Two units without the primitives of the heap: up to the heap is
+   observably. *)
+Lemma up_to_heap_free_observably (e e' : expr) :
+  FlambdaHeapFreeSpec.expr_free_of_heap e = true ->
+  FlambdaHeapFreeSpec.expr_free_of_heap e' = true ->
+  program_refines_up_to_heap e e' -> program_refines_observably e e'.
+Proof.
+  intros He He' (H1 & H2 & H3).
+  assert (Hobs : ∀ (vs vs' : list value) (hp hp' : heap),
+            Forall no_location vs ->
+            exits_observed_equal vs hp vs' hp' ->
+            values_related observed_equal vs vs').
+  { intros vs vs' hp hp' Hnl (β & _ & Hvs). revert Hvs.
+    apply values_related_impl. intros v v' Hv.
+    rewrite Forall_forall in Hnl.
+    exact (observed_equal_at_no_location β v v' (Hnl v Hv)). }
+  split; [ | split; [ | exact H3 ] ].
+  - intros k vs hp Hb. destruct (H1 k vs hp Hb) as (vs' & hp' & Hb' & Heq).
+    exists vs'.
+    destruct Hb as (n & rd & Hn). destruct Hb' as (m & rd' & Hm).
+    destruct (free_exit_no_location e n k vs hp rd He Hn) as [-> Hnl].
+    destruct (free_exit_no_location e' m k vs' hp' rd' He' Hm) as [-> _].
+    split; [ exists m, rd'; exact Hm | exact (Hobs _ _ _ _ Hnl Heq) ].
+  - intros k vs' hp Hb.
+    destruct (H2 k vs' hp Hb) as [(vs & hp0 & Hb0 & Heq) | Hw];
+      [ left | right; exact Hw ].
+    exists vs.
+    destruct Hb0 as (n & rd & Hn). destruct Hb as (m & rd' & Hm).
+    destruct (free_exit_no_location e n k vs hp0 rd He Hn) as [-> Hnl].
+    destruct (free_exit_no_location e' m k vs' hp rd' He' Hm) as [-> _].
+    split; [ exists n, rd; exact Hn | exact (Hobs _ _ _ _ Hnl Heq) ].
+Qed.
+
+(* The units of [in_flow_fragment] have no primitive of the heap. *)
+Lemma flow_fragment_free (codes : list (code_id * code))
+    (symbols : list symbol) :
+  (∀ e : expr,
+     flow_fragment false codes symbols e = true ->
+     FlambdaHeapFreeSpec.expr_free_of_heap e = true)
+  ∧ (∀ h : continuation_handler,
+       handler_flow_fragment false codes symbols h = true ->
+       FlambdaHeapFreeSpec.handler_free_of_heap h = true).
+Proof.
+  apply expr_handler_ind;
+    cbn [flow_fragment handler_flow_fragment
+         FlambdaHeapFreeSpec.expr_free_of_heap
+         FlambdaHeapFreeSpec.handler_free_of_heap];
+    try reflexivity.
+  - intros x kind d body IH H. apply andb_true_iff in H as [Hd Hb].
+    rewrite (IH Hb), andb_true_r.
+    destruct d as [ | [] | | | | | ]; try reflexivity. discriminate Hd.
+  - intros bindings body Hcodes IH H. apply andb_true_iff in H as [Hbs Hb].
+    rewrite (IH Hb), andb_true_r. apply forallb_forall. intros b Hin.
+    rewrite forallb_forall in Hbs. specialize (Hbs b Hin).
+    destruct b as [id c | id | s const]; try reflexivity.
+    destruct c as [params mc ret exn md body'].
+    cbn [binding_flow_fragment code_flow_fragment] in Hbs.
+    apply andb_true_iff in Hbs as [_ Hbody'].
+    exact (Hcodes id _ Hin Hbody').
+  - intros k h body IHh IH H. apply andb_true_iff in H as [Hh Hb].
+    rewrite (IHh Hh), (IH Hb). reflexivity.
+  - intros handlers body IHh IH H. apply andb_true_iff in H as [Hhs Hb].
+    rewrite (IH Hb), andb_true_r. apply forallb_forall. intros [k h] Hin.
+    rewrite forallb_forall in Hhs. exact (IHh k h Hin (Hhs (k, h) Hin)).
+  - intros params metadata handler IH H. exact (IH H).
+Qed.
+
+Lemma rebuild_named_free (sol : solution) (en : rebuild_env) (x : variable)
+    (d : named) :
+  named_changes_heap d = false ->
+  named_changes_heap (rebuild_named sol en x d) = false.
+Proof.
+  intros Hd. destruct d as [s | p args | | | | | ]; try reflexivity.
+  destruct (rebuild_named_prim_cases sol en x p args)
+    as [-> | [-> | [_ ->]]]; [ exact Hd | reflexivity | exact Hd ].
+Qed.
+
+(* The rebuild adds no primitive of the heap. *)
+Lemma rebuild_cc_free (F : facts) (sol : solution)
+    (cannot_change : node -> bool) (code_deps : finite_map code_dep)
+    (b : bool) (unit_code_ids : list code_id)
+    (codes : finite_map code_metadata) (first_fresh : positive) :
+  (∀ e : expr,
+     FlambdaHeapFreeSpec.expr_free_of_heap e = true ->
+     ∀ en : rebuild_env,
+       FlambdaHeapFreeSpec.expr_free_of_heap
+         (rebuild_expr_cc F sol cannot_change code_deps b unit_code_ids codes
+            first_fresh en e)
+       = true)
+  ∧ (∀ h : continuation_handler,
+       FlambdaHeapFreeSpec.handler_free_of_heap h = true ->
+       ∀ (en : rebuild_env) (dead_check : bool) (mask : list bool),
+         FlambdaHeapFreeSpec.handler_free_of_heap
+           (rebuild_handler_cc F sol cannot_change code_deps b unit_code_ids
+              codes first_fresh en dead_check mask h)
+         = true).
+Proof.
+  apply expr_handler_ind.
+  - intros x kind d body IH H en.
+    cbn [FlambdaHeapFreeSpec.expr_free_of_heap] in H.
+    apply andb_true_iff in H as [Hd Hb]. apply negb_true_iff in Hd.
+    cbn [rebuild_expr_cc].
+    destruct (is_pending_projection en x d).
+    { cbn [FlambdaHeapFreeSpec.expr_free_of_heap].
+      rewrite Hd, (IH Hb). reflexivity. }
+    destruct d as [ | | | | | | ];
+      repeat match goal with
+             | |- context [if ?c then _ else _] => destruct c
+             end;
+      cbn [FlambdaHeapFreeSpec.expr_free_of_heap]; try reflexivity;
+      try exact (IH Hb _);
+      rewrite (IH Hb), andb_true_r; try reflexivity;
+      apply negb_true_iff; apply rebuild_named_free; exact Hd.
+  - intros bindings body Hcodes IH H en.
+    cbn [FlambdaHeapFreeSpec.expr_free_of_heap] in H.
+    apply andb_true_iff in H as [Hbs Hb].
+    cbn [rebuild_expr_cc FlambdaHeapFreeSpec.expr_free_of_heap].
+    rewrite (IH Hb), andb_true_r. apply forallb_forall.
+    intros b' Hin. apply in_flat_map in Hin as (b0 & Hb0 & Hin).
+    rewrite forallb_forall in Hbs. specialize (Hbs b0 Hb0).
+    destruct b0 as [id c | id | s const]; cbn [rebuild_binding_cc] in Hin.
+    + destruct (is_code_id_used sol id);
+        destruct Hin as [<- | []]; [ | reflexivity ].
+      destruct c as [params mc ret exn md cbody].
+      cbn [rebuild_code_cc FlambdaHeapFreeSpec.binding_free_of_heap
+           FlambdaHeapFreeSpec.code_free_of_heap] in Hbs |- *.
+      destruct (code_calling_convention_change _ _ _ _ _ _);
+        destruct (existsb _ _); try reflexivity;
+        exact (Hcodes id _ Hb0 Hbs _).
+    + destruct Hin as [<- | []]. reflexivity.
+    + destruct (static_const_is_used sol s const);
+        [ destruct Hin as [<- | []]; reflexivity | destruct Hin ].
+  - intros k h body IHh IH H en.
+    cbn [FlambdaHeapFreeSpec.expr_free_of_heap] in H.
+    apply andb_true_iff in H as [Hh Hb].
+    cbn [rebuild_expr_cc].
+    destruct (among _ _); [ | exact (IH Hb _) ].
+    cbn [FlambdaHeapFreeSpec.expr_free_of_heap].
+    rewrite (IHh Hh), (IH Hb). reflexivity.
+  - intros handlers body IHh IH H en.
+    cbn [FlambdaHeapFreeSpec.expr_free_of_heap] in H.
+    apply andb_true_iff in H as [Hhs Hb].
+    cbn [rebuild_expr_cc FlambdaHeapFreeSpec.expr_free_of_heap].
+    rewrite (IH Hb), andb_true_r. apply forallb_forall.
+    intros [k' h'] Hin. apply in_map_iff in Hin as ([k h] & E & Hin).
+    injection E as <- <-. rewrite forallb_forall in Hhs.
+    exact (IHh k h Hin (Hhs (k, h) Hin) _ _ _).
+  - intros ap _ en. cbn [rebuild_expr_cc]. unfold rebuild_apply_cc.
+    destruct (apply_calling_convention_change _ _ _ _ _ _ ap).
+    + unfold rebuild_apply, make_apply_wrapper.
+      repeat match goal with
+             | |- context [if ?c then _ else _] => destruct c
+             | |- context [match ?c with Some _ => _ | None => _ end] =>
+               destruct c
+             end; reflexivity.
+    + unfold make_apply_wrapper_cc.
+      repeat match goal with
+             | |- context [if ?c then _ else _] => destruct c
+             end; reflexivity.
+  - intros ac _ en. cbn [rebuild_expr_cc]. unfold rebuild_apply_cont.
+    destruct (rewrite_apply_cont _ _ _); reflexivity.
+  - intros scrutinee arms _ en. cbn [rebuild_expr_cc]. unfold rebuild_switch.
+    destruct (Keyed.is_empty _); reflexivity.
+  - intros _ en. reflexivity.
+  - intros params metadata handler IH H en dead_check mask.
+    cbn [FlambdaHeapFreeSpec.handler_free_of_heap] in H.
+    cbn [rebuild_handler_cc FlambdaHeapFreeSpec.handler_free_of_heap].
+    destruct (dead_check && _); [ reflexivity | exact (IH H _) ].
+Qed.
+
+Theorem rebuild_refines_up_to_heap_flow :
+  rebuild_refines_up_to_heap_flow_statement.
+Proof.
+  intros HN flag is_local u e T b Hlocal Hslots Hfrag Hdc Hrk Hwf Hexits
+    Hcheck Hcheck_exact.
+  pose proof (proj1 (flow_fragment_free _ _) e
+                (proj1 (in_fragment_parts false e Hfrag))) as He.
+  apply up_to_heap_free_observably; [ exact He | | ].
+  - unfold rebuild_unit_from_tables, rebuild_unit.
+    rewrite <- (rebuild_expr_cc_unchanged (traverse_unit flag u e)
+                  (solution_of_tables T) (fun _ => true) [] b
+                  (static_names code_ids_bound e) (bound_code_metadata e)
+                  (fresh_name (names_of e)) (fun _ _ => eq_refl)).
+    exact (proj1 (rebuild_cc_free _ _ _ _ _ _ _ _) e He _).
+  - exact (HN flag is_local u e T b Hlocal Hslots
+             (in_flow_fragment_in_heap_fragment e Hfrag) Hdc Hrk Hwf Hexits
+             Hcheck Hcheck_exact).
+Qed.
+
 Theorem closure_exit_observed : closure_exit_observed_statement.
 Proof.
   split; [ vm_compute; reflexivity | ].
@@ -19896,4 +20637,21 @@ Proof.
       split; [ exact Hs | exact Hobs ].
     + intros Hw. pose proof (behaviour_unique _ _ _ Ht Hw) as Heq.
       discriminate Heq.
+Qed.
+
+(* A run that ends with an exit reaches the state that exits. *)
+Lemma run_exit_state (m : nat) :
+  ∀ (t : state) (k : continuation) (vs : list value) (hp : heap)
+    (rd : read_record),
+    run m t = Exit k vs hp rd ->
+    ∃ (m' : nat) (t' : state), run m' t = Step t' ∧ step t' = Exit k vs hp rd.
+Proof.
+  induction m as [ | m IH]; intros t k vs hp rd H; [ discriminate H | ].
+  rewrite run_succ in H.
+  destruct (step t) as [t1 | k' vs' hp' rd' | ] eqn:Ht.
+  - destruct (IH t1 k vs hp rd H) as (m' & t' & H1 & H2).
+    exists (S m'), t'. rewrite run_succ, Ht. split; assumption.
+  - injection H as -> -> -> ->. exists 0, t.
+    split; [ reflexivity | exact Ht ].
+  - discriminate H.
 Qed.

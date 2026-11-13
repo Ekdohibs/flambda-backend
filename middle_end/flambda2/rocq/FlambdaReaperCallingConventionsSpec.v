@@ -499,6 +499,13 @@ Definition rebuild_cc_refines_up_to_heap_statement : Prop :=
       (rebuild_unit_cc_from_tables (traverse_unit flag u e) T cannot_change
          (unit_code_deps flag u e) preserve_direct_calls e).
 
+(* And it gives the statement before it on the units of
+   [in_flow_fragment], as
+   FlambdaReaperRebuildSpec.rebuild_refines_up_to_heap_flow_statement. *)
+Definition rebuild_cc_refines_up_to_heap_flow_statement : Prop :=
+  rebuild_cc_refines_up_to_heap_statement ->
+  rebuild_cc_refines_observably_statement.
+
 (* ======================================================================== *)
 (* Runs of units whose code changes                                         *)
 (* ======================================================================== *)
