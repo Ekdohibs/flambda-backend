@@ -549,6 +549,14 @@ tool), delegated by the orchestrator, and:
 - `middle_end/flambda2/rocq/FlambdaArrayLoad*` (another: the length
   of an immutable array that is known from the term, and a load from
   it at a constant index; V1's once it is staffed)
+- `middle_end/flambda2/rocq/FlambdaValidateReading*` other than
+  `FlambdaValidateReadingRename*` (the validation asked of the term
+  before with its known arrays read; V1's once it is staffed)
+- `middle_end/flambda2/rocq/FlambdaReadsAfter*` (two normalisations
+  that are equivalences, for the term after Simplify: the read of a
+  known block where the read is sure to have a value, and the removal
+  of an allocation of constants that nothing uses; V1's once it is
+  staffed)
 - `middle_end/flambda2/rocq/FlambdaExtcall*` (what some C functions
   of the runtime compute, as a table that nothing uses; whoever owns
   calls of C functions once they have a meaning)
