@@ -1,0 +1,79 @@
+(* The case Keep _, Unbox _ of make_apply_wrapper (rebuild.ml), as
+   unbox_kept_result.fl, made by a program with no cast. The unit is made
+   by ../ocaml/from_ocaml.sh of
+
+     type _ w = P : (int * int) w | F : (int -> int) w
+     external opaque : 'a -> 'a = "%opaque"
+     external ( + ) : int -> int -> int = "%addint"
+     let[@inline never] make x = (x, x)
+     let succ x = x + 1
+     let test (type a) (w : a w) : int =
+       let g : a = match w with P -> make 1 | F -> succ in
+       match w with F -> g 3 | P -> (let (a, _) = make 10 in a)
+     let r = test (opaque P)
+
+   with an interface that exports r. The second call of make reads a field
+   of its result, which is unboxed; the first returns it to the join point
+   of g, which also has the closure of succ as a source and is only called,
+   under the refinement that the GADT gives, so it is kept. The decisions
+   do not match, the check that would stop the compiler is stubbed, and the
+   first call becomes one that never returns: the unit returns 10, and both
+   rebuilds are undefined. With the standard library, the same program
+   prints nothing at -O3 -flambda2-reaper, and 10 without the reaper. *)
+let $camlUnbox_kept_result_gadt__first_const_0 = Block 0 () in
+(let code inline(never) size(8)
+       make_0 (x/51)
+         my_closure/52 &my_alloc_region/53 my_depth/54
+         -> k/32 * k/33
+         : [ 0 of val * val ] =
+   let next_depth/55 = rec_info (succ my_depth/54) in
+   let Pmakeblock/56 = %block.[`0`].my_alloc_region/53 (x/51, x/51) in
+   cont k/32 (Pmakeblock/56)
+ in
+ let code size(3)
+       succ_1 (x/57 : imm tagged)
+         my_closure/58 &my_alloc_region/59 my_depth/60
+         -> k/34 * k/35
+         : imm tagged =
+   let next_depth/61 = rec_info (succ my_depth/60) in
+   let int_add/62 = %int_barith.add (x/57, 1) in
+   cont k/34 (int_add/62)
+ in
+ let make/63 = closure make_0 @make &toplevel in
+ let succ/64 = closure succ_1 @`succ` &toplevel in
+ (let w/67 = %opaque (0) in
+  (let untagged/72 = %untag_imm (w/67) in
+   switch untagged/72
+     | 0 -> k/44
+     | 1 -> k/37 (succ/64))
+    where k/44 =
+      cont k/43
+    where k/43 =
+      apply direct(make_0 &toplevel) (make/63 : _ -> val) (1) -> k/37 * error
+    where k/37 (g/68 : val) =
+      ((let untagged/71 = %untag_imm (w/67) in
+        switch untagged/71
+          | 0 -> k/41
+          | 1 -> k/42)
+         where k/42 =
+           cont k/38
+         where k/41 =
+           cont k/39
+         where k/39 =
+           (apply direct(make_0 &toplevel)
+              (make/63 : _ -> [ 0 of imm tagged * imm tagged ])
+                (10)
+                -> k/40 * error
+              where k/40 (`*match*/69` : [ 0 of imm tagged * imm tagged ]) =
+                let Pmixedfield/70 = %block_load.[`0`] (`*match*/69`) in
+                cont k/36 (Pmixedfield/70))
+         where k/38 =
+           apply &toplevel g/68 (3) -> k/36 * error))
+   where k/36 (r/65 : imm tagged) =
+     let Pmakeblock/66 = %block.[`0`].`toplevel` (r/65) in
+     cont k/31 (Pmakeblock/66))
+  where k/31 define_root_symbol (module_block/49) =
+    let field_0/50 = %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/49)
+    in
+    let $camlUnbox_kept_result_gadt = Block 0 (field_0/50) in
+    cont done ($camlUnbox_kept_result_gadt)
