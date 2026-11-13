@@ -5009,3 +5009,27 @@ Proof.
   do 7 (split; [ vm_compute; reflexivity | ]).
   vm_compute. reflexivity.
 Qed.
+
+Theorem call_exits_one_value_needed : call_exits_one_value_needed_statement.
+Proof.
+  do 7 (split; [ vm_compute; reflexivity | ]).
+  intros [Hexits _].
+  assert (Hsource :
+    behaves
+      (State CallExitsExample.unit_expr [] [] empty_static_env empty_heap)
+      (Exits 1%positive
+         [Value_const (Tagged_immediate 7); Value_const (Tagged_immediate 8)]
+         empty_heap)).
+  { exists 10. vm_compute. reflexivity. }
+  assert (Htarget :
+    behaves
+      (State CallExitsExample.rebuilt [] [] empty_static_env empty_heap)
+      (Exits 1%positive
+         [Value_const (Tagged_immediate 7); Value_const (Poison Value)]
+         empty_heap)).
+  { exists 10. vm_compute. reflexivity. }
+  destruct (Hexits _ _ _ Hsource) as (vs' & Ht & Hrel).
+  pose proof (behaviour_unique _ _ _ Ht Htarget) as Heq.
+  injection Heq as Hvs. subst vs'.
+  simpl in Hrel. destruct Hrel as [_ [H _]]. discriminate H.
+Qed.

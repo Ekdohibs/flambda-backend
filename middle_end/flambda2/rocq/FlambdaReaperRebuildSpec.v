@@ -80,9 +80,15 @@
      [apply_cont_deps] in traverse.ml raises. A second value given to
      the return continuation of the unit then has no use, and the
      rebuild makes it poison: the rebuilt unit exits with other values
-     ([exits_one_value_needed_statement]). [well_formed_unit] does not
-     ask it; it is a condition that the compiler's units meet, and a
-     row for requests/C0-well-formed.md.
+     ([exits_one_value_needed_statement]). It asks the same of a call
+     that returns to a continuation of the unit: one result, and no
+     extra argument with an exception that goes to one; otherwise the
+     rebuild makes the second result poison
+     ([call_exits_one_value_needed_statement]). [well_formed_unit] does
+     not ask it; it is a condition of well-formedness that the
+     compiler's units meet (the return arity of a call is that of its
+     continuation, and the continuation of the unit takes one value), not
+     a fault of the rebuild, and a row for requests/C0-well-formed.md.
    - [check_closed]: the solution is closed under the rules
      (FlambdaReaperSolutionSpec.check_closed_sound_statement).
    - [check_field_used_exact]: a field said to be used is one that a
@@ -353,8 +359,21 @@ Definition apply_cont_exits_one_value (u : unit_interface) (ac : apply_cont)
   then Nat.eqb (length (ac_args ac)) 1
   else true.
 
-(* Every [Apply_cont] of a continuation of the unit, in the expression or
-   in a handler of it, gives it one value. *)
+(* A call that returns to a continuation of the unit returns one value,
+   and one whose exception goes to a continuation of the unit passes no
+   extra argument with it. *)
+Definition apply_exits_one_value (u : unit_interface) (ap : apply_expr)
+    : bool :=
+  (if among (ap_continuation ap) [unit_return u; unit_exn u]
+   then Nat.eqb (length (unarize (ap_return_arity ap))) 1
+   else true)
+  && (if among (ap_exn_continuation ap) [unit_return u; unit_exn u]
+      then Nat.eqb (length (ap_exn_extra_args ap)) 0
+      else true).
+
+(* Every [Apply_cont] of a continuation of the unit, and every call that
+   returns to one, in the expression or in a handler of it, gives it one
+   value. *)
 Fixpoint exits_one_value (u : unit_interface) (e : expr) : bool :=
   match e with
   | Let _ _ _ body | Let_static _ body => exits_one_value u body
@@ -363,7 +382,8 @@ Fixpoint exits_one_value (u : unit_interface) (e : expr) : bool :=
   | Let_cont_recursive handlers body =>
     forallb (fun '(_, h) => handler_exits_one_value u h) handlers
     && exits_one_value u body
-  | Apply _ | Invalid => true
+  | Apply ap => apply_exits_one_value u ap
+  | Invalid => true
   | Apply_cont ac => apply_cont_exits_one_value u ac
   | Switch _ arms =>
     forallb (fun '(_, ac) => apply_cont_exits_one_value u ac) arms
@@ -1350,6 +1370,121 @@ Definition value_slots_example_statement : Prop :=
   ∧ observed_equal ValueSlotsExample.source_result
       ValueSlotsExample.rebuilt_result
   ∧ ValueSlotsExample.source_result <> ValueSlotsExample.rebuilt_result.
+
+(* The unit
+
+     let code f50 x40 =
+       let x42 = 8 in
+       return x40 x42                    (two values)
+     in
+     let x11 = closure f50 in
+     x11 7 -> return                     (a direct call to the unit)
+
+   meets the premises of the statements but [exits_one_value], which a
+   call that returns two values to the continuation of the unit fails.
+   The traversal gives that continuation one parameter, and aliases the
+   results of the call to its parameters as far as they go
+   ([apply_deps], as traverse.ml); the second result, [x42], has no use,
+   and the rebuild makes it poison. The unit exits with 7 and 8, the
+   rebuilt unit with 7 and poison: not even observed equal. The
+   compiler's units do not do this: the return arity of a call is that
+   of its continuation, and the continuation of the unit takes one value
+   (the module block), so [exits_one_value] is a condition of
+   well-formedness that they meet, as for [Apply_cont]. *)
+Module CallExitsExample.
+
+Local Open Scope positive_scope.
+
+Definition metadata : code_metadata :=
+  make_code_metadata [Singleton Value] [Singleton Value; Singleton Value].
+
+Definition two_results (second : simple) : expr :=
+  FlowExample.return_to 3 [Var 40; second].
+
+Definition call : apply_expr :=
+  {| ap_callee := Var 11; ap_call_kind := Direct 50;
+     ap_args := [Const (Tagged_immediate 7)];
+     ap_continuation := 1; ap_exn_continuation := 2;
+     ap_exn_extra_args := [];
+     ap_args_arity := [Singleton Value];
+     ap_return_arity := [Singleton Value; Singleton Value] |}.
+
+Definition unit_expr : expr :=
+  Let_static
+    [Bind_code 50
+       (Code [40] 41 3 4 metadata
+          (Let 42 Value (Simple (Const (Tagged_immediate 8)))
+             (two_results (Var 42))))]
+    (Let 11 Value (Closure_of_set 70 [(70, 50)] []) (Apply call)).
+
+Definition solution : tables :=
+  {| t_alias :=
+       [(Node_made 1, Node_made 3); (Node_made 10, Node_made 12);
+        (Node_made 11, Node_code_id 50); (Node_made 12, Node_made 8);
+        (Node_made 2, Node_made 5); (Node_made 3, Node_variable 40);
+        (Node_made 4, Node_variable 42); (Node_made 6, Node_variable 11);
+        (Node_made 7, Node_all_constants); (Node_variable 40, Node_made 7);
+        (Node_variable 41, Node_made 6);
+        (Node_variable 42, Node_all_constants)];
+     t_any_usage :=
+       [Node_all_constants; Node_code_id 50; Node_made 1; Node_made 11;
+        Node_made 2; Node_made 3; Node_made 5; Node_made 7; Node_variable 40];
+     t_any_source :=
+       [Node_all_constants; Node_code_id 50; Node_made 1; Node_made 11;
+        Node_made 3; Node_made 4; Node_made 7; Node_variable 40;
+        Node_variable 42];
+     t_has_usage :=
+       [Node_all_constants; Node_code_id 50; Node_made 1; Node_made 10;
+        Node_made 11; Node_made 12; Node_made 2; Node_made 3; Node_made 5;
+        Node_made 7; Node_made 8; Node_variable 11; Node_variable 40];
+     t_has_source :=
+       [Node_all_constants; Node_code_id 50; Node_made 1; Node_made 10;
+        Node_made 11; Node_made 12; Node_made 3; Node_made 4; Node_made 6;
+        Node_made 7; Node_made 8; Node_made 9; Node_variable 11;
+        Node_variable 40; Node_variable 41; Node_variable 42];
+     t_usages :=
+       [(Node_made 10, Node_made 10); (Node_made 12, Node_made 10);
+        (Node_made 8, Node_made 10); (Node_variable 11, Node_variable 11)];
+     t_sources :=
+       [(Node_made 10, Node_made 8); (Node_made 12, Node_made 8);
+        (Node_made 6, Node_variable 11); (Node_made 8, Node_made 8);
+        (Node_made 9, Node_made 9); (Node_variable 11, Node_variable 11);
+        (Node_variable 41, Node_variable 11)];
+     t_reading_field := [];
+     t_escaping_field := [];
+     t_field_used :=
+       [(Node_made 8, Field_code_id_of_call_witness);
+        (Node_made 8, Field_return_of_call (Normal 0%nat));
+        (Node_made 8, Field_return_of_call Exn);
+        (Node_variable 11, Field_call_witness Known_arity_code_pointer)] |}.
+
+Definition rebuilt : expr :=
+  Let_static
+    [Bind_code 50
+       (Code [40] 41 3 4 metadata (two_results (Const (Poison Value))))]
+    (Let 11 Value (Closure_of_set 70 [(70, 50)] []) (Apply call)).
+
+End CallExitsExample.
+
+Definition call_exits_one_value_needed_statement : Prop :=
+  in_flow_fragment CallExitsExample.unit_expr = true
+  ∧ results_kinded [] [] CallExitsExample.unit_expr = true
+  ∧ well_formed_unit FlowExample.interface CallExitsExample.unit_expr = true
+  ∧ exits_one_value FlowExample.interface CallExitsExample.unit_expr = false
+  ∧ check_closed FlowExample.is_local
+      (traverse_unit Never FlowExample.interface CallExitsExample.unit_expr)
+      CallExitsExample.solution
+    = true
+  ∧ check_field_used_exact FlowExample.is_local
+      (traverse_unit Never FlowExample.interface CallExitsExample.unit_expr)
+      CallExitsExample.solution
+    = true
+  ∧ rebuild_unit_from_tables
+      (traverse_unit Never FlowExample.interface CallExitsExample.unit_expr)
+      CallExitsExample.solution false CallExitsExample.unit_expr
+    = CallExitsExample.rebuilt
+  ∧ ~ program_refines_observably CallExitsExample.unit_expr
+        CallExitsExample.rebuilt.
 
 (* The unit of [closure_exit_counterexample_statement] meets
    [results_kinded], and its rebuild refines it up to observation. *)
