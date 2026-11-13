@@ -548,6 +548,12 @@ and `give_scrutinees`, and moves none of them: it comes before all
 of them in a round where they are, at the place of the load of
 blocks. That file is V2's: the two lines are asked of it.
 
+Since then the pass has been taken out of the two rounds, where it
+made the validation refuse units that it accepts without it, and
+is applied by a function beside the validation
+(`FlambdaValidateReadingSpec.v`; `status/P1.md`, "The known arrays
+read beside the validation"). 3.4 is of the rounds with the pass.
+
 ### 3.4 What it reaches
 
 Counted between the definitions of 2.2 and those with 3.2 and 3.3:
