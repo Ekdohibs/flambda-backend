@@ -93,11 +93,15 @@
    The rebuild with changes of calling convention refines its unit
    ([rebuild_cc_refines_observably_statement]) as the rebuild without
    does (FlambdaReaperRebuildSpec.rebuild_refines_observably_statement),
-   for now on the units whose calls return to handlers ([cc_fragment]):
-   no call of the unit returns to a continuation of the unit, no call of
-   code to a continuation of the code, none raises to the return
-   continuation of its code. The two units in which code calls in tail
-   position are not of it; [two_calls] is ([two_calls_refines_statement]).
+   for now on the units whose code that changes is returned to as
+   [check_cc_returns] says: a call in tail position in it is known to
+   call code that changes. Calls return anywhere else: to the
+   continuations of the unit, in tail position in code that does not
+   change, and in chains of calls in tail position through code that
+   changes, keeping other results or not. The three units above are
+   instances ([two_calls_refines_statement],
+   [poison_result_refines_statement],
+   [masked_return_refines_statement]).
    The statement asks of the table more than that it be closed and pass
    [check_cc_closed]: that the witnesses of known arity that calls read
    off a node have the same sources ([check_apply_widgets]), which the
@@ -266,12 +270,13 @@ with handler_calls_return_to_handlers (bound : list continuation)
 (* The units whose calls return to handlers: no call of the unit returns
    to a continuation of the unit, nor one of code to a continuation of
    the code, and none raises to the return continuation of its code. In
-   particular, the code makes no call in tail position. A step of the
-   proof that the rebuild with changes of calling convention refines,
-   which the unit of [two_calls_example_statement] meets, and those of
-   [poison_result_example_statement] and
+   particular, the code makes no call in tail position. An earlier step
+   of the proof that the rebuild with changes of calling convention
+   refines, which the unit of [two_calls_example_statement] meets, and
+   those of [poison_result_example_statement] and
    [masked_return_example_statement] do not
-   ([cc_fragment_examples_statement]). *)
+   ([cc_fragment_examples_statement]); the statement no longer asks
+   it. *)
 Definition cc_fragment (e : expr) : bool :=
   calls_return_to_handlers [] e
   && forallb
@@ -317,16 +322,133 @@ Definition check_apply_widgets (F : facts) (T : tables) : bool :=
          (f_accessor F))
     (f_accessor F).
 
+Section Returns.
+
+Variable F : facts.
+Variable sol : solution.
+Variable cannot_change : node -> bool.
+Variable code_deps : finite_map code_dep.
+Variable unit_code_ids : list code_id.
+Variable codes : finite_map code_metadata.
+
+(* What returns in [e] to [r], the return continuation of code that
+   changes its calling convention, whose results are of the kinds [K],
+   the variables having the kinds [E]: an [Apply_cont] gives it simples
+   of the kinds [K]; a call returns to it only if it is known to call
+   code that changes, and has the return arity [K]. Under a [Let_cont]
+   that binds [r] again, nothing; nor in a handler that does not have as
+   many kinds as parameters, which is never entered. The kinds are those
+   that [FlambdaReaperRebuildSpec.results_kinded] checks: what is asked
+   of the unit is [tail_calls_known]. *)
+Fixpoint ret_calls_ok (E : finite_map flambda_kind) (r : continuation)
+    (K : list flambda_kind) (e : expr) : bool :=
+  match e with
+  | Let x kind _ body => ret_calls_ok ((x, kind) :: E) r K body
+  | Let_static _ body => ret_calls_ok E r K body
+  | Let_cont_non_recursive k h body =>
+    handler_ret_calls_ok E r K h
+    && (Pos.eqb k r || ret_calls_ok E r K body)
+  | Let_cont_recursive handlers body =>
+    among r (map fst handlers)
+    || (forallb (fun '(_, h) => handler_ret_calls_ok E r K h) handlers
+        && ret_calls_ok E r K body)
+  | Apply ap =>
+    negb (Pos.eqb (ap_continuation ap) r)
+    || (kinds_eqb K (unarize (ap_return_arity ap))
+        && match
+             apply_calling_convention_change F sol cannot_change code_deps
+               unit_code_ids codes ap
+           with
+           | Changing_calling_convention _ _ => true
+           | Not_changing_calling_convention => false
+           end)
+  | Apply_cont ac =>
+    negb (Pos.eqb (ac_continuation ac) r) || simples_of_kinds E (ac_args ac) K
+  | Switch _ arms =>
+    forallb
+      (fun '(_, ac) =>
+         negb (Pos.eqb (ac_continuation ac) r)
+         || simples_of_kinds E (ac_args ac) K)
+      arms
+  | Invalid => true
+  end
+with handler_ret_calls_ok (E : finite_map flambda_kind) (r : continuation)
+    (K : list flambda_kind) (h : continuation_handler) : bool :=
+  match h with
+  | Handler params metadata handler =>
+    negb (Nat.eqb (length params) (length (hm_params_kinds metadata)))
+    || ret_calls_ok (rev (with_kinds params (hm_params_kinds metadata)) ++ E)
+         r K handler
+  end.
+
+(* A call in [e] returns to [r] only if it is known to call code that
+   changes its calling convention. Under a [Let_cont] that binds [r]
+   again, nothing. *)
+Fixpoint tail_calls_known (r : continuation) (e : expr) : bool :=
+  match e with
+  | Let _ _ _ body | Let_static _ body => tail_calls_known r body
+  | Let_cont_non_recursive k h body =>
+    handler_tail_calls_known r h && (Pos.eqb k r || tail_calls_known r body)
+  | Let_cont_recursive handlers body =>
+    among r (map fst handlers)
+    || (forallb (fun '(_, h) => handler_tail_calls_known r h) handlers
+        && tail_calls_known r body)
+  | Apply ap =>
+    negb (Pos.eqb (ap_continuation ap) r)
+    || match
+         apply_calling_convention_change F sol cannot_change code_deps
+           unit_code_ids codes ap
+       with
+       | Changing_calling_convention _ _ => true
+       | Not_changing_calling_convention => false
+       end
+  | Apply_cont _ | Switch _ _ | Invalid => true
+  end
+with handler_tail_calls_known (r : continuation) (h : continuation_handler)
+    : bool :=
+  match h with
+  | Handler _ _ handler => tail_calls_known r handler
+  end.
+
+End Returns.
+
+(* The code of the unit that changes its calling convention: a call in
+   tail position in it is known to call code that changes
+   ([tail_calls_known]). *)
+Definition check_cc_returns (F : facts) (T : tables)
+    (cannot_change : list node) (code_deps : finite_map code_dep) (e : expr)
+    : bool :=
+  forallb
+    (fun '(id, c) =>
+       match c with
+       | Code _ _ ret _ metadata body =>
+         match
+           code_calling_convention_change (solution_of_tables T)
+             (fun n => mem_node n cannot_change) code_deps
+             (static_names code_ids_bound e) id metadata
+         with
+         | Changing_calling_convention _ _ =>
+           tail_calls_known F (solution_of_tables T)
+                (fun n => mem_node n cannot_change) code_deps
+                (static_names code_ids_bound e) (bound_code_metadata e) ret
+                body
+         | Not_changing_calling_convention => true
+         end
+       end)
+    (unit_codes e).
+
 (* ======================================================================== *)
 (* The rebuild with changes of calling convention refines                    *)
 (* ======================================================================== *)
 
 (* The rebuild with changes of calling convention refines its unit, as
    FlambdaReaperRebuildSpec.rebuild_refines_observably_statement says of
-   the rebuild without, for the units of [cc_fragment], with a table that
-   passes [check_cc_closed], and a table of the solution whose witnesses
-   read off a node agree ([check_apply_widgets]), from facts whose
-   witnesses give one code id each ([check_witness_code_ids]). *)
+   the rebuild without, with a table that passes [check_cc_closed], and a
+   table of the solution whose witnesses read off a node agree
+   ([check_apply_widgets]), from facts whose witnesses give one code id
+   each ([check_witness_code_ids]), for the units whose code that changes
+   is returned to as [check_cc_returns] says: a call in tail position in
+   code that changes is known to call code that changes. *)
 Definition rebuild_cc_refines_observably_statement : Prop :=
   ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
     (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
@@ -335,7 +457,9 @@ Definition rebuild_cc_refines_observably_statement : Prop :=
     (∀ f : field, is_local f = false) ∨ projection_free e = true ->
     in_flow_fragment e = true ->
     static_constants (unit_codes e) e = true ->
-    cc_fragment e = true ->
+    check_cc_returns (traverse_unit flag u e) T cannot_change
+      (unit_code_deps flag u e) e
+    = true ->
     results_kinded [] [] e = true ->
     well_formed_unit u e = true ->
     exits_one_value u e = true ->
@@ -761,9 +885,11 @@ Definition cc_fragment_examples_statement : Prop :=
    nothing reads that node but through an alias that holds only where
    [f51] is used, which it is not; and it passes [check_cc_closed] with
    no code in the table, as the rules read the witnesses of the calls
-   only through that alias. But [code_id_actually_directly_called] reads
-   every witness read off [s80], that of [f51] included, and finds one
-   with any source: the call of the unit is not known to call [f50], is
+   only through that alias; and it passes [check_cc_returns], no code
+   making a call in tail position. But
+   [code_id_actually_directly_called] reads every witness read off
+   [s80], that of [f51] included, and finds one with any source: the
+   call of the unit is not known to call [f50], is
    rebuilt by [FlambdaReaperRebuild.rebuild_apply], with its two
    arguments, and calls the rebuilt [f50], which takes one. The rebuilt
    unit goes wrong, whatever [preserve_direct_calls].
@@ -893,6 +1019,11 @@ Definition spurious_widget_counterexample_statement : Prop :=
   ∧ check_cc_closed SpuriousWidgetExample.unit_facts
       SpuriousWidgetExample.spurious []
     = true
+  ∧ check_cc_returns SpuriousWidgetExample.unit_facts
+      SpuriousWidgetExample.spurious []
+      (unit_code_deps Auto Examples.interface SpuriousWidgetExample.unit_expr)
+      SpuriousWidgetExample.unit_expr
+    = true
   ∧ check_apply_widgets SpuriousWidgetExample.unit_facts
       SpuriousWidgetExample.least
     = true
@@ -912,10 +1043,28 @@ Definition spurious_widget_counterexample_statement : Prop :=
    [rebuild_cc_refines_observably_statement] (with
    [two_calls_example_statement] and [cc_fragment_examples_statement]):
    its rebuild, in which code changes its calling convention, refines
-   it. *)
+   it. So do the units of [poison_result_example_statement], where a call
+   in tail position in code that keeps its calling convention returns
+   through the wrapper of [make_apply_wrapper_cc], and of
+   [masked_return_example_statement], where one in code that changes
+   returns to its return continuation directly. *)
 Definition two_calls_refines_statement : Prop :=
   program_refines_observably Examples.two_calls
     (rebuild_unit_cc_from_tables Examples.two_calls_facts
        Examples.two_calls_tables []
        (unit_code_deps Auto Examples.interface Examples.two_calls) true
        Examples.two_calls).
+
+Definition poison_result_refines_statement : Prop :=
+  program_refines_observably PoisonResultExample.unit_expr
+    (rebuild_unit_cc_from_tables PoisonResultExample.unit_facts
+       PoisonResultExample.solution [Node_code_id 52%positive]
+       (unit_code_deps Auto Examples.interface PoisonResultExample.unit_expr)
+       true PoisonResultExample.unit_expr).
+
+Definition masked_return_refines_statement : Prop :=
+  program_refines_observably MaskedReturnExample.unit_expr
+    (rebuild_unit_cc_from_tables MaskedReturnExample.unit_facts
+       MaskedReturnExample.solution []
+       (unit_code_deps Auto Examples.interface MaskedReturnExample.unit_expr)
+       true MaskedReturnExample.unit_expr).

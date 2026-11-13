@@ -468,7 +468,7 @@ Theorem spurious_widget_counterexample :
 Proof.
   do 9 (split; [ vm_compute; reflexivity | ]).
   split; [ exists 30; vm_compute; reflexivity | ].
-  do 5 (split; [ vm_compute; reflexivity | ]).
+  do 6 (split; [ vm_compute; reflexivity | ]).
   assert (Hsource :
     behaves
       (State SpuriousWidgetExample.unit_expr [] [] empty_static_env
@@ -490,6 +490,29 @@ Proof.
   discriminate Heq.
 Qed.
 
+(* What [check_cc_returns] says of the code that changes. *)
+Lemma check_cc_returns_sound (F : facts) (T : tables)
+    (cannot_change : list node) (code_deps : finite_map code_dep) (e : expr) :
+  check_cc_returns F T cannot_change code_deps e = true ->
+  ∀ (id : code_id) (params : list variable) (mc : variable)
+    (ret exn : continuation) (md : code_metadata) (body : expr)
+    (pd rd : list param_decision),
+    (id, Code params mc ret exn md body) ∈ FlambdaReaperFlowSpec.unit_codes e ->
+    code_calling_convention_change (solution_of_tables T)
+      (fun n => mem_node n cannot_change) code_deps
+      (static_names code_ids_bound e) id md
+    = Changing_calling_convention pd rd ->
+    tail_calls_known F (solution_of_tables T)
+      (fun n => mem_node n cannot_change) code_deps
+      (static_names code_ids_bound e) (bound_code_metadata e) ret body
+    = true.
+Proof.
+  intros Hcheck id params mc ret exn md body pd rd Hin Hch.
+  unfold check_cc_returns in Hcheck. rewrite forallb_forall in Hcheck.
+  specialize (Hcheck _ Hin). cbv beta iota in Hcheck. rewrite Hch in Hcheck.
+  exact Hcheck.
+Qed.
+
 Theorem rebuild_cc_refines_observably :
   rebuild_cc_refines_observably_statement.
 Proof.
@@ -505,7 +528,8 @@ Proof.
                   b Hlocal Hslots Hfrag
                   (proj1 (FlambdaReaperRebuildProofs.static_constants_checked
                             (FlambdaReaperFlowSpec.unit_codes e)) e Hdc)
-                  Hkinded Hwf Hexits Hcheck Hcheck_exact Hccf Hcl
+                  Hkinded Hwf Hexits Hcheck Hcheck_exact
+                  (check_cc_returns_sound _ _ _ _ _ Hccf) Hrk Hcl
                   (check_apply_widgets_sound _ _ Hwid)
                   (check_witness_code_ids_sound _ Hcid))).
 Qed.
@@ -515,6 +539,26 @@ Proof.
   apply (rebuild_cc_refines_observably Auto Examples.no_local
            Examples.interface Examples.two_calls Examples.two_calls_tables []
            true);
+    try (vm_compute; reflexivity).
+  - intros f H. discriminate H.
+  - left. intros f. reflexivity.
+Qed.
+
+Theorem poison_result_refines : poison_result_refines_statement.
+Proof.
+  apply (rebuild_cc_refines_observably Auto Examples.no_local
+           Examples.interface PoisonResultExample.unit_expr
+           PoisonResultExample.solution [Node_code_id 52%positive] true);
+    try (vm_compute; reflexivity).
+  - intros f H. discriminate H.
+  - left. intros f. reflexivity.
+Qed.
+
+Theorem masked_return_refines : masked_return_refines_statement.
+Proof.
+  apply (rebuild_cc_refines_observably Auto Examples.no_local
+           Examples.interface MaskedReturnExample.unit_expr
+           MaskedReturnExample.solution [] true);
     try (vm_compute; reflexivity).
   - intros f H. discriminate H.
   - left. intros f. reflexivity.
