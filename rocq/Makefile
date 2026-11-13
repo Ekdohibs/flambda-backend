@@ -198,6 +198,8 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   FlambdaKindModel.v \
   FlambdaKnownClosuresProofs.v \
   FlambdaKnownClosuresSpec.v \
+  FlambdaKnownSiblingsProofs.v \
+  FlambdaKnownSiblingsSpec.v \
   FlambdaKnownSlotsProofs.v \
   FlambdaKnownSlotsSpec.v \
   FlambdaKnownSymbolsProofs.v \
