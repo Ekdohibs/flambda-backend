@@ -121,7 +121,7 @@ let simples_of_static_const = function
 (** val simples_of_binding : static_binding -> simple list **)
 
 let simples_of_binding = function
-  | Bind_symbol (_, const) -> simples_of_static_const const
+  | Bind_symbol (_, const0) -> simples_of_static_const const0
   | _ -> []
 
 (** val evaluated_simples : expr -> simple list **)
@@ -707,10 +707,10 @@ let simple_below base = function
 
 (** val static_const_below : symbol -> static_const -> bool **)
 
-let static_const_below base const =
-  forallb (simple_below base) (simples_of_static_const const)
+let static_const_below base const0 =
+  forallb (simple_below base) (simples_of_static_const const0)
   &&
-  match const with
+  match const0 with
   | Static_const_closure_of_set (_, closure_symbols, _, _) ->
     forallb
       (fun pat ->
@@ -763,8 +763,8 @@ and handler_below base = function
 and binding_below base = function
   | Bind_code (_, c) -> code_below base c
   | Bind_deleted_code _ -> true
-  | Bind_symbol (s, const) ->
-    symbol_below base s && static_const_below base const
+  | Bind_symbol (s, const0) ->
+    symbol_below base s && static_const_below base const0
 
 (** val code_below : symbol -> code -> bool **)
 
@@ -836,3 +836,337 @@ let statics_below base statics =
 
 let region_names_fresh base e statics =
   expr_below base e && statics_below base statics
+
+(** val unit_simple : simple **)
+
+let unit_simple = Const (Tagged_immediate Z0)
+
+(** val erase_region_primitive : variable -> region_primitive -> simple list ->
+    named option **)
+
+let erase_region_primitive x p args =
+  match p with
+  | End_region -> (
+    match args with
+    | [] -> Some (Prim (Region_primitive p, args))
+    | _ :: l -> (
+      match l with
+      | [] -> Some (Simple unit_simple)
+      | _ :: _ -> Some (Prim (Region_primitive p, args))))
+  | End_try_region -> (
+    match args with
+    | [] -> Some (Prim (Region_primitive p, args))
+    | _ :: l -> (
+      match l with
+      | [] -> Some (Prim (Unary (Opaque_identity Value), unit_simple :: []))
+      | _ :: _ -> Some (Prim (Region_primitive p, args))))
+  | Local_allocation -> (
+    match args with
+    | [] -> Some (Prim (Region_primitive p, args))
+    | s :: _ -> (
+      match s with
+      | Var y -> if Pos.eqb x y then None else Some (Simple (Var y))
+      | _ -> Some (Prim (Region_primitive p, args))))
+  | _ -> (
+    match args with
+    | [] -> None
+    | _ :: _ -> Some (Prim (Region_primitive p, args)))
+
+(** val drop_regions : bool list -> 'a1 list -> 'a1 list **)
+
+let rec drop_regions places l =
+  match places with
+  | [] -> l
+  | place :: places0 -> (
+    match l with
+    | [] -> []
+    | a :: l0 ->
+      if place then drop_regions places0 l0 else a :: drop_regions places0 l0)
+
+type region_conts = (continuation * bool list) list
+
+(** val erase_apply_cont : region_conts -> apply_cont -> apply_cont **)
+
+let erase_apply_cont conts ac =
+  match lookup ac.ac_continuation conts with
+  | Some places ->
+    { ac_continuation = ac.ac_continuation;
+      ac_args = drop_regions places ac.ac_args;
+      ac_trap_action = ac.ac_trap_action
+    }
+  | None -> ac
+
+(** val erase : region_conts -> expr -> expr **)
+
+let rec erase conts e =
+  match e with
+  | Let (x, kind, defining_expr, body) -> (
+    match defining_expr with
+    | Prim (p0, args) -> (
+      match p0 with
+      | Region_primitive p -> (
+        match erase_region_primitive x p args with
+        | Some defining_expr0 -> Let (x, kind, defining_expr0, erase conts body)
+        | None -> erase conts body)
+      | _ -> Let (x, kind, defining_expr, erase conts body))
+    | _ -> Let (x, kind, defining_expr, erase conts body))
+  | Let_static (bindings, body) ->
+    Let_static (map erase_binding bindings, erase conts body)
+  | Let_cont_non_recursive (k, h, body) ->
+    Let_cont_non_recursive
+      (k, erase_handler conts h, erase ((k, region_params h) :: conts) body)
+  | Let_cont_recursive (handlers, body) ->
+    let conts' =
+      app
+        (map
+           (fun pat ->
+             let k, h = pat in
+             k, region_params h)
+           handlers)
+        conts
+    in
+    Let_cont_recursive
+      ( map
+          (fun pat ->
+            let k, h = pat in
+            k, erase_handler conts' h)
+          handlers,
+        erase conts' body )
+  | Apply_cont ac -> Apply_cont (erase_apply_cont conts ac)
+  | Switch (scrutinee, arms) ->
+    Switch
+      ( scrutinee,
+        map
+          (fun pat ->
+            let i, ac = pat in
+            i, erase_apply_cont conts ac)
+          arms )
+  | _ -> e
+
+(** val erase_handler : region_conts -> continuation_handler ->
+    continuation_handler **)
+
+and erase_handler conts = function
+  | Handler (params, metadata, handler) ->
+    let places =
+      map (fun kind -> kind_eqb kind Region) metadata.hm_params_kinds
+    in
+    Handler
+      ( drop_regions places params,
+        { hm_params_kinds = drop_regions places metadata.hm_params_kinds;
+          hm_is_exn_handler = metadata.hm_is_exn_handler
+        },
+        erase conts handler )
+
+(** val erase_binding : static_binding -> static_binding **)
+
+and erase_binding binding =
+  match binding with
+  | Bind_code (id, c) -> Bind_code (id, erase_code c)
+  | _ -> binding
+
+(** val erase_code : code -> code **)
+
+and erase_code = function
+  | Code
+      (params, my_closure, return_continuation, exn_continuation, metadata, body)
+    ->
+    Code
+      ( params,
+        my_closure,
+        return_continuation,
+        exn_continuation,
+        metadata,
+        erase [] body )
+
+(** val takes_no_region : region_conts -> continuation -> bool **)
+
+let takes_no_region conts k =
+  match lookup k conts with
+  | Some places -> negb (existsb (fun place -> place) places)
+  | None -> true
+
+(** val calls_return_no_region : region_conts -> expr -> bool **)
+
+let rec calls_return_no_region conts = function
+  | Let (_, _, _, body) -> calls_return_no_region conts body
+  | Let_static (bindings, body) ->
+    forallb binding_returns_no_region bindings
+    && calls_return_no_region conts body
+  | Let_cont_non_recursive (k, h, body) ->
+    handler_returns_no_region conts h
+    && calls_return_no_region ((k, region_params h) :: conts) body
+  | Let_cont_recursive (handlers, body) ->
+    let conts' =
+      app
+        (map
+           (fun pat ->
+             let k, h = pat in
+             k, region_params h)
+           handlers)
+        conts
+    in
+    forallb
+      (fun pat ->
+        let _, h = pat in
+        handler_returns_no_region conts' h)
+      handlers
+    && calls_return_no_region conts' body
+  | Apply ap ->
+    takes_no_region conts ap.ap_continuation
+    && takes_no_region conts ap.ap_exn_continuation
+  | _ -> true
+
+(** val handler_returns_no_region : region_conts -> continuation_handler -> bool
+    **)
+
+and handler_returns_no_region conts = function
+  | Handler (_, _, handler) -> calls_return_no_region conts handler
+
+(** val binding_returns_no_region : static_binding -> bool **)
+
+and binding_returns_no_region = function
+  | Bind_code (_, c) -> code_returns_no_region c
+  | _ -> true
+
+(** val code_returns_no_region : code -> bool **)
+
+and code_returns_no_region = function
+  | Code (_, _, _, _, _, body) -> calls_return_no_region [] body
+
+(** val statics_return_no_region : static_env -> bool **)
+
+let statics_return_no_region statics =
+  forallb
+    (fun pat ->
+      let _, c = pat in
+      code_returns_no_region c)
+    statics.static_code
+
+(** val const_no_region_poison : const -> bool **)
+
+let const_no_region_poison = function
+  | Poison kind -> negb (kind_eqb kind Region)
+  | _ -> true
+
+(** val simple_no_region_poison : simple -> bool **)
+
+let simple_no_region_poison = function
+  | Const c -> const_no_region_poison c
+  | _ -> true
+
+(** val apply_cont_no_region_poison : apply_cont -> bool **)
+
+let apply_cont_no_region_poison ac = forallb simple_no_region_poison ac.ac_args
+
+(** val no_region_poison : expr -> bool **)
+
+let rec no_region_poison = function
+  | Let (_, _, defining_expr, body) ->
+    forallb simple_no_region_poison (simples_of_named defining_expr)
+    && no_region_poison body
+  | Let_static (bindings, body) ->
+    forallb binding_no_region_poison bindings && no_region_poison body
+  | Let_cont_non_recursive (_, h, body) ->
+    handler_no_region_poison h && no_region_poison body
+  | Let_cont_recursive (handlers, body) ->
+    forallb
+      (fun pat ->
+        let _, h = pat in
+        handler_no_region_poison h)
+      handlers
+    && no_region_poison body
+  | Apply ap ->
+    forallb simple_no_region_poison
+      (ap.ap_callee :: app ap.ap_args (exn_extra_simples ap))
+  | Apply_cont ac -> apply_cont_no_region_poison ac
+  | Switch (scrutinee, arms) ->
+    simple_no_region_poison scrutinee
+    && forallb
+         (fun pat ->
+           let _, ac = pat in
+           apply_cont_no_region_poison ac)
+         arms
+  | Invalid -> true
+
+(** val handler_no_region_poison : continuation_handler -> bool **)
+
+and handler_no_region_poison = function
+  | Handler (_, _, handler) -> no_region_poison handler
+
+(** val binding_no_region_poison : static_binding -> bool **)
+
+and binding_no_region_poison = function
+  | Bind_code (_, c) -> code_no_region_poison c
+  | Bind_deleted_code _ -> true
+  | Bind_symbol (_, const0) ->
+    forallb simple_no_region_poison (simples_of_static_const const0)
+
+(** val code_no_region_poison : code -> bool **)
+
+and code_no_region_poison = function
+  | Code (_, _, _, _, _, body) -> no_region_poison body
+
+(** val value_no_region_poison : value -> bool **)
+
+let rec value_no_region_poison = function
+  | Value_const c -> const_no_region_poison c
+  | Value_closure (_, value_slots) ->
+    forallb
+      (fun pat ->
+        let _, v0 = pat in
+        value_no_region_poison v0)
+      value_slots
+  | Value_closure_of_set (_, _, value_slots) ->
+    forallb
+      (fun pat ->
+        let _, v0 = pat in
+        value_no_region_poison v0)
+      value_slots
+  | Value_block (_, fields) -> forallb value_no_region_poison fields
+  | Value_immutable_array elements -> forallb value_no_region_poison elements
+  | Value_boxed_number c -> const_no_region_poison c
+  | Value_partial_application (callee, args, _) ->
+    value_no_region_poison callee && forallb value_no_region_poison args
+  | _ -> true
+
+(** val allocated_no_region_poison : statically_allocated_value -> bool **)
+
+let allocated_no_region_poison = function
+  | Static_closure (_, value_slots) ->
+    forallb
+      (fun pat ->
+        let _, v = pat in
+        value_no_region_poison v)
+      value_slots
+  | Static_closure_of_set (_, _, _, value_slots) ->
+    forallb
+      (fun pat ->
+        let _, v = pat in
+        value_no_region_poison v)
+      value_slots
+  | Static_block (_, fields) -> forallb value_no_region_poison fields
+  | Static_boxed_number contents -> value_no_region_poison contents
+  | Static_immutable_array elements -> forallb value_no_region_poison elements
+  | _ -> true
+
+(** val statics_no_region_poison : static_env -> bool **)
+
+let statics_no_region_poison statics =
+  forallb
+    (fun pat ->
+      let _, c = pat in
+      code_no_region_poison c)
+    statics.static_code
+  && forallb
+       (fun pat ->
+         let _, allocated = pat in
+         allocated_no_region_poison allocated)
+       statics.static_values
+
+(** val erasable : expr -> static_env -> bool **)
+
+let erasable e statics =
+  ((calls_return_no_region [] e && statics_return_no_region statics)
+  && no_region_poison e)
+  && statics_no_region_poison statics

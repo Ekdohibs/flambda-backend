@@ -219,6 +219,8 @@ Separate Extraction
   drop_unused_params
   empty_heap
   empty_static_env
+  erasable
+  erase
   expr_eqb
   filter_bindings
   fold_constants

@@ -212,3 +212,56 @@ val allocated_below : symbol -> statically_allocated_value -> bool
 val statics_below : symbol -> static_env -> bool
 
 val region_names_fresh : symbol -> expr -> static_env -> bool
+
+val unit_simple : simple
+
+val erase_region_primitive :
+  variable -> region_primitive -> simple list -> named option
+
+val drop_regions : bool list -> 'a1 list -> 'a1 list
+
+type region_conts = (continuation * bool list) list
+
+val erase_apply_cont : region_conts -> apply_cont -> apply_cont
+
+val erase : region_conts -> expr -> expr
+
+val erase_handler : region_conts -> continuation_handler -> continuation_handler
+
+val erase_binding : static_binding -> static_binding
+
+val erase_code : code -> code
+
+val takes_no_region : region_conts -> continuation -> bool
+
+val calls_return_no_region : region_conts -> expr -> bool
+
+val handler_returns_no_region : region_conts -> continuation_handler -> bool
+
+val binding_returns_no_region : static_binding -> bool
+
+val code_returns_no_region : code -> bool
+
+val statics_return_no_region : static_env -> bool
+
+val const_no_region_poison : const -> bool
+
+val simple_no_region_poison : simple -> bool
+
+val apply_cont_no_region_poison : apply_cont -> bool
+
+val no_region_poison : expr -> bool
+
+val handler_no_region_poison : continuation_handler -> bool
+
+val binding_no_region_poison : static_binding -> bool
+
+val code_no_region_poison : code -> bool
+
+val value_no_region_poison : value -> bool
+
+val allocated_no_region_poison : statically_allocated_value -> bool
+
+val statics_no_region_poison : static_env -> bool
+
+val erasable : expr -> static_env -> bool
