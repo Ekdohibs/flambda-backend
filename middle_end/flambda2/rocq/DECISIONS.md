@@ -162,6 +162,42 @@ a `CR` at the place in the `Spec` file.
   validation and changes none of it: the tool prints what it accepts
   on a line of its own under "not validated", and such a unit is in
   no count of the units validated. Open: the human's to choose.
+- **D49.** A view of mutable data as immutable:
+  `Bytes.unsafe_to_string` and `%array_to_iarray`. Ruled, in the
+  source's terms: "Regarding Bytes.unsafe_to_string, the semantics of
+  this function are intended to be that modification of the Bytes
+  during the period when the returned String is live are UB. Same for
+  the function producing an immutable array from a mutable one." Both
+  conversions are erased before Flambda 2
+  (`from_lambda/lambda_to_lambda_transforms.ml`): the term has no
+  view, a load through one is a string load, or an array load marked
+  `Immutable`, of the bytes or of the array itself, and the term does
+  not say which view a load was through, nor where a view was made.
+  Decided for the model, to be made with the bytes and the arrays of
+  the heap: such a load of a cell that can be written is to read the
+  cell as it is, and a later write to a cell that such a load has read
+  is to be undefined. That is not the rule. For a lend it is stricter:
+  it calls undefined a program that the rule defines, one whose view
+  is dead before the write (use-case 2 of `stdlib/bytes.mli`). And it
+  gives a meaning to a write made after a view and before the first
+  read through it, which the rule makes undefined. The departure is
+  deliberate: the compiler gives these loads no coeffect
+  (`effects_and_coeffects_of_binary_primitive` of
+  `terms/flambda_primitive.ml`), and the move of a load in X5-3 relies
+  on what it read not changing. The tool is then to list the units
+  concerned: for a unit whose run writes a cell that such a load has
+  read, it is to make a second pair of runs in which the write is
+  carried out, and to print one line more, which says that the unit
+  does this and whether the two runs of the second pair, before and
+  after Simplify, are the same or differ. The line is not to use the
+  word by which the tool marks a difference of the runs it validates,
+  and such a unit is to be in no count of the units validated. Not in
+  the model yet: meanwhile an array load marked `Immutable` of an
+  array that can be written has no value, and the model has no bytes
+  (`FlambdaHeapSpec.exec_binary_on_cell`, with its `CR`). Open, and
+  the human's: whether the rule is to be his, or one under which the
+  move of X5-3 is right, that bytes of which a view has been read are
+  never written again.
 
 ## Discrepancies with the compiler
 

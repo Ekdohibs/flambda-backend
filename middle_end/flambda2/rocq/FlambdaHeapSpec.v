@@ -315,7 +315,7 @@ Definition exec_unary_on_cell (p : unary_primitive) (l : location) (c : cell)
    ([%array_to_iarray], which is the identity): the model refuses
    that program. Whether the reads of an array so frozen are stable is
    the question that decision 4 of requests/C4-heap.md asks of the
-   fields of blocks. *)
+   fields of blocks. Decision D49. *)
 Definition exec_binary_on_cell (p : binary_primitive) (l : location)
     (c : cell) (v2 : value) : option value :=
   match c, p with
