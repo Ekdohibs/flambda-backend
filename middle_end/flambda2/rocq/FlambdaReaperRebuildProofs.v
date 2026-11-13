@@ -175,7 +175,16 @@
    The two statements are the two modes of one proof
    ([rebuild_refines_checked]): [rebuild_refines] with [exact], for
    which a closure has no value slot, and [rebuild_refines_observably]
-   without. *)
+   without.
+
+   The second run is that of the rebuild with changes of calling
+   convention (FlambdaReaperCallingConventions.rebuild_expr_cc), with a
+   table that has every code of the unit ([Hunchanged]): that rebuild is
+   [rebuild_expr] case for case ([rebuild_expr_cc_unchanged]), and
+   [rebuild_refines_checked] runs it with the table that has everything.
+   The uses of [Hunchanged] ([code_change_unchanged],
+   [rebuild_apply_unchanged]) are where code that changes its calling
+   convention is to be taken in. *)
 
 From Stdlib Require Import ZArith List Bool Arith Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
@@ -188,7 +197,8 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaReaperSolutionProofs FlambdaReaperFlowSpec FlambdaReaperFlowProofs
   FlambdaNameAbstractionSpec FlambdaNameAbstractionProofs
   FlambdaFreshQuantifierSpec FlambdaRenameApartSpec
-  FlambdaReaperRebuild FlambdaReaperRebuildSpec.
+  FlambdaReaperRebuild FlambdaReaperRebuildSpec
+  FlambdaReaperCallingConventions.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -1388,6 +1398,109 @@ Fixpoint spine (e : expr) : nat :=
 Definition measure (s : state) : nat := spine (state_expr s).
 
 (* ======================================================================== *)
+(* The rebuild with no change of calling convention                         *)
+(* ======================================================================== *)
+
+(* The rebuild with changes of calling convention
+   (FlambdaReaperCallingConventions.v) is [rebuild_expr], case for case,
+   where no code of the unit changes: the runs below are of the first,
+   and so of the second. *)
+Section Unchanged.
+
+Variable F : facts.
+Variable sol : solution.
+Variable cannot_change : node -> bool.
+Variable code_deps : finite_map code_dep.
+Variable preserve_direct_calls : bool.
+Variable unit_code_ids : list code_id.
+Variable codes : finite_map code_metadata.
+Variable first_fresh : BinNums.positive.
+
+(* Every code of the unit is in the table. *)
+Hypothesis Hall : ∀ id : code_id,
+  among id unit_code_ids = true -> cannot_change (Node_code_id id) = true.
+
+Lemma code_calling_convention_change_unchanged : ∀ id metadata,
+  code_calling_convention_change sol cannot_change code_deps unit_code_ids id
+    metadata = Not_changing_calling_convention.
+Proof.
+  intros id metadata. unfold code_calling_convention_change,
+    cannot_change_calling_convention.
+  destruct (among id unit_code_ids) eqn:Hamong; [ | reflexivity ].
+  rewrite Hall by exact Hamong. reflexivity.
+Qed.
+
+(* A call changes no calling convention. *)
+Lemma rebuild_apply_cc_unchanged : ∀ en ap,
+  rebuild_apply_cc F sol cannot_change code_deps preserve_direct_calls
+    unit_code_ids codes first_fresh en ap
+  = rebuild_apply F sol preserve_direct_calls unit_code_ids first_fresh en ap.
+Proof.
+  intros en ap. unfold rebuild_apply_cc, apply_calling_convention_change.
+  destruct (code_id_actually_called F sol ap) as [id | ]; [ | reflexivity ].
+  unfold get_calling_convention_change.
+  destruct (lookup id codes) as [metadata | ]; [ | reflexivity ].
+  rewrite code_calling_convention_change_unchanged. reflexivity.
+Qed.
+
+(* The two rebuilds are the same, case for case. *)
+Fixpoint rebuild_expr_cc_unchanged (en : rebuild_env) (e : expr) {struct e} :
+  rebuild_expr_cc F sol cannot_change code_deps preserve_direct_calls
+    unit_code_ids codes first_fresh en e
+  = rebuild_expr F sol preserve_direct_calls unit_code_ids first_fresh en e
+with rebuild_handler_cc_unchanged (en : rebuild_env) (dead_check : bool)
+    (mask : list bool) (h : continuation_handler) {struct h} :
+  rebuild_handler_cc F sol cannot_change code_deps preserve_direct_calls
+    unit_code_ids codes first_fresh en dead_check mask h
+  = rebuild_handler F sol preserve_direct_calls unit_code_ids first_fresh en
+      dead_check mask h
+with rebuild_binding_cc_unchanged (en : rebuild_env)
+    (binding : static_binding) {struct binding} :
+  rebuild_binding_cc F sol cannot_change code_deps preserve_direct_calls
+    unit_code_ids codes first_fresh en binding
+  = rebuild_binding F sol preserve_direct_calls unit_code_ids first_fresh en
+      binding
+with rebuild_code_cc_unchanged (id : code_id) (c : code) {struct c} :
+  rebuild_code_cc F sol cannot_change code_deps preserve_direct_calls
+    unit_code_ids codes first_fresh id c
+  = rebuild_code F sol preserve_direct_calls unit_code_ids first_fresh c.
+Proof.
+  - destruct e as [x kind defining_expr body | bindings body | k h body
+                  | handlers body | ap | ac | scrutinee arms | ].
+    + simpl. destruct (is_pending_projection en x defining_expr).
+      * rewrite rebuild_expr_cc_unchanged. reflexivity.
+      * destruct defining_expr; rewrite ?rebuild_expr_cc_unchanged;
+          reflexivity.
+    + simpl. rewrite rebuild_expr_cc_unchanged. f_equal.
+      induction bindings as [ | binding bindings IH ]; [ reflexivity | ].
+      simpl. rewrite rebuild_binding_cc_unchanged, IH.
+      reflexivity.
+    + simpl. rewrite rebuild_expr_cc_unchanged.
+      rewrite rebuild_handler_cc_unchanged. reflexivity.
+    + simpl.
+      set (en' := bind_continuations en _).
+      rewrite rebuild_expr_cc_unchanged. f_equal. clearbody en'.
+      induction handlers as [ | [k h] handlers IH ]; [ reflexivity | ].
+      simpl. rewrite rebuild_handler_cc_unchanged, IH. reflexivity.
+    + apply rebuild_apply_cc_unchanged.
+    + reflexivity.
+    + reflexivity.
+    + reflexivity.
+  - destruct h as [params metadata handler]. simpl.
+    rewrite rebuild_expr_cc_unchanged. reflexivity.
+  - destruct binding as [id c | id | s const]; simpl.
+    + rewrite rebuild_code_cc_unchanged. reflexivity.
+    + reflexivity.
+    + reflexivity.
+  - destruct c as [params my_closure return_continuation exn_continuation
+                   metadata body].
+    simpl. rewrite code_calling_convention_change_unchanged.
+    rewrite rebuild_expr_cc_unchanged. reflexivity.
+Qed.
+
+End Unchanged.
+
+(* ======================================================================== *)
 (* The two runs                                                             *)
 (* ======================================================================== *)
 
@@ -1425,6 +1538,12 @@ Variable preserve_direct_calls : bool.
 Variable unit_code_ids : list code_id.
 Variable first_fresh : positive.
 Variable exact : bool.
+(* The table of [cannot_change_calling_convention], the code deps and the
+   metadata of the code of the unit, of the rebuild with changes of
+   calling convention (FlambdaReaperCallingConventions.v). *)
+Variable cannot_change : node -> bool.
+Variable code_deps : finite_map code_dep.
+Variable code_metadatas : finite_map code_metadata.
 
 Hypothesis Hc : closed is_local G sol.
 Hypothesis Hlocal : is_local_slots_only is_local.
@@ -1460,6 +1579,10 @@ Hypothesis Hkeep_alive :
   ∀ (id : code_id) (c : code) (cd : code_dep),
     (id, c) ∈ codes -> code_is_tupled c = true -> lookup id cds = Some cd ->
     tupled_kept G id cd.
+(* No code of the unit changes its calling convention. *)
+Hypothesis Hunchanged :
+  ∀ id : code_id,
+    among id unit_code_ids = true -> cannot_change (Node_code_id id) = true.
 
 Abbreviation slots := (∀ f : field, is_local f = false).
 Abbreviation called := (called_by G cds).
@@ -1482,13 +1605,37 @@ Abbreviation field_rel := (field_rel G sol keep called (exact = true) True).
 Abbreviation slot_rel := (slot_rel G sol keep called (exact = true) True).
 Abbreviation sim := (sim sol (exact = true) True).
 Abbreviation rebuild :=
-  (rebuild_expr F sol preserve_direct_calls unit_code_ids first_fresh).
+  (rebuild_expr_cc F sol cannot_change code_deps preserve_direct_calls
+     unit_code_ids code_metadatas first_fresh).
 Abbreviation rebuild_h :=
-  (rebuild_handler F sol preserve_direct_calls unit_code_ids first_fresh).
+  (rebuild_handler_cc F sol cannot_change code_deps preserve_direct_calls
+     unit_code_ids code_metadatas first_fresh).
 Abbreviation rebuild_b :=
-  (rebuild_binding F sol preserve_direct_calls unit_code_ids first_fresh).
+  (rebuild_binding_cc F sol cannot_change code_deps preserve_direct_calls
+     unit_code_ids code_metadatas first_fresh).
 Abbreviation rebuild_c :=
-  (rebuild_code F sol preserve_direct_calls unit_code_ids first_fresh).
+  (rebuild_code_cc F sol cannot_change code_deps preserve_direct_calls
+     unit_code_ids code_metadatas first_fresh).
+
+(* No code changes its calling convention, nor any call. *)
+Lemma code_change_unchanged (id : code_id) (md : code_metadata) :
+  code_calling_convention_change sol cannot_change code_deps unit_code_ids id
+    md
+  = Not_changing_calling_convention.
+Proof.
+  exact (code_calling_convention_change_unchanged sol cannot_change code_deps
+           unit_code_ids Hunchanged id md).
+Qed.
+
+Lemma rebuild_apply_unchanged (en : rebuild_env) (ap : apply_expr) :
+  rebuild_apply_cc F sol cannot_change code_deps preserve_direct_calls
+    unit_code_ids code_metadatas first_fresh en ap
+  = rebuild_apply F sol preserve_direct_calls unit_code_ids first_fresh en ap.
+Proof.
+  exact (rebuild_apply_cc_unchanged F sol cannot_change code_deps
+           preserve_direct_calls unit_code_ids code_metadatas first_fresh
+           Hunchanged en ap).
+Qed.
 
 (* ------------------------------------------------------------------------ *)
 (* Environments                                                             *)
@@ -1596,7 +1743,7 @@ Definition statics_rel (statics statics' : static_env) : Prop :=
        ∨ static_other_rel s allocated (lookup s (static_values statics')))
   ∧ (∀ id : code_id,
        lookup id (static_code statics')
-       = option_map rebuild_c (lookup id (static_code statics))
+       = option_map (rebuild_c id) (lookup id (static_code statics))
        ∨ (lookup id (static_code statics') = None
           ∧ ~ hu (Node_code_id id))).
 
@@ -3165,14 +3312,15 @@ Proof.
       assert (Hl' : lookup id (static_code statics') = None).
       { destruct (Hcode id) as [H | [H _]]; [ | exact H ].
         rewrite H, Hl. reflexivity. }
-      cbn [flat_map rebuild_binding]. unfold is_code_id_used.
+      cbn [flat_map rebuild_binding_cc]. unfold is_code_id_used.
       destruct (s_has_usage sol (Node_code_id id)) eqn:Hu.
       - cbn [app eval_static_bindings]. rewrite Hl'.
         refine (IH _ _ _ Hfrag Hbindings _ Hev).
         split; [ exact Hnone | split; [ exact Hblocks | split ] ];
           [ exact Honly | ].
         intros id'. simpl.
-        destruct (Pos.eqb id' id); [ left; reflexivity | exact (Hcode id') ].
+        destruct (Pos.eqb_spec id' id) as [-> | _];
+          [ left; reflexivity | exact (Hcode id') ].
       - cbn [app eval_static_bindings].
         refine (IH _ _ _ Hfrag Hbindings _ Hev).
         split; [ exact Hnone | split; [ exact Hblocks | split ] ];
@@ -3197,7 +3345,7 @@ Proof.
       cbv beta iota in Hev.
       destruct Hst as (Hnone & Hblocks & Honly & Hcode).
       destruct Hb as (_ & _ & _ & Hslots).
-      cbn [flat_map rebuild_binding static_const_is_used].
+      cbn [flat_map rebuild_binding_cc static_const_is_used].
       destruct (existsb (fun '(_, sym) => is_symbol_used sol sym) syms)
         eqn:Hused.
       * set (bound := map (fun '(_, sym) => Node_symbol sym) syms).
@@ -3298,7 +3446,7 @@ Proof.
         [ | discriminate Hev ].
       cbv beta iota in Hev.
       destruct Hst as (Hnone & Hblocks & Honly & Hcode).
-      cbn [flat_map rebuild_binding static_const_is_used
+      cbn [flat_map rebuild_binding_cc static_const_is_used
            rebuild_static_const].
       rewrite Hr. unfold is_symbol_used.
       destruct (s_has_usage sol (Node_symbol s)) eqn:Hu.
@@ -3332,7 +3480,7 @@ Proof.
         [ discriminate Hev | ].
       cbn [eval_static_const] in Hev. cbv beta iota in Hev.
       destruct Hst as (Hnone & Hblocks & Honly & Hcode).
-      cbn [flat_map rebuild_binding static_const_is_used
+      cbn [flat_map rebuild_binding_cc static_const_is_used
            rebuild_static_const].
       unfold is_symbol_used.
       destruct (s_has_usage sol (Node_symbol s)) eqn:Hu.
@@ -3371,7 +3519,7 @@ Proof.
       cbv beta iota in Hev.
       destruct Hb as (Hcons & _ & _ & _).
       destruct Hst as (Hnone & Hblocks & Honly & Hcode).
-      cbn [flat_map rebuild_binding static_const_is_used
+      cbn [flat_map rebuild_binding_cc static_const_is_used
            rebuild_static_const].
       unfold is_symbol_used.
       destruct (s_has_usage sol (Node_symbol s)) eqn:Hu.
@@ -3624,7 +3772,7 @@ Lemma rebuild_let_cases (en : rebuild_env) (x : variable)
        rebuild en (Let x kind d body) = Let x kind d' (rebuild en' body))
   ∨ ∃ en' : rebuild_env, rebuild en (Let x kind d body) = rebuild en' body.
 Proof.
-  cbn [rebuild_expr].
+  cbn [rebuild_expr_cc].
   destruct (is_pending_projection en x d); [ right; left; eauto | ].
   destruct d; cbv zeta;
     repeat match goal with
@@ -3644,7 +3792,7 @@ Lemma rebuild_let_pending_eq (en : rebuild_env) (x : variable)
   = Let x kind (Project_function_slot move_from move_to closure)
       (rebuild (bind_variables_then en [(x, kind)] ys) body).
 Proof.
-  intros Hep. cbn [rebuild_expr]. unfold is_pending_projection.
+  intros Hep. cbn [rebuild_expr_cc]. unfold is_pending_projection.
   rewrite Hep, Pos.eqb_refl. reflexivity.
 Qed.
 
@@ -3750,7 +3898,7 @@ Proof.
       apply in_flat_map in Hb as (b0 & Hb0 & Hb).
       rewrite forallb_forall in Hbindings. specialize (Hbindings b0 Hb0).
       destruct b0 as [id c | id | s const].
-      * cbn [rebuild_binding] in Hb.
+      * cbn [rebuild_binding_cc] in Hb.
         match type of Hb with
         | context [if ?b then _ else _] => destruct b
         end; destruct Hb as [<- | []]; [ | destruct Hk ].
@@ -3762,21 +3910,23 @@ Proof.
         assert (Hcb : checked exact codes (code_body c) = true)
           by (rewrite He; exact Hnc0).
         pose proof (Hcodes id c Hb0 Hcb) as IHc.
-        destruct c as [params mc ret exn md cbody]. simpl in Hk |- *.
+        destruct c as [params mc ret exn md cbody].
+        cbn [rebuild_code_cc] in Hk. rewrite code_change_unchanged in Hk.
+        cbn [code_body] in Hk. simpl in Hk |- *.
         unfold without in Hk |- *. apply filter_In in Hk as [Hk Hnot].
         apply filter_In. split; [ | exact Hnot ].
         match type of Hk with
         | context [if ?b then _ else _] => destruct b
         end; [ destruct Hk | exact (IHc _ _ Hk) ].
       * simpl in Hb. destruct Hb as [<- | []]. destruct Hk.
-      * cbn [rebuild_binding] in Hb.
+      * cbn [rebuild_binding_cc] in Hb.
         match type of Hb with
         | context [if ?b then _ else _] => destruct b
         end; [ | destruct Hb ].
         destruct Hb as [<- | []]. destruct Hk.
     + apply in_or_app. right. exact (IH Hbody _ _ Hin).
   - intros k0 h body IHh IH Hfrag en k. simpl in Hfrag.
-    apply andb_true_iff in Hfrag as [Hh Hbody]. cbn [rebuild_expr].
+    apply andb_true_iff in Hfrag as [Hh Hbody]. cbn [rebuild_expr_cc].
     set (mask := handler_mask sol (handler_is_exn_handler h) h).
     set (body' := rebuild (bind_continuations en [(k0, mask)]) body).
     simpl. intros Hin. apply in_or_app.
@@ -3808,7 +3958,8 @@ Proof.
       apply in_flat_map. exists (k'', h''). split; [ exact Hin' | ].
       exact (IHh k'' h'' Hin' (Hhandlers _ Hin') _ _ _ _ Hk).
     + exact (IH Hbody _ _ Hin).
-  - intros ap _ en k. cbn [rebuild_expr]. unfold rebuild_apply.
+  - intros ap _ en k. cbn [rebuild_expr_cc].
+    rewrite rebuild_apply_unchanged. unfold rebuild_apply.
     destruct (_ || _); [ intros [] | ].
     unfold make_apply_wrapper. cbn [ap_continuation].
     destruct (lookup (ap_continuation ap) (env_conts en)) as [mask | ];
@@ -3822,14 +3973,14 @@ Proof.
     + unfold among in Hn. simpl in Hn. rewrite Pos.eqb_refl in Hn.
       discriminate Hn.
     + left. reflexivity.
-  - intros ac _ en k. cbn [rebuild_expr]. unfold rebuild_apply_cont.
+  - intros ac _ en k. cbn [rebuild_expr_cc]. unfold rebuild_apply_cont.
     destruct (rewrite_apply_cont sol en ac) as [ac' | ] eqn:Hrw;
       [ | intros [] ].
     unfold rewrite_apply_cont in Hrw.
     destruct (existsb (simple_has_no_source sol) (ac_args ac));
       [ discriminate Hrw | ].
     injection Hrw as <-. simpl. exact (fun H => H).
-  - intros scrutinee arms _ en k. cbn [rebuild_expr]. unfold rebuild_switch.
+  - intros scrutinee arms _ en k. cbn [rebuild_expr_cc]. unfold rebuild_switch.
     cbv zeta.
     destruct (Keyed.is_empty _); [ intros [] | ].
     simpl. intros Hin. apply in_flat_map in Hin as ([d ac'] & Hin & Hk).
@@ -3880,7 +4031,7 @@ Proof.
       simpl in Hin. destruct Hin as [<- | []]. discriminate Hbinds.
     + apply orb_true_intro. right. exact (IH Hbody _ Hb).
   - intros k0 h body IHh IH Hfrag en. simpl in Hfrag.
-    apply andb_true_iff in Hfrag as [Hh Hbody]. cbn [rebuild_expr].
+    apply andb_true_iff in Hfrag as [Hh Hbody]. cbn [rebuild_expr_cc].
     destruct (among k0 _); simpl; intros Hb;
       [ apply orb_true_iff in Hb as [Hb | Hb]; apply orb_true_intro;
         [ left; exact (IHh Hh _ _ _ Hb) | right; exact (IH Hbody _ Hb) ]
@@ -3896,14 +4047,15 @@ Proof.
     apply in_map_iff in Hin as ([k' h''] & [= <- <-] & Hin).
     apply existsb_exists. exists (k', h''). split; [ exact Hin | ].
     exact (IHh k' h'' Hin (Hhandlers _ Hin) _ _ _ Hbinds).
-  - intros ap _ en. cbn [rebuild_expr]. unfold rebuild_apply.
+  - intros ap _ en. cbn [rebuild_expr_cc].
+    rewrite rebuild_apply_unchanged. unfold rebuild_apply.
     destruct (_ || _); [ discriminate | ].
     unfold make_apply_wrapper.
     destruct (lookup _ (env_conts en)); [ | discriminate ].
     destruct (forallb _ _); discriminate.
-  - intros ac _ en. cbn [rebuild_expr]. unfold rebuild_apply_cont.
+  - intros ac _ en. cbn [rebuild_expr_cc]. unfold rebuild_apply_cont.
     destruct (rewrite_apply_cont sol en ac); discriminate.
-  - intros scrutinee arms _ en. cbn [rebuild_expr]. unfold rebuild_switch.
+  - intros scrutinee arms _ en. cbn [rebuild_expr_cc]. unfold rebuild_switch.
     cbv zeta. destruct (Keyed.is_empty _); discriminate.
   - intros _ en. discriminate.
   - intros params metadata handler IH Hfrag en dead_check mask.
@@ -6006,23 +6158,28 @@ Proof.
       * exact (Hrels i s'' w w' Hi Hw Hw').
 Qed.
 
-Lemma code_fields_rebuild (c : code) :
-  code_params (rebuild_c c) = code_params c
-  ∧ code_my_closure (rebuild_c c) = code_my_closure c
-  ∧ code_return_continuation (rebuild_c c) = code_return_continuation c
-  ∧ code_exn_continuation (rebuild_c c) = code_exn_continuation c
-  ∧ code_params_arity (rebuild_c c) = code_params_arity c
-  ∧ code_result_arity (rebuild_c c) = code_result_arity c
-  ∧ code_is_tupled (rebuild_c c) = code_is_tupled c.
-Proof. destruct c. repeat split. Qed.
+Lemma code_fields_rebuild (id : code_id) (c : code) :
+  code_params (rebuild_c id c) = code_params c
+  ∧ code_my_closure (rebuild_c id c) = code_my_closure c
+  ∧ code_return_continuation (rebuild_c id c) = code_return_continuation c
+  ∧ code_exn_continuation (rebuild_c id c) = code_exn_continuation c
+  ∧ code_params_arity (rebuild_c id c) = code_params_arity c
+  ∧ code_result_arity (rebuild_c id c) = code_result_arity c
+  ∧ code_is_tupled (rebuild_c id c) = code_is_tupled c.
+Proof.
+  destruct c. cbn [rebuild_code_cc]. rewrite code_change_unchanged.
+  repeat split.
+Qed.
 
 (* The rebuilt code binds nothing static if the code does not. *)
-Lemma rebuilt_code_no_statics (c : code) :
+Lemma rebuilt_code_no_statics (id : code_id) (c : code) :
   checked exact codes (code_body c) = true ->
   binds_statics (code_body c) = false ->
-  binds_statics (code_body (rebuild_c c)) = false.
+  binds_statics (code_body (rebuild_c id c)) = false.
 Proof.
-  destruct c as [params mc ret exn md body]. cbn [code_body rebuild_code].
+  destruct c as [params mc ret exn md body].
+  cbn [code_body rebuild_code_cc]. rewrite code_change_unchanged.
+  cbn [code_body].
   intros Hcb Hb.
   match goal with
   | |- binds_statics (if ?b then _ else _) = false => destruct b
@@ -6036,11 +6193,12 @@ Qed.
 
 (* The body of the rebuilt code, where the call of the code binds its
    parameters and [my_closure] to values that have sources. *)
-Lemma rebuilt_code_body (c : code) (callee : value) (vs : list value)
+Lemma rebuilt_code_body (id : code_id) (c : code) (callee : value)
+    (vs : list value)
     (hv : env) :
   bind_params (code_params c) vs [(code_my_closure c, callee)] = Some hv ->
   env_flows_ hv ->
-  code_body (rebuild_c c)
+  code_body (rebuild_c id c)
   = rebuild
       (bind_variables FlambdaReaperRebuild.empty_env
          ((code_my_closure c, Value)
@@ -6048,7 +6206,9 @@ Lemma rebuilt_code_body (c : code) (callee : value) (vs : list value)
       (code_body c).
 Proof.
   destruct c as [params mc ret exn md body].
-  cbn [code_body rebuild_code code_params code_my_closure code_params_arity].
+  cbn [code_body rebuild_code_cc code_params code_my_closure
+       code_params_arity].
+  rewrite code_change_unchanged. cbn [code_body].
   intros Hbind Hhv.
   match goal with
   | |- (if ?b then _ else _) = _ => replace b with false
@@ -6070,10 +6230,10 @@ Lemma call_rebuilt_code (callee' : value) (kind : call_kind) (id : code_id)
     (statics' : static_env) (hp' : heap) (callee_vars' : env) :
   closure_of statics' callee' = Some (id, slots') ->
   kind = Indirect ∨ kind = Direct id ->
-  lookup id (static_code statics') = Some (rebuild_c c) ->
+  lookup id (static_code statics') = Some (rebuild_c id c) ->
   code_is_tupled c = false ->
   length args_arity = length (code_params_arity c) ->
-  binds_statics (code_body (rebuild_c c)) = false ->
+  binds_statics (code_body (rebuild_c id c)) = false ->
   kinds_eqb (map kind_of_value vs') (unarize args_arity) = true ->
   kinds_per_parameter_eqb (unarize_per_parameter args_arity)
     (unarize_per_parameter (code_params_arity c)) = true ->
@@ -6082,19 +6242,19 @@ Lemma call_rebuilt_code (callee' : value) (kind : call_kind) (id : code_id)
   = Some callee_vars' ->
   call_function callee' kind vs' args_arity return_arity return_to exn_to
     statics' hp'
-  = Step (State (code_body (rebuild_c c)) callee_vars'
+  = Step (State (code_body (rebuild_c id c)) callee_vars'
             [(code_return_continuation c, return_to);
              (code_exn_continuation c, exn_to)]
             statics' hp').
 Proof.
   intros Hcl Hk Hcode Htup Hfull Hbinds Hk1 Hk2 Hk3 Hbind.
-  destruct (code_fields_rebuild c) as (Ep & Em & Er & Ee & Epa & Era & Et).
+  destruct (code_fields_rebuild id c) as (Ep & Em & Er & Ee & Epa & Era & Et).
   assert (Hshape : shape_of_call statics' callee' kind vs' args_arity
                      return_arity
-                   = Some (Full_call callee' (rebuild_c c) vs' args_arity)).
+                   = Some (Full_call callee' (rebuild_c id c) vs' args_arity)).
   { assert (Hfull' :
       shape_of_closure_call statics' callee' kind vs' args_arity return_arity
-      = Some (Full_call callee' (rebuild_c c) vs' args_arity)).
+      = Some (Full_call callee' (rebuild_c id c) vs' args_arity)).
     { apply (shape_of_closure_call_full _ _ _ _ _ _ id slots' _ Hcl Hk Hcode);
         [ rewrite Et; exact Htup | rewrite Epa; exact Hfull ]. }
     destruct Hk as [-> | ->]; [ | exact Hfull' ].
@@ -6956,7 +7116,7 @@ Lemma code_entered (id : code_id) (params : list variable) (mc : variable)
   way_out cont_rel over_rel (cd_return cd) rt rt' ->
   way_out cont_rel over_rel [cd_exn cd] et et' ->
   related (State cbody callee_vars [(ret, rt); (exn_k, et)] statics hp)
-    (State (code_body (rebuild_c (Code params mc ret exn_k md cbody)))
+    (State (code_body (rebuild_c id (Code params mc ret exn_k md cbody)))
        callee_vars' [(ret, rt'); (exn_k, et')] statics' hp).
 Proof.
   intros Hflow' Hst Hscr_c Hcf_c Hraises_c Hclosed_c Hkinded_c Hfresh_c Hne
@@ -6971,7 +7131,7 @@ Proof.
   split; [ exact Hflow' | ].
   exists (Some id), en', (code_conts (Code params mc ret exn_k md cbody) cd).
   simpl_state.
-  rewrite (rebuilt_code_body (Code params mc ret exn_k md cbody) callee vs
+  rewrite (rebuilt_code_body id (Code params mc ret exn_k md cbody) callee vs
              callee_vars Hbind Hcvars).
   fold en'.
   split; [ exact Hbody | split; [ reflexivity | ] ].
@@ -7098,7 +7258,7 @@ Lemma call_entered (ap : apply_expr) (vars vars' : env)
   ∨ rewrite_call_kind F sol preserve_direct_calls unit_code_ids ap
     = Direct id ->
   lookup id (static_code statics')
-  = Some (rebuild_c (Code params mc ret exn_k md cbody)) ->
+  = Some (rebuild_c id (Code params mc ret exn_k md cbody)) ->
   cm_is_tupled md = false ->
   length (ap_args_arity ap) = length (cm_params_arity md) ->
   scrutinees_used G (Some id) cbody ->
@@ -7245,7 +7405,7 @@ Proof.
                     statics' hp)
             = Step (State
                       (code_body
-                         (rebuild_c (Code params mc ret exn_k md cbody)))
+                         (rebuild_c id (Code params mc ret exn_k md cbody)))
                       callee_vars'
                       [(ret, resolve k1 conts1);
                        (exn_k,
@@ -7286,7 +7446,7 @@ Proof.
                      extra)]
                  statics hp)
               (State
-                 (code_body (rebuild_c (Code params mc ret exn_k md cbody)))
+                 (code_body (rebuild_c id (Code params mc ret exn_k md cbody)))
                  callee_vars'
                  [(ret, ret_to);
                   (exn_k,
@@ -7413,7 +7573,8 @@ Proof.
       rewrite (simple_not_dead en vars vars' s w Hvars (Hnoted_args s Hin) Hw)
         in Hd.
       discriminate Hd. }
-  subst e'. cbn [rebuild_expr] in Hconts |- *.
+  subst e'. cbn [rebuild_expr_cc] in Hconts |- *.
+  rewrite rebuild_apply_unchanged in Hconts |- *.
   unfold rebuild_apply in Hconts |- *. rewrite Hdead in Hconts |- *.
   match goal with
   | |- context [make_apply_wrapper first_fresh en ?a] =>
@@ -7458,7 +7619,7 @@ Proof.
   { refine (read_any_usage _ _ _ Hc w witness called_node _ _ _ Hcodeid
               Hcalled Hw (any_usage_input _ _ _ Hc _ Hused)).
     apply (not_local is_local Hlocal); intros; discriminate. }
-  assert (Hcode' : lookup id (static_code statics') = Some (rebuild_c c)).
+  assert (Hcode' : lookup id (static_code statics') = Some (rebuild_c id c)).
   { pose proof Hst as (_ & _ & _ & Hsc). destruct (Hsc id) as [H | [_ H]].
     - rewrite H, Hcode. reflexivity.
     - exfalso. exact (H (au_hu _ _ _ Hc _ Hlive')). }
@@ -7870,16 +8031,16 @@ Lemma shape_rebuilt (statics statics' : static_env) (closure closure' : value)
   closure_of statics closure = Some (id, slots) ->
   lookup id (static_code statics) = Some c ->
   closure_of statics' closure' = Some (id, slots') ->
-  lookup id (static_code statics') = Some (rebuild_c c) ->
+  lookup id (static_code statics') = Some (rebuild_c id c) ->
   code_is_tupled c = false ->
   map kind_of_value all' = map kind_of_value all ->
   shape_of_closure_call statics closure Indirect all A ret = Some shape ->
   shape_of_closure_call statics' closure' Indirect all' A ret
   = Some
       (match shape with
-       | Full_call _ _ _ _ => Full_call closure' (rebuild_c c) all' A
+       | Full_call _ _ _ _ => Full_call closure' (rebuild_c id c) all' A
        | Over_call _ _ _ _ a1 a2 =>
-         Over_call closure' (rebuild_c c)
+         Over_call closure' (rebuild_c id c)
            (firstn (cardinal_unarized (code_params_arity c)) all')
            (skipn (cardinal_unarized (code_params_arity c)) all') a1 a2
        | Partial_call _ =>
@@ -7887,14 +8048,14 @@ Lemma shape_rebuilt (statics statics' : static_env) (closure closure' : value)
        end).
 Proof.
   intros Hcl Hcode Hcl' Hcode' Htup Hk Hshape.
-  destruct (code_fields_rebuild c) as (_ & _ & _ & _ & Epa & Era & Et).
+  destruct (code_fields_rebuild id c) as (_ & _ & _ & _ & Epa & Era & Et).
   destruct (shape_of_closure_call_cases _ _ _ _ _ _ _ Hshape)
     as (id0 & slots0 & c0 & all0 & A0 & Hcl0 & Hcode0 & _ & Hafc & Hcall).
   rewrite Hcl in Hcl0. injection Hcl0 as <- <-.
   rewrite Hcode in Hcode0. injection Hcode0 as <-.
   rewrite (arguments_for_code_not_tupled _ _ _ _ Htup) in Hafc.
   injection Hafc as <- <-.
-  assert (Ht' : code_is_tupled (rebuild_c c) = false)
+  assert (Ht' : code_is_tupled (rebuild_c id c) = false)
     by (rewrite Et; exact Htup).
   destruct (shape_of_code_call_cases _ _ _ _ _ _ Hcall)
     as [[Hfull ->] | [(Hover & Hkinds & Hpoo & ->)
@@ -7902,14 +8063,14 @@ Proof.
   - apply (shape_of_closure_call_full _ _ _ _ _ _ id slots' _ Hcl'
              (or_introl eq_refl) Hcode' Ht').
     rewrite Epa. exact Hfull.
-  - assert (Hn' : length A <> length (code_params_arity (rebuild_c c)))
+  - assert (Hn' : length A <> length (code_params_arity (rebuild_c id c)))
       by (rewrite Epa; lia).
     rewrite (shape_of_closure_call_not_full _ _ _ _ _ _ id slots' _ Hcl'
                (or_introl eq_refl) Hcode' Ht' Hn').
     rewrite Epa, Era, Hk, Hkinds, kinds_eqb_refl, Hpoo. cbn [andb negb].
     destruct (Nat.ltb_spec (length (code_params_arity c)) (length A))
       as [_ | Hge]; [ reflexivity | lia ].
-  - assert (Hn' : length A <> length (code_params_arity (rebuild_c c)))
+  - assert (Hn' : length A <> length (code_params_arity (rebuild_c id c)))
       by (rewrite Epa; lia).
     rewrite (shape_of_closure_call_not_full _ _ _ _ _ _ id slots' _ Hcl'
                (or_introl eq_refl) Hcode' Ht' Hn').
@@ -7919,25 +8080,26 @@ Proof.
 Qed.
 
 (* A full call of the rebuilt code. *)
-Lemma call_code_rebuilt (closure' : value) (c : code) (vs' : list value)
+Lemma call_code_rebuilt (closure' : value) (id : code_id) (c : code)
+    (vs' : list value)
     (args_arity return_arity : arity) (return_to exn_to : cont_value)
     (statics' : static_env) (hp : heap) (callee_vars' : env) :
-  binds_statics (code_body (rebuild_c c)) = false ->
+  binds_statics (code_body (rebuild_c id c)) = false ->
   kinds_eqb (map kind_of_value vs') (unarize args_arity) = true ->
   kinds_per_parameter_eqb (unarize_per_parameter args_arity)
     (unarize_per_parameter (code_params_arity c)) = true ->
   arity_eqb return_arity (code_result_arity c) = true ->
   bind_params (code_params c) vs' [(code_my_closure c, closure')]
   = Some callee_vars' ->
-  call_code closure' (rebuild_c c) vs' args_arity return_arity return_to
+  call_code closure' (rebuild_c id c) vs' args_arity return_arity return_to
     exn_to statics' hp
-  = Step (State (code_body (rebuild_c c)) callee_vars'
+  = Step (State (code_body (rebuild_c id c)) callee_vars'
             [(code_return_continuation c, return_to);
              (code_exn_continuation c, exn_to)]
             statics' hp).
 Proof.
   intros Hbinds Hk1 Hk2 Hk3 Hbind.
-  destruct (code_fields_rebuild c) as (Ep & Em & Er & Ee & Epa & Era & Et).
+  destruct (code_fields_rebuild id c) as (Ep & Em & Er & Ee & Epa & Era & Et).
   unfold call_code. rewrite Hbinds, Hk1, Epa, Hk2, Era, Hk3. cbn [negb andb].
   rewrite Ep, Em, Hbind, Er, Ee. reflexivity.
 Qed.
@@ -8103,7 +8265,7 @@ Proof.
   subst cd'.
   assert (Hcode'_of : au (Node_code_id id) ->
             lookup id (static_code statics')
-            = Some (rebuild_c (Code params mc rk ek md cbody))).
+            = Some (rebuild_c id (Code params mc rk ek md cbody))).
   { intros Hlive'. pose proof Hst as (_ & _ & _ & Hsc).
     destruct (Hsc id) as [H | [_ H]].
     - rewrite H, Hcode. reflexivity.
@@ -8188,7 +8350,7 @@ Proof.
     injection Hx as <-. rewrite Hkind_c. split; [ reflexivity | ].
     intros _. exists closure'. split; [ reflexivity | exact Hrel_mc ]. }
   pose proof Lr as Lr0.
-  destruct (code_fields_rebuild (Code params mc rk ek md cbody))
+  destruct (code_fields_rebuild id (Code params mc rk ek md cbody))
     as (_ & _ & _ & _ & _ & Era & _).
   cbn [code_result_arity] in Era.
   pose proof (shape_of_code_call_cases _ _ _ _ _ _ Hcall) as Hcases.
@@ -8247,7 +8409,7 @@ Proof.
                Hcode' Htupled (proj1 HA) Hshape).
     cbn [run_call].
     right. left. eexists. split.
-    + apply (call_code_rebuilt closure' (Code params mc rk ek md cbody));
+    + apply (call_code_rebuilt closure' id (Code params mc rk ek md cbody));
         cbn [code_params code_my_closure code_params_arity code_result_arity
              code_body].
       * apply rebuilt_code_no_statics; assumption.
@@ -8417,7 +8579,7 @@ Proof.
     cbn [run_call code_params_arity].
     fold p size.
     right. left. eexists. split.
-    + apply (call_code_rebuilt closure' (Code params mc rk ek md cbody));
+    + apply (call_code_rebuilt closure' id (Code params mc rk ek md cbody));
         cbn [code_params code_my_closure code_params_arity code_result_arity
              code_body].
       * apply rebuilt_code_no_statics; assumption.
@@ -8507,16 +8669,17 @@ Qed.
 
 (* The call of the rebuilt code, in the second run, has the shape of the
    call of the code in the first, given arguments of the same kinds. *)
-Lemma shape_code_rebuilt (closure closure' : value) (c : code)
+Lemma shape_code_rebuilt (closure closure' : value) (id : code_id)
+    (c : code)
     (all all' : list value) (A ret : arity) (shape : call_shape) :
   map kind_of_value all' = map kind_of_value all ->
   shape_of_code_call closure c all A ret = Some shape ->
-  shape_of_code_call closure' (rebuild_c c) all' A ret
+  shape_of_code_call closure' (rebuild_c id c) all' A ret
   = Some
       (match shape with
-       | Full_call _ _ _ _ => Full_call closure' (rebuild_c c) all' A
+       | Full_call _ _ _ _ => Full_call closure' (rebuild_c id c) all' A
        | Over_call _ _ _ _ a1 a2 =>
-         Over_call closure' (rebuild_c c)
+         Over_call closure' (rebuild_c id c)
            (firstn (cardinal_unarized (code_params_arity c)) all')
            (skipn (cardinal_unarized (code_params_arity c)) all') a1 a2
        | Partial_call _ =>
@@ -8524,7 +8687,7 @@ Lemma shape_code_rebuilt (closure closure' : value) (c : code)
        end).
 Proof.
   intros Hk Hshape.
-  destruct (code_fields_rebuild c) as (_ & _ & _ & _ & Epa & Era & Et).
+  destruct (code_fields_rebuild id c) as (_ & _ & _ & _ & Epa & Era & Et).
   destruct (shape_of_code_call_cases _ _ _ _ _ _ Hshape)
     as [[Hfull ->] | [(Hover & Hkinds & Hpoo & ->)
                      | (Hpart & Hkinds & Hpoo & Hnt & ->)]];
@@ -8678,15 +8841,15 @@ Proof.
   { rewrite <- (length_map kind_of_value fields'), Hkf, length_map.
     reflexivity. }
   (* The call of the second run. *)
-  assert (Hcode' : lookup id (static_code statics') = Some (rebuild_c c)).
+  assert (Hcode' : lookup id (static_code statics') = Some (rebuild_c id c)).
   { pose proof Hst as (_ & _ & _ & Hsc).
     destruct (Hsc id) as [H | [_ H]].
     - rewrite H, Hcode. reflexivity.
     - exfalso. exact (H (au_hu _ _ _ Hc _ Hlive')). }
-  destruct (code_fields_rebuild c) as (_ & _ & _ & _ & Epa & _ & Et).
+  destruct (code_fields_rebuild id c) as (_ & _ & _ & _ & Epa & _ & Et).
   rewrite (FlambdaTupledProofs.shape_of_closure_call_tupled statics' callee'
              Indirect tuple' rest' first rest_arity ret id slots'
-             (rebuild_c c) fields' Hclosure' (or_introl eq_refl) Hcode'
+             (rebuild_c id c) fields' Hclosure' (or_introl eq_refl) Hcode'
              ltac:(rewrite Et; exact Htupled)
              ltac:(rewrite (proj1 Ha); exact Hk1) Hk2
              ltac:(rewrite Epa; exact Hfields')).
@@ -8694,7 +8857,8 @@ Proof.
   assert (Hkall : map kind_of_value (fields' ++ rest')
                   = map kind_of_value (fields ++ rest))
     by (rewrite !map_app, Hkf, Hk_rest; reflexivity).
-  rewrite (shape_code_rebuilt callee callee' c _ _ _ ret shape Hkall Hcall).
+  rewrite (shape_code_rebuilt callee callee' id c _ _ _ ret shape Hkall
+             Hcall).
   (* The code, as it is bound. *)
   pose proof (Hcodes id c Hcode) as [_ Hedges_c].
   destruct (Hcode_checks id c Hin_codes)
@@ -8783,7 +8947,7 @@ Proof.
       as (callee_vars' & Hbind' & Hok').
     rewrite !filter_kept_all in Hbind'.
     right. left. eexists. split.
-    + apply (call_code_rebuilt callee' (Code params mc rk ek md cbody));
+    + apply (call_code_rebuilt callee' id (Code params mc rk ek md cbody));
         cbn [code_params code_my_closure code_params_arity code_result_arity
              code_body].
       * apply rebuilt_code_no_statics; assumption.
@@ -8914,13 +9078,16 @@ Proof.
       as (callee_vars' & Hbind' & Hok').
     rewrite !filter_kept_all in Hbind'.
     right. left. eexists. split.
-    + apply (call_code_rebuilt callee' (Code params mc rk ek md cbody));
+    + apply (call_code_rebuilt callee' id (Code params mc rk ek md cbody));
         cbn [code_params code_my_closure code_params_arity code_result_arity
              code_body].
       * apply rebuilt_code_no_statics; assumption.
       * rewrite Hkf, Hk1'. apply kinds_eqb_refl.
       * apply kinds_per_parameter_eqb_eq. exact Hk2'.
-      * apply arity_eqb_eq. reflexivity.
+      * apply arity_eqb_eq.
+        destruct (code_fields_rebuild id (Code params mc rk ek md cbody))
+          as (_ & _ & _ & _ & _ & Era & _).
+        rewrite Era. reflexivity.
       * exact Hbind'.
     + apply (code_entered id params mc rk ek md cbody cd callee fields
                callee_vars callee_vars' _ _ et et' statics statics' hp
@@ -9367,7 +9534,8 @@ Proof.
       rewrite (simple_not_dead en vars vars' s w Hvars (Hnoted_args s Hin) Hw)
         in Hd.
       discriminate Hd. }
-  subst e'. cbn [rebuild_expr] in Hconts |- *.
+  subst e'. cbn [rebuild_expr_cc] in Hconts |- *.
+  rewrite rebuild_apply_unchanged in Hconts |- *.
   unfold rebuild_apply in Hconts |- *. rewrite Hdead in Hconts |- *.
   subst hp'.
   destruct (rewrite_simple_eval en vars vars' (ap_callee ap) callee Henv
@@ -11352,9 +11520,13 @@ Proof.
     apply among_In in Hin. destruct Hin as [<- | [<- | []]];
       [ left | right ]; reflexivity. }
   unfold program_refines, rebuild_unit_from_tables, rebuild_unit.
+  (* The rebuild where no code changes its calling convention. *)
+  rewrite <- (rebuild_expr_cc_unchanged F sol (fun _ => true) [] b
+                (static_names code_ids_bound e) (bound_code_metadata e)
+                (fresh_name (names_of e)) (fun _ _ => eq_refl)).
   eapply (unit_refines is_local G sol noted deps cds (unit_kept e)
             (unit_codes e) (static_names symbols_of_binding e) u F b);
-    eassumption || reflexivity
+    eassumption || reflexivity || (intros; reflexivity)
     || exact (conj I (conj (exits_bound_unit u e Hexits Hfree)
                             (conj Hscr (conj Hcf (conj Hfresh
                                (conj (ex_intro _ [] (conj Hkinded Hagree0))

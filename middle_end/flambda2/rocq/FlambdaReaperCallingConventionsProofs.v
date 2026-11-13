@@ -27,7 +27,8 @@
 
 (* The proofs of FlambdaReaperCallingConventionsSpec.v: the check of
    FlambdaReaperCallingConventions.v implies what it is said to mean, and
-   the table it derives is the least. Nothing here needs review. *)
+   the table it derives is the least, and the rebuild where no code
+   changes is that of FlambdaReaperRebuild.v. Nothing here needs review. *)
 
 From Stdlib Require Import List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -35,6 +36,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaWellFormedSpec FlambdaReaperGraphSpec FlambdaReaperSolutionProofs
   FlambdaReaperTraversal FlambdaReaperRebuild
   FlambdaReaperCallingConventions FlambdaReaperCallingConventionsSpec.
+From OxCamlFlambda2 Require FlambdaReaperRebuildProofs.
 Import ListNotations.
 
 Section Witnesses.
@@ -348,106 +350,35 @@ Qed.
 (* The rebuild with no change of calling convention                         *)
 (* ======================================================================== *)
 
-Section Unchanged.
-
-Variable F : facts.
-Variable sol : solution.
-Variable cannot_change : node -> bool.
-Variable code_deps : finite_map code_dep.
-Variable preserve_direct_calls : bool.
-Variable unit_code_ids : list code_id.
-Variable codes : finite_map code_metadata.
-Variable first_fresh : BinNums.positive.
-
-(* Every code of the unit is in the table. *)
-Hypothesis Hall : ∀ id : code_id,
-  among id unit_code_ids = true -> cannot_change (Node_code_id id) = true.
-
-Lemma code_calling_convention_change_unchanged : ∀ id metadata,
-  code_calling_convention_change sol cannot_change code_deps unit_code_ids id
-    metadata = Not_changing_calling_convention.
-Proof.
-  intros id metadata. unfold code_calling_convention_change,
-    cannot_change_calling_convention.
-  destruct (among id unit_code_ids) eqn:Hamong; [ | reflexivity ].
-  rewrite Hall by exact Hamong. reflexivity.
-Qed.
-
-(* A call changes no calling convention. *)
-Lemma rebuild_apply_cc_unchanged : ∀ en ap,
-  rebuild_apply_cc F sol cannot_change code_deps preserve_direct_calls
-    unit_code_ids codes first_fresh en ap
-  = rebuild_apply F sol preserve_direct_calls unit_code_ids first_fresh en ap.
-Proof.
-  intros en ap. unfold rebuild_apply_cc, apply_calling_convention_change.
-  destruct (code_id_actually_called F sol ap) as [id | ]; [ | reflexivity ].
-  unfold get_calling_convention_change.
-  destruct (lookup id codes) as [metadata | ]; [ | reflexivity ].
-  rewrite code_calling_convention_change_unchanged. reflexivity.
-Qed.
-
-(* The two rebuilds are the same, case for case. *)
-Fixpoint rebuild_expr_cc_unchanged (en : rebuild_env) (e : expr) {struct e} :
-  rebuild_expr_cc F sol cannot_change code_deps preserve_direct_calls
-    unit_code_ids codes first_fresh en e
-  = rebuild_expr F sol preserve_direct_calls unit_code_ids first_fresh en e
-with rebuild_handler_cc_unchanged (en : rebuild_env) (dead_check : bool)
-    (mask : list bool) (h : continuation_handler) {struct h} :
-  rebuild_handler_cc F sol cannot_change code_deps preserve_direct_calls
-    unit_code_ids codes first_fresh en dead_check mask h
-  = rebuild_handler F sol preserve_direct_calls unit_code_ids first_fresh en
-      dead_check mask h
-with rebuild_binding_cc_unchanged (en : rebuild_env)
-    (binding : static_binding) {struct binding} :
-  rebuild_binding_cc F sol cannot_change code_deps preserve_direct_calls
-    unit_code_ids codes first_fresh en binding
-  = rebuild_binding F sol preserve_direct_calls unit_code_ids first_fresh en
-      binding
-with rebuild_code_cc_unchanged (id : code_id) (c : code) {struct c} :
-  rebuild_code_cc F sol cannot_change code_deps preserve_direct_calls
-    unit_code_ids codes first_fresh id c
-  = rebuild_code F sol preserve_direct_calls unit_code_ids first_fresh c.
-Proof.
-  - destruct e as [x kind defining_expr body | bindings body | k h body
-                  | handlers body | ap | ac | scrutinee arms | ].
-    + simpl. destruct (is_pending_projection en x defining_expr).
-      * rewrite rebuild_expr_cc_unchanged. reflexivity.
-      * destruct defining_expr; rewrite ?rebuild_expr_cc_unchanged;
-          reflexivity.
-    + simpl. rewrite rebuild_expr_cc_unchanged. f_equal.
-      induction bindings as [ | binding bindings IH ]; [ reflexivity | ].
-      simpl. rewrite rebuild_binding_cc_unchanged, IH.
-      reflexivity.
-    + simpl. rewrite rebuild_expr_cc_unchanged.
-      rewrite rebuild_handler_cc_unchanged. reflexivity.
-    + simpl.
-      set (en' := bind_continuations en _).
-      rewrite rebuild_expr_cc_unchanged. f_equal. clearbody en'.
-      induction handlers as [ | [k h] handlers IH ]; [ reflexivity | ].
-      simpl. rewrite rebuild_handler_cc_unchanged, IH. reflexivity.
-    + apply rebuild_apply_cc_unchanged.
-    + reflexivity.
-    + reflexivity.
-    + reflexivity.
-  - destruct h as [params metadata handler]. simpl.
-    rewrite rebuild_expr_cc_unchanged. reflexivity.
-  - destruct binding as [id c | id | s const]; simpl.
-    + rewrite rebuild_code_cc_unchanged. reflexivity.
-    + reflexivity.
-    + reflexivity.
-  - destruct c as [params my_closure return_continuation exn_continuation
-                   metadata body].
-    simpl. rewrite code_calling_convention_change_unchanged.
-    rewrite rebuild_expr_cc_unchanged. reflexivity.
-Qed.
-
-End Unchanged.
-
 (* With every code of the unit in the table, [rebuild_unit_cc] is
-   [rebuild_unit]. *)
+   [rebuild_unit]: the two rebuilds are the same case for case
+   (FlambdaReaperRebuildProofs.rebuild_expr_cc_unchanged, which the proof
+   of the rebuild runs on). *)
 Theorem rebuild_unit_cc_unchanged : rebuild_unit_cc_unchanged_statement.
 Proof.
   intros F sol cannot_change code_deps preserve_direct_calls e Hall.
   unfold rebuild_unit_cc, rebuild_unit.
-  apply rebuild_expr_cc_unchanged. exact Hall.
+  apply FlambdaReaperRebuildProofs.rebuild_expr_cc_unchanged. exact Hall.
+Qed.
+
+(* ======================================================================== *)
+(* Runs of units whose code changes                                         *)
+(* ======================================================================== *)
+
+Theorem two_calls_example : two_calls_example_statement.
+Proof.
+  do 10 (split; [ vm_compute; reflexivity | ]).
+  split; exists 30; vm_compute; reflexivity.
+Qed.
+
+Theorem poison_result_example : poison_result_example_statement.
+Proof.
+  do 11 (split; [ vm_compute; reflexivity | ]).
+  split; exists 30; vm_compute; reflexivity.
+Qed.
+
+Theorem masked_return_example : masked_return_example_statement.
+Proof.
+  do 11 (split; [ vm_compute; reflexivity | ]).
+  split; exists 30; vm_compute; reflexivity.
 Qed.
