@@ -95,116 +95,20 @@ Qed.
 (* The normalisation of a round                                             *)
 (* ======================================================================== *)
 
-(* The rounds of the second phase, given continuations to avoid. *)
-Lemma avoiding_rounds_scope (rounds : nat) (avoid : list continuation)
-    (kept : list code_id) :
-  keeps_scope (iterate rounds (normalise_before_round_avoiding avoid kept)).
-Proof.
-  exact
-    (keeps_scope_iterate rounds (normalise_before_round_avoiding avoid kept)
-       (normalise_before_round_avoiding_scope avoid kept)).
-Qed.
-
-Lemma avoiding_rounds_up_to (rounds : nat) (kept : list code_id) :
-  equivariant_up_to_avoiding
-    (fun avoid => iterate rounds (normalise_before_round_avoiding avoid kept)).
-Proof.
-  exact
-    (equivariant_up_to_avoiding_iterate rounds
-       (fun avoid => normalise_before_round_avoiding avoid kept)
-       (fun avoid => normalise_before_round_avoiding_scope avoid kept)
-       (normalise_before_round_avoiding_up_to kept)).
-Qed.
-
-(* The two phases and the rewrites from the types: what the
-   normalisation does before it goes through the rounds once more. *)
-Definition avoiding_and_types (rounds : nat) (avoid : list continuation)
-    (kept : list code_id) (e : expr) : expr :=
-  by_types
-    (iterate rounds (normalise_before_round_avoiding avoid kept)
-       (iterate rounds first_phase_round e)).
-
-Lemma avoiding_and_types_scope (rounds : nat) (avoid : list continuation)
-    (kept : list code_id) :
-  keeps_scope (avoiding_and_types rounds avoid kept).
-Proof.
-  exact
-    (keeps_scope_compose
-       (fun e =>
-          iterate rounds (normalise_before_round_avoiding avoid kept)
-            (iterate rounds first_phase_round e))
-       by_types
-       (keeps_scope_compose (iterate rounds first_phase_round)
-          (iterate rounds (normalise_before_round_avoiding avoid kept))
-          (params_phase_scope rounds)
-          (avoiding_rounds_scope rounds avoid kept))
-       by_types_scope).
-Qed.
-
-Lemma avoiding_and_types_up_to (rounds : nat) (kept : list code_id) :
-  equivariant_up_to_avoiding
-    (fun avoid => avoiding_and_types rounds avoid kept).
-Proof.
-  exact
-    (equivariant_up_to_avoiding_after
-       (fun avoid e =>
-          iterate rounds (normalise_before_round_avoiding avoid kept)
-            (iterate rounds first_phase_round e))
-       by_types
-       (fun avoid =>
-          keeps_scope_compose (iterate rounds first_phase_round)
-            (iterate rounds (normalise_before_round_avoiding avoid kept))
-            (params_phase_scope rounds)
-            (avoiding_rounds_scope rounds avoid kept))
-       by_types_scope by_types_equivariant
-       (equivariant_up_to_avoiding_before
-          (fun avoid =>
-             iterate rounds (normalise_before_round_avoiding avoid kept))
-          (iterate rounds first_phase_round) (params_phase_scope rounds)
-          (params_phase_equivariant rounds)
-          (avoiding_rounds_up_to rounds kept))).
-Qed.
-
-(* Then the rounds once more. *)
-Definition avoiding_phases (rounds : nat) (avoid : list continuation)
-    (kept : list code_id) (e : expr) : expr :=
-  iterate rounds (normalise_before_round_avoiding avoid kept)
-    (avoiding_and_types rounds avoid kept e).
-
-Lemma avoiding_phases_scope (rounds : nat) (avoid : list continuation)
-    (kept : list code_id) :
-  keeps_scope (avoiding_phases rounds avoid kept).
-Proof.
-  exact
-    (keeps_scope_compose (avoiding_and_types rounds avoid kept)
-       (iterate rounds (normalise_before_round_avoiding avoid kept))
-       (avoiding_and_types_scope rounds avoid kept)
-       (avoiding_rounds_scope rounds avoid kept)).
-Qed.
-
-Lemma avoiding_phases_up_to (rounds : nat) (kept : list code_id) :
-  equivariant_up_to_avoiding (fun avoid => avoiding_phases rounds avoid kept).
-Proof.
-  exact
-    (equivariant_up_to_avoiding_then
-       (fun avoid => avoiding_and_types rounds avoid kept)
-       (fun avoid =>
-          iterate rounds (normalise_before_round_avoiding avoid kept))
-       (fun avoid => avoiding_and_types_scope rounds avoid kept)
-       (fun avoid => avoiding_rounds_scope rounds avoid kept)
-       (avoiding_and_types_up_to rounds kept)
-       (avoiding_rounds_up_to rounds kept)).
-Qed.
-
-(* And the demotion of the exception handlers with its rounds, which
-   commutes with renaming. *)
+(* The phases with the round that is given the continuations
+   (FlambdaValidatorEquivarianceProofs.phases_with), then the demotion
+   of the exception handlers with its rounds, which commutes with
+   renaming. *)
 Theorem normalise_before_avoiding_keeps_scope :
   normalise_before_avoiding_keeps_scope_statement.
 Proof.
   intros avoid rounds kept.
   exact
-    (keeps_scope_compose (avoiding_phases rounds avoid kept)
-       (demote_and_tidy rounds) (avoiding_phases_scope rounds avoid kept)
+    (keeps_scope_compose
+       (phases_with rounds (normalise_before_round_avoiding avoid kept))
+       (demote_and_tidy rounds)
+       (phases_with_scope rounds (normalise_before_round_avoiding avoid kept)
+          (normalise_before_round_avoiding_scope avoid kept))
        (demote_and_tidy_scope rounds)).
 Qed.
 
@@ -214,11 +118,18 @@ Proof.
   intros rounds kept.
   exact
     (equivariant_up_to_avoiding_after
-       (fun avoid => avoiding_phases rounds avoid kept)
+       (fun avoid =>
+          phases_with rounds (normalise_before_round_avoiding avoid kept))
        (demote_and_tidy rounds)
-       (fun avoid => avoiding_phases_scope rounds avoid kept)
+       (fun avoid =>
+          phases_with_scope rounds
+            (normalise_before_round_avoiding avoid kept)
+            (normalise_before_round_avoiding_scope avoid kept))
        (demote_and_tidy_scope rounds) (demote_and_tidy_equivariant rounds)
-       (avoiding_phases_up_to rounds kept)).
+       (phases_with_up_to rounds
+          (fun avoid => normalise_before_round_avoiding avoid kept)
+          (fun avoid => normalise_before_round_avoiding_scope avoid kept)
+          (normalise_before_round_avoiding_up_to kept))).
 Qed.
 
 (* ======================================================================== *)
