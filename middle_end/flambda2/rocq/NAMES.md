@@ -1627,21 +1627,24 @@ Owed:
 - The machine of regions (`FlambdaRegionsSpec.v`, with its invariant,
   `FlambdaRegionsInvariantSpec.v`, the erasure of regions,
   `FlambdaRegionsErasureSpec.v`, what is proved of its calls,
-  `FlambdaRegionsCallsSpec.v`, and the check of the regions of a term,
-  `FlambdaRegionsCheckSpec.v`). Nothing is stated of it under a renaming
-  of variables and continuations, nor of the term with its regions
-  dropped (`FlambdaRegionsSpec.erase`) under one (what is stated of
-  `erase` is of runs, in `FlambdaRegionsErasureSpec.v`,
-  `FlambdaRegionsCallsSpec.v` and `FlambdaRegionsCheckSpec.v`, and
-  nothing in them is about a renaming). `erase` is not a function of
+  `FlambdaRegionsCallsSpec.v`, and the check of the regions of a term
+  with its soundness, `FlambdaRegionsCheckSpec.v` and
+  `FlambdaRegionsCheckSoundSpec.v`). Nothing is stated of it under a
+  renaming of variables and continuations, nor of the term with its
+  regions dropped (`FlambdaRegionsSpec.erase`) under one (what is stated
+  of `erase` is of runs, in `FlambdaRegionsErasureSpec.v`,
+  `FlambdaRegionsCallsSpec.v`, `FlambdaRegionsCheckSpec.v` and
+  `FlambdaRegionsCheckSoundSpec.v`, and nothing in them is about a
+  renaming). `erase` is not a function of
   terms up to bound names: it drops the `Let` of a `Local_allocation`
   that binds the name of its argument and makes an alias of any other,
   so of two terms that differ in that bound name the erased terms differ
   by a `Let`. No rewrite of the validation applies it; the test tool
   does, in its check of regions, where it compares `erase` of the term
-  converted with its regions against the term validated, up to bound
-  names (`expr_eqb`), and nothing says that a step of the machine of
-  regions respects that equality. The step compares the names of two
+  converted with its regions against the term that the validation was
+  given, up to bound names (`expr_eqb`), and nothing says that a step
+  of the machine of regions respects that equality. The step compares
+  the names of two
   variables in one place (`marker_of`): the first argument of a
   `Local_allocation` is the variable that the `Let` above it binds, and
   the region that it names is not that variable. The machine makes names
@@ -1691,6 +1694,47 @@ Owed:
   the check are in scope (`check_state_scoped`) and reads the order of
   the symbols drawn as time (`value_within`, `lifetime_holds`, with
   `FlambdaRegionsCallsSpec.frames_ordered`).
+  The check is proved sound
+  (`FlambdaRegionsCheckSoundSpec.region_check_sound_statement`): of a
+  term that passes it, run from its first state in a static environment,
+  the regions add no fault to the term, under two premises: the term is
+  one that the erasure is meant for there (`erasable`), and the symbols
+  that the machine draws are none of the term or of that static
+  environment (`region_names_fresh`). Four statements say what that
+  gives of a run of Simplify, each of runs from the first states of the
+  two terms in one static environment, with one base for the symbols
+  that the machine draws; none of them is about a renaming, and the
+  check is by names as before. All four ask that the term before, with
+  its regions dropped, does not go wrong, and that the term after passes
+  the check; the two that say that the term after never stops without a
+  step ask `erasable` and `region_names_fresh` of the term after, and
+  the two that say that the exits agree ask them of both terms. In two
+  of the four (`refined_and_checked_safe_statement`,
+  `refined_and_checked_exits_agree_statement`) a premise is `refines` of
+  the two terms with their regions dropped by `erase`: a relation of the
+  model, and not a verdict of the validation. The two others
+  (`validated_and_checked_safe_statement`,
+  `validated_and_checked_exits_agree_statement`) are of a unit with its
+  imports, and have in the place of that premise what the test tool
+  computes: that the verdict of `validate_unit`, the first validator
+  alone, of the two terms that it is given holds from the imports
+  (`verdict_holds_from`, asked with the same arguments), and that each
+  of those two terms is `erase` of the term with its regions up to bound
+  names (`expr_eqb [] []`, which is sound,
+  `FlambdaCompareSpec.expr_eqb_sound_statement`). So the comparison up
+  to bound names is a premise there, in the form in which the tool makes
+  it, and the two statements do not need a verdict to be the same of two
+  terms that are the same up to bound names, which is stated only of a
+  term before whose code is closed, renamed as a whole by a renaming
+  that does to its free names, and to the continuations that the
+  validator is given for the liftings and the loops, what the renaming
+  of the rest does (`validate_unit_renamed_alike_statement`). What is
+  between the tool and those two statements is no statement: the reading
+  of the text, the conversion, and that the tool calls these functions
+  on these terms (the head of `FlambdaRegionsCheckSoundSpec.v`).
+  `FlambdaRegionsCheckedSpec.regions_given`, by which the soundness is
+  proved, is a test of a state that reads one name, the continuation of
+  a jump, which it resolves.
 
 ## 10. The compiler's side
 
