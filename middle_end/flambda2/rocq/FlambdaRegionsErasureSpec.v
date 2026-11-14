@@ -102,9 +102,11 @@
    at the exit may be evaluated they give [value_erased] of each,
    with what that relation leaves out of a partial application
    unchanged. That every run from the state that the tool starts in is
-   such a run is not stated here: it would need that code cannot end a
-   region of its caller, which the invariant of
-   FlambdaRegionsInvariantSpec.v does not say.
+   such a run is not stated here: it is
+   FlambdaRegionsCallsSpec.exit_values_usable_statement, from the fact
+   that code cannot end a region of its caller, and the two statements
+   below are said again there with [value_erased] of every value at
+   the exit.
 
    THE STATEMENTS
 
@@ -148,7 +150,8 @@
      what it converts with regions dropped: the tool tests it of each
      unit.
    - That a run from the state that the tool starts in exits with
-     values that may all be evaluated: see "the values", above. *)
+     values that may all be evaluated: that is in
+     FlambdaRegionsCallsSpec.v (see "the values", above). *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.

@@ -132,7 +132,9 @@
      evaluated where the continuation was made, at a call that gave
      them to its exception continuation; they go to the exit as they
      are, and the invariant asks of them what it asks of a variable.
-     That they are still live when the exit is reached is not stated.
+     That they are still live when the exit is reached is not stated
+     here: of a run from the state that the test tool starts in it is
+     FlambdaRegionsCallsSpec.exit_values_usable_statement.
    - What is gone stays gone, over a run and not one step
      ([gone_stays_gone_run_statement]).
    Each stops at a partial application, as above.
