@@ -882,9 +882,12 @@ it gave back.
   that static environment and with symbols to draw that are none of
   the term or of the static environment (`region_names_fresh`), stops
   without a step only with the fault `No_plain_step`, the one for
-  where `step` has no step. That is not the soundness of the check
-  against every fault: the tree does not state that where such a run
-  stops, the run of the term with its regions dropped goes wrong too.
+  where `step` has no step. Of the terms that the erasure is meant for
+  (`FlambdaRegionsSpec.erasable`) it proves more
+  (`FlambdaRegionsCheckSoundSpec.region_check_sound_statement`): where
+  such a run stops, the run of the term with its regions dropped goes
+  wrong too, so that the regions add no fault to the term. That is of
+  the model's term on the model's machine.
   The test tool does not ask `region_check` and nothing of it is
   extracted, so no line of the tool's output rests on it: a line of
   the tool is still of what this entry describes above, the one run
