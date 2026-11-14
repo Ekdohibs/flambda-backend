@@ -1378,7 +1378,24 @@ Definition tidied_before (rounds : nat) (e : expr) : expr :=
    continuation applied once is put at its application where
    FlambdaInlineTailSpec.inline_tail_conts_kinded allows; and of the
    [Let]s left unused, those that are sure to have a value are
-   removed, as in the normalisation of the term after. *)
+   removed, as in the normalisation of the term after.
+
+   After the fold, the continuations that a handler binds on its way
+   to a [Switch] on one of its parameters are bound outside it, and
+   an application that gives that parameter a number goes to the arm
+   of the number, where its arguments are known to have the kinds of
+   the parameters (FlambdaLiftContsSpec.lift_handler_conts,
+   FlambdaForwardArmSpec.forward_to_arms_kinded), as in the rounds
+   of the term after ([inline_once_applied_after]). They come again
+   here because the rounds may leave a continuation that the first
+   of the two refuses and that the rewrites above then make one that
+   it accepts, when no round follows. It refuses where an
+   application gives a variable for a parameter that its arm does
+   not read (FlambdaLiftContsSpec.read_where_given); and where every
+   application gives that parameter one variable, [unalias_params]
+   above takes the parameter away. The term before has its
+   applications go to their arms in the rounds of its first phase
+   ([first_phase_round]). *)
 Definition tidy_expr_after (e : expr) : expr :=
   remove_unused_defined_lets_in_loops []
     (follow_aliases_in_loops []
@@ -1387,10 +1404,13 @@ Definition tidy_expr_after (e : expr) : expr :=
              (inline_tail_conts_kinded
                 (sink_let_conts
                    (remove_unused_conts
-                      (fold_constants
-                         (numbers_in_arms
-                            (unalias_rec_params
-                               (unalias_params (give_scrutinees e))))))))))).
+                      (forward_to_arms_kinded
+                         (lift_handler_conts
+                            (fold_constants
+                               (numbers_in_arms
+                                  (unalias_rec_params
+                                     (unalias_params
+                                        (give_scrutinees e))))))))))))).
 
 Definition tidy_code_after (body : expr) : expr :=
   rewrite_rec_handlers tidy_expr_after (tidy_expr_after body).

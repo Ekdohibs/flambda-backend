@@ -451,10 +451,12 @@ let tidy_expr_after e =
              (inline_tail_conts_kinded
                 (sink_let_conts
                    (remove_unused_conts
-                      (fold_constants
-                         (numbers_in_arms
-                            (unalias_rec_params
-                               (unalias_params (give_scrutinees e)))))))))))
+                      (forward_to_arms_kinded
+                         (lift_handler_conts
+                            (fold_constants
+                               (numbers_in_arms
+                                  (unalias_rec_params
+                                     (unalias_params (give_scrutinees e)))))))))))))
 
 (** val tidy_code_after : expr -> expr **)
 
