@@ -1,0 +1,9 @@
+stub_called_twice.fl:
+  before Simplify (26 steps): returns [0: <fun>; 712]
+  after Simplify (15 steps): returns [0: <fun>; 712]
+  the check of kinds: passes before, passes after
+  calls outside code: 1 before, 1 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated: the same once closures and blocks are lifted to symbols and the terms normalised
+  (asked of the term before with chosen calls inlined first)

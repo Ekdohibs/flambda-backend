@@ -1,0 +1,69 @@
+let $camlRec_local_helper_called_outside__first_const_0 = Block 0 () in
+(let code size(7)
+       second_2 (x/80 : imm tagged)
+         my_closure/81 &my_alloc_region/82 my_depth/83
+         -> k/26 * k/27
+         : imm tagged =
+   let next_depth/84 = rec_info (succ my_depth/83) in
+   let n/85 = %project_value_slot.[second].[n] (my_closure/81) in
+   let first/86 = %project_function_slot.[second].[first] (my_closure/81) in
+   let int_mul/87 = %int_barith.mul (x/80, n/85) in
+   cont k/26 (int_mul/87)
+ in
+ let code size(8)
+       first_1 (x/88 : imm tagged)
+         my_closure/89 &my_alloc_region/90 my_depth/91
+         -> k/28 * k/29
+         : imm tagged =
+   let next_depth/92 = rec_info (succ my_depth/91) in
+   let n/93 = %project_value_slot.[first].[n] (my_closure/89) in
+   let second/94 = %project_function_slot.[first].[second] (my_closure/89) in
+   let int_add/95 = %int_barith.add (x/88, 1) in
+   apply direct(second_2 &my_alloc_region/90)
+     (second/94 ~ depth my_depth/91 -> next_depth/92 : _ -> imm tagged)
+       (int_add/95)
+       -> k/28 * k/29
+ in
+ let code size(40)
+       run_0 (n/96 : imm tagged)
+         my_closure/97 &my_alloc_region/98 my_depth/99
+         -> k/30 * k/31
+         : imm tagged =
+   let next_depth/100 = rec_info (succ my_depth/99) in
+   let region/101 = %begin_region () in
+   let ghost_region/102 = %begin_ghost_region () in
+   (let first/106 = closure first_1 @first &my_alloc_region/98 &region/101
+    and second/107 = closure second_2 @second &my_alloc_region/98 &region/101
+    with { n = n/96 }
+    in
+    apply direct(second_2 &my_alloc_region/98)
+      (second/107 : _ -> imm tagged) (1) -> k/33 * k/31
+      where k/33 (apply_result/108 : imm tagged) =
+        (apply direct(first_1 &my_alloc_region/98)
+           (first/106 : _ -> imm tagged) (2) -> k/34 * k/31
+           where k/34 (apply_result/109 : imm tagged) =
+             let int_add/110 =
+               %int_barith.add (apply_result/109, apply_result/108)
+             in
+             cont k/32 (int_add/110)))
+     where k/32 (region_return/103 : imm tagged) =
+       let unit/104 = %end_region (region/101) in
+       let unit/105 = %end_ghost_region (ghost_region/102) in
+       cont k/30 (region_return/103)
+ in
+ let run/111 = closure run_0 @run &toplevel in
+ (let Popaque/114 = %opaque (3) in
+  apply direct(run_0 &toplevel)
+    (run/111 : _ -> imm tagged) (Popaque/114) -> k/35 * error)
+   where k/35 (result/112 : imm tagged) =
+     let Pmakeblock/113 = %block.[`0`].`toplevel` (run/111, result/112) in
+     cont k/25 (Pmakeblock/113))
+  where k/25 define_root_symbol (module_block/77) =
+    let field_0/78 = %block_load.tag[`0`].`size`[`2`].[`0`] (module_block/77)
+    in
+    let field_1/79 = %block_load.tag[`0`].`size`[`2`].[`1`] (module_block/77)
+    in
+    let $camlRec_local_helper_called_outside =
+      Block 0 (field_0/78, field_1/79)
+    in
+    cont done ($camlRec_local_helper_called_outside)

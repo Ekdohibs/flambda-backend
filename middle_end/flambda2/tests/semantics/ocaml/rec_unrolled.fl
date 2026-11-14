@@ -1,0 +1,65 @@
+(let code rec size(23)
+       length_0
+         (l/55 : [ 0 | 0 of imm tagged * [ 0 | 0 of imm tagged * val ] ])
+         my_closure/56 &my_alloc_region/57 my_depth/58
+         -> k/22 * k/23
+         : imm tagged =
+   let next_depth/59 = rec_info (succ my_depth/58) in
+   (let prim/63 = %is_int (l/55) in
+    let Pisint/64 = %tag_imm (prim/63) in
+    (let untagged/65 = %untag_imm (Pisint/64) in
+     switch untagged/65
+       | 0 -> k/26
+       | 1 -> k/22 (0))
+      where k/26 =
+        cont k/24)
+     where k/24 =
+       ((let Pfield/62 = %block_load.[`1`] (l/55) in
+         apply direct(length_0 &my_alloc_region/57)
+           (my_closure/56 ~ depth my_depth/58 -> next_depth/59
+            : _ -> imm tagged)
+             (Pfield/62)
+             -> k/25 * k/23)
+          where k/25 (apply_result/60 : imm tagged) =
+            let int_add/61 = %int_barith.add (1, apply_result/60) in
+            cont k/22 (int_add/61))
+ in
+ let $camlRec_unrolled__const_block_0 = Block 0 (3, 0) in
+ let $camlRec_unrolled__const_block_1 =
+   Block 0 (2, $camlRec_unrolled__const_block_0)
+ in
+ let $camlRec_unrolled__const_block_2 =
+   Block 0 (1, $camlRec_unrolled__const_block_1)
+ in
+ let code size(5)
+       three_1 (param/66 : imm tagged)
+         my_closure/67 &my_alloc_region/68 my_depth/69
+         -> k/27 * k/28
+         : imm tagged =
+   let next_depth/70 = rec_info (succ my_depth/69) in
+   let length/71 = %project_value_slot.[three].[length] (my_closure/67) in
+   apply direct(length_0 &my_alloc_region/68) unroll(3)
+     (length/71 : _ -> imm tagged)
+       ($camlRec_unrolled__const_block_2)
+       -> k/27 * k/28
+ in
+ let length/72 = closure length_0 @length &toplevel in
+ let three/73 = closure three_1 @three &toplevel
+ with { length = length/72 }
+ in
+ apply direct(three_1 &toplevel)
+   (three/73 : _ -> imm tagged) (0) -> k/29 * error
+   where k/29 (result/74 : imm tagged) =
+     let Pmakeblock/75 =
+       %block.[`0`].`toplevel` (length/72, three/73, result/74)
+     in
+     cont k/21 (Pmakeblock/75))
+  where k/21 define_root_symbol (module_block/51) =
+    let field_0/52 = %block_load.tag[`0`].`size`[`3`].[`0`] (module_block/51)
+    in
+    let field_1/53 = %block_load.tag[`0`].`size`[`3`].[`1`] (module_block/51)
+    in
+    let field_2/54 = %block_load.tag[`0`].`size`[`3`].[`2`] (module_block/51)
+    in
+    let $camlRec_unrolled = Block 0 (field_0/52, field_1/53, field_2/54) in
+    cont done ($camlRec_unrolled)

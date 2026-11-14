@@ -1,0 +1,14 @@
+f2_one_inlined_one_not.fl:
+  before Simplify (59 steps): returns
+                                [0: <fun>; [0: <fun>; <fun>];
+                                 [0: <fun>; <fun>]; 21]
+  after Simplify (35 steps): returns
+                               [0: <fun>; [0: <fun>; <fun>];
+                                [0: <fun>; <fun>]; 21]
+  the check of kinds: passes before, passes after
+  calls outside code: 4 before, 2 after
+  the same
+  calls outside code once those of known code are inlined: 2
+  validated: the same once closures and blocks are lifted to symbols and the terms normalised
+  (at the second asking, of the two terms normalised with what their symbols are bound to used)
+  (asked of the term before with chosen calls inlined first)

@@ -1,0 +1,83 @@
+(let code size(5)
+       apply_1 (x/88 : imm tagged)
+         my_closure/89 &my_alloc_region/90 my_depth/91
+         -> k/28 * k/29
+         : imm tagged =
+   let next_depth/92 = rec_info (succ my_depth/91) in
+   let S/93 = %project_value_slot.[`apply`].[S] (my_closure/89) in
+   let Pfield/94 = %block_load.[`0`] (S/93) in
+   let int_add/95 = %int_barith.add (x/88, Pfield/94) in
+   cont k/28 (int_add/95)
+ in
+ let code size(9)
+       twice_2 (x/96 : imm tagged)
+         my_closure/97 &my_alloc_region/98 my_depth/99
+         -> k/30 * k/31
+         : imm tagged =
+   let next_depth/100 = rec_info (succ my_depth/99) in
+   let apply/101 = %project_value_slot.[twice].[`apply`] (my_closure/97) in
+   apply direct(apply_1 &my_alloc_region/98)
+     (apply/101 : _ -> imm tagged) (x/96) -> k/32 * k/31
+     where k/32 (apply_result/102 : imm tagged) =
+       apply direct(apply_1 &my_alloc_region/98)
+         (apply/101 : _ -> imm tagged) (apply_result/102) -> k/30 * k/31
+ in
+ let code loopify(never) size(38)
+       Add_0 (S/103 : val)
+         my_closure/104 &my_alloc_region/105 my_depth/106
+         -> k/33 * k/34
+         : val =
+   let next_depth/107 = rec_info (succ my_depth/106) in
+   let apply/108 = closure apply_1 @`apply` &my_alloc_region/105
+   with { S = S/103 }
+   in
+   let twice/109 = closure twice_2 @twice &my_alloc_region/105
+   with { `apply` = apply/108 }
+   in
+   let Pmakeblock/110 =
+     %block.[`0`].my_alloc_region/105 (apply/108, twice/109)
+   in
+   cont k/33 (Pmakeblock/110)
+ in
+ let $camlF2_one_inlined_one_not__Pmakeblock_1 = Block 0 (5) in
+ let $camlF2_one_inlined_one_not__Pmakeblock_0 = Block 0 (3) in
+ let Add/111 = closure Add_0 @Add &toplevel in
+ apply direct(Add_0 &toplevel) inlined(always)
+   (Add/111 : _ -> val)
+     ($camlF2_one_inlined_one_not__Pmakeblock_0)
+     -> k/35 * error
+   where k/35 (Add_three/112 : val) =
+     (apply direct(Add_0 &toplevel) inlined(never)
+        (Add/111 : _ -> val)
+          ($camlF2_one_inlined_one_not__Pmakeblock_1)
+          -> k/36 * error
+        where k/36 (Add_five/113 : val) =
+          ((let Popaque/120 = %opaque (1) in
+            let Pfield/121 = %block_load.[`1`] (Add_five/113) in
+            apply &toplevel Pfield/121 (Popaque/120) -> k/37 * error)
+             where k/37 (apply_result/114 : imm tagged) =
+               ((let Popaque/118 = %opaque (4) in
+                 let Pfield/119 = %block_load.[`1`] (Add_three/112) in
+                 apply &toplevel Pfield/119 (Popaque/118) -> k/38 * error)
+                  where k/38 (apply_result/115 : imm tagged) =
+                    let result/116 =
+                      %int_barith.add (apply_result/115, apply_result/114)
+                    in
+                    let Pmakeblock/117 =
+                      %block.[`0`].`toplevel`
+                        (Add/111, Add_three/112, Add_five/113, result/116)
+                    in
+                    cont k/27 (Pmakeblock/117)))))
+  where k/27 define_root_symbol (module_block/83) =
+    let field_0/84 = %block_load.tag[`0`].`size`[`4`].[`0`] (module_block/83)
+    in
+    let field_1/85 = %block_load.tag[`0`].`size`[`4`].[`1`] (module_block/83)
+    in
+    let field_2/86 = %block_load.tag[`0`].`size`[`4`].[`2`] (module_block/83)
+    in
+    let field_3/87 = %block_load.tag[`0`].`size`[`4`].[`3`] (module_block/83)
+    in
+    let $camlF2_one_inlined_one_not =
+      Block 0 (field_0/84, field_1/85, field_2/86, field_3/87)
+    in
+    cont done ($camlF2_one_inlined_one_not)

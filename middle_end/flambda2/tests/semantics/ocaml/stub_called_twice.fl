@@ -1,0 +1,65 @@
+let $camlStub_called_twice__first_const_0 = Block 0 () in
+(let code size(13)
+       combine_0 (a/72 : imm tagged, b/73 : imm tagged, c/74 : imm tagged)
+         my_closure/75 &my_alloc_region/76 my_depth/77
+         -> k/24 * k/25
+         : imm tagged =
+   let next_depth/78 = rec_info (succ my_depth/77) in
+   let int_mul/79 = %int_barith.mul (b/73, 10) in
+   let int_mul/80 = %int_barith.mul (a/72, 100) in
+   let int_add/81 = %int_barith.add (int_mul/80, int_mul/79) in
+   let int_add/82 = %int_barith.add (int_add/81, c/74) in
+   cont k/24 (int_add/82)
+ in
+ let code size(5) stub
+       partial_combine_1 (param1/83 : imm tagged, param2/84 : imm tagged)
+         my_closure/85 &my_alloc_region/86 my_depth/87
+         -> k/26 * k/27
+         : imm tagged =
+   let next_depth/88 = rec_info (succ my_depth/87) in
+   let combine/89 =
+     %project_value_slot.[partial_combine].[combine] (my_closure/85)
+   in
+   apply direct(combine_0 &my_alloc_region/86)
+     (combine/89 : _ -> imm tagged) (7, param1/83, param2/84) -> k/26 * k/27
+ in
+ let code size(5) stub
+       partial_from_seven_2 (param1/90 : imm tagged)
+         my_closure/91 &my_alloc_region/92 my_depth/93
+         -> k/28 * k/29
+         : imm tagged =
+   let next_depth/94 = rec_info (succ my_depth/93) in
+   let from_seven/95 =
+     %project_value_slot.[partial_from_seven].[from_seven] (my_closure/91)
+   in
+   apply direct(partial_combine_1 &my_alloc_region/92)
+     (from_seven/95 : _ -> imm tagged) (8, param1/90) -> k/28 * k/29
+ in
+ let combine/96 = closure combine_0 @combine &toplevel in
+ (let partial_combine/102 =
+    closure partial_combine_1 @partial_combine &toplevel
+  with { combine = combine/96 }
+  in
+  cont k/30 (partial_combine/102))
+   where k/30 (from_seven/97 : val) =
+     ((let partial_from_seven/101 =
+         closure partial_from_seven_2 @partial_from_seven &toplevel
+       with { from_seven = from_seven/97 }
+       in
+       cont k/31 (partial_from_seven/101))
+        where k/31 (from_seven_eight/98 : val) =
+          (apply direct(partial_combine_1 &toplevel)
+             (from_seven/97 : _ -> imm tagged) (1, 2) -> k/32 * error
+             where k/32 (seven_one_two/99 : imm tagged) =
+               let Pmakeblock/100 =
+                 %block.[`0`].`toplevel`
+                   (from_seven_eight/98, seven_one_two/99)
+               in
+               cont k/23 (Pmakeblock/100))))
+  where k/23 define_root_symbol (module_block/69) =
+    let field_0/70 = %block_load.tag[`0`].`size`[`2`].[`0`] (module_block/69)
+    in
+    let field_1/71 = %block_load.tag[`0`].`size`[`2`].[`1`] (module_block/69)
+    in
+    let $camlStub_called_twice = Block 0 (field_0/70, field_1/71) in
+    cont done ($camlStub_called_twice)
