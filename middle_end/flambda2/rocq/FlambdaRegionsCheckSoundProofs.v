@@ -32,12 +32,13 @@
    sound follows: every state of the run of a term that passes the check
    has the property of states, which gives the two things that the first
    statement asks of the states of the run. The two statements about a run
-   of Simplify whose first premise is [refines] are those of
-   FlambdaRegionsCheckProofs.v with the soundness of the check for their
-   premise. The two of a unit with its imports follow from them: the
-   theorem of the validation with imports gives [unit_refines] of the two
-   terms that the validation is given, the comparison up to bound names is
-   sound, and [refines] is transitive. Nothing here needs review. *)
+   of Simplify of which [refines] is a premise are those of
+   FlambdaRegionsCheckProofs.v, with the soundness of the check for their
+   premise [regions_add_no_fault]. The two of a unit with its imports
+   follow from them: the theorem of the validation with imports gives
+   [unit_refines] of the two terms that the validation is given, the
+   comparison up to bound names is sound, and [refines] is transitive.
+   Nothing here needs review. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.

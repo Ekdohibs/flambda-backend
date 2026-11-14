@@ -63,7 +63,7 @@
    check in the place of that premise, each in two forms.
 
    In the first form ([refined_and_checked_safe_statement],
-   [refined_and_checked_exits_agree_statement]) the first premise is
+   [refined_and_checked_exits_agree_statement]) a premise is
    [refines] of the two terms with their regions dropped, from their
    first states in the static environment: a relation of the model,
    and not a verdict of the validation. If it holds, the term before
@@ -88,7 +88,7 @@
    which gives [FlambdaImportsSpec.unit_refines] of the two terms.
    And each of the two is, up to bound names, [erase] of the term
    with its regions ([FlambdaCompareSpec.expr_eqb], which is sound:
-   [expr_eqb_sound_statement]). With these the premise of the first
+   [expr_eqb_sound_statement]). With these that premise of the first
    form holds: [erase_statics] leaves the static environment of the
    imports, which has no code, as it is.
 
