@@ -68,8 +68,12 @@
    [conts_fit]). So a handler is applied to a constant or a symbol
    where its parameter is known. What a handler of a call is given is
    what the code called gives its exception continuation, and code
-   that passes the test spoils nothing of that one
-   ([knowing_spoils_none]).
+   that passes the test spoils nothing of a continuation that is not
+   of its scope ([knowing_spoils_none]), which is its return
+   continuation alone. Where code gives its two continuations one
+   name, the name is of its scope and stands for the return
+   continuation: the call binds that one first, and its entry hides
+   that of the exception continuation ([call_code_plain]).
 
    The two runs may start from a continuation environment of what may
    follow a unit (FlambdaObserversSpec.observers), the empty one for
@@ -2768,7 +2772,8 @@ Qed.
 (* An expression that passes the test for a scope spoils no parameter
    of a continuation that is not of the scope: what it says of one that
    it binds itself is forgotten. So code spoils no parameter of its
-   exception continuation. *)
+   exception continuation, unless that one has the name of its return
+   continuation. *)
 Fixpoint knowing_spoils_none (scope : list continuation)
     (plain : list variable) (e : expr) (k : continuation) (i : nat)
     {struct e} :
@@ -3233,8 +3238,12 @@ Qed.
 
 (* A full call of code that passes the test, returning to a
    continuation that is no way out and excuses every position, keeps
-   the invariant: the body spoils no parameter of the exception
-   continuation of the code, whatever that excuses. *)
+   the invariant. The return continuation of the code is bound first:
+   its name stands for what the call returns to, also where the
+   exception continuation of the code has that name, the entry of the
+   return continuation hiding the other. Under another name the
+   exception continuation is not of the scope of the body, which
+   spoils no parameter of it, whatever it excuses. *)
 Lemma call_code_plain (closure : value) (called : code_id) (c : code)
     (vs : list value) (args_arity return_arity : arity)
     (return_to exn_to : cont_value) (m_return m_exn : nat -> bool)

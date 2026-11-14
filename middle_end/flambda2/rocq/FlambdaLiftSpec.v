@@ -200,9 +200,9 @@
      two [Let]s cannot be given the same symbol; the two files just
      named put one binding for two [Let]s of one constant that are
      lifted out of one body (FlambdaLiftFromCodeSpec.once_each);
-   - a unit that gives a variable to its return continuation, or raises
-     in code a variable that is not known to hold a symbol or a
-     constant: see the CR at [exits_plain].
+   - a unit that gives its return continuation, or raises in code, a
+     variable that is not known to hold a symbol or a constant: see
+     the CR at [exits_plain].
 
    Identity. The model's [Make_block] is the immutable one
    (FlambdaPrimitiveModel.v) and its values have no identity, so nothing
@@ -511,10 +511,14 @@ Definition exits_plain_sound_statement : Prop :=
       exception continuation is tested where the code is bound
       ([code_exits_plain_knowing]: that continuation is not in scope
       there, so every argument and every extra argument given to it is
-      a symbol, a constant or a variable known to hold one). The extra
-      arguments of the calls in the scope of [k] are tested here, all
-      of them and not by position: nested extra arguments move the
-      positions.
+      a symbol, a constant or a variable known to hold one; where the
+      code gives its return and exception continuations one name, the
+      name is in scope, and it stands for the return continuation:
+      FlambdaSemanticsSpec.call_code binds that one first, and its
+      entry hides that of the exception continuation in the
+      environment of the body). The extra arguments of the calls in
+      the scope of [k] are tested here, all of them and not by
+      position: nested extra arguments move the positions.
    There is no other way: a continuation is not a value, a trap action
    applies nothing, and a partial application is given to the return
    continuation of its call.
