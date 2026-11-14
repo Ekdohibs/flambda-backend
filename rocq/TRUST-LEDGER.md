@@ -851,29 +851,21 @@ it gave back.
   what it has delayed before an `End_region`, and not before an
   `End_try_region`). It says nothing of a region that nothing ends, of
   an allocation that names another region than the newest that is not
-  of a `try`, of the closure that a partial application makes, nor of
-  blocks with an identity and mutable arrays (decisions D44 to D48,
-  D53). The conversion makes neither. The machine of regions runs
-  neither: it does not run a `Let` of a primitive of the heap, nor of
-  another primitive, not one of regions, that is given a location.
-  The test of the simples of that `Let` is made first, and a dead
-  value given to it is the fault that it is anywhere. Where that test
-  passes, the run ends there, with a result that is not a step, not an
-  exit and not a fault (`FlambdaRegionsSpec.Region_let_not_run`), and
-  nothing further is checked of the term: a value put in a cell of the
-  heap may be local, and a cell made in a region is not followed. Such
-  an end is not "passes": the line says "not run", with the reason
-  that the unit is not checked for regions from that `Let` on
-  (`run_regions`).
-  While the conversion makes no primitive of the heap, no run of the
-  tool ends so: the static environment of the imports has no code and
-  no value that holds a location, and of a term with no primitive of
-  the heap, run from its first state in such an environment, the tree
-  proves it
-  (`FlambdaRegionsInvariantSpec.no_heap_primitive_no_let_not_run_statement`).
-  That no run of the tool ends so is an argument from that statement
-  and from what is trusted of the conversion of primitives, and not a
-  statement of the tree. And
+  of a `try`, nor of the closure that a partial application makes
+  (decisions D44 to D48). And it says nothing of blocks with an
+  identity and of mutable arrays, though the machine of regions runs
+  them: the conversion makes neither. On the machine a cell that a
+  local allocation makes where a frame is on the stack is listed with
+  the frame that was the newest then, and its location may not be
+  evaluated once that frame is gone; with no frame on the stack the
+  cell is not listed and is never freed (decision D44); a cell made
+  on the heap is made with nothing local; and a store puts in a cell
+  only what lives as long as the cell (decision D54), with a fault of
+  its own, which the tool reports separately (`run_regions`,
+  `region_outcome_shown`). While the conversion makes
+  no primitive of the heap, no run of the tool makes a cell, and none
+  comes to that fault. That is an argument from what is trusted of
+  the conversion of primitives, and not a statement of the tree. And
   "passes before, passes after" relates the two terms in nothing: the
   validation of the unit is still made with regions dropped (the entry
   above, decision D37). The counts that the environment variable
@@ -907,26 +899,33 @@ it gave back.
   (`FlambdaRegionsCheckSoundSpec.region_check_sound_statement`): where
   such a run stops without a step, the run of the term with its
   regions dropped goes wrong too, so that the regions add no fault to
-  the term. Both are of
-  the run as far as the machine of regions runs the term. A run may
-  also end at a `Let` that the machine does not run (decision D53,
-  above): that end is not a stop without a step and not a fault, and
-  neither statement says anything of the term from that `Let` on. So
-  "safe", in the statements about a run of Simplify with the check, is
-  "never undefined" (`FlambdaRegionsCheckSpec.region_safe`, which
+  the term. The machine
+  no longer stops in a way of its own at a `Let` that needs the heap:
+  a `Let` that passes the tests of regions runs on the heap of the
+  state, as `step` runs it, and a step of the machine is a step, an
+  exit or a stop without a step. "Safe", in the statements about a
+  run of Simplify with the check, is "never undefined"
+  (`FlambdaRegionsCheckSpec.region_safe`, which
   `checked_after_safe_statement` and, in
   `FlambdaRegionsCheckSoundSpec.v`,
   `refined_and_checked_safe_statement` and
-  `validated_and_checked_safe_statement` conclude), and it includes a
-  run that ends so with nothing checked after it: `region_safe` holds
-  of the first state of a unit whose first `Let` makes a block with an
-  identity out of constants, whatever the rest of the unit does with
-  regions. The statements about exits have the case "or the run of the
-  term after comes to a `Let` that the machine does not run". A run
-  from the first state of a term with no primitive of the heap, in a
-  static environment whose code has none and whose values hold no
-  location, never ends so (the statement named above), and then a run
-  that is never undefined only steps or exits. That is of the model's
+  `validated_and_checked_safe_statement` conclude), and there is no
+  longer a separate result, "not run", at such a `Let`. The
+  statements that take `region_check` also ask `region_names_fresh`,
+  which in particular asks that the first static environment holds
+  no location. Of cells the check asks more than the machine. It
+  passes a store only of a value to which it gives the
+  lifetime "for ever" (decision D54). And it keeps, for a variable, a
+  lifetime of what is read from its value (`cs_contents`): where it
+  sees the variable bound by the local allocation of a cell, the
+  shortest of the lifetimes that it gives what the cell is made with,
+  which a `Let` of a simple carries to the variable that it binds;
+  for any other variable, the lifetime that the check gives the
+  variable itself. So a cell that comes to a read through a closure,
+  a parameter, a join or the result of a call is read as holding what
+  lives as long as the check takes the cell to live. The check then
+  refuses terms that the machine runs to their end; it is not
+  complete, and no statement says that it is. That is of the model's
   term on the model's machine.
   The test tool does not ask `region_check` and nothing of it is
   extracted, so no line of the tool's output rests on it: a line of
