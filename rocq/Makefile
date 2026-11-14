@@ -317,6 +317,8 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   FlambdaScopedProofs.v \
   FlambdaSemanticsProofs.v \
   FlambdaSemanticsSpec.v \
+  FlambdaSetsOfCodeProofs.v \
+  FlambdaSetsOfCodeSpec.v \
   FlambdaShadowParamsNamesProofs.v \
   FlambdaShadowParamsProofs.v \
   FlambdaShadowParamsSpec.v \
