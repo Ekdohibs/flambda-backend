@@ -298,6 +298,38 @@ a `CR` at the place in the `Spec` file.
   meaning in the model: the conversion refuses every one and nothing
   uses the table. Open, and the human's: `requests/P1-c-calls.md`,
   "The open choice", has the ways to answer and what each costs.
+- **D53.** What the machine of regions does with the heap, once
+  `step` runs a `Let` on the heap. Its frames list the symbols of
+  local allocations and no cells, so a cell made in a region would
+  never be found dead there. Decided for the stage that makes `step`
+  run on the heap: the machine of regions does not run a `Let` of a
+  primitive of the heap, nor of any other primitive but one of
+  regions, one of whose arguments has a location for value
+  (`FlambdaRegionsSpec.named_needs_heap`). The step then has a result
+  of its own, `Region_let_not_run`, which is not a step, not an exit
+  and not a fault; the run ends there. The test of the simples (D45)
+  comes first. The tests of the form of the `Let` do not (the marker
+  of a local allocation, D46): a local value put in a cell of the heap
+  is neither found nor ruled out at such a `Let`. What "safe" then
+  includes: `region_safe` is "never undefined", and it holds of a run
+  that ends at such a `Let`, with nothing checked from there on. Its
+  name and the names of the statements that conclude it stay; the
+  comment and a `CR` at the definition say what they give. A run from
+  the first state of a term with no primitive of the heap, in a static
+  environment whose code has none and whose values hold no location,
+  never ends so (`no_heap_primitive_no_let_not_run_statement`): of
+  such a term the statements say what they said. The statements about
+  exits gain the case "or the run comes to a `Let` that the machine
+  does not run". The test tool is to print such a unit as not checked
+  for regions from that `Let` on. The other choices: to call such a
+  `Let` undefined for want of a step, which the term with its regions
+  dropped is not; or to run it on the heap and say nothing of the
+  cells of a region, which would pass as safe a term that reads a
+  local cell after the end of its region. Lifted when the frames of
+  the machine of regions list cells. If a symbol comes to name a cell
+  before that, the test follows the premise of
+  `exec_named_no_location_statement`. Decided, for the review of the
+  human.
 
 ## Discrepancies with the compiler
 
