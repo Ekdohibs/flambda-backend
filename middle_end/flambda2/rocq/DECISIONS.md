@@ -298,6 +298,32 @@ a `CR` at the place in the `Spec` file.
   meaning in the model: the conversion refuses every one and nothing
   uses the table. Open, and the human's: `requests/P1-c-calls.md`,
   "The open choice", has the ways to answer and what each costs.
+- **D52.** A field read as immutable from a block that can be
+  written: a `Block_load` marked `Immutable` or `Immutable_unique` of
+  a block made mutable. The front end marks the read of a field by
+  the field and not by the record (`lambda/translcore.ml`; then
+  `convert_field_read_semantics` of
+  `from_lambda/lambda_to_flambda_primitives.ml`), so the read of an
+  immutable field of a record that also has a mutable field can be
+  such a load. The compiler gives it no coeffect
+  (`reading_from_a_block` of `terms/flambda_primitive.ml`). In the
+  model such a load has no value (`FlambdaHeapSpec.load_allowed`, in
+  `exec_unary_on_cell`), so a run that comes to one is undefined:
+  that is the conservative choice, and it is not a decision. The
+  state of the machine carries a read record for this label and for
+  D49 (`FlambdaValueSpec.read_record`; the comment at `read_extent`
+  says what it is to hold: a location with one field of a block, or
+  with the whole of the bytes or of the elements). The record does
+  nothing yet: no step adds to it
+  (`FlambdaSemanticsSpec.step_keeps_reads_statement`) and none looks
+  at it (`step_ignores_reads_statement`); the section "The read
+  record does nothing yet" of `FlambdaSemanticsSpec.v` says so, and
+  that these statements change when the record acts. Open, and the
+  human's: what such a load is to read, and what a later write to
+  the field is then to be. The record is shaped for one design,
+  which is not taken: that of D49 carried to the fields of blocks,
+  in which the load reads the field as it is and a later write to a
+  field so read is undefined.
 - **D53.** What the machine of regions does with the heap, once
   `step` runs a `Let` on the heap. Its frames list the symbols of
   local allocations and no cells, so a cell made in a region would
