@@ -302,7 +302,9 @@ Fixpoint rec_handlers_bindings
    ones and the symbols of the static sets of closures that get the
    new ones, which lift no [Let] either; and whether the rounds that
    follow the lifting also make direct the calls of the closures that
-   a [Let] makes. The last seven are not read here: the first two are
+   a [Let] makes; and whether those rounds also use, in the bodies of
+   code, what [my_closure] is known to be from its code. The last
+   eight are not read here: the first two are
    for FlambdaLiftFromCodeSpec.lift_from_code_unit and
    FlambdaLiftFromArmsSpec.lift_to_head_unit, which the validation
    applies before [lift_unit], the next two for
@@ -310,8 +312,8 @@ Fixpoint rec_handlers_bindings
    the fifth for FlambdaUnusedHeadStaticsSpec.add_head_tables, which
    it applies after that, the sixth for
    FlambdaCopyCodeSpec.with_copies, which it applies last of all, and
-   the last for the rounds that the validation goes through once the
-   lifting is made (FlambdaValidateSpec.normalise_lifted_calling). *)
+   the last two for the rounds that the validation goes through once
+   the lifting is made (FlambdaValidateSpec.normalise_lifted_own). *)
 Record lifting : Type := Lifting {
   lifting_unit : unit_interface;
   lifted_lets : list (path * lift_to);
@@ -322,7 +324,8 @@ Record lifting : Type := Lifting {
   groups_put : list (path * list path);
   tables_put : list (symbol * list simple);
   code_copied : list (list (code_id * code_id) * list symbol);
-  made_closures_called : bool
+  made_closures_called : bool;
+  own_closures_known : bool
 }.
 
 (* ======================================================================== *)

@@ -106,6 +106,8 @@ From OxCamlFlambda2 Require FlambdaStubCallsProofs.
 From OxCamlFlambda2 Require FlambdaCopyCodeProofs.
 From OxCamlFlambda2 Require Import FlambdaClosureCallsSpec.
 From OxCamlFlambda2 Require FlambdaClosureCallsProofs.
+From OxCamlFlambda2 Require Import FlambdaClosureOfCodeSpec.
+From OxCamlFlambda2 Require FlambdaClosureOfCodeProofs.
 From OxCamlFlambda2 Require Import FlambdaNeverReturnsSpec.
 From OxCamlFlambda2 Require FlambdaNeverReturnsProofs
   FlambdaNeverReturnsScopeProofs.
@@ -8088,6 +8090,101 @@ Proof.
        (normalise_lifted_round_calling_up_to calling kept)).
 Qed.
 
+(* What the closures of the code of a unit are known to be, used in
+   the bodies of that code: a call keeps its callee, its arguments and
+   its continuations, and what is put in the place of a projection is
+   a symbol or a constant. *)
+Lemma know_own_closures_scope : keeps_scope know_own_closures.
+Proof.
+  exact
+    (FlambdaScopedProofs.keeps_scope_intro know_own_closures
+       FlambdaClosureOfCodeProofs.know_own_closures_names).
+Qed.
+
+Lemma know_own_closures_rewrite_equivariant :
+  rewrite_equivariant know_own_closures.
+Proof. exact FlambdaClosureOfCodeProofs.know_own_closures_equivariant. Qed.
+
+(* A round of FlambdaValidateSpec.normalise_lifted_own: the round of
+   [normalise_lifted_calling] and then, where [own] is set, that. *)
+Lemma normalise_lifted_round_own_scope (calling own : bool)
+    (avoid : list continuation) (kept : list code_id) :
+  keeps_scope (normalise_lifted_round_own calling own avoid kept).
+Proof.
+  destruct own;
+    [ | exact (normalise_lifted_round_calling_scope calling avoid kept) ].
+  exact
+    (keeps_scope_compose (normalise_lifted_round_calling calling avoid kept)
+       know_own_closures
+       (normalise_lifted_round_calling_scope calling avoid kept)
+       know_own_closures_scope).
+Qed.
+
+Lemma normalise_lifted_round_own_up_to (calling own : bool)
+    (kept : list code_id) :
+  equivariant_up_to_avoiding
+    (fun avoid => normalise_lifted_round_own calling own avoid kept).
+Proof.
+  destruct own;
+    [ | exact (normalise_lifted_round_calling_up_to calling kept) ].
+  exact
+    (equivariant_up_to_avoiding_after
+       (fun avoid => normalise_lifted_round_calling calling avoid kept)
+       know_own_closures
+       (fun avoid => normalise_lifted_round_calling_scope calling avoid kept)
+       know_own_closures_scope know_own_closures_rewrite_equivariant
+       (normalise_lifted_round_calling_up_to calling kept)).
+Qed.
+
+(* Those rounds, iterated. *)
+Lemma lifted_own_rounds_scope (calling own : bool) (rounds : nat)
+    (avoid : list continuation) (kept : list code_id) :
+  keeps_scope
+    (iterate rounds (normalise_lifted_round_own calling own avoid kept)).
+Proof.
+  exact
+    (keeps_scope_iterate rounds
+       (normalise_lifted_round_own calling own avoid kept)
+       (normalise_lifted_round_own_scope calling own avoid kept)).
+Qed.
+
+Lemma lifted_own_rounds_up_to (calling own : bool) (rounds : nat)
+    (kept : list code_id) :
+  equivariant_up_to_avoiding
+    (fun avoid =>
+       iterate rounds (normalise_lifted_round_own calling own avoid kept)).
+Proof.
+  exact
+    (equivariant_up_to_avoiding_iterate rounds
+       (fun avoid => normalise_lifted_round_own calling own avoid kept)
+       (fun avoid => normalise_lifted_round_own_scope calling own avoid kept)
+       (normalise_lifted_round_own_up_to calling own kept)).
+Qed.
+
+(* The normalisation with those rounds: the phases of
+   [normalise_lifted], with that round ([phases_with]). *)
+Lemma normalise_lifted_own_scope (calling own : bool) (rounds : nat)
+    (avoid : list continuation) (kept : list code_id) :
+  keeps_scope (normalise_lifted_own calling own rounds avoid kept).
+Proof.
+  exact
+    (phases_with_scope rounds
+       (normalise_lifted_round_own calling own avoid kept)
+       (normalise_lifted_round_own_scope calling own avoid kept)).
+Qed.
+
+Lemma normalise_lifted_own_up_to (calling own : bool) (rounds : nat)
+    (kept : list code_id) :
+  equivariant_up_to_avoiding
+    (fun avoid => normalise_lifted_own calling own rounds avoid kept).
+Proof.
+  exact
+    (phases_with_up_to rounds
+       (fun avoid => normalise_lifted_round_own calling own avoid kept)
+       (fun avoid => normalise_lifted_round_own_scope calling own avoid kept)
+       (normalise_lifted_round_own_up_to calling own kept)).
+Qed.
+
 (* The liftings in turn keep scope. *)
 Lemma lifted_in_turn_scope (rounds : nat) (avoid : list continuation)
     (kept : list code_id) (Ls : list lifting) :
@@ -8103,8 +8200,9 @@ Proof.
     + intros k Hk. apply Hk1, Hk2, Hk.
   - destruct (with_lifting_scope L e Hclosed) as (Hclosed1 & Hv1 & Hk1).
     destruct
-      (normalise_lifted_calling_scope (made_closures_called L) rounds avoid
-         kept (with_lifting L e) Hclosed1)
+      (normalise_lifted_own_scope (made_closures_called L)
+         (own_closures_known L) rounds avoid kept (with_lifting L e)
+         Hclosed1)
       as (Hclosed2 & Hv2 & Hk2).
     destruct (IH _ Hclosed2) as (Hclosed3 & Hv3 & Hk3).
     split; [ exact Hclosed3 | split ].
@@ -8171,26 +8269,30 @@ Proof.
       as (Hclosed1 & Halike1).
     change (made_closures_called (rename_lifting r1 L))
       with (made_closures_called L).
+    change (own_closures_known (rename_lifting r1 L))
+      with (own_closures_known L).
     destruct
-      (normalise_lifted_calling_up_to (made_closures_called L) rounds kept r1
-         avoid (with_lifting L e) Hclosed1)
+      (normalise_lifted_own_up_to (made_closures_called L)
+         (own_closures_known L) rounds kept r1 avoid (with_lifting L e)
+         Hclosed1)
       as (r2 & Halike2 & Havoid2 & Heq).
     cbv beta in Heq, Halike2.
     rewrite (map_rename_conts_alike r r1 avoid Havoid) in Heq.
     rewrite Heq.
     destruct
-      (normalise_lifted_calling_scope (made_closures_called L) rounds avoid
-         kept (with_lifting L e) Hclosed1)
+      (normalise_lifted_own_scope (made_closures_called L)
+         (own_closures_known L) rounds avoid kept (with_lifting L e)
+         Hclosed1)
       as (Hclosed2 & _ & _).
     apply (IH (fun L' HL' => Hunits L' (or_intror HL')) r2).
     + exact Hclosed2.
     + exact
         (renames_alike_then
-           (normalise_lifted_calling (made_closures_called L) rounds avoid
-              kept)
+           (normalise_lifted_own (made_closures_called L)
+              (own_closures_known L) rounds avoid kept)
            r r1 r2 (with_lifting L e)
-           (normalise_lifted_calling_scope (made_closures_called L) rounds
-              avoid kept)
+           (normalise_lifted_own_scope (made_closures_called L)
+              (own_closures_known L) rounds avoid kept)
            Hclosed1 Halike1 Halike2).
     + intros k Hk. rewrite (Havoid2 k Hk). apply Havoid, Hk.
 Qed.

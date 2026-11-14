@@ -5,6 +5,7 @@ open FlambdaArmNumbersSpec
 open FlambdaBindConstParamsSpec
 open FlambdaBlockLoadSpec
 open FlambdaClosureCallsSpec
+open FlambdaClosureOfCodeSpec
 open FlambdaCodeLetsSpec
 open FlambdaCompareSpec
 open FlambdaCopyCodeSpec
@@ -134,8 +135,11 @@ val with_made_closures_called : expr -> expr
 val normalise_lifted_round_calling :
   bool -> continuation list -> code_id list -> expr -> expr
 
-val normalise_lifted_calling :
-  bool -> nat -> continuation list -> code_id list -> expr -> expr
+val normalise_lifted_round_own :
+  bool -> bool -> continuation list -> code_id list -> expr -> expr
+
+val normalise_lifted_own :
+  bool -> bool -> nat -> continuation list -> code_id list -> expr -> expr
 
 val unit_continuations : lifting list -> continuation list
 

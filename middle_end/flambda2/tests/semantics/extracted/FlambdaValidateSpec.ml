@@ -5,6 +5,7 @@ open FlambdaArmNumbersSpec
 open FlambdaBindConstParamsSpec
 open FlambdaBlockLoadSpec
 open FlambdaClosureCallsSpec
+open FlambdaClosureOfCodeSpec
 open FlambdaCodeLetsSpec
 open FlambdaCompareSpec
 open FlambdaCopyCodeSpec
@@ -338,15 +339,22 @@ let normalise_lifted_round_calling calling avoid kept e =
   let round = normalise_lifted_round avoid kept e in
   if calling then with_made_closures_called round else round
 
-(** val normalise_lifted_calling : bool -> nat -> continuation list -> code_id
-    list -> expr -> expr **)
+(** val normalise_lifted_round_own : bool -> bool -> continuation list ->
+    code_id list -> expr -> expr **)
 
-let normalise_lifted_calling calling rounds avoid kept e =
+let normalise_lifted_round_own calling own avoid kept e =
+  let round = normalise_lifted_round_calling calling avoid kept e in
+  if own then know_own_closures round else round
+
+(** val normalise_lifted_own : bool -> bool -> nat -> continuation list ->
+    code_id list -> expr -> expr **)
+
+let normalise_lifted_own calling own rounds avoid kept e =
   iterate rounds
-    (normalise_lifted_round_calling calling avoid kept)
+    (normalise_lifted_round_own calling own avoid kept)
     (guard_scope simplify_by_types_carried
        (iterate rounds
-          (normalise_lifted_round_calling calling avoid kept)
+          (normalise_lifted_round_own calling own avoid kept)
           (iterate rounds first_phase_round e)))
 
 (** val unit_continuations : lifting list -> continuation list **)
@@ -373,8 +381,8 @@ let rec lifted_in_turn rounds avoid ls kept e =
   | [] -> demote_and_tidy_known rounds (read_known_slots_anywhere e)
   | l :: ls0 ->
     lifted_in_turn rounds avoid ls0 kept
-      (normalise_lifted_calling l.made_closures_called rounds avoid kept
-         (with_lifting l e))
+      (normalise_lifted_own l.made_closures_called l.own_closures_known rounds
+         avoid kept (with_lifting l e))
 
 (** val without_slots : value_slot list -> expr -> expr **)
 

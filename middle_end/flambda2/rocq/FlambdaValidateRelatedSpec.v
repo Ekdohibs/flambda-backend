@@ -94,9 +94,11 @@
 
    The route. The unit before is prepared as [validate_unit] prepares
    it; each lifting given is applied without the test of the exits
-   and followed by FlambdaValidateSpec.normalise_lifted_calling (the
+   and followed by FlambdaValidateSpec.normalise_lifted_own (the
    rounds of [normalise_lifted], with the calls of the closures that
-   a [Let] makes made direct in them where the lifting says so), and
+   a [Let] makes made direct in them where the lifting says so, and
+   with what [my_closure] is known to be from its code used in them
+   where the lifting says so), and
    after the last the known value slots are read and what is known is
    used after the demotion, as there ([lifted_in_turn_observed]); the
    calls are taken on and the term tidied as there; the value slots
@@ -154,8 +156,8 @@ Fixpoint lifted_in_turn_observed (rounds : nat) (avoid : list continuation)
   | [] => demote_and_tidy_known rounds (read_known_slots_anywhere e)
   | L :: Ls =>
     lifted_in_turn_observed rounds avoid Ls kept
-      (normalise_lifted_calling (made_closures_called L) rounds avoid kept
-         (with_lifting_observed L e))
+      (normalise_lifted_own (made_closures_called L) (own_closures_known L)
+         rounds avoid kept (with_lifting_observed L e))
   end.
 
 (* What FlambdaLiftObservedSpec.with_lifting_observed_refines_statement
@@ -173,7 +175,7 @@ Definition lifting_observed_free_in (statics : static_env) (L : lifting)
   && static_names_free_in statics (with_lifting_observed L e).
 
 (* That, and what the rounds that follow ask
-   (FlambdaValidateImportsSpec.normalise_lifted_calling_free_in), of
+   (FlambdaValidateImportsSpec.normalise_lifted_own_free_in), of
    each of the liftings as [lifted_in_turn_observed] applies them; and
    after the last, what the use of what is known after the demotion
    asks (FlambdaValidateImportsSpec.demote_and_tidy_known_free_in), of
@@ -186,11 +188,13 @@ Fixpoint lifted_observed_free_in (statics : static_env) (rounds : nat)
     demote_and_tidy_known_free_in statics rounds (read_known_slots_anywhere e)
   | L :: Ls =>
     lifting_observed_free_in statics L e
-    && normalise_lifted_calling_free_in statics (made_closures_called L)
-         rounds avoid kept (with_lifting_observed L e)
+    && normalise_lifted_own_free_in statics (made_closures_called L)
+         (own_closures_known L) rounds avoid kept
+         (with_lifting_observed L e)
     && lifted_observed_free_in statics rounds avoid Ls kept
-         (normalise_lifted_calling (made_closures_called L) rounds avoid
-            kept (with_lifting_observed L e))
+         (normalise_lifted_own (made_closures_called L)
+            (own_closures_known L) rounds avoid kept
+            (with_lifting_observed L e))
   end.
 
 (* ======================================================================== *)

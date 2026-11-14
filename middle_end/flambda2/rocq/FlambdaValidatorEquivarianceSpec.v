@@ -1212,12 +1212,13 @@ Definition well_kinded_unit_equivariant_statement : Prop :=
    code is named by code ids and symbols
    (FlambdaCopyCodeSpec.copy_static_code); whether the calls of the
    closures that a [Let] makes are made direct in the rounds that
-   follow has no name in it. *)
+   follow has no name in it, nor has whether what [my_closure] is
+   known to be is used in them. *)
 Definition rename_lifting (r : renaming) (L : lifting) : lifting :=
   Lifting (rename_unit_interface r (lifting_unit L)) (lifted_lets L)
     (lifted_my_closures L) (lifted_out_of_code L) (lifted_to_head L)
     (lifted_around L) (groups_put L) (tables_put L) (code_copied L)
-    (made_closures_called L).
+    (made_closures_called L) (own_closures_known L).
 
 (* What the check makes of a lifting, of the value slots to remove and
    of what the unit binds its symbols to

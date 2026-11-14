@@ -59,7 +59,8 @@ type lifting =
     groups_put : (path * path list) list;
     tables_put : (symbol * simple list) list;
     code_copied : ((code_id * code_id) list * symbol list) list;
-    made_closures_called : bool
+    made_closures_called : bool;
+    own_closures_known : bool
   }
 
 (** val lift_named : lift_to -> named -> (static_binding list * symbol) option **)

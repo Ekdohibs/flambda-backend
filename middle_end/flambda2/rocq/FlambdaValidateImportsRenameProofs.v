@@ -255,6 +255,69 @@ Proof.
        Hclosed3).
 Qed.
 
+(* The same of the rounds that also use, where a lifting asks for it,
+   what [my_closure] is known to be from its code
+   (FlambdaValidateSpec.normalise_lifted_own): the test of a round is
+   again that of one round of [normalise_lifted], asked of the term
+   that the round is given. *)
+Lemma known_own_free_in_equivariant :
+  ∀ (r : renaming) (statics : static_env) (calling own : bool) (rounds : nat)
+    (avoid : list continuation) (kept : list code_id) (e : expr),
+    code_closed e = true ->
+    known_own_free_in statics calling own rounds
+      (map (rename_continuation r) avoid) kept (rename_expr r e)
+    = known_own_free_in statics calling own rounds avoid kept e.
+Proof.
+  intros r statics calling own rounds avoid kept. revert r.
+  induction rounds as [ | rounds IH]; intros r e Hclosed; [ reflexivity | ].
+  cbn [known_own_free_in]. cbv zeta.
+  rewrite (known_free_in_equivariant r statics 1 avoid kept e Hclosed).
+  f_equal.
+  destruct
+    (normalise_lifted_round_own_up_to calling own kept r avoid e Hclosed)
+    as (r1 & Halike1 & Havoid1 & Heq1).
+  cbv beta in Halike1, Heq1. rewrite Heq1.
+  destruct
+    (normalise_lifted_round_own_scope calling own avoid kept e Hclosed)
+    as (Hclosed1 & _ & _).
+  rewrite (same_after_renamed r r1 e _ Hclosed1 Halike1),
+    <- (map_rename_conts_alike r r1 avoid Havoid1), (IH r1 _ Hclosed1).
+  reflexivity.
+Qed.
+
+Lemma normalise_lifted_own_free_in_equivariant :
+  ∀ (r : renaming) (statics : static_env) (calling own : bool) (rounds : nat)
+    (avoid : list continuation) (kept : list code_id) (e : expr),
+    code_closed e = true ->
+    normalise_lifted_own_free_in statics calling own rounds
+      (map (rename_continuation r) avoid) kept (rename_expr r e)
+    = normalise_lifted_own_free_in statics calling own rounds avoid kept e.
+Proof.
+  intros r statics calling own rounds avoid kept e Hclosed.
+  unfold normalise_lifted_own_free_in. cbv zeta.
+  rewrite (params_phase_equivariant rounds r e).
+  destruct (params_phase_scope rounds e Hclosed) as (Hclosed1 & _ & _).
+  rewrite
+    (known_own_free_in_equivariant r statics calling own rounds avoid kept _
+       Hclosed1).
+  f_equal.
+  destruct
+    (lifted_own_rounds_up_to calling own rounds kept r avoid _ Hclosed1)
+    as (r1 & _ & Havoid1 & Heq1).
+  cbv beta in Heq1. rewrite Heq1.
+  destruct (lifted_own_rounds_scope calling own rounds avoid kept _ Hclosed1)
+    as (Hclosed2 & _ & _).
+  destruct (by_types_scope _ Hclosed2) as (Hclosed3 & _ & _).
+  change
+    (guard_scope FlambdaSimplifyCarriedSpec.simplify_by_types_carried)
+    with by_types.
+  rewrite by_types_equivariant,
+    <- (map_rename_conts_alike r r1 avoid Havoid1).
+  exact
+    (known_own_free_in_equivariant r1 statics calling own rounds avoid kept _
+       Hclosed3).
+Qed.
+
 (* ======================================================================== *)
 (* The test of one lifting                                                  *)
 (* ======================================================================== *)
@@ -316,23 +379,27 @@ Proof.
     destruct (with_lifting_scope L e Hclosed) as (Hclosed1 & _ & _).
     change (made_closures_called (rename_lifting r1 L))
       with (made_closures_called L).
+    change (own_closures_known (rename_lifting r1 L))
+      with (own_closures_known L).
     pose proof
-      (normalise_lifted_calling_free_in_equivariant r1 statics
-         (made_closures_called L) rounds avoid kept (with_lifting L e)
-         Hclosed1)
+      (normalise_lifted_own_free_in_equivariant r1 statics
+         (made_closures_called L) (own_closures_known L) rounds avoid kept
+         (with_lifting L e) Hclosed1)
       as Htest.
     rewrite (map_rename_conts_alike r r1 avoid Havoid) in Htest.
     rewrite Htest.
     destruct
-      (normalise_lifted_calling_up_to (made_closures_called L) rounds kept r1
-         avoid (with_lifting L e) Hclosed1)
+      (normalise_lifted_own_up_to (made_closures_called L)
+         (own_closures_known L) rounds kept r1 avoid (with_lifting L e)
+         Hclosed1)
       as (r2 & _ & Havoid2 & Heq).
     cbv beta in Heq.
     rewrite (map_rename_conts_alike r r1 avoid Havoid) in Heq.
     rewrite Heq.
     destruct
-      (normalise_lifted_calling_scope (made_closures_called L) rounds avoid
-         kept (with_lifting L e) Hclosed1)
+      (normalise_lifted_own_scope (made_closures_called L)
+         (own_closures_known L) rounds avoid kept (with_lifting L e)
+         Hclosed1)
       as (Hclosed2 & _ & _).
     rewrite (IH r2 _ (fun L' HL' => Hunits L' (or_intror HL')) Hclosed2);
       [ reflexivity | ].

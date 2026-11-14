@@ -141,7 +141,12 @@
    rounds also makes direct the calls of the closures that a [Let]
    makes (FlambdaClosureCallsSpec.call_made_closures;
    [normalise_lifted_calling]); where the lifting does not say so,
-   the rounds are those that there were. Every round of that
+   the rounds are those that there were. Where the lifting says so,
+   each of those rounds also uses, in the bodies of code, what
+   [my_closure] is known to be from its code
+   (FlambdaClosureOfCodeSpec.know_own_closures;
+   [normalise_lifted_own]); where it does not, the rounds are again
+   those that there were. Every round of that
    normalisation, after each
    of the liftings, makes no name that is the return or the exception
    continuation of the unit of any of the liftings given, the later
@@ -413,6 +418,7 @@ From OxCamlFlambda2 Require Import FlambdaSharedReadsSpec.
 From OxCamlFlambda2 Require Import FlambdaStubCallsSpec.
 From OxCamlFlambda2 Require Import FlambdaCopyCodeSpec.
 From OxCamlFlambda2 Require Import FlambdaClosureCallsSpec.
+From OxCamlFlambda2 Require Import FlambdaClosureOfCodeSpec.
 From OxCamlFlambda2 Require Import FlambdaNeverReturnsSpec.
 From OxCamlFlambda2 Require Import FlambdaUnusedHeadStaticsSpec.
 From OxCamlFlambda2 Require Import FlambdaSameHandlersSpec.
@@ -1178,6 +1184,41 @@ Definition normalise_lifted_calling_unset_statement : Prop :=
     normalise_lifted_calling false rounds avoid kept e
     = normalise_lifted rounds avoid kept e.
 
+(* A round of [normalise_lifted_calling] and then, where [own] is
+   set, what the closures of the code of the unit are known to be
+   used in the bodies of that code, in the term that the round gives
+   (FlambdaClosureOfCodeSpec.know_own_closures): a call of
+   [my_closure], or of another closure of its set projected from it,
+   is direct, and a value slot of [my_closure] that every set with its
+   code gives one symbol or constant is that. Simplify does both from
+   the type that it gives [my_closure] in the code of a set that it
+   simplifies. The sets are those that the term of the round makes,
+   so a set that a lifting has made static, or a round has changed,
+   is counted as it then is. A call that this makes direct is one
+   that the next round may inline. The round of
+   [normalise_lifted_calling] is named here and not written again. *)
+Definition normalise_lifted_round_own (calling own : bool)
+    (avoid : list continuation) (kept : list code_id) (e : expr) : expr :=
+  let round := normalise_lifted_round_calling calling avoid kept e in
+  if own then know_own_closures round else round.
+
+(* [normalise_lifted_calling] with those rounds. With [own] unset it
+   is [normalise_lifted_calling], by computation
+   ([normalise_lifted_own_unset_statement]); so with both unset it is
+   [normalise_lifted]. *)
+Definition normalise_lifted_own (calling own : bool) (rounds : nat)
+    (avoid : list continuation) (kept : list code_id) (e : expr) : expr :=
+  iterate rounds (normalise_lifted_round_own calling own avoid kept)
+    (guard_scope FlambdaSimplifyCarriedSpec.simplify_by_types_carried
+       (iterate rounds (normalise_lifted_round_own calling own avoid kept)
+          (iterate rounds first_phase_round e))).
+
+Definition normalise_lifted_own_unset_statement : Prop :=
+  ∀ (calling : bool) (rounds : nat) (avoid : list continuation)
+    (kept : list code_id) (e : expr),
+    normalise_lifted_own calling false rounds avoid kept e
+    = normalise_lifted_calling calling rounds avoid kept e.
+
 (* The return and the exception continuation of the unit of each of
    the liftings given: the names by which a lifting checks the unit
    (FlambdaLiftSpec.lift_unit), which the term need not mention. *)
@@ -1220,7 +1261,9 @@ Definition demote_and_tidy_known (rounds : nat) (e : expr) : expr :=
    followed by the normalisation of a term in which something was
    lifted, with the calls of the closures that a [Let] makes made
    direct in its rounds where the lifting says so
-   ([normalise_lifted_calling]). A lifting after the first names
+   ([normalise_lifted_calling]), and with what [my_closure] is known
+   to be from its code used in them where the lifting says so
+   ([normalise_lifted_own]). A lifting after the first names
    [Let]s of the term that those before it give. The continuations to
    avoid are the same at every step: [validate_unit] gives those of
    the units of all the liftings, so that no round, before or after
@@ -1242,8 +1285,8 @@ Fixpoint lifted_in_turn (rounds : nat) (avoid : list continuation)
   | [] => demote_and_tidy_known rounds (read_known_slots_anywhere e)
   | L :: Ls =>
     lifted_in_turn rounds avoid Ls kept
-      (normalise_lifted_calling (made_closures_called L) rounds avoid kept
-         (with_lifting L e))
+      (normalise_lifted_own (made_closures_called L) (own_closures_known L)
+         rounds avoid kept (with_lifting L e))
   end.
 
 (* The value slots given removed from the static sets of closures, if
