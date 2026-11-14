@@ -103,8 +103,8 @@ unit made from OCaml.
   the one run that it makes of each term. The two terms of a unit
   that was compared are converted once more with their regions kept;
   where either has a region that is not a ghost, or a local
-  allocation, each is run on a machine that has regions
-  (`FlambdaRegionsSpec.v`), and the tool prints the line "the check
+  allocation, the tool tries to run each on a machine that has
+  regions (`FlambdaRegionsSpec.v`), and prints the line "the check
   of regions: passes before, passes after", or what failed or was
   not run. No verdict depends on that line; `rocq/TRUST-LEDGER.md`,
   "The check of regions", says what it rests on and what it does not
