@@ -587,7 +587,8 @@ Proof.
          Hargs')
       as (vs & -> & Hvs).
     intros Hp.
-    destruct (eval_prim_back rs statics' Hfresh Hstatics Hlive p vs' vs v' Hvs Hp)
+    destruct
+      (eval_prim_back rs statics' Hfresh Hstatics Hlive p vs' vs v' Hvs Hp)
       as (v & Hv & _).
     eauto.
   - destruct (eval_value_slots vars' slots) as [vs' | ] eqn:Hslots';
