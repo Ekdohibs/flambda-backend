@@ -84,9 +84,11 @@
    THE STATE THAT RUNS ([running_checked])
 
    There is a state of the check under which the expression of the
-   state passes; its open regions are bound to marks that are on the
-   stack and that decrease; each variable holds a value as its
-   lifetime says.
+   state passes; it is in scope ([check_state_scoped]: the regions
+   that it has open, and those that the lifetimes of its variables
+   name, are variables of regions); its open regions are bound to
+   marks that are on the stack and that decrease; each variable holds
+   a value as its lifetime says.
 
    THE CONTINUATIONS ([cont_ok])
 
@@ -100,7 +102,7 @@
    of the check where it was made, with the marks of its open regions
    and the counter then ([made_at]):
    - the handler, and those of its recursive group, pass the check
-     there;
+     there, and that state of the check is in scope;
    - the variables that the closure holds are as their lifetimes say,
      with the marks as they were and the counter then as the bound of
      the newest region: a value that the closure holds was drawn
@@ -342,15 +344,35 @@ Definition lasts (open : list variable) (l l' : lifetime) : bool :=
 (* The state that runs                                                      *)
 (* ======================================================================== *)
 
-(* The state of the check describes the state that runs: its open
-   regions are variables of regions, bound to marks that are on the
-   stack and decrease, and each variable holds a value as its lifetime
+(* A state of the check is in scope: its open regions are variables of
+   regions, and so is every region that the lifetime of a variable
+   names. The check makes no other state: a region that is begun is
+   a variable of a region from then on, and a lifetime that names a
+   region is that of a local allocation in an open region, or is
+   given to a parameter by an entry that is entered with the region
+   (FlambdaRegionsCheckSpec.bind_entry_params). Without it a variable
+   whose lifetime names a variable that is no region yet could come
+   to be usable in a handler that takes a parameter of that name as a
+   region. *)
+Definition check_state_scoped (cs : check_state) : bool :=
+  all_among (cs_open cs) (cs_regions cs)
+  && forallb
+       (fun '(_, l) =>
+          match l with
+          | Of_region r => among r (cs_regions cs)
+          | Forever | Of_caller | Gone => true
+          end)
+       (cs_env cs).
+
+(* The state of the check describes the state that runs: it is in
+   scope, its open regions are bound to marks that are on the stack
+   and decrease, and each variable holds a value as its lifetime
    says. *)
 Definition running_checked (rs : region_state) (cs : check_state)
     (ms : list mark) : Prop :=
   open_marks (state_vars (rs_state rs)) (cs_open cs) = Some ms
   ∧ marks_placed (rs_frames rs) ms = true
-  ∧ all_among (cs_open cs) (cs_regions cs) = true
+  ∧ check_state_scoped cs = true
   ∧ ∀ (x : variable) (l : lifetime) (v : value),
       lookup x (cs_env cs) = Some l ->
       lookup x (state_vars (rs_state rs)) = Some v ->
@@ -432,7 +454,7 @@ Definition made_at (rs : region_state) (u : user) (vars : env)
   ∧ forallb (fun '(k, h) => check_handler cert codes cs k h) recursive = true
   ∧ (∀ (k : continuation) (h : continuation_handler),
        In (k, h) recursive -> incl (code_of_handler h) codes)
-  ∧ all_among (cs_open cs) (cs_regions cs) = true
+  ∧ check_state_scoped cs = true
   ∧ open_marks vars (cs_open cs) = Some ms
   ∧ marks_decrease ms = true
   ∧ forallb (fun m => Pos.ltb m next) ms = true
@@ -515,9 +537,12 @@ with ret_ok (rs : region_state) : caller -> lifetime -> cont_value -> Prop :=
 with raise_ok (rs : region_state) : caller -> cont_value -> Prop :=
   (* A continuation of the caller, with the values of the extra
      arguments of the call, that the check let the exception and the
-     extra arguments go to. *)
+     extra arguments go to. The values are those that the simples had
+     in the caller: where the continuation takes one of them at a
+     parameter that is a region, it is given the mark of the region. *)
   | Raise_to (a : caller) (k : continuation) (simples : list simple)
       (extra : list value) (c : cont_value) :
+    eval_simples (caller_vars a) simples = Some extra ->
     Forall2
       (fun s v => caller_holds rs a (lifetime_of (caller_check a) s) v)
       simples extra ->
