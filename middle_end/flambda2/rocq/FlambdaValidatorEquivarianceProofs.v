@@ -6147,10 +6147,10 @@ Proof.
   cbv zeta.
   rewrite <- lift_expr_equivariant, <- bind_my_closures_equivariant.
   rewrite well_formed_unit_equivariant, only_closures_of_renamed.
-  pose proof (exits_plain_equivariant r [] e) as Hexits. simpl in Hexits.
-  rewrite Hexits.
+  pose proof (exits_plain_knowing_equivariant r [] [] e) as Hexits.
+  simpl in Hexits. rewrite Hexits.
   destruct
-    (exits_plain [] e
+    (exits_plain_knowing [] [] e
      && well_formed_unit (lifting_unit L)
           (bind_my_closures (lifted_my_closures L)
              (lift_expr (lifted_lets L) root e))
@@ -6169,10 +6169,11 @@ Lemma lift_from_code_unit_renamed (r : renaming) (u : unit_interface)
 Proof.
   unfold lift_from_code_unit. cbv zeta.
   rewrite <- lift_from_code_equivariant, well_formed_unit_equivariant.
-  pose proof (exits_plain_equivariant r [] e) as Hexits. simpl in Hexits.
-  rewrite Hexits.
+  pose proof (exits_plain_knowing_equivariant r [] [] e) as Hexits.
+  simpl in Hexits. rewrite Hexits.
   destruct
-    (exits_plain [] e && well_formed_unit u (lift_from_code K [] root e));
+    (exits_plain_knowing [] [] e
+     && well_formed_unit u (lift_from_code K [] root e));
     reflexivity.
 Qed.
 
@@ -6185,9 +6186,10 @@ Proof.
   unfold lift_to_head_unit. cbv zeta.
   rewrite <- FlambdaLiftFromArmsProofs.lift_to_head_equivariant,
     well_formed_unit_equivariant.
-  pose proof (exits_plain_equivariant r [] e) as Hexits. simpl in Hexits.
-  rewrite Hexits.
-  destruct (exits_plain [] e && well_formed_unit u (lift_to_head lets e));
+  pose proof (exits_plain_knowing_equivariant r [] [] e) as Hexits.
+  simpl in Hexits. rewrite Hexits.
+  destruct
+    (exits_plain_knowing [] [] e && well_formed_unit u (lift_to_head lets e));
     reflexivity.
 Qed.
 
@@ -6209,10 +6211,10 @@ Proof.
        (groups_of lets places e) [] root e)
     as Hok.
   cbn [rename_known_constants map] in Hok. rewrite Hok.
-  pose proof (exits_plain_equivariant r [] e) as Hexits. simpl in Hexits.
-  rewrite Hexits.
+  pose proof (exits_plain_knowing_equivariant r [] [] e) as Hexits.
+  simpl in Hexits. rewrite Hexits.
   destruct
-    (exits_plain [] e
+    (exits_plain_knowing [] [] e
      && around_ok lets (groups_of lets places e) [] root e
      && well_formed_unit u
           (lift_around lets (groups_of lets places e) root e));

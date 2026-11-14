@@ -145,4 +145,6 @@ and binding_lift_from_code k binding =
 
 let lift_from_code_unit u k e =
   let lifted = lift_from_code k [] root e in
-  if exits_plain [] e && well_formed_unit u lifted then Some lifted else None
+  if exits_plain_knowing [] [] e && well_formed_unit u lifted
+  then Some lifted
+  else None

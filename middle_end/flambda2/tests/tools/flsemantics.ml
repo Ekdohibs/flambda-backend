@@ -255,13 +255,13 @@
    the imports. The liftings are guessed again, each made without its test that
    the unit exits with symbols and constants only
    (FlambdaLiftObservedSpec.with_lifting_observed in the place of
-   FlambdaLiftSpec's lifting with [exits_plain]; the other tests of a lifting,
-   of well-formedness, of fresh names and of closed code, and the comparisons,
-   are those of the function), for the same lists of calls in the same order;
-   the check is asked with no value slot to remove and, if it refuses, with the
-   slots guessed. What it accepts is not said to be validated: the line "not
-   validated" stays, [validate] gives [Not_validated], and one line more begins
-   "related once lifted". What is proved of such a pair is
+   FlambdaLiftSpec's lifting with [exits_plain_knowing]; the other tests of a
+   lifting, of well-formedness, of fresh names and of closed code, and the
+   comparisons, are those of the function), for the same lists of calls in the
+   same order; the check is asked with no value slot to remove and, if it
+   refuses, with the slots guessed. What it accepts is not said to be validated:
+   the line "not validated" stays, [validate] gives [Not_validated], and one
+   line more begins "related once lifted". What is proved of such a pair is
    validate_unit_related_sound_statement, of the two terms that the check was
    given, run from the static environment of the imports that it was given: an
    exit of the first is answered by an exit of the second that no observer of

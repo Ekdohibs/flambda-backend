@@ -41,7 +41,7 @@
 
    FlambdaValidateSpec.validate_unit answers [Same_once_lifted] of a
    unit only where each lifting passes its test of the exits
-   (FlambdaLiftSpec.exits_plain): a lifting gives a symbol where the
+   (FlambdaLiftSpec.exits_plain_knowing): a lifting gives a symbol where the
    unit before gave the value that it lifts
    (FlambdaLiftSpec.lift_named), and FlambdaSemanticsSpec.refines asks
    of two exits the same values. A unit that exits with something that

@@ -136,10 +136,10 @@
    [Let] lifted where it stands. No primitive and no rule of the
    machine tells the block from the symbol. They differ at an exit of
    the unit, so [lift_around_unit] makes the check of
-   FlambdaLiftSpec.lift_unit (FlambdaLiftSpec.exits_plain). It also
-   checks that the result is a well-formed unit: a group put is then
-   at toplevel, executed once, and binds symbols that are new; and its
-   variables are in scope where it stands, so they have values there
+   FlambdaLiftSpec.lift_unit (FlambdaLiftSpec.exits_plain_knowing). It
+   also checks that the result is a well-formed unit: a group put is
+   then at toplevel, executed once, and binds symbols that are new; and
+   its variables are in scope where it stands, so they have values there
    (FlambdaScopeSpec.v). With these the unit lifted refines the unit,
    run on its own ([lift_around_unit_program_refines_statement]).
 
@@ -449,7 +449,7 @@ Definition lift_around_unit (u : unit_interface)
   let groups := groups_of lets places e in
   let lifted := lift_around lets groups root e in
   if
-    exits_plain [] e
+    exits_plain_knowing [] [] e
     && around_ok lets groups [] root e
     && well_formed_unit u lifted
   then Some lifted

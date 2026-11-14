@@ -7,5 +7,5 @@ a_for_prim_direct_around.fl:
   calls outside code: 4 before, 4 after
   the same
   calls outside code once those of known code are inlined: 0
-  validated with its imports: the same once normalised and unused static bindings removed, at the head of the term after too
+  validated with its imports: the same once closures and blocks are lifted to symbols and the terms normalised
   the check of regions: passes before, passes after

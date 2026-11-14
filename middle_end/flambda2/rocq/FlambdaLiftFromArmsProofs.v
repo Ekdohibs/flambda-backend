@@ -215,7 +215,7 @@ Let bindings : list static_binding :=
 Let lifted : expr := Let_static bindings (lift_from_code [] lets root e).
 
 Hypothesis Hwf : well_formed_unit u lifted = true.
-Hypothesis Hplain : exits_plain [] e = true.
+Hypothesis Hplain : exits_plain_knowing [] [] e = true.
 Hypothesis Hsome : bindings <> [].
 Hypothesis Hno_code : static_code statics0 = [].
 Hypothesis Hfree : static_names_free_in statics0 lifted = true.
@@ -262,7 +262,7 @@ Theorem lift_to_head_unit_program_refines :
   lift_to_head_unit_program_refines_statement.
 Proof.
   intros u lets e e'. unfold lift_to_head_unit. cbv zeta.
-  destruct (exits_plain [] e) eqn:Hplain; [ | discriminate ].
+  destruct (exits_plain_knowing [] [] e) eqn:Hplain; [ | discriminate ].
   destruct (well_formed_unit u (lift_to_head lets e)) eqn:Hwf;
     [ | discriminate ].
   intros [= <-]. unfold program_refines.
@@ -285,7 +285,7 @@ Theorem lift_to_head_unit_refines_imports :
   lift_to_head_unit_refines_imports_statement.
 Proof.
   intros imports u lets e e'. unfold lift_to_head_unit. cbv zeta.
-  destruct (exits_plain [] e) eqn:Hplain; [ | discriminate ].
+  destruct (exits_plain_knowing [] [] e) eqn:Hplain; [ | discriminate ].
   destruct (well_formed_unit u (lift_to_head lets e)) eqn:Hwf;
     [ | discriminate ].
   intros [= <-]. unfold unit_refines.

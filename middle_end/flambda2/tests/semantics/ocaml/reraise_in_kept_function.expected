@@ -5,7 +5,5 @@ reraise_in_kept_function.fl:
   calls outside code: 2 before, 2 after
   the same
   calls outside code once those of known code are inlined: 2
-  not validated
-  related once lifted: the same once values are lifted to symbols without the liftings' symbols-and-constants-only exit test, and the terms normalised; no value slots removed
-  (in the model, an exit before is matched by one after under the restricted observer class; exit values may differ)
+  validated: the same once closures and blocks are lifted to symbols and the terms normalised
   the check of regions: passes before, passes after

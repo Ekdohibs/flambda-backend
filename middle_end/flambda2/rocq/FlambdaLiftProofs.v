@@ -61,7 +61,15 @@
    an invariant of the first run alone ([plain_state]): the
    continuations in scope never stand for a way out ([cont_closed]),
    so a value that is not a constant or a symbol, a partial application
-   included, is given to a handler.
+   included, is given to a handler; the variables known hold constants
+   and symbols ([vars_plain]); and each continuation bound may be
+   given anything at the positions that the expression spoils of it,
+   and constants and symbols at the others ([cont_plain],
+   [conts_fit]). So a handler is applied to a constant or a symbol
+   where its parameter is known. What a handler of a call is given is
+   what the code called gives its exception continuation, and code
+   that passes the test spoils nothing of that one
+   ([knowing_spoils_none]).
 
    The two runs may start from a continuation environment of what may
    follow a unit (FlambdaObserversSpec.observers), the empty one for
@@ -2614,10 +2622,6 @@ Inductive cont_closed : cont_value -> Prop :=
       (Over_application remaining remaining_arity return_arity return_to
          exn_to).
 
-Lemma cont_closed_target (c : cont_value) (k : continuation) :
-  cont_closed c -> cont_target c <> Outer k.
-Proof. intros [ | ]; discriminate. Qed.
-
 (* A full call steps into code or is undefined, and so does a call
    where what is done with a partial application does. *)
 Lemma call_code_no_exit (closure : value) (c : code) (vs : list value)
@@ -2677,126 +2681,509 @@ Definition scope_closed (scope : list continuation) (conts : cont_env)
     among k scope = true ->
     ∃ c : cont_value, lookup k conts = Some c ∧ cont_closed c.
 
-(* A continuation whose handler, and whatever it goes on to, gives a
-   variable only to continuations that are no way out: there is a scope
-   which passes the check for the handler, and for the handlers of its
-   group, and which its environment closes. What is left of an
-   over-application returns to a continuation that is no way out, as the
-   call it comes from passed the check: the value its second call
-   returns, a partial application included, goes to a handler. *)
+(* ------------------------------------------------------------------------ *)
+(* What an expression spoils                                                *)
+(* ------------------------------------------------------------------------ *)
+
+Lemma spoils_at_app (k : continuation) (i : nat) (sp sp' : spoilt) :
+  spoils_at k i (sp ++ sp') = spoils_at k i sp || spoils_at k i sp'.
+Proof. apply existsb_app. Qed.
+
+(* What is said of a continuation that is forgotten is said no longer,
+   and what is said of another is kept. *)
+Lemma spoils_at_forget (k : continuation) (i : nat) (ks : list continuation)
+    (sp : spoilt) :
+  spoils_at k i (forget_conts ks sp) = spoils_at k i sp && negb (among k ks).
+Proof.
+  induction sp as [ | [k' at_] sp IH]; simpl; [ reflexivity | ].
+  destruct (among k' ks) eqn:Hk'; simpl; rewrite IH;
+    destruct (Pos.eqb_spec k k') as [-> | _]; simpl; try reflexivity;
+    rewrite Hk'; simpl.
+  - rewrite !andb_false_r. reflexivity.
+  - rewrite !andb_true_r. reflexivity.
+Qed.
+
+Lemma spoils_at_flat_map {A : Type} (f : A -> spoilt) (k : continuation)
+    (i : nat) (l : list A) :
+  spoils_at k i (flat_map f l) = existsb (fun a => spoils_at k i (f a)) l.
+Proof.
+  induction l as [ | a l IH]; simpl; [ reflexivity | ].
+  rewrite spoils_at_app, IH. reflexivity.
+Qed.
+
+(* What the arguments of an application spoil is of the continuation
+   applied. *)
+Lemma args_spoil_other (k k' : continuation) (plain : list variable)
+    (j : nat) (args : list simple) :
+  k <> k' -> ∀ i : nat, spoils_at k j (args_spoil k' plain i args) = false.
+Proof.
+  intros Hne. induction args as [ | s args IH]; intros i; simpl;
+    [ reflexivity | ].
+  rewrite spoils_at_app, IH, orb_false_r.
+  destruct (plain_or plain s); simpl; [ reflexivity | ].
+  destruct (Pos.eqb_spec k k'); [ contradiction | reflexivity ].
+Qed.
+
+(* Arguments that are all known spoil nothing. *)
+Lemma args_spoil_none (k : continuation) (plain : list variable)
+    (args : list simple) :
+  forallb (plain_or plain) args = true ->
+  ∀ i : nat, args_spoil k plain i args = [].
+Proof.
+  induction args as [ | s args IH]; simpl; [ reflexivity | ].
+  intros Hargs i. apply andb_true_iff in Hargs as [Hs Hargs].
+  rewrite Hs, (IH Hargs). reflexivity.
+Qed.
+
+(* The argument at a position that is not spoilt is known. *)
+Lemma args_spoil_at (k : continuation) (plain : list variable)
+    (args : list simple) :
+  ∀ (i j : nat) (s : simple),
+    nth_error args j = Some s ->
+    spoils_at k (i + j) (args_spoil k plain i args) = false ->
+    plain_or plain s = true.
+Proof.
+  induction args as [ | s' args IH]; intros i [ | j] s; simpl;
+    try discriminate.
+  - intros [= ->]. rewrite Nat.add_0_r.
+    destruct (plain_or plain s); [ reflexivity | ]. simpl.
+    rewrite Pos.eqb_refl, Nat.eqb_refl. discriminate.
+  - intros Hs Hsp. rewrite spoils_at_app in Hsp.
+    apply orb_false_iff in Hsp as [_ Hsp]. rewrite Nat.add_succ_r in Hsp.
+    exact (IH (S i) j s Hs Hsp).
+Qed.
+
+Lemma apply_cont_spoils_none (scope : list continuation)
+    (plain : list variable) (ac : apply_cont) (k : continuation) (i : nat) :
+  apply_cont_exits_plain_knowing scope plain ac = true ->
+  among k scope = false ->
+  spoils_at k i (apply_cont_spoils plain ac) = false.
+Proof.
+  unfold apply_cont_exits_plain_knowing, apply_cont_spoils. intros Hac Hk.
+  destruct (among (ac_continuation ac) scope) eqn:Hin; simpl in Hac.
+  - apply args_spoil_other. intros ->. rewrite Hin in Hk. discriminate.
+  - rewrite (args_spoil_none _ plain _ Hac). reflexivity.
+Qed.
+
+(* An expression that passes the test for a scope spoils no parameter
+   of a continuation that is not of the scope: what it says of one that
+   it binds itself is forgotten. So code spoils no parameter of its
+   exception continuation. *)
+Fixpoint knowing_spoils_none (scope : list continuation)
+    (plain : list variable) (e : expr) (k : continuation) (i : nat)
+    {struct e} :
+  exits_plain_knowing scope plain e = true ->
+  among k scope = false ->
+  spoils_at k i (spoils plain e) = false
+with handler_knowing_spoils_none (scope : list continuation)
+    (plain : list variable) (h : continuation_handler) (k : continuation)
+    (i : nat) {struct h} :
+  handler_exits_plain_knowing scope plain h = true ->
+  among k scope = false ->
+  spoils_at k i (handler_spoils plain h) = false.
+Proof.
+  - destruct e
+      as [ x xkind d body | bindings body
+         | k0 [params metadata handler] body | handlers body | ap | ac
+         | scrutinee arms | ];
+      simpl; intros He Hk.
+    + exact (knowing_spoils_none scope _ body k i He Hk).
+    + apply andb_true_iff in He as [_ He].
+      exact (knowing_spoils_none scope _ body k i He Hk).
+    + apply andb_true_iff in He as [Hh Hbody].
+      rewrite spoils_at_app, spoils_at_forget,
+        (knowing_spoils_none scope _ handler k i Hh Hk), orb_false_l.
+      destruct (Pos.eqb k k0) eqn:Hk0;
+        [ rewrite among_cons, Hk0; apply andb_false_r | ].
+      rewrite (knowing_spoils_none (k0 :: scope) plain body k i Hbody);
+        [ reflexivity | ].
+      rewrite among_cons, Hk0. exact Hk.
+    + apply andb_true_iff in He as [Hhandlers Hbody].
+      rewrite spoils_at_forget.
+      destruct (among k (map fst handlers)) eqn:Hgroup;
+        [ apply andb_false_r | ].
+      assert (Hk' : among k (map fst handlers ++ scope) = false).
+      { rewrite among_app, Hgroup. exact Hk. }
+      rewrite spoils_at_app,
+        (knowing_spoils_none _ plain body k i Hbody Hk'), orb_false_r,
+        andb_true_r, spoils_at_flat_map.
+      clear Hgroup Hbody. revert Hhandlers Hk'.
+      generalize (map fst handlers ++ scope) as scope'. intros scope'.
+      induction handlers as [ | [k' h] handlers IH]; simpl;
+        [ reflexivity | ].
+      intros Hhandlers Hk'.
+      apply andb_true_iff in Hhandlers as [Hh Hhandlers].
+      rewrite (handler_knowing_spoils_none scope' plain h k i Hh Hk'),
+        (IH Hhandlers Hk').
+      reflexivity.
+    + apply andb_true_iff in He as [Hret Hexn].
+      assert (Hne : ∀ k' : continuation,
+        among k' scope = true -> Pos.eqb k k' = false).
+      { intros k' Hk'. destruct (Pos.eqb_spec k k') as [-> | _];
+          [ rewrite Hk' in Hk; discriminate | reflexivity ]. }
+      unfold spoils_at. simpl. rewrite (Hne _ Hret). simpl.
+      destruct (forallb (plain_or plain) (exn_extra_simples ap));
+        [ reflexivity | ].
+      rewrite orb_false_r in Hexn. simpl. rewrite (Hne _ Hexn). reflexivity.
+    + exact (apply_cont_spoils_none scope plain ac k i He Hk).
+    + rewrite spoils_at_flat_map.
+      induction arms as [ | [discriminant ac] arms IH]; simpl in *;
+        [ reflexivity | ].
+      apply andb_true_iff in He as [Hac Harms].
+      rewrite (apply_cont_spoils_none scope plain ac k i Hac Hk),
+        (IH Harms).
+      reflexivity.
+    + reflexivity.
+  - destruct h as [params metadata handler]. simpl.
+    apply knowing_spoils_none.
+Qed.
+
+(* ------------------------------------------------------------------------ *)
+(* What is known of the variables                                           *)
+(* ------------------------------------------------------------------------ *)
+
+(* The variables of [plain] that are bound hold constants and
+   symbols. *)
+Definition vars_plain (plain : list variable) (vars : env) : Prop :=
+  ∀ (x : variable) (v : value),
+    among x plain = true -> lookup x vars = Some v -> plain_value v.
+
+Lemma vars_plain_fewer (plain plain' : list variable) (vars : env) :
+  (∀ x : variable, among x plain' = true -> among x plain = true) ->
+  vars_plain plain vars -> vars_plain plain' vars.
+Proof. intros Hfewer Hvars x v Hx. exact (Hvars x v (Hfewer x Hx)). Qed.
+
+(* A variable bound again is forgotten. *)
+Lemma vars_plain_forgotten (plain : list variable) (vars : env)
+    (x : variable) (v : value) :
+  vars_plain plain vars -> vars_plain (without [x] plain) ((x, v) :: vars).
+Proof.
+  intros Hvars y w Hy. rewrite among_without in Hy.
+  apply andb_true_iff in Hy as [Hy Hother]. apply negb_true_iff in Hother.
+  rewrite among_cons in Hother. simpl in Hother.
+  rewrite orb_false_r in Hother. rewrite lookup_cons, Hother.
+  exact (Hvars y w Hy).
+Qed.
+
+(* A variable bound to a constant or a symbol is known. *)
+Lemma vars_plain_known (plain : list variable) (vars : env) (x : variable)
+    (v : value) :
+  plain_value v ->
+  vars_plain plain vars -> vars_plain (x :: plain) ((x, v) :: vars).
+Proof.
+  intros Hv Hvars y w Hy. rewrite lookup_cons. rewrite among_cons in Hy.
+  destruct (Pos.eqb y x); [ intros [= <-]; exact Hv | exact (Hvars y w Hy) ].
+Qed.
+
+(* The parameters of a handler bound to values that are constants and
+   symbols at the positions that are not spoilt: what [params_known]
+   says is known. The two go through the parameters in the same
+   order. *)
+Lemma bind_params_known (k : continuation) (sp : spoilt)
+    (params : list variable) :
+  ∀ (i : nat) (vs : list value) (vars bound : env) (known : list variable),
+    bind_params params vs vars = Some bound ->
+    vars_plain known vars ->
+    (∀ (j : nat) (v : value),
+       nth_error vs j = Some v ->
+       spoils_at k (i + j) sp = false -> plain_value v) ->
+    vars_plain (params_known k sp i params known) bound.
+Proof.
+  induction params as [ | x params IH];
+    intros i [ | v vs] vars bound known; simpl; try discriminate.
+  - intros [= <-] Hvars _. exact Hvars.
+  - intros Hbind Hvars Hvs. apply (IH (S i) vs _ bound _ Hbind).
+    + destruct (spoils_at k i sp) eqn:Hsp;
+        [ apply vars_plain_forgotten, Hvars | ].
+      apply vars_plain_known; [ | exact Hvars ].
+      apply (Hvs 0 v eq_refl). rewrite Nat.add_0_r. exact Hsp.
+    + intros j w Hw Hsp. apply (Hvs (S j) w Hw). rewrite Nat.add_succ_r.
+      exact Hsp.
+Qed.
+
+(* The parameters of a handler bound to any values: they are
+   forgotten. *)
+Lemma bind_params_forgotten (params : list variable) :
+  ∀ (vs : list value) (vars bound : env) (plain : list variable),
+    bind_params params vs vars = Some bound ->
+    vars_plain plain vars ->
+    vars_plain (without params plain) bound.
+Proof.
+  induction params as [ | x params IH]; intros [ | v vs] vars bound plain;
+    simpl; try discriminate.
+  - intros [= <-]. apply vars_plain_fewer. intros y Hy.
+    rewrite among_without in Hy. apply andb_true_iff in Hy as [Hy _].
+    exact Hy.
+  - intros Hbind Hvars.
+    apply (vars_plain_fewer (without params (without [x] plain)));
+      [ | exact (IH vs _ bound _ Hbind
+                   (vars_plain_forgotten plain vars x v Hvars)) ].
+    intros y. rewrite !among_without, !among_cons. simpl.
+    destruct (among y plain), (Pos.eqb y x), (among y params);
+      simpl; congruence.
+Qed.
+
+(* A simple that is known evaluates to a constant or a symbol. *)
+Lemma eval_simple_known (plain : list variable) (vars : env) (s : simple)
+    (v : value) :
+  vars_plain plain vars ->
+  plain_or plain s = true -> eval_simple vars s = Some v -> plain_value v.
+Proof.
+  intros Hvars Hs. destruct s as [x | sym | c]; simpl in *.
+  - exact (Hvars x v Hs).
+  - intros [= <-]. exact I.
+  - intros [= <-]. exact I.
+Qed.
+
+(* A value among those of some simples is that of the simple at its
+   position. *)
+Lemma eval_simples_nth (vars : env) (args : list simple) :
+  ∀ (vs : list value) (j : nat) (v : value),
+    eval_simples vars args = Some vs ->
+    nth_error vs j = Some v ->
+    ∃ s : simple, nth_error args j = Some s ∧ eval_simple vars s = Some v.
+Proof.
+  induction args as [ | s args IH]; intros vs j v; simpl.
+  - intros [= <-]. destruct j; discriminate.
+  - destruct (eval_simple vars s) as [w | ] eqn:Hw; [ | discriminate ].
+    destruct (eval_simples vars args) as [rest | ]; [ | discriminate ].
+    intros [= <-]. destruct j as [ | j]; simpl.
+    + intros [= <-]. exists s. split; [ reflexivity | exact Hw ].
+    + exact (IH rest j v eq_refl).
+Qed.
+
+Lemma eval_simples_known (plain : list variable) (vars : env)
+    (args : list simple) (vs : list value) :
+  vars_plain plain vars ->
+  forallb (plain_or plain) args = true ->
+  eval_simples vars args = Some vs ->
+  ∀ v : value, v ∈ vs -> plain_value v.
+Proof.
+  intros Hvars Hargs Heval v Hin. apply In_nth_error in Hin as [j Hj].
+  destruct (eval_simples_nth vars args vs j v Heval Hj) as (s & Hs & Hv).
+  rewrite forallb_forall in Hargs.
+  exact (eval_simple_known plain vars s v Hvars
+           (Hargs s (nth_error_In _ _ Hs)) Hv).
+Qed.
+
+(* ------------------------------------------------------------------------ *)
+(* What a continuation may be applied to                                    *)
+(* ------------------------------------------------------------------------ *)
+
+(* The values at the positions that [m] does not excuse are constants
+   and symbols. *)
+Definition args_fit (m : nat -> bool) (vs : list value) : Prop :=
+  ∀ (i : nat) (v : value),
+    nth_error vs i = Some v -> m i = false -> plain_value v.
+
+Lemma args_fit_plain (m : nat -> bool) (vs : list value) :
+  (∀ v : value, v ∈ vs -> plain_value v) -> args_fit m vs.
+Proof. intros Hvs i v Hv _. exact (Hvs v (nth_error_In _ _ Hv)). Qed.
+
+Lemma args_fit_any (m : nat -> bool) (vs : list value) :
+  (∀ i : nat, m i = true) -> args_fit m vs.
+Proof. intros Hm i v _ Hi. rewrite Hm in Hi. discriminate. Qed.
+
+Lemma args_fit_none (m : nat -> bool) (vs : list value) :
+  (∀ i : nat, m i = false) ->
+  args_fit m vs -> ∀ v : value, v ∈ vs -> plain_value v.
+Proof.
+  intros Hm Hfit v Hin. apply In_nth_error in Hin as [i Hi].
+  exact (Hfit i v Hi (Hm i)).
+Qed.
+
+(* [cont_plain c m]: applying [c] to values that are constants and
+   symbols at the positions that [m] does not excuse keeps the
+   invariant below, and if it is a way out the unit exits with
+   constants and symbols.
+   - A way out excuses no position.
+   - The closure of a non-recursive handler excuses the positions that
+     the scope of the handler spoils ([sp], for the name [k] that the
+     handler was bound to): its body passes the test with the other
+     parameters known, under variables that hold what is known where
+     the [Let_cont] stands, and each continuation of its environment
+     excuses what the body spoils of it.
+   - The closure of a recursive handler excuses every position: no
+     parameter of it is known.
+   - A continuation with extra arguments applies the one inside to
+     more values: that one excuses every position, or the extra
+     arguments are constants and symbols and no position is excused.
+   - What is left of an over-application excuses every position, of
+     the one value it is given; it returns to a continuation that is
+     no way out and excuses every position, as the call it comes from
+     passed the test. *)
 #[local] Set Warnings "-register-all".
-Inductive cont_plain : cont_value -> Prop :=
-  | Outer_plain (k : continuation) : cont_plain (Outer k)
-  | Closure_plain (scope : list continuation) (h : continuation_handler)
-      (vars : env) (conts : cont_env)
+Inductive cont_plain : cont_value -> (nat -> bool) -> Prop :=
+  | Outer_plain (k : continuation) : cont_plain (Outer k) (fun _ => false)
+  | Closure_plain (scope : list continuation) (plain : list variable)
+      (k : continuation) (sp : spoilt) (params : list variable)
+      (metadata : handler_metadata) (handler : expr) (vars : env)
+      (conts : cont_env) :
+    exits_plain_knowing scope (params_known k sp 0 params plain) handler
+    = true ->
+    vars_plain plain vars ->
+    scope_closed scope conts ->
+    (∀ (k' : continuation) (c : cont_value),
+       lookup k' conts = Some c ->
+       ∃ m : nat -> bool,
+         cont_plain c m
+         ∧ ∀ i : nat,
+             spoils_at k' i
+               (spoils (params_known k sp 0 params plain) handler)
+             = true ->
+             m i = true) ->
+    cont_plain (Closure (Handler params metadata handler) vars conts [])
+      (fun i => spoils_at k i sp)
+  | Rec_closure_plain (scope : list continuation) (plain : list variable)
+      (k : continuation) (h : continuation_handler) (vars : env)
+      (conts : cont_env)
       (recursive : list (continuation * continuation_handler)) :
-    handler_exits_plain (map fst recursive ++ scope) h = true ->
+    (k, h) ∈ recursive ->
     forallb
-      (fun '(_, h') => handler_exits_plain (map fst recursive ++ scope) h')
+      (fun '(_, h') =>
+         handler_exits_plain_knowing (map fst recursive ++ scope) plain h')
       recursive
     = true ->
+    vars_plain plain vars ->
     scope_closed scope conts ->
-    Forall (fun kc => cont_plain (snd kc)) conts ->
-    cont_plain (Closure h vars conts recursive)
-  | Extra_args_plain (c : cont_value) (extra : list value) :
-    cont_plain c ->
-    ((∃ k : continuation, cont_target c = Outer k) ->
-     ∀ v : value, v ∈ extra -> plain_value v) ->
-    cont_plain (Extra_args c extra)
+    (∀ (k' : continuation) (c : cont_value),
+       lookup k' conts = Some c ->
+       ∃ m : nat -> bool,
+         cont_plain c m
+         ∧ ∀ i : nat,
+             spoils_at k' i
+               (forget_conts (map fst recursive)
+                  (flat_map (fun '(_, h') => handler_spoils plain h')
+                     recursive))
+             = true ->
+             m i = true) ->
+    cont_plain (Closure h vars conts recursive) (fun _ => true)
+  | Extra_args_plain (c : cont_value) (extra : list value)
+      (m_c m : nat -> bool) :
+    cont_plain c m_c ->
+    (∀ j : nat, m_c j = true)
+    ∨ ((∀ i : nat, m i = false) ∧ ∀ v : value, v ∈ extra -> plain_value v) ->
+    cont_plain (Extra_args c extra) m
   | Over_application_plain (remaining : list value)
       (remaining_arity return_arity : arity)
-      (return_to exn_to : cont_value) :
-    cont_plain return_to ->
+      (return_to exn_to : cont_value) (m_return m_exn : nat -> bool) :
+    cont_plain return_to m_return ->
+    (∀ i : nat, m_return i = true) ->
     cont_closed return_to ->
-    cont_plain exn_to ->
+    cont_plain exn_to m_exn ->
     cont_plain
       (Over_application remaining remaining_arity return_arity return_to
-         exn_to).
+         exn_to)
+      (fun _ => true).
 
-Definition conts_plain (conts : cont_env) : Prop :=
-  Forall (fun kc => cont_plain (snd kc)) conts.
+(* Each continuation bound excuses what is spoilt of its name. *)
+Definition conts_fit (sp : spoilt) (conts : cont_env) : Prop :=
+  ∀ (k : continuation) (c : cont_value),
+    lookup k conts = Some c ->
+    ∃ m : nat -> bool,
+      cont_plain c m ∧ ∀ i : nat, spoils_at k i sp = true -> m i = true.
+
+Lemma conts_fit_less (sp sp' : spoilt) (conts : cont_env) :
+  (∀ (k : continuation) (i : nat),
+     spoils_at k i sp' = true -> spoils_at k i sp = true) ->
+  conts_fit sp conts -> conts_fit sp' conts.
+Proof.
+  intros Hless Hfit k c Hk. destruct (Hfit k c Hk) as (m & Hc & Hm).
+  exists m. split; [ exact Hc | ]. intros i Hi. exact (Hm i (Hless k i Hi)).
+Qed.
 
 Definition code_plain (statics : static_env) : Prop :=
   ∀ (id : code_id) (c : code),
-    lookup id (static_code statics) = Some c -> code_exits_plain c = true.
+    lookup id (static_code statics) = Some c ->
+    code_exits_plain_knowing c = true.
 
-(* The invariant: the expression passes the check for a scope that the
-   continuations in scope close. *)
+(* The invariant: the expression passes the test for a scope that the
+   continuations in scope close and for variables that hold constants
+   and symbols, and each continuation bound excuses what the expression
+   spoils of it. *)
 Definition plain_state (s : state) : Prop :=
-  ∃ scope : list continuation,
-    exits_plain scope (state_expr s) = true
+  ∃ (scope : list continuation) (plain : list variable),
+    exits_plain_knowing scope plain (state_expr s) = true
+    ∧ vars_plain plain (state_vars s)
     ∧ scope_closed scope (state_conts s)
-    ∧ conts_plain (state_conts s)
+    ∧ conts_fit (spoils plain (state_expr s)) (state_conts s)
     ∧ code_plain (state_statics s).
 
-Lemma lookup_plain (k : continuation) (conts : cont_env) (c : cont_value) :
-  conts_plain conts -> lookup k conts = Some c -> cont_plain c.
+Lemma lookup_none_among {A : Type} (name : positive)
+    (bindings : list (positive * A)) :
+  lookup name bindings = None -> among name (map fst bindings) = false.
 Proof.
-  induction 1 as [ | [k' c'] conts Hc _ IH]; simpl; [ discriminate | ].
-  destruct (Pos.eqb k k'); [ intros [= <-]; exact Hc | exact IH ].
+  intros Hnone. destruct (among name (map fst bindings)) eqn:Hin;
+    [ | reflexivity ].
+  apply among_In in Hin. destruct (lookup_none_not_in name bindings Hnone Hin).
 Qed.
 
-Lemma resolve_plain (k : continuation) (conts : cont_env) :
-  conts_plain conts -> cont_plain (resolve k conts).
+(* What a handler of a recursive group spoils of a continuation that is
+   not of the group, the group does. *)
+Lemma group_spoils (plain : list variable)
+    (recursive : list (continuation * continuation_handler))
+    (k : continuation) (h : continuation_handler) (k' : continuation)
+    (i : nat) :
+  (k, h) ∈ recursive ->
+  spoils_at k' i (forget_conts (map fst recursive) (handler_spoils plain h))
+  = true ->
+  spoils_at k' i
+    (forget_conts (map fst recursive)
+       (flat_map (fun '(_, h') => handler_spoils plain h') recursive))
+  = true.
 Proof.
-  intros Hconts. unfold resolve.
-  destruct (lookup k conts) as [c | ] eqn:Hk;
-    [ exact (lookup_plain k conts c Hconts Hk) | apply Outer_plain ].
+  intros Hin. rewrite !spoils_at_forget, spoils_at_flat_map. intros Hsp.
+  apply andb_true_iff in Hsp as [Hsp ->]. rewrite andb_true_r.
+  apply existsb_exists. exists (k, h). split; [ exact Hin | exact Hsp ].
 Qed.
 
-(* What a name is bound to among the closures of a recursive group: the
-   closure of one of its handlers, or nothing if the group has not got
-   the name. [all] is the whole group. *)
-Lemma lookup_rec_closures (vars : env) (conts : cont_env)
-    (all handlers : list (continuation * continuation_handler))
-    (k : continuation) :
-  match
-    lookup k (map (fun '(k, h) => (k, Closure h vars conts all)) handlers)
-  with
-  | Some c => ∃ h : continuation_handler, c = Closure h vars conts all
-  | None => among k (map fst handlers) = false
-  end.
-Proof.
-  induction handlers as [ | [k' h] handlers IH]; simpl; [ reflexivity | ].
-  destruct (Pos.eqb k k'); simpl; [ eauto | exact IH ].
-Qed.
-
-Lemma rec_closures_plain (scope : list continuation) (vars : env)
-    (conts : cont_env)
-    (recursive : list (continuation * continuation_handler)) :
+(* The closures of a recursive group whose handlers pass the test,
+   added to an environment: the names of the group are closed, and the
+   continuations bound excuse what [sp] spoils if those of the
+   environment excuse what it spoils of the names that are not of the
+   group. *)
+Lemma rec_closures_plain (scope : list continuation) (plain : list variable)
+    (vars : env) (conts : cont_env)
+    (recursive : list (continuation * continuation_handler)) (sp : spoilt) :
   forallb
-    (fun '(_, h) => handler_exits_plain (map fst recursive ++ scope) h)
+    (fun '(_, h) =>
+       handler_exits_plain_knowing (map fst recursive ++ scope) plain h)
     recursive
   = true ->
+  vars_plain plain vars ->
   scope_closed scope conts ->
-  conts_plain conts ->
+  conts_fit
+    (forget_conts (map fst recursive)
+       (flat_map (fun '(_, h) => handler_spoils plain h) recursive))
+    conts ->
+  conts_fit (forget_conts (map fst recursive) sp) conts ->
   scope_closed (map fst recursive ++ scope)
     (rec_closures recursive vars conts ++ conts)
-  ∧ conts_plain (rec_closures recursive vars conts ++ conts).
+  ∧ conts_fit sp (rec_closures recursive vars conts ++ conts).
 Proof.
-  intros Hrecursive Hscope Hconts. split.
-  - intros k Hk. rewrite lookup_app.
-    pose proof (lookup_rec_closures vars conts recursive recursive k)
-      as Hlookup.
-    unfold rec_closures.
-    destruct
-      (lookup k
-         (map (fun '(k, h) => (k, Closure h vars conts recursive)) recursive))
-      as [c | ].
-    + destruct Hlookup as [h ->].
-      eexists. split; [ reflexivity | apply Closure_closed ].
-    + rewrite among_app, Hlookup in Hk. exact (Hscope k Hk).
-  - apply Forall_app. split; [ | exact Hconts ].
-    unfold rec_closures. apply Forall_forall. intros [k c] Hin.
-    apply in_map_iff in Hin as ([k' h] & [= <- <-] & Hin). simpl.
-    apply (Closure_plain scope); [ | exact Hrecursive | exact Hscope
-                                 | exact Hconts ].
-    rewrite forallb_forall in Hrecursive. exact (Hrecursive (k', h) Hin).
+  intros Hrecursive Hvars Hscope Hgroup Hsp. split.
+  - intros k Hk. rewrite lookup_rec_closures_app.
+    destruct (lookup k recursive) as [h | ] eqn:Hlookup.
+    + eexists. split; [ reflexivity | apply Closure_closed ].
+    + assert (Hout : among k (map fst recursive) = false)
+        by exact (lookup_none_among k recursive Hlookup).
+      rewrite among_app, Hout in Hk. exact (Hscope k Hk).
+  - intros k c. rewrite lookup_rec_closures_app.
+    destruct (lookup k recursive) as [h | ] eqn:Hlookup.
+    + intros [= <-]. exists (fun _ => true). split; [ | reflexivity ].
+      exact (Rec_closure_plain scope plain k h vars conts recursive
+               (lookup_in k h recursive Hlookup) Hrecursive Hvars Hscope
+               Hgroup).
+    + intros Hc. destruct (Hsp k c Hc) as (m & Hm & Hfit).
+      assert (Hout : among k (map fst recursive) = false)
+        by exact (lookup_none_among k recursive Hlookup).
+      exists m. split; [ exact Hm | ]. intros i Hi. apply Hfit.
+      rewrite spoils_at_forget, Hi, Hout. reflexivity.
 Qed.
 
 Lemma eval_static_bindings_plain (vars : env) :
   ∀ (bindings : list static_binding) (statics extended : static_env),
-    forallb binding_exits_plain bindings = true ->
+    forallb binding_exits_plain_knowing bindings = true ->
     code_plain statics ->
     eval_static_bindings vars bindings statics = Some extended ->
     code_plain extended.
@@ -2817,22 +3204,6 @@ Proof.
       apply (IH _ _ Hbindings). exact Hcode.
 Qed.
 
-Lemma eval_simples_plain (vars : env) (args : list simple) :
-  forallb plain_simple args = true ->
-  ∀ vs : list value,
-    eval_simples vars args = Some vs ->
-    ∀ v : value, v ∈ vs -> plain_value v.
-Proof.
-  induction args as [ | s args IH]; simpl.
-  - intros _ vs [= <-] v [].
-  - intros Hplain vs. apply andb_true_iff in Hplain as [Hs Hargs].
-    destruct (eval_simple vars s) as [w | ] eqn:Hw; [ | discriminate ].
-    destruct (eval_simples vars args) as [rest | ]; [ | discriminate ].
-    intros [= <-] v [<- | Hin]; [ | exact (IH Hargs rest eq_refl v Hin) ].
-    destruct s as [x | sym | c]; [ discriminate | | ];
-      simpl in Hw; injection Hw as <-; exact I.
-Qed.
-
 (* A result of a step that keeps the invariant and is no exit. *)
 Definition stays_plain (result : step_result) : Prop :=
   match result with
@@ -2846,56 +3217,60 @@ Definition stays_plain (result : step_result) : Prop :=
 Lemma closed_stays_plain (c : cont_value) (vs : list value)
     (statics : static_env) (hp : heap) :
   cont_closed c ->
-  (((∃ k : continuation, cont_target c = Outer k) ->
-    ∀ v : value, v ∈ vs -> plain_value v) ->
-   match apply_cont_value c vs statics hp with
-   | Step t => plain_state t
-   | Exit k exit_vs _ => ∀ v : value, v ∈ exit_vs -> plain_value v
-   | Undefined => True
-   end) ->
+  match apply_cont_value c vs statics hp with
+  | Step t => plain_state t
+  | Exit k exit_vs _ => ∀ v : value, v ∈ exit_vs -> plain_value v
+  | Undefined => True
+  end ->
   stays_plain (apply_cont_value c vs statics hp).
 Proof.
-  intros Hclosed Hplain. unfold stays_plain.
-  assert (Hvacuous :
-    (∃ k : continuation, cont_target c = Outer k) ->
-    ∀ v : value, v ∈ vs -> plain_value v).
-  { intros [k' Hout]. destruct (cont_closed_target c k' Hclosed Hout). }
-  specialize (Hplain Hvacuous).
+  intros Hclosed. unfold stays_plain.
   generalize (apply_cont_value_closed c Hclosed vs statics hp).
-  revert Hplain.
   destruct (apply_cont_value c vs statics hp) as [t | k exit_vs hp' | ];
-    intros Hplain Hno_exit;
+    intros Hno_exit Hplain;
     [ exact Hplain | exact (Hno_exit k exit_vs hp' eq_refl) | exact I ].
 Qed.
 
-(* A full call of code that passes the check, returning to a
-   continuation that is no way out, keeps the invariant. *)
+(* A full call of code that passes the test, returning to a
+   continuation that is no way out and excuses every position, keeps
+   the invariant: the body spoils no parameter of the exception
+   continuation of the code, whatever that excuses. *)
 Lemma call_code_plain (closure : value) (called : code_id) (c : code)
     (vs : list value) (args_arity return_arity : arity)
-    (return_to exn_to : cont_value) (statics : static_env) (hp : heap) :
+    (return_to exn_to : cont_value) (m_return m_exn : nat -> bool)
+    (statics : static_env) (hp : heap) :
   lookup called (static_code statics) = Some c ->
   code_plain statics ->
-  cont_plain return_to ->
+  cont_plain return_to m_return ->
+  (∀ i : nat, m_return i = true) ->
   cont_closed return_to ->
-  cont_plain exn_to ->
+  cont_plain exn_to m_exn ->
   stays_plain
     (call_code closure c vs args_arity return_arity return_to exn_to statics
        hp).
 Proof.
-  intros Hlookup Hcode Hreturn Hclosed Hexn. unfold stays_plain.
+  intros Hlookup Hcode Hreturn Hany Hclosed Hexn. unfold stays_plain.
   destruct
     (call_code closure c vs args_arity return_arity return_to exn_to statics hp)
     as [t | k exit_vs hp' | ] eqn:Hcall;
     [ | exact (call_code_no_exit _ _ _ _ _ _ _ _ _ _ _ _ Hcall) | exact I ].
   apply call_code_step in Hcall as (callee_vars & _ & _ & _ & _ & _ & ->).
-  exists [code_return_continuation c]. simpl.
-  split; [ | split; [ | split; [ | exact Hcode ] ] ].
-  - pose proof (Hcode called c Hlookup) as Hc. destruct c. exact Hc.
+  pose proof (Hcode called c Hlookup) as Hc.
+  destruct c as [params my_closure ret exn metadata body]. simpl in Hc |- *.
+  exists [ret], []. simpl.
+  split; [ exact Hc | ]. split; [ intros x v Hx; discriminate Hx | ].
+  split; [ | split; [ | exact Hcode ] ].
   - intros k' Hk'. rewrite among_cons in Hk'. simpl in Hk'.
     rewrite orb_false_r in Hk'. simpl. rewrite Hk'.
     exists return_to. split; [ reflexivity | exact Hclosed ].
-  - constructor; [ exact Hreturn | ].
-    constructor; [ exact Hexn | constructor ].
+  - intros k' c'. simpl. destruct (Pos.eqb k' ret) eqn:Hret.
+    + intros [= <-]. exists m_return.
+      split; [ exact Hreturn | intros i _; apply Hany ].
+    + destruct (Pos.eqb k' exn); [ | discriminate ].
+      intros [= <-]. exists m_exn. split; [ exact Hexn | ]. intros i Hi.
+      rewrite (knowing_spoils_none [ret] [] body k' i Hc) in Hi;
+        [ discriminate | ].
+      rewrite among_cons, Hret. reflexivity.
 Qed.
 
 (* So does a call of a given shape, where what is done with a partial
@@ -2903,52 +3278,59 @@ Qed.
    to what is left of it, which is no way out. *)
 Lemma run_call_plain (return_partial : value -> step_result)
     (kind : call_kind) (shape : option call_shape) (return_arity : arity)
-    (return_to exn_to : cont_value) (statics : static_env) (hp : heap) :
+    (return_to exn_to : cont_value) (m_return m_exn : nat -> bool)
+    (statics : static_env) (hp : heap) :
   shape_calls statics kind shape ->
   code_plain statics ->
-  cont_plain return_to ->
+  cont_plain return_to m_return ->
+  (∀ i : nat, m_return i = true) ->
   cont_closed return_to ->
-  cont_plain exn_to ->
+  cont_plain exn_to m_exn ->
   (∀ partial : value, stays_plain (return_partial partial)) ->
   stays_plain
     (run_call return_partial shape return_arity return_to exn_to statics hp).
 Proof.
-  intros Hcalls Hcode Hreturn Hclosed Hexn Hpartial.
+  intros Hcalls Hcode Hreturn Hany Hclosed Hexn Hpartial.
   destruct shape
     as [[closure c vs args_arity
         | closure c vs remaining args_arity remaining_arity | partial] | ];
     simpl in Hcalls |- *.
   - destruct Hcalls as (called & slots & _ & Hlookup & _).
-    exact (call_code_plain closure called c vs _ _ _ _ statics _ Hlookup Hcode
-             Hreturn Hclosed Hexn).
+    exact (call_code_plain closure called c vs _ _ _ _ _ _ statics _ Hlookup
+             Hcode Hreturn Hany Hclosed Hexn).
   - destruct Hcalls as (called & slots & _ & Hlookup & _).
-    apply (call_code_plain closure called c vs _ _ _ _ statics _ Hlookup Hcode);
-      [ apply Over_application_plain; assumption
-      | apply Over_application_closed; exact Hclosed | exact Hexn ].
+    apply
+      (call_code_plain closure called c vs _ _ _ _ (fun _ => true) m_exn
+         statics _ Hlookup Hcode);
+      [ exact (Over_application_plain _ _ _ _ _ _ _ Hreturn Hany Hclosed Hexn)
+      | reflexivity | apply Over_application_closed; exact Hclosed
+      | exact Hexn ].
   - apply Hpartial.
   - exact I.
 Qed.
 
-(* The exception continuation that a call gives its callee: its extra
-   arguments are constants and symbols if it is a way out. *)
-Lemma with_extra_args_plain (c : cont_value) (extra : list value) :
-  cont_plain c ->
-  ((∃ k : continuation, cont_target c = Outer k) ->
-   ∀ v : value, v ∈ extra -> plain_value v) ->
-  cont_plain (with_extra_args c extra).
+(* The exception continuation that a call gives its callee: the
+   caller's excuses every position, or the extra arguments are
+   constants and symbols. *)
+Lemma with_extra_args_plain (c : cont_value) (extra : list value)
+    (m_c : nat -> bool) :
+  cont_plain c m_c ->
+  (∀ j : nat, m_c j = true) ∨ (∀ v : value, v ∈ extra -> plain_value v) ->
+  ∃ m : nat -> bool, cont_plain (with_extra_args c extra) m.
 Proof.
-  intros Hc Hextra. destruct extra as [ | v extra]; [ exact Hc | ].
-  apply Extra_args_plain; assumption.
+  intros Hc Hextra. destruct extra as [ | v extra]; [ exists m_c; exact Hc | ].
+  exists (fun _ => false). apply (Extra_args_plain c _ m_c); [ exact Hc | ].
+  destruct Hextra as [Hany | Hextra]; [ left; exact Hany | right ].
+  split; [ reflexivity | exact Hextra ].
 Qed.
 
-(* Applying a continuation keeps the invariant, and if it is a way out
-   and the arguments are constants and symbols, so is what the term
-   exits with. *)
-Lemma apply_cont_value_plain (c : cont_value) :
-  cont_plain c ->
+(* Applying a continuation to values that are constants and symbols at
+   the positions that it does not excuse keeps the invariant, and if it
+   is a way out the values are what the term exits with. *)
+Lemma apply_cont_value_plain (c : cont_value) (m : nat -> bool) :
+  cont_plain c m ->
   ∀ (vs : list value) (statics : static_env) (hp : heap),
-    ((∃ k : continuation, cont_target c = Outer k) ->
-     ∀ v : value, v ∈ vs -> plain_value v) ->
+    args_fit m vs ->
     code_plain statics ->
     match apply_cont_value c vs statics hp with
     | Step t => plain_state t
@@ -2957,38 +3339,66 @@ Lemma apply_cont_value_plain (c : cont_value) :
     end.
 Proof.
   induction 1
-    as [ k | cscope [params metadata handler] dvars dconts recursive Hh
-             Hrecursive Hcscope Hdconts
-       | c extra Hc IH Hextra
-       | remaining remaining_arity return_arity return_to exn_to Hreturn
-           IHreturn Hclosed Hexn _ ];
+    as [ k
+       | scope plain k sp params metadata handler dvars dconts Hh Hdvars
+           Hscope Hdconts
+       | scope plain k [params metadata handler] dvars dconts recursive Hin
+           Hrecursive Hdvars Hscope Hdconts
+       | c extra m_c m Hc IH Hextra
+       | remaining remaining_arity return_arity return_to exn_to m_return
+           m_exn Hreturn IHreturn Hany Hclosed Hexn _ ];
     intros vs statics hp Hvs Hcode.
-  - simpl. apply Hvs. exists k. reflexivity.
+  - simpl. exact (args_fit_none _ vs (fun _ => eq_refl) Hvs).
   - simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
       [ | exact I ].
-    destruct (bind_params params vs dvars); [ | exact I ].
-    destruct (rec_closures_plain cscope dvars dconts recursive Hrecursive
-                Hcscope Hdconts)
+    destruct (bind_params params vs dvars) as [bound | ] eqn:Hbind;
+      [ | exact I ].
+    exists scope, (params_known k sp 0 params plain). simpl.
+    split; [ exact Hh | ].
+    split;
+      [ | split; [ exact Hscope | split; [ exact Hdconts | exact Hcode ] ] ].
+    exact (bind_params_known k sp params 0 vs dvars bound plain Hbind Hdvars
+             Hvs).
+  - simpl.
+    destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
+      [ | exact I ].
+    destruct (bind_params params vs dvars) as [bound | ] eqn:Hbind;
+      [ | exact I ].
+    destruct
+      (rec_closures_plain scope plain dvars dconts recursive
+         (spoils (without params plain) handler) Hrecursive Hdvars Hscope
+         Hdconts)
       as [Hscope' Hconts'].
-    exists (map fst recursive ++ cscope). simpl. auto.
+    { refine (conts_fit_less _ _ dconts _ Hdconts). intros k' i.
+      exact (group_spoils plain recursive k
+               (Handler params metadata handler) k' i Hin). }
+    exists (map fst recursive ++ scope), (without params plain). simpl.
+    split.
+    { rewrite forallb_forall in Hrecursive. exact (Hrecursive _ Hin). }
+    split; [ exact (bind_params_forgotten params vs dvars bound plain Hbind
+                      Hdvars) | ].
+    auto.
   - simpl. apply IH; [ | exact Hcode ].
-    intros Hout v Hin. apply in_app_or in Hin.
+    destruct Hextra as [Hany | [Hnone Hextra]];
+      [ apply args_fit_any, Hany | ].
+    apply args_fit_plain. intros v Hin. apply in_app_or in Hin.
     destruct Hin as [Hin | Hin];
-      [ exact (Hvs Hout v Hin) | exact (Hextra Hout v Hin) ].
+      [ exact (args_fit_none m vs Hnone Hvs v Hin) | exact (Hextra v Hin) ].
   - rewrite apply_cont_value_over_application.
     destruct vs as [ | v [ | v' vs]]; [ exact I | | exact I ].
     unfold call_function.
     generalize
       (run_call_plain
          (fun partial => apply_cont_value return_to [partial] statics hp)
-         Indirect _ return_arity return_to exn_to statics hp
+         Indirect _ return_arity return_to exn_to m_return m_exn statics hp
          (shape_of_call_calls statics v Indirect remaining remaining_arity
             return_arity)
-         Hcode Hreturn Hclosed Hexn
+         Hcode Hreturn Hany Hclosed Hexn
          (fun partial =>
             closed_stays_plain return_to [partial] statics _ Hclosed
-              (fun Hout => IHreturn [partial] statics hp Hout Hcode))).
+              (IHreturn [partial] statics hp
+                 (args_fit_any m_return [partial] Hany) Hcode))).
     unfold stays_plain.
     destruct (run_call _ _ _ _ _ _ _) as [t | k exit_vs | ];
       [ exact (fun H => H) | intros [] | exact (fun _ => I) ].
@@ -2996,12 +3406,14 @@ Qed.
 
 (* A step keeps the invariant, and an exit is with constants and symbols
    only: the continuation left through is not of the scope, so it was
-   given no variable. *)
-Lemma plain_step_components (scope : list continuation) (e : expr)
-    (vars : env) (conts : cont_env) (statics : static_env) (hp : heap) :
-  exits_plain scope e = true ->
+   given what is known only. *)
+Lemma plain_step_components (scope : list continuation)
+    (plain : list variable) (e : expr) (vars : env) (conts : cont_env)
+    (statics : static_env) (hp : heap) :
+  exits_plain_knowing scope plain e = true ->
+  vars_plain plain vars ->
   scope_closed scope conts ->
-  conts_plain conts ->
+  conts_fit (spoils plain e) conts ->
   code_plain statics ->
   match step (State e vars conts statics hp) with
   | Step t => plain_state t
@@ -3009,82 +3421,115 @@ Lemma plain_step_components (scope : list continuation) (e : expr)
   | Undefined => True
   end.
 Proof.
-  intros He Hscope Hconts Hcode.
+  intros He Hvars Hscope Hconts Hcode.
   destruct e
-    as [ x xkind d body | bindings body | k h body | handlers body | ap | ac
-       | scrutinee arms | ];
-    simpl in He.
+    as [ x xkind d body | bindings body | k [params metadata handler] body
+       | handlers body | ap | ac | scrutinee arms | ];
+    simpl in He, Hconts.
   - (* Let *)
     rewrite step_let.
     destruct (eval_named statics vars d) as [v | ]; [ | exact I ].
     destruct (kind_eqb (kind_of_value v) xkind); [ | exact I ].
-    exists scope. simpl. auto.
+    exists scope, (without [x] plain). simpl.
+    split; [ exact He | ].
+    split; [ exact (vars_plain_forgotten plain vars x v Hvars) | auto ].
   - (* Let_static *)
     apply andb_true_iff in He as [Hbindings Hbody]. rewrite step_let_static.
     destruct (eval_static_bindings vars bindings statics) as [extended | ]
       eqn:Hextended;
       [ | exact I ].
-    exists scope. simpl.
-    split; [ exact Hbody | ]. split; [ exact Hscope | ].
-    split; [ exact Hconts | ].
+    exists scope, plain. simpl.
+    split; [ exact Hbody | ]. split; [ exact Hvars | ].
+    split; [ exact Hscope | ]. split; [ exact Hconts | ].
     exact (eval_static_bindings_plain vars bindings statics extended Hbindings
              Hcode Hextended).
   - (* Let_cont_non_recursive *)
     apply andb_true_iff in He as [Hh Hbody].
     rewrite step_let_cont_non_recursive.
-    exists (k :: scope). simpl.
-    split; [ exact Hbody | ]. split; [ | split; [ | exact Hcode ] ].
+    exists (k :: scope), plain. simpl.
+    split; [ exact Hbody | ]. split; [ exact Hvars | ].
+    split; [ | split; [ | exact Hcode ] ].
     + intros k' Hk'. rewrite among_cons in Hk'. simpl.
       destruct (Pos.eqb k' k); [ | exact (Hscope k' Hk') ].
       eexists. split; [ reflexivity | apply Closure_closed ].
-    + constructor; [ | exact Hconts ]. simpl.
-      apply (Closure_plain scope);
-        [ exact Hh | reflexivity | exact Hscope | exact Hconts ].
+    + intros k' c. simpl. destruct (Pos.eqb_spec k' k) as [-> | Hne].
+      * intros [= <-]. exists (fun i => spoils_at k i (spoils plain body)).
+        split; [ | intros i Hi; exact Hi ].
+        apply (Closure_plain scope plain k (spoils plain body));
+          [ exact Hh | exact Hvars | exact Hscope | ].
+        refine (conts_fit_less _ _ conts _ Hconts). intros k' i Hi.
+        rewrite spoils_at_app, Hi. reflexivity.
+      * intros Hc. destruct (Hconts k' c Hc) as (m & Hm & Hfit).
+        exists m. split; [ exact Hm | ]. intros i Hi. apply Hfit.
+        rewrite spoils_at_app, spoils_at_forget, Hi, among_cons.
+        destruct (Pos.eqb_spec k' k); [ contradiction | ].
+        apply orb_true_r.
   - (* Let_cont_recursive *)
     apply andb_true_iff in He as [Hhandlers Hbody].
     rewrite step_let_cont_recursive.
     destruct (handlers_bind_statics handlers); [ exact I | ].
-    destruct (rec_closures_plain scope vars conts handlers Hhandlers Hscope
-                Hconts)
+    destruct
+      (rec_closures_plain scope plain vars conts handlers (spoils plain body)
+         Hhandlers Hvars Hscope)
       as [Hscope' Hconts'].
-    exists (map fst handlers ++ scope). simpl. auto.
+    { refine (conts_fit_less _ _ conts _ Hconts). intros k i.
+      rewrite !spoils_at_forget, spoils_at_app. intros Hi.
+      apply andb_true_iff in Hi as [-> ->]. reflexivity. }
+    { refine (conts_fit_less _ _ conts _ Hconts). intros k i.
+      rewrite !spoils_at_forget, spoils_at_app. intros Hi.
+      apply andb_true_iff in Hi as [-> ->]. rewrite orb_true_r.
+      reflexivity. }
+    exists (map fst handlers ++ scope), plain. simpl. auto.
   - (* Apply *)
-    apply andb_true_iff in He as [He Hexn]. rewrite step_apply.
+    apply andb_true_iff in He as [Hret Hexn]. rewrite step_apply.
     destruct (eval_simple vars (ap_callee ap)) as [callee | ]; [ | exact I ].
     destruct (eval_simples vars (ap_args ap)) as [vs | ]; [ | exact I ].
     destruct (eval_simples vars (exn_extra_simples ap)) as [extra | ]
       eqn:Hextra;
       [ | exact I ].
-    destruct (Hscope _ He) as (return_to & Hk & Hclosed).
+    destruct (Hscope _ Hret) as (return_to & Hk & Hclosed).
     assert (Hresolve : resolve (ap_continuation ap) conts = return_to).
     { unfold resolve. rewrite Hk. reflexivity. }
-    assert (Hreturn : cont_plain return_to).
-    { rewrite <- Hresolve. exact (resolve_plain _ conts Hconts). }
+    destruct (Hconts _ _ Hk) as (m_return & Hreturn & Hfit).
+    assert (Hany : ∀ i : nat, m_return i = true).
+    { intros i. apply Hfit. simpl. rewrite Pos.eqb_refl. reflexivity. }
     assert (Hexn_plain :
-      cont_plain
-        (with_extra_args (resolve (ap_exn_continuation ap) conts) extra)).
-    { apply with_extra_args_plain; [ exact (resolve_plain _ conts Hconts) | ].
-      intros [k' Hout].
-      destruct (among (ap_exn_continuation ap) scope) eqn:Hin.
-      - destruct (Hscope _ Hin) as (c & Hc & Hc_closed).
-        unfold resolve in Hout. rewrite Hc in Hout.
-        destruct (cont_closed_target c k' Hc_closed Hout).
-      - exact (eval_simples_plain vars _ Hexn extra Hextra). }
+      ∃ m_exn : nat -> bool,
+        cont_plain
+          (with_extra_args (resolve (ap_exn_continuation ap) conts) extra)
+          m_exn).
+    { destruct (forallb (plain_or plain) (exn_extra_simples ap)) eqn:Hall.
+      - assert (Hc :
+          ∃ m_c : nat -> bool,
+            cont_plain (resolve (ap_exn_continuation ap) conts) m_c).
+        { unfold resolve.
+          destruct (lookup (ap_exn_continuation ap) conts) as [c | ] eqn:Hc.
+          - destruct (Hconts _ _ Hc) as (m_c & Hm_c & _).
+            exists m_c. exact Hm_c.
+          - eexists. apply Outer_plain. }
+        destruct Hc as [m_c Hc]. apply (with_extra_args_plain _ _ m_c Hc).
+        right. exact (eval_simples_known plain vars _ extra Hvars Hall Hextra).
+      - rewrite orb_false_r in Hexn.
+        destruct (Hscope _ Hexn) as (c & Hc & _).
+        destruct (Hconts _ _ Hc) as (m_c & Hm_c & Hfit_c).
+        unfold resolve. rewrite Hc.
+        apply (with_extra_args_plain _ _ m_c Hm_c). left. intros j.
+        apply Hfit_c. simpl. rewrite Pos.eqb_refl. apply orb_true_r. }
+    destruct Hexn_plain as [m_exn Hexn_plain].
     rewrite Hresolve. unfold call_function.
     generalize
       (run_call_plain
          (fun partial => apply_cont_value return_to [partial] statics hp)
          (ap_call_kind ap) _ (ap_return_arity ap) return_to
          (with_extra_args (resolve (ap_exn_continuation ap) conts) extra)
-         statics hp
+         m_return m_exn statics hp
          (shape_of_call_calls statics callee (ap_call_kind ap) vs
             (ap_args_arity ap) (ap_return_arity ap))
-         Hcode Hreturn Hclosed Hexn_plain
+         Hcode Hreturn Hany Hclosed Hexn_plain
          (fun partial =>
             closed_stays_plain return_to [partial] statics _ Hclosed
-              (fun Hout =>
-                 apply_cont_value_plain return_to Hreturn [partial] statics
-                   hp Hout Hcode))).
+              (apply_cont_value_plain return_to m_return Hreturn [partial]
+                 statics hp (args_fit_any m_return [partial] Hany) Hcode))).
     unfold stays_plain.
     destruct (run_call _ _ _ _ _ _ _) as [t | k exit_vs | ];
       [ exact (fun H => H) | intros [] | exact (fun _ => I) ].
@@ -3092,24 +3537,41 @@ Proof.
     rewrite step_apply_cont.
     destruct (eval_simples vars (ac_args ac)) as [vs | ] eqn:Hargs;
       [ | exact I ].
-    unfold apply_continuation.
-    apply (apply_cont_value_plain _
-      (resolve_plain (ac_continuation ac) conts Hconts));
-      [ | exact Hcode ].
-    intros [k' Hout]. unfold apply_cont_exits_plain in He.
-    destruct (among (ac_continuation ac) scope) eqn:Hin.
-    + destruct (Hscope _ Hin) as (c & Hk & Hclosed).
-      unfold resolve in Hout. rewrite Hk in Hout.
-      destruct (cont_closed_target c k' Hclosed Hout).
-    + exact (eval_simples_plain vars _ He vs Hargs).
+    unfold apply_continuation, resolve.
+    destruct (lookup (ac_continuation ac) conts) as [c | ] eqn:Hk.
+    + destruct (Hconts _ _ Hk) as (m & Hc & Hm).
+      apply (apply_cont_value_plain c m Hc); [ | exact Hcode ].
+      intros i v Hv Hi.
+      destruct (eval_simples_nth vars _ vs i v Hargs Hv) as (s & Hs & Heval).
+      apply (eval_simple_known plain vars s v Hvars); [ | exact Heval ].
+      apply (args_spoil_at (ac_continuation ac) plain (ac_args ac) 0 i s Hs).
+      simpl.
+      destruct
+        (spoils_at (ac_continuation ac) i
+           (args_spoil (ac_continuation ac) plain 0 (ac_args ac)))
+        eqn:Hsp;
+        [ | reflexivity ].
+      rewrite (Hm i Hsp) in Hi. discriminate.
+    + apply (apply_cont_value_plain _ _ (Outer_plain (ac_continuation ac)));
+        [ | exact Hcode ].
+      apply args_fit_plain. unfold apply_cont_exits_plain_knowing in He.
+      destruct (among (ac_continuation ac) scope) eqn:Hin.
+      * destruct (Hscope _ Hin) as (c & Hc & _). rewrite Hk in Hc.
+        discriminate.
+      * exact (eval_simples_known plain vars _ vs Hvars He Hargs).
   - (* Switch *)
     rewrite step_switch.
     destruct (eval_simple vars scrutinee) as [v | ]; [ | exact I ].
     destruct (naked_immediate_of_value v) as [i | ]; [ | exact I ].
     destruct (find_arm i arms) as [ac | ] eqn:Harm; [ | exact I ].
-    exists scope. simpl. split; [ | auto ].
-    rewrite forallb_forall in He.
-    exact (He (i, ac) (find_arm_in i arms ac Harm)).
+    pose proof (find_arm_in i arms ac Harm) as Hin.
+    exists scope, plain. simpl.
+    split; [ rewrite forallb_forall in He; exact (He (i, ac) Hin) | ].
+    split; [ exact Hvars | ]. split; [ exact Hscope | ].
+    split; [ | exact Hcode ].
+    refine (conts_fit_less _ _ conts _ Hconts). intros k j Hj.
+    rewrite spoils_at_flat_map. apply existsb_exists.
+    exists (i, ac). split; [ exact Hin | exact Hj ].
   - (* Invalid *)
     rewrite step_invalid. exact I.
 Qed.
@@ -3122,8 +3584,10 @@ Lemma plain_step (s : state) :
   | Undefined => True
   end.
 Proof.
-  intros (scope & He & Hscope & Hconts & Hcode). rewrite (state_eta s).
-  exact (plain_step_components scope _ _ _ _ _ He Hscope Hconts Hcode).
+  intros (scope & plain & He & Hvars & Hscope & Hconts & Hcode).
+  rewrite (state_eta s).
+  exact (plain_step_components scope plain _ _ _ _ _ He Hvars Hscope Hconts
+           Hcode).
 Qed.
 
 Lemma plain_run (n : nat) :
@@ -3140,29 +3604,135 @@ Proof.
 Qed.
 
 (* The invariant holds of a first state whose static environment holds
-   no code. *)
+   code that passes the test. *)
+Lemma plain_from_code (e : expr) (statics : static_env) (hp : heap) :
+  exits_plain_knowing [] [] e = true ->
+  code_plain statics ->
+  plain_state (State e [] [] statics hp).
+Proof.
+  intros He Hcode. exists [], []. simpl.
+  split; [ exact He | ]. split; [ intros x v Hx; discriminate Hx | ].
+  split; [ intros k Hk; discriminate Hk | ].
+  split; [ intros k c Hk; discriminate Hk | exact Hcode ].
+Qed.
+
+(* So of one whose static environment holds no code. *)
 Lemma plain_from (e : expr) (statics : static_env) (hp : heap) :
-  exits_plain [] e = true ->
+  exits_plain_knowing [] [] e = true ->
   static_code statics = [] ->
   plain_state (State e [] [] statics hp).
 Proof.
-  intros He Hno_code. exists []. simpl.
-  split; [ exact He | ]. split; [ intros k [=] | ].
-  split; [ constructor | ].
+  intros He Hno_code. apply (plain_from_code e statics hp He).
   intros id c Hlookup. rewrite Hno_code in Hlookup. discriminate Hlookup.
 Qed.
 
-Lemma plain_initial (e : expr) :
-  exits_plain [] e = true
-    -> plain_state (State e [] [] empty_static_env empty_heap).
+Theorem exits_plain_knowing_sound_from :
+  exits_plain_knowing_sound_from_statement.
 Proof.
-  intros He. exact (plain_from e empty_static_env empty_heap He eq_refl).
+  intros statics e n k vs hp Hcode He.
+  exact (plain_run n _ k vs _ (plain_from_code e statics empty_heap He Hcode)).
 Qed.
 
+Theorem exits_plain_knowing_sound : exits_plain_knowing_sound_statement.
+Proof.
+  intros e n k vs hp He.
+  exact (plain_run n _ k vs _
+           (plain_from e empty_static_env empty_heap He eq_refl)).
+Qed.
+
+(* ------------------------------------------------------------------------ *)
+(* The test without what is known                                           *)
+(* ------------------------------------------------------------------------ *)
+
+Lemma plain_simples_known (plain : list variable) (args : list simple) :
+  forallb plain_simple args = true -> forallb (plain_or plain) args = true.
+Proof.
+  induction args as [ | s args IH]; simpl; [ reflexivity | ].
+  intros Hargs. apply andb_true_iff in Hargs as [Hs Hargs].
+  rewrite (IH Hargs), andb_true_r.
+  destruct s; [ discriminate | reflexivity | reflexivity ].
+Qed.
+
+Lemma apply_cont_exits_plain_accepted (scope : list continuation)
+    (plain : list variable) (ac : apply_cont) :
+  apply_cont_exits_plain scope ac = true ->
+  apply_cont_exits_plain_knowing scope plain ac = true.
+Proof.
+  unfold apply_cont_exits_plain, apply_cont_exits_plain_knowing.
+  destruct (among (ac_continuation ac) scope); [ reflexivity | ].
+  apply plain_simples_known.
+Qed.
+
+Fixpoint exits_plain_accepted (scope : list continuation)
+    (plain : list variable) (e : expr) {struct e} :
+  exits_plain scope e = true -> exits_plain_knowing scope plain e = true
+with handler_exits_plain_accepted (scope : list continuation)
+    (plain : list variable) (h : continuation_handler) {struct h} :
+  handler_exits_plain scope h = true ->
+  handler_exits_plain_knowing scope plain h = true
+with binding_exits_plain_accepted (binding : static_binding)
+    {struct binding} :
+  binding_exits_plain binding = true ->
+  binding_exits_plain_knowing binding = true
+with code_exits_plain_accepted (c : code) {struct c} :
+  code_exits_plain c = true -> code_exits_plain_knowing c = true.
+Proof.
+  - destruct e
+      as [ x xkind d body | bindings body
+         | k [params metadata handler] body | handlers body | ap | ac
+         | scrutinee arms | ];
+      simpl; intros He.
+    + exact (exits_plain_accepted scope _ body He).
+    + apply andb_true_iff in He as [Hbindings Hbody].
+      rewrite (exits_plain_accepted scope plain body Hbody), andb_true_r.
+      induction bindings as [ | binding bindings IH]; simpl in *;
+        [ reflexivity | ].
+      apply andb_true_iff in Hbindings as [Hbinding Hbindings].
+      rewrite (binding_exits_plain_accepted binding Hbinding),
+        (IH Hbindings).
+      reflexivity.
+    + apply andb_true_iff in He as [Hh Hbody].
+      rewrite (exits_plain_accepted scope _ handler Hh),
+        (exits_plain_accepted (k :: scope) plain body Hbody).
+      reflexivity.
+    + apply andb_true_iff in He as [Hhandlers Hbody].
+      rewrite (exits_plain_accepted _ plain body Hbody), andb_true_r.
+      clear Hbody. revert Hhandlers.
+      generalize (map fst handlers ++ scope) as scope'. intros scope'.
+      induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
+      intros Hhandlers. apply andb_true_iff in Hhandlers as [Hh Hhandlers].
+      rewrite (handler_exits_plain_accepted scope' plain h Hh),
+        (IH Hhandlers).
+      reflexivity.
+    + apply andb_true_iff in He as [-> Hexn]. simpl.
+      destruct (among (ap_exn_continuation ap) scope); [ reflexivity | ].
+      exact (plain_simples_known plain _ Hexn).
+    + exact (apply_cont_exits_plain_accepted scope plain ac He).
+    + induction arms as [ | [discriminant ac] arms IH]; simpl in *;
+        [ reflexivity | ].
+      apply andb_true_iff in He as [Hac Harms].
+      rewrite (apply_cont_exits_plain_accepted scope plain ac Hac),
+        (IH Harms).
+      reflexivity.
+    + reflexivity.
+  - destruct h as [params metadata handler]. simpl.
+    apply exits_plain_accepted.
+  - destruct binding as [id c | id | sym const]; simpl; try reflexivity.
+    apply code_exits_plain_accepted.
+  - destruct c as [params my_closure ret exn metadata body]. simpl.
+    apply exits_plain_accepted.
+Qed.
+
+Theorem exits_plain_knowing_accepts : exits_plain_knowing_accepts_statement.
+Proof. exact exits_plain_accepted. Qed.
+
+(* So a unit that passes the test without what is known exits with
+   constants and symbols only. *)
 Theorem exits_plain_sound : exits_plain_sound_statement.
 Proof.
   intros e n k vs hp He.
-  exact (plain_run n _ k vs _ (plain_initial e He)).
+  exact (exits_plain_knowing_sound e n k vs hp
+           (exits_plain_accepted [] [] e He)).
 Qed.
 
 (* ======================================================================== *)
@@ -3213,7 +3783,7 @@ Qed.
 (* The unit lifted refines the unit, the two run from that static
    environment and that heap. *)
 Lemma unit_lifted_refines :
-  exits_plain [] e = true ->
+  exits_plain_knowing [] [] e = true ->
   refines (State e [] [] statics0 hp0)
     (State (lifted_unit known lets e) [] [] statics0 hp0).
 Proof.
@@ -3233,7 +3803,7 @@ End Unit_refines.
 Theorem lift_unit_program_refines : lift_unit_program_refines_statement.
 Proof.
   intros L e e'. unfold lift_unit. cbv zeta.
-  destruct (exits_plain [] e) eqn:Hplain; [ | discriminate ].
+  destruct (exits_plain_knowing [] [] e) eqn:Hplain; [ | discriminate ].
   fold (lifted_unit (lifted_my_closures L) (lifted_lets L) e).
   destruct
     (well_formed_unit (lifting_unit L)
@@ -3255,7 +3825,7 @@ Qed.
 Theorem lift_unit_refines_imports : lift_unit_refines_imports_statement.
 Proof.
   intros imports L e e'. unfold lift_unit. cbv zeta.
-  destruct (exits_plain [] e) eqn:Hplain; [ | discriminate ].
+  destruct (exits_plain_knowing [] [] e) eqn:Hplain; [ | discriminate ].
   fold (lifted_unit (lifted_my_closures L) (lifted_lets L) e).
   destruct
     (well_formed_unit (lifting_unit L)
@@ -3403,3 +3973,212 @@ Qed.
 
 Theorem exits_plain_equivariant : exits_plain_equivariant_statement.
 Proof. exact exits_plain_rename. Qed.
+
+(* The same of the test with what is known: the variables known and
+   what is spoilt are renamed with the term. *)
+
+Lemma among_known_renamed (r : renaming) (x : variable)
+    (plain : list variable) :
+  among (rename_variable r x) (map (rename_variable r) plain)
+  = among x plain.
+Proof.
+  unfold among. induction plain as [ | y plain IH]; simpl; [ reflexivity | ].
+  rewrite rename_variable_eqb, IH. reflexivity.
+Qed.
+
+Lemma without_renamed (r : renaming) (bound names : list variable) :
+  without (map (rename_variable r) bound) (map (rename_variable r) names)
+  = map (rename_variable r) (without bound names).
+Proof.
+  unfold without. induction names as [ | y names IH]; simpl;
+    [ reflexivity | ].
+  rewrite among_known_renamed, IH. destruct (among y bound); reflexivity.
+Qed.
+
+Definition rename_spoilt (r : renaming) (sp : spoilt) : spoilt :=
+  map (fun '(k, at_) => (rename_continuation r k, at_)) sp.
+
+Lemma spoils_at_renamed (r : renaming) (k : continuation) (i : nat)
+    (sp : spoilt) :
+  spoils_at (rename_continuation r k) i (rename_spoilt r sp)
+  = spoils_at k i sp.
+Proof.
+  induction sp as [ | [k' at_] sp IH]; simpl; [ reflexivity | ].
+  rewrite rename_continuation_eqb, IH. reflexivity.
+Qed.
+
+Lemma forget_conts_renamed (r : renaming) (ks : list continuation)
+    (sp : spoilt) :
+  forget_conts (map (rename_continuation r) ks) (rename_spoilt r sp)
+  = rename_spoilt r (forget_conts ks sp).
+Proof.
+  induction sp as [ | [k at_] sp IH]; simpl; [ reflexivity | ].
+  rewrite among_rename_continuation, IH. destruct (among k ks); reflexivity.
+Qed.
+
+Lemma plain_or_renamed (r : renaming) (plain : list variable)
+    (args : list simple) :
+  forallb (plain_or (map (rename_variable r) plain))
+    (map (rename_simple r) args)
+  = forallb (plain_or plain) args.
+Proof.
+  induction args as [ | s args IH]; simpl; [ reflexivity | ].
+  rewrite IH. f_equal.
+  destruct s as [x | sym | c]; simpl;
+    [ apply among_known_renamed | reflexivity | reflexivity ].
+Qed.
+
+Lemma args_spoil_renamed (r : renaming) (k : continuation)
+    (plain : list variable) (args : list simple) :
+  ∀ i : nat,
+    args_spoil (rename_continuation r k) (map (rename_variable r) plain) i
+      (map (rename_simple r) args)
+    = rename_spoilt r (args_spoil k plain i args).
+Proof.
+  induction args as [ | s args IH]; intros i; simpl; [ reflexivity | ].
+  rewrite IH. unfold rename_spoilt. rewrite map_app. f_equal.
+  destruct s as [x | sym | c]; simpl; try reflexivity.
+  rewrite among_known_renamed. destruct (among x plain); reflexivity.
+Qed.
+
+Lemma params_known_renamed (r : renaming) (k : continuation) (sp : spoilt)
+    (params : list variable) :
+  ∀ (i : nat) (known : list variable),
+    params_known (rename_continuation r k) (rename_spoilt r sp) i
+      (map (rename_variable r) params) (map (rename_variable r) known)
+    = map (rename_variable r) (params_known k sp i params known).
+Proof.
+  induction params as [ | x params IH]; intros i known; simpl;
+    [ reflexivity | ].
+  rewrite spoils_at_renamed. destruct (spoils_at k i sp).
+  - rewrite <- IH. f_equal. exact (without_renamed r [x] known).
+  - exact (IH (S i) (x :: known)).
+Qed.
+
+Fixpoint spoils_renamed (r : renaming) (plain : list variable) (e : expr)
+    {struct e} :
+  spoils (map (rename_variable r) plain) (rename_expr r e)
+  = rename_spoilt r (spoils plain e)
+with handler_spoils_renamed (r : renaming) (plain : list variable)
+    (h : continuation_handler) {struct h} :
+  handler_spoils (map (rename_variable r) plain) (rename_handler r h)
+  = rename_spoilt r (handler_spoils plain h).
+Proof.
+  - destruct e
+      as [ x xkind d body | bindings body
+         | k [params metadata handler] body | handlers body | ap | ac
+         | scrutinee arms | ];
+      simpl.
+    + rewrite <- spoils_renamed. f_equal. exact (without_renamed r [x] plain).
+    + apply spoils_renamed.
+    + rewrite (spoils_renamed r plain body), params_known_renamed,
+        spoils_renamed, (forget_conts_renamed r [k]).
+      unfold rename_spoilt. rewrite map_app. reflexivity.
+    + assert (Hnames :
+        map fst
+          (map (fun '(k, h) => (rename_continuation r k, rename_handler r h))
+             handlers)
+        = map (rename_continuation r) (map fst handlers)).
+      { rewrite !map_map. apply map_ext. intros [k h]. reflexivity. }
+      assert (Hgroup :
+        flat_map
+          (fun '(_, h) => handler_spoils (map (rename_variable r) plain) h)
+          (map (fun '(k, h) => (rename_continuation r k, rename_handler r h))
+             handlers)
+        = rename_spoilt r
+            (flat_map (fun '(_, h) => handler_spoils plain h) handlers)).
+      { clear Hnames.
+        induction handlers as [ | [k h] handlers IH]; simpl;
+          [ reflexivity | ].
+        rewrite handler_spoils_renamed, IH. unfold rename_spoilt.
+        rewrite map_app. reflexivity. }
+      rewrite Hnames, Hgroup, spoils_renamed, <- forget_conts_renamed.
+      unfold rename_spoilt. rewrite map_app. reflexivity.
+    + rewrite exn_extra_simples_rename, plain_or_renamed.
+      destruct (forallb (plain_or plain) (exn_extra_simples ap));
+        reflexivity.
+    + apply args_spoil_renamed.
+    + induction arms as [ | [discriminant ac] arms IH]; simpl;
+        [ reflexivity | ].
+      rewrite IH. unfold rename_spoilt. rewrite map_app. f_equal.
+      apply args_spoil_renamed.
+    + reflexivity.
+  - destruct h as [params metadata handler]. simpl.
+    rewrite <- spoils_renamed. f_equal. apply without_renamed.
+Qed.
+
+Lemma apply_cont_exits_plain_knowing_rename (r : renaming)
+    (scope : list continuation) (plain : list variable) (ac : apply_cont) :
+  apply_cont_exits_plain_knowing (map (rename_continuation r) scope)
+    (map (rename_variable r) plain) (rename_apply_cont r ac)
+  = apply_cont_exits_plain_knowing scope plain ac.
+Proof.
+  unfold apply_cont_exits_plain_knowing. simpl.
+  rewrite among_rename_continuation, plain_or_renamed. reflexivity.
+Qed.
+
+Fixpoint exits_plain_knowing_rename (r : renaming)
+    (scope : list continuation) (plain : list variable) (e : expr)
+    {struct e} :
+  exits_plain_knowing (map (rename_continuation r) scope)
+    (map (rename_variable r) plain) (rename_expr r e)
+  = exits_plain_knowing scope plain e
+with handler_exits_plain_knowing_rename (r : renaming)
+    (scope : list continuation) (plain : list variable)
+    (h : continuation_handler) {struct h} :
+  handler_exits_plain_knowing (map (rename_continuation r) scope)
+    (map (rename_variable r) plain) (rename_handler r h)
+  = handler_exits_plain_knowing scope plain h
+with binding_exits_plain_knowing_rename (r : renaming)
+    (binding : static_binding) {struct binding} :
+  binding_exits_plain_knowing (rename_static_binding r binding)
+  = binding_exits_plain_knowing binding
+with code_exits_plain_knowing_rename (r : renaming) (c : code) {struct c} :
+  code_exits_plain_knowing (rename_code r c) = code_exits_plain_knowing c.
+Proof.
+  - destruct e
+      as [ x xkind d body | bindings body
+         | k [params metadata handler] body | handlers body | ap | ac
+         | scrutinee arms | ];
+      simpl.
+    + rewrite <- (exits_plain_knowing_rename r scope (without [x] plain) body).
+      f_equal. exact (without_renamed r [x] plain).
+    + rewrite exits_plain_knowing_rename. f_equal.
+      induction bindings as [ | binding bindings IH]; simpl; [ reflexivity | ].
+      rewrite binding_exits_plain_knowing_rename, IH. reflexivity.
+    + rewrite spoils_renamed, params_known_renamed,
+        exits_plain_knowing_rename.
+      f_equal. exact (exits_plain_knowing_rename r (k :: scope) plain body).
+    + assert (Hscope :
+        map fst
+          (map (fun '(k, h) => (rename_continuation r k, rename_handler r h))
+             handlers)
+        ++ map (rename_continuation r) scope
+        = map (rename_continuation r) (map fst handlers ++ scope)).
+      { rewrite map_app, !map_map. f_equal. apply map_ext.
+        intros [k h]. reflexivity. }
+      rewrite Hscope, exits_plain_knowing_rename. f_equal. clear Hscope.
+      generalize (map fst handlers ++ scope) as scope'. intros scope'.
+      induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
+      rewrite handler_exits_plain_knowing_rename, IH. reflexivity.
+    + rewrite !among_rename_continuation, exn_extra_simples_rename,
+        plain_or_renamed.
+      reflexivity.
+    + apply apply_cont_exits_plain_knowing_rename.
+    + induction arms as [ | [discriminant ac] arms IH]; simpl;
+        [ reflexivity | ].
+      rewrite apply_cont_exits_plain_knowing_rename, IH. reflexivity.
+    + reflexivity.
+  - destruct h as [params metadata handler]. simpl.
+    rewrite
+      <- (exits_plain_knowing_rename r scope (without params plain) handler).
+    f_equal. apply without_renamed.
+  - destruct binding as [id c | id | sym const]; simpl; try reflexivity.
+    apply code_exits_plain_knowing_rename.
+  - destruct c as [params my_closure ret exn metadata body]. simpl.
+    exact (exits_plain_knowing_rename r [ret] [] body).
+Qed.
+
+Theorem exits_plain_knowing_equivariant :
+  exits_plain_knowing_equivariant_statement.
+Proof. exact exits_plain_knowing_rename. Qed.

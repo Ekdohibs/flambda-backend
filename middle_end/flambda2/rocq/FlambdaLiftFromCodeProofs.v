@@ -1979,7 +1979,7 @@ Qed.
 (* The unit rewritten refines the unit, the two run from that static
    environment and that heap. *)
 Lemma unit_lifted_out_refines :
-  exits_plain [] e = true ->
+  exits_plain_knowing [] [] e = true ->
   refines (State e [] [] statics0 hp0)
     (State (lift_from_code K [] root e) [] [] statics0 hp0).
 Proof.
@@ -2002,7 +2002,7 @@ Theorem lift_from_code_unit_program_refines :
   lift_from_code_unit_program_refines_statement.
 Proof.
   intros u K e e'. unfold lift_from_code_unit. cbv zeta.
-  destruct (exits_plain [] e) eqn:Hplain; [ | discriminate ].
+  destruct (exits_plain_knowing [] [] e) eqn:Hplain; [ | discriminate ].
   destruct (well_formed_unit u (lift_from_code K [] root e)) eqn:Hwf;
     [ | discriminate ].
   intros [= <-]. unfold program_refines.
@@ -2014,7 +2014,7 @@ Theorem lift_from_code_unit_refines_imports :
   lift_from_code_unit_refines_imports_statement.
 Proof.
   intros imports u K e e'. unfold lift_from_code_unit. cbv zeta.
-  destruct (exits_plain [] e) eqn:Hplain; [ | discriminate ].
+  destruct (exits_plain_knowing [] [] e) eqn:Hplain; [ | discriminate ].
   destruct (well_formed_unit u (lift_from_code K [] root e)) eqn:Hwf;
     [ | discriminate ].
   intros [= <-] Hfree. unfold unit_refines.

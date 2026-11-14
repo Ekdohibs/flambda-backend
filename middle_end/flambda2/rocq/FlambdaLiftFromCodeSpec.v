@@ -122,12 +122,13 @@
    FlambdaLiftSpec.value_lifted, as for the lifting at toplevel, and no
    primitive and no rule of the machine tells them apart. They differ at
    an exit of the unit, so [lift_from_code_unit] makes the same check as
-   FlambdaLiftSpec.lift_unit (FlambdaLiftSpec.exits_plain: the unit
-   gives only symbols and constants to the continuations that it may
-   leave through). It also checks that the result is a well-formed unit:
-   the symbols given are then new and distinct, and the group of the
-   code is executed once. With both, the unit lifted refines the unit,
-   run on its own ([lift_from_code_unit_program_refines_statement]).
+   FlambdaLiftSpec.lift_unit (FlambdaLiftSpec.exits_plain_knowing: the
+   unit gives only symbols and constants to the continuations that it
+   may leave through). It also checks that the result is a well-formed
+   unit: the symbols given are then new and distinct, and the group of
+   the code is executed once. With both, the unit lifted refines the
+   unit, run on its own
+   ([lift_from_code_unit_program_refines_statement]).
 
    The second run binds the symbol when the group of the code is
    bound, whether or not the code is ever called. That binding cannot
@@ -308,7 +309,9 @@ with binding_lift_from_code (K : lets_in_code)
 Definition lift_from_code_unit (u : unit_interface) (K : lets_in_code)
     (e : expr) : option expr :=
   let lifted := lift_from_code K [] root e in
-  if exits_plain [] e && well_formed_unit u lifted then Some lifted else None.
+  if exits_plain_knowing [] [] e && well_formed_unit u lifted
+  then Some lifted
+  else None.
 
 (* ======================================================================== *)
 (* The statements                                                           *)

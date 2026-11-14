@@ -8,6 +8,7 @@ open FlambdaPrimitiveModel
 open FlambdaWellFormedSpec
 open List
 open ListDef
+open PeanoNat
 
 type lift_to =
   | Lift_to_symbol of symbol
@@ -57,14 +58,40 @@ val lift_handler :
 
 val plain_simple : simple -> bool
 
-val apply_cont_exits_plain : continuation list -> apply_cont -> bool
+val plain_or : variable list -> simple -> bool
 
-val exits_plain : continuation list -> expr -> bool
+type spoilt = (continuation * nat option) list
 
-val handler_exits_plain : continuation list -> continuation_handler -> bool
+val spoils_at : continuation -> nat -> spoilt -> bool
 
-val binding_exits_plain : static_binding -> bool
+val forget_conts : continuation list -> spoilt -> spoilt
 
-val code_exits_plain : code -> bool
+val args_spoil : continuation -> variable list -> nat -> simple list -> spoilt
+
+val apply_cont_spoils : variable list -> apply_cont -> spoilt
+
+val params_known :
+  continuation ->
+  spoilt ->
+  nat ->
+  variable list ->
+  variable list ->
+  variable list
+
+val spoils : variable list -> expr -> spoilt
+
+val handler_spoils : variable list -> continuation_handler -> spoilt
+
+val apply_cont_exits_plain_knowing :
+  continuation list -> variable list -> apply_cont -> bool
+
+val exits_plain_knowing : continuation list -> variable list -> expr -> bool
+
+val handler_exits_plain_knowing :
+  continuation list -> variable list -> continuation_handler -> bool
+
+val binding_exits_plain_knowing : static_binding -> bool
+
+val code_exits_plain_knowing : code -> bool
 
 val lift_unit : lifting -> expr -> expr option

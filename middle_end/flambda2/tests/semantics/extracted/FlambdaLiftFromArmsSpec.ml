@@ -16,4 +16,6 @@ let lift_to_head lets e =
 
 let lift_to_head_unit u lets e =
   let lifted = lift_to_head lets e in
-  if exits_plain [] e && well_formed_unit u lifted then Some lifted else None
+  if exits_plain_knowing [] [] e && well_formed_unit u lifted
+  then Some lifted
+  else None

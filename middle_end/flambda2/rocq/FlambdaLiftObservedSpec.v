@@ -38,13 +38,13 @@
    its conditions hold: FlambdaLiftFromArmsSpec.lift_to_head_unit,
    FlambdaLiftFromCodeSpec.lift_from_code_unit, FlambdaLiftSpec.lift_unit
    and FlambdaLiftAroundSpec.lift_around_unit. The first condition of
-   each is FlambdaLiftSpec.exits_plain: the unit exits with symbols and
-   constants only. With it, the unit lifted exits with the same values
-   as the unit, and the statement of each is a refinement in which the
-   exits are equal. Without it, the unit lifted may exit with a symbol
-   where the unit exits with the closure, the block or the boxed number
-   that the symbol is bound to (FlambdaLiftSpec.value_lifted), and the
-   two exits are not equal.
+   each is FlambdaLiftSpec.exits_plain_knowing: the unit exits with
+   symbols and constants only. With it, the unit lifted exits with the
+   same values as the unit, and the statement of each is a refinement
+   in which the exits are equal. Without it, the unit lifted may exit
+   with a symbol where the unit exits with the closure, the block or the
+   boxed number that the symbol is bound to
+   (FlambdaLiftSpec.value_lifted), and the two exits are not equal.
 
    The functions here are those four with that one condition left out
    and every other condition kept. What is stated of each is

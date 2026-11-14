@@ -29,8 +29,8 @@
    an immutable array of values made a static binding of a symbol.
 
    This file is to be reviewed: [lift_named] and [lift_expr], against
-   what Simplify does (below); [exits_plain]; [lift_unit], which is
-   extracted and run by the validation of
+   what Simplify does (below); [exits_plain] and [exits_plain_knowing];
+   [lift_unit], which is extracted and run by the validation of
    middle_end/flambda2/tests/semantics/; the relation [value_lifted];
    and the statements.
 
@@ -153,8 +153,8 @@
      [my_closure] was bound to a symbol.
    - [lift_unit_program_refines_statement]: if moreover the term gives
      only symbols and constants to the continuations it may leave
-     through ([exits_plain]), the values at the exit are equal, and the
-     term lifted refines the term, run on its own
+     through ([exits_plain_knowing]), the values at the exit are equal,
+     and the term lifted refines the term, run on its own
      (FlambdaUnusedStaticsSpec.program_refines). [lift_unit] checks
      both, and this is the statement that
      FlambdaValidateSpec.validate_unit uses. A unit made from an OCaml
@@ -169,6 +169,26 @@
    continuation of code included, may be the way out of the unit, and
    is given symbols and constants only.
 
+   [exits_plain_knowing] is the check that [lift_unit] makes. It is
+   [exits_plain] with one more thing counted as a symbol or a constant:
+   a variable known to hold one, which is a parameter of a
+   non-recursive handler that every way of reaching the handler gives
+   a symbol, a constant or such a variable ([params_known], [spoils]).
+   A handler that raises again what it caught, in code that is kept,
+   passes so. It has the same statement
+   ([exits_plain_knowing_sound_statement], and from a static
+   environment whose code passes the check
+   [exits_plain_knowing_sound_from_statement]), and it accepts whatever
+   [exits_plain] accepts ([exits_plain_knowing_accepts_statement]).
+
+   What neither check says. The machine has no step for a call of code
+   that neither the term nor the static environment it is run from
+   binds: an import is an object of unknown contents, and a call of a
+   C function is not in the model. So of a run in which code that the
+   model has not got raises a block, "validated" says nothing: with a
+   handler around the call under [exits_plain_knowing], exactly as with
+   none around it under [exits_plain].
+
    What is not here, and makes a unit "not validated" rather than
    wrongly accepted:
    - lifting out of a function, where the binding moves to toplevel:
@@ -181,7 +201,8 @@
      named put one binding for two [Let]s of one constant that are
      lifted out of one body (FlambdaLiftFromCodeSpec.once_each);
    - a unit that gives a variable to its return continuation, or raises
-     a variable in code: see the CR at [exits_plain].
+     in code a variable that is not known to hold a symbol or a
+     constant: see the CR at [exits_plain].
 
    Identity. The model's [Make_block] is the immutable one
    (FlambdaPrimitiveModel.v) and its values have no identity, so nothing
@@ -398,7 +419,9 @@ Definition apply_cont_exits_plain (scope : list continuation)
    made so that what is compared at the exit can stay equality. If an
    exit compared values through symbols (decisions D1 and D6, with the
    design of the heap), the check would go and
-   [lift_simulates_statement] would be the whole statement. *)
+   [lift_simulates_statement] would be the whole statement.
+   [exits_plain_knowing] below refuses fewer: it accepts such a variable
+   where it is known to hold a symbol or a constant. *)
 
 (* The expression gives a variable only to continuations of [scope], and
    every call in it returns to one. The exceptions of a call go to its
@@ -458,6 +481,259 @@ Definition exits_plain_sound_statement : Prop :=
     ∀ v : value, v ∈ vs -> plain_value v.
 
 (* ======================================================================== *)
+(* What a unit may exit with, where some variables are known                *)
+(* ======================================================================== *)
+
+(* [exits_plain] refuses a unit that gives a variable to a continuation
+   it may leave through. The test below is the same test, with one more
+   thing counted as a symbol or a constant: a variable known to hold
+   one. Such a variable is a parameter of a non-recursive handler that
+   every way of reaching the handler gives a symbol, a constant or such
+   a variable ([params_known]).
+
+   What a body may give the parameters of the continuations that it
+   does not bind is computed in one pass ([spoils]); a parameter of a
+   non-recursive handler is known in the handler if the scope of the
+   handler spoils neither its position nor the whole handler.
+
+   The ways of reaching a handler [k] bound by a [Let_cont], in the
+   machine of FlambdaSemanticsSpec.v:
+   1. an [Apply_cont] of [k], or an arm of a [Switch] that applies
+      [k], in the scope of [k]: the arguments are those written;
+   2. a call that returns to [k]: the parameters are given what the
+      call returns, of which nothing is known. A handler that a call
+      returns to has no parameter counted;
+   3. a call whose exception continuation is [k]: the parameters are
+      given what the code called, or code that it calls with its own
+      exception continuation, gives that continuation, then the extra
+      arguments of each call on the way, the innermost first
+      (FlambdaSemanticsSpec.with_extra_args). What code gives its
+      exception continuation is tested where the code is bound
+      ([code_exits_plain_knowing]: that continuation is not in scope
+      there, so every argument and every extra argument given to it is
+      a symbol, a constant or a variable known to hold one). The extra
+      arguments of the calls in the scope of [k] are tested here, all
+      of them and not by position: nested extra arguments move the
+      positions.
+   There is no other way: a continuation is not a value, a trap action
+   applies nothing, and a partial application is given to the return
+   continuation of its call.
+
+   What the test does not say. The machine has no step for a call of
+   code that neither the term nor the static environment it is run
+   from binds: an import is an object of unknown contents, and a call
+   of a C function is not in the model. So of a run in which code that
+   the model has not got raises a block, "validated" says nothing,
+   exactly as for a call with no handler around it under
+   [exits_plain].
+
+   What is NOT counted, on purpose:
+   - a parameter of a recursive handler;
+   - a parameter given a symbol on one path and anything else on
+     another: one application that gives it a variable not known to
+     hold a symbol or a constant is enough to refuse it;
+   - a variable bound again: under a [Let] of [x], [x] is forgotten
+     (FlambdaMapSpec.without); the parameters of a handler are taken
+     one after the other as the machine binds them
+     (FlambdaSemanticsSpec.bind_params: of two parameters of one name
+     the later is the one that the handler reads), each added or
+     forgotten ([params_known]). The body of code starts with nothing
+     known;
+   - a variable that a [Let] binds to a symbol or to a constant
+     (it would be sound; no unit measured needs it). *)
+
+(* A symbol, a constant, or a variable known to hold one. *)
+Definition plain_or (plain : list variable) (s : simple) : bool :=
+  match s with
+  | Symbol _ | Const _ => true
+  | Var x => among x plain
+  end.
+
+(* What an expression may do to the parameters of the continuations
+   that it does not bind: [(k, Some i)] says that the parameter of [k]
+   at position [i] may be given something that is not a symbol, a
+   constant or a variable known to hold one; [(k, None)] says so of
+   every parameter of [k]. *)
+Definition spoilt : Type := list (continuation * option nat).
+
+Definition spoils_at (k : continuation) (i : nat) (sp : spoilt) : bool :=
+  existsb
+    (fun '(k', at_) =>
+       Pos.eqb k k'
+       && match at_ with
+          | None => true
+          | Some j => Nat.eqb i j
+          end)
+    sp.
+
+(* The continuations [ks] are bound: what is said of them is of other
+   continuations of those names no longer. *)
+Definition forget_conts (ks : list continuation) (sp : spoilt) : spoilt :=
+  filter (fun '(k, _) => negb (among k ks)) sp.
+
+(* The arguments from position [i] on that are not known to be symbols
+   or constants. An application with fewer or more arguments than the
+   handler has parameters has no step
+   (FlambdaSemanticsSpec.apply_cont_value, by [bind_params]), so a
+   position without an argument needs nothing said. *)
+Fixpoint args_spoil (k : continuation) (plain : list variable) (i : nat)
+    (args : list simple) : spoilt :=
+  match args with
+  | [] => []
+  | s :: args =>
+    (if plain_or plain s then [] else [(k, Some i)])
+    ++ args_spoil k plain (S i) args
+  end.
+
+Definition apply_cont_spoils (plain : list variable) (ac : apply_cont)
+    : spoilt :=
+  args_spoil (ac_continuation ac) plain 0 (ac_args ac).
+
+(* What is known in the handler of [k], given what its scope does to
+   its parameters ([sp]): what is known where the [Let_cont] stands,
+   [known] at first, then each parameter in turn, from position [i]
+   on: added if the scope gives it only symbols, constants and
+   variables known to hold one, forgotten if not. The order is that of
+   FlambdaSemanticsSpec.bind_params, so that of two parameters of one
+   name the later decides. *)
+Fixpoint params_known (k : continuation) (sp : spoilt) (i : nat)
+    (params known : list variable) : list variable :=
+  match params with
+  | [] => known
+  | x :: params =>
+    params_known k sp (S i) params
+      (if spoils_at k i sp then without [x] known else x :: known)
+  end.
+
+(* [spoils plain e]: what [e] may do to the parameters of the
+   continuations that it does not bind, [plain] being the variables
+   known to hold a symbol or a constant where [e] stands.
+   - An application of [k], and an arm of a [Switch] that applies it,
+     spoils the positions at which its argument is not known.
+   - A call spoils every parameter of the continuation that it returns
+     to, and, if one of its extra arguments is not known, every
+     parameter of its exception continuation: all of them and not the
+     one at a position, as what the code called gives that continuation
+     comes first and may be of any length, then the extra arguments of
+     the calls on the way, the innermost first.
+   - Under a [Let_cont] of [k], the handler is read with what its scope
+     leaves known of its parameters, and what the scope says of [k] is
+     forgotten: the handler is not in the scope of [k], so what it says
+     of a continuation of that name is kept.
+   - The parameters of a recursive handler are never known.
+   Static bindings are not looked into: code does not see the
+   continuations of the term around it. *)
+Fixpoint spoils (plain : list variable) (e : expr) {struct e} : spoilt :=
+  match e with
+  | Let x _ _ body => spoils (without [x] plain) body
+  | Let_static _ body => spoils plain body
+  | Let_cont_non_recursive k (Handler params _ handler) body =>
+    let sp := spoils plain body in
+    spoils (params_known k sp 0 params plain) handler ++ forget_conts [k] sp
+  | Let_cont_recursive handlers body =>
+    forget_conts (map fst handlers)
+      (flat_map (fun '(_, h) => handler_spoils plain h) handlers
+       ++ spoils plain body)
+  | Apply ap =>
+    (ap_continuation ap, None)
+    :: (if forallb (plain_or plain) (exn_extra_simples ap)
+        then []
+        else [(ap_exn_continuation ap, None)])
+  | Apply_cont ac => apply_cont_spoils plain ac
+  | Switch _ arms =>
+    flat_map (fun arm => apply_cont_spoils plain (snd arm)) arms
+  | Invalid => []
+  end
+with handler_spoils (plain : list variable) (h : continuation_handler)
+    {struct h} : spoilt :=
+  match h with
+  | Handler params _ handler => spoils (without params plain) handler
+  end.
+
+Definition apply_cont_exits_plain_knowing (scope : list continuation)
+    (plain : list variable) (ac : apply_cont) : bool :=
+  among (ac_continuation ac) scope || forallb (plain_or plain) (ac_args ac).
+
+(* [exits_plain] with [plain]: the expression gives variables that are
+   not known to hold a symbol or a constant only to continuations of
+   [scope], and every call in it returns to one. *)
+Fixpoint exits_plain_knowing (scope : list continuation)
+    (plain : list variable) (e : expr) {struct e} : bool :=
+  match e with
+  | Let x _ _ body => exits_plain_knowing scope (without [x] plain) body
+  | Let_static bindings body =>
+    forallb binding_exits_plain_knowing bindings
+    && exits_plain_knowing scope plain body
+  | Let_cont_non_recursive k (Handler params _ handler) body =>
+    exits_plain_knowing scope
+      (params_known k (spoils plain body) 0 params plain) handler
+    && exits_plain_knowing (k :: scope) plain body
+  | Let_cont_recursive handlers body =>
+    forallb
+      (fun '(_, h) =>
+         handler_exits_plain_knowing (map fst handlers ++ scope) plain h)
+      handlers
+    && exits_plain_knowing (map fst handlers ++ scope) plain body
+  | Apply ap =>
+    among (ap_continuation ap) scope
+    && (among (ap_exn_continuation ap) scope
+        || forallb (plain_or plain) (exn_extra_simples ap))
+  | Apply_cont ac => apply_cont_exits_plain_knowing scope plain ac
+  | Switch _ arms =>
+    forallb
+      (fun arm => apply_cont_exits_plain_knowing scope plain (snd arm))
+      arms
+  | Invalid => true
+  end
+with handler_exits_plain_knowing (scope : list continuation)
+    (plain : list variable) (h : continuation_handler) {struct h} : bool :=
+  match h with
+  | Handler params _ handler =>
+    exits_plain_knowing scope (without params plain) handler
+  end
+with binding_exits_plain_knowing (binding : static_binding) {struct binding}
+    : bool :=
+  match binding with
+  | Bind_code _ c => code_exits_plain_knowing c
+  | Bind_deleted_code _ | Bind_symbol _ _ => true
+  end
+with code_exits_plain_knowing (c : code) {struct c} : bool :=
+  match c with
+  | Code _ _ ret _ _ body => exits_plain_knowing [ret] [] body
+  end.
+
+(* [exits_plain_sound_statement], word for word but for the test: a
+   unit that passes the test, run on its own, exits with symbols and
+   constants only. *)
+Definition exits_plain_knowing_sound_statement : Prop :=
+  ∀ (e : expr) (n : nat) (k : continuation) (vs : list value) (hp : heap),
+    exits_plain_knowing [] [] e = true ->
+    run n (State e [] [] empty_static_env empty_heap) = Exit k vs hp ->
+    ∀ v : value, v ∈ vs -> plain_value v.
+
+(* The same from a static environment, with what it is assumed of
+   written out: every code that the environment binds passes the test.
+   The empty one and that of the imports
+   (FlambdaImportsSpec.imports_statics) bind no code, so the premise
+   holds of them with nothing to check; a unit run after a group of
+   static bindings that binds code (FlambdaImportsSpec
+   .prefix_refines_statement) needs it of that code. *)
+Definition exits_plain_knowing_sound_from_statement : Prop :=
+  ∀ (statics : static_env) (e : expr) (n : nat) (k : continuation)
+    (vs : list value) (hp : heap),
+    (∀ (id : code_id) (c : code),
+       lookup id (static_code statics) = Some c ->
+       code_exits_plain_knowing c = true) ->
+    exits_plain_knowing [] [] e = true ->
+    run n (State e [] [] statics empty_heap) = Exit k vs hp ->
+    ∀ v : value, v ∈ vs -> plain_value v.
+
+(* Nothing that [exits_plain] accepts is refused, whatever is known. *)
+Definition exits_plain_knowing_accepts_statement : Prop :=
+  ∀ (scope : list continuation) (plain : list variable) (e : expr),
+    exits_plain scope e = true -> exits_plain_knowing scope plain e = true.
+
+(* ======================================================================== *)
 (* The check                                                                *)
 (* ======================================================================== *)
 
@@ -471,7 +747,7 @@ Definition lift_unit (L : lifting) (e : expr) : option expr :=
       (lift_expr (lifted_lets L) root e)
   in
   if
-    exits_plain [] e
+    exits_plain_knowing [] [] e
     && well_formed_unit (lifting_unit L) lifted
     && only_closures_of (lifted_my_closures L) lifted
   then Some lifted
@@ -661,3 +937,13 @@ Definition exits_plain_equivariant_statement : Prop :=
   ∀ (r : renaming) (scope : list continuation) (e : expr),
     exits_plain (map (rename_continuation r) scope) (rename_expr r e)
     = exits_plain scope e.
+
+(* And [exits_plain_knowing]: the variables known are renamed with the
+   term. A renaming is a permutation of the names of each sort, so no
+   two variables become one; the statement needs that. *)
+Definition exits_plain_knowing_equivariant_statement : Prop :=
+  ∀ (r : renaming) (scope : list continuation) (plain : list variable)
+    (e : expr),
+    exits_plain_knowing (map (rename_continuation r) scope)
+      (map (rename_variable r) plain) (rename_expr r e)
+    = exits_plain_knowing scope plain e.

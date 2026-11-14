@@ -154,7 +154,9 @@ Proof.
   unfold lift_around_unit, groups_of. cbn [map]. cbv zeta.
   rewrite (lift_around_nothing root e).
   destruct
-    (exits_plain [] e && around_ok [] [] [] root e && well_formed_unit u e);
+    (exits_plain_knowing [] [] e
+     && around_ok [] [] [] root e
+     && well_formed_unit u e);
     reflexivity.
 Qed.
 
@@ -1652,7 +1654,7 @@ Qed.
 (* The unit rewritten refines the unit, the two run from that static
    environment and that heap. *)
 Lemma unit_around_refines :
-  exits_plain [] e = true ->
+  exits_plain_knowing [] [] e = true ->
   refines (State e [] [] statics0 hp0)
     (State (lift_around lets groups root e) [] [] statics0 hp0).
 Proof.
@@ -1673,7 +1675,7 @@ Theorem lift_around_unit_program_refines :
 Proof.
   intros u lets places e e'. unfold lift_around_unit. cbv zeta.
   set (groups := groups_of lets places e).
-  destruct (exits_plain [] e) eqn:Hplain; [ | discriminate ].
+  destruct (exits_plain_knowing [] [] e) eqn:Hplain; [ | discriminate ].
   destruct (around_ok lets groups [] root e) eqn:Hok; [ | discriminate ].
   destruct (well_formed_unit u (lift_around lets groups root e)) eqn:Hwf;
     [ | discriminate ].
@@ -1687,7 +1689,7 @@ Theorem lift_around_unit_refines_imports :
 Proof.
   intros imports u lets places e e'. unfold lift_around_unit. cbv zeta.
   set (groups := groups_of lets places e).
-  destruct (exits_plain [] e) eqn:Hplain; [ | discriminate ].
+  destruct (exits_plain_knowing [] [] e) eqn:Hplain; [ | discriminate ].
   destruct (around_ok lets groups [] root e) eqn:Hok; [ | discriminate ].
   destruct (well_formed_unit u (lift_around lets groups root e)) eqn:Hwf;
     [ | discriminate ].
