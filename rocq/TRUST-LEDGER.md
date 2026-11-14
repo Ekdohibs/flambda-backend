@@ -1008,6 +1008,12 @@ it gave back.
   or a call of one, is therefore undefined in the model where the
   compiler gives it a meaning. Merely containing such a load or call
   does not make the run undefined.
+  In particular a verdict says nothing of a run in which code that the
+  model has not got, that of an import or a C function, raises a
+  block: that is so where a handler around the call raises again what
+  it is given, which the test of the exits of a lifting accepts
+  (`FlambdaLiftSpec.exits_plain_knowing`; the header of that file,
+  "What neither check says"), as where no handler is around the call.
 - **What the `.cmx` files of other units say**, in the same file
   (`make_prefix`, `units_read`, `prefix_fault`, `with_prefix`, and
   `check`, which puts the prefix in front of the two units). This
