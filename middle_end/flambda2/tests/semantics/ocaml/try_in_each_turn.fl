@@ -1,0 +1,95 @@
+(let code rec size(74)
+       sum_of_quotients_0
+         (n/66 : imm tagged,
+          divisors/67 :
+            [ 0 | 0 of imm tagged * [ 0 | 0 of imm tagged * val ] ])
+         my_closure/68 &my_alloc_region/69 my_depth/70
+         -> k/36 * k/37
+         : imm tagged =
+   let next_depth/71 = rec_info (succ my_depth/70) in
+   (let prim/88 = %is_int (divisors/67) in
+    let Pisint/89 = %tag_imm (prim/88) in
+    (let untagged/90 = %untag_imm (Pisint/89) in
+     switch untagged/90
+       | 0 -> k/49
+       | 1 -> k/36 (0))
+      where k/49 =
+        cont k/38)
+     where k/38 =
+       ((let Pfield/87 = %block_load.[`1`] (divisors/67) in
+         apply direct(sum_of_quotients_0 &my_alloc_region/69)
+           (my_closure/68 ~ depth my_depth/70 -> next_depth/71
+            : _ -> imm tagged)
+             (n/66, Pfield/87)
+             -> k/39 * k/37)
+          where k/39 (apply_result/72 : imm tagged) =
+            let try_region/73 = %begin_try_region () in
+            let try_ghost_region/74 = %begin_try_ghost_region () in
+            (cont k/45 push(k/41)
+               where k/45 =
+                 let Pfield/84 = %block_load.[`0`] (divisors/67) in
+                 ((let prim/86 = %int_comp.ne (Pfield/84, 0) in
+                   switch prim/86
+                     | 0 -> k/47
+                     | 1 -> k/48)
+                    where k/48 =
+                      cont k/46
+                    where k/47 =
+                      cont k/41
+                             pop(regular k/41)
+                             ($`*predef*`.caml_exn_Division_by_zero)
+                    where k/46 =
+                      let int_div/85 = %int_barith.div (n/66, Pfield/84) in
+                      cont k/44 (int_div/85))
+               where k/44 (body_result/83 : imm tagged) =
+                 cont k/40 pop(k/41) (body_result/83)
+               where k/41 exn (exn/77 : val) =
+                 let unit/78 = %end_try_region (try_region/73) in
+                 let unit/79 = %end_try_ghost_region (try_ghost_region/74) in
+                 ((let prim/80 =
+                     %phys_eq (exn/77, $`*predef*`.caml_exn_Division_by_zero)
+                   in
+                   let eq/81 = %tag_imm (prim/80) in
+                   (let untagged/82 = %untag_imm (eq/81) in
+                    switch untagged/82
+                      | 0 -> k/43
+                      | 1 -> k/40 (0))
+                     where k/43 =
+                       cont k/42)
+                    where k/42 =
+                      cont k/37 pop(reraise k/37) (exn/77))
+               where k/40 (try_with_result/75 : imm tagged) =
+                 let int_add/76 =
+                   %int_barith.add (try_with_result/75, apply_result/72)
+                 in
+                 cont k/36 (int_add/76)))
+ in
+ let $camlTry_in_each_turn__const_block_0 = Block 0 (3, 0) in
+ let $camlTry_in_each_turn__const_block_1 =
+   Block 0 (0, $camlTry_in_each_turn__const_block_0)
+ in
+ let $camlTry_in_each_turn__const_block_2 =
+   Block 0 (2, $camlTry_in_each_turn__const_block_1)
+ in
+ let $camlTry_in_each_turn__const_block_3 =
+   Block 0 (0, $camlTry_in_each_turn__const_block_2)
+ in
+ let $camlTry_in_each_turn__const_block_4 =
+   Block 0 (1, $camlTry_in_each_turn__const_block_3)
+ in
+ let sum_of_quotients/91 =
+   closure sum_of_quotients_0 @sum_of_quotients &toplevel
+ in
+ (let Popaque/94 = %opaque (60) in
+  apply direct(sum_of_quotients_0 &toplevel)
+    (sum_of_quotients/91 : _ -> imm tagged)
+      (Popaque/94, $camlTry_in_each_turn__const_block_4)
+      -> k/50 * error)
+   where k/50 (result/92 : imm tagged) =
+     let Pmakeblock/93 = %block.[`0`].`toplevel` (result/92) in
+     cont k/35 (Pmakeblock/93))
+  where k/35 define_root_symbol (module_block/64) =
+    let field_0/65 = %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/64)
+    in
+    let $camlTry_in_each_turn = Block 0 (field_0/65) in
+    cont done ($camlTry_in_each_turn)

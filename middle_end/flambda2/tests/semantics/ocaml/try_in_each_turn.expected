@@ -1,0 +1,9 @@
+try_in_each_turn.fl:
+  before Simplify, with its import (179 steps): returns [0: 110]
+  after Simplify, with its import (107 steps): returns [0: 110]
+  the check of kinds: passes before, passes after
+  calls outside code: 1 before, 1 after
+  the same
+  calls outside code once those of known code are inlined: 1
+  validated with its imports: the same once closures and blocks are lifted to symbols and the terms normalised
+  the check of regions: passes before, passes after

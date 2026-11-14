@@ -1,0 +1,136 @@
+let $camlWhile_for_with_raise__first_const_0 = Block 0 () in
+(let code size(95)
+       f_0 (n/125 : imm tagged)
+         my_closure/126 &my_alloc_region/127 my_depth/128
+         -> k/48 * k/49
+         : imm tagged =
+   let next_depth/129 = rec_info (succ my_depth/128) in
+   cont k/50 (0)
+     where k/50 (let_mutable/130 : imm tagged) =
+       let try_region/131 = %begin_try_region () in
+       let try_ghost_region/132 = %begin_try_ghost_region () in
+       (cont k/57 push(k/51) (let_mutable/130)
+          where k/57 (seen_17_unboxed0/145 : imm tagged) =
+            (cont k/58 (n/125, seen_17_unboxed0/145)
+               where k/58
+                       (for_stop/146 : imm tagged,
+                        seen_17_unboxed0/147 : imm tagged) =
+                 ((let prim/170 = %int_comp.le (0, for_stop/146) in
+                   let int_lessequal/171 = %tag_imm (prim/170) in
+                   (let untagged/172 = %untag_imm (int_lessequal/171) in
+                    switch untagged/172
+                      | 0 -> k/59 (0, seen_17_unboxed0/147)
+                      | 1 -> k/66)
+                     where k/66 =
+                       cont k/60 (seen_17_unboxed0/147))
+                    where k/60 (seen_17_unboxed0/150 : imm tagged) =
+                      let prim/151 = %untag_imm (0) in
+                      let for_start_naked/152 =
+                        %num_conv.[`imm`].[`int64`] (prim/151)
+                      in
+                      let prim/153 = %untag_imm (for_stop/146) in
+                      let for_stop_naked/154 =
+                        %num_conv.[`imm`].[`int64`] (prim/153)
+                      in
+                      (cont k/61 (for_start_naked/152, seen_17_unboxed0/150)
+                         where rec k/61
+                                     (for_counter_naked/155 : int64,
+                                      seen_17_unboxed0/156 : imm tagged) =
+                           let prim/157 =
+                             %num_conv.[`int64`].[`imm`]
+                               (for_counter_naked/155)
+                           in
+                           let i/158 = %tag_imm (prim/157) in
+                           ((let prim/167 = %phys_eq (i/158, 3) in
+                             let eq/168 = %tag_imm (prim/167) in
+                             (let untagged/169 = %untag_imm (eq/168) in
+                              switch untagged/169
+                                | 0 -> k/62 (0, seen_17_unboxed0/156)
+                                | 1 -> k/65)
+                               where k/65 =
+                                 cont k/64 (seen_17_unboxed0/156))
+                              where k/64 (seen_17_unboxed0/166 : imm tagged) =
+                                cont k/51
+                                       pop(regular k/51)
+                                       ($`*predef*`.caml_exn_Not_found,
+                                        seen_17_unboxed0/166)
+                              where k/62
+                                      (staticcatch_result/159 : imm tagged,
+                                       seen_17_unboxed0/160 : imm tagged) =
+                                let int_add/161 =
+                                  %int_barith.add (seen_17_unboxed0/160, 1)
+                                in
+                                let for_next_naked/162 =
+                                  %int_barith.`int64`.add
+                                    (for_counter_naked/155, 1L)
+                                in
+                                let prim/163 =
+                                  %int_comp.`int64`.le
+                                    (for_next_naked/162, for_stop_naked/154)
+                                in
+                                let `int64#_lessequal/164` =
+                                  %tag_imm (prim/163)
+                                in
+                                ((let untagged/165 =
+                                    %untag_imm (`int64#_lessequal/164`)
+                                  in
+                                  switch untagged/165
+                                    | 0 -> k/59 (0, int_add/161)
+                                    | 1 -> k/63)
+                                   where k/63 =
+                                     cont k/61
+                                            (for_next_naked/162, int_add/161))))
+                    where k/59
+                            (staticcatch_result/148 : imm tagged,
+                             seen_17_unboxed0/149 : imm tagged) =
+                      cont k/56 (seen_17_unboxed0/149, seen_17_unboxed0/149)))
+          where k/56
+                  (body_result/143 : imm tagged,
+                   seen_17_unboxed0/144 : imm tagged) =
+            cont k/48 pop(k/51) (body_result/143)
+          where k/51 exn (exn/133 : val, seen_17_unboxed0/134 : imm tagged) =
+            let unit/135 = %end_try_region (try_region/131) in
+            let unit/136 = %end_try_ghost_region (try_ghost_region/132) in
+            ((let prim/140 =
+                %phys_eq (exn/133, $`*predef*`.caml_exn_Not_found)
+              in
+              let eq/141 = %tag_imm (prim/140) in
+              (let untagged/142 = %untag_imm (eq/141) in
+               switch untagged/142
+                 | 0 -> k/54
+                 | 1 -> k/55)
+                where k/55 =
+                  cont k/52 (seen_17_unboxed0/134)
+                where k/54 =
+                  cont k/53 (seen_17_unboxed0/134))
+               where k/53 (seen_17_unboxed0/139 : imm tagged) =
+                 cont k/49 pop(reraise k/49) (exn/133)
+               where k/52 (seen_17_unboxed0/137 : imm tagged) =
+                 let int_add/138 =
+                   %int_barith.add (seen_17_unboxed0/137, 100)
+                 in
+                 cont k/48 (int_add/138)))
+ in
+ let f/173 = closure f_0 @f &toplevel in
+ (let Popaque/179 = %opaque (2) in
+  apply direct(f_0 &toplevel)
+    (f/173 : _ -> imm tagged) (Popaque/179) -> k/67 * error)
+   where k/67 (apply_result/174 : imm tagged) =
+     ((let Popaque/178 = %opaque (10) in
+       apply direct(f_0 &toplevel)
+         (f/173 : _ -> imm tagged) (Popaque/178) -> k/68 * error)
+        where k/68 (apply_result/175 : imm tagged) =
+          let result/176 =
+            %int_barith.add (apply_result/175, apply_result/174)
+          in
+          let Pmakeblock/177 = %block.[`0`].`toplevel` (f/173, result/176) in
+          cont k/47 (Pmakeblock/177)))
+  where k/47 define_root_symbol (module_block/122) =
+    let field_0/123 =
+      %block_load.tag[`0`].`size`[`2`].[`0`] (module_block/122)
+    in
+    let field_1/124 =
+      %block_load.tag[`0`].`size`[`2`].[`1`] (module_block/122)
+    in
+    let $camlWhile_for_with_raise = Block 0 (field_0/123, field_1/124) in
+    cont done ($camlWhile_for_with_raise)
