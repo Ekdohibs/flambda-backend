@@ -325,37 +325,48 @@ a `CR` at the place in the `Spec` file.
   in which the load reads the field as it is and a later write to a
   field so read is undefined.
 - **D53.** What the machine of regions does with the heap, once
-  `step` runs a `Let` on the heap. Its frames list the symbols of
-  local allocations and no cells, so a cell made in a region would
-  never be found dead there. Decided for the stage that makes `step`
-  run on the heap: the machine of regions does not run a `Let` of a
-  primitive of the heap, nor of any other primitive but one of
-  regions, one of whose arguments has a location for value
-  (`FlambdaRegionsSpec.named_needs_heap`). The step then has a result
-  of its own, `Region_let_not_run`, which is not a step, not an exit
-  and not a fault; the run ends there. The test of the simples (D45)
-  comes first. The tests of the form of the `Let` do not (the marker
-  of a local allocation, D46): a local value put in a cell of the heap
-  is neither found nor ruled out at such a `Let`. What "safe" then
-  includes: `region_safe` is "never undefined", and it holds of a run
-  that ends at such a `Let`, with nothing checked from there on. Its
-  name and the names of the statements that conclude it stay; the
-  comment and a `CR` at the definition say what they give. A run from
-  the first state of a term with no primitive of the heap, in a static
-  environment whose code has none and whose values hold no location,
-  never ends so (`no_heap_primitive_no_let_not_run_statement`): of
-  such a term the statements say what they said. The statements about
-  exits gain the case "or the run comes to a `Let` that the machine
-  does not run". The test tool is to print such a unit as not checked
-  for regions from that `Let` on. The other choices: to call such a
-  `Let` undefined for want of a step, which the term with its regions
-  dropped is not; or to run it on the heap and say nothing of the
-  cells of a region, which would pass as safe a term that reads a
-  local cell after the end of its region. Lifted when the frames of
-  the machine of regions list cells. If a symbol comes to name a cell
-  before that, the test follows the premise of
-  `exec_named_no_location_statement`. Decided, for the review of the
-  human.
+  `step` runs a `Let` on the heap. For one stage the machine of
+  regions did not run a `Let` that needs the heap: its frames listed
+  the symbols of local allocations and no cells, the step had a result
+  of its own that was not a step, not an exit and not a fault, and
+  nothing was checked of a run from there on. Lifted. The machine
+  lists the cells that local allocations make, each with the mark of
+  the frame that was the newest then (`FlambdaRegionsSpec.rs_cells`),
+  and no longer stops at a `Let` that needs the heap: a `Let` that
+  passes the tests of regions runs on the heap of the state. The
+  local allocation of a primitive that makes a cell is one step
+  (`local_cell_allocation`). The cell is dead once its frame is gone,
+  and its location may then not be evaluated (D45, `cell_dead`); one
+  made with no frame on the stack is not listed and is never freed
+  (D44). A cell made on the heap is made with nothing local (D46),
+  and a store is under D54. The result of its own, the test of the
+  `Let`s that need the heap and the statement of the terms with no
+  primitive of the heap are gone: a step of the machine is again a
+  step, an exit or a stop without a step. Decided, for the review of
+  the human.
+- **D54.** A store of a value that does not live as long as the cell
+  is undefined on the machine of regions
+  (`FlambdaRegionsSpec.store_fault`): in a cell of the heap, a value
+  that is local (D46, of a store); in a cell that a local allocation
+  made, a value that is in a newer frame than the cell. The test
+  comes before the step. The program stores the value, and goes wrong
+  if it is reached through the cell after its region is gone; a cell
+  of the heap that holds a local value can go wrong at a collection
+  too (D46). The type checker asks more: it refuses every store of a
+  local value, whatever the cell. The machine asks what makes a later
+  read sound. The check of regions
+  (`FlambdaRegionsCheckSpec.region_check`) asks the stricter test,
+  that the value stored is one to which it gives the lifetime "for
+  ever": it knows of a cell only a region that it lives at least as
+  long as, and it is because no store puts in a cell what lives
+  shorter that it may take what is read from a cell that it saw made
+  to live as long as the shortest of the lifetimes that it gives what
+  the cell was made with (`cs_contents`). The other choices: the
+  stricter test on the
+  machine too, which calls undefined a store that the program makes
+  rightly; or no test at the store, the fault being left to D45 where
+  the value is read, and then a cell may hold a pointer to freed
+  memory. Decided, for the review of the human.
 
 ## Discrepancies with the compiler
 
