@@ -305,9 +305,14 @@ fields of the tuple, each by the projection that Simplify makes
 (`inline_tupled_statement`; `inlined_tupled_body`, under the
 conditions `tupled_inlinable`, which are those of `inlinable` but for
 the arguments); and the two are equivalent where the callee is a
-closure of that code and the call returns at the result arity of the
-code (`inline_tupled_equivalent_statement`), which is the form that a
-rewrite of the term after Simplify needs. The validation uses the
+closure of that code, the call returns at the result arity of the
+code and the value of the tuple is no location
+(`inline_tupled_equivalent_statement`), which is the form that a
+rewrite of the term after Simplify needs. Of a location the two need
+not be equivalent: the call, which reads no cell, is undefined, and
+the projections read the cell that the heap binds the location to,
+and may have their values. The refinement asks nothing of the tuple.
+The validation uses the
 refinement: `FlambdaNormaliseSpec.inline_apply`, which inlines the
 direct calls of known code in the term before, has a second case, for
 a call that gives known tupled code one argument
