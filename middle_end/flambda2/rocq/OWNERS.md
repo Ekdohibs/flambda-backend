@@ -175,9 +175,10 @@ design out; that is the request, not the change.
     `middle_end/flambda2/rocq/FlambdaRegionsErasedCallsProofs.v` and
     `middle_end/flambda2/rocq/FlambdaRegionsNoStepProofs.v` (for C2's
     soundness of the check of regions: where the state that runs the
-    erased term has a value or a step, the machine of regions has
-    one, so that where that machine stops because `step` has no step
-    the erased term goes wrong)
+    erased term has a value, the machine of regions has one, and
+    where it has a step that machine does not stop because `step` has
+    none; so where that machine stops for that, the erased term goes
+    wrong)
   - `middle_end/flambda2/rocq/status/C3.md`
   - the examples `middle_end/flambda2/tests/semantics/set_*.fl`,
     `apply_partial*.fl`, `apply_over*.fl`, `tupled_apply*.fl` and

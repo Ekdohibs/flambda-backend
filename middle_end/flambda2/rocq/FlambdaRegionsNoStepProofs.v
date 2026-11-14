@@ -39,10 +39,12 @@
 
    The two states are related as in FlambdaRegionsErasureProofs.v
    ([related]), which a run keeps. At the state where the machine of
-   regions stops, the second state has no step either
-   ([region_step_back]): had it one, the machine of regions would have
-   one, by FlambdaRegionsErasedReadsProofs.v and
-   FlambdaRegionsErasedCallsProofs.v. By the expression of the state:
+   regions stops so, the second state has no step either
+   ([region_step_back]): had it one, the machine of regions would not
+   stop because [step] has none, by FlambdaRegionsErasedReadsProofs.v
+   and FlambdaRegionsErasedCallsProofs.v. It might stop there for a
+   rule of regions, which is another fault and is not what is
+   supposed. By the expression of the state:
 
    - a primitive of regions never stops so;
    - a local allocation stops so where its defining expression has no

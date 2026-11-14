@@ -31,9 +31,12 @@
    statement of a Spec file is proved here.
 
    FlambdaRegionsPlainStepProofs.v has that a call, or the application
-   of a continuation, that has a step on the machine of regions has
-   one in the second state. Here is the other way: where the second
-   state has one, the machine of regions has one. As in
+   of a continuation, that has a step of [step] under the static
+   environment that the machine of regions gives it
+   (FlambdaRegionsSpec.live_statics) has one in the second state.
+   Here is the other way: where the second state has one, [step] has
+   one under that static environment. Nothing here is of the tests
+   that the machine of regions makes before it asks [step]. As in
    FlambdaRegionsErasedReadsProofs.v it is of values that reach only
    symbols that may be evaluated
    (FlambdaRegionsErasedReadsProofs.erased_back): the callee and the
@@ -294,9 +297,10 @@ Proof.
   - rewrite Hpartial. apply shape_of_closure_call_back; assumption.
 Qed.
 
-(* A full call that has a step in the second state has one on the
-   machine of regions: the tests are of the code and of the kinds of
-   the arguments, and the parameters are as many as the arguments. *)
+(* A full call that has a step in the second state has one under the
+   static environment of the frames: the tests are of the code and of
+   the kinds of the arguments, and the parameters are as many as the
+   arguments. *)
 Lemma call_code_back (closure closure' : value) (c : code)
     (vs vs' : list value) (args_arity return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value) (hp : heap) :
