@@ -475,6 +475,9 @@ pass into the validator.
     read, from symbols, of a variable that one group of static bindings
     put in two places of its constants is the variable of the first
     read; same stream)
+  - `middle_end/flambda2/rocq/FlambdaHeapFree*` (a term with no
+    primitive of the heap in it exits with the empty heap: the guard of
+    the four liftings until decision D40 is taken; same stream)
   - `middle_end/flambda2/rocq/FlambdaSimulationProofs.v` (simulations in
     which one step is answered by one or more; same stream, and used by
     the loops of V4)
