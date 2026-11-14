@@ -452,6 +452,51 @@ Definition normalise_lifted_free_in (statics : static_env) (rounds : nat)
        (guard_scope FlambdaSimplifyCarriedSpec.simplify_by_types_carried
           (iterate rounds (normalise_lifted_round avoid kept) e)).
 
+(* [known_free_in] of the rounds of
+   FlambdaValidateSpec.normalise_lifted_calling: of each round, the
+   test of one round of [normalise_lifted] ([known_free_in] of one
+   round), asked of the term that the round is given; the step that
+   follows the round, where [calling] is set, asks nothing, being a
+   refinement under all environments. With [calling] unset it is
+   [known_free_in] ([known_calling_free_in_unset_statement]). *)
+Fixpoint known_calling_free_in (statics : static_env) (calling : bool)
+    (rounds : nat) (avoid : list continuation) (kept : list code_id)
+    (e : expr) : bool :=
+  match rounds with
+  | O => true
+  | S rounds =>
+    known_free_in statics 1 avoid kept e
+    && (let e' := normalise_lifted_round_calling calling avoid kept e in
+        if expr_eqb [] [] e e' then true
+        else known_calling_free_in statics calling rounds avoid kept e')
+  end.
+
+Definition known_calling_free_in_unset_statement : Prop :=
+  ∀ (statics : static_env) (rounds : nat) (avoid : list continuation)
+    (kept : list code_id) (e : expr),
+    known_calling_free_in statics false rounds avoid kept e
+    = known_free_in statics rounds avoid kept e.
+
+(* [normalise_lifted_free_in] of the rounds of
+   [normalise_lifted_calling calling rounds avoid kept e]. With
+   [calling] unset it is [normalise_lifted_free_in]
+   ([normalise_lifted_calling_free_in_unset_statement]). *)
+Definition normalise_lifted_calling_free_in (statics : static_env)
+    (calling : bool) (rounds : nat) (avoid : list continuation)
+    (kept : list code_id) (e : expr) : bool :=
+  let e := iterate rounds first_phase_round e in
+  known_calling_free_in statics calling rounds avoid kept e
+  && known_calling_free_in statics calling rounds avoid kept
+       (guard_scope FlambdaSimplifyCarriedSpec.simplify_by_types_carried
+          (iterate rounds (normalise_lifted_round_calling calling avoid kept)
+             e)).
+
+Definition normalise_lifted_calling_free_in_unset_statement : Prop :=
+  ∀ (statics : static_env) (rounds : nat) (avoid : list continuation)
+    (kept : list code_id) (e : expr),
+    normalise_lifted_calling_free_in statics false rounds avoid kept e
+    = normalise_lifted_free_in statics rounds avoid kept e.
+
 (* The same test in each round of
    FlambdaValidateSpec.demote_and_tidy_known that uses what the unit
    binds its symbols to. The terms are those of
@@ -484,10 +529,13 @@ Definition demote_and_tidy_known_free_in (statics : static_env)
     (rounds : nat) (e : expr) : bool :=
   tidy_known_free_in statics rounds rounds (demote_and_tidy rounds e).
 
-(* The two, of each of the liftings as [lifted_in_turn] applies
-   them, and after the last that of what ends the normalisation, asked
-   of the term that the normalisation ends: the term with its known
-   value slots read with every symbol in scope
+(* The test of the lifting and that of the normalisation that follows
+   it ([normalise_lifted_calling_free_in], with what the lifting says
+   of the calls of the closures that a [Let] makes), of each of the
+   liftings as [lifted_in_turn] applies them, and after the last that
+   of what ends the normalisation, asked of the term that the
+   normalisation ends: the term with its known value slots read with
+   every symbol in scope
    (FlambdaKnownSlotsSpec.read_known_slots_anywhere), for which
    nothing is asked, as its law from the imports has no premise. *)
 Fixpoint lifted_free_in (statics : static_env) (rounds : nat)
@@ -498,9 +546,11 @@ Fixpoint lifted_free_in (statics : static_env) (rounds : nat)
     demote_and_tidy_known_free_in statics rounds (read_known_slots_anywhere e)
   | L :: Ls =>
     lifting_free_in statics L e
-    && normalise_lifted_free_in statics rounds avoid kept (with_lifting L e)
+    && normalise_lifted_calling_free_in statics (made_closures_called L)
+         rounds avoid kept (with_lifting L e)
     && lifted_free_in statics rounds avoid Ls kept
-         (normalise_lifted rounds avoid kept (with_lifting L e))
+         (normalise_lifted_calling (made_closures_called L) rounds avoid
+            kept (with_lifting L e))
   end.
 
 (* Where [with_statics_first Ls e] takes bindings to the head of [e],

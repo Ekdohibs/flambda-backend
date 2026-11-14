@@ -102,6 +102,8 @@ From OxCamlFlambda2 Require FlambdaSharedReadsSpec FlambdaSharedReadsProofs.
 From OxCamlFlambda2 Require Import FlambdaStubCallsSpec.
 From OxCamlFlambda2 Require FlambdaStubCallsProofs.
 From OxCamlFlambda2 Require FlambdaCopyCodeProofs.
+From OxCamlFlambda2 Require Import FlambdaClosureCallsSpec.
+From OxCamlFlambda2 Require FlambdaClosureCallsProofs.
 From OxCamlFlambda2 Require Import FlambdaNeverReturnsSpec.
 From OxCamlFlambda2 Require FlambdaNeverReturnsProofs
   FlambdaNeverReturnsScopeProofs.
@@ -7932,6 +7934,120 @@ Proof.
        (normalise_lifted_round_up_to kept)).
 Qed.
 
+(* The calls of the closures that a [Let] makes made direct, in the
+   term and in the bodies of its code: the kind of a call has no name
+   in it. *)
+Lemma call_made_closures_scope : keeps_scope call_made_closures.
+Proof.
+  intros e Hclosed. unfold call_made_closures.
+  destruct (FlambdaClosureCallsProofs.call_closures_knowing_names [] e)
+    as (Hvariables & Hcontinuations & Hcode).
+  rewrite Hvariables, Hcontinuations, Hcode.
+  split; [ exact Hclosed | split; intros name Hname; exact Hname ].
+Qed.
+
+Lemma call_made_closures_rewrite_equivariant :
+  rewrite_equivariant call_made_closures.
+Proof.
+  intros r e. symmetry.
+  apply FlambdaClosureCallsProofs.call_made_closures_equivariant.
+Qed.
+
+Lemma with_made_closures_called_scope : keeps_scope with_made_closures_called.
+Proof.
+  exact
+    (keeps_scope_compose call_made_closures (rewrite_code call_made_closures)
+       call_made_closures_scope
+       (FlambdaKeepsScopeProofs.rewrite_code_keeps_scope _
+          call_made_closures_scope)).
+Qed.
+
+Lemma with_made_closures_called_equivariant :
+  rewrite_equivariant with_made_closures_called.
+Proof.
+  intros r e. unfold with_made_closures_called.
+  rewrite call_made_closures_rewrite_equivariant.
+  apply (rewrite_code_equivariant _ call_made_closures_rewrite_equivariant).
+Qed.
+
+(* A round of FlambdaValidateSpec.normalise_lifted_calling: the round
+   of [normalise_lifted] and then, where [calling] is set, those calls
+   made direct. *)
+Lemma normalise_lifted_round_calling_scope (calling : bool)
+    (avoid : list continuation) (kept : list code_id) :
+  keeps_scope (normalise_lifted_round_calling calling avoid kept).
+Proof.
+  destruct calling; [ | exact (normalise_lifted_round_scope avoid kept) ].
+  exact
+    (keeps_scope_compose (normalise_lifted_round avoid kept)
+       with_made_closures_called (normalise_lifted_round_scope avoid kept)
+       with_made_closures_called_scope).
+Qed.
+
+Lemma normalise_lifted_round_calling_up_to (calling : bool)
+    (kept : list code_id) :
+  equivariant_up_to_avoiding
+    (fun avoid => normalise_lifted_round_calling calling avoid kept).
+Proof.
+  destruct calling; [ | exact (normalise_lifted_round_up_to kept) ].
+  exact
+    (equivariant_up_to_avoiding_after
+       (fun avoid => normalise_lifted_round avoid kept)
+       with_made_closures_called
+       (fun avoid => normalise_lifted_round_scope avoid kept)
+       with_made_closures_called_scope with_made_closures_called_equivariant
+       (normalise_lifted_round_up_to kept)).
+Qed.
+
+(* Those rounds, iterated. *)
+Lemma lifted_calling_rounds_scope (calling : bool) (rounds : nat)
+    (avoid : list continuation) (kept : list code_id) :
+  keeps_scope
+    (iterate rounds (normalise_lifted_round_calling calling avoid kept)).
+Proof.
+  exact
+    (keeps_scope_iterate rounds
+       (normalise_lifted_round_calling calling avoid kept)
+       (normalise_lifted_round_calling_scope calling avoid kept)).
+Qed.
+
+Lemma lifted_calling_rounds_up_to (calling : bool) (rounds : nat)
+    (kept : list code_id) :
+  equivariant_up_to_avoiding
+    (fun avoid =>
+       iterate rounds (normalise_lifted_round_calling calling avoid kept)).
+Proof.
+  exact
+    (equivariant_up_to_avoiding_iterate rounds
+       (fun avoid => normalise_lifted_round_calling calling avoid kept)
+       (fun avoid => normalise_lifted_round_calling_scope calling avoid kept)
+       (normalise_lifted_round_calling_up_to calling kept)).
+Qed.
+
+(* The normalisation with those rounds: the phases of
+   [normalise_lifted], with that round ([phases_with]). *)
+Lemma normalise_lifted_calling_scope (calling : bool) (rounds : nat)
+    (avoid : list continuation) (kept : list code_id) :
+  keeps_scope (normalise_lifted_calling calling rounds avoid kept).
+Proof.
+  exact
+    (phases_with_scope rounds
+       (normalise_lifted_round_calling calling avoid kept)
+       (normalise_lifted_round_calling_scope calling avoid kept)).
+Qed.
+
+Lemma normalise_lifted_calling_up_to (calling : bool) (rounds : nat)
+    (kept : list code_id) :
+  equivariant_up_to_avoiding
+    (fun avoid => normalise_lifted_calling calling rounds avoid kept).
+Proof.
+  exact
+    (phases_with_up_to rounds
+       (fun avoid => normalise_lifted_round_calling calling avoid kept)
+       (fun avoid => normalise_lifted_round_calling_scope calling avoid kept)
+       (normalise_lifted_round_calling_up_to calling kept)).
+Qed.
+
 (* The liftings in turn keep scope. *)
 Lemma lifted_in_turn_scope (rounds : nat) (avoid : list continuation)
     (kept : list code_id) (Ls : list lifting) :
@@ -7947,8 +8063,8 @@ Proof.
     + intros k Hk. apply Hk1, Hk2, Hk.
   - destruct (with_lifting_scope L e Hclosed) as (Hclosed1 & Hv1 & Hk1).
     destruct
-      (normalise_lifted_keeps_scope rounds avoid kept (with_lifting L e)
-         Hclosed1)
+      (normalise_lifted_calling_scope (made_closures_called L) rounds avoid
+         kept (with_lifting L e) Hclosed1)
       as (Hclosed2 & Hv2 & Hk2).
     destruct (IH _ Hclosed2) as (Hclosed3 & Hv3 & Hk3).
     split; [ exact Hclosed3 | split ].
@@ -8013,22 +8129,28 @@ Proof.
       (renames_alike_kept (with_lifting L) r r1 e (with_lifting_scope L)
          Hclosed Halike)
       as (Hclosed1 & Halike1).
+    change (made_closures_called (rename_lifting r1 L))
+      with (made_closures_called L).
     destruct
-      (normalise_lifted_equivariant_up_to rounds kept r1 avoid
-         (with_lifting L e) Hclosed1)
+      (normalise_lifted_calling_up_to (made_closures_called L) rounds kept r1
+         avoid (with_lifting L e) Hclosed1)
       as (r2 & Halike2 & Havoid2 & Heq).
     cbv beta in Heq, Halike2.
     rewrite (map_rename_conts_alike r r1 avoid Havoid) in Heq.
     rewrite Heq.
     destruct
-      (normalise_lifted_keeps_scope rounds avoid kept (with_lifting L e)
-         Hclosed1)
+      (normalise_lifted_calling_scope (made_closures_called L) rounds avoid
+         kept (with_lifting L e) Hclosed1)
       as (Hclosed2 & _ & _).
     apply (IH (fun L' HL' => Hunits L' (or_intror HL')) r2).
     + exact Hclosed2.
     + exact
-        (renames_alike_then (normalise_lifted rounds avoid kept) r r1 r2
-           (with_lifting L e) (normalise_lifted_keeps_scope rounds avoid kept)
+        (renames_alike_then
+           (normalise_lifted_calling (made_closures_called L) rounds avoid
+              kept)
+           r r1 r2 (with_lifting L e)
+           (normalise_lifted_calling_scope (made_closures_called L) rounds
+              avoid kept)
            Hclosed1 Halike1 Halike2).
     + intros k Hk. rewrite (Havoid2 k Hk). apply Havoid, Hk.
 Qed.

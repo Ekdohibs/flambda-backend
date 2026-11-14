@@ -29,9 +29,8 @@
    normalisation that refines.
 
    This file is to be reviewed: [call_made_closures] and what it is made
-   of, which are written to be extracted and run by the validation of
-   middle_end/flambda2/tests/semantics/ and which nothing calls yet,
-   and the statements.
+   of, which are extracted and run by the validation of
+   middle_end/flambda2/tests/semantics/, and the statements.
 
    Simplify makes a call of a closure that it knows a direct call of the
    code of the closure (simplify/simplify_apply_expr.ml,

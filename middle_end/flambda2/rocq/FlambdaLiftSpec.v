@@ -279,15 +279,18 @@ Fixpoint rec_handlers_bindings
    elements of an immutable array, which lift no [Let]; and the
    copies of code to make, each a list of code ids paired with new
    ones and the symbols of the static sets of closures that get the
-   new ones, which lift no [Let] either. The last six are not read
-   here: the first two are for
-   FlambdaLiftFromCodeSpec.lift_from_code_unit and
+   new ones, which lift no [Let] either; and whether the rounds that
+   follow the lifting also make direct the calls of the closures that
+   a [Let] makes. The last seven are not read here: the first two are
+   for FlambdaLiftFromCodeSpec.lift_from_code_unit and
    FlambdaLiftFromArmsSpec.lift_to_head_unit, which the validation
    applies before [lift_unit], the next two for
    FlambdaLiftAroundSpec.lift_around_unit, which it applies after,
    the fifth for FlambdaUnusedHeadStaticsSpec.add_head_tables, which
-   it applies after that, and the last for
-   FlambdaCopyCodeSpec.with_copies, which it applies last of all. *)
+   it applies after that, the sixth for
+   FlambdaCopyCodeSpec.with_copies, which it applies last of all, and
+   the last for the rounds that the validation goes through once the
+   lifting is made (FlambdaValidateSpec.normalise_lifted_calling). *)
 Record lifting : Type := Lifting {
   lifting_unit : unit_interface;
   lifted_lets : list (path * lift_to);
@@ -297,7 +300,8 @@ Record lifting : Type := Lifting {
   lifted_around : list (path * lift_to);
   groups_put : list (path * list path);
   tables_put : list (symbol * list simple);
-  code_copied : list (list (code_id * code_id) * list symbol)
+  code_copied : list (list (code_id * code_id) * list symbol);
+  made_closures_called : bool
 }.
 
 (* ======================================================================== *)

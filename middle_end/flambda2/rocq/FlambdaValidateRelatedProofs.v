@@ -226,6 +226,81 @@ Proof.
   exact (iterate_lifted_refines_followed rounds avoid kept _ Hsecond).
 Qed.
 
+(* One round of [normalise_lifted], from what is proved of its rounds
+   in turn: [iterate] of one round is that round. *)
+Lemma normalise_lifted_round_refines_followed (avoid : list continuation)
+    (kept : list code_id) (e : expr) :
+  known_free_in statics 1 avoid kept e = true ->
+  refines (State e [] conts statics empty_heap)
+    (State (normalise_lifted_round avoid kept e) [] conts statics
+       empty_heap).
+Proof.
+  intros Hfree.
+  generalize (iterate_lifted_refines_followed 1 avoid kept e Hfree).
+  cbn [iterate]. cbv zeta.
+  destruct (expr_eqb [] [] e (normalise_lifted_round avoid kept e));
+    exact (fun H => H).
+Qed.
+
+(* The same of the rounds that are followed by the calls of the
+   closures that a [Let] makes made direct, where they are asked to. *)
+Lemma iterate_lifted_calling_refines_followed (calling : bool)
+    (rounds : nat) (avoid : list continuation) (kept : list code_id) :
+  ∀ e : expr,
+    known_calling_free_in statics calling rounds avoid kept e = true ->
+    refines (State e [] conts statics empty_heap)
+      (State
+         (iterate rounds (normalise_lifted_round_calling calling avoid kept)
+            e)
+         [] conts statics empty_heap).
+Proof.
+  induction rounds as [ | rounds IH]; intros e;
+    cbn [known_calling_free_in iterate];
+    [ intros _; apply refines_refl | ].
+  cbv zeta. intros Hfree.
+  apply andb_true_iff in Hfree as [Hone Hrest].
+  assert (Hround :
+    refines (State e [] conts statics empty_heap)
+      (State (normalise_lifted_round_calling calling avoid kept e) [] conts
+         statics empty_heap)).
+  { unfold normalise_lifted_round_calling. cbv zeta.
+    apply (refines_trans _ _ _
+      (normalise_lifted_round_refines_followed avoid kept e Hone)).
+    destruct calling; [ | apply refines_refl ].
+    exact (with_made_closures_called_refines _ [] conts statics
+             empty_heap). }
+  destruct
+    (expr_eqb [] [] e (normalise_lifted_round_calling calling avoid kept e));
+    [ exact Hround | ].
+  exact (refines_trans _ _ _ Hround (IH _ Hrest)).
+Qed.
+
+Lemma normalise_lifted_calling_refines_followed (calling : bool)
+    (rounds : nat) (avoid : list continuation) (kept : list code_id)
+    (e : expr) :
+  normalise_lifted_calling_free_in statics calling rounds avoid kept e
+  = true ->
+  refines (State e [] conts statics empty_heap)
+    (State (normalise_lifted_calling calling rounds avoid kept e) [] conts
+       statics empty_heap).
+Proof.
+  unfold normalise_lifted_calling, normalise_lifted_calling_free_in.
+  cbv zeta. intros Hknown.
+  apply andb_true_iff in Hknown as [Hfirst Hsecond].
+  apply (refines_trans _ _ _
+    (iterate_refines _ first_phase_round_refines rounds _ [] conts
+       statics empty_heap)).
+  apply (refines_trans _ _ _
+    (iterate_lifted_calling_refines_followed calling rounds avoid kept _
+       Hfirst)).
+  apply (refines_trans _ _ _
+    (guard_scope_refines _ _
+       (FlambdaSimplifyCarriedProofs.simplify_by_types_carried_refines _)
+       [] conts statics empty_heap)).
+  exact (iterate_lifted_calling_refines_followed calling rounds avoid kept _
+           Hsecond).
+Qed.
+
 (* The rounds that use what is known after the demotion. *)
 Lemma tidy_known_refines_followed (inner : nat) :
   ∀ (rounds : nat) (e : expr),
@@ -312,9 +387,11 @@ Proof.
     apply andb_true_iff in Hfree as [Hlifting Hknown].
     apply (reaches_trans _ _ _ (with_lifting_observed_reaches L e Hlifting)).
     apply (reaches_trans _
-      (normalise_lifted rounds avoid kept (with_lifting_observed L e))).
+      (normalise_lifted_calling (made_closures_called L) rounds avoid kept
+         (with_lifting_observed L e))).
     + apply refines_reaches.
-      exact (normalise_lifted_refines_followed rounds avoid kept _ Hknown).
+      exact (normalise_lifted_calling_refines_followed
+               (made_closures_called L) rounds avoid kept _ Hknown).
     + exact (IH _ Hrest).
 Qed.
 

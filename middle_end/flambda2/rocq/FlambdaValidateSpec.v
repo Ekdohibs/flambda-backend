@@ -136,7 +136,12 @@
    block of its module, the second read is the variable of the first.
    Between those rounds and the same rounds once
    more it applies the rewrites from the types, as the normalisation
-   of the term before does. Every round of that normalisation, after each
+   of the term before does. Where the lifting says so, each of those
+   rounds also makes direct the calls of the closures that a [Let]
+   makes (FlambdaClosureCallsSpec.call_made_closures;
+   [normalise_lifted_calling]); where the lifting does not say so,
+   the rounds are those that there were. Every round of that
+   normalisation, after each
    of the liftings, makes no name that is the return or the exception
    continuation of the unit of any of the liftings given, the later
    ones included, whether or not the term mentions them
@@ -400,6 +405,7 @@ From OxCamlFlambda2 Require Import FlambdaKnownSlotsSpec.
 From OxCamlFlambda2 Require Import FlambdaSharedReadsSpec.
 From OxCamlFlambda2 Require Import FlambdaStubCallsSpec.
 From OxCamlFlambda2 Require Import FlambdaCopyCodeSpec.
+From OxCamlFlambda2 Require Import FlambdaClosureCallsSpec.
 From OxCamlFlambda2 Require Import FlambdaNeverReturnsSpec.
 From OxCamlFlambda2 Require Import FlambdaUnusedHeadStaticsSpec.
 From OxCamlFlambda2 Require Import FlambdaSameHandlersSpec.
@@ -1112,6 +1118,44 @@ Definition normalise_lifted (rounds : nat) (avoid : list continuation)
        (iterate rounds (normalise_lifted_round avoid kept)
           (iterate rounds first_phase_round e))).
 
+(* The calls of the closures that a [Let] makes made direct, in the
+   term and in the bodies of its code
+   (FlambdaClosureCallsSpec.call_made_closures, which does not go into
+   code). *)
+Definition with_made_closures_called (e : expr) : expr :=
+  rewrite_code call_made_closures (call_made_closures e).
+
+(* A round of [normalise_lifted] and then, where [calling] is set,
+   those calls made direct in the term that the round gives. Simplify
+   makes such a call direct where it comes to it, from the type of the
+   closure, and may then inline it; the case observed is a function
+   that makes two closures and gives them back in a block, inlined in
+   a round at two calls: the call of a closure read from the block is
+   then the call of a variable that a [Let] binds. A call that this
+   makes direct is one that the next round may inline. The round of
+   [normalise_lifted] is named here and not written again, so what
+   that round does this one does. *)
+Definition normalise_lifted_round_calling (calling : bool)
+    (avoid : list continuation) (kept : list code_id) (e : expr) : expr :=
+  let round := normalise_lifted_round avoid kept e in
+  if calling then with_made_closures_called round else round.
+
+(* [normalise_lifted] with those rounds. With [calling] unset it is
+   [normalise_lifted], by computation
+   ([normalise_lifted_calling_unset_statement]). *)
+Definition normalise_lifted_calling (calling : bool) (rounds : nat)
+    (avoid : list continuation) (kept : list code_id) (e : expr) : expr :=
+  iterate rounds (normalise_lifted_round_calling calling avoid kept)
+    (guard_scope FlambdaSimplifyCarriedSpec.simplify_by_types_carried
+       (iterate rounds (normalise_lifted_round_calling calling avoid kept)
+          (iterate rounds first_phase_round e))).
+
+Definition normalise_lifted_calling_unset_statement : Prop :=
+  ∀ (rounds : nat) (avoid : list continuation) (kept : list code_id)
+    (e : expr),
+    normalise_lifted_calling false rounds avoid kept e
+    = normalise_lifted rounds avoid kept e.
+
 (* The return and the exception continuation of the unit of each of
    the liftings given: the names by which a lifting checks the unit
    (FlambdaLiftSpec.lift_unit), which the term need not mention. *)
@@ -1151,7 +1195,10 @@ Definition demote_and_tidy_known (rounds : nat) (e : expr) : expr :=
     (demote_and_tidy rounds e).
 
 (* The term with each of the liftings given applied in turn, each
-   followed by that normalisation. A lifting after the first names
+   followed by the normalisation of a term in which something was
+   lifted, with the calls of the closures that a [Let] makes made
+   direct in its rounds where the lifting says so
+   ([normalise_lifted_calling]). A lifting after the first names
    [Let]s of the term that those before it give. The continuations to
    avoid are the same at every step: [validate_unit] gives those of
    the units of all the liftings, so that no round, before or after
@@ -1173,7 +1220,8 @@ Fixpoint lifted_in_turn (rounds : nat) (avoid : list continuation)
   | [] => demote_and_tidy_known rounds (read_known_slots_anywhere e)
   | L :: Ls =>
     lifted_in_turn rounds avoid Ls kept
-      (normalise_lifted rounds avoid kept (with_lifting L e))
+      (normalise_lifted_calling (made_closures_called L) rounds avoid kept
+         (with_lifting L e))
   end.
 
 (* The value slots given removed from the static sets of closures, if

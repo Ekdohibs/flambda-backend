@@ -44,7 +44,8 @@ type lifting =
     lifted_around : (path * lift_to) list;
     groups_put : (path * path list) list;
     tables_put : (symbol * simple list) list;
-    code_copied : ((code_id * code_id) list * symbol list) list
+    code_copied : ((code_id * code_id) list * symbol list) list;
+    made_closures_called : bool
   }
 
 val lift_named : lift_to -> named -> (static_binding list * symbol) option

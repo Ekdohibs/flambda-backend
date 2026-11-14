@@ -1868,6 +1868,30 @@ let rec code_bound (e : Model.expr) : (Model.code_id * Model.expr) list =
     @ code_bound body
   | Apply _ | Apply_cont _ | Switch _ | Invalid -> []
 
+(* Whether an expression has, in the code that it binds too, a [Let] of a
+   closure at a function slot of a set. *)
+let rec lets_closure_of_set (e : Model.expr) : bool =
+  let in_handler (Model.Handler (_, _, handler)) =
+    lets_closure_of_set handler
+  in
+  match e with
+  | Let (_, _, Closure_of_set _, _) -> true
+  | Let (_, _, _, body) -> lets_closure_of_set body
+  | Let_static (bindings, body) ->
+    List.exists
+      (fun (binding : Model.static_binding) ->
+        match binding with
+        | Bind_code (_, Code (_, _, _, _, _, body)) -> lets_closure_of_set body
+        | Bind_deleted_code _ | Bind_symbol _ -> false)
+      bindings
+    || lets_closure_of_set body
+  | Let_cont_non_recursive (_, handler, body) ->
+    in_handler handler || lets_closure_of_set body
+  | Let_cont_recursive (handlers, body) ->
+    List.exists (fun (_, handler) -> in_handler handler) handlers
+    || lets_closure_of_set body
+  | Apply _ | Apply_cont _ | Switch _ | Invalid -> false
+
 (* The code that an expression binds and that is a stub. *)
 let rec stub_code (e : Model.expr) : Model.code_id list =
   let in_handler (Model.Handler (_, _, handler)) = stub_code handler in
@@ -3296,7 +3320,8 @@ let lifting_guess ~unit ~(banned : (Lift.path * Model.symbol) list) ~around
       lifted_around = [];
       groups_put = [];
       tables_put = [];
-      code_copied = List.rev !copies
+      code_copied = List.rev !copies;
+      made_closures_called = false
     }
   in
   (* [known] has the symbols that the groups around a place bind, each with its
@@ -4688,7 +4713,8 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
       lifted_around = [];
       groups_put = [];
       tables_put = [];
-      code_copied = []
+      code_copied = [];
+      made_closures_called = false
     }
   in
   (* The code to loopify. *)
@@ -4697,6 +4723,13 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
      term before: read for the line of a verdict that lifts. Each asking sets it
      to false first. *)
   let tables_were_bound = ref false in
+  (* Whether the term before has a [Let] of a closure at a function slot of a
+     set, in its code too. Where it has none, no rewrite of the validation makes
+     one, so the rounds that make direct the calls of the closures that a [Let]
+     makes (FlambdaValidateSpec.normalise_lifted_calling) are the rounds without
+     that, and the askings are not made again with them. It is a shortcut of
+     this search and nothing rests on it. *)
+  let closures_to_call = lets_closure_of_set before.body in
   (* The validation asked once, with the code whose calls it is told to leave.
      [validate_unit] is the function asked, which has the two terms of the unit
      already and takes the other guesses; [before] and [after] are the two terms
@@ -4716,9 +4749,11 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
      as the rounds leave them; the value slots and the static bindings to remove
      from a lifted term are guessed from that term placed and tidied.
      [with_lifting] is the function that applies a lifting in the search: that
-     of the validator, unless the function asked makes its liftings by
-     another. *)
-  let ask ?(with_lifting = Validate.with_lifting) validate_unit
+     of the validator, unless the function asked makes its liftings by another.
+     [calling] says whether the liftings ask for
+     FlambdaValidateSpec.normalise_lifted_calling, which call closures that a
+     [Let] makes directly. *)
+  let ask ~calling ?(with_lifting = Validate.with_lifting) validate_unit
       (before : converted) (after : converted) kept =
     (* No table is bound until a first lifting of this asking binds one: a
        verdict of this asking that is reached with no lifting proposed must not
@@ -4816,6 +4851,7 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
             ~around:(match made with [] -> false | _ :: _ -> true)
             lifted normalised_after
         in
+        let lifting = { lifting with made_closures_called = calling } in
         (* The first lifting also binds, at the head of the unit, the tables
            that the term after has and the term before has not. *)
         let lifting =
@@ -4873,7 +4909,8 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
           then List.rev made, lifted
           else
             liftings_from banned (stage + 1) (lifting :: made)
-              (Validate.normalise_lifted rounds avoid kept lifted')
+              (Validate.normalise_lifted_calling calling rounds avoid kept
+                 lifted')
               (remaining - 1)
       in
       (* The guess gives a symbol to the first [Let] that makes a block of its
@@ -4986,7 +5023,7 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
      computed only where it is read. *)
   let statics_of_imports = Imports.imports_statics imports in
   let last_asking_holds = ref (fun () -> false) in
-  let attempt ?(again = true) ~reading kept =
+  let attempt ~calling ?(again = true) ~reading kept =
     (* [reading]: the attempt is of the term before with its known arrays read.
        The functions asked are the two of FlambdaValidateReadingSpec.v, each
        given the term before as converted, as the two of an attempt that is not
@@ -5019,7 +5056,7 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
       else Validate.validate_unit, Validate_knowing.validate_unit_knowing
     in
     let first =
-      ask
+      ask ~calling
         (fun unused slots liftings ->
           let validation =
             validate_unit rounds unused slots loops liftings kept before.body
@@ -5044,7 +5081,7 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
         Validate.unit_continuations [nothing_lifted] @ List.map snd loops
       in
       match
-        ask
+        ask ~calling
           (fun unused slots liftings ->
             let validation =
               validate_unit_knowing rounds unused slots loops liftings kept
@@ -5107,7 +5144,13 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
       (fun code_id -> not (List.mem code_id once_looped_guess))
       first_guess
   in
-  let attempts_of ~reading =
+  (* The attempts in turn: of the term before as it is, or with its known arrays
+     read ([reading]); and without or with the calls of the closures that a
+     [Let] makes made direct in the rounds that follow each lifting ([calling]:
+     FlambdaValidateSpec.normalise_lifted_calling, which the liftings of every
+     asking then ask for). *)
+  let attempts_of ~calling ~reading =
+    let attempt = attempt ~calling in
     let first = attempt ~reading first_guess in
     match first with
     | Not_validated, _, _, _, _ -> (
@@ -5143,18 +5186,55 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
         _ ) ->
       [], first
   in
-  (* The attempts, of the term before as it is; and, where they all refuse the
-     unit, the same of the term before with its known arrays read. [read] says
-     that the verdict is of an attempt of the second kind. The three lists of
-     calls to leave are, for both kinds, those made above from the term before
-     as converted: they are guesses. Where both kinds refuse the unit, the pairs
-     of terms of both are kept to be shown, and the second check, below, is
-     asked of the two terms as converted. *)
+  (* The attempts of one kind: without the calls of the closures that a [Let]
+     makes made direct first, so that a unit that is validated without them is
+     reported as it was; and, where every one of those fails and the term before
+     has a closure of the sort that those rounds know ([closures_to_call]), all
+     of them again with those calls made direct. Where that validates, its
+     verdict is the one reported, and [closures_were_called] says so for the
+     line under the verdict. If not, the answer is that of the attempts without.
+
+     The two kinds: the attempts of the term before as it is; and, where they
+     all refuse the unit, the same of the term before with its known arrays
+     read. [read] says that the verdict is of an attempt of the second kind. So
+     the order is: the attempts; those with the calls made direct; those of the
+     term read; those of the term read with the calls made direct. The three
+     lists of calls to leave are, for both kinds, those made above from the term
+     before as converted: they are guesses. Where both kinds refuse the unit,
+     the pairs of terms of both, without the calls made direct, are kept to be
+     shown, and the second check, below, is asked of the two terms as
+     converted. *)
   let read = ref false in
+  let closures_were_called = ref false in
   let attempts, (validation, _, _, slots_removed, _) =
-    match attempts_of ~reading:false with
+    let validates (_, ((validation : Validate.validation), _, _, _, _)) =
+      match validation with
+      | Not_validated -> false
+      | Same_up_to_bound_names | Same_once_normalised
+      | Same_once_unused_statics_removed | Same_once_head_statics_removed
+      | Same_once_lifted ->
+        true
+    in
+    let in_turn ~reading =
+      let without = attempts_of ~calling:false ~reading in
+      if validates without || not closures_to_call
+      then without
+      else
+        let holds = !last_asking_holds in
+        let tables = !tables_were_bound in
+        let calling = attempts_of ~calling:true ~reading in
+        if validates calling
+        then (
+          closures_were_called := true;
+          calling)
+        else (
+          last_asking_holds := holds;
+          tables_were_bound := tables;
+          without)
+    in
+    match in_turn ~reading:false with
     | attempts, (Not_validated, _, _, _, _) -> (
-      match attempts_of ~reading:true with
+      match in_turn ~reading:true with
       | attempts_read, ((Not_validated, _, _, _, _) as refused) ->
         ( attempts
           @ List.map
@@ -5269,26 +5349,32 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
     Format.printf
       "  (asked of the term before normalised with the lengths and loads of \
        its known immutable arrays read)@.";
+  if !closures_were_called
+  then
+    Format.printf
+      "  (with the calls of the closures that a Let makes made direct in the \
+       rounds after each lifting)@.";
   (* The second check, FlambdaValidateRelatedSpec.validate_unit_related, of the
      two terms and the imports, for each list of calls that the attempts above
      were made with, in their order. The liftings are guessed as for the
      validator, each applied without its test of the exits
      (FlambdaLiftObservedSpec.with_lifting_observed), which is how the function
-     asked applies them. For each guess the function is asked with no value slot
-     to remove and, if it refuses and slots are guessed, with those. The answer
-     is that of the first list that is accepted with no value slot removed or,
-     if there is none, of the first that is accepted with the slots: whether
-     slots were given, and whether the liftings of that asking bound tables; or
-     nothing, if no list is accepted. [ask] takes an answer in the type of the
-     verdicts of the validator and searches on where it is [Not_validated]:
-     [Same_once_lifted] stands for [Related_once_lifted] between the function
-     given to [ask] and the match on what [ask] returns, here and nowhere else,
-     and is no verdict of the validator. *)
+     asked applies them; they do not ask for the calls of the closures that a
+     [Let] makes to be made direct. For each guess the function is asked with no
+     value slot to remove and, if it refuses and slots are guessed, with those.
+     The answer is that of the first list that is accepted with no value slot
+     removed or, if there is none, of the first that is accepted with the slots:
+     whether slots were given, and whether the liftings of that asking bound
+     tables; or nothing, if no list is accepted. [ask] takes an answer in the
+     type of the verdicts of the validator and searches on where it is
+     [Not_validated]: [Same_once_lifted] stands for [Related_once_lifted]
+     between the function given to [ask] and the match on what [ask] returns,
+     here and nowhere else, and is no verdict of the validator. *)
   let related () : (bool * bool) option =
     let asked kept =
       let with_slots = ref false in
       let answer, _, _, _, _ =
-        ask ~with_lifting:Lift_observed.with_lifting_observed
+        ask ~calling:false ~with_lifting:Lift_observed.with_lifting_observed
           (fun unused slots liftings ->
             let related slots =
               match

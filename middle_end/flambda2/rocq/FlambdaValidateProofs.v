@@ -91,6 +91,8 @@ From OxCamlFlambda2 Require Import FlambdaDemoteSpec.
 From OxCamlFlambda2 Require Import FlambdaUnusedHeadStaticsSpec
   FlambdaUnusedHeadStaticsProofs.
 From OxCamlFlambda2 Require Import FlambdaCopyCodeSpec FlambdaCopyCodeProofs.
+From OxCamlFlambda2 Require Import FlambdaClosureCallsSpec
+  FlambdaClosureCallsProofs.
 From OxCamlFlambda2 Require FlambdaDemoteProofs.
 From OxCamlFlambda2 Require Import FlambdaKnownSiblingsSpec
   FlambdaKnownSiblingsProofs.
@@ -811,6 +813,76 @@ Proof.
   apply iterate_lifted_program_refines.
 Qed.
 
+(* The calls of the closures that a [Let] makes made direct, in the
+   term and in the bodies of its code. *)
+Lemma with_made_closures_called_refines (e : expr) :
+  expr_refines e (with_made_closures_called e).
+Proof.
+  unfold with_made_closures_called.
+  eapply expr_refines_trans; [ apply call_made_closures_refines | ].
+  apply rewrite_code_refines, call_made_closures_refines.
+Qed.
+
+(* One round of [normalise_lifted], from what is proved of its rounds
+   in turn: [iterate] of one round is that round. *)
+Lemma normalise_lifted_round_program_refines (avoid : list continuation)
+    (kept : list code_id) (e : expr) :
+  program_refines e (normalise_lifted_round avoid kept e).
+Proof.
+  generalize (iterate_lifted_program_refines 1 avoid kept e).
+  cbn [iterate]. cbv zeta.
+  destruct (expr_eqb [] [] e (normalise_lifted_round avoid kept e));
+    exact (fun H => H).
+Qed.
+
+(* The rounds that are followed by those calls made direct, where
+   they are asked to. *)
+Lemma iterate_lifted_calling_program_refines (calling : bool) (rounds : nat)
+    (avoid : list continuation) (kept : list code_id) :
+  ∀ e : expr,
+    program_refines e
+      (iterate rounds (normalise_lifted_round_calling calling avoid kept) e).
+Proof.
+  assert (Hround :
+    ∀ e : expr,
+      program_refines e (normalise_lifted_round_calling calling avoid kept e)).
+  { intros e. unfold normalise_lifted_round_calling. cbv zeta.
+    apply (refines_trans _ _ _
+      (normalise_lifted_round_program_refines avoid kept e)).
+    destruct calling; [ | apply refines_refl ].
+    exact (expr_refines_program _ _ (with_made_closures_called_refines _)). }
+  induction rounds as [ | rounds IH]; intros e; cbn [iterate];
+    [ apply refines_refl | ].
+  cbv zeta.
+  destruct
+    (expr_eqb [] [] e (normalise_lifted_round_calling calling avoid kept e));
+    [ apply Hround | ].
+  exact (refines_trans _ _ _ (Hround e) (IH _)).
+Qed.
+
+Lemma normalise_lifted_calling_program_refines (calling : bool)
+    (rounds : nat) (avoid : list continuation) (kept : list code_id) :
+  ∀ e : expr,
+    program_refines e (normalise_lifted_calling calling rounds avoid kept e).
+Proof.
+  intros e. unfold normalise_lifted_calling.
+  apply (refines_trans _ _ _
+    (expr_refines_program _ _
+       (iterate_refines _ first_phase_round_refines rounds e))).
+  apply (refines_trans _ _ _
+    (iterate_lifted_calling_program_refines calling rounds avoid kept _)).
+  apply (refines_trans _ _ _
+    (expr_refines_program _ _
+       (guard_scope_refines _ _
+          (FlambdaSimplifyCarriedProofs.simplify_by_types_carried_refines
+             _)))).
+  apply iterate_lifted_calling_program_refines.
+Qed.
+
+Theorem normalise_lifted_calling_unset :
+  normalise_lifted_calling_unset_statement.
+Proof. intros rounds avoid kept e. reflexivity. Qed.
+
 (* What ends the normalisation of a term in which something was
    lifted: the demotion with its rounds, and then the rounds that use
    what is known, each followed by the demotion with its rounds. *)
@@ -854,7 +926,8 @@ Proof.
     apply demote_and_tidy_known_program_refines. }
   apply (refines_trans _ _ _ (with_lifting_program_refines L _)).
   apply (refines_trans _ _ _
-    (normalise_lifted_program_refines rounds avoid kept _)).
+    (normalise_lifted_calling_program_refines (made_closures_called L) rounds
+       avoid kept _)).
   apply IH.
 Qed.
 

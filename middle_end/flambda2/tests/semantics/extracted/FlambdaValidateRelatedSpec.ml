@@ -24,7 +24,8 @@ let rec lifted_in_turn_observed rounds avoid ls kept e =
   | [] -> demote_and_tidy_known rounds (read_known_slots_anywhere e)
   | l :: ls0 ->
     lifted_in_turn_observed rounds avoid ls0 kept
-      (normalise_lifted rounds avoid kept (with_lifting_observed l e))
+      (normalise_lifted_calling l.made_closures_called rounds avoid kept
+         (with_lifting_observed l e))
 
 (** val lifting_observed_free_in : static_env -> lifting -> expr -> bool **)
 
@@ -46,10 +47,12 @@ let rec lifted_observed_free_in statics rounds avoid ls kept e =
     demote_and_tidy_known_free_in statics rounds (read_known_slots_anywhere e)
   | l :: ls0 ->
     (lifting_observed_free_in statics l e
-    && normalise_lifted_free_in statics rounds avoid kept
+    && normalise_lifted_calling_free_in statics l.made_closures_called rounds
+         avoid kept
          (with_lifting_observed l e))
     && lifted_observed_free_in statics rounds avoid ls0 kept
-         (normalise_lifted rounds avoid kept (with_lifting_observed l e))
+         (normalise_lifted_calling l.made_closures_called rounds avoid kept
+            (with_lifting_observed l e))
 
 type related_validation =
   | Related_once_lifted

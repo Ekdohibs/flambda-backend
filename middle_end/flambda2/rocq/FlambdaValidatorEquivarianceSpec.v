@@ -1201,11 +1201,14 @@ Definition well_kinded_unit_equivariant_statement : Prop :=
    with constants and symbols, and one that has a variable is not
    bound (FlambdaUnusedHeadStaticsSpec.add_head_tables); a copy of
    code is named by code ids and symbols
-   (FlambdaCopyCodeSpec.copy_static_code). *)
+   (FlambdaCopyCodeSpec.copy_static_code); whether the calls of the
+   closures that a [Let] makes are made direct in the rounds that
+   follow has no name in it. *)
 Definition rename_lifting (r : renaming) (L : lifting) : lifting :=
   Lifting (rename_unit_interface r (lifting_unit L)) (lifted_lets L)
     (lifted_my_closures L) (lifted_out_of_code L) (lifted_to_head L)
-    (lifted_around L) (groups_put L) (tables_put L) (code_copied L).
+    (lifted_around L) (groups_put L) (tables_put L) (code_copied L)
+    (made_closures_called L).
 
 (* What the check makes of a lifting, of the value slots to remove and
    of what the unit binds its symbols to

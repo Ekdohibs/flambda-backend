@@ -128,7 +128,8 @@ Definition pair_shared : named := Simple (Var first_read).
    that lifts nothing, and the code left where it is called. *)
 Definition validate_pair (before after : expr) : validation :=
   validate_unit 10 (Dropped [] []) [] []
-    [Lifting (Unit_interface done failed) [] [] [] [] [] [] [] []] [reader]
+    [Lifting (Unit_interface done failed) [] [] [] [] [] [] [] [] false]
+    [reader]
     before after.
 
 (* Where the slot and the field hold one variable, the pair is

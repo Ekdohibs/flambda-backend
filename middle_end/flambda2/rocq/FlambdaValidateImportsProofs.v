@@ -500,6 +500,95 @@ Proof.
   exact (refines_trans _ _ _ Hround (IH _ Hrest)).
 Qed.
 
+(* One round of [normalise_lifted], from what is proved of its rounds
+   in turn: [iterate] of one round is that round. *)
+Lemma normalise_lifted_round_unit_refines
+    (imports : list (symbol * import_class)) (avoid : list continuation)
+    (kept : list code_id) (e : expr) :
+  known_free_in (imports_statics imports) 1 avoid kept e = true ->
+  unit_refines imports e (normalise_lifted_round avoid kept e).
+Proof.
+  intros Hfree.
+  generalize (iterate_lifted_unit_refines imports 1 avoid kept e Hfree).
+  cbn [iterate]. cbv zeta.
+  destruct (expr_eqb [] [] e (normalise_lifted_round avoid kept e));
+    exact (fun H => H).
+Qed.
+
+(* The same of the rounds that are followed by the calls of the
+   closures that a [Let] makes made direct, where they are asked to. *)
+Lemma iterate_lifted_calling_unit_refines
+    (imports : list (symbol * import_class)) (calling : bool) (rounds : nat)
+    (avoid : list continuation) (kept : list code_id) :
+  ∀ e : expr,
+    known_calling_free_in (imports_statics imports) calling rounds avoid kept
+      e
+    = true ->
+    unit_refines imports e
+      (iterate rounds (normalise_lifted_round_calling calling avoid kept) e).
+Proof.
+  induction rounds as [ | rounds IH]; intros e;
+    cbn [known_calling_free_in iterate];
+    [ intros _; apply refines_refl | ].
+  cbv zeta. intros Hfree.
+  apply andb_true_iff in Hfree as [Hone Hrest].
+  assert (Hround :
+    unit_refines imports e
+      (normalise_lifted_round_calling calling avoid kept e)).
+  { unfold normalise_lifted_round_calling. cbv zeta.
+    apply (refines_trans _ _ _
+      (normalise_lifted_round_unit_refines imports avoid kept e Hone)).
+    destruct calling; [ | apply refines_refl ].
+    exact (with_made_closures_called_refines _ [] []
+             (imports_statics imports) empty_heap). }
+  destruct
+    (expr_eqb [] [] e (normalise_lifted_round_calling calling avoid kept e));
+    [ exact Hround | ].
+  exact (refines_trans _ _ _ Hround (IH _ Hrest)).
+Qed.
+
+(* The test of the rounds of [normalise_lifted], a round at a time:
+   that of its first round, and that of the others of what the first
+   gives. *)
+Lemma known_free_in_by_rounds (statics : static_env) (rounds : nat)
+    (avoid : list continuation) (kept : list code_id) (e : expr) :
+  known_free_in statics (S rounds) avoid kept e
+  = known_free_in statics 1 avoid kept e
+    && (let e' := normalise_lifted_round avoid kept e in
+        if expr_eqb [] [] e e' then true
+        else known_free_in statics rounds avoid kept e').
+Proof.
+  cbn [known_free_in]. cbv zeta. unfold normalise_lifted_round, with_known.
+  destruct
+    (fold_known_unit
+       (use_known_closures (normalise_before_round_avoiding avoid kept e)))
+    as [folded | ];
+    match goal with
+    | |- context [expr_eqb [] [] e ?e'] => destruct (expr_eqb [] [] e e')
+    end;
+    rewrite ?andb_true_r; reflexivity.
+Qed.
+
+(* With nothing asked, the test is the one that there was. *)
+Theorem known_calling_free_in_unset : known_calling_free_in_unset_statement.
+Proof.
+  intros statics rounds avoid kept.
+  induction rounds as [ | rounds IH]; intros e; [ reflexivity | ].
+  rewrite known_free_in_by_rounds.
+  cbn [known_calling_free_in]. cbv zeta.
+  change (normalise_lifted_round_calling false avoid kept e)
+    with (normalise_lifted_round avoid kept e).
+  rewrite IH. reflexivity.
+Qed.
+
+Theorem normalise_lifted_calling_free_in_unset :
+  normalise_lifted_calling_free_in_unset_statement.
+Proof.
+  intros statics rounds avoid kept e.
+  unfold normalise_lifted_calling_free_in, normalise_lifted_free_in.
+  cbv zeta. rewrite !known_calling_free_in_unset. reflexivity.
+Qed.
+
 (* The rounds that end the normalisation of a term in which something
    was lifted, where the test passes: each use of what the unit binds
    its symbols to is one of a term that binds no name of the imports. *)
@@ -591,24 +680,28 @@ Proof.
     apply (refines_trans _ _ _
       (with_lifting_unit_refines imports L e Hlifting)).
     apply (refines_trans _
-      (State (normalise_lifted rounds avoid kept (with_lifting L e)) [] []
-         (imports_statics imports) empty_heap)).
-    + unfold normalise_lifted. unfold normalise_lifted_free_in in Hknown.
+      (State
+         (normalise_lifted_calling (made_closures_called L) rounds avoid kept
+            (with_lifting L e))
+         [] [] (imports_statics imports) empty_heap)).
+    + unfold normalise_lifted_calling.
+      unfold normalise_lifted_calling_free_in in Hknown.
       cbv zeta in Hknown.
       apply andb_true_iff in Hknown as [Hfirst Hsecond].
       apply (refines_trans _ _ _
         (iterate_refines _ first_phase_round_refines rounds _ [] []
            (imports_statics imports) empty_heap)).
       apply (refines_trans _ _ _
-        (iterate_lifted_unit_refines imports rounds avoid kept _ Hfirst)).
+        (iterate_lifted_calling_unit_refines imports _ rounds avoid kept _
+           Hfirst)).
       apply (refines_trans _ _ _
         (guard_scope_refines _ _
            (FlambdaSimplifyCarriedProofs.simplify_by_types_carried_refines
               _)
            [] []
            (imports_statics imports) empty_heap)).
-      exact (iterate_lifted_unit_refines imports rounds avoid kept _
-               Hsecond).
+      exact (iterate_lifted_calling_unit_refines imports _ rounds avoid kept
+               _ Hsecond).
     + exact (IH _ Hrest).
 Qed.
 

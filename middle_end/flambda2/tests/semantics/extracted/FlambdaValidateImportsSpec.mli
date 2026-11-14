@@ -36,8 +36,11 @@ val lifting_free_in : static_env -> lifting -> expr -> bool
 val known_free_in :
   static_env -> nat -> continuation list -> code_id list -> expr -> bool
 
-val normalise_lifted_free_in :
-  static_env -> nat -> continuation list -> code_id list -> expr -> bool
+val known_calling_free_in :
+  static_env -> bool -> nat -> continuation list -> code_id list -> expr -> bool
+
+val normalise_lifted_calling_free_in :
+  static_env -> bool -> nat -> continuation list -> code_id list -> expr -> bool
 
 val tidy_known_free_in : static_env -> nat -> nat -> expr -> bool
 

@@ -89,15 +89,31 @@ let rec known_free_in statics rounds avoid kept e =
       && rest (share_static_reads (read_known_slots folded))
     | None -> rest (share_static_reads (read_known_slots given)))
 
-(** val normalise_lifted_free_in : static_env -> nat -> continuation list ->
-    code_id list -> expr -> bool **)
+(** val known_calling_free_in : static_env -> bool -> nat -> continuation list
+    -> code_id list -> expr -> bool **)
 
-let normalise_lifted_free_in statics rounds avoid kept e =
+let rec known_calling_free_in statics calling rounds avoid kept e =
+  match rounds with
+  | O -> true
+  | S rounds0 ->
+    known_free_in statics (S O) avoid kept e
+    &&
+    let e' = normalise_lifted_round_calling calling avoid kept e in
+    if expr_eqb [] [] e e'
+    then true
+    else known_calling_free_in statics calling rounds0 avoid kept e'
+
+(** val normalise_lifted_calling_free_in : static_env -> bool -> nat ->
+    continuation list -> code_id list -> expr -> bool **)
+
+let normalise_lifted_calling_free_in statics calling rounds avoid kept e =
   let e0 = iterate rounds first_phase_round e in
-  known_free_in statics rounds avoid kept e0
-  && known_free_in statics rounds avoid kept
+  known_calling_free_in statics calling rounds avoid kept e0
+  && known_calling_free_in statics calling rounds avoid kept
        (guard_scope simplify_by_types_carried
-          (iterate rounds (normalise_lifted_round avoid kept) e0))
+          (iterate rounds
+             (normalise_lifted_round_calling calling avoid kept)
+             e0))
 
 (** val tidy_known_free_in : static_env -> nat -> nat -> expr -> bool **)
 
@@ -136,9 +152,11 @@ let rec lifted_free_in statics rounds avoid ls kept e =
     demote_and_tidy_known_free_in statics rounds (read_known_slots_anywhere e)
   | l :: ls0 ->
     (lifting_free_in statics l e
-    && normalise_lifted_free_in statics rounds avoid kept (with_lifting l e))
+    && normalise_lifted_calling_free_in statics l.made_closures_called rounds
+         avoid kept (with_lifting l e))
     && lifted_free_in statics rounds avoid ls0 kept
-         (normalise_lifted rounds avoid kept (with_lifting l e))
+         (normalise_lifted_calling l.made_closures_called rounds avoid kept
+            (with_lifting l e))
 
 (** val statics_first_free_in : static_env -> lifting list -> expr -> bool **)
 
