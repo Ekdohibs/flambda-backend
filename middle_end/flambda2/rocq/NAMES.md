@@ -37,9 +37,9 @@ here.
 | That a term makes no immutable array and that a state is free of arrays (it holds no array value and may come to run nothing that makes one); the refinement of expressions of the machine of `FlambdaHeapMachineSpec.v` restricted to the closed whole source states that are free of arrays | `FlambdaNoArrayValueSpec.v` | the owner of that file |
 | The free names; the three conditions on binders; `alpha_equivalent` | `FlambdaAlphaSpec.v` | N1 |
 | The comparison `expr_eqb` | `FlambdaCompareAlphaSpec.v` | N1 |
-| The rewrites of the normalisation, the passes for loops, the sharing of a handler that is the same as one bound around it, the parameters bound again at the head of their handlers and their twins, the parameters given one symbol or one constant bound at the head of their handlers, the applications made to go to the arm of the number that they give, the checks of well-formedness (exception handlers and trap actions among them), the check of kinds, the normalisation of the term after and the first phase of that of the term before | `FlambdaValidatorEquivarianceSpec.v` | N3 |
+| The rewrites of the normalisation, the passes for loops, the sharing of a handler that is the same as one bound around it, the parameters bound again at the head of their handlers and their twins, the parameters of a loop that every turn passes on taken away, the parameters given one symbol or one constant bound at the head of their handlers, the applications made to go to the arm of the number that they give, the checks of well-formedness (exception handlers and trap actions among them), the check of kinds, the normalisation of the term after and the first phase of that of the term before | `FlambdaValidatorEquivarianceSpec.v` | N3 |
 | The normalisation of the term before and that of a term in which something was lifted: up to the names that a round makes. `validate_unit`: where the code of the term before is closed | `FlambdaValidatorEquivarianceSpec.v` | N3 |
-| Identities of primitives, lifting, lifting out of code, the binding of `my_closure`, ranges, sharing of primitives and of projections, the recovery of comparisons, folding at known symbols, unused and known value slots, the order of static bindings, the static closures in sight, code moved up, code and static bindings bound first, lifting out of the arms of a test, inlining within a group of code, the unboxing of parameters, of the reads of a loop and of the boxed numbers that continuations pass to one another, the merging of the arms of a `Switch` and their merging into a load from a table, the continuations that a handler binds on its way to its `Switch` bound outside it, the demotion of exception handlers, the rewrite of the calls of code that never returns, the fold of a `Phys_equal` of a simple against itself, the calls of the unit's other code made indirect in the code of a stub, the lifting to a group around, a `Let` of a variable to the variable just bound made one `Let` with it, the reading of a known immutable array, the sharing of the reads of two places that hold one variable, the inlining of the calls of known siblings in the term after, the copy of code for static sets of closures | the `Spec` file of each pass | the owner of each |
+| Identities of primitives, lifting, lifting out of code, the binding of `my_closure`, ranges, sharing of primitives and of projections, the recovery of comparisons, folding at known symbols, unused and known value slots, the order of static bindings, the static closures in sight, code moved up, code and static bindings bound first, lifting out of the arms of a test, inlining within a group of code, the unboxing of parameters, of the reads of a loop and of the boxed numbers that continuations pass to one another, the merging of the arms of a `Switch` and their merging into a load from a table, the continuations that a handler binds on its way to its `Switch` bound outside it, the demotion of exception handlers, the rewrite of the calls of code that never returns, the fold of a `Phys_equal` of a simple against itself or of two different symbols, the calls of the unit's other code made indirect in the code of a stub, the lifting to a group around, a `Let` of a variable to the variable just bound made one `Let` with it, the reading of a known immutable array, the sharing of the reads of two places that hold one variable, the inlining of the calls of known siblings in the term after, the copy of code for static sets of closures, the calls of the closures that a `Let` in sight makes made direct, what `my_closure` is known to be from its code used in the bodies of code, the read of a known block where it is sure to have a value and the removal of the unused allocations of constants, in the term after | the `Spec` file of each pass | the owner of each |
 | The second asking of the validation, `validate_unit_knowing`: where the code of the term before is closed | `FlambdaValidateKnowingSpec.v` | the owner of that file, N3 |
 | The tests that a verdict holds of a unit run from its imports: those that read static names alone, with no premise; those of a verdict, where the code of the term before is closed | `FlambdaValidateImportsRenameSpec.v` | N3 |
 | The second check of a unit, `validate_unit_related`: with no premise | `FlambdaValidateRelatedRenameSpec.v` | N3 |
@@ -139,7 +139,10 @@ the number of a name is `fresh_name` (`FlambdaNameAbstractionSpec.v`),
 which gives a name outside a list of names. `fresh_location`
 (`FlambdaHeapSpec.v`) is that function on the domain of a heap, written
 out there because the primitives of the heap come before the semantics
-(`FlambdaHeapMachineSpec.fresh_location_fresh_name_statement`).
+(`FlambdaHeapMachineSpec.fresh_location_fresh_name_statement`). The
+machine of regions is apart from this: it draws its symbols from a
+counter and tells a symbol that it drew from any other by its number
+(section 9).
 
 ## 2. Where things are
 
@@ -753,6 +756,14 @@ validation applies to the term after, in the bodies of code too
 (`FlambdaForwardKindedSpec.v`; an application keeps its own trap
 action there too, where the handler's own application has none, and
 with it the continuation that the action names;
+an arm of a `Switch` that applies, to no arguments and with no trap
+action, a continuation that has no parameters and gives no kinds, and
+whose handler, once the pass has been through it, is one application,
+takes that application with its trap action (`forward_kinded_arm`, as
+`FlambdaForwardSpec.forward_arm` for the term before): the
+continuation that the action names is one that the body of the
+`Let_cont` does not bind (`FlambdaForwardSpec.forwarding`), so it
+means at the arm what it means in the handler;
 `forward_kinded_equivariant_statement` and
 `forward_kinded_in_code_equivariant_statement` have the texts that
 they had);
@@ -833,6 +844,9 @@ round of the parameters followed by a step
 (`FlambdaValidateSpec.first_phase_round`: after
 `normalise_params_round`, in the term, in the handlers of its
 recursive continuations and in the bodies of its code, the
+parameters of a loop that every turn passes on are taken away where
+the checks of `FlambdaUnaliasRecParamsSpec.unalias_rec_params` pass
+(of which more with the tidying), the
 continuations that a handler binds on its way to its `Switch` are
 bound outside it, the applications are made to go to their arms and
 are then forwarded, and the continuations left unused are removed;
@@ -872,6 +886,19 @@ commutes with every renaming by an equation,
 `FlambdaStaticsScopeSpec.give_scrutinees_keeps_scope_statement`);
 a parameter that every application gives one variable is taken away
 where the checks of `FlambdaUnaliasParamsSpec.unalias_params` pass,
+a parameter of the one continuation of a recursive `Let_cont` that
+every application outside the handler gives one variable, and every
+application in the handler gives the parameter itself, is taken away
+where the other checks of
+`FlambdaUnaliasRecParamsSpec.unalias_rec_params` pass, and the handler
+then begins with a `Let` of it to that variable (the pass compares
+names by equality only and makes none: the `Let` has the name of the
+parameter, and the variable may have that name too, the `Let` then
+binding the parameter to the variable from outside that it hid; it
+commutes with every renaming by an equation,
+`unalias_rec_params_equivariant_statement`, and keeps scope,
+`FlambdaStaticsScopeSpec.unalias_rec_params_keeps_scope_statement`;
+the tidying of each term applies it just after `unalias_params`),
 the scrutinee of a `Switch` is made the number of the arm at the reads
 that the header of `FlambdaArmNumbersSpec.v` lists, in the arm and in
 the handler that only arms of that number apply (an argument of an
@@ -886,7 +913,13 @@ with every renaming by an equation,
 `numbers_in_arms_equivariant_statement`, and keeps scope,
 `FlambdaStaticsScopeSpec.numbers_in_arms_keeps_scope_statement`), what
 that has made a primitive on constants or a `Switch` on a constant is
-folded (`fold_constants`); in the term before a `Switch` whose arms
+folded (`fold_constants`);
+in the term after, the continuations that a handler binds on its way
+to its `Switch` are then bound outside it and the applications are
+made to go to their arms where the kinds are known
+(`lift_handler_conts`, `forward_to_arms_kinded`, as in the rounds of
+the term after);
+in the term before a `Switch` whose arms
 are then all the same is made that arm, and one whose arms then apply
 one continuation to arguments that are computed from their numbers is
 made that application (`collapse_switches`,
@@ -916,6 +949,26 @@ the term, `without_slots` and `with_known`, each an equation
 (`with_lifting_equivariant_statement`,
 `without_slots_equivariant_statement`,
 `with_known_equivariant_statement`).
+The test of the exits that `FlambdaLiftSpec.lift_unit` makes reads
+names and makes none. `exits_plain` asks that a variable is given only
+to a continuation in scope; `exits_plain_knowing`, which is the test
+that `lift_unit` makes, allows as well a variable known to hold a
+symbol or a constant: a parameter of a non-recursive handler that
+every way of reaching the handler gives a symbol, a constant or such a
+variable. It keeps the variables known and takes one away at a `Let`
+of it and at a parameter of that name that is not known, the
+parameters of a handler being taken in the order in which the machine
+binds them (`params_known`), and all those of a recursive handler; the
+body of code starts with none; what the scope of a `Let_cont` does to
+the parameters of the continuations that it does not bind is read off
+it first (`spoils`), and what is said there of a continuation is
+dropped where a `Let_cont` binds that name (`forget_conts`). Each test
+answers of a term renamed, with the scope and the variables known
+renamed with it, what it answers of the term
+(`exits_plain_equivariant_statement`,
+`exits_plain_knowing_equivariant_statement`, in `FlambdaLiftSpec.v`);
+nothing is stated of two terms that are the same up to their bound
+names.
 `FlambdaLiftObservedSpec.with_lifting_observed`, which the check
 does not apply and which is `with_lifting` without the test of the
 exits, is stated beside it: the same equation
@@ -983,7 +1036,14 @@ under a second renaming that does to the continuations of the units of
 the liftings what the first does); those that go through such rounds
 are stated where the code of the term is closed
 (`known_free_in_equivariant_statement`,
-`normalise_lifted_free_in_equivariant_statement`;
+`normalise_lifted_free_in_equivariant_statement`, and the same of the
+tests of the rounds that also make direct the calls of the closures
+that a `Let` makes, whether or not a lifting asks for it,
+`known_calling_free_in_equivariant_statement` and
+`normalise_lifted_calling_free_in_equivariant_statement`, and of the
+tests of the rounds that also use, in the bodies of code, what
+`my_closure` is known to be, `known_own_free_in_equivariant_statement`
+and `normalise_lifted_own_free_in_equivariant_statement`;
 `lifted_free_in_renamed_alike_statement`, where the term is under a
 second renaming that does to the continuations to avoid what the first
 does, the two continuations of the unit of each lifting being among
@@ -1154,11 +1214,13 @@ of the comparison that a three-way result is tested for
 (`FlambdaRecoverComparisonSpec.v`:
 `recover_known_comparisons_equivariant_statement`, an equation that
 holds of every term; that it keeps scope,
-`FlambdaRecoverComparisonScopeSpec.v`), the fold of a `Phys_equal` of
-a simple against itself (`FlambdaSameComparisonSpec.v`:
+`FlambdaRecoverComparisonScopeSpec.v`), the
+fold of a `Phys_equal` of a simple against itself or of two different
+symbols (`FlambdaSameComparisonSpec.v`:
 `fold_same_comparisons_equivariant_statement`, an equation that holds
-of every term; that it keeps scope,
-`FlambdaSameComparisonScopeSpec.v`), the folding
+of every term: the pass compares two simples by equality and asks
+whether both are symbols, which no renaming moves; that it keeps
+scope, `FlambdaSameComparisonScopeSpec.v`), the folding
 at known symbols (`FlambdaKnownSymbolsSpec.v`; of a static block one
 of whose fields is a variable, what is known has a constant in the
 place of the variable, `unknown_field`, to which no load is folded:
@@ -1176,6 +1238,20 @@ compares variables by equality and makes no name;
 `merge_alias_lets_renamed_statement`, an equation that holds of
 every term; it has no statement that it keeps scope, and it is
 applied to the term after only, where no round makes a name), the
+read of a known block where the read is sure to have a value, and the
+removal of an allocation of constants that nothing uses, in the term
+after (`FlambdaReadsAfterSpec.load_known_blocks_surely`, the part of
+`FlambdaBlockLoadSpec.load_known_blocks` that is sure to have a value:
+`load_blocks_knowing_surely_equivariant_statement`, with what is known
+of the blocks renamed with the term by `rename_known_blocks`, and
+`load_known_blocks_surely_equivariant_statement`, both in
+`FlambdaValidatorEquivarianceSpec.v`;
+`FlambdaReadsAfterSpec.remove_constant_allocations`:
+`remove_constant_allocations_equivariant_statement`, in its own file;
+both compare variables by equality, make no name and bind nothing, and
+under a binder the first forgets what is known of the name; they have
+no statement that they keep scope, and are applied to the term after
+only, where no round makes a name), the
 reading of a known immutable array (`FlambdaArrayLoadSpec.v`:
 `load_known_arrays_equivariant_statement`, an equation that holds of
 every term; `load_arrays_knowing_equivariant_statement`, the same
@@ -1267,7 +1343,72 @@ a renaming leaving what code says of itself as it is; that it keeps
 scope, `FlambdaStaticsScopeSpec.demote_stub_calls_keeps_scope_statement`),
 the order of static bindings
 (`FlambdaStaticsOrderSpec.v`), the use of the static closures in
-sight (`FlambdaKnownClosuresSpec.v`), the move of code to the head of
+sight (`FlambdaKnownClosuresSpec.v`), the
+call of a closure that a `Let` in sight makes, made direct
+(`FlambdaClosureCallsSpec.v`:
+`call_made_closures_equivariant_statement`, an equation that holds of
+every term; `call_closures_knowing_equivariant_statement`, the same
+with what is known renamed with the term by `rename_made_closures`,
+which renames the variables that are known to be closures and leaves
+their function slots and code ids as they are; the pass binds no name
+and makes none, compares variables by equality, and forgets what is
+known of a variable where it is bound again; its result has the free
+variables and the free continuations of the term, and its code is
+closed where that of the term is,
+`call_closures_knowing_names_statement`; that it keeps scope is a
+lemma of `FlambdaValidatorEquivarianceProofs.v` and not a statement; a
+lifting asks for it by its field `made_closures_called`, a bool that
+no renaming moves; the normalisation that follows that lifting, in the
+first check and in the second, then applies it at the end of each
+round of its second phase, in the rounds before the rewrites from the
+types and in those after them, in the term and in the bodies of its
+code: the round of `FlambdaValidateSpec.normalise_lifted_calling` is
+`normalise_lifted_round_calling`, a round of `normalise_lifted` and
+then the pass, and the rounds that know `my_closure`, next, add to
+that round after it; its first phase is as it was, and the
+normalisation after the last lifting does not apply it; with the field
+unset `normalise_lifted_calling` is `normalise_lifted` of the same
+rounds, continuations to avoid, code kept and term,
+`normalise_lifted_calling_unset_statement`), the use, in the body of
+code, of what `my_closure` is known to be from its code
+(`FlambdaClosureOfCodeSpec.know_own_closures`: in the body of code
+`my_closure` is known to be a closure of that code, the body running
+only where it is one, and an indirect call of a variable known to be a
+closure of a code is made the direct call of that code; a variable
+bound to the projection of a function slot from such a variable is
+known in its turn where the unit makes a set of closures with the code
+at the slot projected from and every such set has the same code at the
+slot projected to (`sibling_code`); the projection of a value slot
+from such a variable that names the function slot it projects from
+(`Project_value_slot_from`) is made a symbol or a constant where the
+unit makes a set of closures with the code at that function slot,
+every such set gives the value slot that symbol or constant and, if it
+is a symbol, it is in scope (`slot_held`, `read_code_slot`); a
+`Project_value_slot`, which names no function slot, is left as it is;
+nothing else is rewritten, and the pass is the identity of a unit in
+which a group of static bindings does not bind its static sets of
+closures whole (`groups_whole`);
+`know_own_closures_equivariant_statement`, an equation with no
+premise, and `know_own_closures_names_statement`, that where the code
+of the unit is closed, the code of the result is closed and the result
+has no free variable or continuation that the unit has not; it binds
+nothing and makes no name; what it keeps of a variable is a code id,
+which it forgets under a binder of the variable (the `Let` of it, and
+`forget_code_vars` for the parameters of a handler); it leaves the
+code alone where it is the code of a stub or `my_closure` is also a
+parameter; what it puts in the place of a projection is a symbol or a
+constant; it reads the sets of closures that the unit makes with what
+they put in their value slots, outside the scope of the variables
+there (`FlambdaSetsOfCodeSpec.sets_made`), and asks of them only that
+a function slot has a given code, or that a value slot is given a
+given symbol or constant (`fact_closed`; `closed_simple` in
+`slot_held`), so nothing is concluded from the name of a variable read
+outside its scope; in the rounds it comes after the round of
+`normalise_lifted_calling`, where the lifting asks for it
+(`FlambdaValidateSpec.normalise_lifted_round_own`,
+`normalise_lifted_own`; the field `own_closures_known`, which
+`rename_lifting` passes on, having no name in it), the
+move of code to the head of
 what it is in (`FlambdaFloatCodeSpec.v`), the binding first of the
 code of a unit (`FlambdaHoistCodeSpec.v`) and of its static bindings
 that need nothing from around them (`FlambdaHoistStaticsSpec.v`), the
@@ -1483,6 +1624,73 @@ Owed:
   it is, in which no step allocates. The statements are in the form
   that stays true when one does (section 4); the proofs of the case
   of a `Let` are owed again then.
+- The machine of regions (`FlambdaRegionsSpec.v`, with its invariant,
+  `FlambdaRegionsInvariantSpec.v`, the erasure of regions,
+  `FlambdaRegionsErasureSpec.v`, what is proved of its calls,
+  `FlambdaRegionsCallsSpec.v`, and the check of the regions of a term,
+  `FlambdaRegionsCheckSpec.v`). Nothing is stated of it under a renaming
+  of variables and continuations, nor of the term with its regions
+  dropped (`FlambdaRegionsSpec.erase`) under one (what is stated of
+  `erase` is of runs, in `FlambdaRegionsErasureSpec.v`,
+  `FlambdaRegionsCallsSpec.v` and `FlambdaRegionsCheckSpec.v`, and
+  nothing in them is about a renaming). `erase` is not a function of
+  terms up to bound names: it drops the `Let` of a `Local_allocation`
+  that binds the name of its argument and makes an alias of any other,
+  so of two terms that differ in that bound name the erased terms differ
+  by a `Let`. No rewrite of the validation applies it; the test tool
+  does, in its check of regions, where it compares `erase` of the term
+  converted with its regions against the term validated, up to bound
+  names (`expr_eqb`), and nothing says that a step of the machine of
+  regions respects that equality. The step compares the names of two
+  variables in one place (`marker_of`): the first argument of a
+  `Local_allocation` is the variable that the `Let` above it binds, and
+  the region that it names is not that variable. The machine makes names
+  of a sort that no renaming moves: it draws symbols, one for the mark
+  of each region and for each local allocation (for a set of closures,
+  one for each function slot), from a counter that only goes up
+  (`rs_next`, which starts at `rs_base`), and not by `fresh_name`; the
+  next symbol is the successor of the last (`Pos.succ`, `advance`), so
+  of two symbols drawn the smaller was not drawn after the other. It
+  looks at the number of a symbol: a symbol that it drew is one at or
+  above `rs_base` (`drawn`), and a value that may not be evaluated is a
+  drawn symbol that nothing binds (`value_usable`), so what a step does
+  depends on it. That the symbols drawn are none of the term or of the
+  static environment is a test made before the run
+  (`region_names_fresh`), and that they stay apart is a part of the
+  invariant that a run keeps
+  (`FlambdaRegionsInvariantSpec.symbols_fresh`,
+  `region_run_keeps_invariant_statement`); both tests are written with
+  the order of the numbers (below `rs_base`, below `rs_next`). The test
+  of a state by which it is proved that code cannot end a region of its
+  caller (`FlambdaRegionsCallsSpec.calls_kept`) compares the numbers of
+  two symbols and takes the smaller to be the older (`frames_ordered`,
+  `held_older`, `cont_held_older`); by `region_names_fresh`, a symbol of
+  the term or of the static environment that the run starts with is
+  below every symbol drawn. That a run does not depend on the base is
+  not stated.
+- The check of the regions of a term
+  (`FlambdaRegionsCheckSpec.region_check`, with a certificate; it is a
+  function of the model, not the check of the test tool, and nothing
+  runs it) is by names. The certificate is keyed by the continuations
+  that the term binds (two handlers bound under one name have one entry)
+  and by code ids, and names the regions that are open at a handler by
+  variables (`cert_handlers`, `he_open`; a `lifetime` may be `Of_region`
+  of a variable); `region_at_jump` and `lifetime_at_jump` put the
+  regions that a jump gives in the place of the parameters of the
+  handler that are regions, a substitution and not the action of a
+  renaming. The check compares variables and continuations by equality
+  only, and it refuses a term in which the variable of a region in
+  scope, open or not, is bound again (`not_a_region`), so it does not
+  answer the same of two terms that differ by bound names. Its law under
+  a renaming is owed (section 7, a check): that `region_check` of the
+  renamed term with the certificate renamed is `region_check` of the
+  term is not stated, and no action of the renamings on a certificate is
+  defined. The property of states by which
+  `region_check_fault_statement` is proved
+  (`FlambdaRegionsCheckedSpec.v`) asks that the regions of the state of
+  the check are in scope (`check_state_scoped`) and reads the order of
+  the symbols drawn as time (`value_within`, `lifetime_holds`, with
+  `FlambdaRegionsCallsSpec.frames_ordered`).
 
 ## 10. The compiler's side
 
