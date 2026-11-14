@@ -462,7 +462,12 @@ unit made from OCaml.
   validator accepts one all the same, the tool says so on a line of its
   own.
 - **not checked**: the conversion refused the unit, as it has something
-  the model has not got.
+  the model has not got, or something that the conversion does not
+  make though the model has it: a mutable field, a mutable array.
+  The machine runs the primitives of the heap
+  (`FlambdaSemanticsSpec.exec_named`, at a `Let`) and the conversion
+  makes none of them yet. The line of the tool says "the model has
+  not got" of both.
 
 ## The examples
 
@@ -883,11 +888,11 @@ the line with no import.
 
 ### Not checked
 
-| Source | What the model has not got |
+| Source | What the model has not got, or the conversion does not make |
 |--------|----------------------------|
-| `array_literal.ml` | mutable arrays: `Make_array` (C4) |
+| `array_literal.ml` | mutable arrays: `Make_array`, of which the conversion makes no primitive of the heap yet (C4) |
 | `float_add.ml` | floating-point arithmetic |
-| `ref_counter.ml` | mutable fields: `Block_set` (C4) |
+| `ref_counter.ml` | mutable fields: `Block_set`, of which the conversion makes no primitive of the heap yet (C4) |
 | `tupled_recursive.ml` | after Simplify the unit calls tupled code directly, giving it the components; the model has not got that call (C3) |
 | `tupled_unknown_pair.ml` | as `tupled_recursive.ml` |
 
@@ -928,12 +933,15 @@ the line with no import.
    comparison: the last entry of the list below.
 
 What the model has not got, and the conversion refuses: floating-point
-arithmetic (`float_add.ml`), mutable arrays (`array_literal.ml`),
-mutable fields (`ref_counter.ml`), and a direct call of tupled code,
+arithmetic (`float_add.ml`), and a direct call of tupled code,
 which gives the code the components (`tupled_recursive.ml`,
 `tupled_unknown_pair.ml`): Simplify makes one of the call of a tupled
 function that it knows and does not inline, so the term after is
-refused where the term before is not. A static immutable array of
+refused where the term before is not. What the model has, and the
+conversion refuses all the same: mutable arrays (`array_literal.ml`)
+and mutable fields (`ref_counter.ml`). The machine runs the
+primitives of the heap, and the conversion makes none of them yet,
+so no unit that has one is checked. A static immutable array of
 values and the array with no element are converted
 (`../static_array.fl` and the four beside it, `empty_array_length.ml`,
 `empty_array_tested.ml`, `empty_array_in_record.ml`,
