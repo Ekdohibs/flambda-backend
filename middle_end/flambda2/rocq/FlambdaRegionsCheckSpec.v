@@ -46,7 +46,7 @@
    (FlambdaRegionsSpec.erase). It says nothing of the regions of the
    term after. This check is of the term after alone.
 
-   WHAT IS PROVED OF A TERM THAT PASSES, AND WHAT IS NOT
+   WHAT IS PROVED OF A TERM THAT PASSES
 
    All of it is of one run: that of the term on the machine of
    regions from its first state ([initial_region_state]) in the
@@ -69,24 +69,30 @@
    a property that every state of the run has: three statements of
    FlambdaRegionsCheckedSpec.v.
 
-   Not proved, and no statement of the tree: that where the run stops
-   because [step] has no step, the run of the term with its regions
-   dropped goes wrong too. With that, the regions of a term that
-   passes would add no fault to it ([regions_add_no_fault]): where
-   the run of the term on the machine of regions stops without a
-   step, the run of the term with its regions dropped goes wrong too.
-   [regions_add_no_fault] is an implication and no more: of a term
-   that goes wrong with its regions dropped it says nothing. Nothing
-   in the tree says that a term that passes the check has it.
+   Proved in another file (FlambdaRegionsCheckSoundSpec.v, with its
+   proofs), of a term that the erasure is meant for ([erasable]):
+   that where the run stops because [step] has no step, the run of
+   the term with its regions dropped goes wrong too. So the regions
+   of such a term that passes add no fault to it
+   ([regions_add_no_fault]): where the run of the term on the machine
+   of regions stops without a step, the run of the term with its
+   regions dropped goes wrong too. [regions_add_no_fault] is an
+   implication and no more: of a term that goes wrong with its
+   regions dropped it says nothing.
 
    The two statements about a run of Simplify are of
    [regions_add_no_fault], which they take as a premise, and not of
-   the check. With the validation of today, a term before that does
-   not go wrong, regions dropped, gives a term after that never stops
-   without a step, regions and all, if the regions of the term after
-   add no fault to it ([checked_after_safe_statement]). So, as long
-   as the part above is not proved, they say nothing of a term that
-   passes the check.
+   the check. They take as a premise too [refines] of the two terms
+   with their regions dropped, from their first states: a relation of
+   the model, and not a verdict of the validation
+   (FlambdaRegionsCheckSoundSpec.v has statements with a verdict in
+   its place, and says what is between them and the test tool). With
+   it, a term before that does not go wrong, regions dropped, gives a
+   term after that never stops without a step, regions and all, if
+   the regions of the term after add no fault to it
+   ([checked_after_safe_statement]). By the soundness of the check
+   that last premise holds of a term after that passes the check,
+   under the premises of freshness and [erasable].
 
    Nothing runs the check: the test tool does not ask it, and nothing
    of it is extracted.
@@ -1046,8 +1052,11 @@ Definition region_safe (rs : region_state) : Prop :=
 (* The regions of a term add no fault to it: where its run on the
    machine of regions stops without a step, the run of the term with
    its regions dropped goes wrong too. Nothing is said of what goes
-   wrong without regions. No statement here says that a term has
-   this: the two below take it as a premise. *)
+   wrong without regions. No statement of this file says that a term
+   has this: the two below take it as a premise, and
+   FlambdaRegionsCheckSoundSpec.v has the statement that a term that
+   passes the check has it, under its premises of freshness and
+   [erasable]. *)
 Definition regions_add_no_fault (e : expr) (statics : static_env)
     (base : symbol) : Prop :=
   ∀ (fuel : nat) (fault : region_fault),
@@ -1055,12 +1064,15 @@ Definition regions_add_no_fault (e : expr) (statics : static_env)
     = Region_undefined fault ->
     behaves (erased_initial_state e statics) Goes_wrong.
 
-(* What [regions_add_no_fault] gives with the validation of a run of
-   Simplify, which proves [refines] of the two terms with their
-   regions dropped. If the term before, with its regions dropped,
-   does not go wrong, and the regions of the term after add no fault
-   to it, the term after, with its regions, never stops without a
-   step. Nothing is asked of the regions of the term before. *)
+(* What [regions_add_no_fault] gives of a run of Simplify. The first
+   premise is [refines] of the two terms with their regions dropped:
+   a relation of the model, and not a verdict of the validation
+   (FlambdaRegionsCheckSoundSpec.v has statements with a verdict in
+   its place). If it holds, the term before, with its regions
+   dropped, does not go wrong, and the regions of the term after add
+   no fault to it, the term after, with its regions, never stops
+   without a step. Nothing is asked of the regions of the term
+   before. *)
 Definition checked_after_safe_statement : Prop :=
   ∀ (statics : static_env) (base : symbol) (before after : expr),
     refines (erased_initial_state before statics)
