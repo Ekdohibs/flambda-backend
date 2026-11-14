@@ -371,7 +371,7 @@ Fixpoint region_args (cs : check_state) (params : list variable)
   | _, _, _ => None
   end.
 
-Definition rename_region (given : list (variable * variable)) (r : variable)
+Definition region_at_jump (given : list (variable * variable)) (r : variable)
     : variable :=
   match lookup r given with
   | Some r' => r'
@@ -416,10 +416,10 @@ Definition outlives (named open : list variable) (given wanted : lifetime)
        end
   end.
 
-Definition rename_lifetime (given : list (variable * variable))
+Definition lifetime_at_jump (given : list (variable * variable))
     (l : lifetime) : lifetime :=
   match l with
-  | Of_region r => Of_region (rename_region given r)
+  | Of_region r => Of_region (region_at_jump given r)
   | Forever | Of_caller | Gone => l
   end.
 
@@ -433,7 +433,7 @@ Fixpoint value_args (cs : check_state) (given : list (variable * variable))
   | kind :: kinds, (_, l) :: args, w :: wanted =>
     (kind_eqb kind Region
      || (lifetime_usable cs l
-         && outlives named (cs_open cs) l (rename_lifetime given w)))
+         && outlives named (cs_open cs) l (lifetime_at_jump given w)))
     && value_args cs given named kinds args wanted
   | _, _, _ => false
   end.
@@ -458,7 +458,7 @@ Definition jump (cs : check_state) (k : continuation)
     match region_args cs params kinds args with
     | None => false
     | Some given =>
-      let named := map (rename_region given) (he_open entry) in
+      let named := map (region_at_jump given) (he_open entry) in
       in_order named (cs_open cs)
       && value_args cs given named kinds args (he_params entry)
     end
