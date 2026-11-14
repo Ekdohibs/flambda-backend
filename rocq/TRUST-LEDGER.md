@@ -1262,7 +1262,32 @@ it gave back.
   (`validate_unit_reading_sound_statement`,
   `validate_unit_knowing_reading_sound_statement`), as the term
   that they make refines the term before under all environments
-  (`normalise_reading_refines_statement`). The comparison of the
+  (`normalise_reading_refines_statement`). Where those two do not
+  validate them either, the tool guesses calls of the term before
+  to inline first, as choices of places; unless
+  `FlambdaValidateInliningSpec.before_inlined` gives back the term
+  before itself for them, as it does where there is no choice, it
+  calls `FlambdaValidateInliningSpec.validate_unit_inlining` on the
+  same two terms converted, with those choices, or, where that does
+  not validate them, `validate_unit_knowing_inlining` on the same.
+  Where one of them validates them, it prints that answer as it
+  is, with one line more under it: "(asked of the term before with
+  chosen calls inlined first)". Those two functions ask
+  `validate_unit` and `validate_unit_knowing` of the term after
+  and of a term that they make of the term before
+  (`before_inlined`: for each choice in turn, the direct calls
+  that stand at the places of the choice are given to
+  `FlambdaInlineCallsAtSpec.inline_calls_at`, and the term is then
+  renamed apart); what is proved of them is of the two terms that
+  they are given (`validate_unit_inlining_sound_statement`,
+  `validate_unit_knowing_inlining_sound_statement`), as the term
+  that they make refines the term before under all environments,
+  whatever the choices are (`inlined_in_turn_refines_statement`).
+  The choices are the tool's guess, and nothing that is proved
+  rests on them. The line says which asking validated the unit,
+  and not that a call was inlined: a choice may have no place, the
+  rewrite may leave a call that it has, and the term is renamed
+  apart in any case. The comparison of the
   two runs that it also prints is a test of one run, and no theorem is
   about it.
   For a unit that has imports (the entry "Symbols that a unit does not
@@ -1384,6 +1409,20 @@ it gave back.
   there are those of the asking whose verdict it reports. The
   term that the tool computes by the same function for its
   guesses, with nothing lifted, is not trusted: the theorem holds
+  whatever is guessed. For a verdict of one of the two functions
+  of `FlambdaValidateInliningSpec.v` the theorem from the imports
+  (`validate_unit_inlining_verdict_imports_statement`,
+  `validate_unit_knowing_inlining_verdict_imports_statement`) has
+  the same two tests, asked of the term after and of the term that
+  `before_inlined` gives for the term before, with the choices,
+  the loops and the liftings of the asking, and not of the term
+  before as converted. The tool computes that term itself, by
+  `before_inlined` as it is extracted, and gives it to the test
+  with the verdict that it reports. Trusted of that call besides:
+  that the arguments which the tool gives `before_inlined` there
+  are those of the asking whose verdict it reports. The term that
+  the tool computes by the same function with nothing lifted, for
+  the search of the liftings, is not trusted: the theorem holds
   whatever is guessed. Where the test accepts the verdict, the
   line
   begins "validated with its imports", and the verdict is of the two
