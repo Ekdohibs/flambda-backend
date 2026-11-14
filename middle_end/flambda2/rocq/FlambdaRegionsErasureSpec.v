@@ -33,8 +33,8 @@
    This file is to be reviewed: the relation [value_erased] and the two
    statements. The term with its regions dropped is
    FlambdaRegionsSpec.erase, which is reviewed there. This file adds
-   nothing to either machine. The statements have no proof in this
-   tree.
+   nothing to either machine. FlambdaRegionsErasureProofs.v proves
+   the statements.
 
    WHY
 
