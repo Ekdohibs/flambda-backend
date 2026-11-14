@@ -44,8 +44,8 @@
    be that no list makes the two terms come to the same. A choice
    by place cannot be given to the rounds as they are: each round
    renames the term and moves its parts, so that a place of the
-   term as it is given is not a place of the term that a round is
-   given.
+   term as it is given need not be the place of the same call in
+   the term that a round is given.
 
    So the choice is made before the rounds, in a function beside:
 
