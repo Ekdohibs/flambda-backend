@@ -7,9 +7,10 @@ for it to obey the same laws.
 
 ## Where it stands
 
-As of the tree in which the heap is a component of the state of the
-machine, with the passes for loops and the meet of types under
-renaming. The sections below say each thing in full.
+As of the tree in which a `Let` of the machine runs the primitives of
+the heap on the heap of its state, which has a read record beside it,
+with the passes for loops and the meet of types under renaming. The
+sections below say each thing in full.
 
 **One account of the free names.** The free names of a term are one
 function for each sort (`FlambdaBindersSpec.v`), which goes into code.
@@ -22,18 +23,21 @@ binding not used may be removed are written with it on purpose
 (`FlambdaNominalSpec.v`): they ask nothing of the code, a name that
 occurs only in code does not stop a binding from being removed, and
 the rewrites of the validator that remove bindings are proved from
-them. The other places where it is still used are in the last table
-here.
+them. That of a `Let`, and its corollary with the one function, ask
+that the defining expression is not a primitive of the heap
+(`FlambdaHeapSpec.named_changes_heap`): such a `Let` changes the heap,
+and an exit is compared with its heap (decision D40). The other
+places where it is still used are in the last table here.
 
 **What commutes with renaming.**
 
 | What | Where | By |
 |------|-------|----|
-| The machine: a step, a run, a behaviour; equivalence and refinement, of states and of expressions | `FlambdaEquivarianceSpec.v` | N1 |
+| The machine, whose `Let` runs the primitives of the heap: a step, a run, a behaviour; equivalence and refinement, of states and of expressions; the heap and the read record are left as they are | `FlambdaEquivarianceSpec.v` | N1 |
 | What a run leaves at an exit: that a state leaves a world, and refinement with the worlds of the two exits related | `FlambdaExitWorldActionsSpec.v` | N1 |
 | What may follow a unit: that a continuation stands for an observer, that no observer tells two worlds apart, and the refinement of two terms up to what may follow; the last two of every class of what a continuation may stand for that a renaming keeps | `FlambdaObserversActionsSpec.v`; of the observers that make no array, `FlambdaNoArrayValueObserversSpec.v` | N1; the owner of that file |
 | The machine with a stack of exception handlers and of calls | `FlambdaTrapSpec.v` | the owner of exceptions |
-| The machine of `FlambdaHeapMachineSpec.v`, which runs the primitives of the heap, and its refinements; the heap is left as it is | `FlambdaHeapEquivarianceSpec.v` | N1 |
+| The machine of `FlambdaHeapMachineSpec.v`, the prototype with a heap of its own, which runs the same primitives, and its refinements; the heap is left as it is | `FlambdaHeapEquivarianceSpec.v` | N1 |
 | That a term makes no immutable array and that a state is free of arrays (it holds no array value and may come to run nothing that makes one); the refinement of expressions of the machine of `FlambdaHeapMachineSpec.v` restricted to the closed whole source states that are free of arrays | `FlambdaNoArrayValueSpec.v` | the owner of that file |
 | The free names; the three conditions on binders; `alpha_equivalent` | `FlambdaAlphaSpec.v` | N1 |
 | The comparison `expr_eqb` | `FlambdaCompareAlphaSpec.v` | N1 |
@@ -69,12 +73,13 @@ why.
 permutations act on values, cells, heaps, environments, continuations,
 the static environment and states, and each of these with its
 locations obeys the laws of the interface (`FlambdaLocationsSpec.v`);
-the action commutes with that of the renamings. The primitives go
-through it by an equation, but for the two that bind a location,
-which do up to the location chosen
+the action commutes with that of the renamings. The read record of a
+state holds locations too, and is moved with the state. The
+primitives go through the action by an equation, but for the two
+that bind a location, which do up to the location chosen
 (`FlambdaLocationsPrimitiveSpec.v`); a step, a run and a behaviour of
-the machine do in that form (`FlambdaLocationsMachineSpec.v`). Section
-4 has the premise.
+the machine, whose `Let` runs those primitives, do in that form
+(`FlambdaLocationsMachineSpec.v`). Section 4 has the premise.
 
 **A rewrite that makes names** does not commute with renaming. It
 owes two things, defined in `FlambdaValidatorEquivarianceSpec.v`:
@@ -117,9 +122,7 @@ section 7, has the reason for each and what it would take.
 **Owed.** That the join of typing environments, with one source of
 new names, answers the renamed answer up to the variables that it
 makes (section 7); the functions on types that have no statement
-yet; the rows of the table above; and, when a step of the machine
-comes to allocate, the proofs about a step under a permutation of
-locations again (section 4).
+yet; the rows of the table above.
 
 ## 1. The names
 
@@ -132,14 +135,20 @@ sort of its own. The locations of the heap (`FlambdaHeapSpec.v`) are
 one: no renaming of variables or of continuations moves a location,
 and the permutations of locations (`FlambdaLocationsSpec.v`) move
 nothing in a term, so the two actions commute
-(`rename_permute_state_statement`).
+(`rename_permute_state_statement`). The read record of a state
+(`FlambdaValueSpec.read_record`) is a place that holds locations, and
+no other name.
 
 Names are compared by equality only. The one function that looks at
 the number of a name is `fresh_name` (`FlambdaNameAbstractionSpec.v`),
 which gives a name outside a list of names. `fresh_location`
 (`FlambdaHeapSpec.v`) is that function on the domain of a heap, written
 out there because the primitives of the heap come before the semantics
-(`FlambdaHeapMachineSpec.fresh_location_fresh_name_statement`). The
+(`FlambdaHeapMachineSpec.fresh_location_fresh_name_statement`). Two
+things only are to be used of it: that the heap does not bind the
+location that it gives, and that the location depends on the heap
+only through the locations that the heap binds
+(`fresh_location_statement`, `fresh_location_keys_statement`). The
 machine of regions is apart from this: it draws its symbols from a
 counter and tells a symbol that it drew from any other by its number
 (section 9).
@@ -150,7 +159,7 @@ counter and tells a symbol that it drew from any other by its number
 |------|-------------|
 | `FlambdaBindersSpec.v` | What each binder binds and where; the free variables and free continuations of a term, as one function for each (they go into code); the three conditions on binders: `names_in_scope`, `binders_distinct`, `code_closed` |
 | `FlambdaScopeSpec.v` | `state_in_scope`: what a run keeps of scope; a state in scope reads no variable without a value and leaves only by a continuation it was given |
-| `FlambdaNominalSpec.v` | Permutations and renamings; the action on terms, `rename_expr`, code included; that the binders of code may be renamed; the older relations of free names, and with them that a binding which is not used may be removed |
+| `FlambdaNominalSpec.v` | Permutations and renamings; the action on terms, `rename_expr`, code included; that the binders of code may be renamed; the older relations of free names, and with them that a binding which is not used may be removed, a `Let` of a primitive of the heap excepted |
 | `FlambdaAlphaSpec.v` | The action is that of a group; the free names and the three conditions are equivariant; `alpha_equivalent`, by its generators, is equivariant, keeps the free names and the three conditions, and is sound for the semantics |
 | `FlambdaCompareAlphaSpec.v` | The comparison `expr_eqb` is an equivalence relation, contains `alpha_equivalent` and does not depend on the names; two pairs of terms that it accepts outside well-formed terms |
 | `FlambdaEquivarianceSpec.v` | The action on states; a step, a run and a behaviour commute with it; two rewrites commute with it |
@@ -159,10 +168,10 @@ counter and tells a symbol that it drew from any other by its number
 | `FlambdaFreeNamesSpec.v` | The older accounts of free names agree with the one function where code is closed, and what is free by them is among the free names on every term |
 | `FlambdaCanonicalFreeNamesSpec.v` | The names that a `Let`, a `Let_cont` or a handler binds may be renamed; corollaries, with the one function, of the statements about a binding that is not used |
 | `FlambdaStateSupportSpec.v` | Every expression and every state has a finite support: with the action, the states are a nominal set |
-| `FlambdaHeapEquivarianceSpec.v` | The action on the states of the machine with a heap, which leaves the heap alone; a step, a run and a behaviour of that machine commute with it; its refinements are preserved by renaming; its states have a finite support |
-| `FlambdaLocationsSpec.v` | The action of the permutations of locations on what the machine holds; each thing that holds locations obeys the laws of the interface, with its locations for its names; the action commutes with that of the renamings; lookups go through it |
+| `FlambdaHeapEquivarianceSpec.v` | The action on the states of the machine of `FlambdaHeapMachineSpec.v`, which leaves the heap alone; a step, a run and a behaviour of that machine commute with it; its refinements are preserved by renaming; its states have a finite support |
+| `FlambdaLocationsSpec.v` | The action of the permutations of locations on what the machine holds, the read record of a state included; each thing that holds locations obeys the laws of the interface, with its locations for its names; the action commutes with that of the renamings; lookups go through it |
 | `FlambdaLocationsPrimitiveSpec.v` | A primitive under a permutation of locations: an equation where it binds no location; every primitive up to the location chosen, where the heap binds the locations of all its entries; that premise is kept; a heap with a hidden entry where it fails |
-| `FlambdaLocationsMachineSpec.v` | A step, a run and a behaviour under a permutation of locations, up to the locations allocated, for a state whose heap binds every location of the state; a step, a run and the action keep that; the same of what a `Let` is to run when a step allocates |
+| `FlambdaLocationsMachineSpec.v` | A step, a run and a behaviour under a permutation of locations, up to the locations allocated, for a state whose heap binds every location of the state; a step, a run and the action keep that; the same of what a `Let` runs |
 | `FlambdaExitWorldActionsSpec.v` | The two actions on what a run leaves at an exit: a state leaves a world exactly when the state renamed leaves the world renamed; refinement with the worlds related, the relation renamed; under a permutation of locations, the world that a state leaves, up to the locations allocated |
 | `FlambdaObserversActionsSpec.v` | The two actions on what may follow a unit: under a renaming, a continuation stands for an observer, no observer tells two worlds apart, and two terms are refined up to what may follow, exactly when the same holds of them renamed; under a renaming also, the two relations of a class of what a continuation may stand for, for every class that a renaming keeps; under one permutation of locations applied to both sides, what the way out compares of two worlds, and nothing of the relations of a class |
 | `FlambdaFreshQuantifierSpec.v`, `FlambdaFreshAbstractionSpec.v` | The quantifier "for all but finitely many names"; `fresh_names`; equal abstractions of one name and of a list of distinct names, said with the quantifier |
@@ -238,11 +247,16 @@ Execution commutes with renaming, with no condition:
 `step (rename_state r s) = rename_result r (step s)`, and the same of
 `run` and of `behaves`. So a rewrite that is correct with one choice of
 names is correct with every other. The action leaves the heap of a
-state as it is, since a cell holds values.
+state as it is, since a cell holds values, and its read record, whose
+entries are at locations. A `Let` of a primitive runs it on that heap
+(`FlambdaSemanticsSpec.exec_named`, by `FlambdaHeapSpec.exec_prim`),
+which is given the values of the arguments, and so no variable and no
+continuation.
 
-The same holds of the machine of `FlambdaHeapMachineSpec.v`, which runs the
-primitives of the heap (`heap_step`, `heap_run`, `heap_behaves`, and
-its refinements `heap_refines` and `heap_expr_refines`).
+The same holds of the machine of `FlambdaHeapMachineSpec.v`, the
+prototype with a heap of its own, which runs the same primitives
+(`heap_step`, `heap_run`, `heap_behaves`, and its refinements
+`heap_refines` and `heap_expr_refines`).
 
 An immutable array may be a value that a primitive makes as the term
 runs (`Value_immutable_array`, made by `Make_immutable_array`). It
@@ -283,35 +297,81 @@ with a permutation. So what a state moved by `p` steps to is what the
 state steps to, moved by some `p'` that agrees with `p` on the
 locations that the heap of the state binds; the same of a run and of
 a behaviour (`FlambdaLocationsMachineSpec.v`). The premise is that the
-heap of the state binds every location of the state, those of an
-entry of the heap that a later write hides among them: a location
-that is in the state and is not bound may be the one that an
-allocation chooses, and `hidden_entry_statement`
-(`FlambdaLocationsPrimitiveSpec.v`) is a heap where a hidden entry
-makes the difference. A step keeps the premise. No step allocates
-yet: a `Let` of a primitive is `eval_prim`, which commutes with the
-action by an equation, as does every primitive of the heap but the
-two that bind a location; so of the machine as it is `p'` is `p`. The
-statements are in the form that stays true when a step runs the
-primitives of the heap.
+heap of the state binds every location of the state, those of its
+read record and those of an entry of the heap that a later write
+hides among them: a location that is in the state and is not bound
+may be the one that an allocation chooses, and
+`hidden_entry_statement` (`FlambdaLocationsPrimitiveSpec.v`) is a heap
+where a hidden entry makes the difference. A step keeps the premise.
+The step that allocates is a `Let` of one of the two primitives that
+bind a location. Every other primitive commutes with the action by an
+equation (`exec_prim_permuted_exactly_statement`), and so does a step
+that is not a `Let`, with `p'` equal to `p` and without the premise:
+that is a lemma of the proofs and is not stated.
+
+Between the runs of two terms on the machine of
+`FlambdaSemanticsSpec.v`, locations are not paired by a
+correspondence. The action of a permutation relates one run and the
+run moved, and some statements take a relation or a class as a
+parameter (the relation of `FlambdaExitWorldSpec.refines_world`, the
+class of `worlds_observed_by` and of `refines_observed_by`). Apart
+from those, the comparisons of the values of two runs of that machine
+that the tree makes relate a location to itself, and to nothing else;
+they are these. The law of the primitives on a heap at a relation
+(`FlambdaHeapSpec.exec_prim_related_statement`) asks it of the
+relation (`relates_locations`), and asks two heaps that bind the same
+locations, entry for entry, to cells that are alike (`heap_alike`);
+two such heaps allocate the same location
+(`fresh_location_keys_statement`). The lifting to symbols relates a
+location to itself only (`FlambdaLiftSpec.value_lifted`), and so does
+the erasure of regions, between a run on the machine of regions and
+the run of the term with its regions dropped
+(`FlambdaRegionsErasureSpec.value_erased`). What may follow a unit
+compares what two steps come to
+(`FlambdaObserversSpec.observed_refines`) by the constants and the
+locations among the values of their exits, which are to be the same at
+the same places (`same_scalars`), and by the locations that the heaps
+of their exits bind, which are to be the same in the same order; that
+no observer tells two worlds apart (`worlds_observed`) asks this of
+every observer, and in particular of the way out
+(`worlds_observed_way_out_statement`). `same_exit`, at which
+`refines_world` is `refines`, asks of two exits the same continuation,
+the same values and the same heap, and compares neither their static
+environments nor their read records; so `refines` asks that the heaps
+of two exits are equal. What the tree has not, for that machine, is a
+comparison of the runs of two terms up to a correspondence between
+their locations. Where one of these comparisons is of the heaps of two
+exits, it asks that they bind the same locations in the same order,
+with its own condition on what the cells hold: that they are alike at
+the relation for `heap_alike`, none for `observed_refines`, and
+equality for `same_exit`, so for `refines`. So where two terms
+allocate in another order, or one allocates a cell that the other does
+not, a comparison of the heaps of their exits holds only where the two
+heaps come to bind the same locations in the same order. What an exit
+is to observe of the heap is decision D40, which is not taken. The
+prototype has, for its own machine, a relation between what two runs
+leave that is up to a correspondence between their locations
+(`FlambdaHeapMachineSpec.outcome_related`).
 
 What a run leaves at an exit (`FlambdaExitWorldSpec.exit_world`: the
-continuation, the values, the heap, and the static environment of the
-last state) has the two actions too (`FlambdaExitWorldActionsSpec.v`).
+continuation, the values, the heap, the read record, and the static
+environment of the last state) has the two actions too
+(`FlambdaExitWorldActionsSpec.v`).
 A renaming renames the continuation and the code of the static
 environment. A state leaves a world exactly when the state renamed
 leaves the world renamed, and refinement with the worlds related
 (`refines_world`) is kept with the relation renamed as the two states
 are; so it is kept at the relation itself where the renaming keeps
 the relation, as every renaming keeps `same_exit`. A permutation of
-locations moves the values, the static environment and the heap. A
-state whose heap binds every location of the state leaves a world
-whose heap binds every location of the world, and the state moved by
-`p` leaves the world moved by some `p'` that agrees with `p` on the
-locations that the heap of the state binds. Nothing is stated of
-`refines_world` under a permutation of locations: `same_exit`
-compares values and heaps by equality, and one permutation applied to
-both worlds keeps it, where two independent permutations need not.
+locations moves the values, the static environment, the heap and the
+read record. A state whose heap binds every location of the state
+leaves a world whose heap binds every location of the world, and the
+state moved by `p` leaves the world moved by some `p'` that agrees
+with `p` on the locations that the heap of the state binds. Nothing is
+stated of `refines_world` under a permutation of locations:
+`same_exit` compares values and heaps by equality, and one
+permutation applied to both worlds keeps it, where two independent
+permutations need not.
 
 What may follow a unit has the two actions as well
 (`FlambdaObserversActionsSpec.v`, on the definitions of
@@ -387,10 +447,8 @@ it is the same of the two moved.
 Nothing is stated of `observed_refines` nor of `worlds_observed`
 under a permutation of locations. What is proved of a run gives each
 of the two runs its exit up to a second permutation of its own, the
-comparison is by equality, and a handler that is an observer may be
-written with a primitive that allocates, though no step of the
-machine of `FlambdaSemanticsSpec.v` allocates yet. Whether the two
-hold is not said, either way.
+comparison is by equality, and a handler that is an observer may
+allocate. Whether the two hold is not said, either way.
 
 ## 5. The same up to bound names
 
@@ -508,7 +566,9 @@ an instance of the interface for that one sort, with `=` for its
 equality and all its locations for its names
 (`FlambdaLocationsSpec.v`). Nothing binds a location, so the names of
 a thing are its support, and there is no equality up to bound names
-to define.
+to define. The read record of a state holds locations and is acted on
+with the state (`permute_reads`, `locations_of_reads`); it has no
+statement of its own.
 
 ## 7. What is owed for each function on terms
 
@@ -969,9 +1029,40 @@ renamed with it, what it answers of the term
 `exits_plain_knowing_equivariant_statement`, in `FlambdaLiftSpec.v`);
 nothing is stated of two terms that are the same up to their bound
 names.
-`FlambdaLiftObservedSpec.with_lifting_observed`, which the check
-does not apply and which is `with_lifting` without the test of the
-exits, is stated beside it: the same equation
+Each of the four functions that make a lifting of a unit (`lift_unit`,
+`FlambdaLiftFromCodeSpec.lift_from_code_unit`,
+`FlambdaLiftFromArmsSpec.lift_to_head_unit`,
+`FlambdaLiftAroundSpec.lift_around_unit`) has one test more, after
+that of the exits: it lifts nothing in the term that it is given if
+that term has a primitive of the heap in a `Let` of the term, of a
+handler or of code, code that no run reaches included
+(`FlambdaHeapFreeSpec.expr_free_of_heap`; a primitive of the heap is
+one of the four that allocate or store,
+`FlambdaHeapSpec.named_changes_heap`, and a primitive that only reads
+a cell is not refused). It is the guard that the liftings have for
+now: a limit of them pending decision D40, and not a property that a
+unit is meant to have. It is not a condition of the rewrites
+themselves. The test looks at no name, and answers of a term renamed
+what it answers of the term (`expr_free_of_heap_rename_statement`, in
+its own file). The statements under renaming of the four files are of
+the rewrites and of the tests of the exits, name none of the four
+functions, and keep their text; those of what calls the four functions
+(`FlambdaValidatorEquivarianceSpec.v`,
+`FlambdaValidateImportsRenameSpec.v`,
+`FlambdaValidateReadingRenameSpec.v`, `FlambdaValidateKnowingSpec.v`,
+`FlambdaStaticsScopeSpec.v`) keep theirs. The test has a second use,
+which is not a limit:
+`FlambdaRegionsInvariantSpec.no_heap_primitive_no_let_not_run_statement`
+takes it of a term, and `statics_free_of_heap` of the static
+environment, among its premises. That use does not depend on decision
+D40. The tests of a defining expression by its primitive alone
+(`named_changes_heap`, `named_reads_heap`, and `stable_prim` of a
+primitive, in `FlambdaHeapSpec.v`) read no name; nothing is stated of
+them under renaming, and what uses them has it in its proofs.
+`FlambdaLiftObservedSpec.with_lifting_observed`, which
+`validate_unit` does not apply and which is `with_lifting` without
+the test of the exits and without that of the heap, is stated beside
+it: the same equation
 (`with_lifting_observed_equivariant_statement`), and it keeps scope
 (`FlambdaStaticsScopeSpec.with_lifting_observed_keeps_scope_statement`).
 Of a lifting the two
@@ -1062,7 +1153,15 @@ code of the term before is closed
 (`validate_unit_holds_from_equivariant_statement`,
 `validate_unit_knowing_holds_from_equivariant_statement`). Nothing is
 stated of `statics_free_of`, which reads a static environment and no
-term. In these statements, and in those below of the second check and
+term, nor of `heap_free_of`, which reads a heap: each says, of a set
+of symbols and code ids (in the validation, the static names that it
+removes), that none occurs in what it reads, which is the code and
+the values that a static environment holds for the first, and the
+values of the cells of a heap, the entries that a later write hides
+included, for the second (`FlambdaUnusedStaticsSpec.v`).
+`FlambdaHeapFreeSpec.statics_free_of_heap` is another test, of the
+code of a static environment: that it has no primitive of the heap.
+In these statements, and in those below of the second check and
 of the validation asked with the known arrays read, what is given that
 holds continuations is renamed with the terms, by the first renaming
 where there are two: the liftings, the continuations given for the
@@ -1159,8 +1258,9 @@ correct does not rest on this.
 A second check of a unit
 (`FlambdaValidateRelatedSpec.validate_unit_related`) follows the two
 comparisons of lifted terms of `validate_unit`, with the liftings made
-without the test of the exits (`lifted_in_turn_observed`, which ends
-as `lifted_in_turn` does). Its two statements are about what may
+without the test of the exits and without that of the heap
+(`lifted_in_turn_observed`, made of `with_lifting_observed`, which
+ends as `lifted_in_turn` does). Its two statements are about what may
 follow a unit, over the whole class `observer slots` at the value
 slots given, and over no smaller one. The check answers of the two
 units renamed what it answers of the two units
@@ -1620,10 +1720,12 @@ Owed:
   says, statement by statement, what was replaced, what is left and
   why, and how to go back.
 - The functions listed as owed in section 7.
-- A step under a permutation of locations is proved of the machine as
-  it is, in which no step allocates. The statements are in the form
-  that stays true when one does (section 4); the proofs of the case
-  of a `Let` are owed again then.
+- A step under a permutation of locations is proved of the machine
+  whose `Let` allocates (section 4): of one run and the run moved. What
+  is not done, for that machine, is a comparison of the runs of two
+  terms up to a correspondence between their locations (section 4, the
+  paragraph after that one); the prototype has one for its own
+  machine.
 - The machine of regions (`FlambdaRegionsSpec.v`, with its invariant,
   `FlambdaRegionsInvariantSpec.v`, the erasure of regions,
   `FlambdaRegionsErasureSpec.v`, what is proved of its calls,
@@ -1635,7 +1737,29 @@ Owed:
   of `erase` is of runs, in `FlambdaRegionsErasureSpec.v`,
   `FlambdaRegionsCallsSpec.v`, `FlambdaRegionsCheckSpec.v` and
   `FlambdaRegionsCheckSoundSpec.v`, and nothing in them is about a
-  renaming). `erase` is not a function of
+  renaming).
+  The machine does not run a `Let` that needs the heap (decision D53;
+  `FlambdaRegionsSpec.named_needs_heap`, which the step asks of a
+  `Let` that is not of a primitive of regions: a `Let` of a primitive
+  of the heap, or of another primitive one of whose arguments has a
+  location for value). The test of the simples of the `Let` is made
+  first, and a fault there is what the step comes to. Where that test
+  passes, the step has a result of its own, `Region_let_not_run`,
+  which is not a step, not an exit and not a fault, and the run ends
+  there. `named_needs_heap` is a test of the defining expression at
+  the variables of the state: it is true of a primitive of the heap
+  whatever it is given, and of another primitive it evaluates the
+  arguments, so it reads the names of the term through their values
+  and is not in general determined by the syntax alone. A run from the
+  first state of a term never ends so if the term and the code of the
+  static environment have no primitive of the heap
+  (`FlambdaHeapFreeSpec.expr_free_of_heap`, `statics_free_of_heap`,
+  the test of the liftings) and no value of the static environment
+  holds a location
+  (`FlambdaRegionsInvariantSpec.no_heap_primitive_no_let_not_run_statement`).
+  No step of the machine changes the heap or the read record of its
+  state (`region_step_keeps_memory_statement`).
+  `erase` is not a function of
   terms up to bound names: it drops the `Let` of a `Local_allocation`
   that binds the name of its argument and makes an alias of any other,
   so of two terms that differ in that bound name the erased terms differ
@@ -1732,6 +1856,29 @@ Owed:
   between the tool and those two statements is no statement: the reading
   of the text, the conversion, and that the tool calls these functions
   on these terms (the head of `FlambdaRegionsCheckSoundSpec.v`).
+  Since decision D53 the run of a term on the machine of regions may
+  end at a `Let` that the machine does not run, and the four
+  statements are of the run up to there. The two on the exits say it
+  in their conclusion: an exit of the term before with its regions is
+  an exit of the term after with its regions, or the run of the term
+  after comes to such a `Let`. The two others conclude `region_safe`
+  (`FlambdaRegionsCheckSpec.v`), which is that the run is never
+  undefined, and which holds of a run that ends at such a `Let`, with
+  nothing checked from there on. So the name `region_safe`, and the
+  names of the three statements that conclude it
+  (`checked_after_safe_statement`,
+  `refined_and_checked_safe_statement`,
+  `validated_and_checked_safe_statement`), say more than the
+  definition gives; a `CR` at the definition says so, and a rename is
+  to be considered when decision D53 is lifted. Of a run from the
+  first state of a term with no primitive of the heap, in a static
+  environment whose code has none and whose values hold no location,
+  `no_heap_primitive_no_let_not_run_statement` excludes that end:
+  there the case "the run of the term after comes to such a `Let`" of
+  the two statements on the exits does not arise, and `region_safe` is
+  of a run that only steps or exits. That statement is of that end
+  alone, under those three premises; it is no statement of safety
+  beside the four.
   `FlambdaRegionsCheckedSpec.regions_given`, by which the soundness is
   proved, is a test of a state that reads one name, the continuation of
   a jump, which it resolves.
