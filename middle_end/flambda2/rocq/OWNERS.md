@@ -39,7 +39,8 @@ Owner: C0. Phase 0 was done as C0, and what it created is C0's.
   `middle_end/flambda2/rocq/FlambdaPrimitiveSpec.v`. The file is C1's,
   and a primitive is added there without asking; a change to the
   signature or to a law is a core change
-- `middle_end/flambda2/rocq/FlambdaContext*`
+- `middle_end/flambda2/rocq/FlambdaContext*` (but not
+  `FlambdaContextMemoryProofs.v`, which is C4's)
 - `middle_end/flambda2/rocq/FlambdaWellFormed*`
 - `middle_end/flambda2/rocq/FlambdaMap*` (Phase 0: finite maps and sets
   of names)
@@ -195,6 +196,11 @@ design out; that is the request, not the change.
     `middle_end/flambda2/rocq/FlambdaHeapMachineProofs.v` (the
     prototype: a machine that runs those primitives, beside the machine
     that exists; `FlambdaHeapEquivariance*` are N1's)
+  - `middle_end/flambda2/rocq/FlambdaContextMemoryProofs.v` (a handler
+    that refines another where it is entered, under a condition on the
+    static environment, the heap and the read record that a step and
+    the executor keep; lemmas only, for the passes that keep a fact
+    about what a cell holds)
   - `middle_end/flambda2/rocq/FlambdaExitWorldSpec.v` and
     `middle_end/flambda2/rocq/FlambdaExitWorldProofs.v` (what a run
     leaves at an exit, with the static environment of its last state,
