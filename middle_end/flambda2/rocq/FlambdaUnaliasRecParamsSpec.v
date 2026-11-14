@@ -32,8 +32,8 @@
    This file is to be reviewed: [unalias_rec_param], [unalias_rec_from]
    and [unalias_rec_params], which are extracted and run by the
    validation of middle_end/flambda2/tests/semantics/
-   (FlambdaValidateSpec.tidy_expr_before and tidy_expr_after apply the
-   pass), and the statement.
+   (FlambdaValidateSpec.tidy_expr_before, tidy_expr_after and
+   arms_expr_before apply the pass), and the statement.
 
    FlambdaUnaliasParamsSpec.unalias_params takes away a parameter of a
    non-recursive continuation that every application gives one

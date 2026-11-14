@@ -339,7 +339,8 @@ Proof.
     [ apply merge_tables_refines | apply normalise_code_params_refines ].
 Qed.
 
-(* What follows a round of the first phase: the continuations of a
+(* What follows a round of the first phase: the parameters of loops
+   that every turn passes on taken away, the continuations of a
    handler bound outside it, and the applications made to go to the
    arms. *)
 Lemma arms_expr_before_refines (e : expr) :
@@ -350,7 +351,10 @@ Proof.
     [ | apply expr_equivalent_refines, remove_unused_conts_equivalent ].
   eapply expr_refines_trans; [ | apply forward_applications_refines ].
   eapply expr_refines_trans; [ | apply forward_to_arms_refines ].
-  apply expr_equivalent_refines, lift_handler_conts_equivalent.
+  eapply expr_refines_trans;
+    [ | apply expr_equivalent_refines, lift_handler_conts_equivalent ].
+  apply expr_equivalent_refines,
+    FlambdaUnaliasRecParamsProofs.unalias_rec_params_equivalent.
 Qed.
 
 Lemma arms_code_before_refines (body : expr) :

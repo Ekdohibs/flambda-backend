@@ -74,6 +74,8 @@ From OxCamlFlambda2 Require Import FlambdaMergeTablesSpec
 From OxCamlFlambda2Types Require Import FlambdaTypesSpec FlambdaAliasesSpec.
 From OxCamlFlambda2 Require FlambdaShadowParamsNamesProofs
   FlambdaTwinParamsNamesProofs.
+From OxCamlFlambda2 Require Import FlambdaUnaliasRecParamsSpec.
+From OxCamlFlambda2 Require FlambdaUnaliasRecParamsNamesProofs.
 Import ListNotations.
 
 Lemma rename_apart_scoped (e : expr) : scoped e (rename_apart e).
@@ -236,6 +238,9 @@ Qed.
 Theorem normalise_params_round_keeps_scope :
   normalise_params_round_keeps_scope_statement.
 Proof. apply keeps_scope_intro, normalise_params_round_scoped. Qed.
+
+#[export] Hint Resolve
+  FlambdaUnaliasRecParamsNamesProofs.unalias_rec_params_scoped : scoped.
 
 (* What follows that round in the first phase, and the two together. *)
 Lemma arms_expr_before_scoped (e : expr) : scoped e (arms_expr_before e).

@@ -741,10 +741,24 @@ Definition normalise_params_round (e : expr) : expr :=
    that the round is still what Simplify does to the parameters of
    continuations: the examples of FlambdaUnboxVariantsExamplesSpec.v
    state that rounds of it, or of [normalise_expr_params] that it is
-   made of, take a body before to the body that Simplify gave. *)
+   made of, take a body before to the body that Simplify gave.
+
+   Before them, a parameter of a loop that every turn passes on as it
+   is, and that the loop is given one variable for, is taken away,
+   and the handler begins with a [Let] of it to that variable
+   (FlambdaUnaliasRecParamsSpec.unalias_rec_params, an equivalence,
+   which the tidying applies to both terms). The round above binds
+   such a parameter where the variable is bound nowhere in the
+   [Let_cont] ([bind_aliased_params]), and so leaves one that is
+   given the variable of its own name. Every parameter of the loop
+   that FlambdaLoopifySpec.loopify_unit puts in the body of code is
+   given so: the loop has the parameters of the code and is entered
+   with them, and the rounds of the first phase make no names
+   apart. *)
 Definition arms_expr_before (e : expr) : expr :=
   remove_unused_conts
-    (forward_applications (forward_to_arms (lift_handler_conts e))).
+    (forward_applications
+       (forward_to_arms (lift_handler_conts (unalias_rec_params e)))).
 
 Definition arms_code_before (body : expr) : expr :=
   arms_expr_before (rewrite_rec_handlers arms_expr_before body).

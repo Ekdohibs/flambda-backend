@@ -194,7 +194,8 @@ let normalise_params_round e =
 
 let arms_expr_before e =
   remove_unused_conts
-    (forward_applications (forward_to_arms (lift_handler_conts e)))
+    (forward_applications
+       (forward_to_arms (lift_handler_conts (unalias_rec_params e))))
 
 (** val arms_code_before : expr -> expr **)
 
