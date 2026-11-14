@@ -208,16 +208,10 @@ Qed.
    (FlambdaValidateSpec.normalise_lifted_calling): the test of a round
    is that of one round of [normalise_lifted], asked of the term that
    the round is given. *)
-Lemma known_calling_free_in_equivariant (r : renaming) (statics : static_env)
-    (calling : bool) (rounds : nat) (avoid : list continuation)
-    (kept : list code_id) :
-  ∀ e : expr,
-    code_closed e = true ->
-    known_calling_free_in statics calling rounds
-      (map (rename_continuation r) avoid) kept (rename_expr r e)
-    = known_calling_free_in statics calling rounds avoid kept e.
+Theorem known_calling_free_in_equivariant :
+  known_calling_free_in_equivariant_statement.
 Proof.
-  revert r.
+  intros r statics calling rounds avoid kept. revert r.
   induction rounds as [ | rounds IH]; intros r e Hclosed; [ reflexivity | ].
   cbn [known_calling_free_in]. cbv zeta.
   rewrite (known_free_in_equivariant r statics 1 avoid kept e Hclosed).
@@ -234,15 +228,10 @@ Proof.
   reflexivity.
 Qed.
 
-Lemma normalise_lifted_calling_free_in_equivariant (r : renaming)
-    (statics : static_env) (calling : bool) (rounds : nat)
-    (avoid : list continuation) (kept : list code_id) (e : expr) :
-  code_closed e = true ->
-  normalise_lifted_calling_free_in statics calling rounds
-    (map (rename_continuation r) avoid) kept (rename_expr r e)
-  = normalise_lifted_calling_free_in statics calling rounds avoid kept e.
+Theorem normalise_lifted_calling_free_in_equivariant :
+  normalise_lifted_calling_free_in_equivariant_statement.
 Proof.
-  intros Hclosed.
+  intros r statics calling rounds avoid kept e Hclosed.
   unfold normalise_lifted_calling_free_in. cbv zeta.
   rewrite (params_phase_equivariant rounds r e).
   destruct (params_phase_scope rounds e Hclosed) as (Hclosed1 & _ & _).
