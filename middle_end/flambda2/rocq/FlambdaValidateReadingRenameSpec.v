@@ -85,15 +85,31 @@
      what the first does, which is what
      FlambdaValidatorEquivarianceSpec.validate_unit_renamed_alike_statement
      asks.
+   - The tests from the imports. A caller that has a unit with imports
+     asks, of the verdict that a check gives, whether it holds of the
+     unit run from the static environment of its imports
+     (FlambdaValidateImportsSpec.verdict_holds_from and
+     [verdict_knowing_holds_from]), and asks it of the term that
+     [before_read] gives, as the statements of
+     FlambdaValidateReadingSpec.v with the imports have it. Each test,
+     of the verdict that its check gives, answers the same of a pair
+     and of the pair renamed, where the code of the term before is
+     closed: the form of the two laws of
+     FlambdaValidateImportsRenameSpec.v for [validate_unit] and for
+     the second asking
+     ([validate_unit_holds_from_equivariant_statement] and the one
+     after it). The loops and the liftings are renamed with the
+     terms, and every other argument, the static environment among
+     them, is the same on both sides; nothing is asked of the term
+     after.
 
    What is not said. Of a term before with open code only the
    equation of the read is said: the laws of scope, the laws up to
-   the names made and those of the two checks ask that its code is
-   closed. Nothing is said here of the tests from the imports on the term
-   that [before_read] gives
-   (FlambdaValidateImportsSpec.verdict_holds_from): a law of those
-   tests under renaming, where there is one, applies to that term by
-   [before_read_renamed_statement].
+   the names made, those of the two checks and those of the two tests
+   ask that its code is closed. The statements take the loops and the
+   liftings as they are given: nothing is said of how a caller finds
+   them, nor that what it finds for the term renamed is what it finds
+   for the term, renamed with it.
 
    The proofs are in FlambdaValidateReadingRenameProofs.v, which needs
    no review. *)
@@ -101,10 +117,11 @@
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
-  FlambdaNominalSpec FlambdaBindersSpec FlambdaUnusedStaticsSpec
-  FlambdaLoopifySpec FlambdaLiftSpec FlambdaValidateSpec
-  FlambdaValidatorEquivarianceSpec
-  FlambdaValidateKnowingSpec FlambdaValidateReadingSpec.
+  FlambdaSemanticsSpec FlambdaNominalSpec FlambdaBindersSpec
+  FlambdaUnusedStaticsSpec FlambdaLoopifySpec FlambdaLiftSpec
+  FlambdaValidateSpec FlambdaValidatorEquivarianceSpec
+  FlambdaValidateKnowingSpec FlambdaValidateImportsSpec
+  FlambdaValidateReadingSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -225,3 +242,49 @@ Definition validate_unit_knowing_reading_equivariant_statement : Prop :=
       (rename_expr r before) (rename_expr r after)
     = validate_unit_knowing_reading rounds unused slots G Ls kept before
         after.
+
+(* ======================================================================== *)
+(* The verdict that the checks give                                         *)
+(* ======================================================================== *)
+
+(* Whether the verdict that [validate_unit_reading] gives of two terms
+   holds of the unit run from a static environment, asked of the term
+   that [before_read] gives: the same of the two terms renamed, the
+   names given for the loops and the liftings being renamed with them,
+   where the code of the term before is closed. *)
+Definition validate_unit_reading_holds_from_equivariant_statement : Prop :=
+  ∀ (r : renaming) (statics : static_env) (rounds : nat) (unused : dropped)
+    (slots : list value_slot) (G : loopified) (Ls : list lifting)
+    (kept : list code_id) (before after : expr),
+    code_closed before = true ->
+    verdict_holds_from statics rounds unused slots (rename_loopified r G)
+      (map (rename_lifting r) Ls) kept
+      (before_read rounds (rename_loopified r G)
+         (map (rename_lifting r) Ls) kept (rename_expr r before))
+      (rename_expr r after)
+      (validate_unit_reading rounds unused slots (rename_loopified r G)
+         (map (rename_lifting r) Ls) kept (rename_expr r before)
+         (rename_expr r after))
+    = verdict_holds_from statics rounds unused slots G Ls kept
+        (before_read rounds G Ls kept before) after
+        (validate_unit_reading rounds unused slots G Ls kept before after).
+
+(* The same of the second asking. *)
+Definition validate_unit_knowing_reading_holds_from_equivariant_statement : Prop
+  :=
+  ∀ (r : renaming) (statics : static_env) (rounds : nat) (unused : dropped)
+    (slots : list value_slot) (G : loopified) (Ls : list lifting)
+    (kept : list code_id) (before after : expr),
+    code_closed before = true ->
+    verdict_knowing_holds_from statics rounds unused slots
+      (rename_loopified r G) (map (rename_lifting r) Ls) kept
+      (before_read rounds (rename_loopified r G)
+         (map (rename_lifting r) Ls) kept (rename_expr r before))
+      (rename_expr r after)
+      (validate_unit_knowing_reading rounds unused slots
+         (rename_loopified r G) (map (rename_lifting r) Ls) kept
+         (rename_expr r before) (rename_expr r after))
+    = verdict_knowing_holds_from statics rounds unused slots G Ls kept
+        (before_read rounds G Ls kept before) after
+        (validate_unit_knowing_reading rounds unused slots G Ls kept
+           before after).

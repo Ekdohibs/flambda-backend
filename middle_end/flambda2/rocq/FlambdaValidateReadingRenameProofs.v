@@ -44,7 +44,9 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaArrayLoadScopeProofs FlambdaKeepsScopeSpec FlambdaKeepsScopeProofs
   FlambdaValidateSpec FlambdaValidatorEquivarianceSpec
   FlambdaValidatorEquivarianceProofs FlambdaValidateKnowingSpec
-  FlambdaValidateKnowingProofs FlambdaValidateReadingSpec
+  FlambdaValidateKnowingProofs FlambdaSemanticsSpec
+  FlambdaValidateImportsSpec FlambdaValidateImportsRenameSpec
+  FlambdaValidateImportsRenameProofs FlambdaValidateReadingSpec
   FlambdaValidateReadingRenameSpec.
 From OxCamlFlambda2Types Require FlambdaSimplifyCarriedSpec.
 Import ListNotations.
@@ -400,6 +402,51 @@ Proof.
     as (r1 & Halike & Havoid & Heq).
   rewrite Heq.
   apply validate_unit_knowing_renamed_alike.
+  - exact (proj1 (before_read_keeps_scope rounds G Ls kept before Hclosed)).
+  - exact Halike.
+  - exact Havoid.
+Qed.
+
+(* ======================================================================== *)
+(* The verdict that the checks give                                         *)
+(* ======================================================================== *)
+
+(* The test of the first check is
+   FlambdaValidateImportsRenameProofs.verdict_holds_from_renamed_alike
+   of the term that [before_read] gives, which for a renamed term is
+   that term under a second renaming ([before_read_renamed]); the
+   verdict is the same by the law of the check. *)
+Theorem validate_unit_reading_holds_from_equivariant :
+  validate_unit_reading_holds_from_equivariant_statement.
+Proof.
+  intros r statics rounds unused slots G Ls kept before after Hclosed.
+  rewrite
+    (validate_unit_reading_equivariant r rounds unused slots G Ls kept
+       before after Hclosed).
+  destruct (before_read_renamed r rounds G Ls kept before Hclosed)
+    as (r1 & Halike & Havoid & Heq).
+  rewrite Heq.
+  apply verdict_holds_from_renamed_alike.
+  - exact (proj1 (before_read_keeps_scope rounds G Ls kept before Hclosed)).
+  - exact Halike.
+  - exact Havoid.
+Qed.
+
+(* The same of the second asking, whose test has the same law for a
+   term before under a second renaming: the theorem
+   FlambdaValidateImportsRenameProofs.verdict_knowing_holds_from_renamed_alike
+   of that file. *)
+Theorem validate_unit_knowing_reading_holds_from_equivariant :
+  validate_unit_knowing_reading_holds_from_equivariant_statement.
+Proof.
+  intros r statics rounds unused slots G Ls kept before after Hclosed.
+  rewrite
+    (validate_unit_knowing_reading_equivariant r rounds unused slots G Ls
+       kept before after Hclosed).
+  destruct (before_read_renamed r rounds G Ls kept before Hclosed)
+    as (r1 & Halike & Havoid & Heq).
+  rewrite Heq.
+  apply verdict_knowing_holds_from_renamed_alike.
   - exact (proj1 (before_read_keeps_scope rounds G Ls kept before Hclosed)).
   - exact Halike.
   - exact Havoid.
