@@ -68,12 +68,14 @@
    ask a test of the first sort of some of them: [known_free_in] and
    [normalise_lifted_free_in], each with its twin for the rounds that
    also call directly the closures that a [Let] makes
-   ([known_calling_free_in], [normalise_lifted_calling_free_in]),
-   [demote_and_tidy_known_free_in], [lifted_free_in],
-   [statics_first_free_in], and the tests of a verdict. Some of them
-   go again through rounds that make names
+   ([known_calling_free_in], [normalise_lifted_calling_free_in]) and
+   its twin for the rounds that also use what [my_closure] is known
+   to be from its code ([known_own_free_in],
+   [normalise_lifted_own_free_in]), [demote_and_tidy_known_free_in],
+   [lifted_free_in], [statics_first_free_in], and the tests of a
+   verdict. Some of them go again through rounds that make names
    (FlambdaRenameApartSpec.rename_apart_avoiding): [known_free_in],
-   [normalise_lifted_free_in], their two twins, [lifted_free_in],
+   [normalise_lifted_free_in], their four twins, [lifted_free_in],
    [lifted_holds_from] and, with it, [verdict_holds_from] and
    [verdict_knowing_holds_from]. The terms that those compute of a
    renamed term are those that they compute of the term under another
@@ -200,6 +202,26 @@ Definition normalise_lifted_calling_free_in_equivariant_statement : Prop :=
     normalise_lifted_calling_free_in statics calling rounds
       (map (rename_continuation r) avoid) kept (rename_expr r e)
     = normalise_lifted_calling_free_in statics calling rounds avoid kept e.
+
+(* The same of the tests of the rounds that also use, where a lifting
+   asks for it, what [my_closure] is known to be from its code
+   (FlambdaValidateSpec.normalise_lifted_own), whether or not that or
+   the calls are asked. *)
+Definition known_own_free_in_equivariant_statement : Prop :=
+  ∀ (r : renaming) (statics : static_env) (calling own : bool) (rounds : nat)
+    (avoid : list continuation) (kept : list code_id) (e : expr),
+    code_closed e = true ->
+    known_own_free_in statics calling own rounds
+      (map (rename_continuation r) avoid) kept (rename_expr r e)
+    = known_own_free_in statics calling own rounds avoid kept e.
+
+Definition normalise_lifted_own_free_in_equivariant_statement : Prop :=
+  ∀ (r : renaming) (statics : static_env) (calling own : bool) (rounds : nat)
+    (avoid : list continuation) (kept : list code_id) (e : expr),
+    code_closed e = true ->
+    normalise_lifted_own_free_in statics calling own rounds
+      (map (rename_continuation r) avoid) kept (rename_expr r e)
+    = normalise_lifted_own_free_in statics calling own rounds avoid kept e.
 
 (* The test of the liftings made in turn. The liftings and the
    continuations to avoid are renamed by [r], and the term by a

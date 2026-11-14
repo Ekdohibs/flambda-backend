@@ -260,13 +260,8 @@ Qed.
    (FlambdaValidateSpec.normalise_lifted_own): the test of a round is
    again that of one round of [normalise_lifted], asked of the term
    that the round is given. *)
-Lemma known_own_free_in_equivariant :
-  ∀ (r : renaming) (statics : static_env) (calling own : bool) (rounds : nat)
-    (avoid : list continuation) (kept : list code_id) (e : expr),
-    code_closed e = true ->
-    known_own_free_in statics calling own rounds
-      (map (rename_continuation r) avoid) kept (rename_expr r e)
-    = known_own_free_in statics calling own rounds avoid kept e.
+Theorem known_own_free_in_equivariant :
+  known_own_free_in_equivariant_statement.
 Proof.
   intros r statics calling own rounds avoid kept. revert r.
   induction rounds as [ | rounds IH]; intros r e Hclosed; [ reflexivity | ].
@@ -285,13 +280,8 @@ Proof.
   reflexivity.
 Qed.
 
-Lemma normalise_lifted_own_free_in_equivariant :
-  ∀ (r : renaming) (statics : static_env) (calling own : bool) (rounds : nat)
-    (avoid : list continuation) (kept : list code_id) (e : expr),
-    code_closed e = true ->
-    normalise_lifted_own_free_in statics calling own rounds
-      (map (rename_continuation r) avoid) kept (rename_expr r e)
-    = normalise_lifted_own_free_in statics calling own rounds avoid kept e.
+Theorem normalise_lifted_own_free_in_equivariant :
+  normalise_lifted_own_free_in_equivariant_statement.
 Proof.
   intros r statics calling own rounds avoid kept e Hclosed.
   unfold normalise_lifted_own_free_in. cbv zeta.
