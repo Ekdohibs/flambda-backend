@@ -311,6 +311,7 @@ module Lift = Flambda2_rocq_semantics.FlambdaLiftSpec
 module Lift_observed = Flambda2_rocq_semantics.FlambdaLiftObservedSpec
 module Validate_related = Flambda2_rocq_semantics.FlambdaValidateRelatedSpec
 module Validate_reading = Flambda2_rocq_semantics.FlambdaValidateReadingSpec
+module Validate_inlining = Flambda2_rocq_semantics.FlambdaValidateInliningSpec
 module My_closure = Flambda2_rocq_semantics.FlambdaMyClosureSpec
 module Closure_of_code = Flambda2_rocq_semantics.FlambdaClosureOfCodeSpec
 module Unused_slots = Flambda2_rocq_semantics.FlambdaUnusedSlotsSpec
@@ -1023,6 +1024,17 @@ let directly_called_code : Code_id.t list ref = ref []
 
 let known_arity_call_met : bool ref = ref false
 
+(* The code whose body is being converted, if any; and the direct calls
+   converted so far that Simplify is told to unroll or always to inline: each
+   with the code that it stands in, the call as it was converted, its code, and
+   how many times (once for a call always to inline). They are for the guess of
+   the calls to inline first ([inlining_guess]). *)
+let current_code : Code_id.t option ref = ref None
+
+let marked_calls :
+    (Code_id.t option * Model.apply_expr * Model.code_id * int) list ref =
+  ref []
+
 (* The region variable that a simple is, if it is one, kept or dropped. *)
 let region_variable_of (s : Simple.t) : Variable.t option =
   Simple.pattern_match' s
@@ -1442,7 +1454,11 @@ and convert_let (pattern : Bound_pattern.t) (defining_expr : Flambda.Named.t)
           if Loopify_attribute.should_loopify (Code0.loopify code)
           then loopify_marked := code_id :: !loopify_marked;
           let id = Code_ids.find code_id in
-          Model.Bind_code (id, convert_code code) :: bindings)
+          let outer = !current_code in
+          current_code := Some code_id;
+          let converted = convert_code code in
+          current_code := outer;
+          Model.Bind_code (id, converted) :: bindings)
         ~deleted_code:(fun bindings code_id ->
           deleted_code := code_id :: !deleted_code;
           if List.exists (Code_id.equal code_id) !superseded_code
@@ -1681,8 +1697,27 @@ and convert_apply (apply : Apply_expr.t) : Model.expr =
       ap_return_arity = return_arity
     }
   in
+  (* A direct call that is marked to be unrolled or always inlined is noted as
+     it is converted ([marked_calls]). *)
+  let noted (ap : Model.apply_expr) : Model.apply_expr =
+    (match Apply_expr.call_kind apply with
+    | Function { function_call = Direct code_id; _ } -> (
+      let note times =
+        marked_calls
+          := (!current_code, ap, Code_ids.find code_id, times) :: !marked_calls
+      in
+      match Apply_expr.inlined apply with
+      | Unroll (n, _) -> note n
+      | Always_inlined _ -> note 1
+      | Hint_inlined | Forward_inlined | Never_inlined | Default_inlined -> ())
+    | Function
+        { function_call = Indirect_known_arity _ | Indirect_unknown_arity; _ }
+    | Method _ | C_call _ | Effect _ ->
+      ());
+    ap
+  in
   match Apply_expr.continuation apply with
-  | Return k -> Model.Apply (returning_to (Continuations.find k))
+  | Return k -> Model.Apply (noted (returning_to (Continuations.find k)))
   | Never_returns ->
     (* CR mshinwell: a call that never returns, of whatever kind that is
        converted (a method call, a C call and an effect are refused above), is
@@ -1698,7 +1733,8 @@ and convert_apply (apply : Apply_expr.t) : Model.expr =
     let handler =
       Model.Handler (params, Model.make_handler_metadata kinds, Model.Invalid)
     in
-    Model.Let_cont_non_recursive (k, handler, Model.Apply (returning_to k))
+    Model.Let_cont_non_recursive
+      (k, handler, Model.Apply (noted (returning_to k)))
 
 (* ---- Running ---------------------------------------------------------- *)
 
@@ -1975,6 +2011,8 @@ let check_calls_of_tupled_code () =
 let convert_unit (unit : Flambda_unit.t) : converted =
   tupled_code := [];
   directly_called_code := [];
+  current_code := None;
+  marked_calls := [];
   known_arity_call_met := false;
   (* CR mshinwell: the region of the unit is dropped; see [region_variables]. *)
   drop_region_variable (Flambda_unit.toplevel_my_alloc_region unit);
@@ -4455,6 +4493,12 @@ let print_prefix (prefix : prefix) =
    whose older version is still used. The comparison should relate code ids
    itself; see the CR in middle_end/flambda2/rocq/FlambdaCompareSpec.v for what
    that takes. *)
+(* The marked calls of the unit before ([marked_calls]), as its conversion
+   left them, each with the number of the code that it stands in. *)
+let before_marked :
+    (Model.code_id option * Model.apply_expr * Model.code_id * int) list ref =
+  ref []
+
 let convert_both ~(units : (Compilation_unit.t * Digest.t) list)
     (before : Flambda_unit.t) (after : Flambda_unit.t) =
   let loader =
@@ -4463,6 +4507,11 @@ let convert_both ~(units : (Compilation_unit.t * Digest.t) list)
   superseded_code := [];
   let has_tupled_code () = match !tupled_code with [] -> false | _ -> true in
   let before_converted = convert_unit before in
+  before_marked
+    := List.map
+         (fun (place, ap, callee, times) ->
+           Option.map Code_ids.find place, ap, callee, times)
+         !marked_calls;
   let before_has_tupled_code = has_tupled_code () in
   Continuations.alias
     (Flambda_unit.return_continuation after)
@@ -4730,6 +4779,217 @@ type 'banned search_kept =
     search_answer :
       Validate.validation * Model.expr * string * bool * Model.expr
   }
+
+(* ---- Calls that Simplify inlined where they stand ------------------------ *)
+
+(* The guess for FlambdaValidateInliningSpec.validate_unit_inlining: the calls
+   of the term before to inline before the validation is asked, by their places,
+   one choice for each application of FlambdaInlineCallsAtSpec.inline_calls_at.
+   The model checks nothing of it and needs nothing of it: what the two
+   functions accept is proved whatever the choices are. A guess that does not
+   help may miss a validation; no validation rests on a guess.
+
+   [marked]: the direct calls that the term before marks to be unrolled or
+   always inlined ([marked_calls]). The first choice has the call itself; each
+   choice after it, for as many as the call is marked for and eight at most
+   ([inlining_choices]), has the calls of the same code that the inlining of the
+   choice before brought under it.
+
+   [differing]: the code that the term after still calls directly somewhere, at
+   each place where the term before calls it directly and the term after does
+   not. A place here is the body of a piece of code, or the term outside all
+   code. The body of a stub is not such a place, as Simplify inlines nothing
+   there, and a call of code to itself is not taken, as no inlining of the model
+   takes it. The first three choices have, at those places, the direct calls of
+   that code and of [free], the code that the first guess of the calls to leave
+   does not leave: the validation would inline those in any case, and a call
+   that one of them brings is so inlined in its turn. *)
+type inlining_guess =
+  { marked :
+      (Model.code_id option * Model.apply_expr * Model.code_id * int) list;
+    differing : (Model.code_id option * Model.code_id) list;
+    free : Model.code_id list
+  }
+
+let inlining_guess (before : Model.expr) (after : Model.expr) : inlining_guess =
+  let places_of (e : Model.expr) =
+    (None, direct_callees e)
+    :: List.map (fun (id, body) -> Some id, direct_callees body) (code_bound e)
+  in
+  let after_places = places_of after in
+  let called_after = called_directly after in
+  let stubs = stub_code before in
+  let differing =
+    List.concat_map
+      (fun (place, callees) ->
+        let in_a_stub =
+          match place with None -> false | Some id -> List.mem id stubs
+        in
+        match List.assoc_opt place after_places with
+        | None -> []
+        | Some _ when in_a_stub -> []
+        | Some callees_after ->
+          List.filter_map
+            (fun callee ->
+              if
+                List.mem callee called_after
+                && (not (List.mem callee callees_after))
+                && place <> Some callee
+              then Some (place, callee)
+              else None)
+            (List.sort_uniq compare callees))
+      (places_of before)
+  in
+  let recursive = recursive_code before @ recursive_code after in
+  let free =
+    List.filter
+      (fun id ->
+        (not (List.mem id recursive)) && not (List.mem id called_after))
+      (List.map fst (code_bound before))
+  in
+  { marked = !before_marked; differing; free }
+
+(* The paths of the calls of an expression that [choose] takes, outside the code
+   that it binds. [here] is the path of the expression: the way down is that of
+   FlambdaInlineCallsAtSpec.inline_calls_at_paths, which is that of
+   FlambdaLiftSpec.path. *)
+let rec call_paths (choose : Lift.path -> Model.apply_expr -> bool)
+    (here : Lift.path) (e : Model.expr) : Lift.path list =
+  let in_handler here (Model.Handler (_, _, handler)) =
+    call_paths choose here handler
+  in
+  match e with
+  | Let (_, _, _, body) | Let_static (_, body) ->
+    call_paths choose (Numbers.Coq_xO here) body
+  | Let_cont_non_recursive (_, handler, body) ->
+    in_handler (Numbers.Coq_xI here) handler
+    @ call_paths choose (Numbers.Coq_xO here) body
+  | Let_cont_recursive (handlers, body) ->
+    (* FlambdaLiftSpec.rec_handlers_map *)
+    let rec in_handlers q handlers =
+      match handlers with
+      | [] -> []
+      | (_, handler) :: rest ->
+        in_handler (Numbers.Coq_xO q) handler
+        @ in_handlers (Numbers.Coq_xI q) rest
+    in
+    in_handlers (Numbers.Coq_xI here) handlers
+    @ call_paths choose (Numbers.Coq_xO here) body
+  | Apply ap -> if choose here ap then [here] else []
+  | Apply_cont _ | Switch _ | Invalid -> []
+
+(* Whether the path [q] is [p] or under it. *)
+let rec path_under (p : Lift.path) (q : Lift.path) : bool =
+  q = p
+  ||
+  match q with
+  | Numbers.Coq_xO q' | Numbers.Coq_xI q' -> path_under p q'
+  | Numbers.Coq_xH -> false
+
+(* The choices that the guess makes for a term before, in their order. There are
+   as many as the greatest number that a call is marked for, three at least
+   where calls differ by place, and never more than eight, whatever a call is
+   marked for; there is none where the guess has no marked call and no call that
+   differs by place. A choice is a proposal and not an inlining made: it may
+   have no place at all, and at a place that it has the pass may leave the call.
+   Each is made from the term that the choices before it give: [inlined] is
+   given a choice and a term and gives the term that
+   FlambdaValidateInliningSpec.before_inlined makes of them. *)
+let inlining_choices
+    ~(inlined : Validate_inlining.inlining_choice -> Model.expr -> Model.expr)
+    (guess : inlining_guess) (before : Model.expr) :
+    Validate_inlining.inlining_choice list =
+  let most =
+    max
+      (List.fold_left (fun most (_, _, _, n) -> max most n) 0 guess.marked)
+      (match guess.differing with [] -> 0 | _ :: _ -> 3)
+  in
+  let differing_places =
+    List.sort_uniq compare (List.map fst guess.differing)
+  in
+  let body_at (e : Model.expr) place =
+    match place with
+    | None -> Some e
+    | Some id -> List.assoc_opt id (code_bound e)
+  in
+  let calls callees (ap : Model.apply_expr) =
+    match ap.ap_call_kind with
+    | Direct code -> List.mem code callees
+    | Indirect -> false
+  in
+  let rec choices_from n e previous =
+    if n > min most 8
+    then []
+    else
+      let marked_paths =
+        List.filter_map
+          (fun ((place, first, callee, times) as entry) ->
+            if times < n
+            then None
+            else
+              match body_at e place with
+              | None -> None
+              | Some body ->
+                let paths =
+                  if n = 1
+                  then call_paths (fun _ ap -> ap = first) Lift.root body
+                  else
+                    let brought_under =
+                      match List.assoc_opt entry previous with
+                      | Some paths -> paths
+                      | None -> []
+                    in
+                    call_paths
+                      (fun path ap ->
+                        calls [callee] ap
+                        && List.exists
+                             (fun under -> path_under under path)
+                             brought_under)
+                      Lift.root body
+                in
+                Some (entry, paths))
+          guess.marked
+      in
+      let differing_paths =
+        if n > 3
+        then []
+        else
+          List.filter_map
+            (fun place ->
+              match body_at e place with
+              | None -> None
+              | Some body ->
+                let callees =
+                  List.filter_map
+                    (fun (place', callee) ->
+                      if place' = place then Some callee else None)
+                    guess.differing
+                  @ guess.free
+                in
+                Some
+                  ( place,
+                    call_paths (fun _ ap -> calls callees ap) Lift.root body ))
+            differing_places
+      in
+      let all =
+        List.map (fun ((place, _, _, _), paths) -> place, paths) marked_paths
+        @ differing_paths
+      in
+      let at place =
+        List.concat_map
+          (fun (place', paths) -> if place' = place then paths else [])
+          all
+      in
+      let in_code =
+        List.filter_map
+          (fun place ->
+            match place with Some id -> Some (id, at place) | None -> None)
+          (List.sort_uniq compare (List.map fst all))
+      in
+      let choice : Validate_inlining.inlining_choice = at None, in_code in
+      choice :: choices_from (n + 1) (inlined choice e) marked_paths
+  in
+  choices_from 1 before []
 
 let validate ~(imports : (Model.symbol * Values.import_class) list)
     ~(prefix_units : int) ~(outcome_before : outcome) (before : converted)
@@ -5288,7 +5548,22 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
       ref =
     ref []
   in
-  let attempt ~calling ~own ?(again = true) ~reading kept =
+  let attempt ~calling ~own ?(again = true) ~inlining ~reading kept =
+    (* [inlining]: the attempt is of the term before with the calls of the
+       choices given inlined first. The functions asked are the two of
+       FlambdaValidateInliningSpec.v, each given the choices and the term
+       before as converted. They give [validate_unit] and
+       [validate_unit_knowing], for the term before, the term that
+       FlambdaValidateInliningSpec.before_inlined makes of it, given the
+       choices, the loops and the liftings. As for the reading, [term] is it
+       with nothing lifted, for the search, which makes its guesses of the
+       liftings from it; the loops and the lists of calls to leave are those
+       of every attempt, made from the two terms as converted. The liftings
+       change it only by the continuations that its renamings are told not to
+       name, which are those of the unit of the term before whatever the
+       liftings are; [read liftings] is it for the liftings of an asking, for
+       the test of the verdict from the imports, which the statements of that
+       file have of that term. Such an attempt is not [reading]. *)
     (* [reading]: the attempt is of the term before with its known arrays read.
        The functions asked are the two of FlambdaValidateReadingSpec.v, each
        given the term before as converted, as the two of an attempt that is not
@@ -5304,23 +5579,36 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
        imports, which the statements of that file have of that term. Of an
        attempt that is not [reading] both are the term before as converted. *)
     let read liftings =
-      if reading
-      then
+      match inlining with
+      | Some choices ->
         { before with
           body =
-            Validate_reading.before_read rounds loops liftings kept before.body
+            Validate_inlining.before_inlined choices loops liftings before.body
         }
-      else before
+      | None ->
+        if reading
+        then
+          { before with
+            body =
+              Validate_reading.before_read rounds loops liftings kept
+                before.body
+          }
+        else before
     in
     let term = read [nothing_lifted] in
     let asked () : Validate.validation * Model.expr * string * bool * Model.expr
         =
       let validate_unit, validate_unit_knowing =
-        if reading
-        then
-          ( Validate_reading.validate_unit_reading,
-            Validate_reading.validate_unit_knowing_reading )
-        else Validate.validate_unit, Validate_knowing.validate_unit_knowing
+        match inlining with
+        | Some choices ->
+          ( Validate_inlining.validate_unit_inlining choices,
+            Validate_inlining.validate_unit_knowing_inlining choices )
+        | None ->
+          if reading
+          then
+            ( Validate_reading.validate_unit_reading,
+              Validate_reading.validate_unit_knowing_reading )
+          else Validate.validate_unit, Validate_knowing.validate_unit_knowing
       in
       let first =
         ask ~calling ~own ~asked:(reading, false)
@@ -5436,7 +5724,8 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
       let found = !own_closures_to_know in
       own_closures_to_know := known || found;
       let made = key, found, answer in
-      if not reading then answers_not_reading := made :: !answers_not_reading;
+      if (not reading) && Option.is_none inlining
+      then answers_not_reading := made :: !answers_not_reading;
       answer
   in
   (* Which calls the validation is told to leave: three guesses, tried in turn.
@@ -5474,8 +5763,8 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
      those rounds ([own]). The rounds are
      FlambdaValidateSpec.normalise_lifted_own of the two, which the liftings of
      every asking then ask for. *)
-  let attempts_of ~calling ~own ~reading =
-    let attempt = attempt ~calling ~own in
+  let attempts_of ~calling ~own ~inlining ~reading =
+    let attempt = attempt ~calling ~own ~inlining in
     let first = attempt ~reading first_guess in
     match first with
     | Not_validated, _, _, _, _ -> (
@@ -5542,6 +5831,28 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
      shown, and the second check, below, is asked of the two terms as
      converted. *)
   let read = ref false in
+  (* The attempts of a third kind, made where both kinds refuse the unit: those
+     of the first kind again, of the term that
+     FlambdaValidateInliningSpec.before_inlined makes of the term before for the
+     choices of the guess ([inlining_choices]). They are not made where that
+     term, with nothing lifted, is the term before itself, by structural
+     equality: so where the guess makes no choice. Where it makes one, the term
+     is renamed apart after it, so the attempts may be of a term that differs
+     from the term before by its names alone, no call having been inlined.
+     [inlined] is the term that before_inlined makes for choices, with nothing
+     lifted; [inlined_first] says that the verdict is of such an attempt, and
+     not that a call was inlined. *)
+  let inlined choices e =
+    Validate_inlining.before_inlined choices loops [nothing_lifted] e
+  in
+  let choices_to_inline =
+    lazy
+      (inlining_choices
+         ~inlined:(fun choice e -> inlined [choice] e)
+         (inlining_guess before.body after.body)
+         before.body)
+  in
+  let inlined_first = ref false in
   let closures_were_called = ref false in
   let own_closures_were_known = ref false in
   let attempts, (validation, _, _, slots_removed, _) =
@@ -5570,16 +5881,16 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
           tables_were_bound := tables;
           refused)
     in
-    let in_turn ~reading =
+    let in_turn ~inlining ~reading =
       let with_neither () =
         own_closures_to_know := false;
-        attempts_of ~calling:false ~own:false ~reading
+        attempts_of ~calling:false ~own:false ~inlining ~reading
       in
       let with_calls_made_direct =
         after with_neither
           ~asked:(fun () -> closures_to_call)
           ~accepted:(fun () -> closures_were_called := true)
-          (fun () -> attempts_of ~calling:true ~own:false ~reading)
+          (fun () -> attempts_of ~calling:true ~own:false ~inlining ~reading)
       in
       let with_my_closure_known =
         after with_calls_made_direct
@@ -5587,20 +5898,46 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
           ~accepted:(fun () ->
             closures_were_called := closures_to_call;
             own_closures_were_known := true)
-          (fun () -> attempts_of ~calling:closures_to_call ~own:true ~reading)
+          (fun () ->
+            attempts_of ~calling:closures_to_call ~own:true ~inlining ~reading)
       in
       with_my_closure_known ()
     in
-    match in_turn ~reading:false with
+    match in_turn ~inlining:None ~reading:false with
     | attempts, (Not_validated, _, _, _, _) -> (
-      match in_turn ~reading:true with
-      | attempts_read, ((Not_validated, _, _, _, _) as refused) ->
-        ( attempts
+      match in_turn ~inlining:None ~reading:true with
+      | attempts_read, ((Not_validated, _, _, _, _) as refused) -> (
+        let attempts =
+          attempts
           @ List.map
               (fun (which, pair) ->
                 which ^ ", of the term before with its known arrays read", pair)
-              attempts_read,
-          refused )
+              attempts_read
+        in
+        let choices = Lazy.force choices_to_inline in
+        if inlined choices before.body = before.body
+        then attempts, refused
+        else
+          match in_turn ~inlining:(Some choices) ~reading:false with
+          | attempts_inlined, (Not_validated, _, _, _, _) ->
+            ( attempts
+              @ List.map
+                  (fun (which, pair) ->
+                    ( which
+                      ^ ", of the term before with chosen calls inlined first",
+                      pair ))
+                  attempts_inlined,
+              refused )
+          | ( _,
+              ( ( Same_up_to_bound_names | Same_once_normalised
+                | Same_once_unused_statics_removed
+                | Same_once_head_statics_removed | Same_once_lifted ),
+                _,
+                _,
+                _,
+                _ ) ) as accepted ->
+            inlined_first := true;
+            accepted)
       | ( _,
           ( ( Same_up_to_bound_names | Same_once_normalised
             | Same_once_unused_statics_removed | Same_once_head_statics_removed
@@ -5710,6 +6047,10 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
     Format.printf
       "  (asked of the term before normalised with the lengths and loads of \
        its known immutable arrays read)@.";
+  if !inlined_first
+  then
+    Format.printf
+      "  (asked of the term before with chosen calls inlined first)@.";
   if !closures_were_called
   then
     Format.printf
