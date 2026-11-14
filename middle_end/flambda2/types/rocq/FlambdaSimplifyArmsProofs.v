@@ -53,11 +53,11 @@ Local Open Scope Z_scope.
 
 Theorem simplify_arm_args_equivalent : simplify_arm_args_equivalent_statement.
 Proof.
-  intros tenv s [i ac] vars conts statics hp Hsat Heval.
+  intros tenv s [i ac] vars conts statics hp rd Hsat Heval.
   cbn [fst snd simplify_arm_args] in *.
   exact
     (simplify_apply_cont_equivalent (arm_env tenv s i) ac vars conts statics
-       hp (arm_env_satisfied tenv s i statics vars Hsat Heval)).
+       hp rd_ (arm_env_satisfied tenv s i statics vars Hsat Heval)).
 Qed.
 
 (* ======================================================================== *)
@@ -95,8 +95,8 @@ Qed.
 
 Theorem switch_arms_refined_under : switch_arms_refined_under_statement.
 Proof.
-  intros tenv s arms arms' Hall vars conts statics hp Hsat.
-  destruct (step_switch_cases s arms vars conts statics hp)
+  intros tenv s arms arms' Hall vars conts statics hp rd Hsat.
+  destruct (step_switch_cases s arms vars conts statics hp rd)
     as [Hundefined | [v [i [ac [Hv [Hi [Hfind Hstep]]]]]]].
   { apply step_undefined_refines, Hundefined. }
   pose proof (find_arm_corresponding
@@ -105,7 +105,8 @@ Proof.
                 i arms arms' Hall) as Hfind'.
   rewrite Hfind in Hfind'. destruct Hfind' as [ac' [Hfind' Hrefines]].
   apply
-    (refines_step _ _ _ (State (Apply_cont ac') vars conts statics hp) Hstep).
+    (refines_step _ _ _ (State (Apply_cont ac') vars conts statics hp rd)
+       Hstep).
   - rewrite step_switch, Hv, Hi, Hfind'. reflexivity.
   - apply Hrefines; [ exact Hsat | ].
     rewrite Hv, (naked_immediate_read v i Hi). reflexivity.
@@ -125,9 +126,9 @@ Proof.
   induction arms as [ | arm arms IH]; cbn [map]; constructor;
     [ | exact IH ].
   split; [ reflexivity | ].
-  intros vars conts statics hp Hsat Heval.
+  intros vars conts statics hp rd Hsat Heval.
   apply equivalent_refines.
-  exact (simplify_arm_args_equivalent tenv s arm vars conts statics hp Hsat
+  exact (simplify_arm_args_equivalent tenv s arm vars conts statics hp rd Hsat
            Heval).
 Qed.
 

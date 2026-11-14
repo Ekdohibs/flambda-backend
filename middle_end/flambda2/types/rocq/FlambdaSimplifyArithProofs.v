@@ -158,22 +158,22 @@ Proof.
     exact (int_arith_tagged_possible tenv statics vars op arg1 arg2 ty1 ty2
              r Hsat Hty1 Hty2 Hwf1 Hwf2 Hnamed). }
   split; [ | split; [ | split ] ].
-  - intros result Hresults. apply let_constant.
+  - intros result Hresults. apply let_constant_pure; [ reflexivity | ].
     intros statics vars r Hsat Hnamed.
     destruct (Hsound statics vars r Hsat Hnamed)
       as [i1 [i2 [result' [Hi1 [Hi2 [_ [_ [Heval ->]]]]]]]].
     rewrite (Hresults i1 i2 Hi1 Hi2 result' Heval). reflexivity.
-  - intros Hresults. apply let_simple.
+  - intros Hresults. apply let_simple_pure; [ reflexivity | ].
     intros statics vars r Hsat Hnamed.
     destruct (Hsound statics vars r Hsat Hnamed)
       as [i1 [i2 [result' [Hi1 [Hi2 [_ [Hv2 [Heval ->]]]]]]]].
     rewrite (Hresults i1 i2 Hi1 Hi2 result' Heval). exact Hv2.
-  - intros Hresults. apply let_simple.
+  - intros Hresults. apply let_simple_pure; [ reflexivity | ].
     intros statics vars r Hsat Hnamed.
     destruct (Hsound statics vars r Hsat Hnamed)
       as [i1 [i2 [result' [Hi1 [Hi2 [Hv1 [_ [Heval ->]]]]]]]].
     rewrite (Hresults i1 i2 Hi1 Hi2 result' Heval). exact Hv1.
-  - intros Hresults. apply let_no_value.
+  - intros Hresults. apply let_no_value_pure; [ reflexivity | ].
     intros statics vars r Hsat Hnamed.
     destruct (Hsound statics vars r Hsat Hnamed)
       as [i1 [i2 [result' [Hi1 [Hi2 [_ [_ [Heval _]]]]]]]].
@@ -266,8 +266,8 @@ Theorem let_int_arith_tagged_these : let_int_arith_tagged_these_statement.
 Proof.
   intros tenv x declared op arg1 arg2 ty1 ty2 results body body' Hwf
     Hfresh Hty1 Hty2 Hwf1 Hwf2 Hresults arith Hbody.
-  apply (let_typed_refines_under tenv x declared arith body body'
-           (these_tagged_immediates results) Hwf Hfresh).
+  apply (let_typed_refines_under_pure tenv x declared arith body body'
+           (these_tagged_immediates results) eq_refl Hwf Hfresh).
   - intros y Hy. exfalso.
     exact (these_tagged_immediates_closed results y Hy).
   - intros statics vars v Hsat Hnamed.
@@ -283,8 +283,8 @@ Theorem let_int_arith_tagged_unknown
   : let_int_arith_tagged_unknown_statement.
 Proof.
   intros tenv x declared op arg1 arg2 body body' Hwf Hfresh arith Hbody.
-  apply (let_typed_refines_under tenv x declared arith body body'
-           any_tagged_immediate Hwf Hfresh).
+  apply (let_typed_refines_under_pure tenv x declared arith body body'
+           any_tagged_immediate eq_refl Hwf Hfresh).
   - intros y Hy. cbn in Hy. rewrite ?app_nil_r in Hy. destruct Hy.
   - intros statics vars v Hsat Hnamed. unfold arith in Hnamed.
     simpl in Hnamed.

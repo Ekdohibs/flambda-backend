@@ -241,15 +241,15 @@ Definition call_code_never_returns_statement : Prop :=
   ∀ (closure : value) (c : code) (vs : list value)
     (args_arity return_arity : arity)
     (return_to return_to' exn_to : cont_value) (statics : static_env)
-    (hp : heap),
+    (hp : heap) (rd : read_record),
     cont_free_b (code_return_continuation c)
       (remove_unused_conts (code_body c))
     = false ->
     match
       call_code closure c vs args_arity return_arity return_to exn_to
-        statics hp,
+        statics hp rd,
       call_code closure c vs args_arity return_arity return_to' exn_to
-        statics hp
+        statics hp rd
     with
     | Step s, Step s' => equivalent s s'
     | Undefined, Undefined => True

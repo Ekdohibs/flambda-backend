@@ -51,7 +51,7 @@ Proof.
   destruct body
     as [ x kind d body | bindings body | k' [params' metadata' handler'] body
        | handlers body | ap | ac | scrutinee arms | ];
-    intros k h hp; cbn [sink_to_use];
+    intros k h hp rd; cbn [sink_to_use];
     try (intros vars conts statics; apply equivalent_refl).
   - (* Let *)
     destruct (var_free_in_handler_b x h) eqn:Hfree;
@@ -121,7 +121,7 @@ Proof.
     as [ x kind d body | bindings body | k [params metadata handler] body
        | handlers body | ap | ac | scrutinee arms | ];
     cbn [sink_conts_to_uses];
-    try (intros vars conts statics hp; apply equivalent_refl).
+    try (intros vars conts statics hp rd; apply equivalent_refl).
   - exact (plug_equivalent (Let_body x kind d Hole) _ _ (not_many _)
       (sink_conts_to_uses_equivalent_aux body)).
   - exact (plug_equivalent (Let_static_body bindings Hole) _ _ (not_many _)

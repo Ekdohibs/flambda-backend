@@ -58,7 +58,8 @@ Import ListNotations.
 Definition let_cont_apply_cont_statement : Prop :=
   ∀ (k : continuation) (params : list variable) (metadata : handler_metadata)
     (handler : expr) (args : list simple) (vars handler_vars : env)
-    (conts : cont_env) (statics : static_env) (hp : heap) (vs : list value),
+    (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record)
+      (vs : list value),
     eval_simples vars args = Some vs ->
     map kind_of_value vs = hm_params_kinds metadata ->
     bind_params params vs vars = Some handler_vars ->
@@ -66,8 +67,8 @@ Definition let_cont_apply_cont_statement : Prop :=
       (State
          (Let_cont_non_recursive k (Handler params metadata handler)
             (Apply_cont (Apply_cont_expr k args None)))
-         vars conts statics hp)
-      (State handler handler_vars conts statics hp).
+         vars conts statics hp rd)
+      (State handler handler_vars conts statics hp rd).
 
 (* The same with one parameter, as a rewrite of terms: the parameter becomes
    a [Let], at the kind that the handler gives it. The application and the
@@ -87,7 +88,7 @@ Definition let_cont_recursive_apply_cont_statement : Prop :=
   ∀ (k : continuation) (params : list variable) (metadata : handler_metadata)
     (handler : expr) (handlers : list (continuation * continuation_handler))
     (args : list simple) (vars handler_vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap) (vs : list value),
+    (statics : static_env) (hp : heap) (rd : read_record) (vs : list value),
     handlers_bind_statics handlers = false ->
     lookup k handlers = Some (Handler params metadata handler) ->
     eval_simples vars args = Some vs ->
@@ -97,9 +98,9 @@ Definition let_cont_recursive_apply_cont_statement : Prop :=
       (State
          (Let_cont_recursive handlers
             (Apply_cont (Apply_cont_expr k args None)))
-         vars conts statics hp)
+         vars conts statics hp rd)
       (State handler handler_vars
-         (rec_closures handlers vars conts ++ conts) statics hp).
+         (rec_closures handlers vars conts ++ conts) statics hp rd).
 
 (* A continuation that only applies itself, applied. *)
 Definition loop_forever (k : continuation) : expr :=
@@ -111,8 +112,8 @@ Definition loop_forever (k : continuation) : expr :=
 
 Definition loop_forever_diverges_statement : Prop :=
   ∀ (k : continuation) (vars : env) (conts : cont_env) (statics : static_env)
-    (hp : heap),
-    behaves (State (loop_forever k) vars conts statics hp) Diverges.
+    (hp : heap) (rd : read_record),
+    behaves (State (loop_forever k) vars conts statics hp rd) Diverges.
 
 (* ======================================================================== *)
 (* Switches                                                                 *)

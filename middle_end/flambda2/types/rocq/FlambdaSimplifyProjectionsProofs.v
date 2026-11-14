@@ -33,8 +33,8 @@ From Stdlib Require Import ZArith List Bool Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList OxCamlOption.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaKindModel
   FlambdaMapSpec FlambdaMapProofs FlambdaValueSpec FlambdaPrimitiveModel
-  FlambdaPrimitiveSpec FlambdaPrimitiveProofs FlambdaSemanticsSpec
-  FlambdaSemanticsProofs.
+  FlambdaPrimitiveSpec FlambdaPrimitiveProofs FlambdaHeapSpec
+  FlambdaSemanticsSpec FlambdaSemanticsProofs.
 From OxCamlFlambda2Types Require Import FlambdaTypeGrammar
   FlambdaTypeGrammarProofs FlambdaTypeMeaningSpec FlambdaTypeMeaningProofs
   FlambdaTypeWellFormedSpec FlambdaTypeWellFormedProofs FlambdaBindingTime
@@ -172,34 +172,53 @@ Qed.
 
 Theorem let_simple : let_simple_statement.
 Proof.
-  intros tenv x declared d s body Hknown vars conts statics hp Hsat.
-  destruct (eval_named statics vars d) as [v | ] eqn:Hd.
-  - pose proof (Hknown statics vars v Hsat Hd) as Hs.
-    destruct (kind_eqb (kind_of_value v) declared) eqn:Hkind.
-    + eapply refines_step;
-        [ rewrite step_let, Hd, Hkind; reflexivity
-        | rewrite step_let; cbn [eval_named]; rewrite Hs, Hkind;
-          reflexivity
-        | apply refines_refl ].
-    + apply step_undefined_refines. rewrite step_let, Hd, Hkind.
-      reflexivity.
-  - apply step_undefined_refines. rewrite step_let, Hd. reflexivity.
+  intros tenv x declared d s body Hknown vars conts statics hp rd Hsat.
+  apply let_refines_step_forward.
+  - intros v hp' rd' Hd.
+    destruct (Hknown statics hp hp' rd rd' vars v Hsat Hd) as (Hs & -> & ->).
+    simpl. rewrite Hs. reflexivity.
+  - intros v hp' rd' _ _. apply refines_refl.
 Qed.
 
-(* A [Let] whose defining expression has no value in the states that
-   satisfy the environment, in the form in which the proofs below have
-   it. *)
-Lemma let_no_value (tenv : Typing_env.t) (x : variable)
-    (declared : flambda_kind) (defining_expr : named) (body : expr) :
-  (∀ (statics : static_env) (vars : env) (r : value),
+(* The conclusion with the premise on the value alone
+   ([eval_named]), as FlambdaSimplifyPrimitivesProofs.v has the two
+   others: of a defining expression that reads no cell, and of a unary
+   primitive on an argument whose type has no location. *)
+Lemma let_simple_pure (tenv : Typing_env.t) (x : variable)
+    (declared : flambda_kind) (defining_expr : named) (s : simple)
+    (body : expr) :
+  named_reads_heap defining_expr = false ->
+  (∀ (statics : static_env) (vars : env) (v : value),
     env_satisfies_strictly tenv statics vars ->
-    eval_named statics vars defining_expr = Some r ->
-    False) ->
-  expr_equivalent_under tenv (Let x declared defining_expr body) Invalid.
+    eval_named statics vars defining_expr = Some v ->
+    eval_simple vars s = Some v) ->
+  expr_refines_under tenv (Let x declared defining_expr body)
+    (Let x declared (Simple s) body).
 Proof.
-  intros Hnone. apply let_invalid. intros statics vars Hsat.
-  destruct (eval_named statics vars defining_expr) as [r | ] eqn:Hnamed;
-    [ exfalso; exact (Hnone statics vars r Hsat Hnamed) | reflexivity ].
+  intros Hpure Hknown. apply let_simple.
+  intros statics hp hp' rd rd' vars v Hsat Hexec.
+  destruct (exec_named_pure statics hp hp' rd rd' vars defining_expr v Hpure
+              Hexec) as (Heval & -> & ->).
+  split; [ exact (Hknown statics vars v Hsat Heval) | split; reflexivity ].
+Qed.
+
+Lemma let_simple_unary (tenv : Typing_env.t) (x : variable)
+    (declared : flambda_kind) (p : unary_primitive) (arg : simple)
+    (ty : flambda_type) (s : simple) (body : expr) :
+  argument_type tenv arg ty ->
+  no_location tenv ty ->
+  (∀ (statics : static_env) (vars : env) (v : value),
+    env_satisfies_strictly tenv statics vars ->
+    eval_named statics vars (Prim (Unary p) [arg]) = Some v ->
+    eval_simple vars s = Some v) ->
+  expr_refines_under tenv (Let x declared (Prim (Unary p) [arg]) body)
+    (Let x declared (Simple s) body).
+Proof.
+  intros Hty Hno Hknown. apply let_simple.
+  intros statics hp hp' rd rd' vars v Hsat Hexec.
+  destruct (unary_prim_exec_typed tenv statics hp hp' rd rd' vars p arg ty v
+              Hsat Hty Hno Hexec) as (Hnamed & -> & ->).
+  split; [ exact (Hknown statics vars v Hsat Hnamed) | split; reflexivity ].
 Qed.
 
 (* ======================================================================== *)
@@ -243,10 +262,16 @@ Proof.
                (Hterms s eq_refl)).
     exact Hs. }
   destruct (Provers.meet_block_field_simple tenv Name_mode.normal Value ty
-              (Z.to_nat field)) as [[s | | ] | ];
+              (Z.to_nat field)) as [[s | | ] | ] eqn:Hanswer;
     try exact I.
-  - apply let_simple. exact Hsound.
-  - apply let_no_value. exact Hsound.
+  - apply (let_simple_unary tenv x declared _ arg ty s body Hty);
+      [ exact (meet_answer_no_location _ tenv ty _ Hanswer
+                 ltac:(discriminate))
+      | exact Hsound ].
+  - apply (let_no_value_unary tenv x declared _ arg ty body Hty);
+      [ exact (meet_answer_no_location _ tenv ty _ Hanswer
+                 ltac:(discriminate))
+      | exact Hsound ].
 Qed.
 
 (* ======================================================================== *)
@@ -291,8 +316,8 @@ Proof.
   destruct (Provers.meet_project_function_slot_simple tenv Name_mode.normal
               ty move_to) as [[s | | ] | ];
     try exact I.
-  - apply let_simple. exact Hsound.
-  - apply let_no_value. exact Hsound.
+  - apply let_simple_pure; [ reflexivity | exact Hsound ].
+  - apply let_no_value_pure; [ reflexivity | exact Hsound ].
 Qed.
 
 Theorem let_project_value_slot : let_project_value_slot_statement.
@@ -335,8 +360,8 @@ Proof.
   destruct (Provers.meet_project_value_slot_simple tenv Name_mode.normal ty
               slot value_slot_kind) as [[s | | ] | ];
     try exact I.
-  - apply let_simple. exact Hsound.
-  - apply let_no_value. exact Hsound.
+  - apply let_simple_pure; [ reflexivity | exact Hsound ].
+  - apply let_no_value_pure; [ reflexivity | exact Hsound ].
 Qed.
 
 (* ======================================================================== *)
@@ -459,8 +484,8 @@ Theorem let_make_block : let_make_block_statement.
 Proof.
   intros tenv x declared tag args tys body body' Hwf Hfresh Htys Htag
     make_block Hbody.
-  apply (let_typed_refines_under tenv x declared make_block body body'
-           (make_block_type tag tys) Hwf Hfresh).
+  apply (let_typed_refines_under_pure tenv x declared make_block body body'
+           (make_block_type tag tys) eq_refl Hwf Hfresh).
   - intros y Hy.
     destruct (free_variables_make_block_type tag tys y Hy)
       as [ty [Hin Hfree]].

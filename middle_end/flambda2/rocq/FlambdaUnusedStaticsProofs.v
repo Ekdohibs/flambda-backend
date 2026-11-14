@@ -494,6 +494,59 @@ Proof.
   exact (proj1 (forallb_forall _ _) Hvs _ Hin).
 Qed.
 
+(* The same on a heap: what a primitive does is the same under both
+   static environments; and where no value of the heap refers to a name
+   removed, none of the heap after does, nor the value. *)
+Lemma heap_free_of_values_all (hp : heap) :
+  heap_free_of D hp = true
+  <-> heap_values_all (fun w => value_avoids D w = true) hp.
+Proof.
+  unfold heap_free_of, heap_values_all. rewrite forallb_forall. split.
+  - intros Hfree l c w Hin Hw.
+    exact (proj1 (forallb_forall _ _) (Hfree (l, c) Hin) w Hw).
+  - intros Hall [l c] Hin. apply forallb_forall. intros w Hw.
+    exact (Hall l c w Hin Hw).
+Qed.
+
+Lemma exec_prim_erased (statics statics' : static_env) (hp : heap)
+    (p : prim) (vs : list value) :
+  statics_erased statics statics' ->
+  forallb (value_avoids D) vs = true ->
+  exec_prim statics' hp p vs = exec_prim statics hp p vs.
+Proof.
+  intros (_ & _ & Hvalues & _) Hvs.
+  apply FlambdaHeapProofs.exec_prim_static_values.
+  intros s Hin. apply Hvalues.
+  exact (proj1 (forallb_forall _ _) Hvs _ Hin).
+Qed.
+
+Lemma exec_prim_avoids (statics statics' : static_env) (hp hp' : heap)
+    (p : prim) (vs : list value) (v : value) :
+  statics_erased statics statics' ->
+  forallb (value_avoids D) vs = true ->
+  heap_free_of D hp = true ->
+  exec_prim statics hp p vs = Some (v, hp') ->
+  value_avoids D v = true ∧ heap_free_of D hp' = true.
+Proof.
+  intros (_ & _ & _ & Hvalues_avoid) Hvs Hfree Hexec.
+  rewrite heap_free_of_values_all in Hfree |- *.
+  apply
+    (FlambdaHeapProofs.exec_prim_preserves (fun w => value_avoids D w = true)
+       statics hp hp' p vs v);
+    [ | | | | | | | exact Hfree | exact Hexec ].
+  - intros c. split; reflexivity.
+  - intros tag fields. simpl. apply forallb_forall.
+  - intros elements. simpl. apply forallb_forall.
+  - intros s tag fields Hkept Hlookup.
+    pose proof (Hvalues_avoid s _ Hkept Hlookup) as Hfields.
+    simpl in Hfields. apply forallb_forall. exact Hfields.
+  - intros s elements Hkept Hlookup.
+    pose proof (Hvalues_avoid s _ Hkept Hlookup) as Hfields.
+    simpl in Hfields. apply forallb_forall. exact Hfields.
+  - intros l. reflexivity.
+  - apply forallb_forall. exact Hvs.
+Qed.
+
 Lemma eval_named_erased (statics statics' : static_env) (vars : env)
     (d : named) :
   statics_erased statics statics' ->
@@ -773,15 +826,60 @@ Proof.
   apply rec_closures_erased_aux; assumption.
 Qed.
 
+(* What a named expression does is the same under both static
+   environments, from a heap none of whose values refers to a name
+   removed; and then no value of the heap after does, nor the value. *)
+Lemma exec_named_erased (statics statics' : static_env) (hp : heap)
+    (rd : read_record)
+    (vars : env) (d : named) :
+  statics_erased statics statics' ->
+  env_avoids vars ->
+  named_avoids D d = true ->
+  heap_free_of D hp = true ->
+  exec_named statics' hp rd vars d = exec_named statics hp rd vars d
+  ∧ (∀ (v : value) (hp' : heap) (rd' : read_record),
+      exec_named statics hp rd vars d = Some (v, hp', rd') ->
+      value_avoids D v = true ∧ heap_free_of D hp' = true).
+Proof.
+  intros Hstatics Hvars Hd Hfree.
+  destruct (eval_named_erased statics statics' vars d Hstatics Hvars Hd)
+    as [Hsame Hvalue].
+  assert (Hpure :
+    (let* v := eval_named statics' vars d in Some (v, hp, rd))
+    = (let* v := eval_named statics vars d in Some (v, hp, rd))
+    ∧ (∀ (v : value) (hp' : heap) (rd' : read_record),
+        (let* v := eval_named statics vars d in Some (v, hp, rd))
+        = Some (v, hp', rd') ->
+        value_avoids D v = true ∧ heap_free_of D hp' = true)).
+  { rewrite Hsame. split; [ reflexivity | ]. intros v hp' rd'.
+    destruct (eval_named statics vars d) as [w | ] eqn:Hw; [ | discriminate ].
+    intros [= <- <- <-]. split; [ exact (Hvalue w eq_refl) | exact Hfree ]. }
+  destruct d as [s | p args | code slots | fslot decls slots | slot closure
+    | pfrom slot closure | move_from move_to closure];
+    try exact Hpure.
+  clear Hpure Hsame Hvalue. rewrite !exec_named_prim. simpl in Hd.
+  destruct (eval_simples vars args) as [vs | ] eqn:Hargs; simpl;
+    [ | split; [ reflexivity | discriminate ] ].
+  pose proof (eval_simples_avoid vars args Hvars vs Hd Hargs) as Hvs.
+  rewrite (exec_prim_erased statics statics' hp p vs Hstatics Hvs).
+  split; [ reflexivity | ].
+  intros v hp' rd'.
+  destruct (exec_prim statics hp p vs) as [[w h] | ] eqn:Hprim; simpl;
+    [ | discriminate ].
+  intros [= <- <- <-].
+  exact (exec_prim_avoids statics statics' hp h p vs w Hstatics Hvs Hfree
+           Hprim).
+Qed.
+
 Inductive state_erased : state -> state -> Prop :=
   | State_erased (e : expr) (vars : env) (conts conts' : cont_env)
-      (statics statics' : static_env) (hp : heap) :
+      (statics statics' : static_env) (hp : heap) (rd : read_record) :
     expr_avoids D e = true ->
     env_avoids vars ->
     conts_erased conts conts' ->
     statics_erased statics statics' ->
-    state_erased (State e vars conts statics hp)
-      (State (erase_expr D e) vars conts' statics' hp).
+    state_erased (State e vars conts statics hp rd)
+      (State (erase_expr D e) vars conts' statics' hp rd).
 
 (* A value that avoids the names removed, as a property: that of a
    partial application is that of the value it calls and of its
@@ -873,7 +971,7 @@ Qed.
 Lemma call_code_erased (closure : value) (c : code) (vs : list value)
     (args_arity return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
-    (statics statics' : static_env) (hp : heap) :
+    (statics statics' : static_env) (hp : heap) (rd : read_record) :
   code_avoids D c = true ->
   value_avoids D closure = true ->
   forallb (value_avoids D) vs = true ->
@@ -881,9 +979,10 @@ Lemma call_code_erased (closure : value) (c : code) (vs : list value)
   cont_erased exn_to exn_to' ->
   statics_erased statics statics' ->
   result_simulated state_erased
-    (call_code closure c vs args_arity return_arity return_to exn_to statics hp)
+    (call_code closure c vs args_arity return_arity return_to exn_to statics hp
+       rd)
     (call_code closure (erase_code D c) vs args_arity return_arity return_to'
-       exn_to' statics' hp).
+       exn_to' statics' hp rd).
 Proof.
   intros Hc Hclosure Hvs Hreturn Hexn Hstatics.
   destruct c as [params my_closure ret exn metadata body].
@@ -913,7 +1012,7 @@ Qed.
 Lemma run_call_erased (return_partial return_partial' : value -> step_result)
     (shape shape' : option call_shape) (return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
-    (statics statics' : static_env) (hp : heap) :
+    (statics statics' : static_env) (hp : heap) (rd : read_record) :
   shapes_related (fun c c' => c' = erase_code D c ∧ code_avoids D c = true)
     shape shape' ->
   shape_values_all (fun v => value_avoids D v = true) shape ->
@@ -925,9 +1024,9 @@ Lemma run_call_erased (return_partial return_partial' : value -> step_result)
     result_simulated state_erased (return_partial partial)
       (return_partial' partial)) ->
   result_simulated state_erased
-    (run_call return_partial shape return_arity return_to exn_to statics hp)
+    (run_call return_partial shape return_arity return_to exn_to statics hp rd)
     (run_call return_partial' shape' return_arity return_to' exn_to'
-       statics' hp).
+       statics' hp rd).
 Proof.
   intros Hshapes Hvalues Hreturn Hexn Hstatics Hpartial.
   destruct Hshapes
@@ -948,12 +1047,12 @@ Proof.
 Qed.
 
 Lemma apply_cont_value_erased (c c' : cont_value) (vs : list value)
-    (statics statics' : static_env) (hp : heap) :
+    (statics statics' : static_env) (hp : heap) (rd : read_record) :
   cont_erased c c' ->
   forallb (value_avoids D) vs = true ->
   statics_erased statics statics' ->
-  result_simulated state_erased (apply_cont_value c vs statics hp)
-    (apply_cont_value c' vs statics' hp).
+  result_simulated state_erased (apply_cont_value c vs statics hp rd)
+    (apply_cont_value c' vs statics' hp rd).
 Proof.
   intros Hc Hvs Hstatics. revert vs Hvs.
   induction Hc
@@ -998,7 +1097,7 @@ Qed.
 Lemma call_function_erased (callee : value) (kind : call_kind)
     (vs : list value) (args_arity return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
-    (statics statics' : static_env) (hp : heap) :
+    (statics statics' : static_env) (hp : heap) (rd : read_record) :
   value_avoids D callee = true ->
   forallb (value_avoids D) vs = true ->
   cont_erased return_to return_to' ->
@@ -1006,9 +1105,9 @@ Lemma call_function_erased (callee : value) (kind : call_kind)
   statics_erased statics statics' ->
   result_simulated state_erased
     (call_function callee kind vs args_arity return_arity return_to exn_to
-       statics hp)
+       statics hp rd)
     (call_function callee kind vs args_arity return_arity return_to' exn_to'
-       statics' hp).
+       statics' hp rd).
 Proof.
   intros Hcallee Hvs Hreturn Hexn Hstatics. unfold call_function.
   apply run_call_erased; try assumption.
@@ -1029,25 +1128,34 @@ Proof.
     simpl. rewrite Hpartial. reflexivity.
 Qed.
 
-(* A state and the state erased step alike, where the first is defined. *)
+(* A state and the state erased step alike, where the first is defined
+   and no value of its heap refers to a name removed. *)
 Lemma erased_step (s s' : state) :
-  state_erased s s' -> result_simulated state_erased (step s) (step s').
+  state_erased s s' ->
+  heap_free_of D (state_heap s) = true ->
+  result_simulated state_erased (step s) (step s').
 Proof.
-  intros [e vars conts conts' statics statics' hp He Hvars Hconts Hstatics].
+  intros [e vars conts conts' statics statics' hp rd He Hvars Hconts Hstatics]
+    Hfree.
+  simpl in Hfree.
   destruct e
     as [ x kind d body | bindings body | k h body | handlers body | ap | ac
        | scrutinee arms | ];
     simpl in He |- *; autorewrite with step; simpl.
   - (* Let *)
     apply andb_true_iff in He as [Hd Hbody].
-    destruct (eval_named_erased statics statics' vars d Hstatics Hvars Hd)
+    destruct
+      (exec_named_erased statics statics' hp rd vars d Hstatics Hvars Hd Hfree)
       as [Hsame Hvalue].
     rewrite Hsame.
-    destruct (eval_named statics vars d) as [v | ]; simpl; [ | exact I ].
+    destruct (exec_named statics hp rd vars d) as [[[v hp'] rd'] | ]; simpl;
+      [ | exact I ].
     destruct (kind_eqb (kind_of_value v) kind); simpl; [ | exact I ].
     apply State_erased;
-      [ exact Hbody | apply env_avoids_cons; auto | exact Hconts
-      | exact Hstatics ].
+      [ exact Hbody
+      | apply env_avoids_cons;
+        [ exact (proj1 (Hvalue v hp' rd_ eq_refl)) | auto ]
+      | exact Hconts | exact Hstatics ].
   - (* Let_static *)
     apply andb_true_iff in He as [Hbindings Hbody].
     pose proof (eval_static_bindings_erased vars Hvars bindings statics
@@ -1240,15 +1348,50 @@ Proof.
     destruct allocated; exact Hallocated.
 Qed.
 
+(* The relation of the simulation: a state and the state erased, where
+   no value of the heap refers to a name removed. A step keeps the
+   second part: it changes the heap only at a [Let]
+   (FlambdaSemanticsSpec.step_heap_statement), and there to a heap of
+   which the same holds. *)
+Definition state_erased_free (D : dropped) (s s' : state) : Prop :=
+  state_erased D s s' ∧ heap_free_of D (state_heap s) = true.
+
+Lemma erased_free_step (D : dropped) (s s' : state) :
+  state_erased_free D s s' ->
+  result_simulated (state_erased_free D) (step s) (step s').
+Proof.
+  intros [Herased Hfree].
+  pose proof (erased_step D s s' Herased Hfree) as Hsim.
+  destruct (step s) as [t | k vs hp rd | ] eqn:Hstep;
+    [ | exact Hsim | exact I ].
+  destruct (step s') as [t' | k' vs' hp' rd' | ];
+    [ | contradiction | contradiction ].
+  split; [ exact Hsim | ].
+  destruct (step_heap s t Hstep)
+    as [-> | (x & kind & d & body & v & He & Hexec)];
+    [ exact Hfree | ].
+  destruct Herased
+    as [e vars conts conts' statics statics' hp rd He' Hvars Hconts Hstatics].
+  simpl in He, Hexec, Hfree. subst e. simpl in He'.
+  apply andb_true_iff in He' as [Hd _].
+  exact
+    (proj2
+       (proj2
+          (exec_named_erased D statics statics' hp rd_ vars d Hstatics Hvars Hd
+             Hfree)
+          v (state_heap t) rd_ Hexec)).
+Qed.
+
 Theorem drop_statics_refines : drop_statics_refines_statement.
 Proof.
   intros D e e'. unfold drop_statics.
   destruct (expr_avoids D e) eqn:He; [ | discriminate ].
-  intros [= <-] vars conts statics hp Hfree.
+  intros [= <-] vars conts statics hp rd Hfree Hheap.
   unfold envs_free_of in Hfree.
   apply andb_true_iff in Hfree as [Hfree Hstatics].
   apply andb_true_iff in Hfree as [Hvars Hconts].
-  apply (simulation_refines (state_erased D) (erased_step D)).
+  apply (simulation_refines (state_erased_free D) (erased_free_step D)).
+  split; [ | exact Hheap ].
   apply State_erased;
     [ exact He | exact (env_free_of_avoids D vars Hvars) |
     | exact (statics_free_of_erased D statics Hstatics) ].
@@ -1262,5 +1405,7 @@ Theorem drop_statics_program_refines :
   drop_statics_program_refines_statement.
 Proof.
   intros D e e' Hdrop.
-  exact (drop_statics_refines D e e' Hdrop [] [] empty_static_env _ eq_refl).
+  exact
+    (drop_statics_refines D e e' Hdrop [] [] empty_static_env empty_heap
+       rd_ eq_refl eq_refl).
 Qed.

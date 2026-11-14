@@ -26,8 +26,8 @@
  ******************************************************************************)
 
 
-(* The liftings to symbols without the test of the exits, up to what
-   may follow a unit.
+(* The liftings to symbols without the two tests of the unit, that of
+   its exits and that of the heap, up to what may follow a unit.
 
    This file is to be reviewed: the four functions, each against the
    function that it stands beside; [liftings_observed] and
@@ -37,16 +37,27 @@
    Each of the four liftings has a function that makes it of a unit if
    its conditions hold: FlambdaLiftFromArmsSpec.lift_to_head_unit,
    FlambdaLiftFromCodeSpec.lift_from_code_unit, FlambdaLiftSpec.lift_unit
-   and FlambdaLiftAroundSpec.lift_around_unit. The first condition of
-   each is FlambdaLiftSpec.exits_plain_knowing: the unit exits with
-   symbols and constants only. With it, the unit lifted exits with the
-   same values as the unit, and the statement of each is a refinement
-   in which the exits are equal. Without it, the unit lifted may exit
-   with a symbol where the unit exits with the closure, the block or the
-   boxed number that the symbol is bound to
-   (FlambdaLiftSpec.value_lifted), and the two exits are not equal.
+   and FlambdaLiftAroundSpec.lift_around_unit. The first two
+   conditions of each are tests of the unit before it is lifted. One
+   is FlambdaLiftSpec.exits_plain_knowing, the test of the exits: the
+   unit exits with symbols and constants only. With it, the unit
+   lifted exits with the same values as the unit. The other is
+   FlambdaHeapFreeSpec.expr_free_of_heap, the test of the heap: the
+   unit has no primitive of the heap. With it, the unit, run from the
+   empty heap as the statements of the four run it, exits with the
+   empty heap if it exits, and so does the unit lifted. With both, the statement
+   of each is a refinement, in which the values of two exits are equal
+   and their heaps are equal. Without the first, the unit lifted may
+   exit with a symbol where the unit exits with the closure, the block
+   or the boxed number that the symbol is bound to
+   (FlambdaLiftSpec.value_lifted), and the values of the two exits are
+   not equal. Without the second, a cell of the heap of the unit
+   lifted may hold such a symbol where the cell of the unit holds
+   what the symbol is bound to, and the heaps of the two exits are not
+   equal, whatever the values of the exits are: the test of the exits
+   alone does not make the heaps equal.
 
-   The functions here are those four with that one condition left out
+   The functions here are those four with those two tests left out
    and every other condition kept. What is stated of each is
    FlambdaObserversSpec.refines_under_observers: the unit and the unit
    lifted, run from one continuation environment of what may follow a
@@ -79,8 +90,8 @@
    [liftings_observed] makes the four in turn, each where its
    conditions hold, and [with_lifting_observed] is
    FlambdaValidateSpec.with_lifting with the four functions here in
-   place of the four with the test: it ends by binding the tables that
-   the guess gives at the head of the unit
+   place of the four with the two tests: it ends by binding the tables
+   that the guess gives at the head of the unit
    (FlambdaUnusedHeadStaticsSpec.add_head_tables), and then by giving
    the static sets of closures the copies of code that the guess asks
    (FlambdaCopyCodeSpec.with_copies). The four in turn are
@@ -114,26 +125,26 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
 Import ListNotations.
 
 (* ======================================================================== *)
-(* The four liftings without the test of the exits                          *)
+(* The four liftings without the two tests of the unit                      *)
 (* ======================================================================== *)
 
 (* FlambdaLiftFromArmsSpec.lift_to_head_unit without the test of the
-   exits: the result is a well-formed unit. *)
+   exits and the test of the heap: the result is a well-formed unit. *)
 Definition lift_to_head_unit_observed (u : unit_interface)
     (lets : list (path * lift_to)) (e : expr) : option expr :=
   let lifted := lift_to_head lets e in
   if well_formed_unit u lifted then Some lifted else None.
 
 (* FlambdaLiftFromCodeSpec.lift_from_code_unit without the test of the
-   exits: the result is a well-formed unit. *)
+   exits and the test of the heap: the result is a well-formed unit. *)
 Definition lift_from_code_unit_observed (u : unit_interface)
     (K : lets_in_code) (e : expr) : option expr :=
   let lifted := lift_from_code K [] root e in
   if well_formed_unit u lifted then Some lifted else None.
 
-(* FlambdaLiftSpec.lift_unit without the test of the exits: the result
-   is a well-formed unit, and it makes no closure of the code that the
-   guess names but the symbol given. *)
+(* FlambdaLiftSpec.lift_unit without the test of the exits and the
+   test of the heap: the result is a well-formed unit, and it makes no
+   closure of the code that the guess names but the symbol given. *)
 Definition lift_unit_observed (L : lifting) (e : expr) : option expr :=
   let lifted :=
     bind_my_closures (lifted_my_closures L)
@@ -146,8 +157,8 @@ Definition lift_unit_observed (L : lifting) (e : expr) : option expr :=
   else None.
 
 (* FlambdaLiftAroundSpec.lift_around_unit without the test of the
-   exits: the guess passes the check, and the result is a well-formed
-   unit. *)
+   exits and the test of the heap: the guess passes the check, and the
+   result is a well-formed unit. *)
 Definition lift_around_unit_observed (u : unit_interface)
     (lets : list (path * lift_to)) (places : list (path * list path))
     (e : expr) : option expr :=
@@ -200,9 +211,10 @@ Definition liftings_observed (L : lifting) (e : expr) : expr :=
   around_observed L
     (lets_observed L (out_of_code_observed L (to_head_observed L e))).
 
-(* FlambdaValidateSpec.with_lifting without the test of the exits: the
-   four in turn, then the tables of the guess bound at the head of the
-   unit, and then the copies of code of the guess. *)
+(* FlambdaValidateSpec.with_lifting without the test of the exits and
+   the test of the heap in any of the four: the four in turn, then the
+   tables of the guess bound at the head of the unit, and then the
+   copies of code of the guess. *)
 Definition with_lifting_observed (L : lifting) (e : expr) : expr :=
   with_copies (code_copied L)
     (add_head_tables (tables_put L) (liftings_observed L e)).
@@ -220,20 +232,23 @@ Definition lift_to_head_unit_observed_refines_statement : Prop :=
     (lets : list (path * lift_to)) (e e' : expr),
     lift_to_head_unit_observed u lets e = Some e' ->
     static_names_free_in (imports_statics imports) e' = true ->
-    refines_under_observers [] (imports_statics imports) empty_heap e e'.
+    refines_under_observers [] (imports_statics imports) empty_heap no_reads e
+      e'.
 
 Definition lift_from_code_unit_observed_refines_statement : Prop :=
   ∀ (imports : list (symbol * import_class)) (u : unit_interface)
     (K : lets_in_code) (e e' : expr),
     lift_from_code_unit_observed u K e = Some e' ->
     static_names_free_in (imports_statics imports) e' = true ->
-    refines_under_observers [] (imports_statics imports) empty_heap e e'.
+    refines_under_observers [] (imports_statics imports) empty_heap no_reads e
+      e'.
 
 Definition lift_unit_observed_refines_statement : Prop :=
   ∀ (imports : list (symbol * import_class)) (L : lifting) (e e' : expr),
     lift_unit_observed L e = Some e' ->
     static_names_free_in (imports_statics imports) e' = true ->
-    refines_under_observers [] (imports_statics imports) empty_heap e e'.
+    refines_under_observers [] (imports_statics imports) empty_heap no_reads e
+      e'.
 
 Definition lift_around_unit_observed_refines_statement : Prop :=
   ∀ (imports : list (symbol * import_class)) (u : unit_interface)
@@ -241,7 +256,8 @@ Definition lift_around_unit_observed_refines_statement : Prop :=
     (e e' : expr),
     lift_around_unit_observed u lets places e = Some e' ->
     static_names_free_in (imports_statics imports) e' = true ->
-    refines_under_observers [] (imports_statics imports) empty_heap e e'.
+    refines_under_observers [] (imports_statics imports) empty_heap no_reads e
+      e'.
 
 (* The four in turn give the unit, up to what may follow a unit, if what
    each of the four gives binds no name that the imports bind. With no
@@ -256,11 +272,12 @@ Definition liftings_observed_refines_statement : Prop :=
     static_names_free_in statics out_of_code = true ->
     static_names_free_in statics lifted = true ->
     static_names_free_in statics (liftings_observed L e) = true ->
-    refines_under_observers [] statics empty_heap e (liftings_observed L e).
+    refines_under_observers [] statics empty_heap no_reads e
+      (liftings_observed L e).
 
 (* The same with the tables of the guess bound at the head after, and
-   then its copies of code: the lifting without the test of the exits
-   gives the unit, up to what may follow a unit. The premise on the
+   then its copies of code: the lifting without the two tests gives
+   the unit, up to what may follow a unit. The premise on the
    fourth lifting is now of the whole result, which binds what the
    fourth gives, the tables and the copies. *)
 Definition with_lifting_observed_refines_statement : Prop :=
@@ -273,5 +290,5 @@ Definition with_lifting_observed_refines_statement : Prop :=
     static_names_free_in statics out_of_code = true ->
     static_names_free_in statics lifted = true ->
     static_names_free_in statics (with_lifting_observed L e) = true ->
-    refines_under_observers [] statics empty_heap e
+    refines_under_observers [] statics empty_heap no_reads e
       (with_lifting_observed L e).

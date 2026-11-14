@@ -539,8 +539,8 @@ Definition fold_known_unit_refines_observed_statement : Prop :=
     fold_known_unit e = Some e' ->
     static_names_free_in (imports_statics imports) e = true ->
     observers [] conts ->
-    refines (State e [] conts (imports_statics imports) empty_heap)
-      (State e' [] conts (imports_statics imports) empty_heap).
+    refines (State e [] conts (imports_statics imports) empty_heap no_reads)
+      (State e' [] conts (imports_statics imports) empty_heap no_reads).
 
 (* A defining expression is folded to its value: in any static
    environment in which each symbol that [statics] binds is bound to the
@@ -583,14 +583,15 @@ Definition fold_block_load_sound_statement : Prop :=
 (* A call is folded to a call that steps as it does, in any such static
    environment. *)
 Definition fold_known_apply_sound_statement : Prop :=
-  ∀ (sets run_statics : static_env) (hp : heap) (vars : env) (conts : cont_env)
+  ∀ (sets run_statics : static_env) (hp : heap) (rd : read_record) (vars : env)
+    (conts : cont_env)
     (ap : apply_expr),
     (∀ (s : symbol) (allocated allocated' : statically_allocated_value),
       lookup s (static_values sets) = Some allocated ->
       lookup s (static_values run_statics) = Some allocated' ->
       same_set allocated allocated') ->
-    step (State (Apply (fold_known_apply sets ap)) vars conts run_statics hp)
-    = step (State (Apply ap) vars conts run_statics hp).
+    step (State (Apply (fold_known_apply sets ap)) vars conts run_statics hp rd)
+    = step (State (Apply ap) vars conts run_statics hp rd).
 
 (* The rewrite commutes with renaming, which renames no symbol: what is
    known is the same, a defining expression that is folded has no

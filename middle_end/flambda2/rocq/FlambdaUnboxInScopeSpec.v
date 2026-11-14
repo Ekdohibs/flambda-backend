@@ -283,11 +283,11 @@ with rewrite_rec_handler_in_scope (f : facts -> expr -> expr)
    they are known to be. *)
 Definition refines_where_known (f : facts -> expr -> expr) : Prop :=
   ∀ (known : facts) (e : expr) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap),
+    (statics : static_env) (hp : heap) (rd : read_record),
     symbols_only known ->
     symbols_bound_as known statics ->
-    refines (State e vars conts statics hp)
-      (State (f known e) vars conts statics hp).
+    refines (State e vars conts statics hp rd)
+      (State (f known e) vars conts statics hp rd).
 
 (* Such a rewrite applied to the bodies of code, and to the handlers of
    recursive continuations, with what is in scope known, is such a

@@ -68,9 +68,24 @@
 
    A continuation with no binding stands for a way out of the term: the
    return or exception continuation of the enclosing unit. Applying one
-   ends execution, and the continuation and its arguments are what is
-   observed ([Exit]). This is the only observation so far; there is no
-   mutable memory and there are no effects.
+   ends execution: the result [Exit] carries the continuation, its
+   arguments, and the heap and the read record of the state. What is
+   observed of an exit ([Exits]) is the continuation, the values and
+   the heap, and not the read record.
+
+   A state has a heap (FlambdaHeapSpec.v: locations bound to cells, a
+   cell being a block with an identity or a mutable array) and a read
+   record (FlambdaValueSpec.read_record). A [Let] of a primitive is
+   run on the heap ([exec_named], by FlambdaHeapSpec.exec_prim): a
+   primitive of the heap makes a cell or writes to one, and a load,
+   [Get_tag], [Is_int], [Is_null], [Opaque_identity], the length of an
+   array and [Phys_equal] read a cell, or answer of it, where they are
+   given a location. A step changes the heap only at a [Let]
+   ([step_heap_statement]). The read record is carried: nothing adds
+   to it ([step_keeps_reads_statement]) and nothing reads it
+   ([step_ignores_reads_statement]; decisions D49 and D52). Two exits
+   are compared with their heaps, which must
+   be equal ([refines]; decision D40).
 
    A function call ([call_function]) runs the body of the code of the
    closure called, with the code's return and exception continuations
@@ -419,23 +434,24 @@ Definition eval_named (statics : static_env) (vars : env)
   end.
 
 (* What a named expression does on a heap: its value, and the heap
-   after. Only a primitive may read the heap, and only a primitive of
-   the heap changes it. *)
-(* CR mshinwell: The primitives of the heap are not run yet. For now the
-   value is that of [eval_named], which neither reads nor changes a
-   heap and has no value on a primitive of the heap, and the heap is
-   returned as it came. FlambdaHeapSpec.exec_prim is what a primitive
-   is to do here: the case of [Prim p args] becomes
-   [exec_prim statics hp p vs] on the values of the arguments. The
-   statements of the section "A [Let] and the heap" below are proved of
-   this definition. They are stated so as to be provable of that one,
-   from the statements of FlambdaHeapSpec.v that the section names;
-   they are not proved of it in this tree. A proof about a step is to
-   use them, and [eval_named] where they give it. *)
-Definition exec_named (statics : static_env) (hp : heap) (vars : env)
-    (defining_expr : named) : option (value * heap) :=
-  let* v := eval_named statics vars defining_expr in
-  Some (v, hp).
+   after. A primitive is run on the values of its arguments by
+   FlambdaHeapSpec.exec_prim: it may read the heap, and a primitive of
+   the heap changes it. Anything else has the value that [eval_named]
+   gives it, and the heap is as it came. *)
+Definition exec_named (statics : static_env) (hp : heap)
+    (rd : read_record) (vars : env) (defining_expr : named)
+    : option (value * heap * read_record) :=
+  match defining_expr with
+  | Prim p args =>
+    let* vs := eval_simples vars args in
+    let* '(v, hp') := exec_prim statics hp p vs in
+    Some (v, hp', rd)
+  | Simple _ | Set_of_closures _ _ | Closure_of_set _ _ _
+  | Project_value_slot _ _ | Project_value_slot_from _ _ _
+  | Project_function_slot _ _ _ =>
+    let* v := eval_named statics vars defining_expr in
+    Some (v, hp, rd)
+  end.
 
 (* CR mshinwell: As for [Closure_of_set] in [eval_named]: the constant of
    a closure at a function slot that is not among those of its set has
@@ -606,7 +622,8 @@ Record state : Type := State {
   state_vars : env;
   state_conts : cont_env;
   state_statics : static_env;
-  state_heap : heap
+  state_heap : heap;
+  state_reads : read_record
 }.
 
 (* What one step of a state, or a bounded run, comes to: another state, the
@@ -614,6 +631,7 @@ Record state : Type := State {
 Inductive step_result : Type :=
   | Step (s : state)
   | Exit (k : continuation) (vs : list value) (hp : heap)
+      (rd : read_record)
   | Undefined.
 
 (* The exception continuation that a call gives its callee: the caller's,
@@ -668,7 +686,7 @@ Definition with_extra_args (c : cont_value) (extra : list value)
      [Application_result_kind_mismatch]). *)
 Definition call_code (closure : value) (c : code) (vs : list value)
     (args_arity return_arity : arity) (return_to exn_to : cont_value)
-    (statics : static_env) (hp : heap) : step_result :=
+    (statics : static_env) (hp : heap) (rd : read_record) : step_result :=
   if binds_statics (code_body c) then Undefined
   else if
     negb
@@ -683,7 +701,7 @@ Definition call_code (closure : value) (c : code) (vs : list value)
       Step (State (code_body c) callee_vars
         [(code_return_continuation c, return_to);
          (code_exn_continuation c, exn_to)]
-        statics hp)
+        statics hp rd)
     | None => Undefined
     end.
 
@@ -959,15 +977,16 @@ Definition shape_of_call (statics : static_env) (callee : value)
 Definition run_call (return_partial : value -> step_result)
     (shape : option call_shape) (return_arity : arity)
     (return_to exn_to : cont_value) (statics : static_env)
-      (hp : heap) : step_result :=
+      (hp : heap) (rd : read_record) : step_result :=
   match shape with
   | Some (Full_call closure c vs args_arity) =>
     call_code closure c vs args_arity return_arity return_to exn_to statics hp
+      rd
   | Some (Over_call closure c vs remaining args_arity remaining_arity) =>
     call_code closure c vs args_arity (code_result_arity c)
       (Over_application remaining remaining_arity return_arity return_to
          exn_to)
-      exn_to statics hp
+      exn_to statics hp rd
   | Some (Partial_call partial) => return_partial partial
   | None => Undefined
   end.
@@ -988,44 +1007,48 @@ Definition run_call (return_partial : value -> step_result)
    value is not tested: a value that can be called is of kind
    [Value]. *)
 Fixpoint apply_cont_value (c : cont_value) (vs : list value)
-    (statics : static_env) (hp : heap) {struct c} : step_result :=
+    (statics : static_env) (hp : heap) (rd : read_record)
+      {struct c} : step_result :=
   match c with
-  | Outer k => Exit k vs hp
+  | Outer k => Exit k vs hp rd
   | Closure (Handler params metadata handler) def_vars def_conts recursive =>
     if kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata)
     then
       match bind_params params vs def_vars with
       | Some handler_vars =>
         Step (State handler handler_vars
-          (rec_closures recursive def_vars def_conts ++ def_conts) statics hp)
+          (rec_closures recursive def_vars def_conts ++ def_conts) statics hp
+            rd)
       | None => Undefined
       end
     else Undefined
-  | Extra_args c extra => apply_cont_value c (vs ++ extra) statics hp
+  | Extra_args c extra => apply_cont_value c (vs ++ extra) statics hp rd
   | Over_application remaining remaining_arity return_arity return_to exn_to =>
     match vs with
     | [v] =>
-      run_call (fun partial => apply_cont_value return_to [partial] statics hp)
+      run_call
+        (fun partial => apply_cont_value return_to [partial] statics hp rd)
         (shape_of_call statics v Indirect remaining remaining_arity
            return_arity)
-        return_arity return_to exn_to statics hp
+        return_arity return_to exn_to statics hp rd
     | _ => Undefined
     end
   end.
 
 Definition apply_continuation (k : continuation) (vs : list value)
-    (conts : cont_env) (statics : static_env) (hp : heap) : step_result :=
-  apply_cont_value (resolve k conts) vs statics hp.
+    (conts : cont_env) (statics : static_env) (hp : heap)
+      (rd : read_record) : step_result :=
+  apply_cont_value (resolve k conts) vs statics hp rd.
 
 (* A call: what [shape_of_call] says it is runs, and a partial
    application is given to the return continuation of the call. *)
 Definition call_function (callee : value) (kind : call_kind)
     (vs : list value) (args_arity return_arity : arity)
     (return_to exn_to : cont_value) (statics : static_env)
-      (hp : heap) : step_result :=
-  run_call (fun partial => apply_cont_value return_to [partial] statics hp)
+      (hp : heap) (rd : read_record) : step_result :=
+  run_call (fun partial => apply_cont_value return_to [partial] statics hp rd)
     (shape_of_call statics callee kind vs args_arity return_arity)
-    return_arity return_to exn_to statics hp.
+    return_arity return_to exn_to statics hp rd.
 
 (* CR mshinwell: a [Let] of a value of another kind than the one it
    gives its variable is undefined, and so is a handler applied to
@@ -1052,27 +1075,28 @@ Definition call_function (callee : value) (kind : call_kind)
 
 Definition step (s : state) : step_result :=
   match s with
-  | State (Let x kind defining_expr body) vars conts statics hp =>
-    match exec_named statics hp vars defining_expr with
-    | Some (v, hp') =>
+  | State (Let x kind defining_expr body) vars conts statics hp rd =>
+    match exec_named statics hp rd vars defining_expr with
+    | Some (v, hp', rd') =>
       if kind_eqb (kind_of_value v) kind
-      then Step (State body ((x, v) :: vars) conts statics hp')
+      then Step (State body ((x, v) :: vars) conts statics hp' rd')
       else Undefined
     | None => Undefined
     end
-  | State (Let_static bindings body) vars conts statics hp =>
+  | State (Let_static bindings body) vars conts statics hp rd =>
     match eval_static_bindings vars bindings statics with
-    | Some statics' => Step (State body vars conts statics' hp)
+    | Some statics' => Step (State body vars conts statics' hp rd)
     | None => Undefined
     end
-  | State (Let_cont_non_recursive k h body) vars conts statics hp =>
-    Step (State body vars ((k, Closure h vars conts []) :: conts) statics hp)
-  | State (Let_cont_recursive handlers body) vars conts statics hp =>
+  | State (Let_cont_non_recursive k h body) vars conts statics hp rd =>
+    Step (State body vars ((k, Closure h vars conts []) :: conts) statics hp rd)
+  | State (Let_cont_recursive handlers body) vars conts statics hp rd =>
     if handlers_bind_statics handlers then Undefined
     else
       Step
-        (State body vars (rec_closures handlers vars conts ++ conts) statics hp)
-  | State (Apply ap) vars conts statics hp =>
+        (State body vars (rec_closures handlers vars conts ++ conts) statics hp
+           rd)
+  | State (Apply ap) vars conts statics hp rd =>
     match
       eval_simple vars (ap_callee ap), eval_simples vars (ap_args ap),
       eval_simples vars (exn_extra_simples ap)
@@ -1081,28 +1105,28 @@ Definition step (s : state) : step_result :=
       call_function callee (ap_call_kind ap) vs (ap_args_arity ap)
         (ap_return_arity ap) (resolve (ap_continuation ap) conts)
         (with_extra_args (resolve (ap_exn_continuation ap) conts) extra)
-        statics hp
+        statics hp rd
     | _, _, _ => Undefined
     end
-  | State (Apply_cont ac) vars conts statics hp =>
+  | State (Apply_cont ac) vars conts statics hp rd =>
     match eval_simples vars (ac_args ac) with
-    | Some vs => apply_continuation (ac_continuation ac) vs conts statics hp
+    | Some vs => apply_continuation (ac_continuation ac) vs conts statics hp rd
     | None => Undefined
     end
-  | State (Switch scrutinee arms) vars conts statics hp =>
+  | State (Switch scrutinee arms) vars conts statics hp rd =>
     match eval_simple vars scrutinee with
     | Some v =>
       match naked_immediate_of_value v with
       | Some i =>
         match find_arm i arms with
-        | Some ac => Step (State (Apply_cont ac) vars conts statics hp)
+        | Some ac => Step (State (Apply_cont ac) vars conts statics hp rd)
         | None => Undefined
         end
       | None => Undefined
       end
     | None => Undefined
     end
-  | State Invalid _ _ _ _ => Undefined
+  | State Invalid _ _ _ _ _ => Undefined
   end.
 
 (* At most [fuel] steps: the state reached, or how execution ended. *)
@@ -1121,87 +1145,158 @@ Fixpoint run (fuel : nat) (s : state) : step_result :=
 (* ======================================================================== *)
 
 (* What [exec_named] does, said without saying what the primitives of
-   the heap do. These statements are proved of [exec_named] as it is.
-   They are stated so as to be provable of it when a primitive is run
-   by FlambdaHeapSpec.exec_prim, from statements of FlambdaHeapSpec.v
-   about [exec_prim]: [exec_prim_heap_statement],
-   [exec_prim_eval_prim_statement], [eval_prim_exec_prim_statement],
-   [exec_prim_no_location_statement], [exec_prim_evolves_statement]
-   and [no_coeffects_statement]. They are not proved of that
-   definition in this tree. They are how a proof reasons about the
-   step of a [Let].
+   the heap do. A primitive is run by FlambdaHeapSpec.exec_prim, and
+   these statements are proved of [exec_named] so defined, from
+   statements of FlambdaHeapSpec.v about [exec_prim]:
+   [exec_prim_heap_statement], [exec_prim_eval_prim_statement],
+   [eval_prim_exec_prim_statement], [exec_prim_no_location_statement],
+   [exec_prim_evolves_statement] and [no_coeffects_statement]. They
+   are how a proof reasons about the step of a [Let].
 
    A named expression that is not a primitive does not look at the heap:
    it has the value that [eval_named] gives it, and the heap is as it
    came. *)
 Definition exec_named_not_prim_statement : Prop :=
-  ∀ (statics : static_env) (hp : heap) (vars : env) (d : named),
+  ∀ (statics : static_env) (hp : heap) (rd : read_record) (vars : env)
+    (d : named),
     (∀ (p : prim) (args : list simple), d <> Prim p args) ->
-    exec_named statics hp vars d
+    exec_named statics hp rd vars d
     = let* v := eval_named statics vars d in
-      Some (v, hp).
+      Some (v, hp, rd).
+
+(* A primitive is run on the values of its arguments: two lists of
+   arguments that have the same values, each under its environment, do
+   the same. *)
+Definition exec_named_args_statement : Prop :=
+  ∀ (statics : static_env) (hp : heap) (rd : read_record) (vars vars' : env)
+    (p : prim)
+    (args args' : list simple),
+    eval_simples vars' args' = eval_simples vars args ->
+    exec_named statics hp rd vars' (Prim p args')
+    = exec_named statics hp rd vars (Prim p args).
+
+(* And a primitive has no value when one of its arguments has none. *)
+Definition exec_named_no_args_statement : Prop :=
+  ∀ (statics : static_env) (hp : heap) (rd : read_record) (vars : env)
+    (p : prim)
+    (args : list simple),
+    eval_simples vars args = None ->
+    exec_named statics hp rd vars (Prim p args) = None.
+
+(* A primitive depends on the static environment only through what the
+   symbols among the values of its arguments are bound to; and one that
+   has a value keeps it, and returns the same heap, when the static
+   environment grows: when each of those symbols that is bound stays
+   bound to the same thing (FlambdaHeapSpec.exec_prim_static_values_statement
+   and exec_prim_statics_extend_statement, which are the two statements
+   of FlambdaPrimitiveSpec.v on a heap). *)
+Definition exec_named_static_values_statement : Prop :=
+  ∀ (statics statics' : static_env) (hp : heap) (rd : read_record) (vars : env)
+    (p : prim)
+    (args : list simple),
+    (∀ (vs : list value) (s : symbol),
+      eval_simples vars args = Some vs ->
+      Value_symbol s ∈ vs ->
+      lookup s (static_values statics) = lookup s (static_values statics')) ->
+    exec_named statics hp rd vars (Prim p args)
+    = exec_named statics' hp rd vars (Prim p args).
+
+Definition exec_named_statics_extend_statement : Prop :=
+  ∀ (statics statics' : static_env) (hp hp' : heap) (rd rd' : read_record)
+    (vars : env) (p : prim)
+    (args : list simple) (v : value),
+    (∀ (vs : list value) (s : symbol)
+       (allocated : statically_allocated_value),
+      eval_simples vars args = Some vs ->
+      Value_symbol s ∈ vs ->
+      lookup s (static_values statics) = Some allocated ->
+      lookup s (static_values statics') = Some allocated) ->
+    exec_named statics hp rd vars (Prim p args) = Some (v, hp', rd') ->
+    exec_named statics' hp rd vars (Prim p args) = Some (v, hp', rd').
 
 (* Only a primitive of the heap changes the heap. *)
 Definition exec_named_heap_statement : Prop :=
-  ∀ (statics : static_env) (hp hp' : heap) (vars : env) (d : named)
+  ∀ (statics : static_env) (hp hp' : heap) (rd rd' : read_record) (vars : env)
+    (d : named)
     (v : value),
     (∀ (q : heap_primitive) (args : list simple), d <> Prim (Heap q) args) ->
-    exec_named statics hp vars d = Some (v, hp') ->
+    exec_named statics hp rd vars d = Some (v, hp', rd') ->
     hp' = hp.
 
 (* A primitive that does not read the heap
    (FlambdaHeapSpec.prim_reads_heap) and that has a value has it by
-   [eval_named]. *)
+   [eval_named], and leaves the heap and the read record as they came.
+   The last is not the record doing nothing: such a primitive reads no
+   cell, so there is nothing for it to record. *)
 Definition exec_named_eval_named_statement : Prop :=
-  ∀ (statics : static_env) (hp hp' : heap) (vars : env) (p : prim)
+  ∀ (statics : static_env) (hp hp' : heap) (rd rd' : read_record) (vars : env)
+    (p : prim)
     (args : list simple) (v : value),
     prim_reads_heap p = false ->
-    exec_named statics hp vars (Prim p args) = Some (v, hp') ->
-    eval_named statics vars (Prim p args) = Some v ∧ hp' = hp.
+    exec_named statics hp rd vars (Prim p args) = Some (v, hp', rd') ->
+    eval_named statics vars (Prim p args) = Some v ∧ hp' = hp ∧ rd' = rd.
 
 (* And it has the value that [eval_named] gives it, when the locations
    among the values of its arguments are bound in the heap. *)
 Definition eval_named_exec_named_statement : Prop :=
-  ∀ (statics : static_env) (hp : heap) (vars : env) (p : prim)
+  ∀ (statics : static_env) (hp : heap) (rd : read_record) (vars : env)
+    (p : prim)
     (args : list simple) (vs : list value) (v : value),
     prim_reads_heap p = false ->
     eval_simples vars args = Some vs ->
     (∀ l : location, Value_location l ∈ vs -> is_bound l hp = true) ->
     eval_named statics vars (Prim p args) = Some v ->
-    exec_named statics hp vars (Prim p args) = Some (v, hp).
+    exec_named statics hp rd vars (Prim p args) = Some (v, hp, rd).
 
 (* A primitive that is not of the heap, applied to arguments none of
    whose values is a location, is as [eval_named] has it: a read of a
    block that is a value or that a symbol is bound to, for one. *)
 Definition exec_named_no_location_statement : Prop :=
-  ∀ (statics : static_env) (hp : heap) (vars : env) (p : prim)
+  ∀ (statics : static_env) (hp : heap) (rd : read_record) (vars : env)
+    (p : prim)
     (args : list simple) (vs : list value),
     (∀ q : heap_primitive, p <> Heap q) ->
     eval_simples vars args = Some vs ->
     (∀ l : location, Value_location l ∉ vs) ->
-    exec_named statics hp vars (Prim p args)
+    exec_named statics hp rd vars (Prim p args)
     = let* v := eval_named statics vars (Prim p args) in
-      Some (v, hp).
+      Some (v, hp, rd).
 
 (* The heap after is one that the heap before evolves to
    (FlambdaHeapSpec.heap_evolves): what is bound stays bound, and what
    is not mutable stays as it is. So does the heap of a state at each
    step. *)
 Definition exec_named_evolves_statement : Prop :=
-  ∀ (statics : static_env) (hp hp' : heap) (vars : env) (d : named)
+  ∀ (statics : static_env) (hp hp' : heap) (rd rd' : read_record) (vars : env)
+    (d : named)
     (v : value),
-    exec_named statics hp vars d = Some (v, hp') -> heap_evolves hp hp'.
+    exec_named statics hp rd vars d = Some (v, hp', rd') -> heap_evolves hp hp'.
 
 Definition step_evolves_statement : Prop :=
   ∀ s s' : state,
     step s = Step s' -> heap_evolves (state_heap s) (state_heap s').
 
+(* A step changes the heap only at a [Let]: there the heap after is the
+   one that the defining expression leaves, and at every other
+   construct it is the heap before. *)
+Definition step_heap_statement : Prop :=
+  ∀ s s' : state,
+    step s = Step s' ->
+    state_heap s' = state_heap s
+    ∨ ∃ (x : variable) (kind : flambda_kind) (d : named) (body : expr)
+        (v : value),
+        state_expr s = Let x kind d body
+        ∧ exec_named (state_statics s) (state_heap s) (state_reads s)
+          (state_vars s) d
+          = Some (v, state_heap s', state_reads s').
+
 (* An exit leaves the heap of the state that exits: the steps that can
    exit are a call and the application of a continuation, and neither
    changes the heap. *)
 Definition step_exit_heap_statement : Prop :=
-  ∀ (s : state) (k : continuation) (vs : list value) (hp : heap),
-    step s = Exit k vs hp -> hp = state_heap s.
+  ∀ (s : state) (k : continuation) (vs : list value) (hp : heap)
+    (rd : read_record),
+    step s = Exit k vs hp rd -> hp = state_heap s.
 
 (* A named expression that is stable (FlambdaHeapSpec.named_stable: not a
    primitive, or a primitive with no effects and no coeffects) and that
@@ -1209,19 +1304,21 @@ Definition step_exit_heap_statement : Prop :=
    that the heap evolves to. This is what keeps a fact about the value
    of a variable across the steps that follow, stores among them. *)
 Definition exec_named_stable_statement : Prop :=
-  ∀ (statics : static_env) (hp hp' later : heap) (vars : env) (d : named)
+  ∀ (statics : static_env) (hp hp' later : heap) (rd rd' rd_later : read_record)
+    (vars : env) (d : named)
     (v : value),
     named_stable d = true ->
     heap_evolves hp later ->
-    exec_named statics hp vars d = Some (v, hp') ->
-    exec_named statics later vars d = Some (v, later).
+    exec_named statics hp rd vars d = Some (v, hp', rd') ->
+    exec_named statics later rd_later vars d = Some (v, later, rd_later).
 
 (* A primitive makes its value, and what it puts in the heap, out of
    the values of its arguments and of what the heap holds
    (FlambdaHeapSpec.exec_prim_preserves_statement, which is
    FlambdaPrimitiveSpec.eval_prim_preserves_statement on a heap). *)
 Definition exec_named_preserves_statement : Prop :=
-  ∀ (P : value -> Prop) (statics : static_env) (hp hp' : heap) (vars : env)
+  ∀ (P : value -> Prop) (statics : static_env) (hp hp' : heap)
+    (rd rd' : read_record) (vars : env)
     (p : prim) (args : list simple) (v : value),
     holds_of_numbers P ->
     holds_of_blocks P ->
@@ -1232,8 +1329,106 @@ Definition exec_named_preserves_statement : Prop :=
     (∀ vs : list value,
       eval_simples vars args = Some vs -> ∀ arg : value, arg ∈ vs -> P arg) ->
     heap_values_all P hp ->
-    exec_named statics hp vars (Prim p args) = Some (v, hp') ->
+    exec_named statics hp rd vars (Prim p args) = Some (v, hp', rd') ->
     P v ∧ heap_values_all P hp'.
+
+(* ======================================================================== *)
+(* The read record does nothing yet                                         *)
+(* ======================================================================== *)
+
+(* The record is carried by the machine and is not yet used: nothing
+   looks at it and nothing adds to it. That is said here, once. Decisions
+   D49 and D52 change [exec_named], and these statements with it. *)
+
+(* A state with another record, and what a step or a run comes to with
+   another record. *)
+Definition with_reads (rd : read_record) (s : state) : state :=
+  State (state_expr s) (state_vars s) (state_conts s) (state_statics s)
+    (state_heap s) rd.
+
+Definition result_with_reads (rd : read_record) (result : step_result)
+    : step_result :=
+  match result with
+  | Step s => Step (with_reads rd s)
+  | Exit k vs hp _ => Exit k vs hp rd
+  | Undefined => Undefined
+  end.
+
+(* Nothing looks at the record: with another record the executor of a
+   named expression and a step do what they do with this one, where
+   they fail and where a step is undefined as well. *)
+Definition exec_named_ignores_reads_statement : Prop :=
+  ∀ (statics : static_env) (hp : heap) (rd1 rd2 : read_record) (vars : env)
+    (d : named),
+    exec_named statics hp rd2 vars d
+    = match exec_named statics hp rd1 vars d with
+      | Some (v, hp', _) => Some (v, hp', rd2)
+      | None => None
+      end.
+
+Definition step_ignores_reads_statement : Prop :=
+  ∀ (rd : read_record) (s : state),
+    step (with_reads rd s) = result_with_reads rd (step s).
+
+(* Nothing adds to the record: the executor gives back the record it was
+   given, and a step leaves the record of the state. *)
+Definition exec_named_keeps_reads_statement : Prop :=
+  ∀ (statics : static_env) (hp hp' : heap) (rd rd' : read_record)
+    (vars : env) (d : named) (v : value),
+    exec_named statics hp rd vars d = Some (v, hp', rd') -> rd' = rd.
+
+Definition step_keeps_reads_statement : Prop :=
+  ∀ s : state, result_with_reads (state_reads s) (step s) = step s.
+
+(* What the heap and the record of a state may become. While the record
+   does nothing: the heap evolves (FlambdaHeapSpec.heap_evolves) and the
+   record stays. Decisions D49 and D52 change this definition, not the
+   two statements under it. *)
+Definition memory_evolves (hp : heap) (rd : read_record) (hp' : heap)
+    (rd' : read_record) : Prop :=
+  heap_evolves hp hp' ∧ rd' = rd.
+
+Definition memory_evolves_refl_statement : Prop :=
+  ∀ (hp : heap) (rd : read_record), memory_evolves hp rd hp rd.
+
+Definition memory_evolves_trans_statement : Prop :=
+  ∀ (hp1 hp2 hp3 : heap) (rd1 rd2 rd3 : read_record),
+    memory_evolves hp1 rd1 hp2 rd2 ->
+    memory_evolves hp2 rd2 hp3 rd3 ->
+    memory_evolves hp1 rd1 hp3 rd3.
+
+(* The executor of a named expression and a step only do that. *)
+Definition exec_named_memory_evolves_statement : Prop :=
+  ∀ (statics : static_env) (hp hp' : heap) (rd rd' : read_record)
+    (vars : env) (d : named) (v : value),
+    exec_named statics hp rd vars d = Some (v, hp', rd') ->
+    memory_evolves hp rd hp' rd'.
+
+Definition step_memory_evolves_statement : Prop :=
+  ∀ s s' : state,
+    step s = Step s' ->
+    memory_evolves (state_heap s) (state_reads s) (state_heap s')
+      (state_reads s').
+
+(* A stable primitive (FlambdaHeapSpec.stable_prim) that has run runs
+   again where it left the heap and the record, with the same value, and
+   changes neither. *)
+Definition stable_prim_again_statement : Prop :=
+  ∀ (statics : static_env) (hp hp' : heap) (rd rd' : read_record)
+    (vars : env) (p : prim) (args : list simple) (v : value),
+    stable_prim p = true ->
+    exec_named statics hp rd vars (Prim p args) = Some (v, hp', rd') ->
+    exec_named statics hp' rd' vars (Prim p args) = Some (v, hp', rd').
+
+(* It stays: a stable primitive that runs and changes nothing does the
+   same wherever the heap and the record evolve to. *)
+Definition stable_prim_stays_statement : Prop :=
+  ∀ (statics : static_env) (hp hp2 : heap) (rd rd2 : read_record)
+    (vars : env) (p : prim) (args : list simple) (v : value),
+    stable_prim p = true ->
+    exec_named statics hp rd vars (Prim p args) = Some (v, hp, rd) ->
+    memory_evolves hp rd hp2 rd2 ->
+    exec_named statics hp2 rd2 vars (Prim p args) = Some (v, hp2, rd2).
 
 (* ======================================================================== *)
 (* Where a state holds values                                               *)
@@ -1346,11 +1541,11 @@ Definition step_values_all_statement : Prop :=
       tuple_fields (state_statics s) size tuple = Some fields ->
       Forall (P (state_statics s)) fields) ->
     (∀ (x : variable) (kind : flambda_kind) (defining_expr : named)
-       (body : expr) (v : value) (hp' : heap),
+       (body : expr) (v : value) (hp' : heap) (rd' : read_record),
       state_expr s = Let x kind defining_expr body ->
-      exec_named (state_statics s) (state_heap s) (state_vars s)
+      exec_named (state_statics s) (state_heap s) (state_reads s) (state_vars s)
         defining_expr
-      = Some (v, hp') ->
+      = Some (v, hp', rd') ->
       P (state_statics s) v ∧ heap_values_all (P (state_statics s)) hp') ->
     (∀ (bindings : list static_binding) (body : expr)
        (statics' : static_env),
@@ -1374,7 +1569,7 @@ Definition step_values_all_statement : Prop :=
       Forall (P (state_statics s)) vs) ->
     match step s with
     | Step s' => state_values_all P Q s'
-    | Exit _ vs _ => Forall (P (state_statics s)) vs
+    | Exit _ vs _ _ => Forall (P (state_statics s)) vs
     | Undefined => True
     end.
 
@@ -1389,7 +1584,8 @@ Inductive behaviour : Type :=
 
 Definition behaves (s : state) (b : behaviour) : Prop :=
   match b with
-  | Exits k vs hp => ∃ fuel : nat, run fuel s = Exit k vs hp
+  | Exits k vs hp =>
+    ∃ (fuel : nat) (rd : read_record), run fuel s = Exit k vs hp rd
   | Goes_wrong => ∃ fuel : nat, run fuel s = Undefined
   | Diverges => ∀ fuel : nat, ∃ s' : state, run fuel s = Step s'
   end.
@@ -1444,13 +1640,16 @@ Definition refines_antisymmetric_statement : Prop :=
 
 (* The same for expressions: under all environments. *)
 Definition expr_equivalent (e e' : expr) : Prop :=
-  ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap),
-    equivalent (State e vars conts statics hp) (State e' vars conts statics hp).
+  ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+    (rd : read_record),
+    equivalent (State e vars conts statics hp rd)
+      (State e' vars conts statics hp rd).
 
 Definition expr_refines (source target : expr) : Prop :=
-  ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap),
-    refines (State source vars conts statics hp)
-      (State target vars conts statics hp).
+  ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+    (rd : read_record),
+    refines (State source vars conts statics hp rd)
+      (State target vars conts statics hp rd).
 
 (* A step does not change the behaviour. *)
 Definition step_equivalent_statement : Prop :=

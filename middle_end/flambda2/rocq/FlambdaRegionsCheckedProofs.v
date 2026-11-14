@@ -160,6 +160,11 @@ Proof.
     + (* Another [Let]. *)
       rewrite (region_step_let rs x kind d body He Hd) in Hstep
         by (rewrite He; exact Hnofault).
+      destruct (named_needs_heap (state_vars (rs_state rs)) d) eqn:Hneeds;
+        [ discriminate | ].
+      assert (Hneeds_c :
+        named_needs_heap (state_vars (rs_state (count_uses rs))) d = false)
+        by exact Hneeds.
       unfold let_step in Hstep.
       assert (Hsimples :
         evaluated_simples (Let x kind d body) = simples_of_named d).

@@ -33,6 +33,7 @@ From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaMapProofs FlambdaSemanticsSpec FlambdaSemanticsProofs
   FlambdaRegionsSpec.
+From OxCamlFlambda2 Require FlambdaRegionsNeedsHeapProofs.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -43,12 +44,12 @@ Import ListNotations.
 Theorem step_keeps_statics : step_keeps_statics_statement.
 Proof.
   intros s s' Hstep Hnot. revert Hstep.
-  destruct s as [e vars conts statics hp]. simpl in Hnot. simpl.
+  destruct s as [e vars conts statics hp rd]. simpl in Hnot. simpl.
   destruct e
     as [x kind d body | bindings body | k h body | handlers body | ap | ac
        | scrutinee arms | ].
   - rewrite step_let_exec.
-    destruct (exec_named statics hp vars d) as [[v hp'] | ];
+    destruct (exec_named statics hp rd vars d) as [[[v hp'] rd'] | ];
       [ | discriminate ].
     destruct (kind_eqb (kind_of_value v) kind); [ | discriminate ].
     intros [= <-]. reflexivity.
@@ -147,7 +148,7 @@ Lemma plain_step_no_frames (rs : region_state) :
 Proof.
   intros Hframes Hnot. unfold plain_step.
   rewrite (live_statics_no_frames rs Hframes), with_statics_same.
-  destruct (step (rs_state rs)) as [s' | k vs hp | ] eqn:Hstep; simpl.
+  destruct (step (rs_state rs)) as [s' | k vs hp rd | ] eqn:Hstep; simpl.
   - rewrite (with_statics_of s' _ (step_keeps_statics _ _ Hstep Hnot)).
     reflexivity.
   - destruct rs. reflexivity.
@@ -156,9 +157,11 @@ Qed.
 
 Theorem region_step_plain : region_step_plain_statement.
 Proof.
-  intros rs Hframes Hhead Husable.
-  unfold region_step. rewrite (simples_fault_usable _ _ _ Husable). cbv zeta.
-  set (rs1 := count_uses rs).
+  intros rs Hframes Hhead Husable Hrun.
+  unfold region_step in Hrun |- *.
+  rewrite (simples_fault_usable _ _ _ Husable) in Hrun |- *.
+  cbv zeta in Hrun |- *.
+  set (rs1 := count_uses rs) in *.
   assert (Hframes1 : rs_frames rs1 = []) by exact Hframes.
   assert (Hplain :
             (∀ (bindings : list static_binding) (body : expr),
@@ -169,9 +172,11 @@ Proof.
   assert (Hlocal :
             ∀ l : list simple, existsb (simple_local rs1) l = false).
   { intros l. exact (existsb_simple_local_no_frames rs1 l Hframes1). }
+  revert Hrun.
   destruct (state_expr (rs_state rs))
     as [x kind d body | bindings body | k h body | handlers body | ap | ac
        | scrutinee arms | ] eqn:He;
+    intros Hrun;
     try (apply Hplain; intros bindings0 body0; try rewrite He; discriminate).
   - assert (Hrest :
               match marker_of x body with
@@ -193,7 +198,9 @@ Proof.
       rewrite Hmarker, Hlocal, andb_false_r.
       apply Hplain. intros bindings0 body0. try rewrite He. discriminate. }
     destruct d as [s | [u | b | v | hp | rp] args | | | | | ];
-      try exact Hrest.
+      try exact Hrest;
+      try (destruct (named_needs_heap _ _);
+           [ exfalso; apply Hrun; reflexivity | exact Hrest ]).
     discriminate Hhead.
   - rewrite Hlocal. unfold static_step.
     change (rs_state rs1) with (rs_state rs).
@@ -281,7 +288,7 @@ Lemma plain_step_shape (rs rs' : region_state) :
 Proof.
   intros Hnot Hends. unfold plain_step.
   destruct (step (with_statics (rs_state rs) (live_statics rs)))
-    as [s' | k vs hp | ]; [ | discriminate | discriminate ].
+    as [s' | k vs hp rd | ]; [ | discriminate | discriminate ].
   intros [= <-]. split; [ reflexivity | ].
   apply Shape_plain; try reflexivity. exact Hends.
 Qed.
@@ -293,11 +300,11 @@ Lemma static_step_shape (rs rs' : region_state)
   rs_base rs' = rs_base rs ∧ step_shape rs rs'.
 Proof.
   intros He. unfold static_step.
-  destruct (step (rs_state rs)) as [s' | k vs hp | ] eqn:Hstep;
+  destruct (step (rs_state rs)) as [s' | k vs hp rd | ] eqn:Hstep;
     [ | discriminate | discriminate ].
   intros [= <-]. split; [ reflexivity | ].
   apply (Shape_static _ _ bindings body); try reflexivity; [ exact He | ].
-  simpl. destruct (rs_state rs) as [e vars conts statics hp].
+  simpl. destruct (rs_state rs) as [e vars conts statics hp rd].
   simpl in He. subst e. rewrite step_let_static in Hstep. simpl.
   destruct (eval_static_bindings vars bindings statics) as [statics' | ];
     [ | discriminate ].
@@ -444,7 +451,9 @@ Proof.
         [ intros bindings0 body0; try rewrite He; discriminate
         | rewrite He; exact Hends ]. }
     destruct d as [s | [u | b | v | hp | rp] args | | | | | ];
-      try (apply Hrest; reflexivity).
+      try (apply Hrest; reflexivity);
+      try (destruct (named_needs_heap _ _);
+           [ discriminate | apply Hrest; reflexivity ]).
     destruct rp, args as [ | arg [ | arg' args]]; try discriminate.
     + apply begin_region_shape. rewrite He. reflexivity.
     + apply begin_region_shape. rewrite He. reflexivity.
@@ -723,7 +732,7 @@ Proof.
   destruct (eval_simples (state_vars (rs_state rs)) (ac_args ac)) as [vs | ]
     eqn:Hargs.
   - rewrite (region_kinds_plain _ _ _ Hargs Hmarks).
-    destruct rs as [[e vars conts statics hp] frames base next counts].
+    destruct rs as [[e vars conts statics hp rd] frames base next counts].
     cbn [rs_state rs_frames rs_base rs_next rs_counts state_expr state_vars
          state_conts state_statics state_heap] in *.
     subst e. unfold with_statics.
@@ -734,10 +743,19 @@ Proof.
       [ | reflexivity ].
     destruct (bind_params params vs def_vars) as [handler_vars | ];
       reflexivity.
-  - destruct rs as [[e vars conts statics hp] frames base next counts].
+  - destruct rs as [[e vars conts statics hp rd] frames base next counts].
     cbn [rs_state rs_frames rs_base rs_next rs_counts state_expr state_vars
          state_conts state_statics state_heap] in *.
     subst e. unfold with_statics.
     cbn [state_expr state_vars state_conts state_statics state_heap].
     rewrite step_apply_cont, Hargs. reflexivity.
 Qed.
+
+(* ======================================================================== *)
+(* The heap and the read record                                             *)
+(* ======================================================================== *)
+
+(* The statement of decision D53, as FlambdaRegionsNeedsHeapProofs.v
+   proves it. *)
+Theorem region_step_keeps_memory : region_step_keeps_memory_statement.
+Proof. exact FlambdaRegionsNeedsHeapProofs.region_step_keeps_memory. Qed.

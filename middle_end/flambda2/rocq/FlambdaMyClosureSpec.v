@@ -224,7 +224,7 @@ Definition only_closure_sound_statement : Prop :=
     (ap : apply_expr) (callee : value)
     (value_slots : list (value_slot * value)),
     only_closure_of id s e = true ->
-    run n (State e [] [] empty_static_env empty_heap) = Step st ->
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step st ->
     state_expr st = Apply ap ->
     eval_simple (state_vars st) (ap_callee ap) = Some callee ->
     closure_of (state_statics st) callee = Some (id, value_slots) ->

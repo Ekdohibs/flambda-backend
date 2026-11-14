@@ -108,15 +108,15 @@ Let Hobservers : observers [] conts :=
    come to results that differ in nothing that an exit is compared
    by. *)
 Definition reaches (s t : expr) : Prop :=
-  observed_refines (Step (State s [] conts statics empty_heap))
-    (Step (State t [] conts statics empty_heap)).
+  observed_refines (Step (State s [] conts statics empty_heap no_reads))
+    (Step (State t [] conts statics empty_heap no_reads)).
 
 Lemma reaches_trans (s t u : expr) : reaches s t -> reaches t u -> reaches s u.
 Proof. apply observed_refines_trans. Qed.
 
 Lemma refines_reaches (s t : expr) :
-  refines (State s [] conts statics empty_heap)
-    (State t [] conts statics empty_heap) ->
+  refines (State s [] conts statics empty_heap no_reads)
+    (State t [] conts statics empty_heap no_reads) ->
   reaches s t.
 Proof. apply refines_observed. Qed.
 
@@ -149,9 +149,9 @@ Lemma iterate_lifted_refines_followed (rounds : nat)
     (avoid : list continuation) (kept : list code_id) :
   ∀ e : expr,
     known_free_in statics rounds avoid kept e = true ->
-    refines (State e [] conts statics empty_heap)
+    refines (State e [] conts statics empty_heap no_reads)
       (State (iterate rounds (normalise_lifted_round avoid kept) e) [] conts
-         statics empty_heap).
+         statics empty_heap no_reads).
 Proof.
   induction rounds as [ | rounds IH]; intros e;
     cbn [known_free_in iterate];
@@ -164,21 +164,21 @@ Proof.
      round gives back the term it was given, which is where [iterate]
      stops, and the test of the other rounds otherwise. *)
   assert (Hround :
-    refines (State e [] conts statics empty_heap)
+    refines (State e [] conts statics empty_heap no_reads)
       (State (normalise_lifted_round avoid kept e) [] conts statics
-         empty_heap)
+         empty_heap no_reads)
     ∧ (if expr_eqb [] [] e (normalise_lifted_round avoid kept e) then true
        else
          known_free_in statics rounds avoid kept
            (normalise_lifted_round avoid kept e))
       = true).
   { assert (Hgiven_refines :
-      refines (State e [] conts statics empty_heap)
-        (State given [] conts statics empty_heap)).
+      refines (State e [] conts statics empty_heap no_reads)
+        (State given [] conts statics empty_heap no_reads)).
     { apply (refines_trans _ _ _
         (normalise_before_round_avoiding_refines avoid kept e [] conts
-           statics empty_heap)).
-      exact (use_known_closures_refines _ [] conts statics empty_heap). }
+           statics empty_heap rd_)).
+      exact (use_known_closures_refines _ [] conts statics empty_heap rd_). }
     unfold normalise_lifted_round. fold given. unfold with_known.
     destruct (fold_known_unit given) as [folded | ] eqn:Hfold.
     - apply andb_true_iff in Hfree as [Hgiven Hfree].
@@ -208,22 +208,22 @@ Qed.
 Lemma normalise_lifted_refines_followed (rounds : nat)
     (avoid : list continuation) (kept : list code_id) (e : expr) :
   normalise_lifted_free_in statics rounds avoid kept e = true ->
-  refines (State e [] conts statics empty_heap)
+  refines (State e [] conts statics empty_heap no_reads)
     (State (normalise_lifted rounds avoid kept e) [] conts statics
-       empty_heap).
+       empty_heap no_reads).
 Proof.
   unfold normalise_lifted, normalise_lifted_free_in. cbv zeta.
   intros Hknown.
   apply andb_true_iff in Hknown as [Hfirst Hsecond].
   apply (refines_trans _ _ _
     (iterate_refines _ first_phase_round_refines rounds _ [] conts
-       statics empty_heap)).
+       statics empty_heap rd_)).
   apply (refines_trans _ _ _
     (iterate_lifted_refines_followed rounds avoid kept _ Hfirst)).
   apply (refines_trans _ _ _
     (guard_scope_refines _ _
        (FlambdaSimplifyCarriedProofs.simplify_by_types_carried_refines _)
-       [] conts statics empty_heap)).
+       [] conts statics empty_heap rd_)).
   exact (iterate_lifted_refines_followed rounds avoid kept _ Hsecond).
 Qed.
 
@@ -232,9 +232,9 @@ Qed.
 Lemma normalise_lifted_round_refines_followed (avoid : list continuation)
     (kept : list code_id) (e : expr) :
   known_free_in statics 1 avoid kept e = true ->
-  refines (State e [] conts statics empty_heap)
+  refines (State e [] conts statics empty_heap no_reads)
     (State (normalise_lifted_round avoid kept e) [] conts statics
-       empty_heap).
+       empty_heap no_reads).
 Proof.
   intros Hfree.
   generalize (iterate_lifted_refines_followed 1 avoid kept e Hfree).
@@ -249,11 +249,11 @@ Lemma iterate_lifted_calling_refines_followed (calling : bool)
     (rounds : nat) (avoid : list continuation) (kept : list code_id) :
   ∀ e : expr,
     known_calling_free_in statics calling rounds avoid kept e = true ->
-    refines (State e [] conts statics empty_heap)
+    refines (State e [] conts statics empty_heap no_reads)
       (State
          (iterate rounds (normalise_lifted_round_calling calling avoid kept)
             e)
-         [] conts statics empty_heap).
+         [] conts statics empty_heap no_reads).
 Proof.
   induction rounds as [ | rounds IH]; intros e;
     cbn [known_calling_free_in iterate];
@@ -261,15 +261,15 @@ Proof.
   cbv zeta. intros Hfree.
   apply andb_true_iff in Hfree as [Hone Hrest].
   assert (Hround :
-    refines (State e [] conts statics empty_heap)
+    refines (State e [] conts statics empty_heap no_reads)
       (State (normalise_lifted_round_calling calling avoid kept e) [] conts
-         statics empty_heap)).
+         statics empty_heap no_reads)).
   { unfold normalise_lifted_round_calling. cbv zeta.
     apply (refines_trans _ _ _
       (normalise_lifted_round_refines_followed avoid kept e Hone)).
     destruct calling; [ | apply refines_refl ].
     exact (with_made_closures_called_refines _ [] conts statics
-             empty_heap). }
+             empty_heap rd_). }
   destruct
     (expr_eqb [] [] e (normalise_lifted_round_calling calling avoid kept e));
     [ exact Hround | ].
@@ -281,23 +281,23 @@ Lemma normalise_lifted_calling_refines_followed (calling : bool)
     (e : expr) :
   normalise_lifted_calling_free_in statics calling rounds avoid kept e
   = true ->
-  refines (State e [] conts statics empty_heap)
+  refines (State e [] conts statics empty_heap no_reads)
     (State (normalise_lifted_calling calling rounds avoid kept e) [] conts
-       statics empty_heap).
+       statics empty_heap no_reads).
 Proof.
   unfold normalise_lifted_calling, normalise_lifted_calling_free_in.
   cbv zeta. intros Hknown.
   apply andb_true_iff in Hknown as [Hfirst Hsecond].
   apply (refines_trans _ _ _
     (iterate_refines _ first_phase_round_refines rounds _ [] conts
-       statics empty_heap)).
+       statics empty_heap rd_)).
   apply (refines_trans _ _ _
     (iterate_lifted_calling_refines_followed calling rounds avoid kept _
        Hfirst)).
   apply (refines_trans _ _ _
     (guard_scope_refines _ _
        (FlambdaSimplifyCarriedProofs.simplify_by_types_carried_refines _)
-       [] conts statics empty_heap)).
+       [] conts statics empty_heap rd_)).
   exact (iterate_lifted_calling_refines_followed calling rounds avoid kept _
            Hsecond).
 Qed.
@@ -308,9 +308,9 @@ Qed.
 Lemma normalise_lifted_round_calling_refines_followed (calling : bool)
     (avoid : list continuation) (kept : list code_id) (e : expr) :
   known_free_in statics 1 avoid kept e = true ->
-  refines (State e [] conts statics empty_heap)
+  refines (State e [] conts statics empty_heap no_reads)
     (State (normalise_lifted_round_calling calling avoid kept e) [] conts
-       statics empty_heap).
+       statics empty_heap no_reads).
 Proof.
   intros Hfree.
   assert (Hrounds :
@@ -335,11 +335,11 @@ Lemma iterate_lifted_own_refines_followed (calling own : bool)
     (rounds : nat) (avoid : list continuation) (kept : list code_id) :
   ∀ e : expr,
     known_own_free_in statics calling own rounds avoid kept e = true ->
-    refines (State e [] conts statics empty_heap)
+    refines (State e [] conts statics empty_heap no_reads)
       (State
          (iterate rounds (normalise_lifted_round_own calling own avoid kept)
             e)
-         [] conts statics empty_heap).
+         [] conts statics empty_heap no_reads).
 Proof.
   induction rounds as [ | rounds IH]; intros e;
     cbn [known_own_free_in iterate];
@@ -347,9 +347,9 @@ Proof.
   cbv zeta. intros Hfree.
   apply andb_true_iff in Hfree as [Hone Hrest].
   assert (Hround :
-    refines (State e [] conts statics empty_heap)
+    refines (State e [] conts statics empty_heap no_reads)
       (State (normalise_lifted_round_own calling own avoid kept e) [] conts
-         statics empty_heap)).
+         statics empty_heap no_reads)).
   { unfold normalise_lifted_round_own. cbv zeta.
     apply (refines_trans _ _ _
       (normalise_lifted_round_calling_refines_followed calling avoid kept e
@@ -368,23 +368,23 @@ Lemma normalise_lifted_own_refines_followed (calling own : bool)
     (e : expr) :
   normalise_lifted_own_free_in statics calling own rounds avoid kept e
   = true ->
-  refines (State e [] conts statics empty_heap)
+  refines (State e [] conts statics empty_heap no_reads)
     (State (normalise_lifted_own calling own rounds avoid kept e) [] conts
-       statics empty_heap).
+       statics empty_heap no_reads).
 Proof.
   unfold normalise_lifted_own, normalise_lifted_own_free_in.
   cbv zeta. intros Hknown.
   apply andb_true_iff in Hknown as [Hfirst Hsecond].
   apply (refines_trans _ _ _
     (iterate_refines _ first_phase_round_refines rounds _ [] conts
-       statics empty_heap)).
+       statics empty_heap rd_)).
   apply (refines_trans _ _ _
     (iterate_lifted_own_refines_followed calling own rounds avoid kept _
        Hfirst)).
   apply (refines_trans _ _ _
     (guard_scope_refines _ _
        (FlambdaSimplifyCarriedProofs.simplify_by_types_carried_refines _)
-       [] conts statics empty_heap)).
+       [] conts statics empty_heap rd_)).
   exact (iterate_lifted_own_refines_followed calling own rounds avoid kept _
            Hsecond).
 Qed.
@@ -393,9 +393,9 @@ Qed.
 Lemma tidy_known_refines_followed (inner : nat) :
   ∀ (rounds : nat) (e : expr),
     tidy_known_free_in statics inner rounds e = true ->
-    refines (State e [] conts statics empty_heap)
+    refines (State e [] conts statics empty_heap no_reads)
       (State (iterate rounds (demote_and_tidy_known_round inner) e) [] conts
-         statics empty_heap).
+         statics empty_heap no_reads).
 Proof.
   induction rounds as [ | rounds IH]; intros e;
     cbn [tidy_known_free_in iterate];
@@ -404,18 +404,18 @@ Proof.
   set (given := use_known_closures e).
   intros Hfree.
   assert (Hround :
-    refines (State e [] conts statics empty_heap)
+    refines (State e [] conts statics empty_heap no_reads)
       (State (demote_and_tidy_known_round inner e) [] conts statics
-         empty_heap)
+         empty_heap no_reads)
     ∧ (if expr_eqb [] [] e (demote_and_tidy_known_round inner e) then true
        else
          tidy_known_free_in statics inner rounds
            (demote_and_tidy_known_round inner e))
       = true).
   { assert (Hgiven_refines :
-      refines (State e [] conts statics empty_heap)
-        (State given [] conts statics empty_heap)).
-    { exact (use_known_closures_refines _ [] conts statics empty_heap). }
+      refines (State e [] conts statics empty_heap no_reads)
+        (State given [] conts statics empty_heap no_reads)).
+    { exact (use_known_closures_refines _ [] conts statics empty_heap rd_). }
     unfold demote_and_tidy_known_round. fold given. unfold with_known.
     destruct (fold_known_unit given) as [folded | ] eqn:Hfold.
     - apply andb_true_iff in Hfree as [Hgiven Hfree].
@@ -430,7 +430,7 @@ Proof.
       apply (refines_trans _ _ _
         (FlambdaSharedReadsProofs.share_static_reads_refines_observed
            imports conts _ Hobservers)).
-      exact (demote_and_tidy_refines inner _ [] conts statics empty_heap).
+      exact (demote_and_tidy_refines inner _ [] conts statics empty_heap rd_).
     - split; [ | exact Hfree ].
       apply (refines_trans _ _ _ Hgiven_refines).
       apply (refines_trans _ _ _
@@ -439,7 +439,7 @@ Proof.
       apply (refines_trans _ _ _
         (FlambdaSharedReadsProofs.share_static_reads_refines_observed
            imports conts _ Hobservers)).
-      exact (demote_and_tidy_refines inner _ [] conts statics empty_heap). }
+      exact (demote_and_tidy_refines inner _ [] conts statics empty_heap rd_). }
   destruct Hround as [Hround Hrest].
   destruct (expr_eqb [] [] e (demote_and_tidy_known_round inner e));
     [ exact Hround | ].
@@ -448,12 +448,13 @@ Qed.
 
 Lemma demote_and_tidy_known_refines_followed (rounds : nat) (e : expr) :
   demote_and_tidy_known_free_in statics rounds e = true ->
-  refines (State e [] conts statics empty_heap)
-    (State (demote_and_tidy_known rounds e) [] conts statics empty_heap).
+  refines (State e [] conts statics empty_heap no_reads)
+    (State (demote_and_tidy_known rounds e) [] conts statics empty_heap
+       no_reads).
 Proof.
   unfold demote_and_tidy_known_free_in, demote_and_tidy_known. intros Hfree.
   apply (refines_trans _ _ _
-    (demote_and_tidy_refines rounds e [] conts statics empty_heap)).
+    (demote_and_tidy_refines rounds e [] conts statics empty_heap rd_)).
   exact (tidy_known_refines_followed rounds rounds _ Hfree).
 Qed.
 
@@ -484,14 +485,14 @@ Proof.
 Qed.
 
 Lemma without_statics_refines_followed (D : dropped) (e : expr) :
-  refines (State e [] conts statics empty_heap)
-    (State (without_statics D e) [] conts statics empty_heap).
+  refines (State e [] conts statics empty_heap no_reads)
+    (State (without_statics D e) [] conts statics empty_heap no_reads).
 Proof.
   unfold without_statics.
   destruct (drop_statics D e) as [e' | ] eqn:Hdrop; [ | apply refines_refl ].
   apply (refines_trans _ _ _
     (drop_statics_refines D e e' Hdrop [] conts statics empty_heap
-       (envs_free_of_followed D))).
+       rd_ (envs_free_of_followed D) eq_refl)).
   apply (expr_equivalent_refines _ _
     (expr_equivalent_trans _ _ _ (drop_deleted_code_equivalent e')
        (merge_statics_equivalent _))).
@@ -499,8 +500,9 @@ Qed.
 
 Lemma without_head_statics_refines_followed (D : dropped) (e : expr) :
   head_removal_free_in statics D e = true ->
-  refines (State (without_head_statics D e) [] conts statics empty_heap)
-    (State e [] conts statics empty_heap).
+  refines
+    (State (without_head_statics D e) [] conts statics empty_heap no_reads)
+    (State e [] conts statics empty_heap no_reads).
 Proof.
   intros Hhead. unfold without_head_statics.
   destruct (head_statics_removable D e) eqn:Hchecks; [ | apply refines_refl ].
@@ -509,9 +511,10 @@ Proof.
   assert (Hdropped : drop_head_statics D e = Some e')
     by (unfold drop_head_statics; rewrite Hchecks; exact Hdrop).
   unfold head_removal_free_in in Hhead. rewrite Hdropped in Hhead.
-  apply (refines_trans _ (State e' [] conts statics empty_heap));
+  apply (refines_trans _ (State e' [] conts statics empty_heap no_reads));
     [ | exact (drop_head_statics_refines_under D e e' conts statics
-                 empty_heap Hdropped (envs_free_of_followed D) Hhead) ].
+                 empty_heap no_reads Hdropped (envs_free_of_followed D) eq_refl
+                 Hhead) ].
   apply (expr_equivalent_refines _ _
     (expr_equivalent_sym _ _
        (expr_equivalent_trans _ _ _ (drop_deleted_code_equivalent e')
@@ -519,21 +522,21 @@ Proof.
 Qed.
 
 Lemma with_code_first_equivalent_followed (e : expr) :
-  equivalent (State e [] conts statics empty_heap)
-    (State (with_code_first e) [] conts statics empty_heap).
+  equivalent (State e [] conts statics empty_heap no_reads)
+    (State (with_code_first e) [] conts statics empty_heap no_reads).
 Proof.
   unfold with_code_first.
   destruct (hoist_code e) as [e' | ] eqn:Hhoist; [ | apply equivalent_refl ].
   apply (equivalent_trans _ _ _
     (hoist_code_equivalent_observed imports conts e e' Hhoist Hobservers)).
   apply (equivalent_trans _ _ _
-    (drop_deleted_code_equivalent e' [] conts _ _)).
+    (drop_deleted_code_equivalent e' [] conts _ _ rd_)).
   apply merge_statics_equivalent.
 Qed.
 
 Lemma without_slots_refines_followed (e : expr) :
-  refines (State e [] conts statics empty_heap)
-    (State (without_slots slots e) [] conts statics empty_heap).
+  refines (State e [] conts statics empty_heap no_reads)
+    (State (without_slots slots e) [] conts statics empty_heap no_reads).
 Proof.
   unfold without_slots.
   destruct (drop_unused_slots slots e) as [e' | ] eqn:Hdrop;
@@ -545,13 +548,13 @@ Proof.
                 (rewrite_code remove_unused_lets (remove_unused_lets e'))).
   { eapply expr_refines_trans; [ apply remove_unused_lets_refines | ].
     apply rewrite_code_refines, remove_unused_lets_refines. }
-  exact (H [] conts statics empty_heap).
+  exact (H [] conts statics empty_heap rd_).
 Qed.
 
 Lemma with_statics_first_equivalent_followed (Ls : list lifting) (e : expr) :
   statics_first_free_in statics Ls e = true ->
-  equivalent (State e [] conts statics empty_heap)
-    (State (with_statics_first Ls e) [] conts statics empty_heap).
+  equivalent (State e [] conts statics empty_heap no_reads)
+    (State (with_statics_first Ls e) [] conts statics empty_heap no_reads).
 Proof.
   unfold with_statics_first, statics_first_free_in.
   destruct Ls as [ | L Ls]; [ intros _; apply equivalent_refl | ].
@@ -562,7 +565,7 @@ Proof.
     (hoist_statics_equivalent_observed imports conts _ e e' Hhoist Hfree
        Hobservers)).
   apply (equivalent_trans _ _ _
-    (drop_deleted_code_equivalent e' [] conts _ _)).
+    (drop_deleted_code_equivalent e' [] conts _ _ rd_)).
   apply merge_statics_equivalent.
 Qed.
 
@@ -612,43 +615,43 @@ Proof.
   apply (reaches_trans _ source).
   { apply refines_reaches.
     apply (refines_trans _ _ _
-      (demote_stub_calls_refines before [] conts statics empty_heap)).
+      (demote_stub_calls_refines before [] conts statics empty_heap rd_)).
     apply (refines_trans _ _ _
       (cut_returns_refines (demote_stub_calls before) [] conts statics
-         empty_heap)).
+         empty_heap rd_)).
     exact (loopify_unit_refines G (cut_returns [] (demote_stub_calls before))
-             [] conts statics empty_heap). }
+             [] conts statics empty_heap rd_). }
   apply (reaches_trans _ _ _
     (lifted_in_turn_observed_reaches rounds (unit_continuations Ls) Ls kept
        source Hlifted_free)).
   apply refines_reaches.
-  apply (refines_trans _ (State lifted [] conts statics empty_heap)).
+  apply (refines_trans _ (State lifted [] conts statics empty_heap no_reads)).
   { apply (refines_trans _ _ _
-      (with_returns_refines taken _ [] conts statics empty_heap)).
+      (with_returns_refines taken _ [] conts statics empty_heap rd_)).
     apply (refines_trans _ _ _
-      (tidied_before_refines rounds _ [] conts statics empty_heap)).
+      (tidied_before_refines rounds _ [] conts statics empty_heap rd_)).
     apply (refines_trans _ _ _ (without_slots_refines_followed _)).
     exact (without_statics_refines_followed unused _). }
   (* the unit after, from the term compared *)
   assert (Hcleaned :
-    refines (State c [] conts statics empty_heap)
-      (State after [] conts statics empty_heap)).
+    refines (State c [] conts statics empty_heap no_reads)
+      (State after [] conts statics empty_heap no_reads)).
   { apply (refines_trans _ _ _
       (without_head_statics_refines_followed unused a Hhead)).
     apply equivalent_refines, equivalent_sym.
     exact (tidied_after_normalised_equivalent rounds kept after [] conts
-             statics empty_heap). }
+             statics empty_heap rd_). }
   apply orb_true_iff in Hsame as [Hsame | Hsame].
   - (* the first comparison: the code of the unit after first *)
     apply (refines_trans _
-      (State (with_code_first c) [] conts statics empty_heap)).
+      (State (with_code_first c) [] conts statics empty_heap no_reads)).
     { apply expr_equivalent_refines.
       apply (expr_equivalent_trans _ _ _ (float_code_equivalent _)).
       apply (expr_equivalent_trans _ _ _
         (order_statics_as_equivalent (float_code (with_code_first c)) _)).
       apply (expr_equivalent_trans _ _ _ (expr_eqb_sound _ _ Hsame)).
       apply expr_equivalent_sym, float_code_equivalent. }
-    apply (refines_trans _ (State c [] conts statics empty_heap));
+    apply (refines_trans _ (State c [] conts statics empty_heap no_reads));
       [ | exact Hcleaned ].
     apply equivalent_refines, equivalent_sym.
     apply with_code_first_equivalent_followed.
@@ -659,12 +662,12 @@ Proof.
       (equivalent_refines _ _
          (with_statics_first_equivalent_followed Ls lifted Hfree_lifted))).
     apply (refines_trans _
-      (State (with_statics_first Ls c) [] conts statics empty_heap)).
+      (State (with_statics_first Ls c) [] conts statics empty_heap no_reads)).
     { apply expr_equivalent_refines.
       apply (expr_equivalent_trans _ _ _
         (order_statics_as_equivalent (with_statics_first Ls c) _)).
       exact (expr_eqb_sound _ _ Hsame). }
-    apply (refines_trans _ (State c [] conts statics empty_heap));
+    apply (refines_trans _ (State c [] conts statics empty_heap no_reads));
       [ | exact Hcleaned ].
     apply equivalent_refines, equivalent_sym.
     exact (with_statics_first_equivalent_followed Ls c Hfree_after).
@@ -701,7 +704,7 @@ Proof.
   destruct (validate_unit_related_code_closed imports rounds unused slots G
               Ls kept before after Hrelated) as [Hbefore Hafter].
   apply (proj1 (under_observers_worlds slots (imports_statics imports)
-                  empty_heap before after Hbefore Hafter
+                  empty_heap no_reads before after Hbefore Hafter
                   (Forall_nil _))).
   exact (validate_unit_related_under_observers imports rounds unused slots G
            Ls kept before after Hrelated).

@@ -223,7 +223,7 @@ Definition run_valid_kept_statement : Prop := kept_by_step run_valid.
 Definition run_valid_initial_statement : Prop :=
   ∀ e : expr,
     sets_well_formed e = true ->
-    run_valid (State e [] [] empty_static_env empty_heap).
+    run_valid (State e [] [] empty_static_env empty_heap no_reads).
 
 (* Its static environment is valid. *)
 Definition run_valid_statics_statement : Prop :=
@@ -233,10 +233,10 @@ Definition run_valid_statics_statement : Prop :=
    that has it has it with any expression whose sets are well formed. *)
 Definition run_valid_expr_statement : Prop :=
   ∀ (e e' : expr) (vars : env) (conts : cont_env) (statics : static_env)
-    (hp : heap),
+    (hp : heap) (rd : read_record),
     sets_well_formed e' = true ->
-    run_valid (State e vars conts statics hp) ->
-    run_valid (State e' vars conts statics hp).
+    run_valid (State e vars conts statics hp rd) ->
+    run_valid (State e' vars conts statics hp rd).
 
 (* ======================================================================== *)
 (* Refinement from those states                                             *)
@@ -247,11 +247,12 @@ Definition run_valid_expr_statement : Prop :=
    first expression. *)
 Definition expr_refines_from_valid (tenv : Typing_env.t)
     (source target : expr) : Prop :=
-  ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap),
-    run_valid (State source vars conts statics hp) ->
+  ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+    (rd : read_record),
+    run_valid (State source vars conts statics hp rd) ->
     env_satisfies_strictly tenv statics vars ->
-    refines (State source vars conts statics hp)
-      (State target vars conts statics hp).
+    refines (State source vars conts statics hp rd)
+      (State target vars conts statics hp rd).
 
 (* What holds in every state that satisfies the environment, and what
    holds in those whose static environment is valid, holds from the

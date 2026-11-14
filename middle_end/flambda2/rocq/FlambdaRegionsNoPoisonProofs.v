@@ -335,6 +335,7 @@ Proof.
           bound_no_poison (static_values (state_statics (rs_state rs')))
             (rs_frames rs'))).
   - discriminate.
+  - discriminate.
   - intros x kind d mark_kind body _ Hstep.
     rewrite (begin_region_step _ _ _ _ _ _ Hstep). exact Hbound.
   - intros x kind d ended_by region body _ Hstep.
@@ -348,7 +349,7 @@ Proof.
     change (live_locals (f :: below))
       with (frame_locals f ++ live_locals below).
     apply in_or_app. right. exact Hin.
-  - intros x kind d body y region body' Hexpr _ _ Hstep.
+  - intros x kind d body y region body' Hexpr _ _ _ Hstep.
     destruct (local_allocation_step _ _ _ _ _ _ _ _ Hstep)
       as (v & sym & bindings & His & Hnamed & Hlocalise & _ & _ & _ & _ & _
           & _ & Hframes).
@@ -382,7 +383,7 @@ Proof.
       change (live_locals (Frame m mark_kind locals :: frames))
         with (locals ++ live_locals frames).
       rewrite <- app_assoc. exact Hin.
-  - intros x kind d body _ _ _ Hstep.
+  - intros x kind d body _ _ _ _ Hstep.
     destruct (plain_step_step _ _ Hstep) as (s' & _ & ->). exact Hbound.
   - intros bindings body Hexpr _ _ Hstep.
     destruct (static_step_step (count_uses rs) rs' bindings body Hexpr Hstep)
@@ -443,7 +444,7 @@ Theorem region_run_keeps_no_poison : region_run_keeps_no_poison_statement.
 Proof.
   intros fuel. induction fuel as [ | fuel IH]; intros rs rs' Hpoison; simpl.
   - intros [= <-]. exact Hpoison.
-  - destruct (region_step rs) as [rs1 | k vs rs1 | fault] eqn:Hstep;
+  - destruct (region_step rs) as [rs1 | k vs rs1 | fault | ] eqn:Hstep;
       try discriminate.
     exact (IH rs1 rs' (region_step_keeps_no_poison rs rs1 Hpoison Hstep)).
 Qed.

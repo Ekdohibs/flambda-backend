@@ -309,11 +309,11 @@ Qed.
 (* The step of a [Switch] on a variable that is a number an arm has. *)
 Lemma step_tested_switch (p : variable) (arms : list (Z * apply_cont))
     (n : Z) (target : apply_cont) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   lookup p vars = Some (Value_const (Naked_immediate n)) ->
   find_arm n arms = Some target ->
-  step (State (Switch (Var p) arms) vars conts statics hp)
-  = Step (State (Apply_cont target) vars conts statics hp).
+  step (State (Switch (Var p) arms) vars conts statics hp rd)
+  = Step (State (Apply_cont target) vars conts statics hp rd).
 Proof.
   intros Hp Harm. rewrite step_switch. cbn [eval_simple]. rewrite Hp.
   cbn [naked_immediate_of_value]. rewrite Harm. reflexivity.
@@ -627,13 +627,13 @@ Inductive arm_cont_fwd : cont_value -> cont_value -> Prop :=
 Inductive arm_state_fwd : state -> state -> Prop :=
   | Arm_state_fwd (G : kinds_in_scope) (F : arm_forwards) (e e' : expr)
       (vars : env) (conts conts' : cont_env) (statics : static_env)
-      (hp : heap) :
+      (hp : heap) (rd : read_record) :
     arm_fwd G F e e' ->
     (∀ k : continuation, arm_cont_fwd (resolve k conts) (resolve k conts')) ->
     arm_held F vars conts' ->
     kinds_hold G vars ->
-    arm_state_fwd (State e vars conts statics hp)
-      (State e' vars conts' statics hp).
+    arm_state_fwd (State e vars conts statics hp rd)
+      (State e' vars conts' statics hp rd).
 
 Lemma arm_held_nil (vars : env) (conts' : cont_env) : arm_held [] vars conts'.
 Proof. intros k params metadata i arms body Hsome. discriminate Hsome. Qed.
@@ -759,7 +759,7 @@ Qed.
 Definition arm_answer (result result' : step_result) : Prop :=
   match result with
   | Undefined => strict = true -> result' = Undefined
-  | Exit k vs hp => result' = Exit k vs hp
+  | Exit k vs hp rd => result' = Exit k vs hp rd
   | Step t => ∃ t' : state, result' = Step t' ∧ arm_state_fwd t t'
   end.
 
@@ -835,16 +835,17 @@ Qed.
 Lemma arm_call_code_fwd (closure : value) (c : code) (vs : list value)
     (args_arity return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   arm_cont_fwd return_to return_to' ->
   arm_cont_fwd exn_to exn_to' ->
   arm_answer
-    (call_code closure c vs args_arity return_arity return_to exn_to statics hp)
+    (call_code closure c vs args_arity return_arity return_to exn_to statics hp
+       rd)
     (call_code closure c vs args_arity return_arity return_to' exn_to'
-       statics hp).
+       statics hp rd).
 Proof.
   intros Hreturn Hraise.
-  destruct (call_code_cases closure c vs args_arity return_arity statics hp)
+  destruct (call_code_cases closure c vs args_arity return_arity statics hp rd)
     as [Hundefined | (callee_vars & Hcall)].
   - rewrite !Hundefined. apply arm_answer_undefined.
   - rewrite !Hcall. cbn [arm_answer]. eexists. split; [ reflexivity | ].
@@ -862,22 +863,22 @@ Qed.
    first, one answers the other. *)
 Lemma arm_run_call_fwd (shape : option call_shape) (return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   arm_cont_fwd return_to return_to' ->
   arm_cont_fwd exn_to exn_to' ->
   (∀ partial : value,
     ∃ n : nat,
-      arm_answer (run_on n (apply_cont_value return_to [partial] statics hp))
-        (apply_cont_value return_to' [partial] statics hp)) ->
+      arm_answer (run_on n (apply_cont_value return_to [partial] statics hp rd))
+        (apply_cont_value return_to' [partial] statics hp rd)) ->
   ∃ n : nat,
     arm_answer
       (run_on n
          (run_call
-            (fun partial => apply_cont_value return_to [partial] statics hp)
-            shape return_arity return_to exn_to statics hp))
+            (fun partial => apply_cont_value return_to [partial] statics hp rd)
+            shape return_arity return_to exn_to statics hp rd))
       (run_call
-         (fun partial => apply_cont_value return_to' [partial] statics hp)
-         shape return_arity return_to' exn_to' statics hp).
+         (fun partial => apply_cont_value return_to' [partial] statics hp rd)
+         shape return_arity return_to' exn_to' statics hp rd).
 Proof.
   intros Hreturn Hraise Hpartial.
   destruct shape
@@ -900,15 +901,15 @@ Qed.
    that number with those arguments put for the parameters. *)
 Lemma arm_cont_fwd_rounds (c c' : cont_value) :
   arm_cont_fwd c c' ->
-  (∀ (vs : list value) (statics : static_env) (hp : heap),
+  (∀ (vs : list value) (statics : static_env) (hp : heap) (rd : read_record),
     ∃ m : nat,
-      arm_answer (run_on m (apply_cont_value c vs statics hp))
-        (apply_cont_value c' vs statics hp))
+      arm_answer (run_on m (apply_cont_value c vs statics hp rd))
+        (apply_cont_value c' vs statics hp rd))
   ∧ (∀ (params : list variable) (metadata' : handler_metadata) (p : variable)
        (arms' : list (Z * apply_cont)) (def_vars0 : env)
        (def_conts0 : cont_env) (i : nat) (n : Z) (target : apply_cont)
        (args : list simple) (vs : list value) (vars : env) (conts' : cont_env)
-       (statics : static_env) (hp : heap),
+       (statics : static_env) (hp : heap) (rd : read_record),
        c'
        = Closure (Handler params metadata' (Switch (Var p) arms')) def_vars0
            def_conts0 [] ->
@@ -926,10 +927,10 @@ Lemma arm_cont_fwd_rounds (c c' : cont_value) :
        resolve (ac_continuation target) conts'
        = resolve (ac_continuation target) def_conts0 ->
        ∃ m : nat,
-         arm_answer (run_on m (apply_cont_value c vs statics hp))
+         arm_answer (run_on m (apply_cont_value c vs statics hp rd))
            (step
               (State (Apply_cont (forwarded params args target)) vars conts'
-                 statics hp))).
+                 statics hp rd))).
 Proof.
   induction 1
     as [ c
@@ -945,7 +946,7 @@ Proof.
         apply arm_answer_refl
       | ].
     intros params metadata' p arms' def_vars0 def_conts0 i n target args vs
-      vars conts' statics hp -> Hp Ha Harm Hnodup Hruns Hlen Hargs Hvars
+      vars conts' statics hp rd -> Hp Ha Harm Hnodup Hruns Hlen Hargs Hvars
       Hcont.
     simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata'))
@@ -959,13 +960,13 @@ Proof.
           rewrite Hsome in Hbind; discriminate Hbind ].
     exists 2.
     rewrite run_on_step,
-      (step_tested_switch p arms' n target bound _ statics hp
+      (step_tested_switch p arms' n target bound _ statics hp rd
          (tested_param_bound params args vs vars def_vars0 bound i p _ Hnodup
             Hargs Hbind Hp Ha)
          Harm),
       run_on_step, run_on_zero,
       (step_forwarded params args target vs vars def_vars0 bound conts'
-         def_conts0 statics _ Hnodup Hargs Hbind Hvars Hcont).
+         def_conts0 statics _ rd_ Hnodup Hargs Hbind Hvars Hcont).
     apply arm_answer_refl.
   - (* related closures *)
     split.
@@ -988,7 +989,7 @@ Proof.
       * rewrite <- Hkinds.
         exact (params_in_scope_hold params vs G def_vars bound Htyped Hbind).
     + intros params0 metadata0 p arms' def_vars0 def_conts0 i n target args vs
-        vars conts' statics hp Hc' Hp Ha Harm Hnodup Hruns Hlen Hargs Hvars
+        vars conts' statics hp rd Hc' Hp Ha Harm Hnodup Hruns Hlen Hargs Hvars
         Hcont.
       injection Hc' as Heq_params Heq_metadata Heq_handler Heq_vars Heq_conts
         Heq_recursive.
@@ -1011,7 +1012,7 @@ Proof.
               as [bound Hsome];
             rewrite Hsome in Hbind; discriminate Hbind ].
       rewrite (step_forwarded params args target vs vars def_vars bound conts'
-        def_conts' statics _ Hnodup Hargs Hbind Hvars Hcont).
+        def_conts' statics _ rd_ Hnodup Hargs Hbind Hvars Hcont).
       assert (Hheld_bound : arm_held F bound def_conts')
         by exact (arm_held_bind F params vs def_vars bound def_conts' Hparams
              Hbind Hheld).
@@ -1033,16 +1034,16 @@ Proof.
       * (* the arm of the first closure is the same application *)
         destruct (IHdef_conts (ac_continuation b)) as [IHapply _].
         destruct (eval_simples bound (ac_args b)) as [vt | ] eqn:Hargs_b.
-        -- destruct (IHapply vt statics hp) as [m Hanswer].
+        -- destruct (IHapply vt statics hp rd) as [m Hanswer].
            exists (S (S m)).
            rewrite run_on_step,
-             (step_tested_switch p arms n b bound _ statics hp Hp_bound
+             (step_tested_switch p arms n b bound _ statics hp rd Hp_bound
                 Hfind_b),
              run_on_step, !step_apply_cont, Hargs_b.
            unfold apply_continuation. exact Hanswer.
         -- exists 2.
            rewrite run_on_step,
-             (step_tested_switch p arms n b bound _ statics hp Hp_bound
+             (step_tested_switch p arms n b bound _ statics hp rd Hp_bound
                 Hfind_b),
              run_on_step, run_on_zero, !step_apply_cont, Hargs_b.
            apply arm_answer_undefined.
@@ -1069,18 +1070,18 @@ Proof.
            destruct
              (IHon params_b metadata_b p_b arms_b def_vars_b def_conts_b i_b
                 n_b target_b (ac_args b) vb bound def_conts' statics hp
-                Hresolve_b Hp_b Hnth_b Hfind_tb Hnodup_b Hruns_vb Hlength
+                rd Hresolve_b Hp_b Hnth_b Hfind_tb Hnodup_b Hruns_vb Hlength
                 Hargs_b Hvars_b Hcont_b)
              as [m Hanswer].
            exists (S (S m)).
            rewrite run_on_step,
-             (step_tested_switch p arms n b bound _ statics hp Hp_bound
+             (step_tested_switch p arms n b bound _ statics hp rd Hp_bound
                 Hfind_b),
              run_on_step, (step_apply_cont b), Hargs_b.
            unfold apply_continuation. exact Hanswer.
         -- exists 2.
            rewrite run_on_step,
-             (step_tested_switch p arms n b bound _ statics hp Hp_bound
+             (step_tested_switch p arms n b bound _ statics hp rd Hp_bound
                 Hfind_b),
              run_on_step, run_on_zero, (step_apply_cont b), Hargs_b.
            intros Hstrict.
@@ -1089,18 +1090,18 @@ Proof.
   - (* the same extra arguments *)
     split; [ intros vs statics hp; simpl; apply IHsame | ].
     intros params metadata' p arms' def_vars0 def_conts0 i n target args vs
-      vars conts' statics hp Hc'.
+      vars conts' statics hp rd Hc'.
     discriminate Hc'.
   - (* what is left of the same over-application *)
     split.
-    + intros vs statics hp. rewrite !apply_cont_value_over_application.
+    + intros vs statics hp rd. rewrite !apply_cont_value_over_application.
       destruct vs as [ | v [ | v' vs]];
         try (exists 0; rewrite run_on_zero; apply arm_answer_undefined).
       unfold call_function.
       apply arm_run_call_fwd; [ exact Hreturn | exact Hraise | ].
       intros partial. apply IHreturn.
     + intros params metadata' p arms' def_vars0 def_conts0 i n target args vs
-        vars conts' statics hp Hc'.
+        vars conts' statics hp rd Hc'.
       discriminate Hc'.
 Qed.
 
@@ -1122,7 +1123,7 @@ Qed.
 Lemma arm_fwd_round_answer (st st' : state) :
   arm_state_fwd st st' -> ∃ m : nat, arm_answer (run (S m) st) (step st').
 Proof.
-  intros [G F e e' vars conts conts' statics hp Hfwd Hconts Hheld Htyped].
+  intros [G F e e' vars conts conts' statics hp rd Hfwd Hconts Hheld Htyped].
   destruct Hfwd
     as [ G F x kind d body body' Hx Hbody | G F bindings body body' Hbody
        | G F k params metadata metadata' handler handler' entry body body'
@@ -1131,8 +1132,8 @@ Proof.
        | G F ap | G F ac ac' Hgoes
        | G F scrutinee arms arms' Harms | G F ].
   - (* Let *)
-    exists 0. rewrite run_one, !step_let.
-    destruct (eval_named statics vars d) as [v | ];
+    exists 0. rewrite run_one, !step_let_exec.
+    destruct (exec_named _ _ rd_ _ d) as [[[v hp'] rd'] | ];
       [ | apply arm_answer_undefined ].
     destruct (kind_eqb (kind_of_value v) kind) eqn:Hkind;
       [ | apply arm_answer_undefined ].
@@ -1194,8 +1195,8 @@ Proof.
   - (* Apply: the same call, returning to related continuations *)
     assert (Hround :
       ∃ m : nat,
-        arm_answer (run_on m (step (State (Apply ap) vars conts statics hp)))
-          (step (State (Apply ap) vars conts' statics hp))).
+        arm_answer (run_on m (step (State (Apply ap) vars conts statics hp rd)))
+          (step (State (Apply ap) vars conts' statics hp rd))).
     { rewrite !step_apply.
       destruct (eval_simple vars (ap_callee ap)) as [callee | ];
         [ | exists 0; rewrite run_on_zero; apply arm_answer_undefined ].
@@ -1211,7 +1212,7 @@ Proof.
       - intros partial.
         exact
           (proj1 (arm_cont_fwd_rounds _ _ (Hconts (ap_continuation ap)))
-             [partial] statics hp). }
+             [partial] statics hp rd_). }
     destruct Hround as [m Hround]. exists m. rewrite run_succ_on.
     exact Hround.
   - (* Apply_cont *)
@@ -1221,7 +1222,7 @@ Proof.
       as [-> | (params & metadata & i & arms & body & n & target & Hentry
                 & Hnth & Hfind & Hpasses & Hlength & Hkinds & ->)].
     + destruct (eval_simples vars (ac_args ac)) as [vs | ] eqn:Hargs.
-      * destruct (Hsame vs statics hp) as [m Hanswer]. exists m.
+      * destruct (Hsame vs statics hp rd) as [m Hanswer]. exists m.
         rewrite run_succ_on, !step_apply_cont, Hargs.
         unfold apply_continuation. exact Hanswer.
       * exists 0. rewrite run_one, !step_apply_cont, Hargs.
@@ -1240,7 +1241,7 @@ Proof.
           injection Hvs' as <-. exact Hrest. }
         destruct
           (Hon params metadata p arms def_vars def_conts' i n target
-             (ac_args ac) vs vars conts' statics hp Hresolve Hp Hnth Hfind
+             (ac_args ac) vs vars conts' statics hp rd Hresolve Hp Hnth Hfind
              Hnodup Hruns_vs Hlength Hargs Hvars Hcont)
           as [m Hanswer].
         exists m. rewrite run_succ_on, (step_apply_cont ac), Hargs.
@@ -1613,10 +1614,11 @@ Qed.
 (* A term and what the pass makes of it, under the same environments
    that give the variables the kinds the pass starts from. *)
 Lemma forward_to_arms_related (kinded : bool) (G : kinds_in_scope) (e : expr)
-    (vars : env) (conts : cont_env) (statics : static_env) (hp : heap) :
+    (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+      (rd : read_record) :
   kinds_hold G vars ->
-  arm_state_fwd kinded (State e vars conts statics hp)
-    (State (forward_to_arms_under kinded G [] e) vars conts statics hp).
+  arm_state_fwd kinded (State e vars conts statics hp rd)
+    (State (forward_to_arms_under kinded G [] e) vars conts statics hp rd).
 Proof.
   intros Hhold.
   apply (Arm_state_fwd kinded G []);
@@ -1626,7 +1628,7 @@ Qed.
 
 Theorem forward_to_arms_refines : forward_to_arms_refines_statement.
 Proof.
-  intros e vars conts statics hp.
+  intros e vars conts statics hp rd.
   apply (rounds_refines (arm_state_fwd false) (arm_fwd_round false)).
   apply forward_to_arms_related, kinds_hold_nil.
 Qed.
@@ -1637,8 +1639,8 @@ Lemma forward_to_arms_kinded_under_equivalent_bound (G : kinds_in_scope)
     (e : expr) :
   expr_equivalent_bound G e (forward_to_arms_under true G [] e).
 Proof.
-  intros vars conts statics hp Hhold.
-  pose proof (forward_to_arms_related true G e vars conts statics hp Hhold)
+  intros vars conts statics hp rd Hhold.
+  pose proof (forward_to_arms_related true G e vars conts statics hp rd Hhold)
     as Hrel.
   apply refines_antisymmetric.
   - exact (rounds_refines (arm_state_fwd true) (arm_fwd_round true) _ _ Hrel).
@@ -1650,10 +1652,10 @@ Qed.
 Theorem forward_to_arms_kinded_equivalent :
   forward_to_arms_kinded_equivalent_statement.
 Proof.
-  intros e vars conts statics hp.
+  intros e vars conts statics hp rd.
   exact
     (forward_to_arms_kinded_under_equivalent_bound [] e vars conts statics hp
-       (kinds_hold_nil vars)).
+       rd_ (kinds_hold_nil vars)).
 Qed.
 
 (* ======================================================================== *)
@@ -1694,7 +1696,7 @@ Lemma code_body_to_arms_refines (params : list variable)
          [] body)
       body.
 Proof.
-  split; intros vs callee callee_vars conts statics hp _ Hkinds Hvalue Hbind;
+  split; intros vs callee callee_vars conts statics hp rd _ Hkinds Hvalue Hbind;
     apply equivalent_refines; [ | apply equivalent_sym ];
     apply forward_to_arms_kinded_under_equivalent_bound,
       (code_in_scope_hold params my_closure metadata vs callee callee_vars
@@ -1704,20 +1706,20 @@ Qed.
 (* A group of static bindings with the bodies of its code rewritten, one
    piece of code at a time: [done] is what has been rewritten. *)
 Lemma bindings_to_arms_equivalent (body : expr) (vars : env)
-    (conts : cont_env) (statics : static_env) (hp : heap)
+    (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record)
     (todo : list static_binding) :
   ∀ done : list static_binding,
-    equivalent (State (Let_static (done ++ todo) body) vars conts statics hp)
+    equivalent (State (Let_static (done ++ todo) body) vars conts statics hp rd)
       (State
          (Let_static (done ++ map forward_to_arms_in_binding todo) body)
-         vars conts statics hp).
+         vars conts statics hp rd).
 Proof.
   induction todo as [ | binding todo IH]; intros done; simpl;
     [ apply equivalent_refl | ].
   apply (equivalent_trans _
     (State
        (Let_static (done ++ forward_to_arms_in_binding binding :: todo) body)
-       vars conts statics hp)).
+       vars conts statics hp rd)).
   - destruct binding
       as [id [params my_closure ret exn metadata code_body] | id
          | sym const];
@@ -1740,28 +1742,29 @@ Proof.
   destruct e
     as [ x kind d body | bindings body | k [params metadata handler] body
        | handlers body | ap | ac | scrutinee arms | ];
-    simpl; intros vars conts statics hp; try apply equivalent_refl.
-  - apply let_equivalent_step; [ reflexivity | intros v _ _ ].
+    simpl; intros vars conts statics hp rd; try apply equivalent_refl.
+  - apply let_equivalent_step_exec; [ reflexivity | intros v hp' rd' _ _ ].
     apply forward_to_arms_in_code_equivalent_aux.
   - (* down the body, then the code of the group *)
     apply (equivalent_trans _
       (State (Let_static bindings (forward_to_arms_in_code body)) vars conts
-         statics hp)).
+         statics hp rd)).
     + apply let_static_equivalent_step.
       destruct (eval_static_bindings vars bindings statics) as [extended | ];
         [ | exact I ].
       apply forward_to_arms_in_code_equivalent_aux.
-    + exact (bindings_to_arms_equivalent _ vars conts statics _ bindings []).
+    + exact
+      (bindings_to_arms_equivalent _ vars conts statics _ rd_ bindings []).
   - apply (equivalent_trans _
       (State
          (Let_cont_non_recursive k
             (Handler params metadata (forward_to_arms_in_code handler)) body)
-         vars conts statics hp)).
+         vars conts statics hp rd)).
     + apply
         (let_cont_handler_equivalent_bound [] k params metadata handler _
            body);
         [ | intros x kind [=] ].
-      intros vars' conts' statics' hp' _.
+      intros vars' conts' statics' hp' rd' _.
       apply forward_to_arms_in_code_equivalent_aux.
     + apply let_cont_non_recursive_equivalent_step.
       apply forward_to_arms_in_code_equivalent_aux.
@@ -1771,7 +1774,7 @@ Proof.
             (map (fun '(k, h) => (k, forward_to_arms_in_code_handler h))
                handlers)
             body)
-         vars conts statics hp)).
+         vars conts statics hp rd)).
     + apply (let_cont_recursive_handlers_equivalent_bound [] handlers _ body);
         [ | | intros x kind [=] ].
       * induction handlers as [ | [k [params metadata handler]] handlers IH];
@@ -1780,7 +1783,7 @@ Proof.
         split; [ reflexivity | ]. simpl.
         exists params, metadata, handler, (forward_to_arms_in_code handler).
         split; [ reflexivity | ]. split; [ reflexivity | ].
-        intros vars' conts' statics' hp' _.
+        intros vars' conts' statics' hp' rd' _.
         apply forward_to_arms_in_code_equivalent_aux.
       * unfold handlers_bind_statics.
         induction handlers as [ | [k [params metadata handler]] handlers IH];

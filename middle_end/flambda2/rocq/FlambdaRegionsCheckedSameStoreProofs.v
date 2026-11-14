@@ -37,7 +37,8 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaPrimitiveModel
   FlambdaValueSpec FlambdaPrimitiveSpec FlambdaPrimitiveProofs
   FlambdaHeapProofs FlambdaSemanticsSpec FlambdaSemanticsProofs
   FlambdaClosuresProofs FlambdaRegionsSpec FlambdaRegionsProofs
-  FlambdaRegionsReadsProofs FlambdaRegionsStepsProofs
+  FlambdaRegionsNeedsHeapProofs FlambdaRegionsReadsProofs
+  FlambdaRegionsStepsProofs
   FlambdaRegionsFreshProofs FlambdaRegionsInvariantSpec
   FlambdaRegionsInvariantProofs FlambdaRegionsErasureSpec
   FlambdaRegionsCallsSpec FlambdaRegionsCheckSpec FlambdaRegionsCheckedSpec.
@@ -377,7 +378,7 @@ Lemma jump_entered (k : continuation) (simples : list simple)
   (∀ s : simple, In s simples -> simple_below (rs_base rs) s = true) ->
   eval_simples vars simples = Some vs ->
   apply_cont_value (resolve k conts) vs (live_statics rs)
-    (state_heap (rs_state rs))
+    (state_heap (rs_state rs)) (state_reads (rs_state rs))
   = Step s'
   ∨ (existsb (simple_open_mark rs) simples = true
      ∧ ∃ (params : list variable) (metadata : handler_metadata)
@@ -391,7 +392,8 @@ Lemma jump_entered (k : continuation) (simples : list simple)
          ∧ s'
            = State handler handler_vars
                (rec_closures recursive def_vars def_conts ++ def_conts)
-               (live_statics rs) (state_heap (rs_state rs))) ->
+               (live_statics rs) (state_heap (rs_state rs))
+                 (state_reads (rs_state rs))) ->
   entered s'.
 Proof.
   intros Hjump Hb Hvs Hstep.
@@ -407,7 +409,8 @@ Proof.
          | (Hmark & params & metadata & handler & def_vars & def_conts
             & recursive & handler_vars & Hc & Hbind & ->)].
     + destruct (applied_all cert codes rs Hfresh Hcode Hlocal Hdeep Hstatics
-                  Hgood_statics (state_heap (rs_state rs)))
+                  Hgood_statics (state_heap (rs_state rs))
+                  (state_reads (rs_state rs)))
         as (Hcont_all & _ & _).
       exact
         (Hcont_all _ ce _ Hok cs _ vs s' running_frame Hjump Hargs Hgood_vs
@@ -499,7 +502,8 @@ Proof.
   exists
     (State handler handler_vars
        (rec_closures recursive def_vars def_conts ++ def_conts)
-       (live_statics rs) (state_heap (rs_state rs))).
+       (live_statics rs) (state_heap (rs_state rs))
+         (state_reads (rs_state rs))).
   split; [ reflexivity | ].
   apply (jump_entered (ac_continuation ac) (ac_args ac) vs _ Hc Hb Hvs).
   right. split; [ exact Hmark | ].
@@ -541,7 +545,8 @@ Proof.
   pose proof running_caller_ok as Hcaller.
   destruct Hconts as [Hsome Hnone].
   destruct (applied_all cert codes rs Hfresh Hcode Hlocal Hdeep Hstatics
-              Hgood_statics (state_heap (rs_state rs)))
+              Hgood_statics (state_heap (rs_state rs))
+              (state_reads (rs_state rs)))
     as (_ & Hret_all & _).
   assert (Hret :
     ret_ok cert codes rs a result (resolve (ap_continuation ap) conts)).
@@ -590,12 +595,12 @@ Proof.
   destruct (ap_call_kind ap) as [id | ] eqn:Hkind.
   - exact
       (call_direct cert codes rs Hfresh Hcode Hlocal Hdeep Hstatics
-         Hgood_statics _ a id callee _ _ vs _ _ _ _ result s' Hcaller
+         Hgood_statics _ rd_ a id callee _ _ vs _ _ _ _ result s' Hcaller
          Hcallee_good Hcallee_holds (simples_good _ _ Hvs) Hargs Hresult Hret
          Hraise Hreturns Hgood_ret Hgood_exn Hstep).
   - exact
       (call_unknown cert codes rs Hfresh Hcode Hlocal Hdeep Hstatics
-         Hgood_statics _ a callee _ _ vs _ _ _ _ result s' Hcaller
+         Hgood_statics _ rd_ a callee _ _ vs _ _ _ _ result s' Hcaller
          Hcallee_good Hcallee_live Hcallee_holds (simples_good _ _ Hvs) Hargs
          Hresult Hret Hraise Hreturns Hgood_ret Hgood_exn Hstep).
 Qed.
@@ -608,15 +613,18 @@ Lemma let_entered (x : variable) (kind : flambda_kind) (d : named)
     (body : expr) (s' : state) :
   state_expr (rs_state rs) = Let x kind d body ->
   region_named d = false ->
+  named_needs_heap (state_vars (rs_state rs)) d = false ->
   marker_of x body = No_marker ->
   step (with_statics (rs_state rs) (live_statics rs)) = Step s' ->
   entered s'.
 Proof.
-  intros He Hd Hmarker Hstep.
-  unfold with_statics in Hstep. rewrite He, step_let in Hstep.
-  destruct (eval_named (live_statics rs) vars d) as [v | ] eqn:Hv;
+  intros He Hd Hneeds Hmarker Hstep.
+  unfold with_statics in Hstep. rewrite He, step_let_exec in Hstep.
+  destruct (exec_named _ _ _ _ d) as [[[v hp'] rd'] | ] eqn:Hexec;
     [ | discriminate ].
   destruct (kind_eqb (kind_of_value v) kind); [ | discriminate ].
+  destruct (exec_named_needs_no_heap_some _ _ _ _ _ _ _ _ Hneeds Hexec)
+    as (Hv & -> & ->).
   injection Hstep as <-.
   pose proof Hcheck as Hc. rewrite He in Hc.
   rewrite (check_expr_let cert codes cs x kind d body Hd) in Hc.
@@ -646,9 +654,10 @@ Proof.
       check_expr cert codes (bind_lifetime x l cs) body = true ->
       entered
         (State body ((x, v) :: vars) conts (live_statics rs)
-           (state_heap (rs_state rs)))).
+           (state_heap (rs_state rs)) (state_reads (rs_state rs)))).
   { intros l Hholds Hregion Hgood_v Hbody.
-    exists (bind_lifetime x l cs), ms. cbn [state_expr state_vars state_conts].
+    exists (bind_lifetime x l cs), ms. cbn
+      [state_expr state_vars state_conts].
     split; [ exact Hbody | ]. split; [ exact Hi | ]. split.
     - split;
         [ change (open_marks ((x, v) :: vars) (cs_open cs) = Some ms);
@@ -660,7 +669,8 @@ Proof.
         cbn [bind_lifetime cs_env cs_regions forallb].
         apply andb_true_iff. split; [ | exact Hs2 ].
         destruct l as [ | | r | ]; try reflexivity. exact (Hregion r eq_refl).
-      + intros y l0 w. cbn [bind_lifetime cs_env cs_open]. rewrite !lookup_cons.
+      + intros y l0 w. cbn [bind_lifetime cs_env cs_open]. rewrite
+        !lookup_cons.
         destruct (Pos.eqb y x);
           [ intros [= <-] [= <-]; exact Hholds | exact (Hvalues y l0 w) ].
     - split.

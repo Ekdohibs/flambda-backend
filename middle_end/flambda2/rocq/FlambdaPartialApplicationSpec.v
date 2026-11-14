@@ -126,7 +126,7 @@ Import ListNotations.
    values, and are not used. *)
 Definition apply_partial_statement : Prop :=
   ∀ (ap : apply_expr) (vars : env) (conts : cont_env) (statics : static_env)
-    (hp : heap)
+    (hp : heap) (rd : read_record)
     (callee : value) (vs extra : list value) (called : code_id)
     (slots : list (value_slot * value)) (c : code),
     eval_simple vars (ap_callee ap) = Some callee ->
@@ -141,10 +141,10 @@ Definition apply_partial_statement : Prop :=
     partial_or_over_application (ap_args_arity ap) (ap_return_arity ap)
       (code_params_arity c) (code_result_arity c)
     = true ->
-    step (State (Apply ap) vars conts statics hp)
+    step (State (Apply ap) vars conts statics hp rd)
     = apply_continuation (ap_continuation ap)
         [Value_partial_application callee vs (ap_args_arity ap)] conts
-        statics hp.
+        statics hp rd.
 
 (* An indirect call of a partial application, with one argument at
    least and arguments of the kinds of its arity, is the call of the
@@ -154,7 +154,7 @@ Definition apply_partial_statement : Prop :=
    closure only.) *)
 Definition apply_partial_application_statement : Prop :=
   ∀ (ap : apply_expr) (vars : env) (conts : cont_env) (statics : static_env)
-    (hp : heap)
+    (hp : heap) (rd : read_record)
     (closure : value) (applied vs extra : list value)
     (applied_arity : arity),
     eval_simple vars (ap_callee ap)
@@ -165,23 +165,23 @@ Definition apply_partial_application_statement : Prop :=
     ap_args_arity ap <> [] ->
     map kind_of_value vs = unarize (ap_args_arity ap) ->
     partial_application_of closure = None ->
-    step (State (Apply ap) vars conts statics hp)
+    step (State (Apply ap) vars conts statics hp rd)
     = call_function closure Indirect (applied ++ vs)
         (applied_arity ++ ap_args_arity ap) (ap_return_arity ap)
         (resolve (ap_continuation ap) conts)
         (with_extra_args (resolve (ap_exn_continuation ap) conts) extra)
-        statics hp.
+        statics hp rd.
 
 (* A direct call of a partial application is undefined, as it is a
    closure of no code; and so is a call that gives it no argument. *)
 Definition apply_partial_application_undefined_statement : Prop :=
   ∀ (ap : apply_expr) (vars : env) (conts : cont_env) (statics : static_env)
-    (hp : heap)
+    (hp : heap) (rd : read_record)
     (closure : value) (applied : list value) (applied_arity : arity),
     eval_simple vars (ap_callee ap)
     = Some (Value_partial_application closure applied applied_arity) ->
     ap_call_kind ap <> Indirect ∨ ap_args_arity ap = [] ->
-    step (State (Apply ap) vars conts statics hp) = Undefined.
+    step (State (Apply ap) vars conts statics hp rd) = Undefined.
 
 (* A call of a partial application whose own arguments are not of the
    kinds of its own arity is undefined, whatever the partial application
@@ -194,13 +194,13 @@ Definition apply_partial_application_undefined_statement : Prop :=
    a mismatch in the call. *)
 Definition apply_partial_application_kinds_statement : Prop :=
   ∀ (ap : apply_expr) (vars : env) (conts : cont_env) (statics : static_env)
-    (hp : heap)
+    (hp : heap) (rd : read_record)
     (closure : value) (applied vs : list value) (applied_arity : arity),
     eval_simple vars (ap_callee ap)
     = Some (Value_partial_application closure applied applied_arity) ->
     eval_simples vars (ap_args ap) = Some vs ->
     map kind_of_value vs <> unarize (ap_args_arity ap) ->
-    step (State (Apply ap) vars conts statics hp) = Undefined.
+    step (State (Apply ap) vars conts statics hp rd) = Undefined.
 
 (* A call of a closure with fewer arguments than its code has
    parameters, whose result is at once called with more arguments,
@@ -216,7 +216,8 @@ Definition partial_then_apply_statement : Prop :=
     (extra extra' : list (simple * flambda_kind)) (p : variable)
     (metadata : handler_metadata)
     (args_arity args_arity' partial_arity return_arity : arity) (vars : env)
-    (conts : cont_env) (statics : static_env) (hp : heap) (callee : value)
+    (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record)
+      (callee : value)
     (called : code_id) (slots : list (value_slot * value)) (c : code),
     eval_simple vars f = Some callee ->
     closure_of statics callee = Some (called, slots) ->
@@ -237,12 +238,12 @@ Definition partial_then_apply_statement : Prop :=
             (Apply
                (Apply_expr f kind args k exn extra args_arity
                   partial_arity)))
-         vars conts statics hp)
+         vars conts statics hp rd)
       (State
          (Apply
             (Apply_expr f kind (args ++ args') k' exn' extra'
                (args_arity ++ args_arity') return_arity))
-         vars conts statics hp).
+         vars conts statics hp rd).
 
 (* ======================================================================== *)
 (* Over-applications                                                        *)
@@ -259,7 +260,7 @@ Definition partial_then_apply_statement : Prop :=
    of the call. *)
 Definition apply_over_statement : Prop :=
   ∀ (ap : apply_expr) (vars : env) (conts : cont_env) (statics : static_env)
-    (hp : heap)
+    (hp : heap) (rd : read_record)
     (callee : value) (vs extra : list value) (called : code_id)
     (slots : list (value_slot * value)) (c : code),
     eval_simple vars (ap_callee ap) = Some callee ->
@@ -274,7 +275,7 @@ Definition apply_over_statement : Prop :=
     partial_or_over_application (ap_args_arity ap) (ap_return_arity ap)
       (code_params_arity c) (code_result_arity c)
     = true ->
-    step (State (Apply ap) vars conts statics hp)
+    step (State (Apply ap) vars conts statics hp rd)
     = call_code callee c
         (firstn (cardinal_unarized (code_params_arity c)) vs)
         (firstn (length (code_params_arity c)) (ap_args_arity ap))
@@ -286,7 +287,7 @@ Definition apply_over_statement : Prop :=
            (ap_return_arity ap) (resolve (ap_continuation ap) conts)
            (with_extra_args (resolve (ap_exn_continuation ap) conts) extra))
         (with_extra_args (resolve (ap_exn_continuation ap) conts) extra)
-        statics hp.
+        statics hp rd.
 
 (* What is left of an over-application, applied to one value, is an
    indirect call of that value with the arguments that remain; applied
@@ -294,15 +295,15 @@ Definition apply_over_statement : Prop :=
 Definition over_application_applied_statement : Prop :=
   ∀ (remaining : list value) (remaining_arity return_arity : arity)
     (return_to exn_to : cont_value) (vs : list value) (statics : static_env)
-      (hp : heap),
+      (hp : heap) (rd : read_record),
     apply_cont_value
       (Over_application remaining remaining_arity return_arity return_to
          exn_to)
-      vs statics hp
+      vs statics hp rd
     = match vs with
       | [v] =>
         call_function v Indirect remaining remaining_arity return_arity
-          return_to exn_to statics hp
+          return_to exn_to statics hp rd
       | _ => Undefined
       end.
 
@@ -331,7 +332,8 @@ Definition over_application_split_statement : Prop :=
     (k k' exn' : continuation) (extra : list (simple * flambda_kind))
     (p : variable)
     (args_arity args_arity' return_arity : arity) (vars : env)
-    (conts : cont_env) (statics : static_env) (hp : heap) (callee : value)
+    (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record)
+      (callee : value)
     (called : code_id) (slots : list (value_slot * value)) (c : code),
     eval_simple vars f = Some callee ->
     closure_of statics callee = Some (called, slots) ->
@@ -348,7 +350,7 @@ Definition over_application_split_statement : Prop :=
          (Apply
             (Apply_expr f kind (args ++ args') k' exn' extra
                (args_arity ++ args_arity') return_arity))
-         vars conts statics hp)
+         vars conts statics hp rd)
       (State
          (Let_cont_non_recursive k
             (Handler [p] (make_handler_metadata [Value])
@@ -358,7 +360,7 @@ Definition over_application_split_statement : Prop :=
             (Apply
                (Apply_expr f (Direct called) args k exn' extra
                   (code_params_arity c) (code_result_arity c))))
-         vars conts statics hp).
+         vars conts statics hp rd).
 
 (* ======================================================================== *)
 (* Two examples                                                             *)
@@ -430,7 +432,7 @@ Definition over_example : expr :=
 Definition examples_run_statement : Prop :=
   ∀ e : expr,
     e ∈ [partial_example; over_example] ->
-    behaves (State e [] [] empty_static_env empty_heap)
+    behaves (State e [] [] empty_static_env empty_heap no_reads)
       (Exits done [Value_const (Tagged_immediate 1)] empty_heap).
 
 (* Both are well-formed units, and pass the check of kinds. *)
@@ -456,7 +458,7 @@ Definition malformed_partial_application_statement : Prop :=
          Value_partial_application (Value_closure identity_code_id [])
            [Value_const (Tagged_immediate 5)] [])]
        []
-       (Static_env [(identity_code_id, identity_code)] []) empty_heap)
+       (Static_env [(identity_code_id, identity_code)] []) empty_heap no_reads)
   = Undefined.
 
 (* [raise x] raises [x], and [raiser x] returns [raise]. *)
@@ -497,12 +499,14 @@ Definition over_raising (callee : symbol) (first second : Z) : expr :=
    with the exception followed by the extra argument. *)
 Definition over_raises_statement : Prop :=
   behaves
-    (State (over_raising raise_symbol 7 2) [] [] empty_static_env empty_heap)
+    (State (over_raising raise_symbol 7 2) [] [] empty_static_env empty_heap
+       no_reads)
     (Exits error
        [Value_const (Tagged_immediate 7); Value_const (Tagged_immediate 9)]
          empty_heap)
   ∧ behaves
-    (State (over_raising raiser_symbol 1 5) [] [] empty_static_env empty_heap)
+    (State (over_raising raiser_symbol 1 5) [] [] empty_static_env empty_heap
+       no_reads)
       (Exits error
          [Value_const (Tagged_immediate 5);
           Value_const (Tagged_immediate 9)] empty_heap).
@@ -514,6 +518,6 @@ End Examples.
    so would not use them, too. *)
 Definition apply_extra_undefined_statement : Prop :=
   ∀ (ap : apply_expr) (vars : env) (conts : cont_env) (statics : static_env)
-    (hp : heap),
+    (hp : heap) (rd : read_record),
     eval_simples vars (exn_extra_simples ap) = None ->
-    step (State (Apply ap) vars conts statics hp) = Undefined.
+    step (State (Apply ap) vars conts statics hp rd) = Undefined.

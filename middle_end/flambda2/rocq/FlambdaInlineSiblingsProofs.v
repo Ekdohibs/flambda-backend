@@ -123,7 +123,7 @@ Lemma inline_in_binding_refines (kept : list code_id)
            :: todo)
        body).
 Proof.
-  intros vars conts statics hp'.
+  intros vars conts statics hp' rd'.
   set (others := codes_of (done ++ todo) []).
   assert (Hrefine :
     bindings_refine (statics_know others) (done ++ binding :: todo)
@@ -139,7 +139,7 @@ Proof.
       first
         [ apply inline_calls_binds_statics
         | symmetry; apply inline_calls_binds_statics
-        | intros vars' conts' statics' hp Hknow';
+        | intros vars' conts' statics' hp rd Hknow';
           apply inline_calls_refines_knowing, Hknow' ]. }
   destruct Hrefine as [Hforwards Hbackwards].
   apply (fun H =>

@@ -267,36 +267,48 @@ Definition let_prim_canonical_statement : Prop :=
 (* [Simplify_primitive.arg_kind_mismatch]: where the types of the
    arguments are not of the kinds that the primitive takes, the term is
    [Invalid]. (So it is where the arguments are not as many as the
-   primitive takes, which the compiler's terms cannot be.) *)
+   primitive takes, which the compiler's terms cannot be.) This is not
+   said of a primitive of the heap: [prim_args_well_kinded] knows the
+   kinds of the arguments of none of them, and answers no whatever
+   they are given, while the machine runs them. *)
 Definition let_prim_kind_mismatch_statement : Prop :=
   ∀ (tenv : Typing_env.t) (x : variable) (declared : flambda_kind) (p : prim)
     (args : list simple) (tys : list flambda_type) (body : expr),
+    (∀ q : heap_primitive, p <> Heap q) ->
     Forall2 (argument_type tenv) args tys ->
     prim_args_well_kinded p (map FlambdaTypeGrammar.kind tys) = false ->
     expr_equivalent_under tenv (Let x declared (Prim p args) body) Invalid.
 
 (* A defining expression that has no value but one constant, in the
-   states that satisfy the environment, may be replaced by the
-   constant. This is a refinement: the defining expression may have no
-   value. *)
+   states that satisfy the environment, and that leaves the heap and
+   the read record as they came, may be replaced by the constant. The
+   machine runs the defining expression on its heap
+   (FlambdaSemanticsSpec.exec_named): its value is the value of that
+   run, on whatever heap and with whatever record. The heap is asked
+   to be as it came because a primitive of the heap may answer a
+   constant and write (a store answers the unit value), and the record
+   because the [Let] of the constant records nothing. This is a
+   refinement: the defining expression may have no value. *)
 Definition let_constant_statement : Prop :=
   ∀ (tenv : Typing_env.t) (x : variable) (declared : flambda_kind)
     (defining_expr : named) (c : const) (body : expr),
-    (∀ (statics : static_env) (vars : env) (v : value),
+    (∀ (statics : static_env) (hp hp' : heap) (rd rd' : read_record)
+       (vars : env) (v : value),
       env_satisfies_strictly tenv statics vars ->
-      eval_named statics vars defining_expr = Some v ->
-      v = Value_const c) ->
+      exec_named statics hp rd vars defining_expr = Some (v, hp', rd') ->
+      v = Value_const c ∧ hp' = hp ∧ rd' = rd) ->
     expr_refines_under tenv (Let x declared defining_expr body)
       (Let x declared (Simple (Const c)) body).
 
 (* A [Let] whose defining expression has no value, in the states that
-   satisfy the environment, is [Invalid] there. *)
+   satisfy the environment, on whatever heap and with whatever record
+   the machine runs it, is [Invalid] there. *)
 Definition let_invalid_statement : Prop :=
   ∀ (tenv : Typing_env.t) (x : variable) (declared : flambda_kind)
     (defining_expr : named) (body : expr),
-    (∀ (statics : static_env) (vars : env),
+    (∀ (statics : static_env) (hp : heap) (rd : read_record) (vars : env),
       env_satisfies_strictly tenv statics vars ->
-      eval_named statics vars defining_expr = None) ->
+      exec_named statics hp rd vars defining_expr = None) ->
     expr_equivalent_under tenv (Let x declared defining_expr body) Invalid.
 
 (* ======================================================================== *)

@@ -102,7 +102,7 @@ Qed.
 
 Theorem unused_let_canonical : unused_let_canonical_statement.
 Proof.
-  intros x kind d body Hunused. apply unused_let.
+  intros x kind d body Hheap Hunused. apply unused_let; [ exact Hheap | ].
   intros Hfree. apply var_free_among in Hfree. congruence.
 Qed.
 
@@ -127,7 +127,7 @@ Qed.
 Theorem rename_variables_equivalent_canonical :
   rename_variables_equivalent_canonical_statement.
 Proof.
-  intros r e vars conts statics hp Hclosed Hconts.
+  intros r e vars conts statics hp rd Hclosed Hconts.
   apply rename_variables_equivalent;
     [ exact Hclosed | apply continuations_fixed, Hconts ].
 Qed.

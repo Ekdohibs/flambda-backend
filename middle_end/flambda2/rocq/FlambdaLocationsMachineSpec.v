@@ -48,30 +48,36 @@
    state does not bind, whether or not the run allocates it.
 
    The premise ([state_locations_bound]): the heap of the state binds
-   every location of the state, those of every entry of the heap
-   among them. FlambdaLocationsPrimitiveSpec.v says why it is needed
-   and why it counts the entries that a later write hides. A state
-   that holds no location satisfies it ([no_location_bound_statement];
-   its heap is empty, a key being a location): such is the state that
-   a unit starts from. It is kept by a step and by a run
-   ([step_keeps_locations_bound_statement],
+   every location of the state, those of every entry of the heap and
+   of the read record among them. FlambdaLocationsPrimitiveSpec.v
+   says why it is needed and why it counts the entries that a later
+   write hides. A state that holds no location satisfies it
+   ([no_location_bound_statement]; its heap is empty, a key being a
+   location): such is the state that a unit starts from. It is kept
+   by a step and by a run ([step_keeps_locations_bound_statement],
    [run_keeps_locations_bound_statement]), with the fact that a
    location bound stays bound; and by the action
    ([permute_state_locations_bound_statement]).
 
-   Where the machine stands. The primitives that allocate, read and
-   write are those of FlambdaHeapSpec.exec_prim, and [step] does not
-   run them yet: a [Let] of a primitive is
-   FlambdaPrimitiveSpec.eval_prim, which has no value on them, and
-   every step leaves the heap as it is. So of the machine as it is
-   the equation holds with [p'] equal to [p] and without the premise.
-   It is not stated: it stops being true when [step] runs the
-   primitives of the heap, and the statements here are those that stay
-   true then. What a [Let] is to run is FlambdaHeapMachineSpec.heap_exec_named,
-   and the two statements about it here
-   ([heap_exec_named_permuted_statement],
-   [heap_exec_named_keeps_locations_bound_statement]) are what the case of
-   a [Let] needs then; the other cases of a step do not allocate.
+   Where a step allocates. The primitives that allocate, read and
+   write are those of FlambdaHeapSpec.exec_prim, and [step] runs them
+   in a [Let] (FlambdaSemanticsSpec.exec_named); every other step
+   leaves the heap as it is. What a [Let] runs is
+   FlambdaHeapMachineSpec.heap_exec_named with the read record of
+   the state given back as it came, and the two statements about it
+   here ([heap_exec_named_permuted_statement],
+   [heap_exec_named_keeps_locations_bound_statement]) are what the
+   case of a [Let] goes by. Of a step that is not a [Let] the
+   equation holds with [p'] equal to [p] and without the premise;
+   that is used in the proofs and is not stated.
+
+   The read record. A state and an exit carry a read record
+   (FlambdaValueSpec.read_record), whose entries are at locations.
+   The action moves them, they are among the locations of a state,
+   and [result_locations_bound] asks that the heap of an exit binds
+   them. No step adds to the record
+   (FlambdaSemanticsSpec.step_keeps_reads_statement), and a
+   behaviour does not have it.
 
    What is not here. The equivalences and refinements of
    FlambdaSemanticsSpec.v compare exits by [=], values and heap, so a
@@ -100,7 +106,8 @@ Definition state_locations_bound (s : state) : Prop :=
 
 (* The same of what a step or a run comes to, with the fact that a
    location that the heap [h] bound is still bound: of the state that
-   it steps to; of the heap and the values of an exit. *)
+   it steps to; of the heap, the values and the read record of an
+   exit. *)
 Definition result_locations_bound (h : heap) (result : step_result)
     : Prop :=
   match result with
@@ -108,9 +115,10 @@ Definition result_locations_bound (h : heap) (result : step_result)
     state_locations_bound s
     ∧ (∀ l : location,
          is_bound l h = true -> is_bound l (state_heap s) = true)
-  | Exit _ vs hp =>
+  | Exit _ vs hp rd =>
     locations_bound hp (locations_of_heap hp)
     ∧ locations_bound hp (locations_of_values vs)
+    ∧ locations_bound hp (locations_of_reads rd)
     ∧ (∀ l : location, is_bound l h = true -> is_bound l hp = true)
   | Undefined => True
   end.
@@ -165,12 +173,14 @@ Definition behaves_permuted_statement : Prop :=
       ∧ behaves (permute_state p s) (permute_behaviour p' b).
 
 (* ======================================================================== *)
-(* What a [Let] is to run                                                   *)
+(* What a [Let] runs                                                        *)
 (* ======================================================================== *)
 
 (* FlambdaHeapMachineSpec.heap_exec_named: a primitive is
    FlambdaHeapSpec.exec_prim on the heap, and anything else is
-   FlambdaSemanticsSpec.eval_named with the heap as it came. *)
+   FlambdaSemanticsSpec.eval_named with the heap as it came. What a
+   [Let] of the machine runs (FlambdaSemanticsSpec.exec_named) is
+   that, with the read record given back as it came. *)
 Definition heap_exec_named_permuted_statement : Prop :=
   ∀ (p : permutation) (statics : static_env) (h : heap) (vars : env)
     (defining_expr : named),

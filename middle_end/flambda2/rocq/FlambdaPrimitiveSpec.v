@@ -623,7 +623,7 @@ Definition known_is (known : option Z) (actual : Z) : bool :=
    know the field, when it reads it whatever the tag; it does not use
    the size.
 
-   The mutability of the load is not looked at. It says what the
+   The mutability of the load is not looked at here. It says what the
    compiler may take of the load: one marked [Immutable] or
    [Immutable_unique] may be shared with another of the same field and
    replaced by what is known of the field, and one marked [Mutable] may
@@ -631,16 +631,28 @@ Definition known_is (known : option Z) (actual : Z) : bool :=
    one whose argument is not a constant, and makes one of a constant
    [Invalid], where the load has no value here either). It is not a
    test of the block: the machine reads the field
-   ([To_cmm_primitive.block_load]), and a block of the model is
-   immutable, so that a load marked [Mutable] from one, which is what
-   [%field0] of the source makes when it is applied to a tuple, reads
-   what the block was made with. ([fst] and [snd] of the standard
-   library are [%field0_immut] and [%field1_immut], and make loads
-   marked [Immutable].) When the model has blocks that can be written,
-   the effects of a load will go by its mark and not by the block, as
-   they do in the compiler ([Flambda_primitive.effects_and_coeffects]:
-   a load marked [Mutable] has a coeffect); today no primitive of the
-   model has an effect. *)
+   ([To_cmm_primitive.block_load]), and a block that is a value, or
+   that a symbol is bound to, is immutable, so that a load marked
+   [Mutable] from one, which is what [%field0] of the source makes
+   when it is applied to a tuple, reads what the block was made with.
+   ([fst] and [snd] of the standard library are [%field0_immut] and
+   [%field1_immut], and make loads marked [Immutable].)
+
+   This function is not all of [Block_load]. A block that can be
+   written is a cell of the heap, made by [Make_block_with_identity]
+   and written by [Block_set], which has an effect. Its value is a
+   location, and this function has no value on a location. A load from
+   a location is run on the heap (FlambdaHeapSpec.exec_unary_on_cell),
+   and there the mark of the load is looked at, against the mutability
+   that the cell was made with (FlambdaHeapSpec.load_allowed): that
+   test allows a load marked [Mutable] on a block cell of either
+   mutability, and allows none marked [Immutable] or
+   [Immutable_unique] on a cell made [Mutable]. Where it allows the
+   load, the load may still have no value, for the tag, the size or
+   the field as here; and it has none on a cell that is an array. In
+   the compiler the effects of a load go by its mark alone
+   ([Flambda_primitive.effects_and_coeffects]: a load marked [Mutable]
+   has a coeffect). *)
 (* CR mshinwell: [Block_load] has no value on a block whose tag or whose
    number of fields is not the one the access kind gives, nor, with
    [Immediate], on a field that is not a tagged immediate. The machine

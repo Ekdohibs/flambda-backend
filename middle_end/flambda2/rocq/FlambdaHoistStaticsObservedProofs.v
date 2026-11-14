@@ -65,84 +65,86 @@ Import ListNotations.
    stands for the continuation of the exit behaves alike on what each
    left, behave alike from that continuation environment. One way. *)
 Lemma under_one_way (conts : cont_env) (e e' : expr) (statics : static_env)
-    (hp : heap) :
+    (hp : heap) (rd : read_record) :
   code_closed e = true ->
   code_closed e' = true ->
   static_code_closed statics ->
-  equivalent (State e [] [] statics hp) (State e' [] [] statics hp) ->
+  equivalent (State e [] [] statics hp rd) (State e' [] [] statics hp rd) ->
   (∀ (w w' : exit_world) (b : behaviour),
-    exits_world (State e [] [] statics hp) w ->
-    exits_world (State e' [] [] statics hp) w' ->
+    exits_world (State e [] [] statics hp rd) w ->
+    exits_world (State e' [] [] statics hp rd) w' ->
     step_result_behaves
       (apply_cont_value (resolve (exit_cont w) conts) (exit_values w)
-         (exit_statics w) (exit_heap w))
+         (exit_statics w) (exit_heap w) (exit_reads w))
       b ->
     step_result_behaves
       (apply_cont_value (resolve (exit_cont w') conts) (exit_values w')
-         (exit_statics w') (exit_heap w'))
+         (exit_statics w') (exit_heap w') (exit_reads w'))
       b) ->
   ∀ b : behaviour,
-    behaves (State e [] conts statics hp) b ->
-    behaves (State e' [] conts statics hp) b.
+    behaves (State e [] conts statics hp rd) b ->
+    behaves (State e' [] conts statics hp rd) b.
 Proof.
   intros Hc Hc' Hs Heq Hworlds b Hb.
   assert (Hvia :
     ∀ w : exit_world,
-      exits_world (State e [] [] statics hp) w ->
-      behaves (State e' [] conts statics hp) b).
+      exits_world (State e [] [] statics hp rd) w ->
+      behaves (State e' [] conts statics hp rd) b).
   { intros w Hw.
     pose proof (proj1 (Heq _) (exits_world_exits _ w Hw)) as Hexit'.
-    destruct (proj1 (exits_world_behaves _ _ _ _) Hexit') as [statics' Hw'].
-    refine (proj2 (under_world conts e' statics hp _ b Hc' Hs Hw') _).
+    destruct (proj1 (exits_world_behaves _ _ _ _) Hexit') as
+      [statics' [rd' Hw']].
+    refine (proj2 (under_world conts e' statics hp rd _ b Hc' Hs Hw') _).
     apply (Hworlds w _ b Hw Hw').
-    exact (proj1 (under_world conts e statics hp w b Hc Hs Hw) Hb). }
+    exact (proj1 (under_world conts e statics hp rd w b Hc Hs Hw) Hb). }
   assert (Hdec : b = Diverges ∨ b <> Diverges)
     by (destruct b; [ right | right | left ]; congruence).
   destruct Hdec as [-> | Hnot].
   - intros m.
-    destruct (run m (State e' [] [] statics hp)) as [s | k vs hp' | ]
+    destruct (run m (State e' [] [] statics hp rd)) as [s | k vs hp' rd' | ]
       eqn:Hrun.
-    + destruct (run_under conts e' [] statics hp m s Hc' Hs Hrun)
+    + destruct (run_under conts e' [] statics hp rd m s Hc' Hs Hrun)
         as (s' & Hrun' & _).
       exists s'. exact Hrun'.
-    + assert (Hexit : behaves (State e [] [] statics hp) (Exits k vs hp'))
-        by (apply Heq; exists m; exact Hrun).
-      destruct (proj1 (exits_world_behaves _ _ _ _) Hexit) as [statics0 Hw].
+    + assert (Hexit : behaves (State e [] [] statics hp rd) (Exits k vs hp'))
+        by (apply Heq; exists m; eexists; exact Hrun).
+      destruct (proj1 (exits_world_behaves _ _ _ _) Hexit) as
+        [statics0 [rd'' Hw]].
       exact (Hvia _ Hw m).
-    + assert (Hwrong : behaves (State e [] [] statics hp) Goes_wrong)
+    + assert (Hwrong : behaves (State e [] [] statics hp rd) Goes_wrong)
         by (apply Heq; exists m; exact Hrun).
-      pose proof (under_wrong conts e statics hp Hc Hs Hwrong) as Hwrong'.
+      pose proof (under_wrong conts e statics hp rd Hc Hs Hwrong) as Hwrong'.
       discriminate (behaviour_unique _ _ _ Hb Hwrong').
-  - destruct (under_ends conts e statics hp b Hc Hs Hnot Hb)
+  - destruct (under_ends conts e statics hp rd b Hc Hs Hnot Hb)
       as [Hwrong | [w Hw]]; [ | exact (Hvia w Hw) ].
-    pose proof (under_wrong conts e statics hp Hc Hs Hwrong) as Hwrong'.
+    pose proof (under_wrong conts e statics hp rd Hc Hs Hwrong) as Hwrong'.
     rewrite (behaviour_unique _ _ _ Hb Hwrong').
-    apply (under_wrong conts e' statics hp Hc' Hs). apply Heq. exact Hwrong.
+    apply (under_wrong conts e' statics hp rd Hc' Hs). apply Heq. exact Hwrong.
 Qed.
 
 Lemma equivalent_under (conts : cont_env) (e e' : expr) (statics : static_env)
-    (hp : heap) :
+    (hp : heap) (rd : read_record) :
   code_closed e = true ->
   code_closed e' = true ->
   static_code_closed statics ->
-  equivalent (State e [] [] statics hp) (State e' [] [] statics hp) ->
+  equivalent (State e [] [] statics hp rd) (State e' [] [] statics hp rd) ->
   (∀ (w w' : exit_world) (b : behaviour),
-    exits_world (State e [] [] statics hp) w ->
-    exits_world (State e' [] [] statics hp) w' ->
+    exits_world (State e [] [] statics hp rd) w ->
+    exits_world (State e' [] [] statics hp rd) w' ->
     step_result_behaves
       (apply_cont_value (resolve (exit_cont w) conts) (exit_values w)
-         (exit_statics w) (exit_heap w))
+         (exit_statics w) (exit_heap w) (exit_reads w))
       b
     <-> step_result_behaves
           (apply_cont_value (resolve (exit_cont w') conts) (exit_values w')
-             (exit_statics w') (exit_heap w'))
+             (exit_statics w') (exit_heap w') (exit_reads w'))
           b) ->
-  equivalent (State e [] conts statics hp) (State e' [] conts statics hp).
+  equivalent (State e [] conts statics hp rd) (State e' [] conts statics hp rd).
 Proof.
   intros Hc Hc' Hs Heq Hworlds b. split.
-  - apply (under_one_way conts e e' statics hp Hc Hc' Hs Heq).
+  - apply (under_one_way conts e e' statics hp rd Hc Hc' Hs Heq).
     intros w w' b' Hw Hw'. exact (proj1 (Hworlds w w' b' Hw Hw')).
-  - apply (under_one_way conts e' e statics hp Hc' Hc Hs
+  - apply (under_one_way conts e' e statics hp rd Hc' Hc Hs
              (equivalent_sym _ _ Heq)).
     intros w' w b' Hw' Hw. exact (proj2 (Hworlds w w' b' Hw Hw')).
 Qed.
@@ -182,10 +184,10 @@ Qed.
 Lemma inv_after_any (unit_exn x : continuation)
     (names_of : static_binding -> list positive)
     (is_bound : static_env -> positive -> bool) (last : state) (body : expr)
-    (vars : env) (hp : heap) :
+    (vars : env) (hp : heap) (rd : read_record) :
   inv unit_exn names_of is_bound last ->
   binds_no_static body = true ->
-  inv x names_of is_bound (State body vars [] (state_statics last) hp).
+  inv x names_of is_bound (State body vars [] (state_statics last) hp rd).
 Proof.
   intros (_ & _ & _ & _ & _ & Hcode) Hno.
   destruct
@@ -218,7 +220,8 @@ Hypothesis deleted_not_src :
    bound from the static environment of a state of the first run,
    satisfies the invariant of the first run, for an exception
    continuation that nothing binds. *)
-Lemma hoist_inv_after (last : state) (body : expr) (vars : env) (hp : heap) :
+Lemma hoist_inv_after (last : state) (body : expr) (vars : env) (hp : heap)
+    (rd : read_record) :
   hoist_inv unit_exn deleted src_code src_values last ->
   env_values_all (value_statics_bound deleted (state_statics last)) vars ->
   heap_values_all (value_statics_bound deleted (state_statics last)) hp ->
@@ -226,7 +229,7 @@ Lemma hoist_inv_after (last : state) (body : expr) (vars : env) (hp : heap) :
   expr_statics_in_scope [] [] body = true ->
   ∃ x : continuation,
     hoist_inv x deleted src_code src_values
-      (State body vars [] (state_statics last) hp).
+      (State body vars [] (state_statics last) hp rd).
 Proof.
   intros (Hcodes & Hsymbols & Hterms & Hbound & Hknown) Hvars Hheap Hno
     Hscope.
@@ -257,9 +260,10 @@ Proof.
     (statics_nowhere x code_ids_of_binding body (no_static_nowhere x body Hno))
     as (P & B & _).
   split;
-    [ exact (inv_after_any unit_exn x _ _ last body vars hp Hcodes Hno) | ].
+    [ exact (inv_after_any unit_exn x _ _ last body vars hp rd Hcodes Hno) | ].
   split;
-    [ exact (inv_after_any unit_exn x _ _ last body vars hp Hsymbols Hno) | ].
+    [ exact (inv_after_any unit_exn x _ _ last body vars hp rd Hsymbols Hno)
+     | ].
   split; [ | split ].
   - destruct Hterms as (_ & _ & _ & _ & _ & _ & Hfine).
     unfold terms_inv. simpl_state.
@@ -283,15 +287,15 @@ Qed.
    same from the static environment of that state and from the one of
    the second run. *)
 Lemma after_equivalent (last : state) (k : continuation) (vs : list value)
-    (hp : heap) (slots : list value_slot) (c : cont_value) :
+    (hp : heap) (rd : read_record) (slots : list value_slot) (c : cont_value) :
   hoist_inv unit_exn deleted src_code src_values last ->
-  step last = Exit k vs hp ->
+  step last = Exit k vs hp rd ->
   observer slots c ->
   ∀ b : behaviour,
-    step_result_behaves (apply_cont_value c vs (state_statics last) hp) b
+    step_result_behaves (apply_cont_value c vs (state_statics last) hp rd) b
     <-> step_result_behaves
           (apply_cont_value c vs
-             (hoist_env src_code src_values (state_statics last)) hp)
+             (hoist_env src_code src_values (state_statics last)) hp rd)
           b.
 Proof.
   intros Hinv Hexit Hc b.
@@ -317,9 +321,9 @@ Proof.
              Hbind). }
   assert (Hheap :
     heap_values_all (value_statics_bound deleted (state_statics last)) hp).
-  { rewrite (step_exit_heap last k vs hp Hexit).
+  { rewrite (step_exit_heap last k vs hp rd Hexit).
     exact (proj2 (proj2 (proj2 Hbound))). }
-  destruct (hoist_inv_after last body bound hp Hinv Hvars Hheap Hno Hscope)
+  destruct (hoist_inv_after last body bound hp rd Hinv Hvars Hheap Hno Hscope)
     as [x Hafter].
   destruct
     (statics_nowhere x code_ids_of_binding body (no_static_nowhere x body Hno))
@@ -341,7 +345,7 @@ End After.
 
 Lemma hoist_statics_equivalent_under (slots : list value_slot)
     (u : unit_interface) (e e' : expr) (conts : cont_env)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   hoist_statics u e = Some e' ->
   static_code statics = [] ->
   static_names_free_in statics e = true ->
@@ -356,11 +360,11 @@ Lemma hoist_statics_equivalent_under (slots : list value_slot)
        value_statics_among (map fst (static_values statics)) [] v = true)
     hp ->
   observers slots conts ->
-  equivalent (State e [] conts statics hp) (State e' [] conts statics hp).
+  equivalent (State e [] conts statics hp rd) (State e' [] conts statics hp rd).
 Proof.
   intros Hhoist Hno_code Hfree Hamong Hheap Hobservers.
   pose proof
-    (hoist_statics_equivalent_from u e e' statics hp Hhoist Hno_code Hfree
+    (hoist_statics_equivalent_from u e e' statics hp rd Hhoist Hno_code Hfree
        Hamong Hheap)
     as Halone.
   unfold hoist_statics in Hhoist.
@@ -373,7 +377,7 @@ Proof.
   destruct (static_names_apart [] e) eqn:Hapart; [ | discriminate ].
   injection Hhoist as <-.
   destruct
-    (hoist_statics_related_from u e statics hp Hwf Hscope Hconts Hapart
+    (hoist_statics_related_from u e statics hp rd Hwf Hscope Hconts Hapart
        Hno_code Hfree Hamong Hheap)
     as (src_code & src_values & Hdeleted & Hsrc & Hrel).
   pose proof (well_formed_unit_code_closed u e Hwf) as Hclosed.
@@ -385,7 +389,7 @@ Proof.
     as Hclosed'.
   assert (Hstatics : static_code_closed statics).
   { unfold static_code_closed. rewrite Hno_code. constructor. }
-  apply (equivalent_under conts _ _ statics hp Hclosed Hclosed' Hstatics
+  apply (equivalent_under conts _ _ statics hp rd Hclosed Hclosed' Hstatics
            Halone).
   intros w w' b (n & last & Hrun & Hexit & Hw_statics) Hw'.
   pose proof
@@ -398,7 +402,7 @@ Proof.
   rewrite Hrun in Hn.
   destruct
     (run n (State (without_hoisted e) [] [] (Static_env src_code src_values)
-              hp))
+              hp rd))
     as [last' | | ] eqn:Hrun'; simpl in Hn; try contradiction.
   destruct Hn as [-> Hinv].
   pose proof
@@ -407,14 +411,15 @@ Proof.
     as Hstep.
   rewrite Hexit in Hstep.
   destruct (step (hoist_state src_code src_values last))
-    as [ | k' vs' hp' | ] eqn:Hexit'; simpl in Hstep; try contradiction.
-  destruct Hstep as (<- & <- & <-).
+    as [ | k' vs' hp' rd' | ] eqn:Hexit'; simpl in Hstep; try contradiction.
+  destruct Hstep as (<- & <- & <- & <-).
   assert (Hw0 :
     exits_world
       (State (Let_static (hoisted_bindings e) (without_hoisted e)) [] []
-         statics hp)
+         statics hp rd)
       (Exit_world (exit_cont w) (exit_values w)
-         (hoist_env src_code src_values (state_statics last)) (exit_heap w))).
+         (hoist_env src_code src_values (state_statics last)) (exit_heap w)
+           (exit_reads w))).
   { exists (S n), (hoist_state src_code src_values last).
     split; [ | split; [ exact Hexit' | reflexivity ] ].
     rewrite run_succ, step_let_static, Hsrc. exact Hrun'. }
@@ -423,7 +428,7 @@ Proof.
   rewrite <- Hw_statics.
   exact (after_equivalent (unit_exn u) (deleted_code_ids e) src_code
            src_values Hdeleted last (exit_cont w) (exit_values w)
-           (exit_heap w) slots _ Hinv Hexit
+           (exit_heap w) rd_ slots _ Hinv Hexit
            (observers_resolve slots conts (exit_cont w) Hobservers) b).
 Qed.
 
@@ -432,7 +437,7 @@ Theorem hoist_statics_equivalent_observed :
 Proof.
   intros imports conts u e e' Hhoist Hfree Hobservers.
   exact (hoist_statics_equivalent_under [] u e e' conts
-           (imports_statics imports) empty_heap Hhoist eq_refl Hfree
+           (imports_statics imports) empty_heap no_reads Hhoist eq_refl Hfree
            (imports_statics_among _ imports) (heap_values_all_empty _)
            Hobservers).
 Qed.

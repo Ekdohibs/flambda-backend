@@ -45,7 +45,9 @@
    the two machines agree on what a term computes. The statements here
    say it: the machine of regions adds ways of having no step
    (decisions D45 to D47), names for local allocations, and the
-   regions themselves, which [erase] drops; and nothing else.
+   regions themselves, which [erase] drops; it does not run a [Let]
+   that needs the heap (FlambdaRegionsSpec.v, "what the machine does
+   not run"; decision D53), where its run ends; and nothing else.
 
    THE TERM WITH ITS REGIONS DROPPED
 
@@ -125,11 +127,14 @@
      continuation with values related in the same way, or stops
      somewhere with no step: for one of the rules of regions, or
      because the machine of FlambdaSemanticsSpec.v has none there on
-     the symbols of local allocations.
+     the symbols of local allocations; or it comes to a [Let] that
+     the machine of regions does not run
+     (FlambdaRegionsSpec.Region_let_not_run, decision D53), which the
+     erased term runs on the heap.
 
-   Together: a run on the machine of regions that does not stop
-   without a step exits if and only if the run of the erased term
-   does, and alike.
+   Together: a run on the machine of regions that neither stops
+   without a step nor comes to a [Let] that is not run exits if and
+   only if the run of the erased term does, and alike.
 
    WHAT IS NOT STATED
 
@@ -141,11 +146,14 @@
      (FlambdaRegionsSpec.v, "what this stage leaves out").
    - Anything of the counts, or of the frames that are left at the
      exit.
-   - Anything of the heap at the exit. Neither machine makes a cell
-     in a run of a term that the conversion makes ([step] does not run
-     the primitives of the heap), so the two heaps are those that the
-     runs began with; a value at the exit that is a location is related
-     to itself, and nothing is said of what the heaps hold at it.
+   - Anything of the heap at the exit. The machine of regions makes
+     no cell and changes none
+     (FlambdaRegionsSpec.region_step_keeps_memory_statement): a run
+     of it that exits ran no [Let] that needs the heap, and the run
+     of the erased term that answers it ran the same, so the two
+     heaps are those that the runs began with; a value at the exit
+     that is a location is related to itself, and nothing is said of
+     what the heaps hold at it.
    - That [erase] of what the test tool converts with regions kept is
      what it converts with regions dropped: the tool tests it of each
      unit.
@@ -276,7 +284,7 @@ Definition value_erased_if_usable (rs : region_state) (v v' : value)
    FlambdaRegionsSpec.initial_region_state, with the term and the code
    of the static environment erased. *)
 Definition erased_initial_state (e : expr) (statics : static_env) : state :=
-  State (erase [] e) [] [] (erase_statics statics) empty_heap.
+  State (erase [] e) [] [] (erase_statics statics) empty_heap no_reads.
 
 (* Where the run on the machine of regions exits, the run of the erased
    term exits through the same continuation, with as many values; each
@@ -295,7 +303,8 @@ Definition erasure_exits_statement : Prop :=
       ∧ Forall2 (value_erased_if_usable rs) vs vs'.
 
 (* Where the run of the erased term exits, the run on the machine of
-   regions exits alike, or stops with no step. *)
+   regions exits alike, or stops with no step, or comes to a [Let]
+   that the machine does not run (decision D53). *)
 Definition erasure_adds_no_exit_statement : Prop :=
   ∀ (e : expr) (statics : static_env) (base : symbol) (k : continuation)
     (vs' : list value) (hp : heap),
@@ -306,6 +315,8 @@ Definition erasure_adds_no_exit_statement : Prop :=
       (∃ fault : region_fault,
         region_run fuel (initial_region_state e statics base)
         = Region_undefined fault)
+      ∨ region_run fuel (initial_region_state e statics base)
+        = Region_let_not_run
       ∨ (∃ (vs : list value) (rs : region_state),
           region_run fuel (initial_region_state e statics base)
           = Region_exit k vs rs

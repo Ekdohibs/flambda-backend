@@ -54,7 +54,10 @@
    - At a [Let] of a [Simple]: the [Simple] is replaced by its
      canonical element, and the variable is made an alias of it
      ([bind_simple]).
-   - At a [Let] of a primitive: the arguments are looked up
+   - At a [Let] of a primitive of the heap (an allocation with an
+     identity, a store): nothing. The [Let] is left as it is, and its
+     variable is defined at the kind that the [Let] declares.
+   - At a [Let] of another primitive: the arguments are looked up
      ([simplify_simples], FlambdaSimplifyPrimitivesSpec.v); if their
      types are not of the kinds that
      the primitive takes, the term is [Invalid]; otherwise
@@ -268,7 +271,8 @@ From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList OxCamlOption.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaKindModel
   FlambdaMapSpec FlambdaValueSpec FlambdaPrimitiveModel FlambdaPrimitiveSpec
-  FlambdaSemanticsSpec FlambdaNormaliseSpec FlambdaUnusedContsSpec.
+  FlambdaHeapSpec FlambdaSemanticsSpec FlambdaNormaliseSpec
+  FlambdaUnusedContsSpec.
 From OxCamlFlambda2Types Require Import FlambdaTypeGrammar
   FlambdaTypeMeaningSpec FlambdaTypeWellFormedSpec FlambdaBindingTime
   FlambdaEnvAliases FlambdaEnvAliasesSpec FlambdaTypingEnv
@@ -656,8 +660,16 @@ Definition simplify_variadic (p : variadic_primitive)
 (* A defining expression                                                    *)
 (* ======================================================================== *)
 
+(* Nothing is decided of a primitive of the heap
+   (FlambdaHeapSpec.named_changes_heap): the machine runs it, it
+   changes the heap, and [prim_args_well_kinded] knows the kinds of
+   the arguments of none of them, so the test of the kinds below would
+   make every one of them [Invalid]. *)
 Definition simplify_named (tenv : Typing_env.t) (defining_expr : named)
     : outcome :=
+  if named_changes_heap defining_expr
+  then Not_known
+  else
   match defining_expr with
   | Simple s => Becomes_simple s
   | Prim p args =>
@@ -1288,15 +1300,17 @@ Definition simplify_by_types_refines_statement : Prop :=
   ∀ e : expr, expr_refines e (simplify_by_types e).
 
 (* The environment of the body of a [Let] holds once the [Let] has
-   taken its step: the variable is bound to the value of the defining
-   expression, as it was written, which is of the kind that the [Let]
-   declares. *)
+   taken its step: the variable is bound to the value that the machine
+   has for the defining expression, as it was written, on the heap and
+   with the record of the step (FlambdaSemanticsSpec.exec_named),
+   which is of the kind that the [Let] declares. *)
 Definition let_env_satisfied_statement : Prop :=
   ∀ (tenv tenv' : Typing_env.t) (x : variable) (declared : flambda_kind)
-    (defining_expr : named) (statics : static_env) (vars : env) (v : value),
+    (defining_expr : named) (statics : static_env) (hp hp' : heap)
+    (rd rd' : read_record) (vars : env) (v : value),
     let_env tenv x declared defining_expr = Some tenv' ->
     env_satisfies_strictly tenv statics vars ->
-    eval_named statics vars defining_expr = Some v ->
+    exec_named statics hp rd vars defining_expr = Some (v, hp', rd') ->
     kind_of_value v = declared ->
     env_satisfies_strictly tenv' statics ((x, v) :: vars).
 
@@ -1824,6 +1838,22 @@ Definition example_pass_loop_statement : Prop :=
          (example_tagged_add (Var example_p) (Const (Tagged_immediate 0)))
          (Var example_q))
     = loop (Simple (Var example_p)) (Var example_p).
+
+(* A primitive of the heap is left as it is. [let p = (a new mutable
+   block of one field, which holds 1) in apply_cont k p]: nothing is
+   decided of the allocation, and the term comes back. (The test of
+   the kinds of the arguments, which [simplify_named] makes of every
+   other primitive, would answer [Invalid] here, where the machine
+   binds [p] to a new location.) *)
+Definition example_pass_heap_primitive_statement : Prop :=
+  ∀ k : continuation,
+    let term : expr :=
+      Let example_p Value
+        (Prim (Heap (Make_block_with_identity Cell_mutable 0))
+           [Const (Tagged_immediate 1)])
+        (Apply_cont (Apply_cont_expr k [Var example_p] None))
+    in
+    simplify_by_types term = term.
 
 (* A handler under the environment of its one application.
    [let x = opaque 0 in let_cont k1 () = (switch x | 0 -> k3 | 1 -> k4)

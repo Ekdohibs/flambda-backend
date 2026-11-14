@@ -221,7 +221,8 @@ Definition call_made_closures_refines_statement : Prop :=
    the function slot known, of a set with the code known, the call made
    direct steps as the call does. *)
 Definition call_made_closure_sound_statement : Prop :=
-  ∀ (known : made_closures) (statics : static_env) (hp : heap) (vars : env)
+  ∀ (known : made_closures) (statics : static_env) (hp : heap)
+    (rd : read_record) (vars : env)
     (conts : cont_env) (ap : apply_expr),
     (∀ (x : variable) (slot : function_slot)
        (function_decls : list (function_slot * code_id)),
@@ -229,8 +230,8 @@ Definition call_made_closure_sound_statement : Prop :=
       ∃ value_slots : list (value_slot * value),
         lookup x vars
         = Some (Value_closure_of_set slot function_decls value_slots)) ->
-    step (State (Apply (call_made_closure known ap)) vars conts statics hp)
-    = step (State (Apply ap) vars conts statics hp).
+    step (State (Apply (call_made_closure known ap)) vars conts statics hp rd)
+    = step (State (Apply ap) vars conts statics hp rd).
 
 (* The pass changes the kind of calls and nothing else: the result has
    the free variables and the free continuations of the term, and its

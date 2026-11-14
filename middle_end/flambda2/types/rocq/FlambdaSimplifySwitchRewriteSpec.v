@@ -86,8 +86,8 @@
    environment and no more, so the third slice is taken with nothing
    known of the primitives that have been computed: it then binds a
    primitive the first time an argument asks for it. With something
-   known, what is asked is that it holds in the states that satisfy
-   the environment ([known_holds_under],
+   known, the refinement is in the states in which it holds
+   ([expr_refines_under_valid_where],
    FlambdaSimplifySwitchMergeSpec.v), which a function over terms
    would have to keep as it goes; that is not here.
 

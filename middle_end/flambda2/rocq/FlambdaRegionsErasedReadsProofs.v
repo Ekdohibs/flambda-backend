@@ -64,10 +64,11 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaMapProofs FlambdaValueSpec FlambdaPrimitiveModel FlambdaPrimitiveSpec
   FlambdaPrimitiveProofs FlambdaSemanticsSpec FlambdaSemanticsProofs
   FlambdaClosuresSpec FlambdaClosuresProofs FlambdaLiftProofs
-  FlambdaRegionsSpec FlambdaRegionsProofs FlambdaRegionsInvariantSpec
-  FlambdaRegionsErasureSpec FlambdaRegionsReadsProofs
-  FlambdaRegionsErasedProofs FlambdaRegionsPlainStepProofs
-  FlambdaRegionsErasureProofs FlambdaRegionsCheckedSpec.
+  FlambdaRegionsSpec FlambdaRegionsProofs FlambdaRegionsNeedsHeapProofs
+  FlambdaRegionsInvariantSpec FlambdaRegionsErasureSpec
+  FlambdaRegionsReadsProofs FlambdaRegionsErasedProofs
+  FlambdaRegionsPlainStepProofs FlambdaRegionsErasureProofs
+  FlambdaRegionsCheckedSpec.
 Import ListNotations.
 
 (* The static environment that [step] is given is not unfolded: the
@@ -557,6 +558,40 @@ Proof.
   exact
     (values_back rs vs vs' Hvs
        (simples_all_live_values rs vars args vs Hall Hargs)).
+Qed.
+
+(* A defining expression that needs no heap under the variables of the
+   machine of regions (FlambdaRegionsSpec.named_needs_heap, decision
+   D53) needs none under those of the second state, whether or not it
+   has a value in either: where the arguments of a primitive have
+   values in the second state they have values in the first, which are
+   erased to them, and a value is erased to a location only if it is
+   that location. (FlambdaRegionsErasedProofs.named_needs_heap_erased
+   says the same where the expression has a value in the first
+   state.) *)
+Lemma named_needs_heap_back (rs : region_state) (vars vars' : env)
+    (d : named) :
+  env_erased rs vars vars' ->
+  forallb (simple_below (rs_base rs)) (simples_of_named d) = true ->
+  simples_usable rs vars (simples_of_named d) ->
+  named_needs_heap vars d = false ->
+  named_needs_heap vars' d = false.
+Proof.
+  intros Hvars Hbelow Husable Hneeds.
+  destruct d as [s | p args | | | | | ]; try reflexivity.
+  destruct p as [u | b | va | hp | rp]; try discriminate Hneeds;
+    cbn [named_needs_heap] in Hneeds |- *;
+    (destruct (eval_simples vars' args) as [vs' | ] eqn:Hvs';
+     [ | reflexivity ]);
+    (destruct (eval_simples_back rs vars vars' args Hvars vs' Hvs')
+       as [vs Hvs]);
+    (destruct
+       (eval_simples_erased rs vars vars' args Hvars Hbelow Husable vs Hvs)
+       as (vs0 & Hvs0 & Hrelated));
+    rewrite Hvs' in Hvs0; injection Hvs0 as <-;
+    rewrite Hvs in Hneeds;
+    rewrite (values_erased_is_location rs vs vs' Hrelated);
+    exact Hneeds.
 Qed.
 
 (* A defining expression that has a value in the second state has one

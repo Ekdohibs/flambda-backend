@@ -484,7 +484,7 @@ Definition slots_as_kept_statement : Prop :=
   ∀ (known : known_slots) (e : expr) (n : nat) (s : state),
     closed_slots known = true ->
     slots_as known e = true ->
-    run n (State e [] [] empty_static_env empty_heap) = Step s ->
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
     state_slots_known known s.
 
 (* In such a state, a defining expression that has a value has the same
@@ -531,8 +531,8 @@ Definition read_slots_refines_from_statement : Prop :=
     Forall
       (fun binding => allocated_slots_known known (snd binding) = true)
       (static_values statics) ->
-    refines (State e [] [] statics empty_heap)
-      (State (read_slots known syms e) [] [] statics empty_heap).
+    refines (State e [] [] statics empty_heap no_reads)
+      (State (read_slots known syms e) [] [] statics empty_heap no_reads).
 
 (* So what [read_known_slots] gives refines the unit, each run on its
    own from the same imports (FlambdaImportsSpec.unit_refines): the
@@ -565,8 +565,8 @@ Definition read_slots_refines_observed_statement : Prop :=
       (fun binding => allocated_slots_known known (snd binding) = true)
       (static_values statics) ->
     observers [] conts ->
-    refines (State e [] conts statics empty_heap)
-      (State (read_slots known syms e) [] conts statics empty_heap).
+    refines (State e [] conts statics empty_heap no_reads)
+      (State (read_slots known syms e) [] conts statics empty_heap no_reads).
 
 (* So what [read_known_slots] gives refines the unit, the two followed
    by the same thing and run from the same imports, with the same
@@ -574,9 +574,9 @@ Definition read_slots_refines_observed_statement : Prop :=
 Definition read_known_slots_refines_observed_statement : Prop :=
   ∀ (imports : list (symbol * import_class)) (conts : cont_env) (e : expr),
     observers [] conts ->
-    refines (State e [] conts (imports_statics imports) empty_heap)
+    refines (State e [] conts (imports_statics imports) empty_heap no_reads)
       (State (read_known_slots e) [] conts (imports_statics imports)
-         empty_heap).
+         empty_heap no_reads).
 
 (* The same three of [read_known_slots_anywhere]: the refinement does
    not go by the symbols taken to be in scope. *)
@@ -590,9 +590,9 @@ Definition read_known_slots_anywhere_refines_imports_statement : Prop :=
 Definition read_known_slots_anywhere_refines_observed_statement : Prop :=
   ∀ (imports : list (symbol * import_class)) (conts : cont_env) (e : expr),
     observers [] conts ->
-    refines (State e [] conts (imports_statics imports) empty_heap)
+    refines (State e [] conts (imports_statics imports) empty_heap no_reads)
       (State (read_known_slots_anywhere e) [] conts
-         (imports_statics imports) empty_heap).
+         (imports_statics imports) empty_heap no_reads).
 
 (* The rewrite keeps row 4: where every symbol and code id that a term
    mentions is in scope, given the symbols [syms'] and the code ids

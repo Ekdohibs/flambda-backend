@@ -87,9 +87,9 @@ Proof.
 Qed.
 
 Lemma apply_with_extra (c : cont_value) (extra vs : list value)
-    (statics : static_env) (hp : heap) :
-  apply_cont_value (with_extra_args c extra) vs statics hp
-  = apply_cont_value c (vs ++ extra) statics hp.
+    (statics : static_env) (hp : heap) (rd : read_record) :
+  apply_cont_value (with_extra_args c extra) vs statics hp rd
+  = apply_cont_value c (vs ++ extra) statics hp rd.
 Proof.
   destruct extra as [ | v extra]; [ rewrite app_nil_r | ]; reflexivity.
 Qed.
@@ -135,6 +135,7 @@ Hypothesis Hgood_statics :
     (static_values (live_statics rs)).
 
 Variable hp : heap.
+Variable rd : read_record.
 
 Local Abbreviation good := (good cert codes rs).
 
@@ -186,13 +187,13 @@ Definition applied_cont (u : user) (ce : cont_entry) (c : cont_value)
     Forall2 (arg_holds rs cs u) args vs ->
     Forall good vs ->
     cont_values_all good c ->
-    apply_cont_value c vs (live_statics rs) hp = Step s' ->
+    apply_cont_value c vs (live_statics rs) hp rd = Step s' ->
     entered s'.
 
 Definition applied_ret (a : caller) (l : lifetime) (c : cont_value) : Prop :=
   caller_ok rs a ->
   cont_values_all good c ->
-  returns_ok cert codes rs hp a l c.
+  returns_ok cert codes rs hp rd a l c.
 
 Definition applied_raise (a : caller) (c : cont_value) : Prop :=
   caller_ok rs a ->
@@ -200,7 +201,7 @@ Definition applied_raise (a : caller) (c : cont_value) : Prop :=
   ∀ (vs : list value) (s' : state),
     Forall good vs ->
     Forall (fun v => value_all (heap_symbol rs) v = true) vs ->
-    apply_cont_value c vs (live_statics rs) hp = Step s' ->
+    apply_cont_value c vs (live_statics rs) hp rd = Step s' ->
     entered s'.
 
 Lemma applied_all :
@@ -323,7 +324,7 @@ Proof.
     destruct vs as [ | v [ | v' vs]]; try discriminate Hstep.
     exact
       (call_unknown cert codes rs Hfresh Hcode Hlocal Hdeep Hstatics
-         Hgood_statics hp a v l ls remaining remaining_arity return_arity
+         Hgood_statics hp rd a v l ls remaining remaining_arity return_arity
          return_to exn_to l' s' Hcaller (Forall_inv Hgood_vs)
          (Forall_inv Hlive_vs) (Forall_inv Hholds_vs) Hgood_remaining Hholds
          Hunknown Hret Hraise (IHret Hcaller Hgood_ret) Hgood_ret Hgood_exn

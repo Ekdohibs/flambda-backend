@@ -189,25 +189,25 @@ Definition let_closures_runs_statement : Prop :=
   ∀ (bound_vars : list variable)
     (function_decls : list (function_slot * code_id))
     (value_slots : list (value_slot * simple)) (body e : expr) (vars : env)
-    (conts : cont_env) (statics : static_env) (hp : heap)
+    (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record)
     (slot_values : list (value_slot * value)),
     let_closures bound_vars function_decls value_slots body = Some e ->
     distinct bound_vars = true ->
     eval_value_slots vars value_slots = Some slot_values ->
-    run (length bound_vars) (State e vars conts statics hp)
+    run (length bound_vars) (State e vars conts statics hp rd)
     = Step
         (State body
            (closures_bound bound_vars function_decls slot_values ++ vars)
-           conts statics hp).
+           conts statics hp rd).
 
 Definition let_closures_undefined_statement : Prop :=
   ∀ (bound_vars : list variable)
     (function_decls : list (function_slot * code_id))
     (value_slots : list (value_slot * simple)) (body e : expr) (vars : env)
-    (conts : cont_env) (statics : static_env) (hp : heap),
+    (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record),
     let_closures bound_vars function_decls value_slots body = Some e ->
     eval_value_slots vars value_slots = None ->
-    step (State e vars conts statics hp) = Undefined.
+    step (State e vars conts statics hp rd) = Undefined.
 
 (* In the scope of the [Let] of a set, the projection of a function slot
    from one of its closures is the variable bound at that slot. *)
@@ -242,7 +242,7 @@ Definition apply_sibling_statement : Prop :=
     (args_arity return_arity : arity)
     (function_decls : list (function_slot * code_id))
     (slot_values : list (value_slot * value)) (code : code_id) (vars : env)
-    (conts : cont_env) (statics : static_env) (hp : heap),
+    (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record),
     eval_simple vars closure
     = Some (Value_closure_of_set move_from function_decls slot_values) ->
     lookup move_to function_decls = Some code ->
@@ -252,13 +252,13 @@ Definition apply_sibling_statement : Prop :=
             (Apply
                (Apply_expr (Var x) Indirect args k exn extra args_arity
                   return_arity)))
-         vars conts statics hp)
+         vars conts statics hp rd)
       (State
          (Let x kind (Project_function_slot move_from move_to closure)
             (Apply
                (Apply_expr (Var x) (Direct code) args k exn extra
                   args_arity return_arity)))
-         vars conts statics hp).
+         vars conts statics hp rd).
 
 (* ======================================================================== *)
 (* A static set of closures                                                 *)
@@ -393,7 +393,7 @@ Definition makes_closure_outside_set (s : state) : bool :=
 Definition well_formed_makes_closures_statement : Prop :=
   ∀ (u : unit_interface) (e : expr) (n : nat) (s : state),
     well_formed_unit u e = true ->
-    run n (State e [] [] empty_static_env empty_heap) = Step s ->
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
     makes_closure_outside_set s = false.
 
 (* Every symbol bound to a closure of a static set is the symbol that the
@@ -414,7 +414,7 @@ Definition static_sets_bound (statics : static_env) : Prop :=
 Definition well_formed_sets_bound_statement : Prop :=
   ∀ (u : unit_interface) (e : expr) (n : nat) (s : state),
     well_formed_unit u e = true ->
-    run n (State e [] [] empty_static_env empty_heap) = Step s ->
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
     static_sets_bound (state_statics s).
 
 (* Where the static sets are bound, the projection of a function slot is
@@ -596,7 +596,7 @@ Definition sets_inv (s : state) : Prop :=
 Definition sets_inv_initial_statement : Prop :=
   ∀ e : expr,
     sets_well_formed e = true ->
-    sets_inv (State e [] [] empty_static_env empty_heap).
+    sets_inv (State e [] [] empty_static_env empty_heap no_reads).
 
 (* A step keeps it. *)
 Definition sets_inv_step_statement : Prop :=
@@ -606,7 +606,7 @@ Definition sets_inv_step_statement : Prop :=
 Definition well_formed_sets_inv_statement : Prop :=
   ∀ (u : unit_interface) (e : expr) (n : nat) (s : state),
     well_formed_unit u e = true ->
-    run n (State e [] [] empty_static_env empty_heap) = Step s ->
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
     sets_inv s.
 
 (* From a state that has it and holds valid values only, a step gives a
@@ -616,7 +616,7 @@ Definition state_valid_step_statement : Prop :=
     sets_inv s -> state_valid s ->
     match step s with
     | Step s' => state_valid s'
-    | Exit _ vs _ => Forall (fun v => value_valid v = true) vs
+    | Exit _ vs _ _ => Forall (fun v => value_valid v = true) vs
     | Undefined => True
     end.
 
@@ -629,14 +629,15 @@ Definition state_valid_step_statement : Prop :=
 Definition well_formed_values_valid_statement : Prop :=
   ∀ (u : unit_interface) (e : expr) (n : nat) (s : state),
     well_formed_unit u e = true ->
-    run n (State e [] [] empty_static_env empty_heap) = Step s ->
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
     state_valid s.
 
 Definition well_formed_exit_valid_statement : Prop :=
   ∀ (u : unit_interface) (e : expr) (n : nat) (k : continuation)
-    (vs : list value) (hp : heap),
+    (vs : list value) (hp : heap) (rd : read_record),
     well_formed_unit u e = true ->
-    run n (State e [] [] empty_static_env empty_heap) = Exit k vs hp ->
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Exit k vs hp rd
+      ->
     ∀ v : value, v ∈ vs -> value_valid v = true.
 
 (* In the run of a well-formed unit, a closure that a simple stands for
@@ -661,7 +662,7 @@ Definition well_formed_closure_slot_statement : Prop :=
     (function_decls : list (function_slot * code_id))
     (slot_values slot_values' : list (value_slot * value)) (code : code_id),
     well_formed_unit u e = true ->
-    run n (State e [] [] empty_static_env empty_heap) = Step s ->
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
     eval_simple (state_vars s) closure = Some v ->
     closure_in_set (state_statics s) v
     = Some (slot, function_decls, slot_values) ->
@@ -680,10 +681,11 @@ Definition well_formed_closure_slot_statement : Prop :=
 Definition call_binds_my_closure_statement : Prop :=
   ∀ (callee : value) (kind : call_kind) (vs : list value)
     (args_arity return_arity : arity) (return_to exn_to : cont_value)
-    (statics : static_env) (hp : heap) (s : state) (called : code_id)
+    (statics : static_env) (hp : heap) (rd : read_record) (s : state)
+      (called : code_id)
     (slot_values : list (value_slot * value)) (c : code),
     call_function callee kind vs args_arity return_arity return_to exn_to
-      statics hp
+      statics hp rd
     = Step s ->
     closure_of statics callee = Some (called, slot_values) ->
     lookup called (static_code statics) = Some c ->
@@ -701,7 +703,7 @@ Definition well_formed_code_binders_statement : Prop :=
   ∀ (u : unit_interface) (e : expr) (n : nat) (s : state) (id : code_id)
     (c : code),
     well_formed_unit u e = true ->
-    run n (State e [] [] empty_static_env empty_heap) = Step s ->
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
     lookup id (static_code (state_statics s)) = Some c ->
     code_binders_distinct c = true.
 
@@ -713,7 +715,7 @@ Definition well_formed_call_binds_my_closure_statement : Prop :=
     (ap : apply_expr) (callee : value) (called : code_id)
     (slot_values : list (value_slot * value)) (c : code),
     well_formed_unit u e = true ->
-    run n (State e [] [] empty_static_env empty_heap) = Step s ->
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
     state_expr s = Apply ap ->
     eval_simple (state_vars s) (ap_callee ap) = Some callee ->
     closure_of (state_statics s) callee = Some (called, slot_values) ->
@@ -931,7 +933,7 @@ Definition sets_are_kept_statement : Prop :=
     (closure_symbols : option (list (function_slot * symbol))) (e : expr)
     (n : nat) (s : state),
     sets_are c function_decls closure_symbols e = true ->
-    run n (State e [] [] empty_static_env empty_heap) = Step s ->
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
     state_sets_are c function_decls closure_symbols s.
 
 (* A closure of the code [c], in such a state, is a closure of the set:
@@ -968,7 +970,7 @@ Definition sibling_of_code_statement : Prop :=
     (sibling_code : code_id),
     well_formed_unit u e = true ->
     sets_are c function_decls closure_symbols e = true ->
-    run n (State e [] [] empty_static_env empty_heap) = Step s ->
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
     eval_simple (state_vars s) closure = Some v ->
     closure_of (state_statics s) v = Some (c, slot_values) ->
     lookup slot function_decls = Some c ->
@@ -992,7 +994,7 @@ Definition sibling_symbol_of_code_statement : Prop :=
     (sibling_code : code_id),
     well_formed_unit u e = true ->
     sets_are c function_decls (Some closure_symbols) e = true ->
-    run n (State e [] [] empty_static_env empty_heap) = Step s ->
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
     eval_simple (state_vars s) closure = Some v ->
     closure_of (state_statics s) v = Some (c, slot_values) ->
     lookup slot function_decls = Some c ->
@@ -1019,7 +1021,7 @@ Definition set_of_code_bound_statement : Prop :=
     (slot_values : list (value_slot * value)),
     well_formed_unit u e = true ->
     sets_are c function_decls (Some closure_symbols) e = true ->
-    run n (State e [] [] empty_static_env empty_heap) = Step s ->
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
     eval_simple (state_vars s) closure = Some v ->
     closure_of (state_statics s) v = Some (c, slot_values) ->
     static_set_bound (state_statics s) closure_symbols function_decls
@@ -1129,13 +1131,13 @@ Definition parity_let_statement : Prop :=
     (i, answer) ∈ [(3%Z, 1%Z); (2%Z, 0%Z)] ->
     ∃ e : expr,
       parity_let i = Some e
-      ∧ behaves (State e [] [] empty_static_env empty_heap)
+      ∧ behaves (State e [] [] empty_static_env empty_heap no_reads)
           (Exits done [Value_const (Naked_immediate answer)] empty_heap).
 
 Definition parity_static_statement : Prop :=
   ∀ (i answer : Z),
     (i, answer) ∈ [(3%Z, 1%Z); (2%Z, 0%Z)] ->
-    behaves (State (parity_static i) [] [] empty_static_env empty_heap)
+    behaves (State (parity_static i) [] [] empty_static_env empty_heap no_reads)
       (Exits done [Value_const (Naked_immediate answer)] empty_heap).
 
 (* Both are well-formed units: the statements about well-formed units
@@ -1180,7 +1182,7 @@ Definition parity_partial : expr :=
 (* The machine gives the symbol that the set names for the other slot,
    which is bound to nothing. The unit is not well-formed. *)
 Definition partial_static_set_statement : Prop :=
-  behaves (State parity_partial [] [] empty_static_env empty_heap)
+  behaves (State parity_partial [] [] empty_static_env empty_heap no_reads)
     (Exits done [Value_symbol odd_symbol] empty_heap)
   ∧ well_formed_unit (Unit_interface done error) parity_partial = false.
 

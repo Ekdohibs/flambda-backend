@@ -326,7 +326,8 @@ Definition state_sets_have (c : code_id) (f : function_slot)
 Definition state_sets_have_initial_statement : Prop :=
   ∀ (c : code_id) (f : function_slot) (fact : set_fact) (e : expr),
     sets_made_have c f fact (sets_made e) = true ->
-    state_sets_have c f fact (State e [] [] empty_static_env empty_heap).
+    state_sets_have c f fact
+      (State e [] [] empty_static_env empty_heap no_reads).
 
 (* The same from a static environment that binds something already and
    with continuations: the code that the static environment has and
@@ -342,7 +343,7 @@ Definition state_sets_have_from_statement : Prop :=
     Forall
       (fun binding => allocated_sets_have c f fact (snd binding) = true)
       (static_values statics) ->
-    state_sets_have c f fact (State e [] conts statics empty_heap).
+    state_sets_have c f fact (State e [] conts statics empty_heap no_reads).
 
 (* A step keeps it, where what a value slot is known to hold is a
    symbol or a constant. *)

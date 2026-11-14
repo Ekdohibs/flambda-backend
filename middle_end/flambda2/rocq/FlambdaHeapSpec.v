@@ -45,7 +45,11 @@
      to [exec_prim];
    - what a run may do to a heap ([heap_evolves]);
    - when a memory is closed: no location dangles in it
-     ([memory_closed]).
+     ([memory_closed]);
+   - when two heaps are alike up to a relation between values
+     ([heap_alike]), and that what a primitive does on one it does on
+     the other ([exec_prim_related_statement]): what a pass that
+     changes values is proved with.
 
    What is proved is in FlambdaHeapProofs.v: every [_statement] here. *)
 
@@ -66,7 +70,8 @@ Local Open Scope Z_scope.
    the heap ([FlambdaHeapMachineSpec.fresh_location_fresh_name_statement]),
    written out because that file comes after the machine, which runs the
    primitives of this one. Nothing is to look at the number a location
-   is: only [fresh_location_statement] is to be used of this function. *)
+   is: only [fresh_location_statement] and
+   [fresh_location_keys_statement] are to be used of this function. *)
 Definition fresh_location (h : heap) : location :=
   Pos.succ (fold_right Pos.max xH (domain h)).
 
@@ -428,6 +433,30 @@ Definition prim_reads_heap (p : prim) : bool :=
   | Unary _ | Binary _ | Variadic _ | Region_primitive _ => false
   end.
 
+(* A named expression that may read the heap: a primitive that may. *)
+Definition named_reads_heap (d : named) : bool :=
+  match d with
+  | Prim p _ => prim_reads_heap p
+  | Simple _ | Set_of_closures _ _ | Closure_of_set _ _ _
+  | Project_value_slot _ _ | Project_value_slot_from _ _ _
+  | Project_function_slot _ _ _ =>
+    false
+  end.
+
+(* A named expression that may change the heap: a primitive of the
+   heap. Nothing else does ([exec_prim_heap_statement]). A [Let] of one
+   cannot in general be removed, added or moved past another for as
+   long as two exits are compared with their heaps. The test is
+   conservative: it is not said that no such [Let] ever could be. *)
+Definition named_changes_heap (d : named) : bool :=
+  match d with
+  | Prim (Heap _) _ => true
+  | Prim (Unary _ | Binary _ | Variadic _ | Region_primitive _) _ | Simple _
+  | Set_of_closures _ _ | Closure_of_set _ _ _ | Project_value_slot _ _
+  | Project_value_slot_from _ _ _ | Project_function_slot _ _ _ =>
+    false
+  end.
+
 (* Only a primitive of the heap changes the heap. *)
 Definition exec_prim_heap_statement : Prop :=
   ∀ (statics : static_env) (h h' : heap) (p : prim) (vs : list value)
@@ -467,6 +496,29 @@ Definition exec_prim_no_location_statement : Prop :=
     exec_prim statics h p vs
     = let* v := eval_prim statics p vs in
       Some (v, h).
+
+(* FlambdaPrimitiveSpec.eval_prim_static_values_statement, of
+   [exec_prim]: what a primitive does depends on the static environment
+   only through what the symbols among its arguments are bound to. *)
+Definition exec_prim_static_values_statement : Prop :=
+  ∀ (statics statics' : static_env) (h : heap) (p : prim) (vs : list value),
+    (∀ s : symbol,
+      Value_symbol s ∈ vs ->
+      lookup s (static_values statics) = lookup s (static_values statics')) ->
+    exec_prim statics h p vs = exec_prim statics' h p vs.
+
+(* FlambdaPrimitiveSpec.eval_prim_statics_extend_statement, of
+   [exec_prim]: a primitive that has a value keeps it, and returns the
+   same heap, when the static environment grows. *)
+Definition exec_prim_statics_extend_statement : Prop :=
+  ∀ (statics statics' : static_env) (h h' : heap) (p : prim)
+    (vs : list value) (v : value),
+    (∀ (s : symbol) (allocated : statically_allocated_value),
+      Value_symbol s ∈ vs ->
+      lookup s (static_values statics) = Some allocated ->
+      lookup s (static_values statics') = Some allocated) ->
+    exec_prim statics h p vs = Some (v, h') ->
+    exec_prim statics' h p vs = Some (v, h').
 
 (* ======================================================================== *)
 (* Effects and coeffects                                                    *)
@@ -527,9 +579,14 @@ Definition at_most_generative_effects (p : prim) : bool :=
 
 (* The same of a named expression, as [Simplify_let_expr] asks it
    ([Named.at_most_generative_effects]): everything that is not a
-   primitive qualifies. This is the premise that a statement which
-   erases a binding needs: [FlambdaNominalSpec.unused_let_statement],
-   and FlambdaNormaliseSpec.named_may_go. *)
+   primitive qualifies. It is the compiler's test, and it is not the
+   premise of the statements of the model that erase a binding. For as
+   long as an exit is compared with its heap, those instead exclude
+   every primitive of the heap ([named_changes_heap], above:
+   FlambdaNominalSpec.unused_let_statement; and
+   FlambdaNormaliseSpec.named_may_go leaves those primitives out): an
+   allocation of a cell, which this test lets through, is seen in the
+   heap of an exit. Neither test implies the other. *)
 Definition named_at_most_generative_effects (d : named) : bool :=
   match d with
   | Prim p _ => at_most_generative_effects p
@@ -689,6 +746,27 @@ Definition mutable_load_not_stable_statement : Prop :=
     ∧ exec_prim statics h2 p vs = Some (v2, h2)
     ∧ v1 <> v2.
 
+(* A primitive whose value, once it has one, is the same in every heap
+   that the heap evolves to, and that returns the heap as it came: it
+   reads no cell, or it has neither effects nor coeffects. A fact about
+   the value of a variable may be about such a primitive: the primitive
+   can be run again on the same values of its arguments under the same
+   static environment, now and after any step, and gives that value. *)
+Definition stable_prim (p : prim) : bool :=
+  negb (prim_reads_heap p)
+  || match effects_of_prim p, coeffects_of_prim p with
+     | No_effects, No_coeffects => true
+     | _, _ => false
+     end.
+
+Definition stable_prim_holds_statement : Prop :=
+  ∀ (statics : static_env) (h1 h1' h2 : heap) (p : prim) (vs : list value)
+    (v : value),
+    stable_prim p = true ->
+    heap_evolves h1 h2 ->
+    exec_prim statics h1 p vs = Some (v, h1') ->
+    h1' = h1 ∧ exec_prim statics h2 p vs = Some (v, h2).
+
 (* ======================================================================== *)
 (* Closed memories                                                          *)
 (* ======================================================================== *)
@@ -776,3 +854,89 @@ Definition exec_prim_preserves_statement : Prop :=
     heap_values_all P h ->
     exec_prim statics h p vs = Some (v, h') ->
     P v ∧ heap_values_all P h'.
+
+(* ======================================================================== *)
+(* Two heaps alike up to a relation between values                          *)
+(* ======================================================================== *)
+
+(* Two cells of the same shape, holding related values: blocks of one
+   mutability and tag, or arrays of one kind. *)
+Definition cell_alike (R : value -> value -> Prop) (c c' : cell) : Prop :=
+  match c, c' with
+  | Cell_block mut tag fields, Cell_block mut' tag' fields' =>
+    mut = mut' ∧ tag = tag' ∧ Forall2 R fields fields'
+  | Cell_array kind elements, Cell_array kind' elements' =>
+    kind = kind' ∧ Forall2 R elements elements'
+  | _, _ => False
+  end.
+
+(* Two heaps alike: the same locations, entry for entry and so in the
+   same order, bound to cells alike. The entries that a later write
+   hides are compared too. At equality it is equality of heaps
+   ([heap_alike_eq_statement]), which is how [refines] compares the
+   heaps of two exits. No location is paired with another: this is
+   not a correspondence between the locations of two runs. *)
+Definition heap_alike (R : value -> value -> Prop) (h h' : heap) : Prop :=
+  Forall2 (fun b b' => fst b = fst b' ∧ cell_alike R (snd b) (snd b')) h h'.
+
+Definition heap_alike_eq_statement : Prop :=
+  ∀ h h' : heap, heap_alike eq h h' <-> h = h'.
+
+(* A location is related to itself, and to nothing else. *)
+Definition relates_locations (R : value -> value -> Prop) : Prop :=
+  (∀ l : location, R (Value_location l) (Value_location l))
+  ∧ (∀ (l : location) (v' : value),
+      R (Value_location l) v' -> v' = Value_location l)
+  ∧ (∀ (v : value) (l : location),
+      R v (Value_location l) -> v = Value_location l).
+
+(* The location that an allocation takes depends on the heap only
+   through the locations that it binds: two heaps alike allocate the
+   same location. *)
+Definition fresh_location_keys_statement : Prop :=
+  ∀ h h' : heap,
+    map fst h = map fst h' -> fresh_location h = fresh_location h'.
+
+(* FlambdaPrimitiveSpec.eval_prim_related_statement, on a heap: what a
+   primitive does on some arguments and a heap it does on related
+   arguments and a heap alike, with a related value and heaps alike
+   after. The premise on the relation is that of the law of
+   [eval_prim], with the part that it says a heap needs: a location
+   is related to itself only. As that law, it goes one way. *)
+Definition exec_prim_related_statement : Prop :=
+  ∀ (R : value -> value -> Prop) (statics statics' : static_env)
+    (h h' h1 : heap) (p : prim) (vs vs' : list value) (v : value),
+    respects_observations R statics statics' ->
+    relates_locations R ->
+    heap_alike R h h' ->
+    Forall2 R vs vs' ->
+    exec_prim statics h p vs = Some (v, h1) ->
+    ∃ (v' : value) (h1' : heap),
+      exec_prim statics' h' p vs' = Some (v', h1')
+      ∧ R v v'
+      ∧ heap_alike R h1 h1'.
+
+(* ======================================================================== *)
+(* The kinds of what a primitive run on a heap takes and gives              *)
+(* ======================================================================== *)
+
+(* The value that a primitive run on a heap gives is of the kind of the
+   result of the primitive: FlambdaPrimitiveSpec.eval_prim_kinds_statement
+   for its second part, on a heap, of every primitive, those of the heap
+   included. *)
+Definition exec_prim_result_kind_statement : Prop :=
+  ∀ (statics : static_env) (h h' : heap) (p : prim) (vs : list value)
+    (v : value),
+    exec_prim statics h p vs = Some (v, h') ->
+    kind_of_value v = prim_result_kind p.
+
+(* And its arguments are as many as it takes and of the kinds it takes,
+   where the primitive is not of the heap ([prim_args_well_kinded] is
+   false of every primitive of the heap). *)
+Definition exec_prim_kinds_statement : Prop :=
+  ∀ (statics : static_env) (h h' : heap) (p : prim) (vs : list value)
+    (v : value),
+    (∀ q : heap_primitive, p <> Heap q) ->
+    exec_prim statics h p vs = Some (v, h') ->
+    prim_args_well_kinded p (map kind_of_value vs) = true
+    ∧ kind_of_value v = prim_result_kind p.

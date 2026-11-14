@@ -142,16 +142,16 @@ Definition shared_reads_validated_statement : Prop :=
   = Same_once_lifted
   ∧ run 7
       (State (pair_unit pair_field_read (Var x)) [] [] empty_static_env
-         empty_heap)
+         empty_heap no_reads)
     = Exit done
         [Value_const (Tagged_immediate 1); Value_const (Tagged_immediate 1)]
-        empty_heap
+        empty_heap no_reads
   ∧ run 7
       (State (pair_unit pair_shared (Var x)) [] [] empty_static_env
-         empty_heap)
+         empty_heap no_reads)
     = Exit done
         [Value_const (Tagged_immediate 1); Value_const (Tagged_immediate 1)]
-        empty_heap.
+        empty_heap no_reads.
 
 (* Where they hold two variables, the term after is another program,
    and the pair is not validated. *)
@@ -161,15 +161,15 @@ Definition wrong_sharing_refused_statement : Prop :=
   = Not_validated
   ∧ run 7
       (State (pair_unit pair_field_read (Var y)) [] [] empty_static_env
-         empty_heap)
+         empty_heap no_reads)
     = Exit done
         [Value_const (Tagged_immediate 1); Value_const (Tagged_immediate 2)]
-        empty_heap
+        empty_heap no_reads
   ∧ run 7
       (State (pair_unit pair_shared (Var y)) [] [] empty_static_env
-         empty_heap)
+         empty_heap no_reads)
     = Exit done
         [Value_const (Tagged_immediate 1); Value_const (Tagged_immediate 1)]
-        empty_heap.
+        empty_heap no_reads.
 
 End Pairs.

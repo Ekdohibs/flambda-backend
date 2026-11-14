@@ -130,13 +130,12 @@
 
    What it assumes of a write. The places are places of static
    constants, which nothing writes: in the model a static block has no
-   mark of mutability, a store has no value on a symbol today (no
-   primitive of the heap has a value: FlambdaSemanticsSpec.exec_named)
-   and has none when the primitives of the heap are run
+   mark of mutability, and a store has no value on a symbol
    (FlambdaHeapSpec.exec_heap_primitive, the case [Block_set], which
    has a value on a location bound to a block made [Mutable] and on
-   nothing else: [store_to_symbol_undefined_statement],
-   [exec_prim_store_to_symbol_statement]). So a unit that writes a
+   nothing else: [store_to_symbol_undefined_statement], of a [Let] as
+   the machine runs it, and [exec_prim_store_to_symbol_statement], of
+   the primitive). So a unit that writes a
    field of a static block is undefined where it writes, and the
    refinement says nothing of it; the check does not look at stores,
    and answers of such a unit as of any other
@@ -596,10 +595,11 @@ Definition read_of_place_statement : Prop :=
    heap, it has that value by [eval_named], and the heap is as it
    came. *)
 Definition read_of_exec_statement : Prop :=
-  ∀ (statics : static_env) (hp hp' : heap) (vars : env) (d : named)
+  ∀ (statics : static_env) (hp hp' : heap) (rd rd' : read_record) (vars : env)
+    (d : named)
     (s : symbol) (p : static_place) (v : value),
     read_of d = Some (s, p) ->
-    exec_named statics hp vars d = Some (v, hp') ->
+    exec_named statics hp rd vars d = Some (v, hp', rd') ->
     eval_named statics vars d = Some v ∧ hp' = hp.
 
 (* A group that passes the check, executed in a static environment in
@@ -618,7 +618,7 @@ Definition group_keeps_classes_statement : Prop :=
 Definition classes_agree_kept_statement : Prop :=
   ∀ (held : held_places) (e : expr) (n : nat) (s : state),
     groups_hold held e = true ->
-    run n (State e [] [] empty_static_env empty_heap) = Step s ->
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
     classes_agree held (state_statics s).
 
 (* One read: where the places of each class agree, a read that has a
@@ -662,8 +662,8 @@ Definition share_reads_refines_from_statement : Prop :=
     Forall (fun binding => code_groups_hold held (snd binding) = true)
       (static_code statics) ->
     classes_agree held statics ->
-    refines (State e [] [] statics empty_heap)
-      (State (share_reads held [] e) [] [] statics empty_heap).
+    refines (State e [] [] statics empty_heap no_reads)
+      (State (share_reads held [] e) [] [] statics empty_heap no_reads).
 
 (* So what [share_static_reads] gives refines the unit, each run on its
    own from the same imports (FlambdaImportsSpec.unit_refines): the
@@ -689,8 +689,8 @@ Definition share_reads_refines_observed_statement : Prop :=
       (static_code statics) ->
     classes_agree held statics ->
     observers [] conts ->
-    refines (State e [] conts statics empty_heap)
-      (State (share_reads held [] e) [] conts statics empty_heap).
+    refines (State e [] conts statics empty_heap no_reads)
+      (State (share_reads held [] e) [] conts statics empty_heap no_reads).
 
 (* So what [share_static_reads] gives refines the unit, the two
    followed by the same thing and run from the same imports, with the
@@ -698,9 +698,9 @@ Definition share_reads_refines_observed_statement : Prop :=
 Definition share_static_reads_refines_observed_statement : Prop :=
   ∀ (imports : list (symbol * import_class)) (conts : cont_env) (e : expr),
     observers [] conts ->
-    refines (State e [] conts (imports_statics imports) empty_heap)
+    refines (State e [] conts (imports_statics imports) empty_heap no_reads)
       (State (share_static_reads e) [] conts (imports_statics imports)
-         empty_heap).
+         empty_heap no_reads).
 
 (* The rewrite keeps row 4: it puts a variable, and no symbol. Where
    every symbol and code id that a term mentions is in scope, given
@@ -761,17 +761,19 @@ Definition share_static_reads_equivariant_statement : Prop :=
     share_static_reads (rename_expr r e)
     = rename_expr r (share_static_reads e).
 
-(* A store whose first argument is a symbol has no value: no step of
-   the machine writes a field of what a symbol is bound to. *)
+(* A [Let] of a store whose first argument is a symbol has no value:
+   no step of the machine writes a field of what a symbol is bound
+   to. *)
 Definition store_to_symbol_undefined_statement : Prop :=
-  ∀ (statics : static_env) (hp : heap) (vars : env)
+  ∀ (statics : static_env) (hp : heap) (rd : read_record) (vars : env)
     (kind : block_access_kind) (init : init_or_assign) (field : Z)
     (s : symbol) (new : simple),
-    exec_named statics hp vars
+    exec_named statics hp rd vars
       (Prim (Heap (Block_set kind init field)) [Symbol s; new])
     = None.
 
-(* Nor has it one when the primitives of the heap are run. *)
+(* Nor has the primitive one, on values the first of which is a
+   symbol. *)
 Definition exec_prim_store_to_symbol_statement : Prop :=
   ∀ (statics : static_env) (hp : heap) (kind : block_access_kind)
     (init : init_or_assign) (field : Z) (s : symbol) (new : value),
@@ -875,10 +877,10 @@ Definition share_static_reads_slot_twice_statement : Prop :=
       (example_reads example_field_read done)
   in
   share_static_reads u = u
-  ∧ run 6 (State u [] [] empty_static_env empty_heap)
+  ∧ run 6 (State u [] [] empty_static_env empty_heap no_reads)
     = Exit done
         [Value_const (Tagged_immediate 1); Value_const (Tagged_immediate 2)]
-        empty_heap.
+        empty_heap no_reads.
 
 (* Where the closure and the block are bound by two groups, nothing is
    shared, though both hold [x]: the classes are of one group. *)
@@ -958,7 +960,8 @@ Definition share_static_reads_store_statement : Prop :=
       (Let stored Value store (example_reads second done))
   in
   share_static_reads (u example_field_read) = u (Simple (Var first_read))
-  ∧ run 4 (State (u example_field_read) [] [] empty_static_env empty_heap)
+  ∧ run 4
+    (State (u example_field_read) [] [] empty_static_env empty_heap no_reads)
     = Undefined.
 
 End Examples.

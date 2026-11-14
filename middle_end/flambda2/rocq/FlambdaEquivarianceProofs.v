@@ -559,13 +559,14 @@ Proof. apply rec_closures_equivariant_aux. Qed.
 (* A call of code. *)
 Lemma call_code_equivariant (r : renaming) (closure : value) (c : code)
     (vs : list value) (args_arity return_arity : arity)
-    (return_to exn_to : cont_value) (statics : static_env) (hp : heap) :
+    (return_to exn_to : cont_value) (statics : static_env) (hp : heap)
+      (rd : read_record) :
   call_code closure (rename_code r c) vs args_arity return_arity
     (rename_cont_value r return_to) (rename_cont_value r exn_to)
-    (rename_static_env r statics) hp
+    (rename_static_env r statics) hp rd
   = rename_result r
       (call_code closure c vs args_arity return_arity return_to exn_to
-         statics hp).
+         statics hp rd).
 Proof.
   destruct c as [params my_closure ret exn metadata body].
   unfold call_code. simpl.
@@ -653,14 +654,16 @@ Qed.
 Lemma run_call_equivariant (r : renaming)
     (return_partial return_partial' : value -> step_result)
     (shape : option call_shape) (return_arity : arity)
-    (return_to exn_to : cont_value) (statics : static_env) (hp : heap) :
+    (return_to exn_to : cont_value) (statics : static_env) (hp : heap)
+      (rd : read_record) :
   (∀ partial : value,
     return_partial' partial = rename_result r (return_partial partial)) ->
   run_call return_partial' (option_map (rename_shape r) shape) return_arity
     (rename_cont_value r return_to) (rename_cont_value r exn_to)
-    (rename_static_env r statics) hp
+    (rename_static_env r statics) hp rd
   = rename_result r
-      (run_call return_partial shape return_arity return_to exn_to statics hp).
+      (run_call return_partial shape return_arity return_to exn_to statics hp
+         rd).
 Proof.
   intros Hpartial.
   destruct shape
@@ -674,23 +677,23 @@ Proof.
       (call_code_equivariant r closure c vs args_arity (code_result_arity c)
          (Over_application remaining remaining_arity return_arity return_to
             exn_to)
-         exn_to statics hp).
+         exn_to statics hp rd).
   - apply Hpartial.
   - reflexivity.
 Qed.
 
 Lemma apply_cont_value_equivariant (r : renaming) (c : cont_value) :
-  ∀ (vs : list value) (statics : static_env) (hp : heap),
+  ∀ (vs : list value) (statics : static_env) (hp : heap) (rd : read_record),
     apply_cont_value (rename_cont_value r c) vs
-      (rename_static_env r statics) hp
-    = rename_result r (apply_cont_value c vs statics hp).
+      (rename_static_env r statics) hp rd
+    = rename_result r (apply_cont_value c vs statics hp rd).
 Proof.
   induction c
     as [[params metadata handler] def_vars def_conts recursive | k
        | c IH extra
        | remaining remaining_arity return_arity return_to exn_to IHreturn _]
     using cont_value_over_ind;
-    intros vs statics hp.
+    intros vs statics hp rd.
   - simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
       [ | reflexivity ].
@@ -716,17 +719,37 @@ Proof. destruct extra; reflexivity. Qed.
 
 Lemma call_function_equivariant (r : renaming) (callee : value)
     (kind : call_kind) (vs : list value) (args_arity return_arity : arity)
-    (return_to exn_to : cont_value) (statics : static_env) (hp : heap) :
+    (return_to exn_to : cont_value) (statics : static_env) (hp : heap)
+      (rd : read_record) :
   call_function callee kind vs args_arity return_arity
     (rename_cont_value r return_to) (rename_cont_value r exn_to)
-    (rename_static_env r statics) hp
+    (rename_static_env r statics) hp rd
   = rename_result r
       (call_function callee kind vs args_arity return_arity return_to exn_to
-         statics hp).
+         statics hp rd).
 Proof.
   unfold call_function. rewrite shape_of_call_equivariant.
   apply run_call_equivariant. intros partial.
   apply apply_cont_value_equivariant.
+Qed.
+
+(* The executor of a named expression: a primitive reads the static
+   environment for its statically allocated values, which the action
+   leaves alone, and the heap and the record are not acted on. *)
+Lemma exec_named_equivariant (r : renaming) (statics : static_env)
+    (hp : heap) (rd : read_record) (vars : env) (d : named) :
+  exec_named (rename_static_env r statics) hp rd (rename_env r vars)
+    (rename_named r d)
+  = exec_named statics hp rd vars d.
+Proof.
+  pose proof (eval_named_equivariant r statics vars d) as Heval.
+  destruct d as [s | p args | code slots | fslot decls slots | slot closure
+    | pfrom slot closure | move_from move_to closure];
+    unfold exec_named; cbn [rename_named] in *;
+    try (rewrite Heval; reflexivity).
+  rewrite eval_simples_equivariant.
+  destruct (eval_simples vars args) as [vs | ]; [ | reflexivity ].
+  destruct statics as [codes values]. reflexivity.
 Qed.
 
 (* ======================================================================== *)
@@ -742,8 +765,11 @@ Proof.
        | scrutinee arms | ];
     simpl; autorewrite with step.
   - (* Let *)
-    rewrite eval_named_equivariant.
-    destruct (eval_named (state_statics s) (state_vars s) d) as [v | ];
+    rewrite exec_named_equivariant.
+    destruct
+      (exec_named (state_statics s) (state_heap s) (state_reads s)
+         (state_vars s) d)
+      as [[[v hp'] rd'] | ];
       [ | reflexivity ].
     destruct (kind_eqb (kind_of_value v) kind); reflexivity.
   - (* Let_static *)
@@ -799,13 +825,13 @@ Qed.
 (* A run of a renamed state that has ended, ended as the run of the state
    did, renamed. *)
 Lemma run_renamed_exit (r : renaming) (fuel : nat) (s : state)
-    (k : continuation) (vs : list value) (hp : heap) :
-  run fuel (rename_state r s) = Exit (rename_continuation r k) vs hp
-  <-> run fuel s = Exit k vs hp.
+    (k : continuation) (vs : list value) (hp : heap) (rd : read_record) :
+  run fuel (rename_state r s) = Exit (rename_continuation r k) vs hp rd
+  <-> run fuel s = Exit k vs hp rd.
 Proof.
   rewrite run_equivariant. split.
   - destruct (run fuel s) as [s' | k' vs' | ]; simpl; try discriminate.
-    intros [= Hk -> ->]. apply rename_continuation_injective in Hk.
+    intros [= Hk -> -> ->]. apply rename_continuation_injective in Hk.
     subst k'. reflexivity.
   - intros ->. reflexivity.
 Qed.
@@ -831,7 +857,7 @@ Qed.
 Theorem behaves_equivariant : behaves_equivariant_statement.
 Proof.
   intros r s [k vs | | ]; simpl.
-  - split; intros [fuel Hrun]; exists fuel;
+  - split; intros [fuel [rd Hrun]]; exists fuel; eexists;
       apply (run_renamed_exit r fuel s k vs); exact Hrun.
   - split; intros [fuel Hrun]; exists fuel;
       apply (run_renamed_undefined r fuel s); exact Hrun.
@@ -867,14 +893,14 @@ Qed.
 (* A state with a renamed expression is the renaming of the state whose
    environments are renamed back. *)
 Lemma state_of_renamed_expr (r : renaming) (e : expr) (vars : env)
-    (conts : cont_env) (statics : static_env) (hp : heap) :
-  State (rename_expr r e) vars conts statics hp
+    (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record) :
+  State (rename_expr r e) vars conts statics hp rd
   = rename_state r
       (State e (rename_env (inverse_renaming r) vars)
          (rename_cont_env (inverse_renaming r) conts)
-         (rename_static_env (inverse_renaming r) statics) hp).
+         (rename_static_env (inverse_renaming r) statics) hp rd).
 Proof.
-  pose proof (rename_state_inverse r (State e vars conts statics hp))
+  pose proof (rename_state_inverse r (State e vars conts statics hp rd))
     as [_ Hinverse].
   unfold rename_state in *. simpl_state.
   injection Hinverse as _ Hvars Hconts Hstatics.
@@ -883,14 +909,14 @@ Qed.
 
 Theorem expr_equivalent_equivariant : expr_equivalent_equivariant_statement.
 Proof.
-  intros r e e' Hequivalent vars conts statics hp.
+  intros r e e' Hequivalent vars conts statics hp rd.
   rewrite !state_of_renamed_expr.
   apply equivalent_equivariant, Hequivalent.
 Qed.
 
 Theorem expr_refines_equivariant : expr_refines_equivariant_statement.
 Proof.
-  intros r source target Hrefines vars conts statics hp.
+  intros r source target Hrefines vars conts statics hp rd.
   rewrite !state_of_renamed_expr.
   apply refines_equivariant, Hrefines.
 Qed.

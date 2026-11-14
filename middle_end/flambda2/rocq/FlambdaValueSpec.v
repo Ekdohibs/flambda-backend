@@ -244,6 +244,24 @@ Definition heap : Type := list (location * cell).
 
 Definition empty_heap : heap := [].
 
+(* What the loads that read memory as immutable have read: a location,
+   after a symbol is resolved, with one field of a block or with the
+   whole of the bytes or of the elements. A write to what the record
+   covers is undefined ([Read_whole] covers every field of its
+   location); order and repetition mean nothing. Nothing adds to the
+   record and nothing reads it yet: FlambdaSemanticsSpec.step carries
+   it. Decisions D49 and D52. *)
+Inductive read_extent : Type :=
+  | Read_field (i : nat)
+  | Read_whole.
+
+Definition read_record : Type := list (location * read_extent).
+
+Definition no_reads : read_record := [].
+
+(* A record that the context determines. *)
+Abbreviation rd_ := _ (only parsing).
+
 (* A value as a cell: a location, and what the heap binds it to. *)
 Definition cell_of (h : heap) (v : value) : option cell :=
   match v with

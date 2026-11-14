@@ -135,10 +135,9 @@ Proof.
       [ | discriminate ].
     intros [= <-]. apply rebuild_switch_sets.
   - intros Hfits Hmem.
-    apply (simplify_switch_merging_refines meet rewrite [] fresh tenv s arms
-             e Hmeet Hkeeps Hrewrite);
-      [ | exact Hfits | exact Hmem | exact He ].
-    intros statics vars _ _ entry [].
+    apply (proj1 (expr_refines_under_valid_where_nothing_known _ _ _)).
+    exact (simplify_switch_merging_refines meet rewrite [] fresh tenv s arms
+             e Hmeet Hkeeps Hrewrite Hfits Hmem He).
 Qed.
 
 Theorem switch_arms_of_meet_to_prove_rewrite_sound :

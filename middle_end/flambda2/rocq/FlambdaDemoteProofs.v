@@ -50,8 +50,8 @@ Lemma clear_exn_handler_equivalent (k : continuation)
   expr_equivalent (Let_cont_non_recursive k h body)
     (Let_cont_non_recursive k (clear_exn_handler h) body).
 Proof.
-  intros vars conts statics hp. apply let_cont_handler_alike.
-  intros vs statics' hp'. destruct h as [params metadata handler]. simpl.
+  intros vars conts statics hp rd. apply let_cont_handler_alike.
+  intros vs statics' hp' rd'. destruct h as [params metadata handler]. simpl.
   apply result_related_refl. exact equivalent_refl.
 Qed.
 
@@ -60,12 +60,12 @@ Qed.
 (* ======================================================================== *)
 
 Lemma expr_equivalent_same (e : expr) : expr_equivalent e e.
-Proof. intros vars conts statics hp. apply equivalent_refl. Qed.
+Proof. intros vars conts statics hp rd. apply equivalent_refl. Qed.
 
 Lemma apply_cont_stripped (k : continuation) (ac : apply_cont) :
   expr_equivalent (Apply_cont ac) (Apply_cont (strip_trap k ac)).
 Proof.
-  intros vars conts statics hp. apply step_eq_equivalent.
+  intros vars conts statics hp rd. apply step_eq_equivalent.
   rewrite !step_apply_cont. unfold strip_trap.
   destruct (traps k ac); reflexivity.
 Qed.
@@ -85,7 +85,7 @@ Lemma switch_stripped (k : continuation) (scrutinee : simple)
     (Switch scrutinee
        (map (fun arm => (fst arm, strip_trap k (snd arm))) arms)).
 Proof.
-  intros vars conts statics hp.
+  intros vars conts statics hp rd.
   pose proof (step_switch scrutinee arms vars conts statics) as Hstep.
   pose proof
     (step_switch scrutinee
@@ -99,8 +99,8 @@ Proof.
   destruct (find_arm i arms) as [ac | ]; simpl in Hstep';
     [ | apply step_eq_equivalent; congruence ].
   exact
-    (equivalent_step _ _ _ _ (Hstep hp) (Hstep' hp)
-       (apply_cont_stripped k ac vars conts statics hp)).
+    (equivalent_step _ _ _ _ (Hstep hp rd_) (Hstep' hp rd_)
+       (apply_cont_stripped k ac vars conts statics hp rd_)).
 Qed.
 
 Fixpoint strip_traps_binds_statics (k : continuation) (e : expr) :
@@ -2495,7 +2495,8 @@ Proof.
     (stack_agrees_from statics unit_exn (demote_handlers scope e) b Hcode
        Hdistinct' Htraps')
     as Hafter.
-  pose proof (demote_handlers_equivalent scope e [] [] statics empty_heap b)
+  pose proof
+    (demote_handlers_equivalent scope e [] [] statics empty_heap no_reads b)
     as Hsame.
   split; intros H.
   - apply Hbefore, Hsame, Hafter. exact H.

@@ -81,11 +81,13 @@
    of the unit runs, to the same thing; the two values are related by
    FlambdaLiftSpec.value_lifted. The checks are the same
    ([lift_to_head_unit]): the unit exits with symbols and constants
-   only, and the result is a well-formed unit, so that the symbols given
-   are new and distinct. The binding of a symbol cannot itself be
-   undefined, for the reasons given in FlambdaLiftFromCodeSpec.v; so a
-   [Let] that is never executed brings no undefinedness to the unit
-   lifted.
+   only; it has no primitive of the heap
+   (FlambdaHeapFreeSpec.expr_free_of_heap; a limit, the CR at
+   FlambdaLiftSpec.lift_unit); and the result is a well-formed unit,
+   so that the symbols given are new and distinct. The binding of a
+   symbol cannot itself be undefined, for the reasons given in
+   FlambdaLiftFromCodeSpec.v; so a [Let] that is never executed brings
+   no undefinedness to the unit lifted.
 
    The proofs are in FlambdaLiftFromArmsProofs.v, which needs no
    review. *)
@@ -94,8 +96,8 @@ From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaSemanticsSpec FlambdaNominalSpec FlambdaWellFormedSpec
-  FlambdaUnusedStaticsSpec FlambdaImportsSpec FlambdaLiftSpec
-  FlambdaLiftFromCodeSpec.
+  FlambdaUnusedStaticsSpec FlambdaImportsSpec FlambdaHeapFreeSpec
+  FlambdaLiftSpec FlambdaLiftFromCodeSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -117,12 +119,17 @@ Definition lift_to_head (lets : list (path * lift_to)) (e : expr) : expr :=
 (* ======================================================================== *)
 
 (* The unit with the [Let]s of the guess lifted to its head: if the
-   unit exits with symbols and constants only, and the result is a
-   well-formed unit. *)
+   unit exits with symbols and constants only and has no primitive of
+   the heap, and the result is a well-formed unit. The second is a
+   limit, and not a condition of the lifting: the CR at
+   FlambdaLiftSpec.lift_unit. *)
 Definition lift_to_head_unit (u : unit_interface)
     (lets : list (path * lift_to)) (e : expr) : option expr :=
   let lifted := lift_to_head lets e in
-  if exits_plain_knowing [] [] e && well_formed_unit u lifted
+  if
+    exits_plain_knowing [] [] e
+    && expr_free_of_heap e
+    && well_formed_unit u lifted
   then Some lifted
   else None.
 

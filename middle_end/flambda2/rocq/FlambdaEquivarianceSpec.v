@@ -146,7 +146,7 @@ Definition rename_static_env (r : renaming) (statics : static_env)
 Definition rename_state (r : renaming) (s : state) : state :=
   State (rename_expr r (state_expr s)) (rename_env r (state_vars s))
     (rename_cont_env r (state_conts s))
-    (rename_static_env r (state_statics s)) (state_heap s).
+    (rename_static_env r (state_statics s)) (state_heap s) (state_reads s).
 
 (* An exit is observed by its continuation, which is renamed, and its
    values, which hold no names. *)
@@ -154,7 +154,7 @@ Definition rename_result (r : renaming) (result : step_result)
     : step_result :=
   match result with
   | Step s => Step (rename_state r s)
-  | Exit k vs hp => Exit (rename_continuation r k) vs hp
+  | Exit k vs hp rd => Exit (rename_continuation r k) vs hp rd
   | Undefined => Undefined
   end.
 

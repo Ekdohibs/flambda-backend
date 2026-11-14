@@ -162,12 +162,30 @@
    It is a test apart from [region_invariant]: neither needs the
    other.
 
+   NO PRIMITIVE OF THE HEAP (FlambdaHeapFreeSpec.expr_free_of_heap)
+
+   The machine does not run a [Let] that needs the heap
+   (FlambdaRegionsSpec.named_needs_heap, asked of a [Let] that is not
+   of a primitive of regions; decision D53): the run ends there with
+   [Region_let_not_run]. A run from the first state of a term never
+   comes to one if the term, and the code of the static environment,
+   have no primitive of the heap (the test of FlambdaHeapFreeSpec.v,
+   which is the guard of the liftings), and no value of the static
+   environment holds a location
+   ([no_heap_primitive_no_let_not_run_statement]): a location is made
+   by a primitive of the heap only, so no primitive is ever given one.
+   Until the stage in which [step] runs a [Let] on the heap, the
+   conversion of the test tool made no primitive of the heap, so no
+   unit that it checked for regions had one.
+
    WHAT IS NOT HERE
 
    - Nothing about the plain run of the term with its regions dropped:
      that is FlambdaRegionsErasureSpec.v, which needs this file.
-   - Nothing about the heap of the state: [step] does not run the
-     primitives of the heap, and the machine of regions makes no cell.
+   - Nothing about the heap of the state: no step of the machine of
+     regions changes it
+     (FlambdaRegionsSpec.region_step_keeps_memory_statement), and the
+     machine makes no cell.
    - That the symbols bound are bound once. A frame and the static
      environment bind no symbol in common, and the mark of a frame is
      bound to nothing; that two frames bind no symbol in common is
@@ -176,7 +194,7 @@
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
-  FlambdaSemanticsSpec FlambdaRegionsSpec.
+  FlambdaSemanticsSpec FlambdaHeapFreeSpec FlambdaRegionsSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -544,3 +562,28 @@ Definition usable_not_region_statement : Prop :=
     value_usable rs v = true ->
     kind_of_value v <> Region.
 
+(* A run from the first state of a term that has no primitive of the
+   heap (FlambdaHeapFreeSpec.expr_free_of_heap: no [Let] of one in the
+   term, in a handler or in code that it binds), in a static
+   environment whose code has none ([statics_free_of_heap]) and whose
+   values hold no location, never comes to a [Let] that the machine
+   does not run: no location is ever made, so no primitive is given
+   one. So of such a term a run that is never undefined
+   (FlambdaRegionsCheckSpec.region_safe) only steps or exits, as
+   before decision D53. The conversion of the test tool made no term
+   with a primitive of the heap until then. The third premise is
+   needed: a location that a static block holds in a field is read out
+   by a load, which is no primitive of the heap, and the next
+   primitive that is given it is a [Let] that the machine does not
+   run. It is FlambdaLocationsSpec.locations_of_static_env of the
+   static environment being empty, written out. *)
+Definition no_heap_primitive_no_let_not_run_statement : Prop :=
+  ∀ (e : expr) (statics : static_env) (base : symbol) (fuel : nat),
+    expr_free_of_heap e = true ->
+    statics_free_of_heap statics = true ->
+    (∀ (s : symbol) (allocated : statically_allocated_value) (v : value),
+       (s, allocated) ∈ static_values statics ->
+       v ∈ values_of_static allocated ->
+       locations_of_value v = []) ->
+    region_run fuel (initial_region_state e statics base)
+    <> Region_let_not_run.

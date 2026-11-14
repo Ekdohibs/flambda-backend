@@ -66,7 +66,8 @@
      has no free name ([rename_code_binders_statement], here);
    - that behaviour depends on the free names only, by which a binding
      that is not used may be removed ([unused_let_statement] and the two
-     after it, here).
+     after it, here), a [Let] of a primitive of the heap excepted: what
+     that does is seen in the heap of an exit.
    With FlambdaContextSpec.v these apply to any subterm.
 
    Each statement that renames takes as a premise that the code bound in
@@ -97,7 +98,7 @@
 From Stdlib Require Import ZArith List.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
-  FlambdaBindersSpec FlambdaSemanticsSpec.
+  FlambdaBindersSpec FlambdaHeapSpec FlambdaSemanticsSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -421,12 +422,19 @@ Definition rename_code_binders_statement : Prop :=
    statements would say less of a term whose code is not closed; those
    forms are corollaries, in FlambdaCanonicalFreeNamesSpec.v. *)
 
-(* A [Let] whose variable is not free in its body may be removed. This is
-   a refinement: the defining expression may be undefined. (It has no
-   other effect, there being none in this fragment.) *)
+(* A [Let] whose variable is not free in its body may be removed, if
+   its defining expression is not a primitive of the heap
+   (FlambdaHeapSpec.named_changes_heap). This is a refinement: the
+   defining expression may be undefined. A primitive of the heap is
+   not removed: it changes the heap, and an exit is compared with its
+   heap. Simplify removes more, an unused [Let] of an allocation
+   among them ([Named.at_most_generative_effects]); that is not a
+   refinement in the sense of this file for as long as two exits are
+   compared with their heaps equal (decision D40). *)
 Definition unused_let_statement : Prop :=
   ∀ (x : variable) (kind : flambda_kind) (defining_expr : named)
     (body : expr),
+    named_changes_heap defining_expr = false ->
     ~ var_free_in_expr x body ->
     expr_refines (Let x kind defining_expr body) body.
 

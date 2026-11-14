@@ -174,17 +174,17 @@ Definition result_under (statics : static_env) (r r' : step_result)
     : Prop :=
   match r with
   | Step s => ∃ s' : state, r' = Step s' ∧ state_under s s'
-  | Exit k vs hp => r' = apply_cont_value (resolve k base) vs statics hp
+  | Exit k vs hp rd => r' = apply_cont_value (resolve k base) vs statics hp rd
   | Undefined => r' = Undefined
   end.
 
 Lemma state_under_intro (e : expr) (vars : env) (conts conts' : cont_env)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   conts_under e conts conts' ->
   code_closed e = true ->
   code_all_closed statics ->
-  state_under (State e vars conts statics hp)
-    (State e vars conts' statics hp).
+  state_under (State e vars conts statics hp rd)
+    (State e vars conts' statics hp rd).
 Proof.
   intros Hconts Hcode Hstatics.
   split; [ repeat split | ]. split; [ exact Hconts | ].
@@ -192,12 +192,13 @@ Proof.
 Qed.
 
 Lemma result_under_step (statics : static_env) (e : expr) (vars : env)
-    (conts conts' : cont_env) (statics' : static_env) (hp : heap) :
+    (conts conts' : cont_env) (statics' : static_env) (hp : heap)
+      (rd : read_record) :
   conts_under e conts conts' ->
   code_closed e = true ->
   code_all_closed statics' ->
-  result_under statics (Step (State e vars conts statics' hp))
-    (Step (State e vars conts' statics' hp)).
+  result_under statics (Step (State e vars conts statics' hp rd))
+    (Step (State e vars conts' statics' hp rd)).
 Proof.
   intros Hconts Hcode Hstatics. eexists. split; [ reflexivity | ].
   apply state_under_intro; assumption.
@@ -242,19 +243,19 @@ Qed.
 Lemma call_code_under (closure : value) (called : code_id) (c : code)
     (vs : list value) (args_arity return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   code_all_closed statics ->
   lookup called (static_code statics) = Some c ->
   under return_to return_to' ->
   under exn_to exn_to' ->
   result_under statics
     (call_code closure c vs args_arity return_arity return_to exn_to statics
-       hp)
+       hp rd)
     (call_code closure c vs args_arity return_arity return_to' exn_to'
-       statics hp).
+       statics hp rd).
 Proof.
   intros Hstatics Hc Hreturn Hexn.
-  destruct (call_code_cases closure c vs args_arity return_arity statics hp)
+  destruct (call_code_cases closure c vs args_arity return_arity statics hp rd)
     as [H | [callee_vars H]]; rewrite !H; [ exact eq_refl | ].
   destruct
     (proj1 (closed_code c) (lookup_code_closed statics called c Hstatics Hc))
@@ -275,7 +276,7 @@ Qed.
 Lemma run_call_under (return_partial return_partial' : value -> step_result)
     (kind : call_kind) (shape : option call_shape) (return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   code_all_closed statics ->
   shape_calls statics kind shape ->
   under return_to return_to' ->
@@ -284,9 +285,9 @@ Lemma run_call_under (return_partial return_partial' : value -> step_result)
     result_under statics (return_partial partial)
       (return_partial' partial)) ->
   result_under statics
-    (run_call return_partial shape return_arity return_to exn_to statics hp)
+    (run_call return_partial shape return_arity return_to exn_to statics hp rd)
     (run_call return_partial' shape return_arity return_to' exn_to' statics
-       hp).
+       hp rd).
 Proof.
   intros Hstatics Hcalls Hreturn Hexn Hpartial.
   destruct shape
@@ -294,10 +295,10 @@ Proof.
         | closure c vs remaining args_arity remaining_arity | partial] | ];
     simpl in Hcalls; cbn [run_call].
   - destruct Hcalls as (called & slots & _ & Hc & _).
-    exact (call_code_under closure called c vs _ _ _ _ _ _ statics hp
+    exact (call_code_under closure called c vs _ _ _ _ _ _ statics hp rd
              Hstatics Hc Hreturn Hexn).
   - destruct Hcalls as (called & slots & _ & Hc & _).
-    apply (call_code_under closure called c vs _ _ _ _ _ _ statics hp
+    apply (call_code_under closure called c vs _ _ _ _ _ _ statics hp rd
              Hstatics Hc);
       [ apply Under_over_application; assumption | exact Hexn ].
   - apply Hpartial.
@@ -307,10 +308,10 @@ Qed.
 (* Applying two continuations so related. *)
 Lemma apply_cont_value_under (c c' : cont_value) :
   under c c' ->
-  ∀ (vs : list value) (statics : static_env) (hp : heap),
+  ∀ (vs : list value) (statics : static_env) (hp : heap) (rd : read_record),
     code_all_closed statics ->
-    result_under statics (apply_cont_value c vs statics hp)
-      (apply_cont_value c' vs statics hp).
+    result_under statics (apply_cont_value c vs statics hp rd)
+      (apply_cont_value c' vs statics hp rd).
 Proof.
   induction 1
     as [ k
@@ -319,7 +320,7 @@ Proof.
        | c c' extra _ IH
        | remaining remaining_arity return_arity return_to return_to' exn_to
            exn_to' Hreturn IHreturn Hexn _ ];
-    intros vs statics hp Hstatics.
+    intros vs statics hp rd Hstatics.
   - exact eq_refl.
   - cbn [apply_cont_value].
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
@@ -342,17 +343,17 @@ Qed.
 Lemma step_under (s s' : state) :
   state_under s s' -> result_under (state_statics s) (step s) (step s').
 Proof.
-  destruct s as [e vars conts statics hp],
-    s' as [e' vars' conts' statics' hp'].
-  intros ((He & Hvars & Hstatics_eq & Hhp) & Hconts & Hcode & Hstatics).
-  simpl in He, Hvars, Hstatics_eq, Hhp. subst e' vars' statics' hp'.
+  destruct s as [e vars conts statics hp rd],
+    s' as [e' vars' conts' statics' hp' rd'].
+  intros ((He & Hvars & Hstatics_eq & Hhp & Hrd) & Hconts & Hcode & Hstatics).
+  simpl in He, Hvars, Hstatics_eq, Hhp, Hrd. subst e' vars' statics' hp' rd'.
   simpl state_expr in *. simpl state_conts in *. simpl state_statics in *.
   destruct e
     as [ x kind d body | bindings body | k h body | handlers body | ap | ac
        | scrutinee arms | ].
   - (* Let *)
     rewrite !step_let_exec.
-    destruct (exec_named statics hp vars d) as [[v hp'] | ];
+    destruct (exec_named statics hp rd vars d) as [[[v hp'] rd'] | ];
       [ | exact eq_refl ].
     destruct (kind_eqb (kind_of_value v) kind); [ | exact eq_refl ].
     apply result_under_step; [ exact Hconts | exact Hcode | exact Hstatics ].
@@ -423,7 +424,8 @@ Proof.
       [ exact Hstatics | apply shape_of_call_calls | exact Hreturn
       | apply with_extra_args_under; exact Hexn | ].
     intros partial.
-    exact (apply_cont_value_under _ _ Hreturn [partial] statics hp Hstatics).
+    exact
+      (apply_cont_value_under _ _ Hreturn [partial] statics hp rd Hstatics).
   - (* Apply_cont *)
     rewrite !step_apply_cont.
     destruct (eval_simples vars (ac_args ac)) as [vs | ]; [ | exact eq_refl ].
@@ -456,7 +458,7 @@ Proof.
   induction n as [ | n IH]; intros s s' t Hunder; simpl.
   - intros [= <-]. exists s'. split; [ reflexivity | exact Hunder ].
   - generalize (step_under s s' Hunder).
-    destruct (step s) as [s1 | k vs hp | ]; unfold result_under;
+    destruct (step s) as [s1 | k vs hp rd | ]; unfold result_under;
       [ | discriminate | discriminate ].
     intros (s1' & Hstep' & Hunder1) Hrun. rewrite Hstep'.
     exact (IH s1 s1' t Hunder1 Hrun).
@@ -468,7 +470,7 @@ Lemma run_under_wrong (n : nat) :
 Proof.
   induction n as [ | n IH]; intros s s' Hunder; simpl; [ discriminate | ].
   generalize (step_under s s' Hunder).
-  destruct (step s) as [s1 | k vs hp | ]; unfold result_under.
+  destruct (step s) as [s1 | k vs hp rd | ]; unfold result_under.
   - intros (s1' & Hstep' & Hunder1) Hrun. rewrite Hstep'.
     exact (IH s1 s1' Hunder1 Hrun).
   - discriminate.
@@ -477,10 +479,10 @@ Qed.
 
 (* The unit on its own and the unit from [base], before a step. *)
 Lemma initial_under (e : expr) (vars : env) (statics : static_env)
-    (hp : heap) :
+    (hp : heap) (rd : read_record) :
   code_closed e = true ->
   static_code_closed statics ->
-  state_under (State e vars [] statics hp) (State e vars base statics hp).
+  state_under (State e vars [] statics hp rd) (State e vars base statics hp rd).
 Proof.
   intros Hcode Hstatics.
   apply state_under_intro; [ | exact Hcode | exact Hstatics ].
@@ -495,20 +497,21 @@ End Under.
 
 Theorem run_under : run_under_statement.
 Proof.
-  intros base e vars statics hp n s Hcode Hstatics Hrun.
+  intros base e vars statics hp rd n s Hcode Hstatics Hrun.
   destruct
     (run_under_steps base n _ _ s
-       (initial_under base e vars statics hp Hcode Hstatics) Hrun)
+       (initial_under base e vars statics hp rd_ Hcode Hstatics) Hrun)
     as (s' & Hrun' & Hunder).
   exists s'. split; [ exact Hrun' | exact (proj1 Hunder) ].
 Qed.
 
 Theorem exit_under : exit_under_statement.
 Proof.
-  intros base e vars statics hp n last k vs hp' Hcode Hstatics Hrun Hstep.
+  intros base e vars statics hp rd n last k vs hp' rd' Hcode Hstatics Hrun
+    Hstep.
   destruct
     (run_under_steps base n _ _ last
-       (initial_under base e vars statics hp Hcode Hstatics) Hrun)
+       (initial_under base e vars statics hp rd_ Hcode Hstatics) Hrun)
     as (last' & Hrun' & Hunder).
   exists last'. split; [ exact Hrun' | ].
   split; [ exact (proj1 Hunder) | ].
@@ -518,27 +521,27 @@ Qed.
 
 Theorem wrong_under : wrong_under_statement.
 Proof.
-  intros base e vars statics hp n Hcode Hstatics.
+  intros base e vars statics hp rd n Hcode Hstatics.
   exact (run_under_wrong base n _ _
-           (initial_under base e vars statics hp Hcode Hstatics)).
+           (initial_under base e vars statics hp rd_ Hcode Hstatics)).
 Qed.
 
 Theorem behaves_under : behaves_under_statement.
 Proof.
-  intros base e vars statics hp Hcode Hstatics. cbv zeta.
+  intros base e vars statics hp rd Hcode Hstatics. cbv zeta.
   split; [ | split ].
   - intros w b (n & last & Hrun & Hstep & Hlast).
     destruct
-      (exit_under base e vars statics hp n last _ _ _ Hcode Hstatics Hrun
+      (exit_under base e vars statics hp rd n last _ _ _ rd_ Hcode Hstatics Hrun
          Hstep)
       as (last' & Hrun' & _ & Hstep').
     rewrite Hlast in Hstep'.
     rewrite (run_behaves n _ b), Hrun'. simpl result_behaves.
     rewrite (step_behaves last' b), Hstep'. reflexivity.
   - intros [n Hrun]. exists n.
-    exact (wrong_under base e vars statics hp n Hcode Hstatics Hrun).
+    exact (wrong_under base e vars statics hp rd n Hcode Hstatics Hrun).
   - intros Hdiv n. destruct (Hdiv n) as [s Hrun].
-    destruct (run_under base e vars statics hp n s Hcode Hstatics Hrun)
+    destruct (run_under base e vars statics hp rd n s Hcode Hstatics Hrun)
       as (s' & Hrun' & _).
     exists s'. exact Hrun'.
 Qed.

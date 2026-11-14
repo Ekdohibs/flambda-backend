@@ -593,6 +593,26 @@ Qed.
 Lemma cont_env_laws : action_laws permute_cont_env locations_of_cont_env.
 Proof. exact (laws_of_list _ _ (laws_of_keyed _ _ cont_value_laws)). Qed.
 
+(* The read record: the locations of its entries are moved. *)
+Lemma reads_laws : action_laws permute_reads locations_of_reads.
+Proof.
+  constructor.
+  - intros rd. unfold permute_reads.
+    induction rd as [ | [l extent] rd IH]; [ reflexivity | ].
+    cbn [map fst snd]. rewrite (act_identity _ _ laws_of_name), IH.
+    reflexivity.
+  - intros second first rd. unfold permute_reads.
+    induction rd as [ | [l extent] rd IH]; [ reflexivity | ].
+    cbn [map fst snd]. rewrite (act_compose _ _ laws_of_name), IH.
+    reflexivity.
+  - intros p rd. unfold permute_reads, locations_of_reads.
+    rewrite !map_map. reflexivity.
+  - intros p p' rd Hagree. unfold permute_reads. apply map_ext_in.
+    intros [l extent] Hin. simpl. rewrite (Hagree l); [ reflexivity | ].
+    unfold locations_of_reads. apply in_map_iff. exists (l, extent).
+    split; [ reflexivity | exact Hin ].
+Qed.
+
 (* ======================================================================== *)
 (* States                                                                   *)
 (* ======================================================================== *)
@@ -600,28 +620,33 @@ Proof. exact (laws_of_list _ _ (laws_of_keyed _ _ cont_value_laws)). Qed.
 Lemma state_laws : action_laws permute_state locations_of_state.
 Proof.
   constructor.
-  - intros [e vars conts statics hp]. unfold permute_state. simpl.
+  - intros [e vars conts statics hp rd]. unfold permute_state. simpl.
     rewrite (act_identity _ _ env_laws), (act_identity _ _ cont_env_laws),
-      (act_identity _ _ static_env_laws), (act_identity _ _ heap_laws).
+      (act_identity _ _ static_env_laws), (act_identity _ _ heap_laws),
+      (act_identity _ _ reads_laws).
     reflexivity.
-  - intros second first [e vars conts statics hp]. unfold permute_state.
+  - intros second first [e vars conts statics hp rd]. unfold permute_state.
     simpl.
     rewrite (act_compose _ _ env_laws), (act_compose _ _ cont_env_laws),
-      (act_compose _ _ static_env_laws), (act_compose _ _ heap_laws).
+      (act_compose _ _ static_env_laws), (act_compose _ _ heap_laws),
+      (act_compose _ _ reads_laws).
     reflexivity.
-  - intros p [e vars conts statics hp]. unfold locations_of_state. simpl.
+  - intros p [e vars conts statics hp rd]. unfold locations_of_state. simpl.
     rewrite !map_app, (act_names _ _ env_laws),
       (act_names _ _ cont_env_laws), (act_names _ _ static_env_laws),
-      (act_names _ _ heap_laws).
+      (act_names _ _ heap_laws), (act_names _ _ reads_laws).
     reflexivity.
-  - intros p p' [e vars conts statics hp] Hagree.
+  - intros p p' [e vars conts statics hp rd] Hagree.
     unfold locations_of_state in Hagree. unfold permute_state. simpl in *.
     rewrite (act_ext _ _ env_laws p p' vars),
       (act_ext _ _ cont_env_laws p p' conts),
       (act_ext _ _ static_env_laws p p' statics),
-      (act_ext _ _ heap_laws p p' hp);
-      [ reflexivity | | | | ]; intros l Hl; apply Hagree, in_or_app.
-    + right. apply in_or_app. right. apply in_or_app. right. exact Hl.
+      (act_ext _ _ heap_laws p p' hp), (act_ext _ _ reads_laws p p' rd);
+      [ reflexivity | | | | | ]; intros l Hl; apply Hagree, in_or_app.
+    + right. apply in_or_app. right. apply in_or_app. right.
+      apply in_or_app. right. exact Hl.
+    + right. apply in_or_app. right. apply in_or_app. right.
+      apply in_or_app. left. exact Hl.
     + right. apply in_or_app. right. apply in_or_app. left. exact Hl.
     + right. apply in_or_app. left. exact Hl.
     + left. exact Hl.
@@ -685,7 +710,7 @@ Qed.
 
 Theorem rename_permute_state : rename_permute_state_statement.
 Proof.
-  intros r p [e vars conts statics hp].
+  intros r p [e vars conts statics hp rd].
   unfold rename_state, permute_state. simpl. f_equal.
   - apply rename_permute_env.
   - unfold rename_cont_env, permute_cont_env. rewrite !map_map.

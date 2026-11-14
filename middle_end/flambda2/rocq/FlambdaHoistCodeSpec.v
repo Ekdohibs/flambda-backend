@@ -273,8 +273,8 @@ Definition hoist_code (e : expr) : option expr :=
 Definition hoist_code_program_equivalent_statement : Prop :=
   ∀ e e' : expr,
     hoist_code e = Some e' ->
-    equivalent (State e [] [] empty_static_env empty_heap)
-      (State e' [] [] empty_static_env empty_heap).
+    equivalent (State e [] [] empty_static_env empty_heap no_reads)
+      (State e' [] [] empty_static_env empty_heap no_reads).
 
 (* The same of a unit that imports symbols: the two, each run from the
    static environment of its imports, behave alike. Nothing more is
@@ -283,8 +283,8 @@ Definition hoist_code_program_equivalent_statement : Prop :=
 Definition hoist_code_equivalent_imports_statement : Prop :=
   ∀ (imports : list (symbol * import_class)) (e e' : expr),
     hoist_code e = Some e' ->
-    equivalent (State e [] [] (imports_statics imports) empty_heap)
-      (State e' [] [] (imports_statics imports) empty_heap).
+    equivalent (State e [] [] (imports_statics imports) empty_heap no_reads)
+      (State e' [] [] (imports_statics imports) empty_heap no_reads).
 
 (* The same of the two units followed by something: run from one
    continuation environment of what may follow a unit
@@ -300,8 +300,8 @@ Definition hoist_code_equivalent_observed_statement : Prop :=
     (e e' : expr),
     hoist_code e = Some e' ->
     observers [] conts ->
-    equivalent (State e [] conts (imports_statics imports) empty_heap)
-      (State e' [] conts (imports_statics imports) empty_heap).
+    equivalent (State e [] conts (imports_statics imports) empty_heap no_reads)
+      (State e' [] conts (imports_statics imports) empty_heap no_reads).
 
 (* What the check of closures is for. The closures in a value, or in
    what a symbol is bound to, are of code that [bound] has: every
@@ -355,7 +355,7 @@ Definition closures_bound (s : state) : Prop :=
 Definition closures_in_scope_run_statement : Prop :=
   ∀ (e : expr) (n : nat) (s : state),
     closures_in_scope (fun _ => false) e = true ->
-    run n (State e [] [] empty_static_env empty_heap) = Step s ->
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
     closures_bound s.
 
 (* The parts of the pass commute with renaming, which renames no code

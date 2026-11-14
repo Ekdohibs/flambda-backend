@@ -38,9 +38,11 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaMapProofs FlambdaPrimitiveModel FlambdaPrimitiveSpec
   FlambdaPrimitiveProofs FlambdaHeapProofs FlambdaSemanticsSpec
   FlambdaSemanticsProofs FlambdaClosuresProofs FlambdaRegionsSpec
-  FlambdaRegionsProofs FlambdaRegionsInvariantSpec FlambdaRegionsReadsProofs
+  FlambdaRegionsProofs FlambdaRegionsNeedsHeapProofs
+  FlambdaRegionsInvariantSpec FlambdaRegionsReadsProofs
   FlambdaRegionsStepsProofs FlambdaRegionsFreshProofs.
 From OxCamlFlambda2 Require FlambdaRegionsNoPoisonProofs.
+From OxCamlFlambda2 Require FlambdaRegionsNoHeapPrimitiveProofs.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -576,11 +578,12 @@ Definition live_result (result : region_step_result) : Prop :=
   match result with
   | Region_step rs' => values_live rs' = true
   | Region_exit _ vs rs' => values_live rs' = true ∧ Forall (kept rs') vs
-  | Region_undefined _ => True
+  | Region_undefined _ | Region_let_not_run => True
   end.
 
 Lemma plain_step_live (rs : region_state) :
   values_live rs = true ->
+  needs_no_heap (rs_state rs) ->
   (∀ (x : variable) (kind : flambda_kind) (d : named) (body : expr)
      (v : value),
     state_expr (rs_state rs) = Let x kind d body ->
@@ -588,19 +591,20 @@ Lemma plain_step_live (rs : region_state) :
     kept rs v) ->
   live_result (plain_step rs).
 Proof.
-  intros Hlive Hlet.
+  intros Hlive Hneeds Hlet.
   pose proof Hlive as HL. apply values_live_parts in HL as (_ & _ & L3 & L4).
   pose proof
     (plain_step_values (kept rs) (kept_partial rs) rs (kept_fields rs Hlive)
-       (proj1 (kept_vals rs (rs_state rs)) (conj L3 L4)) Hlet
+       (proj1 (kept_vals rs (rs_state rs)) (conj L3 L4)) Hneeds Hlet
        (fun sim v _ => eval_simple_kept _ _ sim v L3))
     as Hvals.
-  destruct (plain_step rs) as [rs' | k vs rs' | fault] eqn:Hstep;
+  destruct (plain_step rs) as [rs' | k vs rs' | fault | ] eqn:Hstep;
     unfold region_result_vals_ok in Hvals; unfold live_result.
   - destruct (plain_step_step rs rs' Hstep) as (s' & _ & ->).
     apply (values_live_transfer rs); try reflexivity; assumption.
   - rewrite (plain_step_exit rs rs' k vs Hstep).
     exact (conj Hlive Hvals).
+  - exact I.
   - exact I.
 Qed.
 
@@ -617,13 +621,14 @@ Proof.
        (proj1 (kept_vals rs (rs_state rs)) (conj L3 L4))
        (fun sim v _ => eval_simple_kept _ _ sim v L3))
     as Hvals.
-  destruct (region_apply_cont rs ac) as [rs' | k vs rs' | fault] eqn:Hstep;
+  destruct (region_apply_cont rs ac) as [rs' | k vs rs' | fault | ] eqn:Hstep;
     unfold region_result_vals_ok in Hvals; unfold live_result.
   - destruct (region_apply_cont_step rs rs' ac Hstep)
       as (Hframes & Hbase & _ & Hstatics).
     exact (values_live_transfer rs rs' Hbase Hstatics Hframes Hlive Hvals).
   - rewrite (region_apply_cont_exit rs rs' ac k vs Hstep).
     exact (conj Hlive Hvals).
+  - exact I.
   - exact I.
 Qed.
 
@@ -681,7 +686,7 @@ Lemma local_allocation_live (rs : region_state) (x y : variable)
 Proof.
   intros Hlive Husable.
   destruct (local_allocation rs x y kind d region body)
-    as [rs' | k vs rs' | fault] eqn:Hstep; unfold live_result.
+    as [rs' | k vs rs' | fault | ] eqn:Hstep; unfold live_result.
   2: { revert Hstep. unfold local_allocation. cbv zeta.
        destruct (is_allocation d && kind_eqb kind Value); [ | discriminate ].
        destruct (named_region rs region); [ | discriminate ].
@@ -691,7 +696,7 @@ Proof.
          [ | discriminate ].
        destruct (rs_frames rs) as [ | [m mark_kind locals] frames];
          discriminate. }
-  2: exact I.
+  2, 3: exact I.
   destruct (local_allocation_step rs rs' x y kind d region body Hstep)
     as (v & sym & bindings & His & Heval & Hlocalise & _ & Hvars & Hconts
         & Hbase & _ & _ & Hframes).
@@ -798,13 +803,13 @@ Lemma static_step_live (rs : region_state) (bindings : list static_binding)
   live_result (static_step rs).
 Proof.
   intros Hlive Hbelow He Husable Hlocal.
-  destruct (static_step rs) as [rs' | k vs rs' | fault] eqn:Hstep;
+  destruct (static_step rs) as [rs' | k vs rs' | fault | ] eqn:Hstep;
     unfold live_result.
   2: { revert Hstep. unfold static_step.
-       destruct (rs_state rs) as [e vars conts statics hp]. simpl in He.
+       destruct (rs_state rs) as [e vars conts statics hp rd]. simpl in He.
        subst e. rewrite step_let_static.
        destruct (eval_static_bindings vars bindings statics); discriminate. }
-  2: exact I.
+  2, 3: exact I.
   destruct (static_step_step rs rs' bindings body He Hstep)
     as (statics' & Heval & ->).
   destruct (eval_static_bindings_parts _ _ _ _ Heval)
@@ -818,7 +823,7 @@ Proof.
       heap_symbol
         (Region_state
            (State body (state_vars (rs_state rs)) (state_conts (rs_state rs))
-              statics' (state_heap (rs_state rs)))
+              statics' (state_heap (rs_state rs)) (state_reads (rs_state rs)))
            (rs_frames rs) (rs_base rs) (rs_next rs) (rs_counts rs))
         s
       = true)
@@ -868,26 +873,32 @@ Proof.
   pose proof (symbols_fresh_expr rs Hfresh) as Hbelow.
   apply region_step_cases.
   - intros fault. exact I.
+  - intros x kind d body _ _ _. exact I.
   - intros x kind d mark_kind body _.
     exact (begin_region_live _ _ _ _ _ Hlive1).
   - intros x kind d ended_by region body _.
     exact (end_region_live _ _ _ _ _ _ Hlive1).
-  - intros x kind d body y region body' _ _ Husable.
+  - intros x kind d body y region body' _ _ _ Husable.
     exact (local_allocation_live _ _ _ _ _ _ _ Hlive1 Husable).
-  - intros x kind d body He Husable Hheap.
+  - intros x kind d body He Hneeds Husable Hheap.
     apply (plain_step_live _ Hlive1).
-    intros x' kind' d' body' v He' Heval.
-    change (state_expr (rs_state (count_uses rs)))
-      with (state_expr (rs_state rs)) in He'.
-    rewrite He in He'. injection He' as <- <- <- <-.
-    exact (eval_named_kept (count_uses rs) d v Hlive1 Husable Hheap Heval).
+    + intros x' kind' d' body' He'.
+      change (state_expr (rs_state (count_uses rs)))
+        with (state_expr (rs_state rs)) in He'.
+      rewrite He in He'. injection He' as <- <- <- <-. exact Hneeds.
+    + intros x' kind' d' body' v He' Heval.
+      change (state_expr (rs_state (count_uses rs)))
+        with (state_expr (rs_state rs)) in He'.
+      rewrite He in He'. injection He' as <- <- <- <-.
+      exact (eval_named_kept (count_uses rs) d v Hlive1 Husable Hheap Heval).
   - intros bindings body He Husable Hlocal.
     exact
       (static_step_live (count_uses rs) bindings body Hlive1 Hbelow He Husable
          Hlocal).
   - intros ac He. exact (region_apply_cont_live _ ac Hlive1 He).
   - intros Hnot_let _. apply (plain_step_live _ Hlive1).
-    intros x kind d body v He. contradiction (Hnot_let x kind d body He).
+    + intros x kind d body He. contradiction (Hnot_let x kind d body He).
+    + intros x kind d body v He. contradiction (Hnot_let x kind d body He).
 Qed.
 
 (* ======================================================================== *)
@@ -929,7 +940,7 @@ Theorem region_run_keeps_invariant : region_run_keeps_invariant_statement.
 Proof.
   intros fuel. induction fuel as [ | fuel IH]; intros rs rs' Hinv; simpl.
   - intros [= <-]. exact Hinv.
-  - destruct (region_step rs) as [rs1 | k vs rs1 | fault] eqn:Hstep;
+  - destruct (region_step rs) as [rs1 | k vs rs1 | fault | ] eqn:Hstep;
       try discriminate.
     apply IH. exact (region_step_keeps_invariant rs rs1 Hinv Hstep).
 Qed.
@@ -1014,8 +1025,8 @@ Theorem exit_values_kept : exit_values_kept_statement.
 Proof.
   intros fuel. induction fuel as [ | fuel IH]; intros rs rs' k vs Hinv; simpl;
     [ discriminate | ].
-  destruct (region_step rs) as [rs1 | k1 vs1 rs1 | fault] eqn:Hstep;
-    [ | | discriminate ].
+  destruct (region_step rs) as [rs1 | k1 vs1 rs1 | fault | ] eqn:Hstep;
+    [ | | discriminate | discriminate ].
   - apply IH. exact (region_step_keeps_invariant rs rs1 Hinv Hstep).
   - intros [= <- <- <-]. unfold region_invariant in Hinv |- *.
     apply andb_true_iff in Hinv as [Hfresh Hlive].
@@ -1032,7 +1043,7 @@ Theorem gone_stays_gone_run : gone_stays_gone_run_statement.
 Proof.
   intros fuel. induction fuel as [ | fuel IH]; intros rs rs' s Hinv; simpl.
   - intros [= <-] Hgone. exact Hgone.
-  - destruct (region_step rs) as [rs1 | k vs rs1 | fault] eqn:Hstep;
+  - destruct (region_step rs) as [rs1 | k vs rs1 | fault | ] eqn:Hstep;
       try discriminate.
     intros Hrun Hgone.
     apply (IH rs1 rs' s (region_step_keeps_invariant rs rs1 Hinv Hstep) Hrun).
@@ -1058,3 +1069,11 @@ Proof. exact FlambdaRegionsNoPoisonProofs.region_run_keeps_no_poison. Qed.
 
 Theorem usable_not_region : usable_not_region_statement.
 Proof. exact FlambdaRegionsNoPoisonProofs.usable_not_region. Qed.
+
+(* The statement on the terms with no primitive of the heap (decision
+   D53), as FlambdaRegionsNoHeapPrimitiveProofs.v proves it. *)
+Theorem no_heap_primitive_no_let_not_run :
+  no_heap_primitive_no_let_not_run_statement.
+Proof.
+  exact FlambdaRegionsNoHeapPrimitiveProofs.no_heap_primitive_no_let_not_run.
+Qed.

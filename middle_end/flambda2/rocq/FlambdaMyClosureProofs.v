@@ -34,7 +34,10 @@
    every symbol bound to a closure of the code is the symbol
    ([allocated_ok]), and what is still to be run passes the check. The
    primitives keep the first, as they make their values out of their
-   arguments (FlambdaPrimitiveSpec.eval_prim_preserves_statement). *)
+   arguments and of the cells they read
+   (FlambdaSemanticsProofs.exec_named_values_all): so the invariant
+   says the first of the values in the cells of the heap too
+   ([heap_free]). *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
@@ -136,6 +139,13 @@ Definition state_ok (st : state) : Prop :=
   ∧ env_free (state_vars st)
   ∧ conts_ok (state_conts st)
   ∧ statics_ok (state_statics st).
+
+(* No value in a cell of the heap holds such a closure. A primitive that
+   reads a cell gives a value out of it, so this is part of the
+   invariant; it is kept apart from [state_ok] since only a [Let]
+   changes the heap. *)
+Definition heap_free (hp : heap) : Prop :=
+  heap_values_all (fun v => value_free v = true) hp.
 
 Lemma env_free_cons (x : variable) (v : value) (vars : env) :
   value_free v = true -> env_free vars -> env_free ((x, v) :: vars).
@@ -388,6 +398,35 @@ Proof.
              (eval_simple_free vars closure w Hvars Hclosure)).
 Qed.
 
+(* What a named expression that makes no closure of the code runs to
+   holds no such closure, and the heap it leaves holds none. *)
+Lemma exec_named_free (statics : static_env) (hp hp' : heap)
+    (rd rd' : read_record) (vars : env) (d : named) (v : value) :
+  statics_ok statics ->
+  env_free vars ->
+  heap_free hp ->
+  named_makes_no_closure_of id d = true ->
+  exec_named statics hp rd vars d = Some (v, hp', rd') ->
+  value_free v = true ∧ heap_free hp'.
+Proof.
+  intros Hstatics Hvars Hheap Hd.
+  apply (exec_named_values_all (fun w => value_free w = true));
+    [ | | | | | | exact Hheap | | ].
+  - intros c. split; reflexivity.
+  - intros tag fields. simpl. apply forallb_forall.
+  - intros elements. simpl. apply forallb_forall.
+  - intros sym tag fields _ Hsym.
+    pose proof (proj2 Hstatics sym _ Hsym) as Hok. simpl in Hok.
+    apply forallb_forall. exact Hok.
+  - intros sym elements _ Hsym.
+    pose proof (proj2 Hstatics sym _ Hsym) as Hok. simpl in Hok.
+    apply forallb_forall. exact Hok.
+  - intros l. reflexivity.
+  - intros p args vs _ Hvs. apply forallb_forall.
+    exact (eval_simples_free vars args Hvars vs Hvs).
+  - intros _ w. exact (eval_named_free statics vars d w Hstatics Hvars Hd).
+Qed.
+
 Lemma eval_static_const_ok (vars : env) (sym : symbol) (const : static_const)
     (allocated : statically_allocated_value) :
   env_free vars ->
@@ -522,6 +561,7 @@ Qed.
 Lemma call_code_ok (closure : value) (called : code_id) (c : code)
     (vs : list value) (args_arity return_arity : arity)
     (return_to exn_to : cont_value) (statics : static_env) (hp : heap)
+      (rd : read_record)
       (st : state) :
   statics_ok statics ->
   lookup called (static_code statics) = Some c ->
@@ -529,7 +569,7 @@ Lemma call_code_ok (closure : value) (called : code_id) (c : code)
   forallb value_free vs = true ->
   cont_ok return_to ->
   cont_ok exn_to ->
-  call_code closure c vs args_arity return_arity return_to exn_to statics hp
+  call_code closure c vs args_arity return_arity return_to exn_to statics hp rd
   = Step st ->
   state_ok st.
 Proof.
@@ -550,6 +590,7 @@ Qed.
 Lemma run_call_ok (return_partial : value -> step_result) (kind : call_kind)
     (shape : option call_shape) (return_arity : arity)
     (return_to exn_to : cont_value) (statics : static_env) (hp : heap)
+      (rd : read_record)
       (st : state) :
   statics_ok statics ->
   shape_calls statics kind shape ->
@@ -559,7 +600,7 @@ Lemma run_call_ok (return_partial : value -> step_result) (kind : call_kind)
   (∀ partial : value,
     value_free partial = true -> return_partial partial = Step st ->
     state_ok st) ->
-  run_call return_partial shape return_arity return_to exn_to statics hp
+  run_call return_partial shape return_arity return_to exn_to statics hp rd
   = Step st ->
   state_ok st.
 Proof.
@@ -570,12 +611,12 @@ Proof.
     simpl in Hcalls, Hvalues |- *.
   - destruct Hcalls as (called & slots & _ & Hcode & _).
     destruct Hvalues as [Hclosure Hvs]. apply forallb_Forall in Hvs.
-    exact (call_code_ok closure called c vs _ _ _ _ statics _ st Hstatics
+    exact (call_code_ok closure called c vs _ _ _ _ statics _ rd_ st Hstatics
              Hcode Hclosure Hvs Hreturn Hexn).
   - destruct Hcalls as (called & slots & _ & Hcode & _).
     destruct Hvalues as (Hclosure & Hvs & Hremaining).
     apply forallb_Forall in Hvs, Hremaining.
-    apply (call_code_ok closure called c vs _ _ _ _ statics _ st Hstatics
+    apply (call_code_ok closure called c vs _ _ _ _ statics _ rd_ st Hstatics
              Hcode Hclosure Hvs);
       [ apply Over_application_ok; assumption | exact Hexn ].
   - exact (Hpartial partial Hvalues).
@@ -585,10 +626,11 @@ Qed.
 (* Applying a continuation keeps the invariant. *)
 Lemma apply_cont_value_ok (c : cont_value) :
   cont_ok c ->
-  ∀ (vs : list value) (statics : static_env) (hp : heap) (st : state),
+  ∀ (vs : list value) (statics : static_env) (hp : heap) (rd : read_record)
+    (st : state),
     forallb value_free vs = true ->
     statics_ok statics ->
-    apply_cont_value c vs statics hp = Step st ->
+    apply_cont_value c vs statics hp rd = Step st ->
     state_ok st.
 Proof.
   induction 1
@@ -597,7 +639,7 @@ Proof.
        | c extra Hc IH Hextra
        | remaining remaining_arity return_arity return_to exn_to Hremaining
            Hreturn IHreturn Hexn _ ];
-    intros vs statics hp st Hvs Hstatics.
+    intros vs statics hp rd st Hvs Hstatics.
   - discriminate.
   - simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
@@ -613,7 +655,7 @@ Proof.
   - rewrite apply_cont_value_over_application.
     destruct vs as [ | v [ | v' vs]]; [ discriminate | | discriminate ].
     simpl in Hvs. rewrite andb_true_r in Hvs. unfold call_function.
-    apply (run_call_ok _ Indirect _ _ _ _ statics _ st Hstatics
+    apply (run_call_ok _ Indirect _ _ _ _ statics _ rd_ st Hstatics
              (shape_of_call_calls _ _ _ _ _ _));
       [ | exact Hreturn | exact Hexn | ].
     + apply (shape_of_call_values_all _ value_free_partial);
@@ -625,27 +667,38 @@ Qed.
 
 (* A step keeps the invariant. *)
 Lemma ok_step_components (e : expr) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap) (st : state) :
+    (statics : static_env) (hp : heap) (rd : read_record) (st : state) :
   only_closure_of id s e = true ->
   env_free vars ->
   conts_ok conts ->
   statics_ok statics ->
-  step (State e vars conts statics hp) = Step st ->
-  state_ok st.
+  heap_free hp ->
+  step (State e vars conts statics hp rd) = Step st ->
+  state_ok st ∧ heap_free (state_heap st).
 Proof.
-  intros He Hvars Hconts Hstatics.
+  intros He Hvars Hconts Hstatics Hheap Hstep. split.
+  2: { destruct (step_heap _ _ Hstep)
+         as [-> | (x & xkind & d & body & v & Hexpr & Hexec)];
+         [ exact Hheap | ].
+       simpl in Hexpr, Hexec. subst e. simpl in He.
+       apply andb_true_iff in He as [Hd _].
+       exact (proj2 (exec_named_free statics hp _ rd _ vars d v Hstatics
+                       Hvars Hheap Hd Hexec)). }
+  revert Hstep.
   destruct e
     as [ x xkind d body | bindings body | k h body | handlers body | ap | ac
        | scrutinee arms | ];
     simpl in He.
   - (* Let *)
-    apply andb_true_iff in He as [Hd Hbody]. rewrite step_let.
-    destruct (eval_named statics vars d) as [v | ] eqn:Hv; [ | discriminate ].
+    apply andb_true_iff in He as [Hd Hbody]. rewrite step_let_exec.
+    destruct (exec_named statics hp rd vars d) as [[[v hp'] rd'] | ] eqn:Hv;
+      [ | discriminate ].
     destruct (kind_eqb (kind_of_value v) xkind); [ | discriminate ].
     intros [= <-].
     split; [ exact Hbody | ]. split; [ | split; assumption ].
     apply env_free_cons; [ | exact Hvars ].
-    exact (eval_named_free statics vars d v Hstatics Hvars Hd Hv).
+    exact (proj1 (exec_named_free statics hp hp' rd rd' vars d v Hstatics
+                    Hvars Hheap Hd Hv)).
   - (* Let_static *)
     apply andb_true_iff in He as [Hbindings Hbody]. rewrite step_let_static.
     destruct (eval_static_bindings vars bindings statics) as [extended | ]
@@ -688,7 +741,7 @@ Proof.
         (with_extra_args (resolve (ap_exn_continuation ap) conts) extra)).
     { apply with_extra_args_ok; [ exact (resolve_ok _ conts Hconts) | ].
       exact (eval_simples_free vars _ Hvars extra Hextra). }
-    apply (run_call_ok _ (ap_call_kind ap) _ _ _ _ statics _ st Hstatics
+    apply (run_call_ok _ (ap_call_kind ap) _ _ _ _ statics _ _ st Hstatics
              (shape_of_call_calls _ _ _ _ _ _));
       [ | exact Hreturn | exact Hexn | ].
     + apply (shape_of_call_values_all _ value_free_partial);
@@ -719,24 +772,33 @@ Proof.
 Qed.
 
 Lemma ok_step (st st' : state) :
-  state_ok st -> step st = Step st' -> state_ok st'.
+  state_ok st ->
+  heap_free (state_heap st) ->
+  step st = Step st' ->
+  state_ok st' ∧ heap_free (state_heap st').
 Proof.
-  intros (He & Hvars & Hconts & Hstatics). rewrite (state_eta st).
-  exact (ok_step_components _ _ _ _ _ st' He Hvars Hconts Hstatics).
+  intros (He & Hvars & Hconts & Hstatics) Hheap. rewrite (state_eta st).
+  exact (ok_step_components _ _ _ _ _ rd_ st' He Hvars Hconts Hstatics
+           Hheap).
 Qed.
 
 Lemma ok_run (n : nat) :
-  ∀ st st' : state, state_ok st -> run n st = Step st' -> state_ok st'.
+  ∀ st st' : state,
+    state_ok st ->
+    heap_free (state_heap st) ->
+    run n st = Step st' ->
+    state_ok st'.
 Proof.
-  induction n as [ | n IH]; intros st st' Hok; simpl;
+  induction n as [ | n IH]; intros st st' Hok Hheap; simpl;
     [ intros [= <-]; exact Hok | ].
   destruct (step st) as [t | k vs | ] eqn:Hstep; try discriminate.
-  exact (IH t st' (ok_step st t Hok Hstep)).
+  destruct (ok_step st t Hok Hheap Hstep) as [Hok' Hheap'].
+  exact (IH t st' Hok' Hheap').
 Qed.
 
 Lemma ok_initial (e : expr) :
   only_closure_of id s e = true ->
-  state_ok (State e [] [] empty_static_env empty_heap).
+  state_ok (State e [] [] empty_static_env empty_heap no_reads).
 Proof.
   intros He. split; [ exact He | ]. split; [ intros x v [=] | ].
   split; [ constructor | ]. split; [ intros id' c [=] | intros sym a [=] ].
@@ -764,7 +826,8 @@ Theorem only_closure_sound : only_closure_sound_statement.
 Proof.
   intros id s e n st ap callee value_slots He Hrun _.
   exact (ok_callee id s st ap callee value_slots
-           (ok_run id s n _ st (ok_initial id s e He) Hrun)).
+           (ok_run id s n _ st (ok_initial id s e He)
+              (heap_values_all_empty _) Hrun)).
 Qed.
 
 (* ======================================================================== *)

@@ -258,20 +258,21 @@ Definition conts_inside (conts conts' : cont_env) : Prop :=
    comparison matches, once the handler of [k] has been entered. *)
 Inductive state_rel : state -> state -> Prop :=
   | Rel_state_plain (e : expr) (vars : env) (conts conts' : cont_env)
-      (statics : static_env) (hp : heap) :
+      (statics : static_env) (hp : heap) (rd : read_record) :
     conts_plain conts conts' ->
-    state_rel (State e vars conts statics hp) (State e vars conts' statics hp)
+    state_rel (State e vars conts statics hp rd)
+      (State e vars conts' statics hp rd)
   | Rel_state_inside (e : expr) (vars : env) (conts conts' : cont_env)
-      (statics : static_env) (hp : heap) :
+      (statics : static_env) (hp : heap) (rd : read_record) :
     only_applied_or_returned_to k e = true ->
     conts_inside conts conts' ->
-    state_rel (State e vars conts statics hp)
-      (State (wrap_uses k i the_wrapper e) vars conts' statics hp)
+    state_rel (State e vars conts statics hp rd)
+      (State (wrap_uses k i the_wrapper e) vars conts' statics hp rd)
   | Rel_state_matched (s s' : state) : state_matches s s' -> state_rel s s'.
 
 Lemma state_rel_refl (s : state) : state_rel s s.
 Proof.
-  destruct s as [e vars conts statics hp].
+  destruct s as [e vars conts statics hp rd].
   apply Rel_state_plain. intros k1. apply Rel_same.
 Qed.
 
@@ -282,7 +283,7 @@ Qed.
 Definition lagged (r r' : step_result) : Prop :=
   match r with
   | Undefined => True
-  | Exit k1 vs hp => r' = Exit k1 vs hp
+  | Exit k1 vs hp rd => r' = Exit k1 vs hp rd
   | Step t =>
     ∃ u : state,
       r' = Step u
@@ -295,19 +296,19 @@ Proof. intros Hrel. exists u. split; [ reflexivity | left; exact Hrel ]. Qed.
 Lemma lagged_of_related (r r' : step_result) :
   result_related state_rel r r' -> lagged r r'.
 Proof.
-  destruct r as [t | k1 vs hp | ], r' as [t' | k1' vs' hp' | ]; simpl;
+  destruct r as [t | k1 vs hp rd | ], r' as [t' | k1' vs' hp' rd' | ]; simpl;
     try contradiction; try (intros _; exact I).
   - apply lagged_step.
-  - intros (<- & <- & <-). reflexivity.
+  - intros (<- & <- & <- & <-). reflexivity.
 Qed.
 
 Lemma lagged_of_matched (r r' : step_result) :
   result_related state_matches r r' -> lagged r r'.
 Proof.
-  destruct r as [t | k1 vs hp | ], r' as [t' | k1' vs' hp' | ]; simpl;
+  destruct r as [t | k1 vs hp rd | ], r' as [t' | k1' vs' hp' rd' | ]; simpl;
     try contradiction; try (intros _; exact I).
   - intros Hmatch. apply lagged_step, Rel_state_matched, Hmatch.
-  - intros (<- & <- & <-). reflexivity.
+  - intros (<- & <- & <- & <-). reflexivity.
 Qed.
 
 Lemma with_extra_args_rel (c c' : cont_value) (extra : list value) :
@@ -375,16 +376,17 @@ Qed.
 Lemma call_code_rel (closure : value) (c : code) (vs : list value)
     (args_arity return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   cont_rel return_to return_to' ->
   cont_rel exn_to exn_to' ->
   result_related state_rel
-    (call_code closure c vs args_arity return_arity return_to exn_to statics hp)
+    (call_code closure c vs args_arity return_arity return_to exn_to statics hp
+       rd)
     (call_code closure c vs args_arity return_arity return_to' exn_to'
-       statics hp).
+       statics hp rd).
 Proof.
   intros Hreturn Hraise.
-  destruct (call_code_cases closure c vs args_arity return_arity statics hp)
+  destruct (call_code_cases closure c vs args_arity return_arity statics hp rd)
     as [Hundefined | (callee_vars & Hcall)].
   - rewrite !Hundefined. exact I.
   - rewrite !Hcall. simpl.
@@ -401,17 +403,19 @@ Qed.
 
 Lemma run_call_rel (shape : option call_shape) (return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   cont_rel return_to return_to' ->
   cont_rel exn_to exn_to' ->
   (∀ partial : value,
-    lagged (apply_cont_value return_to [partial] statics hp)
-      (apply_cont_value return_to' [partial] statics hp)) ->
+    lagged (apply_cont_value return_to [partial] statics hp rd)
+      (apply_cont_value return_to' [partial] statics hp rd)) ->
   lagged
-    (run_call (fun partial => apply_cont_value return_to [partial] statics hp)
-       shape return_arity return_to exn_to statics hp)
-    (run_call (fun partial => apply_cont_value return_to' [partial] statics hp)
-       shape return_arity return_to' exn_to' statics hp).
+    (run_call
+       (fun partial => apply_cont_value return_to [partial] statics hp rd)
+       shape return_arity return_to exn_to statics hp rd)
+    (run_call
+       (fun partial => apply_cont_value return_to' [partial] statics hp rd)
+       shape return_arity return_to' exn_to' statics hp rd).
 Proof.
   intros Hreturn Hraise Hpartial.
   destruct shape
@@ -429,14 +433,14 @@ Qed.
    one: two states that the comparison matches, as the handler does
    not use it. *)
 Lemma handler_entered (vs : list value) (bound0 : env)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata) = true ->
   bind_params params vs vars0 = Some bound0 ->
   ∃ bound1 : env,
-    apply_cont_value the_closure' (drop_nth i vs) statics hp
-    = Step (State handler bound1 conts0 statics hp)
-    ∧ state_matches (State handler bound0 conts0 statics hp)
-        (State handler bound1 conts0 statics hp).
+    apply_cont_value the_closure' (drop_nth i vs) statics hp rd
+    = Step (State handler bound1 conts0 statics hp rd)
+    ∧ state_matches (State handler bound0 conts0 statics hp rd)
+        (State handler bound1 conts0 statics hp rd).
 Proof.
   intros Hkinds Hbound0. unfold the_closure'. cbn [apply_cont_value].
   apply kinds_eqb_eq in Hkinds.
@@ -468,10 +472,10 @@ Qed.
    the same values: the wrapper takes one step more, to apply the
    second closure of [k]. *)
 Lemma apply_wrapper (dv : env) (dc : cont_env) (vs : list value)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   resolve k dc = the_closure' ->
-  lagged (apply_cont_value the_closure vs statics hp)
-    (apply_cont_value (Closure the_wrapper dv dc []) vs statics hp).
+  lagged (apply_cont_value the_closure vs statics hp rd)
+    (apply_cont_value (Closure the_wrapper dv dc []) vs statics hp rd).
 Proof.
   intros Hk. unfold the_closure, the_wrapper, wrapper.
   cbn [apply_cont_value].
@@ -488,19 +492,19 @@ Proof.
     (eval_simples_drop_nth i (map Var params) boundw vs
        (eval_params_bound params vs dv boundw Hdistinct Hboundw)).
   unfold apply_continuation. rewrite Hk.
-  destruct (handler_entered vs bound0 statics hp Hkinds Hbound0)
+  destruct (handler_entered vs bound0 statics hp rd Hkinds Hbound0)
     as (bound1 & Hstep & Hmatch).
-  exists (State handler bound1 conts0 statics hp).
+  exists (State handler bound1 conts0 statics hp rd).
   split; [ exact Hstep | apply Rel_state_matched, Hmatch ].
 Qed.
 
 (* Related continuations, applied to the same values. *)
 Lemma apply_cont_value_rel (c c' : cont_value) (statics : static_env)
-    (hp : heap) :
+    (hp : heap) (rd : read_record) :
   cont_rel c c' ->
   ∀ vs : list value,
-    lagged (apply_cont_value c vs statics hp)
-      (apply_cont_value c' vs statics hp).
+    lagged (apply_cont_value c vs statics hp rd)
+      (apply_cont_value c' vs statics hp rd).
 Proof.
   intros Hc.
   induction Hc
@@ -536,14 +540,14 @@ Qed.
 Lemma call_function_rel (callee : value) (call_kind : call_kind)
     (vs : list value) (args_arity return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   cont_rel return_to return_to' ->
   cont_rel exn_to exn_to' ->
   lagged
     (call_function callee call_kind vs args_arity return_arity return_to
-       exn_to statics hp)
+       exn_to statics hp rd)
     (call_function callee call_kind vs args_arity return_arity return_to'
-       exn_to' statics hp).
+       exn_to' statics hp rd).
 Proof.
   intros Hreturn Hraise. unfold call_function.
   apply run_call_rel; [ exact Hreturn | exact Hraise | ].
@@ -556,11 +560,11 @@ Lemma call_to_closure_no_exit (callee : value) (call_kind : call_kind)
     (vs : list value) (args_arity return_arity : arity)
     (hh : continuation_handler) (dv : env) (dc : cont_env)
     (recursive : list (continuation * continuation_handler))
-    (exn_to : cont_value) (statics : static_env) (hp : heap)
-    (k1 : continuation) (vs1 : list value) (hp1 : heap) :
+    (exn_to : cont_value) (statics : static_env) (hp : heap) (rd : read_record)
+    (k1 : continuation) (vs1 : list value) (hp1 : heap) (rd1 : read_record) :
   call_function callee call_kind vs args_arity return_arity
-    (Closure hh dv dc recursive) exn_to statics hp
-  <> Exit k1 vs1 hp1.
+    (Closure hh dv dc recursive) exn_to statics hp rd
+  <> Exit k1 vs1 hp1 rd1.
 Proof.
   unfold call_function, run_call.
   destruct
@@ -568,12 +572,12 @@ Proof.
     as [[closure c vs' args_arity'
         | closure c vs' remaining args_arity' remaining_arity | partial] | ].
   - destruct
-      (call_code_cases closure c vs' args_arity' return_arity statics hp)
+      (call_code_cases closure c vs' args_arity' return_arity statics hp rd)
       as [Hundefined | (callee_vars & Hcall)];
       [ rewrite Hundefined | rewrite Hcall ]; discriminate.
   - destruct
       (call_code_cases closure c vs' args_arity' (code_result_arity c)
-         statics hp)
+         statics hp rd)
       as [Hundefined | (callee_vars & Hcall)];
       [ rewrite Hundefined | rewrite Hcall ]; discriminate.
   - destruct hh as [ps m he]. cbn [apply_cont_value].
@@ -590,7 +594,7 @@ Definition answers : step_result -> state -> Prop :=
 Lemma lagged_answers (r : step_result) (s' : state) :
   lagged r (step s') -> answers r s'.
 Proof.
-  unfold answers, answered. destruct r as [t | k1 vs hp | ]; simpl.
+  unfold answers, answered. destruct r as [t | k1 vs hp rd | ]; simpl.
   - intros (u & Hu & [Hrel | (t' & Ht' & Hrel)]).
     + exists 0, u. split; [ simpl; rewrite Hu; reflexivity | exact Hrel ].
     + exists 1, t'. split; [ simpl; rewrite Hu, Ht'; reflexivity | exact Hrel ].
@@ -601,18 +605,19 @@ Qed.
 (* The same where the second state takes a step first. *)
 Lemma lagged_answers_after (r : step_result) (s' s1' : state) :
   step s' = Step s1' ->
-  (∀ (k1 : continuation) (vs : list value) (hp : heap), r <> Exit k1 vs hp) ->
+  (∀ (k1 : continuation) (vs : list value) (hp : heap) (rd : read_record), r <>
+     Exit k1 vs hp rd) ->
   lagged r (step s1') ->
   answers r s'.
 Proof.
   intros Hfirst Hno_exit. unfold answers, answered.
-  destruct r as [t | k1 vs hp | ]; simpl.
+  destruct r as [t | k1 vs hp rd | ]; simpl.
   - intros (u & Hu & [Hrel | (t' & Ht' & Hrel)]).
     + exists 1, u.
       split; [ simpl; rewrite Hfirst, Hu; reflexivity | exact Hrel ].
     + exists 2, t'.
       split; [ simpl; rewrite Hfirst, Hu, Ht'; reflexivity | exact Hrel ].
-  - intros _. exfalso. exact (Hno_exit k1 vs hp eq_refl).
+  - intros _. exfalso. exact (Hno_exit k1 vs hp rd_ eq_refl).
   - intros _. exact I.
 Qed.
 
@@ -620,15 +625,15 @@ Qed.
 Lemma wrap_step (s s' : state) : state_rel s s' -> answers (step s) s'.
 Proof.
   intros
-    [e vars conts conts' statics hp Hconts
-    | e vars conts conts' statics hp Hok (Hk & Hk' & Hconts)
+    [e vars conts conts' statics hp rd Hconts
+    | e vars conts conts' statics hp rd Hok (Hk & Hk' & Hconts)
     | s0 s0' Hmatch].
   - (* outside the scope of [k] *)
     apply lagged_answers.
     destruct e as [y kind1 d body | bindings body | k1 hh body
                   | handlers body | ap | ac | scrutinee arms | ].
-    + rewrite !step_let.
-      destruct (eval_named statics vars d) as [v | ]; [ | exact I ].
+    + rewrite !step_let_exec.
+      destruct (exec_named _ _ rd_ _ d) as [[[v hp'] rd'] | ]; [ | exact I ].
       destruct (kind_eqb (kind_of_value v) kind1); [ | exact I ].
       apply lagged_step, Rel_state_plain, Hconts.
     + rewrite !step_let_static.
@@ -664,8 +669,8 @@ Proof.
     destruct e as [y kind1 d body | bindings body | k1 hh body
                   | handlers body | ap | ac | scrutinee arms | ];
       cbn [wrap_uses only_applied_or_returned_to] in Hok |- *.
-    + apply lagged_answers. rewrite !step_let.
-      destruct (eval_named statics vars d) as [v | ]; [ | exact I ].
+    + apply lagged_answers. rewrite !step_let_exec.
+      destruct (exec_named _ _ rd_ _ d) as [[[v hp'] rd'] | ]; [ | exact I ].
       destruct (kind_eqb (kind_of_value v) kind1); [ | exact I ].
       apply lagged_step, Rel_state_inside; assumption.
     + apply lagged_answers. rewrite !step_let_static.
@@ -699,7 +704,7 @@ Proof.
           (lagged_answers_after _ _
              (State (Apply ap) vars
                 ((k, Closure the_wrapper vars conts' []) :: conts') statics
-                hp));
+                hp rd));
           [ apply step_let_cont_non_recursive | | ].
         -- intros k1 vs1 hp1. rewrite step_apply.
            destruct (eval_simple vars (ap_callee ap)) as [callee | ];
@@ -744,7 +749,7 @@ Proof.
         destruct (bind_params params vs vars0) as [bound0 | ] eqn:Hbound0;
           [ | exact I ].
         cbn [rec_closures map app].
-        destruct (handler_entered vs bound0 statics hp Hkinds Hbound0)
+        destruct (handler_entered vs bound0 statics hp rd Hkinds Hbound0)
           as (bound1 & Hstep & Hmatch).
         rewrite Hstep. apply lagged_step, Rel_state_matched, Hmatch.
       * rewrite !step_apply_cont.
@@ -797,12 +802,12 @@ Proof.
   apply andb_true_iff in Hcond as [Hcond Hunused].
   apply andb_true_iff in Hcond as [_ Hdistinct].
   apply negb_true_iff in Hunused.
-  intros vars conts statics hp.
+  intros vars conts statics hp rd.
   apply
     (refines_step _ _ _ _
        (step_let_cont_non_recursive k (Handler params metadata handler) body
-          vars conts statics hp)
-       (step_let_cont_non_recursive k _ _ vars conts statics hp)).
+          vars conts statics hp rd)
+       (step_let_cont_non_recursive k _ _ vars conts statics hp rd)).
   apply
     (site_refines k i p params metadata handler vars conts Hparam Hdistinct
        Hunused).

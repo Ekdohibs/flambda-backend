@@ -172,18 +172,20 @@ Qed.
 Theorem exits_world_keeps_locations_bound :
   exits_world_keeps_locations_bound_statement.
 Proof.
-  intros s [k vs statics hp] Hbound (n & last & Hrun & Hstep & Hstatics).
+  intros s [k vs statics hp rd] Hbound (n & last & Hrun & Hstep & Hstatics).
   simpl in *.
   pose proof (run_keeps_locations_bound n s Hbound) as Hkeeps.
   rewrite Hrun in Hkeeps. simpl in Hkeeps.
   destruct Hkeeps as [Hlast Hkept].
   pose proof (step_keeps_locations_bound last Hlast) as Hexit.
   rewrite Hstep in Hexit. simpl in Hexit.
-  destruct Hexit as (Hhp & Hvs & Hkept').
+  destruct Hexit as (Hhp & Hvs & Hrd & Hkept').
   split.
   - intros l Hl. simpl in Hl.
     apply in_app_or in Hl as [Hl | Hl]; [ exact (Hvs l Hl) | ].
-    apply in_app_or in Hl as [Hl | Hl]; [ | exact (Hhp l Hl) ].
+    apply in_app_or in Hl as [Hl | Hl];
+      [ | apply in_app_or in Hl as [Hl | Hl];
+          [ exact (Hhp l Hl) | exact (Hrd l Hl) ] ].
     apply Hkept', Hlast, locations_of_statics_in_state.
     rewrite Hstatics. exact Hl.
   - intros l Hl. exact (Hkept' l (Hkept l Hl)).

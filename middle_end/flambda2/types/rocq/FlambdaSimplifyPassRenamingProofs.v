@@ -297,12 +297,19 @@ Proof. rewrite !map_map. split; reflexivity. Qed.
 
 Theorem simplify_named_equivariant : simplify_named_equivariant_statement.
 Proof.
-  intros r tenv d.
+  intros r tenv d. unfold simplify_named.
+  (* A renaming leaves the primitive: what was of the heap is. *)
+  assert (Hheap :
+    FlambdaHeapSpec.named_changes_heap (rename_named r d)
+    = FlambdaHeapSpec.named_changes_heap d).
+  { destruct d; reflexivity. }
+  rewrite Hheap.
+  destruct (FlambdaHeapSpec.named_changes_heap d); [ reflexivity | ].
   destruct d
     as [s | p args | code value_slots | slot function_decls value_slots
         | slot closure | project_from slot closure
         | move_from move_to closure];
-    cbn [rename_named simplify_named]; try reflexivity;
+    cbn [rename_named]; cbn beta iota zeta; try reflexivity;
     try (destruct (value_slots_renamed r value_slots) as [Hslots Hsimples];
          rewrite Hslots, Hsimples, simplify_simples_equivariant;
          destruct (simplify_simples tenv (map snd value_slots))

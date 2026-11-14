@@ -115,11 +115,11 @@ From OxCamlFlambda2 Require FlambdaUnboxTogetherProofs.
 Import ListNotations.
 
 Lemma expr_equivalent_refl (e : expr) : expr_equivalent e e.
-Proof. intros vars conts statics hp. apply equivalent_refl. Qed.
+Proof. intros vars conts statics hp rd. apply equivalent_refl. Qed.
 
 Lemma expr_equivalent_sym (e e' : expr) :
   expr_equivalent e e' -> expr_equivalent e' e.
-Proof. intros H vars conts statics hp. apply equivalent_sym, H. Qed.
+Proof. intros H vars conts statics hp rd. apply equivalent_sym, H. Qed.
 
 (* One rewrite that is an equivalence, at the head of the right-hand
    side. *)
@@ -255,15 +255,16 @@ Proof. apply normalise_before_round_avoiding_refines. Qed.
    unboxing and those after it refine under all environments, and the
    unboxing where what it is given holds. *)
 Lemma expr_refines_at (e e' : expr) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   expr_refines e e' ->
-  refines (State e vars conts statics hp) (State e' vars conts statics hp).
+  refines (State e vars conts statics hp rd)
+    (State e' vars conts statics hp rd).
 Proof. intros Hrefines. apply Hrefines. Qed.
 
 Lemma normalise_expr_params_knowing_refines :
   refines_where_known normalise_expr_params_knowing.
 Proof.
-  intros known e vars conts statics hp Honly Hbound.
+  intros known e vars conts statics hp rd Honly Hbound.
   unfold normalise_expr_params_knowing. cbv zeta.
   match goal with
   | |- context [unbox_variants_knowing known ?x] =>
@@ -272,29 +273,29 @@ Proof.
          (unbox_together_knowing known
             (untag_params
                (unbox_loops_knowing known (unbox_variants_knowing known x))))
-         vars conts statics hp));
+         vars conts statics hp rd));
       [ apply (refines_trans _
           (State
              (untag_params
                 (unbox_loops_knowing known (unbox_variants_knowing known x)))
-             vars conts statics hp));
+             vars conts statics hp rd));
           [ apply (refines_trans _
               (State
                  (unbox_loops_knowing known (unbox_variants_knowing known x))
-                 vars conts statics hp));
+                 vars conts statics hp rd));
               [ apply (refines_trans _
                   (State (unbox_variants_knowing known x) vars conts statics
-                     hp));
-                  [ apply (refines_trans _ (State x vars conts statics hp));
+                     hp rd));
+                  [ apply (refines_trans _ (State x vars conts statics hp rd));
                       [ | exact (unbox_variants_knowing_symbols_refines known
-                            x vars conts statics hp Honly Hbound) ]
+                            x vars conts statics hp rd_ Honly Hbound) ]
                   | exact (unbox_loops_knowing_symbols_refines known _ vars
-                      conts statics hp Honly Hbound) ]
+                      conts statics hp rd_ Honly Hbound) ]
               | apply expr_refines_at, untag_params_refines ]
           | exact
               (FlambdaUnboxTogetherProofs
                .unbox_together_knowing_symbols_refines known _ vars conts
-                 statics hp Honly Hbound) ]
+                 statics hp rd_ Honly Hbound) ]
       | ]
   end; apply expr_refines_at;
     repeat (eapply expr_refines_trans; [ | solve [ refinement_step ] ]);
@@ -304,30 +305,30 @@ Qed.
 Lemma normalise_expr_params_refines (e : expr) :
   expr_refines e (normalise_expr_params e).
 Proof.
-  intros vars conts statics hp.
+  intros vars conts statics hp rd.
   exact (normalise_expr_params_knowing_refines no_facts e vars conts statics
-    hp no_facts_only (no_symbols_bound statics)).
+    hp rd_ no_facts_only (no_symbols_bound statics)).
 Qed.
 
 Lemma normalise_code_params_knowing_refines :
   refines_where_known normalise_code_params_knowing.
 Proof.
-  intros known body vars conts statics hp Honly Hbound.
+  intros known body vars conts statics hp rd Honly Hbound.
   unfold normalise_code_params_knowing.
   eapply refines_trans;
     [ exact (rewrite_rec_handlers_in_scope_refines _
         normalise_expr_params_knowing_refines known body vars conts statics
-        hp Honly Hbound)
+        hp rd_ Honly Hbound)
     | exact (normalise_expr_params_knowing_refines known _ vars conts
-        statics hp Honly Hbound) ].
+        statics hp rd_ Honly Hbound) ].
 Qed.
 
 Lemma normalise_code_params_refines (body : expr) :
   expr_refines body (normalise_code_params body).
 Proof.
-  intros vars conts statics hp.
+  intros vars conts statics hp rd.
   exact (normalise_code_params_knowing_refines no_facts body vars conts
-    statics hp no_facts_only (no_symbols_bound statics)).
+    statics hp rd_ no_facts_only (no_symbols_bound statics)).
 Qed.
 
 Lemma normalise_params_round_refines (e : expr) :
@@ -666,7 +667,7 @@ Proof.
   destruct (drop_statics D e) as [e' | ] eqn:Hdrop; [ | apply refines_refl ].
   assert (Hhead : drop_head_statics D e = Some e')
     by (unfold drop_head_statics; rewrite Hchecks; exact Hdrop).
-  apply (refines_trans _ (State e' [] [] empty_static_env empty_heap));
+  apply (refines_trans _ (State e' [] [] empty_static_env empty_heap no_reads));
     [ | exact (drop_head_statics_program_refines D e e' Hhead) ].
   apply expr_refines_program, expr_equivalent_refines, expr_equivalent_sym.
   exact (expr_equivalent_trans _ _ _ (drop_deleted_code_equivalent e')
@@ -705,18 +706,22 @@ Proof.
   apply
     (refines_trans _
        (State (add_head_tables (tables_put L) around) [] [] empty_static_env
-          empty_heap));
+          empty_heap no_reads));
     [ | exact (with_copies_program_refines (code_copied L) _) ].
-  apply (refines_trans _ (State around [] [] empty_static_env empty_heap));
+  apply
+    (refines_trans _ (State around [] [] empty_static_env empty_heap no_reads));
     [ | exact (add_head_tables_program_refines (tables_put L) around) ].
-  apply (refines_trans _ (State at_head [] [] empty_static_env empty_heap)).
+  apply
+    (refines_trans _
+       (State at_head [] [] empty_static_env empty_heap no_reads)).
   - subst at_head.
     destruct (lift_to_head_unit (lifting_unit L) (lifted_to_head L) e)
       as [e' | ] eqn:Hhead;
       [ | apply refines_refl ].
     exact (lift_to_head_unit_program_refines _ _ e e' Hhead).
   - apply
-    (refines_trans _ (State out_of_code [] [] empty_static_env empty_heap)).
+    (refines_trans _
+       (State out_of_code [] [] empty_static_env empty_heap no_reads)).
     + subst out_of_code.
       destruct
         (lift_from_code_unit (lifting_unit L) (lifted_out_of_code L) at_head)
@@ -724,7 +729,8 @@ Proof.
         [ | apply refines_refl ].
       exact (lift_from_code_unit_program_refines _ _ at_head e' Hout).
     + apply
-        (refines_trans _ (State lifted [] [] empty_static_env empty_heap)).
+        (refines_trans _
+           (State lifted [] [] empty_static_env empty_heap no_reads)).
       * subst lifted.
         destruct (lift_unit L out_of_code) as [e' | ] eqn:Hlift;
           [ | apply refines_refl ].
@@ -1018,21 +1024,23 @@ Qed.
 (* The term with its code first, run on its own, behaves as the
    term. *)
 Lemma with_code_first_program_equivalent (e : expr) :
-  equivalent (State e [] [] empty_static_env empty_heap)
-    (State (with_code_first e) [] [] empty_static_env empty_heap).
+  equivalent (State e [] [] empty_static_env empty_heap no_reads)
+    (State (with_code_first e) [] [] empty_static_env empty_heap no_reads).
 Proof.
   unfold with_code_first.
   destruct (hoist_code e) as [e' | ] eqn:Hhoist; [ | apply equivalent_refl ].
   apply (equivalent_trans _ _ _ (hoist_code_program_equivalent e e' Hhoist)).
-  apply (equivalent_trans _ _ _ (drop_deleted_code_equivalent e' [] [] _ _)).
+  apply
+    (equivalent_trans _ _ _ (drop_deleted_code_equivalent e' [] [] _ _ rd_)).
   apply merge_statics_equivalent.
 Qed.
 
 (* The term with its static bindings that need nothing first, run on
    its own, behaves as the term. *)
 Lemma with_statics_first_program_equivalent (Ls : list lifting) (e : expr) :
-  equivalent (State e [] [] empty_static_env empty_heap)
-    (State (with_statics_first Ls e) [] [] empty_static_env empty_heap).
+  equivalent (State e [] [] empty_static_env empty_heap no_reads)
+    (State (with_statics_first Ls e) [] [] empty_static_env empty_heap
+       no_reads).
 Proof.
   unfold with_statics_first.
   destruct Ls as [ | L Ls]; [ apply equivalent_refl | ].
@@ -1041,7 +1049,8 @@ Proof.
   apply (equivalent_trans _ _ _
     (FlambdaHoistStaticsProofs.hoist_statics_program_equivalent _ e e'
        Hhoist)).
-  apply (equivalent_trans _ _ _ (drop_deleted_code_equivalent e' [] [] _ _)).
+  apply
+    (equivalent_trans _ _ _ (drop_deleted_code_equivalent e' [] [] _ _ rd_)).
   apply merge_statics_equivalent.
 Qed.
 
@@ -1167,10 +1176,10 @@ Proof.
         apply expr_refines_program, expr_equivalent_refines.
         exact (ordered_same_equivalent rounds kept _ after Hremoved).
       * assert (Hafter :
-          equivalent (State after [] [] empty_static_env empty_heap)
-            (State a [] [] empty_static_env empty_heap))
+          equivalent (State after [] [] empty_static_env empty_heap no_reads)
+            (State a [] [] empty_static_env empty_heap no_reads))
           by exact (tidied_after_normalised_equivalent rounds kept after []
-                      [] empty_static_env _).
+                      [] empty_static_env _ rd_).
         set (c := without_head_statics unused a).
         assert (Hcleaned : program_refines c after).
         { apply (refines_trans _ _ _
@@ -1187,7 +1196,7 @@ Proof.
             apply (refines_trans _ _ _
               (without_statics_program_refines unused _));
             apply (refines_trans _
-              (State c [] [] empty_static_env empty_heap));
+              (State c [] [] empty_static_env empty_heap no_reads));
               [ | exact Hcleaned ];
             apply expr_refines_program, expr_equivalent_refines;
             apply (expr_equivalent_trans _ _ _
@@ -1218,7 +1227,8 @@ Proof.
              (float_code (with_code_first c))) eqn:Hlifted.
         -- intros _. apply (refines_trans _ _ _ Hlifting).
            apply (refines_trans _
-             (State (with_code_first c) [] [] empty_static_env empty_heap)).
+             (State (with_code_first c) [] [] empty_static_env empty_heap
+                no_reads)).
            { apply expr_refines_program, expr_equivalent_refines.
              apply (expr_equivalent_trans _ _ _ (float_code_equivalent _)).
              apply (expr_equivalent_trans _ _ _
@@ -1227,7 +1237,7 @@ Proof.
              apply (expr_equivalent_trans _ _ _ (expr_eqb_sound _ _ Hlifted)).
              apply expr_equivalent_sym, float_code_equivalent. }
            apply (refines_trans _
-             (State c [] [] empty_static_env empty_heap));
+             (State c [] [] empty_static_env empty_heap no_reads));
              [ | exact Hcleaned ].
            apply equivalent_refines, equivalent_sym.
            apply with_code_first_program_equivalent.
@@ -1243,13 +1253,13 @@ Proof.
                 (with_statics_first_program_equivalent Ls lifted))).
            apply (refines_trans _
              (State (with_statics_first Ls c) [] [] empty_static_env
-                empty_heap)).
+                empty_heap no_reads)).
            { apply expr_refines_program, expr_equivalent_refines.
              apply (expr_equivalent_trans _ _ _
                (order_statics_as_equivalent (with_statics_first Ls c) _)).
              exact (expr_eqb_sound _ _ Hfirst). }
            apply (refines_trans _
-             (State c [] [] empty_static_env empty_heap));
+             (State c [] [] empty_static_env empty_heap no_reads));
              [ | exact Hcleaned ].
            apply equivalent_refines, equivalent_sym.
            apply with_statics_first_program_equivalent.

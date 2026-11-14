@@ -763,24 +763,25 @@ Definition tables_bound (tables : known_tables) (statics : static_env)
 
 Definition merge_tables_under_refines_statement : Prop :=
   ∀ (known : known_continuations) (tables : known_tables) (e : expr)
-    (vars : env) (conts : cont_env) (statics : static_env) (hp : heap),
+    (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+      (rd : read_record),
     tables_bound tables statics ->
-    refines (State e vars conts statics hp)
-      (State (merge_tables_under known tables e) vars conts statics hp).
+    refines (State e vars conts statics hp rd)
+      (State (merge_tables_under known tables e) vars conts statics hp rd).
 
 Definition merge_tables_knowing_refines_statement : Prop :=
   ∀ (tables : known_tables) (e : expr) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap),
+    (statics : static_env) (hp : heap) (rd : read_record),
     tables_bound tables statics ->
-    refines (State e vars conts statics hp)
-      (State (merge_tables_knowing tables e) vars conts statics hp).
+    refines (State e vars conts statics hp rd)
+      (State (merge_tables_knowing tables e) vars conts statics hp rd).
 
 Definition merge_tables_in_code_refines_statement : Prop :=
   ∀ (tables : known_tables) (e : expr) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap),
+    (statics : static_env) (hp : heap) (rd : read_record),
     tables_bound tables statics ->
-    refines (State e vars conts statics hp)
-      (State (merge_tables_in_code tables e) vars conts statics hp).
+    refines (State e vars conts statics hp rd)
+      (State (merge_tables_in_code tables e) vars conts statics hp rd).
 
 Definition merge_tables_refines_statement : Prop :=
   ∀ e : expr, expr_refines e (merge_tables e).

@@ -43,8 +43,8 @@
    (FlambdaLiftSpec.lift_simulates_statement, which takes the last state
    of the second run by hand). This file gives the form once:
    - [exit_world], what a run leaves at an exit: the continuation, the
-     values, the heap, and the static environment of the state that
-     takes the last step;
+     values, the heap and the read record that the exit carries, and
+     the static environment of the state that takes the last step;
    - [exits_world], that a state exits and leaves a world. The witness
      is a run of that state, so the static environment is that of a
      state of this run and of no other term;
@@ -70,13 +70,16 @@ Import ListNotations.
 (* ======================================================================== *)
 
 (* The continuation named by the exit; the values given to it; the
-   heap; and the static environment of the state that takes the last
-   step. The first three are those of [FlambdaSemanticsSpec.Exits]. *)
+   heap; the read record; and the static environment of the state that
+   takes the last step. The first three are those of
+   [FlambdaSemanticsSpec.Exits], which forgets the read record that
+   [FlambdaSemanticsSpec.Exit] carries. *)
 Record exit_world : Type := Exit_world {
   exit_cont : continuation;
   exit_values : list value;
   exit_statics : static_env;
-  exit_heap : heap
+  exit_heap : heap;
+  exit_reads : read_record
 }.
 
 (* The state exits and leaves this world: some run of it reaches a state
@@ -85,7 +88,8 @@ Record exit_world : Type := Exit_world {
 Definition exits_world (s : state) (w : exit_world) : Prop :=
   ∃ (n : nat) (last : state),
     run n s = Step last
-    ∧ step last = Exit (exit_cont w) (exit_values w) (exit_heap w)
+    ∧ step last
+      = Exit (exit_cont w) (exit_values w) (exit_heap w) (exit_reads w)
     ∧ state_statics last = exit_statics w.
 
 (* A state exits with some values and heap exactly when it leaves a
@@ -93,7 +97,8 @@ Definition exits_world (s : state) (w : exit_world) : Prop :=
 Definition exits_world_behaves_statement : Prop :=
   ∀ (s : state) (k : continuation) (vs : list value) (hp : heap),
     behaves s (Exits k vs hp)
-    <-> ∃ statics : static_env, exits_world s (Exit_world k vs statics hp).
+    <-> ∃ (statics : static_env) (rd : read_record),
+          exits_world s (Exit_world k vs statics hp rd).
 
 (* A state leaves at most one world. *)
 Definition exits_world_unique_statement : Prop :=
@@ -125,8 +130,8 @@ Definition refines_world (R : exit_world -> exit_world -> Prop)
       behaves source Goes_wrong ∨ ∃ w : exit_world, exits_world source w).
 
 (* The relation at which it is [refines]: the same continuation, values
-   and heap. The static environments are not compared, as [refines]
-   does not compare them. *)
+   and heap. Neither the static environments nor the read records are
+   compared, as [refines] compares neither. *)
 Definition same_exit (w w' : exit_world) : Prop :=
   exit_cont w = exit_cont w'
   ∧ exit_values w = exit_values w'

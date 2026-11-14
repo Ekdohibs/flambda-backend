@@ -78,8 +78,8 @@ Qed.
 Theorem let_tag_immediate : let_tag_immediate_statement.
 Proof.
   intros tenv x declared arg ty body body' Hwf Hfresh Hty tagged Hbody.
-  apply (let_typed_refines_under tenv x declared tagged body body'
-           (tag_immediate ty) Hwf Hfresh).
+  apply (let_typed_refines_under_pure tenv x declared tagged body body'
+           (tag_immediate ty) eq_refl Hwf Hfresh).
   - intros y Hy. apply tag_immediate_free_variables in Hy.
     exact (argument_type_in_scope tenv arg ty y Hty Hy).
   - intros statics vars v Hsat Hnamed.
@@ -125,8 +125,8 @@ Qed.
 Theorem let_box_number : let_box_number_statement.
 Proof.
   intros tenv x declared kind arg ty body body' Hwf Hfresh Hty boxed Hbody.
-  apply (let_typed_refines_under tenv x declared boxed body body'
-           (box_number kind ty Alloc_mode.Heap) Hwf Hfresh).
+  apply (let_typed_refines_under_pure tenv x declared boxed body body'
+           (box_number kind ty Alloc_mode.Heap) eq_refl Hwf Hfresh).
   - intros y Hy. apply box_number_free_variables in Hy.
     exact (argument_type_in_scope tenv arg ty y Hty Hy).
   - intros statics vars v Hsat Hnamed.
@@ -223,8 +223,8 @@ Proof.
   destruct (Provers.meet_tagging_of_simple tenv Name_mode.normal
               (alias_type_of Value arg)) as [[s | | ] | ];
     try exact I.
-  - apply let_simple. exact Hsound.
-  - apply let_no_value. exact Hsound.
+  - apply let_simple_pure; [ reflexivity | exact Hsound ].
+  - apply let_no_value_pure; [ reflexivity | exact Hsound ].
 Qed.
 
 Theorem let_unbox_number : let_unbox_number_statement.
@@ -267,8 +267,8 @@ Proof.
   destruct (Provers.meet_boxed_number_containing_simple kind tenv
               Name_mode.normal (alias_type_of Value arg)) as [[s | | ] | ];
     try exact I.
-  - apply let_simple. exact Hsound.
-  - apply let_no_value. exact Hsound.
+  - apply let_simple_pure; [ reflexivity | exact Hsound ].
+  - apply let_no_value_pure; [ reflexivity | exact Hsound ].
 Qed.
 
 (* ======================================================================== *)

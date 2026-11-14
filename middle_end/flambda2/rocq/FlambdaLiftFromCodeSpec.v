@@ -99,15 +99,19 @@
    allocates with an identity is made by a primitive of the heap
    (FlambdaPrimitiveModel.heap_primitive: a block that is mutable or
    unique, a mutable array). [lift_named] lifts none of those, so two
-   [Let]s of one are given no symbol, one or two; and the step of
-   FlambdaSemanticsSpec.v, which the statements here are about, gives
-   such a primitive no value: it is the machine of
-   FlambdaHeapMachineSpec.v that executes one. A [Let] that is lifted
-   out mentions no variable, so what is put once holds symbols and
-   constants only. A location of the heap is a value that only a
-   variable holds, so the constant holds none itself: a closure or a
-   block that is put once may lead, through a symbol, to something that
-   can be written, and is not that thing.
+   [Let]s of one are given no symbol, one or two. The step of
+   FlambdaSemanticsSpec.v, which the statements here are about,
+   executes a primitive of the heap (FlambdaHeapSpec.exec_prim): one
+   that makes a block or an array allocates a location of its own
+   each time it is executed. [lift_from_code_unit] lifts nothing in a
+   unit that has a primitive of the heap
+   (FlambdaHeapFreeSpec.expr_free_of_heap; a limit, the CR at
+   FlambdaLiftSpec.lift_unit). A [Let] that is lifted out mentions no
+   variable, so what is put once holds symbols and constants only. A
+   location of the heap is a value that only a variable holds, so the
+   constant holds none itself: a closure or a block that is put once
+   may lead, through a symbol, to something that can be written, and
+   is not that thing.
 
    A [Let] whose parts are variables bound to symbols by an earlier
    lifting is closed once those aliases are followed: the validator
@@ -121,13 +125,17 @@
    whenever they are evaluated. The two values are related by
    FlambdaLiftSpec.value_lifted, as for the lifting at toplevel, and no
    primitive and no rule of the machine tells them apart. They differ at
-   an exit of the unit, so [lift_from_code_unit] makes the same check as
-   FlambdaLiftSpec.lift_unit (FlambdaLiftSpec.exits_plain_knowing: the
-   unit gives only symbols and constants to the continuations that it
-   may leave through). It also checks that the result is a well-formed
-   unit: the symbols given are then new and distinct, and the group of
-   the code is executed once. With both, the unit lifted refines the
-   unit, run on its own
+   an exit of the unit, among its values and in what the cells of its
+   heap hold, so [lift_from_code_unit] makes the same two checks of
+   the unit as FlambdaLiftSpec.lift_unit:
+   FlambdaLiftSpec.exits_plain_knowing, the unit gives only symbols
+   and constants to the continuations that it may leave through; and
+   FlambdaHeapFreeSpec.expr_free_of_heap, the unit has no primitive of
+   the heap, so that the heaps of two exits are empty (a limit: the CR
+   at FlambdaLiftSpec.lift_unit). It also checks that the result is a
+   well-formed unit: the symbols given are then new and distinct, and
+   the group of the code is executed once. With the three, the unit
+   lifted refines the unit, run on its own
    ([lift_from_code_unit_program_refines_statement]).
 
    The second run binds the symbol when the group of the code is
@@ -158,7 +166,8 @@ From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaSemanticsSpec FlambdaNominalSpec FlambdaWellFormedSpec
-  FlambdaUnusedStaticsSpec FlambdaImportsSpec FlambdaLiftSpec.
+  FlambdaUnusedStaticsSpec FlambdaImportsSpec FlambdaHeapFreeSpec
+  FlambdaLiftSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -304,12 +313,17 @@ with binding_lift_from_code (K : lets_in_code)
 (* ======================================================================== *)
 
 (* The unit with the [Let]s of the guess lifted out of its code: if the
-   unit exits with symbols and constants only, and the result is a
-   well-formed unit. *)
+   unit exits with symbols and constants only and has no primitive of
+   the heap, and the result is a well-formed unit. The second is a
+   limit, and not a condition of the lifting: the CR at
+   FlambdaLiftSpec.lift_unit. *)
 Definition lift_from_code_unit (u : unit_interface) (K : lets_in_code)
     (e : expr) : option expr :=
   let lifted := lift_from_code K [] root e in
-  if exits_plain_knowing [] [] e && well_formed_unit u lifted
+  if
+    exits_plain_knowing [] [] e
+    && expr_free_of_heap e
+    && well_formed_unit u lifted
   then Some lifted
   else None.
 

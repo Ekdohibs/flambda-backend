@@ -167,14 +167,15 @@ Proof.
     - destruct (IH vars) as [Hforwards Hbackwards].
       split; (apply Forall2_cons; [ | assumption ]);
         (split; [ reflexivity | ]); apply Handler_related;
-        intros vs handler_vars conts statics hp _ _ _;
+        intros vs handler_vars conts statics hp rd _ _ _;
         exact (expr_refines_trans _ _ _
           (rewrite_rec_handlers_refines_aux f Hf handler)
-          (rewrite_code_body_refines f _ Hf) handler_vars conts statics hp). }
+          (rewrite_code_body_refines f _ Hf) handler_vars conts statics hp rd_).
+            }
   eapply expr_refines_trans;
     [ | exact (plug_refines (Let_cont_recursive_body _ Hole) _ _ (not_many _)
           (rewrite_rec_handlers_refines_aux f Hf body)) ].
-  intros vars conts statics hp.
+  intros vars conts statics hp rd.
   destruct (Hhandlers vars) as [Hforwards Hbackwards].
   apply (let_cont_recursive_handlers_refine_where always always_extend);
     [ exact I | symmetry; apply rewrite_rec_handlers_bind_statics
@@ -203,15 +204,15 @@ Proof.
     - destruct (IH vars) as [Hforwards Hbackwards].
       split; (apply Forall2_cons; [ | assumption ]);
         (split; [ reflexivity | ]); apply Handler_related;
-        intros vs handler_vars conts statics hp _ _ _;
+        intros vs handler_vars conts statics hp rd _ _ _;
         exact (expr_refines_trans _ _ _
           (rewrite_code_body_refined f _ Hf)
           (rewrite_rec_handlers_refined_aux f Hf handler)
-          handler_vars conts statics hp). }
+          handler_vars conts statics hp rd_). }
   eapply expr_refines_trans;
     [ | exact (plug_refines (Let_cont_recursive_body _ Hole) _ _ (not_many _)
           (rewrite_rec_handlers_refined_aux f Hf body)) ].
-  intros vars conts statics hp.
+  intros vars conts statics hp rd.
   destruct (Hhandlers vars) as [Hforwards Hbackwards].
   apply (let_cont_recursive_handlers_refine_where always always_extend);
     [ exact I | apply rewrite_rec_handlers_bind_statics
@@ -224,10 +225,10 @@ Proof. exact rewrite_rec_handlers_refines_aux. Qed.
 Theorem rewrite_rec_handlers_equivalent :
   rewrite_rec_handlers_equivalent_statement.
 Proof.
-  intros f Hf e vars conts statics hp. apply refines_antisymmetric.
+  intros f Hf e vars conts statics hp rd. apply refines_antisymmetric.
   - apply (rewrite_rec_handlers_refines_aux f).
     intros e'. apply expr_equivalent_refines, Hf.
   - apply (rewrite_rec_handlers_refined_aux f).
-    intros e' vars' conts' statics' hp'.
+    intros e' vars' conts' statics' hp' rd'.
     apply equivalent_refines, equivalent_sym, Hf.
 Qed.

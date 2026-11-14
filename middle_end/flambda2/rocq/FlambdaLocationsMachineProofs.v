@@ -37,6 +37,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaHeapMachineSpec FlambdaLocationsSpec FlambdaLocationsProofs
   FlambdaLocationsPrimitiveSpec FlambdaLocationsPrimitiveProofs
   FlambdaLocationsMachineSpec.
+From OxCamlFlambda2 Require FlambdaHeapMachineProofs.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -281,14 +282,15 @@ Qed.
 
 Lemma call_code_permuted (p : permutation) (closure : value) (c : code)
     (vs : list value) (args_arity return_arity : arity)
-    (return_to exn_to : cont_value) (statics : static_env) (hp : heap) :
+    (return_to exn_to : cont_value) (statics : static_env) (hp : heap)
+      (rd : read_record) :
   call_code (permute_value p closure) c (map (permute_value p) vs)
     args_arity return_arity (permute_cont_value p return_to)
     (permute_cont_value p exn_to) (permute_static_env p statics)
-    (permute_heap p hp)
+    (permute_heap p hp) (permute_reads p rd)
   = permute_result p
       (call_code closure c vs args_arity return_arity return_to exn_to
-         statics hp).
+         statics hp rd).
 Proof.
   unfold call_code. destruct (binds_statics (code_body c)); [ reflexivity | ].
   rewrite kinds_permuted. destruct (negb _); [ reflexivity | ].
@@ -426,16 +428,17 @@ Qed.
 Lemma run_call_permuted (p : permutation)
     (return_partial return_partial' : value -> step_result)
     (shape : option call_shape) (return_arity : arity)
-    (return_to exn_to : cont_value) (statics : static_env) (hp : heap) :
+    (return_to exn_to : cont_value) (statics : static_env) (hp : heap)
+      (rd : read_record) :
   (∀ partial : value,
     return_partial' (permute_value p partial)
     = permute_result p (return_partial partial)) ->
   run_call return_partial' (option_map (permute_shape p) shape) return_arity
     (permute_cont_value p return_to) (permute_cont_value p exn_to)
-    (permute_static_env p statics) (permute_heap p hp)
+    (permute_static_env p statics) (permute_heap p hp) (permute_reads p rd)
   = permute_result p
       (run_call return_partial shape return_arity return_to exn_to statics
-         hp).
+         hp rd).
 Proof.
   intros Hpartial.
   destruct shape
@@ -447,23 +450,23 @@ Proof.
       (call_code_permuted p closure c vs args_arity (code_result_arity c)
          (Over_application remaining remaining_arity return_arity return_to
             exn_to)
-         exn_to statics hp).
+         exn_to statics hp rd).
   - apply Hpartial.
   - reflexivity.
 Qed.
 
 Lemma apply_cont_value_permuted (p : permutation) (c : cont_value) :
-  ∀ (vs : list value) (statics : static_env) (hp : heap),
+  ∀ (vs : list value) (statics : static_env) (hp : heap) (rd : read_record),
     apply_cont_value (permute_cont_value p c) (map (permute_value p) vs)
-      (permute_static_env p statics) (permute_heap p hp)
-    = permute_result p (apply_cont_value c vs statics hp).
+      (permute_static_env p statics) (permute_heap p hp) (permute_reads p rd)
+    = permute_result p (apply_cont_value c vs statics hp rd).
 Proof.
   induction c
     as [[params metadata handler] def_vars def_conts recursive | k
        | c IH extra
        | remaining remaining_arity return_arity return_to exn_to IHreturn _]
     using cont_value_over_ind;
-    intros vs statics hp.
+    intros vs statics hp rd.
   - simpl. rewrite kinds_permuted.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
       [ | reflexivity ].
@@ -478,7 +481,7 @@ Proof.
     cbn [permute_cont_value apply_cont_value map].
     rewrite shape_of_call_permuted.
     apply run_call_permuted. intros partial.
-    exact (IHreturn [partial] statics hp).
+    exact (IHreturn [partial] statics hp rd_).
 Qed.
 
 Lemma with_extra_args_permuted (p : permutation) (c : cont_value)
@@ -489,18 +492,19 @@ Proof. destruct extra; reflexivity. Qed.
 
 Lemma call_function_permuted (p : permutation) (callee : value)
     (kind : call_kind) (vs : list value) (args_arity return_arity : arity)
-    (return_to exn_to : cont_value) (statics : static_env) (hp : heap) :
+    (return_to exn_to : cont_value) (statics : static_env) (hp : heap)
+      (rd : read_record) :
   call_function (permute_value p callee) kind (map (permute_value p) vs)
     args_arity return_arity (permute_cont_value p return_to)
     (permute_cont_value p exn_to) (permute_static_env p statics)
-    (permute_heap p hp)
+    (permute_heap p hp) (permute_reads p rd)
   = permute_result p
       (call_function callee kind vs args_arity return_arity return_to exn_to
-         statics hp).
+         statics hp rd).
 Proof.
   unfold call_function. rewrite shape_of_call_permuted.
   apply run_call_permuted. intros partial.
-  exact (apply_cont_value_permuted p return_to [partial] statics hp).
+  exact (apply_cont_value_permuted p return_to [partial] statics hp rd).
 Qed.
 
 Lemma naked_immediate_of_permute_value (p : permutation) (v : value) :
@@ -508,24 +512,28 @@ Lemma naked_immediate_of_permute_value (p : permutation) (v : value) :
 Proof. destruct v; reflexivity. Qed.
 
 (* ======================================================================== *)
-(* A step that does not allocate                                            *)
+(* A step that is not a [Let]                                               *)
 (* ======================================================================== *)
 
-(* Today no step allocates, and this is an equation of every state. *)
-Lemma step_permuted_exactly (p : permutation) (s : state) :
+Definition is_let (e : expr) : bool :=
+  match e with
+  | Let _ _ _ _ => true
+  | _ => false
+  end.
+
+(* A step that is not a [Let] does not allocate: of it the equation
+   holds with the permutation that the state is moved by, and without
+   the premise. *)
+Lemma step_not_let_permuted (p : permutation) (s : state) :
+  is_let (state_expr s) = false ->
   step (permute_state p s) = permute_result p (step s).
 Proof.
-  rewrite (state_eta s). unfold permute_state. simpl_state.
+  intros Hnot. rewrite (state_eta s). unfold permute_state. simpl_state.
+  cbn [state_reads]. revert Hnot.
   destruct (state_expr s)
     as [ x kind d body | bindings body | k h body | handlers body | ap | ac
        | scrutinee arms | ];
-    autorewrite with step.
-  - (* Let *)
-    rewrite eval_named_permuted.
-    destruct (eval_named (state_statics s) (state_vars s) d) as [v | ];
-      simpl; [ | reflexivity ].
-    rewrite kind_of_permute_value.
-    destruct (kind_eqb (kind_of_value v) kind); reflexivity.
+    intros Hnot; [ discriminate Hnot | .. ]; autorewrite with step.
   - (* Let_static *)
     rewrite eval_static_bindings_permuted.
     destruct
@@ -609,55 +617,58 @@ Qed.
 Definition locations_of_result (result : step_result) : list location :=
   match result with
   | Step s => locations_of_state s
-  | Exit _ vs hp => locations_of_values vs ++ locations_of_heap hp
+  | Exit _ vs hp rd =>
+    locations_of_values vs ++ locations_of_heap hp ++ locations_of_reads rd
   | Undefined => []
   end.
 
 Lemma result_laws : action_laws permute_result locations_of_result.
 Proof.
   pose proof state_laws as Hstate. pose proof values_laws as Hvalues.
-  pose proof heap_laws as Hheap.
+  pose proof heap_laws as Hheap. pose proof reads_laws as Hreads.
   constructor.
-  - intros [s | k vs hp | ]; simpl; [ | | reflexivity ].
+  - intros [s | k vs hp rd | ]; simpl; [ | | reflexivity ].
     + rewrite (act_identity _ _ Hstate). reflexivity.
-    + rewrite (act_identity _ _ Hvalues vs), (act_identity _ _ Hheap).
+    + rewrite (act_identity _ _ Hvalues vs), (act_identity _ _ Hheap),
+        (act_identity _ _ Hreads).
       reflexivity.
-  - intros second first [s | k vs hp | ]; simpl; [ | | reflexivity ].
+  - intros second first [s | k vs hp rd | ]; simpl; [ | | reflexivity ].
     + rewrite (act_compose _ _ Hstate). reflexivity.
     + rewrite (act_compose _ _ Hvalues second first vs),
-        (act_compose _ _ Hheap).
+        (act_compose _ _ Hheap), (act_compose _ _ Hreads).
       reflexivity.
-  - intros p [s | k vs hp | ]; simpl; [ | | reflexivity ].
+  - intros p [s | k vs hp rd | ]; simpl; [ | | reflexivity ].
     + apply (act_names _ _ Hstate).
-    + rewrite map_app. unfold locations_of_values.
-      rewrite (act_names _ _ Hvalues p vs), (act_names _ _ Hheap).
+    + rewrite !map_app. unfold locations_of_values.
+      rewrite (act_names _ _ Hvalues p vs), (act_names _ _ Hheap),
+        (act_names _ _ Hreads).
       reflexivity.
-  - intros p p' [s | k vs hp | ] Hagree; simpl; [ | | reflexivity ].
+  - intros p p' [s | k vs hp rd | ] Hagree; simpl; [ | | reflexivity ].
     + rewrite (act_ext _ _ Hstate p p' s Hagree). reflexivity.
     + simpl in Hagree.
       rewrite (act_ext _ _ Hvalues p p' vs),
-        (act_ext _ _ Hheap p p' hp);
-        [ reflexivity | | ];
-        intros name Hname; apply Hagree, in_or_app; auto.
+        (act_ext _ _ Hheap p p' hp), (act_ext _ _ Hreads p p' rd);
+        [ reflexivity | | | ];
+        intros name Hname; apply Hagree; rewrite !in_app_iff; auto.
 Qed.
 
 (* ======================================================================== *)
-(* A step leaves the heap as it is                                          *)
+(* A step that is not a [Let] leaves the heap as it is                      *)
 (* ======================================================================== *)
 
 Definition result_heap_is (hp : heap) (result : step_result) : Prop :=
   match result with
   | Step s => state_heap s = hp
-  | Exit _ _ hp' => hp' = hp
+  | Exit _ _ hp' rd' => hp' = hp
   | Undefined => True
   end.
 
 Lemma call_code_heap (closure : value) (c : code) (vs : list value)
     (args_arity return_arity : arity) (return_to exn_to : cont_value)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   result_heap_is hp
     (call_code closure c vs args_arity return_arity return_to exn_to statics
-       hp).
+       hp rd).
 Proof.
   unfold call_code. destruct (binds_statics (code_body c)); [ exact I | ].
   destruct (negb _); [ exact I | ].
@@ -667,10 +678,12 @@ Qed.
 
 Lemma run_call_heap (return_partial : value -> step_result)
     (shape : option call_shape) (return_arity : arity)
-    (return_to exn_to : cont_value) (statics : static_env) (hp : heap) :
+    (return_to exn_to : cont_value) (statics : static_env) (hp : heap)
+      (rd : read_record) :
   (∀ partial : value, result_heap_is hp (return_partial partial)) ->
   result_heap_is hp
-    (run_call return_partial shape return_arity return_to exn_to statics hp).
+    (run_call return_partial shape return_arity return_to exn_to statics hp
+       rd).
 Proof.
   intros Hpartial.
   destruct shape
@@ -682,15 +695,15 @@ Proof.
 Qed.
 
 Lemma apply_cont_value_heap (c : cont_value) :
-  ∀ (vs : list value) (statics : static_env) (hp : heap),
-    result_heap_is hp (apply_cont_value c vs statics hp).
+  ∀ (vs : list value) (statics : static_env) (hp : heap) (rd : read_record),
+    result_heap_is hp (apply_cont_value c vs statics hp rd).
 Proof.
   induction c
     as [[params metadata handler] def_vars def_conts recursive | k
        | c IH extra
        | remaining remaining_arity return_arity return_to exn_to IHreturn _]
     using cont_value_over_ind;
-    intros vs statics hp.
+    intros vs statics hp rd.
   - simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
       [ | exact I ].
@@ -702,16 +715,15 @@ Proof.
     apply IHreturn.
 Qed.
 
-Lemma step_heap (s : state) : result_heap_is (state_heap s) (step s).
+Lemma step_not_let_heap (s : state) :
+  is_let (state_expr s) = false ->
+  result_heap_is (state_heap s) (step s).
 Proof.
-  rewrite (state_eta s) at 2.
+  intros Hnot. rewrite (state_eta s) at 2. revert Hnot.
   destruct (state_expr s)
     as [ x kind d body | bindings body | k h body | handlers body | ap | ac
        | scrutinee arms | ];
-    autorewrite with step.
-  - destruct (eval_named (state_statics s) (state_vars s) d) as [v | ];
-      [ | exact I ].
-    destruct (kind_eqb (kind_of_value v) kind); [ reflexivity | exact I ].
+    intros Hnot; [ discriminate Hnot | .. ]; autorewrite with step.
   - destruct
       (eval_static_bindings (state_vars s) bindings (state_statics s));
       [ reflexivity | exact I ].
@@ -737,113 +749,7 @@ Proof.
 Qed.
 
 (* ======================================================================== *)
-(* The premise                                                              *)
-(* ======================================================================== *)
-
-Theorem no_location_bound : no_location_bound_statement.
-Proof.
-  intros s Hnone l Hl. rewrite Hnone in Hl. destruct Hl.
-Qed.
-
-Theorem permute_state_locations_bound :
-  permute_state_locations_bound_statement.
-Proof.
-  intros p s Hbound l Hl. unfold state_locations_bound in Hbound.
-  rewrite (act_names _ _ state_laws) in Hl.
-  apply in_map_iff in Hl as (l0 & <- & Hl0).
-  change (state_heap (permute_state p s)) with (permute_heap p (state_heap s)).
-  rewrite is_bound_permute_heap. exact (Hbound l0 Hl0).
-Qed.
-
-Theorem step_keeps_locations_bound : step_keeps_locations_bound_statement.
-Proof.
-  intros s Hbound.
-  assert (Hsupport :
-            ∀ l : location,
-              l ∈ locations_of_result (step s) -> l ∈ locations_of_state s).
-  { intros l Hl.
-    exact
-      (equivariant_support permute_state locations_of_state permute_result
-         locations_of_result (fun s0 => Some (step s0)) state_laws
-         result_laws
-         (fun p s0 => f_equal Some (step_permuted_exactly p s0)) s (step s)
-         l eq_refl Hl). }
-  pose proof (step_heap s) as Hheap.
-  destruct (step s) as [s' | k vs hp | ]; simpl in *; [ | | exact I ].
-  - split.
-    + intros l Hl. unfold state_locations_bound. rewrite Hheap.
-      exact (Hbound l (Hsupport l Hl)).
-    + intros l Hl. rewrite Hheap. exact Hl.
-  - subst hp. split; [ | split ].
-    + intros l Hl. apply Hbound, Hsupport, in_or_app. right. exact Hl.
-    + intros l Hl. apply Hbound, Hsupport, in_or_app. left. exact Hl.
-    + intros l Hl. exact Hl.
-Qed.
-
-Theorem run_keeps_locations_bound : run_keeps_locations_bound_statement.
-Proof.
-  intros fuel. induction fuel as [ | fuel IH]; intros s Hbound; simpl.
-  - split; [ exact Hbound | intros l Hl; exact Hl ].
-  - pose proof (step_keeps_locations_bound s Hbound) as Hstep.
-    destruct (step s) as [s' | k vs hp | ]; simpl in Hstep;
-      [ | exact Hstep | exact I ].
-    destruct Hstep as [Hbound' Hkept].
-    specialize (IH s' Hbound').
-    destruct (run fuel s') as [s'' | k vs hp | ]; simpl in IH |- *;
-      [ | | exact I ].
-    + destruct IH as [Hbound'' Hkept'].
-      split; [ exact Hbound'' | intros l Hl; exact (Hkept' l (Hkept l Hl)) ].
-    + destruct IH as (Hhp & Hvs & Hkept').
-      split; [ exact Hhp | ].
-      split; [ exact Hvs | intros l Hl; exact (Hkept' l (Hkept l Hl)) ].
-Qed.
-
-(* ======================================================================== *)
-(* A step, a run and a behaviour                                            *)
-(* ======================================================================== *)
-
-Theorem step_permuted : step_permuted_statement.
-Proof.
-  intros p s _. exists p.
-  split; [ reflexivity | apply step_permuted_exactly ].
-Qed.
-
-Theorem run_permuted : run_permuted_statement.
-Proof.
-  intros p fuel. revert p.
-  induction fuel as [ | fuel IH]; intros p s Hbound; simpl.
-  - exists p. split; reflexivity.
-  - destruct (step_permuted p s Hbound) as (p1 & Hagree1 & Hstep).
-    rewrite Hstep.
-    pose proof (step_keeps_locations_bound s Hbound) as Hkeeps.
-    destruct (step s) as [s' | k vs hp | ]; simpl in Hkeeps |- *.
-    + destruct Hkeeps as [Hbound' Hkept].
-      destruct (IH p1 s' Hbound') as (p2 & Hagree2 & Hrun).
-      exists p2. split; [ | exact Hrun ].
-      intros l Hl. rewrite (Hagree2 l (Hkept l Hl)). exact (Hagree1 l Hl).
-    + exists p1. split; [ exact Hagree1 | reflexivity ].
-    + exists p1. split; [ exact Hagree1 | reflexivity ].
-Qed.
-
-Theorem behaves_permuted : behaves_permuted_statement.
-Proof.
-  intros p s [k vs hp | | ] Hbound Hbehaves; simpl in Hbehaves.
-  - destruct Hbehaves as [fuel Hrun].
-    destruct (run_permuted p fuel s Hbound) as (p' & Hagree & Hmoved).
-    exists p'. split; [ exact Hagree | ].
-    exists fuel. rewrite Hmoved, Hrun. reflexivity.
-  - destruct Hbehaves as [fuel Hrun].
-    destruct (run_permuted p fuel s Hbound) as (p' & Hagree & Hmoved).
-    exists p'. split; [ exact Hagree | ].
-    exists fuel. rewrite Hmoved, Hrun. reflexivity.
-  - exists p. split; [ reflexivity | ].
-    intros fuel. destruct (Hbehaves fuel) as [s' Hrun].
-    destruct (run_permuted p fuel s Hbound) as (p' & _ & Hmoved).
-    exists (permute_state p' s'). rewrite Hmoved, Hrun. reflexivity.
-Qed.
-
-(* ======================================================================== *)
-(* What a [Let] is to run                                                   *)
+(* What a [Let] runs                                                        *)
 (* ======================================================================== *)
 
 Lemma eval_simples_locations (vars : env) (args : list simple)
@@ -901,6 +807,36 @@ Proof.
   - exists p. split; reflexivity.
 Qed.
 
+(* The same of the executor of FlambdaSemanticsSpec.v, which is that
+   one with the read record given back as it came: where the heap binds
+   the locations of the record as well, the record moved by the first
+   permutation is the record moved by the second. *)
+Lemma exec_named_permuted (p : permutation) (statics : static_env)
+    (hp : heap) (rd : read_record) (vars : env) (d : named) :
+  locations_bound hp (locations_of_heap hp) ->
+  locations_bound hp (locations_of_env vars) ->
+  locations_bound hp (locations_of_reads rd) ->
+  ∃ p' : permutation,
+    (∀ l : location, is_bound l hp = true -> permute p' l = permute p l)
+    ∧ exec_named (permute_static_env p statics) (permute_heap p hp)
+        (permute_reads p rd) (permute_env p vars) d
+      = option_map
+          (fun r : value * heap * read_record =>
+             (permute_value p' (fst (fst r)), permute_heap p' (snd (fst r)),
+              permute_reads p' (snd r)))
+          (exec_named statics hp rd vars d).
+Proof.
+  intros Hheap Hvars Hreads.
+  destruct (heap_exec_named_permuted p statics hp vars d Hheap Hvars)
+    as (p' & Hagree & Hexec).
+  exists p'. split; [ exact Hagree | ].
+  assert (Hrd : permute_reads p rd = permute_reads p' rd).
+  { apply (act_ext _ _ reads_laws). intros l Hl. symmetry.
+    apply Hagree, Hreads, Hl. }
+  rewrite !FlambdaHeapMachineProofs.exec_named_heap_exec_named, Hexec, Hrd.
+  destruct (heap_exec_named statics hp vars d) as [[v h'] | ]; reflexivity.
+Qed.
+
 Theorem heap_exec_named_keeps_locations_bound :
   heap_exec_named_keeps_locations_bound_statement.
 Proof.
@@ -929,4 +865,215 @@ Proof.
     [ | exact Hstatics | exact Hexec ].
   intros l Hl. apply Hvars.
   exact (eval_simples_locations vars args vs l Hargs Hl).
+Qed.
+
+(* ======================================================================== *)
+(* The premise                                                              *)
+(* ======================================================================== *)
+
+Theorem no_location_bound : no_location_bound_statement.
+Proof.
+  intros s Hnone l Hl. rewrite Hnone in Hl. destruct Hl.
+Qed.
+
+Theorem permute_state_locations_bound :
+  permute_state_locations_bound_statement.
+Proof.
+  intros p s Hbound l Hl. unfold state_locations_bound in Hbound.
+  rewrite (act_names _ _ state_laws) in Hl.
+  apply in_map_iff in Hl as (l0 & <- & Hl0).
+  change (state_heap (permute_state p s)) with (permute_heap p (state_heap s)).
+  rewrite is_bound_permute_heap. exact (Hbound l0 Hl0).
+Qed.
+
+(* The premise, of each component of the state. *)
+Lemma state_locations_bound_parts (s : state) :
+  state_locations_bound s ->
+  locations_bound (state_heap s) (locations_of_env (state_vars s))
+  ∧ locations_bound (state_heap s) (locations_of_cont_env (state_conts s))
+  ∧ locations_bound (state_heap s)
+      (locations_of_static_env (state_statics s))
+  ∧ locations_bound (state_heap s) (locations_of_heap (state_heap s))
+  ∧ locations_bound (state_heap s) (locations_of_reads (state_reads s)).
+Proof.
+  intros Hbound.
+  unfold state_locations_bound, locations_of_state, locations_bound in Hbound.
+  split; [ | split; [ | split; [ | split ] ] ]; intros l Hl; apply Hbound;
+    rewrite !in_app_iff; tauto.
+Qed.
+
+Theorem step_keeps_locations_bound : step_keeps_locations_bound_statement.
+Proof.
+  intros s Hbound.
+  destruct (is_let (state_expr s)) eqn:Hlet.
+  - (* A [Let]: what it runs keeps the premise, of the heap after and
+       of the value that it binds; the rest of the state is as it
+       was. *)
+    destruct (state_locations_bound_parts s Hbound)
+      as (Hvars & Hconts & Hstatics & Hheap & Hreads).
+    rewrite (state_eta s) at 2. revert Hlet.
+    destruct (state_expr s) as [ x kind d body | | | | | | | ];
+      intros Hlet; try discriminate Hlet.
+    rewrite step_let_exec,
+      FlambdaHeapMachineProofs.exec_named_heap_exec_named.
+    destruct
+      (heap_exec_named (state_statics s) (state_heap s) (state_vars s) d)
+      as [[v hp'] | ] eqn:Hexec;
+      cbn [option_map fst snd]; [ | exact I ].
+    destruct (kind_eqb (kind_of_value v) kind); [ | exact I ].
+    destruct
+      (heap_exec_named_keeps_locations_bound (state_statics s)
+         (state_heap s) hp' (state_vars s) d v Hheap Hvars Hstatics Hexec)
+      as (Hheap' & Hv & Hkept).
+    cbn [result_locations_bound]. simpl_state.
+    split; [ | exact Hkept ].
+    unfold state_locations_bound, locations_of_state. simpl_state.
+    cbn [state_reads]. intros l Hl.
+    change (locations_of_env ((x, v) :: state_vars s))
+      with (locations_of_value v ++ locations_of_env (state_vars s)) in Hl.
+    rewrite !in_app_iff in Hl.
+    destruct Hl as [[Hl | Hl] | [Hl | [Hl | [Hl | Hl]]]].
+    + exact (Hv l Hl).
+    + exact (Hkept l (Hvars l Hl)).
+    + exact (Hkept l (Hconts l Hl)).
+    + exact (Hkept l (Hstatics l Hl)).
+    + exact (Hheap' l Hl).
+    + exact (Hkept l (Hreads l Hl)).
+  - (* Any other step: it makes no location and leaves the heap as it
+       is. *)
+    assert (Hsupport :
+              ∀ l : location,
+                l ∈ locations_of_result (step s) -> l ∈ locations_of_state s).
+    { intros l Hl.
+      apply
+        (equivariant_support permute_state locations_of_state permute_result
+           locations_of_result
+           (fun s0 => if is_let (state_expr s0) then None else Some (step s0))
+           state_laws result_laws)
+        with (b := step s);
+        [ | | exact Hl ]; cbv beta.
+      - intros p s0.
+        change (state_expr (permute_state p s0)) with (state_expr s0).
+        destruct (is_let (state_expr s0)) eqn:Hlet0; [ reflexivity | ].
+        cbn [option_map]. f_equal. exact (step_not_let_permuted p s0 Hlet0).
+      - rewrite Hlet. reflexivity. }
+    pose proof (step_not_let_heap s Hlet) as Hheap.
+    destruct (step s) as [s' | k vs hp rd | ]; simpl in *; [ | | exact I ].
+    + split.
+      * intros l Hl. unfold state_locations_bound. rewrite Hheap.
+        exact (Hbound l (Hsupport l Hl)).
+      * intros l Hl. rewrite Hheap. exact Hl.
+    + subst hp. split; [ | split; [ | split ] ].
+      * intros l Hl. apply Hbound, Hsupport, in_or_app. right.
+        apply in_or_app. left. exact Hl.
+      * intros l Hl. apply Hbound, Hsupport, in_or_app. left. exact Hl.
+      * intros l Hl. apply Hbound, Hsupport, in_or_app. right.
+        apply in_or_app. right. exact Hl.
+      * intros l Hl. exact Hl.
+Qed.
+
+Theorem run_keeps_locations_bound : run_keeps_locations_bound_statement.
+Proof.
+  intros fuel. induction fuel as [ | fuel IH]; intros s Hbound; simpl.
+  - split; [ exact Hbound | intros l Hl; exact Hl ].
+  - pose proof (step_keeps_locations_bound s Hbound) as Hstep.
+    destruct (step s) as [s' | k vs hp rd | ]; simpl in Hstep;
+      [ | exact Hstep | exact I ].
+    destruct Hstep as [Hbound' Hkept].
+    specialize (IH s' Hbound').
+    destruct (run fuel s') as [s'' | k vs hp rd | ]; simpl in IH |- *;
+      [ | | exact I ].
+    + destruct IH as [Hbound'' Hkept'].
+      split; [ exact Hbound'' | intros l Hl; exact (Hkept' l (Hkept l Hl)) ].
+    + destruct IH as (Hhp & Hvs & Hrd & Hkept').
+      split; [ exact Hhp | ]. split; [ exact Hvs | ].
+      split; [ exact Hrd | intros l Hl; exact (Hkept' l (Hkept l Hl)) ].
+Qed.
+
+(* ======================================================================== *)
+(* A step, a run and a behaviour                                            *)
+(* ======================================================================== *)
+
+(* A [Let]: what it runs goes through the action up to a second
+   permutation, which moves the rest of the state as the first does,
+   the heap binding every location of it. *)
+Lemma step_let_permuted (p : permutation) (s : state) :
+  state_locations_bound s ->
+  is_let (state_expr s) = true ->
+  ∃ p' : permutation,
+    (∀ l : location,
+       is_bound l (state_heap s) = true -> permute p' l = permute p l)
+    ∧ step (permute_state p s) = permute_result p' (step s).
+Proof.
+  intros Hbound Hlet.
+  destruct (state_locations_bound_parts s Hbound)
+    as (Hvars & Hconts & Hstatics & Hheap & Hreads).
+  rewrite (state_eta s). unfold permute_state. simpl_state.
+  cbn [state_reads]. revert Hlet.
+  destruct (state_expr s) as [ x kind d body | | | | | | | ];
+    intros Hlet; try discriminate Hlet.
+  destruct
+    (exec_named_permuted p (state_statics s) (state_heap s) (state_reads s)
+       (state_vars s) d Hheap Hvars Hreads)
+    as (p' & Hagree & Hexec).
+  exists p'. split; [ exact Hagree | ].
+  rewrite !step_let_exec, Hexec.
+  destruct
+    (exec_named (state_statics s) (state_heap s) (state_reads s)
+       (state_vars s) d)
+    as [[[v hp'] rd'] | ];
+    cbn [option_map fst snd]; [ | reflexivity ].
+  rewrite kind_of_permute_value.
+  destruct (kind_eqb (kind_of_value v) kind); [ | reflexivity ].
+  cbn [permute_result]. unfold permute_state. simpl_state.
+  cbn [state_reads].
+  rewrite (act_ext _ _ env_laws p p' (state_vars s)),
+    (act_ext _ _ cont_env_laws p p' (state_conts s)),
+    (act_ext _ _ static_env_laws p p' (state_statics s));
+    [ reflexivity | | | ];
+    intros l Hl; symmetry; apply Hagree;
+    first [ exact (Hvars l Hl) | exact (Hconts l Hl) | exact (Hstatics l Hl) ].
+Qed.
+
+Theorem step_permuted : step_permuted_statement.
+Proof.
+  intros p s Hbound.
+  destruct (is_let (state_expr s)) eqn:Hlet.
+  - exact (step_let_permuted p s Hbound Hlet).
+  - exists p.
+    split; [ reflexivity | exact (step_not_let_permuted p s Hlet) ].
+Qed.
+
+Theorem run_permuted : run_permuted_statement.
+Proof.
+  intros p fuel. revert p.
+  induction fuel as [ | fuel IH]; intros p s Hbound; simpl.
+  - exists p. split; reflexivity.
+  - destruct (step_permuted p s Hbound) as (p1 & Hagree1 & Hstep).
+    rewrite Hstep.
+    pose proof (step_keeps_locations_bound s Hbound) as Hkeeps.
+    destruct (step s) as [s' | k vs hp rd | ]; simpl in Hkeeps |- *.
+    + destruct Hkeeps as [Hbound' Hkept].
+      destruct (IH p1 s' Hbound') as (p2 & Hagree2 & Hrun).
+      exists p2. split; [ | exact Hrun ].
+      intros l Hl. rewrite (Hagree2 l (Hkept l Hl)). exact (Hagree1 l Hl).
+    + exists p1. split; [ exact Hagree1 | reflexivity ].
+    + exists p1. split; [ exact Hagree1 | reflexivity ].
+Qed.
+
+Theorem behaves_permuted : behaves_permuted_statement.
+Proof.
+  intros p s [k vs hp | | ] Hbound Hbehaves; simpl in Hbehaves.
+  - destruct Hbehaves as [fuel [rd Hrun]].
+    destruct (run_permuted p fuel s Hbound) as (p' & Hagree & Hmoved).
+    exists p'. split; [ exact Hagree | ].
+    exists fuel, (permute_reads p' rd). rewrite Hmoved, Hrun. reflexivity.
+  - destruct Hbehaves as [fuel Hrun].
+    destruct (run_permuted p fuel s Hbound) as (p' & Hagree & Hmoved).
+    exists p'. split; [ exact Hagree | ].
+    exists fuel. rewrite Hmoved, Hrun. reflexivity.
+  - exists p. split; [ reflexivity | ].
+    intros fuel. destruct (Hbehaves fuel) as [s' Hrun].
+    destruct (run_permuted p fuel s Hbound) as (p' & _ & Hmoved).
+    exists (permute_state p' s'). rewrite Hmoved, Hrun. reflexivity.
 Qed.

@@ -189,17 +189,22 @@ Definition provers_answer_in_terms_statement : Prop :=
 (* ======================================================================== *)
 
 (* A defining expression that has no value but that of a [Simple], in
-   the states that satisfy the environment, may be replaced by the
-   [Simple]. This is a refinement: the defining expression may have no
-   value. ([let_constant_statement] of FlambdaSimplifyPrimitivesSpec.v
-   is the case of a constant.) *)
+   the states that satisfy the environment, and that leaves the heap
+   and the read record as they came, may be replaced by the [Simple].
+   Its value is that of the run of the machine on its heap
+   (FlambdaSemanticsSpec.exec_named), on whatever heap and with
+   whatever record. This is a refinement: the defining expression may
+   have no value. ([let_constant_statement] of
+   FlambdaSimplifyPrimitivesSpec.v is the case of a constant, and says
+   why the heap and the record are asked to be as they came.) *)
 Definition let_simple_statement : Prop :=
   ∀ (tenv : Typing_env.t) (x : variable) (declared : flambda_kind)
     (defining_expr : named) (s : simple) (body : expr),
-    (∀ (statics : static_env) (vars : env) (v : value),
+    (∀ (statics : static_env) (hp hp' : heap) (rd rd' : read_record)
+       (vars : env) (v : value),
       env_satisfies_strictly tenv statics vars ->
-      eval_named statics vars defining_expr = Some v ->
-      eval_simple vars s = Some v) ->
+      exec_named statics hp rd vars defining_expr = Some (v, hp', rd') ->
+      eval_simple vars s = Some v ∧ hp' = hp ∧ rd' = rd) ->
     expr_refines_under tenv (Let x declared defining_expr body)
       (Let x declared (Simple s) body).
 

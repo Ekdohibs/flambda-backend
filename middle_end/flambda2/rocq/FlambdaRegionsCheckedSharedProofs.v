@@ -263,7 +263,8 @@ Lemma same_store_checked (cert : certificate) (codes : list (code_id * code))
   entered cert codes rs (rs_state rs') ->
   state_checked cert codes rs'.
 Proof.
-  destruct rs' as [[e' vars' conts' statics' hp'] frames' base' next' counts'].
+  destruct rs' as
+    [[e' vars' conts' statics' hp' rd'] frames' base' next' counts'].
   cbn [rs_frames rs_base rs_next rs_state state_statics].
   intros -> -> -> -> Hinv' Hordered'
     (Hinv & _ & Hcode & Hlocal & Hdeep & Hstatics & Hplain & Hpaps & _)

@@ -85,17 +85,19 @@ Qed.
 
 (* So the merged application steps as the arm does. *)
 Lemma merged_steps_as_arm (v : variable) (c : const) (merged : apply_cont)
-    (vars vars' : env) (conts : cont_env) (statics : static_env) (hp : heap) :
+    (vars vars' : env) (conts : cont_env) (statics : static_env) (hp : heap)
+      (rd : read_record) :
   (∀ x : variable, x <> v -> lookup x vars' = lookup x vars) ->
   step
-    (State (Apply_cont merged) ((v, Value_const c) :: vars') conts statics hp)
+    (State (Apply_cont merged) ((v, Value_const c) :: vars') conts statics hp
+       rd)
   = step
       (State
          (Apply_cont
             (Apply_cont_expr (ac_continuation merged)
                (map (constant_for v c) (ac_args merged))
                (ac_trap_action merged)))
-         vars conts statics hp).
+         vars conts statics hp rd).
 Proof.
   intros Hagree. rewrite !step_apply_cont. simpl.
   rewrite (eval_simples_constant_for v c vars vars' _ Hagree). reflexivity.
@@ -135,29 +137,40 @@ Qed.
 (* ======================================================================== *)
 
 Lemma step_bind_tagged (v : variable) (i : Z) (body : expr) (vars : env)
-    (conts : cont_env) (statics : static_env) (hp : heap) :
+    (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record) :
   lookup v vars = Some (Value_const (Naked_immediate i)) ->
   in_range (int_width Standard_naked_immediate) i = true ->
-  step (State (bind_tagged v body) vars conts statics hp)
+  step (State (bind_tagged v body) vars conts statics hp rd)
   = Step
       (State body ((v, Value_const (Tagged_immediate i)) :: vars) conts
-         statics hp).
+         statics hp rd).
 Proof.
-  intros Hv Hrange. unfold bind_tagged. rewrite step_let.
-  cbn [eval_named eval_simples eval_simple]. rewrite Hv.
+  intros Hv Hrange. unfold bind_tagged.
+  rewrite
+    (step_let_no_location _ _ _ _ _ _ _ _ _ rd_
+       [Value_const (Naked_immediate i)]);
+    [ | intros q; discriminate
+      | cbn [eval_simples eval_simple]; rewrite Hv; reflexivity
+      | intros l [Hl | [ ]]; discriminate Hl ].
   cbn [eval_prim eval_unary_primitive int_of_value].
   rewrite Hrange. reflexivity.
 Qed.
 
 Lemma step_bind_negated (v : variable) (i : Z) (c : const) (body : expr)
-    (vars : env) (conts : cont_env) (statics : static_env) (hp : heap) :
+    (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+      (rd : read_record) :
   lookup v vars = Some (Value_const (Tagged_immediate i)) ->
   constant_of_arm By_tagging_and_negating i = Some c ->
-  step (State (bind_negated v body) vars conts statics hp)
-  = Step (State body ((v, Value_const c) :: vars) conts statics hp).
+  step (State (bind_negated v body) vars conts statics hp rd)
+  = Step (State body ((v, Value_const c) :: vars) conts statics hp rd).
 Proof.
-  intros Hv Hc. unfold bind_negated. rewrite step_let.
-  cbn [eval_named eval_simples eval_simple]. rewrite Hv.
+  intros Hv Hc. unfold bind_negated.
+  rewrite
+    (step_let_no_location _ _ _ _ _ _ _ _ _ rd_
+       [Value_const (Tagged_immediate i)]);
+    [ | intros q; discriminate
+      | cbn [eval_simples eval_simple]; rewrite Hv; reflexivity
+      | intros l [Hl | [ ]]; discriminate Hl ].
   cbn [eval_prim eval_unary_primitive int_of_value].
   unfold constant_of_arm in Hc.
   destruct (Z.eqb_spec i 0) as [-> | _];
@@ -182,8 +195,8 @@ Lemma merge_by_tagging_refines (v : variable) (merged : apply_cont)
   forallb (arm_is_merged By_tagging v merged) arms = true ->
   expr_refines (Switch (Var v) arms) (bind_tagged v (Apply_cont merged)).
 Proof.
-  intros Hall vars conts statics hp.
-  destruct (step_switch_cases (Var v) arms vars conts statics hp)
+  intros Hall vars conts statics hp rd.
+  destruct (step_switch_cases (Var v) arms vars conts statics hp rd)
     as [Hwrong | (w & i & ac & Hv & Hi & Hfind & Hstep)];
     [ apply step_undefined_refines, Hwrong | ].
   apply naked_immediate_of_value_some in Hi. subst w.
@@ -207,8 +220,8 @@ Lemma merge_by_negating_refines (v : variable) (merged : apply_cont)
   expr_refines (Switch (Var v) arms)
     (bind_tagged v (bind_negated v (Apply_cont merged))).
 Proof.
-  intros Hall vars conts statics hp.
-  destruct (step_switch_cases (Var v) arms vars conts statics hp)
+  intros Hall vars conts statics hp rd.
+  destruct (step_switch_cases (Var v) arms vars conts statics hp rd)
     as [Hwrong | (w & i & ac & Hv & Hi & Hfind & Hstep)];
     [ apply step_undefined_refines, Hwrong | ].
   apply naked_immediate_of_value_some in Hi. subst w.
@@ -249,8 +262,8 @@ Lemma merge_as_it_is_refines (v : variable) (merged : apply_cont)
   forallb (arm_is_merged As_it_is v merged) arms = true ->
   expr_refines (Switch (Var v) arms) (Apply_cont merged).
 Proof.
-  intros Hall vars conts statics hp.
-  destruct (step_switch_cases (Var v) arms vars conts statics hp)
+  intros Hall vars conts statics hp rd.
+  destruct (step_switch_cases (Var v) arms vars conts statics hp rd)
     as [Hwrong | (w & i & ac & Hv & Hi & Hfind & Hstep)];
     [ apply step_undefined_refines, Hwrong | ].
   apply naked_immediate_of_value_some in Hi. subst w.
@@ -281,17 +294,17 @@ Qed.
 
 Lemma merged_steps_as_arm_bound (v : variable) (c : const)
     (merged : apply_cont) (vars vars' : env) (conts : cont_env)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   lookup v vars' = Some (Value_const c) ->
   (∀ x : variable, x <> v -> lookup x vars' = lookup x vars) ->
-  step (State (Apply_cont merged) vars' conts statics hp)
+  step (State (Apply_cont merged) vars' conts statics hp rd)
   = step
       (State
          (Apply_cont
             (Apply_cont_expr (ac_continuation merged)
                (map (constant_for v c) (ac_args merged))
                (ac_trap_action merged)))
-         vars conts statics hp).
+         vars conts statics hp rd).
 Proof.
   intros Hv Hagree. rewrite !step_apply_cont. simpl.
   rewrite (eval_simples_constant_bound v c vars vars' _ Hv Hagree).
@@ -314,15 +327,16 @@ Qed.
    the step makes of the integer that it holds. *)
 Lemma step_bind_arithmetic_step (standard : standard_int) (v : variable)
     (arith : arithmetic_step) (a a' : Z) (body : expr) (vars : env)
-    (conts : cont_env) (statics : static_env) (hp : heap) :
+    (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record) :
   lookup v vars = Some (Value_const (const_of_int standard a)) ->
   in_range (int_width standard) a = true ->
   arithmetic_step_value (int_width standard) arith a = Some a' ->
   step
-    (State (bind_arithmetic_step standard v arith body) vars conts statics hp)
+    (State (bind_arithmetic_step standard v arith body) vars conts statics hp
+       rd)
   = Step
       (State body ((v, Value_const (const_of_int standard a')) :: vars) conts
-         statics hp).
+         statics hp rd).
 Proof.
   intros Hv Hrange Hvalue.
   assert
@@ -339,11 +353,32 @@ Proof.
           (kind_of_standard_int standard)
         = true).
   { intros c. destruct standard; reflexivity. }
-  unfold bind_arithmetic_step. rewrite step_let.
+  assert
+    (Hnone :
+      ∀ (c1 c2 : Z) (l : location),
+        Value_location l
+        ∉ [Value_const (const_of_int standard c1);
+           Value_const (const_of_int standard c2)]).
+  { intros c1 c2 l [Hl | [Hl | [ ]]]; destruct standard; discriminate Hl. }
+  unfold bind_arithmetic_step.
   destruct arith as [c | c | c]; cbn [arithmetic_step_value] in Hvalue;
     destruct (in_range (int_width standard) c) eqn:Hc; try discriminate;
-    injection Hvalue as <-;
-    cbn [eval_named eval_simples eval_simple]; rewrite Hv;
+    injection Hvalue as <-; cbn beta iota zeta;
+    [ rewrite
+        (step_let_no_location _ _ _ _ _ _ _ _ _ rd_
+           [Value_const (const_of_int standard a);
+            Value_const (const_of_int standard c)])
+    | rewrite
+        (step_let_no_location _ _ _ _ _ _ _ _ _ rd_
+           [Value_const (const_of_int standard c);
+            Value_const (const_of_int standard a)])
+    | rewrite
+        (step_let_no_location _ _ _ _ _ _ _ _ _ rd_
+           [Value_const (const_of_int standard c);
+            Value_const (const_of_int standard a)]) ];
+    try (intros q; discriminate);
+    try (cbn [eval_simples eval_simple]; rewrite Hv; reflexivity);
+    try apply Hnone;
     cbn [eval_prim eval_binary_primitive];
     rewrite (Hint a Hrange), (Hint c Hc); cbn [eval_int_arith];
     rewrite Hkind; reflexivity.
@@ -353,7 +388,7 @@ Qed.
    environment that they leave binds the other variables as before. *)
 Lemma bind_arithmetic_steps_equivalent (standard : standard_int)
     (v : variable) (body : expr) (conts : cont_env) (statics : static_env)
-    (hp : heap) (steps : list arithmetic_step) :
+    (hp : heap) (rd : read_record) (steps : list arithmetic_step) :
   ∀ (a a' : Z) (vars : env),
     lookup v vars = Some (Value_const (const_of_int standard a)) ->
     in_range (int_width standard) a = true ->
@@ -363,8 +398,8 @@ Lemma bind_arithmetic_steps_equivalent (standard : standard_int)
       ∧ (∀ x : variable, x <> v -> lookup x vars' = lookup x vars)
       ∧ equivalent
           (State (bind_arithmetic_steps standard v steps body) vars conts
-             statics hp)
-          (State body vars' conts statics hp).
+             statics hp rd)
+          (State body vars' conts statics hp rd).
 Proof.
   induction steps as [ | arith steps IH]; intros a a' vars Hv Hrange Hvalue.
   - injection Hvalue as <-. exists vars.
@@ -385,7 +420,7 @@ Proof.
         apply step_equivalent.
         exact
           (step_bind_arithmetic_step standard v arith a a1 _ vars conts
-             statics hp Hv Hrange Hstep).
+             statics hp rd Hv Hrange Hstep).
 Qed.
 
 Lemma merge_by_arithmetic_refines (kind : arithmetic_kind) (offset slope : Z)
@@ -395,8 +430,8 @@ Lemma merge_by_arithmetic_refines (kind : arithmetic_kind) (offset slope : Z)
   expr_refines (Switch (Var v) arms)
     (bind_arithmetic kind offset slope v (Apply_cont merged)).
 Proof.
-  intros Hall vars conts statics hp.
-  destruct (step_switch_cases (Var v) arms vars conts statics hp)
+  intros Hall vars conts statics hp rd.
+  destruct (step_switch_cases (Var v) arms vars conts statics hp rd)
     as [Hwrong | (w & i & ac & Hv & Hi & Hfind & Hstep)];
     [ apply step_undefined_refines, Hwrong | ].
   apply naked_immediate_of_value_some in Hi. subst w.
@@ -417,7 +452,7 @@ Proof.
       | ].
     destruct
       (bind_arithmetic_steps_equivalent Standard_tagged_immediate v
-         (Apply_cont merged) conts statics hp
+         (Apply_cont merged) conts statics hp rd
          (arithmetic_steps (int_width Standard_tagged_immediate) offset slope)
          i a ((v, Value_const (Tagged_immediate i)) :: vars))
       as (vars' & Hv' & Hagree & Hequiv);
@@ -428,7 +463,7 @@ Proof.
     intros x Hne. rewrite (Hagree x Hne). apply lookup_other_variable, Hne.
   - destruct
       (bind_arithmetic_steps_equivalent Standard_naked_immediate v
-         (Apply_cont merged) conts statics hp
+         (Apply_cont merged) conts statics hp rd
          (arithmetic_steps (int_width Standard_naked_immediate) offset slope)
          i a vars)
       as (vars' & Hv' & Hagree & Hequiv);
@@ -466,29 +501,34 @@ Qed.
 (* ======================================================================== *)
 
 Lemma step_bind_tagged_to (v x : variable) (i : Z) (body : expr) (vars : env)
-    (conts : cont_env) (statics : static_env) (hp : heap) :
+    (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record) :
   lookup v vars = Some (Value_const (Naked_immediate i)) ->
   in_range (int_width Standard_naked_immediate) i = true ->
-  step (State (bind_tagged_to v x body) vars conts statics hp)
+  step (State (bind_tagged_to v x body) vars conts statics hp rd)
   = Step
       (State body ((x, Value_const (Tagged_immediate i)) :: vars) conts
-         statics hp).
+         statics hp rd).
 Proof.
-  intros Hv Hrange. unfold bind_tagged_to. rewrite step_let.
-  cbn [eval_named eval_simples eval_simple]. rewrite Hv.
+  intros Hv Hrange. unfold bind_tagged_to.
+  rewrite
+    (step_let_no_location _ _ _ _ _ _ _ _ _ rd_
+       [Value_const (Naked_immediate i)]);
+    [ | intros q; discriminate
+      | cbn [eval_simples eval_simple]; rewrite Hv; reflexivity
+      | intros l [Hl | [ ]]; discriminate Hl ].
   cbn [eval_prim eval_unary_primitive int_of_value].
   rewrite Hrange. reflexivity.
 Qed.
 
 Lemma step_bind_same_to (v x : variable) (i : Z) (body : expr) (vars : env)
-    (conts : cont_env) (statics : static_env) (hp : heap) :
+    (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record) :
   lookup v vars = Some (Value_const (Naked_immediate i)) ->
-  step (State (bind_same_to v x body) vars conts statics hp)
+  step (State (bind_same_to v x body) vars conts statics hp rd)
   = Step
       (State body ((x, Value_const (Naked_immediate i)) :: vars) conts
-         statics hp).
+         statics hp rd).
 Proof.
-  intros Hv. unfold bind_same_to. rewrite step_let.
+  intros Hv. unfold bind_same_to. rewrite step_let_simple.
   cbn [eval_named eval_simple]. rewrite Hv. reflexivity.
 Qed.
 
@@ -503,14 +543,14 @@ Definition way_binds (how : merge_by) : bool :=
    and leave the other variables as they are. *)
 Lemma bind_way_equivalent (how : merge_by) (v x : variable) (i : Z)
     (c : const) (body : expr) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   lookup v vars = Some (Value_const (Naked_immediate i)) ->
   constant_of_arm how i = Some c ->
   ∃ vars' : env,
     (∀ y : variable, y <> x -> lookup y vars' = lookup y vars)
     ∧ (way_binds how = true -> lookup x vars' = Some (Value_const c))
-    ∧ equivalent (State (bind_way how v x body) vars conts statics hp)
-        (State body vars' conts statics hp).
+    ∧ equivalent (State (bind_way how v x body) vars conts statics hp rd)
+        (State body vars' conts statics hp rd).
 Proof.
   intros Hv Hc. destruct how as [ | | | kind offset slope].
   - cbn [constant_of_arm] in Hc.
@@ -548,7 +588,7 @@ Proof.
     destruct kind; cbn [standard_int_of_arithmetic_kind] in *.
     + destruct
         (bind_arithmetic_steps_equivalent Standard_tagged_immediate x body
-           conts statics hp
+           conts statics hp rd
            (arithmetic_steps (int_width Standard_tagged_immediate) offset
               slope)
            i a ((x, Value_const (Tagged_immediate i)) :: vars))
@@ -563,7 +603,7 @@ Proof.
       apply step_equivalent, (step_bind_tagged_to v x i); assumption.
     + destruct
         (bind_arithmetic_steps_equivalent Standard_naked_immediate x body
-           conts statics hp
+           conts statics hp rd
            (arithmetic_steps (int_width Standard_naked_immediate) offset
               slope)
            i a ((x, Value_const (Naked_immediate i)) :: vars))
@@ -635,6 +675,7 @@ Qed.
    merged arguments have the values of the arguments of the arm. *)
 Lemma bind_ways_equivalent (v : variable) (i : Z) (avoid : list variable)
     (body : expr) (conts : cont_env) (statics : static_env) (hp : heap)
+      (rd : read_record)
     (names : list variable) :
   ∀ (ways : list argument_way) (args : list simple) (vars : env),
     lookup v vars = Some (Value_const (Naked_immediate i)) ->
@@ -647,8 +688,8 @@ Lemma bind_ways_equivalent (v : variable) (i : Z) (avoid : list variable)
     ∃ vars' : env,
       (∀ y : variable, among y names = false -> lookup y vars' = lookup y vars)
       ∧ equivalent
-          (State (bind_ways v names ways body) vars conts statics hp)
-          (State body vars' conts statics hp)
+          (State (bind_ways v names ways body) vars conts statics hp rd)
+          (State body vars' conts statics hp rd)
       ∧ eval_simples vars' (merged_by_ways v names ways)
         = eval_simples vars args.
 Proof.
@@ -709,7 +750,7 @@ Proof.
       injection Hs0 as <-.
       destruct
         (bind_way_equivalent how v x i c (bind_ways v names ways body) vars
-           conts statics hp Hv Hc)
+           conts statics hp rd Hv Hc)
         as (vars1 & Hagree1 & Hx1 & Hequiv1).
       assert (Hv1 : lookup v vars1 = Some (Value_const (Naked_immediate i))).
       { rewrite (Hagree1 v Hvx). exact Hv. }
@@ -779,10 +820,10 @@ Proof.
   apply andb_prop in Husable as [Husable Hvnames].
   apply andb_prop in Husable as [Hlength Hdistinct].
   apply Nat.eqb_eq in Hlength. apply negb_true_iff in Hvnames.
-  intros vars conts statics hp.
+  intros vars conts statics hp rd.
   destruct
     (step_switch_cases (Var v) (((i0, ac0) :: arm1 :: others)) vars conts
-       statics hp)
+       statics hp rd)
     as [Hwrong | (w & i & ac & Hv & Hi & Hfind & Hstep)];
     [ apply step_undefined_refines, Hwrong | ].
   apply naked_immediate_of_value_some in Hi. subst w.
@@ -792,7 +833,7 @@ Proof.
        (Apply_cont
           (Apply_cont_expr (ac_continuation ac0)
              (merged_by_ways v names ways) None))
-       conts statics hp names ways args vars Hv Hlength Hdistinct Hvnames
+       conts statics hp rd names ways args vars Hv Hlength Hdistinct Hvnames
        (fun x Hx => Hx) Hsame Hargs)
     as (vars' & _ & Hequiv & Heval).
   apply equivalent_refines.

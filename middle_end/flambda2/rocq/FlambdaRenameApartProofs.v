@@ -49,7 +49,7 @@ Proof.
   intros avoid e. unfold rename_apart_avoiding.
   destruct (expr_eqb [] [] e (renamed_apart_avoiding avoid e)) eqn:Hsame.
   - exact (expr_eqb_sound _ _ Hsame).
-  - intros vars conts statics hp. apply equivalent_refl.
+  - intros vars conts statics hp rd. apply equivalent_refl.
 Qed.
 
 Theorem rename_apart_equivalent : rename_apart_equivalent_statement.

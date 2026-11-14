@@ -474,10 +474,10 @@ Qed.
 
 Theorem state_finitely_supported : state_finitely_supported_statement.
 Proof.
-  intros [e vars conts statics hp].
+  intros [e vars conts statics hp rd].
   exact (supported4 rename_expr rename_env rename_cont_env rename_static_env
            rename_state
-           (fun e vars conts statics => State e vars conts statics hp)
+           (fun e vars conts statics => State e vars conts statics hp rd)
            e vars conts statics (fun r => eq_refl)
            (expr_supported e) (env_supported vars) (cont_env_supported conts)
            (static_env_supported statics)).

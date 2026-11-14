@@ -64,7 +64,8 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaMapProofs FlambdaPrimitiveModel FlambdaPrimitiveProofs
   FlambdaSemanticsSpec FlambdaSemanticsProofs FlambdaClosuresSpec
   FlambdaClosuresProofs FlambdaLiftProofs FlambdaRegionsSpec
-  FlambdaRegionsProofs FlambdaRegionsErasureSpec.
+  FlambdaRegionsProofs FlambdaRegionsNeedsHeapProofs
+  FlambdaRegionsErasureSpec.
 Import ListNotations.
 
 (* The static environment that [step] is given is not unfolded: the
@@ -1030,6 +1031,31 @@ Proof.
              move_to w w' v Hw).
 Qed.
 
+(* A defining expression that needs no heap under the variables of the
+   machine of regions needs none under the erased ones: the values of
+   its arguments are erased to values that are locations where they
+   are. *)
+Lemma named_needs_heap_erased (rs : region_state) (statics : static_env)
+    (vars vars' : env) (d : named) (v : value) :
+  env_erased rs vars vars' ->
+  forallb (simple_below (rs_base rs)) (simples_of_named d) = true ->
+  simples_usable rs vars (simples_of_named d) ->
+  eval_named statics vars d = Some v ->
+  named_needs_heap vars d = false ->
+  named_needs_heap vars' d = false.
+Proof.
+  intros Hvars Hbelow Husable Hv Hneeds.
+  destruct d as [s | p args | | | | | ]; try reflexivity.
+  rewrite eval_named_prim in Hv.
+  destruct (eval_simples vars args) as [vs | ] eqn:Hvs; [ | discriminate ].
+  destruct (eval_simples_erased rs vars vars' args Hvars Hbelow Husable vs Hvs)
+    as (vs' & Hvs' & Hrelated).
+  destruct p as [u | b | va | hp | rp]; try discriminate Hneeds;
+    cbn [named_needs_heap] in Hneeds |- *; rewrite Hvs in Hneeds;
+    rewrite Hvs', (values_erased_is_location rs vs vs' Hrelated);
+    exact Hneeds.
+Qed.
+
 (* ======================================================================== *)
 (* Continuations                                                            *)
 (* ======================================================================== *)
@@ -1375,7 +1401,8 @@ Definition state_erased (rs : region_state) (s' : state) : Prop :=
     ∧ env_erased rs (state_vars (rs_state rs)) (state_vars s')
     ∧ conts_erased rs (state_conts (rs_state rs)) (state_conts s')
     ∧ statics_erased rs (state_statics s')
-    ∧ state_heap s' = state_heap (rs_state rs).
+    ∧ state_heap s' = state_heap (rs_state rs)
+    ∧ state_reads s' = state_reads (rs_state rs).
 
 (* Two states of the machine of regions with the same base, the same
    static environment and the same symbols bound. They relate the same
@@ -1573,7 +1600,7 @@ Proof.
   split; [ intros k; exact I | ].
   split; [ apply env_erased_nil | ].
   split; [ constructor | ].
-  split; [ | reflexivity ].
+  split; [ | split; reflexivity ].
   split; [ intros id; apply lookup_erased_code | ].
   split.
   { intros id c Hid. unfold statics_return_no_region in Hstatics.

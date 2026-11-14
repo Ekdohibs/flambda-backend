@@ -72,18 +72,18 @@ Qed.
 Lemma shortcut_arms_equivalent (k : continuation)
     (metadata : handler_metadata) (target : apply_cont) (s : simple)
     (arms : list (Z * apply_cont)) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   hm_params_kinds metadata = [] ->
   ac_continuation target <> k ->
   equivalent
     (State (Switch s arms) vars
        ((k, Closure (Handler [] metadata (Apply_cont target)) vars conts [])
         :: conts)
-       statics hp)
+       statics hp rd)
     (State (Switch s (map (shortcut_arm k target) arms)) vars
        ((k, Closure (Handler [] metadata (Apply_cont target)) vars conts [])
         :: conts)
-       statics hp).
+       statics hp rd).
 Proof.
   intros Hno_kinds Hother.
   destruct (eval_simple vars s) as [v | ] eqn:Hs;
@@ -105,9 +105,11 @@ Proof.
   destruct args; [ | apply equivalent_refl ].
   destruct (Pos.eqb_spec applied k) as [-> | _]; [ | apply equivalent_refl ].
   simpl. destruct (no_trap_action _); [ | apply equivalent_refl ]. simpl.
-  apply (equivalent_trans _ (State (Apply_cont target) vars conts statics hp)).
+  apply
+    (equivalent_trans _ (State (Apply_cont target) vars conts statics hp rd)).
   - apply step_equivalent.
-    apply (step_apply_cont_handler _ _ _ _ _ [] [] metadata (Apply_cont target)
+    apply
+      (step_apply_cont_handler _ _ _ _ _ rd_ [] [] metadata (Apply_cont target)
       vars conts []);
       [ reflexivity | apply resolve_head
       | rewrite Hno_kinds; reflexivity | reflexivity ].
@@ -120,21 +122,21 @@ Lemma shortcut_switch_equivalent (k : continuation) (h : continuation_handler)
 Proof.
   unfold shortcut_switch.
   destruct h as [[ | param params] metadata handler];
-    try (intros vars conts statics hp; apply equivalent_refl).
+    try (intros vars conts statics hp rd; apply equivalent_refl).
   destruct handler as [ | | | | | target | | ];
-    try (intros vars conts statics hp; apply equivalent_refl).
-  destruct body; try (intros vars conts statics hp; apply equivalent_refl).
+    try (intros vars conts statics hp rd; apply equivalent_refl).
+  destruct body; try (intros vars conts statics hp rd; apply equivalent_refl).
   destruct (hm_params_kinds metadata) eqn:Hno_kinds;
-    [ | intros vars conts statics hp; apply equivalent_refl ].
+    [ | intros vars conts statics hp rd; apply equivalent_refl ].
   destruct (Pos.eqb_spec (ac_continuation target) k) as [ | Hother];
-    [ intros vars conts statics hp; apply equivalent_refl | ].
+    [ intros vars conts statics hp rd; apply equivalent_refl | ].
   cbn [orb].
   destruct (hm_is_exn_handler metadata);
-    [ intros vars conts statics hp; apply equivalent_refl | ].
+    [ intros vars conts statics hp rd; apply equivalent_refl | ].
   cbn [orb].
   destruct (no_trap_action target);
-    [ | intros vars conts statics hp; apply equivalent_refl ].
-  cbn [negb]. intros vars conts statics hp.
+    [ | intros vars conts statics hp rd; apply equivalent_refl ].
+  cbn [negb]. intros vars conts statics hp rd.
   destruct (arms_apply k (map (shortcut_arm k target) arms)) eqn:Happly.
   - apply let_cont_non_recursive_equivalent_step, shortcut_arms_equivalent;
       [ exact Hno_kinds | exact Hother ].
@@ -152,7 +154,7 @@ Proof.
   destruct e
     as [ x kind d body | bindings body | k [params metadata handler] body
        | handlers body | ap | ac | scrutinee arms | ];
-    simpl; try (intros vars conts statics hp; apply equivalent_refl).
+    simpl; try (intros vars conts statics hp rd; apply equivalent_refl).
   - exact (plug_equivalent (Let_body x kind d Hole) _ _ (not_many _)
       (shortcut_switches_equivalent_aux body)).
   - exact (plug_equivalent (Let_static_body bindings Hole) _ _ (not_many _)

@@ -56,7 +56,8 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaMapProofs FlambdaPrimitiveModel FlambdaPrimitiveProofs
   FlambdaSemanticsSpec FlambdaSemanticsProofs FlambdaClosuresSpec
   FlambdaClosuresProofs FlambdaLiftProofs FlambdaRegionsSpec
-  FlambdaRegionsProofs FlambdaRegionsErasureSpec FlambdaRegionsErasedProofs.
+  FlambdaRegionsProofs FlambdaRegionsNeedsHeapProofs FlambdaRegionsErasureSpec
+  FlambdaRegionsErasedProofs.
 Import ListNotations.
 
 #[local] Opaque live_statics.
@@ -445,9 +446,9 @@ Definition step_result_erased (rs : region_state)
     (result result' : step_result) : Prop :=
   match result with
   | Undefined => True
-  | Exit k vs hp =>
+  | Exit k vs hp rd =>
     ∃ vs' : list value,
-      result' = Exit k vs' hp ∧ Forall2 (value_erased_if_usable rs) vs vs'
+      result' = Exit k vs' hp rd ∧ Forall2 (value_erased_if_usable rs) vs vs'
   | Step s1 =>
     ∃ s1' : state, result' = Step s1' ∧ state_erased (plain_next rs s1) s1'
   end.
@@ -456,18 +457,18 @@ Definition step_result_erased (rs : region_state)
    related to its parts, under the state before. *)
 Lemma state_erased_plain_next (rs : region_state) (rconts : region_conts)
     (e1 : expr) (vars1 vars1' : env) (conts1 conts1' : cont_env)
-    (statics statics' : static_env) (hp : heap) :
+    (statics statics' : static_env) (hp : heap) (rd : read_record) :
   calls_return_no_region rconts e1 = true ->
   conts_agree rconts conts1 ->
   env_erased rs vars1 vars1' ->
   conts_erased rs conts1 conts1' ->
   statics_erased rs statics' ->
-  state_erased (plain_next rs (State e1 vars1 conts1 statics hp))
-    (State (erase rconts e1) vars1' conts1' statics' hp).
+  state_erased (plain_next rs (State e1 vars1 conts1 statics hp rd))
+    (State (erase rconts e1) vars1' conts1' statics' hp rd).
 Proof.
   intros Hreturns Hagree Hvars Hconts Hstatics.
   pose proof
-    (same_statics_plain rs (State e1 vars1 conts1 statics hp) (rs_next rs)
+    (same_statics_plain rs (State e1 vars1 conts1 statics hp rd) (rs_next rs)
        (rs_counts rs))
     as Hsame.
   pose proof (same_statics_extends _ _ Hsame) as Hextends.
@@ -476,7 +477,8 @@ Proof.
   split; [ exact Hagree | ].
   split; [ exact (env_erased_extend _ _ _ _ Hextends Hvars) | ].
   split; [ exact (conts_erased_extend _ _ _ _ Hextends Hconts) | ].
-  split; [ exact (statics_erased_same _ _ _ Hsame Hstatics) | reflexivity ].
+  split; [ exact (statics_erased_same _ _ _ Hsame Hstatics) | ].
+  split; reflexivity.
 Qed.
 
 (* ======================================================================== *)
@@ -729,7 +731,8 @@ Qed.
 Lemma call_code_erased (rs : region_state) (statics' : static_env)
     (closure closure' : value) (c : code) (vs vs' : list value)
     (args_arity return_arity : arity)
-    (return_to return_to' exn_to exn_to' : cont_value) (hp : heap) :
+    (return_to return_to' exn_to exn_to' : cont_value) (hp : heap)
+      (rd : read_record) :
   value_erased rs closure closure' ->
   code_returns_no_region c = true ->
   Forall2 (value_erased_if_usable rs) vs vs' ->
@@ -740,9 +743,9 @@ Lemma call_code_erased (rs : region_state) (statics' : static_env)
   statics_erased rs statics' ->
   step_result_erased rs
     (call_code closure c vs args_arity return_arity return_to exn_to
-       (live_statics rs) hp)
+       (live_statics rs) hp rd)
     (call_code closure' (erase_code c) vs' args_arity return_arity return_to'
-       exn_to' statics' hp).
+       exn_to' statics' hp rd).
 Proof.
   intros Hclosure Hc Hvs Hreturn_takes Hexn_takes Hreturn Hexn Hstatics.
   unfold step_result_erased, call_code.
@@ -786,7 +789,8 @@ Qed.
 Lemma run_call_erased (rs : region_state) (statics' : static_env)
     (return_partial return_partial' : value -> step_result)
     (shape shape' : call_shape) (return_arity : arity)
-    (return_to return_to' exn_to exn_to' : cont_value) (hp : heap) :
+    (return_to return_to' exn_to exn_to' : cont_value) (hp : heap)
+      (rd : read_record) :
   shape_erased rs shape shape' ->
   cont_takes_no_region return_to ->
   cont_takes_no_region exn_to ->
@@ -799,9 +803,9 @@ Lemma run_call_erased (rs : region_state) (statics' : static_env)
       (return_partial' partial')) ->
   step_result_erased rs
     (run_call return_partial (Some shape) return_arity return_to exn_to
-       (live_statics rs) hp)
+       (live_statics rs) hp rd)
     (run_call return_partial' (Some shape') return_arity return_to' exn_to'
-       statics' hp).
+       statics' hp rd).
 Proof.
   intros Hshape Hreturn_takes Hexn_takes Hreturn Hexn Hstatics Hpartial.
   destruct Hshape
@@ -819,7 +823,7 @@ Proof.
             exn_to)
          (Over_application remaining' remaining_arity return_arity return_to'
             exn_to')
-         exn_to exn_to' hp Hclosure Hc Hvs I Hexn_takes
+         exn_to exn_to' hp rd_ Hclosure Hc Hvs I Hexn_takes
          (Erased_over_application rs remaining remaining' remaining_arity
             return_arity return_to return_to' exn_to exn_to' Hremaining
             Hreturn_takes Hexn_takes Hreturn Hexn)
@@ -832,7 +836,8 @@ Qed.
 Lemma call_function_erased_from (rs : region_state) (statics' : static_env)
     (callee callee' : value) (kind : call_kind) (vs vs' : list value)
     (args_arity return_arity : arity)
-    (return_to return_to' exn_to exn_to' : cont_value) (hp : heap) :
+    (return_to return_to' exn_to exn_to' : cont_value) (hp : heap)
+      (rd : read_record) :
   value_erased_if_usable rs callee callee' ->
   Forall2 (value_erased_if_usable rs) vs vs' ->
   cont_takes_no_region return_to ->
@@ -843,13 +848,13 @@ Lemma call_function_erased_from (rs : region_state) (statics' : static_env)
   (∀ partial partial' : value,
     value_erased rs partial partial' ->
     step_result_erased rs
-      (apply_cont_value return_to [partial] (live_statics rs) hp)
-      (apply_cont_value return_to' [partial'] statics' hp)) ->
+      (apply_cont_value return_to [partial] (live_statics rs) hp rd)
+      (apply_cont_value return_to' [partial'] statics' hp rd)) ->
   step_result_erased rs
     (call_function callee kind vs args_arity return_arity return_to exn_to
-       (live_statics rs) hp)
+       (live_statics rs) hp rd)
     (call_function callee' kind vs' args_arity return_arity return_to'
-       exn_to' statics' hp).
+       exn_to' statics' hp rd).
 Proof.
   intros Hcallee Hvs Hreturn_takes Hexn_takes Hreturn Hexn Hstatics Hpartial.
   unfold call_function.
@@ -863,7 +868,7 @@ Proof.
     as (shape' & -> & Hshapes).
   exact
     (run_call_erased rs statics' _ _ shape shape' return_arity _ _ _ _ hp
-       Hshapes Hreturn_takes Hexn_takes Hreturn Hexn Hstatics Hpartial).
+       rd_ Hshapes Hreturn_takes Hexn_takes Hreturn Hexn Hstatics Hpartial).
 Qed.
 
 (* Applying a continuation that takes no region. The values are related
@@ -876,10 +881,10 @@ Lemma apply_cont_value_erased (rs : region_state) (statics' : static_env)
   cont_erased rs c c' ->
   cont_takes_no_region c ->
   statics_erased rs statics' ->
-  ∀ (vs vs' : list value) (hp : heap),
+  ∀ (vs vs' : list value) (hp : heap) (rd : read_record),
     Forall2 (value_erased_if_usable rs) vs vs' ->
-    step_result_erased rs (apply_cont_value c vs (live_statics rs) hp)
-      (apply_cont_value c' vs' statics' hp).
+    step_result_erased rs (apply_cont_value c vs (live_statics rs) hp rd)
+      (apply_cont_value c' vs' statics' hp rd).
 Proof.
   intros Hc.
   induction Hc
@@ -890,7 +895,7 @@ Proof.
        | remaining remaining' remaining_arity return_arity return_to
            return_to' exn_to exn_to' Hremaining Hreturn_takes Hexn_takes
            Hreturn IHreturn Hexn _ ];
-    intros Htop Hstatics vs vs' hp Hvs.
+    intros Htop Hstatics vs vs' hp rd Hvs.
   - simpl. exists vs'. split; [ reflexivity | exact Hvs ].
   - simpl in Htop.
     rewrite (erase_handler_no_region _ params metadata handler Htop).
@@ -928,7 +933,8 @@ Qed.
 Lemma call_function_erased (rs : region_state) (statics' : static_env)
     (callee callee' : value) (kind : call_kind) (vs vs' : list value)
     (args_arity return_arity : arity)
-    (return_to return_to' exn_to exn_to' : cont_value) (hp : heap) :
+    (return_to return_to' exn_to exn_to' : cont_value) (hp : heap)
+      (rd : read_record) :
   value_erased_if_usable rs callee callee' ->
   Forall2 (value_erased_if_usable rs) vs vs' ->
   cont_takes_no_region return_to ->
@@ -938,9 +944,9 @@ Lemma call_function_erased (rs : region_state) (statics' : static_env)
   statics_erased rs statics' ->
   step_result_erased rs
     (call_function callee kind vs args_arity return_arity return_to exn_to
-       (live_statics rs) hp)
+       (live_statics rs) hp rd)
     (call_function callee' kind vs' args_arity return_arity return_to'
-       exn_to' statics' hp).
+       exn_to' statics' hp rd).
 Proof.
   intros Hcallee Hvs Hreturn_takes Hexn_takes Hreturn Hexn Hstatics.
   apply call_function_erased_from; try assumption.
@@ -982,9 +988,9 @@ Qed.
    [Region] has no step, or takes no region: the kinds of the values
    are those of the parameters of its handler. *)
 Lemma applied_takes_no_region (c : cont_value) (vs : list value)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   Forall (fun v => kind_of_value v <> Region) vs ->
-  apply_cont_value c vs statics hp = Undefined ∨ cont_takes_no_region c.
+  apply_cont_value c vs statics hp rd = Undefined ∨ cont_takes_no_region c.
 Proof.
   intros Hkinds.
   destruct c
@@ -1006,13 +1012,15 @@ Qed.
 
 (* One step of [step], under the static environment of the frames, at
    an expression at whose head the machine of regions does nothing of
-   its own and that is not a [Let_static]. The premises beside the
-   relation: the expression names no symbol that the machine drew; the
-   simples that the step evaluates may be evaluated; and at an
-   [Apply_cont] no value of an argument is of the kind [Region]. *)
+   its own, that is not a [Let_static] and that is not a [Let] that
+   needs the heap (FlambdaRegionsSpec.named_needs_heap, decision D53:
+   the machine of regions does not run such a [Let]). The premises
+   beside the relation: the expression names no symbol that the machine
+   drew; the simples that the step evaluates may be evaluated; and at
+   an [Apply_cont] no value of an argument is of the kind [Region]. *)
 Lemma step_erased (rs : region_state) (rconts : region_conts) (e : expr)
     (vars vars' : env) (conts conts' : cont_env) (statics' : static_env)
-    (hp : heap) :
+    (hp : heap) (rd : read_record) :
   calls_return_no_region rconts e = true ->
   conts_agree rconts conts ->
   env_erased rs vars vars' ->
@@ -1021,17 +1029,19 @@ Lemma step_erased (rs : region_state) (rconts : region_conts) (e : expr)
   head_plain e = true ->
   (∀ (bindings : list static_binding) (body : expr),
     e <> Let_static bindings body) ->
+  (∀ (x : variable) (kind : flambda_kind) (d : named) (body : expr),
+    e = Let x kind d body -> named_needs_heap vars d = false) ->
   expr_below (rs_base rs) e = true ->
   simples_usable rs vars (evaluated_simples e) ->
   (∀ (ac : apply_cont) (vs : list value),
     e = Apply_cont ac ->
     eval_simples vars (ac_args ac) = Some vs ->
     Forall (fun v => kind_of_value v <> Region) vs) ->
-  step_result_erased rs (step (State e vars conts (live_statics rs) hp))
-    (step (State (erase rconts e) vars' conts' statics' hp)).
+  step_result_erased rs (step (State e vars conts (live_statics rs) hp rd))
+    (step (State (erase rconts e) vars' conts' statics' hp rd)).
 Proof.
-  intros Hreturns Hagree Hvars Hconts Hstatics Hhead Hnot_static Hbelow
-    Husable Hkinds.
+  intros Hreturns Hagree Hvars Hconts Hstatics Hhead Hnot_static Hneeds
+    Hbelow Husable Hkinds.
   pose proof (proj1 (proj2 (proj2 Hstatics))) as Hsymbols.
   destruct e
     as [ x xkind d body | bindings body | k h body | handlers body | ap | ac
@@ -1040,13 +1050,21 @@ Proof.
     destruct (head_plain_let rconts x xkind d body Hhead) as [-> Hsimples].
     rewrite Hsimples in Husable. simpl in Hbelow.
     apply andb_true_iff in Hbelow as [Hd_below _].
-    rewrite !step_let.
+    pose proof (Hneeds x xkind d body eq_refl) as Hrun.
+    rewrite
+      (step_let_needs_no_heap x xkind d body vars conts (live_statics rs) hp
+         rd Hrun).
     destruct (eval_named (live_statics rs) vars d) as [v | ] eqn:Hv;
       [ | exact I ].
     destruct
       (eval_named_erased rs statics' vars vars' d v Hsymbols Hvars Hd_below
          Husable Hv)
-      as (v' & -> & Hrelated).
+      as (v' & Hv' & Hrelated).
+    rewrite
+      (step_let_needs_no_heap x xkind d _ vars' conts' statics' hp rd
+         (named_needs_heap_erased rs _ vars vars' d v Hvars Hd_below Husable
+            Hv Hrun)),
+      Hv'.
     rewrite (kind_of_value_erased rs v v' Hrelated).
     destruct (kind_eqb (kind_of_value v) xkind); [ | exact I ].
     eexists. split; [ reflexivity | ].
@@ -1076,7 +1094,8 @@ Proof.
     simpl in Hreturns. apply andb_true_iff in Hreturns as [Hhandlers Hbody].
     eexists. split; [ reflexivity | ].
     apply state_erased_plain_next; try assumption.
-    + exact (conts_agree_rec rconts conts vars conts handlers handlers Hagree).
+    + exact
+      (conts_agree_rec rconts conts vars conts handlers handlers Hagree).
     + apply rec_closures_erased; assumption.
   - (* A call. *)
     cbn [erase]. rewrite !step_apply.
@@ -1129,7 +1148,7 @@ Proof.
     unfold apply_continuation.
     destruct
       (applied_takes_no_region (resolve (ac_continuation ac) conts) vs
-         (live_statics rs) hp (Hkinds ac vs eq_refl Hargs))
+         (live_statics rs) hp rd (Hkinds ac vs eq_refl Hargs))
       as [Hundefined | Htakes];
       [ rewrite Hundefined; exact I | ].
     rewrite (erase_apply_cont_no_region rconts conts ac Hagree Htakes).
@@ -1155,7 +1174,7 @@ Proof.
     eexists. split; [ reflexivity | ].
     exact
       (state_erased_plain_next rs rconts (Apply_cont ac) vars vars' conts
-         conts' _ statics' hp eq_refl Hagree Hvars Hconts Hstatics).
+         conts' _ statics' hp rd eq_refl Hagree Hvars Hconts Hstatics).
   - (* [Invalid]. *)
     rewrite step_invalid. exact I.
 Qed.
@@ -1172,10 +1191,10 @@ Qed.
 Definition result_erased (result : region_step_result)
     (result' : step_result) : Prop :=
   match result with
-  | Region_undefined _ => True
+  | Region_undefined _ | Region_let_not_run => True
   | Region_exit k vs rs1 =>
-    ∃ (vs' : list value) (hp : heap),
-      result' = Exit k vs' hp ∧ Forall2 (value_erased_if_usable rs1) vs vs'
+    ∃ (vs' : list value) (hp : heap) (rd : read_record),
+      result' = Exit k vs' hp rd ∧ Forall2 (value_erased_if_usable rs1) vs vs'
   | Region_step rs1 =>
     ∃ s1' : state, result' = Step s1' ∧ state_erased rs1 s1'
   end.
@@ -1186,6 +1205,7 @@ Theorem plain_step_erased (rs : region_state) (s' : state) :
   head_plain (state_expr (rs_state rs)) = true ->
   (∀ (bindings : list static_binding) (body : expr),
     state_expr (rs_state rs) <> Let_static bindings body) ->
+  needs_no_heap (rs_state rs) ->
   expr_below (rs_base rs) (state_expr (rs_state rs)) = true ->
   simples_usable rs (state_vars (rs_state rs))
     (evaluated_simples (state_expr (rs_state rs))) ->
@@ -1195,26 +1215,29 @@ Theorem plain_step_erased (rs : region_state) (s' : state) :
     Forall (fun v => kind_of_value v <> Region) vs) ->
   result_erased (plain_step rs) (step s').
 Proof.
-  intros (rconts & He & Hreturns & Hagree & Hvars & Hconts & Hstatics & Hheap)
-    Hhead Hnot_static Hbelow Husable Hkinds.
-  destruct s' as [e' vars' conts' statics' hp'].
-  simpl in He, Hvars, Hconts, Hstatics, Hheap. subst e' hp'.
+  intros
+    (rconts & He & Hreturns & Hagree & Hvars & Hconts & Hstatics & Hheap
+     & Hreads)
+    Hhead Hnot_static Hneeds Hbelow Husable Hkinds.
+  destruct s' as [e' vars' conts' statics' hp' rd'].
+  simpl in He, Hvars, Hconts, Hstatics, Hheap, Hreads. subst e' hp' rd'.
   pose proof
     (step_erased rs rconts (state_expr (rs_state rs))
        (state_vars (rs_state rs)) vars' (state_conts (rs_state rs)) conts'
-       statics' (state_heap (rs_state rs)) Hreturns Hagree Hvars Hconts
-       Hstatics Hhead Hnot_static Hbelow Husable Hkinds)
+       statics' (state_heap (rs_state rs)) (state_reads (rs_state rs)) Hreturns
+       Hagree Hvars Hconts Hstatics Hhead Hnot_static Hneeds Hbelow Husable
+       Hkinds)
     as Hcore.
   unfold plain_step, with_statics.
   destruct
     (step
        (State (state_expr (rs_state rs)) (state_vars (rs_state rs))
           (state_conts (rs_state rs)) (live_statics rs)
-          (state_heap (rs_state rs))))
-    as [s1 | k vs hp | ];
+          (state_heap (rs_state rs)) (state_reads (rs_state rs))))
+    as [s1 | k vs hp rd | ];
     simpl in Hcore |- *.
   - exact Hcore.
-  - destruct Hcore as (vs' & -> & Hvs). exists vs', hp.
+  - destruct Hcore as (vs' & -> & Hvs). exists vs', hp, rd.
     split; [ reflexivity | exact Hvs ].
   - exact I.
 Qed.
@@ -1230,10 +1253,12 @@ Theorem static_step_erased (rs : region_state) (s' : state)
     (evaluated_simples (state_expr (rs_state rs))) ->
   result_erased (static_step rs) (step s').
 Proof.
-  intros (rconts & He & Hreturns & Hagree & Hvars & Hconts & Hstatics & Hheap)
+  intros
+    (rconts & He & Hreturns & Hagree & Hvars & Hconts & Hstatics & Hheap
+     & Hreads)
     Hexpr Hbelow Husable.
-  destruct s' as [e' vars' conts' statics' hp'].
-  simpl in He, Hvars, Hconts, Hstatics, Hheap. subst e' hp'.
+  destruct s' as [e' vars' conts' statics' hp' rd'].
+  simpl in He, Hvars, Hconts, Hstatics, Hheap, Hreads. subst e' hp' rd'.
   rewrite Hexpr in Hreturns, Hbelow, Husable |- *.
   simpl in Hreturns, Hbelow, Husable.
   apply andb_true_iff in Hreturns as [Hbindings_return Hbody].
@@ -1243,7 +1268,7 @@ Proof.
        statics')
     as Hgroup.
   unfold static_step. cbn [erase].
-  destruct (rs_state rs) as [e vars conts statics hp] eqn:Hstate.
+  destruct (rs_state rs) as [e vars conts statics hp rd] eqn:Hstate.
   simpl in Hexpr, Hgroup, Hvars, Hconts, Hagree, Husable. subst e.
   rewrite !step_let_static.
   destruct (eval_static_bindings vars bindings statics) as [statics1 | ]
@@ -1256,7 +1281,7 @@ Proof.
   eexists. split; [ reflexivity | ].
   assert (Hsame :
     same_statics (with_region_statics rs statics1)
-      (Region_state (State body vars conts statics1 hp) (rs_frames rs)
+      (Region_state (State body vars conts statics1 hp rd) (rs_frames rs)
          (rs_base rs) (rs_next rs) (rs_counts rs))).
   { apply same_statics_intro; reflexivity. }
   pose proof
@@ -1267,7 +1292,8 @@ Proof.
   split; [ exact Hagree | ].
   split; [ exact (env_erased_extend _ _ _ _ Hextends1 Hvars) | ].
   split; [ exact (conts_erased_extend _ _ _ _ Hextends1 Hconts) | ].
-  split; [ exact (statics_erased_same _ _ _ Hsame Hstatics1) | reflexivity ].
+  split; [ exact (statics_erased_same _ _ _ Hsame Hstatics1) | ].
+  split; reflexivity.
 Qed.
 
 (* ======================================================================== *)
@@ -1370,11 +1396,14 @@ Proof.
   assert (Hplain :
     (∀ (bindings : list static_binding) (body : expr),
       state_expr (rs_state rs) <> Let_static bindings body) ->
+    (∀ (x : variable) (kind : flambda_kind) (d : named) (body : expr),
+      state_expr (rs_state rs) = Let x kind d body ->
+      named_needs_heap (state_vars (rs_state rs)) d = false) ->
     result_erased (plain_step (with_counts rs counts)) (step s')).
-  { intros Hnot_static.
+  { intros Hnot_static Hneeds.
     exact
       (plain_step_erased (with_counts rs counts) s' Hstate_c Hhead
-         Hnot_static Hbelow Husable_c Hkinds). }
+         Hnot_static Hneeds Hbelow Husable_c Hkinds). }
   assert (Hstatic :
     ∀ (bindings : list static_binding) (body : expr),
       state_expr (rs_state rs) = Let_static bindings body ->
@@ -1391,25 +1420,37 @@ Proof.
       ∀ (bindings : list static_binding) (body0 : expr),
         Let x xkind d body <> Let_static bindings body0)
       by (intros bindings body0; discriminate).
+    (* A [Let] that needs the heap is not run (decision D53), and
+       nothing is asked; of another, the test is what [plain_step_erased]
+       asks. *)
     destruct d as [ s | p args | | | | | ];
       try (destruct p; try discriminate Hhead);
       cbv beta iota; simpl in Hhead;
+      (destruct (named_needs_heap _ _) eqn:Hneeds; [ exact I | ]);
       (destruct (marker_of x body); try discriminate Hhead);
       cbv beta iota;
       (destruct (is_allocation _ && existsb _ _);
-       [ exact I | exact (Hplain Hnot_static) ]).
+       [ exact I
+       | apply (Hplain Hnot_static);
+         intros x0 kind0 d0 body0 [= <- <- <- <-]; exact Hneeds ]).
   - (* A [Let_static]. *)
     destruct
       (existsb (simple_local (with_counts rs counts))
          (evaluated_simples (Let_static bindings body)));
       [ exact I | ].
     exact (Hstatic bindings body eq_refl).
-  - apply Hplain. intros bindings body0. discriminate.
-  - apply Hplain. intros bindings body0. discriminate.
-  - apply Hplain. intros bindings body0. discriminate.
+  - apply Hplain; [ intros bindings body0 | intros x kind d body0 ];
+      discriminate.
+  - apply Hplain; [ intros bindings body0 | intros x kind d body0 ];
+      discriminate.
+  - apply Hplain; [ intros bindings body0 | intros x kind d body0 ];
+      discriminate.
   - (* An [Apply_cont]. *)
     rewrite existsb_open_mark_with_counts, (Hmarks ac eq_refl).
-    apply Hplain. intros bindings body0. discriminate.
-  - apply Hplain. intros bindings body0. discriminate.
-  - apply Hplain. intros bindings body0. discriminate.
+    apply Hplain; [ intros bindings body0 | intros x kind d body0 ];
+      discriminate.
+  - apply Hplain; [ intros bindings body0 | intros x kind d body0 ];
+      discriminate.
+  - apply Hplain; [ intros bindings body0 | intros x kind d body0 ];
+      discriminate.
 Qed.

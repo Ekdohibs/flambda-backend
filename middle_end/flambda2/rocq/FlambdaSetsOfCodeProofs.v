@@ -548,7 +548,7 @@ Lemma values_sets_have_step (s : state) :
   match step s with
   | Step s' =>
     state_values_all (fun _ v => Pv v) (fun _ allocated => Qv allocated) s'
-  | Exit _ vs _ => Forall Pv vs
+  | Exit _ vs _ _ => Forall Pv vs
   | Undefined => True
   end.
 Proof.
@@ -567,11 +567,13 @@ Proof.
               (value_sets_have_in_static_arrays (state_statics s) Hstatics) _
               Hprim).
     intros w [<- | []]. exact Htuple.
-  - intros x kind d body v hp' Hexpr Hexec. rewrite Hexpr in P.
+  - intros x kind d body v hp' rd' Hexpr Hexec. rewrite Hexpr in P.
     unfold Pe in P. cbn [sets_made] in P. rewrite sets_made_have_app in P.
     apply andb_true_iff in P as [Pd _].
     destruct Hvalid as (Hvars & _ & Hstatics & Hheap).
-    refine (exec_named_values_all Pv (state_statics s) (state_heap s) hp'
+    refine
+      (exec_named_values_all Pv (state_statics s) (state_heap s) hp'
+         (state_reads s) rd'
               (state_vars s) d v value_sets_have_of_numbers
               value_sets_have_of_blocks value_sets_have_of_arrays
               (value_sets_have_in_static_blocks (state_statics s) Hstatics)

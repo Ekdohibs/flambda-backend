@@ -33,24 +33,29 @@
    where the term runs. The converse is by the same recursion, with
    the lemmas of that file that keep what is known: where what is
    known holds, a defining expression and what the pass makes of it
-   have the same value or both have none ([share_named_same]). *)
+   run the same on the machine: to the same value, heap and read
+   record, or neither runs ([share_named_same]). *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaMapProofs FlambdaKindModel FlambdaValueSpec FlambdaPrimitiveModel
   FlambdaPrimitiveSpec FlambdaSemanticsSpec FlambdaSemanticsProofs
-  FlambdaContextProofs FlambdaWellFormedSpec FlambdaWellFormedProofs
+  FlambdaContextProofs FlambdaContextMemoryProofs FlambdaWellFormedSpec
+  FlambdaWellFormedProofs
   FlambdaNormaliseSpec FlambdaNormaliseProofs FlambdaCseSpec
   FlambdaCseProofs FlambdaCseEquivalentSpec.
 Import ListNotations.
 
-(* Where what is known holds, sharing does not change what a defining
-   expression evaluates to. *)
+(* Where what is known holds, sharing does not change how a defining
+   expression runs: the variable that takes the place of a primitive
+   holds the value that the primitive gives there, and the primitive
+   leaves the heap and the record as they are, as a variable does. *)
 Lemma share_named_same (known : computed) (vars : env)
-    (statics : static_env) (d : named) :
-  all_computed known vars statics ->
-  eval_named statics vars (share_named known d) = eval_named statics vars d.
+    (statics : static_env) (hp : heap) (rd : read_record) (d : named) :
+  all_computed known vars statics hp rd ->
+  exec_named statics hp rd vars (share_named known d)
+  = exec_named statics hp rd vars d.
 Proof.
   intros Hhold. unfold share_named.
   destruct d as [s | p args | code slots | fslot decls slots | slot closure
@@ -59,59 +64,54 @@ Proof.
   destruct (computed_by known p args) as [x | ] eqn:Hcomputed;
     [ | reflexivity ].
   destruct (Hhold _ (computed_by_sound _ _ _ _ Hcomputed))
-    as (vs & r & Hvs & Hprim & Hlookup).
-  simpl in Hvs, Hprim, Hlookup. simpl. rewrite Hvs. simpl.
-  rewrite Hprim. exact Hlookup.
+    as (_ & v & Hrun & Hlookup).
+  cbn [fst snd] in Hrun, Hlookup. rewrite Hrun.
+  cbn [exec_named eval_named eval_simple]. rewrite Hlookup. reflexivity.
 Qed.
 
 (* The term refines the result: FlambdaCseProofs.v has the converse. *)
 Fixpoint share_primitives_knowing_refined (e : expr) :
   ∀ (known : computed) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap),
-    all_computed known vars statics ->
-    refines (State (share_primitives_knowing known e) vars conts statics hp)
-      (State e vars conts statics hp)
+    (statics : static_env) (hp : heap) (rd : read_record),
+    all_computed known vars statics hp rd ->
+    refines (State (share_primitives_knowing known e) vars conts statics hp rd)
+      (State e vars conts statics hp rd)
 with share_primitives_in_handler_refined (h : continuation_handler) :
   ∀ (known : computed) (k : continuation) (body : expr) (vars : env)
-    (conts : cont_env) (statics : static_env) (hp : heap),
-    all_computed known vars statics ->
+    (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record),
+    all_computed known vars statics hp rd ->
     refines
       (State
          (Let_cont_non_recursive k (share_primitives_in_handler known h)
             body)
-         vars conts statics hp)
-      (State (Let_cont_non_recursive k h body) vars conts statics hp).
+         vars conts statics hp rd)
+      (State (Let_cont_non_recursive k h body) vars conts statics hp rd).
 Proof.
   - destruct e
       as [ x kind d body | bindings body | k h body | handlers body | ap
          | ac | scrutinee arms | ];
-      intros known vars conts statics hp Hhold; simpl.
+      intros known vars conts statics hp rd Hhold; simpl.
     + (* Let *)
-      pose proof (share_named_same known vars statics d Hhold) as Hsame.
-      destruct (eval_named statics vars d) as [v | ] eqn:Hd;
-        [ destruct (kind_eqb (kind_of_value v) kind) eqn:Hkind | ].
-      * eapply refines_step;
-          [ rewrite step_let, Hsame, Hkind; reflexivity
-          | rewrite step_let, Hd, Hkind; reflexivity
-          | ].
-        apply share_primitives_knowing_refined.
-        exact (all_computed_under_let known x d vars statics v Hhold Hd).
-      * apply step_undefined_refines. rewrite step_let, Hsame, Hkind.
-        reflexivity.
-      * apply step_undefined_refines. rewrite step_let, Hsame. reflexivity.
+      pose proof (share_named_same known vars statics hp rd d Hhold)
+        as Hsame.
+      apply let_refines_step_exec; [ symmetry; exact Hsame | ].
+      intros v hp' rd' Hd _. rewrite Hsame in Hd.
+      apply share_primitives_knowing_refined.
+      exact (all_computed_under_let known x d vars statics hp hp' rd rd' v
+        Hhold Hd).
     + (* Let_static *)
       apply let_static_refines_step.
       destruct (eval_static_bindings vars bindings statics)
         as [extended | ] eqn:Hbindings; [ | exact I ].
       apply share_primitives_knowing_refined.
-      exact (all_computed_extend known vars statics extended Hhold
+      exact (all_computed_extend known vars statics extended hp rd Hhold
         (eval_static_bindings_extend vars bindings _ _ Hbindings)).
     + (* Let_cont_non_recursive *)
       apply (refines_trans _
         (State
            (Let_cont_non_recursive k (share_primitives_in_handler known h)
               body)
-           vars conts statics hp)).
+           vars conts statics hp rd)).
       * apply let_cont_non_recursive_refines_step,
           share_primitives_knowing_refined, Hhold.
       * apply share_primitives_in_handler_refined, Hhold.
@@ -123,23 +123,20 @@ Proof.
     + apply refines_refl.
     + apply refines_refl.
   - destruct h as [params metadata handler].
-    intros known k body vars conts statics hp Hhold. simpl.
-    apply (let_cont_handler_refines_where (statics_extend statics)
-      (statics_extend_trans statics));
-      [ apply statics_extend_refl | ].
-    intros vs handler_vars conts' statics' hp' Hextend _ Hbind.
+    intros known k body vars conts statics hp rd Hhold. simpl.
+    apply (let_cont_handler_refines_where_memory (all_computed known vars)
+      (all_computed_extend known vars) (all_computed_evolves known vars));
+      [ exact Hhold | ].
+    intros vs handler_vars conts' statics' hp' rd' Hhold' _ Hbind.
     apply share_primitives_knowing_refined.
-    apply (all_computed_bind_params statics' params known vs vars
-      handler_vars);
-      [ exact (all_computed_extend known vars statics statics' Hhold
-          Hextend)
-      | exact Hbind ].
+    exact (all_computed_bind_params statics' hp' rd' params known vs vars
+      handler_vars Hhold' Hbind).
 Qed.
 
 Theorem share_known_primitives_equivalent :
   share_known_primitives_equivalent_statement.
 Proof.
-  intros e vars conts statics hp. apply refines_antisymmetric.
+  intros e vars conts statics hp rd. apply refines_antisymmetric.
   - apply share_primitives_knowing_refines. intros entry [].
   - apply share_primitives_knowing_refined. intros entry [].
 Qed.

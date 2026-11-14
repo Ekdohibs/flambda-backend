@@ -310,8 +310,8 @@ Definition copy_static_code_refines_observed_statement : Prop :=
     (conts : cont_env) (e e' : expr),
     copy_static_code ids symbols e = Some e' ->
     observers slots conts ->
-    refines (State e [] conts (imports_statics imports) empty_heap)
-      (State e' [] conts (imports_statics imports) empty_heap).
+    refines (State e [] conts (imports_statics imports) empty_heap no_reads)
+      (State e' [] conts (imports_statics imports) empty_heap no_reads).
 
 (* With no copy asked for, the term is as it was. *)
 Definition with_copies_none_statement : Prop :=
@@ -333,9 +333,9 @@ Definition with_copies_refines_observed_statement : Prop :=
     (copies : list (list (code_id * code_id) * list symbol))
     (conts : cont_env) (e : expr),
     observers slots conts ->
-    refines (State e [] conts (imports_statics imports) empty_heap)
+    refines (State e [] conts (imports_statics imports) empty_heap no_reads)
       (State (with_copies copies e) [] conts (imports_statics imports)
-         empty_heap).
+         empty_heap no_reads).
 
 (* The rewrite commutes with renaming, which renames no code id and no
    symbol, and so does the check. *)

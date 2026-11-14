@@ -44,7 +44,8 @@ Definition region_named (d : named) : bool :=
   end.
 
 (* The step of a [Let] of a named expression that is not a primitive of
-   regions, the test of the simples done. *)
+   regions and that the machine runs (decision D53), the test of the
+   simples done. *)
 Definition let_step (rs : region_state) (x : variable) (kind : flambda_kind)
     (d : named) (body : expr) : region_step_result :=
   match marker_of x body with
@@ -63,11 +64,32 @@ Lemma region_step_let (rs : region_state) (x : variable)
   simples_fault rs (evaluated_simples (state_expr (rs_state rs)))
     (region_places rs)
   = None ->
-  region_step rs = let_step (count_uses rs) x kind d body.
+  region_step rs
+  = if named_needs_heap (state_vars (rs_state rs)) d
+    then Region_let_not_run
+    else let_step (count_uses rs) x kind d body.
 Proof.
   intros He Hd Hfault. unfold region_step. cbv zeta. rewrite Hfault, He.
   destruct d as [s | [u | b | v | hp | rp] args | | | | | ];
     first [ reflexivity | discriminate ].
+Qed.
+
+(* Where it is a step, the machine ran the [Let]. *)
+Lemma region_step_let_step (rs rs' : region_state) (x : variable)
+    (kind : flambda_kind) (d : named) (body : expr) :
+  state_expr (rs_state rs) = Let x kind d body ->
+  region_named d = false ->
+  simples_fault rs (evaluated_simples (state_expr (rs_state rs)))
+    (region_places rs)
+  = None ->
+  region_step rs = Region_step rs' ->
+  named_needs_heap (state_vars (rs_state rs)) d = false
+  ∧ let_step (count_uses rs) x kind d body = Region_step rs'.
+Proof.
+  intros He Hd Hfault. rewrite (region_step_let rs x kind d body He Hd Hfault).
+  destruct (named_needs_heap (state_vars (rs_state rs)) d);
+    [ discriminate | ].
+  intros Hstep. split; [ reflexivity | exact Hstep ].
 Qed.
 
 (* The step of a [Let] of a primitive of regions. *)

@@ -93,9 +93,12 @@
      [simplify_switch_merging_of_meet_to_prove_refines_statement] at
      the transcribed meet that the contract is proved of): what
      [simplify_switch_merging] answers refines the [Switch], in the
-     states whose static environment is valid. It is the function of
-     the second slice with [rebuild_switch] where that has
-     [switch_of_arms].
+     states whose static environment is valid and in which what is
+     known holds ([expr_refines_under_valid_where]; with nothing known
+     that is the notion of the first two slices,
+     [expr_refines_under_valid_where_nothing_known_statement]). It is
+     the function of the second slice with [rebuild_switch] where that
+     has [switch_of_arms].
    - The functions commute with a renaming of variables
      ([merge_arms_rename_statement], [rebuild_switch_rename_statement],
      [simplify_switch_merging_rename_statement]): what is known and
@@ -108,15 +111,20 @@
      [example_switch_negate_statement]).
 
    What is assumed.
-   - That what is known holds: each variable that is known to hold
-     the result of a primitive is bound, in the state, to the value of
-     that primitive applied to the values of its arguments
+   - That what is known holds, in the state: each primitive that is
+     known is one whose value stays, and the machine, run on it and
+     its arguments in the state, gives the value that the variable
+     holds and leaves the heap and the read record as they are
      ([all_computed], ../../rocq/FlambdaCseSpec.v, where it is what
-     it means for what the pass that shares primitives knows to hold;
-     under a typing environment, [known_holds_under]). It is a
-     hypothesis about the caller, as the
-     soundness of the meet is in the first slice. Nothing here says
-     that what Simplify knows has it. With nothing known it holds, and
+     it means for what the pass that shares primitives knows to
+     hold). It is a hypothesis about the caller, as the soundness of
+     the meet is in the first slice. Nothing here says that what
+     Simplify knows has it. Under a typing environment it is asked
+     state by state, in the notion of refinement
+     ([expr_refines_under_valid_where]), and not of every state that
+     satisfies the environment: what is known may be of a primitive
+     that reads a cell, and a typing environment says nothing of the
+     heap. With nothing known it holds, and
      then nothing from before the [Switch] is used: a primitive is
      bound the first time an argument asks for it, and one that is
      bound for an argument may still be found for the next ones, where
@@ -621,26 +629,29 @@ Definition rebuild_switch (known : computed) (fresh : list variable)
 (* ======================================================================== *)
 
 (* That what is known holds in a state is [all_computed] of
-   ../../rocq/FlambdaCseSpec.v: each variable is bound to the value of
-   its primitive applied to the values of its arguments. *)
+   ../../rocq/FlambdaCseSpec.v: each primitive is one whose value
+   stays, and run by the machine in the state on its arguments it
+   gives the value that its variable holds, and leaves the heap and
+   the read record as they are. *)
 
 (* The merged term refines the [Switch]. *)
 Definition merge_arms_refines_statement : Prop :=
   ∀ (known : computed) (fresh : list variable) (scrutinee : simple)
     (arms : list (Z * apply_cont)) (e : expr) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap),
+    (statics : static_env) (hp : heap) (rd : read_record),
     merge_arms known fresh scrutinee arms = Some e ->
-    all_computed known vars statics ->
-    refines (State (Switch scrutinee arms) vars conts statics hp)
-      (State e vars conts statics hp).
+    all_computed known vars statics hp rd ->
+    refines (State (Switch scrutinee arms) vars conts statics hp rd)
+      (State e vars conts statics hp rd).
 
 Definition rebuild_switch_refines_statement : Prop :=
   ∀ (known : computed) (fresh : list variable) (scrutinee : simple)
     (arms : list (Z * apply_cont)) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap),
-    all_computed known vars statics ->
-    refines (State (Switch scrutinee arms) vars conts statics hp)
-      (State (rebuild_switch known fresh scrutinee arms) vars conts statics hp).
+    (statics : static_env) (hp : heap) (rd : read_record),
+    all_computed known vars statics hp rd ->
+    refines (State (Switch scrutinee arms) vars conts statics hp rd)
+      (State (rebuild_switch known fresh scrutinee arms) vars conts statics hp
+         rd).
 
 (* With nothing known, in every state. *)
 Definition rebuild_switch_nothing_known_refines_statement : Prop :=
@@ -653,13 +664,23 @@ Definition rebuild_switch_nothing_known_refines_statement : Prop :=
 (* After the first two slices                                               *)
 (* ======================================================================== *)
 
-(* What is known holds in the states that satisfy a typing environment
-   and whose static environment is valid. *)
-Definition known_holds_under (tenv : Typing_env.t) (known : computed) : Prop :=
-  ∀ (statics : static_env) (vars : env),
+(* Refinement in the states that satisfy a typing environment, whose
+   static environment is valid, and in which what is known holds. *)
+Definition expr_refines_under_valid_where (tenv : Typing_env.t)
+    (known : computed) (source target : expr) : Prop :=
+  ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+    (rd : read_record),
     statics_valid statics ->
     env_satisfies_strictly tenv statics vars ->
-    all_computed known vars statics.
+    all_computed known vars statics hp rd ->
+    refines (State source vars conts statics hp rd)
+      (State target vars conts statics hp rd).
+
+(* With nothing known it is [expr_refines_under_valid]. *)
+Definition expr_refines_under_valid_where_nothing_known_statement : Prop :=
+  ∀ (tenv : Typing_env.t) (source target : expr),
+    expr_refines_under_valid_where tenv [] source target
+    <-> expr_refines_under_valid tenv source target.
 
 (* [simplify_switch] with [rebuild_switch]: the arms are pruned and
    simplified as in the second slice ([simplify_arms]), and what is
@@ -682,12 +703,11 @@ Definition simplify_switch_merging_refines_statement : Prop :=
     meet_sound meet ->
     meet_keeps_terms meet ->
     apply_cont_rewrite_sound rewrite ->
-    known_holds_under tenv known ->
     typing_env_fits tenv ->
     Typing_env.mem_simple (Some Name_mode.normal) tenv scrutinee = true ->
     simplify_switch_merging meet rewrite known fresh tenv scrutinee arms
     = Some e ->
-    expr_refines_under_valid tenv (Switch scrutinee arms) e.
+    expr_refines_under_valid_where tenv known (Switch scrutinee arms) e.
 
 (* At the transcribed meet that the contract is proved of. *)
 Definition simplify_switch_merging_of_meet_to_prove_refines_statement : Prop :=
@@ -696,13 +716,12 @@ Definition simplify_switch_merging_of_meet_to_prove_refines_statement : Prop :=
     (scrutinee : simple) (arms : list (Z * apply_cont)) (e : expr),
     join_scoped_envs_sound join ->
     apply_cont_rewrite_sound rewrite ->
-    known_holds_under tenv known ->
     typing_env_fits tenv ->
     Typing_env.mem_simple (Some Name_mode.normal) tenv scrutinee = true ->
     simplify_switch_merging (meet_to_prove join fuel) rewrite known fresh tenv
       scrutinee arms
     = Some e ->
-    expr_refines_under_valid tenv (Switch scrutinee arms) e.
+    expr_refines_under_valid_where tenv known (Switch scrutinee arms) e.
 
 (* ======================================================================== *)
 (* Renaming                                                                 *)

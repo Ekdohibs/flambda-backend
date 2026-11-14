@@ -214,20 +214,20 @@ Qed.
 
 Theorem read_of_exec : read_of_exec_statement.
 Proof.
-  intros statics hp hp' vars d s p v Hread.
+  intros statics hp hp' rd rd' vars d s p v Hread.
   destruct (read_of_cases d s p Hread)
     as [(slot & -> & ->)
        | [(from & slot & -> & ->) | (kind & mut & field & -> & ->)]].
-  - rewrite (exec_named_not_prim statics hp vars _)
+  - rewrite (exec_named_not_prim statics hp rd vars _)
       by (intros q args; discriminate).
     destruct (eval_named statics vars _) as [w | ]; [ | discriminate ].
     simpl. intros [= <- <-]. split; reflexivity.
-  - rewrite (exec_named_not_prim statics hp vars _)
+  - rewrite (exec_named_not_prim statics hp rd vars _)
       by (intros q args; discriminate).
     destruct (eval_named statics vars _) as [w | ]; [ | discriminate ].
     simpl. intros [= <- <-]. split; reflexivity.
   - rewrite
-      (exec_named_no_location statics hp vars _ [Symbol s] [Value_symbol s])
+      (exec_named_no_location statics hp rd vars _ [Symbol s] [Value_symbol s])
       by first
            [ reflexivity
            | intros q; discriminate
@@ -405,7 +405,8 @@ Proof.
     as [x kind d body | bindings body | k h body | handlers body | ap | ac
        | scrutinee arms | ] eqn:Hexpr.
   - rewrite step_let_exec in Hstep.
-    destruct (exec_named statics (state_heap s) vars d) as [[v hp'] | ];
+    destruct (exec_named statics (state_heap s) (state_reads s) vars d) as
+      [[[v hp'] rd'] | ];
       [ | discriminate ].
     destruct (kind_eqb (kind_of_value v) kind); [ | discriminate ].
     injection Hstep as <-. left. reflexivity.
@@ -425,11 +426,11 @@ Proof.
     destruct (eval_simples vars (ap_args ap)) as [vs | ]; [ | discriminate ].
     destruct (eval_simples vars (exn_extra_simples ap)) as [extra | ];
       [ | discriminate ].
-    left. exact (call_function_statics _ _ _ _ _ _ _ _ _ _ Hstep).
+    left. exact (call_function_statics _ _ _ _ _ _ _ _ _ rd_ _ Hstep).
   - rewrite step_apply_cont in Hstep.
     destruct (eval_simples vars (ac_args ac)) as [vs | ]; [ | discriminate ].
     unfold apply_continuation in Hstep.
-    left. exact (apply_cont_value_statics _ _ _ _ _ Hstep).
+    left. exact (apply_cont_value_statics _ _ _ _ rd_ _ Hstep).
   - rewrite step_switch in Hstep.
     destruct (eval_simple vars scrutinee) as [v | ]; [ | discriminate ].
     destruct (naked_immediate_of_value v) as [i | ]; [ | discriminate ].
@@ -494,10 +495,10 @@ Qed.
 (* The invariant does not look at the expression of a state but to ask
    the check of it. *)
 Lemma held_inv_expr (e e' : expr) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   groups_hold held e' = groups_hold held e ->
-  held_inv (State e vars conts statics hp)
-  <-> held_inv (State e' vars conts statics hp).
+  held_inv (State e vars conts statics hp rd)
+  <-> held_inv (State e' vars conts statics hp rd).
 Proof.
   intros Hsame. unfold held_inv, groups_inv, terms_inv. simpl_state.
   rewrite Hsame. reflexivity.
@@ -785,13 +786,14 @@ Proof.
 Qed.
 
 Lemma inv_where_expr (made : reads_made) (def_vars : env) (e e' : expr)
-    (vars : env) (conts : cont_env) (statics : static_env) (hp : heap) :
+    (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+      (rd : read_record) :
   groups_hold held e' = groups_hold held e ->
-  inv_where made def_vars (State e vars conts statics hp)
-  <-> inv_where made def_vars (State e' vars conts statics hp).
+  inv_where made def_vars (State e vars conts statics hp rd)
+  <-> inv_where made def_vars (State e' vars conts statics hp rd).
 Proof.
   intros Hsame. unfold inv_where, inv. simpl_state.
-  pose proof (held_inv_expr held e e' vars conts statics hp Hsame) as Hiff.
+  pose proof (held_inv_expr held e e' vars conts statics hp rd Hsame) as Hiff.
   tauto.
 Qed.
 
@@ -802,32 +804,34 @@ Qed.
    from those that have it with the reads made where it is defined. *)
 Fixpoint share_reads_refines_aux (e : expr) {struct e} :
   ∀ (made : reads_made) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap),
-    inv (State e vars conts statics hp) ->
+    (statics : static_env) (hp : heap) (rd : read_record),
+    inv (State e vars conts statics hp rd) ->
     reads_hold held made vars statics ->
-    refines (State e vars conts statics hp)
-      (State (share_reads held made e) vars conts statics hp).
+    refines (State e vars conts statics hp rd)
+      (State (share_reads held made e) vars conts statics hp rd).
 Proof.
   destruct e
     as [ x kind d body | bindings body | k h body | handlers body | ap | ac
        | scrutinee arms | ];
-    intros made vars conts statics hp Hinv Hreads; cbn [share_reads];
+    intros made vars conts statics hp rd Hinv Hreads; cbn [share_reads];
     try apply refines_refl.
   - (* Let *)
-    destruct (exec_named statics hp vars d) as [[w hp'] | ] eqn:Hd;
+    destruct (exec_named statics hp rd vars d) as [[[w hp'] rd'] | ] eqn:Hd;
       [ | apply step_undefined_refines; rewrite step_let_exec, Hd;
           reflexivity ].
     destruct (kind_eqb (kind_of_value w) kind) eqn:Hkind;
       [ | apply step_undefined_refines; rewrite step_let_exec, Hd, Hkind;
           reflexivity ].
-    assert (Hnext : inv (State body ((x, w) :: vars) conts statics hp')).
+    assert (Hnext : inv (State body ((x, w) :: vars) conts statics hp' rd')).
     { apply (Hkept _ _ Hinv). rewrite step_let_exec, Hd, Hkind.
       reflexivity. }
     destruct (read_class held d) as [c | ] eqn:Hclass.
     + (* A read. *)
       unfold read_class in Hclass.
       destruct (read_of d) as [[s p] | ] eqn:Hread; [ | discriminate ].
-      destruct (read_of_exec statics hp hp' vars d s p w Hread Hd)
+      pose proof (exec_named_keeps_reads statics hp hp' rd rd' vars d w Hd)
+        as ->.
+      destruct (read_of_exec statics hp hp' rd rd vars d s p w Hread Hd)
         as [Heval ->].
       destruct (read_of_place statics vars d s p w Hread Heval)
         as (allocated & Hs & Hplace).
@@ -845,7 +849,7 @@ Proof.
         eapply refines_step;
           [ rewrite step_let_exec, Hd, Hkind; reflexivity
           | rewrite step_let_exec,
-              (exec_named_not_prim statics hp vars (Simple (Var v)))
+              (exec_named_not_prim statics hp rd vars (Simple (Var v)))
               by (intros q args; discriminate);
             cbn [eval_named eval_simple]; rewrite Hv; cbv beta iota;
             rewrite Hkind; reflexivity
@@ -870,20 +874,20 @@ Proof.
   - (* Let_static *)
     apply (refines_trans _
       (State (Let_static (map (share_reads_in_binding held) bindings) body)
-         vars conts statics hp)).
+         vars conts statics hp rd)).
     + assert (Hcode :
         ∀ before : list static_binding,
           inv
             (State (Let_static (before ++ bindings) body) vars conts statics
-               hp)
+               hp rd)
           ->
           refines
             (State (Let_static (before ++ bindings) body) vars conts statics
-               hp)
+               hp rd)
             (State
                (Let_static
                   (before ++ map (share_reads_in_binding held) bindings) body)
-               vars conts statics hp)).
+               vars conts statics hp rd)).
       { clear Hinv.
         induction bindings
           as [ | [id [params my_closure ret exn metadata code_body] | id
@@ -911,7 +915,7 @@ Proof.
                              (share_reads held [] code_body))
                      :: bindings)
                     body)
-                 vars conts statics hp)).
+                 vars conts statics hp rd)).
           { revert Hbefore. apply held_inv_expr. cbn [groups_hold].
             rewrite !forallb_app.
             cbn [forallb code_of_binding_groups_hold code_groups_hold].
@@ -930,13 +934,14 @@ Proof.
                            (share_reads held [] code_body))
                    :: bindings)
                   body)
-               vars conts statics hp)).
+               vars conts statics hp rd)).
           + apply (let_static_code_refines_from inv before id params
                      my_closure ret exn metadata code_body
                      (share_reads held [] code_body) bindings body vars conts
-                     statics hp Hkept Hbefore Hbefore').
+                     statics hp rd Hkept Hbefore Hbefore').
             * symmetry. apply share_reads_binds_statics.
-            * intros vs callee callee_vars return_to exn_to statics' hp' _ _ _.
+            * intros vs callee callee_vars return_to exn_to statics' hp' rd' _ _
+                _.
               split.
               -- apply held_inv_expr, share_reads_groups_hold_expr.
               -- intros Hentry. apply share_reads_refines_aux;
@@ -960,7 +965,7 @@ Proof.
         inv
           (State
              (Let_static (map (share_reads_in_binding held) bindings) body)
-             vars conts statics hp)).
+             vars conts statics hp rd)).
       { revert Hinv. apply held_inv_expr. cbn [groups_hold].
         rewrite share_reads_group_holds, share_reads_bindings_groups_hold.
         reflexivity. }
@@ -981,19 +986,19 @@ Proof.
       inv
         (State
            (Let_cont_non_recursive k (Handler params metadata handler') body)
-           vars conts statics hp)).
+           vars conts statics hp rd)).
     { revert Hinv. apply held_inv_expr.
       cbn [groups_hold handler_groups_hold]. unfold handler'.
       rewrite share_reads_groups_hold_expr. reflexivity. }
     apply (refines_trans _
       (State
          (Let_cont_non_recursive k (Handler params metadata handler') body)
-         vars conts statics hp)).
+         vars conts statics hp rd)).
     + apply (let_cont_handler_refines_from (inv_where made vars) k params
-               metadata handler handler' body vars conts statics hp
+               metadata handler handler' body vars conts statics hp rd
                (inv_where_kept made vars) (conj Hinv Hreads)
                (conj Hinv' Hreads)).
-      intros vs handler_vars conts' statics' hp' _ Hbind. split.
+      intros vs handler_vars conts' statics' hp' rd' _ Hbind. split.
       * apply inv_where_expr. unfold handler'.
         apply share_reads_groups_hold_expr.
       * intros [Hentry Hreads']. simpl_state.
@@ -1009,18 +1014,18 @@ Proof.
              let '(k, h) := kh in (k, share_reads_in_handler held made h)).
     apply (refines_trans _
       (State (Let_cont_recursive (map share handlers) body) vars conts
-         statics hp)).
+         statics hp rd)).
     + assert (Hhandlers :
         ∀ before : list (continuation * continuation_handler),
           inv_where made vars
             (State (Let_cont_recursive (before ++ handlers) body) vars conts
-               statics hp)
+               statics hp rd)
           ->
           refines
             (State (Let_cont_recursive (before ++ handlers) body) vars conts
-               statics hp)
+               statics hp rd)
             (State (Let_cont_recursive (before ++ map share handlers) body)
-               vars conts statics hp)).
+               vars conts statics hp rd)).
       { clear Hinv.
         induction handlers as [ | [k [params metadata handler]] handlers IH];
           intros before Hbefore; cbn [map]; [ apply refines_refl | ].
@@ -1032,7 +1037,7 @@ Proof.
                (Let_cont_recursive
                   (before ++ (k, Handler params metadata handler') :: handlers)
                   body)
-               vars conts statics hp)).
+               vars conts statics hp rd)).
         { revert Hbefore. apply inv_where_expr. cbn [groups_hold].
           rewrite !forallb_app. cbn [forallb handler_groups_hold].
           unfold handler'. rewrite share_reads_groups_hold_expr.
@@ -1042,13 +1047,13 @@ Proof.
              (Let_cont_recursive
                 (before ++ (k, Handler params metadata handler') :: handlers)
                 body)
-             vars conts statics hp)).
+             vars conts statics hp rd)).
         - apply (let_cont_recursive_handler_refines_from (inv_where made vars)
                    before k params metadata handler handler' handlers body
-                   vars conts statics _ (inv_where_kept made vars) Hbefore
+                   vars conts statics _ rd_ (inv_where_kept made vars) Hbefore
                    Hbefore').
           + symmetry. apply share_reads_binds_statics.
-          + intros vs handler_vars conts' statics' hp' _ Hbind. split.
+          + intros vs handler_vars conts' statics' hp' rd' _ Hbind. split.
             * apply inv_where_expr. unfold handler'.
               apply share_reads_groups_hold_expr.
             * intros [Hentry Hreads']. simpl_state.
@@ -1062,7 +1067,7 @@ Proof.
     + assert (Hinv' :
         inv
           (State (Let_cont_recursive (map share handlers) body) vars conts
-             statics hp)).
+             statics hp rd)).
       { revert Hinv. apply held_inv_expr. cbn [groups_hold]. f_equal.
         clear. induction handlers as [ | [k h] handlers IH];
           cbn [map forallb]; [ reflexivity | ].
@@ -1112,7 +1117,7 @@ Lemma held_inv_from (held : held_places) (e : expr) (statics : static_env) :
   Forall (fun binding => code_groups_hold held (snd binding) = true)
     (static_code statics) ->
   classes_agree held statics ->
-  held_inv held (State e [] [] statics empty_heap).
+  held_inv held (State e [] [] statics empty_heap no_reads).
 Proof.
   intros He Hcode Hagree. split; [ | exact Hagree ].
   unfold groups_inv, terms_inv. simpl_state.
@@ -1175,7 +1180,7 @@ Lemma held_inv_observed (held : held_places) (slots : list value_slot)
     (static_code statics) ->
   classes_agree held statics ->
   observers slots conts ->
-  held_inv held (State e [] conts statics empty_heap).
+  held_inv held (State e [] conts statics empty_heap no_reads).
 Proof.
   intros He Hcode Hagree Hobservers. split; [ | exact Hagree ].
   unfold groups_inv, terms_inv. simpl_state.
@@ -2078,29 +2083,23 @@ Qed.
 (* A store to a symbol                                                      *)
 (* ======================================================================== *)
 
-Theorem store_to_symbol_undefined : store_to_symbol_undefined_statement.
-Proof.
-  intros statics hp vars kind init field s new.
-  destruct
-    (exec_named statics hp vars
-       (Prim (Heap (Block_set kind init field)) [Symbol s; new]))
-    as [[v hp'] | ] eqn:Hexec;
-    [ exfalso | reflexivity ].
-  unfold exec_named in Hexec. cbn [eval_named] in Hexec.
-  destruct (eval_simples vars [Symbol s; new]) as [vs | ]; [ | discriminate ].
-  destruct (eval_prim statics (Heap (Block_set kind init field)) vs)
-    as [w | ] eqn:Hprim;
-    [ | discriminate ].
-  destruct (eval_prim_arity statics _ vs w Hprim)
-    as [(q & v1 & Hq & _) | [(q & v1 & v2 & Hq & _) | (q & Hq & _)]];
-    discriminate Hq.
-Qed.
-
 Theorem exec_prim_store_to_symbol : exec_prim_store_to_symbol_statement.
 Proof.
   intros statics hp kind init field s new. unfold exec_prim.
   destruct (forallb (argument_bound statics hp) [Value_symbol s; new]);
     reflexivity.
+Qed.
+
+(* The machine runs a store by [exec_prim] on the values of its
+   arguments, and the first is the symbol. *)
+Theorem store_to_symbol_undefined : store_to_symbol_undefined_statement.
+Proof.
+  intros statics hp rd vars kind init field s new.
+  rewrite exec_named_prim.
+  destruct (eval_simples vars [Symbol s; new]) as [vs | ] eqn:Hvs;
+    [ | reflexivity ].
+  simpl in Hvs. destruct (eval_simple vars new) as [w | ]; [ | discriminate ].
+  injection Hvs as <-. rewrite exec_prim_store_to_symbol. reflexivity.
 Qed.
 
 (* ======================================================================== *)

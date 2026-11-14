@@ -116,12 +116,13 @@ Qed.
    what may follow a unit, from a static environment that holds no code
    and binds no closure with a slot removed, and from any heap. *)
 Lemma drop_unused_slots_refines_under (dropped : list value_slot)
-    (e e' : expr) (conts : cont_env) (statics : static_env) (hp : heap) :
+    (e e' : expr) (conts : cont_env) (statics : static_env) (hp : heap)
+      (rd : read_record) :
   drop_unused_slots dropped e = Some e' ->
   static_code statics = [] ->
   trim_statics dropped statics = statics ->
   observers dropped conts ->
-  refines (State e [] conts statics hp) (State e' [] conts statics hp).
+  refines (State e [] conts statics hp rd) (State e' [] conts statics hp rd).
 Proof.
   unfold drop_unused_slots.
   destruct (slots_unused dropped e) eqn:Hunused; [ | discriminate ].
@@ -144,7 +145,7 @@ Theorem drop_unused_slots_refines_observed :
 Proof.
   intros imports dropped conts e e' Hdrop Hobservers.
   exact (drop_unused_slots_refines_under dropped e e' conts
-           (imports_statics imports) empty_heap Hdrop eq_refl
+           (imports_statics imports) empty_heap no_reads Hdrop eq_refl
            (trim_statics_imports dropped imports) Hobservers).
 Qed.
 
@@ -154,7 +155,8 @@ Qed.
 Lemma drop_unused_slots_observed (imports : list (symbol * import_class))
     (dropped : list value_slot) (e e' : expr) :
   drop_unused_slots dropped e = Some e' ->
-  refines_under_observers dropped (imports_statics imports) empty_heap e e'.
+  refines_under_observers dropped (imports_statics imports) empty_heap no_reads
+    e e'.
 Proof.
   intros Hdrop conts Hobservers. apply refines_observed.
   exact (drop_unused_slots_refines_observed imports dropped conts e e' Hdrop

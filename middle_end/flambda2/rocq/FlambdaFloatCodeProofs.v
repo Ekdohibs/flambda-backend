@@ -98,29 +98,42 @@ Proof.
     unfold project_function_slot. rewrite Hvalues. reflexivity.
 Qed.
 
+(* And it does the same on a heap. *)
+Lemma exec_named_same_values (statics statics' : static_env) (hp : heap)
+    (rd : read_record)
+    (vars : env) (d : named) :
+  static_values statics = static_values statics' ->
+  exec_named statics hp rd vars d = exec_named statics' hp rd vars d.
+Proof.
+  intros Hvalues. symmetry. apply exec_named_same.
+  - symmetry. exact (eval_named_same_values statics statics' vars d Hvalues).
+  - intros p args _. split; [ reflexivity | ].
+    intros vs s _ _. rewrite Hvalues. reflexivity.
+Qed.
+
 (* ======================================================================== *)
 (* Code over one binder                                                     *)
 (* ======================================================================== *)
 
 Theorem float_code_over_let : float_code_over_let_statement.
 Proof.
-  intros x kind d codes body Hcodes vars conts statics hp.
+  intros x kind d codes body Hcodes vars conts statics hp rd.
   destruct (eval_static_bindings vars codes statics) as [statics' | ]
     eqn:Hbind.
   - pose proof (eval_code_bindings_values vars codes Hcodes statics statics'
       Hbind) as Hvalues.
-    destruct (eval_named statics vars d) as [v | ] eqn:Hd;
+    destruct (exec_named statics hp rd vars d) as [[[v hp'] rd'] | ] eqn:Hd;
       [ destruct (kind_eqb (kind_of_value v) kind) eqn:Hkind | ].
     + eapply equivalent_step;
-        [ rewrite step_let, Hd, Hkind; reflexivity
+        [ rewrite step_let_exec, Hd, Hkind; reflexivity
         | rewrite step_let_static, Hbind; reflexivity | ].
       eapply equivalent_step;
         [ rewrite step_let_static,
             (eval_code_bindings_vars ((x, v) :: vars) vars codes Hcodes
                statics), Hbind;
           reflexivity
-        | rewrite step_let,
-            (eval_named_same_values statics' statics vars d Hvalues), Hd,
+        | rewrite step_let_exec,
+            (exec_named_same_values statics' statics hp rd vars d Hvalues), Hd,
             Hkind;
           reflexivity
         | apply equivalent_refl ].
@@ -129,21 +142,22 @@ Proof.
         [ apply step_equivalent; rewrite step_let_static, Hbind;
           reflexivity | ].
       apply step_eq_equivalent.
-      rewrite !step_let,
-        (eval_named_same_values statics' statics vars d Hvalues), Hd, Hkind.
+      rewrite !step_let_exec,
+        (exec_named_same_values statics' statics hp rd vars d Hvalues), Hd,
+          Hkind.
       reflexivity.
     + apply equivalent_sym.
       eapply equivalent_trans;
         [ apply step_equivalent; rewrite step_let_static, Hbind;
           reflexivity | ].
       apply step_eq_equivalent.
-      rewrite !step_let,
-        (eval_named_same_values statics' statics vars d Hvalues), Hd.
+      rewrite !step_let_exec,
+        (exec_named_same_values statics' statics hp rd vars d Hvalues), Hd.
       reflexivity.
-  - destruct (eval_named statics vars d) as [v | ] eqn:Hd;
+  - destruct (exec_named statics hp rd vars d) as [[[v hp'] rd'] | ] eqn:Hd;
       [ destruct (kind_eqb (kind_of_value v) kind) eqn:Hkind | ].
     + eapply equivalent_trans;
-        [ apply step_equivalent; rewrite step_let, Hd, Hkind; reflexivity
+        [ apply step_equivalent; rewrite step_let_exec, Hd, Hkind; reflexivity
         | ].
       apply step_eq_equivalent.
       rewrite !step_let_static,
@@ -151,9 +165,9 @@ Proof.
         Hbind.
       reflexivity.
     + apply step_eq_equivalent.
-      rewrite step_let, Hd, Hkind, step_let_static, Hbind. reflexivity.
+      rewrite step_let_exec, Hd, Hkind, step_let_static, Hbind. reflexivity.
     + apply step_eq_equivalent.
-      rewrite step_let, Hd, step_let_static, Hbind. reflexivity.
+      rewrite step_let_exec, Hd, step_let_static, Hbind. reflexivity.
 Qed.
 
 (* A [Let_cont] binds no variable, so any group may go over it. *)
@@ -162,7 +176,7 @@ Lemma float_over_let_cont (k : continuation) (h : continuation_handler)
   expr_equivalent (Let_cont_non_recursive k h (Let_static bindings body))
     (Let_static bindings (Let_cont_non_recursive k h body)).
 Proof.
-  intros vars conts statics hp.
+  intros vars conts statics hp rd.
   destruct (eval_static_bindings vars bindings statics) as [statics' | ]
     eqn:Hbind.
   - eapply equivalent_step;
@@ -182,7 +196,7 @@ Lemma float_over_let_cont_recursive
   expr_equivalent (Let_cont_recursive handlers (Let_static bindings body))
     (Let_static bindings (Let_cont_recursive handlers body)).
 Proof.
-  intros vars conts statics hp.
+  intros vars conts statics hp rd.
   destruct (handlers_bind_statics handlers) eqn:Hhandlers;
     destruct (eval_static_bindings vars bindings statics) as [statics' | ]
       eqn:Hbind.
@@ -216,7 +230,7 @@ Lemma let_static_if_any_same (bindings : list static_binding) (body : expr) :
   expr_equivalent (Let_static bindings body)
     (let_static_if_any bindings body).
 Proof.
-  intros vars conts statics hp.
+  intros vars conts statics hp rd.
   destruct bindings as [ | binding bindings]; simpl;
     [ | apply equivalent_refl ].
   apply step_equivalent. reflexivity.
@@ -248,7 +262,7 @@ Proof.
     as [ x kind d body | bindings body | k h body | handlers body | ap | ac
        | scrutinee arms | ];
     unfold float_over; try
-      (intros vars conts statics hp; apply equivalent_refl).
+      (intros vars conts statics hp rd; apply equivalent_refl).
   set (codes := filter binds_code bindings).
   set (rest := filter (fun binding => negb (binds_code binding)) bindings).
   apply (expr_equivalent_trans _
@@ -275,7 +289,7 @@ Proof.
     as [ x kind d body | bindings body | k [params metadata handler] body
        | handlers body | ap | ac | scrutinee arms | ];
     cbn [float_code];
-    try (intros vars conts statics hp; apply equivalent_refl).
+    try (intros vars conts statics hp rd; apply equivalent_refl).
   - apply (expr_equivalent_trans _ (Let x kind d (float_code body))).
     + exact (plug_equivalent (Let_body x kind d Hole) _ _ (not_many _)
         (float_code_equivalent_aux body)).
@@ -293,7 +307,7 @@ Proof.
     apply (expr_equivalent_trans _ _ _ Hbody).
     apply (expr_equivalent_trans _
       (Let_static (bindings ++ bindings') body')).
-    + intros vars conts statics hp.
+    + intros vars conts statics hp rd.
       apply equivalent_sym, let_static_split.
     + apply code_first_equivalent.
   - apply (expr_equivalent_trans _

@@ -63,7 +63,7 @@ Local Open Scope Z_scope.
 
 Theorem switch_no_arms : switch_no_arms_statement.
 Proof.
-  intros scrutinee vars conts statics hp. apply step_eq_equivalent.
+  intros scrutinee vars conts statics hp rd. apply step_eq_equivalent.
   rewrite step_switch, step_invalid.
   destruct (eval_simple vars scrutinee) as [v | ]; [ | reflexivity ].
   destruct (naked_immediate_of_value v); reflexivity.
@@ -75,7 +75,7 @@ Proof.
   destruct arms as [ | [i ac] [ | arm arms]].
   - apply expr_equivalent_refines, switch_no_arms.
   - apply switch_same_arms. intros j arm [[= _ <-] | []]. reflexivity.
-  - intros vars conts statics hp. apply refines_refl.
+  - intros vars conts statics hp rd. apply refines_refl.
 Qed.
 
 (* ======================================================================== *)
@@ -84,18 +84,19 @@ Qed.
 
 Lemma refines_under_valid (tenv : Typing_env.t) (e e' : expr) :
   expr_refines_under tenv e e' -> expr_refines_under_valid tenv e e'.
-Proof. intros Hrefines vars conts statics hp _ Hsat. apply Hrefines, Hsat. Qed.
+Proof. intros Hrefines vars conts statics hp rd _ Hsat. apply Hrefines, Hsat.
+  Qed.
 
 Lemma equivalent_under_valid (tenv : Typing_env.t) (e e' : expr) :
   expr_equivalent_under tenv e e' -> expr_equivalent_under_valid tenv e e'.
 Proof.
-  intros Hequivalent vars conts statics hp _ Hsat. apply Hequivalent, Hsat.
+  intros Hequivalent vars conts statics hp rd _ Hsat. apply Hequivalent, Hsat.
 Qed.
 
 Lemma equivalent_under_valid_refines (tenv : Typing_env.t) (e e' : expr) :
   expr_equivalent_under_valid tenv e e' -> expr_refines_under_valid tenv e e'.
 Proof.
-  intros Hequivalent vars conts statics hp Hvalid Hsat.
+  intros Hequivalent vars conts statics hp rd Hvalid Hsat.
   apply equivalent_refines, Hequivalent; assumption.
 Qed.
 
@@ -113,9 +114,9 @@ Lemma expr_refines_under_valid_trans (tenv : Typing_env.t)
   expr_refines_under_valid tenv e' e'' ->
   expr_refines_under_valid tenv e e''.
 Proof.
-  intros Hfirst Hsecond vars conts statics hp Hvalid Hsat.
-  exact (refines_trans _ _ _ (Hfirst vars conts statics hp Hvalid Hsat)
-           (Hsecond vars conts statics hp Hvalid Hsat)).
+  intros Hfirst Hsecond vars conts statics hp rd Hvalid Hsat.
+  exact (refines_trans _ _ _ (Hfirst vars conts statics hp rd_ Hvalid Hsat)
+           (Hsecond vars conts statics hp rd_ Hvalid Hsat)).
 Qed.
 
 (* ======================================================================== *)
@@ -159,7 +160,8 @@ Qed.
 
 Theorem switch_without_arms : switch_without_arms_statement.
 Proof.
-  intros tenv scrutinee keep arms Hnot_taken vars conts statics hp Hvalid Hsat.
+  intros tenv scrutinee keep arms Hnot_taken vars conts statics hp rd Hvalid
+    Hsat.
   apply step_eq_equivalent. rewrite !step_switch.
   destruct (eval_simple vars scrutinee) as [v | ] eqn:Hv; [ | reflexivity ].
   destruct (naked_immediate_of_value v) as [i | ] eqn:Hi; [ | reflexivity ].
@@ -173,7 +175,7 @@ Qed.
 
 Theorem switch_canonical : switch_canonical_statement.
 Proof.
-  intros tenv scrutinee canonical arms Hcanonical vars conts statics hp Hsat.
+  intros tenv scrutinee canonical arms Hcanonical vars conts statics hp rd Hsat.
   apply step_eq_equivalent. rewrite !step_switch.
   rewrite (canonical_in_terms_sound tenv statics vars scrutinee canonical
              Hsat Hcanonical).
@@ -524,9 +526,10 @@ Lemma let_typed_refines_under_valid (tenv : Typing_env.t) (x : variable)
   typing_env_well_formed tenv = true ->
   Typing_env.mem None tenv (Name_var x) = false ->
   (∀ y : variable, y ∈ free_variables ty -> in_scope_in_terms tenv y) ->
-  (∀ (statics : static_env) (vars : env) (v : value),
+  (∀ (statics : static_env) (hp hp' : heap) (rd rd' : read_record)
+     (vars : env) (v : value),
     env_satisfies_strictly tenv statics vars ->
-    eval_named statics vars defining_expr = Some v ->
+    exec_named statics hp rd vars defining_expr = Some (v, hp', rd') ->
     type_satisfied statics vars v ty) ->
   expr_refines_under_valid
     (Typing_env.replace_equation
@@ -536,9 +539,9 @@ Lemma let_typed_refines_under_valid (tenv : Typing_env.t) (x : variable)
   expr_refines_under_valid tenv (Let x declared defining_expr body)
     (Let x declared defining_expr body').
 Proof.
-  intros Hwf Hfresh Hfree Htype Hbody vars conts statics hp Hvalid Hsat.
-  apply let_refines_step; [ reflexivity | intros v Hv _ ].
-  pose proof (Htype statics vars v Hsat Hv) as Hty.
+  intros Hwf Hfresh Hfree Htype Hbody vars conts statics hp rd Hvalid Hsat.
+  apply let_refines_step_exec; [ reflexivity | intros v hp' rd' Hv _ ].
+  pose proof (Htype statics hp hp' rd rd' vars v Hsat Hv) as Hty.
   apply Hbody; [ exact Hvalid | ].
   apply replace_equation_env_satisfies_strictly.
   - apply (add_variable_definition_in_scope tenv x _ x Hwf). left.
@@ -573,8 +576,11 @@ Lemma let_simple_refines_under_valid (tenv : Typing_env.t) (x : variable)
   expr_refines_under_valid tenv (Let x declared (Simple s) body)
     (Let x declared (Simple s) body').
 Proof.
-  intros Hwf Hfresh Hscope Hkind Hadd Hbody vars conts statics hp Hvalid Hsat.
-  apply let_refines_step; [ reflexivity | intros v Hv _ ]. simpl in Hv.
+  intros Hwf Hfresh Hscope Hkind Hadd Hbody vars conts statics hp rd Hvalid
+    Hsat.
+  apply let_refines_step_not_prim;
+    [ intros ? ?; discriminate | intros ? ?; discriminate | reflexivity | intros
+     v Hv _ ]. simpl in Hv.
   assert (Hother :
     eval_simple ((x, v) :: vars) s = eval_simple vars s).
   { destruct s as [y | sym | c]; [ | reflexivity.. ]. simpl.
@@ -711,7 +717,8 @@ Proof.
   - vm_compute. reflexivity.
   - reflexivity.
   - intros y [].
-  - intros statics vars v _ Hv. apply any_bool_satisfied.
+  - intros statics hp hp' rd rd' vars v _ Hv. apply any_bool_satisfied.
+    apply exec_named_pure in Hv as (Hv & _ & _); [ | reflexivity ].
     cbn [eval_named] in Hv.
     destruct (eval_simples vars _) as [vs | ]; [ | discriminate ].
     exact (int_comp_bool statics _ _ vs v Hv).

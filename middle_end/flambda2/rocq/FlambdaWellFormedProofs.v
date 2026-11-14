@@ -80,7 +80,7 @@ Proof.
     as [x kind d body | bindings body | k h body | handlers body | ap | ac
        | scrutinee arms | ];
     autorewrite with step in Hstep.
-  - destruct (eval_named statics vars d) as [v | ]; [ | discriminate ].
+  - destruct (exec_named _ _ rd_ _ d) as [[[v hp'] rd'] | ]; [ | discriminate ].
     destruct (kind_eqb (kind_of_value v) kind); [ | discriminate ].
     injection Hstep as <-. apply statics_extend_refl.
   - destruct (eval_static_bindings vars bindings statics) as [extended | ]
@@ -95,11 +95,11 @@ Proof.
     destruct (eval_simples vars (ap_args ap)) as [vs | ]; [ | discriminate ].
     destruct (eval_simples vars (exn_extra_simples ap)) as [extra | ];
       [ | discriminate ].
-    rewrite (call_function_statics _ _ _ _ _ _ _ _ _ _ Hstep).
+    rewrite (call_function_statics _ _ _ _ _ _ _ _ _ rd_ _ Hstep).
     apply statics_extend_refl.
   - destruct (eval_simples vars (ac_args ac)) as [vs | ]; [ | discriminate ].
     unfold apply_continuation in Hstep.
-    rewrite (apply_cont_value_statics _ _ _ _ _ Hstep).
+    rewrite (apply_cont_value_statics _ _ _ _ rd_ _ Hstep).
     apply statics_extend_refl.
   - destruct (eval_simple vars scrutinee) as [v | ]; [ | discriminate ].
     destruct (naked_immediate_of_value v) as [i | ]; [ | discriminate ].
@@ -416,12 +416,13 @@ Qed.
 Lemma call_code_inv (closure : value) (called : code_id) (c : code)
     (vs : list value) (args_arity return_arity : arity)
     (return_to exn_to : cont_value) (statics : static_env) (hp : heap)
+      (rd : read_record)
       (s' : state) :
   code_ok statics ->
   lookup called (static_code statics) = Some c ->
   cont_inv statics return_to ->
   cont_inv statics exn_to ->
-  call_code closure c vs args_arity return_arity return_to exn_to statics hp
+  call_code closure c vs args_arity return_arity return_to exn_to statics hp rd
   = Step s' ->
   inv s'.
 Proof.
@@ -446,13 +447,14 @@ Qed.
 Lemma run_call_inv (return_partial : value -> step_result)
     (kind : call_kind) (shape : option call_shape) (return_arity : arity)
     (return_to exn_to : cont_value) (statics : static_env) (hp : heap)
+      (rd : read_record)
       (s' : state) :
   code_ok statics ->
   shape_calls statics kind shape ->
   cont_inv statics return_to ->
   cont_inv statics exn_to ->
   (∀ partial : value, return_partial partial = Step s' -> inv s') ->
-  run_call return_partial shape return_arity return_to exn_to statics hp
+  run_call return_partial shape return_arity return_to exn_to statics hp rd
   = Step s' ->
   inv s'.
 Proof.
@@ -462,20 +464,22 @@ Proof.
         | closure c vs remaining args_arity remaining_arity | partial] | ];
     simpl in Hcalls |- *.
   - destruct Hcalls as (called & slots & _ & Hlookup & _).
-    exact (call_code_inv closure called c vs _ _ _ _ statics _ s' S Hlookup
+    exact (call_code_inv closure called c vs _ _ _ _ statics _ rd_ s' S Hlookup
              Hreturn Hexn).
   - destruct Hcalls as (called & slots & _ & Hlookup & _).
-    apply (call_code_inv closure called c vs _ _ _ _ statics _ s' S Hlookup);
+    apply
+      (call_code_inv closure called c vs _ _ _ _ statics _ rd_ s' S Hlookup);
       [ apply cont_inv_over; assumption | exact Hexn ].
   - apply Hpartial.
   - discriminate.
 Qed.
 
 Lemma apply_cont_value_inv (c : cont_value) :
-  ∀ (vs : list value) (statics : static_env) (hp : heap) (s' : state),
+  ∀ (vs : list value) (statics : static_env) (hp : heap) (rd : read_record)
+    (s' : state),
     code_ok statics ->
     cont_inv statics c ->
-    apply_cont_value c vs statics hp = Step s' ->
+    apply_cont_value c vs statics hp rd = Step s' ->
     inv s'.
 Proof.
   induction c
@@ -483,7 +487,7 @@ Proof.
        | c IHc extra
        | remaining remaining_arity return_arity return_to exn_to IHreturn _]
     using cont_value_over_ind;
-    intros vs statics hp s' S [Cr Nr] Hstep.
+    intros vs statics hp rd s' S [Cr Nr] Hstep.
   - simpl in Hstep.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
       [ | discriminate ].
@@ -503,7 +507,7 @@ Proof.
       rewrite conts_names_app in Hn. apply in_app_or in Hn.
       destruct Hn as [Hn | Hn]; [ exact (Nrec n Hn) | exact Hn ].
   - discriminate.
-  - exact (IHc (vs ++ extra) statics hp s' S (conj Cr Nr) Hstep).
+  - exact (IHc (vs ++ extra) statics hp rd_ s' S (conj Cr Nr) Hstep).
   - rewrite apply_cont_value_over_application in Hstep.
     destruct vs as [ | v [ | v' vs]]; [ discriminate | | discriminate ].
     simpl in Cr, Nr. destruct Cr as [C1 C2].
@@ -514,30 +518,31 @@ Proof.
     { split; [ exact C2 | ].
       intros n Hn. apply Nr, in_or_app. right. exact Hn. }
     unfold call_function in Hstep.
-    apply (run_call_inv _ Indirect _ _ _ _ statics _ s' S
+    apply (run_call_inv _ Indirect _ _ _ _ statics _ rd_ s' S
              (shape_of_call_calls _ _ _ _ _ _) Hreturn Hexn)
       in Hstep; [ exact Hstep | ].
     intros partial Hpartial.
-    exact (IHreturn [partial] statics hp s' S Hreturn Hpartial).
+    exact (IHreturn [partial] statics hp rd_ s' S Hreturn Hpartial).
 Qed.
 
 Lemma call_function_inv (callee : value) (kind : call_kind)
     (vs : list value) (args_arity return_arity : arity)
     (return_to exn_to : cont_value) (statics : static_env) (hp : heap)
+      (rd : read_record)
       (s' : state) :
   code_ok statics ->
   cont_inv statics return_to ->
   cont_inv statics exn_to ->
   call_function callee kind vs args_arity return_arity return_to exn_to
-    statics hp
+    statics hp rd
   = Step s' ->
   inv s'.
 Proof.
   intros S Hreturn Hexn. unfold call_function.
-  apply (run_call_inv _ kind _ _ _ _ statics _ s' S
+  apply (run_call_inv _ kind _ _ _ _ statics _ rd_ s' S
            (shape_of_call_calls _ _ _ _ _ _) Hreturn Hexn).
   intros partial. exact
-    (apply_cont_value_inv return_to _ statics _ s' S Hreturn).
+    (apply_cont_value_inv return_to _ statics _ rd_ s' S Hreturn).
 Qed.
 
 Lemma inv_step (s s' : state) : inv s -> step s = Step s' -> inv s'.
@@ -550,7 +555,7 @@ Proof.
        | scrutinee arms | ];
     autorewrite with step in Hstep.
   - (* Let *)
-    destruct (eval_named statics vars d) as [v | ]; [ | discriminate ].
+    destruct (exec_named _ _ rd_ _ d) as [[[v hp'] rd'] | ]; [ | discriminate ].
     destruct (kind_eqb (kind_of_value v) kind); [ | discriminate ].
     injection Hstep as <-. unfold inv. simpl_state. simpl in P, D, X, F.
     exact (conj P (conj D (conj C (conj X (conj F S))))).
@@ -626,14 +631,14 @@ Proof.
     destruct (resolve_ok (ap_exn_continuation ap) conts C) as [C2 N2].
     destruct (with_extra_args_ok _ extra C2) as [C2' N2'].
     rewrite <- N2' in N2.
-    apply (call_function_inv _ _ _ _ _ _ _ statics _ s' S) in Hstep;
+    apply (call_function_inv _ _ _ _ _ _ _ statics _ rd_ s' S) in Hstep;
       [ exact Hstep | | ];
       (split; [ assumption | ]; intros n Hn; apply F; right; auto).
   - (* Apply_cont *)
     destruct (eval_simples vars (ac_args ac)) as [vs | ]; [ | discriminate ].
     unfold apply_continuation in Hstep.
     destruct (resolve_ok (ac_continuation ac) conts C) as [Cr Nr].
-    exact (apply_cont_value_inv _ vs statics _ s' S
+    exact (apply_cont_value_inv _ vs statics _ rd_ s' S
              (conj Cr (fun n Hn => F n (or_intror (Nr n Hn)))) Hstep).
   - (* Switch *)
     destruct (eval_simple vars scrutinee) as [v | ]; [ | discriminate ].
@@ -658,8 +663,9 @@ Qed.
 
 (* What the invariant rules out. *)
 Lemma inv_no_rebinding (bindings : list static_binding) (body : expr)
-    (vars : env) (conts : cont_env) (statics : static_env) (hp : heap) :
-  inv (State (Let_static bindings body) vars conts statics hp) ->
+    (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+      (rd : read_record) :
+  inv (State (Let_static bindings body) vars conts statics hp rd) ->
   rebinds names_of (is_bound statics) bindings = false.
 Proof.
   intros (_ & D & _ & _ & F & _). simpl in D, F. unfold rebinds.
@@ -674,8 +680,9 @@ Qed.
 
 Lemma inv_no_recursive_statics
     (handlers : list (continuation * continuation_handler)) (body : expr)
-    (vars : env) (conts : cont_env) (statics : static_env) (hp : heap) :
-  inv (State (Let_cont_recursive handlers body) vars conts statics hp) ->
+    (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+      (rd : read_record) :
+  inv (State (Let_cont_recursive handlers body) vars conts statics hp rd) ->
   handlers_bind_statics handlers = false.
 Proof.
   intros (P & _). simpl in P. apply andb_true_iff in P as [Phandlers _].
@@ -683,8 +690,8 @@ Proof.
 Qed.
 
 Lemma inv_no_call_binding_statics (ap : apply_expr) (vars : env)
-    (conts : cont_env) (statics : static_env) (hp : heap) :
-  inv (State (Apply ap) vars conts statics hp) ->
+    (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record) :
+  inv (State (Apply ap) vars conts statics hp rd) ->
   calls_code_binding_statics ap vars statics = false.
 Proof.
   intros (_ & _ & _ & _ & _ & S). unfold calls_code_binding_statics.
@@ -752,7 +759,8 @@ Lemma well_formed_inv (unit_exn : continuation)
   (∀ n : positive, is_bound empty_static_env n = false) ->
   statics_at_toplevel unit_exn true e = true ->
   distinct (static_names names_of e) = true ->
-  inv unit_exn names_of is_bound (State e [] [] empty_static_env empty_heap).
+  inv unit_exn names_of is_bound
+    (State e [] [] empty_static_env empty_heap no_reads).
 Proof.
   intros Hempty P D.
   refine
@@ -855,11 +863,11 @@ Proof.
     as [ x kind d body | bindings body | k h body | handlers body | ap | ac
        | scrutinee arms | ];
     try reflexivity.
-  - rewrite (inv_no_rebinding (unit_exn u) _ _ _ _ _ _ _ _ Hcode),
-      (inv_no_rebinding (unit_exn u) _ _ _ _ _ _ _ _ Hsymbols).
+  - rewrite (inv_no_rebinding (unit_exn u) _ _ _ _ _ _ _ _ rd_ Hcode),
+      (inv_no_rebinding (unit_exn u) _ _ _ _ _ _ _ _ rd_ Hsymbols).
     reflexivity.
-  - exact (inv_no_recursive_statics (unit_exn u) _ _ _ _ _ _ _ _ Hcode).
-  - exact (inv_no_call_binding_statics (unit_exn u) _ _ _ _ _ _ _ Hcode).
+  - exact (inv_no_recursive_statics (unit_exn u) _ _ _ _ _ _ _ _ rd_ Hcode).
+  - exact (inv_no_call_binding_statics (unit_exn u) _ _ _ _ _ _ _ rd_ Hcode).
 Qed.
 
 Theorem well_formed_names_bound : well_formed_names_bound_statement.

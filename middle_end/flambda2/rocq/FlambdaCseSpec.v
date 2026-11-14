@@ -210,20 +210,35 @@ Definition computed_under_let (known : computed) (x : variable) (d : named)
   | _ => known
   end.
 
-(* What it means for what is known to hold where a term runs: a
-   variable known to hold the result of a primitive is bound to the
-   value of the primitive applied to the values of its arguments. *)
-Definition computed_holds (statics : static_env) (vars : env)
-    (entry : variable * (prim * list simple)) : Prop :=
-  ∃ (vs : list value) (v : value),
-    eval_simples vars (snd (snd entry)) = Some vs
-    ∧ eval_prim statics (fst (snd entry)) vs = Some v
-    ∧ lookup (fst entry) vars = Some v.
+(* What it means for what is known to hold where a term runs, at a
+   heap and a read record: the primitive is one whose value stays
+   (FlambdaHeapSpec.stable_prim); and run now on its arguments, as the
+   machine runs it at a [Let] (FlambdaSemanticsSpec.exec_named), it
+   gives the value that the variable is bound to, and leaves the heap
+   and the record as they are.
+
+   The heap and the record are those that the [Let] by which it is
+   known left, or any that they have evolved to since
+   (FlambdaSemanticsSpec.memory_evolves): the fact is of a primitive
+   that has run, and says that to run it again changes neither. *)
+Definition computed_holds (statics : static_env) (hp : heap) (rd : read_record)
+    (vars : env) (entry : variable * (prim * list simple)) : Prop :=
+  stable_prim (fst (snd entry)) = true
+  ∧ ∃ v : value,
+      exec_named statics hp rd vars (Prim (fst (snd entry)) (snd (snd entry)))
+      = Some (v, hp, rd)
+      ∧ lookup (fst entry) vars = Some v.
 
 Definition all_computed (known : computed) (vars : env)
-    (statics : static_env) : Prop :=
+    (statics : static_env) (hp : heap) (rd : read_record) : Prop :=
   ∀ entry : variable * (prim * list simple),
-    entry ∈ known -> computed_holds statics vars entry.
+    entry ∈ known -> computed_holds statics hp rd vars entry.
+
+(* Every primitive that may be shared is one whose value stays: what
+   [computed_under_let] adds is of such a primitive, as [computed_holds]
+   asks. *)
+Definition shareable_stable_statement : Prop :=
+  ∀ p : prim, shareable p = true -> stable_prim p = true.
 
 (* ======================================================================== *)
 (* Sharing                                                                  *)

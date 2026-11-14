@@ -115,7 +115,7 @@ Proof.
         (params_in_scope_hold params values kinds vars handler_vars Hhold). }
     repeat split; (apply Forall2_cons; [ | assumption ]);
       (split; [ reflexivity | ]); apply Handler_related;
-      intros values handler_vars conts statics hp _ Hkinds Hbind;
+      intros values handler_vars conts statics hp rd _ Hkinds Hbind;
       apply equivalent_refines;
       first
         [ apply Hequiv, (Hruns values handler_vars Hkinds Hbind)
@@ -131,7 +131,7 @@ Lemma let_cont_recursive_handlers_equivalent_bound (kinds : kinds_in_scope)
   expr_equivalent_bound kinds (Let_cont_recursive handlers body)
     (Let_cont_recursive handlers' body).
 Proof.
-  intros Hall Hbinds vars conts statics hp Hhold.
+  intros Hall Hbinds vars conts statics hp rd Hhold.
   destruct
     (handlers_equivalent_bound_related kinds vars handlers handlers' Hhold
        Hall)
@@ -150,7 +150,7 @@ Proof.
     as [ x kind d body | bindings body | k [params metadata handler] body
        | handlers body | ap | ac | scrutinee arms | ];
     intros kinds; simpl;
-    try (intros vars conts statics hp _; apply equivalent_refl).
+    try (intros vars conts statics hp rd _; apply equivalent_refl).
   - pose proof (let_equivalent_bound kinds x kind d _ _
       (remove_unused_defined_lets_in_loops_equivalent_bound body
          ((x, kind) :: kinds)))
@@ -168,7 +168,7 @@ Proof.
       unused_defined_let;
       [ exact Hdefined | ].
     intros Hx. apply var_free_b_sound in Hx. congruence.
-  - intros vars conts statics hp Hhold.
+  - intros vars conts statics hp rd Hhold.
     apply let_static_equivalent_step.
     destruct (eval_static_bindings vars bindings statics) as [extended | ];
       [ | exact I ].
@@ -183,7 +183,7 @@ Proof.
          body)).
     + apply let_cont_handler_equivalent_bound,
         remove_unused_defined_lets_in_loops_equivalent_bound.
-    + intros vars conts statics hp Hhold.
+    + intros vars conts statics hp rd Hhold.
       apply let_cont_non_recursive_equivalent_step.
       apply (remove_unused_defined_lets_in_loops_equivalent_bound body kinds),
         Hhold.
@@ -210,7 +210,7 @@ Proof.
           simpl; [ reflexivity | ].
         rewrite remove_unused_defined_lets_in_loops_binds_statics, IH.
         reflexivity.
-    + intros vars conts statics hp Hhold.
+    + intros vars conts statics hp rd Hhold.
       apply let_cont_recursive_equivalent_step; [ reflexivity | intros _ ].
       apply (remove_unused_defined_lets_in_loops_equivalent_bound body kinds),
         Hhold.
@@ -219,7 +219,7 @@ Qed.
 Theorem remove_unused_defined_lets_in_loops_equivalent :
   remove_unused_defined_lets_in_loops_equivalent_statement.
 Proof.
-  intros e vars conts statics hp.
+  intros e vars conts statics hp rd.
   apply (remove_unused_defined_lets_in_loops_equivalent_bound e []).
   intros x kind [=].
 Qed.

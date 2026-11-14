@@ -283,18 +283,26 @@ Definition head_free_in (statics : static_env) (e : expr) : bool :=
    The second is asked of every name of the head: a name removed
    that is bound already makes the term undefined where its result is
    not, and a name kept that is bound already makes both undefined. *)
-(* CR mshinwell: the heap is any heap because no step of the machine
-   reads or changes it. When a step runs the primitives of the heap,
-   a premise is to be added here, as to
-   FlambdaUnusedStaticsSpec.drop_statics_refines_statement: that the
-   names removed occur in no value of a cell of the heap. A symbol
-   that only the heap names is otherwise removed from under a read. *)
+(* The heap is one in which the names removed occur in no value of a
+   cell (FlambdaUnusedStaticsSpec.heap_free_of), as for
+   FlambdaUnusedStaticsSpec.drop_statics_refines_statement. There the
+   premise is needed: the term refines its result, and a symbol that
+   only the heap names would be removed from under a read. Here the
+   refinement is the other way: a read through such a symbol makes the
+   result undefined, which this direction allows. The premise is asked
+   here because the simulation that proves the statement keeps the
+   condition that no value in a cell mentions a name removed,
+   alongside its conditions on the term and the environments. It is
+   not known to be needed, and the same holds of the two statements
+   below. *)
 Definition drop_head_statics_refines_from_statement : Prop :=
-  ∀ (D : dropped) (e e' : expr) (statics : static_env) (hp : heap),
+  ∀ (D : dropped) (e e' : expr) (statics : static_env) (hp : heap)
+    (rd : read_record),
     drop_head_statics D e = Some e' ->
     statics_free_of D statics = true ->
+    heap_free_of D hp = true ->
     head_free_in statics e = true ->
-    refines (State e' [] [] statics hp) (State e [] [] statics hp).
+    refines (State e' [] [] statics hp rd) (State e [] [] statics hp rd).
 
 (* The same under continuations: the term refines its result, each run
    with no variable in scope from one static environment, one heap and
@@ -307,15 +315,15 @@ Definition drop_head_statics_refines_from_statement : Prop :=
    is not, when the handler runs; one whose handler refers to a name
    removed is refused with it, though the result would only go wrong
    there. The statement above is this one with no continuation. *)
-(* CR mshinwell: the heap is any heap, as above; the same premise is to
-   be added when a step runs the primitives of the heap. *)
+(* The heap is as above: the names removed occur in no value of a cell. *)
 Definition drop_head_statics_refines_under_statement : Prop :=
   ∀ (D : dropped) (e e' : expr) (conts : cont_env) (statics : static_env)
-    (hp : heap),
+    (hp : heap) (rd : read_record),
     drop_head_statics D e = Some e' ->
     envs_free_of D [] conts statics = true ->
+    heap_free_of D hp = true ->
     head_free_in statics e = true ->
-    refines (State e' [] conts statics hp) (State e [] conts statics hp).
+    refines (State e' [] conts statics hp rd) (State e [] conts statics hp rd).
 
 (* Tables bound at the head, from a static environment that binds
    something and under continuations: the result refines the term, each
@@ -327,14 +335,16 @@ Definition drop_head_statics_refines_under_statement : Prop :=
    premise is of the head of the term, and nothing is used of either.
    [add_head_tables_program_refines_statement] is this at the empty
    environments. *)
-(* CR mshinwell: the heap is any heap, as above. *)
+(* The heap is as above: the symbols of the tables occur in no value of
+   a cell. *)
 Definition add_head_tables_refines_under_statement : Prop :=
   ∀ (tables : list (symbol * list simple)) (e : expr) (conts : cont_env)
-    (statics : static_env) (hp : heap),
+    (statics : static_env) (hp : heap) (rd : read_record),
     envs_free_of (tables_dropped tables) [] conts statics = true ->
+    heap_free_of (tables_dropped tables) hp = true ->
     head_free_in statics (add_head_tables tables e) = true ->
-    refines (State e [] conts statics hp)
-      (State (add_head_tables tables e) [] conts statics hp).
+    refines (State e [] conts statics hp rd)
+      (State (add_head_tables tables e) [] conts statics hp rd).
 
 (* Of a unit run from its imports (FlambdaImportsSpec.unit_refines):
    the static environment of the imports holds no code and no value in

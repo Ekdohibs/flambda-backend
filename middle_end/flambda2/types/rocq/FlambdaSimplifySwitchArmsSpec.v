@@ -213,12 +213,13 @@ Definition arm_env_satisfied_statement : Prop :=
    scrutinee is the number. *)
 Definition arm_refines_where_taken (tenv : Typing_env.t) (scrutinee : simple)
     (i : Z) (ac ac' : apply_cont) : Prop :=
-  ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap),
+  ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+    (rd : read_record),
     statics_valid statics ->
     env_satisfies_strictly tenv statics vars ->
     eval_simple vars scrutinee = Some (Value_const (Naked_immediate i)) ->
-    refines (State (Apply_cont ac) vars conts statics hp)
-      (State (Apply_cont ac') vars conts statics hp).
+    refines (State (Apply_cont ac) vars conts statics hp rd)
+      (State (Apply_cont ac') vars conts statics hp rd).
 
 (* The arms of a [Switch] may each be replaced by an arm for the same
    number that refines it where it is taken. *)

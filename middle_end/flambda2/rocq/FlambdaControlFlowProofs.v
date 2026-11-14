@@ -44,12 +44,12 @@ Import ListNotations.
 (* Two steps of the left-hand side reach the right-hand side. *)
 Theorem let_cont_apply_cont : let_cont_apply_cont_statement.
 Proof.
-  intros k params metadata handler args vars handler_vars conts statics hp
+  intros k params metadata handler args vars handler_vars conts statics hp rd
     vs Hargs Hkinds Hbind.
   eapply equivalent_trans;
     [ apply step_equivalent, step_let_cont_non_recursive | ].
   apply step_equivalent.
-  apply (step_apply_cont_handler _ _ _ _ _ vs params metadata handler vars
+  apply (step_apply_cont_handler _ _ _ _ _ rd_ vs params metadata handler vars
     conts []);
     [ exact Hargs | apply resolve_head
     | rewrite Hkinds; apply kinds_eqb_refl | exact Hbind ].
@@ -60,10 +60,10 @@ Qed.
 Theorem let_cont_apply_cont_one_param :
   let_cont_apply_cont_one_param_statement.
 Proof.
-  intros k x metadata kind handler arg Hkinds vars conts statics hp.
+  intros k x metadata kind handler arg Hkinds vars conts statics hp rd.
   eapply equivalent_trans;
     [ apply step_equivalent, step_let_cont_non_recursive | ].
-  apply step_eq_equivalent. rewrite step_apply_cont, step_let. simpl.
+  apply step_eq_equivalent. rewrite step_apply_cont, step_let_simple. simpl.
   destruct (eval_simple vars arg) as [v | ]; simpl; [ | reflexivity ].
   unfold apply_continuation. rewrite resolve_head. simpl. rewrite Hkinds.
   rewrite (kinds_eqb_singleton (kind_of_value v) kind).
@@ -74,13 +74,13 @@ Theorem let_cont_recursive_apply_cont :
   let_cont_recursive_apply_cont_statement.
 Proof.
   intros k params metadata handler handlers args vars handler_vars conts
-    statics hp vs Hstatics Hlookup Hargs Hkinds Hbind.
+    statics hp rd vs Hstatics Hlookup Hargs Hkinds Hbind.
   eapply equivalent_trans;
     [ apply step_equivalent; rewrite step_let_cont_recursive, Hstatics;
       reflexivity
     | ].
   apply step_equivalent.
-  apply (step_apply_cont_handler _ _ _ _ _ vs params metadata handler vars
+  apply (step_apply_cont_handler _ _ _ _ _ rd_ vs params metadata handler vars
     conts handlers);
     [ exact Hargs | | rewrite Hkinds; apply kinds_eqb_refl | exact Hbind ].
   simpl. rewrite resolve_rec_closures, Hlookup. reflexivity.
@@ -89,19 +89,20 @@ Qed.
 (* After its first step the loop is in a state that steps to itself. *)
 Theorem loop_forever_diverges : loop_forever_diverges_statement.
 Proof.
-  intros k vars conts statics hp.
+  intros k vars conts statics hp rd.
   set (handlers :=
     [(k,
       Handler [] (make_handler_metadata [])
         (Apply_cont (Apply_cont_expr k [] None)))]).
   set (looping :=
     State (Apply_cont (Apply_cont_expr k [] None)) vars
-      (rec_closures handlers vars conts ++ conts) statics hp).
+      (rec_closures handlers vars conts ++ conts) statics hp rd).
   assert (Hfirst :
-    step (State (loop_forever k) vars conts statics hp) = Step looping).
+    step (State (loop_forever k) vars conts statics hp rd) = Step looping).
   { unfold loop_forever. rewrite step_let_cont_recursive. reflexivity. }
   assert (Hstep : step looping = Step looping).
-  { apply (step_apply_cont_handler _ _ _ _ _ [] [] (make_handler_metadata [])
+  { apply
+   (step_apply_cont_handler _ _ _ _ _ rd_ [] [] (make_handler_metadata [])
       _ vars conts handlers);
       [ reflexivity | | reflexivity | reflexivity ].
     rewrite resolve_rec_closures. simpl. rewrite Pos.eqb_refl.
@@ -118,7 +119,7 @@ Qed.
 
 Theorem switch_const : switch_const_statement.
 Proof.
-  intros i arms ac Hfind vars conts statics hp.
+  intros i arms ac Hfind vars conts statics hp rd.
   apply step_equivalent. rewrite step_switch. simpl. rewrite Hfind.
   reflexivity.
 Qed.
@@ -127,8 +128,8 @@ Qed.
    undefined. *)
 Theorem switch_same_arms : switch_same_arms_statement.
 Proof.
-  intros scrutinee arms ac Hsame vars conts statics hp.
-  destruct (step_switch_cases scrutinee arms vars conts statics hp)
+  intros scrutinee arms ac Hsame vars conts statics hp rd.
+  destruct (step_switch_cases scrutinee arms vars conts statics hp rd)
     as [Hwrong | (v & i & arm & _ & _ & Hfind & Hstep)];
     [ apply step_undefined_refines, Hwrong | ].
   apply find_arm_in, Hsame in Hfind. subst arm.

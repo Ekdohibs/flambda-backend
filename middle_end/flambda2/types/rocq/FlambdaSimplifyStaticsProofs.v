@@ -424,13 +424,13 @@ Qed.
 
 Theorem let_static_typed : let_static_typed_statement.
 Proof.
-  intros tenv bindings body body' Hbody vars conts statics hp Hsat.
+  intros tenv bindings body body' Hbody vars conts statics hp rd Hsat.
   destruct (eval_static_bindings vars bindings statics) as [extended | ]
     eqn:Hbindings.
   - assert (Hstep :
       ∀ b : expr,
-        step (State (Let_static bindings b) vars conts statics hp)
-        = Step (State b vars conts extended hp)).
+        step (State (Let_static bindings b) vars conts statics hp rd)
+        = Step (State b vars conts extended hp rd)).
     { intros b. rewrite step_let_static, Hbindings. reflexivity. }
     eapply refines_step; [ apply Hstep | apply Hstep | ].
     apply Hbody.

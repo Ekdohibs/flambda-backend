@@ -757,6 +757,7 @@ Proof.
           store_fresh (rs_base rs') (rs_next rs')
             (static_values (state_statics (rs_state rs'))) (rs_frames rs'))).
   - discriminate.
+  - discriminate.
   - intros x kind d mark_kind body _ Hstep.
     rewrite (begin_region_step _ _ _ _ _ _ Hstep).
     exact (store_fresh_begin _ _ _ _ mark_kind Hstore).
@@ -766,7 +767,7 @@ Proof.
     change (rs_frames (count_uses rs)) with (rs_frames rs) in Hframes.
     rewrite Hframes in Hstore.
     exact (store_fresh_end _ _ _ above f below Hstore).
-  - intros x kind d body y region body' Hexpr _ _ Hstep.
+  - intros x kind d body y region body' Hexpr _ _ _ Hstep.
     destruct (local_allocation_step _ _ _ _ _ _ _ _ Hstep)
       as (v & sym & bindings & His & Hnamed & Hlocalise & _ & _ & _ & Hbase
           & Hnext & _ & Hframes).
@@ -804,7 +805,7 @@ Proof.
     rewrite Hbase. revert Hlocal Hframes.
     destruct (rs_frames rs) as [ | [m mark_kind locals] frames];
       intros Hlocal [Hf Hs]; rewrite Hf, Hs; exact Hlocal.
-  - intros x kind d body _ _ _ Hstep.
+  - intros x kind d body _ _ _ _ Hstep.
     destruct (plain_step_step _ _ Hstep) as (s' & _ & ->). exact Hstore.
   - intros bindings body Hexpr _ _ Hstep.
     destruct (static_step_step (count_uses rs) rs' bindings body Hexpr Hstep)

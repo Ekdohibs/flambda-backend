@@ -1389,13 +1389,13 @@ Proof.
        | r before k params metadata handler after body Hclosed Hvars Hconts
        | r before id c after body Hclosed ]
     using alpha_equivalent_by_relation_ind.
-  - intros vars conts statics hp. apply equivalent_refl.
-  - intros vars conts statics hp. apply equivalent_sym, IH.
-  - intros vars conts statics hp.
-    exact (equivalent_trans _ _ _ (IH _ _ _ _) (IH' _ _ _ hp)).
+  - intros vars conts statics hp rd. apply equivalent_refl.
+  - intros vars conts statics hp rd. apply equivalent_sym, IH.
+  - intros vars conts statics hp rd.
+    exact (equivalent_trans _ _ _ (IH _ _ _ _ rd_) (IH' _ _ _ hp rd_)).
   - apply plug_equivalent;
       [ intros _; apply alpha_binds_statics, Hinner | exact IH ].
-  - intros vars conts statics hp. apply renamed_equivalent.
+  - intros vars conts statics hp rd. apply renamed_equivalent.
     + exact Hclosed.
     + intros x Hx. rewrite (Hvars x Hx). reflexivity.
     + intros k Hk. apply conts_agree_same, Hconts, Hk.
@@ -1865,16 +1865,16 @@ Qed.
    It was a statement of FlambdaAlphaSpec.v. *)
 Definition rename_variables_equivalent_statement : Prop :=
   ∀ (r : renaming) (e : expr) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap),
+    (statics : static_env) (hp : heap) (rd : read_record),
     code_closed e = true ->
     (∀ k : continuation,
       cont_free_in_expr k e -> rename_continuation r k = k) ->
-    equivalent (State e vars conts statics hp)
-      (State (rename_expr r e) (rename_env r vars) conts statics hp).
+    equivalent (State e vars conts statics hp rd)
+      (State (rename_expr r e) (rename_env r vars) conts statics hp rd).
 
 Theorem rename_variables_equivalent : rename_variables_equivalent_statement.
 Proof.
-  intros r e vars conts statics hp Hclosed Hconts.
+  intros r e vars conts statics hp rd Hclosed Hconts.
   apply renamed_equivalent.
   - exact Hclosed.
   - intros x _. apply lookup_rename_env.

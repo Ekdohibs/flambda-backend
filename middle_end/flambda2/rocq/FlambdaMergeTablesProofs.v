@@ -99,17 +99,17 @@ Qed.
 (* So the merged application steps as the arm does. *)
 Lemma merged_steps_as_loaded_arm (v : variable) (element : simple)
     (w : value) (merged : apply_cont) (vars vars' : env) (conts : cont_env)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   eval_simple [] element = Some w ->
   (∀ x : variable, x <> v -> lookup x vars' = lookup x vars) ->
-  step (State (Apply_cont merged) ((v, w) :: vars') conts statics hp)
+  step (State (Apply_cont merged) ((v, w) :: vars') conts statics hp rd)
   = step
       (State
          (Apply_cont
             (Apply_cont_expr (ac_continuation merged)
                (map (element_for v element) (ac_args merged))
                (ac_trap_action merged)))
-         vars conts statics hp).
+         vars conts statics hp rd).
 Proof.
   intros Helement Hagree. rewrite !step_apply_cont. simpl.
   rewrite (eval_simples_element_for v element w vars vars' _ Helement Hagree).
@@ -149,7 +149,7 @@ Qed.
    the index. *)
 Lemma bind_table_offset_equivalent (v : variable)
     (first offset i index : Z) (body : expr) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   lookup v vars = Some (Value_const (Tagged_immediate i)) ->
   table_index first offset i = Some index ->
   ∃ vars' : env,
@@ -157,8 +157,8 @@ Lemma bind_table_offset_equivalent (v : variable)
     ∧ (∀ x : variable, x <> v -> lookup x vars' = lookup x vars)
     ∧ in_range (int_width Standard_tagged_immediate) index = true
     ∧ equivalent
-        (State (bind_table_offset v first offset body) vars conts statics hp)
-        (State body vars' conts statics hp).
+        (State (bind_table_offset v first offset body) vars conts statics hp rd)
+        (State body vars' conts statics hp rd).
 Proof.
   intros Hv Hindex. unfold table_index in Hindex. cbv zeta in Hindex.
   destruct (in_range (int_width Standard_naked_immediate) i) eqn:Hrange;
@@ -181,8 +181,14 @@ Proof.
     + intros x Hne. apply lookup_other_variable, Hne.
     + exact
         (wrap_in_range _ _ (int_width_positive Standard_tagged_immediate)).
-    + apply step_equivalent. rewrite step_let.
-      cbn [eval_named eval_simples eval_simple]. rewrite Hv.
+    + apply step_equivalent.
+      rewrite
+        (step_let_no_location _ _ _ _ _ _ _ _ _ rd_
+           [Value_const (Tagged_immediate i);
+            Value_const (Tagged_immediate offset)]);
+        [ | intros q; discriminate
+          | cbn [eval_simples eval_simple]; rewrite Hv; reflexivity
+          | intros l [Hl | [Hl | [ ]]]; discriminate Hl ].
       cbn [eval_prim eval_binary_primitive int_of_value].
       change (int_width Standard_naked_immediate)
         with (int_width Standard_tagged_immediate) in Hrange.
@@ -285,21 +291,21 @@ Qed.
 Lemma merge_by_table_refines (v : variable) (merged : apply_cont)
     (first offset : Z) (arms : list (Z * apply_cont)) (s : symbol)
     (elements : list simple) (vs : list value) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   forallb
     (arm_is_loaded v merged first offset elements (all_immediates elements))
     arms
   = true ->
   eval_simples [] elements = Some vs ->
   lookup s (static_values statics) = Some (Static_immutable_array vs) ->
-  refines (State (Switch (Var v) arms) vars conts statics hp)
+  refines (State (Switch (Var v) arms) vars conts statics hp rd)
     (State
        (bind_table_load v s first offset (all_immediates elements)
           (Apply_cont merged))
-       vars conts statics hp).
+       vars conts statics hp rd).
 Proof.
   intros Hall Hvs Hs.
-  destruct (step_switch_cases (Var v) arms vars conts statics hp)
+  destruct (step_switch_cases (Var v) arms vars conts statics hp rd)
     as [Hwrong | (w & i & ac & Hv & Hi & Hfind & Hstep)];
     [ apply step_undefined_refines, Hwrong | ].
   apply naked_immediate_of_value_some in Hi. subst w.
@@ -337,14 +343,18 @@ Proof.
                    (table_load_kind (all_immediates elements)) Immutable))
              [Symbol s; Var v])
           (Apply_cont merged))
-       ((v, Value_const (Tagged_immediate i)) :: vars) conts statics hp)
+       ((v, Value_const (Tagged_immediate i)) :: vars) conts statics hp rd)
     as (vars' & Hv' & Hagree & Hindex_range & Hequiv);
     [ simpl; rewrite Pos.eqb_refl; reflexivity | exact Hindex | ].
   eapply equivalent_trans; [ exact Hequiv | ].
   eapply equivalent_trans.
-  - apply step_equivalent. rewrite step_let.
-    cbn [eval_named eval_simples eval_simple]. rewrite Hv'.
-    cbn beta iota.
+  - apply step_equivalent.
+    rewrite
+      (step_let_no_location _ _ _ _ _ _ _ _ _ rd_
+         [Value_symbol s; Value_const (Tagged_immediate index)]);
+      [ | intros q; discriminate
+        | cbn [eval_simples eval_simple]; rewrite Hv'; reflexivity
+        | intros l [Hl | [Hl | [ ]]]; discriminate Hl ].
     rewrite
       (array_load_of_static statics s vs _ _ Immutable
          (Value_const (Tagged_immediate index)) w index Hs);
@@ -358,11 +368,12 @@ Qed.
 
 Lemma merge_switch_by_table_refines (tables : known_tables)
     (scrutinee : simple) (arms : list (Z * apply_cont)) (merged : expr)
-    (vars : env) (conts : cont_env) (statics : static_env) (hp : heap) :
+    (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+      (rd : read_record) :
   tables_bound tables statics ->
   merge_switch_by_table tables scrutinee arms = Some merged ->
-  refines (State (Switch scrutinee arms) vars conts statics hp)
-    (State merged vars conts statics hp).
+  refines (State (Switch scrutinee arms) vars conts statics hp rd)
+    (State merged vars conts statics hp rd).
 Proof.
   intros Hbound. unfold merge_switch_by_table.
   destruct scrutinee as [v | sym | c]; try discriminate.
@@ -377,7 +388,7 @@ Proof.
   cbv zeta in Hall. cbn [snd] in Hall.
   destruct (Hbound s elements Hin) as (vs & Hvs & Hs).
   exact (merge_by_table_refines v _ first _ _ s elements vs vars conts
-    statics hp Hall Hvs Hs).
+    statics hp rd Hall Hvs Hs).
 Qed.
 
 (* With no table in scope no table has the arms. *)
@@ -530,7 +541,7 @@ Qed.
 Lemma bind_table_load_to_equivalent (v x : variable) (s : symbol)
     (first offset i : Z) (elements : list simple) (vs : list value)
     (element : simple) (body : expr) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   lookup v vars = Some (Value_const (Naked_immediate i)) ->
   table_element first offset elements i = Some element ->
   element_taken (all_immediates elements) element = true ->
@@ -544,8 +555,8 @@ Lemma bind_table_load_to_equivalent (v x : variable) (s : symbol)
         (State
            (bind_table_load_to v x s first offset (all_immediates elements)
               body)
-           vars conts statics hp)
-        (State body vars' conts statics hp).
+           vars conts statics hp rd)
+        (State body vars' conts statics hp rd).
 Proof.
   intros Hv Helement Htaken Hvs Hs.
   pose proof Helement as Hnth_element. unfold table_element in Hnth_element.
@@ -576,7 +587,7 @@ Proof.
                    (table_load_kind (all_immediates elements)) Immutable))
              [Symbol s; Var x])
           body)
-       ((x, Value_const (Tagged_immediate i)) :: vars) conts statics hp)
+       ((x, Value_const (Tagged_immediate i)) :: vars) conts statics hp rd)
     as (vars1 & Hx1 & Hagree1 & Hindex_range & Hequiv1);
     [ simpl; rewrite Pos.eqb_refl; reflexivity | exact Hindex | ].
   exists w, ((x, w) :: vars1).
@@ -590,9 +601,13 @@ Proof.
         [ exact Hv | exact Hrange ]
       | ].
     eapply equivalent_trans; [ exact Hequiv1 | ].
-    apply step_equivalent. rewrite step_let.
-    cbn [eval_named eval_simples eval_simple]. rewrite Hx1.
-    cbn beta iota.
+    apply step_equivalent.
+    rewrite
+      (step_let_no_location _ _ _ _ _ _ _ _ _ rd_
+         [Value_symbol s; Value_const (Tagged_immediate index)]);
+      [ | intros q; discriminate
+        | cbn [eval_simples eval_simple]; rewrite Hx1; reflexivity
+        | intros l [Hl | [Hl | [ ]]]; discriminate Hl ].
     rewrite
       (array_load_of_static statics s vs _ _ Immutable
          (Value_const (Tagged_immediate index)) w index Hs);
@@ -674,7 +689,8 @@ Qed.
    merged arguments have the values of the arguments of the arm. *)
 Lemma bind_table_ways_equivalent (first offset : Z) (v : variable) (i : Z)
     (avoid : list variable) (body : expr) (conts : cont_env)
-    (statics : static_env) (hp : heap) (names : list variable) :
+    (statics : static_env) (hp : heap) (rd : read_record)
+      (names : list variable) :
   ∀ (ways : list table_way) (args : list simple) (vars : env),
     ways_bound ways statics ->
     lookup v vars = Some (Value_const (Naked_immediate i)) ->
@@ -688,8 +704,8 @@ Lemma bind_table_ways_equivalent (first offset : Z) (v : variable) (i : Z)
       (∀ y : variable, among y names = false -> lookup y vars' = lookup y vars)
       ∧ equivalent
           (State (bind_table_ways first offset v names ways body) vars conts
-             statics hp)
-          (State body vars' conts statics hp)
+             statics hp rd)
+          (State body vars' conts statics hp rd)
       ∧ eval_simples vars' (merged_by_table_ways v names ways)
         = eval_simples vars args.
 Proof.
@@ -757,7 +773,7 @@ Proof.
       destruct
         (bind_way_equivalent how v x i c
            (bind_table_ways first offset v names ways body) vars conts statics
-           hp Hv Hc)
+           hp rd Hv Hc)
         as (vars1 & Hagree1 & Hx1 & Hequiv1).
       assert (Hv1 : lookup v vars1 = Some (Value_const (Naked_immediate i))).
       { rewrite (Hagree1 v Hvx). exact Hv. }
@@ -800,7 +816,7 @@ Proof.
       destruct
         (bind_table_load_to_equivalent v x s first offset i elements vs
            element (bind_table_ways first offset v names ways body) vars conts
-           statics hp Hv Helement Htaken Hvs Hs)
+           statics hp rd Hv Helement Htaken Hvs Hs)
         as (w & vars1 & Hw & Hagree1 & Hx1 & Hequiv1).
       assert (Hv1 : lookup v vars1 = Some (Value_const (Naked_immediate i))).
       { rewrite (Hagree1 v Hvx). exact Hv. }
@@ -848,11 +864,11 @@ Qed.
 Lemma merge_switch_by_table_ways_refines (known : known_continuations)
     (tables : known_tables) (scrutinee : simple)
     (arms : list (Z * apply_cont)) (merged : expr) (vars : env)
-    (conts : cont_env) (statics : static_env) (hp : heap) :
+    (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record) :
   tables_bound tables statics ->
   merge_switch_by_table_ways known tables scrutinee arms = Some merged ->
-  refines (State (Switch scrutinee arms) vars conts statics hp)
-    (State merged vars conts statics hp).
+  refines (State (Switch scrutinee arms) vars conts statics hp rd)
+    (State merged vars conts statics hp rd).
 Proof.
   intros Hbound. unfold merge_switch_by_table_ways.
   destruct scrutinee as [v | sym | c]; try discriminate.
@@ -880,7 +896,7 @@ Proof.
     as Hways_bound.
   destruct
     (step_switch_cases (Var v) ((first, ac0) :: arm1 :: arm2 :: others) vars
-       conts statics hp)
+       conts statics hp rd)
     as [Hwrong | (w & i & ac & Hv & Hi & Hfind & Hstep)];
     [ apply step_undefined_refines, Hwrong | ].
   apply naked_immediate_of_value_some in Hi. subst w.
@@ -891,7 +907,7 @@ Proof.
        (Apply_cont
           (Apply_cont_expr (ac_continuation ac0)
              (merged_by_table_ways v names ways) None))
-       conts statics hp names ways args vars Hways_bound Hv Hlength Hdistinct
+       conts statics hp rd names ways args vars Hways_bound Hv Hlength Hdistinct
        Hvnames (fun x Hx => Hx) Hsame Hargs)
     as (vars' & _ & Hequiv & Heval).
   apply equivalent_refines.
@@ -970,22 +986,22 @@ Qed.
 Lemma merge_switch_with_tables_refines (known : known_continuations)
     (tables : known_tables) (scrutinee : simple)
     (arms : list (Z * apply_cont)) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   tables_bound tables statics ->
-  refines (State (Switch scrutinee arms) vars conts statics hp)
+  refines (State (Switch scrutinee arms) vars conts statics hp rd)
     (State (merge_switch_with_tables known tables scrutinee arms) vars conts
-       statics hp).
+       statics hp rd).
 Proof.
   intros Hbound. rewrite merge_switch_with_tables_unfold.
   destruct (merge_switch_by_table tables scrutinee arms) as [merged | ]
     eqn:Hmerged.
   - destruct (merge_switch scrutinee arms); try apply refines_refl.
     exact (merge_switch_by_table_refines tables scrutinee arms merged vars
-      conts statics hp Hbound Hmerged).
+      conts statics hp rd Hbound Hmerged).
   - destruct (merge_switch_by_table_ways known tables scrutinee arms)
       as [merged | ] eqn:Hways; [ | apply refines_refl ].
     exact (merge_switch_by_table_ways_refines known tables scrutinee arms
-      merged vars conts statics hp Hbound Hways).
+      merged vars conts statics hp rd Hbound Hways).
 Qed.
 
 (* ======================================================================== *)
@@ -1126,17 +1142,17 @@ Qed.
 
 Fixpoint merge_tables_under_refines_aux (e : expr) :
   ∀ (known : known_continuations) (tables : known_tables) (vars : env)
-    (conts : cont_env) (statics : static_env) (hp : heap),
+    (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record),
     tables_bound tables statics ->
-    refines (State e vars conts statics hp)
-      (State (merge_tables_under known tables e) vars conts statics hp).
+    refines (State e vars conts statics hp rd)
+      (State (merge_tables_under known tables e) vars conts statics hp rd).
 Proof.
   destruct e
     as [ x kind d body | bindings body | k h body | handlers body
        | ap | ac | scrutinee arms | ];
-    intros known tables vars conts statics hp Hbound;
+    intros known tables vars conts statics hp rd Hbound;
     cbn [merge_tables_under]; try apply refines_refl.
-  - apply let_refines_step; [ reflexivity | intros v _ _ ].
+  - apply let_refines_step_exec; [ reflexivity | intros v hp' rd' _ _ ].
     apply merge_tables_under_refines_aux, Hbound.
   - apply let_static_refines_step.
     destruct (eval_static_bindings vars bindings statics) as [extended | ]
@@ -1152,10 +1168,10 @@ Proof.
             (Handler params metadata
                (merge_tables_under known tables handler))
             body)
-         vars conts statics hp)).
+         vars conts statics hp rd)).
     + apply (let_cont_handler_refines_where (tables_bound tables)
         (tables_bound_extend tables)); [ exact Hbound | ].
-      intros vs handler_vars conts' statics' hp' Hbound' _ _.
+      intros vs handler_vars conts' statics' hp' rd' Hbound' _ _.
       apply merge_tables_under_refines_aux, Hbound'.
     + apply let_cont_non_recursive_refines_step,
         merge_tables_under_refines_aux, Hbound.
@@ -1171,7 +1187,7 @@ Proof.
             (map (fun '(k, h) => (k, merge_tables_in_handler known' tables h))
                handlers)
             body)
-         vars conts statics hp)).
+         vars conts statics hp rd)).
     + assert (Hhandlers :
         handlers_refine (tables_bound tables) vars handlers
           (map (fun '(k, h) => (k, merge_tables_in_handler known' tables h))
@@ -1183,7 +1199,7 @@ Proof.
         - destruct IH as [Hforwards Hbackwards].
           split; (apply Forall2_cons; [ | assumption ]);
             (split; [ reflexivity | ]); apply Handler_related;
-            intros vs handler_vars conts' statics' hp' Hbound' _ _;
+            intros vs handler_vars conts' statics' hp' rd' Hbound' _ _;
             apply merge_tables_under_refines_aux, Hbound'. }
       destruct Hhandlers as [Hforwards Hbackwards].
       apply (let_cont_recursive_handlers_refine_where
@@ -1197,7 +1213,7 @@ Qed.
 
 Theorem merge_tables_under_refines : merge_tables_under_refines_statement.
 Proof.
-  intros known tables e vars conts statics hp Hbound.
+  intros known tables e vars conts statics hp rd Hbound.
   apply merge_tables_under_refines_aux, Hbound.
 Qed.
 
@@ -1206,15 +1222,16 @@ Lemma merge_tables_knowing_binds_statics (e : expr) (tables : known_tables) :
 Proof. apply merge_tables_under_binds_statics. Qed.
 
 Lemma merge_tables_knowing_refines_aux (e : expr) (tables : known_tables)
-    (vars : env) (conts : cont_env) (statics : static_env) (hp : heap) :
+    (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+      (rd : read_record) :
   tables_bound tables statics ->
-  refines (State e vars conts statics hp)
-    (State (merge_tables_knowing tables e) vars conts statics hp).
+  refines (State e vars conts statics hp rd)
+    (State (merge_tables_knowing tables e) vars conts statics hp rd).
 Proof. apply merge_tables_under_refines_aux. Qed.
 
 Theorem merge_tables_knowing_refines : merge_tables_knowing_refines_statement.
 Proof.
-  intros tables e vars conts statics hp Hbound.
+  intros tables e vars conts statics hp rd Hbound.
   apply merge_tables_knowing_refines_aux, Hbound.
 Qed.
 
@@ -1312,17 +1329,17 @@ Qed.
    once in a body, and from then on in a handler and in code. *)
 Fixpoint merge_tables_in_code_refines_aux (e : expr) :
   ∀ (tables : known_tables) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap),
+    (statics : static_env) (hp : heap) (rd : read_record),
     tables_bound tables statics ->
-    refines (State e vars conts statics hp)
-      (State (merge_tables_in_code tables e) vars conts statics hp).
+    refines (State e vars conts statics hp rd)
+      (State (merge_tables_in_code tables e) vars conts statics hp rd).
 Proof.
   destruct e
     as [ x kind d body | bindings body | k h body | handlers body
        | ap | ac | scrutinee arms | ];
-    intros tables vars conts statics hp Hbound;
+    intros tables vars conts statics hp rd Hbound;
     cbn [merge_tables_in_code]; cbv zeta; try apply refines_refl.
-  - apply let_refines_step; [ reflexivity | intros v _ _ ].
+  - apply let_refines_step_exec; [ reflexivity | intros v hp' rd' _ _ ].
     apply merge_tables_in_code_refines_aux, Hbound.
   - (* the code of the group is rewritten with the tables of the group
        in scope: the body under the one static environment refines it
@@ -1352,7 +1369,7 @@ Proof.
            bindings).
       exact (tables_under_statics_bound tables _ vars statics extended'
         Hbound Hbindings'). }
-    apply (refines_trans _ (State body vars conts extended' hp)).
+    apply (refines_trans _ (State body vars conts extended' hp rd)).
     + apply (related_states_refines (tables_bound tables')
         (tables_bound_extend tables'));
         [ exact Hbound' | exact Hbound'' | apply cont_env_related_refl
@@ -1365,10 +1382,10 @@ Proof.
          (Let_cont_non_recursive k
             (Handler params metadata (merge_tables_in_code tables handler))
             body)
-         vars conts statics hp)).
+         vars conts statics hp rd)).
     + apply (let_cont_handler_refines_where (tables_bound tables)
         (tables_bound_extend tables)); [ exact Hbound | ].
-      intros vs handler_vars conts' statics' hp' Hbound' _ _.
+      intros vs handler_vars conts' statics' hp' rd' Hbound' _ _.
       apply merge_tables_in_code_refines_aux, Hbound'.
     + apply let_cont_non_recursive_refines_step,
         merge_tables_in_code_refines_aux, Hbound.
@@ -1380,7 +1397,7 @@ Proof.
                   (k, merge_tables_in_code_in_handler tables h))
                handlers)
             body)
-         vars conts statics hp)).
+         vars conts statics hp rd)).
     + assert (Hhandlers :
         handlers_refine (tables_bound tables) vars handlers
           (map
@@ -1393,7 +1410,7 @@ Proof.
         - destruct IH as [Hforwards Hbackwards].
           split; (apply Forall2_cons; [ | assumption ]);
             (split; [ reflexivity | ]); apply Handler_related;
-            intros vs handler_vars conts' statics' hp' Hbound' _ _;
+            intros vs handler_vars conts' statics' hp' rd' Hbound' _ _;
             apply merge_tables_in_code_refines_aux, Hbound'. }
       destruct Hhandlers as [Hforwards Hbackwards].
       apply (let_cont_recursive_handlers_refine_where
@@ -1406,13 +1423,13 @@ Qed.
 
 Theorem merge_tables_in_code_refines : merge_tables_in_code_refines_statement.
 Proof.
-  intros tables e vars conts statics hp Hbound.
+  intros tables e vars conts statics hp rd Hbound.
   apply merge_tables_in_code_refines_aux, Hbound.
 Qed.
 
 Theorem merge_tables_refines : merge_tables_refines_statement.
 Proof.
-  intros e vars conts statics hp. unfold merge_tables.
+  intros e vars conts statics hp rd. unfold merge_tables.
   eapply refines_trans.
   - apply merge_tables_knowing_refines_aux, no_tables_bound.
   - apply merge_tables_in_code_refines_aux, no_tables_bound.

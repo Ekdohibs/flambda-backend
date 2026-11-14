@@ -92,54 +92,6 @@ Proof.
 Qed.
 
 (* ======================================================================== *)
-(* The refinement                                                           *)
-(* ======================================================================== *)
-
-Lemma let_fold_same_comparison_refines (x : variable) (kind : flambda_kind)
-    (d : named) (body : expr) :
-  expr_refines (Let x kind d body) (Let x kind (fold_same_comparison d) body).
-Proof.
-  intros vars conts statics hp.
-  destruct (eval_named statics vars d) as [v | ] eqn:Hd.
-  - apply let_refines_step.
-    + rewrite Hd. exact (fold_same_comparison_sound statics vars d v Hd).
-    + intros v' _ _. apply refines_refl.
-  - apply step_undefined_refines. rewrite step_let, Hd. reflexivity.
-Qed.
-
-Fixpoint fold_same_comparisons_refines_aux (e : expr) :
-  expr_refines e (fold_same_comparisons e).
-Proof.
-  destruct e
-    as [ x kind d body | bindings body | k [params metadata handler] body
-       | handlers body | ap | ac | scrutinee arms | ];
-    cbn [fold_same_comparisons]; try apply expr_refines_refl.
-  - apply (expr_refines_trans _ (Let x kind (fold_same_comparison d) body)).
-    + apply let_fold_same_comparison_refines.
-    + exact (plug_refines (Let_body x kind (fold_same_comparison d) Hole) _ _
-        (not_many _) (fold_same_comparisons_refines_aux body)).
-  - exact (plug_refines (Let_static_body bindings Hole) _ _ (not_many _)
-      (fold_same_comparisons_refines_aux body)).
-  - apply (expr_refines_trans _
-      (Let_cont_non_recursive k
-         (Handler params metadata (fold_same_comparisons handler)) body)).
-    + exact (plug_refines
-        (Let_cont_non_recursive_handler k params metadata Hole body)
-        _ _ (not_many _)
-        (fold_same_comparisons_refines_aux handler)).
-    + exact (plug_refines
-        (Let_cont_non_recursive_body k
-           (Handler params metadata (fold_same_comparisons handler)) Hole)
-        _ _ (not_many _) (fold_same_comparisons_refines_aux body)).
-  - exact (plug_refines (Let_cont_recursive_body handlers Hole) _ _
-      (not_many _) (fold_same_comparisons_refines_aux body)).
-Qed.
-
-Theorem fold_same_comparisons_refines
-    : fold_same_comparisons_refines_statement.
-Proof. exact fold_same_comparisons_refines_aux. Qed.
-
-(* ======================================================================== *)
 (* The machine with a heap                                                  *)
 (* ======================================================================== *)
 
@@ -205,6 +157,86 @@ Proof.
   rewrite different_answer_naked_bool.
   exact (phys_equal_symbols statics op s1 s2 r Hne Hprim).
 Qed.
+
+(* The same for the run of the machine: where the value is a location
+   the comparison reads the heap, its answer is the same, and the heap
+   is left as it was. *)
+Lemma fold_same_comparison_exec (statics : static_env) (hp hp' : heap)
+    (rd rd' : read_record)
+    (vars : env) (d : named) (v : value) :
+  exec_named statics hp rd vars d = Some (v, hp', rd') ->
+  exec_named statics hp rd vars (fold_same_comparison d) = Some (v, hp', rd').
+Proof.
+  intros Hd.
+  destruct d as [s | p args | code slots | fslot decls slots | slot closure
+    | pfrom slot closure | move_from move_to closure];
+    try exact Hd.
+  destruct p as [p | p | p | p | rp]; try exact Hd.
+  destruct p as [k lk m | w | op | k o | k o | k b]; try exact Hd.
+  destruct args as [ | a [ | b [ | c args]]]; try exact Hd.
+  cbn [fold_same_comparison].
+  destruct (FlambdaModel.simple_eq_dec a b) as [<- | Hne].
+  - apply exec_named_prim_some in Hd as (vs & Hvs & Hprim & ->).
+    cbn [eval_simples] in Hvs.
+    destruct (eval_simple vars a) as [va | ]; [ | discriminate Hvs ].
+    injection Hvs as <-.
+    destruct (phys_equal_same_heap statics hp hp' op va v Hprim) as [-> ->].
+    reflexivity.
+  - destruct a as [x1 | s1 | c1]; try exact Hd.
+    destruct b as [x2 | s2 | c2]; try exact Hd.
+    assert (Hsym : s1 <> s2) by (intros ->; apply Hne; reflexivity).
+    apply exec_named_prim_some in Hd as (vs & Hvs & Hprim & ->).
+    injection Hvs as <-.
+    destruct (phys_equal_symbols_heap statics hp hp' op s1 s2 v Hsym Hprim)
+      as [-> ->].
+    reflexivity.
+Qed.
+
+(* ======================================================================== *)
+(* The refinement                                                           *)
+(* ======================================================================== *)
+
+Lemma let_fold_same_comparison_refines (x : variable) (kind : flambda_kind)
+    (d : named) (body : expr) :
+  expr_refines (Let x kind d body) (Let x kind (fold_same_comparison d) body).
+Proof.
+  intros vars conts statics hp rd. apply let_refines_step_forward.
+  - intros v hp' rd' Hd.
+    exact (fold_same_comparison_exec statics hp hp' rd rd' vars d v Hd).
+  - intros v hp' rd' _ _. apply refines_refl.
+Qed.
+
+Fixpoint fold_same_comparisons_refines_aux (e : expr) :
+  expr_refines e (fold_same_comparisons e).
+Proof.
+  destruct e
+    as [ x kind d body | bindings body | k [params metadata handler] body
+       | handlers body | ap | ac | scrutinee arms | ];
+    cbn [fold_same_comparisons]; try apply expr_refines_refl.
+  - apply (expr_refines_trans _ (Let x kind (fold_same_comparison d) body)).
+    + apply let_fold_same_comparison_refines.
+    + exact (plug_refines (Let_body x kind (fold_same_comparison d) Hole) _ _
+        (not_many _) (fold_same_comparisons_refines_aux body)).
+  - exact (plug_refines (Let_static_body bindings Hole) _ _ (not_many _)
+      (fold_same_comparisons_refines_aux body)).
+  - apply (expr_refines_trans _
+      (Let_cont_non_recursive k
+         (Handler params metadata (fold_same_comparisons handler)) body)).
+    + exact (plug_refines
+        (Let_cont_non_recursive_handler k params metadata Hole body)
+        _ _ (not_many _)
+        (fold_same_comparisons_refines_aux handler)).
+    + exact (plug_refines
+        (Let_cont_non_recursive_body k
+           (Handler params metadata (fold_same_comparisons handler)) Hole)
+        _ _ (not_many _) (fold_same_comparisons_refines_aux body)).
+  - exact (plug_refines (Let_cont_recursive_body handlers Hole) _ _
+      (not_many _) (fold_same_comparisons_refines_aux body)).
+Qed.
+
+Theorem fold_same_comparisons_refines
+    : fold_same_comparisons_refines_statement.
+Proof. exact fold_same_comparisons_refines_aux. Qed.
 
 (* ======================================================================== *)
 (* The renamings                                                            *)

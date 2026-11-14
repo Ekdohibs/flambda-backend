@@ -6189,8 +6189,10 @@ Proof.
   rewrite well_formed_unit_equivariant, only_closures_of_renamed.
   pose proof (exits_plain_knowing_equivariant r [] [] e) as Hexits.
   simpl in Hexits. rewrite Hexits.
+  rewrite (FlambdaHeapFreeProofs.expr_free_of_heap_rename r e).
   destruct
     (exits_plain_knowing [] [] e
+     && FlambdaHeapFreeSpec.expr_free_of_heap e
      && well_formed_unit (lifting_unit L)
           (bind_my_closures (lifted_my_closures L)
              (lift_expr (lifted_lets L) root e))
@@ -6211,8 +6213,10 @@ Proof.
   rewrite <- lift_from_code_equivariant, well_formed_unit_equivariant.
   pose proof (exits_plain_knowing_equivariant r [] [] e) as Hexits.
   simpl in Hexits. rewrite Hexits.
+  rewrite (FlambdaHeapFreeProofs.expr_free_of_heap_rename r e).
   destruct
     (exits_plain_knowing [] [] e
+     && FlambdaHeapFreeSpec.expr_free_of_heap e
      && well_formed_unit u (lift_from_code K [] root e));
     reflexivity.
 Qed.
@@ -6228,8 +6232,11 @@ Proof.
     well_formed_unit_equivariant.
   pose proof (exits_plain_knowing_equivariant r [] [] e) as Hexits.
   simpl in Hexits. rewrite Hexits.
+  rewrite (FlambdaHeapFreeProofs.expr_free_of_heap_rename r e).
   destruct
-    (exits_plain_knowing [] [] e && well_formed_unit u (lift_to_head lets e));
+    (exits_plain_knowing [] [] e
+     && FlambdaHeapFreeSpec.expr_free_of_heap e
+     && well_formed_unit u (lift_to_head lets e));
     reflexivity.
 Qed.
 
@@ -6253,8 +6260,10 @@ Proof.
   cbn [rename_known_constants map] in Hok. rewrite Hok.
   pose proof (exits_plain_knowing_equivariant r [] [] e) as Hexits.
   simpl in Hexits. rewrite Hexits.
+  rewrite (FlambdaHeapFreeProofs.expr_free_of_heap_rename r e).
   destruct
     (exits_plain_knowing [] [] e
+     && FlambdaHeapFreeSpec.expr_free_of_heap e
      && around_ok lets (groups_of lets places e) [] root e
      && well_formed_unit u
           (lift_around lets (groups_of lets places e) root e));

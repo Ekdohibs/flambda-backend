@@ -150,8 +150,8 @@ Definition imports_statics (imports : list (symbol * import_class))
    under all environments ([expr_refines]) implies it. *)
 Definition unit_refines (imports : list (symbol * import_class))
     (source target : expr) : Prop :=
-  refines (State source [] [] (imports_statics imports) empty_heap)
-    (State target [] [] (imports_statics imports) empty_heap).
+  refines (State source [] [] (imports_statics imports) empty_heap no_reads)
+    (State target [] [] (imports_statics imports) empty_heap no_reads).
 
 Definition expr_refines_unit_refines_statement : Prop :=
   ∀ (imports : list (symbol * import_class)) (source target : expr),
@@ -189,12 +189,12 @@ Definition static_names_free_in (statics : static_env) (e : expr) : bool :=
    refinement says nothing. *)
 Definition prefix_refines_statement : Prop :=
   ∀ (prefix : list static_binding) (statics statics' : static_env)
-    (hp : heap) (source target : expr),
+    (hp : heap) (rd : read_record) (source target : expr),
     eval_static_bindings [] prefix statics = Some statics' ->
-    refines (State (Let_static prefix source) [] [] statics hp)
-      (State (Let_static prefix target) [] [] statics hp)
-    <-> refines (State source [] [] statics' hp)
-          (State target [] [] statics' hp).
+    refines (State (Let_static prefix source) [] [] statics hp rd)
+      (State (Let_static prefix target) [] [] statics hp rd)
+    <-> refines (State source [] [] statics' hp rd)
+          (State target [] [] statics' hp rd).
 
 (* ======================================================================== *)
 (* What a primitive does with an imported symbol                            *)
@@ -332,7 +332,7 @@ Definition unit_two_classes_statement : Prop :=
        (reached : state),
       (∀ (s : symbol) (c : import_class),
         (s, c) ∈ imports -> c <> Import_unknown) ->
-      run fuel (State e [] [] (imports_statics imports) empty_heap)
+      run fuel (State e [] [] (imports_statics imports) empty_heap no_reads)
       = Step reached ->
       no_import_unknown (state_statics reached)).
 
@@ -421,16 +421,16 @@ Definition catch_by_name (raised : symbol) : expr :=
 Definition catches_by_name_statement : Prop :=
   let statics := imports_statics example_imports in
   behaves
-    (State (catch_by_name example_not_found) [] [] statics empty_heap)
+    (State (catch_by_name example_not_found) [] [] statics empty_heap no_reads)
     (Exits example_leave [Value_const (Tagged_immediate 2)] empty_heap)
   ∧ behaves
       (State (catch_by_name example_division_by_zero) [] [] statics
-         empty_heap)
+         empty_heap no_reads)
       (Exits example_error [Value_symbol example_division_by_zero]
          empty_heap)
   ∧ behaves
       (State (bind_example_bucket (catch_by_name example_bucket)) [] []
-         statics empty_heap)
+         statics empty_heap no_reads)
       (Exits example_error [Value_symbol example_bucket] empty_heap).
 
 (* [try raise raised with Failure n -> n], where the unit has bound
@@ -471,11 +471,12 @@ Definition catch_with_argument (raised : symbol) : expr :=
 Definition catches_with_argument_statement : Prop :=
   let statics := imports_statics example_imports in
   behaves
-    (State (catch_with_argument example_bucket) [] [] statics empty_heap)
+    (State (catch_with_argument example_bucket) [] [] statics empty_heap
+       no_reads)
     (Exits example_leave [Value_const (Tagged_immediate 7)] empty_heap)
   ∧ behaves
       (State (catch_with_argument example_not_found) [] [] statics
-         empty_heap)
+         empty_heap no_reads)
       Goes_wrong.
 
 (* ======================================================================== *)
@@ -511,9 +512,9 @@ Definition compare_hidden : expr :=
    it with the symbol of an exception. *)
 Definition unknown_import_statement : Prop :=
   let statics := imports_statics example_imports_hidden in
-  behaves (State carry_hidden [] [] statics empty_heap)
+  behaves (State carry_hidden [] [] statics empty_heap no_reads)
     (Exits example_leave [Value_symbol example_hidden] empty_heap)
-  ∧ behaves (State compare_hidden [] [] statics empty_heap) Goes_wrong
+  ∧ behaves (State compare_hidden [] [] statics empty_heap no_reads) Goes_wrong
   ∧ behaves
-      (State (catch_by_name example_hidden) [] [] statics empty_heap)
+      (State (catch_by_name example_hidden) [] [] statics empty_heap no_reads)
       Goes_wrong.

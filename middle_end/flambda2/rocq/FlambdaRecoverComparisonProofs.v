@@ -26,15 +26,20 @@
  ******************************************************************************)
 
 (* Proofs of the statements of FlambdaRecoverComparisonSpec.v. Nothing
-   here needs review. The proof of the refinement and that of the
-   equivariance follow those of FlambdaCseProofs.v, whose lemmas on what
-   is known they use. *)
+   here needs review. The proof of the refinement follows that of
+   FlambdaCseProofs.v with an invariant of its own ([comparisons_hold]):
+   of what is known, the pass reads the entries of two forms only, a
+   three-way comparison and the tagging of a variable, and neither
+   reads a cell, so the invariant says nothing of the heap or of the
+   read record. The proof of the equivariance uses the lemmas of
+   FlambdaCseProofs.v on the renaming of what is known. *)
 
 From Stdlib Require Import ZArith List Bool Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaMapProofs FlambdaKindModel FlambdaValueSpec FlambdaPrimitiveModel
-  FlambdaPrimitiveSpec FlambdaPrimitiveProofs FlambdaSemanticsSpec
+  FlambdaPrimitiveSpec FlambdaPrimitiveProofs FlambdaHeapSpec
+  FlambdaSemanticsSpec
   FlambdaSemanticsProofs FlambdaContextProofs FlambdaNominalSpec
   FlambdaNominalProofs
   FlambdaApplyProofs FlambdaWellFormedSpec FlambdaWellFormedProofs
@@ -130,6 +135,170 @@ Proof.
 Qed.
 
 (* ======================================================================== *)
+(* What the pass knows where it runs                                        *)
+(* ======================================================================== *)
+
+(* The two forms of entry that the pass reads
+   (FlambdaRecoverComparisonSpec.comparison_held and
+   tagged_comparison_held): a three-way comparison, and the tagging of
+   an immediate. *)
+Definition read_form (p : prim) : bool :=
+  match p with
+  | Binary (Int_comp _ (Yielding_int_like_compare_functions _)) => true
+  | Unary Tag_immediate => true
+  | _ => false
+  end.
+
+(* An entry holds where a term runs: the variable is bound to the value
+   of the primitive applied to the values of its arguments. *)
+Definition entry_holds (statics : static_env) (vars : env)
+    (entry : variable * (prim * list simple)) : Prop :=
+  ∃ (vs : list value) (v : value),
+    eval_simples vars (snd (snd entry)) = Some vs
+    ∧ eval_prim statics (fst (snd entry)) vs = Some v
+    ∧ lookup (fst entry) vars = Some v.
+
+(* The invariant of the pass: every entry of the two forms holds. It is
+   said with [eval_prim] and has no heap: a primitive of the two forms
+   reads no cell ([read_form_reads_no_cell]), so the machine runs it as
+   [eval_named] has it (FlambdaSemanticsProofs.exec_named_pure), and
+   its value on the same values does not change with the heap. Of the
+   other entries of what is known it says nothing. *)
+Definition comparisons_hold (known : computed) (vars : env)
+    (statics : static_env) : Prop :=
+  ∀ entry : variable * (prim * list simple),
+    entry ∈ known ->
+    read_form (fst (snd entry)) = true ->
+    entry_holds statics vars entry.
+
+Lemma read_form_reads_no_cell (p : prim) (args : list simple) :
+  read_form p = true -> named_reads_heap (Prim p args) = false.
+Proof.
+  intros Hform.
+  destruct p as [u | b | vp | hp | rp]; try discriminate Hform.
+  - destruct u; try discriminate Hform. reflexivity.
+  - destruct b; try discriminate Hform. reflexivity.
+Qed.
+
+(* Binding a variable, once what mentions it is forgotten. *)
+Lemma comparisons_hold_forget (known : computed) (vars : env)
+    (statics : static_env) (x : variable) (v : value) :
+  comparisons_hold known vars statics ->
+  comparisons_hold (forget_computed x known) ((x, v) :: vars) statics.
+Proof.
+  intros Hhold entry Hin Hform. unfold forget_computed in Hin.
+  apply filter_In in Hin. destruct Hin as [Hin Hkept]. cbv beta in Hkept.
+  apply andb_true_iff in Hkept as [Hkey Hargs].
+  apply negb_true_iff, Pos.eqb_neq in Hkey. apply negb_true_iff in Hargs.
+  destruct (Hhold entry Hin Hform) as (vs & r & Hvs & Hprim & Hlookup).
+  exists vs, r. split; [ | split; [ exact Hprim | ] ].
+  - rewrite eval_simples_extend; [ exact Hvs | ].
+    intros Hfree. apply var_in_simples_sound in Hfree.
+    exact (eq_true_false_abs _ Hfree Hargs).
+  - simpl. destruct (Pos.eqb_spec (fst entry) x) as [Heq | _];
+      [ | exact Hlookup ].
+    exfalso. apply Hkey. symmetry. exact Heq.
+Qed.
+
+Lemma comparisons_hold_bind_params (statics : static_env)
+    (params : list variable) :
+  ∀ (known : computed) (vs : list value) (vars handler_vars : env),
+    comparisons_hold known vars statics ->
+    bind_params params vs vars = Some handler_vars ->
+    comparisons_hold (forget_computed_vars params known) handler_vars statics.
+Proof.
+  induction params as [ | param params IH];
+    intros known [ | v vs] vars handler_vars Hhold; simpl; try discriminate.
+  - intros [= <-]. exact Hhold.
+  - apply IH, comparisons_hold_forget, Hhold.
+Qed.
+
+(* A static environment that binds more: a primitive has the value it
+   had. *)
+Lemma comparisons_hold_extend (known : computed) (vars : env)
+    (statics statics' : static_env) :
+  comparisons_hold known vars statics -> statics_extend statics statics' ->
+  comparisons_hold known vars statics'.
+Proof.
+  intros Hhold [_ Hvalues] entry Hin Hform.
+  destruct (Hhold entry Hin Hform) as (vs & v & Hvs & Hprim & Hlookup).
+  exists vs, v. split; [ exact Hvs | split; [ | exact Hlookup ] ].
+  apply (eval_prim_statics_extend statics statics' _ vs v);
+    [ | exact Hprim ].
+  intros s allocated _ Hs. apply Hvalues, Hs.
+Qed.
+
+(* Where an untagging has a value, the tagging of that value is what
+   was untagged. *)
+Lemma tagging_of_untagged (statics : static_env) (tagged v : value) :
+  eval_prim statics (Unary Untag_immediate) [tagged] = Some v ->
+  eval_prim statics (Unary Tag_immediate) [v] = Some tagged.
+Proof.
+  rewrite !eval_prim_unary. unfold eval_unary_primitive, int_of_value.
+  destruct tagged; try discriminate.
+  match goal with c : const |- _ => destruct c; try discriminate end.
+  simpl.
+  match goal with
+  | |- context [in_range ?w ?i] =>
+    destruct (in_range w i) eqn:Hrange; [ | discriminate ]
+  end.
+  intros [= <-]. simpl. rewrite Hrange. reflexivity.
+Qed.
+
+(* Under a [Let], from the run of the machine. A new entry of one of
+   the two forms reads no cell, so it has the value that [eval_named]
+   gives it; so has the untagging from which
+   FlambdaCseSpec.tagged_again says that a variable holds a tagging. *)
+Lemma comparisons_hold_under_let (known : computed) (x : variable)
+    (d : named) (vars : env) (statics : static_env) (hp hp' : heap)
+    (rd rd' : read_record) (v : value) :
+  comparisons_hold known vars statics ->
+  exec_named statics hp rd vars d = Some (v, hp', rd') ->
+  comparisons_hold (computed_under_let known x d) ((x, v) :: vars) statics.
+Proof.
+  intros Hhold Hd. unfold computed_under_let.
+  pose proof (comparisons_hold_forget known vars statics x v Hhold)
+    as Hforgot.
+  destruct d as [s | p args | code slots | fslot decls slots | slot closure
+    | pfrom slot closure | move_from move_to closure];
+    try exact Hforgot.
+  destruct (shareable p && negb (var_in_simples x args)) eqn:Hadd;
+    [ | exact Hforgot ].
+  apply andb_true_iff in Hadd as [_ Hmention].
+  apply negb_true_iff in Hmention.
+  intros entry [<- | Hin] Hform.
+  - cbn [fst snd] in Hform.
+    destruct (exec_named_pure statics hp hp' rd rd' vars (Prim p args) v
+      (read_form_reads_no_cell p args Hform) Hd)
+      as (Heval & _ & _).
+    simpl in Heval.
+    destruct (eval_simples vars args) as [vs | ] eqn:Hvs; [ | discriminate ].
+    simpl in Heval.
+    exists vs, v. simpl. split; [ | split; [ exact Heval | ] ].
+    + rewrite eval_simples_extend; [ exact Hvs | ].
+      intros Hfree. apply var_in_simples_sound in Hfree. congruence.
+    + rewrite Pos.eqb_refl. reflexivity.
+  - apply in_app_or in Hin as [Hagain | Hin];
+      [ | exact (Hforgot entry Hin Hform) ].
+    destruct (tagged_again_spec x p args entry Hagain) as (t & -> & -> & ->).
+    destruct (exec_named_pure statics hp hp' rd rd' vars
+      (Prim (Unary Untag_immediate) [Var t]) v eq_refl Hd)
+      as (Heval & _ & _).
+    assert (Hxt : Pos.eqb x t = false).
+    { cbn [var_in_simples var_in_simple existsb] in Hmention.
+      rewrite orb_false_r in Hmention. exact Hmention. }
+    simpl in Heval.
+    destruct (lookup t vars) as [tagged | ] eqn:Ht; [ | discriminate ].
+    simpl in Heval.
+    exists [v], tagged. cbn [fst snd].
+    split; [ | split ].
+    + cbn [eval_simples eval_simple lookup]. rewrite Pos.eqb_refl.
+      reflexivity.
+    + exact (tagging_of_untagged statics tagged v Heval).
+    + cbn [lookup]. rewrite Pos.eqb_sym, Hxt. exact Ht.
+Qed.
+
+(* ======================================================================== *)
 (* What is known of a variable                                              *)
 (* ======================================================================== *)
 
@@ -185,7 +354,7 @@ Qed.
 Lemma compared_holds (known : computed) (vars : env) (statics : static_env)
     (tagged : simple) (kind : standard_int) (s : signedness)
     (operands : list simple) :
-  all_computed known vars statics ->
+  comparisons_hold known vars statics ->
   compared known tagged = Some (kind, s, operands) ->
   ∃ (v1 v2 : value) (a b : Z),
     eval_simples vars operands = Some [v1; v2]
@@ -209,8 +378,9 @@ Proof.
   apply tagged_comparison_held_sound in Hheld as (u & -> & Hcomparison).
   apply first_known_sound in Hcomparison as (entry' & Hentry' & Hheld').
   apply comparison_held_sound in Hheld' as ->.
-  destruct (Hhold _ Hentry) as (vs & v & Hvs & Htag & Hlookup).
-  destruct (Hhold _ Hentry') as (vs' & v' & Hvs' & Hcomp & Hlookup').
+  destruct (Hhold _ Hentry eq_refl) as (vs & v & Hvs & Htag & Hlookup).
+  destruct (Hhold _ Hentry' eq_refl)
+    as (vs' & v' & Hvs' & Hcomp & Hlookup').
   cbn [fst snd] in Hvs, Htag, Hlookup, Hvs', Hcomp, Hlookup'.
   (* The three-way comparison. *)
   destruct vs' as [ | v1 [ | v2 [ | v3 vs']]]; try discriminate Hcomp.
@@ -268,7 +438,7 @@ Qed.
 Lemma recover_one_way_holds (known : computed) (vars : env)
     (statics : static_env) (tagged zero : simple) (c : int_comparison)
     (d' : named) :
-  all_computed known vars statics ->
+  comparisons_hold known vars statics ->
   recover_one_way known tagged zero c = Some d' ->
   ∃ r : Z,
     eval_simple vars tagged = Some (Value_const (Tagged_immediate r))
@@ -304,7 +474,7 @@ Qed.
 
 Lemma recover_comparison_sound (known : computed) (vars : env)
     (statics : static_env) (d : named) (v : value) :
-  all_computed known vars statics ->
+  comparisons_hold known vars statics ->
   eval_named statics vars d = Some v ->
   eval_named statics vars (recover_comparison known d) = Some v.
 Proof.
@@ -336,60 +506,168 @@ Proof.
 Qed.
 
 (* ======================================================================== *)
+(* What the machine runs                                                    *)
+(* ======================================================================== *)
+
+(* A test is run on two tagged immediates and what takes its place on
+   two integers: no argument is a location, so each runs as
+   [eval_named] has it, and the heap and the read record are as they
+   came (FlambdaSemanticsSpec.exec_named_no_location_statement).
+   [Phys_equal] is among the tests, and on a heap it compares
+   locations: not here. *)
+Lemma tested_exec (statics : static_env) (hp : heap) (rd : read_record)
+    (vars : env) (p : prim) (c : int_comparison) (arg1 arg2 : simple)
+    (x y : Z) :
+  tested p = Some c ->
+  eval_simple vars arg1 = Some (Value_const (Tagged_immediate x)) ->
+  eval_simple vars arg2 = Some (Value_const (Tagged_immediate y)) ->
+  exec_named statics hp rd vars (Prim p [arg1; arg2])
+  = let* v := eval_named statics vars (Prim p [arg1; arg2]) in
+    Some (v, hp, rd).
+Proof.
+  intros Htested Harg1 Harg2.
+  apply (exec_named_no_location statics hp rd vars p [arg1; arg2]
+    [Value_const (Tagged_immediate x); Value_const (Tagged_immediate y)]).
+  - intros q ->. discriminate Htested.
+  - cbn [eval_simples]. rewrite Harg1, Harg2. reflexivity.
+  - intros l [Hl | [Hl | []]]; discriminate Hl.
+Qed.
+
+Lemma recover_one_way_exec (known : computed) (vars : env)
+    (statics : static_env) (hp : heap) (rd : read_record)
+    (tagged zero : simple) (c : int_comparison) (d' : named) :
+  comparisons_hold known vars statics ->
+  recover_one_way known tagged zero c = Some d' ->
+  exec_named statics hp rd vars d'
+  = let* v := eval_named statics vars d' in
+    Some (v, hp, rd).
+Proof.
+  intros Hhold. unfold recover_one_way.
+  destruct (is_tagged_zero zero); [ | discriminate ].
+  destruct (compared known tagged) as [[[kind s] operands] | ] eqn:Hcompared;
+    [ | discriminate ].
+  destruct (against_zero s c) as [c' | ]; [ | discriminate ].
+  intros [= <-].
+  destruct (compared_holds known vars statics tagged kind s operands Hhold
+    Hcompared)
+    as (v1 & v2 & a & b & Hoperands & Ha & Hb & _ & _).
+  apply (exec_named_no_location statics hp rd vars _ operands [v1; v2]);
+    [ intros q; discriminate | exact Hoperands | ].
+  intros l [-> | [-> | []]].
+  - destruct (int_of_value_const kind _ a Ha) as [Hconst _].
+    discriminate Hconst.
+  - destruct (int_of_value_const kind _ b Hb) as [Hconst _].
+    discriminate Hconst.
+Qed.
+
+(* What the machine gives of a named expression, it gives of what the
+   pass puts in its place, with the same heap and the same read
+   record. *)
+Lemma recover_comparison_exec (known : computed) (vars : env)
+    (statics : static_env) (hp hp' : heap) (rd rd' : read_record)
+    (d : named) (v : value) :
+  comparisons_hold known vars statics ->
+  exec_named statics hp rd vars d = Some (v, hp', rd') ->
+  exec_named statics hp rd vars (recover_comparison known d)
+  = Some (v, hp', rd').
+Proof.
+  intros Hhold Hd.
+  assert (Hruns :
+    recover_comparison known d = d
+    ∨ (exec_named statics hp rd vars d
+       = (let* v0 := eval_named statics vars d in
+          Some (v0, hp, rd))
+       ∧ exec_named statics hp rd vars (recover_comparison known d)
+         = (let* v0 := eval_named statics vars (recover_comparison known d) in
+            Some (v0, hp, rd)))).
+  { unfold recover_comparison.
+    destruct d as [s | p args | code slots | fslot decls slots | slot closure
+      | pfrom slot closure | move_from move_to closure];
+      try (left; reflexivity).
+    destruct args as [ | arg1 [ | arg2 [ | arg3 args]]];
+      try (left; reflexivity).
+    destruct (tested p) as [c | ] eqn:Htested; [ | left; reflexivity ].
+    destruct (recover_one_way known arg1 arg2 c) as [d' | ] eqn:Hone.
+    - right.
+      destruct (recover_one_way_holds known vars statics arg1 arg2 c d' Hhold
+        Hone)
+        as (r & Htagged & _ & -> & _).
+      split.
+      + exact (tested_exec statics hp rd vars p c arg1
+          (Const (Tagged_immediate 0)) r 0 Htested Htagged eq_refl).
+      + exact (recover_one_way_exec known vars statics hp rd arg1
+          (Const (Tagged_immediate 0)) c d' Hhold Hone).
+    - destruct (recover_one_way known arg2 arg1 (swap_comparison c))
+        as [d' | ] eqn:Hother; [ | left; reflexivity ].
+      right.
+      destruct (recover_one_way_holds known vars statics arg2 arg1
+        (swap_comparison c) d' Hhold Hother)
+        as (r & Htagged & _ & -> & _).
+      split.
+      + exact (tested_exec statics hp rd vars p c
+          (Const (Tagged_immediate 0)) arg2 0 r Htested eq_refl Htagged).
+      + exact (recover_one_way_exec known vars statics hp rd arg2
+          (Const (Tagged_immediate 0)) (swap_comparison c) d' Hhold
+          Hother). }
+  destruct Hruns as [-> | [Hsource Htarget]]; [ exact Hd | ].
+  rewrite Hsource in Hd. revert Hd.
+  destruct (eval_named statics vars d) as [v0 | ] eqn:Heval;
+    [ | discriminate ].
+  intros Hd. injection Hd as Hv Hhp Hrd. subst v0 hp' rd'.
+  rewrite Htarget,
+    (recover_comparison_sound known vars statics d v Hhold Heval).
+  reflexivity.
+Qed.
+
+(* ======================================================================== *)
 (* The pass                                                                 *)
 (* ======================================================================== *)
 
-(* As in FlambdaCseProofs.v: at a [Let], the variable has the value of
-   the primitive or the primitive has none; then the parts under
-   binders, by the induction, with what is known there. *)
+(* As in FlambdaCseProofs.v: at a [Let], what the machine gives of the
+   named expression it gives of what the pass puts in its place; then
+   the parts under binders, by the induction, with what is known
+   there. *)
 Fixpoint recover_comparisons_knowing_refines (e : expr) :
   ∀ (known : computed) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap),
-    all_computed known vars statics ->
-    refines (State e vars conts statics hp)
-      (State (recover_comparisons_knowing known e) vars conts statics hp)
+    (statics : static_env) (hp : heap) (rd : read_record),
+    comparisons_hold known vars statics ->
+    refines (State e vars conts statics hp rd)
+      (State (recover_comparisons_knowing known e) vars conts statics hp rd)
 with recover_comparisons_in_handler_refines (h : continuation_handler) :
   ∀ (known : computed) (k : continuation) (body : expr) (vars : env)
-    (conts : cont_env) (statics : static_env) (hp : heap),
-    all_computed known vars statics ->
-    refines (State (Let_cont_non_recursive k h body) vars conts statics hp)
+    (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record),
+    comparisons_hold known vars statics ->
+    refines (State (Let_cont_non_recursive k h body) vars conts statics hp rd)
       (State
          (Let_cont_non_recursive k (recover_comparisons_in_handler known h)
             body)
-         vars conts statics hp).
+         vars conts statics hp rd).
 Proof.
   - destruct e
       as [ x kind d body | bindings body | k h body | handlers body | ap
          | ac | scrutinee arms | ];
-      intros known vars conts statics hp Hhold; simpl.
+      intros known vars conts statics hp rd Hhold; simpl.
     + (* Let *)
-      destruct (eval_named statics vars d) as [v | ] eqn:Hd;
-        [ destruct (kind_eqb (kind_of_value v) kind) eqn:Hkind | ].
-      * eapply refines_step;
-          [ rewrite step_let, Hd, Hkind; reflexivity
-          | rewrite step_let,
-              (recover_comparison_sound known vars statics d v Hhold Hd),
-              Hkind;
-            reflexivity
-          | ].
-        apply recover_comparisons_knowing_refines.
-        exact (all_computed_under_let known x d vars statics v Hhold Hd).
-      * apply step_undefined_refines. rewrite step_let, Hd, Hkind.
-        reflexivity.
-      * apply step_undefined_refines. rewrite step_let, Hd. reflexivity.
+      apply let_refines_step_forward.
+      * intros v hp' rd' Hd.
+        exact (recover_comparison_exec known vars statics hp hp' rd rd' d v
+          Hhold Hd).
+      * intros v hp' rd' Hd _. apply recover_comparisons_knowing_refines.
+        exact (comparisons_hold_under_let known x d vars statics hp hp' rd
+          rd' v Hhold Hd).
     + (* Let_static *)
       apply let_static_refines_step.
       destruct (eval_static_bindings vars bindings statics)
         as [extended | ] eqn:Hbindings; [ | exact I ].
       apply recover_comparisons_knowing_refines.
-      exact (all_computed_extend known vars statics extended Hhold
+      exact (comparisons_hold_extend known vars statics extended Hhold
         (eval_static_bindings_extend vars bindings _ _ Hbindings)).
     + (* Let_cont_non_recursive *)
       apply (refines_trans _
         (State
            (Let_cont_non_recursive k
               (recover_comparisons_in_handler known h) body)
-           vars conts statics hp)).
+           vars conts statics hp rd)).
       * apply recover_comparisons_in_handler_refines, Hhold.
       * apply let_cont_non_recursive_refines_step,
           recover_comparisons_knowing_refines, Hhold.
@@ -401,15 +679,15 @@ Proof.
     + apply refines_refl.
     + apply refines_refl.
   - destruct h as [params metadata handler].
-    intros known k body vars conts statics hp Hhold. simpl.
+    intros known k body vars conts statics hp rd Hhold. simpl.
     apply (let_cont_handler_refines_where (statics_extend statics)
       (statics_extend_trans statics));
       [ apply statics_extend_refl | ].
-    intros vs handler_vars conts' statics' hp' Hextend _ Hbind.
+    intros vs handler_vars conts' statics' hp' rd' Hextend _ Hbind.
     apply recover_comparisons_knowing_refines.
-    apply (all_computed_bind_params statics' params known vs vars
+    apply (comparisons_hold_bind_params statics' params known vs vars
       handler_vars);
-      [ exact (all_computed_extend known vars statics statics' Hhold
+      [ exact (comparisons_hold_extend known vars statics statics' Hhold
           Hextend)
       | exact Hbind ].
 Qed.
@@ -417,7 +695,7 @@ Qed.
 Theorem recover_known_comparisons_refines :
   recover_known_comparisons_refines_statement.
 Proof.
-  intros e vars conts statics hp. apply recover_comparisons_knowing_refines.
+  intros e vars conts statics hp rd. apply recover_comparisons_knowing_refines.
   intros entry [].
 Qed.
 

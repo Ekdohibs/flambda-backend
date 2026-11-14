@@ -83,7 +83,7 @@
 From Stdlib Require Import ZArith List.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
-  FlambdaBindersSpec FlambdaSemanticsSpec FlambdaNominalSpec
+  FlambdaBindersSpec FlambdaHeapSpec FlambdaSemanticsSpec FlambdaNominalSpec
   FlambdaAlphaSpec FlambdaNameAbstractionSpec.
 Import ListNotations.
 
@@ -176,13 +176,15 @@ Definition rename_let_cont_recursive_canonical_statement : Prop :=
 (* ======================================================================== *)
 
 (* A [Let] whose variable is not among the free variables of its body
-   may be removed. This and the two statements below are corollaries of
+   may be removed, if its defining expression is not a primitive of the
+   heap. This and the two statements below are corollaries of
    FlambdaNominalSpec.unused_let_statement and the two after it, which
    ask less: nothing is asked of the code, and those do not count a
    name that occurs only in code. *)
 Definition unused_let_canonical_statement : Prop :=
   ∀ (x : variable) (kind : flambda_kind) (defining_expr : named)
     (body : expr),
+    named_changes_heap defining_expr = false ->
     among x (free_variables_of_expr body) = false ->
     expr_refines (Let x kind defining_expr body) body.
 
@@ -209,8 +211,8 @@ Definition unused_let_cont_recursive_canonical_statement : Prop :=
    closed. *)
 Definition rename_variables_equivalent_canonical_statement : Prop :=
   ∀ (r : renaming) (e : expr) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap),
+    (statics : static_env) (hp : heap) (rd : read_record),
     code_closed e = true ->
     fixes (continuation_permutation r) (free_continuations_of_expr e) ->
-    equivalent (State e vars conts statics hp)
-      (State (rename_expr r e) (rename_env r vars) conts statics hp).
+    equivalent (State e vars conts statics hp rd)
+      (State (rename_expr r e) (rename_env r vars) conts statics hp rd).

@@ -648,28 +648,28 @@ Qed.
 Lemma apply_cont_leaf_from (inv : state -> Prop) (k : continuation)
     (params : list variable) (metadata : handler_metadata)
     (handler handler' : expr) (ac : apply_cont) (vars : env)
-    (conts : cont_env) (statics : static_env) (hp : heap) :
+    (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record) :
   kept_by_step inv ->
   inv
     (State (Apply_cont ac) vars
        ((k, Closure (Handler params metadata handler) vars conts []) :: conts)
-       statics hp) ->
+       statics hp rd) ->
   (ac_continuation ac = k ->
    ∀ (vs : list value) (handler_vars : env),
      eval_simples vars (ac_args ac) = Some vs ->
      map kind_of_value vs = hm_params_kinds metadata ->
      bind_params params vs vars = Some handler_vars ->
-     inv (State handler handler_vars conts statics hp) ->
-     refines (State handler handler_vars conts statics hp)
-       (State handler' handler_vars conts statics hp)) ->
+     inv (State handler handler_vars conts statics hp rd) ->
+     refines (State handler handler_vars conts statics hp rd)
+       (State handler' handler_vars conts statics hp rd)) ->
   refines
     (State (Apply_cont ac) vars
        ((k, Closure (Handler params metadata handler) vars conts []) :: conts)
-       statics hp)
+       statics hp rd)
     (State (Apply_cont ac) vars
        ((k, Closure (Handler params metadata handler') vars conts [])
         :: conts)
-       statics hp).
+       statics hp rd).
 Proof.
   intros Hkept Hinv Hhandler.
   destruct (eval_simples vars (ac_args ac)) as [vs | ] eqn:Hargs.
@@ -690,14 +690,14 @@ Proof.
         (State (Apply_cont ac) vars
            ((k, Closure (Handler params metadata handler) vars conts [])
             :: conts)
-           statics hp)
-      = Step (State handler handler_vars conts statics hp)).
-    { apply (step_apply_cont_handler ac vars _ statics _ vs params metadata
+           statics hp rd)
+      = Step (State handler handler_vars conts statics hp rd)).
+    { apply (step_apply_cont_handler ac vars _ statics _ rd_ vs params metadata
                handler vars conts [] handler_vars Hargs);
         [ rewrite Hk; apply resolve_head | exact Hkinds | exact Hbind ]. }
     eapply refines_step.
     + exact Hstep.
-    + apply (step_apply_cont_handler ac vars _ statics _ vs params metadata
+    + apply (step_apply_cont_handler ac vars _ statics _ rd_ vs params metadata
                handler' vars conts [] handler_vars Hargs);
         [ rewrite Hk; apply resolve_head | exact Hkinds | exact Hbind ].
     + exact (Hhandler Hk vs handler_vars eq_refl
@@ -722,7 +722,8 @@ Lemma leaf_refines_from (inv : state -> Prop) (tenv : Typing_env.t)
   kept_by_step inv ->
   leaf_uses tenv k body = Some applications ->
   (∀ (index : nat) (tenv_use : Typing_env.t) (args : list simple)
-     (statics : static_env) (hp : heap) (valuation vars : env)
+     (statics : static_env) (hp : heap) (rd : read_record)
+       (valuation vars : env)
        (conts : cont_env)
      (vs : list value) (handler_vars : env),
      nth_error applications index = Some (tenv_use, args) ->
@@ -731,29 +732,30 @@ Lemma leaf_refines_from (inv : state -> Prop) (tenv : Typing_env.t)
      eval_simples vars args = Some vs ->
      map kind_of_value vs = hm_params_kinds metadata ->
      bind_params params vs vars = Some handler_vars ->
-     inv (State handler handler_vars conts statics hp) ->
-     refines (State handler handler_vars conts statics hp)
-       (State handler' handler_vars conts statics hp)) ->
-  ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap),
+     inv (State handler handler_vars conts statics hp rd) ->
+     refines (State handler handler_vars conts statics hp rd)
+       (State handler' handler_vars conts statics hp rd)) ->
+  ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+    (rd : read_record),
     inv
       (State
          (Let_cont_non_recursive k (Handler params metadata handler) body)
-         vars conts statics hp) ->
+         vars conts statics hp rd) ->
     env_satisfies_strictly tenv statics vars ->
     refines
       (State
          (Let_cont_non_recursive k (Handler params metadata handler) body)
-         vars conts statics hp)
+         vars conts statics hp rd)
       (State
          (Let_cont_non_recursive k (Handler params metadata handler') body)
-         vars conts statics hp).
+         vars conts statics hp rd).
 Proof.
-  intros Hkept Hleaf Hhandler vars conts statics hp Hinv Hsat.
+  intros Hkept Hleaf Hhandler vars conts statics hp rd Hinv Hsat.
   destruct (satisfies_shows tenv statics vars Hsat) as [valuation Hshows].
   pose proof (Hkept _ _ Hinv
                 (step_let_cont_non_recursive k
                    (Handler params metadata handler) body vars conts
-                   statics hp))
+                   statics hp rd))
     as Hinv_body.
   apply let_cont_non_recursive_refines_step.
   destruct body
@@ -763,7 +765,8 @@ Proof.
   - injection Hleaf as <-.
     apply (apply_cont_leaf_from inv); [ exact Hkept | exact Hinv_body | ].
     intros Hk vs handler_vars Hargs Hkinds Hbind Hinv_handler.
-    apply (Hhandler 0%nat tenv (ac_args ac) statics hp valuation vars conts vs
+    apply
+      (Hhandler 0%nat tenv (ac_args ac) statics hp rd_ valuation vars conts vs
              handler_vars);
       try assumption.
     rewrite (proj2 (Pos.eqb_eq _ _) Hk). reflexivity.
@@ -782,12 +785,12 @@ Proof.
         (State (Switch scrutinee arms) vars
            ((k, Closure (Handler params metadata handler) vars conts [])
             :: conts)
-           statics hp)
+           statics hp rd)
       = Step
           (State (Apply_cont ac) vars
              ((k, Closure (Handler params metadata handler) vars conts [])
               :: conts)
-             statics hp)).
+             statics hp rd)).
     { rewrite step_switch, Hv, Hi, Hfind. reflexivity. }
     eapply refines_step;
       [ exact Hstep | rewrite step_switch, Hv, Hi, Hfind; reflexivity | ].
@@ -812,7 +815,7 @@ Proof.
       reflexivity. }
     apply In_nth_error in Hin. destruct Hin as [index Hnth].
     apply (Hhandler index (arm_env tenv scrutinee i) (ac_args ac) statics
-             hp valuation vars conts vs handler_vars Hnth Hshows);
+             hp rd_ valuation vars conts vs handler_vars Hnth Hshows);
       try assumption.
     apply arm_env_shows; [ exact Hshows | ]. rewrite Hv, Hvalue. reflexivity.
 Qed.
@@ -824,7 +827,8 @@ Lemma leaf_refines (tenv : Typing_env.t) (k : continuation)
     (applications : list (Typing_env.t * list simple)) :
   leaf_uses tenv k body = Some applications ->
   (∀ (index : nat) (tenv_use : Typing_env.t) (args : list simple)
-     (statics : static_env) (hp : heap) (valuation vars : env)
+     (statics : static_env) (hp : heap) (rd : read_record)
+       (valuation vars : env)
        (conts : cont_env)
      (vs : list value) (handler_vars : env),
      nth_error applications index = Some (tenv_use, args) ->
@@ -833,19 +837,19 @@ Lemma leaf_refines (tenv : Typing_env.t) (k : continuation)
      eval_simples vars args = Some vs ->
      map kind_of_value vs = hm_params_kinds metadata ->
      bind_params params vs vars = Some handler_vars ->
-     refines (State handler handler_vars conts statics hp)
-       (State handler' handler_vars conts statics hp)) ->
+     refines (State handler handler_vars conts statics hp rd)
+       (State handler' handler_vars conts statics hp rd)) ->
   expr_refines_under tenv
     (Let_cont_non_recursive k (Handler params metadata handler) body)
     (Let_cont_non_recursive k (Handler params metadata handler') body).
 Proof.
-  intros Hleaf Hhandler vars conts statics hp Hsat.
+  intros Hleaf Hhandler vars conts statics hp rd Hsat.
   apply (leaf_refines_from (fun _ => True) tenv k params metadata handler
            handler' body applications);
     [ intros s s' _ _; exact I | exact Hleaf | | exact I | exact Hsat ].
-  intros index tenv_use args statics' hp' valuation vars' conts' vs
+  intros index tenv_use args statics' hp' rd' valuation vars' conts' vs
     handler_vars Hnth Hshows Hshows_use Hargs Hkinds Hbind _.
-  exact (Hhandler index tenv_use args statics' hp' valuation vars' conts' vs
+  exact (Hhandler index tenv_use args statics' hp' rd_ valuation vars' conts' vs
            handler_vars Hnth Hshows Hshows_use Hargs Hkinds Hbind).
 Qed.
 
@@ -858,29 +862,32 @@ Lemma let_cont_handler_at_use_from (inv : state -> Prop)
   kept_by_step inv ->
   leaf_uses tenv k body = Some [(tenv_use, args)] ->
   use_env scope tenv_use params metadata args = Some target ->
-  (∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap),
-     inv (State handler vars conts statics hp) ->
+  (∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+     (rd : read_record),
+     inv (State handler vars conts statics hp rd) ->
      env_satisfies_strictly target statics vars ->
-     refines (State handler vars conts statics hp)
-       (State handler' vars conts statics hp)) ->
-  ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap),
+     refines (State handler vars conts statics hp rd)
+       (State handler' vars conts statics hp rd)) ->
+  ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+    (rd : read_record),
     inv
       (State
          (Let_cont_non_recursive k (Handler params metadata handler) body)
-         vars conts statics hp) ->
+         vars conts statics hp rd) ->
     env_satisfies_strictly tenv statics vars ->
     refines
       (State
          (Let_cont_non_recursive k (Handler params metadata handler) body)
-         vars conts statics hp)
+         vars conts statics hp rd)
       (State
          (Let_cont_non_recursive k (Handler params metadata handler') body)
-         vars conts statics hp).
+         vars conts statics hp rd).
 Proof.
   intros Hkept Hleaf Huse Hhandler.
   apply (leaf_refines_from inv tenv k params metadata handler handler' body
            [(tenv_use, args)] Hkept Hleaf).
-  intros index tenv_use' args' statics hp valuation vars conts vs handler_vars
+  intros index tenv_use' args' statics hp rd valuation vars conts vs
+    handler_vars
     Hnth _ Hshows Hargs Hkinds Hbind Hinv.
   destruct index as [ | index];
     [ | simpl in Hnth; destruct index; discriminate Hnth ].
@@ -901,7 +908,8 @@ Proof.
     target Hleaf Huse Hhandler.
   apply (leaf_refines tenv k params metadata handler handler' body
            [(tenv_use, args)] Hleaf).
-  intros index tenv_use' args' statics hp valuation vars conts vs handler_vars
+  intros index tenv_use' args' statics hp rd valuation vars conts vs
+    handler_vars
     Hnth _ Hshows Hargs Hkinds Hbind.
   destruct index as [ | index];
     [ | simpl in Hnth; destruct index; discriminate Hnth ].
@@ -951,7 +959,7 @@ Proof.
     Hhandler.
   apply (leaf_refines tenv k params metadata handler handler' body
            applications Hleaf).
-  intros index tenv_use args statics hp valuation vars conts vs handler_vars
+  intros index tenv_use args statics hp rd valuation vars conts vs handler_vars
     Hnth Hshows Hshows_use Hargs Hkinds Hbind.
   apply Hhandler.
   destruct (forall2_nth_left _ _ _ index _ Huses Hnth)

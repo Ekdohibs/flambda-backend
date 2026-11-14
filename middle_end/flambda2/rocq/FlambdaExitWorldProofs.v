@@ -40,25 +40,26 @@ Import ListNotations.
 (* A run that ends by an exit goes through a state whose step is the
    exit. *)
 Lemma run_exit_last (n : nat) :
-  ∀ (s : state) (k : continuation) (vs : list value) (hp : heap),
-    run n s = Exit k vs hp ->
+  ∀ (s : state) (k : continuation) (vs : list value) (hp : heap)
+    (rd : read_record),
+    run n s = Exit k vs hp rd ->
     ∃ (m : nat) (last : state),
-      run m s = Step last ∧ step last = Exit k vs hp.
+      run m s = Step last ∧ step last = Exit k vs hp rd.
 Proof.
-  induction n as [ | n IH]; intros s k vs hp Hrun; [ discriminate Hrun | ].
+  induction n as [ | n IH]; intros s k vs hp rd Hrun; [ discriminate Hrun | ].
   rewrite run_succ in Hrun.
-  destruct (step s) as [s' | k' vs' hp' | ] eqn:Hstep;
+  destruct (step s) as [s' | k' vs' hp' rd' | ] eqn:Hstep;
     [ | | discriminate Hrun ].
-  - destruct (IH s' k vs hp Hrun) as (m & last & Hm & Hlast).
+  - destruct (IH s' k vs hp rd_ Hrun) as (m & last & Hm & Hlast).
     exists (S m), last. rewrite run_succ, Hstep. split; assumption.
   - exists O, s. split; [ reflexivity | ]. rewrite Hstep. exact Hrun.
 Qed.
 
 Lemma last_run_exit (n : nat) (s last : state) (k : continuation)
-    (vs : list value) (hp : heap) :
+    (vs : list value) (hp : heap) (rd : read_record) :
   run n s = Step last ->
-  step last = Exit k vs hp ->
-  run (n + 1) s = Exit k vs hp.
+  step last = Exit k vs hp rd ->
+  run (n + 1) s = Exit k vs hp rd.
 Proof.
   intros Hrun Hstep. rewrite run_add, Hrun. simpl. rewrite Hstep. reflexivity.
 Qed.
@@ -66,19 +67,19 @@ Qed.
 Theorem exits_world_behaves : exits_world_behaves_statement.
 Proof.
   intros s k vs hp. split.
-  - intros [fuel Hrun].
-    destruct (run_exit_last fuel s k vs hp Hrun) as (m & last & Hm & Hlast).
-    exists (state_statics last), m, last. simpl. auto.
-  - intros (statics & n & last & Hrun & Hstep & _). simpl in Hstep.
-    exists (n + 1). exact (last_run_exit n s last k vs hp Hrun Hstep).
+  - intros [fuel [rd Hrun]].
+    destruct (run_exit_last fuel s k vs hp rd_ Hrun) as (m & last & Hm & Hlast).
+    exists (state_statics last), rd, m, last. simpl. auto.
+  - intros (statics & rd & n & last & Hrun & Hstep & _). simpl in Hstep.
+    exists (n + 1), rd. exact (last_run_exit n s last k vs hp rd Hrun Hstep).
 Qed.
 
 Lemma exits_world_exits (s : state) (w : exit_world) :
   exits_world s w ->
   behaves s (Exits (exit_cont w) (exit_values w) (exit_heap w)).
 Proof.
-  intros (n & last & Hrun & Hstep & _). exists (n + 1).
-  exact (last_run_exit n s last _ _ _ Hrun Hstep).
+  intros (n & last & Hrun & Hstep & _). exists (n + 1), (exit_reads w).
+  exact (last_run_exit n s last _ _ _ rd_ Hrun Hstep).
 Qed.
 
 (* Two runs of one state to a state: the longer goes through the
@@ -117,7 +118,7 @@ Proof.
   intros source target. split.
   - intros [Hexits Hends]. split.
     + intros k vs hp Hsource.
-      apply exits_world_behaves in Hsource. destruct Hsource as [st Hw].
+      apply exits_world_behaves in Hsource. destruct Hsource as [st [rd Hw]].
       destruct (Hexits _ Hw) as (w' & Hw' & Hk & Hvs & Hhp). simpl in *.
       subst. exact (exits_world_exits target w' Hw').
     + intros b Hnot Htarget.
@@ -130,7 +131,7 @@ Proof.
   - intros [Hexits Hends]. split.
     + intros w Hw.
       pose proof (Hexits _ _ _ (exits_world_exits source w Hw)) as Htarget.
-      apply exits_world_behaves in Htarget. destruct Htarget as [st' Hw'].
+      apply exits_world_behaves in Htarget. destruct Htarget as [st' [rd Hw']].
       eexists. split; [ exact Hw' | ]. repeat split.
     + intros b Hnot Htarget.
       destruct (Hends b Hnot Htarget) as [Hsource | Hwrong];
@@ -138,7 +139,7 @@ Proof.
       destruct b as [k vs hp | | ];
         [ | left; exact Hsource | contradiction Hnot; reflexivity ].
       right. apply exits_world_behaves in Hsource.
-      destruct Hsource as [st Hw]. eauto.
+      destruct Hsource as [st [rd Hw]]. eauto.
 Qed.
 
 Theorem refines_world_trans : refines_world_trans_statement.

@@ -47,6 +47,8 @@
    supposed. By the expression of the state:
 
    - a primitive of regions never stops so;
+   - a [Let] that needs the heap is not run (decision D53): the result
+     is [Region_let_not_run], which is not what is supposed;
    - a local allocation stops so where its defining expression has no
      value, and the erased term has the same [Let]
      ([local_allocation_back]);
@@ -72,9 +74,10 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaMapProofs FlambdaValueSpec FlambdaPrimitiveModel FlambdaPrimitiveSpec
   FlambdaPrimitiveProofs FlambdaSemanticsSpec FlambdaSemanticsProofs
   FlambdaClosuresSpec FlambdaClosuresProofs FlambdaLiftProofs
-  FlambdaRegionsSpec FlambdaRegionsProofs FlambdaRegionsInvariantSpec
-  FlambdaRegionsErasureSpec FlambdaRegionsReadsProofs
-  FlambdaRegionsStepsProofs FlambdaRegionsInvariantProofs
+  FlambdaRegionsSpec FlambdaRegionsProofs FlambdaRegionsNeedsHeapProofs
+  FlambdaRegionsInvariantSpec FlambdaRegionsErasureSpec
+  FlambdaRegionsReadsProofs FlambdaRegionsStepsProofs
+  FlambdaRegionsInvariantProofs
   FlambdaRegionsErasedProofs FlambdaRegionsPlainStepProofs
   FlambdaRegionsErasureProofs FlambdaRegionsCheckedSpec
   FlambdaRegionsErasedReadsProofs FlambdaRegionsErasedCallsProofs.
@@ -264,16 +267,17 @@ Proof.
 Qed.
 
 (* One step of [step], at an expression at whose head the machine of
-   regions does nothing of its own and that is not a [Let_static]:
-   where the second state has a step, [step] has one under the static
-   environment of the frames. The premises beside the relation: the
-   values of the simples that the step evaluates, and the values that
-   the continuation applied gives on, reach only symbols that may be
-   evaluated; and a continuation that an [Apply_cont] applies takes no
-   region. *)
+   regions does nothing of its own, that is not a [Let_static] and that
+   is not a [Let] that needs the heap
+   (FlambdaRegionsSpec.named_needs_heap): where the second state has a
+   step, [step] has one under the static environment of the frames. The
+   premises beside the relation: the values of the simples that the
+   step evaluates, and the values that the continuation applied gives
+   on, reach only symbols that may be evaluated; and a continuation
+   that an [Apply_cont] applies takes no region. *)
 Lemma step_back (rs : region_state) (rconts : region_conts) (e : expr)
     (vars vars' : env) (conts conts' : cont_env) (statics' : static_env)
-    (hp : heap) :
+    (hp : heap) (rd : read_record) :
   symbols_fresh rs = true ->
   forallb (fun '(_, allocated) => allocated_all (live_symbol rs) allocated)
     (static_values (live_statics rs))
@@ -286,6 +290,8 @@ Lemma step_back (rs : region_state) (rconts : region_conts) (e : expr)
   head_plain e = true ->
   (∀ (bindings : list static_binding) (body : expr),
     e <> Let_static bindings body) ->
+  (∀ (x : variable) (kind : flambda_kind) (d : named) (body : expr),
+    e = Let x kind d body -> named_needs_heap vars d = false) ->
   expr_below (rs_base rs) e = true ->
   simples_all_live rs vars (evaluated_simples e) ->
   (∀ ap : apply_expr,
@@ -299,11 +305,11 @@ Lemma step_back (rs : region_state) (rconts : region_conts) (e : expr)
     ∧ forallb (value_all (live_symbol rs))
         (cont_spine_values (resolve (ac_continuation ac) conts))
       = true) ->
-  step (State (erase rconts e) vars' conts' statics' hp) <> Undefined ->
-  step (State e vars conts (live_statics rs) hp) <> Undefined.
+  step (State (erase rconts e) vars' conts' statics' hp rd) <> Undefined ->
+  step (State e vars conts (live_statics rs) hp rd) <> Undefined.
 Proof.
   intros Hfresh Hlive Hreturns Hagree Hvars Hconts Hstatics Hhead Hnot_static
-    Hbelow Hall Hspine_apply Hspine_cont.
+    Hneeds Hbelow Hall Hspine_apply Hspine_cont.
   destruct e
     as [ x xkind d body | bindings body | k h body | handlers body | ap | ac
        | scrutinee arms | ].
@@ -311,7 +317,13 @@ Proof.
     destruct (head_plain_let rconts x xkind d body Hhead) as [-> Hsimples].
     rewrite Hsimples in Hall. simpl in Hbelow.
     apply andb_true_iff in Hbelow as [Hd_below _].
-    rewrite !step_let.
+    pose proof (Hneeds x xkind d body eq_refl) as Hrun.
+    rewrite
+      (step_let_needs_no_heap x xkind d _ vars' conts' statics' hp rd
+         (named_needs_heap_back rs vars vars' d Hvars Hd_below
+            (simples_all_live_usable rs vars _ Hall) Hrun)),
+      (step_let_needs_no_heap x xkind d body vars conts (live_statics rs) hp
+         rd Hrun).
     destruct (eval_named statics' vars' d) as [v' | ] eqn:Hd';
       [ | intros H; contradiction (H eq_refl) ].
     destruct
@@ -408,7 +420,8 @@ Proof.
     exact (fun H => H).
 Qed.
 
-(* The step of [step] under the static environment of the frames. *)
+(* The step of [step] under the static environment of the frames, of a
+   state that is not at a [Let] that needs the heap. *)
 Lemma plain_step_back (rs : region_state) (s' : state) :
   symbols_fresh rs = true ->
   forallb (fun '(_, allocated) => allocated_all (live_symbol rs) allocated)
@@ -418,6 +431,7 @@ Lemma plain_step_back (rs : region_state) (s' : state) :
   head_plain (state_expr (rs_state rs)) = true ->
   (∀ (bindings : list static_binding) (body : expr),
     state_expr (rs_state rs) <> Let_static bindings body) ->
+  needs_no_heap (rs_state rs) ->
   simples_all_live rs (state_vars (rs_state rs))
     (evaluated_simples (state_expr (rs_state rs))) ->
   forallb (value_all (live_symbol rs))
@@ -431,20 +445,22 @@ Lemma plain_step_back (rs : region_state) (s' : state) :
   plain_step rs <> Region_undefined No_plain_step.
 Proof.
   intros Hfresh Hlive
-    (rconts & He & Hreturns & Hagree & Hvars & Hconts & Hstatics & Hheap)
-    Hhead Hnot_static Hall Hspine Htakes Hstep'.
-  destruct s' as [e' vars' conts' statics' hp'].
-  simpl in He, Hvars, Hconts, Hstatics, Hheap. subst e' hp'.
+    (rconts & He & Hreturns & Hagree & Hvars & Hconts & Hstatics & Hheap
+     & Hreads)
+    Hhead Hnot_static Hneeds Hall Hspine Htakes Hstep'.
+  destruct s' as [e' vars' conts' statics' hp' rd'].
+  simpl in He, Hvars, Hconts, Hstatics, Hheap, Hreads.
+  subst e' hp' rd'.
   unfold head_conts in Hspine. cbv zeta in Hspine.
   assert (Hcore :
     step
       (State (state_expr (rs_state rs)) (state_vars (rs_state rs))
          (state_conts (rs_state rs)) (live_statics rs)
-         (state_heap (rs_state rs)))
+         (state_heap (rs_state rs)) (state_reads (rs_state rs)))
     <> Undefined).
   { apply
-      (step_back rs rconts _ _ vars' _ conts' statics' _ Hfresh Hlive Hreturns
-         Hagree Hvars Hconts Hstatics Hhead Hnot_static
+      (step_back rs rconts _ _ vars' _ conts' statics' _ rd_ Hfresh Hlive
+         Hreturns Hagree Hvars Hconts Hstatics Hhead Hnot_static Hneeds
          (symbols_fresh_expr rs Hfresh) Hall);
       [ | | exact Hstep' ].
     - intros ap Hexpr. rewrite Hexpr in Hspine. simpl in Hspine.
@@ -457,8 +473,8 @@ Proof.
     (step
        (State (state_expr (rs_state rs)) (state_vars (rs_state rs))
           (state_conts (rs_state rs)) (live_statics rs)
-          (state_heap (rs_state rs))))
-    as [s1 | k vs hp | ];
+          (state_heap (rs_state rs)) (state_reads (rs_state rs))))
+    as [s1 | k vs hp rd | ];
     [ discriminate | discriminate | contradiction (Hcore eq_refl) ].
 Qed.
 
@@ -475,13 +491,15 @@ Lemma static_step_back (rs : region_state) (s' : state)
   static_step rs <> Region_undefined No_plain_step.
 Proof.
   intros Hfresh
-    (rconts & He & Hreturns & Hagree & Hvars & Hconts & Hstatics & Hheap)
+    (rconts & He & Hreturns & Hagree & Hvars & Hconts & Hstatics & Hheap
+     & Hreads)
     Hexpr Hstep'.
   pose proof (symbols_fresh_expr rs Hfresh) as Hbelow.
   rewrite Hexpr in Hbelow. simpl in Hbelow.
   apply andb_true_iff in Hbelow as [Hbindings_below _].
-  destruct s' as [e' vars' conts' statics' hp'].
-  simpl in He, Hvars, Hconts, Hstatics, Hheap. subst e' hp'.
+  destruct s' as [e' vars' conts' statics' hp' rd'].
+  simpl in He, Hvars, Hconts, Hstatics, Hheap, Hreads.
+  subst e' hp' rd'.
   rewrite Hexpr in Hstep'. cbn [erase] in Hstep'.
   rewrite step_let_static in Hstep'.
   destruct (eval_static_bindings vars' (map erase_binding bindings) statics')
@@ -504,7 +522,7 @@ Proof.
     destruct (Hsymbols s allocated Hnot_drawn Hl) as (allocated' & Hl' & _).
     rewrite Hs' in Hl'. discriminate.
   - unfold static_step. revert Hexpr Heval.
-    destruct (rs_state rs) as [e vars conts statics hp]. simpl.
+    destruct (rs_state rs) as [e vars conts statics hp rd]. simpl.
     intros -> Heval. rewrite step_let_static, Heval. discriminate.
 Qed.
 
@@ -530,7 +548,8 @@ Qed.
 (* The erased term has the [Let] of the allocation, with the same
    defining expression: where that has a value in the second state it
    has one on the machine of regions, and the local allocation does
-   not stop for [step]. *)
+   not stop for [step]. The [Let] needs no heap: the machine of regions
+   comes to a local allocation of no other (decision D53). *)
 Lemma local_allocation_back (rs : region_state) (s' : state)
     (x y : variable) (kind : flambda_kind) (d : named)
     (region : option simple) (body body' : expr) :
@@ -542,19 +561,24 @@ Lemma local_allocation_back (rs : region_state) (s' : state)
   state_expr (rs_state rs) = Let x kind d body ->
   (∀ (p : region_primitive) (args : list simple),
     d <> Prim (Region_primitive p) args) ->
+  named_needs_heap (state_vars (rs_state rs)) d = false ->
   simples_all_live rs (state_vars (rs_state rs)) (simples_of_named d) ->
   step s' <> Undefined ->
   local_allocation rs x y kind d region body' <> Region_undefined No_plain_step.
 Proof.
   intros Hfresh Hlive
-    (rconts & He & Hreturns & Hagree & Hvars & Hconts & Hstatics & Hheap)
-    Hexpr Hnot Hall Hstep'.
+    (rconts & He & Hreturns & Hagree & Hvars & Hconts & Hstatics & Hheap
+     & Hreads)
+    Hexpr Hnot Hneeds Hall Hstep'.
   pose proof (symbols_fresh_expr rs Hfresh) as Hbelow.
   rewrite Hexpr in Hbelow. simpl in Hbelow.
   apply andb_true_iff in Hbelow as [Hd_below _].
-  destruct s' as [e' vars' conts' statics' hp'].
-  simpl in He, Hvars, Hconts, Hstatics, Hheap. subst e' hp'.
-  rewrite Hexpr, (erase_let_plain rconts x kind d body Hnot), step_let
+  destruct s' as [e' vars' conts' statics' hp' rd'].
+  simpl in He, Hvars, Hconts, Hstatics, Hheap, Hreads. subst e' hp' rd'.
+  rewrite Hexpr, (erase_let_plain rconts x kind d body Hnot),
+    (step_let_needs_no_heap x kind d _ vars' conts' statics' _ _
+       (named_needs_heap_back rs _ vars' d Hvars Hd_below
+          (simples_all_live_usable rs _ _ Hall) Hneeds))
     in Hstep'.
   destruct (eval_named statics' vars' d) as [v' | ] eqn:Hd';
     [ | contradiction (Hstep' eq_refl) ].
@@ -731,7 +755,8 @@ Lemma region_apply_cont_back (rs : region_state) (s' : state)
   region_apply_cont rs ac <> Region_undefined No_plain_step.
 Proof.
   intros Hfresh
-    (rconts & He & Hcalls & Hagree & Hvars & Hconts & Hstatics & Hheap)
+    (rconts & He & Hcalls & Hagree & Hvars & Hconts & Hstatics & Hheap
+     & Hreads)
     Hexpr Hfault Hlive Hgiven Hmark.
   pose proof (symbols_fresh_expr rs Hfresh) as Hbelow.
   rewrite Hexpr in Hbelow.
@@ -778,10 +803,11 @@ Proof.
   match goal with
   | H : Closure _ _ _ _ = resolve _ _ |- _ => rename H into Hc'
   end.
-  destruct s' as [e' vars' conts' statics' hp'].
-  cbn [state_expr state_vars state_conts state_statics state_heap] in *.
+  destruct s' as [e' vars' conts' statics' hp' rd'].
+  cbn [state_expr state_vars state_conts state_statics state_heap
+       state_reads] in *.
   rewrite Hexpr in He. cbn [erase] in He. unfold erase_apply_cont in He.
-  rewrite Hlisted in He. subst e' hp'.
+  rewrite Hlisted in He. subst e' hp' rd'.
   rewrite step_apply_cont. cbn [ac_args ac_continuation].
   destruct (eval_simples vars' (drop_regions _ (ac_args ac))) as [vs' | ]
     eqn:Hvs';
@@ -872,12 +898,15 @@ Proof.
   assert (Hplain :
     (∀ (bindings : list static_binding) (body : expr),
       state_expr (rs_state rs) <> Let_static bindings body) ->
+    (∀ (x : variable) (kind : flambda_kind) (d : named) (body : expr),
+      state_expr (rs_state rs) = Let x kind d body ->
+      named_needs_heap (state_vars (rs_state rs)) d = false) ->
     plain_step (with_counts rs counts) <> Region_undefined No_plain_step).
-  { intros Hnot_static.
+  { intros Hnot_static Hneeds.
     exact
       (plain_step_back (with_counts rs counts) s' Hfresh_c
          (statics_live_with_counts rs counts R2) Hstate_c Hhead Hnot_static
-         (simples_all_live_with_counts rs counts _ _ Hall)
+         Hneeds (simples_all_live_with_counts rs counts _ _ Hall)
          (values_live_all_with_counts rs counts _ R3) Htakes Hstep'). }
   assert (Hstatic :
     ∀ (bindings : list static_binding) (body : expr),
@@ -895,27 +924,39 @@ Proof.
       ∀ (bindings : list static_binding) (body0 : expr),
         Let x xkind d body <> Let_static bindings body0)
       by (intros bindings body0; discriminate).
+    (* A [Let] that needs the heap is not run (decision D53), which is
+       not to stop because [step] has no step; of another, the test is
+       what [plain_step_back] asks. *)
     destruct d as [ s | p args | | | | | ];
       try (destruct p; try discriminate Hhead);
       cbv beta iota; simpl in Hhead;
+      (destruct (named_needs_heap _ _) eqn:Hneeds; [ discriminate | ]);
       (destruct (marker_of x body); try discriminate Hhead);
       cbv beta iota;
       (destruct (is_allocation _ && existsb _ _);
-       [ discriminate | exact (Hplain Hnot_static) ]).
+       [ discriminate
+       | apply (Hplain Hnot_static);
+         intros x0 kind0 d0 body0 [= <- <- <- <-]; exact Hneeds ]).
   - (* A [Let_static]. *)
     destruct
       (existsb (simple_local (with_counts rs counts))
          (evaluated_simples (Let_static bindings body)));
       [ discriminate | ].
     exact (Hstatic bindings body eq_refl).
-  - apply Hplain. intros bindings body0. discriminate.
-  - apply Hplain. intros bindings body0. discriminate.
-  - apply Hplain. intros bindings body0. discriminate.
+  - apply Hplain; [ intros bindings body0 | intros x kind d body0 ];
+      discriminate.
+  - apply Hplain; [ intros bindings body0 | intros x kind d body0 ];
+      discriminate.
+  - apply Hplain; [ intros bindings body0 | intros x kind d body0 ];
+      discriminate.
   - (* An [Apply_cont]. *)
     rewrite existsb_open_mark_with_counts, (Hmarks ac eq_refl).
-    apply Hplain. intros bindings body0. discriminate.
-  - apply Hplain. intros bindings body0. discriminate.
-  - apply Hplain. intros bindings body0. discriminate.
+    apply Hplain; [ intros bindings body0 | intros x kind d body0 ];
+      discriminate.
+  - apply Hplain; [ intros bindings body0 | intros x kind d body0 ];
+      discriminate.
+  - apply Hplain; [ intros bindings body0 | intros x kind d body0 ];
+      discriminate.
 Qed.
 
 (* One step of the machine of regions, from a state that has the
@@ -965,11 +1006,13 @@ Proof.
           [ intros [= Heq];
             exact (simples_fault_not_plain rs _ _ _ Hfault Heq)
           | ].
+        destruct (named_needs_heap (state_vars (rs_state rs)) d) eqn:Hneeds;
+          [ discriminate | ].
         rewrite Hcounts.
         apply
           (local_allocation_back (with_counts rs counts) s' x y kind d region
              body body' Hfresh_c (statics_live_with_counts rs counts R2)
-             Herased_c Hexpr Hnot);
+             Herased_c Hexpr Hnot Hneeds);
           [ | exact Hstep' ].
         apply simples_all_live_with_counts.
         rewrite (evaluated_simples_let_plain x kind d body Hnot) in R1.
@@ -979,7 +1022,8 @@ Proof.
           eqn:Hfault;
           [ intros [= Heq];
             exact (simples_fault_not_plain rs _ _ _ Hfault Heq)
-          | discriminate ].
+          | destruct (named_needs_heap (state_vars (rs_state rs)) d);
+            discriminate ].
   - apply (region_step_plain_back rs s' Herased Hfresh Hreads Hgiven);
       [ rewrite Hexpr; reflexivity
       | intros ac Heq; rewrite Hexpr in Heq; discriminate Heq
@@ -1008,9 +1052,11 @@ Proof.
         (region_apply_cont_back (with_counts rs counts) s' ac Hfresh_c
            Herased_c Hexpr);
         [ | | exact Hgiven | | exact Hstep' ].
-      * change (region_places (with_counts rs counts)) with (region_places rs).
+      * change (region_places (with_counts rs counts))
+          with (region_places rs).
         rewrite simples_fault_with_counts. exact Hfault.
-      * change (region_places (with_counts rs counts)) with (region_places rs).
+      * change (region_places (with_counts rs counts))
+          with (region_places rs).
         rewrite simples_live_with_counts. unfold region_places.
         rewrite Hexpr. exact R1.
       * rewrite existsb_open_mark_with_counts. exact Hmark.
@@ -1047,8 +1093,8 @@ Proof.
     [ discriminate | ].
   rewrite region_run_succ in Hrun.
   pose proof (related_sim rs s' Hrelated) as Hsim.
-  destruct (region_step rs) as [rs1 | k0 vs0 rs0 | fault] eqn:Hstep;
-    [ | discriminate | ].
+  destruct (region_step rs) as [rs1 | k0 vs0 rs0 | fault | ] eqn:Hstep;
+    [ | discriminate | | discriminate ].
   - assert (Hstates1 :
       ∀ (fuel' : nat) (rs' : region_state),
         region_run fuel' rs1 = Region_step rs' ->
@@ -1076,7 +1122,7 @@ Proof.
   - injection Hrun as ->.
     destruct (Hstates 0 rs eq_refl) as [Hreads Hgiven].
     exists 1. rewrite run_succ.
-    destruct (step s') as [s1' | k vs hp | ] eqn:Hstep';
+    destruct (step s') as [s1' | k vs hp rd | ] eqn:Hstep';
       [ exfalso | exfalso | reflexivity ];
       (apply (region_step_back rs s' Hrelated Hreads Hgiven);
        [ rewrite Hstep'; discriminate | exact Hstep ]).

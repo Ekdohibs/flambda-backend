@@ -44,14 +44,23 @@
    and FlambdaSemanticsSpec.shape_of_closure_call those of a partial
    application and of an over-application), and a
    primitive has no value on an argument of another kind than it takes
-   (FlambdaPrimitiveSpec.eval_prim_kinds_statement). These are the
+   (FlambdaPrimitiveSpec.eval_prim_kinds_statement, of the value that a
+   primitive has with no heap; of a primitive run on a heap, as a
+   [Let] runs it, FlambdaHeapSpec.exec_prim_kinds_statement, where the
+   primitive is not of the heap). These are the
    mismatches of kinds that Simplify replaces by [Invalid], and the ones
    that well-typed programs are known to produce: OxCaml accepts
    programs (for one, a match on a GADT whose index has layout [any])
    from which Simplify, having inlined, gets a call that does not agree
    with its code, in a branch that is never run. The machine has to be
    undefined there, or Simplify would be wrong on such programs. The
-   request (requests/C2-kinds.md) lists the forms found.
+   request (requests/C2-kinds.md) lists the forms found. Of the kinds
+   that a primitive of the heap takes no statement is made:
+   FlambdaPrimitiveSpec.prim_args_well_kinded is false of every one of
+   them, and each makes its own tests
+   (FlambdaHeapSpec.exec_heap_primitive). What a primitive gives, run
+   on a heap, is of the kind of its result, and that is said of every
+   primitive (FlambdaHeapSpec.exec_prim_result_kind_statement).
 
    What a binder gives, with no premise either. The machine also has no
    step at a [Let] of a value of another kind than its own, nor where a
@@ -169,7 +178,10 @@
    is well-kinded: the values, down the value slots of closures and the
    fields of blocks; the handlers of continuation closures, under the
    environments they keep; the code and the statically allocated values
-   of the static environment. A continuation that is a way out of the
+   of the static environment; and the values that the cells of the heap
+   hold ([heap_well_kinded]), which a load gives to a variable. A
+   location is well-kinded as a value, whatever its cell holds: what the
+   cell holds is asked of the heap. A continuation that is a way out of the
    term has the parameters given by [outer], which is the interface of
    the term: for a unit, its return and exception continuations, each
    taking one [Value] ([unit_arities]). The kinds are those of the values
@@ -253,7 +265,7 @@
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
-  FlambdaSemanticsSpec.
+  FlambdaHeapSpec FlambdaSemanticsSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -646,12 +658,24 @@ Definition statics_well_kinded (statics : static_env) : bool :=
   && forallb (fun '(_, allocated) => allocated_well_kinded allocated)
        (static_values statics).
 
+(* Every value that a cell of the heap holds is well-kinded: of every
+   binding of the list, those that a later write hides too, as
+   FlambdaHeapSpec.heap_values_all reads a heap. Nothing is asked of
+   the shape of a cell, nor of the kinds of what it holds: a load
+   tests the kind of what it reads (FlambdaHeapSpec.load_field), and a
+   [Let] the kind of what it binds. *)
+Definition heap_well_kinded (hp : heap) : bool :=
+  forallb
+    (fun binding => forallb value_well_kinded (values_of_cell (snd binding)))
+    hp.
+
 Definition state_well_kinded (outer : arity_env) (s : state) : bool :=
   well_kinded (kinds_of_env (state_vars s))
     (arities_of_conts outer (state_conts s)) (state_expr s)
   && env_well_kinded (state_vars s)
   && conts_well_kinded outer (state_conts s)
-  && statics_well_kinded (state_statics s).
+  && statics_well_kinded (state_statics s)
+  && heap_well_kinded (state_heap s).
 
 (* ======================================================================== *)
 (* What a well-kinded state cannot do                                       *)
@@ -714,12 +738,15 @@ Definition wrong_number_of_arguments (ac : apply_cont) (conts : cont_env)
   wrong_number_given (resolve (ac_continuation ac) conts)
     (length (ac_args ac)).
 
-(* The value of the defining expression of a [Let] is not of the kind
-   that the [Let] gives its variable. *)
-Definition wrong_kind_bound (statics : static_env) (vars : env)
-    (kind : flambda_kind) (d : named) : bool :=
-  match eval_named statics vars d with
-  | Some v => negb (kind_eqb (kind_of_value v) kind)
+(* The value that the defining expression of a [Let] gives, run as the
+   step runs it, on the heap and with the read record of the state
+   (FlambdaSemanticsSpec.exec_named), is not of the kind that the [Let]
+   gives its variable. *)
+Definition wrong_kind_bound (statics : static_env) (hp : heap)
+    (rd : read_record) (vars : env) (kind : flambda_kind) (d : named)
+    : bool :=
+  match exec_named statics hp rd vars d with
+  | Some (v, _, _) => negb (kind_eqb (kind_of_value v) kind)
   | None => false
   end.
 
@@ -757,7 +784,8 @@ Definition kind_fault (s : state) : bool :=
   existsb (unbound (state_vars s)) (simples_read (state_expr s))
   || match state_expr s with
      | Let _ kind d _ =>
-       wrong_kind_bound (state_statics s) (state_vars s) kind d
+       wrong_kind_bound (state_statics s) (state_heap s) (state_reads s)
+         (state_vars s) kind d
      | Apply_cont ac =>
        wrong_number_of_arguments ac (state_conts s)
        || wrong_kinds_of_arguments ac (state_vars s) (state_conts s)
@@ -790,7 +818,7 @@ End Checker.
    taken apart (FlambdaTupledSpec.v). Nothing is asked of the state. *)
 Definition call_at_wrong_kinds_undefined_statement : Prop :=
   ∀ (ap : apply_expr) (vars : env) (conts : cont_env) (statics : static_env)
-    (hp : heap)
+    (hp : heap) (rd : read_record)
     (callee : value) (vs : list value) (called : code_id)
     (value_slots : list (value_slot * value)) (c : code),
     eval_simple vars (ap_callee ap) = Some callee ->
@@ -808,7 +836,7 @@ Definition call_at_wrong_kinds_undefined_statement : Prop :=
                (ap_return_arity ap) (code_params_arity c)
                (code_result_arity c)
              = false) ->
-    step (State (Apply ap) vars conts statics hp) = Undefined.
+    step (State (Apply ap) vars conts statics hp rd) = Undefined.
 
 (* What a binder gives, whatever the state: the step that binds a
    variable binds it to a value of the kind of its binder. A [Let] that
@@ -831,21 +859,23 @@ Definition call_at_wrong_kinds_undefined_statement : Prop :=
 Definition let_binds_at_kind_statement : Prop :=
   ∀ (x : variable) (kind : flambda_kind) (d : named) (body : expr)
     (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+      (rd : read_record)
       (s : state),
-    step (State (Let x kind d body) vars conts statics hp) = Step s ->
-    ∃ v : value,
-      eval_named statics vars d = Some v
+    step (State (Let x kind d body) vars conts statics hp rd) = Step s ->
+    ∃ (v : value) (hp' : heap) (rd' : read_record),
+      exec_named statics hp rd vars d = Some (v, hp', rd')
       ∧ kind_of_value v = kind
-      ∧ s = State body ((x, v) :: vars) conts statics hp.
+      ∧ s = State body ((x, v) :: vars) conts statics hp' rd'.
 
 Definition handler_binds_at_kinds_statement : Prop :=
   ∀ (params : list variable) (metadata : handler_metadata) (handler : expr)
     (def_vars : env) (def_conts : cont_env)
     (recursive : list (continuation * continuation_handler))
-    (vs : list value) (statics : static_env) (hp : heap) (s : state),
+    (vs : list value) (statics : static_env) (hp : heap) (rd : read_record)
+      (s : state),
     apply_cont_value
       (Closure (Handler params metadata handler) def_vars def_conts recursive)
-      vs statics hp
+      vs statics hp rd
     = Step s ->
     map kind_of_value vs = hm_params_kinds metadata
     ∧ ∃ handler_vars : env,
@@ -853,13 +883,14 @@ Definition handler_binds_at_kinds_statement : Prop :=
         ∧ s
           = State handler handler_vars
               (rec_closures recursive def_vars def_conts ++ def_conts)
-              statics hp.
+              statics hp rd.
 
 Definition call_binds_at_kinds_statement : Prop :=
   ∀ (closure : value) (c : code) (vs : list value)
     (args_arity return_arity : arity) (return_to exn_to : cont_value)
-    (statics : static_env) (hp : heap) (s : state),
+    (statics : static_env) (hp : heap) (rd : read_record) (s : state),
     call_code closure c vs args_arity return_arity return_to exn_to statics hp
+      rd
     = Step s ->
     map kind_of_value vs = code_params_kinds c
     ∧ bind_params (code_params c) vs [(code_my_closure c, closure)]
@@ -879,7 +910,7 @@ Definition well_kinded_unit_state_statement : Prop :=
   ∀ (slots : slot_kinds) (unit_return unit_exn : continuation) (e : expr),
     well_kinded_unit slots unit_return unit_exn e = true ->
     state_well_kinded slots (unit_arities unit_return unit_exn)
-      (State e [] [] empty_static_env empty_heap)
+      (State e [] [] empty_static_env empty_heap no_reads)
     = true.
 
 Definition step_well_kinded_statement : Prop :=
@@ -900,9 +931,9 @@ Definition well_kinded_no_kind_fault_statement : Prop :=
 
 Definition well_kinded_exit_statement : Prop :=
   ∀ (slots : slot_kinds) (outer : arity_env) (s : state) (k : continuation)
-    (vs : list value) (hp : heap),
+    (vs : list value) (hp : heap) (rd : read_record),
     state_well_kinded slots outer s = true ->
-    step s = Exit k vs hp ->
+    step s = Exit k vs hp rd ->
     lookup k outer = Some (map kind_of_value vs)
     ∧ forallb (value_well_kinded slots) vs = true.
 
@@ -913,13 +944,15 @@ Definition well_kinded_unit_never_faults_statement : Prop :=
   ∀ (slots : slot_kinds) (unit_return unit_exn : continuation) (e : expr)
     (n : nat) (s : state),
     well_kinded_unit slots unit_return unit_exn e = true ->
-    run n (State e [] [] empty_static_env empty_heap) = Step s ->
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
     kind_fault s = false.
 
 Definition well_kinded_unit_exits_statement : Prop :=
   ∀ (slots : slot_kinds) (unit_return unit_exn : continuation) (e : expr)
-    (n : nat) (k : continuation) (vs : list value) (hp : heap),
+    (n : nat) (k : continuation) (vs : list value) (hp : heap)
+      (rd : read_record),
     well_kinded_unit slots unit_return unit_exn e = true ->
-    run n (State e [] [] empty_static_env empty_heap) = Exit k vs hp ->
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Exit k vs hp rd
+      ->
     (k = unit_return ∨ k = unit_exn)
     ∧ ∃ v : value, vs = [v] ∧ kind_of_value v = Value.

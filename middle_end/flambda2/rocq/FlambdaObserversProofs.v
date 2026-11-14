@@ -129,7 +129,7 @@ Qed.
 (* The way out alone. *)
 Theorem observed_refines_way_out : observed_refines_way_out_statement.
 Proof.
-  intros k vs vs' statics statics' hp hp' [Hexits _].
+  intros k vs vs' statics statics' hp hp' rd rd' [Hexits _].
   destruct (Hexits k vs hp eq_refl)
     as (vs'' & hp'' & Hexit & Hscalars & Hdomain).
   simpl in Hexit. injection Hexit as <- <-.
@@ -139,7 +139,7 @@ Qed.
 Theorem worlds_observed_way_out : worlds_observed_way_out_statement.
 Proof.
   intros slots w w' [Hk Hobservers]. split; [ exact Hk | ].
-  exact (observed_refines_way_out _ _ _ _ _ _ _
+  exact (observed_refines_way_out _ _ _ _ _ _ _ rd_ rd_
            (Hobservers (Outer (exit_cont w)) I)).
 Qed.
 
@@ -166,8 +166,8 @@ Qed.
 Theorem expr_refines_under_observers :
   expr_refines_under_observers_statement.
 Proof.
-  intros slots statics hp source target Hrefines conts _.
-  exact (refines_gives_observed_refines _ _ (Hrefines [] conts statics hp)).
+  intros slots statics hp rd source target Hrefines conts _.
+  exact (refines_gives_observed_refines _ _ (Hrefines [] conts statics hp rd_)).
 Qed.
 
 (* The two relations of the observers are the two of a class. *)
@@ -180,7 +180,7 @@ Proof. intros slots. reflexivity. Qed.
 
 Theorem refines_observed_by_trans : refines_observed_by_trans_statement.
 Proof.
-  intros O statics hp e1 e2 e3 H12 H23 conts Hconts.
+  intros O statics hp rd e1 e2 e3 H12 H23 conts Hconts.
   exact (observed_refines_trans _ _ _ (H12 conts Hconts) (H23 conts Hconts)).
 Qed.
 
@@ -197,55 +197,57 @@ Qed.
 (* The behaviours of a unit run from a continuation environment, by the
    world that the unit leaves on its own. *)
 Lemma under_world (conts : cont_env) (e : expr) (statics : static_env)
-    (hp : heap) (w : exit_world) (b : behaviour) :
+    (hp : heap) (rd : read_record) (w : exit_world) (b : behaviour) :
   code_closed e = true ->
   static_code_closed statics ->
-  exits_world (State e [] [] statics hp) w ->
-  step_result_behaves (Step (State e [] conts statics hp)) b
+  exits_world (State e [] [] statics hp rd) w ->
+  step_result_behaves (Step (State e [] conts statics hp rd)) b
   <-> step_result_behaves
         (apply_cont_value (resolve (exit_cont w) conts) (exit_values w)
-           (exit_statics w) (exit_heap w))
+           (exit_statics w) (exit_heap w) (exit_reads w))
         b.
 Proof.
   intros Hcode Hstatics Hw.
-  pose proof (behaves_under conts e [] statics hp Hcode Hstatics) as H.
+  pose proof (behaves_under conts e [] statics hp rd Hcode Hstatics) as H.
   cbv zeta in H. destruct H as [H _]. exact (H w b Hw).
 Qed.
 
 Lemma under_wrong (conts : cont_env) (e : expr) (statics : static_env)
-    (hp : heap) :
+    (hp : heap) (rd : read_record) :
   code_closed e = true ->
   static_code_closed statics ->
-  behaves (State e [] [] statics hp) Goes_wrong ->
-  behaves (State e [] conts statics hp) Goes_wrong.
+  behaves (State e [] [] statics hp rd) Goes_wrong ->
+  behaves (State e [] conts statics hp rd) Goes_wrong.
 Proof.
   intros Hcode Hstatics.
-  pose proof (behaves_under conts e [] statics hp Hcode Hstatics) as H.
+  pose proof (behaves_under conts e [] statics hp rd Hcode Hstatics) as H.
   cbv zeta in H. destruct H as (_ & H & _). exact H.
 Qed.
 
 (* The run from a continuation environment ends only if the unit on its
    own exits or goes wrong. *)
 Lemma under_ends (conts : cont_env) (e : expr) (statics : static_env)
-    (hp : heap) (b : behaviour) :
+    (hp : heap) (rd : read_record) (b : behaviour) :
   code_closed e = true ->
   static_code_closed statics ->
   b <> Diverges ->
-  behaves (State e [] conts statics hp) b ->
-  behaves (State e [] [] statics hp) Goes_wrong
-  ∨ ∃ w : exit_world, exits_world (State e [] [] statics hp) w.
+  behaves (State e [] conts statics hp rd) b ->
+  behaves (State e [] [] statics hp rd) Goes_wrong
+  ∨ ∃ w : exit_world, exits_world (State e [] [] statics hp rd) w.
 Proof.
   intros Hcode Hstatics Hnot Hb.
   destruct (behaves_ended _ b Hnot Hb) as [n Hended].
-  destruct (run n (State e [] [] statics hp)) as [s | k vs hp' | ] eqn:Hrun.
-  - destruct (run_under conts e [] statics hp n s Hcode Hstatics Hrun)
+  destruct (run n (State e [] [] statics hp rd)) as [s | k vs hp' rd' | ]
+    eqn:Hrun.
+  - destruct (run_under conts e [] statics hp rd n s Hcode Hstatics Hrun)
       as (s' & Hrun' & _).
     rewrite Hrun' in Hended. destruct b; contradiction.
   - right.
     destruct
-      (proj1 (exits_world_behaves _ k vs hp') (ex_intro _ n Hrun))
-      as [statics' Hw].
-    exists (Exit_world k vs statics' hp'). exact Hw.
+      (proj1 (exits_world_behaves _ k vs hp')
+         (ex_intro _ n (ex_intro _ rd' Hrun)))
+      as [statics' [rd0 Hw]].
+    exists (Exit_world k vs statics' hp' rd0). exact Hw.
   - left. exists n. exact Hrun.
 Qed.
 
@@ -266,50 +268,50 @@ Qed.
    related from every continuation environment of the class, if the
    class has every way out. *)
 Lemma worlds_under_by (O : cont_value -> Prop) (conts : cont_env)
-    (statics : static_env) (hp : heap) (source target : expr)
+    (statics : static_env) (hp : heap) (rd : read_record) (source target : expr)
     (w w' : exit_world) :
   (∀ k : continuation, O (Outer k)) ->
   code_closed source = true ->
   code_closed target = true ->
   static_code_closed statics ->
   Forall (fun kc => O (snd kc)) conts ->
-  exits_world (State source [] [] statics hp) w ->
-  exits_world (State target [] [] statics hp) w' ->
+  exits_world (State source [] [] statics hp rd) w ->
+  exits_world (State target [] [] statics hp rd) w' ->
   worlds_observed_by O w w' ->
-  observed_refines (Step (State source [] conts statics hp))
-    (Step (State target [] conts statics hp)).
+  observed_refines (Step (State source [] conts statics hp rd))
+    (Step (State target [] conts statics hp rd)).
 Proof.
   intros Hout Hsource Htarget Hstatics Hconts Hw Hw' [Hk Hworlds].
   refine
     (observed_refines_ext _ _ _ _ _ _
        (Hworlds _ (class_resolve O conts (exit_cont w) Hout Hconts))).
-  - intros b. exact (under_world conts source statics hp w b Hsource
+  - intros b. exact (under_world conts source statics hp rd w b Hsource
                        Hstatics Hw).
   - intros b. rewrite Hk.
-    exact (under_world conts target statics hp w' b Htarget Hstatics Hw').
+    exact (under_world conts target statics hp rd w' b Htarget Hstatics Hw').
 Qed.
 
 (* The same of the observers. *)
 Lemma worlds_under (slots : list value_slot) (conts : cont_env)
-    (statics : static_env) (hp : heap) (source target : expr)
+    (statics : static_env) (hp : heap) (rd : read_record) (source target : expr)
     (w w' : exit_world) :
   code_closed source = true ->
   code_closed target = true ->
   static_code_closed statics ->
   observers slots conts ->
-  exits_world (State source [] [] statics hp) w ->
-  exits_world (State target [] [] statics hp) w' ->
+  exits_world (State source [] [] statics hp rd) w ->
+  exits_world (State target [] [] statics hp rd) w' ->
   worlds_observed slots w w' ->
-  observed_refines (Step (State source [] conts statics hp))
-    (Step (State target [] conts statics hp)).
+  observed_refines (Step (State source [] conts statics hp rd))
+    (Step (State target [] conts statics hp rd)).
 Proof.
-  exact (worlds_under_by (observer slots) conts statics hp source target w
+  exact (worlds_under_by (observer slots) conts statics hp rd source target w
            w' (fun _ => I)).
 Qed.
 
 Theorem refines_observed_by_worlds : refines_observed_by_worlds_statement.
 Proof.
-  intros O statics hp source target Hout Hsource Htarget Hstatics. split.
+  intros O statics hp rd source target Hout Hsource Htarget Hstatics. split.
   - (* From every environment of the class to the worlds. *)
     intros Hunder.
     destruct (Hunder [] (Forall_nil _)) as [Hexits0 Hends0]. split.
@@ -317,54 +319,55 @@ Proof.
       destruct (Hexits0 _ _ _ (exits_world_exits _ w Hw))
         as (vs' & hp' & Hexit' & _ & _).
       destruct (proj1 (exits_world_behaves _ _ _ _) Hexit')
-        as [statics' Hw'].
-      exists (Exit_world (exit_cont w) vs' statics' hp').
+        as [statics' [rd' Hw']].
+      exists (Exit_world (exit_cont w) vs' statics' hp' rd').
       split; [ exact Hw' | ]. split; [ reflexivity | ].
       intros c Hc.
       assert (Hconts : Forall (fun kc => O (snd kc)) [(exit_cont w, c)])
         by (apply Forall_cons; [ exact Hc | apply Forall_nil ]).
       refine (observed_refines_ext _ _ _ _ _ _ (Hunder _ Hconts)).
       * intros b. symmetry.
-        rewrite (under_world [(exit_cont w, c)] source statics hp w b
+        rewrite (under_world [(exit_cont w, c)] source statics hp rd w b
                    Hsource Hstatics Hw).
         rewrite resolve_head. reflexivity.
       * intros b. symmetry.
-        rewrite (under_world [(exit_cont w, c)] target statics hp _ b
+        rewrite (under_world [(exit_cont w, c)] target statics hp rd _ b
                    Htarget Hstatics Hw').
         cbn [exit_cont exit_values exit_statics exit_heap].
         rewrite resolve_head. reflexivity.
     + intros b Hnot Hb.
       destruct (Hends0 b Hnot Hb) as [Hwrong | (k & vs & hp' & Hexit)];
         [ left; exact Hwrong | right ].
-      destruct (proj1 (exits_world_behaves _ _ _ _) Hexit) as [statics' Hw].
-      exists (Exit_world k vs statics' hp'). exact Hw.
+      destruct (proj1 (exits_world_behaves _ _ _ _) Hexit)
+        as [statics' [rd' Hw]].
+      exists (Exit_world k vs statics' hp' rd'). exact Hw.
   - (* From the worlds to every environment of the class. *)
     intros [Hexits Hends] conts Hconts.
     assert (Hfrom :
       ∀ w : exit_world,
-        exits_world (State source [] [] statics hp) w ->
-        observed_refines (Step (State source [] conts statics hp))
-          (Step (State target [] conts statics hp))).
+        exits_world (State source [] [] statics hp rd) w ->
+        observed_refines (Step (State source [] conts statics hp rd))
+          (Step (State target [] conts statics hp rd))).
     { intros w Hw. destruct (Hexits w Hw) as (w' & Hw' & Hworlds).
-      exact (worlds_under_by O conts statics hp source target w w' Hout
+      exact (worlds_under_by O conts statics hp rd source target w w' Hout
                Hsource Htarget Hstatics Hconts Hw Hw' Hworlds). }
     split.
     + intros k vs hp' HS.
       destruct
-        (under_ends conts source statics hp (Exits k vs hp') Hsource
+        (under_ends conts source statics hp rd (Exits k vs hp') Hsource
            Hstatics ltac:(discriminate) HS)
         as [Hwrong | [w Hw]].
-      * pose proof (under_wrong conts source statics hp Hsource Hstatics
+      * pose proof (under_wrong conts source statics hp rd Hsource Hstatics
                       Hwrong) as Hwrong'.
         pose proof (behaviour_unique _ _ _ HS Hwrong') as Habsurd.
         discriminate Habsurd.
       * exact (proj1 (Hfrom w Hw) k vs hp' HS).
     + intros b Hnot HT.
       assert (Halone :
-        behaves (State source [] [] statics hp) Goes_wrong
-        ∨ ∃ w : exit_world, exits_world (State source [] [] statics hp) w).
+        behaves (State source [] [] statics hp rd) Goes_wrong
+        ∨ ∃ w : exit_world, exits_world (State source [] [] statics hp rd) w).
       { destruct
-          (under_ends conts target statics hp b Htarget Hstatics Hnot HT)
+          (under_ends conts target statics hp rd b Htarget Hstatics Hnot HT)
           as [Hwrong | [w' Hw']].
         - exact (Hends Goes_wrong ltac:(discriminate) Hwrong).
         - exact (Hends
@@ -372,13 +375,13 @@ Proof.
                    ltac:(discriminate) (exits_world_exits _ w' Hw')). }
       destruct Halone as [Hwrong | [w Hw]].
       * left.
-        exact (under_wrong conts source statics hp Hsource Hstatics Hwrong).
+        exact (under_wrong conts source statics hp rd Hsource Hstatics Hwrong).
       * exact (proj2 (Hfrom w Hw) b Hnot HT).
 Qed.
 
 Theorem under_observers_worlds : under_observers_worlds_statement.
 Proof.
-  intros slots statics hp source target.
-  exact (refines_observed_by_worlds (observer slots) statics hp source
+  intros slots statics hp rd source target.
+  exact (refines_observed_by_worlds (observer slots) statics hp rd source
            target (fun _ => I)).
 Qed.

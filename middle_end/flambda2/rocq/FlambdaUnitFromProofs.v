@@ -177,11 +177,12 @@ Qed.
    is to its handler, which binds nothing static, with no continuation
    in scope, under the static environment and the heap given. *)
 Lemma observer_applied_step (slots : list value_slot) (c : cont_value)
-    (vs : list value) (statics : static_env) (hp : heap) (s' : state) :
+    (vs : list value) (statics : static_env) (hp : heap) (rd : read_record)
+      (s' : state) :
   observer slots c ->
-  apply_cont_value c vs statics hp = Step s' ->
+  apply_cont_value c vs statics hp rd = Step s' ->
   ∃ (body : expr) (vars : env),
-    binds_no_static body = true ∧ s' = State body vars [] statics hp.
+    binds_no_static body = true ∧ s' = State body vars [] statics hp rd.
 Proof.
   destruct c
     as [ [params metadata body] vars conts recursive | k | c extra
@@ -227,14 +228,15 @@ Qed.
 Lemma inv_under (unit_exn : continuation)
     (names_of : static_binding -> list positive)
     (is_bound : static_env -> positive -> bool) (slots : list value_slot)
-    (e : expr) (conts : cont_env) (statics : static_env) (hp : heap) :
+    (e : expr) (conts : cont_env) (statics : static_env) (hp : heap)
+      (rd : read_record) :
   (∀ n : positive,
     In n (static_names names_of e) -> is_bound statics n = false) ->
   static_code statics = [] ->
   observers slots conts ->
   statics_at_toplevel unit_exn true e = true ->
   distinct (static_names names_of e) = true ->
-  inv unit_exn names_of is_bound (State e [] conts statics hp).
+  inv unit_exn names_of is_bound (State e [] conts statics hp rd).
 Proof.
   intros Hfree Hno_code Hobs P D.
   destruct (observers_ok unit_exn names_of slots conts Hobs) as [C N].
@@ -250,16 +252,16 @@ Qed.
 Lemma inv_from (unit_exn : continuation)
     (names_of : static_binding -> list positive)
     (is_bound : static_env -> positive -> bool) (e : expr)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   (∀ n : positive,
     In n (static_names names_of e) -> is_bound statics n = false) ->
   static_code statics = [] ->
   statics_at_toplevel unit_exn true e = true ->
   distinct (static_names names_of e) = true ->
-  inv unit_exn names_of is_bound (State e [] [] statics hp).
+  inv unit_exn names_of is_bound (State e [] [] statics hp rd).
 Proof.
   intros Hfree Hno_code.
-  exact (inv_under unit_exn names_of is_bound [] e [] statics hp Hfree
+  exact (inv_under unit_exn names_of is_bound [] e [] statics hp rd Hfree
            Hno_code (Forall_nil _)).
 Qed.
 
@@ -276,21 +278,22 @@ Proof.
     as [ x kind d body | bindings body | k h body | handlers body | ap | ac
        | scrutinee arms | ];
     try reflexivity.
-  - rewrite (inv_no_rebinding unit_exn _ _ _ _ _ _ _ _ Hcode),
-      (inv_no_rebinding unit_exn _ _ _ _ _ _ _ _ Hsymbols).
+  - rewrite (inv_no_rebinding unit_exn _ _ _ _ _ _ _ _ rd_ Hcode),
+      (inv_no_rebinding unit_exn _ _ _ _ _ _ _ _ rd_ Hsymbols).
     reflexivity.
-  - exact (inv_no_recursive_statics unit_exn _ _ _ _ _ _ _ _ Hcode).
-  - exact (inv_no_call_binding_statics unit_exn _ _ _ _ _ _ _ Hcode).
+  - exact (inv_no_recursive_statics unit_exn _ _ _ _ _ _ _ _ rd_ Hcode).
+  - exact (inv_no_call_binding_statics unit_exn _ _ _ _ _ _ _ rd_ Hcode).
 Qed.
 
 Lemma well_formed_never_faults_under (u : unit_interface)
     (slots : list value_slot) (e : expr) (conts : cont_env)
-    (statics : static_env) (hp : heap) (n : nat) (s : state) :
+    (statics : static_env) (hp : heap) (rd : read_record) (n : nat)
+      (s : state) :
   well_formed_unit u e = true ->
   static_code statics = [] ->
   static_names_free_in statics e = true ->
   observers slots conts ->
-  run n (State e [] conts statics hp) = Step s ->
+  run n (State e [] conts statics hp rd) = Step s ->
   static_fault s = false.
 Proof.
   intros Hwf Hno_code Hfree Hobs Hrun.
@@ -302,28 +305,29 @@ Proof.
       (inv_run (unit_exn u) code_ids_of_binding code_id_bound
          code_bound_after n _ s
          (inv_under (unit_exn u) code_ids_of_binding code_id_bound slots e
-            conts statics hp (free_in_code_ids statics e Hfree) Hno_code Hobs
+            conts statics hp rd (free_in_code_ids statics e Hfree) Hno_code Hobs
             P Dcode)
          Hrun).
   - exact
       (inv_run (unit_exn u) symbols_of_binding symbol_bound
          symbol_bound_after n _ s
          (inv_under (unit_exn u) symbols_of_binding symbol_bound slots e
-            conts statics hp (free_in_symbols statics e Hfree) Hno_code Hobs
+            conts statics hp rd (free_in_symbols statics e Hfree) Hno_code Hobs
             P Dsymbols)
          Hrun).
 Qed.
 
 Lemma well_formed_never_faults_from (u : unit_interface) (e : expr)
-    (statics : static_env) (hp : heap) (n : nat) (s : state) :
+    (statics : static_env) (hp : heap) (rd : read_record) (n : nat)
+      (s : state) :
   well_formed_unit u e = true ->
   static_code statics = [] ->
   static_names_free_in statics e = true ->
-  run n (State e [] [] statics hp) = Step s ->
+  run n (State e [] [] statics hp rd) = Step s ->
   static_fault s = false.
 Proof.
   intros Hwf Hno_code Hfree.
-  exact (well_formed_never_faults_under u [] e [] statics hp n s Hwf Hno_code
+  exact (well_formed_never_faults_under u [] e [] statics hp rd n s Hwf Hno_code
            Hfree (Forall_nil _)).
 Qed.
 
@@ -333,10 +337,11 @@ Qed.
 Lemma inv_after (unit_exn : continuation)
     (names_of : static_binding -> list positive)
     (is_bound : static_env -> positive -> bool) (last : state) (body : expr)
-    (vars : env) (hp : heap) :
+    (vars : env) (hp : heap) (rd : read_record) :
   inv unit_exn names_of is_bound last ->
   binds_no_static body = true ->
-  inv unit_exn names_of is_bound (State body vars [] (state_statics last) hp).
+  inv unit_exn names_of is_bound
+    (State body vars [] (state_statics last) hp rd).
 Proof.
   intros (_ & _ & _ & _ & _ & Hcode) Hno.
   destruct
@@ -351,14 +356,16 @@ Proof.
 Qed.
 
 Lemma never_faults_after (u : unit_interface) (e : expr)
-    (statics : static_env) (hp : heap) (n : nat) (last : state)
-    (body : expr) (vars : env) (hp' : heap) (m : nat) (s : state) :
+    (statics : static_env) (hp : heap) (rd : read_record) (n : nat)
+      (last : state)
+    (body : expr) (vars : env) (hp' : heap) (rd' : read_record) (m : nat)
+      (s : state) :
   well_formed_unit u e = true ->
   static_code statics = [] ->
   static_names_free_in statics e = true ->
-  run n (State e [] [] statics hp) = Step last ->
+  run n (State e [] [] statics hp rd) = Step last ->
   binds_no_static body = true ->
-  run m (State body vars [] (state_statics last) hp') = Step s ->
+  run m (State body vars [] (state_statics last) hp' rd') = Step s ->
   static_fault s = false.
 Proof.
   intros Hwf Hno_code Hfree Hlast Hno Hrun.
@@ -370,24 +377,24 @@ Proof.
       (inv_run (unit_exn u) code_ids_of_binding code_id_bound
          code_bound_after m _ s
          (inv_after (unit_exn u) code_ids_of_binding code_id_bound last body
-            vars hp' _ Hno)
+            vars hp' rd' _ Hno)
          Hrun).
     exact
       (inv_run (unit_exn u) code_ids_of_binding code_id_bound
          code_bound_after n _ last
          (inv_from (unit_exn u) code_ids_of_binding code_id_bound e statics
-            hp (free_in_code_ids statics e Hfree) Hno_code P Dcode)
+            hp rd (free_in_code_ids statics e Hfree) Hno_code P Dcode)
          Hlast).
   - refine
       (inv_run (unit_exn u) symbols_of_binding symbol_bound
          symbol_bound_after m _ s
          (inv_after (unit_exn u) symbols_of_binding symbol_bound last body
-            vars hp' _ Hno)
+            vars hp' rd' _ Hno)
          Hrun).
     exact
       (inv_run (unit_exn u) symbols_of_binding symbol_bound
          symbol_bound_after n _ last
-         (inv_from (unit_exn u) symbols_of_binding symbol_bound e statics hp
+         (inv_from (unit_exn u) symbols_of_binding symbol_bound e statics hp rd
             (free_in_symbols statics e Hfree) Hno_code P Dsymbols)
          Hlast).
 Qed.
@@ -397,12 +404,12 @@ Qed.
 (* ======================================================================== *)
 
 Lemma well_formed_names_bound_from (u : unit_interface) (e : expr)
-    (statics : static_env) (hp : heap) (n : nat) :
+    (statics : static_env) (hp : heap) (rd : read_record) (n : nat) :
   well_formed_unit u e = true ->
   static_code statics = [] ->
-  match run n (State e [] [] statics hp) with
+  match run n (State e [] [] statics hp rd) with
   | Step s => reads_unbound_variable s = false
-  | Exit k _ _ => k = unit_return u ∨ k = unit_exn u
+  | Exit k _ _ _ => k = unit_return u ∨ k = unit_exn u
   | Undefined => True
   end.
 Proof.
@@ -411,11 +418,11 @@ Proof.
   { unfold code_all_closed. rewrite Hno_code. apply Forall_nil. }
   pose proof
     (run_in_scope [unit_return u; unit_exn u] n _
-       (state_in_scope_intro [unit_return u; unit_exn u] e [] [] statics hp
+       (state_in_scope_intro [unit_return u; unit_exn u] e [] [] statics hp rd
           (well_formed_unit_names_in_scope u e Hwf)
           (well_formed_unit_code_closed u e Hwf) I Hclosed))
     as Hrun.
-  destruct (run n (State e [] [] statics hp)) as [s | k vs | ];
+  destruct (run n (State e [] [] statics hp rd)) as [s | k vs | ];
     [ exact (in_scope_reads_bound _ s Hrun) | | exact I ].
   apply among_In in Hrun.
   destruct Hrun as [<- | [<- | []]]; [ left | right ]; reflexivity.
@@ -440,21 +447,51 @@ Lemma stuttering_observed (R : state -> state -> Prop)
   ∀ s s' : state, R s s' -> observed_refines (Step s) (Step s').
 Proof.
   intros Hsame R_step s s' Hrel. split.
-  - intros k vs hp [n Hn].
-    destruct (stuttering_exit R Q R_step n s s' k vs hp Hrel Hn)
+  - intros k vs hp [n [rd Hn]].
+    destruct (stuttering_exit R Q R_step n s s' k vs hp rd_ Hrel Hn)
       as (m & last & vs' & Hm & Hlast & HQ).
     exists vs', hp.
     split;
-      [ exists (m + 1); rewrite run_add, Hm; simpl; rewrite Hlast;
+      [ exists (m + 1), rd; rewrite run_add, Hm; simpl; rewrite Hlast;
         reflexivity
       | ].
     split; [ exact (Hsame last vs vs' HQ) | reflexivity ].
   - intros b Hterm Hb. simpl in Hb |- *.
     destruct (behaves_ended s' b Hterm Hb) as [m Hended].
     destruct (stuttering_ends R Q R_step m s s' b Hrel Hended)
-      as [n [Hwrong | (k & vs & hp & Hexit)]].
+      as [n [Hwrong | (k & vs & hp & rd & Hexit)]].
     + left. exists n. exact Hwrong.
-    + right. exists k, vs, hp, n. exact Hexit.
+    + right. exists k, vs, hp, n, rd. exact Hexit.
+Qed.
+
+(* The same of a simulation that leaves the heaps of two exits to its
+   parameter (the second section of FlambdaSimulationProofs.v), where
+   two heaps that answer each other bind the same locations, in the
+   same order. *)
+Lemma stuttering_heaps_observed (R : state -> state -> Prop)
+    (Q : state -> list value -> heap -> list value -> heap -> Prop) :
+  (∀ (last : state) (vs : list value) (hp : heap) (vs' : list value)
+     (hp' : heap),
+    Q last vs hp vs' hp' -> same_scalars vs vs' ∧ map fst hp = map fst hp') ->
+  (∀ s s' : state, R s s' -> answered_heaps R Q (step s) s') ->
+  ∀ s s' : state, R s s' -> observed_refines (Step s) (Step s').
+Proof.
+  intros Hsame R_step s s' Hrel. split.
+  - intros k vs hp [n [rd Hn]].
+    destruct (stuttering_heaps_exit R Q R_step n s s' k vs hp rd Hrel Hn)
+      as (m & last & vs' & hp' & rd' & Hm & Hlast & HQ).
+    exists vs', hp'.
+    split;
+      [ exists (m + 1), rd'; rewrite run_add, Hm; simpl; rewrite Hlast;
+        reflexivity
+      | ].
+    exact (Hsame last vs hp vs' hp' HQ).
+  - intros b Hterm Hb. simpl in Hb |- *.
+    destruct (behaves_ended s' b Hterm Hb) as [m Hended].
+    destruct (stuttering_heaps_ends R Q R_step m s s' b Hrel Hended)
+      as [n [Hwrong | (k & vs & hp & rd & Hexit)]].
+    + left. exists n. exact Hwrong.
+    + right. exists k, vs, hp, n, rd. exact Hexit.
 Qed.
 
 (* Two states of which the second refines the first come to results

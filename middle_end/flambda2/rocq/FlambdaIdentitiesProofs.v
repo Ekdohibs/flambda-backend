@@ -37,6 +37,8 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaKindModel
   FlambdaPrimitiveProofs FlambdaSemanticsSpec FlambdaSemanticsProofs
   FlambdaContextProofs FlambdaNominalSpec FlambdaNominalProofs
   FlambdaIdentitiesSpec.
+From OxCamlFlambda2 Require FlambdaMapSpec FlambdaHeapProofs
+  FlambdaSameComparisonSpec FlambdaSameComparisonProofs.
 Import ListNotations.
 Open Scope Z_scope.
 
@@ -459,6 +461,128 @@ Proof.
 Qed.
 
 (* ======================================================================== *)
+(* With the run of the machine                                              *)
+(* ======================================================================== *)
+
+(* The machine runs a [Let] with the heap ([exec_named]); the facts
+   above are about the value alone ([eval_named]). An operation of
+   arithmetic and a shift read no cell: the run has the value that
+   [eval_named] gives and leaves the heap and the record. What replaces
+   one is a simple, or an operation that reads no cell on an argument of
+   the operation replaced; that argument, if its value is a location,
+   is bound in the heap, as the operation replaced ran. [Phys_equal] of
+   a variable and itself reads the heap where the value is a location,
+   and has the same answer
+   (FlambdaSameComparisonSpec.phys_equal_same_heap_statement). *)
+Lemma named_of_outcome_exec (statics : static_env) (hp : heap)
+    (rd : read_record) (vars : env) (kind : standard_int) (o : outcome)
+    (other : simple) (d : named) (w v : value) :
+  named_of_outcome kind o other = Some d ->
+  eval_simple vars other = Some w ->
+  (∀ l : location,
+    w = Value_location l -> FlambdaMapSpec.is_bound l hp = true) ->
+  eval_named statics vars d = Some v ->
+  exec_named statics hp rd vars d = Some (v, hp, rd).
+Proof.
+  intros Hd Hother Hbound Heval.
+  destruct o; simpl in Hd; try discriminate Hd; injection Hd as <-.
+  - cbn [exec_named]. rewrite Heval. reflexivity.
+  - cbn [exec_named]. rewrite Heval. reflexivity.
+  - apply (eval_named_exec_named statics hp rd vars _ _
+             [Value_const (const_of_int kind 0); w] v);
+      [ reflexivity | cbn [eval_simples eval_simple]; rewrite Hother;
+        reflexivity | | exact Heval ].
+    intros l [Hl | [Hl | []]]; [ discriminate Hl | exact (Hbound l Hl) ].
+  - apply (eval_named_exec_named statics hp rd vars _ _ [w] v);
+      [ reflexivity | cbn [eval_simples]; rewrite Hother; reflexivity
+      | | exact Heval ].
+    intros l [Hl | []]. exact (Hbound l Hl).
+Qed.
+
+Lemma identity_named_exec (statics : static_env) (hp hp' : heap)
+    (rd rd' : read_record) (vars : env) (d : named) (v : value) :
+  exec_named statics hp rd vars d = Some (v, hp', rd') ->
+  exec_named statics hp rd vars (identity_named d) = Some (v, hp', rd').
+Proof.
+  intros Hd. unfold identity_named.
+  destruct d as [s | p args | code slots | fslot decls slots | slot closure
+    | pfrom slot closure | move_from move_to closure];
+    try exact Hd.
+  destruct (binary_applied p args) as [[[b arg1] arg2] | ] eqn:Happlied;
+    [ | exact Hd ].
+  destruct (identity_of_binary b arg1 arg2) as [d' | ] eqn:Hidentity;
+    [ | exact Hd ].
+  destruct (binary_applied_spec _ _ _ _ _ Happlied) as [-> ->].
+  apply exec_named_prim_some in Hd as (vs & Hvs & Hprim & ->).
+  cbn [eval_simples] in Hvs.
+  destruct (eval_simple vars arg1) as [v1 | ] eqn:Hv1; [ | discriminate Hvs ].
+  destruct (eval_simple vars arg2) as [v2 | ] eqn:Hv2; [ | discriminate Hvs ].
+  injection Hvs as <-.
+  assert
+    (Hbound :
+      ∀ l : location,
+        Value_location l ∈ [v1; v2] -> FlambdaMapSpec.is_bound l hp = true).
+  { intros l Hl.
+    pose proof
+      (FlambdaHeapProofs.exec_prim_locations_bound _ _ _ _ _ _ l Hprim Hl)
+      as Hlookup.
+    unfold FlambdaMapSpec.is_bound.
+    destruct (FlambdaMapSpec.lookup l hp); [ reflexivity | contradiction ]. }
+  assert
+    (Hpure :
+      prim_reads_heap (Binary b) = false ->
+      ∀ (kind : standard_int) (o : outcome) (other : simple) (w : value),
+        named_of_outcome kind o other = Some d' ->
+        eval_simple vars other = Some w ->
+        w ∈ [v1; v2] ->
+        exec_named statics hp rd vars d' = Some (v, hp', rd)).
+  { intros Hreads kind o other w Houtcome Hother Hw.
+    destruct
+      (FlambdaHeapProofs.exec_prim_eval_prim statics hp hp' _ _ v Hreads
+         Hprim)
+      as [Heval ->].
+    apply (named_of_outcome_exec statics hp rd vars kind o other d' w v
+             Houtcome Hother).
+    - intros l ->. exact (Hbound l Hw).
+    - apply (identity_of_binary_sound statics vars b arg1 arg2 d' v
+               Hidentity).
+      rewrite eval_named_prim. cbn [eval_simples]. rewrite Hv1, Hv2.
+      exact Heval. }
+  destruct b as [akind load_kind mut | width | op | kind op | kind op
+    | kind behaviour];
+    cbn [identity_of_binary] in Hidentity; try discriminate Hidentity.
+  - (* [Phys_equal] of a variable and itself *)
+    destruct arg1 as [x | sym1 | c1]; try discriminate Hidentity.
+    destruct arg2 as [y | sym2 | c2]; try discriminate Hidentity.
+    destruct (Pos.eqb_spec x y) as [-> | _]; [ | discriminate Hidentity ].
+    injection Hidentity as <-.
+    rewrite Hv1 in Hv2. injection Hv2 as <-.
+    destruct
+      (FlambdaSameComparisonProofs.phys_equal_same_heap statics hp hp' op
+         v1 v Hprim)
+      as [-> ->].
+    destruct op; reflexivity.
+  - (* [Int_arith] *)
+    destruct (int_of_simple kind arg1) as [lhs | ],
+      (int_of_simple kind arg2) as [rhs | ];
+      try discriminate Hidentity.
+    + destruct (is_const arg2); [ discriminate Hidentity | ].
+      exact (Hpure eq_refl kind _ arg2 v2 Hidentity Hv2
+               (or_intror (or_introl eq_refl))).
+    + destruct (is_const arg1); [ discriminate Hidentity | ].
+      exact (Hpure eq_refl kind _ arg1 v1 Hidentity Hv1 (or_introl eq_refl)).
+  - (* [Int_shift] *)
+    destruct (int_of_simple kind arg1) as [lhs | ],
+      (int_of_simple Standard_naked_immediate arg2) as [rhs | ];
+      try discriminate Hidentity.
+    + destruct (is_const arg2); [ discriminate Hidentity | ].
+      exact (Hpure eq_refl kind _ arg2 v2 Hidentity Hv2
+               (or_intror (or_introl eq_refl))).
+    + destruct (is_const arg1); [ discriminate Hidentity | ].
+      exact (Hpure eq_refl kind _ arg1 v1 Hidentity Hv1 (or_introl eq_refl)).
+Qed.
+
+(* ======================================================================== *)
 (* The pass                                                                 *)
 (* ======================================================================== *)
 
@@ -466,34 +590,28 @@ Qed.
    replaces the operation has its value or the operation has none; then
    the parts under binders, by the induction. *)
 Fixpoint apply_identities_refines_at (e : expr) :
-  ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap),
-    refines (State e vars conts statics hp)
-      (State (apply_identities e) vars conts statics hp)
+  ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+    (rd : read_record),
+    refines (State e vars conts statics hp rd)
+      (State (apply_identities e) vars conts statics hp rd)
 with apply_identities_in_handler_refines (h : continuation_handler) :
   ∀ (k : continuation) (body : expr) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap),
-    refines (State (Let_cont_non_recursive k h body) vars conts statics hp)
+    (statics : static_env) (hp : heap) (rd : read_record),
+    refines (State (Let_cont_non_recursive k h body) vars conts statics hp rd)
       (State
          (Let_cont_non_recursive k (apply_identities_in_handler h) body)
-         vars conts statics hp).
+         vars conts statics hp rd).
 Proof.
   - destruct e
       as [ x kind d body | bindings body | k h body | handlers body | ap
          | ac | scrutinee arms | ];
-      intros vars conts statics hp; simpl.
-    + (* Let *)
-      destruct (eval_named statics vars d) as [v | ] eqn:Hd;
-        [ destruct (kind_eqb (kind_of_value v) kind) eqn:Hkind | ].
-      * eapply refines_step;
-          [ rewrite step_let, Hd, Hkind; reflexivity
-          | rewrite step_let, (identity_named_sound statics vars d v Hd),
-              Hkind;
-            reflexivity
-          | ].
-        apply apply_identities_refines_at.
-      * apply step_undefined_refines. rewrite step_let, Hd, Hkind.
-        reflexivity.
-      * apply step_undefined_refines. rewrite step_let, Hd. reflexivity.
+      intros vars conts statics hp rd; simpl.
+    + (* Let: the machine runs [d] with the heap; what replaces the
+         operation runs to the same value, heap and record. *)
+      apply let_refines_step_forward.
+      * intros v hp' rd' Hd.
+        exact (identity_named_exec statics hp hp' rd rd' vars d v Hd).
+      * intros v hp' rd' _ _. apply apply_identities_refines_at.
     + (* Let_static *)
       apply let_static_refines_step.
       destruct (eval_static_bindings vars bindings statics)
@@ -503,7 +621,7 @@ Proof.
       apply (refines_trans _
         (State
            (Let_cont_non_recursive k (apply_identities_in_handler h) body)
-           vars conts statics hp)).
+           vars conts statics hp rd)).
       * apply apply_identities_in_handler_refines.
       * apply let_cont_non_recursive_refines_step,
           apply_identities_refines_at.
@@ -515,9 +633,9 @@ Proof.
     + apply refines_refl.
     + apply refines_refl.
   - destruct h as [params metadata handler].
-    intros k body vars conts statics hp. simpl.
+    intros k body vars conts statics hp rd. simpl.
     apply let_cont_handler_refines_at.
-    intros vs handler_vars conts' statics' hp' _ _.
+    intros vs handler_vars conts' statics' hp' rd' _ _.
     apply apply_identities_refines_at.
 Qed.
 

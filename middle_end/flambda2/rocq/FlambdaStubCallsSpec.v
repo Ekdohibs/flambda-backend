@@ -248,10 +248,10 @@ Definition demote_stub_calls (e : expr) : expr :=
    code ids given and the environments. *)
 Definition demote_call_step_statement : Prop :=
   ∀ (ids : list code_id) (ap : apply_expr) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap),
-    step (State (Apply ap) vars conts statics hp) <> Undefined ->
-    step (State (Apply (demote_call ids ap)) vars conts statics hp)
-    = step (State (Apply ap) vars conts statics hp).
+    (statics : static_env) (hp : heap) (rd : read_record),
+    step (State (Apply ap) vars conts statics hp rd) <> Undefined ->
+    step (State (Apply (demote_call ids ap)) vars conts statics hp rd)
+    = step (State (Apply ap) vars conts statics hp rd).
 
 (* An expression with its calls demoted refines the expression, under
    all environments, whatever the code ids given. *)
@@ -355,12 +355,12 @@ Definition demote_call_defines_statement : Prop :=
   in
   step
     (State (Apply (stub_example_call (Direct wrapper))) vars conts statics
-       empty_heap)
+       empty_heap no_reads)
   = Undefined
   ∧ step
       (State
          (Apply (demote_call [wrapper] (stub_example_call (Direct wrapper))))
-         vars conts statics empty_heap)
+         vars conts statics empty_heap no_reads)
     <> Undefined.
 
 End Examples.

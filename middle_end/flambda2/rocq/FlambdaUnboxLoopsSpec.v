@@ -116,19 +116,27 @@
    The result refines the term, given what is known of the symbols in
    scope ([unbox_loops_knowing_symbols_refines_statement], in the form
    in which the validation takes a rewrite into code and into loops,
-   FlambdaUnboxInScopeSpec.refines_where_known). Why it holds, in two
-   steps. The handler with the read taken to its head refines the
-   handler: under [Let]s only, the run comes to the read or goes
-   wrong before it, and where the primitive has no value the handler
-   goes wrong either way. Then the loop whose handler begins with the
-   read and the loop with the read made a parameter are run together:
-   an application gives the new parameter what the primitive has on
-   the argument, so the first run, one step later, is where the
-   second is, with the same variables; the applications in the
-   handler are of the continuation itself, and the two go on in step.
-   It is a refinement and not an equivalence: where the read has no
-   value of its kind the term goes wrong, and the result, which no
-   longer makes the read, may run on.
+   FlambdaUnboxInScopeSpec.refines_where_known). Why it holds. The
+   loop and the loop with the read made a parameter are run together.
+   An application gives the new parameter what the read, run where
+   the application is, gives of the argument: the term shows that the
+   argument holds no location, so that the read is the same on every
+   heap, or that a [Let] in scope has made the read, which then gives
+   its value again. A primitive that reads a box and has run gives
+   the same wherever the heap evolves to, and the read is under
+   [Let]s only: so the handler, entered with the values of the
+   application, comes to the read or goes wrong before it, and binds
+   there what the new parameter holds. The handler without the read,
+   entered with the new parameter bound, refines it and exits no
+   later; the applications in the handler are of the continuation
+   itself, and the two runs go on in step. Where the read, run at the
+   application, gives nothing of its kind, it gives nothing where the
+   handler comes to it, and the handler goes wrong. The read is not
+   taken to the head of the handler: with a heap, a read that gives
+   nothing where the handler is entered may give a value under the
+   [Let]s above it. It is a refinement and not an equivalence: where
+   the read gives no value of its kind the term goes wrong, and the
+   result, which no longer makes the read, may run on.
 
    That the pass commutes with renaming is stated in
    FlambdaUnboxVariantsRenameSpec.v, and that it keeps scope in

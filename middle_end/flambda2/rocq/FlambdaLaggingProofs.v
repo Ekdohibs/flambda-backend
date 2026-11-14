@@ -57,7 +57,7 @@ Hypothesis R_step :
     R n s s' ->
     match step s with
     | Undefined => True
-    | Exit k vs hp => step s' = Exit k vs hp
+    | Exit k vs hp rd => step s' = Exit k vs hp rd
     | Step t =>
       (∃ (m : nat) (t' : state), step s' = Step t' ∧ R m t t')
       ∨ ∃ m : nat, m < n ∧ R m t s'
@@ -66,21 +66,21 @@ Hypothesis R_step :
 (* An exit of the first run is one of the second. *)
 Lemma counted_lagging_exit (fuel : nat) :
   ∀ (n : nat) (s s' : state) (k : continuation) (vs : list value)
-    (hp : heap),
+    (hp : heap) (rd : read_record),
     R n s s' ->
-    run fuel s = Exit k vs hp ->
-    ∃ m : nat, run m s' = Exit k vs hp.
+    run fuel s = Exit k vs hp rd ->
+    ∃ m : nat, run m s' = Exit k vs hp rd.
 Proof.
-  induction fuel as [ | fuel IH]; intros n s s' k vs hp Hrel; simpl;
+  induction fuel as [ | fuel IH]; intros n s s' k vs hp rd Hrel; simpl;
     [ discriminate | ].
   pose proof (R_step n s s' Hrel) as Hanswer.
-  destruct (step s) as [t | k' vs' hp' | ]; [ | | discriminate ].
+  destruct (step s) as [t | k' vs' hp' rd' | ]; [ | | discriminate ].
   - intros Hexit.
     destruct Hanswer as [(m & t' & Hstep & Hrel') | (m & _ & Hrel')].
-    + destruct (IH m t t' k vs hp Hrel' Hexit) as [j Hj].
+    + destruct (IH m t t' k vs hp rd_ Hrel' Hexit) as [j Hj].
       exists (S j). simpl. rewrite Hstep. exact Hj.
-    + exact (IH m t s' k vs hp Hrel' Hexit).
-  - intros [= <- <- <-]. exists 1. simpl. rewrite Hanswer. reflexivity.
+    + exact (IH m t s' k vs hp rd_ Hrel' Hexit).
+  - intros [= <- <- <- ->]. exists 1. simpl. rewrite Hanswer. reflexivity.
 Qed.
 
 (* If the second run has ended, so has the first: a step of the first
@@ -91,14 +91,14 @@ Lemma counted_lagging_ends (m : nat) :
     ended (run m s') b ->
     ∃ j : nat,
       run j s = Undefined
-      ∨ ∃ (k : continuation) (vs : list value) (hp : heap),
-          run j s = Exit k vs hp.
+      ∨ ∃ (k : continuation) (vs : list value) (hp : heap) (rd : read_record),
+          run j s = Exit k vs hp rd.
 Proof.
   induction m as [m IHm] using (well_founded_induction lt_wf).
   intros n. induction n as [n IHn] using (well_founded_induction lt_wf).
   intros s s' b Hrel Hended.
   pose proof (R_step n s s' Hrel) as Hanswer.
-  destruct (step s) as [t | k vs hp | ] eqn:Hstep.
+  destruct (step s) as [t | k vs hp rd | ] eqn:Hstep.
   - destruct Hanswer as [(n' & t' & Hstep' & Hrel') | (n' & Hless & Hrel')].
     + destruct m as [ | m]; [ destruct b; contradiction | ].
       simpl in Hended. rewrite Hstep' in Hended.
@@ -107,7 +107,7 @@ Proof.
       exists (S j). simpl. rewrite Hstep. exact Hj.
     + destruct (IHn n' Hless t s' b Hrel' Hended) as [j Hj].
       exists (S j). simpl. rewrite Hstep. exact Hj.
-  - exists 1. right. exists k, vs, hp. simpl. rewrite Hstep. reflexivity.
+  - exists 1. right. exists k, vs, hp, rd. simpl. rewrite Hstep. reflexivity.
   - exists 1. left. simpl. rewrite Hstep. reflexivity.
 Qed.
 
@@ -118,14 +118,18 @@ Proof.
   assert (Hexits :
     ∀ (k : continuation) (vs : list value) (hp : heap),
       behaves s (Exits k vs hp) -> behaves s' (Exits k vs hp)).
-  { intros k vs hp [fuel Hfuel].
-    exact (counted_lagging_exit fuel n s s' k vs hp Hrel Hfuel). }
+  { intros k vs hp [fuel [rd Hfuel]].
+    destruct (counted_lagging_exit fuel n s s' k vs hp rd_ Hrel Hfuel)
+      as [m Hm].
+    exists m, rd. exact Hm. }
   split; [ exact Hexits | ].
   intros b Hterm Hb. destruct (behaves_ended s' b Hterm Hb) as [m Hended].
   destruct (counted_lagging_ends m n s s' b Hrel Hended)
-    as [j [Hwrong | (k & vs & hp & Hexit)]].
+    as [j [Hwrong | (k & vs & hp & rd & Hexit)]].
   - right. exists j. exact Hwrong.
-  - left. assert (Hs : behaves s (Exits k vs hp)) by (exists j; exact Hexit).
+  - left.
+    assert (Hs : behaves s (Exits k vs hp))
+      by (exists j, rd; exact Hexit).
     rewrite (behaviour_unique s' b (Exits k vs hp) Hb (Hexits k vs hp Hs)).
     exact Hs.
 Qed.

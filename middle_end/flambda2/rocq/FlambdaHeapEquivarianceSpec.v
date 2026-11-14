@@ -25,18 +25,22 @@
  * DEALINGS IN THE SOFTWARE.                                                  *
  ******************************************************************************)
 
-(* Renamings act on the states of the machine with a heap, and its
-   execution is equivariant.
+(* Renamings act on the states of the prototype machine of the heap
+   (FlambdaHeapMachineSpec.v), and its execution is equivariant.
 
    This file is to be reviewed: the action ([rename_heap_state],
    [rename_outcome], [rename_heap_result], [rename_heap_behaviour]) and
    the statements.
 
-   FlambdaHeapMachineSpec.v has a machine whose states are those of
-   FlambdaSemanticsSpec.v with a heap. FlambdaEquivarianceSpec.v says
-   that the renamings of variables and of continuations act on the
-   states without a heap and that a step, a run and a behaviour commute
-   with the action. Here is the same of the machine with a heap.
+   FlambdaHeapMachineSpec.v has the prototype of the heap: a machine
+   of its own beside that of FlambdaSemanticsSpec.v, with states of
+   its own ([heap_state]) and exits that carry the memory. The states
+   of FlambdaSemanticsSpec.v have a heap too, and a read record, and
+   its machine runs the primitives of the heap in a [Let];
+   FlambdaEquivarianceSpec.v says that the renamings of variables and
+   of continuations act on those states and that a step, a run and a
+   behaviour commute with the action. Here is the same of the
+   prototype.
 
    What the action does to memory: nothing. A location is a name of a
    sort of its own (requests/C4-heap.md, sections 2.2 and 5): no
@@ -44,9 +48,10 @@
    locations, symbols and code ids, and no variable and no continuation;
    a cell of the heap holds values, and so do the extra arguments that a
    continuation keeps. So the heap of a state is left as it is, and so
-   are the values and the heap of an outcome. The code of the
-   static environment is renamed, as in a state without a heap, and an
-   outcome carries a static environment, so its code is renamed too;
+   are the values and the heap of an outcome. The code of the static
+   environment is renamed, as in a state of FlambdaSemanticsSpec.v,
+   and an outcome carries a static environment, so its code is renamed
+   too;
    what is observed of an outcome is read from its values, its
    statically allocated values and its heap
    ([outcome_related_equivariant_statement]: renaming the code of two
@@ -70,10 +75,10 @@
    - a step, a run and a behaviour commute with it, with no premise;
    - so refinement of states, and of expressions under closed memories,
      is preserved by renaming;
-   - a state with a heap has a finite support, as one without has
-     (FlambdaStateSupportSpec.v): with the action, the states of the
-     machine with a heap are a nominal set, and the heap adds nothing to
-     the support.
+   - a state of the prototype has a finite support, as a state of
+     FlambdaSemanticsSpec.v has (FlambdaStateSupportSpec.v): with the
+     action, the states of the prototype are a nominal set, and the
+     heap adds nothing to the support.
 
    Nothing is trusted here. The proofs are in
    FlambdaHeapEquivarianceProofs.v, which needs no review. *)
@@ -90,8 +95,8 @@ Import ListNotations.
 (* The action                                                               *)
 (* ======================================================================== *)
 
-(* The state without its heap is renamed as in FlambdaEquivarianceSpec.v.
-   The heap holds values, which hold no variables or continuations. *)
+(* What is not the heap is renamed as in FlambdaEquivarianceSpec.v. The
+   heap holds values, which hold no variables or continuations. *)
 Definition rename_heap_state (r : renaming) (s : heap_state) : heap_state :=
   Heap_state (rename_expr r (hs_expr s)) (rename_env r (hs_vars s))
     (rename_cont_env r (hs_conts s)) (rename_static_env r (hs_statics s))
@@ -132,15 +137,16 @@ Definition rename_heap_state_inverse_statement : Prop :=
     rename_heap_state (inverse_renaming r) (rename_heap_state r s) = s
     ∧ rename_heap_state r (rename_heap_state (inverse_renaming r) s) = s.
 
-(* The action is that on states without a heap, with the heap carried
-   along. *)
+(* The action is that on the states of FlambdaSemanticsSpec.v, with
+   the heap carried along: [forget_heap] gives such a state, with the
+   heap of the state and no reads. *)
 Definition forget_heap_equivariant_statement : Prop :=
   ∀ (r : renaming) (s : heap_state),
     forget_heap (rename_heap_state r s) = rename_state r (forget_heap s).
 
 (* Finitely many variables and continuations support a state: a renaming
    that fixes them leaves the state as it is. They are those that
-   support the state without its heap. *)
+   support the state that [forget_heap] gives. *)
 Definition heap_state_finitely_supported_statement : Prop :=
   ∀ s : heap_state,
     ∃ (vs : list variable) (ks : list continuation),

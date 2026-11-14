@@ -94,7 +94,7 @@ Definition projections_bound (bound : list (variable * function_slot)) : env :=
    which stays in scope as none of the variables bound is [base]. *)
 Lemma let_projections_runs (base : variable) (base_slot : function_slot)
     (code : code_id) (body : expr) (conts : cont_env) (statics : static_env)
-      (hp : heap) :
+      (hp : heap) (rd : read_record) :
   lookup base_slot decls = Some code ->
   ∀ (bound : list (variable * function_slot)) (vars : env),
     lookup base vars
@@ -103,9 +103,11 @@ Lemma let_projections_runs (base : variable) (base_slot : function_slot)
       (y, slot) ∈ bound ->
       y <> base ∧ ∃ code' : code_id, lookup slot decls = Some code') ->
     run (length bound)
-      (State (let_projections base base_slot bound body) vars conts statics hp)
+      (State (let_projections base base_slot bound body) vars conts statics hp
+         rd)
     = Step
-        (State body (rev (projections_bound bound) ++ vars) conts statics hp).
+        (State body (rev (projections_bound bound) ++ vars) conts statics hp
+           rd).
 Proof.
   intros Hfrom.
   induction bound as [ | [y slot] bound IH]; intros vars Hbase Hbound;
@@ -205,7 +207,8 @@ Qed.
 
 Theorem let_closures_runs : let_closures_runs_statement.
 Proof.
-  intros bound_vars decls value_slots body e vars conts statics hp slot_values
+  intros bound_vars decls value_slots body e vars conts statics hp rd
+    slot_values
     Hlet Hdistinct Hslots.
   unfold let_closures in Hlet.
   destruct bound_vars as [ | x xs]; [ discriminate | ].
@@ -218,7 +221,7 @@ Proof.
   rewrite kind_eqb_refl.
   rewrite <- (combine_fst_length xs others Hlen) at 1.
   rewrite (let_projections_runs ((slot, code) :: others) slot_values x slot
-             code body conts statics hp (lookup_head _ _ _)
+             code body conts statics hp rd_ (lookup_head _ _ _)
              (combine xs (map fst others)));
     [ | apply lookup_head | ].
   - rewrite projections_bound_combine. unfold closures_bound. simpl.
@@ -230,7 +233,8 @@ Qed.
 
 Theorem let_closures_undefined : let_closures_undefined_statement.
 Proof.
-  intros bound_vars decls value_slots body e vars conts statics hp Hlet Hslots.
+  intros bound_vars decls value_slots body e vars conts statics hp rd Hlet
+    Hslots.
   unfold let_closures in Hlet.
   destruct bound_vars as [ | x xs]; [ discriminate | ].
   destruct decls as [ | [slot code] others]; [ discriminate | ].
@@ -255,18 +259,20 @@ Theorem project_function_slot_let_closures :
 Proof.
   intros bound_vars decls value_slots move_from move_to x_from x_to y kind
     code code' i j body e e' Hdistinct Hx_from Hfrom Hx_to Hto Hlet Hlet'
-    vars conts statics hp.
+    vars conts statics hp rd.
   destruct (eval_value_slots vars value_slots) as [slot_values | ] eqn:Hslots.
   - pose proof (let_closures_runs bound_vars decls value_slots _ e vars conts
-                  statics hp slot_values Hlet Hdistinct Hslots) as Hrun.
+                  statics hp rd slot_values Hlet Hdistinct Hslots) as Hrun.
     pose proof (let_closures_runs bound_vars decls value_slots _ e' vars conts
-                  statics hp slot_values Hlet' Hdistinct Hslots) as Hrun'.
+                  statics hp rd slot_values Hlet' Hdistinct Hslots) as Hrun'.
     eapply equivalent_trans;
       [ exact (equivalent_of_run (length bound_vars) 0 _ _ Hrun) | ].
     eapply equivalent_trans;
       [ | apply equivalent_sym;
           exact (equivalent_of_run (length bound_vars) 0 _ _ Hrun') ].
-    apply let_equivalent_step; [ | intros v _ _; apply equivalent_refl ].
+    apply let_equivalent_step_not_prim;
+      [ intros ? ?; discriminate | intros ? ?; discriminate | | intros v _ _;
+       apply equivalent_refl ].
     apply distinct_NoDup in Hdistinct. rewrite closures_bound_rev. simpl.
     rewrite (closures_bound_to_lookup decls slot_values bound_vars decls vars
                i x_from move_from code Hdistinct Hx_from Hfrom).
@@ -279,9 +285,9 @@ Proof.
              slot_values c c' Hc Hc').
   - apply step_eq_equivalent.
     rewrite (let_closures_undefined bound_vars decls value_slots _ e vars
-               conts statics _ Hlet Hslots).
+               conts statics _ rd_ Hlet Hslots).
     rewrite (let_closures_undefined bound_vars decls value_slots _ e' vars
-               conts statics _ Hlet' Hslots).
+               conts statics _ rd_ Hlet' Hslots).
     reflexivity.
 Qed.
 
@@ -290,8 +296,9 @@ Qed.
 Theorem apply_sibling : apply_sibling_statement.
 Proof.
   intros x kind move_from move_to closure args k exn extra args_arity
-    return_arity decls slot_values code vars conts statics hp Hclosure Hto.
-  apply let_equivalent_step; [ reflexivity | ].
+    return_arity decls slot_values code vars conts statics hp rd Hclosure Hto.
+  apply let_equivalent_step_not_prim;
+    [ intros ? ?; discriminate | intros ? ?; discriminate | reflexivity | ].
   intros v. simpl. rewrite Hclosure. unfold project_function_slot.
   rewrite Pos.eqb_refl, Hto.
   destruct (lookup move_from decls); [ | discriminate ].
@@ -394,7 +401,7 @@ Theorem project_function_slot_static :
   project_function_slot_static_statement.
 Proof.
   intros closure_symbols decls value_slots move_from move_to s s' code code' x
-    kind body Hin Hsymbol Hfrom Hto vars conts statics hp.
+    kind body Hin Hsymbol Hfrom Hto vars conts statics hp rd.
   apply let_static_equivalent_step.
   destruct
     (eval_static_bindings vars
@@ -409,7 +416,9 @@ Proof.
   destruct (project_static_set extended closure_symbols decls slot_values
               move_from move_to s s' code code' Hbound Hin Hsymbol Hfrom Hto)
     as [Hproject _].
-  apply let_equivalent_step; [ | intros v _ _; apply equivalent_refl ].
+  apply let_equivalent_step_not_prim;
+    [ intros ? ?; discriminate | intros ? ?; discriminate | | intros v _ _;
+     apply equivalent_refl ].
   cbn [eval_named eval_simple]. rewrite Hproject. reflexivity.
 Qed.
 
@@ -439,7 +448,7 @@ Qed.
 Theorem project_value_slot_static : project_value_slot_static_statement.
 Proof.
   intros closure_symbols decls value_slots project_from s code slot contents
-    x kind body Hin Hfrom Hslot vars conts statics hp.
+    x kind body Hin Hfrom Hslot vars conts statics hp rd.
   apply let_static_equivalent_step.
   destruct
     (eval_static_bindings vars
@@ -452,7 +461,9 @@ Proof.
   pose proof (bind_closures_binds vars closure_symbols decls value_slots
                 slot_values statics extended Hslots Heval project_from s Hin)
     as Hs.
-  apply let_equivalent_step; [ | intros v _ _; apply equivalent_refl ].
+  apply let_equivalent_step_not_prim;
+    [ intros ? ?; discriminate | intros ? ?; discriminate | | intros v _ _;
+     apply equivalent_refl ].
   cbn [eval_named eval_simple]. unfold project_value_slot, closure_in_set.
   rewrite Hs, Hfrom. cbn. rewrite Pos.eqb_refl. symmetry.
   exact (eval_value_slots_lookup vars slot contents value_slots slot_values
@@ -724,7 +735,7 @@ Lemma sets_inv_over (remaining : list value)
   <-> cont_sets_ok return_to ∧ cont_sets_ok exn_to.
 Proof. reflexivity. Qed.
 
-Lemma sets_inv_code (statics : static_env) (hp : heap) :
+Lemma sets_inv_code (statics : static_env) (hp : heap) (rd : read_record) :
   code_sets_ok statics ->
   static_sets_bound statics ->
   ∀ (called : code_id) (c : code) (callee_vars : env)
@@ -736,7 +747,7 @@ Lemma sets_inv_code (statics : static_env) (hp : heap) :
       (State (code_body c) callee_vars
          [(code_return_continuation c, return_to);
           (code_exn_continuation c, exn_to)]
-         statics hp).
+         statics hp rd).
 Proof.
   intros S B called c callee_vars return_to exn_to Hlookup Hreturn Hexn.
   unfold sets_inv. simpl_state.
@@ -746,7 +757,7 @@ Proof.
   exact (conj Hc (conj (conj Hreturn (conj Hexn I)) (conj S B))).
 Qed.
 
-Lemma sets_inv_handler (statics : static_env) (hp : heap) :
+Lemma sets_inv_handler (statics : static_env) (hp : heap) (rd : read_record) :
   code_sets_ok statics ->
   static_sets_bound statics ->
   ∀ (params : list variable) (metadata : handler_metadata) (handler : expr)
@@ -758,7 +769,8 @@ Lemma sets_inv_handler (statics : static_env) (hp : heap) :
          recursive) ->
     sets_inv
       (State handler handler_vars
-         (rec_closures recursive def_vars def_conts ++ def_conts) statics hp).
+         (rec_closures recursive def_vars def_conts ++ def_conts) statics hp
+           rd).
 Proof.
   intros S B params metadata handler def_vars def_conts recursive
     handler_vars Cr.
@@ -779,7 +791,7 @@ Proof.
        | scrutinee arms | ];
     autorewrite with step in Hstep.
   - (* Let *)
-    destruct (eval_named statics vars d) as [v | ]; [ | discriminate ].
+    destruct (exec_named _ _ rd_ _ d) as [[[v hp'] rd'] | ]; [ | discriminate ].
     destruct (kind_eqb (kind_of_value v) kind); [ | discriminate ].
     injection Hstep as <-. unfold sets_inv. simpl_state. simpl in P.
     apply andb_true_iff in P as [_ Pbody].
@@ -815,18 +827,19 @@ Proof.
     destruct (eval_simples vars (exn_extra_simples ap)) as [extra | ];
       [ | discriminate ].
     refine
-      (call_function_lands statics _ cont_sets_ok sets_inv
-         (fun c extra H => H) sets_inv_over (sets_inv_code statics _ S B)
-         (sets_inv_handler statics _ S B) _ _ _ _ _ _ _ s'
+      (call_function_lands statics _ rd_ cont_sets_ok sets_inv
+         (fun c extra H => H) sets_inv_over (sets_inv_code statics _ rd_ S B)
+         (sets_inv_handler statics _ rd_ S B) _ _ _ _ _ _ _ s'
          (resolve_sets_ok _ conts C) _ Hstep).
     apply with_extra_args_sets_ok, resolve_sets_ok, C.
   - (* Apply_cont *)
     destruct (eval_simples vars (ac_args ac)) as [vs | ]; [ | discriminate ].
     unfold apply_continuation in Hstep.
     exact
-      (apply_cont_value_lands statics _ cont_sets_ok sets_inv
-         (fun c extra H => H) sets_inv_over (sets_inv_code statics _ S B)
-         (sets_inv_handler statics _ S B) _ vs s' (resolve_sets_ok _ conts C)
+      (apply_cont_value_lands statics _ rd_ cont_sets_ok sets_inv
+         (fun c extra H => H) sets_inv_over (sets_inv_code statics _ rd_ S B)
+         (sets_inv_handler statics _ rd_ S B) _ vs s'
+           (resolve_sets_ok _ conts C)
          Hstep).
   - (* Switch *)
     destruct (eval_simple vars scrutinee) as [v | ]; [ | discriminate ].
@@ -1320,11 +1333,12 @@ Proof.
               (value_valid_in_static_arrays (state_statics s) Hstatics) _
               Hprim).
     intros w [<- | []]. exact Htuple.
-  - intros x kind d body v hp' Hexpr Hexec. rewrite Hexpr in P. simpl in P.
+  - intros x kind d body v hp' rd' Hexpr Hexec. rewrite Hexpr in P. simpl in P.
     apply andb_true_iff in P as [Pd _].
     destruct Hvalid as (Hvars & _ & Hstatics & Hheap).
     refine (exec_named_values_all (fun v => value_valid v = true)
-              (state_statics s) (state_heap s) hp' (state_vars s) d v
+              (state_statics s) (state_heap s) hp' (state_reads s) rd'
+                (state_vars s) d v
               value_valid_of_numbers value_valid_of_blocks
               value_valid_of_arrays
               (value_valid_in_static_blocks (state_statics s) Hstatics)
@@ -1366,7 +1380,7 @@ Lemma state_valid_run (n : nat) :
     sets_inv s -> state_valid s ->
     match run n s with
     | Step s' => state_valid s'
-    | Exit _ vs _ => Forall (fun v => value_valid v = true) vs
+    | Exit _ vs _ _ => Forall (fun v => value_valid v = true) vs
     | Undefined => True
     end.
 Proof.
@@ -1381,7 +1395,7 @@ Qed.
 
 (* The state a unit starts in holds no value. *)
 Lemma initial_state_valid (e : expr) :
-  state_valid (State e [] [] empty_static_env empty_heap).
+  state_valid (State e [] [] empty_static_env empty_heap no_reads).
 Proof.
   exact
     (conj (Forall_nil _)
@@ -1392,7 +1406,7 @@ Theorem well_formed_values_valid : well_formed_values_valid_statement.
 Proof.
   intros u e n s Hwf Hrun.
   pose proof
-    (state_valid_run n (State e [] [] empty_static_env empty_heap)
+    (state_valid_run n (State e [] [] empty_static_env empty_heap no_reads)
        (well_formed_sets_inv u e 0 _ Hwf eq_refl)
        (initial_state_valid e))
     as H.
@@ -1401,9 +1415,9 @@ Qed.
 
 Theorem well_formed_exit_valid : well_formed_exit_valid_statement.
 Proof.
-  intros u e n k vs hp Hwf Hrun.
+  intros u e n k vs hp rd Hwf Hrun.
   pose proof
-    (state_valid_run n (State e [] [] empty_static_env empty_heap)
+    (state_valid_run n (State e [] [] empty_static_env empty_heap no_reads)
        (well_formed_sets_inv u e 0 _ Hwf eq_refl)
        (initial_state_valid e))
     as H.
@@ -1443,7 +1457,7 @@ Qed.
 
 Theorem call_binds_my_closure : call_binds_my_closure_statement.
 Proof.
-  intros callee kind vs args_arity return_arity return_to exn_to statics hp s
+  intros callee kind vs args_arity return_arity return_to exn_to statics hp rd s
     called slot_values c Hcall Hclosure Hcode Hfresh Hcount.
   unfold call_function in Hcall.
   rewrite (shape_of_call_closure statics callee _ _ _ _
@@ -1460,7 +1474,7 @@ Proof.
   rewrite Hcode in Hcode'. injection Hcode' as <-.
   assert (Hbody :
     ∀ (args : list value) (at_arity result : arity) (k : cont_value),
-      call_code callee c args at_arity result k exn_to statics hp = Step s ->
+      call_code callee c args at_arity result k exn_to statics hp rd = Step s ->
       state_expr s = code_body c
       ∧ lookup (code_my_closure c) (state_vars s) = Some callee).
   { intros args at_arity result k Hstep.
@@ -1613,7 +1627,7 @@ Lemma terms_inv_over (remaining : list value)
   <-> cont_terms_ok return_to ∧ cont_terms_ok exn_to.
 Proof. reflexivity. Qed.
 
-Lemma terms_inv_code (statics : static_env) (hp : heap) :
+Lemma terms_inv_code (statics : static_env) (hp : heap) (rd : read_record) :
   code_terms_ok statics ->
   ∀ (called : code_id) (c : code) (callee_vars : env)
     (return_to exn_to : cont_value),
@@ -1624,7 +1638,7 @@ Lemma terms_inv_code (statics : static_env) (hp : heap) :
       (State (code_body c) callee_vars
          [(code_return_continuation c, return_to);
           (code_exn_continuation c, exn_to)]
-         statics hp).
+         statics hp rd).
 Proof.
   intros S called c callee_vars return_to exn_to Hlookup Hreturn Hexn.
   unfold terms_inv. simpl_state.
@@ -1632,7 +1646,7 @@ Proof.
            (conj (conj Hreturn (conj Hexn I)) S)).
 Qed.
 
-Lemma terms_inv_handler (statics : static_env) (hp : heap) :
+Lemma terms_inv_handler (statics : static_env) (hp : heap) (rd : read_record) :
   code_terms_ok statics ->
   ∀ (params : list variable) (metadata : handler_metadata) (handler : expr)
     (def_vars : env) (def_conts : cont_env)
@@ -1643,7 +1657,8 @@ Lemma terms_inv_handler (statics : static_env) (hp : heap) :
          recursive) ->
     terms_inv
       (State handler handler_vars
-         (rec_closures recursive def_vars def_conts ++ def_conts) statics hp).
+         (rec_closures recursive def_vars def_conts ++ def_conts) statics hp
+           rd).
 Proof.
   intros S params metadata handler def_vars def_conts recursive handler_vars
     Cr.
@@ -1666,7 +1681,7 @@ Proof.
        | scrutinee arms | ];
     autorewrite with step in Hstep.
   - (* Let *)
-    destruct (eval_named statics vars d) as [v | ]; [ | discriminate ].
+    destruct (exec_named _ _ rd_ _ d) as [[[v hp'] rd'] | ]; [ | discriminate ].
     destruct (kind_eqb (kind_of_value v) kind); [ | discriminate ].
     injection Hstep as <-. unfold terms_inv. simpl_state.
     exact (conj (Pe_let x kind d body P) (conj C S)).
@@ -1697,18 +1712,19 @@ Proof.
     destruct (eval_simples vars (exn_extra_simples ap)) as [extra | ];
       [ | discriminate ].
     refine
-      (call_function_lands statics _ cont_terms_ok terms_inv
-         (fun c extra H => H) terms_inv_over (terms_inv_code statics _ S)
-         (terms_inv_handler statics _ S) _ _ _ _ _ _ _ s'
+      (call_function_lands statics _ rd_ cont_terms_ok terms_inv
+         (fun c extra H => H) terms_inv_over (terms_inv_code statics _ rd_ S)
+         (terms_inv_handler statics _ rd_ S) _ _ _ _ _ _ _ s'
          (resolve_terms_ok _ conts C) _ Hstep).
     apply with_extra_args_terms_ok, resolve_terms_ok, C.
   - (* Apply_cont *)
     destruct (eval_simples vars (ac_args ac)) as [vs | ]; [ | discriminate ].
     unfold apply_continuation in Hstep.
     exact
-      (apply_cont_value_lands statics _ cont_terms_ok terms_inv
-         (fun c extra H => H) terms_inv_over (terms_inv_code statics _ S)
-         (terms_inv_handler statics _ S) _ vs s' (resolve_terms_ok _ conts C)
+      (apply_cont_value_lands statics _ rd_ cont_terms_ok terms_inv
+         (fun c extra H => H) terms_inv_over (terms_inv_code statics _ rd_ S)
+         (terms_inv_handler statics _ rd_ S) _ vs s'
+           (resolve_terms_ok _ conts C)
          Hstep).
   - (* Switch *)
     destruct (eval_simple vars scrutinee) as [v | ]; [ | discriminate ].
@@ -1720,7 +1736,7 @@ Proof.
 Qed.
 
 Lemma terms_inv_initial (e : expr) :
-  Pe e = true -> terms_inv (State e [] [] empty_static_env empty_heap).
+  Pe e = true -> terms_inv (State e [] [] empty_static_env empty_heap no_reads).
 Proof.
   intros He. unfold terms_inv. simpl_state.
   refine (conj He (conj I _)). intros id c [=].
@@ -1783,7 +1799,7 @@ Proof.
     as [extra | ];
     [ | discriminate ].
   apply
-    (call_binds_my_closure callee _ vs _ _ _ _ _ _ s' called slot_values c
+    (call_binds_my_closure callee _ vs _ _ _ _ _ _ rd_ s' called slot_values c
        Hstep Hclosure Hcode);
     [ | exact Hcount ].
   destruct c as [params my_closure ret exn metadata body].
@@ -2202,7 +2218,7 @@ Lemma state_sets_are_step (s : state) :
   state_sets_are c function_decls closure_symbols s ->
   match step s with
   | Step s' => state_sets_are c function_decls closure_symbols s'
-  | Exit _ vs _ => Forall Pv vs
+  | Exit _ vs _ _ => Forall Pv vs
   | Undefined => True
   end.
 Proof.
@@ -2225,10 +2241,12 @@ Proof.
               (value_sets_are_in_static_arrays (state_statics s) Hstatics) _
               Hprim).
     intros w [<- | []]. exact Htuple.
-  - intros x kind d body v hp' Hexpr Hexec. rewrite Hexpr in P. simpl in P.
+  - intros x kind d body v hp' rd' Hexpr Hexec. rewrite Hexpr in P. simpl in P.
     apply andb_true_iff in P as [Pd _].
     destruct Hvalid as (Hvars & _ & Hstatics & Hheap).
-    refine (exec_named_values_all Pv (state_statics s) (state_heap s) hp'
+    refine
+      (exec_named_values_all Pv (state_statics s) (state_heap s) hp'
+         (state_reads s) rd'
               (state_vars s) d v value_sets_are_of_numbers
               value_sets_are_of_blocks value_sets_are_of_arrays
               (value_sets_are_in_static_blocks (state_statics s) Hstatics)
@@ -2271,7 +2289,7 @@ Lemma state_sets_are_run (n : nat) :
     state_sets_are c function_decls closure_symbols s ->
     match run n s with
     | Step s' => state_sets_are c function_decls closure_symbols s'
-    | Exit _ vs _ => Forall Pv vs
+    | Exit _ vs _ _ => Forall Pv vs
     | Undefined => True
     end.
 Proof.
@@ -2291,7 +2309,7 @@ Proof.
   intros c function_decls closure_symbols e n s He Hrun.
   pose proof
     (state_sets_are_run c function_decls closure_symbols n
-       (State e [] [] empty_static_env empty_heap)
+       (State e [] [] empty_static_env empty_heap no_reads)
        (terms_inv_initial _ _ _ e He)
        (conj (Forall_nil _)
           (conj I (conj (Forall_nil _) (heap_values_all_empty _)))))
@@ -2326,7 +2344,7 @@ Lemma closure_of_code_at_slot (u : unit_interface) (c : code_id)
     (slot_values : list (value_slot * value)) (slot : function_slot) :
   well_formed_unit u e = true ->
   sets_are c function_decls closure_symbols e = true ->
-  run n (State e [] [] empty_static_env empty_heap) = Step s ->
+  run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
   eval_simple (state_vars s) closure = Some v ->
   closure_of (state_statics s) v = Some (c, slot_values) ->
   lookup slot function_decls = Some c ->
@@ -2457,12 +2475,13 @@ Qed.
 Theorem parity_let : parity_let_statement.
 Proof.
   intros i answer [[= <- <-] | [[= <- <-] | []]]; eexists;
-    (split; [ reflexivity | ]); exists 60; vm_compute; reflexivity.
+    (split; [ reflexivity | ]); exists 60; eexists; vm_compute; reflexivity.
 Qed.
 
 Theorem parity_static : parity_static_statement.
 Proof.
-  intros i answer [[= <- <-] | [[= <- <-] | []]]; exists 60; vm_compute;
+  intros i answer [[= <- <-] | [[= <- <-] | []]]; exists 60; eexists;
+    vm_compute;
     reflexivity.
 Qed.
 
@@ -2501,5 +2520,6 @@ Qed.
 
 Theorem partial_static_set : partial_static_set_statement.
 Proof.
-  split; [ exists 10; vm_compute; reflexivity | vm_compute; reflexivity ].
+  split;
+    [ exists 10; eexists; vm_compute; reflexivity | vm_compute; reflexivity ].
 Qed.

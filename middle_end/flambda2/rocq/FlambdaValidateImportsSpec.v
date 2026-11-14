@@ -95,13 +95,15 @@
 
    [validate_unit_sound_from_statement] and
    [validate_unit_knowing_sound_from_statement] are the same two from
-   any heap and from any static environment in whose code and in whose
-   values the names that the validation removes from the term before
-   do not occur (FlambdaUnusedStaticsSpec.statics_free_of; which
-   symbols and code ids the environment binds is not looked at). The
-   two above are these at the static environment of the imports, which
-   holds no code and binds each symbol to something that holds no
-   value. They are of a unit run after other units have
+   any static environment in whose code and in whose values the names
+   that the validation removes from the term before do not occur
+   (FlambdaUnusedStaticsSpec.statics_free_of; which symbols and code
+   ids the environment binds is not looked at), and from any heap in
+   no cell of which they occur
+   (FlambdaUnusedStaticsSpec.heap_free_of). The two above are these at
+   the static environment of the imports, which holds no code and
+   binds each symbol to something that holds no value, and at the
+   empty heap. They are of a unit run after other units have
    bound code and symbols, as far as the model can say what those are:
    a call of code that the unit does not bind has there the meaning of
    the code that the environment binds. They say nothing of a call
@@ -217,39 +219,41 @@ Definition validate_unit_knowing_sound_imports_statement : Prop :=
     = true ->
     unit_refines imports before after.
 
-(* The same from any heap and from any static environment in whose
-   code and in whose values the names that the validation removes from
-   the term before do not occur
-   (FlambdaUnusedStaticsSpec.statics_free_of). *)
-(* CR mshinwell: the heap is any heap because no step of this machine
-   reads or changes it. When a step runs the primitives of the heap,
-   the premise [heap_free_of unused hp = true] (the names removed
-   occur in no value of a cell of the heap;
-   FlambdaHeapMachineSpec.heap_free_of in this tree, which is to move
-   beside [statics_free_of] with that change) is to be added here, as
-   it is to be added to
-   FlambdaUnusedStaticsSpec.drop_statics_refines_statement: a symbol
-   that only the heap names is otherwise removed from under a read. *)
+(* The same from any static environment in whose code and in whose
+   values the names that the validation removes from the term before
+   do not occur (FlambdaUnusedStaticsSpec.statics_free_of), and from
+   any heap in no value of a cell of which they occur
+   (FlambdaUnusedStaticsSpec.heap_free_of). *)
+(* The heap is asked what the static environment is asked, as at
+   FlambdaUnusedStaticsSpec.drop_statics_refines_statement: a step
+   reads the heap, and a symbol that only the heap names is otherwise
+   removed from under a read. The empty heap holds no value. *)
 Definition validate_unit_sound_from_statement : Prop :=
-  ∀ (statics : static_env) (hp : heap) (rounds : nat) (unused : dropped)
+  ∀ (statics : static_env) (hp : heap) (rd : read_record) (rounds : nat)
+    (unused : dropped)
     (slots : list value_slot) (G : loopified) (Ls : list lifting)
     (kept : list code_id) (before after : expr),
     holds_from_imports
       (validate_unit rounds unused slots G Ls kept before after)
     = true ->
     statics_free_of unused statics = true ->
-    refines (State before [] [] statics hp) (State after [] [] statics hp).
+    heap_free_of unused hp = true ->
+    refines (State before [] [] statics hp rd)
+      (State after [] [] statics hp rd).
 
 (* The same of the second asking. *)
 Definition validate_unit_knowing_sound_from_statement : Prop :=
-  ∀ (statics : static_env) (hp : heap) (rounds : nat) (unused : dropped)
+  ∀ (statics : static_env) (hp : heap) (rd : read_record) (rounds : nat)
+    (unused : dropped)
     (slots : list value_slot) (G : loopified) (Ls : list lifting)
     (kept : list code_id) (before after : expr),
     holds_from_imports
       (validate_unit_knowing rounds unused slots G Ls kept before after)
     = true ->
     statics_free_of unused statics = true ->
-    refines (State before [] [] statics hp) (State after [] [] statics hp).
+    heap_free_of unused hp = true ->
+    refines (State before [] [] statics hp rd)
+      (State after [] [] statics hp rd).
 
 (* ======================================================================== *)
 (* The verdict that removes static bindings from the head of the term after *)
@@ -264,7 +268,8 @@ Definition validate_unit_knowing_sound_from_statement : Prop :=
    that [validate_unit] removes them from: [after], normalised and
    tidied. For a static environment in general the statements below
    also ask that the names removed occur in none of its code and
-   values ([statics_free_of]); this test does not check that. *)
+   values ([statics_free_of]) and in no value of a cell of the heap
+   ([heap_free_of]); this test checks neither. *)
 Definition holds_from (statics : static_env) (rounds : nat)
     (kept : list code_id) (after : expr) (v : validation) : bool :=
   match v with
@@ -287,27 +292,30 @@ Definition static_names_free_in_head_statement : Prop :=
 (* A unit that is validated in one of the ways that [holds_from]
    accepts refines the unit it came from, each run from a static
    environment in whose code and in whose values the names removed do
-   not occur, and from any heap. *)
-(* CR mshinwell: as at [validate_unit_sound_from_statement], and at
-   FlambdaUnusedHeadStaticsSpec.drop_head_statics_refines_from_statement:
-   the heap is any heap because no step of this machine reads or
-   changes it, and the premise [heap_free_of unused hp = true] is to
-   be added when a step runs the primitives of the heap. *)
+   not occur, and from a heap in no value of a cell of which they
+   occur. *)
+(* The heap is asked that as at [validate_unit_sound_from_statement],
+   and at
+   FlambdaUnusedHeadStaticsSpec.drop_head_statics_refines_from_statement. *)
 Definition validate_unit_sound_head_from_statement : Prop :=
-  ∀ (statics : static_env) (hp : heap) (rounds : nat) (unused : dropped)
+  ∀ (statics : static_env) (hp : heap) (rd : read_record) (rounds : nat)
+    (unused : dropped)
     (slots : list value_slot) (G : loopified) (Ls : list lifting)
     (kept : list code_id) (before after : expr),
     holds_from statics rounds kept after
       (validate_unit rounds unused slots G Ls kept before after)
     = true ->
     statics_free_of unused statics = true ->
-    refines (State before [] [] statics hp) (State after [] [] statics hp).
+    heap_free_of unused hp = true ->
+    refines (State before [] [] statics hp rd)
+      (State after [] [] statics hp rd).
 
 (* The same of the second asking. The term after that it gives
    [validate_unit] is the term after normalised with what is known of
    its names. *)
 Definition validate_unit_knowing_sound_head_from_statement : Prop :=
-  ∀ (statics : static_env) (hp : heap) (rounds : nat) (unused : dropped)
+  ∀ (statics : static_env) (hp : heap) (rd : read_record) (rounds : nat)
+    (unused : dropped)
     (slots : list value_slot) (G : loopified) (Ls : list lifting)
     (kept : list code_id) (before after : expr),
     holds_from statics rounds kept
@@ -315,7 +323,9 @@ Definition validate_unit_knowing_sound_head_from_statement : Prop :=
       (validate_unit_knowing rounds unused slots G Ls kept before after)
     = true ->
     statics_free_of unused statics = true ->
-    refines (State before [] [] statics hp) (State after [] [] statics hp).
+    heap_free_of unused hp = true ->
+    refines (State before [] [] statics hp rd)
+      (State after [] [] statics hp rd).
 
 (* The two at the static environment of the imports: the test is that
    the groups at the head of the term after bind no imported symbol. *)

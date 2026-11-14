@@ -186,20 +186,20 @@ Qed.
    environment, which the step has not changed; or the same exit. *)
 Definition result_more (result' result : step_result) : Prop :=
   match result' with
-  | Step (State e vars conts extended' hp) =>
-    extended' = statics' ∧ result = Step (State e vars conts statics hp)
-  | Exit k vs hp => result = Exit k vs hp
+  | Step (State e vars conts extended' hp rd) =>
+    extended' = statics' ∧ result = Step (State e vars conts statics hp rd)
+  | Exit k vs hp rd => result = Exit k vs hp rd
   | Undefined => True
   end.
 
 Lemma call_code_more (closure : value) (c : code) (vs : list value)
     (args_arity return_arity : arity) (return_to exn_to : cont_value)
-    (hp : heap) :
+    (hp : heap) (rd : read_record) :
   result_more
     (call_code closure c vs args_arity return_arity return_to exn_to statics'
-       hp)
+       hp rd)
     (call_code closure c vs args_arity return_arity return_to exn_to statics
-       hp).
+       hp rd).
 Proof.
   unfold call_code.
   destruct (binds_statics (code_body c)); [ exact I | ].
@@ -209,14 +209,14 @@ Qed.
 
 Lemma run_call_more (return_partial' return_partial : value -> step_result)
     (shape' shape : option call_shape) (return_arity : arity)
-    (return_to exn_to : cont_value) (hp : heap) :
+    (return_to exn_to : cont_value) (hp : heap) (rd : read_record) :
   (∀ partial : value,
     result_more (return_partial' partial) (return_partial partial)) ->
   (∀ sh : call_shape, shape' = Some sh -> shape = Some sh) ->
   result_more
     (run_call return_partial' shape' return_arity return_to exn_to statics'
-       hp)
-    (run_call return_partial shape return_arity return_to exn_to statics hp).
+       hp rd)
+    (run_call return_partial shape return_arity return_to exn_to statics hp rd).
 Proof.
   intros Hpartial Hshape.
   destruct shape' as [sh | ]; [ | exact I ].
@@ -226,14 +226,14 @@ Proof.
 Qed.
 
 Fixpoint apply_cont_value_more (c : cont_value) :
-  ∀ (vs : list value) (hp : heap),
-    result_more (apply_cont_value c vs statics' hp)
-      (apply_cont_value c vs statics hp).
+  ∀ (vs : list value) (hp : heap) (rd : read_record),
+    result_more (apply_cont_value c vs statics' hp rd)
+      (apply_cont_value c vs statics hp rd).
 Proof.
   destruct c
     as [h def_vars def_conts recursive | k | c extra
        | remaining remaining_arity return_arity return_to exn_to];
-    intros vs hp; simpl.
+    intros vs hp rd; simpl.
   - destruct h as [params metadata handler].
     destruct (kinds_eqb _ _); [ | exact I ].
     destruct (bind_params params vs def_vars); simpl; auto.
@@ -251,12 +251,12 @@ Qed.
 
 Lemma call_function_more (callee : value) (kind : call_kind)
     (vs : list value) (args_arity return_arity : arity)
-    (return_to exn_to : cont_value) (hp : heap) :
+    (return_to exn_to : cont_value) (hp : heap) (rd : read_record) :
   result_more
     (call_function callee kind vs args_arity return_arity return_to exn_to
-       statics' hp)
+       statics' hp rd)
     (call_function callee kind vs args_arity return_arity return_to exn_to
-       statics hp).
+       statics hp rd).
 Proof.
   unfold call_function.
   apply run_call_more;
@@ -264,20 +264,34 @@ Proof.
     | intros sh; apply shape_of_call_more ].
 Qed.
 
+(* The run of a named expression by the machine: the same value and the
+   same heap after. *)
+Lemma exec_named_more (hp hp' : heap) (rd rd' : read_record) (vars : env)
+    (d : named) (v : value) :
+  exec_named statics' hp rd vars d = Some (v, hp', rd') ->
+  exec_named statics hp rd vars d = Some (v, hp', rd').
+Proof.
+  apply exec_named_extend.
+  - intros _. apply eval_named_more.
+  - intros p args vs s allocated _ _ _. apply symbols_extend.
+Qed.
+
 (* A step that is not that of a [Let_static]. *)
-Lemma step_more (e : expr) (vars : env) (conts : cont_env) (hp : heap) :
+Lemma step_more (e : expr) (vars : env) (conts : cont_env) (hp : heap)
+    (rd : read_record) :
   (∀ (bindings : list static_binding) (body : expr),
     e <> Let_static bindings body) ->
-  result_more (step (State e vars conts statics' hp))
-    (step (State e vars conts statics hp)).
+  result_more (step (State e vars conts statics' hp rd))
+    (step (State e vars conts statics hp rd)).
 Proof.
   intros Hnot.
   destruct e
     as [ x kind d body | bindings body | k h body | handlers body | ap | ac
        | scrutinee arms | ];
     autorewrite with step.
-  - destruct (eval_named statics' vars d) as [v | ] eqn:Hd; [ | exact I ].
-    rewrite (eval_named_more vars d v Hd).
+  - destruct (exec_named _ _ rd_ _ d) as [[[v hp'] rd'] | ] eqn:Hd;
+    [ | exact I ].
+    rewrite (exec_named_more hp hp' rd rd' vars d v Hd).
     destruct (kind_eqb _ _); simpl; auto.
   - exfalso. exact (Hnot bindings body eq_refl).
   - simpl. auto.
@@ -762,27 +776,30 @@ Definition head_ok (e : expr) (statics : static_env) : Prop :=
    environments only. *)
 Inductive related : state -> state -> Prop :=
   | Related_head (e : expr) (conts : cont_env)
-      (statics' statics : static_env) (hp : heap) :
+      (statics' statics : static_env) (hp : heap) (rd : read_record) :
     expr_avoids D e = true ->
     head_ok e statics ->
     conts_erased D conts conts ->
     statics_erased D statics statics' ->
     only_more statics' statics ->
-    related (State (erase_expr D e) [] conts statics' hp)
-      (State e [] conts statics hp)
+    heap_free_of D hp = true ->
+    related (State (erase_expr D e) [] conts statics' hp rd)
+      (State e [] conts statics hp rd)
   | Related_under (e : expr) (vars : env) (conts : cont_env)
-      (statics' statics : static_env) (hp : heap) :
-    state_erased D (State e vars conts statics hp)
-      (State e vars conts statics' hp) ->
+      (statics' statics : static_env) (hp : heap) (rd : read_record) :
+    state_erased D (State e vars conts statics hp rd)
+      (State e vars conts statics' hp rd) ->
     only_more statics' statics ->
-    related (State e vars conts statics' hp) (State e vars conts statics hp).
+    heap_free_of D hp = true ->
+    related (State e vars conts statics' hp rd)
+      (State e vars conts statics hp rd).
 
 Lemma env_avoids_nil : env_avoids D [].
 Proof. intros x v. discriminate. Qed.
 
 Lemma state_erased_expr (e : expr) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap) (t : state) :
-  state_erased D (State e vars conts statics hp) t ->
+    (statics : static_env) (hp : heap) (rd : read_record) (t : state) :
+  state_erased D (State e vars conts statics hp rd) t ->
   state_expr t = erase_expr D e.
 Proof. inversion 1. reflexivity. Qed.
 
@@ -797,17 +814,18 @@ Qed.
 
 (* Under the head. *)
 Lemma under_step (e : expr) (vars : env) (conts : cont_env)
-    (statics' statics : static_env) (hp : heap) :
-  state_erased D (State e vars conts statics hp)
-    (State e vars conts statics' hp) ->
+    (statics' statics : static_env) (hp : heap) (rd : read_record) :
+  state_erased D (State e vars conts statics hp rd)
+    (State e vars conts statics' hp rd) ->
   only_more statics' statics ->
-  result_simulated related (step (State e vars conts statics' hp))
-    (step (State e vars conts statics hp)).
+  heap_free_of D hp = true ->
+  result_simulated related (step (State e vars conts statics' hp rd))
+    (step (State e vars conts statics hp rd)).
 Proof.
-  intros Herased Hmore.
-  pose proof (erased_step D _ _ Herased) as Hsim.
+  intros Herased Hmore Hfree.
+  pose proof (erased_free_step D _ _ (conj Herased Hfree)) as Hsim.
   destruct (let_static_or_not e) as [(bindings & body & ->) | Hnot].
-  - pose proof (state_erased_expr _ _ _ _ _ _ Herased) as Hsame.
+  - pose proof (state_erased_expr _ _ _ _ _ rd_ _ Herased) as Hsame.
     simpl in Hsame. injection Hsame as Hbindings _.
     pose proof (keep_map_same _ _ _ (eq_sym Hbindings)) as Hkept.
     rewrite !step_let_static in Hsim |- *.
@@ -817,15 +835,17 @@ Proof.
                 Heval')
       as (extended & Heval & Hmore').
     rewrite Heval in Hsim |- *. simpl in Hsim |- *.
+    destruct Hsim as [Hsim Hfree'].
     apply Related_under; assumption.
   - pose proof (step_more statics' statics (proj1 Hmore) e vars conts hp
-                  Hnot)
+                  rd Hnot)
       as Hstep.
-    destruct (step (State e vars conts statics' hp))
-      as [[e1 vars1 conts1 extended' hp1] | k vs hp1 | ] eqn:Hstep';
+    destruct (step (State e vars conts statics' hp rd))
+      as [[e1 vars1 conts1 extended' hp1 rd1] | k vs hp1 rd1 | ] eqn:Hstep';
       simpl in Hstep.
     + destruct Hstep as [-> Hstep]. rewrite Hstep in Hsim |- *.
-      simpl in Hsim |- *. apply Related_under; assumption.
+      simpl in Hsim |- *. destruct Hsim as [Hsim Hfree'].
+      apply Related_under; assumption.
     + rewrite Hstep. simpl. auto.
     + exact I.
 Qed.
@@ -833,9 +853,11 @@ Qed.
 Lemma related_step (s' s : state) :
   related s' s -> result_simulated related (step s') (step s).
 Proof.
-  intros [e conts statics' statics hp Havoids Hok Hconts Hstatics Hmore
-         | e vars conts statics' statics hp Herased Hmore];
-    [ | exact (under_step e vars conts statics' statics hp Herased Hmore) ].
+  intros [e conts statics' statics hp rd Havoids Hok Hconts Hstatics Hmore
+           Hfree
+         | e vars conts statics' statics hp rd Herased Hmore Hfree];
+    [ | exact (under_step e vars conts statics' statics hp rd Herased Hmore
+                 Hfree) ].
   destruct (let_static_or_not e) as [(bindings & body & ->) | Hnot].
   - (* A group of the head. *)
     simpl. rewrite !step_let_static.
@@ -872,7 +894,8 @@ Proof.
       as (extended & Heval & Hmore' & Hs & Hc).
     rewrite Heval. simpl.
     simpl in Havoids. apply andb_true_iff in Havoids as [Hbindings Hbody].
-    apply Related_head; [ exact Hbody | | exact Hconts | | exact Hmore' ].
+    apply Related_head;
+      [ exact Hbody | | exact Hconts | | exact Hmore' | exact Hfree ].
     + repeat split; try assumption.
       * intros sym Hsym. apply Hs; [ exact (Hsyms_apart sym Hsym) | ].
         apply Hfresh_s.
@@ -889,10 +912,10 @@ Proof.
     assert (Hunder : under_head e = e)
       by (destruct e; try reflexivity; exfalso; eapply Hnot; reflexivity).
     destruct Hok as [Hkept _]. rewrite Hunder in Hkept.
-    pose proof (State_erased D e [] conts conts statics statics' hp Havoids
+    pose proof (State_erased D e [] conts conts statics statics' hp rd Havoids
       env_avoids_nil Hconts Hstatics) as Herased.
     rewrite (erase_binds_only_kept D e Hkept) in Herased |- *.
-    exact (under_step e [] conts statics' statics hp Herased Hmore).
+    exact (under_step e [] conts statics' statics hp rd Herased Hmore Hfree).
 Qed.
 
 End Head.
@@ -950,7 +973,7 @@ Qed.
 Theorem drop_head_statics_refines_under :
   drop_head_statics_refines_under_statement.
 Proof.
-  intros D e e' conts statics hp. unfold drop_head_statics.
+  intros D e e' conts statics hp rd. unfold drop_head_statics.
   destruct (head_statics_removable D e) eqn:Hchecks; [ | discriminate ].
   unfold head_statics_removable in Hchecks.
   apply andb_true_iff in Hchecks as [Hchecks Htotal].
@@ -960,7 +983,7 @@ Proof.
   apply andb_true_iff in Hchecks as [Havoids Hunder].
   rewrite symbols_bound_by_flat_map in Hsyms.
   rewrite code_bound_by_flat_map in Hcodes.
-  unfold drop_statics. rewrite Havoids. intros [= <-] Hfree Hhead.
+  unfold drop_statics. rewrite Havoids. intros [= <-] Hfree Hheap Hhead.
   unfold envs_free_of in Hfree.
   apply andb_true_iff in Hfree as [Hfree Hstatics].
   apply andb_true_iff in Hfree as [_ Hconts].
@@ -973,22 +996,24 @@ Proof.
   - exact (conts_free_of_erased D conts Hconts).
   - exact (statics_free_of_erased D statics Hstatics).
   - split; [ apply statics_extend_refl | split; intros; assumption ].
+  - exact Hheap.
 Qed.
 
 Theorem drop_head_statics_refines_from :
   drop_head_statics_refines_from_statement.
 Proof.
-  intros D e e' statics hp Hdrop Hfree Hhead.
-  exact (drop_head_statics_refines_under D e e' [] statics hp Hdrop Hfree
-           Hhead).
+  intros D e e' statics hp rd Hdrop Hfree Hheap Hhead.
+  exact (drop_head_statics_refines_under D e e' [] statics hp rd Hdrop Hfree
+           Hheap Hhead).
 Qed.
 
 Theorem drop_head_statics_program_refines :
   drop_head_statics_program_refines_statement.
 Proof.
   intros D e e' Hdrop.
-  exact (drop_head_statics_refines_from D e e' empty_static_env empty_heap
-           Hdrop eq_refl (head_free_in_empty e)).
+  exact
+    (drop_head_statics_refines_from D e e' empty_static_env empty_heap no_reads
+           Hdrop eq_refl eq_refl (head_free_in_empty e)).
 Qed.
 
 (* ======================================================================== *)
@@ -1016,9 +1041,9 @@ Qed.
 
 (* A group of no binding runs as what is under it. *)
 Lemma empty_group_equivalent (body : expr) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap) :
-  equivalent (State (Let_static [] body) vars conts statics hp)
-    (State body vars conts statics hp).
+    (statics : static_env) (hp : heap) (rd : read_record) :
+  equivalent (State (Let_static [] body) vars conts statics hp rd)
+    (State body vars conts statics hp rd).
 Proof. apply step_equivalent. reflexivity. Qed.
 
 (* The term without the tables is the removal of their symbols from the
@@ -1031,15 +1056,16 @@ Proof. apply step_equivalent. reflexivity. Qed.
 Theorem add_head_tables_refines_under :
   add_head_tables_refines_under_statement.
 Proof.
-  intros tables e conts statics hp. unfold add_head_tables.
-  destruct tables as [ | table tables]; [ intros _ _; apply refines_refl | ].
+  intros tables e conts statics hp rd. unfold add_head_tables.
+  destruct tables as [ | table tables];
+    [ intros _ _ _; apply refines_refl | ].
   cbv zeta.
   set (all := table :: tables).
   set (D := tables_dropped all).
   set (e' := Let_static (map table_binding all) e).
   destruct (tables_plain all && head_statics_removable D e') eqn:Hchecks;
-    [ | intros _ _; apply refines_refl ].
-  intros Hfree Hfresh.
+    [ | intros _ _ _; apply refines_refl ].
+  intros Hfree Hheap Hfresh.
   apply andb_true_iff in Hchecks as [_ Hchecks].
   assert (Havoids' : expr_avoids D e' = true).
   { unfold head_statics_removable in Hchecks.
@@ -1062,15 +1088,16 @@ Proof.
     (Hhead : drop_head_statics D e' = Some (Let_static [] (erase_expr D e))).
   { unfold drop_head_statics. rewrite Hchecks. unfold drop_statics.
     rewrite Havoids', Herased. reflexivity. }
-  apply (refines_trans _ (State (erase_expr D e) [] conts statics hp)).
+  apply (refines_trans _ (State (erase_expr D e) [] conts statics hp rd)).
   - apply (drop_statics_refines D e (erase_expr D e));
-      [ unfold drop_statics; rewrite Havoids; reflexivity | exact Hfree ].
+      [ unfold drop_statics; rewrite Havoids; reflexivity | exact Hfree
+      | exact Hheap ].
   - apply
       (refines_trans _
-         (State (Let_static [] (erase_expr D e)) [] conts statics hp)).
+         (State (Let_static [] (erase_expr D e)) [] conts statics hp rd)).
     + apply equivalent_refines, equivalent_sym, empty_group_equivalent.
-    + exact (drop_head_statics_refines_under D e' _ conts statics hp Hhead
-               Hfree Hfresh).
+    + exact (drop_head_statics_refines_under D e' _ conts statics hp rd Hhead
+               Hfree Hheap Hfresh).
 Qed.
 
 Theorem add_head_tables_program_refines :
@@ -1078,7 +1105,7 @@ Theorem add_head_tables_program_refines :
 Proof.
   intros tables e.
   exact (add_head_tables_refines_under tables e [] empty_static_env
-           empty_heap eq_refl (head_free_in_empty _)).
+           empty_heap no_reads eq_refl eq_refl (head_free_in_empty _)).
 Qed.
 
 (* The static environment of the imports holds nothing in which a name
@@ -1088,5 +1115,6 @@ Theorem add_head_tables_refines_imports :
 Proof.
   intros imports tables e Hfresh.
   exact (add_head_tables_refines_under tables e [] (imports_statics imports)
-           empty_heap (imports_statics_free_of _ imports) Hfresh).
+           empty_heap no_reads (imports_statics_free_of _ imports) eq_refl
+             Hfresh).
 Qed.

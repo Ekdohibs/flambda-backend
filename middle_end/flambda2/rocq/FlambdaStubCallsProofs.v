@@ -89,14 +89,15 @@ Qed.
 
 Lemma call_function_direct (callee : value) (code : code_id)
     (vs : list value) (args_arity return_arity : arity)
-    (return_to exn_to : cont_value) (statics : static_env) (hp : heap) :
+    (return_to exn_to : cont_value) (statics : static_env) (hp : heap)
+      (rd : read_record) :
   call_function callee (Direct code) vs args_arity return_arity return_to
-    exn_to statics hp
+    exn_to statics hp rd
   <> Undefined ->
   call_function callee Indirect vs args_arity return_arity return_to exn_to
-    statics hp
+    statics hp rd
   = call_function callee (Direct code) vs args_arity return_arity return_to
-      exn_to statics hp.
+      exn_to statics hp rd.
 Proof.
   unfold call_function. intros Hstep.
   rewrite (shape_of_call_direct statics callee code vs args_arity return_arity);
@@ -106,7 +107,7 @@ Qed.
 
 Theorem demote_call_step : demote_call_step_statement.
 Proof.
-  intros ids ap vars conts statics hp Hstep.
+  intros ids ap vars conts statics hp rd Hstep.
   unfold demote_call.
   destruct (ap_call_kind ap) as [code | ] eqn:Hkind; [ | reflexivity ].
   destruct (among code ids); [ | reflexivity ].
@@ -126,8 +127,8 @@ Qed.
 Lemma demote_call_refines (ids : list code_id) (ap : apply_expr) :
   expr_refines (Apply ap) (Apply (demote_call ids ap)).
 Proof.
-  intros vars conts statics hp.
-  destruct (step (State (Apply ap) vars conts statics hp)) eqn:Hstep;
+  intros vars conts statics hp rd.
+  destruct (step (State (Apply ap) vars conts statics hp rd)) eqn:Hstep;
     try (apply equivalent_refines, step_eq_equivalent; symmetry;
          apply demote_call_step; rewrite Hstep; discriminate).
   apply step_undefined_refines, Hstep.
@@ -237,12 +238,12 @@ Proof.
       - destruct (IH vars) as [Hforwards Hbackwards].
         split; (apply Forall2_cons; [ | assumption ]);
           (split; [ reflexivity | ]); apply Handler_related;
-          intros vs handler_vars conts statics hp _ _ _;
+          intros vs handler_vars conts statics hp rd _ _ _;
           apply (demote_calls_refines_aux ids handler). }
     eapply expr_refines_trans;
       [ | exact (plug_refines (Let_cont_recursive_body _ Hole) _ _
             (not_many _) (demote_calls_refines_aux ids body)) ].
-    intros vars conts statics hp.
+    intros vars conts statics hp rd.
     destruct (Hhandlers vars) as [Hforwards Hbackwards].
     apply (let_cont_recursive_handlers_refine_where always always_extend);
       [ exact I | symmetry; apply demote_calls_handlers_bind_statics
@@ -275,7 +276,7 @@ Proof.
       first
         [ symmetry; apply demote_calls_binds_statics
         | apply demote_calls_binds_statics
-        | intros vars conts statics hp _; apply demote_calls_refines_aux ].
+        | intros vars conts statics hp rd _; apply demote_calls_refines_aux ].
   - split; (apply Forall2_cons; [ apply Binding_same | assumption ]).
   - split; (apply Forall2_cons; [ apply Binding_same | assumption ]).
 Qed.
@@ -315,12 +316,12 @@ Proof.
       - destruct (IH vars) as [Hforwards Hbackwards].
         split; (apply Forall2_cons; [ | assumption ]);
           (split; [ reflexivity | ]); apply Handler_related;
-          intros vs handler_vars conts statics hp _ _ _;
+          intros vs handler_vars conts statics hp rd _ _ _;
           apply (demote_in_stubs_refines_aux ids handler). }
     eapply expr_refines_trans;
       [ | exact (plug_refines (Let_cont_recursive_body _ Hole) _ _
             (not_many _) (demote_in_stubs_refines_aux ids body)) ].
-    intros vars conts statics hp.
+    intros vars conts statics hp rd.
     destruct (Hhandlers vars) as [Hforwards Hbackwards].
     apply (let_cont_recursive_handlers_refine_where always always_extend);
       [ exact I | symmetry; apply demote_in_stubs_handlers_bind_statics

@@ -123,7 +123,7 @@ Lemma bind_const_from_equivalent (i : nat) :
          (snd (bind_const_from i k h body))).
 Proof.
   induction i as [ | i IH]; intros k h body; cbn [bind_const_from].
-  - intros vars conts statics hp. apply equivalent_refl.
+  - intros vars conts statics hp rd. apply equivalent_refl.
   - destruct (bind_const_param i k h body) as [[h' body'] | ] eqn:Hparam;
       [ | apply IH ].
     exact (expr_equivalent_trans _ _ _
@@ -140,7 +140,7 @@ Proof.
     as [ x kind d body | bindings body | k [params metadata handler] body
        | handlers body | ap | ac | scrutinee arms | ];
     cbn [bind_const_params];
-    try (intros vars conts statics hp; apply equivalent_refl).
+    try (intros vars conts statics hp rd; apply equivalent_refl).
   - exact (plug_equivalent (Let_body x kind d Hole) _ _ (not_many _)
       (bind_const_params_equivalent_aux body)).
   - exact (plug_equivalent (Let_static_body bindings Hole) _ _ (not_many _)

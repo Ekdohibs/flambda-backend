@@ -89,7 +89,7 @@ Lemma inline_known_in_binding_equivalent (kept : list code_id)
            :: todo)
        body).
 Proof.
-  intros vars conts statics hp.
+  intros vars conts statics hp rd.
   destruct binding
     as [id [params my_closure ret exn metadata code_body] | id | sym const];
     try apply equivalent_refl.
@@ -113,7 +113,7 @@ Proof.
       first
         [ apply inline_known_calls_binds_statics
         | symmetry; apply inline_known_calls_binds_statics
-        | intros vars' conts' statics' hp' [Hcode' Hsymbols'];
+        | intros vars' conts' statics' hp' rd' [Hcode' Hsymbols'];
           first
             [ apply equivalent_refines,
                 inline_known_calls_equivalent_knowing; assumption
@@ -157,7 +157,7 @@ Lemma inline_known_in_group_equivalent (kept : list code_id) (body : expr) :
 Proof.
   induction todo as [ | binding todo IH]; intros done;
     cbn [inline_known_in_group].
-  - rewrite app_nil_r. intros vars conts statics hp. apply equivalent_refl.
+  - rewrite app_nil_r. intros vars conts statics hp rd. apply equivalent_refl.
   - eapply expr_equivalent_trans;
       [ apply (inline_known_in_binding_equivalent kept done binding todo body)
       | ].
@@ -178,7 +178,7 @@ Proof.
     as [ x kind d body | bindings body | k [params metadata handler] body
        | handlers body | ap | ac | scrutinee arms | ];
     cbn [inline_known_sibling_calls];
-    try (intros vars conts statics hp; apply equivalent_refl).
+    try (intros vars conts statics hp rd; apply equivalent_refl).
   - exact (plug_equivalent (Let_body x kind d Hole) _ _ (not_many _)
       (inline_known_sibling_calls_equivalent_aux kept body)).
   - eapply expr_equivalent_trans.

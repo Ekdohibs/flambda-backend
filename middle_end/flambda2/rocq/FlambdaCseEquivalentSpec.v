@@ -42,13 +42,17 @@
    Why it holds is in the definition of what the pass knows
    (FlambdaCseSpec.all_computed): a variable known to hold the result
    of a primitive is bound, where the term runs, to the value that the
-   primitive has on the values of its arguments. That says that the
-   primitive has a value there, and which. So the [Let] of a primitive
-   and the [Let] of the variable that the pass puts in its place bind
-   the same value: the pass does not put a variable that has a value
-   where a primitive had none, which a refinement would allow. The
-   statement is about the pass as FlambdaCseSpec.v defines it,
-   whatever [shareable] lists and whatever
+   primitive gives when the machine runs it there on its arguments,
+   at the heap and the read record of that place, and that run leaves
+   the heap and the record as they are. That says that the primitive
+   runs there, to which value, and that it changes nothing. So the
+   [Let] of a primitive and the [Let] of the variable that the pass
+   puts in its place bind the same value and go on with the same heap
+   and the same record: the pass does not put a variable that has a
+   value where a primitive had none, which a refinement would allow.
+   The statement is about the pass as FlambdaCseSpec.v defines it,
+   whatever [shareable] lists among the primitives whose value stays
+   (FlambdaHeapSpec.stable_prim) and whatever
    FlambdaCseSpec.computed_under_let adds, as long as [all_computed]
    is kept; that it is kept is proved in FlambdaCseProofs.v.
 

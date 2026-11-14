@@ -175,26 +175,26 @@ Definition inline_fresh_statement : Prop :=
 Definition inline_at_state_statement : Prop :=
   ∀ (ap : apply_expr) (called : code_id) (c : code) (r : renaming)
     (fresh : list variable) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap),
+    (statics : static_env) (hp : heap) (rd : read_record),
     ap_call_kind ap = Direct called ->
     lookup called (static_code statics) = Some c ->
     inlinable_at_fresh ap c r ->
     length fresh = length (code_variables c) ->
     distinct_outside
       (code_variables c ++ free_variables_of_simples (ap_args ap)) fresh ->
-    refines (State (Apply ap) vars conts statics hp)
-      (State (inlined_at fresh c r ap) vars conts statics hp).
+    refines (State (Apply ap) vars conts statics hp rd)
+      (State (inlined_at fresh c r ap) vars conts statics hp rd).
 
 Definition inline_fresh_state_statement : Prop :=
   ∀ (ap : apply_expr) (called : code_id) (c : code) (r : renaming)
     (avoid : list variable) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap),
+    (statics : static_env) (hp : heap) (rd : read_record),
     ap_call_kind ap = Direct called ->
     lookup called (static_code statics) = Some c ->
     inlinable_at_fresh ap c r ->
     all_among (free_variables_of_simples (ap_args ap)) avoid = true ->
-    refines (State (Apply ap) vars conts statics hp)
-      (State (inlined_fresh avoid c r ap) vars conts statics hp).
+    refines (State (Apply ap) vars conts statics hp rd)
+      (State (inlined_fresh avoid c r ap) vars conts statics hp rd).
 
 (* With the quantifier. *)
 Definition inline_at_fresh_statement : Prop :=

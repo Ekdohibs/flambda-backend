@@ -75,14 +75,14 @@ Qed.
 
 Theorem prefix_refines : prefix_refines_statement.
 Proof.
-  intros prefix statics statics' hp source target Heval.
+  intros prefix statics statics' hp rd source target Heval.
   assert (Hsource :
-    step (State (Let_static prefix source) [] [] statics hp)
-    = Step (State source [] [] statics' hp))
+    step (State (Let_static prefix source) [] [] statics hp rd)
+    = Step (State source [] [] statics' hp rd))
     by (rewrite step_let_static, Heval; reflexivity).
   assert (Htarget :
-    step (State (Let_static prefix target) [] [] statics hp)
-    = Step (State target [] [] statics' hp))
+    step (State (Let_static prefix target) [] [] statics hp rd)
+    = Step (State target [] [] statics' hp rd))
     by (rewrite step_let_static, Heval; reflexivity).
   split; intros Hrefines.
   - apply (refines_trans _ _ _
@@ -253,7 +253,7 @@ Proof.
     as [x kind d body | bindings body | k h body | handlers body | ap | ac
        | scrutinee arms | ];
     autorewrite with step in Hstep.
-  - destruct (eval_named statics vars d) as [v | ]; [ | discriminate ].
+  - destruct (exec_named _ _ rd_ _ d) as [[[v hp'] rd'] | ]; [ | discriminate ].
     destruct (kind_eqb (kind_of_value v) kind); [ | discriminate ].
     injection Hstep as <-. exact (fun H => H).
   - destruct (eval_static_bindings vars bindings statics) as [extended | ]
@@ -270,11 +270,11 @@ Proof.
     destruct (eval_simples vars (ap_args ap)) as [vs | ]; [ | discriminate ].
     destruct (eval_simples vars (exn_extra_simples ap)) as [extra | ];
       [ | discriminate ].
-    rewrite (call_function_statics _ _ _ _ _ _ _ _ _ _ Hstep).
+    rewrite (call_function_statics _ _ _ _ _ _ _ _ _ rd_ _ Hstep).
     exact (fun H => H).
   - destruct (eval_simples vars (ac_args ac)) as [vs | ]; [ | discriminate ].
     unfold apply_continuation in Hstep.
-    rewrite (apply_cont_value_statics _ _ _ _ _ Hstep).
+    rewrite (apply_cont_value_statics _ _ _ _ rd_ _ Hstep).
     exact (fun H => H).
   - destruct (eval_simple vars scrutinee) as [v | ]; [ | discriminate ].
     destruct (naked_immediate_of_value v) as [i | ]; [ | discriminate ].
@@ -370,22 +370,22 @@ Qed.
 Theorem catches_by_name : catches_by_name_statement.
 Proof.
   unfold catches_by_name_statement. split; [ | split ].
-  - exists 10%nat. vm_compute. reflexivity.
-  - exists 10%nat. vm_compute. reflexivity.
-  - exists 12%nat. vm_compute. reflexivity.
+  - exists 10%nat; eexists. vm_compute. reflexivity.
+  - exists 10%nat; eexists. vm_compute. reflexivity.
+  - exists 12%nat; eexists. vm_compute. reflexivity.
 Qed.
 
 Theorem catches_with_argument : catches_with_argument_statement.
 Proof.
   unfold catches_with_argument_statement. split.
-  - exists 12%nat. vm_compute. reflexivity.
+  - exists 12%nat; eexists. vm_compute. reflexivity.
   - exists 12%nat. vm_compute. reflexivity.
 Qed.
 
 Theorem unknown_import : unknown_import_statement.
 Proof.
   unfold unknown_import_statement. split; [ | split ].
-  - exists 10%nat. vm_compute. reflexivity.
+  - exists 10%nat; eexists. vm_compute. reflexivity.
   - exists 10%nat. vm_compute. reflexivity.
   - exists 12%nat. vm_compute. reflexivity.
 Qed.

@@ -268,35 +268,36 @@ Definition conts_rel (conts conts' : cont_env) : Prop :=
    hold values of their kinds. *)
 Inductive state_rel : nat -> state -> state -> Prop :=
   | Rel_state_plain (e : expr) (vars : env) (conts conts' : cont_env)
-      (statics : static_env) (hp : heap) :
+      (statics : static_env) (hp : heap) (rd : read_record) :
     conts_rel conts conts' ->
-    state_rel 0 (State e vars conts statics hp)
-      (State e vars conts' statics hp)
+    state_rel 0 (State e vars conts statics hp rd)
+      (State e vars conts' statics hp rd)
   | Rel_state_shadow (e : expr) (vars vars' : env) (conts conts' : cont_env)
-      (statics : static_env) (hp : heap) :
+      (statics : static_env) (hp : heap) (rd : read_record) :
     agree vars vars' ->
     conts_rel conts conts' ->
-    state_rel 0 (State e vars conts statics hp)
-      (State (shadow_expr sites e) vars' conts' statics hp)
+    state_rel 0 (State e vars conts statics hp rd)
+      (State (shadow_expr sites e) vars' conts' statics hp rd)
   | Rel_state_lets (us : list nat) (i : nat) (p : variable)
       (kind : flambda_kind) (params : list variable)
       (kinds : list flambda_kind) (e : expr) (vars vars' : env)
-      (conts conts' : cont_env) (statics : static_env) (hp : heap) :
+      (conts conts' : cont_env) (statics : static_env) (hp : heap)
+        (rd : read_record) :
     agree vars vars' ->
     kinded vars' p kind ->
     Forall2 (kinded vars') params kinds ->
     conts_rel conts conts' ->
-    state_rel (S (length params)) (State e vars conts statics hp)
+    state_rel (S (length params)) (State e vars conts statics hp rd)
       (State
          (Let p kind (Simple (Var p))
             (shadow_lets us i params kinds (shadow_expr sites e)))
-         vars' conts' statics hp).
+         vars' conts' statics hp rd).
 
 Definition related (s s' : state) : Prop := ∃ n : nat, state_rel n s s'.
 
 Lemma related_refl (s : state) : related s s.
 Proof.
-  destruct s as [e vars conts statics hp]. exists 0.
+  destruct s as [e vars conts statics hp rd]. exists 0.
   apply Rel_state_plain. intros k1. apply Rel_same.
 Qed.
 
@@ -304,15 +305,16 @@ Qed.
    that hold values of their kinds. *)
 Lemma state_rel_lets (us : list nat) (i : nat) (params : list variable)
     (kinds : list flambda_kind) (e : expr) (vars vars' : env)
-    (conts conts' : cont_env) (statics : static_env) (hp : heap) :
+    (conts conts' : cont_env) (statics : static_env) (hp : heap)
+      (rd : read_record) :
   agree vars vars' ->
   Forall2 (kinded vars') params kinds ->
   conts_rel conts conts' ->
   ∃ n : nat,
     n <= length params
-    ∧ state_rel n (State e vars conts statics hp)
+    ∧ state_rel n (State e vars conts statics hp rd)
         (State (shadow_lets us i params kinds (shadow_expr sites e)) vars'
-           conts' statics hp).
+           conts' statics hp rd).
 Proof.
   intros Hagree Hkinded Hconts.
   destruct (shadow_lets_cases us (shadow_expr sites e) vars' params kinds i
@@ -362,16 +364,17 @@ Qed.
 Lemma call_code_rel (closure : value) (c : code) (vs : list value)
     (args_arity return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   cont_rel return_to return_to' ->
   cont_rel exn_to exn_to' ->
   result_related related
-    (call_code closure c vs args_arity return_arity return_to exn_to statics hp)
+    (call_code closure c vs args_arity return_arity return_to exn_to statics hp
+       rd)
     (call_code closure c vs args_arity return_arity return_to' exn_to'
-       statics hp).
+       statics hp rd).
 Proof.
   intros Hreturn Hraise.
-  destruct (call_code_cases closure c vs args_arity return_arity statics hp)
+  destruct (call_code_cases closure c vs args_arity return_arity statics hp rd)
     as [Hundefined | (callee_vars & Hcall)].
   - rewrite !Hundefined. exact I.
   - rewrite !Hcall. simpl. exists 0.
@@ -388,18 +391,20 @@ Qed.
 
 Lemma run_call_rel (shape : option call_shape) (return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   cont_rel return_to return_to' ->
   cont_rel exn_to exn_to' ->
   (∀ partial : value,
     result_related related
-      (apply_cont_value return_to [partial] statics hp)
-      (apply_cont_value return_to' [partial] statics hp)) ->
+      (apply_cont_value return_to [partial] statics hp rd)
+      (apply_cont_value return_to' [partial] statics hp rd)) ->
   result_related related
-    (run_call (fun partial => apply_cont_value return_to [partial] statics hp)
-       shape return_arity return_to exn_to statics hp)
-    (run_call (fun partial => apply_cont_value return_to' [partial] statics hp)
-       shape return_arity return_to' exn_to' statics hp).
+    (run_call
+       (fun partial => apply_cont_value return_to [partial] statics hp rd)
+       shape return_arity return_to exn_to statics hp rd)
+    (run_call
+       (fun partial => apply_cont_value return_to' [partial] statics hp rd)
+       shape return_arity return_to' exn_to' statics hp rd).
 Proof.
   intros Hreturn Hraise Hpartial.
   destruct shape
@@ -414,11 +419,11 @@ Qed.
 
 (* Related continuations, applied to the same values. *)
 Lemma apply_cont_value_rel (c c' : cont_value) (statics : static_env)
-    (hp : heap) :
+    (hp : heap) (rd : read_record) :
   cont_rel c c' ->
   ∀ vs : list value,
-    result_related related (apply_cont_value c vs statics hp)
-      (apply_cont_value c' vs statics hp).
+    result_related related (apply_cont_value c vs statics hp rd)
+      (apply_cont_value c' vs statics hp rd).
 Proof.
   intros Hc.
   induction Hc
@@ -448,7 +453,7 @@ Proof.
     destruct (distinct ps) eqn:Hdistinct.
     + destruct
         (state_rel_lets us 0 ps (hm_params_kinds m) he bound bound' _ _
-           statics hp Hbind
+           statics hp rd Hbind
            (params_kinded ps vs dv' bound' _ Hdistinct Hbound' Hkinds) Hconts)
         as (n & _ & Hrel).
       exists n. exact Hrel.
@@ -463,14 +468,14 @@ Qed.
 Lemma call_function_rel (callee : value) (call_kind : call_kind)
     (vs : list value) (args_arity return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   cont_rel return_to return_to' ->
   cont_rel exn_to exn_to' ->
   result_related related
     (call_function callee call_kind vs args_arity return_arity return_to
-       exn_to statics hp)
+       exn_to statics hp rd)
     (call_function callee call_kind vs args_arity return_arity return_to'
-       exn_to' statics hp).
+       exn_to' statics hp rd).
 Proof.
   intros Hreturn Hraise. unfold call_function.
   apply run_call_rel; [ exact Hreturn | exact Hraise | ].
@@ -480,16 +485,16 @@ Qed.
 (* The same expression under related continuations: the two states
    step together. *)
 Lemma plain_step (e : expr) (vars : env) (conts conts' : cont_env)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   conts_rel conts conts' ->
-  result_related related (step (State e vars conts statics hp))
-    (step (State e vars conts' statics hp)).
+  result_related related (step (State e vars conts statics hp rd))
+    (step (State e vars conts' statics hp rd)).
 Proof.
   intros Hconts.
   destruct e as [y kind1 d body | bindings body | k1 hh body
                 | handlers body | ap | ac | scrutinee arms | ].
-  - rewrite !step_let.
-    destruct (eval_named statics vars d) as [v | ]; [ | exact I ].
+  - rewrite !step_let_exec.
+    destruct (exec_named _ _ rd_ _ d) as [[[v hp'] rd'] | ]; [ | exact I ].
     destruct (kind_eqb (kind_of_value v) kind1); [ | exact I ].
     exists 0. apply Rel_state_plain, Hconts.
   - rewrite !step_let_static.
@@ -524,19 +529,20 @@ Qed.
 (* An expression and the same rewritten: the two states step
    together. *)
 Lemma shadow_step (e : expr) (vars vars' : env) (conts conts' : cont_env)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   agree vars vars' ->
   conts_rel conts conts' ->
-  result_related related (step (State e vars conts statics hp))
-    (step (State (shadow_expr sites e) vars' conts' statics hp)).
+  result_related related (step (State e vars conts statics hp rd))
+    (step (State (shadow_expr sites e) vars' conts' statics hp rd)).
 Proof.
   intros Hagree Hconts.
   destruct e as [y kind1 d body | bindings body | k1 hh body
                 | handlers body | ap | ac | scrutinee arms | ];
     cbn [shadow_expr].
-  - rewrite !step_let,
-      (eval_named_agree statics vars vars' d (fun x _ => Hagree x)).
-    destruct (eval_named statics vars d) as [v | ]; [ | exact I ].
+  - rewrite !step_let_exec,
+      (exec_named_agree statics hp rd vars vars' d (fun x _ => Hagree x)).
+    destruct (exec_named statics hp rd vars d) as [[[v hp'] rd'] | ];
+      [ | exact I ].
     destruct (kind_eqb (kind_of_value v) kind1); [ | exact I ].
     exists 0. apply Rel_state_shadow; [ apply agree_cons, Hagree | ].
     exact Hconts.
@@ -581,7 +587,7 @@ Proof.
     exists 0.
     exact
       (Rel_state_shadow (Apply_cont ac) vars vars' conts conts' statics hp
-         Hagree Hconts).
+         rd Hagree Hconts).
   - rewrite !step_invalid. exact I.
 Qed.
 
@@ -592,7 +598,7 @@ Lemma together_step (s s' : state) :
 Proof.
   intros Hrel. remember 0 as n eqn:Hn.
   destruct Hrel
-    as [e vars conts conts' statics hp Hconts
+    as [e vars conts conts' statics hp rd Hconts
        | e vars vars' conts conts' statics hp Hagree Hconts
        | us i p kind params kinds e vars vars' conts conts' statics hp Hagree
            Hp Hkinded Hconts];
@@ -611,20 +617,20 @@ Proof.
   destruct Hrel
     as [e vars conts conts' statics hp Hconts
        | e vars vars' conts conts' statics hp Hagree Hconts
-       | us i p kind params kinds e vars vars' conts conts' statics hp Hagree
+       | us i p kind params kinds e vars vars' conts conts' statics hp rd Hagree
            Hp Hkinded Hconts];
     try discriminate Hn.
   injection Hn as <-. destruct Hp as (v & Hp & Hkind).
   destruct
     (state_rel_lets us i params kinds e vars ((p, v) :: vars') conts conts'
-       statics hp (agree_rebound vars vars' p v Hagree Hp))
+       statics hp rd (agree_rebound vars vars' p v Hagree Hp))
     as (m & Hm & Hrel); [ | exact Hconts | ].
   { revert Hkinded. apply Forall2_impl.
     intros q kind' Hq. exact (kinded_rebound vars' p v q kind' Hp Hq). }
   exists m, (State (shadow_lets us i params kinds (shadow_expr sites e))
-               ((p, v) :: vars') conts' statics hp).
+               ((p, v) :: vars') conts' statics hp rd).
   split; [ | split; assumption ].
-  rewrite step_let. cbn [eval_named eval_simple]. rewrite Hp, Hkind.
+  rewrite step_let_simple. cbn [eval_named eval_simple]. rewrite Hp, Hkind.
   reflexivity.
 Qed.
 
@@ -651,14 +657,14 @@ Proof.
     [ | intros last vs vs' Hsame; exact Hsame ].
   clear s s'. intros s s' Hrel.
   pose proof (together_step s s' Hrel) as Hstep.
-  destruct (step s) as [t | k1 vs hp1 | ],
-    (step s') as [t' | k1' vs' hp1' | ] eqn:Hs';
+  destruct (step s) as [t | k1 vs hp1 rd1 | ],
+    (step s') as [t' | k1' vs' hp1' rd1' | ] eqn:Hs';
     simpl in Hstep; try contradiction; unfold answered.
   - destruct Hstep as [n Hrel'].
     destruct (catch_up n t t' Hrel') as (j & t'' & Hrun & Hrel'').
     exists j, t''. split; [ | exact Hrel'' ].
     simpl. rewrite Hs'. exact Hrun.
-  - destruct Hstep as (<- & <- & <-). exists vs. auto.
+  - destruct Hstep as (<- & <- & <- & <-). exists vs. auto.
   - exact I.
 Qed.
 
@@ -673,11 +679,11 @@ Proof.
   clear n s s' Hrel.
   intros n s' s Hrel. destruct n as [ | n].
   - pose proof (together_step s s' Hrel) as Hstep.
-    destruct (step s) as [t | k1 vs hp1 | ],
-      (step s') as [t' | k1' vs' hp1' | ];
+    destruct (step s) as [t | k1 vs hp1 rd1 | ],
+      (step s') as [t' | k1' vs' hp1' rd1' | ];
       simpl in Hstep; try contradiction.
     + destruct Hstep as [m Hrel']. left. exists m, t. auto.
-    + destruct Hstep as (<- & <- & <-). reflexivity.
+    + destruct Hstep as (<- & <- & <- & <-). reflexivity.
     + exact I.
   - destruct (alone_step n s s' Hrel) as (m & t' & Hstep & Hm & Hrel').
     rewrite Hstep. right. exists m. split; [ lia | exact Hrel' ].
@@ -691,10 +697,10 @@ End Runs.
 
 Theorem shadow_expr_equivalent : shadow_expr_equivalent_statement.
 Proof.
-  intros sites e vars conts statics hp.
+  intros sites e vars conts statics hp rd.
   assert (Hrel :
-    state_rel sites 0 (State e vars conts statics hp)
-      (State (shadow_expr sites e) vars conts statics hp)).
+    state_rel sites 0 (State e vars conts statics hp rd)
+      (State (shadow_expr sites e) vars conts statics hp rd)).
   { apply Rel_state_shadow; [ apply agree_refl | ].
     intros k1. apply Rel_same. }
   exact
@@ -709,7 +715,7 @@ Lemma shadow_params_equivalent (e : expr) :
 Proof.
   unfold shadow_params.
   destruct (count_positions (shadow_positions e));
-    [ intros vars conts statics hp; apply equivalent_refl | ].
+    [ intros vars conts statics hp rd; apply equivalent_refl | ].
   apply shadow_expr_equivalent.
 Qed.
 

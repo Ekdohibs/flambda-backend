@@ -135,13 +135,18 @@
    are the same values, up to FlambdaLiftSpec.value_lifted, as for a
    [Let] lifted where it stands. No primitive and no rule of the
    machine tells the block from the symbol. They differ at an exit of
-   the unit, so [lift_around_unit] makes the check of
-   FlambdaLiftSpec.lift_unit (FlambdaLiftSpec.exits_plain_knowing). It
-   also checks that the result is a well-formed unit: a group put is
-   then at toplevel, executed once, and binds symbols that are new; and
-   its variables are in scope where it stands, so they have values there
-   (FlambdaScopeSpec.v). With these the unit lifted refines the unit,
-   run on its own ([lift_around_unit_program_refines_statement]).
+   the unit, among its values and in what the cells of its heap hold,
+   so [lift_around_unit] makes the two checks of the unit that
+   FlambdaLiftSpec.lift_unit makes: FlambdaLiftSpec.exits_plain_knowing,
+   the unit exits with symbols and constants only; and
+   FlambdaHeapFreeSpec.expr_free_of_heap, the unit has no primitive of
+   the heap, so that the heaps of two exits are empty (a limit: the CR
+   at FlambdaLiftSpec.lift_unit). It also checks that the result is a
+   well-formed unit: a group put is then at toplevel, executed once,
+   and binds symbols that are new; and its variables are in scope
+   where it stands, so they have values there (FlambdaScopeSpec.v).
+   With these the unit lifted refines the unit, run on its own
+   ([lift_around_unit_program_refines_statement]).
 
    Two things that the refinement does not say.
 
@@ -162,9 +167,11 @@
    block, a boxed number, an immutable array or a closure of this unit,
    which have no identity in the model. A block or an array of this unit
    that has one (mutable or unique) is made by a primitive of the heap,
-   which [lift_named] does not lift (FlambdaLiftSpec.v, "Identity") and
-   which the step of the core does not execute; a value with identity
-   that comes from another unit is not itself made an alias by this
+   which [lift_named] does not lift (FlambdaLiftSpec.v, "Identity").
+   The step of the core executes a primitive of the heap, and
+   [lift_around_unit] lifts nothing in a unit that has one
+   (FlambdaHeapFreeSpec.expr_free_of_heap). A value with identity that
+   comes from another unit is not itself made an alias by this
    rewrite. Of the immutable allocated values that this rewrite makes
    aliases, the physical comparison of two has no value
    (FlambdaPrimitiveSpec.eval_phys_equal, decision D19), so a unit that
@@ -189,7 +196,7 @@ From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaBindersSpec FlambdaSemanticsSpec FlambdaNominalSpec
   FlambdaWellFormedSpec FlambdaUnusedStaticsSpec FlambdaImportsSpec
-  FlambdaLiftSpec.
+  FlambdaHeapFreeSpec FlambdaLiftSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -441,8 +448,10 @@ Definition groups_of (lets : list (path * lift_to))
 (* ======================================================================== *)
 
 (* The unit with the [Let]s of the guess made aliases and its groups
-   put: if the unit exits with symbols and constants only, the guess
-   passes the check, and the result is a well-formed unit. *)
+   put: if the unit exits with symbols and constants only and has no
+   primitive of the heap, the guess passes the check, and the result
+   is a well-formed unit. The second is a limit, and not a condition
+   of the lifting: the CR at FlambdaLiftSpec.lift_unit. *)
 Definition lift_around_unit (u : unit_interface)
     (lets : list (path * lift_to)) (places : list (path * list path))
     (e : expr) : option expr :=
@@ -450,6 +459,7 @@ Definition lift_around_unit (u : unit_interface)
   let lifted := lift_around lets groups root e in
   if
     exits_plain_knowing [] [] e
+    && expr_free_of_heap e
     && around_ok lets groups [] root e
     && well_formed_unit u lifted
   then Some lifted

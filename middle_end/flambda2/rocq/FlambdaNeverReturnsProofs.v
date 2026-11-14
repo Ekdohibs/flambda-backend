@@ -48,7 +48,7 @@ Import ListNotations.
 Theorem call_code_never_returns : call_code_never_returns_statement.
 Proof.
   intros closure c vs args_arity return_arity return_to return_to' exn_to
-    statics hp Hfree.
+    statics hp rd Hfree.
   unfold call_code.
   destruct (binds_statics (code_body c)); [ exact I | ].
   destruct (negb
@@ -61,11 +61,11 @@ Proof.
     as [callee_vars | ]; [ | exact I ].
   apply
     (equivalent_trans _ _ _
-       (remove_unused_conts_equivalent (code_body c) _ _ _ _)).
+       (remove_unused_conts_equivalent (code_body c) _ _ _ _ rd_)).
   refine
     (equivalent_trans _ _ _ _
        (equivalent_sym _ _
-          (remove_unused_conts_equivalent (code_body c) _ _ _ _))).
+          (remove_unused_conts_equivalent (code_body c) _ _ _ _ rd_))).
   apply coincide_equivalent; [ reflexivity | ].
   intros k Hk. unfold conts_agree_at, resolve.
   change (rename_continuation identity_renaming k) with k. simpl.
@@ -114,13 +114,13 @@ Qed.
 Lemma call_code_never_returns_of_body (closure : value) (c : code)
     (vs : list value) (args_arity return_arity : arity)
     (return_to return_to' exn_to : cont_value) (statics : static_env)
-    (hp : heap) :
+    (hp : heap) (rd : read_record) :
   cont_free_b (code_return_continuation c) (code_body c) = false ->
   match
     call_code closure c vs args_arity return_arity return_to exn_to
-      statics hp,
+      statics hp rd,
     call_code closure c vs args_arity return_arity return_to' exn_to
-      statics hp
+      statics hp rd
   with
   | Step s, Step s' => equivalent s s'
   | Undefined, Undefined => True
@@ -166,7 +166,7 @@ Qed.
 Lemma call_function_never_returns (callee : value) (called : code_id)
     (c : code) (vs : list value) (args_arity return_arity : arity)
     (return_to return_to' exn_to : cont_value) (statics : static_env)
-    (hp : heap) :
+    (hp : heap) (rd : read_record) :
   lookup called (static_code statics) = Some c ->
   cont_free_b (code_return_continuation c)
     (remove_unused_conts (code_body c))
@@ -175,9 +175,9 @@ Lemma call_function_never_returns (callee : value) (called : code_id)
   length (code_params_arity c) <= length args_arity ->
   match
     call_function callee (Direct called) vs args_arity return_arity
-      return_to exn_to statics hp,
+      return_to exn_to statics hp rd,
     call_function callee (Direct called) vs args_arity return_arity
-      return_to' exn_to statics hp
+      return_to' exn_to statics hp rd
   with
   | Step s, Step s' => equivalent s s'
   | Undefined, Undefined => True
@@ -215,8 +215,8 @@ Lemma steps_alike_refines (s t : state) :
   end ->
   refines s t.
 Proof.
-  destruct (step s) as [s' | k vs hp | ] eqn:Hs;
-    destruct (step t) as [t' | k' vs' hp' | ] eqn:Ht; try contradiction.
+  destruct (step s) as [s' | k vs hp rd | ] eqn:Hs;
+    destruct (step t) as [t' | k' vs' hp' rd' | ] eqn:Ht; try contradiction.
   - intros Hequiv.
     exact (refines_step s s' t t' Hs Ht (equivalent_refines _ _ Hequiv)).
   - intros _. apply step_undefined_refines, Hs.
@@ -227,10 +227,11 @@ Qed.
 (* ======================================================================== *)
 
 Lemma cut_return_refines (known : list (code_id * code)) (ap : apply_expr)
-    (vars : env) (conts : cont_env) (statics : static_env) (hp : heap) :
+    (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+      (rd : read_record) :
   statics_know known statics ->
-  refines (State (Apply ap) vars conts statics hp)
-    (State (cut_return known ap) vars conts statics hp).
+  refines (State (Apply ap) vars conts statics hp rd)
+    (State (cut_return known ap) vars conts statics hp rd).
 Proof.
   intros Hknow. unfold cut_return.
   destruct (ap_call_kind ap) as [called | ] eqn:Hkind;
@@ -251,7 +252,7 @@ Proof.
               (make_handler_metadata (unarize (ap_return_arity ap))) Invalid).
   apply (refines_trans _
     (State (Apply ap) vars
-       ((ap_continuation ap, Closure h vars conts []) :: conts) statics hp)).
+       ((ap_continuation ap, Closure h vars conts []) :: conts) statics hp rd)).
   - apply steps_alike_refines. rewrite !step_apply.
     destruct (eval_simple vars (ap_callee ap)) as [callee | ]; [ | exact I ].
     destruct (eval_simples vars (ap_args ap)) as [vs | ]; [ | exact I ].
@@ -264,7 +265,7 @@ Proof.
       with (resolve (ap_exn_continuation ap) conts)
       by (unfold resolve; simpl; rewrite Pos.eqb_sym, Hapart; reflexivity).
     exact (call_function_never_returns callee called c vs _ _ _ _ _ statics
-             hp (Hknow called c Hlookup) Hfree Htupled Hargs).
+             hp rd (Hknow called c Hlookup) Hfree Htupled Hargs).
   - apply equivalent_refines, equivalent_sym, step_equivalent,
       step_let_cont_non_recursive.
 Qed.
@@ -329,17 +330,17 @@ Qed.
    of FlambdaNormaliseProofs.inline_calls_refines_knowing. *)
 Fixpoint cut_returns_refines_knowing (e : expr) :
   ∀ (known : list (code_id * code)) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap),
+    (statics : static_env) (hp : heap) (rd : read_record),
     statics_know known statics ->
-    refines (State e vars conts statics hp)
-      (State (cut_returns known e) vars conts statics hp).
+    refines (State e vars conts statics hp rd)
+      (State (cut_returns known e) vars conts statics hp rd).
 Proof.
   - destruct e
       as [ x kind d body | bindings body | k h body | handlers body
          | ap | ac | scrutinee arms | ];
-      intros known vars conts statics hp Hknow; simpl;
+      intros known vars conts statics hp rd Hknow; simpl;
       try apply refines_refl.
-    + apply let_refines_step; [ reflexivity | intros v _ _ ].
+    + apply let_refines_step_exec; [ reflexivity | intros v hp' rd' _ _ ].
       apply cut_returns_refines_knowing, Hknow.
     + assert (Hrefine :
         bindings_refine (statics_know known) bindings
@@ -356,7 +357,7 @@ Proof.
             first
               [ apply cut_returns_binds_statics
               | symmetry; apply cut_returns_binds_statics
-              | intros vars' conts' statics' hp' Hknow';
+              | intros vars' conts' statics' hp' rd' Hknow';
                 apply cut_returns_refines_knowing, Hknow' ].
         - destruct IH as [Hforwards Hbackwards].
           split; (apply Forall2_cons; [ apply Binding_same | assumption ]).
@@ -374,7 +375,7 @@ Proof.
         (eval_static_bindings vars bindings' statics) as [extended' | ]
           eqn:Hbindings';
         try contradiction; [ | exact I ].
-      apply (refines_trans _ (State body vars conts extended' hp)).
+      apply (refines_trans _ (State body vars conts extended' hp rd)).
       * apply (related_states_refines (statics_know known)
           (statics_know_extend known));
           [ exact (statics_know_extend known _ _ Hknow
@@ -392,10 +393,10 @@ Proof.
         (State
            (Let_cont_non_recursive k
               (Handler params metadata (cut_returns known handler)) body)
-           vars conts statics hp)).
+           vars conts statics hp rd)).
       * apply (let_cont_handler_refines_where (statics_know known)
           (statics_know_extend known)); [ exact Hknow | ].
-        intros vs handler_vars conts' statics' hp' Hknow' _ _.
+        intros vs handler_vars conts' statics' hp' rd' Hknow' _ _.
         apply cut_returns_refines_knowing, Hknow'.
       * apply let_cont_non_recursive_refines_step,
           cut_returns_refines_knowing, Hknow.
@@ -405,7 +406,7 @@ Proof.
               (map (fun '(k, h) => (k, cut_returns_in_handler known h))
                  handlers)
               body)
-           vars conts statics hp)).
+           vars conts statics hp rd)).
       * assert (Hhandlers :
           handlers_refine (statics_know known) vars handlers
             (map (fun '(k, h) => (k, cut_returns_in_handler known h))
@@ -417,7 +418,7 @@ Proof.
           - destruct IH as [Hforwards Hbackwards].
             split; (apply Forall2_cons; [ | assumption ]);
               (split; [ reflexivity | ]); apply Handler_related;
-              intros vs handler_vars conts' statics' hp' Hknow' _ _;
+              intros vs handler_vars conts' statics' hp' rd' Hknow' _ _;
               apply cut_returns_refines_knowing, Hknow'. }
         destruct Hhandlers as [Hforwards Hbackwards].
         apply (let_cont_recursive_handlers_refine_where (statics_know known)
@@ -431,7 +432,7 @@ Qed.
 
 Theorem cut_returns_refines : cut_returns_refines_statement.
 Proof.
-  intros e vars conts statics hp. apply cut_returns_refines_knowing.
+  intros e vars conts statics hp rd. apply cut_returns_refines_knowing.
   intros id c Hlookup. discriminate Hlookup.
 Qed.
 

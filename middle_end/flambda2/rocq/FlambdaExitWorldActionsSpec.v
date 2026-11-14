@@ -32,10 +32,11 @@
    [world_locations_bound], and the statements.
 
    FlambdaExitWorldSpec.v has what a run leaves at an exit
-   ([exit_world]: the continuation, the values, the heap, and the
-   static environment of the state that takes the last step), that a
-   state leaves a world ([exits_world]), and refinement with the
-   worlds of the two exits related ([refines_world]).
+   ([exit_world]: the continuation, the values, the heap, the read
+   record, and the static environment of the state that takes the
+   last step), that a state leaves a world ([exits_world]), and
+   refinement with the worlds of the two exits related
+   ([refines_world]).
    FlambdaEquivarianceSpec.v has the action of the renamings of
    variables and continuations on states, and FlambdaLocationsSpec.v
    that of the permutations of locations. This file extends both to a
@@ -45,8 +46,8 @@
    A renaming. A world is renamed as the state that leaves it is
    ([rename_exit_world]): its continuation is renamed, as the
    continuation of an exit is; the code of its static environment is
-   renamed; its values and its heap hold no variables or
-   continuations and are left. The action has inverses
+   renamed; its values, its heap and its read record hold no
+   variables or continuations and are left. The action has inverses
    ([rename_exit_world_inverse_statement]). A state leaves a world
    exactly when the state renamed leaves the world renamed
    ([exits_world_equivariant_statement]). It has no premise, as the
@@ -60,14 +61,15 @@
    relation for every renaming ([same_exit_equivariant_statement]).
 
    A permutation of locations. A world is moved in its values, in the
-   statically allocated values of its static environment and in its
-   heap ([permute_exit_world]); its continuation is no location and
-   code holds none. The premise is that of
+   statically allocated values of its static environment, in its heap
+   and in its read record ([permute_exit_world]); its continuation is
+   no location and code holds none. The premise is that of
    FlambdaLocationsMachineSpec.v: the heap of the state binds every
    location of the state. Under it the world that the state leaves
    has its locations bound by its heap ([world_locations_bound]),
-   those of its static environment among them, and a location that
-   the heap of the state bound is bound by the heap of the world
+   those of its static environment and of its read record among
+   them, and a location that the heap of the state bound is bound by
+   the heap of the world
    ([exits_world_keeps_locations_bound_statement]). A run that
    allocates chooses its locations, so the state moved leaves the
    world moved up to a second permutation, which agrees with the
@@ -83,7 +85,8 @@
    their world up to a permutation of their own, so the relation
    would have to be kept where its two worlds are moved by two
    permutations that agree on the locations bound at the start.
-   [same_exit] is not: it compares values and heaps by [=].
+   [same_exit] is not: it compares values and heaps by [=]. It does
+   not compare the read records.
 
    Nothing is trusted here. The proofs are in
    FlambdaExitWorldActionsProofs.v, which needs no review. *)
@@ -102,11 +105,11 @@ Import ListNotations.
 (* ======================================================================== *)
 
 (* The continuation of the exit is renamed, and the code of the static
-   environment. The values and the heap hold no variables or
-   continuations. *)
+   environment. The values, the heap and the read record hold no
+   variables or continuations. *)
 Definition rename_exit_world (r : renaming) (w : exit_world) : exit_world :=
   Exit_world (rename_continuation r (exit_cont w)) (exit_values w)
-    (rename_static_env r (exit_statics w)) (exit_heap w).
+    (rename_static_env r (exit_statics w)) (exit_heap w) (exit_reads w).
 
 Definition rename_exit_world_inverse_statement : Prop :=
   ∀ (r : renaming) (w : exit_world),
@@ -159,19 +162,21 @@ Definition same_exit_equivariant_statement : Prop :=
 (* ======================================================================== *)
 
 (* The values, the statically allocated values of the static
-   environment and the heap are moved. The continuation of the exit is
-   not a location. *)
+   environment, the heap and the read record are moved. The
+   continuation of the exit is not a location. *)
 Definition permute_exit_world (p : permutation) (w : exit_world)
     : exit_world :=
   Exit_world (exit_cont w) (map (permute_value p) (exit_values w))
-    (permute_static_env p (exit_statics w)) (permute_heap p (exit_heap w)).
+    (permute_static_env p (exit_statics w)) (permute_heap p (exit_heap w))
+      (permute_reads p (exit_reads w)).
 
 (* The heap of the world binds every location of the world. *)
 Definition world_locations_bound (w : exit_world) : Prop :=
   locations_bound (exit_heap w)
     (locations_of_values (exit_values w)
      ++ locations_of_static_env (exit_statics w)
-     ++ locations_of_heap (exit_heap w)).
+     ++ locations_of_heap (exit_heap w)
+     ++ locations_of_reads (exit_reads w)).
 
 (* The world that a state leaves has it where the state has, and a
    location that the heap of the state binds is bound by the heap of

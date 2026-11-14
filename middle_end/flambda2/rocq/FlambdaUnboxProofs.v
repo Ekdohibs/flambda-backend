@@ -381,6 +381,78 @@ Proof.
 Qed.
 
 (* ======================================================================== *)
+(* With the run of the machine                                              *)
+(* ======================================================================== *)
+
+(* The machine runs a [Let] with the heap ([exec_named]); the facts
+   above are about the value alone ([eval_named]). The primitives that
+   the pass records (a boxing, a tagging) and those that it replaces
+   (an unboxing, an untagging) read no cell, so for them the two agree
+   and the heap is left as it was; of any other the pass records
+   nothing and changes nothing. *)
+Lemma number_wrapped_reads_no_heap (d : named) (how : wrapping)
+    (contents : simple) :
+  number_wrapped d = Some (how, contents) -> named_reads_heap d = false.
+Proof.
+  intros Hwrapped.
+  destruct (number_wrapped_spec d how contents Hwrapped)
+    as [(kind & _ & ->) | [_ ->]];
+    reflexivity.
+Qed.
+
+Lemma unwrapping_of_known_reads_no_heap (known : known_numbers) (p : prim)
+    (args : list simple) (contents : simple) :
+  unwrapping_of_known known p args = Some contents ->
+  prim_reads_heap p = false.
+Proof.
+  unfold unwrapping_of_known.
+  destruct (unary_applied p args) as [[u wrapped] | ] eqn:Happlied;
+    [ | discriminate ].
+  destruct (unary_applied_spec _ _ _ _ Happlied) as [-> ->].
+  destruct u; try discriminate; intros _; reflexivity.
+Qed.
+
+Lemma numbers_hold_under_let_exec (known : known_numbers) (x : variable)
+    (d : named) (vars : env) (statics : static_env) (hp hp' : heap)
+      (rd rd' : read_record)
+    (v : value) :
+  numbers_hold known vars statics ->
+  exec_named statics hp rd vars d = Some (v, hp', rd') ->
+  numbers_hold (numbers_under_let known x d) ((x, v) :: vars) statics.
+Proof.
+  intros Hhold Hd.
+  destruct (number_wrapped d) as [[how contents] | ] eqn:Hwrapped.
+  - apply numbers_hold_under_let; [ exact Hhold | ].
+    exact (proj1 (exec_named_pure statics hp hp' rd rd' vars d v
+      (number_wrapped_reads_no_heap d how contents Hwrapped) Hd)).
+  - unfold numbers_under_let. rewrite Hwrapped.
+    exact (numbers_hold_forget_var known vars statics x v Hhold).
+Qed.
+
+Lemma unbox_known_named_exec (known : known_numbers) (vars : env)
+    (statics : static_env) (hp hp' : heap) (rd rd' : read_record) (d : named)
+      (v : value) :
+  numbers_hold known vars statics ->
+  exec_named statics hp rd vars d = Some (v, hp', rd') ->
+  exec_named statics hp rd vars (unbox_known_named known d)
+    = Some (v, hp', rd').
+Proof.
+  intros Hhold Hd. unfold unbox_known_named.
+  destruct d as [s | p args | code slots | fslot decls slots | slot closure
+    | pfrom slot closure | move_from move_to closure];
+    try exact Hd.
+  destruct (unwrapping_of_known known p args) as [contents | ]
+    eqn:Hunwrapping; [ | exact Hd ].
+  destruct (exec_named_pure statics hp hp' rd rd' vars (Prim p args) v
+    (unwrapping_of_known_reads_no_heap known p args contents Hunwrapping)
+    Hd) as (Heval & -> & ->).
+  simpl.
+  rewrite (unwrapping_of_known_sound known vars statics p args contents v
+    Hhold Hunwrapping Heval).
+  reflexivity.
+Qed.
+
+(* ======================================================================== *)
 (* The pass                                                                 *)
 (* ======================================================================== *)
 
@@ -389,37 +461,33 @@ Qed.
    induction, with what is known there. *)
 Fixpoint unbox_numbers_knowing_refines (e : expr) :
   ∀ (known : known_numbers) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap),
+    (statics : static_env) (hp : heap) (rd : read_record),
     numbers_hold known vars statics ->
-    refines (State e vars conts statics hp)
-      (State (unbox_numbers_knowing known e) vars conts statics hp)
+    refines (State e vars conts statics hp rd)
+      (State (unbox_numbers_knowing known e) vars conts statics hp rd)
 with unbox_numbers_in_handler_refines (h : continuation_handler) :
   ∀ (known : known_numbers) (k : continuation) (body : expr) (vars : env)
-    (conts : cont_env) (statics : static_env) (hp : heap),
+    (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record),
     numbers_hold known vars statics ->
-    refines (State (Let_cont_non_recursive k h body) vars conts statics hp)
+    refines (State (Let_cont_non_recursive k h body) vars conts statics hp rd)
       (State
          (Let_cont_non_recursive k (unbox_numbers_in_handler known h) body)
-         vars conts statics hp).
+         vars conts statics hp rd).
 Proof.
   - destruct e
       as [ x kind d body | bindings body | k h body | handlers body | ap
          | ac | scrutinee arms | ];
-      intros known vars conts statics hp Hhold; simpl.
-    + (* Let *)
-      destruct (eval_named statics vars d) as [v | ] eqn:Hd;
-        [ destruct (kind_eqb (kind_of_value v) kind) eqn:Hkind | ].
-      * eapply refines_step;
-          [ rewrite step_let, Hd, Hkind; reflexivity
-          | rewrite step_let,
-              (unbox_known_named_sound known vars statics d v Hhold Hd), Hkind;
-            reflexivity
-          | ].
-        apply unbox_numbers_knowing_refines.
-        exact (numbers_hold_under_let known x d vars statics v Hhold Hd).
-      * apply step_undefined_refines. rewrite step_let, Hd, Hkind.
-        reflexivity.
-      * apply step_undefined_refines. rewrite step_let, Hd. reflexivity.
+      intros known vars conts statics hp rd Hhold; simpl.
+    + (* Let: the machine runs [d] with the heap; the pass runs the
+         same or the contents that are known, and leaves the same heap. *)
+      apply let_refines_step_forward.
+      * intros v hp' rd' Hd.
+        exact (unbox_known_named_exec known vars statics hp hp' rd rd' d v Hhold
+          Hd).
+      * intros v hp' rd' Hd _. apply unbox_numbers_knowing_refines.
+        exact
+          (numbers_hold_under_let_exec known x d vars statics hp hp' rd rd' v
+          Hhold Hd).
     + (* Let_static *)
       apply let_static_refines_step.
       destruct (eval_static_bindings vars bindings statics)
@@ -432,7 +500,7 @@ Proof.
         (State
            (Let_cont_non_recursive k (unbox_numbers_in_handler known h)
               body)
-           vars conts statics hp)).
+           vars conts statics hp rd)).
       * apply unbox_numbers_in_handler_refines, Hhold.
       * apply let_cont_non_recursive_refines_step,
           unbox_numbers_knowing_refines, Hhold.
@@ -444,11 +512,11 @@ Proof.
     + apply refines_refl.
     + apply refines_refl.
   - destruct h as [params metadata handler].
-    intros known k body vars conts statics hp Hhold. simpl.
+    intros known k body vars conts statics hp rd Hhold. simpl.
     apply (let_cont_handler_refines_where (symbol_numbers_hold known)
       (symbol_numbers_hold_extend known));
       [ exact (proj2 Hhold) | ].
-    intros vs handler_vars conts' statics' hp' Hsymbols _ Hbind.
+    intros vs handler_vars conts' statics' hp' rd' Hsymbols _ Hbind.
     apply unbox_numbers_knowing_refines.
     apply (numbers_hold_bind_params statics' params known vs vars
       handler_vars);
@@ -457,6 +525,6 @@ Qed.
 
 Theorem unbox_known_numbers_refines : unbox_known_numbers_refines_statement.
 Proof.
-  intros e vars conts statics hp. apply unbox_numbers_knowing_refines.
+  intros e vars conts statics hp rd. apply unbox_numbers_knowing_refines.
   split; intros entry [].
 Qed.

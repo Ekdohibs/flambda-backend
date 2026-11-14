@@ -53,7 +53,7 @@ Proof.
     as [ x kind d body | bindings body | k h body | handlers body | ap | ac
        | scrutinee arms | ];
     unfold group_over; try
-      (intros vars conts statics hp; apply equivalent_refl).
+      (intros vars conts statics hp rd; apply equivalent_refl).
   apply Hover.
 Qed.
 
@@ -64,7 +64,7 @@ Proof.
     as [ x kind d body | bindings body | k [params metadata handler] body
        | handlers body | ap | ac | scrutinee arms | ];
     cbn [groups_up];
-    try (intros vars conts statics hp; apply equivalent_refl).
+    try (intros vars conts statics hp rd; apply equivalent_refl).
   - exact (plug_equivalent (Let_body x kind d Hole) _ _ (not_many _)
       (groups_up_equivalent_aux body)).
   - pose proof (plug_equivalent (Let_static_body bindings Hole) _ _
@@ -77,7 +77,7 @@ Proof.
     apply (expr_equivalent_trans _ _ _ Hbody).
     apply (expr_equivalent_trans _
       (Let_static (bindings ++ bindings') body')).
-    + intros vars conts statics hp.
+    + intros vars conts statics hp rd.
       apply equivalent_sym, let_static_split.
     + apply code_first_equivalent.
   - apply (expr_equivalent_trans _

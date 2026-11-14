@@ -89,7 +89,8 @@ Theorem let_project_value_slot_from_known :
 Proof.
   intros tenv x declared project_from slot value_slot_kind closure ty s body
     Hty Hanswer.
-  apply let_simple. intros statics vars contents Hsat Hnamed.
+  apply let_simple_pure; [ reflexivity | ].
+  intros statics vars contents Hsat Hnamed.
   cbn [eval_named] in Hnamed.
   destruct (eval_simple vars closure) as [v | ] eqn:Hv; [ | discriminate ].
   simpl in Hnamed.
@@ -100,7 +101,8 @@ Qed.
 Theorem let_project_value_slot_known : let_project_value_slot_known_statement.
 Proof.
   intros tenv x declared slot value_slot_kind closure ty s body Hty Hanswer.
-  apply let_simple. intros statics vars contents Hsat Hnamed.
+  apply let_simple_pure; [ reflexivity | ].
+  intros statics vars contents Hsat Hnamed.
   cbn [eval_named] in Hnamed.
   destruct (eval_simple vars closure) as [v | ] eqn:Hv; [ | discriminate ].
   simpl in Hnamed.

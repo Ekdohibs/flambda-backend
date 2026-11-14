@@ -265,18 +265,21 @@ Definition switch_of_arms_refines_statement : Prop :=
    ([from_valid_weaken_statement], there). *)
 Definition expr_refines_under_valid (tenv : Typing_env.t)
     (source target : expr) : Prop :=
-  ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap),
+  ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+    (rd : read_record),
     statics_valid statics ->
     env_satisfies_strictly tenv statics vars ->
-    refines (State source vars conts statics hp)
-      (State target vars conts statics hp).
+    refines (State source vars conts statics hp rd)
+      (State target vars conts statics hp rd).
 
 Definition expr_equivalent_under_valid (tenv : Typing_env.t) (e e' : expr)
     : Prop :=
-  ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap),
+  ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+    (rd : read_record),
     statics_valid statics ->
     env_satisfies_strictly tenv statics vars ->
-    equivalent (State e vars conts statics hp) (State e' vars conts statics hp).
+    equivalent (State e vars conts statics hp rd)
+      (State e' vars conts statics hp rd).
 
 (* What holds in every state that satisfies the environment holds in
    those whose static environment is valid; and an equivalence there

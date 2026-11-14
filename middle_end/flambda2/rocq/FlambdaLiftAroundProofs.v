@@ -70,13 +70,15 @@ From Stdlib Require Import ZArith List Bool Arith Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaMapProofs FlambdaPrimitiveModel FlambdaPrimitiveProofs
+  FlambdaHeapSpec FlambdaHeapProofs
   FlambdaBindersSpec FlambdaSemanticsSpec FlambdaSemanticsProofs
   FlambdaSimulationProofs FlambdaNominalSpec FlambdaNominalProofs
   FlambdaScopeSpec FlambdaWellFormedSpec FlambdaWellFormedProofs
   FlambdaClosuresSpec FlambdaClosuresProofs FlambdaStaticProofs
   FlambdaUnusedStaticsSpec FlambdaImportsSpec FlambdaExitWorldSpec
   FlambdaExitWorldProofs FlambdaRunUnderSpec FlambdaObserversSpec
-  FlambdaObserversProofs FlambdaUnitFromProofs FlambdaLiftSpec
+  FlambdaObserversProofs FlambdaUnitFromProofs FlambdaHeapFreeSpec
+  FlambdaHeapFreeProofs FlambdaLiftSpec
   FlambdaLiftProofs FlambdaLiftFromCodeSpec FlambdaLiftFromCodeProofs
   FlambdaLiftAroundSpec.
 From OxCamlFlambda2 Require Import FlambdaAlphaProofs.
@@ -155,6 +157,7 @@ Proof.
   rewrite (lift_around_nothing root e).
   destruct
     (exits_plain_knowing [] [] e
+     && expr_free_of_heap e
      && around_ok [] [] [] root e
      && well_formed_unit u e);
     reflexivity.
@@ -835,56 +838,63 @@ Proof.
 Qed.
 
 (* The first state and the second: the second expression is the first
-   rewritten, the environments are lifted, and the check passes of the
+   rewritten, the environments are lifted, the check passes of the
    expression for constants that are known in the variables of the
-   second. *)
+   second, and the heaps are alike up to [value_lifted]. The read
+   records are not compared. *)
 Inductive state_around : state -> state -> Prop :=
   | State_around (lets : list (path * lift_to))
       (groups : list (path * list static_binding)) (known : known_constants)
       (at_path : path) (e : expr) (vars vars' : env) (conts conts' : cont_env)
-      (statics statics' : static_env) (hp : heap) :
+      (statics statics' : static_env) (hp hp' : heap)
+      (rd rd' : read_record) :
     env_lifted statics' vars vars' ->
     conts_around statics' conts conts' ->
     statics_lifted_out [] statics statics' ->
     known_valid statics' vars' known ->
     around_ok lets groups known at_path e = true ->
-    state_around (State e vars conts statics hp)
-      (State (lift_around lets groups at_path e) vars' conts' statics' hp).
+    heap_alike (value_lifted statics') hp hp' ->
+    state_around (State e vars conts statics hp rd)
+      (State (lift_around lets groups at_path e) vars' conts' statics' hp' rd').
 
 (* A state and itself rewritten with nothing to do. *)
 Lemma state_around_same (e : expr) (vars vars' : env) (conts conts' : cont_env)
-    (statics statics' : static_env) (hp : heap) :
+    (statics statics' : static_env) (hp hp' : heap) (rd rd' : read_record) :
   env_lifted statics' vars vars' ->
   conts_around statics' conts conts' ->
   statics_lifted_out [] statics statics' ->
-  state_around (State e vars conts statics hp)
-    (State e vars' conts' statics' hp).
+  heap_alike (value_lifted statics') hp hp' ->
+  state_around (State e vars conts statics hp rd)
+    (State e vars' conts' statics' hp' rd').
 Proof.
-  intros Hvars Hconts Hstatics.
+  intros Hvars Hconts Hstatics Hheap.
   pose proof (State_around [] [] [] root e vars vars' conts conts' statics
-    statics' hp Hvars Hconts Hstatics (known_valid_nil statics' vars')
-    (around_ok_nothing [] root e))
+    statics' hp hp' rd rd' Hvars Hconts Hstatics
+    (known_valid_nil statics' vars') (around_ok_nothing [] root e) Hheap)
     as Hstate.
   rewrite lift_around_nothing in Hstate. exact Hstate.
 Qed.
 
-(* The values at an exit are lifted, under the static environment that
-   the second run has reached. *)
-Definition exit_around (last : state) (vs vs' : list value) : Prop :=
-  Forall2 (value_lifted (state_statics last)) vs vs'.
+(* The values at an exit are lifted, and the heaps are alike, under the
+   static environment that the second run has reached. *)
+Definition exit_around (last : state) (vs : list value) (hp : heap)
+    (vs' : list value) (hp' : heap) : Prop :=
+  Forall2 (value_lifted (state_statics last)) vs vs'
+  ∧ heap_alike (value_lifted (state_statics last)) hp hp'.
 
 (* What the second run answers to a result of the first: nothing is
    asked if the first is undefined; an exit is answered by an exit
-   through the same continuation, with values lifted; a step, by a
-   step, to a state related. *)
+   through the same continuation, with values lifted and a heap alike;
+   a step, by a step, to a state related. *)
 Definition result_around (statics' : static_env)
     (result result' : step_result) : Prop :=
   match result with
   | Undefined => True
-  | Exit k exit_vs hp =>
-    ∃ exit_vs' : list value,
-      result' = Exit k exit_vs' hp
+  | Exit k exit_vs hp _ =>
+    ∃ (exit_vs' : list value) (hp' : heap) (rd' : read_record),
+      result' = Exit k exit_vs' hp' rd'
       ∧ Forall2 (value_lifted statics') exit_vs exit_vs'
+      ∧ heap_alike (value_lifted statics') hp hp'
   | Step t => ∃ t' : state, result' = Step t' ∧ state_around t t'
   end.
 
@@ -896,18 +906,20 @@ Definition result_around (statics' : static_env)
 Lemma call_code_around (closure closure' : value) (c : code)
     (vs vs' : list value) (args_arity return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
-    (statics statics' : static_env) (hp : heap) :
+    (statics statics' : static_env) (hp hp' : heap) (rd rd' : read_record) :
   value_lifted statics' closure closure' ->
   Forall2 (value_lifted statics') vs vs' ->
   cont_around statics' return_to return_to' ->
   cont_around statics' exn_to exn_to' ->
   statics_lifted_out [] statics statics' ->
+  heap_alike (value_lifted statics') hp hp' ->
   result_around statics'
-    (call_code closure c vs args_arity return_arity return_to exn_to statics hp)
+    (call_code closure c vs args_arity return_arity return_to exn_to statics hp
+       rd)
     (call_code closure' c vs' args_arity return_arity return_to' exn_to'
-       statics' hp).
+       statics' hp' rd').
 Proof.
-  intros Hclosure Hvs Hreturn Hexn Hstatics.
+  intros Hclosure Hvs Hreturn Hexn Hstatics Hheap.
   unfold result_around, call_code.
   rewrite (kinds_of_values_lifted statics' vs vs' Hvs).
   destruct (binds_statics (code_body c)); [ exact I | ].
@@ -928,7 +940,8 @@ Proof.
     [ apply env_lifted_cons; [ exact Hclosure | intros x v [=] ]
     | exact Hbind | ].
   rewrite Hbind'. eexists. split; [ reflexivity | ].
-  apply state_around_same; [ exact Hbound_vars | | exact Hstatics ].
+  apply state_around_same;
+    [ exact Hbound_vars | | exact Hstatics | exact Hheap ].
   constructor; [ split; [ reflexivity | exact Hreturn ] | ].
   constructor; [ split; [ reflexivity | exact Hexn ] | ].
   constructor.
@@ -941,22 +954,23 @@ Lemma run_call_around
     (return_partial return_partial' : value -> step_result)
     (shape shape' : call_shape) (return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
-    (statics statics' : static_env) (hp : heap) :
+    (statics statics' : static_env) (hp hp' : heap) (rd rd' : read_record) :
   shape_lifted_out [] statics' shape shape' ->
   cont_around statics' return_to return_to' ->
   cont_around statics' exn_to exn_to' ->
   statics_lifted_out [] statics statics' ->
+  heap_alike (value_lifted statics') hp hp' ->
   (∀ partial partial' : value,
     value_lifted statics' partial partial' ->
     result_around statics' (return_partial partial)
       (return_partial' partial')) ->
   result_around statics'
     (run_call return_partial (Some shape) return_arity return_to exn_to
-       statics hp)
+       statics hp rd)
     (run_call return_partial' (Some shape') return_arity return_to' exn_to'
-       statics' hp).
+       statics' hp' rd').
 Proof.
-  intros Hshape Hreturn Hexn Hstatics Hpartial.
+  intros Hshape Hreturn Hexn Hstatics Hheap Hpartial.
   destruct Hshape
     as [ closure closure' called c vs vs' args_arity Hclosure Hvs Hbound
        | closure closure' called c vs vs' remaining remaining' args_arity
@@ -974,23 +988,24 @@ Qed.
 Lemma call_function_around_from (callee callee' : value) (kind : call_kind)
     (vs vs' : list value) (args_arity return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
-    (statics statics' : static_env) (hp : heap) :
+    (statics statics' : static_env) (hp hp' : heap) (rd rd' : read_record) :
   value_lifted statics' callee callee' ->
   Forall2 (value_lifted statics') vs vs' ->
   cont_around statics' return_to return_to' ->
   cont_around statics' exn_to exn_to' ->
   statics_lifted_out [] statics statics' ->
+  heap_alike (value_lifted statics') hp hp' ->
   (∀ partial partial' : value,
     value_lifted statics' partial partial' ->
-    result_around statics' (apply_cont_value return_to [partial] statics hp)
-      (apply_cont_value return_to' [partial'] statics' hp)) ->
+    result_around statics' (apply_cont_value return_to [partial] statics hp rd)
+      (apply_cont_value return_to' [partial'] statics' hp' rd')) ->
   result_around statics'
     (call_function callee kind vs args_arity return_arity return_to exn_to
-       statics hp)
+       statics hp rd)
     (call_function callee' kind vs' args_arity return_arity return_to'
-       exn_to' statics' hp).
+       exn_to' statics' hp' rd').
 Proof.
-  intros Hcallee Hvs Hreturn Hexn Hstatics Hpartial.
+  intros Hcallee Hvs Hreturn Hexn Hstatics Hheap Hpartial.
   unfold call_function.
   destruct (shape_of_call statics callee kind vs args_arity return_arity)
     as [shape | ] eqn:Hshape;
@@ -1000,17 +1015,19 @@ Proof.
               Hshape)
     as (shape' & -> & Hshapes).
   exact (run_call_around _ _ shape shape' return_arity _ _ _ _ statics
-           statics' _ Hshapes Hreturn Hexn Hstatics Hpartial).
+           statics' _ _ _ _ Hshapes Hreturn Hexn Hstatics Hheap Hpartial).
 Qed.
 
 (* Applying a continuation. *)
 Lemma apply_cont_value_around (statics' : static_env) (c c' : cont_value) :
   cont_around statics' c c' ->
-  ∀ (vs vs' : list value) (statics : static_env) (hp : heap),
+  ∀ (vs vs' : list value) (statics : static_env) (hp hp' : heap)
+    (rd rd' : read_record),
     Forall2 (value_lifted statics') vs vs' ->
     statics_lifted_out [] statics statics' ->
-    result_around statics' (apply_cont_value c vs statics hp)
-      (apply_cont_value c' vs' statics' hp).
+    heap_alike (value_lifted statics') hp hp' ->
+    result_around statics' (apply_cont_value c vs statics hp rd)
+      (apply_cont_value c' vs' statics' hp' rd').
 Proof.
   induction 1
     as [ k
@@ -1020,8 +1037,9 @@ Proof.
        | c c' extra extra' Hc IH Hextra
        | remaining remaining' remaining_arity return_arity return_to
            return_to' exn_to exn_to' Hremaining Hreturn IHreturn Hexn _ ];
-    intros vs vs' statics hp Hvs Hstatics.
-  - simpl. exists vs'. split; [ reflexivity | exact Hvs ].
+    intros vs vs' statics hp hp' rd rd' Hvs Hstatics Hheap.
+  - simpl. exists vs', hp', rd'.
+    split; [ reflexivity | split; [ exact Hvs | exact Hheap ] ].
   - simpl. rewrite (kinds_of_values_lifted statics' vs vs' Hvs).
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
       [ | exact I ].
@@ -1036,38 +1054,44 @@ Proof.
       | exact (rec_closures_around statics' vars vars' conts conts' group_lets
                  group_groups known q recursive Hvars Hconts Hvalid Hgroup)
       | exact Hstatics
-      | exact (known_valid_params _ _ _ _ _ _ Hbind' Hvalid) | exact Hok ].
-  - simpl. apply IH; [ apply Forall2_app; assumption | exact Hstatics ].
+      | exact (known_valid_params _ _ _ _ _ _ Hbind' Hvalid) | exact Hok
+      | exact Hheap ].
+  - simpl.
+    apply IH;
+      [ apply Forall2_app; assumption | exact Hstatics | exact Hheap ].
   - rewrite !apply_cont_value_over_application.
     destruct Hvs as [ | v v' vs vs' Hv Hvs]; [ exact I | ].
     destruct Hvs as [ | w w' vs vs' Hw Hvs]; [ | exact I ].
     apply call_function_around_from; try assumption.
     intros partial partial' Hpartial.
     apply IHreturn;
-      [ constructor; [ exact Hpartial | constructor ] | exact Hstatics ].
+      [ constructor; [ exact Hpartial | constructor ] | exact Hstatics
+      | exact Hheap ].
 Qed.
 
 (* A call. *)
 Lemma call_function_around (callee callee' : value) (kind : call_kind)
     (vs vs' : list value) (args_arity return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
-    (statics statics' : static_env) (hp : heap) :
+    (statics statics' : static_env) (hp hp' : heap) (rd rd' : read_record) :
   value_lifted statics' callee callee' ->
   Forall2 (value_lifted statics') vs vs' ->
   cont_around statics' return_to return_to' ->
   cont_around statics' exn_to exn_to' ->
   statics_lifted_out [] statics statics' ->
+  heap_alike (value_lifted statics') hp hp' ->
   result_around statics'
     (call_function callee kind vs args_arity return_arity return_to exn_to
-       statics hp)
+       statics hp rd)
     (call_function callee' kind vs' args_arity return_arity return_to'
-       exn_to' statics' hp).
+       exn_to' statics' hp' rd').
 Proof.
-  intros Hcallee Hvs Hreturn Hexn Hstatics.
+  intros Hcallee Hvs Hreturn Hexn Hstatics Hheap.
   apply call_function_around_from; try assumption.
   intros partial partial' Hpartial.
   apply (apply_cont_value_around statics' return_to return_to' Hreturn);
-    [ constructor; [ exact Hpartial | constructor ] | exact Hstatics ].
+    [ constructor; [ exact Hpartial | constructor ] | exact Hstatics
+    | exact Hheap ].
 Qed.
 
 (* ======================================================================== *)
@@ -1076,12 +1100,14 @@ Qed.
 
 Lemma result_around_answered (s' : state) (result : step_result) :
   result_around (state_statics s') result (step s') ->
-  answered state_around exit_around result s'.
+  answered_heaps state_around exit_around result s'.
 Proof.
-  destruct result as [t | k vs | ]; unfold answered; simpl;
-    [ | exact (fun H => H) | exact (fun H => H) ].
-  intros (t' & Hstep & Ht). exists 0, t'.
-  split; [ rewrite Hstep; reflexivity | exact Ht ].
+  destruct result as [t | k vs hp rd | ]; unfold answered_heaps; simpl;
+    [ | | exact (fun H => H) ].
+  - intros (t' & Hstep & Ht). exists 0, t'.
+    split; [ rewrite Hstep; reflexivity | exact Ht ].
+  - intros (vs' & hp' & rd' & Hstep & Hvs & Hheap). exists vs', hp', rd'.
+    split; [ exact Hstep | split; assumption ].
 Qed.
 
 (* A step of the first state is answered by the second, which is the
@@ -1092,47 +1118,55 @@ Lemma around_step (s s' : state) :
   state_around s s' ->
   static_fault s' = false ->
   reads_unbound_variable s' = false ->
-  answered state_around exit_around (step s) s'.
+  answered_heaps state_around exit_around (step s) s'.
 Proof.
   intros
     [lets groups known at_path e vars vars' conts conts' statics statics' hp
-            Hvars Hconts Hstatics Hvalid Hok] Hfault Hreads.
+            hp' rd rd' Hvars Hconts Hstatics Hvalid Hok Hheap] Hfault Hreads.
   destruct e
     as [ x xkind d body | bindings body | k h body | handlers body | ap | ac
        | scrutinee arms | ].
   - (* Let *)
-    rewrite step_let.
-    destruct (eval_named statics vars d) as [v | ] eqn:Hd; [ | exact I ].
+    rewrite step_let_exec.
+    destruct (exec_named statics hp rd vars d) as [[[v hp1] rd1] | ] eqn:Hd;
+      [ | exact I ].
     destruct (kind_eqb (kind_of_value v) xkind) eqn:Hkind; [ | exact I ].
     cbn [lift_around around_ok] in Hok |- *.
     apply andb_true_iff in Hok as [Hok_d Hok_body].
     destruct (alias_of lets at_path d) as [[bindings s0] | ] eqn:Halias.
-    + (* An alias: the symbol is bound to what the [Let] makes. *)
+    + (* An alias: the [Let] reads no cell, and the symbol is bound to
+         what it makes. *)
       unfold alias_of in Halias.
       destruct (lookup at_path lets) as [target | ]; [ | discriminate ].
+      destruct (exec_named_pure statics hp hp1 rd rd1 vars d v
+                  (lift_named_reads_no_heap target d bindings s0 Halias) Hd)
+        as (Heval & -> & ->).
       pose proof (known_alias target d bindings s0 statics statics' vars vars'
-        v known Halias Hok_d Hvalid Hvars Hd)
+        v known Halias Hok_d Hvalid Hvars Heval)
         as Hv.
       exists 0, (State (lift_around lets groups (xO at_path) body)
-                   ((x, Value_symbol s0) :: vars') conts' statics' hp).
+                   ((x, Value_symbol s0) :: vars') conts' statics' hp' rd').
       split.
-      * simpl. rewrite step_let. cbn [eval_named eval_simple].
+      * simpl. rewrite step_let_simple. cbn [eval_simple].
         rewrite (kind_of_value_lifted _ _ _ Hv), Hkind. reflexivity.
       * apply (State_around lets groups (forget [x] known));
           [ apply env_lifted_cons; assumption | exact Hconts | exact Hstatics
-          | apply known_valid_let; exact Hvalid | exact Hok_body ].
-    + destruct (eval_named_lifted statics statics' vars vars' d v
-                  (proj1 (proj2 Hstatics)) Hvars Hd)
-        as (v' & Hd' & Hv).
+          | apply known_valid_let; exact Hvalid | exact Hok_body
+          | exact Hheap ].
+    + destruct (exec_named_lifted statics statics' hp hp' hp1 rd rd1 rd' vars
+                  vars' d v (proj1 (proj2 Hstatics)) Hvars Hheap Hd)
+        as (v' & hp1' & Hd' & Hv & Hheap1).
       exists 0, (State (lift_around lets groups (xO at_path) body)
-                   ((x, v') :: vars') conts' statics' hp).
+                   ((x, v') :: vars') conts' statics' hp1' rd').
       split.
       * simpl.
-        rewrite step_let, Hd', (kind_of_value_lifted statics' v v' Hv), Hkind.
+        rewrite step_let_exec, Hd', (kind_of_value_lifted statics' v v' Hv),
+          Hkind.
         reflexivity.
       * apply (State_around lets groups (forget [x] known));
           [ apply env_lifted_cons; assumption | exact Hconts | exact Hstatics
-          | apply known_valid_let; exact Hvalid | exact Hok_body ].
+          | apply known_valid_let; exact Hvalid | exact Hok_body
+          | exact Hheap1 ].
   - (* Let_static *)
     cbn [lift_around around_ok] in Hok, Hfault |- *.
     rewrite step_let_static.
@@ -1151,12 +1185,12 @@ Proof.
     pose proof (eval_static_bindings_extend vars' _ statics' extended'
       Hextended) as Hextend.
     exists 0, (State (lift_around lets groups (xO at_path) body) vars' conts'
-                 extended' hp).
+                 extended' hp' rd').
     split; [ simpl; rewrite step_let_static, Hextended; reflexivity | ].
     apply (State_around lets groups (constants_of_group bindings ++ known));
       [ exact (env_lifted_extend _ _ _ _ Hextend Hvars)
       | exact (conts_around_extend _ _ _ _ Hextend Hconts) | exact Hlifted
-      | | exact Hok ].
+      | | exact Hok | exact (heap_lifted_extend _ _ _ _ Hextend Hheap) ].
     apply known_valid_app;
       [ exact (eval_static_bindings_known vars' bindings statics' extended'
                  Hextended)
@@ -1174,7 +1208,8 @@ Proof.
       eexists 0, _.
       split; [ simpl; rewrite step_let_cont_non_recursive; reflexivity | ].
       apply (State_around lets groups known);
-        [ exact Hvars | | exact Hstatics | exact Hvalid | exact Hok_body ].
+        [ exact Hvars | | exact Hstatics | exact Hvalid | exact Hok_body
+        | exact Hheap ].
       constructor; [ | exact Hconts ].
       split; [ reflexivity | ].
       exact (Closure_around statics' lets groups known (xI at_path) h vars
@@ -1218,14 +1253,15 @@ Proof.
              Closure (lift_around_handler lets groups (xI at_path) h) vars'
                conts' [])
             :: conts')
-           extended' hp).
+           extended' hp' rd').
       split.
       * simpl. rewrite step_let_static, Hextended.
         rewrite step_let_cont_non_recursive. reflexivity.
       * apply (State_around lets groups (constants_of_group group ++ known));
           [ exact Hvars' |
           | exact (statics_lifted_out_extend [] _ _ _ Hstatics Hextend Hcode)
-          | exact Hvalid' | exact Hok_body ].
+          | exact Hvalid' | exact Hok_body
+          | exact (heap_lifted_extend _ _ _ _ Hextend Hheap) ].
         constructor; [ | exact Hconts' ].
         split; [ reflexivity | ].
         exact (Closure_around extended' lets groups
@@ -1249,7 +1285,8 @@ Proof.
       split;
         [ simpl; rewrite step_let_cont_recursive, Hsame; reflexivity | ].
       apply (State_around lets groups known);
-        [ exact Hvars | | exact Hstatics | exact Hvalid | exact Hok_body ].
+        [ exact Hvars | | exact Hstatics | exact Hvalid | exact Hok_body
+        | exact Hheap ].
       exact (rec_closures_around statics' vars vars' conts conts' lets groups
                known (xI at_path) handlers Hvars Hconts Hvalid Hok_handlers).
     + (* A group is put: the second run binds it first. *)
@@ -1292,7 +1329,8 @@ Proof.
       * apply (State_around lets groups (constants_of_group group ++ known));
           [ exact Hvars' |
           | exact (statics_lifted_out_extend [] _ _ _ Hstatics Hextend Hcode)
-          | exact Hvalid' | exact Hok_body ].
+          | exact Hvalid' | exact Hok_body
+          | exact (heap_lifted_extend _ _ _ _ Hextend Hheap) ].
         exact (rec_closures_around extended' vars vars' conts conts' lets
                  groups (constants_of_group group ++ known) (xI at_path)
                  handlers Hvars' Hconts' Hvalid' Hok_handlers).
@@ -1327,7 +1365,7 @@ Proof.
     rewrite step_apply_cont, Hargs'. unfold apply_continuation.
     apply (apply_cont_value_around statics' _ _
              (resolve_around statics' _ conts conts' Hconts));
-      [ exact Hvs | exact Hstatics ].
+      [ exact Hvs | exact Hstatics | exact Hheap ].
   - (* Switch *)
     cbn [lift_around]. rewrite step_switch.
     destruct (eval_simple vars scrutinee) as [v | ] eqn:Hscrutinee;
@@ -1336,15 +1374,15 @@ Proof.
       as (v' & Hscrutinee' & Hv).
     destruct (naked_immediate_of_value v) as [i | ] eqn:Hi; [ | exact I ].
     destruct (find_arm i arms) as [ac | ] eqn:Harm; [ | exact I ].
-    exists 0, (State (Apply_cont ac) vars' conts' statics' hp).
+    exists 0, (State (Apply_cont ac) vars' conts' statics' hp' rd').
     split.
     + simpl.
       rewrite step_switch, Hscrutinee',
         (naked_immediate_lifted statics' v v' i Hv Hi), Harm.
       reflexivity.
     + exact (State_around lets groups known at_path (Apply_cont ac) vars vars'
-               conts conts' statics statics' hp Hvars Hconts Hstatics Hvalid
-               eq_refl).
+               conts conts' statics statics' hp hp' rd rd' Hvars Hconts
+               Hstatics Hvalid eq_refl Hheap).
   - (* Invalid *)
     rewrite step_invalid. exact I.
 Qed.
@@ -1477,6 +1515,7 @@ Variable e : expr.
    rewritten binds. *)
 Variable statics0 : static_env.
 Variable hp0 : heap.
+Variable rd0 : read_record.
 
 Hypothesis Hwf : well_formed_unit u (lift_around lets groups root e) = true.
 Hypothesis Hok : around_ok lets groups [] root e = true.
@@ -1487,7 +1526,7 @@ Hypothesis Hfree :
 (* The second state is one that the run of the unit rewritten reaches. *)
 Definition reached_around (s' : state) : Prop :=
   ∃ n : nat,
-    run n (State (lift_around lets groups root e) [] [] statics0 hp0)
+    run n (State (lift_around lets groups root e) [] [] statics0 hp0 rd0)
     = Step s'.
 
 (* The states are related and the second is reached. *)
@@ -1495,17 +1534,17 @@ Definition unit_around (s s' : state) : Prop :=
   state_around s s' ∧ reached_around s'.
 
 Lemma unit_around_step (s s' : state) :
-  unit_around s s' -> answered unit_around exit_around (step s) s'.
+  unit_around s s' -> answered_heaps unit_around exit_around (step s) s'.
 Proof.
   intros (Hrelated & [n Hn]).
-  pose proof (well_formed_names_bound_from u _ statics0 hp0 n Hwf Hno_code)
+  pose proof (well_formed_names_bound_from u _ statics0 hp0 rd0 n Hwf Hno_code)
     as Hbound.
   rewrite Hn in Hbound.
   pose proof (around_step s s' Hrelated
-    (well_formed_never_faults_from u _ statics0 hp0 n s' Hwf Hno_code Hfree
+    (well_formed_never_faults_from u _ statics0 hp0 rd0 n s' Hwf Hno_code Hfree
        Hn)
     Hbound) as Hanswer.
-  destruct (step s) as [t | k vs | ]; unfold answered in *;
+  destruct (step s) as [t | k vs | ]; unfold answered_heaps in *;
     [ | exact Hanswer | exact I ].
   destruct Hanswer as (m & t' & Hrun & Ht).
   exists m, t'. split; [ exact Hrun | ].
@@ -1514,12 +1553,13 @@ Proof.
 Qed.
 
 Lemma unit_around_initial :
-  unit_around (State e [] [] statics0 hp0)
-    (State (lift_around lets groups root e) [] [] statics0 hp0).
+  unit_around (State e [] [] statics0 hp0 rd0)
+    (State (lift_around lets groups root e) [] [] statics0 hp0 rd0).
 Proof.
   split; [ | exists 0; reflexivity ].
   apply (State_around lets groups []);
-    [ intros x v [=] | constructor | | apply known_valid_nil | exact Hok ].
+    [ intros x v [=] | constructor | | apply known_valid_nil | exact Hok
+    | apply heap_lifted_refl ].
   split; [ intros id; rewrite Hno_code; reflexivity | ].
   split; [ apply symbols_lifted_refl | ].
   intros id c Hlookup. rewrite Hno_code in Hlookup. discriminate Hlookup.
@@ -1535,47 +1575,50 @@ Qed.
    variables that are read. *)
 Lemma unit_around_worlds :
   refines_world (worlds_observed [])
-    (State e [] [] statics0 hp0)
-    (State (lift_around lets groups root e) [] [] statics0 hp0).
+    (State e [] [] statics0 hp0 rd0)
+    (State (lift_around lets groups root e) [] [] statics0 hp0 rd0).
 Proof.
   split.
   - intros w (n & last & Hrun & Hstep & Hstatics).
     destruct
-      (stuttering_reaches unit_around exit_around unit_around_step n _ _ last
-         unit_around_initial Hrun)
+      (stuttering_heaps_reaches unit_around exit_around unit_around_step n _
+         _ last unit_around_initial Hrun)
       as (m & last' & Hm & Hrelated & Hreached).
     pose proof (unit_around_step last last' (conj Hrelated Hreached))
       as Hanswer.
-    rewrite Hstep in Hanswer. destruct Hanswer as (vs' & Hstep' & Hvs).
-    exists (Exit_world (exit_cont w) vs' (state_statics last') (exit_heap w)).
+    rewrite Hstep in Hanswer.
+    destruct Hanswer as (vs' & hp' & rd' & Hstep' & Hvs & Hheap).
+    exists (Exit_world (exit_cont w) vs' (state_statics last') hp' rd').
     split; [ exists m, last'; auto | ].
     split; [ reflexivity | ].
     intros c Hobserver. simpl. rewrite <- Hstatics.
     apply
       (observer_applied_lifted [] c (exit_values w) vs' (state_statics last)
-         (state_statics last') (exit_heap w) Hobserver Hvs).
+         (state_statics last') (exit_heap w) hp' (exit_reads w) rd' Hobserver
+         Hvs).
     + apply statics_lifted_out_nothing.
       destruct Hrelated; simpl; assumption.
+    + exact Hheap.
     + intros s' Happly j t' Hj.
       destruct
-        (observer_applied_step [] c vs' (state_statics last') (exit_heap w)
-           s' Hobserver Happly)
+        (observer_applied_step [] c vs' (state_statics last') hp' rd' s'
+           Hobserver Happly)
         as (body & vars & Hno & ->).
-      exact (never_faults_after u _ statics0 hp0 m last' body vars
-               (exit_heap w) j t' Hwf Hno_code Hfree Hm Hno Hj).
+      exact (never_faults_after u _ statics0 hp0 rd0 m last' body vars hp' rd'
+               j t' Hwf Hno_code Hfree Hm Hno Hj).
   - intros b Hterm Hb.
     destruct (behaves_ended _ b Hterm Hb) as [j Hended].
     destruct
-      (stuttering_ends unit_around exit_around unit_around_step j _ _ b
+      (stuttering_heaps_ends unit_around exit_around unit_around_step j _ _ b
          unit_around_initial Hended)
-      as [n [Hwrong | (k & vs & hp & Hexit)]].
+      as [n [Hwrong | (k & vs & hp & rd & Hexit)]].
     + left. exists n. exact Hwrong.
     + right.
       destruct
-        (proj1 (exits_world_behaves (State e [] [] statics0 hp0) k vs hp)
-           (ex_intro _ n Hexit))
-        as [statics Hw].
-      exists (Exit_world k vs statics hp). exact Hw.
+        (proj1 (exits_world_behaves (State e [] [] statics0 hp0 rd0) k vs hp)
+           (ex_intro _ n (ex_intro _ rd Hexit)))
+        as [statics [rd' Hw]].
+      exists (Exit_world k vs statics hp rd'). exact Hw.
 Qed.
 
 End Unit.
@@ -1586,14 +1629,15 @@ End Unit.
    two exits. *)
 Lemma unit_around_observed (u : unit_interface) (lets : list (path * lift_to))
     (groups : list (path * list static_binding)) (e : expr)
-    (statics0 : static_env) (hp0 : heap) (conts : cont_env) :
+    (statics0 : static_env) (hp0 : heap) (rd0 : read_record)
+      (conts : cont_env) :
   well_formed_unit u (lift_around lets groups root e) = true ->
   around_ok lets groups [] root e = true ->
   static_code statics0 = [] ->
   static_names_free_in statics0 (lift_around lets groups root e) = true ->
   observers [] conts ->
-  observed_refines (Step (State e [] conts statics0 hp0))
-    (Step (State (lift_around lets groups root e) [] conts statics0 hp0)).
+  observed_refines (Step (State e [] conts statics0 hp0 rd0))
+    (Step (State (lift_around lets groups root e) [] conts statics0 hp0 rd0)).
 Proof.
   intros Hwf Hok Hno_code Hfree Hobservers.
   pose proof (well_formed_unit_code_closed u _ Hwf) as Hclosed'.
@@ -1603,9 +1647,9 @@ Proof.
   assert (Hstatics : static_code_closed statics0).
   { unfold static_code_closed. rewrite Hno_code. constructor. }
   exact (proj2
-           (under_observers_worlds [] statics0 hp0 e _ Hclosed Hclosed'
+           (under_observers_worlds [] statics0 hp0 rd0 e _ Hclosed Hclosed'
               Hstatics)
-           (unit_around_worlds u lets groups e statics0 hp0 Hwf Hok Hno_code
+           (unit_around_worlds u lets groups e statics0 hp0 rd0 Hwf Hok Hno_code
               Hfree)
            conts Hobservers).
 Qed.
@@ -1619,6 +1663,7 @@ Variable groups : list (path * list static_binding).
 Variable e : expr.
 Variable statics0 : static_env.
 Variable hp0 : heap.
+Variable rd0 : read_record.
 
 Hypothesis Hwf : well_formed_unit u (lift_around lets groups root e) = true.
 Hypothesis Hok : around_ok lets groups [] root e = true.
@@ -1629,43 +1674,51 @@ Hypothesis Hfree :
 (* The states are related, the second is reached, and the first is one
    of a unit that exits with symbols and constants only. *)
 Definition unit_around_plain (s s' : state) : Prop :=
-  unit_around lets groups e statics0 hp0 s s' ∧ plain_state s.
+  unit_around lets groups e statics0 hp0 rd0 s s' ∧ plain_state s.
 
 (* The values at an exit are lifted, and are constants and symbols: they
    are the same. *)
 Lemma unit_around_plain_step (s s' : state) :
   unit_around_plain s s' ->
-  answered unit_around_plain (fun _ vs vs' => vs' = vs) (step s) s'.
+  answered_heaps unit_around_plain exit_plain (step s) s'.
 Proof.
   intros [Hrelated Hplain].
   pose proof
-    (unit_around_step u lets groups e statics0 hp0 Hwf Hno_code Hfree s s'
+    (unit_around_step u lets groups e statics0 hp0 rd0 Hwf Hno_code Hfree s s'
        Hrelated)
     as Hanswer.
   pose proof (plain_step s Hplain) as Hstep.
-  destruct (step s) as [t | k vs | ]; unfold answered in *; [ | | exact I ].
+  destruct (step s) as [t | k vs | ]; unfold answered_heaps in *;
+    [ | | exact I ].
   - destruct Hanswer as (m & t' & Hrun & Ht).
     exists m, t'. split; [ exact Hrun | split; assumption ].
-  - destruct Hanswer as (vs' & Hexit & Hvs).
-    exists vs'. split; [ exact Hexit | ].
-    exact (plain_values_lifted _ vs vs' Hstep Hvs).
+  - destruct Hanswer as (vs' & hp' & rd' & Hexit & Hvs & Hheap).
+    exists vs', hp', rd'. split; [ exact Hexit | ].
+    split; [ exact (plain_values_lifted _ vs vs' Hstep Hvs) | exact Hheap ].
 Qed.
 
 (* The unit rewritten refines the unit, the two run from that static
-   environment and that heap. *)
+   environment and that heap, if the unit exits with the empty heap
+   only. *)
 Lemma unit_around_refines :
   exits_plain_knowing [] [] e = true ->
-  refines (State e [] [] statics0 hp0)
-    (State (lift_around lets groups root e) [] [] statics0 hp0).
+  (∀ (k : continuation) (vs : list value) (hp : heap),
+    behaves (State e [] [] statics0 hp0 rd0) (Exits k vs hp) ->
+    hp = empty_heap) ->
+  refines (State e [] [] statics0 hp0 rd0)
+    (State (lift_around lets groups root e) [] [] statics0 hp0 rd0).
 Proof.
-  intros Hplain.
+  intros Hplain Hempty.
   apply
-    (stuttering_refines unit_around_plain (fun _ vs vs' => vs' = vs)
+    (stuttering_heaps_refines unit_around_plain exit_plain
        unit_around_plain_step).
-  - intros last vs vs' Hsame. exact Hsame.
+  - intros k vs hp last vs' hp' Hexits [Hsame Hheap].
+    split; [ exact Hsame | ].
+    rewrite (Hempty k vs hp Hexits) in Hheap |- *.
+    exact (heap_alike_empty _ hp' Hheap).
   - split;
-      [ exact (unit_around_initial lets groups e statics0 hp0 Hok Hno_code)
-      | exact (plain_from e statics0 hp0 Hplain Hno_code) ].
+      [ exact (unit_around_initial lets groups e statics0 hp0 rd0 Hok Hno_code)
+      | exact (plain_from e statics0 hp0 rd0 Hplain Hno_code) ].
 Qed.
 
 End Unit_refines.
@@ -1676,12 +1729,17 @@ Proof.
   intros u lets places e e'. unfold lift_around_unit. cbv zeta.
   set (groups := groups_of lets places e).
   destruct (exits_plain_knowing [] [] e) eqn:Hplain; [ | discriminate ].
+  destruct (expr_free_of_heap e) eqn:Hheap_free; [ | discriminate ].
   destruct (around_ok lets groups [] root e) eqn:Hok; [ | discriminate ].
   destruct (well_formed_unit u (lift_around lets groups root e)) eqn:Hwf;
     [ | discriminate ].
   intros [= <-]. unfold program_refines.
-  exact (unit_around_refines u lets groups e empty_static_env empty_heap Hwf
-           Hok eq_refl (free_in_empty _) Hplain).
+  exact
+    (unit_around_refines u lets groups e empty_static_env empty_heap no_reads
+       Hwf Hok eq_refl (free_in_empty _) Hplain
+       (fun k vs hp =>
+          free_of_heap_exits_empty e empty_static_env k vs hp Hheap_free
+            eq_refl)).
 Qed.
 
 Theorem lift_around_unit_refines_imports :
@@ -1690,12 +1748,16 @@ Proof.
   intros imports u lets places e e'. unfold lift_around_unit. cbv zeta.
   set (groups := groups_of lets places e).
   destruct (exits_plain_knowing [] [] e) eqn:Hplain; [ | discriminate ].
+  destruct (expr_free_of_heap e) eqn:Hheap_free; [ | discriminate ].
   destruct (around_ok lets groups [] root e) eqn:Hok; [ | discriminate ].
   destruct (well_formed_unit u (lift_around lets groups root e)) eqn:Hwf;
     [ | discriminate ].
   intros [= <-] Hfree. unfold unit_refines.
   exact (unit_around_refines u lets groups e (imports_statics imports)
-           empty_heap Hwf Hok eq_refl Hfree Hplain).
+           empty_heap no_reads Hwf Hok eq_refl Hfree Hplain
+           (fun k vs hp =>
+              free_of_heap_exits_empty e (imports_statics imports) k vs hp
+                Hheap_free eq_refl)).
 Qed.
 
 (* ======================================================================== *)

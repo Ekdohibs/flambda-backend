@@ -239,6 +239,41 @@
    code names nothing here, and is not counted whatever is open. The
    allocation itself goes in the newest frame, of a [try] or not.
 
+   WHAT THE MACHINE DOES NOT RUN
+
+   Decision D53. A [Let] of a primitive of the heap
+   (FlambdaPrimitiveModel.heap_primitive: it makes a block with an
+   identity or a mutable array, or stores in one), and a [Let] of any
+   other primitive but one of regions, one of whose arguments has a
+   location for value ([named_needs_heap], which [region_step] asks
+   after it has taken the primitives of regions: one of those that is
+   given a location is the fault that it was). The run ends there with
+   [Region_let_not_run], which is not a step, not an exit and not a
+   fault: the machine has no account of such a state, and no statement
+   says anything of the run from there on. [step] runs such a [Let] on
+   the heap of the state (FlambdaHeapSpec.v). The frames here list
+   symbols and no cells, so a cell that the program made in a region
+   would never be found dead; rather than run it so, the machine
+   stops. The test of the simples comes first: a dead value among the
+   arguments of such a [Let], or a region used as a value there, is
+   the fault that it is anywhere. What the machine tests next of a
+   [Let] that it runs is not tested of one that it does not: the
+   marker of a local allocation and the region that it names, and D46.
+   So a block with an identity or a mutable array made on the heap
+   with a local value among its arguments, and a store of a local
+   value in a cell, are not run, and that fault is neither found nor
+   ruled out there. A [Let] that the machine does run, where it is
+   given to [step], reads no cell and leaves the heap and the read
+   record of the state as they are
+   (FlambdaSemanticsSpec.exec_named_not_prim_statement,
+   [exec_named_no_location_statement]); so no step of this machine
+   changes either ([region_step_keeps_memory_statement]). The test is
+   the premise of the second of those statements: if a symbol comes to
+   name a cell, so that a primitive reads one with no location among
+   its arguments, the test follows that premise. The stage that puts
+   cells in the frames ("what this stage leaves out", below) lifts
+   this.
+
    THE SIMPLES THAT A STEP EVALUATES
 
    [evaluated_simples] is, for each form, the simples that [step]
@@ -313,7 +348,10 @@
    [block_of], [array_of], [is_allocated] and [kind_of_value] answer
    the same of a block, a boxed number, an array or a closure and of
    a symbol that [localise] binds to it.
-   FlambdaHeapSpec.v is not run by [step].
+   What [step] reads of a location is not in this list: it reads a
+   cell in a primitive only (FlambdaSemanticsSpec.exec_named), and a
+   primitive that is given a location is not run here (decision D53),
+   or is a primitive of regions and a fault.
 
    WHAT THIS STAGE LEAVES OUT
 
@@ -335,8 +373,9 @@
      partial application, its callee, is not a simple: if that is
      dead the state has no step for the reason of [step], and not for
      D45.
-   - Blocks with an identity and mutable arrays: [step] does not run
-     them. In the stage that does, a frame also lists the locations of
+   - Blocks with an identity and mutable arrays: [step] runs them,
+     and this machine does not (decision D53, above). In the stage
+     in which it does, a frame also lists the locations of
      the cells made while it was the newest, as it lists the symbols;
      the cells stay in the heap, and the region state keeps the
      locations of the frames that were popped: a location is dead iff
@@ -822,18 +861,72 @@ Inductive region_fault : Type :=
 
 (* What a step comes to. An exit has the state it left, for the frames
    that are still there, the counts, and the static environment under
-   which its values are read. *)
+   which its values are read. [Region_let_not_run] is of a [Let]
+   that the machine does not run (decision D53). *)
 Inductive region_step_result : Type :=
   | Region_step (rs : region_state)
   | Region_exit (k : continuation) (vs : list value) (rs : region_state)
-  | Region_undefined (fault : region_fault).
+  | Region_undefined (fault : region_fault)
+  | Region_let_not_run.
 
 Definition with_statics (s : state) (statics : static_env) : state :=
-  State (state_expr s) (state_vars s) (state_conts s) statics (state_heap s).
+  State (state_expr s) (state_vars s) (state_conts s) statics (state_heap s)
+    (state_reads s).
 
 Definition with_counts (rs : region_state) (counts : region_counts)
     : region_state :=
   Region_state (rs_state rs) (rs_frames rs) (rs_base rs) (rs_next rs) counts.
+
+(* Decision D53: whether the defining expression of a [Let] needs the
+   heap to be run, under the variables of the state: a primitive of
+   the heap, or another primitive one of whose arguments has a
+   location for value. [region_step] asks it of a [Let] that is not of
+   a primitive of regions, and does not run the [Let] where it is
+   true. (It can be true of a primitive of regions that is given a
+   location: that [Let] is not asked, and is a fault.) Where the test
+   is false, [exec_named] agrees with [eval_named]: the defining
+   expression has a value on the heap where [eval_named] gives it one,
+   the same, and the heap and the read record are then as they were;
+   it has none where [eval_named] gives it none. The two tests of
+   FlambdaHeapSpec.v are of the expression alone: [named_changes_heap]
+   is the first half of this one, and [named_reads_heap] is of the
+   primitive whatever it is given, so it is true of a load from a
+   block that is a value, which needs no heap, and false of
+   [Make_block] given a location, which has a value only where the
+   heap binds the location. This one is of the expression at these
+   variables: it evaluates the arguments, so it is not known before
+   the run, and a change of the values that makes a location something
+   else does not keep it. If a symbol comes to name a cell, the test
+   follows the premise of
+   FlambdaSemanticsSpec.exec_named_no_location_statement, which
+   changes then. *)
+
+(* CR mshinwell: the machine of regions does not run a [Let] of a
+   primitive of the heap, nor of another primitive, not one of
+   regions, that is given a location: the run ends there, with no
+   fault found and none ruled out but those of the simples that the
+   [Let] evaluates. So a unit that makes a block with an identity or a
+   mutable array is not checked for regions from that [Let] on, and a
+   local value that it puts in such a cell on the heap (D46) is not
+   found. Such a run is not undefined, so
+   FlambdaRegionsCheckSpec.region_safe holds of it, and with it the
+   conclusions of [checked_after_safe_statement] and of
+   FlambdaRegionsCheckSoundSpec.refined_and_checked_safe_statement and
+   [validated_and_checked_safe_statement]: "safe" there is as far as
+   the machine runs the term. It is so because the frames list no
+   cells: run on the heap of [step], a cell made in a region would
+   outlive the region. The stage that lists the cells in the frames
+   lifts it. Decision D53. *)
+Definition named_needs_heap (vars : env) (defining_expr : named) : bool :=
+  match defining_expr with
+  | Prim (Heap _) _ => true
+  | Prim _ args =>
+    match eval_simples vars args with
+    | Some vs => existsb is_location vs
+    | None => false
+    end
+  | _ => false
+  end.
 
 (* The step of [step], given [live_statics]. The static environment
    that it leaves is not looked at: this is not asked of a
@@ -846,7 +939,7 @@ Definition plain_step (rs : region_state) : region_step_result :=
     Region_step
       (Region_state (with_statics s' (state_statics s)) (rs_frames rs)
          (rs_base rs) (rs_next rs) (rs_counts rs))
-  | Exit k vs _ => Region_exit k vs rs
+  | Exit k vs _ _ => Region_exit k vs rs
   | Undefined => Region_undefined No_plain_step
   end.
 
@@ -858,7 +951,7 @@ Definition static_step (rs : region_state) : region_step_result :=
     Region_step
       (Region_state s' (rs_frames rs) (rs_base rs) (rs_next rs)
          (rs_counts rs))
-  | Exit k vs _ => Region_exit k vs rs
+  | Exit k vs _ _ => Region_exit k vs rs
   | Undefined => Region_undefined No_plain_step
   end.
 
@@ -869,7 +962,7 @@ Definition bind_let (rs : region_state) (x : variable) (v : value)
   let s := rs_state rs in
   Region_state
     (State body ((x, v) :: state_vars s) (state_conts s) statics
-       (state_heap s))
+       (state_heap s) (state_reads s))
     frames (rs_base rs) next counts.
 
 (* The state after a [Let] of [x] and then one of [y], both to [v]. *)
@@ -879,7 +972,7 @@ Definition bind_pair (rs : region_state) (x y : variable) (v : value)
   let s := rs_state rs in
   Region_state
     (State body ((y, v) :: (x, v) :: state_vars s) (state_conts s) statics
-       (state_heap s))
+       (state_heap s) (state_reads s))
     frames (rs_base rs) next counts.
 
 (* [Begin_region] and [Begin_try_region]: a frame with a fresh mark,
@@ -1155,7 +1248,7 @@ Definition region_apply_cont (rs : region_state) (ac : apply_cont)
             (Region_state
                (State handler handler_vars
                   (rec_closures recursive def_vars def_conts ++ def_conts)
-                  (state_statics s) (state_heap s))
+                  (state_statics s) (state_heap s) (state_reads s))
                (rs_frames rs) (rs_base rs) (rs_next rs) (rs_counts rs))
         | None => Region_undefined No_plain_step
         end
@@ -1167,10 +1260,11 @@ Definition region_apply_cont (rs : region_state) (ac : apply_cont)
 
 (* One step. First the test of every simple that [step] would evaluate
    ([simples_fault]). Then, by the form of the expression: a primitive
-   that begins or ends a region; a [Let] with a [Local_allocation]
-   after it; another [Let], with the test of D46 if it allocates; a
-   [Let_static], with the test of D46; an [Apply_cont] that gives a
-   region ([region_apply_cont]); and for the rest the step of [step]. *)
+   that begins or ends a region; a [Let] that is not run (decision
+   D53); a [Let] with a [Local_allocation] after it; another [Let],
+   with the test of D46 if it allocates; a [Let_static], with the
+   test of D46; an [Apply_cont] that gives a region
+   ([region_apply_cont]); and for the rest the step of [step]. *)
 Definition region_step (rs : region_state) : region_step_result :=
   let e := state_expr (rs_state rs) in
   match simples_fault rs (evaluated_simples e) (region_places rs) with
@@ -1187,16 +1281,19 @@ Definition region_step (rs : region_state) : region_step_result :=
       | _, _ => Region_undefined Not_of_the_conversion
       end
     | Let x kind defining_expr body =>
-      match marker_of x body with
-      | Marker y region body' =>
-        local_allocation rs x y kind defining_expr region body'
-      | Bad_marker => Region_undefined Not_of_the_conversion
-      | No_marker =>
-        if is_allocation defining_expr
-           && existsb (simple_local rs) (simples_of_named defining_expr)
-        then Region_undefined Heap_holds_local
-        else plain_step rs
-      end
+      if named_needs_heap (state_vars (rs_state rs)) defining_expr
+      then Region_let_not_run
+      else
+        match marker_of x body with
+        | Marker y region body' =>
+          local_allocation rs x y kind defining_expr region body'
+        | Bad_marker => Region_undefined Not_of_the_conversion
+        | No_marker =>
+          if is_allocation defining_expr
+             && existsb (simple_local rs) (simples_of_named defining_expr)
+          then Region_undefined Heap_holds_local
+          else plain_step rs
+        end
     | Let_static _ _ =>
       if existsb (simple_local rs) (evaluated_simples e)
       then Region_undefined Heap_holds_local
@@ -1224,7 +1321,8 @@ Fixpoint region_run (fuel : nat) (rs : region_state) : region_step_result :=
    frame, and [base] the first symbol that the machine draws. *)
 Definition initial_region_state (e : expr) (statics : static_env)
     (base : symbol) : region_state :=
-  Region_state (State e [] [] statics empty_heap) [] base base no_counts.
+  Region_state (State e [] [] statics empty_heap no_reads) [] base base
+    no_counts.
 
 (* ======================================================================== *)
 (* The symbols that the machine draws are not those of the term             *)
@@ -1617,21 +1715,31 @@ Definition of_plain_result (rs : region_state) (counts : region_counts)
   | Step s' =>
     Region_step
       (Region_state s' (rs_frames rs) (rs_base rs) (rs_next rs) counts)
-  | Exit k vs _ => Region_exit k vs (with_counts rs counts)
+  | Exit k vs _ _ => Region_exit k vs (with_counts rs counts)
   | Undefined => Region_undefined No_plain_step
   end.
 
 (* With no frame, at an expression that has nothing of regions at its
    head, the machine does what [step] does, if every simple evaluated
-   may be: nothing changes but the counts. *)
+   may be and the machine runs the state (decision D53): nothing
+   changes but the counts. *)
 Definition region_step_plain_statement : Prop :=
   ∀ rs : region_state,
     rs_frames rs = [] ->
     head_plain (state_expr (rs_state rs)) = true ->
     forallb (simple_usable rs) (evaluated_simples (state_expr (rs_state rs)))
     = true ->
+    region_step rs <> Region_let_not_run ->
     region_step rs
     = of_plain_result rs (rs_counts (count_uses rs)) (step (rs_state rs)).
+
+(* No step of this machine changes the heap or the read record of the
+   state: a [Let] that would is not run (decision D53). *)
+Definition region_step_keeps_memory_statement : Prop :=
+  ∀ rs rs' : region_state,
+    region_step rs = Region_step rs' ->
+    state_heap (rs_state rs') = state_heap (rs_state rs)
+    ∧ state_reads (rs_state rs') = state_reads (rs_state rs).
 
 (* The primitives that end a region. *)
 Definition ends_region (e : expr) : bool :=

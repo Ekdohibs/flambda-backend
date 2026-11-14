@@ -47,11 +47,12 @@
    field, a value slot or an argument kept. So locations are in the
    environments of variables, in the continuations (the environment of
    a closure, the values kept with a continuation), in the statically
-   allocated values, and in the heap, whose keys are locations and
-   whose cells hold values. There is none in a term, in code, in a
-   constant, in a kind or in a primitive, and there is no binder of
-   locations in a term: the only thing that makes one is an
-   allocation, in the machine.
+   allocated values, in the heap, whose keys are locations and whose
+   cells hold values, and in the read record
+   (FlambdaValueSpec.read_record), whose entries are at locations.
+   There is none in a term, in code, in a constant, in a kind or in a
+   primitive, and there is no binder of locations in a term: the only
+   thing that makes one is an allocation, in the machine.
 
    The action. A permutation of locations
    (FlambdaNominalSpec.permutation, a list of swaps) acts on values
@@ -59,12 +60,14 @@
    value are gone into), on cells and heaps ([permute_cell],
    [permute_heap]: the keys of the heap are moved with the values of
    its cells; the mutability of a block, its tag and the kind of an
-   array are as they were), on environments, continuations and static
-   environments ([permute_env], [permute_cont_value],
-   [permute_static_env]: handlers and code are left as they are), and
-   on states, on what a step comes to and on behaviours
-   ([permute_state], [permute_result], [permute_behaviour]: the
-   expression and the continuation of an exit are left as they are).
+   array are as they were), on read records ([permute_reads]: the
+   location of an entry is moved, and what was read there is as it
+   was), on environments, continuations and static environments
+   ([permute_env], [permute_cont_value], [permute_static_env]:
+   handlers and code are left as they are), and on states, on what a
+   step comes to and on behaviours ([permute_state],
+   [permute_result], [permute_behaviour]: the expression and the
+   continuation of an exit are left as they are).
 
    The locations of a thing ([locations_of_cell] and the functions
    after it; those of a value are FlambdaHeapSpec.locations_of_value)
@@ -79,7 +82,9 @@
      two lists of swaps that are the same permutation act alike, the
      locations of a thing moved are its locations moved, and a
      permutation that fixes the locations of a thing leaves it as it
-     is. So each is a nominal set whose support is its locations.
+     is. So each is a nominal set whose support is its locations. A
+     read record has no statement of its own: it is a component of a
+     state.
    - The action on states has inverses
      ([permute_state_inverse_statement]).
    - This action and that of the renamings of variables and
@@ -108,9 +113,7 @@
    heap binds: FlambdaLocationsPrimitiveSpec.v for the primitives,
    the two that allocate among them, and
    FlambdaLocationsMachineSpec.v for a step, a run and a behaviour
-   of the machine. A step of the machine does not run the primitives
-   of the heap yet, so no step allocates; the statements about a
-   step are in the form that stays true when one does. The link with
+   of the machine, whose [Let] runs those primitives. The link with
    the relation between outcomes of FlambdaHeapMachineSpec.v, which pairs
    locations by a correspondence, is not stated.
 
@@ -164,6 +167,10 @@ Definition permute_cell (p : permutation) (c : cell) : cell :=
 Definition permute_heap (p : permutation) (h : heap) : heap :=
   map (fun binding => (permute p (fst binding), permute_cell p (snd binding)))
     h.
+
+(* The read record: the locations of its entries. *)
+Definition permute_reads (p : permutation) (rd : read_record) : read_record :=
+  map (fun entry => (permute p (fst entry), snd entry)) rd.
 
 (* An environment of variables: its values. *)
 Definition permute_env (p : permutation) (vars : env) : env :=
@@ -220,15 +227,18 @@ Definition permute_cont_env (p : permutation) (conts : cont_env) : cont_env :=
 Definition permute_state (p : permutation) (s : state) : state :=
   State (state_expr s) (permute_env p (state_vars s))
     (permute_cont_env p (state_conts s))
-    (permute_static_env p (state_statics s)) (permute_heap p (state_heap s)).
+    (permute_static_env p (state_statics s)) (permute_heap p (state_heap s))
+      (permute_reads p (state_reads s)).
 
 (* What a step comes to, and a behaviour: the values and the heap of an
-   exit. Its continuation is not a location. *)
+   exit, and the read record of what a step comes to (a behaviour has
+   none). The continuation of an exit is not a location. *)
 Definition permute_result (p : permutation) (result : step_result)
     : step_result :=
   match result with
   | Step s => Step (permute_state p s)
-  | Exit k vs hp => Exit k (map (permute_value p) vs) (permute_heap p hp)
+  | Exit k vs hp rd => Exit k (map (permute_value p) vs) (permute_heap p hp)
+    (permute_reads p rd)
   | Undefined => Undefined
   end.
 
@@ -251,6 +261,9 @@ Definition locations_of_cell (c : cell) : list location :=
 (* The keys of a heap are among its locations. *)
 Definition locations_of_heap (h : heap) : list location :=
   flat_map (fun binding => fst binding :: locations_of_cell (snd binding)) h.
+
+Definition locations_of_reads (rd : read_record) : list location :=
+  map fst rd.
 
 Definition locations_of_env (vars : env) : list location :=
   flat_map (fun binding => locations_of_value (snd binding)) vars.
@@ -283,7 +296,8 @@ Definition locations_of_state (s : state) : list location :=
   locations_of_env (state_vars s)
   ++ locations_of_cont_env (state_conts s)
   ++ locations_of_static_env (state_statics s)
-  ++ locations_of_heap (state_heap s).
+  ++ locations_of_heap (state_heap s)
+  ++ locations_of_reads (state_reads s).
 
 (* ======================================================================== *)
 (* Each is a nominal set                                                    *)

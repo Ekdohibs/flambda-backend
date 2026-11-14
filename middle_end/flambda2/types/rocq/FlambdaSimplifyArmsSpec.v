@@ -140,23 +140,25 @@ Definition simplify_switch_and_arms (tenv : Typing_env.t) (scrutinee : simple)
    taken. *)
 Definition simplify_arm_args_equivalent_statement : Prop :=
   ∀ (tenv : Typing_env.t) (scrutinee : simple) (arm : Z * apply_cont)
-    (vars : env) (conts : cont_env) (statics : static_env) (hp : heap),
+    (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+      (rd : read_record),
     env_satisfies_strictly tenv statics vars ->
     eval_simple vars scrutinee
     = Some (Value_const (Naked_immediate (fst arm))) ->
-    equivalent (State (Apply_cont (snd arm)) vars conts statics hp)
+    equivalent (State (Apply_cont (snd arm)) vars conts statics hp rd)
       (State (Apply_cont (snd (simplify_arm_args tenv scrutinee arm))) vars
-         conts statics hp).
+         conts statics hp rd).
 
 (* An arm refines another in the states that satisfy the environment
    and in which the scrutinee is its number. *)
 Definition arm_refines_where_taken_under (tenv : Typing_env.t)
     (scrutinee : simple) (i : Z) (ac ac' : apply_cont) : Prop :=
-  ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap),
+  ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+    (rd : read_record),
     env_satisfies_strictly tenv statics vars ->
     eval_simple vars scrutinee = Some (Value_const (Naked_immediate i)) ->
-    refines (State (Apply_cont ac) vars conts statics hp)
-      (State (Apply_cont ac') vars conts statics hp).
+    refines (State (Apply_cont ac) vars conts statics hp rd)
+      (State (Apply_cont ac') vars conts statics hp rd).
 
 (* The arms of a [Switch] may each be replaced by an arm for the same
    number that refines it where it is taken. *)

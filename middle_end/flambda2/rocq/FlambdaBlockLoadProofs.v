@@ -237,6 +237,26 @@ Proof.
   - rewrite Pos.eqb_refl. reflexivity.
 Qed.
 
+(* The same where the defining expression is run: a [Make_block] reads
+   no cell, so its run has the value [eval_named] gives it
+   (FlambdaSemanticsProofs.exec_named_pure). *)
+Lemma blocks_hold_under_let_exec (known : known_blocks) (x : variable)
+    (d : named) (vars : env) (statics : static_env) (hp hp' : heap)
+    (rd rd' : read_record) (v : value) :
+  blocks_hold known vars statics ->
+  exec_named statics hp rd vars d = Some (v, hp', rd') ->
+  blocks_hold (known_under_let known x d) ((x, v) :: vars) statics.
+Proof.
+  intros Hhold Hd.
+  destruct (block_made d) as [block | ] eqn:Hmade.
+  - apply blocks_hold_under_let; [ exact Hhold | ].
+    destruct (block_made_spec d block Hmade) as (fields & -> & _).
+    refine (proj1 (exec_named_pure statics hp hp' rd rd' vars _ v _ Hd)).
+    reflexivity.
+  - unfold known_under_let. cbv zeta. rewrite Hmade.
+    apply blocks_hold_forget_var, Hhold.
+Qed.
+
 (* ======================================================================== *)
 (* Under a [Let_static]                                                     *)
 (* ======================================================================== *)
@@ -398,6 +418,67 @@ Proof.
     rewrite Hblock_of in Hd. exact Hd.
 Qed.
 
+(* What [block_of] reads as a block is not a location. *)
+Lemma block_of_no_location (statics : static_env) (v : value)
+    (block : Z * list value) :
+  block_of statics v = Some block -> ∀ l : location, Value_location l ∉ [v].
+Proof. intros Hblock l [-> | []]. discriminate Hblock. Qed.
+
+(* Where the pass rewrites. *)
+Lemma load_known_named_rewrites (known : known_blocks) (u : unary_primitive)
+    (block : simple) (known_block : known_block) (result : simple) :
+  known_block_of known block = Some known_block ->
+  of_known_block u known_block = Some result ->
+  load_known_named known (Prim (Unary u) [block]) = Simple result.
+Proof.
+  intros Hknown Hresult. unfold load_known_named, unary_applied.
+  rewrite Hknown. cbn beta iota. rewrite Hresult. reflexivity.
+Qed.
+
+(* The same where the primitive is run: it runs as the pass has it, to
+   the same value, heap and record. Where the pass rewrites, the
+   argument is a known block, which is no location, so the run looks at
+   no cell (FlambdaSemanticsSpec.exec_named_no_location_statement). *)
+Lemma load_known_named_exec (known : known_blocks) (vars : env)
+    (statics : static_env) (hp hp' : heap) (rd rd' : read_record)
+    (d : named) (v : value) :
+  blocks_hold known vars statics ->
+  exec_named statics hp rd vars d = Some (v, hp', rd') ->
+  exec_named statics hp rd vars (load_known_named known d)
+  = Some (v, hp', rd').
+Proof.
+  intros Hhold Hd.
+  destruct d as [s | p args | code slots | fslot decls slots | slot closure
+    | pfrom slot closure | move_from move_to closure];
+    try exact Hd.
+  destruct (unary_applied p args) as [[u block] | ] eqn:Happlied;
+    [ | unfold load_known_named; rewrite Happlied; exact Hd ].
+  destruct (known_block_of known block) as [known_block | ] eqn:Hknown;
+    [ | unfold load_known_named; rewrite Happlied, Hknown; exact Hd ].
+  destruct (of_known_block u known_block) as [result | ] eqn:Hresult;
+    [ | unfold load_known_named; rewrite Happlied, Hknown, Hresult;
+        exact Hd ].
+  destruct (unary_applied_spec _ _ _ _ Happlied) as [-> ->].
+  destruct (known_block_of_sound _ _ _ _ _ Hhold Hknown)
+    as (vs & block_value & _ & Hblock & Hblock_of & _).
+  assert (Hargs : eval_simples vars [block] = Some [block_value])
+    by (simpl; rewrite Hblock; reflexivity).
+  rewrite
+    (exec_named_no_location statics hp rd vars (Unary u) [block]
+       [block_value] (fun q => ltac:(discriminate)) Hargs
+       (block_of_no_location statics block_value _ Hblock_of))
+    in Hd.
+  destruct (eval_named statics vars (Prim (Unary u) [block])) as [w | ]
+    eqn:Heval; [ | discriminate Hd ].
+  simpl in Hd. injection Hd as <- <- <-.
+  pose proof
+    (load_known_named_sound known vars statics _ w Hhold Heval) as Hsound.
+  rewrite (load_known_named_rewrites known u block known_block result Hknown
+    Hresult) in Hsound |- *.
+  rewrite exec_named_not_prim by (intros ? ?; discriminate).
+  rewrite Hsound. reflexivity.
+Qed.
+
 (* ======================================================================== *)
 (* The pass                                                                 *)
 (* ======================================================================== *)
@@ -406,37 +487,32 @@ Qed.
    parts under binders, by the induction, with what is known there. *)
 Fixpoint load_blocks_knowing_refines (e : expr) :
   ∀ (known : known_blocks) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap),
+    (statics : static_env) (hp : heap) (rd : read_record),
     blocks_hold known vars statics ->
-    refines (State e vars conts statics hp)
-      (State (load_blocks_knowing known e) vars conts statics hp)
+    refines (State e vars conts statics hp rd)
+      (State (load_blocks_knowing known e) vars conts statics hp rd)
 with load_blocks_in_handler_refines (h : continuation_handler) :
   ∀ (known : known_blocks) (k : continuation) (body : expr) (vars : env)
-    (conts : cont_env) (statics : static_env) (hp : heap),
+    (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record),
     blocks_hold known vars statics ->
-    refines (State (Let_cont_non_recursive k h body) vars conts statics hp)
+    refines (State (Let_cont_non_recursive k h body) vars conts statics hp rd)
       (State
          (Let_cont_non_recursive k (load_blocks_in_handler known h) body)
-         vars conts statics hp).
+         vars conts statics hp rd).
 Proof.
   - destruct e
       as [ x kind d body | bindings body | k h body | handlers body | ap
          | ac | scrutinee arms | ];
-      intros known vars conts statics hp Hhold; simpl.
+      intros known vars conts statics hp rd Hhold; simpl.
     + (* Let *)
-      destruct (eval_named statics vars d) as [v | ] eqn:Hd;
-        [ destruct (kind_eqb (kind_of_value v) kind) eqn:Hkind | ].
-      * eapply refines_step;
-          [ rewrite step_let, Hd, Hkind; reflexivity
-          | rewrite step_let,
-              (load_known_named_sound known vars statics d v Hhold Hd), Hkind;
-            reflexivity
-          | ].
+      apply let_refines_step_forward.
+      * intros v hp' rd' Hd.
+        exact (load_known_named_exec known vars statics hp hp' rd rd' d v
+          Hhold Hd).
+      * intros v hp' rd' Hd _.
         apply load_blocks_knowing_refines.
-        exact (blocks_hold_under_let known x d vars statics v Hhold Hd).
-      * apply step_undefined_refines. rewrite step_let, Hd, Hkind.
-        reflexivity.
-      * apply step_undefined_refines. rewrite step_let, Hd. reflexivity.
+        exact (blocks_hold_under_let_exec known x d vars statics hp hp' rd
+          rd' v Hhold Hd).
     + (* Let_static *)
       apply let_static_refines_step.
       destruct (eval_static_bindings vars bindings statics)
@@ -448,7 +524,7 @@ Proof.
       apply (refines_trans _
         (State
            (Let_cont_non_recursive k (load_blocks_in_handler known h) body)
-           vars conts statics hp)).
+           vars conts statics hp rd)).
       * apply load_blocks_in_handler_refines, Hhold.
       * apply let_cont_non_recursive_refines_step,
           load_blocks_knowing_refines, Hhold.
@@ -460,11 +536,11 @@ Proof.
     + apply refines_refl.
     + apply refines_refl.
   - destruct h as [params metadata handler].
-    intros known k body vars conts statics hp Hhold. simpl.
+    intros known k body vars conts statics hp rd Hhold. simpl.
     apply (let_cont_handler_refines_where (symbols_hold known vars)
       (symbols_hold_extend known vars));
       [ exact (proj2 Hhold) | ].
-    intros vs handler_vars conts' statics' hp' Hsymbols _ Hbind.
+    intros vs handler_vars conts' statics' hp' rd' Hsymbols _ Hbind.
     apply load_blocks_knowing_refines.
     apply (blocks_hold_bind_params statics' params known vs vars
       handler_vars);
@@ -473,6 +549,6 @@ Qed.
 
 Theorem load_known_blocks_refines : load_known_blocks_refines_statement.
 Proof.
-  intros e vars conts statics hp. apply load_blocks_knowing_refines.
+  intros e vars conts statics hp rd. apply load_blocks_knowing_refines.
   split; intros entry [].
 Qed.

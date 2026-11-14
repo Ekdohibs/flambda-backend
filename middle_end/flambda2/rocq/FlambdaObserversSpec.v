@@ -230,9 +230,10 @@ Definition worlds_observed (slots : list value_slot) (w w' : exit_world)
   ∧ ∀ c : cont_value,
       observer slots c ->
       observed_refines
-        (apply_cont_value c (exit_values w) (exit_statics w) (exit_heap w))
+        (apply_cont_value c (exit_values w) (exit_statics w) (exit_heap w)
+           (exit_reads w))
         (apply_cont_value c (exit_values w') (exit_statics w')
-           (exit_heap w')).
+           (exit_heap w') (exit_reads w')).
 
 (* The way out is an observer: so the two exits have the same constants
    and the same locations among their values, and their heaps bind the
@@ -252,26 +253,29 @@ Definition worlds_observed_way_out_statement : Prop :=
    come to results that [observed_refines] relates, whatever the
    environment. *)
 Definition refines_under_observers (slots : list value_slot)
-    (statics : static_env) (hp : heap) (source target : expr) : Prop :=
+    (statics : static_env) (hp : heap) (rd : read_record)
+      (source target : expr) : Prop :=
   ∀ conts : cont_env,
     observers slots conts ->
-    observed_refines (Step (State source [] conts statics hp))
-      (Step (State target [] conts statics hp)).
+    observed_refines (Step (State source [] conts statics hp rd))
+      (Step (State target [] conts statics hp rd)).
 
 (* Refinement under all environments gives it. *)
 Definition expr_refines_under_observers_statement : Prop :=
   ∀ (slots : list value_slot) (statics : static_env) (hp : heap)
+    (rd : read_record)
     (source target : expr),
     expr_refines source target ->
-    refines_under_observers slots statics hp source target.
+    refines_under_observers slots statics hp rd source target.
 
 (* It composes. *)
 Definition refines_under_observers_trans_statement : Prop :=
   ∀ (slots : list value_slot) (statics : static_env) (hp : heap)
+    (rd : read_record)
     (e1 e2 e3 : expr),
-    refines_under_observers slots statics hp e1 e2 ->
-    refines_under_observers slots statics hp e2 e3 ->
-    refines_under_observers slots statics hp e1 e3.
+    refines_under_observers slots statics hp rd e1 e2 ->
+    refines_under_observers slots statics hp rd e2 e3 ->
+    refines_under_observers slots statics hp rd e1 e3.
 
 (* The two forms say the same of two units whose code is closed, from a
    static environment whose code is closed: the two units are so
@@ -281,14 +285,15 @@ Definition refines_under_observers_trans_statement : Prop :=
    ends only if the first exits or goes wrong. *)
 Definition under_observers_worlds_statement : Prop :=
   ∀ (slots : list value_slot) (statics : static_env) (hp : heap)
+    (rd : read_record)
     (source target : expr),
     code_closed source = true ->
     code_closed target = true ->
     static_code_closed statics ->
-    (refines_under_observers slots statics hp source target
+    (refines_under_observers slots statics hp rd source target
      <-> refines_world (worlds_observed slots)
-           (State source [] [] statics hp)
-           (State target [] [] statics hp)).
+           (State source [] [] statics hp rd)
+           (State target [] [] statics hp rd)).
 
 (* ======================================================================== *)
 (* A class of what may follow a unit                                        *)
@@ -305,20 +310,22 @@ Definition worlds_observed_by (O : cont_value -> Prop) (w w' : exit_world)
   ∧ ∀ c : cont_value,
       O c ->
       observed_refines
-        (apply_cont_value c (exit_values w) (exit_statics w) (exit_heap w))
+        (apply_cont_value c (exit_values w) (exit_statics w) (exit_heap w)
+           (exit_reads w))
         (apply_cont_value c (exit_values w') (exit_statics w')
-           (exit_heap w')).
+           (exit_heap w') (exit_reads w')).
 
 (* [refines_under_observers] of a class: the two units, run from one
    continuation environment every entry of which is in the class, the
    ones that an earlier entry hides included, come to results that
    [observed_refines] relates, whatever the environment. *)
 Definition refines_observed_by (O : cont_value -> Prop)
-    (statics : static_env) (hp : heap) (source target : expr) : Prop :=
+    (statics : static_env) (hp : heap) (rd : read_record)
+      (source target : expr) : Prop :=
   ∀ conts : cont_env,
     Forall (fun kc => O (snd kc)) conts ->
-    observed_refines (Step (State source [] conts statics hp))
-      (Step (State target [] conts statics hp)).
+    observed_refines (Step (State source [] conts statics hp rd))
+      (Step (State target [] conts statics hp rd)).
 
 (* The observers of some value slots are a class, and the two relations
    of the parts above are the two of that class. *)
@@ -339,9 +346,9 @@ Definition refines_observed_by_observer_statement : Prop :=
    way out in it does not tell apart are so related. *)
 Definition observed_refines_way_out_statement : Prop :=
   ∀ (k : continuation) (vs vs' : list value)
-    (statics statics' : static_env) (hp hp' : heap),
-    observed_refines (apply_cont_value (Outer k) vs statics hp)
-      (apply_cont_value (Outer k) vs' statics' hp') ->
+    (statics statics' : static_env) (hp hp' : heap) (rd rd' : read_record),
+    observed_refines (apply_cont_value (Outer k) vs statics hp rd)
+      (apply_cont_value (Outer k) vs' statics' hp' rd') ->
     same_scalars vs vs' ∧ map fst hp = map fst hp'.
 
 (* [expr_refines_under_observers_statement] of two states, with no
@@ -356,10 +363,11 @@ Definition refines_gives_observed_refines_statement : Prop :=
 (* [refines_under_observers_trans_statement] of every class. *)
 Definition refines_observed_by_trans_statement : Prop :=
   ∀ (O : cont_value -> Prop) (statics : static_env) (hp : heap)
+    (rd : read_record)
     (e1 e2 e3 : expr),
-    refines_observed_by O statics hp e1 e2 ->
-    refines_observed_by O statics hp e2 e3 ->
-    refines_observed_by O statics hp e1 e3.
+    refines_observed_by O statics hp rd e1 e2 ->
+    refines_observed_by O statics hp rd e2 e3 ->
+    refines_observed_by O statics hp rd e1 e3.
 
 (* [under_observers_worlds_statement] of every class that has every way
    out. The premise on the class is used from the worlds to the
@@ -367,12 +375,13 @@ Definition refines_observed_by_trans_statement : Prop :=
    out. *)
 Definition refines_observed_by_worlds_statement : Prop :=
   ∀ (O : cont_value -> Prop) (statics : static_env) (hp : heap)
+    (rd : read_record)
     (source target : expr),
     (∀ k : continuation, O (Outer k)) ->
     code_closed source = true ->
     code_closed target = true ->
     static_code_closed statics ->
-    (refines_observed_by O statics hp source target
+    (refines_observed_by O statics hp rd source target
      <-> refines_world (worlds_observed_by O)
-           (State source [] [] statics hp)
-           (State target [] [] statics hp)).
+           (State source [] [] statics hp rd)
+           (State target [] [] statics hp rd)).

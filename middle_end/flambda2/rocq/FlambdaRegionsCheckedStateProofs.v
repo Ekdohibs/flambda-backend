@@ -269,7 +269,8 @@ Qed.
    state in which the check takes the body says. *)
 Lemma enter_code (a : caller) (closure : value) (id : code_id) (c : code)
     (entry : code_entry) (vs : list value) (args_arity return_arity : arity)
-    (return_to exn_to : cont_value) (hp : heap) (s' : state) :
+    (return_to exn_to : cont_value) (hp : heap) (rd : read_record)
+      (s' : state) :
   caller_ok a ->
   check_code cert codes id c = true ->
   lookup id (cert_code cert) = Some entry ->
@@ -288,13 +289,13 @@ Lemma enter_code (a : caller) (closure : value) (id : code_id) (c : code)
   cont_values_all good return_to ->
   cont_values_all good exn_to ->
   call_code closure c vs args_arity return_arity return_to exn_to
-    (live_statics rs) hp
+    (live_statics rs) hp rd
   = Step s' ->
   entered s'.
 Proof.
   intros Hcaller Hcheck Hentry Hgood_closure Hlive_closure Hheap_closure
     Hgood_vs Hlive_vs Hfit Hret Hraise Hgood_ret Hgood_exn Hcall.
-  destruct (call_code_step _ _ _ _ _ _ _ _ _ _ Hcall)
+  destruct (call_code_step _ _ _ _ _ _ _ _ _ rd_ _ Hcall)
     as (callee_vars & Hno_statics & _ & _ & _ & Hbind & ->).
   destruct c as [params my_closure ret exn metadata body].
   cbn [code_params code_my_closure code_return_continuation

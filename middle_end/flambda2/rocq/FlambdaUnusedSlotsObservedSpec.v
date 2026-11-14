@@ -82,5 +82,5 @@ Definition drop_unused_slots_refines_observed_statement : Prop :=
     (conts : cont_env) (e e' : expr),
     drop_unused_slots dropped e = Some e' ->
     observers dropped conts ->
-    refines (State e [] conts (imports_statics imports) empty_heap)
-      (State e' [] conts (imports_statics imports) empty_heap).
+    refines (State e [] conts (imports_statics imports) empty_heap no_reads)
+      (State e' [] conts (imports_statics imports) empty_heap no_reads).

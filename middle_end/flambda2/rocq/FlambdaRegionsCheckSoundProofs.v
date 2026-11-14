@@ -128,14 +128,14 @@ Proof.
   intros Hbefore Hafter Hrefines.
   apply (refines_trans _
            (State validated_before [] [] (imports_statics imports)
-              empty_heap)).
-  { apply equivalent_refines. exact (expr_eqb_sound _ _ Hbefore _ _ _ _). }
+              empty_heap no_reads)).
+  { apply equivalent_refines. exact (expr_eqb_sound _ _ Hbefore _ _ _ _ rd_). }
   apply (refines_trans _
            (State validated_after [] [] (imports_statics imports)
-              empty_heap)).
+              empty_heap no_reads)).
   { exact Hrefines. }
   apply equivalent_refines, equivalent_sym.
-  exact (expr_eqb_sound _ _ Hafter _ _ _ _).
+  exact (expr_eqb_sound _ _ Hafter _ _ _ _ rd_).
 Qed.
 
 Theorem validated_and_checked_safe : validated_and_checked_safe_statement.

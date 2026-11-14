@@ -72,7 +72,7 @@ Lemma rewrite_code_body_equivalent_in (tenv : typing_env) (f : expr -> expr)
 Proof.
   intros Hf. unfold rewrite_code_body.
   destruct (Bool.eqb (binds_statics body) (binds_statics (f body)));
-    [ apply Hf | intros vars conts statics hp _; apply equivalent_refl ].
+    [ apply Hf | intros vars conts statics hp rd _; apply equivalent_refl ].
 Qed.
 
 (* Handlers that are equivalent, one with one, under what is known less
@@ -117,7 +117,7 @@ Proof.
         Hsat). }
     repeat split; (apply Forall2_cons; [ | assumption ]);
       (split; [ reflexivity | ]); apply Handler_related;
-      intros vs handler_vars conts statics hp _ _ Hbind;
+      intros vs handler_vars conts statics hp rd _ _ Hbind;
       apply equivalent_refines;
       first
         [ apply Hequiv, (Hruns vs handler_vars Hbind)
@@ -132,7 +132,7 @@ Lemma let_cont_recursive_handlers_equivalent_in (tenv : typing_env)
   expr_equivalent_in tenv (Let_cont_recursive handlers body)
     (Let_cont_recursive handlers' body).
 Proof.
-  intros Hall Hbinds vars conts statics hp Hsat.
+  intros Hall Hbinds vars conts statics hp rd Hsat.
   destruct (handlers_equivalent_related tenv vars handlers handlers' Hsat Hall)
     as [[Hfwd Hbwd] [Hfwd' Hbwd']].
   apply refines_antisymmetric;
@@ -148,7 +148,7 @@ Proof.
     as [ x kind d body | bindings body | k [params metadata handler] body
        | handlers body | ap | ac | scrutinee arms | ];
     intros tenv; simpl;
-    try (intros vars conts statics hp _; apply equivalent_refl).
+    try (intros vars conts statics hp rd _; apply equivalent_refl).
   - apply let_equivalent_in, follow_aliases_in_loops_equivalent_in.
   - apply let_static_equivalent_in, follow_aliases_in_loops_equivalent_in.
   - apply (expr_equivalent_in_trans tenv _
@@ -158,7 +158,7 @@ Proof.
          body)).
     + apply let_cont_handler_equivalent_in,
         follow_aliases_in_loops_equivalent_in.
-    + intros vars conts statics hp Hsat.
+    + intros vars conts statics hp rd Hsat.
       apply let_cont_non_recursive_equivalent_step.
       apply (follow_aliases_in_loops_equivalent_in body tenv), Hsat.
   - apply (expr_equivalent_in_trans tenv _
@@ -185,7 +185,7 @@ Proof.
         rewrite rewrite_code_body_binds_statics,
           follow_aliases_in_loops_binds_statics, IH.
         reflexivity.
-    + intros vars conts statics hp Hsat.
+    + intros vars conts statics hp rd Hsat.
       apply let_cont_recursive_equivalent_step; [ reflexivity | intros _ ].
       apply (follow_aliases_in_loops_equivalent_in body tenv), Hsat.
 Qed.
@@ -193,6 +193,6 @@ Qed.
 Theorem follow_aliases_in_loops_equivalent :
   follow_aliases_in_loops_equivalent_statement.
 Proof.
-  intros e vars conts statics hp.
+  intros e vars conts statics hp rd.
   apply (follow_aliases_in_loops_equivalent_in e []). intros x t [].
 Qed.

@@ -32,8 +32,9 @@
    The simulation of each lifting is the one of its own proofs file,
    from the state that the unit starts in with a continuation
    environment of what may follow a unit
-   (FlambdaObserversSpec.observers), and without the invariant of the
-   first run that the test of the exits gives. What may follow a unit
+   (FlambdaObserversSpec.observers), without the invariant of the
+   first run that the test of the exits gives, and without the test of
+   the heap. What may follow a unit
    has no [Let] to lift and no code, so each rewrite leaves it as it is
    and it is related to itself; it binds nothing static, so the run of
    the unit lifted from it makes no static fault
@@ -41,8 +42,9 @@
    no code id, so it makes no closure of the code of a function. The
    values of two exits that answer each other are lifted, so they have
    the same constants and the same locations
-   (FlambdaLiftProofs.lifted_same_scalars), and the two heaps are the
-   same.
+   (FlambdaLiftProofs.lifted_same_scalars), and the two heaps are
+   alike up to the same relation, so they bind the same locations
+   (FlambdaHeapProofs.heap_alike_keys).
 
    The lifting to a group around needs, of the run of the unit
    rewritten, that it reads no variable that has no value, which is so
@@ -104,7 +106,7 @@ Proof.
     { unfold lift_to_head. cbv zeta. rewrite Hbindings. reflexivity. }
     rewrite Hshape in Hwf |- *. intros Hfree conts Hobservers.
     exact (FlambdaLiftFromArmsProofs.unit_lifted_observed u lets e
-             (imports_statics imports) empty_heap conts Hwf Hsome eq_refl
+             (imports_statics imports) empty_heap rd_ conts Hwf Hsome eq_refl
              Hfree Hobservers).
 Qed.
 
@@ -115,7 +117,9 @@ Proof.
   destruct (well_formed_unit u (lift_from_code K [] root e)) eqn:Hwf;
     [ | discriminate ].
   intros [= <-] Hfree conts Hobservers.
-  exact (unit_lifted_out_observed K u e (imports_statics imports) empty_heap
+  exact
+    (unit_lifted_out_observed K u e (imports_statics imports) empty_heap
+       no_reads
            conts Hwf eq_refl Hfree Hobservers).
 Qed.
 
@@ -136,8 +140,11 @@ Proof.
   intros [= <-] Hfree conts Hobservers.
   exact (FlambdaLiftProofs.unit_lifted_observed (lifted_my_closures L)
            (lifting_unit L) (lifted_lets L) e (imports_statics imports)
-           empty_heap conts Hwf Honly eq_refl Hfree
-           (fun id sym _ => statics_ok_imports id sym imports) Hobservers).
+           empty_heap rd_ conts Hwf Honly eq_refl Hfree
+           (fun id sym _ => statics_ok_imports id sym imports)
+           (fun id sym _ =>
+              FlambdaSemanticsProofs.heap_values_all_empty _)
+           Hobservers).
 Qed.
 
 Theorem lift_around_unit_observed_refines :
@@ -152,16 +159,16 @@ Proof.
     [ | discriminate ].
   intros [= <-] Hfree conts Hobservers.
   exact (unit_around_observed u lets groups e (imports_statics imports)
-           empty_heap conts Hwf Hok eq_refl Hfree Hobservers).
+           empty_heap no_reads conts Hwf Hok eq_refl Hfree Hobservers).
 Qed.
 
 (* A lifting that is made where its conditions hold, and the term as it
    is where they do not. *)
-Lemma made_or_same (statics : static_env) (hp : heap)
+Lemma made_or_same (statics : static_env) (hp : heap) (rd : read_record)
     (lifted : option expr) (e : expr) :
   (∀ e' : expr,
-    lifted = Some e' -> refines_under_observers [] statics hp e e') ->
-  refines_under_observers [] statics hp e
+    lifted = Some e' -> refines_under_observers [] statics hp rd e e') ->
+  refines_under_observers [] statics hp rd e
     match lifted with
     | Some e' => e'
     | None => e
@@ -176,19 +183,19 @@ Proof.
   intros imports L e. cbv zeta. intros Hhead Hcode Hlets Haround.
   unfold liftings_observed in *.
   refine
-    (refines_under_observers_trans [] _ _ e (to_head_observed L e) _ _ _).
+    (refines_under_observers_trans [] _ _ rd_ e (to_head_observed L e) _ _ _).
   { unfold to_head_observed in *. apply made_or_same. intros e' Hstep.
     rewrite Hstep in Hhead.
     exact (lift_to_head_unit_observed_refines imports _ _ e e' Hstep Hhead). }
   refine
-    (refines_under_observers_trans [] _ _ _
+    (refines_under_observers_trans [] _ _ rd_ _
        (out_of_code_observed L (to_head_observed L e)) _ _ _).
   { unfold out_of_code_observed in *. apply made_or_same. intros e' Hstep.
     rewrite Hstep in Hcode.
     exact (lift_from_code_unit_observed_refines imports _ _ _ e' Hstep
              Hcode). }
   refine
-    (refines_under_observers_trans [] _ _ _
+    (refines_under_observers_trans [] _ _ rd_ _
        (lets_observed L (out_of_code_observed L (to_head_observed L e))) _ _
        _).
   { unfold lets_observed in *. apply made_or_same. intros e' Hstep.
@@ -380,11 +387,11 @@ End Free_of.
 Lemma add_head_tables_observed (imports : list (symbol * import_class))
     (tables : list (symbol * list simple)) (e : expr) :
   head_free_in (imports_statics imports) (add_head_tables tables e) = true ->
-  refines_under_observers [] (imports_statics imports) empty_heap e
+  refines_under_observers [] (imports_statics imports) empty_heap no_reads e
     (add_head_tables tables e).
 Proof.
   intros Hhead conts Hobservers. apply refines_observed.
-  apply add_head_tables_refines_under; [ | exact Hhead ].
+  apply add_head_tables_refines_under; [ | reflexivity | exact Hhead ].
   pose proof (imports_statics_free_of (tables_dropped tables) imports)
     as Hstatics.
   unfold envs_free_of in Hstatics |- *.
@@ -425,12 +432,12 @@ Proof.
     as Hall.
   pose proof (free_in_under_tables _ _ _ Hall) as Haround.
   refine
-    (refines_under_observers_trans [] _ _ e
+    (refines_under_observers_trans [] _ _ rd_ e
        (add_head_tables (tables_put L) (liftings_observed L e)) _ _
        (FlambdaCopyCodeProofs.with_copies_refines_under imports []
           (code_copied L) _)).
   refine
-    (refines_under_observers_trans [] _ _ e (liftings_observed L e) _ _ _).
+    (refines_under_observers_trans [] _ _ rd_ e (liftings_observed L e) _ _ _).
   - exact (liftings_observed_refines imports L e Hhead Hcode Hlets Haround).
   - apply add_head_tables_observed.
     exact (FlambdaValidateImportsProofs.static_names_free_in_head _ _ Hall).

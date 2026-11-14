@@ -174,8 +174,8 @@ Definition hoist_statics (u : unit_interface) (e : expr) : option expr :=
 Definition hoist_statics_program_equivalent_statement : Prop :=
   ∀ (u : unit_interface) (e e' : expr),
     hoist_statics u e = Some e' ->
-    equivalent (State e [] [] empty_static_env empty_heap)
-      (State e' [] [] empty_static_env empty_heap).
+    equivalent (State e [] [] empty_static_env empty_heap no_reads)
+      (State e' [] [] empty_static_env empty_heap no_reads).
 
 (* The same of a unit that imports symbols: if the unit binds no name
    that the imports bind, the two, each run from the static environment
@@ -196,8 +196,8 @@ Definition hoist_statics_equivalent_imports_statement : Prop :=
     (e e' : expr),
     hoist_statics u e = Some e' ->
     static_names_free_in (imports_statics imports) e = true ->
-    equivalent (State e [] [] (imports_statics imports) empty_heap)
-      (State e' [] [] (imports_statics imports) empty_heap).
+    equivalent (State e [] [] (imports_statics imports) empty_heap no_reads)
+      (State e' [] [] (imports_statics imports) empty_heap no_reads).
 
 (* The parts of the pass commute with renaming, which moves no symbol
    and no code id: a constant that has a value in the empty environment

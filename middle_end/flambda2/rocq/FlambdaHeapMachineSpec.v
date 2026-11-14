@@ -26,10 +26,14 @@
  ******************************************************************************)
 
 (* C4's prototype of the heap: a machine that runs the primitives of
-   FlambdaHeapSpec.v. It is evidence for the request
-   (requests/C4-heap.md), not the change: the heap is in the state of
-   FlambdaSemanticsSpec.v, whose machine does not run those primitives
-   yet, and this file has a machine of its own beside it that does.
+   FlambdaHeapSpec.v. It was evidence for the request
+   (requests/C4-heap.md) before the machine of FlambdaSemanticsSpec.v
+   ran those primitives, which it now does (the two machines agree at
+   every step that is not a [Let] of a primitive:
+   [heap_step_agrees_statement]). What this file still has that the
+   other has not is the relation on what is observed at exit up to a
+   correspondence between the locations of two runs, stated of this
+   machine and not of [step] (decision D40).
 
    This file is to be read with the request. It has
    - a machine with a heap ([heap_state], [heap_step]): that of
@@ -289,7 +293,8 @@ Definition heap_step_evolves_statement : Prop :=
    FlambdaSemanticsSpec.v with the heap carried along: a state whose next
    step is not a [Let] of a primitive steps as its projection does. *)
 Definition forget_heap (s : heap_state) : state :=
-  State (hs_expr s) (hs_vars s) (hs_conts s) (hs_statics s) (hs_heap s).
+  State (hs_expr s) (hs_vars s) (hs_conts s) (hs_statics s) (hs_heap s)
+    no_reads.
 
 Definition is_let_prim (e : expr) : bool :=
   match e with
@@ -302,7 +307,7 @@ Definition heap_step_agrees_statement : Prop :=
     is_let_prim (hs_expr s) = false ->
     match heap_step s, step (forget_heap s) with
     | Heap_step s', Step t => forget_heap s' = t ∧ hs_heap s' = hs_heap s
-    | Heap_exit k o, Exit k' vs _ =>
+    | Heap_exit k o, Exit k' vs _ _ =>
       k = k' ∧ o = Outcome vs (hs_statics s) (hs_heap s)
     | Heap_undefined, Undefined => True
     | _, _ => False
@@ -991,14 +996,9 @@ Definition cse_adjacent_statement : Prop :=
    first does not ([states_related_except]). The symbol is new: it is not
    bound, and the body, the environments and the heap neither mention it
    nor bind it (the conditions of FlambdaUnusedStaticsSpec.v on a name
-   that is removed, read the other way). Nothing is asked of the fields:
-   where one is a symbol that is bound to nothing, or the new symbol
-   itself, the primitive has no value. *)
-Definition heap_free_of (D : dropped) (h : heap) : bool :=
-  forallb
-    (fun binding => forallb (value_avoids D) (values_of_cell (snd binding)))
-    h.
-
+   that is removed, [heap_free_of] among them, read the other way).
+   Nothing is asked of the fields: where one is a symbol that is bound
+   to nothing, or the new symbol itself, the primitive has no value. *)
 Definition lift_block_statement : Prop :=
   ∀ (x : variable) (x_kind : flambda_kind) (s : symbol) (tag : Z)
     (fields : list simple) (body : expr) (vars : env) (conts : cont_env)

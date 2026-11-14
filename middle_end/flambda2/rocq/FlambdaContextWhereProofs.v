@@ -65,29 +65,29 @@ Definition code_refined_from (params : list variable)
 Lemma handler_forwards (params : list variable)
     (kinds : list flambda_kind) (def_vars : env) (source target : expr)
     (vs : list value) (handler_vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   handler_refines_from inv params kinds def_vars source target ->
   map kind_of_value vs = kinds ->
   bind_params params vs def_vars = Some handler_vars ->
-  refines_from inv (State source handler_vars conts statics hp)
-    (State target handler_vars conts statics hp).
+  refines_from inv (State source handler_vars conts statics hp rd)
+    (State target handler_vars conts statics hp rd).
 Proof.
   intros Hrefines Hkinds Hbind.
-  exact (Hrefines vs handler_vars conts statics hp Hkinds Hbind).
+  exact (Hrefines vs handler_vars conts statics hp rd_ Hkinds Hbind).
 Qed.
 
 Lemma handler_backwards (params : list variable)
     (kinds : list flambda_kind) (def_vars : env) (target source : expr)
     (vs : list value) (handler_vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   handler_refined_from params kinds def_vars target source ->
   map kind_of_value vs = kinds ->
   bind_params params vs def_vars = Some handler_vars ->
-  refines_from inv (State source handler_vars conts statics hp)
-    (State target handler_vars conts statics hp).
+  refines_from inv (State source handler_vars conts statics hp rd)
+    (State target handler_vars conts statics hp rd).
 Proof.
   intros Hrefines Hkinds Hbind.
-  exact (Hrefines vs handler_vars conts statics hp Hkinds Hbind).
+  exact (Hrefines vs handler_vars conts statics hp rd_ Hkinds Hbind).
 Qed.
 
 (* The lemmas of FlambdaContextProofs.v give, of the callee, that it is
@@ -98,19 +98,20 @@ Lemma code_forwards (id : code_id) (params : list variable)
     (my_closure : variable) (ret exn : continuation)
     (metadata : code_metadata) (source target : expr) (vs : list value)
     (callee : value) (callee_vars : env) (return_to exn_to : cont_value)
-    (statics : static_env) (hp : heap) (slots : list (value_slot * value)) :
+    (statics : static_env) (hp : heap) (rd : read_record)
+      (slots : list (value_slot * value)) :
   code_refines_from inv params my_closure ret exn metadata source target ->
   bind_params params vs [(my_closure, callee)] = Some callee_vars ->
   map kind_of_value vs = unarize (cm_params_arity metadata) ->
   kind_of_value callee = Value ->
   closure_of statics callee = Some (id, slots) ->
   refines_from inv
-    (State source callee_vars [(ret, return_to); (exn, exn_to)] statics hp)
-    (State target callee_vars [(ret, return_to); (exn, exn_to)] statics hp).
+    (State source callee_vars [(ret, return_to); (exn, exn_to)] statics hp rd)
+    (State target callee_vars [(ret, return_to); (exn, exn_to)] statics hp rd).
 Proof.
   intros Hrefines Hbind Hkinds Hvalue _.
   exact
-    (Hrefines vs callee callee_vars return_to exn_to statics hp Hbind Hkinds
+    (Hrefines vs callee callee_vars return_to exn_to statics hp rd_ Hbind Hkinds
        Hvalue).
 Qed.
 
@@ -118,19 +119,20 @@ Lemma code_backwards (id : code_id) (params : list variable)
     (my_closure : variable) (ret exn : continuation)
     (metadata : code_metadata) (target source : expr) (vs : list value)
     (callee : value) (callee_vars : env) (return_to exn_to : cont_value)
-    (statics : static_env) (hp : heap) (slots : list (value_slot * value)) :
+    (statics : static_env) (hp : heap) (rd : read_record)
+      (slots : list (value_slot * value)) :
   code_refined_from params my_closure ret exn metadata target source ->
   bind_params params vs [(my_closure, callee)] = Some callee_vars ->
   map kind_of_value vs = unarize (cm_params_arity metadata) ->
   kind_of_value callee = Value ->
   closure_of statics callee = Some (id, slots) ->
   refines_from inv
-    (State source callee_vars [(ret, return_to); (exn, exn_to)] statics hp)
-    (State target callee_vars [(ret, return_to); (exn, exn_to)] statics hp).
+    (State source callee_vars [(ret, return_to); (exn, exn_to)] statics hp rd)
+    (State target callee_vars [(ret, return_to); (exn, exn_to)] statics hp rd).
 Proof.
   intros Hrefines Hbind Hkinds Hvalue _.
   exact
-    (Hrefines vs callee callee_vars return_to exn_to statics hp Hbind Hkinds
+    (Hrefines vs callee callee_vars return_to exn_to statics hp rd_ Hbind Hkinds
        Hvalue).
 Qed.
 
@@ -143,20 +145,20 @@ End Relations.
 Theorem let_cont_handler_refines_from
   : let_cont_handler_refines_from_statement.
 Proof.
-  intros inv k params metadata handler handler' body vars conts statics hp
+  intros inv k params metadata handler handler' body vars conts statics hp rd
     Hstep Hinv Hinv' Hhandler.
   exact
     (FlambdaContextProofs.let_cont_handler_refines_from inv Hstep _ _ _ _
        (handler_forwards inv) (handler_backwards inv) (code_forwards inv)
        (code_backwards inv) k params metadata handler handler' body vars
-       conts statics hp Hinv Hinv' Hhandler Hhandler).
+       conts statics hp rd_ Hinv Hinv' Hhandler Hhandler).
 Qed.
 
 Theorem let_cont_recursive_handler_refines_from
   : let_cont_recursive_handler_refines_from_statement.
 Proof.
   intros inv before k params metadata handler handler' after body vars conts
-    statics hp Hstep Hinv Hinv' Hbinds Hhandler.
+    statics hp rd Hstep Hinv Hinv' Hbinds Hhandler.
   apply
     (let_cont_recursive_handlers_refine_from inv Hstep _ _ _ _
        (handler_forwards inv) (handler_backwards inv) (code_forwards inv)
@@ -174,12 +176,14 @@ Theorem let_static_code_refines_from
   : let_static_code_refines_from_statement.
 Proof.
   intros inv before id params my_closure ret exn metadata code_body
-    code_body' after body vars conts statics hp Hstep Hinv Hinv' Hbinds Hcode.
+    code_body' after body vars conts statics hp rd Hstep Hinv Hinv' Hbinds
+      Hcode.
   exact
     (FlambdaContextProofs.let_static_code_refines_from inv Hstep _ _ _ _
        (handler_forwards inv) (handler_backwards inv) (code_forwards inv)
        (code_backwards inv) before id params my_closure ret exn metadata
-       code_body code_body' after body vars conts statics hp Hinv Hinv' Hbinds
+       code_body code_body' after body vars conts statics hp rd_ Hinv Hinv'
+         Hbinds
        Hcode Hcode).
 Qed.
 
@@ -187,11 +191,11 @@ Theorem let_static_code_refines_where
   : let_static_code_refines_where_statement.
 Proof.
   intros ok before id params my_closure ret exn metadata code_body
-    code_body' after body vars conts statics hp Hextend Hok Hbinds Hcode.
+    code_body' after body vars conts statics hp rd Hextend Hok Hbinds Hcode.
   exact
     (FlambdaContextProofs.let_static_code_refines_where ok Hextend before id
        params my_closure ret exn metadata code_body code_body' after body
-       vars conts statics hp Hok Hbinds Hcode).
+       vars conts statics hp rd_ Hok Hbinds Hcode).
 Qed.
 
 (* ======================================================================== *)
@@ -201,17 +205,18 @@ Qed.
 Theorem handler_refines_from_always : handler_refines_from_always_statement.
 Proof.
   intros params kinds def_vars source target. split.
-  - intros Hrefines vs handler_vars conts statics hp Hkinds Hbind.
-    exact (proj2 (Hrefines vs handler_vars conts statics hp Hkinds Hbind) I).
-  - intros Hrefines vs handler_vars conts statics hp Hkinds Hbind.
+  - intros Hrefines vs handler_vars conts statics hp rd Hkinds Hbind.
+    exact
+      (proj2 (Hrefines vs handler_vars conts statics hp rd_ Hkinds Hbind) I).
+  - intros Hrefines vs handler_vars conts statics hp rd Hkinds Hbind.
     split; [ split; intros _; exact I | intros _ ].
-    exact (Hrefines vs handler_vars conts statics hp Hkinds Hbind).
+    exact (Hrefines vs handler_vars conts statics hp rd_ Hkinds Hbind).
 Qed.
 
 Theorem code_refines_from_always : code_refines_from_always_statement.
 Proof.
   intros params my_closure ret exn metadata source target Hrefines vs callee
-    callee_vars return_to exn_to statics hp _ _ _.
+    callee_vars return_to exn_to statics hp rd _ _ _.
   split; [ split; intros _; exact I | intros _; apply Hrefines ].
 Qed.
 
@@ -219,8 +224,9 @@ Theorem handler_refines_from_in_range
   : handler_refines_from_in_range_statement.
 Proof.
   intros params kinds def_vars source target Hsource Htarget Hrefines vs
-    handler_vars conts statics hp Hkinds Hbind.
-  split; [ | exact (Hrefines vs handler_vars conts statics hp Hkinds Hbind) ].
+    handler_vars conts statics hp rd Hkinds Hbind.
+  split;
+    [ | exact (Hrefines vs handler_vars conts statics hp rd_ Hkinds Hbind) ].
   unfold state_in_range.
   cbn [state_expr state_vars state_conts state_statics].
   rewrite Hsource, Htarget. reflexivity.
@@ -229,7 +235,7 @@ Qed.
 Theorem let_cont_handler_refines_in_range
   : let_cont_handler_refines_in_range_statement.
 Proof.
-  intros k params metadata handler handler' body vars conts statics hp Hinv
+  intros k params metadata handler handler' body vars conts statics hp rd Hinv
     Htarget Hrefines.
   pose proof Hinv as (Hexpr & Hvars & Hconts & Hstatics).
   cbn [state_expr state_vars state_conts state_statics] in Hexpr, Hvars,
@@ -266,7 +272,8 @@ Lemma code_forwards_called (id : code_id) (params : list variable)
     (my_closure : variable) (ret exn : continuation)
     (metadata : code_metadata) (source target : expr) (vs : list value)
     (callee : value) (callee_vars : env) (return_to exn_to : cont_value)
-    (statics : static_env) (hp : heap) (slots : list (value_slot * value)) :
+    (statics : static_env) (hp : heap) (rd : read_record)
+      (slots : list (value_slot * value)) :
   code_refines_from_called inv id params my_closure ret exn metadata source
     target ->
   bind_params params vs [(my_closure, callee)] = Some callee_vars ->
@@ -274,12 +281,12 @@ Lemma code_forwards_called (id : code_id) (params : list variable)
   kind_of_value callee = Value ->
   closure_of statics callee = Some (id, slots) ->
   refines_from inv
-    (State source callee_vars [(ret, return_to); (exn, exn_to)] statics hp)
-    (State target callee_vars [(ret, return_to); (exn, exn_to)] statics hp).
+    (State source callee_vars [(ret, return_to); (exn, exn_to)] statics hp rd)
+    (State target callee_vars [(ret, return_to); (exn, exn_to)] statics hp rd).
 Proof.
   intros Hrefines Hbind Hkinds Hvalue Hclosure.
   exact
-    (Hrefines vs callee callee_vars return_to exn_to statics hp slots Hbind
+    (Hrefines vs callee callee_vars return_to exn_to statics hp rd_ slots Hbind
        Hkinds Hvalue Hclosure).
 Qed.
 
@@ -287,7 +294,8 @@ Lemma code_backwards_called (id : code_id) (params : list variable)
     (my_closure : variable) (ret exn : continuation)
     (metadata : code_metadata) (target source : expr) (vs : list value)
     (callee : value) (callee_vars : env) (return_to exn_to : cont_value)
-    (statics : static_env) (hp : heap) (slots : list (value_slot * value)) :
+    (statics : static_env) (hp : heap) (rd : read_record)
+      (slots : list (value_slot * value)) :
   code_refined_from_called id params my_closure ret exn metadata target
     source ->
   bind_params params vs [(my_closure, callee)] = Some callee_vars ->
@@ -295,12 +303,12 @@ Lemma code_backwards_called (id : code_id) (params : list variable)
   kind_of_value callee = Value ->
   closure_of statics callee = Some (id, slots) ->
   refines_from inv
-    (State source callee_vars [(ret, return_to); (exn, exn_to)] statics hp)
-    (State target callee_vars [(ret, return_to); (exn, exn_to)] statics hp).
+    (State source callee_vars [(ret, return_to); (exn, exn_to)] statics hp rd)
+    (State target callee_vars [(ret, return_to); (exn, exn_to)] statics hp rd).
 Proof.
   intros Hrefines Hbind Hkinds Hvalue Hclosure.
   exact
-    (Hrefines vs callee callee_vars return_to exn_to statics hp slots Hbind
+    (Hrefines vs callee callee_vars return_to exn_to statics hp rd_ slots Hbind
        Hkinds Hvalue Hclosure).
 Qed.
 
@@ -310,13 +318,14 @@ Theorem let_static_code_refines_from_called
   : let_static_code_refines_from_called_statement.
 Proof.
   intros inv before id params my_closure ret exn metadata code_body
-    code_body' after body vars conts statics hp Hstep Hinv Hinv' Hbinds Hcode.
+    code_body' after body vars conts statics hp rd Hstep Hinv Hinv' Hbinds
+      Hcode.
   exact
     (FlambdaContextProofs.let_static_code_refines_from inv Hstep _ _ _ _
        (handler_forwards inv) (handler_backwards inv)
        (code_forwards_called inv) (code_backwards_called inv) before id
        params my_closure ret exn metadata code_body code_body' after body
-       vars conts statics hp Hinv Hinv' Hbinds Hcode Hcode).
+       vars conts statics hp rd_ Hinv Hinv' Hbinds Hcode Hcode).
 Qed.
 
 (* Two bodies that have the premise of [code_refines_from] have that of
@@ -330,10 +339,10 @@ Lemma code_refines_from_called_of_from (inv : state -> Prop) (id : code_id)
   code_refines_from_called inv id params my_closure ret exn metadata source
     target.
 Proof.
-  intros Hrefines vs callee callee_vars return_to exn_to statics hp
+  intros Hrefines vs callee callee_vars return_to exn_to statics hp rd
     value_slots Hbind Hkinds Hvalue _.
   exact
-    (Hrefines vs callee callee_vars return_to exn_to statics hp Hbind Hkinds
+    (Hrefines vs callee callee_vars return_to exn_to statics hp rd_ Hbind Hkinds
        Hvalue).
 Qed.
 
@@ -344,11 +353,11 @@ Lemma let_static_code_refines_from_of_called :
   let_static_code_refines_from_statement.
 Proof.
   intros Hcalled inv before id params my_closure ret exn metadata code_body
-    code_body' after body vars conts statics hp Hstep Hinv Hinv' Hbinds
+    code_body' after body vars conts statics hp rd Hstep Hinv Hinv' Hbinds
     Hbody.
   exact
     (Hcalled inv before id params my_closure ret exn metadata code_body
-       code_body' after body vars conts statics hp Hstep Hinv Hinv' Hbinds
+       code_body' after body vars conts statics hp rd Hstep Hinv Hinv' Hbinds
        (code_refines_from_called_of_from inv id params my_closure ret exn
           metadata code_body code_body' Hbody)).
 Qed.

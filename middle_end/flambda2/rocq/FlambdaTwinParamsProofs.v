@@ -503,20 +503,25 @@ Qed.
 (* What is evaluated                                                        *)
 (* ======================================================================== *)
 
-Lemma eval_twin_named (statics : static_env) (pairs : twinned)
-    (vars vars' : env) (d : named) :
+(* A defining expression runs as it did: the untagging of the twin is
+   the same primitive, of an argument that is worth the same. *)
+Lemma exec_twin_named (statics : static_env) (hp : heap) (rd : read_record)
+    (pairs : twinned) (vars vars' : env) (d : named) :
   vars_rel [] [] pairs vars vars' ->
-  eval_named statics vars' (twin_named pairs d) = eval_named statics vars d.
+  exec_named statics hp rd vars' (twin_named pairs d)
+  = exec_named statics hp rd vars d.
 Proof.
   intros Hvars.
-  assert (Hsame : eval_named statics vars' d = eval_named statics vars d).
-  { apply eval_named_agree. intros z _.
+  assert
+    (Hsame :
+      exec_named statics hp rd vars' d = exec_named statics hp rd vars d).
+  { apply exec_named_agree. intros z _.
     exact (vars_rel_agree pairs vars vars' Hvars z). }
   unfold twin_named.
   destruct (untag_of d) as [x | ] eqn:Huntag; [ | exact Hsame ].
   destruct (lookup x pairs) as [p | ] eqn:Hp; [ | exact Hsame ].
   apply untag_of_some in Huntag. subst d.
-  cbn [eval_named eval_simples eval_simple].
+  apply exec_named_args. cbn [eval_simples eval_simple].
   rewrite
     <- (vars_rel_pairs pairs vars vars' Hvars x p (lookup_in x p pairs Hp)),
     <- (vars_rel_agree pairs vars vars' Hvars x).
@@ -843,26 +848,26 @@ Definition conts_rel (active : positions) (conts conts' : cont_env) : Prop :=
    parameters [pending] being still to come. *)
 Inductive state_rel : nat -> state -> state -> Prop :=
   | Rel_state_plain (e : expr) (vars : env) (conts conts' : cont_env)
-      (statics : static_env) (hp : heap) :
+      (statics : static_env) (hp : heap) (rd : read_record) :
     conts_rel [] conts conts' ->
-    state_rel 0 (State e vars conts statics hp)
-      (State e vars conts' statics hp)
+    state_rel 0 (State e vars conts statics hp rd)
+      (State e vars conts' statics hp rd)
   | Rel_state_inside (e : expr) (vars vars' : env) (conts conts' : cont_env)
-      (statics : static_env) (hp : heap) (active : positions)
+      (statics : static_env) (hp : heap) (rd : read_record) (active : positions)
       (pairs : twinned) (pending : list variable) :
     twin_ok sites active e = true ->
     head_ok (twin_names pending e ++ pending) pending e = true ->
     vars_rel (twin_names pending e) pending pairs vars vars' ->
     conts_rel active conts conts' ->
-    state_rel (length pending) (State e vars conts statics hp)
+    state_rel (length pending) (State e vars conts statics hp rd)
       (State (twin_expr sites active pairs pending e) vars' conts' statics
-         hp).
+         hp rd).
 
 Definition related (s s' : state) : Prop := ∃ n : nat, state_rel n s s'.
 
 Lemma related_refl (s : state) : related s s.
 Proof.
-  destruct s as [e vars conts statics hp]. exists 0.
+  destruct s as [e vars conts statics hp rd]. exists 0.
   apply Rel_state_plain. intros k1. apply Rel_same.
 Qed.
 
@@ -870,16 +875,17 @@ Qed.
    no [Let] still to come. *)
 Lemma state_rel_settled (e : expr) (vars vars' : env)
     (conts conts' : cont_env) (statics : static_env) (hp : heap)
+      (rd : read_record)
     (active : positions) (pairs : twinned) :
   twin_ok sites active e = true ->
   vars_rel [] [] pairs vars vars' ->
   conts_rel active conts conts' ->
-  state_rel 0 (State e vars conts statics hp)
-    (State (twin_expr sites active pairs [] e) vars' conts' statics hp).
+  state_rel 0 (State e vars conts statics hp rd)
+    (State (twin_expr sites active pairs [] e) vars' conts' statics hp rd).
 Proof.
   intros Hok Hvars Hconts.
   apply
-    (Rel_state_inside e vars vars' conts conts' statics hp active pairs []);
+    (Rel_state_inside e vars vars' conts conts' statics hp rd_ active pairs []);
     [ exact Hok | apply head_ok_nil | rewrite twin_names_nil; exact Hvars
     | exact Hconts ].
 Qed.
@@ -887,7 +893,7 @@ Qed.
 Lemma simulated_of_related (r r' : step_result) :
   result_related related r r' -> result_simulated related r r'.
 Proof.
-  destruct r as [t | k1 vs hp | ], r' as [t' | k1' vs' hp' | ]; simpl;
+  destruct r as [t | k1 vs hp rd | ], r' as [t' | k1' vs' hp' rd' | ]; simpl;
     try contradiction; auto.
 Qed.
 
@@ -940,16 +946,17 @@ Qed.
 Lemma call_code_rel (closure : value) (c : code) (vs : list value)
     (args_arity return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   cont_rel [] return_to return_to' ->
   cont_rel [] exn_to exn_to' ->
   result_related related
-    (call_code closure c vs args_arity return_arity return_to exn_to statics hp)
+    (call_code closure c vs args_arity return_arity return_to exn_to statics hp
+       rd)
     (call_code closure c vs args_arity return_arity return_to' exn_to'
-       statics hp).
+       statics hp rd).
 Proof.
   intros Hreturn Hraise.
-  destruct (call_code_cases closure c vs args_arity return_arity statics hp)
+  destruct (call_code_cases closure c vs args_arity return_arity statics hp rd)
     as [Hundefined | (callee_vars & Hcall)].
   - rewrite !Hundefined. exact I.
   - rewrite !Hcall. simpl. exists 0.
@@ -966,18 +973,20 @@ Qed.
 
 Lemma run_call_rel (shape : option call_shape) (return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   cont_rel [] return_to return_to' ->
   cont_rel [] exn_to exn_to' ->
   (∀ partial : value,
     result_simulated related
-      (apply_cont_value return_to [partial] statics hp)
-      (apply_cont_value return_to' [partial] statics hp)) ->
+      (apply_cont_value return_to [partial] statics hp rd)
+      (apply_cont_value return_to' [partial] statics hp rd)) ->
   result_simulated related
-    (run_call (fun partial => apply_cont_value return_to [partial] statics hp)
-       shape return_arity return_to exn_to statics hp)
-    (run_call (fun partial => apply_cont_value return_to' [partial] statics hp)
-       shape return_arity return_to' exn_to' statics hp).
+    (run_call
+       (fun partial => apply_cont_value return_to [partial] statics hp rd)
+       shape return_arity return_to exn_to statics hp rd)
+    (run_call
+       (fun partial => apply_cont_value return_to' [partial] statics hp rd)
+       shape return_arity return_to' exn_to' statics hp rd).
 Proof.
   intros Hreturn Hraise Hpartial.
   destruct shape
@@ -994,11 +1003,11 @@ Qed.
 (* Related continuations, applied to values and to the same with
    those at the positions given again. *)
 Lemma apply_cont_value_rel (ts : list nat) (c c' : cont_value)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   cont_rel ts c c' ->
   ∀ vs : list value,
-    result_simulated related (apply_cont_value c vs statics hp)
-      (apply_cont_value c' (twin_values ts vs) statics hp).
+    result_simulated related (apply_cont_value c vs statics hp rd)
+      (apply_cont_value c' (twin_values ts vs) statics hp rd).
 Proof.
   intros Hc.
   induction Hc
@@ -1045,27 +1054,27 @@ Proof.
 Qed.
 
 Lemma apply_cont_value_plain (c c' : cont_value) (vs : list value)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   cont_rel [] c c' ->
-  result_simulated related (apply_cont_value c vs statics hp)
-    (apply_cont_value c' vs statics hp).
+  result_simulated related (apply_cont_value c vs statics hp rd)
+    (apply_cont_value c' vs statics hp rd).
 Proof.
   intros Hc.
-  pose proof (apply_cont_value_rel [] c c' statics hp Hc vs) as Happly.
+  pose proof (apply_cont_value_rel [] c c' statics hp rd Hc vs) as Happly.
   rewrite twin_values_nil in Happly. exact Happly.
 Qed.
 
 Lemma call_function_rel (callee : value) (call_kind : call_kind)
     (vs : list value) (args_arity return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   cont_rel [] return_to return_to' ->
   cont_rel [] exn_to exn_to' ->
   result_simulated related
     (call_function callee call_kind vs args_arity return_arity return_to
-       exn_to statics hp)
+       exn_to statics hp rd)
     (call_function callee call_kind vs args_arity return_arity return_to'
-       exn_to' statics hp).
+       exn_to' statics hp rd).
 Proof.
   intros Hreturn Hraise. unfold call_function.
   apply run_call_rel; [ exact Hreturn | exact Hraise | ].
@@ -1080,7 +1089,7 @@ Definition answer (n : nat) (r : step_result) (s' : state) : Prop :=
   | Step t =>
     (∃ (m : nat) (t' : state), step s' = Step t' ∧ state_rel m t t')
     ∨ ∃ m : nat, m < n ∧ state_rel m t s'
-  | Exit k vs hp => step s' = Exit k vs hp
+  | Exit k vs hp rd => step s' = Exit k vs hp rd
   | Undefined => True
   end.
 
@@ -1088,25 +1097,26 @@ Lemma answer_together (n : nat) (r : step_result) (s' : state) :
   result_simulated related r (step s') -> answer n r s'.
 Proof.
   unfold answer.
-  destruct r as [t | k vs hp | ], (step s') as [t' | k' vs' hp' | ]; simpl;
+  destruct r as [t | k vs hp rd | ], (step s') as [t' | k' vs' hp' rd' | ];
+    simpl;
     try contradiction; auto.
   - intros [m Hrel]. left. exists m, t'. split; [ reflexivity | exact Hrel ].
-  - intros (-> & -> & ->). reflexivity.
+  - intros (-> & -> & -> & <-). reflexivity.
 Qed.
 
 (* The same expression under related continuations: the two states
    step together. *)
 Lemma plain_step (e : expr) (vars : env) (conts conts' : cont_env)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   conts_rel [] conts conts' ->
-  result_simulated related (step (State e vars conts statics hp))
-    (step (State e vars conts' statics hp)).
+  result_simulated related (step (State e vars conts statics hp rd))
+    (step (State e vars conts' statics hp rd)).
 Proof.
   intros Hconts.
   destruct e as [y kind1 d body | bindings body | k1 hh body
                 | handlers body | ap | ac | scrutinee arms | ].
-  - rewrite !step_let.
-    destruct (eval_named statics vars d) as [v | ]; [ | exact I ].
+  - rewrite !step_let_exec.
+    destruct (exec_named _ _ rd_ _ d) as [[[v hp'] rd'] | ]; [ | exact I ].
     destruct (kind_eqb (kind_of_value v) kind1); [ | exact I ].
     exists 0. apply Rel_state_plain, Hconts.
   - rewrite !step_let_static.
@@ -1142,14 +1152,14 @@ Qed.
    first run takes a [Let] that went alone, and the two step together
    otherwise. *)
 Lemma inside_step (e : expr) (vars vars' : env) (conts conts' : cont_env)
-    (statics : static_env) (hp : heap) (active : positions)
+    (statics : static_env) (hp : heap) (rd : read_record) (active : positions)
     (pairs : twinned) (pending : list variable) :
   twin_ok sites active e = true ->
   head_ok (twin_names pending e ++ pending) pending e = true ->
   vars_rel (twin_names pending e) pending pairs vars vars' ->
   conts_rel active conts conts' ->
-  answer (length pending) (step (State e vars conts statics hp))
-    (State (twin_expr sites active pairs pending e) vars' conts' statics hp).
+  answer (length pending) (step (State e vars conts statics hp rd))
+    (State (twin_expr sites active pairs pending e) vars' conts' statics hp rd).
 Proof.
   intros Hok Hhead Hvars Hconts.
   destruct e as [y kind1 d body | bindings body | k1 hh body
@@ -1160,8 +1170,10 @@ Proof.
     destruct pending as [ | p rest].
     + cbn [twin_ok twin_expr twin_names] in Hok, Hvars |- *.
       apply answer_together.
-      rewrite !step_let, (eval_twin_named statics pairs vars vars' d Hvars).
-      destruct (eval_named statics vars d) as [v | ]; [ | exact I ].
+      rewrite !step_let_exec,
+        (exec_twin_named statics hp rd pairs vars vars' d Hvars).
+      destruct (exec_named statics hp rd vars d) as [[[v hp'] rd'] | ];
+        [ | exact I ].
       destruct (kind_eqb (kind_of_value v) kind1); [ | exact I ].
       exists 0. apply state_rel_settled; [ exact Hok | | exact Hconts ].
       exact (vars_rel_kept y [] [] pairs vars vars' v Hvars eq_refl).
@@ -1172,7 +1184,7 @@ Proof.
       destruct (Pos.eqb_spec q p) as [-> | Hne]; intros Hhead Hvars.
       * (* the [Let] of the first parameter to come: the first run
            takes it alone *)
-        rewrite step_let. cbn [eval_named eval_simple].
+        rewrite step_let_simple. cbn [eval_simple].
         destruct (lookup p vars) as [v | ] eqn:Hp; [ | exact I ].
         destruct (kind_eqb (kind_of_value v) kind1); [ | exact I ].
         right. exists (length rest). split; [ cbn [length]; lia | ].
@@ -1186,8 +1198,8 @@ Proof.
         apply andb_true_iff in Hhead as [Hy Hq].
         apply negb_true_iff in Hy. apply negb_true_iff in Hq.
         rewrite among_app in Hq. apply orb_false_iff in Hq as [Hq _].
-        apply answer_together. rewrite !step_let.
-        cbn [eval_named eval_simple].
+        apply answer_together. rewrite !step_let_simple.
+        cbn [eval_simple].
         rewrite <- (vars_rel_lookup _ _ pairs vars vars' q Hvars Hq).
         destruct (lookup q vars) as [v | ]; [ | exact I ].
         destruct (kind_eqb (kind_of_value v) kind1); [ | exact I ].
@@ -1256,7 +1268,8 @@ Proof.
     rewrite (eval_twin_args _ pairs vars vars' (ac_args ac) vs Hvars Hvs).
     unfold apply_continuation.
     exact
-      (apply_cont_value_rel _ _ _ statics hp (Hconts (ac_continuation ac)) vs).
+      (apply_cont_value_rel _ _ _ statics hp rd
+         (Hconts (ac_continuation ac)) vs).
   - (* [Switch] *)
     cbn [twin_expr twin_names] in Hvars |- *. apply answer_together.
     pose proof (vars_rel_agree pairs vars vars' Hvars) as Hagree.
@@ -1269,7 +1282,7 @@ Proof.
     cbn [option_map]. exists 0.
     exact
       (state_rel_settled (Apply_cont ac) vars vars' conts conts' statics hp
-         active pairs eq_refl Hvars Hconts).
+         rd active pairs eq_refl Hvars Hconts).
   - (* [Invalid] *)
     apply answer_together. cbn [twin_expr]. rewrite !step_invalid. exact I.
 Qed.
@@ -1278,7 +1291,7 @@ Lemma twin_step (n : nat) (s s' : state) :
   state_rel n s s' -> answer n (step s) s'.
 Proof.
   intros
-    [e vars conts conts' statics hp Hconts
+    [e vars conts conts' statics hp rd Hconts
     | e vars vars' conts conts' statics hp active pairs pending Hok Hhead
         Hvars Hconts].
   - apply answer_together, plain_step, Hconts.
@@ -1297,7 +1310,7 @@ End Runs.
 
 Theorem twin_at_refines : twin_at_refines_statement.
 Proof.
-  intros sites e vars conts statics hp. unfold twin_at.
+  intros sites e vars conts statics hp rd. unfold twin_at.
   destruct (twin_ok sites [] e) eqn:Hok; [ | apply refines_refl ].
   apply (related_refines sites 0).
   apply state_rel_settled; [ exact Hok | apply vars_rel_nil | ].

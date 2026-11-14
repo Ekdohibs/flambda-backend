@@ -134,6 +134,26 @@ Proof.
   injection Hy as <- <-. exists vs. reflexivity.
 Qed.
 
+(* The same where the named expression is run on a heap. One that is
+   said to make a closure is no primitive, so it has its value by
+   [eval_named]; of a primitive nothing is known but that the variable
+   is bound again. *)
+Lemma closures_hold_under_let_exec (known : made_closures) (x : variable)
+    (d : named) (statics : static_env) (hp hp' : heap)
+    (rd rd' : read_record) (vars : env) (v : value) :
+  closures_hold known vars ->
+  exec_named statics hp rd vars d = Some (v, hp', rd') ->
+  closures_hold (made_under_let known x d) ((x, v) :: vars).
+Proof.
+  intros Hhold Hd.
+  destruct d as [s | p args | code slots | fslot decls slots | vslot closure
+    | pfrom vslot closure | move_from move_to closure];
+    try (pose proof (fun H => exec_named_pure _ _ _ _ _ _ _ _ H Hd) as Hpure;
+         destruct (Hpure eq_refl) as (Hw & _ & _);
+         exact (closures_hold_under_let known x _ statics vars v Hhold Hw)).
+  exact (closures_hold_unbind known vars x v Hhold).
+Qed.
+
 (* ======================================================================== *)
 (* A call                                                                   *)
 (* ======================================================================== *)
@@ -159,10 +179,11 @@ Proof.
 Qed.
 
 Lemma call_made_closure_holds (known : made_closures) (statics : static_env)
-    (hp : heap) (vars : env) (conts : cont_env) (ap : apply_expr) :
+    (hp : heap) (rd : read_record) (vars : env) (conts : cont_env)
+      (ap : apply_expr) :
   closures_hold known vars ->
-  step (State (Apply (call_made_closure known ap)) vars conts statics hp)
-  = step (State (Apply ap) vars conts statics hp).
+  step (State (Apply (call_made_closure known ap)) vars conts statics hp rd)
+  = step (State (Apply ap) vars conts statics hp rd).
 Proof.
   intros Hhold. unfold call_made_closure.
   destruct (ap_call_kind ap) as [named | ] eqn:Hkind; [ reflexivity | ].
@@ -188,7 +209,7 @@ Qed.
 
 Theorem call_made_closure_sound : call_made_closure_sound_statement.
 Proof.
-  intros known statics hp vars conts ap Hhold.
+  intros known statics hp rd vars conts ap Hhold.
   apply call_made_closure_holds. exact Hhold.
 Qed.
 
@@ -234,27 +255,20 @@ Qed.
    call made direct steps as the call does. *)
 Fixpoint call_closures_knowing_refines (e : expr) :
   ∀ (known : made_closures) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap),
+    (statics : static_env) (hp : heap) (rd : read_record),
     closures_hold known vars ->
-    refines (State e vars conts statics hp)
-      (State (call_closures_knowing known e) vars conts statics hp).
+    refines (State e vars conts statics hp rd)
+      (State (call_closures_knowing known e) vars conts statics hp rd).
 Proof.
   destruct e
     as [ x kind d body | bindings body | k h body | handlers body | ap
        | ac | scrutinee arms | ];
-    intros known vars conts statics hp Hhold; cbn [call_closures_knowing].
+    intros known vars conts statics hp rd Hhold; cbn [call_closures_knowing].
   - (* Let *)
-    destruct (eval_named statics vars d) as [v | ] eqn:Hd;
-      [ destruct (kind_eqb (kind_of_value v) kind) eqn:Hkind | ].
-    + eapply refines_step;
-        [ rewrite step_let, Hd, Hkind; reflexivity
-        | rewrite step_let, Hd, Hkind; reflexivity
-        | ].
-      apply call_closures_knowing_refines.
-      exact (closures_hold_under_let known x d statics vars v Hhold Hd).
-    + apply step_undefined_refines. rewrite step_let, Hd, Hkind.
-      reflexivity.
-    + apply step_undefined_refines. rewrite step_let, Hd. reflexivity.
+    apply let_refines_step_exec; [ reflexivity | ].
+    intros v hp' rd' Hd _. apply call_closures_knowing_refines.
+    exact (closures_hold_under_let_exec known x d statics hp hp' rd rd' vars
+             v Hhold Hd).
   - (* Let_static *)
     apply let_static_refines_step.
     destruct (eval_static_bindings vars bindings statics) as [extended | ];
@@ -268,9 +282,9 @@ Proof.
             (Handler params metadata
                (call_closures_knowing (unbind_params params known) handler))
             body)
-         vars conts statics hp)).
+         vars conts statics hp rd)).
     + apply let_cont_handler_refines_at.
-      intros vs handler_vars conts' statics' hp' _ Hbind.
+      intros vs handler_vars conts' statics' hp' rd' _ Hbind.
       apply call_closures_knowing_refines.
       exact (closures_hold_bind_params params known vs vars handler_vars
         Hhold Hbind).
@@ -287,7 +301,7 @@ Proof.
       - destruct IH as [Hforwards Hbackwards].
         split; (apply Forall2_cons; [ | assumption ]);
           (split; [ reflexivity | ]); apply Handler_related;
-          intros vs handler_vars conts' statics' hp' _ _ Hbind;
+          intros vs handler_vars conts' statics' hp' rd' _ _ Hbind;
           apply call_closures_knowing_refines;
           exact (closures_hold_bind_params params known vs vars
             handler_vars Hhold Hbind). }
@@ -298,7 +312,7 @@ Proof.
             (map (fun '(k, h) => (k, call_closures_in_handler known h))
                handlers)
             body)
-         vars conts statics hp)).
+         vars conts statics hp rd)).
     + apply (let_cont_recursive_handlers_refine_where always always_extend);
         [ exact I
         | symmetry; apply call_closures_handlers_bind_statics
@@ -315,7 +329,7 @@ Qed.
 
 Theorem call_made_closures_refines : call_made_closures_refines_statement.
 Proof.
-  intros e vars conts statics hp. apply call_closures_knowing_refines.
+  intros e vars conts statics hp rd. apply call_closures_knowing_refines.
   intros x slot function_decls Hx. discriminate Hx.
 Qed.
 

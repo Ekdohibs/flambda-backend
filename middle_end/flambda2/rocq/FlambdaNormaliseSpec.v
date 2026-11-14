@@ -427,12 +427,12 @@ with inline_calls_in_code (kept : list code_id)
    call split. *)
 Definition split_over_application_refines_statement : Prop :=
   ∀ (called : code_id) (c : code) (ap : apply_expr) (vars : env)
-    (conts : cont_env) (statics : static_env) (hp : heap),
+    (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record),
     ap_call_kind ap = Direct called ->
     lookup called (static_code statics) = Some c ->
     over_applied_b ap c = true ->
-    refines (State (Apply ap) vars conts statics hp)
-      (State (split_over_application called c ap) vars conts statics hp).
+    refines (State (Apply ap) vars conts statics hp rd)
+      (State (split_over_application called c ap) vars conts statics hp rd).
 
 Definition inline_calls_refines_statement : Prop :=
   ∀ (kept : list code_id) (e : expr),
@@ -509,10 +509,11 @@ with var_free_in_handler_b (x : variable) (h : continuation_handler) : bool :=
 (* Which primitives the normalisation may fold, and remove when unused:
    all but [Opaque_identity], which is meant to hide a value from the
    simplifier and which Simplify leaves alone, and the primitives of the
-   heap, which make an object with an identity or write to one. The
-   machine gives those of the heap no value yet, so any choice is sound
-   today; they are left out so that, when it runs them, no allocation
-   or store is among what may be removed. *)
+   heap, which make an object with an identity or write to one: the
+   machine runs them, an exit is compared with its heap, and so no
+   allocation or store of a cell of the heap is among what may be
+   removed. The primitives of regions are left out too: the machine of
+   FlambdaSemanticsSpec.v gives none of them a value. *)
 Definition prim_may_fold (p : prim) : bool :=
   match p with
   | Unary (Opaque_identity _) | Heap _ | Region_primitive _ => false

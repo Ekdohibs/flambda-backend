@@ -142,7 +142,8 @@
      FlambdaLiftSpec.lift_simulates_statement gives what it gave: the
      values at its exit hold no array value, and those of the unit
      lifted are those values lifted by the rules that have no array,
-     under the static environment of the last state
+     under the static environment of the last state; and the heaps of
+     the two exits are alike by those rules
      ([lift_simulates_no_array_statement]).
 
      Three statements say less, with no rule named. [Lifted_to_array]
@@ -152,7 +153,8 @@
      ([no_array_lifted_to_symbol_statement]). Two values that are
      related, the first of which holds no array value, are related
      under it ([value_lifted_reads_no_static_array_statement]), and so
-     are the values at the two exits of a unit that makes no array
+     are the values at the two exits of a unit that makes no array,
+     and what the cells of their heaps hold
      ([lift_simulates_free_of_arrays_statement]). The converse is not
      claimed, and the relation under that environment is not the
      relation without the rule: leaving a binding out may uncover
@@ -356,7 +358,7 @@ Definition step_free_of_arrays_statement : Prop :=
     state_free_of_arrays s ->
     match step s with
     | Step s' => state_free_of_arrays s'
-    | Exit _ vs hp =>
+    | Exit _ vs hp rd =>
       (∀ v : value, v ∈ vs -> no_array_value v = true)
       ∧ heap_no_array_value hp
     | Undefined => True
@@ -370,7 +372,7 @@ Definition run_free_of_arrays_statement : Prop :=
     state_free_of_arrays s ->
     match run n s with
     | Step s' => state_free_of_arrays s'
-    | Exit _ vs hp =>
+    | Exit _ vs hp rd =>
       (∀ v : value, v ∈ vs -> no_array_value v = true)
       ∧ heap_no_array_value hp
     | Undefined => True
@@ -611,9 +613,13 @@ Definition value_lifted_reads_no_static_array_statement : Prop :=
     value_lifted (without_static_arrays statics') v v'.
 
 (* So of a unit that makes no array: the values at the exit of the
-   unit hold no array value, and those at the exit of the unit lifted
-   are related to them under the static environment of the last state
-   with its static arrays left out. *)
+   unit hold no array value, and nor do the cells of its heap, and
+   those at the exit of the unit lifted are related to them under the
+   static environment of the last state with its static arrays left
+   out. The heaps of the two exits are alike under that environment
+   (FlambdaHeapSpec.heap_alike), as
+   FlambdaLiftSpec.lift_simulates_statement has them alike under the
+   whole of it. *)
 Definition lift_simulates_free_of_arrays_statement : Prop :=
   ∀ (u : unit_interface) (lets : list (path * lift_to))
     (known : list (code_id * symbol)) (e : expr),
@@ -622,14 +628,21 @@ Definition lift_simulates_free_of_arrays_statement : Prop :=
     only_closures_of known lifted = true ->
     makes_array e = false ->
     ∀ (k : continuation) (vs : list value) (hp : heap),
-      behaves (State e [] [] empty_static_env empty_heap) (Exits k vs hp) ->
+      behaves (State e [] [] empty_static_env empty_heap no_reads)
+        (Exits k vs hp) ->
       (∀ v : value, v ∈ vs -> no_array_value v = true)
-      ∧ ∃ (n : nat) (last : state) (vs' : list value),
-          run n (State lifted [] [] empty_static_env empty_heap) = Step last
-          ∧ step last = Exit k vs' hp
+      ∧ heap_no_array_value hp
+      ∧ ∃ (n : nat) (last : state) (vs' : list value) (hp' : heap)
+          (rd : read_record),
+          run n (State lifted [] [] empty_static_env empty_heap no_reads)
+            = Step last
+          ∧ step last = Exit k vs' hp' rd
           ∧ Forall2
               (value_lifted (without_static_arrays (state_statics last)))
-              vs vs'.
+              vs vs'
+          ∧ heap_alike
+              (value_lifted (without_static_arrays (state_statics last)))
+              hp hp'.
 
 (* The rules of FlambdaLiftSpec.value_lifted that have no array: its
    rules but [Lifted_array] and [Lifted_to_array], each as it is
@@ -714,8 +727,9 @@ Definition value_lifted_no_array_exact_statement : Prop :=
 
 (* So of a unit that makes no array, the values at the exit of the unit
    lifted are those of the unit lifted by the rules that have no array,
-   under the static environment of the last state: the first conclusion
-   of FlambdaLiftSpec.lift_simulates_statement, with those rules. *)
+   under the static environment of the last state, and the heaps of the
+   two exits are alike by those rules: the first conclusion of
+   FlambdaLiftSpec.lift_simulates_statement, with those rules. *)
 Definition lift_simulates_no_array_statement : Prop :=
   ∀ (u : unit_interface) (lets : list (path * lift_to))
     (known : list (code_id * symbol)) (e : expr),
@@ -724,8 +738,12 @@ Definition lift_simulates_no_array_statement : Prop :=
     only_closures_of known lifted = true ->
     makes_array e = false ->
     ∀ (k : continuation) (vs : list value) (hp : heap),
-      behaves (State e [] [] empty_static_env empty_heap) (Exits k vs hp) ->
-      ∃ (n : nat) (last : state) (vs' : list value),
-        run n (State lifted [] [] empty_static_env empty_heap) = Step last
-        ∧ step last = Exit k vs' hp
-        ∧ Forall2 (value_lifted_no_array (state_statics last)) vs vs'.
+      behaves (State e [] [] empty_static_env empty_heap no_reads)
+        (Exits k vs hp) ->
+      ∃ (n : nat) (last : state) (vs' : list value) (hp' : heap)
+        (rd : read_record),
+        run n (State lifted [] [] empty_static_env empty_heap no_reads)
+          = Step last
+        ∧ step last = Exit k vs' hp' rd
+        ∧ Forall2 (value_lifted_no_array (state_statics last)) vs vs'
+        ∧ heap_alike (value_lifted_no_array (state_statics last)) hp hp'.

@@ -226,6 +226,7 @@ Section Folded_slot.
 
 Variables sets run_statics : static_env.
 Variable hp : heap.
+Variable rd : read_record.
 
 (* Each symbol that [sets] binds is bound in [run_statics] to a closure
    at the same slot of the same set, or to nothing. *)
@@ -395,8 +396,8 @@ Qed.
    nothing. *)
 Lemma fold_known_apply_sound_here (vars : env) (conts : cont_env)
     (ap : apply_expr) :
-  step (State (Apply (fold_known_apply sets ap)) vars conts run_statics hp)
-  = step (State (Apply ap) vars conts run_statics hp).
+  step (State (Apply (fold_known_apply sets ap)) vars conts run_statics hp rd)
+  = step (State (Apply ap) vars conts run_statics hp rd).
 Proof.
   unfold fold_known_apply.
   destruct (ap_call_kind ap) as [named | ] eqn:Hkind; [ reflexivity | ].
@@ -443,8 +444,9 @@ Qed.
 
 Theorem fold_known_apply_sound : fold_known_apply_sound_statement.
 Proof.
-  intros sets run_statics hp vars conts ap Hsets.
-  exact (fold_known_apply_sound_here sets run_statics hp Hsets vars conts ap).
+  intros sets run_statics hp rd vars conts ap Hsets.
+  exact
+    (fold_known_apply_sound_here sets run_statics hp rd Hsets vars conts ap).
 Qed.
 
 (* ======================================================================== *)
@@ -612,6 +614,158 @@ Proof.
   destruct (eval_static_const [] const) as [allocated | ] eqn:Heval;
     [ | contradiction Hconst; reflexivity ].
   simpl. destruct (Pos.eqb s s'); [ symmetry; exact Heval | exact IH ].
+Qed.
+
+(* ======================================================================== *)
+(* With the run of the machine                                              *)
+(* ======================================================================== *)
+
+(* The machine runs a [Let] with the heap ([exec_named]); the three
+   folds are stated of the value alone ([eval_named]). A defining
+   expression that a fold changes is a projection, or a primitive that
+   is not of the heap and has no variable among its arguments. No
+   location is among the values of such arguments, so the machine runs
+   it as [eval_named] says and leaves the heap and the record as they
+   came; and what a fold puts for it is a symbol or a constant, which
+   the machine runs without the heap too. *)
+Definition closed_simple (a : simple) : bool :=
+  match a with
+  | Var _ => false
+  | Symbol _ | Const _ => true
+  end.
+
+Definition run_without_heap (d : named) : bool :=
+  match d with
+  | Prim (Heap _) _ => false
+  | Prim (Unary _ | Binary _ | Variadic _ | Region_primitive _) args =>
+    forallb closed_simple args
+  | Simple _ | Set_of_closures _ _ | Closure_of_set _ _ _
+  | Project_value_slot _ _ | Project_value_slot_from _ _ _
+  | Project_function_slot _ _ _ =>
+    true
+  end.
+
+Lemma closed_simples_no_location (vars : env) (args : list simple) :
+  forallb closed_simple args = true ->
+  ∀ vs : list value,
+    eval_simples vars args = Some vs ->
+    ∀ l : location, Value_location l ∉ vs.
+Proof.
+  induction args as [ | a args IH]; simpl; intros H vs.
+  - intros [= <-] l [].
+  - apply andb_true_iff in H as [Ha Hargs].
+    destruct (eval_simple vars a) as [v | ] eqn:Hv; simpl; [ | discriminate ].
+    destruct (eval_simples vars args) as [rest | ]; simpl; [ | discriminate ].
+    intros [= <-] l [Hhead | Hrest];
+      [ | exact (IH Hargs rest eq_refl l Hrest) ].
+    subst v. destruct a as [x | sym | c]; simpl in Hv, Ha;
+      discriminate.
+Qed.
+
+Lemma exec_named_without_heap (statics : static_env) (hp hp' : heap)
+    (rd rd' : read_record) (vars : env) (d : named) (v : value) :
+  run_without_heap d = true ->
+  exec_named statics hp rd vars d = Some (v, hp', rd') ->
+  eval_named statics vars d = Some v ∧ hp' = hp ∧ rd' = rd.
+Proof.
+  intros Hd Hexec.
+  destruct d as [s | p args | code slots | fslot decls slots | slot closure
+    | pfrom slot closure | move_from move_to closure];
+    try (rewrite exec_named_not_prim in Hexec by (intros ? ?; discriminate);
+         destruct (eval_named _ _ _) as [w | ]; [ | discriminate ];
+         injection Hexec as <- <- <-; repeat split; reflexivity).
+  assert (Hnot : ∀ q : heap_primitive, p <> Heap q)
+    by (intros q ->; discriminate Hd).
+  assert (Hargs : forallb closed_simple args = true)
+    by (destruct p; first [ exact Hd | discriminate Hd ]).
+  pose proof Hexec as Hvs.
+  apply exec_named_prim_some in Hvs as (vs & Hvs & _ & _).
+  rewrite
+    (exec_named_no_location statics hp rd vars p args vs Hnot Hvs
+       (closed_simples_no_location vars args Hargs vs Hvs))
+    in Hexec.
+  destruct (eval_named statics vars (Prim p args)) as [w | ];
+    [ | discriminate ].
+  injection Hexec as <- <- <-. repeat split; reflexivity.
+Qed.
+
+(* So one fold, from what is proved of it for [eval_named]. *)
+Lemma folded_exec (statics : static_env) (hp hp' : heap)
+    (rd rd' : read_record) (vars : env) (d d' : named) (v : value) :
+  (eval_named statics vars d = Some v ->
+   eval_named statics vars d' = Some v) ->
+  d' = d ∨ (run_without_heap d = true ∧ ∃ a : simple, d' = Simple a) ->
+  exec_named statics hp rd vars d = Some (v, hp', rd') ->
+  exec_named statics hp rd vars d' = Some (v, hp', rd').
+Proof.
+  intros Hsound [-> | (Hd & a & ->)] Hexec; [ exact Hexec | ].
+  destruct (exec_named_without_heap statics hp hp' rd rd' vars d v Hd Hexec)
+    as (Heval & -> & ->).
+  rewrite exec_named_not_prim by (intros ? ?; discriminate).
+  rewrite (Hsound Heval). reflexivity.
+Qed.
+
+(* What each fold does to a defining expression: nothing, or it puts a
+   symbol or a constant for one that the machine runs without the
+   heap. *)
+Lemma fold_known_named_cases (statics : static_env) (d : named) :
+  fold_known_named statics d = d
+  ∨ (run_without_heap d = true
+     ∧ ∃ a : simple, fold_known_named statics d = Simple a).
+Proof.
+  unfold fold_known_named.
+  destruct (named_known statics d) eqn:Hknown; [ | left; reflexivity ].
+  assert (Hd : run_without_heap d = true).
+  { destruct d as [s | p args | code slots | fslot decls slots | slot closure
+      | pfrom slot closure | move_from move_to closure];
+      simpl in Hknown |- *; try reflexivity; try discriminate Hknown.
+    apply andb_true_iff in Hknown as [Hp Hargs].
+    apply andb_true_iff in Hp as [Hp _].
+    assert (Hclosed : forallb closed_simple args = true).
+    { apply forallb_forall. intros a Ha.
+      pose proof (proj1 (forallb_forall _ _) Hargs a Ha) as Hknown.
+      destruct a; [ discriminate Hknown | reflexivity | reflexivity ]. }
+    destruct p; first [ exact Hclosed | discriminate Hp ]. }
+  destruct (eval_named statics [] d) as [[ ] | ];
+    first
+      [ left; reflexivity
+      | right; split; [ exact Hd | eexists; reflexivity ] ].
+Qed.
+
+Lemma fold_function_slot_cases (sets : static_env) (d : named) :
+  fold_function_slot sets d = d
+  ∨ (run_without_heap d = true
+     ∧ ∃ a : simple, fold_function_slot sets d = Simple a).
+Proof.
+  destruct d as [s | p args | code slots | fslot decls slots | slot closure
+    | pfrom slot closure | move_from move_to closure];
+    try (left; reflexivity).
+  destruct closure as [x | sym | c]; try (left; reflexivity).
+  unfold fold_function_slot.
+  destruct (eval_named sets [] _) as [[ ] | ];
+    first
+      [ left; reflexivity
+      | right; split; [ reflexivity | eexists; reflexivity ] ].
+Qed.
+
+Lemma fold_block_load_cases (sets : static_env) (d : named) :
+  fold_block_load sets d = d
+  ∨ (run_without_heap d = true
+     ∧ ∃ a : simple, fold_block_load sets d = Simple a).
+Proof.
+  destruct d as [s | p args | code slots | fslot decls slots | slot closure
+    | pfrom slot closure | move_from move_to closure];
+    try (left; reflexivity).
+  destruct p as [p | p | p | p | rp]; try (left; reflexivity).
+  destruct p; try (left; reflexivity).
+  destruct args as [ | [x | s | c] [ | arg args]]; try (left; reflexivity);
+    try (destruct mut; left; reflexivity).
+  destruct mut; [ left; reflexivity | | ];
+    unfold fold_block_load;
+    (destruct (eval_named sets [] _) as [[ ] | ];
+       first
+         [ left; reflexivity
+         | right; split; [ reflexivity | eexists; reflexivity ] ]).
 Qed.
 
 (* ======================================================================== *)
@@ -786,6 +940,44 @@ Proof.
   all:
     destruct (eval_simples vars args) as [vs | ]; simpl; [ | reflexivity ];
     apply eval_prim_static_values; intros s _; reflexivity.
+Qed.
+
+(* Nor does what it does on the heap. *)
+Lemma exec_named_fold_statics (statics : static_env) (hp : heap)
+    (rd : read_record) (vars : env) (d : named) :
+  exec_named (fold_statics statics) hp rd vars d
+  = exec_named statics hp rd vars d.
+Proof.
+  destruct d as [s | p args | code slots | fslot decls slots | slot closure
+    | pfrom slot closure | move_from move_to closure];
+    try (rewrite !exec_named_not_prim by (intros ? ?; discriminate);
+         rewrite eval_named_fold_statics; reflexivity).
+  apply exec_named_static_values. intros vs s _ _. reflexivity.
+Qed.
+
+(* The defining expression of a [Let] with the three folds: what the
+   machine runs it to, it runs the folded one to, under the static
+   environment with its code folded. *)
+Lemma fold_named_exec (statics : static_env) (hp hp' : heap)
+    (rd rd' : read_record) (vars : env) (d : named) (v : value) :
+  agrees statics ->
+  exec_named statics hp rd vars d = Some (v, hp', rd') ->
+  exec_named (fold_statics statics) hp rd vars
+    (fold_block_load T (fold_function_slot T (fold_known_named S d)))
+  = Some (v, hp', rd').
+Proof.
+  intros Hagrees Hexec. rewrite exec_named_fold_statics.
+  apply (folded_exec statics hp hp' rd rd' vars
+           (fold_function_slot T (fold_known_named S d)));
+    [ exact (fold_block_load_sound_here T statics (proj2 Hagrees) vars _ v)
+    | apply fold_block_load_cases | ].
+  apply (folded_exec statics hp hp' rd rd' vars (fold_known_named S d));
+    [ exact (fold_function_slot_sound_here T statics (proj2 Hagrees) vars _
+               v)
+    | apply fold_function_slot_cases | ].
+  apply (folded_exec statics hp hp' rd rd' vars d);
+    [ exact (fold_known_named_sound_here S statics (proj1 Hagrees) vars d v)
+    | apply fold_known_named_cases | exact Hexec ].
 Qed.
 
 Lemma eval_static_bindings_fold (vars : env)
@@ -1015,18 +1207,18 @@ Definition conts_kept (conts conts' : cont_env) : Prop :=
 
 Inductive state_kept : state -> state -> Prop :=
   | State_kept (e e' : expr) (vars : env) (conts conts' : cont_env)
-      (statics : static_env) (hp : heap) :
+      (statics : static_env) (hp : heap) (rd : read_record) :
     expr_kept e e' ->
     conts_kept conts conts' ->
-    state_kept (State e vars conts statics hp)
-      (State e' vars conts' (fold_statics statics) hp).
+    state_kept (State e vars conts statics hp rd)
+      (State e' vars conts' (fold_statics statics) hp rd).
 
 (* What the second run does where the first does something: a step to
    a state so related, or the same exit. *)
 Definition result_kept (result result' : step_result) : Prop :=
   match result with
   | Step t => ∃ t' : state, result' = Step t' ∧ state_kept t t'
-  | Exit k vs hp => result' = Exit k vs hp
+  | Exit k vs hp rd => result' = Exit k vs hp rd
   | Undefined => True
   end.
 
@@ -1093,13 +1285,14 @@ Qed.
 Lemma call_code_kept (closure : value) (c : code) (vs : list value)
     (args_arity return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value) (statics : static_env)
-    (hp : heap) :
+    (hp : heap) (rd : read_record) :
   cont_kept return_to return_to' ->
   cont_kept exn_to exn_to' ->
   result_kept
-    (call_code closure c vs args_arity return_arity return_to exn_to statics hp)
+    (call_code closure c vs args_arity return_arity return_to exn_to statics hp
+       rd)
     (call_code closure (fold_known_code S T c) vs args_arity return_arity
-       return_to' exn_to' (fold_statics statics) hp).
+       return_to' exn_to' (fold_statics statics) hp rd).
 Proof.
   intros Hreturn Hexn. unfold result_kept, call_code.
   destruct (fold_known_code_parts c)
@@ -1124,16 +1317,16 @@ Qed.
 Lemma run_call_kept (return_partial return_partial' : value -> step_result)
     (shape : call_shape) (return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value) (statics : static_env)
-    (hp : heap) :
+    (hp : heap) (rd : read_record) :
   cont_kept return_to return_to' ->
   cont_kept exn_to exn_to' ->
   (∀ partial : value,
     result_kept (return_partial partial) (return_partial' partial)) ->
   result_kept
     (run_call return_partial (Some shape) return_arity return_to exn_to
-       statics hp)
+       statics hp rd)
     (run_call return_partial' (Some (fold_shape shape)) return_arity
-       return_to' exn_to' (fold_statics statics) hp).
+       return_to' exn_to' (fold_statics statics) hp rd).
 Proof.
   intros Hreturn Hexn Hpartial.
   destruct shape
@@ -1150,17 +1343,17 @@ Qed.
 Lemma call_function_kept_from (callee : value) (kind : call_kind)
     (vs : list value) (args_arity return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value) (statics : static_env)
-    (hp : heap) :
+    (hp : heap) (rd : read_record) :
   cont_kept return_to return_to' ->
   cont_kept exn_to exn_to' ->
   (∀ partial : value,
-    result_kept (apply_cont_value return_to [partial] statics hp)
-      (apply_cont_value return_to' [partial] (fold_statics statics) hp)) ->
+    result_kept (apply_cont_value return_to [partial] statics hp rd)
+      (apply_cont_value return_to' [partial] (fold_statics statics) hp rd)) ->
   result_kept
     (call_function callee kind vs args_arity return_arity return_to exn_to
-       statics hp)
+       statics hp rd)
     (call_function callee kind vs args_arity return_arity return_to' exn_to'
-       (fold_statics statics) hp).
+       (fold_statics statics) hp rd).
 Proof.
   intros Hreturn Hexn Hpartial. unfold call_function.
   destruct (shape_of_call statics callee kind vs args_arity return_arity)
@@ -1173,9 +1366,9 @@ Qed.
 
 Lemma apply_cont_value_kept (c c' : cont_value) :
   cont_kept c c' ->
-  ∀ (vs : list value) (statics : static_env) (hp : heap),
-    result_kept (apply_cont_value c vs statics hp)
-      (apply_cont_value c' vs (fold_statics statics) hp).
+  ∀ (vs : list value) (statics : static_env) (hp : heap) (rd : read_record),
+    result_kept (apply_cont_value c vs statics hp rd)
+      (apply_cont_value c' vs (fold_statics statics) hp rd).
 Proof.
   induction 1
     as [ h h' def_vars def_conts def_conts' recursive recursive' Hh Hrec
@@ -1183,7 +1376,7 @@ Proof.
        | k | c c' extra Hc IH
        | remaining remaining_arity return_arity return_to return_to' exn_to
            exn_to' Hreturn IHreturn Hexn _ ];
-    intros vs statics hp.
+    intros vs statics hp rd.
   - assert (Hparts :
       ∃ (params : list variable) (metadata : handler_metadata)
         (body body' : expr),
@@ -1219,14 +1412,14 @@ Qed.
 Lemma call_function_kept (callee : value) (kind : call_kind)
     (vs : list value) (args_arity return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value) (statics : static_env)
-    (hp : heap) :
+    (hp : heap) (rd : read_record) :
   cont_kept return_to return_to' ->
   cont_kept exn_to exn_to' ->
   result_kept
     (call_function callee kind vs args_arity return_arity return_to exn_to
-       statics hp)
+       statics hp rd)
     (call_function callee kind vs args_arity return_arity return_to' exn_to'
-       (fold_statics statics) hp).
+       (fold_statics statics) hp rd).
 Proof.
   intros Hreturn Hexn.
   apply call_function_kept_from; [ exact Hreturn | exact Hexn | ].
@@ -1237,19 +1430,19 @@ Qed.
    bound them so, is answered by a step of a state so related, to a
    state so related. *)
 Lemma kept_step_components (e e' : expr) (vars : env) (conts conts' : cont_env)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   expr_kept e e' ->
   conts_kept conts conts' ->
   bound_as known sets e = true ->
   agrees statics ->
-  match step (State e vars conts statics hp) with
+  match step (State e vars conts statics hp rd) with
   | Step t =>
     (∃ t' : state,
-      step (State e' vars conts' (fold_statics statics) hp) = Step t'
+      step (State e' vars conts' (fold_statics statics) hp rd) = Step t'
       ∧ state_kept t t')
     ∧ agrees (state_statics t)
-  | Exit k vs hp' =>
-    step (State e' vars conts' (fold_statics statics) hp) = Exit k vs hp'
+  | Exit k vs hp' rd' =>
+    step (State e' vars conts' (fold_statics statics) hp rd) = Exit k vs hp' rd'
   | Undefined => True
   end.
 Proof.
@@ -1258,21 +1451,18 @@ Proof.
     as [ x xkind d body | bindings body | k h body | handlers body | ap | ac
        | scrutinee arms | ].
   - (* Let *)
-    rewrite step_let.
-    destruct (eval_named statics vars d) as [v | ] eqn:Hv; [ | exact I ].
+    rewrite step_let_exec.
+    destruct (exec_named statics hp rd vars d) as [[[v hp'] rd'] | ] eqn:Hv;
+      [ | exact I ].
     destruct (kind_eqb (kind_of_value v) xkind) eqn:Hkind; [ | exact I ].
     split; [ | exact Hagrees ].
     destruct He as [-> | [-> Hno]].
-    + simpl fold_known. rewrite step_let, eval_named_fold_statics.
-      rewrite (fold_block_load_sound_here T statics (proj2 Hagrees) vars _ v
-                 (fold_function_slot_sound_here T statics (proj2 Hagrees)
-                    vars _ v
-                    (fold_known_named_sound_here S statics (proj1 Hagrees)
-                       vars d v Hv))),
-        Hkind.
+    + simpl fold_known.
+      rewrite step_let_exec,
+        (fold_named_exec statics hp hp' rd rd' vars d v Hagrees Hv), Hkind.
       eexists. split; [ reflexivity | ].
       apply State_kept; [ left; reflexivity | exact Hconts ].
-    + rewrite step_let, eval_named_fold_statics, Hv, Hkind.
+    + rewrite step_let_exec, exec_named_fold_statics, Hv, Hkind.
       eexists. split; [ reflexivity | ].
       apply State_kept; [ right; split; [ reflexivity | exact Hno ] | ].
       exact Hconts.
@@ -1328,11 +1518,11 @@ Proof.
         [ right; split; [ reflexivity | exact Hno_hs ] | exact Hconts ].
   - (* Apply *)
     assert (He' :
-      step (State e' vars conts' (fold_statics statics) hp)
-      = step (State (Apply ap) vars conts' (fold_statics statics) hp)).
+      step (State e' vars conts' (fold_statics statics) hp rd)
+      = step (State (Apply ap) vars conts' (fold_statics statics) hp rd)).
     { destruct He as [-> | [-> _]]; [ | reflexivity ].
       simpl fold_known.
-      exact (fold_known_apply_sound_here T (fold_statics statics) hp
+      exact (fold_known_apply_sound_here T (fold_statics statics) hp rd
                (proj2 Hagrees) vars conts' ap). }
     rewrite He'. rewrite !step_apply.
     destruct (eval_simple vars (ap_callee ap)) as [callee | ]; [ | exact I ].
@@ -1345,7 +1535,7 @@ Proof.
          (resolve (ap_continuation ap) conts')
          (with_extra_args (resolve (ap_exn_continuation ap) conts) extra)
          (with_extra_args (resolve (ap_exn_continuation ap) conts') extra)
-         statics hp (resolve_kept _ conts conts' Hconts)
+         statics hp rd (resolve_kept _ conts conts' Hconts)
          (with_extra_args_kept _ _ extra
             (resolve_kept _ conts conts' Hconts)))
       as Hcall.
@@ -1353,11 +1543,12 @@ Proof.
                 (ap_return_arity ap) (resolve (ap_continuation ap) conts)
                 (with_extra_args (resolve (ap_exn_continuation ap) conts)
                    extra)
-                statics hp)
+                statics hp rd)
       as [t | k exit_vs | ] eqn:Hstep;
       [ | exact Hcall | exact I ].
     split; [ exact Hcall | ].
-    rewrite (call_function_statics _ _ _ _ _ _ _ _ _ t Hstep). exact Hagrees.
+    rewrite (call_function_statics _ _ _ _ _ _ _ _ _ _ t Hstep).
+    exact Hagrees.
   - (* Apply_cont *)
     assert (He' : e' = Apply_cont ac)
       by (destruct He as [-> | [-> _]]; reflexivity).
@@ -1367,14 +1558,15 @@ Proof.
     pose proof
       (apply_cont_value_kept (resolve (ac_continuation ac) conts)
          (resolve (ac_continuation ac) conts')
-         (resolve_kept _ conts conts' Hconts) vs statics hp)
+         (resolve_kept _ conts conts' Hconts) vs statics hp rd)
       as Happly.
     destruct
-      (apply_cont_value (resolve (ac_continuation ac) conts) vs statics hp)
+      (apply_cont_value (resolve (ac_continuation ac) conts) vs statics hp
+         rd)
       as [t | | ] eqn:Hstep;
       [ | exact Happly | exact I ].
     split; [ exact Happly | ].
-    rewrite (apply_cont_value_statics _ _ _ _ t Hstep). exact Hagrees.
+    rewrite (apply_cont_value_statics _ _ _ _ _ t Hstep). exact Hagrees.
   - (* Switch *)
     assert (He' : e' = Switch scrutinee arms)
       by (destruct He as [-> | [-> _]]; reflexivity).
@@ -1396,13 +1588,14 @@ Lemma kept_related_step (s s' : state) :
   kept_related s s' -> result_simulated kept_related (step s) (step s').
 Proof.
   intros (Hkept & Hinv & Hagrees).
-  destruct Hkept as [e e' vars conts conts' statics hp He Hconts].
+  destruct Hkept as [e e' vars conts conts' statics hp rd He Hconts].
   pose proof
-    (kept_step_components e e' vars conts conts' statics hp He Hconts
+    (kept_step_components e e' vars conts conts' statics hp rd He Hconts
        (proj1 Hinv) Hagrees)
     as Hstep.
-  pose proof (bound_as_inv_step (State e vars conts statics hp)) as Hkept_inv.
-  destruct (step (State e vars conts statics hp)) as [t | k vs | ]; simpl;
+  pose proof (bound_as_inv_step (State e vars conts statics hp rd)) as
+    Hkept_inv.
+  destruct (step (State e vars conts statics hp rd)) as [t | k vs | ]; simpl;
     [ | | exact I ].
   - destruct Hstep as [(t' & -> & Ht) Hagrees']. simpl.
     split; [ exact Ht | ].
@@ -1614,12 +1807,12 @@ Qed.
    unit binds, from any heap, and from a continuation environment of
    what may follow a unit. *)
 Lemma fold_known_unit_refines_under (slots : list value_slot) (e e' : expr)
-    (conts : cont_env) (statics : static_env) (hp : heap) :
+    (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record) :
   fold_known_unit e = Some e' ->
   static_code statics = [] ->
   static_names_free_in statics e = true ->
   observers slots conts ->
-  refines (State e [] conts statics hp) (State e' [] conts statics hp).
+  refines (State e [] conts statics hp rd) (State e' [] conts statics hp rd).
 Proof.
   unfold fold_known_unit. cbv zeta.
   destruct (bound_as (known_bindings e) (known_sets e) e) eqn:Hbound;
@@ -1636,7 +1829,7 @@ Proof.
   split.
   - destruct statics as [code values]. simpl in Hno_code. subst code.
     exact (State_kept (known_bindings e) (known_sets e) e _ [] conts conts
-             (Static_env [] values) hp (or_introl eq_refl) Hkept).
+             (Static_env [] values) hp rd_ (or_introl eq_refl) Hkept).
   - split; [ | exact (agrees_from e statics Hfree) ].
     unfold bound_as_inv, terms_inv. simpl_state.
     refine (conj Hbound (conj Hok _)).
@@ -1644,14 +1837,14 @@ Proof.
 Qed.
 
 Lemma fold_known_unit_refines_from (e e' : expr) (statics : static_env)
-    (hp : heap) :
+    (hp : heap) (rd : read_record) :
   fold_known_unit e = Some e' ->
   static_code statics = [] ->
   static_names_free_in statics e = true ->
-  refines (State e [] [] statics hp) (State e' [] [] statics hp).
+  refines (State e [] [] statics hp rd) (State e' [] [] statics hp rd).
 Proof.
   intros Hfold Hno_code Hfree.
-  exact (fold_known_unit_refines_under [] e e' [] statics hp Hfold Hno_code
+  exact (fold_known_unit_refines_under [] e e' [] statics hp rd Hfold Hno_code
            Hfree (Forall_nil _)).
 Qed.
 
@@ -1659,7 +1852,9 @@ Theorem fold_known_unit_program_refines :
   fold_known_unit_program_refines_statement.
 Proof.
   intros e e' Hfold. unfold program_refines.
-  exact (fold_known_unit_refines_from e e' empty_static_env empty_heap Hfold
+  exact
+    (fold_known_unit_refines_from e e' empty_static_env empty_heap no_reads
+       Hfold
            eq_refl (free_in_empty e)).
 Qed.
 
@@ -1668,7 +1863,7 @@ Theorem fold_known_unit_refines_imports :
 Proof.
   intros imports e e' Hfold Hfree. unfold unit_refines.
   exact (fold_known_unit_refines_from e e' (imports_statics imports)
-           empty_heap Hfold eq_refl Hfree).
+           empty_heap no_reads Hfold eq_refl Hfree).
 Qed.
 
 Theorem fold_known_unit_refines_observed :
@@ -1676,7 +1871,7 @@ Theorem fold_known_unit_refines_observed :
 Proof.
   intros imports conts e e' Hfold Hfree Hobservers.
   exact (fold_known_unit_refines_under [] e e' conts
-           (imports_statics imports) empty_heap Hfold eq_refl Hfree
+           (imports_statics imports) empty_heap no_reads Hfold eq_refl Hfree
            Hobservers).
 Qed.
 

@@ -135,10 +135,11 @@ Definition observers_free_of_arrays_statement : Prop :=
    refined by every target in this sense, and that tells nothing. The
    condition says nothing of the target. *)
 Definition expr_refines_free_of_arrays (source target : expr) : Prop :=
-  ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap),
-    state_free_of_arrays (State source vars conts statics hp) ->
-    refines (State source vars conts statics hp)
-      (State target vars conts statics hp).
+  ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+    (rd : read_record),
+    state_free_of_arrays (State source vars conts statics hp rd) ->
+    refines (State source vars conts statics hp rd)
+      (State target vars conts statics hp rd).
 
 (* ======================================================================== *)
 (* A statement that concludes one of the two gives what it gave             *)
@@ -151,9 +152,10 @@ Definition worlds_observed_gives_free_of_arrays_statement : Prop :=
 
 Definition refines_under_observers_gives_free_of_arrays_statement : Prop :=
   ∀ (slots : list value_slot) (statics : static_env) (hp : heap)
+    (rd : read_record)
     (source target : expr),
-    refines_under_observers slots statics hp source target ->
-    refines_observed_by (observer_free_of_arrays slots) statics hp source
+    refines_under_observers slots statics hp rd source target ->
+    refines_observed_by (observer_free_of_arrays slots) statics hp rd source
       target.
 
 (* ======================================================================== *)
@@ -174,36 +176,39 @@ Definition worlds_observed_free_of_arrays_way_out_statement : Prop :=
    that makes no array. *)
 Definition expr_refines_free_of_arrays_under_observers_statement : Prop :=
   ∀ (slots : list value_slot) (statics : static_env) (hp : heap)
+    (rd : read_record)
     (source target : expr),
     makes_array source = false ->
     code_makes_no_array statics ->
     statics_no_array_value statics ->
     heap_no_array_value hp ->
     expr_refines_free_of_arrays source target ->
-    refines_observed_by (observer_free_of_arrays slots) statics hp source
+    refines_observed_by (observer_free_of_arrays slots) statics hp rd source
       target.
 
 (* FlambdaObserversSpec.refines_under_observers_trans_statement. *)
 Definition refines_under_observers_free_of_arrays_trans_statement : Prop :=
   ∀ (slots : list value_slot) (statics : static_env) (hp : heap)
+    (rd : read_record)
     (e1 e2 e3 : expr),
-    refines_observed_by (observer_free_of_arrays slots) statics hp e1 e2 ->
-    refines_observed_by (observer_free_of_arrays slots) statics hp e2 e3 ->
-    refines_observed_by (observer_free_of_arrays slots) statics hp e1 e3.
+    refines_observed_by (observer_free_of_arrays slots) statics hp rd e1 e2 ->
+    refines_observed_by (observer_free_of_arrays slots) statics hp rd e2 e3 ->
+    refines_observed_by (observer_free_of_arrays slots) statics hp rd e1 e3.
 
 (* FlambdaObserversSpec.under_observers_worlds_statement: the two forms
    say the same. *)
 Definition under_observers_free_of_arrays_worlds_statement : Prop :=
   ∀ (slots : list value_slot) (statics : static_env) (hp : heap)
+    (rd : read_record)
     (source target : expr),
     code_closed source = true ->
     code_closed target = true ->
     static_code_closed statics ->
-    (refines_observed_by (observer_free_of_arrays slots) statics hp source
+    (refines_observed_by (observer_free_of_arrays slots) statics hp rd source
        target
      <-> refines_world (worlds_observed_by (observer_free_of_arrays slots))
-           (State source [] [] statics hp)
-           (State target [] [] statics hp)).
+           (State source [] [] statics hp rd)
+           (State target [] [] statics hp rd)).
 
 (* ======================================================================== *)
 (* The statements of FlambdaObserversActionsSpec.v                          *)
@@ -233,9 +238,9 @@ Definition refines_world_observed_free_of_arrays_equivariant_statement : Prop :=
    .refines_under_observers_equivariant_statement. *)
 Definition refines_observed_free_of_arrays_equivariant_statement : Prop :=
   ∀ (r : renaming) (slots : list value_slot) (statics : static_env)
-    (hp : heap) (source target : expr),
+    (hp : heap) (rd : read_record) (source target : expr),
     refines_observed_by (observer_free_of_arrays slots)
-      (rename_static_env r statics) hp (rename_expr r source)
+      (rename_static_env r statics) hp rd (rename_expr r source)
       (rename_expr r target)
-    <-> refines_observed_by (observer_free_of_arrays slots) statics hp source
+    <-> refines_observed_by (observer_free_of_arrays slots) statics hp rd source
           target.

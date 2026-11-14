@@ -177,7 +177,7 @@ Proof. destruct (code_params c); [ congruence | discriminate ]. Qed.
 
 Theorem apply_tupled : apply_tupled_statement.
 Proof.
-  intros ap vars conts statics hp callee tuple fields extra called slots c
+  intros ap vars conts statics hp rd callee tuple fields extra called slots c
     Hcallee Hargs Hextra Hclosure Hkind Hcode Htupled Hparams Hsome Harity
     Hfields.
   destruct (params_are_values_cardinal c Hparams) as [Hcardinal Hcount].
@@ -199,7 +199,7 @@ Qed.
 
 Theorem apply_tupled_over : apply_tupled_over_statement.
 Proof.
-  intros ap vars conts statics hp callee tuple fields rest extra rest_arity
+  intros ap vars conts statics hp rd callee tuple fields rest extra rest_arity
     called slots c Hcallee Hargs Hextra Hclosure Hkind Hcode Htupled Hparams
     Hsome Harity Hnonempty Hkinds Htest Hfields.
   destruct (params_are_values_cardinal c Hparams) as [Hcardinal Hcount].
@@ -245,7 +245,7 @@ Qed.
 
 Theorem apply_tupled_undefined : apply_tupled_undefined_statement.
 Proof.
-  intros ap vars conts statics hp callee vs called slots c Hcallee Hargs
+  intros ap vars conts statics hp rd callee vs called slots c Hcallee Hargs
     Hclosure Hcode Htupled Hwrong.
   rewrite step_apply, Hcallee, Hargs.
   destruct (eval_simples vars (exn_extra_simples ap)) as [extra | ];
@@ -295,7 +295,7 @@ Qed.
 
 Theorem examples_run : examples_run_statement.
 Proof.
-  intros e [<- | [<- | [<- | []]]]; exists 20; vm_compute; reflexivity.
+  intros e [<- | [<- | [<- | []]]]; exists 20; eexists; vm_compute; reflexivity.
 Qed.
 
 Theorem examples_well_formed : examples_well_formed_statement.
@@ -313,10 +313,58 @@ Qed.
 (* Inlining a call of tupled code                                           *)
 (* ======================================================================== *)
 
+(* A projection of [let_tuple_fields] that has a value by [eval_prim] is
+   not of a location: a block read as a value is a block or a symbol
+   bound to one. *)
+Lemma tuple_load_no_location (statics : static_env) (size field : nat)
+    (tv v : value) :
+  eval_prim statics
+    (Unary (Block_load (tuple_access size) Immutable (Z.of_nat field))) [tv]
+  = Some v ->
+  ∀ l : location, Value_location l ∉ [tv].
+Proof.
+  intros Hv l [-> | []]. discriminate Hv.
+Qed.
+
+(* The step of one [Let] of [let_tuple_fields], where the value of the
+   tuple is no location: the projection is as [eval_prim] has it. *)
+Lemma step_let_tuple_field (statics : static_env) (hp : heap)
+    (rd : read_record) (size field : nat) (param : variable)
+    (tuple : simple) (tv : value) (body : expr) (vars : env)
+    (conts : cont_env) :
+  eval_simple vars tuple = Some tv ->
+  (∀ l : location, Value_location l ∉ [tv]) ->
+  step
+    (State
+       (Let param Value
+          (Prim
+             (Unary
+                (Block_load (tuple_access size) Immutable (Z.of_nat field)))
+             [tuple])
+          body)
+       vars conts statics hp rd)
+  = match
+      eval_prim statics
+        (Unary (Block_load (tuple_access size) Immutable (Z.of_nat field)))
+        [tv]
+    with
+    | Some v =>
+      if kind_eqb (kind_of_value v) Value
+      then Step (State body ((param, v) :: vars) conts statics hp rd)
+      else Undefined
+    | None => Undefined
+    end.
+Proof.
+  intros Htuple Hnone.
+  apply step_let_no_location; [ intros q; discriminate | | exact Hnone ].
+  cbn [eval_simples]. rewrite Htuple. reflexivity.
+Qed.
+
 (* The [Let]s of [let_tuple_fields] run to the body, with the parameters
    bound to the fields of the tuple as a call binds them, provided no
    parameter is the tuple. *)
-Lemma let_tuple_fields_run (statics : static_env) (hp : heap) (size : nat)
+Lemma let_tuple_fields_run (statics : static_env) (hp : heap) (rd : read_record)
+    (size : nat)
     (tuple : simple) (tv : value) (body : expr) (conts : cont_env) :
   ∀ (params : list variable) (field : nat) (fields : list value)
     (vars bound : env),
@@ -328,8 +376,8 @@ Lemma let_tuple_fields_run (statics : static_env) (hp : heap) (size : nat)
     ∃ n : nat,
       run n
         (State (let_tuple_fields params size field tuple body) vars conts
-           statics hp)
-      = Step (State body bound conts statics hp).
+           statics hp rd)
+      = Step (State body bound conts statics hp rd).
 Proof.
   induction params as [ | param params IH];
     intros field fields vars bound Htuple Hfresh Hfields Hbind.
@@ -350,15 +398,22 @@ Proof.
     + intros p Hin. apply Hfresh. right. exact Hin.
     + exact Hvs.
     + exact Hbind.
-    + exists (S n). cbn [let_tuple_fields]. rewrite run_succ, step_let.
-      cbn [eval_named eval_simples]. rewrite Htuple. cbv beta iota.
+    + exists (S n). cbn [let_tuple_fields].
+      rewrite run_succ,
+        (step_let_tuple_field statics hp rd size field param tuple tv _ vars
+           conts Htuple (tuple_load_no_location statics size field tv v Hv)).
       rewrite Hv, (proj2 (eval_prim_kinds _ _ _ _ Hv)). simpl.
       exact Hrun.
 Qed.
 
-(* Where the tuple has not the fields, one of the [Let]s is undefined. *)
-Lemma let_tuple_fields_wrong (statics : static_env) (hp : heap) (size : nat)
+(* Where the tuple has not the fields and is no location, one of the
+   [Let]s is undefined. (Of a location a projection reads the cell, and
+   may have a value where [tuple_fields_from], which reads none, has
+   not.) *)
+Lemma let_tuple_fields_wrong (statics : static_env) (hp : heap)
+    (rd : read_record) (size : nat)
     (tuple : simple) (tv : value) (body : expr) (conts : cont_env) :
+  (∀ l : location, tv <> Value_location l) ->
   ∀ (params : list variable) (field : nat) (vars : env),
     eval_simple vars tuple = Some tv ->
     (∀ param : variable,
@@ -366,9 +421,12 @@ Lemma let_tuple_fields_wrong (statics : static_env) (hp : heap) (size : nat)
     tuple_fields_from statics size tv field (length params) = None ->
     behaves
       (State (let_tuple_fields params size field tuple body) vars conts
-         statics hp)
+         statics hp rd)
       Goes_wrong.
 Proof.
+  intros Hvalue.
+  assert (Hnone : ∀ l : location, Value_location l ∉ [tv]).
+  { intros l [Hl | []]. exact (Hvalue l Hl). }
   induction params as [ | param params IH];
     intros field vars Htuple Hfresh Hfields; [ discriminate | ].
   cbn [length tuple_fields_from] in Hfields. cbn [let_tuple_fields].
@@ -379,15 +437,19 @@ Proof.
     as [v | ] eqn:Hv.
   - destruct (tuple_fields_from statics size tv (S field) (length params))
       as [vs | ] eqn:Hvs; [ discriminate | ].
-    apply (step_behaves _ Goes_wrong). rewrite step_let.
-    cbn [eval_named eval_simples]. rewrite Htuple. cbv beta iota.
+    apply (step_behaves _ Goes_wrong).
+    rewrite
+      (step_let_tuple_field statics hp rd size field param tuple tv _ vars
+         conts Htuple Hnone).
     rewrite Hv, (proj2 (eval_prim_kinds _ _ _ _ Hv)). simpl.
     apply (IH (S field)); [ | | exact Hvs ].
     + rewrite eval_simple_extend; [ exact Htuple | ].
       apply Hfresh. left. reflexivity.
     + intros p Hin. apply Hfresh. right. exact Hin.
-  - apply step_undefined_wrong. rewrite step_let.
-    cbn [eval_named eval_simples]. rewrite Htuple. cbv beta iota.
+  - apply step_undefined_wrong.
+    rewrite
+      (step_let_tuple_field statics hp rd size field param tuple tv _ vars
+         conts Htuple Hnone).
     rewrite Hv. reflexivity.
 Qed.
 
@@ -395,17 +457,17 @@ Qed.
 Lemma inlined_tupled_body_step (c : code) (r : renaming) (ap : apply_expr)
     (tuple : simple) (callee : value) (called : code_id)
     (slots : list (value_slot * value)) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   eval_simple vars (ap_callee ap) = Some callee ->
   closure_of statics callee = Some (called, slots) ->
-  step (State (inlined_tupled_body c r ap tuple) vars conts statics hp)
+  step (State (inlined_tupled_body c r ap tuple) vars conts statics hp rd)
   = Step
       (State
          (let_tuple_fields (code_params c) (length (code_params c)) 0 tuple
             (rename_expr r (code_body c)))
-         ((code_my_closure c, callee) :: vars) conts statics hp).
+         ((code_my_closure c, callee) :: vars) conts statics hp rd).
 Proof.
-  intros Hcallee Hclosure. unfold inlined_tupled_body. rewrite step_let.
+  intros Hcallee Hclosure. unfold inlined_tupled_body. rewrite step_let_simple.
   simpl. rewrite Hcallee, (closure_of_kind _ _ _ _ Hclosure). reflexivity.
 Qed.
 
@@ -418,7 +480,7 @@ Lemma inline_tupled_meet (ap : apply_expr) (called : code_id) (c : code)
     (r : renaming) (tuple : simple) (callee tv : value)
     (slots : list (value_slot * value)) (fields : list value)
     (callee_vars vars : env) (conts : cont_env) (statics : static_env)
-      (hp : heap) :
+      (hp : heap) (rd : read_record) :
   tupled_inlinable ap c r tuple ->
   eval_simple vars (ap_callee ap) = Some callee ->
   closure_of statics callee = Some (called, slots) ->
@@ -430,8 +492,8 @@ Lemma inline_tupled_meet (ap : apply_expr) (called : code_id) (c : code)
     (State (code_body c) callee_vars
        [(code_return_continuation c, resolve (ap_continuation ap) conts);
         (code_exn_continuation c, resolve (ap_exn_continuation ap) conts)]
-       statics hp)
-    (State (inlined_tupled_body c r ap tuple) vars conts statics hp).
+       statics hp rd)
+    (State (inlined_tupled_body c r ap tuple) vars conts statics hp rd).
 Proof.
   intros
     (Hclosed_vars & Hclosed_conts & Hvars & Hret & Hexn & Hextra & Hargs_eq
@@ -439,7 +501,7 @@ Proof.
      & Hstatic)
     Hcallee Hclosure Htuple Hfields Hbind.
   destruct
-    (let_tuple_fields_run statics hp (length (code_params c)) tuple tv
+    (let_tuple_fields_run statics hp rd (length (code_params c)) tuple tv
        (rename_expr r (code_body c)) conts (code_params c) 0 fields
        ((code_my_closure c, callee) :: vars) (callee_vars ++ vars))
     as [n Hrun].
@@ -453,7 +515,7 @@ Proof.
   { apply (equivalent_of_run (S n) 0).
     rewrite run_succ,
       (inlined_tupled_body_step c r ap tuple callee called slots vars conts
-         statics _ Hcallee Hclosure).
+         statics _ rd_ Hcallee Hclosure).
     exact Hrun. }
   apply equivalent_sym, renamed_equivalent.
   - apply binds_statics_code_closed, Hstatic.
@@ -478,21 +540,21 @@ Qed.
    variables, where the two meet. *)
 Theorem inline_tupled : inline_tupled_statement.
 Proof.
-  intros ap called c r tuple vars conts statics hp Hkind Hcode Hinlinable.
+  intros ap called c r tuple vars conts statics hp rd Hkind Hcode Hinlinable.
   pose proof Hinlinable as
     (_ & _ & _ & _ & _ & Hextra & Hargs_eq & Harity & _ & _ & Htupled
      & Hvalues & Hsome & Hstatic).
   pose proof
-    (step_undefined_refines (State (Apply ap) vars conts statics hp)
-       (State (inlined_tupled_body c r ap tuple) vars conts statics hp))
+    (step_undefined_refines (State (Apply ap) vars conts statics hp rd)
+       (State (inlined_tupled_body c r ap tuple) vars conts statics hp rd))
     as Hwrong.
   destruct (eval_simple vars (ap_callee ap)) as [callee | ] eqn:Hcallee;
     [ | apply Hwrong;
-        rewrite (step_apply_no_extra_args _ _ _ _ _ Hextra), Hcallee;
+        rewrite (step_apply_no_extra_args _ _ _ _ _ rd_ Hextra), Hcallee;
         reflexivity ].
   destruct (eval_simple vars tuple) as [tv | ] eqn:Htuple;
     [ | apply Hwrong;
-        rewrite (step_apply_no_extra_args _ _ _ _ _ Hextra), Hcallee,
+        rewrite (step_apply_no_extra_args _ _ _ _ _ rd_ Hextra), Hcallee,
           Hargs_eq;
         simpl; rewrite Htuple; reflexivity ].
   assert (Hargs : eval_simples vars (ap_args ap) = Some [tv])
@@ -501,13 +563,13 @@ Proof.
     by (unfold exn_extra_simples; rewrite Hextra; reflexivity).
   destruct (closure_of statics callee) as [[called' slots] | ] eqn:Hclosure;
     [ | apply Hwrong;
-        rewrite (step_apply_no_extra_args _ _ _ _ _ Hextra), Hcallee, Hargs,
+        rewrite (step_apply_no_extra_args _ _ _ _ _ rd_ Hextra), Hcallee, Hargs,
           Hkind;
         unfold call_function; rewrite shape_of_call_direct;
         unfold shape_of_closure_call; rewrite Hclosure; reflexivity ].
   destruct (Pos.eqb_spec called' called) as [-> | Hother];
     [ | apply Hwrong;
-        rewrite (step_apply_no_extra_args _ _ _ _ _ Hextra), Hcallee, Hargs,
+        rewrite (step_apply_no_extra_args _ _ _ _ _ rd_ Hextra), Hcallee, Hargs,
           Hkind;
         unfold call_function; rewrite shape_of_call_direct;
         unfold shape_of_closure_call; rewrite Hclosure;
@@ -517,12 +579,13 @@ Proof.
   destruct (tuple_fields statics (length (code_params c)) tv)
     as [fields | ] eqn:Hfields.
   2: { apply Hwrong.
-       apply (apply_tupled_undefined ap vars conts statics _ callee [tv] called
+       apply
+         (apply_tupled_undefined ap vars conts statics _ rd_ callee [tv] called
                 slots c Hcallee Hargs Hclosure Hcode Htupled).
        right. right. exists tv, []. split; [ reflexivity | ].
        rewrite Hcardinal. exact Hfields. }
   pose proof
-    (apply_tupled ap vars conts statics hp callee tv fields [] called slots c
+    (apply_tupled ap vars conts statics hp rd callee tv fields [] called slots c
        Hcallee Hargs Hno_extra Hclosure (or_intror Hkind) Hcode Htupled
        Hvalues Hsome Harity Hfields)
     as Hstep.
@@ -539,7 +602,8 @@ Proof.
   apply equivalent_refines.
   eapply equivalent_trans; [ exact (step_equivalent _ _ Hstep) | ].
   exact (inline_tupled_meet ap called c r tuple callee tv slots fields
-           callee_vars vars conts statics _ Hinlinable Hcallee Hclosure Htuple
+           callee_vars vars conts statics _ rd_ Hinlinable Hcallee Hclosure
+             Htuple
            Hfields Hbind).
 Qed.
 
@@ -547,27 +611,28 @@ Qed.
    has no value. *)
 Theorem inline_tupled_equivalent : inline_tupled_equivalent_statement.
 Proof.
-  intros ap called c r tuple callee slots vars conts statics hp Hkind Hcallee
-    Hclosure Hcode Hinlinable Hreturn.
+  intros ap called c r tuple callee slots vars conts statics hp rd Hkind
+    Hcallee Hclosure Hcode Hinlinable Hreturn Hvalue.
   pose proof Hinlinable as
     (_ & _ & _ & _ & _ & Hextra & Hargs_eq & Harity & Hmy_closure & Hparams
      & Htupled & Hvalues & Hsome & Hstatic).
   pose proof
     (inlined_tupled_body_step c r ap tuple callee called slots vars conts
-       statics hp Hcallee Hclosure)
+       statics hp rd Hcallee Hclosure)
     as Hfirst.
   destruct (params_are_values_cardinal c Hvalues) as [Hcardinal _].
   destruct (eval_simple vars tuple) as [tv | ] eqn:Htuple.
   2: { apply both_wrong_equivalent.
        - apply step_undefined_wrong.
-         rewrite (step_apply_no_extra_args _ _ _ _ _ Hextra), Hcallee,
+         rewrite (step_apply_no_extra_args _ _ _ _ _ rd_ Hextra), Hcallee,
            Hargs_eq.
          simpl. rewrite Htuple. reflexivity.
        - apply (step_behaves _ Goes_wrong). rewrite Hfirst.
          destruct (code_params c) as [ | param params];
            [ contradiction Hsome; reflexivity | ].
          apply step_undefined_wrong. cbn [let_tuple_fields].
-         rewrite step_let. cbn [eval_named eval_simples].
+         rewrite step_let_exec, exec_named_no_args; [ reflexivity | ].
+         cbn [eval_simples].
          rewrite eval_simple_extend by exact Hmy_closure.
          rewrite Htuple. reflexivity. }
   assert (Hargs : eval_simples vars (ap_args ap) = Some [tv])
@@ -578,18 +643,19 @@ Proof.
     as [fields | ] eqn:Hfields.
   2: { apply both_wrong_equivalent.
        - apply step_undefined_wrong.
-         apply (apply_tupled_undefined ap vars conts statics _ callee [tv]
-                  called slots c Hcallee Hargs Hclosure Hcode Htupled).
+         apply (apply_tupled_undefined ap vars conts statics _ rd_ callee
+                  [tv] called slots c Hcallee Hargs Hclosure Hcode Htupled).
          right. right. exists tv, []. split; [ reflexivity | ].
          rewrite Hcardinal. exact Hfields.
        - apply (step_behaves _ Goes_wrong). rewrite Hfirst.
-         apply (let_tuple_fields_wrong statics _ _ tuple tv);
-           [ rewrite eval_simple_extend; assumption | exact Hparams
+         apply (let_tuple_fields_wrong statics _ rd_ _ tuple tv);
+           [ intros l ->; exact (Hvalue l eq_refl)
+           | rewrite eval_simple_extend; assumption | exact Hparams
            | exact Hfields ]. }
   pose proof
-    (apply_tupled ap vars conts statics hp callee tv fields [] called slots c
-       Hcallee Hargs Hno_extra Hclosure (or_intror Hkind) Hcode Htupled
-       Hvalues Hsome Harity Hfields)
+    (apply_tupled ap vars conts statics hp rd callee tv fields [] called
+       slots c Hcallee Hargs Hno_extra Hclosure (or_intror Hkind) Hcode
+       Htupled Hvalues Hsome Harity Hfields)
     as Hstep.
   unfold call_code in Hstep. cbn [with_extra_args] in Hstep.
   rewrite Hstatic, Hreturn, arity_eqb_refl,
@@ -606,6 +672,6 @@ Proof.
   rewrite Hbind in Hstep.
   eapply equivalent_trans; [ exact (step_equivalent _ _ Hstep) | ].
   exact (inline_tupled_meet ap called c r tuple callee tv slots fields
-           callee_vars vars conts statics _ Hinlinable Hcallee Hclosure Htuple
-           Hfields Hbind).
+           callee_vars vars conts statics _ rd_ Hinlinable Hcallee Hclosure
+           Htuple Hfields Hbind).
 Qed.

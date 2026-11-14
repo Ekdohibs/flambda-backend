@@ -796,6 +796,8 @@ Proof.
   set (groups := groups_of lets places e).
   destruct (exits_plain_knowing [] [] e); cbn [andb];
     [ | apply scoped_refl ].
+  destruct (FlambdaHeapFreeSpec.expr_free_of_heap e); cbn [andb];
+    [ | apply scoped_refl ].
   destruct (around_ok lets groups [] root e) eqn:Hok; cbn [andb];
     [ | apply scoped_refl ].
   destruct (well_formed_unit u (lift_around lets groups root e));

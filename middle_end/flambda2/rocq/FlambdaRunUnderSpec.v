@@ -74,7 +74,8 @@ Definition same_but_conts (s s' : state) : Prop :=
   state_expr s = state_expr s'
   ∧ state_vars s = state_vars s'
   ∧ state_statics s = state_statics s'
-  ∧ state_heap s = state_heap s'.
+  ∧ state_heap s = state_heap s'
+  ∧ state_reads s = state_reads s'.
 
 (* The code that a static environment binds is closed. It is so of an
    environment that binds no code. *)
@@ -86,12 +87,12 @@ Definition static_code_closed (statics : static_env) : Prop :=
    many steps, the same but for its continuations. *)
 Definition run_under_statement : Prop :=
   ∀ (base : cont_env) (e : expr) (vars : env) (statics : static_env)
-    (hp : heap) (n : nat) (s : state),
+    (hp : heap) (rd : read_record) (n : nat) (s : state),
     code_closed e = true ->
     static_code_closed statics ->
-    run n (State e vars [] statics hp) = Step s ->
+    run n (State e vars [] statics hp rd) = Step s ->
     ∃ s' : state,
-      run n (State e vars base statics hp) = Step s'
+      run n (State e vars base statics hp rd) = Step s'
       ∧ same_but_conts s s'.
 
 (* Where the unit exits on its own, the run from [base] reaches the same
@@ -100,27 +101,27 @@ Definition run_under_statement : Prop :=
    the exit itself if [base] does not bind it. *)
 Definition exit_under_statement : Prop :=
   ∀ (base : cont_env) (e : expr) (vars : env) (statics : static_env)
-    (hp : heap) (n : nat) (last : state) (k : continuation)
-    (vs : list value) (hp' : heap),
+    (hp : heap) (rd : read_record) (n : nat) (last : state) (k : continuation)
+    (vs : list value) (hp' : heap) (rd' : read_record),
     code_closed e = true ->
     static_code_closed statics ->
-    run n (State e vars [] statics hp) = Step last ->
-    step last = Exit k vs hp' ->
+    run n (State e vars [] statics hp rd) = Step last ->
+    step last = Exit k vs hp' rd' ->
     ∃ last' : state,
-      run n (State e vars base statics hp) = Step last'
+      run n (State e vars base statics hp rd) = Step last'
       ∧ same_but_conts last last'
       ∧ step last'
-        = apply_cont_value (resolve k base) vs (state_statics last) hp'.
+        = apply_cont_value (resolve k base) vs (state_statics last) hp' rd'.
 
 (* Where the unit goes wrong on its own, so does the run from [base],
    in as many steps. *)
 Definition wrong_under_statement : Prop :=
   ∀ (base : cont_env) (e : expr) (vars : env) (statics : static_env)
-    (hp : heap) (n : nat),
+    (hp : heap) (rd : read_record) (n : nat),
     code_closed e = true ->
     static_code_closed statics ->
-    run n (State e vars [] statics hp) = Undefined ->
-    run n (State e vars base statics hp) = Undefined.
+    run n (State e vars [] statics hp rd) = Undefined ->
+    run n (State e vars base statics hp rd) = Undefined.
 
 (* The behaviours of what a step comes to: those of the state it steps
    to; the exit, if it is one; going wrong, if it is undefined. *)
@@ -128,7 +129,7 @@ Definition step_result_behaves (result : step_result) (b : behaviour)
     : Prop :=
   match result with
   | Step s => behaves s b
-  | Exit k vs hp => b = Exits k vs hp
+  | Exit k vs hp rd => b = Exits k vs hp
   | Undefined => b = Goes_wrong
   end.
 
@@ -137,17 +138,17 @@ Definition step_result_behaves (result : step_result) (b : behaviour)
    continuation to, applied to the world that the unit left. *)
 Definition behaves_under_statement : Prop :=
   ∀ (base : cont_env) (e : expr) (vars : env) (statics : static_env)
-    (hp : heap),
+    (hp : heap) (rd : read_record),
     code_closed e = true ->
     static_code_closed statics ->
-    let alone := State e vars [] statics hp in
-    let under := State e vars base statics hp in
+    let alone := State e vars [] statics hp rd in
+    let under := State e vars base statics hp rd in
     (∀ (w : exit_world) (b : behaviour),
       exits_world alone w ->
       behaves under b
       <-> step_result_behaves
             (apply_cont_value (resolve (exit_cont w) base) (exit_values w)
-               (exit_statics w) (exit_heap w))
+               (exit_statics w) (exit_heap w) (exit_reads w))
             b)
     ∧ (behaves alone Goes_wrong -> behaves under Goes_wrong)
     ∧ (behaves alone Diverges -> behaves under Diverges).

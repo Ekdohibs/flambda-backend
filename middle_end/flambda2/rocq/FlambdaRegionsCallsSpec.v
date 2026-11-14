@@ -422,7 +422,9 @@ Definition erasure_exits_erased_statement : Prop :=
       ∧ Forall2 (value_erased rs) vs vs'.
 
 (* FlambdaRegionsErasureSpec.erasure_adds_no_exit_statement, in the
-   same way. *)
+   same way: where the run of the erased term exits, the run on the
+   machine of regions exits alike, or stops with no step, or comes to
+   a [Let] that the machine does not run (decision D53). *)
 Definition erasure_adds_no_exit_erased_statement : Prop :=
   ∀ (e : expr) (statics : static_env) (base : symbol) (k : continuation)
     (vs' : list value) (hp : heap),
@@ -433,6 +435,8 @@ Definition erasure_adds_no_exit_erased_statement : Prop :=
       (∃ fault : region_fault,
         region_run fuel (initial_region_state e statics base)
         = Region_undefined fault)
+      ∨ region_run fuel (initial_region_state e statics base)
+        = Region_let_not_run
       ∨ (∃ (vs : list value) (rs : region_state),
           region_run fuel (initial_region_state e statics base)
           = Region_exit k vs rs

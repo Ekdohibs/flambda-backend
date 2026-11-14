@@ -290,6 +290,33 @@ Proof.
   - cbn [eval_named]. rewrite eval_simples_read by assumption. reflexivity.
 Qed.
 
+(* And it runs as it did: the rewrite of a primitive keeps the
+   primitive and what its arguments are worth. *)
+Lemma exec_named_number (source : option variable) (known : option Z)
+    (statics : static_env) (hp : heap) (rd : read_record) (vars : env)
+    (d : named) :
+  holds known vars ->
+  sourced source vars ->
+  exec_named statics hp rd vars (number_in_named x source known d)
+  = exec_named statics hp rd vars d.
+Proof.
+  intros Hholds Hsourced. apply exec_named_agrees.
+  - exact (eval_named_number source known statics vars d Hholds Hsourced).
+  - intros p args ->. unfold number_in_named.
+    destruct known as [c | ].
+    + pose proof (Hholds c eq_refl) as Hx.
+      pose proof (sourced_tagged source c vars Hsourced Hx) as Ht.
+      eexists. split; [ reflexivity | ].
+      split; [ exact (eval_simples_read x source c vars Hx Ht args) | ].
+      intros vs s _ _. reflexivity.
+    + exists args. split; [ reflexivity | ].
+      split; [ reflexivity | ]. intros vs s _ _. reflexivity.
+  - intros p args Hd. unfold number_in_named in Hd.
+    destruct known as [c | ];
+      destruct d as [s | p0 args0 | | | | | ]; try discriminate Hd;
+      exists p0, args0; reflexivity.
+Qed.
+
 Lemma eval_scrutinee_number (source : option variable) (known : option Z)
     (vars : env) (scrutinee : simple) :
   holds known vars ->
@@ -308,9 +335,10 @@ Qed.
 (* The variable that [x] is the untagging of under a [Let], and in a
    handler. *)
 Lemma sourced_let (source : option variable) (statics : static_env)
-    (vars : env) (y : variable) (d : named) (v : value) :
+    (hp hp' : heap) (rd rd' : read_record) (vars : env) (y : variable)
+    (d : named) (v : value) :
   sourced source vars ->
-  eval_named statics vars d = Some v ->
+  exec_named statics hp rd vars d = Some (v, hp', rd') ->
   sourced (source_under_let x y d source) ((y, v) :: vars).
 Proof.
   intros Hsourced Hv t Ht. unfold source_under_let in Ht.
@@ -318,6 +346,8 @@ Proof.
   - destruct (untag_of d) as [t' | ] eqn:Huntag; [ | discriminate Ht ].
     destruct (Pos.eqb_spec t' x) as [-> | Hne]; [ discriminate Ht | ].
     injection Ht as <-. apply untag_of_some in Huntag. subst d.
+    (* the untagging reads no cell *)
+    apply exec_named_pure in Hv as (Hv & _ & _); [ | reflexivity ].
     destruct (eval_untag_var statics vars t' v Hv) as (i & Ht' & ->).
     exists i. rewrite !lookup_cons, Pos.eqb_refl.
     apply Pos.eqb_neq in Hne. rewrite Hne. split; [ exact Ht' | reflexivity ].
@@ -429,7 +459,7 @@ Inductive cont_rel : cont_value -> cont_value -> Prop :=
 Inductive state_rel : state -> state -> Prop :=
   | Rel_state (dead : list (continuation * Z)) (source : option variable)
       (known : option Z) (e : expr) (vars : env) (conts conts' : cont_env)
-      (statics : static_env) (hp : heap) :
+      (statics : static_env) (hp : heap) (rd : read_record) :
     holds known vars ->
     sourced source vars ->
     (∀ (k2 : continuation) (c : Z),
@@ -440,26 +470,28 @@ Inductive state_rel : state -> state -> Prop :=
        cont_free_b k1 e = true ->
        k1 ∉ map fst dead ->
        cont_rel (resolve k1 conts) (resolve k1 conts')) ->
-    state_rel (State e vars conts statics hp)
-      (State (number_in_region x source known e) vars conts' statics hp)
+    state_rel (State e vars conts statics hp rd)
+      (State (number_in_region x source known e) vars conts' statics hp rd)
   | Rel_state_same (e : expr) (vars : env) (conts conts' : cont_env)
-      (statics : static_env) (hp : heap) :
+      (statics : static_env) (hp : heap) (rd : read_record) :
     (∀ k1 : continuation,
        cont_free_b k1 e = true ->
        cont_rel (resolve k1 conts) (resolve k1 conts')) ->
-    state_rel (State e vars conts statics hp) (State e vars conts' statics hp)
+    state_rel (State e vars conts statics hp rd)
+      (State e vars conts' statics hp rd)
   | Rel_state_arm (known : option Z) (ac : apply_cont) (vars : env)
-      (conts conts' : cont_env) (statics : static_env) (hp : heap) :
+      (conts conts' : cont_env) (statics : static_env) (hp : heap)
+        (rd : read_record) :
     holds known vars ->
     cont_rel (resolve (ac_continuation ac) conts)
       (resolve (ac_continuation ac) conts') ->
-    state_rel (State (Apply_cont ac) vars conts statics hp)
+    state_rel (State (Apply_cont ac) vars conts statics hp rd)
       (State (Apply_cont (number_in_apply_cont x known ac)) vars conts'
-         statics hp).
+         statics hp rd).
 
 Lemma state_rel_refl (s : state) : state_rel s s.
 Proof.
-  destruct s as [e vars conts statics hp].
+  destruct s as [e vars conts statics hp rd].
   apply Rel_state_same. intros k1 _. apply Rel_same.
 Qed.
 
@@ -538,16 +570,17 @@ Qed.
 Lemma call_code_rel (closure : value) (c : code) (vs : list value)
     (args_arity return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   cont_rel return_to return_to' ->
   cont_rel exn_to exn_to' ->
   result_related state_rel
-    (call_code closure c vs args_arity return_arity return_to exn_to statics hp)
+    (call_code closure c vs args_arity return_arity return_to exn_to statics hp
+       rd)
     (call_code closure c vs args_arity return_arity return_to' exn_to'
-       statics hp).
+       statics hp rd).
 Proof.
   intros Hreturn Hraise.
-  destruct (call_code_cases closure c vs args_arity return_arity statics hp)
+  destruct (call_code_cases closure c vs args_arity return_arity statics hp rd)
     as [Hundefined | (callee_vars & Hcall)].
   - rewrite !Hundefined. exact I.
   - rewrite !Hcall. simpl.
@@ -564,18 +597,20 @@ Qed.
 
 Lemma run_call_rel (shape : option call_shape) (return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   cont_rel return_to return_to' ->
   cont_rel exn_to exn_to' ->
   (∀ partial : value,
     result_related state_rel
-      (apply_cont_value return_to [partial] statics hp)
-      (apply_cont_value return_to' [partial] statics hp)) ->
+      (apply_cont_value return_to [partial] statics hp rd)
+      (apply_cont_value return_to' [partial] statics hp rd)) ->
   result_related state_rel
-    (run_call (fun partial => apply_cont_value return_to [partial] statics hp)
-       shape return_arity return_to exn_to statics hp)
-    (run_call (fun partial => apply_cont_value return_to' [partial] statics hp)
-       shape return_arity return_to' exn_to' statics hp).
+    (run_call
+       (fun partial => apply_cont_value return_to [partial] statics hp rd)
+       shape return_arity return_to exn_to statics hp rd)
+    (run_call
+       (fun partial => apply_cont_value return_to' [partial] statics hp rd)
+       shape return_arity return_to' exn_to' statics hp rd).
 Proof.
   intros Hreturn Hraise Hpartial.
   destruct shape
@@ -590,11 +625,11 @@ Qed.
 
 (* Related continuations, applied to the same values. *)
 Lemma apply_cont_value_rel (c c' : cont_value) (statics : static_env)
-    (hp : heap) :
+    (hp : heap) (rd : read_record) :
   cont_rel c c' ->
   ∀ vs : list value,
-    result_related state_rel (apply_cont_value c vs statics hp)
-      (apply_cont_value c' vs statics hp).
+    result_related state_rel (apply_cont_value c vs statics hp rd)
+      (apply_cont_value c' vs statics hp rd).
 Proof.
   intros Hc.
   induction Hc
@@ -644,14 +679,14 @@ Qed.
 Lemma call_function_rel (callee : value) (call_kind : call_kind)
     (vs : list value) (args_arity return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   cont_rel return_to return_to' ->
   cont_rel exn_to exn_to' ->
   result_related state_rel
     (call_function callee call_kind vs args_arity return_arity return_to
-       exn_to statics hp)
+       exn_to statics hp rd)
     (call_function callee call_kind vs args_arity return_arity return_to'
-       exn_to' statics hp).
+       exn_to' statics hp rd).
 Proof.
   intros Hreturn Hraise. unfold call_function.
   apply run_call_rel; [ exact Hreturn | exact Hraise | ].
@@ -683,10 +718,10 @@ Lemma number_step (s s' : state) :
   state_rel s s' -> result_related state_rel (step s) (step s').
 Proof.
   intros
-    [dead source known e vars conts conts' statics hp Hholds Hsourced Hdead
-       Hconts
-    | e vars conts conts' statics hp Hconts
-    | known ac vars conts conts' statics hp Hholds Hk].
+    [dead source known e vars conts conts' statics hp rd Hholds Hsourced
+       Hdead Hconts
+    | e vars conts conts' statics hp rd Hconts
+    | known ac vars conts conts' statics hp rd Hholds Hk].
   - (* an expression and the same rewritten *)
     destruct e as [y kind1 d body | bindings body | k1 hh body
                   | handlers body | ap | ac | scrutinee arms | ];
@@ -695,15 +730,18 @@ Proof.
         by (apply (no_dead dead (Let y kind1 d body) vars);
             [ intros k2; reflexivity | exact Hdead ]).
       subst dead.
-      rewrite !step_let,
-        (eval_named_number source known statics vars d Hholds Hsourced).
-      destruct (eval_named statics vars d) as [v | ] eqn:Hv; [ | exact I ].
+      rewrite !step_let_exec,
+        (exec_named_number source known statics hp rd vars d Hholds
+           Hsourced).
+      destruct (exec_named statics hp rd vars d) as [[[v hp'] rd'] | ]
+        eqn:Hv; [ | exact I ].
       destruct (kind_eqb (kind_of_value v) kind1); [ | exact I ].
       cbn [result_related]. apply (Rel_state []).
       * intros c Hc. destruct (Pos.eqb_spec y x) as [-> | Hyx];
           [ discriminate | ].
         rewrite lookup_other by congruence. exact (Hholds c Hc).
-      * exact (sourced_let source statics vars y d v Hsourced Hv).
+      * exact
+          (sourced_let source statics hp hp' rd rd' vars y d v Hsourced Hv).
       * intros k2 c [].
       * intros k1 Hk1 _. apply Hconts; [ exact Hk1 | intros [] ].
     + assert (Hnil : dead = [])
@@ -790,7 +828,8 @@ Proof.
         destruct (Pos.eq_dec k3 k1) as [-> | Hne];
           [ | exact (Hrest k3 Hk3 Hne Hk3dead) ].
         rewrite !resolve_head.
-        apply closure_given; [ exact Hholds | exact Hsourced | exact Hhandler ].
+        apply closure_given;
+          [ exact Hholds | exact Hsourced | exact Hhandler ].
     + assert (Hnil : dead = [])
         by (apply (no_dead dead (Let_cont_recursive handlers body) vars);
             [ intros k2; reflexivity | exact Hdead ]).
@@ -813,7 +852,8 @@ Proof.
             [ intros k2; reflexivity | exact Hdead ]).
       subst dead.
       rewrite !step_apply.
-      destruct (eval_simple vars (ap_callee ap)) as [callee | ]; [ | exact I ].
+      destruct (eval_simple vars (ap_callee ap)) as [callee | ];
+        [ | exact I ].
       destruct (eval_simples vars (ap_args ap)) as [vs | ]; [ | exact I ].
       destruct (eval_simples vars (exn_extra_simples ap)) as [extra | ];
         [ | exact I ].
@@ -860,8 +900,9 @@ Proof.
   - (* the same expression *)
     destruct e as [y kind1 d body | bindings body | k1 hh body
                   | handlers body | ap | ac | scrutinee arms | ].
-    + rewrite !step_let.
-      destruct (eval_named statics vars d) as [v | ]; [ | exact I ].
+    + rewrite !step_let_exec.
+      destruct (exec_named statics hp rd vars d) as [[[v hp'] rd'] | ];
+        [ | exact I ].
       destruct (kind_eqb (kind_of_value v) kind1); [ | exact I ].
       cbn [result_related]. apply Rel_state_same. exact Hconts.
     + rewrite !step_let_static.
@@ -886,7 +927,8 @@ Proof.
       * intros _. apply Hconts. cbn [cont_free_b]. rewrite Hk3.
         apply orb_true_r.
     + rewrite !step_apply.
-      destruct (eval_simple vars (ap_callee ap)) as [callee | ]; [ | exact I ].
+      destruct (eval_simple vars (ap_callee ap)) as [callee | ];
+        [ | exact I ].
       destruct (eval_simples vars (ap_args ap)) as [vs | ]; [ | exact I ].
       destruct (eval_simples vars (exn_extra_simples ap)) as [extra | ];
         [ | exact I ].
@@ -918,7 +960,7 @@ Qed.
 Lemma number_in_arms_equivalent (e : expr) :
   expr_equivalent e (number_in_arms x None e).
 Proof.
-  intros vars conts statics hp.
+  intros vars conts statics hp rd.
   apply (bisimulation_equivalent state_rel number_step).
   apply (Rel_state [] None None);
     [ intros c; discriminate | apply sourced_none | intros k2 c [] | ].
@@ -936,7 +978,7 @@ Lemma numbers_fold_equivalent (xs : list variable) :
     expr_equivalent e (fold_left (fun e x => number_in_arms x None e) e xs).
 Proof.
   induction xs as [ | x xs IH]; intros e; cbn [fold_left].
-  - intros vars conts statics hp. apply equivalent_refl.
+  - intros vars conts statics hp rd. apply equivalent_refl.
   - exact (expr_equivalent_trans _ _ _ (number_in_arms_equivalent x e)
       (IH (number_in_arms x None e))).
 Qed.

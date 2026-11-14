@@ -127,15 +127,18 @@ Local Open Scope Z_scope.
 
 Definition expr_refines_under (tenv : Typing_env.t) (source target : expr)
     : Prop :=
-  ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap),
+  ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+    (rd : read_record),
     env_satisfies_strictly tenv statics vars ->
-    refines (State source vars conts statics hp)
-      (State target vars conts statics hp).
+    refines (State source vars conts statics hp rd)
+      (State target vars conts statics hp rd).
 
 Definition expr_equivalent_under (tenv : Typing_env.t) (e e' : expr) : Prop :=
-  ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap),
+  ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+    (rd : read_record),
     env_satisfies_strictly tenv statics vars ->
-    equivalent (State e vars conts statics hp) (State e' vars conts statics hp).
+    equivalent (State e vars conts statics hp rd)
+      (State e' vars conts statics hp rd).
 
 (* Refinement under all environments is refinement under any typing
    environment. *)
@@ -286,18 +289,24 @@ Definition simple_of_kind_value_statement : Prop :=
 (* ======================================================================== *)
 
 (* Under a [Let] the body is rewritten with the variable defined, at
-   the kind of the value that the defining expression gives. The kind
-   that the [Let] gives its variable, [declared], is not read here.
-   (Simplify defines the variable at that kind:
-   [let_declared_refines_under_statement], below, is that case.) *)
+   the kind of the value that the defining expression gives. The
+   machine runs the defining expression on its heap
+   (FlambdaSemanticsSpec.exec_named), and a primitive may read a cell
+   there: so "the value that it gives" is the value of that run, on
+   whatever heap and with whatever read record, in a state that
+   satisfies the environment. The kind that the [Let] gives its
+   variable, [declared], is not read here. (Simplify defines the
+   variable at that kind: [let_declared_refines_under_statement],
+   below, is that case.) *)
 Definition let_refines_under_statement : Prop :=
   ∀ (tenv : Typing_env.t) (x : variable) (declared : flambda_kind)
     (defining_expr : named) (body body' : expr) (kind : flambda_kind),
     typing_env_well_formed tenv = true ->
     Typing_env.mem None tenv (Name_var x) = false ->
-    (∀ (statics : static_env) (vars : env) (v : value),
+    (∀ (statics : static_env) (hp hp' : heap) (rd rd' : read_record)
+       (vars : env) (v : value),
       env_satisfies_strictly tenv statics vars ->
-      eval_named statics vars defining_expr = Some v ->
+      exec_named statics hp rd vars defining_expr = Some (v, hp', rd') ->
       kind_of_value v = kind) ->
     expr_refines_under
       (Typing_env.add_variable_definition tenv x kind Name_mode.normal) body
@@ -321,17 +330,19 @@ Definition let_declared_refines_under_statement : Prop :=
       (Let x declared defining_expr body').
 
 (* The same with a type, if every value that the defining expression
-   gives has it; the variable is defined at the kind of the type. The
-   type speaks of variables in scope where the [Let] is. *)
+   gives has it, on whatever heap it is run; the variable is defined
+   at the kind of the type. The type speaks of variables in scope
+   where the [Let] is. *)
 Definition let_typed_refines_under_statement : Prop :=
   ∀ (tenv : Typing_env.t) (x : variable) (declared : flambda_kind)
     (defining_expr : named) (body body' : expr) (ty : flambda_type),
     typing_env_well_formed tenv = true ->
     Typing_env.mem None tenv (Name_var x) = false ->
     (∀ y : variable, y ∈ free_variables ty -> in_scope_in_terms tenv y) ->
-    (∀ (statics : static_env) (vars : env) (v : value),
+    (∀ (statics : static_env) (hp hp' : heap) (rd rd' : read_record)
+       (vars : env) (v : value),
       env_satisfies_strictly tenv statics vars ->
-      eval_named statics vars defining_expr = Some v ->
+      exec_named statics hp rd vars defining_expr = Some (v, hp', rd') ->
       type_satisfied statics vars v ty) ->
     expr_refines_under
       (Typing_env.replace_equation

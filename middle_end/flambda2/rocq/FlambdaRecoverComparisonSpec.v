@@ -143,8 +143,9 @@ Import ListNotations.
 (* ======================================================================== *)
 
 (* The first answer that [f] gives of an entry of what is known. What
-   is known may have several entries for one variable; every one of
-   them holds (FlambdaCseSpec.all_computed), so any will do. *)
+   is known may have several entries for one variable; every one that
+   this file reads holds where the pass runs
+   (FlambdaRecoverComparisonProofs.comparisons_hold), so any will do. *)
 Fixpoint first_known {A : Type}
     (f : variable * (prim * list simple) -> option A) (known : computed)
     : option A :=

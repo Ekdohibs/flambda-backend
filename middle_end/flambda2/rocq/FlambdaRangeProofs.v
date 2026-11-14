@@ -28,8 +28,11 @@
 (* Proofs of the statements of FlambdaRangeSpec.v. Nothing here needs
    review.
 
-   The primitives are not looked into: what one does to numbers in range
-   is the law FlambdaPrimitiveProofs.eval_prim_in_range. *)
+   The primitives that compute on values alone are not looked into:
+   what one does to numbers in range is the law
+   FlambdaPrimitiveProofs.eval_prim_in_range. Those that read or change
+   the heap are looked into here, case by case ([exec_prim_in_range],
+   by the cases of FlambdaHeapSpec.exec_bound_prim). *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
@@ -37,6 +40,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaMapProofs FlambdaSemanticsSpec FlambdaSemanticsProofs
   FlambdaWellFormedSpec FlambdaWellFormedProofs FlambdaNominalSpec
   FlambdaRangeSpec.
+From OxCamlFlambda2 Require FlambdaHeapProofs.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -269,6 +273,174 @@ Qed.
 End Statics.
 
 (* ======================================================================== *)
+(* A primitive on a heap in range                                           *)
+(* ======================================================================== *)
+
+Lemma heap_in_range_write (l : location) (c : cell) (h : heap) :
+  heap_in_range h -> cell_in_range c = true -> heap_in_range ((l, c) :: h).
+Proof.
+  intros Hheap Hc l0 c0 [[= <- <-] | Hin];
+    [ exact Hc | exact (Hheap l0 c0 Hin) ].
+Qed.
+
+(* The cases are those of FlambdaHeapProofs.exec_prim_preserves. *)
+Theorem exec_prim_in_range : exec_prim_in_range_statement.
+Proof.
+  intros st h h1 p vs result Hp Hsymbols Hvs Hheap Hexec.
+  apply FlambdaHeapProofs.exec_prim_bound in Hexec as [_ Hexec].
+  revert Hexec.
+  assert (Hpure :
+            (let* v := eval_prim st p vs in Some (v, h)) = Some (result, h1) ->
+            value_in_range result = true ∧ heap_in_range h1).
+  { destruct (eval_prim st p vs) as [v | ] eqn:Heval; simpl;
+      [ | discriminate ].
+    intros [= <- <-]. split; [ | exact Hheap ].
+    exact (eval_prim_in_range st p vs v Hp Hsymbols Hvs Heval). }
+  assert (Hcell :
+            ∀ (l : location) (c : cell),
+              lookup l h = Some c -> cell_in_range c = true).
+  { intros l c Hl. exact (Hheap l c (lookup_in _ _ _ Hl)). }
+  destruct p as [p | p | p | p | rp]; try exact Hpure.
+  - destruct vs as [ | v [ | v2 vs]]; try exact Hpure.
+    2: { destruct v; simpl; discriminate. }
+    rewrite FlambdaHeapProofs.exec_bound_prim_unary.
+    destruct (FlambdaHeapProofs.location_of v) as [l | ] eqn:Hlocation.
+    2: { destruct v; try discriminate; exact Hpure. }
+    destruct v; try discriminate. injection Hlocation as ->.
+    destruct (lookup l h) as [c | ] eqn:Hc; simpl; [ | discriminate ].
+    destruct (exec_unary_on_cell p l c) as [res | ] eqn:Hres; simpl;
+      [ | discriminate ].
+    intros [= <- <-]. split; [ | exact Hheap ].
+    pose proof (Hcell l c Hc) as Hrange.
+    destruct c as [cell_mut tag fields | akind elements]; simpl in Hrange.
+    + apply andb_true_iff in Hrange as [Htag Hfields].
+      destruct p; simpl in Hres; try discriminate.
+      * destruct (load_allowed _ cell_mut); [ | discriminate ].
+        apply FlambdaHeapProofs.load_field_in in Hres.
+        exact (proj1 (forallb_forall _ _) Hfields res Hres).
+      * injection Hres as <-. apply naked_bool_in_range.
+      * injection Hres as <-. apply naked_bool_in_range.
+      * injection Hres as <-. simpl.
+        exact (tag_in_range_ocaml_int tag Htag).
+      * destruct (kind_eqb _ Value); [ | discriminate ].
+        injection Hres as <-. reflexivity.
+    + destruct p as [ | [ | ] | | | length_kind | | okind | | | | | | | | ];
+        simpl in Hres; try discriminate.
+      * injection Hres as <-. apply naked_bool_in_range.
+      * injection Hres as <-. apply naked_bool_in_range.
+      * unfold array_length_of in Hres.
+        destruct (in_range _ _) eqn:Hlength; [ | discriminate ].
+        injection Hres as <-. exact Hlength.
+      * destruct (kind_eqb _ Value); [ | discriminate ].
+        injection Hres as <-. reflexivity.
+  - rewrite FlambdaHeapProofs.exec_bound_prim_binary.
+    destruct (FlambdaHeapProofs.phys_equal_on_location p vs).
+    + destruct p; try discriminate.
+      destruct vs as [ | v1 [ | v2 [ | v3 vs]]]; try discriminate.
+      destruct (eval_phys_equal_location st v1 v2); simpl;
+        [ | discriminate ].
+      intros [= <- <-]. split; [ apply naked_bool_in_range | exact Hheap ].
+    + destruct (FlambdaHeapProofs.binary_on_cell p vs) as [[l v2] | ];
+        [ | exact Hpure ].
+      destruct (lookup l h) as [c | ] eqn:Hc; simpl; [ | discriminate ].
+      destruct (exec_binary_on_cell p l c v2) as [res | ] eqn:Hres; simpl;
+        [ | discriminate ].
+      intros [= <- <-]. split; [ | exact Hheap ].
+      pose proof (Hcell l c Hc) as Hrange.
+      destruct c as [cell_mut tag fields | akind elements];
+        [ destruct p; simpl in Hres; discriminate | ].
+      destruct p as [array_kind load_kind mut | | | | | ]; simpl in Hres;
+        try discriminate.
+      destruct (load_allowed mut Cell_mutable); [ | discriminate ].
+      apply array_loaded_element in Hres as [Hin _].
+      exact (proj1 (forallb_forall _ _) Hrange res Hin).
+  - change (exec_bound_prim st h (Heap p) vs)
+      with (exec_heap_primitive st h p vs).
+    destruct p as [mut tag | kind init field | kind | akind set_kind].
+    + simpl. destruct (forallb _ vs) eqn:Hkinds; [ | discriminate ].
+      intros [= <- <-]. split; [ reflexivity | ].
+      apply heap_in_range_write; [ exact Hheap | ].
+      simpl. simpl in Hp. rewrite Hp. simpl.
+      apply forallb_forall. exact Hvs.
+    + destruct vs as [ | v [ | new [ | v3 vs]]]; try (simpl; discriminate).
+      rewrite FlambdaHeapProofs.exec_block_set.
+      destruct (FlambdaHeapProofs.location_of v) as [l | ];
+        [ | discriminate ].
+      destruct (lookup l h) as [[[ | ] tag fields | akind elements] | ]
+        eqn:Hc;
+        try discriminate.
+      destruct (store_field kind field new tag fields) as [fields1 | ]
+        eqn:Hstore; simpl; [ | discriminate ].
+      intros [= <- <-].
+      destruct (FlambdaHeapProofs.store_field_in _ _ _ _ _ _ Hstore)
+        as [_ Hin].
+      pose proof (Hcell l _ Hc) as Hrange. simpl in Hrange.
+      apply andb_true_iff in Hrange as [Htag Hfields].
+      split; [ reflexivity | ].
+      apply heap_in_range_write; [ exact Hheap | ].
+      simpl. rewrite Htag. simpl. apply forallb_forall. intros v0 Hv0.
+      destruct (Hin v0 Hv0) as [-> | Hold].
+      * apply Hvs. right. left. reflexivity.
+      * exact (proj1 (forallb_forall _ _) Hfields v0 Hold).
+    + simpl. destruct vs as [ | v0 vs0]; [ discriminate | ].
+      destruct (array_made kind (v0 :: vs0)) as [elements | ] eqn:Hmade;
+        simpl; [ | discriminate ].
+      intros [= <- <-].
+      apply array_made_of_arguments in Hmade as [-> Hok].
+      split; [ reflexivity | ].
+      apply heap_in_range_write; [ exact Hheap | ].
+      unfold cell_in_range. apply forallb_forall. exact Hvs.
+    + destruct vs as [ | v [ | index [ | new [ | v4 vs]]]];
+        try (simpl; discriminate).
+      rewrite FlambdaHeapProofs.exec_array_set.
+      destruct (FlambdaHeapProofs.location_of v) as [l | ];
+        [ | discriminate ].
+      destruct (lookup l h) as [[mut tag fields | kind elements] | ] eqn:Hc;
+        try discriminate.
+      destruct (array_stored set_kind kind elements index new)
+        as [stored | ] eqn:Hstore; simpl; [ | discriminate ].
+      intros [= <- <-].
+      destruct (array_stored_elements _ _ _ _ _ _ Hstore) as (_ & _ & Hin).
+      pose proof (Hcell l _ Hc) as Hrange. simpl in Hrange.
+      split; [ reflexivity | ].
+      apply heap_in_range_write; [ exact Hheap | ].
+      simpl. apply forallb_forall. intros v0 Hv0.
+      destruct (Hin v0 Hv0) as [-> | Hold].
+      * apply Hvs. right. right. left. reflexivity.
+      * exact (proj1 (forallb_forall _ _) Hrange v0 Hold).
+Qed.
+
+(* What a named expression does on a heap in range: where it has a
+   value, the value is in range and so is the heap after. *)
+Lemma exec_named_in_range (statics : static_env)
+    (Hstatics : statics_in_range statics) (vars : env)
+    (Hvars : env_in_range vars) (hp hp' : heap) (rd rd' : read_record)
+    (d : named) (v : value) :
+  named_in_range d = true ->
+  heap_in_range hp ->
+  exec_named statics hp rd vars d = Some (v, hp', rd') ->
+  value_in_range v = true ∧ heap_in_range hp'.
+Proof.
+  intros Hd Hheap Hexec.
+  destruct d
+    as [s | p args | code slots | fslot decls slots | slot closure
+       | pfrom slot closure | move_from move_to closure];
+    try (rewrite exec_named_not_prim in Hexec by (intros ? ?; discriminate);
+         destruct (eval_named statics vars _) as [w | ] eqn:Heval;
+           [ | discriminate ];
+         injection Hexec as <- <- <-;
+         split; [ | exact Hheap ];
+         exact (eval_named_in_range statics Hstatics vars Hvars _ w Hd Heval)).
+  apply exec_named_prim_some in Hexec as (vs & Heval & Hexec & _).
+  simpl in Hd. apply andb_true_iff in Hd as [Hp Hargs].
+  pose proof (eval_simples_in_range vars Hvars args vs Hargs Heval) as Hvs.
+  apply (exec_prim_in_range statics hp hp' p vs v Hp); try assumption.
+  - intros sym allocated _.
+    exact (lookup_symbol_in_range statics Hstatics sym allocated).
+  - apply forallb_forall. exact Hvs.
+Qed.
+
+(* ======================================================================== *)
 (* Static bindings                                                          *)
 (* ======================================================================== *)
 
@@ -407,7 +579,7 @@ Qed.
 Definition result_in_range (result : step_result) : Prop :=
   match result with
   | Step s => state_in_range s
-  | Exit _ vs _ => forallb value_in_range vs = true
+  | Exit _ vs _ _ => forallb value_in_range vs = true
   | Undefined => True
   end.
 
@@ -440,18 +612,20 @@ Qed.
 
 Lemma call_code_in_range (closure : value) (called : code_id) (c : code)
     (vs : list value) (args_arity return_arity : arity)
-    (return_to exn_to : cont_value) (statics : static_env) (hp : heap) :
+    (return_to exn_to : cont_value) (statics : static_env) (hp : heap)
+      (rd : read_record) :
   value_in_range closure = true ->
   forallb value_in_range vs = true ->
   cont_in_range return_to ->
   cont_in_range exn_to ->
   statics_in_range statics ->
+  heap_in_range hp ->
   lookup called (static_code statics) = Some c ->
   result_in_range
     (call_code closure c vs args_arity return_arity return_to exn_to statics
-       hp).
+       hp rd).
 Proof.
-  intros Hclosure Hvs Hreturn Hexn Hstatics Hcode. unfold call_code.
+  intros Hclosure Hvs Hreturn Hexn Hstatics Hheap Hcode. unfold call_code.
   destruct (binds_statics (code_body c)); [ exact I | ].
   destruct
     (negb
@@ -471,49 +645,54 @@ Proof.
   - intros k c' [[= <- <-] | [[= <- <-] | []]]; assumption.
   - exact (proj1 Hstatics).
   - exact (proj2 Hstatics).
+  - exact Hheap.
 Qed.
 
 Lemma run_call_in_range (return_partial : value -> step_result)
     (kind : call_kind) (shape : option call_shape) (return_arity : arity)
-    (return_to exn_to : cont_value) (statics : static_env) (hp : heap) :
+    (return_to exn_to : cont_value) (statics : static_env) (hp : heap)
+      (rd : read_record) :
   shape_calls statics kind shape ->
   shape_values_all (fun v => value_in_range v = true) shape ->
   cont_in_range return_to ->
   cont_in_range exn_to ->
   statics_in_range statics ->
+  heap_in_range hp ->
   (∀ partial : value,
     value_in_range partial = true ->
     result_in_range (return_partial partial)) ->
   result_in_range
-    (run_call return_partial shape return_arity return_to exn_to statics hp).
+    (run_call return_partial shape return_arity return_to exn_to statics hp rd).
 Proof.
-  intros Hcalls Hvalues Hreturn Hexn Hstatics Hpartial.
+  intros Hcalls Hvalues Hreturn Hexn Hstatics Hheap Hpartial.
   destruct shape
     as [[closure c vs args_arity
         | closure c vs remaining args_arity remaining_arity | partial] | ];
     simpl in Hcalls, Hvalues |- *.
   - destruct Hcalls as (called & slots & _ & Hcode & _).
     destruct Hvalues as [Hclosure Hvs]. apply forallb_Forall in Hvs.
-    exact (call_code_in_range closure called c vs _ _ _ _ statics _ Hclosure
-             Hvs Hreturn Hexn Hstatics Hcode).
+    exact (call_code_in_range closure called c vs _ _ _ _ statics _ rd_ Hclosure
+             Hvs Hreturn Hexn Hstatics Hheap Hcode).
   - destruct Hcalls as (called & slots & _ & Hcode & _).
     destruct Hvalues as (Hclosure & Hvs & Hremaining).
     apply forallb_Forall in Hvs, Hremaining.
-    apply (call_code_in_range closure called c vs _ _ _ _ statics _ Hclosure
+    apply (call_code_in_range closure called c vs _ _ _ _ statics _ rd_ Hclosure
              Hvs);
-      [ constructor; assumption | exact Hexn | exact Hstatics | exact Hcode ].
+      [ constructor; assumption | exact Hexn | exact Hstatics | exact Hheap
+      | exact Hcode ].
   - exact (Hpartial partial Hvalues).
   - exact I.
 Qed.
 
 Lemma apply_cont_value_in_range (c : cont_value) (vs : list value)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   cont_in_range c ->
   forallb value_in_range vs = true ->
   statics_in_range statics ->
-  result_in_range (apply_cont_value c vs statics hp).
+  heap_in_range hp ->
+  result_in_range (apply_cont_value c vs statics hp rd).
 Proof.
-  intros Hc Hvs Hstatics. revert vs Hvs.
+  intros Hc Hvs Hstatics Hheap. revert vs Hvs.
   induction Hc
     as [k | c extra Hc IH Hextra
        | [params metadata handler] vars conts recursive Hh Hvars Hconts _
@@ -537,6 +716,7 @@ Proof.
         (rec_closures_in_range recursive vars conts Hrecursive Hvars Hconts).
     + exact (proj1 Hstatics).
     + exact (proj2 Hstatics).
+    + exact Hheap.
   - rewrite apply_cont_value_over_application.
     destruct vs as [ | v [ | v' vs]]; [ exact I | | exact I ].
     simpl in Hvs. rewrite andb_true_r in Hvs. unfold call_function.
@@ -560,24 +740,27 @@ Qed.
 
 Lemma call_function_in_range (callee : value) (kind : call_kind)
     (vs : list value) (args_arity return_arity : arity)
-    (return_to exn_to : cont_value) (statics : static_env) (hp : heap) :
+    (return_to exn_to : cont_value) (statics : static_env) (hp : heap)
+      (rd : read_record) :
   value_in_range callee = true ->
   forallb value_in_range vs = true ->
   cont_in_range return_to ->
   cont_in_range exn_to ->
   statics_in_range statics ->
+  heap_in_range hp ->
   result_in_range
     (call_function callee kind vs args_arity return_arity return_to exn_to
-       statics hp).
+       statics hp rd).
 Proof.
-  intros Hcallee Hvs Hreturn Hexn Hstatics. unfold call_function.
+  intros Hcallee Hvs Hreturn Hexn Hstatics Hheap. unfold call_function.
   apply (run_call_in_range _ kind); try assumption.
   - apply shape_of_call_calls.
   - apply (shape_of_call_values_all _ value_in_range_partial);
       [ exact (tuple_fields_in_range statics Hstatics) | exact Hcallee
       | apply forallb_Forall; exact Hvs ].
   - intros partial Hpartial.
-    apply apply_cont_value_in_range; [ exact Hreturn | | exact Hstatics ].
+    apply apply_cont_value_in_range;
+      [ exact Hreturn | | exact Hstatics | exact Hheap ].
     simpl. rewrite Hpartial. reflexivity.
 Qed.
 
@@ -588,19 +771,23 @@ Qed.
 Lemma step_result_in_range (s : state) :
   state_in_range s -> result_in_range (step s).
 Proof.
-  intros (Hexpr & Hvars & Hconts & Hstatics). rewrite (state_eta s).
+  intros (Hexpr & Hvars & Hconts & Hstatics & Hheap). rewrite (state_eta s).
   set (vars := state_vars s) in *. set (conts := state_conts s) in *.
-  set (statics := state_statics s) in *.
+  set (statics := state_statics s) in *. set (hp := state_heap s) in *.
   destruct (state_expr s)
     as [x kind d body | bindings body | k h body | handlers body | ap | ac
        | scrutinee arms | ];
     autorewrite with step; simpl in Hexpr.
   - apply andb_true_iff in Hexpr as [Hd Hbody].
-    destruct (eval_named statics vars d) as [v | ] eqn:Heval; [ | exact I ].
+    destruct (exec_named _ _ _ _ d) as [[[v hp'] rd'] | ] eqn:Heval;
+      [ | exact I ].
     destruct (kind_eqb (kind_of_value v) kind); [ | exact I ].
+    destruct
+      (exec_named_in_range statics Hstatics vars Hvars _ _ _ _ d v Hd Hheap
+         Heval)
+      as [Hv Hheap'].
     repeat split; simpl; try assumption; try apply Hstatics.
-    intros y w [[= <- <-] | Hin]; [ | exact (Hvars y w Hin) ].
-    exact (eval_named_in_range statics Hstatics vars Hvars d v Hd Heval).
+    intros y w [[= <- <-] | Hin]; [ exact Hv | exact (Hvars y w Hin) ].
   - apply andb_true_iff in Hexpr as [Hbindings Hbody].
     destruct (eval_static_bindings vars bindings statics) as [extended | ]
       eqn:Heval;
@@ -670,7 +857,7 @@ Qed.
 
 Lemma initial_state_in_range (e : expr) :
   numbers_in_range e = true ->
-  state_in_range (State e [] [] empty_static_env empty_heap).
+  state_in_range (State e [] [] empty_static_env empty_heap no_reads).
 Proof.
   intros He. repeat split; simpl; try exact He; intros ? ? [].
 Qed.
@@ -685,7 +872,7 @@ Qed.
 
 Theorem run_exit_in_range : run_exit_in_range_statement.
 Proof.
-  intros e n k vs hp He Hrun.
+  intros e n k vs hp rd He Hrun.
   pose proof (run_result_in_range n _ (initial_state_in_range e He))
     as Hresult.
   rewrite Hrun in Hresult. apply forallb_forall. exact Hresult.
@@ -703,7 +890,7 @@ Qed.
 
 Theorem blocks_in_range : blocks_in_range_statement.
 Proof.
-  intros s x v tag fields (_ & Hvars & _ & Hstatics) Hlookup Hblock.
+  intros s x v tag fields (_ & Hvars & _ & Hstatics & _) Hlookup Hblock.
   destruct
     (block_of_in_range (state_statics s) v tag fields) as [Htag Hfields];
     [ | exact (Hvars x v (lookup_in _ _ _ Hlookup)) | exact Hblock | ].
@@ -824,12 +1011,16 @@ Proof. exact rename_numbers_in_range. Qed.
 
 Theorem in_range_runs : in_range_runs_statement.
 Proof.
-  split; [ vm_compute; reflexivity | exists 5%nat; vm_compute; reflexivity ].
+  split;
+    [ vm_compute; reflexivity | exists 5%nat; eexists; vm_compute; reflexivity
+     ].
 Qed.
 
 Theorem tag_out_of_range : tag_out_of_range_statement.
 Proof.
-  split; [ vm_compute; reflexivity | exists 5%nat; vm_compute; reflexivity ].
+  split;
+    [ vm_compute; reflexivity | exists 5%nat; eexists; vm_compute; reflexivity
+     ].
 Qed.
 
 Theorem constant_out_of_range : constant_out_of_range_statement.

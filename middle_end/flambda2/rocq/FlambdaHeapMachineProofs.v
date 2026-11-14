@@ -208,6 +208,22 @@ Ltac break_innermost :=
     end
   end.
 
+(* The executor of the machine of FlambdaSemanticsSpec.v is the one
+   of this file, with the read record given back as it came. *)
+Lemma exec_named_heap_exec_named (statics : static_env) (h : heap)
+    (rd : read_record) (vars : env) (d : named) :
+  exec_named statics h rd vars d
+  = option_map (fun r : value * heap => (fst r, snd r, rd))
+      (heap_exec_named statics h vars d).
+Proof.
+  destruct d as [s | p args | code slots | fslot decls slots | slot closure
+    | pfrom slot closure | move_from move_to closure];
+    unfold exec_named, heap_exec_named;
+    try (destruct (eval_named _ _ _); reflexivity).
+  destruct (eval_simples vars args) as [vs | ]; [ | reflexivity ].
+  simpl. destruct (exec_prim statics h p vs) as [[v h'] | ]; reflexivity.
+Qed.
+
 Lemma heap_exec_named_evolves (statics : static_env) (h h' : heap) (vars : env)
     (d : named) (v : value) :
   heap_exec_named statics h vars d = Some (v, h') -> heap_evolves h h'.
@@ -298,7 +314,7 @@ Definition results_agree (statics : static_env) (h : heap)
     (result : heap_step_result) (result' : step_result) : Prop :=
   match result, result' with
   | Heap_step s', Step t => forget_heap s' = t ∧ hs_heap s' = h
-  | Heap_exit k o, Exit k' vs' _ => k = k' ∧ o = Outcome vs' statics h
+  | Heap_exit k o, Exit k' vs' _ _ => k = k' ∧ o = Outcome vs' statics h
   | Heap_undefined, Undefined => True
   | _, _ => False
   end.
@@ -310,7 +326,8 @@ Lemma heap_call_code_agrees (closure : value) (c : code) (vs : list value)
   results_agree statics h
     (heap_call_code closure c vs args_arity return_arity return_to exn_to
        statics h)
-    (call_code closure c vs args_arity return_arity return_to exn_to statics h).
+    (call_code closure c vs args_arity return_arity return_to exn_to statics h
+       no_reads).
 Proof.
   unfold results_agree, heap_call_code, call_code.
   repeat (break_innermost; simpl; auto).
@@ -326,7 +343,8 @@ Lemma heap_run_call_agrees (return_partial : value -> heap_step_result)
   results_agree statics h
     (heap_run_call return_partial shape return_arity return_to exn_to statics
        h)
-    (run_call return_partial' shape return_arity return_to exn_to statics h).
+    (run_call return_partial' shape return_arity return_to exn_to statics h
+       no_reads).
 Proof.
   intros Hpartial.
   destruct shape
@@ -344,7 +362,7 @@ Qed.
 Lemma heap_apply_cont_value_agrees (c : cont_value) (vs : list value)
     (statics : static_env) (h : heap) :
   results_agree statics h (heap_apply_cont_value c vs statics h)
-    (apply_cont_value c vs statics h).
+    (apply_cont_value c vs statics h no_reads).
 Proof.
   revert vs.
   induction c
@@ -369,7 +387,7 @@ Lemma heap_call_function_agrees (callee : value) (kind : call_kind)
     (heap_call_function callee kind vs args_arity return_arity return_to
        exn_to statics h)
     (call_function callee kind vs args_arity return_arity return_to exn_to
-       statics h).
+       statics h no_reads).
 Proof.
   unfold heap_call_function, call_function. apply heap_run_call_agrees.
   intros partial. apply heap_apply_cont_value_agrees.

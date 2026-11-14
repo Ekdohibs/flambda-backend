@@ -379,7 +379,7 @@ Theorem stack_differs : stack_differs_statement.
 Proof.
   unfold stack_differs_statement. split; [ reflexivity | ].
   split; [ reflexivity | ]. split.
-  - exists 10%nat. vm_compute. reflexivity.
+  - exists 10%nat; eexists. vm_compute. reflexivity.
   - exists 10%nat. vm_compute. reflexivity.
 Qed.
 
@@ -390,7 +390,7 @@ Theorem stack_needs_distinct_binders :
 Proof.
   unfold stack_needs_distinct_binders_statement.
   split; [ reflexivity | ]. split; [ reflexivity | ]. split.
-  - exists 10%nat. vm_compute. reflexivity.
+  - exists 10%nat; eexists. vm_compute. reflexivity.
   - exists 10%nat. vm_compute. reflexivity.
 Qed.
 
@@ -1197,10 +1197,10 @@ Proof. destruct frame; reflexivity. Qed.
    with removed, is a raise in the caller with the extra arguments. *)
 Lemma unwind_call_exn (frame : call_frame) (ret exn : continuation)
     (return_to : cont_value) (extra : list value) (rest : stack)
-    (vs : list value) (statics : static_env) (hp : heap) :
+    (vs : list value) (statics : static_env) (hp : heap) (rd : read_record) :
   unwind (call_entry frame ret exn return_to extra :: rest) (Leaving_by exn)
-    vs statics hp
-  = unwind rest Raising (vs ++ extra) statics hp.
+    vs statics hp rd
+  = unwind rest Raising (vs ++ extra) statics hp rd.
 Proof. destruct frame; simpl; rewrite Pos.eqb_refl; reflexivity. Qed.
 
 (* The stack, and how the machine that goes by names started what is
@@ -1259,6 +1259,7 @@ Definition inv (n : nat) (s_n s_s : state) (st : stack) : Prop :=
   ∧ state_vars s_n = state_vars s_s
   ∧ state_statics s_n = state_statics s_s
   ∧ state_heap s_n = state_heap s_s
+  ∧ state_reads s_n = state_reads s_s
   ∧ ∃ (f : frame_kind) (bottom : cont_env) (ts : trap_stack) (ds : demands),
       env_rel f bottom (state_conts s_n) (state_conts s_s)
       ∧ full_demands ts (state_expr s_s) = Some ds
@@ -1271,10 +1272,10 @@ Definition inv (n : nat) (s_n s_s : state) (st : stack) : Prop :=
 Definition related (n : nat) (r : step_result) (r' : stack_result) : Prop :=
   match r, r' with
   | Step s_n, Stack_step s_s st => inv n s_n s_s st
-  | Exit k vs hp, Stack_exit k' vs' hp' => k = k' ∧ vs = vs' ∧ hp = hp'
+  | Exit k vs hp rd, Stack_exit k' vs' hp' => k = k' ∧ vs = vs' ∧ hp = hp'
   | Undefined, Stack_undefined => True
   | Step _, (Stack_exit _ _ _ | Stack_undefined)
-  | Exit _ _ _, (Stack_step _ _ | Stack_undefined)
+  | Exit _ _ _ _, (Stack_step _ _ | Stack_undefined)
   | Undefined, (Stack_step _ _ | Stack_exit _ _ _) =>
     False
   end.
@@ -1296,9 +1297,9 @@ Proof.
 Qed.
 
 Lemma apply_with_extra_args (c : cont_value) (extra vs : list value)
-    (statics : static_env) (hp : heap) :
-  apply_cont_value (with_extra_args c extra) vs statics hp
-  = apply_cont_value c (vs ++ extra) statics hp.
+    (statics : static_env) (hp : heap) (rd : read_record) :
+  apply_cont_value (with_extra_args c extra) vs statics hp rd
+  = apply_cont_value c (vs ++ extra) statics hp rd.
 Proof.
   destruct extra; simpl; [ rewrite app_nil_r | ]; reflexivity.
 Qed.
@@ -1310,9 +1311,10 @@ Lemma stack_sim_unit (n : nat) (f : frame_kind) (st : stack)
   ∀ unit_exn : continuation,
     f = Unit_frame unit_exn ->
     bottom = []
-    ∧ ∀ (k : continuation) (vs : list value) (statics : static_env) (hp : heap),
+    ∧ ∀ (k : continuation) (vs : list value) (statics : static_env) (hp : heap)
+      (rd : read_record),
         length (handlers_of st) <= 1 ->
-        unwind st (Leaving_by k) vs statics hp = Stack_exit k vs hp.
+        unwind st (Leaving_by k) vs statics hp rd = Stack_exit k vs hp.
 Proof.
   intros Hsim.
   induction Hsim
@@ -1320,9 +1322,9 @@ Proof.
        | frame ret exn extra rest f bottom conts_n conts_s k_ret k_exn ts
            Hret Hexn Hcorr Henv _ _ ];
     intros u Hf; [ | | discriminate ].
-  - split; [ reflexivity | ]. intros k vs statics hp _. reflexivity.
+  - split; [ reflexivity | ]. intros k vs statics hp rd _. reflexivity.
   - destruct (IH u Hf) as [-> Hexit]. split; [ reflexivity | ].
-    intros k vs statics hp Hlen. simpl in Hlen.
+    intros k vs statics hp rd Hlen. simpl in Hlen.
     destruct st as [ | entry st]; [ reflexivity | ].
     subst f. inversion Hsim; subst; simpl in Hlen; lia.
 Qed.
@@ -1393,7 +1395,8 @@ Qed.
    machines, whatever the stack has to be gone through. *)
 (* The body of code that a call starts, on the two machines: the two are
    in step, whatever call it is that is in progress. *)
-Lemma callee_inv (statics : static_env) (hp : heap) (n : nat) (c : code)
+Lemma callee_inv (statics : static_env) (hp : heap) (rd : read_record) (n : nat)
+    (c : code)
     (callee_vars : env) (st : stack) (bottom : cont_env) :
   code_ok statics ->
   code_full_well_formed c = true ->
@@ -1401,11 +1404,11 @@ Lemma callee_inv (statics : static_env) (hp : heap) (n : nat) (c : code)
     (Code_frame (code_return_continuation c) (code_exn_continuation c)) st
     bottom ->
   handlers_of st = [] ->
-  inv n (State (code_body c) callee_vars bottom statics hp)
+  inv n (State (code_body c) callee_vars bottom statics hp rd)
     (State (code_body c) callee_vars
        [(code_return_continuation c, Outer (code_return_continuation c));
         (code_exn_continuation c, Outer (code_exn_continuation c))]
-       statics hp)
+       statics hp rd)
     (Trap (Outer (code_exn_continuation c)) :: st).
 Proof.
   intros Hcode Hc Hsim Hnone.
@@ -1418,6 +1421,7 @@ Proof.
   unfold inv. simpl_state.
   split; [ reflexivity | ]. split; [ reflexivity | ].
   split; [ reflexivity | ]. split; [ reflexivity | ].
+  split; [ reflexivity | ].
   exists (Code_frame ret exn), bottom, [exn], ds_c.
   split; [ apply Env_bottom | ]. split; [ exact Hbody | ].
   split; [ simpl; rewrite resolve_bottom_code, Hnone; reflexivity | ].
@@ -1440,7 +1444,8 @@ Qed.
    in step, under the stack [rest]: what it comes to is in step. What
    each machine does with a partial application is given, and is
    assumed to be in step. *)
-Lemma run_call_related (statics : static_env) (hp : heap) (n : nat)
+Lemma run_call_related (statics : static_env) (hp : heap) (rd : read_record)
+    (n : nat)
     (f : frame_kind)
     (bottom conts_n conts_s : cont_env) (k_ret k_exn : continuation)
     (ts : trap_stack) (extra : list value) (rest : stack)
@@ -1456,9 +1461,9 @@ Lemma run_call_related (statics : static_env) (hp : heap) (n : nat)
   (∀ partial : value, related n (partial_n partial) (partial_s partial)) ->
   related n
     (run_call partial_n shape return_arity (resolve k_ret conts_n)
-       (with_extra_args (resolve k_exn conts_n) extra) statics hp)
+       (with_extra_args (resolve k_exn conts_n) extra) statics hp rd)
     (stack_run_call partial_s shape return_arity (resolve k_ret conts_s)
-       extra statics hp rest).
+       extra statics hp rd rest).
 Proof.
   intros Hcode Hcalls Hret Hexn Hcorr Henv Hsim Hpartial.
   destruct shape
@@ -1468,10 +1473,11 @@ Proof.
   - (* A full call. *)
     destruct Hcalls as (called & slots & _ & Hlookup & _).
     unfold run_call, stack_run_call. cbv zeta.
-    destruct (call_code_cases closure c vs args_arity return_arity statics hp)
+    destruct
+      (call_code_cases closure c vs args_arity return_arity statics hp rd)
       as [Hundef | (callee_vars & Hstep)];
       [ rewrite !Hundef; exact I | rewrite !Hstep ].
-    refine (callee_inv statics _ n c callee_vars
+    refine (callee_inv statics _ rd_ n c callee_vars
               (call_entry Plain_call (code_return_continuation c)
                  (code_exn_continuation c) (resolve k_ret conts_s) extra
                :: rest)
@@ -1488,10 +1494,10 @@ Proof.
     destruct Hcalls as (called & slots & _ & Hlookup & _).
     unfold run_call, stack_run_call. cbv zeta.
     destruct (call_code_cases closure c vs args_arity (code_result_arity c)
-                statics hp)
+                statics hp rd)
       as [Hundef | (callee_vars & Hstep)];
       [ rewrite !Hundef; exact I | rewrite !Hstep ].
-    refine (callee_inv statics _ n c callee_vars
+    refine (callee_inv statics _ rd_ n c callee_vars
               (call_entry (First_call remaining remaining_arity return_arity)
                  (code_return_continuation c) (code_exn_continuation c)
                  (resolve k_ret conts_s) extra
@@ -1511,7 +1517,7 @@ Qed.
 
 (* Going to a continuation that is in order comes to the same on the two
    machines, whatever the stack has to be gone through. *)
-Lemma enter_related (statics : static_env) (hp : heap) :
+Lemma enter_related (statics : static_env) (hp : heap) (rd : read_record) :
   code_ok statics ->
   ∀ (len : nat) (st : stack),
     length st < len ->
@@ -1521,8 +1527,8 @@ Lemma enter_related (statics : static_env) (hp : heap) :
       env_rel f bottom conts_n conts_s ->
       target_ok (S n) f conts_s k ts ->
       map (fun k => resolve k conts_s) ts = handlers_of st ->
-      related n (apply_cont_value (resolve k conts_n) vs statics hp)
-        (stack_enter (resolve k conts_s) vs statics hp st).
+      related n (apply_cont_value (resolve k conts_n) vs statics hp rd)
+        (stack_enter (resolve k conts_s) vs statics hp rd st).
 Proof.
   intros Hcode len. induction len as [ | len IH]; intros st Hlen; [ lia | ].
   intros n f bottom conts_n conts_s k ts vs Hsim Henv Htarget Hcorr.
@@ -1539,6 +1545,7 @@ Proof.
     simpl. unfold inv. simpl_state.
     split; [ reflexivity | ]. split; [ reflexivity | ].
     split; [ reflexivity | ]. split; [ reflexivity | ].
+    split; [ reflexivity | ].
     exists f, bottom, ts, ds.
     split; [ apply env_rel_rec; exact Hdef | ].
     split; [ exact Hh | ].
@@ -1597,7 +1604,7 @@ Proof.
         -- (* The first call of an over-application returns: its result
               is called with the arguments that remain. *)
            destruct vs as [ | v [ | v' vs]]; [ exact I | | exact I ].
-           apply (run_call_related statics _ n f bottom' conts_n' conts_s'
+           apply (run_call_related statics _ rd_ n f bottom' conts_n' conts_s'
                     k_ret k_exn ts extra rest Indirect);
              [ exact Hcode
              | exact (shape_of_call_calls statics v Indirect remaining
@@ -1651,14 +1658,15 @@ Qed.
 Lemma step_related (n : nat) (s_n s_s : state) (st : stack) :
   inv (S n) s_n s_s st -> related n (step s_n) (stack_step s_s st).
 Proof.
-  intros (He & Hv & Hstatics & Hheap & f & bottom & ts & ds & Henv & Hdemands
-          & Hcorr & Htargets & Hsim & Hcode).
-  rewrite (state_eta s_n), He, Hv, Hstatics, Hheap. unfold stack_step.
+  intros (He & Hv & Hstatics & Hheap & Hreads & f & bottom & ts & ds & Henv
+          & Hdemands & Hcorr & Htargets & Hsim & Hcode).
+  rewrite (state_eta s_n), He, Hv, Hstatics, Hheap, Hreads.
+  unfold stack_step.
   assert (Hstep : step s_s
                   = step
                       (State (state_expr s_s) (state_vars s_s)
                          (state_conts s_s) (state_statics s_s)
-                           (state_heap s_s)))
+                           (state_heap s_s) (state_reads s_s)))
     by (rewrite <- state_eta; reflexivity).
   rewrite Hstep. clear Hstep.
   assert (Hweak : ∀ d : continuation * trap_stack,
@@ -1674,12 +1682,13 @@ Proof.
        | scrutinee arms | ];
     intros Hdemands; cbv iota beta.
   - (* Let *)
-    rewrite !step_let.
-    destruct (eval_named statics vars d) as [v | ]; [ | exact I ].
+    rewrite !step_let_exec.
+    destruct (exec_named _ _ rd_ _ d) as [[[v hp'] rd'] | ]; [ | exact I ].
     destruct (kind_eqb (kind_of_value v) kind); [ | exact I ].
     simpl. unfold inv. simpl_state.
     split; [ reflexivity | ]. split; [ reflexivity | ].
     split; [ reflexivity | ]. split; [ reflexivity | ].
+    split; [ reflexivity | ].
     exists f, bottom, ts, ds.
     split; [ exact Henv | ]. split; [ exact Hdemands | ].
     split; [ exact Hcorr | ]. split; [ exact Hweak | ].
@@ -1693,6 +1702,7 @@ Proof.
     simpl. unfold inv. simpl_state.
     split; [ reflexivity | ]. split; [ reflexivity | ].
     split; [ reflexivity | ]. split; [ reflexivity | ].
+    split; [ reflexivity | ].
     exists f, bottom, ts, ds.
     split; [ exact Henv | ]. split; [ exact Hdemands | ].
     split; [ exact Hcorr | ]. split; [ exact Hweak | ].
@@ -1703,6 +1713,7 @@ Proof.
     rewrite !step_let_cont_non_recursive. simpl. unfold inv. simpl_state.
     split; [ reflexivity | ]. split; [ reflexivity | ].
     split; [ reflexivity | ]. split; [ reflexivity | ].
+    split; [ reflexivity | ].
     destruct (full_demands_non_recursive_inv ts k h body ds Hdemands)
       as (Hfresh & ds_body & outer & Hbody & Hleave & Houter & Hk).
     exists f, bottom, ts, ds_body.
@@ -1734,6 +1745,7 @@ Proof.
     simpl. unfold inv. simpl_state.
     split; [ reflexivity | ]. split; [ reflexivity | ].
     split; [ reflexivity | ]. split; [ reflexivity | ].
+    split; [ reflexivity | ].
     destruct (full_demands_recursive_inv ts handlers body ds Hdemands)
       as (Hfresh & ds_body & ds_group & Hbody & Hsub & Hleave & Hgroup).
     assert (Hres : ∀ k' : continuation,
@@ -1782,7 +1794,7 @@ Proof.
     destruct (Pos.eqb_spec top (ap_exn_continuation ap)) as [-> | _];
       [ | discriminate ].
     intros [= <-]. unfold call_function. cbv zeta.
-    apply (run_call_related statics _ n f bottom conts_n conts_s
+    apply (run_call_related statics _ rd_ n f bottom conts_n conts_s
              (ap_continuation ap) (ap_exn_continuation ap) rest_ts extra st
              (ap_call_kind ap));
       [ exact Hcode | apply shape_of_call_calls
@@ -1795,7 +1807,7 @@ Proof.
     (* A partial application is given to the return continuation of the
        call. *)
     intros partial.
-    refine (enter_related statics _ Hcode (S (length st)) st
+    refine (enter_related statics _ rd_ Hcode (S (length st)) st
               (Nat.lt_succ_diag_r _) n f bottom conts_n conts_s
               (ap_continuation ap) (ap_exn_continuation ap :: rest_ts)
               [partial] Hsim Henv _ Hcorr).
@@ -1812,7 +1824,7 @@ Proof.
       eqn:Haction.
     + (* Push *)
       intros [= <-].
-      apply (enter_related statics _ Hcode (S (S (length st)))
+      apply (enter_related statics _ rd_ Hcode (S (S (length st)))
                (Trap (resolve handler conts_s) :: st))
         with (f := f) (bottom := bottom) (ts := handler :: ts).
       * simpl. lia.
@@ -1831,10 +1843,10 @@ Proof.
       assert (Hgoal :
                 related n
                   (apply_cont_value (resolve (ac_continuation ac) conts_n) vs
-                     statics (state_heap s_s))
+                     statics (state_heap s_s) (state_reads s_s))
                   (stack_enter (resolve (ac_continuation ac) conts_s) vs
-                     statics (state_heap s_s) rest)).
-      { apply (enter_related statics _ Hcode (S (length rest)) rest)
+                     statics (state_heap s_s) (state_reads s_s) rest)).
+      { apply (enter_related statics _ rd_ Hcode (S (length rest)) rest)
           with (f := f) (bottom := bottom) (ts := rest_ts).
         - lia.
         - exact Hsim.
@@ -1846,7 +1858,7 @@ Proof.
       apply Pos.eqb_eq in Hraise. rewrite <- Hraise. exact Hgoal.
     + (* No trap action *)
       intros [= <-].
-      apply (enter_related statics _ Hcode (S (length st)) st)
+      apply (enter_related statics _ rd_ Hcode (S (length st)) st)
         with (f := f) (bottom := bottom) (ts := ts).
       * lia.
       * exact Hsim.
@@ -1864,6 +1876,7 @@ Proof.
     simpl. unfold inv. simpl_state.
     split; [ reflexivity | ]. split; [ reflexivity | ].
     split; [ reflexivity | ]. split; [ reflexivity | ].
+    split; [ reflexivity | ].
     exists f, bottom, ts, ds_ac.
     split; [ exact Henv | ]. split; [ exact Hac | ].
     split; [ exact Hcorr | ].
@@ -1883,10 +1896,10 @@ Lemma run_related :
     related 0 (run fuel s_n) (stack_run fuel s_s st).
 Proof.
   induction fuel as [ | fuel IH]; intros s_n s_s st Hinv; simpl.
-  - destruct Hinv as (He & Hv & Hstatics & Hheap & f & bottom & ts & ds & Henv
-                      & Hdemands & Hcorr & _ & Hsim & Hcode).
+  - destruct Hinv as (He & Hv & Hstatics & Hheap & Hreads & f & bottom & ts
+                      & ds & Henv & Hdemands & Hcorr & _ & Hsim & Hcode).
     split; [ exact He | ]. split; [ exact Hv | ]. split; [ exact Hstatics | ].
-    split; [ exact Hheap | ].
+    split; [ exact Hheap | ]. split; [ exact Hreads | ].
     exists f, bottom, ts, ds. split; [ exact Henv | ].
     split; [ exact Hdemands | ]. split; [ exact Hcorr | ].
     split; [ intros d _; exact I | ]. split; [ exact Hsim | exact Hcode ].
@@ -1903,8 +1916,8 @@ Lemma initial_inv_from (statics : static_env) (unit_exn : continuation)
     (e : expr) (n : nat) :
   static_code statics = [] ->
   full_well_formed unit_exn e = true ->
-  inv n (State e [] [] statics empty_heap)
-    (State e [] [] statics empty_heap)
+  inv n (State e [] [] statics empty_heap no_reads)
+    (State e [] [] statics empty_heap no_reads)
     (initial_stack unit_exn).
 Proof.
   intros Hcode. unfold full_well_formed.
@@ -1914,6 +1927,7 @@ Proof.
   unfold inv. simpl_state.
   split; [ reflexivity | ]. split; [ reflexivity | ].
   split; [ reflexivity | ]. split; [ reflexivity | ].
+  split; [ reflexivity | ].
   exists (Unit_frame unit_exn), [], [unit_exn], ds.
   split; [ apply Env_bottom | ]. split; [ exact Hdemands | ].
   split; [ reflexivity | ]. split.
@@ -1930,16 +1944,20 @@ Proof.
   intros statics unit_exn e b Hcode Hd Hwf.
   rewrite <- (full_well_formed_eq unit_exn e Hd) in Hwf.
   assert (Hrun : ∀ fuel : nat,
-            related 0 (run fuel (State e [] [] statics empty_heap))
-              (stack_run fuel (State e [] [] statics empty_heap)
+            related 0 (run fuel (State e [] [] statics empty_heap no_reads))
+              (stack_run fuel (State e [] [] statics empty_heap no_reads)
                  (initial_stack unit_exn))).
   { intros fuel. apply run_related, initial_inv_from; assumption. }
   destruct b as [k vs | | ]; simpl.
-  - split; intros [fuel H]; exists fuel; specialize (Hrun fuel);
-      rewrite H in Hrun; revert Hrun.
-    + destruct (run fuel _) as [s | k' vs' | ]; simpl; try contradiction.
-      intros [-> [-> ->]]. reflexivity.
-    + destruct (stack_run fuel _ _) as [s st | k' vs' | ]; simpl;
+  - split.
+    + intros [fuel H]. exists fuel. specialize (Hrun fuel).
+      rewrite H in Hrun. revert Hrun.
+      destruct (run fuel _) as [s | k' vs' hp' rd' | ]; simpl;
+        try contradiction.
+      intros [-> [-> ->]]. exists rd'. reflexivity.
+    + intros [fuel [rd H]]. exists fuel. specialize (Hrun fuel).
+      rewrite H in Hrun. revert Hrun.
+      destruct (stack_run fuel _ _) as [s st | k' vs' | ]; simpl;
         try contradiction.
       intros [-> [-> ->]]. reflexivity.
   - split; intros [fuel H]; exists fuel; specialize (Hrun fuel);
@@ -2006,8 +2024,10 @@ Definition over_application_unit : expr :=
                 after unit_exn [] (one ++ one) one)))).
 
 Example over_application_runs :
-  let s := State over_application_unit [] [] empty_static_env empty_heap in
-  run 12 s = Exit 2%positive [Value_const (Tagged_immediate 2%Z)] empty_heap
+  let s := State over_application_unit [] [] empty_static_env empty_heap
+    no_reads in
+  run 12 s
+    = Exit 2%positive [Value_const (Tagged_immediate 2%Z)] empty_heap no_reads
   ∧ stack_run 12 s (initial_stack 1%positive)
     = Stack_exit 2%positive [Value_const (Tagged_immediate 2%Z)] empty_heap.
 Proof. split; vm_compute; reflexivity. Qed.
@@ -2047,8 +2067,10 @@ Definition partial_application_unit : expr :=
                    after unit_exn [] one one))))).
 
 Example partial_application_runs :
-  let s := State partial_application_unit [] [] empty_static_env empty_heap in
-  run 12 s = Exit 2%positive [Value_const (Tagged_immediate 2%Z)] empty_heap
+  let s := State partial_application_unit [] [] empty_static_env empty_heap
+    no_reads in
+  run 12 s
+    = Exit 2%positive [Value_const (Tagged_immediate 2%Z)] empty_heap no_reads
   ∧ stack_run 12 s (initial_stack 1%positive)
     = Stack_exit 2%positive [Value_const (Tagged_immediate 2%Z)] empty_heap.
 Proof. split; vm_compute; reflexivity. Qed.
@@ -2339,15 +2361,15 @@ Lemma stack_run_call_equivariant (r : renaming)
     (partial_s partial_s' : value -> stack_result)
     (shape : option call_shape) (return_arity : arity)
     (return_to : cont_value) (extra : list value) (statics : static_env)
-      (hp : heap)
+      (hp : heap) (rd : read_record)
     (st : stack) :
   (∀ partial : value,
     partial_s' partial = rename_stack_result r (partial_s partial)) ->
   stack_run_call partial_s' (option_map (rename_shape r) shape) return_arity
-    (rename_cont_value r return_to) extra (rename_static_env r statics) hp
+    (rename_cont_value r return_to) extra (rename_static_env r statics) hp rd
     (rename_stack r st)
   = rename_stack_result r
-      (stack_run_call partial_s shape return_arity return_to extra statics hp
+      (stack_run_call partial_s shape return_arity return_to extra statics hp rd
          st).
 Proof.
   intros Hpartial.
@@ -2369,7 +2391,7 @@ Proof.
     destruct
       (call_code closure c vs args_arity return_arity
          (Outer (code_return_continuation c))
-         (Outer (code_exn_continuation c)) statics hp);
+         (Outer (code_exn_continuation c)) statics hp rd);
       reflexivity.
   - replace (code_return_continuation (rename_code r c))
       with (rename_continuation r (code_return_continuation c))
@@ -2387,21 +2409,22 @@ Proof.
     destruct
       (call_code closure c vs args_arity (code_result_arity c)
          (Outer (code_return_continuation c))
-         (Outer (code_exn_continuation c)) statics hp);
+         (Outer (code_exn_continuation c)) statics hp rd);
       reflexivity.
 Qed.
 
 (* [unwind] goes down the stack two entries at a time where a call
    returns, so the induction is on a bound of the length. *)
-Lemma unwind_equivariant (r : renaming) (statics : static_env) (hp : heap) :
+Lemma unwind_equivariant (r : renaming) (statics : static_env) (hp : heap)
+    (rd : read_record) :
   ∀ (n : nat) (st : stack) (how : leaving) (vs : list value),
     length st <= n ->
     unwind (rename_stack r st) (rename_leaving r how) vs
-      (rename_static_env r statics) hp
-    = rename_stack_result r (unwind st how vs statics hp).
+      (rename_static_env r statics) hp rd
+    = rename_stack_result r (unwind st how vs statics hp rd).
 Proof.
-  intros n. revert hp.
-  induction n as [ | n IH]; intros hp st how vs Hlen.
+  intros n. revert hp rd.
+  induction n as [ | n IH]; intros hp rd st how vs Hlen.
   - destruct st; [ | simpl in Hlen; lia ]. destruct how; reflexivity.
   - destruct how as [k | ].
     + destruct st
@@ -2417,10 +2440,10 @@ Proof.
         -- simpl. rewrite rename_continuation_eqb.
            destruct (Pos.eqb k ret); [ | reflexivity ].
            rewrite apply_cont_value_equivariant.
-           destruct (apply_cont_value return_to vs statics hp)
-             as [s | k' vs' hp' | ];
+           destruct (apply_cont_value return_to vs statics hp rd)
+             as [s | k' vs' hp' rd' | ];
              simpl; [ reflexivity | | reflexivity ].
-           apply (IH _ rest (Leaving_by k') vs'). simpl in Hlen. lia.
+           apply (IH _ _ rest (Leaving_by k') vs'). simpl in Hlen. lia.
         -- cbn [rename_stack map rename_stack_entry rename_leaving unwind].
            rewrite rename_continuation_eqb.
            destruct (Pos.eqb k ret); [ | reflexivity ].
@@ -2428,37 +2451,39 @@ Proof.
            rewrite shape_of_call_equivariant.
            apply stack_run_call_equivariant. intros partial.
            rewrite apply_cont_value_equivariant.
-           destruct (apply_cont_value return_to [partial] statics hp)
-             as [s | k' vs' hp' | ];
+           destruct (apply_cont_value return_to [partial] statics hp rd)
+             as [s | k' vs' hp' rd' | ];
              simpl; [ reflexivity | | reflexivity ].
-           apply (IH _ rest (Leaving_by k') vs'). simpl in Hlen. lia.
+           apply (IH _ _ rest (Leaving_by k') vs'). simpl in Hlen. lia.
       * simpl. rewrite rename_continuation_eqb.
         destruct (Pos.eqb k exn); [ | reflexivity ].
-        apply (IH _ rest Raising (vs ++ extra)). simpl in Hlen. lia.
+        apply (IH _ _ rest Raising (vs ++ extra)). simpl in Hlen. lia.
       * simpl. rewrite rename_continuation_eqb.
         destruct (Pos.eqb k exn); [ | reflexivity ].
-        apply (IH _ rest Raising (vs ++ extra)). simpl in Hlen. lia.
+        apply (IH _ _ rest Raising (vs ++ extra)). simpl in Hlen. lia.
     + destruct st
         as [ | [c | ret exn return_to extra
                | ret exn remaining remaining_arity return_arity return_to
                    extra] rest];
         [ reflexivity | | reflexivity | reflexivity ].
       simpl. rewrite apply_cont_value_equivariant.
-      destruct (apply_cont_value c vs statics hp) as [s | k' vs' hp' | ]; simpl;
+      destruct (apply_cont_value c vs statics hp rd) as [s | k' vs' hp' rd' | ];
+        simpl;
         [ reflexivity | | reflexivity ].
-      apply (IH _ rest (Leaving_by k') vs'). simpl in Hlen. lia.
+      apply (IH _ _ rest (Leaving_by k') vs'). simpl in Hlen. lia.
 Qed.
 
 Lemma stack_enter_equivariant (r : renaming) (c : cont_value)
-    (vs : list value) (statics : static_env) (hp : heap) (st : stack) :
-  stack_enter (rename_cont_value r c) vs (rename_static_env r statics) hp
+    (vs : list value) (statics : static_env) (hp : heap) (rd : read_record)
+      (st : stack) :
+  stack_enter (rename_cont_value r c) vs (rename_static_env r statics) hp rd
     (rename_stack r st)
-  = rename_stack_result r (stack_enter c vs statics hp st).
+  = rename_stack_result r (stack_enter c vs statics hp rd st).
 Proof.
   unfold stack_enter. rewrite apply_cont_value_equivariant.
-  destruct (apply_cont_value c vs statics hp) as [s | k vs' | ]; simpl;
+  destruct (apply_cont_value c vs statics hp rd) as [s | k vs' | ]; simpl;
     [ reflexivity | | reflexivity ].
-  exact (unwind_equivariant r statics _ (length st) st (Leaving_by k) vs'
+  exact (unwind_equivariant r statics _ rd_ (length st) st (Leaving_by k) vs'
            (le_n _)).
 Qed.
 
@@ -2472,11 +2497,12 @@ Proof.
 Qed.
 
 Lemma stack_call_equivariant (r : renaming) (ap : apply_expr) (vars : env)
-    (conts : cont_env) (statics : static_env) (hp : heap) (st : stack) :
+    (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record)
+      (st : stack) :
   stack_call (rename_apply r ap) (rename_env r vars)
-    (rename_cont_env r conts) (rename_static_env r statics) hp
+    (rename_cont_env r conts) (rename_static_env r statics) hp rd
     (rename_stack r st)
-  = rename_stack_result r (stack_call ap vars conts statics hp st).
+  = rename_stack_result r (stack_call ap vars conts statics hp rd st).
 Proof.
   unfold stack_call. rewrite exn_extra_simples_rename. simpl.
   rewrite eval_simple_equivariant, !eval_simples_equivariant.
@@ -2492,11 +2518,12 @@ Qed.
 
 Lemma stack_apply_cont_equivariant (r : renaming) (ac : apply_cont)
     (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+      (rd : read_record)
       (st : stack) :
   stack_apply_cont (rename_apply_cont r ac) (rename_env r vars)
-    (rename_cont_env r conts) (rename_static_env r statics) hp
+    (rename_cont_env r conts) (rename_static_env r statics) hp rd
     (rename_stack r st)
-  = rename_stack_result r (stack_apply_cont ac vars conts statics hp st).
+  = rename_stack_result r (stack_apply_cont ac vars conts statics hp rd st).
 Proof.
   unfold stack_apply_cont. rewrite is_raise_equivariant. simpl.
   rewrite eval_simples_equivariant.
@@ -2504,10 +2531,10 @@ Proof.
   rewrite resolve_equivariant.
   destruct (ac_trap_action ac) as [[k | k kind] | ]; simpl.
   - rewrite resolve_equivariant.
-    exact (stack_enter_equivariant r _ vs statics _
+    exact (stack_enter_equivariant r _ vs statics _ rd_
              (Trap (resolve k conts) :: st)).
   - destruct (is_raise ac).
-    + exact (unwind_equivariant r statics _ (length st) st Raising vs
+    + exact (unwind_equivariant r statics _ rd_ (length st) st Raising vs
                (le_n _)).
     + destruct st
         as [ | [c | ret exn return_to extra

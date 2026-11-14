@@ -64,7 +64,7 @@
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
-  FlambdaSemanticsSpec FlambdaNormaliseSpec.
+  FlambdaHeapSpec FlambdaSemanticsSpec FlambdaNormaliseSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -333,22 +333,37 @@ Definition envs_free_of (D : dropped) (vars : env) (conts : cont_env)
   && forallb (fun '(_, c) => cont_free_of D c) conts
   && statics_free_of D statics.
 
+(* And in no value of a cell of the heap, the cells that a later write
+   hides included. *)
+Definition heap_free_of (D : dropped) (h : heap) : bool :=
+  forallb
+    (fun binding => forallb (value_avoids D) (values_of_cell (snd binding)))
+    h.
+
 (* ======================================================================== *)
 (* The statements                                                           *)
 (* ======================================================================== *)
 
+(* The heap is asked what the environments are asked: a cell may hold a
+   symbol, and a load from the cell gives it to the term, which could
+   then read through a name that the term after does not bind. The
+   empty heap holds no value, so the statement of a term run on its own
+   has no premise on the heap. *)
 Definition drop_statics_refines_statement : Prop :=
   ∀ (D : dropped) (e e' : expr),
     drop_statics D e = Some e' ->
-    ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap),
+    ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+      (rd : read_record),
       envs_free_of D vars conts statics = true ->
-      refines (State e vars conts statics hp) (State e' vars conts statics hp).
+      heap_free_of D hp = true ->
+      refines (State e vars conts statics hp rd)
+        (State e' vars conts statics hp rd).
 
 (* Refinement of terms run on their own. Refinement under all environments
    ([expr_refines]) implies it. *)
 Definition program_refines (source target : expr) : Prop :=
-  refines (State source [] [] empty_static_env empty_heap)
-    (State target [] [] empty_static_env empty_heap).
+  refines (State source [] [] empty_static_env empty_heap no_reads)
+    (State target [] [] empty_static_env empty_heap no_reads).
 
 Definition drop_statics_program_refines_statement : Prop :=
   ∀ (D : dropped) (e e' : expr),

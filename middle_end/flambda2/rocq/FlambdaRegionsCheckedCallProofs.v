@@ -563,6 +563,7 @@ Hypothesis Hgood_statics :
     (static_values (live_statics rs)).
 
 Variable hp : heap.
+Variable rd : read_record.
 
 (* The code that a closure is of is code that the check was given,
    and has an entry. *)
@@ -620,12 +621,13 @@ Lemma call_closure (a : caller) (closure : value) (id : code_id)
    = true ->
    ∀ s'' : state,
      apply_cont_value return_to
-       [Value_partial_application closure vs args_arity] (live_statics rs) hp
+       [Value_partial_application closure vs args_arity] (live_statics rs) hp rd
      = Step s'' ->
      entered cert codes rs s'') ->
   run_call
-    (fun partial => apply_cont_value return_to [partial] (live_statics rs) hp)
-    (Some shape) return_arity return_to exn_to (live_statics rs) hp
+    (fun partial => apply_cont_value return_to [partial] (live_statics rs) hp
+       rd)
+    (Some shape) return_arity return_to exn_to (live_statics rs) hp rd
   = Step s' ->
   entered cert codes rs s'.
 Proof.
@@ -642,17 +644,17 @@ Proof.
        | [(Hlen & Hkinds & Hpo & ->) | (Hlen & Hkinds & Hpo & Htupled & ->)]];
     cbn [run_call].
   - intros Hcall.
-    destruct (call_code_step _ _ _ _ _ _ _ _ _ _ Hcall)
+    destruct (call_code_step _ _ _ _ _ _ _ _ _ rd_ _ Hcall)
       as (callee_vars & _ & _ & _ & _ & Hbind & _).
     apply (enter_code cert codes rs a closure id c entry vs args_arity
-             return_arity return_to exn_to hp s' Hcaller Hcheck Hentry
+             return_arity return_to exn_to hp rd s' Hcaller Hcheck Hentry
              Hgood_closure Hlive_closure Hheap_closure Hgood_vs Hlive_vs);
       [ | exact (Kfull Hlen) | exact Hraise | exact Hgood_ret | exact Hgood_exn
         | exact Hcall ].
     apply pointwise_values_fit; [ | exact Hfit ].
     rewrite (bind_params_same_length _ _ _ _ Hbind), Hlen_flags. lia.
   - intros Hcall.
-    destruct (call_code_step _ _ _ _ _ _ _ _ _ _ Hcall)
+    destruct (call_code_step _ _ _ _ _ _ _ _ _ rd_ _ Hcall)
       as (callee_vars & _ & _ & Hper & _ & Hbind & _).
     rewrite <- (firstn_skipn (cardinal_unarized (code_params_arity c)) vs)
       in Hgood_vs, Hlive_vs.
@@ -666,7 +668,7 @@ Proof.
                 (skipn (cardinal_unarized (code_params_arity c)) vs)
                 (partially_apply args_arity (length (code_params_arity c)))
                 return_arity return_to exn_to)
-             exn_to hp s' Hcaller Hcheck Hentry Hgood_closure Hlive_closure
+             exn_to hp rd s' Hcaller Hcheck Hentry Hgood_closure Hlive_closure
              Hheap_closure Hgood_first Hlive_first);
       [ | exact (Kover Hlen Hkinds Hper) | exact Hraise | | exact Hgood_exn
         | exact Hcall ].
@@ -688,7 +690,7 @@ Definition returns_ok (a : caller) (l : lifetime) (c : cont_value) : Prop :=
     Forall
       (lifetime_holds rs (cs_open (caller_check a)) (caller_marks a) None l)
       vs ->
-    apply_cont_value c vs (live_statics rs) hp = Step s'' ->
+    apply_cont_value c vs (live_statics rs) hp rd = Step s'' ->
     entered cert codes rs s''.
 
 Lemma caller_marked (a : caller) :
@@ -838,8 +840,9 @@ Lemma call_unknown_closure (a : caller) (l_c : lifetime) (ls : list lifetime)
       ∧ Forall (fun v => value_all (heap_symbol rs) v = true) vs)) ->
   shape_of_code_call closure c vs args_arity return_arity = Some shape ->
   run_call
-    (fun partial => apply_cont_value return_to [partial] (live_statics rs) hp)
-    (Some shape) return_arity return_to exn_to (live_statics rs) hp
+    (fun partial => apply_cont_value return_to [partial] (live_statics rs) hp
+       rd)
+    (Some shape) return_arity return_to exn_to (live_statics rs) hp rd
   = Step s' ->
   entered cert codes rs s'.
 Proof.
@@ -996,7 +999,7 @@ Lemma call_unknown (a : caller) (callee : value) (l_c : lifetime)
   cont_values_all (good cert codes rs) return_to ->
   cont_values_all (good cert codes rs) exn_to ->
   call_function callee Indirect vs args_arity return_arity return_to exn_to
-    (live_statics rs) hp
+    (live_statics rs) hp rd
   = Step s' ->
   entered cert codes rs s'.
 Proof.
@@ -1349,7 +1352,7 @@ Lemma call_direct (a : caller) (id : code_id) (callee : value)
   cont_values_all (good cert codes rs) return_to ->
   cont_values_all (good cert codes rs) exn_to ->
   call_function callee (Direct id) vs args_arity return_arity return_to
-    exn_to (live_statics rs) hp
+    exn_to (live_statics rs) hp rd
   = Step s' ->
   entered cert codes rs s'.
 Proof.

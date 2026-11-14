@@ -326,7 +326,7 @@ Inductive cont_rel : cont_value -> cont_value -> Prop :=
 Inductive state_rel : state -> state -> Prop :=
   | Rel_state (dead : list (continuation * Z)) (known : option Z) (e : expr)
       (vars : env) (conts conts' : cont_env) (statics : static_env)
-      (hp : heap) :
+      (hp : heap) (rd : read_record) :
     holds known vars ->
     (∀ (k2 : continuation) (c : Z),
        (k2, c) ∈ dead ->
@@ -336,26 +336,28 @@ Inductive state_rel : state -> state -> Prop :=
        cont_free_b k1 e = true ->
        k1 ∉ map fst dead ->
        cont_rel (resolve k1 conts) (resolve k1 conts')) ->
-    state_rel (State e vars conts statics hp)
-      (State (give_scrutinee x k i known e) vars conts' statics hp)
+    state_rel (State e vars conts statics hp rd)
+      (State (give_scrutinee x k i known e) vars conts' statics hp rd)
   | Rel_state_same (e : expr) (vars : env) (conts conts' : cont_env)
-      (statics : static_env) (hp : heap) :
+      (statics : static_env) (hp : heap) (rd : read_record) :
     (∀ k1 : continuation,
        cont_free_b k1 e = true ->
        cont_rel (resolve k1 conts) (resolve k1 conts')) ->
-    state_rel (State e vars conts statics hp) (State e vars conts' statics hp)
+    state_rel (State e vars conts statics hp rd)
+      (State e vars conts' statics hp rd)
   | Rel_state_arm (known : option Z) (ac : apply_cont) (vars : env)
-      (conts conts' : cont_env) (statics : static_env) (hp : heap) :
+      (conts conts' : cont_env) (statics : static_env) (hp : heap)
+        (rd : read_record) :
     holds known vars ->
     cont_rel (resolve (ac_continuation ac) conts)
       (resolve (ac_continuation ac) conts') ->
-    state_rel (State (Apply_cont ac) vars conts statics hp)
+    state_rel (State (Apply_cont ac) vars conts statics hp rd)
       (State (Apply_cont (give_in_apply_cont x k i known ac)) vars conts'
-         statics hp).
+         statics hp rd).
 
 Lemma state_rel_refl (s : state) : state_rel s s.
 Proof.
-  destruct s as [e vars conts statics hp].
+  destruct s as [e vars conts statics hp rd].
   apply Rel_state_same. intros k1 _. apply Rel_same.
 Qed.
 
@@ -432,16 +434,17 @@ Qed.
 Lemma call_code_rel (closure : value) (c : code) (vs : list value)
     (args_arity return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   cont_rel return_to return_to' ->
   cont_rel exn_to exn_to' ->
   result_related state_rel
-    (call_code closure c vs args_arity return_arity return_to exn_to statics hp)
+    (call_code closure c vs args_arity return_arity return_to exn_to statics hp
+       rd)
     (call_code closure c vs args_arity return_arity return_to' exn_to'
-       statics hp).
+       statics hp rd).
 Proof.
   intros Hreturn Hraise.
-  destruct (call_code_cases closure c vs args_arity return_arity statics hp)
+  destruct (call_code_cases closure c vs args_arity return_arity statics hp rd)
     as [Hundefined | (callee_vars & Hcall)].
   - rewrite !Hundefined. exact I.
   - rewrite !Hcall. simpl.
@@ -458,18 +461,20 @@ Qed.
 
 Lemma run_call_rel (shape : option call_shape) (return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   cont_rel return_to return_to' ->
   cont_rel exn_to exn_to' ->
   (∀ partial : value,
     result_related state_rel
-      (apply_cont_value return_to [partial] statics hp)
-      (apply_cont_value return_to' [partial] statics hp)) ->
+      (apply_cont_value return_to [partial] statics hp rd)
+      (apply_cont_value return_to' [partial] statics hp rd)) ->
   result_related state_rel
-    (run_call (fun partial => apply_cont_value return_to [partial] statics hp)
-       shape return_arity return_to exn_to statics hp)
-    (run_call (fun partial => apply_cont_value return_to' [partial] statics hp)
-       shape return_arity return_to' exn_to' statics hp).
+    (run_call
+       (fun partial => apply_cont_value return_to [partial] statics hp rd)
+       shape return_arity return_to exn_to statics hp rd)
+    (run_call
+       (fun partial => apply_cont_value return_to' [partial] statics hp rd)
+       shape return_arity return_to' exn_to' statics hp rd).
 Proof.
   intros Hreturn Hraise Hpartial.
   destruct shape
@@ -484,11 +489,11 @@ Qed.
 
 (* Related continuations, applied to the same values. *)
 Lemma apply_cont_value_rel (c c' : cont_value) (statics : static_env)
-    (hp : heap) :
+    (hp : heap) (rd : read_record) :
   cont_rel c c' ->
   ∀ vs : list value,
-    result_related state_rel (apply_cont_value c vs statics hp)
-      (apply_cont_value c' vs statics hp).
+    result_related state_rel (apply_cont_value c vs statics hp rd)
+      (apply_cont_value c' vs statics hp rd).
 Proof.
   intros Hc.
   induction Hc
@@ -536,14 +541,14 @@ Qed.
 Lemma call_function_rel (callee : value) (call_kind : call_kind)
     (vs : list value) (args_arity return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   cont_rel return_to return_to' ->
   cont_rel exn_to exn_to' ->
   result_related state_rel
     (call_function callee call_kind vs args_arity return_arity return_to
-       exn_to statics hp)
+       exn_to statics hp rd)
     (call_function callee call_kind vs args_arity return_arity return_to'
-       exn_to' statics hp).
+       exn_to' statics hp rd).
 Proof.
   intros Hreturn Hraise. unfold call_function.
   apply run_call_rel; [ exact Hreturn | exact Hraise | ].
@@ -573,9 +578,9 @@ Lemma give_step (s s' : state) :
   state_rel s s' -> result_related state_rel (step s) (step s').
 Proof.
   intros
-    [dead known e vars conts conts' statics hp Hholds Hdead Hconts
-    | e vars conts conts' statics hp Hconts
-    | known ac vars conts conts' statics hp Hholds Hk].
+    [dead known e vars conts conts' statics hp rd Hholds Hdead Hconts
+    | e vars conts conts' statics hp rd Hconts
+    | known ac vars conts conts' statics hp rd Hholds Hk].
   - (* an expression and the same rewritten *)
     destruct e as [y kind1 d body | bindings body | k1 hh body
                   | handlers body | ap | ac | scrutinee arms | ];
@@ -584,8 +589,8 @@ Proof.
         by (apply (no_dead dead (Let y kind1 d body) vars);
             [ intros k2; reflexivity | exact Hdead ]).
       subst dead.
-      rewrite !step_let.
-      destruct (eval_named statics vars d) as [v | ]; [ | exact I ].
+      rewrite !step_let_exec.
+      destruct (exec_named _ _ rd_ _ d) as [[[v hp'] rd'] | ]; [ | exact I ].
       destruct (kind_eqb (kind_of_value v) kind1); [ | exact I ].
       cbn [result_related]. apply (Rel_state []).
       * intros c Hc. destruct (Pos.eqb_spec y x) as [-> | Hyx];
@@ -744,8 +749,8 @@ Proof.
   - (* the same expression *)
     destruct e as [y kind1 d body | bindings body | k1 hh body
                   | handlers body | ap | ac | scrutinee arms | ].
-    + rewrite !step_let.
-      destruct (eval_named statics vars d) as [v | ]; [ | exact I ].
+    + rewrite !step_let_exec.
+      destruct (exec_named _ _ rd_ _ d) as [[[v hp'] rd'] | ]; [ | exact I ].
       destruct (kind_eqb (kind_of_value v) kind1); [ | exact I ].
       cbn [result_related]. apply Rel_state_same. exact Hconts.
     + rewrite !step_let_static.
@@ -802,7 +807,7 @@ Qed.
 Lemma give_scrutinee_equivalent (e : expr) :
   expr_equivalent e (give_scrutinee x k i None e).
 Proof.
-  intros vars conts statics hp.
+  intros vars conts statics hp rd.
   apply (bisimulation_equivalent state_rel give_step).
   apply (Rel_state [] None); [ intros c; discriminate | intros k2 c [] | ].
   intros k1 _ _. apply Rel_same.
@@ -821,9 +826,9 @@ Lemma give_at_equivalent (i : nat) (k : continuation)
 Proof.
   unfold give_at.
   destruct (first_scrutinee k i [] body) as [xs | ];
-    [ | intros vars conts statics hp; apply equivalent_refl ].
+    [ | intros vars conts statics hp rd; apply equivalent_refl ].
   induction xs as [ | x xs IH]; cbn [give_first];
-    [ intros vars conts statics hp; apply equivalent_refl | ].
+    [ intros vars conts statics hp rd; apply equivalent_refl | ].
   destruct (unalias_param i k h (give_scrutinee x k i None body));
     [ | exact IH ].
   exact (plug_equivalent (Let_cont_non_recursive_body k h Hole) _ _
@@ -836,7 +841,7 @@ Lemma give_from_equivalent (i : nat) :
       (Let_cont_non_recursive k h (give_from i k h body)).
 Proof.
   induction i as [ | i IH]; intros k h body; cbn [give_from].
-  - intros vars conts statics hp. apply equivalent_refl.
+  - intros vars conts statics hp rd. apply equivalent_refl.
   - exact (expr_equivalent_trans _ _ _ (give_at_equivalent i k h body)
       (IH k h (give_at i k h body))).
 Qed.
@@ -850,7 +855,7 @@ Proof.
     as [ x kind d body | bindings body | k [params metadata handler] body
        | handlers body | ap | ac | scrutinee arms | ];
     cbn [give_scrutinees];
-    try (intros vars conts statics hp; apply equivalent_refl).
+    try (intros vars conts statics hp rd; apply equivalent_refl).
   - exact (plug_equivalent (Let_body x kind d Hole) _ _ (not_many _)
       (give_scrutinees_equivalent_aux body)).
   - exact (plug_equivalent (Let_static_body bindings Hole) _ _ (not_many _)

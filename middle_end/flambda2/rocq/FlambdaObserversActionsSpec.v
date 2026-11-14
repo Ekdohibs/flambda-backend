@@ -70,8 +70,9 @@
    - The form in which a pass proves it holds of two terms, from a
      static environment, exactly when it holds of the two terms and
      of the code of the static environment renamed
-     ([refines_under_observers_equivariant_statement]). The heap is
-     left: it holds no variables or continuations.
+     ([refines_under_observers_equivariant_statement]). The heap and
+     the read record are left: they hold no variables or
+     continuations.
    None of these has a premise.
 
    A class of what may follow a unit. FlambdaObserversSpec.v has the two
@@ -117,10 +118,10 @@
    is said; the source and the target each have their own. The
    comparison by [same_scalars] and by the locations that the heaps
    bind is by [=], so those statements do not by themselves give the
-   two laws. A handler that is an observer may be written with a
-   primitive that allocates; no step of the machine of
-   FlambdaSemanticsSpec.v allocates yet. Whether the two laws hold is
-   not said here, either way. Nothing is said with two permutations.
+   two laws. A handler that is an observer may allocate: a [Let] of
+   the machine of FlambdaSemanticsSpec.v runs the primitives of the
+   heap. Whether the two laws hold is not said here, either way.
+   Nothing is said with two permutations.
 
    Nothing is trusted here. The proofs are in
    FlambdaObserversActionsProofs.v, which needs no review. *)
@@ -191,10 +192,10 @@ Definition refines_world_observed_equivariant_statement : Prop :=
    of the static environment renamed. *)
 Definition refines_under_observers_equivariant_statement : Prop :=
   ∀ (r : renaming) (slots : list value_slot) (statics : static_env)
-    (hp : heap) (source target : expr),
-    refines_under_observers slots (rename_static_env r statics) hp
+    (hp : heap) (rd : read_record) (source target : expr),
+    refines_under_observers slots (rename_static_env r statics) hp rd
       (rename_expr r source) (rename_expr r target)
-    <-> refines_under_observers slots statics hp source target.
+    <-> refines_under_observers slots statics hp rd source target.
 
 (* ======================================================================== *)
 (* A class of what may follow a unit                                        *)
@@ -227,11 +228,11 @@ Definition refines_world_observed_by_equivariant_statement : Prop :=
 Definition refines_observed_by_equivariant_statement : Prop :=
   ∀ O : cont_value -> Prop,
     (∀ (r : renaming) (c : cont_value), O c -> O (rename_cont_value r c)) ->
-    ∀ (r : renaming) (statics : static_env) (hp : heap)
+    ∀ (r : renaming) (statics : static_env) (hp : heap) (rd : read_record)
       (source target : expr),
-      refines_observed_by O (rename_static_env r statics) hp
+      refines_observed_by O (rename_static_env r statics) hp rd
         (rename_expr r source) (rename_expr r target)
-      <-> refines_observed_by O statics hp source target.
+      <-> refines_observed_by O statics hp rd source target.
 
 (* ======================================================================== *)
 (* A permutation of locations                                               *)

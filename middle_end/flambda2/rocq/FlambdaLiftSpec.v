@@ -135,15 +135,20 @@
    primitive and no rule of the machine tells them apart
    (FlambdaValueSpec.v: every reading is an observation), but the
    continuation that the term leaves through is given the value itself
-   ([Exits]). So the term lifted does not refine the term under all
+   ([Exits]), and an exit has the heap, a cell of which may hold the
+   value. So the term lifted does not refine the term under all
    environments, nor even run on its own, if a lifted value reaches the
-   exit. What is true is stated twice:
+   exit or is stored in a cell. What is true is stated twice:
 
    - [lift_simulates_statement]: run on their own, the term and the term
      lifted end alike, with values at the exit that are the same up to
      [value_lifted]: where the first has a closure, a block, a boxed
      number or an immutable array, the second may have a symbol bound to
-     it, here and inside closures, blocks and arrays. The first premise
+     it, here and inside closures, blocks and arrays. The heaps of the
+     two exits are alike up to it (FlambdaHeapSpec.heap_alike): they
+     bind the same locations, each to a cell of the same shape, and
+     the cell of the second holds the values of the first, so
+     related. The first premise
      is that the term lifted is a well-formed unit
      (FlambdaWellFormedSpec.well_formed_unit), which is what keeps each
      new binding from being executed twice and each new symbol from
@@ -153,12 +158,18 @@
      [my_closure] was bound to a symbol.
    - [lift_unit_program_refines_statement]: if moreover the term gives
      only symbols and constants to the continuations it may leave
-     through ([exits_plain_knowing]), the values at the exit are equal,
-     and the term lifted refines the term, run on its own
+     through ([exits_plain_knowing]) and has no primitive of the heap
+     (FlambdaHeapFreeSpec.expr_free_of_heap), the values at the exit
+     are equal, the two heaps are empty, and the term lifted refines
+     the term, run on its own
      (FlambdaUnusedStaticsSpec.program_refines). [lift_unit] checks
-     both, and this is the statement that
+     these, and this is the statement that
      FlambdaValidateSpec.validate_unit uses. A unit made from an OCaml
-     source leaves with the symbol of its module block, and passes.
+     source returns the symbol of its module block, which the first
+     allows; whether it passes the first depends on its other exits
+     and on its code too (the CR at [exits_plain]). The second is a
+     limit, and not a condition of the lifting (the CR at
+     [lift_unit]).
 
    [exits_plain] is a check on a term, with a statement of its own
    ([exits_plain_sound_statement]): a unit that passes it exits with symbols
@@ -221,14 +232,17 @@
    need one law of the primitives that the others do not give: a
    primitive applied to arguments related by [value_lifted] has a value
    related to the value it had
-   (FlambdaPrimitiveSpec.eval_prim_related_statement). *)
+   (FlambdaPrimitiveSpec.eval_prim_related_statement), and on two
+   heaps alike it leaves two heaps alike
+   (FlambdaHeapSpec.exec_prim_related_statement). *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
-  FlambdaPrimitiveModel FlambdaSemanticsSpec FlambdaNominalSpec
-  FlambdaWellFormedSpec FlambdaClosuresSpec FlambdaUnusedStaticsSpec
-  FlambdaMyClosureSpec FlambdaImportsSpec.
+  FlambdaPrimitiveModel FlambdaHeapSpec FlambdaSemanticsSpec
+  FlambdaNominalSpec FlambdaWellFormedSpec FlambdaClosuresSpec
+  FlambdaUnusedStaticsSpec FlambdaMyClosureSpec FlambdaImportsSpec
+  FlambdaHeapFreeSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -478,9 +492,11 @@ Definition plain_value (v : value) : Prop :=
 
 (* A unit that passes the check exits with constants and symbols only. *)
 Definition exits_plain_sound_statement : Prop :=
-  ∀ (e : expr) (n : nat) (k : continuation) (vs : list value) (hp : heap),
+  ∀ (e : expr) (n : nat) (k : continuation) (vs : list value) (hp : heap)
+    (rd : read_record),
     exits_plain [] e = true ->
-    run n (State e [] [] empty_static_env empty_heap) = Exit k vs hp ->
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Exit k vs hp rd
+      ->
     ∀ v : value, v ∈ vs -> plain_value v.
 
 (* ======================================================================== *)
@@ -713,9 +729,11 @@ with code_exits_plain_knowing (c : code) {struct c} : bool :=
    unit that passes the test, run on its own, exits with symbols and
    constants only. *)
 Definition exits_plain_knowing_sound_statement : Prop :=
-  ∀ (e : expr) (n : nat) (k : continuation) (vs : list value) (hp : heap),
+  ∀ (e : expr) (n : nat) (k : continuation) (vs : list value) (hp : heap)
+    (rd : read_record),
     exits_plain_knowing [] [] e = true ->
-    run n (State e [] [] empty_static_env empty_heap) = Exit k vs hp ->
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Exit k vs hp rd
+      ->
     ∀ v : value, v ∈ vs -> plain_value v.
 
 (* The same from a static environment, with what it is assumed of
@@ -727,12 +745,12 @@ Definition exits_plain_knowing_sound_statement : Prop :=
    .prefix_refines_statement) needs it of that code. *)
 Definition exits_plain_knowing_sound_from_statement : Prop :=
   ∀ (statics : static_env) (e : expr) (n : nat) (k : continuation)
-    (vs : list value) (hp : heap),
+    (vs : list value) (hp : heap) (rd : read_record),
     (∀ (id : code_id) (c : code),
        lookup id (static_code statics) = Some c ->
        code_exits_plain_knowing c = true) ->
     exits_plain_knowing [] [] e = true ->
-    run n (State e [] [] statics empty_heap) = Exit k vs hp ->
+    run n (State e [] [] statics empty_heap no_reads) = Exit k vs hp rd ->
     ∀ v : value, v ∈ vs -> plain_value v.
 
 (* Nothing that [exits_plain] accepts is refused, whatever is known. *)
@@ -744,10 +762,47 @@ Definition exits_plain_knowing_accepts_statement : Prop :=
 (* The check                                                                *)
 (* ======================================================================== *)
 
+(* CR mshinwell: [expr_free_of_heap] below is a limit, and not a
+   condition of the lifting. A unit that stores in a cell what is
+   lifted exits with a heap that is alike to that of the unit lifted
+   up to [value_lifted] ([lift_simulates_statement]) and is not equal
+   to it, and FlambdaSemanticsSpec.refines compares the heaps of two
+   exits by equality. What two exits are to be compared by is decision
+   D40, which is not taken. For now, nothing is lifted in a unit given
+   to [lift_unit] that has a primitive of the heap anywhere, in a
+   function that no run calls too. The three other liftings have the
+   same guard (FlambdaLiftFromArmsSpec.lift_to_head_unit,
+   FlambdaLiftFromCodeSpec.lift_from_code_unit,
+   FlambdaLiftAroundSpec.lift_around_unit). Nothing here justifies
+   removing the guard or weakening it while the heaps of two exits
+   are compared by equality: a finer guard would need a proof of its
+   own and a measure of the units that it turns. With two exits
+   compared up to a relation of their heaps that holds of a unit and
+   the unit lifted the guard would go, as [exits_plain_knowing] would
+   with their values so compared (the CR at [exits_plain]); that is
+   one way for it to go, and is not said to be the only one.
+
+   What the guard costs, as another stream measured it on the branch
+   that puts the ports of the exchange together, with a tool whose
+   conversion makes the primitives of the heap (that of this tree
+   makes none) and which compares the two exits after each verdict:
+   10,408 outputs, an output being a unit at one setting. Of 1,226
+   outputs that have a primitive of the heap in the term before and
+   are accepted at a verdict that rests on a lifting without the
+   guard, 1,101 are not accepted with it. Without the guard the two
+   exits differ in 536 of those 1,101 and are the same in 516, and
+   the run before is undefined in 49. With the guard no accepted
+   output has two exits that differ, and no output without a
+   primitive of the heap loses its verdict or changes its line. None
+   of the 1,101 is accepted by the tool of the tree before the
+   exchange, which stops at a primitive of the heap. The sets, and
+   the figures set by set, are in status/V3.md. *)
+
 (* The unit with the [Let]s of the guess lifted and, in the code that
    the guess names, [my_closure] bound to the symbol given: if the unit
-   exits with symbols and constants only, the result is a well-formed
-   unit, and it makes no closure of that code but the symbol. *)
+   exits with symbols and constants only and has no primitive of the
+   heap, the result is a well-formed unit, and it makes no closure of
+   that code but the symbol. *)
 Definition lift_unit (L : lifting) (e : expr) : option expr :=
   let lifted :=
     bind_my_closures (lifted_my_closures L)
@@ -755,6 +810,7 @@ Definition lift_unit (L : lifting) (e : expr) : option expr :=
   in
   if
     exits_plain_knowing [] [] e
+    && expr_free_of_heap e
     && well_formed_unit (lifting_unit L) lifted
     && only_closures_of (lifted_my_closures L) lifted
   then Some lifted
@@ -788,15 +844,19 @@ Definition lift_unit (L : lifting) (e : expr) : option expr :=
    partial application may not. It is there so that every value is
    lifted to itself.
 
-   A term run on its own, from no variable, no continuation, the empty
-   static environment and the empty heap, with the steps that the
-   machine has, reaches no value that holds a location, at any depth:
-   its first state holds none, the heap of a state binds every
-   location of the state
-   (FlambdaLocationsMachineSpec.run_keeps_locations_bound_statement),
-   and no step changes the heap. So the rule relates no pair that such
-   a run reaches. A run from an environment that holds a location may
-   reach one.
+   What makes the identity the right relation of two locations here
+   is stated of two exits only. Under the premises of
+   [lift_simulates_statement], where the term, run on its own, exits,
+   and the term lifted, run on its own, answers with its exit, the
+   heaps of the two exits are alike, and two heaps alike bind the same
+   locations, entry for entry (FlambdaHeapSpec.heap_alike). So at
+   those two exits the identity on locations is the correspondence
+   between the locations of the two heaps, and the rule relates a
+   location of the first to the location of the second that is bound
+   to the cell alike. Nothing is stated of the locations of a run that
+   does not exit, or of a term lifted that does not pass the premises;
+   and the identity is not a correspondence between the locations of
+   two runs in general (decision D40).
 
    The relation speaks of the second static environment only. A symbol
    is related to itself whatever it is bound to, in either run
@@ -887,8 +947,9 @@ Inductive value_lifted (statics' : static_env) : value -> value -> Prop :=
 
 (* The term lifted, with [my_closure] bound to its symbol in the code
    that [known] names, run on its own, ends as the term does, up to
-   [value_lifted] at the exit: an exit of the term is one of the term
-   lifted, through the same continuation, with values lifted under the
+   [value_lifted] at the exit: an exit of the term is answered by one
+   of the term lifted, through the same continuation, with values
+   lifted and a heap alike (FlambdaHeapSpec.heap_alike), under the
    static environment that the second run has reached; and if the term
    lifted ends, so does the term, or it goes wrong. (By the first part
    the term then ends alike, as a run has one behaviour.) *)
@@ -899,17 +960,21 @@ Definition lift_simulates_statement : Prop :=
     well_formed_unit u lifted = true ->
     only_closures_of known lifted = true ->
     (∀ (k : continuation) (vs : list value) (hp : heap),
-      behaves (State e [] [] empty_static_env empty_heap) (Exits k vs hp) ->
-      ∃ (n : nat) (last : state) (vs' : list value),
-        run n (State lifted [] [] empty_static_env empty_heap) = Step last
-        ∧ step last = Exit k vs' hp
-        ∧ Forall2 (value_lifted (state_statics last)) vs vs')
+      behaves (State e [] [] empty_static_env empty_heap no_reads)
+        (Exits k vs hp) ->
+      ∃ (n : nat) (last : state) (vs' : list value) (hp' : heap)
+        (rd : read_record),
+        run n (State lifted [] [] empty_static_env empty_heap no_reads)
+          = Step last
+        ∧ step last = Exit k vs' hp' rd
+        ∧ Forall2 (value_lifted (state_statics last)) vs vs'
+        ∧ heap_alike (value_lifted (state_statics last)) hp hp')
     ∧ (∀ b : behaviour,
         b <> Diverges ->
-        behaves (State lifted [] [] empty_static_env empty_heap) b ->
-        behaves (State e [] [] empty_static_env empty_heap) Goes_wrong
+        behaves (State lifted [] [] empty_static_env empty_heap no_reads) b ->
+        behaves (State e [] [] empty_static_env empty_heap no_reads) Goes_wrong
         ∨ ∃ (k : continuation) (vs : list value) (hp : heap),
-            behaves (State e [] [] empty_static_env empty_heap)
+            behaves (State e [] [] empty_static_env empty_heap no_reads)
               (Exits k vs hp)).
 
 (* What [lift_unit] gives refines the unit, run on its own. *)

@@ -571,7 +571,8 @@ Proof. intros Hincl Havoids x Hx. apply Havoids, Hincl, Hx. Qed.
 
 Section Merging.
 
-Variables (statics : static_env) (hp : heap) (fresh0 : list variable)
+Variables (statics : static_env) (hp : heap) (rd : read_record)
+  (fresh0 : list variable)
   (vars0 : env).
 
 (* What holds as the arguments are rebuilt: the [Let]s made so far run
@@ -581,9 +582,10 @@ Variables (statics : static_env) (hp : heap) (fresh0 : list variable)
    what is known. *)
 Definition merging_inv (vars : env) (m : merging) : Prop :=
   (∀ (body : expr) (conts : cont_env),
-    equivalent (State (bind_lets (merging_lets m) body) vars0 conts statics hp)
-      (State body vars conts statics hp))
-  ∧ all_computed (merging_known m) vars statics
+    equivalent
+      (State (bind_lets (merging_lets m) body) vars0 conts statics hp rd)
+      (State body vars conts statics hp rd))
+  ∧ all_computed (merging_known m) vars statics hp rd
   ∧ (∀ s : simple, avoids fresh0 s -> eval_simple vars s = eval_simple vars0 s)
   ∧ NoDup (merging_fresh m)
   ∧ incl (merging_fresh m) fresh0
@@ -639,13 +641,31 @@ Lemma bind_prim_sound (vars : env) (m : merging) (kind : flambda_kind)
   merging_inv vars m ->
   bind_prim m kind p args = Some (s, m') ->
   avoid (merging_fresh m) args ->
+  prim_reads_heap p = false ->
   eval_simples vars args = Some vs ->
+  (∀ l : location, Value_location l ∉ vs) ->
   eval_prim statics p vs = Some v ->
   kind_of_value v = kind ->
   merging_result vars m s v m'.
-Proof.
-  intros Hinv Hbind Hargs Hvs Hprim Hkind.
+Proof using Type.
+  intros Hinv Hbind Hargs Hreads Hvs Hnone Hprim Hkind.
   pose proof Hinv as (Hlets & Hknown & Hextends & Hnodup & Hincl & Havoid).
+  assert (Hstable : stable_prim p = true).
+  { unfold stable_prim. rewrite Hreads. reflexivity. }
+  assert (Hnot : ∀ q : heap_primitive, p <> Heap q).
+  { intros q ->. discriminate Hreads. }
+  (* The primitive runs to its value, and leaves the heap and the
+     record, in every environment that gives its arguments these
+     values. *)
+  assert
+    (Hrun :
+      ∀ vars' : env,
+        eval_simples vars' args = Some vs ->
+        exec_named statics hp rd vars' (Prim p args) = Some (v, hp, rd)).
+  { intros vars' Hvs'.
+    apply (eval_named_exec_named statics hp rd vars' p args vs v Hreads Hvs').
+    - intros l Hl. destruct (Hnone l Hl).
+    - rewrite eval_named_prim, Hvs'. exact Hprim. }
   unfold bind_prim in Hbind.
   destruct
     (if existsb simple_is_var args
@@ -656,10 +676,9 @@ Proof.
     assert (Hin : (x, (p, args)) ∈ merging_known m).
     { destruct (existsb simple_is_var args); [ | discriminate ].
       exact (computed_by_sound _ _ _ _ Hfound). }
-    destruct (Hknown _ Hin) as (vs' & v' & Hvs' & Hprim' & Hlookup).
-    cbn [fst snd] in Hvs', Hprim', Hlookup.
-    rewrite Hvs in Hvs'. injection Hvs' as <-.
-    rewrite Hprim in Hprim'. injection Hprim' as <-.
+    destruct (Hknown _ Hin) as (_ & v' & Hrun' & Hlookup).
+    cbn [fst snd] in Hrun', Hlookup.
+    rewrite (Hrun vars Hvs) in Hrun'. injection Hrun' as <-.
     apply merging_result_same; [ exact Hinv | exact Hlookup | ].
     intros y Hy Hfree. simpl in Hfree. subst y.
     exact (proj1 (Havoid _ Hin x Hy) eq_refl).
@@ -669,14 +688,18 @@ Proof.
     apply NoDup_cons_iff in Hnodup as [Hnotin Hnodup].
     assert (Hargs_x : ~ var_free_in_simples x args)
       by (apply Hargs; left; reflexivity).
-    assert (Hold : all_computed (merging_known m) ((x, v) :: vars) statics).
+    assert
+      (Hold :
+        all_computed (merging_known m) ((x, v) :: vars) statics hp rd).
     { intros entry Hin.
-      destruct (Hknown entry Hin) as (vs' & v' & Hvs' & Hprim' & Hlookup).
+      destruct (Hknown entry Hin) as (Hstable' & v' & Hrun' & Hlookup).
       destruct (Havoid entry Hin x (or_introl eq_refl)) as [Hne Hfree].
-      exists vs', v'. split; [ rewrite eval_simples_extend; assumption | ].
-      split; [ exact Hprim' | ]. simpl.
-      destruct (Pos.eqb_spec (fst entry) x) as [Heq | _];
-        [ contradiction | exact Hlookup ]. }
+      split; [ exact Hstable' | ]. exists v'. split.
+      - rewrite <- Hrun'. apply exec_named_args.
+        rewrite eval_simples_extend; [ reflexivity | exact Hfree ].
+      - simpl.
+        destruct (Pos.eqb_spec (fst entry) x) as [Heq | _];
+          [ contradiction | exact Hlookup ]. }
     exists ((x, v) :: vars). cbn [merging_lets merging_known merging_fresh].
     split; [ | split; [ | split; [ | split ] ] ].
     + split; [ | split; [ | split; [ | split; [ | split ] ] ] ].
@@ -684,15 +707,17 @@ Proof.
         apply
           (equivalent_trans _
              (State (Let x (kind_of_value v) (Prim p args) body) vars conts
-                statics hp));
+                statics hp rd));
           [ apply Hlets | ].
-        apply step_equivalent. rewrite step_let. cbn [eval_named].
-        rewrite Hvs. cbn. rewrite Hprim, kind_eqb_refl. reflexivity.
+        apply step_equivalent.
+        rewrite
+          (step_let_no_location _ _ _ _ _ _ _ _ _ rd_ vs Hnot Hvs Hnone).
+        rewrite Hprim, kind_eqb_refl. reflexivity.
       * destruct (existsb simple_is_var args); [ | exact Hold ].
         intros entry [<- | Hin]; [ | exact (Hold entry Hin) ].
-        exists vs, v. cbn [fst snd].
-        split; [ rewrite eval_simples_extend; assumption | ].
-        split; [ exact Hprim | ]. simpl. rewrite Pos.eqb_refl. reflexivity.
+        split; [ exact Hstable | ]. exists v. cbn [fst snd].
+        split; [ apply Hrun; rewrite eval_simples_extend; assumption | ].
+        simpl. rewrite Pos.eqb_refl. reflexivity.
       * intros s0 Hs0.
         rewrite eval_simple_extend; [ apply Hextends, Hs0 | apply Hs0, Hx ].
       * exact Hnodup.
@@ -771,7 +796,9 @@ Proof.
     apply Exists_cons in Hfree as [Hfree | Hfree];
       [ exact (Hsb x Hx Hfree) | ].
     apply Exists_nil in Hfree. exact Hfree.
+  - reflexivity.
   - cbn [eval_simples]. rewrite Ha, Hb. reflexivity.
+  - intros l [Hl | [Hl | [ ]]]; discriminate Hl.
   - exact (eval_immediate_arith kind op a b r Hra Hrb Hr).
   - destruct kind; reflexivity.
 Qed.
@@ -951,7 +978,9 @@ Proof.
     apply Exists_cons in Hfree as [Hfree | Hfree];
       [ exact (Havoids x Hx Hfree) | ].
     apply Exists_nil in Hfree. exact Hfree.
+  - reflexivity.
   - cbn [eval_simples]. rewrite Hscrutinee. reflexivity.
+  - intros l [Hl | [ ]]. discriminate Hl.
   - cbn [eval_prim eval_unary_primitive int_of_value].
     unfold immediate_width in Hi. rewrite Hi. reflexivity.
   - reflexivity.
@@ -999,7 +1028,9 @@ Proof.
       apply Exists_cons in Hfree as [Hfree | Hfree];
         [ exact (Havoids1 x Hx Hfree) | ].
       apply Exists_nil in Hfree. exact Hfree.
+    + reflexivity.
     + cbn [eval_simples]. rewrite Hvalue1. reflexivity.
+    + intros l [Hl | [ ]]. discriminate Hl.
     + cbn in Husable. destruct Husable as [-> | ->]; reflexivity.
     + reflexivity.
   - injection Hv as <-. cbn in Husable. destruct Husable as [Hoffset Hslope].
@@ -1151,7 +1182,7 @@ Qed.
 
 Theorem merge_arms_refines : merge_arms_refines_statement.
 Proof.
-  intros known fresh scrutinee arms e vars conts statics hp Hmerge Hknown.
+  intros known fresh scrutinee arms e vars conts statics hp rd Hmerge Hknown.
   unfold merge_arms in Hmerge.
   destruct (mergeable_arms arms) as [[cont num_args] | ] eqn:Hmergeable;
     [ | discriminate ].
@@ -1171,10 +1202,10 @@ Proof.
     (rebuild_mergeable_arguments scrutinee (Merging [] known fresh) arguments)
     as [[args m] | ] eqn:Hrebuild; [ | discriminate ].
   cbn in Hmerge. injection Hmerge as <-.
-  destruct (step_switch_cases scrutinee arms vars conts statics hp)
+  destruct (step_switch_cases scrutinee arms vars conts statics hp rd)
     as [Hundefined | (v & i & ac & Hv & Hi & Hfind & Hstep)].
   { apply step_undefined_refines, Hundefined. }
-  apply (refines_trans _ (State (Apply_cont ac) vars conts statics hp));
+  apply (refines_trans _ (State (Apply_cont ac) vars conts statics hp rd));
     [ apply equivalent_refines, step_equivalent, Hstep | ].
   assert (Hvalue : v = Value_const (Naked_immediate i)).
   { destruct v; try discriminate Hi.
@@ -1207,7 +1238,7 @@ Proof.
     intros row Hrow x Hx. apply in_map_iff in Hrow as (arm & <- & Harm).
     exact (proj1 (proj2 (name_new_spec _ _ _ x (Hnew x Hx))) arm Harm). }
   assert
-    (Hinv : merging_inv statics hp fresh vars vars (Merging [] known fresh)).
+    (Hinv : merging_inv statics hp rd fresh vars vars (Merging [] known fresh)).
   { split; [ intros body conts'; apply equivalent_refl | ].
     split; [ exact Hknown | ]. split; [ reflexivity | ].
     split; [ apply distinct_NoDup, Hdistinct | ].
@@ -1215,14 +1246,14 @@ Proof.
     intros entry Hentry x Hx.
     exact (proj2 (proj2 (name_new_spec _ _ _ x (Hnew x Hx))) entry Hentry). }
   destruct
-    (rebuild_mergeable_arguments_sound statics hp fresh vars scrutinee i
+    (rebuild_mergeable_arguments_sound statics hp rd fresh vars scrutinee i
        Hscrutinee Hv (Hranges (i, ac) Hin) arguments vars _ args m vs Hinv
        Hrebuild Husable Havoid Hvalues)
     as (vars' & Hinv' & Hargs & _).
   apply
     (refines_trans _
        (State (Apply_cont (Apply_cont_expr cont args None)) vars' conts
-          statics hp)).
+          statics hp rd)).
   - apply equivalent_refines, step_eq_equivalent. rewrite !step_apply_cont.
     cbn [ac_args ac_continuation]. rewrite Hvs, Hargs, Hcont. reflexivity.
   - apply equivalent_refines, equivalent_sym. apply (proj1 Hinv').
@@ -1230,12 +1261,13 @@ Qed.
 
 Theorem rebuild_switch_refines : rebuild_switch_refines_statement.
 Proof.
-  intros known fresh scrutinee arms vars conts statics hp Hknown.
+  intros known fresh scrutinee arms vars conts statics hp rd Hknown.
   unfold rebuild_switch. destruct arms as [ | arm arms].
   - apply equivalent_refines, switch_no_arms.
   - destruct (merge_arms known fresh scrutinee (arm :: arms)) as [e | ]
       eqn:Hmerge.
-    + exact (merge_arms_refines known fresh scrutinee _ e vars conts statics _
+    + exact
+      (merge_arms_refines known fresh scrutinee _ e vars conts statics _ rd_
                Hmerge Hknown).
     + apply switch_of_arms_refines.
 Qed.
@@ -1243,7 +1275,7 @@ Qed.
 Theorem rebuild_switch_nothing_known_refines :
   rebuild_switch_nothing_known_refines_statement.
 Proof.
-  intros fresh scrutinee arms vars conts statics hp.
+  intros fresh scrutinee arms vars conts statics hp rd.
   apply rebuild_switch_refines. intros entry [].
 Qed.
 
@@ -1254,8 +1286,8 @@ Qed.
 Theorem simplify_switch_merging_refines :
   simplify_switch_merging_refines_statement.
 Proof.
-  intros meet rewrite known fresh tenv s arms e Hmeet Hkeeps Hrewrite Hknown
-    Hfits Hmem.
+  intros meet rewrite known fresh tenv s arms e Hmeet Hkeeps Hrewrite Hfits
+    Hmem.
   unfold simplify_switch_merging.
   destruct (Typing_env.type_simple_in_term_exn tenv (Some Name_mode.normal) s)
     as [[[ty canonical] | ] | ] eqn:Htype; try discriminate.
@@ -1263,22 +1295,38 @@ Proof.
   destruct (simplify_arms meet rewrite tenv ty arms) as [arms' | ] eqn:Harms;
     [ | discriminate ].
   intros [= <-].
-  apply (expr_refines_under_valid_trans tenv _ (Switch s arms')).
-  { exact (simplify_arms_refines meet rewrite tenv s canonical ty arms arms'
-             Hmeet Hkeeps Hrewrite Hfits Hmem Htype Harms). }
-  apply (expr_refines_under_valid_trans tenv _ (Switch canonical arms')).
-  { apply equivalent_under_valid_refines, equivalent_under_valid.
+  assert
+    (Hfirst :
+      expr_refines_under_valid tenv (Switch s arms) (Switch canonical arms')).
+  { apply (expr_refines_under_valid_trans tenv _ (Switch s arms')).
+    { exact (simplify_arms_refines meet rewrite tenv s canonical ty arms
+               arms' Hmeet Hkeeps Hrewrite Hfits Hmem Htype Harms). }
+    apply equivalent_under_valid_refines, equivalent_under_valid.
     apply switch_canonical.
     split; [ exact Hmem | exists ty; exact Htype ]. }
-  intros vars conts statics hp Hvalid Hsat.
-  apply rebuild_switch_refines. exact (Hknown statics vars Hvalid Hsat).
+  intros vars conts statics hp rd Hvalid Hsat Hknown.
+  apply
+    (refines_trans _
+       (State (Switch canonical arms') vars conts statics hp rd));
+    [ exact (Hfirst vars conts statics hp rd Hvalid Hsat) | ].
+  apply rebuild_switch_refines. exact Hknown.
+Qed.
+
+Theorem expr_refines_under_valid_where_nothing_known :
+  expr_refines_under_valid_where_nothing_known_statement.
+Proof.
+  intros tenv source target. split.
+  - intros Hwhere vars conts statics hp rd Hvalid Hsat.
+    apply Hwhere; [ exact Hvalid | exact Hsat | intros entry [ ] ].
+  - intros Hunder vars conts statics hp rd Hvalid Hsat _.
+    exact (Hunder vars conts statics hp rd Hvalid Hsat).
 Qed.
 
 Theorem simplify_switch_merging_of_meet_to_prove_refines :
   simplify_switch_merging_of_meet_to_prove_refines_statement.
 Proof.
-  intros join fuel rewrite known fresh tenv s arms e Hjoin Hrewrite Hknown
-    Hfits Hmem.
+  intros join fuel rewrite known fresh tenv s arms e Hjoin Hrewrite Hfits
+    Hmem.
   apply simplify_switch_merging_refines; try assumption.
   - exact (proj1 (FlambdaMeetClosuresProofs.meet_to_prove_sound _ _ Hjoin)).
   - exact (FlambdaMeetTermsProofs.meet_to_prove_keeps_terms _ _ Hjoin).
@@ -1723,10 +1771,11 @@ Proof.
     = Apply_cont (Apply_cont_expr k [Var example_x] None))
     by compute_rebuild_switch.
   split; [ exact Hrebuilt | ].
-  intros vars conts statics hp. unfold example_switch_index.
-  apply let_refines_step; [ reflexivity | intros v Hv _ ].
+  intros vars conts statics hp rd. unfold example_switch_index.
+  apply let_refines_step_exec; [ reflexivity | intros v hp' rd' Hv _ ].
+  apply exec_named_pure in Hv as (Hv & -> & ->); [ | reflexivity ].
   rewrite <- Hrebuilt. apply rebuild_switch_refines.
-  intros entry [<- | []]. unfold computed_holds. cbn [fst snd].
+  intros entry [<- | []].
   cbn [eval_named eval_simples eval_simple] in Hv.
   destruct (lookup example_x vars) as [w | ] eqn:Hx; [ | discriminate ].
   cbn [eval_prim eval_unary_primitive] in Hv.
@@ -1746,10 +1795,21 @@ Proof.
     end; [ | discriminate ].
     injection Hint as ->. split; [ reflexivity | exact Hrange ]. }
   destruct Hw as [-> Hrange].
-  exists [Value_const (Naked_immediate i)], (Value_const (Tagged_immediate i)).
-  split; [ reflexivity | ]. split; [ | exact Hx ].
-  cbn [eval_prim eval_unary_primitive int_of_value]. rewrite Hrange.
-  reflexivity.
+  split; [ reflexivity | ].
+  exists (Value_const (Tagged_immediate i)). cbn [fst snd].
+  split; [ | exact Hx ].
+  apply
+    (eval_named_exec_named statics hp rd _ _ _
+       [Value_const (Naked_immediate i)]).
+  - reflexivity.
+  - reflexivity.
+  - intros l [Hl | [ ]]. discriminate Hl.
+  - change
+      (eval_prim statics (Unary Tag_immediate)
+         [Value_const (Naked_immediate i)]
+       = Some (Value_const (Tagged_immediate i))).
+    cbn [eval_prim eval_unary_primitive int_of_value]. rewrite Hrange.
+    reflexivity.
 Qed.
 
 Theorem example_switch_negate : example_switch_negate_statement.
@@ -1759,11 +1819,13 @@ Proof.
   - vm_compute. reflexivity.
   - reflexivity.
   - intros y [].
-  - intros statics vars v _ Hv. apply any_bool_satisfied.
+  - intros statics hp hp' rd rd' vars v _ Hv. apply any_bool_satisfied.
+    apply exec_named_pure in Hv as (Hv & _ & _); [ | reflexivity ].
     cbn [eval_named] in Hv.
     destruct (eval_simples vars _) as [vs | ]; [ | discriminate ].
     exact (int_comp_bool statics _ _ vs v Hv).
-  - apply (simplify_switch_merging_refines example_meet
+  - apply (proj1 (expr_refines_under_valid_where_nothing_known _ _ _)).
+    apply (simplify_switch_merging_refines example_meet
              FlambdaSimplifyPassSpec.simplify_apply_cont []
              [example_tagged; example_negated]).
     + exact (proj1 (FlambdaMeetClosuresProofs.meet_to_prove_sound _ _
@@ -1771,7 +1833,6 @@ Proof.
     + exact (FlambdaMeetTermsProofs.meet_to_prove_keeps_terms _ _
                FlambdaMeetExamplesProofs.forgetful_join_sound).
     + exact simplify_apply_cont_sound.
-    + intros statics vars _ _ entry [].
     + exact example_comparison_env_fits.
     + reflexivity.
     + unfold simplify_switch_merging.

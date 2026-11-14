@@ -215,6 +215,8 @@ Proof.
     + (* another [Let] *)
       rewrite (region_step_let rs x kind d body He Hd) in Hstep
         by (rewrite He; exact Hnofault).
+      destruct (named_needs_heap (state_vars (rs_state rs)) d);
+        [ discriminate | ].
       rewrite (check_expr_let cert codes cs x kind d body Hd) in Hcheck.
       unfold let_step in Hstep. unfold check_let in Hcheck. cbv zeta in Hcheck.
       apply andb_true_iff in Hcheck as [Hcheck Hrest].

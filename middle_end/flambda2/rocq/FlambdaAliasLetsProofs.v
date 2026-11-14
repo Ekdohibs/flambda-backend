@@ -47,12 +47,12 @@ Lemma merged_alias_let (x y : variable) (kind : flambda_kind) (d : named)
   expr_equivalent (Let x kind d (Let y kind (Simple (Var x)) body))
     (Let y kind d body).
 Proof.
-  intros Hunused vars conts statics hp.
-  apply let_equivalent_step; [ reflexivity | ].
-  intros v _ Hkind.
+  intros Hunused vars conts statics hp rd.
+  apply let_equivalent_step_exec; [ reflexivity | ].
+  intros v hp' rd' _ Hkind.
   apply (equivalent_trans _
-    (State body ((y, v) :: (x, v) :: vars) conts statics hp)).
-  - apply step_equivalent. rewrite step_let. simpl.
+    (State body ((y, v) :: (x, v) :: vars) conts statics hp' rd')).
+  - apply step_equivalent. rewrite step_let_simple. simpl.
     rewrite Pos.eqb_refl, Hkind, kind_eqb_refl. reflexivity.
   - apply coincide_equivalent.
     + intros z Hz. simpl.
@@ -68,7 +68,7 @@ Proof.
   destruct e
     as [ x kind d body | bindings body | k [params metadata handler] body
        | handlers body | ap | ac | scrutinee arms | ];
-    simpl; try (intros vars conts statics hp; apply equivalent_refl).
+    simpl; try (intros vars conts statics hp rd; apply equivalent_refl).
   - pose proof (plug_equivalent (Let_body x kind d Hole) _ _ (not_many _)
       (merge_alias_lets_equivalent_aux body)) as Hbody.
     simpl in Hbody.

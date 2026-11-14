@@ -178,7 +178,7 @@ Definition copy_conts (conts : cont_env) : cont_env :=
 Definition copy_state (s : state) : state :=
   State (copy_expr ids symbols (state_expr s)) (state_vars s)
     (copy_conts (state_conts s)) (copy_statics (state_statics s))
-      (state_heap s).
+      (state_heap s) (state_reads s).
 
 (* No new id is bound. *)
 Definition no_new (codes : list (code_id * code)) : Prop :=
@@ -445,6 +445,38 @@ Proof.
     rewrite project_function_slot_copy. exact (fun H => H).
 Qed.
 
+(* The same where the named expression is run on a heap: what is not a
+   primitive has its value by [eval_named], and no primitive tells the
+   two static environments apart on a heap either
+   (FlambdaHeapSpec.exec_prim_related_statement, at equality). *)
+Lemma exec_named_copy (statics : static_env) (hp hp' : heap)
+    (rd rd' : read_record) (vars : env) (d : named) (v : value) :
+  exec_named statics hp rd vars d = Some (v, hp', rd') ->
+  exec_named (copy_statics statics) hp rd vars d = Some (v, hp', rd').
+Proof.
+  intros Hd.
+  destruct d as [s | p args | code slots | fslot decls slots | slot closure
+    | pfrom slot closure | move_from move_to closure];
+    try (pose proof (fun H => exec_named_pure _ _ _ _ _ _ _ _ H Hd) as Hpure;
+         destruct (Hpure eq_refl) as (Hw & -> & ->);
+         rewrite exec_named_not_prim by (intros ? ?; discriminate);
+         rewrite (eval_named_copy statics vars _ v Hw); reflexivity).
+  apply exec_named_prim_some in Hd as (vs & Hvs & Hexec & ->).
+  apply exec_named_prim_some. exists vs.
+  split; [ exact Hvs | split; [ | reflexivity ] ].
+  assert (Hlocations : FlambdaHeapSpec.relates_locations eq).
+  { split; [ intros l; reflexivity | ].
+    split; [ intros l w H; symmetry; exact H | intros w l H; exact H ]. }
+  destruct
+    (FlambdaHeapProofs.exec_prim_related eq statics (copy_statics statics) hp
+       hp hp' p vs vs v (copy_statics_respects statics) Hlocations
+       (proj2 (FlambdaHeapProofs.heap_alike_eq hp hp) eq_refl)
+       (forall2_eq_refl vs) Hexec)
+    as (v' & hp1 & Hexec' & <- & Halike).
+  rewrite (proj1 (FlambdaHeapProofs.heap_alike_eq hp' hp1) Halike).
+  exact Hexec'.
+Qed.
+
 Lemma eval_static_const_copy (vars : env) (s : symbol) (const : static_const)
     (allocated : statically_allocated_value) :
   eval_static_const vars const = Some allocated ->
@@ -634,7 +666,7 @@ Proof. destruct c. simpl. auto 8. Qed.
 Definition result_copied (result result' : step_result) : Prop :=
   match result with
   | Step t => result' = Step (copy_state t)
-  | Exit k vs hp => result' = Exit k vs hp
+  | Exit k vs hp rd => result' = Exit k vs hp rd
   | Undefined => True
   end.
 
@@ -792,11 +824,12 @@ Qed.
 (* A full call. *)
 Lemma call_code_copy (closure : value) (c : code) (vs : list value)
     (args_arity return_arity : arity) (return_to exn_to : cont_value)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   result_copied
-    (call_code closure c vs args_arity return_arity return_to exn_to statics hp)
+    (call_code closure c vs args_arity return_arity return_to exn_to statics hp
+       rd)
     (call_code closure (copy_code ids symbols c) vs args_arity return_arity
-       (copy_cont return_to) (copy_cont exn_to) (copy_statics statics) hp).
+       (copy_cont return_to) (copy_cont exn_to) (copy_statics statics) hp rd).
 Proof.
   unfold result_copied, call_code.
   destruct (copy_code_parts c)
@@ -818,14 +851,15 @@ Qed.
    application. *)
 Lemma run_call_copy (return_partial return_partial' : value -> step_result)
     (shape : call_shape) (return_arity : arity)
-    (return_to exn_to : cont_value) (statics : static_env) (hp : heap) :
+    (return_to exn_to : cont_value) (statics : static_env) (hp : heap)
+      (rd : read_record) :
   (∀ partial : value,
     result_copied (return_partial partial) (return_partial' partial)) ->
   result_copied
     (run_call return_partial (Some shape) return_arity return_to exn_to
-       statics hp)
+       statics hp rd)
     (run_call return_partial' (Some (copy_shape shape)) return_arity
-       (copy_cont return_to) (copy_cont exn_to) (copy_statics statics) hp).
+       (copy_cont return_to) (copy_cont exn_to) (copy_statics statics) hp rd).
 Proof.
   intros Hpartial.
   destruct shape
@@ -837,7 +871,7 @@ Proof.
     exact (call_code_copy closure c vs args_arity (code_result_arity c)
              (Over_application remaining remaining_arity return_arity
                 return_to exn_to)
-             exn_to statics hp).
+             exn_to statics hp rd).
   - apply Hpartial.
 Qed.
 
@@ -845,18 +879,19 @@ Qed.
    applied to a partial application. *)
 Lemma call_function_copy_from (callee : value) (kind kind' : call_kind)
     (vs : list value) (args_arity return_arity : arity)
-    (return_to exn_to : cont_value) (statics : static_env) (hp : heap) :
+    (return_to exn_to : cont_value) (statics : static_env) (hp : heap)
+      (rd : read_record) :
   no_new (static_code statics) ->
   kind_follows statics callee kind kind' ->
   (∀ partial : value,
-    result_copied (apply_cont_value return_to [partial] statics hp)
+    result_copied (apply_cont_value return_to [partial] statics hp rd)
       (apply_cont_value (copy_cont return_to) [partial]
-         (copy_statics statics) hp)) ->
+         (copy_statics statics) hp rd)) ->
   result_copied
     (call_function callee kind vs args_arity return_arity return_to exn_to
-       statics hp)
+       statics hp rd)
     (call_function callee kind' vs args_arity return_arity
-       (copy_cont return_to) (copy_cont exn_to) (copy_statics statics) hp).
+       (copy_cont return_to) (copy_cont exn_to) (copy_statics statics) hp rd).
 Proof.
   intros Hno Hkind Hpartial. unfold call_function.
   destruct (shape_of_call statics callee kind vs args_arity return_arity)
@@ -868,17 +903,17 @@ Proof.
 Qed.
 
 Lemma apply_cont_value_copy (c : cont_value) :
-  ∀ (vs : list value) (statics : static_env) (hp : heap),
+  ∀ (vs : list value) (statics : static_env) (hp : heap) (rd : read_record),
     no_new (static_code statics) ->
-    result_copied (apply_cont_value c vs statics hp)
-      (apply_cont_value (copy_cont c) vs (copy_statics statics) hp).
+    result_copied (apply_cont_value c vs statics hp rd)
+      (apply_cont_value (copy_cont c) vs (copy_statics statics) hp rd).
 Proof.
   induction c
     as [[params metadata handler] def_vars def_conts recursive | k
        | c IH extra
        | remaining remaining_arity return_arity return_to exn_to IHreturn _]
     using cont_value_over_ind;
-    intros vs statics hp Hno.
+    intros vs statics hp rd Hno.
   - unfold result_copied. simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
       [ | exact I ].
@@ -898,14 +933,15 @@ Qed.
 
 Lemma call_function_copy (callee : value) (kind kind' : call_kind)
     (vs : list value) (args_arity return_arity : arity)
-    (return_to exn_to : cont_value) (statics : static_env) (hp : heap) :
+    (return_to exn_to : cont_value) (statics : static_env) (hp : heap)
+      (rd : read_record) :
   no_new (static_code statics) ->
   kind_follows statics callee kind kind' ->
   result_copied
     (call_function callee kind vs args_arity return_arity return_to exn_to
-       statics hp)
+       statics hp rd)
     (call_function callee kind' vs args_arity return_arity
-       (copy_cont return_to) (copy_cont exn_to) (copy_statics statics) hp).
+       (copy_cont return_to) (copy_cont exn_to) (copy_statics statics) hp rd).
 Proof.
   intros Hno Hkind.
   apply call_function_copy_from; [ exact Hno | exact Hkind | ].
@@ -992,12 +1028,12 @@ Lemma result_copied_keeps (result result' : step_result)
   | Step t =>
     result' = Step (copy_state t)
     ∧ no_new (static_code (state_statics t))
-  | Exit k vs hp => result' = Exit k vs hp
+  | Exit k vs hp rd => result' = Exit k vs hp rd
   | Undefined => True
   end.
 Proof.
   intros Hno Hkeeps Hcopied.
-  destruct result as [t | k vs hp | ]; simpl in *;
+  destruct result as [t | k vs hp rd | ]; simpl in *;
     [ | exact Hcopied | exact I ].
   split; [ exact Hcopied | ]. rewrite (Hkeeps t eq_refl). exact Hno.
 Qed.
@@ -1006,21 +1042,21 @@ Qed.
    environment that binds none, is a step of the second state, to the
    second state of the result; and no new id is bound after it. *)
 Lemma copy_step_components (e : expr) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   binds_no_code (map snd ids) e = true ->
   no_new (static_code statics) ->
-  match step (State e vars conts statics hp) with
+  match step (State e vars conts statics hp rd) with
   | Step t =>
     step
       (State (copy_expr ids symbols e) vars (copy_conts conts)
-         (copy_statics statics) hp)
+         (copy_statics statics) hp rd)
     = Step (copy_state t)
     ∧ no_new (static_code (state_statics t))
-  | Exit k vs hp' =>
+  | Exit k vs hp' rd' =>
     step
       (State (copy_expr ids symbols e) vars (copy_conts conts)
-         (copy_statics statics) hp)
-    = Exit k vs hp'
+         (copy_statics statics) hp rd)
+    = Exit k vs hp' rd'
   | Undefined => True
   end.
 Proof.
@@ -1030,9 +1066,10 @@ Proof.
        | scrutinee arms | ];
     simpl copy_expr; autorewrite with step.
   - (* Let *)
-    destruct (eval_named statics vars d) as [v | ] eqn:Hv; [ | exact I ].
+    destruct (exec_named statics hp rd vars d) as [[[v hp'] rd'] | ] eqn:Hv;
+      [ | exact I ].
     destruct (kind_eqb (kind_of_value v) xkind) eqn:Hkind; [ | exact I ].
-    rewrite (eval_named_copy statics vars d v Hv), Hkind.
+    rewrite (exec_named_copy statics hp hp' rd rd' vars d v Hv), Hkind.
     split; [ reflexivity | exact Hno ].
   - (* Let_static *)
     simpl in Hbinds. apply andb_true_iff in Hbinds as [Hbindings _].
@@ -1062,14 +1099,14 @@ Proof.
     rewrite !resolve_copy, <- with_extra_args_copy.
     apply (result_copied_keeps _ _ statics Hno).
     + intros t Ht.
-      exact (call_function_statics _ _ _ _ _ _ _ _ _ t Ht).
+      exact (call_function_statics _ _ _ _ _ _ _ _ _ rd_ t Ht).
     + apply call_function_copy; [ exact Hno | ].
       exact (copy_call_kind_follows statics vars ap callee Hcallee).
   - (* Apply_cont *)
     destruct (eval_simples vars (ac_args ac)) as [vs | ]; [ | exact I ].
     unfold apply_continuation. rewrite resolve_copy.
     apply (result_copied_keeps _ _ statics Hno).
-    + intros t Ht. exact (apply_cont_value_statics _ _ _ _ t Ht).
+    + intros t Ht. exact (apply_cont_value_statics _ _ _ _ rd_ t Ht).
     + apply apply_cont_value_copy. exact Hno.
   - (* Switch *)
     destruct (eval_simple vars scrutinee) as [v | ]; [ | exact I ].
@@ -1094,14 +1131,14 @@ Lemma copy_step (s : state) :
   copied_inv s ->
   match step s with
   | Step t => step (copy_state s) = Step (copy_state t) ∧ copied_inv t
-  | Exit k vs hp => step (copy_state s) = Exit k vs hp
+  | Exit k vs hp rd => step (copy_state s) = Exit k vs hp rd
   | Undefined => True
   end.
 Proof.
   intros [Hterms Hno].
   pose proof
     (copy_step_components (state_expr s) (state_vars s) (state_conts s)
-       (state_statics s) (state_heap s) (proj1 Hterms) Hno)
+       (state_statics s) (state_heap s) (state_reads s) (proj1 Hterms) Hno)
     as Hstep.
   rewrite <- (state_eta s) in Hstep.
   assert (Hkept :
@@ -1123,7 +1160,7 @@ Proof.
     - intros ac. reflexivity.
     - intros params metadata handler H. exact H.
     - intros [params my_closure ret exn metadata body] H. exact H. }
-  destruct (step s) as [t | k vs hp | ]; [ | exact Hstep | exact I ].
+  destruct (step s) as [t | k vs hp rd | ]; [ | exact Hstep | exact I ].
   destruct Hstep as [Hstep Hno'].
   split; [ exact Hstep | ]. split; [ exact (Hkept t eq_refl) | exact Hno' ].
 Qed.
@@ -1146,14 +1183,14 @@ Qed.
    continuations whose terms bind no new id and that the rewrite
    leaves as they are. *)
 Lemma copy_expr_refines_from (e : expr) (conts : cont_env)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   binds_no_code (map snd ids) e = true ->
   conts_terms_ok (handler_binds_no_code (map snd ids)) conts ->
   copy_conts conts = conts ->
   static_code statics = [] ->
   copy_statics statics = statics ->
-  refines (State e [] conts statics hp)
-    (State (copy_expr ids symbols e) [] conts statics hp).
+  refines (State e [] conts statics hp rd)
+    (State (copy_expr ids symbols e) [] conts statics hp rd).
 Proof.
   intros Hbinds Hconts Hsame_conts Hno_code Hsame.
   apply (simulation_refines copied_related copied_related_step).
@@ -1273,12 +1310,12 @@ Qed.
 
 Lemma copy_static_code_refines_from (ids : list (code_id * code_id))
     (symbols : list symbol) (slots : list value_slot) (e e' : expr)
-    (conts : cont_env) (statics : static_env) (hp : heap) :
+    (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record) :
   copy_static_code ids symbols e = Some e' ->
   observers slots conts ->
   static_code statics = [] ->
   copy_statics ids symbols statics = statics ->
-  refines (State e [] conts statics hp) (State e' [] conts statics hp).
+  refines (State e [] conts statics hp rd) (State e' [] conts statics hp rd).
 Proof.
   unfold copy_static_code, copy_ok.
   destruct (distinct (map fst ids) && distinct (map snd ids)
@@ -1288,7 +1325,7 @@ Proof.
   intros [= <-] Hobservers.
   destruct (observers_copied ids symbols slots conts Hobservers)
     as [Hsame Hconts].
-  exact (copy_expr_refines_from ids symbols Hnew e conts statics hp Hbinds
+  exact (copy_expr_refines_from ids symbols Hnew e conts statics hp rd_ Hbinds
            Hconts Hsame).
 Qed.
 
@@ -1297,7 +1334,8 @@ Theorem copy_static_code_refines_observed :
 Proof.
   intros imports slots ids symbols conts e e' Hcopy Hobservers.
   exact (copy_static_code_refines_from ids symbols slots e e' conts
-           (imports_statics imports) empty_heap Hcopy Hobservers eq_refl
+           (imports_statics imports) empty_heap no_reads Hcopy Hobservers
+             eq_refl
            (copy_statics_imports ids symbols imports)).
 Qed.
 
@@ -1551,7 +1589,7 @@ Qed.
 Lemma with_copies_refines_under (imports : list (symbol * import_class))
     (slots : list value_slot)
     (copies : list (list (code_id * code_id) * list symbol)) (e : expr) :
-  refines_under_observers slots (imports_statics imports) empty_heap e
+  refines_under_observers slots (imports_statics imports) empty_heap no_reads e
     (with_copies copies e).
 Proof.
   intros conts Hobservers. apply refines_observed.

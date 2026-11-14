@@ -79,5 +79,5 @@ Definition hoist_statics_equivalent_observed_statement : Prop :=
     hoist_statics u e = Some e' ->
     static_names_free_in (imports_statics imports) e = true ->
     observers [] conts ->
-    equivalent (State e [] conts (imports_statics imports) empty_heap)
-      (State e' [] conts (imports_statics imports) empty_heap).
+    equivalent (State e [] conts (imports_statics imports) empty_heap no_reads)
+      (State e' [] conts (imports_statics imports) empty_heap no_reads).

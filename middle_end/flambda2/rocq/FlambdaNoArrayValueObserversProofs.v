@@ -81,7 +81,7 @@ Qed.
 Theorem refines_under_observers_gives_free_of_arrays :
   refines_under_observers_gives_free_of_arrays_statement.
 Proof.
-  intros slots statics hp source target Hrefines conts Hconts.
+  intros slots statics hp rd source target Hrefines conts Hconts.
   apply Hrefines.
   exact (proj1 (proj1 (observers_free_of_arrays slots conts) Hconts)).
 Qed.
@@ -95,7 +95,7 @@ Theorem worlds_observed_free_of_arrays_way_out :
 Proof.
   intros slots w w' [Hk Hobserved]. split; [ exact Hk | ].
   exact
-    (observed_refines_way_out (exit_cont w) _ _ _ _ _ _
+    (observed_refines_way_out (exit_cont w) _ _ _ _ _ _ rd_ rd_
        (Hobserved (Outer (exit_cont w))
           (conj I (Outer_free_of_arrays (exit_cont w))))).
 Qed.
@@ -103,7 +103,7 @@ Qed.
 Theorem expr_refines_free_of_arrays_under_observers :
   expr_refines_free_of_arrays_under_observers_statement.
 Proof.
-  intros slots statics hp source target Hsource Hcode Hstatics Hheap
+  intros slots statics hp rd source target Hsource Hcode Hstatics Hheap
     Hrefines conts Hconts.
   apply refines_gives_observed_refines, Hrefines.
   destruct (proj1 (observers_free_of_arrays slots conts) Hconts)
@@ -123,9 +123,9 @@ Qed.
 Theorem under_observers_free_of_arrays_worlds :
   under_observers_free_of_arrays_worlds_statement.
 Proof.
-  intros slots statics hp source target.
+  intros slots statics hp rd source target.
   exact
-    (refines_observed_by_worlds (observer_free_of_arrays slots) statics hp
+    (refines_observed_by_worlds (observer_free_of_arrays slots) statics hp rd
        source target (fun k => conj I (Outer_free_of_arrays k))).
 Qed.
 
@@ -165,8 +165,8 @@ Qed.
 Theorem refines_observed_free_of_arrays_equivariant :
   refines_observed_free_of_arrays_equivariant_statement.
 Proof.
-  intros r slots statics hp source target.
+  intros r slots statics hp rd source target.
   exact
     (refines_observed_by_equivariant (observer_free_of_arrays slots)
-       (observer_free_of_arrays_renamed slots) r statics hp source target).
+       (observer_free_of_arrays_renamed slots) r statics hp rd_ source target).
 Qed.

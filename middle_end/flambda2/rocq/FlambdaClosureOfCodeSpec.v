@@ -386,9 +386,9 @@ Definition know_own_closures_refines_observed_statement : Prop :=
   ∀ (imports : list (symbol * import_class)) (slots : list value_slot)
     (conts : cont_env) (e : expr),
     observers slots conts ->
-    refines (State e [] conts (imports_statics imports) empty_heap)
+    refines (State e [] conts (imports_statics imports) empty_heap no_reads)
       (State (know_own_closures e) [] conts (imports_statics imports)
-         empty_heap).
+         empty_heap no_reads).
 
 (* The names of the result. Where the code of the unit is closed
    (FlambdaBindersSpec.code_closed), so is that of the result, and the

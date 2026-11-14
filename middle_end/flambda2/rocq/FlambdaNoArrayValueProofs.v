@@ -504,7 +504,7 @@ Qed.
 Definition result_free_of_arrays (result : step_result) : Prop :=
   match result with
   | Step s => state_free_of_arrays s
-  | Exit _ vs hp =>
+  | Exit _ vs hp rd =>
     forallb no_array_value vs = true ∧ heap_no_array_value hp
   | Undefined => True
   end.
@@ -526,6 +526,7 @@ Section Calls.
 
 Variable statics : static_env.
 Variable hp : heap.
+Variable rd : read_record.
 Hypothesis Hcode : code_makes_no_array statics.
 Hypothesis Hstatics : statics_no_array_value statics.
 Hypothesis Hheap : heap_no_array_value hp.
@@ -540,7 +541,7 @@ Lemma call_code_free_of_arrays (closure : value) (called : code_id)
   lookup called (static_code statics) = Some c ->
   result_free_of_arrays
     (call_code closure c vs args_arity return_arity return_to exn_to statics
-       hp).
+       hp rd).
 Proof.
   intros Hclosure Hvs Hreturn Hexn Hlookup. unfold call_code.
   destruct (binds_statics (code_body c)); [ exact I | ].
@@ -577,7 +578,7 @@ Lemma run_call_free_of_arrays (return_partial : value -> step_result)
     no_array_value partial = true ->
     result_free_of_arrays (return_partial partial)) ->
   result_free_of_arrays
-    (run_call return_partial shape return_arity return_to exn_to statics hp).
+    (run_call return_partial shape return_arity return_to exn_to statics hp rd).
 Proof.
   intros Hcalls Hvalues Hreturn Hexn Hpartial.
   destruct shape
@@ -601,7 +602,7 @@ Qed.
 Lemma apply_cont_value_free_of_arrays (c : cont_value) (vs : list value) :
   cont_free_of_arrays c ->
   forallb no_array_value vs = true ->
-  result_free_of_arrays (apply_cont_value c vs statics hp).
+  result_free_of_arrays (apply_cont_value c vs statics hp rd).
 Proof.
   intros Hc. revert vs.
   induction Hc
@@ -660,7 +661,7 @@ Lemma call_function_free_of_arrays (callee : value) (kind : call_kind)
   cont_free_of_arrays exn_to ->
   result_free_of_arrays
     (call_function callee kind vs args_arity return_arity return_to exn_to
-       statics hp).
+       statics hp rd).
 Proof.
   intros Hcallee Hvs Hreturn Hexn. unfold call_function.
   apply (run_call_free_of_arrays _ kind); try assumption.
@@ -676,112 +677,7 @@ Qed.
 End Calls.
 
 (* ======================================================================== *)
-(* Steps and runs                                                           *)
-(* ======================================================================== *)
-
-Lemma step_result_free_of_arrays (s : state) :
-  state_free_of_arrays s -> result_free_of_arrays (step s).
-Proof.
-  intros (Hexpr & Hvars & Hconts & Hcode & Hstatics & Hheap).
-  rewrite (state_eta s).
-  set (vars := state_vars s) in *. set (conts := state_conts s) in *.
-  set (statics := state_statics s) in *. set (hp := state_heap s) in *.
-  destruct (state_expr s)
-    as [x kind d body | bindings body | k h body | handlers body | ap | ac
-       | scrutinee arms | ];
-    autorewrite with step; simpl in Hexpr.
-  - apply orb_false_iff in Hexpr as [Hd Hbody].
-    destruct (eval_named statics vars d) as [v | ] eqn:Heval; [ | exact I ].
-    destruct (kind_eqb (kind_of_value v) kind); [ | exact I ].
-    repeat split; simpl; try assumption.
-    intros y w [[= <- <-] | Hin]; [ | exact (Hvars y w Hin) ].
-    exact (eval_named_no_array_value statics Hstatics vars Hvars d v Hd
-             Heval).
-  - apply orb_false_iff in Hexpr as [Hbindings Hbody].
-    destruct (eval_static_bindings vars bindings statics) as [extended | ]
-      eqn:Heval;
-      [ | exact I ].
-    destruct
-      (eval_static_bindings_free_of_arrays vars bindings Hvars statics
-         extended Hbindings Hcode Hstatics Heval)
-      as [Hcode' Hstatics'].
-    repeat split; simpl; assumption.
-  - apply orb_false_iff in Hexpr as [Hh Hbody].
-    repeat split; simpl; try assumption.
-    intros k' c [[= <- <-] | Hin]; [ | exact (Hconts k' c Hin) ].
-    constructor; try assumption. intros k' h' [].
-  - apply orb_false_iff in Hexpr as [Hhandlers Hbody].
-    destruct (handlers_bind_statics handlers); [ exact I | ].
-    repeat split; simpl; try assumption.
-    apply conts_free_of_arrays_app; [ | exact Hconts ].
-    exact
-      (rec_closures_free_of_arrays handlers vars conts
-         (handlers_make_no_array handlers Hhandlers) Hvars Hconts).
-  - destruct (eval_simple vars (ap_callee ap)) as [callee | ] eqn:Hc;
-      [ | exact I ].
-    destruct (eval_simples vars (ap_args ap)) as [vs | ] eqn:Hvs;
-      [ | exact I ].
-    destruct (eval_simples vars (exn_extra_simples ap)) as [extra | ]
-      eqn:Hextras; [ | exact I ].
-    apply call_function_free_of_arrays; try assumption.
-    + exact (eval_simple_no_array_value vars Hvars _ callee Hc).
-    + exact (eval_simples_no_array_value vars Hvars _ vs Hvs).
-    + apply resolve_free_of_arrays, Hconts.
-    + apply with_extra_args_free_of_arrays;
-        [ apply resolve_free_of_arrays, Hconts | ].
-      exact (eval_simples_no_array_value vars Hvars _ extra Hextras).
-  - destruct (eval_simples vars (ac_args ac)) as [vs | ] eqn:Hvs;
-      [ | exact I ].
-    unfold apply_continuation.
-    apply apply_cont_value_free_of_arrays; try assumption.
-    + apply resolve_free_of_arrays, Hconts.
-    + exact (eval_simples_no_array_value vars Hvars _ vs Hvs).
-  - destruct (eval_simple vars scrutinee) as [v | ]; [ | exact I ].
-    destruct (naked_immediate_of_value v) as [i | ]; [ | exact I ].
-    destruct (find_arm i arms) as [ac | ] eqn:Hfind; [ | exact I ].
-    repeat split; simpl; assumption.
-  - exact I.
-Qed.
-
-Lemma result_free_of_arrays_statement_form (result : step_result) :
-  result_free_of_arrays result ->
-  match result with
-  | Step s' => state_free_of_arrays s'
-  | Exit _ vs hp =>
-    (∀ v : value, v ∈ vs -> no_array_value v = true)
-    ∧ heap_no_array_value hp
-  | Undefined => True
-  end.
-Proof.
-  destruct result as [s' | k vs hp | ]; simpl; try exact (fun H => H).
-  intros [Hvs Hhp]. split; [ apply forallb_forall; exact Hvs | exact Hhp ].
-Qed.
-
-Theorem step_free_of_arrays : step_free_of_arrays_statement.
-Proof.
-  intros s Hs.
-  exact
-    (result_free_of_arrays_statement_form _ (step_result_free_of_arrays s Hs)).
-Qed.
-
-Lemma run_result_free_of_arrays (n : nat) :
-  ∀ s : state, state_free_of_arrays s -> result_free_of_arrays (run n s).
-Proof.
-  induction n as [ | n IH]; intros s Hs; simpl; [ exact Hs | ].
-  pose proof (step_result_free_of_arrays s Hs) as Hresult.
-  destruct (step s) as [next | k vs hp | ]; [ exact (IH next Hresult) | .. ];
-    exact Hresult.
-Qed.
-
-Theorem run_free_of_arrays : run_free_of_arrays_statement.
-Proof.
-  intros n s Hs.
-  exact
-    (result_free_of_arrays_statement_form _ (run_result_free_of_arrays n s Hs)).
-Qed.
-
-(* ======================================================================== *)
-(* The machine with a heap                                                  *)
+(* The primitives on a heap                                                 *)
 (* ======================================================================== *)
 
 Lemma naked_bool_no_array_value (b : bool) :
@@ -917,6 +813,151 @@ Proof.
       * exact (proj1 (forallb_forall _ _) Hcell y Hold).
 Qed.
 
+(* The run of a named expression that makes no array: its value holds
+   no array value, and nor does the heap that it leaves. A primitive is
+   run by [exec_prim]; anything else has the value that [eval_named]
+   gives it and leaves the heap. *)
+Lemma exec_named_no_array_value (statics : static_env) (hp hp' : heap)
+    (rd rd' : read_record) (vars : env) (d : named) (v : value) :
+  statics_no_array_value statics ->
+  env_no_array_value vars ->
+  heap_no_array_value hp ->
+  named_makes_array d = false ->
+  exec_named statics hp rd vars d = Some (v, hp', rd') ->
+  no_array_value v = true ∧ heap_no_array_value hp'.
+Proof.
+  intros Hstatics Hvars Hheap Hd Hexec.
+  destruct d as [s | p args | code slots | fslot decls slots | slot closure
+    | pfrom slot closure | move_from move_to closure].
+  2: { apply exec_named_prim_some in Hexec as (vs & Hvs & Hprim & _).
+       exact
+         (exec_prim_no_array_value statics hp hp' p vs v Hd Hstatics Hheap
+            (proj1 (forallb_forall _ _)
+               (eval_simples_no_array_value vars Hvars args vs Hvs))
+            Hprim). }
+  all: rewrite exec_named_not_prim in Hexec by (intros ? ?; discriminate);
+    destruct (eval_named statics vars _) as [w | ] eqn:Heval;
+    [ | discriminate Hexec ];
+    injection Hexec as <- <- <-;
+    split;
+    [ exact
+        (eval_named_no_array_value statics Hstatics vars Hvars _ w Hd Heval)
+    | exact Hheap ].
+Qed.
+
+(* ======================================================================== *)
+(* Steps and runs                                                           *)
+(* ======================================================================== *)
+
+Lemma step_result_free_of_arrays (s : state) :
+  state_free_of_arrays s -> result_free_of_arrays (step s).
+Proof.
+  intros (Hexpr & Hvars & Hconts & Hcode & Hstatics & Hheap).
+  rewrite (state_eta s).
+  set (vars := state_vars s) in *. set (conts := state_conts s) in *.
+  set (statics := state_statics s) in *. set (hp := state_heap s) in *.
+  set (rd := state_reads s) in *.
+  destruct (state_expr s)
+    as [x kind d body | bindings body | k h body | handlers body | ap | ac
+       | scrutinee arms | ];
+    autorewrite with step; simpl in Hexpr.
+  - apply orb_false_iff in Hexpr as [Hd Hbody].
+    destruct (exec_named _ _ _ _ d) as [[[v hp'] rd'] | ] eqn:Heval;
+      [ | exact I ].
+    destruct (kind_eqb (kind_of_value v) kind); [ | exact I ].
+    destruct
+      (exec_named_no_array_value statics hp hp' rd rd' vars d v Hstatics
+         Hvars Hheap Hd Heval)
+      as [Hv Hheap'].
+    repeat split; simpl; try assumption.
+    intros y w [[= <- <-] | Hin]; [ exact Hv | exact (Hvars y w Hin) ].
+  - apply orb_false_iff in Hexpr as [Hbindings Hbody].
+    destruct (eval_static_bindings vars bindings statics) as [extended | ]
+      eqn:Heval;
+      [ | exact I ].
+    destruct
+      (eval_static_bindings_free_of_arrays vars bindings Hvars statics
+         extended Hbindings Hcode Hstatics Heval)
+      as [Hcode' Hstatics'].
+    repeat split; simpl; assumption.
+  - apply orb_false_iff in Hexpr as [Hh Hbody].
+    repeat split; simpl; try assumption.
+    intros k' c [[= <- <-] | Hin]; [ | exact (Hconts k' c Hin) ].
+    constructor; try assumption. intros k' h' [].
+  - apply orb_false_iff in Hexpr as [Hhandlers Hbody].
+    destruct (handlers_bind_statics handlers); [ exact I | ].
+    repeat split; simpl; try assumption.
+    apply conts_free_of_arrays_app; [ | exact Hconts ].
+    exact
+      (rec_closures_free_of_arrays handlers vars conts
+         (handlers_make_no_array handlers Hhandlers) Hvars Hconts).
+  - destruct (eval_simple vars (ap_callee ap)) as [callee | ] eqn:Hc;
+      [ | exact I ].
+    destruct (eval_simples vars (ap_args ap)) as [vs | ] eqn:Hvs;
+      [ | exact I ].
+    destruct (eval_simples vars (exn_extra_simples ap)) as [extra | ]
+      eqn:Hextras; [ | exact I ].
+    apply call_function_free_of_arrays; try assumption.
+    + exact (eval_simple_no_array_value vars Hvars _ callee Hc).
+    + exact (eval_simples_no_array_value vars Hvars _ vs Hvs).
+    + apply resolve_free_of_arrays, Hconts.
+    + apply with_extra_args_free_of_arrays;
+        [ apply resolve_free_of_arrays, Hconts | ].
+      exact (eval_simples_no_array_value vars Hvars _ extra Hextras).
+  - destruct (eval_simples vars (ac_args ac)) as [vs | ] eqn:Hvs;
+      [ | exact I ].
+    unfold apply_continuation.
+    apply apply_cont_value_free_of_arrays; try assumption.
+    + apply resolve_free_of_arrays, Hconts.
+    + exact (eval_simples_no_array_value vars Hvars _ vs Hvs).
+  - destruct (eval_simple vars scrutinee) as [v | ]; [ | exact I ].
+    destruct (naked_immediate_of_value v) as [i | ]; [ | exact I ].
+    destruct (find_arm i arms) as [ac | ] eqn:Hfind; [ | exact I ].
+    repeat split; simpl; assumption.
+  - exact I.
+Qed.
+
+Lemma result_free_of_arrays_statement_form (result : step_result) :
+  result_free_of_arrays result ->
+  match result with
+  | Step s' => state_free_of_arrays s'
+  | Exit _ vs hp rd =>
+    (∀ v : value, v ∈ vs -> no_array_value v = true)
+    ∧ heap_no_array_value hp
+  | Undefined => True
+  end.
+Proof.
+  destruct result as [s' | k vs hp rd | ]; simpl; try exact (fun H => H).
+  intros [Hvs Hhp]. split; [ apply forallb_forall; exact Hvs | exact Hhp ].
+Qed.
+
+Theorem step_free_of_arrays : step_free_of_arrays_statement.
+Proof.
+  intros s Hs.
+  exact
+    (result_free_of_arrays_statement_form _ (step_result_free_of_arrays s Hs)).
+Qed.
+
+Lemma run_result_free_of_arrays (n : nat) :
+  ∀ s : state, state_free_of_arrays s -> result_free_of_arrays (run n s).
+Proof.
+  induction n as [ | n IH]; intros s Hs; simpl; [ exact Hs | ].
+  pose proof (step_result_free_of_arrays s Hs) as Hresult.
+  destruct (step s) as [next | k vs hp rd | ]; [ exact (IH next Hresult) | .. ];
+    exact Hresult.
+Qed.
+
+Theorem run_free_of_arrays : run_free_of_arrays_statement.
+Proof.
+  intros n s Hs.
+  exact
+    (result_free_of_arrays_statement_form _ (run_result_free_of_arrays n s Hs)).
+Qed.
+
+(* ======================================================================== *)
+(* The machine with a heap                                                  *)
+(* ======================================================================== *)
+
 Definition heap_result_free_of_arrays (result : heap_step_result) : Prop :=
   match result with
   | Heap_step s' => heap_state_free_of_arrays s'
@@ -954,7 +995,7 @@ Proof.
     pose proof (step_result_free_of_arrays (forget_heap s) Hs) as Hresult.
     destruct Hs as (_ & _ & _ & _ & Hstatics & Hheap).
     destruct (heap_step s) as [s' | k o | ],
-      (step (forget_heap s)) as [t | k' vs hp | ];
+      (step (forget_heap s)) as [t | k' vs hp rd | ];
       try contradiction.
     + destruct Hagrees as [<- _]. exact Hresult.
     + destruct Hagrees as [_ ->]. destruct Hresult as [Hvs _].
@@ -1629,35 +1670,75 @@ Proof. exact value_lifted_without_static_arrays. Qed.
    none. *)
 Lemma unit_state_free_of_arrays (e : expr) :
   makes_array e = false ->
-  state_free_of_arrays (State e [] [] empty_static_env empty_heap).
+  state_free_of_arrays (State e [] [] empty_static_env empty_heap no_reads).
 Proof.
   intros Hmakes. unfold state_free_of_arrays. simpl.
   split; [ exact Hmakes | ].
   repeat split; intros ? ? [].
 Qed.
 
+(* Two heaps alike, the first of which holds no array value, are alike
+   up to a relation that relates what the first relates of a value
+   that holds none. *)
+Lemma heap_alike_no_array (R R' : value -> value -> Prop) (h h' : heap) :
+  (∀ v v' : value, R v v' -> no_array_value v = true -> R' v v') ->
+  heap_no_array_value h ->
+  heap_alike R h h' ->
+  heap_alike R' h h'.
+Proof.
+  intros Himpl Hnone Halike.
+  assert (Hvalues :
+    ∀ vs vs' : list value,
+      forallb no_array_value vs = true ->
+      Forall2 R vs vs' ->
+      Forall2 R' vs vs').
+  { intros vs vs' Hvs Hrel. rewrite forallb_forall in Hvs.
+    induction Hrel as [ | v v' vs vs' Hv _ IH]; constructor.
+    - exact (Himpl v v' Hv (Hvs v (or_introl eq_refl))).
+    - apply IH. intros w Hw. exact (Hvs w (or_intror Hw)). }
+  induction Halike as [ | [l c] [l' c'] h h' [Hkey Hcell] _ IH]; constructor.
+  - split; [ exact Hkey | ]. simpl in Hcell |- *.
+    pose proof (Hnone l c (or_introl eq_refl)) as Hc.
+    unfold cell_no_array_value in Hc.
+    destruct c as [mut tag fields | kind elements],
+      c' as [mut' tag' fields' | kind' elements'];
+      try contradiction; simpl in Hc.
+    + destruct Hcell as (Hmut & Htag & Hfields).
+      split; [ exact Hmut | split; [ exact Htag | ] ].
+      exact (Hvalues fields fields' Hc Hfields).
+    + destruct Hcell as (Hkind & Helements).
+      split; [ exact Hkind | exact (Hvalues elements elements' Hc Helements) ].
+  - apply IH. intros l0 c0 Hin. exact (Hnone l0 c0 (or_intror Hin)).
+Qed.
+
 Theorem lift_simulates_free_of_arrays :
   lift_simulates_free_of_arrays_statement.
 Proof.
   intros u lets known e. cbv zeta. intros Hwf Honly Hmakes k vs hp Hexit.
-  assert (Hvs : ∀ v : value, v ∈ vs -> no_array_value v = true).
-  { destruct Hexit as [fuel Hrun].
+  assert (Hfree :
+    (∀ v : value, v ∈ vs -> no_array_value v = true)
+    ∧ heap_no_array_value hp).
+  { destruct Hexit as [fuel [rd Hrun]].
     pose proof
       (run_free_of_arrays fuel _ (unit_state_free_of_arrays e Hmakes))
       as Hfree.
-    rewrite Hrun in Hfree. exact (proj1 Hfree). }
-  split; [ exact Hvs | ].
+    rewrite Hrun in Hfree. exact Hfree. }
+  destruct Hfree as [Hvs Hhp].
+  split; [ exact Hvs | ]. split; [ exact Hhp | ].
   pose proof (lift_simulates u lets known e) as Hsimulates.
   cbv zeta in Hsimulates.
   destruct (proj1 (Hsimulates Hwf Honly) k vs hp Hexit)
-    as (n & last & vs' & Hrun & Hstep & Hlifted).
-  exists n, last, vs'.
+    as (n & last & vs' & hp' & rd & Hrun & Hstep & Hlifted & Hheap).
+  exists n, last, vs', hp', rd.
   split; [ exact Hrun | split; [ exact Hstep | ] ].
-  clear Hrun Hstep Hexit. induction Hlifted as [ | v v' vs vs' Hv _ IH];
-    constructor.
-  - exact (value_lifted_reads_no_static_array _ _ _ Hv
-             (Hvs v (or_introl eq_refl))).
-  - apply IH. intros w Hw. exact (Hvs w (or_intror Hw)).
+  split.
+  - clear Hrun Hstep Hexit Hheap.
+    induction Hlifted as [ | v v' vs vs' Hv _ IH]; constructor.
+    + exact (value_lifted_reads_no_static_array _ _ _ Hv
+               (Hvs v (or_introl eq_refl))).
+    + apply IH. intros w Hw. exact (Hvs w (or_intror Hw)).
+  - exact (heap_alike_no_array _ _ hp hp'
+             (value_lifted_reads_no_static_array _) Hhp Hheap).
 Qed.
 
 (* ======================================================================== *)
@@ -1871,21 +1952,27 @@ Qed.
 Theorem lift_simulates_no_array : lift_simulates_no_array_statement.
 Proof.
   intros u lets known e. cbv zeta. intros Hwf Honly Hmakes k vs hp Hexit.
-  assert (Hvs : ∀ v : value, v ∈ vs -> no_array_value v = true).
-  { destruct Hexit as [fuel Hrun].
+  assert (Hfree :
+    (∀ v : value, v ∈ vs -> no_array_value v = true)
+    ∧ heap_no_array_value hp).
+  { destruct Hexit as [fuel [rd Hrun]].
     pose proof
       (run_free_of_arrays fuel _ (unit_state_free_of_arrays e Hmakes))
       as Hfree.
-    rewrite Hrun in Hfree. exact (proj1 Hfree). }
+    rewrite Hrun in Hfree. exact Hfree. }
+  destruct Hfree as [Hvs Hhp].
   pose proof (lift_simulates u lets known e) as Hsimulates.
   cbv zeta in Hsimulates.
   destruct (proj1 (Hsimulates Hwf Honly) k vs hp Hexit)
-    as (n & last & vs' & Hrun & Hstep & Hlifted).
-  exists n, last, vs'.
+    as (n & last & vs' & hp' & rd & Hrun & Hstep & Hlifted & Hheap).
+  exists n, last, vs', hp', rd.
   split; [ exact Hrun | split; [ exact Hstep | ] ].
-  clear Hrun Hstep Hexit. induction Hlifted as [ | v v' vs vs' Hv _ IH];
-    constructor.
-  - exact (value_lifted_by_no_array_rule _ _ _ Hv
-             (Hvs v (or_introl eq_refl))).
-  - apply IH. intros w Hw. exact (Hvs w (or_intror Hw)).
+  split.
+  - clear Hrun Hstep Hexit Hheap.
+    induction Hlifted as [ | v v' vs vs' Hv _ IH]; constructor.
+    + exact (value_lifted_by_no_array_rule _ _ _ Hv
+               (Hvs v (or_introl eq_refl))).
+    + apply IH. intros w Hw. exact (Hvs w (or_intror Hw)).
+  - exact (heap_alike_no_array _ _ hp hp'
+             (value_lifted_by_no_array_rule _) Hhp Hheap).
 Qed.

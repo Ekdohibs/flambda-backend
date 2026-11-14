@@ -42,8 +42,16 @@
    A state is in range ([state_in_range]) when everything it holds is:
    the expression left to run; the values of its variables; the handlers
    and the environments that its continuations keep; what its symbols
-   are bound to, and its code. A unit that passes the check starts in
-   such a state, a step keeps a state so
+   are bound to, and its code; and the cells of its heap
+   ([heap_in_range]). The cells are there because a step reads them: a
+   load from a location brings to a variable a field or an element of
+   its cell, and [Get_tag] the tag of a block that has an identity.
+   Where a primitive has a value on a heap, the value and the heap
+   after are in range, given that the primitive's own numbers are in
+   range, that its arguments are, that what each symbol among them is
+   bound to is, and that the heap before is
+   ([exec_prim_in_range_statement]). A unit that passes the check
+   starts in such a state, with no cell; a step keeps a state so
    ([step_in_range_statement]), and what the run leaves with is in
    range too ([run_in_range_statement],
    [run_exit_in_range_statement]).
@@ -138,11 +146,53 @@ Definition statics_in_range (statics : static_env) : Prop :=
       (s, allocated) ∈ static_values statics ->
       allocated_in_range allocated = true).
 
+(* A cell is in range: the tag of a block with an identity is one
+   that the compiler's blocks can have, and its fields are in range;
+   the elements of an array are in range. *)
+Definition cell_in_range (c : cell) : bool :=
+  match c with
+  | Cell_block _ tag fields =>
+    tag_in_range tag && forallb value_in_range fields
+  | Cell_array _ elements => forallb value_in_range elements
+  end.
+
+(* Every cell of the heap is in range, those that a later write hides
+   included. *)
+Definition heap_in_range (h : heap) : Prop :=
+  ∀ (l : location) (c : cell), (l, c) ∈ h -> cell_in_range c = true.
+
 Definition state_in_range (s : state) : Prop :=
   numbers_in_range (state_expr s) = true
   ∧ env_in_range (state_vars s)
   ∧ conts_in_range (state_conts s)
-  ∧ statics_in_range (state_statics s).
+  ∧ statics_in_range (state_statics s)
+  ∧ heap_in_range (state_heap s).
+
+(* ======================================================================== *)
+(* A primitive on a heap in range                                           *)
+(* ======================================================================== *)
+
+(* A primitive on a heap brings no number out of range:
+   FlambdaPrimitiveSpec.eval_prim_in_range_statement on a heap whose
+   cells are in range. Where the primitive has a value, that value and
+   the heap after are in range, given that the primitive's own numbers
+   are in range, that its arguments are, that what each symbol among
+   the arguments is bound to is, and that the heap before is. So what
+   it reads of a cell is in range, the tag that [Get_tag] reads
+   included, and the cells that it makes or changes are in range.
+   Nothing is said of a primitive that has no value. *)
+Definition exec_prim_in_range_statement : Prop :=
+  ∀ (statics : static_env) (h h' : heap) (p : prim) (vs : list value)
+    (v : value),
+    prim_in_range p = true ->
+    (∀ (s : symbol) (allocated : statically_allocated_value),
+      Value_symbol s ∈ vs ->
+      lookup s (static_values statics) = Some allocated ->
+      allocated_in_range allocated = true) ->
+    (∀ arg : value, arg ∈ vs -> value_in_range arg = true) ->
+    heap_in_range h ->
+    exec_prim statics h p vs = Some (v, h') ->
+    value_in_range v = true ∧ heap_in_range h'.
 
 (* ======================================================================== *)
 (* A run keeps a state in range                                             *)
@@ -156,20 +206,22 @@ Definition step_in_range_statement : Prop :=
 Definition run_in_range_statement : Prop :=
   ∀ (e : expr) (n : nat) (s : state),
     numbers_in_range e = true ->
-    run n (State e [] [] empty_static_env empty_heap) = Step s ->
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
     state_in_range s.
 
 Definition run_exit_in_range_statement : Prop :=
-  ∀ (e : expr) (n : nat) (k : continuation) (vs : list value) (hp : heap),
+  ∀ (e : expr) (n : nat) (k : continuation) (vs : list value) (hp : heap)
+    (rd : read_record),
     numbers_in_range e = true ->
-    run n (State e [] [] empty_static_env empty_heap) = Exit k vs hp ->
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Exit k vs hp rd
+      ->
     ∀ v : value, v ∈ vs -> value_in_range v = true.
 
 (* So is every state of the run of a well-formed unit. *)
 Definition well_formed_in_range_statement : Prop :=
   ∀ (u : unit_interface) (e : expr) (n : nat) (s : state),
     well_formed_unit u e = true ->
-    run n (State e [] [] empty_static_env empty_heap) = Step s ->
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
     state_in_range s.
 
 (* ======================================================================== *)
@@ -229,7 +281,7 @@ Definition in_range_unit : expr :=
 
 Definition in_range_runs_statement : Prop :=
   numbers_in_range in_range_unit = true
-  ∧ behaves (State in_range_unit [] [] empty_static_env empty_heap)
+  ∧ behaves (State in_range_unit [] [] empty_static_env empty_heap no_reads)
       (Exits done
          [Value_block 250 [Value_const (Tagged_immediate 1)];
           Value_const (Naked_int8 (-128))] empty_heap).
@@ -242,7 +294,8 @@ Definition tag_out_of_range_unit : expr :=
 
 Definition tag_out_of_range_statement : Prop :=
   numbers_in_range tag_out_of_range_unit = false
-  ∧ behaves (State tag_out_of_range_unit [] [] empty_static_env empty_heap)
+  ∧ behaves
+    (State tag_out_of_range_unit [] [] empty_static_env empty_heap no_reads)
       (Exits done [Value_block 300 []] empty_heap).
 
 (* An int8 that is 200. The addition has no value on it. *)
@@ -252,7 +305,9 @@ Definition constant_out_of_range_unit : expr :=
 
 Definition constant_out_of_range_statement : Prop :=
   numbers_in_range constant_out_of_range_unit = false
-  ∧ behaves (State constant_out_of_range_unit [] [] empty_static_env empty_heap)
+  ∧ behaves
+    (State constant_out_of_range_unit [] [] empty_static_env empty_heap
+       no_reads)
       Goes_wrong.
 
 End Examples.

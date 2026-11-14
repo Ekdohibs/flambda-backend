@@ -39,16 +39,25 @@
 
    This file is to be reviewed: the definitions and the statements.
 
-   FlambdaValidateSpec.validate_unit answers [Same_once_lifted] of a
-   unit only where each lifting passes its test of the exits
-   (FlambdaLiftSpec.exits_plain_knowing): a lifting gives a symbol where the
-   unit before gave the value that it lifts
-   (FlambdaLiftSpec.lift_named), and FlambdaSemanticsSpec.refines asks
-   of two exits the same values. A unit that exits with something that
-   Simplify lifted is so refused.
+   Each of the four functions that lift, which
+   FlambdaValidateSpec.validate_unit applies in turn
+   (FlambdaValidateSpec.with_lifting), gives a term lifted only where
+   the term that it is given passes two tests: that of the exits
+   (FlambdaLiftSpec.exits_plain_knowing) and that it has no primitive
+   of the heap (FlambdaHeapFreeSpec.expr_free_of_heap). Where a test
+   fails that lifting is not made and the term is kept as it was; the
+   verdict [Same_once_lifted] may still be reached without it. A
+   lifting gives a symbol where the unit before gave the value that
+   it lifts (FlambdaLiftSpec.lift_named), and
+   FlambdaSemanticsSpec.refines asks of two exits the same values and
+   the same heap. So the first test refuses the lifting of a term
+   whose exits are not symbols and constants only, which could exit
+   with something lifted, and the second the lifting of a term that
+   has a primitive of the heap, which could store something lifted in
+   a cell.
 
    The check here follows the two comparisons of lifted terms of
-   [validate_unit], with the liftings made without that test
+   [validate_unit], with the liftings made without those two tests
    (FlambdaLiftObservedSpec.with_lifting_observed), and concludes
    another relation: not [refines], but that an exit of the unit
    before is answered by an exit of the unit after that nothing which
@@ -93,7 +102,7 @@
    the tool that asks it only of a unit not validated.
 
    The route. The unit before is prepared as [validate_unit] prepares
-   it; each lifting given is applied without the test of the exits
+   it; each lifting given is applied without the two tests of the unit
    and followed by FlambdaValidateSpec.normalise_lifted_own (the
    rounds of [normalise_lifted], with the calls of the closures that
    a [Let] makes made direct in them where the lifting says so, and
@@ -149,7 +158,8 @@ Import ListNotations.
 (* ======================================================================== *)
 
 (* FlambdaValidateSpec.lifted_in_turn with each lifting made without
-   the test of the exits. What ends it is what ends that one. *)
+   the two tests of the unit (its exits; no primitive of the heap).
+   What ends it is what ends that one. *)
 Fixpoint lifted_in_turn_observed (rounds : nat) (avoid : list continuation)
     (Ls : list lifting) (kept : list code_id) (e : expr) : expr :=
   match Ls with
@@ -257,7 +267,7 @@ Definition validate_unit_related_under_observers_statement : Prop :=
     (Ls : list lifting) (kept : list code_id) (before after : expr),
     validate_unit_related imports rounds unused slots G Ls kept before after
     = Related_once_lifted ->
-    refines_under_observers slots (imports_statics imports) empty_heap
+    refines_under_observers slots (imports_statics imports) empty_heap no_reads
       before after.
 
 (* Of the two units run on their own from their imports: an exit of
@@ -272,5 +282,5 @@ Definition validate_unit_related_sound_statement : Prop :=
     validate_unit_related imports rounds unused slots G Ls kept before after
     = Related_once_lifted ->
     refines_world (worlds_observed slots)
-      (State before [] [] (imports_statics imports) empty_heap)
-      (State after [] [] (imports_statics imports) empty_heap).
+      (State before [] [] (imports_statics imports) empty_heap no_reads)
+      (State after [] [] (imports_statics imports) empty_heap no_reads).

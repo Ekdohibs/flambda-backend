@@ -636,13 +636,52 @@ Proof.
     reflexivity.
 Qed.
 
+(* The same of the run of the named expression: a primitive is run on the
+   values of its arguments, and what is not a primitive has the value that
+   [eval_named] gives it, with the heap and the record as they came. *)
+Lemma canonical_named_sound_exec (known : Known.t) (vars : env)
+    (statics : static_env) (hp : heap) (rd : read_record) (d : named) :
+  known_respected known statics vars ->
+  exec_named statics hp rd vars (canonical_named known d)
+  = exec_named statics hp rd vars d.
+Proof.
+  intros Hrespected.
+  assert (Hnot : ∀ d' : named,
+    (∀ (p : prim) (args : list simple), d' <> Prim p args) ->
+    (∀ (p : prim) (args : list simple),
+      canonical_named known d' <> Prim p args) ->
+    exec_named statics hp rd vars (canonical_named known d')
+    = exec_named statics hp rd vars d').
+  { intros d' Hd' Hcanonical.
+    rewrite (exec_named_not_prim statics hp rd vars _ Hcanonical),
+      (exec_named_not_prim statics hp rd vars d' Hd'),
+      (canonical_named_sound known vars statics d' Hrespected).
+    reflexivity. }
+  destruct d as [s | p args | code slots | fslot decls slots | slot closure
+    | pfrom slot closure | move_from move_to closure];
+    [ | simpl; apply exec_named_args;
+        exact (canonical_simples_sound known vars args Hrespected)
+      | | | | | ];
+    (apply Hnot; [ intros ? ?; discriminate | ]);
+    simpl;
+    unfold canonical_project, canonical_project_from,
+      canonical_project_function_slot;
+    intros p args;
+    repeat match goal with
+           | |- context [match ?scrutinee with _ => _ end] =>
+             destruct scrutinee
+           end;
+    discriminate.
+Qed.
+
 (* A call and the same call with its aliases followed and, if the callee
    is a known closure, made direct: they take the same step. *)
 Lemma canonical_apply_equivalent (known : Known.t) (ap : apply_expr)
-    (vars : env) (conts : cont_env) (statics : static_env) (hp : heap) :
+    (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+      (rd : read_record) :
   known_respected known statics vars ->
-  equivalent (State (Apply ap) vars conts statics hp)
-    (State (Apply (canonical_apply known ap)) vars conts statics hp).
+  equivalent (State (Apply ap) vars conts statics hp rd)
+    (State (Apply (canonical_apply known ap)) vars conts statics hp rd).
 Proof.
   intros Hrespected. apply step_eq_equivalent. rewrite !step_apply.
   assert (Hextras :
@@ -725,10 +764,12 @@ Proof.
 Qed.
 
 Lemma canonical_apply_cont_equivalent (known : Known.t) (ac : apply_cont)
-    (vars : env) (conts : cont_env) (statics : static_env) (hp : heap) :
+    (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+      (rd : read_record) :
   known_respected known statics vars ->
-  equivalent (State (Apply_cont ac) vars conts statics hp)
-    (State (Apply_cont (canonical_apply_cont known ac)) vars conts statics hp).
+  equivalent (State (Apply_cont ac) vars conts statics hp rd)
+    (State (Apply_cont (canonical_apply_cont known ac)) vars conts statics hp
+       rd).
 Proof.
   intros Hrespected. apply step_eq_equivalent. rewrite !step_apply_cont.
   simpl.
@@ -742,19 +783,43 @@ Qed.
 
 (* Equivalence in the environments that agree with what is known. *)
 Definition equivalent_where (known : Known.t) (e e' : expr) : Prop :=
-  ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap),
+  ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+    (rd : read_record),
     known_respected known statics vars ->
-    equivalent (State e vars conts statics hp) (State e' vars conts statics hp).
+    equivalent (State e vars conts statics hp rd)
+      (State e' vars conts statics hp rd).
+
+(* [under_let_respected] of the run of the named expression: nothing is
+   recorded of a primitive, and what is not a primitive has the value that
+   [eval_named] gives it. *)
+Lemma under_let_respected_exec (known : Known.t) (statics : static_env)
+    (vars : env) (x : variable) (d : named) (hp hp' : heap)
+    (rd rd' : read_record) (v : value) :
+  known_respected known statics vars ->
+  exec_named statics hp rd vars d = Some (v, hp', rd') ->
+  known_respected (Known.under_let known x d) statics ((x, v) :: vars).
+Proof.
+  intros Hrespected Hd.
+  destruct d as [s | p args | code slots | fslot decls slots | slot closure
+    | pfrom slot closure | move_from move_to closure];
+    try (rewrite exec_named_not_prim in Hd by (intros ? ?; discriminate);
+         destruct (eval_named statics vars _) as [w | ] eqn:Hw;
+           [ | discriminate ];
+         injection Hd as <- <- <-;
+         exact (under_let_respected known statics vars x _ w Hrespected Hw)).
+  exact (bind_respected known statics vars x v Hrespected).
+Qed.
 
 Lemma let_equivalent_where (known : Known.t) (x : variable)
     (kind : flambda_kind) (d : named) (body body' : expr) :
   equivalent_where (Known.under_let known x d) body body' ->
   equivalent_where known (Let x kind d body) (Let x kind d body').
 Proof.
-  intros Hbody vars conts statics hp Hrespected.
-  apply let_equivalent_step; [ reflexivity | intros v Hd _ ].
+  intros Hbody vars conts statics hp rd Hrespected.
+  apply let_equivalent_step_exec; [ reflexivity | intros v hp' rd' Hd _ ].
   apply Hbody.
-  exact (under_let_respected known statics vars x d v Hrespected Hd).
+  exact (under_let_respected_exec known statics vars x d hp hp' rd rd' v
+    Hrespected Hd).
 Qed.
 
 Lemma let_static_equivalent_where (known : Known.t)
@@ -763,7 +828,7 @@ Lemma let_static_equivalent_where (known : Known.t)
   equivalent_where known (Let_static bindings body)
     (Let_static bindings body').
 Proof.
-  intros Hbody vars conts statics hp Hrespected.
+  intros Hbody vars conts statics hp rd Hrespected.
   apply let_static_equivalent_step.
   destruct (eval_static_bindings vars bindings statics) as [extended | ]
     eqn:Heval; [ | exact I ].
@@ -782,14 +847,14 @@ Lemma let_cont_handler_equivalent_where (known : Known.t) (k : continuation)
     (Let_cont_non_recursive k (Handler params metadata handler) body)
     (Let_cont_non_recursive k (Handler params metadata handler') body).
 Proof.
-  intros Hhandler vars conts statics hp Hrespected.
+  intros Hhandler vars conts statics hp rd Hrespected.
   apply refines_antisymmetric;
     apply
       (let_cont_handler_refines_where
          (fun statics' => known_respected known statics' vars)
          (fun statics' statics'' => known_respected_extend known _ _ vars));
     try exact Hrespected;
-    intros vs handler_vars conts' statics' hp' Hok _ Hbind;
+    intros vs handler_vars conts' statics' hp' rd' Hok _ Hbind;
     apply equivalent_refines;
     [ | apply equivalent_sym ];
     apply Hhandler,
@@ -801,9 +866,9 @@ Lemma equivalent_where_trans (known : Known.t) (e e' e'' : expr) :
   equivalent_where known e e' -> equivalent_where known e' e'' ->
   equivalent_where known e e''.
 Proof.
-  intros H H' vars conts statics hp Hrespected.
-  exact (equivalent_trans _ _ _ (H vars conts statics hp Hrespected)
-    (H' vars conts statics hp Hrespected)).
+  intros H H' vars conts statics hp rd Hrespected.
+  exact (equivalent_trans _ _ _ (H vars conts statics hp rd_ Hrespected)
+    (H' vars conts statics hp rd_ Hrespected)).
 Qed.
 
 (* ======================================================================== *)
@@ -826,15 +891,16 @@ Proof.
     + (* Let *)
       apply (equivalent_where_trans known _
         (Let x kind (canonical_named known d) body)).
-      * intros vars conts statics hp Hrespected.
-        apply let_equivalent_step;
-          [ apply (canonical_named_sound known vars statics d Hrespected)
-          | intros v _ _; apply equivalent_refl ].
+      * intros vars conts statics hp rd Hrespected.
+        apply let_equivalent_step_exec;
+          [ apply (canonical_named_sound_exec known vars statics hp rd d
+              Hrespected)
+          | intros v hp' rd' _ _; apply equivalent_refl ].
       * apply let_equivalent_where, follow_aliases_equivalent_where.
     + (* Let_static *)
       apply (equivalent_where_trans known _
         (Let_static (map (canonical_static_binding known) bindings) body)).
-      * intros vars conts statics hp Hrespected. apply step_eq_equivalent.
+      * intros vars conts statics hp rd Hrespected. apply step_eq_equivalent.
         rewrite !step_let_static,
           (canonical_static_bindings_sound known vars bindings Hrespected).
         reflexivity.
@@ -843,21 +909,21 @@ Proof.
       apply (equivalent_where_trans known _
         (Let_cont_non_recursive k (follow_aliases_in_handler known h) body));
         [ apply follow_aliases_in_handler_equivalent_where | ].
-      intros vars conts statics hp Hrespected.
+      intros vars conts statics hp rd Hrespected.
       apply let_cont_non_recursive_equivalent_step.
       apply (follow_aliases_equivalent_where body known), Hrespected.
     + (* Let_cont_recursive *)
-      intros vars conts statics hp Hrespected.
+      intros vars conts statics hp rd Hrespected.
       apply let_cont_recursive_equivalent_step; [ reflexivity | intros _ ].
       apply (follow_aliases_equivalent_where body known), Hrespected.
     + (* Apply *)
-      intros vars conts statics hp Hrespected.
+      intros vars conts statics hp rd Hrespected.
       apply canonical_apply_equivalent, Hrespected.
     + (* Apply_cont *)
-      intros vars conts statics hp Hrespected.
+      intros vars conts statics hp rd Hrespected.
       apply canonical_apply_cont_equivalent, Hrespected.
     + (* Switch *)
-      intros vars conts statics hp Hrespected.
+      intros vars conts statics hp rd Hrespected.
       destruct (eval_simple vars scrutinee) as [v | ] eqn:Hscrutinee;
         [ destruct (naked_immediate_of_value v) as [i | ] eqn:Himmediate;
           [ destruct (find_arm i arms) as [ac | ] eqn:Hfind | ]
@@ -886,21 +952,21 @@ Proof.
           Hscrutinee.
         reflexivity.
     + (* Invalid *)
-      intros vars conts statics hp Hrespected. apply equivalent_refl.
+      intros vars conts statics hp rd Hrespected. apply equivalent_refl.
   - destruct h as [params metadata handler]. intros known k body. simpl.
     apply let_cont_handler_equivalent_where, follow_aliases_equivalent_where.
 Qed.
 
 Theorem follow_aliases_respected : follow_aliases_respected_statement.
 Proof.
-  intros known e vars conts statics hp Hrespected.
+  intros known e vars conts statics hp rd Hrespected.
   exact (follow_aliases_equivalent_where e known vars conts statics
-    hp Hrespected).
+    hp rd_ Hrespected).
 Qed.
 
 Theorem follow_aliases_equivalent : follow_aliases_equivalent_statement.
 Proof.
-  intros e vars conts statics hp.
+  intros e vars conts statics hp rd.
   apply follow_aliases_respected, empty_known_respected.
 Qed.
 

@@ -75,7 +75,7 @@ Lemma loop_param_equivalent (i : nat) (k : continuation) (s : simple)
            (Let p kind (Simple s) (drop_arg k i handler)))]
        (drop_arg k i body)).
 Proof.
-  intros Hparam Hkind Hs Hfresh Hgive Hturns vars conts statics hp.
+  intros Hparam Hkind Hs Hfresh Hgive Hturns vars conts statics hp rd.
   set (h' :=
     Handler (drop_nth i params)
       {| hm_params_kinds := drop_nth i (hm_params_kinds metadata);
@@ -95,18 +95,18 @@ Proof.
       step
         (State
            (Let_cont_recursive [(k, Handler params metadata handler)] body)
-           vars conts statics hp)
+           vars conts statics hp rd)
       = Step
           (State body vars
              (site_conts true k params metadata handler vars conts) statics
-             hp)).
+             hp rd)).
     { rewrite step_let_cont_recursive, Hbinds. reflexivity. }
     apply (equivalent_trans _ _ _ (step_equivalent _ _ Hstep)).
     apply (equivalent_trans _
       (State (drop_arg k i body) vars
          (site_conts_binding true k i s p kind params metadata handler vars
             conts)
-         statics hp));
+         statics hp rd));
       [ | apply equivalent_sym, step_equivalent;
           rewrite step_let_cont_recursive, Hstatics; reflexivity ].
     apply
@@ -160,7 +160,7 @@ Lemma unalias_rec_from_equivalent (i : nat) :
          (snd (unalias_rec_from i k h body))).
 Proof.
   induction i as [ | i IH]; intros k h body; cbn [unalias_rec_from].
-  - intros vars conts statics hp. apply equivalent_refl.
+  - intros vars conts statics hp rd. apply equivalent_refl.
   - destruct (unalias_rec_param i k h body) as [[h' body'] | ] eqn:Hparam;
       [ | apply IH ].
     exact (expr_equivalent_trans _ _ _
@@ -178,7 +178,7 @@ Proof.
     as [ x kind d body | bindings body | k [params metadata handler] body
        | handlers body | ap | ac | scrutinee arms | ];
     cbn [unalias_rec_params];
-    try (intros vars conts statics hp; apply equivalent_refl).
+    try (intros vars conts statics hp rd; apply equivalent_refl).
   - exact (plug_equivalent (Let_body x kind d Hole) _ _ (not_many _)
       (unalias_rec_params_equivalent_aux body)).
   - exact (plug_equivalent (Let_static_body bindings Hole) _ _ (not_many _)

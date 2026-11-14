@@ -71,7 +71,7 @@ Lemma rename_result_inverse (r : renaming) (result : step_result) :
   rename_result (inverse_renaming r) (rename_result r result) = result
   ∧ rename_result r (rename_result (inverse_renaming r) result) = result.
 Proof.
-  destruct result as [s | k vs hp | ]; simpl; split; try reflexivity.
+  destruct result as [s | k vs hp rd | ]; simpl; split; try reflexivity.
   - rewrite (proj1 (rename_state_inverse r s)). reflexivity.
   - rewrite (proj2 (rename_state_inverse r s)). reflexivity.
   - rewrite rename_continuation_inverse_l. reflexivity.
@@ -91,7 +91,7 @@ Qed.
 Theorem step_result_behaves_equivariant :
   step_result_behaves_equivariant_statement.
 Proof.
-  intros r [s | k vs hp | ] b; simpl.
+  intros r [s | k vs hp rd | ] b; simpl.
   - apply behaves_equivariant.
   - destruct b as [k' vs' hp' | | ]; simpl; split; intros H;
       try discriminate H.
@@ -263,20 +263,20 @@ Qed.
 
 Lemma refines_observed_by_renamed (O : cont_value -> Prop)
     (HO : ∀ (r : renaming) (c : cont_value), O c -> O (rename_cont_value r c))
-    (r : renaming) (statics : static_env) (hp : heap)
+    (r : renaming) (statics : static_env) (hp : heap) (rd : read_record)
     (source target : expr) :
-  refines_observed_by O statics hp source target ->
-  refines_observed_by O (rename_static_env r statics) hp
+  refines_observed_by O statics hp rd source target ->
+  refines_observed_by O (rename_static_env r statics) hp rd
     (rename_expr r source) (rename_expr r target).
 Proof.
   intros Hrefines conts Hconts.
   rewrite !state_of_renamed_expr, rename_static_env_inverse_l.
   apply (observed_refines_renamed r
            (Step (State source (rename_env (inverse_renaming r) [])
-                    (rename_cont_env (inverse_renaming r) conts) statics hp))
+                    (rename_cont_env (inverse_renaming r) conts) statics hp rd))
            (Step (State target (rename_env (inverse_renaming r) [])
                     (rename_cont_env (inverse_renaming r) conts) statics
-                    hp))).
+                    hp rd))).
   apply Hrefines.
   apply class_env_renamed; [ exact HO | exact Hconts ].
 Qed.
@@ -337,21 +337,22 @@ Qed.
 
 Lemma refines_under_observers_renamed (r : renaming)
     (slots : list value_slot) (statics : static_env) (hp : heap)
+      (rd : read_record)
     (source target : expr) :
-  refines_under_observers slots statics hp source target ->
-  refines_under_observers slots (rename_static_env r statics) hp
+  refines_under_observers slots statics hp rd source target ->
+  refines_under_observers slots (rename_static_env r statics) hp rd
     (rename_expr r source) (rename_expr r target).
 Proof.
   exact (refines_observed_by_renamed (observer slots) (observer_renamed slots)
-           r statics hp source target).
+           r statics hp rd source target).
 Qed.
 
 Theorem refines_under_observers_equivariant :
   refines_under_observers_equivariant_statement.
 Proof.
-  intros r slots statics hp source target.
+  intros r slots statics hp rd source target.
   exact (refines_observed_by_equivariant (observer slots)
-           (observer_renamed slots) r statics hp source target).
+           (observer_renamed slots) r statics hp rd_ source target).
 Qed.
 
 (* ======================================================================== *)

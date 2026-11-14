@@ -120,17 +120,17 @@ Lemma jump_applies_alike (k : continuation) (h : continuation_handler)
           (Apply_cont (Apply_cont_expr k (map Var params) None)))
        vars conts []).
 Proof.
-  intros Hk Hdistinct Hmatch vs statics hp.
-  pose proof (apply_cont_value_match _ _ vs statics statics hp Hmatch
+  intros Hk Hdistinct Hmatch vs statics hp rd.
+  pose proof (apply_cont_value_match _ _ vs statics statics hp rd Hmatch
     (statics_match_same statics)) as Hrelated.
-  remember (apply_cont_value (Closure h vars0 conts0 []) vs statics hp)
+  remember (apply_cont_value (Closure h vars0 conts0 []) vs statics hp rd)
     as result eqn:Happly.
   revert Hrelated. simpl.
   destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
     [ | intros _; exact I ].
   destruct (bind_params params vs vars) as [handler_vars | ] eqn:Hbind;
     [ | intros _; exact I ].
-  destruct result as [s' | k0 vs0 hp0 | ]; simpl; try contradiction.
+  destruct result as [s' | k0 vs0 hp0 rd0 | ]; simpl; try contradiction.
   intros Hrelated.
   apply (equivalent_trans _ s'); [ apply matched_equivalent, Hrelated | ].
   apply equivalent_sym, step_equivalent.
@@ -144,20 +144,20 @@ Qed.
 Fixpoint share_with_equivalent (e : expr) {struct e} :
   ∀ (k : continuation) (h : continuation_handler) (xs : list variable)
     (ks : list continuation) (vars vars0 : env) (conts conts0 : cont_env)
-    (statics : static_env) (hp : heap),
+    (statics : static_env) (hp : heap) (rd : read_record),
     resolve k conts = Closure h vars0 conts0 [] ->
     (∀ x : variable, x ∉ xs -> lookup x vars = lookup x vars0) ->
     (∀ c : continuation, c ∉ ks -> resolve c conts = resolve c conts0) ->
-    equivalent (State e vars conts statics hp)
-      (State (share_with k h xs ks e) vars conts statics hp).
+    equivalent (State e vars conts statics hp rd)
+      (State (share_with k h xs ks e) vars conts statics hp rd).
 Proof.
   destruct e
     as [ x kind d body | bindings body | k' [params metadata handler] body
        | handlers body | ap | ac | scrutinee arms | ];
-    intros k h xs ks vars vars0 conts conts0 statics hp Hk Hvars Hconts;
+    intros k h xs ks vars vars0 conts conts0 statics hp rd Hk Hvars Hconts;
     cbn [share_with]; try apply equivalent_refl.
   - (* Let *)
-    apply let_equivalent_step_exec; [ reflexivity | intros v hp' _ _ ].
+    apply let_equivalent_step_exec; [ reflexivity | intros v hp' rd' _ _ ].
     apply (share_with_equivalent body k h (x :: xs) ks _ vars0 _ conts0);
       [ exact Hk | | exact Hconts ].
     intros y Hy. simpl.
@@ -173,10 +173,11 @@ Proof.
   - (* Let_cont_non_recursive *)
     destruct (Pos.eqb_spec k' k) as [-> | Hne]; [ apply equivalent_refl | ].
     match goal with
-    | |- equivalent _ (State (Let_cont_non_recursive _ ?replaced _) _ _ _ _) =>
+    | |- equivalent _ (State (Let_cont_non_recursive _ ?replaced _) _ _ _ _ _)
+      =>
       apply (equivalent_trans _
         (State (Let_cont_non_recursive k' replaced body) vars conts statics
-           hp))
+           hp rd))
     end.
     + destruct (same_handler h xs ks (Handler params metadata handler))
         eqn:Hsame; [ | apply equivalent_refl ].
@@ -205,7 +206,7 @@ Lemma share_under_equivalent (k : continuation) (h : continuation_handler)
   expr_equivalent (Let_cont_non_recursive k h body)
     (Let_cont_non_recursive k h (share_with k h [] [k] body)).
 Proof.
-  intros vars conts statics hp. apply let_cont_non_recursive_equivalent_step.
+  intros vars conts statics hp rd. apply let_cont_non_recursive_equivalent_step.
   apply (share_with_equivalent body k h [] [k] _ vars _ conts).
   - apply resolve_head.
   - intros x _. reflexivity.
@@ -220,7 +221,7 @@ Proof.
     as [ x kind d body | bindings body | k [params metadata handler] body
        | handlers body | ap | ac | scrutinee arms | ];
     cbn [share_handlers]; cbv zeta;
-    try (intros vars conts statics hp; apply equivalent_refl).
+    try (intros vars conts statics hp rd; apply equivalent_refl).
   - exact (plug_equivalent (Let_body x kind d Hole) _ _ (not_many _)
       (share_handlers_equivalent_aux body)).
   - exact (plug_equivalent (Let_static_body bindings Hole) _ _ (not_many _)
@@ -241,7 +242,7 @@ Proof.
           _ _ (not_many _) (share_handlers_equivalent_aux body)).
       * destruct (sharable (Handler params metadata (share_handlers handler)));
           [ apply share_under_equivalent
-          | intros vars conts statics hp; apply equivalent_refl ].
+          | intros vars conts statics hp rd; apply equivalent_refl ].
   - exact (plug_equivalent (Let_cont_recursive_body handlers Hole)
       _ _ (not_many _) (share_handlers_equivalent_aux body)).
 Qed.

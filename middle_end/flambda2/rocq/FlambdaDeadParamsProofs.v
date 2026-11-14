@@ -152,9 +152,13 @@ Proof.
   - destruct (var_free_b x (drop_dead known body) || negb (named_may_go d))
       eqn:Hkeep.
     + apply Drops_let, drop_dead_drops. exact Hsafe.
-    + apply Drops_let_unused; [ apply drop_dead_drops; exact Hsafe | ].
-      apply orb_false_iff in Hkeep as [Hfree _]. intros Hin.
-      apply var_free_b_sound in Hin. congruence.
+    + apply orb_false_iff in Hkeep as [Hfree Hgo].
+      apply negb_false_iff in Hgo.
+      apply Drops_let_unused; [ | apply drop_dead_drops; exact Hsafe | ].
+      * destruct d as [s | [p | p | p | q | rp] args | | | | | ];
+          try reflexivity.
+        discriminate Hgo.
+      * intros Hin. apply var_free_b_sound in Hin. congruence.
   - apply Drops_let_static, drop_dead_drops. exact Hsafe.
   - apply Drops_let_cont.
     + apply drop_dead_drops. intros k1 mask Hmask.
@@ -278,7 +282,7 @@ Qed.
 
 Theorem drop_dead_params_refines : drop_dead_params_refines_statement.
 Proof.
-  intros e vars conts statics hp.
+  intros e vars conts statics hp rd.
   apply (rounds_refines state_drops drops_round).
   apply (State_drops []);
     [ apply drop_dead_drops; intros k mask Hmask; discriminate Hmask

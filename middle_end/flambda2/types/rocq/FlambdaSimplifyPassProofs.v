@@ -33,7 +33,8 @@ From Stdlib Require Import ZArith List Bool Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList OxCamlOption.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaKindModel
   FlambdaMapSpec FlambdaMapProofs FlambdaValueSpec FlambdaPrimitiveModel
-  FlambdaPrimitiveSpec FlambdaPrimitiveProofs FlambdaSemanticsSpec
+  FlambdaPrimitiveSpec FlambdaPrimitiveProofs FlambdaHeapSpec
+  FlambdaHeapProofs FlambdaSemanticsSpec
   FlambdaSemanticsProofs FlambdaWellFormedSpec FlambdaWellFormedProofs
   FlambdaCompareSpec FlambdaCompareProofs FlambdaNominalSpec
   FlambdaNominalProofs FlambdaContextSpec FlambdaContextProofs
@@ -86,17 +87,53 @@ Definition outcome_sound (tenv : Typing_env.t) (d : named) (o : outcome)
       expr_refines_under tenv (Let x declared d body)
         (Let x declared (Simple s) body)
   | Stays_with_type ty =>
-    ∀ (statics : static_env) (vars : env) (v : value),
+    ∀ (statics : static_env) (hp hp' : heap) (rd rd' : read_record)
+      (vars : env) (v : value),
       env_satisfies_strictly tenv statics vars ->
-      eval_named statics vars d = Some v ->
+      exec_named statics hp rd vars d = Some (v, hp', rd') ->
       type_satisfied statics vars v ty
   | Stays_with_kind kind =>
-    ∀ (statics : static_env) (vars : env) (v : value),
+    ∀ (statics : static_env) (hp hp' : heap) (rd rd' : read_record)
+      (vars : env) (v : value),
       env_satisfies_strictly tenv statics vars ->
-      eval_named statics vars d = Some v ->
+      exec_named statics hp rd vars d = Some (v, hp', rd') ->
       kind_of_value v = kind
   | Not_known => True
   end.
+
+(* The two outcomes in which the defining expression stays are about its
+   run on the heap. Where one that reads no cell
+   (FlambdaHeapSpec.named_reads_heap) runs, its value is the one that
+   [eval_named] gives it. *)
+Lemma stays_with_type_pure (tenv : Typing_env.t) (d : named)
+    (ty : flambda_type) :
+  named_reads_heap d = false ->
+  (∀ (statics : static_env) (vars : env) (v : value),
+    env_satisfies_strictly tenv statics vars ->
+    eval_named statics vars d = Some v ->
+    type_satisfied statics vars v ty) ->
+  outcome_sound tenv d (Stays_with_type ty).
+Proof.
+  intros Hpure Htyped statics hp hp' rd rd' vars v Hsat Hexec.
+  exact (Htyped statics vars v Hsat
+           (proj1 (exec_named_pure statics hp hp' rd rd' vars d v Hpure
+                     Hexec))).
+Qed.
+
+Lemma stays_with_kind_pure (tenv : Typing_env.t) (d : named)
+    (kind : flambda_kind) :
+  named_reads_heap d = false ->
+  (∀ (statics : static_env) (vars : env) (v : value),
+    env_satisfies_strictly tenv statics vars ->
+    eval_named statics vars d = Some v ->
+    kind_of_value v = kind) ->
+  outcome_sound tenv d (Stays_with_kind kind).
+Proof.
+  intros Hpure Hkind statics hp hp' rd rd' vars v Hsat Hexec.
+  exact (Hkind statics vars v Hsat
+           (proj1 (exec_named_pure statics hp hp' rd rd' vars d v Hpure
+                     Hexec))).
+Qed.
 
 Lemma of_bool_shortcut_sound (tenv : Typing_env.t) (d : named)
     (answer : option (Meet_shortcut.t bool)) (otherwise : outcome) :
@@ -137,13 +174,15 @@ Proof.
     exact Hanswer.
 Qed.
 
-(* The value of a primitive is of its result kind. *)
+(* The value of a primitive is of its result kind, on whatever heap it
+   is run. *)
 Lemma prim_kind_sound (tenv : Typing_env.t) (p : prim) (args : list simple) :
   outcome_sound tenv (Prim p args) (Stays_with_kind (prim_result_kind p)).
 Proof.
-  intros statics vars v _ Hnamed. cbn [eval_named] in Hnamed.
-  destruct (eval_simples vars args) as [vs | ]; [ | discriminate ].
-  exact (proj2 (eval_prim_kinds statics p vs v Hnamed)).
+  intros statics hp hp' rd rd' vars v _ Hnamed.
+  destruct (proj1 (exec_named_prim_some statics hp hp' rd rd' vars p args v)
+              Hnamed) as (vs & _ & Hprim & _).
+  exact (exec_prim_result_kind statics hp hp' p vs v Hprim).
 Qed.
 
 (* ======================================================================== *)
@@ -220,6 +259,7 @@ Proof.
     intros x declared body.
     exact (let_unbox_number tenv x declared _ arg body Hterms).
   - (* [Box_number] *)
+    apply stays_with_type_pure; [ reflexivity | ].
     intros statics vars v Hsat Hnamed.
     exact (box_number_typed tenv statics vars _ arg ty v
              (env_satisfies_strictly_env_satisfies tenv statics vars Hsat)
@@ -231,6 +271,7 @@ Proof.
     exact (let_untag_immediate tenv x declared arg body Hterms
              (proj1 (types_well_formed_b_iff tenv) Hwf)).
   - (* [Tag_immediate] *)
+    apply stays_with_type_pure; [ reflexivity | ].
     intros statics vars v Hsat Hnamed.
     exact (tag_immediate_typed tenv statics vars arg ty v
              (env_satisfies_strictly_env_satisfies tenv statics vars Hsat)
@@ -340,6 +381,7 @@ Let arith : named :=
 Lemma int_arith_tagged_any :
   outcome_sound tenv arith (Stays_with_type any_tagged_immediate).
 Proof.
+  apply stays_with_type_pure; [ reflexivity | ].
   intros statics vars v Hsat Hnamed. unfold arith in Hnamed.
   simpl in Hnamed.
   destruct (eval_simple vars arg1) as [v1 | ]; [ | discriminate ].
@@ -383,7 +425,7 @@ Proof.
              v Hsat Hty1 Hty2 Hwf1 Hwf2 Hnamed). }
   unfold check_possible_results.
   destruct results as [ | result rest].
-  - intros x declared body. apply let_no_value.
+  - intros x declared body. apply let_no_value_pure; [ reflexivity | ].
     intros statics vars v Hsat Hnamed.
     destruct (Hvalue statics vars v Hsat Hnamed)
       as (i1 & i2 & r & Hi1 & Hi2 & _ & _ & Heval & _).
@@ -396,14 +438,14 @@ Proof.
         destruct result, r'; simpl in Hsame; try discriminate;
           [ apply Z.eqb_eq in Hsame; subst; reflexivity | reflexivity ]. }
       destruct result as [i | ].
-      * intros x declared body. apply let_constant.
+      * intros x declared body. apply let_constant_pure; [ reflexivity | ].
         intros statics vars v Hsat Hnamed.
         destruct (Hvalue statics vars v Hsat Hnamed)
           as (i1 & i2 & r & Hi1 & Hi2 & _ & _ & Heval & ->).
         destruct (Hresults i1 i2 r Hi1 Hi2 Heval) as [Hin | [Hin _]].
         -- injection (Hall _ Hin) as ->. reflexivity.
         -- discriminate (Hall _ Hin).
-      * intros x declared body. apply let_simple.
+      * intros x declared body. apply let_simple_pure; [ reflexivity | ].
         intros statics vars v Hsat Hnamed.
         destruct (Hvalue statics vars v Hsat Hnamed)
           as (i1 & i2 & r & Hi1 & Hi2 & Hv1 & Hv2 & Heval & ->).
@@ -417,7 +459,8 @@ Proof.
                      | Result_other_side => false
                      end)
                   (result :: rest)) eqn:Hexact.
-      * intros statics vars v Hsat Hnamed.
+      * apply stays_with_type_pure; [ reflexivity | ].
+        intros statics vars v Hsat Hnamed.
         destruct (Hvalue statics vars v Hsat Hnamed)
           as (i1 & i2 & r & Hi1 & Hi2 & _ & _ & Heval & ->).
         apply these_tagged_immediates_satisfied. exists r.
@@ -455,7 +498,7 @@ Proof.
     outcome_sound tenv
       (Prim (Binary (Int_arith Standard_tagged_immediate op)) [arg1; arg2])
       Becomes_invalid).
-  { intros Hnone x declared body. apply let_no_value.
+  { intros Hnone x declared body. apply let_no_value_pure; [ reflexivity | ].
     intros statics vars v Hsat Hnamed.
     destruct (int_arith_tagged_possible tenv statics vars op arg1 arg2 ty1
                 ty2 v Hsat Hty1 Hty2 Hwf1 Hwf2 Hnamed)
@@ -540,17 +583,17 @@ Proof.
   cbn. intros [= <-]. destruct op, same; auto.
 Qed.
 
-Lemma yields_bool_sound (tenv : Typing_env.t) (p : prim) (args : list simple) :
-  (∀ (statics : static_env) (vs : list value) (v : value),
-    eval_prim statics p vs = Some v ->
+Lemma yields_bool_sound (tenv : Typing_env.t) (d : named) :
+  (∀ (statics : static_env) (hp hp' : heap) (rd rd' : read_record)
+     (vars : env) (v : value),
+    exec_named statics hp rd vars d = Some (v, hp', rd') ->
     v = Value_const (Naked_immediate 0)
     ∨ v = Value_const (Naked_immediate 1)) ->
-  outcome_sound tenv (Prim p args) (Stays_with_type any_naked_bool).
+  outcome_sound tenv d (Stays_with_type any_naked_bool).
 Proof.
-  intros Hbool statics vars v _ Hnamed. cbn [eval_named] in Hnamed.
-  destruct (eval_simples vars args) as [vs | ]; [ | discriminate ].
+  intros Hbool statics hp hp' rd rd' vars v _ Hnamed.
   apply (proj2 (any_bool_satisfied statics vars v)).
-  exact (Hbool statics vs v Hnamed).
+  exact (Hbool statics hp hp' rd rd' vars v Hnamed).
 Qed.
 
 Lemma comparison_unknown_sound (tenv : Typing_env.t) (kind : standard_int)
@@ -559,8 +602,11 @@ Lemma comparison_unknown_sound (tenv : Typing_env.t) (kind : standard_int)
     (comparison_unknown behaviour).
 Proof.
   destruct behaviour as [c | s]; cbn [comparison_unknown].
-  - apply yields_bool_sound. intros statics vs v.
-    apply int_comp_yields_bool.
+  - apply yields_bool_sound. intros statics hp hp' rd rd' vars v Hexec.
+    apply exec_named_pure in Hexec; [ | reflexivity ].
+    destruct Hexec as [Hnamed _]. cbn [eval_named] in Hnamed.
+    destruct (eval_simples vars args) as [vs | ]; [ | discriminate ].
+    exact (int_comp_yields_bool statics kind c vs v Hnamed).
   - exact (prim_kind_sound tenv
              (Binary (Int_comp kind (Yielding_int_like_compare_functions s)))
              args).
@@ -618,8 +664,11 @@ Proof.
   assert (Hunknown :
     outcome_sound tenv (Prim (Binary (Phys_equal op)) [arg1; arg2])
       (Stays_with_type any_naked_bool)).
-  { apply yields_bool_sound. intros statics vs v.
-    apply phys_equal_yields_bool. }
+  { apply yields_bool_sound. intros statics hp hp' rd rd' vars v Hexec.
+    destruct (phys_equal_exec statics hp hp' rd rd' vars op arg1 arg2 v Hexec)
+      as (v1 & v2 & _ & _ & _ & _ & [Hprim | (same & _ & ->)]).
+    - exact (phys_equal_yields_bool statics op [v1; v2] v Hprim).
+    - destruct op, same; auto. }
   destruct (well_formed_input_b tenv ty1 && well_formed_input_b tenv ty2)
     eqn:Hwf; [ | exact Hunknown ].
   apply andb_true_iff in Hwf. destruct Hwf as [Hwf1 Hwf2].
@@ -662,7 +711,8 @@ Proof.
   2: { exact (prim_kind_sound tenv (Variadic (Make_immutable_array kind))
                 args). }
   destruct (tag <? no_scan_tag) eqn:Htag.
-  - intros statics vars v Hsat Hnamed.
+  - apply stays_with_type_pure; [ reflexivity | ].
+    intros statics vars v Hsat Hnamed.
     exact (make_block_typed tenv statics vars tag args tys v
              (env_satisfies_strictly_env_satisfies tenv statics vars Hsat)
              Htys (proj1 (Z.ltb_lt _ _) Htag) Hnamed).
@@ -676,7 +726,7 @@ Qed.
 
 Lemma expr_refines_under_refl (tenv : Typing_env.t) (e : expr) :
   expr_refines_under tenv e e.
-Proof. intros vars conts statics hp _. apply refines_refl. Qed.
+Proof. intros vars conts statics hp rd _. apply refines_refl. Qed.
 
 (* The closure that a projection of a function slot answers is of the
    kind value. *)
@@ -696,11 +746,13 @@ Qed.
 Lemma simplify_named_sound (tenv : Typing_env.t) (d : named) :
   outcome_sound tenv d (simplify_named tenv d).
 Proof.
+  unfold simplify_named.
+  destruct (named_changes_heap d) eqn:Hheap; [ exact I | ].
   destruct d
     as [s | p args | code value_slots | slot function_decls value_slots
         | slot closure | project_from slot closure
         | move_from move_to closure];
-    cbn [simplify_named].
+    cbn beta iota zeta.
   - intros x declared body. apply expr_refines_under_refl.
   - destruct (simplify_simples tenv args) as [answers | ] eqn:Hargs;
       [ | exact I ].
@@ -732,30 +784,35 @@ Proof.
         | .. ];
         destruct args; destruct (map fst answers); exact I.
     + intros x declared body.
-      exact (let_prim_kind_mismatch tenv x declared p args (map fst answers)
-               body Htys Hkinds).
+      refine (let_prim_kind_mismatch tenv x declared p args (map fst answers)
+                body _ Htys Hkinds).
+      intros q ->. discriminate Hheap.
   - destruct (simplify_simples tenv (map snd value_slots))
       as [answers | ] eqn:Hslots.
     + destruct (simplify_simples_answers tenv _ answers Hslots)
         as [Htys _].
+      apply stays_with_type_pure; [ reflexivity | ].
       intros statics vars v Hsat Hnamed.
       exact (set_of_closures_typed tenv statics vars code value_slots
                (map fst answers) v
                (env_satisfies_strictly_env_satisfies tenv statics vars Hsat)
                Htys Hnamed).
-    + intros statics vars v _ Hnamed. simpl in Hnamed.
+    + apply stays_with_kind_pure; [ reflexivity | ].
+      intros statics vars v _ Hnamed. simpl in Hnamed.
       destruct (eval_value_slots vars value_slots); [ | discriminate ].
       injection Hnamed as <-. reflexivity.
   - destruct (simplify_simples tenv (map snd value_slots))
       as [answers | ] eqn:Hslots.
     + destruct (simplify_simples_answers tenv _ answers Hslots)
         as [Htys _].
+      apply stays_with_type_pure; [ reflexivity | ].
       intros statics vars v Hsat Hnamed.
       exact (closure_of_set_typed tenv statics vars slot function_decls
                value_slots (map fst answers) v
                (env_satisfies_strictly_env_satisfies tenv statics vars Hsat)
                Htys Hnamed).
-    + intros statics vars v _ Hnamed. simpl in Hnamed.
+    + apply stays_with_kind_pure; [ reflexivity | ].
+      intros statics vars v _ Hnamed. simpl in Hnamed.
       destruct (lookup slot function_decls); [ | discriminate ].
       simpl in Hnamed.
       destruct (eval_value_slots vars value_slots); [ | discriminate ].
@@ -770,7 +827,8 @@ Proof.
     + intros x declared body.
       exact (let_project_function_slot tenv x declared move_from
                move_to closure ty body Hty).
-    + intros statics vars v _ Hnamed. simpl in Hnamed.
+    + apply stays_with_kind_pure; [ reflexivity | ].
+      intros statics vars v _ Hnamed. simpl in Hnamed.
       destruct (eval_simple vars closure) as [w | ]; [ | discriminate ].
       exact (project_function_slot_kind statics move_from move_to w v
                Hnamed).
@@ -786,7 +844,7 @@ Proof.
   assert (Hrefl :
     expr_equivalent_under tenv (Let x declared d body)
       (Let x declared d body)).
-  { intros vars conts statics hp _. apply equivalent_refl. }
+  { intros vars conts statics hp rd _. apply equivalent_refl. }
   destruct d as [s | p args | | | | | ]; try exact Hrefl.
   cbn [canonical_named].
   destruct (simplify_simples tenv args) as [answers | ] eqn:Hargs;
@@ -899,7 +957,7 @@ Proof.
   - destruct ac as [k args action]. simpl in *.
     apply apply_cont_canonical.
     exact (proj2 (simplify_simples_answers tenv args answers Hargs)).
-  - intros vars conts statics hp _. apply equivalent_refl.
+  - intros vars conts statics hp rd _. apply equivalent_refl.
 Qed.
 
 Lemma simplify_switch_refines (tenv : Typing_env.t) (scrutinee : simple)
@@ -1027,46 +1085,51 @@ Qed.
 (* ======================================================================== *)
 
 (* A [Let] that refines the same [Let] of another defining expression,
-   whatever the body: the other defining expression has the value of
-   the first, where that is of the kind of the [Let]. The body that
-   shows it gives the variable to a way out of the term. *)
+   whatever the body: the other defining expression does on the heap
+   what the first does, where the value is of the kind of the [Let]: it
+   has the same value and leaves the same heap. (The record that it
+   leaves is not seen: an exit does not show it.) The body that shows
+   it gives the variable to a way out of the term. *)
 Lemma let_refines_value (tenv : Typing_env.t) (x : variable)
     (declared : flambda_kind) (d d' : named) :
   (∀ body : expr,
     expr_refines_under tenv (Let x declared d body) (Let x declared d' body))
   ->
-  ∀ (statics : static_env) (vars : env) (v : value),
+  ∀ (statics : static_env) (hp hp' : heap) (rd rd' : read_record)
+    (vars : env) (v : value),
     env_satisfies_strictly tenv statics vars ->
-    eval_named statics vars d = Some v ->
+    exec_named statics hp rd vars d = Some (v, hp', rd') ->
     kind_of_value v = declared ->
-    eval_named statics vars d' = Some v.
+    ∃ rd'' : read_record,
+      exec_named statics hp rd vars d' = Some (v, hp', rd'').
 Proof.
-  intros Hrefines statics vars v Hsat Hd Hkind.
+  intros Hrefines statics hp hp' rd rd' vars v Hsat Hd Hkind.
   set (probe := Apply_cont (Apply_cont_expr 1%positive [Var x] None)).
   assert (Hprobe :
-    ∀ (w : value) (hp : heap),
-      behaves (State probe ((x, w) :: vars) [] statics hp)
-        (Exits 1%positive [w] hp)).
-  { intros w hp. apply step_behaves. unfold probe. rewrite step_apply_cont.
+    ∀ (w : value) (h : heap) (r : read_record),
+      behaves (State probe ((x, w) :: vars) [] statics h r)
+        (Exits 1%positive [w] h)).
+  { intros w h r. apply step_behaves. unfold probe. rewrite step_apply_cont.
     cbn [ac_args eval_simples eval_simple]. rewrite lookup_head.
     reflexivity. }
-  destruct (Hrefines probe vars [] statics empty_heap Hsat) as [Hexits _].
+  destruct (Hrefines probe vars [] statics hp rd Hsat) as [Hexits _].
   assert (Hsource :
-    behaves (State (Let x declared d probe) vars [] statics empty_heap)
-      (Exits 1%positive [v] empty_heap)).
-  { apply step_behaves. rewrite step_let, Hd.
-    rewrite (proj2 (kind_eqb_eq _ _) Hkind). exact (Hprobe v empty_heap). }
+    behaves (State (Let x declared d probe) vars [] statics hp rd)
+      (Exits 1%positive [v] hp')).
+  { apply step_behaves. rewrite step_let_exec, Hd.
+    rewrite (proj2 (kind_eqb_eq _ _) Hkind). exact (Hprobe v hp' rd'). }
   apply Hexits in Hsource. apply step_behaves in Hsource.
-  rewrite step_let in Hsource.
-  destruct (eval_named statics vars d') as [v' | ]; [ | discriminate ].
-  destruct (kind_eqb (kind_of_value v') declared); [ | discriminate ].
+  rewrite step_let_exec in Hsource.
+  destruct (exec_named statics hp rd vars d') as [[[v' hp''] rd''] | ];
+    [ | discriminate Hsource ].
+  destruct (kind_eqb (kind_of_value v') declared); [ | discriminate Hsource ].
   simpl in Hsource.
   pose proof
-    (behaviour_unique (State probe ((x, v') :: vars) [] statics empty_heap)
-       (Exits 1%positive [v] empty_heap) (Exits 1%positive [v'] empty_heap)
-       Hsource (Hprobe v' empty_heap))
+    (behaviour_unique (State probe ((x, v') :: vars) [] statics hp'' rd'')
+       (Exits 1%positive [v] hp') (Exits 1%positive [v'] hp'')
+       Hsource (Hprobe v' hp'' rd''))
     as Heq.
-  injection Heq as <-. reflexivity.
+  injection Heq as <- <-. exists rd''. reflexivity.
 Qed.
 
 Lemma bind_simple_satisfied (tenv tenv' : Typing_env.t) (x : variable)
@@ -1121,10 +1184,11 @@ Proof.
 Qed.
 
 Lemma simplify_let_satisfied (tenv tenv' : Typing_env.t) (x : variable)
-    (d d' : named) (statics : static_env) (vars : env) (v : value) :
+    (d d' : named) (statics : static_env) (hp hp' : heap)
+    (rd rd' : read_record) (vars : env) (v : value) :
   simplify_let tenv x d = Step_let d' tenv' ->
   env_satisfies_strictly tenv statics vars ->
-  eval_named statics vars d = Some v ->
+  exec_named statics hp rd vars d = Some (v, hp', rd') ->
   env_satisfies_strictly tenv' statics ((x, v) :: vars).
 Proof.
   unfold simplify_let.
@@ -1139,12 +1203,15 @@ Proof.
   - intros Hbind Hsat Hv.
     apply (bind_simple_satisfied tenv tenv' x s d' statics vars v Hwf Hfresh
              Hbind Hsat).
-    exact (let_refines_value tenv x (kind_of_value v) d (Simple s)
-             (fun body => Hsound x (kind_of_value v) body) statics vars v
-             Hsat Hv eq_refl).
+    destruct (let_refines_value tenv x (kind_of_value v) d (Simple s)
+                (fun body => Hsound x (kind_of_value v) body) statics hp hp'
+                rd rd' vars v Hsat Hv eq_refl) as [rd'' Hs].
+    simpl in Hs.
+    destruct (eval_simple vars s) as [w | ]; [ | discriminate ].
+    injection Hs as -> _ _. reflexivity.
   - destruct (type_in_scope_b tenv ty) eqn:Hscope; [ | discriminate ].
     intros [= _ <-] Hsat Hv.
-    pose proof (Hsound statics vars v Hsat Hv) as Hty.
+    pose proof (Hsound statics hp hp' rd rd' vars v Hsat Hv) as Hty.
     assert (Hfree :
       ∀ y : variable, y ∈ free_variables ty -> in_scope_in_terms tenv y).
     { intros y Hy. unfold type_in_scope_b in Hscope.
@@ -1167,23 +1234,24 @@ Proof.
       exact (type_satisfied_kind statics vars v ty Hty).
   - intros [= _ <-] Hsat Hv.
     apply add_variable_definition_env_satisfies_strictly;
-      [ exact Hwf | exact Hfresh | exact (Hsound statics vars v Hsat Hv)
-      | exact Hsat ].
+      [ exact Hwf | exact Hfresh
+      | exact (Hsound statics hp hp' rd rd' vars v Hsat Hv) | exact Hsat ].
 Qed.
 
 Theorem let_env_satisfied : let_env_satisfied_statement.
 Proof.
-  intros tenv tenv' x declared d statics vars v Henv Hsat Hv Hkind.
+  intros tenv tenv' x declared d statics hp hp' rd rd' vars v Henv Hsat Hv
+    Hkind.
   unfold let_env in Henv.
-  pose proof (let_refines_value tenv x declared d _
-                (resolve_value_slot_refines tenv x declared d) statics vars v
-                Hsat Hv Hkind)
-    as Hresolved.
+  destruct (let_refines_value tenv x declared d _
+              (resolve_value_slot_refines tenv x declared d) statics hp hp'
+              rd rd' vars v Hsat Hv Hkind)
+    as [rd'' Hresolved].
   destruct (simplify_let tenv x (resolve_value_slot tenv declared d))
     as [ | d' tenv'' | ] eqn:Hlet; [ discriminate | | ].
   - injection Henv as <-.
-    exact (simplify_let_satisfied tenv tenv'' x _ d' statics vars v Hlet Hsat
-             Hresolved).
+    exact (simplify_let_satisfied tenv tenv'' x _ d' statics hp hp' rd rd''
+             vars v Hlet Hsat Hresolved).
   - unfold declare_variable in Henv.
     destruct (typing_env_well_formed tenv
               && negb (Typing_env.mem None tenv (Name_var x))) eqn:Htests;
@@ -1232,13 +1300,13 @@ Proof.
     pose proof (find_use_refines_aux rest scope tenv' k params metadata
                   handler handler' target' xs' ks' Hrest Hrest_free Hhandler)
       as IH.
-    intros vars conts statics hp Hsat.
+    intros vars conts statics hp rd Hsat.
     apply (refines_trans _
              (State
                 (Let x declared d
                    (Let_cont_non_recursive k
                       (Handler params metadata handler) rest))
-                vars conts statics hp)).
+                vars conts statics hp rd)).
     { apply equivalent_refines, let_cont_past_let. intros Hfree'.
       apply var_free_in_handler_b_sound in Hfree'. congruence. }
     apply (refines_trans _
@@ -1246,11 +1314,11 @@ Proof.
                 (Let x declared d
                    (Let_cont_non_recursive k
                       (Handler params metadata handler') rest))
-                vars conts statics hp)).
-    { apply let_refines_step; [ reflexivity | intros v Hv Hkind ].
+                vars conts statics hp rd)).
+    { apply let_refines_step_exec; [ reflexivity | intros v hp' rd' Hv Hkind ].
       apply IH.
-      exact (let_env_satisfied tenv tenv' x declared d statics vars v Henv
-               Hsat Hv Hkind). }
+      exact (let_env_satisfied tenv tenv' x declared d statics hp hp' rd rd'
+               vars v Henv Hsat Hv Hkind). }
     apply equivalent_refines, equivalent_sym, let_cont_past_let.
     intros Hfree'. apply var_free_in_handler_b_sound in Hfree'. congruence.
   - destruct (negb (Pos.eqb k k') && negb (cont_free_in_handler_b k h')
@@ -1274,13 +1342,13 @@ Proof.
     pose proof (find_use_refines_aux rest scope tenv k params metadata
                   handler handler' target' xs' ks' Hrest Hrest_free Hhandler)
       as IH.
-    intros vars conts statics hp Hsat.
+    intros vars conts statics hp rd Hsat.
     apply (refines_trans _
              (State
                 (Let_cont_non_recursive k' h'
                    (Let_cont_non_recursive k
                       (Handler params metadata handler) rest))
-                vars conts statics hp)).
+                vars conts statics hp rd)).
     { apply equivalent_refines, let_cont_past_let_cont; [ exact Hne | | ];
         intros Hfree'; apply cont_free_in_handler_b_sound in Hfree';
         congruence. }
@@ -1289,9 +1357,9 @@ Proof.
                 (Let_cont_non_recursive k' h'
                    (Let_cont_non_recursive k
                       (Handler params metadata handler') rest))
-                vars conts statics hp)).
+                vars conts statics hp rd)).
     { exact (let_cont_body_refines_under tenv k' h' _ _ IH vars conts statics
-               hp Hsat). }
+               hp rd Hsat). }
     apply equivalent_refines, equivalent_sym, let_cont_past_let_cont;
       [ exact Hne | | ];
       intros Hfree'; apply cont_free_in_handler_b_sound in Hfree';
@@ -1343,9 +1411,9 @@ Lemma let_cont_copied_into_handler (k k' : continuation)
           (Handler params' metadata' (Let_cont_non_recursive k h handler'))
           body)).
 Proof.
-  intros Hh Hparams vars conts statics hp.
+  intros Hh Hparams vars conts statics hp rd.
   apply let_cont_non_recursive_equivalent_step.
-  apply let_cont_handler_alike. intros vs statics' hp'. simpl.
+  apply let_cont_handler_alike. intros vs statics' hp' rd'. simpl.
   destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata'));
     simpl; [ | exact I ].
   destruct (bind_params params' vs vars) as [handler_vars | ] eqn:Hbind;
@@ -1427,13 +1495,13 @@ Proof.
                   handler' target uses' xs' ks' Hrest Hrest_free Huses
                   Hhandler)
       as IH.
-    intros vars conts statics hp Hsat.
+    intros vars conts statics hp rd Hsat.
     apply (refines_trans _
              (State
                 (Let x declared d
                    (Let_cont_non_recursive k
                       (Handler params metadata handler) rest))
-                vars conts statics hp)).
+                vars conts statics hp rd)).
     { apply equivalent_refines, let_cont_past_let. intros Hfree'.
       apply var_free_in_handler_b_sound in Hfree'. congruence. }
     apply (refines_trans _
@@ -1441,11 +1509,11 @@ Proof.
                 (Let x declared d
                    (Let_cont_non_recursive k
                       (Handler params metadata handler') rest))
-                vars conts statics hp)).
-    { apply let_refines_step; [ reflexivity | intros v Hv Hkind ].
+                vars conts statics hp rd)).
+    { apply let_refines_step_exec; [ reflexivity | intros v hp' rd' Hv Hkind ].
       apply IH.
-      exact (let_env_satisfied tenv tenv' x declared d statics vars v Henv
-               Hsat Hv Hkind). }
+      exact (let_env_satisfied tenv tenv' x declared d statics hp hp' rd rd'
+               vars v Henv Hsat Hv Hkind). }
     apply equivalent_refines, equivalent_sym, let_cont_past_let.
     intros Hfree'. apply var_free_in_handler_b_sound in Hfree'. congruence.
   - destruct (negb (Pos.eqb k k')
@@ -1520,7 +1588,7 @@ Proof.
       { intros param Hin Hf. apply var_free_in_handler_b_sound in Hf.
         rewrite forallb_forall in Hparams'. specialize (Hparams' param Hin).
         rewrite Hf in Hparams'. discriminate. }
-      intros vars conts statics hp Hsat.
+      intros vars conts statics hp rd Hsat.
       (* the copy *)
       apply (refines_trans _
                (State
@@ -1529,10 +1597,10 @@ Proof.
                         (Handler params' metadata'
                            (Let_cont_non_recursive k h body'))
                         rest))
-                  vars conts statics hp)).
+                  vars conts statics hp rd)).
       { apply equivalent_refines.
         exact (let_cont_copied_into_handler k k' h params' metadata' body'
-                 rest Hnot_self Hnot_params vars conts statics hp). }
+                 rest Hnot_self Hnot_params vars conts statics hp rd). }
       (* the copy rewritten, in the handler *)
       apply (refines_trans _
                (State
@@ -1541,7 +1609,7 @@ Proof.
                         (Handler params' metadata'
                            (Let_cont_non_recursive k hr body'))
                         rest))
-                  vars conts statics hp)).
+                  vars conts statics hp rd)).
       { apply (let_cont_body_refines_under tenv k h _ _); [ | exact Hsat ].
         exact (let_cont_handler_typed tenv k' params' metadata' _ _ rest
                  tenv_handler Henv IHh). }
@@ -1556,7 +1624,7 @@ Proof.
                      (Handler params' metadata'
                         (Let_cont_non_recursive k hr body'))
                      (Let_cont_non_recursive k h rest))
-                  vars conts statics hp)).
+                  vars conts statics hp rd)).
       { apply equivalent_refines, let_cont_past_let_cont;
           [ exact Hne | exact Hbound | ].
         intros Hf. apply cont_free_in_handler_b_sound in Hf. congruence. }
@@ -1566,9 +1634,9 @@ Proof.
                      (Handler params' metadata'
                         (Let_cont_non_recursive k hr body'))
                      (Let_cont_non_recursive k hr rest))
-                  vars conts statics hp)).
+                  vars conts statics hp rd)).
       { exact (let_cont_body_refines_under tenv k' _ _ _ IHrest vars conts
-                 statics hp Hsat). }
+                 statics hp rd Hsat). }
       apply (refines_trans _
                (State
                   (Let_cont_non_recursive k hr
@@ -1576,13 +1644,13 @@ Proof.
                         (Handler params' metadata'
                            (Let_cont_non_recursive k hr body'))
                         rest))
-                  vars conts statics hp)).
+                  vars conts statics hp rd)).
       { apply equivalent_refines, equivalent_sym, let_cont_past_let_cont;
           [ exact Hne | exact Hbound | ].
         intros Hf. apply cont_free_in_handler_b_sound in Hf. congruence. }
       apply equivalent_refines, equivalent_sym.
       exact (let_cont_copied_into_handler k k' hr params' metadata' body'
-               rest Hnot_self' Hnot_params' vars conts statics hp).
+               rest Hnot_self' Hnot_params' vars conts statics hp rd).
     + injection Hgather as <- <- <-.
       unfold binders_not_free in Hfree. cbn [forallb] in Hfree.
       apply andb_true_iff in Hfree. destruct Hfree as [Hxs Hks].
@@ -1596,13 +1664,13 @@ Proof.
                     handler handler' target uses_rest xs_rest ks_rest Hrest
                     Hrest_free Huses Hhandler)
         as IH.
-      intros vars conts statics hp Hsat.
+      intros vars conts statics hp rd Hsat.
       apply (refines_trans _
                (State
                   (Let_cont_non_recursive k' h'
                      (Let_cont_non_recursive k
                         (Handler params metadata handler) rest))
-                  vars conts statics hp)).
+                  vars conts statics hp rd)).
       { apply equivalent_refines, let_cont_past_let_cont;
           [ exact Hne | | ];
           intros Hfree'; apply cont_free_in_handler_b_sound in Hfree';
@@ -1612,9 +1680,9 @@ Proof.
                   (Let_cont_non_recursive k' h'
                      (Let_cont_non_recursive k
                         (Handler params metadata handler') rest))
-                  vars conts statics hp)).
+                  vars conts statics hp rd)).
       { exact (let_cont_body_refines_under tenv k' h' _ _ IH vars conts
-                 statics hp Hsat). }
+                 statics hp rd Hsat). }
       apply equivalent_refines, equivalent_sym, let_cont_past_let_cont;
         [ exact Hne | | ];
         intros Hfree'; apply cont_free_in_handler_b_sound in Hfree';
@@ -1624,8 +1692,8 @@ Proof.
     injection Hgather as <- _ _.
     apply (leaf_refines tenv k params metadata handler handler' _ uses'
              Hleaf).
-    intros index tenv_use args statics hp valuation vars conts vs handler_vars
-      Hnth _ Hshows Hargs Hkinds Hbind.
+    intros index tenv_use args statics hp rd valuation vars conts vs
+      handler_vars Hnth _ Hshows Hargs Hkinds Hbind.
     apply Hhandler.
     exact (Huses (tenv_use, args) (nth_error_In _ _ Hnth) statics vars vs
              handler_vars
@@ -1636,8 +1704,8 @@ Proof.
     injection Hgather as <- _ _.
     apply (leaf_refines tenv k params metadata handler handler' _ uses'
              Hleaf).
-    intros index tenv_use args statics hp valuation vars conts vs handler_vars
-      Hnth _ Hshows Hargs Hkinds Hbind.
+    intros index tenv_use args statics hp rd valuation vars conts vs
+      handler_vars Hnth _ Hshows Hargs Hkinds Hbind.
     apply Hhandler.
     exact (Huses (tenv_use, args) (nth_error_In _ _ Hnth) statics vars vs
              handler_vars
@@ -1930,6 +1998,10 @@ Theorem example_pass_static_closure
 Proof. intros k exn ret exn'. vm_compute. reflexivity. Qed.
 
 Theorem example_pass_loop : example_pass_loop_statement.
+Proof. intros k. vm_compute. reflexivity. Qed.
+
+Theorem example_pass_heap_primitive
+    : example_pass_heap_primitive_statement.
 Proof. intros k. vm_compute. reflexivity. Qed.
 
 Theorem example_handler_at_use : example_handler_at_use_statement.

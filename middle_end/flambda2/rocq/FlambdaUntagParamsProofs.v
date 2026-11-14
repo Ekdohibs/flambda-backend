@@ -284,11 +284,11 @@ Qed.
 
 (* The tags under a [Let] hold of the variables with the one bound. *)
 Lemma tags_ok_let (untagged : list variable) (tagged : tags)
-    (statics : static_env) (vars : env) (x : variable) (d : named)
-    (v : value) :
+    (statics : static_env) (hp hp' : heap) (rd rd' : read_record)
+    (vars : env) (x : variable) (d : named) (v : value) :
   named_ok untagged d = true ->
   tags_ok untagged tagged vars ->
-  eval_named statics vars d = Some v ->
+  exec_named statics hp rd vars d = Some (v, hp', rd') ->
   tags_ok (without [x] untagged) (tags_under_let x d tagged)
     ((x, v) :: vars).
 Proof.
@@ -308,6 +308,8 @@ Proof.
   destruct (Pos.eqb_spec n x) as [-> | Hne]; [ exact Hrest | ].
   intros v0 n0 [[= <- <-] | Hin]; [ | exact (Hrest v0 n0 Hin) ].
   apply tag_of_some in Htag. subst d.
+  (* the tagging reads no cell *)
+  apply exec_named_pure in Hv as (Hv & _ & _); [ | reflexivity ].
   destruct (eval_tagging statics vars n v Hv) as (i & Hn & ->).
   assert (Hnot : among n untagged = false).
   { unfold named_ok, reads_untagged in Hd. cbn [untag_of orb] in Hd.
@@ -348,13 +350,13 @@ Proof.
   exact Hx'.
 Qed.
 
-Lemma eval_named_plain (untagged : list variable) (statics : static_env)
-    (vars vars' : env) (d : named) :
+Lemma exec_named_plain (untagged : list variable) (statics : static_env)
+    (hp : heap) (rd : read_record) (vars vars' : env) (d : named) :
   vars_rel untagged vars vars' ->
   none_in untagged (fun p => var_in_named p d) = true ->
-  eval_named statics vars' d = eval_named statics vars d.
+  exec_named statics hp rd vars' d = exec_named statics hp rd vars d.
 Proof.
-  intros Hvars Hnone. apply eval_named_agree. intros x Hx.
+  intros Hvars Hnone. apply exec_named_agree. intros x Hx.
   pose proof (Hvars x) as Hx'.
   rewrite (none_in_not_among untagged _ x Hnone (var_in_named_sound x d Hx))
     in Hx'.
@@ -915,30 +917,31 @@ Definition conts_rel (active : positions) (conts conts' : cont_env) : Prop :=
    expression that the test accepts and the same rewritten. *)
 Inductive state_rel : state -> state -> Prop :=
   | Rel_state_plain (e : expr) (vars : env) (conts conts' : cont_env)
-      (statics : static_env) (hp : heap) :
+      (statics : static_env) (hp : heap) (rd : read_record) :
     conts_rel [] conts conts' ->
-    state_rel (State e vars conts statics hp) (State e vars conts' statics hp)
+    state_rel (State e vars conts statics hp rd)
+      (State e vars conts' statics hp rd)
   | Rel_state_inside (e : expr) (vars vars' : env) (conts conts' : cont_env)
-      (statics : static_env) (hp : heap) (active : positions)
+      (statics : static_env) (hp : heap) (rd : read_record) (active : positions)
       (untagged : list variable) (tagged : tags) :
     untag_ok sites active untagged tagged e = true ->
     vars_rel untagged vars vars' ->
     tags_ok untagged tagged vars ->
     conts_rel active conts conts' ->
-    state_rel (State e vars conts statics hp)
+    state_rel (State e vars conts statics hp rd)
       (State (untag_expr sites active untagged tagged e) vars' conts' statics
-         hp).
+         hp rd).
 
 Lemma state_rel_refl (s : state) : state_rel s s.
 Proof.
-  destruct s as [e vars conts statics hp].
+  destruct s as [e vars conts statics hp rd].
   apply Rel_state_plain. intros k1. apply Rel_same.
 Qed.
 
 Lemma simulated_of_related (r r' : step_result) :
   result_related state_rel r r' -> result_simulated state_rel r r'.
 Proof.
-  destruct r as [t | k1 vs hp | ], r' as [t' | k1' vs' hp' | ]; simpl;
+  destruct r as [t | k1 vs hp rd | ], r' as [t' | k1' vs' hp' rd' | ]; simpl;
     try contradiction; auto.
 Qed.
 
@@ -993,16 +996,17 @@ Qed.
 Lemma call_code_rel (closure : value) (c : code) (vs : list value)
     (args_arity return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   cont_rel [] return_to return_to' ->
   cont_rel [] exn_to exn_to' ->
   result_related state_rel
-    (call_code closure c vs args_arity return_arity return_to exn_to statics hp)
+    (call_code closure c vs args_arity return_arity return_to exn_to statics hp
+       rd)
     (call_code closure c vs args_arity return_arity return_to' exn_to'
-       statics hp).
+       statics hp rd).
 Proof.
   intros Hreturn Hraise.
-  destruct (call_code_cases closure c vs args_arity return_arity statics hp)
+  destruct (call_code_cases closure c vs args_arity return_arity statics hp rd)
     as [Hundefined | (callee_vars & Hcall)].
   - rewrite !Hundefined. exact I.
   - rewrite !Hcall. simpl.
@@ -1019,18 +1023,20 @@ Qed.
 
 Lemma run_call_rel (shape : option call_shape) (return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   cont_rel [] return_to return_to' ->
   cont_rel [] exn_to exn_to' ->
   (∀ partial : value,
     result_simulated state_rel
-      (apply_cont_value return_to [partial] statics hp)
-      (apply_cont_value return_to' [partial] statics hp)) ->
+      (apply_cont_value return_to [partial] statics hp rd)
+      (apply_cont_value return_to' [partial] statics hp rd)) ->
   result_simulated state_rel
-    (run_call (fun partial => apply_cont_value return_to [partial] statics hp)
-       shape return_arity return_to exn_to statics hp)
-    (run_call (fun partial => apply_cont_value return_to' [partial] statics hp)
-       shape return_arity return_to' exn_to' statics hp).
+    (run_call
+       (fun partial => apply_cont_value return_to [partial] statics hp rd)
+       shape return_arity return_to exn_to statics hp rd)
+    (run_call
+       (fun partial => apply_cont_value return_to' [partial] statics hp rd)
+       shape return_arity return_to' exn_to' statics hp rd).
 Proof.
   intros Hreturn Hraise Hpartial.
   destruct shape
@@ -1048,12 +1054,12 @@ Qed.
    untagged positions are tagged immediates, and to the same with those
    untagged. *)
 Lemma apply_cont_value_rel (us : list nat) (c c' : cont_value)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   cont_rel us c c' ->
   ∀ vs : list value,
     Forall is_tagged (moved_from us 0 vs) ->
-    result_simulated state_rel (apply_cont_value c vs statics hp)
-      (apply_cont_value c' (untag_values us vs) statics hp).
+    result_simulated state_rel (apply_cont_value c vs statics hp rd)
+      (apply_cont_value c' (untag_values us vs) statics hp rd).
 Proof.
   intros Hc.
   induction Hc
@@ -1102,13 +1108,13 @@ Proof.
 Qed.
 
 Lemma apply_cont_value_plain (c c' : cont_value) (vs : list value)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   cont_rel [] c c' ->
-  result_simulated state_rel (apply_cont_value c vs statics hp)
-    (apply_cont_value c' vs statics hp).
+  result_simulated state_rel (apply_cont_value c vs statics hp rd)
+    (apply_cont_value c' vs statics hp rd).
 Proof.
   intros Hc.
-  pose proof (apply_cont_value_rel [] c c' statics hp Hc vs) as Happly.
+  pose proof (apply_cont_value_rel [] c c' statics hp rd Hc vs) as Happly.
   rewrite untag_values_nil, moved_from_nil in Happly.
   apply Happly. constructor.
 Qed.
@@ -1116,14 +1122,14 @@ Qed.
 Lemma call_function_rel (callee : value) (call_kind : call_kind)
     (vs : list value) (args_arity return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   cont_rel [] return_to return_to' ->
   cont_rel [] exn_to exn_to' ->
   result_simulated state_rel
     (call_function callee call_kind vs args_arity return_arity return_to
-       exn_to statics hp)
+       exn_to statics hp rd)
     (call_function callee call_kind vs args_arity return_arity return_to'
-       exn_to' statics hp).
+       exn_to' statics hp rd).
 Proof.
   intros Hreturn Hraise. unfold call_function.
   apply run_call_rel; [ exact Hreturn | exact Hraise | ].
@@ -1152,14 +1158,15 @@ Lemma untag_step (s s' : state) :
   state_rel s s' -> result_simulated state_rel (step s) (step s').
 Proof.
   intros
-    [e vars conts conts' statics hp Hconts
-    | e vars vars' conts conts' statics hp active untagged tagged Hok Hvars
-        Htags Hconts].
+    [e vars conts conts' statics hp rd Hconts
+    | e vars vars' conts conts' statics hp rd active untagged tagged Hok
+        Hvars Htags Hconts].
   - (* the same expression *)
     destruct e as [y kind1 d body | bindings body | k1 hh body
                   | handlers body | ap | ac | scrutinee arms | ].
-    + rewrite !step_let.
-      destruct (eval_named statics vars d) as [v | ]; [ | exact I ].
+    + rewrite !step_let_exec.
+      destruct (exec_named statics hp rd vars d) as [[[v hp'] rd'] | ];
+        [ | exact I ].
       destruct (kind_eqb (kind_of_value v) kind1); [ | exact I ].
       apply Rel_state_plain, Hconts.
     + rewrite !step_let_static.
@@ -1174,7 +1181,8 @@ Proof.
       destruct (handlers_bind_statics handlers); [ exact I | ].
       apply Rel_state_plain, rec_conts_plain, Hconts.
     + rewrite !step_apply.
-      destruct (eval_simple vars (ap_callee ap)) as [callee | ]; [ | exact I ].
+      destruct (eval_simple vars (ap_callee ap)) as [callee | ];
+        [ | exact I ].
       destruct (eval_simples vars (ap_args ap)) as [vs | ]; [ | exact I ].
       destruct (eval_simples vars (exn_extra_simples ap)) as [extra | ];
         [ | exact I ].
@@ -1194,20 +1202,32 @@ Proof.
                   | handlers body | ap | ac | scrutinee arms | ];
       cbn [untag_expr untag_ok] in Hok |- *.
     + apply andb_true_iff in Hok as [Hd Hbody].
-      rewrite !step_let.
-      destruct (eval_named statics vars d) as [v | ] eqn:Hv; [ | exact I ].
-      assert (Hv' : eval_named statics vars' (untag_named untagged d) = Some v).
+      rewrite !step_let_exec.
+      destruct (exec_named statics hp rd vars d) as [[[v hp'] rd'] | ]
+        eqn:Hv; [ | exact I ].
+      assert
+        (Hv' :
+          exec_named statics hp rd vars' (untag_named untagged d)
+          = Some (v, hp', rd')).
       { unfold named_ok in Hd. unfold untag_named.
         destruct (reads_untagged untagged d) eqn:Hreads.
         - unfold reads_untagged in Hreads.
           destruct (untag_of d) as [p | ] eqn:Huntag; [ | discriminate ].
           rewrite Hreads. apply untag_of_some in Huntag. subst d.
-          exact (eval_untagging untagged statics vars vars' p v Hvars Hreads
-            Hv).
+          (* the untagging reads no cell, and the variable is worth
+             what it gave *)
+          apply exec_named_pure in Hv as (Hv & -> & ->); [ | reflexivity ].
+          cbn [exec_named].
+          rewrite
+            (eval_untagging untagged statics vars vars' p v Hvars Hreads Hv).
+          reflexivity.
         - cbn [orb] in Hd.
           assert (Hsame :
-            eval_named statics vars' d = eval_named statics vars d)
-            by exact (eval_named_plain untagged statics vars vars' d Hvars Hd).
+            exec_named statics hp rd vars' d
+            = exec_named statics hp rd vars d)
+            by exact
+              (exec_named_plain untagged statics hp rd vars vars' d Hvars
+                 Hd).
           unfold reads_untagged in Hreads.
           destruct (untag_of d) as [p | ]; [ rewrite Hreads | ];
             rewrite Hsame; exact Hv. }
@@ -1215,7 +1235,9 @@ Proof.
       destruct (kind_eqb (kind_of_value v) kind1); [ | exact I ].
       apply Rel_state_inside;
         [ exact Hbody | apply vars_rel_cons, Hvars | | exact Hconts ].
-      exact (tags_ok_let untagged tagged statics vars y d v Hd Htags Hv).
+      exact
+        (tags_ok_let untagged tagged statics hp hp' rd rd' vars y d v Hd
+           Htags Hv).
     + apply andb_true_iff in Hok as [Hbindings Hbody].
       rewrite !step_let_static,
         (eval_static_bindings_plain untagged vars vars' bindings statics Hvars
@@ -1247,14 +1269,16 @@ Proof.
         none_in untagged (fun p => var_in_simple p (ap_callee ap)) = true).
       { unfold none_in in Hargs |- *. rewrite forallb_forall in Hargs.
         apply forallb_forall. intros p Hp. specialize (Hargs p Hp).
-        apply negb_true_iff in Hargs. apply orb_false_iff in Hargs as [Hargs _].
+        apply negb_true_iff in Hargs. apply orb_false_iff in Hargs as
+          [Hargs _].
         apply orb_false_iff in Hargs as [Hargs _]. rewrite Hargs.
         reflexivity. }
       assert (Hap_args :
         none_in untagged (fun p => var_in_simples p (ap_args ap)) = true).
       { unfold none_in in Hargs |- *. rewrite forallb_forall in Hargs.
         apply forallb_forall. intros p Hp. specialize (Hargs p Hp).
-        apply negb_true_iff in Hargs. apply orb_false_iff in Hargs as [Hargs _].
+        apply negb_true_iff in Hargs. apply orb_false_iff in Hargs as
+          [Hargs _].
         apply orb_false_iff in Hargs as [_ Hargs]. rewrite Hargs.
         reflexivity. }
       assert (Hextra :
@@ -1262,13 +1286,15 @@ Proof.
         = true).
       { unfold none_in in Hargs |- *. rewrite forallb_forall in Hargs.
         apply forallb_forall. intros p Hp. specialize (Hargs p Hp).
-        apply negb_true_iff in Hargs. apply orb_false_iff in Hargs as [_ Hargs].
+        apply negb_true_iff in Hargs. apply orb_false_iff in Hargs as
+          [_ Hargs].
         rewrite Hargs. reflexivity. }
       rewrite !step_apply,
         (eval_simple_plain untagged vars vars' _ Hvars Hcallee),
         (eval_simples_plain untagged vars vars' _ Hvars Hap_args),
         (eval_simples_plain untagged vars vars' _ Hvars Hextra).
-      destruct (eval_simple vars (ap_callee ap)) as [callee | ]; [ | exact I ].
+      destruct (eval_simple vars (ap_callee ap)) as [callee | ];
+        [ | exact I ].
       destruct (eval_simples vars (ap_args ap)) as [vs | ]; [ | exact I ].
       destruct (eval_simples vars (exn_extra_simples ap)) as [extra | ];
         [ | exact I ].
@@ -1292,8 +1318,8 @@ Proof.
         as [Hvs' Htagged].
       rewrite Hvs'. unfold apply_continuation.
       exact
-        (apply_cont_value_rel _ _ _ statics hp (Hconts (ac_continuation ac)) vs
-           Htagged).
+        (apply_cont_value_rel _ _ _ statics hp rd
+           (Hconts (ac_continuation ac)) vs Htagged).
     + apply andb_true_iff in Hok as [Hscrutinee Harms].
       rewrite !step_switch,
         (eval_simple_plain untagged vars vars' _ Hvars Hscrutinee).
@@ -1305,7 +1331,7 @@ Proof.
       rewrite forallb_forall in Harms.
       exact
         (Rel_state_inside (Apply_cont ac) vars vars' conts conts' statics hp
-           active untagged tagged
+           rd active untagged tagged
            (Harms (j, ac) (find_arm_in j arms ac Hfind)) Hvars Htags Hconts).
     + rewrite !step_invalid. exact I.
 Qed.
@@ -1321,7 +1347,7 @@ End Runs.
 
 Theorem untag_at_refines : untag_at_refines_statement.
 Proof.
-  intros sites e vars conts statics hp. unfold untag_at.
+  intros sites e vars conts statics hp rd. unfold untag_at.
   destruct (untag_ok sites [] [] [] e) eqn:Hok; [ | apply refines_refl ].
   apply (related_refines sites).
   apply Rel_state_inside;

@@ -102,10 +102,11 @@ Qed.
 
 (* What is known of symbols alone, where the static environment binds
    them so, holds under any variables. *)
-Lemma symbols_facts_hold (known : facts) (vars : env) (statics : static_env) :
+Lemma symbols_facts_hold (known : facts) (vars : env) (statics : static_env)
+    (hp : heap) (rd : read_record) :
   symbols_only known ->
   symbols_bound_as known statics ->
-  facts_hold known vars statics.
+  facts_hold known vars statics hp rd.
 Proof.
   intros Honly [Hblocks Hnumbers].
   assert (Hvars : known_vars (facts_blocks known) = []).
@@ -135,8 +136,8 @@ Qed.
 (* What holds, made of symbols alone, is how the static environment
    binds the symbols. *)
 Lemma facts_hold_symbols_bound (known : facts) (vars : env)
-    (statics : static_env) :
-  facts_hold known vars statics ->
+    (statics : static_env) (hp : heap) (rd : read_record) :
+  facts_hold known vars statics hp rd ->
   symbols_bound_as (facts_of_symbols known) statics.
 Proof.
   intros ([_ Hblocks] & [_ Hnumbers] & _). split.
@@ -158,9 +159,11 @@ Qed.
 Theorem symbols_under_statics_bound : symbols_under_statics_bound_statement.
 Proof.
   intros known bindings vars statics extended Honly Hbound Heval.
-  apply (facts_hold_symbols_bound _ vars).
+  apply (facts_hold_symbols_bound _ vars extended empty_heap no_reads).
   exact (facts_hold_under_statics known vars statics bindings extended
-    (symbols_facts_hold known vars statics Honly Hbound) Heval).
+    empty_heap no_reads
+    (symbols_facts_hold known vars statics empty_heap no_reads Honly Hbound)
+    Heval).
 Qed.
 
 Lemma symbols_bound_as_extend (known : facts)
@@ -219,9 +222,9 @@ Qed.
 Theorem unbox_variants_knowing_symbols_refines :
   unbox_variants_knowing_symbols_refines_statement.
 Proof.
-  intros known e vars conts statics hp Honly Hbound.
+  intros known e vars conts statics hp rd Honly Hbound.
   apply unbox_variants_knowing_refines.
-  exact (symbols_facts_hold known vars statics Honly Hbound).
+  exact (symbols_facts_hold known vars statics hp rd Honly Hbound).
 Qed.
 
 (* ======================================================================== *)
@@ -236,11 +239,11 @@ Hypothesis f_refines : refines_where_known f.
 
 (* What [rewrite_code_body] gives refines where what is known holds. *)
 Lemma rewritten_body_refines (known : facts) (body : expr) (vars : env)
-    (conts : cont_env) (statics : static_env) (hp : heap) :
+    (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record) :
   symbols_only known ->
   symbols_bound_as known statics ->
-  refines (State body vars conts statics hp)
-    (State (rewrite_code_body (f known) body) vars conts statics hp).
+  refines (State body vars conts statics hp rd)
+    (State (rewrite_code_body (f known) body) vars conts statics hp rd).
 Proof.
   intros Honly Hbound. unfold rewrite_code_body. cbv zeta.
   destruct (Bool.eqb (binds_statics body) (binds_statics (f known body)));
@@ -271,7 +274,8 @@ Proof.
       apply Binding_code, Codes_related;
       first
         [ exact Hbinds | exact (eq_sym Hbinds)
-        | intros vars conts statics Hbound; apply f_refines; assumption ].
+        | intros vars conts statics hp rd Hbound; apply f_refines;
+          assumption ].
   - split; (apply Forall2_cons; [ apply Binding_same | assumption ]).
   - split; (apply Forall2_cons; [ apply Binding_same | assumption ]).
 Qed.
@@ -322,18 +326,18 @@ Qed.
    handler and in code. *)
 Fixpoint rewrite_code_in_scope_refines_aux (e : expr) :
   ∀ (known : facts) (vars : env) (conts : cont_env) (statics : static_env)
-    (hp : heap),
+    (hp : heap) (rd : read_record),
     symbols_only known ->
     symbols_bound_as known statics ->
-    refines (State e vars conts statics hp)
-      (State (rewrite_code_in_scope f known e) vars conts statics hp).
+    refines (State e vars conts statics hp rd)
+      (State (rewrite_code_in_scope f known e) vars conts statics hp rd).
 Proof.
   destruct e
     as [ x kind d body | bindings body | k h body | handlers body
        | ap | ac | scrutinee arms | ];
-    intros known vars conts statics hp Honly Hbound;
+    intros known vars conts statics hp rd Honly Hbound;
     cbn [rewrite_code_in_scope]; cbv zeta; try apply refines_refl.
-  - apply let_refines_step; [ reflexivity | intros v _ _ ].
+  - apply let_refines_step_exec; [ reflexivity | intros v hp' rd' _ _ ].
     apply rewrite_code_in_scope_refines_aux; assumption.
   - (* the code of the group is rewritten with the symbols of the group
        known: the body under the one static environment refines it
@@ -360,7 +364,7 @@ Proof.
       rewrite <- (symbols_under_rewritten_code (f known') known bindings).
       exact (symbols_under_statics_bound known _ vars statics extended'
         Honly Hbound Hbindings'). }
-    apply (refines_trans _ (State body vars conts extended' hp)).
+    apply (refines_trans _ (State body vars conts extended' hp rd)).
     + apply (related_states_refines (symbols_bound_as known')
         (symbols_bound_as_extend known'));
         [ exact Hbound' | exact Hbound'' | apply cont_env_related_refl
@@ -373,10 +377,10 @@ Proof.
          (Let_cont_non_recursive k
             (Handler params metadata (rewrite_code_in_scope f known handler))
             body)
-         vars conts statics hp)).
+         vars conts statics hp rd)).
     + apply (let_cont_handler_refines_where (symbols_bound_as known)
         (symbols_bound_as_extend known)); [ exact Hbound | ].
-      intros vs handler_vars conts' statics' hp' Hbound' _ _.
+      intros vs handler_vars conts' statics' hp' rd' Hbound' _ _.
       apply rewrite_code_in_scope_refines_aux; assumption.
     + apply let_cont_non_recursive_refines_step,
         rewrite_code_in_scope_refines_aux; assumption.
@@ -388,7 +392,7 @@ Proof.
                   (k, rewrite_code_in_scope_in_handler f known h))
                handlers)
             body)
-         vars conts statics hp)).
+         vars conts statics hp rd)).
     + assert (Hhandlers :
         handlers_refine (symbols_bound_as known) vars handlers
           (map
@@ -401,7 +405,7 @@ Proof.
         - destruct IH as [Hforwards Hbackwards].
           split; (apply Forall2_cons; [ | assumption ]);
             (split; [ reflexivity | ]); apply Handler_related;
-            intros vs handler_vars conts' statics' hp' Hbound' _ _;
+            intros vs handler_vars conts' statics' hp' rd' Hbound' _ _;
             apply rewrite_code_in_scope_refines_aux; assumption. }
       destruct Hhandlers as [Hforwards Hbackwards].
       apply (let_cont_recursive_handlers_refine_where
@@ -454,19 +458,19 @@ Qed.
 
 Fixpoint rewrite_rec_handlers_in_scope_refines_aux (e : expr) :
   ∀ (known : facts) (vars : env) (conts : cont_env) (statics : static_env)
-    (hp : heap),
+    (hp : heap) (rd : read_record),
     symbols_only known ->
     symbols_bound_as known statics ->
-    refines (State e vars conts statics hp)
+    refines (State e vars conts statics hp rd)
       (State (rewrite_rec_handlers_in_scope f known e) vars conts statics
-         hp).
+         hp rd).
 Proof.
   destruct e
     as [ x kind d body | bindings body | k h body | handlers body
        | ap | ac | scrutinee arms | ];
-    intros known vars conts statics hp Honly Hbound;
+    intros known vars conts statics hp rd Honly Hbound;
     cbn [rewrite_rec_handlers_in_scope]; try apply refines_refl.
-  - apply let_refines_step; [ reflexivity | intros v _ _ ].
+  - apply let_refines_step_exec; [ reflexivity | intros v hp' rd' _ _ ].
     apply rewrite_rec_handlers_in_scope_refines_aux; assumption.
   - apply let_static_refines_step.
     destruct (eval_static_bindings vars bindings statics) as [extended | ]
@@ -483,10 +487,10 @@ Proof.
             (Handler params metadata
                (rewrite_rec_handlers_in_scope f known handler))
             body)
-         vars conts statics hp)).
+         vars conts statics hp rd)).
     + apply (let_cont_handler_refines_where (symbols_bound_as known)
         (symbols_bound_as_extend known)); [ exact Hbound | ].
-      intros vs handler_vars conts' statics' hp' Hbound' _ _.
+      intros vs handler_vars conts' statics' hp' rd' Hbound' _ _.
       apply rewrite_rec_handlers_in_scope_refines_aux; assumption.
     + apply let_cont_non_recursive_refines_step,
         rewrite_rec_handlers_in_scope_refines_aux; assumption.
@@ -497,7 +501,7 @@ Proof.
                (fun '(k, h) => (k, rewrite_rec_handler_in_scope f known h))
                handlers)
             body)
-         vars conts statics hp)).
+         vars conts statics hp rd)).
     + assert (Hhandlers :
         handlers_refine (symbols_bound_as known) vars handlers
           (map (fun '(k, h) => (k, rewrite_rec_handler_in_scope f known h))
@@ -509,7 +513,7 @@ Proof.
         - destruct IH as [Hforwards Hbackwards].
           split; (apply Forall2_cons; [ | assumption ]);
             (split; [ reflexivity | ]); apply Handler_related;
-            intros vs handler_vars conts' statics' hp' Hbound' _ _;
+            intros vs handler_vars conts' statics' hp' rd' Hbound' _ _;
             (eapply refines_trans;
               [ apply rewrite_rec_handlers_in_scope_refines_aux
               | apply rewritten_body_refines ]);
@@ -544,15 +548,15 @@ Qed.
 Theorem rewrite_code_in_scope_expr_refines :
   rewrite_code_in_scope_expr_refines_statement.
 Proof.
-  intros f e Hf vars conts statics hp.
+  intros f e Hf vars conts statics hp rd.
   exact (rewrite_code_in_scope_refines f Hf no_facts e vars conts statics hp
-    no_facts_only (no_symbols_bound statics)).
+    rd_ no_facts_only (no_symbols_bound statics)).
 Qed.
 
 Theorem rewrite_rec_handlers_in_scope_expr_refines :
   rewrite_rec_handlers_in_scope_expr_refines_statement.
 Proof.
-  intros f e Hf vars conts statics hp.
+  intros f e Hf vars conts statics hp rd.
   exact (rewrite_rec_handlers_in_scope_refines f Hf no_facts e vars conts
-    statics hp no_facts_only (no_symbols_bound statics)).
+    statics hp rd_ no_facts_only (no_symbols_bound statics)).
 Qed.

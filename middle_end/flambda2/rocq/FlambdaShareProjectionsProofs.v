@@ -255,45 +255,90 @@ Proof.
 Qed.
 
 (* ======================================================================== *)
+(* With the run of the machine                                              *)
+(* ======================================================================== *)
+
+(* The machine runs a [Let] with the heap ([exec_named]); the two facts
+   above are about the value alone ([eval_named]). A projection is not a
+   primitive, so the machine runs it without the heap and the two agree;
+   of what is not a projection the pass records nothing and changes
+   nothing. *)
+Lemma is_projection_reads_no_heap (d : named) :
+  is_projection d = true -> named_reads_heap d = false.
+Proof.
+  destruct d; simpl; intros Hprojection;
+    first [ reflexivity | discriminate Hprojection ].
+Qed.
+
+Lemma all_projected_under_let_exec (known : projected) (x : variable)
+    (d : named) (vars : env) (statics : static_env) (hp hp' : heap)
+      (rd rd' : read_record)
+    (v : value) :
+  all_projected known vars statics ->
+  exec_named statics hp rd vars d = Some (v, hp', rd') ->
+  all_projected (projected_under_let known x d) ((x, v) :: vars) statics.
+Proof.
+  intros Hhold Hd. destruct (is_projection d) eqn:Hprojection.
+  - apply all_projected_under_let; [ exact Hhold | ].
+    exact (proj1 (exec_named_pure statics hp hp' rd rd' vars d v
+      (is_projection_reads_no_heap d Hprojection) Hd)).
+  - unfold projected_under_let. cbv zeta. rewrite Hprojection. simpl.
+    exact (all_projected_forget known vars statics x v Hhold).
+Qed.
+
+Lemma share_projection_exec (known : projected) (vars : env)
+    (statics : static_env) (hp hp' : heap) (rd rd' : read_record) (d : named)
+      (v : value) :
+  all_projected known vars statics ->
+  exec_named statics hp rd vars d = Some (v, hp', rd') ->
+  exec_named statics hp rd vars (share_projection known d) = Some (v, hp', rd').
+Proof.
+  intros Hhold Hd. unfold share_projection.
+  destruct (projected_by known d) as [x | ] eqn:Hprojected; [ | exact Hd ].
+  destruct (Hhold _ (projected_by_sound _ _ _ Hprojected))
+    as (Hprojection & r & Hvalue & Hlookup).
+  simpl in Hprojection, Hvalue, Hlookup.
+  destruct (exec_named_pure statics hp hp' rd rd' vars d v
+    (is_projection_reads_no_heap d Hprojection) Hd) as (Heval & -> & ->).
+  rewrite Heval in Hvalue. injection Hvalue as <-.
+  simpl. rewrite Hlookup. reflexivity.
+Qed.
+
+(* ======================================================================== *)
 (* The pass                                                                 *)
 (* ======================================================================== *)
 
 (* As in FlambdaCseProofs.v. *)
 Fixpoint share_projections_knowing_refines (e : expr) :
   ∀ (known : projected) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap),
+    (statics : static_env) (hp : heap) (rd : read_record),
     all_projected known vars statics ->
-    refines (State e vars conts statics hp)
-      (State (share_projections_knowing known e) vars conts statics hp)
+    refines (State e vars conts statics hp rd)
+      (State (share_projections_knowing known e) vars conts statics hp rd)
 with share_projections_in_handler_refines (h : continuation_handler) :
   ∀ (known : projected) (k : continuation) (body : expr) (vars : env)
-    (conts : cont_env) (statics : static_env) (hp : heap),
+    (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record),
     all_projected known vars statics ->
-    refines (State (Let_cont_non_recursive k h body) vars conts statics hp)
+    refines (State (Let_cont_non_recursive k h body) vars conts statics hp rd)
       (State
          (Let_cont_non_recursive k (share_projections_in_handler known h)
             body)
-         vars conts statics hp).
+         vars conts statics hp rd).
 Proof.
   - destruct e
       as [ x kind d body | bindings body | k h body | handlers body | ap
          | ac | scrutinee arms | ];
-      intros known vars conts statics hp Hhold; simpl.
-    + (* Let *)
-      destruct (eval_named statics vars d) as [v | ] eqn:Hd;
-        [ destruct (kind_eqb (kind_of_value v) kind) eqn:Hkind | ].
-      * eapply refines_step;
-          [ rewrite step_let, Hd, Hkind; reflexivity
-          | rewrite step_let,
-              (share_projection_sound known vars statics d v Hhold Hd),
-              Hkind;
-            reflexivity
-          | ].
-        apply share_projections_knowing_refines.
-        exact (all_projected_under_let known x d vars statics v Hhold Hd).
-      * apply step_undefined_refines. rewrite step_let, Hd, Hkind.
-        reflexivity.
-      * apply step_undefined_refines. rewrite step_let, Hd. reflexivity.
+      intros known vars conts statics hp rd Hhold; simpl.
+    + (* Let: the machine runs [d] with the heap; the pass runs the
+         same or a variable that holds its value, and leaves the same
+         heap. *)
+      apply let_refines_step_forward.
+      * intros v hp' rd' Hd.
+        exact (share_projection_exec known vars statics hp hp' rd rd' d v Hhold
+          Hd).
+      * intros v hp' rd' Hd _. apply share_projections_knowing_refines.
+        exact (all_projected_under_let_exec known x d vars statics hp hp' rd rd'
+          v Hhold Hd).
     + (* Let_static *)
       apply let_static_refines_step.
       destruct (eval_static_bindings vars bindings statics)
@@ -306,7 +351,7 @@ Proof.
         (State
            (Let_cont_non_recursive k (share_projections_in_handler known h)
               body)
-           vars conts statics hp)).
+           vars conts statics hp rd)).
       * apply share_projections_in_handler_refines, Hhold.
       * apply let_cont_non_recursive_refines_step,
           share_projections_knowing_refines, Hhold.
@@ -318,11 +363,11 @@ Proof.
     + apply refines_refl.
     + apply refines_refl.
   - destruct h as [params metadata handler].
-    intros known k body vars conts statics hp Hhold. simpl.
+    intros known k body vars conts statics hp rd Hhold. simpl.
     apply (let_cont_handler_refines_where (statics_extend statics)
       (statics_extend_trans statics));
       [ apply statics_extend_refl | ].
-    intros vs handler_vars conts' statics' hp' Hextend _ Hbind.
+    intros vs handler_vars conts' statics' hp' rd' Hextend _ Hbind.
     apply share_projections_knowing_refines.
     apply (all_projected_bind_params statics' params known vs vars
       handler_vars);
@@ -334,7 +379,7 @@ Qed.
 Theorem share_known_projections_refines :
   share_known_projections_refines_statement.
 Proof.
-  intros e vars conts statics hp. apply share_projections_knowing_refines.
+  intros e vars conts statics hp rd. apply share_projections_knowing_refines.
   intros entry [].
 Qed.
 

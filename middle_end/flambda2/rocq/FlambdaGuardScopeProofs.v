@@ -48,14 +48,14 @@ Theorem guard_scope_refines : guard_scope_refines_statement.
 Proof.
   intros f e Hrefines.
   destruct (guard_scope_cases f e) as [-> | ->]; [ exact Hrefines | ].
-  intros vars conts statics hp. apply refines_refl.
+  intros vars conts statics hp rd. apply refines_refl.
 Qed.
 
 Theorem guard_scope_equivalent : guard_scope_equivalent_statement.
 Proof.
   intros f e Hequivalent.
   destruct (guard_scope_cases f e) as [-> | ->]; [ exact Hequivalent | ].
-  intros vars conts statics hp. apply equivalent_refl.
+  intros vars conts statics hp rd. apply equivalent_refl.
 Qed.
 
 Theorem guard_scope_program_refines : guard_scope_program_refines_statement.

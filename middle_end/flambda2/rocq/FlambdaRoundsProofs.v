@@ -59,7 +59,7 @@ Variable R : state -> state -> Prop.
 Definition round_answered (result : step_result) (s' : state) : Prop :=
   match result with
   | Undefined => True
-  | Exit k vs hp => ∃ m : nat, run m s' = Exit k vs hp
+  | Exit k vs hp rd => ∃ m : nat, run m s' = Exit k vs hp rd
   | Step t => ∃ (m : nat) (t' : state), run (S m) s' = Step t' ∧ R t t'
   end.
 
@@ -72,7 +72,7 @@ Proof.
     cbn [result_simulated run]; try contradiction; try exact (fun _ => I).
   - intros Hrel. exists 0, t'. split; [ | exact Hrel ].
     cbn [run]. rewrite Hstep'. reflexivity.
-  - intros [<- [<- <-]]. exists 1. cbn [run]. rewrite Hstep'. reflexivity.
+  - intros [<- [<- [<- <-]]]. exists 1. cbn [run]. rewrite Hstep'. reflexivity.
 Qed.
 
 Hypothesis R_round :
@@ -80,8 +80,8 @@ Hypothesis R_round :
 
 (* A run that has come to an exit, or to nothing, stays there. *)
 Lemma run_exit_stable (n m : nat) (s : state) (k : continuation)
-    (vs : list value) (hp : heap) :
-  run n s = Exit k vs hp -> run (n + m) s = Exit k vs hp.
+    (vs : list value) (hp : heap) (rd : read_record) :
+  run n s = Exit k vs hp rd -> run (n + m) s = Exit k vs hp rd.
 Proof. intros Hrun. rewrite run_add, Hrun. reflexivity. Qed.
 
 Lemma run_undefined_stable (n m : nat) (s : state) :
@@ -90,24 +90,26 @@ Proof. intros Hrun. rewrite run_add, Hrun. reflexivity. Qed.
 
 (* An exit of the first run is one of the second. *)
 Lemma rounds_exit (n : nat) :
-  ∀ (s s' : state) (k : continuation) (vs : list value) (hp : heap),
-    R s s' -> run n s = Exit k vs hp -> ∃ m : nat, run m s' = Exit k vs hp.
+  ∀ (s s' : state) (k : continuation) (vs : list value) (hp : heap)
+    (rd : read_record),
+    R s s' -> run n s = Exit k vs hp rd -> ∃ m : nat, run m s'
+      = Exit k vs hp rd.
 Proof.
   induction n as [n IH] using (well_founded_induction lt_wf).
-  intros s s' k vs hp Hrel Hexit.
+  intros s s' k vs hp rd Hrel Hexit.
   destruct (R_round s s' Hrel) as [j Hanswer].
   destruct (Nat.le_gt_cases n (S j)) as [Hshort | Hlong].
   - (* the exit is within the round *)
     replace (S j) with (n + (S j - n)) in Hanswer by lia.
-    rewrite (run_exit_stable n _ s k vs _ Hexit) in Hanswer. exact Hanswer.
+    rewrite (run_exit_stable n _ s k vs _ rd_ Hexit) in Hanswer. exact Hanswer.
   - replace n with (S j + (n - S j)) in Hexit by lia.
     rewrite run_add in Hexit.
     destruct (run (S j) s) as [t | k' vs' | ]; [ | | discriminate Hexit ].
     + destruct Hanswer as (m & t' & Hrun & Hrel').
       assert (Hless : n - S j < n) by lia.
-      destruct (IH (n - S j) Hless t t' k vs hp Hrel' Hexit) as [m' Hm'].
+      destruct (IH (n - S j) Hless t t' k vs hp rd_ Hrel' Hexit) as [m' Hm'].
       exists (S m + m'). rewrite run_add, Hrun. exact Hm'.
-    + injection Hexit as -> -> ->. exact Hanswer.
+    + injection Hexit as -> -> -> ->. exact Hanswer.
 Qed.
 
 (* If the second run has ended, so has the first: each round uses up at
@@ -118,13 +120,14 @@ Lemma rounds_ends (m : nat) :
     ended (run m s') b ->
     ∃ n : nat,
       run n s = Undefined
-      ∨ ∃ (k : continuation) (vs : list value) (hp : heap), run n s
-        = Exit k vs hp.
+      ∨ ∃ (k : continuation) (vs : list value) (hp : heap) (rd : read_record),
+        run n s
+        = Exit k vs hp rd.
 Proof.
   induction m as [m IH] using (well_founded_induction lt_wf).
   intros s s' b Hrel Hended.
   destruct (R_round s s' Hrel) as [j Hanswer].
-  destruct (run (S j) s) as [t | k vs hp' | ] eqn:Hround.
+  destruct (run (S j) s) as [t | k vs hp' rd' | ] eqn:Hround.
   - destruct Hanswer as (i & t' & Hrun & Hrel').
     destruct (Nat.lt_ge_cases m (S i)) as [Hshort | Hlong].
     + exfalso. replace (S i) with (m + (S i - m)) in Hrun by lia.
@@ -135,7 +138,7 @@ Proof.
       assert (Hless : m - S i < m) by lia.
       destruct (IH (m - S i) Hless t t' b Hrel' Hended) as [n Hn].
       exists (S j + n). rewrite run_add, Hround. exact Hn.
-  - exists (S j). right. exists k, vs, hp'. exact Hround.
+  - exists (S j). right. exists k, vs, hp', rd'. exact Hround.
   - exists (S j). left. exact Hround.
 Qed.
 
@@ -146,15 +149,17 @@ Proof.
   assert (Hexits :
     ∀ (k : continuation) (vs : list value) (hp : heap),
       behaves s (Exits k vs hp) -> behaves s' (Exits k vs hp)).
-  { intros k vs hp [n Hn].
-    destruct (rounds_exit n s s' k vs _ Hrel Hn) as [m Hm].
-    exists m. exact Hm. }
+  { intros k vs hp [n [rd Hn]].
+    destruct (rounds_exit n s s' k vs _ rd_ Hrel Hn) as [m Hm].
+    exists m, rd. exact Hm. }
   split; [ exact Hexits | ].
   intros b Hterm Hb. destruct (behaves_ended s' b Hterm Hb) as [m Hended].
   destruct (rounds_ends m s s' b Hrel Hended)
-    as [n [Hwrong | (k & vs & hp & Hexit)]].
+    as [n [Hwrong | (k & vs & hp & rd & Hexit)]].
   - right. exists n. exact Hwrong.
-  - left. assert (Hs : behaves s (Exits k vs hp)) by (exists n; exact Hexit).
+  - left.
+    assert (Hs : behaves s (Exits k vs hp))
+      by (exists n, rd; exact Hexit).
     rewrite (behaviour_unique s' b (Exits k vs hp) Hb (Hexits k vs hp Hs)).
     exact Hs.
 Qed.

@@ -329,6 +329,114 @@ Proof.
 Qed.
 
 (* ======================================================================== *)
+(* With the run of the machine                                              *)
+(* ======================================================================== *)
+
+(* The machine runs a [Let] with the heap ([exec_named]); the facts
+   above are about the value alone ([eval_named]). What the pass records
+   is made by a primitive that reads no cell. The primitives that it
+   replaces, the length of an array and a load from one, may read a
+   cell; but the array is known, so its value is one that a primitive
+   made or a symbol bound to one, and no location, and the index of a
+   load is a constant: the run has the value that [eval_named] gives
+   and leaves the heap and the record
+   (FlambdaSemanticsSpec.exec_named_no_location_statement). Of anything
+   else the pass records nothing and changes nothing. *)
+Lemma arrays_hold_under_let_exec (known : known_arrays) (x : variable)
+    (d : named) (vars : env) (statics : static_env) (hp hp' : heap)
+    (rd rd' : read_record) (v : value) :
+  arrays_hold known vars statics ->
+  exec_named statics hp rd vars d = Some (v, hp', rd') ->
+  arrays_hold (arrays_under_let known x d) ((x, v) :: vars) statics.
+Proof.
+  intros Hhold Hd.
+  destruct (array_made_by d) as [array | ] eqn:Hmade.
+  - apply arrays_hold_under_let; [ exact Hhold | ].
+    destruct (array_made_by_spec d array Hmade) as (kind & elements & -> & _).
+    exact
+      (proj1
+         (exec_named_pure statics hp hp' rd rd' vars
+            (Prim (Variadic (Make_immutable_array kind)) elements) v
+            eq_refl Hd)).
+  - unfold arrays_under_let. rewrite Hmade.
+    exact (arrays_hold_forget_var known vars statics x v Hhold).
+Qed.
+
+(* Where the pass reads, the primitive is not of the heap and none of
+   the values of its arguments is a location. *)
+Lemma of_known_array_no_location (known : known_arrays) (vars : env)
+    (statics : static_env) (p : prim) (args : list simple)
+    (result : simple) (vs : list value) :
+  arrays_hold known vars statics ->
+  of_known_array known p args = Some result ->
+  eval_simples vars args = Some vs ->
+  (∀ q : heap_primitive, p <> Heap q)
+  ∧ ∀ l : location, Value_location l ∉ vs.
+Proof.
+  intros Hhold Hresult Hvs. unfold of_known_array in Hresult.
+  destruct p as [u | b | vp | hp | rp]; try discriminate Hresult.
+  - (* [Array_length] *)
+    destruct u; try discriminate Hresult.
+    destruct args as [ | a [ | a' args]]; try discriminate Hresult.
+    destruct (known_array_of known a) as [array | ] eqn:Hknown;
+      [ | discriminate Hresult ].
+    destruct (known_array_of_sound _ _ _ _ _ Hhold Hknown)
+      as (elements & array_value & _ & Ha & Harray_of).
+    cbn [eval_simples] in Hvs. rewrite Ha in Hvs. injection Hvs as <-.
+    split; [ intros q; discriminate | ].
+    intros l [-> | []]. discriminate Harray_of.
+  - (* [Array_load] *)
+    destruct b; try discriminate Hresult.
+    destruct args as [ | a [ | index [ | arg args]]];
+      try discriminate Hresult.
+    destruct (known_array_of known a) as [array | ] eqn:Hknown;
+      [ | discriminate Hresult ].
+    destruct (known_array_of_sound _ _ _ _ _ Hhold Hknown)
+      as (elements & array_value & _ & Ha & Harray_of).
+    unfold element_loaded in Hresult.
+    destruct index as [x | sym | c]; try discriminate Hresult.
+    cbn [eval_simples eval_simple] in Hvs. rewrite Ha in Hvs.
+    injection Hvs as <-.
+    split; [ intros q; discriminate | ].
+    intros l [-> | [Hl | []]];
+      [ discriminate Harray_of | discriminate Hl ].
+Qed.
+
+Lemma load_known_array_named_exec (known : known_arrays) (vars : env)
+    (statics : static_env) (hp hp' : heap) (rd rd' : read_record)
+    (d : named) (v : value) :
+  arrays_hold known vars statics ->
+  exec_named statics hp rd vars d = Some (v, hp', rd') ->
+  exec_named statics hp rd vars (load_known_array_named known d)
+  = Some (v, hp', rd').
+Proof.
+  intros Hhold Hd. unfold load_known_array_named.
+  destruct d as [s | p args | code slots | fslot decls slots | slot closure
+    | pfrom slot closure | move_from move_to closure];
+    try exact Hd.
+  destruct (of_known_array known p args) as [result | ] eqn:Hresult;
+    [ | exact Hd ].
+  destruct (eval_simples vars args) as [vs | ] eqn:Hvs.
+  2: { rewrite exec_named_prim, Hvs in Hd. discriminate Hd. }
+  destruct
+    (of_known_array_no_location known vars statics p args result vs Hhold
+       Hresult Hvs)
+    as [Hnot_heap Hno_location].
+  rewrite
+    (exec_named_no_location statics hp rd vars p args vs Hnot_heap Hvs
+       Hno_location)
+    in Hd.
+  destruct (eval_named statics vars (Prim p args)) as [w | ] eqn:Heval;
+    [ | discriminate Hd ].
+  injection Hd as <- <- <-.
+  cbn [exec_named eval_named].
+  rewrite
+    (of_known_array_sound known vars statics p args result w Hhold Hresult
+       Heval).
+  reflexivity.
+Qed.
+
+(* ======================================================================== *)
 (* The pass                                                                 *)
 (* ======================================================================== *)
 
@@ -337,39 +445,35 @@ Qed.
    there. *)
 Fixpoint load_arrays_knowing_refines (e : expr) :
   ∀ (known : known_arrays) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap),
+    (statics : static_env) (hp : heap) (rd : read_record),
     arrays_hold known vars statics ->
-    refines (State e vars conts statics hp)
-      (State (load_arrays_knowing known e) vars conts statics hp)
+    refines (State e vars conts statics hp rd)
+      (State (load_arrays_knowing known e) vars conts statics hp rd)
 with load_arrays_in_handler_refines (h : continuation_handler) :
   ∀ (known : known_arrays) (k : continuation) (body : expr) (vars : env)
-    (conts : cont_env) (statics : static_env) (hp : heap),
+    (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record),
     arrays_hold known vars statics ->
-    refines (State (Let_cont_non_recursive k h body) vars conts statics hp)
+    refines (State (Let_cont_non_recursive k h body) vars conts statics hp rd)
       (State
          (Let_cont_non_recursive k (load_arrays_in_handler known h) body)
-         vars conts statics hp).
+         vars conts statics hp rd).
 Proof.
   - destruct e
       as [ x kind d body | bindings body | k h body | handlers body | ap
          | ac | scrutinee arms | ];
-      intros known vars conts statics hp Hhold; simpl.
-    + (* Let *)
-      destruct (eval_named statics vars d) as [v | ] eqn:Hd;
-        [ destruct (kind_eqb (kind_of_value v) kind) eqn:Hkind | ].
-      * eapply refines_step;
-          [ rewrite step_let, Hd, Hkind; reflexivity
-          | rewrite step_let,
-              (load_known_array_named_sound known vars statics d v Hhold
-                 Hd),
-              Hkind;
-            reflexivity
-          | ].
-        apply load_arrays_knowing_refines.
-        exact (arrays_hold_under_let known x d vars statics v Hhold Hd).
-      * apply step_undefined_refines. rewrite step_let, Hd, Hkind.
-        reflexivity.
-      * apply step_undefined_refines. rewrite step_let, Hd. reflexivity.
+      intros known vars conts statics hp rd Hhold; simpl.
+    + (* Let: the machine runs [d] with the heap; the pass runs the
+         same or what is known of the array, and leaves the same heap
+         and record. *)
+      apply let_refines_step_forward.
+      * intros v hp' rd' Hd.
+        exact
+          (load_known_array_named_exec known vars statics hp hp' rd rd' d v
+             Hhold Hd).
+      * intros v hp' rd' Hd _. apply load_arrays_knowing_refines.
+        exact
+          (arrays_hold_under_let_exec known x d vars statics hp hp' rd rd' v
+             Hhold Hd).
     + (* Let_static *)
       apply let_static_refines_step.
       destruct (eval_static_bindings vars bindings statics)
@@ -381,7 +485,7 @@ Proof.
       apply (refines_trans _
         (State
            (Let_cont_non_recursive k (load_arrays_in_handler known h) body)
-           vars conts statics hp)).
+           vars conts statics hp rd)).
       * apply load_arrays_in_handler_refines, Hhold.
       * apply let_cont_non_recursive_refines_step,
           load_arrays_knowing_refines, Hhold.
@@ -393,11 +497,11 @@ Proof.
     + apply refines_refl.
     + apply refines_refl.
   - destruct h as [params metadata handler].
-    intros known k body vars conts statics hp Hhold. simpl.
+    intros known k body vars conts statics hp rd Hhold. simpl.
     apply (let_cont_handler_refines_where (array_symbols_hold known vars)
       (array_symbols_hold_extend known vars));
       [ exact (proj2 Hhold) | ].
-    intros vs handler_vars conts' statics' hp' Hsymbols _ Hbind.
+    intros vs handler_vars conts' statics' hp' rd' Hsymbols _ Hbind.
     apply load_arrays_knowing_refines.
     apply (arrays_hold_bind_params statics' params known vs vars
       handler_vars);
@@ -406,7 +510,7 @@ Qed.
 
 Theorem load_known_arrays_refines : load_known_arrays_refines_statement.
 Proof.
-  intros e vars conts statics hp. apply load_arrays_knowing_refines.
+  intros e vars conts statics hp rd. apply load_arrays_knowing_refines.
   split; intros entry [].
 Qed.
 

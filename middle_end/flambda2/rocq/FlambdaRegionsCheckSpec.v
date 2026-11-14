@@ -177,9 +177,12 @@
      A term that the check passes may stop without a step where
      [step] has none.
    - It says nothing of the primitives of the heap: the machine of
-     regions runs none ([FlambdaRegionsSpec.plain_step] has no step
-     for one), and a term that has one is passed or refused by the
-     lifetimes of its arguments alone.
+     regions runs none. Its run ends at a [Let] of one, and at a [Let]
+     of another primitive, not one of regions, that is given a
+     location (FlambdaRegionsSpec.Region_let_not_run, decision D53),
+     and a term that has one is passed or refused by the lifetimes of
+     its arguments alone: a pass says nothing of the run from that
+     [Let] on.
    - It is of the model's term on the model's machine. Two places
      where that machine keeps a value longer than the program does
      are known, and the check follows the machine in both: an
@@ -1044,7 +1047,23 @@ Definition region_check_fault_statement : Prop :=
     = Region_undefined fault ->
     fault = No_plain_step.
 
-(* A run on the machine of regions that never stops without a step. *)
+(* A run on the machine of regions that is never undefined. It may
+   end at a [Let] that the machine does not run
+   (FlambdaRegionsSpec.Region_let_not_run, decision D53). A run from
+   the first state of a term with no primitive of the heap, in a
+   static environment whose code has none and whose values hold no
+   location, does not
+   (FlambdaRegionsInvariantSpec.no_heap_primitive_no_let_not_run_statement),
+   and then it only steps or exits. *)
+
+(* CR mshinwell: "safe" includes a run that stops at a [Let] that the
+   machine of regions does not run: the first state of a unit whose
+   first [Let] makes a block with an identity out of constants is
+   [region_safe], with nothing checked of the unit from that [Let] on.
+   So the name, and the statements that conclude it
+   ([checked_after_safe_statement] and those of the files that use
+   it), say more than they give until the machine lists cells in its
+   frames. Decision D53. *)
 Definition region_safe (rs : region_state) : Prop :=
   ∀ (fuel : nat) (fault : region_fault),
     region_run fuel rs <> Region_undefined fault.
@@ -1084,7 +1103,9 @@ Definition checked_after_safe_statement : Prop :=
 (* And then the two runs compute the same: an exit of the term before
    with its regions is an exit of the term after with its regions,
    through the same continuation, with values that are erased to the
-   same values where they may be evaluated. *)
+   same values where they may be evaluated; or the run of the term
+   after comes to a [Let] that the machine does not run (decision
+   D53). *)
 Definition checked_exits_agree_statement : Prop :=
   ∀ (statics : static_env) (base : symbol) (before after : expr),
     region_names_fresh base before statics = true ->
@@ -1098,9 +1119,11 @@ Definition checked_exits_agree_statement : Prop :=
     ∀ (fuel : nat) (k : continuation) (vs : list value) (rs : region_state),
       region_run fuel (initial_region_state before statics base)
       = Region_exit k vs rs ->
-      ∃ (fuel' : nat) (ws : list value) (rs' : region_state)
-        (us : list value),
+      ∃ fuel' : nat,
         region_run fuel' (initial_region_state after statics base)
-        = Region_exit k ws rs'
-        ∧ Forall2 (value_erased_if_usable rs) vs us
-        ∧ Forall2 (value_erased_if_usable rs') ws us.
+        = Region_let_not_run
+        ∨ ∃ (ws : list value) (rs' : region_state) (us : list value),
+            region_run fuel' (initial_region_state after statics base)
+            = Region_exit k ws rs'
+            ∧ Forall2 (value_erased_if_usable rs) vs us
+            ∧ Forall2 (value_erased_if_usable rs') ws us.

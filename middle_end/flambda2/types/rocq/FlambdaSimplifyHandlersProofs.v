@@ -84,7 +84,7 @@ Lemma handler_typed_where (tenv : Typing_env.t) (statics : static_env)
   handler_refines_where (statics_extend statics) params
     (hm_params_kinds metadata) vars handler handler'.
 Proof.
-  intros Henv Hhandler Hsat vs handler_vars conts' statics' hp Hextend Hkinds
+  intros Henv Hhandler Hsat vs handler_vars conts' statics' hp rd Hextend Hkinds
     Hbind.
   apply Hhandler.
   exact (handler_env_satisfied tenv params metadata tenv_handler statics'
@@ -97,7 +97,7 @@ Qed.
 Theorem let_cont_handler_typed : let_cont_handler_typed_statement.
 Proof.
   intros tenv k params metadata handler handler' body tenv_handler Henv
-    Hhandler vars conts statics hp Hsat.
+    Hhandler vars conts statics hp rd Hsat.
   apply (let_cont_handler_refines_where (statics_extend statics)
            (fun s s' Hs Hs' => statics_extend_trans statics s s' Hs Hs'));
     [ apply statics_extend_refl | ].
@@ -109,7 +109,7 @@ Theorem let_cont_recursive_handler_typed
     : let_cont_recursive_handler_typed_statement.
 Proof.
   intros tenv before k params metadata handler handler' after body
-    tenv_handler Henv Hbinds Hhandler vars conts statics hp Hsat.
+    tenv_handler Henv Hbinds Hhandler vars conts statics hp rd Hsat.
   pose proof (handler_typed_where tenv statics vars params metadata handler
                 handler' tenv_handler Henv Hhandler Hsat)
     as Hwhere.

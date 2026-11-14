@@ -127,6 +127,7 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   FlambdaCompareSpec.v \
   FlambdaContAlikeProofs.v \
   FlambdaContextProofs.v \
+  FlambdaContextMemoryProofs.v \
   FlambdaContextSpec.v \
   FlambdaContextWhereProofs.v \
   FlambdaContextWhereSpec.v \
@@ -181,6 +182,8 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   FlambdaHeapEquivarianceSpec.v \
   FlambdaHeapMachineProofs.v \
   FlambdaHeapMachineSpec.v \
+  FlambdaHeapFreeProofs.v \
+  FlambdaHeapFreeSpec.v \
   FlambdaHeapProofs.v \
   FlambdaHeapSpec.v \
   FlambdaHoistCodeProofs.v \
@@ -327,6 +330,8 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   FlambdaRegionsFreshProofs.v \
   FlambdaRegionsInvariantProofs.v \
   FlambdaRegionsInvariantSpec.v \
+  FlambdaRegionsNeedsHeapProofs.v \
+  FlambdaRegionsNoHeapPrimitiveProofs.v \
   FlambdaRegionsNoPoisonProofs.v \
   FlambdaRegionsNoStepProofs.v \
   FlambdaRegionsOnceProofs.v \

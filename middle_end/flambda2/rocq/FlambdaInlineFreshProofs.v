@@ -195,24 +195,25 @@ Proof.
     (rename_code_binders (swap_variables (code_variables c) fresh) [] called
        c [])
     as Hbinders.
-  intros vars conts statics hp.
+  intros vars conts statics hp rd.
   apply
     (refines_trans _
        (State (Let_static [Bind_code called (open_code fresh c)] (Apply ap))
-          vars conts statics hp)).
+          vars conts statics hp rd)).
   - apply equivalent_refines.
-    exact (Hbinders (Apply ap) Hclosed vars conts statics hp).
+    exact (Hbinders (Apply ap) Hclosed vars conts statics hp rd_).
   - apply
       (refines_trans _
          (State
             (Let_static [Bind_code called (open_code fresh c)]
                (inlined_at fresh c r ap))
-            vars conts statics hp)).
+            vars conts statics hp rd)).
     + exact
         (inline_let_code ap called (open_code fresh c) r Hkind Hopened vars
-           conts statics hp).
+           conts statics hp rd_).
     + apply equivalent_refines, equivalent_sym.
-      exact (Hbinders (inlined_at fresh c r ap) Hclosed vars conts statics hp).
+      exact
+        (Hbinders (inlined_at fresh c r ap) Hclosed vars conts statics hp rd_).
 Qed.
 
 (* ======================================================================== *)
@@ -277,9 +278,10 @@ Qed.
 
 (* A state under two static environments that match. *)
 Lemma statics_matched_equivalent (e : expr) (vars : env) (conts : cont_env)
-    (statics statics' : static_env) (hp : heap) :
+    (statics statics' : static_env) (hp : heap) (rd : read_record) :
   statics_match statics statics' ->
-  equivalent (State e vars conts statics hp) (State e vars conts statics' hp).
+  equivalent (State e vars conts statics hp rd)
+    (State e vars conts statics' hp rd).
 Proof.
   intros Hmatch. apply matched_equivalent. apply (State_matches [] []).
   - apply expr_eqb_refl; apply reflexive_map_nil.
@@ -290,7 +292,7 @@ Qed.
 
 Theorem inline_at_state : inline_at_state_statement.
 Proof.
-  intros ap called c r fresh vars conts statics hp Hkind Hcode Hinlinable
+  intros ap called c r fresh vars conts statics hp rd Hkind Hcode Hinlinable
     Hlength
     Houtside.
   pose proof Hinlinable as (Hclosed & _).
@@ -304,12 +306,12 @@ Proof.
     (replace_code_match called c (open_code fresh c) (static_code statics)
        Hcode (rename_code_eqb _ c Hclosed))
     as [Hforwards Hbackwards].
-  apply (refines_trans _ (State (Apply ap) vars conts statics' hp)).
+  apply (refines_trans _ (State (Apply ap) vars conts statics' hp rd)).
   - apply equivalent_refines, statics_matched_equivalent.
     split; [ exact Hforwards | reflexivity ].
   - apply
       (refines_trans _
-         (State (inlined_at fresh c r ap) vars conts statics' hp)).
+         (State (inlined_at fresh c r ap) vars conts statics' hp rd)).
     + apply (inline ap called (open_code fresh c) r);
         [ exact Hkind | | exact Hopened ].
       exact (lookup_replace_code called c _ _ Hcode).
@@ -345,7 +347,7 @@ Qed.
 
 Theorem inline_fresh_state : inline_fresh_state_statement.
 Proof.
-  intros ap called c r avoid vars conts statics hp Hkind Hcode Hinlinable
+  intros ap called c r avoid vars conts statics hp rd Hkind Hcode Hinlinable
     Havoid.
   apply (inline_at_state ap called c r);
     [ exact Hkind | exact Hcode | exact Hinlinable | apply fresh_names_length

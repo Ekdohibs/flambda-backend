@@ -244,6 +244,19 @@ Proof.
   apply Hagree, Hx.
 Qed.
 
+(* And it does the same on a heap. *)
+Lemma exec_named_agree (statics : static_env) (hp : heap) (rd : read_record)
+    (vars vars' : env)
+    (d : named) :
+  (∀ x : variable, var_free_in_named x d -> lookup x vars = lookup x vars') ->
+  exec_named statics hp rd vars' d = exec_named statics hp rd vars d.
+Proof.
+  intros Hagree. apply exec_named_same.
+  - exact (eval_named_agree statics vars vars' d Hagree).
+  - intros p args ->. split; [ | reflexivity ].
+    exact (eval_simples_agree vars vars' args Hagree).
+Qed.
+
 Lemma eval_static_bindings_agree (vars vars' : env)
     (bindings : list static_binding) :
   (∀ x : variable,
@@ -396,8 +409,8 @@ Definition handler_expr (h : continuation_handler) : expr :=
    parameters removed that the second handler does not use, their kinds
    removed with them, and their arguments removed where the
    continuation is applied; and with some [Let]s removed whose
-   variables are not free in what follows them in the second
-   ([Drops_let_unused]). No [Apply]
+   variables are not free in what follows them in the second and that
+   are not of a primitive of the heap ([Drops_let_unused]). No [Apply]
    returns to a continuation that has lost a parameter. The handlers of
    a recursive [Let_cont] are related one with one, each with its mask
    ([handlers_drop]). (The warning silenced is about induction schemes,
@@ -446,6 +459,7 @@ Inductive drops : masks -> expr -> expr -> Prop :=
   | Drops_invalid (known : masks) : drops known Invalid Invalid
   | Drops_let_unused (known : masks) (x : variable) (kind : flambda_kind)
       (d : named) (body e' : expr) :
+    named_changes_heap d = false ->
     drops known body e' ->
     ~ var_free_in_expr x e' ->
     drops known (Let x kind d body) e'
@@ -1003,12 +1017,13 @@ Definition conts_drop (known : masks) (conts conts' : cont_env) : Prop :=
 
 Inductive state_drops : state -> state -> Prop :=
   | State_drops (known : masks) (e e' : expr) (vars vars' : env)
-      (conts conts' : cont_env) (statics : static_env) (hp : heap) :
+      (conts conts' : cont_env) (statics : static_env) (hp : heap)
+        (rd : read_record) :
     drops known e e' ->
     (∀ x : variable, var_free_in_expr x e' -> lookup x vars = lookup x vars') ->
     conts_drop known conts conts' ->
-    state_drops (State e vars conts statics hp)
-      (State e' vars' conts' statics hp).
+    state_drops (State e vars conts statics hp rd)
+      (State e' vars' conts' statics hp rd).
 
 Lemma state_drops_refl (s : state) : state_drops s s.
 Proof.
@@ -1051,16 +1066,17 @@ Qed.
 Lemma call_code_drops (closure : value) (c : code) (vs : list value)
     (args_arity return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   cont_drops None return_to return_to' ->
   cont_drops None exn_to exn_to' ->
   result_simulated state_drops
-    (call_code closure c vs args_arity return_arity return_to exn_to statics hp)
+    (call_code closure c vs args_arity return_arity return_to exn_to statics hp
+       rd)
     (call_code closure c vs args_arity return_arity return_to' exn_to'
-       statics hp).
+       statics hp rd).
 Proof.
   intros Hreturn Hraise.
-  destruct (call_code_cases closure c vs args_arity return_arity statics hp)
+  destruct (call_code_cases closure c vs args_arity return_arity statics hp rd)
     as [Hundefined | (callee_vars & Hcall)].
   - rewrite !Hundefined. exact I.
   - rewrite !Hcall. simpl.
@@ -1080,18 +1096,20 @@ Qed.
    a partial application to related results. *)
 Lemma run_call_drops (shape : option call_shape) (return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
-    (statics : static_env) (hp : heap) :
+    (statics : static_env) (hp : heap) (rd : read_record) :
   cont_drops None return_to return_to' ->
   cont_drops None exn_to exn_to' ->
   (∀ partial : value,
     result_simulated state_drops
-      (apply_cont_value return_to [partial] statics hp)
-      (apply_cont_value return_to' [partial] statics hp)) ->
+      (apply_cont_value return_to [partial] statics hp rd)
+      (apply_cont_value return_to' [partial] statics hp rd)) ->
   result_simulated state_drops
-    (run_call (fun partial => apply_cont_value return_to [partial] statics hp)
-       shape return_arity return_to exn_to statics hp)
-    (run_call (fun partial => apply_cont_value return_to' [partial] statics hp)
-       shape return_arity return_to' exn_to' statics hp).
+    (run_call
+       (fun partial => apply_cont_value return_to [partial] statics hp rd)
+       shape return_arity return_to exn_to statics hp rd)
+    (run_call
+       (fun partial => apply_cont_value return_to' [partial] statics hp rd)
+       shape return_arity return_to' exn_to' statics hp rd).
 Proof.
   intros Hreturn Hraise Hpartial.
   destruct shape
@@ -1108,11 +1126,11 @@ Qed.
 (* Related continuations, applied: the second to the arguments that its
    mask keeps. *)
 Lemma apply_cont_value_drops (mask : option (list bool))
-    (c c' : cont_value) (statics : static_env) (hp : heap) :
+    (c c' : cont_value) (statics : static_env) (hp : heap) (rd : read_record) :
   cont_drops mask c c' ->
   ∀ vs : list value,
-    result_simulated state_drops (apply_cont_value c vs statics hp)
-      (apply_cont_value c' (keep_all_or mask vs) statics hp).
+    result_simulated state_drops (apply_cont_value c vs statics hp rd)
+      (apply_cont_value c' (keep_all_or mask vs) statics hp rd).
 Proof.
   intros Hc.
   induction Hc
@@ -1126,7 +1144,7 @@ Proof.
     intros vs.
   - (* the same continuation *)
     simpl.
-    destruct (apply_cont_value c vs statics hp) as [s1 | k1 vs1 | ]; simpl;
+    destruct (apply_cont_value c vs statics hp rd) as [s1 | k1 vs1 | ]; simpl;
       [ apply state_drops_refl | auto | exact I ].
   - (* related closures *)
     simpl.
@@ -1165,30 +1183,32 @@ Lemma drops_step (s s' : state) :
   result_simulated state_drops (step s) (step s')
   ∨ ∃ (known : masks) (x : variable) (kind : flambda_kind) (d : named)
       (body e' : expr) (vars vars' : env) (conts conts' : cont_env)
-      (statics : static_env) (hp : heap),
-      s = State (Let x kind d body) vars conts statics hp
-      ∧ s' = State e' vars' conts' statics hp
+      (statics : static_env) (hp : heap) (rd : read_record),
+      s = State (Let x kind d body) vars conts statics hp rd
+      ∧ s' = State e' vars' conts' statics hp rd
+      ∧ named_changes_heap d = false
       ∧ drops known body e'
       ∧ ~ var_free_in_expr x e'
       ∧ (∀ y : variable,
           var_free_in_expr y e' -> lookup y vars = lookup y vars')
       ∧ conts_drop known conts conts'.
 Proof.
-  intros [known e e' vars vars' conts conts' statics hp Hdrops Hvars Hconts].
+  intros [known e e' vars vars' conts conts' statics hp rd Hdrops Hvars Hconts].
   destruct Hdrops
     as [ known x kind d body body' Hbody | known bindings body body' Hbody
        | known k params metadata metadata' handler handler' mask body body'
            Hhandler Hfits Hkinds Hbody
        | known loop handlers handlers' body body' Hhandlers Hbinds Hbody
        | known ap Hret Hexn | known ac | known scrutinee arms | known
-       | known x kind d body e' Hbody Hunused ];
+       | known x kind d body e' Hheap Hbody Hunused ];
     [ left | left | left | left | left | left | left | left
-    | right; do 12 eexists; repeat split; eassumption ];
-    autorewrite with step.
+    | right; do 13 eexists; repeat split; eassumption ];
+    try rewrite !step_let_exec; autorewrite with step.
   - (* Let *)
-    rewrite (eval_named_agree statics vars vars' d)
+    rewrite (exec_named_agree statics hp rd vars vars' d)
       by (intros y Hy; apply Hvars; left; exact Hy).
-    destruct (eval_named statics vars d) as [v | ]; simpl; [ | exact I ].
+    destruct (exec_named statics hp rd vars d) as [[[v hp'] rd'] | ]; simpl;
+      [ | exact I ].
     destruct (kind_eqb (kind_of_value v) kind); simpl; [ | exact I ].
     apply (State_drops known); [ exact Hbody | | exact Hconts ].
     intros y Hy. simpl.
@@ -1237,7 +1257,7 @@ Proof.
     apply run_call_drops;
       [ exact Hreturn | apply with_extra_args_drops, Hraise | ].
     intros partial.
-    exact (apply_cont_value_drops None _ _ statics _ Hreturn [partial]).
+    exact (apply_cont_value_drops None _ _ statics _ rd_ Hreturn [partial]).
   - (* Apply_cont *)
     unfold drop_args. cbn [ac_args ac_continuation].
     destruct (eval_simples vars (ac_args ac)) as [vs | ] eqn:Hargs;
@@ -1245,7 +1265,7 @@ Proof.
     rewrite (eval_simples_masked _ _ vars vars' vs Hargs)
       by (intros y Hy; apply Hvars; exact Hy).
     unfold apply_continuation.
-    exact (apply_cont_value_drops _ _ _ statics _
+    exact (apply_cont_value_drops _ _ _ statics _ rd_
              (Hconts (ac_continuation ac)) vs).
   - (* Switch *)
     rewrite (eval_simple_agree vars vars' scrutinee)
@@ -1267,36 +1287,39 @@ Qed.
    of each. *)
 Lemma drops_round_expr (e : expr) :
   ∀ (e' : expr) (vars vars' : env) (conts conts' : cont_env)
-    (statics statics' : static_env) (hp : heap),
-    state_drops (State e vars conts statics hp)
-      (State e' vars' conts' statics' hp) ->
+    (statics statics' : static_env) (hp : heap) (rd : read_record),
+    state_drops (State e vars conts statics hp rd)
+      (State e' vars' conts' statics' hp rd) ->
     ∃ n : nat,
-      round_answered state_drops (run (S n) (State e vars conts statics hp))
-        (State e' vars' conts' statics' hp).
+      round_answered state_drops (run (S n) (State e vars conts statics hp rd))
+        (State e' vars' conts' statics' hp rd).
 Proof.
   induction e
     as [ x kind d body IH | bindings body _ | k h body _ | handlers body _
        | ap | ac | scrutinee arms | ];
-    intros e' vars vars' conts conts' statics statics' hp Hrel;
+    intros e' vars vars' conts conts' statics statics' hp rd Hrel;
     (destruct (drops_step _ _ Hrel)
        as [Hstep
           | (known & x0 & kind0 & d0 & body0 & e0 & vars0 & vars0' & conts0
-             & conts0' & statics0 & hp0 & Hs & Hs' & Hbody & Hunused & Hvars
-             & Hconts)];
+             & conts0' & statics0 & hp0 & rd0 & Hs & Hs' & Hheap & Hbody
+             & Hunused & Hvars & Hconts)];
      [ exists 0; apply step_round; exact Hstep | ]);
     try discriminate Hs.
   injection Hs as <- <- <- <- <- <- <- <-. injection Hs' as <- <- <- ->.
-  destruct (eval_named statics vars d) as [v | ] eqn:Hd.
-  2: { exists 0. rewrite run_succ, step_let, Hd. exact I. }
+  destruct (exec_named statics hp rd vars d) as [[[v hp'] rd'] | ] eqn:Hd.
+  2: { exists 0. rewrite run_succ, step_let_exec, Hd. exact I. }
+  pose proof (exec_named_keeps_reads statics hp hp' rd rd' vars d v Hd) as ->.
+  pose proof (exec_named_same_heap statics hp hp' rd rd vars d v Hheap Hd)
+    as ->.
   destruct (kind_eqb (kind_of_value v) kind) eqn:Hkind.
-  2: { exists 0. rewrite run_succ, step_let, Hd, Hkind. exact I. }
-  destruct (IH e' ((x, v) :: vars) vars' conts conts' statics statics hp)
+  2: { exists 0. rewrite run_succ, step_let_exec, Hd, Hkind. exact I. }
+  destruct (IH e' ((x, v) :: vars) vars' conts conts' statics statics hp rd)
     as [n Hn].
   { apply (State_drops known); [ exact Hbody | | exact Hconts ].
     intros y Hy. simpl.
     destruct (Pos.eqb_spec y x) as [-> | Hne];
       [ contradiction (Hunused Hy) | apply Hvars, Hy ]. }
-  exists (S n). rewrite run_succ, step_let, Hd, Hkind. exact Hn.
+  exists (S n). rewrite run_succ, step_let_exec, Hd, Hkind. exact Hn.
 Qed.
 
 Lemma drops_round (s s' : state) :
@@ -1311,7 +1334,7 @@ Qed.
 
 Theorem drop_unused_params_refines : drop_unused_params_refines_statement.
 Proof.
-  intros e vars conts statics hp.
+  intros e vars conts statics hp rd.
   apply (rounds_refines state_drops drops_round).
   apply (State_drops []);
     [ apply drop_params_drops; intros k mask Hmask; discriminate Hmask

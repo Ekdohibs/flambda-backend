@@ -122,31 +122,73 @@ Proof.
     rewrite Hblock_of. reflexivity.
 Qed.
 
+(* The machine runs a [Let] with the heap ([exec_named]); the two
+   lemmas above are about the value alone ([eval_named]). The
+   primitives that the pass replaces may read a cell; but the block is
+   known, so its value is a block that a primitive made or a symbol
+   bound to one, and no location: the run of the primitive has the
+   value that [eval_named] gives and leaves the heap and the record
+   (FlambdaSemanticsSpec.exec_named_no_location_statement), and so does
+   the simple that replaces it. *)
+Lemma load_known_named_surely_exec (known : known_blocks) (vars : env)
+    (statics : static_env) (hp : heap) (rd : read_record) (d : named) :
+  blocks_hold known vars statics ->
+  exec_named statics hp rd vars (load_known_named_surely known d)
+  = exec_named statics hp rd vars d.
+Proof.
+  intros Hhold.
+  generalize (load_known_named_surely_exact known vars statics d Hhold).
+  unfold load_known_named_surely.
+  destruct d as [s | p args | code slots | fslot decls slots | slot closure
+    | pfrom slot closure | move_from move_to closure];
+    try (intros _; reflexivity).
+  destruct (unary_applied p args) as [[u block] | ] eqn:Happlied;
+    [ | intros _; reflexivity ].
+  destruct (known_block_of known block) as [known_block | ] eqn:Hknown;
+    [ | intros _; reflexivity ].
+  destruct (of_known_block_surely u known_block) as [result | ]
+    eqn:Hresult; [ | intros _; reflexivity ].
+  destruct (unary_applied_spec _ _ _ _ Happlied) as [-> ->].
+  intros Hexact.
+  destruct (known_block_of_sound _ _ _ _ _ Hhold Hknown)
+    as (vs & block_value & _ & Hblock & Hblock_of & _).
+  rewrite
+    (exec_named_no_location statics hp rd vars (Unary u) [block]
+       [block_value]).
+  - cbn [exec_named]. rewrite Hexact. reflexivity.
+  - intros q. discriminate.
+  - cbn [eval_simples]. rewrite Hblock. reflexivity.
+  - intros l [-> | []]. discriminate Hblock_of.
+Qed.
+
 Fixpoint load_blocks_knowing_surely_equivalent (e : expr) :
   ∀ (known : known_blocks) (vars : env) (conts : cont_env)
-    (statics : static_env) (hp : heap),
+    (statics : static_env) (hp : heap) (rd : read_record),
     blocks_hold known vars statics ->
-    equivalent (State e vars conts statics hp)
-      (State (load_blocks_knowing_surely known e) vars conts statics hp)
+    equivalent (State e vars conts statics hp rd)
+      (State (load_blocks_knowing_surely known e) vars conts statics hp rd)
 with load_blocks_in_handler_surely_equivalent (h : continuation_handler) :
   ∀ (known : known_blocks) (k : continuation) (body : expr) (vars : env)
-    (conts : cont_env) (statics : static_env) (hp : heap),
+    (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record),
     blocks_hold known vars statics ->
     equivalent
-      (State (Let_cont_non_recursive k h body) vars conts statics hp)
+      (State (Let_cont_non_recursive k h body) vars conts statics hp rd)
       (State
          (Let_cont_non_recursive k (load_blocks_in_handler_surely known h) body)
-         vars conts statics hp).
+         vars conts statics hp rd).
 Proof.
   - destruct e
       as [ x kind d body | bindings body | k h body | handlers body | ap
          | ac | scrutinee arms | ];
-      intros known vars conts statics hp Hhold; simpl.
-    + (* Let *)
-      apply let_equivalent_step.
-      * exact (load_known_named_surely_exact known vars statics d Hhold).
-      * intros v Hd _. apply load_blocks_knowing_surely_equivalent.
-        exact (blocks_hold_under_let known x d vars statics v Hhold Hd).
+      intros known vars conts statics hp rd Hhold; simpl.
+    + (* Let: the machine runs [d] with the heap; what the pass puts
+         for it runs the same. *)
+      apply let_equivalent_step_exec.
+      * exact (load_known_named_surely_exec known vars statics hp rd d Hhold).
+      * intros v hp' rd' Hd _. apply load_blocks_knowing_surely_equivalent.
+        exact
+          (blocks_hold_under_let_exec known x d vars statics hp hp' rd rd' v
+             Hhold Hd).
     + (* Let_static *)
       apply let_static_equivalent_step.
       destruct (eval_static_bindings vars bindings statics)
@@ -159,7 +201,7 @@ Proof.
         (State
            (Let_cont_non_recursive k
               (load_blocks_in_handler_surely known h) body)
-           vars conts statics hp)).
+           vars conts statics hp rd)).
       * apply load_blocks_in_handler_surely_equivalent, Hhold.
       * apply let_cont_non_recursive_equivalent_step,
           load_blocks_knowing_surely_equivalent, Hhold.
@@ -171,12 +213,12 @@ Proof.
     + apply equivalent_refl.
     + apply equivalent_refl.
   - destruct h as [params metadata handler].
-    intros known k body vars conts statics hp Hhold. simpl.
+    intros known k body vars conts statics hp rd Hhold. simpl.
     apply refines_antisymmetric;
       apply (let_cont_handler_refines_where (symbols_hold known vars)
         (symbols_hold_extend known vars));
       try exact (proj2 Hhold);
-      intros vs handler_vars conts' statics' hp' Hsymbols _ Hbind;
+      intros vs handler_vars conts' statics' hp' rd' Hsymbols _ Hbind;
       apply equivalent_refines; [ | apply equivalent_sym ];
       apply load_blocks_knowing_surely_equivalent;
       (apply (blocks_hold_bind_params statics' params known vs vars
@@ -187,7 +229,8 @@ Qed.
 Theorem load_known_blocks_surely_equivalent :
   load_known_blocks_surely_equivalent_statement.
 Proof.
-  intros e vars conts statics hp. apply load_blocks_knowing_surely_equivalent.
+  intros e vars conts statics hp rd. apply
+    load_blocks_knowing_surely_equivalent.
   split; intros entry [].
 Qed.
 
@@ -294,14 +337,34 @@ Lemma unused_constant_allocation_let (x : variable) (kind : flambda_kind)
   ~ var_free_in_expr x body ->
   expr_equivalent (Let x kind d body) body.
 Proof.
-  intros Hkind Hdefined Hunused vars conts statics hp.
+  intros Hkind Hdefined Hunused vars conts statics hp rd.
   destruct (allocation_of_constants_defined statics vars d Hdefined)
     as (v & Hd & Hv).
   apply kind_eqb_eq in Hkind. subst kind.
   assert (Hkind : kind_eqb (kind_of_value v) Value = true)
     by (apply kind_eqb_eq, Hv).
-  apply (equivalent_trans _ (State body ((x, v) :: vars) conts statics hp));
-    [ apply step_equivalent; rewrite step_let, Hd, Hkind; reflexivity | ].
+  (* The allocation is no primitive of the heap and its arguments are
+     constants: the run has the value and leaves the heap and the
+     record. *)
+  assert (Hrun : exec_named statics hp rd vars d = Some (v, hp, rd)).
+  { destruct d as [s | p args | code slots | fslot decls slots
+      | slot closure | pfrom slot closure | move_from move_to closure];
+      try discriminate Hdefined.
+    assert (Hargs : forallb surely_immediate args = true).
+    { destruct p as [u | b | vp | hprim | rp]; try discriminate Hdefined.
+      destruct vp as [[tag] | akind]; exact Hdefined. }
+    destruct (constants_evaluated vars args Hargs) as (vs & Hvs & Htagged).
+    rewrite (exec_named_no_location statics hp rd vars p args vs).
+    - rewrite Hd. reflexivity.
+    - intros q ->. discriminate Hdefined.
+    - exact Hvs.
+    - intros l Hl.
+      pose proof (proj1 (forallb_forall _ _) Htagged _ Hl) as Himmediate.
+      discriminate Himmediate. }
+  apply (equivalent_trans _
+    (State body ((x, v) :: vars) conts statics hp rd));
+    [ apply step_equivalent; rewrite step_let_exec, Hrun, Hkind;
+      reflexivity | ].
   apply coincide_equivalent.
   - intros y Hy. simpl.
     destruct (Pos.eqb_spec y x) as [-> | _]; [ contradiction | reflexivity ].
@@ -316,9 +379,9 @@ Lemma let_cont_handler_equivalent (k : continuation)
     (Let_cont_non_recursive k (Handler params metadata handler) body)
     (Let_cont_non_recursive k (Handler params metadata handler') body).
 Proof.
-  intros Hhandler vars conts statics hp.
+  intros Hhandler vars conts statics hp rd.
   apply refines_antisymmetric; apply let_cont_handler_refines_at;
-    intros values handler_vars conts' statics' hp' _ Hbind;
+    intros values handler_vars conts' statics' hp' rd' _ Hbind;
     apply equivalent_refines; [ | apply equivalent_sym ];
     apply Hhandler.
 Qed.
@@ -330,13 +393,13 @@ Proof.
     as [ x kind d body | bindings body | k [params metadata handler] body
        | handlers body | ap | ac | scrutinee arms | ];
     simpl;
-    try (intros vars conts statics hp; apply equivalent_refl).
+    try (intros vars conts statics hp rd; apply equivalent_refl).
   - assert
       (Hbody :
         expr_equivalent (Let x kind d body)
           (Let x kind d (remove_constant_allocations body))).
-    { intros vars conts statics hp.
-      apply let_equivalent_step; [ reflexivity | intros v _ _ ].
+    { intros vars conts statics hp rd.
+      apply let_equivalent_step_exec; [ reflexivity | intros v hp' rd' _ _ ].
       apply remove_constant_allocations_equivalent_aux. }
     destruct
       (kind_eqb kind Value
@@ -349,7 +412,7 @@ Proof.
     apply (expr_equivalent_trans _ _ _ Hbody),
       unused_constant_allocation_let; [ exact Hkind | exact Hdefined | ].
     intros Hx. apply var_free_b_sound in Hx. congruence.
-  - intros vars conts statics hp.
+  - intros vars conts statics hp rd.
     apply let_static_equivalent_step.
     destruct (eval_static_bindings vars bindings statics) as [extended | ];
       [ | exact I ].
@@ -360,10 +423,10 @@ Proof.
          body)).
     + apply let_cont_handler_equivalent,
         remove_constant_allocations_equivalent_aux.
-    + intros vars conts statics hp.
+    + intros vars conts statics hp rd.
       apply let_cont_non_recursive_equivalent_step.
       apply remove_constant_allocations_equivalent_aux.
-  - intros vars conts statics hp.
+  - intros vars conts statics hp rd.
     apply let_cont_recursive_equivalent_step; [ reflexivity | intros _ ].
     apply remove_constant_allocations_equivalent_aux.
 Qed.
