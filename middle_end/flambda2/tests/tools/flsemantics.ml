@@ -7037,9 +7037,8 @@ type region_outcome =
       (** A step was refused by one of the rules of regions. *)
   | Region_not_run of string
       (** Nothing is said: the reason is the conversion's, or the run had no
-          step for a reason that is not of regions, or it came to a [Let] that
-          the machine of regions does not run, or it was not over when the steps
-          allowed ran out. *)
+          step for a reason that is not of regions, or it was not over when the
+          steps allowed ran out. *)
 
 let run_regions ~(statics : Values.static_env) (unit : converted) :
     region_outcome * int * Regions.region_state option =
@@ -7065,21 +7064,14 @@ let run_regions ~(statics : Values.static_env) (unit : converted) :
           ( Region_not_run "the run is undefined for another reason",
             steps,
             Some state )
-        | Region_let_not_run ->
-          (* Decision D53: nothing is said of the run from this [Let] on. *)
-          ( Region_not_run
-              "the machine of regions does not run a Let that needs the heap: \
-               the unit is not checked for regions from there on",
-            steps,
-            Some state )
         | Region_undefined Not_of_the_conversion ->
           ( Region_not_run
               "a primitive of regions is not as the conversion makes it",
             steps,
             Some state )
         | Region_undefined
-            (( Dead_value_used | Heap_holds_local | Region_not_open
-             | Region_used_as_value ) as fault) ->
+            (( Dead_value_used | Heap_holds_local | Cell_outlives_value
+             | Region_not_open | Region_used_as_value ) as fault) ->
           Region_fails fault, steps, Some state
     in
     go 0 (Regions.initial_region_state unit.body statics base)
@@ -7093,6 +7085,8 @@ let region_outcome_shown (outcome : region_outcome) ~steps =
       | Dead_value_used ->
         "a value allocated in a region is used after the region is gone"
       | Heap_holds_local -> "an allocation on the heap holds a local value"
+      | Cell_outlives_value ->
+        "a store puts in a cell a value that does not live as long as the cell"
       | Region_not_open ->
         "a region that is not open is ended, named or given to a continuation"
       | Region_used_as_value -> "a region is used as a value"

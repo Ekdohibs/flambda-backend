@@ -52,7 +52,8 @@ type region_state =
     rs_frames : frame list;
     rs_base : symbol;
     rs_next : symbol;
-    rs_counts : region_counts
+    rs_counts : region_counts;
+    rs_cells : (location * mark) list
   }
 
 (** val live_locals : frame list -> (symbol * statically_allocated_value) list **)
@@ -71,17 +72,37 @@ let live_statics rs =
 
 let drawn rs s = Pos.leb rs.rs_base s
 
+(** val on_stack : mark -> frame list -> bool **)
+
+let on_stack m frames = existsb (fun f -> Pos.eqb f.frame_mark m) frames
+
+(** val local_cell : region_state -> location -> mark option **)
+
+let local_cell rs l =
+  match lookup l rs.rs_cells with
+  | Some m -> if on_stack m rs.rs_frames then Some m else None
+  | None -> None
+
+(** val cell_dead : region_state -> location -> bool **)
+
+let cell_dead rs l =
+  match lookup l rs.rs_cells with
+  | Some m -> negb (on_stack m rs.rs_frames)
+  | None -> false
+
 (** val value_usable : region_state -> value -> bool **)
 
 let value_usable rs = function
   | Value_symbol s ->
     negb (drawn rs s) || is_some (lookup s (live_statics rs).static_values)
+  | Value_location l -> negb (cell_dead rs l)
   | _ -> true
 
 (** val value_local : region_state -> value -> bool **)
 
 let value_local rs = function
   | Value_symbol s -> is_some (lookup s (live_locals rs.rs_frames))
+  | Value_location l -> is_some (local_cell rs l)
   | _ -> false
 
 (** val simple_usable : region_state -> simple -> bool **)
@@ -153,6 +174,49 @@ let is_allocation = function
   | Closure_of_set (_, _, _) -> true
   | _ -> false
 
+(** val is_cell_allocation : named -> bool **)
+
+let is_cell_allocation = function
+  | Prim (p, _) -> (
+    match p with
+    | Heap p0 -> (
+      match p0 with
+      | Make_block_with_identity (_, _) -> true
+      | Make_mutable_array _ -> true
+      | _ -> false)
+    | _ -> false)
+  | _ -> false
+
+(** val stored : named -> (simple * simple) option **)
+
+let stored = function
+  | Prim (p, args) -> (
+    match p with
+    | Heap p0 -> (
+      match p0 with
+      | Block_set (_, _, _) -> (
+        match args with
+        | [] -> None
+        | cell :: l -> (
+          match l with
+          | [] -> None
+          | new0 :: l0 -> (
+            match l0 with [] -> Some (cell, new0) | _ :: _ -> None)))
+      | Array_set (_, _) -> (
+        match args with
+        | [] -> None
+        | cell :: l -> (
+          match l with
+          | [] -> None
+          | _ :: l0 -> (
+            match l0 with
+            | [] -> None
+            | new0 :: l1 -> (
+              match l1 with [] -> Some (cell, new0) | _ :: _ -> None))))
+      | _ -> None)
+    | _ -> None)
+  | _ -> None
+
 (** val number_slots : (function_slot * code_id) list -> symbol ->
     (function_slot * symbol) list **)
 
@@ -194,10 +258,6 @@ let localise next = function
 (** val advance : symbol -> nat -> symbol **)
 
 let advance next count = PeanoNat.Nat.iter count Pos.succ next
-
-(** val on_stack : mark -> frame list -> bool **)
-
-let on_stack m frames = existsb (fun f -> Pos.eqb f.frame_mark m) frames
 
 (** val cut : mark -> frame list -> (frame list * frame list) option **)
 
@@ -307,6 +367,7 @@ let region_kind_of_value rs v =
 type region_fault =
   | Dead_value_used
   | Heap_holds_local
+  | Cell_outlives_value
   | Region_not_open
   | Region_used_as_value
   | Not_of_the_conversion
@@ -316,7 +377,6 @@ type region_step_result =
   | Region_step of region_state
   | Region_exit of continuation * value list * region_state
   | Region_undefined of region_fault
-  | Region_let_not_run
 
 (** val with_statics : state -> static_env -> state **)
 
@@ -336,20 +396,9 @@ let with_counts rs counts =
     rs_frames = rs.rs_frames;
     rs_base = rs.rs_base;
     rs_next = rs.rs_next;
-    rs_counts = counts
+    rs_counts = counts;
+    rs_cells = rs.rs_cells
   }
-
-(** val named_needs_heap : env -> named -> bool **)
-
-let named_needs_heap vars = function
-  | Prim (p, args) -> (
-    match p with
-    | Heap _ -> true
-    | _ -> (
-      match eval_simples vars args with
-      | Some vs -> existsb is_location vs
-      | None -> false))
-  | _ -> false
 
 (** val plain_step : region_state -> region_step_result **)
 
@@ -362,7 +411,8 @@ let plain_step rs =
         rs_frames = rs.rs_frames;
         rs_base = rs.rs_base;
         rs_next = rs.rs_next;
-        rs_counts = rs.rs_counts
+        rs_counts = rs.rs_counts;
+        rs_cells = rs.rs_cells
       }
   | Exit (k, vs, _, _) -> Region_exit (k, vs, rs)
   | Undefined -> Region_undefined No_plain_step
@@ -377,7 +427,8 @@ let static_step rs =
         rs_frames = rs.rs_frames;
         rs_base = rs.rs_base;
         rs_next = rs.rs_next;
-        rs_counts = rs.rs_counts
+        rs_counts = rs.rs_counts;
+        rs_cells = rs.rs_cells
       }
   | Exit (k, vs, _, _) -> Region_exit (k, vs, rs)
   | Undefined -> Region_undefined No_plain_step
@@ -398,7 +449,8 @@ let bind_let rs x v body statics frames next counts =
     rs_frames = frames;
     rs_base = rs.rs_base;
     rs_next = next;
-    rs_counts = counts
+    rs_counts = counts;
+    rs_cells = rs.rs_cells
   }
 
 (** val bind_pair : region_state -> variable -> variable -> value -> expr ->
@@ -417,7 +469,8 @@ let bind_pair rs x y v body statics frames next counts =
     rs_frames = frames;
     rs_base = rs.rs_base;
     rs_next = next;
-    rs_counts = counts
+    rs_counts = counts;
+    rs_cells = rs.rs_cells
   }
 
 (** val begin_region : region_state -> variable -> flambda_kind -> mark_kind ->
@@ -502,12 +555,117 @@ let named_region rs = function
     | None -> None)
   | None -> Some false
 
+(** val frames_from : mark -> frame list -> frame list option **)
+
+let rec frames_from m = function
+  | [] -> None
+  | f :: below ->
+    if Pos.eqb f.frame_mark m then Some (f :: below) else frames_from m below
+
+(** val value_frame : region_state -> value -> mark option **)
+
+let value_frame rs = function
+  | Value_symbol s ->
+    option_map
+      (fun f -> f.frame_mark)
+      (find (fun f -> is_some (lookup s f.frame_locals)) rs.rs_frames)
+  | Value_location l -> local_cell rs l
+  | _ -> None
+
+(** val lives_as_long : region_state -> value -> mark -> bool **)
+
+let lives_as_long rs v m =
+  match value_frame rs v with
+  | Some m' -> (
+    match frames_from m rs.rs_frames with
+    | Some frames -> on_stack m' frames
+    | None -> false)
+  | None -> true
+
+(** val store_fault : region_state -> named -> region_fault option **)
+
+let store_fault rs defining_expr =
+  match stored defining_expr with
+  | Some p -> (
+    let cell, new0 = p in
+    let vars = rs.rs_state.state_vars in
+    match eval_simple vars cell with
+    | Some v0 -> (
+      match v0 with
+      | Value_location l -> (
+        match eval_simple vars new0 with
+        | Some v -> (
+          match local_cell rs l with
+          | Some m ->
+            if lives_as_long rs v m then None else Some Cell_outlives_value
+          | None -> if value_local rs v then Some Heap_holds_local else None)
+        | None -> None)
+      | _ -> None)
+    | None -> None)
+  | None -> None
+
+(** val local_cell_allocation : region_state -> variable -> variable -> named ->
+    simple option -> expr -> region_step_result **)
+
+let local_cell_allocation rs x y defining_expr region body =
+  let s = rs.rs_state in
+  match named_region rs region with
+  | Some other -> (
+    match
+      exec_named (live_statics rs) s.state_heap s.state_reads s.state_vars
+        defining_expr
+    with
+    | Some p -> (
+      let p0, rd = p in
+      let v, hp = p0 in
+      match v with
+      | Value_location l ->
+        let counts = rs.rs_counts in
+        let counts' =
+          { count_other_region =
+              add (if other then S O else O) counts.count_other_region;
+            count_cut_by_end_region = counts.count_cut_by_end_region;
+            count_cut_by_end_try_region = counts.count_cut_by_end_try_region;
+            count_ends = counts.count_ends;
+            count_local_allocations = S counts.count_local_allocations;
+            count_no_frame =
+              add
+                (match rs.rs_frames with [] -> S O | _ :: _ -> O)
+                counts.count_no_frame;
+            count_local_uses = counts.count_local_uses
+          }
+        in
+        Region_step
+          { rs_state =
+              { state_expr = body;
+                state_vars =
+                  (y, Value_location l) :: (x, Value_location l) :: s.state_vars;
+                state_conts = s.state_conts;
+                state_statics = s.state_statics;
+                state_heap = hp;
+                state_reads = rd
+              };
+            rs_frames = rs.rs_frames;
+            rs_base = rs.rs_base;
+            rs_next = rs.rs_next;
+            rs_counts = counts';
+            rs_cells =
+              (match rs.rs_frames with
+              | [] -> rs.rs_cells
+              | f :: _ -> (l, f.frame_mark) :: rs.rs_cells)
+          }
+      | _ -> Region_undefined Not_of_the_conversion)
+    | None -> Region_undefined No_plain_step)
+  | None -> Region_undefined Region_not_open
+
 (** val local_allocation : region_state -> variable -> variable -> flambda_kind
     -> named -> simple option -> expr -> region_step_result **)
 
 let local_allocation rs x y kind defining_expr region body =
   let s = rs.rs_state in
-  if is_allocation defining_expr && kind_eqb kind Value
+  if is_cell_allocation defining_expr && kind_eqb kind Value
+  then local_cell_allocation rs x y defining_expr region body
+  else if is_allocation defining_expr && kind_eqb kind Value
   then
     match named_region rs region with
     | Some other -> (
@@ -620,7 +778,8 @@ let region_apply_cont rs ac =
               rs_frames = rs.rs_frames;
               rs_base = rs.rs_base;
               rs_next = rs.rs_next;
-              rs_counts = rs.rs_counts
+              rs_counts = rs.rs_counts;
+              rs_cells = rs.rs_cells
             }
         | None -> Region_undefined No_plain_step
       else Region_undefined No_plain_step
@@ -666,33 +825,33 @@ let region_step rs =
               | _ :: _ -> Region_undefined Not_of_the_conversion))
           | Local_allocation -> Region_undefined Not_of_the_conversion)
         | _ -> (
-          if named_needs_heap rs0.rs_state.state_vars defining_expr
-          then Region_let_not_run
-          else
-            match marker_of x body with
-            | No_marker ->
-              if
-                is_allocation defining_expr
-                && existsb (simple_local rs0) (simples_of_named defining_expr)
-              then Region_undefined Heap_holds_local
-              else plain_step rs0
-            | Marker (y, region, body') ->
-              local_allocation rs0 x y kind defining_expr region body'
-            | Bad_marker -> Region_undefined Not_of_the_conversion))
-      | _ -> (
-        if named_needs_heap rs0.rs_state.state_vars defining_expr
-        then Region_let_not_run
-        else
           match marker_of x body with
-          | No_marker ->
+          | No_marker -> (
             if
-              is_allocation defining_expr
+              (is_allocation defining_expr || is_cell_allocation defining_expr)
               && existsb (simple_local rs0) (simples_of_named defining_expr)
             then Region_undefined Heap_holds_local
-            else plain_step rs0
+            else
+              match store_fault rs0 defining_expr with
+              | Some fault -> Region_undefined fault
+              | None -> plain_step rs0)
           | Marker (y, region, body') ->
             local_allocation rs0 x y kind defining_expr region body'
           | Bad_marker -> Region_undefined Not_of_the_conversion))
+      | _ -> (
+        match marker_of x body with
+        | No_marker -> (
+          if
+            (is_allocation defining_expr || is_cell_allocation defining_expr)
+            && existsb (simple_local rs0) (simples_of_named defining_expr)
+          then Region_undefined Heap_holds_local
+          else
+            match store_fault rs0 defining_expr with
+            | Some fault -> Region_undefined fault
+            | None -> plain_step rs0)
+        | Marker (y, region, body') ->
+          local_allocation rs0 x y kind defining_expr region body'
+        | Bad_marker -> Region_undefined Not_of_the_conversion))
     | Let_static (_, _) ->
       if existsb (simple_local rs0) (evaluated_simples e)
       then Region_undefined Heap_holds_local
@@ -717,7 +876,8 @@ let initial_region_state e statics base =
     rs_frames = [];
     rs_base = base;
     rs_next = base;
-    rs_counts = no_counts
+    rs_counts = no_counts;
+    rs_cells = []
   }
 
 (** val symbol_below : symbol -> symbol -> bool **)
@@ -857,10 +1017,23 @@ let statics_below base statics =
          symbol_below base s && allocated_below base allocated)
        statics.static_values
 
+(** val statics_hold_no_location : static_env -> bool **)
+
+let statics_hold_no_location statics =
+  forallb
+    (fun pat ->
+      let _, allocated = pat in
+      forallb
+        (fun v ->
+          match locations_of_value v with [] -> true | _ :: _ -> false)
+        (values_of_static allocated))
+    statics.static_values
+
 (** val region_names_fresh : symbol -> expr -> static_env -> bool **)
 
 let region_names_fresh base e statics =
-  expr_below base e && statics_below base statics
+  (expr_below base e && statics_below base statics)
+  && statics_hold_no_location statics
 
 (** val unit_simple : simple **)
 

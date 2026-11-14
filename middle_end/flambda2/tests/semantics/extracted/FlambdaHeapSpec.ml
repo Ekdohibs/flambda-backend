@@ -9,6 +9,7 @@ open FlambdaPrimitiveModel
 open FlambdaPrimitiveSpec
 open FlambdaValueSpec
 open List
+open ListDef
 open OxCamlOption
 
 (** val fresh_location : heap -> location **)
@@ -351,3 +352,27 @@ let exec_prim statics h p vs =
 let named_changes_heap = function
   | Prim (p, _) -> ( match p with Heap _ -> true | _ -> false)
   | _ -> false
+
+(** val locations_of_value : value -> location list **)
+
+let rec locations_of_value = function
+  | Value_closure (_, slots) ->
+    flat_map (fun slot -> locations_of_value (snd slot)) slots
+  | Value_closure_of_set (_, _, slots) ->
+    flat_map (fun slot -> locations_of_value (snd slot)) slots
+  | Value_block (_, fields) -> flat_map locations_of_value fields
+  | Value_immutable_array fields -> flat_map locations_of_value fields
+  | Value_location l -> l :: []
+  | Value_partial_application (callee, args, _) ->
+    app (locations_of_value callee) (flat_map locations_of_value args)
+  | _ -> []
+
+(** val values_of_static : statically_allocated_value -> value list **)
+
+let values_of_static = function
+  | Static_closure (_, slots) -> map snd slots
+  | Static_closure_of_set (_, _, _, slots) -> map snd slots
+  | Static_block (_, fields) -> fields
+  | Static_boxed_number v -> v :: []
+  | Static_immutable_array elements -> elements
+  | _ -> []

@@ -42,7 +42,8 @@ type region_state =
     rs_frames : frame list;
     rs_base : symbol;
     rs_next : symbol;
-    rs_counts : region_counts
+    rs_counts : region_counts;
+    rs_cells : (location * mark) list
   }
 
 val live_locals : frame list -> (symbol * statically_allocated_value) list
@@ -50,6 +51,12 @@ val live_locals : frame list -> (symbol * statically_allocated_value) list
 val live_statics : region_state -> static_env
 
 val drawn : region_state -> symbol -> bool
+
+val on_stack : mark -> frame list -> bool
+
+val local_cell : region_state -> location -> mark option
+
+val cell_dead : region_state -> location -> bool
 
 val value_usable : region_state -> value -> bool
 
@@ -69,6 +76,10 @@ val evaluated_simples : expr -> simple list
 
 val is_allocation : named -> bool
 
+val is_cell_allocation : named -> bool
+
+val stored : named -> (simple * simple) option
+
 val number_slots :
   (function_slot * code_id) list -> symbol -> (function_slot * symbol) list
 
@@ -78,8 +89,6 @@ val localise :
   (symbol * (symbol * statically_allocated_value) list) option
 
 val advance : symbol -> nat -> symbol
-
-val on_stack : mark -> frame list -> bool
 
 val cut : mark -> frame list -> (frame list * frame list) option
 
@@ -107,6 +116,7 @@ val region_kind_of_value : region_state -> value -> flambda_kind
 type region_fault =
   | Dead_value_used
   | Heap_holds_local
+  | Cell_outlives_value
   | Region_not_open
   | Region_used_as_value
   | Not_of_the_conversion
@@ -116,13 +126,10 @@ type region_step_result =
   | Region_step of region_state
   | Region_exit of continuation * value list * region_state
   | Region_undefined of region_fault
-  | Region_let_not_run
 
 val with_statics : state -> static_env -> state
 
 val with_counts : region_state -> region_counts -> region_state
-
-val named_needs_heap : env -> named -> bool
 
 val plain_step : region_state -> region_step_result
 
@@ -172,6 +179,23 @@ val end_region :
 
 val named_region : region_state -> simple option -> bool option
 
+val frames_from : mark -> frame list -> frame list option
+
+val value_frame : region_state -> value -> mark option
+
+val lives_as_long : region_state -> value -> mark -> bool
+
+val store_fault : region_state -> named -> region_fault option
+
+val local_cell_allocation :
+  region_state ->
+  variable ->
+  variable ->
+  named ->
+  simple option ->
+  expr ->
+  region_step_result
+
 val local_allocation :
   region_state ->
   variable ->
@@ -214,6 +238,8 @@ val value_below : symbol -> value -> bool
 val allocated_below : symbol -> statically_allocated_value -> bool
 
 val statics_below : symbol -> static_env -> bool
+
+val statics_hold_no_location : static_env -> bool
 
 val region_names_fresh : symbol -> expr -> static_env -> bool
 

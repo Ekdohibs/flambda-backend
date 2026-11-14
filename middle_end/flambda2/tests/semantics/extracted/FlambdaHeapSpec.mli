@@ -9,6 +9,7 @@ open FlambdaPrimitiveModel
 open FlambdaPrimitiveSpec
 open FlambdaValueSpec
 open List
+open ListDef
 open OxCamlOption
 
 val fresh_location : heap -> location
@@ -49,3 +50,7 @@ val exec_prim :
   static_env -> heap -> prim -> value list -> (value * heap) option
 
 val named_changes_heap : named -> bool
+
+val locations_of_value : value -> location list
+
+val values_of_static : statically_allocated_value -> value list
