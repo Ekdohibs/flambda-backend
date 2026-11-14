@@ -238,8 +238,15 @@
    before_read gives itself as well: the guesses are made from it, and the test
    of the verdict from the imports is made of it, as those statements have that
    test. The line under the verdict then begins "(asked of the term before".
-   This comes before the second check, which is asked only where these attempts
-   refuse the unit too, and of the two terms as converted.
+   Where the term that before_read gives is the term before as it was converted,
+   as it is in particular where the first round of the reading reads no array
+   (normalise_reading_nothing_read_statement), the two functions are
+   [validate_unit] and [validate_unit_knowing] of the two terms that the attempt
+   already made for the same list was of, and the answer of that attempt is
+   taken. The term of before_read is still computed, and compared with the term
+   as converted; the two functions are not asked again. This comes before the
+   second check, which is asked only where these attempts refuse the unit too,
+   and of the two terms as converted.
 
    The second check. Where every attempt of the validation that the tool makes
    has refused a unit, and the run of the term before that is shown is not
@@ -5023,6 +5030,15 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
      computed only where it is read. *)
   let statics_of_imports = Imports.imports_statics imports in
   let last_asking_holds = ref (fun () -> false) in
+  (* The answers of the attempts that are not [reading], each with what the
+     attempt was given. *)
+  let answers_not_reading :
+      ((bool * bool * Model.code_id list)
+      * (Validate.validation * Model.expr * string * bool * Model.expr))
+      list
+      ref =
+    ref []
+  in
   let attempt ~calling ?(again = true) ~reading kept =
     (* [reading]: the attempt is of the term before with its known arrays read.
        The functions asked are the two of FlambdaValidateReadingSpec.v, each
@@ -5048,73 +5064,112 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
       else before
     in
     let term = read [nothing_lifted] in
-    let validate_unit, validate_unit_knowing =
-      if reading
-      then
-        ( Validate_reading.validate_unit_reading,
-          Validate_reading.validate_unit_knowing_reading )
-      else Validate.validate_unit, Validate_knowing.validate_unit_knowing
-    in
-    let first =
-      ask ~calling
-        (fun unused slots liftings ->
-          let validation =
-            validate_unit rounds unused slots loops liftings kept before.body
-              after.body
-          in
-          (last_asking_holds
-             := fun () ->
-                  Validate_imports.verdict_holds_from statics_of_imports rounds
-                    unused slots loops liftings kept (read liftings).body
-                    after.body validation);
-          validation)
-        term after kept
-    in
-    match first with
-    | Not_validated, _, _, _, _ when again -> (
-      let knowing round (unit : converted) =
-        { unit with
-          body = Validate_knowing.normalise_knowing round rounds unit.body
-        }
+    let asked () : Validate.validation * Model.expr * string * bool * Model.expr
+        =
+      let validate_unit, validate_unit_knowing =
+        if reading
+        then
+          ( Validate_reading.validate_unit_reading,
+            Validate_reading.validate_unit_knowing_reading )
+        else Validate.validate_unit, Validate_knowing.validate_unit_knowing
       in
-      let avoid =
-        Validate.unit_continuations [nothing_lifted] @ List.map snd loops
-      in
-      match
+      let first =
         ask ~calling
           (fun unused slots liftings ->
             let validation =
-              validate_unit_knowing rounds unused slots loops liftings kept
-                before.body after.body
+              validate_unit rounds unused slots loops liftings kept before.body
+                after.body
             in
             (last_asking_holds
                := fun () ->
-                    Validate_imports.verdict_knowing_holds_from
-                      statics_of_imports rounds unused slots loops liftings kept
+                    Validate_imports.verdict_holds_from statics_of_imports
+                      rounds unused slots loops liftings kept
                       (read liftings).body after.body validation);
             validation)
-          (knowing (Validate.normalise_before_round_avoiding avoid kept) term)
-          (knowing (Validate.normalise_after_round kept) after)
-          kept
-      with
-      | Not_validated, _, _, _, _ -> first
-      | ( ( Same_up_to_bound_names | Same_once_normalised
+          term after kept
+      in
+      match first with
+      | Not_validated, _, _, _, _ when again -> (
+        let knowing round (unit : converted) =
+          { unit with
+            body = Validate_knowing.normalise_knowing round rounds unit.body
+          }
+        in
+        let avoid =
+          Validate.unit_continuations [nothing_lifted] @ List.map snd loops
+        in
+        match
+          ask ~calling
+            (fun unused slots liftings ->
+              let validation =
+                validate_unit_knowing rounds unused slots loops liftings kept
+                  before.body after.body
+              in
+              (last_asking_holds
+                 := fun () ->
+                      Validate_imports.verdict_knowing_holds_from
+                        statics_of_imports rounds unused slots loops liftings
+                        kept (read liftings).body after.body validation);
+              validation)
+            (knowing (Validate.normalise_before_round_avoiding avoid kept) term)
+            (knowing (Validate.normalise_after_round kept) after)
+            kept
+        with
+        | Not_validated, _, _, _, _ -> first
+        | ( ( Same_up_to_bound_names | Same_once_normalised
+            | Same_once_unused_statics_removed | Same_once_head_statics_removed
+            | Same_once_lifted ),
+            _,
+            _,
+            _,
+            _ ) as second ->
+          asked_again := true;
+          second)
+      | ( ( Not_validated | Same_up_to_bound_names | Same_once_normalised
           | Same_once_unused_statics_removed | Same_once_head_statics_removed
           | Same_once_lifted ),
           _,
           _,
           _,
-          _ ) as second ->
-        asked_again := true;
-        second)
-    | ( ( Not_validated | Same_up_to_bound_names | Same_once_normalised
-        | Same_once_unused_statics_removed | Same_once_head_statics_removed
-        | Same_once_lifted ),
-        _,
-        _,
-        _,
-        _ ) ->
-      first
+          _ ) ->
+        first
+    in
+    (* An attempt that is [reading] where [term], the term that before_read
+       gives with nothing lifted, is the term before as converted; it is in
+       particular where the first round of the reading reads nothing. Then [read
+       liftings] is that term too whatever the liftings of an asking, which
+       change it only by continuations that are the same for all of them
+       (above). So the two functions asked would be [validate_unit] and
+       [validate_unit_knowing] of the same arguments as in the attempt that is
+       not [reading] for the same list, the same [calling] and the same [again],
+       with the guesses made from the same term: the answer is the same, and it
+       is taken from that attempt where it was made.
+
+       An answer that is taken is a refusal: attempts that are [reading] are
+       made only where every attempt that is not has refused the unit, in the
+       same order. Taking it makes no asking, so it leaves [last_asking_holds],
+       [tables_were_bound] and [asked_again] as they were, where the asking
+       would have set the first two again. That state is never what an accepted
+       verdict is justified or printed with: where a unit is validated, the
+       asking made last is the one that accepted it, which no answer taken here
+       is, and it has set both; [asked_again] is set only where an asking
+       validates. [last_asking_holds] is evaluated for a unit that has imports
+       whatever the verdict, and its value is used only where the unit is
+       validated; the attempts with the calls made direct put the two references
+       back where they refuse; and the second check resets [tables_were_bound]
+       in its own asking before it reads it. *)
+    let key = calling, again, kept in
+    match
+      if reading && term.body = before.body
+      then List.assoc_opt key !answers_not_reading
+      else None
+    with
+    | Some answer -> answer
+    | None ->
+      let answer = asked () in
+      if not reading
+      then answers_not_reading := (key, answer) :: !answers_not_reading;
+      answer
   in
   (* Which calls the validation is told to leave: three guesses, tried in turn.
      First the recursive code and the code that the term after still calls
