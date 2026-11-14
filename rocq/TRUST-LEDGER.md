@@ -856,13 +856,15 @@ it gave back.
   D53). The conversion makes neither. The machine of regions runs
   neither: it does not run a `Let` of a primitive of the heap, nor of
   another primitive, not one of regions, that is given a location.
-  Its run ends there, with a result that is not a step, not an exit
-  and not a fault (`FlambdaRegionsSpec.Region_let_not_run`), and
-  nothing is checked of the term from that `Let` on: a value put in a
-  cell of the heap may be local, and a cell made in a region is not
-  followed. Such an end is not "passes". The tool is to print the unit
-  as not checked for regions from that `Let` on, and never as passing;
-  the function that runs a unit (`run_regions`) has not that case yet.
+  The test of the simples of that `Let` is made first, and a dead
+  value given to it is the fault that it is anywhere. Where that test
+  passes, the run ends there, with a result that is not a step, not an
+  exit and not a fault (`FlambdaRegionsSpec.Region_let_not_run`), and
+  nothing further is checked of the term: a value put in a cell of the
+  heap may be local, and a cell made in a region is not followed. Such
+  an end is not "passes". The tool is to print the unit as not checked
+  for regions from that `Let` on, and never as passing; the function
+  that runs a unit (`run_regions`) has not that case yet.
   While the conversion makes no primitive of the heap, no run of the
   tool ends so: the static environment of the imports has no code and
   no value that holds a location, and of a term with no primitive of
@@ -903,8 +905,9 @@ it gave back.
   where `step` has no step. Of the terms that the erasure is meant for
   (`FlambdaRegionsSpec.erasable`) it proves more
   (`FlambdaRegionsCheckSoundSpec.region_check_sound_statement`): where
-  such a run stops, the run of the term with its regions dropped goes
-  wrong too, so that the regions add no fault to the term. Both are of
+  such a run stops without a step, the run of the term with its
+  regions dropped goes wrong too, so that the regions add no fault to
+  the term. Both are of
   the run as far as the machine of regions runs the term. A run may
   also end at a `Let` that the machine does not run (decision D53,
   above): that end is not a stop without a step and not a fault, and
