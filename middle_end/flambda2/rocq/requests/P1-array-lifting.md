@@ -583,8 +583,11 @@ build. The tenth is `normalise_expr_before_keeps_scope_statement`.
   a value slot of a closure whose every closure is made with an
   array of that length.
 - The tests of an index under the arm of a `Switch` on the length.
-- A load taken twice: the second is not shared
-  (`FlambdaCseSpec.shareable` says no of `Array_load`).
+- A load taken twice: when this page was written the second was
+  not shared (`FlambdaCseSpec.shareable` said no of `Array_load`).
+  The sharing of primitives has since been given the load marked
+  `Immutable` or `Immutable_unique`, and makes the second the
+  variable of the first; this rewrite still does not.
 - A load at a constant index out of the bounds of a known array:
   Simplify makes it `Invalid`; here the `Let` stays, with no
   value.

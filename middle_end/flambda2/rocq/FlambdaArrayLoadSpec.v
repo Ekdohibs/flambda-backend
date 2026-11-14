@@ -126,9 +126,10 @@
    What is not here: the length of an array that the code does not
    make, known by Simplify from the type of a parameter, of a value
    slot or of what two arms give one continuation; the tests of an
-   index under an arm of a [Switch] on the length; a second load of
-   the same element, which is not shared with the first
-   (FlambdaCseSpec.shareable).
+   index under an arm of a [Switch] on the length. Nor does this
+   pass make a second load of one element the first: the sharing of
+   primitives does (FlambdaCseSpec.shareable has the load of an
+   element of an immutable array).
 
    The proofs are in FlambdaArrayLoadProofs.v, which needs no review. *)
 
