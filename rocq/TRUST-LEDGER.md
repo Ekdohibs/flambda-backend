@@ -1265,9 +1265,11 @@ it gave back.
   (`normalise_reading_refines_statement`). Where those two do not
   validate them either, the tool guesses calls of the term before
   to inline first, as choices of places; unless
-  `FlambdaValidateInliningSpec.before_inlined` gives back the term
-  before itself for them, as it does where there is no choice, it
-  calls `FlambdaValidateInliningSpec.validate_unit_inlining` on the
+  `FlambdaValidateInliningSpec.before_inlined`, given those
+  choices, the loops that the tool gives every asking and nothing
+  lifted, gives back the term before itself, as it does where
+  there is no choice, it calls
+  `FlambdaValidateInliningSpec.validate_unit_inlining` on the
   same two terms converted, with those choices, or, where that does
   not validate them, `validate_unit_knowing_inlining` on the same.
   Where one of them validates them, it prints that answer as it
@@ -1275,9 +1277,11 @@ it gave back.
   chosen calls inlined first)". Those two functions ask
   `validate_unit` and `validate_unit_knowing` of the term after
   and of a term that they make of the term before
-  (`before_inlined`: for each choice in turn, the direct calls
-  that stand at the places of the choice are given to
-  `FlambdaInlineCallsAtSpec.inline_calls_at`, and the term is then
+  (`before_inlined`: for each choice in turn, the term and the
+  places of the choice are given to
+  `FlambdaInlineCallsAtSpec.inline_calls_at`, which gives each call
+  that stands at one of them to
+  `FlambdaNormaliseSpec.inline_apply`, and the term is then
   renamed apart); what is proved of them is of the two terms that
   they are given (`validate_unit_inlining_sound_statement`,
   `validate_unit_knowing_inlining_sound_statement`), as the term
