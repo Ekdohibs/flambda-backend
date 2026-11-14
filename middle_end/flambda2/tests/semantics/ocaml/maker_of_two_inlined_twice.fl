@@ -1,0 +1,118 @@
+let $camlMaker_of_two_inlined_twice__first_const_0 = Block 0 () in
+(let code rec size(26)
+       down_1 (n/111 : imm tagged)
+         my_closure/112 &my_alloc_region/113 my_depth/114
+         -> k/42 * k/43
+         : imm tagged =
+   let next_depth/115 = rec_info (succ my_depth/114) in
+   let limit/116 = %project_value_slot.[down].[limit] (my_closure/112) in
+   (let prim/120 = %phys_eq (n/111, limit/116) in
+    let eq/121 = %tag_imm (prim/120) in
+    (let untagged/122 = %untag_imm (eq/121) in
+     switch untagged/122
+       | 0 -> k/46
+       | 1 -> k/42 (0))
+      where k/46 =
+        cont k/44)
+     where k/44 =
+       ((let int_sub/119 = %int_barith.sub (n/111, 1) in
+         apply direct(down_1 &my_alloc_region/113)
+           (my_closure/112 ~ depth my_depth/114 -> next_depth/115
+            : _ -> imm tagged)
+             (int_sub/119)
+             -> k/45 * k/43)
+          where k/45 (apply_result/117 : imm tagged) =
+            let int_add/118 = %int_barith.add (1, apply_result/117) in
+            cont k/42 (int_add/118))
+ in
+ let code rec inline(always) loopify(default tailrec) size(25)
+       up_2 (n/123 : imm tagged, steps/124 : imm tagged)
+         my_closure/125 &my_alloc_region/126 my_depth/127
+         -> k/47 * k/48
+         : imm tagged =
+   let next_depth/128 = rec_info (succ my_depth/127) in
+   let limit/129 = %project_value_slot.[up].[limit_1] (my_closure/125) in
+   (let prim/132 = %phys_eq (n/123, limit/129) in
+    let eq/133 = %tag_imm (prim/132) in
+    (let untagged/134 = %untag_imm (eq/133) in
+     switch untagged/134
+       | 0 -> k/50
+       | 1 -> k/47 (steps/124))
+      where k/50 =
+        cont k/49)
+     where k/49 =
+       let int_add/130 = %int_barith.add (steps/124, 1) in
+       let int_add/131 = %int_barith.add (n/123, 1) in
+       apply direct(up_2 &my_alloc_region/126)
+         (my_closure/125 ~ depth my_depth/127 -> next_depth/128
+          : _ -> imm tagged)
+           (int_add/131, int_add/130)
+           -> k/47 * k/48
+ in
+ let code inline(always) size(76)
+       make_0 (limit/135 : imm tagged)
+         my_closure/136 &my_alloc_region/137 my_depth/138
+         -> k/51 * k/52
+         : [ 0 of val * val ] =
+   let next_depth/139 = rec_info (succ my_depth/138) in
+   let down/140 = closure down_1 @down &my_alloc_region/137
+   with { limit = limit/135 }
+   in
+   let up/141 = closure up_2 @up &my_alloc_region/137
+   with { limit_1 = limit/135 }
+   in
+   let Pmakeblock/142 = %block.[`0`].my_alloc_region/137 (down/140, up/141)
+   in
+   cont k/51 (Pmakeblock/142)
+ in
+ let make/143 = closure make_0 @make &toplevel in
+ apply direct(make_0 &toplevel)
+   (make/143 : _ -> [ 0 of val * val ]) (3) -> k/54 * error
+   where k/54 (`*match*/146` : [ 0 of val * val ]) =
+     (apply direct(make_0 &toplevel)
+        (make/143 : _ -> [ 0 of val * val ]) (5) -> k/55 * error
+        where k/55 (`*match*/147` : [ 0 of val * val ]) =
+          ((let Popaque/161 = %opaque (0) in
+            let Pmixedfield/162 = %block_load.[`1`] (`*match*/147`) in
+            apply &toplevel Pmixedfield/162 (Popaque/161, 0) -> k/56 * error)
+             where k/56 (apply_result/148 : imm tagged) =
+               ((let Popaque/159 = %opaque (9) in
+                 let Pmixedfield/160 = %block_load.[`0`] (`*match*/147`) in
+                 apply &toplevel
+                   Pmixedfield/160 (Popaque/159) -> k/57 * error)
+                  where k/57 (apply_result/149 : imm tagged) =
+                    ((let Popaque/157 = %opaque (0) in
+                      let Pmixedfield/158 = %block_load.[`1`] (`*match*/146`)
+                      in
+                      apply &toplevel
+                        Pmixedfield/158 (Popaque/157, 0) -> k/58 * error)
+                       where k/58 (apply_result/150 : imm tagged) =
+                         ((let Popaque/155 = %opaque (9) in
+                           let Pmixedfield/156 =
+                             %block_load.[`0`] (`*match*/146`)
+                           in
+                           apply &toplevel
+                             Pmixedfield/156 (Popaque/155) -> k/59 * error)
+                            where k/59 (apply_result/151 : imm tagged) =
+                              let int_add/152 =
+                                %int_barith.add
+                                  (apply_result/151, apply_result/150)
+                              in
+                              let int_add/153 =
+                                %int_barith.add
+                                  (int_add/152, apply_result/149)
+                              in
+                              let int_add/154 =
+                                %int_barith.add
+                                  (int_add/153, apply_result/148)
+                              in
+                              cont k/53 (int_add/154))))))
+   where k/53 (result/144 : imm tagged) =
+     let Pmakeblock/145 = %block.[`0`].`toplevel` (result/144) in
+     cont k/41 (Pmakeblock/145))
+  where k/41 define_root_symbol (module_block/109) =
+    let field_0/110 =
+      %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/109)
+    in
+    let $camlMaker_of_two_inlined_twice = Block 0 (field_0/110) in
+    cont done ($camlMaker_of_two_inlined_twice)

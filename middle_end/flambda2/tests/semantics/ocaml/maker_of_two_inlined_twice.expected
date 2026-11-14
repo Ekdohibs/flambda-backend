@@ -1,0 +1,9 @@
+maker_of_two_inlined_twice.fl:
+  before Simplify (311 steps): returns [0: 18]
+  after Simplify (186 steps): returns [0: 18]
+  the check of kinds: passes before, passes after
+  calls outside code: 6 before, 2 after
+  the same
+  calls outside code once those of known code are inlined: 4
+  validated: the same once closures and blocks are lifted to symbols and the terms normalised
+  (with the calls of the closures that a Let makes made direct in the rounds after each lifting)
