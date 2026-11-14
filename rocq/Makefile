@@ -290,6 +290,32 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   FlambdaRecoverComparisonSpec.v \
   FlambdaRegionsCallsProofs.v \
   FlambdaRegionsCallsSpec.v \
+  FlambdaRegionsCheckProofs.v \
+  FlambdaRegionsCheckSpec.v \
+  FlambdaRegionsCheckedAppliedProofs.v \
+  FlambdaRegionsCheckedBasicsProofs.v \
+  FlambdaRegionsCheckedCallProofs.v \
+  FlambdaRegionsCheckedDeepProofs.v \
+  FlambdaRegionsCheckedFaultProofs.v \
+  FlambdaRegionsCheckedHeadProofs.v \
+  FlambdaRegionsCheckedInitialProofs.v \
+  FlambdaRegionsCheckedJumpProofs.v \
+  FlambdaRegionsCheckedLetProofs.v \
+  FlambdaRegionsCheckedMarksProofs.v \
+  FlambdaRegionsCheckedMovesProofs.v \
+  FlambdaRegionsCheckedOutlivesProofs.v \
+  FlambdaRegionsCheckedParamsProofs.v \
+  FlambdaRegionsCheckedProofs.v \
+  FlambdaRegionsCheckedRankProofs.v \
+  FlambdaRegionsCheckedReadsProofs.v \
+  FlambdaRegionsCheckedSameStoreProofs.v \
+  FlambdaRegionsCheckedSharedProofs.v \
+  FlambdaRegionsCheckedSpec.v \
+  FlambdaRegionsCheckedStableProofs.v \
+  FlambdaRegionsCheckedStateProofs.v \
+  FlambdaRegionsCheckedStoreProofs.v \
+  FlambdaRegionsCheckedUnknownProofs.v \
+  FlambdaRegionsCheckedViewsProofs.v \
   FlambdaRegionsErasedProofs.v \
   FlambdaRegionsErasureProofs.v \
   FlambdaRegionsErasureSpec.v \
