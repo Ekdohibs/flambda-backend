@@ -294,7 +294,8 @@ Lemma env_erased_transfer (vars vars' : env) :
   env_erased rs vars vars' ->
   env_erased rs1 vars vars'.
 Proof.
-  intros Hall Hvars x v Hx Hu1.
+  intros Hall [Hvars Hunbound]. split; [ | exact Hunbound ].
+  intros x v Hx Hu1.
   destruct (env_values_all_lookup carried vars x v Hall Hx Hu1) as [Hu Hg].
   destruct (Hvars x v Hx Hu) as (v' & Hx' & Hv).
   exists v'. split; [ exact Hx' | exact (value_erased_transfer _ _ Hv Hg) ].
@@ -1363,8 +1364,11 @@ Lemma env_erased_shadow (rs : region_state) (x : variable) (v : value)
   env_erased rs ((x, v) :: vars) vars' ->
   env_erased rs ((x, v) :: (x, v) :: vars) vars'.
 Proof.
-  intros H z w Hz Hu. apply (H z w); [ | exact Hu ].
-  simpl in Hz |- *. destruct (Pos.eqb z x); exact Hz.
+  intros [H Hunbound]. split.
+  - intros z w Hz Hu. apply (H z w); [ | exact Hu ].
+    simpl in Hz |- *. destruct (Pos.eqb z x); exact Hz.
+  - intros z Hz. apply Hunbound.
+    simpl in Hz |- *. destruct (Pos.eqb z x); exact Hz.
 Qed.
 
 (* The erased term binds the value on the heap, and then the variable

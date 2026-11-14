@@ -765,20 +765,30 @@ End Observations.
 (* ======================================================================== *)
 
 (* Every variable of the first environment whose value may be evaluated
-   is bound in the second, to that value erased. Nothing is asked of a
-   variable that holds a mark or a local allocation that is gone. *)
+   is bound in the second, to that value erased. Nothing is asked of
+   the value of a variable that holds a mark or a local allocation
+   that is gone. And the second environment binds no variable that the
+   first does not: the term with its regions dropped binds a variable
+   only where the term binds it. *)
 Definition env_erased (rs : region_state) (vars vars' : env) : Prop :=
-  ∀ (x : variable) (v : value),
+  (∀ (x : variable) (v : value),
     lookup x vars = Some v ->
     value_usable rs v = true ->
-    ∃ v' : value, lookup x vars' = Some v' ∧ value_erased rs v v'.
+    ∃ v' : value, lookup x vars' = Some v' ∧ value_erased rs v v')
+  ∧ ∀ x : variable, lookup x vars = None -> lookup x vars' = None.
+
+Lemma env_erased_nil (rs : region_state) : env_erased rs [] [].
+Proof.
+  split; [ intros x v Hx; discriminate Hx | intros x _; reflexivity ].
+Qed.
 
 Lemma env_erased_extend (rs rs1 : region_state) (vars vars' : env) :
   region_extends rs rs1 ->
   env_erased rs vars vars' ->
   env_erased rs1 vars vars'.
 Proof.
-  intros Hextends Hvars x v Hx Husable.
+  intros Hextends [Hvars Hunbound]. split; [ | exact Hunbound ].
+  intros x v Hx Husable.
   rewrite (value_usable_extends rs rs1 v Hextends) in Husable.
   destruct (Hvars x v Hx Husable) as (v' & Hx' & Hv).
   exists v'. split; [ exact Hx' | ].
@@ -791,8 +801,11 @@ Lemma env_erased_cons (rs : region_state) (x : variable) (v v' : value)
   env_erased rs vars vars' ->
   env_erased rs ((x, v) :: vars) ((x, v') :: vars').
 Proof.
-  intros Hv Hvars y w. simpl.
-  destruct (Pos.eqb y x); [ intros [= <-] Husable; eauto | apply Hvars ].
+  intros Hv [Hvars Hunbound]. split.
+  - intros y w. simpl.
+    destruct (Pos.eqb y x); [ intros [= <-] Husable; eauto | apply Hvars ].
+  - intros y. simpl.
+    destruct (Pos.eqb y x); [ discriminate | apply Hunbound ].
 Qed.
 
 (* A variable bound in the first environment alone, to a value that may
@@ -803,8 +816,12 @@ Lemma env_erased_cons_dead (rs : region_state) (x : variable) (v : value)
   env_erased rs vars vars' ->
   env_erased rs ((x, v) :: vars) vars'.
 Proof.
-  intros Hdead Hvars y w. simpl.
-  destruct (Pos.eqb y x); [ intros [= <-] Husable; congruence | apply Hvars ].
+  intros Hdead [Hvars Hunbound]. split.
+  - intros y w. simpl.
+    destruct (Pos.eqb y x);
+      [ intros [= <-] Husable; congruence | apply Hvars ].
+  - intros y. simpl.
+    destruct (Pos.eqb y x); [ discriminate | apply Hunbound ].
 Qed.
 
 Lemma bind_params_erased (rs : region_state) (params : list variable) :
@@ -873,7 +890,7 @@ Lemma eval_simple_erased (rs : region_state) (vars vars' : env) (s : simple)
   ∃ v' : value, eval_simple vars' s = Some v' ∧ value_erased rs v v'.
 Proof.
   intros Hvars Hbelow. destruct s as [x | sym | c]; simpl.
-  - apply Hvars.
+  - apply (proj1 Hvars).
   - intros [= <-] _. eexists. split; [ reflexivity | ].
     apply Erased_symbol, drawn_below, Hbelow.
   - intros [= <-] _. eexists. split; [ reflexivity | apply Erased_const ].
@@ -1554,7 +1571,7 @@ Proof.
   apply andb_true_iff in Hbelow as [_ Hvalues].
   exists []. split; [ reflexivity | ]. split; [ exact Hreturns | ].
   split; [ intros k; exact I | ].
-  split; [ intros x v Hx; discriminate Hx | ].
+  split; [ apply env_erased_nil | ].
   split; [ constructor | ].
   split; [ | reflexivity ].
   split; [ intros id; apply lookup_erased_code | ].

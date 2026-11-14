@@ -767,7 +767,7 @@ Proof.
        Hvs)
     as (bound' & -> & Hbound);
     [ apply env_erased_cons;
-      [ intros _; exact Hclosure | intros x v Hx; discriminate Hx ]
+      [ intros _; exact Hclosure | apply env_erased_nil ]
     | exact Hbind | ].
   eexists. split; [ reflexivity | ].
   apply state_erased_plain_next.
