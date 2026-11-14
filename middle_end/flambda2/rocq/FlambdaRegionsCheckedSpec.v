@@ -33,7 +33,7 @@
 
    This file is to be reviewed: all of it. It adds nothing to the
    machine and nothing to the check. FlambdaRegionsCheckedProofs.v
-   proves the four statements at the end.
+   proves the five statements at the end.
 
    THE PLAN OF THE PROOF
 
@@ -49,17 +49,22 @@
    is not as the conversion makes it. The three give
    FlambdaRegionsCheckSpec.region_check_fault_statement.
 
-   The fourth statement is that in a state that has the property what
-   a step reads may be read ([reads_live],
-   [checked_reads_live_statement]). It is here for a part that is not
-   proved, and that no statement of the tree says: that where the run
-   of a term that passes the check stops because [step] has no step,
-   the run of the term with its regions dropped goes wrong. Of a run
-   whose states have [reads_live] and no more, that is false: where a
-   handler that is jumped to has the kind [Region] at a place, it
-   must have a parameter there and the jump an argument, which
-   [reads_live] does not ask. So that part needs more of the property
-   than [reads_live].
+   The fourth and the fifth statement are what the other part of the
+   soundness of the check needs of the states of a run
+   (FlambdaRegionsCheckSoundSpec.v): that where the run of a term
+   that passes the check, and that the erasure is meant for
+   ([erasable]), stops because [step] has no step, the run of the
+   term with its regions dropped goes wrong. In a
+   state that has the property what a step reads may be read
+   ([reads_live], [checked_reads_live_statement]), and a jump to a
+   handler gives every kind [Region] of the handler a parameter and
+   an argument ([regions_given], [checked_regions_given_statement]).
+   Both are needed. Of a run whose states have [reads_live] and no
+   more, that part is false: a handler that has the kind [Region] at
+   a place where it has no parameter, or where the jump has no
+   argument, has no step, because its kinds, its parameters and the
+   arguments are not as many, and the term with its regions dropped,
+   which has not the kind, may have one.
 
    SYMBOLS AS TIMES
 
@@ -197,7 +202,9 @@
    - That a region is ended (decision D48).
    - That where the run of a term that passes the check stops
      because [step] has no step, the run of the term with its regions
-     dropped goes wrong. *)
+     dropped goes wrong: it is a statement of
+     FlambdaRegionsCheckSoundSpec.v, of a term that the erasure is
+     meant for. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
@@ -830,6 +837,40 @@ Definition reads_live (rs : region_state) : Prop :=
     = true.
 
 (* ======================================================================== *)
+(* The regions that a jump gives                                            *)
+(* ======================================================================== *)
+
+(* Where the expression of the state applies a continuation that the
+   machine finds bound to a handler, every kind [Region] among the
+   kinds of the handler is at a place where the handler has a
+   parameter and the [Apply_cont] has an argument. The term with its
+   regions dropped has neither the kind, nor the parameter, nor the
+   argument at such a place (FlambdaRegionsSpec.erase). So a handler
+   that has a kind [Region] and no parameter for it, or that is given
+   no argument for it, has no step on this machine, because its
+   kinds, its parameters and the arguments are not as many, and may
+   have one once the regions are dropped. Nothing is asked of the
+   places that are no region: the term with its regions dropped has
+   there what this one has, and a number that is wrong there is wrong
+   for both. Nothing is asked where the continuation is a way out of
+   the term, has extra arguments or is what is left of an application
+   with too many arguments: none of them is given a region
+   (FlambdaRegionsSpec.region_places). *)
+Definition regions_given (rs : region_state) : bool :=
+  let s := rs_state rs in
+  match state_expr s with
+  | Apply_cont ac =>
+    match resolve (ac_continuation ac) (state_conts s) with
+    | Closure (Handler params metadata handler) _ _ _ =>
+      let places := region_params (Handler params metadata handler) in
+      forallb negb (skipn (length (ac_args ac)) places)
+      && forallb negb (skipn (length params) places)
+    | Outer _ | Extra_args _ _ | Over_application _ _ _ _ _ => true
+    end
+  | _ => true
+  end.
+
+(* ======================================================================== *)
 (* Statements                                                               *)
 (* ======================================================================== *)
 
@@ -864,3 +905,9 @@ Definition checked_fault_statement : Prop :=
 Definition checked_reads_live_statement : Prop :=
   ∀ (cert : certificate) (codes : list (code_id * code)) (rs : region_state),
     state_checked cert codes rs -> reads_live rs.
+
+(* In a state that has it, a jump to a handler gives every kind
+   [Region] of the handler a parameter and an argument. *)
+Definition checked_regions_given_statement : Prop :=
+  ∀ (cert : certificate) (codes : list (code_id * code)) (rs : region_state),
+    state_checked cert codes rs -> regions_given rs = true.

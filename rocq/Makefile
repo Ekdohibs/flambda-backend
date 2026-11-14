@@ -297,6 +297,7 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   FlambdaRegionsCheckedCallProofs.v \
   FlambdaRegionsCheckedDeepProofs.v \
   FlambdaRegionsCheckedFaultProofs.v \
+  FlambdaRegionsCheckedGivenProofs.v \
   FlambdaRegionsCheckedHeadProofs.v \
   FlambdaRegionsCheckedInitialProofs.v \
   FlambdaRegionsCheckedJumpProofs.v \

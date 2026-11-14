@@ -25,11 +25,13 @@
  * DEALINGS IN THE SOFTWARE.                                                  *
  ******************************************************************************)
 
-(* Proofs of the four statements of FlambdaRegionsCheckedSpec.v: the state
+(* Proofs of the five statements of FlambdaRegionsCheckedSpec.v: the state
    that a run of a checked term starts in has the property, a step keeps
    it, a state that has it stops without a step only where [step] has none,
-   and in such a state what a step reads may be read. The lemmas are in the
-   files FlambdaRegionsChecked...Proofs.v. Nothing here needs review. *)
+   and in such a state what a step reads may be read and a jump to a
+   handler gives every kind [Region] of the handler a parameter and an
+   argument. The lemmas are in the files FlambdaRegionsChecked...Proofs.v.
+   Nothing here needs review. *)
 
 From Stdlib Require Import ZArith List Bool Lia PeanoNat.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
@@ -54,7 +56,7 @@ From OxCamlFlambda2 Require Import FlambdaRegionsCheckedBasicsProofs
   FlambdaRegionsCheckedAppliedProofs FlambdaRegionsCheckedMovesProofs
   FlambdaRegionsCheckedDeepProofs FlambdaRegionsCheckedLetProofs
   FlambdaRegionsCheckedSharedProofs FlambdaRegionsCheckedSameStoreProofs
-  FlambdaRegionsCheckedStoreProofs.
+  FlambdaRegionsCheckedStoreProofs FlambdaRegionsCheckedGivenProofs.
 Import ListNotations.
 
 (* What follows a marker is the body of the second [Let]. *)
@@ -92,6 +94,11 @@ Proof. exact checked_state_fault. Qed.
 (* In a state that has it, what a step reads may be read. *)
 Theorem checked_reads_live : checked_reads_live_statement.
 Proof. exact checked_state_reads_live. Qed.
+
+(* In a state that has it, a jump to a handler gives every kind
+   [Region] of the handler a parameter and an argument. *)
+Theorem checked_regions_given : checked_regions_given_statement.
+Proof. exact checked_gives_regions. Qed.
 
 (* A step keeps it. *)
 Theorem region_step_keeps_checked : region_step_keeps_checked_statement.
