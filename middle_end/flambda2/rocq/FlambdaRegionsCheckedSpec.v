@@ -25,30 +25,41 @@
  * DEALINGS IN THE SOFTWARE.                                                  *
  ******************************************************************************)
 
-(* The property of states by which the check of regions
-   (FlambdaRegionsCheckSpec.v) is to be proved sound.
+(* The property of states by which the run of a term that passes the
+   check of regions (FlambdaRegionsCheckSpec.v), from its first state
+   and with symbols to draw that are none of the term or of the
+   static environment ([region_names_fresh]), is proved to stop
+   without a step only where [step] has none.
 
    This file is to be reviewed: all of it. It adds nothing to the
-   machine and nothing to the check. Nothing proves the statements at
-   the end yet: the file is here so that the property is read, and
-   broken if it can be, before the proof that a step keeps it is
-   written.
+   machine and nothing to the check. FlambdaRegionsCheckedProofs.v
+   proves the four statements at the end.
 
    THE PLAN OF THE PROOF
 
    [state_checked] is a property of a state of the machine of regions,
    given a certificate and the code of the term. The state that a run
-   of a checked term starts in has it ([checked_initial_statement]) and
-   a step keeps it ([region_step_keeps_checked_statement]). A state
-   that has it stops without a step only where [step] has none
+   of a checked term starts in has it, if the symbols that the machine
+   draws are none of the term or of the static environment
+   ([checked_initial_statement]), and a step keeps it
+   ([region_step_keeps_checked_statement]). A state that has it stops
+   without a step only where [step] has none
    ([checked_fault_statement]): not for decisions D45, D46 or D47, not
    for a region used as a value, not for a primitive of regions that
-   is not as the conversion makes it. And where [step] has none, the
-   run of the term with its regions dropped goes wrong
-   ([no_plain_step_erased_statement]); that part needs of the states
-   of the run only [reads_live], which a checked state has
-   ([checked_reads_live_statement]). The four give
-   FlambdaRegionsCheckSpec.region_check_sound_statement.
+   is not as the conversion makes it. The three give
+   FlambdaRegionsCheckSpec.region_check_fault_statement.
+
+   The fourth statement is that in a state that has the property what
+   a step reads may be read ([reads_live],
+   [checked_reads_live_statement]). It is here for a part that is not
+   proved, and that no statement of the tree says: that where the run
+   of a term that passes the check stops because [step] has no step,
+   the run of the term with its regions dropped goes wrong. Of a run
+   whose states have [reads_live] and no more, that is false: where a
+   handler that is jumped to has the kind [Region] at a place, it
+   must have a parameter there and the jump an argument, which
+   [reads_live] does not ask. So that part needs more of the property
+   than [reads_live].
 
    SYMBOLS AS TIMES
 
@@ -157,7 +168,7 @@
      the callee or an argument of a partial application, reaches
      symbols of the heap only, through the partial applications that
      are in it too. It is a property of the runs of a term that
-     passes the check, to be proved with the rest: the check passes
+     passes the check, proved with the rest: the check passes
      an allocation on the heap, which is what makes a block, a closure
      or an array that is a value and not a symbol, only with arguments
      that live for ever. A run of a term that does not pass may make
@@ -183,7 +194,10 @@
      primitive of the heap.
    - Nothing of the values at an exit beyond what
      FlambdaRegionsCallsSpec.v states.
-   - That a region is ended (decision D48). *)
+   - That a region is ended (decision D48).
+   - That where the run of a term that passes the check stops
+     because [step] has no step, the run of the term with its regions
+     dropped goes wrong. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
@@ -747,7 +761,7 @@ Definition state_checked (rs : region_state) : Prop :=
 End Checked.
 
 (* ======================================================================== *)
-(* What the other half of the proof needs                                   *)
+(* What a step reads                                                        *)
 (* ======================================================================== *)
 
 (* The simples that a step evaluates: one at the place of a region has
@@ -820,7 +834,8 @@ Definition reads_live (rs : region_state) : Prop :=
 (* ======================================================================== *)
 
 (* The state that a run of a checked term starts in has the
-   property. *)
+   property, if the symbols that the machine draws are none of the
+   term or of the static environment. *)
 Definition checked_initial_statement : Prop :=
   ∀ (cert : certificate) (statics : static_env) (base : symbol) (e : expr),
     region_check cert statics e = true ->
@@ -849,24 +864,3 @@ Definition checked_fault_statement : Prop :=
 Definition checked_reads_live_statement : Prop :=
   ∀ (cert : certificate) (codes : list (code_id * code)) (rs : region_state),
     state_checked cert codes rs -> reads_live rs.
-
-(* The other half. Of a run in every state of which what a step reads
-   may be read: where it stops because [step] has no step, the run of
-   the term with its regions dropped goes wrong. Without the premise
-   it is false: a partial application whose callee is gone may be
-   evaluated, and calling it has no step, where the term with its
-   regions dropped calls a closure; a value that is no mark, given at
-   the place of a region, has no step for the kinds, where the term
-   with its regions dropped has neither the parameter nor the
-   argument. *)
-Definition no_plain_step_erased_statement : Prop :=
-  ∀ (e : expr) (statics : static_env) (base : symbol) (fuel : nat),
-    region_names_fresh base e statics = true ->
-    erasable e statics = true ->
-    (∀ (fuel' : nat) (rs : region_state),
-       region_run fuel' (initial_region_state e statics base)
-       = Region_step rs ->
-       reads_live rs) ->
-    region_run fuel (initial_region_state e statics base)
-    = Region_undefined No_plain_step ->
-    behaves (erased_initial_state e statics) Goes_wrong.

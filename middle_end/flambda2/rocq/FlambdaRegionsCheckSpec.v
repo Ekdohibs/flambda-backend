@@ -26,39 +26,70 @@
  ******************************************************************************)
 
 (* The check of the regions of one term: a test of the term alone, with
-   a certificate, that its regions add no fault to it on the machine
-   of regions (FlambdaRegionsSpec.v).
+   a certificate. The run of a term that passes it, on the machine of
+   regions (FlambdaRegionsSpec.v), from the first state of the term
+   in a static environment, where the symbols that the machine draws
+   are none of the term or of that static environment
+   ([region_names_fresh]), stops without a step only where [step] has
+   none.
 
    This file is to be reviewed: all of it. It adds nothing to the
    machine: [region_step] and the rules of FlambdaRegionsSpec.v keep
-   their text. Nothing proves the statement at the end yet: the file
-   is here for the review of what it says, with
-   FlambdaRegionsCheckedSpec.v, which has the property of states that
-   the proof is to go by.
+   their text. FlambdaRegionsCheckProofs.v proves the three statements
+   at the end, the first of them by the property of states of
+   FlambdaRegionsCheckedSpec.v.
 
    WHAT IT IS FOR
 
    The validation of a run of Simplify compares the term before and
    the term after with their regions dropped
    (FlambdaRegionsSpec.erase). It says nothing of the regions of the
-   term after. This check is of the term after alone. If it passes,
-   the regions of the term add no fault to it
-   ([regions_add_no_fault]): where the run of the term on the machine
-   of regions stops without a step, the run of the term with its
-   regions dropped goes wrong too. That is an implication and no
-   more: of a term that goes wrong with its regions dropped it says
-   nothing. So a term that passes and that does not go wrong with its
-   regions dropped uses no value whose region is gone (decision D45),
-   makes no heap block that holds a local value (decision D46), ends
-   or names no region that is not open (decision D47), and has no
-   primitive of regions that is not as the conversion makes it. With
-   the validation of today, a term before that does not go wrong,
-   regions dropped, gives a term after that never stops without a
-   step, regions and all ([checked_after_safe_statement]). That no
-   state of a run of a term that passes stops for one of those
-   reasons, whatever the term does with its regions dropped, is a
-   statement of FlambdaRegionsCheckedSpec.v
-   ([checked_fault_statement], with the two before it).
+   term after. This check is of the term after alone.
+
+   WHAT IS PROVED OF A TERM THAT PASSES, AND WHAT IS NOT
+
+   All of it is of one run: that of the term on the machine of
+   regions from its first state ([initial_region_state]) in the
+   static environment that the check was given, where the symbols
+   that the machine draws are none of the term or of that static
+   environment ([region_names_fresh]). Without this freshness nothing
+   is proved, and the conclusion need not hold: a term that evaluates
+   a symbol at or above the base that nothing binds may pass the
+   check, and its run stops there for decision D45, because the
+   machine takes the symbol for one that it drew and that is gone.
+
+   Proved ([region_check_fault_statement]): that run stops without a
+   step only where [step] has none (the fault [No_plain_step]). So,
+   whatever the term does with its regions dropped, the run never
+   stops because it uses a value whose region is gone (decision D45),
+   because it makes a heap block that holds a local value (decision
+   D46), because it ends or names a region that is not open (decision
+   D47), because it uses a region as a value, or at a primitive of
+   regions that is not as the conversion makes it. The proof goes by
+   a property that every state of the run has: three statements of
+   FlambdaRegionsCheckedSpec.v.
+
+   Not proved, and no statement of the tree: that where the run stops
+   because [step] has no step, the run of the term with its regions
+   dropped goes wrong too. With that, the regions of a term that
+   passes would add no fault to it ([regions_add_no_fault]): where
+   the run of the term on the machine of regions stops without a
+   step, the run of the term with its regions dropped goes wrong too.
+   [regions_add_no_fault] is an implication and no more: of a term
+   that goes wrong with its regions dropped it says nothing. Nothing
+   in the tree says that a term that passes the check has it.
+
+   The two statements about a run of Simplify are of
+   [regions_add_no_fault], which they take as a premise, and not of
+   the check. With the validation of today, a term before that does
+   not go wrong, regions dropped, gives a term after that never stops
+   without a step, regions and all, if the regions of the term after
+   add no fault to it ([checked_after_safe_statement]). So, as long
+   as the part above is not proved, they say nothing of a term that
+   passes the check.
+
+   Nothing runs the check: the test tool does not ask it, and nothing
+   of it is extracted.
 
    The check is a function. It takes a certificate, which an analysis
    that is not trusted guesses: nothing is asked of the certificate
@@ -137,8 +168,8 @@
    - It says nothing of the kinds of values but where the machine of
      regions has a rule of its own: a [Let] of a primitive of regions,
      a [Let] that is a local allocation, a region given to a parameter.
-     A term that the check passes may stop without a step for a
-     reason that it has with its regions dropped.
+     A term that the check passes may stop without a step where
+     [step] has none.
    - It says nothing of the primitives of the heap: the machine of
      regions runs none ([FlambdaRegionsSpec.plain_step] has no step
      for one), and a term that has one is passed or refused by the
@@ -990,6 +1021,23 @@ Definition region_check (cert : certificate) (statics : static_env)
 (* Statements                                                               *)
 (* ======================================================================== *)
 
+(* The run of a term that passes the check, with any certificate,
+   from its first state, where the symbols that the machine draws are
+   none of the term or of the static environment, stops without a
+   step only where [step] has none: not for decisions D45, D46 or
+   D47, not for a region used as a value, not for a primitive of
+   regions that is not as the conversion makes it. It does not say
+   that the run does not stop where [step] has none, nor what the
+   term does there with its regions dropped. *)
+Definition region_check_fault_statement : Prop :=
+  ∀ (cert : certificate) (statics : static_env) (base : symbol) (e : expr)
+    (fuel : nat) (fault : region_fault),
+    region_check cert statics e = true ->
+    region_names_fresh base e statics = true ->
+    region_run fuel (initial_region_state e statics base)
+    = Region_undefined fault ->
+    fault = No_plain_step.
+
 (* A run on the machine of regions that never stops without a step. *)
 Definition region_safe (rs : region_state) : Prop :=
   ∀ (fuel : nat) (fault : region_fault),
@@ -998,7 +1046,8 @@ Definition region_safe (rs : region_state) : Prop :=
 (* The regions of a term add no fault to it: where its run on the
    machine of regions stops without a step, the run of the term with
    its regions dropped goes wrong too. Nothing is said of what goes
-   wrong without regions. *)
+   wrong without regions. No statement here says that a term has
+   this: the two below take it as a premise. *)
 Definition regions_add_no_fault (e : expr) (statics : static_env)
     (base : symbol) : Prop :=
   ∀ (fuel : nat) (fault : region_fault),
@@ -1006,21 +1055,12 @@ Definition regions_add_no_fault (e : expr) (statics : static_env)
     = Region_undefined fault ->
     behaves (erased_initial_state e statics) Goes_wrong.
 
-(* The check is sound: the regions of a term that passes it, with any
-   certificate, add no fault to the term. *)
-Definition region_check_sound_statement : Prop :=
-  ∀ (cert : certificate) (statics : static_env) (base : symbol) (e : expr),
-    region_check cert statics e = true ->
-    region_names_fresh base e statics = true ->
-    erasable e statics = true ->
-    regions_add_no_fault e statics base.
-
-(* What it gives with the validation of a run of Simplify, which
-   proves [refines] of the two terms with their regions dropped. If
-   the term before, with its regions dropped, does not go wrong, and
-   the regions of the term after add no fault to it, the term after,
-   with its regions, never stops without a step. Nothing is asked of
-   the regions of the term before. *)
+(* What [regions_add_no_fault] gives with the validation of a run of
+   Simplify, which proves [refines] of the two terms with their
+   regions dropped. If the term before, with its regions dropped,
+   does not go wrong, and the regions of the term after add no fault
+   to it, the term after, with its regions, never stops without a
+   step. Nothing is asked of the regions of the term before. *)
 Definition checked_after_safe_statement : Prop :=
   ∀ (statics : static_env) (base : symbol) (before after : expr),
     refines (erased_initial_state before statics)
