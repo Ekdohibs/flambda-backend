@@ -198,6 +198,8 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   FlambdaImportsSpec.v \
   FlambdaInlineFreshProofs.v \
   FlambdaInlineFreshSpec.v \
+  FlambdaInlineCallsAtProofs.v \
+  FlambdaInlineCallsAtSpec.v \
   FlambdaInlineSiblingsProofs.v \
   FlambdaInlineSiblingsSpec.v \
   FlambdaInlineTailProofs.v \
@@ -447,6 +449,10 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   FlambdaValidateImportsRenameProofs.v \
   FlambdaValidateImportsRenameSpec.v \
   FlambdaValidateImportsSpec.v \
+  FlambdaValidateInliningProofs.v \
+  FlambdaValidateInliningRenameProofs.v \
+  FlambdaValidateInliningRenameSpec.v \
+  FlambdaValidateInliningSpec.v \
   FlambdaValidateKnowingProofs.v \
   FlambdaValidateKnowingSpec.v \
   FlambdaValidateProofs.v \

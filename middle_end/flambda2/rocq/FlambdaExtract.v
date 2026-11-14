@@ -70,7 +70,8 @@ From OxCamlFlambda2 Require Import FlambdaMapSpec FlambdaModel
   FlambdaUnusedContsSpec FlambdaUnusedParamsSpec FlambdaUnusedStaticsSpec
   FlambdaValidateImportsSpec
   FlambdaValidateSpec FlambdaValidateKnowingSpec FlambdaValidateRelatedSpec
-  FlambdaValidateReadingSpec.
+  FlambdaValidateReadingSpec FlambdaInlineCallsAtSpec
+  FlambdaValidateInliningSpec.
 From OxCamlFlambda2Types Require Import FlambdaAliasesSpec.
 From OxCamlFlambda2Types Require Import FlambdaBindingTime.
 From OxCamlFlambda2Types Require Import FlambdaJoinEnv.
@@ -202,6 +203,7 @@ Separate Extraction
   FlambdaTypingEnv.Typing_env.mem
   all_among
   among
+  before_inlined
   before_read
   bind_aliased_params
   bind_closures
@@ -233,6 +235,7 @@ Separate Extraction
   imports_statics
   initial_region_state
   inline_calls
+  inline_calls_at
   inline_known_calls
   inline_tail_conts
   inter
@@ -281,7 +284,9 @@ Separate Extraction
   union_with
   unit_exn_handlers_well_formed
   validate_unit
+  validate_unit_inlining
   validate_unit_knowing
+  validate_unit_knowing_inlining
   validate_unit_knowing_reading
   validate_unit_reading
   validate_unit_related
