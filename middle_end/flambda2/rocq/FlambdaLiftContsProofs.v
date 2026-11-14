@@ -229,6 +229,7 @@ Proof.
         (handler_only_applied_all_give_var j p ps ps' hh ok ok' Hok Hp Hh),
         (IH Hothers).
       reflexivity.
+    + destruct ps as [ | p0 ps0]; [ destruct Hp | intros H; exact H ].
     + apply applies_only_gives_var, Hok.
     + intros Harms.
       induction arms as [ | [n ac] arms IH]; [ reflexivity | ].
@@ -325,12 +326,12 @@ Proof.
   { rewrite (lookup_bind_params_out q vs vars bound p Hp Hbind). exact Hv. }
   apply equivalent_sym.
   eapply equivalent_trans.
-  { apply step_equivalent. rewrite step_let_simple. cbn
-   [eval_named eval_simple].
+  { apply step_equivalent. rewrite step_let_simple.
+    cbn [eval_named eval_simple].
     rewrite Hbound, Hkind, kind_eqb_refl. reflexivity. }
   eapply equivalent_trans.
-  { apply step_equivalent. rewrite step_let_simple. cbn
-   [eval_named eval_simple].
+  { apply step_equivalent. rewrite step_let_simple.
+    cbn [eval_named eval_simple].
     rewrite lookup_head, Hkind, kind_eqb_refl. reflexivity. }
   apply coincide_equivalent;
     [ | intros k _; unfold conts_agree_at; apply Same_matches ].
@@ -373,8 +374,8 @@ Proof.
     (bind_params q vs vars) as [bound0 | ];
     try contradiction; simpl; [ | exact I ].
   eapply equivalent_trans.
-  { apply step_equivalent. rewrite step_let_simple. cbn
-   [eval_named eval_simple].
+  { apply step_equivalent. rewrite step_let_simple.
+    cbn [eval_named eval_simple].
     rewrite Hunder', lookup_head, Hkind, kind_eqb_refl. reflexivity. }
   apply coincide_equivalent;
     [ | intros k _; unfold conts_agree_at; apply Same_matches ].

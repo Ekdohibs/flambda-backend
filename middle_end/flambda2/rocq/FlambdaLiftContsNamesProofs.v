@@ -152,7 +152,8 @@ Proof.
       rewrite rename_continuation_eqb, handler_only_applied_equivariant, IH.
       reflexivity.
     + cbn [rename_apply ap_continuation ap_exn_continuation].
-      rewrite !rename_continuation_eqb. reflexivity.
+      destruct ps as [ | p0 ps0]; cbn [map];
+        rewrite !rename_continuation_eqb; reflexivity.
     + apply applies_only_equivariant.
     + induction arms as [ | [n ac] arms IH]; [ reflexivity | ].
       cbn [map forallb fst snd].

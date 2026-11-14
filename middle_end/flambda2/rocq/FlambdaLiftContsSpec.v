@@ -104,7 +104,11 @@
      application, no [Let_cont] binds it again, and no [Let] and no
      parameter of a handler binds, between its binding and an
      application of it, one of the parameters that it takes
-     ([only_applied]).
+     ([only_applied]). One mention more is allowed where [k'] takes
+     no parameter of [k]: a call may return to it. It is then moved
+     as it is, and takes what the call returns, as before. Where it
+     takes a parameter of [k] no call may return to it, as a call
+     has no way to give that parameter. No call may raise to it.
    And two tests of what the applications of [k] give, which the
    equivalence does not need either. The validation applies the pass
    to the two terms that it compares before it applies
@@ -254,7 +258,8 @@ Definition applies_only (j : continuation) (ok : bool) (ac : apply_cont)
   && (ok || negb (Pos.eqb (ac_continuation ac) j)).
 
 (* Every mention of [j] in a term is such an application, and [j] is
-   not bound again. *)
+   not bound again. Where [ps] is empty, a call may also return to
+   [j]; no call raises to it. *)
 Fixpoint only_applied (j : continuation) (ps : list variable) (ok : bool)
     (e : expr) {struct e} : bool :=
   match e with
@@ -270,7 +275,10 @@ Fixpoint only_applied (j : continuation) (ps : list variable) (ok : bool)
       handlers
     && only_applied j ps ok body
   | Apply ap =>
-    negb (Pos.eqb (ap_continuation ap) j)
+    match ps with
+    | [] => true
+    | _ :: _ => negb (Pos.eqb (ap_continuation ap) j)
+    end
     && negb (Pos.eqb (ap_exn_continuation ap) j)
   | Apply_cont ac => applies_only j ok ac
   | Switch _ arms => forallb (fun '(_, ac) => applies_only j ok ac) arms
