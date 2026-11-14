@@ -8422,6 +8422,9 @@ Proof.
     (keeps_scope_compose _ collapse_switches _
        FlambdaKeepsScopeProofs.collapse_switches_keeps_scope).
   refine
+    (keeps_scope_compose _ forward_applications _
+       FlambdaLoopsScopeProofs.forward_applications_keeps_scope).
+  refine
     (keeps_scope_compose _ fold_constants _
        FlambdaKeepsScopeProofs.fold_constants_keeps_scope).
   exact

@@ -1368,7 +1368,10 @@ Definition placed (e : expr) : expr :=
    the file lists for it (FlambdaArmNumbersSpec.numbers_in_arms). A
    primitive may then be on constants and a [Switch] on a constant,
    as they are for Simplify, which simplifies the handler knowing the
-   number: they are folded ([fold_constants]), a [Switch] whose arms
+   number: they are folded ([fold_constants]), an application of a
+   continuation whose handler is then one [Apply_cont] is made that
+   [Apply_cont], with its arguments put for the parameters
+   (FlambdaForwardSpec.forward_applications), a [Switch] whose arms
    are then all the same is that arm ([collapse_switches]), and a
    [Switch] whose arms then apply one continuation to arguments that
    are computed from their numbers is made the application
@@ -1392,11 +1395,13 @@ Definition tidy_expr_before (e : expr) : expr :=
                       (remove_unused_conts
                          (merge_switches
                             (collapse_switches
-                               (fold_constants
-                                  (numbers_in_arms
-                                     (unalias_rec_params
-                                        (unalias_params
-                                           (give_scrutinees e)))))))))))))).
+                               (forward_applications
+                                  (fold_constants
+                                     (numbers_in_arms
+                                        (unalias_rec_params
+                                           (unalias_params
+                                              (give_scrutinees
+                                                 e))))))))))))))).
 
 (* The same for the body of code: that round, and the same for the
    handler of each of its recursive continuations. *)
@@ -1424,11 +1429,17 @@ Definition tidied_before (rounds : nat) (e : expr) : expr :=
    [Let]s left unused, those that are sure to have a value are
    removed, as in the normalisation of the term after.
 
-   After the fold, the continuations that a handler binds on its way
-   to a [Switch] on one of its parameters are bound outside it, and
-   an application that gives that parameter a number goes to the arm
-   of the number, where its arguments are known to have the kinds of
-   the parameters (FlambdaLiftContsSpec.lift_handler_conts,
+   After the fold, an application of a continuation whose handler is
+   then one [Apply_cont] is made that [Apply_cont] where
+   FlambdaForwardKindedSpec.forward_kinded allows, as the term before
+   has it by [forward_applications] in [tidy_expr_before]: without
+   it the term before may have an application gone on where the term
+   after still has the continuation. Then the continuations that a
+   handler binds on its way to a [Switch] on one of its parameters
+   are bound outside it, and an application that gives that
+   parameter a number goes to the arm of the number, where its
+   arguments are known to have the kinds of the parameters
+   (FlambdaLiftContsSpec.lift_handler_conts,
    FlambdaForwardArmSpec.forward_to_arms_kinded), as in the rounds
    of the term after ([inline_once_applied_after]). They come again
    here because the rounds may leave a continuation that the first
@@ -1450,11 +1461,12 @@ Definition tidy_expr_after (e : expr) : expr :=
                    (remove_unused_conts
                       (forward_to_arms_kinded
                          (lift_handler_conts
-                            (fold_constants
-                               (numbers_in_arms
-                                  (unalias_rec_params
-                                     (unalias_params
-                                        (give_scrutinees e))))))))))))).
+                            (forward_kinded
+                               (fold_constants
+                                  (numbers_in_arms
+                                     (unalias_rec_params
+                                        (unalias_params
+                                           (give_scrutinees e)))))))))))))).
 
 Definition tidy_code_after (body : expr) : expr :=
   rewrite_rec_handlers tidy_expr_after (tidy_expr_after body).
