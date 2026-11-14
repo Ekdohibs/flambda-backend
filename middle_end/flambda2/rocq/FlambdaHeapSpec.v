@@ -27,9 +27,10 @@
 
 (* The primitives of the heap: allocation, what each primitive does to a
    heap, and the compiler's classification of primitives by effects and
-   coeffects. It comes before FlambdaSemanticsSpec.v, whose machine is to
-   run these primitives; until it does, the machine that runs them is
-   that of FlambdaHeapMachineSpec.v.
+   coeffects. It comes before FlambdaSemanticsSpec.v, whose machine runs
+   these primitives (FlambdaSemanticsSpec.exec_named, by [exec_prim]).
+   FlambdaHeapMachineSpec.v has the prototype that ran them before that
+   machine did.
 
    This file is to be read with the request (requests/C4-heap.md). It has
    - allocation, and what the primitives of the heap compute
