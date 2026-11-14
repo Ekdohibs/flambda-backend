@@ -1052,15 +1052,22 @@ not a proof.
   regenerates, on top of the branch.
 - An extracted file that is no longer written. The extraction writes a
   file for each module that something extracted uses, and leaves every
-  other file of the directory as it is. So when the last use of a module
-  goes, its `.ml` and `.mli` stay committed as they were last written,
-  compiled into the library of the tests and used by nothing, and
-  `git diff` after `make -C rocq all` does not show them. To see them:
-  delete every `.ml` and `.mli` of `tests/semantics/extracted/` (not its
-  `dune` file, which is written by hand) and
-  `middle_end/flambda2/rocq/FlambdaExtract.vo`, run `make -C rocq all`,
-  and look at `git status` of the directory. A file shown as deleted is
-  one that the extraction no longer writes; the integrator removes it.
+  other file of the directory as it is. So when what is extracted no
+  longer uses a module, its `.ml` and `.mli` stay committed as they
+  were last written and are still compiled into the library of the
+  tests, and `git diff` after `make -C rocq all` does not show them. To
+  see them: delete every `.ml` and `.mli` of `tests/semantics/extracted/`
+  (not its `dune` file, which is written by hand) and
+  `middle_end/flambda2/rocq/FlambdaExtract.vo`, and run
+  `make -C rocq all`. Look at `git status` of the directory only when
+  that build has succeeded: a build that stops before the extraction
+  leaves every file deleted. A file then shown as deleted is one that
+  the extraction no longer writes. That alone does not show that nothing
+  uses it: a test tool is written by hand and may still name the module.
+  Search the test tools and the extracted files that remain for the
+  module. If one names it, what it uses of the module is to be named in
+  `FlambdaExtract.v` again, which makes the extraction write the file;
+  if none does, the integrator removes the file.
 - The test tool and the examples come last. The compiler must build at
   every commit of the integration branch, and `make -s boot-compiler`
   type-checks `flsemantics.ml` against the extracted files that are
