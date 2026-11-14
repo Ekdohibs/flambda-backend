@@ -149,6 +149,17 @@
      ([frames_deep], [statics_deep]).
      FlambdaRegionsInvariantSpec.frames_hold stops at a partial
      application.
+   - Only a symbol and a partial application carry what is local
+     ([values_plain]): every other value that the state holds, in a
+     variable, in a continuation, directly in what a frame binds, as
+     the callee or an argument of a partial application, reaches
+     symbols of the heap only, through the partial applications that
+     are in it too. A block, a closure or an array that is a value
+     and not a symbol was made by an allocation on the heap, whose
+     arguments live for ever. So a closure that is called and is not a
+     symbol may be given to code whose closure is not local.
+     FlambdaRegionsInvariantSpec.value_holds asks this of such a value
+     but for the partial applications inside it.
    - Every partial application that the state holds, anywhere, is one
      that may be called ([paps_fit]): it keeps fewer arguments than its
      code takes, as one that a call makes does; and it reaches symbols
@@ -209,10 +220,6 @@ Definition allocated_all (ok : symbol -> bool)
   | Static_immutable_array elements => forallb (value_all ok) elements
   end.
 
-(* A symbol that may be evaluated: of the heap, or bound in a frame. *)
-Definition live_symbol (rs : region_state) (s : symbol) : bool :=
-  heap_symbol rs s || local_in (rs_frames rs) s.
-
 (* Drawn before the bound; with no bound, any symbol. *)
 Definition before (stop : option symbol) (s : symbol) : bool :=
   match stop with
@@ -221,7 +228,9 @@ Definition before (stop : option symbol) (s : symbol) : bool :=
   end.
 
 (* A symbol within a bound: of the heap, or bound in a frame and drawn
-   before the bound. *)
+   before the bound. With no bound it is a symbol that may be
+   evaluated (FlambdaRegionsInvariantSpec.live_symbol), in a state
+   that has the invariant. *)
 Definition symbol_within (rs : region_state) (stop : option symbol)
     (s : symbol) : bool :=
   heap_symbol rs s || (local_in (rs_frames rs) s && before stop s).
@@ -574,6 +583,64 @@ Definition statics_deep (rs : region_state) : bool :=
   forallb (fun '(_, allocated) => allocated_all (heap_symbol rs) allocated)
     (static_values (state_statics (rs_state rs))).
 
+(* Only a symbol and a partial application carry what is local: a
+   value that is neither reaches symbols of [heap] only; the callee
+   and the arguments of a partial application are such values again. *)
+Fixpoint value_plain (heap : symbol -> bool) (v : value) : bool :=
+  match v with
+  | Value_symbol _ => true
+  | Value_partial_application callee args _ =>
+    value_plain heap callee && forallb (value_plain heap) args
+  | _ => value_all heap v
+  end.
+
+(* A test of each value that what a symbol is bound to holds
+   directly. *)
+Definition allocated_values (ok : value -> bool)
+    (allocated : statically_allocated_value) : bool :=
+  match allocated with
+  | Static_closure _ value_slots | Static_closure_of_set _ _ _ value_slots =>
+    forallb (fun '(_, v) => ok v) value_slots
+  | Static_block _ fields => forallb ok fields
+  | Static_boxed_number contents => ok contents
+  | Static_string _ | Static_imported _ => true
+  | Static_immutable_array elements => forallb ok elements
+  end.
+
+(* The same of each value that a continuation holds: the variables of
+   its closure, its extra arguments, the arguments that remain of an
+   application with too many, and what the continuations that it holds
+   hold. *)
+Fixpoint cont_values (ok : value -> bool) (c : cont_value) : bool :=
+  match c with
+  | Closure _ vars conts _ =>
+    forallb (fun '(_, v) => ok v) vars
+    && forallb (fun '(_, c) => cont_values ok c) conts
+  | Outer _ => true
+  | Extra_args c extra => cont_values ok c && forallb ok extra
+  | Over_application remaining _ _ return_to exn_to =>
+    forallb ok remaining
+    && cont_values ok return_to
+    && cont_values ok exn_to
+  end.
+
+(* A test of every value that the state holds: of a variable, of a
+   continuation, and directly in what the static environment and the
+   frames bind. *)
+Definition state_values (ok : value -> bool) (rs : region_state) : bool :=
+  let s := rs_state rs in
+  forallb (fun '(_, v) => ok v) (state_vars s)
+  && forallb (fun '(_, c) => cont_values ok c) (state_conts s)
+  && forallb (fun '(_, allocated) => allocated_values ok allocated)
+       (static_values (state_statics s))
+  && forallb (fun '(_, allocated) => allocated_values ok allocated)
+       (live_locals (rs_frames rs)).
+
+(* Every value that the state holds is a symbol, a partial application
+   of such values, or reaches symbols of the heap only. *)
+Definition values_plain (rs : region_state) : bool :=
+  state_values (value_plain (heap_symbol rs)) rs.
+
 (* The arguments that a partial application keeps against the
    parameters of its code: one that is not of the heap is at a
    parameter that may be given a local value. *)
@@ -638,45 +705,9 @@ Fixpoint value_paps (ok : value -> list value -> arity -> bool) (v : value)
     && forallb (value_paps ok) args
   end.
 
-Definition allocated_paps (ok : value -> list value -> arity -> bool)
-    (allocated : statically_allocated_value) : bool :=
-  match allocated with
-  | Static_closure _ value_slots | Static_closure_of_set _ _ _ value_slots =>
-    forallb (fun '(_, v) => value_paps ok v) value_slots
-  | Static_block _ fields => forallb (value_paps ok) fields
-  | Static_boxed_number contents => value_paps ok contents
-  | Static_string _ | Static_imported _ => true
-  | Static_immutable_array elements => forallb (value_paps ok) elements
-  end.
-
-(* The same of what a continuation holds: the variables of its
-   closure, its extra arguments, the arguments that remain of an
-   application with too many, and what the continuations that it holds
-   hold. *)
-Fixpoint cont_paps (ok : value -> list value -> arity -> bool)
-    (c : cont_value) : bool :=
-  match c with
-  | Closure _ vars conts _ =>
-    forallb (fun '(_, v) => value_paps ok v) vars
-    && forallb (fun '(_, c) => cont_paps ok c) conts
-  | Outer _ => true
-  | Extra_args c extra => cont_paps ok c && forallb (value_paps ok) extra
-  | Over_application remaining _ _ return_to exn_to =>
-    forallb (value_paps ok) remaining
-    && cont_paps ok return_to
-    && cont_paps ok exn_to
-  end.
-
 (* Every partial application that the state holds may be called. *)
 Definition paps_fit (rs : region_state) : bool :=
-  let s := rs_state rs in
-  let ok := pap_fits rs in
-  forallb (fun '(_, v) => value_paps ok v) (state_vars s)
-  && forallb (fun '(_, c) => cont_paps ok c) (state_conts s)
-  && forallb (fun '(_, allocated) => allocated_paps ok allocated)
-       (static_values (state_statics s))
-  && forallb (fun '(_, allocated) => allocated_paps ok allocated)
-       (live_locals (rs_frames rs)).
+  state_values (value_paps (pap_fits rs)) rs.
 
 (* ======================================================================== *)
 (* The property                                                             *)
@@ -689,6 +720,7 @@ Definition state_checked (rs : region_state) : Prop :=
   ∧ local_closures_fit rs = true
   ∧ frames_deep rs (rs_frames rs) = true
   ∧ statics_deep rs = true
+  ∧ values_plain rs = true
   ∧ paps_fit rs = true
   ∧ ∃ (cs : check_state) (ms : list mark),
       check_expr cert codes cs (state_expr (rs_state rs)) = true
