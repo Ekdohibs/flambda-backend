@@ -1,0 +1,10 @@
+maker_of_mutual_inlined.fl:
+  before Simplify (70 steps): returns [0: <fun>; 5]
+  after Simplify (40 steps): returns [0: <fun>; 5]
+  the check of kinds: passes before, passes after
+  calls outside code: 2 before, 1 after
+  the same
+  calls outside code once those of known code are inlined: 1
+  validated: the same once closures and blocks are lifted to symbols and the terms normalised
+  (with the calls of the closures that a Let makes made direct in the rounds after each lifting)
+  (with what my_closure is known to be from its code used in the rounds after each lifting)

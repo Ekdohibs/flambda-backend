@@ -1,0 +1,78 @@
+let $camlMaker_of_mutual_inlined__first_const_0 = Block 0 () in
+(let code rec size(24)
+       down_1 (k/80 : imm tagged)
+         my_closure/81 &my_alloc_region/82 my_depth/83
+         -> k/34 * k/35
+         : imm tagged =
+   let next_depth/84 = rec_info (succ my_depth/83) in
+   let n/85 = %project_value_slot.[down].[n] (my_closure/81) in
+   let up/86 = %project_function_slot.[down].[up] (my_closure/81) in
+   (let prim/88 = %phys_eq (k/80, 0) in
+    let eq/89 = %tag_imm (prim/88) in
+    (let untagged/90 = %untag_imm (eq/89) in
+     switch untagged/90
+       | 0 -> k/37
+       | 1 -> k/34 (n/85))
+      where k/37 =
+        cont k/36)
+     where k/36 =
+       let int_sub/87 = %int_barith.sub (k/80, 1) in
+       apply direct(up_2 &my_alloc_region/82)
+         (up/86 ~ depth my_depth/83 -> next_depth/84 : _ -> imm tagged)
+           (int_sub/87)
+           -> k/34 * k/35
+ and code rec size(28)
+       up_2 (k/91 : imm tagged)
+         my_closure/92 &my_alloc_region/93 my_depth/94
+         -> k/38 * k/39
+         : imm tagged =
+   let next_depth/95 = rec_info (succ my_depth/94) in
+   let n/96 = %project_value_slot.[up].[n] (my_closure/92) in
+   let down/97 = %project_function_slot.[up].[down] (my_closure/92) in
+   (let prim/100 = %phys_eq (k/91, 0) in
+    let eq/101 = %tag_imm (prim/100) in
+    (let untagged/102 = %untag_imm (eq/101) in
+     switch untagged/102
+       | 0 -> k/42
+       | 1 -> k/43)
+      where k/43 =
+        cont k/40
+      where k/42 =
+        cont k/41)
+     where k/41 =
+       let int_sub/99 = %int_barith.sub (k/91, 1) in
+       apply direct(down_1 &my_alloc_region/93)
+         (down/97 ~ depth my_depth/94 -> next_depth/95 : _ -> imm tagged)
+           (int_sub/99)
+           -> k/38 * k/39
+     where k/40 =
+       let int_add/98 = %int_barith.add (n/96, 1) in
+       cont k/38 (int_add/98)
+ in
+ let code inline(always) size(64)
+       make_0 (n/103 : imm tagged)
+         my_closure/104 &my_alloc_region/105 my_depth/106
+         -> k/44 * k/45
+         : val =
+   let next_depth/107 = rec_info (succ my_depth/106) in
+   let down/108 = closure down_1 @down &my_alloc_region/105
+   and up/109 = closure up_2 @up &my_alloc_region/105
+   with { n = n/103 }
+   in
+   cont k/44 (down/108)
+ in
+ let make/110 = closure make_0 @make &toplevel in
+ (let Popaque/113 = %opaque (4) in
+  apply direct(make_0 &toplevel) make/110 (Popaque/113) -> k/47 * error
+    where k/47 (func/114) =
+      apply &toplevel func/114 (3) -> k/46 * error)
+   where k/46 (result/111 : imm tagged) =
+     let Pmakeblock/112 = %block.[`0`].`toplevel` (make/110, result/111) in
+     cont k/33 (Pmakeblock/112))
+  where k/33 define_root_symbol (module_block/77) =
+    let field_0/78 = %block_load.tag[`0`].`size`[`2`].[`0`] (module_block/77)
+    in
+    let field_1/79 = %block_load.tag[`0`].`size`[`2`].[`1`] (module_block/77)
+    in
+    let $camlMaker_of_mutual_inlined = Block 0 (field_0/78, field_1/79) in
+    cont done ($camlMaker_of_mutual_inlined)
