@@ -1,0 +1,32 @@
+let $camlIarray_element_read_twice__first_const_0 = Block 0 () in
+(let code inline(never) size(5)
+       twice_0 (a/43 : imm array, i/44 : imm tagged)
+         my_closure/45 &my_alloc_region/46 my_depth/47
+         -> k/14 * k/15
+         : imm tagged =
+   let next_depth/48 = rec_info (succ my_depth/47) in
+   let Parrayrefu/49 = %array_load.`imm` (a/43, i/44) in
+   let Parrayrefu/50 = %array_load.`imm` (a/43, i/44) in
+   let int_add/51 = %int_barith.add (Parrayrefu/50, Parrayrefu/49) in
+   cont k/14 (int_add/51)
+ in
+ let twice/52 = closure twice_0 @twice &toplevel in
+ (let Popaque/59 = %opaque (0) in
+  let Pmakearray/60 = %array.`imm`.`toplevel` (4, 6) in
+  apply direct(twice_0 &toplevel)
+    (twice/52 : _ -> imm tagged) (Pmakearray/60, Popaque/59) -> k/16 * error)
+   where k/16 (apply_result/53 : imm tagged) =
+     ((let Popaque/57 = %opaque (6) in
+       let Pmakearray/58 = %array.`imm`.`toplevel` (4, Popaque/57) in
+       apply direct(twice_0 &toplevel)
+         (twice/52 : _ -> imm tagged) (Pmakearray/58, 1) -> k/17 * error)
+        where k/17 (apply_result/54 : imm tagged) =
+          let result/55 = %int_barith.add (apply_result/54, apply_result/53)
+          in
+          let Pmakeblock/56 = %block.[`0`].`toplevel` (result/55) in
+          cont k/13 (Pmakeblock/56)))
+  where k/13 define_root_symbol (module_block/41) =
+    let field_0/42 = %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/41)
+    in
+    let $camlIarray_element_read_twice = Block 0 (field_0/42) in
+    cont done ($camlIarray_element_read_twice)

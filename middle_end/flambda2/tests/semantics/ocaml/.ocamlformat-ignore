@@ -2,6 +2,7 @@ clos_partial_local.ml
 empty_immutable_array.ml
 exclave_after_local_work.ml
 exclave_pair.ml
+iarray_element_read_twice.ml
 iarray_exported.ml
 iarray_in_function.ml
 iarray_length_of_any.ml
@@ -42,6 +43,7 @@ script/void_argument.ml
 script/void_argument_direct.ml
 script/void_parameter.ml
 stack_pair.ml
+table_and_array_alike.ml
 tail_call_after_region.ml
 tail_nontail_annot.ml
 unboxed_float_argument.ml

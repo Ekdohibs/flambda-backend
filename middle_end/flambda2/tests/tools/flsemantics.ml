@@ -2831,7 +2831,9 @@ let code_versions : (Model.code_id * Model.code_id) list ref = ref []
    [Let] is named by its path, as FlambdaLiftSpec.lift_expr counts it. A symbol
    is not given to a [Let] that [banned] pairs it with: the caller asks again,
    with the pair banned, where a symbol went to a [Let] whose block nothing uses
-   in the end.
+   in the end, and where a unit is not validated and the symbol is that of an
+   immutable array of which the term after has a twin (see [twins], where the
+   guesses are made).
 
    In a handler that is not at toplevel
    (FlambdaWellFormedSpec.handler_at_toplevel: the arm of a test, say) and in
@@ -5760,6 +5762,122 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
             made_again rest (again - 1))
           else Some (made, banned, again)
       in
+      (* The term after may bind two symbols to immutable arrays with the same
+         elements: the table that Simplify makes of a [Switch] whose arms give
+         constants, and an array of the source that has those constants, say.
+         The guess gives a [Let] the first symbol that fits it, and a symbol
+         that is left is bound as a table at the head of the unit (above), so
+         the term lifted may be the term after with two such symbols exchanged.
+         [twins] has, of the liftings of a guess, the [Let]s that were given the
+         symbol of an immutable array where the term after binds another symbol,
+         which the term before does not bind, to an array with the same
+         elements: each with the place of its lifting in the sequence, as
+         [banned] has them. Only the [Let]s that are lifted where they stand and
+         those lifted to the head of the unit are looked at. *)
+      let arrays_after =
+        let rec arrays (e : Model.expr) =
+          match e with
+          | Let (_, _, _, body) -> arrays body
+          | Let_static (bindings, body) ->
+            List.filter_map
+              (fun (binding : Model.static_binding) ->
+                match binding with
+                | Bind_symbol (sym, Static_const_immutable_value_array elements)
+                  ->
+                  Some (sym, elements)
+                | Bind_symbol _ | Bind_code _ | Bind_deleted_code _ -> None)
+              bindings
+            @ arrays body
+          | Let_cont_non_recursive (_, Handler (_, _, handler), body) ->
+            arrays body @ arrays handler
+          | Let_cont_recursive (_, body) -> arrays body
+          | Apply _ | Apply_cont _ | Switch _ | Invalid -> []
+        in
+        arrays normalised_after
+      in
+      let twins (liftings : Lift.lifting list) =
+        let bound_before = snd (static_names looped) in
+        let has_twin sym =
+          match List.assoc_opt sym arrays_after with
+          | None -> false
+          | Some elements ->
+            List.exists
+              (fun (sym', elements') ->
+                sym' <> sym && elements' = elements
+                && not (List.mem (Symbol_name sym') bound_before))
+              arrays_after
+        in
+        List.concat
+          (List.mapi
+             (fun stage (lifting : Lift.lifting) ->
+               List.filter_map
+                 (fun (path, (target : Lift.lift_to)) ->
+                   match target with
+                   | Lift_to_symbol sym when has_twin sym ->
+                     Some (stage, path, sym)
+                   | Lift_to_symbol _ | Lift_to_closure_symbols _ -> None)
+                 (lifting.lifted_lets @ lifting.lifted_to_head))
+             liftings)
+      in
+      (* Where the answer to a guess is a refusal and the guess has such [Let]s,
+         the liftings are guessed again with those pairs banned too, so that
+         each of those [Let]s takes another symbol that fits it, and the
+         function is asked of that guess: three times at most, each from the
+         guess before. The first answer that is a verdict is given. Nothing is
+         believed of a guess made so, as of any other: the verdict is that of
+         the function asked. *)
+      let rec verdict_without_twins (liftings, _, _, _) banned tries =
+        match twins liftings with
+        | [] -> None
+        | _ :: _ when tries = 0 -> None
+        | _ :: _ as pairs -> (
+          let banned = pairs @ banned in
+          let guess = guessed None banned 5 in
+          let answer :
+              Validate.validation * Model.expr * string * bool * Model.expr =
+            asked_of guess
+          in
+          match answer with
+          | Validate.Not_validated, _, _, _, _ ->
+            verdict_without_twins guess banned (tries - 1)
+          | _ -> Some answer)
+      in
+      (* The answer to the first guess; or, where that is a refusal, the verdict
+         that [verdict_without_twins] finds, if it finds one. Where it finds
+         none the answer is that of the first guess, and what the guesses made
+         after it have left in the four references that a guess writes
+         ([tables_were_bound], [own_closures_to_know], [normalised], [guesses])
+         is put back as the first guess left it, so that this asking keeps for a
+         later asking what it kept before those guesses were made.
+         [last_asking_holds] is not one of the four. The functions that the
+         attempts of the validation give set it at each call, so after a refusal
+         by one of them it is as the last call left it, which may be a call for
+         a guess made again; the function that the second check gives never
+         writes it. It is evaluated for a unit that has imports whatever the
+         verdict; its value is used only of a unit that is validated, and the
+         asking that validates a unit sets it. *)
+      let answer_of_guesses () =
+        let guess = guessed None [] 5 in
+        let answer :
+            Validate.validation * Model.expr * string * bool * Model.expr =
+          asked_of guess
+        in
+        match answer with
+        | Validate.Not_validated, _, _, _, _ -> (
+          let tables = !tables_were_bound in
+          let own_to_know = !own_closures_to_know in
+          let terms = !normalised in
+          let made = !guesses in
+          match verdict_without_twins guess [] 3 with
+          | Some verdict -> verdict
+          | None ->
+            tables_were_bound := tables;
+            own_closures_to_know := own_to_know;
+            normalised := terms;
+            guesses := made;
+            answer)
+        | _ -> answer
+      in
       let answer : Validate.validation * Model.expr * string * bool * Model.expr
           =
         match probe, search_kept with
@@ -5773,7 +5891,7 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
           | None -> search.search_answer
           | Some (made, banned, again) ->
             asked_of (guessed (Some made) banned again))
-        | None, None -> asked_of (guessed None [] 5)
+        | None, None -> answer_of_guesses ()
       in
       (match asked, answer with
       | Some asked, (Not_validated, _, _, _, _)
