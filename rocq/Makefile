@@ -291,6 +291,8 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   FlambdaRegionsCallsProofs.v \
   FlambdaRegionsCallsSpec.v \
   FlambdaRegionsCheckProofs.v \
+  FlambdaRegionsCheckSoundProofs.v \
+  FlambdaRegionsCheckSoundSpec.v \
   FlambdaRegionsCheckSpec.v \
   FlambdaRegionsCheckedAppliedProofs.v \
   FlambdaRegionsCheckedBasicsProofs.v \
@@ -317,13 +319,16 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   FlambdaRegionsCheckedStoreProofs.v \
   FlambdaRegionsCheckedUnknownProofs.v \
   FlambdaRegionsCheckedViewsProofs.v \
+  FlambdaRegionsErasedCallsProofs.v \
   FlambdaRegionsErasedProofs.v \
+  FlambdaRegionsErasedReadsProofs.v \
   FlambdaRegionsErasureProofs.v \
   FlambdaRegionsErasureSpec.v \
   FlambdaRegionsFreshProofs.v \
   FlambdaRegionsInvariantProofs.v \
   FlambdaRegionsInvariantSpec.v \
   FlambdaRegionsNoPoisonProofs.v \
+  FlambdaRegionsNoStepProofs.v \
   FlambdaRegionsOnceProofs.v \
   FlambdaRegionsPlainStepProofs.v \
   FlambdaRegionsProofs.v \
