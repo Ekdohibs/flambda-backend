@@ -6241,8 +6241,9 @@ type region_outcome =
       (** A step was refused by one of the rules of regions. *)
   | Region_not_run of string
       (** Nothing is said: the reason is the conversion's, or the run had no
-          step for a reason that is not of regions, or it was not over when the
-          steps allowed ran out. *)
+          step for a reason that is not of regions, or it came to a [Let] that
+          the machine of regions does not run, or it was not over when the steps
+          allowed ran out. *)
 
 let run_regions ~(statics : Values.static_env) (unit : converted) :
     region_outcome * int * Regions.region_state option =
@@ -6271,8 +6272,8 @@ let run_regions ~(statics : Values.static_env) (unit : converted) :
         | Region_let_not_run ->
           (* Decision D53: nothing is said of the run from this [Let] on. *)
           ( Region_not_run
-              "the machine of regions does not run a Let that needs the \
-               heap: the unit is not checked for regions from there on",
+              "the machine of regions does not run a Let that needs the heap: \
+               the unit is not checked for regions from there on",
             steps,
             Some state )
         | Region_undefined Not_of_the_conversion ->
