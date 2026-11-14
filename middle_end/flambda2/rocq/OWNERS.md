@@ -550,6 +550,9 @@ stays C0's for now.
 - `middle_end/flambda2/rocq/FlambdaKnownSiblings*` (another: the same
   calls, where the callee is a symbol that the group binds to a closure
   of the code called, inlined as an equivalence, for the term after)
+- `middle_end/flambda2/rocq/FlambdaInlineCallsAt*` (another: the
+  direct calls that stand at given places of a term are inlined, for
+  the term before; a refinement)
 - `middle_end/flambda2/rocq/FlambdaUnusedProjections*` (another: in the
   term after, the `Let` of the projection of a function slot that
   nothing uses, from a closure that a `Let` around it has made, is
