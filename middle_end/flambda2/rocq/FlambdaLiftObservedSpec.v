@@ -109,8 +109,14 @@
    FlambdaStaticsScopeSpec.v, beside the same of [with_lifting].
 
    Whether this is what the verdict on a unit that is lifted is to
-   mean has not been decided (FlambdaObserversSpec.v). No function of
-   the validation calls the functions here.
+   mean has not been decided (FlambdaObserversSpec.v).
+   FlambdaValidateSpec.validate_unit and the functions like it call
+   none of the functions here. The second check of a unit does
+   (FlambdaValidateRelatedSpec.validate_unit_related, through
+   [with_lifting_observed]), and its answer is not a verdict of the
+   validation. The test tool asks the second check only of a unit
+   that it reports as not validated, and what the check answers does
+   not change that report.
 
    The proofs are in FlambdaLiftObservedProofs.v, which needs no
    review. *)
