@@ -77,6 +77,16 @@
    term that is not in the body of code or in the handler of a
    recursive continuation, as [inline_sibling_calls] does.
 
+   Inside the body of code of a group the rewrite is
+   [inline_known_calls] itself, given what the other bindings of the
+   group make known. It goes into the handlers of the continuations
+   of the body, those of recursive ones too, and into the groups that
+   the body binds: the code of such an inner group is rewritten with
+   what is known around that group, and what follows the group with
+   its code and its symbols known as well. The code of an inner group
+   does not know the other code of that group: [inline_known_in_group]
+   is applied to no group that is in the body of code.
+
    Why one binding at a time. When the body of code runs, the static
    environment binds the code and the symbols of its group as the
    group now has them. What is inlined must be that code. With one

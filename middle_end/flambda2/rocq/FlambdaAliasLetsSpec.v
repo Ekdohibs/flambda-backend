@@ -69,8 +69,8 @@
    handlers of non-recursive
    continuations are gone into; the handlers of recursive ones and the
    bodies of code are left as they are
-   (FlambdaNormaliseSpec.rewrite_rec_handlers and [rewrite_code] take a
-   rewrite there).
+   (FlambdaRecHandlersSpec.rewrite_rec_handlers and
+   FlambdaNormaliseSpec.rewrite_code take a rewrite there).
 
    The two kinds must be the same: a [Let] has no step unless the
    value of its defining expression is of its kind
