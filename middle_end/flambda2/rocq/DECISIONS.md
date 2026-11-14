@@ -281,10 +281,19 @@ a `CR` at the place in the `Spec` file.
   and such a unit is to be in no count of the units validated. Not in
   the model yet: meanwhile an array load marked `Immutable` of an
   array that can be written has no value, and the model has no bytes
-  (`FlambdaHeapSpec.exec_binary_on_cell`, with its `CR`). Open, and
-  the human's: whether the rule is to be his, or one under which the
-  move of X5-3 is right, that bytes of which a view has been read are
-  never written again.
+  (`FlambdaHeapSpec.exec_binary_on_cell`, with its `CR`). The
+  validation's sharing of two loads of one element of an immutable
+  array (`FlambdaCseSpec.shareable`) rests on this as the model
+  stands: where the first load has a value, nothing can write the
+  array. Under the design above the two loads still agree in every
+  run that has a meaning; what would change is how that is stated
+  and proved, through the read record
+  (`FlambdaHeapSpec.stable_prim_holds_statement`, on which the case
+  rests, would be restated with it); the case goes out only if such
+  a load comes to read a cell that a later store may change in a
+  run that has a meaning. Open, and the human's: whether the rule
+  is to be his, or one under which the move of X5-3 is right, that
+  bytes of which a view has been read are never written again.
 - **D50.** What a call of a C function shows of its arguments where
   the model has no answer for it. The table of
   `FlambdaExtcallSpec.v` answers fourteen comparisons, on two strings
