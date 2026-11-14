@@ -34,7 +34,8 @@ From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaSemanticsSpec FlambdaSemanticsProofs FlambdaWellFormedSpec
   FlambdaWellFormedProofs FlambdaContextSpec FlambdaContextProofs
-  FlambdaNormaliseSpec FlambdaNormaliseProofs FlambdaLiftSpec
+  FlambdaNominalSpec FlambdaNormaliseSpec FlambdaNormaliseProofs
+  FlambdaEquivarianceSpec FlambdaEquivarianceProofs FlambdaLiftSpec
   FlambdaInlineCallsAtSpec.
 Import ListNotations.
 
@@ -221,4 +222,81 @@ Proof.
   intros sites K e vars conts statics hp rd. unfold inline_calls_at.
   apply inline_calls_at_paths_refines_knowing.
   intros id c Hlookup. discriminate Hlookup.
+Qed.
+
+(* ======================================================================== *)
+(* The rewrite commutes with renaming                                       *)
+(* ======================================================================== *)
+
+(* As FlambdaEquivarianceProofs.inline_calls_equivariant_aux: the code
+   known is renamed with the term. *)
+Fixpoint inline_calls_at_paths_equivariant (r : renaming)
+    (K : calls_in_code) (e : expr) :
+  ∀ (sites : list path) (known : list (code_id * code)) (at_path : path),
+    inline_calls_at_paths K sites (map_values (rename_code r) known) at_path
+      (rename_expr r e)
+    = rename_expr r (inline_calls_at_paths K sites known at_path e)
+with handler_inline_calls_at_paths_equivariant (r : renaming)
+    (K : calls_in_code) (h : continuation_handler) :
+  ∀ (sites : list path) (known : list (code_id * code)) (at_path : path),
+    handler_inline_calls_at_paths K sites (map_values (rename_code r) known)
+      at_path (rename_handler r h)
+    = rename_handler r (handler_inline_calls_at_paths K sites known at_path h)
+with binding_inline_calls_at_paths_equivariant (r : renaming)
+    (K : calls_in_code) (binding : static_binding) :
+  ∀ known : list (code_id * code),
+    binding_inline_calls_at_paths K (map_values (rename_code r) known)
+      (rename_static_binding r binding)
+    = rename_static_binding r (binding_inline_calls_at_paths K known binding).
+Proof.
+  - destruct e
+      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
+         | scrutinee arms | ];
+      intros sites known at_path; simpl; try reflexivity.
+    + (* Let *)
+      rewrite inline_calls_at_paths_equivariant. reflexivity.
+    + (* Let_static: the code known in the body is that of the group,
+         rewritten *)
+      assert (Hbindings :
+        map
+          (binding_inline_calls_at_paths K
+             (map_values (rename_code r) known))
+          (map (rename_static_binding r) bindings)
+        = map (rename_static_binding r)
+            (map (binding_inline_calls_at_paths K known) bindings)).
+      { induction bindings as [ | binding bindings IH]; simpl;
+          [ reflexivity | ].
+        rewrite (binding_inline_calls_at_paths_equivariant r K binding), IH.
+        reflexivity. }
+      rewrite Hbindings, codes_of_equivariant,
+        inline_calls_at_paths_equivariant.
+      reflexivity.
+    + (* Let_cont_non_recursive *)
+      rewrite handler_inline_calls_at_paths_equivariant,
+        inline_calls_at_paths_equivariant.
+      reflexivity.
+    + (* Let_cont_recursive *)
+      rewrite inline_calls_at_paths_equivariant. f_equal.
+      generalize (xI at_path).
+      induction handlers as [ | [k h] handlers IH]; intros q;
+        [ reflexivity | ].
+      cbn [rec_handlers_map map].
+      rewrite (handler_inline_calls_at_paths_equivariant r K h), IH.
+      reflexivity.
+    + (* Apply *)
+      destruct (among at_path sites); [ | reflexivity ].
+      exact (inline_apply_equivariant r [] known ap).
+  - destruct h as [params metadata handler]. intros sites known at_path.
+    simpl.
+    rewrite inline_calls_at_paths_equivariant. reflexivity.
+  - destruct binding
+      as [id [params my_closure ret exn metadata body] | id | sym const];
+      intros known; simpl; try reflexivity.
+    rewrite inline_calls_at_paths_equivariant. reflexivity.
+Qed.
+
+Theorem inline_calls_at_equivariant : inline_calls_at_equivariant_statement.
+Proof.
+  intros r sites K e. unfold inline_calls_at.
+  exact (inline_calls_at_paths_equivariant r K e sites [] root).
 Qed.

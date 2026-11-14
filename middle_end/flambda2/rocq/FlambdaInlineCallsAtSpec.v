@@ -33,7 +33,7 @@
    [inline_calls_at], which are extracted and run by the validation
    of middle_end/flambda2/tests/semantics/
    (FlambdaValidateInliningSpec.v gives the second the term before),
-   and the statement.
+   and the statements.
 
    FlambdaNormaliseSpec.inline_calls is told the code whose calls it
    leaves, and inlines every other direct call of code that it knows:
@@ -83,7 +83,8 @@
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
-  FlambdaSemanticsSpec FlambdaNormaliseSpec FlambdaLiftSpec.
+  FlambdaSemanticsSpec FlambdaNominalSpec FlambdaNormaliseSpec
+  FlambdaLiftSpec.
 Import ListNotations.
 
 (* The guess for the code of a term: for a code id, the places of the
@@ -154,3 +155,11 @@ Definition inline_calls_at (sites : list path) (K : calls_in_code)
 Definition inline_calls_at_refines_statement : Prop :=
   ∀ (sites : list path) (K : calls_in_code) (e : expr),
     expr_refines e (inline_calls_at sites K e).
+
+(* The rewrite commutes with renaming: a call is chosen by where it
+   is. The renaming is of variables and continuations, in code too:
+   code ids are not renamed. *)
+Definition inline_calls_at_equivariant_statement : Prop :=
+  ∀ (r : renaming) (sites : list path) (K : calls_in_code) (e : expr),
+    inline_calls_at sites K (rename_expr r e)
+    = rename_expr r (inline_calls_at sites K e).
