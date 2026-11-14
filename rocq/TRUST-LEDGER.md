@@ -943,6 +943,12 @@ it gave back.
   primitive computes is not here: it is
   `FlambdaPrimitiveSpec.eval_prim`, to be read against
   `terms/flambda_primitive.mli` and `simplify/simplify_*_primitive.ml`.
+  The machine runs a primitive through `FlambdaHeapSpec.exec_prim`,
+  which is `eval_prim`, with the heap left as it was, for a primitive
+  that is not one of `FlambdaPrimitiveModel.heap_primitive` and is
+  given no location
+  (`FlambdaHeapSpec.exec_prim_no_location_statement`); this conversion
+  makes none of those four.
 - **The conversion of numeric constants**, in the same file (the section
   "Numbers" and `convert_const`, about 75 lines; with the boxed numbers
   also `convert_float32`, `convert_float` and the boxed numbers of
@@ -1017,13 +1023,21 @@ it gave back.
   `Import_unknown` it has no value against anything, itself included,
   where the program has an answer: the model says less than the
   program does (decision D41). That is
-  `FlambdaPrimitiveSpec.eval_phys_equal`, which the machine that the
-  tool runs uses (`FlambdaSemanticsSpec.step`); it has no value on a
-  location of the heap, against an import as against anything.
-  `Phys_equal` of the machine with a heap (`FlambdaHeapSpec.exec_prim`),
-  which the tool does not run, answers false of an import of the
-  first two classes against a location bound by that heap, and has no
-  value of one of the third. No other unary or
+  `FlambdaPrimitiveSpec.eval_phys_equal`, which has no value on a
+  location of the heap, against an import as against anything. The
+  machine that the tool runs (`FlambdaSemanticsSpec.step`) runs a
+  primitive on the heap of its state (`FlambdaHeapSpec.exec_prim`):
+  where neither value compared is a location that is
+  `eval_phys_equal`; against a location bound by that heap it answers
+  false of an import of the first two classes, and has no value of one
+  of the third. The conversion of the tool makes no primitive of the
+  heap, and only those change the heap
+  (`FlambdaHeapSpec.exec_prim_heap_statement`); a run binds in its heap
+  every location that it holds
+  (`FlambdaLocationsMachineSpec.run_keeps_locations_bound_statement`).
+  So in a run of the tool, which starts from the empty heap, only the
+  first case arises; that conclusion is an argument from the two
+  statements and not a statement of the tree. No other unary or
   binary primitive has a value on an import. It is not a closure, so a
   call of it is undefined. A run that executes a load from an import,
   or a call of one, is therefore undefined in the model where the
