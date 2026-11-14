@@ -35,9 +35,12 @@
    (FlambdaValidateInliningSpec.v gives the second the term before),
    and the statements.
 
-   FlambdaNormaliseSpec.inline_calls is told the code whose calls it
-   leaves, and inlines every other direct call of code that it knows:
-   the choice is by code. Simplify chooses by call. It inlines one
+   FlambdaNormaliseSpec.inline_calls is told the code that it is not
+   to inline, and inlines every other direct call of code that it
+   knows where the tests of an inlining pass: the choice is by code.
+   (A call of code that it is not to inline may still be split,
+   where the test of an over-application passes.) Simplify chooses
+   by call. It inlines one
    call of a function and leaves another call of the same function in
    the same body; it unrolls a recursive function at a call that is
    marked for it, and leaves the other calls of that function; it
@@ -53,21 +56,30 @@
    stands in, counted as that file counts and as
    FlambdaLiftFromCodeSpec.lift_from_code walks. A call that stands
    at a chosen place is given to FlambdaNormaliseSpec.inline_apply
-   with no code to leave. So it is rewritten as [inline_calls] would
-   rewrite it there if told to leave nothing, with the code that
-   [inline_calls] knows there: inlined, or split if it has more
-   arguments than its code has parameters, or left if it passes
-   neither test. A call at any other place is left as it is, and a
-   chosen place where no call stands changes nothing. The places are
-   a guess of the caller, which is not trusted: the statement holds
-   whatever they are.
+   with no code that it is not to inline, and with the code that is
+   known there. That it is chosen does not make it inlined: the
+   tests of [inline_apply] decide. A direct call of code that is
+   known is inlined where the test of an inlining passes
+   (FlambdaNormaliseSpec.inlinable_b), or else where that of the
+   inlining of a tupled call does ([tupled_inlinable_b]); failing
+   both, it is split where the test of an over-application passes
+   ([over_applied_b]); and it is otherwise left as it is. So is a
+   call that is indirect, or whose code is not known. A call at any
+   other place is left as it is, and a chosen place where no call
+   stands changes nothing. The places are a guess of the caller,
+   which is not trusted: the statement holds whatever they are.
 
-   As for [inline_calls], what is known in the body of code is the
-   code of the groups of static bindings around the group that binds
-   it, and not the code of its own group. So a call of code to
-   itself, or to code bound with it, is not inlined here
-   (FlambdaInlineSiblingsSpec.inline_sibling_calls is for the
-   second).
+   What is known at a place is, as for [inline_calls], the code that
+   the groups of static bindings around it have bound, with the
+   bodies that this pass has given that code, which need not be
+   those that [inline_calls] would give it. In the body of code it
+   is the code of the groups around the group that binds it, and not
+   the code of its own group. So in a term whose code ids are
+   distinct, a call of code to itself, or to code bound with it, is
+   not inlined here (FlambdaInlineSiblingsSpec.inline_sibling_calls
+   is for the second). Where a group around binds the same code id,
+   it is that code which is known under the id; the statements are
+   of every term.
 
    One application rewrites the calls of the term as it is given. A
    call that an inlining brings into the term is at a place of the

@@ -36,9 +36,9 @@
    statements.
 
    Why it is not in the rounds of the validation.
-   FlambdaValidateSpec.validate_unit is told the code whose calls its
-   rounds leave ([kept]), one list for the two terms and for every
-   round: the choice is by code. Simplify chooses by call
+   FlambdaValidateSpec.validate_unit is told the code that its rounds
+   are not to inline ([kept]), one list for the two terms and for
+   every round: the choice is by code. Simplify chooses by call
    (FlambdaInlineCallsAtSpec.v says how), and of a unit in which it
    has inlined one call of a piece of code and left another it can
    be that no list makes the two terms come to the same. A choice
@@ -59,12 +59,15 @@
      (FlambdaRenameApartSpec.rename_apart_avoiding), as a round of
      the validation renames it once its calls are inlined
      (FlambdaValidateSpec.normalise_before_round_avoiding). A body
-     that is inlined binds the parameters of its code, and
-     FlambdaNormaliseSpec.inline_apply leaves a call an argument of
-     which is a parameter of the code called: a call of the same code
-     that the body brings, which passes them, is rewritten by the
-     next choice only once they are renamed. The renaming is given
-     continuations that the names it makes are not to be;
+     that is inlined binds the parameters of its code, and the tests
+     of FlambdaNormaliseSpec.inline_apply for an inlining refuse a
+     call an argument of which is a parameter of the code called
+     (such a call may still be split, where the test of an
+     over-application passes). So a call of the same code that the
+     body brings, which passes them, can be inlined by the next
+     choice only once they are renamed, and is then inlined where
+     the other tests pass. The renaming is given continuations that
+     the names it makes are not to be;
    - [before_inlined] is that of the term before, the continuations
      given being those of the units of the liftings and those of the
      loops, which the function asked reads and the term need not
