@@ -154,10 +154,16 @@
      variable, in a continuation, directly in what a frame binds, as
      the callee or an argument of a partial application, reaches
      symbols of the heap only, through the partial applications that
-     are in it too. A block, a closure or an array that is a value
-     and not a symbol was made by an allocation on the heap, whose
-     arguments live for ever. So a closure that is called and is not a
-     symbol may be given to code whose closure is not local.
+     are in it too. It is a property of the runs of a term that
+     passes the check, to be proved with the rest: the check passes
+     an allocation on the heap, which is what makes a block, a closure
+     or an array that is a value and not a symbol, only with arguments
+     that live for ever. A run of a term that does not pass may make
+     a heap closure that holds a partial application of a local
+     closure: the test of decision D46 on the machine looks at the
+     arguments and not inside them. With the property, a closure that
+     is called and is not a symbol may be given to code whose closure
+     is not local.
      FlambdaRegionsInvariantSpec.value_holds asks this of such a value
      but for the partial applications inside it.
    - Every partial application that the state holds, anywhere, is one
