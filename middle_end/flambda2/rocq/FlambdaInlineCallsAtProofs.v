@@ -1,0 +1,224 @@
+(******************************************************************************
+ *                                  OxCaml                                    *
+ * -------------------------------------------------------------------------- *
+ *                               MIT License                                  *
+ *                                                                            *
+ * Copyright (c) 2026 Jane Street Group LLC                                   *
+ * opensource-contacts@janestreet.com                                         *
+ *                                                                            *
+ * Permission is hereby granted, free of charge, to any person obtaining a    *
+ * copy of this software and associated documentation files (the "Software"), *
+ * to deal in the Software without restriction, including without limitation  *
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,   *
+ * and/or sell copies of the Software, and to permit persons to whom the      *
+ * Software is furnished to do so, subject to the following conditions:       *
+ *                                                                            *
+ * The above copyright notice and this permission notice shall be included    *
+ * in all copies or substantial portions of the Software.                     *
+ *                                                                            *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL    *
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER *
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING    *
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
+ * DEALINGS IN THE SOFTWARE.                                                  *
+ ******************************************************************************)
+
+
+(* Proofs of the statements of FlambdaInlineCallsAtSpec.v. Nothing here
+   needs review. *)
+
+From Stdlib Require Import ZArith List Bool.
+From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
+From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
+  FlambdaSemanticsSpec FlambdaSemanticsProofs FlambdaWellFormedSpec
+  FlambdaWellFormedProofs FlambdaContextSpec FlambdaContextProofs
+  FlambdaNormaliseSpec FlambdaNormaliseProofs FlambdaLiftSpec
+  FlambdaInlineCallsAtSpec.
+Import ListNotations.
+
+(* ======================================================================== *)
+(* What binds something static is as it was                                 *)
+(* ======================================================================== *)
+
+(* As FlambdaNormaliseProofs.inline_calls_binds_statics: what is inlined
+   binds nothing. *)
+Fixpoint inline_calls_at_paths_binds_statics (K : calls_in_code)
+    (sites : list path) (known : list (code_id * code)) (at_path : path)
+    (e : expr) {struct e} :
+  binds_statics (inline_calls_at_paths K sites known at_path e)
+  = binds_statics e
+with handler_inline_calls_at_paths_binds_statics (K : calls_in_code)
+    (sites : list path) (known : list (code_id * code)) (at_path : path)
+    (h : continuation_handler) {struct h} :
+  handler_binds_statics (handler_inline_calls_at_paths K sites known at_path h)
+  = handler_binds_statics h.
+Proof.
+  - destruct e
+      as [ x kind d body | bindings body | k h body | handlers body
+         | ap | ac | scrutinee arms | ];
+      simpl; try reflexivity.
+    + apply inline_calls_at_paths_binds_statics.
+    + rewrite inline_calls_at_paths_binds_statics. f_equal.
+      induction bindings
+        as [ | [id [params my_closure ret exn metadata body'] | id
+               | sym const]
+               bindings IH];
+        simpl; congruence.
+    + rewrite handler_inline_calls_at_paths_binds_statics,
+        inline_calls_at_paths_binds_statics.
+      reflexivity.
+    + rewrite inline_calls_at_paths_binds_statics. f_equal.
+      generalize (xI at_path).
+      induction handlers as [ | [k1 h1] handlers IH]; intros q;
+        [ reflexivity | ].
+      cbn [rec_handlers_map existsb].
+      rewrite handler_inline_calls_at_paths_binds_statics, IH. reflexivity.
+    + destruct (among at_path sites); [ | reflexivity ].
+      apply inline_apply_binds_statics.
+  - destruct h as [params metadata handler]. simpl.
+    apply inline_calls_at_paths_binds_statics.
+Qed.
+
+Lemma handlers_inline_calls_at_paths_bind_statics (K : calls_in_code)
+    (sites : list path) (known : list (code_id * code)) :
+  ∀ (handlers : list (continuation * continuation_handler)) (q : path),
+    handlers_bind_statics
+      (rec_handlers_map (handler_inline_calls_at_paths K sites known) q
+         handlers)
+    = handlers_bind_statics handlers.
+Proof.
+  unfold handlers_bind_statics.
+  induction handlers as [ | [k h] handlers IH]; intros q; [ reflexivity | ].
+  cbn [rec_handlers_map existsb].
+  rewrite handler_inline_calls_at_paths_binds_statics, IH. reflexivity.
+Qed.
+
+(* ======================================================================== *)
+(* The result refines the term                                              *)
+(* ======================================================================== *)
+
+(* Down the term, with the static environment binding what is known: at
+   once in a body, and from then on in a handler. The proof is that of
+   FlambdaNormaliseProofs.inline_calls_refines_knowing, with the places
+   carried down; a call is given to [inline_apply] or left. *)
+Fixpoint inline_calls_at_paths_refines_knowing (e : expr) :
+  ∀ (K : calls_in_code) (sites : list path) (known : list (code_id * code))
+    (at_path : path) (vars : env) (conts : cont_env) (statics : static_env)
+    (hp : heap) (rd : read_record),
+    statics_know known statics ->
+    refines (State e vars conts statics hp rd)
+      (State (inline_calls_at_paths K sites known at_path e) vars conts
+         statics hp rd).
+Proof.
+  - destruct e
+      as [ x kind d body | bindings body | k h body | handlers body
+         | ap | ac | scrutinee arms | ];
+      intros K sites known at_path vars conts statics hp rd Hknow;
+      cbn [inline_calls_at_paths]; try apply refines_refl.
+    + apply let_refines_step_exec; [ reflexivity | intros v hp' rd' _ _ ].
+      apply inline_calls_at_paths_refines_knowing, Hknow.
+    + (* the code of the group is rewritten: the body under the one
+         static environment refines it under the other; then down the
+         body, the static environment binding the code as rewritten *)
+      assert (Hrefine :
+        bindings_refine (statics_know known) bindings
+          (map (binding_inline_calls_at_paths K known) bindings)).
+      { induction bindings
+          as [ | [id [params my_closure ret exn metadata code_body] | id
+                 | sym const]
+                 bindings IH];
+          cbn [map binding_inline_calls_at_paths].
+        - split; apply Forall2_nil.
+        - destruct IH as [Hforwards Hbackwards].
+          split; (apply Forall2_cons; [ | assumption ]);
+            apply Binding_code, Codes_related;
+            first
+              [ apply inline_calls_at_paths_binds_statics
+              | symmetry; apply inline_calls_at_paths_binds_statics
+              | intros vars' conts' statics' hp' rd' Hknow';
+                apply inline_calls_at_paths_refines_knowing, Hknow' ].
+        - destruct IH as [Hforwards Hbackwards].
+          split; (apply Forall2_cons; [ apply Binding_same | assumption ]).
+        - destruct IH as [Hforwards Hbackwards].
+          split; (apply Forall2_cons; [ apply Binding_same | assumption ]). }
+      cbv zeta.
+      remember (map (binding_inline_calls_at_paths K known) bindings)
+        as bindings' eqn:Hdef.
+      clear Hdef. destruct Hrefine as [Hforwards Hbackwards].
+      apply (fun H =>
+        eval_static_bindings_related _ vars _ _ H statics statics
+          (statics_related_refl _ statics)) in Hforwards, Hbackwards.
+      apply let_static_refines_step.
+      destruct (eval_static_bindings vars bindings statics) as [extended | ]
+        eqn:Hbindings,
+        (eval_static_bindings vars bindings' statics) as [extended' | ]
+          eqn:Hbindings';
+        try contradiction; [ | exact I ].
+      apply (refines_trans _ (State body vars conts extended' hp rd)).
+      * apply (related_states_refines (statics_know known)
+          (statics_know_extend known));
+          [ exact (statics_know_extend known _ _ Hknow
+              (eval_static_bindings_extend vars _ _ _ Hbindings))
+          | exact (statics_know_extend known _ _ Hknow
+              (eval_static_bindings_extend vars _ _ _ Hbindings'))
+          | apply cont_env_related_refl | apply cont_env_related_refl
+          | exact Hforwards | exact Hbackwards ].
+      * apply inline_calls_at_paths_refines_knowing.
+        exact (eval_static_bindings_know vars bindings' known statics
+          extended' Hknow Hbindings').
+    + destruct h as [params metadata handler].
+      cbn [handler_inline_calls_at_paths].
+      apply (refines_trans _
+        (State
+           (Let_cont_non_recursive k
+              (Handler params metadata
+                 (inline_calls_at_paths K sites known (xI at_path) handler))
+              body)
+           vars conts statics hp rd)).
+      * apply (let_cont_handler_refines_where (statics_know known)
+          (statics_know_extend known)); [ exact Hknow | ].
+        intros vs handler_vars conts' statics' hp' rd' Hknow' _ _.
+        apply inline_calls_at_paths_refines_knowing, Hknow'.
+      * apply let_cont_non_recursive_refines_step,
+          inline_calls_at_paths_refines_knowing, Hknow.
+    + apply (refines_trans _
+        (State
+           (Let_cont_recursive
+              (rec_handlers_map (handler_inline_calls_at_paths K sites known)
+                 (xI at_path) handlers)
+              body)
+           vars conts statics hp rd)).
+      * assert (Hhandlers :
+          ∀ q : path,
+            handlers_refine (statics_know known) vars handlers
+              (rec_handlers_map (handler_inline_calls_at_paths K sites known)
+                 q handlers)).
+        { induction handlers
+            as [ | [k [params metadata handler]] handlers IH];
+            intros q;
+            cbn [rec_handlers_map handler_inline_calls_at_paths].
+          - split; apply Forall2_nil.
+          - destruct (IH (xI q)) as [Hforwards Hbackwards].
+            split; (apply Forall2_cons; [ | assumption ]);
+              (split; [ reflexivity | ]); apply Handler_related;
+              intros vs handler_vars conts' statics' hp' rd' Hknow' _ _;
+              apply inline_calls_at_paths_refines_knowing, Hknow'. }
+        destruct (Hhandlers (xI at_path)) as [Hforwards Hbackwards].
+        apply (let_cont_recursive_handlers_refine_where (statics_know known)
+          (statics_know_extend known));
+          try assumption.
+        symmetry. apply handlers_inline_calls_at_paths_bind_statics.
+      * apply let_cont_recursive_refines_step; [ reflexivity | intros _ ].
+        apply inline_calls_at_paths_refines_knowing, Hknow.
+    + destruct (among at_path sites); [ | apply refines_refl ].
+      apply inline_apply_refines, Hknow.
+Qed.
+
+Theorem inline_calls_at_refines : inline_calls_at_refines_statement.
+Proof.
+  intros sites K e vars conts statics hp rd. unfold inline_calls_at.
+  apply inline_calls_at_paths_refines_knowing.
+  intros id c Hlookup. discriminate Hlookup.
+Qed.
