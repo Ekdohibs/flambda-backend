@@ -10,7 +10,10 @@ open PeanoNat
 (** val never_returns_b : apply_expr -> code -> bool **)
 
 let never_returns_b ap c =
-  ((negb (cont_free_b (code_return_continuation c) (code_body c))
+  ((negb
+      (cont_free_b
+         (code_return_continuation c)
+         (remove_unused_conts (code_body c)))
    && negb (code_is_tupled c))
   && Nat.leb (length (code_params_arity c)) (length ap.ap_args_arity))
   && negb (Pos.eqb ap.ap_continuation ap.ap_exn_continuation)

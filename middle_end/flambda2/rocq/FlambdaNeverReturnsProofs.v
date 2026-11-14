@@ -59,6 +59,13 @@ Proof.
     [ exact I | ].
   destruct (bind_params (code_params c) vs [(code_my_closure c, closure)])
     as [callee_vars | ]; [ | exact I ].
+  apply
+    (equivalent_trans _ _ _
+       (remove_unused_conts_equivalent (code_body c) _ _ _ _)).
+  refine
+    (equivalent_trans _ _ _ _
+       (equivalent_sym _ _
+          (remove_unused_conts_equivalent (code_body c) _ _ _ _))).
   apply coincide_equivalent; [ reflexivity | ].
   intros k Hk. unfold conts_agree_at, resolve.
   change (rename_continuation identity_renaming k) with k. simpl.
@@ -68,13 +75,102 @@ Proof.
              [(code_exn_continuation c, exn_to)] eq_refl).
 Qed.
 
+(* A continuation that is found in a term with its unused bindings
+   removed is found in the term. *)
+Fixpoint cont_free_b_remove_unused_conts (k : continuation) (e : expr)
+    {struct e} :
+  cont_free_b k (remove_unused_conts e) = true -> cont_free_b k e = true
+with cont_free_in_handler_b_remove_unused_conts (k : continuation)
+    (h : continuation_handler) {struct h} :
+  cont_free_in_handler_b k (remove_unused_conts_in_handler h) = true ->
+  cont_free_in_handler_b k h = true.
+Proof.
+  - destruct e
+      as [ x kind d body | bindings body | bound h body | handlers body | ap
+         | ac | scrutinee arms | ];
+      simpl; try (intros H; exact H).
+    + apply cont_free_b_remove_unused_conts.
+    + apply cont_free_b_remove_unused_conts.
+    + destruct (cont_free_b bound (remove_unused_conts body)) eqn:Hbound;
+        simpl; intros H; apply orb_true_iff.
+      * apply orb_true_iff in H as [H | H];
+          [ left; exact (cont_free_in_handler_b_remove_unused_conts k h H)
+          | right ].
+        apply andb_true_iff in H as [Hk H]. rewrite Hk. simpl.
+        exact (cont_free_b_remove_unused_conts k body H).
+      * right. destruct (Pos.eqb_spec k bound) as [-> | _];
+          [ congruence | ].
+        simpl. exact (cont_free_b_remove_unused_conts k body H).
+    + intros H. apply orb_true_iff.
+      apply orb_true_iff in H as [H | H];
+        [ left; exact H
+        | right; exact (cont_free_b_remove_unused_conts k body H) ].
+  - destruct h as [params metadata handler]. simpl.
+    apply cont_free_b_remove_unused_conts.
+Qed.
+
+(* [call_code_never_returns_statement] as it was when the test was of
+   the body itself: it follows. *)
+Lemma call_code_never_returns_of_body (closure : value) (c : code)
+    (vs : list value) (args_arity return_arity : arity)
+    (return_to return_to' exn_to : cont_value) (statics : static_env)
+    (hp : heap) :
+  cont_free_b (code_return_continuation c) (code_body c) = false ->
+  match
+    call_code closure c vs args_arity return_arity return_to exn_to
+      statics hp,
+    call_code closure c vs args_arity return_arity return_to' exn_to
+      statics hp
+  with
+  | Step s, Step s' => equivalent s s'
+  | Undefined, Undefined => True
+  | _, _ => False
+  end.
+Proof.
+  intros Hfree. apply call_code_never_returns.
+  destruct
+    (cont_free_b (code_return_continuation c)
+       (remove_unused_conts (code_body c)))
+    eqn:Hclean;
+    [ | reflexivity ].
+  rewrite (cont_free_b_remove_unused_conts _ _ Hclean) in Hfree.
+  discriminate Hfree.
+Qed.
+
+(* The test passes of every call of which it passed when it was of the
+   body itself. *)
+Lemma never_returns_b_of_body (ap : apply_expr) (c : code) :
+  negb (cont_free_b (code_return_continuation c) (code_body c))
+  && negb (code_is_tupled c)
+  && Nat.leb (length (code_params_arity c)) (length (ap_args_arity ap))
+  && negb (Pos.eqb (ap_continuation ap) (ap_exn_continuation ap))
+  = true ->
+  never_returns_b ap c = true.
+Proof.
+  unfold never_returns_b. intros H.
+  apply andb_true_iff in H as [H Hapart].
+  apply andb_true_iff in H as [H Hargs].
+  apply andb_true_iff in H as [Hfree Htupled].
+  rewrite Htupled, Hargs, Hapart, !andb_true_r.
+  apply negb_true_iff. apply negb_true_iff in Hfree.
+  destruct
+    (cont_free_b (code_return_continuation c)
+       (remove_unused_conts (code_body c)))
+    eqn:Hclean;
+    [ | reflexivity ].
+  rewrite (cont_free_b_remove_unused_conts _ _ Hclean) in Hfree.
+  discriminate Hfree.
+Qed.
+
 (* The same of a direct call that is not a partial application. *)
 Lemma call_function_never_returns (callee : value) (called : code_id)
     (c : code) (vs : list value) (args_arity return_arity : arity)
     (return_to return_to' exn_to : cont_value) (statics : static_env)
     (hp : heap) :
   lookup called (static_code statics) = Some c ->
-  cont_free_b (code_return_continuation c) (code_body c) = false ->
+  cont_free_b (code_return_continuation c)
+    (remove_unused_conts (code_body c))
+  = false ->
   code_is_tupled c = false ->
   length (code_params_arity c) <= length args_arity ->
   match
@@ -343,6 +439,30 @@ Qed.
 (* The rewrite commutes with renaming                                       *)
 (* ======================================================================== *)
 
+(* As FlambdaValidatorEquivarianceProofs.remove_unused_conts_equivariant,
+   which is proved after this file. *)
+Fixpoint remove_unused_conts_renamed (r : renaming) (e : expr) :
+  remove_unused_conts (rename_expr r e)
+  = rename_expr r (remove_unused_conts e)
+with remove_unused_conts_in_handler_renamed (r : renaming)
+    (h : continuation_handler) :
+  remove_unused_conts_in_handler (rename_handler r h)
+  = rename_handler r (remove_unused_conts_in_handler h).
+Proof.
+  - destruct e
+      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
+         | scrutinee arms | ];
+      simpl; try reflexivity.
+    + rewrite remove_unused_conts_renamed. reflexivity.
+    + rewrite remove_unused_conts_renamed. reflexivity.
+    + rewrite remove_unused_conts_renamed, cont_free_b_equivariant_aux,
+        remove_unused_conts_in_handler_renamed.
+      destruct (cont_free_b k (remove_unused_conts body)); reflexivity.
+    + rewrite remove_unused_conts_renamed. reflexivity.
+  - destruct h as [params metadata handler]. simpl.
+    rewrite remove_unused_conts_renamed. reflexivity.
+Qed.
+
 Lemma never_returns_b_equivariant (r : renaming) (ap : apply_expr)
     (c : code) :
   never_returns_b (rename_apply r ap) (rename_code r c)
@@ -350,7 +470,8 @@ Lemma never_returns_b_equivariant (r : renaming) (ap : apply_expr)
 Proof.
   destruct c as [params my_closure ret exn metadata body].
   unfold never_returns_b. simpl.
-  rewrite cont_free_b_equivariant_aux, rename_continuation_eqb.
+  rewrite remove_unused_conts_renamed, cont_free_b_equivariant_aux,
+    rename_continuation_eqb.
   reflexivity.
 Qed.
 
@@ -483,4 +604,7 @@ Theorem cut_returns_example : cut_returns_example_statement.
 Proof. intros callee. reflexivity. Qed.
 
 Theorem cut_returns_example_again : cut_returns_example_again_statement.
+Proof. intros callee. reflexivity. Qed.
+
+Theorem cut_returns_example_through : cut_returns_example_through_statement.
 Proof. intros callee. reflexivity. Qed.

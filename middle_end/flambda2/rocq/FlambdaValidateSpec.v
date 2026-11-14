@@ -41,7 +41,8 @@
    simplifies the code of a stub
    (FlambdaStubCallsSpec.demote_stub_calls); it puts each direct call
    of code in sight whose body does not mention its return
-   continuation, where the other checks of the rewrite pass
+   continuation once the bindings of the continuations that nothing
+   uses are removed from it, where the other checks of the rewrite pass
    (FlambdaNeverReturnsSpec.never_returns_b and [invalid_params]: the
    call is not a partial application, the code is not tupled, the two
    continuations of the call are two names, and the code binds as
