@@ -591,6 +591,50 @@ Proof.
   - exact Havoid.
 Qed.
 
+(* The same with the term before under a second renaming: as
+   FlambdaValidateReadingRenameProofs.validate_unit_knowing_renamed_alike,
+   with the test of the verdict in the place of the check. The rounds
+   of the term before are given the continuations renamed by the first
+   renaming, which are those renamed by the second, and give their
+   result under a third. *)
+Theorem verdict_knowing_holds_from_renamed_alike :
+  verdict_knowing_holds_from_renamed_alike_statement.
+Proof.
+  intros r r1 statics rounds unused slots G Ls kept before after v Hclosed
+    Halike Hheld.
+  unfold verdict_knowing_holds_from.
+  rewrite unit_continuations_renamed, loop_continuations_renamed, <- map_app.
+  set (avoid := unit_continuations Ls ++ map snd G) in *.
+  rewrite <- (map_rename_conts_alike r r1 avoid Hheld).
+  destruct
+    (normalise_knowing_equivariant_up_to_avoiding
+       (fun avoid => normalise_before_round_avoiding avoid kept) rounds
+       (fun avoid => normalise_before_round_avoiding_scope avoid kept)
+       (normalise_before_round_avoiding_up_to kept) r1 avoid before Hclosed)
+    as (r2 & Halike2 & Havoid2 & Heq).
+  cbv beta in Halike2, Heq. rewrite Heq.
+  rewrite
+    (normalise_knowing_equivariant (normalise_after_round kept) rounds
+       (normalise_after_round_equivariant kept) r after).
+  apply verdict_holds_from_renamed_alike.
+  - exact
+      (proj1
+         (normalise_knowing_keeps_scope
+            (normalise_before_round_avoiding avoid kept) rounds
+            (normalise_before_round_avoiding_scope avoid kept) before
+            Hclosed)).
+  - exact
+      (renames_alike_then
+         (normalise_knowing (normalise_before_round_avoiding avoid kept)
+            rounds)
+         r r1 r2 before
+         (normalise_knowing_keeps_scope
+            (normalise_before_round_avoiding avoid kept) rounds
+            (normalise_before_round_avoiding_scope avoid kept))
+         Hclosed Halike Halike2).
+  - intros k Hk. rewrite (Havoid2 k Hk). exact (Hheld k Hk).
+Qed.
+
 (* ======================================================================== *)
 (* The verdict that the validation gives                                    *)
 (* ======================================================================== *)

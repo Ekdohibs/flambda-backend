@@ -102,7 +102,8 @@
    verdict compares terms too, and there the second renaming is also
    to rename the free names of the term before as the first does
    ([renames_alike]). The statements with one renaming are the case
-   in which the two are the same.
+   in which the two are the same. The test of a verdict of the second
+   asking is stated in both forms, as that of the first is.
 
    The tests of a verdict are stated of any verdict given, as the
    functions take one; the two statements named above are their case
@@ -319,6 +320,25 @@ Definition verdict_knowing_holds_from_equivariant_statement : Prop :=
     verdict_knowing_holds_from statics rounds unused slots
       (rename_loopified r G) (map (rename_lifting r) Ls) kept
       (rename_expr r before) (rename_expr r after) v
+    = verdict_knowing_holds_from statics rounds unused slots G Ls kept
+        before after v.
+
+(* The same where the liftings, the continuations of the loops and the
+   term after are renamed by [r] and the term before, whose code is
+   closed, by a renaming that renames its free names, and the
+   continuations of the units of the liftings and of the loops, as [r]
+   does: the form of [verdict_holds_from_renamed_alike_statement]. *)
+Definition verdict_knowing_holds_from_renamed_alike_statement : Prop :=
+  ∀ (r r1 : renaming) (statics : static_env) (rounds : nat)
+    (unused : dropped) (slots : list value_slot) (G : loopified)
+    (Ls : list lifting) (kept : list code_id) (before after : expr)
+    (v : validation),
+    code_closed before = true ->
+    renames_alike r r1 before ->
+    rename_conts_alike r r1 (unit_continuations Ls ++ map snd G) ->
+    verdict_knowing_holds_from statics rounds unused slots
+      (rename_loopified r G) (map (rename_lifting r) Ls) kept
+      (rename_expr r1 before) (rename_expr r after) v
     = verdict_knowing_holds_from statics rounds unused slots G Ls kept
         before after v.
 
