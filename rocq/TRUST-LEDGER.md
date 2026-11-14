@@ -872,6 +872,24 @@ it gave back.
   harmless only because the conversion for the check and for the
   validation makes none of them; they are made by the second
   conversion alone.
+  *The check in the model, which the tool does not ask.*
+  `FlambdaRegionsCheckSpec.region_check` is another thing than the
+  check of this entry: a function of the model that reads one term,
+  with a certificate and with the static environment that the term is
+  run in, and runs nothing. Of a term that passes it the tree proves
+  (`FlambdaRegionsCheckSpec.region_check_fault_statement`) that the
+  run of the term on the machine of regions, from its first state in
+  that static environment and with symbols to draw that are none of
+  the term or of the static environment (`region_names_fresh`), stops
+  without a step only with the fault `No_plain_step`, the one for
+  where `step` has no step. That is not the soundness of the check
+  against every fault: the tree does not state that where such a run
+  stops, the run of the term with its regions dropped goes wrong too.
+  The test tool does not ask `region_check` and nothing of it is
+  extracted, so no line of the tool's output rests on it: a line of
+  the tool is still of what this entry describes above, the one run
+  that the tool makes of each term or the reason for which it made
+  none.
 - **Calls that never return**, in the same file (`convert_apply`). A
   call whose result continuation is `Never_returns`, whatever its call
   kind among those that the conversion takes (a method call, a C call
