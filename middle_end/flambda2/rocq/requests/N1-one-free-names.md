@@ -552,7 +552,11 @@ Definition for_fresh_avoids_statement : Prop :=
 ### 3.5 What stays as it was
 
 **A binding that is not used** (`FlambdaNominalSpec.v`). The three
-statements, unchanged:
+statements, unchanged by that series. (Since then the first, and its
+corollary below, have gained a premise for the heap: that the
+defining expression is not a primitive of the heap,
+`named_changes_heap defining_expr = false`. They are quoted here as
+they were.)
 
 ```coq
 Definition unused_let_statement : Prop :=
