@@ -150,8 +150,8 @@
 From Stdlib Require Import ZArith List Bool PeanoNat.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaPrimitiveModel
-  FlambdaModel FlambdaMapSpec FlambdaSemanticsSpec FlambdaRegionsSpec
-  FlambdaRegionsErasureSpec.
+  FlambdaModel FlambdaMapSpec FlambdaValueSpec FlambdaSemanticsSpec
+  FlambdaRegionsSpec FlambdaRegionsErasureSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -534,7 +534,10 @@ Definition later_call (codes : list (code_id * code)) (count : nat) : bool :=
    and the arguments that it was given, and ends the chain. The first
    link may make one if some code takes more than [count] arguments; a
    later link, which has one argument or more, if some code takes two
-   or more.
+   or more. A callee that is a partial application takes as many as
+   its code still lacks, which is one at least: every partial
+   application that a state holds was made by a call
+   ([statics_no_partial]).
 
    What a full call returns lives for ever, or as long as the newest
    region if a callee that is not known may return a local value
@@ -909,19 +912,62 @@ with code_of_code (c : code) : list (code_id * code) :=
   | Code _ _ _ _ _ body => code_of_expr body
   end.
 
-(* All the code of a term in a static environment. *)
+(* All the code that a run of a term in a static environment can run:
+   that of the static environment and that which the term binds. The
+   code that the body of code binds is not there, and need not be: a
+   call of code whose body binds something static has no step
+   (FlambdaSemanticsSpec.call_code, the test of [binds_statics]), and
+   neither has a recursive [Let_cont] one of whose handlers does. If
+   that rule of the machine changes, this list must. *)
 Definition all_code (statics : static_env) (e : expr)
     : list (code_id * code) :=
   static_code statics ++ code_of_expr e.
 
 Definition initial_check_state : check_state := Check_state [] [] [] [].
 
-(* The check: no code is bound twice; every code of the static
-   environment is as its entry says; the term is. *)
+(* A value holds no partial application, however deep. *)
+Fixpoint value_no_partial (v : value) : bool :=
+  match v with
+  | Value_const _ | Value_boxed_number _ | Value_location _
+  | Value_symbol _ =>
+    true
+  | Value_closure _ value_slots | Value_closure_of_set _ _ value_slots =>
+    forallb (fun '(_, v) => value_no_partial v) value_slots
+  | Value_block _ fields => forallb value_no_partial fields
+  | Value_immutable_array elements => forallb value_no_partial elements
+  | Value_partial_application _ _ _ => false
+  end.
+
+Definition allocated_no_partial (allocated : statically_allocated_value)
+    : bool :=
+  match allocated with
+  | Static_closure _ value_slots | Static_closure_of_set _ _ _ value_slots =>
+    forallb (fun '(_, v) => value_no_partial v) value_slots
+  | Static_block _ fields => forallb value_no_partial fields
+  | Static_boxed_number contents => value_no_partial contents
+  | Static_string _ | Static_imported _ => true
+  | Static_immutable_array elements => forallb value_no_partial elements
+  end.
+
+(* The static environment that a term is run in holds no partial
+   application. A partial application that a call makes keeps fewer
+   arguments than its code takes, and [unknown_call] counts on that:
+   one that kept as many, called with one argument more, would be an
+   application with too many. A static environment is any list of
+   bindings, so it is asked to hold none; the static constants of a
+   unit and its imports hold none. *)
+Definition statics_no_partial (statics : static_env) : bool :=
+  forallb (fun '(_, allocated) => allocated_no_partial allocated)
+    (static_values statics).
+
+(* The check: no code is bound twice; the static environment holds no
+   partial application; every code of the static environment is as its
+   entry says; the term is. *)
 Definition region_check (cert : certificate) (statics : static_env)
     (e : expr) : bool :=
   let codes := all_code statics e in
   distinct (map fst codes)
+  && statics_no_partial statics
   && forallb (fun '(id, c) => check_code cert codes id c) (static_code statics)
   && check_expr cert codes initial_check_state e.
 

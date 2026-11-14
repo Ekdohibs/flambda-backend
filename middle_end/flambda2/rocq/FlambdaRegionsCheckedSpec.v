@@ -150,10 +150,13 @@
      FlambdaRegionsInvariantSpec.frames_hold stops at a partial
      application.
    - Every partial application that the state holds, anywhere, is one
-     that may be called ([paps_fit]): it reaches symbols of the heap
-     only; or the certificate says that a partial application may keep
-     a local value, and each argument that it keeps is of the heap or
-     is at a parameter that may be given a local value.
+     that may be called ([paps_fit]): it keeps fewer arguments than its
+     code takes, as one that a call makes does; and it reaches symbols
+     of the heap only, or the certificate says that a partial
+     application may keep a local value, and each argument that it
+     keeps is of the heap or is at a parameter that may be given a
+     local value. The first state holds none
+     (FlambdaRegionsCheckSpec.statics_no_partial).
 
    WHAT IS NOT HERE
 
@@ -527,7 +530,10 @@ Definition conts_checked (rs : region_state) (u : user)
 
 (* The code of the static environment of the state is the code that the
    check was given, in which no code is bound twice, and each passes
-   the check. *)
+   the check. The code that the expression of a state binds is asked
+   to be in that list too ([state_checked]); of the body of code that
+   a call enters it is so because the body binds none
+   (FlambdaRegionsCheckSpec.all_code). *)
 Definition code_checked (rs : region_state) : Prop :=
   distinct (map fst codes) = true
   ∧ ∀ (id : code_id) (c : code),
@@ -583,26 +589,41 @@ Fixpoint values_fit (rs : region_state) (flags : list bool)
     end
   end.
 
-(* A partial application that may be called: it reaches symbols of the
-   heap only; or the certificate says that one may keep a local value,
-   and what it keeps fits the code of its callee. One whose callee is
-   not a closure is never called. *)
+(* A partial application that may be called. It keeps fewer arguments
+   than its code takes, and the code is not tupled: that is what a
+   call makes. It reaches symbols of the heap only; or the certificate
+   says that one may keep a local value, and what it keeps fits the
+   code of its callee. One whose callee is a closure of code that the
+   check was not given is never called. Nor is one whose callee is not
+   a closure and cannot come to be one: a value that is no symbol, or
+   a symbol that the machine drew, which is bound to what it was bound
+   to or is gone. A callee that is a symbol of the term, bound to no
+   closure, is refused: a [Let_static] could bind it later, and no
+   call makes such a partial application. *)
 Definition pap_fits (rs : region_state) (callee : value) (args : list value)
-    : bool :=
-  (value_all (heap_symbol rs) callee
-   && forallb (value_all (heap_symbol rs)) args)
-  || (cert_partial_local cert
-      && match closure_of (live_statics rs) callee with
-         | Some (id, _) =>
-           match lookup id (cert_code cert) with
-           | Some entry => values_fit rs (ce_params_local entry) args
-           | None => false
-           end
-         | None => true
-         end).
+    (args_arity : arity) : bool :=
+  match closure_of (live_statics rs) callee with
+  | Some (id, _) =>
+    match lookup id codes, lookup id (cert_code cert) with
+    | Some c, Some entry =>
+      negb (code_is_tupled c)
+      && (length args_arity <? length (code_params_arity c))
+      && ((value_all (heap_symbol rs) callee
+           && forallb (value_all (heap_symbol rs)) args)
+          || (cert_partial_local cert
+              && values_fit rs (ce_params_local entry) args))
+    | _, _ => true
+    end
+  | None =>
+    match callee with
+    | Value_symbol s => drawn rs s
+    | _ => true
+    end
+  end.
 
 (* Every partial application in a value passes [ok], however deep. *)
-Fixpoint value_paps (ok : value -> list value -> bool) (v : value) : bool :=
+Fixpoint value_paps (ok : value -> list value -> arity -> bool) (v : value)
+    : bool :=
   match v with
   | Value_const _ | Value_boxed_number _ | Value_location _
   | Value_symbol _ =>
@@ -611,11 +632,13 @@ Fixpoint value_paps (ok : value -> list value -> bool) (v : value) : bool :=
     forallb (fun '(_, v) => value_paps ok v) value_slots
   | Value_block _ fields => forallb (value_paps ok) fields
   | Value_immutable_array elements => forallb (value_paps ok) elements
-  | Value_partial_application callee args _ =>
-    ok callee args && value_paps ok callee && forallb (value_paps ok) args
+  | Value_partial_application callee args args_arity =>
+    ok callee args args_arity
+    && value_paps ok callee
+    && forallb (value_paps ok) args
   end.
 
-Definition allocated_paps (ok : value -> list value -> bool)
+Definition allocated_paps (ok : value -> list value -> arity -> bool)
     (allocated : statically_allocated_value) : bool :=
   match allocated with
   | Static_closure _ value_slots | Static_closure_of_set _ _ _ value_slots =>
@@ -630,8 +653,8 @@ Definition allocated_paps (ok : value -> list value -> bool)
    closure, its extra arguments, the arguments that remain of an
    application with too many, and what the continuations that it holds
    hold. *)
-Fixpoint cont_paps (ok : value -> list value -> bool) (c : cont_value)
-    : bool :=
+Fixpoint cont_paps (ok : value -> list value -> arity -> bool)
+    (c : cont_value) : bool :=
   match c with
   | Closure _ vars conts _ =>
     forallb (fun '(_, v) => value_paps ok v) vars
