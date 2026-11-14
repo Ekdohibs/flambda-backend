@@ -49,6 +49,30 @@ let forward_kinded_apply_cont g k f ac =
     | None -> ac)
   | None -> ac
 
+(** val forward_kinded_arm : kinds_in_scope -> cont_kinds -> forwards ->
+    apply_cont -> apply_cont **)
+
+let forward_kinded_arm g k f ac =
+  match forward_of f ac.ac_continuation with
+  | Some p -> (
+    let l, target = p in
+    match l with
+    | [] -> (
+      match lookup ac.ac_continuation k with
+      | Some l0 -> (
+        match l0 with
+        | [] -> (
+          match ac.ac_args with
+          | [] ->
+            if no_trap_action ac
+            then forwarded [] [] target
+            else forward_kinded_apply_cont g k f ac
+          | _ :: _ -> forward_kinded_apply_cont g k f ac)
+        | _ :: _ -> forward_kinded_apply_cont g k f ac)
+      | None -> forward_kinded_apply_cont g k f ac)
+    | _ :: _ -> forward_kinded_apply_cont g k f ac)
+  | None -> forward_kinded_apply_cont g k f ac
+
 (** val forward_kinded_under : kinds_in_scope -> cont_kinds -> forwards -> expr
     -> expr **)
 
@@ -91,8 +115,7 @@ let rec forward_kinded_under g k f e =
   | Switch (scrutinee, arms) ->
     Switch
       ( scrutinee,
-        map (fun arm -> fst arm, forward_kinded_apply_cont g k f (snd arm)) arms
-      )
+        map (fun arm -> fst arm, forward_kinded_arm g k f (snd arm)) arms )
   | _ -> e
 
 (** val forward_kinded_in_handler : kinds_in_scope -> cont_kinds -> forwards ->

@@ -130,9 +130,49 @@
    non-recursive continuation whose handler, once done itself, is one
    [Apply_cont], the parameters and that [Apply_cont]. An
    [Apply_cont] and an arm of a [Switch] are treated alike
-   ([forward_kinded_apply_cont]). The [Let_cont] stays;
+   ([forward_kinded_apply_cont]), but for one case of an arm
+   ([forward_kinded_arm]), which comes next. The [Let_cont] stays;
    FlambdaUnusedContsSpec.remove_unused_conts removes it if nothing
    names its continuation any more.
+
+   An arm of a [Switch] that applies, to no arguments and with no
+   trap action of its own, a continuation that has no parameters and
+   gives no kinds, and whose handler is one [Apply_cont], becomes
+   that [Apply_cont] whatever its trap action, which it keeps: an
+   arm may be an [Apply_cont] with a trap action. The other tests of
+   FlambdaForwardSpec.forwarding are asked as for every entry (the
+   continuation is no exception handler, and what stops the pass is
+   listed below). FlambdaForwardSpec.forward_arm does the same
+   for the term before, as Simplify does (the header of that file
+   says where). The term after needs it where the validation has
+   made such a continuation itself. An application that goes to the
+   arm of the number that it gives (FlambdaForwardArmSpec.v) may
+   leave the other applications of its continuation giving one
+   constant; the parameter is then bound at the head of the handler
+   (FlambdaBindConstParamsSpec.v) and the [Switch] on it folded, and
+   where the arm that is left raises, the handler is one
+   [Apply_cont] with the trap action of the raise, of a continuation
+   of no parameters that the arms of the tests before it apply. The
+   term before has the raise in those arms.
+
+   Why that case is an equivalence: the continuation has no
+   parameters and gives no kinds, so its application to no arguments
+   is one that the machine accepts (a handler applied to values that
+   are not of the kinds that it gives is undefined,
+   FlambdaSemanticsSpec.apply_cont_value; here there are neither
+   values nor kinds), and there is nothing to evaluate or to bind,
+   as for FlambdaForwardJumpsSpec.forward_jumps. A continuation of
+   no parameters that gave a kind is not taken: its application
+   would be undefined where the [Apply_cont] of its handler need not
+   be. And the trap action that
+   is then where the arm was changes no run, because the machine
+   does not execute trap actions (FlambdaSemanticsSpec.step reads
+   the continuation and the arguments of an [Apply_cont], and
+   nothing else of it). So the statement is of the machine as it is.
+   For a machine that executes trap actions, that an arm which goes
+   on to a handler with a trap action runs as the arm with that trap
+   action does is not stated here, and is to be looked at again when
+   the statements of the validation are made of such a machine.
 
    What stops it:
    - what stops FlambdaForwardSpec.forwarding: the [Apply_cont] of the
@@ -149,7 +189,8 @@
      [forward_kinded_in_code] is for them;
    - an argument whose kind is not that of the parameter: the
      application is undefined;
-   - a trap action on the [Apply_cont] of the handler;
+   - a trap action on the [Apply_cont] of the handler, but for the
+     arm above;
    - recursive continuations are not forwarded, and an [Apply] that
      returns to a continuation still does: the results of a call are
      tested where they are returned, and their kinds are not known
@@ -257,6 +298,23 @@ Definition forward_kinded_apply_cont (G : kinds_in_scope) (K : cont_kinds)
   | _, _ => ac
   end.
 
+(* The same for an arm of a [Switch], with one case more: an arm that
+   applies, to no arguments and with no trap action, a continuation of
+   no parameters whose handler gives no kinds goes where the handler
+   goes whatever the trap action of the handler, as
+   FlambdaForwardSpec.forward_arm has it. *)
+Definition forward_kinded_arm (G : kinds_in_scope) (K : cont_kinds)
+    (F : forwards) (ac : apply_cont) : apply_cont :=
+  match
+    forward_of F (ac_continuation ac), lookup (ac_continuation ac) K,
+    ac_args ac
+  with
+  | Some ([], target), Some [], [] =>
+    if no_trap_action ac then forwarded [] [] target
+    else forward_kinded_apply_cont G K F ac
+  | _, _, _ => forward_kinded_apply_cont G K F ac
+  end.
+
 Fixpoint forward_kinded_under (G : kinds_in_scope) (K : cont_kinds)
     (F : forwards) (e : expr) : expr :=
   match e with
@@ -281,8 +339,7 @@ Fixpoint forward_kinded_under (G : kinds_in_scope) (K : cont_kinds)
   | Apply_cont ac => Apply_cont (forward_kinded_apply_cont G K F ac)
   | Switch scrutinee arms =>
     Switch scrutinee
-      (map (fun arm => (fst arm, forward_kinded_apply_cont G K F (snd arm)))
-         arms)
+      (map (fun arm => (fst arm, forward_kinded_arm G K F (snd arm))) arms)
   end
 with forward_kinded_in_handler (G : kinds_in_scope) (K : cont_kinds)
     (F : forwards) (h : continuation_handler) : continuation_handler :=

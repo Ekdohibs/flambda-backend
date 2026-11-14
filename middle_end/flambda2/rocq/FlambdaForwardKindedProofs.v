@@ -151,6 +151,30 @@ Proof.
   split; [ exact Hkinds | exact (have_kinds_sound G _ kinds Hhave) ].
 Qed.
 
+(* The same of an arm. Its case more is an application of no arguments
+   to a continuation of no parameters whose handler gives no kinds:
+   there is nothing to know of kinds, and it goes on with the trap
+   action of the handler. *)
+Lemma goes_forward_kinded_arm (G : kinds_in_scope) (K : cont_kinds)
+    (F : forwards) (ac : apply_cont) :
+  goes true G K F ac (forward_kinded_arm G K F ac).
+Proof.
+  unfold forward_kinded_arm.
+  destruct (forward_of F (ac_continuation ac))
+    as [[[ | p params] target] | ] eqn:Hk;
+    try apply goes_forward_kinded.
+  destruct (lookup (ac_continuation ac) K) as [[ | kind kinds] | ] eqn:Hkinds;
+    try apply goes_forward_kinded.
+  destruct (ac_args ac) as [ | arg args] eqn:Hargs;
+    try apply goes_forward_kinded.
+  destruct (no_trap_action ac); [ | apply goes_forward_kinded ].
+  replace (forwarded [] [] target) with (forwarded [] (ac_args ac) target)
+    by (rewrite Hargs; reflexivity).
+  apply Goes_on; [ exact Hk | rewrite Hargs; reflexivity | ].
+  intros _. exists []. split; [ exact Hkinds | ].
+  rewrite Hargs. exact (have_kinds_sound G [] [] eq_refl).
+Qed.
+
 Fixpoint forward_kinded_fwd (e : expr) :
   ∀ (G : kinds_in_scope) (K : cont_kinds) (F : forwards),
     safe F e -> fwd true G K F e (forward_kinded_under G K F e).
@@ -213,7 +237,7 @@ Proof.
   - apply Fwd_switch. clear Hsafe.
     induction arms as [ | arm arms IH]; simpl; [ apply Forall2_nil | ].
     apply Forall2_cons; [ | exact IH ].
-    split; [ reflexivity | apply goes_forward_kinded ].
+    split; [ reflexivity | apply goes_forward_kinded_arm ].
   - apply Fwd_invalid.
 Qed.
 

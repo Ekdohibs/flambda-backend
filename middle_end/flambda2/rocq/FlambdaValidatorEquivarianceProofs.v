@@ -4735,6 +4735,33 @@ Proof.
   apply forwarded_keeping_equivariant.
 Qed.
 
+Lemma forward_kinded_arm_equivariant (r : renaming) (G : kinds_in_scope)
+    (K : cont_kinds) (F : forwards) (ac : apply_cont) :
+  forward_kinded_arm (rename_kinds_in_scope r G) (rename_cont_kinds r K)
+    (rename_forwards r F) (rename_apply_cont r ac)
+  = rename_apply_cont r (forward_kinded_arm G K F ac).
+Proof.
+  pose proof (forward_kinded_apply_cont_equivariant r G K F ac) as Hgeneral.
+  unfold forward_kinded_arm.
+  change (ac_continuation (rename_apply_cont r ac))
+    with (rename_continuation r (ac_continuation ac)).
+  change (ac_args (rename_apply_cont r ac))
+    with (map (rename_simple r) (ac_args ac)).
+  rewrite forward_of_renamed, lookup_rename_cont_kinds.
+  destruct (forward_of F (ac_continuation ac)) as [[params target] | ] eqn:Hof;
+    cbn [rename_forward_entry option_map fst snd].
+  - destruct params as [ | p params],
+      (lookup (ac_continuation ac) K) as [[ | kind kinds] | ],
+      (ac_args ac) as [ | arg args] eqn:Hargs;
+      cbn [map]; try exact Hgeneral.
+    rewrite no_trap_action_renamed.
+    destruct (no_trap_action ac);
+      [ exact (forwarded_equivariant r [] [] target) | exact Hgeneral ].
+  - destruct (lookup (ac_continuation ac) K) as [[ | kind kinds] | ],
+      (ac_args ac);
+      exact Hgeneral.
+Qed.
+
 Fixpoint forward_kinded_under_equivariant (r : renaming) (e : expr) :
   ∀ (G : kinds_in_scope) (K : cont_kinds) (F : forwards),
     forward_kinded_under (rename_kinds_in_scope r G) (rename_cont_kinds r K)
@@ -4806,7 +4833,7 @@ Proof.
       rewrite forward_kinded_apply_cont_equivariant. reflexivity.
     + cbn [rename_expr forward_kinded_under]. f_equal.
       rewrite !map_map. apply map_ext. intros [i ac]. cbn [fst snd].
-      rewrite forward_kinded_apply_cont_equivariant. reflexivity.
+      rewrite forward_kinded_arm_equivariant. reflexivity.
   - destruct h as [params metadata handler]. intros G K F.
     cbn [rename_handler forward_kinded_in_handler].
     rewrite params_in_scope_equivariant, forward_kinded_under_equivariant.

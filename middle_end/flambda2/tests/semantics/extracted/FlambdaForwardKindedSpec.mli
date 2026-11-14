@@ -23,6 +23,9 @@ val kinded_entry :
 val forward_kinded_apply_cont :
   kinds_in_scope -> cont_kinds -> forwards -> apply_cont -> apply_cont
 
+val forward_kinded_arm :
+  kinds_in_scope -> cont_kinds -> forwards -> apply_cont -> apply_cont
+
 val forward_kinded_under :
   kinds_in_scope -> cont_kinds -> forwards -> expr -> expr
 
