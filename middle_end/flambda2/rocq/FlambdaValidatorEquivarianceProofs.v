@@ -5556,6 +5556,7 @@ Ltac rename_outwards :=
       | rewrite remove_unused_defined_lets_in_loops_closed_equivariant
       | rewrite inline_tail_conts_kinded_equivariant_aux
       | rewrite FlambdaUnaliasParamsNamesProofs.unalias_params_renamed
+      | rewrite FlambdaUnaliasRecParamsNamesProofs.unalias_rec_params_renamed
       | rewrite FlambdaGiveScrutineeNamesProofs.give_scrutinees_renamed
       | rewrite FlambdaArmNumbersNamesProofs.numbers_in_arms_renamed
       | rewrite FlambdaAliasLetsProofs.merge_alias_lets_renamed ].
@@ -8237,12 +8238,16 @@ Qed.
 (* The tidying of the term before that follows the placing keeps
    scope: each rewrite of its rounds does. *)
 Lemma give_then_unalias_keeps_scope :
-  keeps_scope (fun e => unalias_params (give_scrutinees e)).
+  keeps_scope
+    (fun e => unalias_rec_params (unalias_params (give_scrutinees e))).
 Proof.
   exact
-    (keeps_scope_compose give_scrutinees unalias_params
-       FlambdaStaticsScopeProofs.give_scrutinees_keeps_scope
-       FlambdaStaticsScopeProofs.unalias_params_keeps_scope).
+    (keeps_scope_compose (fun e => unalias_params (give_scrutinees e))
+       unalias_rec_params
+       (keeps_scope_compose give_scrutinees unalias_params
+          FlambdaStaticsScopeProofs.give_scrutinees_keeps_scope
+          FlambdaStaticsScopeProofs.unalias_params_keeps_scope)
+       FlambdaStaticsScopeProofs.unalias_rec_params_keeps_scope).
 Qed.
 
 Lemma tidy_expr_before_keeps_scope : keeps_scope tidy_expr_before.
@@ -8282,7 +8287,8 @@ Proof.
     (keeps_scope_compose _ fold_constants _
        FlambdaKeepsScopeProofs.fold_constants_keeps_scope).
   exact
-    (keeps_scope_compose (fun e => unalias_params (give_scrutinees e))
+    (keeps_scope_compose
+       (fun e => unalias_rec_params (unalias_params (give_scrutinees e)))
        numbers_in_arms give_then_unalias_keeps_scope
        FlambdaStaticsScopeProofs.numbers_in_arms_keeps_scope).
 Qed.

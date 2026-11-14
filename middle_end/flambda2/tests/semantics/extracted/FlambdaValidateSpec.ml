@@ -58,6 +58,7 @@ open FlambdaStaticsOrderSpec
 open FlambdaStubCallsSpec
 open FlambdaTwinParamsSpec
 open FlambdaUnaliasParamsSpec
+open FlambdaUnaliasRecParamsSpec
 open FlambdaUnboxInScopeSpec
 open FlambdaUnboxLoopsSpec
 open FlambdaUnboxParamsSpec
@@ -422,7 +423,8 @@ let tidy_expr_before e =
                             (collapse_switches
                                (fold_constants
                                   (numbers_in_arms
-                                     (unalias_params (give_scrutinees e)))))))))))))
+                                     (unalias_rec_params
+                                        (unalias_params (give_scrutinees e))))))))))))))
 
 (** val tidy_code_before : expr -> expr **)
 
@@ -449,7 +451,9 @@ let tidy_expr_after e =
                 (sink_let_conts
                    (remove_unused_conts
                       (fold_constants
-                         (numbers_in_arms (unalias_params (give_scrutinees e))))))))))
+                         (numbers_in_arms
+                            (unalias_rec_params
+                               (unalias_params (give_scrutinees e)))))))))))
 
 (** val tidy_code_after : expr -> expr **)
 

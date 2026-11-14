@@ -58,6 +58,7 @@ open FlambdaStaticsOrderSpec
 open FlambdaStubCallsSpec
 open FlambdaTwinParamsSpec
 open FlambdaUnaliasParamsSpec
+open FlambdaUnaliasRecParamsSpec
 open FlambdaUnboxInScopeSpec
 open FlambdaUnboxLoopsSpec
 open FlambdaUnboxParamsSpec

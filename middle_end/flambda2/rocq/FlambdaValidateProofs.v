@@ -86,6 +86,8 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaSemanticsSpec
 From OxCamlFlambda2 Require FlambdaHoistStaticsProofs.
 From OxCamlFlambda2 Require FlambdaBindConstParamsSpec
   FlambdaBindConstParamsProofs.
+From OxCamlFlambda2 Require Import FlambdaUnaliasRecParamsSpec.
+From OxCamlFlambda2 Require FlambdaUnaliasRecParamsProofs.
 From OxCamlFlambda2 Require FlambdaShadowParamsProofs FlambdaTwinParamsProofs.
 From OxCamlFlambda2 Require Import FlambdaDemoteSpec.
 From OxCamlFlambda2 Require Import FlambdaUnusedHeadStaticsSpec
@@ -144,6 +146,7 @@ Ltac equivalence_step :=
     | apply FlambdaBindConstParamsProofs.bind_const_params_equivalent
     | apply lift_handler_conts_equivalent
     | apply unalias_params_equivalent
+    | apply FlambdaUnaliasRecParamsProofs.unalias_rec_params_equivalent
     | apply give_scrutinees_equivalent
     | apply numbers_in_arms_equivalent
     | apply merge_alias_lets_equivalent

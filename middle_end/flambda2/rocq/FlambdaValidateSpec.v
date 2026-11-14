@@ -265,11 +265,16 @@
    primitive, the variable is in scope at the handler: where the
    checks of FlambdaUnaliasParamsSpec.unalias_params pass, the
    parameter is taken away and the handler begins with a [Let] of it
-   to the variable, in both terms. On a path through an arm of a
-   [Switch] on the result, what Simplify gives for the parameter is
-   the number of the arm; such an argument is first made the
-   scrutinee (FlambdaGiveScrutineeSpec.give_scrutinees), where that
-   lets the parameter be taken away. Where it does not, the argument
+   to the variable, in both terms. The same is done for a parameter
+   of a loop that every turn passes on as it is and that the loop is
+   given one variable for
+   (FlambdaUnaliasRecParamsSpec.unalias_rec_params), in both terms,
+   so that the two do not differ by such a parameter. On a path
+   through an arm of a [Switch] on the result, what Simplify gives
+   for the parameter is the number of the arm; such an argument is
+   first made the scrutinee
+   (FlambdaGiveScrutineeSpec.give_scrutinees), where that lets the
+   parameter be taken away. Where it does not, the argument
    stays, and the term before has the scrutinee where Simplify has
    the number, as for a flag that a loop tests before it sets it: the
    scrutinee is made the number of the arm, in the arm and in the
@@ -307,6 +312,7 @@
    of the term after is an equivalence
    (FlambdaGiveScrutineeSpec.give_scrutinees_equivalent_statement,
    FlambdaUnaliasParamsSpec.unalias_params_equivalent_statement,
+   FlambdaUnaliasRecParamsSpec.unalias_rec_params_equivalent_statement,
    FlambdaArmNumbersSpec.numbers_in_arms_equivalent_statement,
    FlambdaNormaliseSpec.fold_constants_equivalent_statement,
    FlambdaUnusedContsSpec.remove_unused_conts_equivalent_statement,
@@ -411,6 +417,7 @@ From OxCamlFlambda2 Require Import FlambdaNeverReturnsSpec.
 From OxCamlFlambda2 Require Import FlambdaUnusedHeadStaticsSpec.
 From OxCamlFlambda2 Require Import FlambdaSameHandlersSpec.
 From OxCamlFlambda2 Require FlambdaBindConstParamsSpec.
+From OxCamlFlambda2 Require Import FlambdaUnaliasRecParamsSpec.
 From OxCamlFlambda2 Require Import FlambdaUnboxParamsSpec
   FlambdaUnboxInScopeSpec FlambdaUnboxLoopsSpec FlambdaUnboxTogetherSpec.
 From OxCamlFlambda2Types Require Import FlambdaAliasesSpec.
@@ -1293,14 +1300,16 @@ Definition placed (e : expr) : expr :=
    application gives one variable, which is at the handler what it is
    at the applications, is taken away where the checks of
    FlambdaUnaliasParamsSpec.unalias_params pass, and the handler
-   begins with a [Let] of it to that variable; the variable that a
-   [Switch] tests is made the number of the arm, in the arm and in
-   the handler that only that arm applies, at the reads that
-   FlambdaArmNumbersSpec.v lists, and the variable that it is the
-   untagging of is made the tagged number at those that the file
-   lists for it (FlambdaArmNumbersSpec.numbers_in_arms). A primitive
-   may then be on constants and a [Switch] on a constant, as they
-   are for Simplify, which simplifies the handler knowing the
+   begins with a [Let] of it to that variable; so is a parameter of
+   a loop that every turn passes on and that the loop is given one
+   variable for (FlambdaUnaliasRecParamsSpec.unalias_rec_params); the
+   variable that a [Switch] tests is made the number of the arm, in
+   the arm and in the handler that only that arm applies, at the
+   reads that FlambdaArmNumbersSpec.v lists, and the variable that
+   it is the untagging of is made the tagged number at those that
+   the file lists for it (FlambdaArmNumbersSpec.numbers_in_arms). A
+   primitive may then be on constants and a [Switch] on a constant,
+   as they are for Simplify, which simplifies the handler knowing the
    number: they are folded ([fold_constants]), a [Switch] whose arms
    are then all the same is that arm ([collapse_switches]), and a
    [Switch] whose arms then apply one continuation to arguments that
@@ -1327,8 +1336,9 @@ Definition tidy_expr_before (e : expr) : expr :=
                             (collapse_switches
                                (fold_constants
                                   (numbers_in_arms
-                                     (unalias_params
-                                        (give_scrutinees e))))))))))))).
+                                     (unalias_rec_params
+                                        (unalias_params
+                                           (give_scrutinees e)))))))))))))).
 
 (* The same for the body of code: that round, and the same for the
    handler of each of its recursive continuations. *)
@@ -1365,7 +1375,8 @@ Definition tidy_expr_after (e : expr) : expr :=
                    (remove_unused_conts
                       (fold_constants
                          (numbers_in_arms
-                            (unalias_params (give_scrutinees e)))))))))).
+                            (unalias_rec_params
+                               (unalias_params (give_scrutinees e))))))))))).
 
 Definition tidy_code_after (body : expr) : expr :=
   rewrite_rec_handlers tidy_expr_after (tidy_expr_after body).
