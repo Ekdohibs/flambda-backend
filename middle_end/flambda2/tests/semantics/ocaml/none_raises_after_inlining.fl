@@ -1,0 +1,82 @@
+(let code size(39)
+       get_0
+         (t/70 : [ 0 | 0 of imm tagged * [ 0 | 0 of imm tagged * val ] ],
+          i/71 : imm tagged)
+         my_closure/72 &my_alloc_region/73 my_depth/74
+         -> k/32 * k/33
+         : [ 0 | 0 of imm tagged ] =
+   let next_depth/75 = rec_info (succ my_depth/74) in
+   (let prim/81 = %is_int (t/70) in
+    let Pisint/82 = %tag_imm (prim/81) in
+    (let untagged/83 = %untag_imm (Pisint/82) in
+     switch untagged/83
+       | 0 -> k/37
+       | 1 -> k/32 (0))
+      where k/37 =
+        cont k/34)
+     where k/34 =
+       ((let prim/78 = %phys_eq (i/71, 0) in
+         let eq/79 = %tag_imm (prim/78) in
+         (let untagged/80 = %untag_imm (eq/79) in
+          switch untagged/80
+            | 0 -> k/32 (0)
+            | 1 -> k/36)
+           where k/36 =
+             cont k/35)
+          where k/35 =
+            let Pfield/76 = %block_load.[`0`] (t/70) in
+            let Pmakeblock/77 = %block.[`0`].my_alloc_region/73 (Pfield/76)
+            in
+            cont k/32 (Pmakeblock/77))
+ in
+ let $camlNone_raises_after_inlining__immstring_0 =
+   "none_raises_after_inlining.ml"
+ in
+ let $camlNone_raises_after_inlining__const_block_1 =
+   Block 0 ($camlNone_raises_after_inlining__immstring_0, 14, 56)
+ in
+ let $camlNone_raises_after_inlining__Pmakeblock_2 =
+   Block 0 ($`*predef*`.caml_exn_Assert_failure,
+            $camlNone_raises_after_inlining__const_block_1)
+ in
+ let code size(26)
+       nth_1
+         (t/84 : [ 0 | 0 of imm tagged * [ 0 | 0 of imm tagged * val ] ],
+          i/85 : imm tagged)
+         my_closure/86 &my_alloc_region/87 my_depth/88
+         -> k/38 * k/39
+         : imm tagged =
+   let next_depth/89 = rec_info (succ my_depth/88) in
+   let get/90 = %project_value_slot.[nth].[get] (my_closure/86) in
+   apply direct(get_0 &my_alloc_region/87) inlined(always)
+     (get/90 : _ -> [ 0 | 0 of imm tagged ]) (t/84, i/85) -> k/40 * k/39
+     where k/40 (`*match*/91` : [ 0 | 0 of imm tagged ]) =
+       ((let prim/93 = %is_int (`*match*/91`) in
+         let Pisint/94 = %tag_imm (prim/93) in
+         (let untagged/95 = %untag_imm (Pisint/94) in
+          switch untagged/95
+            | 0 -> k/43
+            | 1 -> k/44)
+           where k/44 =
+             cont k/41
+           where k/43 =
+             cont k/42)
+          where k/42 =
+            let Pfield/92 = %block_load.[`0`] (`*match*/91`) in
+            cont k/38 (Pfield/92)
+          where k/41 =
+            cont k/39
+                   pop(regular k/39)
+                   ($camlNone_raises_after_inlining__Pmakeblock_2))
+ in
+ let get/96 = closure get_0 @get &toplevel in
+ let nth/97 = closure nth_1 @nth &toplevel with { get = get/96 } in
+ let Pmakeblock/98 = %block.[`0`].`toplevel` (get/96, nth/97) in
+ cont k/31 (Pmakeblock/98))
+  where k/31 define_root_symbol (module_block/67) =
+    let field_0/68 = %block_load.tag[`0`].`size`[`2`].[`0`] (module_block/67)
+    in
+    let field_1/69 = %block_load.tag[`0`].`size`[`2`].[`1`] (module_block/67)
+    in
+    let $camlNone_raises_after_inlining = Block 0 (field_0/68, field_1/69) in
+    cont done ($camlNone_raises_after_inlining)
