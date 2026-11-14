@@ -4702,6 +4702,30 @@ let loopify_guess () =
     (fun code_id -> Code_ids.find code_id, Continuations.fresh ())
     (List.sort_uniq Code_id.compare !loopify_marked)
 
+(* What an asking that searched for liftings and refused the unit keeps for an
+   asking of the same function, of the same two terms and with the same calls to
+   leave, whose liftings ask for other rounds ([ask] in [validate]): whether its
+   own liftings asked for the calls of the closures that a [Let] makes; the two
+   terms that it was given; what it computed before the liftings; for each guess
+   of the liftings, the [Let]s banned that the guess was given and the terms
+   that the rounds gave after each lifting, the last first; and its answer. *)
+type 'banned search_kept =
+  { search_calling : bool;
+    search_before : Model.expr;
+    search_after : Model.expr;
+    search_looped : Model.expr;
+    search_normalised_after : Model.expr;
+    search_tidied_after : Model.expr;
+    search_taken : bool;
+    search_both :
+      Model.expr -> Unused_statics.dropped -> Unused_statics.dropped;
+    search_not_lifted :
+      Validate.validation * Model.expr * string * bool * Model.expr;
+    search_guesses : ('banned * Model.expr list) list;
+    search_answer :
+      Validate.validation * Model.expr * string * bool * Model.expr
+  }
+
 let validate ~(imports : (Model.symbol * Values.import_class) list)
     ~(prefix_units : int) ~(outcome_before : outcome) (before : converted)
     (after : converted) =
@@ -4759,73 +4783,167 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
      of the validator, unless the function asked makes its liftings by another.
      [calling] says whether the liftings ask for
      FlambdaValidateSpec.normalise_lifted_calling, which call closures that a
-     [Let] makes directly. *)
-  let ask ~calling ?(with_lifting = Validate.with_lifting) validate_unit
-      (before : converted) (after : converted) kept =
+     [Let] makes directly.
+
+     [asked], where it is given, says which function [validate_unit] is: whether
+     it is one of the two of the reading, and whether it is that of the second
+     asking of an attempt. An attempt gives it: its askings are made again with
+     [calling] where every one of them has refused the unit, of the same two
+     terms and with the same [kept]. The second check gives none.
+
+     An asking that is given [asked], is not [calling], searches for liftings
+     and refuses the unit keeps what it computed ([searches]), where the term
+     before has a closure of the sort that the rounds with [calling] know
+     ([closures_to_call]; where it has none no asking is made with [calling]).
+     The asking that is [calling], for the same [asked], the same [kept] and the
+     same two terms, which are compared structurally, uses what was kept in two
+     ways.
+
+     What comes before the liftings is taken as it was kept. That is an
+     identity: the term before with its loops made, the term after normalised
+     and tidied, whether the calls are taken on, the names unused and the first
+     [validate_unit], whose lifting lifts nothing and has the field unset
+     whatever [calling] is, are computed from the two terms, [kept], the rounds
+     and the loops alone.
+
+     Each guess of the liftings is then made again with [calling], from the
+     [Let]s banned that were kept for it, and the terms that the rounds give
+     after each lifting are compared with those kept, by [=] on the two lists in
+     order. Where they are the same for every guess, the answer kept is returned
+     and [validate_unit] is not asked of the liftings. With the same terms after
+     each lifting, the liftings guessed are those kept but for the field and the
+     [Let]s banned for the next guess are those kept; and the function asked, if
+     it makes after each lifting the terms that this search makes, compares what
+     it compared. That last step is a shortcut of this search and nothing rests
+     on it. If the function asked made other terms than the search, the answer
+     kept would be taken where the asking might have validated the unit, and
+     never the reverse: an answer kept is a refusal. At the first guess whose
+     terms are not those kept, the asking goes on from that guess as any asking
+     does, and asks [validate_unit] of the liftings that it comes to.
+
+     What such an asking leaves. Where the answer kept is returned, the function
+     given is not called, and [last_asking_holds] is as the asking before this
+     one left it; where the asking goes on, the function is called for the
+     liftings that it comes to and not for the lifting that lifts nothing.
+     [tables_were_bound] is what the guesses made again leave.
+     [last_asking_holds] is evaluated for a unit with imports whatever the
+     verdict; its value is used only of a validated unit. Both are put back
+     where the attempts with [calling] all refuse ([in_turn]); the second check
+     resets [tables_were_bound]. Where a unit is validated, the last asking
+     accepted it: it called the function given with its liftings and set both.
+     An answer kept is never that asking; one that goes on and finds nothing to
+     lift returns the refusal. *)
+  let searches : (((bool * bool) * Model.code_id list) * _ search_kept) list ref
+      =
+    ref []
+  in
+  let ask ~calling ?asked ?(with_lifting = Validate.with_lifting) validate_unit
+      (before : converted) (after : converted) kept :
+      Validate.validation * Model.expr * string * bool * Model.expr =
     (* No table is bound until a first lifting of this asking binds one: a
        verdict of this asking that is reached with no lifting proposed must not
        read what an asking before it left. *)
     tables_were_bound := false;
-    (* The term before with the direct calls of the code of its stubs made
-       indirect, its direct calls of code that never returns which pass the
-       checks of that rewrite put under a binding of their return continuation
-       to a handler that is [Invalid], and its self tail calls made jumps: the
-       term that the function asked normalises and lifts in. *)
-    let looped =
-      Loopify.loopify_unit loops
-        (Never_returns.cut_returns []
-           (Stub_calls.demote_stub_calls before.body))
+    let search_kept =
+      match asked with
+      | Some asked when calling ->
+        List.find_map
+          (fun (key, search) ->
+            if
+              key = (asked, kept)
+              && (not search.search_calling)
+              && search.search_before = before.body
+              && search.search_after = after.body
+            then Some search
+            else None)
+          !searches
+      | Some _ | None -> None
     in
-    let normalised_after = Validate.normalise_after rounds kept after.body in
-    let tidied_after = Validate.tidied_after rounds normalised_after in
-    (* Whether the calls of the term before are taken on when its rounds are
-       over, as [validate_unit] decides it: not where the term after, as it is
-       compared, has a call that would be. *)
-    let taken = not (Validate.keeps_a_return tidied_after) in
-    let normalised_before =
-      Validate.with_returns taken (Validate.normalise_before rounds kept looped)
+    let ( (looped : Model.expr),
+          (normalised_after : Model.expr),
+          (tidied_after : Model.expr),
+          (taken : bool),
+          (both :
+            Model.expr -> Unused_statics.dropped -> Unused_statics.dropped),
+          (not_lifted :
+            Validate.validation * Model.expr * string * bool * Model.expr) ) =
+      match search_kept with
+      | Some search ->
+        ( search.search_looped,
+          search.search_normalised_after,
+          search.search_tidied_after,
+          search.search_taken,
+          search.search_both,
+          search.search_not_lifted )
+      | None ->
+        (* The term before with the direct calls of the code of its stubs made
+           indirect, its direct calls of code that never returns which pass the
+           checks of that rewrite put under a binding of their return
+           continuation to a handler that is [Invalid], and its self tail calls
+           made jumps: the term that the function asked normalises and lifts
+           in. *)
+        let looped =
+          Loopify.loopify_unit loops
+            (Never_returns.cut_returns []
+               (Stub_calls.demote_stub_calls before.body))
+        in
+        let normalised_after =
+          Validate.normalise_after rounds kept after.body
+        in
+        let tidied_after = Validate.tidied_after rounds normalised_after in
+        (* Whether the calls of the term before are taken on when its rounds are
+           over, as [validate_unit] decides it: not where the term after, as it
+           is compared, has a call that would be. *)
+        let taken = not (Validate.keeps_a_return tidied_after) in
+        let normalised_before =
+          Validate.with_returns taken
+            (Validate.normalise_before rounds kept looped)
+        in
+        (* The names that the term after binds and does not use are added to
+           those of the term before, where the term before can do without them
+           too: the one list is for both terms
+           (FlambdaValidateSpec.without_head_statics). *)
+        let unused_after = unused_statics tidied_after in
+        let both (before_term : Model.expr) (unused : Unused_statics.dropped) :
+            Unused_statics.dropped =
+          let more =
+            { Unused_statics.dropped_symbols =
+                unused.dropped_symbols
+                @ List.filter
+                    (fun sym -> not (List.mem sym unused.dropped_symbols))
+                    unused_after.dropped_symbols;
+              dropped_code =
+                unused.dropped_code
+                @ List.filter
+                    (fun id -> not (List.mem id unused.dropped_code))
+                    unused_after.dropped_code
+            }
+          in
+          match Unused_statics.drop_statics more before_term with
+          | Some _ -> more
+          | None -> unused
+        in
+        let unused =
+          both
+            (Validate.tidied_before rounds normalised_before)
+            (unused_statics normalised_before)
+        in
+        let validation : Validate.validation =
+          validate_unit unused [] [nothing_lifted]
+        in
+        let not_lifted =
+          ( validation,
+            Validate.without_statics unused
+              (Validate.tidied_before rounds normalised_before),
+            "normalised",
+            false,
+            Validate.without_head_statics unused tidied_after )
+        in
+        looped, normalised_after, tidied_after, taken, both, not_lifted
     in
-    (* The names that the term after binds and does not use are added to those
-       of the term before, where the term before can do without them too: the
-       one list is for both terms (FlambdaValidateSpec.without_head_statics). *)
-    let unused_after = unused_statics tidied_after in
-    let both (before_term : Model.expr) (unused : Unused_statics.dropped) :
-        Unused_statics.dropped =
-      let more =
-        { Unused_statics.dropped_symbols =
-            unused.dropped_symbols
-            @ List.filter
-                (fun sym -> not (List.mem sym unused.dropped_symbols))
-                unused_after.dropped_symbols;
-          dropped_code =
-            unused.dropped_code
-            @ List.filter
-                (fun id -> not (List.mem id unused.dropped_code))
-                unused_after.dropped_code
-        }
-      in
-      match Unused_statics.drop_statics more before_term with
-      | Some _ -> more
-      | None -> unused
-    in
-    let unused =
-      both
-        (Validate.tidied_before rounds normalised_before)
-        (unused_statics normalised_before)
-    in
-    let validation : Validate.validation =
-      validate_unit unused [] [nothing_lifted]
-    in
-    let not_lifted =
-      ( validation,
-        Validate.without_statics unused
-          (Validate.tidied_before rounds normalised_before),
-        "normalised",
-        false,
-        Validate.without_head_statics unused tidied_after )
-    in
+    let (validation : Validate.validation), _, _, _, _ = not_lifted in
     match validation with
-    | Not_validated -> (
+    | Not_validated ->
       (* The liftings, in turn, as [validate_unit] makes them. The first is
          guessed from the term before after its self tail calls are made jumps;
          each one after it from the term that those before it give, normalised:
@@ -4847,6 +4965,9 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
         let unit = interface before in
         [unit.unit_return; unit.unit_exn]
       in
+      (* The terms that the rounds gave after each lifting of the guess that is
+         being made, the last first. *)
+      let normalised : Model.expr list ref = ref [] in
       let rec liftings_from banned stage made lifted remaining =
         let lifting =
           lifting_guess ~unit:(interface before)
@@ -4915,9 +5036,12 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
           if lifted' == lifted && match made with [] -> false | _ :: _ -> true
           then List.rev made, lifted
           else
-            liftings_from banned (stage + 1) (lifting :: made)
-              (Validate.normalise_lifted_calling calling rounds avoid kept
-                 lifted')
+            let next =
+              Validate.normalise_lifted_calling calling rounds avoid kept
+                lifted'
+            in
+            normalised := next :: !normalised;
+            liftings_from banned (stage + 1) (lifting :: made) next
               (remaining - 1)
       in
       (* The guess gives a symbol to the first [Let] that makes a block of its
@@ -4930,8 +5054,19 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
          that the guess made for a constant that Simplify has no use for, and is
          not such a symbol. *)
       let bound_after = snd (static_names normalised_after) in
-      let rec guessed banned again =
-        let liftings, lifted = liftings_from banned 0 [] looped 4 in
+      (* The guesses made, the last first: what each was given and the terms
+         that the rounds gave it. [made] is the sequence of a first guess that
+         is made already (below). *)
+      let guesses = ref [] in
+      let rec guessed made banned again =
+        let liftings, lifted =
+          match made with
+          | Some made -> made
+          | None ->
+            normalised := [];
+            liftings_from banned 0 [] looped 4
+        in
+        guesses := (banned, !normalised) :: !guesses;
         (* After the last lifting [validate_unit] reads the known value slots
            with every symbol of the unit in scope, demotes the exception
            handlers that no call can raise to and uses what is known of the
@@ -4964,44 +5099,100 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
                liftings)
         in
         match wrong with
-        | _ :: _ when again > 0 -> guessed (wrong @ banned) (again - 1)
+        | _ :: _ when again > 0 -> guessed None (wrong @ banned) (again - 1)
         | _ -> liftings, lifted, slots, unused
       in
-      match guessed [] 5 with
-      | [], _, _, _ -> not_lifted
-      | (_ :: _ as liftings), lifted, slots, unused ->
-        let unused = both lifted unused in
-        let tidied_after = Validate.without_head_statics unused tidied_after in
-        let validation = validate_unit unused slots liftings in
-        let slots_removed = match slots with [] -> false | _ :: _ -> true in
-        if
-          List.exists
-            (fun (lifting : Lift.lifting) ->
-              match lifting.lifted_to_head, lifting.lifted_around with
-              | [], [] -> false
-              | _ :: _, _ | _, _ :: _ -> true)
-            liftings
-        then
-          (* Something was lifted to the head of the unit or to a group around:
-             the pair shown is that of the last comparison, of the two terms
-             with their static bindings that mention no variable bound first. An
-             earlier comparison may be the one that holds: the verdict is that
-             of the function asked alone. *)
-          ( validation,
-            Validate.with_statics_first liftings
-              (Validate.without_statics unused lifted),
-            "lifted and normalised, with the static bindings that mention no \
-             variable first",
-            slots_removed,
-            Validate.with_statics_first liftings tidied_after )
-        else
-          ( (* The pair shown is that of the fifth comparison: the bindings of
-               code of both terms are moved up. *)
-            validation,
-            Float_code.float_code (Validate.without_statics unused lifted),
-            "lifted and normalised",
-            slots_removed,
-            Float_code.float_code (Validate.with_code_first tidied_after) ))
+      let asked_of guess =
+        match guess with
+        | [], _, _, _ -> not_lifted
+        | (_ :: _ as liftings), lifted, slots, unused ->
+          let unused = both lifted unused in
+          let tidied_after =
+            Validate.without_head_statics unused tidied_after
+          in
+          let validation = validate_unit unused slots liftings in
+          let slots_removed = match slots with [] -> false | _ :: _ -> true in
+          if
+            List.exists
+              (fun (lifting : Lift.lifting) ->
+                match lifting.lifted_to_head, lifting.lifted_around with
+                | [], [] -> false
+                | _ :: _, _ | _, _ :: _ -> true)
+              liftings
+          then
+            (* Something was lifted to the head of the unit or to a group
+               around: the pair shown is that of the last comparison, of the two
+               terms with their static bindings that mention no variable bound
+               first. An earlier comparison may be the one that holds: the
+               verdict is that of the function asked alone. *)
+            ( validation,
+              Validate.with_statics_first liftings
+                (Validate.without_statics unused lifted),
+              "lifted and normalised, with the static bindings that mention no \
+               variable first",
+              slots_removed,
+              Validate.with_statics_first liftings tidied_after )
+          else
+            ( (* The pair shown is that of the fifth comparison: the bindings of
+                 code of both terms are moved up. *)
+              validation,
+              Float_code.float_code (Validate.without_statics unused lifted),
+              "lifted and normalised",
+              slots_removed,
+              Float_code.float_code (Validate.with_code_first tidied_after) )
+      in
+      (* The guesses of a search kept, made again in turn: [None] where each
+         gives the terms that it gave; else the first that does not, with the
+         sequence that it now gives and the number of guesses that may follow
+         it. *)
+      let rec made_again guesses_kept again =
+        match guesses_kept with
+        | [] -> None
+        | (banned, terms) :: rest ->
+          normalised := [];
+          let made = liftings_from banned 0 [] looped 4 in
+          if !normalised = terms
+          then made_again rest (again - 1)
+          else Some (made, banned, again)
+      in
+      let answer : Validate.validation * Model.expr * string * bool * Model.expr
+          =
+        match search_kept with
+        | Some search -> (
+          match made_again search.search_guesses 5 with
+          | None -> search.search_answer
+          | Some (made, banned, again) ->
+            asked_of (guessed (Some made) banned again))
+        | None -> asked_of (guessed None [] 5)
+      in
+      (match asked, answer with
+      | Some asked, (Not_validated, _, _, _, _)
+        when (not calling) && closures_to_call ->
+        searches
+          := ( (asked, kept),
+               { search_calling = calling;
+                 search_before = before.body;
+                 search_after = after.body;
+                 search_looped = looped;
+                 search_normalised_after = normalised_after;
+                 search_tidied_after = tidied_after;
+                 search_taken = taken;
+                 search_both = both;
+                 search_not_lifted = not_lifted;
+                 search_guesses = List.rev !guesses;
+                 search_answer = answer
+               } )
+             :: !searches
+      | ( (Some _ | None),
+          ( ( Not_validated | Same_up_to_bound_names | Same_once_normalised
+            | Same_once_unused_statics_removed | Same_once_head_statics_removed
+            | Same_once_lifted ),
+            _,
+            _,
+            _,
+            _ ) ) ->
+        ());
+      answer
     | Same_up_to_bound_names | Same_once_normalised
     | Same_once_unused_statics_removed | Same_once_head_statics_removed
     | Same_once_lifted ->
@@ -5074,7 +5265,7 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
         else Validate.validate_unit, Validate_knowing.validate_unit_knowing
       in
       let first =
-        ask ~calling
+        ask ~calling ~asked:(reading, false)
           (fun unused slots liftings ->
             let validation =
               validate_unit rounds unused slots loops liftings kept before.body
@@ -5099,7 +5290,7 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
           Validate.unit_continuations [nothing_lifted] @ List.map snd loops
         in
         match
-          ask ~calling
+          ask ~calling ~asked:(reading, true)
             (fun unused slots liftings ->
               let validation =
                 validate_unit_knowing rounds unused slots loops liftings kept
@@ -5328,13 +5519,15 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
      the answer of the second; [attempt] asks [validate_unit_knowing] only where
      [validate_unit] does not validate, and not at all for the third attempt;
      the second attempt is made only where the first does not validate, and the
-     third only where the first two do not. Where the model does not say so, and
-     the validator accepts, what is validated is the unit with nothing imported.
-     No line begins "validated:" for a unit that has imports. Where the two
-     terms have a prefix in front of them, made from the [.cmx] files of
-     [prefix_units] units, the verdict is of the two terms with it, and the line
-     says of how many units the files were used: it rests on those files being
-     right, so such a unit is counted apart whatever imports it has left. *)
+     third only where the first two do not; and an answer that [ask] takes from
+     a search that it kept, as one that [attempt] takes for the reading, is a
+     refusal. Where the model does not say so, and the validator accepts, what
+     is validated is the unit with nothing imported. No line begins "validated:"
+     for a unit that has imports. Where the two terms have a prefix in front of
+     them, made from the [.cmx] files of [prefix_units] units, the verdict is of
+     the two terms with it, and the line says of how many units the files were
+     used: it rests on those files being right, so such a unit is counted apart
+     whatever imports it has left. *)
   let of_the_runs_shown =
     match imports with [] -> true | _ :: _ -> !last_asking_holds ()
   in
