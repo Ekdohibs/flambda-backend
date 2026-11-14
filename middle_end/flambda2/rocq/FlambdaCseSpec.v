@@ -82,10 +82,11 @@
    compiler shares ([Flambda_primitive.unary_primitive_eligible_for_cse]
    says yes of [Array_length]) and which does not change once the
    array is made, whether the array can be written or not (here the
-   primitive has a value on a symbol bound to an immutable array only;
-   of a cell of the heap, FlambdaHeapSpec.heap_evolves says that it
-   keeps its number of elements); and so is a [Block_load] marked [Immutable]
-   or [Immutable_unique], a load of a field that is not written
+   primitive has a value on an immutable array, on a symbol bound to
+   one and on an array that is a cell of the heap; of such a cell,
+   FlambdaHeapSpec.heap_evolves says that it keeps its number of
+   elements); and so is a [Block_load] marked [Immutable] or
+   [Immutable_unique], a load of a field that is not written
    (FlambdaPrimitiveSpec.v says what the mark is for). The compiler
    has the second of two such loads stand for the first by another
    road: [Flambda_primitive.unary_primitive_eligible_for_cse] says no
@@ -93,12 +94,29 @@
    in the typing environment what the type of the block and the shape
    that names the variable of the load have in common
    ([Simplify_common.simplify_projection]), where a later load of the
-   field finds that variable. Left out: [Opaque_identity], which
-   Simplify never shares; a [Block_load] marked [Mutable], which is
-   not shared; [String_or_bigstring_load], until the model says
-   which strings cannot change; and the primitives that allocate a
-   block or an array ([Make_block], [Make_immutable_array]), which
-   the compiler does share where what is allocated is immutable.
+   field finds that variable. And so is an [Array_load] marked
+   [Immutable] or [Immutable_unique], the load of an element of an
+   immutable array, which the compiler's sharing takes
+   ([Flambda_primitive.binary_primitive_eligible_for_cse] says yes
+   of it), so that Simplify may make a second load of one element
+   of one array the variable of the first. Such a load has a value
+   on an immutable array and on a symbol bound to one, which nothing
+   writes. It has no value on an array that has an identity, as a
+   [Block_load] so marked has none on a block made [Mutable]: the
+   front end makes one for the reads of an immutable array, and
+   such an array may be a mutable array seen as immutable
+   ([%array_to_iarray], which is the identity); the model refuses
+   that program (FlambdaHeapSpec.exec_binary_on_cell, with its note;
+   decision D49). The sharing rests on that decision as it stands:
+   were such a load to read a cell that a later store may change,
+   in a run that has a meaning, the two loads could differ and it
+   would leave the list. Left out: [Opaque_identity], which Simplify
+   never shares; a [Block_load] and an [Array_load] marked
+   [Mutable], which are not shared; [String_or_bigstring_load],
+   until the model says which strings cannot change; and the
+   primitives that allocate a block or an array ([Make_block],
+   [Make_immutable_array]), which the compiler does share where
+   what is allocated is immutable.
 
    [Box_number] allocates too, and is in the list: a later boxing of
    the same naked number becomes the variable of the first, as in the
@@ -150,6 +168,14 @@ Import ListNotations.
 
 (* The primitives whose result may stand for a later application to the
    same arguments. *)
+(* The last case, the load of an element of an immutable array, rests
+   on decision D49 as it stands: an [Array_load] marked [Immutable]
+   or [Immutable_unique] has no value on an array that has an
+   identity (FlambdaHeapSpec.exec_binary_on_cell), so where the first
+   of two such loads has a value its array is an immutable array or a
+   symbol bound to one, and the second has the same. If that decision
+   comes to give such a load a value on a cell that a later store may
+   change, in a run that has a meaning, the case goes out. *)
 Definition shareable (p : prim) : bool :=
   match p with
   | Unary
@@ -161,6 +187,7 @@ Definition shareable (p : prim) : bool :=
     true
   | Binary (Phys_equal _ | Int_arith _ _ | Int_shift _ _ | Int_comp _ _) =>
     true
+  | Binary (Array_load _ _ (Immutable | Immutable_unique)) => true
   | _ => false
   end.
 

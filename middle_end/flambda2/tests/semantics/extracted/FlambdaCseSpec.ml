@@ -18,7 +18,7 @@ let shareable = function
     | _ -> true)
   | Binary p0 -> (
     match p0 with
-    | Array_load (_, _, _) -> false
+    | Array_load (_, _, mut) -> ( match mut with Mutable -> false | _ -> true)
     | String_or_bigstring_load _ -> false
     | _ -> true)
   | _ -> false
