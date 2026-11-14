@@ -51,7 +51,10 @@ Proof.
     all: match goal with
          | m : mutability |- _ => destruct m
          end; first [ discriminate Hshareable | reflexivity ].
-  - destruct b; try discriminate Hshareable; reflexivity.
+  - destruct b; try discriminate Hshareable; try reflexivity.
+    all: match goal with
+         | m : mutability |- _ => destruct m
+         end; first [ discriminate Hshareable | reflexivity ].
 Qed.
 
 (* ======================================================================== *)
