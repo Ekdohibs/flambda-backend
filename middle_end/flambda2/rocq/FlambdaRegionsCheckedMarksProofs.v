@@ -224,10 +224,21 @@ Lemma within_later (rs : region_state) (stop stop' : option symbol)
   value_within rs stop v = true ->
   value_within rs stop' v = true.
 Proof.
-  intros Hlater. apply value_all_mono. intros s. unfold symbol_within.
-  destruct (heap_symbol rs s); [ reflexivity | ]. cbn [orb].
-  intros H. apply andb_true_iff in H as [-> Hbefore]. cbn [andb].
-  destruct stop' as [b' | ]; [ | reflexivity ].
-  destruct (Hlater b' eq_refl) as (b & -> & Hle). cbn [before] in *.
-  apply Pos.ltb_lt in Hbefore. apply Pos.ltb_lt. lia.
+  intros Hlater.
+  assert (Hbefore :
+    ∀ x : symbol, before stop x = true -> before stop' x = true).
+  { intros x. destruct stop' as [b' | ]; [ | reflexivity ].
+    destruct (Hlater b' eq_refl) as (b & -> & Hle). cbn [before].
+    intros H. apply Pos.ltb_lt in H. apply Pos.ltb_lt. lia. }
+  unfold value_within. intros H.
+  apply andb_true_iff in H as [Hsymbols Hcells]. apply andb_true_iff. split.
+  - revert Hsymbols. apply value_all_mono. intros s. unfold symbol_within.
+    destruct (heap_symbol rs s); [ reflexivity | ]. cbn [orb].
+    intros H. apply andb_true_iff in H as [-> H]. cbn [andb].
+    exact (Hbefore s H).
+  - revert Hcells. apply value_all_cells_mono. intros l. unfold cell_within.
+    destruct (heap_location rs l); [ reflexivity | ]. cbn [orb].
+    destruct (lookup l (rs_cells rs)) as [m | ]; [ | exact (fun H => H) ].
+    intros H. apply andb_true_iff in H as [-> H]. cbn [andb].
+    exact (Hbefore m H).
 Qed.

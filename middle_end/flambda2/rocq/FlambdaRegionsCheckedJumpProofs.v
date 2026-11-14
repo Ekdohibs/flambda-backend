@@ -169,10 +169,14 @@ Definition running_at (rs : region_state) (vars : env) (cs : check_state)
   open_marks vars (cs_open cs) = Some ms
   ∧ marks_placed (rs_frames rs) ms = true
   ∧ check_state_scoped cs = true
+  ∧ (∀ (x : variable) (l : lifetime) (v : value),
+       lookup x (cs_env cs) = Some l ->
+       lookup x vars = Some v ->
+       lifetime_holds rs (cs_open cs) ms None l v)
   ∧ ∀ (x : variable) (l : lifetime) (v : value),
-      lookup x (cs_env cs) = Some l ->
+      lookup x (cs_contents cs) = Some l ->
       lookup x vars = Some v ->
-      lifetime_holds rs (cs_open cs) ms None l v.
+      contents_hold rs (cs_open cs) ms None l v.
 
 (* What a variable that a closure holds was is what it is in the
    handler: the bound that it was within is at most the bound that the
@@ -234,6 +238,36 @@ Proof.
     destruct (Hbefore b' Hb') as [Hin | Hge];
       [ exact (Hleast b' Hin Hlt) | lia ].
   - intros _. exact I.
+Qed.
+
+(* The same of what is read from the variable: each value of the cell
+   is as the lifetime says, in the handler. *)
+Lemma captured_contents (rs : region_state) (vars_c vars' : env)
+    (opens_c opens' : list variable) (ms_c ms' : list mark) (next : symbol)
+    (l : lifetime) (v : value) :
+  Forall2 (marked vars_c) opens_c ms_c ->
+  marks_decrease ms_c = true ->
+  (∀ m : mark, In m ms_c -> (m < next)%positive) ->
+  Forall2 (marked vars') opens' ms' ->
+  marks_decrease ms' = true ->
+  (∀ m : mark, In m ms' -> In m ms_c ∨ (next <= m)%positive) ->
+  (∀ r : variable,
+     l = Of_region r -> In r opens' ->
+     In r opens_c ∧ lookup r vars' = lookup r vars_c) ->
+  contents_hold rs opens_c ms_c (Some next) l v ->
+  contents_hold rs opens' ms' None l v.
+Proof.
+  intros Hmarked_c Hdecrease_c Hbelow Hmarked' Hdecrease' Hbefore Hregion.
+  destruct v;
+    try
+      exact
+        (captured_holds rs vars_c vars' opens_c opens' ms_c ms' next l _
+           Hmarked_c Hdecrease_c Hbelow Hmarked' Hdecrease' Hbefore Hregion).
+  cbn [contents_hold]. intros H c w Hl Hw.
+  exact
+    (captured_holds rs vars_c vars' opens_c opens' ms_c ms' next l w
+       Hmarked_c Hdecrease_c Hbelow Hmarked' Hdecrease' Hbefore Hregion
+       (H c w Hl Hw)).
 Qed.
 
 Lemma bind_entry_params_scoped (he_open regions : list variable)
@@ -298,6 +332,12 @@ Variable cert : certificate.
 Variable codes : list (code_id * code).
 
 Variable rs : region_state.
+
+(* The frames are in the order of their marks, and what a cell holds
+   lives as long as the cell: what is read from a parameter is as the
+   lifetime of the parameter says. *)
+Hypothesis Hordered : frames_ordered rs = true.
+Hypothesis Hcells_deep : cells_deep rs = true.
 
 (* Who jumps: a state of the check and a user. The open regions of
    the state are bound, for the user, to its marks, which are on the
@@ -381,7 +421,7 @@ Proof.
     recursive0.
   destruct Hmade
     as (Hconts_eq & Hrec_check & Hrec_incl & Hscoped & Hopen_c & Hdecrease_c
-        & Hbelow_c & Hnext & Hheld & Hbefore & Hregions).
+        & Hbelow_c & Hnext & Hheld & Hheld_contents & Hbefore & Hregions).
   pose proof (proj1 (open_marks_marked _ _ _) Hopen_c) as Hmarked_c.
   apply Pos.leb_le in Hnext.
   unfold entry_fits in Hfits.
@@ -393,6 +433,8 @@ Proof.
   apply Nat.eqb_eq in Hlen_kinds, Hlen_wanted.
   pose proof Hscoped as Hscoped'.
   apply andb_true_iff in Hscoped' as [Hopen_regions Henv_scoped].
+  rewrite forallb_app in Henv_scoped.
+  apply andb_true_iff in Henv_scoped as [Henv_scoped Hcontents_scoped].
   destruct (region_args_spec cs_F params _ args given Hregion)
     as (_ & Hlen_args & Hkeys & Hregion_nth).
   destruct (bind_params_nth params vs vars_c vars' Hdistinct Hbind)
@@ -487,7 +529,7 @@ Proof.
       | ].
     split.
     + unfold check_state_scoped, handler_state.
-      cbn [cs_open cs_regions cs_env].
+      cbn [cs_open cs_regions cs_env cs_contents].
       assert (Hopen_in :
         ∀ r : variable,
           among r (he_open entry) = true ->
@@ -501,13 +543,27 @@ Proof.
           [ rewrite H; reflexivity | ].
         rewrite (all_among_among _ _ r Hopen_regions H). apply orb_true_r. }
       apply andb_true_iff. split; [ apply all_among_iff; exact Hopen_in | ].
-      apply bind_entry_params_scoped; [ exact Hopen_in | ].
-      revert Henv_scoped. apply forallb_impl.
-      intros [x [ | | r | ]] _; try (intros _; reflexivity).
-      intros H. rewrite among_app, H. apply orb_true_r.
-    + intros x l v Hl Hv. cbn [handler_state cs_env cs_open] in *.
-      destruct (among x params) eqn:Hx.
-      * apply among_In in Hx. destruct (In_nth_error params x Hx) as [i Hi].
+      rewrite forallb_app. apply andb_true_iff.
+      split; (apply bind_entry_params_scoped; [ exact Hopen_in | ]).
+      * revert Henv_scoped. apply forallb_impl.
+        intros [x [ | | r | ]] _; try (intros _; reflexivity).
+        intros H. rewrite among_app, H. apply orb_true_r.
+      * revert Hcontents_scoped. apply forallb_impl.
+        intros [x [ | | r | ]] _; try (intros _; reflexivity).
+        intros H. rewrite among_app, H. apply orb_true_r.
+    + (* A parameter is as its lifetime says, over any lifetimes. *)
+      assert (Hparam :
+        ∀ (env0 : list (variable * lifetime)) (x : variable) (l : lifetime)
+          (v : value),
+          among x params = true ->
+          lookup x
+            (bind_entry_params (he_open entry) params
+               (hm_params_kinds metadata) (he_params entry) env0)
+          = Some l ->
+          lookup x vars' = Some v ->
+          lifetime_holds rs (he_open entry) ms' None l v).
+      { intros env0 x l v Hx Hl Hv.
+        apply among_In in Hx. destruct (In_nth_error params x Hx) as [i Hi].
         destruct (nth_error_same_length params _ (eq_sym Hlen_kinds) i x Hi)
           as (kind & Hkind_i).
         destruct (nth_error_same_length params (he_params entry)
@@ -517,7 +573,7 @@ Proof.
           as ([s l_i] & Harg).
         destruct (nth_error_same_length params vs (eq_sym Hlen_vs) i x Hi)
           as (v_i & Hv_i).
-        rewrite (bind_entry_params_nth (he_open entry) params _ _ (cs_env cs)
+        rewrite (bind_entry_params_nth (he_open entry) params _ _ env0
                    i x kind w Hdistinct Hi Hkind_i Hw)
           in Hl.
         injection Hl as <-.
@@ -538,8 +594,28 @@ Proof.
                       Hmarked' Hnodup Hnamed_holds)
           as Hw_holds.
         destruct w as [ | | r | ]; try exact Hw_holds.
-        destruct (among r (he_open entry)); [ exact Hw_holds | exact I ].
-      * rewrite (bind_entry_params_other (he_open entry) x params _ _
+        destruct (among r (he_open entry)); [ exact Hw_holds | exact I ]. }
+      (* The region that a lifetime of the closure names, if the
+         handler is entered with it, was open where the closure was
+         made, and is bound as it was. *)
+      assert (Hcaptured_region :
+        ∀ r : variable,
+          among r (cs_regions cs) = true ->
+          In r (he_open entry) ->
+          In r (cs_open cs) ∧ lookup r vars' = lookup r vars_c).
+      { intros r Hregion_r Hin.
+        pose proof (forallb_in _ _ r Hentry_open Hin) as Hr.
+        apply orb_true_iff in Hr as [Hr | Hr].
+        - apply among_In in Hr. apply region_params_of_among in Hr.
+          apply among_In in Hr. rewrite (Hparam_not_region r Hr) in Hregion_r.
+          discriminate.
+        - split; [ apply among_In; exact Hr | ].
+          exact (proj1 (Hagree r Hregion_r)). }
+      split.
+      * intros x l v Hl Hv. cbn [handler_state cs_env cs_open] in *.
+        destruct (among x params) eqn:Hx;
+          [ exact (Hparam (cs_env cs) x l v Hx Hl Hv) | ].
+        rewrite (bind_entry_params_other (he_open entry) x params _ _
                    (cs_env cs) Hx)
           in Hl.
         rewrite (bind_params_lookup_other x params vs vars_c vars' Hx Hbind)
@@ -560,13 +636,36 @@ Proof.
              x (Of_region r) (cs_env cs) Henv_scoped Hl)
           as Hregion_r.
         cbv beta iota in Hregion_r.
-        pose proof (forallb_in _ _ r Hentry_open Hin) as Hr.
-        apply orb_true_iff in Hr as [Hr | Hr].
-        -- apply among_In in Hr. apply region_params_of_among in Hr.
-           apply among_In in Hr. rewrite (Hparam_not_region r Hr) in Hregion_r.
-           discriminate.
-        -- split; [ apply among_In; exact Hr | ].
-           exact (proj1 (Hagree r Hregion_r)).
+        exact (Hcaptured_region r Hregion_r Hin).
+      * intros x l v Hl Hv. cbn [handler_state cs_contents cs_open] in *.
+        destruct (among x params) eqn:Hx.
+        -- apply (holds_contents rs (he_open entry) ms' l v Hordered
+                    Hcells_deep
+                    (selection_placed (rs_frames rs) ms' (u_marks u) Hsel
+                       Hplaced)).
+           exact (Hparam (cs_contents cs) x l v Hx Hl Hv).
+        -- rewrite (bind_entry_params_other (he_open entry) x params _ _
+                      (cs_contents cs) Hx)
+             in Hl.
+           rewrite (bind_params_lookup_other x params vs vars_c vars' Hx Hbind)
+             in Hv.
+           apply (captured_contents rs vars_c vars' (cs_open cs)
+                    (he_open entry) ms ms' next l v Hmarked_c Hdecrease_c
+                    (fun m => forallb_ltb_in next ms m Hbelow_c) Hmarked'
+                    Hdecrease' Hbefore');
+             [ | exact (Hheld_contents x l v Hl Hv) ].
+           intros r -> Hin.
+           pose proof
+             (lookup_forallb
+                (fun l =>
+                   match l with
+                   | Of_region r => among r (cs_regions cs)
+                   | Forever | Of_caller | Gone => true
+                   end)
+                x (Of_region r) (cs_contents cs) Hcontents_scoped Hl)
+             as Hregion_r.
+           cbv beta iota in Hregion_r.
+           exact (Hcaptured_region r Hregion_r Hin).
   - cbn [handler_state cs_conts cs_regions].
     set (u' :=
       User vars'
@@ -578,7 +677,7 @@ Proof.
       split; [ exact Hopen_c | ]. split; [ exact Hdecrease_c | ].
       split; [ exact Hbelow_c | ].
       split; [ apply Pos.leb_le; cbn [u_limit u']; lia | ].
-      split; [ exact Hheld | ]. split.
+      split; [ exact Hheld | ]. split; [ exact Hheld_contents | ]. split.
       - intros m Hin Hlt. cbn [u_marks u'] in Hin. apply Pos.ltb_lt in Hlt.
         destruct (Hbefore' m Hin) as [H | H]; [ exact H | lia ].
       - exact Hagree. }

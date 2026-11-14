@@ -37,8 +37,7 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaPrimitiveModel
   FlambdaValueSpec FlambdaPrimitiveSpec FlambdaPrimitiveProofs
   FlambdaHeapProofs FlambdaSemanticsSpec FlambdaSemanticsProofs
   FlambdaClosuresProofs FlambdaRegionsSpec FlambdaRegionsProofs
-  FlambdaRegionsNeedsHeapProofs FlambdaRegionsReadsProofs
-  FlambdaRegionsStepsProofs
+  FlambdaRegionsReadsProofs FlambdaRegionsStepsProofs
   FlambdaRegionsFreshProofs FlambdaRegionsInvariantSpec
   FlambdaRegionsInvariantProofs FlambdaRegionsErasureSpec
   FlambdaRegionsCallsSpec FlambdaRegionsCheckSpec FlambdaRegionsCheckedSpec.
@@ -104,6 +103,8 @@ Hypothesis Hdeep : frames_deep rs (rs_frames rs) = true.
 
 Hypothesis Hstatics : statics_deep rs = true.
 
+Hypothesis Hcells : cells_deep rs = true.
+
 Hypothesis Hgood_vars :
   env_values_all (good cert codes rs) (state_vars (rs_state rs)).
 
@@ -113,6 +114,9 @@ Hypothesis Hgood_conts :
 Hypothesis Hgood_statics :
   Forall (fun binding => allocated_values (good cert codes rs) (snd binding))
     (static_values (live_statics rs)).
+
+Hypothesis Hgood_heap :
+  heap_values_all (good cert codes rs) (state_heap (rs_state rs)).
 
 Hypothesis Hcheck :
   check_expr cert codes cs (state_expr (rs_state rs)) = true.
@@ -209,10 +213,9 @@ Proof.
   unfold FlambdaRegionsSpec.simple_usable in Hunusable.
   destruct (eval_simple vars s) as [v | ] eqn:Hv; [ | discriminate ].
   rewrite
-    (live_usable rs v
-       (value_within_live rs None v
-          (running_usable_within rs cs ms s v Hrun (Hb s Hin)
-             (forallb_in _ _ s Hu Hin) Hv)))
+    (within_usable rs None v
+       (running_usable_within rs cs ms s v Hrun (Hb s Hin)
+          (forallb_in _ _ s Hu Hin) Hv))
     in Hunusable.
   discriminate.
 Qed.
@@ -239,7 +242,7 @@ Lemma group_conts
     (map (fun '(k, h) => (k, Closure h vars conts recursive)) group ++ conts).
 Proof.
   intros csr Hgroup Hgroup_incl Hrec.
-  pose proof Hrun as (Hopen & Hplaced & Hscoped & Hvalues).
+  pose proof Hrun as (Hopen & Hplaced & Hscoped & Hvalues & Hcontents).
   destruct Hconts as [Hsome Hnone].
   assert (Hmade :
     made_at cert codes rs (running_user rs cs ms) vars recursive csr
@@ -255,6 +258,10 @@ Proof.
     split;
       [ intros x l v Hl Hv;
         exact (holds_next rs _ _ l v Hfresh (Hvalues x l v Hl Hv))
+      | ].
+    split;
+      [ intros x l v Hl Hv;
+        exact (contents_next rs _ _ l v Hfresh (Hcontents x l v Hl Hv))
       | ].
     split; [ intros m Hin _; exact Hin | ].
     intros r Hr. split; [ reflexivity | exact Hr ]. }
@@ -409,7 +416,7 @@ Proof.
          | (Hmark & params & metadata & handler & def_vars & def_conts
             & recursive & handler_vars & Hc & Hbind & ->)].
     + destruct (applied_all cert codes rs Hfresh Hcode Hlocal Hdeep Hstatics
-                  Hgood_statics (state_heap (rs_state rs))
+                  Hordered Hcells Hgood_statics (state_heap (rs_state rs))
                   (state_reads (rs_state rs)))
         as (Hcont_all & _ & _).
       exact
@@ -425,9 +432,9 @@ Proof.
         destruct (region_args cs params (hm_params_kinds metadata) _)
           as [given | ] eqn:Hregion; [ | discriminate ].
         apply andb_true_iff in Hjump as [Horder Hvalues].
-        destruct (enter_handler cert codes rs cs _ _ _ _ _ _ _ _ _ vs
-                    handler_vars given running_frame Hok Hregion Horder
-                    Hvalues Hargs Hbind)
+        destruct (enter_handler cert codes rs Hordered Hcells cs _ _ _ _ _ _
+                    _ _ _ vs handler_vars given running_frame Hok Hregion
+                    Horder Hvalues Hargs Hbind)
           as (cs' & ms' & Hcheck' & Hincl' & Hrun' & Hconts').
         destruct Hgood_c as [Hgood_def Hgood_dconts].
         exists cs', ms'. cbn [state_expr state_vars state_conts].
@@ -480,6 +487,7 @@ Lemma region_apply_cont_entered (ac : apply_cont) (rs' : region_state) :
     rs'
     = Region_state (with_statics s' (state_statics (rs_state rs)))
         (rs_frames rs) (rs_base rs) (rs_next rs) (rs_counts rs)
+        (rs_cells rs)
     ∧ entered s'.
 Proof.
   intros He Hmark Hstep. unfold region_apply_cont in Hstep. cbv zeta in Hstep.
@@ -545,7 +553,7 @@ Proof.
   pose proof running_caller_ok as Hcaller.
   destruct Hconts as [Hsome Hnone].
   destruct (applied_all cert codes rs Hfresh Hcode Hlocal Hdeep Hstatics
-              Hgood_statics (state_heap (rs_state rs))
+              Hordered Hcells Hgood_statics (state_heap (rs_state rs))
               (state_reads (rs_state rs)))
     as (_ & Hret_all & _).
   assert (Hret :
@@ -595,14 +603,15 @@ Proof.
   destruct (ap_call_kind ap) as [id | ] eqn:Hkind.
   - exact
       (call_direct cert codes rs Hfresh Hcode Hlocal Hdeep Hstatics
-         Hgood_statics _ rd_ a id callee _ _ vs _ _ _ _ result s' Hcaller
-         Hcallee_good Hcallee_holds (simples_good _ _ Hvs) Hargs Hresult Hret
-         Hraise Hreturns Hgood_ret Hgood_exn Hstep).
+         Hordered Hcells Hgood_statics _ _ a id callee _ _ vs _ _ _ _ result
+         s' Hcaller Hcallee_good Hcallee_holds (simples_good _ _ Hvs) Hargs
+         Hresult Hret Hraise Hreturns Hgood_ret Hgood_exn Hstep).
   - exact
       (call_unknown cert codes rs Hfresh Hcode Hlocal Hdeep Hstatics
-         Hgood_statics _ rd_ a callee _ _ vs _ _ _ _ result s' Hcaller
-         Hcallee_good Hcallee_live Hcallee_holds (simples_good _ _ Hvs) Hargs
-         Hresult Hret Hraise Hreturns Hgood_ret Hgood_exn Hstep).
+         Hordered Hcells Hgood_statics _ _ a callee _ _ vs _ _ _ _ result s'
+         Hcaller Hcallee_good Hcallee_live Hcallee_holds
+         (simples_good _ _ Hvs) Hargs Hresult Hret Hraise Hreturns Hgood_ret
+         Hgood_exn Hstep).
 Qed.
 
 (* ======================================================================== *)
@@ -613,18 +622,16 @@ Lemma let_entered (x : variable) (kind : flambda_kind) (d : named)
     (body : expr) (s' : state) :
   state_expr (rs_state rs) = Let x kind d body ->
   region_named d = false ->
-  named_needs_heap (state_vars (rs_state rs)) d = false ->
+  named_changes_heap d = false ->
   marker_of x body = No_marker ->
   step (with_statics (rs_state rs) (live_statics rs)) = Step s' ->
   entered s'.
 Proof.
-  intros He Hd Hneeds Hmarker Hstep.
+  intros He Hd Hsame Hmarker Hstep.
   unfold with_statics in Hstep. rewrite He, step_let_exec in Hstep.
-  destruct (exec_named _ _ _ _ d) as [[[v hp'] rd'] | ] eqn:Hexec;
+  destruct (exec_named _ _ _ _ d) as [[[v hp'] rd'] | ] eqn:Hv;
     [ | discriminate ].
   destruct (kind_eqb (kind_of_value v) kind); [ | discriminate ].
-  destruct (exec_named_needs_no_heap_some _ _ _ _ _ _ _ _ Hneeds Hexec)
-    as (Hv & -> & ->).
   injection Hstep as <-.
   pose proof Hcheck as Hc. rewrite He in Hc.
   rewrite (check_expr_let cert codes cs x kind d body Hd) in Hc.
@@ -640,47 +647,50 @@ Proof.
     ∀ s : simple,
       In s (simples_of_named d) -> simple_below (rs_base rs) s = true).
   { intros s Hin. apply head_below. rewrite He, Hsimples. exact Hin. }
-  pose proof Hrun as (Hopen & Hplaced & Hscoped & Hvalues).
+  pose proof Hrun as (Hopen & Hplaced & Hscoped & Hvalues & Hcontents).
   pose proof (not_region_not_open cs x Hscoped Hx) as Hx_open.
   assert (Hx_region : among x (cs_regions cs) = false)
     by (unfold not_a_region in Hx; apply negb_true_iff in Hx; exact Hx).
-  pose proof Hscoped as Hscoped'.
-  apply andb_true_iff in Hscoped' as [Hs1 Hs2].
+  destruct (scoped_parts cs Hscoped) as [Hs_env Hs_contents].
   assert (Hbound :
-    ∀ l : lifetime,
+    ∀ l lc : lifetime,
       lifetime_holds rs (cs_open cs) ms None l v ->
+      contents_hold rs (cs_open cs) ms None lc v ->
       (∀ r : variable, l = Of_region r -> among r (cs_regions cs) = true) ->
+      (∀ r : variable, lc = Of_region r -> among r (cs_regions cs) = true) ->
       good v ->
-      check_expr cert codes (bind_lifetime x l cs) body = true ->
+      check_expr cert codes (bind_lifetimes x l lc cs) body = true ->
       entered
-        (State body ((x, v) :: vars) conts (live_statics rs)
-           (state_heap (rs_state rs)) (state_reads (rs_state rs)))).
-  { intros l Hholds Hregion Hgood_v Hbody.
-    exists (bind_lifetime x l cs), ms. cbn
-      [state_expr state_vars state_conts].
+        (State body ((x, v) :: vars) conts (live_statics rs) hp' rd')).
+  { intros l lc Hholds Hcontents_v Hregion Hregion_c Hgood_v Hbody.
+    exists (bind_lifetimes x l lc cs), ms.
+    cbn [state_expr state_vars state_conts].
     split; [ exact Hbody | ]. split; [ exact Hi | ]. split.
     - split;
         [ change (open_marks ((x, v) :: vars) (cs_open cs) = Some ms);
           rewrite (open_marks_bind vars x v _ Hx_open); exact Hopen
         | ].
-      split; [ exact Hplaced | ]. split.
-      + unfold check_state_scoped.
-        apply andb_true_iff. split; [ exact Hs1 | ].
-        cbn [bind_lifetime cs_env cs_regions forallb].
-        apply andb_true_iff. split; [ | exact Hs2 ].
-        destruct l as [ | | r | ]; try reflexivity. exact (Hregion r eq_refl).
-      + intros y l0 w. cbn [bind_lifetime cs_env cs_open]. rewrite
-        !lookup_cons.
+      split; [ exact Hplaced | ].
+      split;
+        [ exact (bind_lifetimes_scoped cs x l lc Hscoped Hregion Hregion_c) | ].
+      split.
+      + intros y l0 w. cbn [bind_lifetimes cs_env cs_open].
+        rewrite !lookup_cons.
         destruct (Pos.eqb y x);
           [ intros [= <-] [= <-]; exact Hholds | exact (Hvalues y l0 w) ].
+      + intros y l0 w. cbn [bind_lifetimes cs_contents cs_open].
+        rewrite !lookup_cons.
+        destruct (Pos.eqb y x);
+          [ intros [= <-] [= <-]; exact Hcontents_v
+          | exact (Hcontents y l0 w) ].
     - split.
       + destruct Hconts as [Hsome Hnone]. split; [ | exact Hnone ].
         intros k ce Hk.
         apply (user_conts cert codes rs (running_user rs cs ms));
           [ | exact (Hsome k ce Hk) ].
         split; [ | split ].
-        * intros r Hr. cbn [u_vars u_regions running_user bind_lifetime
-                              cs_regions].
+        * intros r Hr.
+          cbn [u_vars u_regions running_user bind_lifetimes cs_regions].
           split; [ | exact Hr ].
           rewrite lookup_cons.
           destruct (Pos.eqb r x) eqn:Hrx; [ | reflexivity ].
@@ -692,19 +702,38 @@ Proof.
       + split; [ apply Forall_cons; [ exact Hgood_v | exact Hgood_vars ] | ].
         exact Hgood_conts. }
   destruct (is_allocation d) eqn:Halloc.
-  - apply andb_true_iff in Hrest as [Hforever Hbody].
-    destruct (made_good cert codes rs vars cs ms Hrun Hgood_vars d v Halloc Hb
-                Hforever Hv)
+  - cbn [orb] in Hrest. apply andb_true_iff in Hrest as [Hforever Hbody].
+    destruct (exec_named_makes _ _ _ _ _ _ _ _ Halloc Hv) as [Heval _].
+    destruct (made_good cert codes rs vars cs ms Hrun Hgood_vars d v Halloc
+                Hb Hforever Heval)
       as [Hgood_v Hheap].
-    apply (Hbound Forever Hheap);
-      [ intros r H; discriminate H | exact Hgood_v | exact Hbody ].
-  - apply (Hbound (named_lifetime cs d)).
-    + exact (named_holds rs Hfresh Hordered Hdeep Hstatics vars cs ms Hrun d v
-               Halloc Hb Hv).
-    + intros r Hr. exact (named_scoped cs d r Hs2 Hr).
-    + exact (named_good cert codes rs Hgood_statics vars Hgood_vars d v Halloc
-               Hv).
-    + exact Hrest.
+    apply (Hbound Forever Forever);
+      [ exact Hheap
+      | exact
+          (holds_contents rs _ ms Forever v Hordered Hcells Hplaced Hheap)
+      | intros r H; discriminate H
+      | intros r H; discriminate H
+      | exact Hgood_v
+      | exact Hbody ].
+  - assert (Hcell : is_cell_allocation d = false).
+    { destruct (is_cell_allocation d) eqn:H; [ | reflexivity ].
+      rewrite (cell_allocation_changes_heap d H) in Hsame. discriminate. }
+    rewrite Hcell in Hrest. cbn [orb] in Hrest.
+    apply andb_true_iff in Hrest as [_ Hbody].
+    apply (Hbound (named_lifetime cs d) (named_contents cs d)).
+    + exact
+        (named_holds rs Hfresh Hordered Hdeep Hstatics Hcells vars cs ms Hrun
+           d v _ _ _ Halloc Hsame Hb Hv).
+    + exact
+        (named_contents_hold rs Hfresh Hordered Hdeep Hstatics Hcells vars cs
+           ms Hrun d v _ _ _ Halloc Hsame Hb Hv).
+    + intros r Hr. exact (named_scoped cs d r Hs_env Hs_contents Hr).
+    + intros r Hr.
+      exact (named_contents_scoped cs d r Hs_env Hs_contents Hr).
+    + exact
+        (named_good cert codes rs Hgood_statics Hgood_heap vars Hgood_vars d
+           v _ _ _ Halloc Hsame Hv).
+    + exact Hbody.
 Qed.
 
 End Same.

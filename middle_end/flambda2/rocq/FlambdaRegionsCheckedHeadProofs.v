@@ -108,7 +108,7 @@ Proof.
     { unfold FlambdaRegionsSpec.simple_usable.
       destruct (eval_simple (state_vars (rs_state rs)) s) as [v | ];
         [ | reflexivity ].
-      exact (live_usable rs v (value_within_live rs None v (Hs v eq_refl))). }
+      exact (within_usable rs None v (Hs v eq_refl)). }
     rewrite Husable. exact (IH _ Hrest).
 Qed.
 

@@ -297,6 +297,7 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   FlambdaRecoverComparisonSpec.v \
   FlambdaRegionsCallsProofs.v \
   FlambdaRegionsCallsSpec.v \
+  FlambdaRegionsCellsProofs.v \
   FlambdaRegionsCheckProofs.v \
   FlambdaRegionsCheckSoundProofs.v \
   FlambdaRegionsCheckSoundSpec.v \
@@ -334,8 +335,6 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   FlambdaRegionsFreshProofs.v \
   FlambdaRegionsInvariantProofs.v \
   FlambdaRegionsInvariantSpec.v \
-  FlambdaRegionsNeedsHeapProofs.v \
-  FlambdaRegionsNoHeapPrimitiveProofs.v \
   FlambdaRegionsNoPoisonProofs.v \
   FlambdaRegionsNoStepProofs.v \
   FlambdaRegionsOnceProofs.v \

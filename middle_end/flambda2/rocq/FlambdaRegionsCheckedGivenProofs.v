@@ -82,7 +82,7 @@ Lemma checked_gives_regions (cert : certificate)
   state_checked cert codes rs -> regions_given rs = true.
 Proof.
   intros
-    (_ & _ & _ & _ & _ & _ & _ & _ & cs & ms & Hcheck & _ & _ & Hconts
+    (_ & _ & _ & _ & _ & _ & _ & _ & _ & cs & ms & Hcheck & _ & _ & Hconts
      & Houter).
   unfold regions_given.
   destruct (state_expr (rs_state rs))

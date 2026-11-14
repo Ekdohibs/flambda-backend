@@ -28,8 +28,9 @@
 (* Lemmas for the proofs of the statements of
    FlambdaRegionsInvariantSpec.v: the values that a value, and what a
    symbol is bound to, hold directly; what a named expression that
-   does not allocate reads; what an allocation and a static constant
-   make. Nothing here needs review. *)
+   does not allocate reads, by [eval_named] and on a heap; what an
+   allocation and a static constant make; what a primitive of the heap
+   leaves in the heap. Nothing here needs review. *)
 
 From Stdlib Require Import ZArith List Bool Arith Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
@@ -38,6 +39,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaPrimitiveProofs FlambdaSemanticsSpec FlambdaSemanticsProofs
   FlambdaClosuresProofs FlambdaRegionsSpec FlambdaRegionsProofs
   FlambdaRegionsInvariantSpec.
+From OxCamlFlambda2 Require FlambdaHeapProofs.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -278,6 +280,202 @@ Lemma is_number_of_kind_no_region_poison (kind : boxable_number)
     (c : const) :
   is_number_of_kind kind c = true -> const_no_region_poison c = true.
 Proof. destruct c; try reflexivity. destruct kind; discriminate. Qed.
+
+(* The field that a [Block_load] reads from a cell is one of its
+   fields. *)
+Lemma load_field_in (kind : block_access_kind) (field : Z) (tag : Z)
+    (fields : list value) (v : value) :
+  load_field kind field tag fields = Some v -> In v fields.
+Proof.
+  unfold load_field. destruct kind as [ktag size field_kind].
+  destruct
+    (known_is ktag tag && known_is size (Z.of_nat (length fields))
+     && (0 <=? field)%Z);
+    [ | discriminate ].
+  destruct (nth_error fields (Z.to_nat field)) as [loaded | ] eqn:Hnth;
+    [ | discriminate ].
+  simpl.
+  destruct
+    (match field_kind with
+     | Any_value => kind_eqb (kind_of_value loaded) Value
+     | Immediate => is_tagged_immediate loaded
+     end);
+    [ | discriminate ].
+  intros [= <-]. exact (nth_error_In _ _ Hnth).
+Qed.
+
+(* Where the value of a primitive that is not of the heap comes from,
+   on a heap: it is the value that [eval_prim] gives; or a value of the
+   cell of the location that is the first argument of a load, of a
+   block or of an array; or the location that is the argument of an
+   [Opaque_identity]; or a constant that is not the poison of the kind
+   [Region]. *)
+Lemma exec_prim_reads_cases (statics : static_env) (hp hp' : heap) (p : prim)
+    (vs : list value) (v : value) :
+  (∀ q : heap_primitive, p <> Heap q) ->
+  exec_prim statics hp p vs = Some (v, hp') ->
+  eval_prim statics p vs = Some v
+  ∨ (∃ (l : location) (c : cell),
+      lookup l hp = Some c
+      ∧ In v (values_of_cell c)
+      ∧ ((∃ (access : block_access_kind) (mut : mutability) (field : Z),
+           p = Unary (Block_load access mut field)
+           ∧ vs = [Value_location l])
+         ∨ (∃ (kind : array_kind) (load_kind : array_load_kind)
+              (mut : mutability) (v2 : value),
+             p = Binary (Array_load kind load_kind mut)
+             ∧ vs = [Value_location l; v2])))
+  ∨ (∃ (l : location) (kind : flambda_kind),
+      v = Value_location l
+      ∧ p = Unary (Opaque_identity kind)
+      ∧ vs = [Value_location l])
+  ∨ (∃ c : const, v = Value_const c ∧ const_no_region_poison c = true).
+Proof.
+  intros Hnot. unfold exec_prim.
+  destruct (forallb (argument_bound statics hp) vs); [ | discriminate ].
+  assert (Hpure :
+    (let* v0 := eval_prim statics p vs in Some (v0, hp)) = Some (v, hp') ->
+    eval_prim statics p vs = Some v).
+  { destruct (eval_prim statics p vs) as [v0 | ]; [ | discriminate ].
+    simpl. intros [= <- _]. reflexivity. }
+  unfold exec_bound_prim.
+  destruct p as [u | b | variadic | q | rp].
+  - destruct vs as [ | v1 [ | v2 rest]];
+      try (intros H; left; exact (Hpure H));
+      try (destruct v1; intros H; left; exact (Hpure H)).
+    destruct v1 as [ | | | | | | | l | ];
+      try (intros H; left; exact (Hpure H)).
+    destruct (lookup l hp) as [c | ] eqn:Hl; [ | discriminate ]. simpl.
+    destruct (exec_unary_on_cell u l c) as [v0 | ] eqn:Hu;
+      [ | discriminate ].
+    simpl. intros [= <- _]. unfold exec_unary_on_cell in Hu.
+    destruct c as [mut tag fields | kind elements].
+    + destruct u; try discriminate Hu.
+      * destruct (load_allowed mut0 mut); [ | discriminate Hu ].
+        right. left. exists l, (Cell_block mut tag fields).
+        split; [ exact Hl | ].
+        split; [ exact (load_field_in _ _ _ _ _ Hu) | ].
+        left. eexists _, _, _. split; reflexivity.
+      * injection Hu as <-. right. right. right.
+        eexists. split; reflexivity.
+      * injection Hu as <-. right. right. right.
+        eexists. split; reflexivity.
+      * injection Hu as <-. right. right. right.
+        eexists. split; reflexivity.
+      * destruct (kind_eqb kind Value); [ | discriminate Hu ].
+        injection Hu as <-. right. right. left. exists l, kind.
+        split; [ reflexivity | split; reflexivity ].
+    + destruct u; try discriminate Hu.
+      * destruct variant_only; [ discriminate Hu | ].
+        injection Hu as <-. right. right. right.
+        eexists. split; reflexivity.
+      * injection Hu as <-. right. right. right.
+        eexists. split; reflexivity.
+      * unfold array_length_of in Hu.
+        destruct
+          (in_range (int_width Standard_tagged_immediate)
+             (Z.of_nat (length elements)));
+          [ | discriminate Hu ].
+        injection Hu as <-. right. right. right.
+        eexists. split; reflexivity.
+      * destruct (kind_eqb kind0 Value); [ | discriminate Hu ].
+        injection Hu as <-. right. right. left. exists l, kind0.
+        split; [ reflexivity | split; reflexivity ].
+  - assert (Hcell :
+      ∀ (b : binary_primitive) (v2 : value) (l : location),
+        (let* c := lookup l hp in
+         let* v0 := exec_binary_on_cell b l c v2 in
+         Some (v0, hp))
+        = Some (v, hp') ->
+        ∃ c : cell,
+          lookup l hp = Some c
+          ∧ In v (values_of_cell c)
+          ∧ ∃ (kind : array_kind) (load_kind : array_load_kind)
+              (mut : mutability),
+              b = Array_load kind load_kind mut).
+    { intros b0 v2 l H.
+      destruct (lookup l hp) as [c | ] eqn:Hl; [ | discriminate ].
+      simpl in H.
+      destruct (exec_binary_on_cell b0 l c v2) as [v0 | ] eqn:Hb;
+        [ | discriminate ].
+      simpl in H. injection H as <- _. exists c.
+      split; [ reflexivity | ].
+      unfold exec_binary_on_cell in Hb.
+      destruct c as [mut tag fields | kind elements];
+        [ discriminate Hb | ].
+      destruct b0; try discriminate Hb.
+      destruct (load_allowed mut Cell_mutable); [ | discriminate Hb ].
+      split; [ exact (proj1 (array_loaded_element _ _ _ _ Hb)) | ].
+      eexists _, _, _. reflexivity. }
+    destruct b as [kind load_kind mut | width | op | kind op | kind op
+                  | kind behaviour];
+      destruct vs as [ | v1 [ | v2 [ | v3 rest]]];
+      try (intros H; left; exact (Hpure H));
+      try (destruct v1; intros H; left; exact (Hpure H));
+      try (destruct v1 as [ | | | | | | | l | ];
+           try (intros H; left; exact (Hpure H));
+           intros H;
+           destruct (Hcell _ _ l H) as (c0 & Hl0 & Hv0 & k0 & lk0 & m0 & Hb0);
+           right; left; exists l, c0;
+           split; [ exact Hl0 | ]; split; [ exact Hv0 | ];
+           right; exists k0, lk0, m0, v2;
+           split; [ f_equal; exact Hb0 | reflexivity ]).
+    destruct v1;
+      (destruct (is_location _ || is_location v2);
+       [ destruct (eval_phys_equal_location statics _ v2) as [same | ];
+         [ | discriminate ];
+         simpl; intros [= <- _]; right; right; right; eexists;
+         split; reflexivity
+       | intros H; left; exact (Hpure H) ]).
+  - intros H. left. exact (Hpure H).
+  - contradiction (Hnot q eq_refl).
+  - intros H. left. exact (Hpure H).
+Qed.
+
+(* What a primitive of the heap gives: a location that the heap does
+   not bind, or the unit value. *)
+Lemma exec_prim_heap_value (statics : static_env) (hp hp' : heap)
+    (q : heap_primitive) (vs : list value) (v : value) :
+  exec_prim statics hp (Heap q) vs = Some (v, hp') ->
+  v = Value_location (fresh_location hp) ∨ v = unit_value.
+Proof.
+  intros Hexec.
+  destruct (FlambdaHeapProofs.exec_prim_adds _ _ _ _ _ _ Hexec)
+    as [(c & _ & -> & _) | (l & rest & new & c & c' & i & _ & _ & _ & -> & _)].
+  - left. reflexivity.
+  - right. reflexivity.
+Qed.
+
+(* And what it leaves in the heap: a property that holds of the values
+   of the heap and of the arguments holds of the values of the heap
+   after. *)
+Lemma exec_prim_heap_cells (Q : value -> Prop) (statics : static_env)
+    (hp hp' : heap) (p : prim) (vs : list value) (v : value) :
+  heap_values_all Q hp ->
+  (∀ arg : value, In arg vs -> Q arg) ->
+  exec_prim statics hp p vs = Some (v, hp') ->
+  heap_values_all Q hp'.
+Proof.
+  intros Hcells Hargs Hexec.
+  assert (Hcases :
+    (∃ q : heap_primitive, p = Heap q) ∨ (∀ q : heap_primitive, p <> Heap q)).
+  { destruct p; first [ left; eexists; reflexivity | right; discriminate ]. }
+  destruct Hcases as [(q & ->) | Hnot].
+  - destruct (FlambdaHeapProofs.exec_prim_adds _ _ _ _ _ _ Hexec)
+      as [(c & Hvalues & _ & ->)
+         | (l & rest & new & c & c' & i & -> & Hl & Hwith & _ & ->)].
+    + intros l0 c0 w [[= <- <-] | Hin] Hw.
+      * rewrite Hvalues in Hw. exact (Hargs w Hw).
+      * exact (Hcells l0 c0 w Hin Hw).
+    + intros l0 c0 w [[= <- <-] | Hin] Hw.
+      * destruct (FlambdaHeapProofs.cell_with_values _ _ _ _ w Hwith Hw)
+          as [-> | Hold].
+        -- apply Hargs. right. apply in_or_app. right. left. reflexivity.
+        -- exact (Hcells l c w (lookup_in _ _ _ Hl) Hold).
+      * exact (Hcells l0 c0 w Hin Hw).
+  - rewrite (FlambdaHeapProofs.exec_prim_heap _ _ _ _ _ _ Hnot Hexec).
+    exact Hcells.
+Qed.
 
 (* A property of values that holds of the constants which are not the
    poison of the kind [Region], of the values that a value with the
@@ -565,7 +763,160 @@ Proof.
          (Hsimples closure cv (or_introl eq_refl) Hclosure)).
 Qed.
 
+(* The same on a heap, of a named expression that is not a primitive
+   of the heap: the property is asked of the values of the cells of the
+   locations among the values of the simples too. *)
+Lemma exec_named_reads (hp hp' : heap) (rd rd' : read_record) (vars : env)
+    (d : named) (v : value) :
+  is_allocation d = false ->
+  named_changes_heap d = false ->
+  (∀ (s : simple) (w : value),
+    In s (simples_of_named d) -> eval_simple vars s = Some w -> P w) ->
+  (∀ (s : simple) (l : location) (c : cell) (w : value),
+    In s (simples_of_named d) ->
+    eval_simple vars s = Some (Value_location l) ->
+    lookup l hp = Some c ->
+    In w (values_of_cell c) ->
+    P w) ->
+  exec_named statics hp rd vars d = Some (v, hp', rd') ->
+  P v.
+Proof.
+  intros Hnot Hheap Hsimples Hcells Hexec.
+  assert (Hcases :
+    (∃ (p : prim) (args : list simple), d = Prim p args)
+    ∨ (∀ (p : prim) (args : list simple), d <> Prim p args)).
+  { destruct d;
+      first [ left; eexists _, _; reflexivity | right; intros; discriminate ]. }
+  destruct Hcases as [(p & args & ->) | Hnot_prim].
+  - unfold exec_named in Hexec.
+    destruct (eval_simples vars args) as [vs | ] eqn:Hargs;
+      [ | discriminate ].
+    simpl in Hexec.
+    destruct (exec_prim statics hp p vs) as [[v0 hp0] | ] eqn:Hprim;
+      [ | discriminate ].
+    simpl in Hexec. injection Hexec as -> _ _.
+    assert (Hp : ∀ q : heap_primitive, p <> Heap q).
+    { intros q ->. discriminate Hheap. }
+    destruct (exec_prim_reads_cases _ _ _ _ _ _ Hp Hprim)
+      as [Heval
+         | [(l & c & Hl & Hv & Hshape)
+           | [(l & kind & -> & _ & Hvs) | (c & -> & Hc)]]].
+    + apply (eval_named_reads vars (Prim p args) v Hnot Hsimples).
+      simpl. rewrite Hargs. exact Heval.
+    + assert (Hin : In (Value_location l) vs).
+      { destruct Hshape
+          as [(access & mut & field & _ & ->)
+             | (kind & load_kind & mut & v2 & _ & ->)];
+          left; reflexivity. }
+      destruct (eval_simples_in vars args vs _ Hargs Hin) as (s & Hs & Hw).
+      exact (Hcells s l c v Hs Hw Hl Hv).
+    + assert (Hin : In (Value_location l) vs)
+        by (rewrite Hvs; left; reflexivity).
+      destruct (eval_simples_in vars args vs _ Hargs Hin) as (s & Hs & Hw).
+      exact (Hsimples s _ Hs Hw).
+    + exact (P_const c Hc).
+  - rewrite (exec_named_not_prim statics hp rd vars d Hnot_prim) in Hexec.
+    destruct (eval_named statics vars d) as [v0 | ] eqn:Hnamed;
+      [ | discriminate ].
+    simpl in Hexec. injection Hexec as -> _ _.
+    exact (eval_named_reads vars d v Hnot Hsimples Hnamed).
+Qed.
+
 End Reads.
+
+(* What a named expression leaves in the heap: a property that holds of
+   the values of the heap and of the values of the simples holds of the
+   values of the heap after. *)
+Lemma exec_named_cells (Q : value -> Prop) (statics : static_env)
+    (hp hp' : heap) (rd rd' : read_record) (vars : env) (d : named)
+    (v : value) :
+  heap_values_all Q hp ->
+  (∀ (s : simple) (w : value),
+    In s (simples_of_named d) -> eval_simple vars s = Some w -> Q w) ->
+  exec_named statics hp rd vars d = Some (v, hp', rd') ->
+  heap_values_all Q hp'.
+Proof.
+  intros Hcells Hsimples Hexec.
+  assert (Hcases :
+    (∃ (p : prim) (args : list simple), d = Prim p args)
+    ∨ (∀ (p : prim) (args : list simple), d <> Prim p args)).
+  { destruct d;
+      first [ left; eexists _, _; reflexivity | right; intros; discriminate ]. }
+  destruct Hcases as [(p & args & ->) | Hnot_prim].
+  - unfold exec_named in Hexec.
+    destruct (eval_simples vars args) as [vs | ] eqn:Hargs;
+      [ | discriminate ].
+    simpl in Hexec.
+    destruct (exec_prim statics hp p vs) as [[v0 hp0] | ] eqn:Hprim;
+      [ | discriminate ].
+    simpl in Hexec. injection Hexec as _ <- _.
+    apply (exec_prim_heap_cells Q statics hp hp0 p vs v0 Hcells);
+      [ | exact Hprim ].
+    intros arg Hin.
+    destruct (eval_simples_in vars args vs _ Hargs Hin) as (s & Hs & Hw).
+    exact (Hsimples s arg Hs Hw).
+  - rewrite (exec_named_not_prim statics hp rd vars d Hnot_prim) in Hexec.
+    destruct (eval_named statics vars d) as [v0 | ]; [ | discriminate ].
+    simpl in Hexec. injection Hexec as _ <- _. exact Hcells.
+Qed.
+
+(* What a primitive of the heap gives, as a named expression. *)
+Lemma exec_named_heap_value (statics : static_env) (hp hp' : heap)
+    (rd rd' : read_record) (vars : env) (d : named) (v : value) :
+  named_changes_heap d = true ->
+  exec_named statics hp rd vars d = Some (v, hp', rd') ->
+  v = Value_location (fresh_location hp) ∨ v = unit_value.
+Proof.
+  intros Hheap Hexec.
+  destruct d as [ | p args | | | | | ]; try discriminate Hheap.
+  destruct p as [ | | | q | ]; try discriminate Hheap.
+  unfold exec_named in Hexec.
+  destruct (eval_simples vars args) as [vs | ]; [ | discriminate ].
+  simpl in Hexec.
+  destruct (exec_prim statics hp (Heap q) vs) as [[v0 hp0] | ] eqn:Hprim;
+    [ | discriminate ].
+  simpl in Hexec. injection Hexec as -> _ _.
+  exact (exec_prim_heap_value _ _ _ _ _ _ Hprim).
+Qed.
+
+(* A named expression that allocates what is no cell is run by
+   [eval_named], and leaves the heap. *)
+Lemma exec_named_makes (statics : static_env) (hp hp' : heap)
+    (rd rd' : read_record) (vars : env) (d : named) (v : value) :
+  is_allocation d = true ->
+  exec_named statics hp rd vars d = Some (v, hp', rd') ->
+  eval_named statics vars d = Some v ∧ hp' = hp.
+Proof.
+  intros His Hexec.
+  assert (Hcases :
+    (∃ (p : prim) (args : list simple), d = Prim p args)
+    ∨ (∀ (p : prim) (args : list simple), d <> Prim p args)).
+  { destruct d;
+      first [ left; eexists _, _; reflexivity | right; intros; discriminate ]. }
+  destruct Hcases as [(p & args & ->) | Hnot_prim].
+  - assert (Hreads : prim_reads_heap p = false).
+    { destruct p as [u | b | variadic | q | rp]; try discriminate His;
+        try reflexivity.
+      destruct u; try discriminate His. reflexivity. }
+    destruct (exec_named_eval_named _ _ _ _ _ _ _ _ _ Hreads Hexec)
+      as (Hnamed & -> & _).
+    split; [ exact Hnamed | reflexivity ].
+  - rewrite (exec_named_not_prim statics hp rd vars d Hnot_prim) in Hexec.
+    destruct (eval_named statics vars d) as [v0 | ]; [ | discriminate ].
+    simpl in Hexec. injection Hexec as -> <- _. split; reflexivity.
+Qed.
+
+(* [heap_values_all] of a test: the test of every value of every entry. *)
+Lemma heap_values_all_forallb (f : value -> bool) (hp : heap) :
+  forallb (fun '(_, c) => forallb f (values_of_cell c)) hp = true
+  <-> heap_values_all (fun v => f v = true) hp.
+Proof.
+  unfold heap_values_all. rewrite forallb_forall. split.
+  - intros H l c v Hin Hv. specialize (H (l, c) Hin). cbv beta iota in H.
+    exact (forallb_in _ _ v H Hv).
+  - intros H [l c] Hin. apply forallb_forall. intros v Hv.
+    exact (H l c v Hin Hv).
+Qed.
 
 (* What an allocation makes holds directly the values of its simples. *)
 Lemma eval_named_makes (statics : static_env) (vars : env) (d : named)

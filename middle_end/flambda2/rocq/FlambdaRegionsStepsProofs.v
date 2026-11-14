@@ -37,8 +37,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaMapProofs FlambdaPrimitiveModel FlambdaPrimitiveSpec
   FlambdaPrimitiveProofs FlambdaSemanticsSpec FlambdaSemanticsProofs
   FlambdaClosuresProofs FlambdaRegionsSpec FlambdaRegionsProofs
-  FlambdaRegionsNeedsHeapProofs FlambdaRegionsInvariantSpec
-  FlambdaRegionsReadsProofs.
+  FlambdaRegionsInvariantSpec FlambdaRegionsReadsProofs.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -193,10 +192,10 @@ Qed.
 
 (* The heap of the state is not asked anything, so this is not
    FlambdaSemanticsProofs.step_values_all, which asks the property of
-   the cells: the invariants of regions say nothing of the heap. It is
-   that proof, on the two lemmas under it, of a state that is not at a
-   [Let] that needs the heap (decision D53): such a [Let] binds what
-   [eval_named] gives, and reads no cell. *)
+   every cell: here the property is asked of the value that a [Let]
+   binds, whatever [exec_named] made it of, and what is shown is of
+   the variables and of the continuations alone. It is that proof, on
+   the two lemmas under it. *)
 Section Step_values.
 
 Variable P : value -> Prop.
@@ -219,11 +218,12 @@ Definition result_vals_ok (result : step_result) : Prop :=
 Lemma step_values (s : state) :
   P_fields P (state_statics s) ->
   vals_ok s ->
-  needs_no_heap s ->
   (∀ (x : variable) (kind : flambda_kind) (d : named) (body : expr)
-     (v : value),
+     (v : value) (hp' : heap) (rd' : read_record),
     state_expr s = Let x kind d body ->
-    eval_named (state_statics s) (state_vars s) d = Some v ->
+    exec_named (state_statics s) (state_heap s) (state_reads s)
+      (state_vars s) d
+    = Some (v, hp', rd') ->
     P v) ->
   (∀ (sim : simple) (v : value),
     In sim (evaluated_simples (state_expr s)) ->
@@ -232,8 +232,9 @@ Lemma step_values (s : state) :
   result_vals_ok (step s).
 Proof using P_partial.
   destruct s as [e vars conts statics hp rd].
-  cbn [state_expr state_vars state_conts state_statics].
-  intros Hfields [Hvars Hconts] Hneeds Hlet Hsimples.
+  cbn [state_expr state_vars state_conts state_statics state_heap
+       state_reads].
+  intros Hfields [Hvars Hconts] Hlet Hsimples.
   cbn [state_vars state_conts] in Hvars, Hconts.
   assert (Hstate :
     ∀ (e' : expr) (vars' : env) (conts' : cont_env),
@@ -249,12 +250,8 @@ Proof using P_partial.
   - destruct (exec_named _ _ _ _ d) as [[[v hp'] rd'] | ] eqn:Hd;
       [ | exact I ].
     destruct (kind_eqb (kind_of_value v) kind); [ | exact I ].
-    destruct
-      (exec_named_needs_no_heap_some _ _ _ _ _ _ _ _
-         (Hneeds x kind d body eq_refl) Hd)
-      as (Hv & _ & _).
     split; [ | exact Hconts ].
-    apply Forall_cons; [ exact (Hlet x kind d body v eq_refl Hv) | ].
+    apply Forall_cons; [ exact (Hlet x kind d body v hp' rd' eq_refl Hd) | ].
     exact Hvars.
   - destruct (eval_static_bindings vars bindings statics); [ | exact I ].
     exact (conj Hvars Hconts).
@@ -302,17 +299,18 @@ Definition region_result_vals_ok (result : region_step_result) : Prop :=
   match result with
   | Region_step rs' => vals_ok (rs_state rs')
   | Region_exit _ vs _ => Forall P vs
-  | Region_undefined _ | Region_let_not_run => True
+  | Region_undefined _ => True
   end.
 
 Lemma plain_step_values (rs : region_state) :
   P_fields P (live_statics rs) ->
   vals_ok (rs_state rs) ->
-  needs_no_heap (rs_state rs) ->
   (∀ (x : variable) (kind : flambda_kind) (d : named) (body : expr)
-     (v : value),
+     (v : value) (hp' : heap) (rd' : read_record),
     state_expr (rs_state rs) = Let x kind d body ->
-    eval_named (live_statics rs) (state_vars (rs_state rs)) d = Some v ->
+    exec_named (live_statics rs) (state_heap (rs_state rs))
+      (state_reads (rs_state rs)) (state_vars (rs_state rs)) d
+    = Some (v, hp', rd') ->
     P v) ->
   (∀ (sim : simple) (v : value),
     In sim (evaluated_simples (state_expr (rs_state rs))) ->
@@ -320,10 +318,10 @@ Lemma plain_step_values (rs : region_state) :
     P v) ->
   region_result_vals_ok (plain_step rs).
 Proof.
-  intros Hfields Hvals Hneeds Hlet Hsimples. unfold plain_step.
+  intros Hfields Hvals Hlet Hsimples. unfold plain_step.
   pose proof
     (step_values (with_statics (rs_state rs) (live_statics rs)) Hfields Hvals
-       Hneeds Hlet Hsimples)
+       Hlet Hsimples)
     as Hstep.
   destruct (step (with_statics (rs_state rs) (live_statics rs)))
     as [s' | k vs hp rd | ];
@@ -348,8 +346,8 @@ Proof.
        | remaining remaining_arity return_arity return_to exn_to];
     try (apply plain_step_values;
          [ exact Hfields | exact Hvals
-         | intros x kind d body Hlet; rewrite He in Hlet; discriminate
-         | intros x kind d body v Hlet; rewrite He in Hlet; discriminate
+         | intros x kind d body v hp' rd' Hlet; rewrite He in Hlet;
+           discriminate
          | rewrite He; exact Hsimples ]).
   destruct (eval_simples (state_vars (rs_state rs)) (ac_args ac)) as [vs | ]
     eqn:Hargs; [ | exact I ].
@@ -814,9 +812,20 @@ Proof.
   split; [ reflexivity | ]. split; [ exact Hframes | reflexivity ].
 Qed.
 
+(* A local allocation of a cell is [local_cell_allocation]. *)
+Lemma local_allocation_cell (rs : region_state) (x y : variable)
+    (kind : flambda_kind) (d : named) (region : option simple)
+    (body : expr) :
+  is_cell_allocation d && kind_eqb kind Value = true ->
+  local_allocation rs x y kind d region body
+  = local_cell_allocation rs x y d region body.
+Proof. unfold local_allocation. cbv zeta. intros ->. reflexivity. Qed.
+
+(* A local allocation that is not of a cell. *)
 Lemma local_allocation_step (rs rs' : region_state) (x y : variable)
     (kind : flambda_kind) (d : named) (region : option simple)
     (body : expr) :
+  is_cell_allocation d && kind_eqb kind Value = false ->
   local_allocation rs x y kind d region body = Region_step rs' ->
   ∃ (v : value) (sym : symbol)
     (bindings : list (symbol * statically_allocated_value)),
@@ -842,7 +851,7 @@ Lemma local_allocation_step (rs rs' : region_state) (x y : variable)
         ∧ state_statics (rs_state rs') = state_statics (rs_state rs)
       end.
 Proof.
-  unfold local_allocation. cbv zeta.
+  unfold local_allocation. cbv zeta. intros ->.
   destruct (is_allocation d && kind_eqb kind Value) eqn:Hcond;
     [ | discriminate ].
   apply andb_true_iff in Hcond as [His _].
@@ -856,13 +865,85 @@ Proof.
     repeat split; try reflexivity; assumption.
 Qed.
 
+(* It leaves the heap, the reads and the cells of the state. *)
+Lemma local_allocation_memory (rs rs' : region_state) (x y : variable)
+    (kind : flambda_kind) (d : named) (region : option simple)
+    (body : expr) :
+  is_cell_allocation d && kind_eqb kind Value = false ->
+  local_allocation rs x y kind d region body = Region_step rs' ->
+  state_heap (rs_state rs') = state_heap (rs_state rs)
+  ∧ state_reads (rs_state rs') = state_reads (rs_state rs)
+  ∧ rs_cells rs' = rs_cells rs.
+Proof.
+  unfold local_allocation. cbv zeta. intros ->.
+  destruct (is_allocation d && kind_eqb kind Value); [ | discriminate ].
+  destruct (named_region rs region) as [other | ]; [ | discriminate ].
+  destruct (eval_named (live_statics rs) (state_vars (rs_state rs)) d)
+    as [v | ]; [ | discriminate ].
+  destruct (localise (rs_next rs) v) as [[sym bindings] | ];
+    [ | discriminate ].
+  destruct (rs_frames rs) as [ | [m mark_kind locals] frames];
+    intros [= <-]; repeat split; reflexivity.
+Qed.
+
+(* A local allocation of a cell: what [exec_named] makes is a location,
+   both variables are bound to it, and the cell is listed with the mark
+   of the newest frame, if there is a frame. *)
+Lemma local_cell_allocation_step (rs rs' : region_state) (x y : variable)
+    (d : named) (region : option simple) (body : expr) :
+  local_cell_allocation rs x y d region body = Region_step rs' ->
+  ∃ (l : location) (hp : heap) (rd : read_record),
+    named_region rs region <> None
+    ∧ exec_named (live_statics rs) (state_heap (rs_state rs))
+        (state_reads (rs_state rs)) (state_vars (rs_state rs)) d
+      = Some (Value_location l, hp, rd)
+    ∧ rs_state rs'
+      = State body
+          ((y, Value_location l) :: (x, Value_location l)
+           :: state_vars (rs_state rs))
+          (state_conts (rs_state rs)) (state_statics (rs_state rs)) hp rd
+    ∧ rs_frames rs' = rs_frames rs
+    ∧ rs_base rs' = rs_base rs
+    ∧ rs_next rs' = rs_next rs
+    ∧ rs_cells rs'
+      = match rs_frames rs with
+        | f :: _ => (l, frame_mark f) :: rs_cells rs
+        | [] => rs_cells rs
+        end.
+Proof.
+  unfold local_cell_allocation. cbv zeta.
+  destruct (named_region rs region) as [other | ]; [ | discriminate ].
+  destruct
+    (exec_named (live_statics rs) (state_heap (rs_state rs))
+       (state_reads (rs_state rs)) (state_vars (rs_state rs)) d)
+    as [[[v hp] rd] | ]; [ | discriminate ].
+  destruct v; try discriminate.
+  intros [= <-]. eexists _, hp, rd.
+  split; [ discriminate | ]. repeat split; reflexivity.
+Qed.
+
+Lemma local_cell_allocation_no_exit (rs : region_state) (x y : variable)
+    (d : named) (region : option simple) (body : expr) (k : continuation)
+    (vs : list value) (rs' : region_state) :
+  local_cell_allocation rs x y d region body <> Region_exit k vs rs'.
+Proof.
+  unfold local_cell_allocation. cbv zeta.
+  destruct (named_region rs region); [ | discriminate ].
+  destruct
+    (exec_named (live_statics rs) (state_heap (rs_state rs))
+       (state_reads (rs_state rs)) (state_vars (rs_state rs)) d)
+    as [[[v hp] rd] | ]; [ | discriminate ].
+  destruct v; discriminate.
+Qed.
+
 Lemma plain_step_step (rs rs' : region_state) :
   plain_step rs = Region_step rs' ->
   ∃ s' : state,
     step (with_statics (rs_state rs) (live_statics rs)) = Step s'
     ∧ rs'
       = Region_state (with_statics s' (state_statics (rs_state rs)))
-          (rs_frames rs) (rs_base rs) (rs_next rs) (rs_counts rs).
+          (rs_frames rs) (rs_base rs) (rs_next rs) (rs_counts rs)
+          (rs_cells rs).
 Proof.
   unfold plain_step.
   destruct (step (with_statics (rs_state rs) (live_statics rs)))
@@ -882,7 +963,8 @@ Lemma static_step_step (rs rs' : region_state)
       = Region_state
           (State body (state_vars (rs_state rs)) (state_conts (rs_state rs))
              statics' (state_heap (rs_state rs)) (state_reads (rs_state rs)))
-          (rs_frames rs) (rs_base rs) (rs_next rs) (rs_counts rs).
+          (rs_frames rs) (rs_base rs) (rs_next rs) (rs_counts rs)
+          (rs_cells rs).
 Proof.
   intros He. unfold static_step.
   destruct (rs_state rs) as [e vars conts statics hp rd]. simpl in He. subst e.
@@ -911,12 +993,6 @@ Variable rs : region_state.
 Variable Q : region_step_result -> Prop.
 
 Hypothesis Q_undefined : ∀ fault : region_fault, Q (Region_undefined fault).
-Hypothesis Q_let_not_run :
-  ∀ (x : variable) (kind : flambda_kind) (d : named) (body : expr),
-    state_expr (rs_state rs) = Let x kind d body ->
-    named_needs_heap (state_vars (rs_state rs)) d = true ->
-    forallb (simple_usable rs) (simples_of_named d) = true ->
-    Q Region_let_not_run.
 Hypothesis Q_begin :
   ∀ (x : variable) (kind : flambda_kind) (d : named) (mark_kind : mark_kind)
     (body : expr),
@@ -931,17 +1007,26 @@ Hypothesis Q_local :
   ∀ (x : variable) (kind : flambda_kind) (d : named) (body : expr)
     (y : variable) (region : option simple) (body' : expr),
     state_expr (rs_state rs) = Let x kind d body ->
-    named_needs_heap (state_vars (rs_state rs)) d = false ->
     marker_of x body = Marker y region body' ->
     forallb (simple_usable rs) (simples_of_named d) = true ->
+    is_cell_allocation d && kind_eqb kind Value = false ->
     Q (local_allocation (count_uses rs) x y kind d region body').
+Hypothesis Q_local_cell :
+  ∀ (x : variable) (kind : flambda_kind) (d : named) (body : expr)
+    (y : variable) (region : option simple) (body' : expr),
+    state_expr (rs_state rs) = Let x kind d body ->
+    marker_of x body = Marker y region body' ->
+    forallb (simple_usable rs) (simples_of_named d) = true ->
+    is_cell_allocation d = true ->
+    Q (local_cell_allocation (count_uses rs) x y d region body').
 Hypothesis Q_let :
   ∀ (x : variable) (kind : flambda_kind) (d : named) (body : expr),
     state_expr (rs_state rs) = Let x kind d body ->
-    named_needs_heap (state_vars (rs_state rs)) d = false ->
     forallb (simple_usable rs) (simples_of_named d) = true ->
-    is_allocation d && existsb (simple_local rs) (simples_of_named d)
+    (is_allocation d || is_cell_allocation d)
+    && existsb (simple_local rs) (simples_of_named d)
     = false ->
+    store_fault rs d = None ->
     Q (plain_step (count_uses rs)).
 Hypothesis Q_static :
   ∀ (bindings : list static_binding) (body : expr),
@@ -976,33 +1061,39 @@ Proof.
     try (apply Q_plain; intros; discriminate).
   - assert (Hrest :
               forallb (simple_usable rs) (simples_of_named d) = true ->
-              Q (if named_needs_heap (state_vars (rs_state (count_uses rs))) d
-                 then Region_let_not_run
-                 else
-                   match marker_of x body with
-                   | Marker y region body' =>
-                     local_allocation (count_uses rs) x y kind d region body'
-                   | Bad_marker => Region_undefined Not_of_the_conversion
-                   | No_marker =>
-                     if is_allocation d
-                        && existsb (simple_local (count_uses rs))
-                             (simples_of_named d)
-                     then Region_undefined Heap_holds_local
-                     else plain_step (count_uses rs)
-                   end)).
+              Q match marker_of x body with
+                | Marker y region body' =>
+                  local_allocation (count_uses rs) x y kind d region body'
+                | Bad_marker => Region_undefined Not_of_the_conversion
+                | No_marker =>
+                  if (is_allocation d || is_cell_allocation d)
+                     && existsb (simple_local (count_uses rs))
+                          (simples_of_named d)
+                  then Region_undefined Heap_holds_local
+                  else
+                    match store_fault (count_uses rs) d with
+                    | Some fault => Region_undefined fault
+                    | None => plain_step (count_uses rs)
+                    end
+                end).
     { intros Husable.
-      destruct (named_needs_heap (state_vars (rs_state (count_uses rs))) d)
-        eqn:Hneeds;
-        [ exact (Q_let_not_run x kind d body eq_refl Hneeds Husable) | ].
       destruct (marker_of x body) as [ | y region body' | ] eqn:Hmarker.
       - destruct
-          (is_allocation d
+          ((is_allocation d || is_cell_allocation d)
            && existsb (simple_local (count_uses rs)) (simples_of_named d))
           eqn:Hheap; [ apply Q_undefined | ].
-        exact (Q_let x kind d body eq_refl Hneeds Husable Hheap).
-      - exact
-          (Q_local x kind d body y region body' eq_refl Hneeds Hmarker
-             Husable).
+        destruct (store_fault (count_uses rs) d) eqn:Hstore;
+          [ apply Q_undefined | ].
+        exact (Q_let x kind d body eq_refl Husable Hheap Hstore).
+      - destruct (is_cell_allocation d && kind_eqb kind Value) eqn:Hcell.
+        + rewrite (local_allocation_cell _ _ _ _ _ _ _ Hcell).
+          apply andb_true_iff in Hcell as [Hcell _].
+          exact
+            (Q_local_cell x kind d body y region body' eq_refl Hmarker
+               Husable Hcell).
+        + exact
+            (Q_local x kind d body y region body' eq_refl Hmarker Husable
+               Hcell).
       - apply Q_undefined. }
     destruct d as [s | [u | b | v | hp | rp] args | | | | | ];
       try (apply Hrest; exact (simples_fault_no_place rs _ Hfault)).
@@ -1117,45 +1208,34 @@ Proof.
   exact (ex_intro _ kind (ex_intro _ _ (conj Hbody Hkind))).
 Qed.
 
-(* A local allocation is of the kind [Value], and leaves the heap of
-   the state. *)
+(* A local allocation is of the kind [Value]. *)
+Lemma local_allocation_kind (rs rs' : region_state) (x y : variable)
+    (kind : flambda_kind) (d : named) (region : option simple)
+    (body : expr) :
+  local_allocation rs x y kind d region body = Region_step rs' ->
+  kind_eqb kind Value = true.
+Proof.
+  unfold local_allocation. cbv zeta.
+  destruct (is_cell_allocation d && kind_eqb kind Value) eqn:Hcell.
+  - intros _. apply andb_true_iff in Hcell as [_ Hkind]. exact Hkind.
+  - destruct (is_allocation d && kind_eqb kind Value) eqn:Hcond;
+      [ | discriminate ].
+    intros _. apply andb_true_iff in Hcond as [_ Hkind]. exact Hkind.
+Qed.
+
+(* One that is not of a cell is of the kind [Value], and leaves the
+   heap of the state. *)
 Lemma local_allocation_kind_heap (rs rs' : region_state) (x y : variable)
     (kind : flambda_kind) (d : named) (region : option simple)
     (body : expr) :
+  is_cell_allocation d && kind_eqb kind Value = false ->
   local_allocation rs x y kind d region body = Region_step rs' ->
   kind_eqb kind Value = true
   ∧ state_heap (rs_state rs') = state_heap (rs_state rs).
 Proof.
-  unfold local_allocation. cbv zeta.
-  destruct (is_allocation d && kind_eqb kind Value) eqn:Hcond;
-    [ | discriminate ].
-  apply andb_true_iff in Hcond as [_ Hkind].
-  destruct (named_region rs region) as [other | ]; [ | discriminate ].
-  destruct (eval_named (live_statics rs) (state_vars (rs_state rs)) d)
-    as [v | ]; [ | discriminate ].
-  destruct (localise (rs_next rs) v) as [[sym bindings] | ];
-    [ | discriminate ].
-  destruct (rs_frames rs) as [ | [m mark_kind locals] frames];
-    intros [= <-]; (split; [ exact Hkind | reflexivity ]).
-Qed.
-
-(* And the read record. *)
-Lemma local_allocation_reads (rs rs' : region_state) (x y : variable)
-    (kind : flambda_kind) (d : named) (region : option simple)
-    (body : expr) :
-  local_allocation rs x y kind d region body = Region_step rs' ->
-  state_reads (rs_state rs') = state_reads (rs_state rs).
-Proof.
-  unfold local_allocation. cbv zeta.
-  destruct (is_allocation d && kind_eqb kind Value) eqn:Hcond;
-    [ | discriminate ].
-  destruct (named_region rs region) as [other | ]; [ | discriminate ].
-  destruct (eval_named (live_statics rs) (state_vars (rs_state rs)) d)
-    as [v | ]; [ | discriminate ].
-  destruct (localise (rs_next rs) v) as [[sym bindings] | ];
-    [ | discriminate ].
-  destruct (rs_frames rs) as [ | [m mark_kind locals] frames];
-    intros [= <-]; reflexivity.
+  intros Hcell Hstep.
+  split; [ exact (local_allocation_kind _ _ _ _ _ _ _ _ Hstep) | ].
+  exact (proj1 (local_allocation_memory _ _ _ _ _ _ _ _ Hcell Hstep)).
 Qed.
 
 Lemma region_apply_cont_step (rs rs' : region_state) (ac : apply_cont) :
@@ -1240,6 +1320,8 @@ Lemma local_allocation_no_exit (rs : region_state) (x y : variable)
   local_allocation rs x y kind d region body <> Region_exit k vs rs'.
 Proof.
   unfold local_allocation. cbv zeta.
+  destruct (is_cell_allocation d && kind_eqb kind Value);
+    [ apply local_cell_allocation_no_exit | ].
   destruct (is_allocation d && kind_eqb kind Value); [ | discriminate ].
   destruct (named_region rs region); [ | discriminate ].
   destruct (eval_named (live_statics rs) (state_vars (rs_state rs)) d)
@@ -1259,7 +1341,6 @@ Proof.
     (region_step_cases rs
        (fun result => result = Region_exit k vs rs' -> rs' = count_uses rs)).
   - discriminate.
-  - discriminate.
   - intros x kind d mark_kind body _. unfold begin_region.
     destruct (kind_eqb kind Region); discriminate.
   - intros x kind d ended_by region body _. unfold end_region. cbv zeta.
@@ -1269,57 +1350,126 @@ Proof.
     destruct (cut _ _) as [[above below] | ]; discriminate.
   - intros x kind d body y region body' _ _ _ _ Hexit.
     contradiction (local_allocation_no_exit _ _ _ _ _ _ _ _ _ _ Hexit).
+  - intros x kind d body y region body' _ _ _ _ Hexit.
+    contradiction (local_cell_allocation_no_exit _ _ _ _ _ _ _ _ _ Hexit).
   - intros x kind d body _ _ _ _. apply plain_step_exit.
   - intros bindings body _ _ _. apply static_step_exit.
   - intros ac _. apply region_apply_cont_exit.
   - intros _ _. apply plain_step_exit.
 Qed.
 
-(* Where the machine does not run a step, the state is at a [Let]
-   that needs the heap, whose simples may be evaluated (decision
-   D53). *)
-Lemma region_step_let_not_run (rs : region_state) :
-  region_step rs = Region_let_not_run ->
-  ∃ (x : variable) (kind : flambda_kind) (d : named) (body : expr),
-    state_expr (rs_state rs) = Let x kind d body
-    ∧ named_needs_heap (state_vars (rs_state rs)) d = true
-    ∧ forallb (simple_usable rs) (simples_of_named d) = true.
+(* ======================================================================== *)
+(* The heap after a step                                                    *)
+(* ======================================================================== *)
+
+(* A step changes the heap only at a [Let], where the heap after is the
+   one that [exec_named] leaves under [live_statics]:
+   FlambdaSemanticsSpec.step_heap_statement, of this machine. *)
+Lemma plain_step_heap (rs rs' : region_state) :
+  plain_step rs = Region_step rs' ->
+  state_heap (rs_state rs') = state_heap (rs_state rs)
+  ∨ ∃ (x : variable) (kind : flambda_kind) (d : named) (body : expr)
+      (v : value) (rd' : read_record),
+      state_expr (rs_state rs) = Let x kind d body
+      ∧ exec_named (live_statics rs) (state_heap (rs_state rs))
+          (state_reads (rs_state rs)) (state_vars (rs_state rs)) d
+        = Some (v, state_heap (rs_state rs'), rd').
+Proof.
+  intros Hstep. destruct (plain_step_step _ _ Hstep) as (s' & Hs & ->).
+  destruct (step_heap _ _ Hs)
+    as [Hsame | (x & kind & d & body & v & He & Hexec)].
+  - left. exact Hsame.
+  - right. exists x, kind, d, body, v, (state_reads s').
+    split; [ exact He | exact Hexec ].
+Qed.
+
+Lemma region_apply_cont_heap (rs rs' : region_state) (ac : apply_cont) :
+  state_expr (rs_state rs) = Apply_cont ac ->
+  region_apply_cont rs ac = Region_step rs' ->
+  state_heap (rs_state rs') = state_heap (rs_state rs).
+Proof.
+  intros He.
+  assert (Hplain :
+    plain_step rs = Region_step rs' ->
+    state_heap (rs_state rs') = state_heap (rs_state rs)).
+  { intros Hstep.
+    destruct (plain_step_heap _ _ Hstep)
+      as [Hsame | (x & kind & d & body & v & rd' & He' & _)];
+      [ exact Hsame | ].
+    rewrite He in He'. discriminate. }
+  unfold region_apply_cont.
+  destruct (resolve (ac_continuation ac) (state_conts (rs_state rs)))
+    as [[params metadata handler] def_vars def_conts recursive | k | c extra
+       | remaining remaining_arity return_arity return_to exn_to];
+    try exact Hplain.
+  destruct (eval_simples (state_vars (rs_state rs)) (ac_args ac)) as [vs | ];
+    [ | discriminate ].
+  destruct (kinds_eqb _ _); [ | discriminate ].
+  destruct (bind_params params vs def_vars) as [handler_vars | ];
+    [ | discriminate ].
+  intros [= <-]. reflexivity.
+Qed.
+
+(* The same of a step of the machine of regions: the heap is as it
+   was, or the step is that of a [Let] whose simples may be evaluated,
+   and the heap is the one that [exec_named] leaves. *)
+Lemma region_step_heap (rs rs' : region_state) :
+  region_step rs = Region_step rs' ->
+  state_heap (rs_state rs') = state_heap (rs_state rs)
+  ∨ ∃ (x : variable) (kind : flambda_kind) (d : named) (body : expr)
+      (v : value) (rd' : read_record),
+      state_expr (rs_state rs) = Let x kind d body
+      ∧ forallb (simple_usable rs) (simples_of_named d) = true
+      ∧ exec_named (live_statics rs) (state_heap (rs_state rs))
+          (state_reads (rs_state rs)) (state_vars (rs_state rs)) d
+        = Some (v, state_heap (rs_state rs'), rd').
 Proof.
   apply
     (region_step_cases rs
        (fun result =>
-          result = Region_let_not_run ->
-          ∃ (x : variable) (kind : flambda_kind) (d : named) (body : expr),
-            state_expr (rs_state rs) = Let x kind d body
-            ∧ named_needs_heap (state_vars (rs_state rs)) d = true
-            ∧ forallb (simple_usable rs) (simples_of_named d) = true)).
+          result = Region_step rs' ->
+          state_heap (rs_state rs') = state_heap (rs_state rs)
+          ∨ ∃ (x : variable) (kind : flambda_kind) (d : named) (body : expr)
+              (v : value) (rd' : read_record),
+              state_expr (rs_state rs) = Let x kind d body
+              ∧ forallb (simple_usable rs) (simples_of_named d) = true
+              ∧ exec_named (live_statics rs) (state_heap (rs_state rs))
+                  (state_reads (rs_state rs)) (state_vars (rs_state rs)) d
+                = Some (v, state_heap (rs_state rs'), rd'))).
   - discriminate.
-  - intros x kind d body He Hneeds Husable _. exists x, kind, d, body. auto.
-  - intros x kind d mark_kind body _. unfold begin_region.
-    destruct (kind_eqb kind Region); discriminate.
-  - intros x kind d ended_by region body _. unfold end_region. cbv zeta.
-    destruct (kind_eqb kind Value); [ | discriminate ].
-    destruct (eval_simple _ region) as [v | ]; [ | discriminate ].
-    destruct v; try discriminate.
-    destruct (cut _ _) as [[above below] | ]; discriminate.
-  - intros x kind d body y region body' _ _ _ _. unfold local_allocation.
-    cbv zeta.
-    destruct (is_allocation d && kind_eqb kind Value); [ | discriminate ].
-    destruct (named_region _ region); [ | discriminate ].
-    destruct (eval_named _ _ d); [ | discriminate ].
-    destruct (localise _ _) as [[sym bindings] | ]; [ | discriminate ].
-    destruct (rs_frames _) as [ | [m mark_kind locals] frames]; discriminate.
-  - intros x kind d body _ _ _ _. unfold plain_step.
-    destruct (step _); discriminate.
-  - intros bindings body _ _ _. unfold static_step.
-    destruct (step _); discriminate.
-  - intros ac _. unfold region_apply_cont, plain_step.
-    destruct (resolve _ _) as [[params metadata handler] ? ? ? | | | ];
-      try (destruct (step _); discriminate).
-    destruct (eval_simples _ _); [ | discriminate ].
-    destruct (kinds_eqb _ _); [ | discriminate ].
-    destruct (bind_params _ _ _); discriminate.
-  - intros _ _. unfold plain_step. destruct (step _); discriminate.
+  - intros x kind d mark_kind body _ Hstep.
+    rewrite (begin_region_step _ _ _ _ _ _ Hstep). left. reflexivity.
+  - intros x kind d ended_by region body _ Hstep.
+    destruct (end_region_step _ _ _ _ _ _ _ Hstep)
+      as (m & above & f & below & counts & _ & _ & ->).
+    left. reflexivity.
+  - intros x kind d body y region body' _ _ _ Hcell Hstep. left.
+    exact (proj1 (local_allocation_memory _ _ _ _ _ _ _ _ Hcell Hstep)).
+  - intros x kind d body y region body' He _ Husable _ Hstep.
+    destruct (local_cell_allocation_step _ _ _ _ _ _ _ Hstep)
+      as (l & hp & rd & _ & Hexec & Hstate & _).
+    right. exists x, kind, d, body, (Value_location l), rd. rewrite Hstate.
+    split; [ exact He | ]. split; [ exact Husable | exact Hexec ].
+  - intros x kind d body He Husable _ _ Hstep.
+    destruct (plain_step_heap _ _ Hstep)
+      as [Hsame | (x' & kind' & d' & body0 & v & rd' & He' & Hexec)];
+      [ left; exact Hsame | ].
+    change (state_expr (rs_state (count_uses rs)))
+      with (state_expr (rs_state rs)) in He'.
+    rewrite He in He'. injection He' as <- <- <- <-.
+    right. exists x, kind, d, body, v, rd'.
+    split; [ exact He | ]. split; [ exact Husable | exact Hexec ].
+  - intros bindings body He _ _ Hstep.
+    destruct (static_step_step (count_uses rs) rs' bindings body He Hstep)
+      as (statics' & _ & ->).
+    left. reflexivity.
+  - intros ac He Hstep. left.
+    exact (region_apply_cont_heap (count_uses rs) rs' ac He Hstep).
+  - intros Hnot_let _ Hstep.
+    destruct (plain_step_heap _ _ Hstep)
+      as [Hsame | (x & kind & d & body & v & rd' & He & _)];
+      [ left; exact Hsame | ].
+    contradiction (Hnot_let x kind d body He).
 Qed.
 
 (* ======================================================================== *)
@@ -1444,7 +1594,6 @@ Proof.
     (region_step_cases rs
        (fun result => result = Region_step rs' -> written_ok (rs_state rs'))).
   - discriminate.
-  - discriminate.
   - intros x kind d mark_kind body He Hstep.
     rewrite (begin_region_step _ _ _ _ _ _ Hstep). rewrite He in HPe.
     exact (conj (Pe_let x kind d body HPe) (conj Hconts Hcode)).
@@ -1453,13 +1602,20 @@ Proof.
       as (m & above & f & below & counts & _ & _ & ->).
     rewrite He in HPe.
     exact (conj (Pe_let x kind d body HPe) (conj Hconts Hcode)).
-  - intros x kind d body y region body' He _ Hmarker _ Hstep.
-    destruct (local_allocation_step _ _ _ _ _ _ _ _ Hstep)
+  - intros x kind d body y region body' He Hmarker _ Hcell Hstep.
+    destruct (local_allocation_step _ _ _ _ _ _ _ _ Hcell Hstep)
       as (v & sym & bindings & _ & _ & _ & Hexpr & _ & Hconts' & _ & _
           & Hcode' & _).
     destruct (marker_of_marker x y region body body' Hmarker)
       as (kind' & args & ->).
     rewrite He in HPe. unfold written_ok. rewrite Hexpr, Hconts', Hcode'.
+    exact (conj (Pe_let _ _ _ _ (Pe_let _ _ _ _ HPe)) (conj Hconts Hcode)).
+  - intros x kind d body y region body' He Hmarker _ _ Hstep.
+    destruct (local_cell_allocation_step _ _ _ _ _ _ _ Hstep)
+      as (l & hp & rd & _ & _ & Hstate & _).
+    destruct (marker_of_marker x y region body body' Hmarker)
+      as (kind' & args & ->).
+    rewrite He in HPe. rewrite Hstate.
     exact (conj (Pe_let _ _ _ _ (Pe_let _ _ _ _ HPe)) (conj Hconts Hcode)).
   - intros x kind d body _ _ _ _.
     exact (plain_step_written (count_uses rs) rs' Hw).
@@ -1497,35 +1653,42 @@ Definition region_step_vals_ok (rs : region_state)
       P (Value_symbol s)) ->
     vals_ok P (rs_state rs')
   | Region_exit _ vs _ => Forall P vs
-  | Region_undefined _ | Region_let_not_run => True
+  | Region_undefined _ => True
   end.
 
 (* The value of a [Let] is asked the property where the [Let] is run by
    [step]: it is not a local allocation, its simples may be evaluated,
-   and if it allocates none of them is local (decision D46). *)
+   if it allocates none of them is local (decision D46), and if it
+   stores the value stored lives as long as the cell (decision D54).
+   The property is asked of every location: a local allocation of a
+   cell binds its variables to one. *)
 Lemma region_step_values (rs : region_state) :
   P_fields P (live_statics rs) ->
   vals_ok P (rs_state rs) ->
   (∀ (x : variable) (kind : flambda_kind) (d : named) (body : expr)
-     (v : value),
+     (v : value) (hp' : heap) (rd' : read_record),
     state_expr (rs_state rs) = Let x kind d body ->
     forallb (simple_usable rs) (simples_of_named d) = true ->
-    is_allocation d && existsb (simple_local rs) (simples_of_named d)
+    (is_allocation d || is_cell_allocation d)
+    && existsb (simple_local rs) (simples_of_named d)
     = false ->
-    eval_named (live_statics rs) (state_vars (rs_state rs)) d = Some v ->
+    store_fault rs d = None ->
+    exec_named (live_statics rs) (state_heap (rs_state rs))
+      (state_reads (rs_state rs)) (state_vars (rs_state rs)) d
+    = Some (v, hp', rd') ->
     P v) ->
   (∀ (sim : simple) (v : value),
     In sim (evaluated_simples (state_expr (rs_state rs))) ->
     eval_simple (state_vars (rs_state rs)) sim = Some v ->
     P v) ->
   P unit_value ->
+  (∀ l : location, P (Value_location l)) ->
   region_step_vals_ok rs (region_step rs).
 Proof.
-  intros Hfields Hvals Hlet Hsimples Hunit.
+  intros Hfields Hvals Hlet Hsimples Hunit Hloc.
   pose proof Hvals as [Hvars Hconts].
   apply (region_step_cases rs (region_step_vals_ok rs)).
   - intros fault. exact I.
-  - intros x kind d body _ _ _. exact I.
   - intros x kind d mark_kind body _. unfold begin_region.
     destruct (kind_eqb kind Region); [ | exact I ].
     intros Hdrawn.
@@ -1539,10 +1702,10 @@ Proof.
     destruct v; try exact I.
     destruct (cut _ _) as [[above below] | ]; [ | exact I ].
     intros _. exact (conj (Forall_cons (x, unit_value) Hunit Hvars) Hconts).
-  - intros x kind d body y region body' _ _ _ _.
+  - intros x kind d body y region body' _ _ _ Hcell.
     destruct (local_allocation (count_uses rs) x y kind d region body')
-      as [rs' | k vs rs' | fault | ] eqn:Hlocal; [ | | exact I | exact I ].
-    + destruct (local_allocation_step _ _ _ _ _ _ _ _ Hlocal)
+      as [rs' | k vs rs' | fault] eqn:Hlocal; [ | | exact I ].
+    + destruct (local_allocation_step _ _ _ _ _ _ _ _ Hcell Hlocal)
         as (v & sym & bindings & _ & _ & Hlocalise & _ & Hvars' & Hconts'
             & _ & Hnext & _).
       destruct (localise_makes _ _ _ _ Hlocalise)
@@ -1558,24 +1721,33 @@ Proof.
              (Forall_cons (x, Value_symbol sym) Hsym Hvars)).
       * rewrite Hconts'. exact Hconts.
     + contradiction (local_allocation_no_exit _ _ _ _ _ _ _ _ _ _ Hlocal).
-  - intros x kind d body He Hneeds Husable Hheap.
+  - intros x kind d body y region body' _ _ _ _.
+    destruct (local_cell_allocation (count_uses rs) x y d region body')
+      as [rs' | k vs rs' | fault] eqn:Hlocal; [ | | exact I ].
+    + destruct (local_cell_allocation_step _ _ _ _ _ _ _ Hlocal)
+        as (l & hp & rd & _ & _ & Hstate & _).
+      intros _. rewrite Hstate.
+      exact
+        (conj
+           (Forall_cons (y, Value_location l) (Hloc l)
+              (Forall_cons (x, Value_location l) (Hloc l) Hvars))
+           Hconts).
+    + contradiction
+        (local_cell_allocation_no_exit _ _ _ _ _ _ _ _ _ Hlocal).
+  - intros x kind d body He Husable Hheap Hstore.
     assert (Hplain : region_result_vals_ok P (plain_step (count_uses rs))).
     { apply (plain_step_values P P_partial (count_uses rs) Hfields Hvals);
-        [ | | exact Hsimples ].
-      - intros x' kind' d' body0 He'.
-        change (state_expr (rs_state (count_uses rs)))
-          with (state_expr (rs_state rs)) in He'.
-        rewrite He in He'. injection He' as <- <- <- <-. exact Hneeds.
-      - intros x' kind' d' body0 v He' Hnamed.
-        change (state_expr (rs_state (count_uses rs)))
-          with (state_expr (rs_state rs)) in He'.
-        rewrite He in He'. injection He' as <- <- <- <-.
-        exact (Hlet x kind d body v He Husable Hheap Hnamed). }
-    destruct (plain_step (count_uses rs)) as [rs' | k vs rs' | fault | ];
-      [ intros _; exact Hplain | exact Hplain | exact I | exact I ].
+        [ | exact Hsimples ].
+      intros x' kind' d' body0 v hp' rd' He' Hnamed.
+      change (state_expr (rs_state (count_uses rs)))
+        with (state_expr (rs_state rs)) in He'.
+      rewrite He in He'. injection He' as <- <- <- <-.
+      exact (Hlet x kind d body v hp' rd' He Husable Hheap Hstore Hnamed). }
+    destruct (plain_step (count_uses rs)) as [rs' | k vs rs' | fault];
+      [ intros _; exact Hplain | exact Hplain | exact I ].
   - intros bindings body He _ _.
-    destruct (static_step (count_uses rs)) as [rs' | k vs rs' | fault | ]
-      eqn:Hstatic; [ | | exact I | exact I ].
+    destruct (static_step (count_uses rs)) as [rs' | k vs rs' | fault]
+      eqn:Hstatic; [ | | exact I ].
     + destruct (static_step_step (count_uses rs) _ bindings body He Hstatic)
         as (statics' & _ & ->).
       intros _. exact (conj Hvars Hconts).
@@ -1589,17 +1761,16 @@ Proof.
            Hvals).
       intros sim v Hin. apply Hsimples. rewrite He. exact Hin. }
     destruct (region_apply_cont (count_uses rs) ac)
-      as [rs' | k vs rs' | fault | ];
-      [ intros _; exact Hac | exact Hac | exact I | exact I ].
+      as [rs' | k vs rs' | fault];
+      [ intros _; exact Hac | exact Hac | exact I ].
   - intros Hnot_let _.
     assert (Hplain : region_result_vals_ok P (plain_step (count_uses rs))).
     { apply (plain_step_values P P_partial (count_uses rs) Hfields Hvals);
-        [ | | exact Hsimples ].
-      - intros x kind d body He. contradiction (Hnot_let x kind d body He).
-      - intros x kind d body v He.
-        contradiction (Hnot_let x kind d body He). }
-    destruct (plain_step (count_uses rs)) as [rs' | k vs rs' | fault | ];
-      [ intros _; exact Hplain | exact Hplain | exact I | exact I ].
+        [ | exact Hsimples ].
+      intros x kind d body v hp' rd' He.
+      contradiction (Hnot_let x kind d body He). }
+    destruct (plain_step (count_uses rs)) as [rs' | k vs rs' | fault];
+      [ intros _; exact Hplain | exact Hplain | exact I ].
 Qed.
 
 End Region_step_values.

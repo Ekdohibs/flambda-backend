@@ -66,7 +66,9 @@ Lemma caller_holds_live (rs : region_state) (a : caller) (l : lifetime)
 Proof.
   intros [Hms Hplaced] [Husable Hholds].
   destruct l as [ | | r | ]; cbn [lifetime_usable lifetime_holds] in *.
-  - exact (value_all_mono _ _ v (heap_live rs) Hholds).
+  - unfold value_for_ever in Hholds.
+    apply andb_true_iff in Hholds as [Hholds _].
+    exact (value_all_mono _ _ v (heap_live rs) Hholds).
   - exact (value_within_live rs _ v Hholds).
   - destruct (region_place_open _ _ (caller_marks a) (Some (caller_next a)) r
                 Hms Husable)
@@ -174,8 +176,7 @@ End Spine.
 Lemma invariant_fresh (rs : region_state) :
   region_invariant rs = true -> symbols_fresh rs = true.
 Proof.
-  unfold region_invariant. intros H. apply andb_true_iff in H as [H _].
-  exact H.
+  intros H. apply region_invariant_parts in H as [H _]. exact H.
 Qed.
 
 (* The continuation that a jump of the state that runs goes to. *)
@@ -199,8 +200,8 @@ Qed.
 Lemma checked_state_reads_live : checked_reads_live_statement.
 Proof.
   intros cert codes rs
-    (Hinv & Hord & Hcode & Hlocal & Hframes & Hstatics & Hplain & Hpaps & cs
-     & ms & Hcheck & Hincl & Hrun & Hconts).
+    (Hinv & Hord & Hcode & Hlocal & Hframes & Hstatics & Hplain & Hpaps
+     & Hcells & cs & ms & Hcheck & Hincl & Hrun & Hconts).
   pose proof (invariant_fresh rs Hinv) as Hfresh.
   unfold reads_live. cbv zeta. split; [ | split ].
   - apply simples_ok_live.

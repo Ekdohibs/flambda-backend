@@ -44,17 +44,21 @@ Definition region_named (d : named) : bool :=
   end.
 
 (* The step of a [Let] of a named expression that is not a primitive of
-   regions and that the machine runs (decision D53), the test of the
-   simples done. *)
+   regions, the test of the simples done. *)
 Definition let_step (rs : region_state) (x : variable) (kind : flambda_kind)
     (d : named) (body : expr) : region_step_result :=
   match marker_of x body with
   | Marker y region body' => local_allocation rs x y kind d region body'
   | Bad_marker => Region_undefined Not_of_the_conversion
   | No_marker =>
-    if is_allocation d && existsb (simple_local rs) (simples_of_named d)
+    if (is_allocation d || is_cell_allocation d)
+       && existsb (simple_local rs) (simples_of_named d)
     then Region_undefined Heap_holds_local
-    else plain_step rs
+    else
+      match store_fault rs d with
+      | Some fault => Region_undefined fault
+      | None => plain_step rs
+      end
   end.
 
 Lemma region_step_let (rs : region_state) (x : variable)
@@ -64,32 +68,11 @@ Lemma region_step_let (rs : region_state) (x : variable)
   simples_fault rs (evaluated_simples (state_expr (rs_state rs)))
     (region_places rs)
   = None ->
-  region_step rs
-  = if named_needs_heap (state_vars (rs_state rs)) d
-    then Region_let_not_run
-    else let_step (count_uses rs) x kind d body.
+  region_step rs = let_step (count_uses rs) x kind d body.
 Proof.
   intros He Hd Hfault. unfold region_step. cbv zeta. rewrite Hfault, He.
   destruct d as [s | [u | b | v | hp | rp] args | | | | | ];
     first [ reflexivity | discriminate ].
-Qed.
-
-(* Where it is a step, the machine ran the [Let]. *)
-Lemma region_step_let_step (rs rs' : region_state) (x : variable)
-    (kind : flambda_kind) (d : named) (body : expr) :
-  state_expr (rs_state rs) = Let x kind d body ->
-  region_named d = false ->
-  simples_fault rs (evaluated_simples (state_expr (rs_state rs)))
-    (region_places rs)
-  = None ->
-  region_step rs = Region_step rs' ->
-  named_needs_heap (state_vars (rs_state rs)) d = false
-  ∧ let_step (count_uses rs) x kind d body = Region_step rs'.
-Proof.
-  intros He Hd Hfault. rewrite (region_step_let rs x kind d body He Hd Hfault).
-  destruct (named_needs_heap (state_vars (rs_state rs)) d);
-    [ discriminate | ].
-  intros Hstep. split; [ reflexivity | exact Hstep ].
 Qed.
 
 (* The step of a [Let] of a primitive of regions. *)
@@ -127,7 +110,7 @@ Definition check_let (cs : check_state) (x : variable) (kind : flambda_kind)
   && forallb (check_usable cs) simples
   && match marker_of x body with
      | Marker y region _ =>
-       is_allocation d
+       (is_allocation d || is_cell_allocation d)
        && kind_eqb kind Value
        && not_a_region cs y
        && match region with
@@ -138,20 +121,31 @@ Definition check_let (cs : check_state) (x : variable) (kind : flambda_kind)
        && forallb (closure_may_be_local cert) (closure_code d)
        && match body with
           | Let _ _ _ body' =>
+            let made :=
+              if is_cell_allocation d
+              then shortest cs (map (lifetime_of cs) simples)
+              else newest_lifetime cs
+            in
             check_expr cert codes
-              (bind_lifetime y (newest_lifetime cs)
-                 (bind_lifetime x (newest_lifetime cs) cs))
+              (bind_lifetimes y (newest_lifetime cs) made
+                 (bind_lifetimes x (newest_lifetime cs) made cs))
               body'
           | _ => false
           end
      | Bad_marker => false
      | No_marker =>
-       if is_allocation d
+       if is_allocation d || is_cell_allocation d
        then
          forallb (fun s => is_forever (lifetime_of cs s)) simples
          && check_expr cert codes (bind_lifetime x Forever cs) body
        else
-         check_expr cert codes (bind_lifetime x (named_lifetime cs d) cs) body
+         match stored d with
+         | Some (_, new) => is_forever (lifetime_of cs new)
+         | None => true
+         end
+         && check_expr cert codes
+              (bind_lifetimes x (named_lifetime cs d) (named_contents cs d) cs)
+              body
      end.
 
 Lemma check_expr_let (cs : check_state) (x : variable) (kind : flambda_kind)
@@ -173,7 +167,8 @@ Definition check_region_let (cs : check_state) (x : variable)
     && not_a_region cs x
     && check_expr cert codes
          (Check_state ((x, Gone) :: cs_env cs) (x :: cs_open cs)
-            (x :: cs_regions cs) (cs_conts cs))
+            (x :: cs_regions cs) (cs_conts cs)
+            ((x, Gone) :: cs_contents cs))
          body
   | (End_region | End_try_region), [Var r] =>
     kind_eqb kind Value
@@ -181,7 +176,8 @@ Definition check_region_let (cs : check_state) (x : variable)
     && among r (cs_open cs)
     && check_expr cert codes
          (Check_state ((x, Forever) :: cs_env cs)
-            (regions_below r (cs_open cs)) (cs_regions cs) (cs_conts cs))
+            (regions_below r (cs_open cs)) (cs_regions cs) (cs_conts cs)
+            ((x, Forever) :: cs_contents cs))
          body
   | _, _ => false
   end.

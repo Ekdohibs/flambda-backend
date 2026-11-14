@@ -33,7 +33,6 @@ From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaMapProofs FlambdaSemanticsSpec FlambdaSemanticsProofs
   FlambdaRegionsSpec.
-From OxCamlFlambda2 Require FlambdaRegionsNeedsHeapProofs.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -92,9 +91,20 @@ Proof.
   destruct (state_statics (rs_state rs)). reflexivity.
 Qed.
 
+Lemma local_cell_no_frames (rs : region_state) (l : location) :
+  rs_frames rs = [] -> local_cell rs l = None.
+Proof.
+  unfold local_cell. intros ->.
+  destruct (lookup l (rs_cells rs)); reflexivity.
+Qed.
+
 Lemma value_local_no_frames (rs : region_state) (v : value) :
   rs_frames rs = [] -> value_local rs v = false.
-Proof. unfold value_local. intros ->. destruct v; reflexivity. Qed.
+Proof.
+  intros Hframes. destruct v; simpl; try reflexivity.
+  - rewrite Hframes. reflexivity.
+  - rewrite (local_cell_no_frames _ _ Hframes). reflexivity.
+Qed.
 
 Lemma simple_local_no_frames (rs : region_state) (s : simple) :
   rs_frames rs = [] -> simple_local rs s = false.
@@ -109,6 +119,23 @@ Lemma existsb_simple_local_no_frames (rs : region_state) (l : list simple) :
 Proof.
   intros Hframes. induction l as [ | s l IH]; simpl; [ reflexivity | ].
   rewrite (simple_local_no_frames rs s Hframes). exact IH.
+Qed.
+
+(* With no frame no store is refused: no cell is in a frame, and no
+   value is local. *)
+Lemma store_fault_no_frames (rs : region_state) (d : named) :
+  rs_frames rs = [] -> store_fault rs d = None.
+Proof.
+  intros Hframes. unfold store_fault.
+  destruct (stored d) as [[cell new] | ]; [ | reflexivity ].
+  destruct (eval_simple (state_vars (rs_state rs)) cell) as [vc | ];
+    [ | reflexivity ].
+  destruct vc; try reflexivity.
+  destruct (eval_simple (state_vars (rs_state rs)) new) as [v | ];
+    [ | reflexivity ].
+  rewrite (local_cell_no_frames _ _ Hframes),
+    (value_local_no_frames _ v Hframes).
+  reflexivity.
 Qed.
 
 Lemma value_open_mark_no_frames (rs : region_state) (v : value) :
@@ -157,11 +184,9 @@ Qed.
 
 Theorem region_step_plain : region_step_plain_statement.
 Proof.
-  intros rs Hframes Hhead Husable Hrun.
-  unfold region_step in Hrun |- *.
-  rewrite (simples_fault_usable _ _ _ Husable) in Hrun |- *.
-  cbv zeta in Hrun |- *.
-  set (rs1 := count_uses rs) in *.
+  intros rs Hframes Hhead Husable.
+  unfold region_step. rewrite (simples_fault_usable _ _ _ Husable). cbv zeta.
+  set (rs1 := count_uses rs).
   assert (Hframes1 : rs_frames rs1 = []) by exact Hframes.
   assert (Hplain :
             (∀ (bindings : list static_binding) (body : expr),
@@ -172,11 +197,9 @@ Proof.
   assert (Hlocal :
             ∀ l : list simple, existsb (simple_local rs1) l = false).
   { intros l. exact (existsb_simple_local_no_frames rs1 l Hframes1). }
-  revert Hrun.
   destruct (state_expr (rs_state rs))
     as [x kind d body | bindings body | k h body | handlers body | ap | ac
        | scrutinee arms | ] eqn:He;
-    intros Hrun;
     try (apply Hplain; intros bindings0 body0; try rewrite He; discriminate).
   - assert (Hrest :
               match marker_of x body with
@@ -184,10 +207,14 @@ Proof.
                 local_allocation rs1 x y kind d region body'
               | Bad_marker => Region_undefined Not_of_the_conversion
               | No_marker =>
-                if is_allocation d
+                if (is_allocation d || is_cell_allocation d)
                    && existsb (simple_local rs1) (simples_of_named d)
                 then Region_undefined Heap_holds_local
-                else plain_step rs1
+                else
+                  match store_fault rs1 d with
+                  | Some fault => Region_undefined fault
+                  | None => plain_step rs1
+                  end
               end
               = of_plain_result rs (rs_counts rs1) (step (rs_state rs))).
     { assert (Hmarker : marker_of x body = No_marker).
@@ -195,12 +222,11 @@ Proof.
           simpl in Hhead;
           try discriminate Hhead;
           destruct (marker_of x body); try discriminate Hhead; reflexivity. }
-      rewrite Hmarker, Hlocal, andb_false_r.
+      rewrite Hmarker, Hlocal, andb_false_r,
+        (store_fault_no_frames rs1 d Hframes1).
       apply Hplain. intros bindings0 body0. try rewrite He. discriminate. }
     destruct d as [s | [u | b | v | hp | rp] args | | | | | ];
-      try exact Hrest;
-      try (destruct (named_needs_heap _ _);
-           [ exfalso; apply Hrun; reflexivity | exact Hrest ]).
+      try exact Hrest.
     discriminate Hhead.
   - rewrite Hlocal. unfold static_step.
     change (rs_state rs1) with (rs_state rs).
@@ -351,17 +377,27 @@ Lemma local_allocation_shape (rs rs' : region_state) (x y : variable)
   rs_base rs' = rs_base rs ∧ step_shape rs rs'.
 Proof.
   intros Hends. unfold local_allocation.
-  destruct (is_allocation d && kind_eqb kind Value); [ | discriminate ].
-  destruct (named_region rs region) as [other | ]; [ | discriminate ].
-  destruct (eval_named (live_statics rs) (state_vars (rs_state rs)) d)
-    as [v | ]; [ | discriminate ].
-  destruct (localise (rs_next rs) v) as [[sym bindings] | ] eqn:Hlocalise;
-    [ | discriminate ].
-  destruct (rs_frames rs) as [ | [m mark_kind locals] frames] eqn:Hframes;
-    intros [= <-]; (split; [ reflexivity | ]);
-    apply (Shape_local _ _ v sym bindings);
-    try reflexivity; try exact Hlocalise; try exact Hends;
-    rewrite Hframes; split; reflexivity.
+  destruct (is_cell_allocation d && kind_eqb kind Value).
+  - unfold local_cell_allocation.
+    destruct (named_region rs region) as [other | ]; [ | discriminate ].
+    destruct
+      (exec_named (live_statics rs) (state_heap (rs_state rs))
+         (state_reads (rs_state rs)) (state_vars (rs_state rs)) d)
+      as [[[v hp] rd] | ]; [ | discriminate ].
+    destruct v; try discriminate.
+    intros [= <-]. split; [ reflexivity | ].
+    apply Shape_plain; try reflexivity. exact Hends.
+  - destruct (is_allocation d && kind_eqb kind Value); [ | discriminate ].
+    destruct (named_region rs region) as [other | ]; [ | discriminate ].
+    destruct (eval_named (live_statics rs) (state_vars (rs_state rs)) d)
+      as [v | ]; [ | discriminate ].
+    destruct (localise (rs_next rs) v) as [[sym bindings] | ] eqn:Hlocalise;
+      [ | discriminate ].
+    destruct (rs_frames rs) as [ | [m mark_kind locals] frames] eqn:Hframes;
+      intros [= <-]; (split; [ reflexivity | ]);
+      apply (Shape_local _ _ v sym bindings);
+      try reflexivity; try exact Hlocalise; try exact Hends;
+      rewrite Hframes; split; reflexivity.
 Qed.
 
 Lemma region_apply_cont_shape (rs rs' : region_state) (ac : apply_cont) :
@@ -433,10 +469,14 @@ Proof.
                 local_allocation rs1 x y kind d region body'
               | Bad_marker => Region_undefined Not_of_the_conversion
               | No_marker =>
-                if is_allocation d
+                if (is_allocation d || is_cell_allocation d)
                    && existsb (simple_local rs1) (simples_of_named d)
                 then Region_undefined Heap_holds_local
-                else plain_step rs1
+                else
+                  match store_fault rs1 d with
+                  | Some fault => Region_undefined fault
+                  | None => plain_step rs1
+                  end
               end
               = Region_step rs' ->
               rs_base rs' = rs_base rs1 ∧ step_shape rs1 rs').
@@ -445,15 +485,15 @@ Proof.
         [ | apply local_allocation_shape; rewrite He; exact Hends
           | discriminate ].
       destruct
-        (is_allocation d && existsb (simple_local rs1) (simples_of_named d));
+        ((is_allocation d || is_cell_allocation d)
+         && existsb (simple_local rs1) (simples_of_named d));
         [ discriminate | ].
+      destruct (store_fault rs1 d); [ discriminate | ].
       apply plain_step_shape;
         [ intros bindings0 body0; try rewrite He; discriminate
         | rewrite He; exact Hends ]. }
     destruct d as [s | [u | b | v | hp | rp] args | | | | | ];
-      try (apply Hrest; reflexivity);
-      try (destruct (named_needs_heap _ _);
-           [ discriminate | apply Hrest; reflexivity ]).
+      try (apply Hrest; reflexivity).
     destruct rp, args as [ | arg [ | arg' args]]; try discriminate.
     + apply begin_region_shape. rewrite He. reflexivity.
     + apply begin_region_shape. rewrite He. reflexivity.
@@ -658,6 +698,7 @@ Proof.
     split; [ exact Hstack | ].
     apply lookup_app_none. split; [ exact Hlocals | ].
     unfold region_names_fresh in Hfresh.
+    apply andb_true_iff in Hfresh as [Hfresh _].
     apply andb_true_iff in Hfresh as [Hexpr _].
     rewrite He in Hexpr. simpl in Hexpr.
     apply andb_true_iff in Hexpr as [Hbindings _].
@@ -750,12 +791,3 @@ Proof.
     cbn [state_expr state_vars state_conts state_statics state_heap].
     rewrite step_apply_cont, Hargs. reflexivity.
 Qed.
-
-(* ======================================================================== *)
-(* The heap and the read record                                             *)
-(* ======================================================================== *)
-
-(* The statement of decision D53, as FlambdaRegionsNeedsHeapProofs.v
-   proves it. *)
-Theorem region_step_keeps_memory : region_step_keeps_memory_statement.
-Proof. exact FlambdaRegionsNeedsHeapProofs.region_step_keeps_memory. Qed.

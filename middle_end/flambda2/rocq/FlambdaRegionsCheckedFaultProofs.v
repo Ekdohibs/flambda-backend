@@ -33,11 +33,12 @@ From Stdlib Require Import ZArith List Bool Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaPrimitiveModel
   FlambdaModel FlambdaMapSpec FlambdaMapProofs FlambdaValueSpec
-  FlambdaPrimitiveSpec FlambdaHeapProofs
+  FlambdaPrimitiveSpec FlambdaHeapSpec FlambdaHeapProofs
   FlambdaSemanticsSpec FlambdaRegionsSpec FlambdaRegionsProofs
   FlambdaRegionsReadsProofs FlambdaRegionsStepsProofs
   FlambdaRegionsFreshProofs FlambdaRegionsInvariantSpec
-  FlambdaRegionsInvariantProofs FlambdaRegionsErasureSpec
+  FlambdaRegionsCellsProofs FlambdaRegionsInvariantProofs
+  FlambdaRegionsErasureSpec
   FlambdaRegionsCallsSpec FlambdaRegionsCheckSpec FlambdaRegionsCheckedSpec.
 From OxCamlFlambda2 Require Import FlambdaRegionsCheckedBasicsProofs
   FlambdaRegionsCheckedHeadProofs FlambdaRegionsCheckedReadsProofs
@@ -167,11 +168,69 @@ Proof.
   rewrite (heap_value_not_local rs v Hfresh Hheap) in Hlocal. discriminate.
 Qed.
 
+(* What makes a cell, or allocates, is no store. *)
+Lemma allocation_not_stored (d : named) :
+  is_allocation d || is_cell_allocation d = true -> stored d = None.
+Proof.
+  destruct d as [s | [u | b | va | q | rp] args | | | | | ];
+    try reflexivity.
+  destruct q; first [ reflexivity | discriminate ].
+Qed.
+
+(* A value that is not local is in no frame, and lives as long as any
+   cell. *)
+Lemma not_local_no_frame (rs : region_state) (v : value) :
+  value_local rs v = false -> value_frame rs v = None.
+Proof.
+  destruct v; try reflexivity; cbn [value_local value_frame].
+  - intros Hlocal.
+    destruct (find (fun f => is_some (lookup s (frame_locals f)))
+                (rs_frames rs))
+      as [f | ] eqn:Hfind; [ | reflexivity ].
+    destruct (find_some _ _ Hfind) as [Hin Hs].
+    pose proof (local_in_frame (rs_frames rs) f s Hin Hs) as Hyes.
+    unfold local_in in Hyes. rewrite Hyes in Hlocal. discriminate.
+  - destruct (local_cell rs l); [ discriminate | reflexivity ].
+Qed.
+
+(* A store of what the check takes to live for ever is no fault
+   (decision D54). *)
+Lemma forever_store_no_fault (rs : region_state) (cs : check_state)
+    (ms : list mark) (d : named) :
+  symbols_fresh rs = true ->
+  running_checked rs cs ms ->
+  (∀ s : simple,
+     In s (simples_of_named d) -> simple_below (rs_base rs) s = true) ->
+  match stored d with
+  | Some (_, new) => is_forever (lifetime_of cs new)
+  | None => true
+  end
+  = true ->
+  store_fault rs d = None.
+Proof.
+  intros Hfresh Hrun Hbelow Hforever. unfold store_fault.
+  destruct (stored d) as [[target new] | ] eqn:Hstored; [ | reflexivity ].
+  destruct (eval_simple (state_vars (rs_state rs)) target)
+    as [[ | | | | | | | l | ] | ];
+    try reflexivity.
+  destruct (eval_simple (state_vars (rs_state rs)) new) as [v | ] eqn:Hv;
+    [ | reflexivity ].
+  pose proof
+    (running_forever_heap rs cs ms new v Hrun
+       (Hbelow new (proj2 (stored_simples d target new Hstored))) Hforever Hv)
+    as Hheap.
+  pose proof (heap_value_not_local rs v Hfresh Hheap) as Hlocal.
+  destruct (local_cell rs l) as [m | ].
+  - unfold lives_as_long. rewrite (not_local_no_frame rs v Hlocal).
+    reflexivity.
+  - rewrite Hlocal. reflexivity.
+Qed.
+
 Lemma checked_state_fault : checked_fault_statement.
 Proof.
   intros cert codes rs fault
-    (Hinv & Hord & Hcode & Hlocal & Hframes & Hstatics & Hplain & Hpaps & cs
-     & ms & Hcheck & Hincl & Hrun & Hconts)
+    (Hinv & Hord & Hcode & Hlocal & Hframes & Hstatics & Hplain & Hpaps
+     & Hcells & cs & ms & Hcheck & Hincl & Hrun & Hconts)
     Hstep.
   pose proof (invariant_fresh rs Hinv) as Hfresh.
   pose proof
@@ -215,8 +274,6 @@ Proof.
     + (* another [Let] *)
       rewrite (region_step_let rs x kind d body He Hd) in Hstep
         by (rewrite He; exact Hnofault).
-      destruct (named_needs_heap (state_vars (rs_state rs)) d);
-        [ discriminate | ].
       rewrite (check_expr_let cert codes cs x kind d body Hd) in Hcheck.
       unfold let_step in Hstep. unfold check_let in Hcheck. cbv zeta in Hcheck.
       apply andb_true_iff in Hcheck as [Hcheck Hrest].
@@ -227,21 +284,30 @@ Proof.
           first [ reflexivity | discriminate ]. }
       rewrite Hsimples in Hbelow.
       destruct (marker_of x body) as [ | y region body' | ].
-      * destruct (is_allocation d) eqn:Halloc; cbn [andb] in Hstep.
+      * change (store_fault (count_uses rs) d) with (store_fault rs d)
+          in Hstep.
+        destruct (is_allocation d || is_cell_allocation d) eqn:Halloc;
+          cbn [andb] in Hstep.
         -- apply andb_true_iff in Hrest as [Hforever _].
            change (existsb (simple_local (count_uses rs)) (simples_of_named d))
              with (existsb (simple_local rs) (simples_of_named d)) in Hstep.
            rewrite (forever_none_local rs cs ms _ Hfresh Hrun Hbelow Hforever)
              in Hstep.
+           unfold store_fault in Hstep.
+           rewrite (allocation_not_stored d Halloc) in Hstep.
            exact (plain_step_fault _ _ Hstep).
-        -- exact (plain_step_fault _ _ Hstep).
+        -- apply andb_true_iff in Hrest as [Hstored _].
+           rewrite (forever_store_no_fault rs cs ms d Hfresh Hrun Hbelow
+                      Hstored)
+             in Hstep.
+           exact (plain_step_fault _ _ Hstep).
       * apply andb_true_iff in Hrest as [Hrest _].
         apply andb_true_iff in Hrest as [Hrest _].
         apply andb_true_iff in Hrest as [Hrest Hregion].
         apply andb_true_iff in Hrest as [Hrest _].
         apply andb_true_iff in Hrest as [Halloc Hkind].
         unfold local_allocation in Hstep. cbv zeta in Hstep.
-        rewrite Halloc, Hkind in Hstep. cbn [andb] in Hstep.
+        rewrite Hkind, !andb_true_r in Hstep.
         assert (Hnamed : ∃ other : bool,
                   named_region (count_uses rs) region = Some other).
         { unfold named_region. destruct region as [[r | sym | c] | ];
@@ -253,7 +319,30 @@ Proof.
           change (rs_frames (count_uses rs)) with (rs_frames rs).
           cbn [eval_simple]. rewrite Hr, Hon.
           destruct (newest_plain (rs_frames rs)); eexists; reflexivity. }
-        destruct Hnamed as (other & Hnamed). rewrite Hnamed in Hstep.
+        destruct Hnamed as (other & Hnamed).
+        destruct (is_cell_allocation d) eqn:Hcell.
+        { (* a cell *)
+          unfold local_cell_allocation in Hstep. cbv zeta in Hstep.
+          rewrite Hnamed in Hstep.
+          match type of Hstep with
+          | context [exec_named ?st ?hp ?rd ?vars d] =>
+            destruct (exec_named st hp rd vars d) as [[[v hp'] rd'] | ]
+              eqn:Hexec
+          end;
+            [ | injection Hstep as <-; reflexivity ].
+          destruct (exec_named_heap_cases _ _ _ _ _ _ _ _ Hexec)
+            as [[Hno _]
+               | [(_ & vs & c & _ & _ & Hv & _)
+                 | (target & new_simple & l & new & c & c' & i & Hstored
+                    & _)]].
+          - rewrite (cell_allocation_changes_heap d Hcell) in Hno.
+            discriminate.
+          - rewrite Hv in Hstep. discriminate.
+          - rewrite (allocation_not_stored d) in Hstored;
+              [ discriminate | ].
+            rewrite Hcell. apply orb_true_r. }
+        cbn [orb] in Halloc. rewrite orb_false_r in Halloc.
+        rewrite Halloc, Hnamed in Hstep.
         destruct (eval_named (live_statics (count_uses rs))
                     (state_vars (rs_state (count_uses rs))) d)
           as [v | ] eqn:Hv; [ | injection Hstep as <-; reflexivity ].

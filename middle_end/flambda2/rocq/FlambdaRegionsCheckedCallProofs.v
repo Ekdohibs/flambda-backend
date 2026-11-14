@@ -35,10 +35,11 @@ From Stdlib Require Import ZArith List Bool Lia PeanoNat.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaMapSpec FlambdaMapProofs FlambdaBindersProofs FlambdaValueSpec
-  FlambdaHeapProofs FlambdaSemanticsSpec FlambdaSemanticsProofs
-  FlambdaClosuresProofs FlambdaRegionsSpec FlambdaRegionsProofs
-  FlambdaRegionsReadsProofs FlambdaRegionsFreshProofs
-  FlambdaRegionsInvariantSpec FlambdaRegionsInvariantProofs
+  FlambdaHeapSpec FlambdaHeapProofs FlambdaSemanticsSpec
+  FlambdaSemanticsProofs FlambdaClosuresProofs FlambdaRegionsSpec
+  FlambdaRegionsProofs FlambdaRegionsReadsProofs FlambdaRegionsFreshProofs
+  FlambdaRegionsInvariantSpec FlambdaRegionsCellsProofs
+  FlambdaRegionsInvariantProofs
   FlambdaRegionsErasureSpec FlambdaRegionsCallsSpec FlambdaRegionsCheckSpec
   FlambdaRegionsCheckedSpec.
 From OxCamlFlambda2 Require Import FlambdaRegionsCheckedBasicsProofs
@@ -144,6 +145,8 @@ Hypothesis Hdeep : frames_deep rs (rs_frames rs) = true.
 
 Hypothesis Hstatics : statics_deep rs = true.
 
+Hypothesis Hcells : cells_deep rs = true.
+
 Hypothesis Hgood_statics :
   Forall (fun binding => allocated_values (good cert codes rs) (snd binding))
     (static_values (live_statics rs)).
@@ -159,10 +162,13 @@ Proof.
   destruct (FlambdaSemanticsProofs.block_of_cases _ _ _ _ Hblock)
     as [-> | (s & -> & Hlookup)].
   - destruct Htuple as [Hplain Hfits].
-    cbn [value_plain value_all value_paps] in *.
+    cbn [value_plain value_all value_all_cells value_paps] in *.
+    apply andb_true_iff in Hplain as [Hplain Hplain_cells].
     apply Forall_forall. intros w Hin.
     split;
-      [ apply all_plain; exact (forallb_in _ _ w Hplain Hin)
+      [ apply all_plain;
+          [ exact (forallb_in _ _ w Hplain Hin)
+          | exact (forallb_in _ _ w Hplain_cells Hin) ]
       | exact (forallb_in _ _ w Hfits Hin) ].
   - apply lookup_in in Hlookup. rewrite Forall_forall in Hgood_statics.
     exact (Hgood_statics (s, Static_block tag block) Hlookup).
@@ -194,8 +200,41 @@ Proof.
     rewrite Hframes, <- app_assoc. reflexivity.
 Qed.
 
-(* A closure that is called: it is live; and it reaches symbols of the
-   heap only, unless a closure of its code may be local. *)
+(* What the frames bind reaches locations of cells that are not
+   dead. *)
+Lemma frames_within_cells :
+  ∀ above rest : list frame,
+    rs_frames rs = above ++ rest ->
+    frames_deep_cells rs rest = true ->
+    forallb
+      (fun '(_, allocated) =>
+         forallb (value_all_cells (cell_within rs None))
+           (values_of_static allocated))
+      (live_locals rest)
+    = true.
+Proof.
+  intros above rest. revert above.
+  induction rest as [ | f below IH]; intros above Hframes;
+    [ reflexivity | ].
+  cbn [frames_deep_cells]. intros H. apply andb_true_iff in H as [Hf Hbelow].
+  change (live_locals (f :: below)) with (frame_locals f ++ live_locals below).
+  rewrite forallb_app. apply andb_true_iff. split.
+  - apply forallb_forall. intros [s allocated] Hin.
+    pose proof (forallb_in _ _ (s, allocated) Hf Hin) as Hall.
+    cbv beta iota in Hall. apply forallb_forall. intros w Hw.
+    pose proof (forallb_in _ _ w Hall Hw) as Hcells_w. revert Hcells_w.
+    apply value_all_cells_mono. intros l. unfold cell_within, cell_in.
+    intros H0. apply orb_true_iff in H0 as [-> | H0]; [ reflexivity | ].
+    apply orb_true_iff. right.
+    destruct (lookup l (rs_cells rs)) as [m | ]; [ | discriminate ].
+    rewrite Hframes, on_stack_app, H0, orb_true_r. reflexivity.
+  - apply (IH (above ++ [f])); [ | exact Hbelow ].
+    rewrite Hframes, <- app_assoc. reflexivity.
+Qed.
+
+(* A closure that is called: it is live; and it reaches symbols and
+   locations of the heap only, unless a closure of its code may be
+   local. *)
 Lemma closure_place (closure : value) (id : code_id)
     (slots : list (value_slot * value)) (entry : code_entry) :
   closure_of (live_statics rs) closure = Some (id, slots) ->
@@ -203,7 +242,7 @@ Lemma closure_place (closure : value) (id : code_id)
   lookup id (cert_code cert) = Some entry ->
   live rs closure
   ∧ (ce_closure_local entry = false ->
-     value_all (heap_symbol rs) closure = true).
+     value_for_ever rs closure = true).
 Proof.
   intros Hof [Hplain _] Hentry.
   destruct closure
@@ -221,7 +260,8 @@ Proof.
     destruct (lookup s (live_locals (rs_frames rs))) as [local | ]
       eqn:Hlocal_s.
     + injection Hs as ->. split.
-      * unfold live, value_within. cbn [value_all].
+      * unfold live, value_within. cbn [value_all value_all_cells].
+        rewrite andb_true_r.
         unfold symbol_within, local_in. rewrite Hlocal_s. apply orb_true_r.
       * intros Hnot. exfalso.
         pose proof (forallb_in _ _ (s, allocated) Hlocal
@@ -241,19 +281,21 @@ Proof.
         congruence.
     + assert (Hheap : heap_symbol rs s = true).
       { unfold heap_symbol. rewrite Hs. destruct allocated; apply orb_true_r. }
-      split; [ | intros _; exact Hheap ].
-      unfold live, value_within. cbn [value_all]. unfold symbol_within.
-      rewrite Hheap. reflexivity.
+      split;
+        [ | intros _; unfold value_for_ever; cbn [value_all value_all_cells];
+            rewrite Hheap; reflexivity ].
+      unfold live, value_within. cbn [value_all value_all_cells].
+      unfold symbol_within. rewrite Hheap. reflexivity.
 Qed.
 
 (* The fields of a tuple that is live are live; those of one that
-   reaches symbols of the heap only reach such symbols only. *)
+   lives for ever live for ever. *)
 Lemma tuple_placed (tuple : value) (size : nat) (fields : list value) :
   live rs tuple ->
   tuple_fields (live_statics rs) size tuple = Some fields ->
   Forall (live rs) fields
-  ∧ (value_all (heap_symbol rs) tuple = true ->
-     Forall (fun v => value_all (heap_symbol rs) v = true) fields).
+  ∧ (value_for_ever rs tuple = true ->
+     Forall (fun v => value_for_ever rs v = true) fields).
 Proof.
   intros Hlive Hfields.
   destruct (tuple_fields_block _ _ _ _ Hfields) as [-> | Hblock];
@@ -261,10 +303,8 @@ Proof.
   destruct (FlambdaSemanticsProofs.block_of_cases _ _ _ _ Hblock)
     as [-> | (s & -> & Hlookup)].
   - split.
-    + unfold live, value_within in Hlive. cbn [value_all] in Hlive.
-      exact (proj1 (forallb_Forall _ _) Hlive).
-    + intros Hheap. cbn [value_all] in Hheap.
-      exact (proj1 (forallb_Forall _ _) Hheap).
+    + exact (proj1 (within_block rs None _ fields) Hlive).
+    + exact (proj1 (for_ever_block rs _ fields)).
   - unfold live_statics in Hlookup. cbn [static_values] in Hlookup.
     rewrite lookup_app in Hlookup.
     destruct (lookup s (live_locals (rs_frames rs))) as [local | ]
@@ -275,8 +315,21 @@ Proof.
                     (lookup_in _ _ _ Hlocal_s))
         as Hall.
       cbv beta iota in Hall. cbn [allocated_all] in Hall.
-      split; [ exact (proj1 (forallb_Forall _ _) Hall) | ].
-      intros Hheap. cbn [value_all] in Hheap.
+      pose proof Hcells as Hcells_frames. unfold cells_deep in Hcells_frames.
+      apply andb_true_iff in Hcells_frames as [Hcells_frames _].
+      apply andb_true_iff in Hcells_frames as [Hcells_frames _].
+      pose proof (forallb_in _ _ (s, Static_block 0 fields)
+                    (frames_within_cells [] (rs_frames rs) eq_refl
+                       Hcells_frames)
+                    (lookup_in _ _ _ Hlocal_s))
+        as Hall_cells.
+      cbv beta iota in Hall_cells. cbn [values_of_static] in Hall_cells.
+      split.
+      { apply Forall_forall. intros w Hin. unfold live, value_within.
+        rewrite (forallb_in _ _ w Hall Hin), (forallb_in _ _ w Hall_cells Hin).
+        reflexivity. }
+      intros Hheap. unfold value_for_ever in Hheap.
+      cbn [value_all value_all_cells] in Hheap. rewrite andb_true_r in Hheap.
       pose proof (heap_not_local rs s Hfresh Hheap) as Hnot.
       unfold not_local_symbol, value_local in Hnot. rewrite Hlocal_s in Hnot.
       cbn [is_some negb] in Hnot. rewrite andb_false_r in Hnot. discriminate.
@@ -284,9 +337,20 @@ Proof.
                     (lookup_in _ _ _ Hlookup))
         as Hall.
       cbv beta iota in Hall. cbn [allocated_all] in Hall.
-      split; [ | intros _; exact (proj1 (forallb_Forall _ _) Hall) ].
-      apply Forall_forall. intros w Hin.
-      exact (heap_within rs None w (forallb_in _ _ w Hall Hin)).
+      pose proof Hcells as Hcells_statics. unfold cells_deep in Hcells_statics.
+      apply andb_true_iff in Hcells_statics as [Hcells_statics _].
+      apply andb_true_iff in Hcells_statics as [_ Hcells_statics].
+      pose proof (forallb_in _ _ (s, Static_block 0 fields) Hcells_statics
+                    (lookup_in _ _ _ Hlookup))
+        as Hall_cells.
+      cbv beta iota in Hall_cells. cbn [values_of_static] in Hall_cells.
+      assert (Hforever : Forall (fun v => value_for_ever rs v = true) fields).
+      { apply Forall_forall. intros w Hin. unfold value_for_ever.
+        rewrite (forallb_in _ _ w Hall Hin), (forallb_in _ _ w Hall_cells Hin).
+        reflexivity. }
+      split; [ | intros _; exact Hforever ].
+      revert Hforever. apply Forall_impl. intros w.
+      exact (heap_within rs None w).
 Qed.
 
 End Reads.
@@ -330,20 +394,6 @@ Proof.
     intros b' H'. discriminate H'.
 Qed.
 
-(* A value that reaches symbols of the heap only is as any lifetime
-   says. *)
-Lemma heap_holds (rs : region_state) (opens : list variable) (ms : list mark)
-    (above : option symbol) (l : lifetime) (v : value) :
-  value_all (heap_symbol rs) v = true -> lifetime_holds rs opens ms above l v.
-Proof.
-  intros Hheap. destruct l as [ | | r | ]; cbn [lifetime_holds].
-  - exact Hheap.
-  - exact (heap_within rs _ v Hheap).
-  - destruct (region_place opens ms above r) as [[m stop] | ]; [ | exact I ].
-    intros _. exact (heap_within rs _ v Hheap).
-  - exact I.
-Qed.
-
 (* A partial application is as a lifetime says when its callee and its
    arguments are, and conversely. *)
 Lemma holds_partial (rs : region_state) (opens : list variable)
@@ -354,15 +404,12 @@ Lemma holds_partial (rs : region_state) (opens : list variable)
   <-> lifetime_holds rs opens ms above l callee
       ∧ Forall (lifetime_holds rs opens ms above l) args.
 Proof.
-  assert (Hall :
-    ∀ ok : symbol -> bool,
-      value_all ok (Value_partial_application callee args args_arity) = true
-      <-> value_all ok callee = true
-          ∧ Forall (fun v => value_all ok v = true) args).
-  { intros ok. cbn [value_all]. rewrite andb_true_iff, forallb_Forall.
-    reflexivity. }
+  pose proof
+    (fun stop : option symbol =>
+       within_partial rs stop callee args args_arity)
+    as Hall.
   destruct l as [ | | r | ]; cbn [lifetime_holds].
-  - apply Hall.
+  - apply for_ever_partial.
   - apply Hall.
   - destruct (region_place opens ms above r) as [[m stop] | ] eqn:Hplace.
     + split.
@@ -389,14 +436,14 @@ Qed.
 (* Arguments against the flags of the parameters                            *)
 (* ======================================================================== *)
 
-(* Each argument at a parameter reaches symbols of the heap only, or
-   the parameter may be given a local value. *)
+(* Each argument at a parameter lives for ever, or the parameter may
+   be given a local value. *)
 Definition fit_pointwise (rs : region_state) (flags : list bool)
     (vs : list value) : Prop :=
   ∀ (i : nat) (v : value) (flag : bool),
     nth_error vs i = Some v ->
     nth_error flags i = Some flag ->
-    value_all (heap_symbol rs) v = true ∨ flag = true.
+    value_for_ever rs v = true ∨ flag = true.
 
 Lemma pointwise_values_fit (rs : region_state) (flags : list bool) :
   ∀ vs : list value,
@@ -558,6 +605,10 @@ Hypothesis Hdeep : frames_deep rs (rs_frames rs) = true.
 
 Hypothesis Hstatics : statics_deep rs = true.
 
+Hypothesis Hordered : frames_ordered rs = true.
+
+Hypothesis Hcells : cells_deep rs = true.
+
 Hypothesis Hgood_statics :
   Forall (fun binding => allocated_values (good cert codes rs) (snd binding))
     (static_values (live_statics rs)).
@@ -647,8 +698,9 @@ Proof.
     destruct (call_code_step _ _ _ _ _ _ _ _ _ rd_ _ Hcall)
       as (callee_vars & _ & _ & _ & _ & Hbind & _).
     apply (enter_code cert codes rs a closure id c entry vs args_arity
-             return_arity return_to exn_to hp rd s' Hcaller Hcheck Hentry
-             Hgood_closure Hlive_closure Hheap_closure Hgood_vs Hlive_vs);
+             return_arity return_to exn_to hp rd s' Hordered Hcells Hcaller
+             Hcheck Hentry Hgood_closure Hlive_closure Hheap_closure Hgood_vs
+             Hlive_vs);
       [ | exact (Kfull Hlen) | exact Hraise | exact Hgood_ret | exact Hgood_exn
         | exact Hcall ].
     apply pointwise_values_fit; [ | exact Hfit ].
@@ -668,8 +720,9 @@ Proof.
                 (skipn (cardinal_unarized (code_params_arity c)) vs)
                 (partially_apply args_arity (length (code_params_arity c)))
                 return_arity return_to exn_to)
-             exn_to hp rd s' Hcaller Hcheck Hentry Hgood_closure Hlive_closure
-             Hheap_closure Hgood_first Hlive_first);
+             exn_to hp rd s' Hordered Hcells Hcaller Hcheck Hentry
+             Hgood_closure Hlive_closure Hheap_closure Hgood_first
+             Hlive_first);
       [ | exact (Kover Hlen Hkinds Hper) | exact Hraise | | exact Hgood_exn
         | exact Hcall ].
     + apply pointwise_values_fit;
@@ -705,7 +758,7 @@ Lemma caller_holds_facts (a : caller) (l : lifetime) (v : value) :
   caller_holds rs a l v ->
   live rs v
   ∧ lifetime_holds rs (cs_open (caller_check a)) (caller_marks a) None l v
-  ∧ (is_forever l = true -> value_all (heap_symbol rs) v = true).
+  ∧ (is_forever l = true -> value_for_ever rs v = true).
 Proof.
   intros Hcaller [Husable Hholds].
   pose proof (holds_none _ _ _ _ _ _ Hholds) as Hnone.
@@ -836,8 +889,8 @@ Lemma call_unknown_closure (a : caller) (l_c : lifetime) (ls : list lifetime)
           (shortest (caller_check a) (l_c :: ls)))
        vs
    ∧ (cert_partial_local cert = false ->
-      value_all (heap_symbol rs) closure = true
-      ∧ Forall (fun v => value_all (heap_symbol rs) v = true) vs)) ->
+      value_for_ever rs closure = true
+      ∧ Forall (fun v => value_for_ever rs v = true) vs)) ->
   shape_of_code_call closure c vs args_arity return_arity = Some shape ->
   run_call
     (fun partial => apply_cont_value return_to [partial] (live_statics rs) hp
@@ -943,8 +996,8 @@ Proof.
                     (caller_marked a Hcaller) (caller_placed rs a Hcaller)
                     Hrank).
       * destruct (Hstrict eq_refl) as [Hheap_closure Hheap_vs].
-        apply heap_holds. cbn [value_all]. rewrite Hheap_closure.
-        exact (proj2 (forallb_Forall _ _) Hheap_vs).
+        apply forever_holds. apply for_ever_partial.
+        split; [ exact Hheap_closure | exact Hheap_vs ].
 Qed.
 
 Lemma In_firstn {A : Type} (l : list A) :
@@ -1016,7 +1069,7 @@ Proof.
       (fun l v =>
          live rs v
          ∧ lifetime_holds rs (cs_open cs) (caller_marks a) None l v
-         ∧ (is_forever l = true -> value_all (heap_symbol rs) v = true))
+         ∧ (is_forever l = true -> value_for_ever rs v = true))
       ls vs).
   { revert Hholds. apply Forall2_impl. intros l v.
     exact (caller_holds_facts a l v Hcaller). }
@@ -1025,7 +1078,7 @@ Proof.
     exact (proj1 H). }
   assert (Hheap_vs :
     forallb is_forever ls = true ->
-    Forall (fun v => value_all (heap_symbol rs) v = true) vs).
+    Forall (fun v => value_for_ever rs v = true) vs).
   { intros Hforever. apply (Forall2_right_in _ _ ls vs Hfacts).
     intros l v Hin H. exact (proj2 (proj2 H) (forallb_in _ _ l Hforever Hin)). }
   assert (Hkept_vs :
@@ -1056,8 +1109,8 @@ Proof.
       as Hgood_vs'.
     pose proof (arguments_for_code_forall (live rs) _ _ _ _ _ _
                   (fun size tuple fields Hl Hf =>
-                     proj1 (tuple_placed rs Hfresh Hdeep Hstatics tuple size
-                              fields Hl Hf))
+                     proj1 (tuple_placed rs Hfresh Hdeep Hstatics Hcells tuple
+                              size fields Hl Hf))
                   Hlive_vs Hargs)
       as Hlive_vs'.
     assert (Hfit : fit_pointwise rs (ce_params_local entry) vs').
@@ -1065,11 +1118,11 @@ Proof.
         as [Hforever | Hlocal_cert].
       - assert (Hboth :
           Forall
-            (fun v => live rs v ∧ value_all (heap_symbol rs) v = true) vs').
+            (fun v => live rs v ∧ value_for_ever rs v = true) vs').
         { apply (arguments_for_code_forall _ _ _ _ _ _ _) with (3 := Hargs).
           - intros size tuple fields [Hl Hh] Hf.
-            destruct (tuple_placed rs Hfresh Hdeep Hstatics tuple size fields
-                        Hl Hf)
+            destruct (tuple_placed rs Hfresh Hdeep Hstatics Hcells tuple size
+                        fields Hl Hf)
               as [Hlive_fields Hheap_fields].
             specialize (Hheap_fields Hh). apply Forall_forall. intros w Hin.
             split;
@@ -1369,7 +1422,7 @@ Proof.
       (fun l v =>
          live rs v
          ∧ lifetime_holds rs (cs_open cs) (caller_marks a) None l v
-         ∧ (is_forever l = true -> value_all (heap_symbol rs) v = true))
+         ∧ (is_forever l = true -> value_for_ever rs v = true))
       ls vs).
   { revert Hholds. apply Forall2_impl. intros l v.
     exact (caller_holds_facts a l v Hcaller). }
@@ -1426,8 +1479,8 @@ Proof.
     as Hgood_vs'.
   pose proof (arguments_for_code_forall (live rs) _ _ _ _ _ _
                 (fun size tuple fields Hl Hf =>
-                   proj1 (tuple_placed rs Hfresh Hdeep Hstatics tuple size
-                            fields Hl Hf))
+                   proj1 (tuple_placed rs Hfresh Hdeep Hstatics Hcells tuple
+                            size fields Hl Hf))
                 Hlive_vs Hargs)
     as Hlive_vs'.
   unfold arguments_for_code in Hargs.
@@ -1453,7 +1506,7 @@ Proof.
       rewrite nth_error_app1 in Hv by exact Hi.
       apply orb_true_iff in Htuple_fit as [Hforever | Hall].
       - left.
-        destruct (tuple_placed rs Hfresh Hdeep Hstatics tuple _ fields
+        destruct (tuple_placed rs Hfresh Hdeep Hstatics Hcells tuple _ fields
                     Hlive_tuple Htuple)
           as [_ Hheap_fields].
         exact (proj1 (Forall_forall _ _) (Hheap_fields (Hheap_tuple Hforever)) v
@@ -1571,8 +1624,8 @@ Proof.
         apply (prefix_cardinal _ _ Hagree). lia. }
       assert (Hforever_kept :
         is_forever kept = true ->
-        value_all (heap_symbol rs) callee = true
-        ∧ Forall (fun v => value_all (heap_symbol rs) v = true) vs).
+        value_for_ever rs callee = true
+        ∧ Forall (fun v => value_for_ever rs v = true) vs).
       { intros Hforever. apply (is_forever_rank (cs_open cs)) in Hforever.
         split.
         - pose proof (rank_shortest_le cs (l_c :: ls) l_c (or_introl eq_refl))
@@ -1615,8 +1668,8 @@ Proof.
         -- destruct (is_forever kept) eqn:Hforever; [ | discriminate ].
            injection Hdirect as <-.
            destruct (Hforever_kept eq_refl) as [Hheap_callee Hheap_vs].
-           cbn [lifetime_holds value_all]. rewrite Hheap_callee.
-           exact (proj2 (forallb_Forall _ _) Hheap_vs).
+           cbn [lifetime_holds]. apply for_ever_partial.
+           split; [ exact Hheap_callee | exact Hheap_vs ].
 Qed.
 
 End Call.

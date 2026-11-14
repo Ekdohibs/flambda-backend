@@ -3,8 +3,7 @@
 
    - The forms of a step ([region_step_forms]):
      FlambdaRegionsStepsProofs.region_step_cases with what the test of
-     the simples gives at each form. A [Let] that the machine does not
-     run (decision D53) is one of the forms; nothing is shown of it.
+     the simples gives at each form.
    - The frames stay in the order of their marks
      ([region_step_keeps_frames_ordered]). That part is C2's.
    - Where a call, or the application of a continuation, lands (the
@@ -16,10 +15,17 @@
      abstract. It is used twice.
    - A mark is held by variables only ([region_step_marks]): a step of
      a state that has the invariant keeps the first part of the test,
-     on its own.
+     on its own. The heap is in that part: no value that a cell holds
+     is a mark or holds one ([heap_no_mark]), and a [Let] that is run
+     on the heap keeps it so ([exec_named_no_mark]).
    - The other parts ([region_step_calls]), given the first two. The
      end of a region is where the order of the frames and the age of
-     what is held are used ([end_region_usable]).
+     what is held are used ([end_region_usable]): a location that is
+     held and that the state lists has a mark smaller than that of the
+     region, so the frame of its cell stays ([on_stack_below]). A
+     local allocation of a cell lists a location that the heap did not
+     bind, which is none of the values that are held
+     ([local_cell_allocation_calls]).
    - The statements. *)
 
 From Stdlib Require Import ZArith List Bool Arith Lia.
@@ -31,11 +37,11 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaRegionsSpec FlambdaRegionsProofs FlambdaRegionsInvariantSpec
   FlambdaRegionsErasureSpec
   FlambdaRegionsReadsProofs FlambdaRegionsStepsProofs
-  FlambdaRegionsFreshProofs FlambdaRegionsNoPoisonProofs
+  FlambdaRegionsFreshProofs FlambdaRegionsCellsProofs
+  FlambdaRegionsNoPoisonProofs
   FlambdaRegionsOnceProofs FlambdaRegionsInvariantProofs
   FlambdaRegionsErasedProofs FlambdaRegionsPlainStepProofs
-  FlambdaRegionsErasureProofs FlambdaRegionsNeedsHeapProofs
-  FlambdaRegionsCallsSpec.
+  FlambdaRegionsErasureProofs FlambdaRegionsCallsSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -48,22 +54,15 @@ Import ListNotations.
    continuation, one of the arguments is a mark that is on the stack
    and the test of the simples passed; and at every other expression
    that [step] runs, each simple that the step evaluates may be
-   evaluated. A [Let] that the machine does not run (decision D53) is
-   a form of its own. The two forms of an ordinary [Let], one that is
-   not of a primitive of regions (a local allocation, and any other),
-   have that the defining expression does not need the heap. The
-   beginning and the end of a region are forms apart, as they were. *)
+   evaluated. What region_step_cases says of the local values among
+   the simples of a [Let] and of a [Let_static], and of the test of a
+   store, is left out: nothing here needs it. *)
 Section Region_step_forms.
 
 Variable rs : region_state.
 Variable Q : region_step_result -> Prop.
 
 Hypothesis Q_undefined : ∀ fault : region_fault, Q (Region_undefined fault).
-Hypothesis Q_let_not_run :
-  ∀ (x : variable) (kind : flambda_kind) (d : named) (body : expr),
-    state_expr (rs_state rs) = Let x kind d body ->
-    named_needs_heap (state_vars (rs_state rs)) d = true ->
-    Q Region_let_not_run.
 Hypothesis Q_begin :
   ∀ (x : variable) (kind : flambda_kind) (d : named) (mark_kind : mark_kind)
     (body : expr),
@@ -79,14 +78,21 @@ Hypothesis Q_local :
   ∀ (x : variable) (kind : flambda_kind) (d : named) (body : expr)
     (y : variable) (region : option simple) (body' : expr),
     state_expr (rs_state rs) = Let x kind d body ->
-    named_needs_heap (state_vars (rs_state rs)) d = false ->
     marker_of x body = Marker y region body' ->
     forallb (simple_usable rs) (simples_of_named d) = true ->
+    is_cell_allocation d && kind_eqb kind Value = false ->
     Q (local_allocation (count_uses rs) x y kind d region body').
+Hypothesis Q_local_cell :
+  ∀ (x : variable) (kind : flambda_kind) (d : named) (body : expr)
+    (y : variable) (region : option simple) (body' : expr),
+    state_expr (rs_state rs) = Let x kind d body ->
+    marker_of x body = Marker y region body' ->
+    forallb (simple_usable rs) (simples_of_named d) = true ->
+    is_cell_allocation d = true ->
+    Q (local_cell_allocation (count_uses rs) x y d region body').
 Hypothesis Q_let :
   ∀ (x : variable) (kind : flambda_kind) (d : named) (body : expr),
     state_expr (rs_state rs) = Let x kind d body ->
-    named_needs_heap (state_vars (rs_state rs)) d = false ->
     forallb (simple_usable rs) (simples_of_named d) = true ->
     Q (plain_step (count_uses rs)).
 Hypothesis Q_static :
@@ -111,7 +117,7 @@ Hypothesis Q_plain :
   Q (plain_step (count_uses rs)).
 
 Lemma region_step_forms : Q (region_step rs).
-Proof using Q_undefined Q_let_not_run Q_begin Q_end Q_local Q_let Q_static
+Proof using Q_undefined Q_begin Q_end Q_local Q_local_cell Q_let Q_static
   Q_region_apply_cont Q_plain.
   unfold region_step. cbv zeta.
   destruct
@@ -128,33 +134,38 @@ Proof using Q_undefined Q_let_not_run Q_begin Q_end Q_local Q_let Q_static
   - unfold region_places in Hfault. rewrite He in Hfault.
     assert (Hrest :
               forallb (simple_usable rs) (simples_of_named d) = true ->
-              Q (if named_needs_heap (state_vars (rs_state (count_uses rs))) d
-                 then Region_let_not_run
-                 else
-                   match marker_of x body with
-                   | Marker y region body' =>
-                     local_allocation (count_uses rs) x y kind d region body'
-                   | Bad_marker => Region_undefined Not_of_the_conversion
-                   | No_marker =>
-                     if is_allocation d
-                        && existsb (simple_local (count_uses rs))
-                             (simples_of_named d)
-                     then Region_undefined Heap_holds_local
-                     else plain_step (count_uses rs)
-                   end)).
+              Q match marker_of x body with
+                | Marker y region body' =>
+                  local_allocation (count_uses rs) x y kind d region body'
+                | Bad_marker => Region_undefined Not_of_the_conversion
+                | No_marker =>
+                  if (is_allocation d || is_cell_allocation d)
+                     && existsb (simple_local (count_uses rs))
+                          (simples_of_named d)
+                  then Region_undefined Heap_holds_local
+                  else
+                    match store_fault (count_uses rs) d with
+                    | Some fault => Region_undefined fault
+                    | None => plain_step (count_uses rs)
+                    end
+                end).
     { intros Husable.
-      destruct (named_needs_heap (state_vars (rs_state (count_uses rs))) d)
-        eqn:Hneeds;
-        [ exact (Q_let_not_run x kind d body eq_refl Hneeds) | ].
       destruct (marker_of x body) as [ | y region body' | ] eqn:Hmarker.
       - destruct
-          (is_allocation d
+          ((is_allocation d || is_cell_allocation d)
            && existsb (simple_local (count_uses rs)) (simples_of_named d));
           [ apply Q_undefined | ].
-        exact (Q_let x kind d body eq_refl Hneeds Husable).
-      - exact
-          (Q_local x kind d body y region body' eq_refl Hneeds Hmarker
-             Husable).
+        destruct (store_fault (count_uses rs) d); [ apply Q_undefined | ].
+        exact (Q_let x kind d body eq_refl Husable).
+      - destruct (is_cell_allocation d && kind_eqb kind Value) eqn:Hcell.
+        + rewrite (local_allocation_cell _ _ _ _ _ _ _ Hcell).
+          apply andb_true_iff in Hcell as [Hcell _].
+          exact
+            (Q_local_cell x kind d body y region body' eq_refl Hmarker
+               Husable Hcell).
+        + exact
+            (Q_local x kind d body y region body' eq_refl Hmarker Husable
+               Hcell).
       - apply Q_undefined. }
     destruct d as [s | [u | b | v | hp | rp] args | | | | | ];
       try (apply Hrest; exact (simples_fault_no_place rs _ Hfault)).
@@ -168,7 +179,8 @@ Proof using Q_undefined Q_let_not_run Q_begin Q_end Q_local Q_let Q_static
       (existsb (simple_local (count_uses rs))
          (evaluated_simples (Let_static bindings body)));
       [ apply Q_undefined | ].
-  exact (Q_static bindings body eq_refl (simples_fault_no_place rs _ Hfault)).
+    exact
+      (Q_static bindings body eq_refl (simples_fault_no_place rs _ Hfault)).
   - destruct (count_uses_with_counts rs) as [counts Hcounts].
     rewrite Hcounts, existsb_open_mark_with_counts, <- Hcounts.
     destruct (existsb (simple_open_mark rs) (ac_args ac)) eqn:Hmark.
@@ -178,28 +190,6 @@ Proof using Q_undefined Q_let_not_run Q_begin Q_end Q_local Q_let Q_static
 Qed.
 
 End Region_step_forms.
-
-(* A state is not at a [Let] that needs the heap
-   (FlambdaRegionsNeedsHeapProofs.needs_no_heap) where its expression
-   is a [Let] whose defining expression does not need it, and where its
-   expression is not a [Let]. *)
-Lemma needs_no_heap_let (s : state) (x : variable) (kind : flambda_kind)
-    (d : named) (body : expr) :
-  state_expr s = Let x kind d body ->
-  named_needs_heap (state_vars s) d = false ->
-  needs_no_heap s.
-Proof.
-  intros He Hneeds x0 kind0 d0 body0 He0. rewrite He in He0.
-  injection He0 as <- <- <- <-. exact Hneeds.
-Qed.
-
-Lemma needs_no_heap_not_let (s : state) :
-  (∀ (x : variable) (kind : flambda_kind) (d : named) (body : expr),
-    state_expr s <> Let x kind d body) ->
-  needs_no_heap s.
-Proof.
-  intros Hnot x kind d body He. contradiction (Hnot x kind d body He).
-Qed.
 
 (* ======================================================================== *)
 (* The frames stay in the order of their marks                              *)
@@ -253,7 +243,6 @@ Proof.
     (region_step_cases rs
        (fun result => result = Region_step rs' -> frames_ordered rs' = true)).
   - discriminate.
-  - intros x kind d body _ _ _. discriminate.
   - intros x kind d mark_kind body _ Hstep.
     rewrite (begin_region_step _ _ _ _ _ _ Hstep).
     unfold frames_ordered in *. cbn.
@@ -263,8 +252,8 @@ Proof.
       as (m & above & f & below & counts & _ & Hframes & ->).
     unfold frames_ordered in *. cbn in *. rewrite Hframes in Hord.
     exact (frames_ordered_below_app _ _ _ _ Hord).
-  - intros x kind d body y region body' _ _ _ _ Hstep.
-    destruct (local_allocation_step _ _ _ _ _ _ _ _ Hstep)
+  - intros x kind d body y region body' _ _ _ Hcell Hstep.
+    destruct (local_allocation_step _ _ _ _ _ _ _ _ Hcell Hstep)
       as (v & sym & bindings & _ & _ & Hlocalise & _ & _ & _ & _ & Hnext & _
           & Hframes).
     destruct (localise_makes _ _ _ _ Hlocalise) as (_ & _ & Hmade).
@@ -286,6 +275,10 @@ Proof.
            apply andb_true_iff in Hl as [H1 H2].
            apply andb_true_iff. split; [ exact H1 | ].
            apply Pos.ltb_lt in H2. apply Pos.ltb_lt. lia.
+  - intros x kind d body y region body' _ _ _ _ Hstep.
+    destruct (local_cell_allocation_step _ _ _ _ _ _ _ Hstep)
+      as (l & hp & rd & _ & _ & _ & Hframes & _ & Hnext & _).
+    exact (Hsame rs' Hframes Hnext).
   - intros x kind d body _ _ _ _ Hstep.
     destruct (plain_step_step _ _ Hstep) as (s' & _ & ->).
     apply Hsame; reflexivity.
@@ -642,6 +635,26 @@ Proof.
   apply andb_comm.
 Qed.
 
+(* No value that the heap holds is a mark of [frames] or holds one:
+   the last conjunct of FlambdaRegionsCallsSpec.marks_in_variables, as
+   FlambdaHeapSpec.heap_values_all. *)
+Definition heap_no_mark (frames : list frame) (hp : heap) : Prop :=
+  heap_values_all (no_mark frames) hp.
+
+Lemma heap_no_mark_forallb (frames : list frame) (hp : heap) :
+  forallb (fun '(_, c) => forallb (value_no_mark frames) (values_of_cell c))
+    hp
+  = true
+  <-> heap_no_mark frames hp.
+Proof.
+  unfold heap_no_mark, heap_values_all, no_mark. rewrite forallb_forall.
+  split.
+  - intros H l c v Hin Hv. specialize (H (l, c) Hin). cbv beta iota in H.
+    exact (forallb_in _ _ v H Hv).
+  - intros H [l c] Hin. apply forallb_forall. intros v Hv.
+    exact (H l c v Hin Hv).
+Qed.
+
 Lemma marks_in_variables_parts (rs : region_state) :
   marks_in_variables rs = true
   <-> forallb (fun '(_, v) => variable_no_mark (rs_frames rs) v)
@@ -657,8 +670,12 @@ Lemma marks_in_variables_parts (rs : region_state) :
       ∧ forallb
           (fun '(_, allocated) => allocated_no_mark (rs_frames rs) allocated)
           (live_locals (rs_frames rs))
-        = true.
-Proof. unfold marks_in_variables. cbv zeta. rewrite !andb_true_iff. tauto. Qed.
+        = true
+      ∧ heap_no_mark (rs_frames rs) (state_heap (rs_state rs)).
+Proof.
+  unfold marks_in_variables. cbv zeta.
+  rewrite !andb_true_iff, heap_no_mark_forallb. tauto.
+Qed.
 
 (* The tests under other frames: those of a value all of whose symbols
    are below [next], where the frames have no new mark below [next]. *)
@@ -864,9 +881,12 @@ Proof.
   rewrite (Hfewer s Hon) in Hoff. discriminate.
 Qed.
 
-(* The four parts of the test of a state, under other frames. *)
+(* The five parts of the test of a state, under other frames. The
+   values that the heap holds name no symbol at or above the counter:
+   FlambdaRegionsInvariantSpec.cells_live asks it. *)
 Lemma marks_frames (rs : region_state) (frames' : list frame) :
   symbols_fresh rs = true ->
+  cells_below (rs_next rs) (state_heap (rs_state rs)) ->
   marks_in_variables rs = true ->
   (∀ s : symbol,
     (s < rs_next rs)%positive ->
@@ -883,12 +903,14 @@ Lemma marks_frames (rs : region_state) (frames' : list frame) :
     = true
   ∧ forallb (fun '(_, allocated) => allocated_no_mark frames' allocated)
       (live_locals (rs_frames rs))
-    = true.
+    = true
+  ∧ heap_no_mark frames' (state_heap (rs_state rs)).
 Proof.
-  intros Hfresh Hmarks Hnew.
-  apply marks_in_variables_parts in Hmarks as (M1 & M2 & M3 & M4).
+  intros Hfresh Hbelow Hmarks Hnew.
+  apply marks_in_variables_parts in Hmarks as (M1 & M2 & M3 & M4 & M5).
   destruct (symbols_fresh_held rs Hfresh) as (B1 & B2 & B3 & B4).
-  split; [ | split; [ | split ] ]; apply forallb_forall.
+  split; [ | split; [ | split; [ | split ] ] ];
+    [ apply forallb_forall .. | ].
   - intros [x v] Hin.
     exact
       (variable_no_mark_frames _ _ _ Hnew v (forallb_in _ _ (x, v) B1 Hin)
@@ -907,6 +929,10 @@ Proof.
       (allocated_no_mark_frames _ _ _ Hnew allocated
          (forallb_in _ _ (s, allocated) B4 Hin)
          (forallb_in _ _ (s, allocated) M4 Hin)).
+  - intros l c w Hin Hw.
+    exact
+      (value_no_mark_frames _ _ _ Hnew w (Hbelow l c w Hin Hw)
+         (M5 l c w Hin Hw)).
 Qed.
 
 (* ======================================================================== *)
@@ -965,7 +991,7 @@ Lemma no_mark_static (rs : region_state) (s : symbol)
       no_mark (rs_frames rs) (Value_symbol s')).
 Proof.
   intros Hmarks _ Hlookup.
-  apply marks_in_variables_parts in Hmarks as (_ & _ & M3 & M4).
+  apply marks_in_variables_parts in Hmarks as (_ & _ & M3 & M4 & _).
   assert (Hallocated : allocated_no_mark (rs_frames rs) allocated = true).
   { apply lookup_in in Hlookup. unfold live_statics in Hlookup.
     cbn [static_values] in Hlookup.
@@ -1022,6 +1048,60 @@ Proof.
          (state_vars (rs_state rs)) d v His Hsimples Heval).
 Qed.
 
+(* The same of a [Let] that is run on the heap: its value holds no
+   mark, and neither does a value that the heap holds after it. A
+   primitive makes its value, and the cells that it makes or changes,
+   out of its arguments and of the cells that it reads
+   (FlambdaSemanticsSpec.exec_named_preserves_statement). *)
+Lemma exec_named_no_mark (rs : region_state) (d : named) (v : value)
+    (hp' : heap) (rd' : read_record) :
+  symbols_fresh rs = true ->
+  marks_in_variables rs = true ->
+  forallb (simple_usable rs) (simples_of_named d) = true ->
+  exec_named (live_statics rs) (state_heap (rs_state rs))
+    (state_reads (rs_state rs)) (state_vars (rs_state rs)) d
+  = Some (v, hp', rd') ->
+  value_no_mark (rs_frames rs) v = true ∧ heap_no_mark (rs_frames rs) hp'.
+Proof.
+  intros Hfresh Hmarks Husable Hexec.
+  pose proof Hmarks as HM.
+  apply marks_in_variables_parts in HM as (M1 & _ & _ & _ & M5).
+  assert (Hcases :
+    (∃ (p : prim) (args : list simple), d = Prim p args)
+    ∨ (∀ (p : prim) (args : list simple), d <> Prim p args)).
+  { destruct d;
+      first [ left; eexists _, _; reflexivity | right; intros; discriminate ]. }
+  destruct Hcases as [(p & args & ->) | Hnot].
+  - apply
+      (exec_named_preserves (no_mark (rs_frames rs)) (live_statics rs)
+         (state_heap (rs_state rs)) hp' (state_reads (rs_state rs)) rd'
+         (state_vars (rs_state rs)) p args v);
+      try assumption.
+    + intros c. split; reflexivity.
+    + intros tag fields. unfold no_mark. simpl. apply forallb_forall.
+    + intros elements. unfold no_mark. simpl. apply forallb_forall.
+    + intros s tag fields Hs Hlookup.
+      exact (proj1 (no_mark_static rs s _ Hmarks Hs Hlookup)).
+    + intros s elements Hs Hlookup.
+      exact (proj1 (no_mark_static rs s _ Hmarks Hs Hlookup)).
+    + intros l. reflexivity.
+    + intros vs Hvs arg Harg.
+      refine
+        (proj1 (Forall_forall _ vs)
+           (eval_simples_forall _ (state_vars (rs_state rs)) args vs _ Hvs)
+           arg Harg).
+      intros sim w Hin.
+      exact
+        (simple_no_mark rs _ sim w Hfresh (fewer_marks_same rs) M1
+           (forallb_in _ _ sim Husable Hin)).
+  - rewrite (exec_named_not_prim _ _ _ _ d Hnot) in Hexec.
+    destruct (eval_named (live_statics rs) (state_vars (rs_state rs)) d)
+      as [v0 | ] eqn:Hnamed; [ | discriminate ].
+    simpl in Hexec. injection Hexec as -> <- _.
+    split; [ | exact M5 ].
+    exact (eval_named_no_mark rs d v Hfresh Hmarks Husable Hnamed).
+Qed.
+
 (* What is asked below of a step of [step], of a [Let] whose simples
    may be evaluated. *)
 Lemma let_usable_no_mark (rs : region_state) (x : variable)
@@ -1033,19 +1113,22 @@ Lemma let_usable_no_mark (rs : region_state) (x : variable)
   forallb (simple_usable rs) (evaluated_simples (state_expr (rs_state rs)))
   = true
   ∧ ∀ (x' : variable) (kind' : flambda_kind) (d' : named) (body' : expr)
-      (v : value),
+      (v : value) (hp' : heap) (rd' : read_record),
       state_expr (rs_state rs) = Let x' kind' d' body' ->
-      eval_named (live_statics rs) (state_vars (rs_state rs)) d' = Some v ->
-      value_no_mark (rs_frames rs) v = true.
+      exec_named (live_statics rs) (state_heap (rs_state rs))
+        (state_reads (rs_state rs)) (state_vars (rs_state rs)) d'
+      = Some (v, hp', rd') ->
+      value_no_mark (rs_frames rs) v = true
+      ∧ heap_no_mark (rs_frames rs) hp'.
 Proof.
   intros Hfresh Hmarks He Husable. split.
   - rewrite He. apply forallb_forall. intros sim Hin.
     exact
       (forallb_in _ _ sim Husable
          (evaluated_simples_let x kind d body sim Hin)).
-  - intros x' kind' d' body' v He' Heval. rewrite He in He'.
+  - intros x' kind' d' body' v hp' rd' He' Hexec. rewrite He in He'.
     injection He' as <- <- <- <-.
-    exact (eval_named_no_mark rs d v Hfresh Hmarks Husable Heval).
+    exact (exec_named_no_mark rs d v hp' rd' Hfresh Hmarks Husable Hexec).
 Qed.
 
 (* ======================================================================== *)
@@ -1166,25 +1249,27 @@ Qed.
 Definition marks_step (result : region_step_result) : Prop :=
   match result with
   | Region_step rs' => marks_in_variables rs' = true
-  | Region_exit _ _ _ | Region_undefined _ | Region_let_not_run => True
+  | Region_exit _ _ _ | Region_undefined _ => True
   end.
 
 Lemma plain_step_marks (rs : region_state) :
   symbols_fresh rs = true ->
   marks_in_variables rs = true ->
-  needs_no_heap (rs_state rs) ->
   forallb (simple_usable rs) (evaluated_simples (state_expr (rs_state rs)))
   = true ->
   (∀ (x : variable) (kind : flambda_kind) (d : named) (body : expr)
-     (v : value),
+     (v : value) (hp' : heap) (rd' : read_record),
     state_expr (rs_state rs) = Let x kind d body ->
-    eval_named (live_statics rs) (state_vars (rs_state rs)) d = Some v ->
-    value_no_mark (rs_frames rs) v = true) ->
+    exec_named (live_statics rs) (state_heap (rs_state rs))
+      (state_reads (rs_state rs)) (state_vars (rs_state rs)) d
+    = Some (v, hp', rd') ->
+    value_no_mark (rs_frames rs) v = true
+    ∧ heap_no_mark (rs_frames rs) hp') ->
   marks_step (plain_step rs).
 Proof.
-  intros Hfresh Hmarks Hneeds Husable Hlet.
+  intros Hfresh Hmarks Husable Hlet.
   pose proof Hmarks as HM.
-  apply marks_in_variables_parts in HM as (M1 & M2 & M3 & M4).
+  apply marks_in_variables_parts in HM as (M1 & M2 & M3 & M4 & M5).
   assert (Hstep :
     call_result (no_mark (rs_frames rs)) (marks_held (rs_frames rs))
       (step (with_statics (rs_state rs) (live_statics rs)))).
@@ -1192,7 +1277,8 @@ Proof.
       (step_call_result (no_mark (rs_frames rs)) (no_mark (rs_frames rs))
          (fun c => cont_no_mark (rs_frames rs) c = true)
          (marks_held (rs_frames rs)) (live_statics rs));
-      cbn [with_statics state_expr state_vars state_conts state_statics].
+      cbn [with_statics state_expr state_vars state_conts state_statics
+           state_heap state_reads].
     - exact (no_mark_partial _).
     - exact (no_mark_fields rs Hmarks).
     - intros v H. exact H.
@@ -1209,13 +1295,10 @@ Proof.
     - reflexivity.
     - exact (conj M1 M2).
     - intros k. exact (resolve_no_mark _ k _ M2).
-    - intros x kind d body v hp' rd' He Hd.
-      destruct
-        (exec_named_needs_no_heap_some _ _ _ _ _ _ _ _
-           (Hneeds x kind d body He) Hd)
-        as [Hd' _].
-      split; [ | exact M2 ]. simpl.
-      rewrite (value_no_mark_variable _ v (Hlet x kind d body v He Hd')).
+    - intros x kind d body v hp' rd' He Hd. split; [ | exact M2 ]. simpl.
+      rewrite
+        (value_no_mark_variable _ v
+           (proj1 (Hlet x kind d body v hp' rd' He Hd))).
       exact M1.
     - intros k h body _. split; [ exact M1 | ]. simpl. rewrite M1, M2.
       reflexivity.
@@ -1228,9 +1311,13 @@ Proof.
            (forallb_in _ _ sim Husable Hin)). }
   unfold plain_step.
   destruct (step (with_statics (rs_state rs) (live_statics rs)))
-    as [s' | k vs hp rd | ]; [ | exact I | exact I ].
+    as [s' | k vs hp rd | ] eqn:Hs; [ | exact I | exact I ].
   destruct Hstep as [Hv Hc]. apply marks_in_variables_parts.
-  exact (conj Hv (conj Hc (conj M3 M4))).
+  refine (conj Hv (conj Hc (conj M3 (conj M4 _)))).
+  cbn [rs_state rs_frames with_statics state_heap].
+  destruct (step_heap _ _ Hs)
+    as [-> | (x & kind & d & body & v & He & Hexec)]; [ exact M5 | ].
+  exact (proj2 (Hlet x kind d body v _ _ He Hexec)).
 Qed.
 
 (* An [Apply_cont] whose continuation is not bound to a handler: no
@@ -1266,16 +1353,16 @@ Lemma region_apply_cont_marks (rs : region_state) (ac : apply_cont) :
 Proof.
   intros Hfresh Hmarks He Husable. unfold region_apply_cont.
   pose proof Hmarks as HM.
-  apply marks_in_variables_parts in HM as (M1 & M2 & M3 & M4).
+  apply marks_in_variables_parts in HM as (M1 & M2 & M3 & M4 & M5).
   pose proof (resolve_no_mark (rs_frames rs) (ac_continuation ac) _ M2) as Hc.
   destruct (resolve (ac_continuation ac) (state_conts (rs_state rs)))
     as [[params metadata handler] def_vars def_conts recursive | k | c extra
        | remaining remaining_arity return_arity return_to exn_to]
     eqn:Hresolve;
     try (apply (plain_step_marks rs Hfresh Hmarks);
-         [ intros x kind d body Hlet; rewrite He in Hlet; discriminate
-         | rewrite He; apply Husable; intros; discriminate
-         | intros x kind d body v Hlet; rewrite He in Hlet; discriminate ]).
+         [ rewrite He; apply Husable; intros; discriminate
+         | intros x kind d body v hp' rd' Hlet; rewrite He in Hlet;
+           discriminate ]).
   destruct (eval_simples (state_vars (rs_state rs)) (ac_args ac)) as [vs | ]
     eqn:Hargs; [ | exact I ].
   destruct (kinds_eqb _ _); [ | exact I ].
@@ -1290,48 +1377,52 @@ Proof.
     (marks_handler _ params metadata handler def_vars def_conts recursive vs
        handler_vars Hc Hvs Hbind)
     as [Hv Hconts].
-  apply marks_in_variables_parts. exact (conj Hv (conj Hconts (conj M3 M4))).
+  apply marks_in_variables_parts.
+  exact (conj Hv (conj Hconts (conj M3 (conj M4 M5)))).
 Qed.
 
 Lemma begin_region_marks (rs : region_state) (x : variable)
     (kind : flambda_kind) (mark_kind : mark_kind) (body : expr) :
   symbols_fresh rs = true ->
+  cells_below (rs_next rs) (state_heap (rs_state rs)) ->
   marks_in_variables rs = true ->
   marks_step (begin_region rs x kind mark_kind body).
 Proof.
-  intros Hfresh Hmarks. unfold begin_region.
+  intros Hfresh Hbelow Hmarks. unfold begin_region.
   destruct (kind_eqb kind Region); [ | exact I ].
   destruct
     (marks_frames rs (Frame (rs_next rs) mark_kind [] :: rs_frames rs) Hfresh
-       Hmarks)
-    as (N1 & N2 & N3 & N4).
+       Hbelow Hmarks)
+    as (N1 & N2 & N3 & N4 & N5).
   { intros s Hlt Hoff.
     change
       (Pos.eqb (rs_next rs) s || on_stack s (rs_frames rs) = false).
     rewrite Hoff, orb_false_r. apply Pos.eqb_neq. lia. }
   apply marks_in_variables_parts.
-  exact (conj N1 (conj N2 (conj N3 N4))).
+  exact (conj N1 (conj N2 (conj N3 (conj N4 N5)))).
 Qed.
 
 Lemma end_region_marks (rs : region_state) (x : variable)
     (kind : flambda_kind) (ended_by : mark_kind) (region : simple)
     (body : expr) :
   symbols_fresh rs = true ->
+  cells_below (rs_next rs) (state_heap (rs_state rs)) ->
   marks_in_variables rs = true ->
   marks_step (end_region rs x kind ended_by region body).
 Proof.
-  intros Hfresh Hmarks.
+  intros Hfresh Hbelow Hmarks.
   destruct (end_region rs x kind ended_by region body)
-    as [rs' | k vs rs' | fault | ] eqn:Hstep; [ | exact I | exact I | exact I ].
+    as [rs' | k vs rs' | fault] eqn:Hstep; [ | exact I | exact I ].
   destruct (end_region_step _ _ _ _ _ _ _ Hstep)
     as (m & above & f & below & counts & _ & Hframes & ->).
-  destruct (marks_frames rs below Hfresh Hmarks) as (N1 & N2 & N3 & N4).
+  destruct (marks_frames rs below Hfresh Hbelow Hmarks)
+    as (N1 & N2 & N3 & N4 & N5).
   { apply fewer_marks_no_new. intros s Hon. rewrite Hframes, on_stack_app.
     change (on_stack s (f :: below))
       with (Pos.eqb (frame_mark f) s || on_stack s below).
     rewrite Hon, !orb_true_r. reflexivity. }
   apply marks_in_variables_parts.
-  refine (conj N1 (conj N2 (conj N3 _))).
+  refine (conj N1 (conj N2 (conj N3 (conj _ N5)))).
   rewrite Hframes, live_locals_app, forallb_app in N4.
   apply andb_true_iff in N4 as [_ N4].
   change (live_locals (f :: below))
@@ -1343,16 +1434,20 @@ Lemma local_allocation_marks (rs : region_state) (x y : variable)
     (kind : flambda_kind) (d : named) (region : option simple)
     (body : expr) :
   symbols_fresh rs = true ->
+  cells_below (rs_next rs) (state_heap (rs_state rs)) ->
   marks_in_variables rs = true ->
   forallb (simple_usable rs) (simples_of_named d) = true ->
+  is_cell_allocation d && kind_eqb kind Value = false ->
   marks_step (local_allocation rs x y kind d region body).
 Proof.
-  intros Hfresh Hmarks Husable.
+  intros Hfresh Hbelow Hmarks Husable Hcell.
   destruct (local_allocation rs x y kind d region body)
-    as [rs' | k vs rs' | fault | ] eqn:Hstep; [ | exact I | exact I | exact I ].
-  destruct (local_allocation_step rs rs' x y kind d region body Hstep)
+    as [rs' | k vs rs' | fault] eqn:Hstep; [ | exact I | exact I ].
+  destruct (local_allocation_step rs rs' x y kind d region body Hcell Hstep)
     as (v & sym & bindings & His & Heval & Hlocalise & _ & Hvars & Hconts
         & _ & _ & _ & Hframes).
+  destruct (local_allocation_memory rs rs' x y kind d region body Hcell Hstep)
+    as (Hheap & _ & _).
   destruct (eval_named_makes _ _ d v His Heval) as [_ Hparts].
   destruct (localise_makes _ _ _ _ Hlocalise) as (_ & _ & Hbound).
   assert (Hfewer : fewer_marks rs (rs_frames rs')).
@@ -1360,9 +1455,9 @@ Proof.
     destruct (rs_frames rs) as [ | [m mark_kind locals] frames];
       destruct Hframes as [-> _]; intros s H; exact H. }
   destruct
-    (marks_frames rs (rs_frames rs') Hfresh Hmarks
+    (marks_frames rs (rs_frames rs') Hfresh Hbelow Hmarks
        (fewer_marks_no_new rs _ Hfewer))
-    as (N1 & N2 & N3 & N4).
+    as (N1 & N2 & N3 & N4 & N5).
   assert (Nb :
     forallb
       (fun '(_, allocated) => allocated_no_mark (rs_frames rs') allocated)
@@ -1384,17 +1479,42 @@ Proof.
       pose proof (Hfewer s' Hon) as H.
       rewrite (not_drawn_not_on_stack rs s' Hfresh (or_intror Hfrom)) in H.
       discriminate H. }
-  apply marks_in_variables_parts. rewrite Hvars, Hconts.
+  apply marks_in_variables_parts. rewrite Hvars, Hconts, Hheap.
   split; [ exact N1 | ]. split; [ exact N2 | ].
   destruct (rs_frames rs) as [ | [m mark_kind locals] frames].
   - destruct Hframes as [Hframes' Hvalues'].
-    rewrite Hvalues', forallb_app, Nb, N3, Hframes'. split; reflexivity.
+    rewrite Hvalues', forallb_app, Nb, N3, Hframes'. rewrite Hframes' in N5.
+    split; [ reflexivity | ]. split; [ reflexivity | exact N5 ].
   - destruct Hframes as [Hframes' Hstatics']. rewrite Hstatics'.
-    split; [ exact N3 | ]. rewrite Hframes' in Nb, N4 |- *.
+    split; [ exact N3 | ]. split; [ | exact N5 ].
+    rewrite Hframes' in Nb, N4 |- *.
     change
       (live_locals (Frame m mark_kind (bindings ++ locals) :: frames))
       with ((bindings ++ locals) ++ live_locals frames).
     rewrite <- app_assoc, forallb_app, Nb. exact N4.
+Qed.
+
+(* A local allocation of a cell: the frames are those of the state. *)
+Lemma local_cell_allocation_marks (rs : region_state) (x y : variable)
+    (d : named) (region : option simple) (body : expr) :
+  symbols_fresh rs = true ->
+  marks_in_variables rs = true ->
+  forallb (simple_usable rs) (simples_of_named d) = true ->
+  marks_step (local_cell_allocation rs x y d region body).
+Proof.
+  intros Hfresh Hmarks Husable.
+  destruct (local_cell_allocation rs x y d region body)
+    as [rs' | k vs rs' | fault] eqn:Hstep; [ | exact I | exact I ].
+  destruct (local_cell_allocation_step rs rs' x y d region body Hstep)
+    as (l & hp & rd & _ & Hexec & Hstate & Hframes & _ & _ & _).
+  pose proof Hmarks as HM.
+  apply marks_in_variables_parts in HM as (M1 & M2 & M3 & M4 & _).
+  destruct (exec_named_no_mark rs d _ hp rd Hfresh Hmarks Husable Hexec)
+    as [_ N5].
+  apply marks_in_variables_parts. rewrite Hstate, Hframes.
+  cbn [state_vars state_conts state_statics state_heap].
+  refine (conj _ (conj M2 (conj M3 (conj M4 N5)))).
+  simpl. exact M1.
 Qed.
 
 Lemma static_step_marks (rs : region_state) (bindings : list static_binding)
@@ -1406,20 +1526,20 @@ Lemma static_step_marks (rs : region_state) (bindings : list static_binding)
   marks_step (static_step rs).
 Proof.
   intros Hfresh Hmarks He Husable.
-  destruct (static_step rs) as [rs' | k vs rs' | fault | ] eqn:Hstep;
-    [ | exact I | exact I | exact I ].
+  destruct (static_step rs) as [rs' | k vs rs' | fault] eqn:Hstep;
+    [ | exact I | exact I ].
   destruct (static_step_step rs rs' bindings body He Hstep)
     as (statics' & Heval & ->).
   destruct (eval_static_bindings_parts _ _ _ _ Heval)
     as (new_code & new_values & _ & Hvalues & _ & Hnew).
   pose proof Hmarks as HM.
-  apply marks_in_variables_parts in HM as (M1 & M2 & M3 & M4).
+  apply marks_in_variables_parts in HM as (M1 & M2 & M3 & M4 & M5).
   pose proof (symbols_fresh_expr rs Hfresh) as Hbelow.
   rewrite He in Hbelow. simpl in Hbelow.
   apply andb_true_iff in Hbelow as [Hbindings _].
   apply marks_in_variables_parts.
-  cbn [rs_state rs_frames state_vars state_conts state_statics].
-  refine (conj M1 (conj M2 (conj _ M4))).
+  cbn [rs_state rs_frames state_vars state_conts state_statics state_heap].
+  refine (conj M1 (conj M2 (conj _ (conj M4 M5)))).
   rewrite Hvalues, forallb_app, M3, andb_true_r.
   apply forallb_forall. intros [s allocated] Hin.
   destruct (Hnew s allocated Hin) as (const & Hconst_in & Hconst).
@@ -1453,29 +1573,30 @@ Qed.
    test. *)
 Theorem region_step_marks (rs : region_state) :
   symbols_fresh rs = true ->
+  cells_below (rs_next rs) (state_heap (rs_state rs)) ->
   marks_in_variables rs = true ->
   marks_step (region_step rs).
 Proof.
-  intros Hfresh Hmarks. apply region_step_forms.
+  intros Hfresh Hbelow Hmarks. apply region_step_forms.
   - intros fault. exact I.
-  - intros x kind d body _ _. exact I.
   - intros x kind d mark_kind body _.
     exact (begin_region_marks (count_uses rs) x kind mark_kind body Hfresh
-             Hmarks).
+             Hbelow Hmarks).
   - intros x kind p ended_by region body _.
     exact (end_region_marks (count_uses rs) x kind ended_by region body
-             Hfresh Hmarks).
-  - intros x kind d body y region body' _ _ _ Husable.
+             Hfresh Hbelow Hmarks).
+  - intros x kind d body y region body' _ _ Husable Hcell.
     exact (local_allocation_marks (count_uses rs) x y kind d region body'
+             Hfresh Hbelow Hmarks Husable Hcell).
+  - intros x kind d body y region body' _ _ Husable _.
+    exact (local_cell_allocation_marks (count_uses rs) x y d region body'
              Hfresh Hmarks Husable).
-  - intros x kind d body He Hneeds Husable.
+  - intros x kind d body He Husable.
     destruct
       (let_usable_no_mark (count_uses rs) x kind d body Hfresh Hmarks He
          Husable)
       as [Hsimples Hlet].
-    exact
-      (plain_step_marks (count_uses rs) Hfresh Hmarks
-         (needs_no_heap_let _ x kind d body He Hneeds) Hsimples Hlet).
+    exact (plain_step_marks (count_uses rs) Hfresh Hmarks Hsimples Hlet).
   - intros bindings body He Husable.
     exact (static_step_marks (count_uses rs) bindings body Hfresh Hmarks He
              Husable).
@@ -1483,10 +1604,9 @@ Proof.
     apply (region_apply_cont_marks (count_uses rs) ac Hfresh Hmarks He).
     exact (apply_cont_no_handler_usable rs ac He Hfault).
   - intros Hnot_let _ Husable.
-    apply
-      (plain_step_marks (count_uses rs) Hfresh Hmarks
-         (needs_no_heap_not_let _ Hnot_let) Husable).
-    intros x kind d body v He. contradiction (Hnot_let x kind d body He).
+    apply (plain_step_marks (count_uses rs) Hfresh Hmarks Husable).
+    intros x kind d body v hp' rd' He.
+    contradiction (Hnot_let x kind d body He).
 Qed.
 
 (* ======================================================================== *)
@@ -1494,49 +1614,48 @@ Qed.
 (* ======================================================================== *)
 
 (* The test of [held_older], of the value of one variable. *)
-Definition older (frames : list frame) (vs : list value) (w : value) : bool :=
+Definition older (frames : list frame) (cells : list (location * mark))
+    (vs : list value) (w : value) : bool :=
   match w with
   | Value_symbol m =>
-    negb (on_stack m frames)
-    || forallb
-         (fun v =>
-            match v with
-            | Value_symbol s => Pos.ltb s m
-            | _ => true
-            end)
-         vs
+    negb (on_stack m frames) || forallb (held_before cells m) vs
   | _ => true
   end.
 
-Lemma older_no_mark (frames : list frame) (vs : list value) (w : value) :
-  value_no_mark frames w = true -> older frames vs w = true.
+Lemma older_no_mark (frames : list frame) (cells : list (location * mark))
+    (vs : list value) (w : value) :
+  value_no_mark frames w = true -> older frames cells vs w = true.
 Proof.
-  intros H. destruct w; try reflexivity. simpl in H |- *. rewrite H.
-  reflexivity.
+  intros H. destruct w; try reflexivity. cbn [value_no_mark older] in H |- *.
+  rewrite H. reflexivity.
 Qed.
 
-Lemma older_incl (frames : list frame) (vs vs' : list value) (w : value) :
+Lemma older_incl (frames : list frame) (cells : list (location * mark))
+    (vs vs' : list value) (w : value) :
   (∀ v : value, In v vs' -> In v vs) ->
-  older frames vs w = true ->
-  older frames vs' w = true.
+  older frames cells vs w = true ->
+  older frames cells vs' w = true.
 Proof.
-  intros Hincl. destruct w; try (intros _; reflexivity). simpl. intros H.
+  intros Hincl. destruct w; try (intros _; reflexivity). cbn [older].
+  intros H.
   apply orb_true_iff in H as [H | H]; [ rewrite H; reflexivity | ].
   apply orb_true_iff. right. apply forallb_forall. intros v Hin.
   exact (forallb_in _ _ v H (Hincl v Hin)).
 Qed.
 
-Lemma older_frames (frames frames' : list frame) (next : symbol)
-    (vs : list value) (w : value) :
+Lemma older_frames (frames frames' : list frame)
+    (cells : list (location * mark)) (next : symbol) (vs : list value)
+    (w : value) :
   (∀ s : symbol,
     (s < next)%positive ->
     on_stack s frames = false ->
     on_stack s frames' = false) ->
   value_below next w = true ->
-  older frames vs w = true ->
-  older frames' vs w = true.
+  older frames cells vs w = true ->
+  older frames' cells vs w = true.
 Proof.
-  intros Hnew. destruct w; try (intros _ _; reflexivity). simpl.
+  intros Hnew. destruct w; try (intros _ _; reflexivity).
+  cbn [older value_below].
   intros Hb H. unfold symbol_below in Hb. apply Pos.ltb_lt in Hb.
   destruct (on_stack s frames) eqn:Hon;
     [ simpl in H; rewrite H; apply orb_true_r | ].
@@ -1544,14 +1663,14 @@ Proof.
 Qed.
 
 Lemma cont_held_older_frames (frames frames' : list frame)
-    (base next : symbol) (c : cont_value) :
+    (cells : list (location * mark)) (base next : symbol) (c : cont_value) :
   (∀ s : symbol,
     (s < next)%positive ->
     on_stack s frames = false ->
     on_stack s frames' = false) ->
   cont_below base next c = true ->
-  cont_held_older frames c = true ->
-  cont_held_older frames' c = true.
+  cont_held_older frames cells c = true ->
+  cont_held_older frames' cells c = true.
 Proof.
   intros Hnew.
   induction c
@@ -1566,7 +1685,7 @@ Proof.
     apply andb_true_iff in Ho as [Hov Hoc]. apply andb_true_iff. split.
     + unfold held_older in Hov |- *. apply forallb_forall. intros [x w] Hin.
       exact
-        (older_frames _ _ next _ w Hnew (forallb_in _ _ (x, w) Hbv Hin)
+        (older_frames _ _ _ next _ w Hnew (forallb_in _ _ (x, w) Hbv Hin)
            (forallb_in _ _ (x, w) Hov Hin)).
     + apply forallb_forall. intros [k c] Hin. rewrite Forall_forall in IH.
       exact
@@ -1605,11 +1724,12 @@ Proof.
 Qed.
 
 Lemma rec_closures_older (frames : list frame)
+    (cells : list (location * mark))
     (handlers : list (continuation * continuation_handler)) (vars : env)
     (conts : cont_env) :
-  held_older frames vars (conts_held conts) = true ->
-  forallb (fun '(_, c) => cont_held_older frames c) conts = true ->
-  forallb (fun '(_, c) => cont_held_older frames c)
+  held_older frames cells vars (conts_held conts) = true ->
+  forallb (fun '(_, c) => cont_held_older frames cells c) conts = true ->
+  forallb (fun '(_, c) => cont_held_older frames cells c)
     (rec_closures handlers vars conts)
   = true.
 Proof.
@@ -1620,19 +1740,21 @@ Proof.
   apply andb_true_iff. split; [ exact Hv | exact Hc ].
 Qed.
 
-Lemma bind_params_older (frames : list frame) (held : list value)
+Lemma bind_params_older (frames : list frame)
+    (cells : list (location * mark)) (held : list value)
     (params : list variable) (vs : list value) (vars vars' : env) :
-  Forall (fun v => older frames held v = true) vs ->
-  held_older frames vars held = true ->
+  Forall (fun v => older frames cells held v = true) vs ->
+  held_older frames cells vars held = true ->
   bind_params params vs vars = Some vars' ->
-  held_older frames vars' held = true.
+  held_older frames cells vars' held = true.
 Proof.
-  intros Hvs Hvars Hbind. apply (forallb_pairs_Forall (older frames held)).
+  intros Hvs Hvars Hbind.
+  apply (forallb_pairs_Forall (older frames cells held)).
   apply
-    (bind_params_values_all (fun v => older frames held v = true) params vs
-       vars vars' Hvs);
+    (bind_params_values_all (fun v => older frames cells held v = true)
+       params vs vars vars' Hvs);
     [ | exact Hbind ].
-  apply (forallb_pairs_Forall (older frames held)). exact Hvars.
+  apply (forallb_pairs_Forall (older frames cells held)). exact Hvars.
 Qed.
 
 (* What a continuation has held names no symbol at or above the
@@ -1665,17 +1787,125 @@ Qed.
 Lemma eval_simple_older (rs : region_state) (held : list value)
     (sim : simple) (w : value) :
   symbols_fresh rs = true ->
-  held_older (rs_frames rs) (state_vars (rs_state rs)) held = true ->
+  held_older (rs_frames rs) (rs_cells rs) (state_vars (rs_state rs)) held
+  = true ->
   simple_below (rs_base rs) sim = true ->
   eval_simple (state_vars (rs_state rs)) sim = Some w ->
-  older (rs_frames rs) held w = true.
+  older (rs_frames rs) (rs_cells rs) held w = true.
 Proof.
   intros Hfresh Hvars Hbelow. destruct sim as [x | sym | c]; simpl.
-  - exact (lookup_forallb (older (rs_frames rs) held) x w _ Hvars).
-  - intros [= <-]. simpl.
+  - exact
+      (lookup_forallb (older (rs_frames rs) (rs_cells rs) held) x w _ Hvars).
+  - intros [= <-]. cbn [older].
     rewrite (not_drawn_not_on_stack rs sym Hfresh); [ reflexivity | ].
     left. apply Pos.ltb_lt. exact Hbelow.
   - intros [= <-]. reflexivity.
+Qed.
+
+(* The tests under another list of cells. [same_before] is what is
+   asked of each value that is held: the test of it against a mark
+   passes under the other list if it passes under this one. *)
+Definition same_before (cells cells' : list (location * mark)) (v : value)
+    : Prop :=
+  ∀ m : mark, held_before cells m v = true -> held_before cells' m v = true.
+
+Lemma conts_values_all_in (P : value -> Prop) (conts : cont_env)
+    (k : continuation) (c : cont_value) :
+  conts_values_all P conts -> In (k, c) conts -> cont_values_all P c.
+Proof.
+  unfold conts_values_all.
+  induction conts as [ | [k' c'] conts IH]; cbn [fold_right snd];
+    [ intros _ [] | ].
+  intros [Hc Hrest] [[= <- <-] | Hin]; [ exact Hc | exact (IH Hrest Hin) ].
+Qed.
+
+(* What a continuation has held is among the values that it holds. *)
+Lemma cont_held_all (P : value -> Prop) (c : cont_value) :
+  cont_values_all P c -> Forall P (cont_held c).
+Proof.
+  induction c
+    as [h vars conts recursive IH | k | c extra IH
+       | remaining remaining_arity return_arity return_to exn_to IHreturn
+           IHexn]
+    using cont_value_deep_ind;
+    cbn [cont_values_all cont_held].
+  - intros [_ Hconts]. apply Forall_forall. intros v Hin.
+    apply in_flat_map in Hin as ([k c] & Hc & Hin).
+    rewrite Forall_forall in IH.
+    exact
+      (proj1 (Forall_forall _ _)
+         (IH (k, c) Hc (conts_values_all_in P conts k c Hconts Hc)) v Hin).
+  - intros _. apply Forall_nil.
+  - intros [Hextra Hc]. apply Forall_app.
+    split; [ exact Hextra | exact (IH Hc) ].
+  - intros (_ & Hr & He). apply Forall_app.
+    split; [ exact (IHreturn Hr) | exact (IHexn He) ].
+Qed.
+
+Lemma conts_held_all (P : value -> Prop) (conts : cont_env) :
+  conts_values_all P conts -> Forall P (conts_held conts).
+Proof.
+  intros Hconts. apply Forall_forall. intros v Hin. unfold conts_held in Hin.
+  apply in_flat_map in Hin as ([k c] & Hc & Hin).
+  exact
+    (proj1 (Forall_forall _ _)
+       (cont_held_all P c (conts_values_all_in P conts k c Hconts Hc)) v Hin).
+Qed.
+
+Lemma older_cells (frames : list frame) (cells cells' : list (location * mark))
+    (vs : list value) (w : value) :
+  Forall (same_before cells cells') vs ->
+  older frames cells vs w = true ->
+  older frames cells' vs w = true.
+Proof.
+  intros Hvs. destruct w; try (intros _; reflexivity). cbn [older].
+  intros H.
+  apply orb_true_iff in H as [H | H]; [ rewrite H; reflexivity | ].
+  apply orb_true_iff. right. apply forallb_forall. intros v Hin.
+  exact (proj1 (Forall_forall _ vs) Hvs v Hin s (forallb_in _ _ v H Hin)).
+Qed.
+
+Lemma cont_held_older_cells (frames : list frame)
+    (cells cells' : list (location * mark)) (c : cont_value) :
+  cont_values_all (same_before cells cells') c ->
+  cont_held_older frames cells c = true ->
+  cont_held_older frames cells' c = true.
+Proof.
+  induction c
+    as [h vars conts recursive IH | k | c extra IH
+       | remaining remaining_arity return_arity return_to exn_to IHreturn
+           IHexn]
+    using cont_value_deep_ind;
+    cbn [cont_values_all cont_held_older].
+  - intros [_ Hconts] Ho. apply andb_true_iff in Ho as [Hov Hoc].
+    apply andb_true_iff. split.
+    + unfold held_older in Hov |- *. revert Hov. apply forallb_impl.
+      intros [x w] _. apply older_cells.
+      exact (conts_held_all _ conts Hconts).
+    + apply forallb_forall. intros [k c] Hin. rewrite Forall_forall in IH.
+      exact
+        (IH (k, c) Hin (conts_values_all_in _ conts k c Hconts Hin)
+           (forallb_in _ _ (k, c) Hoc Hin)).
+  - reflexivity.
+  - intros [_ Hc]. exact (IH Hc).
+  - intros (_ & Hr & He) Ho. apply andb_true_iff in Ho as [Hor Hoe].
+    rewrite (IHreturn Hr Hor), (IHexn He Hoe). reflexivity.
+Qed.
+
+(* A value all of whose locations the heap binds is not a location
+   that the heap does not bind: to list that location changes nothing
+   of what the test says of the value. *)
+Lemma same_before_unbound (hp : heap) (cells : list (location * mark))
+    (l : location) (m' : mark) (v : value) :
+  is_bound l hp = false ->
+  value_closed hp v ->
+  same_before cells ((l, m') :: cells) v.
+Proof.
+  intros Hl Hclosed m.
+  destruct v as [ | | | s | | | | l0 | ]; try (intros H; exact H).
+  cbn [held_before]. rewrite lookup_cons.
+  destruct (Pos.eqb_spec l0 l) as [-> | _]; [ | intros H; exact H ].
+  rewrite (Hclosed l (or_introl eq_refl)) in Hl. discriminate Hl.
 Qed.
 
 (* The tests of the third and fourth parts of [calls_kept], and of the
@@ -1683,8 +1913,10 @@ Qed.
 Definition calls_held (rs : region_state) (vars : env) (conts : cont_env)
     : Prop :=
   forallb (value_usable rs) (conts_held conts) = true
-  ∧ held_older (rs_frames rs) vars (conts_held conts) = true
-  ∧ forallb (fun '(_, c) => cont_held_older (rs_frames rs) c) conts = true.
+  ∧ held_older (rs_frames rs) (rs_cells rs) vars (conts_held conts) = true
+  ∧ forallb (fun '(_, c) => cont_held_older (rs_frames rs) (rs_cells rs) c)
+      conts
+    = true.
 
 Lemma calls_kept_parts (rs : region_state) :
   calls_kept rs = true
@@ -1700,16 +1932,18 @@ Qed.
 Lemma calls_held_closures (rs : region_state) (vars : env)
     (conts conts' : cont_env) :
   (∀ v : value, In v (conts_held conts') -> In v (conts_held conts)) ->
-  forallb (fun '(_, c) => cont_held_older (rs_frames rs) c) conts' = true ->
+  forallb (fun '(_, c) => cont_held_older (rs_frames rs) (rs_cells rs) c)
+    conts'
+  = true ->
   forallb (value_usable rs) (conts_held conts) = true ->
-  held_older (rs_frames rs) vars (conts_held conts) = true ->
+  held_older (rs_frames rs) (rs_cells rs) vars (conts_held conts) = true ->
   calls_held rs vars conts'.
 Proof.
   intros Hincl Holder Hu Hvars. split; [ | split; [ | exact Holder ] ].
   - apply forallb_forall. intros v Hin.
     exact (forallb_in _ _ v Hu (Hincl v Hin)).
   - unfold held_older in Hvars |- *. revert Hvars. apply forallb_impl.
-    intros [x w] _. exact (older_incl _ _ _ w Hincl).
+    intros [x w] _. exact (older_incl _ _ _ _ w Hincl).
 Qed.
 
 (* What is asked of a continuation, and of a value that a continuation
@@ -1717,7 +1951,7 @@ Qed.
 Definition cont_calls (rs : region_state) (c : cont_value) : Prop :=
   cont_no_mark (rs_frames rs) c = true
   ∧ forallb (value_usable rs) (cont_held c) = true
-  ∧ cont_held_older (rs_frames rs) c = true.
+  ∧ cont_held_older (rs_frames rs) (rs_cells rs) c = true.
 
 Definition given (rs : region_state) (v : value) : Prop :=
   no_mark (rs_frames rs) v ∧ value_usable rs v = true.
@@ -1765,14 +1999,14 @@ Proof.
   intros Hclosure Hvs (_ & Hur & Hor) (_ & Hue & Hoe) Hbind.
   split; [ | split ].
   - simpl. rewrite app_nil_r, forallb_app, Hur, Hue. reflexivity.
-  - apply (forallb_pairs_Forall (older (rs_frames rs) _)).
+  - apply (forallb_pairs_Forall (older (rs_frames rs) (rs_cells rs) _)).
     refine
       (Forall_impl _ _
          (bind_params_values_all (no_mark (rs_frames rs)) _ _ _ _ Hvs
             (Forall_cons (code_my_closure c, closure) Hclosure
                (Forall_nil _))
             Hbind)).
-    intros [x w]. exact (older_no_mark _ _ w).
+    intros [x w]. exact (older_no_mark _ _ _ w).
   - simpl. rewrite Hor, Hoe. reflexivity.
 Qed.
 
@@ -1783,7 +2017,10 @@ Lemma calls_handler (rs : region_state) (params : list variable)
     (vs : list value) (handler_vars : env) :
   cont_calls rs
     (Closure (Handler params metadata handler) def_vars def_conts recursive) ->
-  Forall (fun v => older (rs_frames rs) (conts_held def_conts) v = true) vs ->
+  Forall
+    (fun v =>
+       older (rs_frames rs) (rs_cells rs) (conts_held def_conts) v = true)
+    vs ->
   bind_params params vs def_vars = Some handler_vars ->
   calls_held rs handler_vars
     (rec_closures recursive def_vars def_conts ++ def_conts).
@@ -1795,11 +2032,11 @@ Proof.
     apply in_app_iff in Hin as [Hin | Hin];
       [ exact (rec_closures_held _ _ _ v Hin) | exact Hin ].
   - rewrite forallb_app,
-      (rec_closures_older _ recursive def_vars def_conts Hvars Hconts),
+      (rec_closures_older _ _ recursive def_vars def_conts Hvars Hconts),
       Hconts.
     reflexivity.
   - exact Hu.
-  - exact (bind_params_older _ _ params vs def_vars handler_vars Hvs Hvars
+  - exact (bind_params_older _ _ _ params vs def_vars handler_vars Hvs Hvars
              Hbind).
 Qed.
 
@@ -1807,7 +2044,9 @@ Lemma resolve_calls (rs : region_state) (k : continuation)
     (conts : cont_env) :
   forallb (fun '(_, c) => cont_no_mark (rs_frames rs) c) conts = true ->
   forallb (value_usable rs) (conts_held conts) = true ->
-  forallb (fun '(_, c) => cont_held_older (rs_frames rs) c) conts = true ->
+  forallb (fun '(_, c) => cont_held_older (rs_frames rs) (rs_cells rs) c)
+    conts
+  = true ->
   cont_calls rs (resolve k conts).
 Proof.
   intros Hm Hu Ho. split; [ exact (resolve_no_mark _ k conts Hm) | ]. split.
@@ -1816,7 +2055,8 @@ Proof.
   - unfold resolve.
     destruct (lookup k conts) as [c | ] eqn:Hlookup; [ | reflexivity ].
     exact
-      (lookup_forallb (cont_held_older (rs_frames rs)) k c conts Ho Hlookup).
+      (lookup_forallb (cont_held_older (rs_frames rs) (rs_cells rs)) k c conts
+         Ho Hlookup).
 Qed.
 
 (* ======================================================================== *)
@@ -1829,24 +2069,26 @@ Definition calls_step (result : region_step_result) : Prop :=
   | Region_step rs' =>
     calls_held rs' (state_vars (rs_state rs')) (state_conts (rs_state rs'))
   | Region_exit _ vs rs' => forallb (value_usable rs') vs = true
-  | Region_undefined _ | Region_let_not_run => True
+  | Region_undefined _ => True
   end.
 
 Lemma plain_step_calls (rs : region_state) :
   symbols_fresh rs = true ->
   marks_in_variables rs = true ->
-  needs_no_heap (rs_state rs) ->
   calls_held rs (state_vars (rs_state rs)) (state_conts (rs_state rs)) ->
   forallb (simple_usable rs) (evaluated_simples (state_expr (rs_state rs)))
   = true ->
   (∀ (x : variable) (kind : flambda_kind) (d : named) (body : expr)
-     (v : value),
+     (v : value) (hp' : heap) (rd' : read_record),
     state_expr (rs_state rs) = Let x kind d body ->
-    eval_named (live_statics rs) (state_vars (rs_state rs)) d = Some v ->
-    value_no_mark (rs_frames rs) v = true) ->
+    exec_named (live_statics rs) (state_heap (rs_state rs))
+      (state_reads (rs_state rs)) (state_vars (rs_state rs)) d
+    = Some (v, hp', rd') ->
+    value_no_mark (rs_frames rs) v = true
+    ∧ heap_no_mark (rs_frames rs) hp') ->
   calls_step (plain_step rs).
 Proof.
-  intros Hfresh Hmarks Hneeds (C1 & C2 & C3) Husable Hlet.
+  intros Hfresh Hmarks (C1 & C2 & C3) Husable Hlet.
   pose proof Hmarks as HM.
   apply marks_in_variables_parts in HM as (M1 & M2 & _ & _).
   assert (Hstep :
@@ -1855,7 +2097,8 @@ Proof.
   { apply
       (step_call_result (no_mark (rs_frames rs)) (given rs) (cont_calls rs)
          (calls_held rs) (live_statics rs));
-      cbn [with_statics state_expr state_vars state_conts state_statics].
+      cbn [with_statics state_expr state_vars state_conts state_statics
+           state_heap state_reads].
     - exact (no_mark_partial _).
     - exact (no_mark_fields rs Hmarks).
     - intros v [H _]. exact H.
@@ -1866,18 +2109,15 @@ Proof.
     - intros params metadata handler def_vars def_conts recursive vs
         handler_vars Hc Hvs.
       apply (calls_handler rs _ _ _ _ _ _ vs handler_vars Hc).
-      exact (Forall_impl _ (fun v H => older_no_mark _ _ v (proj1 H)) Hvs).
+      exact (Forall_impl _ (fun v H => older_no_mark _ _ _ v (proj1 H)) Hvs).
     - reflexivity.
     - exact (conj C1 (conj C2 C3)).
     - intros k. exact (resolve_calls rs k _ M2 C1 C3).
-    - intros x kind d body v hp' rd' He Hd.
-      destruct
-        (exec_named_needs_no_heap_some _ _ _ _ _ _ _ _
-           (Hneeds x kind d body He) Hd)
-        as [Hd' _].
-      split; [ exact C1 | ]. split; [ | exact C3 ].
+    - intros x kind d body v hp' rd' He Hd. split; [ exact C1 | ].
+      split; [ | exact C3 ].
       apply andb_true_iff. split; [ | exact C2 ].
-      exact (older_no_mark _ _ v (Hlet x kind d body v He Hd')).
+      exact
+        (older_no_mark _ _ _ v (proj1 (Hlet x kind d body v hp' rd' He Hd))).
     - intros k h body _.
       apply (calls_held_closures rs _ (state_conts (rs_state rs)));
         [ | | exact C1 | exact C2 ].
@@ -1890,7 +2130,7 @@ Proof.
       + intros v Hin. unfold conts_held in Hin. rewrite flat_map_app in Hin.
         apply in_app_iff in Hin as [Hin | Hin];
           [ exact (rec_closures_held _ _ _ v Hin) | exact Hin ].
-      + rewrite forallb_app, (rec_closures_older _ handlers _ _ C2 C3), C3.
+      + rewrite forallb_app, (rec_closures_older _ _ handlers _ _ C2 C3), C3.
         reflexivity.
     - intros sim v Hin Hv. split.
       + exact
@@ -1926,11 +2166,10 @@ Proof.
   destruct (resolve (ac_continuation ac) (state_conts (rs_state rs)))
     as [[params metadata handler] def_vars def_conts recursive | k | c extra
        | remaining remaining_arity return_arity return_to exn_to];
-    try (apply (plain_step_calls rs Hfresh Hmarks);
-         [ intros x kind d body Hlet; rewrite He in Hlet; discriminate
-         | exact Hcalls
-         | rewrite He; apply Husable; intros; discriminate
-         | intros x kind d body v Hlet; rewrite He in Hlet; discriminate ]).
+    try (apply (plain_step_calls rs Hfresh Hmarks Hcalls);
+         [ rewrite He; apply Husable; intros; discriminate
+         | intros x kind d body v hp' rd' Hlet; rewrite He in Hlet;
+           discriminate ]).
   destruct (eval_simples (state_vars (rs_state rs)) (ac_args ac)) as [vs | ]
     eqn:Hargs; [ | exact I ].
   destruct (kinds_eqb _ _); [ | exact I ].
@@ -1943,7 +2182,7 @@ Proof.
   apply (eval_simples_forall _ (state_vars (rs_state rs)) (ac_args ac) vs);
     [ | exact Hargs ].
   intros sim w Hin Hw.
-  apply (older_incl _ (conts_held (state_conts (rs_state rs))) _ w Hheld).
+  apply (older_incl _ _ (conts_held (state_conts (rs_state rs))) _ w Hheld).
   apply (eval_simple_older rs _ sim w Hfresh C2); [ | exact Hw ].
   apply (evaluated_simples_below _ (Apply_cont ac));
     [ rewrite <- He; exact (symbols_fresh_expr rs Hfresh) | exact Hin ].
@@ -1957,10 +2196,10 @@ Lemma older_frames_state (rs : region_state) (frames' : list frame) :
     on_stack s (rs_frames rs) = false ->
     on_stack s frames' = false) ->
   calls_held rs (state_vars (rs_state rs)) (state_conts (rs_state rs)) ->
-  held_older frames' (state_vars (rs_state rs))
+  held_older frames' (rs_cells rs) (state_vars (rs_state rs))
     (conts_held (state_conts (rs_state rs)))
   = true
-  ∧ forallb (fun '(_, c) => cont_held_older frames' c)
+  ∧ forallb (fun '(_, c) => cont_held_older frames' (rs_cells rs) c)
       (state_conts (rs_state rs))
     = true.
 Proof.
@@ -1969,21 +2208,56 @@ Proof.
   split; apply forallb_forall.
   - intros [x w] Hin.
     exact
-      (older_frames _ _ _ _ w Hnew (forallb_in _ _ (x, w) B1 Hin)
+      (older_frames _ _ _ _ _ w Hnew (forallb_in _ _ (x, w) B1 Hin)
          (forallb_in _ _ (x, w) C2 Hin)).
   - intros [k c] Hin.
     exact
-      (cont_held_older_frames _ _ (rs_base rs) _ c Hnew
+      (cont_held_older_frames _ _ _ (rs_base rs) _ c Hnew
          (forallb_in _ _ (k, c) B2 Hin) (forallb_in _ _ (k, c) C3 Hin)).
+Qed.
+
+(* A state that binds what the state before binds, and in which no
+   cell is dead that was not. *)
+Lemma value_usable_more (rs rs' : region_state) (v : value) :
+  rs_base rs' = rs_base rs ->
+  (∀ s : symbol,
+    is_some (lookup s (static_values (live_statics rs))) = true ->
+    is_some (lookup s (static_values (live_statics rs'))) = true) ->
+  (∀ l : location, cell_dead rs l = false -> cell_dead rs' l = false) ->
+  value_usable rs v = true ->
+  value_usable rs' v = true.
+Proof.
+  intros Hbase Hmore Hcells.
+  destruct v as [ | | | s | | | | l | ]; try reflexivity.
+  - unfold value_usable, drawn. rewrite Hbase. intros H.
+    apply orb_true_iff in H as [H | H]; [ rewrite H; reflexivity | ].
+    rewrite (Hmore s H). apply orb_true_r.
+  - unfold value_usable. rewrite !negb_true_iff. exact (Hcells l).
+Qed.
+
+(* No cell is dead that was not, where the cells are listed as they
+   were and the stack has the marks that it had. *)
+Lemma cell_dead_more (rs rs' : region_state) (l : location) :
+  rs_cells rs' = rs_cells rs ->
+  (∀ m : mark,
+    on_stack m (rs_frames rs) = true -> on_stack m (rs_frames rs') = true) ->
+  cell_dead rs l = false ->
+  cell_dead rs' l = false.
+Proof.
+  intros Hcells Hstack. unfold cell_dead. rewrite Hcells.
+  destruct (lookup l (rs_cells rs)) as [m | ]; [ | intros _; reflexivity ].
+  rewrite !negb_false_iff. exact (Hstack m).
 Qed.
 
 Lemma begin_region_calls (rs : region_state) (x : variable)
     (kind : flambda_kind) (mark_kind : mark_kind) (body : expr) :
   symbols_fresh rs = true ->
+  (∀ (l : location) (m : mark),
+    In (l, m) (rs_cells rs) -> (m < rs_next rs)%positive) ->
   calls_held rs (state_vars (rs_state rs)) (state_conts (rs_state rs)) ->
   calls_step (begin_region rs x kind mark_kind body).
 Proof.
-  intros Hfresh Hcalls. unfold begin_region.
+  intros Hfresh Hlisted Hcalls. unfold begin_region.
   destruct (kind_eqb kind Region); [ | exact I ].
   destruct
     (older_frames_state rs (Frame (rs_next rs) mark_kind [] :: rs_frames rs)
@@ -1994,17 +2268,28 @@ Proof.
       (Pos.eqb (rs_next rs) s || on_stack s (rs_frames rs) = false).
     rewrite Hoff, orb_false_r. apply Pos.eqb_neq. lia. }
   destruct Hcalls as (C1 & _ & _).
-  split; [ exact C1 | split; [ | exact N3 ] ].
-  apply andb_true_iff. split; [ | exact N2 ].
-  apply orb_true_iff. right.
-  destruct (symbols_fresh_held rs Hfresh) as (_ & B2 & _ & _).
-  apply forallb_forall. intros v Hin.
-  unfold conts_held in Hin. apply in_flat_map in Hin as ([k c] & Hc & Hin).
-  pose proof
-    (forallb_in _ _ v
-       (cont_held_below _ _ c (forallb_in _ _ (k, c) B2 Hc)) Hin)
-    as Hv.
-  destruct v; try reflexivity. exact Hv.
+  split; [ | split; [ | exact N3 ] ].
+  - revert C1. apply forallb_impl. intros v _.
+    apply value_usable_more; [ reflexivity | intros s H; exact H | ].
+    intros l. apply cell_dead_more; [ reflexivity | ].
+    intros m H.
+    change (Pos.eqb (rs_next rs) m || on_stack m (rs_frames rs) = true).
+    rewrite H. apply orb_true_r.
+  - apply andb_true_iff. split; [ | exact N2 ].
+    apply orb_true_iff. right.
+    destruct (symbols_fresh_held rs Hfresh) as (_ & B2 & _ & _).
+    apply forallb_forall. intros v Hin.
+    unfold conts_held in Hin. apply in_flat_map in Hin as ([k c] & Hc & Hin).
+    pose proof
+      (forallb_in _ _ v
+         (cont_held_below _ _ c (forallb_in _ _ (k, c) B2 Hc)) Hin)
+      as Hv.
+    destruct v as [ | | | s | | | | l | ]; try reflexivity;
+      [ exact Hv | ].
+    cbn [held_before bind_let rs_cells].
+    destruct (lookup l (rs_cells rs)) as [m | ] eqn:Hlookup;
+      [ | reflexivity ].
+    apply Pos.ltb_lt. exact (Hlisted l m (lookup_in _ _ _ Hlookup)).
 Qed.
 
 (* The frame that the end of a region cuts down to is that of its
@@ -2065,38 +2350,82 @@ Proof.
     lia.
 Qed.
 
-(* A symbol drawn before the mark of the region that ends may be
-   evaluated after as before: the frames that are popped bind none. *)
+(* The marks of the frames above a frame are above its mark. *)
+Lemma frames_ordered_above (above0 : list frame) :
+  ∀ (above : symbol) (f : frame) (below : list frame) (g : frame),
+    frames_ordered_below above (above0 ++ f :: below) = true ->
+    In g above0 ->
+    (frame_mark f < frame_mark g)%positive.
+Proof.
+  induction above0 as [ | g0 above0 IH]; intros above f below g;
+    cbn [app frames_ordered_below]; [ intros _ [] | ].
+  rewrite !andb_true_iff. intros [_ Hb] [<- | Hin];
+    [ | exact (IH _ f below g Hb Hin) ].
+  exact
+    (frames_ordered_below_marks _ _ f Hb
+       (in_or_app above0 (f :: below) f (or_intror (or_introl eq_refl)))).
+Qed.
+
+(* A mark that is on the stack and is smaller than the mark of a frame
+   is the mark of a frame below it. *)
+Lemma on_stack_below (above0 : list frame) (above : symbol) (f : frame)
+    (below : list frame) (m : mark) :
+  frames_ordered_below above (above0 ++ f :: below) = true ->
+  on_stack m (above0 ++ f :: below) = true ->
+  (m < frame_mark f)%positive ->
+  on_stack m below = true.
+Proof.
+  intros Hord Hon Hlt. rewrite on_stack_app in Hon.
+  apply orb_true_iff in Hon as [Hon | Hon].
+  - unfold on_stack in Hon. apply existsb_exists in Hon as (g & Hg & Heq).
+    apply Pos.eqb_eq in Heq.
+    pose proof (frames_ordered_above above0 above f below g Hord Hg). lia.
+  - change (on_stack m (f :: below))
+      with (Pos.eqb (frame_mark f) m || on_stack m below)
+      in Hon.
+    apply orb_true_iff in Hon as [Heq | Hon]; [ | exact Hon ].
+    apply Pos.eqb_eq in Heq. lia.
+Qed.
+
+(* What passes [held_before] against the mark of the region that ends
+   may be evaluated after as before. A symbol drawn before that mark:
+   the frames that are popped bind none. A location listed with a
+   smaller mark: the frame of that mark is below the frames that are
+   popped. *)
 Lemma end_region_usable (rs rs' : region_state) (above : list frame)
     (f : frame) (below : list frame) (v : value) :
   rs_base rs' = rs_base rs ->
   state_statics (rs_state rs') = state_statics (rs_state rs) ->
+  rs_cells rs' = rs_cells rs ->
   rs_frames rs = above ++ f :: below ->
   rs_frames rs' = below ->
   frames_ordered rs = true ->
-  match v with
-  | Value_symbol s => Pos.ltb s (frame_mark f)
-  | _ => true
-  end
-  = true ->
+  held_before (rs_cells rs) (frame_mark f) v = true ->
   value_usable rs v = true ->
   value_usable rs' v = true.
 Proof.
-  intros Hbase Hstatics Hframes Hframes' Hord.
-  destruct v as [ | | | s | | | | | ]; try (intros _ _; reflexivity).
-  intros Hold. apply Pos.ltb_lt in Hold. unfold value_usable, drawn.
-  rewrite Hbase, !live_statics_values, Hstatics, Hframes, Hframes'.
-  intros H. apply orb_true_iff in H as [H | H]; [ rewrite H; reflexivity | ].
-  apply orb_true_iff. right.
-  replace (above ++ f :: below) with ((above ++ [f]) ++ below) in H
-    by (rewrite <- app_assoc; reflexivity).
-  rewrite live_locals_app, <- app_assoc, lookup_app in H.
-  destruct (lookup s (live_locals (above ++ [f]))) as [allocated | ]
-    eqn:Hlookup; [ | exact H ].
-  apply lookup_in in Hlookup. unfold frames_ordered in Hord.
-  rewrite Hframes in Hord.
-  pose proof (frames_ordered_cut above _ f below s allocated Hord Hlookup).
-  lia.
+  intros Hbase Hstatics Hcells Hframes Hframes' Hord.
+  destruct v as [ | | | s | | | | l | ]; try (intros _ _; reflexivity);
+    cbn [held_before].
+  - intros Hold. apply Pos.ltb_lt in Hold. unfold value_usable, drawn.
+    rewrite Hbase, !live_statics_values, Hstatics, Hframes, Hframes'.
+    intros H. apply orb_true_iff in H as [H | H]; [ rewrite H; reflexivity | ].
+    apply orb_true_iff. right.
+    replace (above ++ f :: below) with ((above ++ [f]) ++ below) in H
+      by (rewrite <- app_assoc; reflexivity).
+    rewrite live_locals_app, <- app_assoc, lookup_app in H.
+    destruct (lookup s (live_locals (above ++ [f]))) as [allocated | ]
+      eqn:Hlookup; [ | exact H ].
+    apply lookup_in in Hlookup. unfold frames_ordered in Hord.
+    rewrite Hframes in Hord.
+    pose proof (frames_ordered_cut above _ f below s allocated Hord Hlookup).
+    lia.
+  - unfold value_usable, cell_dead. rewrite Hcells, Hframes'.
+    destruct (lookup l (rs_cells rs)) as [m | ]; [ | intros _ _; reflexivity ].
+    intros Hold Hon. apply Pos.ltb_lt in Hold.
+    rewrite negb_involutive in Hon |- *.
+    unfold frames_ordered in Hord. rewrite Hframes in Hord, Hon.
+    exact (on_stack_below above _ f below m Hord Hon Hold).
 Qed.
 
 Lemma end_region_calls (rs : region_state) (x : variable)
@@ -2124,17 +2453,12 @@ Proof.
     rewrite Hon, !orb_true_r. reflexivity. }
   destruct Hcalls as (C1 & C2 & _).
   assert (Hold :
-    forallb
-      (fun v =>
-         match v with
-         | Value_symbol s => Pos.ltb s (frame_mark f)
-         | _ => true
-         end)
+    forallb (held_before (rs_cells rs) (frame_mark f))
       (conts_held (state_conts (rs_state rs)))
     = true).
   { pose proof
       (eval_simple_older rs _ region _ Hfresh C2 Hbelow Hregion) as H.
-    simpl in H. rewrite Hframes, on_stack_app in H.
+    cbn [older] in H. rewrite Hframes, on_stack_app in H.
     change (on_stack (frame_mark f) (f :: below))
       with
         (Pos.eqb (frame_mark f) (frame_mark f)
@@ -2148,37 +2472,25 @@ Proof.
     | exact (forallb_in _ _ v C1 Hin) ].
 Qed.
 
-(* A state that binds what the state before binds. *)
-Lemma value_usable_more (rs rs' : region_state) (v : value) :
-  rs_base rs' = rs_base rs ->
-  (∀ s : symbol,
-    is_some (lookup s (static_values (live_statics rs))) = true ->
-    is_some (lookup s (static_values (live_statics rs'))) = true) ->
-  value_usable rs v = true ->
-  value_usable rs' v = true.
-Proof.
-  intros Hbase Hmore. destruct v as [ | | | s | | | | | ]; try reflexivity.
-  unfold value_usable, drawn. rewrite Hbase. intros H.
-  apply orb_true_iff in H as [H | H]; [ rewrite H; reflexivity | ].
-  rewrite (Hmore s H). apply orb_true_r.
-Qed.
-
 Lemma local_allocation_calls (rs : region_state) (x y : variable)
     (kind : flambda_kind) (d : named) (region : option simple)
     (body : expr) :
   symbols_fresh rs = true ->
+  is_cell_allocation d && kind_eqb kind Value = false ->
   calls_held rs (state_vars (rs_state rs)) (state_conts (rs_state rs)) ->
   calls_step (local_allocation rs x y kind d region body).
 Proof.
-  intros Hfresh Hcalls.
+  intros Hfresh Hcell Hcalls.
   destruct (local_allocation rs x y kind d region body)
-    as [rs' | k vs rs' | fault | ] eqn:Hstep;
+    as [rs' | k vs rs' | fault] eqn:Hstep;
     [ | contradiction (local_allocation_no_exit _ _ _ _ _ _ _ _ _ _ Hstep)
-    | exact I | exact I ].
-  destruct (local_allocation_step rs rs' x y kind d region body Hstep)
+    | exact I ].
+  destruct (local_allocation_step rs rs' x y kind d region body Hcell Hstep)
     as (v & sym & bindings & _ & _ & Hlocalise & _ & Hvars & Hconts & Hbase
         & _ & _ & Hframes).
-destruct (localise_makes _ _ _ _ Hlocalise) as (_ & [allocated Hin] & Hbound).
+  destruct (local_allocation_memory rs rs' x y kind d region body Hcell Hstep)
+    as (_ & _ & Hcells).
+  destruct (localise_makes _ _ _ _ Hlocalise) as (_ & [allocated Hin] & Hbound).
   destruct (Hbound sym allocated Hin) as (Hfrom & _).
   assert (Hfewer : fewer_marks rs (rs_frames rs')).
   { unfold fewer_marks.
@@ -2189,32 +2501,106 @@ destruct (localise_makes _ _ _ _ Hlocalise) as (_ & [allocated Hin] & Hbound).
        (fewer_marks_no_new rs _ Hfewer) Hcalls)
     as [N2 N3].
   destruct Hcalls as (C1 & _ & _).
-  unfold calls_step, calls_held. rewrite Hvars, Hconts.
+  unfold calls_step, calls_held. rewrite Hvars, Hconts, Hcells.
   split; [ | split; [ | exact N3 ] ].
   - revert C1. apply forallb_impl. intros w _.
-    apply value_usable_more; [ exact Hbase | ].
-    intros s. rewrite !live_statics_values.
-    destruct (rs_frames rs) as [ | [m mark_kind locals] frames];
-      destruct Hframes as [-> Hrest]; rewrite Hrest.
-    + simpl. rewrite is_some_lookup_app. intros ->. apply orb_true_r.
-    + change
-        (live_locals (Frame m mark_kind (bindings ++ locals) :: frames))
-        with ((bindings ++ locals) ++ live_locals frames).
-      change (live_locals (Frame m mark_kind locals :: frames))
-        with (locals ++ live_locals frames).
-      rewrite <- !app_assoc, (is_some_lookup_app s bindings). intros ->.
-      apply orb_true_r.
+    apply value_usable_more; [ exact Hbase | | ].
+    + intros s. rewrite !live_statics_values.
+      destruct (rs_frames rs) as [ | [m mark_kind locals] frames];
+        destruct Hframes as [-> Hrest]; rewrite Hrest.
+      * simpl. rewrite is_some_lookup_app. intros ->. apply orb_true_r.
+      * change
+          (live_locals (Frame m mark_kind (bindings ++ locals) :: frames))
+          with ((bindings ++ locals) ++ live_locals frames).
+        change (live_locals (Frame m mark_kind locals :: frames))
+          with (locals ++ live_locals frames).
+        rewrite <- !app_assoc, (is_some_lookup_app s bindings). intros ->.
+        apply orb_true_r.
+    + intros l. apply cell_dead_more; [ exact Hcells | ].
+      destruct (rs_frames rs) as [ | [m mark_kind locals] frames];
+        destruct Hframes as [-> _]; intros m0 H; exact H.
   - assert (Hsym :
-      older (rs_frames rs') (conts_held (state_conts (rs_state rs)))
-        (Value_symbol sym)
+      older (rs_frames rs') (rs_cells rs)
+        (conts_held (state_conts (rs_state rs))) (Value_symbol sym)
       = true).
-    { simpl. destruct (on_stack sym (rs_frames rs')) eqn:Hon;
+    { cbn [older]. destruct (on_stack sym (rs_frames rs')) eqn:Hon;
         [ | reflexivity ].
       pose proof (Hfewer sym Hon) as H.
       rewrite (not_drawn_not_on_stack rs sym Hfresh (or_intror Hfrom)) in H.
       discriminate H. }
     apply andb_true_iff. split; [ exact Hsym | ].
     apply andb_true_iff. split; [ exact Hsym | exact N2 ].
+Qed.
+
+(* A local allocation of a cell. Its location is one that the heap did
+   not bind, and the heap binds every location that the state holds
+   (FlambdaRegionsInvariantSpec.locations_all_bound): so it is none of
+   the values that the continuations have held, and to list it changes
+   nothing of what the test says of them. The frames are as they were,
+   and the cell that is listed is in the newest. *)
+Lemma local_cell_allocation_calls (rs : region_state) (x y : variable)
+    (d : named) (region : option simple) (body : expr) :
+  bound rs ->
+  is_cell_allocation d = true ->
+  calls_held rs (state_vars (rs_state rs)) (state_conts (rs_state rs)) ->
+  calls_step (local_cell_allocation rs x y d region body).
+Proof.
+  intros Hb Hcell (C1 & C2 & C3).
+  destruct (local_cell_allocation rs x y d region body)
+    as [rs' | k vs rs' | fault] eqn:Hstep;
+    [ | contradiction (local_cell_allocation_no_exit _ _ _ _ _ _ _ _ _ Hstep)
+    | exact I ].
+  destruct (local_cell_allocation_step rs rs' x y d region body Hstep)
+    as (l & hp & rd & _ & Hexec & Hstate & Hframes & Hbase & _ & Hcells).
+  assert (Hl : is_bound l (state_heap (rs_state rs)) = false).
+  { destruct (exec_named_heap_cases _ _ _ _ _ _ d _ Hexec)
+      as [[Hno _]
+         | [(_ & vs & c & _ & _ & Hv & _)
+           | (target & new_simple & l0 & new & c & c' & i & _ & _ & _ & _ & _
+              & Hv & _)]].
+    - rewrite (cell_allocation_changes_heap d Hcell) in Hno. discriminate Hno.
+    - injection Hv as ->. unfold is_bound.
+      rewrite FlambdaHeapProofs.fresh_location. reflexivity.
+    - discriminate Hv. }
+  apply bound_parts in Hb. cbv zeta in Hb. destruct Hb as ([_ Hclosed] & _).
+  assert (Hlisted :
+    ∃ cells' : list (location * mark),
+      rs_cells rs' = cells'
+      ∧ conts_values_all (same_before (rs_cells rs) cells')
+          (state_conts (rs_state rs))).
+  { rewrite Hcells.
+    destruct (rs_frames rs) as [ | f frames]; eexists;
+      (split; [ reflexivity | ]); revert Hclosed;
+      apply conts_values_all_impl; intros v Hv.
+    - intros m H. exact H.
+    - exact (same_before_unbound _ _ l (frame_mark f) v Hl Hv). }
+  destruct Hlisted as (cells' & Hcells' & Hsame).
+  unfold calls_step, calls_held. rewrite Hcells', Hframes, Hstate.
+  cbn [state_vars state_conts].
+  split; [ | split ].
+  - revert C1. apply forallb_impl. intros v _.
+    apply value_usable_more; [ exact Hbase | | ].
+    + intros s. rewrite !live_statics_values, Hframes, Hstate.
+      intros H. exact H.
+    + intros l0. unfold cell_dead. rewrite Hframes, Hcells.
+      destruct (rs_frames rs) as [ | f frames]; [ intros H; exact H | ].
+      rewrite lookup_cons.
+      destruct (Pos.eqb l0 l); [ | intros H; exact H ].
+      intros _. apply negb_false_iff.
+      change
+        (Pos.eqb (frame_mark f) (frame_mark f)
+         || on_stack (frame_mark f) frames
+         = true).
+      rewrite Pos.eqb_refl. reflexivity.
+  - apply andb_true_iff. split; [ reflexivity | ].
+    apply andb_true_iff. split; [ reflexivity | ].
+    unfold held_older in C2 |- *. revert C2. apply forallb_impl.
+    intros [x0 w] _. apply older_cells.
+    exact (conts_held_all _ _ Hsame).
+  - apply forallb_forall. intros [k c] Hin.
+    exact
+      (cont_held_older_cells _ _ _ c (conts_values_all_in _ _ k c Hsame Hin)
+         (forallb_in _ _ (k, c) C3 Hin)).
 Qed.
 
 Lemma static_step_calls (rs : region_state) (bindings : list static_binding)
@@ -2224,16 +2610,16 @@ Lemma static_step_calls (rs : region_state) (bindings : list static_binding)
   calls_step (static_step rs).
 Proof.
   intros He (C1 & C2 & C3).
-  destruct (static_step rs) as [rs' | k vs rs' | fault | ] eqn:Hstep;
+  destruct (static_step rs) as [rs' | k vs rs' | fault] eqn:Hstep;
     [ | contradiction (static_step_no_exit rs bindings body _ _ _ He Hstep)
-    | exact I | exact I ].
+    | exact I ].
   destruct (static_step_step rs rs' bindings body He Hstep)
     as (statics' & Heval & ->).
   destruct (eval_static_bindings_parts _ _ _ _ Heval)
     as (new_code & new_values & _ & Hvalues & _ & _).
   split; [ | exact (conj C2 C3) ].
   revert C1. apply forallb_impl. intros w _.
-  apply value_usable_more; [ reflexivity | ].
+  apply value_usable_more; [ reflexivity | | intros l H; exact H ].
   intros s. rewrite !live_statics_values.
   cbn [rs_state rs_frames state_statics].
   rewrite Hvalues, !is_some_lookup_app. intros H.
@@ -2245,17 +2631,22 @@ Qed.
    evaluated. *)
 Theorem region_step_calls (rs : region_state) :
   symbols_fresh rs = true ->
+  cells_live rs = true ->
+  locations_all_bound rs = true ->
   marks_in_variables rs = true ->
   frames_ordered rs = true ->
   calls_held rs (state_vars (rs_state rs)) (state_conts (rs_state rs)) ->
   calls_step (region_step rs).
 Proof.
-  intros Hfresh Hmarks Hord Hcalls. apply region_step_forms.
+  intros Hfresh Hcells Hbound Hmarks Hord Hcalls.
+  pose proof (proj1 (cells_live_parts rs) Hcells) as (_ & Hlisted & _).
+  apply locations_all_bound_iff in Hbound.
+  apply region_step_forms.
   - intros fault. exact I.
-  - intros x kind d body _ _. exact I.
   - intros x kind d mark_kind body _.
-    exact (begin_region_calls (count_uses rs) x kind mark_kind body Hfresh
-             Hcalls).
+    exact
+      (begin_region_calls (count_uses rs) x kind mark_kind body Hfresh
+         (fun l m Hin => proj2 (proj2 (Hlisted l m Hin))) Hcalls).
   - intros x kind p ended_by region body He.
     apply
       (end_region_calls (count_uses rs) x kind ended_by region body Hfresh
@@ -2263,27 +2654,28 @@ Proof.
     pose proof (symbols_fresh_expr rs Hfresh) as Hb. rewrite He in Hb.
     simpl in Hb. apply andb_true_iff in Hb as [Hb _].
     apply andb_true_iff in Hb as [Hb _]. exact Hb.
-  - intros x kind d body y region body' _ _ _ _.
+  - intros x kind d body y region body' _ _ _ Hcell.
     exact (local_allocation_calls (count_uses rs) x y kind d region body'
-             Hfresh Hcalls).
-  - intros x kind d body He Hneeds Husable.
+             Hfresh Hcell Hcalls).
+  - intros x kind d body y region body' _ _ _ Hcell.
+    exact (local_cell_allocation_calls (count_uses rs) x y d region body'
+             Hbound Hcell Hcalls).
+  - intros x kind d body He Husable.
     destruct
       (let_usable_no_mark (count_uses rs) x kind d body Hfresh Hmarks He
          Husable)
       as [Hsimples Hlet].
     exact
-      (plain_step_calls (count_uses rs) Hfresh Hmarks
-         (needs_no_heap_let _ x kind d body He Hneeds) Hcalls Hsimples Hlet).
+      (plain_step_calls (count_uses rs) Hfresh Hmarks Hcalls Hsimples Hlet).
   - intros bindings body He _.
     exact (static_step_calls (count_uses rs) bindings body He Hcalls).
   - intros ac He Hmark Hfault.
     apply (region_apply_cont_calls (count_uses rs) ac Hfresh Hmarks Hcalls He).
     exact (apply_cont_no_handler_usable rs ac He Hfault).
   - intros Hnot_let _ Husable.
-    apply
-      (plain_step_calls (count_uses rs) Hfresh Hmarks
-         (needs_no_heap_not_let _ Hnot_let) Hcalls Husable).
-    intros x kind d body v He. contradiction (Hnot_let x kind d body He).
+    apply (plain_step_calls (count_uses rs) Hfresh Hmarks Hcalls Husable).
+    intros x kind d body v hp' rd' He.
+    contradiction (Hnot_let x kind d body He).
 Qed.
 
 (* ======================================================================== *)
@@ -2309,7 +2701,9 @@ Theorem calls_kept_initial : calls_kept_initial_statement.
 Proof.
   intros e statics base. apply calls_kept_parts.
   split; [ | split; [ reflexivity | repeat split ] ].
-  apply marks_in_variables_parts. repeat split.
+  apply marks_in_variables_parts.
+  split; [ reflexivity | ]. split; [ reflexivity | ].
+  split; [ | split; [ reflexivity | intros l c v [] ] ].
   apply forallb_forall. intros [s allocated] _.
   rewrite allocated_no_mark_parts. apply andb_true_iff. split.
   - apply forallb_forall. intros w _. apply value_no_mark_no_frame.
@@ -2318,11 +2712,13 @@ Qed.
 
 Theorem region_step_keeps_calls : region_step_keeps_calls_statement.
 Proof.
-  intros rs rs' Hinv Hcalls Hstep. unfold region_invariant in Hinv.
-  apply andb_true_iff in Hinv as [Hfresh _].
+  intros rs rs' Hinv Hcalls Hstep.
+  apply region_invariant_parts in Hinv as (Hfresh & _ & Hcells & Hbound).
   apply calls_kept_parts in Hcalls as (Hmarks & Hord & Hheld).
-  pose proof (region_step_marks rs Hfresh Hmarks) as HA.
-  pose proof (region_step_calls rs Hfresh Hmarks Hord Hheld) as HB.
+  pose proof (proj1 (cells_live_parts rs) Hcells) as (_ & _ & _ & Hbelow & _).
+  pose proof (region_step_marks rs Hfresh Hbelow Hmarks) as HA.
+  pose proof (region_step_calls rs Hfresh Hcells Hbound Hmarks Hord Hheld)
+    as HB.
   rewrite Hstep in HA, HB. apply calls_kept_parts.
   exact
     (conj HA (conj (region_step_keeps_frames_ordered rs rs' Hstep Hord) HB)).
@@ -2333,7 +2729,7 @@ Proof.
   intros fuel. induction fuel as [ | fuel IH]; intros rs rs' Hinv Hcalls;
     simpl.
   - intros [= <-]. exact Hcalls.
-  - destruct (region_step rs) as [rs1 | k vs rs1 | fault | ] eqn:Hstep;
+  - destruct (region_step rs) as [rs1 | k vs rs1 | fault] eqn:Hstep;
       try discriminate.
     apply IH;
       [ exact (region_step_keeps_invariant rs rs1 Hinv Hstep)
@@ -2362,15 +2758,16 @@ Lemma region_run_exit_usable (fuel : nat) :
 Proof.
   induction fuel as [ | fuel IH]; intros rs rs' k vs Hinv Hcalls; simpl;
     [ discriminate | ].
-  destruct (region_step rs) as [rs1 | k1 vs1 rs1 | fault | ] eqn:Hstep;
-    [ | | discriminate | discriminate ].
+  destruct (region_step rs) as [rs1 | k1 vs1 rs1 | fault] eqn:Hstep;
+    [ | | discriminate ].
   - apply IH;
       [ exact (region_step_keeps_invariant rs rs1 Hinv Hstep)
       | exact (region_step_keeps_calls rs rs1 Hinv Hcalls Hstep) ].
-  - intros [= <- <- <-]. unfold region_invariant in Hinv.
-    apply andb_true_iff in Hinv as [Hfresh _].
+  - intros [= <- <- <-].
+    apply region_invariant_parts in Hinv as (Hfresh & _ & Hcells & Hbound).
     apply calls_kept_parts in Hcalls as (Hmarks & Hord & Hheld).
-    pose proof (region_step_calls rs Hfresh Hmarks Hord Hheld) as HB.
+    pose proof (region_step_calls rs Hfresh Hcells Hbound Hmarks Hord Hheld)
+      as HB.
     rewrite Hstep in HB. exact HB.
 Qed.
 
@@ -2390,7 +2787,7 @@ Lemma erased_if_usable (rs : region_state) (vs vs' : list value) :
 Proof.
   intros Hu H. induction H as [ | v v' vs vs' [_ Hv] _ IH]; [ constructor | ].
   simpl in Hu. apply andb_true_iff in Hu as [Hu Hus].
-  constructor; [ exact (Hv Hu) | exact (IH Hus) ].
+  constructor; [ exact (Hv (or_introl Hu)) | exact (IH Hus) ].
 Qed.
 
 Theorem erasure_exits_erased : erasure_exits_erased_statement.
@@ -2409,9 +2806,8 @@ Proof.
   intros e statics base k vs' hp Hfresh Herasable Hbehaves.
   destruct
     (erasure_adds_no_exit e statics base k vs' hp Hfresh Herasable Hbehaves)
-    as (fuel & [Hfault | [Hnot_run | (vs & rs & Hrun & Hrelated)]]);
-    exists fuel;
-    [ left; exact Hfault | right; left; exact Hnot_run | right; right ].
+    as (fuel & [Hfault | (vs & rs & Hrun & Hrelated)]);
+    exists fuel; [ left; exact Hfault | right ].
   exists vs, rs. split; [ exact Hrun | ].
   exact
     (erased_if_usable rs vs vs'

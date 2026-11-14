@@ -38,17 +38,21 @@
 
    In a run from the state that the test tool starts in, with the
    symbols that the machine draws apart from those of the term and of
-   the static environment that the run starts with
+   the static environment that the run starts with, and with that
+   static environment holding no location
    (FlambdaRegionsSpec.region_names_fresh): from a call until the code
    that was called returns or raises, no step pops a frame that was on
    the stack at the call. The reason is that a call gives code no
    region: an [Apply] one of whose simples has, for its value, a mark
    that is on the stack has no step (FlambdaRegionsSpec.simples_fault,
    [Region_used_as_value]), and in such a run no value holds a mark
-   inside. So the regions that code can end are those that it began,
-   and those that code which it called began and gave back to it.
-   None of this is said of a state that no such run reaches: a value
-   of it may hold a mark inside.
+   inside and no cell of the heap holds one: what a cell is made with
+   and what a store puts in it are simples that the step evaluates,
+   so the same test refuses a mark there. So the regions that code
+   can end are those that it began, and those that code which it
+   called began and gave back to it. None of this is said of a state
+   that no such run reaches: a value of it, or a cell of its heap,
+   may hold a mark inside.
 
    The machine has no stack of calls. A call is a step into the body
    of the code (FlambdaSemanticsSpec.call_code); the caller is what
@@ -63,7 +67,11 @@
 
    - In every state of a run from the state that the test tool starts
      in, what the continuations have held since a call may be
-     evaluated ([held_stays_usable_statement]).
+     evaluated ([held_stays_usable_statement]). Of a location that is
+     one of those values, it says that its cell is not dead
+     (FlambdaRegionsSpec.cell_dead): the frame that a local
+     allocation made the cell in, if one did, is still on the
+     stack.
    - So the values that such a run exits with may all be evaluated
      ([exit_values_usable_statement]). The arguments that the term
      gives at the exit are evaluated there (decision D45); the others
@@ -77,9 +85,14 @@
    THE TEST OF A STATE ([calls_kept])
 
    The statements are proved from a test of a state, which the state
-   that a run starts in passes and which a step keeps, of a state that
-   has the invariant of FlambdaRegionsInvariantSpec.v. It has four
-   parts.
+   that a run starts in passes and which a step keeps, of a state
+   that has the invariant of FlambdaRegionsInvariantSpec.v. It has four
+   parts. The first and the fourth say of the cells of the heap, and
+   of the locations that are held, what they say of the values and of
+   the symbols: without that a step does not keep the test. A read
+   binds a variable to what a cell holds, and the end of a region
+   makes dead the cells that local allocations made in its frame and
+   in the frames above.
 
    - A mark is held by variables only ([marks_in_variables]). The
      value of a variable, of the state or of a closure that a
@@ -88,9 +101,14 @@
      however deep, the callee and the arguments of a partial
      application included; not among the extra arguments or the
      arguments that remain of an over-application; not in what the
-     static environment or a frame binds. So no parameter of code is
-     given a mark, whatever the call: with all its arguments, with too
-     many, or of a partial application.
+     static environment or a frame binds; not in what a cell of the
+     heap holds, however deep, the callee and the arguments of a
+     partial application included. That is asked of every entry of
+     the heap: those that a later store hides, and those of a cell
+     whose frame is gone. So no parameter of code is given a mark,
+     whatever the call: with all its arguments, with too many, or of
+     a partial application; and code reads no mark out of a cell
+     that it is given.
    - The frames are in the order of their marks ([frames_ordered]).
      The machine draws its symbols upwards, so a symbol says when it
      was drawn. The marks decrease along the stack, newest first, and
@@ -111,11 +129,26 @@
      (FlambdaRegionsInvariantSpec.symbols_fresh). Such a symbol need
      not be one that the machine drew: it may be of the term or of the
      static environment.
+     The same is asked of each location that is itself one of those
+     values and that the state lists as a cell that a local
+     allocation made (FlambdaRegionsSpec.rs_cells): the mark that it
+     is listed with is smaller than the mark of every frame that the
+     variables hold ([held_before]). In a run the cell was made
+     before the call, in the frame that was the newest then, and the
+     mark that it is listed with had been drawn
+     (FlambdaRegionsInvariantSpec.cells_live); the marks that the
+     variables of code come to hold are drawn after the call. The
+     mark must be smaller and not the same: the end of a region
+     makes dead the cells that are listed with its own mark. Nothing
+     is asked of a location that is not listed: its cell is of the
+     heap and is never dead. Nothing is asked of a location inside a
+     value that is held.
 
    With the second and the fourth, the end of a region that a variable
    of the state names frees no symbol that is itself one of the values
-   that the continuations of the state have held since a call: that is
-   what "code cannot end a region of its caller" comes to in a state.
+   that the continuations of the state have held since a call, and
+   makes no cell dead whose location is one of them: that is what
+   "code cannot end a region of its caller" comes to in a state.
 
    HOW FAR THIS IS ABOUT THE PROGRAM
 
@@ -173,12 +206,21 @@
      not holding. Of those variables the test says that a mark is held
      there directly only, and what the fourth part says of the marks
      that they hold.
+   - That what a cell of the heap holds may be evaluated. The test
+     says that no entry of the heap holds a mark, and no more. What a
+     cell holds while it is not dead is the matter of
+     FlambdaRegionsInvariantSpec.cells_live.
+   - Anything of the heap at an exit. A location at the exit is
+     erased to itself (FlambdaRegionsErasureSpec.value_erased), and
+     the two statements of the erasure that are said again here say
+     nothing of what the two heaps bind it to, as those of
+     FlambdaRegionsErasureSpec.v say nothing of it.
    - That what a partial application keeps, its callee and its
      arguments, may be evaluated. The test says that none of them
      holds a mark, however deep, and no more. At an exit a partial
      application is itself a value that may be evaluated, whatever it
      keeps, and FlambdaRegionsErasureSpec.value_erased asks a part of
-     it to be erased only if the part may be evaluated
+     it to be erased only if the part may be evaluated or is a location
      (FlambdaRegionsErasureSpec.v, "the values"): the two statements
      of the erasure that are said again here keep that limit. *)
 
@@ -220,7 +262,9 @@ Definition held (rs : region_state) : list value :=
    itself if it is a symbol, and the symbols in its fields, its
    elements, its value slots, its callee and its arguments, however
    deep. Unlike FlambdaRegionsInvariantSpec.value_holds, this does not
-   stop at a partial application. *)
+   stop at a partial application. A location is no symbol, and this
+   does not look at the cell that the heap binds it to: the same is
+   asked of what every cell holds ([marks_in_variables]). *)
 Fixpoint value_no_mark (frames : list frame) (v : value) : bool :=
   match v with
   | Value_const _ | Value_boxed_number _ | Value_location _ => true
@@ -274,7 +318,11 @@ Fixpoint cont_no_mark (frames : list frame) (c : cont_value) : bool :=
     && cont_no_mark frames exn_to
   end.
 
-(* The first part of the test. *)
+(* The first part of the test. The last conjunct is of every entry of
+   the heap, a cell whose frame is gone included: no value that a
+   cell holds is a mark or holds one. A read binds a variable to such
+   a value, and a variable that code reads out of a cell that it was
+   given must hold no mark of its caller. *)
 Definition marks_in_variables (rs : region_state) : bool :=
   let s := rs_state rs in
   let frames := rs_frames rs in
@@ -285,7 +333,10 @@ Definition marks_in_variables (rs : region_state) : bool :=
        (static_values (state_statics s))
   && forallb
        (fun '(_, allocated) => allocated_no_mark frames allocated)
-       (live_locals frames).
+       (live_locals frames)
+  && forallb
+       (fun '(_, c) => forallb (value_no_mark frames) (values_of_cell c))
+       (state_heap s).
 
 (* ======================================================================== *)
 (* The frames are in the order of their marks                               *)
@@ -314,22 +365,50 @@ Definition frames_ordered (rs : region_state) : bool :=
 (* What is held is older than the marks that the variables hold             *)
 (* ======================================================================== *)
 
-(* Each symbol among [vs] was drawn before the mark of each frame that
-   the variables [vars] hold. *)
-Definition held_older (frames : list frame) (vars : env) (vs : list value)
-    : bool :=
+(* What the test asks of the value against the mark [m]: a comparison
+   of numbers and nothing else. A symbol: it is smaller than [m]. A
+   location that [cells] lists (FlambdaRegionsSpec.rs_cells): the
+   mark that it is listed with is smaller than [m]. A location that
+   [cells] does not list passes, and so does any other value; nothing
+   is asked of what the value holds. The test does not ask that [m],
+   or the mark that a location is listed with, is the mark of a frame
+   that is on the stack, nor that the cell is not dead: [calls_kept]
+   asks of what is held that it may be evaluated
+   (FlambdaRegionsSpec.value_usable).
+
+   What that comes to in a state of a run. The machine draws its
+   symbols upwards, so a symbol that is smaller than [m] was drawn
+   before [m], or is of the term or of the static environment. A
+   location that is listed has the mark of the frame that was the
+   newest when a local allocation made its cell; that mark is smaller
+   than [m], so it was drawn before [m]. Where both are marks of
+   frames that are on the stack, and the frames are in the order of
+   their marks, the frame of the cell is below the frame of [m], and
+   the end of the region of [m] leaves it on the stack. The order is
+   strict: a cell that is listed with [m] itself is dead after that
+   end. A location that is not listed is of a cell of the heap, which
+   is never dead, whenever it was made: nothing is said of when. *)
+Definition held_before (cells : list (location * mark)) (m : mark)
+    (v : value) : bool :=
+  match v with
+  | Value_symbol s => Pos.ltb s m
+  | Value_location l =>
+    match lookup l cells with
+    | Some m' => Pos.ltb m' m
+    | None => true
+    end
+  | _ => true
+  end.
+
+(* Each value among [vs] passes [held_before] against the mark of each
+   frame on the stack that the variables [vars] hold. *)
+Definition held_older (frames : list frame) (cells : list (location * mark))
+    (vars : env) (vs : list value) : bool :=
   forallb
     (fun '(_, w) =>
        match w with
        | Value_symbol m =>
-         negb (on_stack m frames)
-         || forallb
-              (fun v =>
-                 match v with
-                 | Value_symbol s => Pos.ltb s m
-                 | _ => true
-                 end)
-              vs
+         negb (on_stack m frames) || forallb (held_before cells m) vs
        | _ => true
        end)
     vars.
@@ -337,15 +416,18 @@ Definition held_older (frames : list frame) (vars : env) (vs : list value)
 (* The same of each closure that the continuation holds: of its
    variables, and of what the continuations of its environment have
    held; and so on for those. *)
-Fixpoint cont_held_older (frames : list frame) (c : cont_value) : bool :=
+Fixpoint cont_held_older (frames : list frame)
+    (cells : list (location * mark)) (c : cont_value) : bool :=
   match c with
   | Closure _ vars conts _ =>
-    held_older frames vars (flat_map (fun '(_, c) => cont_held c) conts)
-    && forallb (fun '(_, c) => cont_held_older frames c) conts
+    held_older frames cells vars
+      (flat_map (fun '(_, c) => cont_held c) conts)
+    && forallb (fun '(_, c) => cont_held_older frames cells c) conts
   | Outer _ => true
-  | Extra_args c _ => cont_held_older frames c
+  | Extra_args c _ => cont_held_older frames cells c
   | Over_application _ _ _ return_to exn_to =>
-    cont_held_older frames return_to && cont_held_older frames exn_to
+    cont_held_older frames cells return_to
+    && cont_held_older frames cells exn_to
   end.
 
 (* ======================================================================== *)
@@ -355,11 +437,12 @@ Fixpoint cont_held_older (frames : list frame) (c : cont_value) : bool :=
 Definition calls_kept (rs : region_state) : bool :=
   let s := rs_state rs in
   let frames := rs_frames rs in
+  let cells := rs_cells rs in
   marks_in_variables rs
   && frames_ordered rs
   && forallb (value_usable rs) (held rs)
-  && held_older frames (state_vars s) (held rs)
-  && forallb (fun '(_, c) => cont_held_older frames c) (state_conts s).
+  && held_older frames cells (state_vars s) (held rs)
+  && forallb (fun '(_, c) => cont_held_older frames cells c) (state_conts s).
 
 (* ======================================================================== *)
 (* Statements                                                               *)
@@ -422,9 +505,7 @@ Definition erasure_exits_erased_statement : Prop :=
       ∧ Forall2 (value_erased rs) vs vs'.
 
 (* FlambdaRegionsErasureSpec.erasure_adds_no_exit_statement, in the
-   same way: where the run of the erased term exits, the run on the
-   machine of regions exits alike, or stops with no step, or comes to
-   a [Let] that the machine does not run (decision D53). *)
+   same way. *)
 Definition erasure_adds_no_exit_erased_statement : Prop :=
   ∀ (e : expr) (statics : static_env) (base : symbol) (k : continuation)
     (vs' : list value) (hp : heap),
@@ -435,8 +516,6 @@ Definition erasure_adds_no_exit_erased_statement : Prop :=
       (∃ fault : region_fault,
         region_run fuel (initial_region_state e statics base)
         = Region_undefined fault)
-      ∨ region_run fuel (initial_region_state e statics base)
-        = Region_let_not_run
       ∨ (∃ (vs : list value) (rs : region_state),
           region_run fuel (initial_region_state e statics base)
           = Region_exit k vs rs

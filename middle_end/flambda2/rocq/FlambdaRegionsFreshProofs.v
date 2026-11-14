@@ -667,73 +667,199 @@ Proof.
   - exact (fun s' => forallb_in _ _ s' Hsymbols).
 Qed.
 
-(* The values of a state after a step, and those of an exit, name no
-   symbol at or above a counter that the step does not pass. *)
-Lemma region_step_below (rs : region_state) (next' : symbol) :
+(* ======================================================================== *)
+(* The cells of the heap                                                    *)
+(* ======================================================================== *)
+
+(* Every value that the heap holds names no symbol at or above [next]:
+   the fourth part of FlambdaRegionsInvariantSpec.cells_live, as
+   FlambdaHeapSpec.heap_values_all. *)
+Definition cells_below (next : symbol) (hp : heap) : Prop :=
+  heap_values_all (fun v => value_below next v = true) hp.
+
+Lemma cells_below_forallb (next : symbol) (hp : heap) :
+  forallb (fun '(_, c) => forallb (value_below next) (values_of_cell c)) hp
+  = true
+  <-> cells_below next hp.
+Proof.
+  unfold cells_below, heap_values_all. rewrite forallb_forall. split.
+  - intros H l c v Hin Hv. specialize (H (l, c) Hin). cbv beta iota in H.
+    exact (forallb_in _ _ v H Hv).
+  - intros H [l c] Hin. apply forallb_forall. intros v Hv.
+    exact (H l c v Hin Hv).
+Qed.
+
+Lemma cells_below_mono (next next' : symbol) (hp : heap) :
+  (next <= next')%positive -> cells_below next hp -> cells_below next' hp.
+Proof.
+  intros Hle H l c v Hin Hv.
+  exact (value_below_mono _ _ v Hle (H l c v Hin Hv)).
+Qed.
+
+(* What a [Let] binds, and what it leaves in the heap, name no symbol at
+   or above [next], if what the static environment binds, the values of
+   its simples and the cells of the heap name none. *)
+Lemma exec_named_below (next : symbol) (statics : static_env) (hp hp' : heap)
+    (rd rd' : read_record) (vars : env) (d : named) (v : value) :
+  (∀ (s : symbol) (allocated : statically_allocated_value),
+    lookup s (static_values statics) = Some allocated ->
+    allocated_below next allocated = true) ->
+  (∀ (sim : simple) (w : value),
+    In sim (simples_of_named d) ->
+    eval_simple vars sim = Some w ->
+    value_below next w = true) ->
+  cells_below next hp ->
+  exec_named statics hp rd vars d = Some (v, hp', rd') ->
+  value_below next v = true ∧ cells_below next hp'.
+Proof.
+  intros Hbound Hsimples Hcells Hexec.
+  assert (Hcases :
+    (∃ (p : prim) (args : list simple), d = Prim p args)
+    ∨ (∀ (p : prim) (args : list simple), d <> Prim p args)).
+  { destruct d;
+      first [ left; eexists _, _; reflexivity | right; intros; discriminate ]. }
+  destruct Hcases as [(p & args & ->) | Hnot].
+  - apply
+      (exec_named_preserves (fun v => value_below next v = true) statics hp
+         hp' rd rd' vars p args v);
+      try assumption.
+    + intros c. split; reflexivity.
+    + intros tag fields. simpl. apply forallb_forall.
+    + intros elements. simpl. apply forallb_forall.
+    + intros s tag fields Hs Hlookup.
+      exact (proj1 (value_below_static next statics Hbound s _ Hs Hlookup)).
+    + intros s elements Hs Hlookup.
+      exact (proj1 (value_below_static next statics Hbound s _ Hs Hlookup)).
+    + intros l. reflexivity.
+    + intros vs Hvs arg Harg.
+      exact
+        (proj1 (Forall_forall _ vs)
+           (eval_simples_forall _ vars args vs Hsimples Hvs) arg Harg).
+  - rewrite (exec_named_not_prim statics hp rd vars d Hnot) in Hexec.
+    destruct (eval_named statics vars d) as [v0 | ] eqn:Hnamed;
+      [ | discriminate ].
+    simpl in Hexec. injection Hexec as -> <- _.
+    split; [ | exact Hcells ].
+    destruct (is_allocation d) eqn:His.
+    + destruct (eval_named_makes _ _ d v His Hnamed) as [Hmade Hparts].
+      apply (value_below_made next v Hmade). apply forallb_forall.
+      intros w Hin. destruct (Hparts w Hin) as (sim & Hsim & Hw).
+      exact (Hsimples sim w Hsim Hw).
+    + exact
+        (eval_named_reads (fun v => value_below next v = true) statics
+           (fun c _ => eq_refl) (value_below_parts_in next)
+           (value_below_move next) (value_below_static next _ Hbound) vars d
+           v His Hsimples Hnamed).
+Qed.
+
+(* What the static environment of a step binds names no symbol at or
+   above a counter that the step does not pass. *)
+Lemma live_statics_below (rs : region_state) (next' : symbol) :
   symbols_fresh rs = true ->
   (rs_next rs <= next')%positive ->
-  region_step_vals_ok (fun v => value_below next' v = true) rs
-    (region_step rs).
+  ∀ (s : symbol) (allocated : statically_allocated_value),
+    lookup s (static_values (live_statics rs)) = Some allocated ->
+    allocated_below next' allocated = true.
 Proof.
-  intros Hfresh Hnext.
+  intros Hfresh Hnext s allocated Hlookup.
+  pose proof (proj1 (symbols_fresh_parts rs) Hfresh) as (_ & _ & Hstore).
+  destruct
+    (store_bound_below _ _ _ _ s allocated Hstore (lookup_in _ _ _ Hlookup))
+    as [_ Ha].
+  exact (allocated_below_mono _ _ _ Hnext Ha).
+Qed.
+
+(* The values of the simples of a [Let] that the state is at. *)
+Lemma let_simples_below (rs : region_state) (next' : symbol) (x : variable)
+    (kind : flambda_kind) (d : named) (body : expr) :
+  symbols_fresh rs = true ->
+  (rs_next rs <= next')%positive ->
+  state_expr (rs_state rs) = Let x kind d body ->
+  ∀ (sim : simple) (w : value),
+    In sim (simples_of_named d) ->
+    eval_simple (state_vars (rs_state rs)) sim = Some w ->
+    value_below next' w = true.
+Proof.
+  intros Hfresh Hnext Hexpr sim w.
   pose proof (proj1 (symbols_fresh_parts rs) Hfresh)
     as ((He & _ & _) & Hheld & Hstore).
   pose proof Hstore as (Hle & _).
   assert (Hle' : (rs_base rs <= next')%positive) by lia.
   pose proof (held_below_mono _ _ _ Hnext Hheld) as Hheld'.
-  assert (Hbound :
-    ∀ (s : symbol) (allocated : statically_allocated_value),
-      lookup s (static_values (live_statics rs)) = Some allocated ->
-      allocated_below next' allocated = true).
-  { intros s allocated Hlookup.
-    destruct
-      (store_bound_below _ _ _ _ s allocated Hstore (lookup_in _ _ _ Hlookup))
-      as [_ Ha].
-    exact (allocated_below_mono _ _ _ Hnext Ha). }
+  rewrite Hexpr in He.
+  exact
+    (named_simples_below _ _ _ x kind d body sim w Hle' He (proj1 Hheld')).
+Qed.
+
+(* The values of a state after a step, and those of an exit, name no
+   symbol at or above a counter that the step does not pass. *)
+Lemma region_step_below (rs : region_state) (next' : symbol) :
+  symbols_fresh rs = true ->
+  cells_below (rs_next rs) (state_heap (rs_state rs)) ->
+  (rs_next rs <= next')%positive ->
+  region_step_vals_ok (fun v => value_below next' v = true) rs
+    (region_step rs).
+Proof.
+  intros Hfresh Hcells Hnext.
+  pose proof (proj1 (symbols_fresh_parts rs) Hfresh)
+    as ((He & _ & _) & Hheld & Hstore).
+  pose proof Hstore as (Hle & _).
+  assert (Hle' : (rs_base rs <= next')%positive) by lia.
+  pose proof (held_below_mono _ _ _ Hnext Hheld) as Hheld'.
+  pose proof (live_statics_below rs next' Hfresh Hnext) as Hbound.
   apply (region_step_values _ (value_below_partial next') rs).
   - apply reads_fields;
       [ exact (value_below_parts_in next')
       | exact (value_below_static next' _ Hbound) ].
   - exact Hheld'.
-  - intros x kind d body v Hexpr _ _ Hnamed. rewrite Hexpr in He.
-    assert (Hsimples :
-      ∀ (sim : simple) (w : value),
-        In sim (simples_of_named d) ->
-        eval_simple (state_vars (rs_state rs)) sim = Some w ->
-        value_below next' w = true).
-    { intros sim w.
-      exact
-        (named_simples_below _ _ _ x kind d body sim w Hle' He
-           (proj1 Hheld')). }
-    destruct (is_allocation d) eqn:His.
-    + destruct (eval_named_makes _ _ d v His Hnamed) as [Hmade Hparts].
-      apply (value_below_made next' v Hmade). apply forallb_forall.
-      intros w Hin. destruct (Hparts w Hin) as (sim & Hsim & Hw).
-      exact (Hsimples sim w Hsim Hw).
-    + exact
-        (eval_named_reads (fun v => value_below next' v = true)
-           (live_statics rs) (fun c _ => eq_refl)
-           (value_below_parts_in next') (value_below_move next')
-           (value_below_static next' _ Hbound) (state_vars (rs_state rs)) d v
-           His Hsimples Hnamed).
+  - intros x kind d body v hp' rd' Hexpr _ _ _ Hexec.
+    exact
+      (proj1
+         (exec_named_below next' _ _ _ _ _ _ d v Hbound
+            (let_simples_below rs next' x kind d body Hfresh Hnext Hexpr)
+            (cells_below_mono _ _ _ Hnext Hcells) Hexec)).
   - intros sim v Hin Hv.
     exact
       (eval_simple_below _ _ _ sim v Hle'
          (evaluated_simples_below _ _ sim He Hin) (proj1 Hheld') Hv).
   - reflexivity.
+  - intros l. reflexivity.
 Qed.
 
 Lemma region_step_held (rs rs' : region_state) :
   symbols_fresh rs = true ->
+  cells_below (rs_next rs) (state_heap (rs_state rs)) ->
   region_step rs = Region_step rs' ->
   held_below (rs_next rs') (rs_state rs').
 Proof.
-  intros Hfresh Hstep.
+  intros Hfresh Hcells Hstep.
   destruct (region_step_draws_upwards rs rs' Hstep) as [_ Hnext].
   apply Pos.leb_le in Hnext.
-  pose proof (region_step_below rs (rs_next rs') Hfresh Hnext) as Hvalues.
+  pose proof (region_step_below rs (rs_next rs') Hfresh Hcells Hnext)
+    as Hvalues.
   rewrite Hstep in Hvalues. apply Hvalues.
   intros s _ Hlt. apply Pos.ltb_lt. exact Hlt.
+Qed.
+
+(* The cells of the heap after a step. *)
+Lemma region_step_cells_below (rs rs' : region_state) :
+  symbols_fresh rs = true ->
+  cells_below (rs_next rs) (state_heap (rs_state rs)) ->
+  region_step rs = Region_step rs' ->
+  cells_below (rs_next rs') (state_heap (rs_state rs')).
+Proof.
+  intros Hfresh Hcells Hstep.
+  destruct (region_step_draws_upwards rs rs' Hstep) as [_ Hnext].
+  apply Pos.leb_le in Hnext.
+  destruct (region_step_heap rs rs' Hstep)
+    as [-> | (x & kind & d & body & v & rd' & Hexpr & _ & Hexec)].
+  - exact (cells_below_mono _ _ _ Hnext Hcells).
+  - exact
+      (proj2
+         (exec_named_below (rs_next rs') _ _ _ _ _ _ d v
+            (live_statics_below rs _ Hfresh Hnext)
+            (let_simples_below rs _ x kind d body Hfresh Hnext Hexpr)
+            (cells_below_mono _ _ _ Hnext Hcells) Hexec)).
 Qed.
 
 (* ======================================================================== *)
@@ -757,7 +883,6 @@ Proof.
           store_fresh (rs_base rs') (rs_next rs')
             (static_values (state_statics (rs_state rs'))) (rs_frames rs'))).
   - discriminate.
-  - discriminate.
   - intros x kind d mark_kind body _ Hstep.
     rewrite (begin_region_step _ _ _ _ _ _ Hstep).
     exact (store_fresh_begin _ _ _ _ mark_kind Hstore).
@@ -767,8 +892,8 @@ Proof.
     change (rs_frames (count_uses rs)) with (rs_frames rs) in Hframes.
     rewrite Hframes in Hstore.
     exact (store_fresh_end _ _ _ above f below Hstore).
-  - intros x kind d body y region body' Hexpr _ _ _ Hstep.
-    destruct (local_allocation_step _ _ _ _ _ _ _ _ Hstep)
+  - intros x kind d body y region body' Hexpr _ _ Hcell Hstep.
+    destruct (local_allocation_step _ _ _ _ _ _ _ _ Hcell Hstep)
       as (v & sym & bindings & His & Hnamed & Hlocalise & _ & _ & _ & Hbase
           & Hnext & _ & Hframes).
     destruct (localise_makes _ _ _ _ Hlocalise) as (_ & _ & Hbound).
@@ -805,6 +930,10 @@ Proof.
     rewrite Hbase. revert Hlocal Hframes.
     destruct (rs_frames rs) as [ | [m mark_kind locals] frames];
       intros Hlocal [Hf Hs]; rewrite Hf, Hs; exact Hlocal.
+  - intros x kind d body y region body' _ _ _ _ Hstep.
+    destruct (local_cell_allocation_step _ _ _ _ _ _ _ Hstep)
+      as (l & hp & rd & _ & _ & Hstate & Hf & Hb & Hn & _).
+    rewrite Hstate, Hf, Hb, Hn. exact Hstore.
   - intros x kind d body _ _ _ _ Hstep.
     destruct (plain_step_step _ _ Hstep) as (s' & _ & ->). exact Hstore.
   - intros bindings body Hexpr _ _ Hstep.
@@ -841,6 +970,7 @@ Theorem symbols_fresh_initial (e : expr) (statics : static_env)
   symbols_fresh (initial_region_state e statics base) = true.
 Proof.
   intros H. unfold region_names_fresh, statics_below in H.
+  apply andb_true_iff in H as [H _].
   apply andb_true_iff in H as [He H].
   apply andb_true_iff in H as [Hcode Hvalues].
   apply symbols_fresh_parts. split; [ exact (conj He (conj I Hcode)) | ].
@@ -857,13 +987,14 @@ Qed.
 (* A step keeps it. *)
 Theorem region_step_keeps_symbols_fresh (rs rs' : region_state) :
   symbols_fresh rs = true ->
+  cells_below (rs_next rs) (state_heap (rs_state rs)) ->
   region_step rs = Region_step rs' ->
   symbols_fresh rs' = true.
 Proof.
-  intros Hfresh Hstep. apply symbols_fresh_parts. split; [ | split ].
+  intros Hfresh Hcells Hstep. apply symbols_fresh_parts. split; [ | split ].
   - apply (region_step_keeps_written_below rs rs'); [ | exact Hstep ].
     exact (proj1 (proj1 (symbols_fresh_parts rs) Hfresh)).
-  - exact (region_step_held rs rs' Hfresh Hstep).
+  - exact (region_step_held rs rs' Hfresh Hcells Hstep).
   - exact (region_step_store rs rs' Hfresh Hstep).
 Qed.
 
@@ -882,11 +1013,13 @@ Qed.
 Lemma region_step_exit_values_below (rs : region_state) (k : continuation)
     (vs : list value) (rs' : region_state) :
   symbols_fresh rs = true ->
+  cells_below (rs_next rs) (state_heap (rs_state rs)) ->
   region_step rs = Region_exit k vs rs' ->
   forallb (value_below (rs_next rs')) vs = true.
 Proof.
-  intros Hfresh Hexit.
-  pose proof (region_step_below rs (rs_next rs) Hfresh (Pos.le_refl _))
+  intros Hfresh Hcells Hexit.
+  pose proof
+    (region_step_below rs (rs_next rs) Hfresh Hcells (Pos.le_refl _))
     as Hvalues.
   rewrite Hexit in Hvalues. rewrite (region_step_exit rs rs' k vs Hexit).
   exact (proj2 (forallb_Forall _ vs) Hvalues).
@@ -899,8 +1032,10 @@ Lemma region_step_keeps_expr_below (rs rs' : region_state) :
   expr_below (rs_base rs') (state_expr (rs_state rs')) = true.
 Proof.
   intros Hfresh Hstep.
-  pose proof (region_step_keeps_symbols_fresh rs rs' Hfresh Hstep) as Hfresh'.
-  exact (proj1 (proj1 (proj1 (symbols_fresh_parts rs') Hfresh'))).
+  exact
+    (proj1
+       (region_step_keeps_written_below rs rs'
+          (proj1 (proj1 (symbols_fresh_parts rs) Hfresh)) Hstep)).
 Qed.
 
 (* ======================================================================== *)

@@ -29,9 +29,9 @@
    a certificate. The run of a term that passes it, on the machine of
    regions (FlambdaRegionsSpec.v), from the first state of the term
    in a static environment, where the symbols that the machine draws
-   are none of the term or of that static environment
-   ([region_names_fresh]), stops without a step only where [step] has
-   none.
+   are none of the term or of that static environment, which holds no
+   location ([region_names_fresh]), stops without a step only where
+   [step] has none.
 
    This file is to be reviewed: all of it. It adds nothing to the
    machine: [region_step] and the rules of FlambdaRegionsSpec.v keep
@@ -52,7 +52,8 @@
    regions from its first state ([initial_region_state]) in the
    static environment that the check was given, where the symbols
    that the machine draws are none of the term or of that static
-   environment ([region_names_fresh]). Without this freshness nothing
+   environment, which holds no location ([region_names_fresh]: "this
+   freshness", below). Without this freshness nothing
    is proved, and the conclusion need not hold: a term that evaluates
    a symbol at or above the base that nothing binds may pass the
    check, and its run stops there for decision D45, because the
@@ -176,13 +177,12 @@
      a [Let] that is a local allocation, a region given to a parameter.
      A term that the check passes may stop without a step where
      [step] has none.
-   - It says nothing of the primitives of the heap: the machine of
-     regions runs none. Its run ends at a [Let] of one, and at a [Let]
-     of another primitive, not one of regions, that is given a
-     location (FlambdaRegionsSpec.Region_let_not_run, decision D53),
-     and a term that has one is passed or refused by the lifetimes of
-     its arguments alone: a pass says nothing of the run from that
-     [Let] on.
+   - Of the primitives of the heap it says what [check_expr] asks at
+     a [Let] that makes a cell and at a store, and no more: nothing
+     of the mutability of a cell, of an index or of the kind of what
+     is stored, where [step] has no step for reasons of its own. A
+     store is asked more than the machine asks of it (decision D54),
+     so a term that the machine runs may be refused.
    - It is of the model's term on the model's machine. Two places
      where that machine keeps a value longer than the program does
      are known, and the check follows the machine in both: an
@@ -312,17 +312,34 @@ Inductive cont_entry : Type :=
 
 (* The lifetimes of the variables; the regions that are open and have
    a name, newest first; every variable of a region in scope, open or
-   not, none of which may be bound again; the continuations. *)
+   not, none of which may be bound again; the continuations; and, for
+   each variable, how long what is read from its value lives
+   ([cs_contents]). That is the lifetime of the variable, but for a
+   variable that the check saw bound to a cell: there it is the
+   shortest lifetime of what the cell was made with, which may be
+   longer than that of the cell. No store shortens it, as the check
+   asks that what is stored lives for ever (decision D54): the
+   stricter rule is what this rests on. *)
 Record check_state : Type := Check_state {
   cs_env : list (variable * lifetime);
   cs_open : list variable;
   cs_regions : list variable;
-  cs_conts : list (continuation * cont_entry)
+  cs_conts : list (continuation * cont_entry);
+  cs_contents : list (variable * lifetime)
 }.
 
+(* A variable is bound: its lifetime, and that of what is read from
+   its value. *)
+Definition bind_lifetimes (x : variable) (l contents : lifetime)
+    (cs : check_state) : check_state :=
+  Check_state ((x, l) :: cs_env cs) (cs_open cs) (cs_regions cs) (cs_conts cs)
+    ((x, contents) :: cs_contents cs).
+
+(* A variable whose value the check did not see made as a cell: what
+   is read from it lives as long as it. *)
 Definition bind_lifetime (x : variable) (l : lifetime) (cs : check_state)
     : check_state :=
-  Check_state ((x, l) :: cs_env cs) (cs_open cs) (cs_regions cs) (cs_conts cs).
+  bind_lifetimes x l l cs.
 
 (* A variable that may be bound: not the variable of a region. *)
 Definition not_a_region (cs : check_state) (x : variable) : bool :=
@@ -332,6 +349,17 @@ Definition lifetime_of (cs : check_state) (s : simple) : lifetime :=
   match s with
   | Var x =>
     match lookup x (cs_env cs) with
+    | Some l => l
+    | None => Gone
+    end
+  | Symbol _ | Const _ => Forever
+  end.
+
+(* How long what is read from the value of a simple lives. *)
+Definition contents_of (cs : check_state) (s : simple) : lifetime :=
+  match s with
+  | Var x =>
+    match lookup x (cs_contents cs) with
     | Some l => l
     | None => Gone
     end
@@ -361,11 +389,15 @@ Definition shortest (cs : check_state) (ls : list lifetime) : lifetime :=
   fold_right (shorter (cs_open cs)) Forever ls.
 
 (* The lifetime of what a [Let] binds that does not allocate. What is
-   read from a value lives as long as it; a field that the access says
+   read from a value, a field or an element, lives as long as the
+   check has for what is read from it ([contents_of]): as long as the
+   value, or, of a cell that the check saw made, as long as the
+   shortest-lived of what it was made with. The index of an element
+   is a number, and is not looked at. A field that the access says
    is an immediate is one, or the load has no value; so is an element
-   that the load takes as an immediate. An element of an array lives
-   as long as the array: the index is a number. Every other primitive
-   that has a value on this machine gives a number. *)
+   that the load takes as an immediate. Every other primitive that
+   has a value on this machine gives a number: a store gives unit (a
+   primitive that makes a cell does not come here). *)
 Definition named_lifetime (cs : check_state) (defining_expr : named)
     : lifetime :=
   match defining_expr with
@@ -373,10 +405,10 @@ Definition named_lifetime (cs : check_state) (defining_expr : named)
   | Prim (Unary (Block_load (Block_access_values _ _ Immediate) _ _)) _ =>
     Forever
   | Prim (Binary (Array_load _ Load_immediates _)) _ => Forever
-  | Prim (Binary (Array_load _ _ _)) [array; _] => lifetime_of cs array
+  | Prim (Unary (Block_load _ _ _)) [block] => contents_of cs block
+  | Prim (Binary (Array_load _ _ _)) [array; _] => contents_of cs array
   | Prim (Unary (Block_load _ _ _ | Opaque_identity _)) args
-  | Prim (Binary (Array_load _ _ _)) args
-  | Prim (Heap _) args =>
+  | Prim (Binary (Array_load _ _ _)) args =>
     shortest cs (map (lifetime_of cs) args)
   | Prim _ _ => Forever
   | Project_value_slot _ closure
@@ -385,6 +417,16 @@ Definition named_lifetime (cs : check_state) (defining_expr : named)
     lifetime_of cs closure
   | Set_of_closures _ value_slots | Closure_of_set _ _ value_slots =>
     shortest cs (map (fun '(_, s) => lifetime_of cs s) value_slots)
+  end.
+
+(* How long what is read from what such a [Let] binds lives: for a
+   simple, as long as what is read from the simple; for the rest, as
+   long as what is bound. *)
+Definition named_contents (cs : check_state) (defining_expr : named)
+    : lifetime :=
+  match defining_expr with
+  | Simple s => contents_of cs s
+  | _ => named_lifetime cs defining_expr
   end.
 
 (* ======================================================================== *)
@@ -739,7 +781,9 @@ Definition handler_state (cs : check_state) (params : list variable)
        (cs_env cs))
     (he_open entry)
     (region_params_of params kinds ++ cs_regions cs)
-    (cs_conts cs).
+    (cs_conts cs)
+    (bind_entry_params (he_open entry) params kinds (he_params entry)
+       (cs_contents cs)).
 
 Definition cont_entry_of (cert : certificate) (k : continuation)
     (h : continuation_handler) : cont_entry :=
@@ -751,7 +795,8 @@ Definition cont_entry_of (cert : certificate) (k : continuation)
 
 Definition with_conts (cs : check_state)
     (conts : list (continuation * cont_entry)) : check_state :=
-  Check_state (cs_env cs) (cs_open cs) (cs_regions cs) (conts ++ cs_conts cs).
+  Check_state (cs_env cs) (cs_open cs) (cs_regions cs) (conts ++ cs_conts cs)
+    (cs_contents cs).
 
 (* The state in which the body of code is checked: no region is open;
    the closure and the parameters live for ever, or as long as the
@@ -760,14 +805,16 @@ Definition with_conts (cs : check_state)
 Definition code_state (entry : code_entry) (params : list variable)
     (my_closure : variable) (return_continuation exn_continuation
       : continuation) : check_state :=
-  Check_state
-    ((my_closure, if ce_closure_local entry then Of_caller else Forever)
-     :: combine params
-          (map (fun flag : bool => if flag then Of_caller else Forever)
-             (ce_params_local entry)))
-    [] []
+  let env :=
+    (my_closure, if ce_closure_local entry then Of_caller else Forever)
+    :: combine params
+         (map (fun flag : bool => if flag then Of_caller else Forever)
+            (ce_params_local entry))
+  in
+  Check_state env [] []
     [(return_continuation, To_return (ce_returns_local entry));
-     (exn_continuation, To_raise)].
+     (exn_continuation, To_raise)]
+    env.
 
 Section Check.
 
@@ -789,7 +836,8 @@ Fixpoint check_expr (cs : check_state) (e : expr) {struct e} : bool :=
       && not_a_region cs x
       && check_expr
            (Check_state ((x, Gone) :: cs_env cs) (x :: cs_open cs)
-              (x :: cs_regions cs) (cs_conts cs))
+              (x :: cs_regions cs) (cs_conts cs)
+              ((x, Gone) :: cs_contents cs))
            body
     | (End_region | End_try_region), [Var r] =>
       (* Decision D47. The regions above the one that is ended end
@@ -799,7 +847,8 @@ Fixpoint check_expr (cs : check_state) (e : expr) {struct e} : bool :=
       && among r (cs_open cs)
       && check_expr
            (Check_state ((x, Forever) :: cs_env cs)
-              (regions_below r (cs_open cs)) (cs_regions cs) (cs_conts cs))
+              (regions_below r (cs_open cs)) (cs_regions cs) (cs_conts cs)
+              ((x, Forever) :: cs_contents cs))
            body
     | _, _ => false
     end
@@ -815,7 +864,7 @@ Fixpoint check_expr (cs : check_state) (e : expr) {struct e} : bool :=
             closures may be. What follows the marker is the body of
             the second [Let]: it is read from [body] so that the
             recursion is on a part of the expression. *)
-         is_allocation defining_expr
+         (is_allocation defining_expr || is_cell_allocation defining_expr)
          && kind_eqb kind Value
          && not_a_region cs y
          && match region with
@@ -826,22 +875,43 @@ Fixpoint check_expr (cs : check_state) (e : expr) {struct e} : bool :=
          && forallb (closure_may_be_local cert) (closure_code defining_expr)
          && match body with
             | Let _ _ _ body' =>
+              (* What is read from a cell lives as long as the
+                 shortest-lived of what it was made with; from another
+                 local allocation, as long as the allocation. *)
+              let made :=
+                if is_cell_allocation defining_expr
+                then shortest cs (map (lifetime_of cs) simples)
+                else newest_lifetime cs
+              in
               check_expr
-                (bind_lifetime y (newest_lifetime cs)
-                   (bind_lifetime x (newest_lifetime cs) cs))
+                (bind_lifetimes y (newest_lifetime cs) made
+                   (bind_lifetimes x (newest_lifetime cs) made cs))
                 body'
             | _ => false
             end
        | Bad_marker => false
        | No_marker =>
-         if is_allocation defining_expr
+         if is_allocation defining_expr || is_cell_allocation defining_expr
          then
-           (* Decision D46. *)
+           (* Decision D46, of a cell of the heap too. *)
            forallb (fun s => is_forever (lifetime_of cs s)) simples
            && check_expr (bind_lifetime x Forever cs) body
          else
-           check_expr (bind_lifetime x (named_lifetime cs defining_expr) cs)
-             body
+           (* Decision D54: a store puts in a cell a value that lives
+              for ever, whatever the cell. The machine asks less
+              (FlambdaRegionsSpec.store_fault); the check knows of a
+              cell only a region that it lives at least as long as.
+              And it is because no store puts in a cell what lives
+              shorter that what is read from a cell lives as long as
+              what the cell was made with ([cs_contents]). *)
+           match stored defining_expr with
+           | Some (_, new) => is_forever (lifetime_of cs new)
+           | None => true
+           end
+           && check_expr
+                (bind_lifetimes x (named_lifetime cs defining_expr)
+                   (named_contents cs defining_expr) cs)
+                body
        end
   | Let_static bindings body =>
     (* Decision D46. *)
@@ -976,7 +1046,8 @@ Definition all_code (statics : static_env) (e : expr)
     : list (code_id * code) :=
   static_code statics ++ code_of_expr e.
 
-Definition initial_check_state : check_state := Check_state [] [] [] [].
+Definition initial_check_state : check_state :=
+  Check_state [] [] [] [] [].
 
 (* A value holds no partial application, however deep. *)
 Fixpoint value_no_partial (v : value) : bool :=
@@ -1032,12 +1103,14 @@ Definition region_check (cert : certificate) (statics : static_env)
 
 (* The run of a term that passes the check, with any certificate,
    from its first state, where the symbols that the machine draws are
-   none of the term or of the static environment, stops without a
-   step only where [step] has none: not for decisions D45, D46 or
-   D47, not for a region used as a value, not for a primitive of
-   regions that is not as the conversion makes it. It does not say
-   that the run does not stop where [step] has none, nor what the
-   term does there with its regions dropped. *)
+   none of the term or of the static environment, which holds no
+   location, stops without a step only where [step] has none: not
+   for decisions D45, D46 or D47, not for a store of a value that
+   does not live as long as the cell (decision D54), not for a region
+   used as a value, not for a primitive of regions that is not as the
+   conversion makes it. It does not say that the run does not stop
+   where [step] has none, nor what the term does there with its
+   regions dropped. *)
 Definition region_check_fault_statement : Prop :=
   ∀ (cert : certificate) (statics : static_env) (base : symbol) (e : expr)
     (fuel : nat) (fault : region_fault),
@@ -1047,23 +1120,7 @@ Definition region_check_fault_statement : Prop :=
     = Region_undefined fault ->
     fault = No_plain_step.
 
-(* A run on the machine of regions that is never undefined. It may
-   end at a [Let] that the machine does not run
-   (FlambdaRegionsSpec.Region_let_not_run, decision D53). A run from
-   the first state of a term with no primitive of the heap, in a
-   static environment whose code has none and whose values hold no
-   location, does not
-   (FlambdaRegionsInvariantSpec.no_heap_primitive_no_let_not_run_statement),
-   and then it only steps or exits. *)
-
-(* CR mshinwell: "safe" includes a run that stops at a [Let] that the
-   machine of regions does not run: the first state of a unit whose
-   first [Let] makes a block with an identity out of constants is
-   [region_safe], with nothing checked of the unit from that [Let] on.
-   So the name, and the statements that conclude it
-   ([checked_after_safe_statement] and those of the files that use
-   it), say more than they give until the machine lists cells in its
-   frames. Decision D53. *)
+(* A run on the machine of regions that never stops without a step. *)
 Definition region_safe (rs : region_state) : Prop :=
   ∀ (fuel : nat) (fault : region_fault),
     region_run fuel rs <> Region_undefined fault.
@@ -1103,9 +1160,7 @@ Definition checked_after_safe_statement : Prop :=
 (* And then the two runs compute the same: an exit of the term before
    with its regions is an exit of the term after with its regions,
    through the same continuation, with values that are erased to the
-   same values where they may be evaluated; or the run of the term
-   after comes to a [Let] that the machine does not run (decision
-   D53). *)
+   same values where they may be evaluated or are locations. *)
 Definition checked_exits_agree_statement : Prop :=
   ∀ (statics : static_env) (base : symbol) (before after : expr),
     region_names_fresh base before statics = true ->
@@ -1119,11 +1174,9 @@ Definition checked_exits_agree_statement : Prop :=
     ∀ (fuel : nat) (k : continuation) (vs : list value) (rs : region_state),
       region_run fuel (initial_region_state before statics base)
       = Region_exit k vs rs ->
-      ∃ fuel' : nat,
+      ∃ (fuel' : nat) (ws : list value) (rs' : region_state)
+        (us : list value),
         region_run fuel' (initial_region_state after statics base)
-        = Region_let_not_run
-        ∨ ∃ (ws : list value) (rs' : region_state) (us : list value),
-            region_run fuel' (initial_region_state after statics base)
-            = Region_exit k ws rs'
-            ∧ Forall2 (value_erased_if_usable rs) vs us
-            ∧ Forall2 (value_erased_if_usable rs') ws us.
+        = Region_exit k ws rs'
+        ∧ Forall2 (value_erased_if_usable rs) vs us
+        ∧ Forall2 (value_erased_if_usable rs') ws us.

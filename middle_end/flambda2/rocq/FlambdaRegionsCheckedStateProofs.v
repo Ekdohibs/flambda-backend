@@ -89,19 +89,28 @@ Qed.
 (* Values                                                                   *)
 (* ======================================================================== *)
 
-(* A value that reaches symbols of [ok] only is plain. *)
-Lemma all_plain (ok : symbol -> bool) (v : value) :
-  value_all ok v = true -> value_plain ok v = true.
+(* A value that reaches symbols of [ok] and locations of [ok_cell]
+   only is plain. *)
+Lemma all_plain (ok : symbol -> bool) (ok_cell : location -> bool)
+    (v : value) :
+  value_all ok v = true ->
+  value_all_cells ok_cell v = true ->
+  value_plain ok ok_cell v = true.
 Proof.
   induction v
     as [c | code slots IH | slot decls slots IH | s | tag fields IH
        | elements IH | c | l | callee args args_arity IHcallee IHargs]
     using value_induction;
-    cbn [value_plain value_all]; auto.
-  intros H. apply andb_true_iff in H as [Hcallee Hargs].
-  rewrite (IHcallee Hcallee). cbn [andb].
+    cbn [value_plain]; try reflexivity;
+    try (intros H H'; rewrite H, H'; reflexivity).
+  cbn [value_all value_all_cells]. intros H H'.
+  apply andb_true_iff in H as [Hcallee Hargs].
+  apply andb_true_iff in H' as [Hcallee' Hargs'].
+  rewrite (IHcallee Hcallee Hcallee'). cbn [andb].
   apply forallb_forall. intros arg Hin. rewrite Forall_forall in IHargs.
-  exact (IHargs _ Hin (forallb_in _ _ arg Hargs Hin)).
+  exact
+    (IHargs _ Hin (forallb_in _ _ arg Hargs Hin)
+       (forallb_in _ _ arg Hargs' Hin)).
 Qed.
 
 Lemma lookup_combine_nth {A : Type} (params : list variable) :
@@ -141,7 +150,7 @@ Lemma values_fit_nth (rs : region_state) (flags : list bool) :
     values_fit rs flags vs = true ->
     nth_error vs i = Some v ->
     nth_error flags i = Some flag ->
-    value_all (heap_symbol rs) v = true ∨ flag = true.
+    value_for_ever rs v = true ∨ flag = true.
 Proof.
   induction flags as [ | flag0 flags IH]; intros vs i v flag.
   - destruct vs; [ destruct i; discriminate | discriminate ].
@@ -171,10 +180,11 @@ Variable rs : region_state.
 
 (* As [values_plain] and [paps_fit] ask of a value. *)
 Definition good (v : value) : Prop :=
-  value_plain (heap_symbol rs) v = true
+  value_plain (heap_symbol rs) (heap_location rs) v = true
   ∧ value_paps (pap_fits cert codes rs) v = true.
 
-(* Every symbol that the value reaches may be evaluated. *)
+(* Every symbol that the value reaches may be evaluated, and no
+   location that it reaches is of a cell that is dead. *)
 Definition live (v : value) : Prop := value_within rs None v = true.
 
 (* What a step that enters a handler or the body of code comes to, by
@@ -235,8 +245,16 @@ Lemma live_partial (callee : value) (args : list value) (args_arity : arity) :
   live (Value_partial_application callee args args_arity)
   <-> live callee ∧ Forall live args.
 Proof.
-  unfold live, value_within. cbn [value_all]. rewrite andb_true_iff.
-  rewrite forallb_Forall. reflexivity.
+  unfold live, value_within. cbn [value_all value_all_cells].
+  rewrite !andb_true_iff, !forallb_forall, Forall_forall. split.
+  - intros [[Hc Ha] [Hc' Ha']]. split; [ split; assumption | ].
+    intros arg Hin. rewrite andb_true_iff.
+    exact (conj (Ha arg Hin) (Ha' arg Hin)).
+  - intros [[Hc Hc'] Hargs]. split; split; try assumption.
+    + intros arg Hin. pose proof (Hargs arg Hin) as H.
+      apply andb_true_iff in H as [H _]. exact H.
+    + intros arg Hin. pose proof (Hargs arg Hin) as H.
+      apply andb_true_iff in H as [_ H]. exact H.
 Qed.
 
 (* A value as a lifetime that is not dead says is live. *)
@@ -271,13 +289,14 @@ Lemma enter_code (a : caller) (closure : value) (id : code_id) (c : code)
     (entry : code_entry) (vs : list value) (args_arity return_arity : arity)
     (return_to exn_to : cont_value) (hp : heap) (rd : read_record)
       (s' : state) :
+  frames_ordered rs = true ->
+  cells_deep rs = true ->
   caller_ok a ->
   check_code cert codes id c = true ->
   lookup id (cert_code cert) = Some entry ->
   good closure ->
   live closure ->
-  (ce_closure_local entry = false ->
-   value_all (heap_symbol rs) closure = true) ->
+  (ce_closure_local entry = false -> value_for_ever rs closure = true) ->
   Forall good vs ->
   Forall live vs ->
   values_fit rs (ce_params_local entry) vs = true ->
@@ -293,7 +312,8 @@ Lemma enter_code (a : caller) (closure : value) (id : code_id) (c : code)
   = Step s' ->
   entered s'.
 Proof.
-  intros Hcaller Hcheck Hentry Hgood_closure Hlive_closure Hheap_closure
+  intros Hordered Hcells_deep Hcaller Hcheck Hentry Hgood_closure
+    Hlive_closure Hheap_closure
     Hgood_vs Hlive_vs Hfit Hret Hraise Hgood_ret Hgood_exn Hcall.
   destruct (call_code_step _ _ _ _ _ _ _ _ _ rd_ _ Hcall)
     as (callee_vars & Hno_statics & _ & _ & _ & Hbind & ->).
@@ -320,13 +340,27 @@ Proof.
   split; [ rewrite (no_statics_no_code body Hno_statics); intros x [] | ].
   split; [ | split; [ | split ] ].
   - split; [ reflexivity | ]. split; [ reflexivity | ]. split.
-    + unfold check_state_scoped, code_state. cbn [cs_open cs_regions cs_env].
-      cbn [FlambdaMapSpec.all_among forallb andb].
+    + unfold check_state_scoped, code_state.
+      cbn [cs_open cs_regions cs_env cs_contents].
+      cbn [FlambdaMapSpec.all_among andb].
+      rewrite forallb_app, andb_diag. cbn [forallb].
       destruct (ce_closure_local entry); cbn [andb];
         apply forallb_forall; intros [x l] Hin;
         apply in_combine_r in Hin; apply in_map_iff in Hin as ([ | ] & <- & _);
         reflexivity.
-    + intros x l v. unfold code_state. cbn [cs_env cs_open].
+    + assert (Hholds :
+        ∀ (x : variable) (l : lifetime) (v : value),
+          lookup x (cs_env (code_state entry params my_closure ret exn))
+          = Some l ->
+          lookup x callee_vars = Some v ->
+          lifetime_holds rs [] [] None l v);
+        [ | split;
+            [ exact Hholds
+            | intros x l v Hl Hv;
+              exact
+                (holds_contents rs [] [] l v Hordered Hcells_deep eq_refl
+                   (Hholds x l v Hl Hv)) ] ].
+      intros x l v. unfold code_state. cbn [cs_env cs_open].
       rewrite lookup_cons. destruct (Pos.eqb x my_closure) eqn:Hx.
       * apply Pos.eqb_eq in Hx. subst x. intros [= <-].
         rewrite (bind_params_lookup_other my_closure params vs

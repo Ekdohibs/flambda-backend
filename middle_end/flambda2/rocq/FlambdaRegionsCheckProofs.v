@@ -59,7 +59,7 @@ Lemma region_run_keeps_checked (cert : certificate)
 Proof.
   induction fuel as [ | fuel IH]; intros rs rs' Hchecked; cbn [region_run].
   - intros [= <-]. exact Hchecked.
-  - destruct (region_step rs) as [rs1 | k vs rs1 | fault | ] eqn:Hstep;
+  - destruct (region_step rs) as [rs1 | k vs rs1 | fault] eqn:Hstep;
       try discriminate.
     apply IH.
     exact (region_step_keeps_checked cert codes rs rs1 Hchecked Hstep).
@@ -76,7 +76,7 @@ Lemma region_run_fault (cert : certificate) (codes : list (code_id * code))
 Proof.
   induction fuel as [ | fuel IH]; intros rs fault Hchecked; cbn [region_run];
     [ discriminate | ].
-  destruct (region_step rs) as [rs1 | k vs rs1 | fault1 | ] eqn:Hstep;
+  destruct (region_step rs) as [rs1 | k vs rs1 | fault1] eqn:Hstep;
     try discriminate.
   - apply IH.
     exact (region_step_keeps_checked cert codes rs rs1 Hchecked Hstep).
@@ -128,8 +128,7 @@ Proof.
   destruct
     (erasure_adds_no_exit after statics base k us hp Hfresh' Herasable'
        Hbehaves')
-    as [fuel' [[fault Hfault] | [Hnot_run | (ws & rs' & Hrun' & Hws)]]].
+    as [fuel' [[fault Hfault] | (ws & rs' & Hrun' & Hws)]].
   - contradiction (Hsafe fuel' fault Hfault).
-  - exists fuel'. left. exact Hnot_run.
-  - exists fuel'. right. exists ws, rs', us. auto.
+  - exists fuel', ws, rs', us. auto.
 Qed.

@@ -89,8 +89,8 @@ Proof.
   exact (kinds_of_values_erased rs vs vs' (proj1 (back_values rs vs' vs H))).
 Qed.
 
-(* Values that are related where they may be evaluated, and that reach
-   only symbols that may be evaluated. *)
+(* Values that are related where they may be evaluated or are
+   locations, and that reach only symbols that may be evaluated. *)
 Lemma usable_values_back (rs : region_state) (vs vs' : list value) :
   Forall2 (value_erased_if_usable rs) vs vs' ->
   forallb (value_all (live_symbol rs)) vs = true ->
@@ -100,7 +100,7 @@ Proof.
     [ constructor | ].
   apply andb_true_iff in Hall as [Hhead Htail].
   constructor; [ | exact (IH Htail) ].
-  exact (conj (Hv (value_all_live_usable rs v Hhead)) Hhead).
+  exact (conj (Hv (value_all_live_asked rs v Hhead)) Hhead).
 Qed.
 
 (* Parameters that can be bound to some values can be bound to as many
@@ -289,7 +289,7 @@ Proof.
     destruct (kinds_eqb _ _); [ | discriminate ].
     apply shape_of_closure_call_back.
     + exact
-        (conj (Hclosure (value_all_live_usable rs _ Hclosure_live))
+        (conj (Hclosure (value_all_live_asked rs _ Hclosure_live))
            Hclosure_live).
     + apply Forall2_app;
         [ exact (usable_values_back rs _ _ Happlied Happlied_live)
@@ -303,11 +303,11 @@ Qed.
    arguments. *)
 Lemma call_code_back (closure closure' : value) (c : code)
     (vs vs' : list value) (args_arity return_arity : arity)
-    (return_to return_to' exn_to exn_to' : cont_value) (hp : heap)
-      (rd : read_record) :
+    (return_to return_to' exn_to exn_to' : cont_value) (hp hp' : heap)
+    (rd : read_record) :
   Forall2 (value_erased_if_usable rs) vs vs' ->
   call_code closure' (erase_code c) vs' args_arity return_arity return_to'
-    exn_to' statics' hp rd
+    exn_to' statics' hp' rd
   <> Undefined ->
   call_code closure c vs args_arity return_arity return_to exn_to
     (live_statics rs) hp rd
@@ -340,17 +340,17 @@ Qed.
    applied to a partial application. *)
 Lemma call_function_back_from (callee' callee : value) (kind : call_kind)
     (vs' vs : list value) (args_arity return_arity : arity)
-    (return_to return_to' exn_to exn_to' : cont_value) (hp : heap)
-      (rd : read_record) :
+    (return_to return_to' exn_to exn_to' : cont_value) (hp hp' : heap)
+    (rd : read_record) :
   erased_back rs callee' callee ->
   Forall2 (erased_back rs) vs' vs ->
   (∀ partial' partial : value,
     erased_back rs partial' partial ->
-    apply_cont_value return_to' [partial'] statics' hp rd <> Undefined ->
+    apply_cont_value return_to' [partial'] statics' hp' rd <> Undefined ->
     apply_cont_value return_to [partial] (live_statics rs) hp rd <> Undefined)
       ->
   call_function callee' kind vs' args_arity return_arity return_to' exn_to'
-    statics' hp rd
+    statics' hp' rd
   <> Undefined ->
   call_function callee kind vs args_arity return_arity return_to exn_to
     (live_statics rs) hp rd
@@ -383,9 +383,9 @@ Lemma apply_cont_value_back (c c' : cont_value) :
   cont_erased rs c c' ->
   cont_takes_no_region c ->
   forallb (value_all (live_symbol rs)) (cont_spine_values c) = true ->
-  ∀ (vs' vs : list value) (hp : heap) (rd : read_record),
+  ∀ (vs' vs : list value) (hp hp' : heap) (rd : read_record),
     Forall2 (erased_back rs) vs' vs ->
-    apply_cont_value c' vs' statics' hp rd <> Undefined ->
+    apply_cont_value c' vs' statics' hp' rd <> Undefined ->
     apply_cont_value c vs (live_statics rs) hp rd <> Undefined.
 Proof.
   intros Hc.
@@ -397,7 +397,7 @@ Proof.
        | remaining remaining' remaining_arity return_arity return_to
            return_to' exn_to exn_to' Hremaining Hreturn_takes Hexn_takes
            Hreturn IHreturn Hexn _ ];
-    intros Htop Hspine vs' vs hp rd Hvs.
+    intros Htop Hspine vs' vs hp hp' rd Hvs.
   - simpl. intros _. discriminate.
   - simpl in Htop.
     rewrite (erase_handler_no_region _ params metadata handler Htop).
@@ -438,15 +438,15 @@ Qed.
 (* A call. *)
 Lemma call_function_back (callee' callee : value) (kind : call_kind)
     (vs' vs : list value) (args_arity return_arity : arity)
-    (return_to return_to' exn_to exn_to' : cont_value) (hp : heap)
-      (rd : read_record) :
+    (return_to return_to' exn_to exn_to' : cont_value) (hp hp' : heap)
+    (rd : read_record) :
   erased_back rs callee' callee ->
   Forall2 (erased_back rs) vs' vs ->
   cont_erased rs return_to return_to' ->
   cont_takes_no_region return_to ->
   forallb (value_all (live_symbol rs)) (cont_spine_values return_to) = true ->
   call_function callee' kind vs' args_arity return_arity return_to' exn_to'
-    statics' hp rd
+    statics' hp' rd
   <> Undefined ->
   call_function callee kind vs args_arity return_arity return_to exn_to
     (live_statics rs) hp rd

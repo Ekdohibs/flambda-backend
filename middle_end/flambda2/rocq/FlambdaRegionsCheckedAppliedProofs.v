@@ -130,6 +130,10 @@ Hypothesis Hdeep : frames_deep rs (rs_frames rs) = true.
 
 Hypothesis Hstatics : statics_deep rs = true.
 
+Hypothesis Hordered : frames_ordered rs = true.
+
+Hypothesis Hcells : cells_deep rs = true.
+
 Hypothesis Hgood_statics :
   Forall (fun binding => allocated_values (good cert codes rs) (snd binding))
     (static_values (live_statics rs)).
@@ -200,7 +204,7 @@ Definition applied_raise (a : caller) (c : cont_value) : Prop :=
   cont_values_all good c ->
   ∀ (vs : list value) (s' : state),
     Forall good vs ->
-    Forall (fun v => value_all (heap_symbol rs) v = true) vs ->
+    Forall (fun v => value_for_ever rs v = true) vs ->
     apply_cont_value c vs (live_statics rs) hp rd = Step s' ->
     entered s'.
 
@@ -230,7 +234,8 @@ Proof.
     destruct (bind_params params vs vars) as [vars' | ] eqn:Hbind;
       [ | discriminate ].
     injection Hstep as <-.
-    destruct (enter_handler cert codes rs cs u params metadata handler entry
+    destruct (enter_handler cert codes rs Hordered Hcells cs u params metadata
+                handler entry
                 vars conts recursive args vs vars' given Hframe
                 (Ok_handler cert codes rs u params metadata handler entry vars
                    conts recursive cs0 base ms next Hmade Hfits Hcheck Hincl
@@ -324,8 +329,9 @@ Proof.
     destruct vs as [ | v [ | v' vs]]; try discriminate Hstep.
     exact
       (call_unknown cert codes rs Hfresh Hcode Hlocal Hdeep Hstatics
-         Hgood_statics hp rd a v l ls remaining remaining_arity return_arity
-         return_to exn_to l' s' Hcaller (Forall_inv Hgood_vs)
+         Hordered Hcells Hgood_statics hp rd a v l ls remaining
+         remaining_arity return_arity return_to exn_to l' s' Hcaller
+         (Forall_inv Hgood_vs)
          (Forall_inv Hlive_vs) (Forall_inv Hholds_vs) Hgood_remaining Hholds
          Hunknown Hret Hraise (IHret Hcaller Hgood_ret) Hgood_ret Hgood_exn
          Hstep).

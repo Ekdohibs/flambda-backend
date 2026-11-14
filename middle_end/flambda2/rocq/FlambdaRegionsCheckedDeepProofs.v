@@ -26,18 +26,20 @@
  ******************************************************************************)
 
 (* Lemmas for the proofs of the statements of FlambdaRegionsCheckedSpec.v:
-   what a symbol within a bound is bound to is within the bound; so what a
-   named expression reads from a value that is as a lifetime says is as the
-   lifetime says. Nothing here needs review. *)
+   what a symbol within a bound is bound to is within the bound, of symbols
+   and of locations; so what a named expression reads from a value that is
+   as a lifetime says, without reading the heap, is as the lifetime says.
+   Nothing here needs review. *)
 
 From Stdlib Require Import ZArith List Bool Lia PeanoNat.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaMapSpec FlambdaMapProofs FlambdaBindersProofs FlambdaValueSpec
-  FlambdaHeapProofs FlambdaSemanticsSpec FlambdaSemanticsProofs
-  FlambdaClosuresProofs FlambdaRegionsSpec FlambdaRegionsProofs
-  FlambdaRegionsReadsProofs FlambdaRegionsFreshProofs
-  FlambdaRegionsInvariantSpec FlambdaRegionsInvariantProofs
+  FlambdaHeapSpec FlambdaHeapProofs FlambdaSemanticsSpec
+  FlambdaSemanticsProofs FlambdaClosuresProofs FlambdaRegionsSpec
+  FlambdaRegionsProofs FlambdaRegionsReadsProofs FlambdaRegionsFreshProofs
+  FlambdaRegionsInvariantSpec FlambdaRegionsCellsProofs
+  FlambdaRegionsInvariantProofs
   FlambdaRegionsErasureSpec FlambdaRegionsCallsSpec FlambdaRegionsCallsProofs
   FlambdaRegionsCheckSpec FlambdaRegionsCheckedSpec.
 From OxCamlFlambda2 Require Import FlambdaRegionsCheckedBasicsProofs
@@ -67,6 +69,57 @@ Proof.
   - intros H Hin. exact (forallb_in _ _ w H Hin).
   - intros _ [<- | []]. reflexivity.
 Qed.
+
+Lemma value_all_cells_parts (ok : location -> bool) (v w : value) :
+  value_all_cells ok v = true ->
+  In w (value_parts v) ->
+  value_all_cells ok w = true.
+Proof.
+  destruct v
+    as [c | code slots | slot decls slots | s | tag fields | elements | c | l
+       | callee args args_arity];
+    cbn [value_parts value_all_cells]; try contradiction.
+  - intros H Hin. apply in_map_iff in Hin as ([vslot w0] & <- & Hin).
+    exact (forallb_in _ _ (vslot, w0) H Hin).
+  - intros H Hin. apply in_map_iff in Hin as ([vslot w0] & <- & Hin).
+    exact (forallb_in _ _ (vslot, w0) H Hin).
+  - intros H Hin. exact (forallb_in _ _ w H Hin).
+  - intros H Hin. exact (forallb_in _ _ w H Hin).
+  - intros _ [<- | []]. reflexivity.
+Qed.
+
+Lemma within_parts (rs : region_state) (stop : option symbol) (v w : value) :
+  value_within rs stop v = true ->
+  In w (value_parts v) ->
+  value_within rs stop w = true.
+Proof.
+  unfold value_within. intros H Hin. apply andb_true_iff in H as [H H'].
+  rewrite (value_all_parts _ v w H Hin), (value_all_cells_parts _ v w H' Hin).
+  reflexivity.
+Qed.
+
+Lemma for_ever_parts (rs : region_state) (v w : value) :
+  value_for_ever rs v = true ->
+  In w (value_parts v) ->
+  value_for_ever rs w = true.
+Proof.
+  unfold value_for_ever. intros H Hin. apply andb_true_iff in H as [H H'].
+  rewrite (value_all_parts _ v w H Hin), (value_all_cells_parts _ v w H' Hin).
+  reflexivity.
+Qed.
+
+Lemma cells_deep_parts (rs : region_state) :
+  cells_deep rs = true ->
+  frames_deep_cells rs (rs_frames rs) = true
+  ∧ forallb
+      (fun '(_, allocated) =>
+         forallb (value_all_cells (heap_location rs))
+           (values_of_static allocated))
+      (static_values (state_statics (rs_state rs)))
+    = true
+  ∧ forallb (fun '(l, c) => cell_deep rs l c) (state_heap (rs_state rs))
+    = true.
+Proof. unfold cells_deep. rewrite !andb_true_iff. tauto. Qed.
 
 Lemma allocated_all_parts (ok : symbol -> bool)
     (allocated : statically_allocated_value) :
@@ -200,6 +253,101 @@ Proof.
       rewrite (local_in_cons f below s' H1), H2. apply orb_true_r.
 Qed.
 
+(* The same of the locations that what the frames bind reaches. *)
+Lemma frames_deep_cells_all (rs : region_state) (frames : list frame) :
+  frames_deep_cells rs frames = true ->
+  ∀ (s : symbol) (allocated : statically_allocated_value),
+    In (s, allocated) (live_locals frames) ->
+    forallb
+      (value_all_cells (fun l => heap_location rs l || cell_in rs frames l))
+      (values_of_static allocated)
+    = true.
+Proof.
+  induction frames as [ | f below IH]; intros H s allocated Hin;
+    [ contradiction | ].
+  cbn [frames_deep_cells] in H. apply andb_true_iff in H as [Hf Hbelow].
+  change (live_locals (f :: below)) with (frame_locals f ++ live_locals below)
+    in Hin.
+  apply in_app_iff in Hin as [Hin | Hin].
+  - exact (forallb_in _ _ (s, allocated) Hf Hin).
+  - pose proof (IH Hbelow s allocated Hin) as Hall. revert Hall.
+    apply forallb_impl. intros w _. apply value_all_cells_mono. intros l H.
+    apply orb_true_iff in H as [-> | H]; [ reflexivity | ].
+    unfold cell_in in *.
+    destruct (lookup l (rs_cells rs)) as [m | ]; [ | discriminate ].
+    rewrite on_stack_cons, H, !orb_true_r. reflexivity.
+Qed.
+
+(* What a frame binds a symbol to that was drawn before a mark on the
+   stack reaches locations of the heap, or of cells in frames whose
+   marks were drawn before the mark. *)
+Lemma deep_marked_cells (rs : region_state) (frames : list frame) :
+  ∀ (top : symbol) (b s : symbol) (allocated : statically_allocated_value),
+    frames_ordered_below top frames = true ->
+    frames_deep_cells rs frames = true ->
+    on_stack b frames = true ->
+    In (s, allocated) (live_locals frames) ->
+    (s < b)%positive ->
+    forallb
+      (value_all_cells
+         (fun l =>
+            heap_location rs l
+            || match lookup l (rs_cells rs) with
+               | Some m => on_stack m frames && Pos.ltb m b
+               | None => false
+               end))
+      (values_of_static allocated)
+    = true.
+Proof.
+  induction frames as [ | f below IH];
+    intros top b s allocated Hordered Hdeep Hstack Hin Hlt; [ contradiction | ].
+  cbn [frames_ordered_below] in Hordered.
+  apply andb_true_iff in Hordered as [Hordered Hbelow_ordered].
+  apply andb_true_iff in Hordered as [Hmark Hlocals].
+  cbn [frames_deep_cells] in Hdeep.
+  apply andb_true_iff in Hdeep as [Hf Hbelow_deep].
+  rewrite on_stack_cons in Hstack.
+  change (live_locals (f :: below)) with (frame_locals f ++ live_locals below)
+    in Hin.
+  apply in_app_iff in Hin as [Hin | Hin].
+  - exfalso.
+    pose proof (forallb_in _ _ (s, allocated) Hlocals Hin) as H.
+    cbv beta iota in H. apply andb_true_iff in H as [H _].
+    apply Pos.ltb_lt in H.
+    apply orb_true_iff in Hstack as [Hb | Hb].
+    + apply Pos.eqb_eq in Hb. lia.
+    + destruct (on_stack_frame b below Hb) as (g & Hg & <-).
+      pose proof
+        (frames_ordered_below_marks below (frame_mark f) g Hbelow_ordered Hg).
+      lia.
+  - apply orb_true_iff in Hstack as [Hb | Hb].
+    + apply Pos.eqb_eq in Hb.
+      pose proof (frames_deep_cells_all rs below Hbelow_deep s allocated Hin)
+        as Hall.
+      revert Hall. apply forallb_impl. intros w _.
+      apply value_all_cells_mono. intros l H.
+      apply orb_true_iff in H as [-> | H]; [ reflexivity | ].
+      unfold cell_in in H.
+      destruct (lookup l (rs_cells rs)) as [m | ]; [ | discriminate ].
+      rewrite on_stack_cons, H, orb_true_r. cbn [andb].
+      destruct (on_stack_frame m below H) as (g & Hg & <-).
+      pose proof
+        (frames_ordered_below_marks below (frame_mark f) g Hbelow_ordered Hg)
+        as Hlt'.
+      assert (H' : Pos.ltb (frame_mark g) b = true)
+        by (apply Pos.ltb_lt; lia).
+      rewrite H'. apply orb_true_r.
+    + pose proof (IH (frame_mark f) b s allocated Hbelow_ordered Hbelow_deep
+                    Hb Hin Hlt)
+        as Hall.
+      revert Hall. apply forallb_impl. intros w _.
+      apply value_all_cells_mono. intros l H.
+      apply orb_true_iff in H as [-> | H]; [ reflexivity | ].
+      destruct (lookup l (rs_cells rs)) as [m | ]; [ | discriminate ].
+      apply andb_true_iff in H as [H1 H2].
+      rewrite on_stack_cons, H1, H2, orb_true_r. apply orb_true_r.
+Qed.
+
 (* ======================================================================== *)
 (* What is read from a value within a bound                                 *)
 (* ======================================================================== *)
@@ -215,6 +363,8 @@ Hypothesis Hordered : frames_ordered rs = true.
 Hypothesis Hdeep : frames_deep rs (rs_frames rs) = true.
 
 Hypothesis Hstatics : statics_deep rs = true.
+
+Hypothesis Hcells : cells_deep rs = true.
 
 (* What a symbol of the heap is bound to reaches symbols of the heap. *)
 Lemma heap_bound (s : symbol) (allocated : statically_allocated_value) :
@@ -263,6 +413,61 @@ Proof.
       unfold symbol_within. cbn [before]. rewrite andb_true_r. exact H.
 Qed.
 
+(* The same of locations. *)
+Lemma heap_bound_cells (s : symbol) (allocated : statically_allocated_value) :
+  heap_symbol rs s = true ->
+  lookup s (static_values (live_statics rs)) = Some allocated ->
+  forallb (value_all_cells (heap_location rs)) (values_of_static allocated)
+  = true.
+Proof.
+  intros Hheap Hlookup. unfold live_statics in Hlookup.
+  cbn [static_values] in Hlookup. rewrite lookup_app in Hlookup.
+  destruct (lookup s (live_locals (rs_frames rs))) as [local | ] eqn:Hlocal.
+  - pose proof (heap_not_local rs s Hfresh Hheap) as Hnot.
+    unfold not_local_symbol, value_local in Hnot. rewrite Hlocal in Hnot.
+    cbn [is_some negb] in Hnot. rewrite andb_false_r in Hnot. discriminate.
+  - exact
+      (forallb_in _ _ (s, allocated)
+         (proj1 (proj2 (cells_deep_parts rs Hcells)))
+         (lookup_in _ _ _ Hlookup)).
+Qed.
+
+Lemma within_bound_cells (stop : option symbol) (s : symbol)
+    (allocated : statically_allocated_value) :
+  (∀ b : symbol, stop = Some b -> on_stack b (rs_frames rs) = true) ->
+  symbol_within rs stop s = true ->
+  lookup s (static_values (live_statics rs)) = Some allocated ->
+  forallb (value_all_cells (cell_within rs stop)) (values_of_static allocated)
+  = true.
+Proof.
+  intros Hstop Hs Hlookup.
+  pose proof (proj1 (cells_deep_parts rs Hcells)) as Hcells_frames.
+  destruct (heap_symbol rs s) eqn:Hheap.
+  - pose proof (heap_bound_cells s allocated Hheap Hlookup) as Hall.
+    revert Hall. apply forallb_impl. intros w _.
+    apply value_all_cells_mono. exact (heap_cell_within rs stop).
+  - unfold symbol_within in Hs. rewrite Hheap in Hs. cbn [orb] in Hs.
+    apply andb_true_iff in Hs as [Hlocal Hbefore].
+    unfold live_statics in Hlookup. cbn [static_values] in Hlookup.
+    rewrite lookup_app in Hlookup. unfold local_in in Hlocal.
+    destruct (lookup s (live_locals (rs_frames rs))) as [local | ] eqn:Hs;
+      [ | discriminate ].
+    injection Hlookup as ->.
+    destruct stop as [b | ].
+    + cbn [before] in Hbefore. apply Pos.ltb_lt in Hbefore.
+      exact (deep_marked_cells rs (rs_frames rs) (rs_next rs) b s allocated
+               Hordered Hcells_frames (Hstop b eq_refl) (lookup_in _ _ _ Hs)
+               Hbefore).
+    + pose proof (frames_deep_cells_all rs (rs_frames rs) Hcells_frames s
+                    allocated (lookup_in _ _ _ Hs))
+        as Hall.
+      revert Hall. apply forallb_impl. intros w _.
+      apply value_all_cells_mono. intros l. unfold cell_within, cell_in.
+      intros H. apply orb_true_iff in H as [-> | H]; [ reflexivity | ].
+      destruct (lookup l (rs_cells rs)) as [m | ]; [ | discriminate ].
+      rewrite H. apply orb_true_r.
+Qed.
+
 Variable vars : env.
 
 Variable opens : list variable.
@@ -279,15 +484,15 @@ Local Abbreviation holds :=
   (lifetime_holds rs opens ms None l).
 
 Lemma holds_const (c : const) : holds (Value_const c).
-Proof. apply heap_holds. reflexivity. Qed.
+Proof. apply forever_holds. reflexivity. Qed.
 
 Lemma holds_parts (v w : value) : holds v -> In w (value_parts v) -> holds w.
 Proof.
   intros H Hin. destruct l as [ | | r | ]; cbn [lifetime_holds] in *.
-  - exact (value_all_parts _ v w H Hin).
-  - exact (value_all_parts _ v w H Hin).
+  - exact (for_ever_parts rs v w H Hin).
+  - exact (within_parts rs _ v w H Hin).
   - destruct (region_place opens ms None r) as [[m stop] | ]; [ | exact I ].
-    intros Hstack. exact (value_all_parts _ v w (H Hstack) Hin).
+    intros Hstack. exact (within_parts rs _ v w (H Hstack) Hin).
   - exact I.
 Qed.
 
@@ -317,14 +522,42 @@ Proof.
          value_within rs stop w = true)
       ∧ (∀ s' : symbol,
            In s' (allocated_symbols allocated) ->
-           symbol_within rs stop s' = true)).
+           value_within rs stop (Value_symbol s') = true)).
   { intros stop Hstop Hs Hlookup.
-    apply allocated_all_parts.
-    apply (within_bound stop s allocated); [ | exact Hs | exact Hlookup ].
-    intros b Hb. exact (marks_placed_in _ _ b Hplaced (Hstop b Hb)). }
+    assert (Hon :
+      ∀ b : symbol, stop = Some b -> on_stack b (rs_frames rs) = true)
+      by (intros b Hb; exact (marks_placed_in _ _ b Hplaced (Hstop b Hb))).
+    destruct
+      (allocated_all_parts _ allocated
+         (within_bound stop s allocated Hon Hs Hlookup))
+      as [Hvalues Hsymbols].
+    split.
+    - intros w Hw. unfold value_within. rewrite (Hvalues w Hw). cbn [andb].
+      pose proof (within_bound_cells stop s allocated Hon Hs Hlookup) as Hall.
+      rewrite values_of_static_values in Hall.
+      exact (forallb_in _ _ w Hall Hw).
+    - intros s' Hs'. unfold value_within. cbn [value_all value_all_cells].
+      rewrite (Hsymbols s' Hs'). reflexivity. }
+  assert (Hsymbol :
+    ∀ stop : option symbol,
+      value_within rs stop (Value_symbol s) = true ->
+      symbol_within rs stop s = true).
+  { intros stop H. unfold value_within in H.
+    cbn [value_all value_all_cells] in H. rewrite andb_true_r in H. exact H. }
   intros H Hlookup. destruct l as [ | | r | ]; cbn [lifetime_holds] in *.
-  - apply allocated_all_parts. exact (heap_bound s allocated H Hlookup).
-  - apply (Hbound _); [ | exact H | exact Hlookup ].
+  - unfold value_for_ever in H. cbn [value_all value_all_cells] in H.
+    rewrite andb_true_r in H.
+    destruct
+      (allocated_all_parts _ allocated (heap_bound s allocated H Hlookup))
+      as [Hvalues Hsymbols].
+    split.
+    + intros w Hw. unfold value_for_ever. rewrite (Hvalues w Hw). cbn [andb].
+      pose proof (heap_bound_cells s allocated H Hlookup) as Hall.
+      rewrite values_of_static_values in Hall.
+      exact (forallb_in _ _ w Hall Hw).
+    + intros s' Hs'. unfold value_for_ever. cbn [value_all value_all_cells].
+      rewrite (Hsymbols s' Hs'). reflexivity.
+  - apply (Hbound _); [ | exact (Hsymbol _ H) | exact Hlookup ].
     unfold caller_bound. destruct (lowest ms) as [b0 | ] eqn:Hlowest;
       [ | discriminate ].
     intros b [= <-]. exact (proj1 (lowest_least ms b0 Hlowest Hdecrease)).
@@ -337,9 +570,9 @@ Proof.
     { intros b ->. exact (proj1 Hstop). }
     split.
     + intros w Hw Hstack.
-      exact (proj1 (Hbound stop Hin (H Hstack) Hlookup) w Hw).
+      exact (proj1 (Hbound stop Hin (Hsymbol _ (H Hstack)) Hlookup) w Hw).
     + intros s' Hs' Hstack.
-      exact (proj2 (Hbound stop Hin (H Hstack) Hlookup) s' Hs').
+      exact (proj2 (Hbound stop Hin (Hsymbol _ (H Hstack)) Hlookup) s' Hs').
   - split; intros; exact I.
 Qed.
 

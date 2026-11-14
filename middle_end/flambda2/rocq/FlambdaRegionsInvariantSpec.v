@@ -162,30 +162,16 @@
    It is a test apart from [region_invariant]: neither needs the
    other.
 
-   NO PRIMITIVE OF THE HEAP (FlambdaHeapFreeSpec.expr_free_of_heap)
-
-   The machine does not run a [Let] that needs the heap
-   (FlambdaRegionsSpec.named_needs_heap, asked of a [Let] that is not
-   of a primitive of regions; decision D53): the run ends there with
-   [Region_let_not_run]. A run from the first state of a term never
-   comes to one if the term, and the code of the static environment,
-   have no primitive of the heap (the test of FlambdaHeapFreeSpec.v,
-   which is the guard of the liftings), and no value of the static
-   environment holds a location
-   ([no_heap_primitive_no_let_not_run_statement]): a location is made
-   by a primitive of the heap only, so no primitive is ever given one.
-   Until the stage in which [step] runs a [Let] on the heap, the
-   conversion of the test tool made no primitive of the heap, so no
-   unit that it checked for regions had one.
-
    WHAT IS NOT HERE
 
    - Nothing about the plain run of the term with its regions dropped:
      that is FlambdaRegionsErasureSpec.v, which needs this file.
-   - Nothing about the heap of the state: no step of the machine of
-     regions changes it
-     (FlambdaRegionsSpec.region_step_keeps_memory_statement), and the
-     machine makes no cell.
+   - Of the heap of the state, no more than [cells_live] and
+     [locations_all_bound] say: of a cell whose frame is gone, not
+     how long what it holds lives (what it holds still names no
+     symbol at or above [rs_next]); and nothing of what the heap of a
+     term and that of the term with its regions dropped have in
+     common.
    - That the symbols bound are bound once. A frame and the static
      environment bind no symbol in common, and the mark of a frame is
      bound to nothing; that two frames bind no symbol in common is
@@ -194,7 +180,7 @@
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
-  FlambdaSemanticsSpec FlambdaHeapFreeSpec FlambdaRegionsSpec.
+  FlambdaSemanticsSpec FlambdaLocationsSpec FlambdaRegionsSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -403,9 +389,184 @@ Definition values_live (rs : region_state) : bool :=
   && forallb (fun '(_, v) => value_kept (heap_symbol rs) v) (state_vars s)
   && forallb (fun '(_, c) => cont_kept (heap_symbol rs) c) (state_conts s).
 
+(* ======================================================================== *)
+(* Cells                                                                    *)
+(* ======================================================================== *)
+
+(* What a cell holds lives at least as long as the cell: the third
+   part of the invariant. *)
+
+(* Every location that the value holds is one of [ok]: the value
+   itself if it is a location, and the locations in its fields, its
+   elements and its value slots, however deep. Of a partial
+   application: its callee and each of its arguments is any location,
+   or holds locations of [ok] only. It is [value_holds], of
+   locations. *)
+Fixpoint value_holds_cells (ok : location -> bool) (v : value) : bool :=
+  match v with
+  | Value_const _ | Value_boxed_number _ | Value_symbol _ => true
+  | Value_closure _ value_slots | Value_closure_of_set _ _ value_slots =>
+    forallb (fun '(_, v) => value_holds_cells ok v) value_slots
+  | Value_location l => ok l
+  | Value_block _ fields => forallb (value_holds_cells ok) fields
+  | Value_immutable_array elements => forallb (value_holds_cells ok) elements
+  | Value_partial_application callee args _ =>
+    match callee with
+    | Value_location _ => true
+    | _ => value_holds_cells ok callee
+    end
+    && forallb
+         (fun arg =>
+            match arg with
+            | Value_location _ => true
+            | _ => value_holds_cells ok arg
+            end)
+         args
+  end.
+
+(* What a variable may hold: any location, or a value that is not a
+   location and holds locations of [ok] only. *)
+Definition value_kept_cells (ok : location -> bool) (v : value) : bool :=
+  match v with
+  | Value_location _ => true
+  | _ => value_holds_cells ok v
+  end.
+
+(* What a local allocation or a cell holds directly: a location of
+   [near], or a value that is not a location and holds locations of
+   [ok] only. *)
+Definition value_placed_cells (near ok : location -> bool) (v : value)
+    : bool :=
+  match v with
+  | Value_location l => near l
+  | _ => value_holds_cells ok v
+  end.
+
+Fixpoint cont_kept_cells (ok : location -> bool) (c : cont_value) : bool :=
+  match c with
+  | Closure _ vars conts _ =>
+    forallb (fun '(_, v) => value_kept_cells ok v) vars
+    && forallb (fun '(_, c) => cont_kept_cells ok c) conts
+  | Outer _ => true
+  | Extra_args c extra =>
+    cont_kept_cells ok c && forallb (value_kept_cells ok) extra
+  | Over_application remaining _ _ return_to exn_to =>
+    forallb (value_kept_cells ok) remaining
+    && cont_kept_cells ok return_to
+    && cont_kept_cells ok exn_to
+  end.
+
+(* A location of the heap: one that no local allocation made in a
+   frame. *)
+Definition heap_location (rs : region_state) (l : location) : bool :=
+  negb (is_some (lookup l (rs_cells rs))).
+
+(* A cell that a local allocation made, in one of the frames given. *)
+Definition cell_in (rs : region_state) (frames : list frame) (l : location)
+    : bool :=
+  match lookup l (rs_cells rs) with
+  | Some m => on_stack m frames
+  | None => false
+  end.
+
+(* A value that is held directly by what is in the frames given, the
+   newest first, lives as long: a symbol or a location of the heap, of
+   the first of those frames or of one below it; or a value that is
+   neither and holds symbols and locations of the heap only, but for
+   the callee and the arguments of a partial application in it, each
+   of which may be any symbol or any location ([value_holds],
+   [value_holds_cells]). *)
+Definition value_placed_in (rs : region_state) (frames : list frame)
+    (v : value) : bool :=
+  value_placed (fun s => heap_symbol rs s || local_in frames s)
+    (heap_symbol rs) v
+  && value_placed_cells (fun l => heap_location rs l || cell_in rs frames l)
+       (heap_location rs) v.
+
+(* A value that a cell of the heap, or the static environment, holds:
+   it holds symbols and locations of the heap only, but for the
+   callee and the arguments of a partial application in it, each of
+   which may be any symbol or any location. *)
+Definition value_holds_heap (rs : region_state) (v : value) : bool :=
+  value_holds (heap_symbol rs) v && value_holds_cells (heap_location rs) v.
+
+(* What a cell holds lives at least as long as the cell. Nothing is
+   asked of a cell whose frame is gone. *)
+Definition cell_holds (rs : region_state) (l : location) (c : cell) : bool :=
+  match lookup l (rs_cells rs) with
+  | None => forallb (value_holds_heap rs) (values_of_cell c)
+  | Some m =>
+    match frames_from m (rs_frames rs) with
+    | Some frames => forallb (value_placed_in rs frames) (values_of_cell c)
+    | None => true
+    end
+  end.
+
+(* The locations that each frame binds directly are of the heap, of
+   that frame or of a frame below it. *)
+Fixpoint frames_hold_cells (rs : region_state) (frames : list frame) : bool :=
+  match frames with
+  | [] => true
+  | f :: below =>
+    forallb
+      (fun '(_, allocated) =>
+         forallb
+           (value_placed_cells
+              (fun l => heap_location rs l || cell_in rs (f :: below) l)
+              (heap_location rs))
+           (values_of_static allocated))
+      (frame_locals f)
+    && frames_hold_cells rs below
+  end.
+
+(* The invariant of the cells. Every cell that a local allocation made
+   is bound in the heap, and its mark was drawn. Every entry of the
+   heap, those that a later store hides too, holds what lives as long
+   as its cell, and names no symbol at or above [rs_next], in what a
+   partial application keeps too: a read binds a variable to what
+   the cell holds, and [symbols_fresh] asks it of the variables. The
+   static environment holds locations of the heap only; a frame
+   holds directly locations of the heap, of its own or of a frame
+   below; a variable and a continuation hold any location, and
+   otherwise locations of the heap only. And no two frames have the
+   same mark: the frame that a cell is in is then one frame, and
+   while it is on the stack so are the frames below it. *)
+Definition cells_live (rs : region_state) : bool :=
+  let s := rs_state rs in
+  distinct (map frame_mark (rs_frames rs))
+  && forallb
+    (fun '(l, m) =>
+       is_bound l (state_heap s)
+       && symbol_between (rs_base rs) (rs_next rs) m)
+    (rs_cells rs)
+  && forallb (fun '(l, c) => cell_holds rs l c) (state_heap s)
+  && forallb
+       (fun '(_, c) => forallb (value_below (rs_next rs)) (values_of_cell c))
+       (state_heap s)
+  && forallb
+       (fun '(_, allocated) =>
+          forallb (value_holds_cells (heap_location rs))
+            (values_of_static allocated))
+       (static_values (state_statics s))
+  && frames_hold_cells rs (rs_frames rs)
+  && forallb (fun '(_, v) => value_kept_cells (heap_location rs) v)
+       (state_vars s)
+  && forallb (fun '(_, c) => cont_kept_cells (heap_location rs) c)
+       (state_conts s).
+
+(* The heap of the state binds every location that the state holds,
+   in what its frames bind too: the fourth part of the invariant. It
+   is FlambdaLocationsMachineSpec.state_locations_bound of the state
+   that [step] is given, as a test. A location that nothing binds
+   could be the one that a later allocation draws. *)
+Definition locations_all_bound (rs : region_state) : bool :=
+  let s := with_statics (rs_state rs) (live_statics rs) in
+  forallb (fun l => is_bound l (state_heap s)) (locations_of_state s).
+
 (* The invariant. *)
 Definition region_invariant (rs : region_state) : bool :=
-  symbols_fresh rs && values_live rs.
+  symbols_fresh rs && values_live rs && cells_live rs
+  && locations_all_bound rs.
 
 (* ======================================================================== *)
 (* No poison of the kind [Region]                                           *)
@@ -431,7 +592,8 @@ Fixpoint cont_no_region_poison (c : cont_value) : bool :=
   end.
 
 (* The test: nothing that the state has written, and nothing that it
-   holds, is the poison constant of the kind [Region]. *)
+   holds, in the cells of its heap too, is the poison constant of the
+   kind [Region]. *)
 Definition no_poison (rs : region_state) : bool :=
   let s := rs_state rs in
   no_region_poison (state_expr s)
@@ -440,7 +602,10 @@ Definition no_poison (rs : region_state) : bool :=
   && forallb (fun '(_, c) => cont_no_region_poison c) (state_conts s)
   && forallb
        (fun '(_, allocated) => allocated_no_region_poison allocated)
-       (live_locals (rs_frames rs)).
+       (live_locals (rs_frames rs))
+  && forallb
+       (fun '(_, c) => forallb value_no_region_poison (values_of_cell c))
+       (state_heap s).
 
 (* ======================================================================== *)
 (* Statements                                                               *)
@@ -448,8 +613,9 @@ Definition no_poison (rs : region_state) : bool :=
 
 (* The state that a run starts in has the invariant, if the symbols
    that the machine draws are apart from those of the term and of the
-   static environment that it is run in: the test that the test tool
-   makes. *)
+   static environment that it is run in, and that static environment
+   holds no location: the test that the test tool makes
+   ([region_names_fresh]). *)
 Definition region_invariant_initial_statement : Prop :=
   ∀ (e : expr) (statics : static_env) (base : symbol),
     region_names_fresh base e statics = true ->
@@ -562,28 +728,34 @@ Definition usable_not_region_statement : Prop :=
     value_usable rs v = true ->
     kind_of_value v <> Region.
 
-(* A run from the first state of a term that has no primitive of the
-   heap (FlambdaHeapFreeSpec.expr_free_of_heap: no [Let] of one in the
-   term, in a handler or in code that it binds), in a static
-   environment whose code has none ([statics_free_of_heap]) and whose
-   values hold no location, never comes to a [Let] that the machine
-   does not run: no location is ever made, so no primitive is given
-   one. So of such a term a run that is never undefined
-   (FlambdaRegionsCheckSpec.region_safe) only steps or exits, as
-   before decision D53. The conversion of the test tool made no term
-   with a primitive of the heap until then. The third premise is
-   needed: a location that a static block holds in a field is read out
-   by a load, which is no primitive of the heap, and the next
-   primitive that is given it is a [Let] that the machine does not
-   run. It is FlambdaLocationsSpec.locations_of_static_env of the
-   static environment being empty, written out. *)
-Definition no_heap_primitive_no_let_not_run_statement : Prop :=
-  ∀ (e : expr) (statics : static_env) (base : symbol) (fuel : nat),
-    expr_free_of_heap e = true ->
-    statics_free_of_heap statics = true ->
-    (∀ (s : symbol) (allocated : statically_allocated_value) (v : value),
-       (s, allocated) ∈ static_values statics ->
-       v ∈ values_of_static allocated ->
-       locations_of_value v = []) ->
-    region_run fuel (initial_region_state e statics base)
-    <> Region_let_not_run.
+(* ======================================================================== *)
+(* What the invariant says of cells                                         *)
+(* ======================================================================== *)
+
+(* A cell that is dead stays dead: its mark does not come back. *)
+Definition dead_cell_stays_dead_statement : Prop :=
+  ∀ (rs rs' : region_state) (l : location),
+    region_invariant rs = true ->
+    region_step rs = Region_step rs' ->
+    cell_dead rs l = true ->
+    cell_dead rs' l = true.
+
+(* What a cell that is not dead holds may be evaluated: a read of a
+   live cell gives no dead value. *)
+Definition live_cell_holds_usable_statement : Prop :=
+  ∀ (rs : region_state) (l : location) (c : cell) (v : value),
+    region_invariant rs = true ->
+    lookup l (state_heap (rs_state rs)) = Some c ->
+    cell_dead rs l = false ->
+    v ∈ values_of_cell c ->
+    value_usable rs v = true.
+
+(* A cell of the heap holds nothing local, however deep, but in what
+   a partial application keeps. *)
+Definition heap_cell_holds_no_local_statement : Prop :=
+  ∀ (rs : region_state) (l : location) (c : cell) (v : value),
+    region_invariant rs = true ->
+    lookup l (state_heap (rs_state rs)) = Some c ->
+    lookup l (rs_cells rs) = None ->
+    v ∈ values_of_cell c ->
+    value_holds_heap rs v = true.

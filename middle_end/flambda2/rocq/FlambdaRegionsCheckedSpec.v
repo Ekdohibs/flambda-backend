@@ -28,7 +28,8 @@
 (* The property of states by which the run of a term that passes the
    check of regions (FlambdaRegionsCheckSpec.v), from its first state
    and with symbols to draw that are none of the term or of the
-   static environment ([region_names_fresh]), is proved to stop
+   static environment, which holds no location
+   ([region_names_fresh]), is proved to stop
    without a step only where [step] has none.
 
    This file is to be reviewed: all of it. It adds nothing to the
@@ -40,13 +41,15 @@
    [state_checked] is a property of a state of the machine of regions,
    given a certificate and the code of the term. The state that a run
    of a checked term starts in has it, if the symbols that the machine
-   draws are none of the term or of the static environment
-   ([checked_initial_statement]), and a step keeps it
-   ([region_step_keeps_checked_statement]). A state that has it stops
-   without a step only where [step] has none
+   draws are none of the term or of the static environment, which
+   holds no location ([checked_initial_statement]), and a step keeps
+   it ([region_step_keeps_checked_statement]). A state that has it
+   stops without a step only where [step] has none
    ([checked_fault_statement]): not for decisions D45, D46 or D47, not
-   for a region used as a value, not for a primitive of regions that
-   is not as the conversion makes it. The three give
+   for a store of a value that does not live as long as the cell
+   (decision D54), not for a region used as a value, not for a
+   primitive of regions that is not as the conversion makes it. The
+   three give
    FlambdaRegionsCheckSpec.region_check_fault_statement.
 
    The fourth and the fifth statement are what the other part of the
@@ -55,8 +58,9 @@
    that passes the check, and that the erasure is meant for
    ([erasable]), stops because [step] has no step, the run of the
    term with its regions dropped goes wrong. In a
-   state that has the property what a step reads may be read
-   ([reads_live], [checked_reads_live_statement]), and a jump to a
+   state that has the property, [reads_live] holds, with its tests of
+   region arguments and symbols read as values
+   ([checked_reads_live_statement]), and a jump to a
    handler gives every kind [Region] of the handler a parameter and
    an argument ([regions_given], [checked_regions_given_statement]).
    Both are needed. Of a run whose states have [reads_live] and no
@@ -78,15 +82,20 @@
 
    A value is within a bound ([value_within]) if every symbol that it
    reaches without reading the static environment is of the heap, or
-   is in a frame and was drawn before the bound. "Reaches" goes into
-   a partial application, unlike
+   is in a frame and was drawn before the bound; and every location
+   that it reaches without reading the heap is of the heap, or is of
+   a cell that a local allocation made in a frame that is on the
+   stack and whose MARK was drawn before the bound. A location is
+   placed by the mark of its frame, and not by its own number.
+   "Reaches" goes into a partial application, unlike
    FlambdaRegionsInvariantSpec.value_holds.
 
    WHAT A LIFETIME SAYS OF A VALUE ([lifetime_holds])
 
    Given the open regions of the check, newest first, and the marks
    that their variables are bound to:
-   - [Forever]: every symbol that the value reaches is of the heap;
+   - [Forever]: every symbol and every location that the value
+     reaches is of the heap ([value_for_ever]);
    - [Of_region r]: if the mark of [r] is on the stack, the value is
      within the mark of the next open region above [r]; within no
      bound if [r] is the newest;
@@ -167,12 +176,13 @@
      ([frames_deep], [statics_deep]).
      FlambdaRegionsInvariantSpec.frames_hold stops at a partial
      application.
-   - Only a symbol and a partial application carry what is local
-     ([values_plain]): every other value that the state holds, in a
-     variable, in a continuation, directly in what a frame binds, as
-     the callee or an argument of a partial application, reaches
-     symbols of the heap only, through the partial applications that
-     are in it too. It is a property of the runs of a term that
+   - Only a symbol, a location and a partial application carry what
+     is local ([values_plain]): every other value that the state
+     holds, in a variable, in a continuation, directly in what a
+     frame binds, in a cell of the heap, as the callee or an argument
+     of a partial application, reaches symbols and locations of the
+     heap only, through the partial applications that are in it
+     too. It is a property of the runs of a term that
      passes the check, proved with the rest: the check passes
      an allocation on the heap, which is what makes a block, a closure
      or an array that is a value and not a symbol, only with arguments
@@ -187,16 +197,17 @@
    - Every partial application that the state holds, anywhere, is one
      that may be called ([paps_fit]): it keeps fewer arguments than its
      code takes, as one that a call makes does; and it reaches symbols
-     of the heap only, or the certificate says that a partial
-     application may keep a local value, and each argument that it
-     keeps is of the heap or is at a parameter that may be given a
-     local value. The first state holds none
+     and locations of the heap only, or the certificate says that a
+     partial application may keep a local value, and each argument
+     that it keeps lives for ever or is at a parameter that may be
+     given a local value. The first state holds none
      (FlambdaRegionsCheckSpec.statics_no_partial).
 
    WHAT IS NOT HERE
 
-   - Nothing of the heap of the state: the machine of regions runs no
-     primitive of the heap.
+   - Of the heap of the state, what [cells_deep] says and what
+     [state_values] asks of every entry, and no more: nothing of how
+     the heaps of two runs compare.
    - Nothing of the values at an exit beyond what
      FlambdaRegionsCallsSpec.v states.
    - That a region is ended (decision D48).
@@ -249,6 +260,20 @@ Definition allocated_all (ok : symbol -> bool)
   | Static_immutable_array elements => forallb (value_all ok) elements
   end.
 
+(* The same of locations: every location that a value reaches without
+   reading the heap or the static environment is one of [ok]. *)
+Fixpoint value_all_cells (ok : location -> bool) (v : value) : bool :=
+  match v with
+  | Value_const _ | Value_boxed_number _ | Value_symbol _ => true
+  | Value_closure _ value_slots | Value_closure_of_set _ _ value_slots =>
+    forallb (fun '(_, v) => value_all_cells ok v) value_slots
+  | Value_location l => ok l
+  | Value_block _ fields => forallb (value_all_cells ok) fields
+  | Value_immutable_array elements => forallb (value_all_cells ok) elements
+  | Value_partial_application callee args _ =>
+    value_all_cells ok callee && forallb (value_all_cells ok) args
+  end.
+
 (* Drawn before the bound; with no bound, any symbol. *)
 Definition before (stop : option symbol) (s : symbol) : bool :=
   match stop with
@@ -264,9 +289,26 @@ Definition symbol_within (rs : region_state) (stop : option symbol)
     (s : symbol) : bool :=
   heap_symbol rs s || (local_in (rs_frames rs) s && before stop s).
 
+(* A location within a bound: of the heap, or of a cell that a local
+   allocation made in a frame that is on the stack and whose mark was
+   drawn before the bound. *)
+Definition cell_within (rs : region_state) (stop : option symbol)
+    (l : location) : bool :=
+  heap_location rs l
+  || match lookup l (rs_cells rs) with
+     | Some m => on_stack m (rs_frames rs) && before stop m
+     | None => false
+     end.
+
 Definition value_within (rs : region_state) (stop : option symbol)
     (v : value) : bool :=
-  value_all (symbol_within rs stop) v.
+  value_all (symbol_within rs stop) v
+  && value_all_cells (cell_within rs stop) v.
+
+(* A value that lives for ever: it reaches symbols and locations of
+   the heap only. *)
+Definition value_for_ever (rs : region_state) (v : value) : bool :=
+  value_all (heap_symbol rs) v && value_all_cells (heap_location rs) v.
 
 (* ======================================================================== *)
 (* The open regions and their marks                                         *)
@@ -339,7 +381,7 @@ Definition lifetime_holds (rs : region_state) (opens : list variable)
     (ms : list mark) (above : option symbol) (l : lifetime) (v : value)
     : Prop :=
   match l with
-  | Forever => value_all (heap_symbol rs) v = true
+  | Forever => value_for_ever rs v = true
   | Of_caller => value_within rs (caller_bound ms above) v = true
   | Of_region r =>
     match region_place opens ms above r with
@@ -348,6 +390,23 @@ Definition lifetime_holds (rs : region_state) (opens : list variable)
     | None => True
     end
   | Gone => True
+  end.
+
+(* What a lifetime says of what is read from a value. Of a location:
+   every value that the cell at it holds is as the lifetime says. Of
+   a value that is no location: the value is; what is read from it is
+   a part of it, or is in a frame that lives as long
+   ([frames_deep]). *)
+Definition contents_hold (rs : region_state) (opens : list variable)
+    (ms : list mark) (above : option symbol) (l : lifetime) (v : value)
+    : Prop :=
+  match v with
+  | Value_location loc =>
+    ∀ (c : cell) (w : value),
+      lookup loc (state_heap (rs_state rs)) = Some c ->
+      In w (values_of_cell c) ->
+      lifetime_holds rs opens ms above l w
+  | _ => lifetime_holds rs opens ms above l v
   end.
 
 (* [l] lasts at least as long as [l']: of the two, [l'] ends first. *)
@@ -383,7 +442,7 @@ Definition check_state_scoped (cs : check_state) : bool :=
           | Of_region r => among r (cs_regions cs)
           | Forever | Of_caller | Gone => true
           end)
-       (cs_env cs).
+       (cs_env cs ++ cs_contents cs).
 
 (* The state of the check describes the state that runs: it is in
    scope, its open regions are bound to marks that are on the stack
@@ -394,10 +453,14 @@ Definition running_checked (rs : region_state) (cs : check_state)
   open_marks (state_vars (rs_state rs)) (cs_open cs) = Some ms
   ∧ marks_placed (rs_frames rs) ms = true
   ∧ check_state_scoped cs = true
+  ∧ (∀ (x : variable) (l : lifetime) (v : value),
+       lookup x (cs_env cs) = Some l ->
+       lookup x (state_vars (rs_state rs)) = Some v ->
+       lifetime_holds rs (cs_open cs) ms None l v)
   ∧ ∀ (x : variable) (l : lifetime) (v : value),
-      lookup x (cs_env cs) = Some l ->
+      lookup x (cs_contents cs) = Some l ->
       lookup x (state_vars (rs_state rs)) = Some v ->
-      lifetime_holds rs (cs_open cs) ms None l v.
+      contents_hold rs (cs_open cs) ms None l v.
 
 (* ======================================================================== *)
 (* Who may apply a continuation, and who called                             *)
@@ -485,6 +548,11 @@ Definition made_at (rs : region_state) (u : user) (vars : env)
        lookup x (cs_env cs) = Some l ->
        lookup x vars = Some v ->
        lifetime_holds rs (cs_open cs) ms (Some next) l v)
+  (* What is read from what the closure holds. *)
+  ∧ (∀ (x : variable) (l : lifetime) (v : value),
+       lookup x (cs_contents cs) = Some l ->
+       lookup x vars = Some v ->
+       contents_hold rs (cs_open cs) ms (Some next) l v)
   (* The marks of the user that were drawn before the closure was
      made. *)
   ∧ (∀ m : mark, In m (u_marks u) -> Pos.ltb m next = true -> In m ms)
@@ -635,15 +703,64 @@ Definition statics_deep (rs : region_state) : bool :=
   forallb (fun '(_, allocated) => allocated_all (heap_symbol rs) allocated)
     (static_values (state_statics (rs_state rs))).
 
-(* Only a symbol and a partial application carry what is local: a
-   value that is neither reaches symbols of [heap] only; the callee
-   and the arguments of a partial application are such values again. *)
-Fixpoint value_plain (heap : symbol -> bool) (v : value) : bool :=
+(* The same of locations and of the cells of the heap. What each
+   frame binds reaches locations of the heap, of that frame or of a
+   frame below it; what the static environment binds reaches
+   locations of the heap; and every entry of the heap reaches symbols
+   and locations that live as long as its cell: those of the heap,
+   and, of a cell that a local allocation made in a frame that is
+   still on the stack, those of that frame or of a frame below it. *)
+Fixpoint frames_deep_cells (rs : region_state) (frames : list frame) : bool :=
+  match frames with
+  | [] => true
+  | f :: below =>
+    forallb
+      (fun '(_, allocated) =>
+         forallb
+           (value_all_cells
+              (fun l => heap_location rs l || cell_in rs (f :: below) l))
+           (values_of_static allocated))
+      (frame_locals f)
+    && frames_deep_cells rs below
+  end.
+
+Definition cell_deep (rs : region_state) (l : location) (c : cell) : bool :=
+  match lookup l (rs_cells rs) with
+  | None => forallb (value_for_ever rs) (values_of_cell c)
+  | Some m =>
+    match frames_from m (rs_frames rs) with
+    | Some frames =>
+      forallb
+        (fun v =>
+           value_all (fun s => heap_symbol rs s || local_in frames s) v
+           && value_all_cells
+                (fun l' => heap_location rs l' || cell_in rs frames l') v)
+        (values_of_cell c)
+    | None => true
+    end
+  end.
+
+Definition cells_deep (rs : region_state) : bool :=
+  frames_deep_cells rs (rs_frames rs)
+  && forallb
+       (fun '(_, allocated) =>
+          forallb (value_all_cells (heap_location rs))
+            (values_of_static allocated))
+       (static_values (state_statics (rs_state rs)))
+  && forallb (fun '(l, c) => cell_deep rs l c) (state_heap (rs_state rs)).
+
+(* Only a symbol, a location and a partial application carry what is
+   local: a value that is none of them reaches symbols of [heap] and
+   locations of [heap_cell] only; the callee and the arguments of a
+   partial application are such values again. *)
+Fixpoint value_plain (heap : symbol -> bool) (heap_cell : location -> bool)
+    (v : value) : bool :=
   match v with
-  | Value_symbol _ => true
+  | Value_symbol _ | Value_location _ => true
   | Value_partial_application callee args _ =>
-    value_plain heap callee && forallb (value_plain heap) args
-  | _ => value_all heap v
+    value_plain heap heap_cell callee
+    && forallb (value_plain heap heap_cell) args
+  | _ => value_all heap v && value_all_cells heap_cell v
   end.
 
 (* A property of each value that what a symbol is bound to holds
@@ -663,19 +780,25 @@ Definition allocated_values (P : value -> Prop)
    continuation, in the environment of its closure, among its extra
    arguments and the arguments that remain of an application with too
    many, and so on for the continuations that it holds
-   (FlambdaSemanticsSpec.conts_values_all); and directly in what the
-   static environment and the frames bind. *)
+   (FlambdaSemanticsSpec.conts_values_all); directly in what the
+   static environment and the frames bind; and in every entry of the
+   heap, those that a later store hides and those of a cell that is
+   dead too: a read binds a variable to what a cell holds. *)
 Definition state_values (P : value -> Prop) (rs : region_state) : Prop :=
   let s := rs_state rs in
   env_values_all P (state_vars s)
   ∧ conts_values_all P (state_conts s)
   ∧ Forall (fun binding => allocated_values P (snd binding))
-      (static_values (live_statics rs)).
+      (static_values (live_statics rs))
+  ∧ Forall (fun binding => Forall P (values_of_cell (snd binding)))
+      (state_heap s).
 
-(* Every value that the state holds is a symbol, a partial application
-   of such values, or reaches symbols of the heap only. *)
+(* Every value that the state holds is a symbol, a location, a
+   partial application of such values, or reaches symbols and
+   locations of the heap only. *)
 Definition values_plain (rs : region_state) : Prop :=
-  state_values (fun v => value_plain (heap_symbol rs) v = true) rs.
+  state_values
+    (fun v => value_plain (heap_symbol rs) (heap_location rs) v = true) rs.
 
 (* The arguments that a partial application keeps against the
    parameters of its code: one that is not of the heap is at a
@@ -688,15 +811,17 @@ Fixpoint values_fit (rs : region_state) (flags : list bool)
     match flags with
     | [] => false
     | flag :: flags =>
-      (value_all (heap_symbol rs) v || flag) && values_fit rs flags args
+      (value_for_ever rs v || flag) && values_fit rs flags args
     end
   end.
 
 (* A partial application that may be called. It keeps fewer arguments
    than its code takes, and the code is not tupled: that is what a
-   call makes. It reaches symbols of the heap only; or the certificate
-   says that one may keep a local value, and what it keeps fits the
-   code of its callee. One whose callee is a closure of code that the
+   call makes. It lives for ever, reaching symbols and locations of
+   the heap only; or the certificate says that one may keep a local
+   value, and what it keeps fits the code of its callee, an argument
+   that does not live for ever being at a parameter that may be given
+   a local value. One whose callee is a closure of code that the
    check was not given is never called. Nor is one whose callee is not
    a closure and cannot come to be one: a value that is no symbol, or
    a symbol that the machine drew, which is bound to what it was bound
@@ -711,8 +836,7 @@ Definition pap_fits (rs : region_state) (callee : value) (args : list value)
     | Some c, Some entry =>
       negb (code_is_tupled c)
       && (length args_arity <? length (code_params_arity c))
-      && ((value_all (heap_symbol rs) callee
-           && forallb (value_all (heap_symbol rs)) args)
+      && ((value_for_ever rs callee && forallb (value_for_ever rs) args)
           || (cert_partial_local cert
               && values_fit rs (ce_params_local entry) args))
     | _, _ => true
@@ -758,6 +882,7 @@ Definition state_checked (rs : region_state) : Prop :=
   ∧ statics_deep rs = true
   ∧ values_plain rs
   ∧ paps_fit rs
+  ∧ cells_deep rs = true
   ∧ ∃ (cs : check_state) (ms : list mark),
       check_expr cert codes cs (state_expr (rs_state rs)) = true
       ∧ incl (code_of_expr (state_expr (rs_state rs))) codes
@@ -814,9 +939,10 @@ Fixpoint cont_spine_values (c : cont_value) : list value :=
     remaining ++ cont_spine_values return_to
   end.
 
-(* What a step reads may be read. Where [step] reads into a value (the
-   callee inside a partial application, a field, a value slot, the
-   tuple that tupled code is given), what it finds may be evaluated:
+(* What is asked of the region arguments and of symbols read as
+   values. Where [step] reads into a value (the callee inside a
+   partial application, a field, a value slot, the tuple that tupled
+   code is given), a symbol that it finds may be evaluated:
    - the simples of the head are as [simples_live] says;
    - what the static environment and the frames bind reaches only
      symbols that may be evaluated;
@@ -824,7 +950,11 @@ Fixpoint cont_spine_values (c : cont_value) : list value :=
      it applies: when a call returns into what is left of an
      application with too many arguments, the arguments that remain
      are those of a call, and the first is read where the code called
-     is tupled. *)
+     is tupled.
+   Nothing is asked of a location that it finds, which may be that of
+   a dead cell: FlambdaRegionsErasureSpec.value_erased relates a
+   location to itself and to nothing else, wherever it is kept and
+   whether or not its cell is dead. *)
 Definition reads_live (rs : region_state) : Prop :=
   let s := rs_state rs in
   simples_live rs (evaluated_simples (state_expr s)) (region_places rs) = true
@@ -876,7 +1006,8 @@ Definition regions_given (rs : region_state) : bool :=
 
 (* The state that a run of a checked term starts in has the
    property, if the symbols that the machine draws are none of the
-   term or of the static environment. *)
+   term or of the static environment, which holds no location
+   ([region_names_fresh]). *)
 Definition checked_initial_statement : Prop :=
   ∀ (cert : certificate) (statics : static_env) (base : symbol) (e : expr),
     region_check cert statics e = true ->
@@ -901,7 +1032,8 @@ Definition checked_fault_statement : Prop :=
     region_step rs = Region_undefined fault ->
     fault = No_plain_step.
 
-(* In a state that has it, what a step reads may be read. *)
+(* A state that has the property satisfies [reads_live], which asks
+   nothing of location liveness. *)
 Definition checked_reads_live_statement : Prop :=
   ∀ (cert : certificate) (codes : list (code_id * code)) (rs : region_state),
     state_checked cert codes rs -> reads_live rs.

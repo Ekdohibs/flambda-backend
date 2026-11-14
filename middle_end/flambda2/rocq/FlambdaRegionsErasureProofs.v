@@ -35,16 +35,23 @@
    the two runs.
 
    - The begin of a region: the erased term has no [Let] for it, so the
-     second state makes no step ([begin_region_erased]).
+     second state makes no step ([begin_region_erased]). No cell is
+     listed with the new mark, so the same cells are dead.
    - The end of a region: one step. The frames that are cut bound
-     symbols; what was related stays related for the values that the
-     state after may evaluate ([end_region_erased], on the section
-     [Cut]). This is where the invariant of
-     FlambdaRegionsInvariantSpec.v is used whole, with the fact that
-     the frames bind each symbol once
+     symbols, and the cells that were made in them are dead after;
+     what was related stays related for the values that the state
+     after may evaluate, and for the cells that are not dead after
+     ([end_region_erased], on the section [Cut]). This is where the
+     invariant of FlambdaRegionsInvariantSpec.v is used whole (of the
+     cells, in the state after too, by
+     FlambdaRegionsInvariantProofs.region_step_keeps_invariant), with
+     the fact that the frames bind each symbol once
      (FlambdaRegionsOnceProofs.locals_once).
    - A local allocation: one step of the second state, or two
-     ([local_allocation_erased], on the section [Allocated]).
+     ([local_allocation_erased]). One that makes no cell binds new
+     symbols (the section [Allocated]); one that makes a cell makes
+     it at the same location in the two heaps, and the location is
+     listed with the mark of the newest frame.
    - A region given to a continuation: one step, in which the erased
      handler binds the arguments that are not regions
      ([region_apply_cont_erased]). No value is of the kind [Region]
@@ -64,13 +71,13 @@ From Stdlib Require Import ZArith List Bool Arith Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaMapProofs FlambdaPrimitiveModel FlambdaPrimitiveSpec
-  FlambdaPrimitiveProofs FlambdaSemanticsSpec FlambdaSemanticsProofs
-  FlambdaClosuresSpec FlambdaClosuresProofs FlambdaRegionsSpec
-  FlambdaRegionsProofs FlambdaRegionsNeedsHeapProofs
-  FlambdaRegionsInvariantSpec FlambdaRegionsErasureSpec
-  FlambdaRegionsReadsProofs FlambdaRegionsStepsProofs
-  FlambdaRegionsFreshProofs FlambdaRegionsNoPoisonProofs
-  FlambdaRegionsOnceProofs FlambdaRegionsInvariantProofs
+  FlambdaPrimitiveProofs FlambdaHeapProofs FlambdaSemanticsSpec
+  FlambdaSemanticsProofs FlambdaClosuresSpec FlambdaClosuresProofs
+  FlambdaRegionsSpec FlambdaRegionsProofs FlambdaRegionsInvariantSpec
+  FlambdaRegionsErasureSpec FlambdaRegionsReadsProofs
+  FlambdaRegionsStepsProofs FlambdaRegionsFreshProofs
+  FlambdaRegionsNoPoisonProofs FlambdaRegionsOnceProofs
+  FlambdaRegionsCellsProofs FlambdaRegionsInvariantProofs
   FlambdaRegionsErasedProofs FlambdaRegionsPlainStepProofs.
 Import ListNotations.
 
@@ -88,8 +95,11 @@ Import ListNotations.
    related in the second for the values of a set [G] that the second
    state reads as the first does: a symbol of [G] that the first binds
    is bound alike in the second, to something that holds values of
-   [G]; and a part of a partial application of [G] that may be
-   evaluated in the second may be in the first, and is of [G]. *)
+   [G]; and a part of a partial application of [G] that the relation
+   asks in the second (one that may be evaluated, or a location) is
+   asked in the first, and is of [G]. The two heaps stay related
+   where a cell that is not dead in the second state is not dead in
+   the first, and holds values of [G]. *)
 Section Transfer.
 
 Variable rs rs1 : region_state.
@@ -101,8 +111,8 @@ Hypothesis G_partial :
   ∀ (callee : value) (args : list value) (args_arity : arity) (part : value),
     G (Value_partial_application callee args args_arity) ->
     part = callee ∨ In part args ->
-    value_usable rs1 part = true ->
-    value_usable rs part = true ∧ G part.
+    erased_asked rs1 part ->
+    erased_asked rs part ∧ G part.
 Hypothesis G_bound :
   ∀ (s : symbol) (allocated : statically_allocated_value),
     G (Value_symbol s) ->
@@ -175,8 +185,8 @@ Proof.
     + assert (Hall :
         ∀ part : value,
           In part pargs ->
-          value_usable rs1 part = true ->
-          value_usable rs part = true ∧ G part)
+          erased_asked rs1 part ->
+          erased_asked rs part ∧ G part)
         by (intros part Hin;
             exact (G_partial pcallee pargs parity part Hg (or_intror Hin))).
       clear Hpcallee Hg. revert pargs pargs' Hpargs Hall. fix IH 3.
@@ -264,10 +274,10 @@ Proof.
     | exact (IH (fun w Hin => Hall w (or_intror Hin))) ].
 Qed.
 
-(* A value that the second state may evaluate only if the first may,
-   and that is then of [G]. *)
+(* A value that the relation asks in the second state only if it asks
+   it in the first, and that is then of [G]. *)
 Definition carried (v : value) : Prop :=
-  value_usable rs1 v = true -> value_usable rs v = true ∧ G v.
+  erased_asked rs1 v -> erased_asked rs v ∧ G v.
 
 Lemma value_erased_if_usable_transfer (v v' : value) :
   carried v ->
@@ -402,6 +412,36 @@ Proof.
     exists allocated'.
     split; [ exact Hl' | exact (allocated_erased_transfer _ _ Ha Hall) ].
   - intros s allocated' Hl'. exact (Hgrow s (Hbound s allocated' Hl')).
+Qed.
+
+Lemma cell_alike_transfer (c c' : cell) :
+  cell_alike (value_erased rs) c c' ->
+  (∀ w : value, In w (values_of_cell c) -> G w) ->
+  cell_alike (value_erased rs1) c c'.
+Proof.
+  destruct c as [mut tag fields | kind elements],
+    c' as [mut' tag' fields' | kind' elements'];
+    simpl; try (intros H _; exact H).
+  - intros (Hmut & Htag & Hfields) Hall. split; [ exact Hmut | ].
+    split; [ exact Htag | exact (values_erased_transfer _ _ Hfields Hall) ].
+  - intros (Hkind & Helements) Hall. split; [ exact Hkind | ].
+    exact (values_erased_transfer _ _ Helements Hall).
+Qed.
+
+(* The cells that are not dead in the second state. *)
+Lemma heaps_erased_transfer (h h' : heap) :
+  (∀ (l : location) (c : cell),
+    cell_dead rs1 l = false ->
+    lookup l h = Some c ->
+    cell_dead rs l = false ∧ ∀ w : value, In w (values_of_cell c) -> G w) ->
+  heaps_erased rs h h' ->
+  heaps_erased rs1 h h'.
+Proof.
+  intros Hlive [Hkeys Hcells]. split; [ exact Hkeys | ].
+  intros l c Hdead1 Hl. destruct (Hlive l c Hdead1 Hl) as [Hdead Hall].
+  destruct (Hcells l c Hdead Hl) as (c' & Hl' & Halike).
+  exists c'. split; [ exact Hl' | ].
+  exact (cell_alike_transfer c c' Halike Hall).
 Qed.
 
 End Transfer.
@@ -561,10 +601,12 @@ Qed.
 (* ======================================================================== *)
 
 (* The second state has the frames of the first below one of them, and
-   its base and static environment. The values carried over are those
-   that a variable may hold and that the second state may evaluate: a
-   symbol that it may evaluate, or a value that is not a symbol and
-   holds symbols of the heap only. *)
+   its base, its static environment and its list of cells. The values
+   carried over are those that a variable may hold and that the second
+   state may evaluate: a symbol that it may evaluate, or a value that
+   is not a symbol and holds symbols of the heap only. A cell that is
+   not dead in the second state is not dead in the first: its frame
+   is one of those that are left. *)
 Section Cut.
 
 Variable rs rs1 : region_state.
@@ -578,6 +620,7 @@ Hypothesis Hbase : rs_base rs1 = rs_base rs.
 Hypothesis Hstatics :
   state_statics (rs_state rs1) = state_statics (rs_state rs).
 Hypothesis Hframes : rs_frames rs = above ++ f :: rs_frames rs1.
+Hypothesis Hcells : rs_cells rs1 = rs_cells rs.
 
 Lemma cut_locals :
   live_locals (rs_frames rs)
@@ -608,12 +651,26 @@ Proof. unfold heap_symbol, drawn. rewrite Hbase, Hstatics. reflexivity. Qed.
 Lemma usable_cut (v : value) :
   value_usable rs1 v = true -> value_usable rs v = true.
 Proof.
-  destruct v as [ | | | s | | | | | ]; try (intros _; reflexivity).
-  unfold value_usable, drawn. rewrite Hbase.
-  destruct (negb (Pos.leb (rs_base rs) s)); simpl; [ auto | ].
-  destruct (lookup s (static_values (live_statics rs1))) as [allocated | ]
-    eqn:Hl; [ | discriminate ].
-  intros _. rewrite (lookup_cut s allocated Hl). reflexivity.
+  destruct v as [ | | | s | | | | l | ]; try (intros _; reflexivity).
+  - unfold value_usable, drawn. rewrite Hbase.
+    destruct (negb (Pos.leb (rs_base rs) s)); simpl; [ auto | ].
+    destruct (lookup s (static_values (live_statics rs1))) as [allocated | ]
+      eqn:Hl; [ | discriminate ].
+    intros _. rewrite (lookup_cut s allocated Hl). reflexivity.
+  - unfold value_usable, cell_dead. rewrite Hcells, Hframes.
+    destruct (lookup l (rs_cells rs)) as [m | ]; [ | intros _; reflexivity ].
+    rewrite !negb_involutive. intros Hon.
+    apply on_stack_marks. rewrite map_app. apply in_or_app. right. right.
+    exact (proj1 (on_stack_marks m (rs_frames rs1)) Hon).
+Qed.
+
+Lemma cell_dead_cut (l : location) :
+  cell_dead rs1 l = false -> cell_dead rs l = false.
+Proof.
+  intros Hdead1.
+  pose proof (usable_cut (Value_location l)) as Hu.
+  unfold value_usable in Hu. rewrite Hdead1 in Hu.
+  destruct (cell_dead rs l); [ discriminate (Hu eq_refl) | reflexivity ].
 Qed.
 
 (* A symbol of the heap is bound in the two states alike. *)
@@ -678,16 +735,19 @@ Qed.
 Lemma kept_carried (part : value) :
   value_kept (heap_symbol rs) part = true -> carried rs rs1 cut_good part.
 Proof.
-  intros Hk Hu1. split; [ exact (usable_cut part Hu1) | ].
-  destruct part; try exact Hk. exact Hu1.
+  intros Hk Hu1. split.
+  - destruct Hu1 as [Hu1 | Hloc];
+      [ left; exact (usable_cut part Hu1) | right; exact Hloc ].
+  - destruct part; try exact Hk.
+    destruct Hu1 as [Hu1 | Hloc]; [ exact Hu1 | discriminate Hloc ].
 Qed.
 
 Lemma cut_good_partial (callee : value) (args : list value)
     (args_arity : arity) (part : value) :
   cut_good (Value_partial_application callee args args_arity) ->
   part = callee ∨ In part args ->
-  value_usable rs1 part = true ->
-  value_usable rs part = true ∧ cut_good part.
+  erased_asked rs1 part ->
+  erased_asked rs part ∧ cut_good part.
 Proof.
   intros Hg Hpart. unfold cut_good in Hg. simpl in Hg.
   apply andb_true_iff in Hg as [Hc Ha].
@@ -803,6 +863,26 @@ Proof.
   - rewrite Hstatics. auto.
 Qed.
 
+(* The cells that are left hold what is carried over. *)
+Lemma heaps_erased_cut (h h' : heap) :
+  (∀ (l : location) (c : cell) (w : value),
+    cell_dead rs1 l = false ->
+    cell_dead rs l = false ->
+    lookup l h = Some c ->
+    In w (values_of_cell c) ->
+    cut_good w) ->
+  heaps_erased rs h h' ->
+  heaps_erased rs1 h h'.
+Proof.
+  intros Hgood.
+  apply
+    (heaps_erased_transfer rs rs1 cut_good Hbase cut_good_parts
+       cut_good_partial cut_good_bound).
+  intros l c Hdead1 Hl. pose proof (cell_dead_cut l Hdead1) as Hdead.
+  split; [ exact Hdead | ].
+  intros w Hw. exact (Hgood l c w Hdead1 Hdead Hl Hw).
+Qed.
+
 End Cut.
 
 (* ======================================================================== *)
@@ -810,8 +890,9 @@ End Cut.
 (* ======================================================================== *)
 
 (* The second state binds what the first binds and the new symbols,
-   which are from the counter of the first on. The values carried over
-   are those below that counter. *)
+   which are from the counter of the first on, and the same cells are
+   dead in the two. The values carried over are those below that
+   counter. *)
 Section Allocated.
 
 Variable rs rs1 : region_state.
@@ -832,6 +913,7 @@ Hypothesis Hgrow :
 Hypothesis Hfrom :
   ∀ (s : symbol) (allocated : statically_allocated_value),
     In (s, allocated) bindings -> (rs_next rs <= s)%positive.
+Hypothesis Hdead : ∀ l : location, cell_dead rs1 l = cell_dead rs l.
 
 Definition below_next (v : value) : Prop :=
   value_below (rs_next rs) v = true.
@@ -850,16 +932,18 @@ Qed.
 Lemma usable_allocated (v : value) :
   below_next v -> value_usable rs1 v = value_usable rs v.
 Proof.
-  destruct v as [ | | | s | | | | | ]; try reflexivity.
-  unfold below_next. simpl. intros Hs.
-  unfold value_usable, drawn. rewrite Hbase, (lookup_allocated s Hs).
-  reflexivity.
+  destruct v as [ | | | s | | | | l | ]; try reflexivity.
+  - unfold below_next. simpl. intros Hs.
+    unfold value_usable, drawn. rewrite Hbase, (lookup_allocated s Hs).
+    reflexivity.
+  - intros _. unfold value_usable. rewrite Hdead. reflexivity.
 Qed.
 
 Lemma below_carried (v : value) :
   below_next v -> carried rs rs1 below_next v.
 Proof.
-  intros Hv Hu1. rewrite (usable_allocated v Hv) in Hu1. exact (conj Hu1 Hv).
+  intros Hv Hu1. unfold erased_asked in *.
+  rewrite (usable_allocated v Hv) in Hu1. exact (conj Hu1 Hv).
 Qed.
 
 Lemma below_next_parts (v w : value) :
@@ -872,8 +956,8 @@ Lemma below_next_partial (callee : value) (args : list value)
     (args_arity : arity) (part : value) :
   below_next (Value_partial_application callee args args_arity) ->
   part = callee ∨ In part args ->
-  value_usable rs1 part = true ->
-  value_usable rs part = true ∧ below_next part.
+  erased_asked rs1 part ->
+  erased_asked rs part ∧ below_next part.
 Proof.
   intros Hg Hpart. unfold below_next in Hg. simpl in Hg.
   apply andb_true_iff in Hg as [Hc Ha].
@@ -960,6 +1044,19 @@ Proof.
   - exact Hgrow.
 Qed.
 
+Lemma heaps_erased_allocated (h h' : heap) :
+  cells_below (rs_next rs) h ->
+  heaps_erased rs h h' ->
+  heaps_erased rs1 h h'.
+Proof.
+  intros Hbelow.
+  apply
+    (heaps_erased_transfer rs rs1 below_next Hbase below_next_parts
+       below_next_partial below_next_bound).
+  intros l c Hdead1 Hl. split; [ rewrite <- Hdead; exact Hdead1 | ].
+  intros w Hw. exact (Hbelow l c w (lookup_in _ _ _ Hl) Hw).
+Qed.
+
 End Allocated.
 
 (* ======================================================================== *)
@@ -977,14 +1074,14 @@ Fixpoint let_depth (e : expr) : nat :=
 (* What the second state answers to a result of the machine of
    regions. Nothing is asked if the first has no step. An exit is
    answered by an exit through the same continuation, with the values
-   related where they may be evaluated. A step is answered by no step,
-   the second state being related to the state after and the first
-   expression having one [Let] fewer at its head; or by one step, or
-   by two, to a state related. *)
+   related where they may be evaluated or are locations. A step is
+   answered by no step, the second state being related to the state
+   after and the first expression having one [Let] fewer at its head;
+   or by one step, or by two, to a state related. *)
 Definition sim_result (rs : region_state) (s' : state)
     (result : region_step_result) : Prop :=
   match result with
-  | Region_undefined _ | Region_let_not_run => True
+  | Region_undefined _ => True
   | Region_exit k vs rs1 =>
     ∃ (vs' : list value) (hp : heap) (rd : read_record),
       step s' = Exit k vs' hp rd ∧ Forall2 (value_erased_if_usable rs1) vs vs'
@@ -1001,10 +1098,9 @@ Lemma result_erased_sim (rs : region_state) (s' : state)
     (result : region_step_result) :
   result_erased result (step s') -> sim_result rs s' result.
 Proof.
-  destruct result as [rs1 | k vs rs1 | fault | ]; simpl.
+  destruct result as [rs1 | k vs rs1 | fault]; simpl.
   - intros H. right. left. exact H.
   - intros H. exact H.
-  - intros _. exact I.
   - intros _. exact I.
 Qed.
 
@@ -1026,18 +1122,21 @@ Qed.
 
 (* The erased term has no [Let] for it: the second state is related to
    the state after, in which the variable is bound to a mark, which
-   may not be evaluated. *)
+   may not be evaluated. The mark is the counter, which no cell is
+   listed with, so the cells that are dead are the same. *)
 Lemma begin_region_erased (rs : region_state) (s' : state) (x : variable)
     (kind : flambda_kind) (d : named) (mark_kind : mark_kind) (body : expr) :
   symbols_fresh rs = true ->
+  cells_live rs = true ->
   state_erased rs s' ->
   state_expr (rs_state rs) = Let x kind d body ->
   (∀ rconts : region_conts,
     erase rconts (Let x kind d body) = erase rconts body) ->
   sim_result rs s' (begin_region rs x kind mark_kind body).
 Proof.
-  intros Hfresh
-    (rconts & He & Hcalls & Hagree & Hvars & Hconts & Hstatics & Hheap)
+  intros Hfresh Hcells
+    (rconts & He & Hcalls & Hagree & Hvars & Hconts & Hstatics & Hheap
+     & Hreads)
     Hexpr Herase.
   unfold begin_region. destruct (kind_eqb kind Region); [ | exact I ].
   left. split; [ | rewrite Hexpr; simpl; lia ].
@@ -1049,7 +1148,17 @@ Proof.
          (Pos.succ (rs_next rs)) (rs_counts rs)).
   assert (Hsame : same_statics rs rs1).
   { split; [ reflexivity | ]. split; [ reflexivity | ].
-    rewrite !live_statics_values. reflexivity. }
+    split; [ rewrite !live_statics_values; reflexivity | ].
+    intros l. unfold cell_dead.
+    change (rs_cells rs1) with (rs_cells rs).
+    change (rs_frames rs1)
+      with (Frame (rs_next rs) mark_kind [] :: rs_frames rs).
+    destruct (lookup l (rs_cells rs)) as [m | ] eqn:Hl; [ | reflexivity ].
+    rewrite on_stack_cons. cbn [frame_mark].
+    destruct (Pos.eqb (rs_next rs) m) eqn:Hm; [ | reflexivity ].
+    apply Pos.eqb_eq in Hm. subst m.
+    destruct (proj1 (cells_live_parts rs) Hcells) as (_ & Hlisted & _).
+    destruct (Hlisted l _ (lookup_in _ _ _ Hl)) as (_ & _ & Hlt). lia. }
   pose proof (same_statics_extends rs rs1 Hsame) as Hextends.
   exists rconts.
   split; [ rewrite He, Hexpr; exact (Herase rconts) | ].
@@ -1059,14 +1168,16 @@ Proof.
   { apply
       (env_erased_cons_dead rs1 x (Value_symbol (rs_next rs))
          (state_vars (rs_state rs)) (state_vars s'));
-      [ | exact (env_erased_extend rs rs1 _ _ Hextends Hvars) ].
+      [ | reflexivity | exact (env_erased_extend rs rs1 _ _ Hextends Hvars) ].
     unfold value_usable, drawn.
-    rewrite (proj2 (proj2 Hsame)), (next_unbound rs Hfresh).
+    rewrite (proj1 (proj2 (proj2 Hsame))), (next_unbound rs Hfresh).
     destruct (symbols_fresh_tests rs Hfresh) as (F1 & _).
     apply Pos.leb_le in F1. change (rs_base rs1) with (rs_base rs).
     rewrite F1. reflexivity. }
   split; [ exact (conts_erased_extend rs rs1 _ _ Hextends Hconts) | ].
-  split; [ exact (statics_erased_same rs rs1 _ Hsame Hstatics) | exact Hheap ].
+  split; [ exact (statics_erased_same rs rs1 _ Hsame Hstatics) | ].
+  split; [ exact (heaps_erased_extend rs rs1 _ _ Hextends Hheap) | ].
+  exact Hreads.
 Qed.
 
 (* ======================================================================== *)
@@ -1094,16 +1205,22 @@ Proof.
   intros _. exact (proj1 (kind_eqb_eq kind Value) Hkind).
 Qed.
 
-(* The erased term binds the unit value: one step, which runs a
-   defining expression that needs no heap. The frames that are cut
-   bound symbols that no value of the state after may be evaluated
-   with, so what was related is related. *)
+(* The erased term binds the unit value: one step. The frames that
+   are cut bound symbols that no value of the state after may be
+   evaluated with, so what was related is related. A cell of a frame
+   that is cut is dead after, and nothing is asked of it; a cell that
+   is not dead after holds what the state after may evaluate, by the
+   invariant of the cells before and after the step. *)
 Lemma end_region_erased (rs : region_state) (s' : state) (x : variable)
     (kind : flambda_kind) (d d' : named) (ended_by : mark_kind)
     (region : simple) (body : expr) :
   symbols_fresh rs = true ->
   values_live rs = true ->
+  cells_live rs = true ->
   locals_once rs ->
+  (∀ rs1 : region_state,
+    end_region rs x kind ended_by region body = Region_step rs1 ->
+    cells_live rs1 = true) ->
   state_erased rs s' ->
   state_expr (rs_state rs) = Let x kind d body ->
   (∀ rconts : region_conts,
@@ -1112,28 +1229,31 @@ Lemma end_region_erased (rs : region_state) (s' : state) (x : variable)
     exec_named statics hp rd vars d' = Some (unit_value, hp, rd)) ->
   sim_result rs s' (end_region rs x kind ended_by region body).
 Proof.
-  intros Hfresh Hlive Honce
-    (rconts & He & Hcalls & Hagree & Hvars & Hconts & Hstatics & Hheap)
+  intros Hfresh Hlive Hcells Honce Hcells_after
+    (rconts & He & Hcalls & Hagree & Hvars & Hconts & Hstatics & Hheap
+     & Hreads)
     Hexpr Herase Hunit.
   destruct (end_region rs x kind ended_by region body)
-    as [rs1 | k vs rs1 | fault | ] eqn:Hend;
+    as [rs1 | k vs rs1 | fault] eqn:Hend;
     [ | exfalso; exact (end_region_no_exit _ _ _ _ _ _ _ _ _ Hend)
-    | exact I | exact I ].
+    | exact I ].
   pose proof (end_region_kind _ _ _ _ _ _ _ Hend) as ->.
+  pose proof (Hcells_after rs1 eq_refl) as Hcells1.
   destruct (end_region_step _ _ _ _ _ _ _ Hend)
     as (m & above & f & below & counts & _ & Hframes & ->).
   right. left.
   destruct s' as [e' vars' conts' statics' hp' rd'].
   cbn [state_expr state_vars state_conts state_statics state_heap state_reads]
     in *.
-  rewrite Hexpr, Herase in He. subst e'.
+  rewrite Hexpr, Herase in He. subst e' rd'.
   rewrite step_let_exec, Hunit.
   eexists. split; [ reflexivity | ].
   pose proof (proj1 (values_live_parts rs) Hlive) as (_ & _ & L3 & L4).
-  pose
+  set
     (rs1 :=
        bind_let rs x unit_value body (state_statics (rs_state rs)) below
-         (rs_next rs) counts).
+         (rs_next rs) counts)
+    in *.
   exists rconts.
   split; [ reflexivity | ].
   split; [ rewrite Hexpr in Hcalls; exact Hcalls | ].
@@ -1145,17 +1265,31 @@ Proof.
       [ intros _; apply Erased_const | ].
     exact
       (env_erased_cut rs rs1 above f Hfresh Hlive Honce eq_refl eq_refl
-         Hframes _ _ L3 Hvars). }
+         Hframes eq_refl _ _ L3 Hvars). }
   split;
     [ exact
         (conts_erased_cut rs rs1 above f Hfresh Hlive Honce eq_refl eq_refl
-           Hframes _ _ L4 Hconts)
+           Hframes eq_refl _ _ L4 Hconts)
     | ].
   split;
     [ exact
         (statics_erased_cut rs rs1 above f Hfresh Hlive Honce eq_refl eq_refl
-           Hframes _ Hstatics)
-    | exact Hheap ].
+           Hframes eq_refl _ Hstatics)
+    | ].
+  split; [ | reflexivity ].
+  apply
+    (heaps_erased_cut rs rs1 above f Hfresh Hlive Honce eq_refl eq_refl
+       Hframes eq_refl);
+    [ | exact Hheap ].
+  intros l c w Hdead1 Hdead Hl Hw.
+  pose proof (lookup_in _ _ _ Hl) as Hin.
+  destruct (proj1 (cells_live_parts rs) Hcells) as (_ & _ & Hholds & _).
+  destruct (proj1 (cells_live_parts rs1) Hcells1) as (_ & _ & Hholds1 & _).
+  destruct (live_cell_holds rs l c w (Hholds l c Hin) Hdead Hw)
+    as (Hkept & _ & _).
+  destruct (live_cell_holds rs1 l c w (Hholds1 l c Hin) Hdead1 Hw)
+    as (_ & _ & Husable1).
+  unfold cut_good. destruct w; first [ exact Husable1 | exact Hkept ].
 Qed.
 
 (* ======================================================================== *)
@@ -1211,8 +1345,8 @@ Proof.
 Qed.
 
 (* The step of such a [Let]: the test of its simples, none of which is
-   at the place of a region; then the test of decision D53; and then
-   what follows it says which step it is. *)
+   at the place of a region, and then what follows it says which step
+   it is. *)
 Lemma region_step_let (rs : region_state) (x : variable)
     (kind : flambda_kind) (d : named) (body : expr) :
   state_expr (rs_state rs) = Let x kind d body ->
@@ -1222,19 +1356,20 @@ Lemma region_step_let (rs : region_state) (x : variable)
   = match simples_fault rs (simples_of_named d) [] with
     | Some fault => Region_undefined fault
     | None =>
-      if named_needs_heap (state_vars (rs_state rs)) d
-      then Region_let_not_run
-      else
-        match marker_of x body with
-        | Marker y region body' =>
-          local_allocation (count_uses rs) x y kind d region body'
-        | Bad_marker => Region_undefined Not_of_the_conversion
-        | No_marker =>
-          if is_allocation d
-             && existsb (simple_local (count_uses rs)) (simples_of_named d)
-          then Region_undefined Heap_holds_local
-          else plain_step (count_uses rs)
-        end
+      match marker_of x body with
+      | Marker y region body' =>
+        local_allocation (count_uses rs) x y kind d region body'
+      | Bad_marker => Region_undefined Not_of_the_conversion
+      | No_marker =>
+        if (is_allocation d || is_cell_allocation d)
+           && existsb (simple_local (count_uses rs)) (simples_of_named d)
+        then Region_undefined Heap_holds_local
+        else
+          match store_fault (count_uses rs) d with
+          | Some fault => Region_undefined fault
+          | None => plain_step (count_uses rs)
+          end
+      end
     end.
 Proof.
   intros Hexpr Hnot. unfold region_step, region_places. rewrite Hexpr.
@@ -1378,121 +1513,84 @@ Proof.
     simpl in Hz |- *. destruct (Pos.eqb z x); exact Hz.
 Qed.
 
-(* The erased term binds the value on the heap, and then the variable
-   of the [Local_allocation] to the first, unless they are one
-   variable: one step, or two. The value that was allocated is erased
-   to what the second state binds; the symbol that the first state
-   binds is bound to it in the state after, so the symbol is erased to
-   the same. *)
+(* A defining expression that allocates and makes no cell runs on a
+   heap that binds the locations among the values of its simples: it
+   has the value of [eval_named], and the heap and the record are as
+   they came. *)
+Lemma allocation_exec (statics : static_env) (hp : heap) (rd : read_record)
+    (vars : env) (d : named) (v : value) :
+  is_allocation d = true ->
+  (∀ (sim : simple) (l : location),
+    In sim (simples_of_named d) ->
+    eval_simple vars sim = Some (Value_location l) ->
+    is_bound l hp = true) ->
+  eval_named statics vars d = Some v ->
+  exec_named statics hp rd vars d = Some (v, hp, rd).
+Proof.
+  intros Hallocation Hbound Hv.
+  destruct d as [s | p args | code slots | fslot decls slots | slot closure
+    | pfrom slot closure | move_from move_to closure];
+    try discriminate Hallocation;
+    try (rewrite exec_named_not_prim by (intros p0 args0; discriminate);
+         rewrite Hv; reflexivity).
+  assert (Hreads : prim_reads_heap p = false).
+  { destruct p as [u | b | va | hpp | rp]; try discriminate Hallocation.
+    - destruct u; try discriminate Hallocation; reflexivity.
+    - reflexivity. }
+  destruct (eval_simples vars args) as [vs | ] eqn:Hvs.
+  - apply (eval_named_exec_named statics hp rd vars p args vs v Hreads Hvs);
+      [ | exact Hv ].
+    intros l Hin.
+    destruct (eval_simples_in vars args vs _ Hvs Hin) as (sim & Hsim & Hw).
+    exact (Hbound sim l Hsim Hw).
+  - cbn [eval_named] in Hv. rewrite Hvs in Hv. discriminate Hv.
+Qed.
+
+(* The erased term binds the value, and then the variable of the
+   [Local_allocation] to the first, unless they are one variable: one
+   step, or two. Of an allocation that makes no cell, the value that
+   was allocated is erased to what the second state binds; the symbol
+   that the first state binds is bound to it in the state after, so
+   the symbol is erased to the same. Of a cell, the two states make
+   it at the same location, which is fresh in the two heaps; the
+   location was listed with no mark, as every listed location is
+   bound, so the cells that are dead are the same. *)
 Lemma local_allocation_erased (rs : region_state) (s' : state)
     (x y : variable) (kind : flambda_kind) (d : named)
     (region : option simple) (body body' : expr) :
   symbols_fresh rs = true ->
+  cells_live rs = true ->
+  locations_all_bound rs = true ->
   state_erased rs s' ->
   state_expr (rs_state rs) = Let x kind d body ->
   (∀ (p : region_primitive) (args : list simple),
     d <> Prim (Region_primitive p) args) ->
-  named_needs_heap (state_vars (rs_state rs)) d = false ->
   marker_of x body = Marker y region body' ->
   forallb (simple_usable rs) (simples_of_named d) = true ->
   sim_result rs s' (local_allocation rs x y kind d region body').
 Proof.
-  intros Hfresh
+  intros Hfresh Hcells Hbound
     (rconts & He & Hcalls & Hagree & Hvars & Hconts & Hstatics & Hheap
      & Hreads)
-    Hexpr Hnot Hneeds Hmarker Husable.
+    Hexpr Hnot Hmarker Husable.
   destruct (local_allocation rs x y kind d region body')
-    as [rs1 | k vs rs1 | fault | ] eqn:Hlocal;
+    as [rs1 | k vs rs1 | fault] eqn:Hlocal;
     [ | exfalso; exact (local_allocation_no_exit _ _ _ _ _ _ _ _ _ _ Hlocal)
-    | exact I | exact I ].
-  destruct (local_allocation_step _ _ _ _ _ _ _ _ Hlocal)
-    as (v & sym & bindings & Halloc & Hv & Hloc & Hexpr1 & Hvars1 & Hconts1
-        & Hbase1 & Hnext1 & Hcode1 & Hframes1).
-  destruct (local_allocation_kind_heap _ _ _ _ _ _ _ _ Hlocal)
-    as [Hkind Hheap1].
-  pose proof (local_allocation_reads _ _ _ _ _ _ _ _ Hlocal) as Hreads1.
+    | exact I ].
+  pose proof (local_allocation_kind _ _ _ _ _ _ _ _ Hlocal) as Hkind.
   apply kind_eqb_eq in Hkind. subst kind.
   destruct (marker_of_marker_var _ _ _ _ _ Hmarker)
     as (kind' & rest & -> & Hkind').
   apply kind_eqb_eq in Hkind'. subst kind'.
-  (* What the invariant gives. *)
-  destruct (proj1 (symbols_fresh_parts rs) Hfresh)
-    as (_ & [Hheld_vars _] & _).
   destruct (symbols_fresh_tests rs Hfresh) as (F1 & F2 & F4 & F5 & _).
   pose proof F2 as Hd_below. rewrite Hexpr in Hd_below. simpl in Hd_below.
   apply andb_true_iff in Hd_below as [Hd_below _].
   pose proof (proj1 (proj2 (proj2 Hstatics))) as Hsymbols.
-  (* The value, erased. *)
-  destruct
-    (eval_named_erased rs (state_statics s') _ _ d v Hsymbols Hvars Hd_below
-       (simples_usable_of_test rs _ Husable) Hv)
-    as (v' & Hv' & Hrelated).
-  pose proof
-    (named_needs_heap_erased rs _ _ _ d v Hvars Hd_below
-       (simples_usable_of_test rs _ Husable) Hv Hneeds)
-    as Hneeds'.
-  pose proof (kind_of_value_erased rs v v' Hrelated) as Hvkind'.
-  rewrite (made_kind _ _ _ _ Hloc) in Hvkind'.
-  (* The value names no symbol at or above the counter. *)
-  assert (Hv_below : value_below (rs_next rs) v = true).
-  { destruct (eval_named_makes _ _ d v Halloc Hv) as [Hmade Hparts].
-    apply (value_below_made _ v Hmade). apply forallb_forall. intros w Hw.
-    destruct (Hparts w Hw) as (sim & Hsim & Hw_eval).
-    rewrite Hexpr in F2.
-    exact
-      (named_simples_below (rs_base rs) (rs_next rs) _ x Value d _ sim w F1 F2
-         Hheld_vars Hsim Hw_eval). }
-  (* What the state after binds. *)
-  destruct (localise_makes _ _ _ _ Hloc) as (_ & _ & Hbindings).
-  assert (Hvalues :
-    static_values (live_statics rs1)
-    = bindings ++ static_values (live_statics rs)).
-  { rewrite !live_statics_values.
-    destruct (rs_frames rs) as [ | [m mark_kind locals] frames];
-      destruct Hframes1 as [Hf Hs]; rewrite Hf, Hs;
-      [ reflexivity | simpl; rewrite <- !app_assoc; reflexivity ]. }
-  assert (Hgrow :
-    ∀ s : symbol,
-      lookup s (static_values (state_statics (rs_state rs))) <> None ->
-      lookup s (static_values (state_statics (rs_state rs1))) <> None).
-  { destruct (rs_frames rs) as [ | [m mark_kind locals] frames];
-      destruct Hframes1 as [_ Hs]; rewrite Hs; [ | auto ].
-    intros s Hs0. rewrite lookup_app.
-    destruct (lookup s bindings); [ discriminate | exact Hs0 ]. }
-  assert (Hfrom :
-    ∀ (s : symbol) (allocated : statically_allocated_value),
-      In (s, allocated) bindings -> (rs_next rs <= s)%positive)
-    by (intros s allocated Hin; exact (proj1 (Hbindings s allocated Hin))).
-  pose proof
-    (value_erased_allocated rs rs1 bindings Hfresh Hbase1 Hvalues Hfrom v v'
-       Hrelated Hv_below)
-    as Hrelated1.
-  assert (Hsym : value_erased rs1 (Value_symbol sym) v').
-  { apply (localise_erased rs1 (rs_next rs) v v' sym bindings Hloc);
-      [ | exact Hrelated1 ].
-    intros s allocated Hin. split.
-    - unfold drawn. rewrite Hbase1. apply Pos.leb_le.
-      pose proof (Hfrom s allocated Hin). lia.
-    - rewrite Hvalues, lookup_app,
-        (lookup_nodup_in s allocated bindings (localise_once _ _ _ _ Hloc)
-           Hin).
-      reflexivity. }
-  pose proof
-    (env_erased_allocated rs rs1 bindings Hfresh Hbase1 Hvalues Hfrom _ _ F4
-       Hvars)
-    as Hvars_rs1.
-  pose proof
-    (conts_erased_allocated rs rs1 bindings Hfresh Hbase1 Hvalues Hfrom _ _
-       F5 Hconts)
-    as Hconts_rs1.
-  pose proof
-    (statics_erased_allocated rs rs1 bindings Hfresh Hbase1 Hvalues Hcode1
-       Hgrow Hfrom _ Hstatics)
-    as Hstatics_rs1.
-  (* The steps of the second state. *)
+  (* The erased term. *)
   destruct s' as [e' vars' conts' statics' hp' rd'].
   cbn [state_expr state_vars state_conts state_statics state_heap state_reads]
     in *.
+  subst rd'.
   rewrite Hexpr, (erase_let_plain rconts x Value d _ Hnot) in He.
   change
     (erase rconts
@@ -1507,39 +1605,216 @@ Proof.
   subst e'.
   assert (Hcalls1 : calls_return_no_region rconts body' = true)
     by (rewrite Hexpr in Hcalls; exact Hcalls).
-  destruct (Pos.eqb y x) eqn:Hyx.
-  - (* The second [Let] binds the variable of the first: one step. *)
-    apply Pos.eqb_eq in Hyx. subst y.
-    right. left.
-    rewrite (step_let_needs_no_heap _ _ _ _ _ _ _ _ _ Hneeds'), Hv', Hvkind'.
-    eexists. split; [ reflexivity | ].
-    exists rconts. rewrite Hexpr1, Hvars1, Hconts1, Hheap1, Hreads1.
-    cbn [state_expr state_vars state_conts state_statics state_heap
-         state_reads].
-    split; [ reflexivity | ]. split; [ exact Hcalls1 | ].
-    split; [ exact Hagree | ].
-    split.
-    { apply env_erased_shadow.
-      apply env_erased_cons; [ intros _; exact Hsym | exact Hvars_rs1 ]. }
-    split; [ exact Hconts_rs1 | ].
-    split; [ exact Hstatics_rs1 | ]. split; [ exact Hheap | exact Hreads ].
-  - (* It binds another: two steps. *)
-    right. right.
-    rewrite (step_let_needs_no_heap _ _ _ _ _ _ _ _ _ Hneeds'), Hv', Hvkind'.
-    eexists. eexists. split; [ reflexivity | ].
-    rewrite step_let_simple. cbn [eval_simple lookup].
-    rewrite Pos.eqb_refl, Hvkind'.
-    split; [ reflexivity | ].
-    exists rconts. rewrite Hexpr1, Hvars1, Hconts1, Hheap1, Hreads1.
-    cbn [state_expr state_vars state_conts state_statics state_heap
-         state_reads].
-    split; [ reflexivity | ]. split; [ exact Hcalls1 | ].
-    split; [ exact Hagree | ].
-    split.
-    { apply env_erased_cons; [ intros _; exact Hsym | ].
-      apply env_erased_cons; [ intros _; exact Hsym | exact Hvars_rs1 ]. }
-    split; [ exact Hconts_rs1 | ].
-    split; [ exact Hstatics_rs1 | ]. split; [ exact Hheap | exact Hreads ].
+  (* The steps of the second state, from what the first binds. *)
+  assert (Hfinish :
+    ∀ (v1 v' : value) (hp1' : heap) (rd1 : read_record),
+      exec_named statics' hp' (state_reads (rs_state rs)) vars' d
+      = Some (v', hp1', rd1) ->
+      kind_of_value v' = Value ->
+      state_expr (rs_state rs1) = body' ->
+      state_vars (rs_state rs1)
+      = (y, v1) :: (x, v1) :: state_vars (rs_state rs) ->
+      state_conts (rs_state rs1) = state_conts (rs_state rs) ->
+      state_reads (rs_state rs1) = rd1 ->
+      value_erased rs1 v1 v' ->
+      env_erased rs1 (state_vars (rs_state rs)) vars' ->
+      conts_erased rs1 (state_conts (rs_state rs)) conts' ->
+      statics_erased rs1 statics' ->
+      heaps_erased rs1 (state_heap (rs_state rs1)) hp1' ->
+      sim_result rs
+        (State
+           (Let x Value d
+              match (if Pos.eqb y x then None else Some (Simple (Var x))) with
+              | None => erase rconts body'
+              | Some d0 => Let y Value d0 (erase rconts body')
+              end)
+           vars' conts' statics' hp' (state_reads (rs_state rs)))
+        (Region_step rs1)).
+  { intros v1 v' hp1' rd1 Hv' Hvkind' Hexpr1 Hvars1 Hconts1 Hreads1 Hv1
+      Hvars_rs1 Hconts_rs1 Hstatics_rs1 Hheap_rs1.
+    destruct (Pos.eqb y x) eqn:Hyx.
+    - (* The second [Let] binds the variable of the first: one step. *)
+      apply Pos.eqb_eq in Hyx. subst y.
+      right. left. rewrite step_let_exec, Hv'. cbv beta iota.
+      rewrite Hvkind'.
+      eexists. split; [ reflexivity | ].
+      exists rconts. rewrite Hexpr1, Hvars1, Hconts1, Hreads1.
+      cbn [state_expr state_vars state_conts state_statics state_heap
+           state_reads].
+      split; [ reflexivity | ]. split; [ exact Hcalls1 | ].
+      split; [ exact Hagree | ].
+      split.
+      { apply env_erased_shadow.
+        apply env_erased_cons; [ intros _; exact Hv1 | exact Hvars_rs1 ]. }
+      split; [ exact Hconts_rs1 | ].
+      split; [ exact Hstatics_rs1 | ].
+      split; [ exact Hheap_rs1 | reflexivity ].
+    - (* It binds another: two steps. *)
+      right. right. rewrite step_let_exec, Hv'. cbv beta iota.
+      rewrite Hvkind'.
+      eexists. eexists. split; [ reflexivity | ].
+      rewrite step_let_exec. cbn [exec_named eval_named eval_simple lookup].
+      rewrite Pos.eqb_refl. cbv beta iota. rewrite Hvkind'.
+      split; [ reflexivity | ].
+      exists rconts. rewrite Hexpr1, Hvars1, Hconts1, Hreads1.
+      cbn [state_expr state_vars state_conts state_statics state_heap
+           state_reads].
+      split; [ reflexivity | ]. split; [ exact Hcalls1 | ].
+      split; [ exact Hagree | ].
+      split.
+      { apply env_erased_cons; [ intros _; exact Hv1 | ].
+        apply env_erased_cons; [ intros _; exact Hv1 | exact Hvars_rs1 ]. }
+      split; [ exact Hconts_rs1 | ].
+      split; [ exact Hstatics_rs1 | ].
+      split; [ exact Hheap_rs1 | reflexivity ]. }
+  destruct (is_cell_allocation d && kind_eqb Value Value) eqn:Hcell.
+  - (* A cell. *)
+    rewrite (local_allocation_cell rs x y Value d region body' Hcell)
+      in Hlocal.
+    apply andb_true_iff in Hcell as [Hcell _].
+    destruct (local_cell_allocation_step _ _ _ _ _ _ _ Hlocal)
+      as (l & hp1 & rd1 & _ & Hexec & Hstate1 & Hframes1 & Hbase1 & Hnext1
+          & Hcells1).
+    destruct
+      (exec_named_erased rs statics' _ vars' d _ hp' _ _ _ _ Hsymbols Hvars
+         Hd_below (simples_usable_of_test rs _ Husable) Hheap Hexec)
+      as (v' & hp1' & Hv' & Hrelated & Hheap1').
+    assert (v' = Value_location l) as ->
+      by (inversion Hrelated; reflexivity).
+    (* The location is fresh, and every listed location is bound. *)
+    assert (Hl_fresh : lookup l (rs_cells rs) = None).
+    { destruct (exec_named_heap_cases _ _ _ _ _ _ _ _ Hexec)
+        as [ [Hchanges _]
+           | [ (_ & vs0 & c0 & _ & _ & Heq & _)
+             | (target & new_simple & l0 & new & c0 & c0' & i & _ & _ & _ & _
+                & _ & Heq & _) ] ].
+      - exfalso.
+        destruct d as [ | p args | | | | | ]; try discriminate Hcell.
+        destruct p; try discriminate Hcell. discriminate Hchanges.
+      - injection Heq as ->.
+        destruct
+          (lookup (FlambdaHeapSpec.fresh_location (state_heap (rs_state rs)))
+             (rs_cells rs))
+          as [m | ] eqn:Hlisted; [ | reflexivity ].
+        destruct (proj1 (cells_live_parts rs) Hcells) as (_ & Hlisted_in & _).
+        destruct (Hlisted_in _ m (lookup_in _ _ _ Hlisted)) as (Hb & _).
+        unfold is_bound in Hb.
+        rewrite FlambdaHeapProofs.fresh_location in Hb. discriminate Hb.
+      - discriminate Heq. }
+    assert (Hsame : same_statics rs rs1).
+    { split; [ exact Hbase1 | ].
+      split; [ rewrite Hstate1; reflexivity | ].
+      split;
+        [ rewrite !live_statics_values, Hframes1, Hstate1; reflexivity | ].
+      intros l0. unfold cell_dead. rewrite Hcells1, Hframes1.
+      destruct (rs_frames rs) as [ | f frames]; [ reflexivity | ].
+      cbn [lookup].
+      destruct (Pos.eqb l0 l) eqn:Hl0; [ | reflexivity ].
+      apply Pos.eqb_eq in Hl0. subst l0.
+      rewrite Hl_fresh, on_stack_cons, Pos.eqb_refl. reflexivity. }
+    pose proof (same_statics_extends rs rs1 Hsame) as Hextends.
+    apply (Hfinish (Value_location l) (Value_location l) hp1' rd1 Hv' eq_refl);
+      try (rewrite Hstate1; reflexivity).
+    + apply Erased_location.
+    + exact (env_erased_extend rs rs1 _ _ Hextends Hvars).
+    + exact (conts_erased_extend rs rs1 _ _ Hextends Hconts).
+    + exact (statics_erased_same rs rs1 _ Hsame Hstatics).
+    + rewrite Hstate1. exact (heaps_erased_extend rs rs1 _ _ Hextends Hheap1').
+  - (* An allocation that makes no cell. *)
+    destruct (local_allocation_step _ _ _ _ _ _ _ _ Hcell Hlocal)
+      as (v & sym & bindings & Halloc & Hv & Hloc & Hexpr1 & Hvars1 & Hconts1
+          & Hbase1 & Hnext1 & Hcode1 & Hframes1).
+    destruct (local_allocation_memory _ _ _ _ _ _ _ _ Hcell Hlocal)
+      as (Hheap1 & Hreads1 & Hcells1).
+    destruct (proj1 (symbols_fresh_parts rs) Hfresh)
+      as (_ & [Hheld_vars _] & _).
+    (* The allocation runs on the heap of the first state. *)
+    assert (Hexec :
+      exec_named (live_statics rs) (state_heap (rs_state rs))
+        (state_reads (rs_state rs)) (state_vars (rs_state rs)) d
+      = Some (v, state_heap (rs_state rs), state_reads (rs_state rs))).
+    { apply (allocation_exec _ _ _ _ d v Halloc); [ | exact Hv ].
+      intros sim l Hsim Hl.
+      destruct
+        (proj1 (bound_parts rs) (proj1 (locations_all_bound_iff rs) Hbound))
+        as ([Hclosed _] & _).
+      exact (eval_simple_closed _ _ sim _ Hclosed Hl l (or_introl eq_refl)). }
+    destruct
+      (exec_named_erased rs statics' _ vars' d _ hp' _ _ _ v Hsymbols Hvars
+         Hd_below (simples_usable_of_test rs _ Husable) Hheap Hexec)
+      as (v' & hp1' & Hv' & Hrelated & Hheap1').
+    pose proof (kind_of_value_erased rs v v' Hrelated) as Hvkind'.
+    rewrite (made_kind _ _ _ _ Hloc) in Hvkind'.
+    (* The value names no symbol at or above the counter. *)
+    assert (Hv_below : value_below (rs_next rs) v = true).
+    { destruct (eval_named_makes _ _ d v Halloc Hv) as [Hmade Hparts].
+      apply (value_below_made _ v Hmade). apply forallb_forall. intros w Hw.
+      destruct (Hparts w Hw) as (sim & Hsim & Hw_eval).
+      rewrite Hexpr in F2.
+      exact
+        (named_simples_below (rs_base rs) (rs_next rs) _ x Value d _ sim w F1 F2
+           Hheld_vars Hsim Hw_eval). }
+    (* What the state after binds. *)
+    destruct (localise_makes _ _ _ _ Hloc) as (_ & _ & Hbindings).
+    assert (Hvalues :
+      static_values (live_statics rs1)
+      = bindings ++ static_values (live_statics rs)).
+    { rewrite !live_statics_values.
+      destruct (rs_frames rs) as [ | [m mark_kind locals] frames];
+        destruct Hframes1 as [Hf Hs]; rewrite Hf, Hs;
+        [ reflexivity | simpl; rewrite <- !app_assoc; reflexivity ]. }
+    assert (Hgrow :
+      ∀ s : symbol,
+        lookup s (static_values (state_statics (rs_state rs))) <> None ->
+        lookup s (static_values (state_statics (rs_state rs1))) <> None).
+    { destruct (rs_frames rs) as [ | [m mark_kind locals] frames];
+        destruct Hframes1 as [_ Hs]; rewrite Hs; [ | auto ].
+      intros s Hs0. rewrite lookup_app.
+      destruct (lookup s bindings); [ discriminate | exact Hs0 ]. }
+    assert (Hfrom :
+      ∀ (s : symbol) (allocated : statically_allocated_value),
+        In (s, allocated) bindings -> (rs_next rs <= s)%positive)
+      by (intros s allocated Hin; exact (proj1 (Hbindings s allocated Hin))).
+    assert (Hdead1 : ∀ l : location, cell_dead rs1 l = cell_dead rs l).
+    { intros l. unfold cell_dead. rewrite Hcells1.
+      destruct (lookup l (rs_cells rs)) as [m0 | ]; [ | reflexivity ].
+      f_equal. apply on_stack_same_marks.
+      destruct (rs_frames rs) as [ | [m mark_kind locals] frames];
+        destruct Hframes1 as [Hf _]; rewrite Hf; reflexivity. }
+    pose proof
+      (value_erased_allocated rs rs1 bindings Hfresh Hbase1 Hvalues Hfrom
+         Hdead1 v v' Hrelated Hv_below)
+      as Hrelated1.
+    assert (Hsym : value_erased rs1 (Value_symbol sym) v').
+    { apply (localise_erased rs1 (rs_next rs) v v' sym bindings Hloc);
+        [ | exact Hrelated1 ].
+      intros s allocated Hin. split.
+      - unfold drawn. rewrite Hbase1. apply Pos.leb_le.
+        pose proof (Hfrom s allocated Hin). lia.
+      - rewrite Hvalues, lookup_app,
+          (lookup_nodup_in s allocated bindings (localise_once _ _ _ _ Hloc)
+             Hin).
+        reflexivity. }
+    apply
+      (Hfinish (Value_symbol sym) v' hp1' (state_reads (rs_state rs)) Hv'
+         Hvkind' Hexpr1 Hvars1 Hconts1 Hreads1 Hsym).
+    + exact
+        (env_erased_allocated rs rs1 bindings Hfresh Hbase1 Hvalues Hfrom
+           Hdead1 _ _ F4 Hvars).
+    + exact
+        (conts_erased_allocated rs rs1 bindings Hfresh Hbase1 Hvalues Hfrom
+           Hdead1 _ _ F5 Hconts).
+    + exact
+        (statics_erased_allocated rs rs1 bindings Hfresh Hbase1 Hvalues Hcode1
+           Hgrow Hfrom Hdead1 _ Hstatics).
+    + rewrite Hheap1.
+      apply
+        (heaps_erased_allocated rs rs1 bindings Hfresh Hbase1 Hvalues Hfrom
+           Hdead1);
+        [ | exact Hheap1' ].
+      exact
+        (proj1
+           (proj2 (proj2 (proj2 (proj1 (cells_live_parts rs) Hcells))))).
 Qed.
 
 (* ======================================================================== *)
@@ -1653,13 +1928,14 @@ Qed.
 Lemma region_kind_mark (rs : region_state) (v : value) :
   region_kind_of_value rs v = Region ->
   kind_of_value v <> Region ->
-  value_usable rs v = false.
+  value_usable rs v = false ∧ is_location v = false.
 Proof.
   unfold region_kind_of_value.
   destruct (value_open_mark rs v) eqn:Hm;
     [ intros _ _ | intros H Hn; contradiction (Hn H) ].
   unfold value_open_mark in Hm.
   destruct v as [ | | | m | | | | | ]; try discriminate.
+  split; [ | reflexivity ].
   apply andb_true_iff in Hm as [Hm _]. apply negb_true_iff in Hm. exact Hm.
 Qed.
 
@@ -1682,12 +1958,14 @@ Proof.
   intros H. rewrite H, kind_eqb_refl in Hkind. discriminate.
 Qed.
 
-(* The values at the places of regions may not be evaluated. *)
+(* The values at the places of regions may not be evaluated, and are
+   no locations: the relation asks nothing of them. *)
 Fixpoint regions_dead (rs : region_state) (places : list bool)
     (vs : list value) : Prop :=
   match places, vs with
   | place :: places, v :: vs =>
-    (place = true -> value_usable rs v = false) ∧ regions_dead rs places vs
+    (place = true -> value_usable rs v = false ∧ is_location v = false)
+    ∧ regions_dead rs places vs
   | _, _ => True
   end.
 
@@ -1730,7 +2008,8 @@ Proof.
       destruct place; simpl in Hvs |- *.
       * exact
           (IH params vs vs' _ vars' bound Hdead Hvs
-             (env_erased_cons_dead rs x v vars vars' (Hplace eq_refl) Hvars)
+             (env_erased_cons_dead rs x v vars vars'
+                (proj1 (Hplace eq_refl)) (proj2 (Hplace eq_refl)) Hvars)
              Hbind).
       * inversion Hvs as [ | v0 v' rest rest' Hv Hrest]; subst. simpl.
         exact
@@ -1838,7 +2117,7 @@ Proof.
   cbn [state_expr state_vars state_conts state_statics state_heap state_reads]
     in *.
   rewrite Hexpr in He. cbn [erase] in He. unfold erase_apply_cont in He.
-  rewrite Hlisted in He. subst e' hp' rd'.
+  rewrite Hlisted in He. subst e' rd'.
   rewrite step_apply_cont. cbn [ac_args ac_continuation].
   destruct
     (eval_simples_dropped rs vars' (ac_args ac) Hvars _ vs Hbelow Hfault Hvs)
@@ -1856,13 +2135,13 @@ Proof.
   exact
     (state_erased_plain_next rs (region_conts_of recursive ++ rconts0) handler
        handler_vars bound' _ _ (state_statics (rs_state rs)) statics'
-       (state_heap (rs_state rs)) (state_reads (rs_state rs)) Hh
+       (state_heap (rs_state rs)) hp' (state_reads (rs_state rs)) Hh
        (conts_agree_rec rconts0 def_conts def_vars def_conts recursive
           recursive Hagree0)
        Hbound
        (rec_closures_erased rs rconts0 def_vars vars1' def_conts conts1'
           recursive Hrecursive Hagree0 Hvars0 Hconts0)
-       Hstatics).
+       Hstatics Hheap).
 Qed.
 
 (* The step of an [Apply_cont] one of whose arguments is a mark that is
@@ -1903,6 +2182,11 @@ Proof.
   apply values_live_parts in Hlive as (_ & _ & L3 & L4).
   exact (proj1 (kept_vals rs (rs_state rs)) (conj L3 L4)).
 Qed.
+
+Lemma locations_all_bound_with_counts (rs : region_state)
+    (counts : region_counts) :
+  locations_all_bound (with_counts rs counts) = locations_all_bound rs.
+Proof. reflexivity. Qed.
 
 Lemma no_poison_with_counts (rs : region_state) (counts : region_counts) :
   no_poison (with_counts rs counts) = no_poison rs.
@@ -1963,7 +2247,18 @@ Theorem region_step_simulated (rs : region_state) (s' : state) :
   sim_result rs s' (region_step rs).
 Proof.
   intros Herased Hinv Hpoison Honce.
-  apply andb_true_iff in Hinv as [Hfresh Hlive].
+  assert (Hafter :
+    ∀ rs1 : region_state,
+      region_step rs = Region_step rs1 -> cells_live rs1 = true).
+  { intros rs1 Hstep.
+    exact
+      (proj1
+         (proj2
+            (proj2
+               (proj1 (region_invariant_parts rs1)
+                  (region_step_keeps_invariant rs rs1 Hinv Hstep))))). }
+  destruct (proj1 (region_invariant_parts rs) Hinv)
+    as (Hfresh & Hlive & Hcells & Hbound).
   destruct (count_uses_with_counts rs) as [counts Hcounts].
   pose (rsc := with_counts rs counts).
   assert (Herased_c : state_erased rsc s')
@@ -1974,6 +2269,11 @@ Proof.
     by (unfold rsc; rewrite symbols_fresh_with_counts; exact Hfresh).
   assert (Hlive_c : values_live rsc = true)
     by exact (values_live_with_counts rs counts Hlive).
+  assert (Hcells_c : cells_live rsc = true)
+    by (unfold rsc; rewrite <- Hcounts;
+        exact (cells_live_count_uses rs Hcells)).
+  assert (Hbound_c : locations_all_bound rsc = true)
+    by (unfold rsc; rewrite locations_all_bound_with_counts; exact Hbound).
   assert (Hpoison_c : no_poison rsc = true)
     by (unfold rsc; rewrite no_poison_with_counts; exact Hpoison).
   assert (Honce_c : locals_once rsc) by exact Honce.
@@ -1984,25 +2284,33 @@ Proof.
   - (* A [Let]. *)
     destruct (named_region_primitive_dec d) as [(p & args & ->) | Hnot].
     + (* Of a primitive of regions. *)
-      rewrite (region_step_region_primitive rs x kind p args body Hexpr),
-        Hcounts.
+      pose proof (region_step_region_primitive rs x kind p args body Hexpr)
+        as Hstep_eq.
+      rewrite Hcounts in Hstep_eq. rewrite Hstep_eq.
       destruct p; destruct args as [ | region [ | region' args]];
         try exact I; apply (sim_result_with_counts rs counts).
       * exact
           (begin_region_erased rsc s' x kind _ Plain_mark body Hfresh_c
-             Herased_c Hexpr (fun _ => eq_refl)).
+             Hcells_c Herased_c Hexpr (fun _ => eq_refl)).
       * exact
           (begin_region_erased rsc s' x kind _ Try_mark body Hfresh_c
-             Herased_c Hexpr (fun _ => eq_refl)).
-      * exact
-          (end_region_erased rsc s' x kind _ (Simple unit_simple) Plain_mark
-             region body Hfresh_c Hlive_c Honce_c Herased_c Hexpr
-             (fun _ => eq_refl) (fun _ _ _ _ => eq_refl)).
-      * exact
-          (end_region_erased rsc s' x kind _
+             Hcells_c Herased_c Hexpr (fun _ => eq_refl)).
+      * apply
+          (end_region_erased rsc s' x kind
+             (Prim (Region_primitive End_region) [region])
+             (Simple unit_simple) Plain_mark region body Hfresh_c Hlive_c
+             Hcells_c Honce_c);
+          [ | exact Herased_c | exact Hexpr | exact (fun _ => eq_refl)
+          | exact (fun _ _ _ _ => eq_refl) ].
+        intros rs1 Hend. apply Hafter. rewrite Hstep_eq. exact Hend.
+      * apply
+          (end_region_erased rsc s' x kind
+             (Prim (Region_primitive End_try_region) [region])
              (Prim (Unary (Opaque_identity Value)) [unit_simple]) Try_mark
-             region body Hfresh_c Hlive_c Honce_c Herased_c Hexpr
-             (fun _ => eq_refl) (fun _ _ _ _ => eq_refl)).
+             region body Hfresh_c Hlive_c Hcells_c Honce_c);
+          [ | exact Herased_c | exact Hexpr | exact (fun _ => eq_refl)
+          | exact (fun _ _ _ _ => eq_refl) ].
+        intros rs1 Hend. apply Hafter. rewrite Hstep_eq. exact Hend.
     + destruct (marker_of x body) as [ | y region body' | ] eqn:Hmarker.
       * (* With nothing of regions after it. *)
         apply (region_step_shared_sim rs s' Herased Hfresh Hpoison).
@@ -2013,17 +2321,14 @@ Proof.
         rewrite (region_step_let rs x kind d body Hexpr Hnot), Hmarker.
         destruct (simples_fault rs (simples_of_named d) []) as [fault | ]
           eqn:Hfault; [ exact I | ].
-        destruct (named_needs_heap (state_vars (rs_state rs)) d) eqn:Hneeds;
-          [ exact I | ].
         rewrite Hcounts. apply (sim_result_with_counts rs counts).
         apply
           (local_allocation_erased rsc s' x y kind d region body body'
-             Hfresh_c Herased_c Hexpr Hnot Hneeds Hmarker).
+             Hfresh_c Hcells_c Hbound_c Herased_c Hexpr Hnot Hmarker).
         apply simples_fault_no_place. unfold rsc.
         rewrite simples_fault_with_counts. exact Hfault.
       * rewrite (region_step_let rs x kind d body Hexpr Hnot), Hmarker.
-        destruct (simples_fault rs (simples_of_named d) []); [ exact I | ].
-        destruct (named_needs_heap (state_vars (rs_state rs)) d); exact I.
+        destruct (simples_fault rs (simples_of_named d) []); exact I.
   - apply (region_step_shared_sim rs s' Herased Hfresh Hpoison);
       [ rewrite Hexpr; reflexivity
       | intros ac Heq; rewrite Hexpr in Heq; discriminate Heq ].
@@ -2080,7 +2385,7 @@ Proof.
   split; [ exact Herased1 | ].
   split; [ exact (region_step_keeps_invariant rs rs1 Hinv Hstep) | ].
   split; [ exact (region_step_keeps_no_poison rs rs1 Hpoison Hstep) | ].
-  apply andb_true_iff in Hinv as [Hfresh _].
+  destruct (proj1 (region_invariant_parts rs) Hinv) as (Hfresh & _).
   exact (region_step_keeps_locals_once rs rs1 Hfresh Honce Hstep).
 Qed.
 
@@ -2131,8 +2436,8 @@ Proof.
     [ discriminate | ].
   rewrite region_run_succ in Hrun.
   pose proof (related_sim rs s' Hrelated) as Hsim.
-  destruct (region_step rs) as [rs1 | k0 vs0 rs0 | fault | ] eqn:Hstep;
-    [ | | discriminate | discriminate ].
+  destruct (region_step rs) as [rs1 | k0 vs0 rs0 | fault] eqn:Hstep;
+    [ | | discriminate ].
   - destruct Hsim
       as [ [Herased1 _]
          | [ (s1' & Hstep' & Herased1)
@@ -2159,9 +2464,8 @@ Proof.
     exists 1, rd. rewrite run_succ, Hstep'. reflexivity.
 Qed.
 
-(* Where the run of the second state exits, that of the first exits,
-   stops with no step, or comes to a [Let] that the machine of regions
-   does not run. The run of the first may make steps that the
+(* Where the run of the second state exits, that of the first exits or
+   stops with no step. The run of the first may make steps that the
    second has none for, the begins of regions: each goes under a
    [Let], so there are no more of them in a row than the expression
    has [Let]s at its head. *)
@@ -2173,7 +2477,6 @@ Lemma run_adds_no_exit (k : continuation) (vs' : list value) (hp : heap)
     run n s' = Exit k vs' hp rd ->
     ∃ fuel : nat,
       (∃ fault : region_fault, region_run fuel rs = Region_undefined fault)
-      ∨ region_run fuel rs = Region_let_not_run
       ∨ (∃ (vs : list value) (rs_end : region_state),
           region_run fuel rs = Region_exit k vs rs_end
           ∧ Forall2 (value_erased_if_usable rs_end) vs vs').
@@ -2181,7 +2484,7 @@ Proof.
   induction n as [n IHn] using lt_wf_ind.
   induction m as [ | m IHm]; intros rs s' Hdepth Hrelated Hrun; [ lia | ].
   pose proof (related_sim rs s' Hrelated) as Hsim.
-  destruct (region_step rs) as [rs1 | k0 vs0 rs0 | fault | ] eqn:Hstep.
+  destruct (region_step rs) as [rs1 | k0 vs0 rs0 | fault] eqn:Hstep.
   - destruct Hsim
       as [ [Herased1 Hless]
          | [ (s1' & Hstep' & Herased1)
@@ -2212,11 +2515,10 @@ Proof.
   - destruct Hsim as (vs0' & hp0 & rd0 & Hstep' & Hvs).
     destruct n as [ | n]; [ simpl in Hrun; discriminate | ].
     rewrite run_succ, Hstep' in Hrun. injection Hrun as -> -> -> ->.
-    exists 1. right. right. exists vs0, rs0. rewrite region_run_succ, Hstep.
+    exists 1. right. exists vs0, rs0. rewrite region_run_succ, Hstep.
     split; [ reflexivity | exact Hvs ].
   - exists 1. left. exists fault. rewrite region_run_succ, Hstep.
     reflexivity.
-  - exists 1. right. left. rewrite region_run_succ, Hstep. reflexivity.
 Qed.
 
 (* ======================================================================== *)

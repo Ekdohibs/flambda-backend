@@ -27,16 +27,19 @@
 
 (* Lemmas for the proofs of the statements of FlambdaRegionsCheckedSpec.v:
    the value that a [Let] binds is as the lifetime that the check gives it
-   says, and is good. Nothing here needs review. *)
+   says, and is good; so is what is read from it. A load from a cell
+   gives a value that the cell holds, which is as the check has for what
+   is read from the variable. Nothing here needs review. *)
 
 From Stdlib Require Import ZArith List Bool Lia PeanoNat.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaMapSpec FlambdaMapProofs FlambdaBindersProofs FlambdaValueSpec
-  FlambdaPrimitiveSpec FlambdaPrimitiveProofs FlambdaHeapProofs
-  FlambdaSemanticsSpec FlambdaSemanticsProofs FlambdaClosuresProofs
-  FlambdaRegionsSpec FlambdaRegionsProofs FlambdaRegionsReadsProofs
-  FlambdaRegionsFreshProofs FlambdaRegionsInvariantSpec
+  FlambdaPrimitiveModel FlambdaPrimitiveSpec FlambdaPrimitiveProofs
+  FlambdaHeapSpec FlambdaHeapProofs FlambdaSemanticsSpec
+  FlambdaSemanticsProofs FlambdaClosuresProofs FlambdaRegionsSpec
+  FlambdaRegionsProofs FlambdaRegionsReadsProofs FlambdaRegionsFreshProofs
+  FlambdaRegionsInvariantSpec FlambdaRegionsCellsProofs
   FlambdaRegionsInvariantProofs FlambdaRegionsErasureSpec
   FlambdaRegionsCallsSpec FlambdaRegionsCheckSpec FlambdaRegionsCheckedSpec.
 From OxCamlFlambda2 Require Import FlambdaRegionsCheckedBasicsProofs
@@ -174,6 +177,88 @@ Proof.
   intros [= <-]. exact (tagged_const w Himmediate).
 Qed.
 
+(* The same on a heap: a load of an immediate gives a number, from a
+   cell as from a block or an array that is a value. *)
+Lemma exec_immediate_load (statics : static_env) (hp hp' : heap)
+    (tag size : option Z) (mut : mutability) (field : Z) (vs : list value)
+    (v : value) :
+  exec_prim statics hp
+    (Unary (Block_load (Block_access_values tag size Immediate) mut field))
+    vs
+  = Some (v, hp') ->
+  ∃ c : const, v = Value_const c.
+Proof.
+  unfold exec_prim.
+  destruct (forallb (argument_bound statics hp) vs); [ | discriminate ].
+  assert (Hpure :
+    (let* v0 :=
+       eval_prim statics
+         (Unary
+            (Block_load (Block_access_values tag size Immediate) mut field))
+         vs
+     in
+     Some (v0, hp))
+    = Some (v, hp') ->
+    ∃ c : const, v = Value_const c).
+  { destruct (eval_prim statics _ vs) as [v0 | ] eqn:Heval; [ | discriminate ].
+    simpl. intros [= <- _].
+    destruct (eval_prim_arity _ _ _ _ Heval)
+      as [(p' & v1 & Hp & -> & Hp')
+         | [(p' & v1 & v2 & Hp & _) | (p' & Hp & _)]];
+      try discriminate Hp.
+    injection Hp as <-. exact (immediate_load _ _ _ _ _ _ _ Hp'). }
+  unfold exec_bound_prim.
+  destruct vs as [ | v1 [ | v2 rest]];
+    [ exact Hpure | | destruct v1; exact Hpure ].
+  destruct v1; try exact Hpure.
+  destruct (lookup l hp) as [c | ]; [ | discriminate ]. simpl.
+  destruct c as [cmut ctag fields | kind elements]; simpl; [ | discriminate ].
+  destruct (load_allowed mut cmut); [ | discriminate ].
+  destruct (_ && _); [ | discriminate ].
+  destruct (nth_error fields (Z.to_nat field)) as [loaded | ];
+    [ | discriminate ].
+  simpl. destruct (is_tagged_immediate loaded) eqn:Himmediate;
+    [ | discriminate ].
+  simpl. intros [= <- _]. exact (tagged_const loaded Himmediate).
+Qed.
+
+Lemma exec_immediates_load (statics : static_env) (hp hp' : heap)
+    (kind : array_kind) (mut : mutability) (vs : list value) (v : value) :
+  exec_prim statics hp (Binary (Array_load kind Load_immediates mut)) vs
+  = Some (v, hp') ->
+  ∃ c : const, v = Value_const c.
+Proof.
+  unfold exec_prim.
+  destruct (forallb (argument_bound statics hp) vs); [ | discriminate ].
+  assert (Hpure :
+    (let* v0 :=
+       eval_prim statics (Binary (Array_load kind Load_immediates mut)) vs
+     in
+     Some (v0, hp))
+    = Some (v, hp') ->
+    ∃ c : const, v = Value_const c).
+  { destruct (eval_prim statics _ vs) as [v0 | ] eqn:Heval; [ | discriminate ].
+    simpl. intros [= <- _].
+    destruct (eval_prim_arity _ _ _ _ Heval)
+      as [(p' & v1 & Hp & _)
+         | [(p' & v1 & v2 & Hp & -> & Hp') | (p' & Hp & _)]];
+      try discriminate Hp.
+    injection Hp as <-. exact (immediates_load _ _ _ _ _ _ Hp'). }
+  unfold exec_bound_prim.
+  destruct vs as [ | v1 [ | v2 [ | v3 rest]]]; try exact Hpure;
+    try (destruct v1; exact Hpure).
+  destruct v1; try exact Hpure.
+  destruct (lookup l hp) as [c | ]; [ | discriminate ]. simpl.
+  destruct c as [cmut ctag fields | akind elements]; simpl; [ discriminate | ].
+  destruct (load_allowed mut Cell_mutable); [ | discriminate ].
+  destruct (array_loaded Load_immediates elements v2) as [w | ] eqn:Hloaded;
+    [ | discriminate ].
+  simpl. intros [= <- _].
+  destruct (array_loaded_element _ _ _ _ Hloaded) as [_ Hok].
+  cbn [array_kind_of_load_kind array_element_ok] in Hok.
+  exact (tagged_const w Hok).
+Qed.
+
 (* ======================================================================== *)
 (* The lifetime of what a [Let] binds is one of its state                   *)
 (* ======================================================================== *)
@@ -237,12 +322,49 @@ Proof.
   exact (lifetime_of_scoped cs s r Hscoped Hs).
 Qed.
 
+Definition contents_scoped (cs : check_state) : bool :=
+  forallb
+    (fun '(_, l) =>
+       match l with
+       | Of_region r => among r (cs_regions cs)
+       | Forever | Of_caller | Gone => true
+       end)
+    (cs_contents cs).
+
+Lemma scoped_parts (cs : check_state) :
+  check_state_scoped cs = true ->
+  env_scoped cs = true ∧ contents_scoped cs = true.
+Proof.
+  unfold check_state_scoped, env_scoped, contents_scoped.
+  rewrite andb_true_iff, forallb_app, andb_true_iff. tauto.
+Qed.
+
+Lemma contents_of_scoped (cs : check_state) (s : simple) (r : variable) :
+  contents_scoped cs = true ->
+  contents_of cs s = Of_region r ->
+  among r (cs_regions cs) = true.
+Proof.
+  intros Hscoped. destruct s as [x | sym | c]; cbn [contents_of];
+    try discriminate.
+  destruct (lookup x (cs_contents cs)) as [l | ] eqn:Hl; [ | discriminate ].
+  intros ->.
+  exact
+    (lookup_forallb
+       (fun l =>
+          match l with
+          | Of_region r => among r (cs_regions cs)
+          | Forever | Of_caller | Gone => true
+          end)
+       x (Of_region r) (cs_contents cs) Hscoped Hl).
+Qed.
+
 Lemma named_scoped (cs : check_state) (d : named) (r : variable) :
   env_scoped cs = true ->
+  contents_scoped cs = true ->
   named_lifetime cs d = Of_region r ->
   among r (cs_regions cs) = true.
 Proof.
-  intros Hscoped.
+  intros Hscoped Hcontents.
   assert (Hslots :
     ∀ slots : list (value_slot * simple),
       shortest cs (map (fun '(_, s) => lifetime_of cs s) slots) = Of_region r ->
@@ -255,19 +377,30 @@ Proof.
     cbn [named_lifetime];
     try exact (lifetime_of_scoped cs _ r Hscoped);
     try exact (Hslots _).
-  destruct p as [u | b | v | h | rp].
+  destruct p as [u | b | v | h | rp]; try discriminate.
   - destruct u as [[tag size [ | ]] mut field | | | | | | kind | | | | | | |
                   | ];
       try discriminate;
-      exact (shortest_scoped cs args r Hscoped).
+      try (destruct args as [ | a1 [ | a2 args]]);
+      first
+        [ exact (contents_of_scoped cs _ r Hcontents)
+        | exact (shortest_scoped cs _ r Hscoped) ].
   - destruct b as [kind [ | | ] mut | | | | | ]; try discriminate;
       destruct args as [ | a1 [ | a2 [ | a3 args]]];
       first
-        [ exact (lifetime_of_scoped cs _ r Hscoped)
+        [ exact (contents_of_scoped cs _ r Hcontents)
         | exact (shortest_scoped cs _ r Hscoped) ].
-  - discriminate.
-  - exact (shortest_scoped cs args r Hscoped).
-  - discriminate.
+Qed.
+
+Lemma named_contents_scoped (cs : check_state) (d : named) (r : variable) :
+  env_scoped cs = true ->
+  contents_scoped cs = true ->
+  named_contents cs d = Of_region r ->
+  among r (cs_regions cs) = true.
+Proof.
+  intros Hscoped Hcontents.
+  destruct d; try exact (named_scoped cs _ r Hscoped Hcontents).
+  exact (contents_of_scoped cs _ r Hcontents).
 Qed.
 
 (* ======================================================================== *)
@@ -292,8 +425,28 @@ Proof.
   - apply forallb_forall. exact H.
 Qed.
 
-Lemma made_plain (ok : symbol -> bool) (v : value) :
-  is_made v = true -> value_plain ok v = value_all ok v.
+Lemma made_all_cells (ok : location -> bool) (v : value) :
+  is_made v = true ->
+  (∀ w : value, In w (value_parts v) -> value_all_cells ok w = true) ->
+  value_all_cells ok v = true.
+Proof.
+  destruct v
+    as [c | code slots | slot decls slots | s | tag fields | elements | c | l
+       | callee args args_arity];
+    cbn [is_made value_parts value_all_cells]; try discriminate; intros _ H;
+    try reflexivity.
+  - apply forallb_forall. intros [vslot w] Hin. apply H. apply in_map_iff.
+    exists (vslot, w). split; [ reflexivity | exact Hin ].
+  - apply forallb_forall. intros [vslot w] Hin. apply H. apply in_map_iff.
+    exists (vslot, w). split; [ reflexivity | exact Hin ].
+  - apply forallb_forall. exact H.
+  - apply forallb_forall. exact H.
+Qed.
+
+Lemma made_plain (ok : symbol -> bool) (ok_cell : location -> bool)
+    (v : value) :
+  is_made v = true ->
+  value_plain ok ok_cell v = value_all ok v && value_all_cells ok_cell v.
 Proof. destruct v; cbn [is_made]; try discriminate; reflexivity. Qed.
 
 Lemma made_paps (ok : value -> list value -> arity -> bool) (v : value) :
@@ -368,9 +521,14 @@ Hypothesis Hdeep : frames_deep rs (rs_frames rs) = true.
 
 Hypothesis Hstatics : statics_deep rs = true.
 
+Hypothesis Hcells : cells_deep rs = true.
+
 Hypothesis Hgood_statics :
   Forall (fun binding => allocated_values (good cert codes rs) (snd binding))
     (static_values (live_statics rs)).
+
+Hypothesis Hgood_heap :
+  heap_values_all (good cert codes rs) (state_heap (rs_state rs)).
 
 Variable vars : env.
 
@@ -383,6 +541,8 @@ Hypothesis Hrunning : running_at rs vars cs ms.
 Hypothesis Hgood_vars : env_values_all (good cert codes rs) vars.
 
 Local Abbreviation holds := (lifetime_holds rs (cs_open cs) ms None).
+
+Local Abbreviation contents := (contents_hold rs (cs_open cs) ms None).
 
 Lemma running_marked : Forall2 (marked vars) (cs_open cs) ms.
 Proof.
@@ -398,12 +558,41 @@ Lemma simple_holds (s : simple) (v : value) :
   eval_simple vars s = Some v ->
   holds (lifetime_of cs s) v.
 Proof.
-  destruct Hrunning as (_ & _ & _ & Henv).
+  destruct Hrunning as (_ & _ & _ & Henv & _).
   destruct s as [x | sym | c]; cbn [lifetime_of eval_simple simple_below].
   - intros _ Hv. destruct (lookup x (cs_env cs)) as [l | ] eqn:Hl;
       [ exact (Henv x l v Hl Hv) | exact I ].
-  - intros Hbelow [= <-]. exact (below_base_heap rs sym Hbelow).
+  - intros Hbelow [= <-]. cbn [lifetime_holds]. unfold value_for_ever.
+    cbn [value_all value_all_cells].
+    rewrite (below_base_heap rs sym Hbelow). reflexivity.
   - intros _ [= <-]. reflexivity.
+Qed.
+
+(* What is read from the value of a simple is as the check has for
+   what is read from the simple. *)
+Lemma simple_contents (s : simple) (v : value) :
+  simple_below (rs_base rs) s = true ->
+  eval_simple vars s = Some v ->
+  contents (contents_of cs s) v.
+Proof.
+  destruct Hrunning as (_ & _ & _ & _ & Hcontents).
+  destruct s as [x | sym | c]; cbn [contents_of eval_simple simple_below].
+  - intros _ Hv. destruct (lookup x (cs_contents cs)) as [l | ] eqn:Hl;
+      [ exact (Hcontents x l v Hl Hv) | ].
+    destruct v; cbn [contents_hold lifetime_holds]; try exact I.
+    intros c0 w _ _. exact I.
+  - intros Hbelow [= <-]. cbn [contents_hold lifetime_holds].
+    unfold value_for_ever. cbn [value_all value_all_cells].
+    rewrite (below_base_heap rs sym Hbelow). reflexivity.
+  - intros _ [= <-]. reflexivity.
+Qed.
+
+(* In the state that runs, what is read from a value is as the
+   lifetime of the value says. *)
+Lemma holds_contents_running (l : lifetime) (v : value) :
+  holds l v -> contents l v.
+Proof.
+  exact (holds_contents rs (cs_open cs) ms l v Hordered Hcells running_placed).
 Qed.
 
 Lemma simple_good (s : simple) (v : value) :
@@ -415,51 +604,85 @@ Proof.
   - intros [= <-]. split; reflexivity.
 Qed.
 
-(* The value of a simple that lives for ever reaches symbols of the
-   heap only. *)
+(* The value of a simple that lives for ever reaches symbols and
+   locations of the heap only. *)
 Lemma simple_forever (s : simple) (v : value) :
   simple_below (rs_base rs) s = true ->
   is_forever (lifetime_of cs s) = true ->
   eval_simple vars s = Some v ->
-  value_all (heap_symbol rs) v = true.
+  value_for_ever rs v = true.
 Proof.
   intros Hbelow Hforever Hv. pose proof (simple_holds s v Hbelow Hv) as H.
   destruct (lifetime_of cs s); try discriminate. exact H.
 Qed.
 
-(* What a [Let] that does not allocate binds is as its lifetime
-   says. *)
-Lemma named_holds (d : named) (v : value) :
+(* What a [Let] that does not allocate and is no primitive of the
+   heap binds is as its lifetime says. Its value is that of
+   [eval_named]; or a value of the cell that its first simple names,
+   for a load; or the location that an [Opaque_identity] is given; or
+   a number. *)
+Lemma named_holds (d : named) (v : value) (rd rd' : read_record)
+    (hp' : heap) :
   is_allocation d = false ->
+  named_changes_heap d = false ->
   (∀ s : simple,
      In s (simples_of_named d) -> simple_below (rs_base rs) s = true) ->
-  eval_named (live_statics rs) vars d = Some v ->
+  exec_named (live_statics rs) (state_heap (rs_state rs)) rd vars d
+  = Some (v, hp', rd') ->
   holds (named_lifetime cs d) v.
 Proof.
-  intros Hnot Hbelow Heval.
-  assert (Hnumber : ∀ c : const, holds Forever (Value_const c))
-    by (intros c; reflexivity).
+  intros Hnot Hheap Hbelow Hexec.
+  assert (Hnumber : ∀ (l : lifetime) (c : const), holds l (Value_const c))
+    by (intros l c; apply forever_holds; reflexivity).
   assert (Hread :
     ∀ closure : simple,
+      (∀ (p : prim) (args : list simple), d <> Prim p args) ->
       simples_of_named d = [closure] ->
       holds (lifetime_of cs closure) v).
-  { intros closure Hsimples.
-    apply (holds_named rs Hfresh Hordered Hdeep Hstatics vars (cs_open cs) ms
-             running_marked running_placed (lifetime_of cs closure) vars d v
-             Hnot);
+  { intros closure Hnot_prim Hsimples.
+    rewrite (exec_named_not_prim _ _ _ _ d Hnot_prim) in Hexec.
+    destruct (eval_named (live_statics rs) vars d) as [v0 | ] eqn:Heval;
+      [ | discriminate ].
+    simpl in Hexec. injection Hexec as -> _ _.
+    apply (holds_named rs Hfresh Hordered Hdeep Hstatics Hcells vars
+             (cs_open cs) ms running_marked running_placed
+             (lifetime_of cs closure) vars d v Hnot);
       [ | exact Heval ].
     intros s w Hin Hw. rewrite Hsimples in Hin. destruct Hin as [<- | []].
     apply (simple_holds closure w); [ | exact Hw ].
     apply Hbelow. rewrite Hsimples. left. reflexivity. }
   destruct d as [s | p args | code slots | slot decls slots | slot closure
                 | from slot closure | from to closure];
-    try discriminate Hnot; try exact (Hread _ eq_refl).
-  cbn [eval_named simples_of_named] in *.
+    try discriminate Hnot;
+    try exact (Hread _ ltac:(intros; discriminate) eq_refl).
+  unfold exec_named in Hexec. cbn [simples_of_named] in Hbelow.
   destruct (eval_simples vars args) as [vs | ] eqn:Hargs; [ | discriminate ].
-    cbn in Heval. pose proof (eval_simples_Forall2 _ _ _ Hargs) as Hvalues.
+  simpl in Hexec.
+  destruct (exec_prim (live_statics rs) (state_heap (rs_state rs)) p vs)
+    as [[v0 hp0] | ] eqn:Hprim; [ | discriminate ].
+  simpl in Hexec. injection Hexec as -> _ _.
+  assert (Hp : ∀ q : heap_primitive, p <> Heap q)
+    by (intros q ->; discriminate Hheap).
+  pose proof (eval_simples_Forall2 _ _ _ Hargs) as Hvalues.
+  (* What is read from the first simple, where its value is no
+     location. *)
+  assert (Hfirst :
+    ∀ (a1 : simple) (v1 : value),
+      In a1 args ->
+      eval_simple vars a1 = Some v1 ->
+      is_location v1 = false ->
+      holds (contents_of cs a1) v1).
+  { intros a1 v1 Hin Ha1 Hno.
+    pose proof (simple_contents a1 v1 (Hbelow a1 Hin) Ha1) as Hc.
+    destruct v1; try exact Hc. discriminate Hno. }
+  destruct (exec_prim_reads_cases _ _ _ _ _ _ Hp Hprim)
+    as [Heval
+       | [(l & c & Hl & Hv & Hshape)
+         | [(l & kind & -> & -> & ->) | (c & -> & _)]]].
+  - (* The value of [eval_prim]. *)
     destruct (eval_prim_arity _ _ _ _ Heval)
-      as [(p' & v1 & -> & -> & Hp)
-         | [(p' & v1 & v2 & -> & -> & Hp) | (p' & -> & Hp)]].
+      as [(p' & v1 & -> & -> & Hp')
+         | [(p' & v1 & v2 & -> & -> & Hp') | (p' & -> & Hp')]].
     + inversion Hvalues as [ | a1 w1 args' vs' Ha1 Hrest]; subst.
       inversion Hrest; subst.
       assert (Hv1 : holds (shortest cs [lifetime_of cs a1]) v1).
@@ -472,51 +695,132 @@ Proof.
                      | | ];
         cbn [named_lifetime map];
         try discriminate Hnot;
-        try (eapply unary_number in Hp as [c ->];
-             [ exact (Hnumber c) | exact I ]).
-      * refine (holds_unary rs Hfresh Hordered Hdeep Hstatics vars (cs_open cs)
-                  ms running_marked running_placed _ _ v1 v _ Hv1 Hp).
-        intros kind0 H; discriminate H.
-      * destruct (immediate_load _ _ _ _ _ _ _ Hp) as [c ->].
-        exact (Hnumber c).
-      * refine (holds_unary rs Hfresh Hordered Hdeep Hstatics vars (cs_open cs)
-                  ms running_marked running_placed _ _ v1 v _ Hv1 Hp).
+        try (eapply unary_number in Hp' as [c ->];
+             [ exact (Hnumber _ c) | exact I ]).
+      * refine (holds_unary rs Hfresh Hordered Hdeep Hstatics Hcells vars
+                  (cs_open cs) ms running_marked running_placed _ _ v1 v _ _
+                  Hp');
+          [ intros kind0 H; discriminate H | ].
+        apply (Hfirst a1 v1 (or_introl eq_refl) Ha1).
+        destruct v1; try reflexivity. discriminate Hp'.
+      * destruct (immediate_load _ _ _ _ _ _ _ Hp') as [c ->].
+        exact (Hnumber _ c).
+      * refine (holds_unary rs Hfresh Hordered Hdeep Hstatics Hcells vars
+                  (cs_open cs) ms running_marked running_placed _ _ v1 v _ Hv1
+                  Hp').
         intros kind0 H; discriminate H.
     + inversion Hvalues as [ | a1 w1 args' vs' Ha1 Hrest]; subst.
       inversion Hrest as [ | a2 w2 args'' vs'' Ha2 Hrest']; subst.
       inversion Hrest'; subst.
       destruct p' as [kind [ | | ] mut | | | | | ];
         cbn [named_lifetime];
-        try (eapply binary_number in Hp as [c ->];
-             [ exact (Hnumber c) | exact I ]).
-      * destruct (immediates_load _ _ _ _ _ _ Hp) as [c ->].
-        exact (Hnumber c).
-      * exact (holds_binary rs Hfresh Hordered Hdeep Hstatics vars (cs_open cs)
-                 ms running_marked running_placed _ _ v1 v2 v
-                 (simple_holds a1 v1 (Hbelow a1 (or_introl eq_refl)) Ha1) Hp).
-      * exact (holds_binary rs Hfresh Hordered Hdeep Hstatics vars (cs_open cs)
-                 ms running_marked running_placed _ _ v1 v2 v
-                 (simple_holds a1 v1 (Hbelow a1 (or_introl eq_refl)) Ha1) Hp).
+        try (eapply binary_number in Hp' as [c ->];
+             [ exact (Hnumber _ c) | exact I ]).
+      * destruct (immediates_load _ _ _ _ _ _ Hp') as [c ->].
+        exact (Hnumber _ c).
+      * refine (holds_binary rs Hfresh Hordered Hdeep Hstatics Hcells vars
+                  (cs_open cs) ms running_marked running_placed _ _ v1 v2 v _
+                  Hp').
+        apply (Hfirst a1 v1 (or_introl eq_refl) Ha1).
+        destruct v1; try reflexivity. discriminate Hp'.
+      * refine (holds_binary rs Hfresh Hordered Hdeep Hstatics Hcells vars
+                  (cs_open cs) ms running_marked running_placed _ _ v1 v2 v _
+                  Hp').
+        apply (Hfirst a1 v1 (or_introl eq_refl) Ha1).
+        destruct v1; try reflexivity. discriminate Hp'.
     + destruct p'; discriminate Hnot.
+  - (* A value of a cell. *)
+    destruct Hshape
+      as [(access & mut & field & -> & ->)
+         | (kind & load_kind & mut & v2 & -> & ->)].
+    + inversion Hvalues as [ | a1 w1 args' vs' Ha1 Hrest]; subst.
+      inversion Hrest; subst.
+      destruct access as [tag size [ | ]]; cbn [named_lifetime].
+      * pose proof
+          (simple_contents a1 _ (Hbelow a1 (or_introl eq_refl)) Ha1)
+          as Hc.
+        exact (Hc c v Hl Hv).
+      * destruct (exec_immediate_load _ _ _ _ _ _ _ _ _ Hprim) as [k ->].
+        exact (Hnumber _ k).
+    + inversion Hvalues as [ | a1 w1 args' vs' Ha1 Hrest]; subst.
+      inversion Hrest as [ | a2 w2 args'' vs'' Ha2 Hrest']; subst.
+      inversion Hrest'; subst.
+      destruct load_kind; cbn [named_lifetime];
+        first
+          [ destruct (exec_immediates_load _ _ _ _ _ _ _ Hprim) as [k ->];
+            exact (Hnumber _ k)
+          | pose proof
+              (simple_contents a1 _ (Hbelow a1 (or_introl eq_refl)) Ha1)
+              as Hc;
+            exact (Hc c v Hl Hv) ].
+  - (* The location that an [Opaque_identity] is given. *)
+    inversion Hvalues as [ | a1 w1 args' vs' Ha1 Hrest]; subst.
+    inversion Hrest; subst. cbn [named_lifetime map].
+    apply (holds_rank rs vars _ _ (lifetime_of cs a1) _ _ running_marked
+             running_placed);
+      [ exact (rank_shortest_le cs [lifetime_of cs a1] (lifetime_of cs a1)
+                 (or_introl eq_refl)) | ].
+    exact (simple_holds a1 _ (Hbelow a1 (or_introl eq_refl)) Ha1).
+  - exact (Hnumber _ c).
 Qed.
 
-(* What a [Let] that does not allocate binds is good. *)
-Lemma named_good (d : named) (v : value) :
+(* What is read from what such a [Let] binds: for a simple, as the
+   check has for the simple; for the rest, as what is bound. *)
+Lemma named_contents_hold (d : named) (v : value) (rd rd' : read_record)
+    (hp' : heap) :
   is_allocation d = false ->
-  eval_named (live_statics rs) vars d = Some v ->
+  named_changes_heap d = false ->
+  (∀ s : simple,
+     In s (simples_of_named d) -> simple_below (rs_base rs) s = true) ->
+  exec_named (live_statics rs) (state_heap (rs_state rs)) rd vars d
+  = Some (v, hp', rd') ->
+  contents (named_contents cs d) v.
+Proof.
+  intros Hnot Hheap Hbelow Hexec.
+  destruct d as [s | p args | code slots | slot decls slots | slot closure
+                | from slot closure | from to closure];
+    try (apply holds_contents_running;
+         exact (named_holds _ v rd rd' hp' Hnot Hheap Hbelow Hexec)).
+  cbn [named_contents].
+  rewrite exec_named_not_prim in Hexec by (intros; discriminate).
+  cbn [eval_named] in Hexec.
+  destruct (eval_simple vars s) as [w | ] eqn:Hs; [ | discriminate ].
+  simpl in Hexec. injection Hexec as <- _ _.
+  exact (simple_contents s w (Hbelow s (or_introl eq_refl)) Hs).
+Qed.
+
+(* What a [Let] that does not allocate and is no primitive of the
+   heap binds is good. *)
+Lemma named_good (d : named) (v : value) (rd rd' : read_record)
+    (hp' : heap) :
+  is_allocation d = false ->
+  named_changes_heap d = false ->
+  exec_named (live_statics rs) (state_heap (rs_state rs)) rd vars d
+  = Some (v, hp', rd') ->
   good cert codes rs v.
 Proof.
-  intros Hnot.
-  apply (eval_named_reads (good cert codes rs) (live_statics rs));
-    try exact Hnot.
+  intros Hnot Hheap.
+  apply (exec_named_reads (good cert codes rs) (live_statics rs));
+    try exact Hnot; try exact Hheap.
   - intros c _. split; reflexivity.
   - intros w0 w [Hplain Hfits] Hin. split.
     + destruct w0
         as [c | code slots | slot decls slots | s | tag fields | elements | c
            | l | callee args args_arity];
         try contradiction;
+        cbn [value_plain] in Hplain;
+        apply andb_true_iff in Hplain as [Hplain Hplain_cells];
         apply all_plain;
-        exact (value_all_parts _ _ w Hplain Hin).
+        [ exact (value_all_parts _ _ w Hplain Hin)
+        | exact (value_all_cells_parts _ _ w Hplain_cells Hin)
+        | exact (value_all_parts _ _ w Hplain Hin)
+        | exact (value_all_cells_parts _ _ w Hplain_cells Hin)
+        | exact (value_all_parts _ _ w Hplain Hin)
+        | exact (value_all_cells_parts _ _ w Hplain_cells Hin)
+        | exact (value_all_parts _ _ w Hplain Hin)
+        | exact (value_all_cells_parts _ _ w Hplain_cells Hin)
+        | exact (value_all_parts _ _ w Hplain Hin)
+        | exact (value_all_cells_parts _ _ w Hplain_cells Hin) ].
     + exact (paps_parts _ w0 w Hfits Hin).
   - intros slot slot' decls slots H. exact H.
   - intros s allocated _ Hlookup. split.
@@ -525,10 +829,11 @@ Proof.
                (lookup_in _ _ _ Hlookup)).
     + intros s' _. split; reflexivity.
   - intros s w _. exact (simple_good s w).
+  - intros s l c w _ _ Hl Hw. exact (Hgood_heap l c w (lookup_in _ _ _ Hl) Hw).
 Qed.
 
 (* What an allocation of values that live for ever makes is good, and
-   reaches symbols of the heap only. *)
+   lives for ever. *)
 Lemma made_good (d : named) (v : value) :
   is_allocation d = true ->
   (∀ s : simple,
@@ -536,17 +841,25 @@ Lemma made_good (d : named) (v : value) :
   forallb (fun s => is_forever (lifetime_of cs s)) (simples_of_named d)
   = true ->
   eval_named (live_statics rs) vars d = Some v ->
-  good cert codes rs v ∧ value_all (heap_symbol rs) v = true.
+  good cert codes rs v ∧ value_for_ever rs v = true.
 Proof.
   intros His Hbelow Hforever Heval.
   destruct (eval_named_makes _ _ _ _ His Heval) as [Hmade Hparts].
-  assert (Hheap : value_all (heap_symbol rs) v = true).
-  { apply (made_all _ v Hmade). intros w Hin.
-    destruct (Hparts w Hin) as (s & Hs & Hw).
+  assert (Hpart :
+    ∀ w : value, In w (value_parts v) -> value_for_ever rs w = true).
+  { intros w Hin. destruct (Hparts w Hin) as (s & Hs & Hw).
     exact
       (simple_forever s w (Hbelow s Hs) (forallb_in _ _ s Hforever Hs) Hw). }
+  assert (Hheap : value_for_ever rs v = true).
+  { unfold value_for_ever. apply andb_true_iff. split.
+    - apply (made_all _ v Hmade). intros w Hin.
+      pose proof (Hpart w Hin) as H. unfold value_for_ever in H.
+      apply andb_true_iff in H as [H _]. exact H.
+    - apply (made_all_cells _ v Hmade). intros w Hin.
+      pose proof (Hpart w Hin) as H. unfold value_for_ever in H.
+      apply andb_true_iff in H as [_ H]. exact H. }
   split; [ | exact Hheap ]. split.
-  - rewrite (made_plain _ v Hmade). exact Hheap.
+  - rewrite (made_plain _ _ v Hmade). exact Hheap.
   - apply (made_paps _ v Hmade). intros w Hin.
     destruct (Hparts w Hin) as (s & _ & Hw). exact (proj2 (simple_good s w Hw)).
 Qed.
@@ -563,17 +876,26 @@ Lemma within_next (rs : region_state) (v : value) :
   value_within rs None v = true ->
   value_within rs (Some (rs_next rs)) v = true.
 Proof.
-  intros Hfresh. apply value_all_mono. intros s. unfold symbol_within.
-  destruct (heap_symbol rs s); [ reflexivity | ]. cbn [orb before].
-  rewrite andb_true_r. intros Hlocal. rewrite Hlocal. cbn [andb].
+  intros Hfresh. unfold value_within. intros H.
+  apply andb_true_iff in H as [Hsymbols Hcells].
   apply symbols_fresh_parts in Hfresh as (_ & _ & _ & _ & Hdrawn & _).
-  unfold local_in in Hlocal.
-  destruct (lookup s (live_locals (rs_frames rs))) as [allocated | ] eqn:Hs;
-    [ | discriminate ].
-  apply lookup_in in Hs. unfold live_locals in Hs.
-  apply in_flat_map in Hs as (f & Hf & Hin).
-  destruct (Hdrawn f Hf) as (_ & _ & Hlocals).
-  apply Pos.ltb_lt. exact (proj1 (proj2 (Hlocals s allocated Hin))).
+  apply andb_true_iff. split.
+  - revert Hsymbols. apply value_all_mono. intros s. unfold symbol_within.
+    destruct (heap_symbol rs s); [ reflexivity | ]. cbn [orb before].
+    rewrite andb_true_r. intros Hlocal. rewrite Hlocal. cbn [andb].
+    unfold local_in in Hlocal.
+    destruct (lookup s (live_locals (rs_frames rs))) as [allocated | ] eqn:Hs;
+      [ | discriminate ].
+    apply lookup_in in Hs. unfold live_locals in Hs.
+    apply in_flat_map in Hs as (f & Hf & Hin).
+    destruct (Hdrawn f Hf) as (_ & _ & Hlocals).
+    apply Pos.ltb_lt. exact (proj1 (proj2 (Hlocals s allocated Hin))).
+  - revert Hcells. apply value_all_cells_mono. intros l. unfold cell_within.
+    destruct (heap_location rs l); [ reflexivity | ]. cbn [orb before].
+    destruct (lookup l (rs_cells rs)) as [m | ]; [ | exact (fun H => H) ].
+    rewrite andb_true_r. intros Hon. rewrite Hon. cbn [andb].
+    destruct (on_stack_frame m _ Hon) as (f & Hf & <-).
+    destruct (Hdrawn f Hf) as (_ & Hlt & _). apply Pos.ltb_lt. exact Hlt.
 Qed.
 
 (* A value as a lifetime says with no bound of the newest region is so
@@ -592,4 +914,16 @@ Proof.
     destruct (region_place opens ms None r) as [[m [b | ]] | ];
       try (intros H; exact H).
     intros H Hstack. exact (within_next rs v Hfresh (H Hstack)).
+Qed.
+
+(* The same of what is read from a value. *)
+Lemma contents_next (rs : region_state) (opens : list variable)
+    (ms : list mark) (l : lifetime) (v : value) :
+  symbols_fresh rs = true ->
+  contents_hold rs opens ms None l v ->
+  contents_hold rs opens ms (Some (rs_next rs)) l v.
+Proof.
+  intros Hfresh. destruct v; try exact (holds_next rs opens ms l _ Hfresh).
+  cbn [contents_hold]. intros H c w Hl Hw.
+  exact (holds_next rs opens ms l w Hfresh (H c w Hl Hw)).
 Qed.

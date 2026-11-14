@@ -44,10 +44,10 @@
    their regions kept, on another machine. Nothing so far says that
    the two machines agree on what a term computes. The statements here
    say it: the machine of regions adds ways of having no step
-   (decisions D45 to D47), names for local allocations, and the
-   regions themselves, which [erase] drops; it does not run a [Let]
-   that needs the heap (FlambdaRegionsSpec.v, "what the machine does
-   not run"; decision D53), where its run ends; and nothing else.
+   (decisions D45 to D47, and decision D54 at a store), names for the
+   local allocations that are not cells, the list of the cells that
+   local allocations made, and the regions themselves, which [erase]
+   drops; and nothing else.
 
    THE TERM WITH ITS REGIONS DROPPED
 
@@ -85,21 +85,34 @@
    That is right for a value that may be evaluated, by the invariant
    of FlambdaRegionsInvariantSpec.v: it holds no such symbol, except
    in a partial application. So the relation is asked of a value only
-   where it may be evaluated ([value_erased_if_usable]) in the two
-   places where a value that is gone can be: the callee and the
-   arguments of a partial application, and the values at an exit, as
-   an exit may be given extra arguments that a continuation has held
-   since a call (the header of FlambdaRegionsInvariantSpec.v, "what
-   follows"). Of an argument that a partial application keeps, and of
+   where it may be evaluated or is a location
+   ([value_erased_if_usable]) in the two places where a value that is
+   gone can be: the callee and the arguments of a partial application,
+   and the values at an exit, as an exit may be given extra arguments
+   that a continuation has held since a call (the header of
+   FlambdaRegionsInvariantSpec.v, "what follows"). Of a location it
+   is asked there whether or not the location may be evaluated: the
+   location of a cell that is dead (FlambdaRegionsSpec.cell_dead) is
+   related to itself, as every location is ([Erased_location]), and
+   to nothing else. A dead cell stays in the heap, and a step looks
+   into a partial application, and into what a continuation has
+   held, without asking whether a location that it finds there may
+   be evaluated. Were it not asked of a dead location there, as it
+   is not of a symbol that is gone, a partial application whose
+   callee is such a location, which has no step when it is called,
+   would be related to one whose callee is a closure, which is
+   called. Of an argument that a partial application keeps, and of
    a value at an exit, the kind is asked whether or not the value may
    be evaluated: a call tests the kinds of the arguments kept with
    those of the new ones, on either machine, and a symbol that is gone
    is of the kind [Value].
 
-   So of a value at an exit that may not be evaluated, a symbol whose
-   allocation is gone, the statements say its kind and nothing else:
-   the run of the erased term may have any value of the kind [Value]
-   at its place. They are not the agreement of the values at the exit
+   So of a value at an exit that is a symbol whose allocation is
+   gone, the statements say its kind and nothing else: the run of the
+   erased term may have any value of the kind [Value] at its place.
+   Of one that is the location of a dead cell they say that the run
+   of the erased term has that location at its place. They are not
+   the agreement of the values at the exit
    for every run that the check passes. For a run all of whose values
    at the exit may be evaluated they give [value_erased] of each,
    with what that relation leaves out of a partial application
@@ -113,28 +126,27 @@
    THE STATEMENTS
 
    Both are of a run from the state that the test tool starts in, with
-   the symbols that the machine draws apart from those of the term,
-   and of a term that [erase] is meant for
+   the symbols that the machine draws apart from those of the term
+   and of the static environment, which holds no location
+   (FlambdaRegionsSpec.region_names_fresh), and of a term that
+   [erase] is meant for
    (FlambdaRegionsSpec.erasable).
 
    - [erasure_exits_statement]. If the run on the machine of regions
      exits, the run of the erased term exits through the same
      continuation, with as many values; each value of the first is of
      the kind of the value of the second at its place, and each that
-     may be evaluated is erased to it.
+     may be evaluated or is a location is erased to it.
    - [erasure_adds_no_exit_statement]. If the run of the erased term
      exits, the run on the machine of regions exits through the same
      continuation with values related in the same way, or stops
      somewhere with no step: for one of the rules of regions, or
      because the machine of FlambdaSemanticsSpec.v has none there on
-     the symbols of local allocations; or it comes to a [Let] that
-     the machine of regions does not run
-     (FlambdaRegionsSpec.Region_let_not_run, decision D53), which the
-     erased term runs on the heap.
+     the symbols of local allocations.
 
-   Together: a run on the machine of regions that neither stops
-   without a step nor comes to a [Let] that is not run exits if and
-   only if the run of the erased term does, and alike.
+   Together: a run on the machine of regions that does not stop
+   without a step exits if and only if the run of the erased term
+   does, and alike.
 
    WHAT IS NOT STATED
 
@@ -146,14 +158,9 @@
      (FlambdaRegionsSpec.v, "what this stage leaves out").
    - Anything of the counts, or of the frames that are left at the
      exit.
-   - Anything of the heap at the exit. The machine of regions makes
-     no cell and changes none
-     (FlambdaRegionsSpec.region_step_keeps_memory_statement): a run
-     of it that exits ran no [Let] that needs the heap, and the run
-     of the erased term that answers it ran the same, so the two
-     heaps are those that the runs began with; a value at the exit
-     that is a location is related to itself, and nothing is said of
-     what the heaps hold at it.
+   - Anything of the heap at the exit: a value at the exit that is a
+     location is related to itself, and nothing is said of what the
+     two heaps hold at it.
    - That [erase] of what the test tool converts with regions kept is
      what it converts with regions dropped: the tool tests it of each
      unit.
@@ -184,8 +191,9 @@ Definition slot_erased (R : value -> value -> Prop)
    constant, a boxed number, a location, a symbol that the machine did
    not draw, and a block, an array, a closure, a closure of a set or a
    partial application with parts erased. In a partial application a
-   part is asked to be erased only if it may be evaluated, and an
-   argument is asked to be of the same kind in any case.
+   part is asked to be erased only if it may be evaluated or is a
+   location, and an argument is asked to be of the same kind in any
+   case.
 
    The last five are of a symbol that the machine drew and that
    [live_statics] binds: it is erased to a block, a boxed number, an
@@ -224,11 +232,13 @@ Inductive value_erased (rs : region_state) : value -> value -> Prop :=
       (Value_closure_of_set slot function_decls value_slots')
   | Erased_partial_application (callee callee' : value)
       (args args' : list value) (args_arity : arity) :
-    (value_usable rs callee = true -> value_erased rs callee callee') ->
+    (value_usable rs callee = true ∨ is_location callee = true ->
+     value_erased rs callee callee') ->
     Forall2
       (fun arg arg' =>
          kind_of_value arg' = kind_of_value arg
-         ∧ (value_usable rs arg = true -> value_erased rs arg arg'))
+         ∧ (value_usable rs arg = true ∨ is_location arg = true ->
+            value_erased rs arg arg'))
       args args' ->
     value_erased rs (Value_partial_application callee args args_arity)
       (Value_partial_application callee' args' args_arity)
@@ -270,11 +280,12 @@ Inductive value_erased (rs : region_state) : value -> value -> Prop :=
       (Value_closure_of_set slot function_decls value_slots').
 
 (* The two values are of one kind, and the relation holds if the first
-   may be evaluated. *)
+   may be evaluated or is a location. *)
 Definition value_erased_if_usable (rs : region_state) (v v' : value)
     : Prop :=
   kind_of_value v' = kind_of_value v
-  ∧ (value_usable rs v = true -> value_erased rs v v').
+  ∧ (value_usable rs v = true ∨ is_location v = true ->
+     value_erased rs v v').
 
 (* ======================================================================== *)
 (* Statements                                                               *)
@@ -289,8 +300,8 @@ Definition erased_initial_state (e : expr) (statics : static_env) : state :=
 (* Where the run on the machine of regions exits, the run of the erased
    term exits through the same continuation, with as many values; each
    value of the first run is of the kind of the value of the second at
-   its place, and each that may be evaluated is erased to it, under the
-   state that the first run left by. *)
+   its place, and each that may be evaluated or is a location is erased
+   to it, under the state that the first run left by. *)
 Definition erasure_exits_statement : Prop :=
   ∀ (e : expr) (statics : static_env) (base : symbol) (fuel : nat)
     (k : continuation) (vs : list value) (rs : region_state),
@@ -303,8 +314,7 @@ Definition erasure_exits_statement : Prop :=
       ∧ Forall2 (value_erased_if_usable rs) vs vs'.
 
 (* Where the run of the erased term exits, the run on the machine of
-   regions exits alike, or stops with no step, or comes to a [Let]
-   that the machine does not run (decision D53). *)
+   regions exits alike, or stops with no step. *)
 Definition erasure_adds_no_exit_statement : Prop :=
   ∀ (e : expr) (statics : static_env) (base : symbol) (k : continuation)
     (vs' : list value) (hp : heap),
@@ -315,8 +325,6 @@ Definition erasure_adds_no_exit_statement : Prop :=
       (∃ fault : region_fault,
         region_run fuel (initial_region_state e statics base)
         = Region_undefined fault)
-      ∨ region_run fuel (initial_region_state e statics base)
-        = Region_let_not_run
       ∨ (∃ (vs : list value) (rs : region_state),
           region_run fuel (initial_region_state e statics base)
           = Region_exit k vs rs

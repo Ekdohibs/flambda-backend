@@ -34,8 +34,8 @@
 From Stdlib Require Import ZArith List Bool Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
-  FlambdaMapSpec FlambdaMapProofs FlambdaValueSpec FlambdaHeapProofs
-  FlambdaSemanticsSpec FlambdaRegionsSpec FlambdaRegionsProofs
+  FlambdaMapSpec FlambdaMapProofs FlambdaValueSpec FlambdaHeapSpec
+  FlambdaHeapProofs FlambdaSemanticsSpec FlambdaRegionsSpec FlambdaRegionsProofs
   FlambdaRegionsReadsProofs FlambdaRegionsStepsProofs
   FlambdaRegionsFreshProofs FlambdaRegionsInvariantSpec
   FlambdaRegionsInvariantProofs FlambdaRegionsErasureSpec
@@ -81,6 +81,85 @@ Proof.
     exact (IHargs _ Hin (forallb_in _ _ arg Hargs Hin)).
 Qed.
 
+Lemma value_all_cells_mono (ok ok' : location -> bool) (v : value) :
+  (∀ l : location, ok l = true -> ok' l = true) ->
+  value_all_cells ok v = true ->
+  value_all_cells ok' v = true.
+Proof.
+  intros Hok.
+  induction v
+    as [c | code slots IH | slot decls slots IH | s | tag fields IH
+       | elements IH | c | l | callee args args_arity IHcallee IHargs]
+    using value_induction;
+    simpl; auto.
+  - intros H. apply forallb_forall. intros [vslot w] Hin.
+    rewrite Forall_forall in IH.
+    exact (IH (vslot, w) Hin (forallb_in _ _ (vslot, w) H Hin)).
+  - intros H. apply forallb_forall. intros [vslot w] Hin.
+    rewrite Forall_forall in IH.
+    exact (IH (vslot, w) Hin (forallb_in _ _ (vslot, w) H Hin)).
+  - intros H. apply forallb_forall. intros w Hin.
+    rewrite Forall_forall in IH. exact (IH w Hin (forallb_in _ _ w H Hin)).
+  - intros H. apply forallb_forall. intros w Hin.
+    rewrite Forall_forall in IH. exact (IH w Hin (forallb_in _ _ w H Hin)).
+  - intros H. apply andb_true_iff in H as [Hcallee Hargs].
+    apply andb_true_iff. split; [ exact (IHcallee Hcallee) | ].
+    apply forallb_forall. intros arg Hin.
+    rewrite Forall_forall in IHargs.
+    exact (IHargs _ Hin (forallb_in _ _ arg Hargs Hin)).
+Qed.
+
+(* Every location that a value reaches is one of [ok]: said of the
+   list of its locations. *)
+Lemma value_all_cells_iff (ok : location -> bool) (v : value) :
+  value_all_cells ok v = true
+  <-> ∀ l : location, In l (locations_of_value v) -> ok l = true.
+Proof.
+  induction v
+    as [c | code slots IH | slot decls slots IH | s | tag fields IH
+       | elements IH | c | l | callee args args_arity IHcallee IHargs]
+    using value_induction;
+    cbn [value_all_cells locations_of_value];
+    try (split; [ intros _ l0 [] | reflexivity ]).
+  - rewrite Forall_forall in IH. rewrite forallb_forall. split.
+    + intros H l Hl. apply in_flat_map in Hl as ([vslot w] & Hin & Hl).
+      exact (proj1 (IH (vslot, w) Hin) (H (vslot, w) Hin) l Hl).
+    + intros H [vslot w] Hin. apply (proj2 (IH (vslot, w) Hin)).
+      intros l Hl. apply H, in_flat_map. exists (vslot, w).
+      split; assumption.
+  - rewrite Forall_forall in IH. rewrite forallb_forall. split.
+    + intros H l Hl. apply in_flat_map in Hl as ([vslot w] & Hin & Hl).
+      exact (proj1 (IH (vslot, w) Hin) (H (vslot, w) Hin) l Hl).
+    + intros H [vslot w] Hin. apply (proj2 (IH (vslot, w) Hin)).
+      intros l Hl. apply H, in_flat_map. exists (vslot, w).
+      split; assumption.
+  - rewrite Forall_forall in IH. rewrite forallb_forall. split.
+    + intros H l Hl. apply in_flat_map in Hl as (w & Hin & Hl).
+      exact (proj1 (IH w Hin) (H w Hin) l Hl).
+    + intros H w Hin. apply (proj2 (IH w Hin)).
+      intros l Hl. apply H, in_flat_map. exists w. split; assumption.
+  - rewrite Forall_forall in IH. rewrite forallb_forall. split.
+    + intros H l Hl. apply in_flat_map in Hl as (w & Hin & Hl).
+      exact (proj1 (IH w Hin) (H w Hin) l Hl).
+    + intros H w Hin. apply (proj2 (IH w Hin)).
+      intros l Hl. apply H, in_flat_map. exists w. split; assumption.
+  - split.
+    + intros H l0 [<- | []]. exact H.
+    + intros H. exact (H l (or_introl eq_refl)).
+  - rewrite Forall_forall in IHargs. rewrite andb_true_iff, forallb_forall.
+    split.
+    + intros [Hcallee Hargs] l Hl. apply in_app_or in Hl as [Hl | Hl].
+      * exact (proj1 IHcallee Hcallee l Hl).
+      * apply in_flat_map in Hl as (w & Hin & Hl).
+        exact (proj1 (IHargs w Hin) (Hargs w Hin) l Hl).
+    + intros H. split.
+      * apply (proj2 IHcallee). intros l Hl. apply H, in_or_app. left.
+        exact Hl.
+      * intros w Hin. apply (proj2 (IHargs w Hin)). intros l Hl.
+        apply H, in_or_app. right. apply in_flat_map. exists w.
+        split; assumption.
+Qed.
+
 (* A symbol that a frame binds may be evaluated. *)
 Lemma local_live (rs : region_state) (s : symbol) :
   local_in (rs_frames rs) s = true -> live_symbol rs s = true.
@@ -102,34 +181,150 @@ Qed.
 Lemma value_within_live (rs : region_state) (stop : option symbol)
     (v : value) :
   value_within rs stop v = true -> value_all (live_symbol rs) v = true.
-Proof. apply value_all_mono. exact (within_live rs stop). Qed.
-
-(* A value that reaches symbols of the heap only is within every
-   bound. *)
-Lemma heap_within (rs : region_state) (stop : option symbol) (v : value) :
-  value_all (heap_symbol rs) v = true -> value_within rs stop v = true.
 Proof.
-  apply value_all_mono. intros s H. unfold symbol_within. rewrite H.
-  reflexivity.
+  unfold value_within. intros H. apply andb_true_iff in H as [H _].
+  revert H. apply value_all_mono. exact (within_live rs stop).
 Qed.
 
-(* A value all of whose symbols may be evaluated may be evaluated
-   (decision D45). *)
-Lemma live_usable (rs : region_state) (v : value) :
-  value_all (live_symbol rs) v = true -> value_usable rs v = true.
-Proof. destruct v; try reflexivity. cbn [value_all]. exact (fun H => H). Qed.
+(* A location of the heap is within every bound. *)
+Lemma heap_cell_within (rs : region_state) (stop : option symbol)
+    (l : location) :
+  heap_location rs l = true -> cell_within rs stop l = true.
+Proof. unfold cell_within. intros ->. reflexivity. Qed.
 
-(* A value that reaches symbols of the heap only is not local (decision
-   D46). *)
+(* A value that reaches symbols and locations of the heap only is
+   within every bound. *)
+Lemma heap_within (rs : region_state) (stop : option symbol) (v : value) :
+  value_for_ever rs v = true -> value_within rs stop v = true.
+Proof.
+  unfold value_for_ever, value_within. intros H.
+  apply andb_true_iff in H as [Hsymbols Hcells]. apply andb_true_iff. split.
+  - revert Hsymbols. apply value_all_mono. intros s H. unfold symbol_within.
+    rewrite H. reflexivity.
+  - revert Hcells. apply value_all_cells_mono.
+    exact (heap_cell_within rs stop).
+Qed.
+
+(* The two tests of a partial application and of a block, by the
+   parts. *)
+Lemma all_both_partial (ok : symbol -> bool) (ok_cell : location -> bool)
+    (callee : value) (args : list value) (args_arity : arity) :
+  value_all ok (Value_partial_application callee args args_arity)
+  && value_all_cells ok_cell
+       (Value_partial_application callee args args_arity)
+  = true
+  <-> value_all ok callee && value_all_cells ok_cell callee = true
+      ∧ Forall (fun v => value_all ok v && value_all_cells ok_cell v = true)
+          args.
+Proof.
+  cbn [value_all value_all_cells].
+  rewrite !andb_true_iff, !forallb_forall, Forall_forall. split.
+  - intros [[Hc Ha] [Hc' Ha']]. split; [ split; assumption | ].
+    intros arg Hin. rewrite andb_true_iff.
+    exact (conj (Ha arg Hin) (Ha' arg Hin)).
+  - intros [[Hc Hc'] Hargs]. split; split; try assumption.
+    + intros arg Hin. pose proof (Hargs arg Hin) as H.
+      apply andb_true_iff in H as [H _]. exact H.
+    + intros arg Hin. pose proof (Hargs arg Hin) as H.
+      apply andb_true_iff in H as [_ H]. exact H.
+Qed.
+
+Lemma all_both_block (ok : symbol -> bool) (ok_cell : location -> bool)
+    (tag : Z) (fields : list value) :
+  value_all ok (Value_block tag fields)
+  && value_all_cells ok_cell (Value_block tag fields)
+  = true
+  <-> Forall (fun v => value_all ok v && value_all_cells ok_cell v = true)
+        fields.
+Proof.
+  cbn [value_all value_all_cells].
+  rewrite !andb_true_iff, !forallb_forall, Forall_forall. split.
+  - intros [H H'] w Hin. rewrite andb_true_iff.
+    exact (conj (H w Hin) (H' w Hin)).
+  - intros H. split; intros w Hin; pose proof (H w Hin) as Hw;
+      apply andb_true_iff in Hw as [Hw Hw']; assumption.
+Qed.
+
+Lemma for_ever_partial (rs : region_state) (callee : value)
+    (args : list value) (args_arity : arity) :
+  value_for_ever rs (Value_partial_application callee args args_arity) = true
+  <-> value_for_ever rs callee = true
+      ∧ Forall (fun v => value_for_ever rs v = true) args.
+Proof. exact (all_both_partial _ _ callee args args_arity). Qed.
+
+Lemma for_ever_block (rs : region_state) (tag : Z) (fields : list value) :
+  value_for_ever rs (Value_block tag fields) = true
+  <-> Forall (fun v => value_for_ever rs v = true) fields.
+Proof. exact (all_both_block _ _ tag fields). Qed.
+
+Lemma within_partial (rs : region_state) (stop : option symbol)
+    (callee : value) (args : list value) (args_arity : arity) :
+  value_within rs stop (Value_partial_application callee args args_arity)
+  = true
+  <-> value_within rs stop callee = true
+      ∧ Forall (fun v => value_within rs stop v = true) args.
+Proof. exact (all_both_partial _ _ callee args args_arity). Qed.
+
+Lemma within_block (rs : region_state) (stop : option symbol) (tag : Z)
+    (fields : list value) :
+  value_within rs stop (Value_block tag fields) = true
+  <-> Forall (fun v => value_within rs stop v = true) fields.
+Proof. exact (all_both_block _ _ tag fields). Qed.
+
+(* A value that is within a bound is within no bound. *)
+Lemma within_no_bound (rs : region_state) (stop : option symbol)
+    (v : value) :
+  value_within rs stop v = true -> value_within rs None v = true.
+Proof.
+  unfold value_within. intros H.
+  apply andb_true_iff in H as [Hsymbols Hcells]. apply andb_true_iff. split.
+  - revert Hsymbols. apply value_all_mono. intros s0. unfold symbol_within.
+    destruct (heap_symbol rs s0); [ reflexivity | ]. cbn [orb].
+    intros H. apply andb_true_iff in H as [-> _]. reflexivity.
+  - revert Hcells. apply value_all_cells_mono. intros l. unfold cell_within.
+    destruct (heap_location rs l); [ reflexivity | ]. cbn [orb].
+    destruct (lookup l (rs_cells rs)) as [m | ]; [ | exact (fun H => H) ].
+    intros H. apply andb_true_iff in H as [-> _]. reflexivity.
+Qed.
+
+(* A location within a bound is of a cell that is not dead. *)
+Lemma cell_within_not_dead (rs : region_state) (stop : option symbol)
+    (l : location) :
+  cell_within rs stop l = true -> cell_dead rs l = false.
+Proof.
+  unfold cell_within, heap_location, cell_dead.
+  destruct (lookup l (rs_cells rs)) as [m | ]; cbn [is_some negb orb];
+    [ | reflexivity ].
+  intros H. apply andb_true_iff in H as [-> _]. reflexivity.
+Qed.
+
+(* A value within a bound may be evaluated (decision D45). *)
+Lemma within_usable (rs : region_state) (stop : option symbol) (v : value) :
+  value_within rs stop v = true -> value_usable rs v = true.
+Proof.
+  unfold value_within. intros H. apply andb_true_iff in H as [Hsymbols Hcells].
+  destruct v; try reflexivity.
+  - cbn [value_all] in Hsymbols. exact (within_live rs stop s Hsymbols).
+  - cbn [value_all_cells] in Hcells. cbn [value_usable].
+    rewrite (cell_within_not_dead rs stop l Hcells). reflexivity.
+Qed.
+
+(* A value that reaches symbols and locations of the heap only is not
+   local (decision D46). *)
 Lemma heap_value_not_local (rs : region_state) (v : value) :
   symbols_fresh rs = true ->
-  value_all (heap_symbol rs) v = true ->
+  value_for_ever rs v = true ->
   value_local rs v = false.
 Proof.
-  intros Hfresh. destruct v; try reflexivity. cbn [value_all]. intros Hheap.
-  pose proof (heap_not_local rs s Hfresh Hheap) as H.
-  unfold not_local_symbol in H. apply andb_true_iff in H as [_ H].
-  destruct (value_local rs (Value_symbol s)); [ discriminate | reflexivity ].
+  intros Hfresh. unfold value_for_ever. intros H.
+  apply andb_true_iff in H as [Hheap Hcells]. destruct v; try reflexivity.
+  - cbn [value_all] in Hheap.
+    pose proof (heap_not_local rs s Hfresh Hheap) as H.
+    unfold not_local_symbol in H. apply andb_true_iff in H as [_ H].
+    destruct (value_local rs (Value_symbol s)); [ discriminate | reflexivity ].
+  - cbn [value_all_cells] in Hcells. cbn [value_local].
+    unfold heap_location in Hcells. unfold local_cell.
+    destruct (lookup l (rs_cells rs)); [ discriminate | reflexivity ].
 Qed.
 
 (* The marks of the open regions: each open region is bound to its
@@ -203,47 +398,46 @@ Lemma running_usable_within (rs : region_state) (cs : check_state)
   eval_simple (state_vars (rs_state rs)) s = Some v ->
   value_within rs None v = true.
 Proof.
-  intros (Hms & Hplaced & _ & Henv) Hin. unfold check_usable.
-  assert (Hweaken : ∀ (stop : option symbol) (w : value),
-            value_within rs stop w = true -> value_within rs None w = true).
-  { intros stop w. apply value_all_mono. intros s0. unfold symbol_within.
-    destruct (heap_symbol rs s0); [ reflexivity | ]. cbn [orb].
-    intros H. apply andb_true_iff in H as [-> _]. reflexivity. }
+  intros (Hms & Hplaced & _ & Henv & _) Hin. unfold check_usable.
   destruct s as [x | sym | c]; cbn [lifetime_of eval_simple].
   - destruct (lookup x (cs_env cs)) as [l | ] eqn:Hl; [ | discriminate ].
     intros Husable Hv. specialize (Henv x l v Hl Hv).
     destruct l as [ | | r | ]; cbn [lifetime_usable lifetime_holds] in *.
     + exact (heap_within rs None v Henv).
-    + exact (Hweaken _ v Henv).
+    + exact (within_no_bound rs _ v Henv).
     + destruct (region_place_open _ _ ms None r Hms Husable)
         as (m & stop & Hplace & Hinm).
       rewrite Hplace in Henv.
-      exact (Hweaken _ v (Henv (marks_placed_in _ _ _ Hplaced Hinm))).
+      exact (within_no_bound rs _ v
+               (Henv (marks_placed_in _ _ _ Hplaced Hinm))).
     + discriminate.
-  - intros _ [= <-]. unfold value_within. cbn [value_all].
+  - intros _ [= <-]. unfold value_within.
+    cbn [value_all value_all_cells andb].
     unfold symbol_within. cbn [simple_below] in Hin.
     rewrite (below_base_heap rs sym Hin). reflexivity.
   - intros _ [= <-]. reflexivity.
 Qed.
 
 (* Decision D46, of the state that runs: a simple that the check takes
-   to live for ever has a value that reaches symbols of the heap
-   only. *)
+   to live for ever has a value that reaches symbols and locations of
+   the heap only. *)
 Lemma running_forever_heap (rs : region_state) (cs : check_state)
     (ms : list mark) (s : simple) (v : value) :
   running_checked rs cs ms ->
   simple_below (rs_base rs) s = true ->
   is_forever (lifetime_of cs s) = true ->
   eval_simple (state_vars (rs_state rs)) s = Some v ->
-  value_all (heap_symbol rs) v = true.
+  value_for_ever rs v = true.
 Proof.
-  intros (_ & _ & _ & Henv) Hin.
+  intros (_ & _ & _ & Henv & _) Hin.
   destruct s as [x | sym | c]; cbn [lifetime_of eval_simple].
   - destruct (lookup x (cs_env cs)) as [l | ] eqn:Hl; [ | discriminate ].
     intros Hforever Hv. specialize (Henv x l v Hl Hv).
     destruct l; cbn [is_forever lifetime_holds] in *; try discriminate.
     exact Henv.
-  - intros _ [= <-]. exact (below_base_heap rs sym Hin).
+  - intros _ [= <-]. unfold value_for_ever.
+    cbn [value_all value_all_cells]. cbn [simple_below] in Hin.
+    rewrite (below_base_heap rs sym Hin). reflexivity.
   - intros _ [= <-]. reflexivity.
 Qed.
 

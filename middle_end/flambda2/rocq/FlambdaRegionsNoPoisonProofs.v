@@ -189,26 +189,34 @@ Definition bound_no_poison
     In (s, allocated) (live_locals frames ++ values) ->
     allocated_no_region_poison allocated = true.
 
-(* The test [no_poison], in three parts. *)
+(* What the cells of the heap hold has no such constant. *)
+Definition cells_no_poison (hp : heap) : Prop :=
+  heap_values_all (fun v => value_no_region_poison v = true) hp.
+
+(* The test [no_poison], in four parts. *)
 Lemma no_poison_parts (rs : region_state) :
   no_poison rs = true
   <-> written_no_poison (rs_state rs)
       ∧ held_no_poison (rs_state rs)
       ∧ bound_no_poison (static_values (state_statics (rs_state rs)))
-          (rs_frames rs).
+          (rs_frames rs)
+      ∧ cells_no_poison (state_heap (rs_state rs)).
 Proof.
-  unfold no_poison, statics_no_region_poison. cbv zeta. split.
-  - intros H.
+  unfold no_poison, statics_no_region_poison, cells_no_poison. cbv zeta.
+  rewrite <- heap_values_all_forallb. split.
+  - intros H. apply andb_true_iff in H as [H H6].
     apply andb_true_iff in H as [H H5]. apply andb_true_iff in H as [H H4].
     apply andb_true_iff in H as [H H3]. apply andb_true_iff in H as [H1 H2].
     apply andb_true_iff in H2 as [Hcode Hvalues].
     apply conts_no_region_poison_split in H4 as [H4t H4v].
     split; [ exact (conj H1 (conj H4t Hcode)) | ].
     split; [ exact (conj (proj1 (forallb_pairs_Forall _ _) H3) H4v) | ].
+    split; [ | exact H6 ].
     intros s allocated Hin. apply in_app_or in Hin as [Hin | Hin].
     + exact (forallb_in _ _ (s, allocated) H5 Hin).
     + exact (forallb_in _ _ (s, allocated) Hvalues Hin).
-  - intros ((H1 & H4t & Hcode) & (H3 & H4v) & Hbound).
+  - intros ((H1 & H4t & Hcode) & (H3 & H4v) & Hbound & H6).
+    apply andb_true_iff. split; [ | exact H6 ].
     repeat (apply andb_true_iff; split).
     + exact H1.
     + exact Hcode.
@@ -281,13 +289,13 @@ Lemma region_step_no_poison_values (rs : region_state) :
 Proof.
   intros Hpoison.
   pose proof (proj1 (no_poison_parts rs) Hpoison)
-    as ((He & _ & _) & Hheld & Hbound).
+    as ((He & _ & _) & Hheld & Hbound & Hcells).
   apply (region_step_values _ value_no_region_poison_partial rs).
   - apply reads_fields;
       [ exact value_no_region_poison_parts_in
       | exact (value_no_region_poison_static rs Hbound) ].
   - exact Hheld.
-  - intros x kind d body v Hexpr _ _ Hnamed. rewrite Hexpr in He.
+  - intros x kind d body v hp' rd' Hexpr _ _ _ Hexec. rewrite Hexpr in He.
     assert (Hsimples :
       ∀ (sim : simple) (w : value),
         In sim (simples_of_named d) ->
@@ -298,21 +306,52 @@ Proof.
         (named_simples_no_region_poison _ x kind d body sim w He
            (proj1 Hheld)). }
     destruct (is_allocation d) eqn:His.
-    + destruct (eval_named_makes _ _ d v His Hnamed) as [Hmade Hparts].
+    + destruct (exec_named_makes _ _ _ _ _ _ d v His Hexec) as [Hnamed _].
+      destruct (eval_named_makes _ _ d v His Hnamed) as [Hmade Hparts].
       apply (value_no_region_poison_made v Hmade). apply forallb_forall.
       intros w Hin. destruct (Hparts w Hin) as (sim & Hsim & Hw).
       exact (Hsimples sim w Hsim Hw).
-    + exact
-        (eval_named_reads (fun v => value_no_region_poison v = true)
-           (live_statics rs) (fun c H => H) value_no_region_poison_parts_in
-           value_no_region_poison_move
-           (value_no_region_poison_static rs Hbound)
-           (state_vars (rs_state rs)) d v His Hsimples Hnamed).
+    + destruct (named_changes_heap d) eqn:Hheap.
+      * destruct (exec_named_heap_value _ _ _ _ _ _ d v Hheap Hexec)
+          as [-> | ->]; reflexivity.
+      * apply
+          (exec_named_reads (fun v => value_no_region_poison v = true)
+             (live_statics rs) (fun c H => H) value_no_region_poison_parts_in
+             value_no_region_poison_move
+             (value_no_region_poison_static rs Hbound)
+             (state_heap (rs_state rs)) hp' (state_reads (rs_state rs)) rd'
+             (state_vars (rs_state rs)) d v His Hheap Hsimples);
+          [ | exact Hexec ].
+        intros sim l c w _ _ Hl Hw.
+        exact (Hcells l c w (lookup_in _ _ _ Hl) Hw).
   - intros sim v Hin Hv.
     exact
       (eval_simple_no_region_poison _ sim v
          (evaluated_simples_no_region_poison _ sim He Hin) (proj1 Hheld) Hv).
   - reflexivity.
+  - intros l. reflexivity.
+Qed.
+
+(* The cells of the heap after a step. *)
+Lemma region_step_cells_no_poison (rs rs' : region_state) :
+  no_poison rs = true ->
+  region_step rs = Region_step rs' ->
+  cells_no_poison (state_heap (rs_state rs')).
+Proof.
+  intros Hpoison Hstep.
+  pose proof (proj1 (no_poison_parts rs) Hpoison)
+    as ((He & _ & _) & Hheld & _ & Hcells).
+  destruct (region_step_heap rs rs' Hstep)
+    as [-> | (x & kind & d & body & v & rd' & Hexpr & _ & Hexec)];
+    [ exact Hcells | ].
+  rewrite Hexpr in He.
+  apply
+    (exec_named_cells (fun v => value_no_region_poison v = true)
+       (live_statics rs) (state_heap (rs_state rs)) (state_heap (rs_state rs'))
+       (state_reads (rs_state rs)) rd' (state_vars (rs_state rs)) d v Hcells);
+    [ | exact Hexec ].
+  intros sim w.
+  exact (named_simples_no_region_poison _ x kind d body sim w He (proj1 Hheld)).
 Qed.
 
 (* ======================================================================== *)
@@ -327,14 +366,13 @@ Lemma region_step_bound_no_poison (rs rs' : region_state) :
 Proof.
   intros Hpoison.
   pose proof (proj1 (no_poison_parts rs) Hpoison)
-    as ((He & _ & _) & [Hvars _] & Hbound).
+    as ((He & _ & _) & [Hvars _] & Hbound & _).
   apply
     (region_step_cases rs
        (fun result =>
           result = Region_step rs' ->
           bound_no_poison (static_values (state_statics (rs_state rs')))
             (rs_frames rs'))).
-  - discriminate.
   - discriminate.
   - intros x kind d mark_kind body _ Hstep.
     rewrite (begin_region_step _ _ _ _ _ _ Hstep). exact Hbound.
@@ -349,8 +387,8 @@ Proof.
     change (live_locals (f :: below))
       with (frame_locals f ++ live_locals below).
     apply in_or_app. right. exact Hin.
-  - intros x kind d body y region body' Hexpr _ _ _ Hstep.
-    destruct (local_allocation_step _ _ _ _ _ _ _ _ Hstep)
+  - intros x kind d body y region body' Hexpr _ _ Hcell Hstep.
+    destruct (local_allocation_step _ _ _ _ _ _ _ _ Hcell Hstep)
       as (v & sym & bindings & His & Hnamed & Hlocalise & _ & _ & _ & _ & _
           & _ & Hframes).
     destruct (localise_makes _ _ _ _ Hlocalise) as (_ & _ & Hmade).
@@ -383,6 +421,10 @@ Proof.
       change (live_locals (Frame m mark_kind locals :: frames))
         with (locals ++ live_locals frames).
       rewrite <- app_assoc. exact Hin.
+  - intros x kind d body y region body' _ _ _ _ Hstep.
+    destruct (local_cell_allocation_step _ _ _ _ _ _ _ Hstep)
+      as (l & hp & rd & _ & _ & Hstate & Hf & _).
+    rewrite Hstate, Hf. exact Hbound.
   - intros x kind d body _ _ _ _ Hstep.
     destruct (plain_step_step _ _ Hstep) as (s' & _ & ->). exact Hbound.
   - intros bindings body Hexpr _ _ Hstep.
@@ -426,6 +468,7 @@ Proof.
   apply andb_true_iff in Hstatics as [Hcode Hvalues].
   apply no_poison_parts. split; [ exact (conj He (conj I Hcode)) | ].
   split; [ exact (conj (Forall_nil _) I) | ].
+  split; [ | intros l c v [] ].
   intros s allocated Hin. exact (forallb_in _ _ (s, allocated) Hvalues Hin).
 Qed.
 
@@ -433,18 +476,19 @@ Theorem region_step_keeps_no_poison : region_step_keeps_no_poison_statement.
 Proof.
   intros rs rs' Hpoison Hstep.
   pose proof (proj1 (no_poison_parts rs) Hpoison) as (Hwritten & _ & _).
-  apply no_poison_parts. split; [ | split ].
+  apply no_poison_parts. split; [ | split; [ | split ] ].
   - exact (region_step_keeps_written_no_poison rs rs' Hwritten Hstep).
   - pose proof (region_step_no_poison_values rs Hpoison) as Hvalues.
     rewrite Hstep in Hvalues. apply Hvalues. intros s _ _. reflexivity.
   - exact (region_step_bound_no_poison rs rs' Hpoison Hstep).
+  - exact (region_step_cells_no_poison rs rs' Hpoison Hstep).
 Qed.
 
 Theorem region_run_keeps_no_poison : region_run_keeps_no_poison_statement.
 Proof.
   intros fuel. induction fuel as [ | fuel IH]; intros rs rs' Hpoison; simpl.
   - intros [= <-]. exact Hpoison.
-  - destruct (region_step rs) as [rs1 | k vs rs1 | fault | ] eqn:Hstep;
+  - destruct (region_step rs) as [rs1 | k vs rs1 | fault] eqn:Hstep;
       try discriminate.
     exact (IH rs1 rs' (region_step_keeps_no_poison rs rs1 Hpoison Hstep)).
 Qed.
