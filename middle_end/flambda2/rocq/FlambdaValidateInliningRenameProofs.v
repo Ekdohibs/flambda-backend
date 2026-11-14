@@ -32,7 +32,7 @@
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
-  FlambdaMapProofs FlambdaNominalSpec FlambdaBindersSpec
+  FlambdaMapProofs FlambdaSemanticsSpec FlambdaNominalSpec FlambdaBindersSpec
   FlambdaNormaliseSpec FlambdaUnusedStaticsSpec FlambdaLoopifySpec
   FlambdaLiftSpec FlambdaRenameApartSpec FlambdaScopedProofs
   FlambdaKeepsScopeSpec FlambdaKeepsScopeProofs FlambdaValidateScopeSpec
@@ -40,8 +40,9 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaInlineCallsAtProofs FlambdaValidateSpec
   FlambdaValidatorEquivarianceSpec FlambdaValidatorEquivarianceProofs
   FlambdaValidateKnowingSpec FlambdaValidateKnowingProofs
-  FlambdaValidateReadingRenameProofs FlambdaValidateInliningSpec
-  FlambdaValidateInliningRenameSpec.
+  FlambdaValidateImportsSpec FlambdaValidateImportsRenameSpec
+  FlambdaValidateImportsRenameProofs FlambdaValidateReadingRenameProofs
+  FlambdaValidateInliningSpec FlambdaValidateInliningRenameSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -205,6 +206,48 @@ Proof.
     as (r1 & Halike & Havoid & Heq).
   rewrite Heq.
   apply validate_unit_knowing_renamed_alike.
+  - exact (proj1 (before_inlined_keeps_scope choices G Ls before Hclosed)).
+  - exact Halike.
+  - exact Havoid.
+Qed.
+
+(* ======================================================================== *)
+(* The tests from the imports                                               *)
+(* ======================================================================== *)
+
+(* The test of the first check is
+   FlambdaValidateImportsRenameProofs.verdict_holds_from_renamed_alike
+   of the term that [before_inlined] gives, which for a renamed term
+   is that term under a second renaming ([before_inlined_renamed]). *)
+Theorem inlining_verdict_holds_from_equivariant :
+  inlining_verdict_holds_from_equivariant_statement.
+Proof.
+  intros r statics choices rounds unused slots G Ls kept before after
+    Hclosed.
+  rewrite
+    (validate_unit_inlining_equivariant r choices rounds unused slots G Ls
+       kept before after Hclosed).
+  destruct (before_inlined_renamed r choices G Ls before Hclosed)
+    as (r1 & Halike & Havoid & Heq).
+  rewrite Heq.
+  apply verdict_holds_from_renamed_alike.
+  - exact (proj1 (before_inlined_keeps_scope choices G Ls before Hclosed)).
+  - exact Halike.
+  - exact Havoid.
+Qed.
+
+Theorem knowing_inlining_verdict_holds_from_equivariant :
+  knowing_inlining_verdict_holds_from_equivariant_statement.
+Proof.
+  intros r statics choices rounds unused slots G Ls kept before after
+    Hclosed.
+  rewrite
+    (validate_unit_knowing_inlining_equivariant r choices rounds unused
+       slots G Ls kept before after Hclosed).
+  destruct (before_inlined_renamed r choices G Ls before Hclosed)
+    as (r1 & Halike & Havoid & Heq).
+  rewrite Heq.
+  apply verdict_knowing_holds_from_renamed_alike.
   - exact (proj1 (before_inlined_keeps_scope choices G Ls before Hclosed)).
   - exact Halike.
   - exact Havoid.
