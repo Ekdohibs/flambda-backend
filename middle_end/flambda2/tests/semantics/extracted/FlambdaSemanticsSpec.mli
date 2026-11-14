@@ -2,6 +2,7 @@ open BinInt
 open BinNums
 open BinPos
 open Datatypes
+open FlambdaHeapSpec
 open FlambdaKindModel
 open FlambdaMapSpec
 open FlambdaModel
@@ -40,7 +41,13 @@ val eval_value_slots :
 
 val eval_named : static_env -> env -> named -> value option
 
-val exec_named : static_env -> heap -> env -> named -> (value * heap) option
+val exec_named :
+  static_env ->
+  heap ->
+  read_record ->
+  env ->
+  named ->
+  ((value * heap) * read_record) option
 
 val eval_static_const : env -> static_const -> statically_allocated_value option
 
@@ -66,12 +73,13 @@ type state =
     state_vars : env;
     state_conts : cont_env;
     state_statics : static_env;
-    state_heap : heap
+    state_heap : heap;
+    state_reads : read_record
   }
 
 type step_result =
   | Step of state
-  | Exit of continuation * value list * heap
+  | Exit of continuation * value list * heap * read_record
   | Undefined
 
 val with_extra_args : cont_value -> value list -> cont_value
@@ -86,6 +94,7 @@ val call_code :
   cont_value ->
   static_env ->
   heap ->
+  read_record ->
   step_result
 
 type call_shape =
@@ -135,13 +144,20 @@ val run_call :
   cont_value ->
   static_env ->
   heap ->
+  read_record ->
   step_result
 
 val apply_cont_value :
-  cont_value -> value list -> static_env -> heap -> step_result
+  cont_value -> value list -> static_env -> heap -> read_record -> step_result
 
 val apply_continuation :
-  continuation -> value list -> cont_env -> static_env -> heap -> step_result
+  continuation ->
+  value list ->
+  cont_env ->
+  static_env ->
+  heap ->
+  read_record ->
+  step_result
 
 val call_function :
   value ->
@@ -153,6 +169,7 @@ val call_function :
   cont_value ->
   static_env ->
   heap ->
+  read_record ->
   step_result
 
 val step : state -> step_result

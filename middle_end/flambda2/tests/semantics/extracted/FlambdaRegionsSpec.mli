@@ -1,6 +1,7 @@
 open BinNums
 open BinPos
 open Datatypes
+open FlambdaHeapSpec
 open FlambdaKindModel
 open FlambdaMapSpec
 open FlambdaModel
@@ -115,10 +116,13 @@ type region_step_result =
   | Region_step of region_state
   | Region_exit of continuation * value list * region_state
   | Region_undefined of region_fault
+  | Region_let_not_run
 
 val with_statics : state -> static_env -> state
 
 val with_counts : region_state -> region_counts -> region_state
+
+val named_needs_heap : env -> named -> bool
 
 val plain_step : region_state -> region_step_result
 

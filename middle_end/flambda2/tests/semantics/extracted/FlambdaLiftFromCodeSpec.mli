@@ -1,6 +1,7 @@
 open BinNums
 open BinPos
 open Datatypes
+open FlambdaHeapFreeSpec
 open FlambdaLiftSpec
 open FlambdaMapSpec
 open FlambdaModel

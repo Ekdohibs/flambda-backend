@@ -3,6 +3,7 @@ open BinNums
 open BinPos
 open Datatypes
 open FlambdaBindingTime
+open FlambdaHeapSpec
 open FlambdaKindModel
 open FlambdaMapSpec
 open FlambdaModel
@@ -442,74 +443,78 @@ let simplify_variadic p tys =
 
 (** val simplify_named : Typing_env.t -> named -> outcome **)
 
-let simplify_named tenv = function
-  | Simple s -> Becomes_simple s
-  | Prim (p, args) -> (
-    match simplify_simples tenv args with
-    | Some answers ->
-      let tys = map fst answers in
-      if prim_args_well_kinded p (map kind tys)
-      then
-        match p with
-        | Unary p0 -> (
-          match args with
-          | [] -> Not_known
-          | arg :: l -> (
-            match l with
-            | [] -> (
-              match tys with
-              | [] -> Not_known
-              | ty :: l0 -> (
-                match l0 with
-                | [] -> simplify_unary tenv p0 arg ty
-                | _ :: _ -> Not_known))
-            | _ :: _ -> Not_known))
-        | Binary p0 -> (
-          match args with
-          | [] -> Not_known
-          | arg1 :: l -> (
-            match l with
+let simplify_named tenv defining_expr =
+  if named_changes_heap defining_expr
+  then Not_known
+  else
+    match defining_expr with
+    | Simple s -> Becomes_simple s
+    | Prim (p, args) -> (
+      match simplify_simples tenv args with
+      | Some answers ->
+        let tys = map fst answers in
+        if prim_args_well_kinded p (map kind tys)
+        then
+          match p with
+          | Unary p0 -> (
+            match args with
             | [] -> Not_known
-            | arg2 :: l0 -> (
-              match l0 with
+            | arg :: l -> (
+              match l with
               | [] -> (
                 match tys with
                 | [] -> Not_known
-                | ty1 :: l1 -> (
-                  match l1 with
+                | ty :: l0 -> (
+                  match l0 with
+                  | [] -> simplify_unary tenv p0 arg ty
+                  | _ :: _ -> Not_known))
+              | _ :: _ -> Not_known))
+          | Binary p0 -> (
+            match args with
+            | [] -> Not_known
+            | arg1 :: l -> (
+              match l with
+              | [] -> Not_known
+              | arg2 :: l0 -> (
+                match l0 with
+                | [] -> (
+                  match tys with
                   | [] -> Not_known
-                  | ty2 :: l2 -> (
-                    match l2 with
-                    | [] -> simplify_binary tenv p0 arg1 ty1 arg2 ty2
-                    | _ :: _ -> Not_known)))
-              | _ :: _ -> Not_known)))
-        | Variadic p0 -> simplify_variadic p0 tys
-        | _ -> Not_known
-      else Becomes_invalid
-    | None -> Not_known)
-  | Set_of_closures (code, value_slots) -> (
-    match simplify_simples tenv (map snd value_slots) with
-    | Some answers ->
-      Stays_with_type
-        (set_of_closures_type code (map fst value_slots) (map fst answers))
-    | None -> Stays_with_kind Value)
-  | Closure_of_set (slot, function_decls, value_slots) -> (
-    match simplify_simples tenv (map snd value_slots) with
-    | Some answers ->
-      Stays_with_type
-        (closure_of_set_type slot function_decls (map fst value_slots)
-           (map fst answers))
-    | None -> Stays_with_kind Value)
-  | Project_function_slot (_, move_to, closure) -> (
-    match simplify_simple tenv closure with
-    | Some p ->
-      let ty, _ = p in
-      of_simple_shortcut
-        (Provers.meet_project_function_slot_simple tenv Name_mode.normal ty
-           move_to)
-        (Stays_with_kind Value)
-    | None -> Not_known)
-  | _ -> Not_known
+                  | ty1 :: l1 -> (
+                    match l1 with
+                    | [] -> Not_known
+                    | ty2 :: l2 -> (
+                      match l2 with
+                      | [] -> simplify_binary tenv p0 arg1 ty1 arg2 ty2
+                      | _ :: _ -> Not_known)))
+                | _ :: _ -> Not_known)))
+          | Variadic p0 -> simplify_variadic p0 tys
+          | _ -> Not_known
+        else Becomes_invalid
+      | None -> Not_known)
+    | Set_of_closures (code, value_slots) -> (
+      match simplify_simples tenv (map snd value_slots) with
+      | Some answers ->
+        Stays_with_type
+          (set_of_closures_type code (map fst value_slots) (map fst answers))
+      | None -> Stays_with_kind Value)
+    | Closure_of_set (slot, function_decls, value_slots) -> (
+      match simplify_simples tenv (map snd value_slots) with
+      | Some answers ->
+        Stays_with_type
+          (closure_of_set_type slot function_decls (map fst value_slots)
+             (map fst answers))
+      | None -> Stays_with_kind Value)
+    | Project_function_slot (_, move_to, closure) -> (
+      match simplify_simple tenv closure with
+      | Some p ->
+        let ty, _ = p in
+        of_simple_shortcut
+          (Provers.meet_project_function_slot_simple tenv Name_mode.normal ty
+             move_to)
+          (Stays_with_kind Value)
+      | None -> Not_known)
+    | _ -> Not_known
 
 (** val canonical_named : Typing_env.t -> named -> named **)
 

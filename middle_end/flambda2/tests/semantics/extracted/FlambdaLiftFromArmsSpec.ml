@@ -1,3 +1,4 @@
+open FlambdaHeapFreeSpec
 open FlambdaLiftFromCodeSpec
 open FlambdaLiftSpec
 open FlambdaModel
@@ -16,6 +17,8 @@ let lift_to_head lets e =
 
 let lift_to_head_unit u lets e =
   let lifted = lift_to_head lets e in
-  if exits_plain_knowing [] [] e && well_formed_unit u lifted
+  if
+    (exits_plain_knowing [] [] e && expr_free_of_heap e)
+    && well_formed_unit u lifted
   then Some lifted
   else None

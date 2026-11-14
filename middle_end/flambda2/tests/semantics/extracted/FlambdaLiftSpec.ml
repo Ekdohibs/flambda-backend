@@ -1,6 +1,7 @@
 open BinNums
 open BinPos
 open Datatypes
+open FlambdaHeapFreeSpec
 open FlambdaMapSpec
 open FlambdaModel
 open FlambdaMyClosureSpec
@@ -296,7 +297,8 @@ let lift_unit l e =
     bind_my_closures l.lifted_my_closures (lift_expr l.lifted_lets root e)
   in
   if
-    (exits_plain_knowing [] [] e && well_formed_unit l.lifting_unit lifted)
+    ((exits_plain_knowing [] [] e && expr_free_of_heap e)
+    && well_formed_unit l.lifting_unit lifted)
     && only_closures_of l.lifted_my_closures lifted
   then Some lifted
   else None

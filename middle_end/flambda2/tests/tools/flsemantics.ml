@@ -2053,7 +2053,7 @@ let run ~(statics : Values.static_env) (unit : converted) : outcome * int =
       match Semantics.step state with
       | Step state -> go (steps + 1) state
       | Undefined -> Undefined, steps
-      | Exit (k, values, _heap) ->
+      | Exit (k, values, _heap, _reads) ->
         let values = List.map (observe 50 state.state_statics) values in
         ( (if k = unit.return_continuation
            then Returns values
@@ -2067,7 +2067,8 @@ let run ~(statics : Values.static_env) (unit : converted) : outcome * int =
       state_vars = [];
       state_conts = [];
       state_statics = statics;
-      state_heap = Values.empty_heap
+      state_heap = Values.empty_heap;
+      state_reads = Values.no_reads
     }
 
 (* The external symbols that the units converted so far mention, each with its
@@ -6265,6 +6266,13 @@ let run_regions ~(statics : Values.static_env) (unit : converted) :
         | Region_exit (_, _, state) -> Region_passes, steps, Some state
         | Region_undefined No_plain_step ->
           ( Region_not_run "the run is undefined for another reason",
+            steps,
+            Some state )
+        | Region_let_not_run ->
+          (* Decision D53: nothing is said of the run from this [Let] on. *)
+          ( Region_not_run
+              "the machine of regions does not run a Let that needs the \
+               heap: the unit is not checked for regions from there on",
             steps,
             Some state )
         | Region_undefined Not_of_the_conversion ->

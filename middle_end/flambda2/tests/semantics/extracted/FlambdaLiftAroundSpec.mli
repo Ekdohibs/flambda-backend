@@ -3,6 +3,7 @@ open BinPos
 open Bool
 open Datatypes
 open FlambdaBindersSpec
+open FlambdaHeapFreeSpec
 open FlambdaLiftSpec
 open FlambdaMapSpec
 open FlambdaModel

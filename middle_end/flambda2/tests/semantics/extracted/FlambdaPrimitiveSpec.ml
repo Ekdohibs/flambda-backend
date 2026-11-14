@@ -250,6 +250,13 @@ let array_kind_of_load_kind = function
   | Load_gc_ignorable_values -> Array_gc_ignorable_values
   | Load_values -> Array_values
 
+(** val array_kind_of_set_kind : array_set_kind -> array_kind **)
+
+let array_kind_of_set_kind = function
+  | Set_immediates -> Array_immediates
+  | Set_gc_ignorable_values -> Array_gc_ignorable_values
+  | Set_values _ -> Array_values
+
 (** val array_element_ok : array_kind -> value -> bool **)
 
 let array_element_ok kind v =
@@ -292,6 +299,30 @@ let array_loaded load_kind elements index =
       else None
     | None -> None)
   | None -> None
+
+(** val replace_nth : nat -> 'a1 -> 'a1 list -> 'a1 list option **)
+
+let rec replace_nth n x l =
+  match n with
+  | O -> ( match l with [] -> None | _ :: l0 -> Some (x :: l0))
+  | S n0 -> (
+    match l with
+    | [] -> None
+    | y :: l0 -> (
+      match replace_nth n0 x l0 with Some l' -> Some (y :: l') | None -> None))
+
+(** val array_stored : array_set_kind -> array_kind -> value list -> value ->
+    value -> value list option **)
+
+let array_stored set_kind kind elements index new0 =
+  if
+    array_element_ok (array_kind_of_set_kind set_kind) new0
+    && array_element_ok kind new0
+  then
+    match array_index elements index with
+    | Some i -> replace_nth i new0 elements
+    | None -> None
+  else None
 
 (** val bound_if_symbol : static_env -> value -> bool **)
 

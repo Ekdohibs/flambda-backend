@@ -1,6 +1,7 @@
 open BinNums
 open BinPos
 open Datatypes
+open FlambdaHeapSpec
 open FlambdaKindModel
 open FlambdaMapSpec
 open FlambdaModel
@@ -315,6 +316,7 @@ type region_step_result =
   | Region_step of region_state
   | Region_exit of continuation * value list * region_state
   | Region_undefined of region_fault
+  | Region_let_not_run
 
 (** val with_statics : state -> static_env -> state **)
 
@@ -323,7 +325,8 @@ let with_statics s statics =
     state_vars = s.state_vars;
     state_conts = s.state_conts;
     state_statics = statics;
-    state_heap = s.state_heap
+    state_heap = s.state_heap;
+    state_reads = s.state_reads
   }
 
 (** val with_counts : region_state -> region_counts -> region_state **)
@@ -335,6 +338,18 @@ let with_counts rs counts =
     rs_next = rs.rs_next;
     rs_counts = counts
   }
+
+(** val named_needs_heap : env -> named -> bool **)
+
+let named_needs_heap vars = function
+  | Prim (p, args) -> (
+    match p with
+    | Heap _ -> true
+    | _ -> (
+      match eval_simples vars args with
+      | Some vs -> existsb is_location vs
+      | None -> false))
+  | _ -> false
 
 (** val plain_step : region_state -> region_step_result **)
 
@@ -349,7 +364,7 @@ let plain_step rs =
         rs_next = rs.rs_next;
         rs_counts = rs.rs_counts
       }
-  | Exit (k, vs, _) -> Region_exit (k, vs, rs)
+  | Exit (k, vs, _, _) -> Region_exit (k, vs, rs)
   | Undefined -> Region_undefined No_plain_step
 
 (** val static_step : region_state -> region_step_result **)
@@ -364,7 +379,7 @@ let static_step rs =
         rs_next = rs.rs_next;
         rs_counts = rs.rs_counts
       }
-  | Exit (k, vs, _) -> Region_exit (k, vs, rs)
+  | Exit (k, vs, _, _) -> Region_exit (k, vs, rs)
   | Undefined -> Region_undefined No_plain_step
 
 (** val bind_let : region_state -> variable -> value -> expr -> static_env ->
@@ -377,7 +392,8 @@ let bind_let rs x v body statics frames next counts =
         state_vars = (x, v) :: s.state_vars;
         state_conts = s.state_conts;
         state_statics = statics;
-        state_heap = s.state_heap
+        state_heap = s.state_heap;
+        state_reads = s.state_reads
       };
     rs_frames = frames;
     rs_base = rs.rs_base;
@@ -395,7 +411,8 @@ let bind_pair rs x y v body statics frames next counts =
         state_vars = (y, v) :: (x, v) :: s.state_vars;
         state_conts = s.state_conts;
         state_statics = statics;
-        state_heap = s.state_heap
+        state_heap = s.state_heap;
+        state_reads = s.state_reads
       };
     rs_frames = frames;
     rs_base = rs.rs_base;
@@ -597,7 +614,8 @@ let region_apply_cont rs ac =
                   state_conts =
                     app (rec_closures recursive def_vars def_conts) def_conts;
                   state_statics = s.state_statics;
-                  state_heap = s.state_heap
+                  state_heap = s.state_heap;
+                  state_reads = s.state_reads
                 };
               rs_frames = rs.rs_frames;
               rs_base = rs.rs_base;
@@ -648,6 +666,23 @@ let region_step rs =
               | _ :: _ -> Region_undefined Not_of_the_conversion))
           | Local_allocation -> Region_undefined Not_of_the_conversion)
         | _ -> (
+          if named_needs_heap rs0.rs_state.state_vars defining_expr
+          then Region_let_not_run
+          else
+            match marker_of x body with
+            | No_marker ->
+              if
+                is_allocation defining_expr
+                && existsb (simple_local rs0) (simples_of_named defining_expr)
+              then Region_undefined Heap_holds_local
+              else plain_step rs0
+            | Marker (y, region, body') ->
+              local_allocation rs0 x y kind defining_expr region body'
+            | Bad_marker -> Region_undefined Not_of_the_conversion))
+      | _ -> (
+        if named_needs_heap rs0.rs_state.state_vars defining_expr
+        then Region_let_not_run
+        else
           match marker_of x body with
           | No_marker ->
             if
@@ -658,17 +693,6 @@ let region_step rs =
           | Marker (y, region, body') ->
             local_allocation rs0 x y kind defining_expr region body'
           | Bad_marker -> Region_undefined Not_of_the_conversion))
-      | _ -> (
-        match marker_of x body with
-        | No_marker ->
-          if
-            is_allocation defining_expr
-            && existsb (simple_local rs0) (simples_of_named defining_expr)
-          then Region_undefined Heap_holds_local
-          else plain_step rs0
-        | Marker (y, region, body') ->
-          local_allocation rs0 x y kind defining_expr region body'
-        | Bad_marker -> Region_undefined Not_of_the_conversion))
     | Let_static (_, _) ->
       if existsb (simple_local rs0) (evaluated_simples e)
       then Region_undefined Heap_holds_local
@@ -687,7 +711,8 @@ let initial_region_state e statics base =
         state_vars = [];
         state_conts = [];
         state_statics = statics;
-        state_heap = empty_heap
+        state_heap = empty_heap;
+        state_reads = no_reads
       };
     rs_frames = [];
     rs_base = base;

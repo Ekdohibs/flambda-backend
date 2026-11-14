@@ -2,6 +2,7 @@ open BinInt
 open BinNums
 open BinPos
 open Datatypes
+open FlambdaHeapSpec
 open FlambdaKindModel
 open FlambdaMapSpec
 open FlambdaModel
@@ -108,13 +109,22 @@ let eval_named statics vars = function
     | Some v -> project_function_slot statics move_from move_to v
     | None -> None)
 
-(** val exec_named : static_env -> heap -> env -> named -> (value * heap) option
-    **)
+(** val exec_named : static_env -> heap -> read_record -> env -> named ->
+    ((value * heap) * read_record) option **)
 
-let exec_named statics hp vars defining_expr =
-  match eval_named statics vars defining_expr with
-  | Some v -> Some (v, hp)
-  | None -> None
+let exec_named statics hp rd vars defining_expr =
+  match defining_expr with
+  | Prim (p, args) -> (
+    match eval_simples vars args with
+    | Some vs -> (
+      match exec_prim statics hp p vs with
+      | Some p0 -> Some (p0, rd)
+      | None -> None)
+    | None -> None)
+  | _ -> (
+    match eval_named statics vars defining_expr with
+    | Some v -> Some ((v, hp), rd)
+    | None -> None)
 
 (** val eval_static_const : env -> static_const -> statically_allocated_value
     option **)
@@ -241,12 +251,13 @@ type state =
     state_vars : env;
     state_conts : cont_env;
     state_statics : static_env;
-    state_heap : heap
+    state_heap : heap;
+    state_reads : read_record
   }
 
 type step_result =
   | Step of state
-  | Exit of continuation * value list * heap
+  | Exit of continuation * value list * heap * read_record
   | Undefined
 
 (** val with_extra_args : cont_value -> value list -> cont_value **)
@@ -255,9 +266,10 @@ let with_extra_args c extra =
   match extra with [] -> c | _ :: _ -> Extra_args (c, extra)
 
 (** val call_code : value -> code -> value list -> arity -> arity -> cont_value
-    -> cont_value -> static_env -> heap -> step_result **)
+    -> cont_value -> static_env -> heap -> read_record -> step_result **)
 
-let call_code closure c vs args_arity return_arity return_to exn_to statics hp =
+let call_code closure c vs args_arity return_arity return_to exn_to statics hp
+    rd =
   if binds_statics (code_body c)
   then Undefined
   else if
@@ -280,7 +292,8 @@ let call_code closure c vs args_arity return_arity return_to exn_to statics hp =
             [ code_return_continuation c, return_to;
               code_exn_continuation c, exn_to ];
           state_statics = statics;
-          state_heap = hp
+          state_heap = hp;
+          state_reads = rd
         }
     | None -> Undefined
 
@@ -426,26 +439,28 @@ let shape_of_call statics callee kind vs args_arity return_arity =
       shape_of_closure_call statics callee kind vs args_arity return_arity)
 
 (** val run_call : (value -> step_result) -> call_shape option -> arity ->
-    cont_value -> cont_value -> static_env -> heap -> step_result **)
+    cont_value -> cont_value -> static_env -> heap -> read_record -> step_result
+    **)
 
-let run_call return_partial shape return_arity return_to exn_to statics hp =
+let run_call return_partial shape return_arity return_to exn_to statics hp rd =
   match shape with
   | Some c0 -> (
     match c0 with
     | Full_call (closure, c, vs, args_arity) ->
       call_code closure c vs args_arity return_arity return_to exn_to statics hp
+        rd
     | Over_call (closure, c, vs, remaining, args_arity, remaining_arity) ->
       call_code closure c vs args_arity (code_result_arity c)
         (Over_application
            (remaining, remaining_arity, return_arity, return_to, exn_to))
-        exn_to statics hp
+        exn_to statics hp rd
     | Partial_call partial -> return_partial partial)
   | None -> Undefined
 
 (** val apply_cont_value : cont_value -> value list -> static_env -> heap ->
-    step_result **)
+    read_record -> step_result **)
 
-let rec apply_cont_value c vs statics hp =
+let rec apply_cont_value c vs statics hp rd =
   match c with
   | Closure (h, def_vars, def_conts, recursive) ->
     let (Handler (params, metadata, handler)) = h in
@@ -459,12 +474,13 @@ let rec apply_cont_value c vs statics hp =
             state_conts =
               app (rec_closures recursive def_vars def_conts) def_conts;
             state_statics = statics;
-            state_heap = hp
+            state_heap = hp;
+            state_reads = rd
           }
       | None -> Undefined
     else Undefined
-  | Outer k -> Exit (k, vs, hp)
-  | Extra_args (c0, extra) -> apply_cont_value c0 (app vs extra) statics hp
+  | Outer k -> Exit (k, vs, hp, rd)
+  | Extra_args (c0, extra) -> apply_cont_value c0 (app vs extra) statics hp rd
   | Over_application
       (remaining, remaining_arity, return_arity, return_to, exn_to) -> (
     match vs with
@@ -473,27 +489,29 @@ let rec apply_cont_value c vs statics hp =
       match l with
       | [] ->
         run_call
-          (fun partial -> apply_cont_value return_to (partial :: []) statics hp)
+          (fun partial ->
+            apply_cont_value return_to (partial :: []) statics hp rd)
           (shape_of_call statics v Indirect remaining remaining_arity
              return_arity)
-          return_arity return_to exn_to statics hp
+          return_arity return_to exn_to statics hp rd
       | _ :: _ -> Undefined))
 
 (** val apply_continuation : continuation -> value list -> cont_env ->
-    static_env -> heap -> step_result **)
+    static_env -> heap -> read_record -> step_result **)
 
-let apply_continuation k vs conts statics hp =
-  apply_cont_value (resolve k conts) vs statics hp
+let apply_continuation k vs conts statics hp rd =
+  apply_cont_value (resolve k conts) vs statics hp rd
 
 (** val call_function : value -> call_kind -> value list -> arity -> arity ->
-    cont_value -> cont_value -> static_env -> heap -> step_result **)
+    cont_value -> cont_value -> static_env -> heap -> read_record -> step_result
+    **)
 
 let call_function callee kind vs args_arity return_arity return_to exn_to
-    statics hp =
+    statics hp rd =
   run_call
-    (fun partial -> apply_cont_value return_to (partial :: []) statics hp)
+    (fun partial -> apply_cont_value return_to (partial :: []) statics hp rd)
     (shape_of_call statics callee kind vs args_arity return_arity)
-    return_arity return_to exn_to statics hp
+    return_arity return_to exn_to statics hp rd
 
 (** val step : state -> step_result **)
 
@@ -502,15 +520,17 @@ let step s =
         state_vars = vars;
         state_conts = conts;
         state_statics = statics;
-        state_heap = hp
+        state_heap = hp;
+        state_reads = rd
       } =
     s
   in
   match state_expr0 with
   | Let (x, kind, defining_expr, body) -> (
-    match exec_named statics hp vars defining_expr with
+    match exec_named statics hp rd vars defining_expr with
     | Some p ->
-      let v, hp' = p in
+      let p0, rd' = p in
+      let v, hp' = p0 in
       if kind_eqb (kind_of_value v) kind
       then
         Step
@@ -518,7 +538,8 @@ let step s =
             state_vars = (x, v) :: vars;
             state_conts = conts;
             state_statics = statics;
-            state_heap = hp'
+            state_heap = hp';
+            state_reads = rd'
           }
       else Undefined
     | None -> Undefined)
@@ -530,7 +551,8 @@ let step s =
           state_vars = vars;
           state_conts = conts;
           state_statics = statics';
-          state_heap = hp
+          state_heap = hp;
+          state_reads = rd
         }
     | None -> Undefined)
   | Let_cont_non_recursive (k, h, body) ->
@@ -539,7 +561,8 @@ let step s =
         state_vars = vars;
         state_conts = (k, Closure (h, vars, conts, [])) :: conts;
         state_statics = statics;
-        state_heap = hp
+        state_heap = hp;
+        state_reads = rd
       }
   | Let_cont_recursive (handlers, body) ->
     if handlers_bind_statics handlers
@@ -550,7 +573,8 @@ let step s =
           state_vars = vars;
           state_conts = app (rec_closures handlers vars conts) conts;
           state_statics = statics;
-          state_heap = hp
+          state_heap = hp;
+          state_reads = rd
         }
   | Apply ap -> (
     match eval_simple vars ap.ap_callee with
@@ -563,13 +587,13 @@ let step s =
             ap.ap_return_arity
             (resolve ap.ap_continuation conts)
             (with_extra_args (resolve ap.ap_exn_continuation conts) extra)
-            statics hp
+            statics hp rd
         | None -> Undefined)
       | None -> Undefined)
     | None -> Undefined)
   | Apply_cont ac -> (
     match eval_simples vars ac.ac_args with
-    | Some vs -> apply_continuation ac.ac_continuation vs conts statics hp
+    | Some vs -> apply_continuation ac.ac_continuation vs conts statics hp rd
     | None -> Undefined)
   | Switch (scrutinee, arms) -> (
     match eval_simple vars scrutinee with
@@ -583,7 +607,8 @@ let step s =
               state_vars = vars;
               state_conts = conts;
               state_statics = statics;
-              state_heap = hp
+              state_heap = hp;
+              state_reads = rd
             }
         | None -> Undefined)
       | None -> Undefined)

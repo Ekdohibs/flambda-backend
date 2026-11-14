@@ -48,6 +48,8 @@ val eval_int_comp : coq_Z -> int_comparison_behaviour -> coq_Z -> coq_Z -> coq_Z
 
 val array_kind_of_load_kind : array_load_kind -> array_kind
 
+val array_kind_of_set_kind : array_set_kind -> array_kind
+
 val array_element_ok : array_kind -> value -> bool
 
 val array_made : array_kind -> value list -> value list option
@@ -57,6 +59,16 @@ val array_length_of : value list -> value option
 val array_index : value list -> value -> nat option
 
 val array_loaded : array_load_kind -> value list -> value -> value option
+
+val replace_nth : nat -> 'a1 -> 'a1 list -> 'a1 list option
+
+val array_stored :
+  array_set_kind ->
+  array_kind ->
+  value list ->
+  value ->
+  value ->
+  value list option
 
 val bound_if_symbol : static_env -> value -> bool
 

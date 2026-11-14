@@ -1,6 +1,7 @@
 open BinNums
 open BinPos
 open Datatypes
+open FlambdaHeapFreeSpec
 open FlambdaLiftSpec
 open FlambdaMapSpec
 open FlambdaModel
@@ -145,6 +146,8 @@ and binding_lift_from_code k binding =
 
 let lift_from_code_unit u k e =
   let lifted = lift_from_code k [] root e in
-  if exits_plain_knowing [] [] e && well_formed_unit u lifted
+  if
+    (exits_plain_knowing [] [] e && expr_free_of_heap e)
+    && well_formed_unit u lifted
   then Some lifted
   else None

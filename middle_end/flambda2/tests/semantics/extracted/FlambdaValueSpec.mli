@@ -1,5 +1,6 @@
 open BinNums
 open BinPos
+open Datatypes
 open FlambdaKindModel
 open FlambdaMapSpec
 open FlambdaModel
@@ -54,6 +55,14 @@ type cell =
 type heap = (location * cell) list
 
 val empty_heap : heap
+
+type read_extent =
+  | Read_field of nat
+  | Read_whole
+
+type read_record = (location * read_extent) list
+
+val no_reads : read_record
 
 val closure_of :
   static_env -> value -> (code_id * (value_slot * value) list) option

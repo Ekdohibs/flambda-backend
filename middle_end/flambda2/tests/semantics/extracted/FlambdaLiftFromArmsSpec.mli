@@ -1,3 +1,4 @@
+open FlambdaHeapFreeSpec
 open FlambdaLiftFromCodeSpec
 open FlambdaLiftSpec
 open FlambdaModel

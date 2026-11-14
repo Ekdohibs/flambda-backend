@@ -3,6 +3,7 @@ open BinPos
 open Bool
 open Datatypes
 open FlambdaBindersSpec
+open FlambdaHeapFreeSpec
 open FlambdaLiftSpec
 open FlambdaMapSpec
 open FlambdaModel
@@ -217,7 +218,8 @@ let lift_around_unit u lets places e =
   let groups = groups_of lets places e in
   let lifted = lift_around lets groups root e in
   if
-    (exits_plain_knowing [] [] e && around_ok lets groups [] root e)
+    ((exits_plain_knowing [] [] e && expr_free_of_heap e)
+    && around_ok lets groups [] root e)
     && well_formed_unit u lifted
   then Some lifted
   else None

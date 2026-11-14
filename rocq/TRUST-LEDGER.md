@@ -862,9 +862,9 @@ it gave back.
   exit and not a fault (`FlambdaRegionsSpec.Region_let_not_run`), and
   nothing further is checked of the term: a value put in a cell of the
   heap may be local, and a cell made in a region is not followed. Such
-  an end is not "passes". The tool is to print the unit as not checked
-  for regions from that `Let` on, and never as passing; the function
-  that runs a unit (`run_regions`) has not that case yet.
+  an end is not "passes": the line says "not run", with the reason
+  that the unit is not checked for regions from that `Let` on
+  (`run_regions`).
   While the conversion makes no primitive of the heap, no run of the
   tool ends so: the static environment of the imports has no code and
   no value that holds a location, and of a term with no primitive of
