@@ -32,9 +32,7 @@
    This file is to be reviewed: all of it. It adds nothing to the
    machine: [region_step] and the rules of FlambdaRegionsSpec.v keep
    their text, and so do the tests of FlambdaRegionsInvariantSpec.v.
-   Nothing proves the statements at the end yet: the file is here for
-   the review of what it says, and it is not in the lists of
-   rocq/Makefile.
+   FlambdaRegionsCallsProofs.v proves the statements.
 
    WHAT IS SAID
 
@@ -78,10 +76,10 @@
 
    THE TEST OF A STATE ([calls_kept])
 
-   The statements are to be proved from a test of a state, which the
-   state that a run starts in passes and which a step keeps, of a
-   state that has the invariant of FlambdaRegionsInvariantSpec.v. It
-   has four parts.
+   The statements are proved from a test of a state, which the state
+   that a run starts in passes and which a step keeps, of a state that
+   has the invariant of FlambdaRegionsInvariantSpec.v. It has four
+   parts.
 
    - A mark is held by variables only ([marks_in_variables]). The
      value of a variable, of the state or of a closure that a
