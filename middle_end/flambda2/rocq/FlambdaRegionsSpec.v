@@ -377,7 +377,18 @@
      that the premise holds of every state of a run.
    - That the run of a term with its regions dropped ([erase]) on the
      machine of FlambdaSemanticsSpec.v is what its run here comes to.
-     None of the statements is that.
+     None of the statements of this file is that. What is stated of
+     the two runs is in other files, and is of a run from the first
+     state of a term that the erasure is meant for ([erasable]), with
+     symbols to draw that are none of the term or of the static
+     environment ([region_names_fresh]): an exit of the run here is
+     an exit of the run of the erased term, and where the erased term
+     exits the run here exits alike or stops with no step
+     (FlambdaRegionsErasureSpec.v, and FlambdaRegionsCallsSpec.v for
+     the values at the exit); where the run here stops because [step]
+     has no step, the run of the erased term goes wrong, under
+     premises on the states of the run that a term which passes the
+     check of regions has (FlambdaRegionsCheckSoundSpec.v).
 
    THE TERM WITH ITS REGIONS DROPPED ([erase])
 
