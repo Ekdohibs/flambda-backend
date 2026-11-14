@@ -282,8 +282,19 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   FlambdaRecoverComparisonScopeProofs.v \
   FlambdaRecoverComparisonScopeSpec.v \
   FlambdaRecoverComparisonSpec.v \
+  FlambdaRegionsErasedProofs.v \
+  FlambdaRegionsErasureProofs.v \
+  FlambdaRegionsErasureSpec.v \
+  FlambdaRegionsFreshProofs.v \
+  FlambdaRegionsInvariantProofs.v \
+  FlambdaRegionsInvariantSpec.v \
+  FlambdaRegionsNoPoisonProofs.v \
+  FlambdaRegionsOnceProofs.v \
+  FlambdaRegionsPlainStepProofs.v \
   FlambdaRegionsProofs.v \
+  FlambdaRegionsReadsProofs.v \
   FlambdaRegionsSpec.v \
+  FlambdaRegionsStepsProofs.v \
   FlambdaRenameApartProofs.v \
   FlambdaRenameApartSpec.v \
   FlambdaSameComparisonProofs.v \
