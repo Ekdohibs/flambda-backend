@@ -1,0 +1,63 @@
+(let code rec inline(always) loopify(default tailrec) size(27)
+       fold_0
+         (f/57 : val,
+          acc/58 : imm tagged,
+          l/59 : [ 0 | 0 of imm tagged * [ 0 | 0 of imm tagged * val ] ])
+         my_closure/60 &my_alloc_region/61 my_depth/62
+         -> k/22 * k/23
+         : imm tagged =
+   let next_depth/63 = rec_info (succ my_depth/62) in
+   (let prim/67 = %is_int (l/59) in
+    let Pisint/68 = %tag_imm (prim/67) in
+    (let untagged/69 = %untag_imm (Pisint/68) in
+     switch untagged/69
+       | 0 -> k/26
+       | 1 -> k/22 (acc/58))
+      where k/26 =
+        cont k/24)
+     where k/24 =
+       let Pfield/64 = %block_load.[`1`] (l/59) in
+       ((let Pfield/66 = %block_load.[`0`] (l/59) in
+         apply &my_alloc_region/61 f/57 (acc/58, Pfield/66) -> k/25 * k/23)
+          where k/25 (apply_result/65 : imm tagged) =
+            apply direct(fold_0 &my_alloc_region/61)
+              (my_closure/60 ~ depth my_depth/62 -> next_depth/63
+               : _ -> imm tagged)
+                (f/57, apply_result/65, Pfield/64)
+                -> k/22 * k/23)
+ in
+ let code size(3)
+       `fn[fold_passes_function_on.ml:15,18--36]_1`
+         (a/70 : imm tagged, x/71 : imm tagged)
+         my_closure/72 &my_alloc_region/73 my_depth/74
+         -> k/27 * k/28
+         : imm tagged =
+   let next_depth/75 = rec_info (succ my_depth/74) in
+   let int_add/76 = %int_barith.add (a/70, x/71) in
+   cont k/27 (int_add/76)
+ in
+ let $camlFold_passes_function_on__const_block_0 = Block 0 (3, 0) in
+ let $camlFold_passes_function_on__const_block_1 =
+   Block 0 (2, $camlFold_passes_function_on__const_block_0)
+ in
+ let $camlFold_passes_function_on__const_block_2 =
+   Block 0 (1, $camlFold_passes_function_on__const_block_1)
+ in
+ let fold/77 = closure fold_0 @fold &toplevel in
+ (let Popaque/80 = %opaque ($camlFold_passes_function_on__const_block_2) in
+  let `fn[fold_passes_function_on.ml:15,18--36]/81` =
+    closure `fn[fold_passes_function_on.ml:15,18--36]_1`
+      @`fn[fold_passes_function_on.ml:15,18--36]` &toplevel
+  in
+  apply direct(fold_0 &toplevel)
+    (fold/77 : _ -> imm tagged)
+      (`fn[fold_passes_function_on.ml:15,18--36]/81`, 0, Popaque/80)
+      -> k/29 * error)
+   where k/29 (result/78 : imm tagged) =
+     let Pmakeblock/79 = %block.[`0`].`toplevel` (result/78) in
+     cont k/21 (Pmakeblock/79))
+  where k/21 define_root_symbol (module_block/55) =
+    let field_0/56 = %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/55)
+    in
+    let $camlFold_passes_function_on = Block 0 (field_0/56) in
+    cont done ($camlFold_passes_function_on)

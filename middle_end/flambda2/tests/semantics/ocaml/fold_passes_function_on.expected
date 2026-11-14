@@ -1,0 +1,8 @@
+fold_passes_function_on.fl:
+  before Simplify (67 steps): returns [0: 6]
+  after Simplify (37 steps): returns [0: 6]
+  the check of kinds: passes before, passes after
+  calls outside code: 1 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 1
+  validated: the same once normalised and unused static bindings removed

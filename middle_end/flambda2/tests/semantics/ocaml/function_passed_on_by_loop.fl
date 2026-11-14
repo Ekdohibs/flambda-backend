@@ -1,0 +1,70 @@
+(let code rec loopify(default tailrec) size(39)
+       exists_0
+         (p/57 : val,
+          l/58 : [ 0 | 0 of imm tagged * [ 0 | 0 of imm tagged * val ] ])
+         my_closure/59 &my_alloc_region/60 my_depth/61
+         -> k/26 * k/27
+         : imm tagged =
+   let next_depth/62 = rec_info (succ my_depth/61) in
+   (let prim/67 = %is_int (l/58) in
+    let Pisint/68 = %tag_imm (prim/67) in
+    (let untagged/69 = %untag_imm (Pisint/68) in
+     switch untagged/69
+       | 0 -> k/32
+       | 1 -> k/26 (0))
+      where k/32 =
+        cont k/28)
+     where k/28 =
+       ((let Pfield/66 = %block_load.[`0`] (l/58) in
+         apply &my_alloc_region/60 p/57 (Pfield/66) -> k/30 * k/27)
+          where k/30 (apply_result/64 : [ 0 |1 ]) =
+            ((let untagged/65 = %untag_imm (apply_result/64) in
+              switch untagged/65
+                | 0 -> k/31
+                | 1 -> k/26 (1))
+               where k/31 =
+                 cont k/29)
+          where k/29 =
+            let Pfield/63 = %block_load.[`1`] (l/58) in
+            apply direct(exists_0 &my_alloc_region/60)
+              (my_closure/59 ~ depth my_depth/61 -> next_depth/62
+               : _ -> imm tagged)
+                (p/57, Pfield/63)
+                -> k/26 * k/27)
+ in
+ let code size(5)
+       `fn[function_passed_on_by_loop.ml:16,33--49]_1` (x/70 : imm tagged)
+         my_closure/71 &my_alloc_region/72 my_depth/73
+         -> k/33 * k/34
+         : imm tagged =
+   let next_depth/74 = rec_info (succ my_depth/73) in
+   let prim/75 = %int_comp.gt (x/70, 2) in
+   let int_greaterthan/76 = %tag_imm (prim/75) in
+   cont k/33 (int_greaterthan/76)
+ in
+ let $camlFunction_passed_on_by_loop__const_block_0 = Block 0 (3, 0) in
+ let $camlFunction_passed_on_by_loop__const_block_1 =
+   Block 0 (2, $camlFunction_passed_on_by_loop__const_block_0)
+ in
+ let $camlFunction_passed_on_by_loop__const_block_2 =
+   Block 0 (1, $camlFunction_passed_on_by_loop__const_block_1)
+ in
+ let exists/77 = closure exists_0 @exists &toplevel in
+ (let Popaque/80 = %opaque ($camlFunction_passed_on_by_loop__const_block_2)
+  in
+  let `fn[function_passed_on_by_loop.ml:16,33--49]/81` =
+    closure `fn[function_passed_on_by_loop.ml:16,33--49]_1`
+      @`fn[function_passed_on_by_loop.ml:16,33--49]` &toplevel
+  in
+  apply direct(exists_0 &toplevel) inlined(always)
+    (exists/77 : _ -> imm tagged)
+      (`fn[function_passed_on_by_loop.ml:16,33--49]/81`, Popaque/80)
+      -> k/35 * error)
+   where k/35 (result/78 : imm tagged) =
+     let Pmakeblock/79 = %block.[`0`].`toplevel` (result/78) in
+     cont k/25 (Pmakeblock/79))
+  where k/25 define_root_symbol (module_block/55) =
+    let field_0/56 = %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/55)
+    in
+    let $camlFunction_passed_on_by_loop = Block 0 (field_0/56) in
+    cont done ($camlFunction_passed_on_by_loop)
