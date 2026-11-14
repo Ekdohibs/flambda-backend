@@ -1050,6 +1050,17 @@ not a proof.
   them back, which a rebase needs first. When a branch is merged, the
   integrator runs `make -C rocq all` on the result and commits what it
   regenerates, on top of the branch.
+- An extracted file that is no longer written. The extraction writes a
+  file for each module that something extracted uses, and leaves every
+  other file of the directory as it is. So when the last use of a module
+  goes, its `.ml` and `.mli` stay committed as they were last written,
+  compiled into the library of the tests and used by nothing, and
+  `git diff` after `make -C rocq all` does not show them. To see them:
+  delete every `.ml` and `.mli` of `tests/semantics/extracted/` (not its
+  `dune` file, which is written by hand) and
+  `middle_end/flambda2/rocq/FlambdaExtract.vo`, run `make -C rocq all`,
+  and look at `git status` of the directory. A file shown as deleted is
+  one that the extraction no longer writes; the integrator removes it.
 - The test tool and the examples come last. The compiler must build at
   every commit of the integration branch, and `make -s boot-compiler`
   type-checks `flsemantics.ml` against the extracted files that are
