@@ -163,7 +163,8 @@ design out; that is the request, not the change.
     C2's erasure of regions: the relation between a state of the
     machine of regions and the state that runs the erased term, and
     the steps at the expressions where that machine does what `step`
-    does; the other `FlambdaRegions*` files are C2's)
+    does; the other `FlambdaRegions*` files are C2's, but for
+    `FlambdaRegionsCalls*`, which are C5's)
   - `middle_end/flambda2/rocq/status/C3.md`
   - the examples `middle_end/flambda2/tests/semantics/set_*.fl`,
     `apply_partial*.fl`, `apply_over*.fl`, `tupled_apply*.fl` and
@@ -221,6 +222,10 @@ design out; that is the request, not the change.
     return continuation whose handler is `Invalid`)
   - `middle_end/flambda2/rocq/requests/C5-imports-with-contents.md`
     (a request: a unit run after the units it depends on)
+  - `middle_end/flambda2/rocq/FlambdaRegionsCalls*` (calls on C2's
+    machine of regions: code cannot end a region of its caller, and
+    what follows of the values that a run exits with; C5's, though
+    the names match the pattern of C2's files)
   - `middle_end/flambda2/rocq/status/C5.md`
   - the examples `middle_end/flambda2/tests/semantics/`
     `exn_extra_args.fl`, `push_unit_return.fl`, `raise_in_call.fl`,
