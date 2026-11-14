@@ -31,7 +31,8 @@
 
    This file is to be reviewed: all of it. It adds nothing to the
    machine: [region_step] and the rules of FlambdaRegionsSpec.v keep
-   their text. The statements at the end have no proof in this tree.
+   their text. FlambdaRegionsInvariantProofs.v proves the statements
+   at the end.
 
    The statements of FlambdaRegionsSpec.v are laws of one step. Two
    things were said there in words and stated of no run: that the
