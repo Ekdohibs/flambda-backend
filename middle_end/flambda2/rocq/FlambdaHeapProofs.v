@@ -1781,6 +1781,23 @@ Lemma eval_phys_equal_location_form (statics : static_env) (v1 v2 : value) :
     end.
 Proof. destruct v1, v2; reflexivity. Qed.
 
+Lemma is_bound_same_keys (h h' : heap) (l : location) :
+  map fst h = map fst h' -> is_bound l h = true -> is_bound l h' = true.
+Proof.
+  unfold is_bound. revert h'.
+  induction h as [ | [k c] h IH]; intros [ | [k' c'] h'] Hkeys; simpl;
+    try discriminate; try (intros; assumption).
+  simpl in Hkeys. injection Hkeys as -> Hkeys.
+  destruct (Pos.eqb l k'); [ reflexivity | exact (IH h' Hkeys) ].
+Qed.
+
+(* The lemmas of the section are proved of two heaps that bind the same
+   locations and whose cells are alike where the arguments name one
+   ([heap_alike_given]), and they say what the primitive has added to
+   each heap ([heap_alike_added]). [exec_prim_related_given] is read
+   off them; [exec_prim_related], of two heaps alike in every entry,
+   follows from it. *)
+
 Section Prims_related.
 
 Variable R : value -> value -> Prop.
@@ -1839,21 +1856,31 @@ Proof.
   destruct v, v'; simpl in *; try reflexivity; discriminate Hl.
 Qed.
 
-Lemma arguments_bound_related (h h' : heap) (vs vs' : list value) :
-  heap_alike R h h' ->
+Lemma lookup_given (h h' : heap) (vs : list value) (l : location) :
+  heap_alike_given R h h' vs ->
+  Value_location l ∈ vs ->
+  match lookup l h with
+  | Some c => ∃ c' : cell, lookup l h' = Some c' ∧ cell_alike R c c'
+  | None => True
+  end.
+Proof.
+  intros [_ Hcells] Hin.
+  destruct (lookup l h) as [c | ] eqn:Hl;
+    [ exact (Hcells l c Hin Hl) | exact I ].
+Qed.
+
+Lemma arguments_bound_given (h h' : heap) (vs vs' : list value) :
+  map fst h = map fst h' ->
   Forall2 R vs vs' ->
   forallb (argument_bound statics h) vs = true ->
   forallb (argument_bound statics' h') vs' = true.
 Proof.
-  intros Hheap. apply FlambdaPrimitiveProofs.forall2_forallb.
+  intros Hkeys. apply FlambdaPrimitiveProofs.forall2_forallb.
   intros v v' Hr Hbound.
   pose proof (related_location_of v v' Hr) as Hl.
   destruct (location_of v) as [l | ] eqn:Hv.
   - apply location_of_some in Hv. apply location_of_some in Hl. subst v v'.
-    simpl in *. unfold is_bound in *.
-    pose proof (heap_alike_lookup R h h' l Hheap) as Hlookup.
-    destruct (lookup l h) as [c | ]; [ | discriminate Hbound ].
-    destruct Hlookup as (c' & -> & _). reflexivity.
+    simpl in *. exact (is_bound_same_keys h h' l Hkeys Hbound).
   - rewrite (argument_bound_not_location statics' h' v' Hl).
     rewrite (argument_bound_not_location statics h v Hv) in Hbound.
     pose proof (proj2 (proj2 Hrespects)) as Hobserved.
@@ -2021,39 +2048,38 @@ Proof.
     | discriminate ].
 Qed.
 
-Lemma pure_related (h h' h1 : heap) (p : prim) (vs vs' : list value)
+Lemma pure_given (h h' h1 : heap) (p : prim) (vs vs' : list value)
     (v : value) :
-  heap_alike R h h' ->
   Forall2 R vs vs' ->
   (let* v := eval_prim statics p vs in Some (v, h)) = Some (v, h1) ->
   ∃ (v' : value) (h1' : heap),
     (let* v := eval_prim statics' p vs' in Some (v, h')) = Some (v', h1')
     ∧ R v v'
-    ∧ heap_alike R h1 h1'.
+    ∧ heap_alike_added R h h1 h' h1'.
 Proof.
-  intros Hheap Hvs.
+  intros Hvs.
   destruct (eval_prim statics p vs) as [w | ] eqn:Heval; [ | discriminate ].
   intros [= <- <-].
   destruct
     (FlambdaPrimitiveProofs.eval_prim_related R statics statics' p vs vs' w
        Hrespects Hvs Heval)
     as (w' & -> & Hw).
-  exists w', h'. auto.
+  exists w', h'. split; [ reflexivity | ]. split; [ exact Hw | ].
+  left. split; reflexivity.
 Qed.
 
-Lemma exec_heap_primitive_related (h h' h1 : heap) (p : heap_primitive)
+Lemma exec_heap_primitive_given (h h' h1 : heap) (p : heap_primitive)
     (vs vs' : list value) (v : value) :
-  heap_alike R h h' ->
+  heap_alike_given R h h' vs ->
   Forall2 R vs vs' ->
   exec_heap_primitive statics h p vs = Some (v, h1) ->
   ∃ (v' : value) (h1' : heap),
     exec_heap_primitive statics' h' p vs' = Some (v', h1')
     ∧ R v v'
-    ∧ heap_alike R h1 h1'.
+    ∧ heap_alike_added R h h1 h' h1'.
 Proof.
-  intros Hheap Hvs.
-  pose proof (fresh_location_keys h h' (heap_alike_keys R h h' Hheap))
-    as Hfresh.
+  intros Hgiven Hvs.
+  pose proof (fresh_location_keys h h' (proj1 Hgiven)) as Hfresh.
   destruct p as [mut tag | kind init field | kind | akind set_kind].
   - simpl.
     destruct (forallb (fun w => kind_eqb (kind_of_value w) Value) vs)
@@ -2068,13 +2094,16 @@ Proof.
          Hvs Hkinds).
     rewrite <- Hfresh. eexists _, _. split; [ reflexivity | ].
     split; [ apply Hloc | ].
-    apply heap_alike_cons; [ | exact Hheap ]. simpl. auto.
+    right. eexists _, _, _. split; [ reflexivity | ].
+    split; [ reflexivity | ]. simpl. auto.
   - destruct Hvs as [ | w w' vs vs' Hw Hvs]; [ discriminate | ].
     destruct Hvs as [ | new new' vs vs' Hnew Hvs]; [ discriminate | ].
     destruct Hvs as [ | x x' vs vs' _ _]; [ | discriminate ].
     rewrite !exec_block_set, (related_location_of w w' Hw).
-    destruct (location_of w) as [l | ]; [ | discriminate ].
-    pose proof (heap_alike_lookup R h h' l Hheap) as Hlookup.
+    destruct (location_of w) as [l | ] eqn:Hwl; [ | discriminate ].
+    pose proof
+      (lookup_given h h' _ l Hgiven (or_introl (location_of_some w l Hwl)))
+      as Hlookup.
     destruct (lookup l h) as [[[ | ] ctag fields | ] | ]; try discriminate.
     destruct Hlookup as (c' & -> & Hcell).
     destruct c' as [mut' tag' fields' | ]; [ | contradiction ].
@@ -2087,7 +2116,8 @@ Proof.
          Hfields Hnew Hstore)
       as (stored' & -> & Hstored).
     eexists _, _. split; [ reflexivity | ]. split; [ apply Hconst | ].
-    apply heap_alike_cons; [ | exact Hheap ]. simpl. auto.
+    right. eexists _, _, _. split; [ reflexivity | ].
+    split; [ reflexivity | ]. simpl. auto.
   - destruct Hvs as [ | w w' vs vs' Hw Hvs]; [ discriminate | ].
     simpl.
     destruct (array_made kind (w :: vs)) as [elements | ] eqn:Hmade;
@@ -2099,14 +2129,17 @@ Proof.
       as (elements' & -> & Helements).
     rewrite <- Hfresh. eexists _, _. split; [ reflexivity | ].
     split; [ apply Hloc | ].
-    apply heap_alike_cons; [ | exact Hheap ]. simpl. auto.
+    right. eexists _, _, _. split; [ reflexivity | ].
+    split; [ reflexivity | ]. simpl. auto.
   - destruct Hvs as [ | w w' vs vs' Hw Hvs]; [ discriminate | ].
     destruct Hvs as [ | index index' vs vs' Hindex Hvs]; [ discriminate | ].
     destruct Hvs as [ | new new' vs vs' Hnew Hvs]; [ discriminate | ].
     destruct Hvs as [ | x x' vs vs' _ _]; [ | discriminate ].
     rewrite !exec_array_set, (related_location_of w w' Hw).
-    destruct (location_of w) as [l | ]; [ | discriminate ].
-    pose proof (heap_alike_lookup R h h' l Hheap) as Hlookup.
+    destruct (location_of w) as [l | ] eqn:Hwl; [ | discriminate ].
+    pose proof
+      (lookup_given h h' _ l Hgiven (or_introl (location_of_some w l Hwl)))
+      as Hlookup.
     destruct (lookup l h) as [[ | kind elements] | ]; try discriminate.
     destruct Hlookup as (c' & -> & Hcell).
     destruct c' as [ | kind' elements']; [ contradiction | ].
@@ -2121,35 +2154,38 @@ Proof.
          Helements Hindex Hnew Hstore)
       as (stored' & -> & Hstored).
     eexists _, _. split; [ reflexivity | ]. split; [ apply Hconst | ].
-    apply heap_alike_cons; [ | exact Hheap ]. simpl. auto.
+    right. eexists _, _, _. split; [ reflexivity | ].
+    split; [ reflexivity | ]. simpl. auto.
 Qed.
 
-Lemma exec_bound_prim_related (h h' h1 : heap) (p : prim)
+Lemma exec_bound_prim_given (h h' h1 : heap) (p : prim)
     (vs vs' : list value) (v : value) :
-  heap_alike R h h' ->
+  heap_alike_given R h h' vs ->
   Forall2 R vs vs' ->
   exec_bound_prim statics h p vs = Some (v, h1) ->
   ∃ (v' : value) (h1' : heap),
     exec_bound_prim statics' h' p vs' = Some (v', h1')
     ∧ R v v'
-    ∧ heap_alike R h1 h1'.
+    ∧ heap_alike_added R h h1 h' h1'.
 Proof.
-  intros Hheap Hvs.
+  intros Hgiven Hvs.
   destruct p as [p | p | p | p | rp].
   - rewrite !exec_bound_prim_unary_form.
     destruct Hvs as [ | w w' vs vs' Hw Hvs];
-      [ exact (pure_related h h' h1 (Unary p) [] [] v Hheap (Forall2_nil _))
+      [ exact (pure_given h h' h1 (Unary p) [] [] v (Forall2_nil _))
       | ].
     destruct Hvs as [ | w2 w2' vs vs' Hw2 Hvs];
       [ | exact
-            (pure_related h h' h1 (Unary p) _ _ v Hheap
+            (pure_given h h' h1 (Unary p) _ _ v
                (Forall2_cons _ _ Hw (Forall2_cons _ _ Hw2 Hvs))) ].
     rewrite (related_location_of w w' Hw).
-    destruct (location_of w) as [l | ];
+    destruct (location_of w) as [l | ] eqn:Hwl;
       [ | exact
-            (pure_related h h' h1 (Unary p) _ _ v Hheap
+            (pure_given h h' h1 (Unary p) _ _ v
                (Forall2_cons _ _ Hw (Forall2_nil _))) ].
-    pose proof (heap_alike_lookup R h h' l Hheap) as Hlookup.
+    pose proof
+      (lookup_given h h' _ l Hgiven (or_introl (location_of_some w l Hwl)))
+      as Hlookup.
     destruct (lookup l h) as [c | ]; [ | discriminate ].
     destruct Hlookup as (c' & -> & Hcell). simpl.
     destruct (exec_unary_on_cell p l c) as [result | ] eqn:Hresult;
@@ -2157,7 +2193,8 @@ Proof.
     intros [= <- <-].
     destruct (exec_unary_on_cell_related p l c c' result Hcell Hresult)
       as (result' & -> & Hrelated).
-    exists result', h'. auto.
+    exists result', h'. split; [ reflexivity | ].
+    split; [ exact Hrelated | left; split; reflexivity ].
   - rewrite !exec_bound_prim_binary.
     assert (Hphys :
       phys_equal_on_location p vs' = phys_equal_on_location p vs).
@@ -2179,7 +2216,7 @@ Proof.
       intros [= <- <-].
       rewrite (eval_phys_equal_location_related w1 w1' w2 w2' same H1 H2 Hsame).
       eexists _, _. split; [ reflexivity | ].
-      split; [ apply Hconst | exact Hheap ].
+      split; [ apply Hconst | left; split; reflexivity ].
     + rewrite !binary_on_cell_form.
       assert (Hpure :
         (let* v := eval_prim statics (Binary p) vs in Some (v, h))
@@ -2188,8 +2225,8 @@ Proof.
           (let* v := eval_prim statics' (Binary p) vs' in Some (v, h'))
           = Some (v', h1')
           ∧ R v v'
-          ∧ heap_alike R h1 h1')
-        by exact (pure_related h h' h1 (Binary p) vs vs' v Hheap Hvs).
+          ∧ heap_alike_added R h h1 h' h1')
+        by exact (pure_given h h' h1 (Binary p) vs vs' v Hvs).
       assert (Hcell :
         match vs with
         | [v1; v2] =>
@@ -2230,9 +2267,13 @@ Proof.
              destruct Hvs as [ | w2 w2' vs vs' H2 Hvs]; [ discriminate | ];
              destruct Hvs as [ | w3 w3' vs vs' H3 Hvs]; [ | discriminate ];
              rewrite (related_location_of w1 w1' H1);
-             destruct (location_of w1) as [l1 | ]; [ | discriminate ];
+             destruct (location_of w1) as [l1 | ] eqn:Hw1l;
+               [ | discriminate ];
              injection Hon_cell as <- <-;
-             pose proof (heap_alike_lookup R h h' l1 Hheap) as Hlookup;
+             pose proof
+               (lookup_given h h' _ l1 Hgiven
+                  (or_introl (location_of_some w1 l1 Hw1l)))
+               as Hlookup;
              destruct (lookup l1 h) as [c | ]; [ | discriminate ];
              destruct Hlookup as (c' & -> & Halike); simpl;
              match goal with
@@ -2245,27 +2286,57 @@ Proof.
                  (exec_binary_on_cell_related q l1 c c' w2 w2' result Halike
                     H2 Hresult)
                  as (result' & -> & Hrelated);
-               exists result', h'; auto
+               exists result', h'; split; [ reflexivity | ];
+               split; [ exact Hrelated | left; split; reflexivity ]
              end).
-  - exact (pure_related h h' h1 (Variadic p) vs vs' v Hheap Hvs).
-  - exact (exec_heap_primitive_related h h' h1 p vs vs' v Hheap Hvs).
-  - exact (pure_related h h' h1 (Region_primitive rp) vs vs' v Hheap Hvs).
+  - exact (pure_given h h' h1 (Variadic p) vs vs' v Hvs).
+  - exact (exec_heap_primitive_given h h' h1 p vs vs' v Hgiven Hvs).
+  - exact (pure_given h h' h1 (Region_primitive rp) vs vs' v Hvs).
 Qed.
 
 End Prims_related.
 
-Theorem exec_prim_related : exec_prim_related_statement.
+Theorem exec_prim_related_given : exec_prim_related_given_statement.
 Proof.
-  intros R statics statics' h h' h1 p vs vs' v Hrespects Hlocations Hheap Hvs.
+  intros R statics statics' h h' h1 p vs vs' v Hrespects Hlocations Hgiven Hvs.
   unfold exec_prim.
   destruct (forallb (argument_bound statics h) vs) eqn:Hbound;
     [ | discriminate ].
   rewrite
-    (arguments_bound_related R statics statics' Hrespects Hlocations h h' vs
-       vs' Hheap Hvs Hbound).
+    (arguments_bound_given R statics statics' Hrespects Hlocations h h' vs
+       vs' (proj1 Hgiven) Hvs Hbound).
   exact
-    (exec_bound_prim_related R statics statics' Hrespects Hlocations h h' h1 p
-       vs vs' v Hheap Hvs).
+    (exec_bound_prim_given R statics statics' Hrespects Hlocations h h' h1 p
+       vs vs' v Hgiven Hvs).
+Qed.
+
+Lemma heap_alike_given_of_alike (R : value -> value -> Prop) (h h' : heap)
+    (vs : list value) :
+  heap_alike R h h' -> heap_alike_given R h h' vs.
+Proof.
+  intros Hheap. split; [ exact (heap_alike_keys R h h' Hheap) | ].
+  intros l c _ Hl.
+  pose proof (heap_alike_lookup R h h' l Hheap) as Hlookup.
+  rewrite Hl in Hlookup. exact Hlookup.
+Qed.
+
+Lemma heap_alike_of_added (R : value -> value -> Prop) (h h1 h' h1' : heap) :
+  heap_alike R h h' -> heap_alike_added R h h1 h' h1' -> heap_alike R h1 h1'.
+Proof.
+  intros Hheap [[-> ->] | (l & c & c' & -> & -> & Hcell)];
+    [ exact Hheap | exact (heap_alike_cons R h h' l c c' Hcell Hheap) ].
+Qed.
+
+Theorem exec_prim_related : exec_prim_related_statement.
+Proof.
+  intros R statics statics' h h' h1 p vs vs' v Hrespects Hlocations Hheap Hvs
+    Hexec.
+  destruct
+    (exec_prim_related_given R statics statics' h h' h1 p vs vs' v Hrespects
+       Hlocations (heap_alike_given_of_alike R h h' vs Hheap) Hvs Hexec)
+    as (v' & h1' & Hexec' & Hv & Hadded).
+  exists v', h1'. split; [ exact Hexec' | ]. split; [ exact Hv | ].
+  exact (heap_alike_of_added R h h1 h' h1' Hheap Hadded).
 Qed.
 
 (* ======================================================================== *)
@@ -2517,4 +2588,190 @@ Proof.
   destruct (forallb (argument_bound statics h) vs); [ | discriminate ].
   rewrite (exec_heap_primitive_result_kind statics h h' q vs v Hexec).
   destruct q; reflexivity.
+Qed.
+
+(* ======================================================================== *)
+(* What a primitive does, said of the cells that its arguments name          *)
+(* ======================================================================== *)
+
+(* [exec_prim_related_given] is above, after the section that
+   proves it: [exec_prim_related] follows from it. *)
+
+Theorem exec_prim_preserves_given : exec_prim_preserves_given_statement.
+Proof.
+  intros P st h h1 p vs result Hnumbers Hblocks Hof_arrays Hstatic Harrays
+    Hnot_heap Hvs Hgiven Hexec.
+  apply exec_prim_bound in Hexec as [_ Hexec]. revert Hexec.
+  assert (Hpure :
+            (let* v := eval_prim st p vs in Some (v, h)) = Some (result, h1) ->
+            P result).
+  { destruct (eval_prim st p vs) as [v | ] eqn:Heval; simpl;
+      [ | discriminate ].
+    intros [= <- <-].
+    exact
+      (FlambdaPrimitiveProofs.eval_prim_preserves P st p vs v Hnumbers Hblocks
+         Hof_arrays Hstatic Harrays Hvs Heval). }
+  assert (Hconst : ∀ c : const, P (Value_const c)).
+  { intros c. exact (proj1 (Hnumbers c)). }
+  destruct p as [p | p | p | p | rp]; try exact Hpure.
+  - destruct vs as [ | v [ | v2 vs]]; try exact Hpure.
+    2: { destruct v; simpl; discriminate. }
+    rewrite exec_bound_prim_unary.
+    destruct (location_of v) as [l | ] eqn:Hlocation.
+    2: { destruct v; try discriminate; exact Hpure. }
+    destruct v; try discriminate. injection Hlocation as ->.
+    destruct (lookup l h) as [c | ] eqn:Hc; simpl; [ | discriminate ].
+    destruct (exec_unary_on_cell p l c) as [res | ] eqn:Hres; simpl;
+      [ | discriminate ].
+    intros [= <- <-].
+    assert (Hcell : ∀ v : value, v ∈ values_of_cell c -> P v).
+    { intros v Hv. exact (Hgiven l c v (or_introl eq_refl) Hc Hv). }
+    destruct c as [cell_mut tag fields | akind elements].
+    + destruct p; simpl in Hres; try discriminate.
+      * destruct (load_allowed _ cell_mut); [ | discriminate ].
+        apply load_field_in in Hres. exact (Hcell res Hres).
+      * injection Hres as <-. apply Hconst.
+      * injection Hres as <-. apply Hconst.
+      * injection Hres as <-. apply Hconst.
+      * destruct (kind_eqb _ Value); [ | discriminate ].
+        injection Hres as <-. apply Hvs. left. reflexivity.
+    + destruct p as [ | [ | ] | | | length_kind | | okind | | | | | | | | ];
+        simpl in Hres; try discriminate.
+      * injection Hres as <-. apply Hconst.
+      * injection Hres as <-. apply Hconst.
+      * unfold array_length_of in Hres.
+        destruct (in_range _ _); [ | discriminate ].
+        injection Hres as <-. apply Hconst.
+      * destruct (kind_eqb _ Value); [ | discriminate ].
+        injection Hres as <-. apply Hvs. left. reflexivity.
+  - rewrite exec_bound_prim_binary.
+    destruct (phys_equal_on_location p vs).
+    + destruct p; try discriminate.
+      destruct vs as [ | v1 [ | v2 [ | v3 vs]]]; try discriminate.
+      destruct (eval_phys_equal_location st v1 v2); simpl;
+        [ | discriminate ].
+      intros [= <- <-]. apply Hconst.
+    + destruct (binary_on_cell p vs) as [[l v2] | ] eqn:Hon;
+        [ | exact Hpure ].
+      destruct (lookup l h) as [c | ] eqn:Hc; simpl; [ | discriminate ].
+      destruct (exec_binary_on_cell p l c v2) as [res | ] eqn:Hres; simpl;
+        [ | discriminate ].
+      intros [= <- <-].
+      destruct c as [cell_mut tag fields | akind elements];
+        [ destruct p; simpl in Hres; discriminate | ].
+      destruct p as [array_kind load_kind mut | | | | | ]; simpl in Hres;
+        try discriminate.
+      destruct (load_allowed mut Cell_mutable); [ | discriminate ].
+      apply FlambdaPrimitiveProofs.array_loaded_element in Hres as [Hin _].
+      assert (Hl : Value_location l ∈ vs).
+      { unfold binary_on_cell in Hon.
+        destruct vs as [ | w1 [ | w2 [ | w3 ws]]]; simpl in Hon;
+          try discriminate;
+          destruct w1; simpl in Hon; try discriminate.
+        injection Hon as <- <-. left. reflexivity. }
+      exact (Hgiven l _ res Hl Hc Hin).
+  - exfalso. exact (Hnot_heap p eq_refl).
+Qed.
+
+Theorem exec_prim_load : exec_prim_load_statement.
+Proof.
+  intros st h h1 p l rest c v Hloads Hc Hexec.
+  apply exec_prim_bound in Hexec as [_ Hexec].
+  destruct p as [p | p | p | p | rp]; try discriminate.
+  - destruct p; try discriminate.
+    destruct rest as [ | w rest].
+    + rewrite exec_bound_prim_unary in Hexec. cbn in Hexec.
+      rewrite Hc in Hexec. cbn in Hexec.
+      destruct c as [cell_mut tag fields | akind elements];
+        cbn in Hexec; [ | discriminate ].
+      destruct (load_allowed _ cell_mut); [ | discriminate ].
+      match type of Hexec with
+      | (let* r := ?e in _) = _ => destruct e as [res | ] eqn:Hres
+      end; [ | discriminate ].
+      cbn in Hexec. injection Hexec as <- <-.
+      exact (load_field_in _ _ _ _ _ Hres).
+    + cbn in Hexec. discriminate.
+  - destruct p; try discriminate.
+    destruct rest as [ | index [ | w rest]].
+    + cbn in Hexec. discriminate.
+    + cbn in Hexec. rewrite Hc in Hexec. cbn in Hexec.
+      destruct c as [cell_mut tag fields | akind elements];
+        cbn in Hexec; [ discriminate | ].
+      destruct (load_allowed _ Cell_mutable); [ | discriminate ].
+      match type of Hexec with
+      | (let* r := ?e in _) = _ => destruct e as [res | ] eqn:Hres
+      end; [ | discriminate ].
+      cbn in Hexec. injection Hexec as <- <-.
+      apply FlambdaPrimitiveProofs.array_loaded_element in Hres as [Hin _].
+      exact Hin.
+    + cbn in Hexec. discriminate.
+Qed.
+
+Theorem cell_with_values : cell_with_values_statement.
+Proof.
+  intros i w c c' v Hwith Hin.
+  destruct c as [mut tag fields | kind elements]; cbn in Hwith.
+  - destruct (replace_nth i w fields) as [fields' | ] eqn:Hr;
+      [ | discriminate ].
+    cbn in Hwith. injection Hwith as <-. cbn in Hin |- *.
+    exact (FlambdaPrimitiveProofs.replace_nth_in i w fields fields' v Hr Hin).
+  - destruct (replace_nth i w elements) as [elements' | ] eqn:Hr;
+      [ | discriminate ].
+    cbn in Hwith. injection Hwith as <-. cbn in Hin |- *.
+    exact
+      (FlambdaPrimitiveProofs.replace_nth_in i w elements elements' v Hr Hin).
+Qed.
+
+Theorem exec_prim_adds : exec_prim_adds_statement.
+Proof.
+  intros statics h h' q vs v H.
+  unfold exec_prim in H.
+  destruct (forallb (argument_bound statics h) vs); [|discriminate].
+  cbn [exec_bound_prim] in H.
+  destruct q as [mut tag | kind init field | kind | kind set_kind].
+  - cbn [exec_heap_primitive] in H.
+    destruct (forallb _ vs); [|discriminate].
+    inversion H; subst. left. exists (Cell_block mut tag vs).
+    repeat split.
+  - cbn [exec_heap_primitive] in H.
+    destruct vs as [|a [|new [|? ?]]]; try discriminate.
+    destruct a; try discriminate.
+    destruct (lookup l h) as [[mutc tagc fields | ? ?]|] eqn:Hl;
+      try discriminate.
+    destruct mutc; try discriminate.
+    destruct (store_field kind field new tagc fields) as [fields'|] eqn:Hs;
+      [|discriminate].
+    cbn in H. inversion H; subst. right.
+    exists l, [], new, (Cell_block Cell_mutable tagc fields),
+      (Cell_block Cell_mutable tagc fields'), (Z.to_nat field).
+    repeat split; try reflexivity; try assumption.
+    unfold store_field in Hs. destruct kind.
+    match type of Hs with (if ?b then _ else _) = _ =>
+      destruct b; [|discriminate] end.
+    cbn. rewrite Hs. reflexivity.
+  - cbn [exec_heap_primitive] in H.
+    destruct vs as [|a vs]; try discriminate.
+    destruct (array_made kind (a :: vs)) as [elements|] eqn:Hm;
+      [|discriminate].
+    cbn in H. inversion H; subst. left.
+    exists (Cell_array kind elements). repeat split.
+    cbn. unfold array_made in Hm.
+    destruct (forallb _ _) in Hm; [|discriminate].
+    inversion Hm. reflexivity.
+  - cbn [exec_heap_primitive] in H.
+    destruct vs as [|a [|index [|new [|? ?]]]]; try discriminate.
+    destruct a; try discriminate.
+    destruct (lookup l h) as [[? ? ? | kindc elements]|] eqn:Hl;
+      try discriminate.
+    destruct (array_stored set_kind kindc elements index new)
+      as [elements'|] eqn:Hs; [|discriminate].
+    cbn in H. inversion H; subst. right.
+    unfold array_stored in Hs.
+    destruct (_ && _) in Hs; [|discriminate].
+    destruct (array_index elements index) as [i|] eqn:Hi; [|discriminate].
+    cbn in Hs.
+    exists l, [index], new, (Cell_array kindc elements),
+      (Cell_array kindc elements'), i.
+    repeat split; try reflexivity; try assumption.
+    cbn. rewrite Hs. reflexivity.
 Qed.

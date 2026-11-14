@@ -51,6 +51,13 @@
      ([heap_alike]), and that what a primitive does on one it does on
      the other ([exec_prim_related_statement]): what a pass that
      changes values is proved with.
+   - what a primitive does, with nothing asked of what a cell holds
+     but of the cells that its arguments name
+     ([exec_prim_preserves_given_statement],
+     [exec_prim_load_statement], [exec_prim_adds_statement],
+     [exec_prim_related_given_statement]):
+     what a machine is proved with whose heap has cells that it is
+     not to look at.
 
    What is proved is in FlambdaHeapProofs.v: every [_statement] here. *)
 
@@ -941,3 +948,172 @@ Definition exec_prim_kinds_statement : Prop :=
     exec_prim statics h p vs = Some (v, h') ->
     prim_args_well_kinded p (map kind_of_value vs) = true
     ∧ kind_of_value v = prim_result_kind p.
+
+(* ======================================================================== *)
+(* What a primitive does, said of the cells that its arguments name         *)
+(* ======================================================================== *)
+
+(* The laws above ask a property of every value of the heap
+   ([exec_prim_preserves_statement]) or of every entry of two heaps
+   ([exec_prim_related_statement]). A primitive looks at what no cell
+   holds but those that the heap binds the locations among its
+   arguments to, and it changes the heap by one entry at most. The
+   laws of this section say so: what they ask of what cells hold, they
+   ask of those cells alone. A location inside an argument, in a field
+   of a block that is an argument, names no cell here: no primitive
+   reads through one.
+   What they ask of the locations that a heap binds is not local. The
+   law on two heaps asks that the heaps bind the same locations,
+   entry for entry, the whole of both: an allocation takes its
+   location from all of them ([fresh_location]), so two heaps that
+   differ in a location that no argument names may still allocate
+   differently.
+   The premises are the same for every primitive: none is said to be
+   the weakest for a given one. *)
+
+(* [P] holds of every value of the cells that the arguments name: of
+   the cell that the heap binds each location among them to. *)
+Definition heap_values_all_given (P : value -> Prop) (h : heap)
+    (vs : list value) : Prop :=
+  ∀ (l : location) (c : cell) (v : value),
+    Value_location l ∈ vs ->
+    lookup l h = Some c ->
+    v ∈ values_of_cell c ->
+    P v.
+
+(* L1. A primitive that is not of the heap makes its value out of its
+   arguments and of the cells that they name:
+   [exec_prim_preserves_statement] for the value, with the property
+   asked of those cells alone, and not of every location. A primitive
+   of the heap is left out: its value is a fresh location or unit
+   ([exec_prim_adds_statement]). *)
+Definition exec_prim_preserves_given_statement : Prop :=
+  ∀ (P : value -> Prop) (statics : static_env) (h h' : heap) (p : prim)
+    (vs : list value) (v : value),
+    holds_of_numbers P ->
+    holds_of_blocks P ->
+    holds_of_arrays P ->
+    holds_in_static_blocks statics P ->
+    holds_in_static_arrays statics P ->
+    (∀ q : heap_primitive, p <> Heap q) ->
+    (∀ arg : value, arg ∈ vs -> P arg) ->
+    heap_values_all_given P h vs ->
+    exec_prim statics h p vs = Some (v, h') ->
+    P v.
+
+(* The two primitives whose value is a value that a cell holds, where
+   their first argument is a location. *)
+Definition prim_loads_cell (p : prim) : bool :=
+  match p with
+  | Unary (Block_load _ _ _) | Binary (Array_load _ _ _) => true
+  | _ => false
+  end.
+
+(* A load gives a value that the cell holds: the cell that the heap
+   binds its first argument to. No property of the value is asked or
+   given, where the law above asks one of every argument, the location
+   read included: a value may outlive, in a sense that a property
+   says, the cell that it is read from. *)
+Definition exec_prim_load_statement : Prop :=
+  ∀ (statics : static_env) (h h' : heap) (p : prim) (l : location)
+    (rest : list value) (c : cell) (v : value),
+    prim_loads_cell p = true ->
+    lookup l h = Some c ->
+    exec_prim statics h p (Value_location l :: rest) = Some (v, h') ->
+    v ∈ values_of_cell c.
+
+(* The cell with the value at one position replaced: the same
+   mutability and tag, or the same kind, and as many values. There is
+   none if the cell has no such position. *)
+Definition cell_with (i : nat) (w : value) (c : cell) : option cell :=
+  match c with
+  | Cell_block mut tag fields =>
+    let* fields' := replace_nth i w fields in
+    Some (Cell_block mut tag fields')
+  | Cell_array kind elements =>
+    let* elements' := replace_nth i w elements in
+    Some (Cell_array kind elements')
+  end.
+
+(* Each value of the cell after is the new value or a value of the
+   cell before. *)
+Definition cell_with_values_statement : Prop :=
+  ∀ (i : nat) (w : value) (c c' : cell) (v : value),
+    cell_with i w c = Some c' ->
+    v ∈ values_of_cell c' ->
+    v = w ∨ v ∈ values_of_cell c.
+
+(* L2. What a primitive of the heap adds: one entry, in front of the
+   heap. An allocation binds the fresh location to a cell whose values
+   are the arguments, in their order, and its value is that location.
+   A write binds the location that is its first argument to the cell
+   that the location was bound to with one value replaced by the last
+   argument, and its value is unit. *)
+Definition exec_prim_adds_statement : Prop :=
+  ∀ (statics : static_env) (h h' : heap) (q : heap_primitive)
+    (vs : list value) (v : value),
+    exec_prim statics h (Heap q) vs = Some (v, h') ->
+    (∃ c : cell,
+      values_of_cell c = vs
+      ∧ v = Value_location (fresh_location h)
+      ∧ h' = (fresh_location h, c) :: h)
+    ∨ (∃ (l : location) (rest : list value) (new : value) (c c' : cell)
+         (i : nat),
+        vs = Value_location l :: rest ++ [new]
+        ∧ lookup l h = Some c
+        ∧ cell_with i new c = Some c'
+        ∧ v = unit_value
+        ∧ h' = (l, c') :: h).
+
+(* Two heaps bind the same locations, entry for entry, and the cells
+   that the arguments name are alike: [heap_alike] asked of those cells
+   alone, and of each only the entry that [lookup] finds, the first.
+   Nothing is asked of what any other entry holds: not of the cell of
+   a location that no argument names, and not of an entry that a
+   later write hides, of a location that an argument names too. *)
+Definition heap_alike_given (R : value -> value -> Prop) (h h' : heap)
+    (vs : list value) : Prop :=
+  map fst h = map fst h'
+  ∧ (∀ (l : location) (c : cell),
+      Value_location l ∈ vs ->
+      lookup l h = Some c ->
+      ∃ c' : cell, lookup l h' = Some c' ∧ cell_alike R c c').
+
+(* What one primitive has done to two heaps: nothing to either, or one
+   entry in front of each, at one location, with cells alike. So
+   [lookup] finds at every other location what it found before. The
+   relation does not say which location the new entry is at, nor
+   whether that location was named by an argument or was fresh, so it
+   alone does not say that a location that no argument names is bound
+   as it was. Which location it is, [exec_prim_adds_statement] says,
+   of each heap: the fresh one, or the one that the first argument
+   names. *)
+Definition heap_alike_added (R : value -> value -> Prop) (h h1 h' h1' : heap)
+    : Prop :=
+  (h1 = h ∧ h1' = h')
+  ∨ (∃ (l : location) (c c' : cell),
+      h1 = (l, c) :: h ∧ h1' = (l, c') :: h' ∧ cell_alike R c c').
+
+(* L3. [exec_prim_related_statement] with the two heaps alike only
+   where the arguments name a cell. What the primitive does on some
+   arguments and a heap it does on related arguments and the other
+   heap, with a related value, and it adds to each heap nothing, or an
+   entry at one location with cells alike. So two heaps that bind the
+   same locations still do after. That the cell of a location bound
+   before, which no argument names, is found after as it was before
+   is not said by this law alone but with [exec_prim_adds_statement]
+   and [exec_prim_heap_statement], of each heap: an allocation binds
+   a location that no argument names, which was not bound. As that
+   law, it goes one way. *)
+Definition exec_prim_related_given_statement : Prop :=
+  ∀ (R : value -> value -> Prop) (statics statics' : static_env)
+    (h h' h1 : heap) (p : prim) (vs vs' : list value) (v : value),
+    respects_observations R statics statics' ->
+    relates_locations R ->
+    heap_alike_given R h h' vs ->
+    Forall2 R vs vs' ->
+    exec_prim statics h p vs = Some (v, h1) ->
+    ∃ (v' : value) (h1' : heap),
+      exec_prim statics' h' p vs' = Some (v', h1')
+      ∧ R v v'
+      ∧ heap_alike_added R h h1 h' h1'.
