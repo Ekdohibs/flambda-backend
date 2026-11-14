@@ -1072,12 +1072,18 @@ it gave back.
   false of an import of the first two classes, and has no value of one
   of the third. The conversion of the tool makes no primitive of the
   heap, and only those change the heap
-  (`FlambdaHeapSpec.exec_prim_heap_statement`); a run binds in its heap
-  every location that it holds
-  (`FlambdaLocationsMachineSpec.run_keeps_locations_bound_statement`).
-  So in a run of the tool, which starts from the empty heap, only the
-  first case arises; that conclusion is an argument from the two
-  statements and not a statement of the tree. No other unary or
+  (`FlambdaHeapSpec.exec_prim_heap_statement`); a run from a state
+  whose heap binds every location that the state holds keeps that
+  (`FlambdaLocationsMachineSpec.run_keeps_locations_bound_statement`,
+  whose premise is `state_locations_bound` of the first state). The
+  first state of a run of the tool holds no location: it has no
+  variable and no continuation, the empty heap and the empty read
+  record, and the static environment of its imports, which holds
+  none. So in a run of the tool, while the conversion makes no
+  primitive of the heap, no value is a location and only the first
+  case arises; that conclusion is an argument from the two statements
+  and from what the tool starts a run from, and not a statement of the
+  tree. No other unary or
   binary primitive has a value on an import. It is not a closure, so a
   call of it is undefined. A run that executes a load from an import,
   or a call of one, is therefore undefined in the model where the
