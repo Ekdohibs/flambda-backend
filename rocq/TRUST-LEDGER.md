@@ -1230,7 +1230,13 @@ it gave back.
   of the first phase are as they were), the test of such a round is
   that of the round that there was, asked of the term that the round
   is given (`known_calling_free_in`); making those calls direct asks
-  nothing. The test computes
+  nothing. Where a lifting asks for what `my_closure` is known to be
+  from its code to be used after each of those rounds, the test of
+  such a round is again that of the round that there was, asked of
+  the term that the round is given (`known_own_free_in`); that step
+  asks nothing, its law from the imports
+  (`FlambdaClosureOfCodeSpec.know_own_closures_refines_imports_statement`)
+  having no premise. The test computes
   those terms a second time, as the validation does; it is
   sufficient, not necessary. The rounds that follow the demotion
   are those of `FlambdaValidateSpec.demote_and_tidy_known`, and
@@ -1850,6 +1856,35 @@ checked by an extracted function, and `validate_unit_sound` and
   (`FlambdaClosureCallsSpec.call_made_closures_refines_statement`),
   and with the field unset the normalisation is the one that there
   was (`FlambdaValidateSpec.normalise_lifted_calling_unset_statement`).
+- Whether those rounds also use, in the bodies of code, what
+  `my_closure` is known to be from its code (the field
+  `own_closures_known` of the same guess): what is known is not
+  guessed. In the body of code that is no stub and whose
+  `my_closure` is not also a parameter,
+  `FlambdaClosureOfCodeSpec.know_own_closures` makes an indirect
+  call of `my_closure` itself direct with no test of the sets,
+  where no binder of that variable has hidden it (a `Let` of it and
+  the parameters of a handler make what was known of it forgotten):
+  the body runs only where `my_closure` is a closure of that code. A
+  call of another function of the set, projected from `my_closure`,
+  and the read of a value slot are rewritten only where a test of
+  the unit that the function is given passes: the unit makes a set
+  of closures with that code at that function slot, and every such
+  set has the same code at the other function slot
+  (`sibling_code`), or gives the value slot the same symbol or
+  constant (`slot_held`; both by
+  `FlambdaSetsOfCodeSpec.sets_made_have`), and a symbol is put in
+  the place of a read only where it is in scope. The rewrite is the
+  identity of a unit one of whose groups does not bind its static
+  sets whole. It refines the unit run on its own, from its imports,
+  and followed by the observers of `FlambdaObserversSpec.v` at the
+  value slots given, run from the imports
+  (`know_own_closures_program_refines_statement`,
+  `know_own_closures_refines_imports_statement`,
+  `know_own_closures_refines_observed_statement`), and not under
+  every environment. With the field unset the normalisation is the
+  one that there was
+  (`FlambdaValidateSpec.normalise_lifted_own_unset_statement`).
 - Which value slots Simplify removed from the static sets of closures
   (`unused_slots_guess`): checked by `drop_unused_slots`.
 - Which code Simplify made a loop of, with a name for the loop of each

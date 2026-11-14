@@ -158,6 +158,11 @@ design out; that is the request, not the change.
   - `middle_end/flambda2/rocq/FlambdaClosureCalls*` (a call of a
     closure that a `Let` in sight makes is made direct, for the
     validator; S4's once it is staffed)
+  - `middle_end/flambda2/rocq/FlambdaSetsOfCode*` (what every set of
+    closures of a unit that has a code at a function slot has, kept
+    by a run) and `middle_end/flambda2/rocq/FlambdaClosureOfCode*`
+    (in the body of code, what `my_closure` is known to be from its
+    code is used, for the validator; S4's once it is staffed)
   - `middle_end/flambda2/rocq/FlambdaRegionsErasedProofs.v` and
     `middle_end/flambda2/rocq/FlambdaRegionsPlainStepProofs.v` (for
     C2's erasure of regions: the relation between a state of the
