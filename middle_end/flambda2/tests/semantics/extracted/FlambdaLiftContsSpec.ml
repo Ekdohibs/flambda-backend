@@ -82,7 +82,7 @@ let rec only_applied j ps ok = function
       handlers
     && only_applied j ps ok body
   | Apply ap ->
-    negb (Pos.eqb ap.ap_continuation j)
+    (match ps with [] -> true | _ :: _ -> negb (Pos.eqb ap.ap_continuation j))
     && negb (Pos.eqb ap.ap_exn_continuation j)
   | Apply_cont ac -> applies_only j ok ac
   | Switch (_, arms) ->

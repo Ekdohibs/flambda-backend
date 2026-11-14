@@ -430,10 +430,11 @@ let tidy_expr_before e =
                       (remove_unused_conts
                          (merge_switches
                             (collapse_switches
-                               (fold_constants
-                                  (numbers_in_arms
-                                     (unalias_rec_params
-                                        (unalias_params (give_scrutinees e))))))))))))))
+                               (forward_applications
+                                  (fold_constants
+                                     (numbers_in_arms
+                                        (unalias_rec_params
+                                           (unalias_params (give_scrutinees e)))))))))))))))
 
 (** val tidy_code_before : expr -> expr **)
 
@@ -461,10 +462,11 @@ let tidy_expr_after e =
                    (remove_unused_conts
                       (forward_to_arms_kinded
                          (lift_handler_conts
-                            (fold_constants
-                               (numbers_in_arms
-                                  (unalias_rec_params
-                                     (unalias_params (give_scrutinees e)))))))))))))
+                            (forward_kinded
+                               (fold_constants
+                                  (numbers_in_arms
+                                     (unalias_rec_params
+                                        (unalias_params (give_scrutinees e))))))))))))))
 
 (** val tidy_code_after : expr -> expr **)
 

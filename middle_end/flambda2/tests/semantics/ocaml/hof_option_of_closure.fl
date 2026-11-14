@@ -1,0 +1,125 @@
+let $camlHof_option_of_closure__first_const_0 = Block 0 () in
+(let code inline(always) size(22)
+       call_or_0 (o/117 : [ 0 | 0 of val ], d/118, x/119)
+         my_closure/120 &my_alloc_region/121 my_depth/122
+         -> k/44 * k/45 =
+   let next_depth/123 = rec_info (succ my_depth/122) in
+   (let prim/125 = %is_int (o/117) in
+    let Pisint/126 = %tag_imm (prim/125) in
+    (let untagged/127 = %untag_imm (Pisint/126) in
+     switch untagged/127
+       | 0 -> k/47
+       | 1 -> k/44 (d/118))
+      where k/47 =
+        cont k/46)
+     where k/46 =
+       let Pfield/124 = %block_load.[`0`] (o/117) in
+       apply &my_alloc_region/121 Pfield/124 (x/119) -> k/44 * k/45
+ in
+ let code size(4)
+       `fn[hof_option_of_closure.ml:27,25--41]_2` (y/128 : imm tagged)
+         my_closure/129 &my_alloc_region/130 my_depth/131
+         -> k/48 * k/49
+         : imm tagged =
+   let next_depth/132 = rec_info (succ my_depth/131) in
+   let x/133 =
+     %project_value_slot.[`fn[hof_option_of_closure.ml:27,25--41]`].[x]
+       (my_closure/129)
+   in
+   let int_add/134 = %int_barith.add (y/128, x/133) in
+   cont k/48 (int_add/134)
+ in
+ let code size(5)
+       `fn[hof_option_of_closure.ml:28,34--50]_3` (y/135 : imm tagged)
+         my_closure/136 &my_alloc_region/137 my_depth/138
+         -> k/50 * k/51
+         : imm tagged =
+   let next_depth/139 = rec_info (succ my_depth/138) in
+   let int_mul/140 = %int_barith.mul (y/135, 2) in
+   cont k/50 (int_mul/140)
+ in
+ let code inline(never) size(70)
+       body_1 (c/141 : imm tagged, x/142 : imm tagged)
+         my_closure/143 &my_alloc_region/144 my_depth/145
+         -> k/52 * k/53
+         : imm tagged =
+   let next_depth/146 = rec_info (succ my_depth/145) in
+   let call_or/147 = %project_value_slot.[body].[call_or] (my_closure/143) in
+   let region/148 = %begin_region () in
+   let ghost_region/149 = %begin_ghost_region () in
+   (let untagged/163 = %untag_imm (c/141) in
+    switch untagged/163
+      | 0 -> k/55 (0)
+      | 1 -> k/60)
+     where k/60 =
+       cont k/59
+     where k/59 =
+       let `fn[hof_option_of_closure.ml:27,25--41]/161` =
+         closure `fn[hof_option_of_closure.ml:27,25--41]_2`
+           @`fn[hof_option_of_closure.ml:27,25--41]` &my_alloc_region/144
+           &region/148
+       with { x = x/142 }
+       in
+       let Pmakeblock/162 =
+         %block.[`0`].my_alloc_region/144.local[region/148]
+           (`fn[hof_option_of_closure.ml:27,25--41]/161`)
+       in
+       cont k/55 (Pmakeblock/162)
+     where k/55 (o/153 : [ 0 | 0 of val ]) =
+       (apply direct(call_or_0 &my_alloc_region/144)
+          (call_or/147 : _ -> imm tagged) (0, x/142, 0) -> k/56 * k/53
+          where k/56 (apply_result/154 : imm tagged) =
+            ((let `fn[hof_option_of_closure.ml:28,34--50]/159` =
+                closure `fn[hof_option_of_closure.ml:28,34--50]_3`
+                  @`fn[hof_option_of_closure.ml:28,34--50]`
+                  &my_alloc_region/144 &region/148
+              in
+              let Pmakeblock/160 =
+                %block.[`0`].my_alloc_region/144.local[region/148]
+                  (`fn[hof_option_of_closure.ml:28,34--50]/159`)
+              in
+              apply direct(call_or_0 &my_alloc_region/144)
+                (call_or/147 : _ -> imm tagged)
+                  (Pmakeblock/160, 0, x/142)
+                  -> k/57 * k/53)
+               where k/57 (apply_result/155 : imm tagged) =
+                 (apply direct(call_or_0 &my_alloc_region/144)
+                    (call_or/147 : _ -> imm tagged)
+                      (o/153, 100, 5)
+                      -> k/58 * k/53
+                    where k/58 (apply_result/156 : imm tagged) =
+                      let int_add/157 =
+                        %int_barith.add (apply_result/156, apply_result/155)
+                      in
+                      let int_add/158 =
+                        %int_barith.add (int_add/157, apply_result/154)
+                      in
+                      cont k/54 (int_add/158))))
+     where k/54 (region_return/150 : imm tagged) =
+       let unit/151 = %end_region (region/148) in
+       let unit/152 = %end_ghost_region (ghost_region/149) in
+       cont k/52 (region_return/150)
+ in
+ let call_or/164 = closure call_or_0 @call_or &toplevel in
+ let body/165 = closure body_1 @body &toplevel
+ with { call_or = call_or/164 }
+ in
+ (let Popaque/171 = %opaque (4) in
+  apply direct(body_1 &toplevel)
+    (body/165 : _ -> imm tagged) (0, Popaque/171) -> k/61 * error)
+   where k/61 (apply_result/166 : imm tagged) =
+     ((let Popaque/170 = %opaque (1) in
+       apply direct(body_1 &toplevel)
+         (body/165 : _ -> imm tagged) (Popaque/170, 3) -> k/62 * error)
+        where k/62 (apply_result/167 : imm tagged) =
+          let result/168 =
+            %int_barith.add (apply_result/167, apply_result/166)
+          in
+          let Pmakeblock/169 = %block.[`0`].`toplevel` (result/168) in
+          cont k/43 (Pmakeblock/169)))
+  where k/43 define_root_symbol (module_block/115) =
+    let field_0/116 =
+      %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/115)
+    in
+    let $camlHof_option_of_closure = Block 0 (field_0/116) in
+    cont done ($camlHof_option_of_closure)

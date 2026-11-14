@@ -1,0 +1,46 @@
+let $camlTest_boolean_twice__first_const_0 = Block 0 () in
+(let code size(35)
+       f_0 (b/42 : imm tagged)
+         my_closure/43 &my_alloc_region/44 my_depth/45
+         -> k/22 * k/23
+         : imm tagged =
+   let next_depth/46 = rec_info (succ my_depth/45) in
+   (let untagged/49 = %untag_imm (b/42) in
+    switch untagged/49
+      | 0 -> k/26
+      | 1 -> k/27)
+     where k/27 =
+       cont k/24
+     where k/26 =
+       cont k/25
+     where k/25 =
+       let untagged/48 = %untag_imm (b/42) in
+       switch untagged/48
+         | 0 -> k/22 (3)
+         | 1 -> k/22 (4)
+     where k/24 =
+       let untagged/47 = %untag_imm (b/42) in
+       switch untagged/47
+         | 0 -> k/22 (2)
+         | 1 -> k/22 (1)
+ in
+ let f/50 = closure f_0 @f &toplevel in
+ (let Popaque/57 = %opaque (0) in
+  apply direct(f_0 &toplevel)
+    (f/50 : _ -> imm tagged) (Popaque/57) -> k/28 * error)
+   where k/28 (apply_result/51 : imm tagged) =
+     ((let Popaque/56 = %opaque (1) in
+       apply direct(f_0 &toplevel)
+         (f/50 : _ -> imm tagged) (Popaque/56) -> k/29 * error)
+        where k/29 (apply_result/52 : imm tagged) =
+          let int_mul/53 = %int_barith.mul (apply_result/52, 10) in
+          let result/54 = %int_barith.add (int_mul/53, apply_result/51) in
+          let Pmakeblock/55 = %block.[`0`].`toplevel` (f/50, result/54) in
+          cont k/21 (Pmakeblock/55)))
+  where k/21 define_root_symbol (module_block/39) =
+    let field_0/40 = %block_load.tag[`0`].`size`[`2`].[`0`] (module_block/39)
+    in
+    let field_1/41 = %block_load.tag[`0`].`size`[`2`].[`1`] (module_block/39)
+    in
+    let $camlTest_boolean_twice = Block 0 (field_0/40, field_1/41) in
+    cont done ($camlTest_boolean_twice)
