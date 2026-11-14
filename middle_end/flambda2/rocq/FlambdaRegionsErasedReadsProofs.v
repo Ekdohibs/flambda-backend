@@ -713,7 +713,8 @@ Qed.
 
 (* A group of static bindings that the second state can add, erased,
    to its static environment, the first can add to one that binds no
-   code and no symbol below [base] that the second does not bind. *)
+   code that the second does not bind, and no symbol that the machine
+   did not draw and that the second does not bind. *)
 Lemma eval_static_bindings_back (rs : region_state) (vars vars' : env)
     (bindings : list static_binding) :
   env_erased rs vars vars' ->
