@@ -1217,7 +1217,14 @@ it gave back.
   (`FlambdaCopyCodeSpec.with_copies`) the test asks nothing: their
   law from the imports (`with_copies_refines_imports_statement`) has
   no premise, and a lifting that asks for no copy gives the term
-  that it gave (`with_copies_none_statement`). The test computes
+  that it gave (`with_copies_none_statement`). Where a lifting asks
+  for the calls of the closures that a `Let` makes to be made direct
+  after each round of the second phase of the normalisation that
+  follows it (`normalise_lifted_round`, in its two runs; the rounds
+  of the first phase are as they were), the test of such a round is
+  that of the round that there was, asked of the term that the round
+  is given (`known_calling_free_in`); making those calls direct asks
+  nothing. The test computes
   those terms a second time, as the validation does; it is
   sufficient, not necessary. The rounds that follow the demotion
   are those of `FlambdaValidateSpec.demote_and_tidy_known`, and
@@ -1828,6 +1835,15 @@ checked by an extracted function, and `validate_unit_sound` and
   field `code_copied` of the same guess): checked by
   `FlambdaCopyCodeSpec.copy_static_code`, which makes no copy where
   its check (`copy_ok`) fails.
+- Whether the rounds of the second phase of the normalisation that
+  follows a lifting also make direct the calls of the closures that
+  a `Let` makes (the field `made_closures_called` of the same
+  guess; the rounds of the first phase are as they were): there is
+  nothing to
+  check, the rewrite being a refinement under all environments
+  (`FlambdaClosureCallsSpec.call_made_closures_refines_statement`),
+  and with the field unset the normalisation is the one that there
+  was (`FlambdaValidateSpec.normalise_lifted_calling_unset_statement`).
 - Which value slots Simplify removed from the static sets of closures
   (`unused_slots_guess`): checked by `drop_unused_slots`.
 - Which code Simplify made a loop of, with a name for the loop of each

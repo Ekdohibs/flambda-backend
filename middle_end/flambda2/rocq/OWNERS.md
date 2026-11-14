@@ -155,6 +155,9 @@ design out; that is the request, not the change.
     copied under new code ids for static sets of closures that
     Simplify gave new code, for the validator; S4's once it is
     staffed)
+  - `middle_end/flambda2/rocq/FlambdaClosureCalls*` (a call of a
+    closure that a `Let` in sight makes is made direct, for the
+    validator; S4's once it is staffed)
   - `middle_end/flambda2/rocq/FlambdaRegionsErasedProofs.v` and
     `middle_end/flambda2/rocq/FlambdaRegionsPlainStepProofs.v` (for
     C2's erasure of regions: the relation between a state of the
