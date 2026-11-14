@@ -600,52 +600,36 @@ Fixpoint value_plain (heap : symbol -> bool) (v : value) : bool :=
   | _ => value_all heap v
   end.
 
-(* A test of each value that what a symbol is bound to holds
+(* A property of each value that what a symbol is bound to holds
    directly. *)
-Definition allocated_values (ok : value -> bool)
-    (allocated : statically_allocated_value) : bool :=
+Definition allocated_values (P : value -> Prop)
+    (allocated : statically_allocated_value) : Prop :=
   match allocated with
   | Static_closure _ value_slots | Static_closure_of_set _ _ _ value_slots =>
-    forallb (fun '(_, v) => ok v) value_slots
-  | Static_block _ fields => forallb ok fields
-  | Static_boxed_number contents => ok contents
-  | Static_string _ | Static_imported _ => true
-  | Static_immutable_array elements => forallb ok elements
+    Forall (fun binding => P (snd binding)) value_slots
+  | Static_block _ fields => Forall P fields
+  | Static_boxed_number contents => P contents
+  | Static_string _ | Static_imported _ => True
+  | Static_immutable_array elements => Forall P elements
   end.
 
-(* The same of each value that a continuation holds: the variables of
-   its closure, its extra arguments, the arguments that remain of an
-   application with too many, and what the continuations that it holds
-   hold. *)
-Fixpoint cont_values (ok : value -> bool) (c : cont_value) : bool :=
-  match c with
-  | Closure _ vars conts _ =>
-    forallb (fun '(_, v) => ok v) vars
-    && forallb (fun '(_, c) => cont_values ok c) conts
-  | Outer _ => true
-  | Extra_args c extra => cont_values ok c && forallb ok extra
-  | Over_application remaining _ _ return_to exn_to =>
-    forallb ok remaining
-    && cont_values ok return_to
-    && cont_values ok exn_to
-  end.
-
-(* A test of every value that the state holds: of a variable, of a
-   continuation, and directly in what the static environment and the
-   frames bind. *)
-Definition state_values (ok : value -> bool) (rs : region_state) : bool :=
+(* A property of every value that the state holds: of a variable; of a
+   continuation, in the environment of its closure, among its extra
+   arguments and the arguments that remain of an application with too
+   many, and so on for the continuations that it holds
+   (FlambdaSemanticsSpec.conts_values_all); and directly in what the
+   static environment and the frames bind. *)
+Definition state_values (P : value -> Prop) (rs : region_state) : Prop :=
   let s := rs_state rs in
-  forallb (fun '(_, v) => ok v) (state_vars s)
-  && forallb (fun '(_, c) => cont_values ok c) (state_conts s)
-  && forallb (fun '(_, allocated) => allocated_values ok allocated)
-       (static_values (state_statics s))
-  && forallb (fun '(_, allocated) => allocated_values ok allocated)
-       (live_locals (rs_frames rs)).
+  env_values_all P (state_vars s)
+  ∧ conts_values_all P (state_conts s)
+  ∧ Forall (fun binding => allocated_values P (snd binding))
+      (static_values (live_statics rs)).
 
 (* Every value that the state holds is a symbol, a partial application
    of such values, or reaches symbols of the heap only. *)
-Definition values_plain (rs : region_state) : bool :=
-  state_values (value_plain (heap_symbol rs)) rs.
+Definition values_plain (rs : region_state) : Prop :=
+  state_values (fun v => value_plain (heap_symbol rs) v = true) rs.
 
 (* The arguments that a partial application keeps against the
    parameters of its code: one that is not of the heap is at a
@@ -712,8 +696,8 @@ Fixpoint value_paps (ok : value -> list value -> arity -> bool) (v : value)
   end.
 
 (* Every partial application that the state holds may be called. *)
-Definition paps_fit (rs : region_state) : bool :=
-  state_values (value_paps (pap_fits rs)) rs.
+Definition paps_fit (rs : region_state) : Prop :=
+  state_values (fun v => value_paps (pap_fits rs) v = true) rs.
 
 (* ======================================================================== *)
 (* The property                                                             *)
@@ -726,8 +710,8 @@ Definition state_checked (rs : region_state) : Prop :=
   ∧ local_closures_fit rs = true
   ∧ frames_deep rs (rs_frames rs) = true
   ∧ statics_deep rs = true
-  ∧ values_plain rs = true
-  ∧ paps_fit rs = true
+  ∧ values_plain rs
+  ∧ paps_fit rs
   ∧ ∃ (cs : check_state) (ms : list mark),
       check_expr cert codes cs (state_expr (rs_state rs)) = true
       ∧ incl (code_of_expr (state_expr (rs_state rs))) codes
