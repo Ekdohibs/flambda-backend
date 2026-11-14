@@ -45,14 +45,20 @@
    the regions of the term add no fault to it
    ([regions_add_no_fault]): where the run of the term on the machine
    of regions stops without a step, the run of the term with its
-   regions dropped goes wrong too. So the term uses no value whose
-   region is gone (decision D45), makes no heap block that holds a
-   local value (decision D46), ends or names no region that is not
-   open (decision D47), and has no primitive of regions that is not
-   as the conversion makes it. With the validation of today, a term
-   before that does not go wrong, regions dropped, gives a term after
-   that never stops without a step, regions and all
-   ([checked_after_safe_statement]).
+   regions dropped goes wrong too. That is an implication and no
+   more: of a term that goes wrong with its regions dropped it says
+   nothing. So a term that passes and that does not go wrong with its
+   regions dropped uses no value whose region is gone (decision D45),
+   makes no heap block that holds a local value (decision D46), ends
+   or names no region that is not open (decision D47), and has no
+   primitive of regions that is not as the conversion makes it. With
+   the validation of today, a term before that does not go wrong,
+   regions dropped, gives a term after that never stops without a
+   step, regions and all ([checked_after_safe_statement]). That no
+   state of a run of a term that passes stops for one of those
+   reasons, whatever the term does with its regions dropped, is a
+   statement of FlambdaRegionsCheckedSpec.v
+   ([checked_fault_statement], with the two before it).
 
    The check is a function. It takes a certificate, which an analysis
    that is not trusted guesses: nothing is asked of the certificate
@@ -854,8 +860,12 @@ with check_binding (binding : static_binding) {struct binding} : bool :=
   | Bind_code id c => check_code id c
   | Bind_deleted_code _ | Bind_symbol _ _ => true
   end
-(* Code against its entry. If a callee that is not known may be given
-   a local value, every parameter of every code may be; if none may
+(* Code against its entry. The code has a parameter for each variable
+   that its arity stands for, and the entry a flag for each: a call
+   with fewer arguments than the code takes keeps them in a partial
+   application without binding the parameters, so the machine does not
+   test this there. If a callee that is not known may be given a
+   local value, every parameter of every code may be; if none may
    return one, no code does. The parameters of tupled code are the
    fields of one tuple: all may be local or none. *)
 with check_code (id : code_id) (c : code) {struct c} : bool :=
@@ -867,6 +877,7 @@ with check_code (id : code_id) (c : code) {struct c} : bool :=
     | Some entry =>
       let flags := ce_params_local entry in
       (length flags =? length params)
+      && (length params =? cardinal_unarized (cm_params_arity metadata))
       && distinct (my_closure :: params)
       && negb (Pos.eqb return_continuation exn_continuation)
       && (negb (cert_indirect_local cert) || forallb (fun flag => flag) flags)
@@ -914,10 +925,12 @@ with code_of_code (c : code) : list (code_id * code) :=
 
 (* All the code that a run of a term in a static environment can run:
    that of the static environment and that which the term binds. The
-   code that the body of code binds is not there, and need not be: a
-   call of code whose body binds something static has no step
-   (FlambdaSemanticsSpec.call_code, the test of [binds_statics]), and
-   neither has a recursive [Let_cont] one of whose handlers does. If
+   code that the body of code of the static environment binds is not
+   there, and need not be: a call of code whose body binds something
+   static has no step (FlambdaSemanticsSpec.call_code, the test of
+   [binds_statics]), and neither has a recursive [Let_cont] one of
+   whose handlers does. For the same reason the code that the body of
+   code of the term binds, which is in the list, is never bound. If
    that rule of the machine changes, this list must. *)
 Definition all_code (statics : static_env) (e : expr)
     : list (code_id * code) :=
@@ -954,8 +967,10 @@ Definition allocated_no_partial (allocated : statically_allocated_value)
    arguments than its code takes, and [unknown_call] counts on that:
    one that kept as many, called with one argument more, would be an
    application with too many. A static environment is any list of
-   bindings, so it is asked to hold none; the static constants of a
-   unit and its imports hold none. *)
+   bindings, so the one that the run starts in is asked to hold none;
+   that of a unit, made of its imports before anything has run, holds
+   none. This is not asked of what a [Let_static] of the term binds
+   later, which may hold a partial application that a call made. *)
 Definition statics_no_partial (statics : static_env) : bool :=
   forallb (fun '(_, allocated) => allocated_no_partial allocated)
     (static_values statics).
