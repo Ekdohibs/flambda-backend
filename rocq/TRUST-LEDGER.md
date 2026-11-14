@@ -852,8 +852,26 @@ it gave back.
   `End_try_region`). It says nothing of a region that nothing ends, of
   an allocation that names another region than the newest that is not
   of a `try`, of the closure that a partial application makes, nor of
-  blocks with an identity, which are not converted (decisions D44 to
-  D48). And
+  blocks with an identity and mutable arrays (decisions D44 to D48,
+  D53). The conversion makes neither. The machine of regions runs
+  neither: it does not run a `Let` of a primitive of the heap, nor of
+  another primitive, not one of regions, that is given a location.
+  Its run ends there, with a result that is not a step, not an exit
+  and not a fault (`FlambdaRegionsSpec.Region_let_not_run`), and
+  nothing is checked of the term from that `Let` on: a value put in a
+  cell of the heap may be local, and a cell made in a region is not
+  followed. Such an end is not "passes". The tool is to print the unit
+  as not checked for regions from that `Let` on, and never as passing;
+  the function that runs a unit (`run_regions`) has not that case yet.
+  While the conversion makes no primitive of the heap, no run of the
+  tool ends so: the static environment of the imports has no code and
+  no value that holds a location, and of a term with no primitive of
+  the heap, run from its first state in such an environment, the tree
+  proves it
+  (`FlambdaRegionsInvariantSpec.no_heap_primitive_no_let_not_run_statement`).
+  That no run of the tool ends so is an argument from that statement
+  and from what is trusted of the conversion of primitives, and not a
+  statement of the tree. And
   "passes before, passes after" relates the two terms in nothing: the
   validation of the unit is still made with regions dropped (the entry
   above, decision D37). The counts that the environment variable
@@ -886,8 +904,27 @@ it gave back.
   (`FlambdaRegionsSpec.erasable`) it proves more
   (`FlambdaRegionsCheckSoundSpec.region_check_sound_statement`): where
   such a run stops, the run of the term with its regions dropped goes
-  wrong too, so that the regions add no fault to the term. That is of
-  the model's term on the model's machine.
+  wrong too, so that the regions add no fault to the term. Both are of
+  the run as far as the machine of regions runs the term. A run may
+  also end at a `Let` that the machine does not run (decision D53,
+  above): that end is not a stop without a step and not a fault, and
+  neither statement says anything of the term from that `Let` on. So
+  "safe", in the statements about a run of Simplify with the check, is
+  "never undefined" (`FlambdaRegionsCheckSpec.region_safe`, which
+  `checked_after_safe_statement` and, in
+  `FlambdaRegionsCheckSoundSpec.v`,
+  `refined_and_checked_safe_statement` and
+  `validated_and_checked_safe_statement` conclude), and it includes a
+  run that ends so with nothing checked after it: `region_safe` holds
+  of the first state of a unit whose first `Let` makes a block with an
+  identity out of constants, whatever the rest of the unit does with
+  regions. The statements about exits have the case "or the run of the
+  term after comes to a `Let` that the machine does not run". A run
+  from the first state of a term with no primitive of the heap, in a
+  static environment whose code has none and whose values hold no
+  location, never ends so (the statement named above), and then a run
+  that is never undefined only steps or exits. That is of the model's
+  term on the model's machine.
   The test tool does not ask `region_check` and nothing of it is
   extracted, so no line of the tool's output rests on it: a line of
   the tool is still of what this entry describes above, the one run
