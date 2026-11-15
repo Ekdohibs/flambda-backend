@@ -62,7 +62,8 @@ From OxCamlFlambda2 Require Import FlambdaMapSpec FlambdaModel
   FlambdaImportsSpec
   FlambdaLoopifySpec FlambdaMergeSwitchesSpec FlambdaNormaliseSpec
   FlambdaParamAliasesSpec
-  FlambdaRecHandlersSpec FlambdaRegionsSpec FlambdaRenameApartSpec
+  FlambdaRecHandlersSpec FlambdaRegionsEndsSpec FlambdaRegionsSpec
+  FlambdaRenameApartSpec
   FlambdaShortcutSpec
   FlambdaSinkContsSpec FlambdaSinkUsesSpec FlambdaStaticsInScopeSpec
   FlambdaStaticsOrderSpec
@@ -224,6 +225,7 @@ Separate Extraction
   drop_unused_params
   empty_heap
   empty_static_env
+  ends_check
   erasable
   erase
   expr_eqb

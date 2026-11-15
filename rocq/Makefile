@@ -327,6 +327,15 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   FlambdaRegionsCheckedStoreProofs.v \
   FlambdaRegionsCheckedUnknownProofs.v \
   FlambdaRegionsCheckedViewsProofs.v \
+  FlambdaRegionsEndsBasicsProofs.v \
+  FlambdaRegionsEndsCallProofs.v \
+  FlambdaRegionsEndsHandlersProofs.v \
+  FlambdaRegionsEndsJumpProofs.v \
+  FlambdaRegionsEndsLetProofs.v \
+  FlambdaRegionsEndsProofs.v \
+  FlambdaRegionsEndsSpec.v \
+  FlambdaRegionsEndsStableProofs.v \
+  FlambdaRegionsEndsViewProofs.v \
   FlambdaRegionsErasedCallsProofs.v \
   FlambdaRegionsErasedProofs.v \
   FlambdaRegionsErasedReadsProofs.v \
