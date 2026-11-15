@@ -31,7 +31,27 @@ regions (`../README.md`, "What the conversion does to a unit", says of
 which units and what the line may say; no verdict depends on it).
 Measured at the default flags: it prints the line of 555 of the 600 and
 of 234 of the 240 below, and says of each that the check passes before
-and after.
+and after. Under that line it prints of each the line of the ends of
+regions (the same section of that README says what the check is, what
+"accepted" rests on and what its option `eo_own_end` asks). Of 542 of
+the 555 and of 230 of the 234 it says "accepted" of the term before and
+of the term after, with the option and without it. Of the other 13 and 4
+it says "accepted" of both without the option and, with the option,
+"refused" of the term before and "accepted" of the term after
+(`exceptions`, seeds 1 and 13; `exceptions_scalar`, seed 33;
+`functions`, seeds 13, 95 and 100; `known`, seeds 16 and 84;
+`known_scalar`, seeds 22, 27 and 47; `loops_scalar`, seed 27; `unknown`,
+seeds 75, 82 and 97; `unknown_scalar`, seeds 106 and 145). With `-O3` it
+prints the two lines of the same units, and each line says what it says
+at the default flags. N3 read the terms before of these 17 units: in
+each, a jump to a handler that is not an exception handler (in one unit
+it is an arm of a `Switch`) is made where a plain region is open that is
+not one of the regions that the handler is entered with; the handler
+ends an older region first, the machine pops the frame of the inner
+region with it, and the run leaves no plain region open. The conversion
+from Lambda makes such a jump on purpose where control leaves several
+regions at once, and without the option the check allows it
+(`rocq/DECISIONS.md`, D55, which names the place in the front end).
 
 ## What a generated unit is
 
@@ -242,36 +262,44 @@ time, user and system together. Until now it allowed 60 seconds of
 the clock, which measured what else the machine was running:
 `loops_scalar`, seed 55, which was without an answer in 60 seconds
 the day before, then took 16 seconds of processor time, then 4,
-then 7 with the tool of 87cdbf3e01, and takes 3.7 now, the most of the
-240 (3.7 with the tool of 698cf003e5, in a run made just before). The
-240 took 14.5 seconds of processor time together in one run (11.6 user,
-2.9 system), and 14.6 in a second run of the same tool (11.8 and 2.9).
+then 7 with the tool of 87cdbf3e01, and takes 6.2 now, the most of the
+240 (3.6 with the tool of 8e6e4ba1b2, in a run made just before). The
+240 took 18.0 seconds of processor time together in one run (15.5 user,
+2.5 system), and 18.0 in a second run of the same tool (15.5 and 2.5).
 Other builds ran on the machine during both: in two runs made one after
-the other with the same inputs and flags, the tool of 698cf003e5 took
-14.3 and the tool of this tree 14.6. These are totals of processor time
+the other with the same inputs and flags, the tool of 8e6e4ba1b2 took
+13.8 and the tool of this tree 18.0. These are totals of processor time
 on a machine whose processors the runs shared with other builds under
 one quota: they are not a comparison of the speed of two tools run
 alone. The tool of this tree converts the two terms of a unit that was
 compared once more, with their regions kept, and tries to run each for
-the check of regions. And for a unit that is not validated it may make
+the check of regions; where that check says what the two runs came to,
+it asks the check of the ends of regions of each term, with its option
+and without it. And for a unit that is not validated it may make
 attempts that the tool of ca84b4345c did not make, besides the second
 check, which that tool made: the validation of the term before with its
 known arrays read, liftings whose rounds make direct the calls of the
 closures that a `Let` makes or use what `my_closure` is known to be from
 its code, the validation of the term before with chosen calls inlined
 first, that of the term before with copies of code for the sets of
-closures that a `Let` makes, and the liftings guessed again where two
-static arrays of the term after are alike (`../README.md`, the entry of
-`table_and_array_alike.ml`), each where the tool's conditions for it
-hold and no answer that it has kept serves; 7 of the 240 are not
+closures that a `Let` makes, the liftings guessed again where two static
+arrays of the term after are alike (`../README.md`, the entry of
+`table_and_array_alike.ml`), and the search of the liftings of an asking
+that asks a function made once more, with two choices of the guess
+changed, where it ended in a refusal (the same README, the entry of
+`local_rec_below_a_let_and_in_an_arm.ml`), each where the tool's
+conditions for it
+hold and no answer that it has kept serves; 6 of the 240 are not
 validated, two of them units that were not checked while the conversion
 made no primitive of the heap, where 25 were not validated with the tool
-of ca84b4345c. When it was measured there, the tool of 698cf003e5 took
-13.5 and 13.7, the second in a run made just after one of the tool of
-255f6a36c2, which took 13.8; the tool of 9c6e3fc02c took 13.6 and 13.7,
-the second in a run made just after one of the tool of 5a514806c3, which
-took 13.1 (`../README.md`, "What a check costs", says with which builds
-the times of these two tools were measured);
+of ca84b4345c. When it was measured there, the tool of 8e6e4ba1b2 took
+14.5 and 14.6, the second in a run made just after one of the tool of
+698cf003e5, which took 14.3; the tool of 698cf003e5 took 13.5 and 13.7,
+the second in a run made just after one of the tool of 255f6a36c2, which
+took 13.8; the tool of 9c6e3fc02c took 13.6 and 13.7, the second in a
+run made just after one of the tool of 5a514806c3, which took 13.1
+(`../README.md`, "What a check costs", says with which builds the times
+of the tools of 8e6e4ba1b2, 698cf003e5 and 9c6e3fc02c were measured);
 the tool of 24cd3c9252 took 13.2 and 13.1, and 13.7 in a
 run made just after one of the tool of b006dd4b0d, which took 14.4. When
 it was measured at that commit, the tool of b006dd4b0d took 17.8 and
@@ -296,18 +324,20 @@ made, with the tool before it and the tool after: 79 seconds and 12
 for the 240, 30 and 16 for the 600, and no output of the 840
 differs between the two. What else came between the two tools was
 not measured for its cost on these units one change at a time. The 600
-took 13.6 seconds in the first of those two runs (6.6 user, 7.0 system)
-and 12.9 in the second (6.4 and 6.5), and the tool of 698cf003e5 13.6 in
+took 12.3 seconds in the first of those two runs (6.1 user, 6.1 system)
+and 12.3 in the second (6.2 and 6.1), and the tool of 8e6e4ba1b2 12.1 in
 a run made just before the second; when it was measured there, the tool
-of 698cf003e5 took 12.5 and 12.6, and the tool of 255f6a36c2 12.2 in a
-run made just before the second of them; the tool of 9c6e3fc02c took
+of 8e6e4ba1b2 took 13.6 and 12.9, and the tool of 698cf003e5 13.6 in a
+run made just before the second of them; the tool of 698cf003e5 took
+12.5 and 12.6, and the tool of 255f6a36c2 12.2 in a run made just before
+the second of them; the tool of 9c6e3fc02c took
 12.3 and 12.5, and the tool of 5a514806c3 12.3 in a run made just before
 the second of them; the tool of 24cd3c9252 took
 12.8 and 12.7, and 13.5 in a run made just after one
 of the tool of b006dd4b0d, which took 13.1; when it was measured at that
 commit, the tool of b006dd4b0d took 19.1 and 18.8, and the tool of
 ca84b4345c, at its commit, 17.1 and 14.7. They took 33 with the tool of
-87cdbf3e01. More than half of what the 600 take now is the system's
+87cdbf3e01. Less than half of what the 600 take now is the system's
 part. A tool that
 a signal other than that of the limit ends
 is reported as that, with its status, and counted as no answer.
@@ -317,7 +347,7 @@ is reported as that, with its status, and counted as no answer.
 | `exceptions` | 60 | 33 | 0 | 27 | 0 | 0 | 0 |
 | `exceptions_scalar` | 60 | 35 | 0 | 23 | 0 | 2 | 0 |
 | `loops` | 60 | 56 | 1 | 0 | 0 | 3 | 0 |
-| `loops_scalar` | 60 | 55 | 3 | 0 | 0 | 2 | 0 |
+| `loops_scalar` | 60 | 56 | 3 | 0 | 0 | 1 | 0 |
 
 A unit that names a predefined exception has an import, and the
 tool runs it from its imports (`../README.md`, "What the verdicts
@@ -333,7 +363,7 @@ which had no such test, they were validated with nothing imported
 only; of the other 226 units the tool of ea56783099 printed what
 that one printed, byte for byte. One of the two units with
 exceptions that are not validated has an import. The validator accepts
-229 of the 240; 179 of them import nothing. Four more, which it refuses,
+230 of the 240; 180 of them import nothing. Four more, which it refuses,
 are validated when asked of the term before with copies of code for the
 sets of closures that a `Let` makes, which is another function
 (`../README.md`, "What the verdicts mean"), and are counted apart:
@@ -380,12 +410,31 @@ for byte. What came between the two, the load of an element of an
 immutable array among the primitives that the validation shares and the
 liftings guessed again where two static arrays of the term after are
 alike, turned none of these units.
-Between the tool of 698cf003e5 and the tool of this tree, at the default
-flags and with `-O3`: the two units with loops that were not checked are
-not validated (above), and each has the line of the check of regions;
-none is lost. Of the other 238 units of the 240, and of each of the 600,
-the tool of this tree prints what the tool of 698cf003e5 prints, byte
-for byte.
+Between the tool of 698cf003e5 and the tool of 8e6e4ba1b2, at the
+default flags and with `-O3`: the two units with loops that were not
+checked were not validated (above), and each had the line of the check
+of regions; none was lost. Of the other 238 units of the 240, and of
+each of the 600, the tool of 8e6e4ba1b2 printed what the tool of
+698cf003e5 printed, byte for byte.
+Between the tool of 8e6e4ba1b2 and the tool of this tree: at the default
+flags one of the 240 that was not validated is validated
+(`loops_scalar`, seed 2), none lost; with `-O3` the tool of 8e6e4ba1b2
+validated it already. What validates it is the search of the liftings
+made once more after a refusal (`../README.md`, the entry of
+`local_rec_below_a_let_and_in_an_arm.ml`): of that unit, at the default
+flags, a tool built at the commit before that search prints what the
+tool of 8e6e4ba1b2 prints but for the line of the ends of regions, and
+one built with the search and no later change of the validation prints
+what the tool of this tree prints. At both settings each unit that has
+the line of the check of regions, 555 of the 600 and 234 of the 240,
+gains the line of the ends of regions under it (above); but for the
+verdict of that one unit at the default flags, nothing else of what the
+tool prints of them changes. Of the other 45 units of the 600 and 6 of
+the 240, the tool of this tree prints what the tool of 8e6e4ba1b2
+prints, byte for byte. What else came between the two, the constant that
+a variable bound to a store is known to be and the code of the closure
+that a value slot of a closure of known code holds, turns none of these
+units.
 Six were validated when it went from 207 to 213,
 none lost: three by the liftings to a group of static bindings
 around (`FlambdaLiftAroundSpec.lift_around_unit`, V3's; `loops`,
@@ -468,7 +517,7 @@ terms, as the tool showed them, differed by the same kinds of line.
 The six units that were validated next are of the first kind, and
 the eleven others of the first kind were not read again. The third
 kind is what a call returning where its result is passed on removes;
-seven units are validated by it (above). Five units with loops are not
+seven units are validated by it (above). Four units with loops are not
 validated now, and four more are validated only when asked of the term
 before with copies of code; they were not sorted again.
 

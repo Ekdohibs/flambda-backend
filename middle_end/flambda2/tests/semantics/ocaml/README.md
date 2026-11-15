@@ -108,7 +108,7 @@ unit made from OCaml.
   of regions: passes before, passes after", or what failed or was
   not run. No verdict depends on that line; `rocq/TRUST-LEDGER.md`, "The
   check of regions", says what it rests on and what it does not say. The
-  tool prints the line of 108 of the 538 units of this directory, and it
+  tool prints the line of 109 of the 541 units of this directory, and it
   says "passes before, passes after" of each. Where that line says
   what the two runs came to, the tool prints one more, "the ends of
   regions ...": of each term, the answer of the model's `ends_check`
@@ -124,9 +124,9 @@ unit made from OCaml.
   control leaves several regions at once: a jump to the continuation
   that ends the outermost of them, whose end pops the frames of the
   others (`rocq/DECISIONS.md`, D55). `rocq/TRUST-LEDGER.md`, "The
-  ends of regions", says what the line does not say. It says
-  "accepted" of both terms of each of the 108 units, with and
-  without the option. The regions around a `try`
+  ends of regions", says what the line does not say. It says "accepted"
+  of both terms of each of the 109 units, with and without the option.
+  The regions around a `try`
   are dropped in the same way: the
   handler ends the regions that the body had open when it raised, and
   nothing allocated in one of them is assumed to be used after that.
@@ -236,10 +236,10 @@ unit made from OCaml.
   rewrites from the types; the first phase is as it was. The attempts
   of the term before with copies of code for the sets of closures
   that a `Let` makes (below) are made with such rounds from the
-  first, where the term before has such a closure. Three units of
-  this directory have the line: `maker_of_mutual_inlined.ml`,
-  `maker_of_two_inlined_twice.ml` and, under the line of the copies,
-  `local_rec_inlined_twice.ml`.
+  first, where the term before has such a closure. Four units of this
+  directory have the line: `captured_closure_given_to_inlined.ml`,
+  `maker_of_mutual_inlined.ml`, `maker_of_two_inlined_twice.ml` and,
+  under the line of the copies, `local_rec_inlined_twice.ml`.
   Where it has the line "(with what my_closure is known to be from its
   code used in the rounds after each lifting)", the liftings of the
   attempt that accepted the pair asked that too; the line records what
@@ -259,7 +259,20 @@ unit made from OCaml.
   call of a variable so known is made the direct call of its code, and
   the projection from it of a value slot that every such set gives one
   constant, or one symbol that is in scope, is made that constant or
-  symbol. The rewrite is made only of a unit in which each group of
+  symbol. A second pass, over the result of the first
+  (`FlambdaClosureOfCodeSpec.know_code_slots`, after
+  `know_code_closures`), knows one thing more of a variable so known: a
+  variable bound to the projection of a value slot from it, where the
+  projection names the function slot, is known to be a closure of one
+  code where the result of the first pass makes a set with the first
+  code at that function slot and every such set gives the value slot a
+  variable that is in sight there as a closure of that code
+  (`FlambdaSlotsOfCodeSpec.sight_made`: a variable that a `Let` above
+  binds to a closure that the `Let` makes, or to the projection of a
+  function slot from a variable in sight; no other variable, and no
+  symbol, whatever it is bound to). That pass changes calls only: an
+  indirect call of a variable that it knows is made the direct call of
+  its code. The rewrite is made only of a unit in which each group of
   static bindings that binds a set of closures binds all of it, and is
   the identity of any other
   (`FlambdaClosureOfCodeSpec.know_own_closures`, C3's, whose header has
@@ -270,9 +283,10 @@ unit made from OCaml.
   `FlambdaValidateSpec.normalise_lifted_own`). The theorem keeps the
   text of its statement here too. The attempts of the term before
   with copies of code for the sets of closures that a `Let` makes
-  (below) are made with these rounds from the first. Two units of
-  this directory have the line: `maker_of_mutual_inlined.ml` and,
-  under the line of the copies, `local_rec_inlined_twice.ml`.
+  (below) are made with these rounds from the first. Three units of this
+  directory have the line: `captured_closure_given_to_inlined.ml`,
+  `maker_of_mutual_inlined.ml` and, under the line of the copies,
+  `local_rec_inlined_twice.ml`.
 - **validated with its imports**: the unit names a symbol of another
   unit, here always a predefined exception, and the tool runs both
   terms from the static environment of their imports
@@ -732,7 +746,7 @@ Simplify does to it. Steps are those of the machine, before and after
 Simplify. The names in brackets are the streams whose work in progress
 is the rewrite that is missing.
 
-540 sources: 451 validated; 2 validated when asked of the term before
+541 sources: 452 validated; 2 validated when asked of the term before
 with its known immutable arrays read, which is another function than the
 others are asked of; 4 validated when asked of the term before with
 chosen calls inlined first, which is another function again; 1 validated
@@ -748,29 +762,30 @@ imports); 2 undefined in the model; 3 not checked.
 
 | Source | Steps | Source | Steps |
 |--------|-------|--------|-------|
-| `add3_exported.ml` | 9, 6 | `join_tags_then_shared_field.ml` | 69, 46 |
-| `add_zero.ml` | 8, 2 | `join_two_names_of_symbol.ml` | 24, 8 |
-| `alias_kept_or_rebuilt.ml` | 49, 28 | `kept_local_mutual_to_inlined.ml` | 145, 97 |
-| `apply_exported.ml` | 8, 4 | `labelled_arguments.ml` | 13, 3 |
-| `array_literal.ml` | 8, 3 | `labelled_in_every_order.ml` | 108, 94 |
-| `attr_inlined_never_at_call.ml` | 27, 20 | `labelled_optional.ml` | 38, 6 |
-| `attr_local_in_match.ml` | 87, 59 | `late_three_values_interleaved.ml` | 430, 382 |
-| `attr_local_two_uses.ml` | 41, 27 | `least_join_table.ml` | 30, 35 |
-| `bitwise_unknown.ml` | 14, 7 | `len_compare_two.ml` | 41, 33 |
-| `block_in_arm_of_unknown.ml` | 19, 7 | `len_of_constants.ml` | 32, 1 |
-| `bool_not_unknown.ml` | 8, 3 | `len_of_unknown_twice.ml` | 18, 12 |
-| `bool_ops.ml` | 47, 1 | `list_constant.ml` | 39, 25 |
-| `boxed_constant_made.ml` | 12, 4 | `list_head.ml` | 41, 3 |
-| `boxed_constant_twice.ml` | 16, 2 | `list_heap.ml` | 54, 33 |
-| `bswap_constants.ml` | 29, 2 | `list_last.ml` | 76, 41 |
-| `call_of_call_tested.ml` | 39, 42 | `list_sum.ml` | 61, 42 |
-| `call_result_passed_on.ml` | 79, 31 | `load_through_join.ml` | 68, 37 |
-| `call_result_tested.ml` | 78, 73 | `local_argument_partial_application.ml` | 102, 59 |
-| `call_result_unused.ml` | 79, 50 | `local_block_matched.ml` | 93, 66 |
-| `capture_fun_and_var_run.ml` | 24, 20 | `local_block_matched_argument.ml` | 93, 66 |
-| `capture_fun_bound_in_handler_run.ml` | 31, 26 | `local_call_exported.ml` | 8, 4 |
-| `capture_rec_self.ml` | 9, 6 | `local_call_used.ml` | 10, 3 |
-| `capture_two_funs.ml` | 15, 12 | `local_closure_applied_mutual.ml` | 158, 82 |
+| `add3_exported.ml` | 9, 6 | `join_phys_equal_arms.ml` | 25, 17 |
+| `add_zero.ml` | 8, 2 | `join_tags_then_shared_field.ml` | 69, 46 |
+| `alias_kept_or_rebuilt.ml` | 49, 28 | `join_two_names_of_symbol.ml` | 24, 8 |
+| `apply_exported.ml` | 8, 4 | `kept_local_mutual_to_inlined.ml` | 145, 97 |
+| `array_literal.ml` | 8, 3 | `labelled_arguments.ml` | 13, 3 |
+| `attr_inlined_never_at_call.ml` | 27, 20 | `labelled_in_every_order.ml` | 108, 94 |
+| `attr_local_in_match.ml` | 87, 59 | `labelled_optional.ml` | 38, 6 |
+| `attr_local_two_uses.ml` | 41, 27 | `late_three_values_interleaved.ml` | 430, 382 |
+| `bitwise_unknown.ml` | 14, 7 | `least_join_table.ml` | 30, 35 |
+| `block_in_arm_of_unknown.ml` | 19, 7 | `len_compare_two.ml` | 41, 33 |
+| `bool_not_unknown.ml` | 8, 3 | `len_of_constants.ml` | 32, 1 |
+| `bool_ops.ml` | 47, 1 | `len_of_unknown_twice.ml` | 18, 12 |
+| `boxed_constant_made.ml` | 12, 4 | `list_constant.ml` | 39, 25 |
+| `boxed_constant_twice.ml` | 16, 2 | `list_head.ml` | 41, 3 |
+| `bswap_constants.ml` | 29, 2 | `list_heap.ml` | 54, 33 |
+| `call_of_call_tested.ml` | 39, 42 | `list_last.ml` | 76, 41 |
+| `call_result_passed_on.ml` | 79, 31 | `list_sum.ml` | 61, 42 |
+| `call_result_tested.ml` | 78, 73 | `load_through_join.ml` | 68, 37 |
+| `call_result_unused.ml` | 79, 50 | `local_argument_partial_application.ml` | 102, 59 |
+| `capture_fun_and_var_run.ml` | 24, 20 | `local_block_matched.ml` | 93, 66 |
+| `capture_fun_bound_in_handler_run.ml` | 31, 26 | `local_block_matched_argument.ml` | 93, 66 |
+| `capture_rec_self.ml` | 9, 6 | `local_call_exported.ml` | 8, 4 |
+| `capture_two_funs.ml` | 15, 12 | `local_call_used.ml` | 10, 3 |
+| `captured_closure_given_to_inlined.ml` | 104, 59 | `local_closure_applied_mutual.ml` | 158, 82 |
 | `char_code.ml` | 13, 3 | `local_closure_given_partially.ml` | 58, 40 |
 | `char_comparisons.ml` | 56, 36 | `local_function.ml` | 29, 5 |
 | `char_count_in_string.ml` | 654, 304 | `local_loop_inlined.ml` | 66, 41 |
@@ -973,7 +988,6 @@ imports); 2 undefined in the model; 3 not checked.
 | `int_switch.ml` | 31, 1 | `while_two_loops.ml` | 126, 81 |
 | `is_even.ml` | 29, 1 | `while_two_tests.ml` | 180, 123 |
 | `join_pair_equal_fields.ml` | 50, 28 | `while_unused_counter.ml` | 78, 40 |
-| `join_phys_equal_arms.ml` | 25, 17 |  |  |
 
 ### Validated when asked of the term before with its known arrays read
 
@@ -2527,6 +2541,24 @@ removed it:
   nothing in a term given to it that has one ("What the verdicts
   mean"). The second check, which printed no line of it, now prints
   "related once lifted", which is no validation of the unit.
+- A closure that a recursive function captures and gives to a function
+  that is inlined (`captured_closure_given_to_inlined.ml`; C3's). A
+  function that the unit exports makes a closure that holds its
+  argument, and then a recursive function that holds that closure and
+  gives it to a function that applies what it is given twice and is
+  always inlined; it returns the recursive function. Simplify inlines
+  the two calls of the closure in the code of the recursive function.
+  The term before, once the rounds have inlined the function that
+  applies twice, has two indirect calls of what a value slot of the
+  recursive function holds. The rounds that use what `my_closure` is
+  known to be from its code now know the code of the closure that such a
+  value slot holds, under the conditions that "What the verdicts mean"
+  gives: every set that is made with the code of the recursive function
+  gives the slot a variable that is in sight there as a closure of one
+  code, here the variable that the `Let` of the closure binds, so the
+  two calls are made direct. The unit is validated, at the default flags
+  and with `-O3`, and the verdict has the two lines of what its liftings
+  asked of their rounds.
 
 A count over 600 units made at random is in `census/README.md`, with
 one over 240 more that have exceptions, loops and recursive functions.
@@ -2600,13 +2632,21 @@ Where the search of an asking that asks something ends in a refusal
 after that, the search is made once more with two choices of the guess
 changed (the entry of `local_rec_below_a_let_and_in_an_arm.ml`, in the
 list above).
-The 538 units here were checked in 12.5 seconds of processor time
-together in one run (5.8 user, 6.7 system), and in 12.1 in a second run
-of the same tool (5.6 and 6.5): more than half of each is the system's
+The 541 units here were checked in 11.3 seconds of processor time
+together in one run (5.7 user, 5.5 system), and in 11.1 in a second run
+of the same tool (5.6 and 5.5): less than half of each is the system's
 part. Other builds ran on the machine during both. In two runs made one
-after the other with the same inputs and flags, on the same 538 units,
-the tool of 698cf003e5 took 11.8 seconds and the tool of this tree 11.4.
-On the 536 units that the directory had at 255f6a36c2, in two such runs,
+after the other with the same inputs and flags, on the same 541 units,
+the tool of 8e6e4ba1b2 took 10.7 seconds and the tool of this tree 11.2.
+On the 538 units that the directory had at 698cf003e5, in two such runs,
+the tool of that commit took 11.8 seconds and the tool of 8e6e4ba1b2
+took 11.4. That time, and those that `census/README.md` gives for the
+tool of 8e6e4ba1b2 where it says "when it was measured there", were
+measured with the build that C2 made of its series of the conversion
+that makes cells when that series was closed, and not with a build made
+at 8e6e4ba1b2: between the two the source of the tool and one Rocq file
+change in comments only, and no other Rocq file changes. On the 536
+units that the directory had at 255f6a36c2, in two such runs,
 the tool of that commit took 10.5 seconds and the tool of 698cf003e5
 took 10.5. That time, and those that `census/README.md` gives for the
 tool of 698cf003e5 where it says "when it was measured there", were
@@ -2651,8 +2691,9 @@ two terms and compared the runs: there it prints "the validation:
 not asked (FLSEMANTICS_REGIONS_ONLY is set)" in the place of the
 line of the calls once those of known code are inlined, of the
 verdict and of the lines under it, and the runs, the check of kinds,
-the comparison of the two runs and the line of the check of regions
-as without the variable. Where the tool stops before it asks the
+the comparison of the two runs, the line of the check of regions and the
+line of the ends of regions as without the variable. Where the tool
+stops before it asks the
 validation (a unit that is not checked, a term after that is not
 well-formed, a fault of the prefix made from `.cmx` files), the
 variable changes nothing of what it prints. What the tool prints
@@ -2784,7 +2825,7 @@ directory sets the variable; one of `../regions/` does.
   `option_bind`, `option_map`, `polymorphic_variant`,
   `project_record_two_levels`, `record_update`, `result_map`,
   `same_field_chain_twice` and `tree_root`.
-  Of the 207 units that have entered since, 32 have:
+  Of the 210 units that have entered since, 32 have:
   `stack_argument_result_returned`, whose source says `local_` of a
   parameter, the first source of this directory that does, and 31 that
   entered after it: `attr_local_in_match`, `clos_partial_local`,
@@ -2805,7 +2846,7 @@ directory sets the variable; one of `../regions/` does.
   `tupled_partial_application`, `twice_nested_same_scrutinee` and
   `var_twelve_mixed`. Twelve of the 31 say `local_` in the source. Each
   unit is looked at so before it enters. By the same print, the term
-  before Simplify of 63 of the 538 units of this directory has an
+  before Simplify of 64 of the 541 units of this directory has an
   allocation mode that names a region, on
   an allocation or on a call ("What the conversion does to a unit" says
   what is made of regions). What was run for the
