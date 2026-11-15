@@ -95,8 +95,11 @@
    that last premise holds of a term after that passes the check,
    under the premises of freshness and [erasable].
 
-   Nothing runs the check: the test tool does not ask it, and nothing
-   of it is extracted.
+   Nothing runs the check: the test tool does not ask it, and
+   [region_check] is not extracted. What is extracted of this file is
+   the types of a certificate and four functions on lists of regions
+   ([regions_below], [in_order], [region_at_jump],
+   [region_params_of]), for the check of FlambdaRegionsEndsSpec.v.
 
    The check is a function. It takes a certificate, which an analysis
    that is not trusted guesses: nothing is asked of the certificate

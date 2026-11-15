@@ -1107,11 +1107,15 @@ it gave back.
   refuses terms that the machine runs to their end; it is not
   complete, and no statement says that it is. That is of the model's
   term on the model's machine.
-  The test tool does not ask `region_check` and nothing of it is
-  extracted, so no line of the tool's output rests on it: a line of
-  the tool is still of what this entry describes above, the one run
-  that the tool makes of each term or the reason for which it made
-  none.
+  The test tool does not ask `region_check`, and neither it nor
+  `check_expr` is extracted, so no line of the tool's output rests on
+  it: the line of the check of regions is still of what this entry
+  describes above, the one run that the tool makes of each term or
+  the reason for which it made none. What is extracted of
+  `FlambdaRegionsCheckSpec.v` is the types of a certificate and four
+  functions on lists of regions (`regions_below`, `in_order`,
+  `region_at_jump`, `region_params_of`), which another check uses:
+  the next entry.
 - **The ends of regions**, in the same file (`guess_ends_certificate`,
   `print_region_ends`), with the model's
   `FlambdaRegionsEndsSpec.ends_check`, which is extracted. Where the
