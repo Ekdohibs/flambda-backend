@@ -76,6 +76,12 @@
      rocq/TRUST-LEDGER.md, "Regions"). The machine of
      FlambdaRegionsSpec.v is told that an allocation is local by the
      primitive [Local_allocation] after it.
+     [Make_block_with_identity] and [Make_mutable_array], under
+     [Heap], have no allocation mode either. What they make has an
+     identity: it is a cell of the heap (FlambdaHeapSpec.v). The
+     machine of FlambdaRegionsSpec.v is told in the same way that the
+     allocation of a cell is local: it makes the cell in the same
+     heap, and says when such a cell is dead.
    - [Make_block] has no mutability: it is that of immutable blocks
      ([Immutable], not [Immutable_unique]), and the conversion must
      refuse the others. So every block that [Make_block] makes is
@@ -151,8 +157,8 @@
      floats.
    - [Make_array] is two primitives, by its mutability, and neither
      carries it. At [Mutable] it is [Make_mutable_array], under [Heap],
-     with no allocation mode: the allocation on the heap of an array
-     that has an identity. At [Immutable] it is [Make_immutable_array],
+     with no allocation mode: it makes an array that has an identity,
+     a cell of the heap. At [Immutable] it is [Make_immutable_array],
      a variadic primitive, which makes a value with no identity, as
      [Make_block] makes an immutable block. [Immutable_unique] is not a
      mutability of arrays: Simplify stops on a [Make_array] that has
@@ -339,12 +345,14 @@ Inductive array_set_kind : Type :=
   | Set_values (init : init_or_assign).
 
 Inductive heap_primitive : Type :=
-  (* [Make_block (Values (tag, _), Mutable | Immutable_unique, Heap)]:
-     variadic. *)
+  (* [Make_block (Values (tag, _), Mutable | Immutable_unique, _)]:
+     variadic. The allocation mode is not here: a [Local_allocation]
+     after it says that the allocation is local (below). *)
   | Make_block_with_identity (mut : cell_mutability) (tag : Z)
   (* [Block_set { kind; init; field }]: binary. *)
   | Block_set (kind : block_access_kind) (init : init_or_assign) (field : Z)
-  (* [Make_array (kind, Mutable, Heap)]: variadic. *)
+  (* [Make_array (kind, Mutable, _)]: variadic. The allocation mode is
+     not here either. *)
   | Make_mutable_array (kind : array_kind)
   (* [Array_set (kind, set_kind)]: ternary. *)
   | Array_set (kind : array_kind) (set_kind : array_set_kind).
