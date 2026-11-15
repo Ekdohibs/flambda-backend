@@ -272,7 +272,8 @@
    pass, the term as it is where they do not) is stated in the
    section of the check, and beside the first the same of
    FlambdaLiftObservedSpec.with_lifting_observed, which leaves out
-   the test of the exits and which the check does not apply. Other
+   the two tests of the unit, that of its exits and that of the heap,
+   and which the check does not apply. Other
    rewrites that the check applies are stated to commute with
    renaming in their own files:
    FlambdaDemoteSpec.demote_handlers, of the end of the normalisation
@@ -1234,7 +1235,7 @@ Definition with_lifting_equivariant_statement : Prop :=
     with_lifting (rename_lifting r L) (rename_expr r e)
     = rename_expr r (with_lifting L e).
 
-(* The same of the lifting without the test of the exits
+(* The same of the lifting without the two tests of the unit
    (FlambdaLiftObservedSpec.with_lifting_observed): its other tests go
    by the two continuations of its unit, as those of [with_lifting]
    do. *)

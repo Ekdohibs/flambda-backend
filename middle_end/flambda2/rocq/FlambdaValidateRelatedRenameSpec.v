@@ -87,7 +87,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
 Import ListNotations.
 
 (* ======================================================================== *)
-(* The liftings made in turn without the test of the exits                  *)
+(* The liftings made in turn without the two tests of the unit              *)
 (* ======================================================================== *)
 
 (* They keep scope, as FlambdaValidateSpec.lifted_in_turn does. *)

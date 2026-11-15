@@ -293,8 +293,8 @@ Definition bind_my_closures_keeps_scope_statement : Prop :=
 Definition with_lifting_keeps_scope_statement : Prop :=
   ∀ L : lifting, keeps_scope (with_lifting L).
 
-(* The same without the test of the exits
-   (FlambdaLiftObservedSpec.with_lifting_observed). *)
+(* The same without the two tests of the unit, that of its exits and
+   that of the heap (FlambdaLiftObservedSpec.with_lifting_observed). *)
 Definition with_lifting_observed_keeps_scope_statement : Prop :=
   ∀ L : lifting, keeps_scope (with_lifting_observed L).
 

@@ -954,8 +954,8 @@ Proof.
     [ apply lift_unit_scoped | apply lift_around_unit_scoped ].
 Qed.
 
-(* The four liftings without the test of the exits
-   (FlambdaLiftObservedSpec.v), as the four with it. *)
+(* The four liftings without the two tests of the unit
+   (FlambdaLiftObservedSpec.v), as the four with them. *)
 Lemma to_head_observed_scoped (L : lifting) (e : expr) :
   scoped e (to_head_observed L e).
 Proof.

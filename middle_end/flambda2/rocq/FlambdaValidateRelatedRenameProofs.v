@@ -28,7 +28,7 @@
 (* Proofs of the statements of FlambdaValidateRelatedRenameSpec.v. This
    file needs no review.
 
-   The liftings made in turn without the test of the exits are those
+   The liftings made in turn without the two tests of the unit are those
    of FlambdaValidateSpec.lifted_in_turn with another first step, and
    the proofs are those of FlambdaValidatorEquivarianceProofs.v for
    that function with the laws of that step. The check is then as
@@ -55,7 +55,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec FlambdaMapProofs
 Import ListNotations.
 
 (* ======================================================================== *)
-(* The liftings made in turn without the test of the exits                  *)
+(* The liftings made in turn without the two tests of the unit              *)
 (* ======================================================================== *)
 
 Lemma lifted_in_turn_observed_scope (rounds : nat) (avoid : list continuation)

@@ -6353,8 +6353,8 @@ Qed.
 Theorem with_lifting_equivariant : with_lifting_equivariant_statement.
 Proof. exact with_lifting_renamed. Qed.
 
-(* The four liftings without the test of the exits
-   (FlambdaLiftObservedSpec.v), as the four with it: the other checks
+(* The four liftings without the two tests of the unit
+   (FlambdaLiftObservedSpec.v), as the four with them: the other checks
    answer the same on the renamed unit, and each rewrite commutes with
    the renaming. *)
 Lemma lift_unit_observed_renamed (r : renaming) (L : lifting) (e : expr) :
