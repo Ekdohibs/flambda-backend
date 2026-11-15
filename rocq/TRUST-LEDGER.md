@@ -523,13 +523,29 @@ it gave back.
     the value and the cell live (`FlambdaRegionsSpec.store_fault`):
     that is the model's own test, and it is no evidence that a store
     whose mode is wrong for its target is safe;
-  - that every initialising store is refused, of a block and of an
-    array. Such a store has conditions on what the field held before
-    and on the collector that the model does not follow, and refusing
-    it keeps outside the conversion the store that the compiler makes
-    for a function whose recursion is in the tail of a constructor,
-    which is an `Array_set` of values marked `Initialization` on a
-    block;
+  - that every store marked `Initialization` is refused, of a block
+    and of an array: a `Block_set` so marked, and an `Array_set`
+    whose set kind is that of values with that mark. A store so
+    marked has conditions on what the field held before and on the
+    collector that the model does not follow, and refusing it keeps
+    outside the conversion the store that the compiler makes for a
+    function whose recursion is in the tail of a constructor, which
+    is an `Array_set` of values marked `Initialization` on a block.
+    The set kinds of immediates and of values that the collector may
+    ignore carry no such mark, and a store at one of them is
+    converted where the array kind of the primitive is that of
+    immediates or of values that the collector may ignore, whatever
+    the source meant: the conversion reads the two kinds that the
+    primitive carries, and not what the store writes to. This is not
+    a claim that every store that initialises in the source is
+    refused. The front end writes a store of an immediate through a
+    computed field of a block as an `Array_set` whose array kind and
+    set kind are those of immediates, whether it initialises or
+    assigns (`Lambda_to_flambda_primitives`, `Psetfield_computed`);
+    what else makes such a store was not searched. In the model an
+    `Array_set` whose target is a cell that is a block has no value
+    (`FlambdaHeapSpec.exec_heap_primitive`): a run that comes to one
+    is undefined;
   - that these are refused, and not approximated: a store into a
     block of floats or a mixed block; an array of floats, of naked
     numbers, of vectors, of masks or of unboxed products, made or
@@ -636,8 +652,8 @@ it gave back.
   such a store, and of a term that has one, where the whole term is
   converted, the round trip says that the two terms differ and that
   they are printed the same. A unit that the
-  conversion refuses, as one with an initialising store, is "not
-  converted" there too. So the round trip checks the term of the
+  conversion refuses, as one with a store marked `Initialization`,
+  is "not converted" there too. So the round trip checks the term of the
   model that the conversion makes, and not that the modes of the
   allocations and of the assignments, the markers of regions (which
   it does not print), what the collector is asked, or the meaning of
