@@ -543,7 +543,8 @@ it gave back.
     marked mutable of a block made mutable then has no value
     (decision D52, open), and an array load marked immutable of a
     mutable array none (decision D49): a run that comes to one is
-    undefined, and the validation says nothing of the unit.
+    undefined. Where the run before is undefined, the validation
+    says nothing of the unit.
   *Which lines the guard of the liftings governs.* Each of the four
   liftings to symbols of the validation lifts nothing in what it is
   given, where that term has a primitive of the heap
