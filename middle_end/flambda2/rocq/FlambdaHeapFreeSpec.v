@@ -48,7 +48,9 @@
    [expr_free_of_heap] is their guard for the time being. A unit that
    passes it, run as said above, exits with the empty heap if it
    exits ([free_of_heap_exits_empty_statement]), and a heap alike to
-   the empty heap is empty.
+   the empty heap is empty. The copy of code for a [Let] asks the
+   same test of the unit that it is given, for the same reason
+   (FlambdaCopyLetsSpec.copy_let_code).
 
    The test is of the text: no [Let] of a primitive of the heap
    (FlambdaModel.Prim of FlambdaPrimitiveModel.Heap) in the unit, in a
@@ -69,17 +71,6 @@
    That the heaps come to be compared by a relation that holds of a
    unit and the unit lifted is one way for it to go, and is not said
    to be the only one.
-
-   The test has a second use, which is not a limit.
-   FlambdaRegionsInvariantSpec.no_heap_primitive_no_let_not_run_statement
-   takes it of a term, and [statics_free_of_heap] of the static
-   environment, among its premises: the machine of regions does not
-   run a [Let] that needs the heap, and a run of that machine from
-   the first state of a term that passes, in a static environment
-   whose code passes, never comes to one, if moreover no value of
-   the static environment holds a location. That use does not depend
-   on decision D40: the test stays for it whatever becomes of the
-   guard.
 
    The proofs are in FlambdaHeapFreeProofs.v, which needs no review. *)
 
