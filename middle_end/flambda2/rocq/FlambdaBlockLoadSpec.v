@@ -69,12 +69,22 @@
      the tag and of the size what is known of the block, where it says
      anything ([known_is]); the block has the field; and the field kind
      of the access is [Any_value]. A load marked [Mutable] is left
-     alone, as Simplify leaves one whose argument is not a constant
-     ([Simplify_unary_primitive.simplify_mutable_block_load]): the pass
-     is for the term before only, and it must do as Simplify does. A
-     load whose field kind is [Immediate] is left alone: it has no value
-     on a field that is not a tagged immediate, and that is not known
-     from the term.
+     alone. Where Simplify simplifies the primitive it leaves one whose
+     argument is not a constant
+     ([Simplify_unary_primitive.simplify_mutable_block_load]), and the
+     pass, which is for the term before only, does as that does. It
+     does not follow the flow analysis of Simplify, which records each
+     [Make_block] and each load whose block is a variable
+     ([Flow_acc.record_let_binding]) and, for a [Make_block] whose
+     variable it requires and does not class as escaping
+     ([Mutable_unboxing.blocks_to_unbox]), removes the block and
+     replaces each recorded load from it, whatever the load is marked,
+     by what the field holds at that point, where the block has the
+     field and what it holds is of the load's kind; otherwise it makes
+     the load [Invalid]. The pass has no such selection. A load whose
+     field kind is [Immediate] is left alone: it has no value on a
+     field that is not a tagged immediate, and that is not known from
+     the term.
 
    So where the access kind disagrees with the block the pass does not
    fire, although the load is then undefined
