@@ -1,0 +1,10 @@
+captured_closure_given_to_inlined.fl:
+  before Simplify (104 steps): returns [0: <fun>; <fun>; 24]
+  after Simplify (59 steps): returns [0: <fun>; <fun>; 24]
+  the check of kinds: passes before, passes after
+  calls outside code: 2 before, 2 after
+  the same
+  calls outside code once those of known code are inlined: 1
+  validated: the same once closures and blocks are lifted to symbols, the terms normalised and unused value slots removed
+  (with the calls of the closures that a Let makes made direct in the rounds after each lifting)
+  (with what my_closure is known to be from its code used in the rounds after each lifting)

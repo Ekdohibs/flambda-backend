@@ -1,0 +1,91 @@
+let $camlCaptured_closure_given_to_inlined__first_const_0 = Block 0 () in
+(let code inline(always) size(12)
+       twice_0 (f/97 : val, n/98 : imm tagged)
+         my_closure/99 &my_alloc_region/100 my_depth/101
+         -> k/34 * k/35
+         : imm tagged =
+   let next_depth/102 = rec_info (succ my_depth/101) in
+   apply &my_alloc_region/100 f/97 (n/98) -> k/36 * k/35
+     where k/36 (apply_result/103 : imm tagged) =
+       apply &my_alloc_region/100 f/97 (apply_result/103) -> k/34 * k/35
+ in
+ let code size(6)
+       scale_2 (n/104 : imm tagged)
+         my_closure/105 &my_alloc_region/106 my_depth/107
+         -> k/37 * k/38
+         : imm tagged =
+   let next_depth/108 = rec_info (succ my_depth/107) in
+   let factor/109 = %project_value_slot.[scale].[factor] (my_closure/105) in
+   let int_mul/110 = %int_barith.mul (n/104, factor/109) in
+   cont k/37 (int_mul/110)
+ in
+ let code rec loopify(default tailrec) size(30)
+       sum_3 (n/111 : imm tagged, acc/112 : imm tagged)
+         my_closure/113 &my_alloc_region/114 my_depth/115
+         -> k/39 * k/40
+         : imm tagged =
+   let next_depth/116 = rec_info (succ my_depth/115) in
+   let twice/117 = %project_value_slot.[sum].[twice] (my_closure/113) in
+   let scale/118 = %project_value_slot.[sum].[scale] (my_closure/113) in
+   (let prim/122 = %int_comp.le (n/111, 0) in
+    let int_lessequal/123 = %tag_imm (prim/122) in
+    (let untagged/124 = %untag_imm (int_lessequal/123) in
+     switch untagged/124
+       | 0 -> k/43
+       | 1 -> k/39 (acc/112))
+      where k/43 =
+        cont k/41)
+     where k/41 =
+       (apply direct(twice_0 &my_alloc_region/114)
+          (twice/117 : _ -> imm tagged) (scale/118, n/111) -> k/42 * k/40
+          where k/42 (apply_result/119 : imm tagged) =
+            let int_add/120 = %int_barith.add (acc/112, apply_result/119) in
+            let int_sub/121 = %int_barith.sub (n/111, 1) in
+            apply direct(sum_3 &my_alloc_region/114)
+              (my_closure/113 ~ depth my_depth/115 -> next_depth/116
+               : _ -> imm tagged)
+                (int_sub/121, int_add/120)
+                -> k/39 * k/40)
+ in
+ let code size(56)
+       sum_scaled_1 (factor/125 : imm tagged)
+         my_closure/126 &my_alloc_region/127 my_depth/128
+         -> k/44 * k/45
+         : val =
+   let next_depth/129 = rec_info (succ my_depth/128) in
+   let twice/130 =
+     %project_value_slot.[sum_scaled].[twice_1] (my_closure/126)
+   in
+   let scale/131 = closure scale_2 @scale &my_alloc_region/127
+   with { factor = factor/125 }
+   in
+   let sum/132 = closure sum_3 @sum &my_alloc_region/127
+   with { twice = twice/130; scale = scale/131 }
+   in
+   cont k/44 (sum/132)
+ in
+ let twice/133 = closure twice_0 @twice &toplevel in
+ let sum_scaled/134 = closure sum_scaled_1 @sum_scaled &toplevel
+ with { twice_1 = twice/133 }
+ in
+ (let Popaque/137 = %opaque (2) in
+  apply direct(sum_scaled_1 &toplevel)
+    sum_scaled/134 (Popaque/137) -> k/47 * error
+    where k/47 (func/138) =
+      apply &toplevel func/138 (3, 0) -> k/46 * error)
+   where k/46 (result/135 : imm tagged) =
+     let Pmakeblock/136 =
+       %block.[`0`].`toplevel` (twice/133, sum_scaled/134, result/135)
+     in
+     cont k/33 (Pmakeblock/136))
+  where k/33 define_root_symbol (module_block/93) =
+    let field_0/94 = %block_load.tag[`0`].`size`[`3`].[`0`] (module_block/93)
+    in
+    let field_1/95 = %block_load.tag[`0`].`size`[`3`].[`1`] (module_block/93)
+    in
+    let field_2/96 = %block_load.tag[`0`].`size`[`3`].[`2`] (module_block/93)
+    in
+    let $camlCaptured_closure_given_to_inlined =
+      Block 0 (field_0/94, field_1/95, field_2/96)
+    in
+    cont done ($camlCaptured_closure_given_to_inlined)
