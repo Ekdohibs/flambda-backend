@@ -1,0 +1,69 @@
+(* heap_no_store_guess_again.fl with a store: three lines more, which make a
+   block that can change at the toplevel of the unit, pass it through
+   [%opaque] and store into it. Both terms then have a primitive of the heap,
+   and each of the four liftings to symbols of the validation lifts nothing in
+   a term that it is given, where that term has one, whatever liftings the tool
+   guesses. The guess made again, which validates the unit without the store,
+   gives the same functions another guess: the unit is not validated, and the
+   line under the verdict says that the two terms have a primitive of the heap.
+
+   The second check, whose line begins "related once lifted", makes its
+   liftings without the test of the heap. It comes to a guess made again too,
+   and accepts with it. That line does not validate.
+
+   What this does not show: that a guess made again can never lead the
+   validation to accept a unit whose terms have a primitive of the heap. The
+   validation may accept such a unit where no lifting is needed. And the test
+   of a lifting is of the term that the lifting is given, not of the unit as
+   it was read: a rewrite before the lifting may have removed the primitive.
+   What a lifting does not do is lift in a term that has one when it is given
+   that term. *)
+let $camlHeap_store_stops_guess_again__first_const_0 = Block 0 () in
+(let code inline(never) size(21)
+       by_match_0 (d/51 : imm tagged)
+         my_closure/52 &my_alloc_region/53 my_depth/54
+         -> k/18 * k/19
+         : imm tagged =
+   let next_depth/55 = rec_info (succ my_depth/54) in
+   let untagged/56 = %untag_imm (d/51) in
+   switch untagged/56
+     | 0 -> k/18 (3)
+     | 1 -> k/18 (1)
+     | 2 -> k/18 (4)
+     | 3 -> k/18 (15)
+ in
+ let code inline(never) size(3)
+       by_table_1 (i/57 : imm tagged)
+         my_closure/58 &my_alloc_region/59 my_depth/60
+         -> k/20 * k/21
+         : imm tagged =
+   let next_depth/61 = rec_info (succ my_depth/60) in
+   let table/62 = %project_value_slot.[by_table].[table] (my_closure/58) in
+   let Parrayrefu/63 = %array_load.`imm` (table/62, i/57) in
+   cont k/20 (Parrayrefu/63)
+ in
+ let by_match/64 = closure by_match_0 @by_match &toplevel in
+ let cell/80 = %block.mut.[`0`].`toplevel` (0) in
+ let kept/81 = %opaque (cell/80) in
+ let stored/82 = %block_set.`imm`.[`0`] (kept/81, 5) in
+ let table/65 = %array.`imm`.`toplevel` (3, 1, 4, 15) in
+ let by_table/66 = closure by_table_1 @by_table &toplevel
+ with { table = table/65 }
+ in
+ (let Popaque/72 = %opaque (3) in
+  apply direct(by_table_1 &toplevel)
+    (by_table/66 : _ -> imm tagged) (Popaque/72) -> k/22 * error)
+   where k/22 (apply_result/67 : imm tagged) =
+     ((let Popaque/71 = %opaque (3) in
+       apply direct(by_match_0 &toplevel)
+         (by_match/64 : _ -> imm tagged) (Popaque/71) -> k/23 * error)
+        where k/23 (apply_result/68 : imm tagged) =
+          let result/69 = %int_barith.add (apply_result/68, apply_result/67)
+          in
+          let Pmakeblock/70 = %block.[`0`].`toplevel` (result/69) in
+          cont k/17 (Pmakeblock/70)))
+  where k/17 define_root_symbol (module_block/49) =
+    let field_0/50 = %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/49)
+    in
+    let $camlHeap_store_stops_guess_again = Block 0 (field_0/50) in
+    cont done ($camlHeap_store_stops_guess_again)

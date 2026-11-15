@@ -1,0 +1,11 @@
+heap_store_stops_guess_again.fl:
+  before Simplify (27 steps): returns [0: 30]
+  after Simplify (23 steps): returns [0: 30]
+  the check of kinds: passes before, passes after
+  calls outside code: 2 before, 2 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  not validated
+  (the term before and the term after have a primitive of the heap: each of the four liftings to symbols of the validation lifts nothing in a term that has one)
+  related once lifted: the same once values are lifted to symbols without the liftings' symbols-and-constants-only exit test and without their test of the heap, the tables of the term after bound in the term before, the terms normalised and unused value slots removed
+  (in the model, an exit before is matched by one after under the restricted observer class; exit values may differ)
