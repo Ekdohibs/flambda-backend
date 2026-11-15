@@ -135,6 +135,8 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   FlambdaControlFlowSpec.v \
   FlambdaCopyCodeProofs.v \
   FlambdaCopyCodeSpec.v \
+  FlambdaCopyLetsProofs.v \
+  FlambdaCopyLetsSpec.v \
   FlambdaCseEquivalentProofs.v \
   FlambdaCseEquivalentSpec.v \
   FlambdaCseProofs.v \
@@ -445,6 +447,8 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   FlambdaUnusedHeadStaticsSpec.v \
   FlambdaUnusedStaticsProofs.v \
   FlambdaUnusedStaticsSpec.v \
+  FlambdaValidateCopyingProofs.v \
+  FlambdaValidateCopyingSpec.v \
   FlambdaValidateImportsProofs.v \
   FlambdaValidateImportsRenameProofs.v \
   FlambdaValidateImportsRenameSpec.v \

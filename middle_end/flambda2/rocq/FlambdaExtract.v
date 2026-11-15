@@ -71,7 +71,8 @@ From OxCamlFlambda2 Require Import FlambdaMapSpec FlambdaModel
   FlambdaValidateImportsSpec
   FlambdaValidateSpec FlambdaValidateKnowingSpec FlambdaValidateRelatedSpec
   FlambdaValidateReadingSpec FlambdaInlineCallsAtSpec
-  FlambdaValidateInliningSpec.
+  FlambdaValidateInliningSpec FlambdaCopyLetsSpec
+  FlambdaValidateCopyingSpec.
 From OxCamlFlambda2Types Require Import FlambdaAliasesSpec.
 From OxCamlFlambda2Types Require Import FlambdaBindingTime.
 From OxCamlFlambda2Types Require Import FlambdaJoinEnv.
@@ -203,6 +204,8 @@ Separate Extraction
   FlambdaTypingEnv.Typing_env.mem
   all_among
   among
+  before_copied
+  before_copied_holds_from
   before_inlined
   before_read
   bind_aliased_params
@@ -284,8 +287,10 @@ Separate Extraction
   union_with
   unit_exn_handlers_well_formed
   validate_unit
+  validate_unit_copying
   validate_unit_inlining
   validate_unit_knowing
+  validate_unit_knowing_copying
   validate_unit_knowing_inlining
   validate_unit_knowing_reading
   validate_unit_reading
@@ -294,5 +299,6 @@ Separate Extraction
   verdict_knowing_holds_from
   well_formed_unit
   well_kinded_unit
+  with_let_copies
   without
   .
