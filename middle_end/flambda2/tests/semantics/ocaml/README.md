@@ -108,7 +108,7 @@ unit made from OCaml.
   of regions: passes before, passes after", or what failed or was
   not run. No verdict depends on that line; `rocq/TRUST-LEDGER.md`, "The
   check of regions", says what it rests on and what it does not say. The
-  tool prints the line of 106 of the 529 units of this directory, and it
+  tool prints the line of 107 of the 533 units of this directory, and it
   says "passes before, passes after" of each. The regions around a `try`
   are dropped in the same way: the
   handler ends the regions that the body had open when it raised, and
@@ -367,6 +367,79 @@ unit made from OCaml.
   it asks, `validate_unit` or `validate_unit_knowing`, of the two
   terms as they are. Two units of this directory have the line,
   `iarray_exported.ml` and `iarray_length_of_any.ml`.
+- **(asked of the term before with chosen calls inlined first)**, a line
+  under a verdict: the verdict is of another function than the
+  validation, and the tables count the unit apart. The validation
+  refused the pair at every attempt that the tool makes of the term
+  before as it is and of the term before with its known arrays read, the
+  second asking included where it makes one, and the tool then asked
+  `FlambdaValidateInliningSpec.validate_unit_inlining` of the same two
+  terms, and `validate_unit_knowing_inlining` where it makes a second
+  asking. Each makes another term of the term before (`before_inlined`),
+  from a list of choices: for each choice in turn, the direct calls that
+  stand at the places of the choice are rewritten as a round of the
+  validation rewrites a call when it is given no code not to inline
+  (`FlambdaInlineCallsAtSpec.inline_calls_at`; a place is where a call
+  is in the term, or in the body of the code that it stands in), and the
+  term is renamed apart. The first function then asks `validate_unit` of
+  that term and of the term after; the second asks
+  `validate_unit_knowing` of them. Why there is such a function: the
+  validation is told the code that its rounds are not to inline, one
+  list for the two terms and for every round (a call of that code may
+  still be split, where the test of an over-application passes), and
+  Simplify chooses by call. It inlines one call of a
+  function and leaves another call of it, it unrolls a recursive
+  function at a call that is marked for it, and it inlines a function
+  everywhere but in the body of a stub. Then neither choice by code need
+  give the term after: with that code in the list the term before keeps
+  the call that Simplify inlined, and with it out of the list the term
+  before loses the call that Simplify left. The validation rewrites both
+  terms and may find them the same even so; the tool asks this function
+  where it does not.
+  The choices are a guess of the tool (`inlining_choices` in
+  `middle_end/flambda2/tests/tools/flsemantics.ml`), and nothing proved
+  rests on them. The first has the direct calls that the term before
+  marks to be unrolled or always inlined (`[@unrolled n]`,
+  `[@inlined]`); each choice after it has, for a call marked to be
+  unrolled, the calls of the same code that the inlining of the choice
+  before brought under it, as many times as the mark says. The first
+  three choices also have, at each place where the term before calls
+  directly code that the term after still calls directly somewhere and
+  does not call at that place, the calls there of that code and of the
+  code that the term before binds, that is recursive in neither term and
+  that the term after does not call directly; a place here is the term
+  outside all code, or the body of a piece of code that is not a stub
+  and that the term after binds too. A call of code to itself is not
+  taken there. One that is marked is chosen as any marked call is, and
+  the inlining leaves it: in the body of code it does not know the code
+  of the group that binds that code. There are never more than eight
+  choices, whatever a call is marked for.
+  What is proved of a pair that either function accepts is of the term
+  before as the tool converted it, not of the term with the calls
+  inlined, since the inlining refines the term whatever the places are
+  (`inline_calls_at_refines_statement`,
+  `inlined_in_turn_refines_statement`): the unit after refines the unit
+  before, each run on its own (`validate_unit_inlining_sound_statement`,
+  `validate_unit_knowing_inlining_sound_statement`). Acceptance gives no
+  more than that. Of the two units run from their imports the same is
+  proved where the test of the verdict from the imports passes too
+  (`verdict_holds_from` for the first function,
+  `verdict_knowing_holds_from` for the second), asked of the term that
+  `before_inlined` gives, of the term after and of that verdict, with
+  the arguments of the asking
+  (`validate_unit_inlining_verdict_imports_statement`,
+  `validate_unit_knowing_inlining_verdict_imports_statement`); the tool
+  makes the test of that term. A unit that has the line is one that the
+  validation refuses, with and without the reading, and that one of the
+  two functions then accepts. The tool does not ask them where the guess
+  gives no choice, nor where the term that `before_inlined` gives with
+  nothing lifted is the term before name for name. That test is of the
+  two terms as they are written: a term that differs need not have a
+  call inlined, as each choice renames the term apart. No unit has this
+  line and the line of the reading. Four units of this directory have
+  the line in their expected files, which are made at the default flags,
+  `f2_one_inlined_one_not.ml`, `rec_local_helper_called_outside.ml`,
+  `rec_unrolled.ml` and `stub_called_twice.ml`.
 - **the same, not validated**: the two runs came to the same result,
   which is a test of one run and no proof. The validator could not make
   the two terms the same; the table says what it is missing.
@@ -476,14 +549,15 @@ Simplify does to it. Steps are those of the machine, before and after
 Simplify. The names in brackets are the streams whose work in progress
 is the rewrite that is missing.
 
-529 sources: 444 validated; 2 validated when asked of the term before
+533 sources: 444 validated; 2 validated when asked of the term before
 with its known immutable arrays read, which is another function than the
-others are asked of; 14 validated for the term as read, which says never
-null of a value that may be null (T4-13); 58 validated with their
-imports; none validated with nothing imported and not with its imports;
-4 compared on one run and not validated, 2 of them with the line of the
-second check (1 of those with imports); 2 undefined in the model; 5 not
-checked.
+others are asked of; 4 validated when asked of the term before with
+chosen calls inlined first, which is another function again; 14
+validated for the term as read, which says never null of a value that
+may be null (T4-13); 58 validated with their imports; none validated
+with nothing imported and not with its imports; 4 compared on one run
+and not validated, 2 of them with the line of the second check (1 of
+those with imports); 2 undefined in the model; 5 not checked.
 
 ### Validated
 
@@ -718,6 +792,15 @@ checked.
 |--------|-------|
 | `iarray_exported.ml` | 10, 3 |
 | `iarray_length_of_any.ml` | 14, 4 |
+
+### Validated when asked of the term before with chosen calls inlined
+
+| Source | Steps |
+|--------|-------|
+| `f2_one_inlined_one_not.ml` | 59, 35 |
+| `rec_local_helper_called_outside.ml` | 38, 24 |
+| `rec_unrolled.ml` | 64, 18 |
+| `stub_called_twice.ml` | 26, 15 |
 
 ### Validated for the term as read (T4-13)
 
@@ -1565,7 +1648,12 @@ removed it:
   (a source of T3's), which was validated at the second asking, is
   validated at the first, by a lifting: its handler raises again
   what it caught, and a lifting is now made of such a unit (item 1
-  of the list above). By a
+  of the list above).
+  Two more, `f2_one_inlined_one_not.ml` and
+  `rec_local_helper_called_outside.ml`, are validated, at the default
+  flags, at the second asking of the function that inlines chosen calls
+  of the term before first ("What the verdicts mean").
+  By a
   measure of T3's with the tool of
   fda8114815, over
   4,166 terms (the units of this directory at two settings of the
@@ -2050,6 +2138,38 @@ removed it:
   rounds may leave a continuation that the first refuses and that the
   tidying then makes one that it accepts. This directory has no unit of
   that, which was seen at `-O3` only.
+- A call that Simplify inlines where it stands, of code that it still
+  calls elsewhere (`f2_one_inlined_one_not.ml`,
+  `rec_local_helper_called_outside.ml` and `rec_unrolled.ml`, T3's
+  sources, and `stub_called_twice.ml`, T5b's; V4's). In the first a
+  functor is applied twice, once marked to be inlined and once marked
+  never to be, and Simplify does as each mark says. In the second two
+  functions are defined together inside a function, neither of them
+  recursive: Simplify inlines the second where the function calls it and
+  leaves the call of it in the code of the first. In the third a
+  recursive function is unrolled three times at one call
+  (`[@unrolled 3]`), and the call that the third inlining brings is
+  left; its list is a list of integers, so that the text writes no kind
+  that may be null (with a list of any type the unit would be one of
+  those validated for the term as read, T4-13). In the fourth the
+  wrapper of a partial application, which is the code of a stub, is
+  inlined where the unit applies it and left in the wrapper of a partial
+  application of it, which is the code of a stub too. The validation is
+  told the code that it is not to inline: with the code in the list the
+  term before keeps the call that Simplify inlined, and without it the
+  term before loses the call that Simplify left. Every attempt that the
+  tool makes of these four units with such a list refuses them. The tool
+  now asks, of a unit that the validation refuses, a function that
+  inlines the calls at chosen places of the term before and then asks
+  the validation (`FlambdaValidateInliningSpec.validate_unit_inlining`;
+  "What the verdicts mean" says what is chosen and what is proved). At
+  the default flags, which are those of the tests of this directory, the
+  four units are validated so, the first two at the second asking of
+  that function, and are counted apart. The limit that `status/V2.md`
+  described, that what is not inlined is chosen by code and not by call,
+  is so lifted for the calls that the guess of the tool finds, and the
+  guess looks for no other; the list of the code not to inline, which
+  the rounds of the validation are given, is as it was.
 
 A count over 600 units made at random is in `census/README.md`, with
 one over 240 more that have exceptions, loops and recursive functions.
@@ -2102,14 +2222,25 @@ the first two fails it is made again at the second asking. The third
 is asked once: a second asking normalises the term before as it is
 given, before its loops are made, and each of its rounds would inline
 code that is recursive by its self tail calls into itself once more.
-The 529 units here were checked in 11.0 seconds of processor time
-together in one run (5.2 user, 5.9 system), and in 10.4 in a second run
+Where every attempt refuses the unit, the attempts are made once more of
+the term before with its known immutable arrays read and, where those
+refuse it too, once more of the term before with chosen calls inlined
+first, unless the guess of the tool gives no choice or the term that its
+choices give is the term before name for name ("What the verdicts
+mean").
+The 533 units here were checked in 10.4 seconds of processor time
+together in one run (4.9 user, 5.6 system), and in 10.4 in a second run
 of the same tool (4.9 and 5.5): more than half of each is the system's
 part. Other builds ran on the machine during both. In two runs made one
-after the other in the same conditions, on the 516 units that the
-directory had at b006dd4b0d, the tool of that commit took 10.5 seconds
-and the tool of this tree 10.6; when it was measured at that commit, the
-tool of b006dd4b0d took 16.1 and 14.0. The 347 units that the directory
+after the other with the same inputs and flags, on the 529 units that
+the directory had at 5a514806c3, the tool of that commit took 10.1
+seconds and the tool of this tree 10.2. On the 516 units that the
+directory had at b006dd4b0d, in two such runs, the tool of that commit
+took 10.5 seconds and the tool of 24cd3c9252 took 10.6; when it was
+measured at that commit, the tool of b006dd4b0d took 16.1 and 14.0.
+These are totals of processor time on a machine whose processors the
+runs shared with other builds under one quota: they are not a comparison
+of the speed of two tools run alone. The 347 units that the directory
 had at 87cdbf3e01 took 47
 seconds with the tool of that commit, 28 of them for the four units
 with a match that Simplify makes a table of. Two things have come
@@ -2252,7 +2383,7 @@ compared.
   `option_bind`, `option_map`, `polymorphic_variant`,
   `project_record_two_levels`, `record_update`, `result_map`,
   `same_field_chain_twice` and `tree_root`.
-  Of the 198 units that have entered since, 31 have:
+  Of the 202 units that have entered since, 31 have:
   `stack_argument_result_returned`, whose source says `local_` of a
   parameter, the first source of this directory that does, and 30 that
   entered after it: `attr_local_in_match`, `clos_partial_local`,
@@ -2272,7 +2403,7 @@ compared.
   `tupled_partial_application`, `twice_nested_same_scrutinee` and
   `var_twelve_mixed`. Twelve of the 30 say `local_` in the source. Each
   unit is looked at so before it enters. By the same print, the term
-  before Simplify of 61 of the 529 units of this directory has an
+  before Simplify of 62 of the 533 units of this directory has an
   allocation mode that names a region, on
   an allocation or on a call ("What the conversion does to a unit" says
   what is made of regions). What was run for the
