@@ -1,0 +1,9 @@
+region_cell_stores_shorter.fl:
+  before Simplify (13 steps): returns [0: 41]
+  after Simplify (14 steps): returns [0: 41]
+  the check of kinds: passes before, passes after
+  calls outside code: 1 before, 1 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated: the same once normalised
+  the check of regions: fails (a store puts in a cell a value that does not live as long as the cell, at step 10) before, fails (a store puts in a cell a value that does not live as long as the cell, at step 11) after

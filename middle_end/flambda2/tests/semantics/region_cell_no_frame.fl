@@ -1,0 +1,25 @@
+(* For the check of regions: a function makes a block that can change in the
+   region of its caller, and is called where no region is open. The allocation
+   names the region of the code, for which nothing is passed, and there is no
+   frame on the stack for it to go on: the cell is not listed, and is never
+   freed. It is written and read after the call. The check passes of both
+   terms. *)
+let code inline(never) size(4)
+      make_2 (y : imm tagged)
+        my_closure &my_alloc_region &my_region &my_ghost_region my_depth
+        -> k * e
+        : [ 0 of imm tagged ] stack =
+  let p = %block.mut.[`0`].my_alloc_region.local[my_region] (y) in
+  cont k (p)
+in
+let $camlRegion_cell_no_frame__make_3 = closure make_2 @make &toplevel in
+apply direct(make_2 &toplevel)
+  ($camlRegion_cell_no_frame__make_3
+     : _ -> [ 0 of imm tagged ])
+    (41) -> k1 * error
+  where k1 (c : [ 0 of imm tagged ]) =
+    let q = %opaque (c) in
+    let w = %block_set.`imm`.[`0`] (q, 42) in
+    let a = %block_load.mut.[`0`] (q) in
+    let $camlRegion_cell_no_frame = Block 0 (a) in
+    cont done ($camlRegion_cell_no_frame)

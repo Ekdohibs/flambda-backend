@@ -1,0 +1,27 @@
+(* For the check of regions: a block that can change is made on the heap, and
+   a block that is in a region still open is stored in it. A cell of the heap
+   holds nothing local: the check fails at the store, of both terms (decisions
+   D46 and D54). *)
+let code inline(never) loopify(never) size(20)
+      work_0 (x : imm tagged)
+        my_closure &my_alloc_region my_depth
+        -> k * e
+        : imm tagged =
+  let rgn = %begin_region () in
+  let h = %block.mut.[`0`].my_alloc_region (0) in
+  let c = %opaque (h) in
+  let p = %block.[`0`].my_alloc_region.local[rgn] (x, 1) in
+  let q = %opaque (p) in
+  let w = %block_set.lassign.[`0`] (c, q) in
+  let u1 = %end_region (rgn) in
+  cont k (x)
+in
+let $camlRegion_cell_heap_stores_local__work_1 =
+  closure work_0 @work &toplevel in
+apply direct(work_0 &toplevel)
+  ($camlRegion_cell_heap_stores_local__work_1
+     : _ -> imm tagged)
+    (41) -> k1 * error
+  where k1 (r : imm tagged) =
+    let $camlRegion_cell_heap_stores_local = Block 0 (r) in
+    cont done ($camlRegion_cell_heap_stores_local)

@@ -1,0 +1,9 @@
+heap_cell_removed.fl:
+  before Simplify (10 steps): returns [0: 42]
+  after Simplify (8 steps): returns [0: 42]
+  the check of kinds: passes before, passes after
+  calls outside code: 1 before, 1 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  not validated
+  (the term before has a primitive of the heap, and the term after none: each of the four liftings to symbols of the validation lifts nothing in a term that has one)

@@ -1,0 +1,25 @@
+(* A unit that makes a block that can change at toplevel, writes its field
+   and reads it, and takes the length of a string that a symbol is bound to.
+   Both terms keep the block, the store and the load. The unit is validated,
+   and the verdict is the one that names a lifting to symbols: it is the step
+   of the validation that accepted, which has other rewrites than its
+   liftings, and each of its liftings lifts nothing in a term that has a
+   primitive of the heap. The line under the verdict says so. *)
+let $camlHeap_store_lifting_step__immstring_0 = "abc" in
+let cell = %block.mut.[`0`].`toplevel` (0) in
+(let n = %opaque (3) in
+ let w = %block_set.`imm`.[`0`] (cell, 7) in
+ let l = %string_length ($camlHeap_store_lifting_step__immstring_0) in
+ let tl = %tag_imm (l) in
+ let x = %int_barith.add (tl, n) in
+ let f = %block_load.mut.[`0`] (cell) in
+ let r = %int_barith.add (f, x) in
+ cont k (r))
+  where k (result : imm tagged) =
+    let m = %block.[`0`].`toplevel` (cell, result) in
+    cont k1 (m)
+  where k1 define_root_symbol (module_block) =
+    let field_0 = %block_load.tag[`0`].`size`[`2`].[`0`] (module_block) in
+    let field_1 = %block_load.tag[`0`].`size`[`2`].[`1`] (module_block) in
+    let $camlHeap_store_lifting_step = Block 0 (field_0, field_1) in
+    cont done ($camlHeap_store_lifting_step)

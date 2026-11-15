@@ -1,0 +1,30 @@
+(* For the check of regions: region_cell_stores_shorter.fl with the block that
+   is stored made in the outer region, before the cell. It lives as long as
+   the cell. The store is made while the inner region is open, and the block
+   is read through the cell after the inner region has ended, while the outer
+   one is open: the cell was listed with the mark of the outer region, which
+   was the newest when it was made. The check passes of both terms. *)
+let code inline(never) loopify(never) size(20)
+      work_0 (x : imm tagged)
+        my_closure &my_alloc_region my_depth
+        -> k * e
+        : imm tagged =
+  let rout = %begin_region () in
+  let p = %block.[`0`].my_alloc_region.local[rout] (x, 1) in
+  let q = %opaque (p) in
+  let h = %block.mut.[`0`].my_alloc_region.local[rout] (0) in
+  let c = %opaque (h) in
+  let rin = %begin_region () in
+  let w = %block_set.lassign.[`0`] (c, q) in
+  let u1 = %end_region (rin) in
+  let l = %block_load.mut.[`0`] (c) in
+  let a = %block_load.[`0`] (l) in
+  let u2 = %end_region (rout) in
+  cont k (a)
+in
+let $camlRegion_cell_stores_as_long__work_1 = closure work_0 @work &toplevel in
+apply direct(work_0 &toplevel)
+  ($camlRegion_cell_stores_as_long__work_1 : _ -> imm tagged) (41) -> k1 * error
+  where k1 (r : imm tagged) =
+    let $camlRegion_cell_stores_as_long = Block 0 (r) in
+    cont done ($camlRegion_cell_stores_as_long)

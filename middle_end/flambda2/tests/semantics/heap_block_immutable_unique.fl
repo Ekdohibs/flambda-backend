@@ -1,0 +1,22 @@
+(* A block marked immutable-unique: it has an identity and cannot change. It
+   is a cell of the heap, and a load marked immutable-unique reads it. *)
+let code inline(never) loopify(never) size(20)
+      work_0 (x : imm tagged)
+        my_closure &my_alloc_region my_depth
+        -> k * e
+        : imm tagged =
+  let r = %block.immut_uniq.[`0`].my_alloc_region (x, 1) in
+  let c = %opaque (r) in
+  let a = %block_load.immut_uniq.[`0`] (c) in
+  let b = %block_load.immut_uniq.[`1`] (c) in
+  let s = %int_barith.add (a, b) in
+  cont k (s)
+in
+let $camlHeap_block_immutable_unique__work_1 = closure work_0 @work &toplevel in
+apply direct(work_0 &toplevel)
+  ($camlHeap_block_immutable_unique__work_1
+     : _ -> imm tagged)
+    (41) -> k1 * error
+  where k1 (r : imm tagged) =
+    let $camlHeap_block_immutable_unique = Block 0 (r) in
+    cont done ($camlHeap_block_immutable_unique)

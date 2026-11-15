@@ -1,0 +1,9 @@
+region_cell_read.fl:
+  before Simplify (13 steps): returns [0: 42]
+  after Simplify (14 steps): returns [0: 42]
+  the check of kinds: passes before, passes after
+  calls outside code: 1 before, 1 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated: the same once normalised
+  the check of regions: passes before, passes after

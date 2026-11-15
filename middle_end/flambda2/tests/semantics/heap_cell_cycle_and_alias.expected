@@ -1,0 +1,10 @@
+heap_cell_cycle_and_alias.fl:
+  before Simplify (12 steps): returns
+                                [0: [0: [0: <cycle>; 41]; [0: 7]; [0: 7]]]
+  after Simplify (13 steps): returns
+                               [0: [0: [0: <cycle>; 41]; [0: 7]; [0: 7]]]
+  the check of kinds: passes before, passes after
+  calls outside code: 1 before, 1 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated: the same once normalised

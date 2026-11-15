@@ -1,0 +1,9 @@
+heap_load_marked_immutable.fl:
+  before Simplify (8 steps): undefined
+  after Simplify (9 steps): undefined
+  the check of kinds: passes before, passes after
+  calls outside code: 1 before, 1 after
+  anything goes, as the run before is undefined
+  calls outside code once those of known code are inlined: 0
+  validated: the same once normalised
+  the term before is undefined in the model, so the validation says nothing of this unit

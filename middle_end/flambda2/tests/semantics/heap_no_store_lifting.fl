@@ -1,0 +1,19 @@
+(* A function makes a block of two constants, which Simplify lifts to a
+   symbol. The unit is validated once blocks are lifted to symbols. It is
+   heap_store_stops_lifting.fl without the store. *)
+let code inline(never) loopify(never) size(20)
+      work_0 (x : imm tagged)
+        my_closure &my_alloc_region my_depth
+        -> k * e
+        : [ 0 of imm tagged * imm tagged ] =
+  let p = %block.[`0`].my_alloc_region (7, 1) in
+  cont k (p)
+in
+let $camlHeap_no_store_lifting__work_1 = closure work_0 @work &toplevel in
+apply direct(work_0 &toplevel)
+  ($camlHeap_no_store_lifting__work_1
+     : _ -> [ 0 of imm tagged * imm tagged ])
+    (41) -> k1 * error
+  where k1 (r : [ 0 of imm tagged * imm tagged ]) =
+    let $camlHeap_no_store_lifting = Block 0 (r) in
+    cont done ($camlHeap_no_store_lifting)

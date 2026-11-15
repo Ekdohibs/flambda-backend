@@ -1,0 +1,33 @@
+(* A function makes a block that can change and stores the block in its own
+   first field; it makes a second one, and returns a block that holds the
+   first and the second twice. Where a location is met again on the way down
+   from the value returned, the lines of the two runs print a cycle; a cell
+   that is reached by two ways is printed twice, in full.
+
+   What the expected lines show: that the first block comes back to a cell
+   above it, and what each cell holds at the exit. What they do not show:
+   that the two [0: 7] are one cell, and not two cells that hold the same;
+   and which cell a cycle comes back to, where more than one is above it. The
+   line "the same" compares what is observed of the two runs for these
+   lines, so it does not tell an alias from a copy either. *)
+let code inline(never) loopify(never) size(20)
+      work_0 (x : imm tagged)
+        my_closure &my_alloc_region my_depth
+        -> k * e
+        : [ 0 of val * val * val ] =
+  let r = %block.mut.[`0`].my_alloc_region (0, x) in
+  let c = %opaque (r) in
+  let w = %block_set.[`0`] (c, c) in
+  let s = %block.mut.[`0`].my_alloc_region (7) in
+  let d = %opaque (s) in
+  let p = %block.[`0`].my_alloc_region (c, d, d) in
+  cont k (p)
+in
+let $camlHeap_cell_cycle_and_alias__work_1 = closure work_0 @work &toplevel in
+apply direct(work_0 &toplevel)
+  ($camlHeap_cell_cycle_and_alias__work_1
+     : _ -> [ 0 of val * val * val ])
+    (41) -> k1 * error
+  where k1 (r : [ 0 of val * val * val ]) =
+    let $camlHeap_cell_cycle_and_alias = Block 0 (r) in
+    cont done ($camlHeap_cell_cycle_and_alias)

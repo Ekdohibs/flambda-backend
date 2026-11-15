@@ -1,0 +1,34 @@
+(* heap_no_store_lifting.fl with a store: the function also writes a field
+   of a block that can change. The term has a primitive of the heap, and each
+   of the four liftings to symbols of the validation lifts nothing in such a
+   term: where what is lifted is stored in a cell, the heaps of the two exits
+   differ, and the validation compares two exits with their heaps (decision
+   D40). The store here puts a number in the cell, and nothing is lifted all
+   the same: the test is of the text of the term. The unit is not validated,
+   and the line under that one says that the two terms have a primitive of
+   the heap.
+
+   The second check, whose line begins "related once lifted", is another
+   comparison (decision D43): its liftings are made without the test of the
+   exits and without the test of the heap, and it accepts this unit. Its line
+   says that the test of the heap was left out. It is not a line that
+   validates. *)
+let code inline(never) loopify(never) size(20)
+      work_0 (x : imm tagged)
+        my_closure &my_alloc_region my_depth
+        -> k * e
+        : [ 0 of imm tagged * imm tagged ] =
+  let r = %block.mut.[`0`].my_alloc_region (0) in
+  let c = %opaque (r) in
+  let w = %block_set.`imm`.[`0`] (c, x) in
+  let p = %block.[`0`].my_alloc_region (7, 1) in
+  cont k (p)
+in
+let $camlHeap_store_stops_lifting__work_1 = closure work_0 @work &toplevel in
+apply direct(work_0 &toplevel)
+  ($camlHeap_store_stops_lifting__work_1
+     : _ -> [ 0 of imm tagged * imm tagged ])
+    (41) -> k1 * error
+  where k1 (r : [ 0 of imm tagged * imm tagged ]) =
+    let $camlHeap_store_stops_lifting = Block 0 (r) in
+    cont done ($camlHeap_store_stops_lifting)

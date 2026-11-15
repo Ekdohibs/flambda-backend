@@ -1,0 +1,24 @@
+(* A block that can change is made, written and read in one function, and
+   nothing else holds it. Simplify removes it: the term after makes no cell.
+   The two runs return the same value, and their heaps differ, the first
+   having the cell and what was written to it. Two exits are compared with
+   their heaps (decision D40), and the validation has no rewrite that removes
+   a cell: the unit is not validated. The line under that one says that the
+   term before has a primitive of the heap and the term after none. *)
+let code inline(never) loopify(never) size(20)
+      work_0 (x : imm tagged)
+        my_closure &my_alloc_region my_depth
+        -> k * e
+        : imm tagged =
+  let r = %block.mut.[`0`].my_alloc_region (0) in
+  let w = %block_set.`imm`.[`0`] (r, x) in
+  let a = %block_load.mut.[`0`] (r) in
+  let s = %int_barith.add (a, 1) in
+  cont k (s)
+in
+let $camlHeap_cell_removed__work_1 = closure work_0 @work &toplevel in
+apply direct(work_0 &toplevel)
+  ($camlHeap_cell_removed__work_1 : _ -> imm tagged) (41) -> k1 * error
+  where k1 (r : imm tagged) =
+    let $camlHeap_cell_removed = Block 0 (r) in
+    cont done ($camlHeap_cell_removed)

@@ -1,0 +1,27 @@
+(* A function makes a block that can change and an array that can change,
+   writes a field of the first and an element of the second, and returns the
+   two in a block. The unit exits with the two cells in what it returns: the
+   lines of the two runs print each location as what its cell holds in the
+   heap of the exit, the block as a block and the array as an array. *)
+let code inline(never) loopify(never) size(20)
+      work_0 (x : imm tagged)
+        my_closure &my_alloc_region my_depth
+        -> k * e
+        : [ 0 of val * val ] =
+  let r = %block.mut.[`0`].my_alloc_region (0, 1) in
+  let c = %opaque (r) in
+  let w = %block_set.`imm`.[`0`] (c, x) in
+  let a = %array.`imm`.mut.my_alloc_region (0, 2, 3) in
+  let d = %opaque (a) in
+  let v = %array_set.`imm` (d, 0, x) in
+  let p = %block.[`0`].my_alloc_region (c, d) in
+  cont k (p)
+in
+let $camlHeap_cell_returned__work_1 = closure work_0 @work &toplevel in
+apply direct(work_0 &toplevel)
+  ($camlHeap_cell_returned__work_1
+     : _ -> [ 0 of val * val ])
+    (41) -> k1 * error
+  where k1 (r : [ 0 of val * val ]) =
+    let $camlHeap_cell_returned = Block 0 (r) in
+    cont done ($camlHeap_cell_returned)

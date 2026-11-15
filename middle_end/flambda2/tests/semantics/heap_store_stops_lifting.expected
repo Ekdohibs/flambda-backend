@@ -1,0 +1,11 @@
+heap_store_stops_lifting.fl:
+  before Simplify (10 steps): returns [0: [0: 7; 1]]
+  after Simplify (11 steps): returns [0: [0: 7; 1]]
+  the check of kinds: passes before, passes after
+  calls outside code: 1 before, 1 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  not validated
+  (the term before and the term after have a primitive of the heap: each of the four liftings to symbols of the validation lifts nothing in a term that has one)
+  related once lifted: the same once values are lifted to symbols without the liftings' symbols-and-constants-only exit test and without their test of the heap, and the terms normalised; no value slots removed
+  (in the model, an exit before is matched by one after under the restricted observer class; exit values may differ)
