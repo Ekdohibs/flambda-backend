@@ -490,6 +490,30 @@ a `CR` at the place in the `Spec` file.
   Decided by the orchestrator, for the confirmation of the human: it
   is about kinds, and it makes the comparison less strict than it
   was, not more.
+- **D57.** An exit does not carry its static environment. Two exits
+  are the same when their continuations, their values and their heaps
+  are equal (D40), and a symbol is a value whether it is bound or
+  not, the same as another by its name. So a term after may exit with
+  a symbol which it never binds, and refine a term before that binds
+  it: `refines` does not exclude that
+  (`FlambdaExitBoundSpec.refined_exit_unbound_statement` has two
+  such units, which are not shown to be a pair that the validation
+  accepts). The statements of the validation conclude `refines`: so
+  the refinement that a verdict concludes does not by itself say
+  that a symbol at an exit of the term after is bound. What says it,
+  of a unit run from its imports and the empty heap, is three tests
+  of the unit, `well_formed_unit`, `statics_in_scope` and
+  `interface_conts_not_rebound`
+  (`FlambdaStaticsInScopeSpec.statics_bound_in_run_statement`,
+  joined to a refinement in
+  `FlambdaExitBoundSpec.unit_refines_exits_bound_statement`). No
+  statement of the validation concludes them; the tool asks the
+  first of every term after. They say that a symbol is bound, and
+  not that it is bound to what the term before bound it to: the two
+  static environments are not compared. The comparison intended is
+  of exits that carry their static environments, related as the
+  comparison of D40 would relate them; it is not started without the
+  human. Decided for the interim; open.
 
 ## Discrepancies with the compiler
 
