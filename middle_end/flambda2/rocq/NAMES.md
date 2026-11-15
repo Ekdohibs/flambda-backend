@@ -144,7 +144,9 @@ and the permutations of locations (`FlambdaLocationsSpec.v`) move
 nothing in a term, so the two actions commute
 (`rename_permute_state_statement`). The read record of a state
 (`FlambdaValueSpec.read_record`) is a place that holds locations, and
-no other name.
+no other name. The state of the machine of regions lists locations
+too, each with the mark of a frame (`FlambdaRegionsSpec.rs_cells`),
+and no action is defined on it (section 9).
 
 Names are compared by equality only. The one function that looks at
 the number of a name is `fresh_name` (`FlambdaNameAbstractionSpec.v`),
@@ -157,8 +159,10 @@ location that it gives, and that the location depends on the heap
 only through the locations that the heap binds
 (`fresh_location_statement`, `fresh_location_keys_statement`). The
 machine of regions is apart from this: it draws its symbols from a
-counter and tells a symbol that it drew from any other by its number
-(section 9).
+counter and tells a symbol that it drew from any other by its number;
+the locations of its cells are those that the heap gives
+(`fresh_location`), and its tests of regions do not order them: they
+use the marks of the frames (section 9).
 
 ## 2. Where things are
 
@@ -329,11 +333,40 @@ they are these. The law of the primitives on a heap at a relation
 relation (`relates_locations`), and asks two heaps that bind the same
 locations, entry for entry, to cells that are alike (`heap_alike`);
 two such heaps allocate the same location
-(`fresh_location_keys_statement`). The lifting to symbols relates a
+(`fresh_location_keys_statement`). The same law is stated with less
+asked of what the cells hold (`exec_prim_related_given_statement`):
+the two heaps bind the same locations, entry for entry, as before,
+and the cells that the arguments name are alike (`heap_alike_given`);
+after, each heap has nothing more, or one entry more at one location,
+with cells alike (`heap_alike_added`). A name of `FlambdaHeapSpec.v`
+that ends in `_given` asks what it asks of what cells hold only of
+the cells that the heap binds the locations among the arguments to.
+`heap_values_all_given` is `heap_values_all` asked of those cells, of
+each the entry that `lookup` finds and not one that a later write
+hides. `heap_alike_given` keeps of `heap_alike` that the two heaps
+bind the same locations, entry for entry, which is of the whole of
+both, and asks cells alike of those cells only, of each the entry
+that `lookup` finds. `exec_prim_preserves_given_statement` is
+`exec_prim_preserves_statement` for a primitive that is not of the
+heap, with its premise on the heap asked of those cells and without
+its premise that the property holds of every location; it concludes
+of the value alone, the heap being as it was
+(`exec_prim_heap_statement`). `exec_prim_related_given_statement` is
+`exec_prim_related_statement` with `heap_alike_given` for its premise
+on the two heaps and `heap_alike_added` for what it concludes of
+them. A location inside an argument names no cell there. Which
+location an entry is added at is another law
+(`exec_prim_adds_statement`: the fresh one, or the one that the first
+argument of a write names, bound to the cell that it had with one
+value replaced, `cell_with`), and where a load has a value, it is one
+that the cell of its first argument holds, that argument being a
+location that the heap binds (`exec_prim_load_statement`, of the two
+loads of `prim_loads_cell`). The lifting to symbols relates a
 location to itself only (`FlambdaLiftSpec.value_lifted`), and so does
 the erasure of regions, between a run on the machine of regions and
 the run of the term with its regions dropped
-(`FlambdaRegionsErasureSpec.value_erased`). What may follow a unit
+(`FlambdaRegionsErasureSpec.value_erased`, of the location of a dead
+cell as of any other). What may follow a unit
 compares what two steps come to
 (`FlambdaObserversSpec.observed_refines`) by the constants and the
 locations among the values of their exits, which are to be the same at
@@ -1062,12 +1095,8 @@ functions, and keep their text; those of what calls the four functions
 (`FlambdaValidatorEquivarianceSpec.v`,
 `FlambdaValidateImportsRenameSpec.v`,
 `FlambdaValidateReadingRenameSpec.v`, `FlambdaValidateKnowingSpec.v`,
-`FlambdaStaticsScopeSpec.v`) keep theirs. The test has a second use,
-which is not a limit:
-`FlambdaRegionsInvariantSpec.no_heap_primitive_no_let_not_run_statement`
-takes it of a term, and `statics_free_of_heap` of the static
-environment, among its premises. That use does not depend on decision
-D40. The tests of a defining expression by its primitive alone
+`FlambdaStaticsScopeSpec.v`) keep theirs. The tests of a defining
+expression by its primitive alone
 (`named_changes_heap`, `named_reads_heap`, and `stable_prim` of a
 primitive, in `FlambdaHeapSpec.v`) read no name; nothing is stated of
 them under renaming, and what uses them has it in its proofs.
@@ -1857,27 +1886,36 @@ Owed:
   `FlambdaRegionsCallsSpec.v`, `FlambdaRegionsCheckSpec.v` and
   `FlambdaRegionsCheckSoundSpec.v`, and nothing in them is about a
   renaming).
-  The machine does not run a `Let` that needs the heap (decision D53;
-  `FlambdaRegionsSpec.named_needs_heap`, which the step asks of a
-  `Let` that is not of a primitive of regions: a `Let` of a primitive
-  of the heap, or of another primitive one of whose arguments has a
-  location for value). The test of the simples of the `Let` is made
-  first, and a fault there is what the step comes to. Where that test
-  passes, the step has a result of its own, `Region_let_not_run`,
-  which is not a step, not an exit and not a fault, and the run ends
-  there. `named_needs_heap` is a test of the defining expression at
-  the variables of the state: it is true of a primitive of the heap
-  whatever it is given, and of another primitive it evaluates the
-  arguments, so it reads the names of the term through their values
-  and is not in general determined by the syntax alone. A run from the
-  first state of a term never ends so if the term and the code of the
-  static environment have no primitive of the heap
-  (`FlambdaHeapFreeSpec.expr_free_of_heap`, `statics_free_of_heap`,
-  the test of the liftings) and no value of the static environment
-  holds a location
-  (`FlambdaRegionsInvariantSpec.no_heap_primitive_no_let_not_run_statement`).
-  No step of the machine changes the heap or the read record of its
-  state (`region_step_keeps_memory_statement`).
+  The machine runs the primitives of the heap on the heap of its
+  state, as `step` does, where its own tests pass: decision D53, by
+  which it ran none, is lifted. A cell that a local allocation makes
+  is a cell of that heap, at the location that the heap draws
+  (`FlambdaHeapSpec.fresh_location`): the machine draws no name of its
+  own for it, and lists the location with the mark of the frame that
+  was the newest then (`rs_cells`; with no frame on the stack the
+  location is not listed). The end of a region takes nothing out of
+  the heap. A cell whose mark is on the stack no more is dead
+  (`cell_dead`): its location may not be evaluated (`value_usable`),
+  and it stays bound. Because a dead cell keeps its entry, the
+  relation by which the erasure is proved, between a state of a run
+  here and the state that answers it in the run of the term with its
+  regions dropped, can ask that the two heaps bind the same locations,
+  entry for entry; that relation is in a file of proofs. The
+  statements say less: they relate a location at an exit to itself
+  (`FlambdaRegionsErasureSpec.value_erased`), that of a dead cell as
+  any other, and none says that the two runs allocate the same
+  locations or leave heaps that bind the same. "Of the heap", in these
+  files, is said of what, in a run, is in no frame and never was: a
+  symbol that the machine did not draw or that the static environment
+  of the state binds (`heap_symbol`), a location that the state does
+  not list (`heap_location`); the fault `Heap_holds_local` uses the
+  word so. The heap of the state binds the location of every cell,
+  listed or not, dead or not. So
+  `FlambdaRegionsInvariantSpec.heap_location` is a test of a location,
+  and is not `FlambdaLocationsSpec.heap_locations`, which is the heap
+  as a thing that holds locations. Nothing is stated of the machine
+  under a permutation of locations: the list of its cells holds
+  locations, and no action on a state of this machine is defined.
   `erase` is not a function of
   terms up to bound names: it drops the `Let` of a `Local_allocation`
   that binds the name of its argument and makes an alias of any other,
@@ -1892,25 +1930,39 @@ Owed:
   `Local_allocation` is the variable that the `Let` above it binds, and
   the region that it names is not that variable. The machine makes names
   of a sort that no renaming moves: it draws symbols, one for the mark
-  of each region and for each local allocation (for a set of closures,
-  one for each function slot), from a counter that only goes up
+  of each region and for each local allocation that is not a cell (for
+  a set of closures, one for each function slot), from a counter that
+  only goes up
   (`rs_next`, which starts at `rs_base`), and not by `fresh_name`; the
   next symbol is the successor of the last (`Pos.succ`, `advance`), so
   of two symbols drawn the smaller was not drawn after the other. It
   looks at the number of a symbol: a symbol that it drew is one at or
   above `rs_base` (`drawn`), and a value that may not be evaluated is a
-  drawn symbol that nothing binds (`value_usable`), so what a step does
-  depends on it. That the symbols drawn are none of the term or of the
-  static environment is a test made before the run
-  (`region_names_fresh`), and that they stay apart is a part of the
-  invariant that a run keeps
-  (`FlambdaRegionsInvariantSpec.symbols_fresh`,
-  `region_run_keeps_invariant_statement`); both tests are written with
-  the order of the numbers (below `rs_base`, below `rs_next`). The test
+  drawn symbol that nothing binds, or the location of a dead cell
+  (`value_usable`), so what a step does depends on it. No test of
+  regions orders the locations, which the heap orders when it
+  allocates (`fresh_location`): a location is looked up among the
+  cells that the state lists, and where a symbol is placed by its own
+  number, a location is placed by the mark that it is listed with
+  (`FlambdaRegionsCallsSpec.held_before`,
+  `FlambdaRegionsCheckedSpec.cell_within`). That the symbols drawn
+  are none of the term or of the static environment, and that the
+  static environment holds no location (`statics_hold_no_location`:
+  the first heap is empty, and a location held there could be the one
+  that a later allocation draws), is a test made before the run
+  (`region_names_fresh`). That the symbols stay apart, and that the
+  heap binds every location that the state holds
+  (`FlambdaRegionsInvariantSpec.locations_all_bound`, which is
+  `FlambdaLocationsMachineSpec.state_locations_bound` as a test, of
+  the state that `step` is given), are parts of the invariant that a
+  run keeps (`symbols_fresh`, `region_run_keeps_invariant_statement`);
+  the tests of the symbols are written with the order of the numbers
+  (below `rs_base`, below `rs_next`). The test
   of a state by which it is proved that code cannot end a region of its
   caller (`FlambdaRegionsCallsSpec.calls_kept`) compares the numbers of
   two symbols and takes the smaller to be the older (`frames_ordered`,
-  `held_older`, `cont_held_older`); by `region_names_fresh`, a symbol of
+  `held_before`, `held_older`, `cont_held_older`); by
+  `region_names_fresh`, a symbol of
   the term or of the static environment that the run starts with is
   below every symbol drawn. That a run does not depend on the base is
   not stated.
@@ -1921,7 +1973,11 @@ Owed:
   that the term binds (two handlers bound under one name have one entry)
   and by code ids, and names the regions that are open at a handler by
   variables (`cert_handlers`, `he_open`; a `lifetime` may be `Of_region`
-  of a variable); `region_at_jump` and `lifetime_at_jump` put the
+  of a variable). The state of the check has two lists keyed by
+  variables, the lifetime of each (`cs_env`) and how long what is read
+  from its value lives (`cs_contents`), which are extended together
+  (at a `Let`, by `bind_lifetimes`). `region_at_jump` and
+  `lifetime_at_jump` put the
   regions that a jump gives in the place of the parameters of the
   handler that are regions, a substitution and not the action of a
   renaming. The check compares variables and continuations by equality
@@ -1936,14 +1992,16 @@ Owed:
   (`FlambdaRegionsCheckedSpec.v`) asks that the regions of the state of
   the check are in scope (`check_state_scoped`) and reads the order of
   the symbols drawn as time (`value_within`, `lifetime_holds`, with
-  `FlambdaRegionsCallsSpec.frames_ordered`).
+  `FlambdaRegionsCallsSpec.frames_ordered`); a location is placed
+  there by the mark of its frame (`cell_within`).
   The check is proved sound
   (`FlambdaRegionsCheckSoundSpec.region_check_sound_statement`): of a
   term that passes it, run from its first state in a static environment,
   the regions add no fault to the term, under two premises: the term is
   one that the erasure is meant for there (`erasable`), and the symbols
   that the machine draws are none of the term or of that static
-  environment (`region_names_fresh`). Four statements say what that
+  environment, which holds no location (`region_names_fresh`). Four
+  statements say what that
   gives of a run of Simplify, each of runs from the first states of the
   two terms in one static environment, with one base for the symbols
   that the machine draws; none of them is about a renaming, and the
@@ -1975,29 +2033,20 @@ Owed:
   between the tool and those two statements is no statement: the reading
   of the text, the conversion, and that the tool calls these functions
   on these terms (the head of `FlambdaRegionsCheckSoundSpec.v`).
-  Since decision D53 the run of a term on the machine of regions may
-  end at a `Let` that the machine does not run, and the four
-  statements are of the run up to there. The two on the exits say it
-  in their conclusion: an exit of the term before with its regions is
-  an exit of the term after with its regions, or the run of the term
-  after comes to such a `Let`. The two others conclude `region_safe`
-  (`FlambdaRegionsCheckSpec.v`), which is that the run is never
-  undefined, and which holds of a run that ends at such a `Let`, with
-  nothing checked from there on. So the name `region_safe`, and the
-  names of the three statements that conclude it
-  (`checked_after_safe_statement`,
+  Decision D53 is lifted: a run on the machine of regions steps, exits
+  or stops without a step, and the four statements are of the whole
+  run. `region_safe` (`FlambdaRegionsCheckSpec.v`) is that the run
+  never stops without a step, and its name, and those of the three
+  statements that conclude it (`checked_after_safe_statement`,
   `refined_and_checked_safe_statement`,
-  `validated_and_checked_safe_statement`), say more than the
-  definition gives; a `CR` at the definition says so, and a rename is
-  to be considered when decision D53 is lifted. Of a run from the
-  first state of a term with no primitive of the heap, in a static
-  environment whose code has none and whose values hold no location,
-  `no_heap_primitive_no_let_not_run_statement` excludes that end:
-  there the case "the run of the term after comes to such a `Let`" of
-  the two statements on the exits does not arise, and `region_safe` is
-  of a run that only steps or exits. That statement is of that end
-  alone, under those three premises; it is no statement of safety
-  beside the four.
+  `validated_and_checked_safe_statement`), say what the definition
+  gives: no rename is owed. The two statements on the exits conclude
+  an exit of the term after, with no other case.
+  `FlambdaRegionsErasureSpec.value_erased_if_usable`, by which they
+  and the statements of the erasure compare the values at an exit,
+  asks that the two values are of one kind, and asks the relation of a
+  value that may be evaluated or is a location: the name says less
+  than the definition gives, a dead location being asked too.
   `FlambdaRegionsCheckedSpec.regions_given`, by which the soundness is
   proved, is a test of a state that reads one name, the continuation of
   a jump, which it resolves.
