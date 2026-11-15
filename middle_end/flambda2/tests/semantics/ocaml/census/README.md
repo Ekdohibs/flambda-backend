@@ -16,8 +16,14 @@ validated, and what that line says of it is counted apart, after the
 counts. Measured with the tool of this tree, at the default flags
 and with `-O3`: no unit of the 600 or of the 240 below has the line,
 and none has the line of a verdict that was asked of the term before
-with its known arrays read (the same section of that README). The tool
-of this tree may print, after the verdict, the line of the check of
+with its known arrays read or with chosen calls inlined first (the same
+section of that README). Of the 240, four have at the default flags, and
+five with `-O3`, the line of a verdict that was asked of the term before
+with copies of code for the sets of closures that a `Let` makes (the
+same section): such a unit is counted apart from those that the
+validation accepts, in a column of its own in the table of the 240,
+which is of the default flags. No unit of the 600 has that line. The
+tool of this tree may print, after the verdict, the line of the check of
 regions (`../README.md`, "What the conversion does to a unit", says of
 which units and what the line may say; no verdict depends on it).
 Measured at the default flags: it prints the line of 555 of the 600 and
@@ -233,23 +239,31 @@ time, user and system together. Until now it allowed 60 seconds of
 the clock, which measured what else the machine was running:
 `loops_scalar`, seed 55, which was without an answer in 60 seconds
 the day before, then took 16 seconds of processor time, then 4,
-then 7 with the tool of 87cdbf3e01, and takes 2.8 now, the most of the
-240. The 240 took 13.2 seconds of processor time together in one run
-(10.6 user, 2.6 system), and 13.1 in a second run of the same tool (10.6
-and 2.6). Other builds ran on the machine during both: in two runs made
-one after the other in the same conditions, the tool of b006dd4b0d took
-14.4 and the tool of this tree 13.7. The tool of this tree converts the
-two terms of a unit that was compared once more, with their regions
-kept, and tries to run each for the check of regions. And for a unit
-that is not validated it may make attempts that the tool of ca84b4345c
-did not make, besides the second check, which that tool made: the
-validation of the term before with its known arrays read, and liftings
-whose rounds make direct the calls of the closures that a `Let` makes or
-use what `my_closure` is known to be from its code, each where the
-tool's conditions for it hold and no answer that it has kept serves; 9
-of the 240 are not validated, where 25 were with the tool of ca84b4345c.
-When it was measured at that commit, the tool of b006dd4b0d took 17.8
-and 18.3. When the search of the second check came, in two runs made one
+then 7 with the tool of 87cdbf3e01, and takes 3.6 now, the most of the
+240 (2.7 with the tool of 5a514806c3, in a run made just before). The
+240 took 13.6 seconds of processor time together in one run (11.2 user,
+2.5 system), and 13.7 in a second run of the same tool (11.0 and 2.6).
+Other builds ran on the machine during both: in two runs made one after
+the other with the same inputs and flags, the tool of 5a514806c3 took
+13.1 and the tool of this tree 13.7. These are totals of processor time
+on a machine whose processors the runs shared with other builds under
+one quota: they are not a comparison of the speed of two tools run
+alone. The tool of this tree converts the two terms of a unit that was
+compared once more, with their regions kept, and tries to run each for
+the check of regions. And for a unit that is not validated it may make
+attempts that the tool of ca84b4345c did not make, besides the second
+check, which that tool made: the validation of the term before with its
+known arrays read, liftings whose rounds make direct the calls of the
+closures that a `Let` makes or use what `my_closure` is known to be from
+its code, the validation of the term before with chosen calls inlined
+first, and that of the term before with copies of code for the sets of
+closures that a `Let` makes, each where the tool's conditions for it
+hold and no answer that it has kept serves; 5 of the 240 are not
+validated, where 25 were with the tool of ca84b4345c. When it was
+measured there, the tool of 24cd3c9252 took 13.2 and 13.1, and 13.7 in a
+run made just after one of the tool of b006dd4b0d, which took 14.4. When
+it was measured at that commit, the tool of b006dd4b0d took 17.8 and
+18.3. When the search of the second check came, in two runs made one
 after the other, the tool of 93703d211b, which had the model and the
 tool of ca84b4345c but for that search, took 14.2 (10.2 of user time)
 and the tool of ca84b4345c 18.3 (14.0). When it was measured at that
@@ -270,22 +284,24 @@ made, with the tool before it and the tool after: 79 seconds and 12
 for the 240, 30 and 16 for the 600, and no output of the 840
 differs between the two. What else came between the two tools was
 not measured for its cost on these units one change at a time. The 600
-took 12.8 seconds in the first of those two runs (6.5 user, 6.3 system)
-and 12.7 in the second (6.4 and 6.3), and 13.5 in the run made just
-after that of the tool of b006dd4b0d, which took 13.1; when it was
-measured at that commit, the tool of b006dd4b0d took 19.1 and 18.8, and
-the tool of ca84b4345c, at its commit, 17.1 and 14.7. They took 33 with
-the tool of 87cdbf3e01. Less than half of what the 600 take now is the
-system's part. A tool that
+took 12.3 seconds in the first of those two runs (6.0 user, 6.3 system)
+and 12.5 in the second (6.1 and 6.4), and the tool of 5a514806c3 12.3 in
+a run made just before the second; when it was measured there, the tool
+of 24cd3c9252 took 12.8 and 12.7, and 13.5 in a run made just after one
+of the tool of b006dd4b0d, which took 13.1; when it was measured at that
+commit, the tool of b006dd4b0d took 19.1 and 18.8, and the tool of
+ca84b4345c, at its commit, 17.1 and 14.7. They took 33 with the tool of
+87cdbf3e01. More than half of what the 600 take now is the system's
+part. A tool that
 a signal other than that of the limit ends
 is reported as that, with its status, and counted as no answer.
 
-| Profile | Units | Validated | Validated with its imports | Validated with nothing imported only | Not validated | Not checked |
-|---------|-------|-----------|----------------------------|--------------------------------------|---------------|-------------|
-| `exceptions` | 60 | 33 | 27 | 0 | 0 | 0 |
-| `exceptions_scalar` | 60 | 35 | 23 | 0 | 2 | 0 |
-| `loops` | 60 | 56 | 0 | 0 | 2 | 2 |
-| `loops_scalar` | 60 | 55 | 0 | 0 | 5 | 0 |
+| Profile | Units | Validated | Validated when asked with copies of code | Validated with its imports | Validated with nothing imported only | Not validated | Not checked |
+|---------|-------|-----------|------------------------------------------|----------------------------|--------------------------------------|---------------|-------------|
+| `exceptions` | 60 | 33 | 0 | 27 | 0 | 0 | 0 |
+| `exceptions_scalar` | 60 | 35 | 0 | 23 | 0 | 2 | 0 |
+| `loops` | 60 | 56 | 1 | 0 | 0 | 1 | 2 |
+| `loops_scalar` | 60 | 55 | 3 | 0 | 0 | 2 | 0 |
 
 A unit that names a predefined exception has an import, and the
 tool runs it from its imports (`../README.md`, "What the verdicts
@@ -301,9 +317,13 @@ which had no such test, they were validated with nothing imported
 only; of the other 226 units the tool of ea56783099 printed what
 that one printed, byte for byte. One of the two units with
 exceptions that are not validated has an import. The validator accepts
-229 of the 240; 179 of them import nothing. Fifteen were validated when
-it went from 213 to 228, none lost. One (`loops`, seed 21) by the
-applications
+229 of the 240; 179 of them import nothing. Four more, which it refuses,
+are validated when asked of the term before with copies of code for the
+sets of closures that a `Let` makes, which is another function
+(`../README.md`, "What the verdicts mean"), and are counted apart:
+`loops`, seed 33; `loops_scalar`, seeds 3, 13 and 44. Fifteen were
+validated when the validator went from 213 to 228, none lost. One
+(`loops`, seed 21) by the applications
 of the two terms that go to the arm of the number they give, the
 continuations that the handler binds on its way to its `Switch` bound
 outside it first, and a parameter of a non-recursive continuation that
@@ -324,13 +344,19 @@ the copies, prints another thing than the tool of b006dd4b0d. Of the
 other 225 units, and of each of the 600, the tool of b006dd4b0d prints
 at the default flags what the tool of ca84b4345c printed, byte for
 byte.
-Between the tool of b006dd4b0d and the tool of this tree, at the default
-flags: one of the 240 is validated with the tool of this tree and was
-not with the tool of b006dd4b0d (`loops_scalar`, seed 12), none lost; it
-was not sorted by what validates it. Of the other 239 units of the 240,
-and of each of the 600, the tool of this tree prints what the tool of
-b006dd4b0d printed, byte for byte, but for the line of the check of
-regions, which 232 of the 240 and 555 of the 600 gain.
+Between the tool of b006dd4b0d and the tool of 5a514806c3, at the
+default flags: one of the 240 is validated with the tool of 5a514806c3
+and was not with the tool of b006dd4b0d (`loops_scalar`, seed 12), none
+lost; it was not sorted by what validates it. Of the other 239 units of
+the 240, and of each of the 600, the tool of 5a514806c3 prints what the
+tool of b006dd4b0d printed, byte for byte, but for the line of the check
+of regions, which 232 of the 240 and 555 of the 600 gain.
+Between the tool of 5a514806c3 and the tool of this tree, at the default
+flags: the four units counted apart above have the verdict of the
+function that makes the copies, with its line, and were not validated;
+none is lost. Of the other 236 units of the 240, and of each of the 600,
+the tool of this tree prints what the tool of 5a514806c3 printed, byte
+for byte.
 Six were validated when it went from 207 to 213,
 none lost: three by the liftings to a group of static bindings
 around (`FlambdaLiftAroundSpec.lift_around_unit`, V3's; `loops`,
@@ -405,8 +431,9 @@ terms, as the tool showed them, differed by the same kinds of line.
 The six units that were validated next are of the first kind, and
 the eleven others of the first kind were not read again. The third
 kind is what a call returning where its result is passed on removes;
-seven units are validated by it (above). Seven units with loops are
-not validated now; they were not sorted again.
+seven units are validated by it (above). Three units with loops are not
+validated now, and four more are validated only when asked of the term
+before with copies of code; they were not sorted again.
 
 - A closure of no value slot that the term before makes by a `Let`
   and the term after has as a symbol (17 units). A local recursive

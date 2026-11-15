@@ -108,7 +108,7 @@ unit made from OCaml.
   of regions: passes before, passes after", or what failed or was
   not run. No verdict depends on that line; `rocq/TRUST-LEDGER.md`, "The
   check of regions", says what it rests on and what it does not say. The
-  tool prints the line of 108 of the 535 units of this directory, and it
+  tool prints the line of 108 of the 536 units of this directory, and it
   says "passes before, passes after" of each. The regions around a `try`
   are dropped in the same way: the
   handler ends the regions that the body had open when it raised, and
@@ -209,9 +209,13 @@ unit made from OCaml.
   keeps the text of its statement, and is proved of the validation with
   the rounds so chosen. The rounds that a lifting chooses so are those
   that follow the first phase, in their two runs, before and after the
-  rewrites from the types; the first phase is as it was. Two units of
-  this directory have the line (`maker_of_mutual_inlined.ml` and
-  `maker_of_two_inlined_twice.ml`).
+  rewrites from the types; the first phase is as it was. The attempts
+  of the term before with copies of code for the sets of closures
+  that a `Let` makes (below) are made with such rounds from the
+  first, where the term before has such a closure. Three units of
+  this directory have the line: `maker_of_mutual_inlined.ml`,
+  `maker_of_two_inlined_twice.ml` and, under the line of the copies,
+  `local_rec_inlined_twice.ml`.
   Where it has the line "(with what my_closure is known to be from its
   code used in the rounds after each lifting)", the liftings of the
   attempt that accepted the pair asked that too; the line records what
@@ -240,8 +244,11 @@ unit made from OCaml.
   observers of `FlambdaObserversSpec.v` at the value slots given, run
   from the imports, and not under all environments; the rounds are
   `FlambdaValidateSpec.normalise_lifted_own`). The theorem keeps the
-  text of its statement here too. One unit of this directory has the
-  line (`maker_of_mutual_inlined.ml`).
+  text of its statement here too. The attempts of the term before
+  with copies of code for the sets of closures that a `Let` makes
+  (below) are made with these rounds from the first. Two units of
+  this directory have the line: `maker_of_mutual_inlined.ml` and,
+  under the line of the copies, `local_rec_inlined_twice.ml`.
 - **validated with its imports**: the unit names a symbol of another
   unit, here always a predefined exception, and the tool runs both
   terms from the static environment of their imports
@@ -439,6 +446,82 @@ unit made from OCaml.
   the line in their expected files, which are made at the default flags,
   `f2_one_inlined_one_not.ml`, `rec_local_helper_called_outside.ml`,
   `rec_unrolled.ml` and `stub_called_twice.ml`.
+- **(asked of the term before with copies of code for the sets of
+  closures that a Let makes)**, a line under a verdict: the verdict is
+  of another function than the validation, and the tables count the
+  unit apart. The validation refused the pair at every attempt of the
+  three kinds that the tool makes first (of the term before as it is,
+  with its known arrays read, with chosen calls inlined first), and
+  the tool then asked
+  `FlambdaValidateCopyingSpec.validate_unit_copying` of the same two
+  terms, and `validate_unit_knowing_copying` where it makes a second
+  asking. Each makes another term of the term before
+  (`before_copied`): the term before after the same initial
+  preprocessing as `validate_unit` (`demote_stub_calls`,
+  `cut_returns`, then `loopify_unit`); then the liftings given, each
+  followed by its rounds; then one lifting more, with no round after
+  it; and then, at given places, a `Let` that makes a set of closures,
+  or a closure of a set, makes it of a copy of its code, the copy
+  being bound under code ids that are given for it
+  (`FlambdaCopyLetsSpec.with_let_copies`). The first function then
+  asks `validate_unit` of that term and of the term after; the second
+  asks `validate_unit_knowing` of them. Why there is such a function:
+  Simplify gives new code to every set of closures that it simplifies,
+  and a set that it meets twice, in the body of a function that stays
+  and in a copy of that body that it inlines, has two newer versions
+  of its code. Where the closure of the copy is lifted to a symbol, a
+  lifting of the validation asks a copy for the static set
+  (`FlambdaCopyCodeSpec.copy_static_code`). Where it is not, a value
+  slot of the set holding a variable for one, the term after has a
+  `Let` that makes its closures of code under a new id, where the
+  term before has one code.
+  The liftings, the places and the code ids are a guess of the tool,
+  and nothing proved rests on them. The tool makes the attempts of
+  this kind where the term after makes by a `Let`, in its code too, a
+  set of closures of code that the term before does not bind. It
+  guesses liftings in turn, as for any asking, until one that lifts
+  nothing has copies beside it that change the term. The copies are
+  guessed from the term that the liftings before that one and their
+  rounds have made: each of its `Let`s that makes a set of closures
+  is paired, by the place where it stands (outside code, or in the
+  body of a piece of code) and in the order of the terms, with a
+  `Let` of the term after that makes a set with the same function
+  slots and, for each function, the same code or code that the term
+  before does not bind; a `Let` whose code is not the same is to get
+  the code ids of the term after. Where no such lifting is found, no
+  function is asked. The attempts of this kind are made once, with
+  what `my_closure` is known to be from its code used in the rounds
+  after each lifting and, where the term before has a closure of the
+  sort that those rounds know, with the calls of the closures that a
+  `Let` makes made direct there: the lines of those rounds stand
+  under this one. For these attempts the lists of the code not to
+  inline have, beside the code that the term after calls directly,
+  the code that it is a newer version of, and what that is a newer
+  version of, eight times at most: the term before may call the
+  older code where the term after calls the newer.
+  What is proved of a pair that either function accepts is of the
+  term before as the tool converted it, each unit run on its own from
+  empty environments: the unit after refines the unit before
+  (`validate_unit_copying_sound_statement`,
+  `validate_unit_knowing_copying_sound_statement`), since
+  `before_copied` refines the term before so run
+  (`before_copied_program_refines_statement`). Nothing is said under
+  all environments, of which a lifting and a copy are no
+  refinements. A copy is made only where its tests pass
+  (`FlambdaCopyLetsSpec.copy_let_code`); where one fails the term is
+  as it was, and the function asked answers of that term. Of the two
+  units run from their imports the same is proved where two tests
+  pass, that of the liftings which `before_copied` applies
+  (`before_copied_holds_from`) and that of the verdict of the
+  function asked, on the term that `before_copied` gives
+  (`validate_unit_copying_verdict_imports_statement`,
+  `validate_unit_knowing_copying_verdict_imports_statement`); the
+  verdict of a unit with imports then begins "validated with its
+  imports", and "validated with nothing imported" where one of them
+  fails. No unit has this line and the line of the reading or that of
+  the inlining. One unit of this directory has the line in its
+  expected file, which is made at the default flags,
+  `local_rec_inlined_twice.ml`.
 - **the same, not validated**: the two runs came to the same result,
   which is a test of one run and no proof. The validator could not make
   the two terms the same; the table says what it is missing.
@@ -548,15 +631,17 @@ Simplify does to it. Steps are those of the machine, before and after
 Simplify. The names in brackets are the streams whose work in progress
 is the rewrite that is missing.
 
-535 sources: 446 validated; 2 validated when asked of the term before
+536 sources: 446 validated; 2 validated when asked of the term before
 with its known immutable arrays read, which is another function than the
 others are asked of; 4 validated when asked of the term before with
-chosen calls inlined first, which is another function again; 14
-validated for the term as read, which says never null of a value that
-may be null (T4-13); 58 validated with their imports; none validated
-with nothing imported and not with its imports; 4 compared on one run
-and not validated, 2 of them with the line of the second check (1 of
-those with imports); 2 undefined in the model; 5 not checked.
+chosen calls inlined first, which is another function again; 1 validated
+when asked of the term before with copies of code for the sets of
+closures that a `Let` makes, which is another again; 14 validated for
+the term as read, which says never null of a value that may be null
+(T4-13); 58 validated with their imports; none validated with nothing
+imported and not with its imports; 4 compared on one run and not
+validated, 2 of them with the line of the second check (1 of those with
+imports); 2 undefined in the model; 5 not checked.
 
 ### Validated
 
@@ -801,6 +886,12 @@ those with imports); 2 undefined in the model; 5 not checked.
 | `rec_local_helper_called_outside.ml` | 38, 24 |
 | `rec_unrolled.ml` | 64, 18 |
 | `stub_called_twice.ml` | 26, 15 |
+
+### Validated when asked of the term before with copies of code
+
+| Source | Steps |
+|--------|-------|
+| `local_rec_inlined_twice.ml` | 128, 93 |
 
 ### Validated for the term as read (T4-13)
 
@@ -2205,6 +2296,25 @@ removed it:
   shows that. It is seen in the comparison of the two tools, whole
   outputs, that is made when a series is closed, a measure which
   `status/V2.md` records with the count of the units with `-O3`.
+- A set of closures that a `Let` makes, given new code where the
+  function that makes it is inlined (`local_rec_inlined_twice.ml`;
+  C3's). A function that is always inlined makes a recursive function
+  local to it, which uses its parameter, and calls it; another
+  function calls the first twice. Simplify inlines the two calls.
+  Each copy of the body makes its closure of the local function where
+  it stands, as the closure holds a variable, and Simplify gives each
+  copy new code: the term after has the code of the local function
+  three times, once for the closure that the code of the first
+  function makes and once for each of the two that the code of the
+  second makes. The term before has that code once, and with the two
+  calls inlined its three `Let`s make their closures of it. The tool
+  now asks, of a unit that the attempts of the three kinds before
+  refuse, a function that gives such `Let`s copies of their code
+  under the code ids of the term after, and then asks the validation
+  (`FlambdaValidateCopyingSpec.validate_unit_copying`; "What the
+  verdicts mean" says what is guessed and what is proved). At the
+  default flags, which are those of the tests of this directory, the
+  unit is validated so, and is counted apart.
 
 A count over 600 units made at random is in `census/README.md`, with
 one over 240 more that have exceptions, loops and recursive functions.
@@ -2263,13 +2373,18 @@ refuse it too, once more of the term before with chosen calls inlined
 first, unless the guess of the tool gives no choice or the term that its
 choices give is the term before name for name ("What the verdicts
 mean").
-The 535 units here were checked in 10.6 seconds of processor time
-together in one run (5.1 user, 5.5 system), and in 10.9 in a second run
-of the same tool (5.0 and 5.9): more than half of each is the system's
+Where those refuse it as well, and the term after makes by a `Let`, in
+its code too, a set of closures of code that the term before does not
+bind, attempts are made of the term before with copies of code for
+such sets, once, with the rounds that the lines under the verdict
+name (the same section).
+The 536 units here were checked in 10.6 seconds of processor time
+together in one run (5.0 user, 5.6 system), and in 10.4 in a second run
+of the same tool (4.9 and 5.5): more than half of each is the system's
 part. Other builds ran on the machine during both. In two runs made one
 after the other with the same inputs and flags, on the 529 units that
 the directory had at 5a514806c3, the tool of that commit took 10.3
-seconds and the tool of this tree 10.4. On the 516 units that the
+seconds and the tool of this tree 10.2. On the 516 units that the
 directory had at b006dd4b0d, in two such runs, the tool of that commit
 took 10.5 seconds and the tool of 24cd3c9252 took 10.6; when it was
 measured at that commit, the tool of b006dd4b0d took 16.1 and 14.0.
@@ -2418,7 +2533,7 @@ compared.
   `option_bind`, `option_map`, `polymorphic_variant`,
   `project_record_two_levels`, `record_update`, `result_map`,
   `same_field_chain_twice` and `tree_root`.
-  Of the 204 units that have entered since, 32 have:
+  Of the 205 units that have entered since, 32 have:
   `stack_argument_result_returned`, whose source says `local_` of a
   parameter, the first source of this directory that does, and 31 that
   entered after it: `attr_local_in_match`, `clos_partial_local`,
@@ -2439,7 +2554,7 @@ compared.
   `tupled_partial_application`, `twice_nested_same_scrutinee` and
   `var_twelve_mixed`. Twelve of the 31 say `local_` in the source. Each
   unit is looked at so before it enters. By the same print, the term
-  before Simplify of 63 of the 535 units of this directory has an
+  before Simplify of 63 of the 536 units of this directory has an
   allocation mode that names a region, on
   an allocation or on a call ("What the conversion does to a unit" says
   what is made of regions). What was run for the
