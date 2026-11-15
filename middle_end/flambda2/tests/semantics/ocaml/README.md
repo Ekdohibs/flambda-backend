@@ -593,8 +593,9 @@ unit made from OCaml.
   with nothing lifted. A unit that has a primitive of the heap and is
   validated at another step has no such line (`array_literal.ml`,
   `ref_counter.ml`): the theorem is the same one as for any unit
-  validated at that step. No unit of this directory has the line in its
-  expected file.
+  validated at that step. One unit of this directory has the line in
+  its expected file, under "not validated":
+  `pair_of_unknowns_after_inlined_pair.ml`.
 - **related once lifted**, a line under "not validated" (it awaits
   the human's choice, decision D43): the validator refused the
   pair for every list of calls that the tool tries, and the tool
@@ -731,7 +732,7 @@ Simplify does to it. Steps are those of the machine, before and after
 Simplify. The names in brackets are the streams whose work in progress
 is the rewrite that is missing.
 
-538 sources: 450 validated; 2 validated when asked of the term before
+540 sources: 451 validated; 2 validated when asked of the term before
 with its known immutable arrays read, which is another function than the
 others are asked of; 4 validated when asked of the term before with
 chosen calls inlined first, which is another function again; 1 validated
@@ -739,41 +740,41 @@ when asked of the term before with copies of code for the sets of
 closures that a `Let` makes, which is another again; 14 validated for
 the term as read, which says never null of a value that may be null
 (T4-13); 58 validated with their imports; none validated with nothing
-imported and not with its imports; 4 compared on one run and not
-validated, 2 of them with the line of the second check (1 of those with
+imported and not with its imports; 5 compared on one run and not
+validated, 3 of them with the line of the second check (1 of those with
 imports); 2 undefined in the model; 3 not checked.
 
 ### Validated
 
 | Source | Steps | Source | Steps |
 |--------|-------|--------|-------|
-| `add3_exported.ml` | 9, 6 | `join_phys_equal_arms.ml` | 25, 17 |
-| `add_zero.ml` | 8, 2 | `join_tags_then_shared_field.ml` | 69, 46 |
-| `alias_kept_or_rebuilt.ml` | 49, 28 | `join_two_names_of_symbol.ml` | 24, 8 |
-| `apply_exported.ml` | 8, 4 | `kept_local_mutual_to_inlined.ml` | 145, 97 |
-| `array_literal.ml` | 8, 3 | `labelled_arguments.ml` | 13, 3 |
-| `attr_inlined_never_at_call.ml` | 27, 20 | `labelled_in_every_order.ml` | 108, 94 |
-| `attr_local_in_match.ml` | 87, 59 | `labelled_optional.ml` | 38, 6 |
-| `attr_local_two_uses.ml` | 41, 27 | `late_three_values_interleaved.ml` | 430, 382 |
-| `bitwise_unknown.ml` | 14, 7 | `least_join_table.ml` | 30, 35 |
-| `block_in_arm_of_unknown.ml` | 19, 7 | `len_compare_two.ml` | 41, 33 |
-| `bool_not_unknown.ml` | 8, 3 | `len_of_constants.ml` | 32, 1 |
-| `bool_ops.ml` | 47, 1 | `len_of_unknown_twice.ml` | 18, 12 |
-| `boxed_constant_made.ml` | 12, 4 | `list_constant.ml` | 39, 25 |
-| `boxed_constant_twice.ml` | 16, 2 | `list_head.ml` | 41, 3 |
-| `bswap_constants.ml` | 29, 2 | `list_heap.ml` | 54, 33 |
-| `call_of_call_tested.ml` | 39, 42 | `list_last.ml` | 76, 41 |
-| `call_result_passed_on.ml` | 79, 31 | `list_sum.ml` | 61, 42 |
-| `call_result_tested.ml` | 78, 73 | `load_through_join.ml` | 68, 37 |
-| `call_result_unused.ml` | 79, 50 | `local_argument_partial_application.ml` | 102, 59 |
-| `capture_fun_and_var_run.ml` | 24, 20 | `local_block_matched.ml` | 93, 66 |
-| `capture_fun_bound_in_handler_run.ml` | 31, 26 | `local_block_matched_argument.ml` | 93, 66 |
-| `capture_rec_self.ml` | 9, 6 | `local_call_exported.ml` | 8, 4 |
-| `capture_two_funs.ml` | 15, 12 | `local_call_used.ml` | 10, 3 |
-| `char_code.ml` | 13, 3 | `local_closure_applied_mutual.ml` | 158, 82 |
-| `char_comparisons.ml` | 56, 36 | `local_closure_given_partially.ml` | 58, 40 |
-| `char_count_in_string.ml` | 654, 304 | `local_function.ml` | 29, 5 |
-| `char_digit_value.ml` | 87, 60 | `local_loop_inlined.ml` | 66, 41 |
+| `add3_exported.ml` | 9, 6 | `join_tags_then_shared_field.ml` | 69, 46 |
+| `add_zero.ml` | 8, 2 | `join_two_names_of_symbol.ml` | 24, 8 |
+| `alias_kept_or_rebuilt.ml` | 49, 28 | `kept_local_mutual_to_inlined.ml` | 145, 97 |
+| `apply_exported.ml` | 8, 4 | `labelled_arguments.ml` | 13, 3 |
+| `array_literal.ml` | 8, 3 | `labelled_in_every_order.ml` | 108, 94 |
+| `attr_inlined_never_at_call.ml` | 27, 20 | `labelled_optional.ml` | 38, 6 |
+| `attr_local_in_match.ml` | 87, 59 | `late_three_values_interleaved.ml` | 430, 382 |
+| `attr_local_two_uses.ml` | 41, 27 | `least_join_table.ml` | 30, 35 |
+| `bitwise_unknown.ml` | 14, 7 | `len_compare_two.ml` | 41, 33 |
+| `block_in_arm_of_unknown.ml` | 19, 7 | `len_of_constants.ml` | 32, 1 |
+| `bool_not_unknown.ml` | 8, 3 | `len_of_unknown_twice.ml` | 18, 12 |
+| `bool_ops.ml` | 47, 1 | `list_constant.ml` | 39, 25 |
+| `boxed_constant_made.ml` | 12, 4 | `list_head.ml` | 41, 3 |
+| `boxed_constant_twice.ml` | 16, 2 | `list_heap.ml` | 54, 33 |
+| `bswap_constants.ml` | 29, 2 | `list_last.ml` | 76, 41 |
+| `call_of_call_tested.ml` | 39, 42 | `list_sum.ml` | 61, 42 |
+| `call_result_passed_on.ml` | 79, 31 | `load_through_join.ml` | 68, 37 |
+| `call_result_tested.ml` | 78, 73 | `local_argument_partial_application.ml` | 102, 59 |
+| `call_result_unused.ml` | 79, 50 | `local_block_matched.ml` | 93, 66 |
+| `capture_fun_and_var_run.ml` | 24, 20 | `local_block_matched_argument.ml` | 93, 66 |
+| `capture_fun_bound_in_handler_run.ml` | 31, 26 | `local_call_exported.ml` | 8, 4 |
+| `capture_rec_self.ml` | 9, 6 | `local_call_used.ml` | 10, 3 |
+| `capture_two_funs.ml` | 15, 12 | `local_closure_applied_mutual.ml` | 158, 82 |
+| `char_code.ml` | 13, 3 | `local_closure_given_partially.ml` | 58, 40 |
+| `char_comparisons.ml` | 56, 36 | `local_function.ml` | 29, 5 |
+| `char_count_in_string.ml` | 654, 304 | `local_loop_inlined.ml` | 66, 41 |
+| `char_digit_value.ml` | 87, 60 | `local_rec_below_a_let_and_in_an_arm.ml` | 58, 37 |
 | `char_hex_digit_value.ml` | 144, 80 | `local_rec_in_tail_loop.ml` | 173, 108 |
 | `char_match.ml` | 48, 1 | `loop_exit_inlined.ml` | 82, 36 |
 | `char_of_int_in_loop.ml` | 269, 184 | `loop_for_local_pair_each_turn.ml` | 1749, 1336 |
@@ -972,6 +973,7 @@ imports); 2 undefined in the model; 3 not checked.
 | `int_switch.ml` | 31, 1 | `while_two_loops.ml` | 126, 81 |
 | `is_even.ml` | 29, 1 | `while_two_tests.ml` | 180, 123 |
 | `join_pair_equal_fields.ml` | 50, 28 | `while_unused_counter.ml` | 78, 40 |
+| `join_phys_equal_arms.ml` | 25, 17 |  |  |
 
 ### Validated when asked of the term before with its known arrays read
 
@@ -1117,6 +1119,7 @@ before. What each shows, and what its validation uses besides:
 |--------|-------|--------------------------|
 | `pair_kept.ml` | 35, 33 | one branch gives a parameter of the function, and Simplify loads its fields at that use, which only the subkind of the parameter justifies; the model has no subkinds (T6-7). Item 2 of the list below says what the comparison of the two terms with the two calls inlined is left with |
 | `pair_loop.ml` | 192, 85 | the same loads of the fields of a parameter of the function, which only its subkind justifies, at the entry of a loop, whose parameter Simplify unboxes from its subkind without looking at the uses (T6-7) |
+| `pair_of_unknowns_after_inlined_pair.ml` | 22, 10 | not validated; both terms have a primitive of the heap, and each of the four liftings of the validation lifts nothing in a term given to it that has one (a limit pending decision D40; "What the verdicts mean", the line that names the primitive); related once lifted (the tables below), with the second search of the liftings |
 | `raise_parameter.ml` | 11, 7 | code raises a variable that is not known to hold a symbol or a constant (a parameter of the code), and a lifting is made only where the unit gives symbols, constants and variables known to hold one to the continuations that it may leave through (`FlambdaLiftSpec.exits_plain_knowing`, and the CR at `exits_plain`); related once lifted (the tables below) |
 | `throw_variable_kept.ml` | 49, 31 | as `raise_parameter.ml` |
 
@@ -1130,6 +1133,7 @@ The check given no import:
 
 | Source | What it is | The line |
 |--------|------------|----------|
+| `pair_of_unknowns_after_inlined_pair.ml` | a function that is always inlined, which counts its calls in a reference and returns a pair, called once with a constant; then a pair of two values that are not known | related once lifted; no value slots removed |
 | `raise_parameter.ml` | a function that raises its parameter, and one that catches whatever the first raises; neither is called | related once lifted; unused value slots removed |
 
 The check given imports:
@@ -1144,16 +1148,28 @@ terms written by hand in the directory above, `../uncaught.fl` has
 the line, with no import and no value slot removed: it leaves by its
 exception continuation with a block that it made.
 
-Measured: on the sources that the tool of this tree was run on, in
-this tree and outside it, every unit that has the line has an
-import, apart from the examples added here to exercise the no-import
-case, two more of their shape that are not in this tree, and that
-term written by hand. The import is a predefined exception or, in a
-unit that uses another unit, an exception or another symbol of that
-unit. A declaration of a fresh exception uses the runtime call
-`caml_fresh_oo_id`. A term in which that call remains has no
-verdict: the tool does not convert C calls. Those examples exercise
-the line with no import.
+Measured when the line was added, with the tool of cd71844a36,
+whose conversion made no primitive of the heap: on the sources that
+that tool was run on, in the tree and outside it, every unit that
+had the line had an import, apart from the examples added then to
+exercise the no-import case, two more of their shape that are not
+in the tree, and that term written by hand. The import was a
+predefined exception or, in a unit that uses another unit, an
+exception or another symbol of that unit. A declaration of a fresh
+exception uses the runtime call `caml_fresh_oo_id`. A term in which
+that call remains has no verdict: the tool does not convert C calls.
+Those examples exercised the line with no import. That measure is
+not one of the tool of this tree, whose conversion makes the
+primitives of the heap. A unit that stores or makes a cell can have
+the line with no import: each lifting of the validation lifts
+nothing in a term given to it that has such a primitive, and the
+second check may relate the two terms all the same.
+`pair_of_unknowns_after_inlined_pair.ml` has it so; so has a
+generated unit of `census/` (`loops`, seed 19), and so have two
+terms written by hand in the directory above
+(`../heap_store_stops_lifting.fl`, `../heap_store_stops_guess_again.fl`;
+C2's). How many units outside the tree have it so is not counted
+here.
 
 ### Undefined in the model
 
@@ -2471,6 +2487,46 @@ removed it:
   at the definition says what would take the case out. A load marked
   `Mutable` is not shared. The unit is validated, at the default flags
   and with `-O3`.
+- A guess of the liftings that the function asked refuses, in a unit
+  of which another guess is accepted
+  (`local_rec_below_a_let_and_in_an_arm.ml`,
+  `pair_of_unknowns_after_inlined_pair.ml`; V4's). The liftings are a
+  guess of the tool (the entry of `table_and_array_alike.ml`, above).
+  In the first unit a recursive function that captures nothing is made
+  below a value that is not known, and its code calls it by name.
+  Simplify binds its closure to a symbol at the head of the unit. The
+  guess lifted the closure where its `Let` stands, below the `Let` of
+  the value, which stays, and the code that names the symbol is bound
+  above that: the two terms differed by the place of one binding. In
+  the second unit a call that Simplify inlines makes a pair of
+  constants, which the term before as it is given does not make, and
+  the unit then makes a pair of two values that are not known. The
+  guess gave the symbol of the pair of constants to the `Let` of the
+  second pair, whose fields agree with anything.
+  Where the search of an asking ends in a refusal, and the asking is
+  not one that asks nothing, the tool now makes the search once more
+  with two choices of the guess changed; any liftings that it proposes
+  are checked by the same function. Where the guess gives the `Let`,
+  outside code, of a closure with no value slot a symbol of the term
+  after, that `Let` is given to the lifting to the head of the unit
+  and is not lifted where it stands. Where it chooses the symbol of a
+  `Let` of a block that has a field and whose fields are all variables
+  of which nothing is known, it prefers, among the symbols that fit,
+  one whose block has a variable among its fields, and takes the first
+  that fits if there is none. A verdict of the second search is the
+  answer of the asking; where it is refused too, the answer is the
+  refusal that there was. A verdict that the search of an asking gave
+  before is still the answer of that asking, as the second search is
+  made only after a refusal; a unit that was validated may now be
+  validated by an earlier asking. A guess is not trusted: the verdict
+  is that of the function asked. No definition and no statement
+  changes for this, and the tool prints no new line. At the default
+  flags, which are those of the tests of this directory, the first
+  unit is validated. The second is not validated. Both its terms have
+  a primitive of the heap, and a lifting of the validation lifts
+  nothing in a term given to it that has one ("What the verdicts
+  mean"). The second check, which printed no line of it, now prints
+  "related once lifted", which is no validation of the unit.
 
 A count over 600 units made at random is in `census/README.md`, with
 one over 240 more that have exceptions, loops and recursive functions.
@@ -2540,6 +2596,10 @@ the symbol of an immutable array which has a twin in the term after,
 the liftings are guessed again and the function asked again, three
 times at most (the entry of `table_and_array_alike.ml`, in the list
 above).
+Where the search of an asking that asks something ends in a refusal
+after that, the search is made once more with two choices of the guess
+changed (the entry of `local_rec_below_a_let_and_in_an_arm.ml`, in the
+list above).
 The 538 units here were checked in 12.5 seconds of processor time
 together in one run (5.8 user, 6.7 system), and in 12.1 in a second run
 of the same tool (5.6 and 6.5): more than half of each is the system's
