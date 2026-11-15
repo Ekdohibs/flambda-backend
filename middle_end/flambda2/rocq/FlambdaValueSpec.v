@@ -41,12 +41,19 @@
    imports the semantics has what is here.
 
    A value is a constant (a tagged immediate, a naked number of any kind,
-   null or poison), a pointer to what a symbol is bound to, or something
-   allocated that is immutable: a closure, a block of values, an
-   immutable array of values, a boxed number. An allocated value is its
-   contents: two of them are the same value when they have the same
-   contents, and nothing tells one allocation from another. There is no
-   mutable memory.
+   null or poison), a pointer to what a symbol is bound to, something
+   allocated that is immutable (a closure, a block of values, an immutable
+   array of values, a boxed number, a partial application), or a location.
+   An allocated immutable value is its contents: two of them are the same
+   value when they have the same contents, and nothing tells one
+   allocation from another. Mutable memory is the heap, which this file
+   defines after the values ([cell], [heap]) and which the state of the
+   machine carries: a location ([Value_location]) names a cell of it where
+   the heap binds it, a block of values that has an identity or a mutable
+   array of values. None of the five observations reads a location, and a
+   location is not allocated in the sense of [is_allocated]: it is read
+   with a heap ([cell_of]), and what a primitive does with one is
+   FlambdaHeapSpec.exec_prim's to say.
 
    A symbol is a value by itself, whether or not it is bound, and what it
    points to is in the static environment. So a block made by a primitive
