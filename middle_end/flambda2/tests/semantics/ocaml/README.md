@@ -1110,7 +1110,7 @@ the line with no import.
    only where its fields are constants
    (`FlambdaReadsAfterSpec.remove_constant_allocations`).
    `pair_join.ml`, which was the third unit, is validated by that
-   comparison: the last entry of the list below.
+   comparison: its entry in the list below.
 
 What the model has not got, and the conversion refuses: floating-point
 arithmetic (`float_add.ml`), and a direct call of tupled code,
