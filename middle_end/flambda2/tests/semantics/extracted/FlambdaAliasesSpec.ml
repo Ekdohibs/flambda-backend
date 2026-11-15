@@ -1,8 +1,10 @@
+open BinNums
 open BinPos
 open Datatypes
 open FlambdaMapSpec
 open FlambdaModel
 open FlambdaNormaliseSpec
+open FlambdaPrimitiveModel
 open FlambdaTypesSpec
 open List
 open ListDef
@@ -145,6 +147,14 @@ let typing_env_under_let tenv x = function
     if var_in_simple x s
     then drop_var x tenv
     else (x, Equals s) :: drop_var x tenv
+  | Prim (p, _) -> (
+    match p with
+    | Heap p0 -> (
+      match p0 with
+      | Make_block_with_identity (_, _) -> drop_var x tenv
+      | Make_mutable_array _ -> drop_var x tenv
+      | _ -> (x, Equals (Const (Tagged_immediate Z0))) :: drop_var x tenv)
+    | _ -> drop_var x tenv)
   | Set_of_closures (code, slots) ->
     if var_in_value_slots x slots
     then drop_var x tenv

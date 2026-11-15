@@ -1821,6 +1821,12 @@ Proof.
     try apply drop_var_equivariant.
   - rewrite var_in_simple_equivariant, drop_var_equivariant.
     destruct (var_in_simple x s); reflexivity.
+  - (* What is known of the result of a store is a constant, which a
+       renaming leaves as it is. *)
+    destruct p as [u | b | vr | q | r0]; try apply drop_var_equivariant.
+    destruct q as [mut tag | kind init field | kind | kind set_kind];
+      try apply drop_var_equivariant;
+      rewrite drop_var_equivariant; reflexivity.
   - rewrite var_in_value_slots_equivariant, drop_var_equivariant.
     destruct (var_in_value_slots x slots); reflexivity.
 Qed.

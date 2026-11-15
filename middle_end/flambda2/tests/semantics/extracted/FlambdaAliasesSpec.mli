@@ -1,8 +1,10 @@
+open BinNums
 open BinPos
 open Datatypes
 open FlambdaMapSpec
 open FlambdaModel
 open FlambdaNormaliseSpec
+open FlambdaPrimitiveModel
 open FlambdaTypesSpec
 open List
 open ListDef

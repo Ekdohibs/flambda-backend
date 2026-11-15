@@ -31,7 +31,8 @@
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
-  FlambdaSemanticsSpec FlambdaSemanticsProofs FlambdaContextProofs
+  FlambdaHeapSpec FlambdaSemanticsSpec FlambdaSemanticsProofs
+  FlambdaContextProofs
   FlambdaNominalSpec FlambdaNominalProofs FlambdaApplyProofs
   FlambdaNormaliseSpec FlambdaNormaliseProofs.
 From OxCamlFlambda2Types Require Import FlambdaTypesSpec FlambdaTypesProofs
@@ -314,6 +315,42 @@ Qed.
 (* Under binders                                                            *)
 (* ======================================================================== *)
 
+(* A store has a value only where that value is unit. *)
+Lemma exec_heap_store_unit (statics : static_env) (h h' : heap)
+    (q : heap_primitive) (vs : list value) (v : value) :
+  exec_heap_primitive statics h q vs = Some (v, h') ->
+  match q with
+  | Block_set _ _ _ | Array_set _ _ => v = unit_value
+  | Make_block_with_identity _ _ | Make_mutable_array _ => True
+  end.
+Proof.
+  intros Hexec.
+  destruct q as [mut tag | kind init field | kind | kind set_kind];
+    try exact I; simpl in Hexec;
+    repeat match type of Hexec with
+           | match ?e with _ => _ end = Some _ =>
+             destruct e; try discriminate Hexec
+           end;
+    injection Hexec as <- _; reflexivity.
+Qed.
+
+(* What a primitive of the heap gives at a [Let] is what
+   [exec_heap_primitive] gives on the values of its arguments. *)
+Lemma exec_named_heap_inv (statics : static_env) (hp hp' : heap)
+    (rd rd' : read_record) (vars : env) (q : heap_primitive)
+    (args : list simple) (v : value) :
+  exec_named statics hp rd vars (Prim (Heap q) args) = Some (v, hp', rd') ->
+  ∃ vs : list value, exec_heap_primitive statics hp q vs = Some (v, hp').
+Proof.
+  unfold exec_named, exec_prim. intros Hd.
+  destruct (eval_simples vars args) as [vs | ]; [ | discriminate ].
+  destruct (forallb (argument_bound statics hp) vs); [ | discriminate ].
+  simpl in Hd.
+  destruct (exec_heap_primitive statics hp q vs) as [[w hp''] | ] eqn:Hexec;
+    [ | discriminate ].
+  injection Hd as <- <- _. exists vs. exact Hexec.
+Qed.
+
 (* The environment under a [Let] satisfies what is known there. *)
 Lemma env_satisfies_under_let (tenv : typing_env) (x : variable) (d : named)
     (vars : env) (statics : static_env) (v : value) :
@@ -337,6 +374,11 @@ Proof.
       (drop_var_fresh x tenv)).
     simpl in Hd |- *. rewrite <- Hd. apply eval_simple_extend.
     intros Hfree. apply var_in_simple_sound in Hfree. congruence.
+  - (* A store has no value by [eval_named]. *)
+    destruct p as [u | b | vr | q | r]; try exact Hunknown.
+    destruct q as [mut tag | kind init field | kind | kind set_kind];
+      try exact Hunknown;
+      simpl in Hd; destruct (eval_simples vars args); discriminate Hd.
   - destruct (var_in_value_slots x slots) eqn:Hmention; [ exact Hunknown | ].
     apply (env_satisfies_extend _ vars x v (Closure_of code slots) Hdropped
       (drop_var_fresh x tenv)).
@@ -349,9 +391,9 @@ Proof.
     intros Hfree. apply var_in_value_slots_sound in Hfree. congruence.
 Qed.
 
-(* The same, of the run of the named expression: nothing is recorded of a
-   primitive, and what is not a primitive has the value that [eval_named]
-   gives it. *)
+(* The same, of the run of the named expression: of a primitive nothing
+   is recorded but that a store returns unit, and what is not a
+   primitive has the value that [eval_named] gives it. *)
 Lemma env_satisfies_under_let_exec (tenv : typing_env) (x : variable)
     (d : named) (vars : env) (statics : static_env) (hp hp' : heap)
     (rd rd' : read_record) (v : value) :
@@ -367,12 +409,22 @@ Proof.
            [ | discriminate ];
          injection Hd as <- <- <-;
          exact (env_satisfies_under_let tenv x _ vars statics w Hsat Hw)).
-  simpl.
-  apply (env_satisfies_incl ((x, Unknown) :: drop_var x tenv));
-    [ intros entry Hin; right; exact Hin | ].
-  exact (env_satisfies_extend _ vars x v Unknown
-    (env_satisfies_incl tenv _ vars (drop_var_incl x tenv) Hsat)
-    (drop_var_fresh x tenv) I).
+  assert (Hdropped : env_satisfies (drop_var x tenv) vars)
+    by exact (env_satisfies_incl tenv _ vars (drop_var_incl x tenv) Hsat).
+  assert (Hunknown : env_satisfies (drop_var x tenv) ((x, v) :: vars)).
+  { apply (env_satisfies_incl ((x, Unknown) :: drop_var x tenv));
+      [ intros entry Hin; right; exact Hin | ].
+    exact (env_satisfies_extend _ vars x v Unknown Hdropped
+      (drop_var_fresh x tenv) I). }
+  destruct p as [u | b | vr | q | r]; try exact Hunknown.
+  destruct (exec_named_heap_inv statics hp hp' rd rd' vars q args v Hd)
+    as [vs Hexec].
+  apply exec_heap_store_unit in Hexec.
+  destruct q as [mut tag | kind init field | kind | kind set_kind];
+    try exact Hunknown; subst v;
+    exact (env_satisfies_extend _ vars x unit_value
+      (Equals (Const (Tagged_immediate 0))) Hdropped (drop_var_fresh x tenv)
+      eq_refl).
 Qed.
 
 Lemma let_equivalent_in (tenv : typing_env) (x : variable)

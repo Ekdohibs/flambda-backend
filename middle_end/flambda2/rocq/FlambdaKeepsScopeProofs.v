@@ -1680,10 +1680,17 @@ Proof.
   { apply drop_var_within.
     eapply tenv_within_weaken; [ | exact Htenv ]. apply incl_appl, incl_refl. }
   unfold typing_env_under_let.
-  destruct d as [s | | code slots | | | | ]; try exact Hdropped.
+  destruct d as [s | p args | code slots | | | | ]; try exact Hdropped.
   - destruct (var_in_simple x s); [ exact Hdropped | ].
     intros entry [<- | Hentry]; [ | exact (Hdropped entry Hentry) ].
     cbn [snd type_within free_variables_of_named]. apply incl_appr, incl_refl.
+  - (* What is known of the result of a store is a constant, which
+       mentions no variable. *)
+    destruct p as [u | b | vr | q | r]; try exact Hdropped.
+    destruct q as [mut tag | kind init field | kind | kind set_kind];
+      try exact Hdropped;
+      (intros entry [<- | Hentry]; [ | exact (Hdropped entry Hentry) ]);
+      intros y [].
   - destruct (var_in_value_slots x slots); [ exact Hdropped | ].
     intros entry [<- | Hentry]; [ | exact (Hdropped entry Hentry) ].
     cbn [snd type_within free_variables_of_named]. apply incl_appr, incl_refl.

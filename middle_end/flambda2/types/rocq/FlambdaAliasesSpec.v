@@ -44,6 +44,19 @@
    to be removed if it is then unused
    (../../rocq/FlambdaNormaliseSpec.remove_unused_lets).
 
+   It holds too, for a variable bound to a store ([Block_set],
+   [Array_set]), the constant unit, and the uses of the variable that
+   the pass visits are replaced by that constant, under the rules of
+   scope and shadowing below. Simplify gives the result of a store the
+   type of the constant (simplify/simplify_primitive_result.ml,
+   [create_unit], for a [Block_set];
+   simplify/simplify_ternary_primitive.ml, [simplify_array_set]), so
+   the term after has the constant where the term before has the
+   variable. The pass keeps the [Let] of the store. That its result is
+   then unused does not let the rewrites that remove an unused [Let]
+   remove it: their tests refuse a primitive of the heap
+   (../../rocq/FlambdaNormaliseSpec.prim_may_fold, [named_defined]).
+
    Going under a binder, what is known of its name, and of anything said
    to be an alias of it, is dropped ([drop_var]): the name stands for
    something else from there on. So nothing is asked of the names of the
@@ -185,7 +198,10 @@ Definition canonical_apply (tenv : typing_env) (ap : apply_expr) : apply_expr :=
 
 (* What is known in the body of a [Let] of [x] to [d]: nothing of the old
    [x], and that the new one is [d] if that is a [Simple] or a closure not
-   mentioning it. *)
+   mentioning it. If [d] is a store, the new [x] is the constant unit:
+   a store has a value only where it returns that constant
+   (../../rocq/FlambdaHeapSpec.exec_heap_primitive, whose two cases of a
+   store end with [unit_value]). *)
 Definition typing_env_under_let (tenv : typing_env) (x : variable) (d : named)
     : typing_env :=
   match d with
@@ -197,6 +213,8 @@ Definition typing_env_under_let (tenv : typing_env) (x : variable) (d : named)
     if var_in_value_slots x slots
     then drop_var x tenv
     else (x, Closure_of code slots) :: drop_var x tenv
+  | Prim (Heap (Block_set _ _ _ | Array_set _ _)) _ =>
+    (x, Equals (Const (Tagged_immediate 0))) :: drop_var x tenv
   | Prim _ _ | Closure_of_set _ _ _ | Project_value_slot _ _
   | Project_value_slot_from _ _ _ | Project_function_slot _ _ _ =>
     drop_var x tenv
