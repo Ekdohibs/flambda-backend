@@ -1291,7 +1291,48 @@ it gave back.
   rests on them. The line says which asking validated the unit,
   and not that a call was inlined: a choice may have no place, the
   rewrite may leave a call that it has, and the term is renamed
-  apart in any case. The comparison of the
+  apart in any case.
+  Where none of the functions above validates them, and the term
+  after makes by a `Let`, in its code too, a set of closures of
+  code that the term before does not bind, the tool guesses
+  liftings and, beside the last of them, copies of code for sets
+  of closures that a `Let` makes; where its search finds copies
+  that change the term, it calls
+  `FlambdaValidateCopyingSpec.validate_unit_copying` on the same
+  two terms converted, with those liftings and copies, or, where
+  that does not validate them, `validate_unit_knowing_copying` on
+  the same. Where one of them validates them, it prints that
+  answer as it is, with one line more under it: "(asked of the
+  term before with copies of code for the sets of closures that a
+  Let makes)". Those two functions ask `validate_unit` and
+  `validate_unit_knowing` of the term after and of a term that
+  they make of the term before
+  (`FlambdaValidateCopyingSpec.before_copied`: the term before
+  after the same initial preprocessing as `validate_unit`
+  (`demote_stub_calls`, `cut_returns`, then `loopify_unit`); then
+  the liftings given, each followed by its rounds; then one
+  lifting more, with no round after it; then
+  `FlambdaCopyLetsSpec.with_let_copies` of the copies, by which a
+  `Let` at a place given makes its closures of a copy of its
+  code, bound under the code ids given); what is proved of them
+  is of the two terms that they are given, each run
+  on its own from empty environments
+  (`validate_unit_copying_sound_statement`,
+  `validate_unit_knowing_copying_sound_statement`), as the term
+  that they make refines the term before so run, whatever the
+  liftings and the copies are
+  (`before_copied_program_refines_statement`). That term is not
+  stated to refine the term before under all environments, as the
+  terms of the reading and of the inlining are: a closure that a
+  `Let` makes holds its code ids, so the two runs differ in the
+  closures of the `Let`s copied, and a copy is made only of a term
+  that exits with symbols and constants only and has no primitive
+  of the heap, which are two of its tests. The liftings and the
+  copies are the tool's guess, and nothing that is proved rests on
+  them. The line says which asking validated the unit, and not
+  that a copy was made: a copy whose tests fail is not made, and
+  the function then answers of the term without it.
+  The comparison of the
   two runs that it also prints is a test of one run, and no theorem is
   about it.
   For a unit that has imports (the entry "Symbols that a unit does not
@@ -1427,7 +1468,32 @@ it gave back.
   are those of the asking whose verdict it reports. The term that
   the tool computes by the same function with nothing lifted, for
   the search of the liftings, is not trusted: the theorem holds
-  whatever is guessed. Where the test accepts the verdict, the
+  whatever is guessed.
+  For a verdict of one of the two functions of
+  `FlambdaValidateCopyingSpec.v` the theorem from the imports
+  (`validate_unit_copying_verdict_imports_statement`,
+  `validate_unit_knowing_copying_verdict_imports_statement`) has
+  the same two tests, asked of the term after and of the term that
+  `before_copied` gives for the term before, with the rounds, the
+  loops, the liftings before the copies, the copies, the liftings
+  of the asking and the list of calls of the asking, and not of
+  the term before as converted; and it has one test more,
+  `FlambdaValidateCopyingSpec.before_copied_holds_from`, with the
+  same rounds, loops, liftings and list of calls: the tests of the
+  liftings that `before_copied` makes before the copies, each with
+  the rounds that follow it but the last, which has none, on the
+  terms that `before_copied` applies them to. The copies ask
+  nothing of the imports. The tool computes that term and that
+  test itself, by the two functions as they are extracted, and the
+  line begins "validated with its imports" only where both tests
+  pass. Trusted of those calls besides: that the arguments which
+  the tool gives `before_copied` and `before_copied_holds_from`
+  there are those of the asking whose verdict it reports. The
+  search that finds the liftings before the copies, and the term
+  that the tool computes by `before_copied` with nothing lifted,
+  for the search of the liftings of the asking, are not trusted:
+  the theorem holds whatever is guessed.
+  Where the test accepts the verdict, the
   line
   begins "validated with its imports", and the verdict is of the two
   runs that the tool shows. Where the validator accepts and the test
