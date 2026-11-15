@@ -194,9 +194,13 @@ Definition unit_value : value := Value_const (Tagged_immediate 0).
    [Array_set (Values, Values Initialization)] on the block, seen
    through [Opaque_identity]
    (from_lambda/lambda_to_flambda_primitives.ml). Here an [Array_set]
-   on a block has no value, and the conversion refuses the set kind
-   that is marked so, which would be [Set_values Initialization]
-   (decision 4). Decision 5 of requests/C4-heap.md. *)
+   on a block has no value. The conversion refuses the set kind that
+   is marked so, which would be [Set_values Initialization], where the
+   term that it is given carries the mark. A term read from the text
+   that the compiler prints does not carry it: the text has no set
+   kind for an [Array_set] at the array kind of values, and the store
+   is read as an assignment and converted. A run that comes to it is
+   undefined (decision 4). Decision 5 of requests/C4-heap.md. *)
 (* CR mshinwell: [Make_mutable_array] of no argument has no value. The
    compiler does not allocate the empty array: [Closure_conversion]
    makes a [Pmakearray] of no argument the one static empty array of
@@ -281,19 +285,26 @@ Definition load_allowed (load_mut : mutability) (mut : cell_mutability)
    both mutable and immutable fields, from the first read of an
    immutable field.
    Two things that the front end makes are outside the model by ruling,
-   at every stage, and the conversion refuses them:
+   at every stage:
    - the blocks that tail-modulo-cons builds (lambda/tmc.ml:
      placeholders made [Mutable], filled by stores at a computed field
      marked [Heap_initialization], which come as [Array_set]s on the
      block; the blocks may then be read with immutable loads; R2-18):
      "we can ignore TMC for now
      b/c ... the pass produces broken Lambda code, that needs fixing in
-     the prod compiler";
+     the prod compiler". The conversion does not refuse these stores
+     in a term read from the text that the compiler prints, where they
+     have lost their mark (the note on [Block_set] above
+     [exec_heap_primitive]): they are converted as assignments, and a
+     run that comes to one is undefined, an [Array_set] on a block
+     having no value. Where the run of the term before comes to one,
+     the test tool says that it is undefined, and the validation says
+     nothing of that run;
    - [Duplicate_block] followed by stores, which is the copy of a large
      record for [{ r with ... }] (lambda/translcore.ml,
      [transl_record]; miscompiled today, C4-4): "I think we can not
      model Pduprecord for the moment, it is broken as you say and is
-     being fixed in prod".
+     being fixed in prod". The conversion refuses [Duplicate_block].
    Decision 4 of requests/C4-heap.md. *)
 Definition exec_unary_on_cell (p : unary_primitive) (l : location) (c : cell)
     : option value :=
