@@ -2005,8 +2005,10 @@ removed it:
   (`FlambdaKnownSiblingsSpec.inline_known_sibling_calls`, an
   equivalence). In the second unit a third function of the group
   has the type of the second and another body. The limit that
-  `status/V2.md` describes stays: the calls to leave are chosen by
-  code and not by call.
+  `status/V2.md` described stayed then: what the rounds of the
+  validation do not inline is chosen by code and not by call. The
+  entry of `f2_one_inlined_one_not.ml`, below, says for which
+  calls it is lifted.
 - A value of the unit read from two places
   (`shared_read_slot_and_field.ml`, `shared_read_two_closures.ml`;
   V3's). A value that is computed when the unit runs is held in two
