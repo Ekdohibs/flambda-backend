@@ -1577,6 +1577,15 @@ unit makes a set of closures with the code at that function slot,
 every such set gives the value slot that symbol or constant and, if it
 is a symbol, it is in scope (`slot_held`, `read_code_slot`); a
 `Project_value_slot`, which names no function slot, is left as it is;
+a second pass over the result (`know_code_slots`) changes calls only:
+where a variable is bound to a `Project_value_slot_from` from a
+variable known to be a closure of a code, the result of the first pass
+makes a set of closures with that code at the function slot named, and
+every such set gives the value slot a closure in sight of one code
+(`slot_closure_code`, by the test
+`FlambdaSlotsOfCodeSpec.sets_seen_give`), the variable is known to be
+a closure of that code, and an indirect call of it is made the direct
+call of the code;
 nothing else is rewritten, and the pass is the identity of a unit in
 which a group of static bindings does not bind its static sets of
 closures whole (`groups_whole`);
@@ -1595,7 +1604,26 @@ there (`FlambdaSetsOfCodeSpec.sets_made`), and asks of them only that
 a function slot has a given code, or that a value slot is given a
 given symbol or constant (`fact_closed`; `closed_simple` in
 `slot_held`), so nothing is concluded from the name of a variable read
-outside its scope; in the rounds it comes after the round of
+outside its scope;
+for the second pass it reads the sets that the result of the first
+pass makes, each with what is in sight where it is made
+(`FlambdaSlotsOfCodeSpec.sets_seen`, `closure_sight`: the variables
+that a `Let` above binds to a closure that the `Let` makes, or to the
+projection of a function slot from a variable in sight; a variable is
+in sight until it is bound again, by a `Let` or as a parameter of a
+handler, and none is where the body of code starts), and keeps, of a
+variable that a set gives a value slot, the code of the closure in
+sight that it is, a code id, and not the variable (`set_seen`,
+`simple_seen_code`), so there too nothing is concluded from the name
+of a variable outside its scope; that the sets of a renamed term are
+seen as those of the term are is a lemma of
+`FlambdaClosureOfCodeProofs.v` and not a statement, and the two
+statements above are of the pass with its second pass and have the
+texts that they had; `FlambdaSlotsOfCodeSpec.v` states that a step
+from a state that has what the test gives of a state keeps it
+(`state_slots_give`, `state_slots_give_step_statement`), and none of
+its statements is about a renaming;
+in the rounds it comes after the round of
 `normalise_lifted_calling`, where the lifting asks for it
 (`FlambdaValidateSpec.normalise_lifted_round_own`,
 `normalise_lifted_own`; the field `own_closures_known`, which
@@ -1985,9 +2013,10 @@ Owed:
   scope, open or not, is bound again (`not_a_region`), so it does not
   answer the same of two terms that differ by bound names. Its law under
   a renaming is owed (section 7, a check): that `region_check` of the
-  renamed term with the certificate renamed is `region_check` of the
-  term is not stated, and no action of the renamings on a certificate is
-  defined. The property of states by which
+  renamed term with the certificate and the code of the static
+  environment renamed is `region_check` of the term is not stated, and
+  no action of the renamings on a certificate is defined. The property
+  of states by which
   `region_check_fault_statement` is proved
   (`FlambdaRegionsCheckedSpec.v`) asks that the regions of the state of
   the check are in scope (`check_state_scoped`) and reads the order of
@@ -2050,6 +2079,48 @@ Owed:
   `FlambdaRegionsCheckedSpec.regions_given`, by which the soundness is
   proved, is a test of a state that reads one name, the continuation of
   a jump, which it resolves.
+- A second check of the regions of a term, about their ends
+  (`FlambdaRegionsEndsSpec.ends_check`, with a certificate as
+  `region_check` has one and the two continuations of the unit; the
+  test tool runs it, on a certificate that the tool guesses and that
+  is not trusted; `region_check_ends` is the two checks together, and
+  nothing runs that), is by names as the first is. Its state lists by
+  their variables the regions that are open, those of a `try` and all
+  those in scope (`es_open`, `es_tries`, `es_regions`), and says what
+  each continuation in scope is (`es_conts`, `ends_cont`); its one
+  other field is a flag, which names nothing (`es_stale`). Of the
+  certificate it reads the regions that are open at a handler
+  (`he_open`), and it puts the regions that a jump gives in the place
+  of the parameters that are regions (`entry_at_jump`, by
+  `region_at_jump`), a substitution as in the first check. Whether a
+  handler is entered stale (`enters_stale`) is read off its metadata
+  and, without the option of the check, off the text of its body
+  (`ends_first`), and reads no name. The check compares variables and
+  continuations by equality only. Where it checks a `Let` it refuses
+  one that binds the variable of a region in scope, open or not
+  (`es_regions`), and it refuses such a variable as a parameter of a
+  handler that has an entry; a handler that has no entry is not looked
+  into. So it need not answer the same of two terms that differ by
+  bound names. Its law under a renaming is owed with that of
+  `region_check` (section 7, a check): that `ends_check` of the
+  renamed term, with the certificate, the two continuations and the
+  code of the static environment renamed, is `ends_check` of the term
+  is not stated. The property of states that a run keeps
+  (`state_ends`) reads the order of the symbols drawn as time, as that
+  of the first check does: the frames of plain regions that it asks to
+  be those of the open regions are the ones whose marks were drawn
+  since the running code was entered (`frames_tight`, with the counter
+  at that entry, `eu_floor`, and at the entry of what is run,
+  `bottom`; where the state of the check is stale, those drawn before
+  its newest open region if there is one, and none if there is none,
+  `stale_stop`), and it has `FlambdaRegionsCallsSpec.frames_ordered`
+  as a part. None of the eight statements of the file is about a
+  renaming. `validated_and_ends_statement` is of a run of the term
+  before that exits through the return continuation that the check is
+  given: it has the premises of
+  `validated_and_checked_exits_agree_statement`, the comparison up to
+  bound names among them (`expr_eqb [] []`), and `ends_check` of the
+  term after.
 
 ## 10. The compiler's side
 
