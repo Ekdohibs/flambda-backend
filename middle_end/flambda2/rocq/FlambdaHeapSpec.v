@@ -187,8 +187,15 @@ Definition unit_value : value := Value_const (Tagged_immediate 0).
    block. The front end makes no such store: every store of lambda/ is
    into a record with a mutable field, a [ref], an object, a copy made
    by [Pduprecord] or a placeholder of tail-modulo-cons. [init] does not
-   change what the store does; the only stores marked [Initialization]
-   are those of tail-modulo-cons, which the conversion refuses
+   change what the store does. The front end makes no [Block_set]
+   marked [Initialization]: the only stores that it marks so are those
+   of tail-modulo-cons (lambda/tmc.ml), which are stores at a computed
+   field and come as the compiler's
+   [Array_set (Values, Values Initialization)] on the block, seen
+   through [Opaque_identity]
+   (from_lambda/lambda_to_flambda_primitives.ml). Here an [Array_set]
+   on a block has no value, and the conversion refuses the set kind
+   that is marked so, which would be [Set_values Initialization]
    (decision 4). Decision 5 of requests/C4-heap.md. *)
 (* CR mshinwell: [Make_mutable_array] of no argument has no value. The
    compiler does not allocate the empty array: [Closure_conversion]
@@ -276,8 +283,10 @@ Definition load_allowed (load_mut : mutability) (mut : cell_mutability)
    Two things that the front end makes are outside the model by ruling,
    at every stage, and the conversion refuses them:
    - the blocks that tail-modulo-cons builds (lambda/tmc.ml:
-     placeholders made [Mutable], filled with [Heap_initialization],
-     then read with immutable loads; R2-18): "we can ignore TMC for now
+     placeholders made [Mutable], filled by stores at a computed field
+     marked [Heap_initialization], which come as [Array_set]s on the
+     block; the blocks may then be read with immutable loads; R2-18):
+     "we can ignore TMC for now
      b/c ... the pass produces broken Lambda code, that needs fixing in
      the prod compiler";
    - [Duplicate_block] followed by stores, which is the copy of a large
