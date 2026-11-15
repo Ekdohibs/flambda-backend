@@ -108,7 +108,7 @@ unit made from OCaml.
   of regions: passes before, passes after", or what failed or was
   not run. No verdict depends on that line; `rocq/TRUST-LEDGER.md`, "The
   check of regions", says what it rests on and what it does not say. The
-  tool prints the line of 108 of the 536 units of this directory, and it
+  tool prints the line of 108 of the 538 units of this directory, and it
   says "passes before, passes after" of each. The regions around a `try`
   are dropped in the same way: the
   handler ends the regions that the body had open when it raised, and
@@ -636,7 +636,7 @@ Simplify does to it. Steps are those of the machine, before and after
 Simplify. The names in brackets are the streams whose work in progress
 is the rewrite that is missing.
 
-536 sources: 446 validated; 2 validated when asked of the term before
+538 sources: 448 validated; 2 validated when asked of the term before
 with its known immutable arrays read, which is another function than the
 others are asked of; 4 validated when asked of the term before with
 chosen calls inlined first, which is another function again; 1 validated
@@ -816,17 +816,18 @@ imports); 2 undefined in the model; 5 not checked.
 | `gadt_equal_indices_pair.ml` | 53, 40 | `submodule.ml` | 27, 1 |
 | `gadt_existential_match.ml` | 38, 8 | `succ_pred.ml` | 12, 5 |
 | `gadt_known.ml` | 35, 4 | `sums_of_two_sorts.ml` | 341, 182 |
-| `gadt_refutation_clause.ml` | 67, 50 | `tag_known_in_arm.ml` | 91, 52 |
-| `get_after_own_bounds_test.ml` | 56, 37 | `tail_call_after_region.ml` | 171, 153 |
-| `guard_falls_to_later_case.ml` | 151, 92 | `tail_loop.ml` | 128, 83 |
-| `guard_on_or_pattern.ml` | 132, 84 | `tail_nontail_annot.ml` | 175, 157 |
-| `helper_called_through_slot.ml` | 33, 12 | `test_boolean_twice.ml` | 39, 18 |
-| `helper_inlined_in_closure.ml` | 28, 17 | `three_arms_same_sum.ml` | 24, 5 |
-| `hidden_helper_inlined_twice.ml` | 46, 22 | `toplevel_closure_applied_mutual.ml` | 84, 40 |
-| `higher_order.ml` | 32, 5 | `tree_root.ml` | 90, 4 |
-| `hof_closure_in_record.ml` | 49, 22 | `try_no_raise.ml` | 14, 5 |
-| `hof_option_of_closure.ml` | 125, 47 | `try_returned_exported.ml` | 11, 9 |
-| `hof_two_closures_through_join.ml` | 65, 54 | `tuple_match.ml` | 75, 1 |
+| `gadt_refutation_clause.ml` | 67, 50 | `table_and_array_alike.ml` | 24, 20 |
+| `get_after_own_bounds_test.ml` | 56, 37 | `tag_known_in_arm.ml` | 91, 52 |
+| `guard_falls_to_later_case.ml` | 151, 92 | `tail_call_after_region.ml` | 171, 153 |
+| `guard_on_or_pattern.ml` | 132, 84 | `tail_loop.ml` | 128, 83 |
+| `helper_called_through_slot.ml` | 33, 12 | `tail_nontail_annot.ml` | 175, 157 |
+| `helper_inlined_in_closure.ml` | 28, 17 | `test_boolean_twice.ml` | 39, 18 |
+| `hidden_helper_inlined_twice.ml` | 46, 22 | `three_arms_same_sum.ml` | 24, 5 |
+| `higher_order.ml` | 32, 5 | `toplevel_closure_applied_mutual.ml` | 84, 40 |
+| `hof_closure_in_record.ml` | 49, 22 | `tree_root.ml` | 90, 4 |
+| `hof_option_of_closure.ml` | 125, 47 | `try_no_raise.ml` | 14, 5 |
+| `hof_two_closures_through_join.ml` | 65, 54 | `try_returned_exported.ml` | 11, 9 |
+| `iarray_element_read_twice.ml` | 25, 19 | `tuple_match.ml` | 75, 1 |
 | `iarray_in_function.ml` | 21, 14 | `tuple_return.ml` | 20, 5 |
 | `iarray_length_of_any_not_inlined.ml` | 19, 14 | `tuple_swap.ml` | 19, 4 |
 | `iarray_literal.ml` | 11, 5 | `tuple_through_kept_identity.ml` | 19, 12 |
@@ -1177,9 +1178,10 @@ removed it:
   (`FlambdaUnusedProjectionsSpec.v`).
 - A recursive function that the unit keeps and calls (`fib.ml`,
   `list_map.ml`, `factorial.ml`): each round inlined the call once
-  more on both sides. The validator is told which calls to leave
-  (`FlambdaNormaliseSpec.inline_calls`), and the test tool names the
-  recursive code and the code that the term after still calls.
+  more on both sides. The validator is told the code that it is not
+  to inline (`FlambdaNormaliseSpec.inline_calls`), and the test tool
+  names the recursive code and the code that the term after still
+  calls.
 - A function that is never inlined, given to one that always is
   (`exported_twice_kept.ml`): the same list, and the indirect call of
   a symbol that the unit binds to a closure made direct
@@ -1307,9 +1309,9 @@ removed it:
   `list_rev.ml`): where the two terms are not the same as given, the
   validator makes loops of the self tail calls of the code it is told
   (`FlambdaLoopifySpec.v`), and the tool names the code that the front
-  end marks for it. The recursive code is in the list of code to
-  leave, so the call of the function stays on both sides and the two
-  bodies are compared.
+  end marks for it. The recursive code is in the list of the code
+  not to inline; in these units the call of the function stays on
+  both sides, and the two bodies are compared.
 - A parameter of a loop that is only passed round the loop
   (`while_unused_counter.ml`): removed (`FlambdaDeadParamsSpec.v`).
 - A continuation applied once that Simplify leaves in the term after,
@@ -1816,9 +1818,9 @@ removed it:
   (`local_loop_inlined.ml`; V4's): an exported function whose body
   is a local tail-recursive function, marked to be inlined, and its
   one call. Simplify makes a loop of the local function and inlines
-  it. Both lists of calls to leave that the tool tried had the
-  local function, as recursive code, so the term before kept the
-  call where the term after has the loop. The tool has a third
+  it. Both lists of the code not to inline that the tool tried had
+  the local function, as recursive code, so the term before kept
+  the call where the term after has the loop. The tool has a third
   list, in which code that is recursive by its self tail calls
   alone is not recursive ("What a check costs").
 - A match that Simplify makes two tables of, or a table and a
@@ -1949,7 +1951,8 @@ removed it:
   where the first is still known. In the model a boxed number is
   its contents, so the pass stays an equivalence; the header of
   that file has the question that this leaves for the human
-  (decision D42). Blocks and arrays are not shared.
+  (decision D42). The primitives that make a block or an array are
+  not shared.
 - A flag that a loop tests and keeps (`flag_and_test_in_loop.ml`,
   `flag_or_test_in_loop.ml`, `flag_or_test_then_count.ml`,
   `two_flags_and_or_in_loop.ml`; N3's). A loop sets a flag kept in
@@ -2324,6 +2327,54 @@ removed it:
   verdicts mean" says what is guessed and what is proved). At the
   default flags, which are those of the tests of this directory, the
   unit is validated so, and is counted apart.
+- A match that Simplify makes a table of, in a unit that has an
+  immutable array with the same elements (`table_and_array_alike.ml`;
+  V3's). A function matches four constructors to four integers that
+  follow no rule, and a second function reads an immutable array of
+  the source that has the same four. The term after binds two symbols
+  to static arrays with the same elements, the table and the array of
+  the source. The liftings are a guess of the tool: a symbol that the
+  term after binds and the term before does not goes to the first
+  `Let` of the term before that the tests of the guess find to make
+  what the symbol is bound to, and a symbol of an immutable array that
+  is left is bound as a table at the head of the term before (the
+  entry of `match_constant_table.ml`, above). The symbol of the table
+  went to the `Let` of the array; the two terms were then the same but
+  for those two symbols exchanged, and the unit was not validated.
+  Where the function asked refuses the first guess of an asking, and
+  that guess gave a `Let` the symbol of an immutable array of which
+  the term after has a twin (another symbol that the term after binds
+  to an array with the same elements, and that the term before does
+  not bind), the tool now guesses the liftings again with such pairs
+  left out, three times at most, each time from the guess before, and
+  asks the function of each new guess. It gives the first answer that
+  is a verdict; where there is none, the answer is that of the first
+  guess. Only the `Let`s that a lifting lifts where they stand or to
+  the head of the unit are looked at, and only an asking that has no
+  search kept from an earlier one guesses again so. A guess is not
+  trusted: the verdict is that of the function asked. No definition
+  and no statement changes for this, and the tool prints no new line.
+  The unit is validated, at the default flags and with `-O3`; its
+  verdict has the words of the tables bound in the term before ("What
+  the verdicts mean").
+- An element of an immutable array read twice
+  (`iarray_element_read_twice.ml`; V3's, the proof P1's). A function
+  that Simplify does not inline loads one element of its argument
+  twice, and Simplify shares the two loads. The sharing of primitives
+  now takes the load of an element of an immutable array (`Array_load`
+  marked `Immutable` or `Immutable_unique` in
+  `FlambdaCseSpec.shareable`): a later `Let` of the same primitive
+  applied to the same arguments has the variable of the first as its
+  defining expression, while the first is still among what the pass
+  has recorded. The pass compares the primitive and the arguments as
+  they are written, and not what array or what element they stand for.
+  In the model such a load has no value on an array that has an
+  identity, which a store can change (decision D49, as it stands), so
+  where the first has a value the array is an immutable array or a
+  symbol bound to one, and the second has the same value; the comment
+  at the definition says what would take the case out. A load marked
+  `Mutable` is not shared. The unit is validated, at the default flags
+  and with `-O3`.
 
 A count over 600 units made at random is in `census/README.md`, with
 one over 240 more that have exceptions, loops and recursive functions.
@@ -2387,13 +2438,22 @@ its code too, a set of closures of code that the term before does not
 bind, attempts are made of the term before with copies of code for
 such sets, once, with the rounds that the lines under the verdict
 name (the same section).
-The 536 units here were checked in 10.6 seconds of processor time
-together in one run (5.0 user, 5.6 system), and in 10.4 in a second run
-of the same tool (4.9 and 5.5): more than half of each is the system's
+Where the function asked refuses the first guess of an asking that
+has no search kept from an earlier one, and that guess gave a `Let`
+the symbol of an immutable array which has a twin in the term after,
+the liftings are guessed again and the function asked again, three
+times at most (the entry of `table_and_array_alike.ml`, in the list
+above).
+The 538 units here were checked in 10.7 seconds of processor time
+together in one run (5.3 user, 5.5 system), and in 10.7 in a second run
+of the same tool (5.2 and 5.5): more than half of each is the system's
 part. Other builds ran on the machine during both. In two runs made one
-after the other with the same inputs and flags, on the 529 units that
-the directory had at 5a514806c3, the tool of that commit took 10.3
-seconds and the tool of this tree 10.2. On the 516 units that the
+after the other with the same inputs and flags, on the 536 units that
+the directory had at 255f6a36c2, the tool of that commit took 10.5
+seconds and the tool of this tree 10.5. On the 529 units that the
+directory had at 5a514806c3, in two such runs, the tool of that commit
+took 10.3 seconds and the tool of 9c6e3fc02c took 10.2. On the 516 units
+that the
 directory had at b006dd4b0d, in two such runs, the tool of that commit
 took 10.5 seconds and the tool of 24cd3c9252 took 10.6; when it was
 measured at that commit, the tool of b006dd4b0d took 16.1 and 14.0.
@@ -2542,7 +2602,7 @@ compared.
   `option_bind`, `option_map`, `polymorphic_variant`,
   `project_record_two_levels`, `record_update`, `result_map`,
   `same_field_chain_twice` and `tree_root`.
-  Of the 205 units that have entered since, 32 have:
+  Of the 207 units that have entered since, 32 have:
   `stack_argument_result_returned`, whose source says `local_` of a
   parameter, the first source of this directory that does, and 31 that
   entered after it: `attr_local_in_match`, `clos_partial_local`,
@@ -2563,7 +2623,7 @@ compared.
   `tupled_partial_application`, `twice_nested_same_scrutinee` and
   `var_twelve_mixed`. Twelve of the 31 say `local_` in the source. Each
   unit is looked at so before it enters. By the same print, the term
-  before Simplify of 63 of the 536 units of this directory has an
+  before Simplify of 63 of the 538 units of this directory has an
   allocation mode that names a region, on
   an allocation or on a call ("What the conversion does to a unit" says
   what is made of regions). What was run for the

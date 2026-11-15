@@ -240,12 +240,12 @@ the clock, which measured what else the machine was running:
 `loops_scalar`, seed 55, which was without an answer in 60 seconds
 the day before, then took 16 seconds of processor time, then 4,
 then 7 with the tool of 87cdbf3e01, and takes 3.6 now, the most of the
-240 (2.7 with the tool of 5a514806c3, in a run made just before). The
-240 took 13.6 seconds of processor time together in one run (11.2 user,
-2.5 system), and 13.7 in a second run of the same tool (11.0 and 2.6).
+240 (3.6 with the tool of 255f6a36c2, in a run made just before). The
+240 took 13.5 seconds of processor time together in one run (10.9 user,
+2.6 system), and 13.7 in a second run of the same tool (11.1 and 2.6).
 Other builds ran on the machine during both: in two runs made one after
-the other with the same inputs and flags, the tool of 5a514806c3 took
-13.1 and the tool of this tree 13.7. These are totals of processor time
+the other with the same inputs and flags, the tool of 255f6a36c2 took
+13.8 and the tool of this tree 13.7. These are totals of processor time
 on a machine whose processors the runs shared with other builds under
 one quota: they are not a comparison of the speed of two tools run
 alone. The tool of this tree converts the two terms of a unit that was
@@ -256,11 +256,15 @@ check, which that tool made: the validation of the term before with its
 known arrays read, liftings whose rounds make direct the calls of the
 closures that a `Let` makes or use what `my_closure` is known to be from
 its code, the validation of the term before with chosen calls inlined
-first, and that of the term before with copies of code for the sets of
-closures that a `Let` makes, each where the tool's conditions for it
+first, that of the term before with copies of code for the sets of
+closures that a `Let` makes, and the liftings guessed again where two
+static arrays of the term after are alike (`../README.md`, the entry of
+`table_and_array_alike.ml`), each where the tool's conditions for it
 hold and no answer that it has kept serves; 5 of the 240 are not
 validated, where 25 were with the tool of ca84b4345c. When it was
-measured there, the tool of 24cd3c9252 took 13.2 and 13.1, and 13.7 in a
+measured there, the tool of 9c6e3fc02c took 13.6 and 13.7, the second in
+a run made just after one of the tool of 5a514806c3, which took 13.1;
+the tool of 24cd3c9252 took 13.2 and 13.1, and 13.7 in a
 run made just after one of the tool of b006dd4b0d, which took 14.4. When
 it was measured at that commit, the tool of b006dd4b0d took 17.8 and
 18.3. When the search of the second check came, in two runs made one
@@ -284,10 +288,12 @@ made, with the tool before it and the tool after: 79 seconds and 12
 for the 240, 30 and 16 for the 600, and no output of the 840
 differs between the two. What else came between the two tools was
 not measured for its cost on these units one change at a time. The 600
-took 12.3 seconds in the first of those two runs (6.0 user, 6.3 system)
-and 12.5 in the second (6.1 and 6.4), and the tool of 5a514806c3 12.3 in
+took 12.5 seconds in the first of those two runs (6.2 user, 6.3 system)
+and 12.6 in the second (6.2 and 6.4), and the tool of 255f6a36c2 12.2 in
 a run made just before the second; when it was measured there, the tool
-of 24cd3c9252 took 12.8 and 12.7, and 13.5 in a run made just after one
+of 9c6e3fc02c took 12.3 and 12.5, and the tool of 5a514806c3 12.3 in a
+run made just before the second of them; the tool of 24cd3c9252 took
+12.8 and 12.7, and 13.5 in a run made just after one
 of the tool of b006dd4b0d, which took 13.1; when it was measured at that
 commit, the tool of b006dd4b0d took 19.1 and 18.8, and the tool of
 ca84b4345c, at its commit, 17.1 and 14.7. They took 33 with the tool of
@@ -351,12 +357,19 @@ lost; it was not sorted by what validates it. Of the other 239 units of
 the 240, and of each of the 600, the tool of 5a514806c3 prints what the
 tool of b006dd4b0d printed, byte for byte, but for the line of the check
 of regions, which 232 of the 240 and 555 of the 600 gain.
-Between the tool of 5a514806c3 and the tool of this tree, at the default
-flags: the four units counted apart above have the verdict of the
-function that makes the copies, with its line, and were not validated;
-none is lost. Of the other 236 units of the 240, and of each of the 600,
-the tool of this tree prints what the tool of 5a514806c3 printed, byte
-for byte.
+Between the tool of 5a514806c3 and the tool of 255f6a36c2, at the
+default flags: the four units counted apart above have the verdict of
+the function that makes the copies, with its line, and were not
+validated; none is lost. Of the other 236 units of the 240, and of each
+of the 600, the tool of 255f6a36c2 prints what the tool of 5a514806c3
+printed, byte for byte.
+Between the tool of 255f6a36c2 and the tool of this tree, at the default
+flags and with `-O3`: of each of the 240 and of each of the 600, the
+tool of this tree prints what the tool of 255f6a36c2 prints, byte for
+byte. What came between the two, the load of an element of an immutable
+array among the primitives that the validation shares and the liftings
+guessed again where two static arrays of the term after are alike, turns
+none of these units.
 Six were validated when it went from 207 to 213,
 none lost: three by the liftings to a group of static bindings
 around (`FlambdaLiftAroundSpec.lift_around_unit`, V3's; `loops`,
