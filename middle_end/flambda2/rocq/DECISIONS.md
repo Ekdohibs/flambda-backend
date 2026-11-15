@@ -376,6 +376,75 @@ a `CR` at the place in the `Spec` file.
   rightly; or no test at the store, the fault being left to D45 where
   the value is read, and then a cell may hold a pointer to freed
   memory. Decided, for the review of the human.
+- **D55.** What the second verdict of regions, about ends, refuses.
+  `FlambdaRegionsEndsSpec.ends_check` is a test of a term beside the
+  check of regions, with the same certificate. Of a term that passes
+  it, the run on the machine of regions from its first state, where
+  it exits through the return continuation that the check was given,
+  leaves no frame of a plain region (`ends_unit_exit_statement`). Of
+  the body of code that passes, run on its own from a state whose
+  frames are in the order of their marks, whose static environment
+  has only code that passes and which binds no continuation, an exit
+  through its return continuation leaves the plain frames that the
+  stack had (`ends_code_return_statement`). Nothing of D48 changes:
+  the machine has no new fault, and a region that nothing ends is
+  still not one. What the verdict refuses is a choice, in three
+  parts. (1) A handler may be entered stale: frames that no region
+  open in the check accounts for may be above its newest open
+  region, and nothing in the term says that there are none. An
+  exception handler is entered stale, for the frames that a raise
+  left. Without the option of (3), so is a handler whose body ends a
+  region before any other primitive of regions and before anything
+  that is not a `Let` or a `Let_static`, for the frames of the
+  regions that a jump to it left open: the front end makes such a
+  jump on purpose where control leaves several regions at once, to
+  the continuation that ends the outermost of them
+  (`from_lambda/lambda_to_flambda.ml`, the comment in the case of
+  `Lregion`). A stale state may not begin a region, jump to a
+  handler that is not entered stale, or return, until it ends a
+  region, which pops those frames. So an exception handler that
+  begins and ends a region of its own before it ends the region of
+  its `try` is refused, though its run leaves nothing, and one that
+  is entered with no region stays stale. The front end makes the
+  handler of
+  a `try` end the region of the `try` first (the same file,
+  `Ltrywith`), and Simplify removes the end of a region that is not
+  used only where it is an `End_region`
+  (`simplify/simplify_let_expr.ml`,
+  `Flambda_primitive.is_end_region`). (2) Regions of a `try` are
+  left out: one may be forgotten at a jump and be open where code
+  returns, because the front end ends it in the handler only (the
+  body of a `try` may return a local value). The verdict says
+  nothing of the frames of a `try`, nor of what they hold. A
+  parameter that is a region is taken to be plain whatever it is
+  given, so a term may still be refused for the region of a `try`
+  that a handler is given at a parameter. (3) The option
+  `eo_own_end`. With it, the regions that the check has open above
+  a region that is ended must be of a `try`, and only a handler that
+  is marked as an exception handler is entered stale. That is a
+  test of the regions that the check follows, and what is proved of
+  it is of one step, from a state that is not stale
+  (`ends_own_end_statement`). The option is there to refuse an end
+  that pops the frame of another plain region, and the front end's
+  jump out of several regions leads to one: with the option that
+  jump is refused, and without it it is no longer a reason to refuse
+  a term. Of the control
+  `tests/semantics/regions/region_inner_ended_by_outer.fl` the
+  verdict says "accepted" without the option and "refused" with it.
+  The option also refuses what Simplify makes where it splits an
+  application with too many arguments (D48). A first form of
+  the verdict let only an exception handler be entered stale, and
+  so refused the front end's jump with or without the option,
+  whatever the certificate, though the run leaves no plain frame.
+  That was found by running the check on the generated units of
+  `tests/semantics/ocaml/census`, the term before Simplify of 17 of
+  840 of which it refused, and then on units in which the local
+  value is used, where Simplify keeps the jump. The other choices:
+  for (1), the exact rule, which records where among the open
+  regions the frames that were left are; for (3), one of the two
+  forms alone. It would be wrong if the compiler makes, on purpose,
+  a handler of an exception that goes on working with what the
+  raise left on the stack. Decided, for the review of the human.
 
 ## Discrepancies with the compiler
 
