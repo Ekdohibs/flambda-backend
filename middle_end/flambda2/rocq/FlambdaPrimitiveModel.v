@@ -166,7 +166,7 @@
    - The conversion must refuse an [Array_set] whose array kind is
      [Values] and whose set kind is not. The front end makes none, and
      Simplify stops on one unless the type of the array lets it change
-     the array kind to [Immediates] first
+     the array kind to [Immediates] first, or make the store [Invalid]
      ([Simplify_ternary_primitive.simplify_array_set], after
      [Simplify_common.specialise_array_kind]).
 
