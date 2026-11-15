@@ -168,6 +168,13 @@ design out; that is the request, not the change.
     by a run) and `middle_end/flambda2/rocq/FlambdaClosureOfCode*`
     (in the body of code, what `my_closure` is known to be from its
     code is used, for the validator; S4's once it is staffed)
+  - `middle_end/flambda2/rocq/FlambdaSlotsOfCode*` (the code of the
+    closure that every set of closures of a unit with a code at a
+    function slot gives a value slot, where each of them gives it a
+    closure in sight of one code, with a property of states that a
+    step keeps; for the second pass of
+    `FlambdaClosureOfCodeSpec.know_own_closures`; S4's once it is
+    staffed)
   - `middle_end/flambda2/rocq/FlambdaRegionsErasedProofs.v` and
     `middle_end/flambda2/rocq/FlambdaRegionsPlainStepProofs.v` (for
     C2's erasure of regions: the relation between a state of the
