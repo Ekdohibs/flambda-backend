@@ -263,7 +263,9 @@ static arrays of the term after are alike (`../README.md`, the entry of
 hold and no answer that it has kept serves; 5 of the 240 are not
 validated, where 25 were with the tool of ca84b4345c. When it was
 measured there, the tool of 9c6e3fc02c took 13.6 and 13.7, the second in
-a run made just after one of the tool of 5a514806c3, which took 13.1;
+a run made just after one of the tool of 5a514806c3, which took 13.1
+(`../README.md`, "What a check costs", says with which build the times
+of the tool of 9c6e3fc02c were measured);
 the tool of 24cd3c9252 took 13.2 and 13.1, and 13.7 in a
 run made just after one of the tool of b006dd4b0d, which took 14.4. When
 it was measured at that commit, the tool of b006dd4b0d took 17.8 and

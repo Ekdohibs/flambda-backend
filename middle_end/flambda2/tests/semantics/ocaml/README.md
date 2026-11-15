@@ -2452,8 +2452,13 @@ after the other with the same inputs and flags, on the 536 units that
 the directory had at 255f6a36c2, the tool of that commit took 10.5
 seconds and the tool of this tree 10.5. On the 529 units that the
 directory had at 5a514806c3, in two such runs, the tool of that commit
-took 10.3 seconds and the tool of 9c6e3fc02c took 10.2. On the 516 units
-that the
+took 10.3 seconds and the tool of 9c6e3fc02c took 10.2. The times given
+for the tool of 9c6e3fc02c, here and in `census/README.md`, were
+measured with the build that C3 made of its series of the copies of
+code, when that series was closed, and not with a build made at
+9c6e3fc02c: the source of the tool is the same, and between the two
+the Rocq files change in comments only, but for two files that the
+tool is not extracted from. On the 516 units that the
 directory had at b006dd4b0d, in two such runs, the tool of that commit
 took 10.5 seconds and the tool of 24cd3c9252 took 10.6; when it was
 measured at that commit, the tool of b006dd4b0d took 16.1 and 14.0.
