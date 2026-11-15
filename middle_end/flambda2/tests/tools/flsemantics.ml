@@ -3082,7 +3082,39 @@ let code_versions : (Model.code_id * Model.code_id) list ref = ref []
    part is a guess as the others are: FlambdaLiftAroundSpec.around_ok checks the
    aliases and the groups, and the comparison of the two terms the rest. The
    caller asks for this from the second lifting on, where the term is
-   normalised. *)
+   normalised.
+
+   Where the search of an asking ends in a refusal, [ask] makes the search once
+   more with [second_guess] set, unless the asking asks nothing ([probe]). The
+   guess then differs from the first in two choices.
+
+   Where it gives the [Let], outside code, of a closure with no value slot a
+   symbol of the term after, that [Let] is given to the lifting to the head of
+   the unit (FlambdaLiftFromArmsSpec.lift_to_head) and is not lifted where it
+   stands. Simplify binds such a closure at the head. Lifted where its [Let]
+   stands, under a [Let] that stays, its binding stays under that [Let], and
+   code that names its symbol is bound above it: the last comparison, which
+   binds first what mentions no variable
+   (FlambdaValidateSpec.with_statics_first), then leaves the term before as it
+   is. A closure that is given symbols which neither term has is lifted where
+   its [Let] stands, as in the first guess.
+
+   Where it chooses the symbol of a [Let] of a block that has a field and whose
+   fields are all variables of which nothing is known, it prefers, among the
+   symbols that fit as in the first guess, one whose block has a variable among
+   its fields, and takes the first that fits if there is none. Such a [Let]
+   agrees with any block of its tag and size, and the first guess can give it
+   the symbol of a block of constants that the term before makes only once a
+   call is inlined, which the list of the constants made exactly, read off the
+   term as it is given, has not got.
+
+   Neither choice is in the first guess: given to every guess, the first of the
+   two loses units that are validated without it (a closure given to the head
+   whose code is bound below the head in the term before). Nothing is believed
+   of the second search either: every lifting that it proposes is checked by the
+   function that makes it. *)
+let second_guess = ref false
+
 let lifting_guess ~unit ~(banned : (Lift.path * Model.symbol) list) ~around
     ~let_copies (before : Model.expr) (after : Model.expr) : Lift.lifting =
   (* The symbols bound outside code, in the order in which they are bound when
@@ -3532,6 +3564,19 @@ let lifting_guess ~unit ~(banned : (Lift.path * Model.symbol) list) ~around
   in
   let to_head = ref [] in
   let to_head_given = ref [] in
+  (* The lifting of the [Let], outside code, of a closure that is given a symbol
+     of the term after: to the head of the unit for a closure with no value slot
+     in the second guess, and where the [Let] stands otherwise. *)
+  let lift_closure x path slots (target : Lift.lift_to) =
+    match slots with
+    | [] when !second_guess -> (
+      to_head := (path, target) :: !to_head;
+      match target with
+      | Lift_to_symbol sym ->
+        known_simples := (x, Model.Symbol sym) :: !known_simples
+      | Lift_to_closure_symbols _ -> ())
+    | [] | _ :: _ -> lift x path target
+  in
   (* A symbol, a constant, or a variable met that stands for one. *)
   let known_simple (s : Model.simple) =
     match s with
@@ -3569,7 +3614,7 @@ let lifting_guess ~unit ~(banned : (Lift.path * Model.symbol) list) ~around
               taken
             | taken -> taken)
         with
-        | Some (sym, _) -> lift x path (Lift_to_symbol sym)
+        | Some (sym, _) -> lift_closure x path slots (Lift_to_symbol sym)
         | None -> ())
       | Closure_of_set (slot, decls, slots) -> (
         match
@@ -3607,7 +3652,7 @@ let lifting_guess ~unit ~(banned : (Lift.path * Model.symbol) list) ~around
           (match List.assoc_opt slot symbols with
           | Some sym -> known_simples := (x, Model.Symbol sym) :: !known_simples
           | None -> ());
-          lift x path (Lift_to_closure_symbols symbols)
+          lift_closure x path slots (Lift_to_closure_symbols symbols)
         | Some _ -> ()
         | None ->
           (* A closure whose value slots hold symbols, constants or variables
@@ -3633,13 +3678,40 @@ let lifting_guess ~unit ~(banned : (Lift.path * Model.symbol) list) ~around
             lift x path (Lift_to_closure_symbols symbols)))
       | Prim (Variadic (Make_block (Block_kind_values tag)), fields) -> (
         match
-          take path (fun (const : Model.static_const) ->
-              match const with
-              | Static_const_block (tag', fields') ->
-                tag = tag'
-                && fields_agree fields fields'
-                && not (kept_from fields const)
-              | _ -> false)
+          let fits ~with_a_variable (const : Model.static_const) =
+            match const with
+            | Static_const_block (tag', fields') ->
+              tag = tag'
+              && fields_agree fields fields'
+              && (not (kept_from fields const))
+              && ((not with_a_variable)
+                 || List.exists
+                      (fun (field' : Model.simple) ->
+                        match field' with
+                        | Var _ -> true
+                        | Symbol _ | Const _ -> false)
+                      fields')
+            | _ -> false
+          in
+          (* In the second guess, where the block has a field and its fields are
+             all variables of which nothing is known, a symbol that fits and
+             whose block has a variable among its fields is preferred; the first
+             symbol that fits is taken if there is none. *)
+          let all_unknown =
+            !second_guess
+            && (match fields with [] -> false | _ :: _ -> true)
+            && List.for_all
+                 (fun (field : Model.simple) ->
+                   match field with
+                   | Var x -> not (List.mem_assoc x !known_simples)
+                   | Symbol _ | Const _ -> false)
+                 fields
+          in
+          match
+            if all_unknown then take path (fits ~with_a_variable:true) else None
+          with
+          | Some _ as taken -> taken
+          | None -> take path (fits ~with_a_variable:false)
         with
         | Some (sym, _) -> lift x path (Lift_to_symbol sym)
         | None ->
@@ -6065,6 +6137,60 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
           | Some (made, banned, again) ->
             asked_of (guessed (Some made) banned again))
         | None, None -> answer_of_guesses ()
+      in
+      (* Where that answer is a refusal, the search is made once more with
+         [second_guess] set: the liftings are guessed again from the start, and
+         any that are proposed are checked by the same function ([asked_of]). A
+         verdict of it is the answer. Where it is a refusal too, the answer is
+         the refusal that there was, and what the second search has left in the
+         four references that a guess writes is put back, so that the search
+         kept below is that of the first guesses. No guess is made again without
+         the twins for the second search: [verdict_without_twins] is not called
+         for it. [last_asking_holds] is not put back, as above: after a refusal
+         it is as the last call left it, which may be a call for the second
+         search, and its value is used only of a unit that is validated, by the
+         asking that set it. An asking that asks nothing ([probe]) makes no
+         second search. *)
+      let answer : Validate.validation * Model.expr * string * bool * Model.expr
+          =
+        match probe, answer with
+        | None, (Not_validated, _, _, _, _) -> (
+          let tables = !tables_were_bound in
+          let own_to_know = !own_closures_to_know in
+          let terms = !normalised in
+          let made = !guesses in
+          second_guess := true;
+          let again :
+              Validate.validation * Model.expr * string * bool * Model.expr =
+            Fun.protect
+              ~finally:(fun () -> second_guess := false)
+              (fun () -> asked_of (guessed None [] 5))
+          in
+          match again with
+          | Not_validated, _, _, _, _ ->
+            tables_were_bound := tables;
+            own_closures_to_know := own_to_know;
+            normalised := terms;
+            guesses := made;
+            answer
+          | ( ( Same_up_to_bound_names | Same_once_normalised
+              | Same_once_unused_statics_removed
+              | Same_once_head_statics_removed | Same_once_lifted ),
+              _,
+              _,
+              _,
+              _ ) ->
+            again)
+        | Some _, (Not_validated, _, _, _, _)
+        | ( (Some _ | None),
+            ( ( Same_up_to_bound_names | Same_once_normalised
+              | Same_once_unused_statics_removed
+              | Same_once_head_statics_removed | Same_once_lifted ),
+              _,
+              _,
+              _,
+              _ ) ) ->
+          answer
       in
       (match asked, answer with
       | Some asked, (Not_validated, _, _, _, _)
