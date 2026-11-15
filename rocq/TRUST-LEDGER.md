@@ -2331,7 +2331,15 @@ checked by an extracted function, and `validate_unit_sound` and
   (`sibling_code`), or gives the value slot the same symbol or
   constant (`slot_held`; both by
   `FlambdaSetsOfCodeSpec.sets_made_have`), and a symbol is put in
-  the place of a read only where it is in scope. The rewrite is the
+  the place of a read only where it is in scope. A call of what a
+  value slot of such a closure holds is made direct only where
+  another test of the unit passes, asked of the result of those
+  rewrites: the unit makes a set of closures with that code at that
+  function slot, and every such set gives the value slot a variable
+  that a `Let` in sight binds to a closure of one code
+  (`slot_closure_code`, by
+  `FlambdaSlotsOfCodeSpec.sets_seen_give`); a symbol in a value slot
+  is not counted, whatever it is bound to. The rewrite is the
   identity of a unit one of whose groups does not bind its static
   sets whole. It refines the unit run on its own, from its imports,
   and followed by the observers of `FlambdaObserversSpec.v` at the
