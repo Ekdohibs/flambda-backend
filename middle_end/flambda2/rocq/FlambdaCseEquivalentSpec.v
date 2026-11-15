@@ -31,13 +31,14 @@
    This file is to be reviewed: the statement.
 
    FlambdaCseSpec.v defines [share_known_primitives] and states that
-   its result refines the term; it says that the result is most likely
-   equivalent to the term, and does not claim it. It is
-   ([share_known_primitives_equivalent_statement]). A refinement is
-   what a rewrite of the term before Simplify owes. A rewrite of the
-   term after owes the converse, that the term refines its result; so
-   a rewrite that the validation is to apply to both of the terms that
-   it compares owes the equivalence.
+   its result refines the term. That the result is equivalent to the
+   term is stated here
+   ([share_known_primitives_equivalent_statement]), and that file
+   names this statement for it. A refinement is what a rewrite of the
+   term before Simplify owes. A rewrite of the term after owes the
+   converse, that the term refines its result; so a rewrite that the
+   validation is to apply to both of the terms that it compares owes
+   the equivalence.
 
    Why it holds is in the definition of what the pass knows
    (FlambdaCseSpec.all_computed): a variable known to hold the result
