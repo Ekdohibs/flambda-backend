@@ -84,8 +84,8 @@
      heap, and says when such a cell is dead.
    - [Make_block] has no mutability: it is that of immutable blocks
      ([Immutable], not [Immutable_unique]), and the conversion must
-     refuse the others. So every block that [Make_block] makes is
-     immutable and has no identity: it is a value of the model. At
+     not make it of the others. So every block that [Make_block] makes
+     is immutable and has no identity: it is a value of the model. At
      [Mutable] or [Immutable_unique] the compiler's [Make_block] is
      [Make_block_with_identity], under [Heap] below: that makes a
      cell of the heap, and its value is the location of the cell

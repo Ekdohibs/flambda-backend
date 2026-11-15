@@ -320,6 +320,22 @@ than `Immutable`, block kinds and access kinds other than `Values`,
 and kinds of fields of a block other than `any_value`. `Opaque_identity`
 drops `middle_end_only`.
 
+(Since then the converter refuses fewer of these. For the validation
+it no longer refuses an allocation because its mode is `Local`: it
+converts it as it converts the same allocation on the heap (decision
+D37). Where it converts a term once more with its regions kept, for
+the machine of regions, it says that such an allocation is local by a
+`Local_allocation` after it. A `Block_load` keeps its mutability. And
+a `Make_block` is no longer refused because its mutability is
+`Mutable` or `Immutable_unique`. Where such a block has a field, and
+passes what is asked of an `Immutable` one (a block of values, with as
+many kinds of fields as arguments, every one `any_value`), it is
+converted: not to `Make_block`, which is still made of an `Immutable`
+block only, but to `Make_block_with_identity`, which makes a cell of
+the heap of `FlambdaHeapSpec.v`. The header of
+`FlambdaPrimitiveModel.v` says what the model leaves out as it
+stands.)
+
 Later, as leaf work, in the order the corpus asks for: `Int_shift`, the
 unary `Int_arith`, `Num_conv`, `Boolean_not`, `Phys_equal`,
 `String_length`, `Reinterpret_64_bit_word`; floats need a model of IEEE
