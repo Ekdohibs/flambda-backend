@@ -298,7 +298,13 @@
    rewrite that they are given does: FlambdaUnboxInScopeRenameSpec.v),
    and FlambdaStaticsOrderSpec.order_statics_as, which
    the check applies to the term before with the term after as its
-   pattern. One of a round of the term after is stated here:
+   pattern. Those of a round of the term after that are stated in
+   their own files are FlambdaAliasLetsSpec.merge_alias_lets,
+   FlambdaLiftContsSpec.lift_handler_conts,
+   FlambdaKnownSiblingsSpec.inline_known_sibling_calls,
+   FlambdaReadsAfterSpec.remove_constant_allocations and
+   FlambdaMadeLengthsSpec.fold_made_lengths. One of a round of the
+   term after is stated here:
    FlambdaUnusedProjectionsSpec.remove_unused_projections, which
    carries what it knows of the variables that are sets of closures;
    the action of a renaming on that is in its file
@@ -1048,10 +1054,21 @@ Definition first_phase_round_equivariant_statement : Prop :=
 Definition normalise_before_inlined_equivariant_statement : Prop :=
   rewrite_equivariant normalise_before_inlined.
 
-(* The normalisation of the term after Simplify: it is made of the
-   rewrites above and of [fold_constants]. The code whose calls are not
-   inlined is named by code ids, which no renaming changes. That of the
-   term before is in the last section: a round of it makes names. *)
+(* The normalisation of the term after Simplify. What it is made of
+   is in four definitions of FlambdaValidateSpec.v:
+   [normalise_after_round], [normalise_expr_after],
+   [normalise_code_after] and [inline_once_applied_after]. Most of
+   those rewrites have their statement above. The others have it in
+   another file: [fold_constants] in FlambdaEquivarianceSpec.v, and,
+   each in the file that defines it,
+   FlambdaAliasLetsSpec.merge_alias_lets,
+   FlambdaLiftContsSpec.lift_handler_conts,
+   FlambdaKnownSiblingsSpec.inline_known_sibling_calls,
+   FlambdaReadsAfterSpec.remove_constant_allocations and
+   FlambdaMadeLengthsSpec.fold_made_lengths. The code whose calls are
+   not inlined is named by code ids, which no renaming changes. That
+   of the term before is in the last section: a round of it makes
+   names. *)
 Definition normalise_after_equivariant_statement : Prop :=
   ∀ (rounds : nat) (kept : list code_id),
     rewrite_equivariant (normalise_after rounds kept).
