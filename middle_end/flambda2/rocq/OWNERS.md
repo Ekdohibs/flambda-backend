@@ -851,6 +851,25 @@ Owner: N3, on `flambda2-rocq/N3-equivariance` for the validator and on
   answer the renamed answer)
 - `middle_end/flambda2/types/rocq/FlambdaTypeProjectRenameProofs.v`
   (lemmas only: the removal of variables from a type under renaming)
+- `middle_end/flambda2/rocq/FlambdaRegionsEnds*` (on
+  `flambda2-rocq/N3-regions-ends`: a second verdict of the check of
+  regions, about ends. The check `ends_check`, which stands beside
+  `FlambdaRegionsCheckSpec.region_check` and reads the same
+  certificate; the property of states that a run of a term which
+  passes it keeps; and what follows of the plain frames that the run
+  leaves. The machine of regions and the check of regions stay their
+  owner's. `FlambdaRegionsEndsViewProofs.v` is the one file of these
+  that reads the step of the machine of regions: a change to that
+  step is ported there, by its owner's call)
+- in `middle_end/flambda2/tests/tools/flsemantics.ml`, the block "The
+  ends of regions" (`guess_ends_certificate`, `print_region_ends`):
+  the part of a certificate that the tool guesses for that check, and
+  the line that it prints. The tool and `check_regions` stay their
+  owners'; the block goes when the check of regions is asked by the
+  tool with one certificate for both checks. The control
+  `tests/semantics/regions/region_inner_ended_by_outer.fl`, with its
+  counts, is in the directory of the controls of the check of
+  regions, with its owner's word
 
 ## R1, R2: reviewers
 
