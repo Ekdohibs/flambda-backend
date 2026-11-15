@@ -784,8 +784,9 @@ Definition exits_plain_knowing_accepts_statement : Prop :=
 
    What the guard costs, as another stream measured it on the branch
    that puts the ports of the exchange together, with a tool whose
-   conversion makes the primitives of the heap (that of this tree
-   makes none) and which compares the two exits after each verdict:
+   conversion made the primitives of the heap before that of this
+   tree did (the figures are of that tool, and not of the tool of
+   this tree) and which compares the two exits after each verdict:
    10,408 outputs, an output being a unit at one setting. Of 1,226
    outputs that have a primitive of the heap in the term before and
    are accepted at a verdict that rests on a lifting without the
