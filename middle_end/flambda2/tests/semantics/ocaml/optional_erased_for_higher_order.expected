@@ -2,6 +2,7 @@ optional_erased_for_higher_order.fl:
   before Simplify (172 steps): returns [0: 7; 205; 25; 45]
   after Simplify (118 steps): returns [0: 7; 205; 25; 45]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 4 before, 4 after
   the same
   calls outside code once those of known code are inlined: 8

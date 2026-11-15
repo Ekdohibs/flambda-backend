@@ -6,6 +6,7 @@ string_load_wide.fl:
                                [0: 32768; -32768; -939063803;
                                 -4033248322675080703; -128]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 0 before, 0 after
   the same
   calls outside code once those of known code are inlined: 0

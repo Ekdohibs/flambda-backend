@@ -6,6 +6,7 @@ f2_one_inlined_one_not.fl:
                                [0: <fun>; [0: <fun>; <fun>];
                                 [0: <fun>; <fun>]; 21]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 4 before, 2 after
   the same
   calls outside code once those of known code are inlined: 2

@@ -2,6 +2,7 @@ char_comparisons.fl:
   before Simplify (56 steps): returns [0: <fun>; 5]
   after Simplify (36 steps): returns [0: <fun>; 5]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 3 before, 3 after
   the same
   calls outside code once those of known code are inlined: 0

@@ -2,6 +2,7 @@ int_split_intervals.fl:
   before Simplify (94 steps): returns [0: 10211]
   after Simplify (63 steps): returns [0: 10211]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 5 before, 5 after
   the same
   calls outside code once those of known code are inlined: 0

@@ -2,6 +2,7 @@ compose_chains.fl:
   before Simplify (142 steps): returns [0: 7; 19; 19; 29; 22]
   after Simplify (115 steps): returns [0: 7; 19; 19; 29; 22]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 7 before, 7 after
   the same
   calls outside code once those of known code are inlined: 14

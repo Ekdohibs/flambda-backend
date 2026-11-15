@@ -6,6 +6,7 @@ unboxed_pair_with_float_argument.fl:
                                [0: <fun>;
                                 [0: (boxed #4609434218613702656:float); 7]]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 1 before, 1 after
   the same
   calls outside code once those of known code are inlined: 0

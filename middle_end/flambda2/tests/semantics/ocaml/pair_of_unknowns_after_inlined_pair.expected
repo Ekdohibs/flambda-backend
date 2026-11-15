@@ -2,6 +2,7 @@ pair_of_unknowns_after_inlined_pair.fl:
   before Simplify (22 steps): returns [0: [0: [0: 1; 2]; [0: 3; 4]]]
   after Simplify (10 steps): returns [0: [0: [0: 1; 2]; [0: 3; 4]]]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 1 before, 0 after
   the same
   calls outside code once those of known code are inlined: 0

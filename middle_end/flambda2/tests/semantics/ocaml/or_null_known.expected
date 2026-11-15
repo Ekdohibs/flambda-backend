@@ -2,6 +2,7 @@ or_null_known.fl:
   before Simplify (23 steps): returns [0: 3]
   after Simplify (1 steps): returns [0: 3]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 2 before, 0 after
   the same
   calls outside code once those of known code are inlined: 0

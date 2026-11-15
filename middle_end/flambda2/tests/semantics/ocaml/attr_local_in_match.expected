@@ -2,6 +2,7 @@ attr_local_in_match.fl:
   before Simplify (87 steps): returns [0: 79]
   after Simplify (59 steps): returns [0: 79]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 3 before, 3 after
   the same
   calls outside code once those of known code are inlined: 0

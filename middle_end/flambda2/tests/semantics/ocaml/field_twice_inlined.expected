@@ -2,6 +2,7 @@ field_twice_inlined.fl:
   before Simplify (27 steps): returns [0: 1]
   after Simplify (17 steps): returns [0: 1]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 1 before, 2 after
   the same
   calls outside code once those of known code are inlined: 2

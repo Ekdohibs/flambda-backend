@@ -2,6 +2,7 @@ heap_no_store_lifting.fl:
   before Simplify (7 steps): returns [0: [0: 7; 1]]
   after Simplify (8 steps): returns [0: [0: 7; 1]]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 1 before, 1 after
   the same
   calls outside code once those of known code are inlined: 0

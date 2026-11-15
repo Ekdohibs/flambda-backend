@@ -2,6 +2,7 @@ closure_argument_exported.fl:
   before Simplify (12 steps): returns [0: <fun>; <fun>]
   after Simplify (7 steps): returns [0: <fun>; <fun>]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 0 before, 0 after
   the same
   calls outside code once those of known code are inlined: 0

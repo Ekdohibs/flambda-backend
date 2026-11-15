@@ -2,6 +2,7 @@ inline_direct.fl:
   before Simplify (8 steps): returns [0: 42; <fun>]
   after Simplify (6 steps): returns [0: 42; <fun>]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 1 before, 0 after
   the same
   calls outside code once those of known code are inlined: 0

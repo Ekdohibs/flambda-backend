@@ -2711,6 +2711,29 @@ directory sets the variable; one of `../regions/` does.
   of a string that is the block of bytes written while it is read
   (X5-3).
 - Regions: see above.
+- The refinement that a validation concludes does not by itself say
+  that a symbol which the term after exits with is bound. It
+  compares the two exits by their continuation, their values and
+  their heap, and a symbol is a value whether it is bound or not
+  (decision D57). The statements of `FlambdaExitBoundSpec.v` add it
+  for two terms run from the same imports and the empty heap (the
+  header of that file has the two states), where the run of the
+  term after refines that of the term before and the term after
+  passes three tests: if the term before exits, the values that the
+  term after exits with, and those in the cells of its heap, mention
+  only symbols that its static environment binds when it exits.
+  That a symbol is bound is not that it is bound to what the term
+  before bound it to: the two static environments are not compared.
+  The tool asks the first of the tests, `well_formed_unit`, of the
+  term after before it validates anything. What the two others
+  answer of each of the two terms (`statics_in_scope`, given the
+  imports of the unit, and `interface_conts_not_rebound`, both of
+  `FlambdaStaticsInScopeSpec.v`) it prints on the line "the check of
+  static names", after the line of the check of kinds. Nothing is
+  refused for that line and no verdict depends on it. The tool
+  prints it of 543 of the 546 units of this directory (not of the 3
+  that are not checked), and it says "passes before, passes after"
+  of each.
 - What is validated is the term the parser reads back from what
   `-drawfexpr` prints (see "validated" above), as the tool's Simplify
   simplifies it. The printed term has no mark for a functor, for

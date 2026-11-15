@@ -325,6 +325,7 @@ module Statics_order = Flambda2_rocq_semantics.FlambdaStaticsOrderSpec
 module Lift_from_code = Flambda2_rocq_semantics.FlambdaLiftFromCodeSpec
 module Lift_from_arms = Flambda2_rocq_semantics.FlambdaLiftFromArmsSpec
 module Heap_free = Flambda2_rocq_semantics.FlambdaHeapFreeSpec
+module Statics_in_scope = Flambda2_rocq_semantics.FlambdaStaticsInScopeSpec
 module Numbers = Flambda2_rocq_semantics.BinNums
 module Value_approximation = Flambda2_classic_mode_types.Value_approximation
 module P = Flambda_primitive
@@ -5144,6 +5145,66 @@ let well_formed (unit : converted) =
     { unit_return = unit.return_continuation; unit_exn = unit.exn_continuation }
     unit.body
 
+(* The two tests that FlambdaStaticsInScopeSpec.statics_bound_in_run_statement
+   asks of a unit beside [well_formed_unit]: every symbol and every code id that
+   the unit mentions is in scope where it is mentioned, given the symbols that
+   it imports ([statics_in_scope]), and no continuation of the interface of the
+   unit is bound again ([interface_conts_not_rebound]). Of a unit that passes
+   the three, run from its imports and the empty heap, that statement says that
+   it exits only with values whose symbols are bound in the static environment
+   of the state that exits, where an import is bound from the start, and whose
+   closures are of code that is bound there or that the unit declares deleted.
+
+   The statements of the validation conclude a refinement, which compares two
+   exits by their continuation, their values and their heap, and a symbol is a
+   value whether it is bound or not. So the refinement that a verdict concludes
+   does not by itself exclude a term after that exits with a symbol which it
+   never binds (decision D57; FlambdaExitBoundSpec.v joins a refinement to the
+   three tests of its target). The line "the check of static names" says what
+   the two tests answer of each term, and which of them a term fails. It is a
+   check beside the verdict: nothing is refused for it, and [well_formed_unit]
+   is what it was. It is printed with the verdict, and where the term after is
+   refused as not well-formed. There the term before is converted, and the two
+   terms are given to the tests with the prefix in front of them where there is
+   one, as they would have been run; in that branch the prefix is not tested for
+   a fault.
+
+   Where the two terms have a prefix made from [.cmx] files in front of them,
+   the tests are asked of the terms with it, as they are run, and the line says
+   that and no more. A prefix binds the closures of another unit that it reaches
+   and the code of some of them only, and [statics_in_scope] asks that the code
+   of a closure, and of a direct call, be bound or declared deleted. In a
+   measure of units that have a prefix (status/V3.md) every "fails" was of both
+   terms, and for code of another unit that the prefix does not bind: not for
+   something of the unit. *)
+let static_names_in_scope ~(imports : Model.symbol list) (unit : converted) =
+  let in_scope = Statics_in_scope.statics_in_scope imports unit.body in
+  let not_rebound =
+    Statics_in_scope.interface_conts_not_rebound
+      { unit_return = unit.return_continuation;
+        unit_exn = unit.exn_continuation
+      }
+      unit.body
+  in
+  match in_scope, not_rebound with
+  | true, true -> "passes"
+  | false, true ->
+    "fails (statics_in_scope: a symbol or a code id is not in scope)"
+  | true, false ->
+    "fails (interface_conts_not_rebound: a continuation of the unit is bound \
+     again)"
+  | false, false -> "fails (statics_in_scope and interface_conts_not_rebound)"
+
+(* The line: the two terms are given with the prefix in front of them where
+   there is one, and the imports are those that the validation is given. *)
+let print_static_names ~(imports : (Model.symbol * Values.import_class) list)
+    ~(with_prefix : bool) (before : converted) (after : converted) =
+  let imports = List.map fst imports in
+  Format.printf "  the check of static names: %s before, %s after%s@."
+    (static_names_in_scope ~imports before)
+    (static_names_in_scope ~imports after)
+    (if with_prefix then ", each with the prefix in front of it" else "")
+
 (* A condition of well-formedness that a unit which is not well-formed fails. *)
 let why_not_well_formed (unit : converted) =
   let exn = unit.exn_continuation in
@@ -7302,10 +7363,18 @@ let check_or_raise ~filename ~(units : (Compilation_unit.t * Digest.t) list)
       Format.printf "%s: not checked: after Simplify, %s@." filename reason
     | None, None -> ());
     None
-  | _, after, _ when not (well_formed after) ->
+  | before, after, prefix when not (well_formed after) ->
     Format.printf "%s: the term after Simplify is NOT WELL-FORMED (%s)@."
       filename
       (why_not_well_formed after);
+    print_static_names
+      ~imports:
+        (imports ~bound:prefix.prefix_symbols
+           ~unmentioned:prefix.prefix_unmentioned ~hidden:prefix.prefix_hidden)
+      ~with_prefix:
+        (match prefix.prefix_groups with [] -> false | _ :: _ -> true)
+      (with_prefix prefix before)
+      (with_prefix prefix after);
     raise Check_failed
   | before, after, prefix ->
     let imports =
@@ -7369,6 +7438,10 @@ let check_or_raise ~filename ~(units : (Compilation_unit.t * Digest.t) list)
     Format.printf "  the check of kinds: %s before, %s after@."
       (passes (well_kinded before))
       (passes (well_kinded after));
+    print_static_names ~imports
+      ~with_prefix:
+        (match prefix.prefix_groups with [] -> false | _ :: _ -> true)
+      before after;
     Format.printf "  calls outside code: %d before, %d after@."
       (calls_outside_code before.body)
       (calls_outside_code after.body);

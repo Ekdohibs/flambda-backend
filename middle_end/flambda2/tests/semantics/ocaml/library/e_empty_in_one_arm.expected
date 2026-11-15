@@ -2,6 +2,7 @@ e_empty_in_one_arm.fl:
   before Simplify (47 steps): returns [0: 0; 2]
   after Simplify (28 steps): returns [0: 0; 2]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 2 before, 2 after
   the same
   calls outside code once those of known code are inlined: 0

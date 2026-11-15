@@ -5,6 +5,7 @@ partly_tested.fl:
   before Simplify, after the prefix, with its import (11 steps): undefined
   after Simplify, after the prefix, with its import (7 steps): undefined
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after, each with the prefix in front of it
   calls outside code: 1 before, 1 after
   anything goes, as the run before is undefined
   calls outside code once those of known code are inlined: 0

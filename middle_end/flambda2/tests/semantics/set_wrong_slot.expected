@@ -2,6 +2,7 @@ set_wrong_slot.fl:
   before Simplify (3 steps): undefined
   after Simplify (2 steps): returns [0: 5]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 1 before, 0 after
   anything goes, as the run before is undefined
   calls outside code once those of known code are inlined: 1

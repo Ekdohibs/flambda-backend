@@ -2,6 +2,7 @@ nest_matrix_three_columns.fl:
   before Simplify (108 steps): returns [0: 34321]
   after Simplify (81 steps): returns [0: 34321]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 5 before, 5 after
   the same
   calls outside code once those of known code are inlined: 0

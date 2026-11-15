@@ -2,6 +2,7 @@ exported_table.fl:
   before Simplify (13 steps): returns [0: <fun>; [0: <fun>; 20]; <fun>]
   after Simplify (8 steps): returns [0: <fun>; [0: <fun>; 20]; <fun>]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 0 before, 0 after
   the same
   calls outside code once those of known code are inlined: 0

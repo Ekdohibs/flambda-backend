@@ -2,6 +2,7 @@ raise_division_inlined.fl:
   before Simplify, with its import (83 steps): returns [0: 81]
   after Simplify, with its import (29 steps): returns [0: 81]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 3 before, 2 after
   the same
   calls outside code once those of known code are inlined: 0

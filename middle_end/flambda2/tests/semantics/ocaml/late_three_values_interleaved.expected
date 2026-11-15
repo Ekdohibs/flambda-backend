@@ -2,6 +2,7 @@ late_three_values_interleaved.fl:
   before Simplify (430 steps): returns [0: 51504590]
   after Simplify (382 steps): returns [0: 51504590]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 2 before, 2 after
   the same
   calls outside code once those of known code are inlined: 8

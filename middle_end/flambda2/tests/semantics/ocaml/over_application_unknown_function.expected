@@ -2,6 +2,7 @@ over_application_unknown_function.fl:
   before Simplify (61 steps): returns [0: 42; 38; 51; 49]
   after Simplify (58 steps): returns [0: 42; 38; 51; 49]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 4 before, 4 after
   the same
   calls outside code once those of known code are inlined: 4

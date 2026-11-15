@@ -2,6 +2,7 @@ factorial.fl:
   before Simplify (70 steps): returns [0: 120]
   after Simplify (46 steps): returns [0: 120]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 1 before, 1 after
   the same
   calls outside code once those of known code are inlined: 1

@@ -2,6 +2,7 @@ polymorphic_variant.fl:
   before Simplify (77 steps): returns [0: 16]
   after Simplify (4 steps): returns [0: 16]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 3 before, 0 after
   the same
   calls outside code once those of known code are inlined: 0

@@ -2,6 +2,7 @@ iarray_literal.fl:
   before Simplify (11 steps): returns [0: 12]
   after Simplify (5 steps): returns [0: 12]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 0 before, 0 after
   the same
   calls outside code once those of known code are inlined: 0

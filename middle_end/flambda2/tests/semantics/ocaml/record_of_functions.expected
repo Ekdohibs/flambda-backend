@@ -2,6 +2,7 @@ record_of_functions.fl:
   before Simplify (51 steps): returns [0: 64]
   after Simplify (10 steps): returns [0: 64]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 2 before, 0 after
   the same
   calls outside code once those of known code are inlined: 6

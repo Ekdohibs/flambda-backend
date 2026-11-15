@@ -1520,6 +1520,15 @@ it gave back.
   given the .cmx of N", and is followed by a line that begins "not
   validated with its imports", as for a unit with no prefix (the
   entry "What the tool reports"). Both rest on the two things above.
+  The line "the check of static names" (the same entry) is of the
+  two terms with the prefix in front of them, and says so.
+  `statics_in_scope` asks that the code of a closure, and of a
+  direct call, be bound or declared deleted, and a prefix binds
+  closures of the other unit whose code it leaves unbound (above).
+  So of a unit with such a prefix the line says "fails" of both
+  terms, for what the prefix leaves out: it is not then a finding
+  about the unit or about Simplify, and it says nothing of the names
+  of the unit itself.
   The tool's Simplify looks for a `.cmx` file in the directories
   given with `-I` and in no other, whatever other options of the
   compiler the tool is given (`init_load_path`). Where it is given
@@ -1794,6 +1803,21 @@ it gave back.
   compared, not a validated verdict. In that case the tool also runs
   the unit before from the empty static environment, to say where
   the validation with nothing imported is vacuous.
+  The refinement that a verdict concludes does not by itself say
+  that a symbol which the term after exits with is bound: the
+  statement of each asking concludes a refinement
+  (`FlambdaValidateSpec.validate_unit_sound_statement` for the
+  first), which compares two exits without the static environments
+  of the states that exit (decision D57).
+  `FlambdaStaticsInScopeSpec.statics_bound_in_run_statement` says
+  it of a unit that passes three tests, run from its imports and
+  the empty heap: the tool refuses a term after that fails the
+  first, `well_formed_unit`, and the line "the check of static
+  names" says what the two others answer of each of the two terms
+  as it is run (`statics_in_scope`, with the symbols of the imports
+  that the two runs are from, and `interface_conts_not_rebound`, as
+  they are extracted); nothing is refused for that line, and no
+  verdict depends on it.
 - **A check that does not establish `refines` is in the model, and
   what it accepts the tool prints on a line of its own, never as
   validated.** This entry awaits the human's confirmation (decision

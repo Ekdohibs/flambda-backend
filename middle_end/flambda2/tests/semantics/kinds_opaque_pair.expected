@@ -5,6 +5,7 @@ kinds_opaque_pair.fl:
   after Simplify (5 steps): returns
                               [0: [0: 1; (boxed #4612811918334230528:float)]]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 0 before, 0 after
   the same
   calls outside code once those of known code are inlined: 0

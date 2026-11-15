@@ -2,6 +2,7 @@ result_map.fl:
   before Simplify (44 steps): returns [0: 42]
   after Simplify (3 steps): returns [0: 42]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 2 before, 0 after
   the same
   calls outside code once those of known code are inlined: 1

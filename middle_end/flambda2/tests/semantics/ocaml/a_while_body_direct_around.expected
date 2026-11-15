@@ -4,6 +4,7 @@ a_while_body_direct_around.fl:
   after Simplify, with its import (167 steps): returns
                                                  [0: 1026; 114; 1001; 0]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 4 before, 4 after
   the same
   calls outside code once those of known code are inlined: 0

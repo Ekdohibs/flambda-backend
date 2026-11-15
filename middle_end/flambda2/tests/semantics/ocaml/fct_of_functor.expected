@@ -2,6 +2,7 @@ fct_of_functor.fl:
   before Simplify (97 steps): returns [0: 62]
   after Simplify (93 steps): returns [0: 62]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 5 before, 5 after
   the same
   calls outside code once those of known code are inlined: 3

@@ -6,6 +6,7 @@ labelled_in_every_order.fl:
                                [0: 123; 123; 123; 123; 123; 123; 123; 123;
                                 123; 123; 123; 123]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 12 before, 12 after
   the same
   calls outside code once those of known code are inlined: 0

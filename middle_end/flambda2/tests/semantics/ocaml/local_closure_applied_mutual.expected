@@ -2,6 +2,7 @@ local_closure_applied_mutual.fl:
   before Simplify (158 steps): returns [0: <fun>; <fun>; <fun>; <fun>; 22]
   after Simplify (82 steps): returns [0: <fun>; <fun>; <fun>; <fun>; 22]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 1 before, 1 after
   the same
   calls outside code once those of known code are inlined: 3

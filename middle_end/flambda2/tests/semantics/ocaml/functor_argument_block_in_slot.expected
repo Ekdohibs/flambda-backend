@@ -2,6 +2,7 @@ functor_argument_block_in_slot.fl:
   before Simplify (50 steps): returns [0: <fun>; [0: <fun>]; 7]
   after Simplify (14 steps): returns [0: <fun>; [0: <fun>]; 7]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 1 before, 0 after
   the same
   calls outside code once those of known code are inlined: 0

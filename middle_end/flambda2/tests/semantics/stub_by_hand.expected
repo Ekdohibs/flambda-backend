@@ -2,6 +2,7 @@ stub_by_hand.fl:
   before Simplify (15 steps): returns [0: <fun>; <fun>; 42]
   after Simplify (6 steps): returns [0: <fun>; <fun>; 42]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 1 before, 0 after
   the same
   calls outside code once those of known code are inlined: 1

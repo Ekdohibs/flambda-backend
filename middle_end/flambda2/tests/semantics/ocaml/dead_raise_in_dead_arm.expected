@@ -2,6 +2,7 @@ dead_raise_in_dead_arm.fl:
   before Simplify, with its import (84 steps): returns [0: -88]
   after Simplify, with its import (27 steps): returns [0: -88]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 2 before, 2 after
   the same
   calls outside code once those of known code are inlined: 0

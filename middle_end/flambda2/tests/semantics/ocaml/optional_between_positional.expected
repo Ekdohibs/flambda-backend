@@ -6,6 +6,7 @@ optional_between_positional.fl:
                                 [0: 1324; 5324; 1364; 1364; 7384; 1924; 1954;
                                  2901]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 8 before, 8 after
   the same
   calls outside code once those of known code are inlined: 0

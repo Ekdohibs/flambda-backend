@@ -2,6 +2,7 @@ variant_nested_match.fl:
   before Simplify (213 steps): returns [0: 186]
   after Simplify (151 steps): returns [0: 186]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 5 before, 5 after
   the same
   calls outside code once those of known code are inlined: 0

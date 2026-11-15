@@ -2,6 +2,7 @@ tag_known_in_arm.fl:
   before Simplify (91 steps): returns [0: <fun>; <fun>; 8]
   after Simplify (52 steps): returns [0: <fun>; <fun>; 8]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 3 before, 3 after
   the same
   calls outside code once those of known code are inlined: 0

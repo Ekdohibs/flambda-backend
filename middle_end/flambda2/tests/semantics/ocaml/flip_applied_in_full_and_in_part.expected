@@ -2,6 +2,7 @@ flip_applied_in_full_and_in_part.fl:
   before Simplify (101 steps): returns [0: 13; 13; 13; 13; 13; 68]
   after Simplify (53 steps): returns [0: 13; 13; 13; 13; 13; 68]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 8 before, 8 after
   the same
   calls outside code once those of known code are inlined: 6

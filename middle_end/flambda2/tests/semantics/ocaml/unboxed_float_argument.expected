@@ -8,6 +8,7 @@ unboxed_float_argument.fl:
                                 [0: (boxed #4612811918334230528:float);
                                  (boxed #4609434218613702656:float)]]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 2 before, 2 after
   the same
   calls outside code once those of known code are inlined: 0

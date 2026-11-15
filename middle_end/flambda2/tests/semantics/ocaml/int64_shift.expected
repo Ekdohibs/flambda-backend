@@ -2,6 +2,7 @@ int64_shift.fl:
   before Simplify (21 steps): returns [0: (boxed #76:int64)]
   after Simplify (8 steps): returns [0: (boxed #76:int64)]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 0 before, 0 after
   the same
   calls outside code once those of known code are inlined: 0

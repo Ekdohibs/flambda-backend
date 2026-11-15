@@ -4,6 +4,7 @@ a_for_notrace_direct_value.fl:
   after Simplify, with its import (169 steps): returns
                                                  [0: 6026; 114; 6001; 0]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 4 before, 4 after
   the same
   calls outside code once those of known code are inlined: 0

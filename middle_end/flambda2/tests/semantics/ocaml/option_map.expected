@@ -2,6 +2,7 @@ option_map.fl:
   before Simplify (70 steps): returns [0: 15]
   after Simplify (4 steps): returns [0: 15]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 4 before, 0 after
   the same
   calls outside code once those of known code are inlined: 2

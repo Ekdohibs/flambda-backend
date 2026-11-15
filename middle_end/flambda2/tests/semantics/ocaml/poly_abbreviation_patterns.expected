@@ -2,6 +2,7 @@ poly_abbreviation_patterns.fl:
   before Simplify (117 steps): returns [0: 3742]
   after Simplify (68 steps): returns [0: 3742]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 4 before, 4 after
   the same
   calls outside code once those of known code are inlined: 0

@@ -7,6 +7,7 @@ shift_edges.fl:
                               [0: 4611686018427387903; -4611686018427387904;
                                -2305843009213693952; -4; -1; 1]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 0 before, 0 after
   the same
   calls outside code once those of known code are inlined: 0

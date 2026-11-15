@@ -2,6 +2,7 @@ over_application_three_stages.fl:
   before Simplify (101 steps): returns [0: 1234; 1234; 1234; 1234]
   after Simplify (92 steps): returns [0: 1234; 1234; 1234; 1234]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 10 before, 10 after
   the same
   calls outside code once those of known code are inlined: 6

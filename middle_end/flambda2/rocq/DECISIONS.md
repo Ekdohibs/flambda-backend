@@ -508,7 +508,9 @@ a `CR` at the place in the `Spec` file.
   joined to a refinement in
   `FlambdaExitBoundSpec.unit_refines_exits_bound_statement`). No
   statement of the validation concludes them; the tool asks the
-  first of every term after. They say that a symbol is bound, and
+  first of every term after, and prints what the two others answer
+  of each of the two terms on the line "the check of static names",
+  for which it refuses nothing. They say that a symbol is bound, and
   not that it is bound to what the term before bound it to: the two
   static environments are not compared. The comparison intended is
   of exits that carry their static environments, related as the

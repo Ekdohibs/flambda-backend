@@ -2,6 +2,7 @@ local_rec_in_tail_loop.fl:
   before Simplify (173 steps): returns [0: 6]
   after Simplify (108 steps): returns [0: 6]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 1 before, 1 after
   the same
   calls outside code once those of known code are inlined: 1

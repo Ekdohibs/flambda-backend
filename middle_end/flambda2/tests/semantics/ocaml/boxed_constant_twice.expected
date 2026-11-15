@@ -2,6 +2,7 @@ boxed_constant_twice.fl:
   before Simplify (16 steps): returns [0: (boxed #3:int64); (boxed #3:int64)]
   after Simplify (2 steps): returns [0: (boxed #3:int64); (boxed #3:int64)]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 0 before, 0 after
   the same
   calls outside code once those of known code are inlined: 0

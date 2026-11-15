@@ -2,6 +2,7 @@ same_projection_across_call.fl:
   before Simplify (25 steps): returns [0: <fun>; <fun>; 9]
   after Simplify (13 steps): returns [0: <fun>; <fun>; 9]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 1 before, 1 after
   the same
   calls outside code once those of known code are inlined: 0

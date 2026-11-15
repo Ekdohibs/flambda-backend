@@ -20,6 +20,7 @@ lengths_kept_with_exception.fl:
                                                                   <fun>;
                                                                   <imported caml_exn_Not_found>]
   the check of kinds: passes before, passes after
+  the check of static names: fails (statics_in_scope: a symbol or a code id is not in scope) before, fails (statics_in_scope: a symbol or a code id is not in scope) after, each with the prefix in front of it
   calls outside code: 0 before, 0 after
   the same
   calls outside code once those of known code are inlined: 0

@@ -2,6 +2,7 @@ arity_text_code_in_handler.fl:
   before Simplify (11 steps): returns [0: 1; 2]
   after Simplify (1 steps): returns [0: 1; 2]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 1 before, 0 after
   the same
   calls outside code once those of known code are inlined: 1

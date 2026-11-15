@@ -6,6 +6,7 @@ imp_head_closure_uses_unit_function_only.fl:
                                                 [0: 16;
                                                  <imported caml_exn_Not_found>]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 4 before, 4 after
   the same
   calls outside code once those of known code are inlined: 2

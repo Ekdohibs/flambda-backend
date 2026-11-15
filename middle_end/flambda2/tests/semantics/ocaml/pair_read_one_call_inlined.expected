@@ -2,6 +2,7 @@ pair_read_one_call_inlined.fl:
   before Simplify (31 steps): returns [0: 4; 5; 5]
   after Simplify (23 steps): returns [0: 4; 5; 5]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 4 before, 3 after
   the same
   calls outside code once those of known code are inlined: 0

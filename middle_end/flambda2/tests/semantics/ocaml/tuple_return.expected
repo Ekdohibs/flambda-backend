@@ -2,6 +2,7 @@ tuple_return.fl:
   before Simplify (20 steps): returns [0: 10]
   after Simplify (5 steps): returns [0: 10]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 1 before, 0 after
   the same
   calls outside code once those of known code are inlined: 0

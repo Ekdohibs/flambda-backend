@@ -2,6 +2,7 @@ gadt_existential_match.fl:
   before Simplify (38 steps): returns [0: 8]
   after Simplify (8 steps): returns [0: 8]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 2 before, 0 after
   the same
   calls outside code once those of known code are inlined: 0

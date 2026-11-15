@@ -2,6 +2,7 @@ guard_on_or_pattern.fl:
   before Simplify (132 steps): returns [0: 251511]
   after Simplify (84 steps): returns [0: 251511]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 5 before, 5 after
   the same
   calls outside code once those of known code are inlined: 0

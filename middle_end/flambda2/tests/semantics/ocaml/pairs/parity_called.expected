@@ -8,6 +8,7 @@ parity_called.fl:
   before Simplify, after the prefix (7 steps): undefined
   after Simplify, after the prefix (5 steps): undefined
   the check of kinds: passes before, passes after
+  the check of static names: fails (statics_in_scope: a symbol or a code id is not in scope) before, fails (statics_in_scope: a symbol or a code id is not in scope) after, each with the prefix in front of it
   calls outside code: 1 before, 1 after
   anything goes, as the run before is undefined
   calls outside code once those of known code are inlined: 1

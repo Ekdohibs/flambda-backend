@@ -135,6 +135,19 @@ then "after the prefix".
 
   in its place, as it does where the prefix is made from fewer units
   than were read.
+- The line "the check of static names" (`../README.md`, "What a
+  validation does not say") is, where the two terms have a prefix,
+  of the two terms with the prefix in front of them, and then ends
+  ", each with the prefix in front of it". Of 8 of the 10 units here
+  that have a prefix it says "fails" of both terms
+  (`lengths_called_at_toplevel`, `lengths_called_in_function`,
+  `lengths_included`, `lengths_kept_with_exception`, `never_called`,
+  `parity_called`, `phantom_called` and `probed_called`): the prefix
+  binds a closure of the first unit and not its code, which
+  `statics_in_scope` refuses whatever follows the prefix. So the
+  line says nothing of those 8 units themselves. Of the 2 others
+  (`hidden_known_read` and `partly_tested`), whose prefix binds no
+  closure, it says "passes" of both terms.
 - Nothing is said of the first unit itself: its initialisation is
   not run, and what its `.cmx` says of it is taken as it is.
 

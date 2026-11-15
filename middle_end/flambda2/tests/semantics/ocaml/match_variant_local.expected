@@ -2,6 +2,7 @@ match_variant_local.fl:
   before Simplify (72 steps): returns [0: 38]
   after Simplify (7 steps): returns [0: 38]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 3 before, 0 after
   the same
   calls outside code once those of known code are inlined: 0

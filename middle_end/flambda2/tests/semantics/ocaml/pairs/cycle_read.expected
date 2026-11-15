@@ -3,6 +3,7 @@ cycle_read.fl:
   before Simplify, with its import (3 steps): undefined
   after Simplify, with its import (1 steps): undefined
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 0 before, 0 after
   anything goes, as the run before is undefined
   calls outside code once those of known code are inlined: 0

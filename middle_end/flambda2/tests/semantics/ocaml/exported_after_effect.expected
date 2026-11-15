@@ -2,6 +2,7 @@ exported_after_effect.fl:
   before Simplify (15 steps): returns [0: 1; <fun>; 2]
   after Simplify (6 steps): returns [0: 1; <fun>; 2]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 1 before, 0 after
   the same
   calls outside code once those of known code are inlined: 0

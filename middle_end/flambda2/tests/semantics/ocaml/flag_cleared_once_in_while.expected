@@ -2,6 +2,7 @@ flag_cleared_once_in_while.fl:
   before Simplify (217 steps): returns [0: <fun>; 3]
   after Simplify (133 steps): returns [0: <fun>; 3]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 1 before, 1 after
   the same
   calls outside code once those of known code are inlined: 0

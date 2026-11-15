@@ -6,6 +6,7 @@ imp_head_include_functor_result.fl:
                                                 [0: 19;
                                                  <imported caml_exn_Not_found>]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 3 before, 2 after
   the same
   calls outside code once those of known code are inlined: 2

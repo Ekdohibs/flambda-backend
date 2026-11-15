@@ -2,6 +2,7 @@ while_two_loops.fl:
   before Simplify (126 steps): returns [0: 22]
   after Simplify (81 steps): returns [0: 22]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 0 before, 0 after
   the same
   calls outside code once those of known code are inlined: 0

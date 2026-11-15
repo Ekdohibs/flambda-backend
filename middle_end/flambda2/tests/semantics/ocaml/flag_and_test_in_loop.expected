@@ -2,6 +2,7 @@ flag_and_test_in_loop.fl:
   before Simplify (157 steps): returns [0: <fun>; 1]
   after Simplify (99 steps): returns [0: <fun>; 1]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 1 before, 1 after
   the same
   calls outside code once those of known code are inlined: 0

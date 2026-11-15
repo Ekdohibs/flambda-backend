@@ -2,6 +2,7 @@ higher_order.fl:
   before Simplify (32 steps): returns [0: 34]
   after Simplify (5 steps): returns [0: 34]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 2 before, 0 after
   the same
   calls outside code once those of known code are inlined: 4

@@ -2,6 +2,7 @@ partial_two_to_six_parameters.fl:
   before Simplify (156 steps): returns [0: 29; 249; 2469; 24689; 246909]
   after Simplify (112 steps): returns [0: 29; 249; 2469; 24689; 246909]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 10 before, 10 after
   the same
   calls outside code once those of known code are inlined: 0

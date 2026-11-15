@@ -2,6 +2,7 @@ tupled_function.fl:
   before Simplify (21 steps): returns [0: "hello"]
   after Simplify (2 steps): returns [0: "hello"]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 2 before, 0 after
   the same
   calls outside code once those of known code are inlined: 2

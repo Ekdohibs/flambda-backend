@@ -7,6 +7,7 @@ int_bswap.fl:
                               [0: 13330; 65535; 255; -5; -32768; 2018915346;
                                578437695752307201; -72057594037927937]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 0 before, 0 after
   the same
   calls outside code once those of known code are inlined: 0

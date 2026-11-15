@@ -2,6 +2,7 @@ mom_three_levels.fl:
   before Simplify (126 steps): returns [0: 7650]
   after Simplify (77 steps): returns [0: 7650]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 3 before, 3 after
   the same
   calls outside code once those of known code are inlined: 0

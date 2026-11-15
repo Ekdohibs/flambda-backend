@@ -2,6 +2,7 @@ m_constant_and_variable.fl:
   before Simplify, with its import (45 steps): returns [0: 24]
   after Simplify, with its import (30 steps): returns [0: 24]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 1 before, 1 after
   the same
   calls outside code once those of known code are inlined: 0

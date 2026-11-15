@@ -2,6 +2,7 @@ while_sum_down.fl:
   before Simplify (133 steps): returns [0: 55]
   after Simplify (80 steps): returns [0: 55]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 0 before, 0 after
   the same
   calls outside code once those of known code are inlined: 0

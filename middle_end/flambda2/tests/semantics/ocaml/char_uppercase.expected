@@ -2,6 +2,7 @@ char_uppercase.fl:
   before Simplify (63 steps): returns [0: <fun>; 188]
   after Simplify (38 steps): returns [0: <fun>; 188]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 3 before, 3 after
   the same
   calls outside code once those of known code are inlined: 0

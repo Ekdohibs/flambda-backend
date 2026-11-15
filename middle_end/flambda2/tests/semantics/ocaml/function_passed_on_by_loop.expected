@@ -2,6 +2,7 @@ function_passed_on_by_loop.fl:
   before Simplify (78 steps): returns [0: 1]
   after Simplify (39 steps): returns [0: 1]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 1 before, 0 after
   the same
   calls outside code once those of known code are inlined: 1

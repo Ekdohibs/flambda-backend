@@ -2,6 +2,7 @@ list_constant.fl:
   before Simplify (39 steps): returns [0: 12]
   after Simplify (25 steps): returns [0: 12]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 2 before, 2 after
   the same
   calls outside code once those of known code are inlined: 0

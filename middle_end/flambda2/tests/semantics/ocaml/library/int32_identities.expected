@@ -25,6 +25,7 @@ int32_identities.fl:
                                 (boxed #-2147483648:int32);
                                 (boxed #-2147483648:int32)]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 21 before, 0 after
   the same
   calls outside code once those of known code are inlined: 0

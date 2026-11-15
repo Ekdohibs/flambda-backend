@@ -2,6 +2,7 @@ tuple_match.fl:
   before Simplify (75 steps): returns [0: 6]
   after Simplify (1 steps): returns [0: 6]
   the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
   calls outside code: 4 before, 0 after
   the same
   calls outside code once those of known code are inlined: 0
