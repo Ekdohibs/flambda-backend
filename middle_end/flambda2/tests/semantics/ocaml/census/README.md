@@ -51,7 +51,15 @@ ends an older region first, the machine pops the frame of the inner
 region with it, and the run leaves no plain region open. The conversion
 from Lambda makes such a jump on purpose where control leaves several
 regions at once, and without the option the check allows it
-(`rocq/DECISIONS.md`, D55, which names the place in the front end).
+(`rocq/DECISIONS.md`, D55, which names the place in the front end). The
+tool of this tree prints, after the line of the check of kinds, the line
+of the check of static names (`../README.md`, "What a validation does
+not say", says what its two tests are; no verdict depends on it): of
+each of the 600 and of each of the 240, at the default flags and with
+`-O3`, and it says "passes before, passes after" of each. No unit of the
+600 or of the 240 has the line of the stores into arrays by the array
+kind they carry (`../README.md`, "What the verdicts mean"), at either
+setting: no generated unit makes an array.
 
 ## What a generated unit is
 
@@ -262,20 +270,22 @@ time, user and system together. Until now it allowed 60 seconds of
 the clock, which measured what else the machine was running:
 `loops_scalar`, seed 55, which was without an answer in 60 seconds
 the day before, then took 16 seconds of processor time, then 4,
-then 7 with the tool of 87cdbf3e01, and takes 6.2 now, the most of the
-240 (3.6 with the tool of 8e6e4ba1b2, in a run made just before). The
-240 took 18.0 seconds of processor time together in one run (15.5 user,
-2.5 system), and 18.0 in a second run of the same tool (15.5 and 2.5).
+then 7 with the tool of 87cdbf3e01, and takes 6.4 now, the most of the
+240 (6.3 with the tool of 4ba710c501, in a run made just before). The
+240 took 19.3 seconds of processor time together in one run (16.6 user,
+2.7 system), and 18.5 in a second run of the same tool (15.9 and 2.6).
 Other builds ran on the machine during both: in two runs made one after
-the other with the same inputs and flags, the tool of 8e6e4ba1b2 took
-13.8 and the tool of this tree 18.0. These are totals of processor time
+the other with the same inputs and flags, the tool of 4ba710c501 took
+18.1 and the tool of this tree 18.5. These are totals of processor time
 on a machine whose processors the runs shared with other builds under
 one quota: they are not a comparison of the speed of two tools run
 alone. The tool of this tree converts the two terms of a unit that was
 compared once more, with their regions kept, and tries to run each for
 the check of regions; where that check says what the two runs came to,
 it asks the check of the ends of regions of each term, with its option
-and without it. And for a unit that is not validated it may make
+and without it. It asks the two tests of the check of static names of
+each of the two terms as they are converted for the runs, with their
+regions dropped. And for a unit that is not validated it may make
 attempts that the tool of ca84b4345c did not make, besides the second
 check, which that tool made: the validation of the term before with its
 known arrays read, liftings whose rounds make direct the calls of the
@@ -292,14 +302,16 @@ conditions for it
 hold and no answer that it has kept serves; 6 of the 240 are not
 validated, two of them units that were not checked while the conversion
 made no primitive of the heap, where 25 were not validated with the tool
-of ca84b4345c. When it was measured there, the tool of 8e6e4ba1b2 took
-14.5 and 14.6, the second in a run made just after one of the tool of
-698cf003e5, which took 14.3; the tool of 698cf003e5 took 13.5 and 13.7,
-the second in a run made just after one of the tool of 255f6a36c2, which
-took 13.8; the tool of 9c6e3fc02c took 13.6 and 13.7, the second in a
-run made just after one of the tool of 5a514806c3, which took 13.1
-(`../README.md`, "What a check costs", says with which builds the times
-of the tools of 8e6e4ba1b2, 698cf003e5 and 9c6e3fc02c were measured);
+of ca84b4345c. When it was measured there, the tool of 4ba710c501 took
+18.0 and 18.0, the second in a run made just after one of the tool of
+8e6e4ba1b2, which took 13.8; the tool of 8e6e4ba1b2 took 14.5 and 14.6,
+the second in a run made just after one of the tool of 698cf003e5, which
+took 14.3; the tool of 698cf003e5 took 13.5 and 13.7, the second in a
+run made just after one of the tool of 255f6a36c2, which took 13.8; the
+tool of 9c6e3fc02c took 13.6 and 13.7, the second in a run made just
+after one of the tool of 5a514806c3, which took 13.1 (`../README.md`,
+"What a check costs", says with which builds the times of the tools of
+4ba710c501, 8e6e4ba1b2, 698cf003e5 and 9c6e3fc02c were measured);
 the tool of 24cd3c9252 took 13.2 and 13.1, and 13.7 in a
 run made just after one of the tool of b006dd4b0d, which took 14.4. When
 it was measured at that commit, the tool of b006dd4b0d took 17.8 and
@@ -324,11 +336,13 @@ made, with the tool before it and the tool after: 79 seconds and 12
 for the 240, 30 and 16 for the 600, and no output of the 840
 differs between the two. What else came between the two tools was
 not measured for its cost on these units one change at a time. The 600
-took 12.3 seconds in the first of those two runs (6.1 user, 6.1 system)
-and 12.3 in the second (6.2 and 6.1), and the tool of 8e6e4ba1b2 12.1 in
+took 12.6 seconds in the first of those two runs (6.4 user, 6.2 system)
+and 13.1 in the second (6.6 and 6.4), and the tool of 4ba710c501 12.8 in
 a run made just before the second; when it was measured there, the tool
-of 8e6e4ba1b2 took 13.6 and 12.9, and the tool of 698cf003e5 13.6 in a
-run made just before the second of them; the tool of 698cf003e5 took
+of 4ba710c501 took 12.3 and 12.3, and the tool of 8e6e4ba1b2 12.1 in a
+run made just before the second of them; the tool of 8e6e4ba1b2 took
+13.6 and 12.9, and the tool of 698cf003e5 13.6 in a run made just before
+the second of them; the tool of 698cf003e5 took
 12.5 and 12.6, and the tool of 255f6a36c2 12.2 in a run made just before
 the second of them; the tool of 9c6e3fc02c took
 12.3 and 12.5, and the tool of 5a514806c3 12.3 in a run made just before
@@ -416,25 +430,32 @@ checked were not validated (above), and each had the line of the check
 of regions; none was lost. Of the other 238 units of the 240, and of
 each of the 600, the tool of 8e6e4ba1b2 printed what the tool of
 698cf003e5 printed, byte for byte.
-Between the tool of 8e6e4ba1b2 and the tool of this tree: at the default
-flags one of the 240 that was not validated is validated
+Between the tool of 8e6e4ba1b2 and the tool of 4ba710c501: at the
+default flags one of the 240 that was not validated was validated
 (`loops_scalar`, seed 2), none lost; with `-O3` the tool of 8e6e4ba1b2
-validated it already. What validates it is the search of the liftings
+validated it already. What validated it was the search of the liftings
 made once more after a refusal (`../README.md`, the entry of
 `local_rec_below_a_let_and_in_an_arm.ml`): of that unit, at the default
-flags, a tool built at the commit before that search prints what the
-tool of 8e6e4ba1b2 prints but for the line of the ends of regions, and
-one built with the search and no later change of the validation prints
-what the tool of this tree prints. At both settings each unit that has
+flags, a tool built at the commit before that search printed what the
+tool of 8e6e4ba1b2 printed but for the line of the ends of regions, and
+one built with the search and no later change of the validation printed
+what the tool of 4ba710c501 printed. At both settings each unit that had
 the line of the check of regions, 555 of the 600 and 234 of the 240,
-gains the line of the ends of regions under it (above); but for the
+gained the line of the ends of regions under it (above); but for the
 verdict of that one unit at the default flags, nothing else of what the
-tool prints of them changes. Of the other 45 units of the 600 and 6 of
-the 240, the tool of this tree prints what the tool of 8e6e4ba1b2
-prints, byte for byte. What else came between the two, the constant that
-a variable bound to a store is known to be and the code of the closure
-that a value slot of a closure of known code holds, turns none of these
-units.
+tool printed of them changed. Of the other 45 units of the 600 and 6 of
+the 240, the tool of 4ba710c501 printed what the tool of 8e6e4ba1b2
+printed, byte for byte. What else came between the two, the constant
+that a variable bound to a store is known to be and the code of the
+closure that a value slot of a closure of known code holds, turned none
+of these units.
+Between the tool of 4ba710c501 and the tool of this tree, at the default
+flags and with `-O3`: each of the 240 and each of the 600 gains the line
+of the check of static names (above), and nothing else of what the tool
+prints of it changes. What else came between the two, the length of a
+mutable array that a `Let` in scope has made, known to the validation,
+and the array kind of a store and the kind of a length written in one
+form, turns none of these units.
 Six were validated when it went from 207 to 213,
 none lost: three by the liftings to a group of static bindings
 around (`FlambdaLiftAroundSpec.lift_around_unit`, V3's; `loops`,
