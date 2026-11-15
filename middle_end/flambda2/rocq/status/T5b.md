@@ -38,6 +38,21 @@ proof.
   (`computed_under_let_operands_within`) goes by the definition of
   `computed_under_let`, with a case for that entry, and needs a
   case more if the definition gains another.
+- At the stage of the heap (2026-11-14: the machine runs a `Let` of
+  a primitive on the heap, and a state has a record of the reads),
+  `recover_comparisons_knowing_refines` is proved on that machine,
+  in `FlambdaRecoverComparisonProofs.v`, with an invariant of its
+  own, `comparisons_hold`, in the place of `all_computed` of
+  `FlambdaCseSpec.v`, whose text that stage changed. Of what is
+  known the pass reads the entries of two forms only, a three-way
+  comparison and the tagging of a variable; neither reads a cell
+  (`read_form_reads_no_cell`), so the invariant says nothing of the
+  heap or of the record of the reads, and the lemmas that keep it
+  (`comparisons_hold_forget`, `comparisons_hold_bind_params`,
+  `comparisons_hold_extend`, `comparisons_hold_under_let`) are that
+  file's own. No statement of this leaf's Spec files changed its
+  text; one comment of `FlambdaRecoverComparisonSpec.v` was
+  reworded.
 - Reviewer: R5.
 
 The series is merged into the integration branch (the type
