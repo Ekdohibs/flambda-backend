@@ -41,8 +41,10 @@ in the order of the term.
 ## Answers that are not "round trip the same"
 
 Each has a file here with what the tool prints, and its reason below.
-There are four, of units of `../ocaml/library`:
-`ocaml_library_int64_identities.expected`,
+There are six: four of units of `../ocaml/library` and two of units
+of `../ocaml`.
+
+The four are `ocaml_library_int64_identities.expected`,
 `ocaml_library_int64_laws_more.expected`,
 `ocaml_library_nativeint_identities.expected` and
 `ocaml_library_nativeint_laws_more.expected`. In each the round trip
@@ -77,6 +79,35 @@ the term after of those four, with status 2 and no second line, and
 no rule ran the round trip on that directory: it was seen when the
 round trip was run there by hand, with the tool of the tree that
 first had those units together with all that came in with them.
+
+The two are `ocaml_made_array_store_of_integer.expected` and
+`ocaml_made_array_checked_store.expected`. In each the round trip is
+the same of the unit of the file, and of the unit after Simplify it
+"DIFFERS", with the line "the two terms are printed the same: they
+differ in what the printer does not show".
+
+The term after Simplify of each has a store into an array that
+carries the array kind of immediates and the set kind of values that
+the collector may ignore. The front end writes a store into an array
+of integers with both kinds those of values that the collector may
+ignore; Simplify changes the array kind where the type of the array
+says that its elements are immediates, and keeps the set kind
+(`Simplify_common.specialise_array_kind`). The text of fexpr writes
+the array kind of a store, and its set kind only for an array of
+unboxed products; the parser gives a store whose set kind is not
+written the one that goes with its array kind
+(`middle_end/flambda2/parser/fexpr_prim.ml`, `array_set`; discrepancy
+P1-9). So the unit read back has the set kind of immediates where the
+unit printed has that of values that the collector may ignore, and
+the texts of the two are the same.
+
+It is a limit of what fexpr writes, and not a fault of the conversion
+or of the printer of the model, which gives fexpr the array kind and
+the set kind that the term has: the parser reads a set kind that is
+written, for an array of any kind, so the text could carry it. The
+check of a unit reads no text of its term after, so the verdicts
+of the two units are not touched; the term before of each, which is
+read from a text, has the two kinds that go together.
 
 There was another, `kinds_direct_naked.fl` after Simplify, until a unit
 read from a text was given the arity of the arguments of its calls.

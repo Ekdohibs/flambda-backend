@@ -756,6 +756,74 @@ let convert_variadic_primitive (p : P.variadic_primitive) ~num_args :
     Some (Make_immutable_array Array_values)
   | _ -> None
 
+(* The stores into arrays of a term, counted by the array kind that each carries
+   (immediates; values that the collector may ignore; values): those of the term
+   itself, of the handlers of its continuations and of the bodies of its
+   code. *)
+let array_stores_by_kind (e : Model.expr) : int * int * int =
+  let immediates = ref 0 and ignorable = ref 0 and values = ref 0 in
+  let rec expr (e : Model.expr) =
+    match e with
+    | Let (_, _, d, body) ->
+      (match d with
+      | Prim (Heap (Array_set (kind, _)), _) -> (
+        match kind with
+        | Array_immediates -> incr immediates
+        | Array_gc_ignorable_values -> incr ignorable
+        | Array_values -> incr values)
+      | _ -> ());
+      expr body
+    | Let_static (bindings, body) ->
+      List.iter
+        (fun (binding : Model.static_binding) ->
+          match binding with
+          | Bind_code (_, Code (_, _, _, _, _, body)) -> expr body
+          | Bind_deleted_code _ | Bind_symbol _ -> ())
+        bindings;
+      expr body
+    | Let_cont_non_recursive (_, handler, body) ->
+      in_handler handler;
+      expr body
+    | Let_cont_recursive (handlers, body) ->
+      List.iter (fun (_, handler) -> in_handler handler) handlers;
+      expr body
+    | Apply _ | Apply_cont _ | Switch _ | Invalid -> ()
+  and in_handler (Model.Handler (_, _, handler)) = expr handler in
+  expr e;
+  !immediates, !ignorable, !values
+
+(* One line after what is printed of the verdict, which is no part of it: how
+   many stores into arrays each of the two terms given to the validation has at
+   each array kind; where a prefix was made from the .cmx files of other units,
+   each term is counted with the prefix in front of it. The line is printed only
+   where those numbers differ between the two terms. The validation writes the
+   array kind of a store in one form where it folds constants
+   (FlambdaNormaliseSpec.fold_named, decision D56), so its verdict does not say
+   that these kinds agree in the two terms. Nor does this line: it gives numbers
+   and no correspondence of the stores. Exchanging the kinds of two stores, and
+   nothing else, leaves the numbers the same; and the numbers can differ merely
+   because Simplify has removed a store or copied one. That no line is printed
+   does not say that the kinds agree. *)
+let print_array_stores_where_they_differ (before : Model.expr)
+    (after : Model.expr) =
+  let before_immediates, before_ignorable, before_values =
+    array_stores_by_kind before
+  in
+  let after_immediates, after_ignorable, after_values =
+    array_stores_by_kind after
+  in
+  if
+    before_immediates <> after_immediates
+    || before_ignorable <> after_ignorable
+    || before_values <> after_values
+  then
+    Format.printf
+      "  stores into arrays by the array kind they carry (no part of the \
+       verdict): before %d immediates, %d values that the collector may \
+       ignore, %d values; after %d, %d, %d@."
+      before_immediates before_ignorable before_values after_immediates
+      after_ignorable after_values
+
 (* The primitives of the heap (FlambdaPrimitiveModel.heap_primitive), which
    [convert_prim] converts with their arguments. These are the kinds that the
    two of arrays carry: those of the arrays whose elements are of kind [Value].
@@ -7131,6 +7199,7 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
   | Same_once_unused_statics_removed | Same_once_head_statics_removed
   | Same_once_lifted ->
     ());
+  print_array_stores_where_they_differ before.body after.body;
   validation
 
 (* ---- The .cmx of other units ------------------------------------------- *)

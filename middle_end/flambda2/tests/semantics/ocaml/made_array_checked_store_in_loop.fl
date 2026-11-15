@@ -1,0 +1,78 @@
+(let $camlMade_array_checked_store_in_loop__string_1 = "index out of bounds"
+ in
+ let $camlMade_array_checked_store_in_loop__block_2 =
+   Block 0 ($`*predef*`.caml_exn_Invalid_argument,
+            $camlMade_array_checked_store_in_loop__string_1)
+ in
+ let $camlMade_array_checked_store_in_loop__const_block_0 = Block 0 (2) in
+ (let Popaque/69 =
+    %opaque ($camlMade_array_checked_store_in_loop__const_block_0)
+  in
+  let Popaque/70 = %opaque (0) in
+  let Popaque/71 = %opaque (0) in
+  let a/72 = %array.mut.`toplevel` (Popaque/71, Popaque/70, Popaque/69) in
+  (let prim/93 = %int_comp.le (0, 2) in
+   let int_lessequal/94 = %tag_imm (prim/93) in
+   (let untagged/95 = %untag_imm (int_lessequal/94) in
+    switch untagged/95
+      | 0 -> k/29 (0)
+      | 1 -> k/38)
+     where k/38 =
+       cont k/32)
+    where k/32 =
+      let prim/79 = %untag_imm (0) in
+      let for_start_naked/80 = %num_conv.[`imm`].[`int64`] (prim/79) in
+      let prim/81 = %untag_imm (2) in
+      let for_stop_naked/82 = %num_conv.[`imm`].[`int64`] (prim/81) in
+      (cont k/33 (for_start_naked/80)
+         where rec k/33 (for_counter_naked/83 : int64) =
+           let prim/84 = %num_conv.[`int64`].[`imm`] (for_counter_naked/83)
+           in
+           let i/85 = %tag_imm (prim/84) in
+           ((let prim/91 = %array_length (a/72) in
+             let prim/92 = %int_comp.unsigned.lt (i/85, prim/91) in
+             switch prim/92
+               | 0 -> k/36
+               | 1 -> k/37)
+              where k/37 =
+                cont k/34
+              where k/36 =
+                cont error
+                       pop(regular error)
+                       ($camlMade_array_checked_store_in_loop__block_2)
+              where k/34 =
+                let Parraysets/86 = %array_set (a/72, i/85, 0) in
+                let for_next_naked/87 =
+                  %int_barith.`int64`.add (for_counter_naked/83, 1L)
+                in
+                let prim/88 =
+                  %int_comp.`int64`.le (for_next_naked/87, for_stop_naked/82)
+                in
+                let `int64#_lessequal/89` = %tag_imm (prim/88) in
+                ((let untagged/90 = %untag_imm (`int64#_lessequal/89`) in
+                  switch untagged/90
+                    | 0 -> k/29 (0)
+                    | 1 -> k/35)
+                   where k/35 =
+                     cont k/33 (for_next_naked/87))))
+    where k/29 (staticcatch_result/73 : imm tagged) =
+      let `*match*/74` = %array_load.mut (a/72, 0) in
+      ((let prim/76 = %is_int (`*match*/74`) in
+        let Pisint/77 = %tag_imm (prim/76) in
+        (let untagged/78 = %untag_imm (Pisint/77) in
+         switch untagged/78
+           | 0 -> k/31
+           | 1 -> k/28 (0))
+          where k/31 =
+            cont k/30)
+         where k/30 =
+           let Pfield/75 = %block_load.[`0`] (`*match*/74`) in
+           cont k/28 (Pfield/75)))
+   where k/28 (result/67 : imm tagged) =
+     let Pmakeblock/68 = %block.[`0`].`toplevel` (result/67) in
+     cont k/27 (Pmakeblock/68))
+  where k/27 define_root_symbol (module_block/65) =
+    let field_0/66 = %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/65)
+    in
+    let $camlMade_array_checked_store_in_loop = Block 0 (field_0/66) in
+    cont done ($camlMade_array_checked_store_in_loop)

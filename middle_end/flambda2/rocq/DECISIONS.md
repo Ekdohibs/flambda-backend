@@ -479,6 +479,14 @@ a `CR` at the place in the `Spec` file.
   is covered by no statement. The other choice: the validation tells
   these kinds apart, and a unit in which Simplify has changed the
   array kind of a store can stay not validated for that difference.
+  The test tool prints one line after what it prints of the verdict,
+  which is no part of the verdict, where the two terms given to the
+  validation, each with the prefix made from the `.cmx` files of
+  other units where there is one, differ in how many stores into
+  arrays they have at each array kind: the numbers for each term.
+  The line gives numbers and no correspondence of the stores, so
+  that no line is printed does not say that the kinds agree; and it
+  says nothing of the kinds of the lengths.
   Decided by the orchestrator, for the confirmation of the human: it
   is about kinds, and it makes the comparison less strict than it
   was, not more.

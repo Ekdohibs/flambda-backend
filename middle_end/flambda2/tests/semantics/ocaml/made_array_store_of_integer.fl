@@ -1,0 +1,18 @@
+let $camlMade_array_store_of_integer__first_const_0 = Block 0 () in
+(let Popaque/29 = %opaque (2) in
+ let Popaque/30 = %opaque (1) in
+ let a/31 = %array.`imm`.mut.`toplevel` (Popaque/30, Popaque/29) in
+ let Popaque/32 = %opaque (7) in
+ let Parraysetu/33 = %array_set.gc_ign (a/31, 0, Popaque/32) in
+ let Parrayrefu/34 = %array_load.`imm`.mut (a/31, 1) in
+ let Parrayrefu/35 = %array_load.`imm`.mut (a/31, 0) in
+ let int_add/36 = %int_barith.add (Parrayrefu/35, Parrayrefu/34) in
+ cont k/8 (int_add/36))
+  where k/8 (result/27 : imm tagged) =
+    let Pmakeblock/28 = %block.[`0`].`toplevel` (result/27) in
+    cont k/7 (Pmakeblock/28)
+  where k/7 define_root_symbol (module_block/25) =
+    let field_0/26 = %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/25)
+    in
+    let $camlMade_array_store_of_integer = Block 0 (field_0/26) in
+    cont done ($camlMade_array_store_of_integer)

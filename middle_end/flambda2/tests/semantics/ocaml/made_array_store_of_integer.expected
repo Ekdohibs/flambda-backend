@@ -1,0 +1,9 @@
+made_array_store_of_integer.fl:
+  before Simplify (16 steps): returns [0: 9]
+  after Simplify (9 steps): returns [0: 9]
+  the check of kinds: passes before, passes after
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated: the same once normalised and unused static bindings removed
+  stores into arrays by the array kind they carry (no part of the verdict): before 0 immediates, 1 values that the collector may ignore, 0 values; after 1, 0, 0

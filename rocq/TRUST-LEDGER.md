@@ -612,7 +612,17 @@ it gave back.
   kind of values carries, and that the compiled code of a length is
   the same at each of those four kinds, as
   `To_cmm_primitive.array_set0` and `array_length` were read to
-  say.
+  say. Where the two terms given to the validation, each with the
+  prefix made from the `.cmx` files of other units where there is
+  one, differ in how many stores into arrays they have at each array
+  kind, the test tool prints those numbers on one line after what it
+  prints of the verdict ("stores into arrays by the array kind they
+  carry"). The line is no part of the verdict. It gives numbers and
+  no correspondence of the stores. It is not printed where the
+  numbers are the same, which does not say that the kinds agree:
+  exchanging the kinds of two stores, and nothing else, leaves the
+  numbers the same. And the numbers can differ merely because
+  Simplify has removed a store or copied one.
   *What the tool prints of a cell.* A value that is a location is
   printed as what its cell holds in the heap of the exit (`observe`):
   a block of the heap as a block with its tag, an array of the heap
