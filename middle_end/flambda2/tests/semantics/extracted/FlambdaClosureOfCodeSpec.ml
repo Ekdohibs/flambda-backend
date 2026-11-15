@@ -3,6 +3,7 @@ open FlambdaKnownSymbolsSpec
 open FlambdaMapSpec
 open FlambdaModel
 open FlambdaSetsOfCodeSpec
+open FlambdaSlotsOfCodeSpec
 open FlambdaStaticsInScopeSpec
 open FlambdaWellFormedSpec
 open List
@@ -208,6 +209,136 @@ and know_code_in_handler sets syms = function
   | Handler (params, metadata, handler) ->
     Handler (params, metadata, know_code_closures sets syms handler)
 
+(** val slot_closure_code : set_seen list -> code_id -> function_slot ->
+    value_slot -> code_id option **)
+
+let slot_closure_code seen c f slot =
+  match find (fun set -> has_code_at c f (fst set)) seen with
+  | Some set -> (
+    match lookup slot (snd set) with
+    | Some o -> (
+      match o with
+      | Some d -> if sets_seen_give c f slot d seen then Some d else None
+      | None -> None)
+    | None -> None)
+  | None -> None
+
+(** val closure_code_read : set_made list -> set_seen list -> closure_codes ->
+    named -> code_id option **)
+
+let closure_code_read sets seen known d =
+  match d with
+  | Project_value_slot_from (project_from, slot, closure) -> (
+    match closure with
+    | Var x -> (
+      match lookup x known with
+      | Some c -> slot_closure_code seen c project_from slot
+      | None -> None)
+    | _ -> closure_code_made sets known d)
+  | _ -> closure_code_made sets known d
+
+(** val codes_under_read : set_made list -> set_seen list -> closure_codes ->
+    variable -> named -> closure_codes **)
+
+let codes_under_read sets seen known x d =
+  match closure_code_read sets seen known d with
+  | Some c -> (x, c) :: unbind x known
+  | None -> unbind x known
+
+(** val know_slots_in_body : set_made list -> set_seen list -> closure_codes ->
+    expr -> expr **)
+
+let rec know_slots_in_body sets seen known e =
+  match e with
+  | Let (x, kind, d, body) ->
+    Let
+      ( x,
+        kind,
+        d,
+        know_slots_in_body sets seen (codes_under_read sets seen known x d) body
+      )
+  | Let_static (bindings, body) ->
+    Let_static (bindings, know_slots_in_body sets seen known body)
+  | Let_cont_non_recursive (k, h, body) ->
+    Let_cont_non_recursive
+      ( k,
+        know_slots_in_handler sets seen known h,
+        know_slots_in_body sets seen known body )
+  | Let_cont_recursive (handlers, body) ->
+    Let_cont_recursive
+      ( map
+          (fun pat ->
+            let k, h = pat in
+            k, know_slots_in_handler sets seen known h)
+          handlers,
+        know_slots_in_body sets seen known body )
+  | Apply ap -> Apply (call_code_closure known ap)
+  | _ -> e
+
+(** val know_slots_in_handler : set_made list -> set_seen list -> closure_codes
+    -> continuation_handler -> continuation_handler **)
+
+and know_slots_in_handler sets seen known = function
+  | Handler (params, metadata, handler) ->
+    Handler
+      ( params,
+        metadata,
+        know_slots_in_body sets seen (forget_code_vars params known) handler )
+
+(** val know_slots_in_code : set_made list -> set_seen list -> code_id -> code
+    -> code **)
+
+let know_slots_in_code sets seen id c =
+  match c with
+  | Code (params, my_closure, ret, exn, metadata, body) ->
+    if metadata.cm_is_stub || among my_closure params
+    then c
+    else
+      Code
+        ( params,
+          my_closure,
+          ret,
+          exn,
+          metadata,
+          know_slots_in_body sets seen ((my_closure, id) :: []) body )
+
+(** val know_slots_in_binding : set_made list -> set_seen list -> static_binding
+    -> static_binding **)
+
+let know_slots_in_binding sets seen binding =
+  match binding with
+  | Bind_code (id, c) -> Bind_code (id, know_slots_in_code sets seen id c)
+  | _ -> binding
+
+(** val know_code_slots : set_made list -> set_seen list -> expr -> expr **)
+
+let rec know_code_slots sets seen e =
+  match e with
+  | Let (x, kind, d, body) -> Let (x, kind, d, know_code_slots sets seen body)
+  | Let_static (bindings, body) ->
+    Let_static
+      ( map (know_slots_in_binding sets seen) bindings,
+        know_code_slots sets seen body )
+  | Let_cont_non_recursive (k, h, body) ->
+    Let_cont_non_recursive
+      (k, know_code_slots_in_handler sets seen h, know_code_slots sets seen body)
+  | Let_cont_recursive (handlers, body) ->
+    Let_cont_recursive
+      ( map
+          (fun pat ->
+            let k, h = pat in
+            k, know_code_slots_in_handler sets seen h)
+          handlers,
+        know_code_slots sets seen body )
+  | _ -> e
+
+(** val know_code_slots_in_handler : set_made list -> set_seen list ->
+    continuation_handler -> continuation_handler **)
+
+and know_code_slots_in_handler sets seen = function
+  | Handler (params, metadata, handler) ->
+    Handler (params, metadata, know_code_slots sets seen handler)
+
 (** val groups_whole : expr -> bool **)
 
 let rec groups_whole = function
@@ -246,4 +377,8 @@ and code_groups_whole = function
 (** val know_own_closures : expr -> expr **)
 
 let know_own_closures e =
-  if groups_whole e then know_code_closures (sets_made e) [] e else e
+  if groups_whole e
+  then
+    let e' = know_code_closures (sets_made e) [] e in
+    know_code_slots (sets_made e') (sets_seen [] e') e'
+  else e

@@ -3,6 +3,7 @@ open FlambdaKnownSymbolsSpec
 open FlambdaMapSpec
 open FlambdaModel
 open FlambdaSetsOfCodeSpec
+open FlambdaSlotsOfCodeSpec
 open FlambdaStaticsInScopeSpec
 open FlambdaWellFormedSpec
 open List
@@ -49,6 +50,41 @@ val know_code_closures : set_made list -> symbol list -> expr -> expr
 
 val know_code_in_handler :
   set_made list -> symbol list -> continuation_handler -> continuation_handler
+
+val slot_closure_code :
+  set_seen list -> code_id -> function_slot -> value_slot -> code_id option
+
+val closure_code_read :
+  set_made list -> set_seen list -> closure_codes -> named -> code_id option
+
+val codes_under_read :
+  set_made list ->
+  set_seen list ->
+  closure_codes ->
+  variable ->
+  named ->
+  closure_codes
+
+val know_slots_in_body :
+  set_made list -> set_seen list -> closure_codes -> expr -> expr
+
+val know_slots_in_handler :
+  set_made list ->
+  set_seen list ->
+  closure_codes ->
+  continuation_handler ->
+  continuation_handler
+
+val know_slots_in_code :
+  set_made list -> set_seen list -> code_id -> code -> code
+
+val know_slots_in_binding :
+  set_made list -> set_seen list -> static_binding -> static_binding
+
+val know_code_slots : set_made list -> set_seen list -> expr -> expr
+
+val know_code_slots_in_handler :
+  set_made list -> set_seen list -> continuation_handler -> continuation_handler
 
 val groups_whole : expr -> bool
 

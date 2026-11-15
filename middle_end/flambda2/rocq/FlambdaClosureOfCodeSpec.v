@@ -27,14 +27,16 @@
 
 (* In the body of code, what [my_closure] is known to be from its code
    is used: a call of it or of another closure of its set is made
-   direct, and a value slot that every such set gives one symbol or
-   constant is read.
+   direct, a value slot that every such set gives one symbol or
+   constant is read, and a call of a value slot that every such set
+   gives a closure of one code is made direct.
 
-   This file is to be reviewed: [sibling_code] and [slot_held], which
-   say what is known; [know_code_closures] and what it is made of;
-   [groups_whole]; [know_own_closures], which is to be extracted and
-   run by the validation of middle_end/flambda2/tests/semantics/; and
-   the statements.
+   This file is to be reviewed: [sibling_code], [slot_held] and
+   [slot_closure_code], which say what is known; [know_code_closures]
+   and [know_code_slots] and what they are made of; [groups_whole];
+   [know_own_closures], which is to be extracted and run by the
+   validation of middle_end/flambda2/tests/semantics/; and the
+   statements.
 
    What Simplify does. It simplifies the code of a function where it
    simplifies the set of closures that the function is of, and gives
@@ -72,6 +74,36 @@
    known of a variable is its code, a code id; going under a binder
    of the variable, it is forgotten.
 
+   A second pass goes over the result ([know_code_slots]) and knows
+   one thing more of a variable [x] known to be a closure of code
+   [c]:
+
+   - a variable bound to [Project_value_slot_from f slot (Var x)] is
+     known to be a closure of the code [d], if there is a set with
+     [c] at [f] and every such set gives [slot] a closure in sight
+     of the code [d] ([slot_closure_code];
+     FlambdaSlotsOfCodeSpec.sets_seen_give, which is checked on the
+     sets that the result of the first pass makes).
+
+   The closures that the sets give the slot need not be one closure:
+   a function that captures a closure which an enclosing function
+   makes may hold different closure values on different runs of that
+   function. What is known is their code, so the second pass changes
+   calls only: an indirect call of a variable that is known is the
+   direct call of its code, as in the first pass, and no defining
+   expression is changed. Simplify knows it from the same type of
+   [my_closure]:
+   the type of a value slot there is the type that the simple put in
+   it has where the set is made
+   (simplify/simplify_set_of_closures.ml,
+   [type_value_slots_and_make_lifting_decision_for_one_set]), which
+   for a variable bound to a closure made above is that of a closure
+   of known code. A value slot that the sets give a symbol is not
+   read by the second pass, whatever the symbol is bound to
+   (FlambdaSlotsOfCodeSpec.v says why): where they all give one
+   symbol and it is in scope at the projection, the first pass has
+   put that symbol in the place of the projection.
+
    The result refines the unit run on its own, from its imports, and
    followed by what may follow a unit, which is the observers of
    FlambdaObserversSpec.v at the value slots given, run from the
@@ -80,9 +112,18 @@
    from elsewhere may have the code [c] at [f] beside other code, or
    with other values in its value slots. What makes it right is that
    every closure of the run of a unit is of a set that the unit makes
-   (FlambdaSetsOfCodeSpec.state_sets_have), and that the body of code
+   (FlambdaSetsOfCodeSpec.state_sets_have,
+   FlambdaSlotsOfCodeSpec.state_slots_give), and that the body of code
    runs only where [my_closure] is a closure of that code
    (FlambdaContextWhereSpec.let_static_code_refines_from_called_statement).
+   What may follow a unit may call a closure of the unit, and the
+   code of the unit then runs and makes the sets that the unit makes;
+   it names no code id, so it makes no set of its own. A later unit
+   that made sets with a code id of this unit, as one that kept a
+   copy of code of this unit under the code id of this unit would,
+   is not among what may follow: nothing is said of it here. Of a
+   copy under another code id nothing is known by these facts, which
+   go by the code id.
    A projection of a function slot from a symbol gives the symbol
    that the static set has for that slot, which is a closure of the
    set only where the group that binds the set binds all of it; so
@@ -102,7 +143,8 @@ From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaValueSpec FlambdaSemanticsSpec FlambdaBindersSpec FlambdaNominalSpec
   FlambdaWellFormedSpec FlambdaStaticsInScopeSpec FlambdaUnusedStaticsSpec
-  FlambdaKnownSymbolsSpec FlambdaKnownSlotsSpec FlambdaSetsOfCodeSpec.
+  FlambdaKnownSymbolsSpec FlambdaKnownSlotsSpec FlambdaSetsOfCodeSpec
+  FlambdaSlotsOfCodeSpec.
 From OxCamlFlambda2 Require Import FlambdaImportsSpec FlambdaObserversSpec.
 Import ListNotations.
 
@@ -307,6 +349,126 @@ with know_code_in_handler (sets : list set_made) (syms : list symbol)
     Handler params metadata (know_code_closures sets syms handler)
   end.
 
+(* ======================================================================== *)
+(* A value slot that every set gives a closure of one code                  *)
+(* ======================================================================== *)
+
+(* The code of the closure that every set with [c] at [f] gives the
+   value slot, if there is such a set and each of them gives the slot
+   a closure in sight of that one code
+   (FlambdaSlotsOfCodeSpec.sets_seen_give). *)
+Definition slot_closure_code (seen : list set_seen) (c : code_id)
+    (f : function_slot) (slot : value_slot) : option code_id :=
+  match find (fun set => has_code_at c f (fst set)) seen with
+  | Some set =>
+    match lookup slot (snd set) with
+    | Some (Some d) => if sets_seen_give c f slot d seen then Some d else None
+    | Some None | None => None
+    end
+  | None => None
+  end.
+
+(* The code of the closure that a named expression gives, where it is
+   known: what [closure_code_made] says, and the projection of a value
+   slot from a variable that is known. *)
+Definition closure_code_read (sets : list set_made) (seen : list set_seen)
+    (known : closure_codes) (d : named) : option code_id :=
+  match d with
+  | Project_value_slot_from project_from slot (Var x) =>
+    match lookup x known with
+    | Some c => slot_closure_code seen c project_from slot
+    | None => None
+    end
+  | Project_value_slot_from _ _ (Symbol _ | Const _) | Simple _ | Prim _ _
+  | Set_of_closures _ _ | Closure_of_set _ _ _ | Project_value_slot _ _
+  | Project_function_slot _ _ _ =>
+    closure_code_made sets known d
+  end.
+
+Definition codes_under_read (sets : list set_made) (seen : list set_seen)
+    (known : closure_codes) (x : variable) (d : named) : closure_codes :=
+  match closure_code_read sets seen known d with
+  | Some c => (x, c) :: unbind x known
+  | None => unbind x known
+  end.
+
+(* The body of code again, with that known too. Only calls are
+   rewritten: an indirect call of a variable that is known is the
+   direct call of its code. No defining expression is changed. *)
+Fixpoint know_slots_in_body (sets : list set_made) (seen : list set_seen)
+    (known : closure_codes) (e : expr) : expr :=
+  match e with
+  | Let x kind d body =>
+    Let x kind d
+      (know_slots_in_body sets seen (codes_under_read sets seen known x d)
+         body)
+  | Let_static bindings body =>
+    Let_static bindings (know_slots_in_body sets seen known body)
+  | Let_cont_non_recursive k h body =>
+    Let_cont_non_recursive k (know_slots_in_handler sets seen known h)
+      (know_slots_in_body sets seen known body)
+  | Let_cont_recursive handlers body =>
+    Let_cont_recursive
+      (map (fun '(k, h) => (k, know_slots_in_handler sets seen known h))
+         handlers)
+      (know_slots_in_body sets seen known body)
+  | Apply ap => Apply (call_code_closure known ap)
+  | Apply_cont _ | Switch _ _ | Invalid => e
+  end
+with know_slots_in_handler (sets : list set_made) (seen : list set_seen)
+    (known : closure_codes) (h : continuation_handler)
+    : continuation_handler :=
+  match h with
+  | Handler params metadata handler =>
+    Handler params metadata
+      (know_slots_in_body sets seen (forget_code_vars params known) handler)
+  end.
+
+(* The code [id], as [know_in_code]. *)
+Definition know_slots_in_code (sets : list set_made) (seen : list set_seen)
+    (id : code_id) (c : code) : code :=
+  match c with
+  | Code params my_closure ret exn metadata body =>
+    if cm_is_stub metadata || among my_closure params then c
+    else
+      Code params my_closure ret exn metadata
+        (know_slots_in_body sets seen [(my_closure, id)] body)
+  end.
+
+Definition know_slots_in_binding (sets : list set_made)
+    (seen : list set_seen) (binding : static_binding) : static_binding :=
+  match binding with
+  | Bind_code id c => Bind_code id (know_slots_in_code sets seen id c)
+  | Bind_deleted_code _ | Bind_symbol _ _ => binding
+  end.
+
+(* Every code that the expression binds, in handlers too; not the code
+   that the body of code binds. *)
+Fixpoint know_code_slots (sets : list set_made) (seen : list set_seen)
+    (e : expr) {struct e} : expr :=
+  match e with
+  | Let x kind d body => Let x kind d (know_code_slots sets seen body)
+  | Let_static bindings body =>
+    Let_static (map (know_slots_in_binding sets seen) bindings)
+      (know_code_slots sets seen body)
+  | Let_cont_non_recursive k h body =>
+    Let_cont_non_recursive k (know_code_slots_in_handler sets seen h)
+      (know_code_slots sets seen body)
+  | Let_cont_recursive handlers body =>
+    Let_cont_recursive
+      (map (fun '(k, h) => (k, know_code_slots_in_handler sets seen h))
+         handlers)
+      (know_code_slots sets seen body)
+  | Apply _ | Apply_cont _ | Switch _ _ | Invalid => e
+  end
+with know_code_slots_in_handler (sets : list set_made)
+    (seen : list set_seen) (h : continuation_handler) {struct h}
+    : continuation_handler :=
+  match h with
+  | Handler params metadata handler =>
+    Handler params metadata (know_code_slots sets seen handler)
+  end.
+
 (* Every group of static bindings of the expression, in handlers and
    in code too, binds the static sets of closures that it binds whole
    (FlambdaWellFormedSpec.static_set_whole): each symbol of a set to
@@ -342,9 +504,16 @@ with code_groups_whole (c : code) : bool :=
 (* The unit with what the closures of its code are known to be used,
    from the sets that it makes, where its groups bind their static
    sets whole; the unit as it is otherwise. No symbol is in scope to
-   begin with: those that the unit imports are not known here. *)
+   begin with: those that the unit imports are not known here. Then,
+   of the result, the calls of the value slots that every set gives a
+   closure of one code, from the sets that the result makes, seen from
+   nothing in sight. *)
 Definition know_own_closures (e : expr) : expr :=
-  if groups_whole e then know_code_closures (sets_made e) [] e else e.
+  if groups_whole e
+  then
+    let e' := know_code_closures (sets_made e) [] e in
+    know_code_slots (sets_made e') (sets_seen [] e') e'
+  else e.
 
 (* ======================================================================== *)
 (* The statements                                                           *)
@@ -359,6 +528,18 @@ Definition know_code_closures_program_refines_statement : Prop :=
     incl (sets_made e) sets ->
     groups_whole e = true ->
     program_refines e (know_code_closures sets syms e).
+
+(* The same of the calls of the value slots: a unit whose groups bind
+   their static sets whole, with what the closures of its code are
+   known to be from sets that include those that it makes, as made
+   and as seen from nothing in sight, refines the unit, run on its
+   own. *)
+Definition know_code_slots_program_refines_statement : Prop :=
+  ∀ (sets : list set_made) (seen : list set_seen) (e : expr),
+    incl (sets_made e) sets ->
+    incl (sets_seen [] e) seen ->
+    groups_whole e = true ->
+    program_refines e (know_code_slots sets seen e).
 
 (* So what [know_own_closures] gives refines the unit, run on its
    own. *)
@@ -379,9 +560,9 @@ Definition know_own_closures_refines_imports_statement : Prop :=
    FlambdaObserversSpec.v at the value slots given
    (FlambdaObserversSpec.observers) and from the static environment
    of the imports. What follows is the same term in the
-   two runs: it has no code. It makes no closure, since it names no
-   code id, so every closure of the run is still of a set that the
-   unit makes. *)
+   two runs: it has no code. It makes no set of its own, since it
+   names no code id, so every closure of the run is still of a set
+   that the unit makes. *)
 Definition know_own_closures_refines_observed_statement : Prop :=
   ∀ (imports : list (symbol * import_class)) (slots : list value_slot)
     (conts : cont_env) (e : expr),

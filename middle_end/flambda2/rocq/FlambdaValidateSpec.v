@@ -1191,13 +1191,16 @@ Definition normalise_lifted_calling_unset_statement : Prop :=
    (FlambdaClosureOfCodeSpec.know_own_closures): a call of
    [my_closure], or of another closure of its set projected from it,
    is direct, and a value slot of [my_closure] that every set with its
-   code gives one symbol or constant is that. Simplify does both from
-   the type that it gives [my_closure] in the code of a set that it
-   simplifies. The sets are those that the term of the round makes,
-   so a set that a lifting has made static, or a round has changed,
-   is counted as it then is. A call that this makes direct is one
-   that the next round may inline. The round of
-   [normalise_lifted_calling] is named here and not written again. *)
+   code gives one symbol or constant is that. A call of a value slot
+   of [my_closure] that every set with its code gives a closure in
+   sight of one code is direct too (FlambdaSlotsOfCodeSpec.v).
+   Simplify does all three from the type that it gives [my_closure]
+   in the code of a set that it simplifies. The sets are those that
+   the term of the round makes, so a set that a lifting has made
+   static, or a round has changed, is counted as it then is. A call
+   that this makes direct is one that the next round may inline. The
+   round of [normalise_lifted_calling] is named here and not written
+   again. *)
 Definition normalise_lifted_round_own (calling own : bool)
     (avoid : list continuation) (kept : list code_id) (e : expr) : expr :=
   let round := normalise_lifted_round_calling calling avoid kept e in

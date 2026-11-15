@@ -37,7 +37,8 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaUnusedStaticsSpec FlambdaKnownSymbolsSpec FlambdaClosuresSpec
   FlambdaClosuresProofs FlambdaContextWhereSpec FlambdaContextWhereProofs
   FlambdaKnownSlotsSpec FlambdaKnownSlotsProofs FlambdaSetsOfCodeSpec
-  FlambdaSetsOfCodeProofs FlambdaImportsSpec FlambdaObserversSpec
+  FlambdaSetsOfCodeProofs FlambdaSlotsOfCodeSpec FlambdaSlotsOfCodeProofs
+  FlambdaImportsSpec FlambdaObserversSpec
   FlambdaUnitFromProofs FlambdaSharedReadsProofs FlambdaClosureOfCodeSpec.
 From OxCamlFlambda2 Require Import FlambdaBindersSpec FlambdaNominalProofs
   FlambdaEquivarianceProofs FlambdaScopedProofs.
@@ -1451,13 +1452,1187 @@ Proof.
   exact (code_inv_observed sets [] [] [] e Hincl Hwhole (Forall_nil _)).
 Qed.
 
+(* ======================================================================== *)
+(* What the second pass keeps                                               *)
+(* ======================================================================== *)
+
+(* It changes calls only: it makes no set of closures and changes none,
+   as they are made and as they are seen. *)
+Fixpoint know_slots_in_body_sets_made (sets : list set_made)
+    (seen : list set_seen) (e : expr) {struct e} :
+  ∀ known : closure_codes,
+    sets_made (know_slots_in_body sets seen known e) = sets_made e
+with know_slots_in_handler_sets_made (sets : list set_made)
+    (seen : list set_seen) (h : continuation_handler) {struct h} :
+  ∀ known : closure_codes,
+    handler_sets_made (know_slots_in_handler sets seen known h)
+    = handler_sets_made h.
+Proof.
+  - destruct e
+      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
+         | scrutinee arms | ];
+      intros known; cbn [know_slots_in_body sets_made]; try reflexivity.
+    + rewrite (know_slots_in_body_sets_made sets seen body). reflexivity.
+    + rewrite (know_slots_in_body_sets_made sets seen body). reflexivity.
+    + rewrite (know_slots_in_handler_sets_made sets seen h),
+        (know_slots_in_body_sets_made sets seen body).
+      reflexivity.
+    + rewrite (know_slots_in_body_sets_made sets seen body). f_equal.
+      induction handlers as [ | [k h] handlers IH]; cbn [map flat_map];
+        [ reflexivity | ].
+      rewrite (know_slots_in_handler_sets_made sets seen h), IH. reflexivity.
+  - destruct h as [params metadata handler]. intros known.
+    cbn [know_slots_in_handler handler_sets_made].
+    apply know_slots_in_body_sets_made.
+Qed.
+
+Fixpoint know_slots_in_body_sets_seen (sets : list set_made)
+    (seen : list set_seen) (e : expr) {struct e} :
+  ∀ (known : closure_codes) (sight : closure_sight),
+    sets_seen sight (know_slots_in_body sets seen known e) = sets_seen sight e
+with know_slots_in_handler_sets_seen (sets : list set_made)
+    (seen : list set_seen) (h : continuation_handler) {struct h} :
+  ∀ (known : closure_codes) (sight : closure_sight),
+    handler_sets_seen sight (know_slots_in_handler sets seen known h)
+    = handler_sets_seen sight h.
+Proof.
+  - destruct e
+      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
+         | scrutinee arms | ];
+      intros known sight; cbn [know_slots_in_body sets_seen];
+      try reflexivity.
+    + rewrite (know_slots_in_body_sets_seen sets seen body). reflexivity.
+    + rewrite (know_slots_in_body_sets_seen sets seen body). reflexivity.
+    + rewrite (know_slots_in_handler_sets_seen sets seen h),
+        (know_slots_in_body_sets_seen sets seen body).
+      reflexivity.
+    + rewrite (know_slots_in_body_sets_seen sets seen body). f_equal.
+      induction handlers as [ | [k h] handlers IH]; cbn [map flat_map];
+        [ reflexivity | ].
+      rewrite (know_slots_in_handler_sets_seen sets seen h), IH. reflexivity.
+  - destruct h as [params metadata handler]. intros known sight.
+    cbn [know_slots_in_handler handler_sets_seen].
+    apply know_slots_in_body_sets_seen.
+Qed.
+
+Fixpoint know_slots_in_body_groups_whole (sets : list set_made)
+    (seen : list set_seen) (e : expr) {struct e} :
+  ∀ known : closure_codes,
+    groups_whole (know_slots_in_body sets seen known e) = groups_whole e
+with know_slots_in_handler_groups_whole (sets : list set_made)
+    (seen : list set_seen) (h : continuation_handler) {struct h} :
+  ∀ known : closure_codes,
+    handler_groups_whole (know_slots_in_handler sets seen known h)
+    = handler_groups_whole h.
+Proof.
+  - destruct e
+      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
+         | scrutinee arms | ];
+      intros known; cbn [know_slots_in_body groups_whole]; try reflexivity.
+    + apply know_slots_in_body_groups_whole.
+    + rewrite (know_slots_in_body_groups_whole sets seen body). reflexivity.
+    + rewrite (know_slots_in_handler_groups_whole sets seen h),
+        (know_slots_in_body_groups_whole sets seen body).
+      reflexivity.
+    + rewrite (know_slots_in_body_groups_whole sets seen body). f_equal.
+      induction handlers as [ | [k h] handlers IH]; cbn [map forallb];
+        [ reflexivity | ].
+      rewrite (know_slots_in_handler_groups_whole sets seen h), IH.
+      reflexivity.
+  - destruct h as [params metadata handler]. intros known.
+    cbn [know_slots_in_handler handler_groups_whole].
+    apply know_slots_in_body_groups_whole.
+Qed.
+
+Fixpoint know_slots_in_body_binds_statics (sets : list set_made)
+    (seen : list set_seen) (e : expr) :
+  ∀ known : closure_codes,
+    binds_statics (know_slots_in_body sets seen known e) = binds_statics e.
+Proof.
+  destruct e
+    as [ x kind d body | bindings body | k h body | handlers body | ap | ac
+       | scrutinee arms | ];
+    intros known; simpl; try reflexivity.
+  - apply know_slots_in_body_binds_statics.
+  - rewrite know_slots_in_body_binds_statics. reflexivity.
+  - destruct h as [params metadata handler]. simpl.
+    rewrite !know_slots_in_body_binds_statics. reflexivity.
+  - rewrite know_slots_in_body_binds_statics. f_equal.
+    induction handlers as [ | [k [params metadata handler]] handlers IH];
+      simpl; [ reflexivity | ].
+    rewrite know_slots_in_body_binds_statics, IH. reflexivity.
+Qed.
+
+(* The same of the second pass over the code of a unit. *)
+Lemma know_slots_in_code_sets_made (sets : list set_made)
+    (seen : list set_seen) (id : code_id) (c : code) :
+  code_sets_made (know_slots_in_code sets seen id c) = code_sets_made c.
+Proof.
+  destruct c as [params my_closure ret exn metadata body].
+  cbn [know_slots_in_code].
+  destruct (cm_is_stub metadata || among my_closure params);
+    [ reflexivity | ].
+  cbn [code_sets_made]. apply know_slots_in_body_sets_made.
+Qed.
+
+Lemma know_slots_in_bindings_sets_made (sets : list set_made)
+    (seen : list set_seen) (bindings : list static_binding) :
+  flat_map binding_sets_made (map (know_slots_in_binding sets seen) bindings)
+  = flat_map binding_sets_made bindings.
+Proof.
+  induction bindings as [ | [id c | id | sym const] bindings IH];
+    cbn [map flat_map know_slots_in_binding binding_sets_made];
+    [ reflexivity | | | ]; rewrite IH; [ | reflexivity | reflexivity ].
+  rewrite know_slots_in_code_sets_made. reflexivity.
+Qed.
+
+Fixpoint know_code_slots_sets_made (sets : list set_made)
+    (seen : list set_seen) (e : expr) {struct e} :
+  sets_made (know_code_slots sets seen e) = sets_made e
+with know_code_slots_in_handler_sets_made (sets : list set_made)
+    (seen : list set_seen) (h : continuation_handler) {struct h} :
+  handler_sets_made (know_code_slots_in_handler sets seen h)
+  = handler_sets_made h.
+Proof.
+  - destruct e
+      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
+         | scrutinee arms | ];
+      cbn [know_code_slots sets_made]; try reflexivity.
+    + rewrite (know_code_slots_sets_made sets seen body). reflexivity.
+    + rewrite (know_code_slots_sets_made sets seen body),
+        know_slots_in_bindings_sets_made.
+      reflexivity.
+    + rewrite (know_code_slots_in_handler_sets_made sets seen h),
+        (know_code_slots_sets_made sets seen body).
+      reflexivity.
+    + rewrite (know_code_slots_sets_made sets seen body). f_equal.
+      induction handlers as [ | [k h] handlers IH]; cbn [map flat_map];
+        [ reflexivity | ].
+      rewrite (know_code_slots_in_handler_sets_made sets seen h), IH.
+      reflexivity.
+  - destruct h as [params metadata handler].
+    cbn [know_code_slots_in_handler handler_sets_made].
+    apply know_code_slots_sets_made.
+Qed.
+
+Lemma know_slots_in_code_sets_seen (sets : list set_made)
+    (seen : list set_seen) (id : code_id) (c : code) :
+  code_sets_seen (know_slots_in_code sets seen id c) = code_sets_seen c.
+Proof.
+  destruct c as [params my_closure ret exn metadata body].
+  cbn [know_slots_in_code].
+  destruct (cm_is_stub metadata || among my_closure params);
+    [ reflexivity | ].
+  cbn [code_sets_seen]. apply know_slots_in_body_sets_seen.
+Qed.
+
+Lemma know_slots_in_bindings_sets_seen (sets : list set_made)
+    (seen : list set_seen) (sight : closure_sight)
+    (bindings : list static_binding) :
+  flat_map (binding_sets_seen sight)
+    (map (know_slots_in_binding sets seen) bindings)
+  = flat_map (binding_sets_seen sight) bindings.
+Proof.
+  induction bindings as [ | [id c | id | sym const] bindings IH];
+    cbn [map flat_map know_slots_in_binding binding_sets_seen];
+    [ reflexivity | | | ]; rewrite IH; [ | reflexivity | reflexivity ].
+  rewrite know_slots_in_code_sets_seen. reflexivity.
+Qed.
+
+Fixpoint know_code_slots_sets_seen (sets : list set_made)
+    (seen : list set_seen) (e : expr) {struct e} :
+  ∀ sight : closure_sight,
+    sets_seen sight (know_code_slots sets seen e) = sets_seen sight e
+with know_code_slots_in_handler_sets_seen (sets : list set_made)
+    (seen : list set_seen) (h : continuation_handler) {struct h} :
+  ∀ sight : closure_sight,
+    handler_sets_seen sight (know_code_slots_in_handler sets seen h)
+    = handler_sets_seen sight h.
+Proof.
+  - destruct e
+      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
+         | scrutinee arms | ];
+      intros sight; cbn [know_code_slots sets_seen]; try reflexivity.
+    + rewrite (know_code_slots_sets_seen sets seen body). reflexivity.
+    + rewrite (know_code_slots_sets_seen sets seen body),
+        know_slots_in_bindings_sets_seen.
+      reflexivity.
+    + rewrite (know_code_slots_in_handler_sets_seen sets seen h),
+        (know_code_slots_sets_seen sets seen body).
+      reflexivity.
+    + rewrite (know_code_slots_sets_seen sets seen body). f_equal.
+      induction handlers as [ | [k h] handlers IH]; cbn [map flat_map];
+        [ reflexivity | ].
+      rewrite (know_code_slots_in_handler_sets_seen sets seen h), IH.
+      reflexivity.
+  - destruct h as [params metadata handler]. intros sight.
+    cbn [know_code_slots_in_handler handler_sets_seen].
+    apply know_code_slots_sets_seen.
+Qed.
+
+Lemma know_slots_in_code_groups_whole (sets : list set_made)
+    (seen : list set_seen) (id : code_id) (c : code) :
+  code_groups_whole (know_slots_in_code sets seen id c) = code_groups_whole c.
+Proof.
+  destruct c as [params my_closure ret exn metadata body].
+  cbn [know_slots_in_code].
+  destruct (cm_is_stub metadata || among my_closure params);
+    [ reflexivity | ].
+  cbn [code_groups_whole]. apply know_slots_in_body_groups_whole.
+Qed.
+
+Lemma know_slots_in_bindings_groups_whole (sets : list set_made)
+    (seen : list set_seen) (bindings : list static_binding) :
+  forallb binding_groups_whole
+    (map (know_slots_in_binding sets seen) bindings)
+  = forallb binding_groups_whole bindings.
+Proof.
+  induction bindings as [ | [id c | id | sym const] bindings IH];
+    cbn [map forallb know_slots_in_binding binding_groups_whole];
+    [ reflexivity | | | ]; rewrite IH; [ | reflexivity | reflexivity ].
+  rewrite know_slots_in_code_groups_whole. reflexivity.
+Qed.
+
+Lemma binds_symbol_to_know_slots (sets : list set_made)
+    (seen : list set_seen) (s : symbol) (const : static_const)
+    (binding : static_binding) :
+  binds_symbol_to s const (know_slots_in_binding sets seen binding)
+  = binds_symbol_to s const binding.
+Proof. destruct binding; reflexivity. Qed.
+
+Lemma existsb_binds_symbol_to_know_slots (sets : list set_made)
+    (seen : list set_seen) (s : symbol) (const : static_const)
+    (bindings : list static_binding) :
+  existsb (binds_symbol_to s const)
+    (map (know_slots_in_binding sets seen) bindings)
+  = existsb (binds_symbol_to s const) bindings.
+Proof.
+  induction bindings as [ | binding bindings IH]; cbn [map existsb];
+    [ reflexivity | ].
+  rewrite binds_symbol_to_know_slots, IH. reflexivity.
+Qed.
+
+Lemma static_set_whole_know_slots (sets : list set_made)
+    (seen : list set_seen) (bindings : list static_binding)
+    (binding : static_binding) :
+  static_set_whole (map (know_slots_in_binding sets seen) bindings)
+    (know_slots_in_binding sets seen binding)
+  = static_set_whole bindings binding.
+Proof.
+  destruct binding as [id c | id | sym const];
+    cbn [know_slots_in_binding static_set_whole]; try reflexivity.
+  destruct const
+    as [code slots | slot closure_symbols decls slots | tag fields
+       | contents | contents | elements];
+    try reflexivity.
+  cbn [static_set_whole]. f_equal. apply forallb_same. intros [slot' s'].
+  apply existsb_binds_symbol_to_know_slots.
+Qed.
+
+Lemma know_slots_in_bindings_whole (sets : list set_made)
+    (seen : list set_seen) (bindings : list static_binding) :
+  forallb
+    (static_set_whole (map (know_slots_in_binding sets seen) bindings))
+    (map (know_slots_in_binding sets seen) bindings)
+  = forallb (static_set_whole bindings) bindings.
+Proof.
+  generalize bindings at 1 3. intros all.
+  induction bindings as [ | binding bindings IH]; cbn [map forallb];
+    [ reflexivity | ].
+  rewrite static_set_whole_know_slots, IH. reflexivity.
+Qed.
+
+Fixpoint know_code_slots_groups_whole (sets : list set_made)
+    (seen : list set_seen) (e : expr) {struct e} :
+  groups_whole (know_code_slots sets seen e) = groups_whole e
+with know_code_slots_in_handler_groups_whole (sets : list set_made)
+    (seen : list set_seen) (h : continuation_handler) {struct h} :
+  handler_groups_whole (know_code_slots_in_handler sets seen h)
+  = handler_groups_whole h.
+Proof.
+  - destruct e
+      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
+         | scrutinee arms | ];
+      cbn [know_code_slots groups_whole]; try reflexivity.
+    + apply know_code_slots_groups_whole.
+    + rewrite (know_code_slots_groups_whole sets seen body),
+        know_slots_in_bindings_whole, know_slots_in_bindings_groups_whole.
+      reflexivity.
+    + rewrite (know_code_slots_in_handler_groups_whole sets seen h),
+        (know_code_slots_groups_whole sets seen body).
+      reflexivity.
+    + rewrite (know_code_slots_groups_whole sets seen body). f_equal.
+      induction handlers as [ | [k h] handlers IH]; cbn [map forallb];
+        [ reflexivity | ].
+      rewrite (know_code_slots_in_handler_groups_whole sets seen h), IH.
+      reflexivity.
+  - destruct h as [params metadata handler].
+    cbn [know_code_slots_in_handler handler_groups_whole].
+    apply know_code_slots_groups_whole.
+Qed.
+
+Fixpoint know_code_slots_binds_statics (sets : list set_made)
+    (seen : list set_seen) (e : expr) :
+  binds_statics (know_code_slots sets seen e) = binds_statics e.
+Proof.
+  destruct e
+    as [ x kind d body | bindings body | k h body | handlers body | ap | ac
+       | scrutinee arms | ];
+    cbn [know_code_slots binds_statics]; try reflexivity.
+  - apply know_code_slots_binds_statics.
+  - rewrite (know_code_slots_binds_statics sets seen body). f_equal.
+    induction bindings as [ | [id c | id | sym const] bindings IH];
+      cbn [map existsb know_slots_in_binding binding_binds]; congruence.
+  - destruct h as [params metadata handler].
+    cbn [know_code_slots_in_handler handler_binds_statics].
+    rewrite !know_code_slots_binds_statics. reflexivity.
+  - rewrite (know_code_slots_binds_statics sets seen body). f_equal.
+    induction handlers as [ | [k [params metadata handler]] handlers IH];
+      cbn [map existsb know_code_slots_in_handler handler_binds_statics];
+      [ reflexivity | ].
+    rewrite know_code_slots_binds_statics, IH. reflexivity.
+Qed.
+
+(* ======================================================================== *)
+(* The second pass: the invariant                                           *)
+(* ======================================================================== *)
+
+Section Slots_known.
+
+Variable sets : list set_made.
+Variable seen : list set_seen.
+
+(* Every fact about the closure in a value slot that the sets given
+   pass the test of, as they are seen, the state has. *)
+Definition slot_facts_hold (s : state) : Prop :=
+  ∀ (c : code_id) (f : function_slot) (slot : value_slot) (d : code_id),
+    sets_seen_give c f slot d seen = true -> state_slots_give c f slot d s.
+
+Definition slots_inv (s : state) : Prop :=
+  code_inv sets s ∧ slot_facts_hold s.
+
+Lemma slots_inv_kept : kept_by_step slots_inv.
+Proof.
+  intros s s' [Hcode Hslots] Hstep. split.
+  - exact (code_inv_kept sets s s' Hcode Hstep).
+  - intros c f slot d Htest.
+    exact (state_slots_give_step c f slot d s s' (Hslots c f slot d Htest)
+             Hstep).
+Qed.
+
+(* The invariant looks at the expression of a state only to ask the
+   tests of it. *)
+Lemma slots_inv_expr (e e' : expr) (vars : env) (conts : cont_env)
+    (statics : static_env) (hp : heap) (rd : read_record) :
+  sets_made e' = sets_made e ->
+  groups_whole e' = groups_whole e ->
+  (∀ sight : closure_sight, sets_seen sight e' = sets_seen sight e) ->
+  slots_inv (State e vars conts statics hp rd)
+  <-> slots_inv (State e' vars conts statics hp rd).
+Proof.
+  intros Hsets Hwhole Hseen.
+  pose proof (code_inv_expr sets e e' vars conts statics hp rd Hsets Hwhole)
+    as Hiff.
+  unfold slots_inv, slot_facts_hold, state_slots_give, expr_slots_give,
+    state_values_all.
+  simpl_state.
+  split; intros [H1 H2]; (split; [ apply Hiff, H1 | ]);
+    intros c f slot d Htest;
+    destruct (H2 c f slot d Htest) as ((known & Hhold & P) & Hrest);
+    (split; [ exists known; split; [ exact Hhold | ] | exact Hrest ]).
+  - rewrite Hseen. exact P.
+  - rewrite <- Hseen. exact P.
+Qed.
+
+(* What the invariant gives of the closures that the variables are
+   bound to. *)
+Definition slot_facts_read (vars : env) (statics : static_env) : Prop :=
+  ∀ (c : code_id) (f : function_slot) (slot : value_slot) (d : code_id)
+    (x : variable) (v : value) (decls : list (function_slot * code_id))
+    (slot_values : list (value_slot * value)),
+    sets_seen_give c f slot d seen = true ->
+    lookup x vars = Some v ->
+    closure_in_set statics v = Some (f, decls, slot_values) ->
+    lookup f decls = Some c ->
+    ∃ w : value,
+      lookup slot slot_values = Some w ∧ value_is_closure_of d w = true.
+
+Lemma slots_inv_facts_read (s : state) :
+  slots_inv s -> slot_facts_read (state_vars s) (state_statics s).
+Proof.
+  intros [_ Hslots] c f slot d x v decls slot_values Htest Hx Hin_set Hcode.
+  exact (closure_slot_gives c f slot d s x v decls slot_values
+           (Hslots c f slot d Htest) Hx Hin_set Hcode).
+Qed.
+
+(* The test that [slot_closure_code] has passed. *)
+Lemma slot_closure_code_test (c : code_id) (f : function_slot)
+    (slot : value_slot) (d : code_id) :
+  slot_closure_code seen c f slot = Some d ->
+  sets_seen_give c f slot d seen = true.
+Proof.
+  unfold slot_closure_code.
+  destruct (find (fun set => has_code_at c f (fst set)) seen) as [set | ];
+    [ | discriminate ].
+  destruct (lookup slot (snd set)) as [[d' | ] | ]; try discriminate.
+  destruct (sets_seen_give c f slot d' seen) eqn:Htest; [ | discriminate ].
+  intros [= <-]. exact Htest.
+Qed.
+
+(* Under a [Let]: what [closure_code_made] knows, and the projection
+   of a value slot from a closure of known code, which is a closure of
+   the code that [slot_closure_code] gives. *)
+Lemma codes_hold_under_read (known : closure_codes) (x : variable)
+    (d : named) (vars : env) (statics : static_env) (v : value) :
+  facts_read sets vars statics ->
+  slot_facts_read vars statics ->
+  codes_hold known vars statics ->
+  eval_named statics vars d = Some v ->
+  codes_hold (codes_under_read sets seen known x d) ((x, v) :: vars) statics.
+Proof.
+  intros Hread Hslots Hhold Hd.
+  destruct d as [a | p args | code slots | slot decls slots | slot closure
+    | project_from slot closure | move_from move_to closure];
+    try exact (codes_hold_under_let sets known x _ vars statics v Hread Hhold
+                 Hd).
+  destruct closure as [y | sym | k];
+    try exact (codes_hold_under_let sets known x _ vars statics v Hread Hhold
+                 Hd).
+  unfold codes_under_read. cbn [closure_code_read].
+  pose proof (codes_hold_unbind known vars statics x v Hhold) as Hforgot.
+  destruct (lookup y known) as [c | ] eqn:Hy; [ | exact Hforgot ].
+  destruct (slot_closure_code seen c project_from slot) as [made | ]
+    eqn:Hmade;
+    [ | exact Hforgot ].
+  assert (Hv :
+    ∃ slots : list (value_slot * value),
+      closure_of statics v = Some (made, slots)).
+  { destruct (Hhold y c Hy) as (w & wslots & Hw & Hclosure).
+    cbn [eval_named eval_simple] in Hd. rewrite Hw in Hd. simpl in Hd.
+    unfold project_value_slot in Hd.
+    destruct (closure_in_set statics w) as [[[at_slot decls] slot_values] | ]
+      eqn:Hin_set;
+      [ | discriminate ].
+    simpl in Hd.
+    destruct (Pos.eqb_spec at_slot project_from) as [-> | _];
+      [ | discriminate ].
+    pose proof (closure_of_in_set statics w c wslots project_from decls
+                  slot_values Hclosure Hin_set) as Hcode.
+    destruct (Hslots c project_from slot made y w decls slot_values
+                (slot_closure_code_test c project_from slot made Hmade) Hw
+                Hin_set Hcode)
+      as (w' & Hw' & Hof).
+    rewrite Hd in Hw'. injection Hw' as <-.
+    exact (closure_value_of statics made v Hof). }
+  destruct Hv as (slots & Hv).
+  intros z c' Hz. specialize (Hforgot z c').
+  cbn [lookup] in Hz, Hforgot |- *.
+  destruct (Pos.eqb z x); [ | exact (Hforgot Hz) ].
+  injection Hz as <-. exists v, slots. split; [ reflexivity | exact Hv ].
+Qed.
+
+(* The same where the named expression is run on a heap. *)
+Lemma codes_hold_under_read_exec (known : closure_codes) (x : variable)
+    (d : named) (vars : env) (statics : static_env) (hp hp' : heap)
+    (rd rd' : read_record) (v : value) :
+  facts_read sets vars statics ->
+  slot_facts_read vars statics ->
+  codes_hold known vars statics ->
+  exec_named statics hp rd vars d = Some (v, hp', rd') ->
+  codes_hold (codes_under_read sets seen known x d) ((x, v) :: vars) statics.
+Proof.
+  intros Hread Hslots Hhold Hd.
+  destruct d as [a | p args | code slots | slot decls slots | slot closure
+    | project_from slot closure | move_from move_to closure];
+    try (pose proof (fun H => exec_named_pure _ _ _ _ _ _ _ _ H Hd) as Hpure;
+         destruct (Hpure eq_refl) as (Hw & _ & _);
+         exact (codes_hold_under_read known x _ vars statics v Hread Hslots
+                  Hhold Hw)).
+  exact (codes_hold_unbind known vars statics x v Hhold).
+Qed.
+
+(* ======================================================================== *)
+(* The second pass: the body of code                                        *)
+(* ======================================================================== *)
+
+Definition slots_inv_at (statics0 : static_env) (s : state) : Prop :=
+  slots_inv s ∧ statics_extend statics0 (state_statics s).
+
+Lemma slots_inv_at_kept (statics0 : static_env) :
+  kept_by_step (slots_inv_at statics0).
+Proof.
+  intros s s' [Hinv Hextend] Hstep.
+  split; [ exact (slots_inv_kept s s' Hinv Hstep) | ].
+  exact (statics_extend_trans _ _ _ Hextend (step_extends_statics s s' Hstep)).
+Qed.
+
+Lemma slots_inv_at_expr (statics0 : static_env) (e e' : expr) (vars : env)
+    (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record) :
+  sets_made e' = sets_made e ->
+  groups_whole e' = groups_whole e ->
+  (∀ sight : closure_sight, sets_seen sight e' = sets_seen sight e) ->
+  slots_inv_at statics0 (State e vars conts statics hp rd)
+  <-> slots_inv_at statics0 (State e' vars conts statics hp rd).
+Proof.
+  intros Hsets Hwhole Hseen.
+  pose proof (slots_inv_expr e e' vars conts statics hp rd Hsets Hwhole Hseen)
+    as Hiff.
+  unfold slots_inv_at. simpl_state.
+  split; intros [H1 H2]; (split; [ apply Hiff, H1 | exact H2 ]).
+Qed.
+
+Fixpoint know_slots_in_body_refines (e : expr) {struct e} :
+  ∀ (known : closure_codes) (vars : env) (conts : cont_env)
+    (statics : static_env) (hp : heap) (rd : read_record),
+    slots_inv (State e vars conts statics hp rd) ->
+    codes_hold known vars statics ->
+    refines (State e vars conts statics hp rd)
+      (State (know_slots_in_body sets seen known e) vars conts statics hp rd).
+Proof.
+  destruct e
+    as [ x kind d body | bindings body | k h body | handlers body | ap | ac
+       | scrutinee arms | ];
+    intros known vars conts statics hp rd Hinv Hhold;
+    cbn [know_slots_in_body]; try apply refines_refl.
+  - (* Let *)
+    pose proof (code_inv_facts_read sets _ (proj1 Hinv)) as Hread.
+    pose proof (slots_inv_facts_read _ Hinv) as Hslots. simpl_state.
+    apply let_refines_step_exec; [ reflexivity | ].
+    intros v hp' rd' Hd Hkind. apply know_slots_in_body_refines.
+    + apply (slots_inv_kept _ _ Hinv).
+      rewrite step_let_exec, Hd, Hkind, kind_eqb_refl. reflexivity.
+    + exact (codes_hold_under_read_exec known x d vars statics hp hp' rd
+               rd' v Hread Hslots Hhold Hd).
+  - (* Let_static *)
+    apply let_static_refines_step.
+    destruct (eval_static_bindings vars bindings statics) as [extended | ]
+      eqn:Heval;
+      [ | exact I ].
+    apply know_slots_in_body_refines.
+    + apply (slots_inv_kept _ _ Hinv).
+      rewrite step_let_static, Heval. reflexivity.
+    + exact (codes_hold_extend known vars statics extended
+               (eval_static_bindings_extend vars bindings statics extended
+                  Heval)
+               Hhold).
+  - (* Let_cont_non_recursive *)
+    destruct h as [params metadata handler]. cbn [know_slots_in_handler].
+    set (handler' :=
+           know_slots_in_body sets seen (forget_code_vars params known)
+             handler).
+    assert (Hinv' :
+      slots_inv
+        (State
+           (Let_cont_non_recursive k (Handler params metadata handler') body)
+           vars conts statics hp rd)).
+    { revert Hinv. apply slots_inv_expr.
+      - cbn [sets_made handler_sets_made]. unfold handler'.
+        rewrite know_slots_in_body_sets_made. reflexivity.
+      - cbn [groups_whole handler_groups_whole]. unfold handler'.
+        rewrite know_slots_in_body_groups_whole. reflexivity.
+      - intros sight. cbn [sets_seen handler_sets_seen]. unfold handler'.
+        rewrite know_slots_in_body_sets_seen. reflexivity. }
+    apply (refines_trans _
+      (State
+         (Let_cont_non_recursive k (Handler params metadata handler') body)
+         vars conts statics hp rd)).
+    + apply (let_cont_handler_refines_from (slots_inv_at statics) k params
+               metadata handler handler' body vars conts statics hp rd
+               (slots_inv_at_kept statics)).
+      * exact (conj Hinv (statics_extend_refl statics)).
+      * exact (conj Hinv' (statics_extend_refl statics)).
+      * intros vs handler_vars conts' statics' hp' rd' _ Hbind. split.
+        -- apply slots_inv_at_expr; unfold handler';
+             [ apply know_slots_in_body_sets_made
+             | apply know_slots_in_body_groups_whole
+             | intros sight; apply know_slots_in_body_sets_seen ].
+        -- intros [Hentry Hextend]. simpl_state.
+           apply know_slots_in_body_refines; [ exact Hentry | ].
+           exact (codes_hold_bind_params statics' params known vs vars
+                    handler_vars
+                    (codes_hold_extend known vars statics statics' Hextend
+                       Hhold)
+                    Hbind).
+    + apply let_cont_non_recursive_refines_step.
+      apply know_slots_in_body_refines; [ | exact Hhold ].
+      apply (slots_inv_kept _ _ Hinv'). apply step_let_cont_non_recursive.
+  - (* Let_cont_recursive *)
+    set (know :=
+           fun kh : continuation * continuation_handler =>
+             let '(k, h) := kh in
+             (k, know_slots_in_handler sets seen known h)).
+    apply (refines_trans _
+      (State (Let_cont_recursive (map know handlers) body) vars conts
+         statics hp rd)).
+    + assert (Hhandlers :
+        ∀ done : list (continuation * continuation_handler),
+          slots_inv
+            (State (Let_cont_recursive (done ++ handlers) body) vars conts
+               statics hp rd)
+          ->
+          refines
+            (State (Let_cont_recursive (done ++ handlers) body) vars conts
+               statics hp rd)
+            (State (Let_cont_recursive (done ++ map know handlers) body)
+               vars conts statics hp rd)).
+      { clear Hinv.
+        induction handlers as [ | [k [params metadata handler]] handlers IH];
+          intros done Hdone; cbn [map]; [ apply refines_refl | ].
+        unfold know at 1. cbn [know_slots_in_handler].
+        set (handler' :=
+               know_slots_in_body sets seen (forget_code_vars params known)
+                 handler).
+        assert (Hdone' :
+          slots_inv
+            (State
+               (Let_cont_recursive
+                  (done ++ (k, Handler params metadata handler') :: handlers)
+                  body)
+               vars conts statics hp rd)).
+        { revert Hdone. apply slots_inv_expr.
+          - cbn [sets_made]. rewrite !flat_map_app.
+            cbn [flat_map handler_sets_made]. unfold handler'.
+            rewrite know_slots_in_body_sets_made. reflexivity.
+          - cbn [groups_whole]. rewrite !forallb_app.
+            cbn [forallb handler_groups_whole]. unfold handler'.
+            rewrite know_slots_in_body_groups_whole. reflexivity.
+          - intros sight. cbn [sets_seen]. rewrite !flat_map_app.
+            cbn [flat_map handler_sets_seen]. unfold handler'.
+            rewrite know_slots_in_body_sets_seen. reflexivity. }
+        apply (refines_trans _
+          (State
+             (Let_cont_recursive
+                (done ++ (k, Handler params metadata handler') :: handlers)
+                body)
+             vars conts statics hp rd)).
+        - apply (let_cont_recursive_handler_refines_from
+                   (slots_inv_at statics) done k params metadata handler
+                   handler' handlers body vars conts statics hp rd
+                   (slots_inv_at_kept statics)).
+          + exact (conj Hdone (statics_extend_refl statics)).
+          + exact (conj Hdone' (statics_extend_refl statics)).
+          + symmetry. unfold handler'. apply know_slots_in_body_binds_statics.
+          + intros vs handler_vars conts' statics' hp' rd' _ Hbind. split.
+            * apply slots_inv_at_expr; unfold handler';
+                [ apply know_slots_in_body_sets_made
+                | apply know_slots_in_body_groups_whole
+                | intros sight; apply know_slots_in_body_sets_seen ].
+            * intros [Hentry Hextend]. simpl_state.
+              apply know_slots_in_body_refines; [ exact Hentry | ].
+              exact (codes_hold_bind_params statics' params known vs vars
+                       handler_vars
+                       (codes_hold_extend known vars statics statics'
+                          Hextend Hhold)
+                       Hbind).
+        - specialize
+            (IH (done ++ [(k, Handler params metadata handler')])).
+          rewrite <- !app_assoc in IH. cbn [app] in IH. exact (IH Hdone'). }
+      exact (Hhandlers [] Hinv).
+    + assert (Hinv' :
+        slots_inv
+          (State (Let_cont_recursive (map know handlers) body) vars conts
+             statics hp rd)).
+      { revert Hinv. apply slots_inv_expr.
+        - cbn [sets_made]. f_equal. clear.
+          induction handlers as [ | [k h] handlers IH]; cbn [map flat_map];
+            [ reflexivity | ].
+          unfold know at 1. rewrite know_slots_in_handler_sets_made, IH.
+          reflexivity.
+        - cbn [groups_whole]. f_equal. clear.
+          induction handlers as [ | [k h] handlers IH]; cbn [map forallb];
+            [ reflexivity | ].
+          unfold know at 1. rewrite know_slots_in_handler_groups_whole, IH.
+          reflexivity.
+        - intros sight. cbn [sets_seen]. f_equal. clear.
+          induction handlers as [ | [k h] handlers IH]; cbn [map flat_map];
+            [ reflexivity | ].
+          unfold know at 1. rewrite know_slots_in_handler_sets_seen, IH.
+          reflexivity. }
+      apply let_cont_recursive_refines_step; [ reflexivity | ].
+      intros Hbinds. apply know_slots_in_body_refines; [ | exact Hhold ].
+      apply (slots_inv_kept _ _ Hinv').
+      rewrite step_let_cont_recursive, Hbinds. reflexivity.
+  - (* Apply *)
+    apply equivalent_refines, step_eq_equivalent. symmetry.
+    apply call_code_closure_step, Hhold.
+Qed.
+
+(* ======================================================================== *)
+(* The second pass: the code of a unit                                      *)
+(* ======================================================================== *)
+
+Fixpoint know_code_slots_refines_aux (e : expr) {struct e} :
+  ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+    (rd : read_record),
+    slots_inv (State e vars conts statics hp rd) ->
+    refines (State e vars conts statics hp rd)
+      (State (know_code_slots sets seen e) vars conts statics hp rd).
+Proof.
+  destruct e
+    as [ x kind d body | bindings body | k h body | handlers body | ap | ac
+       | scrutinee arms | ];
+    intros vars conts statics hp rd Hinv; cbn [know_code_slots];
+    try apply refines_refl.
+  - (* Let *)
+    apply let_refines_step_exec; [ reflexivity | ].
+    intros v hp' rd' Hv Hkind. apply know_code_slots_refines_aux.
+    apply (slots_inv_kept _ _ Hinv).
+    rewrite step_let_exec, Hv, Hkind, kind_eqb_refl. reflexivity.
+  - (* Let_static *)
+    apply (refines_trans _
+      (State
+         (Let_static (map (know_slots_in_binding sets seen) bindings) body)
+         vars conts statics hp rd)).
+    + assert (Hcode :
+        ∀ done : list static_binding,
+          slots_inv
+            (State (Let_static (done ++ bindings) body) vars conts statics hp
+               rd)
+          ->
+          refines
+            (State (Let_static (done ++ bindings) body) vars conts statics hp
+               rd)
+            (State
+               (Let_static
+                  (done ++ map (know_slots_in_binding sets seen) bindings)
+                  body)
+               vars conts statics hp rd)).
+      { clear Hinv.
+        induction bindings
+          as [ | [id [params my_closure ret exn metadata code_body] | id
+                 | sym const]
+                 bindings IH];
+          intros done Hdone; cbn [map]; [ apply refines_refl | | | ].
+        - cbn [know_slots_in_binding know_slots_in_code].
+          destruct (cm_is_stub metadata || among my_closure params)
+            eqn:Hleft.
+          { (* The code is left. *)
+            specialize
+              (IH
+                 (done
+                  ++ [Bind_code id
+                        (Code params my_closure ret exn metadata code_body)])).
+            rewrite <- !app_assoc in IH. cbn [app] in IH. exact (IH Hdone). }
+          apply orb_false_iff in Hleft as [_ Hmine].
+          set (code_body' :=
+                 know_slots_in_body sets seen [(my_closure, id)] code_body).
+          assert (Hdone' :
+            slots_inv
+              (State
+                 (Let_static
+                    (done
+                     ++ Bind_code id
+                          (Code params my_closure ret exn metadata code_body')
+                     :: bindings)
+                    body)
+                 vars conts statics hp rd)).
+          { revert Hdone. apply slots_inv_expr.
+            - cbn [sets_made]. rewrite !flat_map_app.
+              cbn [flat_map binding_sets_made code_sets_made].
+              unfold code_body'. rewrite know_slots_in_body_sets_made.
+              reflexivity.
+            - apply groups_whole_let_static_code. unfold code_body'.
+              symmetry. apply know_slots_in_body_groups_whole.
+            - intros sight. cbn [sets_seen]. rewrite !flat_map_app.
+              cbn [flat_map binding_sets_seen code_sets_seen].
+              unfold code_body'. rewrite know_slots_in_body_sets_seen.
+              reflexivity. }
+          apply (refines_trans _
+            (State
+               (Let_static
+                  (done
+                   ++ Bind_code id
+                        (Code params my_closure ret exn metadata code_body')
+                   :: bindings)
+                  body)
+               vars conts statics hp rd)).
+          + apply (let_static_code_refines_from_called slots_inv done id
+                     params my_closure ret exn metadata code_body code_body'
+                     bindings body vars conts statics hp rd slots_inv_kept
+                     Hdone Hdone').
+            * symmetry. unfold code_body'.
+              apply know_slots_in_body_binds_statics.
+            * intros vs callee callee_vars return_to exn_to statics' hp' rd'
+                value_slots Hbind _ _ Hclosure.
+              split.
+              -- apply slots_inv_expr; unfold code_body';
+                   [ apply know_slots_in_body_sets_made
+                   | apply know_slots_in_body_groups_whole
+                   | intros sight; apply know_slots_in_body_sets_seen ].
+              -- intros Hentry.
+                 apply know_slots_in_body_refines; [ exact Hentry | ].
+                 intros x c Hx. cbn [lookup] in Hx.
+                 destruct (Pos.eqb_spec x my_closure) as [-> | _];
+                   [ | discriminate ].
+                 injection Hx as <-. exists callee, value_slots.
+                 split; [ | exact Hclosure ].
+                 rewrite (bind_params_lookup_other my_closure params vs _
+                            callee_vars Hmine Hbind).
+                 cbn [lookup]. rewrite Pos.eqb_refl. reflexivity.
+          + specialize
+              (IH
+                 (done
+                  ++ [Bind_code id
+                        (Code params my_closure ret exn metadata code_body')])).
+            rewrite <- !app_assoc in IH. cbn [app] in IH.
+            exact (IH Hdone').
+        - cbn [know_slots_in_binding].
+          specialize (IH (done ++ [Bind_deleted_code id])).
+          rewrite <- !app_assoc in IH. cbn [app] in IH. exact (IH Hdone).
+        - cbn [know_slots_in_binding].
+          specialize (IH (done ++ [Bind_symbol sym const])).
+          rewrite <- !app_assoc in IH. cbn [app] in IH. exact (IH Hdone). }
+      exact (Hcode [] Hinv).
+    + assert (Hinv' :
+        slots_inv
+          (State
+             (Let_static (map (know_slots_in_binding sets seen) bindings)
+                body)
+             vars conts statics hp rd)).
+      { revert Hinv. apply slots_inv_expr.
+        - cbn [sets_made]. rewrite know_slots_in_bindings_sets_made.
+          reflexivity.
+        - cbn [groups_whole].
+          rewrite know_slots_in_bindings_whole,
+            know_slots_in_bindings_groups_whole.
+          reflexivity.
+        - intros sight. cbn [sets_seen].
+          rewrite know_slots_in_bindings_sets_seen. reflexivity. }
+      apply let_static_refines_step.
+      destruct
+        (eval_static_bindings vars
+           (map (know_slots_in_binding sets seen) bindings) statics)
+        as [extended | ] eqn:Heval;
+        [ | exact I ].
+      apply know_code_slots_refines_aux. apply (slots_inv_kept _ _ Hinv').
+      rewrite step_let_static, Heval. reflexivity.
+  - (* Let_cont_non_recursive *)
+    destruct h as [params metadata handler].
+    cbn [know_code_slots_in_handler].
+    assert (Hinv' :
+      slots_inv
+        (State
+           (Let_cont_non_recursive k
+              (Handler params metadata (know_code_slots sets seen handler))
+              body)
+           vars conts statics hp rd)).
+    { revert Hinv. apply slots_inv_expr.
+      - cbn [sets_made handler_sets_made].
+        rewrite know_code_slots_sets_made. reflexivity.
+      - cbn [groups_whole handler_groups_whole].
+        rewrite know_code_slots_groups_whole. reflexivity.
+      - intros sight. cbn [sets_seen handler_sets_seen].
+        rewrite know_code_slots_sets_seen. reflexivity. }
+    apply (refines_trans _
+      (State
+         (Let_cont_non_recursive k
+            (Handler params metadata (know_code_slots sets seen handler))
+            body)
+         vars conts statics hp rd)).
+    + apply (let_cont_handler_refines_from slots_inv k params metadata handler
+               (know_code_slots sets seen handler) body vars conts statics
+               hp rd_ slots_inv_kept Hinv Hinv').
+      intros vs handler_vars conts' statics' hp' rd' _ _. split.
+      * apply slots_inv_expr;
+          [ apply know_code_slots_sets_made
+          | apply know_code_slots_groups_whole
+          | intros sight; apply know_code_slots_sets_seen ].
+      * intros Hentry. apply know_code_slots_refines_aux. exact Hentry.
+    + apply let_cont_non_recursive_refines_step.
+      apply know_code_slots_refines_aux. apply (slots_inv_kept _ _ Hinv').
+      apply step_let_cont_non_recursive.
+  - (* Let_cont_recursive *)
+    set (know :=
+           fun kh : continuation * continuation_handler =>
+             let '(k, h) := kh in (k, know_code_slots_in_handler sets seen h)).
+    apply (refines_trans _
+      (State (Let_cont_recursive (map know handlers) body) vars conts
+         statics hp rd)).
+    + assert (Hhandlers :
+        ∀ done : list (continuation * continuation_handler),
+          slots_inv
+            (State (Let_cont_recursive (done ++ handlers) body) vars conts
+               statics hp rd)
+          ->
+          refines
+            (State (Let_cont_recursive (done ++ handlers) body) vars conts
+               statics hp rd)
+            (State (Let_cont_recursive (done ++ map know handlers) body)
+               vars conts statics hp rd)).
+      { clear Hinv.
+        induction handlers as [ | [k [params metadata handler]] handlers IH];
+          intros done Hdone; cbn [map]; [ apply refines_refl | ].
+        unfold know at 1. cbn [know_code_slots_in_handler].
+        assert (Hdone' :
+          slots_inv
+            (State
+               (Let_cont_recursive
+                  (done
+                   ++ (k,
+                       Handler params metadata
+                         (know_code_slots sets seen handler))
+                   :: handlers)
+                  body)
+               vars conts statics hp rd)).
+        { revert Hdone. apply slots_inv_expr.
+          - cbn [sets_made]. rewrite !flat_map_app.
+            cbn [flat_map handler_sets_made].
+            rewrite know_code_slots_sets_made. reflexivity.
+          - cbn [groups_whole]. rewrite !forallb_app.
+            cbn [forallb handler_groups_whole].
+            rewrite know_code_slots_groups_whole. reflexivity.
+          - intros sight. cbn [sets_seen]. rewrite !flat_map_app.
+            cbn [flat_map handler_sets_seen].
+            rewrite know_code_slots_sets_seen. reflexivity. }
+        apply (refines_trans _
+          (State
+             (Let_cont_recursive
+                (done
+                 ++ (k,
+                     Handler params metadata
+                       (know_code_slots sets seen handler))
+                 :: handlers)
+                body)
+             vars conts statics hp rd)).
+        - apply (let_cont_recursive_handler_refines_from slots_inv done k
+                   params metadata handler
+                   (know_code_slots sets seen handler) handlers body vars
+                   conts statics hp rd slots_inv_kept Hdone Hdone').
+          + symmetry. apply know_code_slots_binds_statics.
+          + intros vs handler_vars conts' statics' hp' rd' _ _. split.
+            * apply slots_inv_expr;
+                [ apply know_code_slots_sets_made
+                | apply know_code_slots_groups_whole
+                | intros sight; apply know_code_slots_sets_seen ].
+            * intros Hentry. apply know_code_slots_refines_aux.
+              exact Hentry.
+        - specialize
+            (IH
+               (done
+                ++ [(k,
+                     Handler params metadata
+                       (know_code_slots sets seen handler))])).
+          rewrite <- !app_assoc in IH. cbn [app] in IH. exact (IH Hdone'). }
+      exact (Hhandlers [] Hinv).
+    + assert (Hinv' :
+        slots_inv
+          (State (Let_cont_recursive (map know handlers) body) vars conts
+             statics hp rd)).
+      { revert Hinv. apply slots_inv_expr.
+        - cbn [sets_made]. f_equal. clear.
+          induction handlers as [ | [k h] handlers IH]; cbn [map flat_map];
+            [ reflexivity | ].
+          unfold know at 1. rewrite know_code_slots_in_handler_sets_made, IH.
+          reflexivity.
+        - cbn [groups_whole]. f_equal. clear.
+          induction handlers as [ | [k h] handlers IH]; cbn [map forallb];
+            [ reflexivity | ].
+          unfold know at 1.
+          rewrite know_code_slots_in_handler_groups_whole, IH.
+          reflexivity.
+        - intros sight. cbn [sets_seen]. f_equal. clear.
+          induction handlers as [ | [k h] handlers IH]; cbn [map flat_map];
+            [ reflexivity | ].
+          unfold know at 1. rewrite know_code_slots_in_handler_sets_seen, IH.
+          reflexivity. }
+      apply let_cont_recursive_refines_step; [ reflexivity | ].
+      intros Hbinds. apply know_code_slots_refines_aux.
+      apply (slots_inv_kept _ _ Hinv').
+      rewrite step_let_cont_recursive, Hbinds. reflexivity.
+Qed.
+
+(* The states that a unit starts in. *)
+Lemma slot_facts_hold_from (e : expr) (conts : cont_env)
+    (statics : static_env) :
+  incl (sets_seen [] e) seen ->
+  (∀ (c : code_id) (f : function_slot) (slot : value_slot) (d : code_id),
+    conts_slots_give c f slot d conts
+    ∧ conts_values_all (fun v => value_slots_give c f slot d v = true) conts
+    ∧ code_slots_give c f slot d statics
+    ∧ Forall
+        (fun binding => allocated_slots_give c f slot d (snd binding) = true)
+        (static_values statics)) ->
+  slot_facts_hold (State e [] conts statics empty_heap no_reads).
+Proof.
+  intros Hincl Hrest c f slot d Htest.
+  destruct (Hrest c f slot d) as (Hconts & Hvalues & Hcode & Hstatics).
+  apply state_slots_give_from; try assumption.
+  unfold sets_seen_give in Htest |- *. rewrite forallb_forall in Htest |- *.
+  intros set Hin. exact (Htest set (Hincl set Hin)).
+Qed.
+
+End Slots_known.
+
+(* The static environment of the imports, and what may follow a unit,
+   for the closures in value slots. *)
+Lemma imports_slots_give (imports : list (symbol * import_class))
+    (c : code_id) (f : function_slot) (slot : value_slot) (d : code_id) :
+  code_slots_give c f slot d (imports_statics imports)
+  ∧ Forall
+      (fun binding => allocated_slots_give c f slot d (snd binding) = true)
+      (static_values (imports_statics imports)).
+Proof.
+  split.
+  - intros id code Hlookup. discriminate Hlookup.
+  - unfold imports_statics. cbn [static_values]. apply Forall_forall.
+    intros [s allocated] Hin.
+    apply in_map_iff in Hin as ([s' c'] & Heq & _).
+    injection Heq as _ <-. reflexivity.
+Qed.
+
+Lemma named_no_code_sets_seen (c : code_id) (f : function_slot)
+    (slot : value_slot) (d : code_id) (sight : closure_sight)
+    (syms : list symbol) (defining : named) :
+  named_statics_in_scope syms [] defining = true ->
+  sets_seen_give c f slot d (named_sets_seen sight defining) = true.
+Proof.
+  destruct defining as [ | | code slots | at_slot decls slots | | | ]; simpl;
+    try reflexivity.
+  - discriminate.
+  - intros H. apply andb_true_iff in H as [Hdecls _].
+    destruct decls as [ | decl decls]; [ reflexivity | ].
+    simpl in Hdecls. discriminate Hdecls.
+Qed.
+
+Fixpoint observer_sets_seen (c : code_id) (f : function_slot)
+    (slot : value_slot) (d : code_id) (e : expr) {struct e} :
+  ∀ sight : closure_sight,
+    binds_no_static e = true ->
+    expr_statics_in_scope [] [] e = true ->
+    sets_seen_give c f slot d (sets_seen sight e) = true.
+Proof.
+  destruct e
+    as [ x xkind defining body | bindings body | k h body | handlers body | ap
+       | ac | scrutinee arms | ];
+    intros sight; cbn [sets_seen]; try (intros _ _; reflexivity).
+  - intros Hno H. simpl in Hno, H. apply andb_true_iff in H as [Hd Hbody].
+    rewrite sets_seen_give_app,
+      (named_no_code_sets_seen c f slot d sight [] defining Hd).
+    exact (observer_sets_seen c f slot d body _ Hno Hbody).
+  - discriminate.
+  - destruct h as [params metadata handler]. cbn [handler_sets_seen].
+    intros Hno H. simpl in Hno, H.
+    apply andb_true_iff in Hno as [Hno_h Hno_b].
+    apply andb_true_iff in H as [Hh Hb].
+    rewrite (no_static_names symbols_of_binding body Hno_b),
+      (no_static_names declared_code_ids_of_binding body Hno_b)
+      in Hh.
+    simpl in Hh.
+    rewrite sets_seen_give_app,
+      (observer_sets_seen c f slot d handler _ Hno_h Hh),
+      (observer_sets_seen c f slot d body _ Hno_b Hb).
+    reflexivity.
+  - intros Hno H. simpl in Hno, H.
+    apply andb_true_iff in Hno as [Hno_hs Hno_b].
+    apply andb_true_iff in H as [Hhs Hb].
+    rewrite sets_seen_give_app,
+      (observer_sets_seen c f slot d body _ Hno_b Hb), andb_true_r.
+    rewrite (no_static_names symbols_of_binding body Hno_b),
+      (no_static_names declared_code_ids_of_binding body Hno_b)
+      in Hhs.
+    simpl in Hhs.
+    induction handlers as [ | [k [params metadata handler]] handlers IH];
+      [ reflexivity | ].
+    simpl in Hno_hs, Hhs.
+    apply andb_true_iff in Hno_hs as [Hno_h Hno_rest].
+    apply andb_true_iff in Hhs as [Hh Hrest].
+    cbn [flat_map handler_sets_seen].
+    rewrite sets_seen_give_app,
+      (observer_sets_seen c f slot d handler _ Hno_h Hh).
+    exact (IH Hno_rest Hrest).
+Qed.
+
+Lemma observers_slots_give (c : code_id) (f : function_slot)
+    (slot : value_slot) (d : code_id) (slots : list value_slot)
+    (conts : cont_env) :
+  observers slots conts -> conts_slots_give c f slot d conts.
+Proof.
+  unfold observers, conts_slots_give.
+  induction conts as [ | [k cont] conts IH]; simpl;
+    [ intros _; exact I | ].
+  intros H. inversion H as [ | kc rest Hc Hrest]; subst.
+  split; [ | exact (IH Hrest) ].
+  revert Hc.
+  destruct cont
+    as [ [params metadata body] vars kept recursive | k0 | c0 extra
+       | remaining remaining_arity return_arity return_to exn_to ];
+    simpl; try contradiction; [ | intros _; exact I ].
+  destruct vars; [ | contradiction ].
+  destruct kept; [ | contradiction ].
+  destruct recursive; [ | contradiction ].
+  intros (Hno & Hscope & _).
+  split; [ | exact I ].
+  exists []. split; [ apply sight_holds_nil | ].
+  split; [ | reflexivity ].
+  exact (observer_sets_seen c f slot d body _ Hno Hscope).
+Qed.
+
+(* The invariant of the state that a unit starts in, from its imports
+   and with what may follow it. *)
+Lemma slots_inv_observed (sets : list set_made) (seen : list set_seen)
+    (imports : list (symbol * import_class)) (slots : list value_slot)
+    (conts : cont_env) (e : expr) :
+  incl (sets_made e) sets ->
+  incl (sets_seen [] e) seen ->
+  groups_whole e = true ->
+  observers slots conts ->
+  slots_inv sets seen
+    (State e [] conts (imports_statics imports) empty_heap no_reads).
+Proof.
+  intros Hincl Hseen Hwhole Hobservers. split.
+  - exact (code_inv_observed sets imports slots conts e Hincl Hwhole
+             Hobservers).
+  - apply slot_facts_hold_from; [ exact Hseen | ].
+    intros c f slot d.
+    destruct (imports_slots_give imports c f slot d) as [Hcode Hstatics].
+    exact (conj (observers_slots_give c f slot d slots conts Hobservers)
+             (conj (observers_values_all _ slots conts Hobservers)
+                (conj Hcode Hstatics))).
+Qed.
+
+(* The second pass over the result of the first has the two tests of
+   the unit. *)
+Lemma second_pass_inv (imports : list (symbol * import_class))
+    (slots : list value_slot) (conts : cont_env) (e : expr) :
+  groups_whole e = true ->
+  observers slots conts ->
+  let e' := know_code_closures (sets_made e) [] e in
+  slots_inv (sets_made e') (sets_seen [] e')
+    (State e' [] conts (imports_statics imports) empty_heap no_reads).
+Proof.
+  intros Hwhole Hobservers e'.
+  apply (slots_inv_observed (sets_made e') (sets_seen [] e') imports slots
+           conts e');
+    [ apply incl_refl | apply incl_refl | | exact Hobservers ].
+  unfold e'. rewrite know_code_closures_groups_whole. exact Hwhole.
+Qed.
+
+(* ======================================================================== *)
+(* The statements                                                           *)
+(* ======================================================================== *)
+
+Theorem know_code_slots_program_refines :
+  know_code_slots_program_refines_statement.
+Proof.
+  intros sets seen e Hincl Hseen Hwhole. unfold program_refines.
+  apply know_code_slots_refines_aux.
+  exact (slots_inv_observed sets seen [] [] [] e Hincl Hseen Hwhole
+           (Forall_nil _)).
+Qed.
+
 Theorem know_own_closures_program_refines :
   know_own_closures_program_refines_statement.
 Proof.
-  intros e. unfold know_own_closures.
+  intros e. unfold know_own_closures, program_refines.
   destruct (groups_whole e) eqn:Hwhole; [ | apply refines_refl ].
-  exact (know_code_closures_program_refines (sets_made e) [] e
-           (incl_refl _) Hwhole).
+  cbv zeta.
+  apply (refines_trans _
+    (State (know_code_closures (sets_made e) [] e) [] [] empty_static_env
+       empty_heap no_reads)).
+  - exact (know_code_closures_program_refines (sets_made e) [] e
+             (incl_refl _) Hwhole).
+  - apply know_code_slots_refines_aux.
+    exact (second_pass_inv [] [] [] e Hwhole (Forall_nil _)).
 Qed.
 
 Theorem know_own_closures_refines_imports :
@@ -1465,9 +2640,15 @@ Theorem know_own_closures_refines_imports :
 Proof.
   intros imports e. unfold unit_refines, know_own_closures.
   destruct (groups_whole e) eqn:Hwhole; [ | apply refines_refl ].
-  apply know_code_closures_refines_aux.
-  exact (code_inv_observed (sets_made e) imports [] [] e (incl_refl _) Hwhole
-           (Forall_nil _)).
+  cbv zeta.
+  apply (refines_trans _
+    (State (know_code_closures (sets_made e) [] e) [] []
+       (imports_statics imports) empty_heap no_reads)).
+  - apply know_code_closures_refines_aux.
+    exact (code_inv_observed (sets_made e) imports [] [] e (incl_refl _)
+             Hwhole (Forall_nil _)).
+  - apply know_code_slots_refines_aux.
+    exact (second_pass_inv imports [] [] e Hwhole (Forall_nil _)).
 Qed.
 
 Theorem know_own_closures_refines_observed :
@@ -1475,9 +2656,15 @@ Theorem know_own_closures_refines_observed :
 Proof.
   intros imports slots conts e Hobservers. unfold know_own_closures.
   destruct (groups_whole e) eqn:Hwhole; [ | apply refines_refl ].
-  apply know_code_closures_refines_aux.
-  exact (code_inv_observed (sets_made e) imports slots conts e (incl_refl _)
-           Hwhole Hobservers).
+  cbv zeta.
+  apply (refines_trans _
+    (State (know_code_closures (sets_made e) [] e) [] conts
+       (imports_statics imports) empty_heap no_reads)).
+  - apply know_code_closures_refines_aux.
+    exact (code_inv_observed (sets_made e) imports slots conts e
+             (incl_refl _) Hwhole Hobservers).
+  - apply know_code_slots_refines_aux.
+    exact (second_pass_inv imports slots conts e Hwhole Hobservers).
 Qed.
 
 (* ======================================================================== *)
@@ -1595,11 +2782,88 @@ Proof.
     apply scoped_handler_intro, know_code_closures_scoped.
 Qed.
 
+(* The second pass keeps every name: it changes calls only. *)
+Fixpoint know_slots_in_body_scoped (sets : list set_made)
+    (seen : list set_seen) (e : expr) {struct e} :
+  ∀ known : closure_codes,
+    scoped e (know_slots_in_body sets seen known e)
+with know_slots_in_handler_scoped (sets : list set_made)
+    (seen : list set_seen) (h : continuation_handler) {struct h} :
+  ∀ known : closure_codes,
+    scoped_handler h (know_slots_in_handler sets seen known h).
+Proof.
+  - destruct e as [x kind d body | bindings body | k h body | handlers body
+                  | ap | ac | scrutinee arms | ];
+      intros known; cbn [know_slots_in_body]; try apply scoped_refl.
+    + apply scoped_let;
+        [ apply incl_refl | apply know_slots_in_body_scoped ].
+    + apply scoped_let_static;
+        [ apply scoped_bindings_refl | apply know_slots_in_body_scoped ].
+    + apply scoped_let_cont;
+        [ apply know_slots_in_handler_scoped
+        | apply know_slots_in_body_scoped ].
+    + apply scoped_let_cont_recursive;
+        [ | | apply know_slots_in_body_scoped ].
+      * rewrite map_map. apply map_ext. intros [k h]. reflexivity.
+      * induction handlers as [ | [k h] handlers IH]; cbn [map];
+          [ apply scoped_handlers_nil | ].
+        apply scoped_handlers_cons;
+          [ apply know_slots_in_handler_scoped | exact IH ].
+    + intros _.
+      destruct (call_code_closure_shape known ap) as [-> | (c & ->)];
+        (split; [ reflexivity | split; apply incl_refl ]).
+  - destruct h as [params metadata handler]. intros known.
+    cbn [know_slots_in_handler].
+    apply scoped_handler_intro, know_slots_in_body_scoped.
+Qed.
+
+Fixpoint know_code_slots_scoped (sets : list set_made)
+    (seen : list set_seen) (e : expr) {struct e} :
+  scoped e (know_code_slots sets seen e)
+with know_code_slots_in_handler_scoped (sets : list set_made)
+    (seen : list set_seen) (h : continuation_handler) {struct h} :
+  scoped_handler h (know_code_slots_in_handler sets seen h).
+Proof.
+  - destruct e as [x kind d body | bindings body | k h body | handlers body
+                  | ap | ac | scrutinee arms | ];
+      cbn [know_code_slots]; try apply scoped_refl.
+    + apply scoped_let;
+        [ apply incl_refl | apply know_code_slots_scoped ].
+    + apply scoped_let_static; [ | apply know_code_slots_scoped ].
+      induction bindings
+        as [ | [id [params my_closure ret exn metadata code_body] | id
+               | sym const]
+               bindings IH];
+        cbn [map]; [ apply scoped_bindings_nil | | | ].
+      * cbn [know_slots_in_binding know_slots_in_code].
+        destruct (cm_is_stub metadata || among my_closure params);
+          [ apply scoped_bindings_cons_same, IH | ].
+        apply scoped_bindings_cons_code; [ | exact IH ].
+        apply scoped_code_intro, know_slots_in_body_scoped.
+      * apply scoped_bindings_cons_same, IH.
+      * apply scoped_bindings_cons_same, IH.
+    + apply scoped_let_cont;
+        [ apply know_code_slots_in_handler_scoped
+        | apply know_code_slots_scoped ].
+    + apply scoped_let_cont_recursive;
+        [ | | apply know_code_slots_scoped ].
+      * rewrite map_map. apply map_ext. intros [k h]. reflexivity.
+      * induction handlers as [ | [k h] handlers IH]; cbn [map];
+          [ apply scoped_handlers_nil | ].
+        apply scoped_handlers_cons;
+          [ apply know_code_slots_in_handler_scoped | exact IH ].
+  - destruct h as [params metadata handler].
+    cbn [know_code_slots_in_handler].
+    apply scoped_handler_intro, know_code_slots_scoped.
+Qed.
+
 Theorem know_own_closures_names : know_own_closures_names_statement.
 Proof.
   intros e. unfold know_own_closures.
-  destruct (groups_whole e);
-    [ apply know_code_closures_scoped | apply scoped_refl ].
+  destruct (groups_whole e); [ | apply scoped_refl ].
+  cbv zeta.
+  apply (scoped_trans _ (know_code_closures (sets_made e) [] e));
+    [ apply know_code_closures_scoped | apply know_code_slots_scoped ].
 Qed.
 
 (* ======================================================================== *)
@@ -2074,11 +3338,280 @@ Proof.
     cbn [rename_handler handler_groups_whole]. apply groups_whole_renamed.
 Qed.
 
+(* What is in sight, renamed: the variables; function slots and code
+   ids are not renamed. *)
+Definition rename_sight (r : renaming) (sight : closure_sight)
+    : closure_sight :=
+  map (fun entry => (rename_variable r (fst entry), snd entry)) sight.
+
+Lemma lookup_sight_renamed (r : renaming) (x : variable)
+    (sight : closure_sight) :
+  lookup (rename_variable r x) (rename_sight r sight) = lookup x sight.
+Proof.
+  unfold rename_sight.
+  induction sight as [ | [y seen] sight IH]; simpl; [ reflexivity | ].
+  rewrite rename_variable_eqb. destruct (Pos.eqb x y); [ reflexivity | ].
+  exact IH.
+Qed.
+
+Lemma unbind_sight_renamed (r : renaming) (x : variable)
+    (sight : closure_sight) :
+  unbind (rename_variable r x) (rename_sight r sight)
+  = rename_sight r (unbind x sight).
+Proof.
+  unfold unbind, rename_sight.
+  induction sight as [ | [y seen] sight IH]; simpl; [ reflexivity | ].
+  rewrite rename_variable_eqb, IH. destruct (Pos.eqb x y); reflexivity.
+Qed.
+
+Lemma sight_without_renamed (r : renaming) (params : list variable) :
+  ∀ sight : closure_sight,
+    sight_without (map (rename_variable r) params) (rename_sight r sight)
+    = rename_sight r (sight_without params sight).
+Proof.
+  induction params as [ | param params IH]; intros sight; simpl;
+    [ reflexivity | ].
+  rewrite unbind_sight_renamed. apply IH.
+Qed.
+
+Lemma sight_made_renamed (r : renaming) (sight : closure_sight)
+    (d : named) :
+  sight_made (rename_sight r sight) (rename_named r d) = sight_made sight d.
+Proof.
+  destruct d as [s | p args | code slots | fslot decls slots | vslot closure
+    | pfrom vslot closure | move_from move_to closure];
+    try reflexivity.
+  destruct closure as [y | sym | c]; try reflexivity.
+  cbn [rename_named rename_simple sight_made].
+  rewrite lookup_sight_renamed. reflexivity.
+Qed.
+
+Lemma sight_under_let_renamed (r : renaming) (sight : closure_sight)
+    (x : variable) (d : named) :
+  sight_under_let (rename_sight r sight) (rename_variable r x)
+    (rename_named r d)
+  = rename_sight r (sight_under_let sight x d).
+Proof.
+  unfold sight_under_let.
+  rewrite sight_made_renamed, unbind_sight_renamed.
+  destruct (sight_made sight d); reflexivity.
+Qed.
+
+Lemma simple_seen_code_renamed (r : renaming) (sight : closure_sight)
+    (a : simple) :
+  simple_seen_code (rename_sight r sight) (rename_simple r a)
+  = simple_seen_code sight a.
+Proof.
+  destruct a as [x | sym | k]; try reflexivity.
+  cbn [rename_simple simple_seen_code]. rewrite lookup_sight_renamed.
+  reflexivity.
+Qed.
+
+Lemma slots_seen_renamed (r : renaming) (sight : closure_sight)
+    (value_slots : list (value_slot * simple)) :
+  slots_seen (rename_sight r sight)
+    (map (fun slot => (fst slot, rename_simple r (snd slot))) value_slots)
+  = slots_seen sight value_slots.
+Proof.
+  unfold slots_seen.
+  induction value_slots as [ | [slot a] value_slots IH]; cbn [map];
+    [ reflexivity | ].
+  cbn [fst snd]. rewrite simple_seen_code_renamed, IH.
+  reflexivity.
+Qed.
+
+Lemma named_sets_seen_renamed (r : renaming) (sight : closure_sight)
+    (d : named) :
+  named_sets_seen (rename_sight r sight) (rename_named r d)
+  = named_sets_seen sight d.
+Proof.
+  destruct d as [s | p args | code slots | fslot decls slots | vslot closure
+    | pfrom vslot closure | move_from move_to closure];
+    try reflexivity; cbn [rename_named named_sets_seen];
+    rewrite (slots_seen_renamed r sight slots); reflexivity.
+Qed.
+
+Lemma static_const_sets_seen_renamed (r : renaming) (sight : closure_sight)
+    (const : static_const) :
+  static_const_sets_seen (rename_sight r sight) (rename_static_const r const)
+  = static_const_sets_seen sight const.
+Proof.
+  destruct const
+    as [code slots | slot closure_symbols decls slots | tag fields
+       | contents | contents | elements];
+    try reflexivity; cbn [rename_static_const static_const_sets_seen];
+    rewrite (slots_seen_renamed r sight slots); reflexivity.
+Qed.
+
+(* The sets that a term renamed makes are seen as those of the term
+   are. *)
+Fixpoint sets_seen_renamed (r : renaming) (e : expr) {struct e} :
+  ∀ sight : closure_sight,
+    sets_seen (rename_sight r sight) (rename_expr r e) = sets_seen sight e
+with handler_sets_seen_renamed (r : renaming) (h : continuation_handler)
+    {struct h} :
+  ∀ sight : closure_sight,
+    handler_sets_seen (rename_sight r sight) (rename_handler r h)
+    = handler_sets_seen sight h.
+Proof.
+  - destruct e
+      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
+         | scrutinee arms | ];
+      intros sight; cbn [rename_expr sets_seen]; try reflexivity.
+    + rewrite named_sets_seen_renamed, sight_under_let_renamed,
+        (sets_seen_renamed r body).
+      reflexivity.
+    + rewrite (sets_seen_renamed r body). f_equal.
+      induction bindings
+        as [ | [id [params my_closure ret exn metadata code_body] | id
+               | sym const]
+               bindings IH];
+        cbn [map flat_map]; [ reflexivity | | | ]; rewrite IH; f_equal.
+      * cbn [rename_static_binding rename_code binding_sets_seen
+               code_sets_seen].
+        exact (sets_seen_renamed r code_body []).
+      * cbn [rename_static_binding binding_sets_seen].
+        apply static_const_sets_seen_renamed.
+    + rewrite (handler_sets_seen_renamed r h), (sets_seen_renamed r body).
+      reflexivity.
+    + rewrite (sets_seen_renamed r body). f_equal.
+      induction handlers as [ | [k h] handlers IH]; cbn [map flat_map];
+        [ reflexivity | ].
+      rewrite (handler_sets_seen_renamed r h), IH. reflexivity.
+  - destruct h as [params metadata handler]. intros sight.
+    cbn [rename_handler handler_sets_seen].
+    rewrite sight_without_renamed. apply sets_seen_renamed.
+Qed.
+
+Lemma sets_seen_renamed_nil (r : renaming) (e : expr) :
+  sets_seen [] (rename_expr r e) = sets_seen [] e.
+Proof. exact (sets_seen_renamed r e []). Qed.
+
+Lemma closure_code_read_renamed (r : renaming) (sets : list set_made)
+    (seen : list set_seen) (known : closure_codes) (d : named) :
+  closure_code_read (map (rename_set_made r) sets) seen
+    (rename_codes r known) (rename_named r d)
+  = closure_code_read sets seen known d.
+Proof.
+  destruct d as [s | p args | code slots | fslot decls slots | vslot closure
+    | pfrom vslot closure | move_from move_to closure];
+    try exact (closure_code_made_renamed r sets known _).
+  destruct closure as [y | sym | c]; try reflexivity.
+  cbn [rename_named rename_simple closure_code_read].
+  rewrite lookup_codes_renamed. reflexivity.
+Qed.
+
+Lemma codes_under_read_renamed (r : renaming) (sets : list set_made)
+    (seen : list set_seen) (known : closure_codes) (x : variable)
+    (d : named) :
+  codes_under_read (map (rename_set_made r) sets) seen
+    (rename_codes r known) (rename_variable r x) (rename_named r d)
+  = rename_codes r (codes_under_read sets seen known x d).
+Proof.
+  unfold codes_under_read.
+  rewrite closure_code_read_renamed, unbind_codes_renamed.
+  destruct (closure_code_read sets seen known d); reflexivity.
+Qed.
+
+Fixpoint know_slots_in_body_renamed (r : renaming) (sets : list set_made)
+    (seen : list set_seen) (e : expr) {struct e} :
+  ∀ known : closure_codes,
+    know_slots_in_body (map (rename_set_made r) sets) seen
+      (rename_codes r known) (rename_expr r e)
+    = rename_expr r (know_slots_in_body sets seen known e)
+with know_slots_in_handler_renamed (r : renaming) (sets : list set_made)
+    (seen : list set_seen) (h : continuation_handler) {struct h} :
+  ∀ known : closure_codes,
+    know_slots_in_handler (map (rename_set_made r) sets) seen
+      (rename_codes r known) (rename_handler r h)
+    = rename_handler r (know_slots_in_handler sets seen known h).
+Proof.
+  - destruct e
+      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
+         | scrutinee arms | ];
+      intros known; try reflexivity;
+      cbn [rename_expr know_slots_in_body].
+    + rewrite codes_under_read_renamed,
+        (know_slots_in_body_renamed r sets seen body).
+      reflexivity.
+    + rewrite (know_slots_in_body_renamed r sets seen body). reflexivity.
+    + rewrite (know_slots_in_handler_renamed r sets seen h),
+        (know_slots_in_body_renamed r sets seen body).
+      reflexivity.
+    + rewrite (know_slots_in_body_renamed r sets seen body). f_equal.
+      induction handlers as [ | [k h] handlers IH]; cbn [map];
+        [ reflexivity | ].
+      rewrite (know_slots_in_handler_renamed r sets seen h), IH.
+      reflexivity.
+    + rewrite call_code_closure_renamed. reflexivity.
+  - destruct h as [params metadata handler]. intros known.
+    cbn [rename_handler know_slots_in_handler].
+    rewrite forget_code_vars_renamed,
+      (know_slots_in_body_renamed r sets seen handler).
+    reflexivity.
+Qed.
+
+Lemma know_slots_in_binding_renamed (r : renaming) (sets : list set_made)
+    (seen : list set_seen) (binding : static_binding) :
+  know_slots_in_binding (map (rename_set_made r) sets) seen
+    (rename_static_binding r binding)
+  = rename_static_binding r (know_slots_in_binding sets seen binding).
+Proof.
+  destruct binding
+    as [id [params my_closure ret exn metadata body] | id | sym const];
+    try reflexivity.
+  cbn [rename_static_binding rename_code know_slots_in_binding
+         know_slots_in_code].
+  rewrite among_rename_variable.
+  destruct (cm_is_stub metadata || among my_closure params);
+    [ reflexivity | ].
+  cbn [rename_static_binding rename_code].
+  rewrite <- (know_slots_in_body_renamed r sets seen body
+                [(my_closure, id)]).
+  reflexivity.
+Qed.
+
+Fixpoint know_code_slots_renamed (r : renaming) (sets : list set_made)
+    (seen : list set_seen) (e : expr) {struct e} :
+  know_code_slots (map (rename_set_made r) sets) seen (rename_expr r e)
+  = rename_expr r (know_code_slots sets seen e)
+with know_code_slots_in_handler_renamed (r : renaming)
+    (sets : list set_made) (seen : list set_seen)
+    (h : continuation_handler) {struct h} :
+  know_code_slots_in_handler (map (rename_set_made r) sets) seen
+    (rename_handler r h)
+  = rename_handler r (know_code_slots_in_handler sets seen h).
+Proof.
+  - destruct e
+      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
+         | scrutinee arms | ];
+      cbn [rename_expr know_code_slots]; try reflexivity.
+    + rewrite (know_code_slots_renamed r sets seen body). reflexivity.
+    + rewrite (know_code_slots_renamed r sets seen body). f_equal.
+      induction bindings as [ | binding bindings IH]; cbn [map];
+        [ reflexivity | ].
+      rewrite know_slots_in_binding_renamed, IH. reflexivity.
+    + rewrite (know_code_slots_in_handler_renamed r sets seen h),
+        (know_code_slots_renamed r sets seen body).
+      reflexivity.
+    + rewrite (know_code_slots_renamed r sets seen body). f_equal.
+      induction handlers as [ | [k h] handlers IH]; cbn [map];
+        [ reflexivity | ].
+      rewrite (know_code_slots_in_handler_renamed r sets seen h), IH.
+      reflexivity.
+  - destruct h as [params metadata handler].
+    cbn [rename_handler know_code_slots_in_handler].
+    rewrite (know_code_slots_renamed r sets seen handler). reflexivity.
+Qed.
+
 Theorem know_own_closures_equivariant :
   know_own_closures_equivariant_statement.
 Proof.
   intros r e. unfold know_own_closures.
   rewrite groups_whole_renamed.
   destruct (groups_whole e); [ | reflexivity ].
-  rewrite sets_made_renamed. apply know_code_closures_renamed.
+  cbv zeta.
+  rewrite sets_made_renamed, know_code_closures_renamed.
+  rewrite sets_made_renamed, sets_seen_renamed_nil.
+  apply know_code_slots_renamed.
 Qed.
