@@ -1,0 +1,49 @@
+(* Two functions that end with a store and return what the store returns:
+   the first writes a field of a block that can change, the second an
+   element of an array that can change. In the term before Simplify each
+   applies its return continuation to the variable bound to the store.
+   Simplify gives that variable the type of the constant unit, and in the
+   term after each applies its return continuation to the constant.
+
+   The validation knows the same of a variable bound to a store
+   (FlambdaAliasesSpec.typing_env_under_let): a store has a value only where
+   it returns unit, so the constant is written for the variable in both
+   terms, and the stores stay. Simplify inlines neither function. The unit is
+   validated at the verdict "the same once normalised", which is before any
+   lifting, although both terms have primitives of the heap. *)
+let code inline(never) loopify(never) size(20)
+      store_0 (x : imm tagged)
+        my_closure &my_alloc_region my_depth
+        -> k * e
+        : imm tagged =
+  let r = %block.mut.[`0`].my_alloc_region (0) in
+  let c = %opaque (r) in
+  let w = %block_set.`imm`.[`0`] (c, x) in
+  cont k (w)
+in
+let code inline(never) loopify(never) size(20)
+      fill_2 (x : imm tagged)
+        my_closure &my_alloc_region my_depth
+        -> k * e
+        : imm tagged =
+  let a = %array.`imm`.mut.my_alloc_region (0, 2, 3) in
+  let d = %opaque (a) in
+  let v = %array_set.`imm` (d, 0, x) in
+  cont k (v)
+in
+let $camlHeap_store_result_returned__store_1 =
+  closure store_0 @store &toplevel
+in
+let $camlHeap_store_result_returned__fill_3 =
+  closure fill_2 @fill &toplevel
+in
+apply direct(store_0 &toplevel)
+  ($camlHeap_store_result_returned__store_1 : _ -> imm tagged)
+    (41) -> k1 * error
+  where k1 (r1 : imm tagged) =
+    (apply direct(fill_2 &toplevel)
+       ($camlHeap_store_result_returned__fill_3 : _ -> imm tagged)
+         (41) -> k2 * error
+       where k2 (r2 : imm tagged) =
+         let $camlHeap_store_result_returned = Block 0 (r1, r2) in
+         cont done ($camlHeap_store_result_returned))
