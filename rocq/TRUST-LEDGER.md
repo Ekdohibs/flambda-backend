@@ -488,6 +488,163 @@ it gave back.
   whatever the unit has. What the compiler's two patterns expand to is not
   in the OCaml: it is `let_closures` and `bind_closures`, in Rocq, with
   statements.
+  *The primitives of the heap.* The conversion makes the four
+  primitives of `FlambdaPrimitiveModel.heap_primitive` (the cases at
+  the head of `convert_prim`, with `convert_array_kind` and
+  `convert_array_set_kind`), so a run of the tool can have cells.
+  These cases were read by a reviewer one by one, in the source and
+  with no run, against the compiler's definition of the primitives
+  and against what its translation to Cmm does with each. That was
+  not a review case by case of the conversion as it was before.
+  Trusted of the cases of the four primitives, and covered by no
+  statement:
+  - that a block marked `Mutable` or `Immutable_unique` is a cell of
+    the heap, and one marked `Immutable` a value with no identity: the
+    split is the compiler's mark, and not what the program does with
+    the block;
+  - that a block marked `Mutable` or `Immutable_unique` is converted
+    only where it has as many kinds of fields as arguments and every
+    one is `any_value` (decision D25), and only where it has an
+    argument: one made with no field as a term runs is refused, as
+    the compiler makes none (a static block with no field is another
+    thing, and not of these cases). The case of a block marked
+    `Immutable` is as it was: it does not ask for an argument, and
+    nothing here is said of it;
+  - that a store into a block is the model's `Block_set` on the block
+    and the new value, in that order, at the field named by the
+    compiler's primitive, counted in fields;
+  - that a store into an array is the model's `Array_set` on the
+    array, the index and the new value, in that order, the index a
+    tagged immediate as that of a load is;
+  - that dropping the mode of an assignment keeps what the store does
+    to the contents of a target that the store is valid for. The
+    write barrier, and what the mode asks of the collector, are not
+    in the model. The machine of regions tests a store by how long
+    the value and the cell live (`FlambdaRegionsSpec.store_fault`):
+    that is the model's own test, and it is no evidence that a store
+    whose mode is wrong for its target is safe;
+  - that every initialising store is refused, of a block and of an
+    array. Such a store has conditions on what the field held before
+    and on the collector that the model does not follow, and refusing
+    it keeps outside the conversion the store that the compiler makes
+    for a function whose recursion is in the tail of a constructor,
+    which is an `Array_set` of values marked `Initialization` on a
+    block;
+  - that these are refused, and not approximated: a store into a
+    block of floats or a mixed block; an array of floats, of naked
+    numbers, of vectors, of masks or of unboxed products, made or
+    written; an array of values written with a set kind of
+    immediates or of values that the collector may ignore; a
+    `Make_array` marked `Mutable` with no argument (the static empty
+    array is still converted, to the immutable array with no
+    element); and the three copies (`Duplicate_block`,
+    `Duplicate_array`, `Obj_dup`);
+  - that the loads keep the mark that the term gives them. A load not
+    marked mutable of a block made mutable then has no value
+    (decision D52, open), and an array load marked immutable of a
+    mutable array none (decision D49): a run that comes to one is
+    undefined, and the validation says nothing of the unit.
+  *Which lines the guard of the liftings governs.* Each of the four
+  liftings to symbols of the validation lifts nothing in what it is
+  given, where that term has a primitive of the heap
+  (`FlambdaHeapFreeSpec.expr_free_of_heap`, a limit pending decision
+  D40). The test is of the term that the lifting is given: the other
+  rewrites of the validation may still validate a unit that stores,
+  and a lifting may be given a term from which a rewrite before it
+  has removed the primitive. A line that begins "validated" is of the
+  validation, with that test in each of the four. The verdict of
+  that line is the step of the validation that accepted. The step
+  that names a lifting ("the same once closures and blocks are
+  lifted to symbols") has other rewrites than its liftings, and a
+  unit that has a primitive of the heap in both terms may be
+  validated at it with nothing lifted in either: the verdict names
+  the step, and not that something was lifted. The second check
+  (the entry "A check that does not establish `refines`") is another
+  comparison: its liftings are made without the test of the exits
+  and without the test of the heap. Its line, "related once lifted",
+  is printed under "not validated" where that check accepts, for a
+  unit that stores as for another; it is not printed for every unit
+  that stores, and the unit stays not validated. Where a term of the
+  two has a primitive of the heap that line says that the test of
+  the heap was left out. Under "not validated", where the run before
+  that is shown is not undefined, and under a verdict that names a
+  lifting, where either of the two terms that the validation was
+  given (the prefix in front where there is one) has a primitive of
+  the heap, one line more says which of the two has one; under the
+  verdict it adds that the line above names the step at which the
+  validation accepted. It is a
+  fact of those two terms, not of what each lifting was given, and
+  under "not validated" it does not say why the unit is not
+  validated.
+  *What the tool prints of a cell.* A value that is a location is
+  printed as what its cell holds in the heap of the exit (`observe`):
+  a block of the heap as a block with its tag, an array of the heap
+  as an array. The printing goes 50 deep from each value that the
+  run returns, and prints "..." for whatever is below that, a number
+  as well as a block. A location that is met again on the way down
+  from the value printed, among those above it, is printed as a
+  cycle; a cell that is reached by two ways is printed twice, and
+  that it is one cell is not shown. A cycle is found only at a
+  location: a value with no identity that is on a cycle is printed
+  again until a location comes round or the 50 levels end, so the
+  printing can unfold a cycle further than a heap in which every
+  block has an address would show it. A location that
+  the heap does not bind is printed as
+  itself; that none arises in a run of the tool is the argument of
+  the entry on the symbols of other units, from the first state of a
+  run and the statement named there. No verdict of the validation
+  rests on this printing; the line that compares what the two runs
+  return does, and "the same" on that line is of what is observed
+  for those printings, cut at that depth (the two observations are
+  compared, and not their texts), not of the two exits with their
+  heaps, nor of what the compiled unit does. So the line "the same"
+  does not tell apart, of what the two runs return:
+  - a cell that is reached by two ways from two cells that hold the
+    same at the exit, an alias from a copy (a store through one of
+    the ways can change what is observed by both, and can so tell
+    the run from one that stores into a copy);
+  - a cell from a value with no identity that holds the same: a
+    unit whose run before returns a mutable array and whose run
+    after returns an immutable one with the same elements can show
+    equal returns;
+  - which of the cells above it a cycle comes back to, as the
+    printing says that a location is met again and not which;
+  - what is below the 50 levels.
+  What is observed of the two runs can also differ by where the
+  printing enters a cycle: where it enters at a block that is a cell
+  in one run and a value with no identity in the other, the second
+  may be unfolded further, and the line may then say that the two
+  runs differ. Neither "the same" nor a difference on that line
+  establishes what the compiled unit does.
+  *The round trip* covers the cases of the four primitives that the
+  conversion admits: `flmodel_to_fexpr.ml` writes each back as the
+  compiler's (`heap_primitive`), every allocation on the heap and
+  every assignment with the mode of the heap. One thing of a store
+  into an array the text does not keep. For the three array kinds
+  of values, which are the array kinds of the stores that the
+  conversion admits, the text of fexpr writes the array kind of a
+  store and not its set kind, and the parser gives a store whose
+  set kind is not written the one that goes with its array kind
+  (`middle_end/flambda2/parser/fexpr_prim.ml`, `array_set`;
+  discrepancy P1-9). The parser reads a set kind that is written,
+  for an array of any kind; the printer writes one only for an
+  array of unboxed products, which the conversion refuses. Simplify
+  gives a store the array kind of immediates where the type of the
+  array proves it and leaves the set kind as it was, that of values
+  or of values that the collector may ignore; the conversion admits
+  such a store, and of a term that has one, where the whole term is
+  converted, the round trip says that the two terms differ and that
+  they are printed the same. A unit that the
+  conversion refuses, as one with an initialising store, is "not
+  converted" there too. So the round trip checks the term of the
+  model that the conversion makes, and not that the modes of the
+  allocations and of the assignments, the markers of regions (which
+  it does not print), what the collector is asked, or the meaning of
+  the compiled unit are kept. The printer of a term in the tool's
+  own lines (`print_prim`) is another thing: it shows a `Block_set`
+  by the number of its field, without its access kind and without
+  its mark of initialisation or assignment, and an `Array_set` by
+  the kind of the array and the set kind.
 - **The kinds and arities that the conversion gives**, in the same file
   (`convert_arity`, `convert_params_kinds`, `convert_bound_var`,
   `find_value_slot`, and the arities in `convert_code` and
@@ -810,8 +967,9 @@ it gave back.
   the term has the compiler's with `ghost = false`, the end on the
   variable of the region that the term ends; that it puts
   `Local_allocation` directly after the `Let` of exactly the
-  allocations whose mode is `Local` (a block, an immutable array, a
-  boxed number, the first closure of a set), with the variable of the
+  allocations whose mode is `Local` (a block, with an identity or
+  without, an array, mutable or not, a boxed number, the first
+  closure of a set), with the variable of the
   region that the mode names, or with none where that region is the
   one of the code that the allocation is in; that a parameter of a
   continuation which is a region is kept, with the argument at its
@@ -852,9 +1010,10 @@ it gave back.
   `End_try_region`). It says nothing of a region that nothing ends, of
   an allocation that names another region than the newest that is not
   of a `try`, nor of the closure that a partial application makes
-  (decisions D44 to D48). And it says nothing of blocks with an
-  identity and of mutable arrays, though the machine of regions runs
-  them: the conversion makes neither. On the machine a cell that a
+  (decisions D44 to D48). Blocks with an identity and mutable arrays
+  are converted (the entry "The conversion of terms"), so a run of
+  the tool on the machine of regions can have cells. On the machine
+  a cell that a
   local allocation makes where a frame is on the stack is listed with
   the frame that was the newest then, and its location may not be
   evaluated once that frame is gone; with no frame on the stack the
@@ -862,10 +1021,10 @@ it gave back.
   on the heap is made with nothing local; and a store puts in a cell
   only what lives as long as the cell (decision D54), with a fault of
   its own, which the tool reports separately (`run_regions`,
-  `region_outcome_shown`). While the conversion makes
-  no primitive of the heap, no run of the tool makes a cell, and none
-  comes to that fault. That is an argument from what is trusted of
-  the conversion of primitives, and not a statement of the tree. And
+  `region_outcome_shown`). Of a unit that has a cell the line says
+  what it says of another: it is of the one run, and where that run
+  is undefined for another reason, as at a load not marked mutable
+  of a block made mutable (decision D52), the line is "not run". And
   "passes before, passes after" relates the two terms in nothing: the
   validation of the unit is still made with regions dropped (the entry
   above, decision D37). The counts that the environment variable
@@ -968,14 +1127,18 @@ it gave back.
   renaming of constructors, with the fields the model keeps. Trusted:
   that it sends a primitive to the one of the same name, and refuses a
   primitive, or a value of a field, that the model has not got. Of the
-  primitives that allocate or load, that is: a block that is not
-  immutable or not of values; and, for `Make_block`, a kind of a field
-  that says more than `any_value`, as the model has no subkinds and
-  Simplify uses them. A `Make_array` is converted where it is marked
-  `Immutable` and is of one of the three array kinds of values, to
-  the model's `Make_immutable_array` at that kind, which is not the
-  primitive of the same name: the model's carries no mutability and
-  makes a value with no identity. One marked `Mutable` is refused.
+  primitives that allocate or load, that is: a block that is not of
+  values; and, for `Make_block`, a kind of a field that says more
+  than `any_value`, as the model has no subkinds and Simplify uses
+  them. A `Make_array` that is marked `Immutable` and is of one of
+  the three array kinds of values is converted to the model's
+  `Make_immutable_array` at that kind, which is not the primitive of
+  the same name: the model's carries no mutability and makes a value
+  with no identity. A block marked `Mutable` or `Immutable_unique`, a
+  mutable array and the two stores are not converted by these
+  functions: they are the primitives of the heap, which
+  `convert_prim` converts with their arguments, and the entry "The
+  conversion of terms" says what is trusted of them.
   An allocation in a region is not refused: it is
   converted as one on the heap, which is not a renaming of constructors
   and is one of the exceptions of the entry above (*Regions*). What a
@@ -986,8 +1149,10 @@ it gave back.
   which is `eval_prim`, with the heap left as it was, for a primitive
   that is not one of `FlambdaPrimitiveModel.heap_primitive` and is
   given no location
-  (`FlambdaHeapSpec.exec_prim_no_location_statement`); this conversion
-  makes none of those four.
+  (`FlambdaHeapSpec.exec_prim_no_location_statement`). The conversion
+  makes those four, so a run of the tool can give a primitive a
+  location; what a primitive does on one is `exec_prim` and no
+  longer `eval_prim` alone.
 - **The conversion of numeric constants**, in the same file (the section
   "Numbers" and `convert_const`, about 75 lines; with the boxed numbers
   also `convert_float32`, `convert_float` and the boxed numbers of
@@ -1069,20 +1234,25 @@ it gave back.
   where neither value compared is a location that is
   `eval_phys_equal`; against a location bound by that heap it answers
   false of an import of the first two classes, and has no value of one
-  of the third. The conversion of the tool makes no primitive of the
-  heap, and only those change the heap
-  (`FlambdaHeapSpec.exec_prim_heap_statement`); a run from a state
-  whose heap binds every location that the state holds keeps that
+  of the third. Only the primitives of the heap change the heap
+  (`FlambdaHeapSpec.exec_prim_heap_statement`), and the conversion of
+  the tool makes them (the entry "The conversion of terms"): in a
+  run of the tool a value can be a location, and both cases can now
+  arise. A run from a state whose heap binds every location that the
+  state holds keeps that
   (`FlambdaLocationsMachineSpec.run_keeps_locations_bound_statement`,
   whose premise is `state_locations_bound` of the first state). The
   first state of a run of the tool holds no location: it has no
   variable and no continuation, the empty heap and the empty read
   record, and the static environment of its imports, which holds
-  none. So in a run of the tool, while the conversion makes no
-  primitive of the heap, no value is a location and only the first
-  case arises; that conclusion is an argument from the two statements
-  and from what the tool starts a run from, and not a statement of the
-  tree. No other unary or
+  none; and a state that holds none has that premise
+  (`FlambdaLocationsMachineSpec.no_location_bound_statement`). So in
+  a run of the tool every location that a state holds is bound by
+  the heap of that state, and a location that is compared is one
+  that the state holds, being the value of a variable; that
+  conclusion is an argument from the statements, from what the tool
+  starts a run from and from how a simple is evaluated, and not a
+  statement of the tree. No other unary or
   binary primitive has a value on an import. It is not a closure, so a
   call of it is undefined. A run that executes a load from an import,
   or a call of one, is therefore undefined in the model where the
