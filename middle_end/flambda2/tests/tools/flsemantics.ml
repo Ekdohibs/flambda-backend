@@ -842,12 +842,12 @@ let convert_array_kind (kind : P.Array_kind.t) : Primitives.array_kind option =
 (* How an element is written, where the write is an assignment. The mode of the
    assignment is dropped: the model's has none.
 
-   An array of values written with a set kind of immediates is refused: Simplify
-   does not expect one ([Simplify_ternary_primitive] stops on an array kind of
-   values with a set kind that is not), though the model has a value for it.
+   At the array kind [Values], a set kind of immediates or of values that the
+   collector may ignore is refused: [Simplify_ternary_primitive] stops on it if
+   the array kind stays [Values] once specialised. The model permits the pair.
 
-   A write marked [Initialization] is refused, as an initialising store into a
-   block is. An initialising write has conditions on what the field held before
+   A write marked [Initialization] is refused, as a store with the mark into a
+   block is. A write with the mark has conditions on what the field held before
    and on the collector that the model does not track: the model's store does
    for it what it does for an assignment. It is refused so that the stores of
    tail-modulo-cons stay outside the conversion. For a function whose recursion
@@ -1644,7 +1644,7 @@ and convert_prim (prim : P.t) : Model.named =
      the model.
 
      A store into a block is converted when it is an assignment into a block of
-     values. One marked [Initialization] is refused, as an initialising write to
+     values. One marked [Initialization] is refused, as a write with the mark to
      an array is ([convert_array_set_kind]), and so is a store into a block of
      floats or a mixed block. The mode of the assignment is dropped: the model's
      store has none, and the machine of regions tests a store by how long the
