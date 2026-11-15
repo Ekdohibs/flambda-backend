@@ -527,10 +527,28 @@ it gave back.
     and of an array: a `Block_set` so marked, and an `Array_set`
     whose set kind is that of values with that mark. A store so
     marked has conditions on what the field held before and on the
-    collector that the model does not follow, and refusing it keeps
-    outside the conversion the store that the compiler makes for a
-    function whose recursion is in the tail of a constructor, which
-    is an `Array_set` of values marked `Initialization` on a block.
+    collector that the model does not follow. The refusal is of the
+    mark that the primitive carries when it is converted, and the
+    tool converts a term that is read from its text. The text keeps
+    the mark of a `Block_set` (`init`), and the refusal of a
+    `Block_set` so marked stands of a term read from its text. Of an
+    `Array_set` the text that the compiler prints keeps the set
+    kind, and with it the mark, only where the array is one of
+    unboxed products; of any other the parser gives the set kind
+    that goes with the array kind, which at the array kind `Values`
+    is an assignment on the heap (the paragraph "The round trip"
+    below; discrepancy P1-9). So this refusal does not keep outside
+    the conversion the store that the compiler makes for a function
+    whose recursion is in the tail of a constructor, which is an
+    `Array_set` at the array kind `Values`, marked
+    `Initialization`, whose destination is a block. Read from the
+    text that the compiler prints, that store has lost its mark: it
+    is converted as an assignment, and a run that comes to it is
+    undefined (the end of this bullet). Where the run before is
+    undefined the tool says so, and the validation says nothing of
+    the unit. An `Array_set` is refused for its mark only where a
+    text has the set kind written out, as that of one control has
+    (`heap_array_set_initialising.fl`).
     The set kinds of immediates and of values that the collector may
     ignore carry no such mark, and a store at one of them is
     converted where the array kind of the primitive is that of
