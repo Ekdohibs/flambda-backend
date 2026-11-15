@@ -108,7 +108,7 @@ unit made from OCaml.
   of regions: passes before, passes after", or what failed or was
   not run. No verdict depends on that line; `rocq/TRUST-LEDGER.md`, "The
   check of regions", says what it rests on and what it does not say. The
-  tool prints the line of 107 of the 533 units of this directory, and it
+  tool prints the line of 108 of the 535 units of this directory, and it
   says "passes before, passes after" of each. The regions around a `try`
   are dropped in the same way: the
   handler ends the regions that the body had open when it raised, and
@@ -179,12 +179,11 @@ unit made from OCaml.
   term after binds and the term before does not, the validation
   bound them at the head of the term before
   (`FlambdaUnusedHeadStaticsSpec.add_head_tables`, under its two
-  checks). The line says that and no more. In the four units of
-  this directory that have it, a round of the term before then
-  made a `Switch` whose arms give a continuation the elements of
-  such an array the load from it
-  (`FlambdaMergeTablesSpec.merge_tables`, T1's). The theorem is the
-  same one.
+  checks). The line says that and no more. The tables are bound
+  for a round of the term before, which makes a `Switch` whose arms
+  give a continuation the elements of such an array the load from
+  it (`FlambdaMergeTablesSpec.merge_tables`, T1's). The theorem is
+  the same one.
   Where the verdict has a second line, "at the second asking", the
   validator refused the pair as it is, and the tool asked
   `validate_unit_knowing` (`FlambdaValidateKnowingSpec.v`): the same
@@ -549,7 +548,7 @@ Simplify does to it. Steps are those of the machine, before and after
 Simplify. The names in brackets are the streams whose work in progress
 is the rewrite that is missing.
 
-533 sources: 444 validated; 2 validated when asked of the term before
+535 sources: 446 validated; 2 validated when asked of the term before
 with its known immutable arrays read, which is another function than the
 others are asked of; 4 validated when asked of the term before with
 chosen calls inlined first, which is another function again; 14
@@ -731,11 +730,12 @@ those with imports); 2 undefined in the model; 5 not checked.
 | `get_after_own_bounds_test.ml` | 56, 37 | `tail_call_after_region.ml` | 171, 153 |
 | `guard_falls_to_later_case.ml` | 151, 92 | `tail_loop.ml` | 128, 83 |
 | `guard_on_or_pattern.ml` | 132, 84 | `tail_nontail_annot.ml` | 175, 157 |
-| `helper_called_through_slot.ml` | 33, 12 | `three_arms_same_sum.ml` | 24, 5 |
-| `helper_inlined_in_closure.ml` | 28, 17 | `toplevel_closure_applied_mutual.ml` | 84, 40 |
-| `hidden_helper_inlined_twice.ml` | 46, 22 | `tree_root.ml` | 90, 4 |
-| `higher_order.ml` | 32, 5 | `try_no_raise.ml` | 14, 5 |
-| `hof_closure_in_record.ml` | 49, 22 | `try_returned_exported.ml` | 11, 9 |
+| `helper_called_through_slot.ml` | 33, 12 | `test_boolean_twice.ml` | 39, 18 |
+| `helper_inlined_in_closure.ml` | 28, 17 | `three_arms_same_sum.ml` | 24, 5 |
+| `hidden_helper_inlined_twice.ml` | 46, 22 | `toplevel_closure_applied_mutual.ml` | 84, 40 |
+| `higher_order.ml` | 32, 5 | `tree_root.ml` | 90, 4 |
+| `hof_closure_in_record.ml` | 49, 22 | `try_no_raise.ml` | 14, 5 |
+| `hof_option_of_closure.ml` | 125, 47 | `try_returned_exported.ml` | 11, 9 |
 | `hof_two_closures_through_join.ml` | 65, 54 | `tuple_match.ml` | 75, 1 |
 | `iarray_in_function.ml` | 21, 14 | `tuple_return.ml` | 20, 5 |
 | `iarray_length_of_any_not_inlined.ml` | 19, 14 | `tuple_swap.ml` | 19, 4 |
@@ -2170,6 +2170,41 @@ removed it:
   is so lifted for the calls that the guess of the tool finds, and the
   guess looks for no other; the list of the code not to inline, which
   the rounds of the validation are given, is as it was.
+- A test made again in an arm of itself (`test_boolean_twice.ml`, T3's
+  source; V4's). A boolean is tested, and in each arm of the test it is
+  tested again, once negated. Simplify knows the boolean in each arm:
+  the second tests are gone, and each arm of the first returns its
+  number. In the validation the number that a `Switch` has decided for
+  its scrutinee is put for the variable in the arm, and the tidying of
+  each term folds what that has made constant (the entry of
+  `divisor_tested_twice.ml`, above). An arm may then go through a
+  continuation whose handler is one application. A round forwards such
+  an application after its own fold; the tidying comes after the rounds,
+  and no round follows it. The tidying of each term now forwards after
+  its fold: that of the term before by
+  `FlambdaForwardSpec.forward_applications`, a refinement, and that of
+  the term after by `FlambdaForwardKindedSpec.forward_kinded`, an
+  equivalence, where the arguments are known to have the kinds of the
+  parameters (`FlambdaValidateSpec.tidy_expr_before`,
+  `tidy_expr_after`). The unit is validated by the comparison of the
+  lifted terms.
+  The same series changes one test more. A continuation that a handler
+  binds on its way to its `Switch` is bound outside the handler where
+  every mention of it is an application
+  (`FlambdaLiftContsSpec.lift_handler_conts`, N2's; the entry of
+  `load_through_join.ml`, above), and a call may now return to it too,
+  where it takes no parameter of the handler (`only_applied`).
+  `hof_option_of_closure.ml` (T3's source) enters with that change, and
+  the test of it in this directory does not exercise the change: at the
+  default flags, which are those of the tests, the unit is validated
+  with and without it, and its expected file is the same with the two
+  tools. What the change does for the unit is with `-O3`, where Simplify
+  knows the closure at the place where the arms of the test meet and
+  inlines its call: there the tool built without the change does not
+  validate the unit and the tool of this tree does. No test of the tree
+  shows that. It is seen in the comparison of the two tools, whole
+  outputs, that is made when a series is closed, a measure which
+  `status/V2.md` records with the count of the units with `-O3`.
 
 A count over 600 units made at random is in `census/README.md`, with
 one over 240 more that have exceptions, loops and recursive functions.
@@ -2228,13 +2263,13 @@ refuse it too, once more of the term before with chosen calls inlined
 first, unless the guess of the tool gives no choice or the term that its
 choices give is the term before name for name ("What the verdicts
 mean").
-The 533 units here were checked in 10.4 seconds of processor time
-together in one run (4.9 user, 5.6 system), and in 10.4 in a second run
-of the same tool (4.9 and 5.5): more than half of each is the system's
+The 535 units here were checked in 10.6 seconds of processor time
+together in one run (5.1 user, 5.5 system), and in 10.9 in a second run
+of the same tool (5.0 and 5.9): more than half of each is the system's
 part. Other builds ran on the machine during both. In two runs made one
 after the other with the same inputs and flags, on the 529 units that
-the directory had at 5a514806c3, the tool of that commit took 10.1
-seconds and the tool of this tree 10.2. On the 516 units that the
+the directory had at 5a514806c3, the tool of that commit took 10.3
+seconds and the tool of this tree 10.4. On the 516 units that the
 directory had at b006dd4b0d, in two such runs, the tool of that commit
 took 10.5 seconds and the tool of 24cd3c9252 took 10.6; when it was
 measured at that commit, the tool of b006dd4b0d took 16.1 and 14.0.
@@ -2383,16 +2418,17 @@ compared.
   `option_bind`, `option_map`, `polymorphic_variant`,
   `project_record_two_levels`, `record_update`, `result_map`,
   `same_field_chain_twice` and `tree_root`.
-  Of the 202 units that have entered since, 31 have:
+  Of the 204 units that have entered since, 32 have:
   `stack_argument_result_returned`, whose source says `local_` of a
-  parameter, the first source of this directory that does, and 30 that
+  parameter, the first source of this directory that does, and 31 that
   entered after it: `attr_local_in_match`, `clos_partial_local`,
   `exclave_after_local_work`, `exclave_pair`,
   `flip_applied_in_full_and_in_part`, `guard_falls_to_later_case`,
-  `guard_on_or_pattern`, `inl_callee_region_twice`,
-  `late_three_values_interleaved`, `local_argument_partial_application`,
-  `local_closure_given_partially`, `loop_for_local_pair_each_turn`,
-  `nest_list_of_options`, `optional_between_positional`,
+  `guard_on_or_pattern`, `hof_option_of_closure`,
+  `inl_callee_region_twice`, `late_three_values_interleaved`,
+  `local_argument_partial_application`, `local_closure_given_partially`,
+  `loop_for_local_pair_each_turn`, `nest_list_of_options`,
+  `optional_between_positional`,
   `optional_default_uses_earlier_argument`,
   `optional_erased_for_higher_order`,
   `optional_given_omitted_none_some`, `or_in_list_positions`,
@@ -2401,9 +2437,9 @@ compared.
   `stack_pair`, `tail_call_after_region`, `tail_nontail_annot`,
   `try_in_each_turn`, `try_returned_exported`,
   `tupled_partial_application`, `twice_nested_same_scrutinee` and
-  `var_twelve_mixed`. Twelve of the 30 say `local_` in the source. Each
+  `var_twelve_mixed`. Twelve of the 31 say `local_` in the source. Each
   unit is looked at so before it enters. By the same print, the term
-  before Simplify of 62 of the 533 units of this directory has an
+  before Simplify of 63 of the 535 units of this directory has an
   allocation mode that names a region, on
   an allocation or on a call ("What the conversion does to a unit" says
   what is made of regions). What was run for the
