@@ -155,14 +155,21 @@ unit made from OCaml.
   `-drawfexpr` and the fexpr parser: what is validated is the term the
   parser reads back, which is the term the compiler simplifies only as
   far as printing and parsing lose nothing.
-  What the theorem observes at the exit is the continuation and its
-  arguments, here the symbol of the unit; the contents of the module
-  block are not part of the statement.
+  What the theorem observes at the exit is the continuation, its
+  arguments, here the symbol of the unit, and the heap, which has
+  the cells that the run has made; the contents of the module block
+  are not part of the statement.
   Where the verdict says that closures and blocks were lifted to
-  symbols, the validator first made static bindings, in the term
-  before, of the `Let`s that Simplify lifted
-  (`FlambdaLiftSpec.lift_unit`, under the conditions of that file: one
-  is that the unit exits with constants and symbols only). The theorem
+  symbols, the validation accepted at the step that lifts. Where the
+  conditions of a lifting hold, that step makes static bindings, in
+  the term before, of `Let`s that Simplify lifted (for one of its
+  four liftings, `FlambdaLiftSpec.lift_unit`, two of the conditions
+  are that the term it is given exits with constants and symbols
+  only and has no primitive of the heap). The words name the step,
+  and not what it lifted: where a condition of a lifting fails, that
+  lifting leaves the term that it was given as it is, and the step
+  may still apply its other liftings and rewrites (see the item on
+  the line that names a primitive of the heap, below). The theorem
   is the same one. The line has those words too where a `Let` that
   was lifted makes an immutable array of values, which is lifted as
   one that makes a block is (`iarray_literal.ml`).
@@ -525,6 +532,52 @@ unit made from OCaml.
 - **the same, not validated**: the two runs came to the same result,
   which is a test of one run and no proof. The validator could not make
   the two terms the same; the table says what it is missing.
+  "The same", on the line that compares the two runs, is of what the
+  tool observes of the two exits, and not of the two exits with
+  their heaps. A value that is a location is observed as what its
+  cell holds in the heap of the exit, a block with its tag or an
+  array, 50 levels deep from each value that the run returns.
+  So what is observed can be the same for an alias and for a copy,
+  where the two cells hold the same at the exit, and for a cell and
+  for a value with no identity that holds the same: a unit whose
+  run before returns a mutable array and whose run after returns an
+  immutable one with the same elements can show equal returns. The
+  line does not say which of the cells above it a cycle comes back
+  to, nor what is below the 50 levels. And where the printing
+  enters a cycle at a block that is a cell in one run and a value
+  with no identity in the other, the second may be unfolded
+  further, and the line may then say that the two runs differ
+  (`rocq/TRUST-LEDGER.md`, "The conversion of terms", has this in
+  full). The verdict of the validation does not rest on what is
+  observed; that line does.
+- **(the term before and the term after have a primitive of the heap:
+  each of the four liftings to symbols of the validation lifts nothing
+  in a term that has one)**, a line under "not validated", and under a
+  verdict that names a lifting. Each of the four liftings of the
+  validation lifts nothing in the term that it is given where that term
+  has a primitive of the heap (`FlambdaHeapFreeSpec.expr_free_of_heap`;
+  a limit pending decision D40, and not a property that a unit is meant
+  to have). The line says which of the two terms as converted, the
+  prefix in front where there is one, has such a primitive: both, as
+  above; or "the term before has a primitive of the heap, and the term
+  after none"; or "the term after has a primitive of the heap, and the
+  term before none". There is no line where neither has one. It is a
+  fact of those two terms. It is not a fact of what each lifting was
+  given, as a rewrite before a lifting may have removed the primitive;
+  and under "not validated" it does not say why the unit is not
+  validated, as the validation may refuse a unit for another reason.
+  Under "not validated" it is printed where the run before that is shown
+  is not undefined. Under a verdict "the same once closures and blocks
+  are lifted to symbols", by whichever asking gave it and whatever the
+  run before is, the line ends "; the line above names the step at which
+  the validation accepted": that verdict is the step of the validation
+  that accepted, which has other rewrites than its liftings, and a unit
+  that has a primitive of the heap in both terms may be validated at it
+  with nothing lifted. A unit that has a primitive of the heap and is
+  validated at another step has no such line (`array_literal.ml`,
+  `ref_counter.ml`): the theorem is the same one as for any unit
+  validated at that step. No unit of this directory has the line in its
+  expected file.
 - **related once lifted**, a line under "not validated" (it awaits
   the human's choice, decision D43): the validator refused the
   pair for every list of calls that the tool tries, and the tool
@@ -538,9 +591,12 @@ unit made from OCaml.
   It keeps every other condition of a lifting
   (`FlambdaLiftObservedSpec.with_lifting_observed`), and then
   compares the two terms as the validator compares two lifted
-  terms. The line of the tool names the first test only; the
-  conversion makes no primitive of the heap ("not checked",
-  below).
+  terms. The line of the tool names the first test, "without the
+  liftings' symbols-and-constants-only exit test", and where either
+  of the two terms has a primitive of the heap it names the second
+  too, "and without their test of the heap". The line is printed
+  for a unit that stores as for another, where the check accepts
+  the pair; it is not printed of every unit that stores.
   What is proved of a pair that it accepts
   (`validate_unit_related_sound_statement`) is not that the unit
   after refines the unit before. It is one-way, and it is this:
@@ -623,11 +679,33 @@ unit made from OCaml.
   own.
 - **not checked**: the conversion refused the unit, as it has something
   the model has not got, or something that the conversion does not
-  make though the model has it: a mutable field, a mutable array.
-  The machine runs the primitives of the heap
-  (`FlambdaSemanticsSpec.exec_named`, at a `Let`) and the conversion
-  makes none of them yet. The line of the tool says "the model has
-  not got" of both.
+  make though the model has it. The line of the tool says "the model
+  has not got" of both. The machine runs the primitives of the heap
+  (`FlambdaSemanticsSpec.exec_named`, at a `Let`), and the conversion
+  makes the four of `FlambdaPrimitiveModel.heap_primitive` in these
+  cases: a block of values marked `Mutable` or `Immutable_unique`
+  that has a field, with as many kinds of fields as arguments, where
+  the kind of every field says no more than that it is a value (it
+  is a cell of the heap; a block marked `Immutable` is a value with
+  no identity, as it was); an array marked `Mutable` whose elements
+  are values and that has an element; and a store into a block of
+  values or into an array whose elements are values, but for the
+  stores that it refuses. It refuses, and approximates nothing: a
+  store marked `Initialization`, into a block or into an array; a
+  store into a block of floats or a mixed block; an array of floats,
+  of naked numbers, of vectors, of masks or of unboxed products, made
+  or written; a store, into an array of the kind of any values, at a
+  set kind of immediates or of values that the collector may ignore;
+  and the three copies of a block or of an array (`Duplicate_block`,
+  `Duplicate_array`, `Obj_dup`). The mode of an assignment is
+  dropped. A load keeps the mark that the term gives it: a load not
+  marked mutable of a block made mutable has no value in the model
+  (decision D52, open), nor has an array load marked immutable of a
+  mutable array (decision D49); a run that comes to one is
+  undefined. Where the run before is undefined, a validation says
+  nothing of the unit.
+  `rocq/TRUST-LEDGER.md`, "The conversion of terms", has the cases
+  and what is trusted of each.
 
 ## The examples
 
@@ -636,7 +714,7 @@ Simplify does to it. Steps are those of the machine, before and after
 Simplify. The names in brackets are the streams whose work in progress
 is the rewrite that is missing.
 
-538 sources: 448 validated; 2 validated when asked of the term before
+538 sources: 450 validated; 2 validated when asked of the term before
 with its known immutable arrays read, which is another function than the
 others are asked of; 4 validated when asked of the term before with
 chosen calls inlined first, which is another function again; 1 validated
@@ -646,7 +724,7 @@ the term as read, which says never null of a value that may be null
 (T4-13); 58 validated with their imports; none validated with nothing
 imported and not with its imports; 4 compared on one run and not
 validated, 2 of them with the line of the second check (1 of those with
-imports); 2 undefined in the model; 5 not checked.
+imports); 2 undefined in the model; 3 not checked.
 
 ### Validated
 
@@ -656,130 +734,131 @@ imports); 2 undefined in the model; 5 not checked.
 | `add_zero.ml` | 8, 2 | `join_tags_then_shared_field.ml` | 69, 46 |
 | `alias_kept_or_rebuilt.ml` | 49, 28 | `join_two_names_of_symbol.ml` | 24, 8 |
 | `apply_exported.ml` | 8, 4 | `kept_local_mutual_to_inlined.ml` | 145, 97 |
-| `attr_inlined_never_at_call.ml` | 27, 20 | `labelled_arguments.ml` | 13, 3 |
-| `attr_local_in_match.ml` | 87, 59 | `labelled_in_every_order.ml` | 108, 94 |
-| `attr_local_two_uses.ml` | 41, 27 | `labelled_optional.ml` | 38, 6 |
-| `bitwise_unknown.ml` | 14, 7 | `late_three_values_interleaved.ml` | 430, 382 |
-| `block_in_arm_of_unknown.ml` | 19, 7 | `least_join_table.ml` | 30, 35 |
-| `bool_not_unknown.ml` | 8, 3 | `len_compare_two.ml` | 41, 33 |
-| `bool_ops.ml` | 47, 1 | `len_of_constants.ml` | 32, 1 |
-| `boxed_constant_made.ml` | 12, 4 | `len_of_unknown_twice.ml` | 18, 12 |
-| `boxed_constant_twice.ml` | 16, 2 | `list_constant.ml` | 39, 25 |
-| `bswap_constants.ml` | 29, 2 | `list_head.ml` | 41, 3 |
-| `call_of_call_tested.ml` | 39, 42 | `list_heap.ml` | 54, 33 |
-| `call_result_passed_on.ml` | 79, 31 | `list_last.ml` | 76, 41 |
-| `call_result_tested.ml` | 78, 73 | `list_sum.ml` | 61, 42 |
-| `call_result_unused.ml` | 79, 50 | `load_through_join.ml` | 68, 37 |
-| `capture_fun_and_var_run.ml` | 24, 20 | `local_argument_partial_application.ml` | 102, 59 |
-| `capture_fun_bound_in_handler_run.ml` | 31, 26 | `local_block_matched.ml` | 93, 66 |
-| `capture_rec_self.ml` | 9, 6 | `local_block_matched_argument.ml` | 93, 66 |
-| `capture_two_funs.ml` | 15, 12 | `local_call_exported.ml` | 8, 4 |
-| `char_code.ml` | 13, 3 | `local_call_used.ml` | 10, 3 |
-| `char_comparisons.ml` | 56, 36 | `local_closure_applied_mutual.ml` | 158, 82 |
-| `char_count_in_string.ml` | 654, 304 | `local_closure_given_partially.ml` | 58, 40 |
-| `char_digit_value.ml` | 87, 60 | `local_function.ml` | 29, 5 |
-| `char_hex_digit_value.ml` | 144, 80 | `local_loop_inlined.ml` | 66, 41 |
-| `char_match.ml` | 48, 1 | `local_rec_in_tail_loop.ml` | 173, 108 |
-| `char_of_int_in_loop.ml` | 269, 184 | `loop_exit_inlined.ml` | 82, 36 |
-| `char_parse_number.ml` | 111, 92 | `loop_for_local_pair_each_turn.ml` | 1749, 1336 |
-| `char_ranges.ml` | 183, 94 | `loop_function_in_kept.ml` | 85, 50 |
-| `char_ranges_inlined_constants.ml` | 112, 4 | `loop_function_twice.ml` | 149, 85 |
-| `char_uppercase.ml` | 63, 38 | `loop_local_mutual_both_in_loop.ml` | 261, 165 |
-| `clamp.ml` | 49, 1 | `loop_result_passed_round.ml` | 190, 110 |
-| `clos_partial_local.ml` | 186, 160 | `maker_inlined_and_exported.ml` | 21, 10 |
-| `closed_mutual_recursion.ml` | 66, 35 | `maker_of_mutual_inlined.ml` | 70, 40 |
-| `closure_argument_exported.ml` | 12, 7 | `maker_of_two_inlined_twice.ml` | 311, 186 |
-| `closure_argument_used.ml` | 14, 3 | `match_constant_table.ml` | 28, 22 |
-| `closure_capture.ml` | 31, 4 | `match_guard.ml` | 52, 1 |
-| `closure_captures_argument_inlined.ml` | 27, 21 | `match_int_dense.ml` | 74, 50 |
-| `closure_captures_field_once.ml` | 24, 19 | `match_int_intervals.ml` | 235, 90 |
-| `closure_from_pair_called.ml` | 44, 15 | `match_local_mutual_both_in_arm.ml` | 132, 85 |
-| `closure_from_pair_exported.ml` | 9, 4 | `match_of_inlined_match.ml` | 68, 38 |
-| `closure_from_pair_used.ml` | 16, 3 | `match_of_match.ml` | 86, 54 |
-| `closure_in_arm_of_unknown.ml` | 23, 11 | `match_pair_option_built.ml` | 65, 32 |
-| `closure_in_tuple.ml` | 33, 5 | `match_tuple_of_variants.ml` | 102, 71 |
-| `closure_pair_shares_capture.ml` | 45, 40 | `match_unknown.ml` | 18, 10 |
-| `closure_uses_unit_function_only.ml` | 39, 30 | `match_variant.ml` | 66, 7 |
-| `compare_ints.ml` | 113, 1 | `match_variant_local.ml` | 72, 7 |
-| `compare_order.ml` | 60, 35 | `max_exported.ml` | 8, 4 |
-| `compare_signed.ml` | 31, 1 | `min_max.ml` | 25, 1 |
-| `compare_tested.ml` | 15, 6 | `module_alias.ml` | 34, 5 |
-| `compare_unknown.ml` | 9, 4 | `module_function_in_code.ml` | 58, 31 |
-| `compose.ml` | 29, 4 | `mom_three_levels.ml` | 126, 77 |
-| `compose_chains.ml` | 142, 115 | `mom_variant_to_variant.ml` | 50, 24 |
-| `compose_exported.ml` | 8, 4 | `mutual_alias_exported.ml` | 78, 40 |
-| `constant_exported.ml` | 8, 4 | `mutual_capture_exported.ml` | 123, 72 |
-| `constant_folding.ml` | 31, 1 | `mutual_recursion.ml` | 130, 70 |
-| `conv_truncate.ml` | 45, 1 | `nativeint_arith.ml` | 25, 8 |
-| `count_after_flag.ml` | 275, 152 | `negate.ml` | 10, 5 |
-| `data_closure_captures_string.ml` | 38, 33 | `nest_list_of_options.ml` | 177, 109 |
-| `data_list_of_strings.ml` | 82, 61 | `nest_matrix_three_columns.ml` | 108, 81 |
-| `data_option_of_string.ml` | 56, 41 | `nested_heap.ml` | 50, 29 |
-| `data_string_in_module_and_functor.ml` | 37, 33 | `nested_ignored_tests.ml` | 37, 28 |
-| `data_string_returned_through_join.ml` | 32, 28 | `nested_record.ml` | 23, 3 |
-| `data_variant_argument.ml` | 89, 65 | `nested_tuple.ml` | 24, 4 |
-| `either_heap.ml` | 58, 37 | `nomark_local_mutual.ml` | 145, 97 |
-| `empty_array_in_record.ml` | 14, 8 | `not_inlined.ml` | 21, 17 |
-| `empty_array_length.ml` | 9, 5 | `num_conversions.ml` | 27, 19 |
-| `empty_array_tested.ml` | 14, 8 | `option_bind.ml` | 89, 1 |
-| `empty_arrays_of_two_types.ml` | 12, 8 | `option_constant.ml` | 39, 25 |
-| `empty_immutable_array.ml` | 9, 5 | `option_constant_loop.ml` | 175, 114 |
-| `empty_type_refuted.ml` | 21, 6 | `option_constant_loop_fun.ml` | 379, 258 |
-| `enum_to_int.ml` | 19, 1 | `option_default.ml` | 32, 3 |
-| `exclave_after_local_work.ml` | 201, 177 | `option_heap.ml` | 47, 29 |
-| `exclave_pair.ml` | 177, 157 | `option_in_pair.ml` | 67, 31 |
-| `exported_after_effect.ml` | 15, 6 | `option_inlined.ml` | 36, 12 |
-| `exported_and_used.ml` | 14, 6 | `option_join.ml` | 55, 29 |
-| `exported_apply.ml` | 18, 9 | `option_map.ml` | 70, 4 |
-| `exported_arms_after_let.ml` | 26, 21 | `option_matched_twice.ml` | 82, 43 |
-| `exported_bool.ml` | 11, 7 | `optional_between_positional.ml` | 258, 178 |
-| `exported_branch_calls_twice.ml` | 17, 11 | `optional_default_uses_earlier_argument.ml` | 200, 123 |
-| `exported_branch_fun_const.ml` | 17, 12 | `optional_erased_for_higher_order.ml` | 172, 118 |
-| `exported_branch_option.ml` | 14, 9 | `optional_given_omitted_none_some.ml` | 98, 69 |
-| `exported_branch_pair.ml` | 15, 10 | `or_in_list_positions.ml` | 113, 69 |
-| `exported_branch_then_const.ml` | 14, 9 | `or_null_known.ml` | 23, 1 |
-| `exported_branch_then_fun.ml` | 14, 8 | `or_null_unknown.ml` | 16, 6 |
-| `exported_branch_two_funs.ml` | 17, 11 | `or_pattern.ml` | 49, 1 |
-| `exported_capture.ml` | 16, 5 | `or_two_variables_swapped.ml` | 61, 47 |
-| `exported_chain.ml` | 14, 10 | `over_application.ml` | 19, 3 |
-| `exported_compose_kept.ml` | 17, 13 | `over_application_three_stages.ml` | 101, 92 |
-| `exported_const_list.ml` | 10, 7 | `over_application_unknown_function.ml` | 61, 58 |
-| `exported_curried.ml` | 14, 6 | `over_inlined_maker_run.ml` | 23, 3 |
-| `exported_fun_branch_fun.ml` | 17, 11 | `over_rec.ml` | 84, 52 |
-| `exported_fun_given.ml` | 9, 7 | `overflow_wrap.ml` | 19, 1 |
-| `exported_fun_in_arms.ml` | 20, 12 | `pair_built.ml` | 43, 21 |
-| `exported_fun_in_one_arm.ml` | 17, 12 | `pair_computed.ml` | 45, 29 |
-| `exported_fun_in_option.ml` | 9, 8 | `pair_constant_arm.ml` | 53, 23 |
-| `exported_fun_returned.ml` | 9, 7 | `pair_constant_arm_toplevel.ml` | 31, 12 |
-| `exported_function.ml` | 14, 6 | `pair_constants.ml` | 32, 23 |
-| `exported_funs_given.ml` | 10, 10 | `pair_join.ml` | 31, 28 |
-| `exported_funs_in_arms_used.ml` | 23, 14 | `pair_loop_in_loop.ml` | 333, 173 |
-| `exported_funs_in_pair.ml` | 14, 11 | `pair_read_one_call_inlined.ml` | 31, 23 |
-| `exported_list.ml` | 9, 5 | `pair_turned_in_loop.ml` | 192, 65 |
-| `exported_local_fun.ml` | 8, 4 | `pair_two_constants.ml` | 25, 9 |
-| `exported_local_never.ml` | 9, 7 | `pairs_for_a_suit.ml` | 20, 9 |
-| `exported_match_pair_then_fun.ml` | 13, 7 | `param_copy_to_heap.ml` | 193, 171 |
-| `exported_match_then_fun.ml` | 21, 12 | `partial_across_join.ml` | 148, 105 |
-| `exported_match_three_funs.ml` | 33, 19 | `partial_application.ml` | 23, 3 |
-| `exported_nested_branch.ml` | 21, 13 | `partial_exported.ml` | 13, 6 |
-| `exported_nested_pair.ml` | 10, 7 | `partial_in_a_pair.ml` | 90, 26 |
-| `exported_option_fun_in_arm.ml` | 18, 10 | `partial_one_argument_at_a_time.ml` | 116, 57 |
-| `exported_pair_fun_in_arms.ml` | 21, 14 | `partial_two_to_six_parameters.ml` | 156, 112 |
-| `exported_record.ml` | 23, 9 | `phys_equal_unknown.ml` | 9, 4 |
-| `exported_record_of_funs.ml` | 14, 11 | `physical_equality.ml` | 32, 1 |
-| `exported_record_update.ml` | 14, 6 | `pipeline.ml` | 23, 5 |
-| `exported_records_in_arms.ml` | 21, 14 | `poly_abbreviation_patterns.ml` | 117, 68 |
-| `exported_some_again.ml` | 26, 6 | `polymorphic_variant.ml` | 77, 4 |
-| `exported_string_length.ml` | 8, 5 | `power.ml` | 147, 99 |
-| `exported_submodule.ml` | 14, 8 | `project_record_two_levels.ml` | 43, 18 |
-| `exported_table.ml` | 13, 8 | `project_variant_argument.ml` | 27, 11 |
-| `exported_twice_kept.ml` | 14, 10 | `projections_exported.ml` | 11, 7 |
-| `exported_two_branches.ml` | 23, 15 | `rec_helper_among_three.ml` | 29, 10 |
-| `exported_two_functions.ml` | 22, 10 | `rec_helper_called_outside.ml` | 27, 13 |
-| `exported_two_somes.ml` | 11, 5 | `record_exported.ml` | 11, 7 |
-| `exported_two_tests.ml` | 26, 17 | `record_of_functions.ml` | 51, 10 |
-| `exported_two_values.ml` | 18, 1 | `record_project.ml` | 37, 8 |
-| `exported_variant.ml` | 17, 6 | `record_update.ml` | 27, 4 |
+| `array_literal.ml` | 8, 3 | `labelled_arguments.ml` | 13, 3 |
+| `attr_inlined_never_at_call.ml` | 27, 20 | `labelled_in_every_order.ml` | 108, 94 |
+| `attr_local_in_match.ml` | 87, 59 | `labelled_optional.ml` | 38, 6 |
+| `attr_local_two_uses.ml` | 41, 27 | `late_three_values_interleaved.ml` | 430, 382 |
+| `bitwise_unknown.ml` | 14, 7 | `least_join_table.ml` | 30, 35 |
+| `block_in_arm_of_unknown.ml` | 19, 7 | `len_compare_two.ml` | 41, 33 |
+| `bool_not_unknown.ml` | 8, 3 | `len_of_constants.ml` | 32, 1 |
+| `bool_ops.ml` | 47, 1 | `len_of_unknown_twice.ml` | 18, 12 |
+| `boxed_constant_made.ml` | 12, 4 | `list_constant.ml` | 39, 25 |
+| `boxed_constant_twice.ml` | 16, 2 | `list_head.ml` | 41, 3 |
+| `bswap_constants.ml` | 29, 2 | `list_heap.ml` | 54, 33 |
+| `call_of_call_tested.ml` | 39, 42 | `list_last.ml` | 76, 41 |
+| `call_result_passed_on.ml` | 79, 31 | `list_sum.ml` | 61, 42 |
+| `call_result_tested.ml` | 78, 73 | `load_through_join.ml` | 68, 37 |
+| `call_result_unused.ml` | 79, 50 | `local_argument_partial_application.ml` | 102, 59 |
+| `capture_fun_and_var_run.ml` | 24, 20 | `local_block_matched.ml` | 93, 66 |
+| `capture_fun_bound_in_handler_run.ml` | 31, 26 | `local_block_matched_argument.ml` | 93, 66 |
+| `capture_rec_self.ml` | 9, 6 | `local_call_exported.ml` | 8, 4 |
+| `capture_two_funs.ml` | 15, 12 | `local_call_used.ml` | 10, 3 |
+| `char_code.ml` | 13, 3 | `local_closure_applied_mutual.ml` | 158, 82 |
+| `char_comparisons.ml` | 56, 36 | `local_closure_given_partially.ml` | 58, 40 |
+| `char_count_in_string.ml` | 654, 304 | `local_function.ml` | 29, 5 |
+| `char_digit_value.ml` | 87, 60 | `local_loop_inlined.ml` | 66, 41 |
+| `char_hex_digit_value.ml` | 144, 80 | `local_rec_in_tail_loop.ml` | 173, 108 |
+| `char_match.ml` | 48, 1 | `loop_exit_inlined.ml` | 82, 36 |
+| `char_of_int_in_loop.ml` | 269, 184 | `loop_for_local_pair_each_turn.ml` | 1749, 1336 |
+| `char_parse_number.ml` | 111, 92 | `loop_function_in_kept.ml` | 85, 50 |
+| `char_ranges.ml` | 183, 94 | `loop_function_twice.ml` | 149, 85 |
+| `char_ranges_inlined_constants.ml` | 112, 4 | `loop_local_mutual_both_in_loop.ml` | 261, 165 |
+| `char_uppercase.ml` | 63, 38 | `loop_result_passed_round.ml` | 190, 110 |
+| `clamp.ml` | 49, 1 | `maker_inlined_and_exported.ml` | 21, 10 |
+| `clos_partial_local.ml` | 186, 160 | `maker_of_mutual_inlined.ml` | 70, 40 |
+| `closed_mutual_recursion.ml` | 66, 35 | `maker_of_two_inlined_twice.ml` | 311, 186 |
+| `closure_argument_exported.ml` | 12, 7 | `match_constant_table.ml` | 28, 22 |
+| `closure_argument_used.ml` | 14, 3 | `match_guard.ml` | 52, 1 |
+| `closure_capture.ml` | 31, 4 | `match_int_dense.ml` | 74, 50 |
+| `closure_captures_argument_inlined.ml` | 27, 21 | `match_int_intervals.ml` | 235, 90 |
+| `closure_captures_field_once.ml` | 24, 19 | `match_local_mutual_both_in_arm.ml` | 132, 85 |
+| `closure_from_pair_called.ml` | 44, 15 | `match_of_inlined_match.ml` | 68, 38 |
+| `closure_from_pair_exported.ml` | 9, 4 | `match_of_match.ml` | 86, 54 |
+| `closure_from_pair_used.ml` | 16, 3 | `match_pair_option_built.ml` | 65, 32 |
+| `closure_in_arm_of_unknown.ml` | 23, 11 | `match_tuple_of_variants.ml` | 102, 71 |
+| `closure_in_tuple.ml` | 33, 5 | `match_unknown.ml` | 18, 10 |
+| `closure_pair_shares_capture.ml` | 45, 40 | `match_variant.ml` | 66, 7 |
+| `closure_uses_unit_function_only.ml` | 39, 30 | `match_variant_local.ml` | 72, 7 |
+| `compare_ints.ml` | 113, 1 | `max_exported.ml` | 8, 4 |
+| `compare_order.ml` | 60, 35 | `min_max.ml` | 25, 1 |
+| `compare_signed.ml` | 31, 1 | `module_alias.ml` | 34, 5 |
+| `compare_tested.ml` | 15, 6 | `module_function_in_code.ml` | 58, 31 |
+| `compare_unknown.ml` | 9, 4 | `mom_three_levels.ml` | 126, 77 |
+| `compose.ml` | 29, 4 | `mom_variant_to_variant.ml` | 50, 24 |
+| `compose_chains.ml` | 142, 115 | `mutual_alias_exported.ml` | 78, 40 |
+| `compose_exported.ml` | 8, 4 | `mutual_capture_exported.ml` | 123, 72 |
+| `constant_exported.ml` | 8, 4 | `mutual_recursion.ml` | 130, 70 |
+| `constant_folding.ml` | 31, 1 | `nativeint_arith.ml` | 25, 8 |
+| `conv_truncate.ml` | 45, 1 | `negate.ml` | 10, 5 |
+| `count_after_flag.ml` | 275, 152 | `nest_list_of_options.ml` | 177, 109 |
+| `data_closure_captures_string.ml` | 38, 33 | `nest_matrix_three_columns.ml` | 108, 81 |
+| `data_list_of_strings.ml` | 82, 61 | `nested_heap.ml` | 50, 29 |
+| `data_option_of_string.ml` | 56, 41 | `nested_ignored_tests.ml` | 37, 28 |
+| `data_string_in_module_and_functor.ml` | 37, 33 | `nested_record.ml` | 23, 3 |
+| `data_string_returned_through_join.ml` | 32, 28 | `nested_tuple.ml` | 24, 4 |
+| `data_variant_argument.ml` | 89, 65 | `nomark_local_mutual.ml` | 145, 97 |
+| `either_heap.ml` | 58, 37 | `not_inlined.ml` | 21, 17 |
+| `empty_array_in_record.ml` | 14, 8 | `num_conversions.ml` | 27, 19 |
+| `empty_array_length.ml` | 9, 5 | `option_bind.ml` | 89, 1 |
+| `empty_array_tested.ml` | 14, 8 | `option_constant.ml` | 39, 25 |
+| `empty_arrays_of_two_types.ml` | 12, 8 | `option_constant_loop.ml` | 175, 114 |
+| `empty_immutable_array.ml` | 9, 5 | `option_constant_loop_fun.ml` | 379, 258 |
+| `empty_type_refuted.ml` | 21, 6 | `option_default.ml` | 32, 3 |
+| `enum_to_int.ml` | 19, 1 | `option_heap.ml` | 47, 29 |
+| `exclave_after_local_work.ml` | 201, 177 | `option_in_pair.ml` | 67, 31 |
+| `exclave_pair.ml` | 177, 157 | `option_inlined.ml` | 36, 12 |
+| `exported_after_effect.ml` | 15, 6 | `option_join.ml` | 55, 29 |
+| `exported_and_used.ml` | 14, 6 | `option_map.ml` | 70, 4 |
+| `exported_apply.ml` | 18, 9 | `option_matched_twice.ml` | 82, 43 |
+| `exported_arms_after_let.ml` | 26, 21 | `optional_between_positional.ml` | 258, 178 |
+| `exported_bool.ml` | 11, 7 | `optional_default_uses_earlier_argument.ml` | 200, 123 |
+| `exported_branch_calls_twice.ml` | 17, 11 | `optional_erased_for_higher_order.ml` | 172, 118 |
+| `exported_branch_fun_const.ml` | 17, 12 | `optional_given_omitted_none_some.ml` | 98, 69 |
+| `exported_branch_option.ml` | 14, 9 | `or_in_list_positions.ml` | 113, 69 |
+| `exported_branch_pair.ml` | 15, 10 | `or_null_known.ml` | 23, 1 |
+| `exported_branch_then_const.ml` | 14, 9 | `or_null_unknown.ml` | 16, 6 |
+| `exported_branch_then_fun.ml` | 14, 8 | `or_pattern.ml` | 49, 1 |
+| `exported_branch_two_funs.ml` | 17, 11 | `or_two_variables_swapped.ml` | 61, 47 |
+| `exported_capture.ml` | 16, 5 | `over_application.ml` | 19, 3 |
+| `exported_chain.ml` | 14, 10 | `over_application_three_stages.ml` | 101, 92 |
+| `exported_compose_kept.ml` | 17, 13 | `over_application_unknown_function.ml` | 61, 58 |
+| `exported_const_list.ml` | 10, 7 | `over_inlined_maker_run.ml` | 23, 3 |
+| `exported_curried.ml` | 14, 6 | `over_rec.ml` | 84, 52 |
+| `exported_fun_branch_fun.ml` | 17, 11 | `overflow_wrap.ml` | 19, 1 |
+| `exported_fun_given.ml` | 9, 7 | `pair_built.ml` | 43, 21 |
+| `exported_fun_in_arms.ml` | 20, 12 | `pair_computed.ml` | 45, 29 |
+| `exported_fun_in_one_arm.ml` | 17, 12 | `pair_constant_arm.ml` | 53, 23 |
+| `exported_fun_in_option.ml` | 9, 8 | `pair_constant_arm_toplevel.ml` | 31, 12 |
+| `exported_fun_returned.ml` | 9, 7 | `pair_constants.ml` | 32, 23 |
+| `exported_function.ml` | 14, 6 | `pair_join.ml` | 31, 28 |
+| `exported_funs_given.ml` | 10, 10 | `pair_loop_in_loop.ml` | 333, 173 |
+| `exported_funs_in_arms_used.ml` | 23, 14 | `pair_read_one_call_inlined.ml` | 31, 23 |
+| `exported_funs_in_pair.ml` | 14, 11 | `pair_turned_in_loop.ml` | 192, 65 |
+| `exported_list.ml` | 9, 5 | `pair_two_constants.ml` | 25, 9 |
+| `exported_local_fun.ml` | 8, 4 | `pairs_for_a_suit.ml` | 20, 9 |
+| `exported_local_never.ml` | 9, 7 | `param_copy_to_heap.ml` | 193, 171 |
+| `exported_match_pair_then_fun.ml` | 13, 7 | `partial_across_join.ml` | 148, 105 |
+| `exported_match_then_fun.ml` | 21, 12 | `partial_application.ml` | 23, 3 |
+| `exported_match_three_funs.ml` | 33, 19 | `partial_exported.ml` | 13, 6 |
+| `exported_nested_branch.ml` | 21, 13 | `partial_in_a_pair.ml` | 90, 26 |
+| `exported_nested_pair.ml` | 10, 7 | `partial_one_argument_at_a_time.ml` | 116, 57 |
+| `exported_option_fun_in_arm.ml` | 18, 10 | `partial_two_to_six_parameters.ml` | 156, 112 |
+| `exported_pair_fun_in_arms.ml` | 21, 14 | `phys_equal_unknown.ml` | 9, 4 |
+| `exported_record.ml` | 23, 9 | `physical_equality.ml` | 32, 1 |
+| `exported_record_of_funs.ml` | 14, 11 | `pipeline.ml` | 23, 5 |
+| `exported_record_update.ml` | 14, 6 | `poly_abbreviation_patterns.ml` | 117, 68 |
+| `exported_records_in_arms.ml` | 21, 14 | `polymorphic_variant.ml` | 77, 4 |
+| `exported_some_again.ml` | 26, 6 | `power.ml` | 147, 99 |
+| `exported_string_length.ml` | 8, 5 | `project_record_two_levels.ml` | 43, 18 |
+| `exported_submodule.ml` | 14, 8 | `project_variant_argument.ml` | 27, 11 |
+| `exported_table.ml` | 13, 8 | `projections_exported.ml` | 11, 7 |
+| `exported_twice_kept.ml` | 14, 10 | `rec_helper_among_three.ml` | 29, 10 |
+| `exported_two_branches.ml` | 23, 15 | `rec_helper_called_outside.ml` | 27, 13 |
+| `exported_two_functions.ml` | 22, 10 | `record_exported.ml` | 11, 7 |
+| `exported_two_somes.ml` | 11, 5 | `record_of_functions.ml` | 51, 10 |
+| `exported_two_tests.ml` | 26, 17 | `record_project.ml` | 37, 8 |
+| `exported_two_values.ml` | 18, 1 | `record_update.ml` | 27, 4 |
+| `exported_variant.ml` | 17, 6 | `ref_counter.ml` | 23, 23 |
 | `fact_exported.ml` | 8, 3 | `ref_local.ml` | 132, 79 |
 | `factorial.ml` | 70, 46 | `ref_local_in_for_loop.ml` | 296, 180 |
 | `fct_applied_twice_same_argument.ml` | 92, 89 | `ref_straight.ml` | 13, 4 |
@@ -1070,9 +1149,7 @@ the line with no import.
 
 | Source | What the model has not got, or the conversion does not make |
 |--------|----------------------------|
-| `array_literal.ml` | mutable arrays: `Make_array`, of which the conversion makes no primitive of the heap yet (C4) |
 | `float_add.ml` | floating-point arithmetic |
-| `ref_counter.ml` | mutable fields: `Block_set`, of which the conversion makes no primitive of the heap yet (C4) |
 | `tupled_recursive.ml` | after Simplify the unit calls tupled code directly, giving it the components; the model has not got that call (C3) |
 | `tupled_unknown_pair.ml` | as `tupled_recursive.ml` |
 
@@ -1118,19 +1195,21 @@ which gives the code the components (`tupled_recursive.ml`,
 `tupled_unknown_pair.ml`): Simplify makes one of the call of a tupled
 function that it knows and does not inline, so the term after is
 refused where the term before is not. What the model has, and the
-conversion refuses all the same: mutable arrays (`array_literal.ml`)
-and mutable fields (`ref_counter.ml`). The machine runs the
-primitives of the heap, and the conversion makes none of them yet,
-so no unit that has one is checked. A static immutable array of
-values and the array with no element are converted
+conversion makes in the cases that "not checked" lists ("What the
+verdicts mean"): the primitives of the heap. A mutable array made of its
+elements (`array_literal.ml`), and a reference that stays a block, with
+the stores into it (`ref_counter.ml`), are converted, and the two units
+are validated with nothing lifted. No unit of this directory has a case
+of those primitives that the conversion refuses. A static immutable
+array of values and the array with no element are converted
 (`../static_array.fl` and the four beside it, `empty_array_length.ml`,
 `empty_array_tested.ml`, `empty_array_in_record.ml`,
-`empty_arrays_of_two_types.ml`, `empty_immutable_array.ml`; P1's).
-An immutable array made as the term runs is converted too, where its
+`empty_arrays_of_two_types.ml`, `empty_immutable_array.ml`; P1's). An
+immutable array made as the term runs is converted too, where its
 elements are values (`iarray_in_function.ml` and
-`iarray_read_in_function.ml`, which are validated: the array is made
-of the arguments of a function that is not inlined); a mutable one is
-refused.
+`iarray_read_in_function.ml`, which are validated: the array is made of
+the arguments of a function that is not inlined); it is a value with no
+identity, where a mutable one is a cell.
 The conversion refuses a call that is a probe as well; no unit of
 this directory has one (`pairs/README.md`), and `from_ocaml.sh`
 refuses a unit that has one.
@@ -2444,13 +2523,20 @@ the symbol of an immutable array which has a twin in the term after,
 the liftings are guessed again and the function asked again, three
 times at most (the entry of `table_and_array_alike.ml`, in the list
 above).
-The 538 units here were checked in 10.7 seconds of processor time
-together in one run (5.3 user, 5.5 system), and in 10.7 in a second run
-of the same tool (5.2 and 5.5): more than half of each is the system's
+The 538 units here were checked in 12.5 seconds of processor time
+together in one run (5.8 user, 6.7 system), and in 12.1 in a second run
+of the same tool (5.6 and 6.5): more than half of each is the system's
 part. Other builds ran on the machine during both. In two runs made one
-after the other with the same inputs and flags, on the 536 units that
-the directory had at 255f6a36c2, the tool of that commit took 10.5
-seconds and the tool of this tree 10.5. On the 529 units that the
+after the other with the same inputs and flags, on the same 538 units,
+the tool of 698cf003e5 took 11.8 seconds and the tool of this tree 11.4.
+On the 536 units that the directory had at 255f6a36c2, in two such runs,
+the tool of that commit took 10.5 seconds and the tool of 698cf003e5
+took 10.5. That time, and those that `census/README.md` gives for the
+tool of 698cf003e5 where it says "when it was measured there", were
+measured with the build that V3 made of its series of the loads of an
+immutable array when that series was closed, and not with a build made
+at 698cf003e5: between the two the source of the tool and the Rocq files
+do not change. On the 529 units that the
 directory had at 5a514806c3, in two such runs, the tool of that commit
 took 10.3 seconds and the tool of 9c6e3fc02c took 10.2. The times given
 for the tool of 9c6e3fc02c, here and in `census/README.md`, were
@@ -2481,6 +2567,20 @@ four. `census/README.md` has the times of the generated units.
 validated, two terms that the validation compared, for each list, and
 how the term before was made: it is not always the last pair that was
 compared.
+
+`FLSEMANTICS_REGIONS_ONLY`, set to anything, makes the tool not ask
+the validation where it would ask it, which is once it has run the
+two terms and compared the runs: there it prints "the validation:
+not asked (FLSEMANTICS_REGIONS_ONLY is set)" in the place of the
+line of the calls once those of known code are inlined, of the
+verdict and of the lines under it, and the runs, the check of kinds,
+the comparison of the two runs and the line of the check of regions
+as without the variable. Where the tool stops before it asks the
+validation (a unit that is not checked, a term after that is not
+well-formed, a fault of the prefix made from `.cmx` files), the
+variable changes nothing of what it prints. What the tool prints
+with the variable set is no verdict on the unit. No test of this
+directory sets the variable; one of `../regions/` does.
 
 ## What a validation does not say
 
@@ -2783,16 +2883,15 @@ compared.
   tree, and is of the units and the tool of that commit. The
   fourteenth unit of T4-13 is not among the 259.
 
-What no example here validates. A unit whose term has a primitive
-of the heap (`FlambdaPrimitiveModel.heap_primitive`: it makes a
-block with an identity or a mutable array as the term runs, or
-stores into one), as `ref_counter.ml`, whose reference stays a
-block, and `array_literal.ml` have: the model has those primitives,
-and the conversion makes none of them ("not checked", in "What the
-verdicts mean"). And, because the model has not got it: arithmetic
-on floats, calls of C functions (polymorphic comparison among them),
-an exception that the unit declares (it is made by a call of a C
-function), objects, laziness.
+What no example here validates, because the model has not got it:
+arithmetic on floats, calls of C functions (polymorphic comparison among
+them), an exception that the unit declares (it is made by a call of a C
+function), objects, laziness. And no example here has one of the cases
+of the primitives of the heap that the conversion refuses though the
+model has the primitive: a store marked `Initialization`, a block of
+floats or a mixed block that is written, an array that is not of
+values, a copy of a block or of an array ("not checked", in "What the
+verdicts mean").
 (`fst` and `snd` are in the model: the standard library declares them
 with `%field0_immut` and `%field1_immut`, a load that cannot change,
 with a tag and a size that are not known: `fst_snd.ml`. It is `!`, and

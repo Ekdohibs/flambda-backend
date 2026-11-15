@@ -14,10 +14,13 @@ A unit that has the line of the second check under "not validated"
 (`../README.md`, "What the verdicts mean") is counted as not
 validated, and what that line says of it is counted apart, after the
 counts. Measured with the tool of this tree, at the default flags
-and with `-O3`: no unit of the 600 or of the 240 below has the line,
-and none has the line of a verdict that was asked of the term before
-with its known arrays read or with chosen calls inlined first (the same
-section of that README). Of the 240, four have at the default flags, and
+and with `-O3`: no unit of the 600 has the line, and one of the 240 has
+it, at both settings (`loops`, seed 19): there the line names both tests
+that the liftings of that check are made without, the second of them the
+test of the heap. None has the line of a verdict that was asked of the
+term before with its known arrays read or with chosen calls inlined
+first (the same section of that README). Of the 240, four have at the
+default flags, and
 five with `-O3`, the line of a verdict that was asked of the term before
 with copies of code for the sets of closures that a `Let` makes (the
 same section): such a unit is counted apart from those that the
@@ -27,7 +30,7 @@ tool of this tree may print, after the verdict, the line of the check of
 regions (`../README.md`, "What the conversion does to a unit", says of
 which units and what the line may say; no verdict depends on it).
 Measured at the default flags: it prints the line of 555 of the 600 and
-of 232 of the 240 below, and says of each that the check passes before
+of 234 of the 240 below, and says of each that the check passes before
 and after.
 
 ## What a generated unit is
@@ -239,13 +242,13 @@ time, user and system together. Until now it allowed 60 seconds of
 the clock, which measured what else the machine was running:
 `loops_scalar`, seed 55, which was without an answer in 60 seconds
 the day before, then took 16 seconds of processor time, then 4,
-then 7 with the tool of 87cdbf3e01, and takes 3.6 now, the most of the
-240 (3.6 with the tool of 255f6a36c2, in a run made just before). The
-240 took 13.5 seconds of processor time together in one run (10.9 user,
-2.6 system), and 13.7 in a second run of the same tool (11.1 and 2.6).
+then 7 with the tool of 87cdbf3e01, and takes 3.7 now, the most of the
+240 (3.7 with the tool of 698cf003e5, in a run made just before). The
+240 took 14.5 seconds of processor time together in one run (11.6 user,
+2.9 system), and 14.6 in a second run of the same tool (11.8 and 2.9).
 Other builds ran on the machine during both: in two runs made one after
-the other with the same inputs and flags, the tool of 255f6a36c2 took
-13.8 and the tool of this tree 13.7. These are totals of processor time
+the other with the same inputs and flags, the tool of 698cf003e5 took
+14.3 and the tool of this tree 14.6. These are totals of processor time
 on a machine whose processors the runs shared with other builds under
 one quota: they are not a comparison of the speed of two tools run
 alone. The tool of this tree converts the two terms of a unit that was
@@ -260,12 +263,15 @@ first, that of the term before with copies of code for the sets of
 closures that a `Let` makes, and the liftings guessed again where two
 static arrays of the term after are alike (`../README.md`, the entry of
 `table_and_array_alike.ml`), each where the tool's conditions for it
-hold and no answer that it has kept serves; 5 of the 240 are not
-validated, where 25 were with the tool of ca84b4345c. When it was
-measured there, the tool of 9c6e3fc02c took 13.6 and 13.7, the second in
-a run made just after one of the tool of 5a514806c3, which took 13.1
-(`../README.md`, "What a check costs", says with which build the times
-of the tool of 9c6e3fc02c were measured);
+hold and no answer that it has kept serves; 7 of the 240 are not
+validated, two of them units that were not checked while the conversion
+made no primitive of the heap, where 25 were not validated with the tool
+of ca84b4345c. When it was measured there, the tool of 698cf003e5 took
+13.5 and 13.7, the second in a run made just after one of the tool of
+255f6a36c2, which took 13.8; the tool of 9c6e3fc02c took 13.6 and 13.7,
+the second in a run made just after one of the tool of 5a514806c3, which
+took 13.1 (`../README.md`, "What a check costs", says with which builds
+the times of these two tools were measured);
 the tool of 24cd3c9252 took 13.2 and 13.1, and 13.7 in a
 run made just after one of the tool of b006dd4b0d, which took 14.4. When
 it was measured at that commit, the tool of b006dd4b0d took 17.8 and
@@ -290,11 +296,13 @@ made, with the tool before it and the tool after: 79 seconds and 12
 for the 240, 30 and 16 for the 600, and no output of the 840
 differs between the two. What else came between the two tools was
 not measured for its cost on these units one change at a time. The 600
-took 12.5 seconds in the first of those two runs (6.2 user, 6.3 system)
-and 12.6 in the second (6.2 and 6.4), and the tool of 255f6a36c2 12.2 in
+took 13.6 seconds in the first of those two runs (6.6 user, 7.0 system)
+and 12.9 in the second (6.4 and 6.5), and the tool of 698cf003e5 13.6 in
 a run made just before the second; when it was measured there, the tool
-of 9c6e3fc02c took 12.3 and 12.5, and the tool of 5a514806c3 12.3 in a
-run made just before the second of them; the tool of 24cd3c9252 took
+of 698cf003e5 took 12.5 and 12.6, and the tool of 255f6a36c2 12.2 in a
+run made just before the second of them; the tool of 9c6e3fc02c took
+12.3 and 12.5, and the tool of 5a514806c3 12.3 in a run made just before
+the second of them; the tool of 24cd3c9252 took
 12.8 and 12.7, and 13.5 in a run made just after one
 of the tool of b006dd4b0d, which took 13.1; when it was measured at that
 commit, the tool of b006dd4b0d took 19.1 and 18.8, and the tool of
@@ -308,7 +316,7 @@ is reported as that, with its status, and counted as no answer.
 |---------|-------|-----------|------------------------------------------|----------------------------|--------------------------------------|---------------|-------------|
 | `exceptions` | 60 | 33 | 0 | 27 | 0 | 0 | 0 |
 | `exceptions_scalar` | 60 | 35 | 0 | 23 | 0 | 2 | 0 |
-| `loops` | 60 | 56 | 1 | 0 | 0 | 1 | 2 |
+| `loops` | 60 | 56 | 1 | 0 | 0 | 3 | 0 |
 | `loops_scalar` | 60 | 55 | 3 | 0 | 0 | 2 | 0 |
 
 A unit that names a predefined exception has an import, and the
@@ -365,13 +373,19 @@ the function that makes the copies, with its line, and were not
 validated; none is lost. Of the other 236 units of the 240, and of each
 of the 600, the tool of 255f6a36c2 prints what the tool of 5a514806c3
 printed, byte for byte.
-Between the tool of 255f6a36c2 and the tool of this tree, at the default
-flags and with `-O3`: of each of the 240 and of each of the 600, the
-tool of this tree prints what the tool of 255f6a36c2 prints, byte for
-byte. What came between the two, the load of an element of an immutable
-array among the primitives that the validation shares and the liftings
-guessed again where two static arrays of the term after are alike, turns
-none of these units.
+Between the tool of 255f6a36c2 and the tool of 698cf003e5, at the
+default flags and with `-O3`: of each of the 240 and of each of the 600,
+the tool of 698cf003e5 prints what the tool of 255f6a36c2 printed, byte
+for byte. What came between the two, the load of an element of an
+immutable array among the primitives that the validation shares and the
+liftings guessed again where two static arrays of the term after are
+alike, turned none of these units.
+Between the tool of 698cf003e5 and the tool of this tree, at the default
+flags and with `-O3`: the two units with loops that were not checked are
+not validated (above), and each has the line of the check of regions;
+none is lost. Of the other 238 units of the 240, and of each of the 600,
+the tool of this tree prints what the tool of 698cf003e5 prints, byte
+for byte.
 Six were validated when it went from 207 to 213,
 none lost: three by the liftings to a group of static bindings
 around (`FlambdaLiftAroundSpec.lift_around_unit`, V3's; `loops`,
@@ -382,7 +396,7 @@ and two by the placing that takes a continuation into the handler
 under it that alone names it (`FlambdaSinkUsesSpec.sink_to_use`,
 V4's; `loops`, seed 40, and `loops_scalar`, seed 17). When
 it accepted 211, with the first four of the six, the tool printed
-of the two units that are not checked other names of variables in
+of the two units that were not checked then other names of variables in
 the message that says what the model has not got, as the unit is
 built again with fresh names where the modes of the parameters of
 code are made unknown; of the other 234 it printed what it had
@@ -418,9 +432,17 @@ with the removal of unused static bindings from the head of the term
 after, the unboxing of a join going by the box that each arm has,
 and the conversion of a call that never returns as well.
 
-The two that are not checked have a reference that a local function
-captures: it stays a block with a field that is written
-(`Block_set`).
+Two units with loops have a reference that a local function captures: it
+stays a block with a field that is written (`Block_set`; `loops`, seeds
+19 and 52). They were not checked while the conversion made no primitive
+of the heap. The conversion now makes the reference a cell of the heap
+and the write a store, and the two units are not validated. Under "not
+validated" the tool prints of each, at the default flags, that the term
+before and the term after have a primitive of the heap; with `-O3` it
+prints that of seed 19, and of seed 52 it prints that the term before
+has such a primitive and the term after none. Of seed 19 it prints the
+line of the second check too, at both settings (`../README.md`, "What
+the verdicts mean", for both lines). What stops them was not looked at.
 
 Before each term that is compared had its continuations placed
 (`FlambdaValidateSpec.placed`), 16 of the 120 units with loops were
@@ -446,7 +468,7 @@ terms, as the tool showed them, differed by the same kinds of line.
 The six units that were validated next are of the first kind, and
 the eleven others of the first kind were not read again. The third
 kind is what a call returning where its result is passed on removes;
-seven units are validated by it (above). Three units with loops are not
+seven units are validated by it (above). Five units with loops are not
 validated now, and four more are validated only when asked of the term
 before with copies of code; they were not sorted again.
 

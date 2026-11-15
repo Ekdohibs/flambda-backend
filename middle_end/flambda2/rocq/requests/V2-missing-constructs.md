@@ -48,6 +48,12 @@ it. The conversion now drops regions and converts a local allocation
 as one on the heap; the README of the examples says what that
 assumes.
 
+On 8 and 9, since the column was written (2026-11-15): the machine runs
+the primitives of the heap, and the conversion of the test tool
+makes them in the cases that the README of the examples lists ("What
+the verdicts mean", the item "not checked"). `ref_counter.ml` and
+`array_literal.ml` are validated.
+
 ## 2. Undefined before: the model has no step for a defined program
 
 | Construct | OCaml that makes it | What the model does | What it should do |
