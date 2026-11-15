@@ -388,6 +388,8 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   FlambdaSinkContsSpec.v \
   FlambdaSinkUsesProofs.v \
   FlambdaSinkUsesSpec.v \
+  FlambdaSlotsOfCodeProofs.v \
+  FlambdaSlotsOfCodeSpec.v \
   FlambdaStateSupportProofs.v \
   FlambdaStateSupportSpec.v \
   FlambdaStaticProofs.v \
