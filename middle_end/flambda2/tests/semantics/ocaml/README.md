@@ -2071,9 +2071,11 @@ removed it:
   are distinct, and that the term binds none of the new. Which code
   and which symbols is a guess of the tool, read off the term
   after, and nothing is believed of it: the refinement is of every
-  copy that passes that check. Only static sets get copies: a
-  closure that a `Let` makes and that Simplify gives new code is
-  left (`status/C3.md`).
+  copy that passes that check. The copies at the end of a lifting
+  are for static sets only: a closure still made by a `Let` in the
+  term they are given keeps its code ids (`status/C3.md`). For such
+  a `Let` the tool can ask another function
+  (`local_rec_inlined_twice.ml`, below).
 - A pair read where two paths meet, in a function that is called
   twice and that the unit does not export (`pair_join.ml`; P1's
   rewrite). The function is marked never to be inlined. Simplify
