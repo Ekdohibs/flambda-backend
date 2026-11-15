@@ -561,28 +561,47 @@ be proved correct, built a fragment at a time. The files follow the same Spec/Pr
   by experiment only; so it is not a condition of `well_formed_unit`
   and no statement about the compiler's terms may take it as a
   premise. The header of the file says more.
-- Mutable memory is being added in steps, and the first is in: a form
-  of value, `Value_location`, which no observation reads, and four
-  primitives of the heap under one constructor of `prim` (`Heap`: the
-  allocation of a block that has an identity, `Block_set`, the
-  allocation of a mutable array of values, and `Array_set`), on
-  which `eval_prim` has no value. The load from such a block and the
-  comparison of two are `Block_load`, with its mark of mutability, and
-  `Phys_equal`. The length and the load of an array are `Array_length`
-  and `Array_load`. A cell of the heap is a block or an array
-  (`FlambdaValueSpec.cell`). Nothing makes a location yet: the state
-  carries a heap, which no step reads or changes, and the conversion
-  of the test tool refuses the primitives.
-  `FlambdaHeapMachineSpec.v` is the prototype that the design
-  (`middle_end/flambda2/rocq/requests/C4-heap.md`) rests on: a machine
-  of its own beside `step`, with a heap carried along and an exit that
-  carries the memory, the relation on what is observed at exit up to
-  a correspondence between the locations of two runs, and the
-  rewrites that Simplify needs, proved for that machine. It is
-  evidence for the design and not the change: `step` carries the
-  heap and does not run these primitives yet. A proof by cases on
-  values or on primitives has the new case, and so has OCaml code
-  that matches on the extracted `value` or `prim` without a wildcard.
+- Mutable memory is in the model: a form of value, `Value_location`,
+  which none of the five observations of `FlambdaValueSpec.v` reads (a
+  location is read with a heap, by `cell_of`), and four primitives of
+  the heap under one constructor of `prim` (`Heap`: the allocation of
+  a block that has an identity, `Block_set`, the allocation of a
+  mutable array of values, and `Array_set`), on which `eval_prim` has
+  no value. The load from such a block and the comparison of two are
+  `Block_load`, with its mark of mutability, and `Phys_equal`. The
+  length and the load of an array are `Array_length` and `Array_load`.
+  A cell of the heap is a block or an array (`FlambdaValueSpec.cell`).
+  The state carries a heap, and `step` runs a `Let` on it:
+  `FlambdaSemanticsSpec.exec_named` gives the value of the defining
+  expression and the heap after, by `FlambdaHeapSpec.exec_prim` where
+  it is a primitive. `exec_prim` says what each primitive does on a
+  heap, where it has a value: a primitive of the heap makes a cell or
+  writes to one; a unary primitive of a location, and a binary
+  primitive other than `Phys_equal` whose first argument is a
+  location, read its cell; `Phys_equal` with a location among its two
+  arguments is a comparison of its own (`eval_phys_equal_location`),
+  which reads no cell; and every other primitive has the value that
+  `eval_prim` gives it. It has no value where an argument is a symbol
+  or a location that is bound to nothing. The state also carries a
+  read record (`FlambdaValueSpec.read_record`), which nothing adds to
+  and nothing reads yet (decisions D49 and D52). The conversion of the
+  test tool makes the four primitives, so a run of the tool can have
+  cells; the trust ledger says which forms it converts and which it
+  refuses ("The conversion of terms"). `FlambdaHeapMachineSpec.v` is
+  the prototype that the design
+  (`middle_end/flambda2/rocq/requests/C4-heap.md`) rested on: a
+  machine of its own beside `step`, with a heap carried along and an
+  exit that carries the memory, which ran these primitives before
+  `step` did. A state of the prototype whose next step is not a `Let`
+  of a primitive steps as the state of `step` that it projects to
+  (`heap_step_agrees_statement`). What that file still has and
+  `FlambdaSemanticsSpec.v` has not is the relation on what is observed
+  at exit up to a correspondence between the locations of two runs,
+  stated of that machine and not of `step` (decision D40), and the
+  rewrites that Simplify needs, proved for that machine in that
+  relation. A proof by cases on values or on primitives has the case
+  of a location and that of `Heap`, and so has OCaml code that matches
+  on the extracted `value` or `prim` without a wildcard.
 - A unit is well-formed with respect to its interface
   (`FlambdaWellFormedSpec.unit_interface`: the continuation it returns
   to and its exception continuation). `well_formed_unit` is to be the
