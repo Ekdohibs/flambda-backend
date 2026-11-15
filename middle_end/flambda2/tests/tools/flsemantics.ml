@@ -849,11 +849,11 @@ let convert_array_kind (kind : P.Array_kind.t) : Primitives.array_kind option =
    A write marked [Initialization] is refused, as a store with the mark into a
    block is. A write with the mark has conditions on what the field held before
    and on the collector that the model does not track: the model's store does
-   for it what it does for an assignment. It is refused so that the stores of
-   tail-modulo-cons stay outside the conversion. For a function whose recursion
-   is in the tail of a constructor (lambda/tmc.ml) the compiler makes an
-   [Array_set] of values marked [Initialization], where the destination is a
-   block, reached through [Opaque_identity]. *)
+   for it what it does for an assignment. The compiler makes one into a block,
+   through [Opaque_identity], for a recursion in the tail of a constructor
+   (lambda/tmc.ml). In the compiler's text of a term it has no set kind and is
+   read as an assignment: so in a term read from that text it is converted, and
+   a run that comes to it is undefined. *)
 let convert_array_set_kind (kind : Primitives.array_kind)
     (set_kind : P.Array_set_kind.t) : Primitives.array_set_kind option =
   match kind, set_kind with
