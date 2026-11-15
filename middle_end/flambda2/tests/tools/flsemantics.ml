@@ -308,6 +308,8 @@ module Validate = Flambda2_rocq_semantics.FlambdaValidateSpec
 module Validate_knowing = Flambda2_rocq_semantics.FlambdaValidateKnowingSpec
 module Validate_imports = Flambda2_rocq_semantics.FlambdaValidateImportsSpec
 module Lift = Flambda2_rocq_semantics.FlambdaLiftSpec
+module Copy_lets = Flambda2_rocq_semantics.FlambdaCopyLetsSpec
+module Validate_copying = Flambda2_rocq_semantics.FlambdaValidateCopyingSpec
 module Lift_observed = Flambda2_rocq_semantics.FlambdaLiftObservedSpec
 module Validate_related = Flambda2_rocq_semantics.FlambdaValidateRelatedSpec
 module Validate_reading = Flambda2_rocq_semantics.FlambdaValidateReadingSpec
@@ -2605,6 +2607,212 @@ let unused_statics (e : Model.expr) : Unused_statics.dropped =
         unused
   }
 
+(* The copies of code to ask for the sets of closures that a [Let] of the term
+   before makes (FlambdaCopyLetsSpec.let_copy): a guess. Each [Let] of the term
+   before that makes a set of closures is paired, by the place where it stands
+   (outside code, or in the body of a piece of code) and in the order of the
+   terms, with a [Let] of the term after that makes a set with the same function
+   slots and, for each function, the same code or code that the term before does
+   not bind. Where the code is not the same, the [Let] is to get the code of the
+   term after: one copy is asked for each list of pairs of code ids, with the
+   paths of all the [Let]s that have that list. No symbol of a static set of
+   closures is given to a copy. *)
+let let_copies_guess (before : Model.expr) (after : Model.expr) =
+  let code_bound_before =
+    let _, bound = static_names before in
+    List.filter_map
+      (function Code_name id -> Some id | Symbol_name _ -> None)
+      bound
+  in
+  let decls_of (d : Model.named) =
+    match d with
+    | Closure_of_set (_, decls, _) -> Some decls
+    | Set_of_closures (code, _) -> Some [Numbers.Coq_xH, code]
+    | Simple _ | Prim _ | Project_value_slot _ | Project_value_slot_from _
+    | Project_function_slot _ ->
+      None
+  in
+  let made = ref [] in
+  let rec collect place (e : Model.expr) =
+    match e with
+    | Let (_, _, d, body) ->
+      (match decls_of d with
+      | Some decls -> made := (place, decls) :: !made
+      | None -> ());
+      collect place body
+    | Let_static (bindings, body) ->
+      List.iter
+        (fun (binding : Model.static_binding) ->
+          match binding with
+          | Bind_code (id, Code (_, _, _, _, _, code_body)) ->
+            collect (Some id) code_body
+          | Bind_deleted_code _ | Bind_symbol _ -> ())
+        bindings;
+      collect place body
+    | Let_cont_non_recursive (_, Handler (_, _, handler), body) ->
+      collect place body;
+      collect place handler
+    | Let_cont_recursive (handlers, body) ->
+      collect place body;
+      List.iter
+        (fun (_, Model.Handler (_, _, handler)) -> collect place handler)
+        handlers
+    | Apply _ | Apply_cont _ | Switch _ | Invalid -> ()
+  in
+  collect None after;
+  let available = ref (List.rev !made) in
+  let fits decls decls' =
+    List.length decls = List.length decls'
+    && List.for_all2
+         (fun (slot, code) (slot', code') ->
+           slot = slot'
+           && (code = code' || not (List.mem code' code_bound_before)))
+         decls decls'
+  in
+  let consume place decls =
+    let rec go seen = function
+      | [] -> None
+      | ((place', decls') as entry) :: rest ->
+        if place' = place && fits decls decls'
+        then (
+          available := List.rev_append seen rest;
+          Some decls')
+        else go (entry :: seen) rest
+    in
+    go [] !available
+  in
+  let copies = ref [] in
+  let rec walk place (path : Numbers.positive) (e : Model.expr) =
+    match e with
+    | Let (_, _, d, body) ->
+      (match decls_of d with
+      | Some decls -> (
+        match consume place decls with
+        | Some decls' when decls' <> decls ->
+          let ids =
+            List.concat
+              (List.map2
+                 (fun (_, code) (_, code') ->
+                   if code = code' then [] else [code, code'])
+                 decls decls')
+          in
+          copies := (ids, place, path) :: !copies
+        | Some _ | None -> ())
+      | None -> ());
+      walk place (Numbers.Coq_xO path) body
+    | Let_static (bindings, body) ->
+      List.iter
+        (fun (binding : Model.static_binding) ->
+          match binding with
+          | Bind_code (id, Code (_, _, _, _, _, code_body)) ->
+            walk (Some id) Numbers.Coq_xH code_body
+          | Bind_deleted_code _ | Bind_symbol _ -> ())
+        bindings;
+      walk place (Numbers.Coq_xO path) body
+    | Let_cont_non_recursive (_, Handler (_, _, handler), body) ->
+      walk place (Numbers.Coq_xO path) body;
+      walk place (Numbers.Coq_xI path) handler
+    | Let_cont_recursive (handlers, body) ->
+      walk place (Numbers.Coq_xO path) body;
+      ignore
+        (List.fold_left
+           (fun q (_, Model.Handler (_, _, handler)) ->
+             walk place (Numbers.Coq_xO q) handler;
+             Numbers.Coq_xI q)
+           (Numbers.Coq_xI path) handlers
+          : Numbers.positive)
+    | Apply _ | Apply_cont _ | Switch _ | Invalid -> ()
+  in
+  walk None Numbers.Coq_xH before;
+  (* One copy for each list of pairs of code ids, with all its [Let]s. *)
+  let all_ids =
+    List.fold_left
+      (fun seen (ids, _, _) -> if List.mem ids seen then seen else ids :: seen)
+      [] (List.rev !copies)
+  in
+  List.rev_map
+    (fun ids ->
+      let mine =
+        List.filter (fun (ids', _, _) -> ids' = ids) (List.rev !copies)
+      in
+      let lets =
+        List.filter_map
+          (fun (_, place, path) ->
+            match place with None -> Some path | Some _ -> None)
+          mine
+      in
+      let codes =
+        List.sort_uniq compare
+          (List.filter_map (fun (_, place, _) -> place) mine)
+      in
+      let in_code =
+        List.map
+          (fun id ->
+            ( id,
+              List.filter_map
+                (fun (_, place, path) ->
+                  if place = Some id then Some path else None)
+                mine ))
+          codes
+      in
+      (ids, []), (lets, in_code))
+    all_ids
+
+(* Whether the term after makes, by a [Let], in its code too, a set of closures
+   of code that the term before does not bind. Where it makes none,
+   [let_copies_guess] asks for no copy, and the askings with copies of code for
+   [Let]s are not made. It is a shortcut of the search and nothing rests on
+   it. *)
+let let_sets_newly_coded (before : Model.expr) (after : Model.expr) =
+  let code_bound_before =
+    let _, bound = static_names before in
+    List.filter_map
+      (function Code_name id -> Some id | Symbol_name _ -> None)
+      bound
+  in
+  let fresh code = not (List.mem code code_bound_before) in
+  let rec in_term (e : Model.expr) =
+    match e with
+    | Let (_, _, d, body) ->
+      (match d with
+        | Closure_of_set (_, decls, _) ->
+          List.exists (fun (_, code) -> fresh code) decls
+        | Set_of_closures (code, _) -> fresh code
+        | Simple _ | Prim _ | Project_value_slot _ | Project_value_slot_from _
+        | Project_function_slot _ ->
+          false)
+      || in_term body
+    | Let_static (bindings, body) ->
+      List.exists
+        (fun (binding : Model.static_binding) ->
+          match binding with
+          | Bind_code (_, Code (_, _, _, _, _, code_body)) -> in_term code_body
+          | Bind_deleted_code _ | Bind_symbol _ -> false)
+        bindings
+      || in_term body
+    | Let_cont_non_recursive (_, Handler (_, _, handler), body) ->
+      in_term body || in_term handler
+    | Let_cont_recursive (handlers, body) ->
+      in_term body
+      || List.exists
+           (fun (_, Model.Handler (_, _, handler)) -> in_term handler)
+           handlers
+    | Apply _ | Apply_cont _ | Switch _ | Invalid -> false
+  in
+  in_term after
+
+(* Whether the guesses of the asking being made are to ask for copies of code
+   for the sets of closures that a [Let] makes ([validate] sets it). *)
+let let_copies_asked = ref false
+
+(* The copies that the guess of a lifting made last asks for ([lifting_guess]).
+   They are beside the lifting: a lifting has no field for them. *)
+let guessed_let_copies : Copy_lets.let_copy list ref = ref []
+
+(* The code of the unit after that is a newer version of other code, each with
+   that code, by the numbers of the model ([convert_both] sets it). *)
+let code_versions : (Model.code_id * Model.code_id) list ref = ref []
+
 (* ---- Lets that Simplify made static bindings --------------------------- *)
 
 (* Which [Let]s of the term before to make static bindings, and of which
@@ -2701,7 +2909,7 @@ let unused_statics (e : Model.expr) : Unused_statics.dropped =
    caller asks for this from the second lifting on, where the term is
    normalised. *)
 let lifting_guess ~unit ~(banned : (Lift.path * Model.symbol) list) ~around
-    (before : Model.expr) (after : Model.expr) : Lift.lifting =
+    ~let_copies (before : Model.expr) (after : Model.expr) : Lift.lifting =
   (* The symbols bound outside code, in the order in which they are bound when
      the term runs: the body of a [Let_cont] before its handler. *)
   let rec bound_symbols (e : Model.expr) =
@@ -2955,11 +3163,32 @@ let lifting_guess ~unit ~(banned : (Lift.path * Model.symbol) list) ~around
            && (code = code' || not (List.mem code' code_bound_before)))
          decls decls'
   in
+  (* Where copies of code for [Let]s are asked for ([let_copies]), a value slot
+     of the first set that holds a variable which stands for no symbol and no
+     constant agrees with no symbol and no constant of the second, where
+     [fields_agree] has it agree with anything. So a [Let] of such a closure is
+     not given a symbol that the term after binds to a set with new code: it is
+     left to get the new code by a copy for [Let]s. *)
   let slots_agree slots slots' =
     List.for_all
-      (fun (slot', field') ->
+      (fun (slot', (field' : Model.simple)) ->
         match List.assoc_opt slot' slots with
-        | Some field -> fields_agree [field] [field']
+        | Some (field : Model.simple) -> (
+          if not let_copies
+          then fields_agree [field] [field']
+          else
+            let field =
+              match field with
+              | Var x -> (
+                match List.assoc_opt x !known_simples with
+                | Some known -> known
+                | None -> field)
+              | Symbol _ | Const _ -> field
+            in
+            match field, field' with
+            | Var _, Var _ -> true
+            | Var _, (Symbol _ | Const _) | (Symbol _ | Const _), Var _ -> false
+            | (Symbol _ | Const _), (Symbol _ | Const _) -> field = field')
         | None -> false)
       slots'
   in
@@ -3536,7 +3765,40 @@ let lifting_guess ~unit ~(banned : (Lift.path * Model.symbol) list) ~around
     | Apply _ | Apply_cont _ | Switch _ | Invalid -> ()
   in
   if around then scan [] None Lift.root lifted;
-  { first with lifted_around = List.rev !aliases; groups_put = !places }
+  let lifting =
+    { first with lifted_around = List.rev !aliases; groups_put = !places }
+  in
+  (* Copies of code for [Let]s are guessed only beside a lifting that lifts
+     nothing, so that the paths are those of the term given: they are applied to
+     what the lifting gives (FlambdaCopyLetsSpec.with_let_copies). *)
+  match
+    ( around && let_copies,
+      lifting.lifted_lets,
+      lifting.lifted_out_of_code,
+      lifting.lifted_to_head,
+      lifting.lifted_around )
+  with
+  | true, [], [], [], [] ->
+    (* The body of code in which [my_closure] is bound to a symbol is under the
+       [Let] that binds it. *)
+    let lets_copied =
+      List.map
+        (fun (copied, (lets, in_code)) ->
+          ( copied,
+            ( lets,
+              List.map
+                (fun (id, paths) ->
+                  if List.mem_assoc id lifting.lifted_my_closures
+                  then id, List.map under_group paths
+                  else id, paths)
+                in_code ) ))
+        (let_copies_guess before after)
+    in
+    guessed_let_copies := lets_copied;
+    lifting
+  | _, _, _, _, _ ->
+    guessed_let_copies := [];
+    lifting
 
 (* ---- Tables that Simplify made ----------------------------------------- *)
 
@@ -4542,6 +4804,13 @@ let convert_both ~(units : (Compilation_unit.t * Digest.t) list)
       ~units_have_tupled_code:(before_has_tupled_code || has_tupled_code ())
       [before_converted.body; after_converted.body]
   in
+  code_versions
+    := List.sort_uniq compare
+         (List.filter_map
+            (fun (newer, older) ->
+              let newer = Code_ids.find newer and older = Code_ids.find older in
+              if newer = older then None else Some (newer, older))
+            !newer_versions);
   before_converted, after_converted, prefix
 
 (* What the check of kinds answers for a unit (FlambdaWellKindedSpec.v), given
@@ -5041,6 +5310,10 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
      this search too: it decides whether an asking is made, and nothing else
      rests on it. *)
   let own_closures_to_know = ref false in
+  (* Whether the askings may be made once more with copies of code for the sets
+     of closures that a [Let] makes ([let_sets_newly_coded]). It is a shortcut
+     of this search and nothing rests on it. *)
+  let let_copies_to_make = lazy (let_sets_newly_coded before.body after.body) in
   (* The validation asked once, with the code whose calls it is told to leave.
      [validate_unit] is the function asked, which has the two terms of the unit
      already and takes the other guesses; [before] and [after] are the two terms
@@ -5136,7 +5409,7 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
       =
     ref []
   in
-  let ask ~calling ~own ?asked ?(with_lifting = Validate.with_lifting)
+  let ask ~calling ~own ?asked ?probe ?(with_lifting = Validate.with_lifting)
       validate_unit (before : converted) (after : converted) kept :
       Validate.validation * Model.expr * string * bool * Model.expr =
     (* No table is bound until a first lifting of this asking binds one: a
@@ -5268,6 +5541,11 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
       let avoid =
         let unit = interface before in
         [unit.unit_return; unit.unit_exn]
+        @
+        (* A search that looks for copies makes the term of
+           FlambdaValidateCopyingSpec.before_copied, whose rounds are told the
+           continuations of the loops too. *)
+        match probe with Some _ -> List.map snd loops | None -> []
       in
       (* The terms that the rounds gave after each lifting of the guess that is
          being made, the last first. *)
@@ -5281,8 +5559,9 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
                    if stage' = stage then Some (path, sym) else None)
                  banned)
             ~around:(match made with [] -> false | _ :: _ -> true)
-            lifted normalised_after
+            ~let_copies:!let_copies_asked lifted normalised_after
         in
+        let copies = !guessed_let_copies in
         let lifting =
           { lifting with
             made_closures_called = calling;
@@ -5322,10 +5601,11 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
               lifting.lifted_my_closures,
               lifting.lifted_out_of_code,
               lifting.lifted_to_head,
-              lifting.lifted_around )
+              lifting.lifted_around,
+              copies )
           with
-          | 0, _, _, _, _, _, _ | _, _ :: _, [], [], [], [], [] -> true
-          | _, _, _, _, _, _, _ -> false
+          | 0, _, _, _, _, _, _, _ | _, _ :: _, [], [], [], [], [], [] -> true
+          | _, _, _, _, _, _, _, _ -> false
         in
         if stop
         then List.rev made, lifted
@@ -5338,11 +5618,20 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
              trusted. It says nothing of the checks of a lifting: a lifting
              whose checks pass may give the same term back, and then the search
              stops; one that gives a term rebuilt but equal may continue. *)
-          let lifted' = with_lifting lifting lifted in
+          let lifted' =
+            Copy_lets.with_let_copies copies (with_lifting lifting lifted)
+          in
+          (match probe, copies with
+          | Some found, _ :: _ when !found = None && lifted' <> lifted ->
+            found := Some (List.rev made, lifting, copies)
+          | (Some _ | None), _ -> ());
           (match made with
           | [] -> tables_were_bound := tables_bound lifting.tables_put lifted'
           | _ :: _ -> ());
-          if lifted' == lifted && match made with [] -> false | _ :: _ -> true
+          if
+            (lifted' == lifted
+            || match copies with [] -> false | _ :: _ -> lifted' = lifted)
+            && match made with [] -> false | _ :: _ -> true
           then List.rev made, lifted
           else
             let next =
@@ -5473,13 +5762,18 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
       in
       let answer : Validate.validation * Model.expr * string * bool * Model.expr
           =
-        match search_kept with
-        | Some search -> (
+        match probe, search_kept with
+        | Some _, _ ->
+          normalised := [];
+          ignore
+            (liftings_from [] 0 [] looped 4 : Lift.lifting list * Model.expr);
+          not_lifted
+        | None, Some search -> (
           match made_again search.search_guesses 5 with
           | None -> search.search_answer
           | Some (made, banned, again) ->
             asked_of (guessed (Some made) banned again))
-        | None -> asked_of (guessed None [] 5)
+        | None, None -> asked_of (guessed None [] 5)
       in
       (match asked, answer with
       | Some asked, (Not_validated, _, _, _, _)
@@ -5541,7 +5835,7 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
      attempt was given and with whether its askings found a term for the rounds
      with [own] ([own_closures_to_know]). *)
   let answers_not_reading :
-      ((bool * bool * bool * Model.code_id list)
+      ((bool * bool * bool * bool * Model.code_id list)
       * bool
       * (Validate.validation * Model.expr * string * bool * Model.expr))
       list
@@ -5596,19 +5890,55 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
         else before
     in
     let term = read [nothing_lifted] in
-    let asked () : Validate.validation * Model.expr * string * bool * Model.expr
-        =
+    (* [copying]: the liftings, the last lifting and the copies of
+       FlambdaValidateCopyingSpec.before_copied, where the attempt is of the
+       term before with copies of code for the sets of closures that a [Let]
+       makes. The functions asked are then the two of that file, each given the
+       term before as converted; [given liftings] is the term that they give to
+       the function that they ask, for the test of the verdict from the imports,
+       and [term] is it with nothing lifted, for the guesses. *)
+    let asked ?copying () :
+        Validate.validation * Model.expr * string * bool * Model.expr =
+      let read liftings =
+        match copying with
+        | Some (made, last, copies) ->
+          { before with
+            body =
+              Validate_copying.before_copied rounds loops made last copies
+                liftings kept before.body
+          }
+        | None -> read liftings
+      in
+      let term =
+        match copying with Some _ -> read [nothing_lifted] | None -> term
+      in
+      let copied_holds liftings =
+        match copying with
+        | Some (made, last, _) ->
+          Validate_copying.before_copied_holds_from statics_of_imports rounds
+            loops made last liftings kept before.body
+        | None -> true
+      in
       let validate_unit, validate_unit_knowing =
-        match inlining with
-        | Some choices ->
-          ( Validate_inlining.validate_unit_inlining choices,
-            Validate_inlining.validate_unit_knowing_inlining choices )
-        | None ->
-          if reading
-          then
-            ( Validate_reading.validate_unit_reading,
-              Validate_reading.validate_unit_knowing_reading )
-          else Validate.validate_unit, Validate_knowing.validate_unit_knowing
+        match copying with
+        | Some (made, last, copies) ->
+          ( (fun rounds unused slots loops liftings kept before after ->
+              Validate_copying.validate_unit_copying rounds unused slots loops
+                made last copies liftings kept before after),
+            fun rounds unused slots loops liftings kept before after ->
+              Validate_copying.validate_unit_knowing_copying rounds unused slots
+                loops made last copies liftings kept before after )
+        | None -> (
+          match inlining with
+          | Some choices ->
+            ( Validate_inlining.validate_unit_inlining choices,
+              Validate_inlining.validate_unit_knowing_inlining choices )
+          | None ->
+            if reading
+            then
+              ( Validate_reading.validate_unit_reading,
+                Validate_reading.validate_unit_knowing_reading )
+            else Validate.validate_unit, Validate_knowing.validate_unit_knowing)
       in
       let first =
         ask ~calling ~own ~asked:(reading, false)
@@ -5619,9 +5949,10 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
             in
             (last_asking_holds
                := fun () ->
-                    Validate_imports.verdict_holds_from statics_of_imports
-                      rounds unused slots loops liftings kept
-                      (read liftings).body after.body validation);
+                    copied_holds liftings
+                    && Validate_imports.verdict_holds_from statics_of_imports
+                         rounds unused slots loops liftings kept
+                         (read liftings).body after.body validation);
             validation)
           term after kept
       in
@@ -5644,9 +5975,10 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
               in
               (last_asking_holds
                  := fun () ->
-                      Validate_imports.verdict_knowing_holds_from
-                        statics_of_imports rounds unused slots loops liftings
-                        kept (read liftings).body after.body validation);
+                      copied_holds liftings
+                      && Validate_imports.verdict_knowing_holds_from
+                           statics_of_imports rounds unused slots loops liftings
+                           kept (read liftings).body after.body validation);
               validation)
             (knowing (Validate.normalise_before_round_avoiding avoid kept) term)
             (knowing (Validate.normalise_after_round kept) after)
@@ -5704,7 +6036,7 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
        that is made notes whether its own askings found such a term, which is
        kept with its answer, and an answer that is taken sets the reference
        where that says so. *)
-    let key = calling, own, again, kept in
+    let key = calling, own, !let_copies_asked, again, kept in
     match
       if reading && term.body = before.body
       then
@@ -5720,7 +6052,33 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
     | None ->
       let known = !own_closures_to_know in
       own_closures_to_know := false;
-      let answer = asked () in
+      let answer =
+        if !let_copies_asked && not reading
+        then (
+          (* The liftings and the copies are looked for first, by a search that
+             asks nothing ([probe]): its liftings are guessed in turn, as those
+             of any asking are, until one that lifts nothing has copies beside
+             it that change the term. Where there is none, the answer is a
+             refusal. Where there is one, the functions asked are those of
+             FlambdaValidateCopyingSpec.v, given the term before as converted,
+             the liftings made before that one, that one and its copies; their
+             own liftings are guessed from the term that before_copied makes,
+             with no copy asked for. *)
+          let probe = ref None in
+          let refusal =
+            ask ~calling ~own ~probe
+              (fun _ _ _ -> Validate.Not_validated)
+              term after kept
+          in
+          match !probe with
+          | None -> refusal
+          | Some (made, (last : Lift.lifting), copies) ->
+            let_copies_asked := false;
+            Fun.protect
+              ~finally:(fun () -> let_copies_asked := true)
+              (fun () -> asked ~copying:(made, last, copies) ()))
+        else asked ()
+      in
       let found = !own_closures_to_know in
       own_closures_to_know := known || found;
       let made = key, found, answer in
@@ -5744,17 +6102,41 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
      each of its rounds would inline such code into itself once more. *)
   let called_after = called_directly after.body in
   let first_guess = recursive @ called_after in
-  let once_looped_guess =
+  let recursive_once_looped =
     recursive_code
       (Loopify.loopify_unit loops
          (Never_returns.cut_returns []
             (Stub_calls.demote_stub_calls before.body)))
-    @ recursive_code after.body @ called_after
+    @ recursive_code after.body
   in
+  let once_looped_guess = recursive_once_looped @ called_after in
   let another_guess =
     List.exists
       (fun code_id -> not (List.mem code_id once_looped_guess))
       first_guess
+  in
+  (* The same three lists with, beside the code that the term after calls, the
+     code that it is a newer version of ([code_versions]), and what that is a
+     newer version of, eight times at most: the term before may call the older
+     code where the term after calls the newer. They are for the attempts of the
+     fourth kind, below ([copied]). *)
+  let called_after_older =
+    let rec older depth id =
+      if depth = 0
+      then []
+      else
+        match List.assoc_opt id !code_versions with
+        | Some id' -> id' :: older (depth - 1) id'
+        | None -> []
+    in
+    called_after @ List.concat_map (older 8) called_after
+  in
+  let first_guess_older = recursive @ called_after_older in
+  let once_looped_guess_older = recursive_once_looped @ called_after_older in
+  let another_guess_older =
+    List.exists
+      (fun code_id -> not (List.mem code_id once_looped_guess_older))
+      first_guess_older
   in
   (* The attempts in turn: of the term before as it is, or with its known arrays
      read ([reading]); without or with the calls of the closures that a [Let]
@@ -5762,8 +6144,15 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
      without or with what [my_closure] is known to be from its code used in
      those rounds ([own]). The rounds are
      FlambdaValidateSpec.normalise_lifted_own of the two, which the liftings of
-     every asking then ask for. *)
-  let attempts_of ~calling ~own ~inlining ~reading =
+     every asking then ask for. The lists of calls to leave are the three above,
+     or, where [older], the three with the older versions of the code that the
+     term after calls. *)
+  let attempts_of ~older ~calling ~own ~inlining ~reading =
+    let first_guess, once_looped_guess, another_guess =
+      if older
+      then first_guess_older, once_looped_guess_older, another_guess_older
+      else first_guess, once_looped_guess, another_guess
+    in
     let attempt = attempt ~calling ~own ~inlining in
     let first = attempt ~reading first_guess in
     match first with
@@ -5855,6 +6244,7 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
   let inlined_first = ref false in
   let closures_were_called = ref false in
   let own_closures_were_known = ref false in
+  let lets_were_copied = ref false in
   let attempts, (validation, _, _, slots_removed, _) =
     let validates (_, ((validation : Validate.validation), _, _, _, _)) =
       match validation with
@@ -5884,13 +6274,14 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
     let in_turn ~inlining ~reading =
       let with_neither () =
         own_closures_to_know := false;
-        attempts_of ~calling:false ~own:false ~inlining ~reading
+        attempts_of ~older:false ~calling:false ~own:false ~inlining ~reading
       in
       let with_calls_made_direct =
         after with_neither
           ~asked:(fun () -> closures_to_call)
           ~accepted:(fun () -> closures_were_called := true)
-          (fun () -> attempts_of ~calling:true ~own:false ~inlining ~reading)
+          (fun () ->
+            attempts_of ~older:false ~calling:true ~own:false ~inlining ~reading)
       in
       let with_my_closure_known =
         after with_calls_made_direct
@@ -5899,9 +6290,66 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
             closures_were_called := closures_to_call;
             own_closures_were_known := true)
           (fun () ->
-            attempts_of ~calling:closures_to_call ~own:true ~inlining ~reading)
+            attempts_of ~older:false ~calling:closures_to_call ~own:true
+              ~inlining ~reading)
       in
       with_my_closure_known ()
+    in
+    (* The attempts of a fourth kind, given what the kinds before them answer
+       where they all refuse the unit: made where the term after makes by a
+       [Let] a set of closures of code that the term before does not bind
+       ([let_copies_to_make]). They are of the term before as it is, with copies
+       of code for the sets of closures that a [Let] makes ([attempt], where
+       [let_copies_asked]), with what [my_closure] is known to be from its code
+       used in the rounds that follow each lifting, with the calls made direct
+       in them where the term before has a closure for that
+       ([closures_to_call]), and with the calls of the older versions of the
+       code that the term after calls left too ([older]). They are asked once,
+       and not without those rounds first, as the attempts of the kinds before
+       them are. Where they validate, [lets_were_copied] says so for a line
+       under the verdict, with [closures_were_called] and
+       [own_closures_were_known]. Where they refuse the unit too, what the last
+       asking before them left is put back, the answer is the one that there
+       was, and their pairs of terms are shown after the others. *)
+    let copied (attempts, refused) =
+      if not (Lazy.force let_copies_to_make)
+      then attempts, refused
+      else
+        let holds = !last_asking_holds in
+        let tables = !tables_were_bound in
+        let_copies_asked := true;
+        let attempts_copied, answer =
+          Fun.protect
+            ~finally:(fun () -> let_copies_asked := false)
+            (fun () ->
+              own_closures_to_know := false;
+              attempts_of ~older:true ~calling:closures_to_call ~own:true
+                ~inlining:None ~reading:false)
+        in
+        match answer with
+        | Not_validated, _, _, _, _ ->
+          last_asking_holds := holds;
+          tables_were_bound := tables;
+          ( attempts
+            @ List.map
+                (fun (which, pair) ->
+                  ( which
+                    ^ ", of the term before with copies of code for the sets \
+                       of closures that a Let makes",
+                    pair ))
+                attempts_copied,
+            refused )
+        | ( ( Same_up_to_bound_names | Same_once_normalised
+            | Same_once_unused_statics_removed | Same_once_head_statics_removed
+            | Same_once_lifted ),
+            _,
+            _,
+            _,
+            _ ) ->
+          closures_were_called := closures_to_call;
+          own_closures_were_known := true;
+          lets_were_copied := true;
+          attempts_copied, answer
     in
     match in_turn ~inlining:None ~reading:false with
     | attempts, (Not_validated, _, _, _, _) -> (
@@ -5916,18 +6364,19 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
         in
         let choices = Lazy.force choices_to_inline in
         if inlined choices before.body = before.body
-        then attempts, refused
+        then copied (attempts, refused)
         else
           match in_turn ~inlining:(Some choices) ~reading:false with
           | attempts_inlined, (Not_validated, _, _, _, _) ->
-            ( attempts
-              @ List.map
-                  (fun (which, pair) ->
-                    ( which
-                      ^ ", of the term before with chosen calls inlined first",
-                      pair ))
-                  attempts_inlined,
-              refused )
+            copied
+              ( attempts
+                @ List.map
+                    (fun (which, pair) ->
+                      ( which
+                        ^ ", of the term before with chosen calls inlined first",
+                        pair ))
+                    attempts_inlined,
+                refused )
           | ( _,
               ( ( Same_up_to_bound_names | Same_once_normalised
                 | Same_once_unused_statics_removed
@@ -6051,6 +6500,11 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
   then
     Format.printf
       "  (asked of the term before with chosen calls inlined first)@.";
+  if !lets_were_copied
+  then
+    Format.printf
+      "  (asked of the term before with copies of code for the sets of \
+       closures that a Let makes)@.";
   if !closures_were_called
   then
     Format.printf
@@ -6063,21 +6517,22 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
        after each lifting)@.";
   (* The second check, FlambdaValidateRelatedSpec.validate_unit_related, of the
      two terms and the imports, for each list of calls that the attempts above
-     were made with, in their order. The liftings are guessed as for the
-     validator, each applied without its test of the exits
+     of the first three kinds were made with, in their order. The liftings are
+     guessed as for the validator, each applied without its test of the exits
      (FlambdaLiftObservedSpec.with_lifting_observed), which is how the function
      asked applies them; they do not ask for the calls of the closures that a
      [Let] makes to be made direct, nor for what [my_closure] is known to be
-     from its code to be used. For each guess the function is asked with no
-     value slot to remove and, if it refuses and slots are guessed, with those.
-     The answer is that of the first list that is accepted with no value slot
-     removed or, if there is none, of the first that is accepted with the slots:
-     whether slots were given, and whether the liftings of that asking bound
-     tables; or nothing, if no list is accepted. [ask] takes an answer in the
-     type of the verdicts of the validator and searches on where it is
-     [Not_validated]: [Same_once_lifted] stands for [Related_once_lifted]
-     between the function given to [ask] and the match on what [ask] returns,
-     here and nowhere else, and is no verdict of the validator. *)
+     from its code to be used, nor for copies of code for the sets of closures
+     that a [Let] makes. For each guess the function is asked with no value slot
+     to remove and, if it refuses and slots are guessed, with those. The answer
+     is that of the first list that is accepted with no value slot removed or,
+     if there is none, of the first that is accepted with the slots: whether
+     slots were given, and whether the liftings of that asking bound tables; or
+     nothing, if no list is accepted. [ask] takes an answer in the type of the
+     verdicts of the validator and searches on where it is [Not_validated]:
+     [Same_once_lifted] stands for [Related_once_lifted] between the function
+     given to [ask] and the match on what [ask] returns, here and nowhere else,
+     and is no verdict of the validator. *)
   let related () : (bool * bool) option =
     let asked kept =
       let with_slots = ref false in
