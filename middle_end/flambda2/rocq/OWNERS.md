@@ -156,6 +156,10 @@ design out; that is the request, not the change.
     copied under new code ids for static sets of closures that
     Simplify gave new code, for the validator; S4's once it is
     staffed)
+  - `middle_end/flambda2/rocq/FlambdaCopyLets*` (code of the unit
+    copied under new code ids for sets of closures that a `Let`
+    makes and that Simplify gave new code, for the validator; S4's
+    once it is staffed)
   - `middle_end/flambda2/rocq/FlambdaClosureCalls*` (a call of a
     closure that a `Let` in sight makes is made direct, for the
     validator; S4's once it is staffed)
