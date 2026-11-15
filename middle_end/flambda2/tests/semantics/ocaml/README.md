@@ -109,7 +109,24 @@ unit made from OCaml.
   not run. No verdict depends on that line; `rocq/TRUST-LEDGER.md`, "The
   check of regions", says what it rests on and what it does not say. The
   tool prints the line of 108 of the 538 units of this directory, and it
-  says "passes before, passes after" of each. The regions around a `try`
+  says "passes before, passes after" of each. Where that line says
+  what the two runs came to, the tool prints one more, "the ends of
+  regions ...": of each term, the answer of the model's `ends_check`
+  (`FlambdaRegionsEndsSpec.v`) on a certificate that the tool
+  guesses, and its answer with the option `eo_own_end` of the check
+  set. "accepted" rests on
+  `FlambdaRegionsEndsSpec.ends_unit_exit_statement`, which is of any
+  certificate: a run of the term that exits through the return
+  continuation leaves no plain region open. A poor guess can only
+  refuse more. Each term has its own guessed certificate and nothing
+  that is proved relates the two answers. With the option the check
+  refuses what the conversion from Lambda makes on purpose where
+  control leaves several regions at once: a jump to the continuation
+  that ends the outermost of them, whose end pops the frames of the
+  others (`rocq/DECISIONS.md`, D55). `rocq/TRUST-LEDGER.md`, "The
+  ends of regions", says what the line does not say. It says
+  "accepted" of both terms of each of the 108 units, with and
+  without the option. The regions around a `try`
   are dropped in the same way: the
   handler ends the regions that the body had open when it raised, and
   nothing allocated in one of them is assumed to be used after that.

@@ -3,8 +3,11 @@
 ;; the check says of each term whether its run passes; the counts say
 ;; what the run left: the ends of regions that it ran, the regions and
 ;; the local allocations that were still there at its end. A region that
-;; nothing ends is not a fault of the check (decision D48), so it shows
-;; here and nowhere else.
+;; nothing ends is not a fault of the check (decision D48), so the line
+;; of the check does not show it: the counts do. The line of the ends
+;; of regions, which the tool prints after the line of the check, is a
+;; verdict of the model's own about ends (decision D55); the counts say
+;; what the run did, whatever that line says.
 ;;
 ;; Each X.counts is what the tool prints, with FLSEMANTICS_REGION_COUNTS
 ;; set, of ../X.fl or of X.fl here. `dune promote` updates it. The rules
@@ -21,6 +24,13 @@
 ;; lines. The line of the check and the two lines of counts are those of
 ;; region_param_loop.counts. No other rule of the tree sets that
 ;; variable.
+;;
+;; region_inner_ended_by_outer, whose .fl is here: a region is begun
+;; inside another, and each arm of a switch jumps to the handler that
+;; ends the outer one, so the inner region has no end of its own. The
+;; conversion from Lambda makes that jump where control leaves several
+;; regions at once. Before and after, one end is run, which cuts the
+;; frame of the inner region too, and nothing is left.
 
 (rule
  (with-stdout-to
@@ -67,3 +77,18 @@
  (alias runtest)
  (action
   (diff region_param_loop.regions-only region_param_loop.regions-only.output)))
+
+(rule
+ (with-stdout-to
+  region_inner_ended_by_outer.output
+  (setenv
+   FLSEMANTICS_REGION_COUNTS
+   1
+   (run ../../tools/flsemantics.exe %{dep:region_inner_ended_by_outer.fl}))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff
+   region_inner_ended_by_outer.counts
+   region_inner_ended_by_outer.output)))

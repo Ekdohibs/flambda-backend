@@ -9,3 +9,4 @@ raise_parameter.fl:
   related once lifted: the same once values are lifted to symbols without the liftings' symbols-and-constants-only exit test, the terms normalised and unused value slots removed
   (in the model, an exit before is matched by one after under the restricted observer class; exit values may differ)
   the check of regions: passes before, passes after
+  the ends of regions (the model's ends_check, on a certificate that the tool guesses): accepted before, accepted after; with its option eo_own_end: accepted before, accepted after

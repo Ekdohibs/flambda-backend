@@ -7,3 +7,4 @@ region_param_given_after_end.fl:
   calls outside code once those of known code are inlined: 0
   validated: the same once normalised
   the check of regions: fails (a region that is not open is ended, named or given to a continuation, at step 9) before, fails (a region that is not open is ended, named or given to a continuation, at step 10) after
+  the ends of regions (the model's ends_check, on a certificate that the tool guesses): refused before, refused after; with its option eo_own_end: refused before, refused after

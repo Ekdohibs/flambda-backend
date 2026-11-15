@@ -6,5 +6,6 @@ region_param_loop.fl:
   the same
   the validation: not asked (FLSEMANTICS_REGIONS_ONLY is set)
   the check of regions: passes before, passes after
+  the ends of regions (the model's ends_check, on a certificate that the tool guesses): accepted before, refused after; with its option eo_own_end: accepted before, refused after
   the counts of regions before: steps=35 ends=1 local_allocations=3 local_uses=6 other_region=0 cut_by_end_region=0 cut_by_end_try_region=0 no_frame=0 plain_left=0 try_left=0 locals_left=0
   the counts of regions after: steps=36 ends=0 local_allocations=3 local_uses=6 other_region=0 cut_by_end_region=0 cut_by_end_try_region=0 no_frame=0 plain_left=1 try_left=0 locals_left=3

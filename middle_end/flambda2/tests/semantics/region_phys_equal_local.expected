@@ -8,3 +8,4 @@ region_phys_equal_local.fl:
   validated: the same once normalised
   the term before is undefined in the model, so the validation says nothing of this unit
   the check of regions: not run (the run is undefined for another reason) before, passes after
+  the ends of regions (the model's ends_check, on a certificate that the tool guesses): accepted before, accepted after; with its option eo_own_end: accepted before, accepted after

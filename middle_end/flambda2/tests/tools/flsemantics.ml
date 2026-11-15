@@ -7487,6 +7487,310 @@ let print_region_counts which ~steps (state : Regions.region_state option) =
       (int_of_nat counts.count_no_frame)
       (frames_left Plain_mark) (frames_left Try_mark) locals_left
 
+(* ---- The ends of regions ---------------------------------------------- *)
+
+(* A second verdict of regions, about ends: the model's [ends_check]
+   (FlambdaRegionsEndsSpec.v), extracted, of each of the two terms of a unit
+   converted with its regions kept, of the static environment that the term is
+   run from and of the two continuations of the unit. It changes no other line.
+
+   The check reads a certificate, of which it uses one thing: for each handler,
+   the regions that are open when the handler is entered, by the names that the
+   handler has for them. The model has no function that makes a certificate, so
+   the tool guesses that part of one ([guess_ends_certificate]). The guess is
+   not trusted, and nothing is proved of it. The check tests it at every jump,
+   and what is proved is of any certificate: a poor guess can only make the
+   check refuse a term that another certificate would pass.
+
+   What "accepted" rests on is FlambdaRegionsEndsSpec.ends_unit_exit_statement:
+   the run of the term on the machine of regions, from that static environment
+   and from any first symbol, where it exits through the return continuation of
+   the unit, leaves no frame of a plain region on the stack. Beyond that exit,
+   which the statement supposes, that the check passes is its only premise:
+   nothing is asked of the symbols that the machine draws, and the tool makes no
+   test for this line beyond those by which [check_regions] comes to its own
+   line. It says nothing of an exit by a raise, of the frames of a [try], or of
+   a run that does not exit; and "refused" says only that the check did not pass
+   with the certificate guessed, and nothing of a run.
+
+   The line gives the answer of each term, and then the answer of each with the
+   option [eo_own_end] of the check set. With the option, the regions that the
+   check has open above a region that is ended must be of a [try], and only a
+   handler that is marked as an exception handler is entered stale
+   (FlambdaRegionsEndsSpec.v): the check then refuses the jump out of several
+   regions that the conversion from Lambda makes on purpose (decision D55). That
+   is a test of the regions that the check follows, and "accepted" with the
+   option is not a statement about every end in a run: what is proved of it
+   (FlambdaRegionsEndsSpec.ends_own_end_statement) is of one step, from a state
+   of the check that is not stale, and in a handler marked as an exception
+   handler the end of a region pops the plain frames left above its regions.
+   Each term has its own guessed certificate, and nothing that is proved relates
+   the two answers: "accepted before, refused after" says that the check passes
+   the first and not the second, each with the certificate guessed for it. It is
+   not by itself evidence against Simplify, since the guess may be the cause.
+
+   No statement is about the code of this block. That it gives the check, for
+   each term, the body, the two continuations and the static environment said
+   above, with the certificate guessed for that term, sets the option as the
+   line says, and prints each answer at the place of its term, is trusted
+   (rocq/TRUST-LEDGER.md, "The ends of regions"). *)
+module Regions_check = Flambda2_rocq_semantics.FlambdaRegionsCheckSpec
+module Regions_ends = Flambda2_rocq_semantics.FlambdaRegionsEndsSpec
+
+(* What the guess keeps of a handler: its parameters and their kinds, the
+   variables of regions in scope where it is bound, and, for each place that
+   applies it, the regions open there, newest first, with the region given at
+   each argument. *)
+type ends_guess_handler =
+  { eg_params : Model.variable list;
+    eg_kinds : Kinds.flambda_kind list;
+    eg_in_scope : int list;
+    mutable eg_jumps : (int list * int option list) list
+  }
+
+(* The guess. The term is walked with the regions that are open, newest first,
+   as the check walks it. Where a continuation is applied (an [Apply_cont], an
+   arm of a [Switch], the two continuations of a call) the open regions are
+   noted for its handler. They are then put in the names of the handler: a
+   region given at a parameter that is a region has the parameter's name; one
+   that is not given keeps its own if it was in scope where the handler is
+   bound; any other has no name there. The regions that a handler is entered
+   with are the oldest regions that the lists noted for it have in common, and
+   those of them that have a name are its entry. A handler that nothing applies
+   gets no entry and is not walked. The handlers of a recursive [Let_cont] are
+   walked again while the last pass changed an entry, in 41 passes at most, and
+   the whole term again while the last pass found a new region of a [try], in 31
+   passes at most. The walks stop there whether or not anything has settled:
+   nothing is claimed of the guess, and the check tests whatever it gives.
+
+   Only the entries of handlers are filled: [ends_check] reads nothing else of a
+   certificate. *)
+let guess_ends_certificate (statics : Values.static_env) (e : Model.expr) :
+    Regions_check.certificate =
+  let v = int_of_positive in
+  (* In a list of open regions, a region that has no name there: a plain one and
+     one of a [try]. *)
+  let nameless_plain = 0 in
+  let nameless_try = -1 in
+  let tries : (int, unit) Hashtbl.t = Hashtbl.create 16 in
+  let is_try r = r = nameless_try || Hashtbl.mem tries r in
+  let entries : (int, int list) Hashtbl.t = Hashtbl.create 16 in
+  let rec common_start a b =
+    match a, b with
+    | x :: a, y :: b when x = y -> x :: common_start a b
+    | _, _ -> []
+  in
+  let common_end (lists : int list list) : int list =
+    match List.map List.rev lists with
+    | [] -> []
+    | first :: rest -> List.rev (List.fold_left common_start first rest)
+  in
+  (* The regions open on entry to a handler, with those that have no name there,
+     and the variables of regions in scope in it. *)
+  let entry (info : ends_guess_handler) : (int list * int list) option =
+    match info.eg_jumps with
+    | [] -> None
+    | jumps ->
+      let in_the_names_of_the_handler (opened, given) =
+        let rec renaming params kinds given =
+          match params, kinds, given with
+          | ( param :: params,
+              (kind : Kinds.flambda_kind) :: kinds,
+              region :: given ) -> (
+            let rest = renaming params kinds given in
+            match kind, region with
+            | Region, Some r -> (r, v param) :: rest
+            | (Value | Naked_number _ | Region | Rec_info), _ -> rest)
+          | _, _, _ -> []
+        in
+        let renaming = renaming info.eg_params info.eg_kinds given in
+        List.iter
+          (fun (r, param) -> if is_try r then Hashtbl.replace tries param ())
+          renaming;
+        List.map
+          (fun r ->
+            match List.assoc_opt r renaming with
+            | Some param -> param
+            | None ->
+              if List.mem r info.eg_in_scope
+              then r
+              else if is_try r
+              then nameless_try
+              else nameless_plain)
+          opened
+      in
+      let lists = List.map in_the_names_of_the_handler jumps in
+      let common = common_end lists in
+      let above l =
+        List.filteri (fun i _ -> i < List.length l - List.length common) l
+      in
+      let some_above test =
+        List.exists (fun l -> List.exists test (above l)) lists
+      in
+      let opened =
+        (if some_above (fun r -> not (is_try r)) then [nameless_plain] else [])
+        @ (if some_above is_try then [nameless_try] else [])
+        @ common
+      in
+      let region_params =
+        if List.compare_lengths info.eg_kinds info.eg_params = 0
+        then
+          List.filter_map
+            (fun (param, (kind : Kinds.flambda_kind)) ->
+              match kind with
+              | Region -> Some (v param)
+              | Value | Naked_number _ | Rec_info -> None)
+            (List.combine info.eg_params info.eg_kinds)
+        else []
+      in
+      Some (opened, region_params @ info.eg_in_scope)
+  in
+  let jump conts (opened, in_scope) (k : Model.continuation)
+      (args : Model.simple option list) =
+    match List.assoc_opt (v k) conts with
+    | None -> ()
+    | Some info ->
+      let noted =
+        ( opened,
+          List.map
+            (fun (arg : Model.simple option) ->
+              match arg with
+              | Some (Var r) when List.mem (v r) in_scope -> Some (v r)
+              | Some (Var _ | Symbol _ | Const _) | None -> None)
+            args )
+      in
+      if not (List.mem noted info.eg_jumps)
+      then info.eg_jumps <- noted :: info.eg_jumps
+  in
+  let info_of in_scope
+      (Handler (params, metadata, _) : Model.continuation_handler) =
+    { eg_params = params;
+      eg_kinds = metadata.hm_params_kinds;
+      eg_in_scope = in_scope;
+      eg_jumps = []
+    }
+  in
+  let rec expr conts ((opened, in_scope) as st) (e : Model.expr) : unit =
+    match e with
+    | Let (x, _, Prim (Region_primitive Begin_region, []), body) ->
+      expr conts (v x :: opened, v x :: in_scope) body
+    | Let (x, _, Prim (Region_primitive Begin_try_region, []), body) ->
+      Hashtbl.replace tries (v x) ();
+      expr conts (v x :: opened, v x :: in_scope) body
+    | Let
+        ( _,
+          _,
+          Prim (Region_primitive (End_region | End_try_region), [Var r]),
+          body )
+      when List.mem (v r) opened ->
+      let rec below = function
+        | [] -> []
+        | y :: rest -> if y = v r then rest else below rest
+      in
+      expr conts (below opened, in_scope) body
+    | Let (_, _, _, body) -> expr conts st body
+    | Let_static (bindings, body) ->
+      List.iter
+        (fun (binding : Model.static_binding) ->
+          match binding with
+          | Bind_code (_, c) -> code c
+          | Bind_deleted_code _ | Bind_symbol _ -> ())
+        bindings;
+      expr conts st body
+    | Let_cont_non_recursive (k, (Handler (_, _, handler) as h), body) -> (
+      let info = info_of in_scope h in
+      expr ((v k, info) :: conts) st body;
+      match entry info with
+      | None -> ()
+      | Some ((opened, _) as st') ->
+        Hashtbl.replace entries (v k) opened;
+        expr conts st' handler)
+    | Let_cont_recursive (handlers, body) ->
+      let infos = List.map (fun (k, h) -> v k, info_of in_scope h) handlers in
+      let conts = infos @ conts in
+      expr conts st body;
+      let last : (int, int list) Hashtbl.t = Hashtbl.create 8 in
+      let rec settle rounds =
+        let changed = ref false in
+        List.iter2
+          (fun (k, info)
+               (_, (Handler (_, _, handler) : Model.continuation_handler)) ->
+            match entry info with
+            | None -> ()
+            | Some ((opened, _) as st') ->
+              Hashtbl.replace entries k opened;
+              if Hashtbl.find_opt last k <> Some opened
+              then (
+                Hashtbl.replace last k opened;
+                changed := true;
+                expr conts st' handler))
+          infos handlers;
+        if !changed && rounds < 40 then settle (rounds + 1)
+      in
+      settle 0
+    | Apply ap ->
+      jump conts st ap.ap_continuation
+        (match List.assoc_opt (v ap.ap_continuation) conts with
+        | Some info -> List.map (fun _ -> None) info.eg_params
+        | None -> [None]);
+      jump conts st ap.ap_exn_continuation
+        (None :: List.map (fun (s, _) -> Some s) ap.ap_exn_extra_args)
+    | Apply_cont ac ->
+      jump conts st ac.ac_continuation (List.map Option.some ac.ac_args)
+    | Switch (_, arms) ->
+      List.iter
+        (fun (_, (ac : Model.apply_cont)) ->
+          jump conts st ac.ac_continuation (List.map Option.some ac.ac_args))
+        arms
+    | Invalid -> ()
+  and code (Code (_, _, _, _, _, body) : Model.code) = expr [] ([], []) body in
+  let rec walk rounds =
+    let known = Hashtbl.length tries in
+    Hashtbl.reset entries;
+    List.iter (fun (_, c) -> code c) statics.static_code;
+    expr [] ([], []) e;
+    if Hashtbl.length tries > known && rounds < 30 then walk (rounds + 1)
+  in
+  walk 0;
+  { cert_handlers =
+      Hashtbl.fold
+        (fun k opened acc ->
+          ( positive_of_int k,
+            { Regions_check.he_open =
+                List.map positive_of_int (List.filter (fun r -> r > 0) opened);
+              he_params = []
+            } )
+          :: acc)
+        entries [];
+    cert_code = [];
+    cert_indirect_local = false;
+    cert_unknown_returns_local = false;
+    cert_partial_local = false
+  }
+
+(* The line of the ends of regions: of each term, the answer of the check, and
+   its answer with the option. *)
+let print_region_ends ~(statics : Values.static_env) (before : converted)
+    (after : converted) : unit =
+  let verdicts (unit : converted) =
+    let cert = guess_ends_certificate statics unit.body in
+    let verdict own_end =
+      if
+        Regions_ends.ends_check cert { eo_own_end = own_end }
+          unit.return_continuation unit.exn_continuation statics unit.body
+      then "accepted"
+      else "refused"
+    in
+    verdict false, verdict true
+  in
+  let before_base, before_own = verdicts before in
+  let after_base, after_own = verdicts after in
+  Format.printf
+    "  the ends of regions (the model's ends_check, on a certificate that the \
+     tool guesses): %s before, %s after; with its option eo_own_end: %s \
+     before, %s after@."
+    before_base after_base before_own after_own
+
 (* The check of regions, after everything else: the two terms are converted
    again with regions and the modes of allocations kept ([keep_regions]), and
    each is run on the machine of regions from the imports. It changes no
@@ -7600,6 +7904,7 @@ let check_regions ~(units : (Compilation_unit.t * Digest.t) list)
         Format.printf "  the check of regions: %s before, %s after@."
           (region_outcome_shown outcome_before ~steps:steps_before)
           (region_outcome_shown outcome_after ~steps:steps_after);
+        print_region_ends ~statics before after;
         if Sys.getenv_opt "FLSEMANTICS_REGION_COUNTS" <> None
         then (
           print_region_counts "before" ~steps:steps_before state_before;

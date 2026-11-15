@@ -9,3 +9,4 @@ rec_local_helper_called_outside.fl:
   (at the second asking, of the two terms normalised with what their symbols are bound to used)
   (asked of the term before with chosen calls inlined first)
   the check of regions: passes before, passes after
+  the ends of regions (the model's ends_check, on a certificate that the tool guesses): accepted before, accepted after; with its option eo_own_end: accepted before, accepted after

@@ -7,3 +7,4 @@ raise_inlined.fl:
   calls outside code once those of known code are inlined: 0
   validated with its imports: the same once normalised and unused static bindings removed
   the check of regions: passes before, passes after
+  the ends of regions (the model's ends_check, on a certificate that the tool guesses): accepted before, accepted after; with its option eo_own_end: accepted before, accepted after

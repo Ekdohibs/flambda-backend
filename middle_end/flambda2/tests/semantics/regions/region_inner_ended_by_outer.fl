@@ -1,0 +1,39 @@
+(* For the line of the ends of regions: the jump that the conversion from
+   Lambda makes where control leaves several regions at once. A region is
+   begun inside another and a local block is made in it; each arm of a switch
+   reads the block and jumps to the handler that ends the outer region, which
+   is bound outside the inner one. The inner region has no end of its own: the
+   end of the outer one pops its frame, and the run leaves nothing, as the
+   counts show (region_inner_ended_by_outer.counts, which the rules of this
+   directory compare). The line accepts both terms. With its option it refuses
+   both, since an end pops the frame of another plain region (decision
+   D55). *)
+let code inline(never) loopify(never) size(30)
+      work_0 (x : imm tagged)
+        my_closure &my_alloc_region my_depth
+        -> k * e
+        : imm tagged =
+  let outer = %begin_region () in
+  ((let inner = %begin_region (outer) in
+    let p = %block.[`0`].my_alloc_region.local[inner] (x, 1) in
+    let q = %opaque (p) in
+    let c = %untag_imm (x) in
+    ((switch c
+        | 0 -> a0
+        | 1 -> a1)
+       where a0 =
+         let a = %block_load.[`0`] (q) in
+         cont j (a)
+       where a1 =
+         let a = %block_load.[`1`] (q) in
+         cont j (a)))
+     where j (i : imm tagged) =
+       let u = %end_region (outer) in
+       cont k (i))
+in
+let $camlRegion_inner_ended_by_outer__work_1 = closure work_0 @work &toplevel in
+apply direct(work_0 &toplevel)
+  ($camlRegion_inner_ended_by_outer__work_1 : _ -> imm tagged) (1) -> k1 * error
+  where k1 (r : imm tagged) =
+    let $camlRegion_inner_ended_by_outer = Block 0 (r) in
+    cont done ($camlRegion_inner_ended_by_outer)

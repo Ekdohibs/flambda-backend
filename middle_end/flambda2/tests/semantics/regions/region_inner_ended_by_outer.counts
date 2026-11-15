@@ -1,0 +1,12 @@
+region_inner_ended_by_outer.fl:
+  before Simplify (17 steps): returns [0: 1]
+  after Simplify (18 steps): returns [0: 1]
+  the check of kinds: passes before, passes after
+  calls outside code: 1 before, 1 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated: the same once normalised
+  the check of regions: passes before, passes after
+  the ends of regions (the model's ends_check, on a certificate that the tool guesses): accepted before, accepted after; with its option eo_own_end: refused before, refused after
+  the counts of regions before: steps=19 ends=1 local_allocations=1 local_uses=2 other_region=0 cut_by_end_region=1 cut_by_end_try_region=0 no_frame=0 plain_left=0 try_left=0 locals_left=0
+  the counts of regions after: steps=20 ends=1 local_allocations=1 local_uses=2 other_region=0 cut_by_end_region=1 cut_by_end_try_region=0 no_frame=0 plain_left=0 try_left=0 locals_left=0

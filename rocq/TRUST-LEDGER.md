@@ -1112,6 +1112,71 @@ it gave back.
   the tool is still of what this entry describes above, the one run
   that the tool makes of each term or the reason for which it made
   none.
+- **The ends of regions**, in the same file (`guess_ends_certificate`,
+  `print_region_ends`), with the model's
+  `FlambdaRegionsEndsSpec.ends_check`, which is extracted. Where the
+  tool prints the line of the check of regions with what the two runs
+  came to (the entry above), it prints one line more: of each of the
+  two terms converted with its regions kept, whether `ends_check`
+  passes it, and whether it passes it with its option `eo_own_end`
+  set. No verdict changes. *What "accepted" rests on*:
+  `FlambdaRegionsEndsSpec.ends_unit_exit_statement`. Of a term that
+  the check passes, with any certificate, the run on the machine of
+  regions from the static environment that the check was given and
+  from any first symbol, where it exits through the return
+  continuation that the check was given, leaves no frame of a plain
+  region on the stack. The check is given the term that the tool
+  runs, the static environment of the imports that it runs it from,
+  and the two continuations of the unit by which the tool reads how
+  a run ended. Beyond that exit, which the statement supposes, that
+  the check passes is its only premise: nothing is asked of the
+  symbols that the machine draws, and the tool makes no test for
+  this line beyond those by which it comes to the line of the check
+  of regions. *The option.* With `eo_own_end` set the check asks
+  more: where a region is ended, the regions that the check has open
+  above it must be of a `try`, and only a handler that is marked as
+  an exception handler may be entered stale (the header of
+  `FlambdaRegionsEndsSpec.v` says what that is). That is a test of
+  the regions that the check follows, and "accepted" with the option
+  is not a statement about every end in a run:
+  `ends_own_end_statement` is of one step, from a state of the check
+  that is not stale, and in a handler that is marked as an exception
+  handler the end of a region pops the plain frames that were left
+  above its regions, with the option as without. *Not trusted*: the
+  certificate. The check reads of it, for each handler, the regions
+  that are open when the handler is entered.
+  The model has no function that makes a certificate, so the tool
+  guesses that part of one from the term (`guess_ends_certificate`:
+  a walk of the term, in a bounded number of passes, that takes for
+  each handler the oldest regions that are open at every place
+  which applies it, by the names that the handler has for them) and
+  leaves the rest empty. Nothing is proved of the guess, and nothing
+  needs to be: the check tests it at every jump, and the statement
+  is of any certificate, so a poor guess can only make the check
+  refuse a term that another certificate would pass. *Trusted*: the
+  second conversion, as far as the entry above says; the extraction;
+  and the code of the tool that asks the check and prints its
+  answers (`print_region_ends`, and `check_regions` where it calls
+  it), which no statement is about: that it gives the check, for
+  each term, the body, the two continuations and the static
+  environment said above, with the certificate guessed for that
+  term, once with the option off and once with it set; that it
+  prints "accepted" where the answer is true and "refused" where it
+  is false; and that it prints each answer at the place of its term
+  and of its setting. *What the line does not say.* "refused" says
+  only that the check did not pass with the certificate guessed; it
+  says nothing of a run. "accepted" says nothing of a run that exits
+  by a raise (a raise leaves its regions open on purpose), of the
+  frames of a `try`, nor of a run that does not exit. Each term has
+  its own guessed certificate, and nothing that is proved relates
+  the two answers of a line: "accepted before, refused after" is not
+  by itself evidence against Simplify, since the guess may be the
+  cause. What the verdict refuses beyond a region that is left open
+  is a choice (decision D55): with the option it refuses the jump
+  out of several regions that the front end makes on purpose. The
+  types of a certificate are extracted with the check, from
+  `FlambdaRegionsCheckSpec.v`; `region_check` itself still is not,
+  and the tool still does not ask it (the entry above).
 - **Calls that never return**, in the same file (`convert_apply`). A
   call whose result continuation is `Never_returns`, whatever its call
   kind among those that the conversion takes (a method call, a C call
