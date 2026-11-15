@@ -623,13 +623,25 @@ Definition known_is (known : option Z) (actual : Z) : bool :=
    know the field, when it reads it whatever the tag; it does not use
    the size.
 
-   The mutability of the load is not looked at here. It says what the
-   compiler may take of the load: one marked [Immutable] or
-   [Immutable_unique] may be shared with another of the same field and
-   replaced by what is known of the field, and one marked [Mutable] may
-   not ([Simplify_unary_primitive.simplify_mutable_block_load] keeps
+   The mutability of the load is not looked at here. It says what
+   Simplify may take of the load where it simplifies the primitive:
+   one marked [Immutable] or [Immutable_unique] may be shared with
+   another of the same field and replaced by what is known of the
+   field, and one marked [Mutable] is neither shared nor replaced
+   there ([Simplify_unary_primitive.simplify_mutable_block_load] keeps
    one whose argument is not a constant, and makes one of a constant
-   [Invalid], where the load has no value here either). It is not a
+   [Invalid], where the load has no value here either). That is not
+   all that Simplify does with a load marked [Mutable]. Its flow
+   analysis records each [Make_block], whatever its mutability, and
+   each load whose block is a variable, with its mark
+   ([Flow_acc.record_let_binding]; a load from a symbol is not
+   recorded). For a [Make_block] whose variable the analysis requires
+   and does not class as escaping
+   ([Mutable_unboxing.blocks_to_unbox]), it removes the block,
+   whatever its mutability, and replaces each recorded load from it by
+   what the field holds at that point, whatever the load is marked; a
+   load of a field that the block has not got, or that holds a value
+   of another kind than the load's, it makes [Invalid]. It is not a
    test of the block: the machine reads the field
    ([To_cmm_primitive.block_load]), and a block that is a value, or
    that a symbol is bound to, is immutable, so that a load marked
