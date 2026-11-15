@@ -1619,6 +1619,18 @@ Definition equivalent (s s' : state) : Prop :=
    prototype's is FlambdaHeapMachineSpec.outcome_related, which relates
    outcomes that carry their static environments, as an exit here does
    not. Decision D40. *)
+(* CR mshinwell: An exit does not carry the static environment of the
+   state that exits, and a symbol is a value whether it is bound or
+   not. So a target may exit with a symbol that it never binds, and
+   refine a source that binds it:
+   FlambdaExitBoundSpec.refined_exit_unbound_statement has such a
+   pair. Of a unit run from its imports and the empty heap, what says
+   that the symbols at its exit are bound is three tests of the unit
+   (FlambdaExitBoundSpec.unit_refines_exits_bound_statement joins them
+   to a refinement of two such units), and they do not say what a
+   symbol is bound to. The comparison that is intended is of exits
+   that carry their static environments, as that of decision D40 is.
+   Decision D57. *)
 Definition refines (source target : state) : Prop :=
   (∀ (k : continuation) (vs : list value) (hp : heap),
     behaves source (Exits k vs hp) -> behaves target (Exits k vs hp))

@@ -149,6 +149,8 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   FlambdaDemoteSpec.v \
   FlambdaEquivarianceProofs.v \
   FlambdaEquivarianceSpec.v \
+  FlambdaExitBoundProofs.v \
+  FlambdaExitBoundSpec.v \
   FlambdaExitWorldActionsProofs.v \
   FlambdaExitWorldActionsSpec.v \
   FlambdaExitWorldProofs.v \

@@ -502,6 +502,10 @@ pass into the validator.
     of `FlambdaWellFormedSpec.v` about the run of a well-formed unit,
     for a run from a static environment that holds no code and binds
     no name that the unit binds; same stream)
+  - `middle_end/flambda2/rocq/FlambdaExitBound*` (where the target of
+    a refinement of two units passes three tests, the symbols at its
+    exit are bound in its static environment, which a refinement
+    alone does not say; same stream)
   - `middle_end/flambda2/rocq/status/V3.md`
 - S6, unboxing of continuation parameters. Owner: unassigned.
 - S7, the reaper. Out of scope for now, unassigned.
