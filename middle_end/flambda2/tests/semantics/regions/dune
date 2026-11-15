@@ -14,6 +14,13 @@
 ;; the end of a region that is a parameter of a continuation and that
 ;; nothing else uses. Before, one end is run and nothing is left; after,
 ;; no end is run, and the region and its allocations are left.
+;;
+;; region_param_loop.regions-only is what the tool prints of
+;; ../region_param_loop.fl with FLSEMANTICS_REGIONS_ONLY set as well:
+;; the validation is not asked, and one line says so in the place of its
+;; lines. The line of the check and the two lines of counts are those of
+;; region_param_loop.counts. No other rule of the tree sets that
+;; variable.
 
 (rule
  (with-stdout-to
@@ -44,3 +51,19 @@
  (alias runtest)
  (action
   (diff region_param_loop.counts region_param_loop.output)))
+
+(rule
+ (with-stdout-to
+  region_param_loop.regions-only.output
+  (setenv
+   FLSEMANTICS_REGION_COUNTS
+   1
+   (setenv
+    FLSEMANTICS_REGIONS_ONLY
+    1
+    (run ../../tools/flsemantics.exe %{dep:../region_param_loop.fl})))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff region_param_loop.regions-only region_param_loop.regions-only.output)))

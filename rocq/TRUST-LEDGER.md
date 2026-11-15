@@ -1031,7 +1031,11 @@ it gave back.
   `FLSEMANTICS_REGION_COUNTS` asks for are for measures; they are in
   no expected file but those of
   `middle_end/flambda2/tests/semantics/regions/`, whose rules set the
-  variable. The count of allocations that name another region
+  variable. With `FLSEMANTICS_REGIONS_ONLY` set the tool does not ask
+  the validation of a unit and prints one line that says so in the
+  place of its lines; what it prints of regions is computed as without
+  the variable, which one control of that directory shows of one unit
+  and nothing proves. The count of allocations that name another region
   sees only a region named by a variable, not the region of the code.
   *What the five primitives are to everything else.* The machine of
   `FlambdaSemanticsSpec.v` gives them no value: a run that comes to

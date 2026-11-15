@@ -7073,7 +7073,10 @@ type checked =
           gave the same, or the run before is undefined, or one of them was not
           over when the steps allowed ran out, as the lines printed say. With
           it, the verdict of the validator, which may be that the unit is not
-          validated; the last lines printed say with what it is of. *)
+          validated; the last lines printed say with what it is of. Where the
+          environment asks for the check of regions alone
+          ([FLSEMANTICS_REGIONS_ONLY]) it is [Not_validated] with no validation
+          asked, as the line printed says. *)
 
 (* Raised where a check has failed, after the line that says how is printed. *)
 exception Check_failed
@@ -7184,10 +7187,25 @@ let check_or_raise ~filename ~(units : (Compilation_unit.t * Digest.t) list)
         else "DIFFERENT", false
     in
     Format.printf "  %s@." verdict;
+    (* Where the environment asks for the check of regions alone
+       ([FLSEMANTICS_REGIONS_ONLY]) the validation is not asked, and a line says
+       so in the place of its lines: it is for measures that need the check of
+       regions without the cost of the validation and of its second check. The
+       runs, the check of kinds and the comparison of the runs above are made as
+       ever, and [check_regions] reads nothing of what the validation would have
+       said. The answer given here, [Not_validated], is then no verdict. No rule
+       of the tree sets the variable but that of a control of
+       tests/semantics/regions/, so it is in no other expected file. *)
     let validation =
-      validate ~imports
-        ~prefix_units:(List.length prefix.prefix_units)
-        ~outcome_before before after
+      if Sys.getenv_opt "FLSEMANTICS_REGIONS_ONLY" <> None
+      then (
+        Format.printf
+          "  the validation: not asked (FLSEMANTICS_REGIONS_ONLY is set)@.";
+        Validate.Not_validated)
+      else
+        validate ~imports
+          ~prefix_units:(List.length prefix.prefix_units)
+          ~outcome_before before after
     in
     if not ok then raise Check_failed;
     Some validation
@@ -7489,7 +7507,7 @@ let print_region_counts which ~steps (state : Regions.region_state option) =
    of the two terms, [erase] of the term converted with regions kept must be the
    term that [check_or_raise] ran and compared ([terms_compared]), up to bound
    names (FlambdaCompareSpec.expr_eqb). So what is run here is the term that was
-   validated, with its regions in it, and not another. Where that fails the line
+   compared, with its regions in it, and not another. Where that fails, the line
    says so, and nothing is run: it is a fault of the conversion.
 
    And each term, with the imports, must be one that [erase] is meant for (the
