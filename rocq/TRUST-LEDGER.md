@@ -2291,6 +2291,14 @@ checked by an extracted function, and `validate_unit_sound` and
   read) by `lift_from_code_unit`; the `Let`s of the handlers that are
   not at toplevel, to bind at the head of the unit (the field
   `lifted_to_head`), by `lift_to_head_unit`.
+  Where the search of an asking that asks something ends in a refusal,
+  the search is made once more with two choices of the guess changed
+  (`second_guess`: the `Let`, outside code, of a closure with no value
+  slot that is given a symbol of the term after goes to the lifting to
+  the head; a `Let` of a block whose fields are all variables of which
+  nothing is known takes by preference a symbol that fits and whose
+  block has a variable), and the same three functions check what it
+  proposes.
 - Which code of the term before to copy, under which new code ids, and
   the static sets of closures of which symbols get the copies (the
   field `code_copied` of the same guess): checked by
