@@ -33,10 +33,11 @@
    computes is FlambdaPrimitiveSpec.v.
 
    The fragment has, with the compiler's names:
-   - of [unary_primitive]: [Block_load] from an immutable block of
-     values, whatever the load says of mutability, [Is_int], [Is_null],
-     [Get_tag], [Array_length] of an array of values, [String_length] of
-     a string, [Opaque_identity], the
+   - of [unary_primitive]: [Block_load] from a block of values (from
+     an immutable one, whatever the load says of mutability; from one
+     that has an identity, as FlambdaHeapSpec.v says), [Is_int],
+     [Is_null], [Get_tag], [Array_length] of an array of values,
+     [String_length] of a string, [Opaque_identity], the
      unary [Int_arith] (here [Unary_int_arith]), [Num_conv] between the
      integer kinds, [Boolean_not], [Unbox_number],
      [Box_number], [Untag_immediate], [Tag_immediate] and
@@ -48,9 +49,12 @@
    - of [variadic_primitive]: [Make_block] of an immutable block of
      values, and [Make_array] of an immutable array of values (here
      [Make_immutable_array]);
-   - under [Heap], with the primitives of C4's prototype: [Make_array]
-     of a mutable array of values (here [Make_mutable_array]), and the
-     ternary [Array_set] into one;
+   - under [Heap], the primitives of the heap, which the machine runs
+     (FlambdaHeapSpec.v): [Make_block] of a block of values that has
+     an identity (here [Make_block_with_identity]) and the binary
+     [Block_set] into one made [Mutable], [Make_array] of a mutable
+     array of values (here [Make_mutable_array]) and the ternary
+     [Array_set] into one;
    - under [Region_primitive], the primitives of regions that are not
      ghosts, [Begin_region], [Begin_try_region], [End_region] and
      [End_try_region], and [Local_allocation], which is no primitive of
@@ -74,13 +78,20 @@
      primitive [Local_allocation] after it.
    - [Make_block] has no mutability: it is that of immutable blocks
      ([Immutable], not [Immutable_unique]), and the conversion must
-     refuse the others. So every block of the model is immutable.
-     [Block_load] has the mutability of the compiler's, and is a load
-     from such a block whatever that is: the front end marks [Mutable]
-     a load that the source declares as one of a field that may be
-     written ([Reads_vary]: [%field0] and [%field1], and the [!] of a
+     refuse the others. So every block that [Make_block] makes is
+     immutable and has no identity: it is a value of the model. At
+     [Mutable] or [Immutable_unique] the compiler's [Make_block] is
+     [Make_block_with_identity], under [Heap] below: that makes a
+     cell of the heap, and its value is the location of the cell
+     (FlambdaHeapSpec.v).
+     [Block_load] has the mutability of the compiler's. From a block
+     that is a value, or that a symbol is bound to, it is a load
+     whatever that is: the front end marks [Mutable] a load that the
+     source declares as one of a field that may be written
+     ([Reads_vary]: [%field0] and [%field1], and the [!] of a
      reference), and nothing stops a source from declaring such a load
-     of a tuple.
+     of a tuple. From a cell, the mark is tested against how the cell
+     was made (FlambdaHeapSpec.load_allowed).
      The only [Block_access_kind.t] and [Block_kind.t] are those of
      blocks of values, [Values]; an [Or_unknown.t] is an [option],
      [Unknown] being [None].
@@ -293,19 +304,20 @@ Inductive variadic_primitive : Type :=
   | Make_block (kind : block_kind)
   | Make_immutable_array (kind : array_kind).
 
-(* C4's prototype. The primitives of the heap that are not above, under
-   one constructor of [prim] so that the prototype changes no
-   constructor that exists. In the change itself they are where the
-   compiler has them: [Make_block] gains its [Mutability.t], and
-   [Block_set] is a binary primitive. The load from a block that has an
-   identity is [Block_load] above, with its mutability, and the
-   comparison of two such blocks is [Phys_equal] above: the prototype
-   says what they do on a location (FlambdaHeapSpec.v). The two
-   primitives of arrays that are here are with them for the same
-   reason: in the change itself [Make_array] is a variadic primitive
-   with its [Mutability.t], and [Array_set] a ternary one. The length
-   and the load of an array are [Array_length] and [Array_load]
-   above. *)
+(* The primitives of the heap that are not above, under one constructor
+   of [prim]. They came with C4's prototype of the heap, which changed
+   no constructor that existed, and they stayed here when the machine
+   came to run them (FlambdaSemanticsSpec.step, by
+   FlambdaHeapSpec.exec_prim). The compiler has them elsewhere: its
+   [Make_block] has a [Mutability.t], and its [Block_set] is a binary
+   primitive. The load from a block that has an identity is [Block_load]
+   above, with its mutability, and the comparison of two such blocks is
+   [Phys_equal] above: FlambdaHeapSpec.v says what they do on a
+   location. The two primitives of arrays that are here are with them
+   for the same reason: the compiler's [Make_array] is a variadic
+   primitive with its [Mutability.t], and its [Array_set] a ternary one.
+   The length and the load of an array are [Array_length] and
+   [Array_load] above. *)
 
 (* [Mutability.t] without [Immutable]: the mutability of a block that
    has an identity. *)
