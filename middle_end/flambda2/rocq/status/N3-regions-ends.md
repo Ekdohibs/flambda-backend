@@ -152,11 +152,11 @@ nothing that is proved relates the two answers of a line.
 rests on, what of the tool is trusted for it, and what it does not
 say.
 
-In the expected files of the tree the line is in 145: the 26
+In the expected files of the tree the line is in 146: the 26
 examples of `tests/semantics` that have the line of the check of
 regions with two runs, four files of `tests/semantics/regions` (the
-three of counts, and `region_param_loop.regions-only`), and 115 units
-made from OCaml sources. Of the 115 units from OCaml both terms are
+three of counts, and `region_param_loop.regions-only`), and 116 units
+made from OCaml sources. Of the 116 units from OCaml both terms are
 accepted, with and without the option. So are both terms of each of
 the eight controls of the cells that the conversion of the tool makes
 (`region_cell_*`), those three included whose run the check of
