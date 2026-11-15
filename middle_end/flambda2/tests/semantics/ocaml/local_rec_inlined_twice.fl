@@ -1,0 +1,81 @@
+let $camlLocal_rec_inlined_twice__first_const_0 = Block 0 () in
+(let code rec size(26)
+       go_1 (n/79 : imm tagged)
+         my_closure/80 &my_alloc_region/81 my_depth/82
+         -> k/30 * k/31
+         : imm tagged =
+   let next_depth/83 = rec_info (succ my_depth/82) in
+   let q/84 = %project_value_slot.[go].[q] (my_closure/80) in
+   (let prim/88 = %int_comp.le (n/79, 0) in
+    let int_lessequal/89 = %tag_imm (prim/88) in
+    (let untagged/90 = %untag_imm (int_lessequal/89) in
+     switch untagged/90
+       | 0 -> k/34
+       | 1 -> k/30 (q/84))
+      where k/34 =
+        cont k/32)
+     where k/32 =
+       ((let int_sub/87 = %int_barith.sub (n/79, 1) in
+         apply direct(go_1 &my_alloc_region/81)
+           (my_closure/80 ~ depth my_depth/82 -> next_depth/83
+            : _ -> imm tagged)
+             (int_sub/87)
+             -> k/33 * k/31)
+          where k/33 (apply_result/85 : imm tagged) =
+            let int_add/86 = %int_barith.add (apply_result/85, 1) in
+            cont k/30 (int_add/86))
+ in
+ let code inline(always) size(38)
+       count_from_0 (q/91 : imm tagged)
+         my_closure/92 &my_alloc_region/93 my_depth/94
+         -> k/35 * k/36
+         : imm tagged =
+   let next_depth/95 = rec_info (succ my_depth/94) in
+   let go/96 = closure go_1 @go &my_alloc_region/93 with { q = q/91 } in
+   apply direct(go_1 &my_alloc_region/93)
+     (go/96 : _ -> imm tagged) (3) -> k/35 * k/36
+ in
+ let code size(14)
+       twice_2 (a/97 : imm tagged)
+         my_closure/98 &my_alloc_region/99 my_depth/100
+         -> k/37 * k/38
+         : imm tagged =
+   let next_depth/101 = rec_info (succ my_depth/100) in
+   let count_from/102 =
+     %project_value_slot.[twice].[count_from] (my_closure/98)
+   in
+   (let int_add/106 = %int_barith.add (a/97, 1) in
+    apply direct(count_from_0 &my_alloc_region/99)
+      (count_from/102 : _ -> imm tagged) (int_add/106) -> k/39 * k/38)
+     where k/39 (apply_result/103 : imm tagged) =
+       (apply direct(count_from_0 &my_alloc_region/99)
+          (count_from/102 : _ -> imm tagged) (a/97) -> k/40 * k/38
+          where k/40 (apply_result/104 : imm tagged) =
+            let int_add/105 =
+              %int_barith.add (apply_result/104, apply_result/103)
+            in
+            cont k/37 (int_add/105))
+ in
+ let count_from/107 = closure count_from_0 @count_from &toplevel in
+ let twice/108 = closure twice_2 @twice &toplevel
+ with { count_from = count_from/107 }
+ in
+ (let Popaque/111 = %opaque (5) in
+  apply direct(twice_2 &toplevel)
+    (twice/108 : _ -> imm tagged) (Popaque/111) -> k/41 * error)
+   where k/41 (result/109 : imm tagged) =
+     let Pmakeblock/110 =
+       %block.[`0`].`toplevel` (count_from/107, twice/108, result/109)
+     in
+     cont k/29 (Pmakeblock/110))
+  where k/29 define_root_symbol (module_block/75) =
+    let field_0/76 = %block_load.tag[`0`].`size`[`3`].[`0`] (module_block/75)
+    in
+    let field_1/77 = %block_load.tag[`0`].`size`[`3`].[`1`] (module_block/75)
+    in
+    let field_2/78 = %block_load.tag[`0`].`size`[`3`].[`2`] (module_block/75)
+    in
+    let $camlLocal_rec_inlined_twice =
+      Block 0 (field_0/76, field_1/77, field_2/78)
+    in
+    cont done ($camlLocal_rec_inlined_twice)

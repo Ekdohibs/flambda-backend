@@ -1,0 +1,11 @@
+local_rec_inlined_twice.fl:
+  before Simplify (128 steps): returns [0: <fun>; <fun>; 17]
+  after Simplify (93 steps): returns [0: <fun>; <fun>; 17]
+  the check of kinds: passes before, passes after
+  calls outside code: 1 before, 1 after
+  the same
+  calls outside code once those of known code are inlined: 2
+  validated: the same once closures and blocks are lifted to symbols, the terms normalised and unused value slots removed
+  (asked of the term before with copies of code for the sets of closures that a Let makes)
+  (with the calls of the closures that a Let makes made direct in the rounds after each lifting)
+  (with what my_closure is known to be from its code used in the rounds after each lifting)
