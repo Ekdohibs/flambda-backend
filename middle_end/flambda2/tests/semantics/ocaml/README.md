@@ -76,7 +76,7 @@ compare the term made with `X.fl` and what the tool prints with
 
 The test tool converts the compiler's term to a term of the model
 (`../../tools/flsemantics.ml`; it is trusted, and
-`rocq/TRUST-LEDGER.md` lists it). Three things it does matter to a
+`rocq/TRUST-LEDGER.md` lists it). Four things it does matter to a
 unit made from OCaml.
 
 - **Regions.** Where a block, a boxed number or a closure does not
@@ -530,12 +530,17 @@ unit made from OCaml.
   pair for every list of calls that the tool tries, and the tool
   then asked a second check of the same two terms,
   `FlambdaValidateRelatedSpec.validate_unit_related`. That check
-  makes each lifting without the test that the unit exits with
-  symbols and constants only
-  (`FlambdaLiftObservedSpec.with_lifting_observed`; the test is
-  `FlambdaLiftSpec.exits_plain_knowing`), keeps every other test
-  of a lifting, and then compares the two terms as the validator
-  compares two lifted terms.
+  makes each lifting without two tests that a lifting of the
+  validation makes of the term that it is given: that it exits
+  with symbols and constants only
+  (`FlambdaLiftSpec.exits_plain_knowing`), and that it has no
+  primitive of the heap (`FlambdaHeapFreeSpec.expr_free_of_heap`).
+  It keeps every other condition of a lifting
+  (`FlambdaLiftObservedSpec.with_lifting_observed`), and then
+  compares the two terms as the validator compares two lifted
+  terms. The line of the tool names the first test only; the
+  conversion makes no primitive of the heap ("not checked",
+  below).
   What is proved of a pair that it accepts
   (`validate_unit_related_sound_statement`) is not that the unit
   after refines the unit before. It is one-way, and it is this:
@@ -2711,10 +2716,16 @@ compared.
   tree, and is of the units and the tool of that commit. The
   fourteenth unit of T4-13 is not among the 259.
 
-What no example here validates, because the model has not got it:
-mutable fields and arrays, arithmetic on floats, calls of C functions
-(polymorphic comparison among them), an exception that the unit
-declares (it is made by a call of a C function), objects, laziness.
+What no example here validates. A unit whose term has a primitive
+of the heap (`FlambdaPrimitiveModel.heap_primitive`: it makes a
+block with an identity or a mutable array as the term runs, or
+stores into one), as `ref_counter.ml`, whose reference stays a
+block, and `array_literal.ml` have: the model has those primitives,
+and the conversion makes none of them ("not checked", in "What the
+verdicts mean"). And, because the model has not got it: arithmetic
+on floats, calls of C functions (polymorphic comparison among them),
+an exception that the unit declares (it is made by a call of a C
+function), objects, laziness.
 (`fst` and `snd` are in the model: the standard library declares them
 with `%field0_immut` and `%field1_immut`, a load that cannot change,
 with a tag and a size that are not known: `fst_snd.ml`. It is `!`, and
