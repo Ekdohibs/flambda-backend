@@ -1,2 +1,8 @@
-ref_counter.fl: not checked: the model has not got primitive ((Block_set (Values (tag ⊤) (size ⊤) (field_kind Immediate))
-           Assign Heap 0) counter/63UV int_add/69UV)
+ref_counter.fl:
+  before Simplify (23 steps): returns [0: 2]
+  after Simplify (23 steps): returns [0: 2]
+  the check of kinds: passes before, passes after
+  calls outside code: 2 before, 2 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated: the same once normalised and unused static bindings removed, at the head of the term after too

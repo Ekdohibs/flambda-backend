@@ -45,17 +45,17 @@
 
    What the model has not got is given the value that says least: no
    continuation sort but that of an exception handler, no inlining attribute,
-   size 0 for code, code that is not recursive, allocation on the heap, no
-   subkinds. Code gets a region variable and a depth variable of its own, as the
-   syntax asks for them; a call or an allocation in code names that region.
+   size 0 for code, code that is not recursive, allocation on the heap, the mode
+   of the heap for an assignment, no subkinds. Code gets a region variable and a
+   depth variable of its own, as the syntax asks for them; a call or an
+   allocation in code names that region.
 
    What is covered: the terms that the conversion makes today. A term that is
    outside them, or that fexpr has no way to write, raises [Not_printable] with
    the reason: - an arity with an unboxed product: an arity of fexpr is a list
    of kinds; - a constant that is a vector or a mask, which the conversion does
-   not make; - a primitive of the heap, which the conversion does not make
-   either; - [Closure_of_set] other than as FlambdaModel.let_closures makes it:
-   the closure at the first function slot of its set, followed by the
+   not make; - [Closure_of_set] other than as FlambdaModel.let_closures makes
+   it: the closure at the first function slot of its set, followed by the
    projections of the other function slots, in order, each bound at kind
    [Value]. Flambda binds all the closures of a set at once; -
    [Static_const_closure_of_set] other than as FlambdaModel.bind_closures makes
@@ -482,6 +482,61 @@ let variadic_primitive (p : Primitives.variadic_primitive) ~num_args :
   | Make_immutable_array kind ->
     Make_array (array_kind kind, Immutable, on_the_heap ())
 
+(* A primitive of the heap is one of three sorts of primitive of the compiler,
+   by the number of its arguments. An assignment is written with the mode of the
+   heap: the model's store has no mode. *)
+type heap_primitive =
+  | Heap_binary of P.binary_primitive
+  | Heap_ternary of P.ternary_primitive
+  | Heap_variadic of P.variadic_primitive
+
+let init_or_assign (init : Primitives.init_or_assign) : P.Init_or_assign.t =
+  match init with
+  | Initialization -> Initialization
+  | Assignment -> Assignment Alloc_mode.For_assignments.heap
+
+let heap_primitive (p : Primitives.heap_primitive) ~num_args : heap_primitive =
+  match p with
+  | Make_block_with_identity (mut, tag) ->
+    let mut : Mutability.t =
+      match mut with
+      | Cell_mutable -> Mutable
+      | Cell_immutable_unique -> Immutable_unique
+    in
+    Heap_variadic
+      (Make_block
+         ( Values
+             ( Tag.Scannable.create_exn (int_of_z tag),
+               List.init num_args (fun _ -> Flambda_kind.With_subkind.any_value)
+             ),
+           mut,
+           on_the_heap () ))
+  | Block_set (Block_access_values (tag, size, field_kind), init, field) ->
+    let field_kind : P.Block_access_field_kind.t =
+      match field_kind with Any_value -> Any_value | Immediate -> Immediate
+    in
+    Heap_binary
+      (Block_set
+         { kind =
+             Values
+               { tag = or_unknown Tag.Scannable.create_exn tag;
+                 size = or_unknown (Target_ocaml_int.of_int machine_width) size;
+                 field_kind
+               };
+           init = init_or_assign init;
+           field = Target_ocaml_int.of_int machine_width (int_of_z field)
+         })
+  | Make_mutable_array kind ->
+    Heap_variadic (Make_array (array_kind kind, Mutable, on_the_heap ()))
+  | Array_set (kind, set_kind) ->
+    let set_kind : P.Array_set_kind.t =
+      match set_kind with
+      | Set_immediates -> Immediates
+      | Set_gc_ignorable_values -> Gc_ignorable_values
+      | Set_values init -> Values (init_or_assign init)
+    in
+    Heap_ternary (Array_set (array_kind kind, set_kind))
+
 (* The region that the compiler's description wrote as the toplevel one is the
    region of where the primitive is. *)
 let rec in_region (region : F.region) (param : F.prim_param) : F.prim_param =
@@ -508,9 +563,11 @@ let prim region (p : Primitives.prim) (args : Model.simple list) : F.prim =
     | Variadic p ->
       Fexpr_prim.OfFlambda.varop encoding
         (variadic_primitive p ~num_args:(List.length args))
-    | Heap _ ->
-      not_printable
-        "a primitive of the heap, which the conversion does not make"
+    | Heap p -> (
+      match heap_primitive p ~num_args:(List.length args) with
+      | Heap_binary p -> Fexpr_prim.OfFlambda.binop encoding p
+      | Heap_ternary p -> Fexpr_prim.OfFlambda.ternop encoding p
+      | Heap_variadic p -> Fexpr_prim.OfFlambda.varop encoding p)
     | Region_primitive _ ->
       not_printable
         "a primitive of regions, which the conversion makes for the machine of \

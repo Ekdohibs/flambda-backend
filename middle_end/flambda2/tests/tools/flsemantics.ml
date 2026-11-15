@@ -324,6 +324,7 @@ module Never_returns = Flambda2_rocq_semantics.FlambdaNeverReturnsSpec
 module Statics_order = Flambda2_rocq_semantics.FlambdaStaticsOrderSpec
 module Lift_from_code = Flambda2_rocq_semantics.FlambdaLiftFromCodeSpec
 module Lift_from_arms = Flambda2_rocq_semantics.FlambdaLiftFromArmsSpec
+module Heap_free = Flambda2_rocq_semantics.FlambdaHeapFreeSpec
 module Numbers = Flambda2_rocq_semantics.BinNums
 module Value_approximation = Flambda2_classic_mode_types.Value_approximation
 module P = Flambda_primitive
@@ -727,11 +728,11 @@ let convert_binary_primitive (p : P.binary_primitive) :
    annotation converted is the one that says nothing, [any_value] for every
    field; a block kind that says more of a field is not in the model.
 
-   A [Make_array] is converted when it is [Immutable] and its elements are of
-   kind [Value]: it is the model's [Make_immutable_array], which makes a value
-   with no identity. A [Mutable] one is an allocation with an identity, which
-   the conversion does not make, and [Immutable_unique] is not a mutability of
-   arrays. *)
+   A [Make_array] is converted here when it is [Immutable] and its elements are
+   of kind [Value]: it is the model's [Make_immutable_array], which makes a
+   value with no identity. A [Mutable] one is an allocation with an identity:
+   [convert_prim] converts it, with the blocks that have an identity, to a
+   primitive of the heap. [Immutable_unique] is not a mutability of arrays. *)
 let convert_variadic_primitive (p : P.variadic_primitive) ~num_args :
     Primitives.variadic_primitive option =
   match p with
@@ -754,6 +755,55 @@ let convert_variadic_primitive (p : P.variadic_primitive) ~num_args :
   | Make_array (Values, Immutable, (Heap _ | Local _)) ->
     Some (Make_immutable_array Array_values)
   | _ -> None
+
+(* The primitives of the heap (FlambdaPrimitiveModel.heap_primitive), which
+   [convert_prim] converts with their arguments. These are the kinds that the
+   two of arrays carry: those of the arrays whose elements are of kind [Value].
+   An array of floats, of naked numbers or of vectors is not in the model. *)
+let convert_array_kind (kind : P.Array_kind.t) : Primitives.array_kind option =
+  match kind with
+  | Immediates -> Some Array_immediates
+  | Gc_ignorable_values -> Some Array_gc_ignorable_values
+  | Values -> Some Array_values
+  | Naked_floats | Naked_float32s | Naked_ints | Naked_int8s | Naked_int16s
+  | Naked_int32s | Naked_int64s | Naked_nativeints | Naked_vec128s
+  | Naked_vec256s | Naked_vec512s | Naked_masks | Unboxed_product _ ->
+    None
+
+(* How an element is written, where the write is an assignment. The mode of the
+   assignment is dropped: the model's has none.
+
+   An array of values written with a set kind of immediates is refused: Simplify
+   does not expect one ([Simplify_ternary_primitive] stops on an array kind of
+   values with a set kind that is not), though the model has a value for it.
+
+   A write marked [Initialization] is refused, as an initialising store into a
+   block is. An initialising write has conditions on what the field held before
+   and on the collector that the model does not track: the model's store does
+   for it what it does for an assignment. It is refused so that the stores of
+   tail-modulo-cons stay outside the conversion. For a function whose recursion
+   is in the tail of a constructor (lambda/tmc.ml) the compiler makes an
+   [Array_set] of values marked [Initialization], where the destination is a
+   block, reached through [Opaque_identity]. *)
+let convert_array_set_kind (kind : Primitives.array_kind)
+    (set_kind : P.Array_set_kind.t) : Primitives.array_set_kind option =
+  match kind, set_kind with
+  | Array_values, (Immediates | Gc_ignorable_values) -> None
+  | (Array_immediates | Array_gc_ignorable_values), Immediates ->
+    Some Set_immediates
+  | (Array_immediates | Array_gc_ignorable_values), Gc_ignorable_values ->
+    Some Set_gc_ignorable_values
+  | ( (Array_immediates | Array_gc_ignorable_values | Array_values),
+      Values Initialization ) ->
+    None
+  | ( (Array_immediates | Array_gc_ignorable_values | Array_values),
+      Values (Assignment _) ) ->
+    Some (Set_values Assignment)
+  | ( (Array_immediates | Array_gc_ignorable_values | Array_values),
+      ( Naked_floats | Naked_float32s | Naked_ints | Naked_int8s | Naked_int16s
+      | Naked_int32s | Naked_int64s | Naked_nativeints | Naked_vec128s
+      | Naked_vec256s | Naked_vec512s | Naked_masks ) ) ->
+    None
 
 (* ---- Conversion of terms ---------------------------------------------- *)
 
@@ -854,12 +904,12 @@ let drop_region_variable var =
    An [End_region] or an [End_try_region] that is not a ghost, of a region that
    is kept, is the model's primitive on the variable of the region.
 
-   An allocation whose mode is [Local] (a block, an immutable array, a boxed
-   number, a set of closures) is followed by a [Let] of the same variable to
-   [Local_allocation], applied to the variable and to the variable of the region
-   that the mode names. The region of the code that the allocation is in
-   ([code_regions]) is named by nothing: no variable is bound to it when the
-   code runs.
+   An allocation whose mode is [Local] (a block, with an identity or without; an
+   array, mutable or not; a boxed number; a set of closures) is followed by a
+   [Let] of the same variable to [Local_allocation], applied to the variable and
+   to the variable of the region that the mode names. The region of the code
+   that the allocation is in ([code_regions]) is named by nothing: no variable
+   is bound to it when the code runs.
 
    What is a ghost is converted as above: the [Let] of the begin is dropped and
    that of the end binds the unit value. So the end that is a ghost of a region
@@ -1510,6 +1560,89 @@ and convert_prim (prim : P.t) : Model.named =
       ( Function_slots.find move_from,
         Function_slots.find move_to,
         convert_simple closure )
+  (* The primitives of the heap: the allocations that have an identity, and the
+     two stores. Each is a cell of the model's heap, or a write to one.
+
+     A block marked [Mutable] or [Immutable_unique] is a cell; one marked
+     [Immutable] is a value with no identity, by [convert_variadic_primitive].
+     The kinds of the fields are as there: [any_value] for every field, or the
+     block is refused. A block marked [Mutable] or [Immutable_unique] that has
+     no field is refused: the compiler makes no such allocation as the term runs
+     (the front end makes a static block of it, and [To_cmm_primitive] stops on
+     one). The case of a block marked [Immutable] is as it was, and takes one of
+     no field. A mutable array is a cell if its elements are of kind [Value];
+     one made of no argument is refused for the same reason, and has no value in
+     the model.
+
+     A store into a block is converted when it is an assignment into a block of
+     values. One marked [Initialization] is refused, as an initialising write to
+     an array is ([convert_array_set_kind]), and so is a store into a block of
+     floats or a mixed block. The mode of the assignment is dropped: the model's
+     store has none, and the machine of regions tests a store by how long the
+     value and the cell live (FlambdaRegionsSpec.store_fault).
+
+     [Duplicate_block], [Duplicate_array] and [Obj_dup] have no case: the copy
+     of a cell is not in the model, and they are refused below. *)
+  | Binary
+      ( Block_set
+          { kind = Values { tag; size; field_kind };
+            init = Assignment _;
+            field
+          },
+        block,
+        new_value ) ->
+    let field_kind : Primitives.block_access_field_kind =
+      match field_kind with Any_value -> Any_value | Immediate -> Immediate
+    in
+    let kind : Primitives.block_access_kind =
+      Block_access_values
+        ( convert_or_unknown Tag.Scannable.to_int tag,
+          convert_or_unknown Target_ocaml_int.to_int size,
+          field_kind )
+    in
+    let field = z_of_int (Target_ocaml_int.to_int field) in
+    Prim
+      ( Heap (Block_set (kind, Assignment, field)),
+        [convert_simple block; convert_simple new_value] )
+  | Ternary (Array_set (kind, set_kind), array, index, new_value) -> (
+    match convert_array_kind kind with
+    | None -> unsupported "primitive %a" P.print prim
+    | Some kind -> (
+      match convert_array_set_kind kind set_kind with
+      | None -> unsupported "primitive %a" P.print prim
+      | Some set_kind ->
+        Prim
+          ( Heap (Array_set (kind, set_kind)),
+            [ convert_simple array;
+              convert_simple index;
+              convert_simple new_value ] )))
+  | Variadic
+      ( Make_block
+          ( Values (tag, kinds),
+            ((Mutable | Immutable_unique) as mut),
+            (Heap _ | Local _) ),
+        (_ :: _ as args) )
+    when List.compare_lengths kinds args = 0
+         && List.for_all
+              (fun kind ->
+                Flambda_kind.With_subkind.equal kind
+                  Flambda_kind.With_subkind.any_value)
+              kinds ->
+    let mut : Primitives.cell_mutability =
+      match mut with
+      | Mutable -> Cell_mutable
+      | Immutable_unique -> Cell_immutable_unique
+      | Immutable -> assert false
+    in
+    Prim
+      ( Heap
+          (Make_block_with_identity (mut, z_of_int (Tag.Scannable.to_int tag))),
+        convert_simples args )
+  | Variadic (Make_array (kind, Mutable, (Heap _ | Local _)), (_ :: _ as args))
+    -> (
+    match convert_array_kind kind with
+    | Some kind -> Prim (Heap (Make_mutable_array kind), convert_simples args)
+    | None -> unsupported "primitive %a" P.print prim)
   | Unary (p, arg) -> (
     match convert_unary_primitive p with
     | Some p -> Prim (Unary p, [convert_simple arg])
@@ -1539,15 +1672,15 @@ and convert_or_variable : type a.
    The empty array of values is the model's immutable array with no element. Its
    length is 0 and no load or store is within its bounds, so that the compiler's
    is mutable and the model's is not changes no run that keeps to the bounds: a
-   load from it has no value in the model, and a store into an array is not
-   converted. The model does not say that [[||] == [||]]: [Phys_equal] has no
-   value on two allocated values, these as any others
-   (FlambdaPrimitiveSpec.eval_phys_equal), so a run that compares them is
-   undefined, where the compiler makes one symbol of the empty arrays of a unit
-   and answers that they are the same. The compiler's constant is also the empty
-   array of floats; no primitive of arrays of floats is converted, so nothing
-   reads it as one. An empty array of naked numbers of another kind or of
-   unboxed products is not in the model. *)
+   load from it has no value in the model, and neither has a store into it,
+   which is a store into a value that is no cell. The model does not say that
+   [[||] == [||]]: [Phys_equal] has no value on two allocated values, these as
+   any others (FlambdaPrimitiveSpec.eval_phys_equal), so a run that compares
+   them is undefined, where the compiler makes one symbol of the empty arrays of
+   a unit and answers that they are the same. The compiler's constant is also
+   the empty array of floats; no primitive of arrays of floats is converted, so
+   nothing reads it as one. An empty array of naked numbers of another kind or
+   of unboxed products is not in the model. *)
 and convert_static_const (const : Static_const.t) : Model.static_const =
   match const with
   | Block (tag, Immutable, Value_only, fields) ->
@@ -1745,7 +1878,16 @@ and convert_apply (apply : Apply_expr.t) : Model.expr =
    application is observed as a closure is: Simplify makes a closure of one
    whose function it knows. An immutable array that a symbol is bound to is
    observed by its elements, and is not a block: the two runs do not agree by an
-   array in one and a block of tag 0 in the other. *)
+   array in one and a block of tag 0 in the other.
+
+   A value that is a location is observed as what its cell holds in the heap
+   given, which is the heap of the exit: a block of the heap as a block, with
+   its tag, and an array of the heap as an array. So a block that can change and
+   one that cannot are observed alike, and so are an array that can change and
+   one that cannot; and two cells that hold the same are observed alike, whether
+   they are one cell or two. A location met again on the way down from the value
+   is a cycle. A location that the heap does not bind is observed as itself; no
+   run from the empty heap comes to one. *)
 type observation =
   | Tagged of int
   | Naked of string * int64
@@ -1758,10 +1900,12 @@ type observation =
   | Dangling
   | Imported of int
   | Location of int
+  | Cycle
   | Too_deep
 
-let rec observe depth (statics : Values.static_env) (v : Values.value) :
-    observation =
+let rec observe ?(above = []) depth (statics : Values.static_env)
+    (heap : Values.heap) (v : Values.value) : observation =
+  let inside ?(above = above) v = observe ~above (depth - 1) statics heap v in
   if depth = 0
   then Too_deep
   else
@@ -1780,21 +1924,27 @@ let rec observe depth (statics : Values.static_env) (v : Values.value) :
     | Value_closure _ | Value_closure_of_set _ | Value_partial_application _ ->
       Function
     | Value_block (tag, fields) ->
-      Block (int_of_z tag, List.map (observe (depth - 1) statics) fields)
+      Block (int_of_z tag, List.map (fun v -> inside v) fields)
     | Value_immutable_array elements ->
-      Array (List.map (observe (depth - 1) statics) elements)
-    | Value_boxed_number c ->
-      Boxed (observe (depth - 1) statics (Values.Value_const c))
-    | Value_location l -> Location (int_of_positive l)
+      Array (List.map (fun v -> inside v) elements)
+    | Value_boxed_number c -> Boxed (inside (Values.Value_const c))
+    | Value_location l when List.mem l above -> Cycle
+    | Value_location l -> (
+      let inside v = inside ~above:(l :: above) v in
+      match Maps.lookup l heap with
+      | None -> Location (int_of_positive l)
+      | Some (Cell_block (_, tag, fields)) ->
+        Block (int_of_z tag, List.map inside fields)
+      | Some (Cell_array (_, elements)) -> Array (List.map inside elements))
     | Value_symbol symbol -> (
       match Maps.lookup symbol statics.static_values with
       | None -> Dangling
       | Some (Static_closure _ | Static_closure_of_set _) -> Function
       | Some (Static_block (tag, fields)) ->
-        Block (int_of_z tag, List.map (observe (depth - 1) statics) fields)
-      | Some (Static_boxed_number v) -> Boxed (observe (depth - 1) statics v)
+        Block (int_of_z tag, List.map (fun v -> inside v) fields)
+      | Some (Static_boxed_number v) -> Boxed (inside v)
       | Some (Static_immutable_array elements) ->
-        Array (List.map (observe (depth - 1) statics) elements)
+        Array (List.map (fun v -> inside v) elements)
       | Some (Static_string bytes) ->
         String
           (String.init (List.length bytes) (fun i ->
@@ -1834,6 +1984,7 @@ let rec print_observation ppf (o : observation) =
   | Dangling -> Format.fprintf ppf "<unbound symbol>"
   | Imported n -> Format.fprintf ppf "<imported %s>" (imported_name n)
   | Location n -> Format.fprintf ppf "<location %d>" n
+  | Cycle -> Format.fprintf ppf "<cycle>"
   | Too_deep -> Format.fprintf ppf "..."
 
 type outcome =
@@ -2093,8 +2244,8 @@ let run ~(statics : Values.static_env) (unit : converted) : outcome * int =
       match Semantics.step state with
       | Step state -> go (steps + 1) state
       | Undefined -> Undefined, steps
-      | Exit (k, values, _heap, _reads) ->
-        let values = List.map (observe 50 state.state_statics) values in
+      | Exit (k, values, heap, _reads) ->
+        let values = List.map (observe 50 state.state_statics heap) values in
         ( (if k = unit.return_continuation
            then Returns values
            else if k = unit.exn_continuation
@@ -2271,7 +2422,7 @@ let print_prim ppf (p : Primitives.prim) =
     | Is_null -> "Is_null"
     | Get_tag -> "Get_tag"
     | Array_length _ ->
-      (* The converter makes no primitive of arrays. *)
+      (* Shown by its name alone, without its kind. *)
       "Array_length"
     | String_length -> "String_length"
     | Opaque_identity _ -> "Opaque_identity"
@@ -2322,7 +2473,7 @@ let print_prim ppf (p : Primitives.prim) =
   match p with
   | Unary p -> Format.pp_print_string ppf (unary p)
   | Binary (Array_load _) ->
-    (* The converter makes no primitive of arrays. *)
+    (* Shown by its name alone, without its kinds and its mark. *)
     Format.pp_print_string ppf "Array_load"
   | Binary (String_or_bigstring_load width) ->
     Format.fprintf ppf "String_load %s"
@@ -2355,9 +2506,31 @@ let print_prim ppf (p : Primitives.prim) =
       | Array_immediates -> "immediates"
       | Array_gc_ignorable_values -> "gc_ignorable_values"
       | Array_values -> "values")
-  | Heap _ ->
-    (* The converter makes no primitive of the heap. *)
-    Format.pp_print_string ppf "<primitive of the heap>"
+  | Heap (Make_block_with_identity (mut, tag)) ->
+    Format.fprintf ppf "Make_block %s %d"
+      (match mut with
+      | Cell_mutable -> "mut"
+      | Cell_immutable_unique -> "immut_uniq")
+      (int_of_z tag)
+  | Heap (Block_set (_, _, field)) ->
+    Format.fprintf ppf "Block_set %d" (int_of_z field)
+  | Heap (Make_mutable_array kind) ->
+    Format.fprintf ppf "Make_array mut %s"
+      (match kind with
+      | Array_immediates -> "immediates"
+      | Array_gc_ignorable_values -> "gc_ignorable_values"
+      | Array_values -> "values")
+  | Heap (Array_set (kind, set_kind)) ->
+    Format.fprintf ppf "Array_set %s %s"
+      (match kind with
+      | Array_immediates -> "immediates"
+      | Array_gc_ignorable_values -> "gc_ignorable_values"
+      | Array_values -> "values")
+      (match set_kind with
+      | Set_immediates -> "immediates"
+      | Set_gc_ignorable_values -> "gc_ignorable_values"
+      | Set_values Initialization -> "values_init"
+      | Set_values Assignment -> "values")
   | Region_primitive p ->
     Format.pp_print_string ppf
       (match p with
@@ -6604,6 +6777,50 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
       if outcome_before = Undefined
       then "nothing to validate, as the term before is undefined"
       else "not validated");
+  (* The guard of the liftings (FlambdaHeapFreeSpec.expr_free_of_heap): each of
+     the four liftings to symbols of the validation lifts nothing in a term that
+     has a primitive of the heap. Under the line "not validated", a line says
+     which of the two terms that the validation was given has one; there is none
+     where neither has. It does not say that the guard is why the unit is not
+     validated: the test is made of the term that a lifting is given, after the
+     rewrites before it, and the validation may refuse the unit for another
+     reason. A unit that has such a primitive is validated where no lifting is
+     needed. That may be at the verdict that names a lifting: the verdict is the
+     step of the validation that accepted, and that step has other rewrites than
+     its liftings. So the same line is printed under that verdict, and says
+     there that the verdict names the step. The liftings of the second check,
+     whose line may follow a line "not validated", are made without that test,
+     as without the test of the exits (FlambdaLiftObservedSpec.v): its line says
+     so where a term has such a primitive. *)
+  let line_of_the_guard ~at_the_lifting_step =
+    match
+      ( Heap_free.expr_free_of_heap before.body,
+        Heap_free.expr_free_of_heap after.body )
+    with
+    | true, true -> ()
+    | before_free, after_free ->
+      Format.printf
+        "  (%s: each of the four liftings to symbols of the validation lifts \
+         nothing in a term that has one%s)@."
+        (match before_free, after_free with
+        | false, false ->
+          "the term before and the term after have a primitive of the heap"
+        | false, true ->
+          "the term before has a primitive of the heap, and the term after none"
+        | true, false ->
+          "the term after has a primitive of the heap, and the term before none"
+        | true, true -> assert false)
+        (if at_the_lifting_step
+         then "; the line above names the step at which the validation accepted"
+         else "")
+  in
+  (match validation with
+  | Not_validated when outcome_before <> Undefined ->
+    line_of_the_guard ~at_the_lifting_step:false
+  | Same_once_lifted -> line_of_the_guard ~at_the_lifting_step:true
+  | Not_validated | Same_up_to_bound_names | Same_once_normalised
+  | Same_once_unused_statics_removed | Same_once_head_statics_removed ->
+    ());
   if !asked_again
   then
     Format.printf
@@ -6727,8 +6944,13 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
       in
       Format.printf
         "  %s: the same once values are lifted to symbols without the \
-         liftings' symbols-and-constants-only exit test%s%s@."
+         liftings' symbols-and-constants-only exit test%s%s%s@."
         head
+        (if
+           Heap_free.expr_free_of_heap before.body
+           && Heap_free.expr_free_of_heap after.body
+         then ""
+         else " and without their test of the heap")
         (if tables
          then ", the tables of the term after bound in the term before"
          else "")
