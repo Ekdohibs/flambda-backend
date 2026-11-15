@@ -424,6 +424,7 @@ From OxCamlFlambda2 Require Import FlambdaUnusedHeadStaticsSpec.
 From OxCamlFlambda2 Require Import FlambdaSameHandlersSpec.
 From OxCamlFlambda2 Require FlambdaBindConstParamsSpec.
 From OxCamlFlambda2 Require Import FlambdaUnaliasRecParamsSpec.
+From OxCamlFlambda2 Require Import FlambdaMadeLengthsSpec.
 From OxCamlFlambda2 Require Import FlambdaUnboxParamsSpec
   FlambdaUnboxInScopeSpec FlambdaUnboxLoopsSpec FlambdaUnboxTogetherSpec.
 From OxCamlFlambda2Types Require Import FlambdaAliasesSpec.
@@ -965,7 +966,17 @@ Definition inline_once_applied_after (e : expr) : expr :=
    not inline is given, and the block with it; where the validation
    inlines that call in the two terms, the term before loses both by
    refinements (FlambdaBlockLoadSpec.load_known_blocks,
-   FlambdaNormaliseSpec.remove_unused_lets). Last in a round come two
+   FlambdaNormaliseSpec.remove_unused_lets). Between that read and
+   the folding of constants, the length of a mutable array that a
+   [Let] in scope has made becomes its constant
+   (FlambdaMadeLengthsSpec.fold_made_lengths). The rounds of the term
+   before do that where they share primitives
+   (FlambdaCseSpec.share_known_primitives), which these rounds do not
+   do: where the validation inlines a call in the two terms, the term
+   before loses the length of an array made at the call, the
+   comparisons on it and the arms that those decide, and the term
+   after must lose them too. Nothing else of that sharing is applied
+   here. Last in a round come two
    passes that go into the
    bodies of code with the parameters of the code in scope, at the
    kinds of its arity. The applications that
@@ -987,11 +998,11 @@ Definition normalise_expr_after (e : expr) : expr :=
     (remove_constant_allocations
        (remove_unused_projections
           (fold_constants
-             (load_known_blocks_surely
+             (fold_made_lengths (load_known_blocks_surely
                 (follow_aliases_in_loops []
                    (follow_aliases []
                       (merge_alias_lets
-                         (inline_once_applied_after e)))))))).
+                         (inline_once_applied_after e))))))))).
 
 Definition normalise_code_after (body : expr) : expr :=
   rewrite_rec_handlers normalise_expr_after (normalise_expr_after body).
@@ -1018,14 +1029,14 @@ Definition normalise_after_round (kept : list code_id) (e : expr) : expr :=
                          (remove_constant_allocations
                             (remove_unused_projections
                                (fold_constants
-                                  (load_known_blocks_surely
+                                  (fold_made_lengths (load_known_blocks_surely
                                      (inline_known_sibling_calls kept
                                         (inline_known_calls kept [] []
                                            (follow_aliases_in_loops []
                                               (follow_aliases []
                                                  (merge_alias_lets
                                                     (inline_once_applied_after
-                                                       e))))))))))))))))).
+                                                       e)))))))))))))))))).
 
 Definition normalise_after (rounds : nat) (kept : list code_id) (e : expr)
     : expr :=

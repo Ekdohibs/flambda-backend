@@ -461,12 +461,44 @@ let rec consts_of_simples = function
 let fold_named d =
   match d with
   | Prim (p, args) -> (
-    match if prim_may_fold p then consts_of_simples args else None with
-    | Some cs -> (
-      match eval_prim empty_static_env p (map (fun x -> Value_const x) cs) with
-      | Some v -> ( match v with Value_const c -> Simple (Const c) | _ -> d)
-      | None -> d)
-    | None -> d)
+    match p with
+    | Unary p0 -> (
+      match p0 with
+      | Array_length _ ->
+        Prim (Unary (Array_length (Array_kind Array_values)), args)
+      | _ -> (
+        match if prim_may_fold p then consts_of_simples args else None with
+        | Some cs -> (
+          match
+            eval_prim empty_static_env p (map (fun x -> Value_const x) cs)
+          with
+          | Some v -> (
+            match v with Value_const c -> Simple (Const c) | _ -> d)
+          | None -> d)
+        | None -> d))
+    | Heap p0 -> (
+      match p0 with
+      | Array_set (_, set_kind) ->
+        Prim (Heap (Array_set (array_kind_of_set_kind set_kind, set_kind)), args)
+      | _ -> (
+        match if prim_may_fold p then consts_of_simples args else None with
+        | Some cs -> (
+          match
+            eval_prim empty_static_env p (map (fun x -> Value_const x) cs)
+          with
+          | Some v -> (
+            match v with Value_const c -> Simple (Const c) | _ -> d)
+          | None -> d)
+        | None -> d))
+    | _ -> (
+      match if prim_may_fold p then consts_of_simples args else None with
+      | Some cs -> (
+        match
+          eval_prim empty_static_env p (map (fun x -> Value_const x) cs)
+        with
+        | Some v -> ( match v with Value_const c -> Simple (Const c) | _ -> d)
+        | None -> d)
+      | None -> d))
   | _ -> d
 
 (** val fold_switch : simple -> (coq_Z * apply_cont) list -> expr **)

@@ -36,6 +36,7 @@ open FlambdaLiftSpec
 open FlambdaLoopAliasesSpec
 open FlambdaLoopLetsSpec
 open FlambdaLoopifySpec
+open FlambdaMadeLengthsSpec
 open FlambdaMergeSwitchesSpec
 open FlambdaMergeTablesSpec
 open FlambdaModel
@@ -244,10 +245,11 @@ let normalise_expr_after e =
     (remove_constant_allocations
        (remove_unused_projections
           (fold_constants
-             (load_known_blocks_surely
-                (follow_aliases_in_loops []
-                   (follow_aliases []
-                      (merge_alias_lets (inline_once_applied_after e))))))))
+             (fold_made_lengths
+                (load_known_blocks_surely
+                   (follow_aliases_in_loops []
+                      (follow_aliases []
+                         (merge_alias_lets (inline_once_applied_after e)))))))))
 
 (** val normalise_code_after : expr -> expr **)
 
@@ -268,13 +270,15 @@ let normalise_after_round kept e =
                          (remove_constant_allocations
                             (remove_unused_projections
                                (fold_constants
-                                  (load_known_blocks_surely
-                                     (inline_known_sibling_calls kept
-                                        (inline_known_calls kept [] []
-                                           (follow_aliases_in_loops []
-                                              (follow_aliases []
-                                                 (merge_alias_lets
-                                                    (inline_once_applied_after e)))))))))))))))))
+                                  (fold_made_lengths
+                                     (load_known_blocks_surely
+                                        (inline_known_sibling_calls kept
+                                           (inline_known_calls kept [] []
+                                              (follow_aliases_in_loops []
+                                                 (follow_aliases []
+                                                    (merge_alias_lets
+                                                       (inline_once_applied_after
+                                                          e))))))))))))))))))
 
 (** val normalise_after : nat -> code_id list -> expr -> expr **)
 

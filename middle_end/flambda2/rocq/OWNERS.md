@@ -602,6 +602,11 @@ tool), delegated by the orchestrator, and:
   known block where the read is sure to have a value, and the removal
   of an allocation of constants that nothing uses; V1's once it is
   staffed)
+- `middle_end/flambda2/rocq/FlambdaMadeLengths*` (another, an
+  equivalence, for the term after Simplify: the length of a mutable
+  array that a `Let` in scope has made is its constant, which is one
+  rule of the sharing of primitives of `FlambdaCseSpec.v`, alone;
+  V1's once it is staffed)
 - `middle_end/flambda2/rocq/FlambdaExtcall*` (what some C functions
   of the runtime compute, as a table that nothing uses; whoever owns
   calls of C functions once they have a meaning)

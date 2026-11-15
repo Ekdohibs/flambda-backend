@@ -247,6 +247,8 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   FlambdaLoopifySpec.v \
   FlambdaLoopsScopeProofs.v \
   FlambdaLoopsScopeSpec.v \
+  FlambdaMadeLengthsProofs.v \
+  FlambdaMadeLengthsSpec.v \
   FlambdaMapProofs.v \
   FlambdaMapSpec.v \
   FlambdaMergeSwitchesProofs.v \

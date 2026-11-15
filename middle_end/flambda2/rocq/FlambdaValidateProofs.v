@@ -37,6 +37,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaSemanticsSpec
   FlambdaBlockLoadProofs FlambdaCodeLetsSpec FlambdaCodeLetsProofs
   FlambdaCseSpec FlambdaCseProofs
   FlambdaCseEquivalentSpec FlambdaCseEquivalentProofs
+  FlambdaMadeLengthsSpec FlambdaMadeLengthsProofs
   FlambdaDeadParamsSpec FlambdaDeadParamsProofs
   FlambdaForwardSpec FlambdaForwardProofs
   FlambdaForwardKindedSpec FlambdaForwardKindedProofs
@@ -130,6 +131,7 @@ Ltac equivalence_step :=
     | apply remove_unused_defined_lets_equivalent
     | apply remove_unused_projections_equivalent
     | apply load_known_blocks_surely_equivalent
+    | apply fold_made_lengths_equivalent
     | apply remove_constant_allocations_equivalent
     | apply drop_deleted_code_equivalent
     | apply merge_statics_equivalent

@@ -593,6 +593,26 @@ it gave back.
   fact of those two terms, not of what each lifting was given, and
   under "not validated" it does not say why the unit is not
   validated.
+  *The array kind of a store, and the kind of a length.* Where the
+  validation's folding of constants visits a store into an array or
+  a length of an array, it writes the array kind of the store, or
+  the kind of the length, in one form
+  (`FlambdaNormaliseSpec.fold_named`; decision D56), and the
+  validation applies that pass to both of its terms, in its rounds
+  and in the tidying that follows them. So a line that begins
+  "validated" does not say that those kinds agree in the two terms
+  that the validation was given: the array kind of a store, among
+  the three array kinds of values that the model has, and the kind
+  of a length, among the four that it has. The set kind of a store
+  is kept, with what it carries, and nothing that a load carries is
+  touched. The machine reads the array kind of no access
+  (`FlambdaHeapSpec.array_kind_of_access_statement`). Trusted, and
+  covered by no statement: that the compiled code of a store into an
+  array of values is chosen by the set kind alone, with what a set
+  kind of values carries, and that the compiled code of a length is
+  the same at each of those four kinds, as
+  `To_cmm_primitive.array_set0` and `array_length` were read to
+  say.
   *What the tool prints of a cell.* A value that is a location is
   printed as what its cell holds in the heap of the exit (`observe`):
   a block of the heap as a block with its tag, an array of the heap

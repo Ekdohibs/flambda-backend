@@ -37,7 +37,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaAlphaProofs FlambdaFreeNamesSpec FlambdaFreeNamesProofs
   FlambdaApplySpec FlambdaCompareSpec FlambdaNormaliseSpec
   FlambdaNormaliseProofs FlambdaPrimitiveModel FlambdaPrimitiveSpec
-  FlambdaBlockLoadSpec FlambdaCseSpec
+  FlambdaBlockLoadSpec FlambdaCseSpec FlambdaMadeLengthsSpec
   FlambdaIdentitiesSpec FlambdaMergeSwitchesSpec FlambdaRenameApartSpec
   FlambdaStaticsOrderSpec
   FlambdaUnboxSpec FlambdaUnusedContsSpec FlambdaUnusedContsProofs
@@ -88,7 +88,9 @@ Lemma fold_named_free (d : named) :
   incl (free_variables_of_named (fold_named d)) (free_variables_of_named d).
 Proof.
   destruct d as [s | p args | | | | | ]; try apply incl_refl.
-  unfold fold_named.
+  destruct (fold_named_prim_cases p args)
+    as [(kind & set_kind & -> & ->) | [(kind & -> & ->) | ->]];
+    try apply incl_refl.
   destruct (if prim_may_fold p then consts_of_simples args else None)
     as [cs | ]; [ | apply incl_refl ].
   destruct (eval_prim empty_static_env p (map Value_const cs)) as [v | ];
@@ -1416,6 +1418,41 @@ Proof.
     exists entry. split; [ right; exact Hentry | exact Hfst ].
 Qed.
 
+(* What the sharing knows in the body of a [Let]: the array that the
+   [Let] makes is known of its variable. *)
+Lemma computed_or_made_under_let_within (names : list variable)
+    (known : computed) (x : variable) (d : named) :
+  computed_within names known ->
+  computed_within (x :: names ++ free_variables_of_named d)
+    (computed_or_made_under_let known x d).
+Proof.
+  intros Hknown entry Hentry. unfold computed_or_made_under_let in Hentry.
+  apply in_app_or in Hentry as [Hmade | Hentry];
+    [ | exact (computed_under_let_within names known x d Hknown entry Hentry) ].
+  unfold array_made_under_let in Hmade.
+  destruct d as [ | p args | | | | | ]; try contradiction.
+  destruct p as [ | | | hprim | ]; try contradiction.
+  destruct hprim as [ | | kind | ]; try contradiction.
+  destruct (var_in_simples x args); [ contradiction | ].
+  destruct Hmade as [<- | []]. left. reflexivity.
+Qed.
+
+(* The length of an array made becomes a constant, which has no free
+   variable. *)
+Lemma made_length_named_closed (known : computed) (d d' : named) :
+  made_length_named known d = Some d' -> free_variables_of_named d' = [].
+Proof.
+  unfold made_length_named.
+  destruct d as [ | p args | | | | | ]; try discriminate.
+  destruct p as [u | | | | ]; try discriminate.
+  destruct u; try discriminate.
+  destruct args as [ | [x | sym | c] [ | arg args]]; try discriminate.
+  destruct (made_length known x) as [n | ]; [ | discriminate ].
+  destruct (in_range (int_width Standard_tagged_immediate) n);
+    [ | discriminate ].
+  intros [= <-]. reflexivity.
+Qed.
+
 Lemma share_named_free (names : list variable) (known : computed)
     (d : named) :
   computed_within names known ->
@@ -1423,7 +1460,12 @@ Lemma share_named_free (names : list variable) (known : computed)
     (free_variables_of_named d ++ names).
 Proof.
   intros Hknown. unfold share_named.
+  destruct (made_length_named known d) as [d' | ] eqn:Hlength;
+    [ rewrite (made_length_named_closed known d d' Hlength);
+      apply incl_nil_l
+    | ].
   destruct d as [ | p args | | | | | ]; try (apply incl_appl, incl_refl).
+  destruct (shareable p); [ | apply incl_appl, incl_refl ].
   destruct (computed_by known p args) as [x | ] eqn:Hcomputed;
     [ | apply incl_appl, incl_refl ].
   destruct (computed_by_from known p args x Hcomputed)
@@ -1444,7 +1486,8 @@ Proof.
     cbn [share_primitives_knowing share_primitives_in_handler];
     try apply scoped_under_refl.
   - apply scoped_under_let; [ apply share_named_free, Hknown | ].
-    apply share_primitives_knowing_scoped, computed_under_let_within, Hknown.
+    apply share_primitives_knowing_scoped,
+      computed_or_made_under_let_within, Hknown.
   - apply scoped_under_let_static. apply share_primitives_knowing_scoped.
     intros entry Hentry. apply in_or_app. left. exact (Hknown entry Hentry).
   - apply scoped_under_let_cont; apply share_primitives_knowing_scoped;
@@ -1462,6 +1505,36 @@ Qed.
 Theorem share_known_primitives_keeps_scope :
   share_known_primitives_keeps_scope_statement.
 Proof. apply keeps_scope_intro, share_known_primitives_scoped. Qed.
+
+(* The length of an array that a [Let] in scope has made, alone: a
+   [Let] of a length becomes a [Let] of a constant, and nothing else
+   moves. *)
+Fixpoint lengths_knowing_scoped (e : expr) :
+  ∀ (names : list variable) (known : computed),
+    scoped_under names e (lengths_knowing known e).
+Proof.
+  destruct e
+    as [x kind d body | bindings body | k [params metadata handler] body
+       | handlers body | ap | ac | scrutinee arms | ];
+    intros names known;
+    cbn [lengths_knowing lengths_in_handler];
+    try apply scoped_under_refl.
+  - apply scoped_under_let; [ | apply lengths_knowing_scoped ].
+    destruct (made_length_named known d) as [d' | ] eqn:Hlength;
+      [ rewrite (made_length_named_closed known d d' Hlength);
+        apply incl_nil_l
+      | apply incl_appl, incl_refl ].
+  - apply scoped_under_let_static. apply lengths_knowing_scoped.
+  - apply scoped_under_let_cont; apply lengths_knowing_scoped.
+  - apply scoped_under_let_cont_recursive. apply lengths_knowing_scoped.
+Qed.
+
+Lemma fold_made_lengths_scoped (e : expr) : scoped e (fold_made_lengths e).
+Proof. apply scoped_under_none, lengths_knowing_scoped. Qed.
+
+Theorem fold_made_lengths_keeps_scope :
+  fold_made_lengths_keeps_scope_statement.
+Proof. apply keeps_scope_intro, fold_made_lengths_scoped. Qed.
 
 (* Following aliases. *)
 

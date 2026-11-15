@@ -666,7 +666,9 @@ Lemma fold_named_no_location (vars : env) (p : unary_primitive)
   eval_simple vars arg = Some v ->
   ∀ l : location, v <> Value_location l.
 Proof.
-  unfold fold_named.
+  destruct (fold_named_prim_cases (Unary p) [arg])
+    as [(kind & set_kind & Hp & _) | [(kind & _ & ->) | ->]];
+    [ discriminate Hp | discriminate | ].
   destruct arg as [y | sym | c];
     [ destruct (prim_may_fold (Unary p)); simpl; discriminate ..
     | ].

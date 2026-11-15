@@ -142,7 +142,10 @@
    constant by its arm. The value of the primitive is what
    FlambdaPrimitiveSpec.eval_prim says, which the semantics uses too. It
    is asked under the empty static environment: on constants a primitive
-   does not look at it.
+   does not look at it. Where it visits them, the pass also writes in
+   one form two kinds that the machine does not read, the array kind
+   of a store into an array and the kind of a length of an array (the
+   comment at [fold_named] says why that is done, and why here).
 
    [remove_unused_lets], also for the term before, removes each [Let] whose
    variable is not free in its body, in bodies and in the handlers of
@@ -657,8 +660,63 @@ Fixpoint consts_of_simples (args : list simple) : option (list const) :=
   | (Var _ | Symbol _) :: _ => None
   end.
 
+(* Two cases of [fold_named] fold no constant. They write in one form
+   a kind that an access to an array carries and that the machine does
+   not read.
+
+   The array kind of a store, an [Array_set], becomes the one that its
+   set kind determines (FlambdaPrimitiveSpec.array_kind_of_set_kind);
+   the set kind is kept. Simplify changes the array kind of a store
+   where the type of the array says that its elements are immediates,
+   and keeps the set kind ([Simplify_common.specialise_array_kind],
+   called by [Simplify_ternary_primitive.simplify_array_set]): the
+   store of the term after then carries another array kind than that
+   of the term before.
+
+   The kind of a length, an [Array_length], becomes that of an array
+   of values. The front end can take the length of one array at two
+   kinds, one for [Array.length] and another for the test of the
+   bounds of an access, and Simplify makes the second of two lengths
+   of one array the first whatever their kinds
+   ([Simplify_unary_primitive.simplify_array_length] does not look at
+   the kind); the sharing of primitives
+   (FlambdaCseSpec.share_known_primitives) compares the primitives as
+   they are written.
+
+   Both are equivalences: a length and a store do the same at every
+   array kind (FlambdaHeapSpec.array_kind_of_access_statement). The
+   array kind of a load is left as it is.
+
+   They are here because [fold_constants] is a pass that the
+   validation applies to both terms, in the rounds of each and in the
+   tidying that follows the rounds (FlambdaValidateSpec.v). Where
+   [fold_named] visits a store or a length it writes that kind in one
+   form; a store or a length that no application of the pass visits
+   keeps the kind it has. *)
+(* CR mshinwell: with these two cases, two terms that differ in the
+   array kind of a store, or in the kind of a length, can be found
+   the same where the pass has visited those: a verdict of the
+   validation does not say that these kinds agree in the two terms
+   that it was given. The machine reads neither. The
+   compiler chooses the code of a store into an array of values by
+   the set kind alone ([To_cmm_primitive.array_set0]: the store of an
+   integer for the set kinds of immediates and of values that the
+   collector may ignore, and for the set kind of values the store
+   that this set kind's own argument asks, an assignment or an
+   initialisation), and the set kind is kept here and compared, with
+   what it carries; and it compiles a length in the same way at the
+   four kinds that the model has ([To_cmm_primitive.array_length],
+   which is given the array kind, or [Values] where the kind is
+   [Float_array_opt_dynamic]). The other answer would be that the
+   validation tells these kinds apart: a unit in which Simplify has
+   changed the array kind of a store can then stay not validated for
+   that difference. Decision D56. *)
 Definition fold_named (d : named) : named :=
   match d with
+  | Prim (Heap (Array_set _ set_kind)) args =>
+    Prim (Heap (Array_set (array_kind_of_set_kind set_kind) set_kind)) args
+  | Prim (Unary (Array_length _)) args =>
+    Prim (Unary (Array_length (Array_kind Array_values))) args
   | Prim p args =>
     match (if prim_may_fold p then consts_of_simples args else None) with
     | Some cs =>

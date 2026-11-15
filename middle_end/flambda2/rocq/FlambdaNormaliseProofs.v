@@ -38,6 +38,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaStaticSpec FlambdaStaticProofs FlambdaCompareSpec
   FlambdaTupledSpec FlambdaTupledProofs FlambdaPartialApplicationSpec
   FlambdaPartialApplicationProofs FlambdaNormaliseSpec.
+From OxCamlFlambda2 Require FlambdaHeapProofs.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -1213,20 +1214,56 @@ Proof.
     simpl. intros [= <-]. rewrite (IH cs' eq_refl). reflexivity.
 Qed.
 
-(* The value is the one the primitive has. *)
+(* What [fold_named] makes of a primitive: one of its two cases that
+   fold no constant, or the folding. *)
+Lemma fold_named_prim_cases (p : prim) (args : list simple) :
+  (∃ (kind : array_kind) (set_kind : array_set_kind),
+     p = Heap (Array_set kind set_kind)
+     ∧ fold_named (Prim p args)
+       = Prim (Heap (Array_set (array_kind_of_set_kind set_kind) set_kind))
+           args)
+  ∨ (∃ kind : array_kind_for_length,
+       p = Unary (Array_length kind)
+       ∧ fold_named (Prim p args)
+         = Prim (Unary (Array_length (Array_kind Array_values))) args)
+  ∨ fold_named (Prim p args)
+    = match (if prim_may_fold p then consts_of_simples args else None) with
+      | Some cs =>
+        match eval_prim empty_static_env p (map Value_const cs) with
+        | Some (Value_const c) => Simple (Const c)
+        | _ => Prim p args
+        end
+      | None => Prim p args
+      end.
+Proof.
+  destruct p as [u | b | v | h | r]; try (right; right; reflexivity).
+  - destruct u; try (right; right; reflexivity).
+    right. left. eexists. split; reflexivity.
+  - destruct h; try (right; right; reflexivity).
+    left. eexists. eexists. split; reflexivity.
+Qed.
+
+(* The value is the one the primitive has. A store has none here, and
+   a length has the same at every kind. *)
 Lemma fold_named_sound (statics : static_env) (vars : env) (d : named) :
   eval_named statics vars (fold_named d) = eval_named statics vars d.
 Proof.
   destruct d as [s | p args | code slots | fslot decls slots | slot closure
-    | pfrom slot closure | move_from move_to closure]; simpl;
+    | pfrom slot closure | move_from move_to closure];
     try reflexivity.
-  destruct (prim_may_fold p); [ | reflexivity ].
-  destruct (consts_of_simples args) as [cs | ] eqn:Hconsts; [ | reflexivity ].
-  destruct (eval_prim empty_static_env p (map Value_const cs)) as [v | ]
-    eqn:Hprim;
-    [ destruct v | ]; try reflexivity.
-  simpl. rewrite (consts_of_simples_eval vars args cs Hconsts). simpl.
-  rewrite (eval_prim_consts statics empty_static_env), Hprim. reflexivity.
+  destruct (fold_named_prim_cases p args)
+    as [(kind & set_kind & -> & ->) | [(kind & -> & ->) | ->]].
+  - simpl. destruct (eval_simples vars args); reflexivity.
+  - simpl. destruct (eval_simples vars args) as [[ | v [ | w vs]] | ];
+      reflexivity.
+  - simpl. destruct (prim_may_fold p); [ | reflexivity ].
+    destruct (consts_of_simples args) as [cs | ] eqn:Hconsts;
+      [ | reflexivity ].
+    destruct (eval_prim empty_static_env p (map Value_const cs)) as [v | ]
+      eqn:Hprim;
+      [ destruct v | ]; try reflexivity.
+    simpl. rewrite (consts_of_simples_eval vars args cs Hconsts). simpl.
+    rewrite (eval_prim_consts statics empty_static_env), Hprim. reflexivity.
 Qed.
 
 (* And it does the same on a heap: a primitive that is folded is not of
@@ -1240,23 +1277,43 @@ Proof.
   destruct d as [s | p args | code slots | fslot decls slots | slot closure
     | pfrom slot closure | move_from move_to closure];
     try reflexivity.
-  unfold fold_named.
-  destruct (prim_may_fold p) eqn:Hmay; [ | reflexivity ].
-  destruct (consts_of_simples args) as [cs | ] eqn:Hconsts; [ | reflexivity ].
-  pose proof (consts_of_simples_eval vars args cs Hconsts) as Hargs.
-  destruct (eval_prim empty_static_env p (map Value_const cs)) as [v | ]
-    eqn:Hprim;
-    [ destruct v as [c | | | | | | | | ] | ]; try reflexivity.
-  cbv beta iota.
-  rewrite (exec_named_not_prim statics hp rd vars (Simple (Const c)))
-    by (intros ? ?; discriminate).
-  rewrite
-    (exec_named_no_location statics hp rd vars p args (map Value_const cs)).
-  - simpl. rewrite Hargs. simpl.
-    rewrite (eval_prim_consts statics empty_static_env), Hprim. reflexivity.
-  - intros q ->. discriminate Hmay.
-  - exact Hargs.
-  - intros l Hl. apply in_map_iff in Hl as (c0 & Hc0 & _). discriminate Hc0.
+  destruct (fold_named_prim_cases p args)
+    as [(kind & set_kind & -> & ->) | [(kind & -> & ->) | ->]].
+  - cbn [exec_named].
+    destruct (eval_simples vars args) as [vs | ]; [ | reflexivity ].
+    destruct
+      (FlambdaHeapProofs.array_kind_of_access statics hp vs
+         (array_kind_of_set_kind set_kind) kind (Array_kind kind)
+         (Array_kind kind) ltac:(constructor) ltac:(constructor) set_kind)
+      as (_ & _ & Hset).
+    cbv beta iota. rewrite Hset. reflexivity.
+  - cbn [exec_named].
+    destruct (eval_simples vars args) as [vs | ]; [ | reflexivity ].
+    destruct
+      (FlambdaHeapProofs.array_kind_of_access statics hp vs Array_values
+         Array_values (Array_kind Array_values) kind ltac:(constructor)
+         ltac:(constructor) ltac:(constructor))
+      as (Hlength & _).
+    cbv beta iota. rewrite Hlength. reflexivity.
+  - destruct (prim_may_fold p) eqn:Hmay; [ | reflexivity ].
+    destruct (consts_of_simples args) as [cs | ] eqn:Hconsts;
+      [ | reflexivity ].
+    pose proof (consts_of_simples_eval vars args cs Hconsts) as Hargs.
+    destruct (eval_prim empty_static_env p (map Value_const cs)) as [v | ]
+      eqn:Hprim;
+      [ destruct v as [c | | | | | | | | ] | ]; try reflexivity.
+    cbv beta iota.
+    rewrite (exec_named_not_prim statics hp rd vars (Simple (Const c)))
+      by (intros ? ?; discriminate).
+    rewrite
+      (exec_named_no_location statics hp rd vars p args (map Value_const cs)).
+    + simpl. rewrite Hargs. simpl.
+      rewrite (eval_prim_consts statics empty_static_env), Hprim.
+      reflexivity.
+    + intros q ->. discriminate Hmay.
+    + exact Hargs.
+    + intros l Hl. apply in_map_iff in Hl as (c0 & Hc0 & _).
+      discriminate Hc0.
 Qed.
 
 Lemma fold_switch_equivalent (scrutinee : simple)

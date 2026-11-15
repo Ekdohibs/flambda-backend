@@ -950,11 +950,18 @@ Lemma fold_named_equivariant (r : renaming) (d : named) :
 Proof.
   destruct d as [s | p args | code slots | fslot decls slots | slot closure
     | pfrom slot closure | move_from move_to closure]; try reflexivity.
-  simpl. rewrite consts_of_simples_renamed.
-  destruct (if prim_may_fold p then consts_of_simples args else None)
-    as [cs | ]; [ | reflexivity ].
-  destruct (eval_prim empty_static_env p (map Value_const cs)) as [v | ];
-    [ destruct v | ]; reflexivity.
+  destruct p as [u | b | v | h | rp];
+    [ destruct u | | | destruct h | ];
+    cbn [fold_named rename_named]; try reflexivity;
+    rewrite consts_of_simples_renamed;
+    match goal with
+    | |- context [prim_may_fold ?q] =>
+      destruct (if prim_may_fold q then consts_of_simples args else None)
+        as [cs | ]; [ | reflexivity ];
+      destruct (eval_prim empty_static_env q (map Value_const cs))
+        as [w | ];
+        [ destruct w | ]; reflexivity
+    end.
 Qed.
 
 Lemma fold_switch_equivariant (r : renaming) (scrutinee : simple)

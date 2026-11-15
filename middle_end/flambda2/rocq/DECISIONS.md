@@ -445,6 +445,43 @@ a `CR` at the place in the `Spec` file.
   forms alone. It would be wrong if the compiler makes, on purpose,
   a handler of an exception that goes on working with what the
   raise left on the stack. Decided, for the review of the human.
+- **D56.** What a verdict of the validation says of the array kind of
+  a store and of the kind of a length: it does not say that they
+  agree in the two terms. Where `FlambdaNormaliseSpec.fold_named`
+  visits a store into an array or a length of an array, it writes
+  that kind in one form: the array kind of an `Array_set` as the one
+  that its set kind determines, among the three array kinds of values
+  that the model has, and the kind of an `Array_length` as that of an
+  array of values, among the four that the model has. The validation
+  applies the pass that visits them to both terms, in its rounds and
+  in the tidying that follows them, so two terms that differ in those
+  kinds can be found the same. The set kind of a store is kept, with
+  what it carries; the array kind of a load is not touched. Simplify
+  changes the array kind of a store where the type of the array says
+  that its elements are immediates, and keeps the set kind
+  (`Simplify_common.specialise_array_kind`); the front end can take
+  the length of one array at two kinds, and Simplify can make two
+  lengths of one array one whatever their kinds. A unit in which
+  either happened could stay not validated for that difference. The
+  machine reads the array kind of no access
+  (`FlambdaHeapSpec.array_kind_of_access_statement`), so the two
+  cases are equivalences. No existing statement changes its text;
+  the statements about the pass and about the validation are now
+  about these changed computations, and the relations that they name
+  are not weakened. The compiler chooses the code of a store among
+  the three array kinds of values by the set kind alone
+  (`To_cmm_primitive.array_set0`: the store of an integer for the set
+  kinds of immediates and of values that the collector may ignore,
+  and for the set kind of values the store that this set kind's own
+  argument asks, an assignment or an initialisation), and compiles a
+  length in the same way at the four kinds
+  (`To_cmm_primitive.array_length`): that was read in the source and
+  is covered by no statement. The other choice: the validation tells
+  these kinds apart, and a unit in which Simplify has changed the
+  array kind of a store can stay not validated for that difference.
+  Decided by the orchestrator, for the confirmation of the human: it
+  is about kinds, and it makes the comparison less strict than it
+  was, not more.
 
 ## Discrepancies with the compiler
 

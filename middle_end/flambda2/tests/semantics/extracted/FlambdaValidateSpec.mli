@@ -36,6 +36,7 @@ open FlambdaLiftSpec
 open FlambdaLoopAliasesSpec
 open FlambdaLoopLetsSpec
 open FlambdaLoopifySpec
+open FlambdaMadeLengthsSpec
 open FlambdaMergeSwitchesSpec
 open FlambdaMergeTablesSpec
 open FlambdaModel

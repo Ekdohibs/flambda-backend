@@ -41,7 +41,9 @@
    the equivalence.
 
    Why it holds is in the definition of what the pass knows
-   (FlambdaCseSpec.all_computed): a variable known to hold the result
+   (FlambdaCseSpec.all_computed_or_made). Of a primitive that may be
+   shared (FlambdaCseSpec.computed_holds): a variable known to hold
+   the result
    of a primitive is bound, where the term runs, to the value that the
    primitive gives when the machine runs it there on its arguments,
    at the heap and the read record of that place, and that run leaves
@@ -51,11 +53,24 @@
    puts in its place bind the same value and go on with the same heap
    and the same record: the pass does not put a variable that has a
    value where a primitive had none, which a refinement would allow.
-   The statement is about the pass as FlambdaCseSpec.v defines it,
-   whatever [shareable] lists among the primitives whose value stays
-   (FlambdaHeapSpec.stable_prim) and whatever
-   FlambdaCseSpec.computed_under_let adds, as long as [all_computed]
-   is kept; that it is kept is proved in FlambdaCseProofs.v.
+   Of the allocation of a mutable array
+   (FlambdaCseSpec.array_made_holds): the variable known to hold the
+   array is bound to what the allocation gave on as many values as it
+   had arguments, in a heap that the one it left has evolved to. The
+   length of that array has a value there, at any length kind,
+   exactly where that number is a tagged immediate, and the value is
+   that number (FlambdaHeapSpec.array_length_known_statement;
+   FlambdaPrimitiveSpec.array_length_of makes the test of the range
+   that FlambdaCseSpec.made_length_named makes). So the [Let] of the
+   length and the [Let] of the constant that the pass puts in its
+   place bind the same value and go on with the same heap and the
+   same record: the constant is not put where the length had no
+   value. The statement is about the pass as FlambdaCseSpec.v defines
+   it, whatever [shareable] lists among the primitives whose value
+   stays (FlambdaHeapSpec.stable_prim) and whatever
+   FlambdaCseSpec.computed_or_made_under_let adds, as long as
+   [all_computed_or_made] is kept; that it is kept is proved in
+   FlambdaCseProofs.v.
 
    The proofs are in FlambdaCseEquivalentProofs.v, which needs no
    review. *)

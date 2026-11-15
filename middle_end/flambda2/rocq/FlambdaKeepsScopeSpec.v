@@ -71,6 +71,7 @@ From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaSemanticsSpec FlambdaBindersSpec FlambdaCompareSpec
   FlambdaNormaliseSpec FlambdaBlockLoadSpec FlambdaCseSpec
+  FlambdaMadeLengthsSpec
   FlambdaIdentitiesSpec FlambdaMergeSwitchesSpec FlambdaRenameApartSpec
   FlambdaStaticsOrderSpec
   FlambdaUnboxSpec FlambdaUnusedContsSpec FlambdaUnusedStaticsSpec
@@ -159,6 +160,9 @@ Definition unbox_known_numbers_keeps_scope_statement : Prop :=
 
 Definition share_known_primitives_keeps_scope_statement : Prop :=
   keeps_scope share_known_primitives.
+
+Definition fold_made_lengths_keeps_scope_statement : Prop :=
+  keeps_scope fold_made_lengths.
 
 Definition follow_aliases_keeps_scope_statement : Prop :=
   keeps_scope (follow_aliases []).

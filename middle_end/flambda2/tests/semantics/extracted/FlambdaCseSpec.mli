@@ -1,5 +1,8 @@
+open BinInt
+open BinNums
 open BinPos
 open Datatypes
+open FlambdaKindModel
 open FlambdaModel
 open FlambdaNormaliseSpec
 open FlambdaPrimitiveModel
@@ -18,9 +21,17 @@ val tagged_again : variable -> prim -> simple list -> computed
 
 val computed_under_let : computed -> variable -> named -> computed
 
+val array_made_under_let : variable -> named -> computed
+
+val computed_or_made_under_let : computed -> variable -> named -> computed
+
 val same_simples : simple list -> simple list -> bool
 
 val computed_by : computed -> prim -> simple list -> variable option
+
+val made_length : computed -> variable -> coq_Z option
+
+val made_length_named : computed -> named -> named option
 
 val share_named : computed -> named -> named
 

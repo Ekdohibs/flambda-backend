@@ -1,5 +1,8 @@
+open BinInt
+open BinNums
 open BinPos
 open Datatypes
+open FlambdaKindModel
 open FlambdaModel
 open FlambdaNormaliseSpec
 open FlambdaPrimitiveModel
@@ -70,6 +73,26 @@ let computed_under_let known x d =
     else known0
   | _ -> known0
 
+(** val array_made_under_let : variable -> named -> computed **)
+
+let array_made_under_let x = function
+  | Prim (p, args) -> (
+    match p with
+    | Heap p0 -> (
+      match p0 with
+      | Make_mutable_array kind ->
+        if var_in_simples x args
+        then []
+        else (x, (Heap (Make_mutable_array kind), args)) :: []
+      | _ -> [])
+    | _ -> [])
+  | _ -> []
+
+(** val computed_or_made_under_let : computed -> variable -> named -> computed **)
+
+let computed_or_made_under_let known x d =
+  app (array_made_under_let x d) (computed_under_let known x d)
+
 (** val same_simples : simple list -> simple list -> bool **)
 
 let same_simples args args' =
@@ -87,13 +110,66 @@ let rec computed_by known p args =
     then Some x
     else computed_by known0 p args
 
+(** val made_length : computed -> variable -> coq_Z option **)
+
+let rec made_length known x =
+  match known with
+  | [] -> None
+  | p :: known0 -> (
+    let y, p0 = p in
+    let p1, args = p0 in
+    match p1 with
+    | Heap p2 -> (
+      match p2 with
+      | Make_mutable_array _ ->
+        if Pos.eqb x y
+        then Some (Z.of_nat (length args))
+        else made_length known0 x
+      | _ -> made_length known0 x)
+    | _ -> made_length known0 x)
+
+(** val made_length_named : computed -> named -> named option **)
+
+let made_length_named known = function
+  | Prim (p, args) -> (
+    match p with
+    | Unary p0 -> (
+      match p0 with
+      | Array_length _ -> (
+        match args with
+        | [] -> None
+        | s :: l -> (
+          match s with
+          | Var x -> (
+            match l with
+            | [] -> (
+              match made_length known x with
+              | Some n ->
+                if in_range (int_width Standard_tagged_immediate) n
+                then Some (Simple (Const (Tagged_immediate n)))
+                else None
+              | None -> None)
+            | _ :: _ -> None)
+          | _ -> None))
+      | _ -> None)
+    | _ -> None)
+  | _ -> None
+
 (** val share_named : computed -> named -> named **)
 
 let share_named known d =
-  match d with
-  | Prim (p, args) -> (
-    match computed_by known p args with Some x -> Simple (Var x) | None -> d)
-  | _ -> d
+  match made_length_named known d with
+  | Some d' -> d'
+  | None -> (
+    match d with
+    | Prim (p, args) ->
+      if shareable p
+      then
+        match computed_by known p args with
+        | Some x -> Simple (Var x)
+        | None -> d
+      else d
+    | _ -> d)
 
 (** val share_primitives_knowing : computed -> expr -> expr **)
 
@@ -104,7 +180,7 @@ let rec share_primitives_knowing known e =
       ( x,
         kind,
         share_named known d,
-        share_primitives_knowing (computed_under_let known x d) body )
+        share_primitives_knowing (computed_or_made_under_let known x d) body )
   | Let_static (bindings, body) ->
     Let_static (bindings, share_primitives_knowing known body)
   | Let_cont_non_recursive (k, h, body) ->

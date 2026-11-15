@@ -110,7 +110,8 @@ Create HintDb scoped.
   apply_identities_scoped inline_tail_conts_scoped thread_switches_scoped
   drop_deleted_code_scoped merge_statics_scoped rewrite_code_scoped
   load_known_blocks_scoped unbox_known_numbers_scoped
-  share_known_primitives_scoped follow_aliases_scoped sink_let_conts_scoped
+  share_known_primitives_scoped fold_made_lengths_scoped
+  follow_aliases_scoped sink_let_conts_scoped
   shortcut_switches_scoped share_handlers_scoped
   follow_aliases_in_loops_scoped
   drop_unused_params_scoped drop_dead_params_scoped
