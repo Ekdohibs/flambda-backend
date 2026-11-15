@@ -7798,13 +7798,20 @@ let print_region_ends ~(statics : Values.static_env) (before : converted)
 
    It is made only of a unit that was compared: [check] calls it where
    [check_or_raise] has returned a validation, and not of a unit that is not
-   checked or whose check failed. It then prints one line if the second
-   conversion met something of regions (a region that is not a ghost, or an
-   allocation whose mode is [Local]: [regions_met]), or if it was refused. The
-   first conversion of the same terms was not refused, and the two differ only
-   where [keep_regions] is read, so a refusal of the second is one for regions;
-   whatever its reason, the line gives it. A unit of which the second conversion
-   went to its end and met nothing of regions has none, and gets no line.
+   checked or whose check failed. It then prints the line of the check of
+   regions if the second conversion met something of regions (a region that is
+   not a ghost, or an allocation whose mode is [Local]: [regions_met]), or if it
+   was refused. The first conversion of the same terms was not refused, and the
+   two differ only where [keep_regions] is read, so a refusal of the second is
+   one for regions; whatever its reason, the line gives it. A unit of which the
+   second conversion went to its end and met nothing of regions has none, and
+   gets no line. Where the line gives an outcome for each of the two terms, the
+   line of the ends of regions follows it ([print_region_ends]), and after that,
+   where the environment asks for the counts, a line of them for each term whose
+   run has a state to count ([print_region_counts]; a run that was not begun has
+   none). Where the line is of the check as a whole and says that it was not run
+   (the second conversion was refused, or one of the two tests of the paragraphs
+   below failed), nothing follows it.
 
    Before anything is run, the two conversions are compared. The model's [erase]
    (FlambdaRegionsSpec.v) drops the regions from a term that has them. Of each
