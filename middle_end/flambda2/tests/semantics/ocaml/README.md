@@ -2997,9 +2997,16 @@ directory sets the variable; one of `../regions/` does.
   which is what the conversion from Lambda made the arity of such a
   call, and for a call of unknown arity at the kinds of its
   arguments as the reader has them, on the two conditions said
-  above. Where those are the kinds of the arity that the call has
-  as read, the call keeps that arity; where they are not, the tool
-  gives the call one component for each of those kinds
+  above. The tool does so only for a call whose arity as read is
+  one value for each argument, which is what the reader gives where
+  the text writes no arity. An arity as read that is anything else
+  must have been written, and the call keeps it, whatever the code
+  that it names (`../kinds_call_direct_written.fl`); an arity that
+  the text wrote and that is one value for each argument is not told
+  from none, and the call is treated as one with none. Where those
+  are the kinds of the arity that the call has as read, the call
+  keeps that arity; where they are not, the tool gives the call one
+  component for each of those kinds
   (`unboxed_float_argument.ml` and the three units beside it, each
   undefined as read before the tool had the step). What the text
   lost besides was the grouping: in the compiler's term an argument
@@ -3020,11 +3027,11 @@ directory sets the variable; one of `../regions/` does.
   nothing as `#()`, and the parameters of code that are the
   components of one product as a group; the reader takes both, and
   `from_ocaml.sh` no longer fails so (the units that it refused are
-  in `script/`). A group that is read is kept by the step of the
-  tool where the call keeps its arity, and lost where the tool
-  gives the call one component for each kind. The text does not say
-  that a call is a probe (discrepancy C2-17), and `from_ocaml.sh`
-  fails on a unit that has one.
+  in `script/`). A group that is read is kept: an arity with a
+  group is not one value for each argument, and the step of the tool
+  leaves such a call alone. The text does not say that a call is a
+  probe (discrepancy C2-17), and `from_ocaml.sh` fails on a unit
+  that has one.
 - Two things that the tool refuses, to stay clear of two ways in
   which the term of the model may not be the program. Neither
   refusal shows that it is not: each refuses more than it need. A

@@ -1,0 +1,11 @@
+let code inline(never) size(1) second (x : imm, y : imm) my_closure &my_region
+    my_depth -> k * e =
+  let r = %tag_imm (y) in
+  cont k (r)
+in
+let $Second = closure second &toplevel in
+apply direct(second &toplevel) ($Second : #(float * imm) -> val) (3i, 4i)
+  -> k1 * error
+  where k1 (r) =
+    let $camlKinds_call_direct_written = Block 0 (r) in
+    cont done ($camlKinds_call_direct_written)

@@ -8373,34 +8373,48 @@ let with_unknown_param_modes (unit : Flambda_unit.t) : Flambda_unit.t =
    every nullary primitive today, so such a unit is not checked for that reason
    either.)
 
-   The arity of the arguments of a call. The text does not write it for a direct
-   call, nor for a call of unknown arity, and the reader gives such a call one
-   value for each argument ([Fexpr_to_flambda]; label C2-5). The machine has no
-   step for a call whose arguments are not of the kinds of its arity, or whose
-   arity is not that of the code called, and Simplify makes such a call
-   [Invalid]: so a unit that gives a function an unboxed number was undefined as
-   read. In the same pass each such call is given an arity
-   ([arity_of_arguments]); a call of known arity has its arity in the text and
-   is left alone.
+   The arity of the arguments of a call. A text need not write it for a direct
+   call, nor for a call of unknown arity: where it writes none, the reader gives
+   the call one value for each argument ([Fexpr_to_flambda.arities_or_values];
+   label C2-5). The printer writes it beside the callee unless it is one value
+   for each argument, so the text that the printer makes of a call with a callee
+   loses nothing here. A direct call with no callee, which the step before
+   Simplify makes at -Oclassic, has no place in the text for its arity and loses
+   it; and a text made before the printer wrote the arity, or written by hand,
+   may leave it out of a call that has an argument which is not a value. The
+   machine has no step for a call whose arguments are not of the kinds of its
+   arity, or whose arity is not that of the code called, and Simplify makes such
+   a call [Invalid]: so a unit that gives a function an unboxed number is
+   undefined as read from such a text. In the same pass a direct call, or a call
+   of unknown arity, whose arity as read is one value for each argument is given
+   an arity ([arity_of_arguments]). An arity as read that is anything else must
+   have been written ([arity_of_arguments_was_written]), and the call is left
+   alone, whatever the code that it names: where a text states a call which does
+   not fit its code, this step does not mend the arity that it states. The
+   inference goes one way only: an arity that the text wrote and that is one
+   value for each argument reads as if the text had written none, and such a
+   call is given an arity as the others are. A call of known arity has its arity
+   in the text and is left alone too.
 
-   A direct call is given the arity of the parameters of the code that it names,
-   each kind without a subkind, where the unit binds that code and the call has
-   as many arguments as the code has parameters. In the term that the compiler
-   gives to Simplify that is the arity which the call had, subkinds and the
-   grouping of unboxed products aside: the conversion from Lambda makes a call
-   direct only where the arity of its arguments is, parameter for parameter,
-   that of the code ([Closure_conversion.close_exact_or_unknown_apply], which
-   makes any other [Invalid]), and with the flags of the tests it knows no code
-   but the unit's own. The kinds of the arguments are not looked at for this:
-   where an argument is not of the kind of its parameter, the call is ill-kinded
-   in the term read as it was written. Where the unit does not bind the code, or
-   the numbers differ, nothing gives the arity: the call is left as it was read
-   if every argument is a value, and otherwise the unit is not checked.
+   Such a direct call is given the arity of the parameters of the code that it
+   names, each kind without a subkind, where the unit binds that code and the
+   call has as many arguments as the code has parameters. In the term that the
+   compiler gives to Simplify that is the arity which the call had, subkinds and
+   the grouping of unboxed products aside: the conversion from Lambda makes a
+   call direct only where the arity of its arguments is, parameter for
+   parameter, that of the code
+   ([Closure_conversion.close_exact_or_unknown_apply], which makes any other
+   [Invalid]), and with the flags of the tests it knows no code but the unit's
+   own. The kinds of the arguments are not looked at for this: where an argument
+   is not of the kind of its parameter, the call is ill-kinded in the term read
+   as it was written. Where the unit does not bind the code, or the numbers
+   differ, nothing gives the arity: the call is left as it was read if every
+   argument is a value, and otherwise the unit is not checked.
 
-   A call of unknown arity is given one kind for each argument, the kind that
-   the term read has for it. That is the arity that the compiler's call had,
-   subkinds aside, on three conditions, none of which this pass checks. For each
-   argument, the kind obtained for it is the kind of that argument in the
+   Such a call of unknown arity is given one kind for each argument, the kind
+   that the term read has for it. That is the arity that the compiler's call
+   had, subkinds aside, on three conditions, none of which this pass checks. For
+   each argument, the kind obtained for it is the kind of that argument in the
    compiler's term: that can fail as it can for the argument of an
    [Opaque_identity], above. The arity of the compiler's call gave each argument
    the kind of that argument: the compiler does not see to it, and Simplify
@@ -8416,39 +8430,38 @@ let with_unknown_param_modes (unit : Flambda_unit.t) : Flambda_unit.t =
    argument that is an unboxed product is one component of several kinds, or of
    none, and then the text does not write the argument at all; and an
    application counts the components against the parameters of the code to tell
-   a full application from a partial application or an over-application. The
-   text has no grouping, neither at a call nor in the parameters that it writes
-   for code: nothing in it tells a call that gives an unboxed pair from one that
-   gives two arguments, nor says that a call, or a piece of code, has one more
-   component, of no kind. So the grouping is not given back, here or anywhere,
-   and the third condition is one that this pass cannot test. A direct call and
-   its code are flattened alike, the call having the parameters of the code. For
-   a call of unknown arity, the term read is the compiler's with every group
-   flattened, at the call and in the code of the unit. As far as the grouping
-   goes, and that alone (the kinds are as said above, and the text loses other
-   things), such a call runs in the term read as in the compiler's if neither
-   the call nor the code that it reaches has a group. If one of them has, it may
-   not. A partial application that stops before a parameter of no kind is read
-   as a full application, and so is an over-application whose last argument has
-   no kind (label C2-30). And where the call and the code group the same kinds
-   differently, which is ill-kinded in the compiler's term, the term read may be
-   defined where the compiler's is not. All of that was so before this step of a
-   call whose arguments are all values, which the reader has always read flat;
-   what the step would add is the same of a call with an argument that is not a
-   value, which was undefined as read.
+   a full application from a partial application or an over-application. A text
+   that writes the arity of a call writes its groups, the product of nothing
+   included, and writes the parameters of code that are the components of one
+   product as a group; the reader takes both, and this pass leaves such a call
+   as it was read, so its grouping is that of the text. In a text that the
+   printer made, a call that has a callee and no arity has one value for each
+   argument and no group, and nothing is lost. In a text that leaves the arity
+   out of a call which had a group, made before the printer wrote arities or
+   written by hand, the grouping of that call is not given back, and the third
+   condition is one that this pass cannot test: the call is read flat, and what
+   the pass gives it is flat. As far as the grouping goes, and that alone (the
+   kinds are as said above, and the text loses other things), such a call runs
+   in the term read as in the compiler's if neither the call nor the code that
+   it reaches has a group. If one of them has, it may not. Where the text writes
+   neither the group of the call nor a parameter of no kind, a partial
+   application that stops before that parameter is read as a full application,
+   and so is an over-application whose last argument has no kind (label C2-30).
+   And where the call and the code group the same kinds differently, which is
+   ill-kinded in the compiler's term, the term read may be defined where the
+   compiler's is not. All of that is so, without this step, of a call whose
+   arguments are all values, which the reader reads flat where the text writes
+   no arity; what the step adds is the same of a call with an argument that is
+   not a value, which is undefined as read.
 
-   The scripts that make the texts of tests/semantics/ocaml refuse the units in
-   which that can happen, from what the compiler prints of the term: a unit that
-   has a call of unknown arity is refused if such a call has a group among its
-   arguments, or if code that the unit binds has one among its parameters. In a
-   unit that they let through, no call of unknown arity has a group, and the
-   code of the unit, which is all that such a call can reach of what is read
-   from the text, has none: there the grouping is the compiler's. (Code of
-   another unit is not read from a text: it is taken from the .cmx of that unit,
-   with the arity that the compiler gave it.) This pass cannot tell that a text
-   is of such a unit: the refusal of the scripts does not protect a text that is
-   given to the tool by hand, which is read as it is. A term in memory has the
-   component of no kind, and [convert_arity] keeps it.
+   The texts of tests/semantics/ocaml are made by the printer, which writes the
+   arities and their groups beside the callee of a call: in them the grouping is
+   the compiler's wherever the call has a callee, and the scripts that make them
+   refuse no unit for a group. (Code of another unit is not read from a text: it
+   is taken from the .cmx of that unit, with the arity that the compiler gave
+   it.) This pass cannot tell that a text was made so: a text that is given to
+   the tool by hand is read as it is. A term in memory has the component of no
+   kind, and [convert_arity] keeps it.
 
    Like the rest of the pass this is a normalisation of a unit read from a text
    and not a check of kinds: it refuses a unit only where it cannot tell what to
@@ -8559,6 +8572,20 @@ type arity_of_arguments =
   | Given of [`Complex] Flambda_arity.t
   | Not_known of string  (** Nothing gives it; why. *)
 
+(* Whether the arity of the arguments of a call, as read, is other than the one
+   that the reader gives where the text writes none, one value for each argument
+   ([Fexpr_to_flambda.arities_or_values]). Such an arity must have been written.
+   The inference goes one way only: an arity that the text wrote and that is one
+   value for each argument is not told from none, and this is false of it. *)
+let arity_of_arguments_was_written (apply : Flambda.Apply.t) : bool =
+  not
+    (Flambda_arity.equal_exact
+       (Flambda.Apply.args_arity apply)
+       (Flambda_arity.create_singletons
+          (List.map
+             (fun _ -> Flambda_kind.With_subkind.any_value)
+             (Flambda.Apply.args apply))))
+
 (* [code_params] has the parameters of the code that the unit binds
    ([params_of_code_in_expr]); [misread], the variables whose kind may be one
    that the reader misread. *)
@@ -8578,6 +8605,9 @@ let arity_of_arguments ~code_params ~misread (apply : Flambda.Apply.t) :
            (List.map Flambda_kind.With_subkind.anything kinds))
   in
   match Flambda.Apply.call_kind apply with
+  | Function { function_call = Direct _ | Indirect_unknown_arity; _ }
+    when arity_of_arguments_was_written apply ->
+    As_read
   | Function { function_call = Direct code_id; _ } -> (
     match Code_id.Map.find_opt code_id code_params with
     | Some params when List.compare_lengths params args = 0 -> given params

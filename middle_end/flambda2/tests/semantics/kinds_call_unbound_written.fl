@@ -1,0 +1,5 @@
+let f = %opaque (0) in
+apply direct(elsewhere &toplevel) (f : imm -> val) (3i) -> k1 * error
+  where k1 (r) =
+    let $camlKinds_call_unbound_written = Block 0 (r) in
+    cont done ($camlKinds_call_unbound_written)
