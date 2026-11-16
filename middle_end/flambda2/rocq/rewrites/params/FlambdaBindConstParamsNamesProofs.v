@@ -45,207 +45,37 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaEquivarianceSpec FlambdaEquivarianceProofs FlambdaBindersSpec
   FlambdaValidatorEquivarianceSpec FlambdaScopedProofs
   FlambdaUnaliasParamsSpec FlambdaUnaliasParamsProofs
-  FlambdaUnaliasParamsNamesProofs FlambdaBindConstParamsSpec.
+  FlambdaUnaliasParamsNamesProofs FlambdaEquivarianceTactic
+  FlambdaBindConstParamsSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
 (* The pass commutes with renaming                                          *)
 (* ======================================================================== *)
 
-(* A renaming is a permutation: two simples are the same once renamed
-   if and only if they are. *)
-Lemma same_simple_rename (r : renaming) (s s' : simple) :
-  same_simple (rename_simple r s) (rename_simple r s') = same_simple s s'.
-Proof.
-  unfold same_simple. destruct (simple_eq_dec s s') as [-> | Hne].
-  - destruct (simple_eq_dec (rename_simple r s') (rename_simple r s'));
-      [ reflexivity | contradiction ].
-  - destruct (simple_eq_dec (rename_simple r s) (rename_simple r s'))
-      as [Heq | ]; [ | reflexivity ].
-    exfalso. apply Hne.
-    destruct s as [x | sym | c], s' as [x' | sym' | c']; simpl in Heq;
-      try discriminate; try exact Heq.
-    injection Heq as Heq. f_equal.
-    exact (permute_injective (variable_permutation r) x x' Heq).
-Qed.
+(* The law of the pass is proved from the definitions alone
+   ([equivariance], of FlambdaEquivarianceTactic.v): the tactic states
+   and proves, as it goes, the laws of the functions that the pass is
+   made of, the law of [same_simple] among them (a renaming is a
+   permutation: two simples are the same once renamed if and only if
+   they are). It is given one step: how to go under [first_answer], a
+   function that takes a function, with the lemma of
+   FlambdaUnaliasParamsNamesProofs.v, as that file does. *)
 
-Lemma is_plain_rename (r : renaming) (s : simple) :
-  is_plain (rename_simple r s) = is_plain s.
-Proof. destruct s; reflexivity. Qed.
-
-Lemma apply_cont_gives_equivariant (r : renaming) (k : continuation)
-    (i : nat) (s : simple) (ac : apply_cont) :
-  apply_cont_gives (rename_continuation r k) i (rename_simple r s)
-    (rename_apply_cont r ac)
-  = apply_cont_gives k i s ac.
-Proof.
-  unfold apply_cont_gives, rename_apply_cont.
-  cbn [ac_trap_action ac_continuation ac_args].
-  rewrite rename_continuation_eqb, nth_error_map.
-  f_equal.
-  - destruct (ac_trap_action ac) as [action | ]; [ | reflexivity ].
-    cbn [option_map].
-    rewrite trap_action_handler_renamed, rename_continuation_eqb.
-    reflexivity.
-  - destruct (Pos.eqb (ac_continuation ac) k); [ | reflexivity ].
-    destruct (nth_error (ac_args ac) i) as [s' | ]; cbn [option_map];
-      [ | reflexivity ].
-    apply same_simple_rename.
-Qed.
-
-Fixpoint all_give_equivariant (r : renaming) (k : continuation) (i : nat)
-    (s : simple) (e : expr) {struct e} :
-  all_give (rename_continuation r k) i (rename_simple r s) (rename_expr r e)
-  = all_give k i s e
-with handler_all_give_equivariant (r : renaming) (k : continuation)
-    (i : nat) (s : simple) (h : continuation_handler) {struct h} :
-  handler_all_give (rename_continuation r k) i (rename_simple r s)
-    (rename_handler r h)
-  = handler_all_give k i s h.
-Proof.
-  - destruct e as [y kind d body | bindings body | k' hh body | handlers body
-                  | ap | ac | scrutinee arms | ];
-      cbn [rename_expr all_give]; try reflexivity.
-    + apply all_give_equivariant.
-    + apply all_give_equivariant.
-    + rewrite rename_continuation_eqb, handler_all_give_equivariant,
-        all_give_equivariant.
-      reflexivity.
-    + rewrite all_give_equivariant. f_equal.
-      induction handlers as [ | [k' hh] handlers IH]; [ reflexivity | ].
-      cbn [map forallb].
-      rewrite rename_continuation_eqb, handler_all_give_equivariant, IH.
-      reflexivity.
-    + cbn [rename_apply ap_continuation ap_exn_continuation].
-      rewrite !rename_continuation_eqb. reflexivity.
-    + apply apply_cont_gives_equivariant.
-    + induction arms as [ | [n ac] arms IH]; [ reflexivity | ].
-      cbn [map forallb fst snd].
-      rewrite apply_cont_gives_equivariant, IH. reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler handler_all_give]. apply all_give_equivariant.
-Qed.
-
-Definition rename_given_simple (r : renaming)
-    (given : option (option simple)) : option (option simple) :=
-  option_map (option_map (rename_simple r)) given.
-
-Lemma given_by_equivariant (r : renaming) (k : continuation) (i : nat)
-    (ac : apply_cont) :
-  given_by (rename_continuation r k) i (rename_apply_cont r ac)
-  = rename_given_simple r (given_by k i ac).
-Proof.
-  unfold given_by, rename_apply_cont.
-  cbn [ac_continuation ac_args].
-  rewrite rename_continuation_eqb, nth_error_map.
-  destruct (Pos.eqb (ac_continuation ac) k); reflexivity.
-Qed.
-
-Fixpoint first_given_equivariant (r : renaming) (k : continuation)
-    (i : nat) (e : expr) {struct e} :
-  first_given (rename_continuation r k) i (rename_expr r e)
-  = rename_given_simple r (first_given k i e)
-with handler_first_given_equivariant (r : renaming) (k : continuation)
-    (i : nat) (h : continuation_handler) {struct h} :
-  handler_first_given (rename_continuation r k) i (rename_handler r h)
-  = rename_given_simple r (handler_first_given k i h).
-Proof.
-  - destruct e as [y kind d body | bindings body | k' hh body | handlers body
-                  | ap | ac | scrutinee arms | ];
-      cbn [rename_expr first_given]; try reflexivity.
-    + apply first_given_equivariant.
-    + apply first_given_equivariant.
-    + rewrite handler_first_given_equivariant, first_given_equivariant.
-      destruct (handler_first_given k i hh); reflexivity.
-    + rewrite first_given_equivariant.
-      assert (Hhandlers :
-        first_answer
-          (fun '(_, h) => handler_first_given (rename_continuation r k) i h)
-          (map (fun '(k0, h) => (rename_continuation r k0, rename_handler r h))
-             handlers)
-        = rename_given_simple r
-            (first_answer (fun '(_, h) => handler_first_given k i h)
-               handlers)).
-      { induction handlers as [ | [k' hh] handlers IH]; [ reflexivity | ].
-        cbn [map first_answer]. rewrite handler_first_given_equivariant.
-        destruct (handler_first_given k i hh); [ reflexivity | exact IH ]. }
-      rewrite Hhandlers.
-      destruct (first_answer (fun '(_, h) => handler_first_given k i h)
-                  handlers);
-        reflexivity.
-    + apply given_by_equivariant.
-    + induction arms as [ | [n ac] arms IH]; [ reflexivity | ].
-      cbn [map first_answer fst snd]. rewrite given_by_equivariant.
-      destruct (given_by k i ac); [ reflexivity | exact IH ].
-  - destruct h as [params metadata handler].
-    cbn [rename_handler handler_first_given].
-    apply first_given_equivariant.
-Qed.
-
-Lemma bind_const_param_equivariant (r : renaming) (i : nat)
-    (k : continuation) (h : continuation_handler) (body : expr) :
-  bind_const_param i (rename_continuation r k) (rename_handler r h)
-    (rename_expr r body)
-  = rename_unaliased r (bind_const_param i k h body).
-Proof.
-  destruct h as [params metadata handler].
-  cbn [rename_handler bind_const_param].
-  rewrite nth_error_map, first_given_equivariant.
-  destruct (nth_error params i) as [p | ]; [ | reflexivity ].
-  cbn [option_map].
-  destruct (nth_error (hm_params_kinds metadata) i) as [kind | ];
-    [ | reflexivity ].
-  destruct (first_given k i body) as [[s | ] | ]; try reflexivity.
-  cbn [rename_given_simple option_map].
-  rewrite is_plain_rename, all_give_equivariant, drop_nth_map,
-    among_rename_variable, drop_arg_equivariant.
-  destruct
-    (is_plain s && negb (hm_is_exn_handler metadata) && all_give k i s body
-     && negb (among p (drop_nth i params)));
-    reflexivity.
-Qed.
-
-Lemma bind_const_from_equivariant (r : renaming) (i : nat) :
-  ∀ (k : continuation) (h : continuation_handler) (body : expr),
-    bind_const_from i (rename_continuation r k) (rename_handler r h)
-      (rename_expr r body)
-    = (rename_handler r (fst (bind_const_from i k h body)),
-       rename_expr r (snd (bind_const_from i k h body))).
-Proof.
-  induction i as [ | i IH]; intros k h body; cbn [bind_const_from];
-    [ reflexivity | ].
-  rewrite bind_const_param_equivariant.
-  destruct (bind_const_param i k h body) as [[h' body'] | ];
-    cbn [rename_unaliased option_map]; apply IH.
-Qed.
-
-Fixpoint bind_const_params_equivariant_aux (r : renaming) (e : expr) :
-  bind_const_params (rename_expr r e) = rename_expr r (bind_const_params e).
-Proof.
-  destruct e
-    as [ x kind d body | bindings body | k [params metadata handler] body
-       | handlers body | ap | ac | scrutinee arms | ];
-    cbn [rename_expr rename_handler bind_const_params]; try reflexivity.
-  - rewrite bind_const_params_equivariant_aux. reflexivity.
-  - rewrite bind_const_params_equivariant_aux. reflexivity.
-  - rewrite !bind_const_params_equivariant_aux, length_map.
-    pose proof
-      (bind_const_from_equivariant r (length params) k
-         (Handler params metadata (bind_const_params handler))
-         (bind_const_params body))
-      as Hfrom.
-    cbn [rename_handler] in Hfrom. rewrite Hfrom.
-    destruct
-      (bind_const_from (length params) k
-         (Handler params metadata (bind_const_params handler))
-         (bind_const_params body))
-      as [h' body'].
-    reflexivity.
-  - rewrite bind_const_params_equivariant_aux. reflexivity.
-Qed.
+#[local] Ltac eqv_extra ::=
+  match goal with
+  | |- context [first_answer ?f' ?l] =>
+    match goal with
+    | |- context [first_answer ?f l] =>
+      tryif constr_eq f f' then fail
+      else (eqv_no_renaming f;
+            erewrite (first_answer_ext_among f' f _ l);
+            [ | eqv_enter l; solve [ eqv_core ] ])
+    end
+  end.
 
 Lemma bind_const_params_renamed : rewrite_equivariant bind_const_params.
-Proof. exact bind_const_params_equivariant_aux. Qed.
+Proof. equivariance. Qed.
 
 (* ======================================================================== *)
 (* The pass keeps scope                                                     *)
