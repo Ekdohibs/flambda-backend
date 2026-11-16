@@ -1063,13 +1063,15 @@ Proof.
   destruct (expr_eqb [] [] before after) eqn:Hsame.
   - intros _. apply expr_equivalent_refines, expr_eqb_sound, Hsame.
   - cbv zeta. intros Hvalidated.
-    apply (expr_refines_trans _ _ _ (demote_stub_calls_refines before)).
+    apply (expr_refines_trans _ _ _ (demote_full_stub_calls_refines before)).
     apply (expr_refines_trans _ _ _
-      (cut_returns_refines (demote_stub_calls before))).
+      (cut_returns_refines (demote_full_stub_calls before))).
     apply (expr_refines_trans _ _ _
-      (loopify_unit_refines G (cut_returns [] (demote_stub_calls before)))).
+      (loopify_unit_refines G
+         (cut_returns [] (demote_full_stub_calls before)))).
     revert Hvalidated. clear Hsame.
-    generalize (loopify_unit G (cut_returns [] (demote_stub_calls before))).
+    generalize
+      (loopify_unit G (cut_returns [] (demote_full_stub_calls before))).
     clear before. intros before.
     set (a := tidied_after rounds (normalise_after rounds kept after)).
     set (taken := negb (keeps_a_return a)).
@@ -1134,16 +1136,17 @@ Proof.
       Hsame.
   - cbv zeta. intros Hvalidated.
     apply (refines_trans _ _ _
-      (expr_refines_program _ _ (demote_stub_calls_refines before))).
+      (expr_refines_program _ _ (demote_full_stub_calls_refines before))).
     apply (refines_trans _ _ _
       (expr_refines_program _ _
-         (cut_returns_refines (demote_stub_calls before)))).
+         (cut_returns_refines (demote_full_stub_calls before)))).
     apply (refines_trans _ _ _
       (expr_refines_program _ _
          (loopify_unit_refines G
-            (cut_returns [] (demote_stub_calls before))))).
+            (cut_returns [] (demote_full_stub_calls before))))).
     revert Hvalidated. clear Hsame.
-    generalize (loopify_unit G (cut_returns [] (demote_stub_calls before))).
+    generalize
+      (loopify_unit G (cut_returns [] (demote_full_stub_calls before))).
     clear before. intros before.
     set (a := tidied_after rounds (normalise_after rounds kept after)).
     set (taken := negb (keeps_a_return a)).

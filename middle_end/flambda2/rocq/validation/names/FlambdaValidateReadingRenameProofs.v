@@ -140,15 +140,15 @@ Qed.
 
 (* The loops of the term made, as the validation makes them first. *)
 Definition made_loops (G : loopified) (e : expr) : expr :=
-  loopify_unit G (cut_returns [] (demote_stub_calls e)).
+  loopify_unit G (cut_returns [] (demote_full_stub_calls e)).
 
 Lemma made_loops_scope (G : loopified) : keeps_scope (made_loops G).
 Proof.
   exact
-    (keeps_scope_compose (fun e => cut_returns [] (demote_stub_calls e))
+    (keeps_scope_compose (fun e => cut_returns [] (demote_full_stub_calls e))
        (loopify_unit G)
-       (keeps_scope_compose demote_stub_calls (cut_returns [])
-          FlambdaStaticsScopeProofs.demote_stub_calls_keeps_scope
+       (keeps_scope_compose demote_full_stub_calls (cut_returns [])
+          FlambdaStaticsScopeProofs.demote_full_stub_calls_keeps_scope
           (FlambdaNeverReturnsScopeProofs.cut_returns_keeps_scope []))
        (FlambdaLoopsScopeProofs.loopify_unit_keeps_scope G)).
 Qed.
@@ -158,7 +158,7 @@ Lemma made_loops_renamed (r : renaming) (G : loopified) (e : expr) :
   = rename_expr r (made_loops G e).
 Proof.
   unfold made_loops.
-  rewrite FlambdaStubCallsProofs.demote_stub_calls_equivariant,
+  rewrite FlambdaStubCallsProofs.demote_full_stub_calls_equivariant,
     FlambdaNeverReturnsProofs.cut_returns_unit_equivariant.
   apply loopify_unit_equivariant.
 Qed.

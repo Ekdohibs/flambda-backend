@@ -92,11 +92,11 @@ Lemma reading_round_refines (avoid : list continuation) (rounds : nat)
 Proof.
   unfold reading_round. cbv zeta.
   destruct (expr_eqb [] [] _ _); [ apply expr_refines_refl | ].
-  apply (expr_refines_trans _ _ _ (demote_stub_calls_refines e)).
+  apply (expr_refines_trans _ _ _ (demote_full_stub_calls_refines e)).
   apply (expr_refines_trans _ _ _
-    (cut_returns_refines (demote_stub_calls e))).
+    (cut_returns_refines (demote_full_stub_calls e))).
   apply (expr_refines_trans _ _ _
-    (loopify_unit_refines G (cut_returns [] (demote_stub_calls e)))).
+    (loopify_unit_refines G (cut_returns [] (demote_full_stub_calls e)))).
   exact (expr_refines_trans _ _ _
     (normalise_before_avoiding_refines avoid rounds kept _)
     (read_arrays_refines _)).

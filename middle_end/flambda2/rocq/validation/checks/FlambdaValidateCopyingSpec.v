@@ -215,7 +215,7 @@ Definition before_copied (rounds : nat) (G : loopified) (Ls : list lifting)
   with_let_copies copies
     (with_lifting L
        (lifted_steps rounds (copied_avoiding G Ls L Ls') Ls kept
-          (loopify_unit G (cut_returns [] (demote_stub_calls before))))).
+          (loopify_unit G (cut_returns [] (demote_full_stub_calls before))))).
 
 (* ======================================================================== *)
 (* The two functions asked                                                  *)
@@ -268,7 +268,9 @@ Definition before_copied_holds_from (statics : static_env) (rounds : nat)
     (G : loopified) (Ls : list lifting) (L : lifting) (Ls' : list lifting)
     (kept : list code_id) (before : expr) : bool :=
   let avoid := copied_avoiding G Ls L Ls' in
-  let looped := loopify_unit G (cut_returns [] (demote_stub_calls before)) in
+  let looped :=
+    loopify_unit G (cut_returns [] (demote_full_stub_calls before))
+  in
   lifted_steps_free_in statics rounds avoid Ls kept looped
   && lifting_free_in statics L (lifted_steps rounds avoid Ls kept looped).
 

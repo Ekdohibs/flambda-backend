@@ -581,7 +581,8 @@ Lemma validate_unit_related_reaches (rounds : nat) (unused : dropped)
   reaches before after.
 Proof.
   unfold validate_unit_related. cbv zeta. fold statics.
-  set (source := loopify_unit G (cut_returns [] (demote_stub_calls before))).
+  set (source :=
+    loopify_unit G (cut_returns [] (demote_full_stub_calls before))).
   set (a := tidied_after rounds (normalise_after rounds kept after)).
   set (taken := negb (keeps_a_return a)).
   set (c := without_head_statics unused a).
@@ -615,12 +616,13 @@ Proof.
   apply (reaches_trans _ source).
   { apply refines_reaches.
     apply (refines_trans _ _ _
-      (demote_stub_calls_refines before [] conts statics empty_heap rd_)).
+      (demote_full_stub_calls_refines before [] conts statics empty_heap rd_)).
     apply (refines_trans _ _ _
-      (cut_returns_refines (demote_stub_calls before) [] conts statics
+      (cut_returns_refines (demote_full_stub_calls before) [] conts statics
          empty_heap rd_)).
-    exact (loopify_unit_refines G (cut_returns [] (demote_stub_calls before))
-             [] conts statics empty_heap rd_). }
+    exact (loopify_unit_refines G
+             (cut_returns [] (demote_full_stub_calls before)) [] conts
+             statics empty_heap rd_). }
   apply (reaches_trans _ _ _
     (lifted_in_turn_observed_reaches rounds (unit_continuations Ls) Ls kept
        source Hlifted_free)).

@@ -158,7 +158,7 @@ Definition reading_round (avoid : list continuation) (rounds : nat)
     (G : loopified) (kept : list code_id) (e : expr) : expr :=
   let normalised :=
     normalise_before_avoiding avoid rounds kept
-      (loopify_unit G (cut_returns [] (demote_stub_calls e)))
+      (loopify_unit G (cut_returns [] (demote_full_stub_calls e)))
   in
   let read := read_arrays normalised in
   if expr_eqb [] [] normalised read then e else read.

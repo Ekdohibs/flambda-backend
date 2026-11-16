@@ -75,9 +75,9 @@ Lemma made_loops_refines (G : loopified) (e : expr) :
   expr_refines e (made_loops G e).
 Proof.
   unfold made_loops.
-  apply (expr_refines_trans _ _ _ (demote_stub_calls_refines e)).
+  apply (expr_refines_trans _ _ _ (demote_full_stub_calls_refines e)).
   apply (expr_refines_trans _ _ _
-    (cut_returns_refines (demote_stub_calls e))).
+    (cut_returns_refines (demote_full_stub_calls e))).
   apply loopify_unit_refines.
 Qed.
 
@@ -471,9 +471,9 @@ Proof.
   set (avoid := copied_avoiding G Ls L Ls').
   change
     (loopify_unit (rename_loopified r G)
-       (cut_returns [] (demote_stub_calls (rename_expr r before))))
+       (cut_returns [] (demote_full_stub_calls (rename_expr r before))))
     with (made_loops (rename_loopified r G) (rename_expr r before)).
-  change (loopify_unit G (cut_returns [] (demote_stub_calls before)))
+  change (loopify_unit G (cut_returns [] (demote_full_stub_calls before)))
     with (made_loops G before).
   rewrite made_loops_renamed.
   destruct (made_loops_scope G before Hclosed) as (Hclosed0 & _ & _).
@@ -627,9 +627,9 @@ Proof.
   set (avoid := copied_avoiding G Ls L Ls').
   change
     (loopify_unit (rename_loopified r G)
-       (cut_returns [] (demote_stub_calls (rename_expr r before))))
+       (cut_returns [] (demote_full_stub_calls (rename_expr r before))))
     with (made_loops (rename_loopified r G) (rename_expr r before)).
-  change (loopify_unit G (cut_returns [] (demote_stub_calls before)))
+  change (loopify_unit G (cut_returns [] (demote_full_stub_calls before)))
     with (made_loops G before).
   rewrite made_loops_renamed.
   destruct (made_loops_scope G before Hclosed) as (Hclosed0 & _ & _).

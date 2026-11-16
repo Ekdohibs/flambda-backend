@@ -664,7 +664,9 @@ Definition head_removal_free_in (statics : static_env) (D : dropped)
 Definition lifted_holds_from (statics : static_env) (rounds : nat)
     (unused : dropped) (slots : list value_slot) (G : loopified)
     (Ls : list lifting) (kept : list code_id) (before after : expr) : bool :=
-  let before := loopify_unit G (cut_returns [] (demote_stub_calls before)) in
+  let before :=
+    loopify_unit G (cut_returns [] (demote_full_stub_calls before))
+  in
   let tidied := tidied_after rounds (normalise_after rounds kept after) in
   let taken := negb (keeps_a_return tidied) in
   let after := without_head_statics unused tidied in

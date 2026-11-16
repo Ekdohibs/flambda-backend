@@ -422,19 +422,24 @@ the series.
    comment at `shape_of_closure_call`. The other choice is to make a
    direct call that is not full undefined, and to give those three
    statements a premise on the number of arguments.
-2. **One `Indirect` for both of the compiler's indirect call kinds.**
-   The model does not tell `Indirect_known_arity` from
-   `Indirect_unknown_arity`. The backend makes a full call of a
-   known-arity one, so a known-arity call with another number of
-   arguments is run by the model as a generic application and would
-   not be by the compiler. No such term is known: closure conversion
-   makes no call of known arity, and Simplify marks a call so only
-   where its types say that every code the callee may have has the
-   arity of the call, or where it makes an indirect call of a direct
-   one. Nothing checks afterwards that a call so marked is full, which
-   is what the model would need of the compiler (discrepancy C3-9, and
-   the review comment at `shape_of_closure_call`). The other choice is
-   a third call kind, exact like `Direct`; C2 agrees to one `Indirect`.
+2. **One `Indirect` for both of the compiler's indirect call kinds:
+   taken in this series, and no longer so.** The series did not tell
+   `Indirect_known_arity` from `Indirect_unknown_arity`, and ran a call
+   of known arity with another number of arguments as a generic
+   application, which the backend does not: it makes a full call of
+   it. The other choice was a third call kind, exact like `Direct`.
+   The model now has it, in a later series: `Indirect_known_arity`,
+   with the list of code ids that the call may have, has a meaning
+   only where it is a full call of code that is bound, is not tupled,
+   and has as many parameters as the call has groups of arguments, of
+   which there is one at least; and, where the call has such a list,
+   the code is in the list (with no list, the compiler's `Unknown`,
+   the call may be of any code; an empty list allows none)
+   (`FlambdaSemanticsSpec.shape_of_closure_call`, with
+   `known_arity_full` and `code_ids_allow`; `FlambdaKnownAritySpec.v`;
+   decisions D58 and D59, each with a review comment for the human).
+   `Indirect_unknown_arity` is the generic application, as `Indirect`
+   was. Discrepancy C3-9 is now of direct calls alone (choice 1).
 3. **A partial application is not a closure of code.** `closure_of`
    has no value on it, so the types say nothing of it but that it is a
    value, a direct call of it is undefined, and at exit it is compared

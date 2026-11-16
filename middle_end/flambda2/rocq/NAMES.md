@@ -1588,12 +1588,23 @@ its variable is bound again; a round of the normalisation of a term in
 which something was lifted applies it, after the reading of known
 value slots, and so does a round of those that follow the last
 lifting), the
-direct calls of the unit's code that is not a stub, made indirect in
-the code of a stub
-(`FlambdaStubCallsSpec.v`: `demote_stub_calls_equivariant_statement`,
+direct calls in the code of a stub that are full calls of code which
+is not a stub and which the unit binds in the group of the stub or in
+a group around it (the code is not tupled and has as many parameters
+as the call has groups of arguments, one at least), made calls of
+known arity
+(`FlambdaStubCallsSpec.v`:
+`demote_full_stub_calls_equivariant_statement`,
 an equation that holds of every term, the rewrite making no name and
 a renaming leaving what code says of itself as it is; that it keeps
-scope, `FlambdaStaticsScopeSpec.demote_stub_calls_keeps_scope_statement`),
+scope,
+`FlambdaStaticsScopeSpec.demote_full_stub_calls_keeps_scope_statement`;
+the first form, `demote_stub_calls`, which makes every direct call
+there of code that the unit binds and that is not a stub a call of
+unknown arity, and which no function of the validation applies now,
+has the same two laws,
+`demote_stub_calls_equivariant_statement` and
+`FlambdaStaticsScopeSpec.demote_stub_calls_keeps_scope_statement`),
 the order of static bindings
 (`FlambdaStaticsOrderSpec.v`), the use of the static closures in
 sight (`FlambdaKnownClosuresSpec.v`), the
@@ -1735,7 +1746,7 @@ function of `FlambdaValidateSpec.v` calls it;
 `validate_unit_copying` and `validate_unit_knowing_copying` ask
 `validate_unit` and `validate_unit_knowing` of the term before as
 `validate_unit` makes it after its first comparison
-(`demote_stub_calls`, `cut_returns`, then `loopify_unit`), then some
+(`demote_full_stub_calls`, `cut_returns`, then `loopify_unit`), then some
 liftings each followed by its rounds (`lifted_steps`), then one
 lifting with no round, and then the copies (`before_copied`); the
 rounds make names, and are given, as names that they are not to make,

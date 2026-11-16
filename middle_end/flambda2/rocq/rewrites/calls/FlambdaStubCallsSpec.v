@@ -29,12 +29,13 @@
    made indirect, as Simplify makes them. A normalisation that refines,
    in two forms.
 
-   [demote_stub_calls] makes them calls of unknown arity. It is
-   extracted and run by the validation of
-   middle_end/flambda2/tests/semantics/, on the term before.
-   [demote_full_stub_calls] makes them calls of known arity, which is
-   what Simplify makes. It is here with its laws; the validation does
-   not use it yet.
+   [demote_stub_calls] makes them calls of unknown arity. No function
+   of the validation applies it now: it is here with its laws and its
+   computed examples, as the form that demotes every such call and
+   rests on no invariant. [demote_full_stub_calls] makes them calls of
+   known arity, which is what Simplify makes. It is extracted and run
+   by the validation of middle_end/flambda2/tests/semantics/, on the
+   term before.
 
    This file is to be reviewed: the two rewrites and what they are made
    of, against what Simplify does (below), and the statements. Of the
@@ -88,27 +89,11 @@
 
    The first form. [demote_stub_calls e] makes indirect, in the code of
    each stub that the unit [e] binds, every direct call that names
-   code which [e] binds and which is not a stub ([non_stub_code]). It
-   makes them calls of unknown arity, where Simplify makes calls of
-   known arity (above). Every such call of that code is made indirect,
-   whatever its callee. Simplify does it where the type of the callee
-   is not available. Where the type says which closure the
-   callee is, Simplify keeps the call direct, and the validation makes
-   direct again the call that this has made indirect: for a variable
-   that a [Let] of the stub binds to a [Set_of_closures] whose value
-   slots do not hold the variable
-   (FlambdaAliasesSpec.follow_aliases, by
-   [typing_env_under_let]), and for a symbol that the unit binds,
-   outside code, to a closure
-   (FlambdaKnownSymbolsSpec.fold_known_unit). [follow_aliases] does
-   not do it for a variable that a [Let] binds to a [Closure_of_set],
-   however many functions the set has, and a unit that has such a
-   call in the code of a stub may not be validated. The model has not
-   got what code is a newer version of, so that code is not left out
-   of [non_stub_code]: in a unit written by hand that has it, the
-   rewrite makes indirect a call that Simplify leaves direct, and the
-   unit may not be validated. Everything else is left: code that is
-   not a stub, and what is outside code.
+   code which [e] binds and which is not a stub ([non_stub_code]),
+   whatever its callee and wherever [e] binds the code. It makes them
+   calls of unknown arity, where Simplify makes calls of known arity
+   (above). Everything else is left: code that is not a stub, and what
+   is outside code.
 
    It refines, under all environments, and rests on no invariant
    ([demote_stub_calls_refines_statement]): a direct call is the
@@ -162,6 +147,11 @@
    elsewhere. Where Simplify makes a call of known arity of such a
    call, the unit may not be validated.
 
+   The model has not got what code is a newer version of, so neither
+   form leaves that code out, as Simplify does (above): in a unit
+   written by hand that has it, the rewrite demotes a call that
+   Simplify leaves direct, and the unit may not be validated.
+
    It refines, under all environments
    ([demote_full_stub_calls_refines_statement]). Unlike the first form
    it rests on an invariant, which the machine provides. The laws of
@@ -178,20 +168,24 @@
    equivalence, as the first form is not, and nothing is believed of
    the flag.
 
-   What the validation would not undo. The second form demotes every
-   call that passes its test, whatever its callee, where Simplify
-   keeps the call direct if the type says which closure the callee is.
-   Of the two rewrites that make direct again a call that the first
-   form has made indirect (above), [fold_known_unit] makes direct a
-   call of known arity too, where its callee is a symbol that the unit
-   binds, outside code, to a closure
-   (FlambdaKnownSymbolsSpec.fold_known_apply); [follow_aliases] acts
-   on a call of unknown arity, and leaves a call of known arity. So
-   with this form a unit in which Simplify keeps such a call direct,
-   in the code of the stub or in a copy of it where the stub is
-   inlined, has a call of known arity before and a direct call after,
-   unless the callee is such a symbol by the time [fold_known_unit]
-   comes to the call.
+   What the validation makes direct again, and what it does not. The
+   second form demotes every call that passes its test, whatever its
+   callee. Simplify does it where the type of the callee is not
+   available; where the type says which closure the callee is, it
+   keeps the call direct. The validation makes direct again a call of
+   known arity whose callee is a symbol that the unit binds, outside
+   code, to a closure (FlambdaKnownSymbolsSpec.fold_known_unit, by
+   [fold_known_apply]). It does not where the callee is a variable:
+   FlambdaAliasesSpec.follow_aliases makes direct a call of unknown
+   arity of a variable that a [Let] binds to a [Set_of_closures] whose
+   value slots do not hold the variable (by [typing_env_under_let]),
+   and leaves a call of known arity; for a variable that a [Let] binds
+   to a [Closure_of_set] it makes no call direct, of either kind. So a
+   unit in which Simplify keeps such a call direct, in the code of the
+   stub or in a copy of it where the stub is inlined, has a call of
+   known arity before and a direct call after, unless the callee is
+   such a symbol by the time [fold_known_unit] comes to the call, and
+   may not be validated.
 
    This file does not say that the other rewrites of the validation
    leave the code of a stub as Simplify does; each says so of itself.

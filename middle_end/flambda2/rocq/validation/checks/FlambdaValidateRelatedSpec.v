@@ -220,7 +220,9 @@ Definition validate_unit_related (imports : list (symbol * import_class))
     (G : loopified) (Ls : list lifting) (kept : list code_id)
     (before after : expr) : related_validation :=
   let statics := imports_statics imports in
-  let source := loopify_unit G (cut_returns [] (demote_stub_calls before)) in
+  let source :=
+    loopify_unit G (cut_returns [] (demote_full_stub_calls before))
+  in
   let tidied := tidied_after rounds (normalise_after rounds kept after) in
   let taken := negb (keeps_a_return tidied) in
   let target := without_head_statics unused tidied in

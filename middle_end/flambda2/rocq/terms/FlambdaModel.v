@@ -573,9 +573,10 @@ Definition handler_metadata_eqb (m m' : handler_metadata) : bool :=
    ([code_metadata_eqb]): two terms that differ in it are not the
    same. Two rewrites of the validation read it, to leave the code of
    a stub as Simplify leaves it: FlambdaKnownSlotsSpec.read_slots reads
-   no value slot there, and FlambdaStubCallsSpec.demote_stub_calls
-   makes its direct calls indirect. Each refines whatever the flag
-   says. *)
+   no value slot there, and
+   FlambdaStubCallsSpec.demote_full_stub_calls makes calls of known
+   arity of those of its direct calls that it knows to be full. Each
+   refines whatever the flag says. *)
 Record code_metadata : Type := Code_metadata {
   cm_params_arity : arity;
   cm_result_arity : arity;

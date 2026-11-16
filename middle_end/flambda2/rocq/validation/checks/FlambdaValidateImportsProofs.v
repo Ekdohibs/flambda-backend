@@ -97,14 +97,16 @@ Proof.
     apply (expr_equivalent_refines _ _ (expr_eqb_sound _ _ Hsame)).
   - cbv zeta. intros Hvalidated Hfree Hheap.
     apply (refines_trans _ _ _
-      (demote_stub_calls_refines before [] [] statics hp rd_)).
+      (demote_full_stub_calls_refines before [] [] statics hp rd_)).
     apply (refines_trans _ _ _
-      (cut_returns_refines (demote_stub_calls before) [] [] statics hp rd_)).
+      (cut_returns_refines (demote_full_stub_calls before) [] [] statics hp
+         rd_)).
     apply (refines_trans _ _ _
-      (loopify_unit_refines G (cut_returns [] (demote_stub_calls before))
+      (loopify_unit_refines G (cut_returns [] (demote_full_stub_calls before))
          [] [] statics hp rd_)).
     revert Hvalidated. clear Hsame.
-    generalize (loopify_unit G (cut_returns [] (demote_stub_calls before))).
+    generalize
+      (loopify_unit G (cut_returns [] (demote_full_stub_calls before))).
     clear before. intros before.
     set (a := tidied_after rounds (normalise_after rounds kept after)).
     set (taken := negb (keeps_a_return a)).
@@ -268,14 +270,14 @@ Proof.
   destruct (expr_eqb [] [] before after) eqn:Hsame; [ discriminate | ].
   cbv zeta. intros Hverdict.
   apply (refines_trans _ _ _
-    (demote_stub_calls_refines before [] [] statics hp rd_)).
+    (demote_full_stub_calls_refines before [] [] statics hp rd_)).
   apply (refines_trans _ _ _
-    (cut_returns_refines (demote_stub_calls before) [] [] statics hp rd_)).
+    (cut_returns_refines (demote_full_stub_calls before) [] [] statics hp rd_)).
   apply (refines_trans _ _ _
-    (loopify_unit_refines G (cut_returns [] (demote_stub_calls before))
+    (loopify_unit_refines G (cut_returns [] (demote_full_stub_calls before))
        [] [] statics hp rd_)).
   revert Hverdict. clear Hsame.
-  generalize (loopify_unit G (cut_returns [] (demote_stub_calls before))).
+  generalize (loopify_unit G (cut_returns [] (demote_full_stub_calls before))).
   clear before. intros before.
   set (a := tidied_after rounds (normalise_after rounds kept after)) in *.
   set (taken := negb (keeps_a_return a)) in *.
@@ -888,17 +890,17 @@ Proof.
   unfold unit_refines.
   set (statics := imports_statics imports) in *.
   apply (refines_trans _ _ _
-    (demote_stub_calls_refines before [] [] statics empty_heap rd_)).
+    (demote_full_stub_calls_refines before [] [] statics empty_heap rd_)).
   apply (refines_trans _ _ _
-    (cut_returns_refines (demote_stub_calls before) [] [] statics
+    (cut_returns_refines (demote_full_stub_calls before) [] [] statics
        empty_heap rd_)).
   apply (refines_trans _ _ _
-    (loopify_unit_refines G (cut_returns [] (demote_stub_calls before))
+    (loopify_unit_refines G (cut_returns [] (demote_full_stub_calls before))
        [] [] statics empty_heap rd_)).
   revert Hverdict Hholds. unfold validate_unit, lifted_holds_from.
   destruct (expr_eqb [] [] before after); [ discriminate | ].
   cbv zeta.
-  generalize (loopify_unit G (cut_returns [] (demote_stub_calls before))).
+  generalize (loopify_unit G (cut_returns [] (demote_full_stub_calls before))).
   clear before. intros before.
   set (a := tidied_after rounds (normalise_after rounds kept after)).
   set (taken := negb (keeps_a_return a)).

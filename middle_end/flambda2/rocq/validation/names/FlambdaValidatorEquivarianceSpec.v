@@ -1663,9 +1663,9 @@ Definition with_statics_first_renamed_alike_statement : Prop :=
    [with_code_first_equivariant_statement]).
 
    The first comparison is of the two terms as they are, and answers
-   the same of the two renamed. After it the direct calls of the code
-   of the stubs of the term before are made indirect
-   (FlambdaStubCallsSpec.demote_stub_calls), which commutes with the
+   the same of the two renamed. After it some direct calls in the code
+   of the stubs of the term before are made calls of known arity
+   (FlambdaStubCallsSpec.demote_full_stub_calls), which commutes with the
    renaming, as that renames no code id and keeps what code is
    annotated with, and keeps the code closed; the direct calls of
    code that never returns are put under a binding of their return

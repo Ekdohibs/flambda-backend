@@ -264,28 +264,28 @@ Proof.
   { intros k Hk. apply Hheld. rewrite among_app, Hk. reflexivity. }
   assert (Hloops : rename_conts_alike r r1 (map snd G)).
   { intros k Hk. apply Hheld. rewrite among_app, Hk. apply orb_true_r. }
-  rewrite FlambdaStubCallsProofs.demote_stub_calls_equivariant,
+  rewrite FlambdaStubCallsProofs.demote_full_stub_calls_equivariant,
     FlambdaNeverReturnsProofs.cut_returns_unit_equivariant,
     (rename_loopified_alike r r1 G Hloops), loopify_unit_equivariant.
   destruct
-    (renames_alike_kept demote_stub_calls r r1 before
-       FlambdaStaticsScopeProofs.demote_stub_calls_keeps_scope Hclosed
+    (renames_alike_kept demote_full_stub_calls r r1 before
+       FlambdaStaticsScopeProofs.demote_full_stub_calls_keeps_scope Hclosed
        Halike1)
     as (Hclosed0 & Halike0).
   destruct
-    (renames_alike_kept (cut_returns []) r r1 (demote_stub_calls before)
+    (renames_alike_kept (cut_returns []) r r1 (demote_full_stub_calls before)
        (FlambdaNeverReturnsScopeProofs.cut_returns_keeps_scope [])
        Hclosed0 Halike0)
     as (Hclosed00 & Halike00).
   destruct
     (renames_alike_kept (loopify_unit G) r r1
-       (cut_returns [] (demote_stub_calls before))
+       (cut_returns [] (demote_full_stub_calls before))
        (FlambdaLoopsScopeProofs.loopify_unit_keeps_scope G) Hclosed00
        Halike00)
     as (Hclosed' & Halike1').
   clear Hclosed Halike1 Hheld Hloops Hclosed0 Halike0 Hclosed00 Halike00.
   revert Hclosed' Halike1'.
-  generalize (loopify_unit G (cut_returns [] (demote_stub_calls before))).
+  generalize (loopify_unit G (cut_returns [] (demote_full_stub_calls before))).
   clear before.
   intros before Hclosed Halike1.
   destruct

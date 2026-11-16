@@ -35,11 +35,12 @@
    [validate_unit] is the whole check, so that what it accepts is correct
    by one theorem and not by how a tool puts the proved pieces together.
    It compares the two terms as they are given, up to bound names
-   (FlambdaCompareSpec.expr_eqb). Failing that, it makes indirect, in
-   the code of each stub of the term before, the direct calls of code
-   of the unit that is not a stub, as Simplify does where it
-   simplifies the code of a stub
-   (FlambdaStubCallsSpec.demote_stub_calls); it puts each direct call
+   (FlambdaCompareSpec.expr_eqb). Failing that, it makes calls of
+   known arity, in the code of each stub of the term before, of the
+   direct calls of code of the unit that is not a stub which it knows
+   to be full calls, as Simplify does where it simplifies the code of
+   a stub (FlambdaStubCallsSpec.demote_full_stub_calls, which says
+   which calls those are); it puts each direct call
    of code in sight whose body does not mention its return
    continuation once the bindings of the continuations that nothing
    uses are removed from it, where the other checks of the rewrite pass
@@ -51,11 +52,11 @@
    [Invalid], which is the form that the term after has for a call to
    which Simplify gives no return continuation
    (FlambdaNeverReturnsSpec.cut_returns; after the demotion in the
-   code of stubs, so that a direct call there of code of the unit
-   that is not a stub is indirect by then and is left: at the default
-   flags Simplify keeps the return continuation of a call, in the
-   code of a stub, whose callee is projected from the closure of the
-   stub); and it makes jumps of the
+   code of stubs, so that a direct call there which the demotion has
+   made a call of known arity is indirect by then and is left: at the
+   default flags Simplify keeps the return continuation of a call, in
+   the code of a stub, whose callee is projected from the closure of
+   the stub); and it makes jumps of the
    self tail calls of the code named, each with the name given for its
    loop (FlambdaLoopifySpec.loopify_unit, which says what a self tail
    call is and leaves alone the code that it may not change), as
@@ -1552,7 +1553,7 @@ Definition validate_unit (rounds : nat) (unused : dropped)
   if expr_eqb [] [] before after then Same_up_to_bound_names
   else
     let before :=
-      loopify_unit G (cut_returns [] (demote_stub_calls before))
+      loopify_unit G (cut_returns [] (demote_full_stub_calls before))
     in
     let after := tidied_after rounds (normalise_after rounds kept after) in
     let taken := negb (keeps_a_return after) in
