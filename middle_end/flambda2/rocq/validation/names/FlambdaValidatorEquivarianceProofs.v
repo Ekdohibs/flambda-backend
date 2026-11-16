@@ -3066,53 +3066,44 @@ Proof. equivariance. Qed.
 End Masks.
 
 (* Removing the unused [Let]s whose defining expression has a value, in
-   the handlers of recursive continuations too. *)
-Fixpoint remove_unused_defined_lets_in_loops_equivariant_aux (r : renaming)
+   the handlers of recursive continuations too. The pass adds to the
+   kinds in scope at a [Let]; in the renamed term they are then a
+   renamed binding put before renamed kinds, and the tactic does not
+   use the hypothesis of the induction there. The rule writes them as
+   the kinds of the other side of the equation renamed, which they are
+   by computation, and uses the hypothesis. *)
+Section Loop_lets.
+
+#[local] Hint Rewrite named_defined_equivariant params_in_scope_equivariant
+  : equivariance.
+
+#[local] Ltac eqv_extra ::=
+  match goal with
+  | r : renaming,
+    H : context [remove_unused_defined_lets_in_loops _ (rename_expr _ ?e)
+                 = rename_expr _ (remove_unused_defined_lets_in_loops _ ?e)]
+    |- context [remove_unused_defined_lets_in_loops ?m' (rename_expr ?r ?e)] =>
+    lazymatch m' with
+    | rename_kinds_in_scope _ _ => fail
+    | _ => idtac
+    end;
+    match goal with
+    | |- context [remove_unused_defined_lets_in_loops ?m e] =>
+      eqv_no_renaming m;
+      change m' with (rename_kinds_in_scope r m);
+      rewrite H
+    end
+  end.
+
+Lemma remove_unused_defined_lets_in_loops_equivariant_aux (r : renaming)
     (e : expr) :
   ∀ kinds : kinds_in_scope,
     remove_unused_defined_lets_in_loops (rename_kinds_in_scope r kinds)
       (rename_expr r e)
-    = rename_expr r (remove_unused_defined_lets_in_loops kinds e)
-with remove_unused_defined_lets_in_handler_equivariant (r : renaming)
-    (h : continuation_handler) :
-  ∀ kinds : kinds_in_scope,
-    remove_unused_defined_lets_in_handler (rename_kinds_in_scope r kinds)
-      (rename_handler r h)
-    = rename_handler r (remove_unused_defined_lets_in_handler kinds h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      intros kinds;
-      cbn [rename_expr remove_unused_defined_lets_in_loops];
-      try reflexivity.
-    + change ((rename_variable r x, kind) :: rename_kinds_in_scope r kinds)
-        with (rename_kinds_in_scope r ((x, kind) :: kinds)).
-      rewrite remove_unused_defined_lets_in_loops_equivariant_aux,
-        named_defined_equivariant, var_free_b_equivariant_aux.
-      destruct
-        (named_defined kinds kind d
-         && negb
-              (var_free_b x
-                 (remove_unused_defined_lets_in_loops ((x, kind) :: kinds)
-                    body)));
-        reflexivity.
-    + rewrite remove_unused_defined_lets_in_loops_equivariant_aux.
-      reflexivity.
-    + rewrite remove_unused_defined_lets_in_handler_equivariant,
-        remove_unused_defined_lets_in_loops_equivariant_aux.
-      reflexivity.
-    + rewrite remove_unused_defined_lets_in_loops_equivariant_aux. f_equal.
-      induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
-      rewrite (remove_unused_defined_lets_in_handler_equivariant r h kinds),
-        IH.
-      reflexivity.
-  - destruct h as [params metadata handler]. intros kinds.
-    cbn [rename_handler remove_unused_defined_lets_in_handler].
-    rewrite params_in_scope_equivariant,
-      remove_unused_defined_lets_in_loops_equivariant_aux.
-    reflexivity.
-Qed.
+    = rename_expr r (remove_unused_defined_lets_in_loops kinds e).
+Proof. equivariance. Qed.
+
+End Loop_lets.
 
 (* The same in the bodies of code, with the parameters of the code in
    scope. *)
