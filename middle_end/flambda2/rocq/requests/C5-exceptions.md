@@ -317,9 +317,18 @@ the call has extra arguments.
 The backend reads the stack. `to_cmm_expr.ml`, `translate_raise`: an
 `Apply_cont` of an exception handler is a raise to whatever is
 installed last. `translate_apply` does not look at the handler the call
-names. `backend/select_utils.ml`: a `Pop` removes the top whatever it
+names. `backend/select_utils.ml`: in the selection of instructions
+(`combine_traps`, `set_traps`) a `Pop` removes the top whatever it
 names; a continuation reached with two stacks is a fatal error, and so
-is a `Pop` on an empty stack. Nothing else is checked, anywhere.
+is a `Pop` on an empty stack. A later pass
+(`Stack_offset_and_exn.process_basic` of the same file; on the other
+path of the backend, `compute_block_end_trap_stack` of
+`backend/ssa/ssa.ml`) reports a fatal error where a `Pop` of a jump or
+of a return names another handler than the one on top. The lowering
+and instruction-selection paths above do not compare the handler
+named by a raise, or the exception continuation of a call, with the
+top. (Corrected on 16 November 2026, after R2's reading of the
+backend: this paragraph said "Nothing else is checked, anywhere.")
 
 ### An example where the two differ
 
@@ -565,8 +574,11 @@ establishes it.
   and a way out applied directly to the wrong number of values is left
   as it is.
 - A `Pop`, a raise and the exception continuation of a call name the
-  handler installed last. `traps_well_formed`. Nothing (C5-1); the
-  front end builds it so.
+  handler installed last. `traps_well_formed`. For a `Pop` of a jump
+  or of a return: `backend/select_utils.ml`,
+  `Stack_offset_and_exn.process_basic`, and `backend/ssa/ssa.ml`,
+  `compute_block_end_trap_stack`. For a raise and for a call: nothing
+  (C5-1); the front end builds it so.
 - A continuation is entered with one stack of handlers, and there is
   no `Pop` on an empty stack. `traps_well_formed`. Pass:
   `backend/select_utils.ml`, `set_traps` and `combine_traps`.
@@ -616,7 +628,9 @@ a creation function that always checks).
    Adopt `traps_well_formed` and `exn_handlers_well_formed` as
    conditions of well-formedness, with the comment that D32 asks for;
    or only what the backend checks (one stack for each continuation,
-   no `Pop` on an empty stack). Recommendation: adopt both. A unit of
+   no `Pop` on an empty stack, and that a `Pop` of a jump or of a
+   return names the handler on top). Recommendation: adopt both. A
+   unit of
    the compiler that fails is then a finding. The evidence so far is
    small: six examples written after what `-drawfexpr` prints for
    `try`, raise and a mutable variable, before and after Simplify. The
@@ -829,7 +843,7 @@ Rows for the table of `requests/C0-well-formed.md`, in its form:
 | 11e | Of the continuations that code, or the unit, does not bind, only the exception continuation is used as an exception handler | C5 | Code, when visited: to_cmm fails on a trap action that names the return continuation of a function (`To_cmm_env.get_cmm_continuation`). The unit: nothing (R1-22) |
 | 11f | No call gives extra arguments to a continuation that code, or the unit, does not bind | C5 | When visited, by accident: Simplify stops with `Invalid_argument` (`Continuation_uses_env.add_continuation_use`; C5-5) |
 | 11g | The exception continuation of code, or of the unit, is named by calls, as their exception continuation, and by the trap actions of raises, and by no other trap action | C5 | When visited: to_cmm stops, as it does not find that continuation among those a trap action of a jump can name (`To_cmm_env.get_cmm_continuation`; C5-9) |
-| 12a | A `Pop`, a raise and the exception continuation of a call name the handler installed last | C5 | Nothing (C5-1); the front end builds it so |
+| 12a | A `Pop`, a raise and the exception continuation of a call name the handler installed last | C5 | For a `Pop` of a jump or of a return, when visited, in the backend: `backend/select_utils.ml`, `Stack_offset_and_exn.process_basic`, and `backend/ssa/ssa.ml`, `compute_block_end_trap_stack`. For a raise and for a call: nothing (C5-1); the front end builds it so |
 | 12b | A continuation is entered with one stack of handlers; no `Pop` on an empty stack | C5 | When visited, in the backend: `backend/select_utils.ml`, `set_traps` and `combine_traps` |
 | 12c | Code returns with the stack it started with, and raises to its exception continuation so; the unit likewise | C5 | Nothing in Flambda 2 |
 

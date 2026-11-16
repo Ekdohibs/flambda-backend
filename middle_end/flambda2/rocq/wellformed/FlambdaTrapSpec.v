@@ -37,7 +37,9 @@
    two machines, against what the backend does with the terms it is
    given (middle_end/flambda2/to_cmm/to_cmm_expr.ml: translate_raise,
    translate_apply, translate_jump_to_continuation;
-   backend/select_utils.ml: combine_traps, set_traps);
+   backend/select_utils.ml: combine_traps, set_traps,
+   Stack_offset_and_exn.process_basic; backend/ssa/ssa.ml:
+   compute_block_end_trap_stack);
    [raises_as_marked] against to_cmm's test of what is a raise
    (to_cmm_expr.ml: apply_cont, let_cont, let_cont_not_inlined;
    to_cmm_env.ml: create, add_exn_handler, is_exn_handler), with its
@@ -53,7 +55,13 @@
    this machine does is not stated here, and nothing here proves it:
    - a [Push] installs a handler: it puts on the stack what the
      continuation it names stands for. A [Pop] removes the entry on
-     top, whatever it names;
+     top, whatever it names. (The backend stops, when it compiles, on
+     a [Pop] of a jump or of a return that names another handler than
+     the one on top: backend/select_utils.ml,
+     [Stack_offset_and_exn.process_basic]; backend/ssa/ssa.ml,
+     [compute_block_end_trap_stack]. The machine here does not check
+     the handler that a [Pop] names; [traps_well_formed] checks it
+     against the top);
    - a raise (FlambdaModel.is_raise) removes the entry on top and goes
      to it, whatever continuation the raise names;
    - a call of code with as many arguments as it has parameters

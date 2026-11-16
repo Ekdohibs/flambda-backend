@@ -39,7 +39,8 @@
    against what the backend requires of the terms it is given
    (to_cmm/to_cmm_expr.ml: translate_raise, translate_apply,
    let_cont_exn_handler; backend/select_utils.ml: combine_traps,
-   set_traps) and what the front end builds
+   set_traps, Stack_offset_and_exn.process_basic; backend/ssa/ssa.ml:
+   compute_block_end_trap_stack) and what the front end builds
    (from_lambda/lambda_to_flambda.ml, the case Ltrywith;
    closure_conversion.ml, close_raise0), [well_formed_unit], and the
    statements. Three of the conditions of [well_formed_unit] are
@@ -945,13 +946,25 @@ Fixpoint iterate {A : Type} (n : nat) (f : A -> option A) (x : A)
    continuations out of handlers. A handler that nothing applies is not
    checked: it never runs.
 
-   The model is stricter than the compiler here. Nothing in
-   middle_end/flambda2/ checks trap actions (a review comment in
-   terms/flambda.ml asks for it), and the backend checks only that a
-   continuation is reached with one stack and that no [Pop] finds the
-   stack empty (backend/select_utils.ml, [set_traps] and
-   [combine_traps]). The front end builds terms that pass
-   (from_lambda/lambda_to_flambda.ml, the case [Ltrywith];
+   The model is stricter than the compiler here, in part. Flambda 2
+   does not check handler names against the installed trap stack (a
+   review comment in terms/flambda.ml asks for a check of an
+   [Apply_cont] that has a trap action). The selection of
+   instructions asks that a continuation be reached with one stack
+   and that no [Pop] find the stack empty (backend/select_utils.ml,
+   [set_traps] and [combine_traps], which do not look at the handler
+   that a [Pop] names). A later pass stops the compiler where a [Pop]
+   of a jump or of a return names another handler than the one on top
+   ([Stack_offset_and_exn.process_basic] of the same file, run by
+   [update_cfg] from backend/cfg_selectgen.ml; on the other path of
+   the backend, [compute_block_end_trap_stack] of
+   backend/ssa/ssa.ml). So of the name of such a [Pop] the model asks
+   what the backend asks. Of a raise and of the exception continuation
+   of a call it asks more: to_cmm does not keep the handler that a
+   raise names (to_cmm/to_cmm_expr.ml, [translate_raise]) and does not
+   look at the one that a call names ([translate_apply]), and the
+   backend goes by the handler on top. The front end builds terms
+   that pass (from_lambda/lambda_to_flambda.ml, the case [Ltrywith];
    closure_conversion.ml, [close_raise0]). Discrepancy C5-1. *)
 Fixpoint trap_demands (ts : trap_stack) (e : expr) : option demands :=
   match e with

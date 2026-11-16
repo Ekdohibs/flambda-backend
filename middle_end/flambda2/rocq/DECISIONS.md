@@ -695,7 +695,9 @@ says so. Only the labels that this tree cites are listed.
   fields that are then read as immutable.
 - **C5-1.** Nothing in Flambda 2 checks that trap actions, raises and
   calls name the handler that is installed last; the backend goes by the
-  stack and Simplify by the names.
+  stack and Simplify by the names. The backend stops on a `Pop` of a
+  jump or of a return that names another handler than the one on top;
+  it checks no raise and no call so.
 - **C5-2.** `Apply_cont_expr.is_raise` and the backend disagree on which
   `Apply_cont` is a raise.
 - **C5-3.** A `Pop` with no raise kind is "the same as No_trace" for the

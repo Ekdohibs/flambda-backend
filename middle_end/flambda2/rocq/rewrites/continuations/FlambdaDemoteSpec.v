@@ -63,11 +63,17 @@
    bind each name once, and lose nothing by this.
 
    What it does not look at, where Simplify does:
-   - the kind of a raise. Simplify takes a [Pop] of a raise that keeps a
-     backtrace ([Regular] or [Reraise]) for a use that escapes when
-     the unit is compiled with debugging information, and so keeps the
-     handler; the machines observe no backtrace, and the rewrite does
-     not look (discrepancy C5-4). On a unit compiled so the rewrite
+   - the kind of a raise. For a continuation of sort [Normal_or_exn],
+     Simplify takes a [Pop] whose raise kind is absent, [Regular] or
+     [Reraise] for a use that escapes when the unit is compiled with
+     debugging information, and so keeps the handler
+     (simplify/simplify_common.ml, [apply_cont_use_kind]).
+     With that information [Regular] and [Reraise] keep a backtrace.
+     An absent kind keeps none: it is lowered as [No_trace] is
+     (terms/trap_action.ml, [option_to_lambda]), and Simplify treats
+     it as a regular raise all the same (discrepancy C5-3). The
+     machines observe no backtrace, and the rewrite does not look
+     (discrepancy C5-4). On a unit compiled so the rewrite
      demotes where Simplify did not, which can leave the two terms
      different in structure. Nothing is claimed here of backtraces, or
      of the native code of a handler that is demoted;
