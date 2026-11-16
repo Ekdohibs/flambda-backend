@@ -337,6 +337,8 @@ Qed.
 (* The names of the result                                                  *)
 (* ======================================================================== *)
 
+(* What the pass does to one call keeps its free variables and its
+   two continuations. *)
 Lemma call_made_closure_free_variables (known : made_closures)
     (ap : apply_expr) :
   free_variables_of_apply (call_made_closure known ap)
@@ -347,99 +349,49 @@ Proof.
   destruct (made_callee_code known (ap_callee ap)); reflexivity.
 Qed.
 
-Lemma call_made_closure_continuations (known : made_closures)
+Lemma call_made_closure_continuation (known : made_closures)
     (ap : apply_expr) :
-  ap_continuation (call_made_closure known ap) = ap_continuation ap
-  ∧ ap_exn_continuation (call_made_closure known ap) = ap_exn_continuation ap.
+  ap_continuation (call_made_closure known ap) = ap_continuation ap.
 Proof.
   unfold call_made_closure.
-  destruct (ap_call_kind ap); [ split; reflexivity | ].
-  destruct (made_callee_code known (ap_callee ap)); split; reflexivity.
+  destruct (ap_call_kind ap); [ reflexivity | ].
+  destruct (made_callee_code known (ap_callee ap)); reflexivity.
 Qed.
 
-Fixpoint call_closures_knowing_free_variables (e : expr) :
-  ∀ known : made_closures,
-    free_variables_of_expr (call_closures_knowing known e)
-    = free_variables_of_expr e.
+Lemma call_made_closure_exn_continuation (known : made_closures)
+    (ap : apply_expr) :
+  ap_exn_continuation (call_made_closure known ap) = ap_exn_continuation ap.
 Proof.
-  destruct e
-    as [ x kind d body | bindings body | k h body | handlers body
-       | ap | ac | scrutinee arms | ];
-    intros known; cbn [call_closures_knowing free_variables_of_expr];
-    try reflexivity.
-  - rewrite call_closures_knowing_free_variables. reflexivity.
-  - rewrite call_closures_knowing_free_variables. reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [call_closures_in_handler free_variables_of_handler].
-    rewrite !call_closures_knowing_free_variables. reflexivity.
-  - rewrite call_closures_knowing_free_variables. f_equal.
-    induction handlers as [ | [k [params metadata handler]] handlers IH];
-      simpl; [ reflexivity | ].
-    rewrite call_closures_knowing_free_variables, IH. reflexivity.
-  - apply call_made_closure_free_variables.
+  unfold call_made_closure.
+  destruct (ap_call_kind ap); [ reflexivity | ].
+  destruct (made_callee_code known (ap_callee ap)); reflexivity.
 Qed.
 
+(* The names of the handlers of a recursive [Let_cont] are kept: the
+   left-hand side is the form that computation gives. *)
 Lemma call_closures_handlers_names (known : made_closures)
     (handlers : list (continuation * continuation_handler)) :
-  map fst
-    (map (fun '(k, h) => (k, call_closures_in_handler known h)) handlers)
+  map
+    (fun x : continuation * continuation_handler =>
+       fst (let '(k, h) := x in (k, call_closures_in_handler known h)))
+    handlers
   = map fst handlers.
-Proof.
-  induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
-  rewrite IH. reflexivity.
-Qed.
+Proof. apply map_ext. intros [k h]. reflexivity. Qed.
 
-Fixpoint call_closures_knowing_free_continuations (e : expr) :
-  ∀ known : made_closures,
-    free_continuations_of_expr (call_closures_knowing known e)
-    = free_continuations_of_expr e.
-Proof.
-  destruct e
-    as [ x kind d body | bindings body | k h body | handlers body
-       | ap | ac | scrutinee arms | ];
-    intros known; cbn [call_closures_knowing free_continuations_of_expr];
-    try reflexivity.
-  - apply call_closures_knowing_free_continuations.
-  - rewrite call_closures_knowing_free_continuations. reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [call_closures_in_handler free_continuations_of_handler].
-    rewrite !call_closures_knowing_free_continuations. reflexivity.
-  - rewrite call_closures_knowing_free_continuations,
-      call_closures_handlers_names.
-    f_equal. f_equal.
-    induction handlers as [ | [k [params metadata handler]] handlers IH];
-      simpl; [ reflexivity | ].
-    rewrite call_closures_knowing_free_continuations, IH. reflexivity.
-  - destruct (call_made_closure_continuations known ap) as [-> ->].
-    reflexivity.
-Qed.
+#[local] Hint Rewrite call_made_closure_free_variables
+  call_made_closure_continuation call_made_closure_exn_continuation
+  call_closures_handlers_names : equivariance.
 
-Fixpoint call_closures_knowing_code_closed (e : expr) :
-  ∀ known : made_closures,
-    code_closed (call_closures_knowing known e) = code_closed e.
-Proof.
-  destruct e
-    as [ x kind d body | bindings body | k h body | handlers body
-       | ap | ac | scrutinee arms | ];
-    intros known; cbn [call_closures_knowing code_closed];
-    try reflexivity.
-  - apply call_closures_knowing_code_closed.
-  - rewrite call_closures_knowing_code_closed. reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [call_closures_in_handler handler_code_closed].
-    rewrite !call_closures_knowing_code_closed. reflexivity.
-  - rewrite call_closures_knowing_code_closed. f_equal.
-    induction handlers as [ | [k [params metadata handler]] handlers IH];
-      simpl; [ reflexivity | ].
-    rewrite call_closures_knowing_code_closed, IH. reflexivity.
-Qed.
-
+(* Each of the three equations is of a function of names at the pass
+   and has no renaming in it. The tactic of the laws of renaming
+   proves it all the same, by its induction on the term, its laws of
+   lists and the four laws above. *)
 Theorem call_closures_knowing_names : call_closures_knowing_names_statement.
 Proof.
-  intros known e. split; [ | split ].
-  - apply call_closures_knowing_free_variables.
-  - apply call_closures_knowing_free_continuations.
-  - apply call_closures_knowing_code_closed.
+  intros known e. split; [ | split ]; revert known e.
+  - equivariance.
+  - equivariance.
+  - equivariance.
 Qed.
 
 (* ======================================================================== *)
