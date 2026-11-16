@@ -74,6 +74,11 @@ Import ListNotations.
 
 #[local] Arguments twin_args : simpl never.
 
+(* The laws of the database are applied in one pass over the goal,
+   which is faster than [autorewrite], in the proofs that pass with
+   it: all but the last three. *)
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
+
 #[local] Hint Rewrite @moved_from_map positions_of_renamed
   tags_without_renamed distinct_renamed count_positions_renamed
   : equivariance.
@@ -204,7 +209,12 @@ Proof. exact (blame_renamed r sites [] [] [] e). Qed.
 (* [twin_settle] goes on at the positions pruned by a list of refused
    positions that it has taken apart, or by the origins of one. The
    step for it: the list on the left is the list on the right renamed
-   (the tactic shows that), and then the law of [prune] applies. *)
+   (the tactic shows that), and then the law of [prune] applies.
+   [twin_settle] and [twin_params] are not proved with the one pass
+   (FlambdaEquivarianceTactic.v says what it does not find): from
+   here the database is applied by [autorewrite], as it is by
+   default. *)
+#[local] Ltac eqv_database ::= eqv_database_by_autorewrite.
 #[local] Arguments prune : simpl never.
 #[local] Arguments twin_origin : simpl never.
 #[local] Ltac eqv_extra ::=
