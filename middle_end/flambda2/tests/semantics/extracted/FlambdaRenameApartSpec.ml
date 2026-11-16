@@ -1,5 +1,6 @@
 open BinNums
 open Datatypes
+open FlambdaBindersSpec
 open FlambdaCompareSpec
 open FlambdaFreshQuantifierSpec
 open FlambdaModel
@@ -7,136 +8,6 @@ open FlambdaNominalSpec
 open List
 open ListDef
 open Nat
-
-(** val variables_in_simple : simple -> variable list **)
-
-let variables_in_simple = function Var x -> x :: [] | _ -> []
-
-(** val variables_in_simples : simple list -> variable list **)
-
-let variables_in_simples args = flat_map variables_in_simple args
-
-(** val variables_in_slots : (value_slot * simple) list -> variable list **)
-
-let variables_in_slots slots =
-  flat_map (fun slot -> variables_in_simple (snd slot)) slots
-
-(** val variables_in_named : named -> variable list **)
-
-let variables_in_named = function
-  | Simple s -> variables_in_simple s
-  | Prim (_, args) -> variables_in_simples args
-  | Set_of_closures (_, slots) -> variables_in_slots slots
-  | Closure_of_set (_, _, slots) -> variables_in_slots slots
-  | Project_value_slot (_, closure) -> variables_in_simple closure
-  | Project_value_slot_from (_, _, closure) -> variables_in_simple closure
-  | Project_function_slot (_, _, closure) -> variables_in_simple closure
-
-(** val variables_in_static_const : static_const -> variable list **)
-
-let variables_in_static_const = function
-  | Static_const_set_of_closures (_, slots) -> variables_in_slots slots
-  | Static_const_closure_of_set (_, _, _, slots) -> variables_in_slots slots
-  | Static_const_block (_, fields) -> variables_in_simples fields
-  | Static_const_boxed_number contents -> variables_in_simple contents
-  | Static_const_immutable_string _ -> []
-  | Static_const_immutable_value_array elements -> variables_in_simples elements
-
-(** val variables_in_apply_cont : apply_cont -> variable list **)
-
-let variables_in_apply_cont ac = variables_in_simples ac.ac_args
-
-(** val variables_in_apply : apply_expr -> variable list **)
-
-let variables_in_apply ap =
-  app
-    (variables_in_simple ap.ap_callee)
-    (app
-       (variables_in_simples ap.ap_args)
-       (variables_in_simples (exn_extra_simples ap)))
-
-(** val variables_of : expr -> variable list **)
-
-let rec variables_of = function
-  | Let (x, _, d, body) -> x :: app (variables_in_named d) (variables_of body)
-  | Let_static (bindings, body) ->
-    app (flat_map variables_in_binding bindings) (variables_of body)
-  | Let_cont_non_recursive (_, h, body) ->
-    app (variables_in_handler h) (variables_of body)
-  | Let_cont_recursive (handlers, body) ->
-    app
-      (flat_map (fun kh -> variables_in_handler (snd kh)) handlers)
-      (variables_of body)
-  | Apply ap -> variables_in_apply ap
-  | Apply_cont ac -> variables_in_apply_cont ac
-  | Switch (scrutinee, arms) ->
-    app
-      (variables_in_simple scrutinee)
-      (flat_map (fun arm -> variables_in_apply_cont (snd arm)) arms)
-  | Invalid -> []
-
-(** val variables_in_handler : continuation_handler -> variable list **)
-
-and variables_in_handler = function
-  | Handler (params, _, handler) -> app params (variables_of handler)
-
-(** val variables_in_binding : static_binding -> variable list **)
-
-and variables_in_binding = function
-  | Bind_code (_, c) -> variables_in_code c
-  | Bind_deleted_code _ -> []
-  | Bind_symbol (_, const) -> variables_in_static_const const
-
-(** val variables_in_code : code -> variable list **)
-
-and variables_in_code = function
-  | Code (params, my_closure, _, _, _, body) ->
-    my_closure :: app params (variables_of body)
-
-(** val continuations_in_apply : apply_expr -> continuation list **)
-
-let continuations_in_apply ap = [ap.ap_continuation; ap.ap_exn_continuation]
-
-(** val continuations_of : expr -> continuation list **)
-
-let rec continuations_of = function
-  | Let (_, _, _, body) -> continuations_of body
-  | Let_static (bindings, body) ->
-    app (flat_map continuations_in_binding bindings) (continuations_of body)
-  | Let_cont_non_recursive (k, h, body) ->
-    k :: app (continuations_in_handler h) (continuations_of body)
-  | Let_cont_recursive (handlers, body) ->
-    app
-      (flat_map
-         (fun kh -> fst kh :: continuations_in_handler (snd kh))
-         handlers)
-      (continuations_of body)
-  | Apply ap -> continuations_in_apply ap
-  | Apply_cont ac -> apply_cont_continuations ac
-  | Switch (_, arms) ->
-    flat_map (fun arm -> apply_cont_continuations (snd arm)) arms
-  | Invalid -> []
-
-(** val continuations_in_handler : continuation_handler -> continuation list **)
-
-and continuations_in_handler = function
-  | Handler (_, _, handler) -> continuations_of handler
-
-(** val continuations_in_binding : static_binding -> continuation list **)
-
-and continuations_in_binding = function
-  | Bind_code (_, c) -> continuations_in_code c
-  | _ -> []
-
-(** val continuations_in_code : code -> continuation list **)
-
-and continuations_in_code = function
-  | Code (_, _, return_continuation, exn_continuation, _, body) ->
-    return_continuation :: exn_continuation :: continuations_of body
-
-(** val names_of : expr -> positive list **)
-
-let names_of e = app (variables_of e) (continuations_of e)
 
 (** val binders : expr -> nat **)
 
@@ -305,16 +176,18 @@ and apart_code r news = function
           metadata,
           body' ) )
 
-(** val renamed_apart_avoiding : continuation list -> expr -> expr **)
+(** val canonical_avoiding : continuation list -> expr -> expr **)
 
-let renamed_apart_avoiding avoid e =
+let canonical_avoiding avoid e =
   snd
     (apart identity_renaming
-       (fresh_names (binders e) (app avoid (names_of e)))
+       (fresh_names (binders e)
+          (app avoid
+             (app (free_variables_of_expr e) (free_continuations_of_expr e))))
        e)
 
 (** val rename_apart_avoiding : continuation list -> expr -> expr **)
 
 let rename_apart_avoiding avoid e =
-  let e' = renamed_apart_avoiding avoid e in
+  let e' = canonical_avoiding avoid e in
   if expr_eqb [] [] e e' then e' else e

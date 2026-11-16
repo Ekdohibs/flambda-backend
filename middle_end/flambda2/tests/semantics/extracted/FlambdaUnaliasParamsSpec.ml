@@ -2,6 +2,7 @@ open BinPos
 open Datatypes
 open FlambdaMapSpec
 open FlambdaModel
+open FlambdaSpineWalkSpec
 open List
 open ListDef
 
@@ -201,18 +202,18 @@ let rec unalias_from i k h body =
       unalias_from i0 k h' body'
     | None -> unalias_from i0 k h body)
 
-(** val unalias_params : expr -> expr **)
+(** val unalias_node : expr -> expr **)
 
-let rec unalias_params e =
+let unalias_node e =
   match e with
-  | Let (x, kind, d, body) -> Let (x, kind, d, unalias_params body)
-  | Let_static (bindings, body) -> Let_static (bindings, unalias_params body)
   | Let_cont_non_recursive (k, handler0, body) ->
     let (Handler (params, metadata, handler)) = handler0 in
-    let h = Handler (params, metadata, unalias_params handler) in
-    let body0 = unalias_params body in
-    let h0, body1 = unalias_from (length params) k h body0 in
-    Let_cont_non_recursive (k, h0, body1)
-  | Let_cont_recursive (handlers, body) ->
-    Let_cont_recursive (handlers, unalias_params body)
+    let h, body0 =
+      unalias_from (length params) k (Handler (params, metadata, handler)) body
+    in
+    Let_cont_non_recursive (k, h, body0)
   | _ -> e
+
+(** val unalias_params : expr -> expr **)
+
+let unalias_params e = walk_spine unalias_node e

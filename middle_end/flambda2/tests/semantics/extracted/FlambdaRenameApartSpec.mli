@@ -1,5 +1,6 @@
 open BinNums
 open Datatypes
+open FlambdaBindersSpec
 open FlambdaCompareSpec
 open FlambdaFreshQuantifierSpec
 open FlambdaModel
@@ -7,40 +8,6 @@ open FlambdaNominalSpec
 open List
 open ListDef
 open Nat
-
-val variables_in_simple : simple -> variable list
-
-val variables_in_simples : simple list -> variable list
-
-val variables_in_slots : (value_slot * simple) list -> variable list
-
-val variables_in_named : named -> variable list
-
-val variables_in_static_const : static_const -> variable list
-
-val variables_in_apply_cont : apply_cont -> variable list
-
-val variables_in_apply : apply_expr -> variable list
-
-val variables_of : expr -> variable list
-
-val variables_in_handler : continuation_handler -> variable list
-
-val variables_in_binding : static_binding -> variable list
-
-val variables_in_code : code -> variable list
-
-val continuations_in_apply : apply_expr -> continuation list
-
-val continuations_of : expr -> continuation list
-
-val continuations_in_handler : continuation_handler -> continuation list
-
-val continuations_in_binding : static_binding -> continuation list
-
-val continuations_in_code : code -> continuation list
-
-val names_of : expr -> positive list
 
 val binders : expr -> nat
 
@@ -89,6 +56,6 @@ val apart_binding :
 
 val apart_code : renaming -> positive list -> code -> positive list * code
 
-val renamed_apart_avoiding : continuation list -> expr -> expr
+val canonical_avoiding : continuation list -> expr -> expr
 
 val rename_apart_avoiding : continuation list -> expr -> expr

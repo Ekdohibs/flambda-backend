@@ -2,6 +2,7 @@ open BinPos
 open Datatypes
 open FlambdaMapSpec
 open FlambdaModel
+open FlambdaSpineWalkSpec
 open List
 open ListDef
 
@@ -44,5 +45,7 @@ val unalias_from :
   continuation_handler ->
   expr ->
   continuation_handler * expr
+
+val unalias_node : expr -> expr
 
 val unalias_params : expr -> expr
