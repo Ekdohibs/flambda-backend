@@ -22,7 +22,7 @@ let $camlExported_option_fun_in_arm__first_const_0 = Block 0 () in
      in
      let Pmakeblock/40 =
        %block.[`0`].`toplevel`
-         (`fn[exported_option_fun_in_arm.ml:8,33--49]/39`)
+         (`fn[exported_option_fun_in_arm.ml:8,33--49]/39` : val)
      in
      cont k/18 (Pmakeblock/40)
    where k/18 (f/37 : [ 0 | 0 of val ]) =

@@ -14,10 +14,14 @@ let $camlPair_built__first_const_0 = Block 0 () in
      where k/29 =
        cont k/28
      where k/28 =
-       let Pmakeblock/54 = %block.[`0`].my_alloc_region/46 (2, x/44) in
+       let Pmakeblock/54 =
+         %block.[`0`].my_alloc_region/46 (2 : imm tagged, x/44 : imm tagged)
+       in
        cont k/26 (Pmakeblock/54)
      where k/27 =
-       let Pmakeblock/53 = %block.[`0`].my_alloc_region/46 (x/44, 1) in
+       let Pmakeblock/53 =
+         %block.[`0`].my_alloc_region/46 (x/44 : imm tagged, 1 : imm tagged)
+       in
        cont k/26 (Pmakeblock/53)
      where k/26 (p/49 : [ 0 of imm tagged * imm tagged ]) =
        let Pfield/50 = %block_load.[`1`] (p/49) in

@@ -5,7 +5,9 @@ let code loopify(never) size(10) newer_version_of(f_0)
         -> k * k1
         : [ 0 of imm tagged * imm tagged ] =
   let a = %int_barith.add (x, y) in
-  let Pmakeblock = %block.[`0`].my_alloc_region (a, a) in
+  let Pmakeblock =
+    %block.[`0`].my_alloc_region (a : imm tagged, a : imm tagged)
+  in
   cont k (Pmakeblock)
 in
 let $camlCse_needing_canonicalisation__f_1 = closure f_0_1 @f &toplevel in

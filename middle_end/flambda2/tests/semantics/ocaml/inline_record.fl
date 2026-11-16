@@ -27,14 +27,15 @@ let $camlInline_record__first_const_0 = Block 0 () in
   let ghost_region/83 = %begin_ghost_region () in
   (let Popaque/92 = %opaque (4) in
    let Pmakeblock/93 =
-     %block.[`1`].`toplevel`.local[region/82] (3, Popaque/92)
+     %block.[`1`].`toplevel`.local[region/82]
+       (3 : imm tagged, Popaque/92 : imm tagged)
    in
    apply direct(area_0 &toplevel)
      (area/79 : val -> imm tagged) (Pmakeblock/93) -> k/28 * error)
     where k/28 (apply_result/87 : imm tagged) =
       ((let Popaque/90 = %opaque (2) in
         let Pmakeblock/91 =
-          %block.[`0`].`toplevel`.local[region/82] (Popaque/90)
+          %block.[`0`].`toplevel`.local[region/82] (Popaque/90 : imm tagged)
         in
         apply direct(area_0 &toplevel)
           (area/79 : val -> imm tagged) (Pmakeblock/91) -> k/29 * error)

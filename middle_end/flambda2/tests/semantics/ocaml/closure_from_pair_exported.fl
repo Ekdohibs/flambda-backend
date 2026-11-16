@@ -16,7 +16,8 @@ let $camlClosure_from_pair_exported__first_const_0 = Block 0 () in
          : imm tagged =
    let next_depth/52 = rec_info (succ my_depth/51) in
    let g/53 = closure g_1 @g &my_alloc_region/50 with { x = x/48 } in
-   let p/54 = %block.[`0`].my_alloc_region/50 (g/53, x/48) in
+   let p/54 = %block.[`0`].my_alloc_region/50 (g/53 : val, x/48 : imm tagged)
+   in
    let Pfield/55 = %block_load.[`0`] (p/54) in
    apply direct(g_1 &my_alloc_region/50)
      (Pfield/55 : imm tagged -> imm tagged) (x/48) -> k/16 * k/17

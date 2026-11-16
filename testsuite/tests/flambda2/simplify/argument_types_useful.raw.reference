@@ -34,7 +34,7 @@ let $camlArgument_types_useful__first_const_0 = Block 0 () in
      %project_value_slot.[box_int_then_call_unbox_int_and_add_one_wrapper].[unbox_int_and_add_one_wrapper]
        (my_closure)
    in
-   let Pmakeblock = %block.[`0`].my_alloc_region (x) in
+   let Pmakeblock = %block.[`0`].my_alloc_region (x : imm tagged) in
    apply direct(unbox_int_and_add_one_wrapper_1 &my_alloc_region)
      (unbox_int_and_add_one_wrapper : val -> imm tagged)
        (Pmakeblock)

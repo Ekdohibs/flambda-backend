@@ -27,7 +27,7 @@
          where k/23 (apply_result/66 : imm tagged) =
            let pair/67 =
              %block.[`0`].`toplevel`.local[region/60]
-               (apply_result/66, apply_result/65)
+               (apply_result/66 : imm tagged, apply_result/65 : val)
            in
            let Pmixedfield/68 = %block_load.[`0`] (pair/67) in
            let int_add/69 = %int_barith.add (Pmixedfield/68, 1) in

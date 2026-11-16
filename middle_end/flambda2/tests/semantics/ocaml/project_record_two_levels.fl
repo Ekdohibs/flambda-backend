@@ -23,11 +23,14 @@ let $camlProject_record_two_levels__first_const_0 = Block 0 () in
    let Pfield/126 = %block_load.[`0`] (Pfield/125) in
    let int_add/127 = %int_barith.add (Pfield/126, 1) in
    let Pmakeblock/128 =
-     %block.[`0`].my_alloc_region/120 (int_add/127, Pfield/124)
+     %block.[`0`].my_alloc_region/120
+       (int_add/127 : imm tagged, Pfield/124 : imm tagged)
    in
    let Pfield/129 = %block_load.[`0`] (window/118) in
    let Pmakeblock/130 =
-     %block.[`0`].my_alloc_region/120 (Pfield/129, Pmakeblock/128)
+     %block.[`0`].my_alloc_region/120
+       (Pfield/129 : imm tagged,
+        Pmakeblock/128 : [ 0 of imm tagged * imm tagged ])
    in
    cont k/27 (Pmakeblock/130)
  in
@@ -48,7 +51,7 @@ let $camlProject_record_two_levels__first_const_0 = Block 0 () in
    let ghost_region/140 = %begin_ghost_region () in
    (let Pmakeblock/144 =
       %block.[`0`].my_alloc_region/134.local[region/139]
-        (title/131, size/132)
+        (title/131 : imm tagged, size/132 : [ 0 of imm tagged * imm tagged ])
     in
     apply direct(widen_1 &my_alloc_region/134)
       (widen/138
@@ -77,7 +80,8 @@ let $camlProject_record_two_levels__first_const_0 = Block 0 () in
   let ghost_region/151 = %begin_ghost_region () in
   (let Popaque/155 = %opaque (3) in
    let Pmakeblock/156 =
-     %block.[`0`].`toplevel`.local[region/150] (Popaque/155, 4)
+     %block.[`0`].`toplevel`.local[region/150]
+       (Popaque/155 : imm tagged, 4 : imm tagged)
    in
    apply direct(widened_width_2 &toplevel)
      (widened_width/147 : imm tagged * val -> imm tagged)

@@ -59,20 +59,22 @@ let $camlLoop_for_local_pair_each_turn__first_const_0 = Block 0 () in
     let int_add/306 = %int_barith.add (x/292, 1000) in
     let a/307 =
       %block.[`0`].my_alloc_region/294.local[region/300]
-        (int_add/306, int_add/305)
+        (int_add/306 : imm tagged, int_add/305 : imm tagged)
     in
     let int_add/308 = %int_barith.add (x/292, 5004) in
     let int_add/309 = %int_barith.add (x/292, 4003) in
     let int_add/310 = %int_barith.add (x/292, 3002) in
     let b/311 =
       %block.[`0`].my_alloc_region/294.local[region/300]
-        (int_add/310, int_add/309, int_add/308)
+        (int_add/310 : imm tagged,
+         int_add/309 : imm tagged,
+         int_add/308 : imm tagged)
     in
     let int_add/312 = %int_barith.add (x/292, 7006) in
     let int_add/313 = %int_barith.add (x/292, 6005) in
     let c/314 =
       %block.[`0`].my_alloc_region/294.local[region/300]
-        (int_add/313, int_add/312)
+        (int_add/313 : imm tagged, int_add/312 : imm tagged)
     in
     let f/315 = closure f_4 @f &my_alloc_region/294 &region/300
     with { x = x/292 }
@@ -155,7 +157,7 @@ let $camlLoop_for_local_pair_each_turn__first_const_0 = Block 0 () in
                  in
                  ((let p/359 =
                      %block.[`0`].my_alloc_region/325.local[region/347]
-                       (i/346, r_38_unboxed0/344)
+                       (i/346 : imm tagged, r_38_unboxed0/344 : imm tagged)
                    in
                    apply direct(noise_3 &my_alloc_region/325)
                      (noise/329 : imm tagged -> imm tagged)

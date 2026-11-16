@@ -19,7 +19,7 @@ let $camlFunctions_in_record_called__first_const_0 = Block 0 () in
  in
  let up/64 = closure up_0 @up &toplevel in
  let down/65 = closure down_1 @down &toplevel in
- let ops/66 = %block.[`0`].`toplevel` (up/64, down/65) in
+ let ops/66 = %block.[`0`].`toplevel` (up/64 : val, down/65 : val) in
  (let Popaque/71 = %opaque (5) in
   let Pfield/72 = %block_load.[`0`] (ops/66) in
   apply direct(up_0 &toplevel)

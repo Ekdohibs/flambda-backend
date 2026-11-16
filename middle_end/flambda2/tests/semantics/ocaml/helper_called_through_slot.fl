@@ -5,7 +5,8 @@
          : [ 0 of val * val ] =
    let next_depth/75 = rec_info (succ my_depth/74) in
    let swap/76 = %project_function_slot.[swap].[swap] (my_closure/72) in
-   let Pmakeblock/77 = %block.[`0`].my_alloc_region/73 (param/71, param/70)
+   let Pmakeblock/77 =
+     %block.[`0`].my_alloc_region/73 (param/71 : val, param/70 : val)
    in
    cont k/24 (Pmakeblock/77)
  in
@@ -51,7 +52,7 @@
  (let Popaque/98 = %opaque ($camlHelper_called_through_slot__immstring_0) in
   let Pmakeblock/99 =
     %block.[`0`].`toplevel`
-      (Popaque/98, $camlHelper_called_through_slot__immstring_1)
+      (Popaque/98 : val, $camlHelper_called_through_slot__immstring_1 : val)
   in
   apply direct(back_2 &toplevel)
     (back/95 : val -> val) (Pmakeblock/99) -> k/32 * error)

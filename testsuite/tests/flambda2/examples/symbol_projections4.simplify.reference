@@ -36,12 +36,14 @@ let $camlSymbol_projections4__immstring_0 = "FOO" in
          | 1 -> k3)
         where k3 =
           let Pmakeblock =
-            %block.[`0`].my_alloc_region (x, $camlSymbol_projections4__g_3)
+            %block.[`0`].my_alloc_region
+              (x, $camlSymbol_projections4__g_3 : val)
           in
           cont k (Pmakeblock)
         where k2 =
           let Pmakeblock =
-            %block.[`0`].my_alloc_region (x, $camlSymbol_projections4__h_2)
+            %block.[`0`].my_alloc_region
+              (x, $camlSymbol_projections4__h_2 : val)
           in
           cont k (Pmakeblock)
     and set_of_closures

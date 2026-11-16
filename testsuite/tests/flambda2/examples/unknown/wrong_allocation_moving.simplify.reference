@@ -33,7 +33,7 @@ let code loopify(never) size(57) newer_version_of(f_0)
                @`fn[wrong_allocation_moving.ml:21,15--28]` &my_alloc_region
            with { y = y }
            in
-           let Pmakeblock = %block.[`0`].my_alloc_region (y) in
+           let Pmakeblock = %block.[`0`].my_alloc_region (y : float boxed) in
            apply unknown_arity &my_alloc_region
              (foo : val * val? * float boxed -> val?)
                (Pmakeblock, `fn[wrong_allocation_moving.ml:21,15--28]`, diff)

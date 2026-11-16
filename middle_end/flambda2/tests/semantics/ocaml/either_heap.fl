@@ -15,12 +15,16 @@ let $camlEither_heap__first_const_0 = Block 0 () in
        cont k/34
      where k/34 =
        let int_add/74 = %int_barith.add (x/58, 2) in
-       let Pmakeblock/75 = %block.[`1`].my_alloc_region/60 (x/58, int_add/74)
+       let Pmakeblock/75 =
+         %block.[`1`].my_alloc_region/60
+           (x/58 : imm tagged, int_add/74 : imm tagged)
        in
        cont k/30 (Pmakeblock/75)
      where k/33 =
        let int_add/72 = %int_barith.add (x/58, 1) in
-       let Pmakeblock/73 = %block.[`0`].my_alloc_region/60 (int_add/72) in
+       let Pmakeblock/73 =
+         %block.[`0`].my_alloc_region/60 (int_add/72 : imm tagged)
+       in
        cont k/30 (Pmakeblock/73)
      where k/30 (v/63 : [ 0 of imm tagged |1 of imm tagged * imm tagged ]) =
        ((let prim/69 = %get_tag (v/63) in

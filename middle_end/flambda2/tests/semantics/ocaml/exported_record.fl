@@ -5,7 +5,9 @@ let $camlExported_record__first_const_0 = Block 0 () in
          -> k/18 * k/19
          : [ 0 of imm tagged * imm tagged ] =
    let next_depth/60 = rec_info (succ my_depth/59) in
-   let Pmakeblock/61 = %block.[`0`].my_alloc_region/58 (x/55, y/56) in
+   let Pmakeblock/61 =
+     %block.[`0`].my_alloc_region/58 (x/55 : imm tagged, y/56 : imm tagged)
+   in
    cont k/18 (Pmakeblock/61)
  in
  let code size(5)

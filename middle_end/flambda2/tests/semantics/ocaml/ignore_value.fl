@@ -1,7 +1,9 @@
 let $camlIgnore_value__first_const_0 = Block 0 () in
 (let x/19 = %opaque (6) in
  let int_mul/20 = %int_barith.mul (x/19, x/19) in
- let Pmakeblock/21 = %block.[`0`].`toplevel` (int_mul/20, x/19) in
+ let Pmakeblock/21 =
+   %block.[`0`].`toplevel` (int_mul/20 : imm tagged, x/19 : imm tagged)
+ in
  cont k/8 (x/19))
   where k/8 (result/17 : imm tagged) =
     let Pmakeblock/18 = %block.[`0`].`toplevel` (result/17) in

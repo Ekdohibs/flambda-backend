@@ -13,7 +13,9 @@ let $camlOption_heap__first_const_0 = Block 0 () in
        cont k/29
      where k/29 =
        let int_add/59 = %int_barith.add (x/48, 1) in
-       let Pmakeblock/60 = %block.[`0`].my_alloc_region/50 (int_add/59) in
+       let Pmakeblock/60 =
+         %block.[`0`].my_alloc_region/50 (int_add/59 : imm tagged)
+       in
        cont k/26 (Pmakeblock/60)
      where k/26 (v/53 : [ 0 | 0 of imm tagged ]) =
        ((let prim/56 = %is_int (v/53) in

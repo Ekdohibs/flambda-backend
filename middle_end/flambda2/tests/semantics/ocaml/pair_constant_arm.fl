@@ -15,7 +15,8 @@
        cont k/32
      where k/32 =
        let Pmakeblock/70 =
-         %block.[`0`].my_alloc_region/58.local[region/61] (x/56, 1)
+         %block.[`0`].my_alloc_region/58.local[region/61]
+           (x/56 : imm tagged, 1 : imm tagged)
        in
        cont k/29 (Pmakeblock/70)
      where k/29 (`*match*/66` : [ 0 of imm tagged * imm tagged ]) =

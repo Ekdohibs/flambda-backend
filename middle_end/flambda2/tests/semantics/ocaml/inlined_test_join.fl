@@ -23,7 +23,8 @@ let $camlInlined_test_join__first_const_0 = Block 0 () in
        cont k/32 (Popaque/65)
      where k/32 (staticcatch_result/63 : imm tagged) =
        let Pmakeblock/64 =
-         %block.[`0`].my_alloc_region/60 (p/57, staticcatch_result/63)
+         %block.[`0`].my_alloc_region/60
+           (p/57 : imm tagged, staticcatch_result/63 : imm tagged)
        in
        cont k/30 (Pmakeblock/64)
  in

@@ -45,7 +45,8 @@ let $camlLocal_argument_partial_application__first_const_0 = Block 0 () in
    let region/117 = %begin_region () in
    let ghost_region/118 = %begin_ghost_region () in
    (let p/122 =
-      %block.[`0`].my_alloc_region/113.local[region/117] (x/110, y/111)
+      %block.[`0`].my_alloc_region/113.local[region/117]
+        (x/110 : imm tagged, y/111 : imm tagged)
     in
     (let partial_pick/128 =
        closure partial_pick_2 @partial_pick &my_alloc_region/113 &region/117

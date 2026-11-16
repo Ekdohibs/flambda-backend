@@ -33,7 +33,10 @@ let code loopify(never) size(49) newer_version_of(ld_conf_contents_1)
                  -> k7 * k5 (path_unboxed0 val?)
                where k7 (return_val0 : val) =
                  let Pmakeblock =
-                   %block.[`0`].my_alloc_region (return_val0, path_unboxed0)
+                   %block.[`0`].my_alloc_region
+                     (return_val0 : val,
+                      path_unboxed0 :
+                        [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
                  in
                  cont k6 (Pmakeblock)))
      where k5 exn (`exn` : val, path_unboxed0) =

@@ -52,10 +52,28 @@ let $camlTree_root__first_const_0 = Block 0 () in
   let ghost_region/112 = %begin_ghost_region () in
   (let Popaque/116 = %opaque (1) in
    let Pmakeblock/117 =
-     %block.[`0`].`toplevel`.local[region/111] (0, Popaque/116, 0)
+     %block.[`0`].`toplevel`.local[region/111]
+       (0 :
+          [ 0
+          | 0 of [ 0 | 0 of val * imm tagged * val ] * imm tagged *
+              [ 0 | 0 of val * imm tagged * val ] ],
+        Popaque/116 : imm tagged,
+        0 :
+          [ 0
+          | 0 of [ 0 | 0 of val * imm tagged * val ] * imm tagged *
+              [ 0 | 0 of val * imm tagged * val ] ])
    in
    let tree/118 =
-     %block.[`0`].`toplevel`.local[region/111] (Pmakeblock/117, 2, 0)
+     %block.[`0`].`toplevel`.local[region/111]
+       (Pmakeblock/117 :
+          [ 0
+          | 0 of [ 0 | 0 of val * imm tagged * val ] * imm tagged *
+              [ 0 | 0 of val * imm tagged * val ] ],
+        2 : imm tagged,
+        0 :
+          [ 0
+          | 0 of [ 0 | 0 of val * imm tagged * val ] * imm tagged *
+              [ 0 | 0 of val * imm tagged * val ] ])
    in
    apply direct(left_1 &toplevel &region/111 &ghost_region/112)
      (left/108

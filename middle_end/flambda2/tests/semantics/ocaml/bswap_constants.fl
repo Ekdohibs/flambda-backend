@@ -23,11 +23,11 @@
  let int_bswap/70 = %int_uarith.bswp (4660) in
  let result/71 =
    %block.[`0`].`toplevel`
-     (int_bswap/70,
-      int_bswap/69,
-      int_of_int32/68,
-      int_of_int32/62,
-      int_of_int64/56)
+     (int_bswap/70 : imm tagged,
+      int_bswap/69 : imm tagged,
+      int_of_int32/68 : imm tagged,
+      int_of_int32/62 : imm tagged,
+      int_of_int64/56 : imm tagged)
  in
  let Pmakeblock/72 = %block.[`0`].`toplevel` (result/71) in
  cont k/5 (Pmakeblock/72))

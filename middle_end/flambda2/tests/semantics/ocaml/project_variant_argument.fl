@@ -27,7 +27,9 @@ let $camlProject_variant_argument__first_const_0 = Block 0 () in
    let next_depth/74 = rec_info (succ my_depth/73) in
    let height/75 = %project_value_slot.[rect_height].[height] (my_closure/71)
    in
-   let Pmakeblock/76 = %block.[`1`].my_alloc_region/72 (w/69, h/70) in
+   let Pmakeblock/76 =
+     %block.[`1`].my_alloc_region/72 (w/69 : imm tagged, h/70 : imm tagged)
+   in
    apply direct(height_0 &my_alloc_region/72)
      (height/75 : val -> imm tagged) (Pmakeblock/76) -> k/24 * k/25
  in

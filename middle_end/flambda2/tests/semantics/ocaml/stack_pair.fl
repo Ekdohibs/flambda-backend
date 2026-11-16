@@ -59,20 +59,22 @@ let $camlStack_pair__first_const_0 = Block 0 () in
     let int_add/242 = %int_barith.add (x/228, 1000) in
     let a/243 =
       %block.[`0`].my_alloc_region/230.local[region/236]
-        (int_add/242, int_add/241)
+        (int_add/242 : imm tagged, int_add/241 : imm tagged)
     in
     let int_add/244 = %int_barith.add (x/228, 5004) in
     let int_add/245 = %int_barith.add (x/228, 4003) in
     let int_add/246 = %int_barith.add (x/228, 3002) in
     let b/247 =
       %block.[`0`].my_alloc_region/230.local[region/236]
-        (int_add/246, int_add/245, int_add/244)
+        (int_add/246 : imm tagged,
+         int_add/245 : imm tagged,
+         int_add/244 : imm tagged)
     in
     let int_add/248 = %int_barith.add (x/228, 7006) in
     let int_add/249 = %int_barith.add (x/228, 6005) in
     let c/250 =
       %block.[`0`].my_alloc_region/230.local[region/236]
-        (int_add/249, int_add/248)
+        (int_add/249 : imm tagged, int_add/248 : imm tagged)
     in
     let f/251 = closure f_4 @f &my_alloc_region/230 &region/236
     with { x = x/228 }
@@ -126,7 +128,8 @@ let $camlStack_pair__first_const_0 = Block 0 () in
    let ghost_region/267 = %begin_ghost_region () in
    (let int_add/271 = %int_barith.add (x/259, 1) in
     let p/272 =
-      %block.[`0`].my_alloc_region/261.local[region/266] (x/259, int_add/271)
+      %block.[`0`].my_alloc_region/261.local[region/266]
+        (x/259 : imm tagged, int_add/271 : imm tagged)
     in
     apply direct(noise_3 &my_alloc_region/261)
       (noise/265 : imm tagged -> imm tagged) (x/259) -> k/68 * k/66

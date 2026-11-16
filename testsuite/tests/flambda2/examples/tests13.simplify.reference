@@ -106,8 +106,9 @@ and code rec loopify(never) size(77) newer_version_of(map_foo_4)
                         where k2 (apply_result : val) =
                           let Pmakeblock =
                             %block.[`0`].my_alloc_region
-                              (apply_result,
-                               $`camlTests13__fn[tests13.ml:41,15--28]_5`)
+                              (apply_result : val,
+                               $`camlTests13__fn[tests13.ml:41,15--28]_5` :
+                                 val)
                           in
                           cont k (Pmakeblock)))))
 and code loopify(never) size(4) newer_version_of(`fn[tests13.ml:27,2--118]_1_1`)

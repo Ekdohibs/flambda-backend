@@ -5,7 +5,9 @@ let $camlPair_read_one_call_inlined__first_const_0 = Block 0 () in
          -> k/26 * k/27
          : [ 0 of imm tagged * imm tagged ] =
    let next_depth/71 = rec_info (succ my_depth/70) in
-   let Pmakeblock/72 = %block.[`0`].my_alloc_region/69 (x/67, x/67) in
+   let Pmakeblock/72 =
+     %block.[`0`].my_alloc_region/69 (x/67 : imm tagged, x/67 : imm tagged)
+   in
    cont k/26 (Pmakeblock/72)
  in
  let code inline(never) size(2)

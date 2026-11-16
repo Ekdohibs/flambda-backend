@@ -59,20 +59,22 @@ let $camlExclave_pair__first_const_0 = Block 0 () in
     let int_add/262 = %int_barith.add (x/248, 1000) in
     let a/263 =
       %block.[`0`].my_alloc_region/250.local[region/256]
-        (int_add/262, int_add/261)
+        (int_add/262 : imm tagged, int_add/261 : imm tagged)
     in
     let int_add/264 = %int_barith.add (x/248, 5004) in
     let int_add/265 = %int_barith.add (x/248, 4003) in
     let int_add/266 = %int_barith.add (x/248, 3002) in
     let b/267 =
       %block.[`0`].my_alloc_region/250.local[region/256]
-        (int_add/266, int_add/265, int_add/264)
+        (int_add/266 : imm tagged,
+         int_add/265 : imm tagged,
+         int_add/264 : imm tagged)
     in
     let int_add/268 = %int_barith.add (x/248, 7006) in
     let int_add/269 = %int_barith.add (x/248, 6005) in
     let c/270 =
       %block.[`0`].my_alloc_region/250.local[region/256]
-        (int_add/269, int_add/268)
+        (int_add/269 : imm tagged, int_add/268 : imm tagged)
     in
     let f/271 = closure f_4 @f &my_alloc_region/250 &region/256
     with { x = x/248 }
@@ -125,7 +127,7 @@ let $camlExclave_pair__first_const_0 = Block 0 () in
    let int_add/286 = %int_barith.add (x/279, 1) in
    let Pmakeblock/287 =
      %block.[`0`].my_alloc_region/281.local[my_region/282]
-       (x/279, int_add/286)
+       (x/279 : imm tagged, int_add/286 : imm tagged)
    in
    cont k/71 (Pmakeblock/287)
  in

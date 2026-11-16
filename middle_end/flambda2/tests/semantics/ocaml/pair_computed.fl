@@ -15,11 +15,17 @@ let $camlPair_computed__first_const_0 = Block 0 () in
        cont k/28
      where k/28 =
        let int_add/59 = %int_barith.add (x/48, 2) in
-       let Pmakeblock/60 = %block.[`0`].my_alloc_region/50 (2, int_add/59) in
+       let Pmakeblock/60 =
+         %block.[`0`].my_alloc_region/50
+           (2 : imm tagged, int_add/59 : imm tagged)
+       in
        cont k/26 (Pmakeblock/60)
      where k/27 =
        let int_add/57 = %int_barith.add (x/48, 1) in
-       let Pmakeblock/58 = %block.[`0`].my_alloc_region/50 (int_add/57, 1) in
+       let Pmakeblock/58 =
+         %block.[`0`].my_alloc_region/50
+           (int_add/57 : imm tagged, 1 : imm tagged)
+       in
        cont k/26 (Pmakeblock/58)
      where k/26 (p/53 : [ 0 of imm tagged * imm tagged ]) =
        let Pfield/54 = %block_load.[`1`] (p/53) in

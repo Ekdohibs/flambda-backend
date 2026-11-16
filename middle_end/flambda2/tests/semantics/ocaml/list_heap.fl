@@ -13,7 +13,11 @@ let $camlList_heap__first_const_0 = Block 0 () in
        cont k/35
      where k/35 =
        let int_add/62 = %int_barith.add (x/50, 1) in
-       let Pmakeblock/63 = %block.[`0`].my_alloc_region/52 (int_add/62, 0) in
+       let Pmakeblock/63 =
+         %block.[`0`].my_alloc_region/52
+           (int_add/62 : imm tagged,
+            0 : [ 0 | 0 of imm tagged * [ 0 | 0 of imm tagged * val ] ])
+       in
        cont k/30 (Pmakeblock/63)
      where k/30
              (l/55 : [ 0 | 0 of imm tagged * [ 0 | 0 of imm tagged * val ] ]) =

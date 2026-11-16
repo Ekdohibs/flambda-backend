@@ -1,8 +1,8 @@
 let $camlExported_two_somes__first_const_0 = Block 0 () in
 (let Popaque/20 = %opaque (1) in
- let a/21 = %block.[`0`].`toplevel` (Popaque/20) in
+ let a/21 = %block.[`0`].`toplevel` (Popaque/20 : imm tagged) in
  let Popaque/22 = %opaque (2) in
- let b/23 = %block.[`0`].`toplevel` (Popaque/22) in
+ let b/23 = %block.[`0`].`toplevel` (Popaque/22 : imm tagged) in
  let Pmakeblock/24 = %block.[`0`].`toplevel` (a/21, b/23) in
  cont k/5 (Pmakeblock/24))
   where k/5 define_root_symbol (module_block/17) =

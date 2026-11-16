@@ -113,7 +113,8 @@ let $camlTests13__first_const_0 = Block 0 () in
                          where k3 (apply_result : val) =
                            let Pmakeblock =
                              %block.[`0`].my_alloc_region
-                               (apply_result, `fn[tests13.ml:41,15--28]`)
+                               (apply_result : val,
+                                `fn[tests13.ml:41,15--28]` : val)
                            in
                            cont k1 (Pmakeblock)))))
  in

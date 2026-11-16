@@ -70,7 +70,8 @@ let $camlMatch_in_match_seq__first_const_0 = Block 0 () in
                 (f : _ -> val) (Pfield_1) -> k3 * k2)
                where k3 (apply_result : val) =
                  let Pmakeblock =
-                   %block.[`0`].my_alloc_region (apply_result, Pfield)
+                   %block.[`0`].my_alloc_region
+                     (apply_result : val, Pfield : val)
                  in
                  cont k1 (Pmakeblock)))
  in
@@ -90,9 +91,11 @@ let $camlMatch_in_match_seq__first_const_0 = Block 0 () in
    let Pmixedfield = %block_load.[`0`] (`*match*`) in
    let Pmakeblock =
      %block.[`0`].my_alloc_region
-       (Pmixedfield, `fn[match_in_match_seq.ml:35,14--125]`)
+       (Pmixedfield : val, `fn[match_in_match_seq.ml:35,14--125]` : val)
    in
-   let Pmakeblock_1 = %block.[`0`].my_alloc_region (Pmakeblock) in
+   let Pmakeblock_1 =
+     %block.[`0`].my_alloc_region (Pmakeblock : [ 0 of val * val ])
+   in
    cont k1 (Pmakeblock_1)
  in
  let code rec inline(always) loopify(always) size(56)
@@ -135,7 +138,9 @@ let $camlMatch_in_match_seq__first_const_0 = Block 0 () in
                      (s')
                      -> k1 * k2
                where k3 =
-                 let Pmakeblock = %block.[`0`].my_alloc_region (x, s') in
+                 let Pmakeblock =
+                   %block.[`0`].my_alloc_region (x : val, s' : val)
+                 in
                  cont k1 (Pmakeblock)))
  in
  let code inline(always) size(82)
@@ -150,8 +155,12 @@ let $camlMatch_in_match_seq__first_const_0 = Block 0 () in
    with { f_2 = f; next_2 = next }
    in
    let Pmixedfield = %block_load.[`0`] (`*match*`) in
-   let Pmakeblock = %block.[`0`].my_alloc_region (Pmixedfield, aux) in
-   let Pmakeblock_1 = %block.[`0`].my_alloc_region (Pmakeblock) in
+   let Pmakeblock =
+     %block.[`0`].my_alloc_region (Pmixedfield : val, aux : val)
+   in
+   let Pmakeblock_1 =
+     %block.[`0`].my_alloc_region (Pmakeblock : [ 0 of val * val ])
+   in
    cont k1 (Pmakeblock_1)
  in
  let code inline(always) size(14)
@@ -160,8 +169,10 @@ let $camlMatch_in_match_seq__first_const_0 = Block 0 () in
          -> k1 * k2
          : [ 0 of [ 0 of val * val ] ] =
    let next_depth = rec_info (succ my_depth) in
-   let Pmakeblock = %block.[`0`].my_alloc_region (acc, f) in
-   let Pmakeblock_1 = %block.[`0`].my_alloc_region (Pmakeblock) in
+   let Pmakeblock = %block.[`0`].my_alloc_region (acc : val, f : val) in
+   let Pmakeblock_1 =
+     %block.[`0`].my_alloc_region (Pmakeblock : [ 0 of val * val ])
+   in
    cont k1 (Pmakeblock_1)
  in
  let code inline(always) size(5)
@@ -193,7 +204,9 @@ let $camlMatch_in_match_seq__first_const_0 = Block 0 () in
         cont k3)
      where k3 =
        let int_add = %int_barith.add (i, 1) in
-       let Pmakeblock = %block.[`0`].my_alloc_region (i, int_add) in
+       let Pmakeblock =
+         %block.[`0`].my_alloc_region (i : imm tagged, int_add : imm tagged)
+       in
        cont k1 (Pmakeblock)
  in
  let code inline(always) size(40)

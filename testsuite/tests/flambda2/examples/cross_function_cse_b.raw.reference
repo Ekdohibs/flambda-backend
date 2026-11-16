@@ -19,7 +19,10 @@ let $camlCross_function_cse_b__first_const_0 = Block 0 () in
    apply direct(some_0 &my_alloc_region)
      (some : _ -> [ 0 | 0 of val? ]) (x) -> k3 * k2
      where k3 (b : [ 0 | 0 of val? ]) =
-       let Pmakeblock = %block.[`0`].my_alloc_region (a, b) in
+       let Pmakeblock =
+         %block.[`0`].my_alloc_region
+           (a : [ 0 | 0 of val? ], b : [ 0 | 0 of val? ])
+       in
        cont k1 (Pmakeblock)
  in
  let code size(19)
@@ -33,7 +36,10 @@ let $camlCross_function_cse_b__first_const_0 = Block 0 () in
      (some : _ -> [ 0 | 0 of val? ]) (x) -> k3 * k2
      where k3 (a : [ 0 | 0 of val? ]) =
        let b = %block.[`0`].my_alloc_region (x) in
-       let Pmakeblock = %block.[`0`].my_alloc_region (a, b) in
+       let Pmakeblock =
+         %block.[`0`].my_alloc_region
+           (a : [ 0 | 0 of val? ], b : [ 0 | 0 of val? ])
+       in
        cont k1 (Pmakeblock)
  in
  let code size(7)

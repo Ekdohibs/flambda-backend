@@ -10,10 +10,13 @@ let $camlPair_of_unknowns_after_inlined_pair__first_const_0 = Block 0 () in
    let int_add/52 = %int_barith.add (Pfield/51, 1) in
    let Psetfield/53 = %block_set.`imm`.[`0`] (calls/50, int_add/52) in
    let int_mul/54 = %int_barith.mul (2, x/45) in
-   let Pmakeblock/55 = %block.[`0`].my_alloc_region/47 (x/45, int_mul/54) in
+   let Pmakeblock/55 =
+     %block.[`0`].my_alloc_region/47
+       (x/45 : imm tagged, int_mul/54 : imm tagged)
+   in
    cont k/12 (Pmakeblock/55)
  in
- let calls/56 = %block.mut.[`0`].`toplevel` (0) in
+ let calls/56 = %block.mut.[`0`].`toplevel` (0 : imm tagged) in
  let entry/57 = closure entry_0 @entry &toplevel with { calls = calls/56 } in
  apply direct(entry_0 &toplevel)
    (entry/57 : imm tagged -> [ 0 of imm tagged * imm tagged ])
@@ -22,8 +25,15 @@ let $camlPair_of_unknowns_after_inlined_pair__first_const_0 = Block 0 () in
    where k/14 (first/58 : [ 0 of imm tagged * imm tagged ]) =
      let Popaque/59 = %opaque (4) in
      let Popaque/60 = %opaque (3) in
-     let counts/61 = %block.[`0`].`toplevel` (Popaque/60, Popaque/59) in
-     let result/62 = %block.[`0`].`toplevel` (first/58, counts/61) in
+     let counts/61 =
+       %block.[`0`].`toplevel`
+         (Popaque/60 : imm tagged, Popaque/59 : imm tagged)
+     in
+     let result/62 =
+       %block.[`0`].`toplevel`
+         (first/58 : [ 0 of imm tagged * imm tagged ],
+          counts/61 : [ 0 of imm tagged * imm tagged ])
+     in
      let Pmakeblock/63 = %block.[`0`].`toplevel` (result/62) in
      cont k/11 (Pmakeblock/63))
   where k/11 define_root_symbol (module_block/43) =

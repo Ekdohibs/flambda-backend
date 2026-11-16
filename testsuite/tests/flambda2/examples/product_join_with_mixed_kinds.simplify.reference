@@ -20,7 +20,9 @@ let code loopify(never) size(34) newer_version_of(f_0)
       let Pmakefloatblock = %block.floats.my_alloc_region (prim_1, prim) in
       cont k2 (Pmakefloatblock)
     where k2 (x_1 : val) =
-      let Pmakeblock = %block.[`0`].my_alloc_region (x_1, 0) in
+      let Pmakeblock =
+        %block.[`0`].my_alloc_region (x_1 : val, 0 : imm tagged)
+      in
       cont k (Pmakeblock)
 in
 let $camlProduct_join_with_mixed_kinds__f_1 = closure f_0_1 @f &toplevel in

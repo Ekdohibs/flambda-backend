@@ -78,7 +78,8 @@
     where k/72 (apply_result/125 : imm tagged) =
       ((let Popaque/140 = %opaque (2) in
         let Pmakeblock/141 =
-          %block.[`2`].`toplevel`.local[region/120] (1, Popaque/140)
+          %block.[`2`].`toplevel`.local[region/120]
+            (1 : imm tagged, Popaque/140 : imm tagged)
         in
         apply direct(class__0 &toplevel)
           (class_/117 : val -> imm tagged) (Pmakeblock/141) -> k/73 * error)
@@ -90,7 +91,8 @@
               where k/74 (apply_result/127 : imm tagged) =
                 ((let Popaque/138 = %opaque (3) in
                   let Pmakeblock/139 =
-                    %block.[`0`].`toplevel`.local[region/120] (Popaque/138)
+                    %block.[`0`].`toplevel`.local[region/120]
+                      (Popaque/138 : imm tagged)
                   in
                   apply direct(class__0 &toplevel)
                     (class_/117 : val -> imm tagged)

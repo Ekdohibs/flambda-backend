@@ -29,7 +29,7 @@ apply ccall
             -> k * k1
             : val =
       let Pmakeblock =
-        %block.[`0`].my_alloc_region ($`*predef*`.caml_exn_Failure, s)
+        %block.[`0`].my_alloc_region ($`*predef*`.caml_exn_Failure, s : val)
       in
       cont k1 pop(regular k1) (Pmakeblock)
     in
@@ -41,7 +41,7 @@ apply ccall
             : val =
       let Pmakeblock =
         %block.[`0`].my_alloc_region
-          ($`*predef*`.caml_exn_Invalid_argument, s)
+          ($`*predef*`.caml_exn_Invalid_argument, s : val)
       in
       cont k1 pop(regular k1) (Pmakeblock)
     in

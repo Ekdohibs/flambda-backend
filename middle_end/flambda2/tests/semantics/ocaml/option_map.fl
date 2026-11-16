@@ -19,7 +19,7 @@ let $camlOption_map__first_const_0 = Block 0 () in
            (f/111 : _ -> val) (Pfield/119) -> k/47 * k/45)
           where k/47 (apply_result/117 : val) =
             let Pmakeblock/118 =
-              %block.[`0`].my_alloc_region/114 (apply_result/117)
+              %block.[`0`].my_alloc_region/114 (apply_result/117 : val)
             in
             cont k/44 (Pmakeblock/118))
  in
@@ -79,7 +79,8 @@ let $camlOption_map__first_const_0 = Block 0 () in
     where k/59 (apply_result/154 : imm tagged) =
       ((let Popaque/158 = %opaque (4) in
         let Pmakeblock/159 =
-          %block.[`0`].`toplevel`.local[region/149] (Popaque/158)
+          %block.[`0`].`toplevel`.local[region/149]
+            (Popaque/158 : imm tagged)
         in
         let `fn[option_map.ml:19,13--29]/160` =
           closure `fn[option_map.ml:19,13--29]_3`

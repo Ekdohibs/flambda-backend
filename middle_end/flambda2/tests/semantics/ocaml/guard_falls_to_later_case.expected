@@ -1,6 +1,6 @@
 guard_falls_to_later_case.fl:
   before Simplify (151 steps): returns [0: -13905]
-  after Simplify (92 steps): returns [0: -13905]
+  after Simplify (91 steps): returns [0: -13905]
   the check of kinds: passes before, passes after
   the check of static names: passes before, passes after
   calls outside code: 5 before, 5 after

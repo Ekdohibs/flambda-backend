@@ -40,14 +40,15 @@ let $camlMatch_variant_local__first_const_0 = Block 0 () in
     where k/36 (apply_result/100 : imm tagged) =
       ((let Popaque/107 = %opaque (5) in
         let Pmakeblock/108 =
-          %block.[`0`].`toplevel`.local[region/95] (Popaque/107)
+          %block.[`0`].`toplevel`.local[region/95] (Popaque/107 : imm tagged)
         in
         apply direct(cells_0 &toplevel)
           (cells/92 : val -> imm tagged) (Pmakeblock/108) -> k/37 * error)
          where k/37 (apply_result/101 : imm tagged) =
            ((let Popaque/105 = %opaque (3) in
              let Pmakeblock/106 =
-               %block.[`1`].`toplevel`.local[region/95] (Popaque/105, 4)
+               %block.[`1`].`toplevel`.local[region/95]
+                 (Popaque/105 : imm tagged, 4 : imm tagged)
              in
              apply direct(cells_0 &toplevel)
                (cells/92 : val -> imm tagged)

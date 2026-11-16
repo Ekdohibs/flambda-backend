@@ -23,10 +23,12 @@ let $camlSame_field_chain_twice__first_const_0 = Block 0 () in
   let ghost_region/81 = %begin_ghost_region () in
   (let Popaque/85 = %opaque (3) in
    let Pmakeblock/86 =
-     %block.[`0`].`toplevel`.local[region/80] (Popaque/85, 4)
+     %block.[`0`].`toplevel`.local[region/80]
+       (Popaque/85 : imm tagged, 4 : imm tagged)
    in
    let Pmakeblock/87 =
-     %block.[`0`].`toplevel`.local[region/80] (1, Pmakeblock/86)
+     %block.[`0`].`toplevel`.local[region/80]
+       (1 : imm tagged, Pmakeblock/86 : [ 0 of imm tagged * imm tagged ])
    in
    apply direct(measure_0 &toplevel)
      (measure/77 : val -> imm tagged) (Pmakeblock/87) -> k/17 * error)

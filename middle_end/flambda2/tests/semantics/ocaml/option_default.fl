@@ -24,7 +24,8 @@ let $camlOption_default__first_const_0 = Block 0 () in
      -> k/22 * error
    where k/22 (apply_result/52 : imm tagged) =
      ((let Popaque/56 = %opaque (3) in
-       let Pmakeblock/57 = %block.[`0`].`toplevel` (Popaque/56) in
+       let Pmakeblock/57 = %block.[`0`].`toplevel` (Popaque/56 : imm tagged)
+       in
        apply direct(value_or_0 &toplevel)
          (value_or/51 : imm tagged * val -> imm tagged)
            (0, Pmakeblock/57)

@@ -1,6 +1,7 @@
 let $camlPartly__first_const_0 = Block 0 () in
 (let Popaque/13 = %opaque (7) in
- let r/14 = %block.[`0`].`toplevel` (5, Popaque/13) in
+ let r/14 = %block.[`0`].`toplevel` (5 : imm tagged, Popaque/13 : imm tagged)
+ in
  let Pmakeblock/15 = %block.[`0`].`toplevel` (r/14) in
  cont k/5 (Pmakeblock/15))
   where k/5 define_root_symbol (module_block/11) =

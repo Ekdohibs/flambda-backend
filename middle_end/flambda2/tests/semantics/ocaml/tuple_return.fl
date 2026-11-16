@@ -8,7 +8,8 @@ let $camlTuple_return__first_const_0 = Block 0 () in
    let int_mul/44 = %int_barith.mul (x/39, 2) in
    let int_add/45 = %int_barith.add (x/39, 1) in
    let Pmakeblock/46 =
-     %block.[`0`].my_alloc_region/41 (int_add/45, int_mul/44)
+     %block.[`0`].my_alloc_region/41
+       (int_add/45 : imm tagged, int_mul/44 : imm tagged)
    in
    cont k/14 (Pmakeblock/46)
  in

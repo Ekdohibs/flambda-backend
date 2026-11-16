@@ -19,7 +19,8 @@
          (f/37 : float -> float boxed) (`float#_of_float/42`) -> k/17 * error)
         where k/17 (apply_result/39 : float boxed) =
           let result/40 =
-            %block.[`0`].`toplevel` (apply_result/39, apply_result/38)
+            %block.[`0`].`toplevel`
+              (apply_result/39 : float boxed, apply_result/38 : float boxed)
           in
           let Pmakeblock/41 = %block.[`0`].`toplevel` (result/40) in
           cont k/13 (Pmakeblock/41)))

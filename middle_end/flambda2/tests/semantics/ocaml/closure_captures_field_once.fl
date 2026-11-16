@@ -30,7 +30,9 @@ let $camlClosure_captures_field_once__first_const_0 = Block 0 () in
  in
  let doubler/70 = closure doubler_0 @doubler &toplevel in
  (let Popaque/73 = %opaque (3) in
-  let Pmakeblock/74 = %block.[`0`].`toplevel` (Popaque/73, 0) in
+  let Pmakeblock/74 =
+    %block.[`0`].`toplevel` (Popaque/73 : imm tagged, 0 : imm tagged)
+  in
   apply direct(doubler_0 &toplevel)
     (doubler/70 : [ 0 of imm tagged * val ] -> val?)
       (Pmakeblock/74)

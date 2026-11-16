@@ -105,25 +105,37 @@
   let ghost_region/140 = %begin_ghost_region () in
   (let Popaque/144 = %opaque (4) in
    let Pmakeblock/145 =
-     %block.[`0`].`toplevel`.local[region/139] (Popaque/144)
+     %block.[`0`].`toplevel`.local[region/139] (Popaque/144 : imm tagged)
    in
    let Pmakeblock/146 =
      %block.[`0`].`toplevel`.local[region/139]
-       (Pmakeblock/145, $camlNest_list_of_options__const_block_1)
+       (Pmakeblock/145 : [ 0 | 0 of imm tagged ],
+        $camlNest_list_of_options__const_block_1 :
+          [ 0 | 0 of [ 0 | 0 of imm tagged ] * [ 0 | 0 of val * val ] ])
    in
    let Pmakeblock/147 =
      %block.[`0`].`toplevel`.local[region/139]
-       ($camlNest_list_of_options__const_block_2, Pmakeblock/146)
+       ($camlNest_list_of_options__const_block_2 : [ 0 | 0 of imm tagged ],
+        Pmakeblock/146 :
+          [ 0 | 0 of [ 0 | 0 of imm tagged ] * [ 0 | 0 of val * val ] ])
    in
    let Pmakeblock/148 =
-     %block.[`0`].`toplevel`.local[region/139] (0, Pmakeblock/147)
+     %block.[`0`].`toplevel`.local[region/139]
+       (0 : [ 0 | 0 of imm tagged ],
+        Pmakeblock/147 :
+          [ 0 | 0 of [ 0 | 0 of imm tagged ] * [ 0 | 0 of val * val ] ])
    in
    let Pmakeblock/149 =
-     %block.[`0`].`toplevel`.local[region/139] (0, Pmakeblock/148)
+     %block.[`0`].`toplevel`.local[region/139]
+       (0 : [ 0 | 0 of imm tagged ],
+        Pmakeblock/148 :
+          [ 0 | 0 of [ 0 | 0 of imm tagged ] * [ 0 | 0 of val * val ] ])
    in
    let Pmakeblock/150 =
      %block.[`0`].`toplevel`.local[region/139]
-       ($camlNest_list_of_options__const_block_3, Pmakeblock/149)
+       ($camlNest_list_of_options__const_block_3 : [ 0 | 0 of imm tagged ],
+        Pmakeblock/149 :
+          [ 0 | 0 of [ 0 | 0 of imm tagged ] * [ 0 | 0 of val * val ] ])
    in
    apply direct(count_pairs_0 &toplevel)
      (count_pairs/136 : val -> imm tagged) (Pmakeblock/150) -> k/68 * error)

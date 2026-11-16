@@ -28,7 +28,8 @@ let $camlHof_closure_in_record__first_const_0 = Block 0 () in
    in
    let ops/77 =
      %block.[`0`].my_alloc_region/72
-       (`fn[hof_closure_in_record.ml:17,24--48]/76`, int_add/75)
+       (`fn[hof_closure_in_record.ml:17,24--48]/76` : val,
+        int_add/75 : imm tagged)
    in
    (let Pfield/80 = %block_load.[`1`] (ops/77) in
     let Pfield/81 = %block_load.[`0`] (ops/77) in

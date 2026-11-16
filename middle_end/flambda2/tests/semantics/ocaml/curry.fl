@@ -52,7 +52,9 @@ let $camlCurry__first_const_0 = Block 0 () in
  (let region/135 = %begin_region () in
   let ghost_region/136 = %begin_ghost_region () in
   (let Popaque/140 = %opaque (10) in
-   let Pmakeblock/141 = %block.[`0`].`toplevel` (Popaque/140, 4) in
+   let Pmakeblock/141 =
+     %block.[`0`].`toplevel` (Popaque/140 : imm tagged, 4 : imm tagged)
+   in
    (let `fn[curry.ml:12,28--49]/143` =
       closure `fn[curry.ml:12,28--49]_2` @`fn[curry.ml:12,28--49]` &toplevel
         &region/135

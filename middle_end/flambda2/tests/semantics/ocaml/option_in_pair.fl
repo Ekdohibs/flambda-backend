@@ -15,12 +15,18 @@ let $camlOption_in_pair__first_const_0 = Block 0 () in
        cont k/40
      where k/40 =
        let int_add/81 = %int_barith.add (y/65, 1) in
-       let Pmakeblock/82 = %block.[`0`].my_alloc_region/67 (0, int_add/81) in
+       let Pmakeblock/82 =
+         %block.[`0`].my_alloc_region/67
+           (0 : [ 0 | 0 of imm tagged ], int_add/81 : imm tagged)
+       in
        cont k/34 (Pmakeblock/82)
      where k/39 =
-       let Pmakeblock/79 = %block.[`0`].my_alloc_region/67 (x/64) in
+       let Pmakeblock/79 =
+         %block.[`0`].my_alloc_region/67 (x/64 : imm tagged)
+       in
        let Pmakeblock/80 =
-         %block.[`0`].my_alloc_region/67 (Pmakeblock/79, y/65)
+         %block.[`0`].my_alloc_region/67
+           (Pmakeblock/79 : [ 0 | 0 of imm tagged ], y/65 : imm tagged)
        in
        cont k/34 (Pmakeblock/80)
      where k/34 (p/70 : [ 0 of [ 0 | 0 of imm tagged ] * imm tagged ]) =

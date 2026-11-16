@@ -56,7 +56,10 @@
         cont k3)
      where k3 =
        let Pfield = %block_load.[`0`] (l1) in
-       let Pmakeblock = %block.[`0`].my_alloc_region (Pfield, l2) in
+       let Pmakeblock =
+         %block.[`0`].my_alloc_region
+           (Pfield, l2 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+       in
        let Pfield_1 = %block_load.[`1`] (l1) in
        apply direct(rev_append_2 &my_alloc_region)
          (my_closure ~ depth my_depth -> next_depth
@@ -173,7 +176,10 @@
                             cont k7)
                          where k7 =
                            let Pmakeblock =
-                             %block.[`0`].my_alloc_region (h2, accu)
+                             %block.[`0`].my_alloc_region
+                               (h2,
+                                accu :
+                                  [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                            in
                            apply direct(rev_merge_5 &my_alloc_region)
                              (my_closure ~ depth my_depth -> next_depth
@@ -186,7 +192,10 @@
                                -> k1 * k2
                          where k6 =
                            let Pmakeblock =
-                             %block.[`0`].my_alloc_region (h1, accu)
+                             %block.[`0`].my_alloc_region
+                               (h1,
+                                accu :
+                                  [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                            in
                            apply direct(rev_merge_5 &my_alloc_region)
                              (my_closure ~ depth my_depth -> next_depth
@@ -199,7 +208,9 @@
                                -> k1 * k2)
                     where k5 =
                       let Pmakeblock =
-                        %block.[`0`].my_alloc_region (h1, accu)
+                        %block.[`0`].my_alloc_region
+                          (h1,
+                           accu : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                       in
                       apply direct(rev_merge_5 &my_alloc_region)
                         (my_closure ~ depth my_depth -> next_depth
@@ -292,7 +303,10 @@
                             cont k7)
                          where k7 =
                            let Pmakeblock =
-                             %block.[`0`].my_alloc_region (h2, accu)
+                             %block.[`0`].my_alloc_region
+                               (h2,
+                                accu :
+                                  [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                            in
                            apply direct(rev_merge_rev_6 &my_alloc_region)
                              (my_closure ~ depth my_depth -> next_depth
@@ -305,7 +319,10 @@
                                -> k1 * k2
                          where k6 =
                            let Pmakeblock =
-                             %block.[`0`].my_alloc_region (h1, accu)
+                             %block.[`0`].my_alloc_region
+                               (h1,
+                                accu :
+                                  [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                            in
                            apply direct(rev_merge_rev_6 &my_alloc_region)
                              (my_closure ~ depth my_depth -> next_depth
@@ -318,7 +335,9 @@
                                -> k1 * k2)
                     where k5 =
                       let Pmakeblock =
-                        %block.[`0`].my_alloc_region (h1, accu)
+                        %block.[`0`].my_alloc_region
+                          (h1,
+                           accu : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                       in
                       apply direct(rev_merge_rev_6 &my_alloc_region)
                         (my_closure ~ depth my_depth -> next_depth
@@ -422,25 +441,46 @@
                                  cont k7)
                               where k7 =
                                 let Pmakeblock =
-                                  %block.[`0`].my_alloc_region (x1, 0)
+                                  %block.[`0`].my_alloc_region
+                                    (x1,
+                                     0 :
+                                       [ 0
+                                       | 0 of val? * [ 0 | 0 of val? * val ]
+                                       ])
                                 in
                                 let Pmakeblock_1 =
                                   %block.[`0`].my_alloc_region
-                                    (x2, Pmakeblock)
+                                    (x2,
+                                     Pmakeblock :
+                                       [ 0
+                                       | 0 of val? * [ 0 | 0 of val? * val ]
+                                       ])
                                 in
                                 cont k1 (Pmakeblock_1)
                               where k6 =
                                 let Pmakeblock =
-                                  %block.[`0`].my_alloc_region (x2, 0)
+                                  %block.[`0`].my_alloc_region
+                                    (x2,
+                                     0 :
+                                       [ 0
+                                       | 0 of val? * [ 0 | 0 of val? * val ]
+                                       ])
                                 in
                                 let Pmakeblock_1 =
                                   %block.[`0`].my_alloc_region
-                                    (x1, Pmakeblock)
+                                    (x1,
+                                     Pmakeblock :
+                                       [ 0
+                                       | 0 of val? * [ 0 | 0 of val? * val ]
+                                       ])
                                 in
                                 cont k1 (Pmakeblock_1))
                          where k5 =
                            let Pmakeblock =
-                             %block.[`0`].my_alloc_region (x1, 0)
+                             %block.[`0`].my_alloc_region
+                               (x1,
+                                0 :
+                                  [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                            in
                            cont k1 (Pmakeblock)))))
      where k4 =
@@ -624,17 +664,39 @@
                                                                     k10 =
                                                                     let Pmakeblock =
                                                                     %block.[`0`].my_alloc_region
-                                                                    (x1, 0)
+                                                                    (x1,
+                                                                    0 :
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                                     in
                                                                     let Pmakeblock_1 =
                                                                     %block.[`0`].my_alloc_region
                                                                     (x2,
-                                                                    Pmakeblock)
+                                                                    Pmakeblock :
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                                     in
                                                                     let Pmakeblock_2 =
                                                                     %block.[`0`].my_alloc_region
                                                                     (x3,
-                                                                    Pmakeblock_1)
+                                                                    Pmakeblock_1 :
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                                     in
                                                                     cont 
                                                                     k1
@@ -643,17 +705,39 @@
                                                                     k9 =
                                                                     let Pmakeblock =
                                                                     %block.[`0`].my_alloc_region
-                                                                    (x1, 0)
+                                                                    (x1,
+                                                                    0 :
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                                     in
                                                                     let Pmakeblock_1 =
                                                                     %block.[`0`].my_alloc_region
                                                                     (x3,
-                                                                    Pmakeblock)
+                                                                    Pmakeblock :
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                                     in
                                                                     let Pmakeblock_2 =
                                                                     %block.[`0`].my_alloc_region
                                                                     (x2,
-                                                                    Pmakeblock_1)
+                                                                    Pmakeblock_1 :
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                                     in
                                                                     cont 
                                                                     k1
@@ -662,12 +746,27 @@
                                                                    k8 =
                                                                    let Pmakeblock =
                                                                     %block.[`0`].my_alloc_region
-                                                                    (x1, 0)
+                                                                    (x1,
+                                                                    0 :
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                                    in
                                                                    let Pmakeblock_1 =
                                                                     %block.[`0`].my_alloc_region
                                                                     (x2,
-                                                                    Pmakeblock)
+                                                                    Pmakeblock :
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                                    in
                                                                    cont 
                                                                    k1
@@ -675,27 +774,59 @@
                                                        where k7 =
                                                          let Pmakeblock =
                                                            %block.[`0`].my_alloc_region
-                                                             (x3, 0)
+                                                             (x3,
+                                                              0 :
+                                                                [ 0
+                                                                | 0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                          in
                                                          let Pmakeblock_1 =
                                                            %block.[`0`].my_alloc_region
-                                                             (x1, Pmakeblock)
+                                                             (x1,
+                                                              Pmakeblock :
+                                                                [ 0
+                                                                | 0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                          in
                                                          let Pmakeblock_2 =
                                                            %block.[`0`].my_alloc_region
                                                              (x2,
-                                                              Pmakeblock_1)
+                                                              Pmakeblock_1 :
+                                                                [ 0
+                                                                | 0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                          in
                                                          cont k1
                                                                 (Pmakeblock_2))
                                                   where k6 =
                                                     let Pmakeblock =
                                                       %block.[`0`].my_alloc_region
-                                                        (x1, 0)
+                                                        (x1,
+                                                         0 :
+                                                           [ 0
+                                                           | 0 of val? *
+                                                               [ 0
+                                                               | 0 of val? *
+                                                                   val ] ])
                                                     in
                                                     let Pmakeblock_1 =
                                                       %block.[`0`].my_alloc_region
-                                                        (x2, Pmakeblock)
+                                                        (x2,
+                                                         Pmakeblock :
+                                                           [ 0
+                                                           | 0 of val? *
+                                                               [ 0
+                                                               | 0 of val? *
+                                                                   val ] ])
                                                     in
                                                     cont k1 (Pmakeblock_1)))
                                         where k5 =
@@ -803,17 +934,39 @@
                                                                     k9 =
                                                                     let Pmakeblock =
                                                                     %block.[`0`].my_alloc_region
-                                                                    (x2, 0)
+                                                                    (x2,
+                                                                    0 :
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                                     in
                                                                     let Pmakeblock_1 =
                                                                     %block.[`0`].my_alloc_region
                                                                     (x1,
-                                                                    Pmakeblock)
+                                                                    Pmakeblock :
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                                     in
                                                                     let Pmakeblock_2 =
                                                                     %block.[`0`].my_alloc_region
                                                                     (x3,
-                                                                    Pmakeblock_1)
+                                                                    Pmakeblock_1 :
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                                     in
                                                                     cont 
                                                                     k1
@@ -822,17 +975,39 @@
                                                                     k8 =
                                                                     let Pmakeblock =
                                                                     %block.[`0`].my_alloc_region
-                                                                    (x2, 0)
+                                                                    (x2,
+                                                                    0 :
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                                     in
                                                                     let Pmakeblock_1 =
                                                                     %block.[`0`].my_alloc_region
                                                                     (x3,
-                                                                    Pmakeblock)
+                                                                    Pmakeblock :
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                                     in
                                                                     let Pmakeblock_2 =
                                                                     %block.[`0`].my_alloc_region
                                                                     (x1,
-                                                                    Pmakeblock_1)
+                                                                    Pmakeblock_1 :
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                                     in
                                                                     cont 
                                                                     k1
@@ -841,12 +1016,27 @@
                                                                    k7 =
                                                                    let Pmakeblock =
                                                                     %block.[`0`].my_alloc_region
-                                                                    (x2, 0)
+                                                                    (x2,
+                                                                    0 :
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                                    in
                                                                    let Pmakeblock_1 =
                                                                     %block.[`0`].my_alloc_region
                                                                     (x1,
-                                                                    Pmakeblock)
+                                                                    Pmakeblock :
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                                    in
                                                                    cont 
                                                                    k1
@@ -854,27 +1044,59 @@
                                                        where k6 =
                                                          let Pmakeblock =
                                                            %block.[`0`].my_alloc_region
-                                                             (x3, 0)
+                                                             (x3,
+                                                              0 :
+                                                                [ 0
+                                                                | 0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                          in
                                                          let Pmakeblock_1 =
                                                            %block.[`0`].my_alloc_region
-                                                             (x2, Pmakeblock)
+                                                             (x2,
+                                                              Pmakeblock :
+                                                                [ 0
+                                                                | 0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                          in
                                                          let Pmakeblock_2 =
                                                            %block.[`0`].my_alloc_region
                                                              (x1,
-                                                              Pmakeblock_1)
+                                                              Pmakeblock_1 :
+                                                                [ 0
+                                                                | 0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                          in
                                                          cont k1
                                                                 (Pmakeblock_2))
                                                   where k5 =
                                                     let Pmakeblock =
                                                       %block.[`0`].my_alloc_region
-                                                        (x2, 0)
+                                                        (x2,
+                                                         0 :
+                                                           [ 0
+                                                           | 0 of val? *
+                                                               [ 0
+                                                               | 0 of val? *
+                                                                   val ] ])
                                                     in
                                                     let Pmakeblock_1 =
                                                       %block.[`0`].my_alloc_region
-                                                        (x1, Pmakeblock)
+                                                        (x1,
+                                                         Pmakeblock :
+                                                           [ 0
+                                                           | 0 of val? *
+                                                               [ 0
+                                                               | 0 of val? *
+                                                                   val ] ])
                                                     in
                                                     cont k1 (Pmakeblock_1))))
                                    where k4 =
@@ -914,27 +1136,57 @@
                                                   where k6 =
                                                     let Pmakeblock =
                                                       %block.[`0`].my_alloc_region
-                                                        (x2, 0)
+                                                        (x2,
+                                                         0 :
+                                                           [ 0
+                                                           | 0 of val? *
+                                                               [ 0
+                                                               | 0 of val? *
+                                                                   val ] ])
                                                     in
                                                     let Pmakeblock_1 =
                                                       %block.[`0`].my_alloc_region
-                                                        (x3, Pmakeblock)
+                                                        (x3,
+                                                         Pmakeblock :
+                                                           [ 0
+                                                           | 0 of val? *
+                                                               [ 0
+                                                               | 0 of val? *
+                                                                   val ] ])
                                                     in
                                                     cont k1 (Pmakeblock_1)
                                                   where k5 =
                                                     let Pmakeblock =
                                                       %block.[`0`].my_alloc_region
-                                                        (x3, 0)
+                                                        (x3,
+                                                         0 :
+                                                           [ 0
+                                                           | 0 of val? *
+                                                               [ 0
+                                                               | 0 of val? *
+                                                                   val ] ])
                                                     in
                                                     let Pmakeblock_1 =
                                                       %block.[`0`].my_alloc_region
-                                                        (x2, Pmakeblock)
+                                                        (x2,
+                                                         Pmakeblock :
+                                                           [ 0
+                                                           | 0 of val? *
+                                                               [ 0
+                                                               | 0 of val? *
+                                                                   val ] ])
                                                     in
                                                     cont k1 (Pmakeblock_1))
                                              where k4 =
                                                let Pmakeblock =
                                                  %block.[`0`].my_alloc_region
-                                                   (x2, 0)
+                                                   (x2,
+                                                    0 :
+                                                      [ 0
+                                                      | 0 of val? *
+                                                          [ 0
+                                                          | 0 of val? * val ]
+                                                      ])
                                                in
                                                cont k1 (Pmakeblock)))))))))
      where k3 =
@@ -1052,25 +1304,46 @@
                                  cont k7)
                               where k7 =
                                 let Pmakeblock =
-                                  %block.[`0`].my_alloc_region (x1, 0)
+                                  %block.[`0`].my_alloc_region
+                                    (x1,
+                                     0 :
+                                       [ 0
+                                       | 0 of val? * [ 0 | 0 of val? * val ]
+                                       ])
                                 in
                                 let Pmakeblock_1 =
                                   %block.[`0`].my_alloc_region
-                                    (x2, Pmakeblock)
+                                    (x2,
+                                     Pmakeblock :
+                                       [ 0
+                                       | 0 of val? * [ 0 | 0 of val? * val ]
+                                       ])
                                 in
                                 cont k1 (Pmakeblock_1)
                               where k6 =
                                 let Pmakeblock =
-                                  %block.[`0`].my_alloc_region (x2, 0)
+                                  %block.[`0`].my_alloc_region
+                                    (x2,
+                                     0 :
+                                       [ 0
+                                       | 0 of val? * [ 0 | 0 of val? * val ]
+                                       ])
                                 in
                                 let Pmakeblock_1 =
                                   %block.[`0`].my_alloc_region
-                                    (x1, Pmakeblock)
+                                    (x1,
+                                     Pmakeblock :
+                                       [ 0
+                                       | 0 of val? * [ 0 | 0 of val? * val ]
+                                       ])
                                 in
                                 cont k1 (Pmakeblock_1))
                          where k5 =
                            let Pmakeblock =
-                             %block.[`0`].my_alloc_region (x1, 0)
+                             %block.[`0`].my_alloc_region
+                               (x1,
+                                0 :
+                                  [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                            in
                            cont k1 (Pmakeblock)))))
      where k4 =
@@ -1255,17 +1528,39 @@
                                                                     k10 =
                                                                     let Pmakeblock =
                                                                     %block.[`0`].my_alloc_region
-                                                                    (x1, 0)
+                                                                    (x1,
+                                                                    0 :
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                                     in
                                                                     let Pmakeblock_1 =
                                                                     %block.[`0`].my_alloc_region
                                                                     (x2,
-                                                                    Pmakeblock)
+                                                                    Pmakeblock :
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                                     in
                                                                     let Pmakeblock_2 =
                                                                     %block.[`0`].my_alloc_region
                                                                     (x3,
-                                                                    Pmakeblock_1)
+                                                                    Pmakeblock_1 :
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                                     in
                                                                     cont 
                                                                     k1
@@ -1274,17 +1569,39 @@
                                                                     k9 =
                                                                     let Pmakeblock =
                                                                     %block.[`0`].my_alloc_region
-                                                                    (x1, 0)
+                                                                    (x1,
+                                                                    0 :
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                                     in
                                                                     let Pmakeblock_1 =
                                                                     %block.[`0`].my_alloc_region
                                                                     (x3,
-                                                                    Pmakeblock)
+                                                                    Pmakeblock :
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                                     in
                                                                     let Pmakeblock_2 =
                                                                     %block.[`0`].my_alloc_region
                                                                     (x2,
-                                                                    Pmakeblock_1)
+                                                                    Pmakeblock_1 :
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                                     in
                                                                     cont 
                                                                     k1
@@ -1293,12 +1610,27 @@
                                                                    k8 =
                                                                    let Pmakeblock =
                                                                     %block.[`0`].my_alloc_region
-                                                                    (x1, 0)
+                                                                    (x1,
+                                                                    0 :
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                                    in
                                                                    let Pmakeblock_1 =
                                                                     %block.[`0`].my_alloc_region
                                                                     (x2,
-                                                                    Pmakeblock)
+                                                                    Pmakeblock :
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                                    in
                                                                    cont 
                                                                    k1
@@ -1306,27 +1638,59 @@
                                                        where k7 =
                                                          let Pmakeblock =
                                                            %block.[`0`].my_alloc_region
-                                                             (x3, 0)
+                                                             (x3,
+                                                              0 :
+                                                                [ 0
+                                                                | 0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                          in
                                                          let Pmakeblock_1 =
                                                            %block.[`0`].my_alloc_region
-                                                             (x1, Pmakeblock)
+                                                             (x1,
+                                                              Pmakeblock :
+                                                                [ 0
+                                                                | 0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                          in
                                                          let Pmakeblock_2 =
                                                            %block.[`0`].my_alloc_region
                                                              (x2,
-                                                              Pmakeblock_1)
+                                                              Pmakeblock_1 :
+                                                                [ 0
+                                                                | 0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                          in
                                                          cont k1
                                                                 (Pmakeblock_2))
                                                   where k6 =
                                                     let Pmakeblock =
                                                       %block.[`0`].my_alloc_region
-                                                        (x1, 0)
+                                                        (x1,
+                                                         0 :
+                                                           [ 0
+                                                           | 0 of val? *
+                                                               [ 0
+                                                               | 0 of val? *
+                                                                   val ] ])
                                                     in
                                                     let Pmakeblock_1 =
                                                       %block.[`0`].my_alloc_region
-                                                        (x2, Pmakeblock)
+                                                        (x2,
+                                                         Pmakeblock :
+                                                           [ 0
+                                                           | 0 of val? *
+                                                               [ 0
+                                                               | 0 of val? *
+                                                                   val ] ])
                                                     in
                                                     cont k1 (Pmakeblock_1)))
                                         where k5 =
@@ -1434,17 +1798,39 @@
                                                                     k9 =
                                                                     let Pmakeblock =
                                                                     %block.[`0`].my_alloc_region
-                                                                    (x2, 0)
+                                                                    (x2,
+                                                                    0 :
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                                     in
                                                                     let Pmakeblock_1 =
                                                                     %block.[`0`].my_alloc_region
                                                                     (x1,
-                                                                    Pmakeblock)
+                                                                    Pmakeblock :
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                                     in
                                                                     let Pmakeblock_2 =
                                                                     %block.[`0`].my_alloc_region
                                                                     (x3,
-                                                                    Pmakeblock_1)
+                                                                    Pmakeblock_1 :
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                                     in
                                                                     cont 
                                                                     k1
@@ -1453,17 +1839,39 @@
                                                                     k8 =
                                                                     let Pmakeblock =
                                                                     %block.[`0`].my_alloc_region
-                                                                    (x2, 0)
+                                                                    (x2,
+                                                                    0 :
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                                     in
                                                                     let Pmakeblock_1 =
                                                                     %block.[`0`].my_alloc_region
                                                                     (x3,
-                                                                    Pmakeblock)
+                                                                    Pmakeblock :
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                                     in
                                                                     let Pmakeblock_2 =
                                                                     %block.[`0`].my_alloc_region
                                                                     (x1,
-                                                                    Pmakeblock_1)
+                                                                    Pmakeblock_1 :
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                                     in
                                                                     cont 
                                                                     k1
@@ -1472,12 +1880,27 @@
                                                                    k7 =
                                                                    let Pmakeblock =
                                                                     %block.[`0`].my_alloc_region
-                                                                    (x2, 0)
+                                                                    (x2,
+                                                                    0 :
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                                    in
                                                                    let Pmakeblock_1 =
                                                                     %block.[`0`].my_alloc_region
                                                                     (x1,
-                                                                    Pmakeblock)
+                                                                    Pmakeblock :
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                                    in
                                                                    cont 
                                                                    k1
@@ -1485,27 +1908,59 @@
                                                        where k6 =
                                                          let Pmakeblock =
                                                            %block.[`0`].my_alloc_region
-                                                             (x3, 0)
+                                                             (x3,
+                                                              0 :
+                                                                [ 0
+                                                                | 0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                          in
                                                          let Pmakeblock_1 =
                                                            %block.[`0`].my_alloc_region
-                                                             (x2, Pmakeblock)
+                                                             (x2,
+                                                              Pmakeblock :
+                                                                [ 0
+                                                                | 0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                          in
                                                          let Pmakeblock_2 =
                                                            %block.[`0`].my_alloc_region
                                                              (x1,
-                                                              Pmakeblock_1)
+                                                              Pmakeblock_1 :
+                                                                [ 0
+                                                                | 0 of val? *
+                                                                    [ 0
+                                                                    | 
+                                                                    0 of val? *
+                                                                    val ] ])
                                                          in
                                                          cont k1
                                                                 (Pmakeblock_2))
                                                   where k5 =
                                                     let Pmakeblock =
                                                       %block.[`0`].my_alloc_region
-                                                        (x2, 0)
+                                                        (x2,
+                                                         0 :
+                                                           [ 0
+                                                           | 0 of val? *
+                                                               [ 0
+                                                               | 0 of val? *
+                                                                   val ] ])
                                                     in
                                                     let Pmakeblock_1 =
                                                       %block.[`0`].my_alloc_region
-                                                        (x1, Pmakeblock)
+                                                        (x1,
+                                                         Pmakeblock :
+                                                           [ 0
+                                                           | 0 of val? *
+                                                               [ 0
+                                                               | 0 of val? *
+                                                                   val ] ])
                                                     in
                                                     cont k1 (Pmakeblock_1))))
                                    where k4 =
@@ -1546,27 +2001,57 @@
                                                   where k6 =
                                                     let Pmakeblock =
                                                       %block.[`0`].my_alloc_region
-                                                        (x2, 0)
+                                                        (x2,
+                                                         0 :
+                                                           [ 0
+                                                           | 0 of val? *
+                                                               [ 0
+                                                               | 0 of val? *
+                                                                   val ] ])
                                                     in
                                                     let Pmakeblock_1 =
                                                       %block.[`0`].my_alloc_region
-                                                        (x3, Pmakeblock)
+                                                        (x3,
+                                                         Pmakeblock :
+                                                           [ 0
+                                                           | 0 of val? *
+                                                               [ 0
+                                                               | 0 of val? *
+                                                                   val ] ])
                                                     in
                                                     cont k1 (Pmakeblock_1)
                                                   where k5 =
                                                     let Pmakeblock =
                                                       %block.[`0`].my_alloc_region
-                                                        (x3, 0)
+                                                        (x3,
+                                                         0 :
+                                                           [ 0
+                                                           | 0 of val? *
+                                                               [ 0
+                                                               | 0 of val? *
+                                                                   val ] ])
                                                     in
                                                     let Pmakeblock_1 =
                                                       %block.[`0`].my_alloc_region
-                                                        (x2, Pmakeblock)
+                                                        (x2,
+                                                         Pmakeblock :
+                                                           [ 0
+                                                           | 0 of val? *
+                                                               [ 0
+                                                               | 0 of val? *
+                                                                   val ] ])
                                                     in
                                                     cont k1 (Pmakeblock_1))
                                              where k4 =
                                                let Pmakeblock =
                                                  %block.[`0`].my_alloc_region
-                                                   (x2, 0)
+                                                   (x2,
+                                                    0 :
+                                                      [ 0
+                                                      | 0 of val? *
+                                                          [ 0
+                                                          | 0 of val? * val ]
+                                                      ])
                                                in
                                                cont k1 (Pmakeblock)))))))))
      where k3 =
@@ -1736,12 +2221,18 @@
                             cont k5)
                          where k5 =
                            let Pmakeblock =
-                             %block.[`0`].my_alloc_region (x2, 0)
+                             %block.[`0`].my_alloc_region
+                               (x2,
+                                0 :
+                                  [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                            in
                            cont k1 (Pmakeblock)
                          where k4 =
                            let Pmakeblock =
-                             %block.[`0`].my_alloc_region (x1, 0)
+                             %block.[`0`].my_alloc_region
+                               (x1,
+                                0 :
+                                  [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                            in
                            cont k1 (Pmakeblock)))))
      where k3 =

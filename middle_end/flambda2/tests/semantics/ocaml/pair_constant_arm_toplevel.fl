@@ -11,7 +11,8 @@
     where k/25 =
       let Popaque/48 = %opaque (3) in
       let Pmakeblock/49 =
-        %block.[`0`].`toplevel`.local[region/39] (Popaque/48, 1)
+        %block.[`0`].`toplevel`.local[region/39]
+          (Popaque/48 : imm tagged, 1 : imm tagged)
       in
       cont k/22 (Pmakeblock/49)
     where k/22 (`*match*/44` : [ 0 of imm tagged * imm tagged ]) =

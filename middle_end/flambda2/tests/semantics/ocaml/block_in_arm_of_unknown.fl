@@ -9,7 +9,7 @@ let $camlBlock_in_arm_of_unknown__first_const_0 = Block 0 () in
     where k/14 =
       cont k/13)
    where k/13 =
-     let Pmakeblock/27 = %block.[`0`].`toplevel` (limit/24) in
+     let Pmakeblock/27 = %block.[`0`].`toplevel` (limit/24 : imm tagged) in
      cont k/12 (Pmakeblock/27)
    where k/12 (above/25 : [ 0 | 0 of val ]) =
      let Pmakeblock/26 = %block.[`0`].`toplevel` (limit/24, above/25) in

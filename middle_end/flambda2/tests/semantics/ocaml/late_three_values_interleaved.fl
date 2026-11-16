@@ -59,20 +59,22 @@ let $camlLate_three_values_interleaved__first_const_0 = Block 0 () in
     let int_add/274 = %int_barith.add (x/260, 1000) in
     let a/275 =
       %block.[`0`].my_alloc_region/262.local[region/268]
-        (int_add/274, int_add/273)
+        (int_add/274 : imm tagged, int_add/273 : imm tagged)
     in
     let int_add/276 = %int_barith.add (x/260, 5004) in
     let int_add/277 = %int_barith.add (x/260, 4003) in
     let int_add/278 = %int_barith.add (x/260, 3002) in
     let b/279 =
       %block.[`0`].my_alloc_region/262.local[region/268]
-        (int_add/278, int_add/277, int_add/276)
+        (int_add/278 : imm tagged,
+         int_add/277 : imm tagged,
+         int_add/276 : imm tagged)
     in
     let int_add/280 = %int_barith.add (x/260, 7006) in
     let int_add/281 = %int_barith.add (x/260, 6005) in
     let c/282 =
       %block.[`0`].my_alloc_region/262.local[region/268]
-        (int_add/281, int_add/280)
+        (int_add/281 : imm tagged, int_add/280 : imm tagged)
     in
     let f/283 = closure f_4 @f &my_alloc_region/262 &region/268
     with { x = x/260 }
@@ -136,14 +138,16 @@ let $camlLate_three_values_interleaved__first_const_0 = Block 0 () in
    let noise/306 = %project_value_slot.[body].[noise] (my_closure/299) in
    let region/307 = %begin_region () in
    let ghost_region/308 = %begin_ghost_region () in
-   (let p/312 = %block.[`0`].my_alloc_region/300.local[region/307] (x/298, 1)
+   (let p/312 =
+      %block.[`0`].my_alloc_region/300.local[region/307]
+        (x/298 : imm tagged, 1 : imm tagged)
     in
     apply direct(noise_3 &my_alloc_region/300)
       (noise/306 : imm tagged -> imm tagged) (x/298) -> k/82 * k/80
       where k/82 (n1/313 : imm tagged) =
         let q/314 =
           %block.[`0`].my_alloc_region/300.local[region/307]
-            (n1/313, x/298, 2)
+            (n1/313 : imm tagged, x/298 : imm tagged, 2 : imm tagged)
         in
         (apply direct(noise_3 &my_alloc_region/300)
            (noise/306 : imm tagged -> imm tagged) (n1/313) -> k/83 * k/80

@@ -19,7 +19,8 @@ let $camlTwo_options_matched__first_const_0 = Block 0 () in
        cont k/63
      where k/63 =
        let Pmakeblock/135 =
-         %block.[`0`].my_alloc_region/110.local[region/113] (x/107)
+         %block.[`0`].my_alloc_region/110.local[region/113]
+           (x/107 : imm tagged)
        in
        cont k/51 (Pmakeblock/135)
      where k/51 (a/118 : [ 0 | 0 of imm tagged ]) =
@@ -31,7 +32,8 @@ let $camlTwo_options_matched__first_const_0 = Block 0 () in
             cont k/61
           where k/61 =
             let Pmakeblock/133 =
-              %block.[`0`].my_alloc_region/110.local[region/113] (y/108)
+              %block.[`0`].my_alloc_region/110.local[region/113]
+                (y/108 : imm tagged)
             in
             cont k/52 (Pmakeblock/133)
           where k/52 (b/119 : [ 0 | 0 of imm tagged ]) =

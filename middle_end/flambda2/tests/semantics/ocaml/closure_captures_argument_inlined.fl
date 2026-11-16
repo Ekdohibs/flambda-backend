@@ -43,7 +43,9 @@ let $camlClosure_captures_argument_inlined__first_const_0 = Block 0 () in
  with { adder = adder/87 }
  in
  (let Popaque/91 = %opaque (3) in
-  let Pmakeblock/92 = %block.[`0`].`toplevel` (Popaque/91, 0) in
+  let Pmakeblock/92 =
+    %block.[`0`].`toplevel` (Popaque/91 : imm tagged, 0 : imm tagged)
+  in
   apply direct(add_first_2 &toplevel)
     (add_first/88 : [ 0 of imm tagged * val ] -> val?)
       (Pmakeblock/92)

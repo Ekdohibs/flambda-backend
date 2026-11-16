@@ -7,8 +7,8 @@ let $camlTests10__first_const_0 = Block 0 () in
    let next_depth = rec_info (succ my_depth) in
    let Pmakeblock =
      %block.[`0`].my_alloc_region
-       (my_closure ~ depth my_depth -> next_depth,
-        my_closure ~ depth my_depth -> next_depth)
+       (my_closure ~ depth my_depth -> next_depth : val,
+        my_closure ~ depth my_depth -> next_depth : val)
    in
    cont k1 (Pmakeblock)
  in

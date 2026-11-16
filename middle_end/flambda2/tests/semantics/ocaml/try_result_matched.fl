@@ -36,7 +36,7 @@ let $camlTry_result_matched__first_const_0 = Block 0 () in
            where k/51 (apply_result/121 : imm tagged) =
              let Pmakeblock/122 =
                %block.[`0`].my_alloc_region/100.local[region/104]
-                 (apply_result/121)
+                 (apply_result/121 : imm tagged)
              in
              cont k/49 (Pmakeblock/122))
       where k/49 (body_result/120 : [ 0 | 0 of imm tagged ]) =

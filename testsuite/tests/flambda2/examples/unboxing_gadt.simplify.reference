@@ -35,7 +35,7 @@ let code loopify(never) size(23) newer_version_of(baz_1)
           (x)
           -> k2 * k1
     where k3 =
-      let Pmakeblock = %block.[`1`].my_alloc_region (z) in
+      let Pmakeblock = %block.[`1`].my_alloc_region (z : imm tagged) in
       cont k2 (Pmakeblock)
     where k2 (a : [ 0 of float boxed |1 of imm tagged ]) =
       let Popaque = %opaque (a) in

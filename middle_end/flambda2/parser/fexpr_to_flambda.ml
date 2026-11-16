@@ -218,6 +218,25 @@ let prim env ((p, args) : Fexpr.prim) : Flambda_primitive.t =
   let args = List.map (simple env) args in
   Fexpr_prim.ToFlambda.prim env p args
 
+(* The making of a block of values whose fields are given kinds: it is read as
+   the primitive with no kinds is, and then given the kinds. *)
+let prim_with_kinds env (p : Fexpr.prim_op) args : Flambda_primitive.t =
+  match prim env (p, List.map fst args) with
+  | Variadic (Make_block (Values (tag, _), mutability, alloc_mode), args') ->
+    let kinds =
+      List.map (fun (_, kind) -> value_kind_with_subkind_opt kind) args
+    in
+    Variadic (Make_block (Values (tag, kinds), mutability, alloc_mode), args')
+  | Variadic
+      ( ( Make_block ((Naked_floats | Mixed _), _, _)
+        | Make_array _ | Begin_region _ | Begin_try_region _ ),
+        _ )
+  | Nullary _ | Unary _ | Binary _ | Ternary _ | Quaternary _ ->
+    Misc.fatal_errorf
+      "Kinds are given to the arguments of %s, which does not make a block of \
+       values"
+      p.prim
+
 let convert_recursive_flag (flag : Fexpr.is_recursive) : Recursive.t =
   match flag with Recursive -> Recursive | Nonrecursive -> Non_recursive
 
@@ -226,6 +245,9 @@ let defining_expr env (named : Fexpr.named) : Flambda.Named.t =
   | Simple s -> Flambda.Named.create_simple (simple env s)
   | Prim p ->
     let p = prim env p in
+    Flambda.Named.create_prim p Debuginfo.none
+  | Prim_with_kinds (p, args) ->
+    let p = prim_with_kinds env p args in
     Flambda.Named.create_prim p Debuginfo.none
   | Rec_info ri ->
     let ri = rec_info env ri in
@@ -371,7 +393,7 @@ let rec expr env acc (e : Fexpr.expr) : _ * Flambda.Expr.t =
     let binding_to_var_and_closure_binding : Fexpr.let_binding -> _ = function
       | { var; defining_expr = Closure binding; _ } -> var, binding
       | { var = { txt = _; loc };
-          defining_expr = Simple _ | Prim _ | Rec_info _;
+          defining_expr = Simple _ | Prim _ | Prim_with_kinds _ | Rec_info _;
           _
         } ->
         Misc.fatal_errorf "Cannot use 'and' with non-closure: %a"
@@ -404,7 +426,10 @@ let rec expr env acc (e : Fexpr.expr) : _ * Flambda.Expr.t =
     acc, let_expr
   | Let
       { bindings =
-          { defining_expr = Simple _ | Prim _ | Rec_info _; _ } :: _ :: _;
+          { defining_expr = Simple _ | Prim _ | Prim_with_kinds _ | Rec_info _;
+            _
+          }
+          :: _ :: _;
         _
       } ->
     Misc.fatal_errorf
@@ -1032,7 +1057,8 @@ let bind_all_code_ids_and_function_slots env (unit : Fexpr.flambda_unit) =
           (fun code_ids_of_slots (binding : Fexpr.let_binding) ->
             match binding.defining_expr with
             | Closure fun_decl -> add_code_id_of_slot code_ids_of_slots fun_decl
-            | Simple _ | Prim _ | Rec_info _ -> code_ids_of_slots)
+            | Simple _ | Prim _ | Prim_with_kinds _ | Rec_info _ ->
+              code_ids_of_slots)
           code_ids_of_slots bindings
       in
       go env fs_size_of_code_ids code_ids_of_slots body

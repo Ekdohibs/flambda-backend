@@ -24,13 +24,15 @@ let $camlVariant_blocks_join__first_const_0 = Block 0 () in
            cont k/29)
         where k/29 =
           let Pmakeblock/66 =
-            %block.[`1`].`toplevel`.local[region/55] (p/54, q/53)
+            %block.[`1`].`toplevel`.local[region/55]
+              (p/54 : imm tagged, q/53 : imm tagged)
           in
           cont k/27 (Pmakeblock/66)
         where k/28 =
           let Popaque/64 = %opaque (6) in
           let Pmakeblock/65 =
-            %block.[`0`].`toplevel`.local[region/55] (Popaque/64)
+            %block.[`0`].`toplevel`.local[region/55]
+              (Popaque/64 : imm tagged)
           in
           cont k/27 (Pmakeblock/65)
         where k/27

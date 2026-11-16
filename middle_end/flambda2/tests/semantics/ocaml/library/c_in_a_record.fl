@@ -6,7 +6,9 @@
    let next_depth/76 = rec_info (succ my_depth/75) in
    let int_add/77 = %int_barith.add (x/72, 1) in
    let Pmakearray/78 = %array.`imm`.my_alloc_region/74 (x/72, int_add/77) in
-   let Pmakeblock/79 = %block.[`0`].my_alloc_region/74 (id/71, Pmakearray/78)
+   let Pmakeblock/79 =
+     %block.[`0`].my_alloc_region/74
+       (id/71 : imm tagged, Pmakearray/78 : imm array)
    in
    cont k/30 (Pmakeblock/79)
  in

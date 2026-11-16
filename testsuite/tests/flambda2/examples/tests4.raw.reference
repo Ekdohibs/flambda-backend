@@ -93,7 +93,10 @@
        let prim_1 = %unbox_num.`float` (y) in
        let prim_2 = %bfloat_arith.add (prim_1, prim) in
        let float_add = %box_num.`float`.my_alloc_region (prim_2) in
-       let Pmakeblock = %block.[`0`].my_alloc_region (x, float_add) in
+       let Pmakeblock =
+         %block.[`0`].my_alloc_region
+           (x : imm tagged, float_add : float boxed)
+       in
        cont k3 (Pmakeblock)
      where k4 =
        let prim = %unbox_num.`float` ($camlTests4__float_1) in
@@ -101,7 +104,10 @@
        let prim_2 = %bfloat_arith.mul (prim_1, prim) in
        let float_mul = %box_num.`float`.my_alloc_region (prim_2) in
        let int_mul = %int_barith.mul (x, 2) in
-       let Pmakeblock = %block.[`0`].my_alloc_region (int_mul, float_mul) in
+       let Pmakeblock =
+         %block.[`0`].my_alloc_region
+           (int_mul : imm tagged, float_mul : float boxed)
+       in
        cont k3 (Pmakeblock)
      where k3 (pair : [ 0 of imm tagged * float boxed ]) =
        let Pmixedfield = %block_load.[`1`] (pair) in
@@ -140,9 +146,13 @@
        let prim_2 = %int_barith.`int64`.add (prim_1, prim) in
        let int64_add = %box_num.`int64`.my_alloc_region (prim_2) in
        let Pmakeblock =
-         %block.[`0`].my_alloc_region ($camlTests4__int32_3, int64_add)
+         %block.[`0`].my_alloc_region
+           ($camlTests4__int32_3 : int32 boxed, int64_add : int64 boxed)
        in
-       let Pmakeblock_1 = %block.[`0`].my_alloc_region (x, Pmakeblock) in
+       let Pmakeblock_1 =
+         %block.[`0`].my_alloc_region
+           (x : imm tagged, Pmakeblock : [ 0 of int32 boxed * int64 boxed ])
+       in
        cont k3 (Pmakeblock_1)
      where k4 =
        let prim = %unbox_num.`int64` ($camlTests4__int64_4) in
@@ -153,10 +163,15 @@
        let prim_4 = %unbox_num.`int32` (y') in
        let prim_5 = %int_barith.`int32`.mul (prim_4, prim_3) in
        let int32_mul = %box_num.`int32`.my_alloc_region (prim_5) in
-       let Pmakeblock = %block.[`0`].my_alloc_region (int32_mul, int64_mul)
+       let Pmakeblock =
+         %block.[`0`].my_alloc_region
+           (int32_mul : int32 boxed, int64_mul : int64 boxed)
        in
        let int_mul = %int_barith.mul (x, 2) in
-       let Pmakeblock_1 = %block.[`0`].my_alloc_region (int_mul, Pmakeblock)
+       let Pmakeblock_1 =
+         %block.[`0`].my_alloc_region
+           (int_mul : imm tagged,
+            Pmakeblock : [ 0 of int32 boxed * int64 boxed ])
        in
        cont k3 (Pmakeblock_1)
      where k3
@@ -179,7 +194,9 @@
        let prim_8 = %unbox_num.`int64` (int64_of_int) in
        let prim_9 = %int_barith.`int64`.sub (prim_8, prim_7) in
        let int64_sub = %box_num.`int64`.my_alloc_region (prim_9) in
-       let Pmakeblock = %block.[`0`].my_alloc_region (int64_sub, int32_sub)
+       let Pmakeblock =
+         %block.[`0`].my_alloc_region
+           (int64_sub : int64 boxed, int32_sub : int32 boxed)
        in
        cont k1 (Pmakeblock)
  in

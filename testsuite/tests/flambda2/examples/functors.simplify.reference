@@ -39,7 +39,7 @@ apply direct(init_mod_4 &toplevel)
                    (Pfield_1 : _ -> val) (Pfield) -> k2 * k1)
                   where k2 (apply_result : val) =
                     let Pmakeblock =
-                      %block.[`0`].my_alloc_region (apply_result)
+                      %block.[`0`].my_alloc_region (apply_result : val)
                     in
                     cont k (Pmakeblock))
          in
@@ -48,7 +48,7 @@ apply direct(init_mod_4 &toplevel)
                  my_closure &my_alloc_region my_depth
                  -> k * k1
                  : [ 0 | 0 of val ] =
-           let Pmakeblock = %block.[`0`].my_alloc_region (x) in
+           let Pmakeblock = %block.[`0`].my_alloc_region (x : val) in
            cont k (Pmakeblock)
          in
          let $camlFunctors__na_6 = closure na_1_1 @na &toplevel in

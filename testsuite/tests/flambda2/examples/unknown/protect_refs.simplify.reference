@@ -62,7 +62,7 @@ let $`camlProtect_refs__fn[protect_refs.ml:29,2--43]_4` =
   closure `fn[protect_refs.ml:29,2--43]_3_1` @`fn[protect_refs.ml:29,2--43]`
     &toplevel
 in
-let umode = %block.mut.[`0`].`toplevel` (0) in
+let umode = %block.mut.[`0`].`toplevel` (0 : imm tagged) in
 let umode_1 = umode in
 let $camlProtect_refs__set_mode_pattern_5 =
   closure set_mode_pattern_4_1 @set_mode_pattern &toplevel

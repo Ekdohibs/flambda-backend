@@ -28,7 +28,9 @@ let $camlSame_projection_across_call__first_const_0 = Block 0 () in
  with { twice = twice/73 }
  in
  (let Popaque/77 = %opaque (3) in
-  let Pmakeblock/78 = %block.[`0`].`toplevel` (Popaque/77, 0) in
+  let Pmakeblock/78 =
+    %block.[`0`].`toplevel` (Popaque/77 : imm tagged, 0 : imm tagged)
+  in
   apply direct(around_1 &toplevel)
     (around/74 : val -> imm tagged) (Pmakeblock/78) -> k/23 * error)
    where k/23 (result/75 : imm tagged) =

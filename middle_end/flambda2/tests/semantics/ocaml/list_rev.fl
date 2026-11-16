@@ -18,7 +18,8 @@
        let Pfield/67 = %block_load.[`1`] (list/62) in
        let Pfield/68 = %block_load.[`0`] (list/62) in
        let Pmakeblock/69 =
-         %block.[`0`].my_alloc_region/64 (Pfield/68, acc/61)
+         %block.[`0`].my_alloc_region/64
+           (Pfield/68, acc/61 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
        in
        apply direct(rev_onto_0 &my_alloc_region/64)
          (my_closure/63 ~ depth my_depth/65 -> next_depth/66

@@ -1,6 +1,7 @@
 (* A unit that makes a block with a field that is an immediate. The text of its
-   term does not write the kinds of the fields of a block that is made, so the
-   text is not the term; the driver names that difference. *)
+   term writes the kinds of the fields of a block that is made, on the
+   arguments, where they are not all that of any value; so the text is the
+   term. *)
 
 external opaque : 'a -> 'a = "%opaque"
 

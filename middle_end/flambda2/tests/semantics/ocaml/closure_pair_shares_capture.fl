@@ -29,7 +29,8 @@ let $camlClosure_pair_shares_capture__first_const_0 = Block 0 () in
    let scale/102 = closure scale_2 @scale &my_alloc_region/98
    with { n_1 = n/96 }
    in
-   let Pmakeblock/103 = %block.[`0`].my_alloc_region/98 (add/101, scale/102)
+   let Pmakeblock/103 =
+     %block.[`0`].my_alloc_region/98 (add/101 : val, scale/102 : val)
    in
    cont k/34 (Pmakeblock/103)
  in

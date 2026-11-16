@@ -20,7 +20,8 @@
        let int_add/54 = %int_barith.add (Pfield/53, Pfield/52) in
        let Pfield/55 = %block_load.[`1`] (acc/46) in
        let Pmakeblock/56 =
-         %block.[`0`].my_alloc_region/48 (Pfield/55, int_add/54)
+         %block.[`0`].my_alloc_region/48
+           (Pfield/55 : imm tagged, int_add/54 : imm tagged)
        in
        let int_sub/57 = %int_barith.sub (n/45, 1) in
        apply direct(fib_0 &my_alloc_region/48)

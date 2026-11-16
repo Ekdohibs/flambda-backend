@@ -20,7 +20,7 @@
        let int_add/97 = %int_barith.add (side/80, 1) in
        let Pmakeblock/98 =
          %block.[`0`].my_alloc_region/82.local[region/85]
-           (side/80, int_add/97)
+           (side/80 : imm tagged, int_add/97 : imm tagged)
        in
        cont k/31 (Pmakeblock/98)
      where k/31 (shape/90 : [ 0 | 0 of imm tagged * imm tagged ]) =

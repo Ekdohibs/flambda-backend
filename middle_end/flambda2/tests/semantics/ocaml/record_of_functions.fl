@@ -55,7 +55,8 @@ let $camlRecord_of_functions__first_const_0 = Block 0 () in
       @`fn[record_of_functions.ml:22,22--49]` &toplevel
   in
   let Pmakeblock/123 =
-    %block.[`0`].`toplevel` (`fn[record_of_functions.ml:22,22--49]/122`, 2)
+    %block.[`0`].`toplevel`
+      (`fn[record_of_functions.ml:22,22--49]/122` : val, 2 : imm tagged)
   in
   apply direct(fold3_0 &toplevel)
     (fold3/113 : val * val? * imm tagged * imm tagged -> imm tagged)
@@ -69,7 +70,7 @@ let $camlRecord_of_functions__first_const_0 = Block 0 () in
        in
        let Pmakeblock/120 =
          %block.[`0`].`toplevel`
-           (`fn[record_of_functions.ml:21,20--47]/119`, 10)
+           (`fn[record_of_functions.ml:21,20--47]/119` : val, 10 : imm tagged)
        in
        apply direct(fold3_0 &toplevel)
          (fold3/113 : val * val? * imm tagged * imm tagged -> imm tagged)

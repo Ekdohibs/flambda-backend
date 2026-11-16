@@ -28,7 +28,9 @@
                where k/42 (apply_result/100) =
                  let Pmakeblock/101 =
                    %block.[`0`].my_alloc_region/96
-                     (apply_result/100, apply_result/99)
+                     (apply_result/100,
+                      apply_result/99 :
+                        [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                  in
                  cont k/38 (Pmakeblock/101)))
  in

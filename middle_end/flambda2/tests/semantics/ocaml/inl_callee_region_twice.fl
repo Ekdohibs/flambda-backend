@@ -59,20 +59,22 @@ let $camlInl_callee_region_twice__first_const_0 = Block 0 () in
     let int_add/292 = %int_barith.add (x/278, 1000) in
     let a/293 =
       %block.[`0`].my_alloc_region/280.local[region/286]
-        (int_add/292, int_add/291)
+        (int_add/292 : imm tagged, int_add/291 : imm tagged)
     in
     let int_add/294 = %int_barith.add (x/278, 5004) in
     let int_add/295 = %int_barith.add (x/278, 4003) in
     let int_add/296 = %int_barith.add (x/278, 3002) in
     let b/297 =
       %block.[`0`].my_alloc_region/280.local[region/286]
-        (int_add/296, int_add/295, int_add/294)
+        (int_add/296 : imm tagged,
+         int_add/295 : imm tagged,
+         int_add/294 : imm tagged)
     in
     let int_add/298 = %int_barith.add (x/278, 7006) in
     let int_add/299 = %int_barith.add (x/278, 6005) in
     let c/300 =
       %block.[`0`].my_alloc_region/280.local[region/286]
-        (int_add/299, int_add/298)
+        (int_add/299 : imm tagged, int_add/298 : imm tagged)
     in
     let f/301 = closure f_4 @f &my_alloc_region/280 &region/286
     with { x = x/278 }
@@ -128,7 +130,7 @@ let $camlInl_callee_region_twice__first_const_0 = Block 0 () in
     let int_add/322 = %int_barith.add (x/309, 1) in
     let t/323 =
       %block.[`0`].my_alloc_region/311.local[region/316]
-        (int_add/322, int_add/321)
+        (int_add/322 : imm tagged, int_add/321 : imm tagged)
     in
     apply direct(noise_3 &my_alloc_region/311)
       (noise/315 : imm tagged -> imm tagged) (x/309) -> k/82 * k/80
@@ -158,7 +160,8 @@ let $camlInl_callee_region_twice__first_const_0 = Block 0 () in
    let ghost_region/336 = %begin_ghost_region () in
    (let int_add/340 = %int_barith.add (x/327, 1) in
     let p/341 =
-      %block.[`0`].my_alloc_region/329.local[region/335] (x/327, int_add/340)
+      %block.[`0`].my_alloc_region/329.local[region/335]
+        (x/327 : imm tagged, int_add/340 : imm tagged)
     in
     (let int_add/349 = %int_barith.add (x/327, 1) in
      apply direct(work_5 &my_alloc_region/329)

@@ -117,7 +117,10 @@ let code loopify(never) size(49) newer_version_of(pr2162_3_as_int64_3)
       let prim_2 = %num_conv.[`imm`].[`int64`] (naked_immediate) in
       let prim_3 = %int_barith.`int64`.sub (prim_2, unboxed_int64) in
       let int64_sub = %box_num.`int64`.my_alloc_region (prim_3) in
-      let Pmakeblock = %block.[`0`].my_alloc_region (int64_sub, int32_sub) in
+      let Pmakeblock =
+        %block.[`0`].my_alloc_region
+          (int64_sub : int64 boxed, int32_sub : int32 boxed)
+      in
       cont k (Pmakeblock)
 in
 let $camlTests4__pr2162_3_as_int64_9 =

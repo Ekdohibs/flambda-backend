@@ -16,7 +16,8 @@ let $camlOption_matched_twice__first_const_0 = Block 0 () in
      where k/44 =
        let int_add/99 = %int_barith.add (x/76, 1) in
        let Pmakeblock/100 =
-         %block.[`0`].my_alloc_region/78.local[region/81] (int_add/99)
+         %block.[`0`].my_alloc_region/78.local[region/81]
+           (int_add/99 : imm tagged)
        in
        cont k/37 (Pmakeblock/100)
      where k/37 (o/86 : [ 0 | 0 of imm tagged ]) =

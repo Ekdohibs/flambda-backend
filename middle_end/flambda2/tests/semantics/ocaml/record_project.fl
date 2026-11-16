@@ -14,15 +14,20 @@ let $camlRecord_project__first_const_0 = Block 0 () in
    let Pfield/67 = %block_load.[`0`] (p/57) in
    let int_add/68 = %int_barith.add (Pfield/67, Pfield/66) in
    let Pmakeblock/69 =
-     %block.[`0`].my_alloc_region/60 (int_add/68, int_add/65)
+     %block.[`0`].my_alloc_region/60
+       (int_add/68 : imm tagged, int_add/65 : imm tagged)
    in
    cont k/16 (Pmakeblock/69)
  in
  let add/70 = closure add_0 @add &toplevel in
  (let Popaque/78 = %opaque (4) in
-  let Pmakeblock/79 = %block.[`0`].`toplevel` (3, Popaque/78) in
+  let Pmakeblock/79 =
+    %block.[`0`].`toplevel` (3 : imm tagged, Popaque/78 : imm tagged)
+  in
   let Popaque/80 = %opaque (1) in
-  let Pmakeblock/81 = %block.[`0`].`toplevel` (Popaque/80, 2) in
+  let Pmakeblock/81 =
+    %block.[`0`].`toplevel` (Popaque/80 : imm tagged, 2 : imm tagged)
+  in
   apply direct(add_0 &toplevel)
     (add/70 : val * val -> [ 0 of imm tagged * imm tagged ])
       (Pmakeblock/81, Pmakeblock/79)

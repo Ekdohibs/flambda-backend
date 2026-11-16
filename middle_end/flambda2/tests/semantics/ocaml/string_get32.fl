@@ -15,7 +15,9 @@
  let prim/56 = %unbox_num.`int32` (Pstring_load_32/55) in
  let prim/57 = %num_conv.[`int32`].[`imm`] (prim/56) in
  let int_of_int32/58 = %tag_imm (prim/57) in
- let result/59 = %block.[`0`].`toplevel` (int_of_int32/58, int_of_int32/52)
+ let result/59 =
+   %block.[`0`].`toplevel`
+     (int_of_int32/58 : imm tagged, int_of_int32/52 : imm tagged)
  in
  let Pmakeblock/60 = %block.[`0`].`toplevel` (result/59) in
  cont k/5 (Pmakeblock/60))

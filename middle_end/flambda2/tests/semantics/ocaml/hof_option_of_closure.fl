@@ -62,7 +62,7 @@ let $camlHof_option_of_closure__first_const_0 = Block 0 () in
        in
        let Pmakeblock/162 =
          %block.[`0`].my_alloc_region/144.local[region/148]
-           (`fn[hof_option_of_closure.ml:27,25--41]/161`)
+           (`fn[hof_option_of_closure.ml:27,25--41]/161` : val)
        in
        cont k/55 (Pmakeblock/162)
      where k/55 (o/153 : [ 0 | 0 of val ]) =
@@ -78,7 +78,7 @@ let $camlHof_option_of_closure__first_const_0 = Block 0 () in
               in
               let Pmakeblock/160 =
                 %block.[`0`].my_alloc_region/144.local[region/148]
-                  (`fn[hof_option_of_closure.ml:28,34--50]/159`)
+                  (`fn[hof_option_of_closure.ml:28,34--50]/159` : val)
               in
               apply direct(call_or_0 &my_alloc_region/144)
                 (call_or/147 : val * imm tagged * imm tagged -> imm tagged)

@@ -231,9 +231,27 @@ let alloc_mode_for_applications env (alloc : Alloc_mode.For_applications.t) :
     let ghost_region = Env.find_region_exn env ghost_region in
     Maybe_alloc_stack { alloc_region; region; ghost_region }
 
-let prim env (p : Flambda_primitive.t) : Fexpr.prim =
-  let p, args = Fexpr_prim.OfFlambda.prim env p in
-  p, List.map (simple env) args
+let prim env (p : Flambda_primitive.t) : Fexpr.named =
+  let op, args = Fexpr_prim.OfFlambda.prim env p in
+  let args = List.map (simple env) args in
+  let kinds_of_fields =
+    match p with
+    | Variadic (Make_block (Values (_, kinds), _, _), _) -> kinds
+    | Variadic
+        ( ( Make_block ((Naked_floats | Mixed _), _, _)
+          | Make_array _ | Begin_region _ | Begin_try_region _ ),
+          _ )
+    | Nullary _ | Unary _ | Binary _ | Ternary _ | Quaternary _ ->
+      []
+  in
+  (* The kinds of the fields of a block of values that is made are written on
+     the arguments, unless each is that of any value, which is what is read
+     where none is written. *)
+  if List.for_all is_default_kind_with_subkind kinds_of_fields
+  then Prim (op, args)
+  else
+    Prim_with_kinds
+      (op, List.combine args (List.map kind_with_subkind_opt kinds_of_fields))
 
 let value_slots env map =
   List.map
@@ -375,7 +393,7 @@ and dynamic_let_expr env vars (defining_expr : Flambda.Named.t) body :
   let defining_exprs, value_slots =
     match defining_expr with
     | Simple s -> ([Simple (simple env s)] : Fexpr.named list), None
-    | Prim (p, _dbg) -> ([Prim (prim env p)] : Fexpr.named list), None
+    | Prim (p, _dbg) -> ([prim env p] : Fexpr.named list), None
     | Set_of_closures (sc, alloc_mode) ->
       let alloc_mode = alloc_mode_for_allocations env alloc_mode in
       let fun_decls, value_slots = set_of_closures env sc alloc_mode in

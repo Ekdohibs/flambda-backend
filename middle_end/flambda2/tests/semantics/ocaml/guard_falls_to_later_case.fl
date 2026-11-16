@@ -58,7 +58,7 @@ let $camlGuard_falls_to_later_case__first_const_0 = Block 0 () in
   let ghost_region/136 = %begin_ghost_region () in
   (let Popaque/158 = %opaque (-3) in
    let Pmakeblock/159 =
-     %block.[`1`].`toplevel`.local[region/135] (Popaque/158)
+     %block.[`1`].`toplevel`.local[region/135] (Popaque/158 : imm tagged)
    in
    apply direct(f_0 &toplevel)
      (f/132 : val -> imm tagged) (Pmakeblock/159) -> k/58 * error)
@@ -66,7 +66,8 @@ let $camlGuard_falls_to_later_case__first_const_0 = Block 0 () in
       let int_mul/141 = %int_barith.mul (apply_result/140, 10000) in
       ((let Popaque/156 = %opaque (3) in
         let Pmakeblock/157 =
-          %block.[`1`].`toplevel`.local[region/135] (Popaque/156)
+          %block.[`1`].`toplevel`.local[region/135]
+            (Popaque/156 : imm tagged)
         in
         apply direct(f_0 &toplevel)
           (f/132 : val -> imm tagged) (Pmakeblock/157) -> k/59 * error)
@@ -77,7 +78,8 @@ let $camlGuard_falls_to_later_case__first_const_0 = Block 0 () in
               where k/60 (apply_result/144 : imm tagged) =
                 ((let Popaque/154 = %opaque (0) in
                   let Pmakeblock/155 =
-                    %block.[`0`].`toplevel`.local[region/135] (Popaque/154)
+                    %block.[`0`].`toplevel`.local[region/135]
+                      (Popaque/154 : imm tagged)
                   in
                   apply direct(f_0 &toplevel)
                     (f/132 : val -> imm tagged)
@@ -89,7 +91,7 @@ let $camlGuard_falls_to_later_case__first_const_0 = Block 0 () in
                      ((let Popaque/152 = %opaque (5) in
                        let Pmakeblock/153 =
                          %block.[`0`].`toplevel`.local[region/135]
-                           (Popaque/152)
+                           (Popaque/152 : imm tagged)
                        in
                        apply direct(f_0 &toplevel)
                          (f/132 : val -> imm tagged)

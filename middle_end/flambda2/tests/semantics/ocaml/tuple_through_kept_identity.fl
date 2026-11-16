@@ -8,7 +8,9 @@ let $camlTuple_through_kept_identity__first_const_0 = Block 0 () in
  in
  let keep/43 = closure keep_0 @keep &toplevel in
  (let Popaque/50 = %opaque (1) in
-  let Pmakeblock/51 = %block.[`0`].`toplevel` (Popaque/50, 2) in
+  let Pmakeblock/51 =
+    %block.[`0`].`toplevel` (Popaque/50 : imm tagged, 2 : imm tagged)
+  in
   apply direct(keep_0 &toplevel)
     (keep/43 : val -> [ 0 of imm tagged * imm tagged ])
       (Pmakeblock/51)

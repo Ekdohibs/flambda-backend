@@ -1,6 +1,6 @@
 var_twelve_mixed.fl:
   before Simplify (191 steps): returns [0: 116]
-  after Simplify (106 steps): returns [0: 116]
+  after Simplify (105 steps): returns [0: 116]
   the check of kinds: passes before, passes after
   the check of static names: passes before, passes after
   calls outside code: 6 before, 6 after

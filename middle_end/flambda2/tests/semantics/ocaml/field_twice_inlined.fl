@@ -34,7 +34,8 @@ let $camlField_twice_inlined__first_const_0 = Block 0 () in
       @`fn[field_twice_inlined.ml:10,30--45]` &toplevel
   in
   let Pmakeblock/65 =
-    %block.[`0`].`toplevel` (`fn[field_twice_inlined.ml:10,30--45]/64`, 0)
+    %block.[`0`].`toplevel`
+      (`fn[field_twice_inlined.ml:10,30--45]/64` : val, 0 : imm tagged)
   in
   let Popaque/66 = %opaque (Pmakeblock/65) in
   apply direct(both_0 &toplevel)

@@ -13,8 +13,11 @@
 ;; one plain value for each argument, and the text writes it. The text is the
 ;; term.
 ;;
-;; block_of_an_immediate: the text is not the term, and the driver names the
-;; first difference.
+;; block_of_an_immediate: the kinds of the fields of a block that is made are
+;; not all that of any value, and the text writes them. The text is the term.
+;;
+;; checked_division: the text is not the term, and the driver names the first
+;; difference.
 ;;
 ;; c_call: the text is not read back.
 ;;
@@ -327,3 +330,19 @@
   (= %{context_name} "main"))
  (action
   (diff block_of_an_immediate.expected block_of_an_immediate.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   checked_division.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     %{dep:checked_division.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff checked_division.expected checked_division.output)))

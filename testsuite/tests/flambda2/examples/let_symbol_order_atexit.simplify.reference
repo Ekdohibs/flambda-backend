@@ -10,7 +10,7 @@ let code loopify(never) size(1) newer_version_of(id_0)
 in
 let $camlLet_symbol_order_atexit__id_1 = closure id_0_1 @`id` &toplevel in
 let exit_function =
-  %block.mut.[`0`].`toplevel` ($camlLet_symbol_order_atexit__id_1)
+  %block.mut.[`0`].`toplevel` ($camlLet_symbol_order_atexit__id_1 : val)
 in
 let $camlLet_symbol_order_atexit__do_at_exit_2 =
   closure do_at_exit_1_1 @do_at_exit &toplevel

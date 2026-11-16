@@ -16,7 +16,9 @@ let $camlJoin_two_names_of_symbol__first_const_0 = Block 0 () in
  in
  let Popaque/57 = %opaque (2) in
  let Popaque/58 = %opaque (1) in
- let default/59 = %block.[`0`].`toplevel` (Popaque/58, Popaque/57) in
+ let default/59 =
+   %block.[`0`].`toplevel` (Popaque/58 : imm tagged, Popaque/57 : imm tagged)
+ in
  let pick/60 = closure pick_0 @pick &toplevel
  with { `default` = default/59 }
  in

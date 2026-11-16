@@ -13,7 +13,9 @@ let $camlResult_map__first_const_0 = Block 0 () in
       | 1 -> k/36)
      where k/36 =
        let Pfield/102 = %block_load.[`0`] (r/94) in
-       let Pmakeblock/103 = %block.[`1`].my_alloc_region/96 (Pfield/102) in
+       let Pmakeblock/103 =
+         %block.[`1`].my_alloc_region/96 (Pfield/102 : val)
+       in
        cont k/32 (Pmakeblock/103)
      where k/34 =
        ((let Pfield/101 = %block_load.[`0`] (r/94) in
@@ -21,7 +23,7 @@ let $camlResult_map__first_const_0 = Block 0 () in
            (f/93 : _ -> val) (Pfield/101) -> k/35 * k/33)
           where k/35 (apply_result/99 : val) =
             let Pmakeblock/100 =
-              %block.[`0`].my_alloc_region/96 (apply_result/99)
+              %block.[`0`].my_alloc_region/96 (apply_result/99 : val)
             in
             cont k/32 (Pmakeblock/100))
  in
@@ -55,7 +57,7 @@ let $camlResult_map__first_const_0 = Block 0 () in
  (let region/127 = %begin_region () in
   let ghost_region/128 = %begin_ghost_region () in
   (let Popaque/133 = %opaque (21) in
-   let Pmakeblock/134 = %block.[`0`].`toplevel` (Popaque/133) in
+   let Pmakeblock/134 = %block.[`0`].`toplevel` (Popaque/133 : imm tagged) in
    let `fn[result_map.ml:15,24--40]/135` =
      closure `fn[result_map.ml:15,24--40]_2` @`fn[result_map.ml:15,24--40]`
        &toplevel &region/127

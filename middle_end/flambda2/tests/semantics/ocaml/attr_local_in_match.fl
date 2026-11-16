@@ -43,7 +43,8 @@ let $camlAttr_local_in_match__first_const_0 = Block 0 () in
   let ghost_region/105 = %begin_ghost_region () in
   (let Popaque/116 = %opaque (6) in
    let Pmakeblock/117 =
-     %block.[`1`].`toplevel`.local[region/104] (2, Popaque/116)
+     %block.[`1`].`toplevel`.local[region/104]
+       (2 : imm tagged, Popaque/116 : imm tagged)
    in
    apply direct(body_0 &toplevel)
      (body/101 : val * imm tagged -> imm tagged)
@@ -52,7 +53,8 @@ let $camlAttr_local_in_match__first_const_0 = Block 0 () in
     where k/42 (apply_result/109 : imm tagged) =
       ((let Popaque/114 = %opaque (4) in
         let Pmakeblock/115 =
-          %block.[`0`].`toplevel`.local[region/104] (Popaque/114)
+          %block.[`0`].`toplevel`.local[region/104]
+            (Popaque/114 : imm tagged)
         in
         apply direct(body_0 &toplevel)
           (body/101 : val * imm tagged -> imm tagged)

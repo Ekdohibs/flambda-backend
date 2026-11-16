@@ -37,12 +37,16 @@ let $camlMatch_variant__first_const_0 = Block 0 () in
    (cells/80 : imm tagged -> imm tagged) (0) -> k/30 * error
    where k/30 (apply_result/81 : imm tagged) =
      ((let Popaque/89 = %opaque (5) in
-       let Pmakeblock/90 = %block.[`0`].`toplevel` (Popaque/89) in
+       let Pmakeblock/90 = %block.[`0`].`toplevel` (Popaque/89 : imm tagged)
+       in
        apply direct(cells_0 &toplevel)
          (cells/80 : val -> imm tagged) (Pmakeblock/90) -> k/31 * error)
         where k/31 (apply_result/82 : imm tagged) =
           ((let Popaque/87 = %opaque (3) in
-            let Pmakeblock/88 = %block.[`1`].`toplevel` (Popaque/87, 4) in
+            let Pmakeblock/88 =
+              %block.[`1`].`toplevel`
+                (Popaque/87 : imm tagged, 4 : imm tagged)
+            in
             apply direct(cells_0 &toplevel)
               (cells/80 : val -> imm tagged) (Pmakeblock/88) -> k/32 * error)
              where k/32 (apply_result/83 : imm tagged) =

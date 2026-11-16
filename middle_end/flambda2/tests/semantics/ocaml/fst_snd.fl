@@ -12,7 +12,9 @@ let $camlFst_snd__first_const_0 = Block 0 () in
  in
  let sum/41 = closure sum_0 @sum &toplevel in
  (let Popaque/44 = %opaque (1) in
-  let Pmakeblock/45 = %block.[`0`].`toplevel` (Popaque/44, 2) in
+  let Pmakeblock/45 =
+    %block.[`0`].`toplevel` (Popaque/44 : imm tagged, 2 : imm tagged)
+  in
   apply direct(sum_0 &toplevel)
     (sum/41 : val -> imm tagged) (Pmakeblock/45) -> k/14 * error)
    where k/14 (result/42 : imm tagged) =

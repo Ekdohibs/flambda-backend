@@ -40,8 +40,8 @@ let $camlExported_funs_in_pair__first_const_0 = Block 0 () in
  in
  let ops/79 =
    %block.[`0`].`toplevel`
-     (`fn[exported_funs_in_pair.ml:9,10--26]/78`,
-      `fn[exported_funs_in_pair.ml:9,28--42]/77`)
+     (`fn[exported_funs_in_pair.ml:9,10--26]/78` : val,
+      `fn[exported_funs_in_pair.ml:9,28--42]/77` : val)
  in
  let apply_first/80 = closure apply_first_2 @apply_first &toplevel
  with { ops = ops/79 }

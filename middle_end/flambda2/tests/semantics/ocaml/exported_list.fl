@@ -4,7 +4,10 @@
  in
  let Popaque/13 = %opaque (1) in
  let l/14 =
-   %block.[`0`].`toplevel` (Popaque/13, $camlExported_list__const_block_1)
+   %block.[`0`].`toplevel`
+     (Popaque/13 : imm tagged,
+      $camlExported_list__const_block_1 :
+        [ 0 | 0 of imm tagged * [ 0 | 0 of imm tagged * val ] ])
  in
  let Pmakeblock/15 = %block.[`0`].`toplevel` (l/14) in
  cont k/5 (Pmakeblock/15))

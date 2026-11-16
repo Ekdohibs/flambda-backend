@@ -10,7 +10,10 @@ let code inline(never) loopify(never) size(23) newer_version_of(g_0)
   let float_add = %box_num.`float`.my_alloc_region (prim_1) in
   let prim_2 = %bfloat_arith.add (prim, 0x1.5p+5) in
   let float_add_1 = %box_num.`float`.my_alloc_region (prim_2) in
-  let Pmakeblock = %block.[`0`].my_alloc_region (float_add_1, float_add) in
+  let Pmakeblock =
+    %block.[`0`].my_alloc_region
+      (float_add_1 : float boxed, float_add : float boxed)
+  in
   cont k (Pmakeblock)
 in
 let $camlFloat_fn_tuple__g_2 = closure g_0_1 @g &toplevel in

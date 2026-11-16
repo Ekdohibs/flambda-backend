@@ -28,7 +28,9 @@ let $camlExported_fun_to_map__first_const_0 = Block 0 () in
                where k/30 (apply_result/77) =
                  let Pmakeblock/78 =
                    %block.[`0`].my_alloc_region/73
-                     (apply_result/77, apply_result/76)
+                     (apply_result/77,
+                      apply_result/76 :
+                        [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                  in
                  cont k/26 (Pmakeblock/78)))
  in

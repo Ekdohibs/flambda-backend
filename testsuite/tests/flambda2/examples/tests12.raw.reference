@@ -96,7 +96,8 @@ let $camlTests12__first_const_0 = Block 0 () in
                           (f : _ -> val) (Pfield) -> k3 * k2)
                          where k3 (apply_result : val) =
                            let Pmakeblock =
-                             %block.[`0`].my_alloc_region (apply_result, g)
+                             %block.[`0`].my_alloc_region
+                               (apply_result : val, g : val)
                            in
                            cont k1 (Pmakeblock)))))
  in

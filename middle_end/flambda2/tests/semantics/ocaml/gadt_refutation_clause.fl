@@ -47,8 +47,13 @@
    where k/35 (apply_result/84 : imm tagged) =
      ((let Popaque/90 = %opaque ($camlGadt_refutation_clause__const_block_0)
        in
-       let Pmakeblock/91 = %block.[`0`].`toplevel` (Popaque/90) in
-       let Pmakeblock/92 = %block.[`0`].`toplevel` (Pmakeblock/91) in
+       let Pmakeblock/91 =
+         %block.[`0`].`toplevel` (Popaque/90 : [ 0 | 0 of [ 0 | 0 of val ] ])
+       in
+       let Pmakeblock/92 =
+         %block.[`0`].`toplevel`
+           (Pmakeblock/91 : [ 0 | 0 of [ 0 | 0 of val ] ])
+       in
        apply direct(pred_0 &toplevel)
          (pred/82 : val -> [ 0 | 0 of [ 0 | 0 of val ] ])
            (Pmakeblock/92)

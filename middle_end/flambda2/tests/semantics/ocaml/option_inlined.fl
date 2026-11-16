@@ -16,7 +16,8 @@ let $camlOption_inlined__first_const_0 = Block 0 () in
      where k/30 =
        let int_add/72 = %int_barith.add (x/56, 1) in
        let Pmakeblock/73 =
-         %block.[`0`].my_alloc_region/58.local[region/61] (int_add/72)
+         %block.[`0`].my_alloc_region/58.local[region/61]
+           (int_add/72 : imm tagged)
        in
        cont k/27 (Pmakeblock/73)
      where k/27 (v/66 : [ 0 | 0 of imm tagged ]) =

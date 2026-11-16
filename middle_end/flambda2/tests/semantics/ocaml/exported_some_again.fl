@@ -19,11 +19,11 @@ let $camlExported_some_again__first_const_0 = Block 0 () in
  in
  let get/55 = closure get_0 @get &toplevel in
  let v/56 = %opaque (6) in
- (let Pmakeblock/60 = %block.[`0`].`toplevel` (v/56) in
+ (let Pmakeblock/60 = %block.[`0`].`toplevel` (v/56 : imm tagged) in
   apply direct(get_0 &toplevel)
     (get/55 : val -> imm tagged) (Pmakeblock/60) -> k/20 * error)
    where k/20 (inside/57 : imm tagged) =
-     let kept/58 = %block.[`0`].`toplevel` (inside/57) in
+     let kept/58 = %block.[`0`].`toplevel` (inside/57 : imm tagged) in
      let Pmakeblock/59 =
        %block.[`0`].`toplevel` (get/55, v/56, inside/57, kept/58)
      in

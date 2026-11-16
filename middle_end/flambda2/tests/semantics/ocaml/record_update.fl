@@ -10,7 +10,8 @@ let $camlRecord_update__first_const_0 = Block 0 () in
    let Pfield/63 = %block_load.[`2`] (point/57) in
    let Pfield/64 = %block_load.[`0`] (point/57) in
    let Pmakeblock/65 =
-     %block.[`0`].my_alloc_region/60 (Pfield/64, y/58, Pfield/63)
+     %block.[`0`].my_alloc_region/60
+       (Pfield/64 : imm tagged, y/58 : imm tagged, Pfield/63 : imm tagged)
    in
    cont k/16 (Pmakeblock/65)
  in
@@ -19,7 +20,8 @@ let $camlRecord_update__first_const_0 = Block 0 () in
   let ghost_region/70 = %begin_ghost_region () in
   (let Popaque/80 = %opaque (1) in
    let Pmakeblock/81 =
-     %block.[`0`].`toplevel`.local[region/69] (Popaque/80, 2, 3)
+     %block.[`0`].`toplevel`.local[region/69]
+       (Popaque/80 : imm tagged, 2 : imm tagged, 3 : imm tagged)
    in
    apply direct(with_y_0 &toplevel)
      (with_y/66

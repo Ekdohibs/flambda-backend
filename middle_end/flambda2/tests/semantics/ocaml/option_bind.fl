@@ -33,7 +33,9 @@ let $camlOption_bind__first_const_0 = Block 0 () in
       where k/61 =
         cont k/60)
      where k/60 =
-       let Pmakeblock/144 = %block.[`0`].my_alloc_region/141 (x/139) in
+       let Pmakeblock/144 =
+         %block.[`0`].my_alloc_region/141 (x/139 : imm tagged)
+       in
        cont k/58 (Pmakeblock/144)
  in
  let code inline(always) size(17)
@@ -61,7 +63,9 @@ let $camlOption_bind__first_const_0 = Block 0 () in
          : [ 0 | 0 of val ] =
    let next_depth/161 = rec_info (succ my_depth/160) in
    let int_add/162 = %int_barith.add (x/157, 1) in
-   let Pmakeblock/163 = %block.[`0`].my_alloc_region/159 (int_add/162) in
+   let Pmakeblock/163 =
+     %block.[`0`].my_alloc_region/159 (int_add/162 : imm tagged)
+   in
    cont k/66 (Pmakeblock/163)
  in
  let code size(9)
@@ -71,7 +75,9 @@ let $camlOption_bind__first_const_0 = Block 0 () in
          : [ 0 | 0 of val ] =
    let next_depth/168 = rec_info (succ my_depth/167) in
    let int_add/169 = %int_barith.add (x/164, 1) in
-   let Pmakeblock/170 = %block.[`0`].my_alloc_region/166 (int_add/169) in
+   let Pmakeblock/170 =
+     %block.[`0`].my_alloc_region/166 (int_add/169 : imm tagged)
+   in
    cont k/68 (Pmakeblock/170)
  in
  let bind/171 = closure bind_0 @bind &toplevel in

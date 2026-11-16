@@ -54,9 +54,12 @@ let code inline(never) loopify(never) size(160) newer_version_of(f_0)
                 let Pfield_1 = %block_load.[`0`] (`*match*`) in
                 let Popaque_1 = %opaque (Pfield_1) in
                 let Pmakeblock =
-                  %block.[`0`].my_alloc_region (Popaque_1, Popaque)
+                  %block.[`0`].my_alloc_region
+                    (Popaque_1 : imm tagged, Popaque : imm tagged)
                 in
-                let Pmakeblock_1 = %block.[`0`].my_alloc_region (Pmakeblock)
+                let Pmakeblock_1 =
+                  %block.[`0`].my_alloc_region
+                    (Pmakeblock : [ 0 of imm tagged * imm tagged ])
                 in
                 cont k (Pmakeblock_1))
          where k4 =
@@ -79,9 +82,12 @@ let code inline(never) loopify(never) size(160) newer_version_of(f_0)
                 let int_add_1 = %int_barith.add (Pfield_3, Pfield_2) in
                 let Popaque_1 = %opaque (int_add_1) in
                 let Pmakeblock =
-                  %block.[`0`].my_alloc_region (Popaque_1, Popaque)
+                  %block.[`0`].my_alloc_region
+                    (Popaque_1 : imm tagged, Popaque : imm tagged)
                 in
-                let Pmakeblock_1 = %block.[`0`].my_alloc_region (Pmakeblock)
+                let Pmakeblock_1 =
+                  %block.[`0`].my_alloc_region
+                    (Pmakeblock : [ 0 of imm tagged * imm tagged ])
                 in
                 cont k (Pmakeblock_1))
          where k3 =
@@ -91,7 +97,10 @@ let code inline(never) loopify(never) size(160) newer_version_of(f_0)
              | 1 -> k (0))
     where k2 =
       let Popaque = %opaque ($camlIncludecore_repro__const_block_0) in
-      let Pmakeblock = %block.[`0`].my_alloc_region (Popaque) in
+      let Pmakeblock =
+        %block.[`0`].my_alloc_region
+          (Popaque : [ 0 of imm tagged * imm tagged ])
+      in
       cont k (Pmakeblock)
 in
 let $camlIncludecore_repro__f_2 = closure f_0_1 @f &toplevel in

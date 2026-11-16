@@ -4,7 +4,7 @@ let code F3_2 deleted in
 let code loopify(never) size(14) newer_version_of(F1_0)
       F1_0_1 (M : val) my_closure &my_alloc_region my_depth -> k * k1 : val =
   let Pfield = %block_load.[`0`] (M) in
-  let x = %block.[`0`].my_alloc_region (Pfield) in
+  let x = %block.[`0`].my_alloc_region (Pfield : val) in
   let Pmakeblock = %block.[`0`].my_alloc_region (x) in
   cont k (Pmakeblock)
 in
@@ -16,7 +16,7 @@ let code loopify(never) size(22) newer_version_of(F2_1)
         : val =
   let Pfield = %block_load.[`0`] (M2) in
   let Pfield_1 = %block_load.[`0`] (M1) in
-  let x = %block.[`0`].my_alloc_region (Pfield_1, Pfield) in
+  let x = %block.[`0`].my_alloc_region (Pfield_1 : val, Pfield : val) in
   let Pmakeblock = %block.[`0`].my_alloc_region (x) in
   let Pmakeblock_1 = %block.[`0`].my_alloc_region (Pmakeblock) in
   cont k (Pmakeblock_1)

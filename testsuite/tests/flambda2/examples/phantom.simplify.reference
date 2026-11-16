@@ -82,7 +82,9 @@ let code inline(always) loopify(never) size(56) newer_version_of(eval_level_3)
           | 0 -> k1 pop(regular k1) ($camlPhantom__Pmakeblock_3)
           | 1 -> k3)
          where k3 =
-           let Pmakeblock = %block.[`0`].my_alloc_region (1, lvl) in
+           let Pmakeblock =
+             %block.[`0`].my_alloc_region (1 : imm tagged, lvl : imm tagged)
+           in
            cont k (Pmakeblock))
     where k2 =
       let Pfield_2 = %block_load.[`2`] (a) in
@@ -92,7 +94,9 @@ let code inline(always) loopify(never) size(56) newer_version_of(eval_level_3)
           | 0 -> k1 pop(reraise k1) (UndecidedLit)
           | 1 -> k2)
          where k2 =
-           let Pmakeblock = %block.[`0`].my_alloc_region (0, lvl) in
+           let Pmakeblock =
+             %block.[`0`].my_alloc_region (0 : imm tagged, lvl : imm tagged)
+           in
            cont k (Pmakeblock))
 in
 let code inline(always) loopify(never) size(3) newer_version_of(is_false_2)

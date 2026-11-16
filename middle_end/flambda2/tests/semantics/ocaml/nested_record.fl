@@ -20,11 +20,13 @@
   let ghost_region/63 = %begin_ghost_region () in
   (let Popaque/67 = %opaque (1) in
    let Pmakeblock/68 =
-     %block.[`0`].`toplevel`.local[region/62] (Popaque/67, 2)
+     %block.[`0`].`toplevel`.local[region/62]
+       (Popaque/67 : imm tagged, 2 : imm tagged)
    in
    let Pmakeblock/69 =
      %block.[`0`].`toplevel`.local[region/62]
-       (Pmakeblock/68, $camlNested_record__const_block_0)
+       (Pmakeblock/68 : [ 0 of imm tagged * imm tagged ],
+        $camlNested_record__const_block_0 : [ 0 of imm tagged * imm tagged ])
    in
    apply direct(width_0 &toplevel)
      (width/59 : val -> imm tagged) (Pmakeblock/69) -> k/17 * error)

@@ -59,20 +59,22 @@ let $camlExclave_after_local_work__first_const_0 = Block 0 () in
     let int_add/281 = %int_barith.add (x/267, 1000) in
     let a/282 =
       %block.[`0`].my_alloc_region/269.local[region/275]
-        (int_add/281, int_add/280)
+        (int_add/281 : imm tagged, int_add/280 : imm tagged)
     in
     let int_add/283 = %int_barith.add (x/267, 5004) in
     let int_add/284 = %int_barith.add (x/267, 4003) in
     let int_add/285 = %int_barith.add (x/267, 3002) in
     let b/286 =
       %block.[`0`].my_alloc_region/269.local[region/275]
-        (int_add/285, int_add/284, int_add/283)
+        (int_add/285 : imm tagged,
+         int_add/284 : imm tagged,
+         int_add/283 : imm tagged)
     in
     let int_add/287 = %int_barith.add (x/267, 7006) in
     let int_add/288 = %int_barith.add (x/267, 6005) in
     let c/289 =
       %block.[`0`].my_alloc_region/269.local[region/275]
-        (int_add/288, int_add/287)
+        (int_add/288 : imm tagged, int_add/287 : imm tagged)
     in
     let f/290 = closure f_4 @f &my_alloc_region/269 &region/275
     with { x = x/267 }
@@ -129,7 +131,7 @@ let $camlExclave_after_local_work__first_const_0 = Block 0 () in
    let int_add/309 = %int_barith.add (x/298, 1) in
    let t/310 =
      %block.[`0`].my_alloc_region/300.local[region/306]
-       (int_add/309, int_add/308)
+       (int_add/309 : imm tagged, int_add/308 : imm tagged)
    in
    apply direct(read2_0 &my_alloc_region/300)
      (read2/305 : [ 0 of imm tagged * imm tagged ] -> imm tagged)
@@ -139,7 +141,8 @@ let $camlExclave_after_local_work__first_const_0 = Block 0 () in
        let unit/312 = %end_region (region/306) in
        let unit/313 = %end_ghost_region (ghost_region/307) in
        let Pmakeblock/314 =
-         %block.[`0`].my_alloc_region/300.local[my_region/301] (s/311, x/298)
+         %block.[`0`].my_alloc_region/300.local[my_region/301]
+           (s/311 : imm tagged, x/298 : imm tagged)
        in
        cont k/74 (Pmakeblock/314)
  in

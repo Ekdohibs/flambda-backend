@@ -59,20 +59,22 @@ let $camlClos_partial_local__first_const_0 = Block 0 () in
     let int_add/286 = %int_barith.add (x/272, 1000) in
     let a/287 =
       %block.[`0`].my_alloc_region/274.local[region/280]
-        (int_add/286, int_add/285)
+        (int_add/286 : imm tagged, int_add/285 : imm tagged)
     in
     let int_add/288 = %int_barith.add (x/272, 5004) in
     let int_add/289 = %int_barith.add (x/272, 4003) in
     let int_add/290 = %int_barith.add (x/272, 3002) in
     let b/291 =
       %block.[`0`].my_alloc_region/274.local[region/280]
-        (int_add/290, int_add/289, int_add/288)
+        (int_add/290 : imm tagged,
+         int_add/289 : imm tagged,
+         int_add/288 : imm tagged)
     in
     let int_add/292 = %int_barith.add (x/272, 7006) in
     let int_add/293 = %int_barith.add (x/272, 6005) in
     let c/294 =
       %block.[`0`].my_alloc_region/274.local[region/280]
-        (int_add/293, int_add/292)
+        (int_add/293 : imm tagged, int_add/292 : imm tagged)
     in
     let f/295 = closure f_4 @f &my_alloc_region/274 &region/280
     with { x = x/272 }

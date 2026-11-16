@@ -32,13 +32,13 @@ let code loopify(never) size(64) newer_version_of(foobar_0)
      | 1 -> k4)
     where k4 =
       let bar1 = closure bar1_2_1 @bar1 &my_alloc_region with { x = x } in
-      let Pmakeblock = %block.[`0`].my_alloc_region (bar1) in
+      let Pmakeblock = %block.[`0`].my_alloc_region (bar1 : val) in
       cont k2 (Pmakeblock)
     where k3 =
       let bar2 = closure bar2_1_1 @bar2 &my_alloc_region
       with { x_1 = x; z = z }
       in
-      let Pmakeblock = %block.[`1`].my_alloc_region (bar2) in
+      let Pmakeblock = %block.[`1`].my_alloc_region (bar2 : val) in
       cont k2 (Pmakeblock)
     where k2 (f : [ 0 of val |1 of val ]) =
       let Pfield = %block_load.[`0`] (f) in

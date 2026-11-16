@@ -55,7 +55,7 @@
                            in
                            let Pmakeblock/112 =
                              %block.[`0`].my_alloc_region/89
-                               (b/109, int_add/111)
+                               (b/109 : imm tagged, int_add/111 : imm tagged)
                            in
                            let for_next_naked/113 =
                              %int_barith.`int64`.add

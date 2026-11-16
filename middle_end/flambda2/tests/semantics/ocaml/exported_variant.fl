@@ -10,7 +10,7 @@ let $camlExported_variant__first_const_0 = Block 0 () in
    cont k/12 (Pisint/43)
  in
  let Popaque/44 = %opaque (1) in
- let b/45 = %block.[`0`].`toplevel` (Popaque/44) in
+ let b/45 = %block.[`0`].`toplevel` (Popaque/44 : imm tagged) in
  let is_a/46 = closure is_a_0 @is_a &toplevel in
  apply direct(is_a_0 &toplevel)
    (is_a/46 : [ 0 | 0 of imm tagged ] -> imm tagged) (b/45) -> k/14 * error

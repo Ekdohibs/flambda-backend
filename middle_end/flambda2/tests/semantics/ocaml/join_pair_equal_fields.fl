@@ -17,11 +17,15 @@
         cont k/28)
      where k/28 =
        let v/64 = %block_load.[`0`] (option/53) in
-       let Pmakeblock/65 = %block.[`0`].my_alloc_region/56 (v/64, v/64) in
+       let Pmakeblock/65 =
+         %block.[`0`].my_alloc_region/56
+           (v/64 : imm tagged, v/64 : imm tagged)
+       in
        cont k/26 (Pmakeblock/65)
      where k/27 =
        let Pmakeblock/63 =
-         %block.[`0`].my_alloc_region/56 (default/54, default/54)
+         %block.[`0`].my_alloc_region/56
+           (default/54 : imm tagged, default/54 : imm tagged)
        in
        cont k/26 (Pmakeblock/63)
      where k/26 (pair/59 : [ 0 of imm tagged * imm tagged ]) =

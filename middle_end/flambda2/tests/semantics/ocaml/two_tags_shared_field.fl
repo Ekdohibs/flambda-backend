@@ -17,12 +17,12 @@ let $camlTwo_tags_shared_field__first_const_0 = Block 0 () in
        cont k/37
      where k/37 =
        let Pmakeblock/83 =
-         %block.[`1`].my_alloc_region/68.local[region/71] (x/66)
+         %block.[`1`].my_alloc_region/68.local[region/71] (x/66 : imm tagged)
        in
        cont k/33 (Pmakeblock/83)
      where k/36 =
        let Pmakeblock/82 =
-         %block.[`0`].my_alloc_region/68.local[region/71] (x/66)
+         %block.[`0`].my_alloc_region/68.local[region/71] (x/66 : imm tagged)
        in
        cont k/33 (Pmakeblock/82)
      where k/33 (`*match*/76` : [ 0 | 0 of imm tagged |1 of imm tagged ]) =

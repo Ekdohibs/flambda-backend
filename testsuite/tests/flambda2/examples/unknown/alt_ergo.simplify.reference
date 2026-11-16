@@ -73,10 +73,12 @@ let code loopify(never) size(86) newer_version_of(inv_borne_sup_1)
                      let Popaque = %opaque (0) in
                      let Pobj_magic = %opaque (Popaque) in
                      let Pmakeblock =
-                       %block.[`0`].my_alloc_region (Pobj_magic, Pmixedfield)
+                       %block.[`0`].my_alloc_region
+                         (Pobj_magic : imm tagged, Pmixedfield : imm tagged)
                      in
                      let Pmakeblock_1 =
-                       %block.[`1`].my_alloc_region (Pmakeblock)
+                       %block.[`1`].my_alloc_region
+                         (Pmakeblock : [ 0 of imm tagged * imm tagged ])
                      in
                      cont k (Pmakeblock_1)
                    where k2 =
@@ -85,10 +87,12 @@ let code loopify(never) size(86) newer_version_of(inv_borne_sup_1)
                      let Popaque = %opaque (0) in
                      let Pobj_magic = %opaque (Popaque) in
                      let Pmakeblock =
-                       %block.[`0`].my_alloc_region (Pobj_magic, Pmixedfield)
+                       %block.[`0`].my_alloc_region
+                         (Pobj_magic : imm tagged, Pmixedfield : imm tagged)
                      in
                      let Pmakeblock_1 =
-                       %block.[`0`].my_alloc_region (Pmakeblock)
+                       %block.[`0`].my_alloc_region
+                         (Pmakeblock : [ 0 of imm tagged * imm tagged ])
                      in
                      cont k (Pmakeblock_1))))
 in
@@ -116,7 +120,15 @@ let code loopify(never) size(14) newer_version_of(inv_bornes_2)
             (apply_result :
                [ 0 |1 | 0 of [ 0 of imm tagged * imm tagged ]
                |1 of [ 0 of imm tagged * imm tagged ] ]) =
-      let Pmakeblock = %block.[`0`].my_alloc_region (apply_result, u) in
+      let Pmakeblock =
+        %block.[`0`].my_alloc_region
+          (apply_result :
+             [ 0 |1 | 0 of [ 0 of imm tagged * imm tagged ]
+             |1 of [ 0 of imm tagged * imm tagged ] ],
+           u :
+             [ 0 |1 | 0 of [ 0 of imm tagged * imm tagged ]
+             |1 of [ 0 of imm tagged * imm tagged ] ])
+      in
       cont k (Pmakeblock)
 in
 let $camlAlt_ergo__inv_bornes_11 =
@@ -142,7 +154,11 @@ let code loopify(never) size(45) newer_version_of(inv_3) tupled
            ((let Pmixedfield = %block_load.[`1`] (`*match*`) in
              let Pmixedfield_1 = %block_load.[`0`] (`*match*`) in
              let Pmakeblock =
-               %block.[`0`].my_alloc_region (Pmixedfield_1, Pmixedfield)
+               %block.[`0`].my_alloc_region
+                 (Pmixedfield_1,
+                  Pmixedfield :
+                    [ 0 |1 | 0 of [ 0 of imm tagged * imm tagged ]
+                    |1 of [ 0 of imm tagged * imm tagged ] ])
              in
              apply direct(inv_bornes_2_1 &my_alloc_region)
                ($camlAlt_ergo__inv_bornes_11
@@ -157,7 +173,13 @@ let code loopify(never) size(45) newer_version_of(inv_3) tupled
                          [ 0 of [ 0 |1 | 0 of val |1 of val ] *
                              [ 0 |1 | 0 of val |1 of val ] ]) =
                 let Pmakeblock =
-                  %block.[`0`].my_alloc_region (apply_result, 0)
+                  %block.[`0`].my_alloc_region
+                    (apply_result :
+                       [ 0 of [ 0 |1 | 0 of val |1 of val ] *
+                           [ 0 |1 | 0 of val |1 of val ] ],
+                     0 :
+                       [ 0 | 0 of [ 0 of val * val ] * [ 0 | 0 of val * val ]
+                       ])
                 in
                 cont k (Pmakeblock)))
 in

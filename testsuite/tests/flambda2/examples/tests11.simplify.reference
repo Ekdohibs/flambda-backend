@@ -84,7 +84,7 @@ and code rec loopify(never) size(69) newer_version_of(map_foo_4)
                    where k2 (apply_result : val) =
                      let Pmakeblock =
                        %block.[`0`].my_alloc_region
-                         (apply_result, staticcatch_result)
+                         (apply_result : val, staticcatch_result : val)
                      in
                      cont k (Pmakeblock))))
 and code loopify(never) size(4) newer_version_of(`fn[tests11.ml:23,2--70]_1_1`)

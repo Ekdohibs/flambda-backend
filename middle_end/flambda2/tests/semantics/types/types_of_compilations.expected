@@ -57,9 +57,9 @@ higher_order.fl: 7 environments, 192 names, 51 different types of a name, 51 in 
 inline_function.fl: 5 environments, 79 names, 21 different types of a name, 21 in the model
 int64_boxed.fl: 2 environments, 42 names, 22 different types of a name, 22 in the model
 match_variant.fl: 13 environments, 255 names, 58 different types of a name, 58 in the model
-match_variant_local.fl: 15 environments, 339 names, 62 different types of a name, 62 in the model
+match_variant_local.fl: 15 environments, 356 names, 64 different types of a name, 64 in the model
 mutual_recursion.fl: 7 environments, 73 names, 30 different types of a name, 30 in the model
-option_default.fl: 7 environments, 113 names, 35 different types of a name, 35 in the model
+option_default.fl: 7 environments, 113 names, 34 different types of a name, 34 in the model
 record_project.fl: 5 environments, 182 names, 44 different types of a name, 44 in the model
 tail_loop.fl: 6 environments, 62 names, 23 different types of a name, 23 in the model
 tuple_swap.fl: 4 environments, 60 names, 19 different types of a name, 19 in the model
@@ -105,28 +105,28 @@ In all:
   95 units simplified
   180 environments at the start of a handler
   95 environments at the end of a unit
-  5628 names in the environments
-  3690 different types of a name
-  3690 in the model
+  5645 names in the environments
+  3691 different types of a name
+  3691 in the model
   61 the round trip from the model (to the compiler and back): not run, not in the compiler: a Rec_info type given by its head: the model has not got the expression
-  3690 kind: agree
-  3690 get_alias_opt: agree
-  3690 is_obviously_bottom: agree
-  3690 is_obviously_unknown: agree
-  3681 free_variables against free_names, without shadowed bindings: agree
-  3681 free_variables includes free_names, with shadowed bindings: agree
-  3690 must_be_singleton: agree
-  3233 is_alias_of_name, of each name that the type mentions at its top: not run, the type mentions no variable and is no alias
-  3690 free_variables, with the variables of what the converter drops, against free_names: agree
+  3691 kind: agree
+  3691 get_alias_opt: agree
+  3691 is_obviously_bottom: agree
+  3691 is_obviously_unknown: agree
+  3682 free_variables against free_names, without shadowed bindings: agree
+  3682 free_variables includes free_names, with shadowed bindings: agree
+  3691 must_be_singleton: agree
+  3232 is_alias_of_name, of each name that the type mentions at its top: not run, the type mentions no variable and is no alias
+  3691 free_variables, with the variables of what the converter drops, against free_names: agree
   61 the round trip from the compiler, as printed: not run, not in the compiler: a Rec_info type given by its head: the model has not got the expression
   61 the round trip from the compiler, for the compiler's equality: not run, not in the compiler: a Rec_info type given by its head: the model has not got the expression
   61 the round trip from the compiler, for Type_grammar.equal: not run, not in the compiler: a Rec_info type given by its head: the model has not got the expression
-  3690 type_well_formed: agree
-  3629 the round trip from the model (to the compiler and back): agree
-  3629 the round trip from the compiler, as printed: agree
-  3629 the round trip from the compiler, for the compiler's equality: agree
-  3629 the round trip from the compiler, for Type_grammar.equal: agree
-  457 is_alias_of_name, of each name that the type mentions at its top: agree
+  3691 type_well_formed: agree
+  3630 the round trip from the model (to the compiler and back): agree
+  3630 the round trip from the compiler, as printed: agree
+  3630 the round trip from the compiler, for the compiler's equality: agree
+  3630 the round trip from the compiler, for Type_grammar.equal: agree
+  459 is_alias_of_name, of each name that the type mentions at its top: agree
   62 with a function type that has a rec_info, which is put back for the round trip from the compiler
   9 free_variables against free_names, without shadowed bindings: not run, what the converter dropped of Rec_info mentions variables, which the model has not got
   9 free_variables includes free_names, with shadowed bindings: not run, what the converter dropped of Rec_info mentions variables, which the model has not got

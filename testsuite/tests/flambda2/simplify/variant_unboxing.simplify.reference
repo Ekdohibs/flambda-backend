@@ -25,7 +25,9 @@ let code loopify(never) size(32) newer_version_of(descr_0)
         | 1 -> k (param)
     where k2 =
       let Pfield = %block_load.[`0`] (param) in
-      let Pmakeblock = %block.[`0`].my_alloc_region (Pfield, 0) in
+      let Pmakeblock =
+        %block.[`0`].my_alloc_region (Pfield : imm tagged, 0 : imm tagged)
+      in
       cont k (Pmakeblock)
 in
 let $camlVariant_unboxing__descr_1 = closure descr_0_1 @descr &toplevel in

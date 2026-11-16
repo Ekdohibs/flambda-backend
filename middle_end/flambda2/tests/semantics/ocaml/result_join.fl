@@ -17,13 +17,14 @@ let $camlResult_join__first_const_0 = Block 0 () in
        cont k/37
      where k/37 =
        let Pmakeblock/84 =
-         %block.[`1`].my_alloc_region/66.local[region/69] (x/64)
+         %block.[`1`].my_alloc_region/66.local[region/69] (x/64 : imm tagged)
        in
        cont k/33 (Pmakeblock/84)
      where k/36 =
        let int_add/82 = %int_barith.add (x/64, 1) in
        let Pmakeblock/83 =
-         %block.[`0`].my_alloc_region/66.local[region/69] (int_add/82)
+         %block.[`0`].my_alloc_region/66.local[region/69]
+           (int_add/82 : imm tagged)
        in
        cont k/33 (Pmakeblock/83)
      where k/33 (v/74 : [ 0 of imm tagged |1 of imm tagged ]) =

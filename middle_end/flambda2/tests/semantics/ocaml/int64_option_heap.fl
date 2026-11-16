@@ -18,7 +18,9 @@
        let prim/87 = %unbox_num.`int64` (x/72) in
        let prim/88 = %int_barith.`int64`.add (prim/87, prim/86) in
        let int64_add/89 = %box_num.`int64`.my_alloc_region/74 (prim/88) in
-       let Pmakeblock/90 = %block.[`0`].my_alloc_region/74 (int64_add/89) in
+       let Pmakeblock/90 =
+         %block.[`0`].my_alloc_region/74 (int64_add/89 : int64 boxed)
+       in
        cont k/26 (Pmakeblock/90)
      where k/26 (v/77 : [ 0 | 0 of int64 boxed ]) =
        ((let prim/83 = %is_int (v/77) in

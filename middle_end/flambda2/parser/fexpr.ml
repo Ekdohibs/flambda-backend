@@ -367,6 +367,12 @@ and let_binding =
 and named =
   | Simple of simple
   | Prim of prim
+  | Prim_with_kinds of prim_op * (simple * kind_with_subkind option) list
+    (* A primitive whose arguments are written with kinds. The reader takes it
+       for one primitive only, the making of a block of values, where a kind is
+       that of the field that the argument fills. An argument with no kind there
+       fills a field of any value, as every field of such a block does when the
+       block is written as a [Prim]. *)
   | Closure of fun_decl
   | Rec_info of rec_info
 

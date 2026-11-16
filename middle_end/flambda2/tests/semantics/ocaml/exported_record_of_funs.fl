@@ -40,8 +40,8 @@ let $camlExported_record_of_funs__first_const_0 = Block 0 () in
  in
  let ops/79 =
    %block.[`0`].`toplevel`
-     (`fn[exported_record_of_funs.ml:12,19--35]/78`,
-      `fn[exported_record_of_funs.ml:12,44--60]/77`)
+     (`fn[exported_record_of_funs.ml:12,19--35]/78` : val,
+      `fn[exported_record_of_funs.ml:12,44--60]/77` : val)
  in
  let up/80 = closure up_2 @up &toplevel with { ops = ops/79 } in
  let Pmakeblock/81 = %block.[`0`].`toplevel` (ops/79, up/80) in

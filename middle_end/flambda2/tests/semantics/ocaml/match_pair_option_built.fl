@@ -14,8 +14,14 @@ let $camlMatch_pair_option_built__first_const_0 = Block 0 () in
       where k/31 =
         cont k/30)
      where k/30 =
-       let Pmakeblock/91 = %block.[`0`].my_alloc_region/88 (a/85, b/86) in
-       let Pmakeblock/92 = %block.[`0`].my_alloc_region/88 (Pmakeblock/91) in
+       let Pmakeblock/91 =
+         %block.[`0`].my_alloc_region/88
+           (a/85 : imm tagged, b/86 : imm tagged)
+       in
+       let Pmakeblock/92 =
+         %block.[`0`].my_alloc_region/88
+           (Pmakeblock/91 : [ 0 of imm tagged * imm tagged ])
+       in
        cont k/28 (Pmakeblock/92)
  in
  let code inline(never) size(26)

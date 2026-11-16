@@ -37,7 +37,8 @@ let $camlPair_loop_in_loop__first_const_0 = Block 0 () in
                       in
                       let i/172 = %tag_imm (prim/171) in
                       ((let Pmakeblock/215 =
-                          %block.[`0`].my_alloc_region/156 (i/172, 0)
+                          %block.[`0`].my_alloc_region/156
+                            (i/172 : imm tagged, 0 : imm tagged)
                         in
                         cont k/49 (Pmakeblock/215, total_18_unboxed0/170))
                          where k/49
@@ -135,7 +136,8 @@ let $camlPair_loop_in_loop__first_const_0 = Block 0 () in
                                                in
                                                let Pmakeblock/207 =
                                                  %block.[`0`].my_alloc_region/156
-                                                   (int_add/206, int_add/204)
+                                                   (int_add/206 : imm tagged,
+                                                    int_add/204 : imm tagged)
                                                in
                                                let for_next_naked/208 =
                                                  %int_barith.`int64`.add

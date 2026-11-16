@@ -13,7 +13,8 @@ let $camlUnboxed_pair_with_float_argument__first_const_0 = Block 0 () in
      %box_num.`float`.my_alloc_region/46 (param_12_unboxed0/42)
    in
    let Pmakeblock/51 =
-     %block.[`0`].my_alloc_region/46 (`float_of_float#/50`, int_add/49)
+     %block.[`0`].my_alloc_region/46
+       (`float_of_float#/50` : float boxed, int_add/49 : imm tagged)
    in
    cont k/12 (Pmakeblock/51)
  in

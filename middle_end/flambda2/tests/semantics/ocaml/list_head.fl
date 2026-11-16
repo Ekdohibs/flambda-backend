@@ -45,7 +45,9 @@
   (let Popaque/80 = %opaque (1) in
    let Pmakeblock/81 =
      %block.[`0`].`toplevel`.local[region/75]
-       (Popaque/80, $camlList_head__const_block_1)
+       (Popaque/80 : imm tagged,
+        $camlList_head__const_block_1 :
+          [ 0 | 0 of imm tagged * [ 0 | 0 of imm tagged * val ] ])
    in
    apply direct(first_two_0 &toplevel)
      (first_two/72 : val -> imm tagged) (Pmakeblock/81) -> k/38 * error)

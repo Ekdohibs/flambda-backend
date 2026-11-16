@@ -101,7 +101,8 @@ and code rec loopify(never) size(75) newer_version_of(map_foo_4)
                          (f : _ -> val) (Pfield) -> k2 * k1)
                         where k2 (apply_result : val) =
                           let Pmakeblock =
-                            %block.[`0`].my_alloc_region (apply_result, g)
+                            %block.[`0`].my_alloc_region
+                              (apply_result : val, g : val)
                           in
                           cont k (Pmakeblock)))))
 and code loopify(never) size(4) newer_version_of(`fn[tests12.ml:25,2--70]_1_1`)

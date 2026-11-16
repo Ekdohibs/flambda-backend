@@ -25,7 +25,8 @@
              cont k/35)
           where k/35 =
             let Pfield/76 = %block_load.[`0`] (t/70) in
-            let Pmakeblock/77 = %block.[`0`].my_alloc_region/73 (Pfield/76)
+            let Pmakeblock/77 =
+              %block.[`0`].my_alloc_region/73 (Pfield/76 : imm tagged)
             in
             cont k/32 (Pmakeblock/77))
  in

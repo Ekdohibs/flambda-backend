@@ -1,7 +1,9 @@
 let $camlTuple_swap__first_const_0 = Block 0 () in
 (let Popaque/37 = %opaque (10) in
  let Popaque/38 = %opaque (1) in
- let pair/39 = %block.[`0`].`toplevel` (Popaque/38, Popaque/37) in
+ let pair/39 =
+   %block.[`0`].`toplevel` (Popaque/38 : imm tagged, Popaque/37 : imm tagged)
+ in
  let Pmixedfield/40 = %block_load.[`0`] (pair/39) in
  let Pmixedfield/41 = %block_load.[`1`] (pair/39) in
  let Pmakeblock/42 = %block.[`0`].`toplevel` (Pmixedfield/41, Pmixedfield/40)

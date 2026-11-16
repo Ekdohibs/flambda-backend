@@ -34,12 +34,25 @@ let $camlVariant_unboxing__first_const_0 = Block 0 () in
        let Pfield_1 = %block_load.[`1`] (param) in
        let Pfield_2 = %block_load.[`0`] (param) in
        let Pmakeblock =
-         %block.[`1`].my_alloc_region (Pfield_2, Pfield_1, Pfield)
+         %block.[`1`].my_alloc_region
+           (Pfield_2 : imm tagged,
+            Pfield_1 :
+              [ 0 | 0 of imm tagged
+              |1 of imm tagged *
+                 [ 0 | 0 of imm tagged |1 of imm tagged * val * val ] *
+                 [ 0 | 0 of imm tagged |1 of imm tagged * val * val ] ],
+            Pfield :
+              [ 0 | 0 of imm tagged
+              |1 of imm tagged *
+                 [ 0 | 0 of imm tagged |1 of imm tagged * val * val ] *
+                 [ 0 | 0 of imm tagged |1 of imm tagged * val * val ] ])
        in
        cont k1 (Pmakeblock)
      where k3 =
        let Pfield = %block_load.[`0`] (param) in
-       let Pmakeblock = %block.[`0`].my_alloc_region (Pfield, 0) in
+       let Pmakeblock =
+         %block.[`0`].my_alloc_region (Pfield : imm tagged, 0 : imm tagged)
+       in
        cont k1 (Pmakeblock)
  in
  let code size(12)

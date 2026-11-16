@@ -16,7 +16,9 @@ let $camlChar_digit_value__first_const_0 = Block 0 () in
         cont k/36)
      where k/36 =
        let int_sub/84 = %int_barith.sub (c/79, 48) in
-       let Pmakeblock/85 = %block.[`0`].my_alloc_region/81 (int_sub/84) in
+       let Pmakeblock/85 =
+         %block.[`0`].my_alloc_region/81 (int_sub/84 : imm tagged)
+       in
        cont k/34 (Pmakeblock/85)
  in
  let code size(17)

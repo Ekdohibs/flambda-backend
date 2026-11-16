@@ -68,7 +68,7 @@ let $camlPartial_in_a_pair__first_const_0 = Block 0 () in
           where k/46 (apply_result/150 : val) =
             let fs/151 =
               %block.[`0`].my_alloc_region/140.local[region/144]
-                (apply_result/150, apply_result/149)
+                (apply_result/150 : val, apply_result/149 : val)
             in
             ((let Pmixedfield/156 = %block_load.[`1`] (fs/151) in
               apply direct(partial_combine_2 &my_alloc_region/140)

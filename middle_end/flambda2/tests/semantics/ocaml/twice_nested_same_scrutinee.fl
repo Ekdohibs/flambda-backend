@@ -47,7 +47,7 @@ let $camlTwice_nested_same_scrutinee__first_const_0 = Block 0 () in
       let int_mul/97 = %int_barith.mul (apply_result/96, 100) in
       ((let Popaque/100 = %opaque (21) in
         let Pmakeblock/101 =
-          %block.[`0`].`toplevel`.local[region/91] (Popaque/100)
+          %block.[`0`].`toplevel`.local[region/91] (Popaque/100 : imm tagged)
         in
         apply direct(f_0 &toplevel)
           (f/88 : val -> imm tagged) (Pmakeblock/101) -> k/41 * error)

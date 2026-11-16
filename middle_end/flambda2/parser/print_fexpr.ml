@@ -514,6 +514,16 @@ let prim ppf ((op, args) : prim) =
     (simple_args ~space:Before ~omit_if_empty:false)
     args
 
+let prim_with_kinds ppf (op, args) =
+  let arg ppf (s, (k : kind_with_subkind option)) =
+    match k with
+    | None -> simple ppf s
+    | Some k ->
+      Format.fprintf ppf "@[<2>%a :@ %a@]" simple s kind_with_subkind k
+  in
+  Format.fprintf ppf "@[<2>%a@ (@[<hv>%a@])@]" prim_op op (pp_comma_list arg)
+    args
+
 let parameter ppf { param; kind = k } = kinded_variable ppf (param, k)
 
 let kinded_parameters ~space ppf = function
@@ -581,6 +591,7 @@ let fun_decl expr_or_static ppf (decl : fun_decl) =
 let named ppf = function
   | (Simple s : named) -> simple ppf s
   | Prim p -> prim ppf p
+  | Prim_with_kinds (op, args) -> prim_with_kinds ppf (op, args)
   | (Closure decl : named) -> fun_decl Flambda_colours.expr_keyword ppf decl
   | Rec_info ri ->
     Format.fprintf ppf "@[<hv 2>rec_info@ %a@]" (rec_info ~parens:If_complex) ri

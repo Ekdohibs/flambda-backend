@@ -17,7 +17,10 @@
     let Pmakeblock = %block.[`0`].my_alloc_region (x_1) in
     cont k3 (Pmakeblock))
      where k3 (b : [ 0 | 0 of val? ]) =
-       let Pmakeblock = %block.[`0`].my_alloc_region (a, b) in
+       let Pmakeblock =
+         %block.[`0`].my_alloc_region
+           (a : [ 0 | 0 of val? ], b : [ 0 | 0 of val? ])
+       in
        cont k1 (Pmakeblock)
  in
  let code size(21)
@@ -31,7 +34,10 @@
     cont k3 (Pmakeblock))
      where k3 (a : [ 0 | 0 of val? ]) =
        let b = %block.[`0`].my_alloc_region (x) in
-       let Pmakeblock = %block.[`0`].my_alloc_region (a, b) in
+       let Pmakeblock =
+         %block.[`0`].my_alloc_region
+           (a : [ 0 | 0 of val? ], b : [ 0 | 0 of val? ])
+       in
        cont k1 (Pmakeblock)
  in
  let $camlCross_function_cse_a__s0 = closure some_0 @some &toplevel in

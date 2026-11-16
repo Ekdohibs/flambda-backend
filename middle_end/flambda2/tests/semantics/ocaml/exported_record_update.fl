@@ -5,7 +5,10 @@
          : [ 0 of imm tagged * imm tagged ] =
    let next_depth/38 = rec_info (succ my_depth/37) in
    let Pfield/39 = %block_load.[`1`] (t/33) in
-   let Pmakeblock/40 = %block.[`0`].my_alloc_region/36 (dx/34, Pfield/39) in
+   let Pmakeblock/40 =
+     %block.[`0`].my_alloc_region/36
+       (dx/34 : imm tagged, Pfield/39 : imm tagged)
+   in
    cont k/12 (Pmakeblock/40)
  in
  let $camlExported_record_update__const_block_0 = Block 0 (0, 0) in

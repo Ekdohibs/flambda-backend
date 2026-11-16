@@ -22,7 +22,8 @@ let $camlStack_argument_result_returned__first_const_0 = Block 0 () in
    let ghost_region/80 = %begin_ghost_region () in
    (let int_add/84 = %int_barith.add (x/73, 1) in
     let Pmakeblock/85 =
-      %block.[`0`].my_alloc_region/75.local[region/79] (x/73, int_add/84)
+      %block.[`0`].my_alloc_region/75.local[region/79]
+        (x/73 : imm tagged, int_add/84 : imm tagged)
     in
     apply direct(total_0 &my_alloc_region/75)
       (total/78 : val -> imm tagged) (Pmakeblock/85) -> k/22 * k/21)

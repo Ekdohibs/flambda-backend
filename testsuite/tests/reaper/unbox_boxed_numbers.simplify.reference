@@ -315,7 +315,8 @@ let code loopify(never) size(23) newer_version_of(test_pair_16)
   let prim_3 = %num_conv.[`imm`].[`int64`] (prim_2) in
   let int64_of_int_1 = %box_num.`int64`.my_alloc_region (prim_3) in
   let Pmakeblock =
-    %block.[`0`].my_alloc_region (int64_of_int_1, int64_of_int)
+    %block.[`0`].my_alloc_region
+      (int64_of_int_1 : int64 boxed, int64_of_int : int64 boxed)
   in
   apply direct(pair_first_15_1 &my_alloc_region)
     ($camlUnbox_boxed_numbers__pair_first_14 : val -> imm tagged)

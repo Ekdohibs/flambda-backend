@@ -27,7 +27,8 @@ let code loopify(never) size(10) newer_version_of(f_1)
   let n = %block_load.[`0`] (Pfield) in
   let Pmakeblock =
     %block.[`0`].my_alloc_region
-      ($camlMeet_with_incompatible_kinds__float_0, n)
+      ($camlMeet_with_incompatible_kinds__float_0 : float boxed,
+       n : imm tagged)
   in
   cont k (Pmakeblock)
 in

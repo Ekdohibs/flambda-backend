@@ -2,12 +2,16 @@ let $camlEmpty_type_refuted__first_const_0 = Block 0 () in
 (let region/41 = %begin_region () in
  let ghost_region/42 = %begin_ghost_region () in
  (let Popaque/46 = %opaque (5) in
-  let e/47 = %block.[`0`].`toplevel`.local[region/41] (Popaque/46) in
+  let e/47 =
+    %block.[`0`].`toplevel`.local[region/41] (Popaque/46 : imm tagged)
+  in
   let Pfield/48 = %block_load.[`0`] (e/47) in
   let int_mul/49 = %int_barith.mul (Pfield/48, 2) in
   let int_mul/50 = %int_barith.mul (int_mul/49, 10) in
   let Popaque/51 = %opaque (4) in
-  let e/52 = %block.[`0`].`toplevel`.local[region/41] (Popaque/51) in
+  let e/52 =
+    %block.[`0`].`toplevel`.local[region/41] (Popaque/51 : imm tagged)
+  in
   let Pfield/53 = %block_load.[`0`] (e/52) in
   let int_add/54 = %int_barith.add (Pfield/53, int_mul/50) in
   cont k/11 (int_add/54))

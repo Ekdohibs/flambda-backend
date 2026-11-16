@@ -25,7 +25,9 @@ let code loopify(never) size(7) newer_version_of(create_1)
         my_closure &my_alloc_region my_depth
         -> k * k1
         : val =
-  let Pmakeblock = %block.mut.[`0`].my_alloc_region (0) in
+  let Pmakeblock =
+    %block.mut.[`0`].my_alloc_region (0 : [ 0 | 0 of [ 0 of val * val ] ])
+  in
   cont k (Pmakeblock)
 in
 let $camlDirect_app_parameter_kind_check_simplify__create_2 =

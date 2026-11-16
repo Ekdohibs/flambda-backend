@@ -75,12 +75,13 @@ let code inline(always) loopify(never) size(29) newer_version_of(result_try_with
       (apply unknown_arity &my_alloc_region
          (f : imm tagged -> val) (0) -> k3 * k2
          where k3 (apply_result : val) =
-           let Pmakeblock = %block.[`0`].my_alloc_region (apply_result) in
+           let Pmakeblock = %block.[`0`].my_alloc_region (apply_result : val)
+           in
            cont k pop(k2) (Pmakeblock))
     where k2 exn (`exn` : val) =
       let `unit` = %end_try_region (try_region) in
       let unit_1 = %end_try_ghost_region (try_ghost_region) in
-      let Pmakeblock = %block.[`1`].my_alloc_region (`exn`) in
+      let Pmakeblock = %block.[`1`].my_alloc_region (`exn` : val) in
       cont k (Pmakeblock)
 in
 let $camlFrom_core_char_test__result_try_with_11 =

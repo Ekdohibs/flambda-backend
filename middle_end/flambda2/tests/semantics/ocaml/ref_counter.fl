@@ -11,7 +11,7 @@ let $camlRef_counter__first_const_0 = Block 0 () in
    cont k/14 (Psetfield/44)
  in
  let tick/45 = closure tick_0 @tick &toplevel in
- let Pmakeblock/46 = %block.mut.[`0`].`toplevel` (0) in
+ let Pmakeblock/46 = %block.mut.[`0`].`toplevel` (0 : imm tagged) in
  let counter/47 = %opaque (Pmakeblock/46) in
  apply direct(tick_0 &toplevel)
    (tick/45 : val -> imm tagged) (counter/47) -> k/17 * error

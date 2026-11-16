@@ -49,10 +49,15 @@
       ((let Popaque/130 = %opaque (7) in
         let Pmakeblock/131 =
           %block.[`0`].`toplevel`.local[region/111]
-            (Popaque/130, $camlOr_in_list_positions__const_block_1)
+            (Popaque/130 : imm tagged,
+             $camlOr_in_list_positions__const_block_1 :
+               [ 0 | 0 of imm tagged * [ 0 | 0 of imm tagged * val ] ])
         in
         let Pmakeblock/132 =
-          %block.[`0`].`toplevel`.local[region/111] (1, Pmakeblock/131)
+          %block.[`0`].`toplevel`.local[region/111]
+            (1 : imm tagged,
+             Pmakeblock/131 :
+               [ 0 | 0 of imm tagged * [ 0 | 0 of imm tagged * val ] ])
         in
         apply
                direct(second_or_only_0
@@ -64,10 +69,15 @@
            let int_mul/118 = %int_barith.mul (apply_result/117, 100) in
            ((let Popaque/127 = %opaque (6) in
              let Pmakeblock/128 =
-               %block.[`0`].`toplevel`.local[region/111] (Popaque/127, 0)
+               %block.[`0`].`toplevel`.local[region/111]
+                 (Popaque/127 : imm tagged,
+                  0 : [ 0 | 0 of imm tagged * [ 0 | 0 of imm tagged * val ] ])
              in
              let Pmakeblock/129 =
-               %block.[`0`].`toplevel`.local[region/111] (1, Pmakeblock/128)
+               %block.[`0`].`toplevel`.local[region/111]
+                 (1 : imm tagged,
+                  Pmakeblock/128 :
+                    [ 0 | 0 of imm tagged * [ 0 | 0 of imm tagged * val ] ])
              in
              apply
                     direct(second_or_only_0
@@ -80,7 +90,10 @@
                 ((let Popaque/125 = %opaque (5) in
                   let Pmakeblock/126 =
                     %block.[`0`].`toplevel`.local[region/111]
-                      (Popaque/125, 0)
+                      (Popaque/125 : imm tagged,
+                       0 :
+                         [ 0
+                         | 0 of imm tagged * [ 0 | 0 of imm tagged * val ] ])
                   in
                   apply
                          direct(second_or_only_0

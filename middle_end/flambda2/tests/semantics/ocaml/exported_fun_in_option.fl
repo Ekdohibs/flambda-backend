@@ -20,7 +20,7 @@ let $camlExported_fun_in_option__first_const_0 = Block 0 () in
    in
    let Pmakeblock/49 =
      %block.[`0`].my_alloc_region/45
-       (`fn[exported_fun_in_option.ml:6,22--38]/48`)
+       (`fn[exported_fun_in_option.ml:6,22--38]/48` : val)
    in
    cont k/16 (Pmakeblock/49)
  in

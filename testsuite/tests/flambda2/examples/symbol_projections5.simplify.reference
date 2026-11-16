@@ -33,13 +33,15 @@ let $camlSymbol_projections5__immstring_0 = "FOO" in
         where k3 =
           let Pmakeblock =
             %block.[`0`].my_alloc_region
-              ($camlSymbol_projections5__g_3 ~ depth my_depth -> succ my_depth)
+              ($camlSymbol_projections5__g_3 ~ depth my_depth -> succ my_depth :
+                 val)
           in
           cont k (Pmakeblock)
         where k2 =
           let Pmakeblock =
             %block.[`1`].my_alloc_region
-              ($camlSymbol_projections5__g_3 ~ depth my_depth -> succ my_depth)
+              ($camlSymbol_projections5__g_3 ~ depth my_depth -> succ my_depth :
+                 val)
           in
           cont k (Pmakeblock)
     in
@@ -57,13 +59,15 @@ let $camlSymbol_projections5__immstring_0 = "FOO" in
         where k3 =
           let Pmakeblock =
             %block.[`0`].my_alloc_region
-              ($camlSymbol_projections5__h_2 ~ depth my_depth -> succ my_depth)
+              ($camlSymbol_projections5__h_2 ~ depth my_depth -> succ my_depth :
+                 val)
           in
           cont k (Pmakeblock)
         where k2 =
           let Pmakeblock =
             %block.[`1`].my_alloc_region
-              ($camlSymbol_projections5__h_2 ~ depth my_depth -> succ my_depth)
+              ($camlSymbol_projections5__h_2 ~ depth my_depth -> succ my_depth :
+                 val)
           in
           cont k (Pmakeblock)
     in

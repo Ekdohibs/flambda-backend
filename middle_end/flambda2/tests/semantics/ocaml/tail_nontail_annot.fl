@@ -59,20 +59,22 @@ let $camlTail_nontail_annot__first_const_0 = Block 0 () in
     let int_add/258 = %int_barith.add (x/244, 1000) in
     let a/259 =
       %block.[`0`].my_alloc_region/246.local[region/252]
-        (int_add/258, int_add/257)
+        (int_add/258 : imm tagged, int_add/257 : imm tagged)
     in
     let int_add/260 = %int_barith.add (x/244, 5004) in
     let int_add/261 = %int_barith.add (x/244, 4003) in
     let int_add/262 = %int_barith.add (x/244, 3002) in
     let b/263 =
       %block.[`0`].my_alloc_region/246.local[region/252]
-        (int_add/262, int_add/261, int_add/260)
+        (int_add/262 : imm tagged,
+         int_add/261 : imm tagged,
+         int_add/260 : imm tagged)
     in
     let int_add/264 = %int_barith.add (x/244, 7006) in
     let int_add/265 = %int_barith.add (x/244, 6005) in
     let c/266 =
       %block.[`0`].my_alloc_region/246.local[region/252]
-        (int_add/265, int_add/264)
+        (int_add/265 : imm tagged, int_add/264 : imm tagged)
     in
     let f/267 = closure f_4 @f &my_alloc_region/246 &region/252
     with { x = x/244 }
@@ -136,7 +138,8 @@ let $camlTail_nontail_annot__first_const_0 = Block 0 () in
    let ghost_region/290 = %begin_ghost_region () in
    (let int_add/294 = %int_barith.add (x/281, 1) in
     let p/295 =
-      %block.[`0`].my_alloc_region/283.local[region/289] (x/281, int_add/294)
+      %block.[`0`].my_alloc_region/283.local[region/289]
+        (x/281 : imm tagged, int_add/294 : imm tagged)
     in
     apply direct(noise_3 &my_alloc_region/283)
       (noise/287 : imm tagged -> imm tagged) (x/281) -> k/74 * k/72

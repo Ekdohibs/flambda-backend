@@ -13,7 +13,9 @@ let $camlShape2_heap__first_const_0 = Block 0 () in
        cont k/41
      where k/41 =
        let int_add/68 = %int_barith.add (x/54, 1) in
-       let Pmakeblock/69 = %block.[`0`].my_alloc_region/56 (int_add/68, x/54)
+       let Pmakeblock/69 =
+         %block.[`0`].my_alloc_region/56
+           (int_add/68 : imm tagged, x/54 : imm tagged)
        in
        cont k/34 (Pmakeblock/69)
      where k/34 (v/59 : [ 0 |1 | 0 of imm tagged * imm tagged ]) =

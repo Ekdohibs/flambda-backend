@@ -16,7 +16,8 @@ let $camlOption_join__first_const_0 = Block 0 () in
      where k/32 =
        let int_add/74 = %int_barith.add (x/58, 1) in
        let Pmakeblock/75 =
-         %block.[`0`].my_alloc_region/60.local[region/63] (int_add/74)
+         %block.[`0`].my_alloc_region/60.local[region/63]
+           (int_add/74 : imm tagged)
        in
        cont k/29 (Pmakeblock/75)
      where k/29 (v/68 : [ 0 | 0 of imm tagged ]) =

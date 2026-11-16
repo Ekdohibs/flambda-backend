@@ -28,10 +28,14 @@ let code inline(always) loopify(never) size(27) newer_version_of(help_desired_0)
      | 0 -> k2
      | 1 -> k3)
     where k3 =
-      let Pmakeblock = %block.[`0`].my_alloc_region (b, a) in
+      let Pmakeblock =
+        %block.[`0`].my_alloc_region (b : imm tagged, a : imm tagged)
+      in
       cont k (Pmakeblock)
     where k2 =
-      let Pmakeblock = %block.[`0`].my_alloc_region (a, b) in
+      let Pmakeblock =
+        %block.[`0`].my_alloc_region (a : imm tagged, b : imm tagged)
+      in
       cont k (Pmakeblock)
 in
 let $camlIfs_and_records__help_desired_1 =
@@ -48,7 +52,9 @@ let code inline(always) loopify(never) size(19) newer_version_of(help_wrap_1)
      | 0 -> k2 (a, b)
      | 1 -> k2 (b, a))
     where k2 (a_1 : imm tagged, b_1 : imm tagged) =
-      let Pmakeblock = %block.[`0`].my_alloc_region (a_1, b_1) in
+      let Pmakeblock =
+        %block.[`0`].my_alloc_region (a_1 : imm tagged, b_1 : imm tagged)
+      in
       cont k (Pmakeblock)
 in
 let $camlIfs_and_records__help_wrap_2 =
@@ -65,10 +71,14 @@ let code inline(always) loopify(never) size(27) newer_version_of(help_variant_2)
      | 0 -> k2
      | 1 -> k3)
     where k3 =
-      let Pmakeblock = %block.[`0`].my_alloc_region (b, a) in
+      let Pmakeblock =
+        %block.[`0`].my_alloc_region (b : imm tagged, a : imm tagged)
+      in
       cont k (Pmakeblock)
     where k2 =
-      let Pmakeblock = %block.[`0`].my_alloc_region (a, b) in
+      let Pmakeblock =
+        %block.[`0`].my_alloc_region (a : imm tagged, b : imm tagged)
+      in
       cont k (Pmakeblock)
 in
 let $camlIfs_and_records__help_variant_3 =
@@ -85,7 +95,9 @@ let code inline(always) loopify(never) size(19) newer_version_of(help_wrap_varia
      | 0 -> k2 (a, b)
      | 1 -> k2 (b, a))
     where k2 (a_1 : imm tagged, b_1 : imm tagged) =
-      let Pmakeblock = %block.[`0`].my_alloc_region (a_1, b_1) in
+      let Pmakeblock =
+        %block.[`0`].my_alloc_region (a_1 : imm tagged, b_1 : imm tagged)
+      in
       cont k (Pmakeblock)
 in
 let $camlIfs_and_records__help_wrap_variant_4 =
@@ -127,7 +139,8 @@ let code inline(always) loopify(never) size(30) newer_version_of(help_interior_i
           | 1 -> k2 (b))
          where k2 (switch_result_1 : imm tagged) =
            let Pmakeblock =
-             %block.[`0`].my_alloc_region (switch_result_1, switch_result)
+             %block.[`0`].my_alloc_region
+               (switch_result_1 : imm tagged, switch_result : imm tagged)
            in
            cont k (Pmakeblock))
 in
@@ -139,7 +152,9 @@ let code inline(always) loopify(never) size(8) newer_version_of(help_no_if_6)
         my_closure &my_alloc_region my_depth
         -> k * k1
         : [ 0 of imm tagged * imm tagged ] =
-  let Pmakeblock = %block.[`0`].my_alloc_region (a, b) in
+  let Pmakeblock =
+    %block.[`0`].my_alloc_region (a : imm tagged, b : imm tagged)
+  in
   cont k (Pmakeblock)
 in
 let $camlIfs_and_records__help_no_if_7 =

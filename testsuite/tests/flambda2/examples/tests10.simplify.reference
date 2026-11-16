@@ -8,8 +8,8 @@ and code rec loopify(never) size(8) newer_version_of(f_0)
         : [ 0 of val * val ] =
   let Pmakeblock =
     %block.[`0`].my_alloc_region
-      ($camlTests10__f_1 ~ depth my_depth -> succ my_depth,
-       $camlTests10__f_1 ~ depth my_depth -> succ my_depth)
+      ($camlTests10__f_1 ~ depth my_depth -> succ my_depth : val,
+       $camlTests10__f_1 ~ depth my_depth -> succ my_depth : val)
   in
   cont k (Pmakeblock)
 in

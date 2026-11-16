@@ -20,7 +20,18 @@ let code inline(never) loopify(never) size(9) newer_version_of(bal_0)
         : [ 0
           | 0 of [ 0 | 0 of val * imm tagged * val ] * imm tagged *
               [ 0 | 0 of val * imm tagged * val ] ] =
-  let Pmakeblock = %block.[`0`].my_alloc_region (l, v, r) in
+  let Pmakeblock =
+    %block.[`0`].my_alloc_region
+      (l :
+         [ 0
+         | 0 of [ 0 | 0 of val * imm tagged * val ] * imm tagged *
+             [ 0 | 0 of val * imm tagged * val ] ],
+       v : imm tagged,
+       r :
+         [ 0
+         | 0 of [ 0 | 0 of val * imm tagged * val ] * imm tagged *
+             [ 0 | 0 of val * imm tagged * val ] ])
+  in
   cont k (Pmakeblock)
 in
 let $camlMap_remove__bal_1 = closure bal_0_1 @bal &toplevel in

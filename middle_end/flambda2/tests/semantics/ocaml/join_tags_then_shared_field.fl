@@ -14,10 +14,14 @@ let $camlJoin_tags_then_shared_field__first_const_0 = Block 0 () in
      where k/36 =
        cont k/35
      where k/35 =
-       let Pmakeblock/84 = %block.[`1`].my_alloc_region/80 (x/78) in
+       let Pmakeblock/84 =
+         %block.[`1`].my_alloc_region/80 (x/78 : imm tagged)
+       in
        cont k/32 (Pmakeblock/84)
      where k/34 =
-       let Pmakeblock/83 = %block.[`0`].my_alloc_region/80 (x/78) in
+       let Pmakeblock/83 =
+         %block.[`0`].my_alloc_region/80 (x/78 : imm tagged)
+       in
        cont k/32 (Pmakeblock/83)
  in
  let code inline(never) size(24)

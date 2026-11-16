@@ -24,7 +24,9 @@
          my_closure &my_alloc_region my_depth
          -> k1 * k2
          : val =
-   let Pmakeblock = %block.mut.[`0`].my_alloc_region (0) in
+   let Pmakeblock =
+     %block.mut.[`0`].my_alloc_region (0 : [ 0 | 0 of [ 0 of val * val ] ])
+   in
    cont k1 (Pmakeblock)
  in
  let code size(1)
@@ -49,7 +51,9 @@
    closure fn_2 @fn &toplevel
  in
  (let inlined_dbg = %inlined_apply () in
-  let Pmakeblock = %block.mut.[`0`].`toplevel` (0) in
+  let Pmakeblock =
+    %block.mut.[`0`].`toplevel` (0 : [ 0 | 0 of [ 0 of val * val ] ])
+  in
   cont k2 (Pmakeblock))
    where k2 (apply_result : val) =
      let inlined_dbg = %inlined_apply () in

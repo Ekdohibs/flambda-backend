@@ -50,7 +50,7 @@ and code rec loopify(never) size(44) newer_version_of(map_foo_0)
               where k2 (apply_result : val) =
                 let Pmakeblock =
                   %block.[`0`].my_alloc_region
-                    (apply_result, `fn[tests8.ml:20,12--80]`)
+                    (apply_result : val, `fn[tests8.ml:20,12--80]` : val)
                 in
                 cont k (Pmakeblock)))
 and code loopify(never) size(4) newer_version_of(`fn[tests8.ml:20,12--80]_1`)

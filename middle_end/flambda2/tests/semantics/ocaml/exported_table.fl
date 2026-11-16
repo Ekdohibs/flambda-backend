@@ -19,7 +19,7 @@ let $camlExported_table__first_const_0 = Block 0 () in
    cont k/16 (Pmixedfield/59)
  in
  let succ/60 = closure succ_0 @`succ` &toplevel in
- let table/61 = %block.[`0`].`toplevel` (succ/60, 20) in
+ let table/61 = %block.[`0`].`toplevel` (succ/60 : val, 20 : imm tagged) in
  let first/62 = closure first_1 @first &toplevel with { table = table/61 } in
  let Pmakeblock/63 = %block.[`0`].`toplevel` (succ/60, table/61, first/62) in
  cont k/13 (Pmakeblock/63))

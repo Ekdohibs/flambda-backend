@@ -26,7 +26,7 @@ let $camlCall_result_passed_on__first_const_0 = Block 0 () in
           where k/24 (total/64 : imm tagged) =
             let Pmakeblock/65 =
               %block.[`0`].my_alloc_region/56.local[region/59]
-                (total/64, n/53)
+                (total/64 : imm tagged, n/53 : imm tagged)
             in
             let Pfield/66 = %block_load.[`0`] (Pmakeblock/65) in
             cont k/22 (Pfield/66))

@@ -415,7 +415,10 @@ prim_op:
 
 named:
   | s = simple { Simple s }
-  | p = prim_op; args = simple_args { Prim (p, args) }
+  | p = prim_op; args = prim_args
+    { if List.for_all (fun (_, kind) -> Option.is_none kind) args
+      then Prim (p, List.map fst args)
+      else Prim_with_kinds (p, args) }
   | c = fun_decl { Closure c }
   (* CR lmaurer: This strikes me as a bit ugly, but it's necessary because
      [let x = y] could be assigning either a simple or a rec_info. We could
@@ -915,6 +918,15 @@ kinded_variable:
 kind_with_subkind_opt:
   | { None }
   | COLON; kind = kind_with_subkind { Some kind }
+
+prim_args:
+  | { [] }
+  | LPAREN args = separated_list(COMMA, prim_arg); RPAREN { args }
+;
+
+prim_arg:
+  | s = simple; kind = kind_with_subkind_opt { s, kind }
+;
 
 simple_args:
   | { [] }

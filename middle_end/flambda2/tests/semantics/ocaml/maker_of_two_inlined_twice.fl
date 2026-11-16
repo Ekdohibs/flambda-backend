@@ -61,7 +61,8 @@ let $camlMaker_of_two_inlined_twice__first_const_0 = Block 0 () in
    let up/141 = closure up_2 @up &my_alloc_region/137
    with { limit_1 = limit/135 }
    in
-   let Pmakeblock/142 = %block.[`0`].my_alloc_region/137 (down/140, up/141)
+   let Pmakeblock/142 =
+     %block.[`0`].my_alloc_region/137 (down/140 : val, up/141 : val)
    in
    cont k/51 (Pmakeblock/142)
  in

@@ -32,8 +32,9 @@ let $camlSymbol_projections3__immstring_0 = "FOO" in
       let Pmakeblock =
         %block.[`0`].my_alloc_region
           (x,
-           $camlSymbol_projections3__g_2,
-           $camlSymbol_projections3__block_to_lift_3)
+           $camlSymbol_projections3__g_2 : val,
+           $camlSymbol_projections3__block_to_lift_3 :
+             [ 0 of imm tagged * imm tagged ])
       in
       cont k (Pmakeblock)
     and set_of_closures

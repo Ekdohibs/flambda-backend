@@ -59,20 +59,22 @@ let $camlParam_copy_to_heap__first_const_0 = Block 0 () in
     let int_add/274 = %int_barith.add (x/260, 1000) in
     let a/275 =
       %block.[`0`].my_alloc_region/262.local[region/268]
-        (int_add/274, int_add/273)
+        (int_add/274 : imm tagged, int_add/273 : imm tagged)
     in
     let int_add/276 = %int_barith.add (x/260, 5004) in
     let int_add/277 = %int_barith.add (x/260, 4003) in
     let int_add/278 = %int_barith.add (x/260, 3002) in
     let b/279 =
       %block.[`0`].my_alloc_region/262.local[region/268]
-        (int_add/278, int_add/277, int_add/276)
+        (int_add/278 : imm tagged,
+         int_add/277 : imm tagged,
+         int_add/276 : imm tagged)
     in
     let int_add/280 = %int_barith.add (x/260, 7006) in
     let int_add/281 = %int_barith.add (x/260, 6005) in
     let c/282 =
       %block.[`0`].my_alloc_region/262.local[region/268]
-        (int_add/281, int_add/280)
+        (int_add/281 : imm tagged, int_add/280 : imm tagged)
     in
     let f/283 = closure f_4 @f &my_alloc_region/262 &region/268
     with { x = x/260 }
@@ -123,7 +125,8 @@ let $camlParam_copy_to_heap__first_const_0 = Block 0 () in
    let Pmixedfield/296 = %block_load.[`1`] (p/291) in
    let Pmixedfield/297 = %block_load.[`0`] (p/291) in
    let Pmakeblock/298 =
-     %block.[`0`].my_alloc_region/293 (Pmixedfield/297, Pmixedfield/296)
+     %block.[`0`].my_alloc_region/293
+       (Pmixedfield/297 : imm tagged, Pmixedfield/296 : imm tagged)
    in
    cont k/71 (Pmakeblock/298)
  in
@@ -140,7 +143,8 @@ let $camlParam_copy_to_heap__first_const_0 = Block 0 () in
    let ghost_region/308 = %begin_ghost_region () in
    (let int_add/312 = %int_barith.add (x/299, 1) in
     let p/313 =
-      %block.[`0`].my_alloc_region/301.local[region/307] (x/299, int_add/312)
+      %block.[`0`].my_alloc_region/301.local[region/307]
+        (x/299 : imm tagged, int_add/312 : imm tagged)
     in
     apply direct(copy_5 &my_alloc_region/301)
       (copy/306

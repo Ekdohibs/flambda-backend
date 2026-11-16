@@ -93,7 +93,7 @@ let $camlTests11__first_const_0 = Block 0 () in
                     where k3 (apply_result : val) =
                       let Pmakeblock =
                         %block.[`0`].my_alloc_region
-                          (apply_result, staticcatch_result)
+                          (apply_result : val, staticcatch_result : val)
                       in
                       cont k1 (Pmakeblock))))
  in

@@ -12,7 +12,8 @@ let code loopify(never) size(15) stub
        -> k2 * k1)
     where k2 (unboxed_return : imm tagged, unboxed_return_1 : imm tagged) =
       let boxed_return =
-        %block.[`0`].my_alloc_region (unboxed_return, unboxed_return_1)
+        %block.[`0`].my_alloc_region
+          (unboxed_return : imm tagged, unboxed_return_1 : imm tagged)
       in
       cont k (boxed_return)
 in

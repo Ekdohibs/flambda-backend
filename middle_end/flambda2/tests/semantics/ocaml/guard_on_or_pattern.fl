@@ -47,7 +47,8 @@ let $camlGuard_on_or_pattern__first_const_0 = Block 0 () in
     where k/46 (apply_result/128 : imm tagged) =
       ((let Popaque/146 = %opaque (5) in
         let Pmakeblock/147 =
-          %block.[`1`].`toplevel`.local[region/123] (Popaque/146)
+          %block.[`1`].`toplevel`.local[region/123]
+            (Popaque/146 : imm tagged)
         in
         apply direct(f_0 &toplevel)
           (f/120 : val -> imm tagged) (Pmakeblock/147) -> k/47 * error)
@@ -55,7 +56,8 @@ let $camlGuard_on_or_pattern__first_const_0 = Block 0 () in
            let int_mul/130 = %int_barith.mul (apply_result/129, 10000) in
            ((let Popaque/144 = %opaque (5) in
              let Pmakeblock/145 =
-               %block.[`0`].`toplevel`.local[region/123] (Popaque/144)
+               %block.[`0`].`toplevel`.local[region/123]
+                 (Popaque/144 : imm tagged)
              in
              apply direct(f_0 &toplevel)
                (f/120 : val -> imm tagged) (Pmakeblock/145) -> k/48 * error)
@@ -63,7 +65,8 @@ let $camlGuard_on_or_pattern__first_const_0 = Block 0 () in
                 let int_mul/132 = %int_barith.mul (apply_result/131, 100) in
                 ((let Popaque/142 = %opaque (0) in
                   let Pmakeblock/143 =
-                    %block.[`1`].`toplevel`.local[region/123] (Popaque/142)
+                    %block.[`1`].`toplevel`.local[region/123]
+                      (Popaque/142 : imm tagged)
                   in
                   apply direct(f_0 &toplevel)
                     (f/120 : val -> imm tagged)
@@ -75,7 +78,7 @@ let $camlGuard_on_or_pattern__first_const_0 = Block 0 () in
                      ((let Popaque/140 = %opaque (0) in
                        let Pmakeblock/141 =
                          %block.[`0`].`toplevel`.local[region/123]
-                           (Popaque/140)
+                           (Popaque/140 : imm tagged)
                        in
                        apply direct(f_0 &toplevel)
                          (f/120 : val -> imm tagged)

@@ -47,10 +47,15 @@ let $camlLoad_through_join__first_const_0 = Block 0 () in
      where k/44 =
        cont k/43
      where k/43 =
-       let Pmakeblock/112 = %block.[`1`].my_alloc_region/106 (n/104, 1) in
+       let Pmakeblock/112 =
+         %block.[`1`].my_alloc_region/106
+           (n/104 : imm tagged, 1 : imm tagged)
+       in
        cont k/41 (Pmakeblock/112)
      where k/42 =
-       let Pmakeblock/111 = %block.[`0`].my_alloc_region/106 (n/104) in
+       let Pmakeblock/111 =
+         %block.[`0`].my_alloc_region/106 (n/104 : imm tagged)
+       in
        cont k/41 (Pmakeblock/111)
      where k/41
              (v/110 :
