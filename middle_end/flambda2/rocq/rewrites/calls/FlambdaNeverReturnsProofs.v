@@ -234,8 +234,8 @@ Lemma cut_return_refines (known : list (code_id * code)) (ap : apply_expr)
     (State (cut_return known ap) vars conts statics hp rd).
 Proof.
   intros Hknow. unfold cut_return.
-  destruct (ap_call_kind ap) as [called | ] eqn:Hkind;
-    [ | apply refines_refl ].
+  destruct (ap_call_kind ap) as [called | | code_ids] eqn:Hkind;
+    [ | apply refines_refl | apply refines_refl ].
   destruct (lookup called known) as [c | ] eqn:Hlookup;
     [ | apply refines_refl ].
   destruct (invalid_params c (length (unarize (ap_return_arity ap))))
@@ -279,7 +279,8 @@ Lemma cut_return_binds_statics (known : list (code_id * code))
   binds_statics (cut_return known ap) = false.
 Proof.
   unfold cut_return.
-  destruct (ap_call_kind ap) as [called | ]; [ | reflexivity ].
+  destruct (ap_call_kind ap) as [called | | code_ids];
+    [ | reflexivity | reflexivity ].
   destruct (lookup called known) as [c | ]; [ | reflexivity ].
   destruct (invalid_params c (length (unarize (ap_return_arity ap))))
     as [params | ];

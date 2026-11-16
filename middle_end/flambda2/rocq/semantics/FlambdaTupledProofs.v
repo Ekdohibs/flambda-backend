@@ -138,6 +138,9 @@ Proof.
     match kind with
     | Direct named => Pos.eqb called named
     | Indirect_unknown_arity => true
+    | Indirect_known_arity code_ids =>
+      code_ids_allow code_ids called
+      && known_arity_full statics called (first :: rest_arity)
     end = true)
     by (destruct Hkind as [-> | ->]; [ reflexivity | apply Pos.eqb_refl ]).
   rewrite Hexpected, Hcode. unfold arguments_for_code, detuple.

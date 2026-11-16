@@ -241,18 +241,18 @@
    call. The kinds of the arguments that a partial application keeps
    are not compared with anything until it is called with the rest.
 
-   Tupled functions are left out too. A call of unknown arity gives a
+   Tupled functions. In the compiler a call of unknown arity gives a
    tupled function one argument, the tuple, whatever the arity of its
    code ([Code_metadata.is_tupled]; [simplify_direct_tuple_application]
    turns such a call into a direct one of the code, on the fields); a
    direct call and a call of known arity go by the arity of the code.
-   The code of this fragment has no such mark, and its
-   [Indirect_unknown_arity] is both sorts of indirect call. So the call
-   with the tuple would be a partial application here, or undefined, or,
-   where the code has one parameter, run with the parameter bound to the
-   tuple and not to its field, which is a wrong result and not an
-   undefined one. The test tool refuses a unit that has tupled code and
-   a call that is not direct.
+   Here code has the mark (FlambdaModel.code_is_tupled); a call of
+   unknown arity and a direct call give tupled code the tuple, and a
+   call of known arity of tupled code is undefined
+   (FlambdaSemanticsSpec.shape_of_closure_call and the review comments
+   there; FlambdaTupledSpec.v). The test tool refuses a direct call of
+   tupled code, and a call of known arity in a unit that has tupled
+   code.
 
    The primitives. The check takes the kind of the result of a primitive
    from FlambdaPrimitiveSpec.prim_result_kind, and the proofs use two of

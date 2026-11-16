@@ -372,7 +372,8 @@ Lemma call_known_closure_holds (known : known_closures)
   = step (State (Apply ap) vars conts statics hp rd).
 Proof.
   intros Hhold. unfold call_known_closure.
-  destruct (ap_call_kind ap) as [named | ] eqn:Hkind; [ reflexivity | ].
+  destruct (ap_call_kind ap) as [named | | code_ids] eqn:Hkind;
+    [ reflexivity | | reflexivity ].
   destruct (callee_code known (ap_callee ap)) as [code | ] eqn:Hcode;
     [ | reflexivity ].
   destruct (callee_code_sound known vars statics (ap_callee ap) code Hhold

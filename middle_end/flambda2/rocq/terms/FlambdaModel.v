@@ -476,11 +476,21 @@ Definition is_raise (ac : apply_cont) : bool :=
   | Some (Push _) | None => false
   end.
 
-(* [Call_kind.Function_call.t]: the code called is known, or it is that of
-   whatever closure the callee turns out to be. *)
+(* [Call_kind.Function_call.t]. The code called is known ([Direct]), or
+   it is that of whatever closure the callee turns out to be. Such a
+   call is the generic application ([Indirect_unknown_arity]), or it
+   promises that the callee is a closure of code that has the arity of
+   the call ([Indirect_known_arity]). A call of known arity may list
+   code ids, which the code of its callee is then among
+   ([Code_id.Set.t Or_unknown.t]: no list is [Unknown], and the
+   semantics asks of a list only what its members are). What each kind
+   means is at FlambdaSemanticsSpec.shape_of_closure_call. Where a
+   comment of these files says "an indirect call" and no more, it is a
+   call of unknown arity. *)
 Inductive call_kind : Type :=
   | Direct (code : code_id)
-  | Indirect_unknown_arity.
+  | Indirect_unknown_arity
+  | Indirect_known_arity (code_ids : option (list code_id)).
 
 (* [Apply_expr.t]. An exception raised by the call goes to the exception
    continuation, which is applied to the exception followed by the extra

@@ -224,7 +224,10 @@ Proof.
   intros [[[Hcallee Hkind] Hargs] Hextra].
   repeat split.
   - exact (simple_scope_sub _ _ _ Hs Hcallee).
-  - destruct (ap_call_kind ap) as [code | ]; [ exact (Hi code Hkind) | auto ].
+  - destruct (ap_call_kind ap) as [code | | [code_ids | ]];
+      [ exact (Hi code Hkind) | auto | | auto ].
+    apply forallb_forall. intros id Hin. apply Hi.
+    exact (proj1 (forallb_forall _ _) Hkind id Hin).
   - exact (simples_scope_sub _ _ _ Hs Hargs).
   - exact (simples_scope_sub _ _ _ Hs Hextra).
 Qed.

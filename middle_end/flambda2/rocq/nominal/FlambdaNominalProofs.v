@@ -467,8 +467,7 @@ Proof.
   rewrite exn_extra_simples_rename. simpl.
   rewrite Hreturn, Hexn, simple_eqb_renamed, !simples_eqb_renamed.
   - rewrite map_map. simpl. rewrite kinds_eqb_refl.
-    destruct (ap_call_kind ap); simpl;
-      rewrite ?Pos.eqb_refl, !arity_eqb_refl; reflexivity.
+    rewrite call_kind_eqb_refl, !arity_eqb_refl. reflexivity.
   - intros x Hx. apply Hfree. right. right. exact Hx.
   - intros x Hx. apply Hfree. right. left. exact Hx.
   - intros x Hx. apply Hfree. left. exact Hx.

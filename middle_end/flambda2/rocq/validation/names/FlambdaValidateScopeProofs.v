@@ -404,7 +404,8 @@ Lemma inline_apply_scoped (kept : list code_id)
   scoped (Apply ap) (inline_apply kept known ap).
 Proof.
   unfold inline_apply.
-  destruct (ap_call_kind ap) as [called | ]; [ | apply scoped_refl ].
+  destruct (ap_call_kind ap) as [called | | code_ids];
+    [ | apply scoped_refl | apply scoped_refl ].
   destruct (lookup called known) as [c | ]; [ | apply scoped_refl ].
   destruct (negb (among called kept) && inlinable_b ap c) eqn:Hinline;
     [ | destruct (negb (among called kept) && tupled_inlinable_b ap c)

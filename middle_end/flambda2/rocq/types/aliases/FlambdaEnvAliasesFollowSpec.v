@@ -545,7 +545,12 @@ Definition canonical_apply_cont (known : Known.t) (ac : apply_cont)
   Apply_cont_expr (ac_continuation ac)
     (map (Known.canonical_simple known) (ac_args ac)) (ac_trap_action ac).
 
-(* A call of a known closure is a direct call of its code. *)
+(* A call of unknown arity of a known closure is a direct call of its
+   code. A call of known arity is left: it is undefined wherever the
+   code of its callee has not as many parameters as the call has groups
+   of arguments
+   (FlambdaKnownAritySpec.known_arity_other_arity_statement), and
+   nothing here says that it is the direct call. *)
 Definition canonical_call_kind (known : Known.t) (callee : simple)
     (kind : call_kind) : call_kind :=
   match kind with
@@ -558,7 +563,7 @@ Definition canonical_call_kind (known : Known.t) (callee : simple)
       end
     | None => Indirect_unknown_arity
     end
-  | Direct _ => kind
+  | Direct _ | Indirect_known_arity _ => kind
   end.
 
 Definition canonical_apply (known : Known.t) (ap : apply_expr) : apply_expr :=

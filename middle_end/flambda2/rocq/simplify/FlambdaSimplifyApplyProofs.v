@@ -115,9 +115,10 @@ Lemma direct_call_kind_equivalent (tenv : Typing_env.t) (ap : apply_expr) :
     (Apply (with_call_kind ap (direct_call_kind tenv ap))).
 Proof.
   unfold direct_call_kind.
-  destruct (ap_call_kind ap) as [code | ] eqn:Hkind.
-  - rewrite <- Hkind, with_call_kind_same. intros vars conts statics hp rd _.
-    apply equivalent_refl.
+  destruct (ap_call_kind ap) as [code | | code_ids] eqn:Hkind.
+  1, 3:
+    (rewrite <- Hkind, with_call_kind_same;
+     intros vars conts statics hp rd _; apply equivalent_refl).
   - destruct (simplify_simple tenv (ap_callee ap)) as [[ty canonical] | ]
       eqn:Hcallee.
     + destruct (simplify_simple_answer tenv (ap_callee ap) canonical ty
@@ -213,7 +214,8 @@ Lemma direct_call_kind_rename (r : renaming) (tenv : Typing_env.t)
   = direct_call_kind tenv ap.
 Proof.
   unfold direct_call_kind. simpl.
-  destruct (ap_call_kind ap) as [code | ]; [ reflexivity | ].
+  destruct (ap_call_kind ap) as [code | | code_ids];
+    [ reflexivity | | reflexivity ].
   rewrite simplify_simple_rename.
   destruct (simplify_simple tenv (ap_callee ap)) as [[ty canonical] | ];
     [ | reflexivity ].

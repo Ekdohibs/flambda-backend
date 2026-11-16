@@ -524,6 +524,44 @@ a `CR` at the place in the `Spec` file.
   of exits that carry their static environments, related as the
   comparison of D40 would relate them; it is not started without the
   human. Decided for the interim; open.
+- **D58.** A call of known arity (`Indirect_known_arity`) is defined
+  only where it is a full call: it has one group of arguments at
+  least, and its callee is a closure of code that is bound, is not
+  tupled and has as many parameters as the call has groups of
+  arguments; it is then the call of unknown arity of the same callee
+  (`FlambdaKnownAritySpec.known_arity_shape_statement`). Any other is
+  undefined. The backend loads a code pointer and calls it with the
+  arguments given, with no test of the callee at run time, and stops
+  on a call with no group; there is no general check that such a call
+  keeps the promise of its kind (Simplify tests what it learns of the
+  callee). A call of unknown arity is the generic application, as the
+  one indirect call of the model was. A direct call is not changed
+  (C3-9), so the model's calls as a whole are not claimed to follow
+  the backend. The model is stricter than the compiler, by choice, for
+  a callee that is a partial application made at run time, and for
+  tupled code: every call of known arity of tupled code is undefined
+  in the model (what the compiler does there is in the CR at
+  `FlambdaSemanticsSpec.shape_of_closure_call`; the test tool refuses
+  such a unit). Decided by the team on the human's word ("do something
+  sensible and leave a CR"); the developers are asked whether the
+  mismatch is a broken promise or has the generic meaning (the same
+  CR). Open until they say.
+- **D59.** The code ids that a call of known arity lists are a
+  promise: the call is undefined unless the code id of its callee is
+  one of them; no list allows every code, the empty list none. The
+  compiler admits newer versions of the listed code, by its code age
+  relation, which the model has not got (C0-1): exact membership is
+  the model's choice, and stricter. The ids are names of code for the
+  checks of scope and of what is kept
+  (`FlambdaStaticsInScopeSpec.v`, `FlambdaUnusedStaticsSpec.v`), as
+  they are free names in the compiler. Two calls of known arity are
+  the same for the comparison of terms where neither has a list or
+  both have the same list, in the same order
+  (`FlambdaCompareSpec.call_kind_eqb`): the compiler compares two
+  sets, and the comparison of the model is stricter so that what it
+  accepts with no names paired stays alpha-equivalent. The text of a
+  term cannot say the ids and its reader gives none. Decided by the
+  team; open until the developers say what the list promises.
 
 ## Discrepancies with the compiler
 
@@ -676,7 +714,9 @@ says so. Only the labels that this tree cites are listed.
   is given twice; the compiler cannot, and the fexpr parser accepts one
   and keeps the second value.
 - **C3-9.** The backend reads a direct call and a call of known arity as
-  full calls; Simplify reads a call of any kind as a generic
+  full calls; Simplify treats a call of any kind by the number of its
+  arguments. The model gives a call of known arity the restricted
+  meaning of D58, and a direct call keeps the meaning of the generic
   application.
 - **C3-10.** `simplify_direct_tuple_application` takes the tuple and the
   remaining arity apart by two different counts, and splits an

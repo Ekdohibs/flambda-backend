@@ -186,6 +186,13 @@ Proof.
     [ reflexivity | exact Hkm | exact Hvm ].
 Qed.
 
+Lemma call_kind_eqb_refl (kind : call_kind) : call_kind_eqb kind kind = true.
+Proof.
+  destruct kind as [code | | [code_ids | ]]; simpl;
+    [ apply Pos.eqb_refl | reflexivity | | reflexivity ].
+  apply forall2b_refl, Pos.eqb_refl.
+Qed.
+
 Lemma apply_eqb_refl (vm km : name_map) (ap : apply_expr) :
   reflexive_map vm -> reflexive_map km -> apply_eqb vm km ap ap = true.
 Proof.
@@ -193,7 +200,7 @@ Proof.
   rewrite !Hkm, simple_eqb_refl, !simples_eqb_refl, kinds_eqb_refl,
     !arity_eqb_refl
     by exact Hvm.
-  destruct (ap_call_kind ap); simpl; rewrite ?Pos.eqb_refl; reflexivity.
+  rewrite call_kind_eqb_refl. reflexivity.
 Qed.
 
 Fixpoint expr_eqb_refl (e : expr) :
@@ -850,12 +857,24 @@ Proof.
   apply handler_eqb_refl; [ apply reflexive_map_nil | exact Hkm' ].
 Qed.
 
+(* Lists of code ids that compare the same are the same. *)
+Lemma code_ids_eqb_eq (ids ids' : list code_id) :
+  forall2b Pos.eqb ids ids' = true -> ids = ids'.
+Proof.
+  revert ids'.
+  induction ids as [ | id ids IH]; intros [ | id' ids']; simpl;
+    try discriminate; [ reflexivity | ].
+  intros Heq. apply andb_true_iff in Heq as [Hid Hids].
+  apply Pos.eqb_eq in Hid. subst id'. rewrite (IH ids' Hids). reflexivity.
+Qed.
+
 Lemma call_kind_eqb_eq (kind kind' : call_kind) :
   call_kind_eqb kind kind' = true -> kind = kind'.
 Proof.
-  destruct kind as [code | ], kind' as [code' | ]; simpl; try discriminate;
-    [ | reflexivity ].
-  intros Heq. apply Pos.eqb_eq in Heq. subst code'. reflexivity.
+  destruct kind as [code | | [ids | ]], kind' as [code' | | [ids' | ]]; simpl;
+    try discriminate; try reflexivity.
+  - intros Heq. apply Pos.eqb_eq in Heq. subst code'. reflexivity.
+  - intros Heq. rewrite (code_ids_eqb_eq ids ids' Heq). reflexivity.
 Qed.
 
 (* Expressions that are the same up to bound names agree on whether they

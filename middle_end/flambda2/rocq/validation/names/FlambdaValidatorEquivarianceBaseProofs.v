@@ -193,7 +193,8 @@ Proof.
     by reflexivity.
   destruct (ap_callee ap) as [x | s | c]; cbn [rename_simple];
     try reflexivity.
-  destruct (ap_call_kind ap) as [called | ]; [ | reflexivity ].
+  destruct (ap_call_kind ap) as [called | | code_ids];
+    [ | reflexivity | reflexivity ].
   rewrite lookup_map_values.
   destruct (lookup s known_symbols) as [[code | ] | ]; try reflexivity.
   destruct (lookup called known_code) as [c | ]; cbn [option_map];

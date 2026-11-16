@@ -1702,6 +1702,9 @@ Proof.
     (match ap_call_kind ap with
      | Direct named => Pos.eqb called named
      | Indirect_unknown_arity => true
+     | Indirect_known_arity code_ids =>
+       code_ids_allow code_ids called
+       && known_arity_full statics called (ap_args_arity ap)
      end);
     [ | reflexivity ].
   rewrite Hcode.

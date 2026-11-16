@@ -233,10 +233,12 @@ Proof.
   rewrite (canonical_simples_sound tenv vars (ap_args ap) Hsat),
     (canonical_simples_sound tenv vars (exn_extra_simples ap) Hsat).
   unfold canonical_call_kind.
-  destruct (ap_call_kind ap) as [code | ];
+  destruct (ap_call_kind ap) as [code | | code_ids];
     [ rewrite (canonical_simple_sound tenv vars (ap_callee ap) Hsat);
       reflexivity
-    | ].
+    |
+    | rewrite (canonical_simple_sound tenv vars (ap_callee ap) Hsat);
+      reflexivity ].
   destruct (closure_of_simple tenv (canonical_simple tenv (ap_callee ap)))
     as [[code slots] | ] eqn:Hclosure;
     [ | rewrite (canonical_simple_sound tenv vars (ap_callee ap) Hsat);

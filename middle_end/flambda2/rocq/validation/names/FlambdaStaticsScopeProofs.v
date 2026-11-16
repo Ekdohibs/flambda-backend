@@ -883,12 +883,15 @@ Lemma copy_call_scoped (ids : list (code_id * code_id))
 Proof.
   destruct ap as [callee kind args k exn extra args_arity return_arity].
   unfold copy_call. cbn [ap_call_kind ap_callee].
-  destruct kind as [id | ]; [ | apply scoped_refl ].
-  destruct callee as [x | s | c];
-    [ destruct (lookup id ids) | destruct (among s symbols)
-    | destruct (lookup id ids) ];
-    try apply scoped_refl;
-    intros Hclosed; split; try exact Hclosed; split; apply incl_refl.
+  destruct kind as [id | | [code_ids | ]];
+    [ | apply scoped_refl | | apply scoped_refl ].
+  - destruct callee as [x | s | c];
+      [ destruct (lookup id ids) | destruct (among s symbols)
+      | destruct (lookup id ids) ];
+      try apply scoped_refl;
+      intros Hclosed; split; try exact Hclosed; split; apply incl_refl.
+  - destruct (names_copied ids code_ids); [ | apply scoped_refl ].
+    intros Hclosed. split; [ exact Hclosed | split; apply incl_refl ].
 Qed.
 
 Fixpoint copy_expr_scoped (ids : list (code_id * code_id))
@@ -1070,7 +1073,8 @@ Lemma fold_known_apply_scoped (sets : static_env) (ap : apply_expr) :
 Proof.
   destruct ap as [callee call_kind args k exn extra args_arity return_arity].
   unfold fold_known_apply. cbn [ap_call_kind ap_callee].
-  destruct call_kind as [code | ]; [ apply scoped_refl | ].
+  destruct call_kind as [code | | code_ids];
+    [ apply scoped_refl | | apply scoped_refl ].
   destruct callee as [x | s | c]; try apply scoped_refl.
   destruct (closure_of sets (Value_symbol s)) as [[code slots] | ];
     [ | apply scoped_refl ].
@@ -1242,7 +1246,8 @@ Lemma demote_call_scoped (ids : list code_id) (ap : apply_expr) :
 Proof.
   destruct ap as [callee call_kind args k exn extra args_arity return_arity].
   unfold demote_call. cbn [ap_call_kind].
-  destruct call_kind as [code | ]; [ | apply scoped_refl ].
+  destruct call_kind as [code | | code_ids];
+    [ | apply scoped_refl | apply scoped_refl ].
   destruct (among code ids); [ | apply scoped_refl ].
   intros Hclosed. split; [ exact Hclosed | split; apply incl_refl ].
 Qed.

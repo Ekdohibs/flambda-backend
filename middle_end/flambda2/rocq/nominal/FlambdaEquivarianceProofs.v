@@ -604,11 +604,20 @@ Proof.
     with (closure_of statics closure) by reflexivity.
   destruct (closure_of statics closure) as [[called slots] | ];
     [ | reflexivity ].
-  rewrite lookup_rename_code.
+  assert (Hfull :
+    known_arity_full (rename_static_env r statics) called args_arity
+    = known_arity_full statics called args_arity).
+  { apply (known_arity_full_mapped (rename_code r));
+      [ apply lookup_rename_code | ].
+    intros c _. destruct c. split; reflexivity. }
+  rewrite Hfull, lookup_rename_code.
   destruct
     (match kind with
      | Direct named => Pos.eqb called named
      | Indirect_unknown_arity => true
+     | Indirect_known_arity code_ids =>
+       code_ids_allow code_ids called
+       && known_arity_full statics called args_arity
      end);
     [ | reflexivity ].
   destruct (lookup called (static_code statics)) as [c | ];
@@ -642,7 +651,9 @@ Lemma shape_of_call_equivariant (r : renaming) (statics : static_env)
       (shape_of_call statics callee kind vs args_arity return_arity).
 Proof.
   unfold shape_of_call.
-  destruct kind as [named | ]; [ apply shape_of_closure_call_equivariant | ].
+  destruct kind as [named | | code_ids];
+    [ apply shape_of_closure_call_equivariant |
+    | apply shape_of_closure_call_equivariant ].
   destruct (partial_application_of callee)
     as [[[closure applied] applied_arity] | ];
     [ | apply shape_of_closure_call_equivariant ].
@@ -1349,7 +1360,8 @@ Proof.
   unfold inline_apply.
   replace (ap_call_kind (rename_apply r ap)) with (ap_call_kind ap)
     by reflexivity.
-  destruct (ap_call_kind ap) as [called | ]; [ | reflexivity ].
+  destruct (ap_call_kind ap) as [called | | code_ids];
+    [ | reflexivity | reflexivity ].
   rewrite lookup_map_values.
   destruct (lookup called known) as [c | ]; cbn [option_map];
     [ | reflexivity ].

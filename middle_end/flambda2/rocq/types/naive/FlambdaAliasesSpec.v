@@ -179,12 +179,18 @@ Definition canonical_apply_cont (tenv : typing_env) (ac : apply_cont)
   Apply_cont_expr (ac_continuation ac)
     (map (canonical_simple tenv) (ac_args ac)) (ac_trap_action ac).
 
-(* A call of a known closure is a direct call of its code. *)
+(* A call of unknown arity of a known closure is a direct call of its
+   code. A call of known arity is left: it is undefined wherever the
+   code of its callee has not as many parameters as the call has groups
+   of arguments
+   (FlambdaKnownAritySpec.known_arity_other_arity_statement), and
+   nothing here says that it is the direct call. *)
 Definition canonical_call_kind (tenv : typing_env) (callee : simple)
     (kind : call_kind) : call_kind :=
   match kind, closure_of_simple tenv callee with
   | Indirect_unknown_arity, Some (code, _) => Direct code
-  | Indirect_unknown_arity, None | Direct _, _ => kind
+  | Indirect_unknown_arity, None | Direct _, _ | Indirect_known_arity _, _ =>
+    kind
   end.
 
 Definition canonical_apply (tenv : typing_env) (ap : apply_expr) : apply_expr :=

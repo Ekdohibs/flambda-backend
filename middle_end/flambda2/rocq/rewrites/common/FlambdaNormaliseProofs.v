@@ -506,7 +506,8 @@ Lemma inline_apply_refines (known : list (code_id * code)) (ap : apply_expr)
     (State (inline_apply kept known ap) vars conts statics hp rd).
 Proof.
   intros Hknow. unfold inline_apply.
-  destruct (ap_call_kind ap) as [called | ] eqn:Hkind; [ | apply refines_refl ].
+  destruct (ap_call_kind ap) as [called | | code_ids] eqn:Hkind;
+    [ | apply refines_refl | apply refines_refl ].
   destruct (lookup called known) as [c | ] eqn:Hlookup;
     [ | apply refines_refl ].
   destruct (negb (among called kept) && inlinable_b ap c) eqn:Hcheck.
@@ -603,7 +604,8 @@ Lemma inline_apply_binds_statics (known : list (code_id * code))
   binds_statics (inline_apply kept known ap) = false.
 Proof.
   unfold inline_apply.
-  destruct (ap_call_kind ap) as [called | ]; [ | reflexivity ].
+  destruct (ap_call_kind ap) as [called | | code_ids];
+    [ | reflexivity | reflexivity ].
   destruct (lookup called known) as [c | ]; [ | reflexivity ].
   destruct (negb (among called kept) && inlinable_b ap c) eqn:Hcheck.
   - apply andb_true_iff in Hcheck as [_ Hinlinable].
@@ -1760,8 +1762,8 @@ Proof.
   intros Hcode Hsymbols. unfold inline_known_apply.
   destruct (ap_callee ap) as [x | s | const] eqn:Hcallee;
     try apply equivalent_refl.
-  destruct (ap_call_kind ap) as [called | ] eqn:Hkind;
-    [ | apply equivalent_refl ].
+  destruct (ap_call_kind ap) as [called | | code_ids] eqn:Hkind;
+    [ | apply equivalent_refl | apply equivalent_refl ].
   destruct (lookup s known_symbols) as [[code | ] | ] eqn:Hs;
     try apply equivalent_refl.
   destruct (lookup called known_code) as [c | ] eqn:Hc;
@@ -1818,7 +1820,7 @@ Lemma inline_known_apply_binds_statics
 Proof.
   unfold inline_known_apply.
   destruct (ap_callee ap) as [x | s | const]; try reflexivity.
-  destruct (ap_call_kind ap) as [called | ]; try reflexivity.
+  destruct (ap_call_kind ap) as [called | | code_ids]; try reflexivity.
   destruct (lookup s known_symbols) as [[code | ] | ]; try reflexivity.
   destruct (lookup called known_code) as [c | ]; try reflexivity.
   destruct

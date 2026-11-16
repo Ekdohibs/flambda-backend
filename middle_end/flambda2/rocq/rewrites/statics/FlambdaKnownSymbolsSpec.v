@@ -359,8 +359,12 @@ Definition fold_block_load (sets : static_env) (d : named) : named :=
   | _ => d
   end.
 
-(* An indirect call of a symbol that [sets] binds to a closure, made a
-   direct call of the code of that closure. *)
+(* A call of unknown arity of a symbol that [sets] binds to a closure,
+   made a direct call of the code of that closure. A call of known
+   arity is left: it is undefined wherever the code of its callee has
+   not as many parameters as the call has groups of arguments
+   (FlambdaKnownAritySpec.known_arity_other_arity_statement), and
+   nothing here says that it is the direct call. *)
 Definition fold_known_apply (sets : static_env) (ap : apply_expr)
     : apply_expr :=
   match ap_call_kind ap, ap_callee ap with
@@ -372,7 +376,9 @@ Definition fold_known_apply (sets : static_env) (ap : apply_expr)
         (ap_args_arity ap) (ap_return_arity ap)
     | None => ap
     end
-  | Indirect_unknown_arity, (Var _ | Const _) | Direct _, _ => ap
+  | Indirect_unknown_arity, (Var _ | Const _)
+  | Direct _, _ | Indirect_known_arity _, _ =>
+    ap
   end.
 
 (* Every [Let] of the expression, in handlers and in code too, with its

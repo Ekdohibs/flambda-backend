@@ -76,11 +76,12 @@
 
    What is here. [demote_stub_calls e] makes indirect, in the code of
    each stub that the unit [e] binds, every direct call that names
-   code which [e] binds and which is not a stub ([non_stub_code]). The
-   [Indirect_unknown_arity] of the model is both sorts of indirect call
-   of the compiler (FlambdaSemanticsSpec.v, the comment at
-   [shape_of_closure_call]). Every such call of that code is made
-   indirect, whatever its callee. Simplify does it where the type of
+   code which [e] binds and which is not a stub ([non_stub_code]). It
+   makes them calls of unknown arity, where the compiler makes calls
+   of known arity (above); the model has that kind
+   (FlambdaSemanticsSpec.v, the comments at [shape_of_closure_call]),
+   and this rewrite does not make it. Every such call of that code is
+   made indirect, whatever its callee. Simplify does it where the type of
    the callee is not available. Where the type says which closure the
    callee is, Simplify keeps the call direct, and the validation makes
    direct again the call that this has made indirect: for a variable
@@ -168,7 +169,7 @@ Definition demote_call (ids : list code_id) (ap : apply_expr) : apply_expr :=
         (ap_exn_continuation ap) (ap_exn_extra_args ap) (ap_args_arity ap)
         (ap_return_arity ap)
     else ap
-  | Indirect_unknown_arity => ap
+  | Indirect_unknown_arity | Indirect_known_arity _ => ap
   end.
 
 (* Every call of an expression, in handlers too. Static bindings are

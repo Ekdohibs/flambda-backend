@@ -235,6 +235,11 @@ design out; that is the request, not the change.
     two exits apart; the test tool asks it only of a unit that it
     reports as not validated, and prints what it accepts on a line of
     its own, never as validated)
+  - `middle_end/flambda2/rocq/semantics/FlambdaKnownAritySpec.v` and
+    `middle_end/flambda2/rocq/semantics/FlambdaKnownArityProofs.v` (what a
+    call of known arity comes to: the call of unknown arity where it is
+    a full call of code that is not tupled, undefined elsewhere;
+    decisions D58 and D59)
   - `middle_end/flambda2/rocq/status/C4.md`
 - C5, exceptions. Owner: C5, on `flambda2-rocq/C5-epoch`.
   - `middle_end/flambda2/rocq/requests/C5-exceptions.md` (the request)

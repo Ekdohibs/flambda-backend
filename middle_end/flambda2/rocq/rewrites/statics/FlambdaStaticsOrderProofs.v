@@ -305,7 +305,8 @@ Lemma apply_avoids_nothing (ap : apply_expr) : apply_avoids nothing ap = true.
 Proof.
   unfold apply_avoids.
   rewrite simple_avoids_nothing, !simples_avoid_nothing.
-  destruct (ap_call_kind ap); reflexivity.
+  destruct (ap_call_kind ap) as [code | | [code_ids | ]]; try reflexivity.
+  rewrite !andb_true_r. apply forallb_forall. intros id _. reflexivity.
 Qed.
 
 Fixpoint expr_avoids_nothing (e : expr) : expr_avoids nothing e = true

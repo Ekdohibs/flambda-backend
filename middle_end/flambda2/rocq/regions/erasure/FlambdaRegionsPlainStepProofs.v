@@ -630,10 +630,21 @@ Proof.
     (closure_of_erased rs statics' Hsymbols closure closure' called slots
        Hclosure Hc)
     as (slots' & -> & _).
+  assert (Hfull :
+    known_arity_full statics' called args_arity
+    = known_arity_full (live_statics rs) called args_arity).
+  { apply (known_arity_full_mapped erase_code);
+      [ rewrite live_statics_code; apply Hcode | ].
+    intros c _.
+    split; [ apply erase_code_is_tupled | apply erase_code_params_arity ]. }
+  rewrite Hfull.
   destruct
     (match kind with
      | Direct named => Pos.eqb called named
      | Indirect_unknown_arity => true
+     | Indirect_known_arity code_ids =>
+       code_ids_allow code_ids called
+       && known_arity_full (live_statics rs) called args_arity
      end);
     [ | discriminate ].
   rewrite live_statics_code, Hcode.
@@ -709,16 +720,18 @@ Proof.
   intros Hstatics [_ Hcallee] Hvs Hshape.
   assert (Husable : value_usable rs callee = true).
   { unfold shape_of_call in Hshape.
-    destruct kind as [named | ];
-      [ exact (shape_of_closure_call_usable rs _ _ _ _ _ _ Hshape) | ].
+    destruct kind as [named | | code_ids];
+      [ exact (shape_of_closure_call_usable rs _ _ _ _ _ _ Hshape) |
+      | exact (shape_of_closure_call_usable rs _ _ _ _ _ _ Hshape) ].
     destruct (partial_application_of callee)
       as [[[closure applied] applied_arity] | ] eqn:Hpartial;
       [ | exact (shape_of_closure_call_usable rs _ _ _ _ _ _ Hshape) ].
     destruct callee; try discriminate Hpartial. reflexivity. }
   specialize (Hcallee (usable_asked rs callee Husable)). revert Hshape.
   unfold shape_of_call.
-  destruct kind as [named | ];
-    [ apply shape_of_closure_call_erased; assumption | ].
+  destruct kind as [named | | code_ids];
+    [ apply shape_of_closure_call_erased; assumption |
+    | apply shape_of_closure_call_erased; assumption ].
   pose proof (partial_application_erased rs callee callee' Hcallee)
     as Hpartial.
   destruct (partial_application_of callee)

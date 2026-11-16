@@ -1449,10 +1449,23 @@ Proof.
               called slots Hclosure Hc)
     as (slots' & Hc' & _).
   rewrite Hc'.
+  assert (Hfull :
+    known_arity_full statics' called args_arity
+    = known_arity_full statics called args_arity).
+  { apply (known_arity_full_mapped (code_lifted_out called));
+      [ apply Hcode | ].
+    intros c _. split; [ destruct c; reflexivity | ].
+    destruct (code_lifted_out_parts called c)
+      as (_ & _ & _ & _ & Hparams_arity & _).
+    exact Hparams_arity. }
+  rewrite Hfull.
   destruct
     (match kind with
      | Direct named => Pos.eqb called named
      | Indirect_unknown_arity => true
+     | Indirect_known_arity code_ids =>
+       code_ids_allow code_ids called
+       && known_arity_full statics called args_arity
      end);
     [ | discriminate ].
   rewrite (Hcode called).
@@ -1515,8 +1528,9 @@ Lemma shape_of_call_lifted_out (statics statics' : static_env)
     ∧ shape_lifted_out statics' shape shape'.
 Proof.
   intros Hstatics Hcallee Hvs. unfold shape_of_call.
-  destruct kind as [named | ];
-    [ apply shape_of_closure_call_lifted_out; assumption | ].
+  destruct kind as [named | | code_ids];
+    [ apply shape_of_closure_call_lifted_out; assumption |
+    | apply shape_of_closure_call_lifted_out; assumption ].
   pose proof (partial_application_lifted statics' callee callee' Hcallee)
     as Hpartial.
   destruct (partial_application_of callee)

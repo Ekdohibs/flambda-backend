@@ -400,7 +400,8 @@ Lemma fold_known_apply_sound_here (vars : env) (conts : cont_env)
   = step (State (Apply ap) vars conts run_statics hp rd).
 Proof.
   unfold fold_known_apply.
-  destruct (ap_call_kind ap) as [named | ] eqn:Hkind; [ reflexivity | ].
+  destruct (ap_call_kind ap) as [named | | code_ids] eqn:Hkind;
+    [ reflexivity | | reflexivity ].
   destruct (ap_callee ap) as [x | s | c] eqn:Hcallee; try reflexivity.
   destruct (closure_of sets (Value_symbol s)) as [[code slots] | ] eqn:Hknown;
     [ | reflexivity ].
@@ -1073,10 +1074,20 @@ Proof.
     with (closure_of statics closure).
   destruct (closure_of statics closure) as [[called slots] | ];
     [ | discriminate ].
+  assert (Hfull :
+    known_arity_full (fold_statics statics) called args_arity
+    = known_arity_full statics called args_arity).
+  { apply (known_arity_full_mapped (fold_known_code S T));
+      [ apply lookup_fold_code | ].
+    intros c _. destruct c. split; reflexivity. }
+  rewrite Hfull.
   destruct
     (match kind with
      | Direct named => Pos.eqb called named
      | Indirect_unknown_arity => true
+     | Indirect_known_arity code_ids =>
+       code_ids_allow code_ids called
+       && known_arity_full statics called args_arity
      end);
     [ | discriminate ].
   rewrite lookup_fold_code.
@@ -1121,7 +1132,8 @@ Lemma shape_of_call_fold (statics : static_env) (callee : value)
   = Some (fold_shape shape).
 Proof.
   unfold shape_of_call.
-  destruct kind as [named | ]; [ apply shape_of_closure_call_fold | ].
+  destruct kind as [named | | code_ids];
+    [ apply shape_of_closure_call_fold | | apply shape_of_closure_call_fold ].
   destruct (partial_application_of callee)
     as [[[closure applied] applied_arity] | ];
     [ | apply shape_of_closure_call_fold ].

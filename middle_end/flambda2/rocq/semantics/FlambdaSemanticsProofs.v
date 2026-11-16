@@ -356,6 +356,75 @@ Proof.
   intros Htupled. unfold arguments_for_code. rewrite Htupled. reflexivity.
 Qed.
 
+(* What the tests of a call of known arity on its arity and on the code
+   of its callee say. *)
+Lemma known_arity_full_true (statics : static_env) (called : code_id)
+    (args_arity : arity) :
+  known_arity_full statics called args_arity = true
+  <-> args_arity <> []
+      ∧ ∃ c : code,
+          lookup called (static_code statics) = Some c
+          ∧ code_is_tupled c = false
+          ∧ length args_arity = length (code_params_arity c).
+Proof.
+  unfold known_arity_full. split.
+  - destruct args_arity as [ | component args_arity]; [ discriminate | ].
+    destruct (lookup called (static_code statics)) as [c | ];
+      [ | discriminate ].
+    intros Htests. apply andb_true_iff in Htests as [Htupled Hcount].
+    split; [ discriminate | ]. exists c.
+    split; [ reflexivity | ].
+    split; [ apply negb_true_iff; exact Htupled | ].
+    apply Nat.eqb_eq. exact Hcount.
+  - intros [Hgroup (c & Hcode & Htupled & Hcount)].
+    destruct args_arity as [ | component args_arity];
+      [ exfalso; apply Hgroup; reflexivity | ].
+    rewrite Hcode, Htupled. apply andb_true_iff.
+    split; [ reflexivity | apply Nat.eqb_eq; exact Hcount ].
+Qed.
+
+(* They fail where the code has not as many parameters as the call has
+   groups of arguments. *)
+Lemma known_arity_full_other (statics : static_env) (called : code_id)
+    (args_arity : arity) (c : code) :
+  lookup called (static_code statics) = Some c ->
+  length args_arity <> length (code_params_arity c) ->
+  known_arity_full statics called args_arity = false.
+Proof.
+  intros Hcode Hcount. unfold known_arity_full.
+  destruct args_arity as [ | component args_arity]; [ reflexivity | ].
+  rewrite Hcode. apply Nat.eqb_neq in Hcount. rewrite Hcount.
+  apply andb_false_r.
+Qed.
+
+(* The tests of a call of known arity read the static environment by
+   the code that it binds to the code id, and that code by whether it
+   is tupled and by the arity of its parameters. *)
+Lemma known_arity_full_code (statics statics' : static_env)
+    (called : code_id) (args_arity : arity) :
+  lookup called (static_code statics') = lookup called (static_code statics) ->
+  known_arity_full statics' called args_arity
+  = known_arity_full statics called args_arity.
+Proof. intros Hcode. unfold known_arity_full. rewrite Hcode. reflexivity. Qed.
+
+Lemma known_arity_full_mapped (f : code -> code)
+    (statics statics' : static_env) (called : code_id) (args_arity : arity) :
+  lookup called (static_code statics')
+  = option_map f (lookup called (static_code statics)) ->
+  (∀ c : code,
+    lookup called (static_code statics) = Some c ->
+    code_is_tupled (f c) = code_is_tupled c
+    ∧ code_params_arity (f c) = code_params_arity c) ->
+  known_arity_full statics' called args_arity
+  = known_arity_full statics called args_arity.
+Proof.
+  intros Hcode Hsame. unfold known_arity_full. rewrite Hcode.
+  destruct (lookup called (static_code statics)) as [c | ];
+    [ | reflexivity ].
+  destruct (Hsame c eq_refl) as [Htupled Hparams]. simpl.
+  rewrite Htupled, Hparams. reflexivity.
+Qed.
+
 (* The call of a closure of code that is bound, the code named if the
    call is direct: full where the arguments are as many as the
    parameters, and otherwise what the tests of arities say. A direct
@@ -377,6 +446,9 @@ Proof.
     match kind with
     | Direct named => Pos.eqb called named
     | Indirect_unknown_arity => true
+    | Indirect_known_arity code_ids =>
+      code_ids_allow code_ids called
+      && known_arity_full statics called args_arity
     end = true)
     by (destruct Hkind as [-> | ->]; [ reflexivity | apply Pos.eqb_refl ]).
   rewrite Hexpected, Hcode, (arguments_for_code_not_tupled _ _ _ _ Htupled).
@@ -415,6 +487,9 @@ Proof.
     match kind with
     | Direct named => Pos.eqb called named
     | Indirect_unknown_arity => true
+    | Indirect_known_arity code_ids =>
+      code_ids_allow code_ids called
+      && known_arity_full statics called args_arity
     end = true)
     by (destruct Hkind as [-> | ->]; [ reflexivity | apply Pos.eqb_refl ]).
   apply Nat.eqb_neq in Hcount.
@@ -503,6 +578,9 @@ Proof.
     match ap_call_kind ap with
     | Direct named => Pos.eqb called named
     | Indirect_unknown_arity => true
+    | Indirect_known_arity code_ids =>
+      code_ids_allow code_ids called
+      && known_arity_full statics called (ap_args_arity ap)
     end = true)
     by (destruct Hkind as [-> | ->]; [ reflexivity | apply Pos.eqb_refl ]).
   rewrite Hexpected, Hcode, (arguments_for_code_not_tupled _ _ _ _ Htupled).
@@ -2624,6 +2702,9 @@ Proof.
     (match kind with
      | Direct named => Pos.eqb called named
      | Indirect_unknown_arity => true
+     | Indirect_known_arity code_ids =>
+       code_ids_allow code_ids called
+       && known_arity_full statics called args_arity
      end)
     eqn:Hexpected; [ | discriminate ].
   destruct (lookup called (static_code statics)) as [c | ] eqn:Hcode;
@@ -2655,7 +2736,9 @@ Lemma shape_of_call_cases (statics : static_env) (callee : value)
         = Some shape.
 Proof.
   unfold shape_of_call.
-  destruct kind as [named | ]; [ intros Hshape; left; exact Hshape | ].
+  destruct kind as [named | | code_ids];
+    [ intros Hshape; left; exact Hshape |
+    | intros Hshape; left; exact Hshape ].
   destruct callee
     as [k | code slots | slot decls slots | s | tag fields | | contents
        | l | closure applied applied_arity];
@@ -3046,10 +3129,23 @@ Proof.
   destruct (closure_of statics closure) as [[called slots] | ];
     [ | apply Shapes_none ].
   specialize (Hcodes called slots eq_refl). unfold codes_agree in Hcodes.
+  assert (Hfull :
+    known_arity_full statics' called args_arity
+    = known_arity_full statics called args_arity).
+  { unfold known_arity_full.
+    destruct (lookup called (static_code statics)) as [c | ],
+      (lookup called (static_code statics')) as [c' | ];
+      try contradiction; [ | reflexivity ].
+    destruct Hcodes as (_ & Hparams & _ & Htupled).
+    rewrite Hparams, Htupled. reflexivity. }
+  rewrite Hfull.
   destruct
     (match kind with
      | Direct named => Pos.eqb called named
      | Indirect_unknown_arity => true
+     | Indirect_known_arity code_ids =>
+       code_ids_allow code_ids called
+       && known_arity_full statics called args_arity
      end);
     [ | apply Shapes_none ].
   destruct (lookup called (static_code statics)) as [c | ],
@@ -3095,7 +3191,7 @@ Lemma shape_of_call_related (R : code -> code -> Prop)
     (shape_of_call statics' callee kind vs args_arity return_arity).
 Proof.
   intros Hclosure Hcodes Hprim. unfold shape_of_call.
-  destruct kind as [named | ];
+  destruct kind as [named | | code_ids];
     destruct callee
       as [k | code slots | slot decls slots | s | tag fields | | contents
          | l | closure applied applied_arity];
@@ -3106,6 +3202,7 @@ Proof.
       [ apply Shapes_none | ].
     destruct (kinds_eqb _ _); [ | apply Shapes_none ].
     apply shape_of_closure_call_related; assumption.
+  - apply Shapes_none.
 Qed.
 
 (* Full calls of two codes that differ in their bodies only: undefined

@@ -266,8 +266,8 @@ Proof.
   apply andb_true_iff in H as [Hcallee Hkind].
   rewrite (simple_nowhere_avoids _ Hcallee), (simples_nowhere_avoid _ Hargs),
     (simples_nowhere_avoid _ Hextra).
-  destruct (ap_call_kind ap) as [code | ];
-    [ simpl in Hkind; discriminate Hkind | reflexivity ].
+  destruct (ap_call_kind ap) as [code | | [[ | code_id code_ids] | ]];
+    try reflexivity; simpl in Hkind; discriminate Hkind.
 Qed.
 
 Lemma apply_cont_nowhere_avoids (ac : apply_cont) :

@@ -157,12 +157,22 @@ Proof.
              (fun s allocated _ => symbols_extend s allocated) _ Hclosure).
   destruct (lookup called (static_code statics')) as [c | ] eqn:Hcode.
   - rewrite (proj1 Hextend called c Hcode).
-    destruct kind as [named | ]; [ destruct (Pos.eqb called named) | ];
+    rewrite (known_arity_full_code statics' statics called args_arity)
+      by (rewrite Hcode; exact (proj1 Hextend called c Hcode)).
+    destruct kind as [named | | code_ids];
+      [ destruct (Pos.eqb called named) |
+      | destruct
+          (code_ids_allow code_ids called
+           && known_arity_full statics' called args_arity) ];
       try discriminate;
       (destruct (arguments_for_code statics' c vs args_arity)
          as [[vs' args_arity'] | ] eqn:Hargs; [ | discriminate ];
        rewrite (arguments_for_code_more _ _ _ _ Hargs); exact (fun H => H)).
-  - destruct kind as [named | ]; [ destruct (Pos.eqb called named) | ];
+  - destruct kind as [named | | code_ids];
+      [ destruct (Pos.eqb called named) |
+      | destruct
+          (code_ids_allow code_ids called
+           && known_arity_full statics' called args_arity) ];
       discriminate.
 Qed.
 
@@ -172,7 +182,7 @@ Lemma shape_of_call_more (callee : value) (kind : call_kind)
   shape_of_call statics callee kind vs args_arity return_arity = Some shape.
 Proof.
   unfold shape_of_call.
-  destruct kind as [named | ];
+  destruct kind as [named | | code_ids];
     destruct (partial_application_of callee)
       as [[[closure applied] applied_arity] | ];
     try apply shape_of_closure_call_more.

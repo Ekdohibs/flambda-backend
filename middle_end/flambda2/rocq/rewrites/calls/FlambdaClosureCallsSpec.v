@@ -172,8 +172,12 @@ Definition made_callee_code (known : made_closures) (callee : simple)
   | Symbol _ | Const _ => None
   end.
 
-(* An indirect call of a variable known to be a closure is a direct call
-   of the code of the closure. *)
+(* A call of unknown arity of a variable known to be a closure is a
+   direct call of the code of the closure. A call of known arity is
+   left: it is undefined wherever the code of its callee has not as
+   many parameters as the call has groups of arguments
+   (FlambdaKnownAritySpec.known_arity_other_arity_statement), and
+   nothing here says that it is the direct call. *)
 Definition call_made_closure (known : made_closures) (ap : apply_expr)
     : apply_expr :=
   match ap_call_kind ap, made_callee_code known (ap_callee ap) with
@@ -181,7 +185,8 @@ Definition call_made_closure (known : made_closures) (ap : apply_expr)
     Apply_expr (ap_callee ap) (Direct code) (ap_args ap) (ap_continuation ap)
       (ap_exn_continuation ap) (ap_exn_extra_args ap) (ap_args_arity ap)
       (ap_return_arity ap)
-  | Indirect_unknown_arity, None | Direct _, _ => ap
+  | Indirect_unknown_arity, None | Direct _, _ | Indirect_known_arity _, _ =>
+    ap
   end.
 
 Fixpoint call_closures_knowing (known : made_closures) (e : expr) : expr :=

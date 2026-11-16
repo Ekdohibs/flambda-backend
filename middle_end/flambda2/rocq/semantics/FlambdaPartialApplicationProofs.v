@@ -78,11 +78,12 @@ Proof.
   destruct (eval_simples vars (exn_extra_simples ap)) as [extra | ];
     [ | reflexivity ].
   unfold call_function, shape_of_call.
-  destruct (ap_call_kind ap) as [named | ] eqn:Hkind;
+  destruct (ap_call_kind ap) as [named | | code_ids] eqn:Hkind;
     cbn [partial_application_of].
   - reflexivity.
   - destruct Hbad as [Hbad | Harity]; [ destruct (Hbad eq_refl) | ].
     rewrite Harity. reflexivity.
+  - reflexivity.
 Qed.
 
 Theorem apply_partial_application_kinds :
@@ -95,8 +96,8 @@ Proof.
   destruct (eval_simples vars (exn_extra_simples ap)) as [extra | ];
     [ | reflexivity ].
   unfold call_function, shape_of_call.
-  destruct (ap_call_kind ap) as [named | ]; cbn [partial_application_of];
-    [ reflexivity | ].
+  destruct (ap_call_kind ap) as [named | | code_ids];
+    cbn [partial_application_of]; [ reflexivity | | reflexivity ].
   revert Hkinds.
   destruct (ap_args_arity ap) as [ | component rest]; intros Hkinds;
     [ reflexivity | ].
@@ -836,20 +837,28 @@ Proof.
               (closure_not_partial statics callee _ Hclosure)),
     (shape_of_closure_call_full statics callee (Direct called) vs _ _ called
        slots c Hclosure (or_intror eq_refl) Hcode Htupled eq_refl).
-  (* a direct call of other code is undefined *)
-  assert (Hkind :
-    (kind = Indirect_unknown_arity ∨ kind = Direct called)
-    ∨ ∃ named : code_id, kind = Direct named ∧ called <> named).
-  { destruct kind as [named | ]; [ | auto ].
-    destruct (Pos.eq_dec called named) as [<- | Hother]; [ auto | ].
-    right. exists named. auto. }
-  destruct Hkind as [Hkind | (named & -> & Hother)].
-  2: { unfold shape_of_closure_call. rewrite Hclosure.
-       apply Pos.eqb_neq in Hother. rewrite Hother. exact I. }
   assert (Hlonger :
     length (code_params_arity c) < length (args_arity ++ args_arity')).
   { rewrite length_app, Hcount.
     destruct args_arity'; [ destruct (Hnonempty eq_refl) | simpl; lia ]. }
+  (* a direct call of other code is undefined, and so is a call of known
+     arity, which is not full *)
+  assert (Hkind :
+    (kind = Indirect_unknown_arity ∨ kind = Direct called)
+    ∨ (∃ named : code_id, kind = Direct named ∧ called <> named)
+    ∨ ∃ code_ids : option (list code_id), kind = Indirect_known_arity code_ids).
+  { destruct kind as [named | | code_ids];
+      [ | auto | right; right; exists code_ids; reflexivity ].
+    destruct (Pos.eq_dec called named) as [<- | Hother]; [ auto | ].
+    right. left. exists named. auto. }
+  destruct Hkind as [Hkind | [(named & -> & Hother) | (code_ids & ->)]].
+  2: { unfold shape_of_closure_call. rewrite Hclosure.
+       apply Pos.eqb_neq in Hother. rewrite Hother. exact I. }
+  2: { unfold shape_of_closure_call. rewrite Hclosure.
+       rewrite (known_arity_full_other statics called _ c Hcode)
+         by (intros Heq; rewrite Heq in Hlonger;
+             exact (Nat.lt_irrefl _ Hlonger)).
+       rewrite andb_false_r. exact I. }
   rewrite (shape_of_closure_call_not_full statics callee kind _ _ _ called
              slots c Hclosure Hkind Hcode Htupled)
     by (intros Heq; rewrite Heq in Hlonger; exact (Nat.lt_irrefl _ Hlonger)).

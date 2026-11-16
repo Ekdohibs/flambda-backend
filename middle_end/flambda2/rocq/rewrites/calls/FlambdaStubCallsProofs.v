@@ -110,7 +110,8 @@ Theorem demote_call_step : demote_call_step_statement.
 Proof.
   intros ids ap vars conts statics hp rd Hstep.
   unfold demote_call.
-  destruct (ap_call_kind ap) as [code | ] eqn:Hkind; [ | reflexivity ].
+  destruct (ap_call_kind ap) as [code | | code_ids] eqn:Hkind;
+    [ | reflexivity | reflexivity ].
   destruct (among code ids); [ | reflexivity ].
   rewrite step_apply in Hstep. rewrite !step_apply.
   unfold exn_extra_simples in *. cbn [ap_callee ap_args ap_exn_extra_args

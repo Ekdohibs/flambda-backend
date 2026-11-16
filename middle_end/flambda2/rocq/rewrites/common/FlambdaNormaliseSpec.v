@@ -384,7 +384,7 @@ Definition inline_apply (kept : list code_id)
       else Apply ap
     | None => Apply ap
     end
-  | Indirect_unknown_arity => Apply ap
+  | Indirect_unknown_arity | Indirect_known_arity _ => Apply ap
   end.
 
 Fixpoint inline_calls (kept : list code_id) (known : list (code_id * code))

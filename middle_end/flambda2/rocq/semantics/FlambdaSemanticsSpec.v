@@ -847,11 +847,59 @@ Definition shape_of_code_call (closure : value) (c : code) (vs : list value)
   then None
   else Some (Partial_call (Value_partial_application closure vs args_arity)).
 
+(* Whether the code ids that a call of known arity lists allow the code
+   id [called]: a list allows its members, and no list allows every
+   code ([Or_unknown.Unknown]). The empty list allows none. *)
+(* CR mshinwell: the code ids of a call of known arity. The compiler
+   says that "only the provided functions (or a simplified version
+   thereof) can be called" (terms/call_kind.mli). Here the call is
+   undefined unless the code id of the callee is one of those listed.
+   That is a choice of the model and stricter than the compiler: the
+   model has not got what code is a newer version of (the code age
+   relation; discrepancy C0-1). The compiler relies on the list.
+   Simplify meets it, in the code age relation, with the code id that
+   the type of the callee gives, keeps what is related or of unknown
+   relation, and makes the call [Invalid] if nothing is left
+   (simplify/simplify_apply_expr.ml, [simplify_direct_function_call];
+   types/env/code_age_relation.ml, [meet_set]); the zero_alloc
+   checker takes the list for the callees (backend/cmm.mli,
+   [Capply]). Nothing tests at run time that the callee is one of
+   them. Asked of the developers: is the list a promise that every
+   pass must keep true, as it is read here, and is "a simplified
+   version" any newer version in the code age relation?
+   Decision D59. *)
+Definition code_ids_allow (code_ids : option (list code_id))
+    (called : code_id) : bool :=
+  match code_ids with
+  | Some ids => among called ids
+  | None => true
+  end.
+
+(* The tests of a call of known arity on its arity and on the code of
+   its callee: the call has one group of arguments at least; the code
+   is bound, is not tupled, and has as many parameters as the call has
+   groups of arguments. Arguments and parameters are counted by group,
+   as the generic application counts them ([shape_of_code_call]), and
+   not by the values that they unarize to: one group may stand for no
+   value. *)
+Definition known_arity_full (statics : static_env) (called : code_id)
+    (args_arity : arity) : bool :=
+  match args_arity, lookup called (static_code statics) with
+  | _ :: _, Some c =>
+    negb (code_is_tupled c)
+    && Nat.eqb (length args_arity) (length (code_params_arity c))
+  | _, _ => false
+  end.
+
 (* What the call of a closure is; [None] where it is undefined. A direct
-   call must be to a closure of the code named. The code takes the
-   arguments as they are, unless it is tupled: then the first argument
-   is a tuple, and the code takes its fields followed by the other
-   arguments ([arguments_for_code]). That is the rewrite of
+   call must be to a closure of the code named. A call of known arity
+   must be to a closure of code that its list allows ([code_ids_allow])
+   and must pass the tests of [known_arity_full]; it is then what the
+   call of unknown arity of the same closure is, which is a full call
+   (FlambdaKnownAritySpec.known_arity_shape_statement). The code takes
+   the arguments as they are, unless it is tupled: then the first
+   argument is a tuple, and the code takes its fields followed by the
+   other arguments ([arguments_for_code]). That is the rewrite of
    [simplify_direct_tuple_application], made by the machine: the
    compiler gives a tupled function a tuple wherever the call does not
    go by the code (a call of unknown arity), and at run time the
@@ -874,41 +922,105 @@ Definition shape_of_code_call (closure : value) (c : code) (vs : list value)
      relates them by its code age relation, which the model has not got.
      Discrepancy C0-1; no decision yet. *)
 
-(* CR mshinwell: a direct call, and an indirect call that the compiler
-   has marked as of known arity
-   ([Call_kind.Function_call.Indirect_known_arity]; the
-   [Indirect_unknown_arity] of this fragment is both sorts of indirect
-   call), are generic applications here: with fewer or more arguments
-   than the code has parameters they are partial applications and
-   over-applications. That is how Simplify reads a call of any kind
-   once it knows the callee ([simplify_function_call] sends all three to
-   [simplify_direct_function_call]), and it is what makes an indirect
-   call of a known closure the same as a direct call of its code
+(* CR mshinwell: a direct call is a generic application here: with
+   fewer or more arguments than the code has parameters it is a partial
+   application or an over-application. That is how Simplify treats a
+   call of any kind once it knows the callee ([simplify_function_call]
+   sends all three to [simplify_direct_function_call], which goes by
+   the number of arguments), and it is what makes a call of unknown
+   arity of a known closure the same as a direct call of its code
    whatever the number of arguments
    (FlambdaApplySpec.apply_indirect_known_statement). The backend reads
-   the two as full calls: it stops on a direct call that has not as many
+   a direct call as a full call: it stops on one that has not as many
    arguments as the code has parameters (to_cmm/to_cmm_expr.ml, "Wrong
-   arity for direct call"), and it compiles a call of known arity as a
-   full call with no test of the callee. So the machine gives a meaning
-   to calls that the backend refuses or would compile wrongly. No term
-   that the compiler makes is known to have one: closure conversion
-   makes a call direct only where it is full
-   (from_lambda/closure_conversion.ml, [close_apply]), and Simplify
-   marks a call as of known arity only where its types say that every
-   code the callee may have has the arity of the call; nothing checks
-   either afterwards. Whether such a call should be undefined, or ruled
-   out by well-formedness where the code is named, is not decided.
-   Discrepancy C3-9. *)
+   arity for direct call"). So the machine gives a meaning to direct
+   calls that the backend refuses. No term that the compiler makes is
+   known to have one: closure conversion makes a call direct only where
+   it is full (from_lambda/closure_conversion.ml, [close_apply]). A
+   call of known arity, which the backend also reads as a full call, is
+   one here too (the next comment; decision D58). Whether a direct call
+   that is not full should be undefined as well, or ruled out by
+   well-formedness where the code is named, is not decided.
+   Discrepancy C3-9, which is now of direct calls alone. *)
+(* CR mshinwell: a call of known arity
+   ([Call_kind.Function_call.Indirect_known_arity]) has a meaning here
+   only where it is a full call: it has one group of arguments at
+   least, and its callee is a closure of code that is bound, is not
+   tupled, and has as many parameters as the call has groups of
+   arguments ([code_ids_allow] and [known_arity_full] above). It is
+   then the call of unknown arity of the same callee, which is that
+   full call (FlambdaKnownAritySpec.known_arity_shape_statement).
+   Every other call of known arity is undefined: with no group of
+   arguments; of a partial application made at run time by a call of
+   unknown arity; with fewer or more groups of arguments than the
+   code has parameters, also where the call has one group; of tupled
+   code.
+   What the compiler does. Simplify makes a call of known arity in
+   two places: from a call of unknown arity, where the type of the
+   callee gives candidate code that is not tupled and has the arity
+   of the call ([simplify_function_call]); and from a direct call
+   whose code id it gives up
+   ([simplify_function_call_where_callee's_type_unavailable]), which
+   is a full call only if the direct call was. There is no general
+   check that a call of known arity keeps the promise of its kind:
+   Simplify tests what it learns of the callee, and may treat a
+   mismatch of the number of groups as a partial application or an
+   over-application (below); the backend emits no test at run time
+   of the callee. The backend loads a code pointer from the closure,
+   the first field for one group of arguments and the third for
+   more, and calls it with the arguments given; it stops on a call
+   with no group
+   (to_cmm/to_cmm_expr.ml, the case [Indirect_known_arity];
+   backend/cmm_helpers.ml, [indirect_full_call]). With two groups or
+   more: a closure of code that is not tupled and has one parameter
+   or none has no third field with a code pointer; of a closure of
+   other code that has not the number of parameters of the call,
+   the third field is the code of the full application, which is
+   then given another number of arguments than it takes. With one
+   group the backend's call is that of the generic application; it
+   is undefined here where the code has not one parameter, as the
+   kind promises the arity and the reaper goes by that promise
+   (identifiers/field.mli,
+   [Known_arity_code_pointer]; to_cmm/to_cmm_set_of_closures.ml puts
+   a function that fails in the first field where a set is marked
+   [only_full_applications]). Simplify, once it knows the callee,
+   treats a call of any kind by the number of its arguments: with
+   fewer it makes a closure, with more it splits the call
+   ([simplify_direct_function_call]).
+   Where the model is stricter than the compiler, by choice. A
+   partial application made at run time is a closure of what is left
+   to apply, and the backend would run a call of known arity that
+   gives it exactly that; the compiler is not known to make one, and
+   the value has no code id here. Tupled code: Simplify takes a
+   call of known arity, like a direct call, to give tupled code its
+   components ([simplify_function_call], [call_must_be_detupled]);
+   the backend's call with two groups or more loads the code that
+   takes them, and with one group loads the function that takes a
+   tuple, or the one that fails. Every call of known arity of tupled
+   code is undefined here, so that every call of known arity that
+   has a step is the call of unknown arity of the same callee, and
+   the test tool refuses a unit that has a call of known arity and
+   binds tupled code (the next comment).
+   Asked of the developers: is a call of known arity whose callee
+   has not the arity of the call a broken promise, which a check
+   could catch under [-flambda2-invariants] or in [to_cmm]; or has
+   it the meaning of the generic application, which the backend
+   would then have to keep? A direct call is still a generic
+   application here (discrepancy C3-9, which is now of direct calls
+   alone).
+   Decision D58. *)
 (* CR mshinwell: a direct call of tupled code gives it a tuple here, as
-   an indirect one does. In the compiler a direct call is in the
-   convention of the code: it gives tupled code the components
+   a call of unknown arity does. In the compiler a direct call and a
+   call of known arity are in the convention of the code: Simplify
+   takes them to give tupled code the components
    ([simplify_function_call], the comment at [call_must_be_detupled]).
-   So the compiler's direct calls of tupled code are not in this
-   fragment (the test tool refuses them), and the [Direct] of this
-   fragment says of tupled code what the compiler has no call kind for:
-   the code is known and the argument is still the tuple. It is so in
-   order that an indirect call of a known closure is a direct call of
-   its code whatever the code
+   So the compiler's direct calls and calls of known arity of tupled
+   code are not in this fragment: a call of known arity of tupled code
+   is undefined (the comment above), the test tool refuses both, and
+   the [Direct] of this fragment says of tupled code what the compiler
+   has no call kind for: the code is known and the argument is still
+   the tuple. It is so in order that a call of unknown arity of a known
+   closure is a direct call of its code whatever the code
    (FlambdaApplySpec.apply_indirect_known_statement), which the
    canonicalisation of a term by aliases relies on under every static
    environment. The other choice is a [Direct] in the convention of the
@@ -923,6 +1035,9 @@ Definition shape_of_closure_call (statics : static_env) (closure : value)
       match kind with
       | Direct named => Pos.eqb called named
       | Indirect_unknown_arity => true
+      | Indirect_known_arity code_ids =>
+        (code_ids_allow code_ids called
+         && known_arity_full statics called args_arity)%bool
       end
     in
     match expected, lookup called (static_code statics) with
@@ -934,8 +1049,8 @@ Definition shape_of_closure_call (statics : static_env) (closure : value)
   | None => None
   end.
 
-(* What a call is. An indirect call of a partial application is the
-   call of its closure with the arguments that it has been given
+(* What a call is. A call of unknown arity of a partial application is
+   the call of its closure with the arguments that it has been given
    already, followed by those of the call, of which there must be one at
    least: the compiler makes a partial application a closure of code
    with the parameters that are left, and stops on a call of it with no
@@ -948,7 +1063,8 @@ Definition shape_of_closure_call (statics : static_env) (closure : value)
    that test a partial application that no call made, one that keeps
    arguments that are not of the kinds of the arity it keeps, could
    hide a mismatch. A direct call of a partial application is
-   undefined: it is a closure of no code of the term. *)
+   undefined: it is a closure of no code of the term. So is a call of
+   known arity (decision D58). *)
 Definition shape_of_call (statics : static_env) (callee : value)
     (kind : call_kind) (vs : list value) (args_arity return_arity : arity)
     : option call_shape :=

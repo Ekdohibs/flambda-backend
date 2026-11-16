@@ -79,8 +79,8 @@
    is used as it is); the code age relation, and so the calls that
    name code already; the calling convention of tupled functions;
    the arities, over-application and partial application; inlining;
-   the mark of an indirect call of known arity, a call kind that the
-   model has not; the answer that the type has no closure.
+   the mark of an indirect call of known arity (a call that has that
+   kind is left as it is); the answer that the type has no closure.
 
    The statements.
    - From the type to the code ([callee_code_proved_statement]). In a
@@ -282,6 +282,7 @@ Definition direct_call_kind (tenv : Typing_env.t) (ap : apply_expr)
       end
     | None => Indirect_unknown_arity
     end
+  | Indirect_known_arity code_ids => Indirect_known_arity code_ids
   end.
 
 (* The callee and the arguments replaced by their canonical elements,

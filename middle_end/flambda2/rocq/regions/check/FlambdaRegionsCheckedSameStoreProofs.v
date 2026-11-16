@@ -36,6 +36,7 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaPrimitiveModel
   FlambdaModel FlambdaMapSpec FlambdaMapProofs FlambdaBindersProofs
   FlambdaValueSpec FlambdaPrimitiveSpec FlambdaPrimitiveProofs
   FlambdaHeapProofs FlambdaSemanticsSpec FlambdaSemanticsProofs
+  FlambdaKnownAritySpec FlambdaKnownArityProofs
   FlambdaClosuresProofs FlambdaRegionsSpec FlambdaRegionsProofs
   FlambdaRegionsReadsProofs FlambdaRegionsStepsProofs
   FlambdaRegionsFreshProofs FlambdaRegionsInvariantSpec
@@ -600,12 +601,22 @@ Proof.
     as Hcallee_live.
   pose proof (Hret_all a result _ Hret Hcaller Hgood_ret) as Hreturns.
   unfold call_result in Hresult.
-  destruct (ap_call_kind ap) as [id | ] eqn:Hkind.
+  destruct (ap_call_kind ap) as [id | | code_ids] eqn:Hkind.
+  3: (* A call of known arity that has a step is the call of unknown
+        arity. *)
+    rewrite <- (known_arity_call callee code_ids vs _ _ _ _ _ _ _) in Hstep
+      by (rewrite Hstep; discriminate).
   - exact
       (call_direct cert codes rs Hfresh Hcode Hlocal Hdeep Hstatics
          Hordered Hcells Hgood_statics _ _ a id callee _ _ vs _ _ _ _ result
          s' Hcaller Hcallee_good Hcallee_holds (simples_good _ _ Hvs) Hargs
          Hresult Hret Hraise Hreturns Hgood_ret Hgood_exn Hstep).
+  - exact
+      (call_unknown cert codes rs Hfresh Hcode Hlocal Hdeep Hstatics
+         Hordered Hcells Hgood_statics _ _ a callee _ _ vs _ _ _ _ result s'
+         Hcaller Hcallee_good Hcallee_live Hcallee_holds
+         (simples_good _ _ Hvs) Hargs Hresult Hret Hraise Hreturns Hgood_ret
+         Hgood_exn Hstep).
   - exact
       (call_unknown cert codes rs Hfresh Hcode Hlocal Hdeep Hstatics
          Hordered Hcells Hgood_statics _ _ a callee _ _ vs _ _ _ _ result s'

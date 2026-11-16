@@ -682,24 +682,31 @@ Definition copy_shape (shape : call_shape) : call_shape :=
   | Partial_call partial => Partial_call partial
   end.
 
-(* Whether a call of a kind is one of a closure of the code given. *)
-Definition expected (kind : call_kind) (called : code_id) : bool :=
+(* Whether a call of a kind, at an arity, is one of a closure of the
+   code given, under a static environment. *)
+Definition expected (statics : static_env) (kind : call_kind)
+    (called : code_id) (args_arity : arity) : bool :=
   match kind with
   | Direct named => Pos.eqb called named
   | Indirect_unknown_arity => true
+  | Indirect_known_arity code_ids =>
+    code_ids_allow code_ids called
+    && known_arity_full statics called args_arity
   end.
 
 (* The call kind of the second run answers that of the first, for a
-   callee: an indirect call stays one, and a call that is of the code
-   of the callee is of the code that the callee has in the second
+   callee: a call of unknown arity stays one, and a call that is of the
+   code of the callee is of the code that the callee has in the second
    run. *)
 Definition kind_follows (statics : static_env) (callee : value)
     (kind kind' : call_kind) : Prop :=
   (kind = Indirect_unknown_arity -> kind' = Indirect_unknown_arity)
-  ∧ (∀ (called : code_id) (slots : list (value_slot * value)),
+  ∧ (∀ (called : code_id) (slots : list (value_slot * value))
+       (args_arity : arity),
       closure_of statics callee = Some (called, slots) ->
-      expected kind called = true ->
-      expected kind' (code_at callee called) = true).
+      expected statics kind called args_arity = true ->
+      expected (copy_statics statics) kind' (code_at callee called) args_arity
+      = true).
 
 Lemma kind_follows_indirect (statics : static_env) (callee : value) :
   kind_follows statics callee Indirect_unknown_arity Indirect_unknown_arity.
@@ -729,6 +736,44 @@ Proof.
   rewrite (lookup_copy_code_new called id' codes Hno Hcopy), Hc. reflexivity.
 Qed.
 
+(* The tests of a call of known arity that pass of the code of a
+   closure in the first run pass of the code that the closure has in
+   the second. *)
+Lemma known_arity_full_copy (statics : static_env) (v : value)
+    (called : code_id) (args_arity : arity) :
+  no_new (static_code statics) ->
+  known_arity_full statics called args_arity = true ->
+  known_arity_full (copy_statics statics) (code_at v called) args_arity
+  = true.
+Proof.
+  intros Hno Hfull.
+  apply known_arity_full_true in Hfull
+    as [Hgroup (c & Hcode & Htupled & Hcount)].
+  apply known_arity_full_true. split; [ exact Hgroup | ].
+  exists (copy_code ids symbols c). rewrite copy_statics_code.
+  split;
+    [ exact (lookup_code_at v called c (static_code statics) Hno Hcode) | ].
+  destruct (copy_code_parts c) as (_ & _ & _ & _ & Hparams_arity & _).
+  split; [ destruct c; exact Htupled | rewrite Hparams_arity; exact Hcount ].
+Qed.
+
+(* A code id that a list has, where the list names no copied code, has
+   no copy. *)
+Lemma names_copied_none (code_ids : list code_id) (id : code_id) :
+  names_copied ids code_ids = false ->
+  among id code_ids = true ->
+  lookup id ids = None.
+Proof.
+  intros Hcopied Hamong.
+  assert (Hnot : among id (map fst ids) = false).
+  { apply among_In in Hamong. unfold names_copied in Hcopied.
+    destruct (among id (map fst ids)) eqn:Hid; [ | reflexivity ].
+    rewrite <- Hcopied. symmetry. apply existsb_exists. exists id.
+    split; assumption. }
+  rewrite <- is_bound_among in Hnot. unfold is_bound in Hnot.
+  destruct (lookup id ids); [ discriminate | reflexivity ].
+Qed.
+
 Lemma shape_of_closure_call_copy (statics : static_env) (closure : value)
     (kind kind' : call_kind) (vs : list value)
     (args_arity return_arity : arity) (shape : call_shape) :
@@ -744,11 +789,15 @@ Proof.
   destruct (closure_of statics closure) as [[called slots] | ] eqn:Hc;
     [ | discriminate ].
   rewrite (closure_of_copy statics closure called slots Hc).
-  specialize (Hkind called slots eq_refl). unfold expected in Hkind.
+  specialize (Hkind called slots args_arity eq_refl).
+  unfold expected in Hkind.
   destruct
     (match kind with
      | Direct named => Pos.eqb called named
      | Indirect_unknown_arity => true
+     | Indirect_known_arity code_ids =>
+       code_ids_allow code_ids called
+       && known_arity_full statics called args_arity
      end);
     [ | discriminate ].
   rewrite (Hkind eq_refl).
@@ -794,21 +843,22 @@ Lemma shape_of_call_copy (statics : static_env) (callee : value)
   = Some (copy_shape shape).
 Proof.
   intros Hno Hkind. unfold shape_of_call.
-  destruct kind as [named | ].
-  - (* A direct call: its callee is a closure, and no partial
-       application. *)
-    intros Hshape.
-    assert (Hpartial : partial_application_of callee = None).
-    { unfold shape_of_closure_call in Hshape.
-      destruct callee; try reflexivity. discriminate Hshape. }
-    rewrite Hpartial.
-    assert (Hgoal :
-      shape_of_closure_call (copy_statics statics) callee kind' vs
-        args_arity return_arity
-      = Some (copy_shape shape))
-      by exact (shape_of_closure_call_copy statics callee (Direct named)
-                  kind' vs args_arity return_arity shape Hno Hkind Hshape).
-    destruct kind'; exact Hgoal.
+  destruct kind as [named | | code_ids].
+  1, 3:
+    (* A direct call, or a call of known arity: its callee is a
+       closure, and no partial application. *)
+    (intros Hshape;
+     assert (Hpartial : partial_application_of callee = None)
+       by (unfold shape_of_closure_call in Hshape;
+           destruct callee; try reflexivity; discriminate Hshape);
+     rewrite Hpartial;
+     assert (Hgoal :
+       shape_of_closure_call (copy_statics statics) callee kind' vs
+         args_arity return_arity
+       = Some (copy_shape shape))
+       by exact (shape_of_closure_call_copy statics callee _ kind' vs
+                   args_arity return_arity shape Hno Hkind Hshape);
+     destruct kind'; exact Hgoal).
   - rewrite (proj1 Hkind eq_refl).
     destruct (partial_application_of callee)
       as [[[closure applied] applied_arity] | ];
@@ -966,11 +1016,12 @@ Lemma copy_call_parts (ap : apply_expr) :
 Proof.
   destruct ap as [callee kind args k exn extra args_arity return_arity].
   unfold copy_call. cbn [ap_call_kind ap_callee].
-  destruct kind as [id | ]; [ | auto 8 ].
-  destruct callee as [x | s | c];
-    [ destruct (lookup id ids) | destruct (among s symbols)
-    | destruct (lookup id ids) ];
-    auto 8.
+  destruct kind as [id | | [code_ids | ]]; [ | auto 8 | | auto 8 ].
+  - destruct callee as [x | s | c];
+      [ destruct (lookup id ids) | destruct (among s symbols)
+      | destruct (lookup id ids) ];
+      auto 8.
+  - destruct (names_copied ids code_ids); auto 8.
 Qed.
 
 (* A code id that has no copy is the code of a closure in both runs. *)
@@ -986,13 +1037,39 @@ Qed.
    the call had. *)
 Lemma copy_call_kind_follows (statics : static_env) (vars : env)
     (ap : apply_expr) (callee : value) :
+  no_new (static_code statics) ->
   eval_simple vars (ap_callee ap) = Some callee ->
   kind_follows statics callee (ap_call_kind ap)
     (ap_call_kind (copy_call ids symbols ap)).
 Proof.
-  unfold copy_call.
-  destruct (ap_call_kind ap) as [id | ] eqn:Hkind;
-    [ | intros _; rewrite Hkind; apply kind_follows_indirect ].
+  intros Hno. unfold copy_call.
+  destruct (ap_call_kind ap) as [id | | [code_ids | ]] eqn:Hkind;
+    [ | intros _; rewrite Hkind; apply kind_follows_indirect | | ].
+  2: { (* A call of known arity with a list: the list is kept where
+          it names no copied code, and then the code of the callee has
+          no copy. *)
+       intros _.
+       destruct (names_copied ids code_ids) eqn:Hcopied;
+         [ cbn [with_call_kind ap_call_kind] | rewrite Hkind ];
+         (split; [ discriminate | ]);
+         intros called slots args_arity _ Hexpected; unfold expected in *;
+         apply andb_true_iff in Hexpected as [Hallow Hfull];
+         apply andb_true_iff;
+         (split;
+          [ | exact (known_arity_full_copy statics callee called args_arity
+                       Hno Hfull) ]);
+         [ reflexivity | ].
+       rewrite (code_at_not_copied callee called
+                  (names_copied_none code_ids called Hcopied Hallow)).
+       exact Hallow. }
+  2: { intros _. rewrite Hkind. split; [ discriminate | ].
+       intros called slots args_arity _ Hexpected. unfold expected in *.
+       apply andb_true_iff in Hexpected as [_ Hfull].
+       apply andb_true_iff.
+       split;
+         [ reflexivity
+         | exact (known_arity_full_copy statics callee called args_arity Hno
+                    Hfull) ]. }
   assert (Hno_symbol :
     ∀ kind' : call_kind,
       kind'
@@ -1002,7 +1079,7 @@ Proof.
         end ->
       kind_follows statics callee (Direct id) kind').
   { intros kind' ->. split; [ discriminate | ].
-    intros called slots _ Hexpected.
+    intros called slots args_arity _ Hexpected.
     destruct (lookup id ids) eqn:Hid; [ reflexivity | ].
     apply Pos.eqb_eq in Hexpected as ->. simpl.
     rewrite (code_at_not_copied callee id Hid). apply Pos.eqb_refl. }
@@ -1010,7 +1087,7 @@ Proof.
   - intros _. apply Hno_symbol.
     destruct (lookup id ids); [ reflexivity | exact Hkind ].
   - intros [= <-]. split; [ discriminate | ].
-    intros called slots _ Hexpected.
+    intros called slots args_arity _ Hexpected.
     apply Pos.eqb_eq in Hexpected as ->.
     destruct (among s symbols) eqn:Hs.
     + simpl. rewrite Hs. apply Pos.eqb_refl.
@@ -1103,7 +1180,7 @@ Proof.
     + intros t Ht.
       exact (call_function_statics _ _ _ _ _ _ _ _ _ rd_ t Ht).
     + apply call_function_copy; [ exact Hno | ].
-      exact (copy_call_kind_follows statics vars ap callee Hcallee).
+      exact (copy_call_kind_follows statics vars ap callee Hno Hcallee).
   - (* Apply_cont *)
     destruct (eval_simples vars (ac_args ac)) as [vs | ]; [ | exact I ].
     unfold apply_continuation. rewrite resolve_copy.
@@ -1238,9 +1315,10 @@ Proof.
     reflexivity.
   - intros _ Hscope. unfold apply_statics_in_scope in Hscope.
     unfold copy_call.
-    destruct (ap_call_kind ap) as [id | ]; [ | reflexivity ].
-    cbn [among existsb] in Hscope.
-    rewrite andb_false_r in Hscope. discriminate.
+    destruct (ap_call_kind ap) as [id | | [[ | code_id code_ids] | ]];
+      try reflexivity;
+      cbn [all_among forallb among existsb andb] in Hscope;
+      rewrite andb_false_r in Hscope; discriminate.
 Qed.
 
 Fixpoint binds_no_static_no_code (e : expr) {struct e} :

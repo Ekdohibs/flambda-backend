@@ -117,7 +117,7 @@ Lemma shape_of_partial_callee (statics : static_env) (closure : value)
     = Some shape.
 Proof.
   unfold shape_of_call. cbn [partial_application_of].
-  destruct kind as [named | ]; [ discriminate | ].
+  destruct kind as [named | | code_ids]; [ discriminate | | discriminate ].
   destruct args_arity as [ | first args_arity]; [ discriminate | ].
   destruct (kinds_eqb (map kind_of_value vs) (unarize (first :: args_arity)))
     eqn:Hkinds; [ | discriminate ].

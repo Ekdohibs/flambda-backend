@@ -51,9 +51,6 @@ Proof.
   unfold const_eqb. destruct (const_eq_dec c c'); [ auto | discriminate ].
 Qed.
 
-Lemma call_kind_eqb_refl (kind : call_kind) : call_kind_eqb kind kind = true.
-Proof. destruct kind; simpl; [ apply Pos.eqb_refl | reflexivity ]. Qed.
-
 (* ======================================================================== *)
 (* Symmetry                                                                 *)
 (* ======================================================================== *)

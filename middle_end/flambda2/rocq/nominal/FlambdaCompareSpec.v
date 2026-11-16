@@ -190,10 +190,23 @@ Definition static_const_eqb (vm : name_map) (const const' : static_const)
   | _, _ => false
   end.
 
+(* [Compare.call_kinds]. Two calls of known arity are the same if
+   neither lists code ids, or if both list the same code ids in the same
+   order; a call with a list and one with none differ. The compiler
+   compares two sets. So the comparison here is stricter than the
+   compiler's where two lists have the same members and are not the
+   same list: it is so in order that two terms that it accepts with no
+   names paired are alpha-equivalent
+   (FlambdaCompareConverseSpec.expr_eqb_alpha_equivalent_statement),
+   which lists that differ are not. *)
 Definition call_kind_eqb (kind kind' : call_kind) : bool :=
   match kind, kind' with
   | Direct code, Direct code' => Pos.eqb code code'
   | Indirect_unknown_arity, Indirect_unknown_arity => true
+  | Indirect_known_arity None, Indirect_known_arity None => true
+  | Indirect_known_arity (Some code_ids), Indirect_known_arity (Some code_ids')
+    =>
+    forall2b Pos.eqb code_ids code_ids'
   | _, _ => false
   end.
 

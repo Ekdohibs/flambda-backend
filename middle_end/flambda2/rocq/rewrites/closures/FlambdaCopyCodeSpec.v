@@ -151,13 +151,27 @@ Definition with_call_kind (kind : call_kind) (ap : apply_expr)
     (ap_exn_continuation ap) (ap_exn_extra_args ap) (ap_args_arity ap)
     (ap_return_arity ap).
 
+(* Whether one of the code ids listed is code that is copied. *)
+Definition names_copied (ids : list (code_id * code_id))
+    (code_ids : list code_id) : bool :=
+  existsb (fun id => among id (map fst ids)) code_ids.
+
 (* A direct call whose callee is one of the symbols names the copy of
    the code that it names; one that names copied code and whose callee
-   is no symbol is made indirect. *)
+   is no symbol is made a call of unknown arity. A call of known arity
+   whose list names copied code loses its list: the closure that it
+   calls may be one of the copy, which the list has not, and a call
+   with no list is defined wherever the call with the list is
+   (FlambdaKnownAritySpec.known_arity_forget_statement). Any other
+   call of known arity is left. *)
 Definition copy_call (ids : list (code_id * code_id))
     (symbols : list symbol) (ap : apply_expr) : apply_expr :=
   match ap_call_kind ap with
-  | Indirect_unknown_arity => ap
+  | Indirect_unknown_arity | Indirect_known_arity None => ap
+  | Indirect_known_arity (Some code_ids) =>
+    if names_copied ids code_ids
+    then with_call_kind (Indirect_known_arity None) ap
+    else ap
   | Direct id =>
     match ap_callee ap with
     | Symbol s =>

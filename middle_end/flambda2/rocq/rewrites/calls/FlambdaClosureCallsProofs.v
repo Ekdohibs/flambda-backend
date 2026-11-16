@@ -186,7 +186,8 @@ Lemma call_made_closure_holds (known : made_closures) (statics : static_env)
   = step (State (Apply ap) vars conts statics hp rd).
 Proof.
   intros Hhold. unfold call_made_closure.
-  destruct (ap_call_kind ap) as [named | ] eqn:Hkind; [ reflexivity | ].
+  destruct (ap_call_kind ap) as [named | | code_ids] eqn:Hkind;
+    [ reflexivity | | reflexivity ].
   destruct (made_callee_code known (ap_callee ap)) as [code | ] eqn:Hcode;
     [ | reflexivity ].
   destruct (made_callee_code_sound known statics vars (ap_callee ap) code
@@ -345,7 +346,7 @@ Lemma call_made_closure_free_variables (known : made_closures)
   = free_variables_of_apply ap.
 Proof.
   unfold call_made_closure.
-  destruct (ap_call_kind ap); [ reflexivity | ].
+  destruct (ap_call_kind ap); [ reflexivity | | reflexivity ].
   destruct (made_callee_code known (ap_callee ap)); reflexivity.
 Qed.
 
@@ -354,7 +355,7 @@ Lemma call_made_closure_continuation (known : made_closures)
   ap_continuation (call_made_closure known ap) = ap_continuation ap.
 Proof.
   unfold call_made_closure.
-  destruct (ap_call_kind ap); [ reflexivity | ].
+  destruct (ap_call_kind ap); [ reflexivity | | reflexivity ].
   destruct (made_callee_code known (ap_callee ap)); reflexivity.
 Qed.
 
@@ -363,7 +364,7 @@ Lemma call_made_closure_exn_continuation (known : made_closures)
   ap_exn_continuation (call_made_closure known ap) = ap_exn_continuation ap.
 Proof.
   unfold call_made_closure.
-  destruct (ap_call_kind ap); [ reflexivity | ].
+  destruct (ap_call_kind ap); [ reflexivity | | reflexivity ].
   destruct (made_callee_code known (ap_callee ap)); reflexivity.
 Qed.
 

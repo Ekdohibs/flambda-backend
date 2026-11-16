@@ -693,7 +693,8 @@ Proof.
     (canonical_simples_sound known vars (exn_extra_simples ap) Hrespected).
   rewrite (canonical_simple_sound known vars (ap_callee ap) Hrespected).
   unfold canonical_call_kind.
-  destruct (ap_call_kind ap) as [code | ]; [ reflexivity | ].
+  destruct (ap_call_kind ap) as [code | | code_ids];
+    [ reflexivity | | reflexivity ].
   destruct (Known.find_closure known
               (Known.canonical_simple known (ap_callee ap)))
     as [c | ] eqn:Hclosure; [ | reflexivity ].
@@ -1672,7 +1673,8 @@ Lemma canonical_call_kind_renamed (r : renaming) (known : Known.t)
   canonical_call_kind (rename_known r known) (rename_simple r callee) kind
   = canonical_call_kind known callee kind.
 Proof.
-  unfold canonical_call_kind. destruct kind as [code | ]; [ reflexivity | ].
+  unfold canonical_call_kind. destruct kind as [code | | code_ids];
+    [ reflexivity | | reflexivity ].
   rewrite find_closure_renamed.
   destruct (Known.find_closure known callee) as [c | ]; cbn [option_map];
     [ | reflexivity ].

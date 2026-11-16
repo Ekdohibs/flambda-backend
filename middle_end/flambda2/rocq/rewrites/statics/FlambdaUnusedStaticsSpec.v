@@ -154,7 +154,8 @@ Definition apply_avoids (D : dropped) (ap : apply_expr) : bool :=
   simple_avoids D (ap_callee ap)
   && match ap_call_kind ap with
      | Direct code => code_kept D code
-     | Indirect_unknown_arity => true
+     | Indirect_unknown_arity | Indirect_known_arity None => true
+     | Indirect_known_arity (Some code_ids) => forallb (code_kept D) code_ids
      end
   && simples_avoid D (ap_args ap)
   && simples_avoid D (exn_extra_simples ap).

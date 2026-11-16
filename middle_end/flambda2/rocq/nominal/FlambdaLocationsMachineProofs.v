@@ -389,10 +389,15 @@ Proof.
   unfold shape_of_closure_call. rewrite closure_of_permuted.
   destruct (closure_of statics closure) as [[called slots] | ]; simpl;
     [ | reflexivity ].
+  change (known_arity_full (permute_static_env p statics) called args_arity)
+    with (known_arity_full statics called args_arity).
   destruct
     (match kind with
      | Direct named => Pos.eqb called named
      | Indirect_unknown_arity => true
+     | Indirect_known_arity code_ids =>
+       code_ids_allow code_ids called
+       && known_arity_full statics called args_arity
      end);
     [ | reflexivity ].
   destruct (lookup called (static_code statics)) as [c | ];
@@ -412,7 +417,9 @@ Lemma shape_of_call_permuted (p : permutation) (statics : static_env)
       (shape_of_call statics callee kind vs args_arity return_arity).
 Proof.
   unfold shape_of_call.
-  destruct kind as [named | ]; [ apply shape_of_closure_call_permuted | ].
+  destruct kind as [named | | code_ids];
+    [ apply shape_of_closure_call_permuted |
+    | apply shape_of_closure_call_permuted ].
   destruct (partial_application_of callee)
     as [[[closure applied] applied_arity] | ] eqn:Hpartial.
   - destruct callee; try discriminate. injection Hpartial as -> -> ->.

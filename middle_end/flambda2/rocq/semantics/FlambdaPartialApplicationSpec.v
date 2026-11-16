@@ -322,7 +322,8 @@ Definition over_application_applied_statement : Prop :=
    not an exception handler; its parameter [p] is not free in the
    arguments that remain, nor in the extra arguments.
    The call may be of any kind: a direct call of other code than the
-   closure's is undefined. It is a refinement and not an equivalence:
+   closure's is undefined, and so is a call of known arity, which is
+   not full. It is a refinement and not an equivalence:
    the over-application is undefined where the compiler's test of
    arities fails for it, or an argument that remains is not of the kind
    of its arity, even when the full call never returns. (Where the code

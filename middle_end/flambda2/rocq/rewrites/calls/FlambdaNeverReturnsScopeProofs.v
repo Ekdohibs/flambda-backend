@@ -42,7 +42,8 @@ Lemma scoped_cut_return (known : list (code_id * code)) (ap : apply_expr) :
   scoped (Apply ap) (cut_return known ap).
 Proof.
   unfold cut_return.
-  destruct (ap_call_kind ap) as [called | ]; [ | apply scoped_refl ].
+  destruct (ap_call_kind ap) as [called | | code_ids];
+    [ | apply scoped_refl | apply scoped_refl ].
   destruct (lookup called known) as [c | ]; [ | apply scoped_refl ].
   destruct (invalid_params c (length (unarize (ap_return_arity ap))))
     as [params | ];

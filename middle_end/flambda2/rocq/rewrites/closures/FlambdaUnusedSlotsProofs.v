@@ -559,10 +559,23 @@ Proof.
     [ | discriminate ].
   destruct (closure_of_drop statics closure called slots Hc)
     as (slots' & -> & _).
+  assert (Hfull :
+    known_arity_full (trim_statics statics) called args_arity
+    = known_arity_full statics called args_arity).
+  { apply (known_arity_full_mapped (drop_slots_code D));
+      [ apply lookup_trim_code | ].
+    intros c _. split; [ destruct c; reflexivity | ].
+    destruct (drop_slots_code_parts c)
+      as (_ & _ & _ & _ & Hparams_arity & _).
+    exact Hparams_arity. }
+  rewrite Hfull.
   destruct
     (match kind with
      | Direct named => Pos.eqb called named
      | Indirect_unknown_arity => true
+     | Indirect_known_arity code_ids =>
+       code_ids_allow code_ids called
+       && known_arity_full statics called args_arity
      end);
     [ | discriminate ].
   lookup_trimmed.
@@ -602,7 +615,8 @@ Lemma shape_of_call_drop (statics : static_env) (callee : value)
   = Some (trim_shape shape).
 Proof.
   unfold shape_of_call.
-  destruct kind as [named | ]; [ apply shape_of_closure_call_drop | ].
+  destruct kind as [named | | code_ids];
+    [ apply shape_of_closure_call_drop | | apply shape_of_closure_call_drop ].
   destruct (partial_application_of callee)
     as [[[closure applied] applied_arity] | ];
     [ | apply shape_of_closure_call_drop ].

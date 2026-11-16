@@ -1262,12 +1262,14 @@ Definition follows (statics : static_env) : Prop :=
     lookup id (static_code statics) = Some c ->
     lookup id' (static_code statics) = Some c.
 
-(* A direct call is of a symbol, or names code that has no copy. *)
+(* A direct call is of a symbol, or names code that has no copy; the
+   list of a call of known arity names no code that has a copy. *)
 Definition kind_ok (callee : value) (kind : call_kind) : Prop :=
   match kind with
   | Direct named =>
     (∃ s : symbol, callee = Value_symbol s) ∨ lookup named ids = None
-  | Indirect_unknown_arity => True
+  | Indirect_unknown_arity | Indirect_known_arity None => True
+  | Indirect_known_arity (Some code_ids) => names_copied ids code_ids = false
   end.
 
 (* Code with some [Let]s copied has the parameters, the arities and the
@@ -1350,19 +1352,11 @@ Proof.
     (match kind with
      | Direct named => Pos.eqb called named
      | Indirect_unknown_arity => true
+     | Indirect_known_arity code_ids =>
+       code_ids_allow code_ids called
+       && known_arity_full statics called args_arity
      end) eqn:Hexpected;
     [ | discriminate ].
-  assert (Hexpected' :
-    match kind with
-    | Direct named => Pos.eqb called' named
-    | Indirect_unknown_arity => true
-    end = true).
-  { destruct kind as [named | ]; [ | reflexivity ].
-    apply Pos.eqb_eq in Hexpected. subst named. apply Pos.eqb_eq.
-    destruct Hkind as [[s ->] | Hnone]; [ exact (Hsym s eq_refl) | ].
-    destruct Hid as [-> | ->]; [ reflexivity | ].
-    unfold copy_of. rewrite Hnone. reflexivity. }
-  rewrite Hexpected'.
   destruct (lookup called (static_code statics)) as [c | ] eqn:Hcode;
     [ | discriminate ].
   assert (Hcode' :
@@ -1374,10 +1368,41 @@ Proof.
         [ exact (Hfollows called id' c Hcopy Hcode) | exact Hcode ]. }
     pose proof (proj1 Hstatics called') as H. rewrite Hsource in H.
     exact H. }
-  destruct Hcode' as (c' & -> & Hc_lets).
-  cbv iota.
+  destruct Hcode' as (c' & Hcode' & Hc_lets).
   destruct (code_lets_parts c c' Hc_lets)
     as (Htupled & Hparams & Hresult & _).
+  assert (Hexpected' :
+    match kind with
+    | Direct named => Pos.eqb called' named
+    | Indirect_unknown_arity => true
+    | Indirect_known_arity code_ids =>
+      code_ids_allow code_ids called'
+      && known_arity_full statics' called' args_arity
+    end = true).
+  { destruct kind as [named | | code_ids]; [ | reflexivity | ].
+    - apply Pos.eqb_eq in Hexpected. subst named. apply Pos.eqb_eq.
+      destruct Hkind as [[s ->] | Hnone]; [ exact (Hsym s eq_refl) | ].
+      destruct Hid as [-> | ->]; [ reflexivity | ].
+      unfold copy_of. rewrite Hnone. reflexivity.
+    - (* A call of known arity: its list, if it has one, names no code
+         that has a copy, so that the closure has the same code in the
+         third run; and the code there has the arity and is not
+         tupled. *)
+      apply andb_true_iff in Hexpected as [Hallow Hfull].
+      apply andb_true_iff. split.
+      + destruct code_ids as [code_ids | ]; [ | reflexivity ].
+        destruct Hid as [-> | ->]; [ exact Hallow | ].
+        unfold copy_of.
+        rewrite (names_copied_none ids code_ids called Hkind Hallow).
+        exact Hallow.
+      + apply known_arity_full_true in Hfull
+          as [Hgroup (c0 & Hcode0 & Htupled0 & Hcount)].
+        rewrite Hcode in Hcode0. injection Hcode0 as <-.
+        apply known_arity_full_true. split; [ exact Hgroup | ].
+        exists c'. split; [ exact Hcode' | ].
+        rewrite Htupled, Hparams. split; assumption. }
+  rewrite Hexpected', Hcode'.
+  cbv iota.
   destruct (arguments_for_code statics c vs args_arity)
     as [[ws args_arity'] | ] eqn:Hargs; [ | discriminate ].
   destruct
@@ -1429,8 +1454,9 @@ Lemma shape_of_call_copied (statics statics' : static_env)
     ∧ shape_copied shape shape'.
 Proof.
   intros Hstatics Hfollows Hcallee Hvs Hkind. unfold shape_of_call.
-  destruct kind as [named | ];
-    [ apply shape_of_closure_call_copied; assumption | ].
+  destruct kind as [named | | code_ids];
+    [ apply shape_of_closure_call_copied; assumption |
+    | apply shape_of_closure_call_copied; assumption ].
   pose proof (partial_application_copied callee callee' Hcallee) as Hpartial.
   destruct (partial_application_of callee)
     as [[[closure applied] applied_arity] | ].
@@ -1645,14 +1671,17 @@ Qed.
 
 (* What is asked of the expression of the second state: if it is a
    direct call, the callee is a symbol or the code named has no
-   copy. *)
+   copy; if it is a call of known arity with a list, the list names no
+   code that has a copy. *)
 Definition apply_ok (e : expr) : Prop :=
   match e with
   | Apply ap =>
     match ap_call_kind ap with
     | Direct named =>
       (∃ s : symbol, ap_callee ap = Symbol s) ∨ lookup named ids = None
-    | Indirect_unknown_arity => True
+    | Indirect_unknown_arity | Indirect_known_arity None => True
+    | Indirect_known_arity (Some code_ids) =>
+      names_copied ids code_ids = false
     end
   | Let _ _ _ _ | Let_static _ _ | Let_cont_non_recursive _ _ _
   | Let_cont_recursive _ _ | Apply_cont _ | Switch _ _ | Invalid =>
@@ -1743,7 +1772,8 @@ Proof.
     + exact (with_extra_args_copied _ _ extra extra'
                (resolve_copied _ conts conts' Hconts) Hextras).
     + cbn [apply_ok] in Hok. unfold kind_ok.
-      destruct (ap_call_kind ap) as [named | ]; [ | exact I ].
+      destruct (ap_call_kind ap) as [named | | [code_ids | ]];
+        [ | exact I | exact Hok | exact I ].
       destruct Hok as [[sym Hsym] | Hnone]; [ | right; exact Hnone ].
       left. exists sym. rewrite Hsym in Hcallee. simpl in Hcallee.
       injection Hcallee as <-. reflexivity.
@@ -1817,13 +1847,15 @@ Proof.
     try exact I.
   destruct ap as [callee kind args k exn extra args_arity return_arity].
   cbn [copy_expr]. unfold copy_call. cbn [ap_call_kind ap_callee].
-  destruct kind as [named | ]; [ | exact I ].
-  destruct callee as [x | s | c].
+  destruct kind as [named | | [code_ids | ]]; [ | exact I | | exact I ].
+  1: destruct callee as [x | s | c].
   - destruct (lookup named ids) eqn:Hcopy; [ exact I | ].
     right. exact Hcopy.
   - destruct (among s symbols); left; exists s; reflexivity.
   - destruct (lookup named ids) eqn:Hcopy; [ exact I | ].
     right. exact Hcopy.
+  - destruct (names_copied ids code_ids) eqn:Hcopied;
+      [ exact I | exact Hcopied ].
 Qed.
 
 (* What two exits are compared by: the same values, and heaps alike. *)

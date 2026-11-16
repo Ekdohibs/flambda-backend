@@ -1161,6 +1161,8 @@ Proof.
     (match kind with
      | Direct named => Pos.eqb id named
      | Indirect_unknown_arity => true
+     | Indirect_known_arity code_ids =>
+       code_ids_allow code_ids id && known_arity_full statics id args_arity
      end);
     [ | exact I ].
   rewrite Hid. unfold arguments_for_code.

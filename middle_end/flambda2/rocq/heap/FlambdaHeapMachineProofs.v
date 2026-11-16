@@ -4374,10 +4374,16 @@ Proof.
     (related_closure_of D r st st' h h' Hmemories _ _ _ _ Hclosure Hcalled)
     as (slots' & -> & _).
   rewrite <- Hcode.
+  rewrite (FlambdaSemanticsProofs.known_arity_full_code st st' called
+             args_arity)
+    by (rewrite Hcode; reflexivity).
   destruct
     match kind with
     | Direct named => Pos.eqb called named
     | Indirect_unknown_arity => true
+    | Indirect_known_arity code_ids =>
+      code_ids_allow code_ids called
+      && known_arity_full st called args_arity
     end;
     [ | exact I ].
   destruct (lookup called (static_code st)) as [c | ]; [ | exact I ].
@@ -4425,8 +4431,9 @@ Proof.
          Hcallee Hpartial)
       as (closure' & applied' & -> & Hclosure & Happlied).
     simpl.
-    destruct kind as [named | ];
-      [ apply (related_shape_of_closure_call D r _ _ h h'); assumption | ].
+    destruct kind as [named | | code_ids];
+      [ apply (related_shape_of_closure_call D r _ _ h h'); assumption |
+      | apply (related_shape_of_closure_call D r _ _ h h'); assumption ].
     destruct args_arity as [ | component args_arity]; [ exact I | ].
     rewrite (related_kinds D r st st' h h' _ _ Hmemories Hvs).
     destruct (kinds_eqb _ _); [ | exact I ].
@@ -4866,7 +4873,8 @@ Proof.
     split; apply forallb_forall; intros entry _; reflexivity.
   - unfold apply_avoids.
     rewrite simple_avoids_nothing, !simples_avoid_nothing.
-    destruct (ap_call_kind ap); reflexivity.
+    destruct (ap_call_kind ap) as [code | | [code_ids | ]]; try reflexivity.
+    rewrite !andb_true_r. apply forallb_forall. intros id _. reflexivity.
   - apply simples_avoid_nothing.
   - apply simple_avoids_nothing.
 Qed.

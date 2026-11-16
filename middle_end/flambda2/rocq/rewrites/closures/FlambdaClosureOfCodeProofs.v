@@ -742,8 +742,9 @@ Lemma call_code_closure_step (known : closure_codes) (statics : static_env)
   = step (State (Apply ap) vars conts statics hp rd).
 Proof.
   intros Hhold. unfold call_code_closure.
-  destruct (ap_call_kind ap) as [named | ] eqn:Hkind;
-    [ destruct (ap_callee ap); reflexivity | ].
+  destruct (ap_call_kind ap) as [named | | code_ids] eqn:Hkind;
+    [ destruct (ap_callee ap); reflexivity |
+    | destruct (ap_callee ap); reflexivity ].
   destruct (ap_callee ap) as [x | sym | k] eqn:Hcallee; try reflexivity.
   destruct (lookup x known) as [c | ] eqn:Hx; [ | reflexivity ].
   destruct (Hhold x c Hx) as (v & slots & Hv & Hclosure).
@@ -2701,7 +2702,8 @@ Lemma call_code_closure_shape (known : closure_codes) (ap : apply_expr) :
 Proof.
   unfold call_code_closure.
   destruct (ap_call_kind ap);
-    [ left; destruct (ap_callee ap); reflexivity | ].
+    [ left; destruct (ap_callee ap); reflexivity |
+    | left; destruct (ap_callee ap); reflexivity ].
   destruct (ap_callee ap) as [x | sym | k]; try (left; reflexivity).
   destruct (lookup x known) as [c | ]; [ | left; reflexivity ].
   right. exists c. reflexivity.
