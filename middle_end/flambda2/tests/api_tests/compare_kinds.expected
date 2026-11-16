@@ -127,6 +127,9 @@ two static blocks whose fields have not the same debugging information (one has 
 two static arrays of values: the same
 two static arrays of values of two lengths: different
 two static arrays of values whose fields have not the same debugging information: the same
+a name, and the name under a change of depth between two equal depths (the identity by Coercion.is_id: false): different
+a name, and the name under a change of depth between two depths: different
+a name under a change of depth, and under the change the other way: different
 two groups of two recursive continuations: the same
 a group of one recursive continuation and a group of two: different
 a direct call of the code that the unit binds:
@@ -204,3 +207,5 @@ the kind Float_block (a keyword of the text), written and read back: "invalid `F
 the kind Empty_array (a keyword of the text), written and read back: "invalid `Empty_array`", the same
 a poison constant with the name "variant_unboxing_field", written and read back: "cont done (poison.val."variant_unboxing_field")", the same
 a poison constant with the name "a \"name\" with quotes\\", written and read back: "cont done (poison.val."a \"name\" with quotes\\")", the same
+a name under a change of depth between two equal depths, the depth 1 (the identity by Coercion.is_id: false), written and read back: "cont done ($camlKinds ~ depth 1 -> 1)", the same
+a name under a change of depth between two equal depths, the depth "do not inline" (the identity by Coercion.is_id: false), written and read back: "cont done ($camlKinds ~ depth do_not_inline -> do_not_inline)", the same

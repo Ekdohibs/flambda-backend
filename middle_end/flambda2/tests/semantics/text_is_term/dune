@@ -136,8 +136,8 @@
 ;; recursive_function_called_from_its_closure: checked with -after-simplify,
 ;; on the term that Simplify returns. On the callee of a direct call that term
 ;; has a change of depth between two equal depths, which is not the identity
-;; coercion (X3-8). The text writes it, and the reader reads the identity. The
-;; text is not the term.
+;; coercion (X3-8). The text writes it, and the reader reads a change of
+;; depth. The text is the term.
 ;;
 ;; after_simplify_in_classic_mode: direct_call_in_classic_mode.ml, checked
 ;; with -after-simplify and compiled with -Oclassic. Simplify is not run, and

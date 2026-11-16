@@ -178,11 +178,32 @@ let rec rec_info env (ri : Fexpr.rec_info) : Rec_info_expr.t =
       ~unrolling:(US.unrolling ~remaining_depth:u)
   | Unroll (d, ri) -> Rec_info_expr.unroll_to d (rec_info env ri)
 
+(* A value equal to the one given that is another value in memory: one of its
+   parts goes through [Sys.opaque_identity], so that whatever compiles this file
+   cannot take the value built for the one given, or for a constant. *)
+let another_rec_info (ri : Rec_info_expr.t) : Rec_info_expr.t =
+  match ri with
+  | Const { depth; unrolling } ->
+    Rec_info_expr.const ~depth:(Sys.opaque_identity depth) ~unrolling
+  | Var dv -> Rec_info_expr.var (Sys.opaque_identity dv)
+  | Succ ri -> Rec_info_expr.succ (Sys.opaque_identity ri)
+  | Unroll_to (d, ri) -> Rec_info_expr.unroll_to d (Sys.opaque_identity ri)
+
+(* [Coercion.change_depth] gives the identity if its two depths are one value in
+   memory, and a change of depth otherwise, even between two equal depths; and
+   the two are different coercions for [Coercion.equal] and [Coercion.is_id]. A
+   term can have a change of depth between two equal depths (Simplify returns
+   such terms), and the printer of texts writes it [~ depth D -> D]: it writes
+   no coercion for the identity. So a change of depth in a text is never the
+   identity, and the second depth is made here as a value of its own, whatever
+   [rec_info] returned, so that [Coercion.change_depth] does not give the
+   identity for it. *)
 let coercion env (co : Fexpr.coercion) : Coercion.t =
   match co with
   | Id -> Coercion.id
   | Change_depth { from; to_ } ->
-    Coercion.change_depth ~from:(rec_info env from) ~to_:(rec_info env to_)
+    Coercion.change_depth ~from:(rec_info env from)
+      ~to_:(another_rec_info (rec_info env to_))
 
 let rec simple env (s : Fexpr.simple) : Simple.t =
   match s with

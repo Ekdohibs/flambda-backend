@@ -49,7 +49,10 @@
    probe, a call that performs an effect, the shape of a static block, the
    debugging information of its fields and of those of a static array of values
    (which is not compared, as no other debugging information is), and a group of
-   two recursive continuations.
+   two recursive continuations. And pairs built in memory of a name under a
+   coercion: the first is a name, and the name under a change of depth between
+   two equal depths, which is not the identity coercion, and the comparison
+   calls the two different.
 
    Then the unit that the comparison gives for two different units, where the
    kind of a call of the first unit has a name that the second unit binds under
@@ -74,7 +77,12 @@
 
    And a unit that returns a poison constant is written and read back, for two
    names: the printer writes the name as a string, which is what the reader
-   takes. *)
+   takes.
+
+   And a unit that returns a name under a change of depth between two equal
+   depths is written and read back, for a depth that is a number and for the
+   depth that the reader has as one constant: the reader reads a change of
+   depth, not the identity. *)
 
 open Flambda2_bound_identifiers
 open Flambda2_identifiers
@@ -368,6 +376,22 @@ let static_array ?dbg ?(short = false) () =
       Static_const.immutable_value_array
         (if short then [List.hd fields] else fields))
 
+(* A depth that is made anew at each call, so that two of them that are equal
+   are not the same value in memory. *)
+let[@inline never] depth n =
+  Rec_info_expr.const ~depth:(Or_infinity.Finite n)
+    ~unrolling:Rec_info_expr.Unrolling_state.not_unrolling
+
+(* The same of the depth "do not inline". *)
+let[@inline never] do_not_inline unrolling =
+  Rec_info_expr.const ~depth:Or_infinity.Infinity ~unrolling
+
+(* A unit that returns the symbol of the module under the given coercion. *)
+let returns_under coercion =
+  unit
+    (fun ~return_continuation ~exn_continuation:_ ~toplevel_my_alloc_region:_ ->
+      jump return_continuation [Simple.with_coercion argument coercion])
+
 (* A group of [n] recursive continuations, of which the first is called. *)
 let recursive_group n =
   unit
@@ -485,6 +509,26 @@ let () =
     "two static arrays of values whose fields have not the same debugging \
      information: %s\n"
     (answer (static_array ()) (static_array ~dbg:somewhere ()));
+  let between_equal_depths =
+    Coercion.change_depth
+      ~from:(depth (Sys.opaque_identity 1))
+      ~to_:(depth (Sys.opaque_identity 1))
+  in
+  Printf.printf
+    "a name, and the name under a change of depth between two equal depths \
+     (the identity by Coercion.is_id: %b): %s\n"
+    (Coercion.is_id between_equal_depths)
+    (answer (returns_under Coercion.id) (returns_under between_equal_depths));
+  Printf.printf
+    "a name, and the name under a change of depth between two depths: %s\n"
+    (answer
+       (returns_under Coercion.id)
+       (returns_under (Coercion.change_depth ~from:(depth 1) ~to_:(depth 2))));
+  Printf.printf
+    "a name under a change of depth, and under the change the other way: %s\n"
+    (answer
+       (returns_under (Coercion.change_depth ~from:(depth 1) ~to_:(depth 2)))
+       (returns_under (Coercion.change_depth ~from:(depth 2) ~to_:(depth 1))));
   Printf.printf "two groups of two recursive continuations: %s\n"
     (answer (recursive_group 2) (recursive_group 2));
   Printf.printf "a group of one recursive continuation and a group of two: %s\n"
@@ -795,4 +839,19 @@ let () =
         name
         (String.concat " " (String.split_on_char '\n' text))
         read)
-    ["variant_unboxing_field"; "a \"name\" with quotes\\"]
+    ["variant_unboxing_field"; "a \"name\" with quotes\\"];
+  List.iter
+    (fun (what, from, to_) ->
+      let coercion = Coercion.change_depth ~from ~to_ in
+      let text, read = unit_written_and_read_back (returns_under coercion) in
+      Printf.printf
+        "a name under a change of depth between two equal depths, %s (the \
+         identity by Coercion.is_id: %b), written and read back: \"%s\", %s\n"
+        what (Coercion.is_id coercion)
+        (String.concat " " (String.split_on_char '\n' text))
+        read)
+    [ "the depth 1", depth (Sys.opaque_identity 1), depth (Sys.opaque_identity 1);
+      ( "the depth \"do not inline\"",
+        Rec_info_expr.do_not_inline,
+        do_not_inline
+          (Sys.opaque_identity Rec_info_expr.Unrolling_state.do_not_unroll) ) ]

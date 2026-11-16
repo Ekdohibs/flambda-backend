@@ -5,8 +5,8 @@
    change of depth gives the identity only if its two depths are one value in
    memory). The unit is checked with -after-simplify: on the term that Simplify
    returns. The text writes the coercion ([~ depth do_not_inline ->
-   do_not_inline]); the reader makes both depths from one constant, so it reads
-   the identity, and the text is not the term. *)
+   do_not_inline]), and the reader reads a change of depth for it, where it read
+   the identity. So the text is the term. *)
 
 external ( + ) : int -> int -> int = "%addint"
 
