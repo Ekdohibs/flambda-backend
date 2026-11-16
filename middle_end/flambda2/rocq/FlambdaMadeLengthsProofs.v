@@ -232,19 +232,16 @@ Qed.
 (* The rule commutes with renaming                                          *)
 (* ======================================================================== *)
 
-(* The law of the traversal is proved by the tactic of
-   FlambdaEquivarianceTactic.v from the definition of the rule: the
-   induction over the term and its cases are the tactic's. It is given
-   three laws that FlambdaCseProofs.v has of what the rule is made of;
-   the law of FlambdaCseSpec.array_made_under_let it states and proves
-   by itself. The rule as the validation runs it is the traversal at
-   nothing known, which a renaming leaves as it is. *)
-#[local] Hint Rewrite made_length_named_renamed forget_computed_renamed
-  forget_computed_vars_renamed : equivariance.
+(* The two laws are proved by the tactic of FlambdaEquivarianceTactic.v
+   from the definition of the rule: the induction over the term and
+   its cases are the tactic's. The instance tells it how what is known
+   is renamed, and the laws of what the rule is made of are in the
+   database that FlambdaCseProofs.v fills. *)
+#[local] Instance computed_renaming : Renaming_of computed := rename_computed.
 
 Theorem lengths_knowing_equivariant : lengths_knowing_equivariant_statement.
 Proof. equivariance. Qed.
 
 Theorem fold_made_lengths_equivariant :
   fold_made_lengths_equivariant_statement.
-Proof. intros r e. exact (lengths_knowing_equivariant r [] e). Qed.
+Proof. equivariance. Qed.
