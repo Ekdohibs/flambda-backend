@@ -36,7 +36,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaKindModel
   FlambdaValueSpec FlambdaPrimitiveModel FlambdaPrimitiveSpec
   FlambdaPrimitiveProofs FlambdaSemanticsSpec FlambdaSemanticsProofs
   FlambdaContextProofs FlambdaNominalSpec FlambdaNominalProofs
-  FlambdaIdentitiesSpec.
+  FlambdaIdentitiesSpec FlambdaEquivarianceTactic.
 From OxCamlFlambda2 Require FlambdaMapSpec FlambdaHeapProofs
   FlambdaSameComparisonSpec FlambdaSameComparisonProofs.
 Import ListNotations.
@@ -646,89 +646,20 @@ Proof. intros e vars conts statics. apply apply_identities_refines_at. Qed.
 (* The pass commutes with renaming                                          *)
 (* ======================================================================== *)
 
-(* A renaming leaves a constant as it is, and makes no other argument a
-   constant. *)
-Lemma int_of_simple_renamed (r : renaming) (kind : standard_int)
-    (s : simple) :
-  int_of_simple kind (rename_simple r s) = int_of_simple kind s.
-Proof. destruct s; reflexivity. Qed.
-
-Lemma is_const_renamed (r : renaming) (s : simple) :
-  is_const (rename_simple r s) = is_const s.
-Proof. destruct s; reflexivity. Qed.
-
-Lemma named_of_outcome_equivariant (r : renaming) (kind : standard_int)
-    (o : outcome) (other : simple) :
-  named_of_outcome kind o (rename_simple r other)
-  = option_map (rename_named r) (named_of_outcome kind o other).
-Proof. destruct o; reflexivity. Qed.
-
-(* The two arguments of [Phys_equal] are the same variable after a
-   renaming exactly when they were before. *)
-Lemma identity_of_binary_equivariant (r : renaming) (p : binary_primitive)
-    (arg1 arg2 : simple) :
-  identity_of_binary p (rename_simple r arg1) (rename_simple r arg2)
-  = option_map (rename_named r) (identity_of_binary p arg1 arg2).
-Proof.
-  destruct p as [array_kind load_kind mut | width | op | kind op | kind op
-                | kind behaviour];
-    cbn [identity_of_binary]; try reflexivity.
-  - (* [Phys_equal] *)
-    destruct arg1 as [x | | ], arg2 as [y | | ]; try reflexivity.
-    cbn [rename_simple]. rewrite rename_variable_eqb.
-    destruct (Pos.eqb x y); reflexivity.
-  - (* [Int_arith] *)
-    rewrite !int_of_simple_renamed, !is_const_renamed.
-    destruct (int_of_simple kind arg1), (int_of_simple kind arg2);
-      try reflexivity.
-    + destruct (is_const arg2);
-        [ reflexivity | apply named_of_outcome_equivariant ].
-    + destruct (is_const arg1);
-        [ reflexivity | apply named_of_outcome_equivariant ].
-  - (* [Int_shift] *)
-    rewrite !int_of_simple_renamed, !is_const_renamed.
-    destruct (int_of_simple kind arg1),
-      (int_of_simple Standard_naked_immediate arg2);
-      try reflexivity.
-    + destruct (is_const arg2);
-        [ reflexivity | apply named_of_outcome_equivariant ].
-    + destruct (is_const arg1);
-        [ reflexivity | apply named_of_outcome_equivariant ].
-Qed.
-
+(* The two laws are proved by the tactic of FlambdaEquivarianceTactic.v
+   from the definitions: it states and proves by itself the laws of
+   [int_of_simple], [is_const], [named_of_outcome] and
+   [identity_of_binary], and makes the induction over the term. The
+   first law is given to it for the second, which would otherwise
+   derive it again. *)
 Theorem identity_named_equivariant : identity_named_equivariant_statement.
-Proof.
-  intros r d.
-  destruct d as [s | p args | code slots | fslot decls slots | slot closure
-    | pfrom slot closure | move_from move_to closure];
-    try reflexivity.
-  destruct p as [u | b | variadic | heap | rp]; try reflexivity.
-  destruct args as [ | arg1 [ | arg2 [ | arg3 args]]]; try reflexivity.
-  cbn [rename_named map identity_named binary_applied].
-  rewrite identity_of_binary_equivariant.
-  destruct (identity_of_binary b arg1 arg2); reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
-(* By recursion on the term. A renaming goes into the handlers of
-   recursive continuations and into code, where the pass does not: there
-   both sides are the term renamed. *)
-Fixpoint apply_identities_equivariant_aux (r : renaming) (e : expr) :
-  apply_identities (rename_expr r e) = rename_expr r (apply_identities e).
-Proof.
-  destruct e
-    as [ x kind d body | bindings body | k [params metadata handler] body
-       | handlers body | ap | ac | scrutinee arms | ];
-    simpl; try reflexivity.
-  - rewrite identity_named_equivariant, apply_identities_equivariant_aux.
-    reflexivity.
-  - rewrite apply_identities_equivariant_aux. reflexivity.
-  - rewrite !apply_identities_equivariant_aux. reflexivity.
-  - rewrite apply_identities_equivariant_aux. reflexivity.
-Qed.
+#[local] Hint Rewrite identity_named_equivariant : equivariance.
 
 Theorem apply_identities_equivariant :
   apply_identities_equivariant_statement.
-Proof. exact apply_identities_equivariant_aux. Qed.
+Proof. equivariance. Qed.
 
 (* ======================================================================== *)
 (* What the pass makes of some operations                                   *)
