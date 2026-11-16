@@ -486,7 +486,12 @@ Qed.
    - the laws of [forget_slot_var] and [forget_slot_vars], stated from
      their types ([equivariance_of]; [Check] shows the statement):
      without the first the tactic does not close the second, whose
-     induction needs it at what is known of each step. *)
+     induction needs it at what is known of each step;
+   - the law of [slot_read], also stated from its type. Its lookups
+     are the scrutinee of a [match], where only the step that tries
+     every law on the whole goal finds them: it is proved with that
+     step, and after it the database is applied by its one pass, the
+     faster step, with which every later proof passes. *)
 
 #[local] Instance known_closures_renaming : Renaming_of known_closures :=
   rename_known_closures.
@@ -505,6 +510,12 @@ Lemma lookup_renamed_known (r : renaming) (s : symbol)
   = option_map (rename_static_const r) (lookup s known).
 Proof. apply (lookup_map_values _ _ (rename_static_const r)). Qed.
 #[local] Hint Rewrite lookup_renamed_known : equivariance.
+
+Lemma slot_read_renamed : equivariance_of slot_read.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite slot_read_renamed : equivariance.
+
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
 
 Lemma var_in_static_const_renamed (r : renaming) (x : variable) (s : symbol)
     (const : static_const) :
