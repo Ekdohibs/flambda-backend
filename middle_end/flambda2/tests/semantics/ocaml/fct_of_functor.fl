@@ -27,7 +27,7 @@ let $camlFct_of_functor__first_const_0 = Block 0 () in
            (apply_result/133)
            -> k/40 * k/41
  in
- let code loopify(never) size(46)
+ let code loopify(never) size(46) functor
        Make_0 (N/134 : val)
          my_closure/135 &my_alloc_region/136 my_depth/137
          -> k/43 * k/44

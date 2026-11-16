@@ -57,6 +57,7 @@ let keyword_table =
     "exn", KWD_EXN;
     "float", KWD_FLOAT;
     "float32", KWD_FLOAT32;
+    "functor", KWD_FUNCTOR;
     "halt_and_catch_fire", KWD_HCF;
     "hint", KWD_HINT;
     "id", KWD_ID;

@@ -1066,6 +1066,7 @@ and code env id (Model.Code (params, my_closure, ret, exn, metadata, body)) :
     code_size = 0;
     is_tupled = metadata.cm_is_tupled;
     stub = metadata.cm_is_stub;
+    is_a_functor = false;
     loopify = None;
     result_mode = Not_alloc_stack
   }

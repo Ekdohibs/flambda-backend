@@ -1,9 +1,9 @@
 fct_applied_twice_same_argument.fl:
   before Simplify (92 steps): returns [0: 109]
-  after Simplify (89 steps): returns [0: 109]
+  after Simplify (34 steps): returns [0: 109]
   the check of kinds: passes before, passes after
   the check of static names: passes before, passes after
-  calls outside code: 6 before, 6 after
+  calls outside code: 6 before, 2 after
   the same
   calls outside code once those of known code are inlined: 4
   validated: the same once closures and blocks are lifted to symbols and the terms normalised

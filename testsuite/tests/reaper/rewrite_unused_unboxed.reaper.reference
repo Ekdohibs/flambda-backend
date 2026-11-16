@@ -28,7 +28,7 @@ in
 let $camlRewrite_unused_unboxed__consume_2 =
   closure consume_1_1 @consume &toplevel
 in
-let code inline(never) loopify(never) size(6) newer_version_of(Make_2)
+let code inline(never) loopify(never) size(6) newer_version_of(Make_2) functor
       Make_2_1 (N : val)
         my_closure &my_alloc_region my_depth
         -> k * k1

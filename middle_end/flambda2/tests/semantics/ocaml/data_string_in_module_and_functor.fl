@@ -23,7 +23,7 @@
    let Pstringrefu/103 = %tag_imm (prim/102) in
    cont k/26 (Pstringrefu/103)
  in
- let code loopify(never) size(43)
+ let code loopify(never) size(43) functor
        Describe_0 (N/104 : val)
          my_closure/105 &my_alloc_region/106 my_depth/107
          -> k/28 * k/29

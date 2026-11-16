@@ -88,7 +88,7 @@ let $camlFct_local_mutual_both_to_inlined__first_const_0 = Block 0 () in
             in
             cont k/58 (int_add/179))
  in
- let code inline(never) loopify(never) size(97)
+ let code inline(never) loopify(never) size(97) functor
        Make_1 (S/180 : val)
          my_closure/181 &my_alloc_region/182 my_depth/183
          -> k/62 * k/63

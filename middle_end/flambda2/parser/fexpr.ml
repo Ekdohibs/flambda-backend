@@ -426,6 +426,7 @@ and code =
     code_size : code_size;
     is_tupled : bool;
     stub : bool;
+    is_a_functor : bool;
     loopify : loopify_attribute option;
     result_mode : alloc_mode_for_return
   }

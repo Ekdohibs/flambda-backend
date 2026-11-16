@@ -24,7 +24,7 @@
            (apply_result/102)
            -> k/30 * k/31
  in
- let code loopify(never) size(38)
+ let code loopify(never) size(38) functor
        Add_0 (S/103 : val)
          my_closure/104 &my_alloc_region/105 my_depth/106
          -> k/33 * k/34

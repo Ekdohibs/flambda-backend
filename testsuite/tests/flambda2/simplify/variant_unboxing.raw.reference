@@ -75,7 +75,7 @@ let $camlVariant_unboxing__first_const_0 = Block 0 () in
        let Pisint = %tag_imm (prim) in
        cont k1 (Pisint)
  in
- let code inline(always) loopify(never) size(27)
+ let code inline(always) loopify(never) size(27) functor
        Tree_operations_1 (Tree : val)
          my_closure &my_alloc_region my_depth
          -> k1 * k2

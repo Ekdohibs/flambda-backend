@@ -567,6 +567,7 @@ and static_let_expr env bound_static defining_expr body : Fexpr.expr =
           code_size;
           is_tupled;
           stub;
+          is_a_functor = Code.is_a_functor code;
           result_mode
         }
     | Code code_id, Deleted_code ->

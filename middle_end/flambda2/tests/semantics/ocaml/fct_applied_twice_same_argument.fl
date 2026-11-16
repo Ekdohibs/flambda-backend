@@ -27,7 +27,7 @@ let $camlFct_applied_twice_same_argument__first_const_0 = Block 0 () in
            (apply_result/119)
            -> k/40 * k/41
  in
- let code loopify(never) size(46)
+ let code loopify(never) size(46) functor
        Make_0 (N/120 : val)
          my_closure/121 &my_alloc_region/122 my_depth/123
          -> k/43 * k/44

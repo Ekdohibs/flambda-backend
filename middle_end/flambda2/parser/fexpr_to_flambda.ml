@@ -724,6 +724,7 @@ let rec expr env acc (e : Fexpr.expr) : _ * Flambda.Expr.t =
             code_size;
             is_tupled;
             stub;
+            is_a_functor;
             loopify;
             result_mode
           } ->
@@ -858,7 +859,7 @@ let rec expr env acc (e : Fexpr.expr) : _ * Flambda.Expr.t =
             ~result_arity ~result_types:Unknown ~result_mode ~stub ~inline
             ~zero_alloc_attribute:Default_zero_alloc
               (* CR gyorsh: should [check] be set properly? *)
-            ~is_a_functor:false ~is_opaque:false ~recursive
+            ~is_a_functor ~is_opaque:false ~recursive
             ~cost_metrics (* CR poechsel: grab inlining arguments from fexpr. *)
             ~inlining_arguments:(Inlining_arguments.create ~round:0)
             ~poll_attribute:Default ~regalloc_attribute:Default_regalloc

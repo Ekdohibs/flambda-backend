@@ -52,7 +52,7 @@ apply direct(init_mod_4 &toplevel)
            cont k (Pmakeblock)
          in
          let $camlFunctors__na_6 = closure na_1_1 @na &toplevel in
-         let code loopify(never) size(45) newer_version_of(Make_0)
+         let code loopify(never) size(45) newer_version_of(Make_0) functor
                Make_0_1 (X : val)
                  my_closure &my_alloc_region my_depth
                  -> k * k1

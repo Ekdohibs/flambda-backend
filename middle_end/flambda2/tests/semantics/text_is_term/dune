@@ -19,6 +19,12 @@
 ;; checked_division: the text is not the term, and the driver names the first
 ;; difference.
 ;;
+;; functor_of_a_module: code of the unit is that of a functor, and the text
+;; says so. The text is the term.
+;;
+;; unboxed_pair_parameter: the text is not the term, and the driver names the
+;; first difference.
+;;
 ;; c_call: the text is not read back.
 ;;
 ;; interface_only, type_error: the compiler does not reach the middle end.
@@ -346,3 +352,35 @@
   (= %{context_name} "main"))
  (action
   (diff checked_division.expected checked_division.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   functor_of_a_module.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     %{dep:functor_of_a_module.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff functor_of_a_module.expected functor_of_a_module.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   unboxed_pair_parameter.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     %{dep:unboxed_pair_parameter.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff unboxed_pair_parameter.expected unboxed_pair_parameter.output)))

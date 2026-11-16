@@ -53,7 +53,7 @@ let code loopify(never) size(12) newer_version_of(is_empty_2)
       let Pisint = %tag_imm (prim) in
       cont k (Pisint)
 in
-let code inline(always) loopify(never) size(27) newer_version_of(Tree_operations_1)
+let code inline(always) loopify(never) size(27) newer_version_of(Tree_operations_1) functor
       Tree_operations_1_1 (Tree : val)
         my_closure &my_alloc_region my_depth
         -> k * k1

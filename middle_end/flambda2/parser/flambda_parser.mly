@@ -141,6 +141,7 @@ let make_boxed_const_int (i, m) : static_data =
 %token KWD_EXN   [@symbol "exn"]
 %token KWD_FLOAT [@symbol "float"]
 %token KWD_FLOAT32 [@symbol "float32"]
+%token KWD_FUNCTOR [@symbol "functor"]
 %token KWD_HCF   [@symbol "halt_and_catch_fire"]
 %token KWD_HINT  [@symbol "hint"]
 %token KWD_ID    [@symbol "id"]
@@ -310,7 +311,7 @@ code:
     EQUAL; body = expr;
     { let
         recursive, inline, loopify, id, newer_version_of, code_size, is_tupled,
-        stub
+        stub, is_a_functor
         =
         header
       in
@@ -320,7 +321,7 @@ code:
       { id; newer_version_of; param_arity = None; ret_arity; recursive; inline;
         params_and_body = { params; closure_var; region_vars; depth_var;
                             ret_cont; exn_cont; body };
-        code_size; is_tupled; stub; loopify; result_mode; } }
+        code_size; is_tupled; stub; is_a_functor; loopify; result_mode; } }
 ;
 
 code_header:
@@ -332,9 +333,10 @@ code_header:
     newer_version_of = option(newer_version_of);
     is_tupled = boption(KWD_TUPLED);
     stub = boption(KWD_STUB);
+    is_a_functor = boption(KWD_FUNCTOR);
     id = code_id;
     { recursive, inline, loopify, id, newer_version_of, code_size, is_tupled,
-      stub }
+      stub, is_a_functor }
 ;
 
 newer_version_of:

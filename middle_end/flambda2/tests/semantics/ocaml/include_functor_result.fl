@@ -9,7 +9,7 @@
    let int_mul/88 = %int_barith.mul (x/81, Pfield/87) in
    cont k/28 (int_mul/88)
  in
- let code inline(always) loopify(never) size(22)
+ let code inline(always) loopify(never) size(22) functor
        Times_0 (N/89 : val)
          my_closure/90 &my_alloc_region/91 my_depth/92
          -> k/30 * k/31
