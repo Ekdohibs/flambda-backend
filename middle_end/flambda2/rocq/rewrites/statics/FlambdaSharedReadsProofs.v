@@ -37,7 +37,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaWellFormedProofs FlambdaStaticsInScopeSpec FlambdaUnusedStaticsSpec
   FlambdaHeapSpec FlambdaClosuresProofs FlambdaContextWhereSpec
   FlambdaContextWhereProofs FlambdaImportsSpec FlambdaObserversSpec
-  FlambdaScopedProofs FlambdaSharedReadsSpec.
+  FlambdaScopedProofs FlambdaEquivarianceTactic FlambdaSharedReadsSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -1761,323 +1761,79 @@ Qed.
 (* Renaming                                                                 *)
 (* ======================================================================== *)
 
-Lemma place_held_renamed (r : renaming) (const : static_const)
-    (p : static_place) :
-  place_held (rename_static_const r const) p
-  = option_map (rename_simple r) (place_held const p).
-Proof.
-  destruct p as [slot | field];
-    destruct const as [code slots | fslot syms decls slots | tag fields
-      | contents | bytes | elements];
-    cbn [rename_static_const place_held]; try reflexivity.
-  - exact (lookup_map_values _ _ (rename_simple r) slot slots).
-  - exact (lookup_map_values _ _ (rename_simple r) slot slots).
-  - destruct (0 <=? field)%Z; [ apply nth_error_map | reflexivity ].
-Qed.
+(* The two statements are proved from the definitions by the tactic of
+   FlambdaEquivarianceTactic.v ([equivariance]), which states and
+   proves by itself the laws of the functions that the rewrite and
+   its check are made of. What it is given:
+   - how what is known, the reads made and a class are renamed: their
+     types are lists and pairs of positives, and do not say it;
+   - that what is known, renamed, goes into an append with its name,
+     which is not unfolded where it is at something that is not a
+     list written out; and that [is_some] does not look at what an
+     option holds;
+   - four laws of functions of the pass, which it proves, so that it
+     has them before the functions that call them are unfolded. That
+     of [same_class] is in the form that computation gives where the
+     reads made are renamed: the class of an entry is a pair. *)
+Definition rename_class (r : renaming) (c : place_class) : place_class :=
+  (fst c, rename_variable r (snd c)).
 
-Lemma const_places_renamed (r : renaming) (const : static_const) :
-  const_places (rename_static_const r const) = const_places const.
-Proof.
-  destruct const as [code slots | fslot syms decls slots | tag fields
-    | contents | bytes | elements];
-    cbn [rename_static_const const_places]; try reflexivity.
-  - rewrite map_map. reflexivity.
-  - rewrite map_map. reflexivity.
-  - rewrite length_map. reflexivity.
-Qed.
+#[local] Instance held_renaming : Renaming_of held_places := rename_held.
+#[local] Instance reads_made_renaming : Renaming_of reads_made :=
+  rename_reads_made.
+#[local] Instance class_renaming : Renaming_of place_class := rename_class.
+
+Lemma rename_held_app (r : renaming) (held held' : held_places) :
+  rename_held r (held ++ held') = rename_held r held ++ rename_held r held'.
+Proof. apply map_app. Qed.
+#[local] Hint Rewrite rename_held_app : equivariance.
+#[local] Arguments rename_held : simpl never.
+
+Lemma is_some_option_map {A B : Type} (f : A -> B) (o : option A) :
+  is_some (option_map f o) = is_some o.
+Proof. destruct o; reflexivity. Qed.
+#[local] Hint Rewrite @is_some_option_map : equivariance.
 
 Lemma first_symbol_renamed (r : renaming) (bindings : list static_binding) :
   first_symbol (map (rename_static_binding r) bindings)
   = first_symbol bindings.
-Proof.
-  induction bindings as [ | [id c | id | sym const] bindings IH];
-    cbn [map rename_static_binding first_symbol]; congruence.
-Qed.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite first_symbol_renamed : equivariance.
 
 Lemma group_const_renamed (r : renaming) (s : symbol)
     (bindings : list static_binding) :
   group_const s (map (rename_static_binding r) bindings)
   = option_map (rename_static_const r) (group_const s bindings).
-Proof.
-  induction bindings as [ | [id c | id | sym const] bindings IH];
-    cbn [map rename_static_binding group_const]; try exact IH;
-    [ reflexivity | ].
-  destruct (Pos.eqb s sym); [ reflexivity | exact IH ].
-Qed.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite group_const_renamed : equivariance.
 
-Lemma rename_held_app (r : renaming) (held held' : held_places) :
-  rename_held r (held ++ held') = rename_held r held ++ rename_held r held'.
-Proof. apply map_app. Qed.
-
-Lemma place_entry_renamed (r : renaming) (first s : symbol)
-    (const : static_const) (p : static_place) :
-  place_entry first s (rename_static_const r const) p
-  = rename_held r (place_entry first s const p).
-Proof.
-  unfold place_entry. rewrite place_held_renamed.
-  destruct (place_held const p) as [[x | sym | c] | ]; reflexivity.
-Qed.
-
-Lemma binding_places_renamed (r : renaming) (first : symbol)
-    (binding : static_binding) :
-  binding_places first (rename_static_binding r binding)
-  = rename_held r (binding_places first binding).
-Proof.
-  destruct binding as [id c | id | sym const];
-    cbn [rename_static_binding binding_places]; try reflexivity.
-  rewrite const_places_renamed.
-  induction (const_places const) as [ | p places IH]; cbn [flat_map];
-    [ reflexivity | ].
-  rewrite rename_held_app, place_entry_renamed, IH. reflexivity.
-Qed.
-
-Lemma group_places_renamed (r : renaming) (bindings : list static_binding) :
-  group_places (map (rename_static_binding r) bindings)
-  = rename_held r (group_places bindings).
-Proof.
-  unfold group_places. rewrite first_symbol_renamed.
-  destruct (first_symbol bindings) as [first | ]; [ | reflexivity ].
-  induction bindings as [ | binding bindings IH]; cbn [map flat_map];
-    [ reflexivity | ].
-  rewrite rename_held_app, binding_places_renamed, IH. reflexivity.
-Qed.
-
-(* What is known of the term renamed is what is known of the term,
-   renamed. *)
-Fixpoint places_held_renamed (r : renaming) (e : expr) {struct e} :
-  places_held (rename_expr r e) = rename_held r (places_held e)
-with places_held_of_handler_renamed (r : renaming) (h : continuation_handler)
-    {struct h} :
-  places_held_of_handler (rename_handler r h)
-  = rename_held r (places_held_of_handler h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      cbn [rename_expr places_held]; try reflexivity.
-    + apply places_held_renamed.
-    + rewrite rename_held_app, group_places_renamed,
-        (places_held_renamed r body).
-      reflexivity.
-    + rewrite rename_held_app, (places_held_of_handler_renamed r h),
-        (places_held_renamed r body).
-      reflexivity.
-    + rewrite rename_held_app, (places_held_renamed r body). f_equal.
-      induction handlers as [ | [k h] handlers IH]; cbn [map flat_map];
-        [ reflexivity | ].
-      rewrite rename_held_app, (places_held_of_handler_renamed r h), IH.
-      reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler places_held_of_handler].
-    apply places_held_renamed.
-Qed.
-
-Lemma group_holds_renamed (r : renaming) (held : held_places)
-    (bindings : list static_binding) :
-  group_holds (rename_held r held) (map (rename_static_binding r) bindings)
-  = group_holds held bindings.
-Proof.
-  unfold group_holds.
-  induction held as [ | [[s p] [first x]] held IH];
-    cbn [rename_held map forallb]; [ reflexivity | ].
-  fold (rename_held r held). rewrite IH. f_equal.
-  unfold entry_meets_group, entry_of_group.
-  rewrite first_symbol_renamed, group_const_renamed.
-  destruct (first_symbol bindings) as [first' | ],
-    (group_const s bindings) as [const | ];
-    cbn [option_map is_some]; try reflexivity.
-  rewrite place_held_renamed.
-  destruct (place_held const p) as [[x' | sym | c] | ];
-    cbn [option_map rename_simple]; try reflexivity.
-  rewrite rename_variable_eqb. reflexivity.
-Qed.
-
-(* The term renamed passes the check of what is known, renamed, if and
-   only if the term passes that of what is known. *)
-Fixpoint groups_hold_renamed (r : renaming) (held : held_places) (e : expr)
-    {struct e} :
-  groups_hold (rename_held r held) (rename_expr r e) = groups_hold held e
-with handler_groups_hold_renamed (r : renaming) (held : held_places)
-    (h : continuation_handler) {struct h} :
-  handler_groups_hold (rename_held r held) (rename_handler r h)
-  = handler_groups_hold held h.
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      cbn [rename_expr groups_hold]; try reflexivity.
-    + apply groups_hold_renamed.
-    + rewrite group_holds_renamed, (groups_hold_renamed r held body).
-      f_equal. f_equal.
-      induction bindings
-        as [ | [id [params my_closure ret exn metadata code_body] | id
-               | sym const]
-               bindings IH];
-        cbn [map forallb]; [ reflexivity | | | ]; rewrite IH;
-        try reflexivity.
-      cbn [rename_static_binding rename_code code_of_binding_groups_hold
-             code_groups_hold].
-      rewrite (groups_hold_renamed r held code_body). reflexivity.
-    + rewrite (handler_groups_hold_renamed r held h),
-        (groups_hold_renamed r held body).
-      reflexivity.
-    + rewrite (groups_hold_renamed r held body). f_equal.
-      induction handlers as [ | [k h] handlers IH]; cbn [map forallb];
-        [ reflexivity | ].
-      rewrite (handler_groups_hold_renamed r held h), IH. reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler handler_groups_hold].
-    apply groups_hold_renamed.
-Qed.
-
-(* A renaming renames no symbol: a read is a read of the same place. *)
-Lemma read_of_renamed (r : renaming) (d : named) :
-  read_of (rename_named r d) = read_of d.
-Proof.
-  destruct d as
-    [a | q args | code slots | fslot decls slots | slot closure
-    | from slot closure | move_from move_to closure];
-    cbn [rename_named read_of]; try reflexivity.
-  - destruct q as [u | b | va | h | rp]; try reflexivity.
-    destruct u; try reflexivity.
-    destruct mut, args as [ | [x | sym | c] [ | arg args]]; reflexivity.
-  - destruct closure as [x | sym | c]; reflexivity.
-  - destruct closure as [x | sym | c]; reflexivity.
-Qed.
-
-Definition rename_class (r : renaming) (c : place_class) : place_class :=
-  (fst c, rename_variable r (snd c)).
-
-Lemma class_of_renamed (r : renaming) (held : held_places) (s : symbol)
-    (p : static_place) :
-  class_of (rename_held r held) s p
-  = option_map (rename_class r) (class_of held s p).
-Proof.
-  induction held as [ | [[s' p'] [first x]] held IH];
-    cbn [rename_held map class_of]; [ reflexivity | ].
-  fold (rename_held r held).
-  destruct (Pos.eqb s s' && same_place p p'); [ reflexivity | exact IH ].
-Qed.
-
-Lemma read_class_renamed (r : renaming) (held : held_places) (d : named) :
-  read_class (rename_held r held) (rename_named r d)
-  = option_map (rename_class r) (read_class held d).
-Proof.
-  unfold read_class. rewrite read_of_renamed.
-  destruct (read_of d) as [[s p] | ]; [ apply class_of_renamed | reflexivity ].
-Qed.
-
-Lemma same_class_renamed (r : renaming) (c c' : place_class) :
-  same_class (rename_class r c) (rename_class r c') = same_class c c'.
-Proof.
-  unfold same_class, rename_class. cbn [fst snd].
-  rewrite rename_variable_eqb. reflexivity.
-Qed.
-
-Lemma read_before_renamed (r : renaming) (made : reads_made)
-    (c : place_class) :
-  read_before (rename_reads_made r made) (rename_class r c)
-  = option_map (rename_variable r) (read_before made c).
-Proof.
-  induction made as [ | [[first x] v] made IH];
-    cbn [rename_reads_made map read_before]; [ reflexivity | ].
-  fold (rename_reads_made r made).
-  change (first, rename_variable r x) with (rename_class r (first, x)).
-  rewrite same_class_renamed.
-  destruct (same_class c (first, x)); [ reflexivity | exact IH ].
-Qed.
+Lemma same_class_renamed (r : renaming) (c : place_class) (first : symbol)
+    (x : variable) :
+  same_class (rename_class r c) (first, rename_variable r x)
+  = same_class c (first, x).
+Proof. equivariance. Qed.
+#[local] Hint Rewrite same_class_renamed : equivariance.
 
 Lemma forget_read_renamed (r : renaming) (x : variable) (made : reads_made) :
   forget_read (rename_variable r x) (rename_reads_made r made)
   = rename_reads_made r (forget_read x made).
-Proof.
-  unfold forget_read.
-  induction made as [ | [[first y] v] made IH];
-    cbn [rename_reads_made map filter snd]; [ reflexivity | ].
-  fold (rename_reads_made r made). rewrite rename_variable_eqb, IH.
-  destruct (Pos.eqb x v); reflexivity.
-Qed.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite forget_read_renamed : equivariance.
 
-Lemma forget_reads_renamed (r : renaming) (xs : list variable) :
-  ∀ made : reads_made,
-    forget_reads (map (rename_variable r) xs) (rename_reads_made r made)
-    = rename_reads_made r (forget_reads xs made).
-Proof.
-  induction xs as [ | x xs IH]; intros made; cbn [map forget_reads];
-    [ reflexivity | ].
-  rewrite forget_read_renamed. apply IH.
-Qed.
-
-Fixpoint share_reads_renamed (r : renaming) (held : held_places) (e : expr)
-    {struct e} :
+Lemma share_reads_renamed (r : renaming) (held : held_places) (e : expr) :
   ∀ made : reads_made,
     share_reads (rename_held r held) (rename_reads_made r made)
       (rename_expr r e)
-    = rename_expr r (share_reads held made e)
-with share_reads_in_handler_renamed (r : renaming) (held : held_places)
-    (h : continuation_handler) {struct h} :
-  ∀ made : reads_made,
-    share_reads_in_handler (rename_held r held) (rename_reads_made r made)
-      (rename_handler r h)
-    = rename_handler r (share_reads_in_handler held made h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      intros made; cbn [rename_expr share_reads]; try reflexivity.
-    + rewrite read_class_renamed.
-      destruct (read_class held d) as [[first y] | ]; cbn [option_map].
-      * rewrite read_before_renamed.
-        destruct (read_before made (first, y)) as [v | ];
-          cbn [option_map rename_expr rename_named rename_simple].
-        -- rewrite forget_read_renamed,
-             (share_reads_renamed r held body).
-           reflexivity.
-        -- rewrite forget_read_renamed.
-           change
-             ((rename_class r (first, y), rename_variable r x)
-              :: rename_reads_made r (forget_read x made))
-             with
-               (rename_reads_made r (((first, y), x) :: forget_read x made)).
-           rewrite (share_reads_renamed r held body). reflexivity.
-      * cbn [rename_expr].
-        rewrite forget_read_renamed, (share_reads_renamed r held body).
-        reflexivity.
-    + rewrite (share_reads_renamed r held body). f_equal.
-      induction bindings
-        as [ | [id [params my_closure ret exn metadata code_body] | id
-               | sym const]
-               bindings IH];
-        cbn [map]; [ reflexivity | | | ]; rewrite IH; f_equal.
-      cbn [rename_static_binding rename_code share_reads_in_binding
-             code_is_stub].
-      destruct (cm_is_stub metadata); [ reflexivity | ].
-      cbn [rename_static_binding rename_code share_reads_in_code].
-      rewrite <- (share_reads_renamed r held code_body []). reflexivity.
-    + rewrite (share_reads_in_handler_renamed r held h),
-        (share_reads_renamed r held body).
-      reflexivity.
-    + rewrite (share_reads_renamed r held body). f_equal.
-      induction handlers as [ | [k h] handlers IH]; cbn [map];
-        [ reflexivity | ].
-      rewrite (share_reads_in_handler_renamed r held h), IH. reflexivity.
-  - destruct h as [params metadata handler]. intros made.
-    cbn [rename_handler share_reads_in_handler].
-    rewrite forget_reads_renamed, (share_reads_renamed r held handler).
-    reflexivity.
-Qed.
+    = rename_expr r (share_reads held made e).
+Proof. equivariance. Qed.
+#[local] Hint Rewrite share_reads_renamed : equivariance.
 
 Theorem share_reads_equivariant : share_reads_equivariant_statement.
 Proof. intros r held made e. apply share_reads_renamed. Qed.
 
 Theorem share_static_reads_equivariant :
   share_static_reads_equivariant_statement.
-Proof.
-  intros r e. unfold share_static_reads. cbv zeta.
-  rewrite places_held_renamed, groups_hold_renamed.
-  destruct (groups_hold (places_held e) e); [ | reflexivity ].
-  exact (share_reads_renamed r (places_held e) e []).
-Qed.
+Proof. equivariance. Qed.
 
 (* ======================================================================== *)
 (* A store to a symbol                                                      *)
