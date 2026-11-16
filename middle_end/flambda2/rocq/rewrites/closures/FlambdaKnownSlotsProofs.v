@@ -1874,39 +1874,11 @@ Hypothesis names_of_renamed :
   ∀ binding : static_binding,
     names_of (rename_static_binding r binding) = names_of binding.
 
-Lemma bindings_names_renamed (bindings : list static_binding) :
-  flat_map names_of (map (rename_static_binding r) bindings)
-  = flat_map names_of bindings.
-Proof.
-  induction bindings as [ | binding bindings IH]; cbn [map flat_map];
-    [ reflexivity | ].
-  rewrite names_of_renamed, IH. reflexivity.
-Qed.
+#[local] Hint Rewrite names_of_renamed : equivariance.
 
-Fixpoint static_names_of_renamed (e : expr) {struct e} :
-  static_names names_of (rename_expr r e) = static_names names_of e
-with handler_static_names_of_renamed (h : continuation_handler) {struct h} :
-  handler_static_names names_of (rename_handler r h)
-  = handler_static_names names_of h.
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      cbn [rename_expr static_names]; try reflexivity.
-    + apply static_names_of_renamed.
-    + rewrite bindings_names_renamed, (static_names_of_renamed body).
-      reflexivity.
-    + rewrite (handler_static_names_of_renamed h),
-        (static_names_of_renamed body).
-      reflexivity.
-    + rewrite (static_names_of_renamed body). f_equal.
-      induction handlers as [ | [k h] handlers IH]; cbn [map flat_map];
-        [ reflexivity | ].
-      rewrite (handler_static_names_of_renamed h), IH. reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler handler_static_names].
-    apply static_names_of_renamed.
-Qed.
+Lemma static_names_of_renamed (e : expr) :
+  static_names names_of (rename_expr r e) = static_names names_of e.
+Proof. equivariance. Qed.
 
 End Names_renamed.
 
