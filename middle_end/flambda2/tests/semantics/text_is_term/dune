@@ -27,6 +27,9 @@
 ;;
 ;; c_call: a unit with a call of a C function. The text is the term.
 ;;
+;; length_of_bytes: the length of a byte sequence, which the text writes
+;; "%bytes_length". The text is the term.
+;;
 ;; partial_application_of_unboxed_float: the text is not read back.
 ;;
 ;; interface_only, type_error: the compiler does not reach the middle end.
@@ -94,6 +97,22 @@
   (= %{context_name} "main"))
  (action
   (diff c_call.expected c_call.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   length_of_bytes.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     %{dep:length_of_bytes.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff length_of_bytes.expected length_of_bytes.output)))
 
 (rule
  (enabled_if

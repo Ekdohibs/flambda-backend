@@ -941,7 +941,7 @@ let string_length =
   D.(unary "%string_length" ~params:param0 (fun _ () -> P.String_length String))
 
 let bytes_length =
-  D.(unary "%bytes_length" ~params:param0 (fun _ () -> P.String_length String))
+  D.(unary "%bytes_length" ~params:param0 (fun _ () -> P.String_length Bytes))
 
 let boolean_not =
   D.(unary "%boolean_not" ~params:param0 (fun _ () -> P.Boolean_not))
