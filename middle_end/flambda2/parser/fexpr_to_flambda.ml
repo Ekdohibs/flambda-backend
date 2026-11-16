@@ -92,6 +92,8 @@ and value_kind_with_subkind :
   | Value sk ->
     Flambda_kind.With_subkind.create Flambda_kind.value (sk |> subkind)
       Non_nullable
+  | Nullable_value sk ->
+    Flambda_kind.With_subkind.create Flambda_kind.value (sk |> subkind) Nullable
   | Naked_number nnk -> Flambda_kind.With_subkind.of_naked_number_kind nnk
   | Region -> Flambda_kind.With_subkind.region
   | Rec_info -> Flambda_kind.With_subkind.rec_info

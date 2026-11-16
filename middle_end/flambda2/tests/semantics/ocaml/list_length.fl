@@ -1,7 +1,7 @@
 (let code rec loopify(default tailrec) size(22)
        length_from_0
          (acc/35 : imm tagged,
-          list/36 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+          list/36 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
          my_closure/37 &my_alloc_region/38 my_depth/39
          -> k/16 * k/17
          : imm tagged =

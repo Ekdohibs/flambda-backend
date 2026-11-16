@@ -4,7 +4,7 @@ let code loopify(never) size(8) newer_version_of(f_0)
       f_0_1 (x)
         my_closure &my_alloc_region my_depth
         -> k * k1
-        : [ 0 of val * val ] =
+        : [ 0 of val? * val? ] =
   let Pmakeblock = %block.[`0`].my_alloc_region (x, x) in
   cont k (Pmakeblock)
 in

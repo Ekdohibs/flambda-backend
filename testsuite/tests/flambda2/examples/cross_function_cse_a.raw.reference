@@ -2,7 +2,7 @@
        some_0 (x)
          my_closure &my_alloc_region my_depth
          -> k1 * k2
-         : [ 0 | 0 of val ] =
+         : [ 0 | 0 of val? ] =
    let Pmakeblock = %block.[`0`].my_alloc_region (x) in
    cont k1 (Pmakeblock)
  in
@@ -10,13 +10,13 @@
        f_1 (x)
          my_closure &my_alloc_region my_depth
          -> k1 * k2
-         : [ 0 of [ 0 | 0 of val ] * [ 0 | 0 of val ] ] =
+         : [ 0 of [ 0 | 0 of val? ] * [ 0 | 0 of val? ] ] =
    let a = %block.[`0`].my_alloc_region (x) in
    (let inlined_dbg = %inlined_apply () in
     let x_1 = x in
     let Pmakeblock = %block.[`0`].my_alloc_region (x_1) in
     cont k3 (Pmakeblock))
-     where k3 (b : [ 0 | 0 of val ]) =
+     where k3 (b : [ 0 | 0 of val? ]) =
        let Pmakeblock = %block.[`0`].my_alloc_region (a, b) in
        cont k1 (Pmakeblock)
  in
@@ -24,12 +24,12 @@
        g_2 (x)
          my_closure &my_alloc_region my_depth
          -> k1 * k2
-         : [ 0 of [ 0 | 0 of val ] * [ 0 | 0 of val ] ] =
+         : [ 0 of [ 0 | 0 of val? ] * [ 0 | 0 of val? ] ] =
    (let inlined_dbg = %inlined_apply () in
     let x_1 = x in
     let Pmakeblock = %block.[`0`].my_alloc_region (x_1) in
     cont k3 (Pmakeblock))
-     where k3 (a : [ 0 | 0 of val ]) =
+     where k3 (a : [ 0 | 0 of val? ]) =
        let b = %block.[`0`].my_alloc_region (x) in
        let Pmakeblock = %block.[`0`].my_alloc_region (a, b) in
        cont k1 (Pmakeblock)

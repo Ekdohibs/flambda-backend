@@ -109,8 +109,13 @@ and variant_subkind consts non_consts : Fexpr.subkind =
 and kind_with_subkind (k : Flambda_kind.With_subkind.t) :
     Fexpr.kind_with_subkind =
   match Flambda_kind.With_subkind.kind k with
-  | Value ->
-    Value (subkind (Flambda_kind.With_subkind.non_null_value_subkind k))
+  | Value -> (
+    let subkind =
+      subkind (Flambda_kind.With_subkind.non_null_value_subkind k)
+    in
+    match Flambda_kind.With_subkind.nullable k with
+    | Non_nullable -> Value subkind
+    | Nullable -> Nullable_value subkind)
   | Naked_number nnk -> Naked_number nnk
   | Region -> Region
   | Rec_info -> Rec_info
@@ -173,7 +178,14 @@ let const c : Fexpr.const =
   | Naked_nativeint i -> Naked_nativeint (i |> targetint)
   | Null -> Null
   | Poison (kind, name) ->
-    let kind = kind_with_subkind (Flambda_kind.With_subkind.anything kind) in
+    (* The kind alone: the reader takes no more of what is written here. *)
+    let kind : Fexpr.kind_with_subkind =
+      match (kind : Flambda_kind.t) with
+      | Value -> Value Anything
+      | Naked_number naked_number_kind -> Naked_number naked_number_kind
+      | Region -> Region
+      | Rec_info -> Rec_info
+    in
     Poison (kind, name)
 
 let simple env s =

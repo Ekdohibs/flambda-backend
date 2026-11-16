@@ -7,7 +7,7 @@
  in
  let $camlTests15__empty_array_3 = Empty_array in
  let code size(20)
-       list_to_array_0 (param : [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+       list_to_array_0 (param : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
          my_closure &my_alloc_region my_depth
          -> k1 * k2
          : any array =

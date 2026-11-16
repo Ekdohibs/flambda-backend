@@ -4,12 +4,12 @@ let code `fn[protect_refs.ml:29,2--43]_3` deleted in
 let code set_mode_pattern_4 deleted in
 let code `fn[protect_refs.ml:41,26--40]_5` deleted in
 let code loopify(done) size(22) newer_version_of(iter_0)
-      iter_0_1 (f : val, param : [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+      iter_0_1 (f : val, param : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
         my_closure &my_alloc_region my_depth
         -> k * k1
         : imm tagged =
   cont `self` (param)
-    where rec `self` (param_1 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ]) =
+    where rec `self` (param_1 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
       let f_1 = f in
       let prim = %is_int (param_1) in
       (switch prim

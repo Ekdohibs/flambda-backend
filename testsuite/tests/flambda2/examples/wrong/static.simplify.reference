@@ -34,7 +34,8 @@ let code loopify(never) size(58) newer_version_of(f_0)
   let g = closure g_1_1 @g &my_alloc_region with { x = x } in
   let h = closure h_2_1 @h &my_alloc_region with { g = g } in
   cont `self` (0, l)
-    where rec `self` (accu, l_1 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ]) =
+    where rec `self`
+                (accu, l_1 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
       let prim = %is_int (l_1) in
       (switch prim
          | 0 -> k2

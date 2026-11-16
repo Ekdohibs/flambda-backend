@@ -16,14 +16,15 @@ let code rev_sort_11 deleted and code sort_10 deleted in
 let code foo_9 deleted in
 let code loopify(done) size(16) newer_version_of(length_aux_0)
       length_aux_0_1
-        (len : imm tagged, param : [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+        (len : imm tagged,
+         param : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
         my_closure &my_alloc_region my_depth
         -> k * k1
         : imm tagged =
   cont `self` (len, param)
     where rec `self`
                 (len_1 : imm tagged,
-                 param_1 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ]) =
+                 param_1 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
       let prim = %is_int (param_1) in
       (switch prim
          | 0 -> k2
@@ -36,7 +37,7 @@ in
 let $camlTests9__length_aux_3 = closure length_aux_0_1 @length_aux &toplevel
 in
 let code loopify(never) size(4) newer_version_of(length_1)
-      length_1_1 (l : [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+      length_1_1 (l : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
         my_closure &my_alloc_region my_depth
         -> k * k1
         : imm tagged =
@@ -46,15 +47,15 @@ in
 let $camlTests9__length_4 = closure length_1_1 @length &toplevel in
 let code loopify(done) size(22) newer_version_of(rev_append_2)
       rev_append_2_1
-        (l1 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ],
-         l2 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+        (l1 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ],
+         l2 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
         my_closure &my_alloc_region my_depth
         -> k * k1
-        : [ 0 | 0 of val * [ 0 | 0 of val * val ] ] =
+        : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] =
   cont `self` (l1, l2)
     where rec `self`
-                (l1_1 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ],
-                 l2_1 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ]) =
+                (l1_1 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ],
+                 l2_1 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
       let prim = %is_int (l1_1) in
       (switch prim
          | 0 -> k2
@@ -69,14 +70,14 @@ let $camlTests9__rev_append_5 = closure rev_append_2_1 @rev_append &toplevel
 in
 let code loopify(done) size(28) newer_version_of(chop_3)
       chop_3_1
-        (k : imm tagged, l : [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+        (k : imm tagged, l : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
         my_closure &my_alloc_region my_depth
         -> k * k1
-        : [ 0 | 0 of val * [ 0 | 0 of val * val ] ] =
+        : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] =
   cont `self` (k, l)
     where rec `self`
                 (k_1 : imm tagged,
-                 l_1 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ]) =
+                 l_1 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
       let prim = %phys_eq (k_1, 0) in
       (switch prim
          | 0 -> k2
@@ -94,17 +95,17 @@ in
 let $camlTests9__chop_6 = closure chop_3_1 @chop &toplevel in
 let code loopify(done) size(90) newer_version_of(rev_merge_5)
       rev_merge_5_1
-        (l1 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ],
-         l2 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ],
-         accu : [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+        (l1 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ],
+         l2 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ],
+         accu : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
         my_closure &my_alloc_region my_depth
         -> k * k1
-        : [ 0 | 0 of val * [ 0 | 0 of val * val ] ] =
+        : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] =
   cont `self` (l1, l2, accu)
     where rec `self`
-                (l1_1 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ],
-                 l2_1 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ],
-                 accu_1 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ]) =
+                (l1_1 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ],
+                 l2_1 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ],
+                 accu_1 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
       let cmp = %project_value_slot.[rev_merge].[cmp] (my_closure) in
       let prim = %is_int (l1_1) in
       (switch prim
@@ -113,7 +114,7 @@ let code loopify(done) size(90) newer_version_of(rev_merge_5)
          where k3 =
            apply direct(rev_append_2_1 &my_alloc_region)
              ($camlTests9__rev_append_5
-              : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+              : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                (l2_1, accu_1)
                -> k * k1
          where k2 =
@@ -124,7 +125,7 @@ let code loopify(done) size(90) newer_version_of(rev_merge_5)
               where k3 =
                 apply direct(rev_append_2_1 &my_alloc_region)
                   ($camlTests9__rev_append_5
-                   : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+                   : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                     (l1_1, accu_1)
                     -> k * k1
               where k2 =
@@ -161,17 +162,17 @@ let code loopify(done) size(90) newer_version_of(rev_merge_5)
 in
 let code loopify(done) size(90) newer_version_of(rev_merge_rev_6)
       rev_merge_rev_6_1
-        (l1 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ],
-         l2 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ],
-         accu : [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+        (l1 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ],
+         l2 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ],
+         accu : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
         my_closure &my_alloc_region my_depth
         -> k * k1
-        : [ 0 | 0 of val * [ 0 | 0 of val * val ] ] =
+        : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] =
   cont `self` (l1, l2, accu)
     where rec `self`
-                (l1_1 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ],
-                 l2_1 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ],
-                 accu_1 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ]) =
+                (l1_1 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ],
+                 l2_1 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ],
+                 accu_1 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
       let cmp = %project_value_slot.[rev_merge_rev].[cmp_1] (my_closure) in
       let prim = %is_int (l1_1) in
       (switch prim
@@ -180,7 +181,7 @@ let code loopify(done) size(90) newer_version_of(rev_merge_rev_6)
          where k3 =
            apply direct(rev_append_2_1 &my_alloc_region)
              ($camlTests9__rev_append_5
-              : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+              : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                (l2_1, accu_1)
                -> k * k1
          where k2 =
@@ -191,7 +192,7 @@ let code loopify(done) size(90) newer_version_of(rev_merge_rev_6)
               where k3 =
                 apply direct(rev_append_2_1 &my_alloc_region)
                   ($camlTests9__rev_append_5
-                   : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+                   : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                     (l1_1, accu_1)
                     -> k * k1
               where k2 =
@@ -228,10 +229,10 @@ let code loopify(done) size(90) newer_version_of(rev_merge_rev_6)
 in
 let code rec loopify(never) size(588) newer_version_of(rev_sort_8)
       rev_sort_8_1
-        (n : imm tagged, l : [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+        (n : imm tagged, l : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
         my_closure &my_alloc_region my_depth
         -> k * k1
-        : [ 0 | 0 of val * [ 0 | 0 of val * val ] ] =
+        : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] =
   let cmp = %project_value_slot.[rev_sort].[cmp_2] (my_closure) in
   let rev_merge = %project_value_slot.[rev_sort].[rev_merge] (my_closure) in
   let sort = %project_function_slot.[rev_sort].[sort] (my_closure) in
@@ -610,33 +611,34 @@ let code rec loopify(never) size(588) newer_version_of(rev_sort_8)
       let n2 = %int_barith.sub (n, n1) in
       (apply direct(chop_3_1 &my_alloc_region)
          ($camlTests9__chop_6
-          : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+          : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
            (n1, l)
            -> k2 * k1
-         where k2 (l2 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ]) =
+         where k2 (l2 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
            (apply direct(sort_7_1 &my_alloc_region)
               (sort ~ depth my_depth -> succ my_depth
-               : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+               : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                 (n1, l)
                 -> k2 * k1
-              where k2 (s1 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ]) =
+              where k2 (s1 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
                 (apply direct(sort_7_1 &my_alloc_region)
                    (sort ~ depth my_depth -> succ my_depth
-                    : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+                    : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                      (n2, l2)
                      -> k2 * k1
-                   where k2 (s2 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ]) =
+                   where k2
+                           (s2 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
                      apply direct(rev_merge_5_1 &my_alloc_region)
                        (rev_merge
-                        : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+                        : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                          (s1, s2, 0)
                          -> k * k1)))
 and code rec loopify(never) size(588) newer_version_of(sort_7)
       sort_7_1
-        (n : imm tagged, l : [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+        (n : imm tagged, l : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
         my_closure &my_alloc_region my_depth
         -> k * k1
-        : [ 0 | 0 of val * [ 0 | 0 of val * val ] ] =
+        : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] =
   let cmp = %project_value_slot.[sort].[cmp_2] (my_closure) in
   let rev_merge_rev = %project_value_slot.[sort].[rev_merge_rev] (my_closure)
   in
@@ -1016,34 +1018,35 @@ and code rec loopify(never) size(588) newer_version_of(sort_7)
       let n2 = %int_barith.sub (n, n1) in
       (apply direct(chop_3_1 &my_alloc_region)
          ($camlTests9__chop_6
-          : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+          : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
            (n1, l)
            -> k2 * k1
-         where k2 (l2 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ]) =
+         where k2 (l2 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
            (apply direct(rev_sort_8_1 &my_alloc_region)
               (rev_sort ~ depth my_depth -> succ my_depth
-               : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+               : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                 (n1, l)
                 -> k2 * k1
-              where k2 (s1 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ]) =
+              where k2 (s1 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
                 (apply direct(rev_sort_8_1 &my_alloc_region)
                    (rev_sort ~ depth my_depth -> succ my_depth
-                    : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+                    : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                      (n2, l2)
                      -> k2 * k1
-                   where k2 (s2 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ]) =
+                   where k2
+                           (s2 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
                      apply direct(rev_merge_rev_6_1 &my_alloc_region)
                        (rev_merge_rev
-                        : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+                        : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                          (s1, s2, 0)
                          -> k * k1)))
 in
 let code loopify(never) size(1412) newer_version_of(sort_uniq_4)
       sort_uniq_4_1
-        (cmp : val, l : [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+        (cmp : val, l : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
         my_closure &my_alloc_region my_depth
         -> k * k1
-        : [ 0 | 0 of val * [ 0 | 0 of val * val ] ] =
+        : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] =
   let rev_merge = closure rev_merge_5_1 @rev_merge &my_alloc_region
   with { rev_append_1 = $camlTests9__rev_append_5; cmp = cmp }
   in
@@ -1069,17 +1072,17 @@ let code loopify(never) size(1412) newer_version_of(sort_uniq_4)
          | 1 -> k (l)
          where k2 =
            apply direct(sort_7_1 &my_alloc_region)
-             (sort : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+             (sort : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                (len, l)
                -> k * k1)
 in
 let $camlTests9__sort_uniq_7 = closure sort_uniq_4_1 @sort_uniq &toplevel in
 let code rec loopify(never) size(77) newer_version_of(rev_sort_11)
       rev_sort_11_1
-        (n : imm tagged, l : [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+        (n : imm tagged, l : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
         my_closure &my_alloc_region my_depth
         -> k * k1
-        : [ 0 | 0 of val * [ 0 | 0 of val * val ] ] =
+        : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] =
   let cmp = %project_value_slot.[rev_sort_1].[cmp_3] (my_closure) in
   let sort = %project_function_slot.[rev_sort_1].[sort_1] (my_closure) in
   (let prim = %int_comp.ne (n, 2) in
@@ -1119,33 +1122,35 @@ let code rec loopify(never) size(77) newer_version_of(rev_sort_11)
     where k2 =
       apply direct(sort_10_1 &my_alloc_region)
         (sort ~ depth my_depth -> succ my_depth
-         : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+         : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
           (n, l)
           -> k * k1
 and code rec loopify(never) size(5) newer_version_of(sort_10)
       sort_10_1
-        (n : imm tagged, l : [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+        (n : imm tagged, l : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
         my_closure &my_alloc_region my_depth
         -> k * k1
-        : [ 0 | 0 of val * [ 0 | 0 of val * val ] ] =
+        : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] =
   let rev_sort = %project_function_slot.[sort_1].[rev_sort_1] (my_closure) in
   apply direct(rev_sort_11_1 &my_alloc_region)
     (rev_sort ~ depth my_depth -> succ my_depth
-     : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+     : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
       (n, l)
       -> k * k1
 in
 let code loopify(never) size(99) newer_version_of(foo_9)
-      foo_9_1 (cmp : val, l : [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+      foo_9_1 (cmp : val, l : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
         my_closure &my_alloc_region my_depth
         -> k * k1
-        : [ 0 | 0 of val * [ 0 | 0 of val * val ] ] =
+        : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] =
   let sort = closure sort_10_1 @sort_1 &my_alloc_region
   and rev_sort = closure rev_sort_11_1 @rev_sort_1 &my_alloc_region
   with { cmp_3 = cmp }
   in
   apply direct(sort_10_1 &my_alloc_region)
-    (sort : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ]) (42, l) -> k * k1
+    (sort : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+      (42, l)
+      -> k * k1
 in
 let $camlTests9__foo_8 = closure foo_9_1 @foo &toplevel in
 let $camlTests9 =

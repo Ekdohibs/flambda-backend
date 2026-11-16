@@ -1,7 +1,7 @@
 let code f_0 deleted in
 let $camlVariants_and_if__immstring_0 = "Variants_and_if.Foo" in
 apply ccall noalloc
-  ($`*extern*`.caml_fresh_oo_id : val -> val) (0) -> k * error
+  ($`*extern*`.caml_fresh_oo_id : val? -> val?) (0) -> k * error
   where k (Pccall) =
     let $camlVariants_and_if__Foo_1 =
       Block immutable_unique

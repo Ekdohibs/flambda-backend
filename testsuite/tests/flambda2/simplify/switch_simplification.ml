@@ -17,7 +17,7 @@ let code loopify(never) size(2) newer_version_of(all_boolean_simplifications_0)
       all_boolean_simplifications_0_1 (x, param : imm tagged)
         my_closure &my_alloc_region my_depth
         -> k * k1
-        : val * val * val =
+        : val? * val? * val? =
   let not_scrutinee = %boolean_not (param) in
   cont k (param, not_scrutinee, x)
 in
@@ -48,7 +48,7 @@ let code loopify(never) size(4) newer_version_of(all_large_simplifications_1)
       all_large_simplifications_1_1 (x, param : imm tagged)
         my_closure &my_alloc_region my_depth
         -> k * k1
-        : val * val * val * val =
+        : val? * val? * val? * val? =
   let final_arg = %int_barith.add (1, param) in
   let arg = %array_load ($camlTOP4__switch_block_7, param) in
   cont k (param, x, final_arg, arg)
@@ -72,7 +72,7 @@ let code loopify(never) size(7) newer_version_of(shared_affine_functions_2)
       shared_affine_functions_2_1 (param : imm tagged)
         my_closure &my_alloc_region my_depth
         -> k * k1
-        : val * val =
+        : val? * val? =
   let scaled_arg = %int_barith.mul (param, 2) in
   let final_arg = %int_barith.add (1, scaled_arg) in
   cont k (scaled_arg, final_arg)
@@ -103,7 +103,7 @@ let code loopify(never) size(2) newer_version_of(shared_lookup_table_3)
       shared_lookup_table_3_1 (param : imm tagged)
         my_closure &my_alloc_region my_depth
         -> k * k1
-        : val * val * val =
+        : val? * val? * val? =
   let arg = %array_load ($camlTOP6__switch_block_14, param) in
   cont k (param, arg, arg)
 in
@@ -128,7 +128,7 @@ let code loopify(never) size(3) newer_version_of(multiple_lookup_tables_4)
       multiple_lookup_tables_4_1 (param : imm tagged)
         my_closure &my_alloc_region my_depth
         -> k * k1
-        : val * val =
+        : val? * val? =
   let arg = %array_load.`imm` ($camlTOP7__switch_block_18, param) in
   let arg_1 = %array_load.`imm` ($camlTOP7__switch_block_19, param) in
   cont k (arg, arg_1)

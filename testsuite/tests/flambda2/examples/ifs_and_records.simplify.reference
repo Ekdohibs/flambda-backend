@@ -95,7 +95,7 @@ let code inline(always) loopify(never) size(27) newer_version_of(help_tuple_4)
       help_tuple_4_1 (should_swap : imm tagged, a, b)
         my_closure &my_alloc_region my_depth
         -> k * k1
-        : [ 0 of val * val ] =
+        : [ 0 of val? * val? ] =
   (let untagged = %untag_imm (should_swap) in
    switch untagged
      | 0 -> k2
@@ -149,7 +149,7 @@ let code inline(always) loopify(never) size(8) newer_version_of(help_no_if_tuple
       help_no_if_tuple_7_1 (param, a, b)
         my_closure &my_alloc_region my_depth
         -> k * k1
-        : [ 0 of val * val ] =
+        : [ 0 of val? * val? ] =
   let Pmakeblock = %block.[`0`].my_alloc_region (a, b) in
   cont k (Pmakeblock)
 in

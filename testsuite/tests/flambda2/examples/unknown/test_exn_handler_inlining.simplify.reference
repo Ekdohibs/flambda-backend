@@ -8,10 +8,10 @@ let code loopify(never) size(1) newer_version_of(id_0)
 in
 let $camlTest_exn_handler_inlining__id_1 = closure id_0_1 @`id` &toplevel in
 let code loopify(never) size(19) newer_version_of(p_2)
-      p_2_1 (param : [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+      p_2_1 (param : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
         my_closure &my_alloc_region my_depth
         -> k * k1
-        : [ 0 | 0 of val * [ 0 | 0 of val * val ] ] =
+        : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] =
   let prim = %is_int (param) in
   switch prim
     | 0 -> k2
@@ -26,36 +26,36 @@ let code loopify(never) size(19) newer_version_of(p_2)
 in
 let $camlTest_exn_handler_inlining__p_3 = closure p_2_1 @p &toplevel in
 let code loopify(never) size(4) newer_version_of(g_1)
-      g_1_1 (y : [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+      g_1_1 (y : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
         my_closure &my_alloc_region my_depth
         -> k * k1
-        : [ 0 | 0 of val * [ 0 | 0 of val * val ] ] =
+        : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] =
   apply direct(p_2_1 &my_alloc_region)
     ($camlTest_exn_handler_inlining__p_3
-     : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+     : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
       (y)
       -> k * k1
 in
 let $camlTest_exn_handler_inlining__g_2 = closure g_1_1 @g &toplevel in
 let code loopify(never) size(18) newer_version_of(f_3)
-      f_3_1 (x : [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+      f_3_1 (x : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
         my_closure &my_alloc_region my_depth
         -> k * k1
-        : [ 0 | 0 of val * [ 0 | 0 of val * val ] ] =
+        : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] =
   let try_region = %begin_try_region () in
   let try_ghost_region = %begin_try_ghost_region () in
   cont k3 (x)
-    where rec k3 (c_unboxed0 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ]) =
+    where rec k3 (c_unboxed0 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
       (cont k6 push(k5)
          where k6 =
            (apply direct(p_2_1 &my_alloc_region) inlining_state(depth(10))
               ($camlTest_exn_handler_inlining__p_3
-               : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+               : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                 (c_unboxed0)
                 -> k6 * k5
               where k6
                       (wrapper_return :
-                         [ 0 | 0 of val * [ 0 | 0 of val * val ] ]) =
+                         [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
                 cont k4 pop(k5) (wrapper_return))
          where k5 exn (`exn`) =
            cont k2 (c_unboxed0)

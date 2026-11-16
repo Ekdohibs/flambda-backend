@@ -1,5 +1,5 @@
 (let code inline(always) size(2)
-       first_0 (param/49 : [ 0 of val * val ])
+       first_0 (param/49 : [ 0 of val? * val? ])
          my_closure/50 &my_alloc_region/51 &my_region/52 &my_ghost_region/53
            my_depth/54
          -> k/18 * k/19 stack =

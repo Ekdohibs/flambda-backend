@@ -1,6 +1,7 @@
 (let code rec loopify(default tailrec) size(22)
        length_aux_0
-         (len : imm tagged, param : [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+         (len : imm tagged,
+          param : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
          my_closure &my_alloc_region my_depth
          -> k1 * k2
          : imm tagged =
@@ -22,7 +23,7 @@
            -> k1 * k2
  in
  let code size(5)
-       length_1 (l : [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+       length_1 (l : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
          my_closure &my_alloc_region my_depth
          -> k1 * k2
          : imm tagged =
@@ -33,11 +34,11 @@
  in
  let code rec loopify(default tailrec) size(28)
        rev_append_2
-         (l1 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ],
-          l2 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+         (l1 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ],
+          l2 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
          my_closure &my_alloc_region my_depth
          -> k1 * k2
-         : [ 0 | 0 of val * [ 0 | 0 of val * val ] ] =
+         : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] =
    let next_depth = rec_info (succ my_depth) in
    (let prim = %is_int (l1) in
     let Pisint = %tag_imm (prim) in
@@ -53,7 +54,7 @@
        let Pfield_1 = %block_load.[`1`] (l1) in
        apply direct(rev_append_2 &my_alloc_region)
          (my_closure ~ depth my_depth -> next_depth
-          : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+          : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
            (Pfield_1, Pmakeblock)
            -> k1 * k2
  in
@@ -64,10 +65,11 @@
    Block 0 ($`*predef*`.caml_exn_Assert_failure, $camlTests9__const_block_1)
  in
  let code rec loopify(default tailrec) size(42)
-       chop_3 (k : imm tagged, l : [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+       chop_3
+         (k : imm tagged, l : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
          my_closure &my_alloc_region my_depth
          -> k1 * k2
-         : [ 0 | 0 of val * [ 0 | 0 of val * val ] ] =
+         : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] =
    let next_depth = rec_info (succ my_depth) in
    (let prim = %phys_eq (k, 0) in
     let eq = %tag_imm (prim) in
@@ -93,7 +95,7 @@
             let int_sub = %int_barith.sub (k, 1) in
             apply direct(chop_3 &my_alloc_region)
               (my_closure ~ depth my_depth -> next_depth
-               : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+               : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                 (int_sub, Pfield)
                 -> k1 * k2
           where k3 =
@@ -101,12 +103,12 @@
  in
  let code rec loopify(default tailrec) size(119)
        rev_merge_5
-         (l1 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ],
-          l2 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ],
-          accu : [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+         (l1 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ],
+          l2 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ],
+          accu : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
          my_closure &my_alloc_region my_depth
          -> k1 * k2
-         : [ 0 | 0 of val * [ 0 | 0 of val * val ] ] =
+         : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] =
    let next_depth = rec_info (succ my_depth) in
    let rev_append = %project_value_slot.[rev_merge].[rev_append] (my_closure)
    in
@@ -167,7 +169,7 @@
                            apply direct(rev_merge_5 &my_alloc_region)
                              (my_closure ~ depth my_depth -> next_depth
                               : _ ->
-                                [ 0 | 0 of val * [ 0 | 0 of val * val ] ]
+                                [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
                               )
                                (l1, t2, Pmakeblock)
                                -> k1 * k2
@@ -178,7 +180,7 @@
                            apply direct(rev_merge_5 &my_alloc_region)
                              (my_closure ~ depth my_depth -> next_depth
                               : _ ->
-                                [ 0 | 0 of val * [ 0 | 0 of val * val ] ]
+                                [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
                               )
                                (t1, l2, Pmakeblock)
                                -> k1 * k2)
@@ -188,28 +190,28 @@
                       in
                       apply direct(rev_merge_5 &my_alloc_region)
                         (my_closure ~ depth my_depth -> next_depth
-                         : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+                         : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                           (t1, t2, Pmakeblock)
                           -> k1 * k2))
           where k4 =
             apply direct(rev_append_2 &my_alloc_region)
-              (rev_append : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+              (rev_append : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                 (l1, accu)
                 -> k1 * k2)
      where k3 =
        apply direct(rev_append_2 &my_alloc_region)
-         (rev_append : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+         (rev_append : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
            (l2, accu)
            -> k1 * k2
  in
  let code rec loopify(default tailrec) size(119)
        rev_merge_rev_6
-         (l1 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ],
-          l2 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ],
-          accu : [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+         (l1 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ],
+          l2 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ],
+          accu : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
          my_closure &my_alloc_region my_depth
          -> k1 * k2
-         : [ 0 | 0 of val * [ 0 | 0 of val * val ] ] =
+         : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] =
    let next_depth = rec_info (succ my_depth) in
    let rev_append =
      %project_value_slot.[rev_merge_rev].[rev_append_1] (my_closure)
@@ -271,7 +273,7 @@
                            apply direct(rev_merge_rev_6 &my_alloc_region)
                              (my_closure ~ depth my_depth -> next_depth
                               : _ ->
-                                [ 0 | 0 of val * [ 0 | 0 of val * val ] ]
+                                [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
                               )
                                (l1, t2, Pmakeblock)
                                -> k1 * k2
@@ -282,7 +284,7 @@
                            apply direct(rev_merge_rev_6 &my_alloc_region)
                              (my_closure ~ depth my_depth -> next_depth
                               : _ ->
-                                [ 0 | 0 of val * [ 0 | 0 of val * val ] ]
+                                [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
                               )
                                (t1, l2, Pmakeblock)
                                -> k1 * k2)
@@ -292,25 +294,26 @@
                       in
                       apply direct(rev_merge_rev_6 &my_alloc_region)
                         (my_closure ~ depth my_depth -> next_depth
-                         : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+                         : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                           (t1, t2, Pmakeblock)
                           -> k1 * k2))
           where k4 =
             apply direct(rev_append_2 &my_alloc_region)
-              (rev_append : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+              (rev_append : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                 (l1, accu)
                 -> k1 * k2)
      where k3 =
        apply direct(rev_append_2 &my_alloc_region)
-         (rev_append : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+         (rev_append : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
            (l2, accu)
            -> k1 * k2
  in
  let code rec size(696)
-       sort_7 (n : imm tagged, l : [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+       sort_7
+         (n : imm tagged, l : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
          my_closure &my_alloc_region my_depth
          -> k1 * k2
-         : [ 0 | 0 of val * [ 0 | 0 of val * val ] ] =
+         : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] =
    let next_depth = rec_info (succ my_depth) in
    let chop = %project_value_slot.[sort].[chop] (my_closure) in
    let cmp = %project_value_slot.[sort].[cmp_2] (my_closure) in
@@ -881,33 +884,34 @@
        let n1 = %int_shift.asr (n, prim) in
        let n2 = %int_barith.sub (n, n1) in
        (apply direct(chop_3 &my_alloc_region)
-          (chop : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+          (chop : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
             (n1, l)
             -> k3 * k2
-          where k3 (l2 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ]) =
+          where k3 (l2 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
             (apply direct(rev_sort_8 &my_alloc_region)
                (rev_sort ~ depth my_depth -> next_depth
-                : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+                : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                  (n1, l)
                  -> k3 * k2
-               where k3 (s1 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ]) =
+               where k3 (s1 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
                  (apply direct(rev_sort_8 &my_alloc_region)
                     (rev_sort ~ depth my_depth -> next_depth
-                     : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+                     : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                       (n2, l2)
                       -> k3 * k2
-                    where k3 (s2 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ]) =
+                    where k3
+                            (s2 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
                       apply direct(rev_merge_rev_6 &my_alloc_region)
                         (rev_merge_rev
-                         : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+                         : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                           (s1, s2, 0)
                           -> k1 * k2)))
  and code rec size(696)
        rev_sort_8
-         (n : imm tagged, l : [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+         (n : imm tagged, l : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
          my_closure &my_alloc_region my_depth
          -> k1 * k2
-         : [ 0 | 0 of val * [ 0 | 0 of val * val ] ] =
+         : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] =
    let next_depth = rec_info (succ my_depth) in
    let chop = %project_value_slot.[rev_sort].[chop] (my_closure) in
    let cmp = %project_value_slot.[rev_sort].[cmp_2] (my_closure) in
@@ -1480,33 +1484,35 @@
        let n1 = %int_shift.asr (n, prim) in
        let n2 = %int_barith.sub (n, n1) in
        (apply direct(chop_3 &my_alloc_region)
-          (chop : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+          (chop : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
             (n1, l)
             -> k3 * k2
-          where k3 (l2 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ]) =
+          where k3 (l2 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
             (apply direct(sort_7 &my_alloc_region)
                (sort ~ depth my_depth -> next_depth
-                : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+                : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                  (n1, l)
                  -> k3 * k2
-               where k3 (s1 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ]) =
+               where k3 (s1 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
                  (apply direct(sort_7 &my_alloc_region)
                     (sort ~ depth my_depth -> next_depth
-                     : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+                     : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                       (n2, l2)
                       -> k3 * k2
-                    where k3 (s2 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ]) =
+                    where k3
+                            (s2 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
                       apply direct(rev_merge_5 &my_alloc_region)
                         (rev_merge
-                         : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+                         : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                           (s1, s2, 0)
                           -> k1 * k2)))
  in
  let code size(1693)
-       sort_uniq_4 (cmp : val, l : [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+       sort_uniq_4
+         (cmp : val, l : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
          my_closure &my_alloc_region my_depth
          -> k1 * k2
-         : [ 0 | 0 of val * [ 0 | 0 of val * val ] ] =
+         : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] =
    let next_depth = rec_info (succ my_depth) in
    let length = %project_value_slot.[sort_uniq].[length] (my_closure) in
    let rev_append =
@@ -1542,31 +1548,31 @@
              cont k3)
           where k3 =
             apply direct(sort_7 &my_alloc_region)
-              (sort : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+              (sort : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
                 (len, l)
                 -> k1 * k2)
  in
  let code rec size(6)
        sort_10
-         (n : imm tagged, l : [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+         (n : imm tagged, l : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
          my_closure &my_alloc_region my_depth
          -> k1 * k2
-         : [ 0 | 0 of val * [ 0 | 0 of val * val ] ] =
+         : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] =
    let next_depth = rec_info (succ my_depth) in
    let cmp = %project_value_slot.[sort_1].[cmp_3] (my_closure) in
    let rev_sort = %project_function_slot.[sort_1].[rev_sort_1] (my_closure)
    in
    apply direct(rev_sort_11 &my_alloc_region)
      (rev_sort ~ depth my_depth -> next_depth
-      : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+      : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
        (n, l)
        -> k1 * k2
  and code rec size(97)
        rev_sort_11
-         (n : imm tagged, l : [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+         (n : imm tagged, l : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
          my_closure &my_alloc_region my_depth
          -> k1 * k2
-         : [ 0 | 0 of val * [ 0 | 0 of val * val ] ] =
+         : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] =
    let next_depth = rec_info (succ my_depth) in
    let cmp = %project_value_slot.[rev_sort_1].[cmp_3] (my_closure) in
    let sort = %project_function_slot.[rev_sort_1].[sort_1] (my_closure) in
@@ -1631,22 +1637,22 @@
      where k3 =
        apply direct(sort_10 &my_alloc_region)
          (sort ~ depth my_depth -> next_depth
-          : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+          : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
            (n, l)
            -> k1 * k2
  in
  let code size(120)
-       foo_9 (cmp : val, l : [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+       foo_9 (cmp : val, l : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
          my_closure &my_alloc_region my_depth
          -> k1 * k2
-         : [ 0 | 0 of val * [ 0 | 0 of val * val ] ] =
+         : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] =
    let next_depth = rec_info (succ my_depth) in
    let sort = closure sort_10 @sort_1 &my_alloc_region
    and rev_sort = closure rev_sort_11 @rev_sort_1 &my_alloc_region
    with { cmp_3 = cmp }
    in
    apply direct(sort_10 &my_alloc_region)
-     (sort : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+     (sort : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
        (42, l)
        -> k1 * k2
  in

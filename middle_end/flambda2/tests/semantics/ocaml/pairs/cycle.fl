@@ -1,18 +1,18 @@
 let $camlCycle__first_const_0 = Block 0 () in
-apply ccall ($`*extern*`.caml_alloc_dummy : val -> val) (2) -> k/14 * error
+apply ccall ($`*extern*`.caml_alloc_dummy : val? -> val?) (2) -> k/14 * error
   where k/14 (ones/28) =
     (apply ccall
-       ($`*extern*`.caml_alloc_dummy : val -> val) (2) -> k/15 * error
+       ($`*extern*`.caml_alloc_dummy : val? -> val?) (2) -> k/15 * error
        where k/15 (twos/29) =
          let Pmakeblock/30 = %block.[`0`].`toplevel` (1, twos/29) in
          (apply ccall
-            ($`*extern*`.caml_update_dummy : val * val -> val)
+            ($`*extern*`.caml_update_dummy : val? * val? -> val?)
               (ones/28, Pmakeblock/30)
               -> k/16 * error
             where k/16 (Pccall/31) =
               let Pmakeblock/32 = %block.[`0`].`toplevel` (2, ones/28) in
               (apply ccall
-                 ($`*extern*`.caml_update_dummy : val * val -> val)
+                 ($`*extern*`.caml_update_dummy : val? * val? -> val?)
                    (twos/29, Pmakeblock/32)
                    -> k/17 * error
                  where k/17 (Pccall/33) =

@@ -7,7 +7,7 @@ let code inline(always) loopify(never) size(7) newer_version_of(some_0)
       some_0_1 (x)
         my_closure &my_alloc_region my_depth
         -> k * k1
-        : [ 0 | 0 of val ] =
+        : [ 0 | 0 of val? ] =
   let Pmakeblock = %block.[`0`].my_alloc_region (x) in
   cont k (Pmakeblock)
 in
@@ -16,7 +16,7 @@ let code loopify(never) size(14) newer_version_of(f_1)
       f_1_1 (x)
         my_closure &my_alloc_region my_depth
         -> k * k1
-        : [ 0 of [ 0 | 0 of val ] * [ 0 | 0 of val ] ] =
+        : [ 0 of [ 0 | 0 of val? ] * [ 0 | 0 of val? ] ] =
   let a = %block.[`0`].my_alloc_region (x) in
   let Pmakeblock = %block.[`0`].my_alloc_region (a, a) in
   cont k (Pmakeblock)
@@ -26,7 +26,7 @@ let code loopify(never) size(14) newer_version_of(g_2)
       g_2_1 (x)
         my_closure &my_alloc_region my_depth
         -> k * k1
-        : [ 0 of [ 0 | 0 of val ] * [ 0 | 0 of val ] ] =
+        : [ 0 of [ 0 | 0 of val? ] * [ 0 | 0 of val? ] ] =
   let Pmakeblock = %block.[`0`].my_alloc_region (x) in
   let Pmakeblock_1 = %block.[`0`].my_alloc_region (Pmakeblock, Pmakeblock) in
   cont k (Pmakeblock_1)
@@ -36,7 +36,7 @@ let code loopify(never) size(14) newer_version_of(f_classic_3)
       f_classic_3_1 (x)
         my_closure &my_alloc_region my_depth
         -> k * k1
-        : [ 0 of [ 0 | 0 of val ] * [ 0 | 0 of val ] ] =
+        : [ 0 of [ 0 | 0 of val? ] * [ 0 | 0 of val? ] ] =
   let a = %block.[`0`].my_alloc_region (x) in
   let Pmakeblock = %block.[`0`].my_alloc_region (a, a) in
   cont k (Pmakeblock)
@@ -48,7 +48,7 @@ let code loopify(never) size(14) newer_version_of(g_classic_4)
       g_classic_4_1 (x)
         my_closure &my_alloc_region my_depth
         -> k * k1
-        : [ 0 of [ 0 | 0 of val ] * [ 0 | 0 of val ] ] =
+        : [ 0 of [ 0 | 0 of val? ] * [ 0 | 0 of val? ] ] =
   let Pmakeblock = %block.[`0`].my_alloc_region (x) in
   let Pmakeblock_1 = %block.[`0`].my_alloc_region (Pmakeblock, Pmakeblock) in
   cont k (Pmakeblock_1)

@@ -3,7 +3,7 @@ let $camlExported_made__first_const_0 = Block 0 () in
        pair_0 (x/32, y/33)
          my_closure/34 &my_alloc_region/35 my_depth/36
          -> k/12 * k/13
-         : [ 0 of val * val ] =
+         : [ 0 of val? * val? ] =
    let next_depth/37 = rec_info (succ my_depth/36) in
    let Pmakeblock/38 = %block.[`0`].my_alloc_region/35 (x/32, y/33) in
    cont k/12 (Pmakeblock/38)

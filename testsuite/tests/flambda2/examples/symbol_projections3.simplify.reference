@@ -6,7 +6,7 @@ let $camlSymbol_projections3__immstring_0 = "FOO" in
  cont k2 push(k1)
    where k2 =
      (apply ccall
-        ($`*extern*`.caml_sys_getenv : val -> val)
+        ($`*extern*`.caml_sys_getenv : val? -> val?)
           ($camlSymbol_projections3__immstring_0)
           -> k3 * k1
         where k3 (param) =
@@ -28,7 +28,7 @@ let $camlSymbol_projections3__immstring_0 = "FOO" in
           f_0_1 (x)
             my_closure &my_alloc_region my_depth
             -> k * k1
-            : [ 0 of val * val * [ 0 of imm tagged * imm tagged ] ] =
+            : [ 0 of val? * val * [ 0 of imm tagged * imm tagged ] ] =
       let Pmakeblock =
         %block.[`0`].my_alloc_region
           (x,

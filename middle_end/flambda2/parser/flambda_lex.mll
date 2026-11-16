@@ -232,6 +232,7 @@ rule token = parse
   | "~"  { TILDE }
   | "&"  { AMP }
   | "^"  { CARET }
+  | "?"  { QMARK }
   | identstart identchar* ('/' ['0'-'9']+)? as ident
          { ident_or_keyword ident }
   | quoted_ident as ident

@@ -7,7 +7,7 @@ let code loopify(never) size(17) newer_version_of(foo_1)
         -> k * k1
         : imm tagged =
   cont `self` (x, y)
-    where rec `self` (accu, l : [ 0 | 0 of val * [ 0 | 0 of val * val ] ]) =
+    where rec `self` (accu, l : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
       let prim = %is_int (l) in
       (switch prim
          | 0 -> k2

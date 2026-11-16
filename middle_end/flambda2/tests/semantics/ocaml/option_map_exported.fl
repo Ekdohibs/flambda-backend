@@ -1,9 +1,9 @@
 let $camlOption_map_exported__first_const_0 = Block 0 () in
 (let code size(29)
-       map_0 (f/35 : val, o/36 : [ 0 | 0 of val ])
+       map_0 (f/35 : val, o/36 : [ 0 | 0 of val? ])
          my_closure/37 &my_alloc_region/38 my_depth/39
          -> k/16 * k/17
-         : [ 0 | 0 of val ] =
+         : [ 0 | 0 of val? ] =
    let next_depth/40 = rec_info (succ my_depth/39) in
    (let prim/44 = %is_int (o/36) in
     let Pisint/45 = %tag_imm (prim/44) in

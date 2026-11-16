@@ -40,7 +40,7 @@ let code loopify(never) size(44) newer_version_of(test_3)
       test_3_1 (x)
         my_closure &my_alloc_region my_depth
         -> k * k1
-        : [ 0 | 0 of [ 0 of val * val ] ] =
+        : [ 0 | 0 of [ 0 of val? * val ] ] =
   apply direct(f_1_1 &my_alloc_region)
     ($camlGadt_meet__f_5 : _ -> [ 0 of [ 0 of imm tagged ] |1 of imm tagged ]
      )
@@ -54,7 +54,7 @@ let code loopify(never) size(44) newer_version_of(test_3)
            -> k2 * k1
          where k2 (apply_result : [ 0 of imm tagged ]) =
            (apply ccall
-              ($`*extern*`.caml_equal : val * val -> val)
+              ($`*extern*`.caml_equal : val? * val? -> val?)
                 (apply_result, $camlGadt_meet__const_block_2)
                 -> k2 * k1
               where k2 (Pccall) =

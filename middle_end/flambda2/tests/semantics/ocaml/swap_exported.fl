@@ -1,9 +1,9 @@
 let $camlSwap_exported__first_const_0 = Block 0 () in
 (let code size(10)
-       swap_0 (p/27 : [ 0 of val * val ])
+       swap_0 (p/27 : [ 0 of val? * val? ])
          my_closure/28 &my_alloc_region/29 my_depth/30
          -> k/10 * k/11
-         : [ 0 of val * val ] =
+         : [ 0 of val? * val? ] =
    let next_depth/31 = rec_info (succ my_depth/30) in
    let Pmixedfield/32 = %block_load.[`0`] (p/27) in
    let Pmixedfield/33 = %block_load.[`1`] (p/27) in

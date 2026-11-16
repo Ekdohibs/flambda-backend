@@ -3,7 +3,7 @@ let $camlCross_function_cse_b__first_const_0 = Block 0 () in
        some_0 (x)
          my_closure &my_alloc_region my_depth
          -> k1 * k2
-         : [ 0 | 0 of val ] =
+         : [ 0 | 0 of val? ] =
    let next_depth = rec_info (succ my_depth) in
    let Pmakeblock = %block.[`0`].my_alloc_region (x) in
    cont k1 (Pmakeblock)
@@ -12,13 +12,13 @@ let $camlCross_function_cse_b__first_const_0 = Block 0 () in
        f_1 (x)
          my_closure &my_alloc_region my_depth
          -> k1 * k2
-         : [ 0 of [ 0 | 0 of val ] * [ 0 | 0 of val ] ] =
+         : [ 0 of [ 0 | 0 of val? ] * [ 0 | 0 of val? ] ] =
    let next_depth = rec_info (succ my_depth) in
    let some = %project_value_slot.[f].[some] (my_closure) in
    let a = %block.[`0`].my_alloc_region (x) in
    apply direct(some_0 &my_alloc_region)
-     (some : _ -> [ 0 | 0 of val ]) (x) -> k3 * k2
-     where k3 (b : [ 0 | 0 of val ]) =
+     (some : _ -> [ 0 | 0 of val? ]) (x) -> k3 * k2
+     where k3 (b : [ 0 | 0 of val? ]) =
        let Pmakeblock = %block.[`0`].my_alloc_region (a, b) in
        cont k1 (Pmakeblock)
  in
@@ -26,12 +26,12 @@ let $camlCross_function_cse_b__first_const_0 = Block 0 () in
        g_2 (x)
          my_closure &my_alloc_region my_depth
          -> k1 * k2
-         : [ 0 of [ 0 | 0 of val ] * [ 0 | 0 of val ] ] =
+         : [ 0 of [ 0 | 0 of val? ] * [ 0 | 0 of val? ] ] =
    let next_depth = rec_info (succ my_depth) in
    let some = %project_value_slot.[g].[some_1] (my_closure) in
    apply direct(some_0 &my_alloc_region)
-     (some : _ -> [ 0 | 0 of val ]) (x) -> k3 * k2
-     where k3 (a : [ 0 | 0 of val ]) =
+     (some : _ -> [ 0 | 0 of val? ]) (x) -> k3 * k2
+     where k3 (a : [ 0 | 0 of val? ]) =
        let b = %block.[`0`].my_alloc_region (x) in
        let Pmakeblock = %block.[`0`].my_alloc_region (a, b) in
        cont k1 (Pmakeblock)
@@ -40,7 +40,7 @@ let $camlCross_function_cse_b__first_const_0 = Block 0 () in
        f_classic_3 (x)
          my_closure &my_alloc_region my_depth
          -> k1 * k2
-         : [ 0 of [ 0 | 0 of val ] * [ 0 | 0 of val ] ] =
+         : [ 0 of [ 0 | 0 of val? ] * [ 0 | 0 of val? ] ] =
    let next_depth = rec_info (succ my_depth) in
    let Pfield =
      %block_load.[`1`] ($Cross_function_cse_a.camlCross_function_cse_a)
@@ -51,7 +51,7 @@ let $camlCross_function_cse_b__first_const_0 = Block 0 () in
        g_classic_4 (x)
          my_closure &my_alloc_region my_depth
          -> k1 * k2
-         : [ 0 of [ 0 | 0 of val ] * [ 0 | 0 of val ] ] =
+         : [ 0 of [ 0 | 0 of val? ] * [ 0 | 0 of val? ] ] =
    let next_depth = rec_info (succ my_depth) in
    let Pfield =
      %block_load.[`2`] ($Cross_function_cse_a.camlCross_function_cse_a)

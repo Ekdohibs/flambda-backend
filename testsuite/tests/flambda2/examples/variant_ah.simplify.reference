@@ -4,7 +4,7 @@ let code inline(always) loopify(never) size(18) newer_version_of(maybe_0)
       maybe_0_1 (b : imm tagged, x)
         my_closure &my_alloc_region my_depth
         -> k * k1
-        : [ 0 | 0 of val ] =
+        : [ 0 | 0 of val? ] =
   (let untagged = %untag_imm (b) in
    switch untagged
      | 0 -> k (0)

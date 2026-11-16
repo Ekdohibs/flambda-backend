@@ -3,7 +3,7 @@ let $camlIgnored_second_of_pair__first_const_0 = Block 0 () in
        both_0 (x/62 : imm tagged)
          my_closure/63 &my_alloc_region/64 my_depth/65
          -> k/26 * k/27
-         : val * val =
+         : val? * val? =
    let next_depth/66 = rec_info (succ my_depth/65) in
    let int_add/67 = %int_barith.add (x/62, 1) in
    cont k/26 (x/62, int_add/67)
@@ -27,7 +27,7 @@ let $camlIgnored_second_of_pair__first_const_0 = Block 0 () in
        cont k/30 (8, 9)
      where k/31 =
        apply direct(both_0 &my_alloc_region/71)
-         (both/74 : _ -> val * val) (x/69) -> k/30 * k/29
+         (both/74 : _ -> val? * val?) (x/69) -> k/30 * k/29
      where k/30 (`*match*_23_unboxed0/75`, `*match*_23_unboxed1/76`) =
        let int_add/77 = %int_barith.add (`*match*_23_unboxed0/75`, 1) in
        cont k/28 (int_add/77)

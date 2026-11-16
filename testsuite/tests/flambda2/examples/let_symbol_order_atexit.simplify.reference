@@ -42,7 +42,7 @@ let code loopify(never) size(19) newer_version_of(exit_3)
        cont k2)
     where k2 =
       apply ccall
-        ($`*extern*`.caml_sys_exit : val -> val) (retcode) -> k * k1
+        ($`*extern*`.caml_sys_exit : val? -> val?) (retcode) -> k * k1
 in
 let $camlLet_symbol_order_atexit__exit_4 = closure exit_3_1 @exit &toplevel
 in

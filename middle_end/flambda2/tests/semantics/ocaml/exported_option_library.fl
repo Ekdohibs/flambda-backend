@@ -1,9 +1,9 @@
 let $camlExported_option_library__first_const_0 = Block 0 () in
 (let code size(29)
-       map_0 (f/81 : val, o/82 : [ 0 | 0 of val ])
+       map_0 (f/81 : val, o/82 : [ 0 | 0 of val? ])
          my_closure/83 &my_alloc_region/84 my_depth/85
          -> k/28 * k/29
-         : [ 0 | 0 of val ] =
+         : [ 0 | 0 of val? ] =
    let next_depth/86 = rec_info (succ my_depth/85) in
    (let prim/90 = %is_int (o/82) in
     let Pisint/91 = %tag_imm (prim/90) in
@@ -23,7 +23,7 @@ let $camlExported_option_library__first_const_0 = Block 0 () in
             cont k/28 (Pmakeblock/88))
  in
  let code size(17)
-       default_1 (d/93, o/94 : [ 0 | 0 of val ])
+       default_1 (d/93, o/94 : [ 0 | 0 of val? ])
          my_closure/95 &my_alloc_region/96 my_depth/97
          -> k/33 * k/34 =
    let next_depth/98 = rec_info (succ my_depth/97) in
@@ -40,7 +40,7 @@ let $camlExported_option_library__first_const_0 = Block 0 () in
        cont k/33 (Pfield/99)
  in
  let code size(5)
-       is_some_2 (o/103 : [ 0 | 0 of val ])
+       is_some_2 (o/103 : [ 0 | 0 of val? ])
          my_closure/104 &my_alloc_region/105 my_depth/106
          -> k/37 * k/38
          : imm tagged =

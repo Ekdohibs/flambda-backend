@@ -1,6 +1,6 @@
 let $camlLength_exported__first_const_0 = Block 0 () in
 (let code rec size(23)
-       length_0 (l/33 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+       length_0 (l/33 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
          my_closure/34 &my_alloc_region/35 my_depth/36
          -> k/16 * k/17
          : imm tagged =

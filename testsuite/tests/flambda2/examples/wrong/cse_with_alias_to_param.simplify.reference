@@ -6,7 +6,7 @@ let code inline(never) loopify(never) size(1) newer_version_of(id_0)
 in
 let $camlCse_with_alias_to_param__id_1 = closure id_0_1 @`id` &toplevel in
 let code loopify(never) size(42) newer_version_of(foo_1)
-      foo_1_1 (v : val, opt : [ 0 | 0 of val ])
+      foo_1_1 (v : val, opt : [ 0 | 0 of val? ])
         my_closure &my_alloc_region my_depth
         -> k * k1
         : [ 0 of [ 0 of val ] * [ 0 of val ] ] =

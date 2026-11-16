@@ -2,7 +2,7 @@ let code f_0 deleted in
 let code loopify(never) size(7) stub
       g_1 (param) my_closure &my_alloc_region my_depth -> k * k1 =
   let f = %project_value_slot.[g].[f] (my_closure) in
-  apply &my_alloc_region (f : val * imm tagged -> val) (param, 0) -> k * k1
+  apply &my_alloc_region (f : val? * imm tagged -> val?) (param, 0) -> k * k1
 in
 let code loopify(never) size(3) newer_version_of(f_0)
       f_0_1 (x : imm tagged, y : imm tagged)

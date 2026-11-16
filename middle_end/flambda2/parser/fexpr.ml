@@ -89,6 +89,9 @@ type subkind =
 
 and kind_with_subkind =
   | Value of subkind
+  | Nullable_value of subkind
+    (* A value that may be null; [Value] is for one that is not. Where a text
+       gives no kind, the kind is that of any value, which may be null. *)
   | Naked_number of Flambda_kind.Naked_number_kind.t
   | Region
   | Rec_info

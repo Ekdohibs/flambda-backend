@@ -3,7 +3,7 @@ let $camlSpeculative_inlining_lifted_constants__first_const_0 = Block 0 () in
        f_0 (x)
          my_closure &my_alloc_region my_depth
          -> k1 * k2
-         : [ 0 of val * val ] =
+         : [ 0 of val? * val? ] =
    let next_depth = rec_info (succ my_depth) in
    let Pmakeblock = %block.[`0`].my_alloc_region (x, x) in
    cont k1 (Pmakeblock)

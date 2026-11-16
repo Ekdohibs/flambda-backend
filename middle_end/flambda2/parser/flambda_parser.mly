@@ -100,6 +100,7 @@ let make_boxed_const_int (i, m) : static_data =
 %token LPAREN [@symbol "("]
 %token MINUSGREATER [@symbol "->"]
 %token PIPE [@symbol "|"]
+%token QMARK [@symbol "?"]
 %token RBRACE [@symbol "}"]
 %token RBRACK [@symbol "]"]
 %token RBRACKPIPE [@symbol "|]"]
@@ -454,6 +455,7 @@ kind:
 kind_with_subkind:
   | nnk = naked_number_kind { Naked_number nnk }
   | subkind = subkind { Value subkind }
+  | subkind = subkind; QMARK { Nullable_value subkind }
   | KWD_REGION { Region }
   | KWD_REC_INFO { Rec_info }
 ;

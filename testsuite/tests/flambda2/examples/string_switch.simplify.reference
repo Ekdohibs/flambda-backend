@@ -17,7 +17,7 @@ let code loopify(never) size(60) newer_version_of(of_string_0)
         -> k * k1
         : imm tagged =
   apply ccall noalloc
-    ($`*extern*`.caml_string_notequal : val * val -> val)
+    ($`*extern*`.caml_string_notequal : val? * val? -> val?)
       (str, $camlString_switch__immstring_0)
       -> k2 * k1
     where k2 (Pccall) =
@@ -27,7 +27,7 @@ let code loopify(never) size(60) newer_version_of(of_string_0)
           | 1 -> k2)
          where k2 =
            (apply ccall noalloc
-              ($`*extern*`.caml_string_notequal : val * val -> val)
+              ($`*extern*`.caml_string_notequal : val? * val? -> val?)
                 (str, $camlString_switch__immstring_1)
                 -> k2 * k1
               where k2 (Pccall_1) =
@@ -37,7 +37,8 @@ let code loopify(never) size(60) newer_version_of(of_string_0)
                     | 1 -> k2)
                    where k2 =
                      (apply ccall noalloc
-                        ($`*extern*`.caml_string_notequal : val * val -> val)
+                        ($`*extern*`.caml_string_notequal
+                         : val? * val? -> val?)
                           (str, $camlString_switch__immstring_2)
                           -> k2 * k1
                         where k2 (Pccall_2) =
@@ -48,7 +49,7 @@ let code loopify(never) size(60) newer_version_of(of_string_0)
                              where k2 =
                                (apply ccall noalloc
                                   ($`*extern*`.caml_string_notequal
-                                   : val * val -> val)
+                                   : val? * val? -> val?)
                                     (str, $camlString_switch__immstring_3)
                                     -> k2 * k1
                                   where k2 (Pccall_3) =

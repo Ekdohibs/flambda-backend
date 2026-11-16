@@ -17,7 +17,7 @@ let $camlTo_hex__Pmakeblock_5 =
   Block 0 ($`*predef*`.caml_exn_Invalid_argument, $camlTo_hex__immstring_0)
 in
 apply ccall
-  ($`*extern*`.caml_register_named_value : val * val -> val)
+  ($`*extern*`.caml_register_named_value : val? * val? -> val?)
     ($camlTo_hex__immstring_1, $camlTo_hex__Pmakeblock_5)
     -> k1 * error
   where k1 (param) =
@@ -49,7 +49,7 @@ apply ccall
       closure invalid_arg_1_1 @invalid_arg &toplevel
     in
     (apply ccall noalloc
-       ($`*extern*`.caml_fresh_oo_id : val -> val) (0) -> k * error
+       ($`*extern*`.caml_fresh_oo_id : val? -> val?) (0) -> k * error
        where k (Pccall) =
          let $camlTo_hex__Exit_8 =
            Block immutable_unique
@@ -61,7 +61,7 @@ apply ccall
                  -> k * k1
                  : val =
            apply ccall
-             ($`*extern*`.caml_lessequal : val * val -> val)
+             ($`*extern*`.caml_lessequal : val? * val? -> val?)
                (x, y)
                -> k2 * k1
              where k2 (Pccall_1) =
@@ -77,7 +77,7 @@ apply ccall
                  -> k * k1
                  : val =
            apply ccall
-             ($`*extern*`.caml_greaterequal : val * val -> val)
+             ($`*extern*`.caml_greaterequal : val? * val? -> val?)
                (x, y)
                -> k2 * k1
              where k2 (Pccall_1) =
@@ -168,7 +168,7 @@ apply ccall
              where k2 (prim : imm) =
                let cse_param = prim in
                (apply ccall
-                  ($`*extern*`.caml_create_bytes : val -> val)
+                  ($`*extern*`.caml_create_bytes : val? -> val?)
                     (32)
                     -> k2 * k1
                   where k2 (result) =

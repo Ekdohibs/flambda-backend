@@ -6,7 +6,7 @@ let $camlCode_id_join_b__const_block_12 =
   Block 0 (0, $camlCode_id_join_b__const_block_11)
 in
 cont `self` ($camlCode_id_join_b__const_block_12)
-  where rec `self` (param : [ 0 | 0 of val * [ 0 | 0 of val * val ] ]) =
+  where rec `self` (param : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
     let prim = %is_int (param) in
     (switch prim
        | 0 -> k1

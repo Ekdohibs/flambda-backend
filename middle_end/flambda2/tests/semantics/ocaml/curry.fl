@@ -8,7 +8,7 @@ let $camlCurry__first_const_0 = Block 0 () in
    apply &my_alloc_region/103 f/99 (Pmakeblock/106) -> k/28 * k/29
  in
  let code inline(always) size(8)
-       uncurry_1 (f/107 : val, param/108 : [ 0 of val * val ])
+       uncurry_1 (f/107 : val, param/108 : [ 0 of val? * val? ])
          my_closure/109 &my_alloc_region/110 my_depth/111
          -> k/30 * k/31 =
    let next_depth/112 = rec_info (succ my_depth/111) in

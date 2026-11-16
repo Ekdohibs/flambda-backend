@@ -74,7 +74,7 @@ let Popaque = %opaque ($camlData_flow_bug__immstring_3) in
                                 where k1 =
                                   (apply ccall noalloc
                                      ($`*extern*`.caml_string_notequal
-                                      : val * val -> val)
+                                      : val? * val? -> val?)
                                        (Popaque,
                                         $camlData_flow_bug__immstring_3)
                                        -> k1 * error
@@ -113,10 +113,10 @@ let Popaque = %opaque ($camlData_flow_bug__immstring_3) in
                                                                 (param :
                                                                    [ 0
                                                                    | 
-                                                                   0 of val *
+                                                                   0 of val? *
                                                                     [ 0
                                                                     | 
-                                                                    0 of val *
+                                                                    0 of val? *
                                                                     val ] ]) =
                                                       let prim_1 =
                                                         %is_int (param)
@@ -132,8 +132,8 @@ let Popaque = %opaque ($camlData_flow_bug__immstring_3) in
                                                            (apply ccall
                                                                    inlining_state(depth(10))
                                                               ($`*extern*`.caml_compare
-                                                               : val * val ->
-                                                                 val
+                                                               : val? * val? ->
+                                                                 val?
                                                                )
                                                                 (Pfield,
                                                                  Pstringrefs)

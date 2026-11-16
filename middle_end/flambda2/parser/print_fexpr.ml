@@ -260,6 +260,7 @@ and kind_with_subkind ppf (k : kind_with_subkind) =
   | Rec_info -> str "rec_info"
   | Region -> str "region"
   | Value sk -> subkind ppf sk
+  | Nullable_value sk -> Format.fprintf ppf "%a?" subkind sk
 
 let kind_with_subkind ppf k =
   directive Flambda_colours.kind kind_with_subkind ppf k

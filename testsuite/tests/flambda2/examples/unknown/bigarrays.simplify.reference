@@ -5,7 +5,7 @@ in
 (let `region` = %begin_region () in
  (let Pmakearray = %array.`imm`.mut.`toplevel`.local[`region`] (3, 3) in
   apply ccall inlining_state(depth(10))
-    ($`*extern*`.caml_ba_create : val * val * val -> val)
+    ($`*extern*`.caml_ba_create : val? * val? * val? -> val?)
       (8, 0, Pmakearray)
       -> k1 * error)
    where k1 (region_return : val) =
@@ -36,7 +36,7 @@ in
                    ($Stdlib.camlStdlib__print_int_45_96)
                in
                (apply ccall inlining_state(depth(20))
-                  ($`*extern*`.caml_format_int : val * val -> val)
+                  ($`*extern*`.caml_format_int : val? * val? -> val?)
                     ($Stdlib.camlStdlib__immstring_19, i)
                     -> k2 * error
                   where k2 (apply_result : val) =
@@ -44,7 +44,7 @@ in
                     let Pstringlength = %tag_imm (prim_4) in
                     (apply ccall inlining_state(depth(20))
                        ($`*extern*`.caml_ml_output
-                        : val * val * val * val -> val)
+                        : val? * val? * val? * val? -> val?)
                          (stdout, apply_result, 0, Pstringlength)
                          -> k2 * error
                        where k2 (param) =

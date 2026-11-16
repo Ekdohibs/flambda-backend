@@ -14,7 +14,7 @@ let code negate_5 deleted in
 let code foo_6 deleted in
 let $camlTests15__immstring_4 = " \\ \n " in
 let code loopify(never) size(11) newer_version_of(list_to_array_0)
-      list_to_array_0_1 (param : [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+      list_to_array_0_1 (param : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
         my_closure &my_alloc_region my_depth
         -> k * k1
         : any array =

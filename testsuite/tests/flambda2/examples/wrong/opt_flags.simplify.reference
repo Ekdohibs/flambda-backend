@@ -4,7 +4,7 @@ let $camlOpt_flags__immstring_0 = "foo" in
  cont k3 push(k2)
    where k3 =
      (apply ccall
-        ($`*extern*`.caml_sys_getenv : val -> val)
+        ($`*extern*`.caml_sys_getenv : val? -> val?)
           ($camlOpt_flags__immstring_0)
           -> k4 * k2
         where k4 (param) =

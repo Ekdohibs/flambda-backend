@@ -1,10 +1,10 @@
 (let code rec loopify(default tailrec) size(28)
        rev_onto_0
-         (acc/61 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ],
-          list/62 : [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+         (acc/61 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ],
+          list/62 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
          my_closure/63 &my_alloc_region/64 my_depth/65
          -> k/26 * k/27
-         : [ 0 | 0 of val * [ 0 | 0 of val * val ] ] =
+         : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] =
    let next_depth/66 = rec_info (succ my_depth/65) in
    (let prim/70 = %is_int (list/62) in
     let Pisint/71 = %tag_imm (prim/70) in
@@ -22,7 +22,7 @@
        in
        apply direct(rev_onto_0 &my_alloc_region/64)
          (my_closure/63 ~ depth my_depth/65 -> next_depth/66
-          : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+          : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
            (Pmakeblock/69, Pfield/67)
            -> k/26 * k/27
  in

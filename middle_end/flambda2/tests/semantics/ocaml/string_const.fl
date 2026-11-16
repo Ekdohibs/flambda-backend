@@ -1,5 +1,5 @@
 (let code inline(always) size(2)
-       first_0 (pair/44 : [ 0 of val * val ])
+       first_0 (pair/44 : [ 0 of val? * val? ])
          my_closure/45 &my_alloc_region/46 my_depth/47
          -> k/18 * k/19 =
    let next_depth/48 = rec_info (succ my_depth/47) in
@@ -7,7 +7,7 @@
    cont k/18 (Pmixedfield/49)
  in
  let code inline(always) size(2)
-       second_1 (pair/50 : [ 0 of val * val ])
+       second_1 (pair/50 : [ 0 of val? * val? ])
          my_closure/51 &my_alloc_region/52 my_depth/53
          -> k/20 * k/21 =
    let next_depth/54 = rec_info (succ my_depth/53) in
