@@ -164,6 +164,11 @@ Hypothesis unbox_known_named_equivariant :
   numbers_under_statics_equivariant unwrapped_equivariant
   unbox_known_named_equivariant : equivariance.
 
+(* The tactic's step of the database is its one pass, which is faster.
+   A proof that does not pass with it is between two lines, one that
+   puts [autorewrite] back and one that takes it away again. *)
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
+
 
 Lemma facts_under_let_equivariant (r : renaming) (known : facts)
     (x : variable) (d : named) :
@@ -219,11 +224,13 @@ Qed.
 #[local] Hint Rewrite facts_under_params_equivariant
   projection_of_equivariant : equivariance.
 
+#[local] Ltac eqv_database ::= eqv_database_by_autorewrite.
 Lemma extend_args_equivariant (r : renaming) (known : facts) (i : nat)
     (p : unary_primitive) (args : list simple) :
   extend_args (rename_facts r known) i p (map (rename_simple r) args)
   = option_map (map (rename_simple r)) (extend_args known i p args).
 Proof. equivariance. Qed.
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
 
 #[local] Hint Rewrite extend_args_equivariant : equivariance.
 
@@ -467,11 +474,13 @@ Qed.
 #[local] Hint Rewrite lookup_known_var_renamed no_value_on_renamed
   made_field_equivariant made_number_equivariant : equivariance.
 
+#[local] Ltac eqv_database ::= eqv_database_by_autorewrite.
 Lemma certain_projection_equivariant (r : renaming) (known : facts)
     (p : unary_primitive) (kind : flambda_kind) (arg : simple) :
   certain_projection (rename_facts r known) p kind (rename_simple r arg)
   = option_map (rename_simple r) (certain_projection known p kind arg).
 Proof. equivariance. Qed.
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
 
 #[local] Hint Rewrite certain_projection_equivariant : equivariance.
 
@@ -514,6 +523,7 @@ Proof. equivariance. Qed.
 #[local] Hint Rewrite known_immediates_equivariant expr_eqb_under_renaming
   : equivariance.
 
+#[local] Ltac eqv_database ::= eqv_database_by_autorewrite.
 Lemma never_reads_renamed (r : renaming) (consts : list (variable * Z))
     (handler without : expr) :
   never_reads (rename_immediates r consts) (rename_expr r handler)
@@ -526,6 +536,7 @@ Proof. equivariance. Qed.
 Theorem extend_args_certain_equivariant :
   extend_args_certain_equivariant_statement.
 Proof. equivariance. Qed.
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
 
 #[local] Hint Rewrite extend_args_certain_equivariant : equivariance.
 
@@ -671,6 +682,7 @@ Proof. equivariance. Qed.
 
 End Tags_renamed.
 
+#[local] Ltac eqv_database ::= eqv_database_by_autorewrite.
 Lemma tag_read_renamed (r : renaming) (tests params : list variable)
     (handler without : expr) (i : nat) (known : facts) (args : list simple) :
   tag_read (map (rename_variable r) tests) (map (rename_variable r) params)
@@ -678,6 +690,7 @@ Lemma tag_read_renamed (r : renaming) (tests params : list variable)
     (map (rename_simple r) args)
   = tag_read tests params handler without i known args.
 Proof. equivariance. Qed.
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
 
 (* Whether blocks of more than one tag may come to a load is answered
    the same of the renamed term. *)
@@ -736,6 +749,7 @@ Proof. equivariance. Qed.
 
 #[local] Hint Rewrite read_of_same_renamed : equivariance.
 
+#[local] Ltac eqv_database ::= eqv_database_by_autorewrite.
 Lemma share_reads_renamed (r : renaming) (p : unary_primitive)
     (e : expr) :
   ∀ (x f : variable) (same : list variable),
@@ -743,6 +757,7 @@ Lemma share_reads_renamed (r : renaming) (p : unary_primitive)
       (map (rename_variable r) same) (rename_expr r e)
     = rename_expr r (share_reads p x f same e).
 Proof. equivariance. Qed.
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
 
 #[local] Hint Rewrite share_reads_renamed : equivariance.
 
