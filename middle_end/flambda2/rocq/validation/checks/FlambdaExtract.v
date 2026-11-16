@@ -79,6 +79,8 @@ From OxCamlFlambda2Types Require Import FlambdaBindingTime.
 From OxCamlFlambda2Types Require Import FlambdaJoinEnv.
 From OxCamlFlambda2Types Require Import FlambdaJoinMeet.
 From OxCamlFlambda2Types Require Import FlambdaMeet.
+From OxCamlFlambda2Types Require Import FlambdaProvers.
+From OxCamlFlambda2Types Require Import FlambdaReify.
 From OxCamlFlambda2Types Require Import FlambdaSimplifyStaticsSpec.
 From OxCamlFlambda2Types Require Import FlambdaTypeEqualSpec.
 From OxCamlFlambda2Types Require Import FlambdaTypeGrammar.
@@ -118,6 +120,68 @@ Separate Extraction
   FlambdaMeet.Flambda2_types.add_is_null_relation
   FlambdaMeet.compiler_choices
   FlambdaMeet.repaired_choices
+  FlambdaProvers.Provers.meet_block_field_simple
+  FlambdaProvers.Provers.meet_boxed_float32_containing_simple
+  FlambdaProvers.Provers.meet_boxed_float_containing_simple
+  FlambdaProvers.Provers.meet_boxed_int32_containing_simple
+  FlambdaProvers.Provers.meet_boxed_int64_containing_simple
+  FlambdaProvers.Provers.meet_boxed_mask_containing_simple
+  FlambdaProvers.Provers.meet_boxed_nativeint_containing_simple
+  FlambdaProvers.Provers.meet_boxed_vec128_containing_simple
+  FlambdaProvers.Provers.meet_boxed_vec256_containing_simple
+  FlambdaProvers.Provers.meet_boxed_vec512_containing_simple
+  FlambdaProvers.Provers.meet_code_ids
+  FlambdaProvers.Provers.meet_equals_single_tagged_immediate
+  FlambdaProvers.Provers.meet_equals_tagged_immediates
+  FlambdaProvers.Provers.meet_is_int_variant_only
+  FlambdaProvers.Provers.meet_is_null
+  FlambdaProvers.Provers.meet_naked_float32s
+  FlambdaProvers.Provers.meet_naked_floats
+  FlambdaProvers.Provers.meet_naked_immediates
+  FlambdaProvers.Provers.meet_naked_int16s
+  FlambdaProvers.Provers.meet_naked_int32s
+  FlambdaProvers.Provers.meet_naked_int64s
+  FlambdaProvers.Provers.meet_naked_int8s
+  FlambdaProvers.Provers.meet_naked_masks
+  FlambdaProvers.Provers.meet_naked_nativeints
+  FlambdaProvers.Provers.meet_naked_vec128s
+  FlambdaProvers.Provers.meet_naked_vec256s
+  FlambdaProvers.Provers.meet_naked_vec512s
+  FlambdaProvers.Provers.meet_project_function_slot_simple
+  FlambdaProvers.Provers.meet_project_value_slot_simple
+  FlambdaProvers.Provers.meet_single_closures_entry
+  FlambdaProvers.Provers.meet_strings
+  FlambdaProvers.Provers.meet_tagging_of_simple
+  FlambdaProvers.Provers.meet_variant_like
+  FlambdaProvers.Provers.never_holds_locally_allocated_values
+  FlambdaProvers.Provers.prove_alloc_mode_of_boxed_number
+  FlambdaProvers.Provers.prove_code_ids
+  FlambdaProvers.Provers.prove_equals_tagged_immediates
+  FlambdaProvers.Provers.prove_equals_to_simple_of_kind
+  FlambdaProvers.Provers.prove_get_tag
+  FlambdaProvers.Provers.prove_is_a_boxed_float
+  FlambdaProvers.Provers.prove_is_a_boxed_float32
+  FlambdaProvers.Provers.prove_is_a_boxed_int32
+  FlambdaProvers.Provers.prove_is_a_boxed_int64
+  FlambdaProvers.Provers.prove_is_a_boxed_mask
+  FlambdaProvers.Provers.prove_is_a_boxed_nativeint
+  FlambdaProvers.Provers.prove_is_a_boxed_or_tagged_number
+  FlambdaProvers.Provers.prove_is_a_boxed_vec128
+  FlambdaProvers.Provers.prove_is_a_boxed_vec256
+  FlambdaProvers.Provers.prove_is_a_boxed_vec512
+  FlambdaProvers.Provers.prove_is_a_tagged_immediate
+  FlambdaProvers.Provers.prove_is_int
+  FlambdaProvers.Provers.prove_is_not_a_pointer
+  FlambdaProvers.Provers.prove_is_or_is_not_a_boxed_float
+  FlambdaProvers.Provers.prove_nothing
+  FlambdaProvers.Provers.prove_physical_equality
+  FlambdaProvers.Provers.prove_single_closures_entry
+  FlambdaProvers.Provers.prove_strings
+  FlambdaProvers.Provers.prove_tagging_of_simple
+  FlambdaProvers.Provers.prove_unique_fully_constructed_immutable_heap_block
+  FlambdaProvers.Provers.prove_unique_tag_and_size
+  FlambdaProvers.Provers.prove_variant_like
+  FlambdaReify.Reify.reify
   FlambdaSimplifyStaticsSpec.add_static_bindings
   FlambdaSimplifyStaticsSpec.static_const_type_in
   FlambdaTypeEqualSpec.type_eqb
