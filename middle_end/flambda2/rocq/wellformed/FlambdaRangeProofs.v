@@ -39,7 +39,7 @@ From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaMapProofs FlambdaSemanticsSpec FlambdaSemanticsProofs
   FlambdaWellFormedSpec FlambdaWellFormedProofs FlambdaNominalSpec
-  FlambdaRangeSpec.
+  FlambdaEquivarianceTactic FlambdaRangeSpec.
 From OxCamlFlambda2 Require FlambdaHeapProofs.
 Import ListNotations.
 
@@ -910,100 +910,17 @@ Qed.
 (* Renaming                                                                 *)
 (* ======================================================================== *)
 
-Lemma rename_simple_in_range (r : renaming) (s : simple) :
-  simple_in_range (rename_simple r s) = simple_in_range s.
-Proof. destruct s; reflexivity. Qed.
-
-Lemma rename_simples_in_range (r : renaming) (args : list simple) :
-  forallb simple_in_range (map (rename_simple r) args)
-  = forallb simple_in_range args.
-Proof.
-  induction args as [ | s args IH]; simpl; [ reflexivity | ].
-  rewrite rename_simple_in_range, IH. reflexivity.
-Qed.
-
-Lemma rename_value_slots_in_range (r : renaming)
-    (value_slots : list (value_slot * simple)) :
-  value_slots_in_range
-    (map (fun slot => (fst slot, rename_simple r (snd slot))) value_slots)
-  = value_slots_in_range value_slots.
-Proof.
-  unfold value_slots_in_range.
-  induction value_slots as [ | [slot s] value_slots IH]; simpl;
-    [ reflexivity | ].
-  rewrite rename_simple_in_range, IH. reflexivity.
-Qed.
-
-Lemma rename_named_in_range (r : renaming) (d : named) :
-  named_in_range (rename_named r d) = named_in_range d.
-Proof.
-  destruct d; simpl;
-    rewrite ?rename_simples_in_range, ?rename_value_slots_in_range,
-      ?rename_simple_in_range;
-    reflexivity.
-Qed.
-
-Lemma rename_static_const_in_range (r : renaming) (const : static_const) :
-  static_const_in_range (rename_static_const r const)
-  = static_const_in_range const.
-Proof.
-  destruct const; simpl;
-    rewrite ?rename_simples_in_range, ?rename_value_slots_in_range,
-      ?rename_simple_in_range;
-    reflexivity.
-Qed.
-
-Lemma rename_apply_cont_in_range (r : renaming) (ac : apply_cont) :
-  apply_cont_in_range (rename_apply_cont r ac) = apply_cont_in_range ac.
-Proof. unfold apply_cont_in_range. simpl. apply rename_simples_in_range. Qed.
-
-Lemma rename_apply_in_range (r : renaming) (ap : apply_expr) :
-  apply_in_range (rename_apply r ap) = apply_in_range ap.
-Proof.
-  assert (Hextra :
-    forallb simple_in_range (exn_extra_simples (rename_apply r ap))
-    = forallb simple_in_range (exn_extra_simples ap)).
-  { unfold exn_extra_simples. simpl. rewrite map_map. simpl.
-    rewrite <- (map_map fst (rename_simple r)).
-    apply rename_simples_in_range. }
-  unfold apply_in_range. rewrite Hextra. simpl.
-  rewrite rename_simple_in_range, rename_simples_in_range. reflexivity.
-Qed.
-
-Fixpoint rename_numbers_in_range (r : renaming) (e : expr) :
-  numbers_in_range (rename_expr r e) = numbers_in_range e.
-Proof.
-  destruct e
-    as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-       | scrutinee arms | ];
-    simpl.
-  - rewrite rename_named_in_range, rename_numbers_in_range. reflexivity.
-  - rewrite rename_numbers_in_range. f_equal.
-    induction bindings
-      as [ | [id [params my_closure ret exn code_body] | id | sym const]
-             bindings IH];
-      simpl;
-      [ reflexivity
-      | rewrite rename_numbers_in_range, IH; reflexivity
-      | rewrite IH; reflexivity | ].
-    rewrite rename_static_const_in_range, IH. reflexivity.
-  - destruct h as [params metadata handler]. simpl.
-    rewrite !rename_numbers_in_range. reflexivity.
-  - rewrite rename_numbers_in_range. f_equal.
-    induction handlers as [ | [k [params metadata handler]] handlers IH];
-      simpl; [ reflexivity | ].
-    rewrite rename_numbers_in_range, IH. reflexivity.
-  - apply rename_apply_in_range.
-  - apply rename_apply_cont_in_range.
-  - rewrite rename_simple_in_range. f_equal.
-    induction arms as [ | [i ac] arms IH]; simpl; [ reflexivity | ].
-    rewrite IH. unfold arm_in_range. simpl.
-    rewrite rename_apply_cont_in_range. reflexivity.
-  - reflexivity.
-Qed.
+(* The law is proved from the definitions by the tactic of
+   FlambdaEquivarianceTactic.v, which states and proves by itself the
+   laws of the checks that the check of a term is made of. It is told
+   one thing: to unfold the check of an arm of a [Switch] where it
+   computes. The tactic does not use the law that it derives for that
+   check at the arms of a renamed [Switch]; with the check unfolded it
+   needs none. *)
+#[local] Arguments arm_in_range arm /.
 
 Theorem numbers_in_range_renamed : numbers_in_range_renamed_statement.
-Proof. exact rename_numbers_in_range. Qed.
+Proof. equivariance. Qed.
 
 (* ======================================================================== *)
 (* Examples                                                                 *)
