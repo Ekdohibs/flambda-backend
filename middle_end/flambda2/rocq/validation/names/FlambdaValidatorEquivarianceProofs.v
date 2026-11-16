@@ -1258,290 +1258,122 @@ Qed.
 (* FlambdaBlockLoadSpec.v                                                   *)
 (* ======================================================================== *)
 
-(* A map whose keys are renamed: a renaming is injective, so a name is
-   found where its image is. *)
-Lemma lookup_renamed_keys {A B : Type} (p : permutation) (g : A -> B)
-    (x : positive) (l : list (positive * A)) :
-  lookup (permute p x)
-    (map (fun entry => (permute p (fst entry), g (snd entry))) l)
-  = option_map g (lookup x l).
-Proof.
-  induction l as [ | [y a] l IH]; simpl; [ reflexivity | ].
-  rewrite permute_eqb. destruct (Pos.eqb x y); [ reflexivity | exact IH ].
-Qed.
+(* The laws of renaming of this section are proved from the definitions
+   by the tactic of FlambdaEquivarianceTactic.v. It is told how what is
+   known is renamed, since the types do not say it (the blocks known of
+   variables are a map keyed by variables, and a known block is a pair
+   of a tag and a list): the actions are [rename_known_blocks] and
+   [rename_known_block]. The laws that other files use by name keep
+   their names and statements, and each law is given to the tactic for
+   the proofs after it. One law is stated in the form that computation
+   gives it, [static_blocks_made_renamed]: the blocks that the bindings
+   of a [Let_static] make, under [flat_map]. *)
+Section Block_load.
 
-Lemma lookup_value_slots_renamed (r : renaming) (slot : value_slot)
-    (slots : list (value_slot * simple)) :
-  lookup slot (map (fun slot => (fst slot, rename_simple r (snd slot))) slots)
-  = option_map (rename_simple r) (lookup slot slots).
-Proof.
-  induction slots as [ | [slot' s] slots IH]; simpl; [ reflexivity | ].
-  destruct (Pos.eqb slot slot'); [ reflexivity | exact IH ].
-Qed.
-
-Lemma forget_field_equivariant (r : renaming) (x : variable)
-    (field : option simple) :
-  forget_field (rename_variable r x) (option_map (rename_simple r) field)
-  = option_map (rename_simple r) (forget_field x field).
-Proof.
-  destruct field as [s | ]; simpl; [ | reflexivity ].
-  rewrite var_in_simple_equivariant. destruct (var_in_simple x s); reflexivity.
-Qed.
-
-Lemma forget_in_block_equivariant (r : renaming) (x : variable)
-    (block : known_block) :
-  forget_in_block (rename_variable r x) (rename_known_block r block)
-  = rename_known_block r (forget_in_block x block).
-Proof.
-  unfold forget_in_block, rename_known_block. simpl. rewrite !map_map.
-  f_equal. apply map_ext. intros field. apply forget_field_equivariant.
-Qed.
+#[local] Instance known_blocks_renaming : Renaming_of known_blocks :=
+  rename_known_blocks.
+#[local] Instance known_block_renaming : Renaming_of known_block :=
+  rename_known_block.
 
 Lemma forget_var_equivariant (r : renaming) (x : variable)
     (known : known_blocks) :
   forget_var (rename_variable r x) (rename_known_blocks r known)
   = rename_known_blocks r (forget_var x known).
-Proof.
-  unfold forget_var, rename_known_blocks, map_values. simpl. f_equal.
-  - rewrite
-      (filter_map_with _ _
-         (fun entry => negb (Pos.eqb x (fst entry))))
-      by (intros entry; simpl; rewrite rename_variable_eqb; reflexivity).
-    rewrite !map_map. apply map_ext. intros entry. simpl.
-    rewrite forget_in_block_equivariant. reflexivity.
-  - rewrite !map_map. apply map_ext. intros [sym block]. simpl.
-    rewrite forget_in_block_equivariant. reflexivity.
-Qed.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite forget_var_equivariant : equivariance.
 
 Lemma forget_vars_equivariant (r : renaming) (xs : list variable) :
   ∀ known : known_blocks,
     forget_vars (map (rename_variable r) xs) (rename_known_blocks r known)
     = rename_known_blocks r (forget_vars xs known).
-Proof.
-  induction xs as [ | x xs IH]; intros known; simpl; [ reflexivity | ].
-  rewrite forget_var_equivariant. apply IH.
-Qed.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite forget_vars_equivariant : equivariance.
 
 Lemma block_made_equivariant (r : renaming) (d : named) :
   block_made (rename_named r d)
   = option_map (rename_known_block r) (block_made d).
-Proof.
-  destruct d as [s | p args | | | | | ]; try reflexivity.
-  destruct p as [p | p | [[tag]| ] | p | rp]; try reflexivity.
-  simpl. unfold rename_known_block. simpl. rewrite !map_map. reflexivity.
-Qed.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite block_made_equivariant : equivariance.
 
 Lemma known_under_let_equivariant (r : renaming) (known : known_blocks)
     (x : variable) (d : named) :
   known_under_let (rename_known_blocks r known) (rename_variable r x)
     (rename_named r d)
   = rename_known_blocks r (known_under_let known x d).
-Proof.
-  unfold known_under_let.
-  rewrite forget_var_equivariant, block_made_equivariant.
-  destruct (block_made d) as [block | ]; cbn [option_map]; [ | reflexivity ].
-  rewrite forget_in_block_equivariant. reflexivity.
-Qed.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite known_under_let_equivariant : equivariance.
 
-Lemma static_block_made_renamed (r : renaming) (binding : static_binding) :
-  static_block_made (rename_static_binding r binding)
-  = map_values (rename_known_block r) (static_block_made binding).
-Proof.
-  destruct binding as [id c | id | sym const]; try reflexivity.
-  destruct const; try reflexivity.
-  simpl. unfold rename_known_block. simpl. rewrite !map_map. reflexivity.
-Qed.
+Lemma static_blocks_made_renamed (r : renaming)
+    (bindings : list static_binding) :
+  flat_map (fun binding => static_block_made (rename_static_binding r binding))
+    bindings
+  = flat_map
+      (fun binding =>
+         map (fun made : positive * known_block =>
+                (fst made, rename_known_block r (snd made)))
+           (static_block_made binding))
+      bindings.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite static_blocks_made_renamed : equivariance.
 
 Lemma known_under_statics_equivariant (r : renaming) (known : known_blocks)
     (bindings : list static_binding) :
   known_under_statics (rename_known_blocks r known)
     (map (rename_static_binding r) bindings)
   = rename_known_blocks r (known_under_statics known bindings).
-Proof.
-  unfold known_under_statics, rename_known_blocks, map_values. simpl.
-  f_equal. rewrite map_app. f_equal.
-  induction bindings as [ | binding bindings IH]; simpl; [ reflexivity | ].
-  rewrite static_block_made_renamed, map_app, IH. reflexivity.
-Qed.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite known_under_statics_equivariant : equivariance.
 
 Lemma known_block_of_equivariant (r : renaming) (known : known_blocks)
     (s : simple) :
   known_block_of (rename_known_blocks r known) (rename_simple r s)
   = option_map (rename_known_block r) (known_block_of known s).
-Proof.
-  destruct s as [x | sym | c]; simpl;
-    [ apply lookup_renamed_keys | apply lookup_map_values | reflexivity ].
-Qed.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite known_block_of_equivariant : equivariance.
 
 Lemma field_loaded_equivariant (r : renaming) (kind : block_access_kind)
     (field : Z) (block : known_block) :
   field_loaded kind field (rename_known_block r block)
   = option_map (rename_simple r) (field_loaded kind field block).
-Proof.
-  destruct kind as [tag size [ | ]]; [ | reflexivity ].
-  unfold field_loaded, rename_known_block. simpl. rewrite length_map.
-  destruct
-    (known_is tag (fst block)
-     && known_is size (Z.of_nat (length (snd block)))
-     && (0 <=? field)%Z);
-    [ | reflexivity ].
-  rewrite nth_error_map.
-  destruct (nth_error (snd block) (Z.to_nat field)) as [[contents | ] | ];
-    reflexivity.
-Qed.
-
-Lemma of_known_block_equivariant (r : renaming) (p : unary_primitive)
-    (block : known_block) :
-  of_known_block p (rename_known_block r block)
-  = option_map (rename_simple r) (of_known_block p block).
-Proof.
-  destruct p as [kind mut field | | | | | | | | | | | | | | ];
-    try reflexivity.
-  destruct mut; try reflexivity; apply field_loaded_equivariant.
-Qed.
-
-Lemma unary_applied_equivariant (r : renaming) (p : prim)
-    (args : list simple) :
-  unary_applied p (map (rename_simple r) args)
-  = option_map (fun applied => (fst applied, rename_simple r (snd applied)))
-      (unary_applied p args).
-Proof.
-  destruct p; try reflexivity.
-  destruct args as [ | arg [ | arg' args]]; reflexivity.
-Qed.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite field_loaded_equivariant : equivariance.
 
 Lemma load_known_named_equivariant (r : renaming) (known : known_blocks)
     (d : named) :
   load_known_named (rename_known_blocks r known) (rename_named r d)
   = rename_named r (load_known_named known d).
-Proof.
-  destruct d as [s | p args | | | | | ]; try reflexivity.
-  cbn [rename_named load_known_named]. rewrite unary_applied_equivariant.
-  destruct (unary_applied p args) as [[p' block] | ]; cbn [option_map fst snd];
-    [ | reflexivity ].
-  rewrite known_block_of_equivariant.
-  destruct (known_block_of known block) as [made | ]; cbn [option_map];
-    [ | reflexivity ].
-  rewrite of_known_block_equivariant.
-  destruct (of_known_block p' made); reflexivity.
-Qed.
-
-Fixpoint load_blocks_knowing_equivariant_aux (r : renaming) (e : expr) :
-  ∀ known : known_blocks,
-    load_blocks_knowing (rename_known_blocks r known) (rename_expr r e)
-    = rename_expr r (load_blocks_knowing known e)
-with load_blocks_in_handler_equivariant (r : renaming)
-    (h : continuation_handler) :
-  ∀ known : known_blocks,
-    load_blocks_in_handler (rename_known_blocks r known) (rename_handler r h)
-    = rename_handler r (load_blocks_in_handler known h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      intros known; try reflexivity;
-      cbn [rename_expr load_blocks_knowing].
-    + rewrite load_known_named_equivariant, known_under_let_equivariant,
-        load_blocks_knowing_equivariant_aux.
-      reflexivity.
-    + rewrite known_under_statics_equivariant,
-        load_blocks_knowing_equivariant_aux.
-      reflexivity.
-    + rewrite load_blocks_in_handler_equivariant,
-        load_blocks_knowing_equivariant_aux.
-      reflexivity.
-    + rewrite load_blocks_knowing_equivariant_aux. reflexivity.
-  - destruct h as [params metadata handler]. intros known.
-    cbn [rename_handler load_blocks_in_handler].
-    rewrite forget_vars_equivariant, load_blocks_knowing_equivariant_aux.
-    reflexivity.
-Qed.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite load_known_named_equivariant : equivariance.
 
 Theorem load_blocks_knowing_equivariant :
   load_blocks_knowing_equivariant_statement.
-Proof. intros r known e. apply load_blocks_knowing_equivariant_aux. Qed.
+Proof. equivariance. Qed.
 
 Theorem load_known_blocks_equivariant :
   load_known_blocks_equivariant_statement.
 Proof.
-  intros r e. exact (load_blocks_knowing_equivariant_aux r e no_blocks).
+  intros r e. exact (load_blocks_knowing_equivariant r no_blocks e).
 Qed.
 
 (* The read of a known block that the term after is given. *)
-Lemma of_known_block_surely_equivariant (r : renaming)
-    (p : unary_primitive) (block : known_block) :
-  of_known_block_surely p (rename_known_block r block)
-  = option_map (rename_simple r) (of_known_block_surely p block).
-Proof.
-  unfold of_known_block_surely.
-  destruct p; try reflexivity.
-  rewrite of_known_block_equivariant.
-  match goal with
-  | |- context [of_known_block ?p block] =>
-    destruct (of_known_block p block) as [contents | ]
-  end;
-    cbn [option_map]; [ | reflexivity ].
-  rewrite FlambdaReadsAfterProofs.surely_value_renamed.
-  destruct (surely_value contents); reflexivity.
-Qed.
-
 Lemma load_known_named_surely_equivariant (r : renaming) (known : known_blocks)
     (d : named) :
   load_known_named_surely (rename_known_blocks r known) (rename_named r d)
   = rename_named r (load_known_named_surely known d).
-Proof.
-  destruct d as [s | p args | | | | | ]; try reflexivity.
-  cbn [rename_named load_known_named_surely]. rewrite unary_applied_equivariant.
-  destruct (unary_applied p args) as [[p' block] | ]; cbn [option_map fst snd];
-    [ | reflexivity ].
-  rewrite known_block_of_equivariant.
-  destruct (known_block_of known block) as [made | ]; cbn [option_map];
-    [ | reflexivity ].
-  rewrite of_known_block_surely_equivariant.
-  destruct (of_known_block_surely p' made); reflexivity.
-Qed.
-
-Fixpoint load_blocks_knowing_surely_equivariant_aux (r : renaming) (e : expr) :
-  ∀ known : known_blocks,
-    load_blocks_knowing_surely (rename_known_blocks r known) (rename_expr r e)
-    = rename_expr r (load_blocks_knowing_surely known e)
-with load_blocks_in_handler_surely_equivariant (r : renaming)
-    (h : continuation_handler) :
-  ∀ known : known_blocks,
-    load_blocks_in_handler_surely (rename_known_blocks r known)
-      (rename_handler r h)
-    = rename_handler r (load_blocks_in_handler_surely known h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      intros known; try reflexivity;
-      cbn [rename_expr load_blocks_knowing_surely].
-    + rewrite load_known_named_surely_equivariant, known_under_let_equivariant,
-        load_blocks_knowing_surely_equivariant_aux.
-      reflexivity.
-    + rewrite known_under_statics_equivariant,
-        load_blocks_knowing_surely_equivariant_aux.
-      reflexivity.
-    + rewrite load_blocks_in_handler_surely_equivariant,
-        load_blocks_knowing_surely_equivariant_aux.
-      reflexivity.
-    + rewrite load_blocks_knowing_surely_equivariant_aux. reflexivity.
-  - destruct h as [params metadata handler]. intros known.
-    cbn [rename_handler load_blocks_in_handler_surely].
-    rewrite forget_vars_equivariant, load_blocks_knowing_surely_equivariant_aux.
-    reflexivity.
-Qed.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite load_known_named_surely_equivariant : equivariance.
 
 Theorem load_blocks_knowing_surely_equivariant :
   load_blocks_knowing_surely_equivariant_statement.
-Proof. intros r known e. apply load_blocks_knowing_surely_equivariant_aux. Qed.
+Proof. equivariance. Qed.
 
 Theorem load_known_blocks_surely_equivariant :
   load_known_blocks_surely_equivariant_statement.
 Proof.
-  intros r e. exact (load_blocks_knowing_surely_equivariant_aux r e no_blocks).
+  intros r e. exact (load_blocks_knowing_surely_equivariant r no_blocks e).
 Qed.
+
+End Block_load.
 
 (* ======================================================================== *)
 (* FlambdaUnboxSpec.v                                                       *)
