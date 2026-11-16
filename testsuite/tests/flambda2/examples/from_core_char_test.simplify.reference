@@ -45,7 +45,7 @@ let code inline(always) loopify(never) size(40) newer_version_of(char_of_string_
            let prim_2 = %string_load.[`8`] (s, 0n) in
            let Pstringrefs = %tag_imm (prim_2) in
            cont k (Pstringrefs)
-         where k2 =
+         where k2 cold =
            cont k1 pop(regular k1) ($camlFrom_core_char_test__block_1))
 in
 let $camlFrom_core_char_test__char_of_string_9 =

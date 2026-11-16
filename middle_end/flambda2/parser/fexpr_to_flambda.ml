@@ -456,8 +456,8 @@ let rec expr env acc (e : Fexpr.expr) : _ * Flambda.Expr.t =
       |> Flambda.Expr.create_let
     in
     acc, let_expr
-  | Let_cont { recursive; body; bindings = [{ name; params; sort; handler }] }
-    ->
+  | Let_cont
+      { recursive; body; bindings = [{ name; params; sort; cold; handler }] } ->
     let sort =
       sort |> Option.value ~default:(Normal : Fexpr.continuation_sort)
     in
@@ -500,7 +500,7 @@ let rec expr env acc (e : Fexpr.expr) : _ * Flambda.Expr.t =
     let acc, handler = expr handler_env acc handler in
     let handler =
       Flambda.Continuation_handler.create params ~handler
-        ~free_names_of_handler:Unknown ~is_exn_handler ~is_cold:false
+        ~free_names_of_handler:Unknown ~is_exn_handler ~is_cold:cold
     in
     let let_cont =
       match recursive with

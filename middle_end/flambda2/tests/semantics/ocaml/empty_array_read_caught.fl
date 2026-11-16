@@ -17,7 +17,7 @@
           | 1 -> k/32)
          where k/32 =
            cont k/30
-         where k/31 =
+         where k/31 cold =
            cont k/25
                   pop(regular k/25)
                   ($camlEmpty_array_read_caught__block_2)

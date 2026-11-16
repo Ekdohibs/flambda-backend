@@ -23,7 +23,7 @@ let $camlDead_division_in_dead_arm__first_const_0 = Block 0 () in
            | 1 -> k/53)
           where k/53 =
             cont k/51
-          where k/52 =
+          where k/52 cold =
             cont k/49
                    pop(regular k/49)
                    ($`*predef*`.caml_exn_Division_by_zero)

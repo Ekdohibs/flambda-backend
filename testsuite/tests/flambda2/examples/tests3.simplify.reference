@@ -29,7 +29,7 @@ let code loopify(never) size(72) newer_version_of(foo_0)
          where k4 (if_then_else_result) =
            apply unknown_arity &my_alloc_region
              (f : _ -> val) (if_then_else_result) -> k2 * k1)
-    where k3 =
+    where k3 cold =
       cont k1 pop(regular k1) ($camlTests3__block_1)
     where k2 (apply_result : val) =
       ((let cond_result = %is_flat_float_array (arr) in

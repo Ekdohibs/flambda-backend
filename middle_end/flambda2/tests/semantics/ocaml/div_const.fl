@@ -6,7 +6,7 @@ let $camlDiv_const__first_const_0 = Block 0 () in
     | 1 -> k/26)
    where k/26 =
      cont k/21
-   where k/25 =
+   where k/25 cold =
      cont error pop(regular error) ($`*predef*`.caml_exn_Division_by_zero)
    where k/21 =
      let int_mod/26 = %int_barith.mod (x/25, 5) in
@@ -16,7 +16,7 @@ let $camlDiv_const__first_const_0 = Block 0 () in
          | 1 -> k/24)
         where k/24 =
           cont k/22
-        where k/23 =
+        where k/23 cold =
           cont error
                  pop(regular error)
                  ($`*predef*`.caml_exn_Division_by_zero)

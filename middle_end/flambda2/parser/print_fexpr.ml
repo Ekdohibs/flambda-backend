@@ -46,6 +46,8 @@ let recursive ~space ppf r =
   | Nonrecursive -> ()
   | Recursive -> pp_spaced ~space ppf "rec"
 
+let cold ~space ppf cold = if cold then pp_spaced ~space ppf "cold"
+
 let continuation_sort ppf sort =
   Format.pp_print_string ppf
   @@
@@ -747,18 +749,18 @@ let rec expr scope ppf = function
   | Let_cont
       { recursive = recu;
         body;
-        bindings = { name; params; sort; handler } :: rem_cont
+        bindings = { name; params; sort; cold = is_cold; handler } :: rem_cont
       } ->
     parens ~if_scope_is:Continuation_body scope ppf (fun _scope ppf ->
         Format.fprintf ppf
-          "@[<v 2>%a@ @[<v>@[<v 2>@[%twhere%t%a @]@[<hv 2>%a%a%a@] =@ \
+          "@[<v 2>%a@ @[<v>@[<v 2>@[%twhere%t%a @]@[<hv 2>%a%a%a%a@] =@ \
            %a@]%a@]@]"
           (expr Where_body) body Flambda_colours.expr_keyword
           Flambda_colours.pop
           (cont_recursive ~space:Before)
           recu continuation_id name
           (pp_option continuation_sort ~space:Before)
-          sort
+          sort (cold ~space:Before) is_cold
           (kinded_parameters ~space:Before)
           params (expr Continuation_body) handler andk rem_cont)
   | Let_cont _ -> Format.pp_print_string ppf "<malformed letk>"
@@ -845,10 +847,12 @@ and let_symbol_expr scope ppf = function
       (expr scope) body
 
 and andk ppf l =
-  let cont { name; params; sort; handler } =
-    Format.fprintf ppf "@ @[<v 2>andwhere%a %a@[<hv2>%a@] =@ %a@]"
+  let cont { name; params; sort; cold = is_cold; handler } =
+    (* The name, then the sort, as the grammar has them. *)
+    Format.fprintf ppf "@ @[<v 2>andwhere %a@[<hv2>%a%a%a@] =@ %a@]"
+      continuation_id name
       (pp_option continuation_sort ~space:Before)
-      sort continuation_id name
+      sort (cold ~space:Before) is_cold
       (kinded_parameters ~space:Before)
       params (expr Continuation_body) handler
   in

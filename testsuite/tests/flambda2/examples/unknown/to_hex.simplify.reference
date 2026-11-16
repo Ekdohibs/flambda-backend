@@ -253,7 +253,7 @@ apply ccall &toplevel
                                         switch prim_8
                                           | 0 -> k (result)
                                           | 1 -> k2 (for_next_naked)))
-                            where k3 =
+                            where k3 cold =
                               cont k1 pop(regular k1) ($camlTo_hex__block_4))))
          in
          let $camlTo_hex__to_hex_15 = closure to_hex_7_1 @to_hex &toplevel in

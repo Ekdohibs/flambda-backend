@@ -39,7 +39,7 @@ in
  switch prim
    | 0 -> k1
    | 1 -> k
-   where k1 =
+   where k1 cold =
      invalid)
   where k =
     let $camlDirect_app_parameter_kind_check_simplify =

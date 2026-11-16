@@ -7,7 +7,7 @@ let $camlDiv_unknown__first_const_0 = Block 0 () in
     | 1 -> k/14)
    where k/14 =
      cont k/12
-   where k/13 =
+   where k/13 cold =
      cont error pop(regular error) ($`*predef*`.caml_exn_Division_by_zero)
    where k/12 =
      let result/19 = %int_barith.div (Popaque/18, Popaque/17) in

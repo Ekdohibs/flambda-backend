@@ -11,7 +11,7 @@ let $camlDivisor_tested_twice__first_const_0 = Block 0 () in
       | 1 -> k/31)
      where k/31 =
        cont k/26
-     where k/30 =
+     where k/30 cold =
        cont k/25 pop(regular k/25) ($`*predef*`.caml_exn_Division_by_zero)
      where k/26 =
        let int_mod/48 = %int_barith.mod (a/42, b/43) in
@@ -21,7 +21,7 @@ let $camlDivisor_tested_twice__first_const_0 = Block 0 () in
            | 1 -> k/29)
           where k/29 =
             cont k/27
-          where k/28 =
+          where k/28 cold =
             cont k/25
                    pop(regular k/25)
                    ($`*predef*`.caml_exn_Division_by_zero)

@@ -30,7 +30,7 @@
          | 1 -> k/26)
         where k/26 =
           cont k/23
-        where k/25 =
+        where k/25 cold =
           cont error pop(regular error) ($camlG_boxed_int64s__block_3)
         where k/23 =
           let Parrayrefs/55 = %array_load (apply_result/54, Popaque/53) in

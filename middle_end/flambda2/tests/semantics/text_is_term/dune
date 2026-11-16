@@ -16,8 +16,8 @@
 ;; block_of_an_immediate: the kinds of the fields of a block that is made are
 ;; not all that of any value, and the text writes them. The text is the term.
 ;;
-;; checked_division: the text is not the term, and the driver names the first
-;; difference.
+;; checked_division: a continuation of the unit is cold, and the text says
+;; so. The text is the term.
 ;;
 ;; functor_of_a_module: code of the unit is that of a functor, and the text
 ;; says so. The text is the term.

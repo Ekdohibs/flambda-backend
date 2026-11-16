@@ -1,9 +1,2 @@
-div_unknown.fl:
-  before Simplify, with its import (16 steps): returns [0: 3]
-  after Simplify, with its import (8 steps): returns [0: 3]
-  the check of kinds: passes before, passes after
+div_unknown.fl: the term after Simplify is NOT WELL-FORMED (a static binding that is not at toplevel, or a name bound twice)
   the check of static names: passes before, passes after
-  calls outside code: 0 before, 0 after
-  the same
-  calls outside code once those of known code are inlined: 0
-  validated with its imports: the same once normalised and unused static bindings removed

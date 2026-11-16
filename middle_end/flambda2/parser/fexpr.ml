@@ -397,6 +397,7 @@ and continuation_binding =
   { name : continuation_id;
     params : kinded_parameter list;
     sort : continuation_sort option;
+    cold : bool;
     handler : expr
   }
 

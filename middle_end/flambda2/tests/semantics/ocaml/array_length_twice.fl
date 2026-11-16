@@ -26,7 +26,7 @@
            | 1 -> k/27)
           where k/27 =
             cont k/25
-          where k/26 =
+          where k/26 cold =
             cont k/23 pop(regular k/23) ($camlArray_length_twice__block_1)
           where k/25 =
             let Parrayrefs/55 = %array_load.`imm`.mut (a/48, i/49) in

@@ -20,7 +20,7 @@
            | 1 -> k/41)
           where k/41 =
             cont k/39
-          where k/40 =
+          where k/40 cold =
             cont k/36
                    pop(regular k/36)
                    ($camlR_out_of_bounds_caught__block_1)

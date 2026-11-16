@@ -63,7 +63,7 @@
          | 1 -> k/53)
         where k/53 =
           cont k/51
-        where k/52 =
+        where k/52 cold =
           cont error pop(regular error) ($camlV_of_closures__block_1)
         where k/51 =
           let Parrayrefs/112 = %array_load (apply_result/111, 0) in
@@ -81,7 +81,7 @@
               | 1 -> k/49)
              where k/49 =
                cont k/47
-             where k/48 =
+             where k/48 cold =
                cont error pop(regular error) ($camlV_of_closures__block_1)
              where k/47 =
                let Parrayrefs/107 = %array_load (apply_result/106, 1) in

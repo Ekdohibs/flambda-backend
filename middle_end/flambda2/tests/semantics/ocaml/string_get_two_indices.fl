@@ -24,7 +24,7 @@
           | 1 -> k/31)
          where k/31 =
            cont k/26
-         where k/30 =
+         where k/30 cold =
            cont error
                   pop(regular error)
                   ($camlString_get_two_indices__block_2)
@@ -43,7 +43,7 @@
                | 1 -> k/29)
               where k/29 =
                 cont k/27
-              where k/28 =
+              where k/28 cold =
                 cont error
                        pop(regular error)
                        ($camlString_get_two_indices__block_2)

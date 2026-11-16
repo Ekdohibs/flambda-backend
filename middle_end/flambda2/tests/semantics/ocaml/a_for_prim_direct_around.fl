@@ -51,7 +51,7 @@
                                | 1 -> k/72)
                               where k/72 =
                                 cont k/69
-                              where k/71 =
+                              where k/71 cold =
                                 cont k/58
                                        pop(regular k/58)
                                        ($`*predef*`.caml_exn_Division_by_zero,

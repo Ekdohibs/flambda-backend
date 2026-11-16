@@ -26,7 +26,7 @@
          | 1 -> k/32)
         where k/32 =
           cont k/27
-        where k/31 =
+        where k/31 cold =
           cont error pop(regular error) ($camlV_two_parameters__block_1)
         where k/27 =
           let p/53 = %array_load.`imm` (a/52, 0) in
@@ -37,7 +37,7 @@
               | 1 -> k/30)
              where k/30 =
                cont k/28
-             where k/29 =
+             where k/29 cold =
                cont error pop(regular error) ($camlV_two_parameters__block_1)
              where k/28 =
                let q/54 = %array_load.`imm` (a/52, 1) in

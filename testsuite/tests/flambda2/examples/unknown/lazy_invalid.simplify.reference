@@ -55,7 +55,7 @@ apply ccall noalloc &toplevel
                (switch prim
                   | 0 -> k2
                   | 1 -> k3
-                  where k3 =
+                  where k3 cold =
                     invalid
                   where k2 =
                     ((let prim_1 = %int_comp.eq (tag, 246) in

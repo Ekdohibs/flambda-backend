@@ -681,7 +681,12 @@ and cont_handler env cont_id (sort : Continuation.Sort.t) h =
         map_accum_left kinded_parameter env (Bound_parameters.to_list params)
       in
       let handler = expr env handler in
-      { name = cont_id; params; sort; handler })
+      { name = cont_id;
+        params;
+        sort;
+        cold = Flambda.Continuation_handler.is_cold h;
+        handler
+      })
 
 and apply_expr env (app : Apply_expr.t) : Fexpr.expr =
   let func = Option.map (simple env) (Apply_expr.callee app) in

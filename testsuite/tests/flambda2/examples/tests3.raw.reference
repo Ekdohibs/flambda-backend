@@ -15,7 +15,7 @@
       | 1 -> k6)
      where k6 =
        cont k4
-     where k5 =
+     where k5 cold =
        cont k2 pop(regular k2) ($camlTests3__block_1)
      where k4 =
        ((let cond_result = %is_flat_float_array (arr) in
@@ -40,7 +40,7 @@
            | 1 -> k5)
           where k5 =
             cont k3
-          where k4 =
+          where k4 cold =
             cont k2 pop(regular k2) ($camlTests3__block_1)
           where k3 =
             ((let cond_result = %is_flat_float_array (arr) in

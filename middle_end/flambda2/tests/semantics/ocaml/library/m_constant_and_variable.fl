@@ -24,7 +24,7 @@
          | 1 -> k/44)
         where k/44 =
           cont k/36
-        where k/43 =
+        where k/43 cold =
           cont error
                  pop(regular error)
                  ($camlM_constant_and_variable__block_1)
@@ -37,7 +37,7 @@
               | 1 -> k/42)
              where k/42 =
                cont k/37
-             where k/41 =
+             where k/41 cold =
                cont error
                       pop(regular error)
                       ($camlM_constant_and_variable__block_1)
@@ -50,7 +50,7 @@
                    | 1 -> k/40)
                   where k/40 =
                     cont k/38
-                  where k/39 =
+                  where k/39 cold =
                     cont error
                            pop(regular error)
                            ($camlM_constant_and_variable__block_1)

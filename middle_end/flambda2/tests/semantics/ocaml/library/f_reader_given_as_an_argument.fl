@@ -30,7 +30,7 @@
       | 1 -> k/36)
      where k/36 =
        cont k/34
-     where k/35 =
+     where k/35 cold =
        cont k/33
               pop(regular k/33)
               ($camlF_reader_given_as_an_argument__block_1)

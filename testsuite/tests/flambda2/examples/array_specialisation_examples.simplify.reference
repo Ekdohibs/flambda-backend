@@ -20,7 +20,7 @@ let code loopify(never) size(22) newer_version_of(f_0)
     where k3 =
       let ifnot_result = %array_load.mut (arr, 0) in
       cont k (ifnot_result)
-    where k2 =
+    where k2 cold =
       cont k1 pop(regular k1) ($camlArray_specialisation_examples__block_1)
 in
 let $camlArray_specialisation_examples__f_2 = closure f_0_1 @f &toplevel in
@@ -79,7 +79,7 @@ let code loopify(never) size(62) newer_version_of(i_3)
                   %array_load.`imm`.mut (if_then_else_result, 0)
                 in
                 cont k2 (Parrayrefs)
-              where k3 =
+              where k3 cold =
                 cont k1
                        pop(regular k1)
                        ($camlArray_specialisation_examples__block_1)))

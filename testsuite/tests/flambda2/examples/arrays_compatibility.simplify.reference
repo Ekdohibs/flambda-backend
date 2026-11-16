@@ -45,7 +45,7 @@ let code inline(always) loopify(never) size(60) newer_version_of(convert_fast_1)
                  let int_sub_1 = %int_barith.sub (offset, Parrayrefs) in
                  let int_add = %int_barith.add (int_sub_1, 1) in
                  cont k2 (int_add)
-               where k4 =
+               where k4 cold =
                  cont k1 pop(regular k1) ($camlArrays_compatibility__block_2))))
     where k3 =
       let int_add = %int_barith.add (offset, 1) in
@@ -100,7 +100,7 @@ let code loopify(never) size(75) newer_version_of(f_2)
                       let int_sub_1 = %int_barith.sub (offset, Parrayrefs) in
                       let int_add = %int_barith.add (int_sub_1, 1) in
                       cont k2 (int_add)
-                    where k4 =
+                    where k4 cold =
                       cont k1
                              pop(regular k1)
                              ($camlArrays_compatibility__block_2))))

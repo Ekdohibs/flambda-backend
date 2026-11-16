@@ -246,7 +246,7 @@
       | 1 -> k5)
      where k5 =
        cont k3
-     where k4 =
+     where k4 cold =
        cont k2 pop(regular k2) ($`*predef*`.caml_exn_Division_by_zero)
      where k3 =
        let int_mod = %int_barith.mod (i, 2) in

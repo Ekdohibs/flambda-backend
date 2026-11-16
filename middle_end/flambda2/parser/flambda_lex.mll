@@ -43,6 +43,7 @@ let keyword_table =
     "cached", KWD_CACHED;
     "closure", KWD_CLOSURE;
     "code", KWD_CODE;
+    "cold", KWD_COLD;
     "cont", KWD_CONT;
     "default", KWD_DEFAULT;
     "define_root_symbol", KWD_DEFINE_ROOT_SYMBOL;

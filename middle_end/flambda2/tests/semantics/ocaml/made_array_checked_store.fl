@@ -14,7 +14,7 @@
      | 1 -> k/17)
     where k/17 =
       cont k/15
-    where k/16 =
+    where k/16 cold =
       cont error pop(regular error) ($camlMade_array_checked_store__block_1)
     where k/15 =
       let Parraysets/33 = %array_set.gc_ign (a/31, 1, Popaque/32) in

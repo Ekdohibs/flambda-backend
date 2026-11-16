@@ -1,6 +1,6 @@
 f_reader_given_as_an_argument.fl:
   before Simplify, with its import (43 steps): returns [0: 11; 3]
-  after Simplify, with its import (34 steps): returns [0: 11; 3]
+  after Simplify, with its import (35 steps): returns [0: 11; 3]
   the check of kinds: passes before, passes after
   the check of static names: passes before, passes after
   calls outside code: 2 before, 2 after

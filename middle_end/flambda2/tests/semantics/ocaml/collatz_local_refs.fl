@@ -51,7 +51,7 @@ let $camlCollatz_local_refs__first_const_0 = Block 0 () in
                              | 1 -> k/46)
                             where k/46 =
                               cont k/44
-                            where k/45 =
+                            where k/45 cold =
                               cont error
                                      pop(regular error)
                                      ($`*predef*`.caml_exn_Division_by_zero)

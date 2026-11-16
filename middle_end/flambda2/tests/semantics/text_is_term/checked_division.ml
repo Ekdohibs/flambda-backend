@@ -1,6 +1,6 @@
 (* A unit with a division, which is checked: the continuation that raises
-   [Division_by_zero] is cold. The text does not say of a continuation that it
-   is cold, so the text is not the term; the driver names that difference. *)
+   [Division_by_zero] is cold. The text says of a continuation that it is cold,
+   so the text is the term. *)
 
 external ( / ) : int -> int -> int = "%divint"
 

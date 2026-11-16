@@ -23,7 +23,7 @@
           | 1 -> k/22)
          where k/22 =
            cont k/20
-         where k/21 =
+         where k/21 cold =
            cont error pop(regular error) ($camlString_get_in_branch__block_2)
          where k/20 =
            let prim/39 = %num_conv.[tagged_imm].[`nativeint`] (i/38) in

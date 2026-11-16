@@ -153,6 +153,7 @@ let make_boxed_const_int (i, m) : static_data =
 %token KWD_CACHED  [@symbol "cached"]
 %token KWD_CLOSURE  [@symbol "closure"]
 %token KWD_CODE  [@symbol "code"]
+%token KWD_COLD  [@symbol "cold"]
 %token KWD_CONT  [@symbol "cont"]
 %token KWD_DEFAULT [@symbol "default"]
 %token KWD_DEFINE_ROOT_SYMBOL [@symbol "define_root_symbol"]
@@ -791,9 +792,9 @@ continuation_sort:
 ;
 
 continuation_binding:
-  | name = continuation_id; sort = continuation_sort;
+  | name = continuation_id; sort = continuation_sort; cold = boption(KWD_COLD);
     params = kinded_args; EQUAL; handler = continuation_body
-    { { name; params; handler; sort } }
+    { { name; params; handler; sort; cold } }
 ;
 
 kinded_args:

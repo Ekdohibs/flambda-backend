@@ -56,7 +56,7 @@ let code loopify(never) size(11) newer_version_of(tag_of_parameter_2)
    switch untagged
      | 0 -> k (0)
      | 1 -> k2)
-    where k2 =
+    where k2 cold =
       invalid
 in
 let $camlGet_tag_of_immediate__tag_of_parameter_3 =
@@ -71,7 +71,7 @@ let code loopify(never) size(11) newer_version_of(tag_of_constant_3)
    switch untagged
      | 0 -> k (0)
      | 1 -> k2)
-    where k2 =
+    where k2 cold =
       invalid
 in
 let $camlGet_tag_of_immediate__tag_of_constant_4 =
@@ -87,7 +87,7 @@ let code loopify(never) size(11) newer_version_of(switch_on_tag_of_parameter_4)
    switch untagged
      | 0 -> k (0)
      | 1 -> k2)
-    where k2 =
+    where k2 cold =
       invalid
 in
 let $camlGet_tag_of_immediate__switch_on_tag_of_parameter_5 =
@@ -103,7 +103,7 @@ let code loopify(never) size(11) newer_version_of(switch_on_tag_of_constant_5)
    switch untagged
      | 0 -> k (0)
      | 1 -> k2)
-    where k2 =
+    where k2 cold =
       invalid
 in
 let $camlGet_tag_of_immediate__switch_on_tag_of_constant_6 =

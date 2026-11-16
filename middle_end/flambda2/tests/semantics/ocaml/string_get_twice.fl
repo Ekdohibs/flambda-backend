@@ -15,7 +15,7 @@
      | 1 -> k/26)
     where k/26 =
       cont k/21
-    where k/25 =
+    where k/25 cold =
       cont error pop(regular error) ($camlString_get_twice__block_2)
     where k/21 =
       let prim/49 = %num_conv.[tagged_imm].[`nativeint`] (i/48) in
@@ -30,7 +30,7 @@
           | 1 -> k/24)
          where k/24 =
            cont k/22
-         where k/23 =
+         where k/23 cold =
            cont error pop(regular error) ($camlString_get_twice__block_2)
          where k/22 =
            let prim/52 = %num_conv.[tagged_imm].[`nativeint`] (i/48) in

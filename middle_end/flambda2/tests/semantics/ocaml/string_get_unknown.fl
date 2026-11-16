@@ -19,7 +19,7 @@
           | 1 -> k/26)
          where k/26 =
            cont k/24
-         where k/25 =
+         where k/25 cold =
            cont k/21 pop(regular k/21) ($camlString_get_unknown__block_2)
          where k/24 =
            let prim/51 = %num_conv.[tagged_imm].[`nativeint`] (Popaque/49) in

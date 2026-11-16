@@ -36,7 +36,7 @@
                | 1 -> k/37)
               where k/37 =
                 cont k/34
-              where k/36 =
+              where k/36 cold =
                 cont error
                        pop(regular error)
                        ($camlMade_array_checked_store_in_loop__block_2)

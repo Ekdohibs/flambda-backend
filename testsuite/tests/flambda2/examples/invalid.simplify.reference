@@ -49,7 +49,7 @@ let code loopify(never) size(11) newer_version_of(foo_2)
       -> k3 * k1
     where k3 (param_1 : imm tagged) =
       cont k2
-    where k2 =
+    where k2 cold =
       invalid
 in
 let $camlInvalid__foo_7 = closure foo_2_1 @foo &toplevel in

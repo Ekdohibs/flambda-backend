@@ -160,7 +160,7 @@ let Popaque = %opaque ($camlData_flow_bug__immstring_3) in
                                                                     cont 
                                                                     `self`
                                                                     (Pfield_1)))))
-                                               where k1 =
+                                               where k1 cold =
                                                  cont error
                                                         pop(regular error)
                                                         ($camlData_flow_bug__block_5)))))))))

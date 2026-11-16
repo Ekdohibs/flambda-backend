@@ -13,7 +13,7 @@
     | 1 -> k/14)
    where k/14 =
      cont k/12
-   where k/13 =
+   where k/13 cold =
      cont error pop(regular error) ($camlString_get_checked__block_2)
    where k/12 =
      let prim/23 = %num_conv.[tagged_imm].[`nativeint`] (1) in

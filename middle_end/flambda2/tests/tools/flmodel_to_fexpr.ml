@@ -938,6 +938,7 @@ and handler env k (Model.Handler (params, metadata, handler)) :
   { name = continuation_id k;
     params = kinded_parameters params kinds;
     sort = (if metadata.hm_is_exn_handler then Some Exn else None);
+    cold = false;
     handler = expr (bind_parameters env params kinds) handler
   }
 

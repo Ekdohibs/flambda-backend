@@ -10,7 +10,7 @@ let $camlName_then_wildcard__first_const_0 = Block 0 () in
          | 1 -> k/26)
         where k/26 =
           cont k/24
-        where k/25 =
+        where k/25 cold =
           cont k/21 pop(regular k/21) ($`*predef*`.caml_exn_Division_by_zero)
         where k/24 =
           let int_div/48 = %int_barith.div (10, Popaque/47) in

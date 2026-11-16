@@ -43,9 +43,9 @@ let code loopify(never) size(82) newer_version_of(maxson_0)
                      switch prim_4
                        | 0 -> k (0)
                        | 1 -> k (int_add_2))
-              where k3 =
+              where k3 cold =
                 cont k1 pop(regular k1) ($camlF__block_1))
-         where k2 =
+         where k2 cold =
            cont k1 pop(regular k1) ($camlF__block_1))
 in
 let $camlF__maxson_2 = closure maxson_0_1 @maxson &toplevel in

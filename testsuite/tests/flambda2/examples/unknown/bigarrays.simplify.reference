@@ -49,7 +49,7 @@ in
                          -> k2 * error
                        where k2 (param) =
                          cont k)))
-        where k1 =
+        where k1 cold =
           cont error pop(regular error) ($camlBigarrays__block_1)))
   where k =
     let $camlBigarrays = Block 0 () in

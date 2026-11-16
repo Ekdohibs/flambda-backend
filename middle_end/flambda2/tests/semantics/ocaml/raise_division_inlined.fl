@@ -11,7 +11,7 @@ let $camlRaise_division_inlined__first_const_0 = Block 0 () in
       | 1 -> k/54)
      where k/54 =
        cont k/52
-     where k/53 =
+     where k/53 cold =
        cont k/51 pop(regular k/51) ($`*predef*`.caml_exn_Division_by_zero)
      where k/52 =
        let int_div/103 = %int_barith.div (a/97, b/98) in

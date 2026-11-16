@@ -38,7 +38,7 @@
            | 1 -> k/35)
           where k/35 =
             cont k/33
-          where k/34 =
+          where k/34 cold =
             cont k/31 pop(regular k/31) ($camlT_two_lengths__block_1)
           where k/33 =
             let Parrayrefs/65 = %array_load.`imm` (a/62, int_sub/64) in
