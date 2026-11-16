@@ -732,6 +732,12 @@ End Switches.
 (* Rewriting the bodies of code                                             *)
 (* ======================================================================== *)
 
+(* The two laws are proved from the definitions by the tactic of
+   FlambdaEquivarianceTactic.v, for a rewrite [f] that the section
+   takes with its law. The law of [rewrite_code_body] is stated, and
+   is then a hint for the law of [rewrite_code]: the tactic cannot
+   read it from the type of [rewrite_code_body], which says nothing
+   of [f]. *)
 Section Rewrite_code.
 
 Variable f : expr -> expr.
@@ -740,47 +746,13 @@ Hypothesis f_equivariant : rewrite_equivariant f.
 Lemma rewrite_code_body_equivariant (r : renaming) (body : expr) :
   rewrite_code_body f (rename_expr r body)
   = rename_expr r (rewrite_code_body f body).
-Proof.
-  unfold rewrite_code_body. rewrite f_equivariant, !rename_binds_statics.
-  destruct (Bool.eqb (binds_statics body) (binds_statics (f body)));
-    reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
-Lemma rewrite_code_in_binding_equivariant (r : renaming)
-    (binding : static_binding) :
-  rewrite_code_in_binding f (rename_static_binding r binding)
-  = rename_static_binding r (rewrite_code_in_binding f binding).
-Proof.
-  destruct binding
-    as [id [params my_closure ret exn metadata body] | id | sym const];
-    try reflexivity.
-  cbn [rename_static_binding rename_code rewrite_code_in_binding].
-  rewrite rewrite_code_body_equivariant. reflexivity.
-Qed.
+#[local] Hint Rewrite rewrite_code_body_equivariant : equivariance.
 
-Fixpoint rewrite_code_equivariant_aux (r : renaming) (e : expr) :
-  rewrite_code f (rename_expr r e) = rename_expr r (rewrite_code f e)
-with rewrite_code_in_handler_equivariant (r : renaming)
-    (h : continuation_handler) :
-  rewrite_code_in_handler f (rename_handler r h)
-  = rename_handler r (rewrite_code_in_handler f h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      simpl; try reflexivity.
-    + rewrite rewrite_code_equivariant_aux. reflexivity.
-    + rewrite rewrite_code_equivariant_aux, !map_map. f_equal.
-      apply map_ext. exact (rewrite_code_in_binding_equivariant r).
-    + rewrite rewrite_code_in_handler_equivariant,
-        rewrite_code_equivariant_aux.
-      reflexivity.
-    + rewrite rewrite_code_equivariant_aux. f_equal.
-      induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
-      rewrite (rewrite_code_in_handler_equivariant r h), IH. reflexivity.
-  - destruct h as [params metadata handler]. simpl.
-    rewrite rewrite_code_equivariant_aux. reflexivity.
-Qed.
+Lemma rewrite_code_equivariant_aux (r : renaming) (e : expr) :
+  rewrite_code f (rename_expr r e) = rename_expr r (rewrite_code f e).
+Proof. equivariance. Qed.
 
 End Rewrite_code.
 
