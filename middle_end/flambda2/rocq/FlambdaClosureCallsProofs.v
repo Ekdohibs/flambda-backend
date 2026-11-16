@@ -403,21 +403,11 @@ Qed.
    the laws of the functions that the pass is made of. It is told two
    things. The type of what is known does not say how it is renamed (a
    map is a list of pairs of positives): the action is
-   [rename_made_closures]. And the two functions of maps that the pass
-   uses have their laws stated here, at a renamed variable and what is
-   known renamed; the tactic proves them. *)
-#[local] Ltac eqv_action_extra T ::=
-  lazymatch T with
-  | made_closures => constr:(rename_made_closures)
-  end.
-
-(* A renaming is injective, so a variable is found where its image
-   is. *)
-Lemma lookup_made_renamed (r : renaming) (x : variable)
-    (known : made_closures) :
-  lookup (rename_variable r x) (rename_made_closures r known)
-  = lookup x known.
-Proof. equivariance. Qed.
+   [rename_made_closures]. And the law of [unbind] at a renamed
+   variable and what is known renamed is stated here; the tactic
+   proves it. *)
+#[local] Instance made_closures_renaming : Renaming_of made_closures :=
+  rename_made_closures.
 
 Lemma unbind_made_renamed (r : renaming) (x : variable)
     (known : made_closures) :
@@ -425,7 +415,7 @@ Lemma unbind_made_renamed (r : renaming) (x : variable)
   = rename_made_closures r (unbind x known).
 Proof. equivariance. Qed.
 
-#[local] Hint Rewrite lookup_made_renamed unbind_made_renamed : equivariance.
+#[local] Hint Rewrite unbind_made_renamed : equivariance.
 
 Theorem call_closures_knowing_equivariant :
   call_closures_knowing_equivariant_statement.

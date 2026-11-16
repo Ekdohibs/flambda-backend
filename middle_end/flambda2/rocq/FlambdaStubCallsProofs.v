@@ -340,17 +340,7 @@ Proof. intros e. apply demote_in_stubs_refines_aux. Qed.
 
 (* The law of the rewrite is proved from the definitions by the tactic
    of FlambdaEquivarianceTactic.v, which states and proves by itself
-   the laws of the functions that the rewrite is made of. It needs one
-   step here. [non_stub_code] gives code ids, which a renaming does
-   not change, and at a recursive [Let_cont] it appends those of the
-   handlers and those of the body: the two lists are compared part by
-   part first, so that the tactic makes no induction on the handlers
-   for the append. *)
-#[local] Ltac eqv_extra ::=
-  lazymatch goal with
-  | |- _ ++ _ = _ ++ _ => f_equal
-  end.
-
+   the laws of the functions that the rewrite is made of. *)
 Theorem demote_stub_calls_equivariant :
   demote_stub_calls_equivariant_statement.
 Proof. equivariance. Qed.
