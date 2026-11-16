@@ -34,7 +34,8 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaMapProofs FlambdaValueSpec FlambdaSemanticsSpec
   FlambdaSemanticsProofs FlambdaContextProofs FlambdaNominalSpec
   FlambdaNominalProofs FlambdaWellFormedSpec FlambdaWellFormedProofs
-  FlambdaClosuresProofs FlambdaNormaliseSpec FlambdaKnownClosuresSpec.
+  FlambdaClosuresProofs FlambdaNormaliseSpec FlambdaKnownClosuresSpec
+  FlambdaEquivarianceTactic.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -471,201 +472,60 @@ Qed.
 (* Renaming                                                                 *)
 (* ======================================================================== *)
 
-Lemma var_in_simple_renamed (r : renaming) (x : variable) (s : simple) :
-  var_in_simple (rename_variable r x) (rename_simple r s) = var_in_simple x s.
-Proof.
-  destruct s as [y | sym | c]; simpl;
-    [ apply rename_variable_eqb | reflexivity | reflexivity ].
-Qed.
+(* The law of the pass is proved from the definitions by [equivariance]
+   (FlambdaEquivarianceTactic.v). What is known is a map from symbols to
+   constants, and its type does not say how it is renamed: the instance
+   says that it is by [rename_known_closures]. Besides it the tactic is
+   given, to rewrite with:
+   - [map_values] as the [map] that it is, so that the laws of lists
+     apply to what is known renamed;
+   - the lookup of a symbol in what is known renamed, which is a law of
+     maps (FlambdaMapProofs.lookup_map_values) in that form;
+   - the test of a variable in a constant of what is known, in the form
+     that computation gives it;
+   - the laws of [forget_slot_var] and [forget_slot_vars], stated from
+     their types ([equivariance_of]; [Check] shows the statement):
+     without the first the tactic does not close the second, whose
+     induction needs it at what is known of each step. *)
 
-Lemma var_in_value_slots_renamed (r : renaming) (x : variable)
-    (slots : list (value_slot * simple)) :
-  var_in_value_slots (rename_variable r x)
-    (map (fun slot => (fst slot, rename_simple r (snd slot))) slots)
-  = var_in_value_slots x slots.
-Proof.
-  unfold var_in_value_slots.
-  induction slots as [ | [slot s] slots IH]; simpl; [ reflexivity | ].
-  rewrite var_in_simple_renamed, IH. reflexivity.
-Qed.
+#[local] Instance known_closures_renaming : Renaming_of known_closures :=
+  rename_known_closures.
 
-Lemma var_in_simples_renamed (r : renaming) (x : variable)
-    (args : list simple) :
-  var_in_simples (rename_variable r x) (map (rename_simple r) args)
-  = var_in_simples x args.
-Proof.
-  unfold var_in_simples.
-  induction args as [ | s args IH]; simpl; [ reflexivity | ].
-  rewrite IH. destruct s; simpl; rewrite ?rename_variable_eqb; reflexivity.
-Qed.
+Lemma map_values_as_map {A B : Type} (f : A -> B) (bindings : finite_map A) :
+  map_values f bindings
+  = map (fun binding => (fst binding, f (snd binding))) bindings.
+Proof. reflexivity. Qed.
+#[local] Hint Rewrite @map_values_as_map : equivariance.
+
+Lemma lookup_renamed_known (r : renaming) (s : symbol)
+    (known : known_closures) :
+  lookup s
+    (map (fun binding => (fst binding, rename_static_const r (snd binding)))
+       known)
+  = option_map (rename_static_const r) (lookup s known).
+Proof. apply (lookup_map_values _ _ (rename_static_const r)). Qed.
+#[local] Hint Rewrite lookup_renamed_known : equivariance.
 
 Lemma var_in_static_const_renamed (r : renaming) (x : variable) (s : symbol)
     (const : static_const) :
   var_in_static_binding (rename_variable r x)
     (Bind_symbol s (rename_static_const r const))
   = var_in_static_binding x (Bind_symbol s const).
-Proof.
-  destruct const; simpl.
-  - apply var_in_value_slots_renamed.
-  - apply var_in_value_slots_renamed.
-  - apply var_in_simples_renamed.
-  - apply var_in_simple_renamed.
-  - reflexivity.
-  - apply var_in_simples_renamed.
-Qed.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite var_in_static_const_renamed : equivariance.
 
-Lemma forget_slot_var_renamed (r : renaming) (x : variable)
-    (known : known_closures) :
-  forget_slot_var (rename_variable r x) (rename_known_closures r known)
-  = rename_known_closures r (forget_slot_var x known).
-Proof.
-  unfold forget_slot_var, rename_known_closures, map_values.
-  induction known as [ | [s const] known IH]; [ reflexivity | ].
-  cbn [map filter fst snd]. rewrite var_in_static_const_renamed, IH.
-  destruct (var_in_static_binding x (Bind_symbol s const)); reflexivity.
-Qed.
+Lemma forget_slot_var_renamed : equivariance_of forget_slot_var.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite forget_slot_var_renamed : equivariance.
 
-Lemma forget_slot_vars_renamed (r : renaming) (xs : list variable) :
-  ∀ known : known_closures,
-    forget_slot_vars (map (rename_variable r) xs)
-      (rename_known_closures r known)
-    = rename_known_closures r (forget_slot_vars xs known).
-Proof.
-  induction xs as [ | x xs IH]; intros known; cbn [map forget_slot_vars];
-    [ reflexivity | ].
-  rewrite forget_slot_var_renamed. apply IH.
-Qed.
-
-Lemma static_closure_made_renamed (r : renaming) (binding : static_binding) :
-  static_closure_made (rename_static_binding r binding)
-  = rename_known_closures r (static_closure_made binding).
-Proof.
-  destruct binding as [id c | id | s const]; try reflexivity.
-  destruct const; reflexivity.
-Qed.
-
-Lemma closures_under_statics_renamed (r : renaming) (known : known_closures)
-    (bindings : list static_binding) :
-  closures_under_statics (rename_known_closures r known)
-    (map (rename_static_binding r) bindings)
-  = rename_known_closures r (closures_under_statics known bindings).
-Proof.
-  unfold closures_under_statics, rename_known_closures, map_values.
-  rewrite map_app. f_equal.
-  induction bindings as [ | binding bindings IH]; [ reflexivity | ].
-  cbn [map flat_map]. rewrite map_app, IH. f_equal.
-  apply static_closure_made_renamed.
-Qed.
-
-Lemma static_closure_slots_renamed (r : renaming) (const : static_const) :
-  static_closure_slots (rename_static_const r const)
-  = option_map
-      (fun closure =>
-         (fst closure, map_values (rename_simple r) (snd closure)))
-      (static_closure_slots const).
-Proof. destruct const; reflexivity. Qed.
-
-Lemma slot_read_renamed (r : renaming) (known : known_closures)
-    (project_from : option function_slot) (slot : value_slot)
-    (closure : simple) :
-  slot_read (rename_known_closures r known) project_from slot
-    (rename_simple r closure)
-  = option_map (rename_simple r) (slot_read known project_from slot closure).
-Proof.
-  destruct closure as [x | s | c]; try reflexivity.
-  unfold slot_read, rename_known_closures. cbn [rename_simple].
-  rewrite lookup_map_values.
-  destruct (lookup s known) as [const | ]; [ | reflexivity ].
-  cbn [option_map]. rewrite static_closure_slots_renamed.
-  destruct (static_closure_slots const) as [[at_slot slots] | ];
-    [ | reflexivity ].
-  cbn [option_map fst snd].
-  destruct project_from as [from | ].
-  - destruct (Pos.eqb at_slot from); [ apply lookup_map_values | reflexivity ].
-  - apply lookup_map_values.
-Qed.
-
-Lemma read_slot_named_renamed (r : renaming) (known : known_closures)
-    (d : named) :
-  read_slot_named (rename_known_closures r known) (rename_named r d)
-  = rename_named r (read_slot_named known d).
-Proof.
-  destruct d as
-    [s | p args | code slots | fslot decls slots | slot closure
-    | pfrom slot closure | move_from move_to closure];
-    try reflexivity.
-  - unfold read_slot_named. cbn [rename_named]. rewrite slot_read_renamed.
-    destruct (slot_read known None slot closure); reflexivity.
-  - unfold read_slot_named. cbn [rename_named]. rewrite slot_read_renamed.
-    destruct (slot_read known (Some pfrom) slot closure); reflexivity.
-Qed.
-
-Lemma static_closure_code_renamed (r : renaming) (const : static_const) :
-  static_closure_code (rename_static_const r const)
-  = static_closure_code const.
-Proof. destruct const; reflexivity. Qed.
-
-Lemma callee_code_renamed (r : renaming) (known : known_closures)
-    (callee : simple) :
-  callee_code (rename_known_closures r known) (rename_simple r callee)
-  = callee_code known callee.
-Proof.
-  destruct callee as [x | s | c]; try reflexivity.
-  unfold callee_code, rename_known_closures. cbn [rename_simple].
-  rewrite lookup_map_values.
-  destruct (lookup s known) as [const | ]; [ | reflexivity ].
-  cbn [option_map]. apply static_closure_code_renamed.
-Qed.
-
-Lemma call_known_closure_renamed (r : renaming) (known : known_closures)
-    (ap : apply_expr) :
-  call_known_closure (rename_known_closures r known) (rename_apply r ap)
-  = rename_apply r (call_known_closure known ap).
-Proof.
-  unfold call_known_closure.
-  replace (ap_call_kind (rename_apply r ap)) with (ap_call_kind ap)
-    by reflexivity.
-  replace (ap_callee (rename_apply r ap))
-    with (rename_simple r (ap_callee ap)) by reflexivity.
-  rewrite callee_code_renamed.
-  destruct (ap_call_kind ap) as [named | ]; [ reflexivity | ].
-  destruct (callee_code known (ap_callee ap)); reflexivity.
-Qed.
-
-Fixpoint use_closures_knowing_renamed (r : renaming) (e : expr) {struct e} :
-  ∀ known : known_closures,
-    rename_expr r (use_closures_knowing known e)
-    = use_closures_knowing (rename_known_closures r known) (rename_expr r e)
-with use_closures_in_handler_renamed (r : renaming) (h : continuation_handler)
-    {struct h} :
-  ∀ known : known_closures,
-    rename_handler r (use_closures_in_handler known h)
-    = use_closures_in_handler (rename_known_closures r known)
-        (rename_handler r h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      intros known; try reflexivity;
-      cbn [rename_expr use_closures_knowing].
-    + rewrite read_slot_named_renamed, forget_slot_var_renamed,
-        use_closures_knowing_renamed.
-      reflexivity.
-    + rewrite closures_under_statics_renamed, use_closures_knowing_renamed.
-      reflexivity.
-    + rewrite use_closures_in_handler_renamed, use_closures_knowing_renamed.
-      reflexivity.
-    + rewrite use_closures_knowing_renamed. reflexivity.
-    + rewrite call_known_closure_renamed. reflexivity.
-  - destruct h as [params metadata handler]. intros known.
-    cbn [rename_handler use_closures_in_handler].
-    rewrite forget_slot_vars_renamed, use_closures_knowing_renamed. reflexivity.
-Qed.
+Lemma forget_slot_vars_renamed : equivariance_of forget_slot_vars.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite forget_slot_vars_renamed : equivariance.
 
 Theorem use_closures_knowing_equivariant :
   use_closures_knowing_equivariant_statement.
-Proof. intros r known e. apply use_closures_knowing_renamed. Qed.
+Proof. equivariance. Qed.
 
 Theorem use_known_closures_equivariant :
   use_known_closures_equivariant_statement.
-Proof. intros r e. exact (use_closures_knowing_renamed r e []). Qed.
+Proof. intros r e. exact (use_closures_knowing_equivariant r [] e). Qed.
