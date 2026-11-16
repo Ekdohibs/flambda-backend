@@ -49,7 +49,10 @@
      and no law says what it is there, states the law of that function
      from its type, proves it from its definition in the same way, and
      uses it (the last section).
-   It leaves the goals that it does not close.
+   It closes its goal or fails, and the failure says what is left;
+   [equivariance_open] leaves the goals that it does not close. It
+   ends on every goal: its steps are counted (the section "The
+   bound").
 
    So the laws of the functions that a function calls need not be
    stated: the law of a pass is proved from the definitions alone. A
@@ -1132,13 +1135,15 @@ Ltac eqv_same_test := fail.
    the goals of the steps are added up, and every [Bound.goal_unit]
    subterms of that sum count for one more. When the count passes
    [Bound.step_limit] the call stops with an error that no [try],
-   [first] or [repeat] catches. The error names the last step taken,
-   the step that was being tried, and the function whose law was
-   being derived (or the function at the head of the goal). A step
-   that runs for more than [Bound.seconds_of_a_step] seconds of the
-   clock stops the call in the same way; the count is the bound to
-   rely on, the clock a second guard for one step that does not come
-   back.
+   [first] or [repeat] catches. The error names the last step taken
+   and the function whose law was being derived (or the function at
+   the head of the goal): it says where the count ran out, and the
+   cause is as a rule earlier, a law that is not stated or a function
+   left to unfold. A step that runs for more than
+   [Bound.seconds_of_a_step] seconds of the clock stops the call in
+   the same way, and its error names that step too; the count is the
+   bound to rely on, the clock a second guard for one step that does
+   not come back.
 
    Two more things end a call that cannot succeed sooner. A goal that
    says that a renaming is the identity on a variable ([rename_x r x
@@ -1249,16 +1254,23 @@ Module Bound.
     let taken := Ref.ref @none in
     let dead := Ref.ref false in
     let failed : (constr * constr list) list ref := Ref.ref [] in
-    let stop (why : message) :=
+    (* Where the count runs out the step that is being tried is the
+       test at the head of the loop, whatever the goal: it is named
+       only where the clock stops a step ([tried]). *)
+    let stop (tried : bool) (why : message) :=
       Control.throw
         (Equivariance_stopped
            (Message.concat why
               (Message.concat (Message.of_string "; the last step taken: ")
                  (Message.concat (Message.of_ident (Ref.get taken))
-                    (Message.concat (Message.of_string "; the step tried: ")
-                       (Message.concat (Message.of_ident (Ref.get trying))
-                          (Message.concat (Message.of_string "; ")
-                             (place ())))))))) in
+                    (Message.concat
+                       (if tried then
+                          Message.concat
+                            (Message.of_string "; the step tried: ")
+                            (Message.of_ident (Ref.get trying))
+                        else Message.of_string "")
+                       (Message.concat (Message.of_string "; ")
+                          (place ()))))))) in
     let st :=
       Ltac1.lambda
         (fun (a : Ltac1.t) =>
@@ -1274,7 +1286,7 @@ Module Bound.
                   (Int.add (Ref.get turns)
                      (Int.div (Ref.get work) goal_unit));
                 if Int.gt (Ref.get count) step_limit then
-                  stop
+                  stop false
                     (Message.concat
                        (Message.of_string "equivariance stopped after ")
                        (Message.concat (Message.of_int (Ref.get turns))
@@ -1324,7 +1336,7 @@ Module Bound.
                            | Err _ => false
                            end))
                    (fun _ =>
-                      stop
+                      stop true
                         (Message.concat
                            (Message.of_string
                               "equivariance stopped: a step took over ")
