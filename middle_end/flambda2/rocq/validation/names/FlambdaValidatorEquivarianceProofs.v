@@ -1193,10 +1193,17 @@ End Unbox_numbers.
    is under a [map]. *)
 Section Follow_aliases.
 
+(* The database of laws is tried in one pass (rewrite_strat) in this
+   section: every proof of it passes so, and takes a third of the
+   time. *)
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
+
 #[local] Instance naive_typing_env_renaming : Renaming_of typing_env :=
   rename_naive_typing_env.
 #[local] Instance naive_type_renaming : Renaming_of flambda_type :=
   rename_naive_type.
+#[local] Hint Rewrite var_in_simple_equivariant
+  var_in_value_slots_equivariant : equivariance.
 
 Lemma canonical_simple_equivariant (r : renaming) (tenv : typing_env)
     (s : simple) :
@@ -1223,6 +1230,27 @@ Lemma canonical_exn_extra_args_equivariant (r : renaming) (tenv : typing_env)
       (map (fun arg => (canonical_simple tenv (fst arg), snd arg)) extra).
 Proof. equivariance. Qed.
 #[local] Hint Rewrite canonical_exn_extra_args_equivariant : equivariance.
+
+Lemma canonical_value_slots_equivariant (r : renaming) (tenv : typing_env)
+    (slots : list (value_slot * simple)) :
+  canonical_value_slots (rename_naive_typing_env r tenv)
+    (map (fun slot => (fst slot, rename_simple r (snd slot))) slots)
+  = map (fun slot => (fst slot, rename_simple r (snd slot)))
+      (canonical_value_slots tenv slots).
+Proof. equivariance. Qed.
+#[local] Hint Rewrite canonical_value_slots_equivariant : equivariance.
+
+Lemma closure_of_simple_equivariant (r : renaming) (tenv : typing_env)
+    (s : simple) :
+  closure_of_simple (rename_naive_typing_env r tenv) (rename_simple r s)
+  = option_map
+      (fun closure : code_id * list (value_slot * simple) =>
+         (fst closure,
+          map (fun slot => (fst slot, rename_simple r (snd slot)))
+            (snd closure)))
+      (closure_of_simple tenv s).
+Proof. equivariance. Qed.
+#[local] Hint Rewrite closure_of_simple_equivariant : equivariance.
 
 Lemma canonical_call_kind_equivariant (r : renaming) (tenv : typing_env)
     (callee : simple) (kind : call_kind) :
