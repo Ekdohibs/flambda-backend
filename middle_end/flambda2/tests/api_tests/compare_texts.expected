@@ -1,20 +1,20 @@
 names: the same
 four_arguments: the same
-arity: different; the unit given is printed
-params: different; the unit given is printed
-value_slot: different; the unit given is printed
-function_slot: different; the unit given is printed
-handler_kind: different; the unit given is printed
-invariant_kind: different; the unit given is printed
-tupled: different; the unit given is printed
+arity: different (code: the kinds of its parameters (subkind)); the unit given is printed
+params: different (code: the kinds of its parameters (number); code: the number of its parameters, or whether it may allocate on the stack); the unit given is printed
+value_slot: different (a value slot; a value slot); the unit given is printed
+function_slot: different (a function slot); the unit given is printed
+handler_kind: different (a continuation: the kinds of its parameters (subkind)); the unit given is printed
+invariant_kind: different (recursive continuations: not the same group); the unit given is printed
+tupled: different (code: tupled); the unit given is printed
 code_variant_same: the same
-code_variant: different; the unit given is printed
-four_arguments_other: different; the unit given is printed
-alloc_stack: different; the unit given is printed
-invariant_count: different; the unit given is printed
-result_arity: different; the unit given is printed
-four_arguments_operator: different; the unit given is printed
+code_variant: different (code: the kinds of its parameters (subkind); code: the kinds of its result (subkind)); the unit given is printed
+four_arguments_other: different (a constant); the unit given is printed
+alloc_stack: different (code: the number of its parameters, or whether it may allocate on the stack); the unit given is printed
+invariant_count: different (recursive continuations: not the same group); the unit given is printed
+result_arity: different (code: the kinds of its result (subkind)); the unit given is printed
+four_arguments_operator: different (a primitive: Atomic_compare_and_set); the unit given is printed
 value_slots_consistent: the same
-value_slots_collision: different; the unit given is printed
+value_slots_collision: different (a value slot); the unit given is printed
 function_slots_consistent: the same
-function_slots_collision: different; the unit given is printed
+function_slots_collision: different (a function slot); the unit given is printed

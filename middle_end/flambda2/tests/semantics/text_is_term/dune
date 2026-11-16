@@ -6,6 +6,9 @@
 ;; kind of a variant built with its constructors in another order than the
 ;; reader of texts builds it. The text is the term.
 ;;
+;; call_of_unknown_function: the text is not the term, and the driver names
+;; the first difference.
+;;
 ;; c_call: the text is not read back.
 ;;
 ;; interface_only, type_error: the compiler does not reach the middle end.
@@ -269,3 +272,19 @@
   (= %{context_name} "main"))
  (action
   (diff mlt_alone.expected mlt_alone.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   call_of_unknown_function.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     %{dep:call_of_unknown_function.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff call_of_unknown_function.expected call_of_unknown_function.output)))

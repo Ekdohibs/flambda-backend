@@ -28,10 +28,11 @@
 (* The compiler, with one check: that the text of the term that it gives to
    Simplify, read back, is that term. It is the driver of the compiler
    (driver/oxcaml_main.ml) with one hook registered (driver/compiler_hooks.mli):
-   it takes the command line of the compiler, and one option of its own, which
-   comes first if it is given:
+   it takes the command line of the compiler, and two options of its own, which
+   come first if they are given:
 
-   fltextisterm.exe [-text-to FILE] <the command line of the compiler>
+   fltextisterm.exe [-text-to FILE] [-differences-to FILE] <the command line of
+   the compiler>
 
    The hook [Raw_flambda2] is given the term that the compiler gives to Simplify
    (middle_end/flambda2/flambda2.ml, [flambda_to_flambda0], before anything else
@@ -45,7 +46,8 @@
    [Fexpr_to_flambda.conv]), for the compilation unit being compiled;
 
    3. compares the term in memory with the term read, with the comparison of the
-   compiler ([Compare.flambda_units], as ../fldiff.ml does);
+   compiler ([Compare.flambda_units_and_differences]; ../fldiff.ml uses
+   [Compare.flambda_units]);
 
    4. keeps the answer, and lets the compiler go on.
 
@@ -57,16 +59,23 @@
    - "the text is the term", 0: the hook was called once, and the comparison
    said that the two are equivalent;
 
-   - "the text is not the term", 1: called once, and the comparison said that
-   they are different;
+   - "the text is not the term: WHAT", 1: called once, and the comparison said
+   that they are different; WHAT is the name that it gives to the first thing
+   that it found them to differ in (a fixed string, with the name of a primitive
+   for a primitive; see [Env.note_difference] in
+   middle_end/flambda2/compare/compare.ml). With [-differences-to], the names of
+   all the differences that it found are written to FILE, one on a line, each
+   once, in the order in which they were found; the file is empty if the text is
+   the term;
 
    - "the text is not read back: ...", 1: called once, and the reader refused
    the text, or stopped;
 
    - "not checked: ...", 2: the comparison stopped; or the hook was called more
-   than once (more than one implementation was given: the file of [-text-to] is
-   then removed); or it was not called (the compiler did not reach the middle
-   end: an interface alone, [-i], [-stop-after typing]).
+   than once (more than one implementation was given: the files of [-text-to]
+   and [-differences-to] are then removed); or it was not called (the compiler
+   did not reach the middle end: an interface alone, [-i], [-stop-after
+   typing]).
 
    If the compiler fails and returns to the driver, the driver prints no line
    and exits with the compiler's status. If the compiler exits by itself, with
@@ -104,6 +113,8 @@ module P = Flambda2_parser
 
 let text_to = ref None
 
+let differences_to = ref None
+
 let one_line s = String.concat " " (String.split_on_char '\n' s)
 
 let position (loc : Location.t) =
@@ -117,7 +128,7 @@ let current_unit () =
 
 type answer =
   | The_term
-  | Not_the_term
+  | Not_the_term of string list
   | Not_read_back of string
   | Not_checked of string
 
@@ -145,10 +156,31 @@ let check (unit : Flambda2_terms.Flambda_unit.t) =
         match P.Fexpr_to_flambda.conv (current_unit ()) fexpr with
         | exception exn -> Not_read_back (one_line (Printexc.to_string exn))
         | { unit = read; code_slot_offsets = _ } -> (
-          match Flambda2_compare.Compare.flambda_units unit read with
+          match
+            Flambda2_compare.Compare.flambda_units_and_differences unit read
+          with
           | exception exn -> Not_checked (one_line (Printexc.to_string exn))
-          | Equivalent -> The_term
-          | Different { approximant = _ } -> Not_the_term)))
+          | Equivalent, _ -> The_term
+          | Different { approximant = _ }, differences ->
+            Not_the_term differences)))
+
+(* Each name once, in the order in which the differences were found. *)
+let write_differences differences =
+  match !differences_to with
+  | None -> ()
+  | Some file ->
+    let oc = open_out file in
+    let _ : string list =
+      List.fold_left
+        (fun seen difference ->
+          if List.mem difference seen
+          then seen
+          else (
+            output_string oc (difference ^ "\n");
+            difference :: seen))
+        [] differences
+    in
+    close_out oc
 
 (* What the check said of the first implementation, and how many times the hook
    has been called: once for each implementation that the compiler compiles as
@@ -191,12 +223,19 @@ let () =
         answer "not checked: the compiler exited by itself" 2))
 
 let () =
-  let argv =
-    match Array.to_list Sys.argv with
-    | program :: "-text-to" :: file :: rest ->
+  let rec own_options args =
+    match args with
+    | "-text-to" :: file :: args ->
       text_to := Some file;
-      Array.of_list (program :: rest)
-    | _ -> Sys.argv
+      own_options args
+    | "-differences-to" :: file :: args ->
+      differences_to := Some file;
+      own_options args
+    | _ -> args
+  in
+  let argv =
+    Array.of_list
+      (Sys.argv.(0) :: own_options (List.tl (Array.to_list Sys.argv)))
   in
   Compiler_hooks.register Raw_flambda2 on_raw_flambda;
   let compiler =
@@ -213,12 +252,20 @@ let () =
   then (
     (* The text written is that of the first implementation only. *)
     Option.iter Misc.remove_file !text_to;
+    Option.iter Misc.remove_file !differences_to;
     answer "not checked: more than one implementation is given" 2)
   else
     (* The hook sets [first_answer] at its first call. *)
     match !first_answer with
     | None -> answer "not checked: the compiler did not reach the middle end" 2
-    | Some The_term -> answer "the text is the term" 0
-    | Some Not_the_term -> answer "the text is not the term" 1
+    | Some The_term ->
+      write_differences [];
+      answer "the text is the term" 0
+    | Some (Not_the_term differences) ->
+      write_differences differences;
+      answer
+        ("the text is not the term: "
+        ^ match differences with first :: _ -> first | [] -> "(no name)")
+        1
     | Some (Not_read_back why) -> answer ("the text is not read back: " ^ why) 1
     | Some (Not_checked why) -> answer ("not checked: " ^ why) 2

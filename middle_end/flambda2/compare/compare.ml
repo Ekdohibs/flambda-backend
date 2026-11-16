@@ -217,6 +217,48 @@ module Kinds = struct
          (Flambda_arity.unarize arity1)
          (Flambda_arity.unarize arity2)
 
+  (* In what two kinds, two lists of kinds or two arities that are not equal
+     differ: for the name of a difference (see [Env.note_difference]). *)
+
+  let kind_difference kind1 kind2 =
+    if not (K.equal (KS.kind kind1) (KS.kind kind2))
+    then "kind"
+    else if
+      not
+        (subkinds_equal
+           (KS.non_null_value_subkind kind1)
+           (KS.non_null_value_subkind kind2))
+    then "subkind"
+    else "may be null"
+
+  let kinds_difference kinds1 kinds2 =
+    if List.compare_lengths kinds1 kinds2 <> 0
+    then "number"
+    else
+      match
+        List.find_opt
+          (fun (kind1, kind2) -> not (with_subkinds_equal kind1 kind2))
+          (List.combine kinds1 kinds2)
+      with
+      | Some (kind1, kind2) -> kind_difference kind1 kind2
+      | None -> "none"
+
+  let arity_difference arity1 arity2 =
+    let kinds1 = Flambda_arity.unarize arity1 in
+    let kinds2 = Flambda_arity.unarize arity2 in
+    if Flambda_arity.equal_ignoring_subkinds arity1 arity2
+    then kinds_difference kinds1 kinds2
+    else if Flambda_arity.num_params arity1 <> Flambda_arity.num_params arity2
+    then "number"
+    else if
+      List.compare_lengths kinds1 kinds2 = 0
+      && not
+           (List.for_all2
+              (fun kind1 kind2 -> K.equal (KS.kind kind1) (KS.kind kind2))
+              kinds1 kinds2)
+    then "kind"
+    else "grouping"
+
   let mutable_flags_equal (flag1 : Asttypes.mutable_flag)
       (flag2 : Asttypes.mutable_flag) =
     match flag1, flag2 with
@@ -257,6 +299,19 @@ module Kinds = struct
            (Make_block (Values (tag2, kinds1), mutability2, mode2))
     | _, _ -> Flambda_primitive.equal_variadic_primitive prim1 prim2
 
+  (* In what the kinds of the fields of two blocks that are made differ, if the
+     two primitives differ in nothing else. *)
+  let make_block_kinds_difference (prim1 : Flambda_primitive.variadic_primitive)
+      (prim2 : Flambda_primitive.variadic_primitive) =
+    match prim1, prim2 with
+    | ( Make_block (Values (tag1, kinds1), mutability1, mode1),
+        Make_block (Values (tag2, kinds2), mutability2, mode2) )
+      when Flambda_primitive.equal_variadic_primitive
+             (Make_block (Values (tag1, kinds1), mutability1, mode1))
+             (Make_block (Values (tag2, kinds1), mutability2, mode2)) ->
+      Some (kinds_difference kinds1 kinds2)
+    | _, _ -> None
+
   let exn_continuations_equal exn_continuation1 exn_continuation2 =
     Continuation.equal
       (Exn_continuation.exn_handler exn_continuation1)
@@ -281,7 +336,11 @@ module Env = struct
       mutable function_slots : Function_slot.t Function_slot.Map.t;
       mutable function_slots_rev : Function_slot.t Function_slot.Map.t;
       mutable value_slots : Value_slot.t Value_slot.Map.t;
-      mutable value_slots_rev : Value_slot.t Value_slot.Map.t
+      mutable value_slots_rev : Value_slot.t Value_slot.Map.t;
+      (* What the two units have been found to differ in so far, the last first,
+         and how many: see [note_difference]. *)
+      mutable differences : string list;
+      mutable num_differences : int
     }
 
   let create () =
@@ -290,7 +349,9 @@ module Env = struct
       function_slots = Function_slot.Map.empty;
       function_slots_rev = Function_slot.Map.empty;
       value_slots = Value_slot.Map.empty;
-      value_slots_rev = Value_slot.Map.empty
+      value_slots_rev = Value_slot.Map.empty;
+      differences = [];
+      num_differences = 0
     }
 
   let add_symbol t symbol1 symbol2 =
@@ -326,6 +387,26 @@ module Env = struct
 
   let find_value_slot_rev t value_slot =
     Value_slot.Map.find_opt value_slot t.value_slots_rev
+
+  (* The differences.
+
+     For a tool that says of two units that they are different, the comparison
+     records a name for each thing that it finds them to differ in. The names
+     are fixed strings (with, for a primitive, its name), so that units can be
+     counted by them. A comparison that is made of others records its name only
+     if none of them recorded one: a difference has the name of the innermost
+     thing that differs. The first name recorded is that of the first difference
+     in the order in which the two units are walked.
+
+     Not every difference is found: where two things differ, what stands beside
+     them is in some places not compared any further. *)
+  let note_difference t what =
+    t.differences <- what :: t.differences;
+    t.num_differences <- t.num_differences + 1
+
+  let num_differences t = t.num_differences
+
+  let differences t = List.rev t.differences
 end
 
 let subst_function_slot (env : Env.t) function_slot =
@@ -611,6 +692,42 @@ module Comparator = struct
     of_predicate ?subst (fun a1 a2 -> f a1 a2 = 0)
 end
 
+(* [noting what f] is [f]; it records [what] if [f] finds a difference and none
+   of the comparisons that [f] makes recorded one. *)
+let noting what (f : Env.t -> 'a -> 'a -> 'b Comparison.t) env a1 a2 =
+  let before = Env.num_differences env in
+  let comparison = f env a1 a2 in
+  (match comparison with
+  | Different _ when Env.num_differences env = before ->
+    Env.note_difference env what
+  | Different _ | Equivalent -> ());
+  comparison
+
+(* [check env what cond] is [cond]; it records [what] if [cond] does not
+   hold. *)
+let check env what cond =
+  if not cond then Env.note_difference env what;
+  cond
+
+(* The same for two arities and for two lists of kinds, with in what they
+   differ: their number, their grouping, a kind, a subkind, or that one may be
+   null. *)
+let check_arities env what arity1 arity2 =
+  let equal = Kinds.arities_equal arity1 arity2 in
+  if not equal
+  then
+    Env.note_difference env
+      (Printf.sprintf "%s (%s)" what (Kinds.arity_difference arity1 arity2));
+  equal
+
+let check_kinds env what kinds1 kinds2 =
+  let equal = Misc.Stdlib.List.equal Kinds.with_subkinds_equal kinds1 kinds2 in
+  if not equal
+  then
+    Env.note_difference env
+      (Printf.sprintf "%s (%s)" what (Kinds.kinds_difference kinds1 kinds2));
+  equal
+
 (* If subst2 is given and the first components of the pairs are unequal, then
  * rather than call f2 on the second components to produce the approximants (see
  * step 1(b)(ii) in the note at the top of the file), it will use the
@@ -676,17 +793,23 @@ let symbols env symbol1 symbol2 : Symbol.t Comparison.t =
       then Equivalent
       else Different { approximant = symbol1 })
 
+let symbols = noting "a symbol" symbols
+
 let code_ids env code_id1 code_id2 : Code_id.t Comparison.t =
   let code_id1 = subst_code_id env code_id1 in
   if Code_id.equal code_id1 code_id2
   then Equivalent
   else Different { approximant = code_id1 }
 
+let code_ids = noting "a code ID" code_ids
+
 let code_ids_set env code_ids1 code_ids2 : Code_id.Set.t Comparison.t =
   let code_ids1 = Code_id.Set.map (subst_code_id env) code_ids1 in
   if Code_id.Set.equal code_ids1 code_ids2
   then Equivalent
   else Different { approximant = code_ids1 }
+
+let code_ids_set = noting "a set of code IDs" code_ids_set
 
 let function_slots env function_slot1 function_slot2 :
     Function_slot.t Comparison.t =
@@ -702,6 +825,8 @@ let function_slots env function_slot1 function_slot2 :
       Env.add_function_slot env function_slot1 function_slot2;
       Equivalent)
 
+let function_slots = noting "a function slot" function_slots
+
 let value_slots env value_slot1 value_slot2 : Value_slot.t Comparison.t =
   match Env.find_value_slot env value_slot1 with
   | Some value_slot ->
@@ -715,11 +840,15 @@ let value_slots env value_slot1 value_slot2 : Value_slot.t Comparison.t =
       Env.add_value_slot env value_slot1 value_slot2;
       Equivalent)
 
+let value_slots = noting "a value slot" value_slots
+
 let coercions _env coercion1 coercion2 : Coercion.t Comparison.t =
   (* Coercions only contain variables, not symbols, so we can just compare *)
   if Coercion.equal coercion1 coercion2
   then Equivalent
   else Different { approximant = coercion1 }
+
+let coercions = noting "a coercion" coercions
 
 let names env name1 name2 : Name.t Comparison.t =
   log Name.print name1 name2 (fun () ->
@@ -740,6 +869,8 @@ let names env name1 name2 : Name.t Comparison.t =
             ~symbol:(fun symbol2 ->
               symbols env symbol1 symbol2 |> Comparison.map ~f:Name.symbol)))
 
+let names = noting "a variable" names
+
 let simple_exprs env simple1 simple2 : Simple.t Comparison.t =
   Simple.pattern_match simple1
     ~name:(fun name1 ~coercion:coercion1 ->
@@ -759,6 +890,8 @@ let simple_exprs env simple1 simple2 : Simple.t Comparison.t =
           then Equivalent
           else Different { approximant = simple1 }))
 
+let simple_exprs = noting "a constant" simple_exprs
+
 let simples_with_debuginfo env simple_with_dbg1 simple_with_dbg2 :
     Simple.With_debuginfo.t Comparison.t =
   (* The debugging information is not compared, here as everywhere else. *)
@@ -776,6 +909,8 @@ let print_list f ppf l =
 let simple_lists env list1 list2 : Simple.t list Comparison.t =
   log (print_list Simple.print) list1 list2 (fun () ->
       lists ~f:simple_exprs ~subst:subst_simple ~subst_snd:true env list1 list2)
+
+let simple_lists = noting "the number of arguments" simple_lists
 
 let unary_prim_ops env (prim_op1 : Flambda_primitive.unary_primitive)
     (prim_op2 : Flambda_primitive.unary_primitive) :
@@ -879,6 +1014,57 @@ let primitives env prim1 prim2 : Flambda_primitive.t Comparison.t =
       Different { approximant }
   | _, _ -> Different { approximant = subst_primitive env prim1 }
 
+(* The name of a difference of two primitives: the name of the first, without
+   its parameters; and, for two blocks that are made and that differ in the
+   kinds of their fields only, in what those differ. *)
+let primitive_difference (prim1 : Flambda_primitive.t)
+    (prim2 : Flambda_primitive.t) =
+  let name =
+    let without_args : Flambda_primitive.Without_args.t =
+      match prim1 with
+      | Nullary prim -> Nullary prim
+      | Unary (prim, _) -> Unary prim
+      | Binary (prim, _, _) -> Binary prim
+      | Ternary (prim, _, _, _) -> Ternary prim
+      | Quaternary (prim, _, _, _, _) -> Quaternary prim
+      | Variadic (prim, _) -> Variadic prim
+    in
+    let printed =
+      Flambda2_ui.Flambda_colours.without_colours ~f:(fun () ->
+          Format.asprintf "%a" Flambda_primitive.Without_args.print without_args)
+    in
+    let is_of_name c =
+      match c with
+      | 'A' .. 'Z' | 'a' .. 'z' | '0' .. '9' | '_' -> true
+      | _ -> false
+    in
+    let length = String.length printed in
+    let rec skip_to ~of_name i =
+      if i < length && Bool.equal (is_of_name printed.[i]) (not of_name)
+      then skip_to ~of_name (i + 1)
+      else i
+    in
+    let first = skip_to ~of_name:true 0 in
+    String.sub printed first (skip_to ~of_name:false first - first)
+  in
+  match prim1, prim2 with
+  | Variadic (prim_op1, _), Variadic (prim_op2, _) -> (
+    match Kinds.make_block_kinds_difference prim_op1 prim_op2 with
+    | Some difference ->
+      Printf.sprintf "a primitive: %s, the kinds of its fields (%s)" name
+        difference
+    | None -> "a primitive: " ^ name)
+  | _, _ -> "a primitive: " ^ name
+
+let primitives env prim1 prim2 =
+  let before = Env.num_differences env in
+  let comparison = primitives env prim1 prim2 in
+  (match comparison with
+  | Different _ when Env.num_differences env = before ->
+    Env.note_difference env (primitive_difference prim1 prim2)
+  | Different _ | Equivalent -> ());
+  comparison
+
 (* Returns unit because the approximant isn't used by sets_of_closures *)
 let function_decls env
     (fun_decl1 : Function_declarations.code_id_in_function_declaration)
@@ -900,6 +1086,8 @@ let function_decls env
     else Different { approximant = () }
   | Deleted _, Code_id _ | Code_id _, Deleted _ ->
     Different { approximant = () }
+
+let function_decls = noting "a function declaration" function_decls
 
 (** Match up equal elements in two lists and iterate through both of them, using
     [f] analogously to [Map.S.merge] *)
@@ -952,7 +1140,9 @@ let sets_of_closures env set1 set2 : Set_of_closures.t Comparison.t =
       ~compare ~f:(fun elt1 elt2 ->
         match elt1, elt2 with
         | None, None -> ()
-        | Some _, None | None, Some _ -> ok := false
+        | Some _, None | None, Some _ ->
+          Env.note_difference env "a set of closures: its value slots";
+          ok := false
         | Some (_kind1, _value1, var1), Some (_kind2, _value2, var2) -> (
           match value_slots env var1 var2 with
           | Equivalent -> ()
@@ -989,7 +1179,9 @@ let sets_of_closures env set1 set2 : Set_of_closures.t Comparison.t =
       (fun _code_id value1 value2 ->
         (match value1, value2 with
         | None, None -> ()
-        | Some _, None | None, Some _ -> ok := false
+        | Some _, None | None, Some _ ->
+          Env.note_difference env "a set of closures: its code";
+          ok := false
         | Some (function_slot1, fun_decl1), Some (function_slot2, fun_decl2)
           -> (
           (match function_slots env function_slot1 function_slot2 with
@@ -1006,7 +1198,9 @@ let sets_of_closures env set1 set2 : Set_of_closures.t Comparison.t =
   if
     Function_slot.Set.cardinal deleted_function_slot_set1
     <> Function_slot.Set.cardinal deleted_function_slot_set2
-  then ok := false;
+  then (
+    Env.note_difference env "a set of closures: its deleted function slots";
+    ok := false);
   if !ok
   then Equivalent
   else Different { approximant = subst_set_of_closures env set1 }
@@ -1018,6 +1212,8 @@ let rec_info_exprs _env rec_info_expr1 rec_info_expr2 :
   if Rec_info_expr.equal rec_info_expr1 rec_info_expr2
   then Equivalent
   else Different { approximant = rec_info_expr1 }
+
+let rec_info_exprs = noting "a recursion depth" rec_info_exprs
 
 let named_exprs env named1 named2 : Named.t Comparison.t =
   match (named1 : Named.t), (named2 : Named.t) with
@@ -1032,7 +1228,9 @@ let named_exprs env named1 named2 : Named.t Comparison.t =
       sets_of_closures env set1 set2
       |> Comparison.map
            ~f:(Named.create_set_of_closures ~alloc_mode:alloc_mode1)
-    else Different { approximant = named1 }
+    else (
+      Env.note_difference env "a set of closures: its allocation mode";
+      Different { approximant = named1 })
   | Rec_info rec_info_expr1, Rec_info rec_info_expr2 ->
     rec_info_exprs env rec_info_expr1 rec_info_expr2
     |> Comparison.map ~f:Named.create_rec_info
@@ -1043,6 +1241,8 @@ let named_exprs env named1 named2 : Named.t Comparison.t =
     assert false
   | (Simple _ | Prim _ | Set_of_closures _ | Static_consts _ | Rec_info _), _ ->
     Different { approximant = subst_named env named1 }
+
+let named_exprs = noting "a definition of another form" named_exprs
 
 (* Compares the two patterns for compatibility *and* adds the
  * correspondences to the environment. *)
@@ -1078,6 +1278,8 @@ let patterns env (pattern1 : Bound_static.Pattern.t)
           (bindings |> Function_slot.Lmap.of_list))
   | _, _ -> Different { approximant = subst_pattern env pattern1 }
 
+let patterns = noting "a static binding of another form" patterns
+
 (* Compares the two sets of bound symbols for compatibility *and* adds the
  * correspondences to the environment. *)
 let bound_static env bound_static1 bound_static2 : Bound_static.t Comparison.t =
@@ -1085,6 +1287,8 @@ let bound_static env bound_static1 bound_static2 : Bound_static.t Comparison.t =
     (bound_static1 |> Bound_static.to_list)
     (bound_static2 |> Bound_static.to_list)
   |> Comparison.map ~f:Bound_static.create
+
+let bound_static = noting "the number of static bindings" bound_static
 
 let fields env (field1 : Simple.With_debuginfo.t)
     (field2 : Simple.With_debuginfo.t) : Simple.With_debuginfo.t Comparison.t =
@@ -1098,6 +1302,10 @@ let blocks env block1 block2 =
     ~subst2:(fun _ mut -> mut)
     ~subst3:(fun env -> List.map (subst_field env))
     env block1 block2
+
+let blocks env block1 block2 =
+  noting "a static block: its tag, its mutability or the number of its fields"
+    blocks env block1 block2
 
 let method_kinds _env (method_kind1 : Call_kind.Method_kind.t)
     (method_kind2 : Call_kind.Method_kind.t) :
@@ -1173,6 +1381,8 @@ let call_kinds env (call_kind1 : Call_kind.t) (call_kind2 : Call_kind.t) :
     else Different { approximant = call_kind1 }
   | _, _ -> Different { approximant = call_kind1 }
 
+let call_kinds = noting "a call: its kind" call_kinds
+
 let probes_equal (probe1 : Probe.t) (probe2 : Probe.t) =
   match probe1, probe2 with
   | None, None -> true
@@ -1187,31 +1397,62 @@ let inlining_states_equal is1 is2 : bool =
   Inlining_state.depth is1 = Inlining_state.depth is2
 
 let apply_exprs env apply1 apply2 : Expr.t Comparison.t =
-  let atomic_things_equal =
-    Apply.Result_continuation.equal
-      (Apply.continuation apply1)
-      (Apply.continuation apply2)
-    && Kinds.exn_continuations_equal
+  (* Each is compared, so that each difference is recorded. *)
+  let continuations_equal =
+    check env "a call: its continuation"
+      (Apply.Result_continuation.equal
+         (Apply.continuation apply1)
+         (Apply.continuation apply2))
+  in
+  let exn_continuations_equal =
+    check env "a call: its exception continuation"
+      (Kinds.exn_continuations_equal
          (Apply.exn_continuation apply1)
-         (Apply.exn_continuation apply2)
-    && Inlined_attribute.equal (Apply.inlined apply1) (Apply.inlined apply2)
-    && inlining_states_equal
+         (Apply.exn_continuation apply2))
+  in
+  let args_arities_equal =
+    check_arities env "a call: the kinds of its arguments"
+      (Apply.args_arity apply1) (Apply.args_arity apply2)
+  in
+  let return_arities_equal =
+    check_arities env "a call: the kinds of its result"
+      (Apply.return_arity apply1)
+      (Apply.return_arity apply2)
+  in
+  let positions_equal =
+    check env "a call: its position"
+      (Apply.Position.equal (Apply.position apply1) (Apply.position apply2))
+  in
+  let inlined_equal =
+    check env "a call: its inlining attribute"
+      (Inlined_attribute.equal (Apply.inlined apply1) (Apply.inlined apply2))
+  in
+  let inlining_states_equal =
+    check env "a call: its inlining depth"
+      (inlining_states_equal
          (Apply.inlining_state apply1)
-         (Apply.inlining_state apply2)
-    && Apply.Position.equal (Apply.position apply1) (Apply.position apply2)
-    && Kinds.arities_equal (Apply.args_arity apply1) (Apply.args_arity apply2)
-    && Kinds.arities_equal
-         (Apply.return_arity apply1)
-         (Apply.return_arity apply2)
-    && Alloc_mode.For_applications.compare (Apply.return_mode apply1)
+         (Apply.inlining_state apply2))
+  in
+  let return_modes_equal =
+    check env "a call: its allocation mode"
+      (Alloc_mode.For_applications.compare (Apply.return_mode apply1)
          (Apply.return_mode apply2)
-       = 0
-    && probes_equal (Apply.probe apply1) (Apply.probe apply2)
+      = 0)
+  in
+  let probes_equal =
+    check env "a call: a probe"
+      (probes_equal (Apply.probe apply1) (Apply.probe apply2))
+  in
+  let atomic_things_equal =
+    continuations_equal && exn_continuations_equal && args_arities_equal
+    && return_arities_equal && positions_equal && inlined_equal
+    && inlining_states_equal && return_modes_equal && probes_equal
   in
   let ok = ref atomic_things_equal in
   let callee1' =
-    options ~f:simple_exprs ~subst:subst_simple env (Apply.callee apply1)
-      (Apply.callee apply2)
+    noting "a call: its callee"
+      (options ~f:simple_exprs ~subst:subst_simple)
+      env (Apply.callee apply1) (Apply.callee apply2)
     |> Comparison.chain ~if_equivalent:(Apply.callee apply2) ~ok
   in
   let args1' =
@@ -1250,14 +1491,20 @@ let apply_cont_exprs env apply_cont1 apply_cont2 : Apply_cont.t Comparison.t =
     (Format.pp_print_option Trap_action.print)
     (Apply_cont.trap_action apply_cont1)
     (Apply_cont.trap_action apply_cont2);
-  if
-    Option.compare Trap_action.compare
-      (Apply_cont.trap_action apply_cont1)
-      (Apply_cont.trap_action apply_cont2)
-    = 0
-    && Continuation.equal
+  let trap_actions_equal =
+    check env "a jump: its trap action"
+      (Option.compare Trap_action.compare
+         (Apply_cont.trap_action apply_cont1)
+         (Apply_cont.trap_action apply_cont2)
+      = 0)
+  in
+  let continuations_equal =
+    check env "a jump: its continuation"
+      (Continuation.equal
          (Apply_cont.continuation apply_cont1)
-         (Apply_cont.continuation apply_cont2)
+         (Apply_cont.continuation apply_cont2))
+  in
+  if trap_actions_equal && continuations_equal
   then
     simple_lists env (Apply_cont.args apply_cont1) (Apply_cont.args apply_cont2)
     |> Comparison.map ~f:(fun args1' ->
@@ -1294,6 +1541,8 @@ let switch_exprs env switch1 switch2 : Expr.t Comparison.t =
   |> Comparison.map ~f:(fun (arms, scrutinee) ->
       Expr.create_switch
         (Switch.create ~condition_dbg:Debuginfo.none ~scrutinee ~arms))
+
+let switch_exprs = noting "a switch: its cases" switch_exprs
 
 (* The functions that open two binders together stop with a fatal error if the
    two do not bind their names alike. The comparison asks first, so that it says
@@ -1364,10 +1613,14 @@ let rec exprs env e1 e2 : Expr.t Comparison.t =
         |> Comparison.map ~f:Expr.create_apply_cont
       | Switch switch1, Switch switch2 -> switch_exprs env switch1 switch2
       | Invalid { message = message1 }, Invalid { message = message2 } ->
-        if String.equal message1 message2
+        if
+          check env "an invalid expression: its message"
+            (String.equal message1 message2)
         then Equivalent
         else Different { approximant = e1 }
-      | _, _ -> Different { approximant = subst_expr env e1 })
+      | _, _ ->
+        Env.note_difference env "an expression of another form";
+        Different { approximant = subst_expr env e1 })
 
 and let_exprs env let_expr1 let_expr2 : Expr.t Comparison.t =
   let named1 = Let_expr.defining_expr let_expr1 in
@@ -1397,6 +1650,7 @@ and let_exprs env let_expr1 let_expr2 : Expr.t Comparison.t =
   |> function
   | Ok comp -> comp
   | Error _ ->
+    Env.note_difference env "a let: what it binds";
     Comparison.Different { approximant = subst_let_expr env let_expr1 }
 
 and let_symbol_exprs env (bound_static1, static_consts1, body1)
@@ -1407,7 +1661,9 @@ and let_symbol_exprs env (bound_static1, static_consts1, body1)
     |> Comparison.chain ~ok ~if_equivalent:bound_static2
   in
   let static_consts_comp : Static_const_group.t Comparison.t =
-    lists ~f:static_consts ~subst:subst_static_const ~subst_snd:false env
+    noting "the number of static constants"
+      (lists ~f:static_consts ~subst:subst_static_const ~subst_snd:false)
+      env
       (static_consts1 |> Static_const_group.to_list)
       (static_consts2 |> Static_const_group.to_list)
     |> Comparison.map ~f:Static_const_group.create
@@ -1444,7 +1700,9 @@ and static_consts env (const1 : Static_const_or_code.t)
            Static_const_or_code.create_static_const
              (Static_const.block tag1' mut1' shape1 fields1'))
     |> Comparison.add_condition
-         ~cond:(Flambda_kind.Scannable_block_shape.equal shape1 shape2)
+         ~cond:
+           (check env "a static block: its shape"
+              (Flambda_kind.Scannable_block_shape.equal shape1 shape2))
          ~approximant:(fun () -> subst_static_const env const1)
   | Static_const (Set_of_closures set1), Static_const (Set_of_closures set2) ->
     sets_of_closures env set1 set2
@@ -1452,12 +1710,46 @@ and static_consts env (const1 : Static_const_or_code.t)
         Static_const_or_code.create_static_const
           (Static_const.set_of_closures set1'))
   | _, _ ->
-    if Static_const_or_code.equal const1 const2
+    if check env "a static constant" (Static_const_or_code.equal const1 const2)
     then Equivalent
     else Different { approximant = subst_static_const env const1 }
 
 and codes env (code1 : Code.t) (code2 : Code.t) =
   log Code.print code1 code2 @@ fun () ->
+  (* Compared before the bodies, so that what is recorded of code comes before
+     what is recorded of its body; and each is compared, so that each difference
+     is recorded. *)
+  let marks_equal =
+    let params_arities_equal =
+      check_arities env "code: the kinds of its parameters"
+        (Code.params_arity code1) (Code.params_arity code2)
+    in
+    let result_arities_equal =
+      check_arities env "code: the kinds of its result"
+        (Code.result_arity code1) (Code.result_arity code2)
+    in
+    let stubs_equal =
+      check env "code: stub" (Bool.equal (Code.stub code1) (Code.stub code2))
+    in
+    let inline_equal =
+      check env "code: its inlining attribute"
+        (Inline_attribute.equal (Code.inline code1) (Code.inline code2))
+    in
+    let functors_equal =
+      check env "code: functor"
+        (Bool.equal (Code.is_a_functor code1) (Code.is_a_functor code2))
+    in
+    let recursive_equal =
+      check env "code: recursive"
+        (Recursive.equal (Code.recursive code1) (Code.recursive code2))
+    in
+    let tupled_equal =
+      check env "code: tupled"
+        (Bool.equal (Code.is_tupled code1) (Code.is_tupled code2))
+    in
+    params_arities_equal && result_arities_equal && stubs_equal && inline_equal
+    && functors_equal && recursive_equal && tupled_equal
+  in
   let bodies env params_and_body1 params_and_body2 =
     Function_params_and_body.pattern_match_pair params_and_body1
       params_and_body2
@@ -1478,14 +1770,20 @@ and codes env (code1 : Code.t) (code2 : Code.t) =
               ~my_depth ~free_names_of_body:Unknown))
   in
   let bodies env params_and_body1 params_and_body2 =
-    if functions_bind_alike params_and_body1 params_and_body2
+    if
+      check env
+        "code: the number of its parameters, or whether it may allocate on the \
+         stack"
+        (functions_bind_alike params_and_body1 params_and_body2)
     then bodies env params_and_body1 params_and_body2
     else
       Comparison.Different
         { approximant = subst_params_and_body env params_and_body1 }
   in
   pairs ~f1:bodies
-    ~f2:(options ~f:code_ids ~subst:subst_code_id)
+    ~f2:
+      (noting "code: a newer version of other code"
+         (options ~f:code_ids ~subst:subst_code_id))
     env
     (Code.params_and_body code1, Code.newer_version_of code1)
     (Code.params_and_body code2, Code.newer_version_of code2)
@@ -1500,16 +1798,7 @@ and codes env (code1 : Code.t) (code2 : Code.t) =
       |> Code.with_newer_version_of newer_version_of)
   |> Comparison.add_condition
        ~approximant:(fun () -> subst_code env code1)
-       ~cond:
-         (Kinds.arities_equal (Code.params_arity code1)
-            (Code.params_arity code2)
-         && Kinds.arities_equal (Code.result_arity code1)
-              (Code.result_arity code2)
-         && Bool.equal (Code.stub code1) (Code.stub code2)
-         && Inline_attribute.equal (Code.inline code1) (Code.inline code2)
-         && Bool.equal (Code.is_a_functor code1) (Code.is_a_functor code2)
-         && Recursive.equal (Code.recursive code1) (Code.recursive code2)
-         && Bool.equal (Code.is_tupled code1) (Code.is_tupled code2))
+       ~cond:marks_equal
 
 and let_cont_exprs env (let_cont1 : Let_cont.t) (let_cont2 : Let_cont.t) :
     Expr.t Comparison.t =
@@ -1532,7 +1821,12 @@ and let_cont_exprs env (let_cont1 : Let_cont.t) (let_cont2 : Let_cont.t) :
         Non_rec.pattern_match handler ~f:(fun cont ~body:_ ->
             Continuation.sort cont)
       in
-      Continuation.Sort.equal (sort handler1) (sort handler2)
+      check env "a continuation: its sort"
+        (Continuation.Sort.equal (sort handler1) (sort handler2))
+    in
+    let lifted_alike =
+      check env "a continuation: whether it can be lifted"
+        (Bool.equal can_be_lifted1 can_be_lifted2)
     in
     (* Note: the order here is important, due to the dominator-scoping of
        symbols. Indeed, we need to ensure walk both bodies first to ensure the
@@ -1545,7 +1839,7 @@ and let_cont_exprs env (let_cont1 : Let_cont.t) (let_cont2 : Let_cont.t) :
              ~approximant:(fun () ->
                ( subst_expr env body1,
                  subst_cont_handler env (Non_rec.handler handler1) ))
-             ~cond:(sorts_match && Bool.equal can_be_lifted1 can_be_lifted2)
+             ~cond:(sorts_match && lifted_alike)
         |> Comparison.map ~f:(fun (body, handler) ->
             Let_cont.create_non_recursive cont handler ~body
               ~free_names_of_body:Unknown))
@@ -1575,12 +1869,31 @@ and let_cont_exprs env (let_cont1 : Let_cont.t) (let_cont2 : Let_cont.t) :
           (body2, cont_handlers2 |> Continuation_handlers.to_map)
         |> Comparison.map ~f:(fun (body, handlers) ->
             Let_cont_expr.create_recursive handlers ~invariant_params ~body))
-  | _, _ -> Different { approximant = subst_let_cont env let_cont1 }
+  | _, _ ->
+    Env.note_difference env "recursive continuations: not the same group";
+    Different { approximant = subst_let_cont env let_cont1 }
 
 and cont_handlers env handler1 handler2 =
   let kinds_of_params handler =
     Continuation_handler.pattern_match handler ~f:(fun params ~handler:_ ->
         List.map Bound_parameter.kind (Bound_parameters.to_list params))
+  in
+  (* Compared before the handlers, and each of them: as in [codes]. *)
+  let exn_handlers_equal =
+    check env "a continuation: exception handler"
+      (Bool.equal
+         (Continuation_handler.is_exn_handler handler1)
+         (Continuation_handler.is_exn_handler handler2))
+  in
+  let cold_equal =
+    check env "a continuation: cold"
+      (Bool.equal
+         (Continuation_handler.is_cold handler1)
+         (Continuation_handler.is_cold handler2))
+  in
+  let kinds_equal =
+    check_kinds env "a continuation: the kinds of its parameters"
+      (kinds_of_params handler1) (kinds_of_params handler2)
   in
   Flambda.Continuation_handler.pattern_match_pair handler1 handler2
     ~f:(fun params ~handler1:expr1 ~handler2:expr2 ->
@@ -1591,28 +1904,14 @@ and cont_handlers env handler1 handler2 =
             ~is_exn_handler:(Continuation_handler.is_exn_handler handler2)
             ~is_cold:(Continuation_handler.is_cold handler2))
       |> Comparison.add_condition
-           ~cond:
-             (Bool.equal
-                (Continuation_handler.is_exn_handler handler1)
-                (Continuation_handler.is_exn_handler handler2))
-           ~approximant:(fun () -> subst_cont_handler env handler1)
-      |> Comparison.add_condition
-           ~cond:
-             (Bool.equal
-                (Continuation_handler.is_cold handler1)
-                (Continuation_handler.is_cold handler2))
-           ~approximant:(fun () -> subst_cont_handler env handler1)
-      |> Comparison.add_condition
-           ~cond:
-             (Misc.Stdlib.List.equal Kinds.with_subkinds_equal
-                (kinds_of_params handler1) (kinds_of_params handler2))
+           ~cond:(exn_handlers_equal && cold_equal && kinds_equal)
            ~approximant:(fun () -> subst_cont_handler env handler1))
   |> function
   | Ok comp -> comp
   | Error _ ->
     Comparison.Different { approximant = subst_cont_handler env handler1 }
 
-let flambda_units u1 u2 =
+let flambda_units_and_differences u1 u2 =
   let ret_cont = Continuation.create ~sort:Toplevel_return () in
   let exn_cont = Continuation.create () in
   let toplevel_my_alloc_region =
@@ -1640,9 +1939,14 @@ let flambda_units u1 u2 =
   let env = Env.create () in
   let body1 = Expr.apply_renaming (Flambda_unit.body u1) (mk_renaming u1) in
   let body2 = Expr.apply_renaming (Flambda_unit.body u2) (mk_renaming u2) in
-  exprs env body1 body2
-  |> Comparison.map ~f:(fun body ->
-      let module_symbol = Flambda_unit.module_symbol u1 in
-      Flambda_unit.create ~return_continuation:ret_cont
-        ~exn_continuation:exn_cont ~body ~module_symbol
-        ~toplevel_my_alloc_region)
+  let comparison =
+    exprs env body1 body2
+    |> Comparison.map ~f:(fun body ->
+        let module_symbol = Flambda_unit.module_symbol u1 in
+        Flambda_unit.create ~return_continuation:ret_cont
+          ~exn_continuation:exn_cont ~body ~module_symbol
+          ~toplevel_my_alloc_region)
+  in
+  comparison, Env.differences env
+
+let flambda_units u1 u2 = fst (flambda_units_and_differences u1 u2)

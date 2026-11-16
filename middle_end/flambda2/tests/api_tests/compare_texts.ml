@@ -29,7 +29,9 @@
    texts: for the NAME given, of the units of NAME_a.fl and NAME_b.fl. Where it
    says that the two are different it gives a unit, the first with the names of
    the second where they agree; that unit is printed here with the two printers
-   of units, to nowhere, and the line says whether both printed it.
+   of units, to nowhere, and the line says whether both printed it. The line
+   also has the names that the comparison gives to the differences that it
+   found.
 
    names: the two differ in the names of code, of symbols, of variables and of
    continuations only. They are the same.
@@ -100,9 +102,11 @@ let () =
   (* As ../tools/fldiff.ml does: the symbols of both are of this unit. *)
   Env.set_current_unit (P.Parse_flambda.make_unit_info ~filename:file1);
   let answer =
-    match Flambda2_compare.Compare.flambda_units unit1 unit2 with
-    | Equivalent -> "the same"
-    | Different { approximant } ->
+    match
+      Flambda2_compare.Compare.flambda_units_and_differences unit1 unit2
+    with
+    | Equivalent, _ -> "the same"
+    | Different { approximant }, differences ->
       let raw = is_printed Flambda2_terms.Flambda_unit.print approximant in
       let text =
         is_printed
@@ -110,7 +114,8 @@ let () =
             P.Print_fexpr.flambda_unit ppf (P.Flambda_to_fexpr.conv unit))
           approximant
       in
-      Printf.sprintf "different; the unit given is %s"
+      Printf.sprintf "different (%s); the unit given is %s"
+        (String.concat "; " differences)
         (if raw && text then "printed" else "NOT PRINTED")
     | exception exn -> "STOPPED: " ^ Printexc.to_string exn
   in
