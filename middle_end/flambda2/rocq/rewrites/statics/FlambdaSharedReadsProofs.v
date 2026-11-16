@@ -1773,8 +1773,9 @@ Qed.
      option holds;
    - five laws of functions of the pass, which it proves, so that it
      has them before the functions that call them are unfolded. That
-     of [same_class] is in the form that computation gives where the
-     reads made are renamed: the class of an entry is a pair. *)
+     of [same_class] is at the class of an entry of the reads made,
+     in the form that computation gives where they are renamed: a
+     pair. *)
 Definition rename_class (r : renaming) (c : place_class) : place_class :=
   (fst c, rename_variable r (snd c)).
 
@@ -1817,12 +1818,12 @@ Proof. equivariance. Qed.
 
 #[local] Ltac eqv_database ::= eqv_database_by_one_pass.
 
-Lemma same_class_renamed (r : renaming) (c : place_class) (first : symbol)
-    (x : variable) :
+Lemma same_class_of_entry_renamed (r : renaming) (c : place_class)
+    (first : symbol) (x : variable) :
   same_class (rename_class r c) (first, rename_variable r x)
   = same_class c (first, x).
 Proof. equivariance. Qed.
-#[local] Hint Rewrite same_class_renamed : equivariance.
+#[local] Hint Rewrite same_class_of_entry_renamed : equivariance.
 
 Lemma forget_read_renamed (r : renaming) (x : variable) (made : reads_made) :
   forget_read (rename_variable r x) (rename_reads_made r made)
