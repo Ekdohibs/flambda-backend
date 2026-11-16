@@ -262,7 +262,10 @@ rule token = parse
          { FLOAT (lit |> Float.of_string, modif) }
   | (float_literal | int_literal) identchar+ as lit
          { error ~lexbuf (Invalid_literal lit) }
-  | '"' (([^ '"'] | '\\' '"')* as s) '"'
+  | '"' (([^ '"' '\\'] | '\\' _)* as s) '"'
+         (* A backslash is taken with the character after it, whatever that is,
+            so that the quote which ends a string that ends in a backslash
+            (written as two) is not taken for one that a backslash escapes. *)
          (* CR-someday lmaurer: Escape sequences, multiline strings *)
          { STRING (Scanf.unescaped s) }
   | eof  { EOF }
