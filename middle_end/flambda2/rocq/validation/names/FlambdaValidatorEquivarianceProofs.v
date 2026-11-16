@@ -3107,57 +3107,20 @@ End Loop_lets.
 
 (* The same in the bodies of code, with the parameters of the code in
    scope. *)
-Lemma remove_unused_defined_lets_in_binding_equivariant (r : renaming)
-    (binding : static_binding) :
-  remove_unused_defined_lets_in_binding (rename_static_binding r binding)
-  = rename_static_binding r (remove_unused_defined_lets_in_binding binding).
+Lemma code_in_scope_renamed (r : renaming) (params : list variable)
+    (my_closure : variable) (metadata : code_metadata) :
+  code_in_scope (map (rename_variable r) params) (rename_variable r my_closure)
+    metadata
+  = rename_kinds_in_scope r (code_in_scope params my_closure metadata).
 Proof.
-  destruct binding
-    as [id [params my_closure ret exn metadata body] | id | sym const];
-    try reflexivity.
-  cbn [rename_static_binding rename_code
-       remove_unused_defined_lets_in_binding].
-  unfold code_in_scope.
-  change [(rename_variable r my_closure, Value)]
-    with (rename_kinds_in_scope r [(my_closure, Value)]).
-  rewrite params_in_scope_equivariant,
-    remove_unused_defined_lets_in_loops_equivariant_aux.
-  reflexivity.
+  exact (params_in_scope_equivariant r params _ [(my_closure, Value)]).
 Qed.
-
-Fixpoint remove_unused_defined_lets_in_code_equivariant_aux (r : renaming)
-    (e : expr) :
-  remove_unused_defined_lets_in_code (rename_expr r e)
-  = rename_expr r (remove_unused_defined_lets_in_code e)
-with remove_unused_defined_lets_in_code_handler_equivariant (r : renaming)
-    (h : continuation_handler) :
-  remove_unused_defined_lets_in_code_handler (rename_handler r h)
-  = rename_handler r (remove_unused_defined_lets_in_code_handler h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      simpl; try reflexivity.
-    + rewrite remove_unused_defined_lets_in_code_equivariant_aux.
-      reflexivity.
-    + rewrite remove_unused_defined_lets_in_code_equivariant_aux, !map_map.
-      f_equal. apply map_ext.
-      exact (remove_unused_defined_lets_in_binding_equivariant r).
-    + rewrite remove_unused_defined_lets_in_code_handler_equivariant,
-        remove_unused_defined_lets_in_code_equivariant_aux.
-      reflexivity.
-    + rewrite remove_unused_defined_lets_in_code_equivariant_aux. f_equal.
-      induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
-      rewrite (remove_unused_defined_lets_in_code_handler_equivariant r h),
-        IH.
-      reflexivity.
-  - destruct h as [params metadata handler]. simpl.
-    rewrite remove_unused_defined_lets_in_code_equivariant_aux. reflexivity.
-Qed.
+#[local] Hint Rewrite code_in_scope_renamed
+  remove_unused_defined_lets_in_loops_equivariant_aux : equivariance.
 
 Lemma remove_unused_defined_lets_in_code_equivariant :
   rewrite_equivariant remove_unused_defined_lets_in_code.
-Proof. exact remove_unused_defined_lets_in_code_equivariant_aux. Qed.
+Proof. equivariance. Qed.
 
 (* Binding the parameters that every application gives the same thing. *)
 Lemma simple_eqb_renamed (r : renaming) (s s' : simple) :
