@@ -1747,8 +1747,10 @@ Qed.
 (* Where a law below has the proof [equivariance], it is proved from
    the definitions by the tactic of FlambdaEquivarianceTactic.v. The
    laws that ask that what is known holds symbols and constants only
-   are proved by hand, but for that of [read_slots], which comes from
-   its law with what is known renamed too. *)
+   are proved by hand, but for that of [slots_as], which the tactic
+   proves from the law of [value_slots_as] given with its premise, and
+   that of [read_slots], which comes from its law with what is known
+   renamed too. *)
 
 Lemma rename_closed_simple (r : renaming) (a : simple) :
   closed_simple a = true -> rename_simple r a = a.
@@ -1852,47 +1854,15 @@ Proof.
   reflexivity.
 Qed.
 
-Fixpoint slots_as_renamed (r : renaming) (known : known_slots)
-    (Hclosed : closed_slots known = true) (e : expr) {struct e} :
-  slots_as known (rename_expr r e) = slots_as known e
-with handler_slots_as_renamed (r : renaming) (known : known_slots)
-    (Hclosed : closed_slots known = true) (h : continuation_handler)
-    {struct h} :
-  handler_slots_as known (rename_handler r h) = handler_slots_as known h.
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      cbn [rename_expr slots_as]; try reflexivity.
-    + rewrite named_slots_made_renamed,
-        (value_slots_as_renamed r known _ Hclosed),
-        (slots_as_renamed r known Hclosed body).
-      reflexivity.
-    + rewrite (slots_as_renamed r known Hclosed body). f_equal.
-      induction bindings
-        as [ | [id [params my_closure ret exn metadata code_body] | id
-               | sym const]
-               bindings IH];
-        cbn [map forallb rename_static_binding rename_code binding_slots_as
-               code_slots_as];
-        [ reflexivity | | | ].
-      * rewrite (slots_as_renamed r known Hclosed code_body), IH.
-        reflexivity.
-      * rewrite IH. reflexivity.
-      * rewrite static_const_slots_made_renamed,
-          (value_slots_as_renamed r known _ Hclosed), IH.
-        reflexivity.
-    + rewrite (handler_slots_as_renamed r known Hclosed h),
-        (slots_as_renamed r known Hclosed body).
-      reflexivity.
-    + rewrite (slots_as_renamed r known Hclosed body). f_equal.
-      induction handlers as [ | [k h] handlers IH]; cbn [map forallb];
-        [ reflexivity | ].
-      rewrite (handler_slots_as_renamed r known Hclosed h), IH. reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler handler_slots_as].
-    apply slots_as_renamed, Hclosed.
-Qed.
+#[local] Hint Rewrite named_slots_made_renamed
+  static_const_slots_made_renamed : equivariance.
+#[local] Hint Rewrite value_slots_as_renamed using assumption
+  : equivariance.
+
+Lemma slots_as_renamed (r : renaming) (known : known_slots)
+    (Hclosed : closed_slots known = true) (e : expr) :
+  slots_as known (rename_expr r e) = slots_as known e.
+Proof. equivariance. Qed.
 
 (* A renaming renames no symbol, so the symbols in scope are the
    same. *)
