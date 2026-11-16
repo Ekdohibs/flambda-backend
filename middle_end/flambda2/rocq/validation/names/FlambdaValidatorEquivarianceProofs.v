@@ -2221,6 +2221,13 @@ Section Passes_for_loops.
 #[local] Hint Rewrite no_trap_action_renamed
   inline_cont_at_tail_equivariant_aux : equivariance.
 
+(* The tactic looks for the laws of the database in one pass over the
+   goal in the proofs below, which is several times faster than its
+   usual way. The one pass does not see a law inside a [match] or
+   under a binder; the two proofs that need the usual way take it
+   back, each for itself. *)
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
+
 (* A rewrite applied to the handlers of recursive continuations. *)
 Section Rewrite_rec_handlers.
 
@@ -2536,15 +2543,18 @@ Qed.
 
 #[local] Arguments settle : simpl never.
 
-(* The two rules. The first: [settle] at a function and at first masks
-   that mention the renaming, where the other side has it at ones that
-   do not. The second: [drop_dead] at masks that are not written as a
-   renamed list, of a term that the induction has a hypothesis for,
-   where the other side has it at masks that do not mention the
-   renaming. *)
+(* The rules. The law of [count_params], which the one pass over the
+   database does not see where the handlers are renamed under a
+   binder, so that the two searches have the same fuel. Then: [settle]
+   at a function and at first masks that mention the renaming, where
+   the other side has it at ones that do not. Last: [drop_dead] at
+   masks that are not written as a renamed list, of a term that the
+   induction has a hypothesis for, where the other side has it at
+   masks that do not mention the renaming. *)
 #[local] Ltac eqv_extra ::=
   first
-    [ match goal with
+    [ rewrite count_params_renamed
+    | match goal with
       | r : renaming |- context [settle ?fuel ?next' ?first'] =>
         eqv_has_renaming next';
         match goal with
@@ -2633,9 +2643,11 @@ Lemma remove_unused_defined_lets_in_code_equivariant :
 Proof. equivariance. Qed.
 
 (* Binding the parameters that every application gives the same thing. *)
+#[local] Ltac eqv_database ::= eqv_database_by_autorewrite.
 Lemma simple_eqb_renamed (r : renaming) (s s' : simple) :
   simple_eqb (rename_simple r s) (rename_simple r s') = simple_eqb s s'.
 Proof. equivariance. Qed.
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
 
 Lemma binds_var_equivariant (r : renaming) (x : variable) (e : expr) :
   binds_var (rename_variable r x) (rename_expr r e) = binds_var x e.
@@ -2857,9 +2869,11 @@ End Param_aliases.
 (* An application made to go where the handler of its continuation
    goes. The entries are keyed by continuations, which are renamed, and
    keep parameters and an [Apply_cont], which are renamed too. *)
+#[local] Ltac eqv_database ::= eqv_database_by_autorewrite.
 Lemma binds_cont_equivariant (r : renaming) (k : continuation) (e : expr) :
   binds_cont (rename_continuation r k) (rename_expr r e) = binds_cont k e.
 Proof. equivariance. Qed.
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
 
 Definition rename_forward_entry (r : renaming)
     (entry : option (list variable * apply_cont))
@@ -3148,6 +3162,9 @@ Lemma forward_jumps_equivariant : rewrite_equivariant forward_jumps.
 Proof.
   intros r e. exact (forward_jumps_under_equivariant r e []).
 Qed.
+
+(* The passes below take the database in the tactic's usual way. *)
+#[local] Ltac eqv_database ::= eqv_database_by_autorewrite.
 
 (* The same where the arguments are known to have the kinds of the
    parameters (FlambdaForwardKindedSpec.v). The kinds of the variables
