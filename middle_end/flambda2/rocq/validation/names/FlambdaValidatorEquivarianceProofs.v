@@ -238,93 +238,59 @@ Proof. exact var_free_b_equivariant_aux. Qed.
 (* Removing unused [Let]s                                                   *)
 (* ======================================================================== *)
 
-Lemma named_may_go_renamed (r : renaming) (d : named) :
-  named_may_go (rename_named r d) = named_may_go d.
-Proof. destruct d; reflexivity. Qed.
+(* The laws of renaming of the four rewrites that remove unused
+   [Let]s are proved from the definitions by the tactic of
+   FlambdaEquivarianceTactic.v, which states and proves by itself the
+   laws of the tests that the first two make of a named expression. It
+   is given the laws of the free names of
+   FlambdaValidatorEquivarianceBaseProofs.v, which are proved by hand
+   there: the tactic derives them where they are not given, and is
+   slower. *)
+From OxCamlFlambda2 Require Import FlambdaEquivarianceTactic.
 
-Fixpoint remove_unused_lets_equivariant_aux (r : renaming) (e : expr) :
-  remove_unused_lets (rename_expr r e) = rename_expr r (remove_unused_lets e)
-with remove_unused_lets_in_handler_equivariant (r : renaming)
-    (h : continuation_handler) :
-  remove_unused_lets_in_handler (rename_handler r h)
-  = rename_handler r (remove_unused_lets_in_handler h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      simpl; try reflexivity.
-    + rewrite remove_unused_lets_equivariant_aux, var_free_b_equivariant_aux,
-        named_may_go_renamed.
-      destruct
-        (var_free_b x (remove_unused_lets body) || negb (named_may_go d));
-        reflexivity.
-    + rewrite remove_unused_lets_equivariant_aux. reflexivity.
-    + rewrite remove_unused_lets_in_handler_equivariant,
-        remove_unused_lets_equivariant_aux.
-      reflexivity.
-    + rewrite remove_unused_lets_equivariant_aux. reflexivity.
-  - destruct h as [params metadata handler]. simpl.
-    rewrite remove_unused_lets_equivariant_aux. reflexivity.
-Qed.
+Section Unused_lets.
+
+#[local] Hint Rewrite var_in_simple_equivariant var_in_named_equivariant
+  var_free_b_equivariant_aux cont_free_b_equivariant_aux : equivariance.
+
+Lemma remove_unused_lets_equivariant_aux (r : renaming) (e : expr) :
+  remove_unused_lets (rename_expr r e) = rename_expr r (remove_unused_lets e).
+Proof. equivariance. Qed.
 
 Theorem remove_unused_lets_equivariant :
   remove_unused_lets_equivariant_statement.
 Proof. exact remove_unused_lets_equivariant_aux. Qed.
 
-Lemma named_is_total_renamed (r : renaming) (kind : flambda_kind)
-    (d : named) :
-  named_is_total kind (rename_named r d) = named_is_total kind d.
-Proof. destruct d as [[x | sym | c] | | | | | | ]; reflexivity. Qed.
-
-Fixpoint remove_unused_total_lets_equivariant_aux (r : renaming) (e : expr) :
-  remove_unused_total_lets (rename_expr r e)
-  = rename_expr r (remove_unused_total_lets e).
-Proof.
-  destruct e
-    as [ x kind d body | bindings body | k [params metadata handler] body
-       | handlers body | ap | ac | scrutinee arms | ];
-    simpl; try reflexivity.
-  - rewrite remove_unused_total_lets_equivariant_aux,
-      var_free_b_equivariant_aux, named_is_total_renamed.
-    destruct
-      (named_is_total kind d
-       && negb (var_free_b x (remove_unused_total_lets body)));
-      reflexivity.
-  - rewrite remove_unused_total_lets_equivariant_aux. reflexivity.
-  - rewrite !remove_unused_total_lets_equivariant_aux. reflexivity.
-  - rewrite remove_unused_total_lets_equivariant_aux. reflexivity.
-Qed.
-
 Theorem remove_unused_total_lets_equivariant :
   remove_unused_total_lets_equivariant_statement.
-Proof. exact remove_unused_total_lets_equivariant_aux. Qed.
+Proof. equivariance. Qed.
 
-(* A variable is found among the renamed variables in scope where it was
-   found, at the same kind: a renaming is injective. *)
-Lemma lookup_rename_kinds_in_scope (r : renaming) (x : variable)
-    (kinds : kinds_in_scope) :
-  lookup (rename_variable r x) (rename_kinds_in_scope r kinds)
-  = lookup x kinds.
-Proof.
-  induction kinds as [ | [y kind] kinds IH]; simpl; [ reflexivity | ].
-  rewrite rename_variable_eqb. destruct (Pos.eqb x y); [ reflexivity | ].
-  exact IH.
-Qed.
+(* The variables in scope with their kinds are a list of pairs, whose
+   type does not say how it is renamed: the action is
+   [rename_kinds_in_scope]. The laws of the tests and of
+   [params_in_scope] are given to the tactic once proved; other parts
+   of this file use them by name.
+
+   Two of them are proved by hand. The tactic proves that of
+   [named_defined] in more than half a second, which this file is not
+   given. That of [params_in_scope], which adds the parameters of a
+   handler one by one, it does not prove: the hypothesis of its
+   induction is of the variables in scope renamed, and the variables
+   in scope of the next step are a renamed pair put before them. *)
+#[local] Instance kinds_in_scope_renaming : Renaming_of kinds_in_scope :=
+  rename_kinds_in_scope.
+
+Lemma kind_of_simple_in_scope_equivariant (r : renaming)
+    (kinds : kinds_in_scope) (s : simple) :
+  kind_of_simple_in_scope (rename_kinds_in_scope r kinds) (rename_simple r s)
+  = kind_of_simple_in_scope kinds s.
+Proof. equivariance. Qed.
 
 Lemma map_fst_rename_kinds_in_scope (r : renaming) (kinds : kinds_in_scope) :
   map fst (rename_kinds_in_scope r kinds)
   = map (rename_variable r) (map fst kinds).
 Proof.
   unfold rename_kinds_in_scope. rewrite !map_map. reflexivity.
-Qed.
-
-Lemma kind_of_simple_in_scope_equivariant (r : renaming)
-    (kinds : kinds_in_scope) (s : simple) :
-  kind_of_simple_in_scope (rename_kinds_in_scope r kinds) (rename_simple r s)
-  = kind_of_simple_in_scope kinds s.
-Proof.
-  destruct s; simpl; [ apply lookup_rename_kinds_in_scope | | ];
-    reflexivity.
 Qed.
 
 Lemma named_defined_equivariant (r : renaming) (kinds : kinds_in_scope)
@@ -353,33 +319,33 @@ Proof.
   exact (IH params_kinds ((param, kind) :: kinds)).
 Qed.
 
-Fixpoint remove_unused_defined_lets_equivariant_aux (r : renaming)
+#[local] Hint Rewrite named_defined_equivariant params_in_scope_equivariant
+  : equivariance.
+
+(* At a [Let] the variables in scope are one pair more. That a renamed
+   pair before the renamed variables in scope is the renaming of the
+   pair before them holds by computation; it is given to the tactic,
+   and computation is kept from undoing it. *)
+Lemma kinds_in_scope_cons_renamed (r : renaming) (x : variable)
+    (kind : flambda_kind) (kinds : kinds_in_scope) :
+  (rename_variable r x, kind) :: rename_kinds_in_scope r kinds
+  = rename_kinds_in_scope r ((x, kind) :: kinds).
+Proof. reflexivity. Qed.
+
+Section Defined_lets.
+
+#[local] Arguments rename_kinds_in_scope : simpl never.
+#[local] Hint Rewrite kinds_in_scope_cons_renamed : equivariance.
+
+Lemma remove_unused_defined_lets_equivariant_aux (r : renaming)
     (e : expr) :
   ∀ kinds : kinds_in_scope,
     remove_unused_defined_lets (rename_kinds_in_scope r kinds)
       (rename_expr r e)
     = rename_expr r (remove_unused_defined_lets kinds e).
-Proof.
-  destruct e
-    as [ x kind d body | bindings body | k [params metadata handler] body
-       | handlers body | ap | ac | scrutinee arms | ];
-    intros kinds; simpl; try reflexivity.
-  - change ((rename_variable r x, kind) :: rename_kinds_in_scope r kinds)
-      with (rename_kinds_in_scope r ((x, kind) :: kinds)).
-    rewrite remove_unused_defined_lets_equivariant_aux,
-      named_defined_equivariant, var_free_b_equivariant_aux.
-    destruct
-      (named_defined kinds kind d
-       && negb
-            (var_free_b x
-               (remove_unused_defined_lets ((x, kind) :: kinds) body)));
-      reflexivity.
-  - rewrite remove_unused_defined_lets_equivariant_aux. reflexivity.
-  - rewrite params_in_scope_equivariant,
-      !remove_unused_defined_lets_equivariant_aux.
-    reflexivity.
-  - rewrite remove_unused_defined_lets_equivariant_aux. reflexivity.
-Qed.
+Proof. equivariance. Qed.
+
+End Defined_lets.
 
 Theorem remove_unused_defined_lets_equivariant :
   remove_unused_defined_lets_equivariant_statement.
@@ -387,15 +353,17 @@ Proof.
   intros r kinds e. apply remove_unused_defined_lets_equivariant_aux.
 Qed.
 
-(* The projections of function slots that nothing uses. *)
+(* The projections of function slots that nothing uses. What is known
+   of the sets of closures is renamed by [rename_known_sets]. The laws
+   of [sets_under_let] and of [projection_defined] are stated so that
+   the rewrite does not derive them at each [Let].
 
-Lemma lookup_rename_known_sets (r : renaming) (x : variable)
-    (known : known_sets) :
-  lookup (rename_variable r x) (rename_known_sets r known) = lookup x known.
-Proof.
-  induction known as [ | [y entry] known IH]; simpl; [ reflexivity | ].
-  rewrite rename_variable_eqb, IH. reflexivity.
-Qed.
+   Two laws are proved by hand. The tactic proves that of [forget_set]
+   in a third of a second, which this file is not given. That of
+   [forget_sets], which forgets the variables of a list one by one, it
+   does not prove, for the reason given of [params_in_scope]. *)
+#[local] Instance known_sets_renaming : Renaming_of known_sets :=
+  rename_known_sets.
 
 Lemma forget_set_renamed (r : renaming) (x : variable) (known : known_sets) :
   forget_set (rename_variable r x) (rename_known_sets r known)
@@ -415,65 +383,35 @@ Proof.
   rewrite forget_set_renamed. apply IH.
 Qed.
 
+#[local] Hint Rewrite forget_set_renamed forget_sets_renamed : equivariance.
+
 Lemma sets_under_let_renamed (r : renaming) (known : known_sets)
     (x : variable) (d : named) :
   sets_under_let (rename_known_sets r known) (rename_variable r x)
     (rename_named r d)
   = rename_known_sets r (sets_under_let known x d).
-Proof.
-  unfold sets_under_let. rewrite forget_set_renamed.
-  destruct d; reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 Lemma projection_defined_renamed (r : renaming) (known : known_sets)
     (d : named) :
   projection_defined (rename_known_sets r known) (rename_named r d)
   = projection_defined known d.
-Proof.
-  destruct d as [s | p args | code slots | fslot decls slots | slot closure
-    | pfrom slot closure | move_from move_to closure];
-    try reflexivity.
-  destruct closure as [x | sym | c]; try reflexivity.
-  simpl. rewrite lookup_rename_known_sets. reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
-Fixpoint remove_projections_knowing_equivariant_aux (r : renaming)
-    (e : expr) :
-  ∀ known : known_sets,
-    remove_projections_knowing (rename_known_sets r known) (rename_expr r e)
-    = rename_expr r (remove_projections_knowing known e).
-Proof.
-  destruct e
-    as [ x kind d body | bindings body | k [params metadata handler] body
-       | handlers body | ap | ac | scrutinee arms | ];
-    intros known; simpl; try reflexivity.
-  - rewrite sets_under_let_renamed,
-      remove_projections_knowing_equivariant_aux,
-      projection_defined_renamed, var_free_b_equivariant_aux.
-    destruct
-      (kind_eqb kind Value
-       && projection_defined known d
-       && negb
-            (var_free_b x
-               (remove_projections_knowing (sets_under_let known x d) body)));
-      reflexivity.
-  - rewrite remove_projections_knowing_equivariant_aux. reflexivity.
-  - rewrite forget_sets_renamed, !remove_projections_knowing_equivariant_aux.
-    reflexivity.
-  - rewrite remove_projections_knowing_equivariant_aux. reflexivity.
-Qed.
+#[local] Hint Rewrite sets_under_let_renamed projection_defined_renamed
+  : equivariance.
 
 Theorem remove_projections_knowing_equivariant :
   remove_projections_knowing_equivariant_statement.
-Proof.
-  intros r known e. apply remove_projections_knowing_equivariant_aux.
-Qed.
+Proof. equivariance. Qed.
 
 Theorem remove_unused_projections_equivariant :
   remove_unused_projections_equivariant_statement.
 Proof.
-  intros r e. exact (remove_projections_knowing_equivariant_aux r e []).
+  intros r e. exact (remove_projections_knowing_equivariant r [] e).
 Qed.
+
+End Unused_lets.
 
 (* ======================================================================== *)
 (* A continuation applied once, at the end of its scope                     *)
