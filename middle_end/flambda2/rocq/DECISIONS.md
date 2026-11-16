@@ -840,6 +840,10 @@ says so. Only the labels that this tree cites are listed.
   one of its inputs does not (with T1-4).
 - **R3-15.** In the model, the immediates of a type include raw integers
   that are out of range for the compiler.
+- **R5-3.** `Static_const.compare` has no case for two immutable float
+  blocks: a float block does not compare equal to itself, and a float
+  block and a float array of the same numbers compare equal in one order
+  and not in the other.
 - **R6-1.** The printer of fexpr writes the naked kinds `int8`, `int16`
   and `mask`, and the parser has no rule for them, so a poison constant
   of one of those kinds that is printed is not read back.

@@ -1111,7 +1111,8 @@ that every such file changed since this work began is named here.
   should be (`middle_end/flambda2/terms/static_const.ml` is not
   changed), so two equal float blocks were different, and a float block
   and a float array of the same numbers, in that order, were the same
-  (in the other order they were different). Two invalid expressions are
+  (in the other order they were different); this is discrepancy R5-3.
+  Two invalid expressions are
   the same if they are of the same kind (`kind_of_invalid_message`),
   the name read from each message as the entry above says; before,
   their messages were compared whole, with the names of continuations
