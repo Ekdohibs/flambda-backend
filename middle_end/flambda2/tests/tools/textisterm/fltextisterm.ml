@@ -25,18 +25,20 @@
  * DEALINGS IN THE SOFTWARE.                                                  *
  ******************************************************************************)
 
-(* The compiler, with one check: that the text of the term that it gives to
-   Simplify, read back, is that term. It is the driver of the compiler
-   (driver/oxcaml_main.ml) with one hook registered (driver/compiler_hooks.mli):
-   it takes the command line of the compiler, and two options of its own, which
-   come first if they are given:
+(* The compiler, with one check: that the text of a term, read back, is that
+   term. The term is the one that the compiler gives to Simplify or, with an
+   option, the one that Simplify returns. It is the driver of the compiler
+   (driver/oxcaml_main.ml) with two hooks registered
+   (driver/compiler_hooks.mli): it takes the command line of the compiler, and
+   three options of its own, which come first if they are given:
 
-   fltextisterm.exe [-text-to FILE] [-differences-to FILE] <the command line of
-   the compiler>
+   fltextisterm.exe [-after-simplify] [-text-to FILE] [-differences-to FILE]
+   <the command line of the compiler>
 
    The hook [Raw_flambda2] is given the term that the compiler gives to Simplify
    (middle_end/flambda2/flambda2.ml, [flambda_to_flambda0], before anything else
-   is done with the term). The first time it is called, the driver
+   is done with the term). Without [-after-simplify], the first time it is
+   called, the driver
 
    1. writes the term as text, as [-drawfexpr-to] does ([Flambda_to_fexpr.conv],
    [Print_fexpr.flambda_unit]): to FILE if [-text-to] is given, to a temporary
@@ -51,12 +53,18 @@
 
    4. keeps the answer, and lets the compiler go on.
 
-   The hook counts its calls: the compiler calls it once for each implementation
-   that it compiles as far as the middle end, however the implementations are
-   given to it. When the compiler has returned, the driver prints one line on
-   standard output and exits:
+   With [-after-simplify] the check is of the term that Simplify returns, in the
+   place of the term that is given to it: the term is then the one that the hook
+   [Flambda2] is given (the same function, after [Simplify.run] and before
+   anything else is done with what it returns), for the first implementation.
+   That hook is not called if Simplify is not run, as with -Oclassic.
 
-   - "the text is the term", 0: the hook was called once, and the comparison
+   The hook [Raw_flambda2] counts its calls: the compiler calls it once for each
+   implementation that it compiles as far as the middle end, however the
+   implementations are given to it. When the compiler has returned, the driver
+   prints one line on standard output and exits:
+
+   - "the text is the term", 0: that hook was called once, and the comparison
    said that the two are equivalent;
 
    - "the text is not the term: WHAT", 1: called once, and the comparison said
@@ -72,11 +80,12 @@
    the text, or stopped, in whichever of its two steps;
 
    - "not checked: ...", 2: the printer stopped, so that there is no text (the
-   term has something that it does not write), or the comparison stopped; or the
-   hook was called more than once (more than one implementation was given: the
-   files of [-text-to] and [-differences-to] are then removed); or it was not
-   called (the compiler did not reach the middle end: an interface alone, [-i],
-   [-stop-after typing]).
+   term has something that it does not write), or the comparison stopped; or
+   that hook was called more than once (more than one implementation was given:
+   the files of [-text-to] and [-differences-to] are then removed); or it was
+   not called (the compiler did not reach the middle end: an interface alone,
+   [-i], [-stop-after typing]); or, with [-after-simplify], Simplify was not
+   run.
 
    If the compiler fails and returns to the driver, the driver prints no line
    and exits with the compiler's status. If the compiler exits by itself, with
@@ -95,9 +104,12 @@
    made names in the compiler's process, and what the compiler writes afterwards
    need not be byte for byte what it writes alone.
 
-   What is trusted: that the hook is given the term that the compiler goes on
+   What is trusted: that each hook is given the term that the compiler goes on
    with, and the comparison. What the comparison does not read of a term is not
-   checked (see middle_end/flambda2/compare/compare.ml). *)
+   checked (see middle_end/flambda2/compare/compare.ml). It does not compare
+   debugging information in full, and the text writes none; in this compiler the
+   debugging information also carries the assumptions of zero allocation, which
+   the backend's checker reads. *)
 
 (* Eta-expansion gives [create_process] and [waitpid] the unannotated types
    required by [Compiler_owee.Unix_intf.S] (as in driver/oxcaml_main.ml). *)
@@ -115,6 +127,8 @@ module P = Flambda2_parser
 let text_to = ref None
 
 let differences_to = ref None
+
+let after_simplify = ref false
 
 let one_line s = String.concat " " (String.split_on_char '\n' s)
 
@@ -185,20 +199,25 @@ let write_differences differences =
     close_out oc
 
 (* What the check said of the first implementation, and how many times the hook
-   has been called: once for each implementation that the compiler compiles as
-   far as the middle end. *)
+   [Raw_flambda2] has been called: once for each implementation that the
+   compiler compiles as far as the middle end. *)
 let first_answer = ref None
 
 let calls = ref 0
 
+let keep_answer unit =
+  first_answer
+    := Some
+         (try check unit
+          with exn -> Not_checked (one_line (Printexc.to_string exn)))
+
 let on_raw_flambda unit =
   incr calls;
-  if !calls = 1
-  then
-    first_answer
-      := Some
-           (try check unit
-            with exn -> Not_checked (one_line (Printexc.to_string exn)))
+  if !calls = 1 && not !after_simplify then keep_answer unit
+
+(* The compiler calls the hook [Flambda2] for an implementation after it has
+   called [Raw_flambda2] for it, and before it calls either for another. *)
+let on_flambda unit = if !calls = 1 && !after_simplify then keep_answer unit
 
 (* Whether the driver has printed its line, or exits with the status that the
    compiler returned. *)
@@ -227,6 +246,9 @@ let () =
 let () =
   let rec own_options args =
     match args with
+    | "-after-simplify" :: args ->
+      after_simplify := true;
+      own_options args
     | "-text-to" :: file :: args ->
       text_to := Some file;
       own_options args
@@ -240,6 +262,7 @@ let () =
       (Sys.argv.(0) :: own_options (List.tl (Array.to_list Sys.argv)))
   in
   Compiler_hooks.register Raw_flambda2 on_raw_flambda;
+  Compiler_hooks.register Flambda2 on_flambda;
   let compiler =
     Optmaindriver.main
       (module Unix_for_owee : Compiler_owee.Unix_intf.S)
@@ -257,9 +280,13 @@ let () =
     Option.iter Misc.remove_file !differences_to;
     answer "not checked: more than one implementation is given" 2)
   else
-    (* The hook sets [first_answer] at its first call. *)
     match !first_answer with
-    | None -> answer "not checked: the compiler did not reach the middle end" 2
+    | None ->
+      if !calls = 0
+      then answer "not checked: the compiler did not reach the middle end" 2
+      else
+        (* With [-after-simplify], and the hook [Flambda2] was not called. *)
+        answer "not checked: Simplify was not run" 2
     | Some The_term ->
       write_differences [];
       answer "the text is the term" 0
