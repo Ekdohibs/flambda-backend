@@ -4,7 +4,7 @@ let code loopify(never) size(3) newer_version_of(f_0)
         my_closure &my_alloc_region my_depth
         -> k * k1
         : imm tagged =
-  let Pobj_magic = %opaque (a) in
+  let Pobj_magic = %opaque.middle_end_only (a) in
   let prim = %unbox_num.`float` (v) in
   let Parraysetu = %array_set.`float` (Pobj_magic, 0, prim) in
   cont k (0)

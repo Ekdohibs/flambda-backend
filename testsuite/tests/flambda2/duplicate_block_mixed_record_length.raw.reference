@@ -5,12 +5,12 @@ let $camlDuplicate_block_mixed_record_length__first_const_0 = Block 0 () in
          -> k1 * k2
          : val =
    let next_depth = rec_info (succ my_depth) in
-   let r = %opaque (x) in
+   let r = %opaque.middle_end_only (x) in
    let newrecord = %duplicate_block.`0`.`385`.my_alloc_region (r) in
    let Pmixedfield = %block_load.`imm`.[`384`] (r) in
    let int_add = %int_barith.add (Pmixedfield, 1) in
    let Psetmixedfield = %block_set.`imm`.[`384`] (newrecord, int_add) in
-   let Pobj_magic = %opaque (newrecord) in
+   let Pobj_magic = %opaque.middle_end_only (newrecord) in
    cont k1 (Pobj_magic)
  in
  let code inline(never) size(36)
@@ -19,7 +19,7 @@ let $camlDuplicate_block_mixed_record_length__first_const_0 = Block 0 () in
          -> k1 * k2
          : val =
    let next_depth = rec_info (succ my_depth) in
-   let `*match*` = %opaque (x) in
+   let `*match*` = %opaque.middle_end_only (x) in
    (let prim = %is_int (`*match*`) in
     let Pisint = %tag_imm (prim) in
     (let untagged = %untag_imm (Pisint) in
@@ -36,10 +36,10 @@ let $camlDuplicate_block_mixed_record_length__first_const_0 = Block 0 () in
        let Pmixedfield = %block_load.`imm`.[`384`] (`*match*`) in
        let int_add = %int_barith.add (Pmixedfield, 1) in
        let Psetmixedfield = %block_set.`imm`.[`384`] (newrecord, int_add) in
-       let Pobj_magic = %opaque (newrecord) in
+       let Pobj_magic = %opaque.middle_end_only (newrecord) in
        cont k1 (Pobj_magic)
      where k3 =
-       let Pobj_magic = %opaque (0) in
+       let Pobj_magic = %opaque.middle_end_only (0) in
        cont k1 (Pobj_magic)
  in
  let update = closure update_0 @update &toplevel in

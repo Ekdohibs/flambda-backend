@@ -870,10 +870,15 @@ let make_lazy =
     unary "%lazy" ~params:(param2 lazy_tag alloc_region)
       (fun _ (lazy_tag, alloc_region) -> P.Make_lazy { lazy_tag; alloc_region }))
 
+(* With no parameter: the identity that nothing sees through, on a value.
+   [middle_end_only] is for the one that only the middle end does not see
+   through, and the kind is written if it is not that of values. *)
 let opaque_identity =
   D.(
-    unary "%opaque" ~params:param0 (fun _ () ->
-        P.Opaque_identity { middle_end_only = false; kind = Flambda_kind.value }))
+    unary "%opaque"
+      ~params:(param2 (bool_flag "middle_end_only") kind)
+      (fun _ (middle_end_only, kind) ->
+        P.Opaque_identity { middle_end_only; kind }))
 
 let reinterpret_64_bit_word =
   D.(
@@ -1393,7 +1398,8 @@ module OfFlambda = struct
     | Make_lazy { lazy_tag; alloc_region } ->
       make_lazy env (lazy_tag, alloc_region)
     | Num_conv { src; dst } -> num_conv env (src, dst)
-    | Opaque_identity _ -> opaque_identity env ()
+    | Opaque_identity { middle_end_only; kind } ->
+      opaque_identity env (middle_end_only, kind)
     | Unbox_number bk -> unbox_num env bk
     | Untag_immediate -> untag_immediate env ()
     | Project_value_slot { project_from; value_slot } ->

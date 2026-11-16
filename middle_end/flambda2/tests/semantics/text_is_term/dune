@@ -42,6 +42,10 @@
 ;; test_for_an_immediate_of_any_value: the test for an immediate that works on
 ;; any value, which the text writes "%is_int.generic". The text is the term.
 ;;
+;; identity_for_the_middle_end: an identity that only the middle end does not
+;; see through, which the text writes "%opaque.middle_end_only". The text is
+;; the term.
+;;
 ;; partial_application_of_unboxed_float: the text is not read back.
 ;;
 ;; interface_only, type_error: the compiler does not reach the middle end.
@@ -125,6 +129,22 @@
   (= %{context_name} "main"))
  (action
   (diff length_of_bytes.expected length_of_bytes.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   identity_for_the_middle_end.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     %{dep:identity_for_the_middle_end.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff identity_for_the_middle_end.expected identity_for_the_middle_end.output)))
 
 (rule
  (enabled_if
