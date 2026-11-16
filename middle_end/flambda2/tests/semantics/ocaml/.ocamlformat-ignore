@@ -51,5 +51,11 @@ unboxed_float_argument_unknown.ml
 unboxed_float_over_application.ml
 unboxed_pair.ml
 unboxed_pair_argument.ml
+unboxed_pair_argument_unknown.ml
+unboxed_pair_parameter_beside_unknown_call.ml
 unboxed_pair_parameter_partial.ml
+unboxed_pair_then_integer_argument.ml
 unboxed_pair_with_float_argument.ml
+void_argument_known.ml
+void_argument_unknown.ml
+void_parameter_partial.ml

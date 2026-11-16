@@ -1,6 +1,7 @@
 (* An over-application whose second argument is an unboxed float: [first] is
    given its one argument and what it returns is given the float. The call is
-   of unknown arity, and the tool gives it the kinds of its two arguments. *)
+   of unknown arity, and the text of the term writes the kinds of its two
+   arguments. *)
 
 external box : float# -> float = "%box_float"
 

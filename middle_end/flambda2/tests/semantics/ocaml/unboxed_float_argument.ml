@@ -1,6 +1,6 @@
-(* A function of an unboxed float, called directly. The text of a term does
-   not give the arity of the arguments of a direct call; the tool gives the
-   call that of the parameters of its code. *)
+(* A function of an unboxed float, called directly. The text of the term
+   writes the arity of the arguments of the call, which is one component of
+   the kind of an unboxed float, and not a value. *)
 
 external box : float# -> float = "%box_float"
 

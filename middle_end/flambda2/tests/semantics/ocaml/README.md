@@ -71,15 +71,23 @@ fails on it.
   enabled (label C2-17). `script/` has a unit that is refused for a
   probe and the same unit without the probe, with what the script
   says of each, and two more for the refusal that is of `library/`
-  only. It has seven more, of an unboxed product among the arguments
-  of a call or the parameters of code, the product of nothing
-  included. The script refused the four of them that have a call of
-  unknown arity, while the text grouped neither the arguments of a
-  call nor the parameters of code and wrote nothing for one of no
-  kind, so that a partial application or an over-application might
-  be read as a full one (labels C2-5 and C2-30). The text now writes
-  the arity of the arguments of a call, and the parameters of code
-  in their groups, and the script makes the text of all seven.
+  only. It has seven more: six of an unboxed product among the arguments
+  of a call or the parameters of code, the product of nothing included,
+  and one that is one of the six with two ordinary parameters in the
+  place of the product. The script refused four of the six, those that
+  have a call of unknown arity, while the text grouped neither the
+  arguments of a call nor the parameters of code and wrote nothing for
+  the product of nothing, so that a partial application or an
+  over-application might be read as a full one (labels C2-5 and C2-30).
+  The text now writes the arity of the arguments of a call, and the
+  parameters of code in their groups, and the script makes the text of
+  all seven. The seven programs are units of this directory too, under
+  other names, where the tool checks them:
+  `unboxed_pair_argument_unknown.ml`,
+  `unboxed_pair_then_integer_argument.ml`,
+  `unboxed_pair_parameter_beside_unknown_call.ml`,
+  `two_parameters_beside_unknown_call.ml`, `void_argument_unknown.ml`,
+  `void_argument_known.ml` and `void_parameter_partial.ml`.
 - The sources are formatted by `ocamlformat`, as `make fmt` wants, but
   for those that it does not read, which `.ocamlformat-ignore` names:
   the sources, here, in `script/` and in `library/`, that have an

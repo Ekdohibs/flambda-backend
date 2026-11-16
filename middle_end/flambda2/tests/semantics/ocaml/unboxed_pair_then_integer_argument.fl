@@ -1,0 +1,32 @@
+let $camlUnboxed_pair_then_integer_argument__first_const_0 = Block 0 () in
+(let code inline(never) size(5)
+       sum_0
+         (#(param_11_unboxed0/40, param_11_unboxed1/41), c/42 : imm tagged)
+         my_closure/43 &my_alloc_region/44 my_depth/45
+         -> k/12 * k/13
+         : imm tagged =
+   let next_depth/46 = rec_info (succ my_depth/45) in
+   let int_add/47 =
+     %int_barith.add (param_11_unboxed0/40, param_11_unboxed1/41)
+   in
+   let int_add/48 = %int_barith.add (int_add/47, c/42) in
+   cont k/12 (int_add/48)
+ in
+ let sum/49 = closure sum_0 @sum &toplevel in
+ (let Popaque/52 = %opaque (3) in
+  apply direct(sum_0 &toplevel)
+    (sum/49 : #(imm tagged * imm tagged) * imm tagged -> imm tagged)
+      (Popaque/52, 4, 5)
+      -> k/14 * error)
+   where k/14 (result/50 : imm tagged) =
+     let Pmakeblock/51 = %block.[`0`].`toplevel` (sum/49, result/50) in
+     cont k/11 (Pmakeblock/51))
+  where k/11 define_root_symbol (module_block/37) =
+    let field_0/38 = %block_load.tag[`0`].`size`[`2`].[`0`] (module_block/37)
+    in
+    let field_1/39 = %block_load.tag[`0`].`size`[`2`].[`1`] (module_block/37)
+    in
+    let $camlUnboxed_pair_then_integer_argument =
+      Block 0 (field_0/38, field_1/39)
+    in
+    cont done ($camlUnboxed_pair_then_integer_argument)

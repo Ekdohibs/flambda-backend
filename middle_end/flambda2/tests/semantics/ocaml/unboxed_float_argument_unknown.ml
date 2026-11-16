@@ -1,6 +1,7 @@
 (* A function of an unboxed float, called through a value of which nothing is
-   known. The text of a term does not give the arity of a call of unknown
-   arity; the tool gives the call one kind for each argument. *)
+   known. The call is of unknown arity, and the text of the term writes the
+   arity of its arguments, which is one component of the kind of an unboxed
+   float, and not a value. *)
 
 external box : float# -> float = "%box_float"
 

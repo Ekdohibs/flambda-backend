@@ -1,0 +1,23 @@
+let $camlVoid_argument_known__first_const_0 = Block 0 () in
+(let code inline(never) size(1)
+       h_0 (c/28 : imm tagged, #())
+         my_closure/29 &my_alloc_region/30 my_depth/31
+         -> k/12 * k/13
+         : imm tagged =
+   let next_depth/32 = rec_info (succ my_depth/31) in
+   cont k/12 (c/28)
+ in
+ let h/33 = closure h_0 @h &toplevel in
+ (let Popaque/36 = %opaque (5) in
+  apply direct(h_0 &toplevel)
+    (h/33 : val? * #() -> imm tagged) (Popaque/36) -> k/14 * error)
+   where k/14 (result/34 : imm tagged) =
+     let Pmakeblock/35 = %block.[`0`].`toplevel` (h/33, result/34) in
+     cont k/11 (Pmakeblock/35))
+  where k/11 define_root_symbol (module_block/25) =
+    let field_0/26 = %block_load.tag[`0`].`size`[`2`].[`0`] (module_block/25)
+    in
+    let field_1/27 = %block_load.tag[`0`].`size`[`2`].[`1`] (module_block/25)
+    in
+    let $camlVoid_argument_known = Block 0 (field_0/26, field_1/27) in
+    cont done ($camlVoid_argument_known)
