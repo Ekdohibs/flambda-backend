@@ -69,13 +69,14 @@
    the term;
 
    - "the text is not read back: ...", 1: called once, and the reader refused
-   the text, or stopped;
+   the text, or stopped, in whichever of its two steps;
 
-   - "not checked: ...", 2: the comparison stopped; or the hook was called more
-   than once (more than one implementation was given: the files of [-text-to]
-   and [-differences-to] are then removed); or it was not called (the compiler
-   did not reach the middle end: an interface alone, [-i], [-stop-after
-   typing]).
+   - "not checked: ...", 2: the printer stopped, so that there is no text (the
+   term has something that it does not write), or the comparison stopped; or the
+   hook was called more than once (more than one implementation was given: the
+   files of [-text-to] and [-differences-to] are then removed); or it was not
+   called (the compiler did not reach the middle end: an interface alone, [-i],
+   [-stop-after typing]).
 
    If the compiler fails and returns to the driver, the driver prints no line
    and exits with the compiler's status. If the compiler exits by itself, with
@@ -148,6 +149,7 @@ let check (unit : Flambda2_terms.Flambda_unit.t) =
           Format.pp_print_flush ppf ());
       close_out oc;
       match P.Parse_flambda.parse_fexpr file with
+      | exception exn -> Not_read_back (one_line (Printexc.to_string exn))
       | Error (Parsing_error (_, loc)) ->
         Not_read_back ("syntax error at " ^ position loc)
       | Error (Lexing_error (_, loc)) ->
