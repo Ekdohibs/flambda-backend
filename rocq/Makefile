@@ -357,6 +357,10 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   FlambdaRegionsReadsProofs.v \
   FlambdaRegionsSpec.v \
   FlambdaRegionsStepsProofs.v \
+  FlambdaRenameApartAlphaProofs.v \
+  FlambdaRenameApartAlphaSpec.v \
+  FlambdaRenameApartCanonicalProofs.v \
+  FlambdaRenameApartCanonicalSpec.v \
   FlambdaRenameApartProofs.v \
   FlambdaRenameApartSpec.v \
   FlambdaSameComparisonProofs.v \
