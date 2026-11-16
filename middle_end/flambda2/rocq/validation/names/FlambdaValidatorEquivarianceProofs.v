@@ -1547,155 +1547,81 @@ Qed.
 (* FlambdaUnboxSpec.v                                                       *)
 (* ======================================================================== *)
 
-Lemma forget_wrapped_var_equivariant (r : renaming) (x : variable)
-    (known : known_numbers) :
-  forget_wrapped_var (rename_variable r x) (rename_known_numbers r known)
-  = rename_known_numbers r (forget_wrapped_var x known).
-Proof.
-  unfold forget_wrapped_var, rename_known_numbers. simpl. f_equal.
-  apply filter_map_with. intros entry. simpl.
-  rewrite rename_variable_eqb, var_in_simple_equivariant. reflexivity.
-Qed.
+(* The laws of renaming of this section are proved from the definitions
+   by the tactic of FlambdaEquivarianceTactic.v. It is told two things.
+   The type of what is known does not say how it is renamed (its first
+   field is a map keyed by variables): the action is
+   [rename_known_numbers]. And the law of [lookup] in that map, at a
+   renamed variable, is stated here; the tactic proves it. The laws
+   that other files use by name keep their names and statements, and
+   each is given to the tactic for the proofs after it. *)
+Section Unbox_numbers.
+
+#[local] Instance known_numbers_renaming : Renaming_of known_numbers :=
+  rename_known_numbers.
+
+Lemma lookup_wrapped_var_renamed (r : renaming) (x : variable)
+    (wrapped_vars : list (variable * (wrapping * simple))) :
+  lookup (rename_variable r x)
+    (map
+       (fun entry =>
+          (rename_variable r (fst entry),
+           (fst (snd entry), rename_simple r (snd (snd entry)))))
+       wrapped_vars)
+  = option_map (fun wrapped => (fst wrapped, rename_simple r (snd wrapped)))
+      (lookup x wrapped_vars).
+Proof. equivariance. Qed.
+#[local] Hint Rewrite lookup_wrapped_var_renamed : equivariance.
 
 Lemma forget_wrapped_vars_equivariant (r : renaming) (xs : list variable) :
   ∀ known : known_numbers,
     forget_wrapped_vars (map (rename_variable r) xs)
       (rename_known_numbers r known)
     = rename_known_numbers r (forget_wrapped_vars xs known).
-Proof.
-  induction xs as [ | x xs IH]; intros known; simpl; [ reflexivity | ].
-  rewrite forget_wrapped_var_equivariant. apply IH.
-Qed.
-
-Lemma number_wrapped_equivariant (r : renaming) (d : named) :
-  number_wrapped (rename_named r d)
-  = option_map (fun wrapped => (fst wrapped, rename_simple r (snd wrapped)))
-      (number_wrapped d).
-Proof.
-  destruct d as [s | p args | | | | | ]; try reflexivity.
-  cbn [rename_named number_wrapped]. rewrite unary_applied_equivariant.
-  destruct (unary_applied p args) as [[p' contents] | ];
-    cbn [option_map fst snd]; [ | reflexivity ].
-  destruct p'; reflexivity.
-Qed.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite forget_wrapped_vars_equivariant : equivariance.
 
 Lemma numbers_under_let_equivariant (r : renaming) (known : known_numbers)
     (x : variable) (d : named) :
   numbers_under_let (rename_known_numbers r known) (rename_variable r x)
     (rename_named r d)
   = rename_known_numbers r (numbers_under_let known x d).
-Proof.
-  unfold numbers_under_let.
-  rewrite forget_wrapped_var_equivariant, number_wrapped_equivariant.
-  destruct (number_wrapped d) as [[how contents] | ];
-    cbn [option_map fst snd]; [ | reflexivity ].
-  rewrite var_in_simple_equivariant.
-  destruct (var_in_simple x contents); reflexivity.
-Qed.
-
-Lemma static_number_boxed_renamed (r : renaming) (binding : static_binding) :
-  static_number_boxed (rename_static_binding r binding)
-  = static_number_boxed binding.
-Proof.
-  destruct binding as [id c | id | sym const]; try reflexivity.
-  destruct const as [ | | | [x | sym' | c] | | ]; reflexivity.
-Qed.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite numbers_under_let_equivariant : equivariance.
 
 Lemma numbers_under_statics_equivariant (r : renaming)
     (known : known_numbers) (bindings : list static_binding) :
   numbers_under_statics (rename_known_numbers r known)
     (map (rename_static_binding r) bindings)
   = rename_known_numbers r (numbers_under_statics known bindings).
-Proof.
-  unfold numbers_under_statics, rename_known_numbers. simpl. do 2 f_equal.
-  induction bindings as [ | binding bindings IH]; simpl; [ reflexivity | ].
-  rewrite static_number_boxed_renamed, IH. reflexivity.
-Qed.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite numbers_under_statics_equivariant : equivariance.
 
 Lemma unwrapped_equivariant (r : renaming) (known : known_numbers)
     (how : wrapping) (wrapped : simple) :
   unwrapped (rename_known_numbers r known) how (rename_simple r wrapped)
   = option_map (rename_simple r) (unwrapped known how wrapped).
-Proof.
-  destruct wrapped as [x | sym | c]; simpl; [ | | reflexivity ].
-  - unfold rename_variable.
-    rewrite
-      (lookup_renamed_keys (variable_permutation r)
-         (fun wrapped => (fst wrapped, rename_simple r (snd wrapped)))).
-    destruct (lookup x (known_wrapped_vars known)) as [[how' contents] | ];
-      cbn [option_map fst snd]; [ | reflexivity ].
-    destruct (wrapping_eqb how how'); reflexivity.
-  - destruct how as [kind | ]; [ | reflexivity ].
-    destruct (lookup sym (known_boxed_symbols known)) as [c | ];
-      [ | reflexivity ].
-    destruct (is_number_of_kind kind c); reflexivity.
-Qed.
-
-Lemma unwrapping_of_known_equivariant (r : renaming) (known : known_numbers)
-    (p : prim) (args : list simple) :
-  unwrapping_of_known (rename_known_numbers r known) p
-    (map (rename_simple r) args)
-  = option_map (rename_simple r) (unwrapping_of_known known p args).
-Proof.
-  unfold unwrapping_of_known. rewrite unary_applied_equivariant.
-  destruct (unary_applied p args) as [[p' wrapped] | ];
-    cbn [option_map fst snd]; [ | reflexivity ].
-  destruct p'; try reflexivity; apply unwrapped_equivariant.
-Qed.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite unwrapped_equivariant : equivariance.
 
 Lemma unbox_known_named_equivariant (r : renaming) (known : known_numbers)
     (d : named) :
   unbox_known_named (rename_known_numbers r known) (rename_named r d)
   = rename_named r (unbox_known_named known d).
-Proof.
-  destruct d as [s | p args | | | | | ]; try reflexivity.
-  cbn [rename_named unbox_known_named].
-  rewrite unwrapping_of_known_equivariant.
-  destruct (unwrapping_of_known known p args); reflexivity.
-Qed.
-
-Fixpoint unbox_numbers_knowing_equivariant_aux (r : renaming) (e : expr) :
-  ∀ known : known_numbers,
-    unbox_numbers_knowing (rename_known_numbers r known) (rename_expr r e)
-    = rename_expr r (unbox_numbers_knowing known e)
-with unbox_numbers_in_handler_equivariant (r : renaming)
-    (h : continuation_handler) :
-  ∀ known : known_numbers,
-    unbox_numbers_in_handler (rename_known_numbers r known)
-      (rename_handler r h)
-    = rename_handler r (unbox_numbers_in_handler known h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      intros known; try reflexivity;
-      cbn [rename_expr unbox_numbers_knowing].
-    + rewrite unbox_known_named_equivariant, numbers_under_let_equivariant,
-        unbox_numbers_knowing_equivariant_aux.
-      reflexivity.
-    + rewrite numbers_under_statics_equivariant,
-        unbox_numbers_knowing_equivariant_aux.
-      reflexivity.
-    + rewrite unbox_numbers_in_handler_equivariant,
-        unbox_numbers_knowing_equivariant_aux.
-      reflexivity.
-    + rewrite unbox_numbers_knowing_equivariant_aux. reflexivity.
-  - destruct h as [params metadata handler]. intros known.
-    cbn [rename_handler unbox_numbers_in_handler].
-    rewrite forget_wrapped_vars_equivariant,
-      unbox_numbers_knowing_equivariant_aux.
-    reflexivity.
-Qed.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite unbox_known_named_equivariant : equivariance.
 
 Theorem unbox_numbers_knowing_equivariant :
   unbox_numbers_knowing_equivariant_statement.
-Proof. intros r known e. apply unbox_numbers_knowing_equivariant_aux. Qed.
+Proof. equivariance. Qed.
 
 Theorem unbox_known_numbers_equivariant :
   unbox_known_numbers_equivariant_statement.
 Proof.
-  intros r e. exact (unbox_numbers_knowing_equivariant_aux r e no_numbers).
+  intros r e. exact (unbox_numbers_knowing_equivariant r no_numbers e).
 Qed.
+
+End Unbox_numbers.
 
 (* ======================================================================== *)
 (* Following aliases                                                        *)
