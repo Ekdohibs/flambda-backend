@@ -1,0 +1,13 @@
+# The units whose own run is compared with X.expected as own_same.sh
+# compares when it is given "numbers" (README.md, "The compiler's own
+# run"): each of the two files must be the one line that says "not checked"
+# of a primitive that the model has not got, and the two lines are compared
+# with one mark in the place of the number, and of the letters UV or N
+# after it, of each word that own_same.sh takes for a variable. One name a
+# line; a line that begins with # is a comment.
+#
+# float_add: both ways print that line, which shows the primitive with its
+# two arguments. They are variables. The number of a variable is the one
+# that the process gave it, and the letters after it say whether the
+# variable is user-visible, which the text does not write.
+float_add

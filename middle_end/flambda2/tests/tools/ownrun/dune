@@ -6,8 +6,7 @@
 ;; program is built in the main context only. `make boot-compiler` does
 ;; not type-check it. What builds it, in the main context: the alias `all`
 ;; of the directory above, and the semantics tests, for the control of
-;; ../../semantics/own_run/ and for each unit of ../../semantics/ocaml/
-;; that has X.own_expected.
+;; ../../semantics/own_run/ and for each unit of ../../semantics/ocaml/.
 ;;
 ;; The modules of the check are those of the directory above, copied: the
 ;; programs above are not a library, and dune does not let one module be in
