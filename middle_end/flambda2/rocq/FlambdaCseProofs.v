@@ -710,29 +710,27 @@ Qed.
 (* ======================================================================== *)
 
 (* The laws of this section are proved from the definitions
-   ([equivariance], of FlambdaEquivarianceTactic.v), but for three
-   things that the tactic is given.
+   ([equivariance], of FlambdaEquivarianceTactic.v). The injectivity
+   of the renaming of a simple is the one proof by hand: another file
+   uses it, and the tactic has no need of it.
 
-   The test of two lists of simples ([same_simples]) is made by a
-   decision procedure on lists, of which the database has no law: its
-   law is proved by hand, from the injectivity of renaming, and given
-   to the database.
+   A law is stated here if another file uses it by its name; so are
+   the two theorems. The laws of the other functions that the pass
+   calls ([share_named], [array_made_under_let],
+   [computed_or_made_under_let]) are not stated: the tactic derives
+   them where it meets the functions.
 
-   Computation is kept from unfolding [var_in_simples] and
-   [same_simples] here, so that their laws apply where the tactic
-   meets them in a test.
+   Two things are given to the tactic. An instance says that
+   [rename_computed] renames the type [computed]; without it the
+   tactic reads a renaming from the type, and the section is proved
+   all the same, more slowly. And each law of a function that is
+   stated is given to the database, so that the proofs that come
+   after it do not derive it again: the law of [forget_computed] is
+   needed in that way by the law of [forget_computed_vars], and the
+   others save time. *)
 
-   The law of [forget_computed] is not left to the tactic from its
-   start: the two definitions are unfolded and the database rewrites
-   the filter of a mapped list, one step by hand goes under the [map]
-   that both sides then begin with, and the tactic closes what is
-   left. The tactic does not go under it itself: the type of the
-   entries is written in two ways on the two sides ([variable] in
-   [computed], the type that it is defined as in the test of the
-   definition).
-
-   A law that another file uses by its name is stated; a law that is
-   stated is given to the database, and is not derived again. *)
+#[local] Instance computed_renaming : Renaming_of computed :=
+  rename_computed.
 
 Lemma var_in_simples_renamed (r : renaming) (x : variable)
     (args : list simple) :
@@ -748,39 +746,10 @@ Proof.
   f_equal. exact (permute_injective (variable_permutation r) x x' H1).
 Qed.
 
-Lemma rename_simples_injective (r : renaming) (args : list simple) :
-  ∀ args' : list simple,
-    map (rename_simple r) args = map (rename_simple r) args' -> args = args'.
-Proof.
-  induction args as [ | s args IH]; intros [ | s' args']; simpl; intros H;
-    try discriminate H; [ reflexivity | ].
-  inversion H as [[Hs Hargs]].
-  rewrite (rename_simple_injective r s s' Hs), (IH args' Hargs).
-  reflexivity.
-Qed.
-
 Lemma same_simples_renamed (r : renaming) (args args' : list simple) :
   same_simples (map (rename_simple r) args) (map (rename_simple r) args')
   = same_simples args args'.
-Proof.
-  unfold same_simples.
-  destruct (list_eq_dec simple_eq_dec args args') as [-> | Hdiffer].
-  - destruct
-      (list_eq_dec simple_eq_dec (map (rename_simple r) args')
-         (map (rename_simple r) args'))
-      as [_ | Hne];
-      [ reflexivity | contradiction Hne; reflexivity ].
-  - destruct
-      (list_eq_dec simple_eq_dec (map (rename_simple r) args)
-         (map (rename_simple r) args'))
-      as [Hsame | _];
-      [ | reflexivity ].
-    contradiction Hdiffer.
-    exact (rename_simples_injective r args args' Hsame).
-Qed.
-
-#[local] Arguments var_in_simples : simpl never.
-#[local] Arguments same_simples : simpl never.
+Proof. equivariance. Qed.
 #[export] Hint Rewrite same_simples_renamed : equivariance.
 
 Lemma computed_by_renamed (r : renaming) (known : computed) (p : prim)
@@ -796,20 +765,11 @@ Lemma made_length_named_renamed (r : renaming) (known : computed) (d : named) :
 Proof. equivariance. Qed.
 #[export] Hint Rewrite made_length_named_renamed : equivariance.
 
-Lemma share_named_renamed (r : renaming) (known : computed) (d : named) :
-  share_named (rename_computed r known) (rename_named r d)
-  = rename_named r (share_named known d).
-Proof. equivariance. Qed.
-#[export] Hint Rewrite share_named_renamed : equivariance.
-
 Lemma forget_computed_renamed (r : renaming) (x : variable)
     (known : computed) :
   forget_computed (rename_variable r x) (rename_computed r known)
   = rename_computed r (forget_computed x known).
-Proof.
-  unfold forget_computed, rename_computed.
-  autorewrite with equivariance. f_equal. eqv_core.
-Qed.
+Proof. equivariance. Qed.
 #[export] Hint Rewrite forget_computed_renamed : equivariance.
 
 Lemma forget_computed_vars_renamed (r : renaming) (xs : list variable) :
@@ -827,20 +787,6 @@ Lemma computed_under_let_renamed (r : renaming) (known : computed)
   = rename_computed r (computed_under_let known x d).
 Proof. equivariance. Qed.
 #[export] Hint Rewrite computed_under_let_renamed : equivariance.
-
-Lemma array_made_under_let_renamed (r : renaming) (x : variable) (d : named) :
-  array_made_under_let (rename_variable r x) (rename_named r d)
-  = rename_computed r (array_made_under_let x d).
-Proof. equivariance. Qed.
-#[export] Hint Rewrite array_made_under_let_renamed : equivariance.
-
-Lemma computed_or_made_under_let_renamed (r : renaming) (known : computed)
-    (x : variable) (d : named) :
-  computed_or_made_under_let (rename_computed r known) (rename_variable r x)
-    (rename_named r d)
-  = rename_computed r (computed_or_made_under_let known x d).
-Proof. equivariance. Qed.
-#[export] Hint Rewrite computed_or_made_under_let_renamed : equivariance.
 
 Theorem share_primitives_knowing_equivariant :
   share_primitives_knowing_equivariant_statement.
