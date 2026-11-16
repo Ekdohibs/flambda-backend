@@ -1026,6 +1026,10 @@ Qed.
    states and proves by itself the law of [named_makes_array]. The
    law is given back to the tactic for those of the handler and of
    the code, which are of the same recursion. *)
+(* The step of the database is the one pass: every proof by the tactic
+   of this part passes with it. *)
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
+
 Lemma rename_makes_array (r : renaming) (e : expr) :
   makes_array (rename_expr r e) = makes_array e.
 Proof. equivariance. Qed.
