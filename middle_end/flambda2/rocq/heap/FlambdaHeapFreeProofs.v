@@ -42,7 +42,8 @@ From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaMapProofs FlambdaHeapSpec FlambdaSemanticsSpec
-  FlambdaSemanticsProofs FlambdaNominalSpec FlambdaHeapFreeSpec.
+  FlambdaSemanticsProofs FlambdaNominalSpec FlambdaHeapFreeSpec
+  FlambdaEquivarianceTactic.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -353,38 +354,7 @@ Qed.
 (* Renaming                                                                 *)
 (* ======================================================================== *)
 
-Fixpoint expr_free_of_heap_renamed (r : renaming) (e : expr) {struct e} :
-  expr_free_of_heap (rename_expr r e) = expr_free_of_heap e
-with handler_free_of_heap_renamed (r : renaming) (h : continuation_handler)
-    {struct h} :
-  handler_free_of_heap (rename_handler r h) = handler_free_of_heap h
-with binding_free_of_heap_renamed (r : renaming) (binding : static_binding)
-    {struct binding} :
-  binding_free_of_heap (rename_static_binding r binding)
-  = binding_free_of_heap binding
-with code_free_of_heap_renamed (r : renaming) (c : code) {struct c} :
-  code_free_of_heap (rename_code r c) = code_free_of_heap c.
-Proof.
-  - destruct e
-      as [ x xkind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      simpl; try reflexivity.
-    + rewrite expr_free_of_heap_renamed. f_equal. destruct d; reflexivity.
-    + rewrite expr_free_of_heap_renamed. f_equal.
-      induction bindings as [ | binding bindings IH]; simpl; [ reflexivity | ].
-      rewrite binding_free_of_heap_renamed, IH. reflexivity.
-    + rewrite handler_free_of_heap_renamed, expr_free_of_heap_renamed.
-      reflexivity.
-    + rewrite expr_free_of_heap_renamed. f_equal.
-      induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
-      rewrite handler_free_of_heap_renamed, IH. reflexivity.
-  - destruct h as [params metadata handler]. simpl.
-    apply expr_free_of_heap_renamed.
-  - destruct binding as [id' c | id' | sym const]; simpl; try reflexivity.
-    apply code_free_of_heap_renamed.
-  - destruct c as [params my_closure ret exn metadata body]. simpl.
-    apply expr_free_of_heap_renamed.
-Qed.
-
+(* Proved from the definitions by [equivariance]
+   (FlambdaEquivarianceTactic.v). *)
 Theorem expr_free_of_heap_rename : expr_free_of_heap_rename_statement.
-Proof. exact expr_free_of_heap_renamed. Qed.
+Proof. equivariance. Qed.
