@@ -100,7 +100,9 @@ type mode =
   | In_types
   | Phantom
 
-let modes = [Normal; In_types; Phantom]
+(* The three name modes, the strongest first: a name that is there at a mode is
+   there at every mode after it ([Name_mode.compare_partial_order]). *)
+let modes = [Normal; Phantom; In_types]
 
 let mode_of_compiler (mode : mode) : Name_mode.t =
   match mode with
@@ -119,9 +121,10 @@ let print_mode (mode : mode) =
 
 (* A name that an environment has: its kind, and the name mode at which the
    environment has it, which is the strongest of the three at which [TE.mem]
-   says that the name is there. For a variable that was bound outside the
-   closure that Simplify is in, that is the mode for types, whatever the mode it
-   was bound with: the environment gives it no other. *)
+   says that the name is there ([modes] is gone through from the strongest). For
+   a variable that was bound outside the closure that Simplify is in, that is
+   the mode for types, whatever the mode it was bound with: the environment
+   gives it no other. *)
 type name_of_env =
   { name : Name.t;
     kind : K.t;
@@ -140,12 +143,11 @@ let mode_in (env : TE.t) (name : Name.t) : mode option =
     (fun mode -> TE.mem ~min_name_mode:(mode_of_compiler mode) env name)
     modes
 
-(* The names of an environment: the variables that its levels above the first
-   define and the symbols that it defines, as in types_of_compilations.ml; and
-   with them every name that the type of one of these mentions, and every name
-   that the environment has as an alias of one, and so on. (The variables of the
-   first level cannot be listed: [TE.cut] gives the levels above a scope, and
-   there is none below the first.) A name that a type mentions and the
+(* The names of an environment: the variables that its levels define and the
+   symbols that it defines, as in types_of_compilations.ml; and with them every
+   name that the type of one of these mentions, and every name that the
+   environment has as an alias of one, and so on: a type may mention a name of
+   another unit, which no level defines. A name that a type mentions and the
    environment has not is a loss. The variables are in the order in which the
    environment bound them, after the symbols. *)
 let names_of (env : TE.t) : name_of_env list =
@@ -986,10 +988,100 @@ let each_in_a_run_of_its_own ~(flags : string list) (inputs : string list) =
   let stopped = number totals "units on which this tool stopped" in
   if stopped > 0 then exit 3
 
+(* A control of the replay and of the gate, on an environment made by hand that
+   has what the environments of the units of the tests may not have: variables
+   bound at each of the three name modes, in scope and put out of scope by a
+   closure ([TE.closure_env]), and a name in scope that is an alias of one out
+   of scope. The mode at which the environment has a variable is to be the mode
+   it was bound with where it is in scope, and the mode for types where it is
+   not; and the environment is to be admitted, with the compiler's replay seen
+   as it too. *)
+let control () =
+  Env.set_current_unit
+    (Unit_info.make_dummy ~input_name:"provers_of_compilations"
+       (Compilation_unit.of_string "Provers_of_compilations"));
+  let variables = ref [] in
+  let define env label (bound : mode) ~(expected : mode) =
+    let variable = Variable.create label K.value in
+    variables := (variable, label, bound, expected) :: !variables;
+    ( TE.add_definition env
+        (Bound_name.create_var
+           (Bound_var.create variable Flambda_debug_uid.none
+              (mode_of_compiler bound)))
+        K.value,
+      variable )
+  in
+  let env = TE.create ~machine_width ~resolver:(fun _ -> None) in
+  let env, outside = define env "normal, outside" Normal ~expected:In_types in
+  let env, _ = define env "phantom, outside" Phantom ~expected:In_types in
+  let env, _ = define env "for types, outside" In_types ~expected:In_types in
+  let env = TE.closure_env env in
+  let env, inside = define env "normal, inside" Normal ~expected:Normal in
+  let env, _ = define env "phantom, inside" Phantom ~expected:Phantom in
+  let env, _ = define env "for types, inside" In_types ~expected:In_types in
+  let env =
+    match
+      TE.add_alias env ~canonical_element1:(Simple.var outside)
+        ~canonical_element2:(Simple.var inside)
+    with
+    | Ok { t = env; canonical_element = _; demoted_name = _ } ->
+      TE.replace_equation env (Name.var inside)
+        (TG.alias_type_of K.value (Simple.var outside))
+    | Unknown | Bottom -> Misc.fatal_error "The control: no alias"
+  in
+  Format.printf
+    "A control: an environment made by hand, with variables of the three name \
+     modes, in the scope of a closure and outside it@.";
+  let failed = ref false in
+  let names = names_of env in
+  List.iter
+    (fun (variable, label, bound, expected) ->
+      let found =
+        List.find_map
+          (fun { name; mode; kind = _ } ->
+            if Name.equal name (Name.var variable) then Some mode else None)
+          names
+      in
+      let as_expected =
+        match found with
+        | Some mode -> Stdlib.( = ) mode expected
+        | None -> false
+      in
+      if not as_expected then failed := true;
+      Format.printf "  %s, bound at the mode %s: the environment has it %s%s@."
+        label (print_mode bound)
+        (match found with
+        | Some mode -> "at the mode " ^ print_mode mode
+        | None -> "not")
+        (if as_expected then "" else " (NOT AS EXPECTED)"))
+    (List.rev !variables);
+  (match replay (Model_names.create ()) env with
+  | Error why ->
+    failed := true;
+    Format.printf "  the environment is LOST: %s@." why
+  | Ok
+      { simplify_against_model;
+        simplify_against_replay;
+        replay_against_model;
+        _
+      } ->
+    List.iter
+      (fun (title, (compared : compared)) ->
+        (match compared with
+        | Seen_the_same -> ()
+        | Differ _ | Not_compared _ -> failed := true);
+        Format.printf "  %s: %s@." title (what_of compared))
+      [ "Simplify's against the model's replay", simplify_against_model;
+        "Simplify's against the compiler's replay", simplify_against_replay;
+        "the compiler's replay against the model's", replay_against_model ]);
+  Format.printf "@.";
+  if !failed then exit 1
+
 let usage () =
   prerr_endline
     "usage: provers_of_compilations [-O3] FILE.fl ..., or \
-     provers_of_compilations [-O3] -why FILE.fl";
+     provers_of_compilations [-O3] -why FILE.fl, or provers_of_compilations \
+     -control";
   exit 2
 
 let () =
@@ -1013,7 +1105,10 @@ let () =
   | ["-why"; filename] -> ignore (one ~why:true filename : counts)
   | ["-why-with-names"; filename] ->
     ignore (one ~why:true ~names:true filename : counts)
-  | [] | ("-one" | "-why" | "-why-with-names") :: _ -> usage ()
+  | ["-control"] ->
+    Clflags.set_target Clflags.Target.Native;
+    control ()
+  | [] | ("-one" | "-why" | "-why-with-names" | "-control") :: _ -> usage ()
   | filenames ->
     Format.printf
       "The environments that Simplify computes for the units of the semantics \

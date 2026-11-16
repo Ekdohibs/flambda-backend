@@ -39,17 +39,16 @@ replayed twice: into the model (M), and into a new environment of the
 compiler (E'), which is a control. The steps are the same but for one
 exception, in step 2.
 
-1. The names. Those that the levels of E above the first define, and its
-   symbols; every name that the type of one of these mentions; every name
-   that E has as an alias of one; and so on. The variables of the first
-   level cannot be listed (`Typing_env.cut` gives the levels above a
-   scope): one of them is among the names only if it is reached in one of
-   those ways.
+1. The names. Those that the levels of E define, and its symbols; every
+   name that the type of one of these mentions; every name that E has as
+   an alias of one; and so on. A type may mention a name of another unit,
+   which no level defines.
 2. Each name is defined, in the order that `stable_compare_simples` gives
    in E (the symbols, then the variables in the order in which E bound
    them), with its kind
-   and with the strongest name mode at which `mem` says that E has it. For
-   a variable bound outside the closure that Simplify is in, that is the
+   and with the strongest name mode at which `mem` says that E has it
+   (the three are normal, phantom and for types, in that order). For a
+   variable bound outside the closure that Simplify is in, that is the
    mode for types, whatever mode it was bound with. The exception: in E'
    a symbol of another unit is not defined, as the compiler has such a
    symbol without a definition; M defines it like any symbol.
@@ -103,6 +102,18 @@ reason that is counted.
 Three comparisons are made. M against E is the admission. E' against E
 says whether the steps give E back in the compiler itself. E' against M
 says, where they do not, whether the model went the way of the compiler.
+
+## A control
+
+The units of the tests may have no variable bound at the phantom mode, and
+the mode of a variable that a closure puts out of scope matters only where
+there is one. So the tool first makes an environment by hand
+(`-control`): variables of the three modes, in the scope of a closure and
+outside it, and a name in scope that is an alias of one outside. It prints
+the mode at which the environment has each, which is to be the mode it was
+bound with in scope and the mode for types outside, and the three
+comparisons of the replays, which are to say "seen the same". Its output
+is the head of the expected file.
 
 ## What is lost, and what is counted apart
 

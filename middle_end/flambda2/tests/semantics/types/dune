@@ -112,6 +112,7 @@
   (with-stdout-to
    provers_of_compilations.output
    (progn
+    (run ./provers_of_compilations.exe -control)
     (system "u=provers_of_compilations.units; ./${u%.units}.exe $(cat $u)")
     (system
      "u=provers_of_compilations.units; ./${u%.units}.exe -O3 $(cat $u)")))))

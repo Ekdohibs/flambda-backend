@@ -1,3 +1,14 @@
+A control: an environment made by hand, with variables of the three name modes, in the scope of a closure and outside it
+  normal, outside, bound at the mode normal: the environment has it at the mode in types
+  phantom, outside, bound at the mode phantom: the environment has it at the mode in types
+  for types, outside, bound at the mode in types: the environment has it at the mode in types
+  normal, inside, bound at the mode normal: the environment has it at the mode normal
+  phantom, inside, bound at the mode phantom: the environment has it at the mode phantom
+  for types, inside, bound at the mode in types: the environment has it at the mode in types
+  Simplify's against the model's replay: seen the same
+  Simplify's against the compiler's replay: seen the same
+  the compiler's replay against the model's: seen the same
+
 The environments that Simplify computes for the units of the semantics tests, replayed into the Rocq model.
 
 apply_direct.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
