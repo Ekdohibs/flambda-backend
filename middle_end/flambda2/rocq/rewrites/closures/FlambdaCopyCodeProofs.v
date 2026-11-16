@@ -51,7 +51,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaSemanticsProofs FlambdaNominalSpec FlambdaClosuresProofs
   FlambdaWellFormedSpec FlambdaUnusedStaticsSpec FlambdaImportsSpec
   FlambdaStaticsInScopeSpec FlambdaObserversSpec FlambdaUnitFromProofs
-  FlambdaCopyCodeSpec.
+  FlambdaEquivarianceTactic FlambdaCopyCodeSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -1390,115 +1390,18 @@ Qed.
 (* The rewrite and the check under renaming                                 *)
 (* ======================================================================== *)
 
-Lemma copy_call_rename (r : renaming) (ids : list (code_id * code_id))
-    (symbols : list symbol) (ap : apply_expr) :
-  rename_apply r (copy_call ids symbols ap)
-  = copy_call ids symbols (rename_apply r ap).
-Proof.
-  destruct ap as [callee kind args k exn extra args_arity return_arity].
-  unfold copy_call, rename_apply. cbn [ap_call_kind ap_callee].
-  destruct kind as [id | ]; [ | reflexivity ].
-  destruct callee as [x | s | c]; cbn [rename_simple];
-    [ destruct (lookup id ids) | destruct (among s symbols)
-    | destruct (lookup id ids) ];
-    reflexivity.
-Qed.
-
-Fixpoint copy_expr_rename (r : renaming) (ids : list (code_id * code_id))
-    (symbols : list symbol) (e : expr) {struct e} :
-  rename_expr r (copy_expr ids symbols e)
-  = copy_expr ids symbols (rename_expr r e)
-with copy_handler_rename (r : renaming) (ids : list (code_id * code_id))
-    (symbols : list symbol) (h : continuation_handler) {struct h} :
-  rename_handler r (copy_handler ids symbols h)
-  = copy_handler ids symbols (rename_handler r h)
-with copy_binding_rename (r : renaming) (ids : list (code_id * code_id))
-    (symbols : list symbol) (binding : static_binding) {struct binding} :
-  map (rename_static_binding r) (copy_binding ids symbols binding)
-  = copy_binding ids symbols (rename_static_binding r binding)
-with copy_code_rename (r : renaming) (ids : list (code_id * code_id))
-    (symbols : list symbol) (c : code) {struct c} :
-  rename_code r (copy_code ids symbols c)
-  = copy_code ids symbols (rename_code r c).
-Proof.
-  - destruct e
-      as [ x xkind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      simpl; try reflexivity.
-    + rewrite copy_expr_rename. reflexivity.
-    + rewrite copy_expr_rename. f_equal.
-      induction bindings as [ | binding bindings IH]; [ reflexivity | ].
-      cbn [flat_map map]. rewrite map_app, copy_binding_rename, IH.
-      reflexivity.
-    + rewrite copy_handler_rename, copy_expr_rename. reflexivity.
-    + rewrite copy_expr_rename. f_equal. rewrite !map_map.
-      induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
-      rewrite copy_handler_rename, IH. reflexivity.
-    + rewrite copy_call_rename. reflexivity.
-  - destruct h as [params metadata handler]. simpl. rewrite copy_expr_rename.
-    reflexivity.
-  - destruct binding as [id c | id | sym const]; simpl; try reflexivity.
-    + destruct (lookup id ids); simpl; rewrite !copy_code_rename;
-        reflexivity.
-    + destruct (among sym symbols); [ | reflexivity ].
-      destruct const; reflexivity.
-  - destruct c as [params my_closure ret exn metadata body]. simpl.
-    rewrite copy_expr_rename. reflexivity.
-Qed.
-
+(* The three laws are proved from the definitions by the tactic of
+   FlambdaEquivarianceTactic.v, which states and proves by itself the
+   laws of the functions that the rewrite and the check are made
+   of. *)
 Theorem copy_expr_equivariant : copy_expr_equivariant_statement.
-Proof. exact copy_expr_rename. Qed.
-
-Fixpoint binds_no_code_rename (r : renaming) (new : list code_id)
-    (e : expr) {struct e} :
-  binds_no_code new (rename_expr r e) = binds_no_code new e
-with handler_binds_no_code_rename (r : renaming) (new : list code_id)
-    (h : continuation_handler) {struct h} :
-  handler_binds_no_code new (rename_handler r h)
-  = handler_binds_no_code new h
-with binding_binds_no_code_rename (r : renaming) (new : list code_id)
-    (binding : static_binding) {struct binding} :
-  binding_binds_no_code new (rename_static_binding r binding)
-  = binding_binds_no_code new binding
-with code_binds_no_code_rename (r : renaming) (new : list code_id)
-    (c : code) {struct c} :
-  code_binds_no_code new (rename_code r c) = code_binds_no_code new c.
-Proof.
-  - destruct e
-      as [ x xkind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      simpl; try reflexivity.
-    + apply binds_no_code_rename.
-    + rewrite binds_no_code_rename. f_equal.
-      induction bindings as [ | binding bindings IH]; simpl; [ reflexivity | ].
-      rewrite binding_binds_no_code_rename, IH. reflexivity.
-    + rewrite handler_binds_no_code_rename, binds_no_code_rename. reflexivity.
-    + rewrite binds_no_code_rename. f_equal.
-      induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
-      rewrite handler_binds_no_code_rename, IH. reflexivity.
-  - destruct h as [params metadata handler]. simpl.
-    apply binds_no_code_rename.
-  - destruct binding as [id c | id | sym const]; simpl; try reflexivity.
-    rewrite code_binds_no_code_rename. reflexivity.
-  - destruct c as [params my_closure ret exn metadata body]. simpl.
-    apply binds_no_code_rename.
-Qed.
+Proof. equivariance. Qed.
 
 Theorem binds_no_code_equivariant : binds_no_code_equivariant_statement.
-Proof. exact binds_no_code_rename. Qed.
+Proof. equivariance. Qed.
 
 Theorem with_copies_equivariant : with_copies_equivariant_statement.
-Proof.
-  intros r copies.
-  induction copies as [ | [ids symbols] copies IH]; intros e;
-    cbn [with_copies]; [ reflexivity | ].
-  unfold copy_static_code, copy_ok.
-  rewrite binds_no_code_rename.
-  destruct (distinct (map fst ids) && distinct (map snd ids)
-            && binds_no_code (map snd ids) e);
-    [ | apply IH ].
-  rewrite IH, copy_expr_rename. reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 (* ======================================================================== *)
 (* The names that the unit with the copies binds                            *)
