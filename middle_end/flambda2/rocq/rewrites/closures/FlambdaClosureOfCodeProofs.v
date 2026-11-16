@@ -39,7 +39,8 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaKnownSlotsSpec FlambdaKnownSlotsProofs FlambdaSetsOfCodeSpec
   FlambdaSetsOfCodeProofs FlambdaSlotsOfCodeSpec FlambdaSlotsOfCodeProofs
   FlambdaImportsSpec FlambdaObserversSpec
-  FlambdaUnitFromProofs FlambdaSharedReadsProofs FlambdaClosureOfCodeSpec.
+  FlambdaUnitFromProofs FlambdaSharedReadsProofs FlambdaEquivarianceTactic
+  FlambdaClosureOfCodeSpec.
 From OxCamlFlambda2 Require Import FlambdaBindersSpec FlambdaNominalProofs
   FlambdaEquivarianceProofs FlambdaScopedProofs.
 Import ListNotations.
@@ -2870,77 +2871,37 @@ Qed.
 (* Renaming                                                                 *)
 (* ======================================================================== *)
 
+(* Where a law below has the proof [equivariance], it is proved from
+   the definitions by the tactic of FlambdaEquivarianceTactic.v, which
+   states and proves by itself the laws of the functions under it. By
+   hand are the laws that ask that a fact holds no variable, the two
+   that rest on what a slot is held to hold having no variable, and the
+   test of the groups, which rests on a renaming being injective. *)
+
 (* A set that a term makes, renamed: the variables in its value
    slots. *)
 Definition rename_set_made (r : renaming) (set : set_made) : set_made :=
   (fst set, map (rename_slot r) (snd set)).
 
-Lemma named_sets_made_renamed (r : renaming) (d : named) :
-  named_sets_made (rename_named r d)
-  = map (rename_set_made r) (named_sets_made d).
-Proof. destruct d; reflexivity. Qed.
+#[local] Instance set_made_renaming : Renaming_of set_made :=
+  rename_set_made.
 
-Lemma static_const_sets_made_renamed (r : renaming) (const : static_const) :
-  static_const_sets_made (rename_static_const r const)
-  = map (rename_set_made r) (static_const_sets_made const).
-Proof. destruct const; reflexivity. Qed.
-
-Fixpoint sets_made_renamed (r : renaming) (e : expr) {struct e} :
-  sets_made (rename_expr r e) = map (rename_set_made r) (sets_made e)
-with handler_sets_made_renamed (r : renaming) (h : continuation_handler)
-    {struct h} :
-  handler_sets_made (rename_handler r h)
-  = map (rename_set_made r) (handler_sets_made h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      cbn [rename_expr sets_made]; try reflexivity.
-    + rewrite named_sets_made_renamed, (sets_made_renamed r body), map_app.
-      reflexivity.
-    + rewrite (sets_made_renamed r body), map_app. f_equal.
-      induction bindings
-        as [ | [id [params my_closure ret exn metadata code_body] | id
-               | sym const]
-               bindings IH];
-        cbn [map flat_map]; [ reflexivity | | | ]; rewrite map_app, IH;
-        f_equal.
-      * cbn [rename_static_binding rename_code binding_sets_made
-               code_sets_made].
-        apply sets_made_renamed.
-      * cbn [rename_static_binding binding_sets_made].
-        apply static_const_sets_made_renamed.
-    + rewrite (handler_sets_made_renamed r h), (sets_made_renamed r body),
-        map_app.
-      reflexivity.
-    + rewrite (sets_made_renamed r body), map_app. f_equal.
-      induction handlers as [ | [k h] handlers IH]; cbn [map flat_map];
-        [ reflexivity | ].
-      rewrite map_app, (handler_sets_made_renamed r h), IH. reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler handler_sets_made]. apply sets_made_renamed.
-Qed.
+Lemma sets_made_renamed (r : renaming) (e : expr) :
+  sets_made (rename_expr r e) = map (rename_set_made r) (sets_made e).
+Proof. equivariance. Qed.
 
 (* The tests answer the same of the sets renamed. *)
 Lemma lookup_slots_renamed (r : renaming) (slot : value_slot)
     (slots : list (value_slot * simple)) :
   lookup slot (map (rename_slot r) slots)
   = option_map (rename_simple r) (lookup slot slots).
-Proof.
-  induction slots as [ | [slot' a] slots IH]; simpl; [ reflexivity | ].
-  destruct (Pos.eqb slot slot'); [ reflexivity | exact IH ].
-Qed.
+Proof. equivariance. Qed.
 
 Lemma set_with_code_renamed (r : renaming) (sets : list set_made)
     (c : code_id) (f : function_slot) :
   set_with_code (map (rename_set_made r) sets) c f
   = option_map (rename_set_made r) (set_with_code sets c f).
-Proof.
-  unfold set_with_code.
-  induction sets as [ | set sets IH]; cbn [map find]; [ reflexivity | ].
-  cbn [rename_set_made fst].
-  destruct (has_code_at c f (fst set)); [ reflexivity | exact IH ].
-Qed.
+Proof. equivariance. Qed.
 
 Lemma set_made_has_renamed (r : renaming) (fact : set_fact)
     (set : set_made) :
@@ -2968,19 +2929,8 @@ Proof.
   rewrite (set_made_has_renamed r fact set Hclosed), IH. reflexivity.
 Qed.
 
-Lemma sibling_code_renamed (r : renaming) (sets : list set_made)
-    (c : code_id) (f g : function_slot) :
-  sibling_code (map (rename_set_made r) sets) c f g
-  = sibling_code sets c f g.
-Proof.
-  unfold sibling_code. rewrite set_with_code_renamed.
-  destruct (set_with_code sets c f) as [set | ]; cbn [option_map];
-    [ | reflexivity ].
-  cbn [rename_set_made fst].
-  destruct (lookup g (fst set)) as [d | ]; [ | reflexivity ].
-  rewrite (sets_made_have_renamed r c f (Code_at g d) sets eq_refl).
-  reflexivity.
-Qed.
+#[local] Hint Rewrite set_made_has_renamed sets_made_have_renamed
+  using (solve [ assumption | reflexivity ]) : equivariance.
 
 Lemma slot_held_renamed (r : renaming) (sets : list set_made) (c : code_id)
     (f : function_slot) (slot : value_slot) :
@@ -3005,62 +2955,19 @@ Definition rename_codes (r : renaming) (known : closure_codes)
     : closure_codes :=
   map (fun entry => (rename_variable r (fst entry), snd entry)) known.
 
+#[local] Instance closure_codes_renaming : Renaming_of closure_codes :=
+  rename_codes.
+
 Lemma lookup_codes_renamed (r : renaming) (x : variable)
     (known : closure_codes) :
   lookup (rename_variable r x) (rename_codes r known) = lookup x known.
-Proof.
-  unfold rename_codes.
-  induction known as [ | [y c] known IH]; simpl; [ reflexivity | ].
-  rewrite rename_variable_eqb. destruct (Pos.eqb x y); [ reflexivity | ].
-  exact IH.
-Qed.
+Proof. equivariance. Qed.
 
 Lemma unbind_codes_renamed (r : renaming) (x : variable)
     (known : closure_codes) :
   unbind (rename_variable r x) (rename_codes r known)
   = rename_codes r (unbind x known).
-Proof.
-  unfold unbind, rename_codes.
-  induction known as [ | [y c] known IH]; simpl; [ reflexivity | ].
-  rewrite rename_variable_eqb, IH. destruct (Pos.eqb x y); reflexivity.
-Qed.
-
-Lemma forget_code_vars_renamed (r : renaming) (params : list variable) :
-  ∀ known : closure_codes,
-    forget_code_vars (map (rename_variable r) params) (rename_codes r known)
-    = rename_codes r (forget_code_vars params known).
-Proof.
-  induction params as [ | param params IH]; intros known; simpl;
-    [ reflexivity | ].
-  rewrite unbind_codes_renamed. apply IH.
-Qed.
-
-Lemma closure_code_made_renamed (r : renaming) (sets : list set_made)
-    (known : closure_codes) (d : named) :
-  closure_code_made (map (rename_set_made r) sets) (rename_codes r known)
-    (rename_named r d)
-  = closure_code_made sets known d.
-Proof.
-  destruct d as [s | p args | code slots | fslot decls slots | vslot closure
-    | pfrom vslot closure | move_from move_to closure];
-    try reflexivity.
-  destruct closure as [y | sym | c]; try reflexivity.
-  cbn [rename_named rename_simple closure_code_made].
-  rewrite lookup_codes_renamed.
-  destruct (lookup y known) as [c | ]; [ | reflexivity ].
-  apply sibling_code_renamed.
-Qed.
-
-Lemma codes_under_let_renamed (r : renaming) (sets : list set_made)
-    (known : closure_codes) (x : variable) (d : named) :
-  codes_under_let (map (rename_set_made r) sets) (rename_codes r known)
-    (rename_variable r x) (rename_named r d)
-  = rename_codes r (codes_under_let sets known x d).
-Proof.
-  unfold codes_under_let.
-  rewrite closure_code_made_renamed, unbind_codes_renamed.
-  destruct (closure_code_made sets known d); reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 Lemma read_code_slot_renamed (r : renaming) (sets : list set_made)
     (syms : list symbol) (known : closure_codes) (d : named) :
@@ -3084,137 +2991,16 @@ Proof.
   reflexivity.
 Qed.
 
-Lemma call_code_closure_renamed (r : renaming) (known : closure_codes)
-    (ap : apply_expr) :
-  call_code_closure (rename_codes r known) (rename_apply r ap)
-  = rename_apply r (call_code_closure known ap).
-Proof.
-  unfold call_code_closure.
-  cbn [rename_apply ap_call_kind ap_callee].
-  destruct (ap_call_kind ap); [ destruct (ap_callee ap); reflexivity | ].
-  destruct (ap_callee ap) as [x | sym | c]; try reflexivity.
-  cbn [rename_simple]. rewrite lookup_codes_renamed.
-  destruct (lookup x known); reflexivity.
-Qed.
+#[local] Hint Rewrite lookup_codes_renamed unbind_codes_renamed
+  read_code_slot_renamed symbols_of_bindings_renamed symbol_names_renamed
+  : equivariance.
 
-Fixpoint know_in_body_renamed (r : renaming) (sets : list set_made)
-    (e : expr) {struct e} :
-  ∀ (syms : list symbol) (known : closure_codes),
-    know_in_body (map (rename_set_made r) sets) syms (rename_codes r known)
-      (rename_expr r e)
-    = rename_expr r (know_in_body sets syms known e)
-with know_in_body_handler_renamed (r : renaming) (sets : list set_made)
-    (h : continuation_handler) {struct h} :
-  ∀ (syms : list symbol) (known : closure_codes),
-    know_in_body_handler (map (rename_set_made r) sets) syms
-      (rename_codes r known) (rename_handler r h)
-    = rename_handler r (know_in_body_handler sets syms known h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      intros syms known; try reflexivity;
-      cbn [rename_expr know_in_body].
-    + rewrite read_code_slot_renamed, codes_under_let_renamed,
-        (know_in_body_renamed r sets body).
-      reflexivity.
-    + rewrite (know_in_body_renamed r sets body). reflexivity.
-    + rewrite (know_in_body_handler_renamed r sets h),
-        (know_in_body_renamed r sets body).
-      reflexivity.
-    + rewrite (know_in_body_renamed r sets body). f_equal.
-      induction handlers as [ | [k h] handlers IH]; cbn [map];
-        [ reflexivity | ].
-      rewrite (know_in_body_handler_renamed r sets h), IH. reflexivity.
-    + rewrite call_code_closure_renamed. reflexivity.
-  - destruct h as [params metadata handler]. intros syms known.
-    cbn [rename_handler know_in_body_handler].
-    rewrite forget_code_vars_renamed, (know_in_body_renamed r sets handler).
-    reflexivity.
-Qed.
-
-Lemma know_code_in_binding_renamed (r : renaming) (sets : list set_made)
-    (syms : list symbol) (binding : static_binding) :
-  know_code_in_binding (map (rename_set_made r) sets) syms
-    (rename_static_binding r binding)
-  = rename_static_binding r (know_code_in_binding sets syms binding).
-Proof.
-  destruct binding
-    as [id [params my_closure ret exn metadata body] | id | sym const];
-    try reflexivity.
-  cbn [rename_static_binding rename_code know_code_in_binding know_in_code].
-  rewrite among_rename_variable.
-  destruct (cm_is_stub metadata || among my_closure params);
-    [ reflexivity | ].
-  cbn [rename_static_binding rename_code].
-  rewrite <- (know_in_body_renamed r sets body syms [(my_closure, id)]).
-  reflexivity.
-Qed.
-
-Fixpoint know_code_closures_renamed (r : renaming) (sets : list set_made)
-    (e : expr) {struct e} :
+Lemma know_code_closures_renamed (r : renaming) (sets : list set_made)
+    (e : expr) :
   ∀ syms : list symbol,
     know_code_closures (map (rename_set_made r) sets) syms (rename_expr r e)
-    = rename_expr r (know_code_closures sets syms e)
-with know_code_in_handler_renamed (r : renaming) (sets : list set_made)
-    (h : continuation_handler) {struct h} :
-  ∀ syms : list symbol,
-    know_code_in_handler (map (rename_set_made r) sets) syms
-      (rename_handler r h)
-    = rename_handler r (know_code_in_handler sets syms h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      intros syms; cbn [rename_expr know_code_closures]; try reflexivity.
-    + rewrite (know_code_closures_renamed r sets body). reflexivity.
-    + assert (Hbindings :
-        ∀ all : list symbol,
-          map (know_code_in_binding (map (rename_set_made r) sets) all)
-            (map (rename_static_binding r) bindings)
-          = map (rename_static_binding r)
-              (map (know_code_in_binding sets all) bindings)).
-      { intros all.
-        induction bindings as [ | binding bindings IH]; cbn [map];
-          [ reflexivity | ].
-        rewrite know_code_in_binding_renamed, IH. reflexivity. }
-      rewrite
-        (bindings_names_renamed r symbols_of_binding
-           (symbols_of_binding_renamed r)),
-        (know_code_closures_renamed r sets body), Hbindings.
-      reflexivity.
-    + rewrite
-        (static_names_of_renamed r symbols_of_binding
-           (symbols_of_binding_renamed r)),
-        (know_code_in_handler_renamed r sets h),
-        (know_code_closures_renamed r sets body).
-      reflexivity.
-    + assert (Hhandlers :
-        ∀ all : list symbol,
-          map
-            (fun '(k, h) =>
-               (k,
-                know_code_in_handler (map (rename_set_made r) sets) all h))
-            (map
-               (fun '(k, h) => (rename_continuation r k, rename_handler r h))
-               handlers)
-          = map
-              (fun '(k, h) => (rename_continuation r k, rename_handler r h))
-              (map (fun '(k, h) => (k, know_code_in_handler sets all h))
-                 handlers)).
-      { intros all.
-        induction handlers as [ | [k h] handlers IH]; cbn [map];
-          [ reflexivity | ].
-        rewrite (know_code_in_handler_renamed r sets h), IH. reflexivity. }
-      rewrite
-        (static_names_of_renamed r symbols_of_binding
-           (symbols_of_binding_renamed r)),
-        (know_code_closures_renamed r sets body), Hhandlers.
-      reflexivity.
-  - destruct h as [params metadata handler]. intros syms.
-    cbn [rename_handler know_code_in_handler].
-    rewrite (know_code_closures_renamed r sets handler). reflexivity.
-Qed.
+    = rename_expr r (know_code_closures sets syms e).
+Proof. equivariance. Qed.
 
 (* The test of the groups is the same of a term renamed: a renaming is
    injective, so the test of equality of static constants answers the
@@ -3344,274 +3130,38 @@ Definition rename_sight (r : renaming) (sight : closure_sight)
     : closure_sight :=
   map (fun entry => (rename_variable r (fst entry), snd entry)) sight.
 
-Lemma lookup_sight_renamed (r : renaming) (x : variable)
-    (sight : closure_sight) :
-  lookup (rename_variable r x) (rename_sight r sight) = lookup x sight.
-Proof.
-  unfold rename_sight.
-  induction sight as [ | [y seen] sight IH]; simpl; [ reflexivity | ].
-  rewrite rename_variable_eqb. destruct (Pos.eqb x y); [ reflexivity | ].
-  exact IH.
-Qed.
+#[local] Instance closure_sight_renaming : Renaming_of closure_sight :=
+  rename_sight.
 
 Lemma unbind_sight_renamed (r : renaming) (x : variable)
     (sight : closure_sight) :
   unbind (rename_variable r x) (rename_sight r sight)
   = rename_sight r (unbind x sight).
-Proof.
-  unfold unbind, rename_sight.
-  induction sight as [ | [y seen] sight IH]; simpl; [ reflexivity | ].
-  rewrite rename_variable_eqb, IH. destruct (Pos.eqb x y); reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
-Lemma sight_without_renamed (r : renaming) (params : list variable) :
-  ∀ sight : closure_sight,
-    sight_without (map (rename_variable r) params) (rename_sight r sight)
-    = rename_sight r (sight_without params sight).
-Proof.
-  induction params as [ | param params IH]; intros sight; simpl;
-    [ reflexivity | ].
-  rewrite unbind_sight_renamed. apply IH.
-Qed.
-
-Lemma sight_made_renamed (r : renaming) (sight : closure_sight)
-    (d : named) :
-  sight_made (rename_sight r sight) (rename_named r d) = sight_made sight d.
-Proof.
-  destruct d as [s | p args | code slots | fslot decls slots | vslot closure
-    | pfrom vslot closure | move_from move_to closure];
-    try reflexivity.
-  destruct closure as [y | sym | c]; try reflexivity.
-  cbn [rename_named rename_simple sight_made].
-  rewrite lookup_sight_renamed. reflexivity.
-Qed.
-
-Lemma sight_under_let_renamed (r : renaming) (sight : closure_sight)
-    (x : variable) (d : named) :
-  sight_under_let (rename_sight r sight) (rename_variable r x)
-    (rename_named r d)
-  = rename_sight r (sight_under_let sight x d).
-Proof.
-  unfold sight_under_let.
-  rewrite sight_made_renamed, unbind_sight_renamed.
-  destruct (sight_made sight d); reflexivity.
-Qed.
-
-Lemma simple_seen_code_renamed (r : renaming) (sight : closure_sight)
-    (a : simple) :
-  simple_seen_code (rename_sight r sight) (rename_simple r a)
-  = simple_seen_code sight a.
-Proof.
-  destruct a as [x | sym | k]; try reflexivity.
-  cbn [rename_simple simple_seen_code]. rewrite lookup_sight_renamed.
-  reflexivity.
-Qed.
-
-Lemma slots_seen_renamed (r : renaming) (sight : closure_sight)
-    (value_slots : list (value_slot * simple)) :
-  slots_seen (rename_sight r sight)
-    (map (fun slot => (fst slot, rename_simple r (snd slot))) value_slots)
-  = slots_seen sight value_slots.
-Proof.
-  unfold slots_seen.
-  induction value_slots as [ | [slot a] value_slots IH]; cbn [map];
-    [ reflexivity | ].
-  cbn [fst snd]. rewrite simple_seen_code_renamed, IH.
-  reflexivity.
-Qed.
-
-Lemma named_sets_seen_renamed (r : renaming) (sight : closure_sight)
-    (d : named) :
-  named_sets_seen (rename_sight r sight) (rename_named r d)
-  = named_sets_seen sight d.
-Proof.
-  destruct d as [s | p args | code slots | fslot decls slots | vslot closure
-    | pfrom vslot closure | move_from move_to closure];
-    try reflexivity; cbn [rename_named named_sets_seen];
-    rewrite (slots_seen_renamed r sight slots); reflexivity.
-Qed.
-
-Lemma static_const_sets_seen_renamed (r : renaming) (sight : closure_sight)
-    (const : static_const) :
-  static_const_sets_seen (rename_sight r sight) (rename_static_const r const)
-  = static_const_sets_seen sight const.
-Proof.
-  destruct const
-    as [code slots | slot closure_symbols decls slots | tag fields
-       | contents | contents | elements];
-    try reflexivity; cbn [rename_static_const static_const_sets_seen];
-    rewrite (slots_seen_renamed r sight slots); reflexivity.
-Qed.
+#[local] Hint Rewrite unbind_sight_renamed : equivariance.
 
 (* The sets that a term renamed makes are seen as those of the term
    are. *)
-Fixpoint sets_seen_renamed (r : renaming) (e : expr) {struct e} :
+Lemma sets_seen_renamed (r : renaming) (e : expr) :
   ∀ sight : closure_sight,
-    sets_seen (rename_sight r sight) (rename_expr r e) = sets_seen sight e
-with handler_sets_seen_renamed (r : renaming) (h : continuation_handler)
-    {struct h} :
-  ∀ sight : closure_sight,
-    handler_sets_seen (rename_sight r sight) (rename_handler r h)
-    = handler_sets_seen sight h.
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      intros sight; cbn [rename_expr sets_seen]; try reflexivity.
-    + rewrite named_sets_seen_renamed, sight_under_let_renamed,
-        (sets_seen_renamed r body).
-      reflexivity.
-    + rewrite (sets_seen_renamed r body). f_equal.
-      induction bindings
-        as [ | [id [params my_closure ret exn metadata code_body] | id
-               | sym const]
-               bindings IH];
-        cbn [map flat_map]; [ reflexivity | | | ]; rewrite IH; f_equal.
-      * cbn [rename_static_binding rename_code binding_sets_seen
-               code_sets_seen].
-        exact (sets_seen_renamed r code_body []).
-      * cbn [rename_static_binding binding_sets_seen].
-        apply static_const_sets_seen_renamed.
-    + rewrite (handler_sets_seen_renamed r h), (sets_seen_renamed r body).
-      reflexivity.
-    + rewrite (sets_seen_renamed r body). f_equal.
-      induction handlers as [ | [k h] handlers IH]; cbn [map flat_map];
-        [ reflexivity | ].
-      rewrite (handler_sets_seen_renamed r h), IH. reflexivity.
-  - destruct h as [params metadata handler]. intros sight.
-    cbn [rename_handler handler_sets_seen].
-    rewrite sight_without_renamed. apply sets_seen_renamed.
-Qed.
+    sets_seen (rename_sight r sight) (rename_expr r e) = sets_seen sight e.
+Proof. equivariance. Qed.
 
 Lemma sets_seen_renamed_nil (r : renaming) (e : expr) :
   sets_seen [] (rename_expr r e) = sets_seen [] e.
 Proof. exact (sets_seen_renamed r e []). Qed.
 
-Lemma closure_code_read_renamed (r : renaming) (sets : list set_made)
-    (seen : list set_seen) (known : closure_codes) (d : named) :
-  closure_code_read (map (rename_set_made r) sets) seen
-    (rename_codes r known) (rename_named r d)
-  = closure_code_read sets seen known d.
-Proof.
-  destruct d as [s | p args | code slots | fslot decls slots | vslot closure
-    | pfrom vslot closure | move_from move_to closure];
-    try exact (closure_code_made_renamed r sets known _).
-  destruct closure as [y | sym | c]; try reflexivity.
-  cbn [rename_named rename_simple closure_code_read].
-  rewrite lookup_codes_renamed. reflexivity.
-Qed.
-
-Lemma codes_under_read_renamed (r : renaming) (sets : list set_made)
-    (seen : list set_seen) (known : closure_codes) (x : variable)
-    (d : named) :
-  codes_under_read (map (rename_set_made r) sets) seen
-    (rename_codes r known) (rename_variable r x) (rename_named r d)
-  = rename_codes r (codes_under_read sets seen known x d).
-Proof.
-  unfold codes_under_read.
-  rewrite closure_code_read_renamed, unbind_codes_renamed.
-  destruct (closure_code_read sets seen known d); reflexivity.
-Qed.
-
-Fixpoint know_slots_in_body_renamed (r : renaming) (sets : list set_made)
-    (seen : list set_seen) (e : expr) {struct e} :
-  ∀ known : closure_codes,
-    know_slots_in_body (map (rename_set_made r) sets) seen
-      (rename_codes r known) (rename_expr r e)
-    = rename_expr r (know_slots_in_body sets seen known e)
-with know_slots_in_handler_renamed (r : renaming) (sets : list set_made)
-    (seen : list set_seen) (h : continuation_handler) {struct h} :
-  ∀ known : closure_codes,
-    know_slots_in_handler (map (rename_set_made r) sets) seen
-      (rename_codes r known) (rename_handler r h)
-    = rename_handler r (know_slots_in_handler sets seen known h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      intros known; try reflexivity;
-      cbn [rename_expr know_slots_in_body].
-    + rewrite codes_under_read_renamed,
-        (know_slots_in_body_renamed r sets seen body).
-      reflexivity.
-    + rewrite (know_slots_in_body_renamed r sets seen body). reflexivity.
-    + rewrite (know_slots_in_handler_renamed r sets seen h),
-        (know_slots_in_body_renamed r sets seen body).
-      reflexivity.
-    + rewrite (know_slots_in_body_renamed r sets seen body). f_equal.
-      induction handlers as [ | [k h] handlers IH]; cbn [map];
-        [ reflexivity | ].
-      rewrite (know_slots_in_handler_renamed r sets seen h), IH.
-      reflexivity.
-    + rewrite call_code_closure_renamed. reflexivity.
-  - destruct h as [params metadata handler]. intros known.
-    cbn [rename_handler know_slots_in_handler].
-    rewrite forget_code_vars_renamed,
-      (know_slots_in_body_renamed r sets seen handler).
-    reflexivity.
-Qed.
-
-Lemma know_slots_in_binding_renamed (r : renaming) (sets : list set_made)
-    (seen : list set_seen) (binding : static_binding) :
-  know_slots_in_binding (map (rename_set_made r) sets) seen
-    (rename_static_binding r binding)
-  = rename_static_binding r (know_slots_in_binding sets seen binding).
-Proof.
-  destruct binding
-    as [id [params my_closure ret exn metadata body] | id | sym const];
-    try reflexivity.
-  cbn [rename_static_binding rename_code know_slots_in_binding
-         know_slots_in_code].
-  rewrite among_rename_variable.
-  destruct (cm_is_stub metadata || among my_closure params);
-    [ reflexivity | ].
-  cbn [rename_static_binding rename_code].
-  rewrite <- (know_slots_in_body_renamed r sets seen body
-                [(my_closure, id)]).
-  reflexivity.
-Qed.
-
-Fixpoint know_code_slots_renamed (r : renaming) (sets : list set_made)
-    (seen : list set_seen) (e : expr) {struct e} :
+Lemma know_code_slots_renamed (r : renaming) (sets : list set_made)
+    (seen : list set_seen) (e : expr) :
   know_code_slots (map (rename_set_made r) sets) seen (rename_expr r e)
-  = rename_expr r (know_code_slots sets seen e)
-with know_code_slots_in_handler_renamed (r : renaming)
-    (sets : list set_made) (seen : list set_seen)
-    (h : continuation_handler) {struct h} :
-  know_code_slots_in_handler (map (rename_set_made r) sets) seen
-    (rename_handler r h)
-  = rename_handler r (know_code_slots_in_handler sets seen h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      cbn [rename_expr know_code_slots]; try reflexivity.
-    + rewrite (know_code_slots_renamed r sets seen body). reflexivity.
-    + rewrite (know_code_slots_renamed r sets seen body). f_equal.
-      induction bindings as [ | binding bindings IH]; cbn [map];
-        [ reflexivity | ].
-      rewrite know_slots_in_binding_renamed, IH. reflexivity.
-    + rewrite (know_code_slots_in_handler_renamed r sets seen h),
-        (know_code_slots_renamed r sets seen body).
-      reflexivity.
-    + rewrite (know_code_slots_renamed r sets seen body). f_equal.
-      induction handlers as [ | [k h] handlers IH]; cbn [map];
-        [ reflexivity | ].
-      rewrite (know_code_slots_in_handler_renamed r sets seen h), IH.
-      reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler know_code_slots_in_handler].
-    rewrite (know_code_slots_renamed r sets seen handler). reflexivity.
-Qed.
+  = rename_expr r (know_code_slots sets seen e).
+Proof. equivariance. Qed.
+
+#[local] Hint Rewrite groups_whole_renamed sets_made_renamed
+  know_code_closures_renamed sets_seen_renamed_nil know_code_slots_renamed
+  : equivariance.
 
 Theorem know_own_closures_equivariant :
   know_own_closures_equivariant_statement.
-Proof.
-  intros r e. unfold know_own_closures.
-  rewrite groups_whole_renamed.
-  destruct (groups_whole e); [ | reflexivity ].
-  cbv zeta.
-  rewrite sets_made_renamed, know_code_closures_renamed.
-  rewrite sets_made_renamed, sets_seen_renamed_nil.
-  apply know_code_slots_renamed.
-Qed.
+Proof. equivariance. Qed.
