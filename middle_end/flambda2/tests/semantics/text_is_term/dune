@@ -100,6 +100,9 @@
 ;; parameters_of_small_unboxed_integers: parameters of the kinds of unboxed
 ;; 8-bit and 16-bit integers, which the reader takes. The text is the term.
 ;;
+;; parameter_that_is_a_boxed_vector: a parameter of the kind of a boxed
+;; 128-bit vector, which the reader takes. The text is the term.
+;;
 ;; partial_application_of_unboxed_float: the text is not read back.
 ;;
 ;; interface_only, type_error: the compiler does not reach the middle end.
@@ -183,6 +186,22 @@
   (= %{context_name} "main"))
  (action
   (diff length_of_bytes.expected length_of_bytes.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   parameter_that_is_a_boxed_vector.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     %{dep:parameter_that_is_a_boxed_vector.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff parameter_that_is_a_boxed_vector.expected parameter_that_is_a_boxed_vector.output)))
 
 (rule
  (enabled_if

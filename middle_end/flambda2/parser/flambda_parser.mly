@@ -515,6 +515,10 @@ subkind:
   | KWD_INT32 KWD_BOXED { Boxed_int32 }
   | KWD_INT64 KWD_BOXED { Boxed_int64 }
   | KWD_NATIVEINT KWD_BOXED { Boxed_nativeint }
+  | KWD_VEC128 KWD_BOXED { Boxed_vec128 }
+  | KWD_VEC256 KWD_BOXED { Boxed_vec256 }
+  | KWD_VEC512 KWD_BOXED { Boxed_vec512 }
+  | KWD_MASK KWD_BOXED { Boxed_mask }
   | KWD_IMM KWD_TAGGED { Tagged_immediate }
   | KWD_FLOAT; CARET; num_fields = plain_int { Float_block { num_fields } }
   | LBRACK; ctors = ctors; RBRACK
