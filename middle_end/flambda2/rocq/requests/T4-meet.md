@@ -1111,7 +1111,7 @@ places where `compiler_choices` differs, with that one choice as the
 compiler has it and the two others repaired (`only_get_tag_of_blocks`,
 `only_defining_again`, `only_not_lifting`):
 
-1. The type of the scrutinee of `Get_tag` (T4-6).
+1. The type of the scrutinee of `Get_tag` (T1-1, R3-2).
    `get_tag_reduction_of_block`: the compiler's type is true of a
    value that the relation holds of exactly where the value is a
    block. `example_get_tag_inputs`: the input of the example that

@@ -46,7 +46,7 @@
      fails.
 
    1. The type that the step for [Get_tag] gives the scrutinee
-      (discrepancy T4-6; "The step that is not sound" in
+      (discrepancies T1-1 and R3-2; "The step that is not sound" in
       FlambdaMeetSpec.v). The compiler's type,
       [blocks_with_these_tags], is true of a scrutinee that the
       relation holds of exactly where the scrutinee is a block
