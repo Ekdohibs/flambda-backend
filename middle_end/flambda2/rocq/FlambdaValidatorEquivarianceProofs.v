@@ -479,50 +479,24 @@ Qed.
 (* A continuation applied once, at the end of its scope                     *)
 (* ======================================================================== *)
 
-(* The laws of [inline_cont_at_tail] and of the two rewrites that are
-   made of it are proved from the definitions by the tactic of
-   FlambdaEquivarianceTactic.v. What the tactic is given here:
-   - the law of [var_free_b], which is proved by hand in
-     FlambdaValidatorEquivarianceBaseProofs.v: without it the tactic
-     leaves the first proof incomplete;
-   - computation is kept from unfolding [var_in_simples], so that the
-     law of the test that no parameter is among the arguments
-     (FlambdaEquivarianceProofs.params_not_in_args_equivariant) applies
-     as it is written: without that the first proof does not end;
-   - two rules. Where [option_map] is at what a function answers of
-     the term before renaming, the two cases of that answer: the tactic
-     has no step for [option_map] at an answer that is not known. And
-     where the two sides choose on one condition that has no renaming
-     left in it, the two cases of the condition, before the tactic
-     derives a law for what is under the choice: the law of
-     [let_params] that it derives and the law of the database
-     (FlambdaEquivarianceProofs.let_params_equivariant), which is
-     written the other way round, undo each other without end. *)
-From OxCamlFlambda2 Require Import FlambdaEquivarianceTactic.
+(* The laws of renaming of [inline_cont_at_tail] and of the two
+   rewrites that are made of it, FlambdaNormaliseSpec.inline_tail_conts
+   and FlambdaInlineTailSpec.inline_tail_conts_kinded, in two ways side
+   by side, to be compared.
+
+   The first way: each law is proved from the definitions by the
+   tactic of FlambdaEquivarianceTactic.v. The tactic is given one law,
+   that of [var_free_b], which is proved by hand in
+   FlambdaValidatorEquivarianceBaseProofs.v: where it is not given the
+   tactic derives it, and the first proof is slower. The law of
+   [inline_cont_at_tail], once proved, is given to the tactic for the
+   two rewrites. *)
+From OxCamlFlambda2 Require Import FlambdaEquivarianceTactic
+  FlambdaTermInductionProofs FlambdaSpineWalkSpec FlambdaSpineWalkNamesProofs.
 
 Section Inline_tail.
 
 #[local] Hint Rewrite var_free_b_equivariant_aux : equivariance.
-
-#[local] Arguments var_in_simples : simpl never.
-
-#[local] Ltac eqv_extra ::=
-  match goal with
-  | |- context [option_map _ ?o] =>
-    eqv_no_renaming o;
-    let h := eqv_head o in
-    is_const h;
-    lazymatch h with
-    | @option_map => fail
-    | _ => idtac
-    end;
-    destruct o
-  | |- (if ?c then _ else _) = ?rhs =>
-    eqv_no_renaming c;
-    lazymatch rhs with
-    | context [if c then _ else _] => destruct c
-    end
-  end.
 
 Lemma inline_cont_at_tail_equivariant_aux (r : renaming) (k : continuation)
     (params : list variable) (metadata : handler_metadata) (handler : expr) :
@@ -560,6 +534,81 @@ Proof. equivariance. Qed.
 Lemma inline_tail_conts_kinded_equivariant :
   rewrite_equivariant inline_tail_conts_kinded.
 Proof. exact inline_tail_conts_kinded_equivariant_aux. Qed.
+
+(* The second way: each of the two rewrites is the walk over the spine
+   of a term (FlambdaSpineWalkSpec.walk_spine) of a rewrite of one
+   node, which is not recursive. At a non-recursive [Let_cont] whose
+   handler and body the walk has rewritten, the step puts the handler
+   in the place of the application that ends the body, where
+   [inline_cont_at_tail] gives it; it leaves every other node as it
+   is. The law of renaming of a rewrite is then that of its step, by
+   FlambdaSpineWalkNamesProofs.walk_spine_equivariant, and the tactic
+   proves the law of a step.
+
+   The definitions of the two rewrites are not written as walks: they
+   are as they were, in FlambdaNormaliseSpec.v and
+   FlambdaInlineTailSpec.v, and that each is the walk of its step is a
+   lemma here. To write them as walks would change those two files
+   and what is extracted from them, and the other laws of the two
+   rewrites would be had through the equation, or proved again of the
+   step. *)
+Definition inline_tail_step (e : expr) : expr :=
+  match e with
+  | Let_cont_non_recursive k (Handler params metadata handler) body =>
+    match inline_cont_at_tail k params metadata handler body with
+    | Some inlined => inlined
+    | None => e
+    end
+  | _ => e
+  end.
+
+Definition inline_tail_kinded_step (e : expr) : expr :=
+  match e with
+  | Let_cont_non_recursive k (Handler params metadata handler) body =>
+    if Nat.eqb (length params) (length (hm_params_kinds metadata))
+    then
+      match inline_cont_at_tail k params metadata handler body with
+      | Some inlined => inlined
+      | None => e
+      end
+    else e
+  | _ => e
+  end.
+
+Lemma inline_tail_conts_as_walk (e : expr) :
+  inline_tail_conts e = walk_spine inline_tail_step e.
+Proof.
+  induction e using expr_deep_ind; cbn [inline_tail_conts walk_spine];
+    rewrite <- ?IHe, <- ?IHe1, <- ?IHe2; reflexivity.
+Qed.
+
+Lemma inline_tail_conts_kinded_as_walk (e : expr) :
+  inline_tail_conts_kinded e = walk_spine inline_tail_kinded_step e.
+Proof.
+  induction e using expr_deep_ind; cbn [inline_tail_conts_kinded walk_spine];
+    rewrite <- ?IHe, <- ?IHe1, <- ?IHe2; reflexivity.
+Qed.
+
+Lemma inline_tail_step_equivariant : rewrite_equivariant inline_tail_step.
+Proof. equivariance. Qed.
+
+Lemma inline_tail_kinded_step_equivariant :
+  rewrite_equivariant inline_tail_kinded_step.
+Proof. equivariance. Qed.
+
+Lemma inline_tail_conts_renamed_by_walk :
+  rewrite_equivariant inline_tail_conts.
+Proof.
+  intros r e. rewrite !inline_tail_conts_as_walk.
+  apply (walk_spine_equivariant _ inline_tail_step_equivariant).
+Qed.
+
+Lemma inline_tail_conts_kinded_renamed_by_walk :
+  rewrite_equivariant inline_tail_conts_kinded.
+Proof.
+  intros r e. rewrite !inline_tail_conts_kinded_as_walk.
+  apply (walk_spine_equivariant _ inline_tail_kinded_step_equivariant).
+Qed.
 
 End Inline_tail.
 
