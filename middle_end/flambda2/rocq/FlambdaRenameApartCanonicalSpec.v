@@ -126,8 +126,18 @@
      term under both. Here the term under the two renamings is two
      terms that differ in their bound names, and that the comparison
      answers the same of both is known of a term whose code is closed
-     (FlambdaNominalProofs.rename_expr_accepted). Whether it holds
-     where code is not closed is not known.
+     (FlambdaNominalProofs.rename_expr_accepted).
+   - [rename_apart_not_equivariant_up_to_open_code_statement]: the
+     premise cannot be dropped. The proof has the term: a [Let] that
+     binds again the variable of the [Let] around it, and code that
+     mentions that variable, so that the code is not closed. The
+     comparison takes the body of code with nothing paired outside it,
+     so it accepts the canonical form only where that variable is the
+     new name that the canonical form gives it: it is so of the term,
+     and is not of the term with the variable renamed. The
+     normalisation gives the canonical form of the first, whose two
+     [Let]s bind two variables, and the second as it is, whose two
+     [Let]s bind one; no renaming takes the one to the other.
 
    Nothing is trusted here. The proofs are in
    FlambdaRenameApartCanonicalProofs.v, which needs no review. *)
@@ -380,3 +390,17 @@ Definition rename_apart_avoiding_equivariant_up_to_statement : Prop :=
       ∧ rename_apart_avoiding (map (rename_continuation r) avoid)
           (rename_expr r e)
         = rename_expr r' (rename_apart_avoiding avoid e).
+
+(* Without the premise the first of the two is false, whatever is
+   asked of the second renaming on the free names. *)
+Definition rename_apart_not_equivariant_up_to_open_code_statement : Prop :=
+  ~ (∀ (r : renaming) (e : expr),
+      ∃ r' : renaming,
+        (∀ x : variable,
+          among x (free_variables_of_expr e) = true ->
+          rename_variable r' x = rename_variable r x)
+        ∧ (∀ k : continuation,
+            among k (free_continuations_of_expr e) = true ->
+            rename_continuation r' k = rename_continuation r k)
+        ∧ rename_apart (rename_expr r e)
+          = rename_expr r' (rename_apart e)).

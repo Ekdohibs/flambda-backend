@@ -3666,6 +3666,80 @@ Proof.
   exists r'. split; [ exact Hv | split; [ exact Hk | exact Hrenamed ] ].
 Qed.
 
+(* Code that mentions the variable 3, which it does not bind, under two
+   [Let]s of that variable. The continuation 1 is free, so the new
+   names are 2 and the names after it: the second [Let] is given 3. *)
+Definition shadowed_around_open_code : expr :=
+  Let 3%positive Value (Simple (Const (Tagged_immediate 0%Z)))
+    (Let 3%positive Value (Simple (Const (Tagged_immediate 1%Z)))
+       (Let_static
+          [Bind_code 1%positive
+             (Code [] 7%positive 8%positive 9%positive
+                (make_code_metadata [] [Singleton Value])
+                (Apply_cont
+                   (Apply_cont_expr 8%positive [Var 3%positive] None)))]
+          (Apply_cont (Apply_cont_expr 1%positive [Var 3%positive] None)))).
+
+(* Its canonical form, which the comparison accepts: in the code the
+   variable 3 is the new name of the second [Let]. *)
+Definition canonical_of_shadowed : expr :=
+  Let 2%positive Value (Simple (Const (Tagged_immediate 0%Z)))
+    (Let 3%positive Value (Simple (Const (Tagged_immediate 1%Z)))
+       (Let_static
+          [Bind_code 1%positive
+             (Code [] 4%positive 5%positive 6%positive
+                (make_code_metadata [] [Singleton Value])
+                (Apply_cont
+                   (Apply_cont_expr 5%positive [Var 3%positive] None)))]
+          (Apply_cont (Apply_cont_expr 1%positive [Var 3%positive] None)))).
+
+(* The swap of the variables 3 and 10. *)
+Definition swap_of_shadowed_name : renaming :=
+  Renaming [(3%positive, 10%positive)] [].
+
+Definition let_variable (e : expr) : variable :=
+  match e with
+  | Let x _ _ _ => x
+  | _ => 1%positive
+  end.
+
+Definition let_body (e : expr) : expr :=
+  match e with
+  | Let _ _ _ body => body
+  | _ => e
+  end.
+
+(* The renamed term has the canonical form of the term, with the
+   variable 3 in its code where the renamed term has 10: the comparison
+   refuses it, and the normalisation gives the renamed term, whose two
+   [Let]s bind 10. Those of the canonical form bind 2 and 3, and a
+   renaming sends them to two variables. *)
+Theorem rename_apart_not_equivariant_up_to_open_code :
+  rename_apart_not_equivariant_up_to_open_code_statement.
+Proof.
+  intros H.
+  destruct (H swap_of_shadowed_name shadowed_around_open_code)
+    as [r' [_ [_ Heq]]].
+  assert
+    (Hterm : rename_apart shadowed_around_open_code = canonical_of_shadowed)
+    by (vm_compute; reflexivity).
+  assert
+    (Hrenamed :
+      rename_apart (rename_expr swap_of_shadowed_name
+                      shadowed_around_open_code)
+      = rename_expr swap_of_shadowed_name shadowed_around_open_code)
+    by (vm_compute; reflexivity).
+  rewrite Hrenamed, Hterm in Heq.
+  pose proof (f_equal let_variable Heq) as Houter.
+  pose proof (f_equal (fun e : expr => let_variable (let_body e)) Heq)
+    as Hinner.
+  unfold shadowed_around_open_code, canonical_of_shadowed in Houter, Hinner.
+  cbn [rename_expr let_variable let_body] in Houter, Hinner.
+  rewrite Houter in Hinner.
+  apply (f_equal (rename_variable (inverse_renaming r'))) in Hinner.
+  rewrite !rename_variable_inverse_l in Hinner. discriminate Hinner.
+Qed.
+
 (* ======================================================================== *)
 (* The candidate of a term with closed code has closed code                 *)
 (* ======================================================================== *)
