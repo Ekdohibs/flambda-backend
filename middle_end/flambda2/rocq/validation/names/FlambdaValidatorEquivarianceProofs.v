@@ -4772,12 +4772,16 @@ Qed.
    continuations that a unit binds and of the interface continuations
    are proved from the definitions by [equivariance]
    (FlambdaEquivarianceTactic.v); six of them are given to the tactic,
-   as hints of the Section, for the laws after them. The rest is by
-   hand: the two laws that turn round the theorem of a pass; the laws
-   of the unit with its code first and with its static bindings first,
-   which rewrite with laws of other files; and the check of the static
-   names in scope, of which the tactic leaves goals. *)
+   as hints of the Section, for the laws after them. The database is
+   applied by its one pass, the faster step: every one of these proofs
+   passes with it. The rest is by hand: the two laws that turn round
+   the theorem of a pass; the laws of the unit with its code first and
+   with its static bindings first, which rewrite with laws of other
+   files; and the check of the static names in scope, of which the
+   tactic leaves goals. *)
 Section Code_and_statics_first.
+
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
 
 (* The use of the static closures in sight, and the moving up of the
    bindings of code. *)
@@ -4853,25 +4857,13 @@ Lemma named_statics_in_scope_renamed (r : renaming) (syms : list symbol)
     (ids : list code_id) (d : named) :
   named_statics_in_scope syms ids (rename_named r d)
   = named_statics_in_scope syms ids d.
-Proof.
-  destruct d; cbn [rename_named named_statics_in_scope];
-    rewrite ?simple_statics_in_scope_renamed,
-      ?simples_statics_in_scope_renamed,
-      ?value_slots_statics_in_scope_renamed;
-    reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 Lemma static_const_statics_in_scope_renamed (r : renaming)
     (syms : list symbol) (ids : list code_id) (const : static_const) :
   static_const_statics_in_scope syms ids (rename_static_const r const)
   = static_const_statics_in_scope syms ids const.
-Proof.
-  destruct const; cbn [rename_static_const static_const_statics_in_scope];
-    rewrite ?simple_statics_in_scope_renamed,
-      ?simples_statics_in_scope_renamed,
-      ?value_slots_statics_in_scope_renamed;
-    reflexivity.
-Qed.
+Proof. equivariance. Qed.
 #[local] Hint Rewrite static_const_statics_in_scope_renamed : equivariance.
 
 Lemma apply_cont_statics_in_scope_renamed (r : renaming)
@@ -4884,13 +4876,7 @@ Lemma apply_statics_in_scope_renamed (r : renaming) (syms : list symbol)
     (ids : list code_id) (ap : apply_expr) :
   apply_statics_in_scope syms ids (rename_apply r ap)
   = apply_statics_in_scope syms ids ap.
-Proof.
-  unfold apply_statics_in_scope.
-  rewrite exn_extra_simples_rename. unfold rename_apply.
-  cbn [ap_callee ap_call_kind ap_args].
-  rewrite simple_statics_in_scope_renamed, !simples_statics_in_scope_renamed.
-  reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 Lemma is_closure_const_renamed (r : renaming) (const : static_const) :
   is_closure_const (rename_static_const r const) = is_closure_const const.
