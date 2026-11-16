@@ -940,15 +940,39 @@ End Dropped.
    of a tag and a list): the actions are [rename_known_blocks] and
    [rename_known_block]. The laws that other files use by name keep
    their names and statements, and each law is given to the tactic for
-   the proofs after it. One law is stated in the form that computation
-   gives it, [static_blocks_made_renamed]: the blocks that the bindings
-   of a [Let_static] make, under [flat_map]. *)
+   the proofs after it. A law that no other file uses is stated where
+   the tactic would otherwise derive it in two proofs or more. One law
+   is stated in the form that computation gives it,
+   [static_blocks_made_renamed]: the blocks that the bindings of a
+   [Let_static] make, under [flat_map]. *)
 Section Block_load.
+
+(* The database of laws is tried in one pass (rewrite_strat) in this
+   section: every proof of it passes so, and takes a third of the
+   time. *)
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
 
 #[local] Instance known_blocks_renaming : Renaming_of known_blocks :=
   rename_known_blocks.
 #[local] Instance known_block_renaming : Renaming_of known_block :=
   rename_known_block.
+#[local] Hint Rewrite var_in_simple_equivariant
+  FlambdaReadsAfterProofs.surely_value_renamed : equivariance.
+
+Lemma unary_applied_equivariant (r : renaming) (p : prim)
+    (args : list simple) :
+  unary_applied p (map (rename_simple r) args)
+  = option_map (fun applied => (fst applied, rename_simple r (snd applied)))
+      (unary_applied p args).
+Proof. equivariance. Qed.
+#[local] Hint Rewrite unary_applied_equivariant : equivariance.
+
+Lemma forget_in_block_equivariant (r : renaming) (x : variable)
+    (block : known_block) :
+  forget_in_block (rename_variable r x) (rename_known_block r block)
+  = rename_known_block r (forget_in_block x block).
+Proof. equivariance. Qed.
+#[local] Hint Rewrite forget_in_block_equivariant : equivariance.
 
 Lemma forget_var_equivariant (r : renaming) (x : variable)
     (known : known_blocks) :
@@ -1012,6 +1036,13 @@ Lemma field_loaded_equivariant (r : renaming) (kind : block_access_kind)
   = option_map (rename_simple r) (field_loaded kind field block).
 Proof. equivariance. Qed.
 #[local] Hint Rewrite field_loaded_equivariant : equivariance.
+
+Lemma of_known_block_equivariant (r : renaming) (p : unary_primitive)
+    (block : known_block) :
+  of_known_block p (rename_known_block r block)
+  = option_map (rename_simple r) (of_known_block p block).
+Proof. equivariance. Qed.
+#[local] Hint Rewrite of_known_block_equivariant : equivariance.
 
 Lemma load_known_named_equivariant (r : renaming) (known : known_blocks)
     (d : named) :
