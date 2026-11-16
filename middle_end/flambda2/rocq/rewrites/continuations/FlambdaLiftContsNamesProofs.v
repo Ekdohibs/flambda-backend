@@ -39,11 +39,14 @@
 
    The step of the database is the one pass
    ([eqv_database_by_one_pass]): with the step that tries every law
-   the file takes more than twice as long. Two proofs, each of a test
+   the file takes more than twice as long. Two laws, each of a test
    that goes through the handlers of a recursive [Let_cont], are not
-   closed by the one pass alone, which leaves goals under the binder:
-   there the step is the one pass first, and the step that tries
-   every law where the one pass finds nothing. With the one pass the
+   closed by the one pass alone, which leaves goals under the binder.
+   One, [only_applied_equivariant], is proved by hand as it was, with
+   the law of its test in a handler: the step that tries every law is
+   slow on it. For the other, [all_give_immediate_equivariant], the
+   step is the one pass first, and the step that tries every law
+   where the one pass finds nothing. With the one pass the
    lemma needs laws stated that the other step derives in good time:
    those of the functions that give an application more arguments,
    of the test of what an application gives, and of [applies_only],
@@ -138,18 +141,41 @@ Lemma applies_only_equivariant (r : renaming) (j : continuation) (ok : bool)
 Proof. equivariance. Qed.
 #[local] Hint Rewrite applies_only_equivariant : equivariance.
 
-(* The one pass alone leaves goals in the next proof: its step is the
-   one pass first, and the step that tries every law where the one
-   pass finds nothing. *)
-#[local] Ltac eqv_database ::=
-  first [ eqv_database_by_one_pass | eqv_database_by_autorewrite ].
-Lemma only_applied_equivariant (r : renaming) (j : continuation)
-    (ps : list variable) (ok : bool) (e : expr) :
+Fixpoint only_applied_equivariant (r : renaming) (j : continuation)
+    (ps : list variable) (ok : bool) (e : expr) {struct e} :
   only_applied (rename_continuation r j) (map (rename_variable r) ps) ok
     (rename_expr r e)
-  = only_applied j ps ok e.
-Proof. equivariance. Qed.
-#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
+  = only_applied j ps ok e
+with handler_only_applied_equivariant (r : renaming) (j : continuation)
+    (ps : list variable) (ok : bool) (h : continuation_handler) {struct h} :
+  handler_only_applied (rename_continuation r j) (map (rename_variable r) ps)
+    ok (rename_handler r h)
+  = handler_only_applied j ps ok h.
+Proof.
+  - destruct e as [y kind d body | bindings body | k' hh body | handlers body
+                  | ap | ac | scrutinee arms | ];
+      cbn [rename_expr only_applied]; try reflexivity.
+    + rewrite among_rename_variable. apply only_applied_equivariant.
+    + apply only_applied_equivariant.
+    + rewrite rename_continuation_eqb, handler_only_applied_equivariant,
+        only_applied_equivariant.
+      reflexivity.
+    + rewrite only_applied_equivariant. f_equal.
+      induction handlers as [ | [k' hh] handlers IH]; [ reflexivity | ].
+      cbn [map forallb].
+      rewrite rename_continuation_eqb, handler_only_applied_equivariant, IH.
+      reflexivity.
+    + cbn [rename_apply ap_continuation ap_exn_continuation].
+      destruct ps as [ | p0 ps0]; cbn [map];
+        rewrite !rename_continuation_eqb; reflexivity.
+    + apply applies_only_equivariant.
+    + induction arms as [ | [n ac] arms IH]; [ reflexivity | ].
+      cbn [map forallb fst snd].
+      rewrite applies_only_equivariant, IH. reflexivity.
+  - destruct h as [params metadata handler].
+    cbn [rename_handler handler_only_applied].
+    rewrite any_among_renamed. apply only_applied_equivariant.
+Qed.
 #[local] Hint Rewrite only_applied_equivariant : equivariance.
 
 (* ======================================================================== *)
