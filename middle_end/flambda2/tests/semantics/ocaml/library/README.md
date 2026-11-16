@@ -48,7 +48,9 @@ differs, or the unit is refused, if a primitive that the source uses
 becomes a function there. The rules that run the tool on `X.fl` and
 compare what it prints with `X.expected` are for every context, as
 in the directory above: the tool is given no directory to read a
-`.cmx` from, and runs at the default flags.
+`.cmx` from, and runs at the default flags. As in the directory
+above, the rule takes the status 1, and no other, of a unit that
+`tool_fails.txt` here names.
 
 To add a unit, add `X.ml` (and `X.mli`), `X.fl` and `X.expected`, and
 nothing else. Each unit is looked at before it enters as the units of

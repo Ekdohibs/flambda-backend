@@ -11,13 +11,17 @@
 ;;
 ;; To add an example, add X.ml (and X.mli), X.fl and X.expected, and
 ;; nothing else. The rules are included by run/dune and not by this file.
+;;
+;; As in the directory above, the rule that runs the tool takes the status 1,
+;; and no other, of a unit that tool_fails.txt names.
 
 (rule
  (deps
   (glob_files *.ml)
   (glob_files *.mli)
   (glob_files *.fl)
-  (glob_files *.expected))
+  (glob_files *.expected)
+  tool_fails.txt)
  (action
   (with-stdout-to
    dune.inc

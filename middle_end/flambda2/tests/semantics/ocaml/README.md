@@ -33,6 +33,14 @@ The rules that make a term name the compiler among what they depend
 on: a term is made again, and compared, when the compiler changes,
 and not only when its source does.
 
+The tool exits with the status 1 where it fails on a unit, having
+printed why: where the term after Simplify is not well-formed, for
+one, or where the two runs differ. The rule that runs it takes the
+status 0 of a unit, and the status 1, and no other, of a unit that
+`tool_fails.txt` names; `X.expected` has what the tool prints either
+way. The list names a unit only with the reason for which the tool
+fails on it.
+
 - `-drawfexpr` prints the unit after the conversion from Lambda (closure
   conversion) and before Simplify. The tool runs Simplify itself, with
   the default flags, on what the parser reads back.

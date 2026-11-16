@@ -1,0 +1,12 @@
+# Units of this directory on which the test tool is expected to fail. The
+# tool fails on a unit where, for one, the term after Simplify is not
+# well-formed, or the two runs differ (`Failed` in
+# ../../tools/flsemantics.ml has the cases): it prints why and exits with
+# the status 1, where it exits with 0 of a unit on which it does not fail.
+# X.expected has what the tool prints, as for any unit. The rule that runs the
+# tool on a unit named here takes the status 1 and no other (gen_rules.sh
+# reads this list): when the tool no longer fails on the unit, the rule fails
+# until the name is taken out. One name to a line, without .ml.
+#
+# A name is added only with a line here that says why the tool fails on the
+# unit and under what label that is recorded.
