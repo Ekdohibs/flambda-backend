@@ -995,7 +995,8 @@ that every such file changed since this work began is named here.
   of a static block, which was the only debugging information that it
   compared. Before, two units that are the same could be called
   different (two kinds of one variant whose constructors were added in
-  two orders, two equal operations of effects, two equal primitives of
+  two orders, which is discrepancy T6-11, two equal operations of
+  effects, two equal primitives of
   four arguments), two different units could be called the same (a
   probe and a plain call, a continuation whose parameter is a value and
   one whose parameter is an immediate, two units that project two

@@ -1034,6 +1034,11 @@ says so. Only the labels that this tree cites are listed.
 - **T6-7.** Unboxing a continuation parameter adds, at a use, a load
   that names the tag and the size, justified only by the subkind of a
   binder.
+- **T6-11.** `Flambda_kind.With_subkind.equal` compares the constructors
+  of a variant kind as the balanced trees that hold them: two kinds that
+  are the same variant can compare unequal when their constructors were
+  added in different orders, as the front end and the reader of texts
+  add them.
 - **T7-1.** No function of the compiler makes the allocation mode
   `Local` of a type; the converter of types refuses it.
 - **T7-2.** `Equal_types_for_debug.equal_type` overflows the stack on a
