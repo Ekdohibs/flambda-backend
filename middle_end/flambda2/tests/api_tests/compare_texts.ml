@@ -86,7 +86,11 @@
    the two are an invalid expression with no kind, written with two of the words
    that the grammar has for it. They are the same. invalid_other_kind: of two
    kinds. invalid_free_and_kind: one has a kind and the other has none. They are
-   different. *)
+   different.
+
+   number_kind_32, number_kind_64: the two have a primitive with a kind of
+   numbers as its parameter, of 32 bits and of 8 in the first pair, of 64 and of
+   16 in the second. They are different. *)
 
 module P = Flambda2_parser
 

@@ -176,7 +176,9 @@
     (run ./compare_texts.exe compare_texts/invalid_kind)
     (run ./compare_texts.exe compare_texts/invalid_other_kind)
     (run ./compare_texts.exe compare_texts/invalid_free)
-    (run ./compare_texts.exe compare_texts/invalid_free_and_kind)))))
+    (run ./compare_texts.exe compare_texts/invalid_free_and_kind)
+    (run ./compare_texts.exe compare_texts/number_kind_32)
+    (run ./compare_texts.exe compare_texts/number_kind_64)))))
 
 (rule
  (alias runtest)

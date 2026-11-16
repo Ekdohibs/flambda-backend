@@ -1,1 +1,1 @@
-kinds_opaque_misread.fl: not checked: the text does not say the kind of an Opaque_identity, and the kind of its argument is one that the reader may have misread: it comes from a nullary primitive whose kind the text writes with a word that the reader takes for two kinds
+kinds_opaque_misread.fl: not checked: the model has not got primitive Invalid

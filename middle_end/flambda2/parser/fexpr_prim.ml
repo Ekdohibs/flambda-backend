@@ -541,8 +541,8 @@ let kind =
            "float", K.naked_float;
            "int8", K.naked_int8;
            "int16", K.naked_int16;
-           "int32", K.naked_int8;
-           "int64", K.naked_int16;
+           "int32", K.naked_int32;
+           "int64", K.naked_int64;
            "nativeint", K.naked_nativeint;
            "vec128", K.naked_vec128;
            "vec256", K.naked_vec256;

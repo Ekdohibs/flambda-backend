@@ -25,3 +25,5 @@ invalid_kind: the same
 invalid_other_kind: different (an invalid expression: its kind); the unit given is printed
 invalid_free: the same
 invalid_free_and_kind: different (an invalid expression: its kind); the unit given is printed
+number_kind_32: different (a primitive: Invalid); the unit given is printed
+number_kind_64: different (a primitive: Invalid); the unit given is printed

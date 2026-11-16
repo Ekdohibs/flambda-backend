@@ -1,0 +1,3 @@
+let x = %invalid.`int16` in
+let $B = Block 0 () in
+cont done ($B)

@@ -1,1 +1,1 @@
-kinds_call_misread.fl: not checked: the text does not give the arity of the arguments of a call of unknown arity, and the kind of one of its arguments is one that the reader may have misread: it comes from a nullary primitive whose kind the text writes with a word that the reader takes for two kinds
+kinds_call_misread.fl: not checked: the model has not got primitive Invalid
