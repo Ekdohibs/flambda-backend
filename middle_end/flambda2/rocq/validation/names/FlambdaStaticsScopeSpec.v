@@ -119,7 +119,10 @@
    - FlambdaStubCallsSpec.demote_stub_calls makes, in the code of the
      stubs of a unit, a direct call an indirect call of the same
      callee with the same arguments
-     ([demote_stub_calls_keeps_scope_statement]).
+     ([demote_stub_calls_keeps_scope_statement]);
+     [demote_full_stub_calls] makes some of those calls calls of known
+     arity, of the same callee with the same arguments
+     ([demote_full_stub_calls_keeps_scope_statement]).
    - FlambdaUnusedSlotsSpec.drop_slots removes value slots from static
      sets of closures, and with them the variables they hold
      ([drop_slots_keeps_scope_statement]); [without_slots] is that
@@ -327,6 +330,9 @@ Definition read_known_slots_anywhere_keeps_scope_statement : Prop :=
 
 Definition demote_stub_calls_keeps_scope_statement : Prop :=
   keeps_scope demote_stub_calls.
+
+Definition demote_full_stub_calls_keeps_scope_statement : Prop :=
+  keeps_scope demote_full_stub_calls.
 
 (* ======================================================================== *)
 (* The removal of value slots                                               *)

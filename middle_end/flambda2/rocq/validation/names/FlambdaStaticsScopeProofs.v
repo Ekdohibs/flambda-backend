@@ -1325,6 +1325,106 @@ Proof.
 Qed.
 
 (* ======================================================================== *)
+(* The direct calls of the code of a stub, made calls of known arity        *)
+(* ======================================================================== *)
+
+Lemma demote_full_call_scoped (known : list (code_id * code))
+    (ap : apply_expr) :
+  scoped (Apply ap) (Apply (demote_full_call known ap)).
+Proof.
+  destruct ap as [callee call_kind args k exn extra args_arity return_arity].
+  unfold demote_full_call. cbn [ap_call_kind].
+  destruct call_kind as [code | | code_ids];
+    [ | apply scoped_refl | apply scoped_refl ].
+  destruct (lookup code known) as [c | ]; [ | apply scoped_refl ].
+  destruct (full_call_of_b _ c); [ | apply scoped_refl ].
+  intros Hclosed. split; [ exact Hclosed | split; apply incl_refl ].
+Qed.
+
+Fixpoint demote_full_calls_scoped (known : list (code_id * code))
+    (e : expr) {struct e} :
+  scoped e (demote_full_calls known e)
+with demote_full_calls_in_handler_scoped (known : list (code_id * code))
+    (h : continuation_handler) {struct h} :
+  scoped_handler h (demote_full_calls_in_handler known h).
+Proof.
+  - destruct e as [x kind d body | bindings body | k h body | handlers body
+                  | ap | ac | scrutinee arms | ];
+      cbn [demote_full_calls]; try apply scoped_refl.
+    + apply scoped_let;
+        [ apply incl_refl | apply demote_full_calls_scoped ].
+    + apply scoped_let_static; [ | apply demote_full_calls_scoped ].
+      induction bindings as [ | binding bindings IH];
+        [ apply scoped_bindings_nil | apply scoped_bindings_cons_same, IH ].
+    + apply scoped_let_cont;
+        [ apply demote_full_calls_in_handler_scoped
+        | apply demote_full_calls_scoped ].
+    + apply scoped_let_cont_recursive;
+        [ | | apply demote_full_calls_scoped ].
+      * rewrite map_map. apply map_ext. intros [k h]. reflexivity.
+      * induction handlers as [ | [k h] handlers IH]; cbn [map];
+          [ apply scoped_handlers_nil | ].
+        apply scoped_handlers_cons;
+          [ apply demote_full_calls_in_handler_scoped | exact IH ].
+    + apply demote_full_call_scoped.
+  - destruct h as [params metadata handler].
+    cbn [demote_full_calls_in_handler].
+    apply scoped_handler_intro, demote_full_calls_scoped.
+Qed.
+
+(* What is known changes at a group of bindings, so the induction is
+   for whatever is known. *)
+Fixpoint demote_full_in_stubs_scoped (e : expr) {struct e} :
+  ∀ known : list (code_id * code),
+    scoped e (demote_full_in_stubs known e)
+with demote_full_in_stubs_of_handler_scoped (h : continuation_handler)
+    {struct h} :
+  ∀ known : list (code_id * code),
+    scoped_handler h (demote_full_in_stubs_of_handler known h).
+Proof.
+  - destruct e as [x kind d body | bindings body | k h body | handlers body
+                  | ap | ac | scrutinee arms | ];
+      intros known; cbn [demote_full_in_stubs]; try apply scoped_refl.
+    + apply scoped_let;
+        [ apply incl_refl | apply demote_full_in_stubs_scoped ].
+    + apply scoped_let_static; [ | apply demote_full_in_stubs_scoped ].
+      generalize (codes_of bindings known). intros known'.
+      induction bindings
+        as [ | [id [params my_closure ret exn metadata code_body] | id
+               | sym const]
+               bindings IH];
+        cbn [map]; [ apply scoped_bindings_nil | | | ].
+      * cbn [demote_full_in_stub_binding code_is_stub].
+        destruct (cm_is_stub metadata);
+          [ | apply scoped_bindings_cons_same, IH ].
+        cbn [demote_full_calls_in_code].
+        apply scoped_bindings_cons_code; [ | exact IH ].
+        apply scoped_code_intro, demote_full_calls_scoped.
+      * apply scoped_bindings_cons_same, IH.
+      * apply scoped_bindings_cons_same, IH.
+    + apply scoped_let_cont;
+        [ apply demote_full_in_stubs_of_handler_scoped
+        | apply demote_full_in_stubs_scoped ].
+    + apply scoped_let_cont_recursive;
+        [ | | apply demote_full_in_stubs_scoped ].
+      * rewrite map_map. apply map_ext. intros [k h]. reflexivity.
+      * induction handlers as [ | [k h] handlers IH]; cbn [map];
+          [ apply scoped_handlers_nil | ].
+        apply scoped_handlers_cons;
+          [ apply demote_full_in_stubs_of_handler_scoped | exact IH ].
+  - destruct h as [params metadata handler]. intros known.
+    cbn [demote_full_in_stubs_of_handler].
+    apply scoped_handler_intro, demote_full_in_stubs_scoped.
+Qed.
+
+Theorem demote_full_stub_calls_keeps_scope :
+  demote_full_stub_calls_keeps_scope_statement.
+Proof.
+  apply keeps_scope_intro. intros e. unfold demote_full_stub_calls.
+  apply demote_full_in_stubs_scoped.
+Qed.
+
+(* ======================================================================== *)
 (* The removal of value slots                                               *)
 (* ======================================================================== *)
 
