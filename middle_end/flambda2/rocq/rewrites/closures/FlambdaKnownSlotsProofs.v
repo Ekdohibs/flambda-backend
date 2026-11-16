@@ -37,7 +37,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaStaticsInScopeSpec FlambdaUnusedStaticsSpec FlambdaKnownSymbolsSpec
   FlambdaClosuresSpec FlambdaClosuresProofs FlambdaContextWhereSpec
   FlambdaContextWhereProofs FlambdaImportsSpec FlambdaObserversSpec
-  FlambdaUnitFromProofs FlambdaKnownSlotsSpec.
+  FlambdaUnitFromProofs FlambdaEquivarianceTactic FlambdaKnownSlotsSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -1744,30 +1744,25 @@ Qed.
 (* Renaming                                                                 *)
 (* ======================================================================== *)
 
+(* Where a law below has the proof [equivariance], it is proved from
+   the definitions by the tactic of FlambdaEquivarianceTactic.v. The
+   laws that ask that what is known holds symbols and constants only
+   are proved by hand, but for that of [read_slots], which comes from
+   its law with what is known renamed too. *)
+
 Lemma rename_closed_simple (r : renaming) (a : simple) :
   closed_simple a = true -> rename_simple r a = a.
 Proof. destruct a as [x | sym | k]; [ discriminate | reflexivity .. ]. Qed.
 
 Lemma closed_simple_renamed (r : renaming) (a : simple) :
   closed_simple (rename_simple r a) = closed_simple a.
-Proof. destruct a as [x | sym | k]; reflexivity. Qed.
+Proof. equivariance. Qed.
 
 (* A renaming is a permutation: two simples are the same once renamed
    if and only if they are. *)
 Lemma same_simple_renamed (r : renaming) (a a' : simple) :
   same_simple (rename_simple r a) (rename_simple r a') = same_simple a a'.
-Proof.
-  unfold same_simple. destruct (simple_eq_dec a a') as [-> | Hne].
-  - destruct (simple_eq_dec (rename_simple r a') (rename_simple r a'));
-      [ reflexivity | contradiction ].
-  - destruct (simple_eq_dec (rename_simple r a) (rename_simple r a'))
-      as [Heq | ]; [ | reflexivity ].
-    exfalso. apply Hne.
-    destruct a as [x | sym | k], a' as [x' | sym' | k']; simpl in Heq;
-      try discriminate; try exact Heq.
-    injection Heq as Heq. f_equal.
-    exact (permute_injective (variable_permutation r) x x' Heq).
-Qed.
+Proof. equivariance. Qed.
 
 (* A value slot with what it holds, renamed. *)
 Definition rename_slot (r : renaming) (entry : value_slot * simple)
@@ -1777,56 +1772,16 @@ Definition rename_slot (r : renaming) (entry : value_slot * simple)
 Lemma named_slots_made_renamed (r : renaming) (d : named) :
   named_slots_made (rename_named r d)
   = map (rename_slot r) (named_slots_made d).
-Proof.
-  destruct d as [a | p args | code slots | slot decls slots | slot closure
-    | project_from slot closure | move_from move_to closure];
-    reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 Lemma static_const_slots_made_renamed (r : renaming) (const : static_const) :
   static_const_slots_made (rename_static_const r const)
   = map (rename_slot r) (static_const_slots_made const).
-Proof.
-  destruct const as [code slots | slot syms decls slots | tag fields
-    | contents | bytes | elements];
-    reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
-Fixpoint slots_made_renamed (r : renaming) (e : expr) {struct e} :
-  slots_made (rename_expr r e) = map (rename_slot r) (slots_made e)
-with handler_slots_made_renamed (r : renaming) (h : continuation_handler)
-    {struct h} :
-  handler_slots_made (rename_handler r h)
-  = map (rename_slot r) (handler_slots_made h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      cbn [rename_expr slots_made]; try reflexivity.
-    + rewrite named_slots_made_renamed, (slots_made_renamed r body), map_app.
-      reflexivity.
-    + rewrite (slots_made_renamed r body), map_app. f_equal.
-      induction bindings
-        as [ | [id [params my_closure ret exn metadata code_body] | id
-               | sym const]
-               bindings IH];
-        cbn [map flat_map]; [ reflexivity | | | ]; rewrite map_app, IH;
-        f_equal.
-      * cbn [rename_static_binding rename_code binding_slots_made
-               code_slots_made].
-        apply slots_made_renamed.
-      * cbn [rename_static_binding binding_slots_made].
-        apply static_const_slots_made_renamed.
-    + rewrite (handler_slots_made_renamed r h), (slots_made_renamed r body),
-        map_app.
-      reflexivity.
-    + rewrite (slots_made_renamed r body), map_app. f_equal.
-      induction handlers as [ | [k h] handlers IH]; cbn [map flat_map];
-        [ reflexivity | ].
-      rewrite map_app, (handler_slots_made_renamed r h), IH. reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler handler_slots_made]. apply slots_made_renamed.
-Qed.
+Lemma slots_made_renamed (r : renaming) (e : expr) :
+  slots_made (rename_expr r e) = map (rename_slot r) (slots_made e).
+Proof. equivariance. Qed.
 
 (* What is known is the same: an entry that is kept holds a symbol or a
    constant, which no renaming changes. *)
@@ -1939,25 +1894,6 @@ Proof.
     apply slots_as_renamed, Hclosed.
 Qed.
 
-(* The rewrite. *)
-Lemma read_slot_renamed (r : renaming) (known : known_slots)
-    (syms : list symbol) (d : named) :
-  closed_slots known = true ->
-  read_slot known syms (rename_named r d)
-  = rename_named r (read_slot known syms d).
-Proof.
-  intros Hclosed.
-  destruct d as [a | p args | code slots | slot decls slots | slot closure
-    | project_from slot closure | move_from move_to closure];
-    cbn [rename_named read_slot]; try reflexivity;
-    (destruct (lookup slot known) as [a | ] eqn:Hknown; [ | reflexivity ]);
-    (destruct (simple_statics_in_scope syms a); [ | reflexivity ]);
-    cbn [rename_named];
-    rewrite (rename_closed_simple r a
-               (closed_slots_lookup known slot a Hclosed Hknown));
-    reflexivity.
-Qed.
-
 (* A renaming renames no symbol, so the symbols in scope are the
    same. *)
 Section Names_renamed.
@@ -2007,79 +1943,65 @@ End Names_renamed.
 Lemma symbols_of_binding_renamed (r : renaming) (binding : static_binding) :
   symbols_of_binding (rename_static_binding r binding)
   = symbols_of_binding binding.
-Proof. destruct binding as [id c | id | sym const]; reflexivity. Qed.
+Proof. equivariance. Qed.
 
-Fixpoint read_slots_renamed (r : renaming) (known : known_slots)
-    (Hclosed : closed_slots known = true) (e : expr) {struct e} :
+(* The rewrite, with what is known renamed too: no premise. The three
+   laws before it are given to the tactic in the forms that
+   computation gives. *)
+Lemma lookup_slots_renamed (r : renaming) (slot : value_slot)
+    (known : known_slots) :
+  lookup slot
+    (map (fun p : value_slot * simple => (fst p, rename_simple r (snd p)))
+       known)
+  = option_map (rename_simple r) (lookup slot known).
+Proof. equivariance. Qed.
+
+Lemma symbols_of_bindings_renamed (r : renaming)
+    (bindings : list static_binding) :
+  flat_map (fun a => symbols_of_binding (rename_static_binding r a)) bindings
+  = flat_map symbols_of_binding bindings.
+Proof. equivariance. Qed.
+
+Lemma symbol_names_renamed (r : renaming) (e : expr) :
+  static_names symbols_of_binding (rename_expr r e)
+  = static_names symbols_of_binding e.
+Proof. equivariance. Qed.
+
+#[local] Hint Rewrite lookup_slots_renamed symbols_of_bindings_renamed
+  symbol_names_renamed : equivariance.
+
+Lemma read_slots_all_renamed (r : renaming) (known : known_slots)
+    (syms : list symbol) (e : expr) :
+  read_slots
+    (map (fun p : value_slot * simple => (fst p, rename_simple r (snd p)))
+       known)
+    syms (rename_expr r e)
+  = rename_expr r (read_slots known syms e).
+Proof. equivariance. Qed.
+
+(* What is known is as it was once renamed, where it holds symbols
+   and constants only. *)
+Lemma closed_slots_same (r : renaming) (known : known_slots) :
+  closed_slots known = true ->
+  map (fun p : value_slot * simple => (fst p, rename_simple r (snd p))) known
+  = known.
+Proof.
+  induction known as [ | [slot a] known IH]; cbn [closed_slots forallb map];
+    [ reflexivity | ].
+  intros Hclosed. apply andb_true_iff in Hclosed as [Ha Hclosed].
+  cbn [fst snd] in Ha |- *.
+  rewrite (rename_closed_simple r a Ha), (IH Hclosed).
+  reflexivity.
+Qed.
+
+Lemma read_slots_renamed (r : renaming) (known : known_slots)
+    (Hclosed : closed_slots known = true) (e : expr) :
   ∀ syms : list symbol,
     read_slots known syms (rename_expr r e)
-    = rename_expr r (read_slots known syms e)
-with read_slots_in_handler_renamed (r : renaming) (known : known_slots)
-    (Hclosed : closed_slots known = true) (h : continuation_handler)
-    {struct h} :
-  ∀ syms : list symbol,
-    read_slots_in_handler known syms (rename_handler r h)
-    = rename_handler r (read_slots_in_handler known syms h).
+    = rename_expr r (read_slots known syms e).
 Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      intros syms; cbn [rename_expr read_slots]; try reflexivity.
-    + rewrite (read_slot_renamed r known syms d Hclosed),
-        (read_slots_renamed r known Hclosed body).
-      reflexivity.
-    + assert (Hbindings :
-        ∀ all : list symbol,
-          map (read_slots_in_binding known all)
-            (map (rename_static_binding r) bindings)
-          = map (rename_static_binding r)
-              (map (read_slots_in_binding known all) bindings)).
-      { intros all.
-        induction bindings
-          as [ | [id [params my_closure ret exn metadata code_body] | id
-                 | sym const]
-                 bindings IH];
-          cbn [map]; [ reflexivity | | | ]; rewrite IH; f_equal.
-        cbn [rename_static_binding rename_code read_slots_in_binding
-               code_is_stub].
-        destruct (cm_is_stub metadata); [ reflexivity | ].
-        cbn [rename_static_binding rename_code read_slots_in_code].
-        rewrite (read_slots_renamed r known Hclosed code_body).
-        reflexivity. }
-      rewrite
-        (bindings_names_renamed r symbols_of_binding
-           (symbols_of_binding_renamed r)),
-        (read_slots_renamed r known Hclosed body), Hbindings.
-      reflexivity.
-    + rewrite
-        (static_names_of_renamed r symbols_of_binding
-           (symbols_of_binding_renamed r)),
-        (read_slots_in_handler_renamed r known Hclosed h),
-        (read_slots_renamed r known Hclosed body).
-      reflexivity.
-    + assert (Hhandlers :
-        ∀ all : list symbol,
-          map (fun '(k, h) => (k, read_slots_in_handler known all h))
-            (map
-               (fun '(k, h) => (rename_continuation r k, rename_handler r h))
-               handlers)
-          = map
-              (fun '(k, h) => (rename_continuation r k, rename_handler r h))
-              (map (fun '(k, h) => (k, read_slots_in_handler known all h))
-                 handlers)).
-      { intros all.
-        induction handlers as [ | [k h] handlers IH]; cbn [map];
-          [ reflexivity | ].
-        rewrite (read_slots_in_handler_renamed r known Hclosed h), IH.
-        reflexivity. }
-      rewrite
-        (static_names_of_renamed r symbols_of_binding
-           (symbols_of_binding_renamed r)),
-        (read_slots_renamed r known Hclosed body), Hhandlers.
-      reflexivity.
-  - destruct h as [params metadata handler]. intros syms.
-    cbn [rename_handler read_slots_in_handler].
-    rewrite (read_slots_renamed r known Hclosed handler). reflexivity.
+  intros syms. rewrite <- (closed_slots_same r known Hclosed) at 1.
+  apply read_slots_all_renamed.
 Qed.
 
 Theorem read_known_slots_equivariant : read_known_slots_equivariant_statement.
