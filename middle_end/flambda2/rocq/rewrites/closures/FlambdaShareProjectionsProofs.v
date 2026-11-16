@@ -37,7 +37,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaNominalProofs
   FlambdaApplyProofs FlambdaWellFormedSpec FlambdaWellFormedProofs
   FlambdaNormaliseSpec FlambdaNormaliseProofs FlambdaCseSpec
-  FlambdaCseProofs FlambdaShareProjectionsSpec.
+  FlambdaCseProofs FlambdaShareProjectionsSpec FlambdaEquivarianceTactic.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -387,136 +387,45 @@ Qed.
 (* The pass commutes with renaming                                          *)
 (* ======================================================================== *)
 
-Lemma is_projection_renamed (r : renaming) (d : named) :
-  is_projection (rename_named r d) = is_projection d.
-Proof. destruct d; reflexivity. Qed.
+(* The two theorems are proved from the definitions ([equivariance],
+   of FlambdaEquivarianceTactic.v), which derives the laws of the
+   functions that the pass calls. Three things are given to it, for
+   this file only.
 
-Lemma projected_from_renamed (r : renaming) (d : named) :
-  projected_from (rename_named r d)
-  = map (rename_simple r) (projected_from d).
-Proof. destruct d; reflexivity. Qed.
+   An instance says that [rename_projected] renames the type
+   [projected].
 
-Lemma same_projection_renamed (r : renaming) (d d' : named) :
-  same_projection (rename_named r d) (rename_named r d')
-  = same_projection d d'.
-Proof.
-  destruct d as [s | p args | code slots | fslot decls slots | slot closure
-    | pfrom slot closure | move_from move_to closure];
-    destruct d' as [s' | p' args' | code' slots' | fslot' decls' slots'
-      | slot' closure' | pfrom' slot' closure'
-      | move_from' move_to' closure'];
-    try reflexivity; cbn [rename_named same_projection];
-    change [rename_simple r closure]
-      with (map (rename_simple r) [closure]);
-    change [rename_simple r closure']
-      with (map (rename_simple r) [closure']);
-    rewrite same_simples_renamed; reflexivity.
-Qed.
+   The test of two projections compares two lists of one simple each
+   ([same_simples [closure] [closure']]). The law that
+   FlambdaCseProofs.v has of that test is of two mapped lists, and
+   does not apply to a list that is written out: it is given here for
+   two lists of one element.
 
-Lemma projected_by_renamed (r : renaming) (known : projected) (d : named) :
-  projected_by (rename_projected r known) (rename_named r d)
-  = option_map (rename_variable r) (projected_by known d).
-Proof.
-  induction known as [ | [x d'] known IH]; simpl; [ reflexivity | ].
-  rewrite same_projection_renamed.
-  destruct (same_projection d d'); [ reflexivity | exact IH ].
-Qed.
+   The law of [forget_projected] is stated and given to the database.
+   Without it the tactic derives that law and still leaves a goal in
+   the law of [forget_projected_vars], where it has made an induction
+   inside another. *)
 
-Lemma share_projection_renamed (r : renaming) (known : projected)
-    (d : named) :
-  share_projection (rename_projected r known) (rename_named r d)
-  = rename_named r (share_projection known d).
-Proof.
-  unfold share_projection. rewrite projected_by_renamed.
-  destruct (projected_by known d); reflexivity.
-Qed.
+#[local] Instance projected_renaming : Renaming_of projected :=
+  rename_projected.
+
+Lemma same_simples_of_one_renamed (r : renaming) (s s' : simple) :
+  same_simples [rename_simple r s] [rename_simple r s']
+  = same_simples [s] [s'].
+Proof. exact (same_simples_renamed r [s] [s']). Qed.
+#[local] Hint Rewrite same_simples_of_one_renamed : equivariance.
 
 Lemma forget_projected_renamed (r : renaming) (x : variable)
     (known : projected) :
   forget_projected (rename_variable r x) (rename_projected r known)
   = rename_projected r (forget_projected x known).
-Proof.
-  induction known as [ | [y d] known IH]; [ reflexivity | ].
-  change
-    ((if
-        negb (Pos.eqb (rename_variable r x) (rename_variable r y))
-        && negb
-             (var_in_simples (rename_variable r x)
-                (projected_from (rename_named r d)))
-      then
-        (rename_variable r y, rename_named r d)
-        :: forget_projected (rename_variable r x) (rename_projected r known)
-      else forget_projected (rename_variable r x) (rename_projected r known))
-     = rename_projected r
-         (if negb (Pos.eqb x y) && negb (var_in_simples x (projected_from d))
-          then (y, d) :: forget_projected x known
-          else forget_projected x known)).
-  rewrite rename_variable_eqb, projected_from_renamed,
-    var_in_simples_renamed, IH.
-  destruct (negb (Pos.eqb x y) && negb (var_in_simples x (projected_from d)));
-    reflexivity.
-Qed.
-
-Lemma forget_projected_vars_renamed (r : renaming) (xs : list variable) :
-  ∀ known : projected,
-    forget_projected_vars (map (rename_variable r) xs)
-      (rename_projected r known)
-    = rename_projected r (forget_projected_vars xs known).
-Proof.
-  induction xs as [ | x xs IH]; intros known; simpl; [ reflexivity | ].
-  rewrite forget_projected_renamed. apply IH.
-Qed.
-
-Lemma projected_under_let_renamed (r : renaming) (known : projected)
-    (x : variable) (d : named) :
-  projected_under_let (rename_projected r known) (rename_variable r x)
-    (rename_named r d)
-  = rename_projected r (projected_under_let known x d).
-Proof.
-  unfold projected_under_let. cbv zeta.
-  rewrite forget_projected_renamed, is_projection_renamed,
-    projected_from_renamed, var_in_simples_renamed.
-  destruct (is_projection d && negb (var_in_simples x (projected_from d)));
-    reflexivity.
-Qed.
-
-Fixpoint share_projections_knowing_equivariant_aux (r : renaming) (e : expr) :
-  ∀ known : projected,
-    share_projections_knowing (rename_projected r known) (rename_expr r e)
-    = rename_expr r (share_projections_knowing known e)
-with share_projections_in_handler_equivariant (r : renaming)
-    (h : continuation_handler) :
-  ∀ known : projected,
-    share_projections_in_handler (rename_projected r known)
-      (rename_handler r h)
-    = rename_handler r (share_projections_in_handler known h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      intros known; simpl; try reflexivity.
-    + rewrite share_projection_renamed, projected_under_let_renamed,
-        share_projections_knowing_equivariant_aux.
-      reflexivity.
-    + rewrite share_projections_knowing_equivariant_aux. reflexivity.
-    + rewrite share_projections_in_handler_equivariant,
-        share_projections_knowing_equivariant_aux.
-      reflexivity.
-    + rewrite share_projections_knowing_equivariant_aux. reflexivity.
-  - destruct h as [params metadata handler]. intros known. simpl.
-    rewrite forget_projected_vars_renamed,
-      share_projections_knowing_equivariant_aux.
-    reflexivity.
-Qed.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite forget_projected_renamed : equivariance.
 
 Theorem share_projections_knowing_equivariant :
   share_projections_knowing_equivariant_statement.
-Proof.
-  intros r known e. apply share_projections_knowing_equivariant_aux.
-Qed.
+Proof. equivariance. Qed.
 
 Theorem share_known_projections_equivariant :
   share_known_projections_equivariant_statement.
-Proof.
-  intros r e. exact (share_projections_knowing_equivariant_aux r e []).
-Qed.
+Proof. intros r e. exact (share_projections_knowing_equivariant r [] e). Qed.
