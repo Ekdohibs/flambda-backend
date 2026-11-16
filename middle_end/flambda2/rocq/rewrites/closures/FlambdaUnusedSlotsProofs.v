@@ -45,7 +45,8 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaMapProofs FlambdaPrimitiveModel FlambdaValueSpec
   FlambdaPrimitiveSpec FlambdaPrimitiveProofs FlambdaSemanticsSpec
   FlambdaSemanticsProofs FlambdaNominalSpec FlambdaClosuresProofs
-  FlambdaUnusedStaticsSpec FlambdaImportsSpec FlambdaUnusedSlotsSpec.
+  FlambdaUnusedStaticsSpec FlambdaImportsSpec FlambdaUnusedSlotsSpec
+  FlambdaEquivarianceTactic.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -953,93 +954,11 @@ Qed.
 Theorem drop_slots_slots_unused : drop_slots_slots_unused_statement.
 Proof. exact drop_slots_slots_unused_expr. Qed.
 
-(* Renaming renames no value slot. *)
-Lemma keep_slots_rename (r : renaming) (dropped : list value_slot)
-    (slots : list (value_slot * simple)) :
-  map (fun slot => (fst slot, rename_simple r (snd slot)))
-    (keep_slots dropped slots)
-  = keep_slots dropped
-      (map (fun slot => (fst slot, rename_simple r (snd slot))) slots).
-Proof.
-  unfold keep_slots.
-  induction slots as [ | [slot s] slots IH]; simpl; [ reflexivity | ].
-  destruct (among slot dropped); simpl; [ exact IH | ].
-  rewrite IH. reflexivity.
-Qed.
-
-Fixpoint drop_slots_rename (r : renaming) (dropped : list value_slot)
-    (e : expr) {struct e} :
-  rename_expr r (drop_slots dropped e) = drop_slots dropped (rename_expr r e)
-with drop_slots_handler_rename (r : renaming) (dropped : list value_slot)
-    (h : continuation_handler) {struct h} :
-  rename_handler r (drop_slots_handler dropped h)
-  = drop_slots_handler dropped (rename_handler r h)
-with drop_slots_binding_rename (r : renaming) (dropped : list value_slot)
-    (binding : static_binding) {struct binding} :
-  rename_static_binding r (drop_slots_binding dropped binding)
-  = drop_slots_binding dropped (rename_static_binding r binding)
-with drop_slots_code_rename (r : renaming) (dropped : list value_slot)
-    (c : code) {struct c} :
-  rename_code r (drop_slots_code dropped c)
-  = drop_slots_code dropped (rename_code r c).
-Proof.
-  - destruct e
-      as [ x xkind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      simpl; try reflexivity.
-    + rewrite drop_slots_rename. reflexivity.
-    + rewrite drop_slots_rename. f_equal. rewrite !map_map.
-      induction bindings as [ | binding bindings IH]; simpl; [ reflexivity | ].
-      rewrite drop_slots_binding_rename, IH. reflexivity.
-    + rewrite drop_slots_handler_rename, drop_slots_rename. reflexivity.
-    + rewrite drop_slots_rename. f_equal. rewrite !map_map.
-      induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
-      rewrite drop_slots_handler_rename, IH. reflexivity.
-  - destruct h as [params metadata handler]. simpl. rewrite drop_slots_rename.
-    reflexivity.
-  - destruct binding as [id c | id | sym const]; simpl; try reflexivity.
-    + rewrite drop_slots_code_rename. reflexivity.
-    + destruct const; simpl; rewrite ?keep_slots_rename; reflexivity.
-  - destruct c as [params my_closure ret exn metadata body]. simpl.
-    rewrite drop_slots_rename. reflexivity.
-Qed.
-
+(* Renaming renames no value slot: the rewrite and the check commute with
+   it. Proved from the definitions by [equivariance]
+   (FlambdaEquivarianceTactic.v). *)
 Theorem drop_slots_equivariant : drop_slots_equivariant_statement.
-Proof. exact drop_slots_rename. Qed.
-
-Fixpoint slots_unused_rename (r : renaming) (dropped : list value_slot)
-    (e : expr) {struct e} :
-  slots_unused dropped (rename_expr r e) = slots_unused dropped e
-with handler_slots_unused_rename (r : renaming) (dropped : list value_slot)
-    (h : continuation_handler) {struct h} :
-  handler_slots_unused dropped (rename_handler r h)
-  = handler_slots_unused dropped h
-with binding_slots_unused_rename (r : renaming) (dropped : list value_slot)
-    (binding : static_binding) {struct binding} :
-  binding_slots_unused dropped (rename_static_binding r binding)
-  = binding_slots_unused dropped binding
-with code_slots_unused_rename (r : renaming) (dropped : list value_slot)
-    (c : code) {struct c} :
-  code_slots_unused dropped (rename_code r c) = code_slots_unused dropped c.
-Proof.
-  - destruct e
-      as [ x xkind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      simpl; try reflexivity.
-    + rewrite slots_unused_rename. f_equal. destruct d; reflexivity.
-    + rewrite slots_unused_rename. f_equal.
-      induction bindings as [ | binding bindings IH]; simpl; [ reflexivity | ].
-      rewrite binding_slots_unused_rename, IH. reflexivity.
-    + rewrite handler_slots_unused_rename, slots_unused_rename. reflexivity.
-    + rewrite slots_unused_rename. f_equal.
-      induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
-      rewrite handler_slots_unused_rename, IH. reflexivity.
-  - destruct h as [params metadata handler]. simpl. apply slots_unused_rename.
-  - destruct binding as [id c | id | sym const]; simpl; try reflexivity.
-    apply code_slots_unused_rename.
-  - destruct c as [params my_closure ret exn metadata body]. simpl.
-    apply slots_unused_rename.
-Qed.
+Proof. equivariance. Qed.
 
 Theorem slots_unused_equivariant : slots_unused_equivariant_statement.
-Proof. exact slots_unused_rename. Qed.
+Proof. equivariance. Qed.
