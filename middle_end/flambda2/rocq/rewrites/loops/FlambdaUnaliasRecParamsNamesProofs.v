@@ -59,7 +59,10 @@ Import ListNotations.
 
 (* By the tactic of FlambdaEquivarianceTactic.v, from the definitions:
    it derives the laws of [unalias_rec_param] and of
-   [unalias_rec_from]. *)
+   [unalias_rec_from]. Its faster step for the laws of its database is
+   taken: the proof passes with it in half the time. *)
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
+
 Lemma unalias_rec_params_renamed : rewrite_equivariant unalias_rec_params.
 Proof. equivariance. Qed.
 
