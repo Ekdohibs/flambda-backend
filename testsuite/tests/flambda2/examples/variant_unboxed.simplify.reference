@@ -24,8 +24,8 @@ let code loopify(never) size(47) newer_version_of(foo_0)
          (1i,
           y,
           x2,
-          poison.val.variant_unboxing_field,
-          poison.val.variant_unboxing_field)
+          poison.val."variant_unboxing_field",
+          poison.val."variant_unboxing_field")
      | 1 -> k3)
     where k3 =
       let untagged = %untag_imm (b') in
@@ -33,15 +33,15 @@ let code loopify(never) size(47) newer_version_of(foo_0)
         | 0 ->
           k2
             (0i,
-             poison.val.variant_unboxing_field,
-             poison.val.variant_unboxing_field,
+             poison.val."variant_unboxing_field",
+             poison.val."variant_unboxing_field",
              x1,
              x2)
         | 1 ->
           k2
             (0i,
-             poison.val.variant_unboxing_field,
-             poison.val.variant_unboxing_field,
+             poison.val."variant_unboxing_field",
+             poison.val."variant_unboxing_field",
              x2,
              x1)
     where k2

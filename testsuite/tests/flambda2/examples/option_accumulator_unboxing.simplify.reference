@@ -7,7 +7,7 @@ let code inline(never) loopify(never) size(47) newer_version_of(last_any_0)
   let for_stop = %int_barith.sub (n, 1) in
   (let prim = %int_comp.le (0, for_stop) in
    switch prim
-     | 0 -> k2 (1i, poison.val.variant_unboxing_field)
+     | 0 -> k2 (1i, poison.val."variant_unboxing_field")
      | 1 -> k3
      where k3 =
        let prim_1 = %untag_imm (for_stop) in
@@ -44,7 +44,7 @@ let code inline(never) loopify(never) size(47) newer_version_of(last_value_1)
   let for_stop = %int_barith.sub (n, 1) in
   (let prim = %int_comp.le (0, for_stop) in
    switch prim
-     | 0 -> k2 (1i, poison.val.variant_unboxing_field)
+     | 0 -> k2 (1i, poison.val."variant_unboxing_field")
      | 1 -> k3
      where k3 =
        let prim_1 = %untag_imm (for_stop) in

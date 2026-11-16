@@ -127,13 +127,15 @@ fields that a branch has not got the constant `poison`; eight examples
 of `../ocaml` that the tool converts have it after Simplify
 (`option_join.fl` and seven whose names end in `_heap.fl`). The
 conversion makes that constant of the model, which keeps its kind and
-no name. The printer writes it as
-`poison.KIND."poison"`, with the quotes in the name that it gives the
-printer of fexpr: that printer writes the name of a poison constant as
-it is (`middle_end/flambda2/parser/print_fexpr.ml`), and the parser
-reads a string there (`middle_end/flambda2/parser/flambda_parser.mly`,
-the rule `const`), so a poison constant printed with the name that the
-compiler gave it is not read back (discrepancy C2-14).
+no name. The printer writes it as `poison.KIND."poison"`: it gives the
+printer of fexpr the name `poison`, and that printer writes the name of
+a poison constant as a string
+(`middle_end/flambda2/parser/print_fexpr.ml`), which is what the parser
+reads there (`middle_end/flambda2/parser/flambda_parser.mly`, the rule
+`const`). The printer of fexpr once wrote the name as it is, so that a
+poison constant printed with the name that the compiler gave it was not
+read back (discrepancy C2-14), and the printer of the model gave the
+name with quotes in it.
 
 A poison constant whose kind is a naked `int8`, a naked `int16` or
 `mask` was printed all the same and was not read back, until the

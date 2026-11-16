@@ -69,7 +69,11 @@
    has, and the fifteen words that begin with a capital and are keywords of the
    text, which the printer must write in backquotes. The one argument of the
    test is a text with code, for the constructor that takes the metadata of
-   code. *)
+   code.
+
+   And a unit that returns a poison constant is written and read back, for two
+   names: the printer writes the name as a string, which is what the reader
+   takes. *)
 
 open Flambda2_bound_identifiers
 open Flambda2_identifiers
@@ -593,11 +597,9 @@ let invalid reason =
       ~return_continuation:_ ~exn_continuation:_ ~toplevel_my_alloc_region:_ ->
       Flambda.Expr.create_invalid reason)
 
-(* A unit that is one invalid expression whose message is the given name,
-   written by the printer of texts and read back by the reader: the text, and
-   what the comparison says of the unit and the unit read. *)
-let written_and_read_back name =
-  let unit1 = invalid (Message name) in
+(* A unit written by the printer of texts and read back by the reader: the text,
+   and what the comparison says of the unit and the unit read. *)
+let unit_written_and_read_back unit1 =
   let text =
     Flambda2_ui.Flambda_colours.without_colours ~f:(fun () ->
         Format.asprintf "%a" Flambda2_parser.Print_fexpr.flambda_unit
@@ -614,6 +616,19 @@ let written_and_read_back name =
   in
   Sys.remove file;
   String.trim text, read
+
+(* The same of a unit that is one invalid expression whose message is the given
+   name. *)
+let written_and_read_back name =
+  unit_written_and_read_back (invalid (Message name))
+
+(* A unit that returns a poison constant of the kind of values with the given
+   name. *)
+let poison name =
+  unit
+    (fun ~return_continuation ~exn_continuation:_ ~toplevel_my_alloc_region:_ ->
+      jump return_continuation
+        [Simple.const (Reg_width_const.const_poison K.value name)])
 
 (* The words that begin with a capital and are keywords of the text: the names
    of the static constants. *)
@@ -751,4 +766,13 @@ let () =
     (List.filter_map
        (fun (_, reason) -> Flambda2_compare.Compare.name_of_invalid reason)
        reasons
-    @ ["Message"; "Not_yet"] @ keywords_with_a_capital)
+    @ ["Message"; "Not_yet"] @ keywords_with_a_capital);
+  List.iter
+    (fun name ->
+      let text, read = unit_written_and_read_back (poison name) in
+      Printf.printf
+        "a poison constant with the name %S, written and read back: \"%s\", %s\n"
+        name
+        (String.concat " " (String.split_on_char '\n' text))
+        read)
+    ["variant_unboxing_field"; "a \"name\" with quotes\\"]

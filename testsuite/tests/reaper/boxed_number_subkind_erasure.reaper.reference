@@ -23,13 +23,13 @@ let code loopify(never) size(50) newer_version_of(f_0)
       let prim = %unbox_num.`int64` (y) in
       let prim_1 = %int_barith.`int64`.add (prim, prim) in
       let int64_add = %box_num.`int64`.my_alloc_region (prim_1) in
-      let int32_add = poison.val.reaper_unused_boxed_number in
+      let int32_add = poison.val."reaper_unused_boxed_number" in
       cont k2 (int32_add, int64_add)
     where k3 =
       let prim = %unbox_num.`int64` (y) in
       let prim_1 = %int_barith.`int64`.mul (prim, prim) in
       let int64_mul = %box_num.`int64`.my_alloc_region (prim_1) in
-      let int32_mul = poison.val.reaper_unused_boxed_number in
+      let int32_mul = poison.val."reaper_unused_boxed_number" in
       cont k2 (int32_mul, int64_mul)
     where k2 (a : val, b_1 : int64 boxed) =
       (apply direct(merge_usages_1_1 &my_alloc_region)

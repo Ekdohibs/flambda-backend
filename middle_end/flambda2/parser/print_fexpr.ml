@@ -290,8 +290,9 @@ let const ppf (c : Fexpr.const) =
   | Naked_mask v -> mask ppf v
   | Null -> Format.fprintf ppf "null"
   | Poison (kind, name) ->
-    Format.fprintf ppf "%tpoison.%a.%s%t" Flambda_colours.invalid_keyword
-      kind_with_subkind kind name Flambda_colours.pop
+    (* The name is written as a string, which is what the reader takes. *)
+    Format.fprintf ppf "%tpoison.%a.\"%s\"%t" Flambda_colours.invalid_keyword
+      kind_with_subkind kind (String.escaped name) Flambda_colours.pop
 
 let arity ppf (a : arity) =
   match a with

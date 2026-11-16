@@ -79,10 +79,8 @@
    the text; the round trip gives each one of a unit that it reads the kind of
    its argument (flroundtrip.ml).
 
-   A poison constant is written with a name of its own, in quotes. The model
-   keeps no name for it, and the printer of fexpr writes a name as it is where
-   the parser reads a string, so that a name without its quotes is not read
-   back. A poison constant of kind naked [int8], naked [int16] or [mask] is
+   A poison constant is written with a name of its own: the model keeps no name
+   for it. A poison constant of kind naked [int8], naked [int16] or [mask] is
    written like any other: the parser of fexpr reads those three kinds
    (parser/flambda_parser.mly, the rule [naked_number_kind]). *)
 
@@ -267,12 +265,11 @@ let const (c : Model.const) : F.const =
   | Naked_vec128 _ | Naked_vec256 _ | Naked_vec512 _ | Naked_mask _ ->
     not_printable "a constant that is a vector or a mask"
   | Poison k ->
-    (* The printer of fexpr writes the name of a poison constant as it is, and
-       the parser asks for a string there (parser/print_fexpr.ml, the case
-       [Poison]; parser/flambda_parser.mly, the rule [const]). So the name is
-       given with its quotes, and the text can be read. The model keeps no name:
-       the conversion drops it. *)
-    Poison (kind k, "\"poison\"")
+    (* The model keeps no name: the conversion drops it. The printer of fexpr
+       writes the name given here as a string, which the parser reads
+       (parser/print_fexpr.ml, the case [Poison]; parser/flambda_parser.mly, the
+       rule [const]). *)
+    Poison (kind k, "poison")
 
 let simple (s : Model.simple) : F.simple =
   match s with
