@@ -45,6 +45,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaValidatorEquivarianceSpec FlambdaScopedProofs
   FlambdaKeepsScopeSpec.
 From OxCamlFlambda2 Require FlambdaCseProofs.
+From OxCamlFlambda2 Require Import FlambdaScopeTactic.
 From OxCamlFlambda2Types Require Import FlambdaTypesSpec FlambdaAliasesSpec.
 Import ListNotations.
 
@@ -1441,17 +1442,7 @@ Qed.
    variable. *)
 Lemma made_length_named_closed (known : computed) (d d' : named) :
   made_length_named known d = Some d' -> free_variables_of_named d' = [].
-Proof.
-  unfold made_length_named.
-  destruct d as [ | p args | | | | | ]; try discriminate.
-  destruct p as [u | | | | ]; try discriminate.
-  destruct u; try discriminate.
-  destruct args as [ | [x | sym | c] [ | arg args]]; try discriminate.
-  destruct (made_length known x) as [n | ]; [ | discriminate ].
-  destruct (in_range (int_width Standard_tagged_immediate) n);
-    [ | discriminate ].
-  intros [= <-]. reflexivity.
-Qed.
+Proof. unfold made_length_named. intros Hmade. tests. reflexivity. Qed.
 
 Lemma share_named_free (names : list variable) (known : computed)
     (d : named) :
@@ -1521,9 +1512,7 @@ Proof.
     try apply scoped_under_refl.
   - apply scoped_under_let; [ | apply lengths_knowing_scoped ].
     destruct (made_length_named known d) as [d' | ] eqn:Hlength;
-      [ rewrite (made_length_named_closed known d d' Hlength);
-        apply incl_nil_l
-      | apply incl_appl, incl_refl ].
+      [ rewrite (made_length_named_closed known d d' Hlength) | ]; names.
   - apply scoped_under_let_static. apply lengths_knowing_scoped.
   - apply scoped_under_let_cont; apply lengths_knowing_scoped.
   - apply scoped_under_let_cont_recursive. apply lengths_knowing_scoped.

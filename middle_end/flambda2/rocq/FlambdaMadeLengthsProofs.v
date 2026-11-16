@@ -44,7 +44,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaContextProofs FlambdaContextMemoryProofs FlambdaNominalSpec
   FlambdaNominalProofs FlambdaWellFormedSpec FlambdaWellFormedProofs
   FlambdaNormaliseSpec FlambdaNormaliseProofs FlambdaCseSpec
-  FlambdaCseProofs FlambdaMadeLengthsSpec.
+  FlambdaCseProofs FlambdaMadeLengthsSpec FlambdaEquivarianceTactic.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -232,46 +232,19 @@ Qed.
 (* The rule commutes with renaming                                          *)
 (* ======================================================================== *)
 
-Lemma rename_computed_app (r : renaming) (known known' : computed) :
-  rename_computed r (known ++ known')
-  = rename_computed r known ++ rename_computed r known'.
-Proof. unfold rename_computed. apply map_app. Qed.
-
-Fixpoint lengths_knowing_equivariant_aux (r : renaming) (e : expr) :
-  ∀ known : computed,
-    lengths_knowing (rename_computed r known) (rename_expr r e)
-    = rename_expr r (lengths_knowing known e)
-with lengths_in_handler_equivariant (r : renaming)
-    (h : continuation_handler) :
-  ∀ known : computed,
-    lengths_in_handler (rename_computed r known) (rename_handler r h)
-    = rename_handler r (lengths_in_handler known h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      intros known; simpl; try reflexivity.
-    + rewrite made_length_named_renamed, array_made_under_let_renamed,
-        forget_computed_renamed, <- rename_computed_app,
-        lengths_knowing_equivariant_aux.
-      destruct (made_length_named known d); reflexivity.
-    + rewrite lengths_knowing_equivariant_aux. reflexivity.
-    + rewrite lengths_in_handler_equivariant,
-        lengths_knowing_equivariant_aux.
-      reflexivity.
-    + rewrite lengths_knowing_equivariant_aux. reflexivity.
-  - destruct h as [params metadata handler]. intros known. simpl.
-    rewrite forget_computed_vars_renamed, lengths_knowing_equivariant_aux.
-    reflexivity.
-Qed.
+(* The law of the traversal is proved by the tactic of
+   FlambdaEquivarianceTactic.v from the definition of the rule: the
+   induction over the term and its cases are the tactic's. It is given
+   three laws that FlambdaCseProofs.v has of what the rule is made of;
+   the law of FlambdaCseSpec.array_made_under_let it states and proves
+   by itself. The rule as the validation runs it is the traversal at
+   nothing known, which a renaming leaves as it is. *)
+#[local] Hint Rewrite made_length_named_renamed forget_computed_renamed
+  forget_computed_vars_renamed : equivariance.
 
 Theorem lengths_knowing_equivariant : lengths_knowing_equivariant_statement.
-Proof.
-  intros r known e. apply lengths_knowing_equivariant_aux.
-Qed.
+Proof. equivariance. Qed.
 
 Theorem fold_made_lengths_equivariant :
   fold_made_lengths_equivariant_statement.
-Proof.
-  intros r e. exact (lengths_knowing_equivariant_aux r e []).
-Qed.
+Proof. intros r e. exact (lengths_knowing_equivariant r [] e). Qed.
