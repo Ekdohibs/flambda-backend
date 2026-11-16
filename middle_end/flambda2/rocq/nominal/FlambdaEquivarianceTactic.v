@@ -50,9 +50,11 @@
      from its type, proves it from its definition in the same way, and
      uses it (the last section).
    It closes its goal or fails, and the failure says what is left;
-   [equivariance_open] leaves the goals that it does not close. It
-   ends on every goal: its steps are counted (the section "The
-   bound").
+   [equivariance_open] leaves the goals that a search which ends does
+   not close. Both end on every goal, under the same bounds: the
+   steps are counted (the section "The bound"), and where a bound
+   stops a call, either raises an error instead of returning
+   unfinished goals.
 
    So the laws of the functions that a function calls need not be
    stated: the law of a pass is proved from the definitions alone. A
@@ -72,10 +74,13 @@
    redefinition replaces the one before it, for every file that comes
    after.
 
-   A type that does not say how it is renamed (a map keyed by names)
-   is declared by an instance of [Renaming_of] (the section before
-   the last); without it the tactic keeps such an argument as it is,
-   tries laws that are false, and is slow to fail.
+   A type from which the tactic cannot read how it is renamed (a map
+   keyed by names) is declared by an instance of [Renaming_of] (the
+   section before the last). Where neither an instance nor the type
+   itself gives an action, the tactic treats such an argument as
+   unchanged; the law that it then writes may be false, and it may be
+   slow to fail. An instance can also save time where an action can
+   already be read from the type.
 
    The statement of a law need not be written: [equivariance_of f] is
    the law of renaming of [f], read from its type (the section before
@@ -493,7 +498,7 @@ Ltac eqv_rewrite_hyp :=
    tries every law of the database on the whole goal, one law after
    another, and where no law applies that is most of the time of a
    proof. One pass of [rewrite_strat] looks at each subterm once and
-   is many times faster; but it finds a law by the look of a term
+   can be many times faster; but it finds a law by the look of a term
    (not inside a [match], not under a binder, not where a sort is
    written [positive] in one place and [variable] in another), and
    in another order, so a proof that passes with the one need not
@@ -1145,10 +1150,13 @@ Ltac eqv_same_test := fail.
    bound to rely on, the clock a second guard for one step that does
    not come back.
 
-   Two more things end a call that cannot succeed sooner. A goal that
-   says that a renaming is the identity on a variable ([rename_x r x
-   = x]) is false: the derivation that reached it is given up at
-   once. And a function whose law could not be derived is not tried
+   Two other checks abandon a derivation sooner or avoid repeating
+   one that has failed. A goal of the shape [f x = x] or [x = f x],
+   with [x] a variable and a renaming in [f], is taken for one that
+   the steps of the tactic will not prove: the derivation that
+   reached it is given up at once. This is a test of the shape of
+   the goal, not a proof that the goal or the law being derived is
+   false. And a function whose law could not be derived is not tried
    again where the same derivations are under way: the failure is
    remembered for the rest of the call.
 
@@ -1405,8 +1413,9 @@ Ltac eqv_alt st name tac :=
   st name; st tac; st ident:(eqv_taken);
   eqv_note_step ltac:(idtac name).
 
-(* A goal that no law of renaming proves: a renaming is the identity
-   on a variable. *)
+(* The shape of a goal at which a derivation is given up: something
+   with a renaming in it, applied to a variable, is that variable,
+   written either way round. A test of the shape only. *)
 Ltac eqv_identity_goal :=
   lazymatch goal with
   | |- ?f ?x = ?x => is_var x; eqv_has_renaming f
@@ -1582,7 +1591,10 @@ End Prepare.
 (* [equivariance] closes its goal or fails; the failure says how many
    goals are left and what the first is about. [equivariance_open]
    leaves the goals that it does not close: for a proof that goes on
-   by hand after it, and to see what is left. *)
+   by hand after it, and to see what is left. It is the same search
+   under the same bounds: where a bound stops the call, it raises an
+   error, as [equivariance] does, instead of returning unfinished
+   goals. *)
 Tactic Notation "equivariance" :=
   ltac2:(Bound.closing
            (fun st =>
