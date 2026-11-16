@@ -67,9 +67,9 @@
    expression is written by the printer of texts and read back by the reader,
    for each of these names: the sixteen, [Message], a name that no constructor
    has, and the fifteen words that begin with a capital and are keywords of the
-   text,
-   which the printer must write in backquotes. The one argument of the test is
-   a text with code, for the constructor that takes the metadata of code. *)
+   text, which the printer must write in backquotes. The one argument of the
+   test is a text with code, for the constructor that takes the metadata of
+   code. *)
 
 open Flambda2_bound_identifiers
 open Flambda2_identifiers
