@@ -438,6 +438,10 @@ pass into the validator.
     does, and is proved equal to the first; the validation calls it)
   - `middle_end/flambda2/rocq/simplify/FlambdaSimplifyArms*` (the arms of
     a `Switch`, each rewritten under what its arm knows)
+  - `middle_end/flambda2/rocq/simplify/FlambdaSimplifyClosuresUnion*` (the
+    environment of the handler of a continuation in which a parameter
+    is one of the closures that the applications pass, and the handler
+    rewritten under it; no pass uses it yet)
 - S2, switch. Owner of the first three slices: T1, on
   `flambda2-rocq/T1-grammar`; the rest unassigned.
   - `middle_end/flambda2/rocq/simplify/FlambdaSimplifySwitch*` (the arms
