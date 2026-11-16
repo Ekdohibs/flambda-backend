@@ -198,7 +198,10 @@ Definition static_const_eqb (vm : name_map) (const const' : static_const)
    same list: it is so in order that two terms that it accepts with no
    names paired are alpha-equivalent
    (FlambdaCompareConverseSpec.expr_eqb_alpha_equivalent_statement),
-   which lists that differ are not. *)
+   which lists that differ are not. The order of this list and
+   repetitions in it do not change the meaning of the call; only this
+   comparison asks for the same list
+   (FlambdaKnownAritySpec.code_ids_allow_members_statement). *)
 Definition call_kind_eqb (kind kind' : call_kind) : bool :=
   match kind, kind' with
   | Direct code, Direct code' => Pos.eqb code code'

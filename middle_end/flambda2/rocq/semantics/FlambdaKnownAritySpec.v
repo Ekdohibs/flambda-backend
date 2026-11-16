@@ -45,8 +45,11 @@
    fewer or more arguments than its code has parameters. A call of
    known arity promises that the callee is a closure of code that has
    the arity of the call, so that the backend calls the code with the
-   arguments and tests nothing; it may list the code ids that the code
-   of the callee is among.
+   arguments and tests nothing; it may list code ids, and then, by the
+   compiler's interface, only the functions listed, or a simplified
+   version of one, can be called (terms/call_kind.mli). The model
+   reads the list as exact membership, which is a choice of its own
+   and stricter (decision D59).
 
    - A call of known arity that has a shape is a full call, of code
      that is not tupled, and it is what the call of unknown arity of the

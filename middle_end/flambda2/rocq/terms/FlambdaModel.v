@@ -481,9 +481,11 @@ Definition is_raise (ac : apply_cont) : bool :=
    call is the generic application ([Indirect_unknown_arity]), or it
    promises that the callee is a closure of code that has the arity of
    the call ([Indirect_known_arity]). A call of known arity may list
-   code ids, which the code of its callee is then among
-   ([Code_id.Set.t Or_unknown.t]: no list is [Unknown], and the
-   semantics asks of a list only what its members are). What each kind
+   code ids ([Code_id.Set.t Or_unknown.t]: no list is [Unknown]). In
+   the compiler the callee is then one of the functions listed or a
+   simplified version of one; here, by a choice of the model, the code
+   id of the callee is one of those listed (decision D59), and the
+   semantics asks of a list only what its members are. What each kind
    means is at FlambdaSemanticsSpec.shape_of_closure_call. Where a
    comment of these files says "an indirect call" and no more, it is a
    call of unknown arity. *)

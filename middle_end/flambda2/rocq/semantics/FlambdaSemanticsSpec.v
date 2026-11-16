@@ -927,7 +927,9 @@ Definition known_arity_full (statics : static_env) (called : code_id)
    application or an over-application. That is how Simplify treats a
    call of any kind once it knows the callee ([simplify_function_call]
    sends all three to [simplify_direct_function_call], which goes by
-   the number of arguments), and it is what makes a call of unknown
+   the number of arguments, subject to its tests of kinds and to the
+   case where it makes no stub for a partial application: the comment
+   on calls of known arity below), and it is what makes a call of unknown
    arity of a known closure the same as a direct call of its code
    whatever the number of arguments
    (FlambdaApplySpec.apply_indirect_known_statement). The backend reads
@@ -984,23 +986,41 @@ Definition known_arity_full (statics : static_env) (called : code_id)
    [Known_arity_code_pointer]; to_cmm/to_cmm_set_of_closures.ml puts
    a function that fails in the first field where a set is marked
    [only_full_applications]). Simplify, once it knows the callee,
-   treats a call of any kind by the number of its arguments: with
-   fewer it makes a closure, with more it splits the call
-   ([simplify_direct_function_call]).
-   Where the model is stricter than the compiler, by choice. A
-   partial application made at run time is a closure of what is left
-   to apply, and the backend would run a call of known arity that
-   gives it exactly that; the compiler is not known to make one, and
-   the value has no code id here. Tupled code: Simplify takes a
-   call of known arity, like a direct call, to give tupled code its
-   components ([simplify_function_call], [call_must_be_detupled]);
-   the backend's call with two groups or more loads the code that
-   takes them, and with one group loads the function that takes a
-   tuple, or the one that fails. Every call of known arity of tupled
-   code is undefined here, so that every call of known arity that
-   has a step is the call of unknown arity of the same callee, and
-   the test tool refuses a unit that has a call of known arity and
-   binds tupled code (the next comment).
+   treats a call of any kind by the number of its arguments
+   ([simplify_direct_function_call]): with fewer it may make a
+   closure, and with more it may split the call. Each has a test of
+   its own, without which the call is made [Invalid] or the compiler
+   stops: with more arguments, that the code of the callee returns
+   one value, which the arguments that remain are then given to;
+   with fewer, that the arity which the application itself gives for
+   its result is one value. Where no stub is to be made for a
+   partial application it treats the call as one whose callee is not
+   known; and it stops on a call with no argument of code that has
+   parameters.
+   Where the model is stricter than the compiler, by choice. Three
+   sorts of call of known arity are undefined here although the
+   backend's call has the result of the generic application: of a
+   partial application made at run time, given exactly the parameters
+   that are left (it is a closure of what is left to apply; the
+   compiler is not known to make such a call, and the value has no
+   code id here); with one group of arguments, of code that is not
+   tupled and has more parameters, which goes by the first field of
+   the closure and returns a partial application; and with one group,
+   of tupled code given its tuple, which goes by the same field to
+   the function that takes the tuple apart. The last two are so only
+   where that field has not been given the function that fails (a
+   set marked [only_full_applications], above). Nothing of the kind
+   is said of another mismatch: with two groups or more the call
+   goes by a field that may hold no code, or gives code another
+   number of arguments than it takes (above). Tupled code otherwise:
+   Simplify takes a call of known arity, like a direct call, to give
+   tupled code its components ([simplify_function_call],
+   [call_must_be_detupled]), and the backend's call with two groups
+   or more loads the code that takes them. Every call of known arity
+   of tupled code is undefined here, so that every call of known
+   arity that has a step is the call of unknown arity of the same
+   callee, and the test tool refuses a unit that has a call of known
+   arity and binds tupled code (the next comment).
    Asked of the developers: is a call of known arity whose callee
    has not the arity of the call a broken promise, which a check
    could catch under [-flambda2-invariants] or in [to_cmm]; or has

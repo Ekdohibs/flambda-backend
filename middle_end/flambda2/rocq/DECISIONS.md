@@ -538,14 +538,17 @@ a `CR` at the place in the `Spec` file.
   one indirect call of the model was. A direct call is not changed
   (C3-9), so the model's calls as a whole are not claimed to follow
   the backend. The model is stricter than the compiler, by choice, for
-  a callee that is a partial application made at run time, and for
-  tupled code: every call of known arity of tupled code is undefined
-  in the model (what the compiler does there is in the CR at
+  a callee that is a partial application made at run time; for a call
+  with one group of arguments of code that has more parameters, where
+  the backend's call is that of the generic application and returns a
+  partial application; and for tupled code: every call of known arity
+  of tupled code is undefined in the model (what the compiler does in
+  the three cases is in the CR at
   `FlambdaSemanticsSpec.shape_of_closure_call`; the test tool refuses
-  such a unit). Decided by the team on the human's word ("do something
-  sensible and leave a CR"); the developers are asked whether the
-  mismatch is a broken promise or has the generic meaning (the same
-  CR). Open until they say.
+  a unit with a call of known arity and tupled code). Decided by the
+  team on the human's word ("do something sensible and leave a CR");
+  the developers are asked whether the mismatch is a broken promise or
+  has the generic meaning (the same CR). Open until they say.
 - **D59.** The code ids that a call of known arity lists are a
   promise: the call is undefined unless the code id of its callee is
   one of them; no list allows every code, the empty list none. The
