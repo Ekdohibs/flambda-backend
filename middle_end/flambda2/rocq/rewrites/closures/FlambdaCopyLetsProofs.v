@@ -59,7 +59,8 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaClosuresProofs
   FlambdaUnusedStaticsSpec FlambdaImportsSpec FlambdaHeapFreeSpec
   FlambdaHeapFreeProofs FlambdaLiftSpec FlambdaLiftProofs
-  FlambdaCopyCodeSpec FlambdaCopyCodeProofs FlambdaCopyLetsSpec.
+  FlambdaCopyCodeSpec FlambdaCopyCodeProofs FlambdaEquivarianceTactic
+  FlambdaCopyLetsSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -1962,107 +1963,64 @@ Qed.
 (* The rewrite under renaming                                               *)
 (* ======================================================================== *)
 
-Lemma copy_named_rename (r : renaming) (ids : list (code_id * code_id))
-    (d : named) :
-  rename_named r (copy_named ids d) = copy_named ids (rename_named r d).
-Proof. destruct d; reflexivity. Qed.
+(* The two laws are proved from the definitions by the tactic of
+   FlambdaEquivarianceTactic.v, which states and proves by itself the
+   laws of the functions that the rewrite is made of. It is given
+   three things.
 
-Fixpoint copy_lets_expr_rename (r : renaming)
-    (ids : list (code_id * code_id)) (lets : list path) (at_path : path)
-    (e : expr) {struct e} :
-  rename_expr r (copy_lets_expr ids lets at_path e)
-  = copy_lets_expr ids lets at_path (rename_expr r e)
-with copy_lets_handler_rename (r : renaming)
-    (ids : list (code_id * code_id)) (lets : list path) (at_path : path)
-    (h : continuation_handler) {struct h} :
-  rename_handler r (copy_lets_handler ids lets at_path h)
-  = copy_lets_handler ids lets at_path (rename_handler r h).
+   The handlers of a recursive [Let_cont] are rewritten by
+   [FlambdaLiftSpec.rec_handlers_map], which takes a function of the
+   path of a handler: its law is proved here by hand, with a step
+   that uses it.
+
+   The first test of the rewrite, [FlambdaLiftSpec.exits_plain_knowing]
+   at nothing known, has its law stated at nothing known; that law,
+   and those of the two other tests, are in other files and are given
+   as they are. So is the law of the copy of static code, from right
+   to left. *)
+Lemma rec_handlers_map_renamed (r : renaming)
+    (f : path -> continuation_handler -> continuation_handler)
+    (handlers : list (continuation * continuation_handler)) :
+  (∀ x : continuation * continuation_handler,
+     In x handlers ->
+     ∀ q : path,
+       f q (rename_handler r (snd x)) = rename_handler r (f q (snd x))) ->
+  ∀ q : path,
+    rec_handlers_map f q
+      (map (fun '(k, h) => (rename_continuation r k, rename_handler r h))
+         handlers)
+    = map (fun '(k, h) => (rename_continuation r k, rename_handler r h))
+        (rec_handlers_map f q handlers).
 Proof.
-  - destruct e
-      as [ x xkind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      simpl; try reflexivity.
-    + rewrite copy_lets_expr_rename.
-      destruct (among at_path lets); [ rewrite copy_named_rename | ];
-        reflexivity.
-    + rewrite copy_lets_expr_rename. reflexivity.
-    + rewrite copy_lets_handler_rename, copy_lets_expr_rename. reflexivity.
-    + rewrite copy_lets_expr_rename. f_equal.
-      generalize (xI at_path) as q. revert handlers. fix IH 1.
-      intros [ | [k h] handlers] q; simpl; [ reflexivity | ].
-      rewrite copy_lets_handler_rename, IH. reflexivity.
-  - destruct h as [params metadata handler]. simpl.
-    rewrite copy_lets_expr_rename. reflexivity.
+  induction handlers as [ | [k h] handlers IH]; intros Hf q;
+    [ reflexivity | ].
+  cbn [map rec_handlers_map].
+  rewrite (Hf (k, h) (or_introl eq_refl)), IH; [ reflexivity | ].
+  intros x Hx. apply Hf. right. exact Hx.
 Qed.
 
-Lemma copy_lets_binding_rename (r : renaming)
-    (ids : list (code_id * code_id)) (in_code : list (code_id * list path))
-    (binding : static_binding) :
-  rename_static_binding r (copy_lets_binding ids in_code binding)
-  = copy_lets_binding ids in_code (rename_static_binding r binding).
-Proof.
-  destruct binding as [id [params my_closure ret exn metadata body] | id
-    | s const];
-    simpl; try reflexivity.
-  destruct (lookup id in_code); simpl;
-    [ rewrite copy_lets_expr_rename | ]; reflexivity.
-Qed.
+#[local] Ltac eqv_extra ::=
+  lazymatch goal with
+  | |- context [rec_handlers_map ?f ?q (map _ ?l)] =>
+    rewrite (rec_handlers_map_renamed _ f l);
+    [ | eqv_enter l; intros ?; solve [ eqv_core ] ]
+  end.
 
-Fixpoint copy_lets_in_code_rename (r : renaming)
-    (ids : list (code_id * code_id)) (in_code : list (code_id * list path))
-    (e : expr) {struct e} :
-  rename_expr r (copy_lets_in_code ids in_code e)
-  = copy_lets_in_code ids in_code (rename_expr r e)
-with copy_lets_in_code_handler_rename (r : renaming)
-    (ids : list (code_id * code_id)) (in_code : list (code_id * list path))
-    (h : continuation_handler) {struct h} :
-  rename_handler r (copy_lets_in_code_handler ids in_code h)
-  = copy_lets_in_code_handler ids in_code (rename_handler r h).
-Proof.
-  - destruct e
-      as [ x xkind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      simpl; try reflexivity.
-    + rewrite copy_lets_in_code_rename. reflexivity.
-    + rewrite copy_lets_in_code_rename. f_equal. rewrite !map_map.
-      induction bindings as [ | binding bindings IH]; simpl;
-        [ reflexivity | ].
-      rewrite copy_lets_binding_rename, IH. reflexivity.
-    + rewrite copy_lets_in_code_handler_rename, copy_lets_in_code_rename.
-      reflexivity.
-    + rewrite copy_lets_in_code_rename. f_equal. rewrite !map_map.
-      induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
-      rewrite copy_lets_in_code_handler_rename, IH. reflexivity.
-  - destruct h as [params metadata handler]. simpl.
-    rewrite copy_lets_in_code_rename. reflexivity.
-Qed.
+Lemma exits_plain_renamed (r : renaming) (e : expr) :
+  exits_plain_knowing [] [] (rename_expr r e) = exits_plain_knowing [] [] e.
+Proof. exact (exits_plain_knowing_equivariant r [] [] e). Qed.
+
+#[local] Hint Rewrite exits_plain_renamed expr_free_of_heap_rename
+  binds_no_code_equivariant : equivariance.
+#[local] Hint Rewrite <- copy_expr_equivariant : equivariance.
 
 Theorem copy_let_code_equivariant : copy_let_code_equivariant_statement.
-Proof.
-  intros r [[ids symbols] [lets in_code]] e. unfold copy_let_code.
-  pose proof (exits_plain_knowing_equivariant r [] [] e) as Hplain.
-  cbn [map] in Hplain.
-  rewrite Hplain, (expr_free_of_heap_rename r e).
-  destruct (exits_plain_knowing [] [] e && expr_free_of_heap e
-            && copies_apart ids);
-    [ | reflexivity ].
-  unfold copy_static_code, copy_ok.
-  rewrite (binds_no_code_equivariant r (map snd ids) e).
-  destruct (distinct (map fst ids) && distinct (map snd ids)
-            && binds_no_code (map snd ids) e);
-    [ | reflexivity ].
-  rewrite copy_lets_in_code_rename, copy_lets_expr_rename,
-    (copy_expr_equivariant r ids symbols e).
-  reflexivity.
-Qed.
+Proof. equivariance. Qed.
+
+#[local] Hint Rewrite <- copy_let_code_equivariant : equivariance.
 
 Theorem with_let_copies_equivariant : with_let_copies_equivariant_statement.
-Proof.
-  intros r copies.
-  induction copies as [ | copy copies IH]; intros e; cbn [with_let_copies];
-    [ reflexivity | ].
-  rewrite IH, copy_let_code_equivariant. reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 (* ======================================================================== *)
 (* One [Let] copied, and one unit left as it is                             *)
