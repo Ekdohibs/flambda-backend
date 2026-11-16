@@ -1771,7 +1771,7 @@ Qed.
      which is not unfolded where it is at something that is not a
      list written out; and that [is_some] does not look at what an
      option holds;
-   - four laws of functions of the pass, which it proves, so that it
+   - five laws of functions of the pass, which it proves, so that it
      has them before the functions that call them are unfolded. That
      of [same_class] is in the form that computation gives where the
      reads made are renamed: the class of an entry is a pair. *)
@@ -1806,6 +1806,16 @@ Lemma group_const_renamed (r : renaming) (s : symbol)
   = option_map (rename_static_const r) (group_const s bindings).
 Proof. equivariance. Qed.
 #[local] Hint Rewrite group_const_renamed : equivariance.
+
+(* What is known of the term renamed is what is known of the term,
+   renamed. Stated: with it the laws that follow pass with the one
+   pass of the database, which is faster; it does not. *)
+Lemma places_held_renamed (r : renaming) (e : expr) :
+  places_held (rename_expr r e) = rename_held r (places_held e).
+Proof. equivariance. Qed.
+#[local] Hint Rewrite places_held_renamed : equivariance.
+
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
 
 Lemma same_class_renamed (r : renaming) (c : place_class) (first : symbol)
     (x : variable) :
