@@ -696,6 +696,8 @@ units with loops (`while`, `for`, tail-recursive functions).
   of code, the unused `Let`s of its parameters)
 - `middle_end/flambda2/rocq/rewrites/continuations/FlambdaSinkUses*` (moving a continuation
   down past the bindings under it)
+- `middle_end/flambda2/rocq/rewrites/params/FlambdaParamOrder*` (the parameters of a
+  continuation put in the order in which its handler first names them)
 
 ## N1: nominal loose ends
 

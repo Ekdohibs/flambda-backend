@@ -304,6 +304,8 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   semantics/FlambdaObserversSpec.v \
   rewrites/params/FlambdaParamAliasesProofs.v \
   rewrites/params/FlambdaParamAliasesSpec.v \
+  rewrites/params/FlambdaParamOrderProofs.v \
+  rewrites/params/FlambdaParamOrderSpec.v \
   semantics/FlambdaPartialApplicationProofs.v \
   semantics/FlambdaPartialApplicationSpec.v \
   terms/FlambdaPrimitiveModel.v \
