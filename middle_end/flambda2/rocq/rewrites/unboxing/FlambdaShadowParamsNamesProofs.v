@@ -64,6 +64,10 @@ Import ListNotations.
    continuations is a list of pairs: the action is [rename_keyed]),
    and it is given two laws of functions of lists that other files
    prove. *)
+(* The step of the database is the one pass: every proof by the tactic
+   of this part passes with it. *)
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
+
 #[local] Instance positions_renaming : Renaming_of positions := rename_keyed.
 #[local] Hint Rewrite @moved_from_map distinct_renamed : equivariance.
 
