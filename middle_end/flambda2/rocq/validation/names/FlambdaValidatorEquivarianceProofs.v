@@ -2746,82 +2746,16 @@ Proof. equivariance. Qed.
 End Rewrite_rec_handlers.
 
 (* Moving a continuation to the handler that alone uses it. *)
-Lemma applied_at_tail_equivariant (r : renaming) (k : continuation)
-    (h : continuation_handler) (body : expr) :
-  applied_at_tail (rename_continuation r k) (rename_handler r h)
-    (rename_expr r body)
-  = applied_at_tail k h body.
-Proof.
-  destruct h as [params metadata handler]. unfold applied_at_tail.
-  cbn [rename_handler]. rewrite inline_cont_at_tail_equivariant_aux.
-  destruct (inline_cont_at_tail k params metadata handler body); reflexivity.
-Qed.
-
 Lemma params_not_free_equivariant (r : renaming) (params : list variable)
     (h : continuation_handler) :
   params_not_free (map (rename_variable r) params) (rename_handler r h)
   = params_not_free params h.
-Proof.
-  unfold params_not_free. apply forallb_map_with. intros param.
-  rewrite var_free_in_handler_b_equivariant. reflexivity.
-Qed.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite params_not_free_equivariant : equivariance.
 
-Fixpoint sink_into_handler_equivariant (r : renaming) (k : continuation)
-    (h : continuation_handler) (body : expr) {struct body} :
-  sink_into_handler (rename_continuation r k) (rename_handler r h)
-    (rename_expr r body)
-  = option_map (rename_expr r) (sink_into_handler k h body).
-Proof.
-  destruct body
-    as [ x kind d body | bindings body | k' [params' metadata' handler'] body
-       | handlers body | ap | ac | scrutinee arms | ];
-    cbn [rename_expr rename_handler sink_into_handler]; try reflexivity.
-  - rewrite var_free_in_handler_b_equivariant,
-      (sink_into_handler_equivariant r k h body).
-    destruct (var_free_in_handler_b x h); [ reflexivity | ].
-    destruct (sink_into_handler k h body); reflexivity.
-  - rewrite (sink_into_handler_equivariant r k h body).
-    destruct (sink_into_handler k h body); reflexivity.
-  - rewrite !cont_free_b_equivariant_aux,
-      !cont_free_in_handler_b_equivariant, params_not_free_equivariant,
-      applied_at_tail_equivariant, rename_continuation_eqb,
-      (sink_into_handler_equivariant r k h handler'),
-      (sink_into_handler_equivariant r k h body).
-    destruct
-      (negb (cont_free_b k body) && negb (cont_free_in_handler_b k h)
-       && params_not_free params' h).
-    + destruct (sink_into_handler k h handler'); [ reflexivity | ].
-      cbn [option_map].
-      destruct (applied_at_tail k h handler'); reflexivity.
-    + destruct
-        (negb (Pos.eqb k k') && negb (cont_free_b k handler')
-         && negb (cont_free_in_handler_b k' h));
-        [ | reflexivity ].
-      destruct (sink_into_handler k h body); reflexivity.
-Qed.
-
-Fixpoint sink_let_conts_equivariant_aux (r : renaming) (e : expr) :
+Lemma sink_let_conts_equivariant_aux (r : renaming) (e : expr) :
   sink_let_conts (rename_expr r e) = rename_expr r (sink_let_conts e).
-Proof.
-  destruct e
-    as [ x kind d body | bindings body | k [params metadata handler] body
-       | handlers body | ap | ac | scrutinee arms | ];
-    cbn [rename_expr rename_handler sink_let_conts]; try reflexivity.
-  - rewrite sink_let_conts_equivariant_aux. reflexivity.
-  - rewrite sink_let_conts_equivariant_aux. reflexivity.
-  - rewrite !sink_let_conts_equivariant_aux.
-    pose proof
-      (sink_into_handler_equivariant r k
-         (Handler params metadata (sink_let_conts handler))
-         (sink_let_conts body))
-      as Hsink.
-    cbn [rename_handler] in Hsink. rewrite Hsink.
-    destruct
-      (sink_into_handler k (Handler params metadata (sink_let_conts handler))
-         (sink_let_conts body));
-      reflexivity.
-  - rewrite sink_let_conts_equivariant_aux. reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 Lemma sink_let_conts_equivariant : rewrite_equivariant sink_let_conts.
 Proof. exact sink_let_conts_equivariant_aux. Qed.
