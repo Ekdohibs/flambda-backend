@@ -3974,58 +3974,27 @@ Proof.
 Qed.
 
 (* Loopify. The name given for the loop of each piece of code is renamed
-   with the term; code ids are not renamed ([rename_loopified]). *)
-Lemma is_self_tail_call_equivariant (r : renaming) (my_closure : variable)
-    (params_arity : arity) (ret exn : continuation) (ap : apply_expr) :
-  is_self_tail_call (rename_variable r my_closure) params_arity
-    (rename_continuation r ret) (rename_continuation r exn)
-    (rename_apply r ap)
-  = is_self_tail_call my_closure params_arity ret exn ap.
-Proof.
-  unfold is_self_tail_call. rewrite no_exn_extra_args_renamed.
-  cbn [rename_apply ap_callee ap_continuation ap_exn_continuation
-       ap_args_arity].
-  rewrite !rename_continuation_eqb.
-  destruct (ap_callee ap) as [x | sym | c]; cbn [rename_simple];
-    [ rewrite rename_variable_eqb | | ]; reflexivity.
-Qed.
+   with the term; code ids are not renamed ([rename_loopified]). The
+   laws of [loop_calls] and of [loopify_unit] are by the tactic, which
+   is told how the names given are renamed. Three laws that it is given
+   are by hand: that of [loopable], because the test that the
+   parameters are distinct answers the same of renamed parameters by
+   the renaming being injective, and those of [loop_safe] and of
+   [looped_code] for the time of compiling. *)
+Section Loopify.
 
-Fixpoint loop_calls_equivariant (r : renaming) (my_closure : variable)
+#[local] Instance loopified_renaming : Renaming_of loopified :=
+  rename_loopified.
+
+#[local] Hint Rewrite no_exn_extra_args_renamed : equivariance.
+
+Lemma loop_calls_equivariant (r : renaming) (my_closure : variable)
     (params_arity : arity) (ret exn self : continuation) (e : expr) :
   loop_calls (rename_variable r my_closure) params_arity
     (rename_continuation r ret) (rename_continuation r exn)
     (rename_continuation r self) (rename_expr r e)
-  = rename_expr r (loop_calls my_closure params_arity ret exn self e)
-with loop_calls_in_handler_equivariant (r : renaming) (my_closure : variable)
-    (params_arity : arity) (ret exn self : continuation)
-    (h : continuation_handler) :
-  loop_calls_in_handler (rename_variable r my_closure) params_arity
-    (rename_continuation r ret) (rename_continuation r exn)
-    (rename_continuation r self) (rename_handler r h)
-  = rename_handler r
-      (loop_calls_in_handler my_closure params_arity ret exn self h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      cbn [rename_expr loop_calls]; try reflexivity.
-    + rewrite loop_calls_equivariant. reflexivity.
-    + rewrite loop_calls_equivariant. reflexivity.
-    + rewrite loop_calls_in_handler_equivariant, loop_calls_equivariant.
-      reflexivity.
-    + rewrite loop_calls_equivariant. f_equal.
-      induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
-      rewrite
-        (loop_calls_in_handler_equivariant r my_closure params_arity ret exn
-           self h),
-        IH.
-      reflexivity.
-    + rewrite is_self_tail_call_equivariant.
-      destruct (is_self_tail_call my_closure params_arity ret exn ap);
-        reflexivity.
-  - destruct h as [params metadata handler]. simpl.
-    rewrite loop_calls_equivariant. reflexivity.
-Qed.
+  = rename_expr r (loop_calls my_closure params_arity ret exn self e).
+Proof. equivariance. Qed.
 
 Fixpoint loop_safe_equivariant (r : renaming) (my_closure : variable)
     (ret exn self : continuation) (e : expr) :
@@ -4088,52 +4057,22 @@ Proof.
   reflexivity.
 Qed.
 
-Lemma loopify_code_equivariant (r : renaming) (self : continuation)
-    (c : code) :
-  loopify_code (rename_continuation r self) (rename_code r c)
-  = rename_code r (loopify_code self c).
-Proof.
-  unfold loopify_code. rewrite loopable_equivariant, looped_code_equivariant.
-  destruct (loopable self c); reflexivity.
-Qed.
-
 Lemma lookup_rename_loopified (r : renaming) (G : loopified) (id : code_id) :
   lookup id (rename_loopified r G)
   = option_map (rename_continuation r) (lookup id G).
-Proof.
-  unfold rename_loopified.
-  induction G as [ | [id' self] G IH]; simpl; [ reflexivity | ].
-  destruct (Pos.eqb id id'); [ reflexivity | exact IH ].
-Qed.
+Proof. equivariance. Qed.
 
-Lemma loopify_binding_equivariant (r : renaming) (G : loopified)
-    (binding : static_binding) :
-  loopify_binding (rename_loopified r G) (rename_static_binding r binding)
-  = rename_static_binding r (loopify_binding G binding).
-Proof.
-  destruct binding as [id c | id | sym const]; try reflexivity.
-  cbn [rename_static_binding loopify_binding].
-  rewrite lookup_rename_loopified.
-  destruct (lookup id G) as [self | ]; cbn [option_map];
-    [ | reflexivity ].
-  cbn [rename_static_binding]. rewrite loopify_code_equivariant.
-  reflexivity.
-Qed.
+#[local] Hint Rewrite looped_code_equivariant loopable_equivariant
+  lookup_rename_loopified : equivariance.
+#[local] Arguments looped_code : simpl never.
+#[local] Arguments loopable : simpl never.
 
-Fixpoint loopify_unit_equivariant (r : renaming) (G : loopified) (e : expr) :
+Lemma loopify_unit_equivariant (r : renaming) (G : loopified) (e : expr) :
   loopify_unit (rename_loopified r G) (rename_expr r e)
   = rename_expr r (loopify_unit G e).
-Proof.
-  destruct e
-    as [ x kind d body | bindings body | k [params metadata handler] body
-       | handlers body | ap | ac | scrutinee arms | ];
-    cbn [rename_expr rename_handler loopify_unit]; try reflexivity.
-  - rewrite loopify_unit_equivariant. reflexivity.
-  - rewrite loopify_unit_equivariant, !map_map. f_equal.
-    apply map_ext. intros binding. apply loopify_binding_equivariant.
-  - rewrite !loopify_unit_equivariant. reflexivity.
-  - rewrite loopify_unit_equivariant. reflexivity.
-Qed.
+Proof. equivariance. Qed.
+
+End Loopify.
 
 End Passes_for_loops.
 
