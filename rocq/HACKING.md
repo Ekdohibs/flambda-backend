@@ -888,8 +888,20 @@ own), and any link to the simplifier's code.
 The work on the semantics does not change the compiler: where the model
 and the compiler part ways, the difference is recorded and the model
 follows the compiler. The exceptions are listed here, each made at the
-request of the branch's owner, each a commit of its own with a subject
-in the compiler's style, so that it can be proposed upstream by itself.
+request of the branch's owner, with the files that it changes and the
+subjects of its commits. A change that is meant to be proposed for
+OxCaml is kept in a commit of its own, with a subject in the compiler's
+style, so that it can be proposed by itself.
+
+A series of commits that changes a file outside
+`middle_end/flambda2/rocq/`, `rocq/`, `middle_end/flambda2/tests/` and
+the directories named `rocq` of other work changes this section in the
+same series, and the section names every such file by its path, a test
+under `testsuite/` too. Three documents are exempt as well: `AGENTS.md`,
+`ROCQ-REVIEW-GUIDE.md` and the skill file for Rocq models. A series that
+changes reference files of the testsuite says here how many and why;
+those are not listed by path. The integrator's gate checks both, and
+that every such file changed since this work began is named here.
 
 - `middle_end/flambda2/types/meet_and_n_way_join.ml`,
   `n_way_join_closures_entry`: the n-way join keeps the function type of
@@ -897,7 +909,9 @@ in the compiler's style, so that it can be proposed upstream by itself.
   (discrepancies T1-4 and R3-7). Before, with the n-way join, a correct
   program could stop on an `Invalid` put in place of a live call, and
   the `zero_alloc` check could accept a function that allocates. Tests:
-  `testsuite/tests/flambda2/n_way_join_function_types*.ml`.
+  `testsuite/tests/flambda2/n_way_join_function_types*.ml`. Commit:
+  "Flambda 2: the n-way join keeps a function type only if every input
+  has one".
 - `middle_end/flambda2/simplify/simplify_unary_primitive.ml`,
   `simplify_get_tag`: `Get_tag` of an argument known to be a tagged
   immediate (a constant, or a name whose type has no blocks) becomes
@@ -907,7 +921,8 @@ in the compiler's style, so that it can be proposed upstream by itself.
   which code using GADTs has. Provisional, with a `CR` at the place; the
   `Get_tag` relation that the types record is not changed. Tests:
   `testsuite/tests/flambda2/simplify/get_tag_of_immediate.ml` and
-  `testsuite/tests/flambda2/get_tag_of_immediate_run.ml`.
+  `testsuite/tests/flambda2/get_tag_of_immediate_run.ml`. Commit:
+  "Flambda 2: Get_tag of a tagged immediate is Invalid".
 - A flag, `-flambda2-join-sharing {physical|structural|none}`
   (`Oxcaml_flags.Flambda2.join_sharing`, `Flambda_features.join_sharing`;
   `flambda2-join-sharing=structural` in `OCAMLPARAM`). The join of types
@@ -925,7 +940,16 @@ in the compiler's style, so that it can be proposed upstream by itself.
   Test: `middle_end/flambda2/tests/api_tests/join_sharing.ml`; its
   expected file prints the stamps of variables, as `meet_test.expected`
   does, and is to be regenerated when the joins create another number
-  of variables.
+  of variables. Files: `driver/oxcaml_args.ml*`,
+  `driver/oxcaml_flags.ml*`, `external/merlin/src/kernel/mconfig.ml`,
+  `middle_end/flambda2/ui/flambda_features.ml*`,
+  `middle_end/flambda2/types/env/join_env.ml`,
+  `middle_end/flambda2/types/meet_and_join.ml`,
+  `middle_end/flambda2/types/meet_and_n_way_join.ml`,
+  `middle_end/flambda2/types/grammar/type_descr.ml*` and
+  `middle_end/flambda2/types/grammar/type_grammar.ml*`. Commit: "Add
+  -flambda2-join-sharing, to make joins independent of sharing of
+  types".
 - Three commits that let a test see the types that Simplify computes
   and the names that a term is stored with (decision D33). None
   changes what the compiler does, and each new entry point of the
@@ -934,7 +958,9 @@ in the compiler's style, so that it can be proposed upstream by itself.
   revert the observer, revert the openings first.
   - `Type_grammar.Block_size.of_target_ocaml_int` and
     `to_target_ocaml_int`: the type stays abstract; the two are the
-    identity and check nothing.
+    identity and check nothing. Files:
+    `middle_end/flambda2/types/grammar/type_grammar.ml*`. Commit:
+    "flambda2: Add accessors for `Type_grammar.Block_size`".
   - An observer of typing environments.
     `Typing_env.For_testing.set_observer`, in the internal interface
     of the library of types, registers a function, and Simplify calls
@@ -943,13 +969,49 @@ in the compiler's style, so that it can be proposed upstream by itself.
     return continuation of the unit. With no observer, which is always
     so in the compiler, the call reads a reference and returns. Test:
     `middle_end/flambda2/tests/api_tests/typing_env_observer.ml`.
+    Files: `middle_end/flambda2/types/env/typing_env.ml*`,
+    `middle_end/flambda2/types/flambda2_types.mli`,
+    `middle_end/flambda2/simplify/simplify.ml` and
+    `middle_end/flambda2/simplify/simplify_let_cont_expr.ml`. Commit:
+    "flambda2: Let tests observe the typing environments of Simplify".
   - `pattern_match_for_printing` of `Let_expr`, `Continuation_handler`,
     `Non_recursive_let_cont_handler`, `Recursive_let_cont_handlers` and
     `Function_params_and_body`: the opening of a binder that does not
     freshen the names it binds (unless `-dfreshen` is given), which the
     printer had and nothing exported. The environments reported to the
     observer are keyed by those names. Test:
-    `middle_end/flambda2/tests/api_tests/binder_openings.ml`.
+    `middle_end/flambda2/tests/api_tests/binder_openings.ml`. Files:
+    `middle_end/flambda2/terms/flambda.ml*`. Commit: "flambda2: Export
+    the openings of binders that do not freshen names".
+- `middle_end/flambda2/compare/compare.ml`, the comparison of two units
+  up to the names that they bind (`Compare.flambda_units`): it compares
+  two kinds with their subkinds by what they hold, keeps the function
+  slots and value slots that it has matched, and reads what it did not
+  read (that a call is a probe, a call that is an operation of an
+  effect, a primitive of four arguments, the kinds of the parameters of
+  a continuation and of the invariant parameters of recursive ones,
+  that code takes its arguments as one tuple, the shape of a static
+  block); it no longer compares the debugging information of the fields
+  of a static block, which was the only debugging information that it
+  compared. Before, two units that are the same could be called
+  different (two kinds of one variant whose constructors were added in
+  two orders, two equal operations of effects, two equal primitives of
+  four arguments), two different units could be called the same (a
+  probe and a plain call, a continuation whose parameter is a value and
+  one whose parameter is an immediate, two units that project two
+  different slots of one closure), and for some pairs of different
+  units the comparison stopped with a fatal error or gave a unit that
+  the printer could not print. The compiler does not call the
+  comparison when it compiles: the library `flambda2_compare` is linked
+  only by tools and tests under `middle_end/flambda2/tests/`
+  (`tools/fldiff.ml`, `tools/roundtrip.ml`, `tools/import.ml`,
+  `tools/textisterm/fltextisterm.ml`, `tools/ownrun/`, `api_tests/`).
+  Tests: `middle_end/flambda2/tests/api_tests/compare_kinds.ml` and
+  `middle_end/flambda2/tests/api_tests/compare_texts.ml`, with the pairs
+  of texts in `middle_end/flambda2/tests/api_tests/compare_texts/`.
+  Commits: five, four whose subjects begin "Flambda 2 Rocq: T6: the
+  comparison of units" and one whose subject begins "Flambda 2 Rocq:
+  T6: the tests of the comparison of units".
 
 ### Testing Simplify against the semantics
 
