@@ -123,6 +123,10 @@
 ;; float in a value slot. The text writes the kind of the slot where the code
 ;; reads it. The text is the term.
 ;;
+;; operator_with_a_slash: variables whose names have a slash, which the reader
+;; takes with the name where a stamp follows another slash. The text is the
+;; term.
+;;
 ;; call_of_code_of_another_unit: compiled with -Oclassic after other_unit.ml,
 ;; which is compiled first. The term has a direct call of code of that unit,
 ;; put there where a call of a function of it was inlined before Simplify.
@@ -224,6 +228,22 @@
   (= %{context_name} "main"))
  (action
   (diff length_of_bytes.expected length_of_bytes.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   operator_with_a_slash.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     %{dep:operator_with_a_slash.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff operator_with_a_slash.expected operator_with_a_slash.output)))
 
 (rule
  (enabled_if

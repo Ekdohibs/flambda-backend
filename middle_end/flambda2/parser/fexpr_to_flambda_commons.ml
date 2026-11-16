@@ -117,10 +117,21 @@ let enter_code env =
     vars_within_closures = env.vars_within_closures
   }
 
+(* The printer writes a variable or a continuation as its name, a slash and its
+   stamp. The name may have slashes of its own: that of an operator, and that of
+   an anonymous function of a source that was given with a directory. So the
+   stamp is what follows the last slash, if that is a number, and the name is
+   all that stands before it. *)
 let chop_stamp name =
-  match String.split_on_char '/' name with
-  | [] | _ :: _ :: _ :: _ -> Misc.fatal_errorf "invalid id '%s'" name
-  | [name] | [name; _] -> name
+  match String.rindex_opt name '/' with
+  | None -> name
+  | Some slash ->
+    let stamp = String.sub name (slash + 1) (String.length name - slash - 1) in
+    let is_digit c = Char.compare '0' c <= 0 && Char.compare c '9' <= 0 in
+    if
+      (not (String.equal stamp "")) && Misc.Stdlib.String.for_all is_digit stamp
+    then String.sub name 0 slash
+    else name
 
 let fresh_cont env { Fexpr.txt = name; loc = _ } ~sort ~arity =
   let c = Continuation.create ~sort ~name:(chop_stamp name) () in
