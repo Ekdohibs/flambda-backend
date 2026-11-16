@@ -35,7 +35,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaSemanticsSpec
   FlambdaSemanticsProofs FlambdaContextSpec FlambdaContextProofs
   FlambdaStaticSpec FlambdaStaticProofs FlambdaNominalSpec
   FlambdaNormaliseSpec FlambdaNormaliseProofs FlambdaFloatCodeSpec
-  FlambdaFloatCodeProofs FlambdaGroupsUpSpec.
+  FlambdaFloatCodeProofs FlambdaGroupsUpSpec FlambdaEquivarianceTactic.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -112,39 +112,7 @@ Proof. exact groups_up_equivalent_aux. Qed.
 (* Renaming                                                                 *)
 (* ======================================================================== *)
 
-Lemma group_over_rename (r : renaming) (wrap wrap' : expr -> expr) :
-  (∀ e : expr, rename_expr r (wrap e) = wrap' (rename_expr r e)) ->
-  ∀ inner : expr,
-    rename_expr r (group_over wrap inner)
-    = group_over wrap' (rename_expr r inner).
-Proof.
-  intros Hwrap inner.
-  destruct inner
-    as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-       | scrutinee arms | ];
-    try (unfold group_over; rewrite Hwrap; reflexivity).
-  cbn [group_over rename_expr]. rewrite Hwrap. reflexivity.
-Qed.
-
-Fixpoint groups_up_rename (r : renaming) (e : expr) {struct e} :
-  rename_expr r (groups_up e) = groups_up (rename_expr r e).
-Proof.
-  destruct e
-    as [ x kind d body | bindings body | k [params metadata handler] body
-       | handlers body | ap | ac | scrutinee arms | ];
-    try reflexivity.
-  - cbn [groups_up rename_expr]. rewrite <- groups_up_rename. reflexivity.
-  - cbn [groups_up rename_expr]. rewrite <- groups_up_rename.
-    destruct (groups_up body)
-      as [ x kind' d body' | bindings' body' | k h body' | handlers body' | ap
-         | ac | scrutinee arms | ];
-      cbn [rename_expr]; rewrite <- ?map_app, code_first_rename; reflexivity.
-  - cbn [groups_up rename_expr rename_handler].
-    rewrite <- !groups_up_rename.
-    apply group_over_rename. intros e'. reflexivity.
-  - cbn [groups_up rename_expr]. rewrite <- groups_up_rename.
-    apply group_over_rename. intros e'. reflexivity.
-Qed.
-
+(* Proved from the definitions by [equivariance]
+   (FlambdaEquivarianceTactic.v). *)
 Theorem groups_up_equivariant : groups_up_equivariant_statement.
-Proof. exact groups_up_rename. Qed.
+Proof. equivariance. Qed.
