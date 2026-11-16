@@ -58,11 +58,15 @@ Import ListNotations.
 (* The law of the pass is proved from the definitions alone
    ([equivariance], of FlambdaEquivarianceTactic.v): the tactic states
    and proves, as it goes, the laws of the functions that the pass is
-   made of. Two laws are given to it besides. That of [distinct] at
+   made of. Three laws are given to it besides. That of [distinct] at
    renamed variables is stated here, because the type of [distinct]
    does not say that its list is of variables. That of [var_free_b] is
    proved in FlambdaValidatorEquivarianceBaseProofs.v, and the tactic
-   would otherwise derive it again at each use. *)
+   would otherwise derive it again at each use. That of
+   [only_applied_or_returned_to] is stated here for the time: it is
+   the one function of the pass whose law needs the repeated rewriting
+   with the database; once it is given, the tactic proves the law of
+   the pass with its database in one pass over the goal. *)
 
 Lemma distinct_rename_variables (r : renaming) (params : list variable) :
   distinct (map (rename_variable r) params) = distinct params.
@@ -70,6 +74,17 @@ Proof. equivariance. Qed.
 
 #[local] Hint Rewrite distinct_rename_variables var_free_b_equivariant_aux
   : equivariance.
+
+Lemma only_applied_or_returned_to_equivariant (r : renaming)
+    (k : continuation) (e : expr) :
+  only_applied_or_returned_to (rename_continuation r k) (rename_expr r e)
+  = only_applied_or_returned_to k e.
+Proof. equivariance. Qed.
+
+#[local] Hint Rewrite only_applied_or_returned_to_equivariant
+  : equivariance.
+
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
 
 Lemma wrap_returns_renamed : rewrite_equivariant wrap_returns.
 Proof. equivariance. Qed.
