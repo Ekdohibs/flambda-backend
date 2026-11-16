@@ -64,6 +64,10 @@ Import ListNotations.
    FlambdaGiveScrutineeSpec.arm_fact, which goes through
    [first_answer], a function that takes a function. *)
 
+(* The step of the database is the one pass: every proof by the tactic
+   of this part passes with it. *)
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
+
 #[local] Hint Rewrite arm_fact_equivariant : equivariance.
 
 Lemma numbers_in_arms_renamed : rewrite_equivariant numbers_in_arms.
