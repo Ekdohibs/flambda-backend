@@ -1229,6 +1229,256 @@ is said in a line or two in `middle_end/flambda2/rocq/DECISIONS.md`. A
 mistake in the model that is then fixed is not an entry, unless it is
 not clear which side is wrong.
 
+### The laws of renaming of a pass: the tactic `equivariance`
+
+A new pass proves its laws of renaming (the function at renamed
+arguments is the renamed answer, or the same answer) with the tactic
+`equivariance` of `FlambdaEquivarianceTactic.v`. This section says
+how, and what to do when the tactic fails. Its first part is what to
+know before anything else.
+
+#### Read this first
+
+- **`equivariance` closes its goal or fails.** It never leaves goals.
+  `equivariance_open` is the same search, under the same bounds, and
+  leaves the goals that a search which ends does not close: use it to
+  look at what is left, and in a proof that goes on by hand after it
+  (no proof of the tree does today). A stop by the bound is a stop
+  for both: `equivariance_open` does not turn it into goals left.
+- **A failure with goals left** reads
+
+      equivariance: goals left: 3; the first is in the derivation of
+      the law of f; the last step taken: destruct_scrutinee
+
+  The search had no step left to try on those goals. `f` is the
+  function whose law was being derived at the first of them (or it
+  reads `at a goal about f`, the function at the head of that goal).
+- **A stop** reads
+
+      equivariance stopped after 229 steps: with the sizes of their
+      goals they pass the limit, 500; the last step taken:
+      rewrite_hyp; in the derivation of the law of f
+
+  No `try`, `first` or `repeat` catches it. It says WHERE THE COUNT
+  RAN OUT, NOT WHY. The cause is as a rule earlier: a law that is not
+  stated, so that the tactic derives it again in every case; or a
+  function left to unfold, so that the goals grow. Look at the trace
+  (below), not only at the place named.
+- **The three usual cures**, most common first:
+  1. State the law of the inner function that the message or the
+     trace names, prove it (by the tactic, or by hand if the tactic
+     does not), and give it to the database for the file, as
+     `FlambdaClosureCallsProofs.v` does:
+     `#[local] Hint Rewrite unbind_made_renamed : equivariance.`
+  2. Say how a type is renamed, where the tactic cannot read it from
+     the type (a map keyed by names, a state carried down the term)
+     or where its renaming has a name of its own, as
+     `FlambdaMadeLengthsProofs.v` does for the type `computed`:
+     `#[local] Instance computed_renaming : Renaming_of computed :=
+     rename_computed.`
+     Where neither an instance nor the type itself gives the tactic
+     an action, it treats the argument as unchanged; the law that it
+     then writes may be false, and it may be slow to fail. An
+     instance can also save time where an action can already be read
+     from the type.
+  3. Keep computation from unfolding a helper before its law applies
+     (`#[local] Arguments unarize : simpl never.` in
+     `FlambdaNeverReturnsProofs.v`), with the law of the helper as a
+     hint.
+  If none of the three ends it in a few minutes of your work, prove
+  that one law by hand, give it as a hint, and let the tactic do the
+  laws above it.
+- **A proof by the tactic must not take over ten seconds of
+  processor time** (user and system): each sentence that calls the
+  tactic, and each whole proof that does, its `Qed` counted. The
+  integrator's gate fails a series that has one over. When the
+  passes of the tree were converted the slowest call of
+  `equivariance` took 2.25 s (in the proof of
+  `recover_comparisons_knowing_equivariant`, 2.28 s as a whole), and
+  the 373 calls 72 s in all.
+- **A file whose laws go to the tactic must take under three times
+  its time by hand to compile, or be within one second of it**; past
+  that, laws are stated for speed or go back by hand, the costliest
+  first. This is a rule for whoever converts a file, who measures
+  it: the processor time (user and system) of the whole compilation
+  of the file, the text by hand and the text by the tactic compiled
+  back to back against the same compiled tree, several times, the
+  smaller time of each taken. The gate lists the times of the files
+  and does not judge them.
+
+#### Use
+
+    From OxCamlFlambda2 Require Import FlambdaEquivarianceTactic.
+
+    Theorem demote_stub_calls_equivariant :
+      demote_stub_calls_equivariant_statement.
+    Proof. equivariance. Qed.
+
+(of `FlambdaStubCallsProofs.v`).
+
+The goal is an equation whose left-hand side is the function at
+renamed arguments, or a definition that unfolds to one. The tactic
+goes by induction on the argument that the function recurses on (or
+unfolds a function that does not recurse), computes, rewrites with
+the laws of the database `equivariance` and the hypotheses of the
+induction, goes under `map`, `forallb`, `existsb`, `flat_map`,
+`filter`, `fold_right` and `fold_left` to the elements of the list,
+and states and proves by itself the laws of the functions that the
+function calls. The header of the tactic's file says the rest.
+
+- `equivariance_of f` is the law of `f` read from its type, as in
+  `FlambdaKnownClosuresProofs.v`:
+  `Lemma slot_read_renamed : equivariance_of slot_read.`, proved by
+  `equivariance`. `Check slot_read_renamed.` shows the equation.
+  Where the type does not say how an argument is renamed, write the
+  statement out.
+- Everything that you give the tactic is local: `#[local]` on every
+  `Hint Rewrite`, `Instance`, `Arguments` and `Ltac ... ::=` line. A
+  redefinition that is not local changes the tactic for every file
+  that comes after.
+- A statement of a `Spec` file is not changed to suit the tactic, and
+  a law that another file names keeps its name and its statement.
+- Inside a `Section`, a proof by the tactic may use fewer of the
+  section's hypotheses than a proof by hand; the law then has fewer
+  premises outside the section. Where the premises matter to the
+  callers, pin them: `Proof using H1 H2.`
+
+#### Seeing what it does
+
+    Ltac eqv_note_step say ::= say.          (* each step taken *)
+    Ltac eqv_note_derived g ::= idtac "derived" g.
+    Ltac eqv_note_failed g ::= idtac "failed" g.
+    Ltac2 Set Bound.count_shown := Ltac2.Init.true.
+
+The last prints, for each call, the steps taken, the count, the sum
+of the sizes of the goals and the largest goal (`equivariance: steps
+taken: 5; counted: 5; work: 105; largest goal: 30`). Take the four
+lines out before you commit. To count the goals that `equivariance_open`
+leaves, use `all: let n := numgoals in idtac "goals left" n.`; `all:
+idtac.` does not tell.
+
+A law that the trace shows derived in case after case is the one to
+state (cure 1). A step named `unfold_head`, `unfold_stuck` or
+`unfold_underived` shortly before goals of thousands of subterms is
+a function left to unfold (cures 1 and 3). A step named `given up: a
+renaming as the identity` says that a derivation was given up at a
+goal of the shape `f x = x` or `x = f x`, with `x` a variable and a
+renaming in `f`. It is a test of the shape of the goal, not a proof
+that the law is false: look at the equation and at its context. A
+common cause is an action that the tactic did not find for a type,
+or read from it otherwise than was meant (cure 2).
+
+#### The bound
+
+One call counts its steps, those of the derivations that it makes
+too. A step counts for one, and every 250 subterms of the goals of
+the steps (`Bound.goal_unit`) count for one more. Past
+`Bound.step_limit`, which is 500, the call stops. The count does not
+depend on the time that passes: with the same proof, the same
+settings and the same Rocq, a call that the count stops is stopped
+at the same place; the guard of the clock (below) may stop it
+sooner. When the limit was set the largest count of a call in the
+tree was 222 (167 steps on goals of 13,961 subterms in all).
+
+The limit is a setting. A file may lower it for itself, so that a
+proof that goes wrong stops sooner while you work on it, or raise it
+for a proof that needs more:
+
+    #[local] Ltac2 Set Bound.step_limit := 200.
+
+A file that raises it says why in a comment, and its proofs still
+do not take over ten seconds.
+
+A second guard is of the clock: one step that runs for more than
+`Bound.seconds_of_a_step` seconds, which is 20, stops the call, and
+its message names the step that was being tried. It is there for a
+single step that does not come back (a computation on a very large
+goal); the count is the bound to rely on.
+
+How long a call that is stopped has taken depends on its goals. The
+slowest stops among the attempts recorded while the passes of the
+tree were converted, each an attempt that did not succeed as it was
+(a law not yet stated, a help line taken out, a law that was then
+left by hand), in processor seconds:
+
+| attempt | stopped after | seconds |
+|---|---|---|
+| `drop_dead_params` with one helper left to unfold | 36 steps, goals of 3,000 subterms | 41.3 |
+| `merge_switch_by_arguments`, its statement read from the type | 148 steps | 38.8 |
+| `projection_of` proved directly | 5 steps, goals of 25,000 subterms | 23.4 |
+| three laws of the meet under renaming, nothing stated | one step ended by the clock | 17.7 |
+| `unbox_together_knowing`, nothing stated | 367 steps | 17.4 |
+| `recover_comparisons_knowing`, cases on a primitive | 177 steps | 16.9 |
+| `unbox_loop_reads` | 265 steps | 15.4 |
+| `untag_params` without the law of `untag_positions` | 296 steps | 13.3 |
+| `lift_handler_conts` without one `Arguments` line | 229 steps | 12.6 |
+| `around_ok` alone | 121 steps, goals up to 6,430 subterms | 11.8 |
+
+Of 223 such attempts recorded, 14 closed, 76 failed with goals left,
+133 were stopped by the bound, and none failed to end.
+
+#### When the database is slow: the one pass
+
+The step that rewrites with the database is `autorewrite`, which
+tries every law on the whole goal; where no law applies that is most
+of the time of a proof. A section may take one pass of
+`rewrite_strat` in its place, which can be many times faster: try
+the proofs of the section with it and time them, and take it where
+they all pass and the file is the faster for it:
+
+    #[local] Ltac eqv_database ::= eqv_database_by_one_pass.
+
+Its limits: it does not see a law inside a `match` or under a
+binder; it finds a law by its equation as it is written, so a
+theorem that is stated by the name of its statement
+(`expr_avoids_equivariant` has the type
+`expr_avoids_equivariant_statement`) is given as a hint with its
+arguments written (`fun r D e => expr_avoids_equivariant r D e`),
+and a sort written `positive` in one place and `variable` in
+another does not match; and it applies the laws in
+another order, so the database of the file must hold no law that
+turns another round. A proof that passes with `autorewrite` need
+not pass with the one pass, and the other way round. A proof that
+needs the usual step takes it back for itself; say in the commit
+which the file takes and which proofs do not.
+
+#### Other things a pass may need
+
+- **A law wanted at a literal `[]` or `None`** one level down (the
+  pass at an empty state): state it from the general law, as
+  `FlambdaClosureCallsProofs.v` does by
+  `exact (call_closures_knowing_equivariant r [] e)`, and give it as
+  a hint.
+- **A function that takes a function** and is not one of the seven
+  functions of lists above: its law has a premise ("the function
+  given commutes with renaming on the elements"). Prove that law by
+  hand and give it with a solver of its premise:
+  `#[local] Hint Rewrite codes_of_cut_returns_renamed using
+  eqv_premise : equivariance.` (in `FlambdaNeverReturnsProofs.v`).
+- **A step of your own**: `#[local] Ltac eqv_extra ::= ... .` (see
+  `first_answer` in `FlambdaUnaliasParamsNamesProofs.v`).
+- **A hypothesis of a nested induction that is not used** (it has
+  premises, or the renaming is folded on one side): state the law of
+  the inner function, or go on by hand after `equivariance_open`
+  (which leaves goals where the search ends, and stops as
+  `equivariance` does where a bound is passed).
+- **A law of another type than its proof by hand had.** After a
+  conversion, compare the type of every kept law as seen from outside
+  its file with what it was; a law proved by the tactic in a section
+  is the usual cause (see "Use").
+
+#### Worked examples in the tree
+
+| file | what it shows |
+|---|---|
+| `FlambdaStubCallsProofs.v` | a pass with no law stated: one theorem, one call |
+| `FlambdaMadeLengthsProofs.v` | an instance and two theorems |
+| `FlambdaClosureCallsProofs.v` | a map keyed by variables: the instance, one law of the map, the pass at `[]` |
+| `FlambdaCseProofs.v` | a carried state; laws that other files name, kept and proved by the tactic |
+| `FlambdaLiftProofs.v` | laws stated for speed, one local rule |
+| `FlambdaUnaliasParamsNamesProofs.v` | a function that takes a function |
+| `FlambdaLiftContsNamesProofs.v` | one law back by hand for the time of the file, over laws by the tactic |
+
 ## Extraction pitfalls
 
 - `&&` is extracted to OxCaml's short-circuiting `( && )`, but a `let` is
