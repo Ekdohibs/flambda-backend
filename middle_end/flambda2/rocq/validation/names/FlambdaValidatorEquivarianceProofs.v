@@ -4186,6 +4186,17 @@ Theorem apply_well_kinded_equivariant :
 Proof. equivariance. Qed.
 #[local] Hint Rewrite apply_well_kinded_equivariant : equivariance.
 
+Lemma handler_arities_renamed (r : renaming)
+    (handlers : list (continuation * continuation_handler)) :
+  handler_arities (rename_handlers r handlers)
+  = rename_arity_env r (handler_arities handlers).
+Proof.
+  unfold handler_arities, rename_handlers, rename_arity_env, Keyed.map_keys,
+    Keyed.map_bindings, map_values.
+  induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
+  rewrite handler_kinds_equivariant, IH. reflexivity.
+Qed.
+
 (* For the check of a term: the parameters are distinct, the arities of
    the handlers of a recursive [Let_cont] are put before those in
    scope, and the parameters of code are bound in a map that holds
@@ -4195,7 +4206,7 @@ Lemma distinct_rename_variables (r : renaming) (params : list variable) :
   distinct (map (rename_variable r) params) = distinct params.
 Proof. exact (distinct_map_injective _ (rename_variable_eqb r) params). Qed.
 
-Lemma handler_arities_renamed (r : renaming)
+Lemma handler_arities_before_renamed (r : renaming)
     (handlers : list (continuation * continuation_handler))
     (conts : arity_env) :
   handler_arities
@@ -4204,10 +4215,8 @@ Lemma handler_arities_renamed (r : renaming)
   ++ rename_arity_env r conts
   = rename_arity_env r (handler_arities handlers ++ conts).
 Proof.
-  unfold handler_arities, rename_arity_env, Keyed.map_keys,
-    Keyed.map_bindings, map_values.
-  induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
-  rewrite handler_kinds_equivariant, IH. reflexivity.
+  change (map _ handlers) with (rename_handlers r handlers).
+  rewrite handler_arities_renamed. symmetry. apply map_app.
 Qed.
 
 Lemma bind_param_kinds_of_code (r : renaming) (params : list variable)
@@ -4219,8 +4228,8 @@ Lemma bind_param_kinds_of_code (r : renaming) (params : list variable)
 Proof.
   exact (bind_param_kinds_equivariant r params params_kinds [(x, kind)]).
 Qed.
-#[local] Hint Rewrite distinct_rename_variables handler_arities_renamed
-  bind_param_kinds_of_code : equivariance.
+#[local] Hint Rewrite distinct_rename_variables
+  handler_arities_before_renamed bind_param_kinds_of_code : equivariance.
 #[local] Arguments handler_arities : simpl never.
 
 Theorem well_kinded_equivariant : well_kinded_equivariant_statement.
