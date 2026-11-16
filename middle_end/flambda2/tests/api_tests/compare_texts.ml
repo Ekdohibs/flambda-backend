@@ -52,7 +52,18 @@
    are different.
 
    tupled: the code of the second takes its parameters as one tuple. They are
-   different. *)
+   different.
+
+   code_variant_same, code_variant: the parameter and the result of code have
+   the kind of a variant; the same variant in the first pair, a variant with one
+   constant constructor fewer in the second of the second pair.
+
+   four_arguments_other: the primitive of four arguments, with another fourth
+   argument. They are different.
+
+   alloc_stack: the code of the second may allocate on the stack.
+   invariant_count: the recursive continuation of the second has one invariant
+   parameter more. They are different; the comparison does not stop on them. *)
 
 module P = Flambda2_parser
 

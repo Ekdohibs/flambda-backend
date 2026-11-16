@@ -7,3 +7,8 @@ function_slot: different; the unit given is printed
 handler_kind: different; the unit given is printed
 invariant_kind: different; the unit given is printed
 tupled: different; the unit given is printed
+code_variant_same: the same
+code_variant: different; the unit given is printed
+four_arguments_other: different; the unit given is printed
+alloc_stack: different; the unit given is printed
+invariant_count: different; the unit given is printed

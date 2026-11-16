@@ -158,7 +158,12 @@
     (run ./compare_texts.exe compare_texts/function_slot)
     (run ./compare_texts.exe compare_texts/handler_kind)
     (run ./compare_texts.exe compare_texts/invariant_kind)
-    (run ./compare_texts.exe compare_texts/tupled)))))
+    (run ./compare_texts.exe compare_texts/tupled)
+    (run ./compare_texts.exe compare_texts/code_variant_same)
+    (run ./compare_texts.exe compare_texts/code_variant)
+    (run ./compare_texts.exe compare_texts/four_arguments_other)
+    (run ./compare_texts.exe compare_texts/alloc_stack)
+    (run ./compare_texts.exe compare_texts/invariant_count)))))
 
 (rule
  (alias runtest)

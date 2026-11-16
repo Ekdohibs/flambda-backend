@@ -34,11 +34,16 @@
    added in two orders. The comparison of units must call two such kinds the
    same, and must still tell apart two kinds that hold different things.
 
-   Each pair of kinds below is put in each place of a term where the comparison
-   reads a kind with its subkind, and the answer is printed.
+   Each pair of kinds below is put in eight places of a term where the
+   comparison reads a kind with its subkind, and the answer is printed. The
+   places that are not here are the arities of the parameters and of the result
+   of code, which are compared by the function that compares the arities of a
+   call (compare_texts has pairs for them, and ../semantics/text_is_term/ has
+   units of the two orders), and the kinds of the invariant parameters of
+   recursive continuations (compare_texts).
 
-   Then two things that the text of a term does not write, and that the
-   comparison reads: that a call is a probe, and the shape of a static block. *)
+   Then three things that a text cannot write: that a call is a probe, the shape
+   of a static block, and a group of two recursive continuations. *)
 
 open Flambda2_bound_identifiers
 open Flambda2_identifiers
@@ -169,6 +174,25 @@ let call ?(probe = None) ~args_arity ~return_arity ~extra_args () =
         ~relative_history:Inlining_history.Relative.empty
       |> Flambda.Expr.create_apply)
 
+let jump continuation args =
+  Flambda.Apply_cont.create continuation ~args ~dbg:Debuginfo.none
+  |> Flambda.Expr.create_apply_cont
+
+(* A unit that binds a variable to the primitive and returns it. *)
+let let_prim prim =
+  unit
+    (fun ~return_continuation ~exn_continuation:_ ~toplevel_my_alloc_region ->
+      let result = Variable.create "result" K.value in
+      Flambda.Let.create
+        (Bound_pattern.singleton
+           (Bound_var.create result Flambda_debug_uid.none Name_mode.normal))
+        (Flambda.Named.create_prim
+           (prim ~toplevel_my_alloc_region)
+           Debuginfo.none)
+        ~body:(jump return_continuation [Simple.var result])
+        ~free_names_of_body:Unknown
+      |> Flambda.Expr.create_let)
+
 let one kind = Flambda_arity.create_singletons [kind]
 
 let any = one KS.any_value
@@ -193,33 +217,47 @@ let places =
     );
     ( "the kinds of the fields of a block that is made",
       fun kind ->
+        let_prim (fun ~toplevel_my_alloc_region ->
+            Variadic
+              ( Make_block
+                  ( Values (Tag.Scannable.zero, [KS.any_value; kind]),
+                    Immutable,
+                    Alloc_mode.For_allocations.heap
+                      ~alloc_region:toplevel_my_alloc_region ),
+                [argument; argument] )) );
+    ( "the kind of a read at an offset",
+      fun kind ->
+        let_prim (fun ~toplevel_my_alloc_region:_ ->
+            Binary (Read_offset (kind, Immutable), argument, argument)) );
+    ( "the kind of a write at an offset",
+      fun kind ->
+        let_prim (fun ~toplevel_my_alloc_region:_ ->
+            Ternary
+              ( Write_offset (Into_block, kind, Alloc_mode.For_assignments.heap),
+                argument,
+                argument,
+                argument )) );
+    ( "the kind of a parameter of a continuation",
+      fun kind ->
         unit
           (fun
             ~return_continuation
             ~exn_continuation:_
-            ~toplevel_my_alloc_region
+            ~toplevel_my_alloc_region:_
           ->
-            let block = Variable.create "block" K.value in
-            let body =
-              Flambda.Apply_cont.create return_continuation
-                ~args:[Simple.var block]
-                ~dbg:Debuginfo.none
-              |> Flambda.Expr.create_apply_cont
+            let continuation = Continuation.create () in
+            let param = Variable.create "param" K.value in
+            let handler =
+              Flambda.Continuation_handler.create
+                (Bound_parameters.create
+                   [Bound_parameter.create param kind Flambda_debug_uid.none])
+                ~handler:(jump return_continuation [Simple.var param])
+                ~free_names_of_handler:Unknown ~is_exn_handler:false
+                ~is_cold:false
             in
-            Flambda.Let.create
-              (Bound_pattern.singleton
-                 (Bound_var.create block Flambda_debug_uid.none Name_mode.normal))
-              (Flambda.Named.create_prim
-                 (Variadic
-                    ( Make_block
-                        ( Values (Tag.Scannable.zero, [KS.any_value; kind]),
-                          Immutable,
-                          Alloc_mode.For_allocations.heap
-                            ~alloc_region:toplevel_my_alloc_region ),
-                      [argument; argument] ))
-                 Debuginfo.none)
-              ~body ~free_names_of_body:Unknown
-            |> Flambda.Expr.create_let) ) ]
+            Flambda.Let_cont.create_non_recursive continuation handler
+              ~body:(jump continuation [argument])
+              ~free_names_of_body:Unknown) ) ]
 
 let answer unit1 unit2 =
   match Flambda2_compare.Compare.flambda_units unit1 unit2 with
@@ -269,6 +307,22 @@ let static_block shape =
         ~body ~free_names_of_body:Unknown
       |> Flambda.Expr.create_let)
 
+(* A group of [n] recursive continuations, of which the first is called. *)
+let recursive_group n =
+  unit
+    (fun ~return_continuation ~exn_continuation:_ ~toplevel_my_alloc_region:_ ->
+      let continuations = List.init n (fun _ -> Continuation.create ()) in
+      let handler =
+        Flambda.Continuation_handler.create Bound_parameters.empty
+          ~handler:(jump return_continuation [argument])
+          ~free_names_of_handler:Unknown ~is_exn_handler:false ~is_cold:false
+      in
+      Flambda.Let_cont.create_recursive
+        (Continuation.Lmap.of_list
+           (List.map (fun continuation -> continuation, handler) continuations))
+        ~invariant_params:Bound_parameters.empty
+        ~body:(jump (List.hd continuations) []))
+
 let () =
   Printf.printf "a call that is a probe and a plain call: %s\n"
     (answer (call_that_is (probe "a")) (call_that_is None));
@@ -283,4 +337,8 @@ let () =
   Printf.printf "two static blocks of values: %s\n"
     (answer (static_block Value_only) (static_block Value_only));
   Printf.printf "a static block of values and a mixed one: %s\n"
-    (answer (static_block Value_only) (static_block mixed))
+    (answer (static_block Value_only) (static_block mixed));
+  Printf.printf "two groups of two recursive continuations: %s\n"
+    (answer (recursive_group 2) (recursive_group 2));
+  Printf.printf "a group of one recursive continuation and a group of two: %s\n"
+    (answer (recursive_group 1) (recursive_group 2))

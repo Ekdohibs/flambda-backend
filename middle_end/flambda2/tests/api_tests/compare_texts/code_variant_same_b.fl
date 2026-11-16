@@ -1,0 +1,6 @@
+let code size(1) f (x : [ 0 |1 | 0 of imm tagged |1 of imm tagged * imm tagged ]) my_closure &my_region my_depth -> k * e : [ 0 |1 | 0 of imm tagged |1 of imm tagged * imm tagged ] =
+  cont k (x)
+in
+let $F = closure f @f &toplevel in
+let $B = Block 0 ($F) in
+cont done ($B)

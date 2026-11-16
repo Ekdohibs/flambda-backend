@@ -4,74 +4,112 @@ the same variant, its constructors added in the other order (the kinds, by Flamb
   the arity of the result of a call: the same
   the kind of an extra argument of an exception continuation: the same
   the kinds of the fields of a block that is made: the same
+  the kind of a read at an offset: the same
+  the kind of a write at an offset: the same
+  the kind of a parameter of a continuation: the same
 the same, inside the field of a constructor (the kinds, by Flambda_kind.With_subkind.equal: not equal)
   the arity of the arguments of a call: the same
   the arity of the arguments of a call, in an unboxed product: the same
   the arity of the result of a call: the same
   the kind of an extra argument of an exception continuation: the same
   the kinds of the fields of a block that is made: the same
+  the kind of a read at an offset: the same
+  the kind of a write at an offset: the same
+  the kind of a parameter of a continuation: the same
 one constant constructor more (the kinds, by Flambda_kind.With_subkind.equal: not equal)
   the arity of the arguments of a call: different
   the arity of the arguments of a call, in an unboxed product: different
   the arity of the result of a call: different
   the kind of an extra argument of an exception continuation: different
   the kinds of the fields of a block that is made: different
+  the kind of a read at an offset: different
+  the kind of a write at an offset: different
+  the kind of a parameter of a continuation: different
 one constant constructor fewer (the kinds, by Flambda_kind.With_subkind.equal: not equal)
   the arity of the arguments of a call: different
   the arity of the arguments of a call, in an unboxed product: different
   the arity of the result of a call: different
   the kind of an extra argument of an exception continuation: different
   the kinds of the fields of a block that is made: different
+  the kind of a read at an offset: different
+  the kind of a write at an offset: different
+  the kind of a parameter of a continuation: different
 another kind of field (the kinds, by Flambda_kind.With_subkind.equal: not equal)
   the arity of the arguments of a call: different
   the arity of the arguments of a call, in an unboxed product: different
   the arity of the result of a call: different
   the kind of an extra argument of an exception continuation: different
   the kinds of the fields of a block that is made: different
+  the kind of a read at an offset: different
+  the kind of a write at an offset: different
+  the kind of a parameter of a continuation: different
 one field more (the kinds, by Flambda_kind.With_subkind.equal: not equal)
   the arity of the arguments of a call: different
   the arity of the arguments of a call, in an unboxed product: different
   the arity of the result of a call: different
   the kind of an extra argument of an exception continuation: different
   the kinds of the fields of a block that is made: different
+  the kind of a read at an offset: different
+  the kind of a write at an offset: different
+  the kind of a parameter of a continuation: different
 another tag (the kinds, by Flambda_kind.With_subkind.equal: not equal)
   the arity of the arguments of a call: different
   the arity of the arguments of a call, in an unboxed product: different
   the arity of the result of a call: different
   the kind of an extra argument of an exception continuation: different
   the kinds of the fields of a block that is made: different
+  the kind of a read at an offset: different
+  the kind of a write at an offset: different
+  the kind of a parameter of a continuation: different
 one constructor with fields more (the kinds, by Flambda_kind.With_subkind.equal: not equal)
   the arity of the arguments of a call: different
   the arity of the arguments of a call, in an unboxed product: different
   the arity of the result of a call: different
   the kind of an extra argument of an exception continuation: different
   the kinds of the fields of a block that is made: different
+  the kind of a read at an offset: different
+  the kind of a write at an offset: different
+  the kind of a parameter of a continuation: different
 the fields of a constructor not known (the kinds, by Flambda_kind.With_subkind.equal: not equal)
   the arity of the arguments of a call: different
   the arity of the arguments of a call, in an unboxed product: different
   the arity of the result of a call: different
   the kind of an extra argument of an exception continuation: different
   the kinds of the fields of a block that is made: different
+  the kind of a read at an offset: different
+  the kind of a write at an offset: different
+  the kind of a parameter of a continuation: different
 another field, inside the field of a constructor (the kinds, by Flambda_kind.With_subkind.equal: not equal)
   the arity of the arguments of a call: different
   the arity of the arguments of a call, in an unboxed product: different
   the arity of the result of a call: different
   the kind of an extra argument of an exception continuation: different
   the kinds of the fields of a block that is made: different
+  the kind of a read at an offset: different
+  the kind of a write at an offset: different
+  the kind of a parameter of a continuation: different
 may be null (the kinds, by Flambda_kind.With_subkind.equal: not equal)
   the arity of the arguments of a call: different
   the arity of the arguments of a call, in an unboxed product: different
   the arity of the result of a call: different
   the kind of an extra argument of an exception continuation: different
   the kinds of the fields of a block that is made: different
+  the kind of a read at an offset: different
+  the kind of a write at an offset: different
+  the kind of a parameter of a continuation: different
 not a variant (the kinds, by Flambda_kind.With_subkind.equal: not equal)
   the arity of the arguments of a call: different
   the arity of the arguments of a call, in an unboxed product: different
   the arity of the result of a call: different
   the kind of an extra argument of an exception continuation: different
   the kinds of the fields of a block that is made: different
+  the kind of a read at an offset: different
+  the kind of a write at an offset: different
+  the kind of a parameter of a continuation: different
 a call that is a probe and a plain call: different
 two calls that are probes of one name: the same
 two calls that are probes of two names: different
 two static blocks of values: the same
 a static block of values and a mixed one: different
+two groups of two recursive continuations: the same
+a group of one recursive continuation and a group of two: different
