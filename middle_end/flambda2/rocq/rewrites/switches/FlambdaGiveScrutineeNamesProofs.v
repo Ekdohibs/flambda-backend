@@ -64,7 +64,12 @@ Import ListNotations.
    [arm_fact], [arm_known] and [known_under]) and what the tactic does
    not find by itself: the pass looks for the scrutinee from an empty
    list of variables, which is not written as a renamed list, so the
-   law of [first_scrutinee] is stated and then given at that list. *)
+   law of [first_scrutinee] is stated and then given at that list.
+
+   For the time, the tactic rewrites with its database in one pass
+   over the goal, except in the law of [first_scrutinee], which needs
+   the repeated rewriting; and the law of [scrutinee_by] is stated,
+   which makes that one cheaper. *)
 
 (* [first_answer] takes a function: the rule by which the tactic goes
    under it, with the two lemmas of FlambdaUnaliasParamsNamesProofs.v. *)
@@ -79,6 +84,8 @@ Import ListNotations.
             [ | eqv_enter l; solve [ eqv_core ] ])
     end
   end.
+
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
 
 Lemma arm_fact_equivariant (r : renaming) (x : variable)
     (k : continuation) (body : expr) :
@@ -99,8 +106,17 @@ Lemma known_under_equivariant (r : renaming) (x : variable)
   = known_under x params known.
 Proof. equivariance. Qed.
 
+Lemma scrutinee_by_equivariant (r : renaming) (k : continuation) (i : nat)
+    (current : list variable) (ac : apply_cont) :
+  scrutinee_by (rename_continuation r k) i
+    (map (rename_variable r) current) (rename_apply_cont r ac)
+  = option_map (map (rename_variable r)) (scrutinee_by k i current ac).
+Proof. equivariance. Qed.
+
 #[local] Hint Rewrite arm_fact_equivariant arm_known_equivariant
-  known_under_equivariant : equivariance.
+  known_under_equivariant scrutinee_by_equivariant : equivariance.
+
+#[local] Ltac eqv_database ::= eqv_database_by_autorewrite.
 
 Lemma first_scrutinee_equivariant (r : renaming) (k : continuation)
     (i : nat) (current : list variable) (e : expr) :
@@ -116,6 +132,8 @@ Lemma first_scrutinee_at_nil (r : renaming) (k : continuation) (i : nat)
 Proof. exact (first_scrutinee_equivariant r k i [] e). Qed.
 
 #[local] Hint Rewrite first_scrutinee_at_nil : equivariance.
+
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
 
 Lemma give_scrutinees_renamed : rewrite_equivariant give_scrutinees.
 Proof. equivariance. Qed.
