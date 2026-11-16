@@ -34,12 +34,16 @@ while [ "$seed" -lt $((first + count)) ]; do
       # that passes, which depends on what else the machine is running. At
       # the soft limit the system sends the tool SIGXCPU, which ends it with
       # the status 128 + 24; the hard limit is one second more, so that this
-      # signal is the one that ends it. Any other signal is reported with its
-      # status and no cause.
+      # signal is the one that ends it. The soft limit is set first, so that
+      # it does not exceed the hard limit that is asked next. Where the soft
+      # limit that is inherited is unlimited, a finite hard limit set first
+      # is refused, and the message of the shell would be the first line of
+      # what is kept as the output of the tool. Any other signal is reported
+      # with its status and no cause.
       code=0
       (
-        ulimit -H -t 61
         ulimit -S -t 60
+        ulimit -H -t 61
         exec "$tool" "$unit.fl"
       ) >"$unit.out" 2>&1 || code=$?
       if [ "$code" = 152 ]; then
@@ -48,6 +52,15 @@ while [ "$seed" -lt $((first + count)) ]; do
         verdict="the tool was ended by a signal (status $code)"
       elif grep -q "DIFFERENT" "$unit.out"; then
         verdict="THE RUNS DIFFER"
+      elif grep -q "NOT WELL-FORMED" "$unit.out"; then
+        verdict="THE TERM AFTER SIMPLIFY IS NOT WELL-FORMED"
+      elif [ "$code" != 0 ]; then
+        # The tool exits with 1 in the two cases above. Any other status
+        # that is not 0, and is not counted above as a limit or a signal,
+        # is counted as a failure of the tool, with the status: a text
+        # that it cannot read, for one. Such a unit has no verdict to
+        # count.
+        verdict="the tool failed (status $code)"
       elif grep -q "not checked" "$unit.out"; then
         verdict="not checked: $(sed -n \
           's/.*not checked: the model has not got \([a-z ]*[A-Za-z_]*\).*/\1/p' \
@@ -64,7 +77,14 @@ while [ "$seed" -lt $((first + count)) ]; do
           's/^  \(related once lifted[^:]*\):.*/\1/p' "$unit.out")" \
           >>"$out/related.txt"
       else
-        verdict=$(tail -1 "$unit.out" | sed 's/^ *//')
+        # The verdict is read by its text and not by its place: the tool
+        # prints lines after it, those that are under it and the lines of
+        # the regions. It is the last line that begins as a verdict does.
+        verdict=$(grep -E '^  (not )?validated' "$unit.out" | tail -1 |
+          sed 's/^ *//')
+        if [ -z "$verdict" ]; then
+          verdict="no line of a verdict"
+        fi
       fi
     else
       verdict="does not compile"

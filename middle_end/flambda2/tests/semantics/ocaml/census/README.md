@@ -354,7 +354,13 @@ ca84b4345c, at its commit, 17.1 and 14.7. They took 33 with the tool of
 87cdbf3e01. Less than half of what the 600 take now is the system's
 part. A tool that
 a signal other than that of the limit ends
-is reported as that, with its status, and counted as no answer.
+is reported as that, with its status, and counted as no answer. A unit
+of which the tool says that the two runs differ, or that the term after
+Simplify is not well-formed, is reported as that; the tool exits with
+the status 1 of both. Any other status that is not 0, and that is not
+counted above as the limit or a signal, is reported as a failure of the
+tool, with the status. A unit that is reported in one of these ways has
+no verdict.
 
 | Profile | Units | Validated | Validated when asked with copies of code | Validated with its imports | Validated with nothing imported only | Not validated | Not checked |
 |---------|-------|-----------|------------------------------------------|----------------------------|--------------------------------------|---------------|-------------|
