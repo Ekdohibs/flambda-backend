@@ -231,6 +231,8 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   validation/names/FlambdaKeepsScopeProofs.v \
   validation/names/FlambdaKeepsScopeSpec.v \
   terms/FlambdaKindModel.v \
+  semantics/FlambdaKnownArityProofs.v \
+  semantics/FlambdaKnownAritySpec.v \
   rewrites/closures/FlambdaKnownClosuresProofs.v \
   rewrites/closures/FlambdaKnownClosuresSpec.v \
   rewrites/calls/FlambdaKnownSiblingsProofs.v \
