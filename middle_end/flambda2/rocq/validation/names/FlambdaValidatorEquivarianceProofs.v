@@ -3530,6 +3530,9 @@ Qed.
    [looped_code] for the time of compiling. *)
 Section Loopify.
 
+(* One pass over the goal for the laws of the database: enough here. *)
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
+
 #[local] Instance loopified_renaming : Renaming_of loopified :=
   rename_loopified.
 
