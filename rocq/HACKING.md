@@ -1012,6 +1012,124 @@ that every such file changed since this work began is named here.
   Commits: five, four whose subjects begin "Flambda 2 Rocq: T6: the
   comparison of units" and one whose subject begins "Flambda 2 Rocq:
   T6: the tests of the comparison of units".
+- The text of a term, in `middle_end/flambda2/parser/`: the text writes,
+  and the reader takes, nine things that a term has and the text did not
+  say. For each of them a text read back was not the term that was
+  printed. Item by item:
+  - that a kind may be null (`val?`);
+  - the arities of a direct call, of a call of unknown arity (which gets
+    the word `unknown_arity`) and of a method call;
+  - the kinds of the fields of a block of values that is made
+    (`%block.[0] (x : imm tagged)`), and of no other primitive;
+  - that code is the code of a functor (`functor`);
+  - the allocation mode of a call of a C function and of a method call
+    (`ccall &region`), which the grammar asked for and the printer did
+    not write: such a text was not read back at all;
+  - the unboxed products of an arity (`#(k1 * k2)`, `#()`), and the
+    parameters of code that are the components of one (`#(p, q)`);
+  - that a call is not in tail position (`nontail`);
+  - that a continuation is cold (`cold`);
+  - the kind of an invalid expression (`invalid Defining_expr_of_let`),
+    which is a name read from the message that the term keeps. For a
+    constructor of `Flambda.Invalid.t` other than `Message` it is the
+    name of the constructor. For `Message`, a text of the form that
+    another constructor's message has gives the name in that text, and
+    any other text gives no name. Any bare word that begins with a
+    capital is such a name, the word `Message` too: `invalid Message`
+    is a kind of its own, and is not `invalid` alone. A kind that is a
+    keyword of the text is written in backquotes.
+
+  These changes mend cases of the nine losses. Other cases of them
+  remain: a direct call that has no callee, as the calls made under
+  `-Oclassic` are, has nowhere to write its arities. And other losses
+  remain. The numbers that follow are answers of the compiler's
+  comparison of two terms (`middle_end/flambda2/compare/`), which does
+  not read everything that a term holds. Of the term that the compiler
+  gives to Simplify, on 2,689 units compiled with no option that changes
+  what the optimiser does: for 2,677 the text read back is the term, and
+  12 are not read back (a closure that keeps an unboxed number in a
+  value slot, 9; a number that the reader does not take, 3). A second
+  set of 706 units, written to reach what the first has little of
+  (unboxed numbers and products in every position, records with unboxed
+  fields, C calls, probes, effects, objects), has 607 for which the text
+  read back is the term, 40 for which it is read back as another term,
+  and 59 whose text is not read back or not written; each unit of it has
+  the same answer at `-O3` and at `-g`, and under `-Oclassic` the text
+  read back is the term for 40 of the 706 only. Of the term that
+  Simplify returns, on the first set, the text read back is the term for
+  2,559; the other 130 show static constants, 44; a poison constant, 42;
+  a number that the reader does not take, 15; code of another unit, 9;
+  an unboxed number in a value slot, 7; the primitives `Array_set` and
+  `Array_load`, 7; a coercion, 6. The differences and failures that
+  remain in these measures are not mended here.
+
+  The reader also takes `%bytes_length` for the length of a byte
+  sequence; before, it took it for the length of a string. A text
+  written before reads as before, with these exceptions.
+  `unknown_arity`, `functor`, `nontail` and `cold` are keywords: a text
+  that has one of them as a bare name is no longer read (in backquotes
+  the name still is). `%bytes_length` reads as just said. A direct call
+  that writes the arity of its arguments has it taken, where it was
+  dropped. A method call that writes arities has them taken, that of
+  the result too and even where it is written alone
+  (`(m : _ -> float)`), where both were dropped. The printer wrote
+  neither of those arities before, so the last two exceptions are for
+  texts written by hand. The compiler prints these texts under
+  `-drawfexpr`, `-dfexpr` and the flags beside them, and does not read a
+  text when it compiles; the reader is used by tools and tests. Because
+  the printer changes, 172 reference files of the testsuite change (the
+  dumps kept under `testsuite/tests/flambda2`, `testsuite/tests/flambda`
+  and `testsuite/tests/reaper`), and so do two tests that keep their
+  dumps in their source. Tests:
+  `middle_end/flambda2/tests/semantics/text_is_term/`, where a driver
+  compiles a unit, writes its text, reads it back and compares the two
+  terms; `middle_end/flambda2/tests/semantics/roundtrip/`; and the texts
+  of `middle_end/flambda2/tests/semantics/ocaml/`, which the tests make
+  again with the compiler. Files:
+  `middle_end/flambda2/parser/fexpr.ml`,
+  `middle_end/flambda2/parser/fexpr_prim.ml`,
+  `middle_end/flambda2/parser/fexpr_to_flambda.ml`,
+  `middle_end/flambda2/parser/flambda_lex.mll`,
+  `middle_end/flambda2/parser/flambda_parser.messages`,
+  `middle_end/flambda2/parser/flambda_parser.mly`,
+  `middle_end/flambda2/parser/flambda_to_fexpr.ml`,
+  `middle_end/flambda2/parser/invalid_kind.ml`,
+  `middle_end/flambda2/parser/invalid_kind.mli`,
+  `middle_end/flambda2/parser/print_fexpr.ml`,
+  `testsuite/tests/flambda2/match_on_unboxed_ints.ml` and
+  `testsuite/tests/flambda2/simplify/switch_simplification.ml`.
+  Commits: ten, whose subjects begin "Flambda 2 Rocq: T6: the text of a
+  term", "Flambda 2 Rocq: T6: the printer of texts", "Flambda 2 Rocq:
+  T6: the reader of texts" or "Flambda 2 Rocq: T6: an invalid
+  expression".
+- The comparison of two units again, four more changes. It can give the
+  names of what two units differ in
+  (`Compare.flambda_units_and_differences`). Two static float blocks are
+  compared by their fields, and a float block and a float array are
+  different; before, `Static_const.compare`, which the comparison asked,
+  had a case for a block and an array where the case for two blocks
+  should be (`middle_end/flambda2/terms/static_const.ml` is not
+  changed), so two equal float blocks were different, and a float block
+  and a float array of the same numbers, in that order, were the same
+  (in the other order they were different). Two invalid expressions are
+  the same if they are of the same kind (`kind_of_invalid_message`),
+  the name read from each message as the entry above says; before,
+  their messages were compared whole, with the names of continuations
+  and the printed terms in them. The unit that the
+  comparison gives for two different units has the names of the second
+  unit in the kind of a call too (`subst_call_kind`: the code that a
+  call of known arity may reach, the object of a method call, what an
+  operation of an effect is given); before, it kept those of the first
+  there, and no answer of the comparison was affected. As before, the
+  compiler does not call the comparison when it compiles. Tests:
+  `middle_end/flambda2/tests/api_tests/compare_kinds.ml` and
+  `middle_end/flambda2/tests/api_tests/compare_texts.ml`. Files:
+  `middle_end/flambda2/compare/compare.ml` and
+  `middle_end/flambda2/compare/compare.mli`. Commits: four, whose
+  subjects begin "Flambda 2 Rocq: T6: the comparison of units names",
+  "Flambda 2 Rocq: T6: the comparison of units compares two static",
+  "Flambda 2 Rocq: T6: the unit that the comparison gives" and "Flambda
+  2 Rocq: T6: an invalid expression".
 
 ### Testing Simplify against the semantics
 
