@@ -35,7 +35,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaMapProofs FlambdaValueSpec FlambdaSemanticsSpec
   FlambdaSemanticsProofs FlambdaContextProofs FlambdaBindersSpec
   FlambdaNominalSpec FlambdaNominalProofs FlambdaNormaliseSpec
-  FlambdaNormaliseProofs FlambdaClosureCallsSpec.
+  FlambdaNormaliseProofs FlambdaEquivarianceTactic FlambdaClosureCallsSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -446,111 +446,39 @@ Qed.
 (* Renaming                                                                 *)
 (* ======================================================================== *)
 
+(* The laws of renaming are proved from the definitions by the tactic
+   of FlambdaEquivarianceTactic.v, which states and proves by itself
+   the laws of the functions that the pass is made of. It is told two
+   things. The type of what is known does not say how it is renamed (a
+   map is a list of pairs of positives): the action is
+   [rename_made_closures]. And the two functions of maps that the pass
+   uses have their laws stated here, at a renamed variable and what is
+   known renamed; the tactic proves them. *)
+#[local] Ltac eqv_action_extra T ::=
+  lazymatch T with
+  | made_closures => constr:(rename_made_closures)
+  end.
+
 (* A renaming is injective, so a variable is found where its image
    is. *)
 Lemma lookup_made_renamed (r : renaming) (x : variable)
     (known : made_closures) :
   lookup (rename_variable r x) (rename_made_closures r known)
   = lookup x known.
-Proof.
-  unfold rename_made_closures.
-  induction known as [ | [y closure] known IH]; simpl; [ reflexivity | ].
-  rewrite rename_variable_eqb. destruct (Pos.eqb x y); [ reflexivity | ].
-  exact IH.
-Qed.
+Proof. equivariance. Qed.
 
 Lemma unbind_made_renamed (r : renaming) (x : variable)
     (known : made_closures) :
   unbind (rename_variable r x) (rename_made_closures r known)
   = rename_made_closures r (unbind x known).
-Proof.
-  unfold unbind, rename_made_closures.
-  induction known as [ | [y closure] known IH]; simpl; [ reflexivity | ].
-  rewrite rename_variable_eqb, IH. destruct (Pos.eqb x y); reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
-Lemma unbind_params_renamed (r : renaming) (params : list variable) :
-  ∀ known : made_closures,
-    unbind_params (map (rename_variable r) params)
-      (rename_made_closures r known)
-    = rename_made_closures r (unbind_params params known).
-Proof.
-  induction params as [ | param params IH]; intros known; simpl;
-    [ reflexivity | ].
-  rewrite unbind_made_renamed. apply IH.
-Qed.
-
-Lemma closure_made_renamed (r : renaming) (known : made_closures)
-    (d : named) :
-  closure_made (rename_made_closures r known) (rename_named r d)
-  = closure_made known d.
-Proof.
-  destruct d as [s | p args | code slots | fslot decls slots | vslot closure
-    | pfrom vslot closure | move_from move_to closure];
-    try reflexivity.
-  destruct closure as [y | sym | c]; try reflexivity.
-  cbn [rename_named rename_simple closure_made].
-  rewrite lookup_made_renamed. reflexivity.
-Qed.
-
-Lemma made_under_let_renamed (r : renaming) (known : made_closures)
-    (x : variable) (d : named) :
-  made_under_let (rename_made_closures r known) (rename_variable r x)
-    (rename_named r d)
-  = rename_made_closures r (made_under_let known x d).
-Proof.
-  unfold made_under_let.
-  rewrite closure_made_renamed, unbind_made_renamed.
-  destruct (closure_made known d); reflexivity.
-Qed.
-
-Lemma call_made_closure_renamed (r : renaming) (known : made_closures)
-    (ap : apply_expr) :
-  call_made_closure (rename_made_closures r known) (rename_apply r ap)
-  = rename_apply r (call_made_closure known ap).
-Proof.
-  unfold call_made_closure.
-  cbn [rename_apply ap_call_kind ap_callee].
-  destruct (ap_call_kind ap); [ reflexivity | ].
-  destruct (ap_callee ap) as [x | sym | c]; try reflexivity.
-  cbn [rename_simple made_callee_code]. rewrite lookup_made_renamed.
-  destruct (lookup x known) as [[slot function_decls] | ]; [ | reflexivity ].
-  destruct (lookup slot function_decls); reflexivity.
-Qed.
-
-Fixpoint call_closures_knowing_renamed (r : renaming) (e : expr) :
-  ∀ known : made_closures,
-    call_closures_knowing (rename_made_closures r known) (rename_expr r e)
-    = rename_expr r (call_closures_knowing known e).
-Proof.
-  destruct e
-    as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-       | scrutinee arms | ];
-    intros known; try reflexivity;
-    cbn [rename_expr call_closures_knowing].
-  - rewrite made_under_let_renamed, call_closures_knowing_renamed.
-    reflexivity.
-  - rewrite call_closures_knowing_renamed. reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler call_closures_in_handler].
-    rewrite unbind_params_renamed, !call_closures_knowing_renamed.
-    reflexivity.
-  - rewrite call_closures_knowing_renamed. f_equal.
-    induction handlers as [ | [k [params metadata handler]] handlers IH];
-      simpl; [ reflexivity | ].
-    rewrite unbind_params_renamed, call_closures_knowing_renamed, IH.
-    reflexivity.
-  - rewrite call_made_closure_renamed. reflexivity.
-Qed.
+#[local] Hint Rewrite lookup_made_renamed unbind_made_renamed : equivariance.
 
 Theorem call_closures_knowing_equivariant :
   call_closures_knowing_equivariant_statement.
-Proof.
-  intros r known e. symmetry. apply call_closures_knowing_renamed.
-Qed.
+Proof. equivariance. Qed.
 
 Theorem call_made_closures_equivariant :
   call_made_closures_equivariant_statement.
-Proof.
-  intros r e. symmetry. exact (call_closures_knowing_renamed r e []).
-Qed.
+Proof. intros r e. exact (call_closures_knowing_equivariant r [] e). Qed.
