@@ -1119,14 +1119,19 @@ Definition eval_binary_primitive (statics : static_env)
    other: no array value has an identity. *)
 (* CR mshinwell: A [Make_block] says nothing of its fields but that each
    is of kind [Value]: the block kind of the model has not the subkind
-   that the compiler gives each field, and the conversion refuses a
-   block that has one. So nothing is undefined here by a field's
-   subkind. In the compiler Simplify meets each argument that is a
-   variable with the subkind and gives [Invalid] where they cannot
-   agree, the subkinds come from the types of the source, and the
-   backend ignores them. When they come into the model, whether a
-   field that is not of its subkind makes the block undefined is to be
-   settled with the kinds. Decision D25. *)
+   that the compiler gives each field, and the conversion drops it. So
+   nothing is undefined here by a field's subkind. The checks of the
+   arguments' kinds and of symbols being bound still apply. In the
+   compiler Simplify meets each argument that is a variable with the
+   subkind and gives [Invalid] where they cannot agree, the subkinds
+   come from the types of the source, and the backend ignores them.
+   That the subkind of a field has no bearing on what the program
+   computes is not proved.
+   The tool reads every field of a [Make_block] at block kind [Values]
+   as any value; this is provisional; decision D25 is open and is the
+   human's: whether the subkinds are dropped, as now, or come into the
+   model, and then whether a field that is not of its subkind makes
+   the block undefined. *)
 Definition eval_variadic_primitive (statics : static_env)
     (p : variadic_primitive) (vs : list value) : option value :=
   match p with

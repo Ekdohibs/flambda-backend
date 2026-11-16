@@ -74,8 +74,16 @@ a `CR` at the place in the `Spec` file.
   test it; tags in `[0, 251)` are a condition of well-formedness.
   Decided.
 - **D24.** Blocks with no fields are allowed. Ruled.
-- **D25.** What the kind of a `Make_block` field promises. The
-  conversion refuses annotated blocks meanwhile. Open; goes with kinds.
+- **D25.** What the kind of a `Make_block` field promises. Open;
+  meanwhile the tool reads every field of a `Make_block` at block kind
+  `Values` as any value (provisional): its check of the kinds of the
+  fields asks that each be of kind value, and drops the subkind of
+  each field, and whether it may be null, as the conversion does of a
+  parameter (at first the check refused a block whose kinds said
+  either). So a wrong subkind of a field is not seen, and
+  that the subkind of a field has no bearing on what the program
+  computes is not proved. The question is whether they are dropped or
+  come into the model; goes with kinds.
 - **D26.** Types of names that hold poison. Typing facts are about
   values that are not poison; an environment asks nothing of the type
   of a name whose value is poison; an `Is_int` or `Get_tag` relation

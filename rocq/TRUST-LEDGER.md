@@ -504,8 +504,10 @@ it gave back.
     split is the compiler's mark, and not what the program does with
     the block;
   - that a block marked `Mutable` or `Immutable_unique` is converted
-    only where it has as many kinds of fields as arguments and every
-    one is `any_value` (decision D25), and only where it has an
+    only where it has as many kinds of fields as arguments, every one
+    of kind value, whatever its subkind and whether or not it may be
+    null; that much of the kind of a field is dropped, as it is of a
+    parameter (decision D25, which is open), and only where it has an
     argument: one made with no field as a term runs is refused, as
     the compiler makes none (a static block with no field is another
     thing, and not of these cases). The case of a block marked
@@ -1267,10 +1269,35 @@ it gave back.
   that it sends a primitive to the one of the same name, and refuses a
   primitive, or a value of a field, that the model has not got. Of the
   primitives that allocate or load, that is: a block that is not of
-  values; and, for `Make_block`, a kind of a field that says more
-  than `any_value`, as the model has no subkinds and Simplify uses
-  them. A `Make_array` that is marked `Immutable` and is of one of
-  the three array kinds of values is converted to the model's
+  values, and a field of a block that is not of kind value. The
+  subkinds of the fields of a `Make_block` at block kind `Values`, and
+  whether a field may be null, are another matter: the model has no
+  subkinds, and the check of the kinds of the fields drops that much
+  of the kind of a field, as the conversion does of a parameter, where
+  it refused a block one of whose fields said more than `any_value`.
+  It is the check of the kinds only, beside the other conditions
+  under which a block is converted. That is a claim of the term that
+  is dropped, and no renaming: Simplify takes an argument that is a
+  variable to be of the subkind of its field and makes the primitive
+  `Invalid` where it cannot be, so the conversion can give a defined
+  construction in the model where Simplify makes it `Invalid` for a
+  field's subkind. Trusted, and not
+  proved: that the subkind of a field has no bearing on what the
+  program computes. By a reading of the source the translation to Cmm
+  does not read it when it makes the block
+  (`to_cmm/to_cmm_primitive.ml`, `make_block`). Simplify also gives
+  the kind of a field, with its subkind, to a parameter that it adds
+  where it removes a block (`simplify/flow/mutable_unboxing.ml`), and
+  the backend reads the subkind of a parameter (discrepancy C2-10);
+  the conversion drops the subkinds of parameters as well. The
+  subkinds of the two terms are not compared. A term read from a text
+  that does not write these kinds had lost them before the conversion
+  (discrepancy V2-2). The tool reads every field of a `Make_block` at
+  block kind `Values` as any value; this is provisional; decision D25
+  is open and is the human's: whether they are dropped or come into
+  the model. A `Make_array` that is marked
+  `Immutable` and is of one of the three array kinds of values is
+  converted to the model's
   `Make_immutable_array` at that kind, which is not the primitive of
   the same name: the model's carries no mutability and makes a value
   with no identity. A block marked `Mutable` or `Immutable_unique`, a

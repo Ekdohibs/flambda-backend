@@ -725,9 +725,24 @@ let convert_binary_primitive (p : P.binary_primitive) :
    argument, with its subkind, and Simplify takes an argument that is a variable
    to be of the subkind of its field: where it cannot be, the primitive becomes
    [Invalid] ([Simplify_variadic_primitive]). The model's [Make_block] has no
-   such annotation and makes a block of whatever values it is given. So the only
-   annotation converted is the one that says nothing, [any_value] for every
-   field; a block kind that says more of a field is not in the model.
+   such annotation: the model does not check a field against its subkind. So the
+   check of the kinds of the fields of a [Make_block] at block kind [Values]
+   drops their subkinds, as those of parameters are dropped: it asks that there
+   be as many kinds as arguments and that each field be of kind [Value],
+   whatever its subkind and whether or not it may be null. A field of another
+   kind is refused. This is the check of the kinds only: the other conditions
+   under which a block is converted (how it is marked, and for a block with an
+   identity that it has an argument) are tested apart from it.
+
+   The model has no subkinds, so a verdict is of the two terms without them.
+   What is not proved is that the subkind of a field has no bearing on what the
+   program computes: Simplify reads it, and by a reading of the source the
+   translation to Cmm does not when it makes the block. Two things follow. The
+   conversion can give a defined construction in the model where Simplify makes
+   it [Invalid] for a field's subkind. And the subkinds of the two terms are not
+   compared: a field may have another in the term after. A term read from a text
+   that does not write these kinds has lost them before it comes here
+   (discrepancy V2-2).
 
    A [Make_array] is converted here when it is [Immutable] and its elements are
    of kind [Value]: it is the model's [Make_immutable_array], which makes a
@@ -740,11 +755,17 @@ let convert_variadic_primitive (p : P.variadic_primitive) ~num_args :
   | Make_block (Values (tag, kinds), Immutable, (Heap _ | Local _))
   (* CR mshinwell: a block made in a region is converted as one made on the
      heap; see [region_variables]. *)
+  (* CR mshinwell: the subkind of each field, and whether it may be null, are
+     dropped, as they are of a parameter: every field is read as any value. So
+     a wrong subkind of a field is not seen, as one of a parameter is not: the
+     model does not check a field against its subkind, and the subkinds of the
+     two terms are not compared. This is provisional. Decision D25. *)
     when List.compare_length_with kinds num_args = 0
          && List.for_all
               (fun kind ->
-                Flambda_kind.With_subkind.equal kind
-                  Flambda_kind.With_subkind.any_value)
+                Flambda_kind.equal
+                  (Flambda_kind.With_subkind.kind kind)
+                  Flambda_kind.value)
               kinds ->
     Some (Make_block (Block_kind_values (z_of_int (Tag.Scannable.to_int tag))))
   (* CR mshinwell: an array made in a region is converted as one made on the
@@ -1634,14 +1655,14 @@ and convert_prim (prim : P.t) : Model.named =
 
      A block marked [Mutable] or [Immutable_unique] is a cell; one marked
      [Immutable] is a value with no identity, by [convert_variadic_primitive].
-     The kinds of the fields are as there: [any_value] for every field, or the
-     block is refused. A block marked [Mutable] or [Immutable_unique] that has
-     no field is refused: the compiler makes no such allocation as the term runs
-     (the front end makes a static block of it, and [To_cmm_primitive] stops on
-     one). The case of a block marked [Immutable] is as it was, and takes one of
-     no field. A mutable array is a cell if its elements are of kind [Value];
-     one made of no argument is refused for the same reason, and has no value in
-     the model.
+     The kinds of the fields are as there: each field of kind [Value], its
+     subkind dropped, or the block is refused. A block marked [Mutable] or
+     [Immutable_unique] that has no field is refused: the compiler makes no such
+     allocation as the term runs (the front end makes a static block of it, and
+     [To_cmm_primitive] stops on one). The case of a block marked [Immutable] is
+     as it was, and takes one of no field. A mutable array is a cell if its
+     elements are of kind [Value]; one made of no argument is refused for the
+     same reason, and has no value in the model.
 
      A store into a block is converted when it is an assignment into a block of
      values. One marked [Initialization] is refused, as a write with the mark to
@@ -1691,11 +1712,16 @@ and convert_prim (prim : P.t) : Model.named =
             ((Mutable | Immutable_unique) as mut),
             (Heap _ | Local _) ),
         (_ :: _ as args) )
+  (* CR mshinwell: the subkind of each field, and whether it may be null, are
+     dropped, as in [convert_variadic_primitive]: every field is read as any
+     value, and a wrong subkind of a field is not seen. This is provisional.
+     Decision D25. *)
     when List.compare_lengths kinds args = 0
          && List.for_all
               (fun kind ->
-                Flambda_kind.With_subkind.equal kind
-                  Flambda_kind.With_subkind.any_value)
+                Flambda_kind.equal
+                  (Flambda_kind.With_subkind.kind kind)
+                  Flambda_kind.value)
               kinds ->
     let mut : Primitives.cell_mutability =
       match mut with
