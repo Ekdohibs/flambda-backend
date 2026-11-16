@@ -443,7 +443,9 @@ Qed.
 (* The law of the rewrite is proved from the definitions by the tactic
    of FlambdaEquivarianceTactic.v, which states and proves by itself
    the laws of the functions that the rewrite is made of, the removal
-   of unused continuations among them. It is given three things.
+   of unused continuations among them. It rewrites with its database
+   in one pass over the goal, which is quicker and is enough here, and
+   it is given three things.
 
    Computation is told to unfold [never_returns_b], which makes the
    proof quicker, and not to unfold [unarize]: unfolded on one side
@@ -457,6 +459,8 @@ Qed.
    each binding does, which the induction gives: the law is stated
    with that premise and proved by hand, and the tactic is told how to
    show the premise ([eqv_premise]). *)
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
+
 #[local] Arguments never_returns_b ap c /.
 #[local] Arguments unarize : simpl never.
 
