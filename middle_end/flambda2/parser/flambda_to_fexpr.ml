@@ -764,7 +764,22 @@ and apply_expr env (app : Apply_expr.t) : Fexpr.expr =
     | C_call { needs_caml_c_call; is_c_builtin; effects; coeffects } ->
       C_call { alloc = needs_caml_c_call; is_c_builtin; effects; coeffects }
     | Method { kind; obj } -> Method { kind; obj = simple env obj }
-    | Effect _ -> Misc.fatal_error "TODO: Effect call kind"
+    | Effect operation ->
+      let operation, operands =
+        match operation with
+        | Perform { eff } -> Fexpr.Perform, [eff]
+        | Reperform { eff; cont; last_fiber } ->
+          Fexpr.Reperform, [eff; cont; last_fiber]
+        | With_stack { valuec; exnc; effc; f; arg } ->
+          Fexpr.With_stack, [valuec; exnc; effc; f; arg]
+        | With_stack_preemptible { valuec; exnc; effc; handle_tick; f; arg } ->
+          Fexpr.With_stack_preemptible, [valuec; exnc; effc; handle_tick; f; arg]
+        | Continue { cont; value } -> Fexpr.Continue, [cont; value]
+        | Discontinue { cont; exn } -> Fexpr.Discontinue, [cont; exn]
+        | Discontinue_with_backtrace { cont; exn; bt } ->
+          Fexpr.Discontinue_with_backtrace, [cont; exn; bt]
+      in
+      Effect { operation; operands = List.map (simple env) operands }
   in
   let param_arity = Apply_expr.args_arity app in
   let return_arity = Apply_expr.return_arity app in
@@ -774,8 +789,8 @@ and apply_expr env (app : Apply_expr.t) : Fexpr.expr =
       let params_arity = Some (complex_arity param_arity) in
       let ret_arity = arity return_arity in
       Some { params_arity; ret_arity }
-    | Function { function_call = Direct _ | Indirect_unknown_arity } | Method _
-      ->
+    | Function { function_call = Direct _ | Indirect_unknown_arity }
+    | Method _ | Effect _ ->
       (* The arity of the arguments is written unless it is one value for each
          argument, which is what is read where none is written; and no arity at
          all is written if the arity of the result is one value too. *)
@@ -791,7 +806,6 @@ and apply_expr env (app : Apply_expr.t) : Fexpr.expr =
       let params_arity = Some (complex_arity param_arity) in
       let ret_arity = arity return_arity in
       Some { params_arity; ret_arity }
-    | Effect _ -> assert false
   in
   let inlined : Fexpr.inlined_attribute option =
     if Flambda2_terms.Inlined_attribute.is_default (Apply_expr.inlined app)

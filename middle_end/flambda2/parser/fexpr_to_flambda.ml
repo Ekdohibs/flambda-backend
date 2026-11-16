@@ -993,6 +993,30 @@ let rec expr env acc (e : Fexpr.expr) : _ * Flambda.Expr.t =
         ( Call_kind.method_call kind ~obj:(simple env obj),
           params_arity,
           return_arity )
+      | Effect { operation; operands } ->
+        let params_arity, return_arity = arities_or_values arities args in
+        let module E = Call_kind.Effect in
+        let operation : E.t =
+          match operation, List.map (simple env) operands with
+          | Perform, [eff] -> E.perform ~eff
+          | Reperform, [eff; cont; last_fiber] ->
+            E.reperform ~eff ~cont ~last_fiber
+          | With_stack, [valuec; exnc; effc; f; arg] ->
+            E.with_stack ~valuec ~exnc ~effc ~f ~arg
+          | With_stack_preemptible, [valuec; exnc; effc; handle_tick; f; arg] ->
+            E.with_stack_preemptible ~valuec ~exnc ~effc ~handle_tick ~f ~arg
+          | Continue, [cont; value] -> E.continue ~cont ~value
+          | Discontinue, [cont; exn] -> E.discontinue ~cont ~exn
+          | Discontinue_with_backtrace, [cont; exn; bt] ->
+            E.discontinue_with_backtrace ~cont ~exn ~bt
+          | ( ( Perform | Reperform | With_stack | With_stack_preemptible
+              | Continue | Discontinue | Discontinue_with_backtrace ),
+              operands ) ->
+            Misc.fatal_errorf
+              "An operation of effects with %d operands, which it does not take"
+              (List.length operands)
+        in
+        Call_kind.effect_ operation, params_arity, return_arity
     in
     let inlined : Inlined_attribute.t =
       match inlined with

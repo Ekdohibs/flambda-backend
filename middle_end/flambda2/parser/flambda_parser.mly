@@ -162,6 +162,7 @@ let make_boxed_const_int (i, m) : static_data =
 %token KWD_DELETED [@symbol "deleted"]
 %token KWD_DEPTH [@symbol "depth"]
 %token KWD_DIRECT [@symbol "direct"]
+%token KWD_EFFECT [@symbol "effect"]
 %token KWD_UNKNOWN_ARITY [@symbol "unknown_arity"]
 %token KWD_DO_NOT_INLINE [@symbol "do_not_inline"]
 %token KWD_DONE  [@symbol "done"]
@@ -743,6 +744,22 @@ call_kind:
   | KWD_MCALL LPAREN; kind = method_kind; obj = simple; RPAREN;
       alloc = alloc_mode_for_applications
     { (Method { kind; obj }, alloc) }
+  | KWD_EFFECT LPAREN; name = IDENT;
+      operands = separated_nonempty_list(COMMA, simple); RPAREN;
+      alloc = alloc_mode_for_applications
+    { (* The names of the operations are no keywords. *)
+      let operation : effect_operation =
+        match name with
+        | "perform" -> Perform
+        | "reperform" -> Reperform
+        | "with_stack" -> With_stack
+        | "with_stack_preemptible" -> With_stack_preemptible
+        | "continue" -> Continue
+        | "discontinue" -> Discontinue
+        | "discontinue_with_backtrace" -> Discontinue_with_backtrace
+        | _ -> Misc.fatal_errorf "Unknown operation of effects '%s'" name
+      in
+      (Effect { operation; operands }, alloc) }
 ;
 
 c_call_effects:

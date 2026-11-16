@@ -684,6 +684,21 @@ let call_kind_and_alloc_mode ~space ppf (ck, alloc_mode) =
       obj
       (alloc_mode_for_applications region ~space:Before)
       alloc_mode
+  | Effect { operation; operands } ->
+    let name =
+      match operation with
+      | Perform -> "perform"
+      | Reperform -> "reperform"
+      | With_stack -> "with_stack"
+      | With_stack_preemptible -> "with_stack_preemptible"
+      | Continue -> "continue"
+      | Discontinue -> "discontinue"
+      | Discontinue_with_backtrace -> "discontinue_with_backtrace"
+    in
+    pp_spaced ~space ppf "@[effect(%s@ @[%a@])%a@]" name (pp_comma_list simple)
+      operands
+      (alloc_mode_for_applications region ~space:Before)
+      alloc_mode
 
 let inline_attribute ~space ppf (i : Inline_attribute.t) =
   let str =

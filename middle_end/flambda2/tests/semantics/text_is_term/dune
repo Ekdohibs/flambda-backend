@@ -115,6 +115,10 @@
 ;; products, some of which hold a product. The reader reads the kind of such
 ;; an array in the order of the text. The text is the term.
 ;;
+;; operations_of_effects: the seven operations of effects, each a call of a
+;; kind of its own, which the text writes "effect(NAME OPERANDS)". The text
+;; is the term.
+;;
 ;; partial_application_of_unboxed_float: a closure that keeps an unboxed
 ;; float in a value slot. The text writes the kind of the slot where the code
 ;; reads it. The text is the term.
@@ -200,6 +204,22 @@
   (= %{context_name} "main"))
  (action
   (diff length_of_bytes.expected length_of_bytes.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   operations_of_effects.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     %{dep:operations_of_effects.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff operations_of_effects.expected operations_of_effects.output)))
 
 (rule
  (enabled_if

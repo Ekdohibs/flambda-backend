@@ -273,11 +273,27 @@ type function_call =
    no arities is [Indirect], and is read with one value for each argument and
    one for the result. *)
 
+(* The operations of effects, in the order of [Call_kind.Effect.t]. What an
+   operation is given stands with it, in the order of the fields there: the call
+   has no callee and no arguments. *)
+type effect_operation =
+  | Perform
+  | Reperform
+  | With_stack
+  | With_stack_preemptible
+  | Continue
+  | Discontinue
+  | Discontinue_with_backtrace
+
 type call_kind =
   | Function of function_call
   | Method of
       { kind : Call_kind.Method_kind.t;
         obj : simple
+      }
+  | Effect of
+      { operation : effect_operation;
+        operands : simple list
       }
   | C_call of
       { alloc : bool;
