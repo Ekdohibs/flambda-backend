@@ -1,5 +1,5 @@
 #!/usr/bin/perl
-# review-pdf.pl BUILD_DIR OUT.pdf FILE.v ...
+# review-pdf.pl BUILD_DIR OUT.pdf -Q DIR LIBRARY ... FILE.v ...
 #
 # Typesets what a reviewer of the Rocq development reads as one PDF, in the
 # shape of a paper. The first part is the ground the passes share: the
@@ -11,7 +11,8 @@
 # axioms the statements rest on. `rocq doc` typesets the sources, with every
 # identifier linked to its definition; LuaLaTeX typesets the document.
 #
-# Run it as `make -C rocq review`, which passes the files of the libraries.
+# Run it as `make -C rocq review`, which passes the directories of the
+# libraries, as it gives them to Rocq, and then the files of the libraries.
 # Those of the stdlib, backend, SSA and loop libraries are listed in
 # dependency order in rocq/Makefile and are shown in that order. Those of
 # the Flambda 2 libraries are listed there by name, one to a line, so that
@@ -35,16 +36,22 @@ use File::Spec;
 use POSIX qw(strftime);
 
 my ($build, $out, @files) = @ARGV;
-die "usage: review-pdf.pl BUILD_DIR OUT.pdf FILE.v ...\n" unless @files;
+my @directories;    # [directory, library], as rocq/Makefile maps them
+while (@files >= 3 && $files[0] eq '-Q') {
+  my (undef, $dir, $name) = splice @files, 0, 3;
+  push @directories, [abs_path($dir) // $dir, $name];
+}
+die "usage: review-pdf.pl BUILD_DIR OUT.pdf -Q DIR LIBRARY ... FILE.v ...\n"
+  unless @files && @directories;
 my $root = abs_path(dirname(abs_path($0)) . '/..');
 $build = File::Spec->rel2abs($build);
 $out = File::Spec->rel2abs($out);
 make_path($build, "$build/src", "$build/tex");
 
-# ---- The libraries, as rocq/Makefile maps them ------------------------
+# ---- The libraries ------------------------------------------------------
 
 my @libraries = (
-  { dir => 'rocq', name => 'OxCamlStdlib',
+  { name => 'OxCamlStdlib',
     title => "Models of OxCaml's own types",
     intro => <<'TEX' },
 The analyses compute with OxCaml's own types: tagged 63-bit integers
@@ -56,7 +63,7 @@ definitions and the axioms only; the lemmas proved about them are in the
 directives of Appendix~\ref{app:extraction} they are what the development
 takes on trust about OxCaml.
 TEX
-  { dir => 'backend/rocq', name => 'OxCamlBackend',
+  { name => 'OxCamlBackend',
     title => 'Backend-wide definitions',
     intro => <<'TEX' },
 Definitions shared with the rest of the backend: the meaning of the integer
@@ -64,7 +71,7 @@ comparisons as propositions over the integers, and the model's copy of the
 backend's \texttt{Operation.t}, which must match the OCaml type constructor
 for constructor.
 TEX
-  { dir => 'backend/ssa/rocq', name => 'OxCamlSsa',
+  { name => 'OxCamlSsa',
     title => 'The SSA graph and its semantics',
     intro => <<'TEX' },
 The SSA graph as the models see it: abstract blocks and values with the few
@@ -75,15 +82,15 @@ the statements use; the implementation file of the same name without the
 suffix is the extracted check and is not shown, nor is the
 \texttt{*Proofs.v} file.
 TEX
-  { dir => 'backend/ssa/loop/rocq', name => 'OxCamlLoop' },
-  { dir => 'middle_end/flambda2/rocq', name => 'OxCamlFlambda2',
+  { name => 'OxCamlLoop' },
+  { name => 'OxCamlFlambda2',
     title => 'The terms of Flambda 2 and their semantics',
     intro => <<'TEX' },
 The control-flow fragment of Flambda 2: its terms, their execution by an
 abstract machine, what it means for two terms to behave alike, and the
 rewrites stated against that. The \texttt{*Proofs.v} files are not shown.
 TEX
-  { dir => 'middle_end/flambda2/types/rocq', name => 'OxCamlFlambda2Types',
+  { name => 'OxCamlFlambda2Types',
     title => 'Flambda types and typing environments',
     intro => <<'TEX' },
 A first, naive model of the types and typing environments of the simplifier,
@@ -91,7 +98,13 @@ with refinement relative to a typing environment. The \texttt{*Proofs.v}
 files are not shown.
 TEX
 );
-my %library = map { $_->{dir} => $_ } @libraries;
+my %library_named = map { $_->{name} => $_ } @libraries;
+my %library;    # by directory, from the root
+for my $mapping (@directories) {
+  my ($dir, $name) = @$mapping;
+  $library{File::Spec->abs2rel($dir, $root)} = $library_named{$name}
+    or die "$dir: of the library $name, which this script does not know\n";
+}
 
 # ---- The parts of the document ------------------------------------------
 
@@ -368,7 +381,7 @@ my %style_of_glob_kind = (def => 'definition', scheme => 'definition',
   abbrev => 'abbreviation', prf => 'lemma', constr => 'constructor',
   ax => 'axiom', proj => 'projection', ind => 'inductive', rec => 'record',
   mod => 'module');
-for my $glob (map { glob "$root/$_->{dir}/*.glob" } @libraries) {
+for my $glob (map { glob "$_->[0]/*.glob" } @directories) {
   open my $g, '<', $glob or die "$glob: $!\n";
   while (<$g>) {
     my ($kind, $name) = /^(\w+) \d+:\d+ (?:\S+ )?<> (\S+)$/ or next;
@@ -710,7 +723,7 @@ for my $base (keys %fragment) {
 
 # ---- The axioms the statements rest on ----------------------------------
 
-my @flags = map { ('-Q', "$root/$_->{dir}", $_->{name}) } @libraries;
+my @flags = map { ('-Q', @$_) } @directories;
 my %axioms;
 for my $st (@statements) {
   my $file = "$build/assumptions-$st->{name}";
@@ -736,7 +749,7 @@ my $author = $ENV{REVIEW_AUTHOR} // 'The OxCaml developers';
 my $commit = `git -C "$root" rev-parse --short HEAD 2>/dev/null`;
 chomp $commit;
 my $dirty = `git -C "$root" status --porcelain -- ROCQ-REVIEW-GUIDE.md @{[
-  map { "$root/$_->{dir}" } @libraries ]} 2>/dev/null`;
+  map { $_->[0] } @directories ]} 2>/dev/null`;
 my $date = strftime('%e %B %Y', localtime);
 $date =~ s/^\s+//;
 my $provenance = $commit
