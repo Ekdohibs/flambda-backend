@@ -48,7 +48,11 @@
    things that a text cannot write: that a call is a probe, a call that performs
    an effect, the shape of a static block, the debugging information of its
    fields (which is not compared, as no other debugging information is), and a
-   group of two recursive continuations. *)
+   group of two recursive continuations.
+
+   Last, the unit that the comparison gives for two different units, where the
+   kind of a call of the first unit has a name that the second unit binds under
+   another name. *)
 
 open Flambda2_bound_identifiers
 open Flambda2_identifiers
@@ -444,3 +448,93 @@ let () =
     (answer (recursive_group 2) (recursive_group 2));
   Printf.printf "a group of one recursive continuation and a group of two: %s\n"
     (answer (recursive_group 1) (recursive_group 2))
+
+(* The unit that the comparison gives for two different units is, by
+   compare.mli, the first unit with the names of the second where the two agree.
+   So the comparison must say of the first unit and of the unit given that they
+   are the same. *)
+let answer_for_the_unit_given unit1 unit2 =
+  match Flambda2_compare.Compare.flambda_units unit1 unit2 with
+  | Equivalent -> "NOT DIFFERENT"
+  | Different { approximant } -> answer unit1 approximant
+  | exception exn -> "STOPPED: " ^ Printexc.to_string exn
+
+let fresh_symbol =
+  let count = ref 0 in
+  fun () ->
+    incr count;
+    Symbol.create compilation_unit
+      (Linkage_name.of_string (Printf.sprintf "bound%d" !count))
+
+(* A unit that binds a code ID (to deleted code, which is enough for the name)
+   and a symbol, each new at every use, and then either jumps or makes one call
+   whose kind [call_kind] makes from the two names. *)
+let with_names ?call_kind () =
+  unit (fun ~return_continuation ~exn_continuation ~toplevel_my_alloc_region ->
+      let code_id =
+        Code_id.create ~name:"code" ~debug:Debuginfo.none compilation_unit
+      in
+      let symbol = fresh_symbol () in
+      let body =
+        match call_kind with
+        | None -> jump return_continuation [argument]
+        | Some call_kind ->
+          let call_kind : Call_kind.t = call_kind ~code_id ~symbol in
+          let callee, args, args_arity =
+            match call_kind with
+            | Effect _ -> None, [], Flambda_arity.nullary
+            | Function _ | Method _ | C_call _ -> Some argument, [argument], any
+          in
+          Flambda.Apply.create ~callee
+            ~continuation:(Return return_continuation)
+            (Exn_continuation.create ~exn_handler:exn_continuation
+               ~extra_args:[])
+            ~args ~args_arity ~return_arity:any ~call_kind
+            ~return_mode:
+              (Alloc_mode.For_applications.not_alloc_stack
+                 ~alloc_region:toplevel_my_alloc_region)
+            Debuginfo.none ~inlined:Default_inlined
+            ~inlining_state:(Inlining_state.default ~round:0)
+            ~probe:None ~position:Normal
+            ~relative_history:Inlining_history.Relative.empty
+          |> Flambda.Expr.create_apply
+      in
+      Flambda.Let.create
+        (Bound_pattern.static
+           (Bound_static.create
+              [ Bound_static.Pattern.code code_id;
+                Bound_static.Pattern.block_like symbol ]))
+        (Flambda.Named.create_static_consts
+           (Flambda.Static_const_group.create
+              [ Flambda.Static_const_or_code.deleted_code;
+                Flambda.Static_const_or_code.create_static_const
+                  (Static_const.block Tag.Scannable.zero Immutable Value_only
+                     [Simple.With_debuginfo.create argument Debuginfo.none]) ]))
+        ~body ~free_names_of_body:Unknown
+      |> Flambda.Expr.create_let)
+
+let () =
+  let direct ~code_id ~symbol:_ = Call_kind.direct_function_call code_id in
+  let known_arity ~code_id ~symbol:_ =
+    Call_kind.indirect_function_call_known_arity
+      ~code_ids:(Known (Code_id.Set.singleton code_id))
+  in
+  let method_call ~code_id:_ ~symbol =
+    Call_kind.method_call Public ~obj:(Simple.symbol symbol)
+  in
+  let effect_ ~code_id:_ ~symbol =
+    Call_kind.effect_ (Call_kind.Effect.perform ~eff:(Simple.symbol symbol))
+  in
+  List.iter
+    (fun (what, call_kind) ->
+      Printf.printf "%s:\n  two units that have it: %s\n" what
+        (answer (with_names ~call_kind ()) (with_names ~call_kind ()));
+      Printf.printf
+        "  a unit that has it and one that jumps, the first and the unit \
+         given: %s\n"
+        (answer_for_the_unit_given (with_names ~call_kind ()) (with_names ())))
+    [ "a direct call of the code that the unit binds", direct;
+      ( "a call of known arity that may reach the code that the unit binds",
+        known_arity );
+      "a method call on the symbol that the unit binds", method_call;
+      "an effect performed on the symbol that the unit binds", effect_ ]

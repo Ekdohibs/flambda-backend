@@ -126,3 +126,15 @@ a static block of values and a mixed one: different
 two static blocks whose fields have not the same debugging information (one has some: true): the same
 two groups of two recursive continuations: the same
 a group of one recursive continuation and a group of two: different
+a direct call of the code that the unit binds:
+  two units that have it: the same
+  a unit that has it and one that jumps, the first and the unit given: the same
+a call of known arity that may reach the code that the unit binds:
+  two units that have it: the same
+  a unit that has it and one that jumps, the first and the unit given: the same
+a method call on the symbol that the unit binds:
+  two units that have it: the same
+  a unit that has it and one that jumps, the first and the unit given: the same
+an effect performed on the symbol that the unit binds:
+  two units that have it: the same
+  a unit that has it and one that jumps, the first and the unit given: the same

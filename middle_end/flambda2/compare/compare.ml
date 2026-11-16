@@ -490,12 +490,46 @@ let subst_field env field =
     (subst_simple env (Simple.With_debuginfo.simple field))
     (Simple.With_debuginfo.dbg field)
 
+(* Every name in the kind of a call that the comparison renames: the code of a
+   direct call, the code that a call of known arity may reach, the object of a
+   method call, and what an operation of an effect is given. *)
 let subst_call_kind env (call_kind : Call_kind.t) : Call_kind.t =
+  let subst = subst_simple env in
   match call_kind with
   | Function { function_call = Direct code_id } ->
     let code_id = subst_code_id env code_id in
     Call_kind.direct_function_call code_id
-  | _ -> call_kind
+  | Function { function_call = Indirect_known_arity (Known code_ids) } ->
+    Call_kind.indirect_function_call_known_arity
+      ~code_ids:(Known (Code_id.Set.map (subst_code_id env) code_ids))
+  | Function
+      { function_call = Indirect_known_arity Unknown | Indirect_unknown_arity }
+  | C_call _ ->
+    call_kind
+  | Method { kind; obj } -> Call_kind.method_call kind ~obj:(subst obj)
+  | Effect operation ->
+    let operation : Call_kind.Effect.t =
+      match operation with
+      | Perform { eff } -> Call_kind.Effect.perform ~eff:(subst eff)
+      | Reperform { eff; cont; last_fiber } ->
+        Call_kind.Effect.reperform ~eff:(subst eff) ~cont:(subst cont)
+          ~last_fiber:(subst last_fiber)
+      | With_stack { valuec; exnc; effc; f; arg } ->
+        Call_kind.Effect.with_stack ~valuec:(subst valuec) ~exnc:(subst exnc)
+          ~effc:(subst effc) ~f:(subst f) ~arg:(subst arg)
+      | With_stack_preemptible { valuec; exnc; effc; handle_tick; f; arg } ->
+        Call_kind.Effect.with_stack_preemptible ~valuec:(subst valuec)
+          ~exnc:(subst exnc) ~effc:(subst effc) ~handle_tick:(subst handle_tick)
+          ~f:(subst f) ~arg:(subst arg)
+      | Continue { cont; value } ->
+        Call_kind.Effect.continue ~cont:(subst cont) ~value:(subst value)
+      | Discontinue { cont; exn } ->
+        Call_kind.Effect.discontinue ~cont:(subst cont) ~exn:(subst exn)
+      | Discontinue_with_backtrace { cont; exn; bt } ->
+        Call_kind.Effect.discontinue_with_backtrace ~cont:(subst cont)
+          ~exn:(subst exn) ~bt:(subst bt)
+    in
+    Call_kind.effect_ operation
 
 let rec subst_expr env e =
   match Expr.descr e with
