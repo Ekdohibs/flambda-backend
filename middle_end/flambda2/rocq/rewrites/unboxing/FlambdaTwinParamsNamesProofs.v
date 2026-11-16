@@ -52,446 +52,179 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaNormaliseSpec FlambdaValidatorEquivarianceSpec
   FlambdaValidatorEquivarianceBaseProofs FlambdaScopedProofs
   FlambdaUntagParamsSpec FlambdaUntagParamsProofs
-  FlambdaUntagParamsNamesProofs FlambdaTwinParamsSpec FlambdaTwinParamsProofs.
+  FlambdaUntagParamsNamesProofs FlambdaTwinParamsSpec FlambdaTwinParamsProofs
+  FlambdaEquivarianceTactic.
 Import ListNotations.
 
 (* ======================================================================== *)
 (* The rewrite commutes with renaming                                       *)
 (* ======================================================================== *)
 
-Lemma alias_of_renamed (r : renaming) (d : named) :
-  alias_of (rename_named r d) = option_map (rename_variable r) (alias_of d).
-Proof. destruct d as [[x | sym | c] | | | | | | ]; reflexivity. Qed.
+(* The laws are proved by the tactic of FlambdaEquivarianceTactic.v,
+   from the definitions. It is given: how the two maps of the pass
+   are renamed; laws of FlambdaUntagParamsNamesProofs.v and
+   FlambdaUntagParamsProofs.v for functions that the pass takes from
+   FlambdaUntagParamsSpec.v; [twin_args] kept folded, which
+   computation would unfold before its law applies; and the laws of
+   the functions of the pass, stated one by one so that none is
+   derived again where it is used. *)
 
-Lemma twin_simple_renamed (r : renaming) (pairs : twinned) (s : simple) :
-  twin_simple (rename_tags r pairs) (rename_simple r s)
-  = rename_simple r (twin_simple pairs s).
-Proof.
-  destruct s as [x | sym | c]; [ | reflexivity | reflexivity ].
-  cbn [rename_simple twin_simple]. rewrite lookup_rename_tags.
-  destruct (lookup x pairs); reflexivity.
-Qed.
+#[local] Instance twinned_renaming : Renaming_of twinned := rename_tags.
+#[local] Instance positions_renaming : Renaming_of positions := rename_keyed.
 
-Lemma twin_args_renamed (r : renaming) (ts : list nat) (pairs : twinned)
-    (args : list simple) :
-  twin_args ts (rename_tags r pairs) (map (rename_simple r) args)
-  = map (rename_simple r) (twin_args ts pairs args).
-Proof.
-  unfold twin_args. rewrite moved_from_map, map_app, !map_map. f_equal.
-  apply map_ext. intros s. apply twin_simple_renamed.
-Qed.
+#[local] Arguments twin_args : simpl never.
 
-Lemma twin_apply_cont_renamed (r : renaming) (active : positions)
-    (pairs : twinned) (ac : apply_cont) :
-  twin_apply_cont (rename_keyed r active) (rename_tags r pairs)
-    (rename_apply_cont r ac)
-  = rename_apply_cont r (twin_apply_cont active pairs ac).
-Proof.
-  unfold twin_apply_cont, rename_apply_cont.
-  cbn [ac_continuation ac_args ac_trap_action].
-  rewrite positions_of_renamed, twin_args_renamed. reflexivity.
-Qed.
+#[local] Hint Rewrite @moved_from_map positions_of_renamed
+  tags_without_renamed distinct_renamed count_positions_renamed
+  : equivariance.
 
-Lemma twin_named_renamed (r : renaming) (pairs : twinned) (d : named) :
-  twin_named (rename_tags r pairs) (rename_named r d)
-  = rename_named r (twin_named pairs d).
-Proof.
-  unfold twin_named. rewrite untag_of_renamed.
-  destruct (untag_of d) as [v | ]; cbn [option_map]; [ | reflexivity ].
-  rewrite lookup_rename_tags. destruct (lookup v pairs); reflexivity.
-Qed.
+(* The law of [active_under], with the handlers renamed as computation
+   writes them. *)
+Lemma active_under_at_handlers (r : renaming) (sites active : positions)
+    (handlers : list (continuation * continuation_handler)) :
+  active_under (rename_keyed r sites)
+    (map (fun '(k, h) => (rename_continuation r k, rename_handler r h))
+       handlers)
+    (rename_keyed r active)
+  = rename_keyed r (active_under sites handlers active).
+Proof. exact (active_under_renamed r sites active handlers). Qed.
+#[local] Hint Rewrite active_under_at_handlers : equivariance.
 
-Lemma twin_names_renamed (r : renaming) (e : expr) :
-  ∀ pending : list variable,
-    twin_names (map (rename_variable r) pending) (rename_expr r e)
-    = map (rename_variable r) (twin_names pending e).
-Proof.
-  induction e
-    as [x kind d body IH | bindings body IH | k h body IH | handlers body IH
-       | ap | ac | scrutinee arms | ];
-    intros [ | p rest]; cbn [map rename_expr twin_names]; try reflexivity.
-  rewrite alias_of_renamed.
-  destruct (alias_of d) as [q | ]; cbn [option_map]; [ | reflexivity ].
-  rewrite rename_variable_eqb. destruct (Pos.eqb q p).
-  - cbn [map]. rewrite IH. reflexivity.
-  - exact (IH (p :: rest)).
-Qed.
+Lemma alias_of_renamed : equivariance_of alias_of.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite alias_of_renamed : equivariance.
 
-Lemma renamed_from_renamed (r : renaming) (ts : list nat)
-    (params : list variable) :
-  ∀ (i : nat) (names : list variable),
-    renamed_from ts i (map (rename_variable r) params)
-      (map (rename_variable r) names)
-    = map (rename_variable r) (renamed_from ts i params names).
-Proof.
-  induction params as [ | p params IH]; intros i names; [ reflexivity | ].
-  cbn [map renamed_from].
-  destruct (at_position ts i); [ destruct names as [ | x names] | ];
-    cbn [map]; f_equal.
-  - exact (IH (S i) []).
-  - exact (IH (S i) names).
-  - exact (IH (S i) names).
-Qed.
+Lemma twin_args_renamed : equivariance_of twin_args.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite twin_args_renamed : equivariance.
 
-Lemma twin_params_list_renamed (r : renaming) (ts : list nat)
-    (params : list variable) (handler : expr) :
-  twin_params_list ts (map (rename_variable r) params) (rename_expr r handler)
-  = map (rename_variable r) (twin_params_list ts params handler).
-Proof.
-  unfold twin_params_list.
-  rewrite moved_from_map, twin_names_renamed, renamed_from_renamed, map_app.
-  reflexivity.
-Qed.
+Lemma twin_apply_cont_renamed : equivariance_of twin_apply_cont.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite twin_apply_cont_renamed : equivariance.
 
-Fixpoint twin_expr_renamed (r : renaming) (sites active : positions)
-    (pairs : twinned) (pending : list variable) (e : expr) {struct e} :
-  twin_expr (rename_keyed r sites) (rename_keyed r active)
-    (rename_tags r pairs) (map (rename_variable r) pending) (rename_expr r e)
-  = rename_expr r (twin_expr sites active pairs pending e)
-with twin_handler_renamed (r : renaming) (sites active : positions)
-    (pairs : twinned) (ts : list nat) (h : continuation_handler) {struct h} :
-  twin_handler (rename_keyed r sites) (rename_keyed r active)
-    (rename_tags r pairs) ts (rename_handler r h)
-  = rename_handler r (twin_handler sites active pairs ts h).
-Proof.
-  - destruct e as [y kind d body | bindings body | k' hh body | handlers body
-                  | ap | ac | scrutinee arms | ];
-      cbn [rename_expr twin_expr]; try reflexivity.
-    + pose proof (tags_without_renamed r [y] pairs) as Hwithout.
-      cbn [map] in Hwithout.
-      assert (Hplain :
-        Let (rename_variable r y) kind
-          (twin_named (rename_tags r pairs) (rename_named r d))
-          (twin_expr (rename_keyed r sites) (rename_keyed r active)
-             (tags_without [rename_variable r y] (rename_tags r pairs)) []
-             (rename_expr r body))
-        = rename_expr r
-            (Let y kind (twin_named pairs d)
-               (twin_expr sites active (tags_without [y] pairs) [] body))).
-      { cbn [rename_expr]. rewrite twin_named_renamed, Hwithout. f_equal.
-        exact (twin_expr_renamed r sites active (tags_without [y] pairs) []
-                 body). }
-      destruct pending as [ | p rest]; cbn [map]; [ exact Hplain | ].
-      rewrite alias_of_renamed.
-      destruct (alias_of d) as [q | ]; cbn [option_map]; [ | exact Hplain ].
-      rewrite rename_variable_eqb. destruct (Pos.eqb q p).
-      * rewrite Hwithout.
-        exact
-          (twin_expr_renamed r sites active
-             ((y, p) :: tags_without [y] pairs) rest body).
-      * cbn [rename_expr]. rewrite Hwithout. f_equal.
-        exact
-          (twin_expr_renamed r sites active (tags_without [y] pairs)
-             (p :: rest) body).
-    + f_equal. exact (twin_expr_renamed r sites active pairs [] body).
-    + rewrite positions_of_renamed, twin_handler_renamed. f_equal.
-      exact
-        (twin_expr_renamed r sites ((k', positions_of sites k') :: active)
-           pairs [] body).
-    + fold (rename_handlers r handlers). rewrite active_under_renamed.
-      f_equal;
-        [ | exact
-              (twin_expr_renamed r sites (active_under sites handlers active)
-                 pairs [] body) ].
-      generalize (active_under sites handlers active). intros active'.
-      unfold rename_handlers.
-      induction handlers as [ | [k' hh] handlers IH]; [ reflexivity | ].
-      cbn [map].
-      rewrite positions_of_renamed, twin_handler_renamed, IH. reflexivity.
-    + rewrite twin_apply_cont_renamed. reflexivity.
-    + f_equal. induction arms as [ | [n ac] arms IH]; [ reflexivity | ].
-      cbn [map fst snd]. rewrite twin_apply_cont_renamed, IH. reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler twin_handler].
-    rewrite twin_params_list_renamed, tags_without_renamed, moved_from_map,
-      twin_expr_renamed.
-    reflexivity.
-Qed.
+Lemma twin_names_renamed : equivariance_of twin_names.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite twin_names_renamed : equivariance.
 
-(* ======================================================================== *)
-(* The test commutes with renaming                                          *)
-(* ======================================================================== *)
+Lemma renamed_from_renamed : equivariance_of renamed_from.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite renamed_from_renamed : equivariance.
 
-Lemma head_ok_renamed (r : renaming) (avoid : list variable) (e : expr) :
-  ∀ pending : list variable,
-    head_ok (map (rename_variable r) avoid) (map (rename_variable r) pending)
-      (rename_expr r e)
-    = head_ok avoid pending e.
-Proof.
-  induction e
-    as [x kind d body IH | bindings body IH | k h body IH | handlers body IH
-       | ap | ac | scrutinee arms | ];
-    intros [ | p rest]; cbn [map rename_expr head_ok]; try reflexivity.
-  rewrite alias_of_renamed.
-  destruct (alias_of d) as [q | ]; cbn [option_map]; [ | reflexivity ].
-  rewrite rename_variable_eqb. destruct (Pos.eqb q p); [ apply IH | ].
-  pose proof (IH (p :: rest)) as IH'. cbn [map] in IH'.
-  rewrite !among_rename_variable, IH'. reflexivity.
-Qed.
+Lemma twin_params_list_renamed : equivariance_of twin_params_list.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite twin_params_list_renamed : equivariance.
 
-Lemma handler_twins_fit_renamed (r : renaming) (ts : list nat)
-    (params : list variable) (handler : expr) :
-  handler_twins_fit ts (map (rename_variable r) params)
-    (rename_expr r handler)
-  = handler_twins_fit ts params handler.
-Proof.
-  unfold handler_twins_fit.
-  rewrite twin_params_list_renamed, distinct_renamed, moved_from_map,
-    twin_names_renamed, <- map_app, head_ok_renamed.
-  reflexivity.
-Qed.
+Lemma twin_expr_renamed : equivariance_of twin_expr.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite twin_expr_renamed : equivariance.
 
-Fixpoint twin_ok_renamed (r : renaming) (sites active : positions)
-    (e : expr) {struct e} :
-  twin_ok (rename_keyed r sites) (rename_keyed r active) (rename_expr r e)
-  = twin_ok sites active e
-with twin_handler_ok_renamed (r : renaming) (sites active : positions)
-    (ts : list nat) (h : continuation_handler) {struct h} :
-  twin_handler_ok (rename_keyed r sites) (rename_keyed r active) ts
-    (rename_handler r h)
-  = twin_handler_ok sites active ts h.
-Proof.
-  - destruct e as [y kind d body | bindings body | k' hh body | handlers body
-                  | ap | ac | scrutinee arms | ];
-      cbn [rename_expr twin_ok]; try reflexivity.
-    + apply twin_ok_renamed.
-    + apply twin_ok_renamed.
-    + rewrite positions_of_renamed, twin_handler_ok_renamed.
-      rewrite
-        <- (twin_ok_renamed r sites ((k', positions_of sites k') :: active)).
-      reflexivity.
-    + fold (rename_handlers r handlers).
-      rewrite active_under_renamed, twin_ok_renamed. f_equal.
-      generalize (active_under sites handlers active). intros active'.
-      unfold rename_handlers.
-      induction handlers as [ | [k' hh] handlers IH]; [ reflexivity | ].
-      cbn [map forallb].
-      rewrite positions_of_renamed, twin_handler_ok_renamed, IH. reflexivity.
-    + cbn [rename_apply ap_continuation ap_exn_continuation].
-      rewrite !no_positions_renamed. reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler twin_handler_ok].
-    rewrite handler_twins_fit_renamed, twin_ok_renamed. reflexivity.
-Qed.
+Lemma head_ok_renamed : equivariance_of head_ok.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite head_ok_renamed : equivariance.
 
-Fixpoint twin_sites_renamed (r : renaming) (sites : positions) (e : expr)
-    {struct e} :
-  twin_sites (rename_keyed r sites) (rename_expr r e)
-  = rename_keyed r (twin_sites sites e)
-with handler_twin_sites_renamed (r : renaming) (sites : positions)
-    (k : continuation) (h : continuation_handler) {struct h} :
-  handler_twin_sites (rename_keyed r sites) (rename_continuation r k)
-    (rename_handler r h)
-  = rename_keyed r (handler_twin_sites sites k h).
-Proof.
-  - destruct e as [y kind d body | bindings body | k' hh body | handlers body
-                  | ap | ac | scrutinee arms | ];
-      cbn [rename_expr twin_sites]; try reflexivity.
-    + apply twin_sites_renamed.
-    + apply twin_sites_renamed.
-    + rewrite handler_twin_sites_renamed, twin_sites_renamed, rename_keyed_app.
-      reflexivity.
-    + rewrite twin_sites_renamed, rename_keyed_app. f_equal.
-      induction handlers as [ | [k' hh] handlers IH]; [ reflexivity | ].
-      cbn [map flat_map].
-      rewrite handler_twin_sites_renamed, IH, rename_keyed_app. reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler handler_twin_sites].
-    rewrite positions_of_renamed, moved_from_map, !length_map,
-      twin_sites_renamed.
-    reflexivity.
-Qed.
+(* The test of a handler asks [head_ok] with two lists appended to
+   avoid: the database renames each part, and the law above is at one
+   list renamed. *)
+Lemma head_ok_app_renamed (r : renaming) (avoid avoid' pending : list variable)
+    (e : expr) :
+  head_ok (map (rename_variable r) avoid ++ map (rename_variable r) avoid')
+    (map (rename_variable r) pending) (rename_expr r e)
+  = head_ok (avoid ++ avoid') pending e.
+Proof. rewrite <- map_app. apply head_ok_renamed. Qed.
+#[local] Hint Rewrite head_ok_app_renamed : equivariance.
 
-Lemma twin_untag_at_renamed (r : renaming) (sites : positions) (e : expr) :
-  twin_untag_at (rename_keyed r sites) (rename_expr r e)
-  = rename_expr r (twin_untag_at sites e).
-Proof.
-  unfold twin_untag_at.
-  rewrite (twin_ok_renamed r sites [] e : twin_ok _ [] _ = _),
-    twin_sites_renamed,
-    (twin_expr_renamed r sites [] [] [] e : twin_expr _ [] [] [] _ = _),
-    (untag_ok_renamed r (twin_sites sites e) [] [] []
-       (twin_expr sites [] [] [] e)
-     : untag_ok _ [] [] [] _ = _).
-  destruct
-    (twin_ok sites [] e
-     && untag_ok (twin_sites sites e) [] [] [] (twin_expr sites [] [] [] e));
-    [ | reflexivity ].
-  exact
-    (untag_expr_renamed r (twin_sites sites e) [] [] []
-       (twin_expr sites [] [] [] e)).
-Qed.
+Lemma handler_twins_fit_renamed : equivariance_of handler_twins_fit.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite handler_twins_fit_renamed : equivariance.
+
+Lemma twin_ok_renamed : equivariance_of twin_ok.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite twin_ok_renamed : equivariance.
+
+Lemma twin_sites_renamed : equivariance_of twin_sites.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite twin_sites_renamed : equivariance.
+
+(* The pass starts its functions, and those of the other pass, at
+   empty states. A law is used where the goal has its left-hand side
+   as it is written, and the renaming of [[]] is written [[]]: so
+   the laws at the empty states are stated. *)
+Lemma twin_ok_at_start (r : renaming) (sites : positions) (e : expr) :
+  twin_ok (rename_keyed r sites) [] (rename_expr r e) = twin_ok sites [] e.
+Proof. exact (twin_ok_renamed r sites [] e). Qed.
+
+Lemma twin_expr_at_start (r : renaming) (sites : positions) (e : expr) :
+  twin_expr (rename_keyed r sites) [] [] [] (rename_expr r e)
+  = rename_expr r (twin_expr sites [] [] [] e).
+Proof. exact (twin_expr_renamed r sites [] [] [] e). Qed.
+
+Lemma untag_ok_at_start (r : renaming) (sites : positions) (e : expr) :
+  untag_ok (rename_keyed r sites) [] [] [] (rename_expr r e)
+  = untag_ok sites [] [] [] e.
+Proof. exact (untag_ok_renamed r sites [] [] [] e). Qed.
+
+Lemma untag_expr_at_start (r : renaming) (sites : positions) (e : expr) :
+  untag_expr (rename_keyed r sites) [] [] [] (rename_expr r e)
+  = rename_expr r (untag_expr sites [] [] [] e).
+Proof. exact (untag_expr_renamed r sites [] [] [] e). Qed.
+#[local] Hint Rewrite twin_ok_at_start twin_expr_at_start untag_ok_at_start
+  untag_expr_at_start : equivariance.
+
+Lemma twin_untag_at_renamed : equivariance_of twin_untag_at.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite twin_untag_at_renamed : equivariance.
 
 (* ======================================================================== *)
 (* The positions that the validation uses commute with renaming             *)
 (* ======================================================================== *)
 
-Lemma after_alias_renamed (r : renaming) (p : variable) (e : expr) :
-  after_alias (rename_variable r p) (rename_expr r e)
-  = option_map (rename_expr r) (after_alias p e).
-Proof.
-  induction e
-    as [x kind d body IH | bindings body IH | k h body IH | handlers body IH
-       | ap | ac | scrutinee arms | ];
-    cbn [rename_expr after_alias]; try reflexivity.
-  rewrite alias_of_renamed.
-  destruct (alias_of d) as [q | ]; cbn [option_map]; [ | reflexivity ].
-  rewrite rename_variable_eqb. destruct (Pos.eqb q p); [ reflexivity | ].
-  exact IH.
-Qed.
+Lemma head_positions_renamed : equivariance_of head_positions.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite head_positions_renamed : equivariance.
 
-Lemma head_positions_renamed (r : renaming) (params : list variable) :
-  ∀ (kinds : list flambda_kind) (i : nat) (e : expr),
-    head_positions i (map (rename_variable r) params) kinds (rename_expr r e)
-    = head_positions i params kinds e.
-Proof.
-  induction params as [ | p params IH]; intros [ | kind kinds] i e;
-    cbn [map head_positions]; try reflexivity.
-  destruct (kind_eqb kind Value); [ | apply IH ].
-  rewrite after_alias_renamed.
-  destruct (after_alias p e) as [rest | ]; cbn [option_map]; [ | apply IH ].
-  rewrite IH. reflexivity.
-Qed.
+Lemma twin_candidates_renamed : equivariance_of twin_candidates.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite twin_candidates_renamed : equivariance.
 
-Fixpoint twin_candidates_renamed (r : renaming) (e : expr) {struct e} :
-  twin_candidates (rename_expr r e) = rename_keyed r (twin_candidates e)
-with handler_twin_candidates_renamed (r : renaming) (k : continuation)
-    (h : continuation_handler) {struct h} :
-  handler_twin_candidates (rename_continuation r k) (rename_handler r h)
-  = rename_keyed r (handler_twin_candidates k h).
-Proof.
-  - destruct e as [y kind d body | bindings body | k' hh body | handlers body
-                  | ap | ac | scrutinee arms | ];
-      cbn [rename_expr twin_candidates]; try reflexivity.
-    + apply twin_candidates_renamed.
-    + apply twin_candidates_renamed.
-    + rewrite handler_twin_candidates_renamed, twin_candidates_renamed,
-        rename_keyed_app.
-      reflexivity.
-    + rewrite twin_candidates_renamed, rename_keyed_app. f_equal.
-      induction handlers as [ | [k' hh] handlers IH]; [ reflexivity | ].
-      cbn [map flat_map].
-      rewrite handler_twin_candidates_renamed, IH, rename_keyed_app.
-      reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler handler_twin_candidates].
-    rewrite head_positions_renamed, twin_candidates_renamed. reflexivity.
-Qed.
+Lemma twin_blame_renamed : equivariance_of twin_blame.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite twin_blame_renamed : equivariance.
 
-Fixpoint twin_blame_renamed (r : renaming) (sites active : positions)
-    (e : expr) {struct e} :
-  twin_blame (rename_keyed r sites) (rename_keyed r active) (rename_expr r e)
-  = rename_keyed r (twin_blame sites active e)
-with twin_handler_blame_renamed (r : renaming) (sites active : positions)
-    (k : continuation) (h : continuation_handler) {struct h} :
-  twin_handler_blame (rename_keyed r sites) (rename_keyed r active)
-    (rename_continuation r k) (rename_handler r h)
-  = rename_keyed r (twin_handler_blame sites active k h).
-Proof.
-  - destruct e as [y kind d body | bindings body | k' hh body | handlers body
-                  | ap | ac | scrutinee arms | ];
-      cbn [rename_expr twin_blame]; try reflexivity.
-    + apply twin_blame_renamed.
-    + apply twin_blame_renamed.
-    + rewrite positions_of_renamed, twin_handler_blame_renamed,
-        rename_keyed_app.
-      rewrite
-        <- (twin_blame_renamed r sites
-              ((k', positions_of sites k') :: active)).
-      reflexivity.
-    + fold (rename_handlers r handlers).
-      rewrite active_under_renamed, twin_blame_renamed, rename_keyed_app.
-      f_equal.
-      generalize (active_under sites handlers active). intros active'.
-      unfold rename_handlers.
-      induction handlers as [ | [k' hh] handlers IH]; [ reflexivity | ].
-      cbn [map flat_map].
-      rewrite twin_handler_blame_renamed, IH, rename_keyed_app. reflexivity.
-    + cbn [rename_apply ap_continuation ap_exn_continuation].
-      rewrite !all_of_renamed, rename_keyed_app. reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler twin_handler_blame].
-    rewrite positions_of_renamed, handler_twins_fit_renamed,
-      twin_blame_renamed, rename_keyed_app.
-    f_equal.
-    destruct (handler_twins_fit (positions_of sites k) params handler);
-      [ reflexivity | ].
-    unfold rename_keyed. rewrite map_map. reflexivity.
-Qed.
+Lemma twin_blame_at_start (r : renaming) (sites : positions) (e : expr) :
+  twin_blame (rename_keyed r sites) [] (rename_expr r e)
+  = rename_keyed r (twin_blame sites [] e).
+Proof. exact (twin_blame_renamed r sites [] e). Qed.
 
-Lemma twin_origin_renamed (r : renaming) (sites new : positions)
-    (k : continuation) (u : nat) :
-  twin_origin (rename_keyed r sites) (rename_keyed r new)
-    (rename_continuation r k, u)
-  = rename_keyed r (twin_origin sites new (k, u)).
-Proof.
-  unfold twin_origin. rewrite !positions_of_renamed.
-  destruct (positions_of new k) as [ | n rest]; [ reflexivity | ].
-  destruct (nth_error (positions_of sites k) (u - n)); reflexivity.
-Qed.
+Lemma blame_at_start (r : renaming) (sites : positions) (e : expr) :
+  blame (rename_keyed r sites) [] [] [] (rename_expr r e)
+  = rename_keyed r (blame sites [] [] [] e).
+Proof. exact (blame_renamed r sites [] [] [] e). Qed.
+#[local] Hint Rewrite twin_blame_at_start blame_at_start : equivariance.
 
-Lemma twin_origins_renamed (r : renaming) (sites new : positions)
-    (refused : list (continuation * nat)) :
-  flat_map (twin_origin (rename_keyed r sites) (rename_keyed r new))
-    (rename_keyed r refused)
-  = rename_keyed r (flat_map (twin_origin sites new) refused).
-Proof.
-  induction refused as [ | [k u] refused IH]; [ reflexivity | ].
-  change (rename_keyed r ((k, u) :: refused))
-    with ((rename_continuation r k, u) :: rename_keyed r refused).
-  cbn [flat_map]. rewrite twin_origin_renamed, IH, rename_keyed_app.
-  reflexivity.
-Qed.
+(* [twin_settle] goes on at the positions pruned by a list of refused
+   positions that it has taken apart, or by the origins of one. The
+   step for it: the list on the left is the list on the right renamed
+   (the tactic shows that), and then the law of [prune] applies. *)
+#[local] Arguments prune : simpl never.
+#[local] Arguments twin_origin : simpl never.
+#[local] Ltac eqv_extra ::=
+  lazymatch goal with
+  | |- twin_settle ?fuel (prune ?l' (rename_keyed ?r ?sites)) _
+       = _ (twin_settle ?fuel (prune ?l ?sites) _) =>
+    replace l' with (rename_keyed r l);
+    [ rewrite prune_renamed | symmetry ]
+  end.
 
-Lemma twin_settle_renamed (r : renaming) (fuel : nat) :
-  ∀ (sites : positions) (e : expr),
-    twin_settle fuel (rename_keyed r sites) (rename_expr r e)
-    = rename_keyed r (twin_settle fuel sites e).
-Proof.
-  induction fuel as [ | fuel IH]; intros sites e; [ reflexivity | ].
-  cbn [twin_settle].
-  rewrite (twin_blame_renamed r sites [] e : twin_blame _ [] _ = _).
-  destruct (twin_blame sites [] e) as [ | refused0 refused] eqn:Hblame.
-  - cbn [rename_keyed map].
-    rewrite twin_sites_renamed,
-      (twin_expr_renamed r sites [] [] [] e : twin_expr _ [] [] [] _ = _),
-      (blame_renamed r (twin_sites sites e) [] [] []
-         (twin_expr sites [] [] [] e)
-       : blame _ [] [] [] _ = _).
-    destruct (blame (twin_sites sites e) [] [] [] (twin_expr sites [] [] [] e))
-      as [ | b0 bs] eqn:Hb; [ reflexivity | ].
-    exact
-      (eq_trans
-         (f_equal (fun s => twin_settle fuel s (rename_expr r e))
-            (eq_trans
-               (f_equal (fun l => prune l (rename_keyed r sites))
-                  (twin_origins_renamed r sites (twin_sites sites e)
-                     (b0 :: bs)))
-               (prune_renamed r _ sites)))
-         (IH _ e)).
-  - cbn [rename_keyed map].
-    exact
-      (eq_trans
-         (f_equal (fun s => twin_settle fuel s (rename_expr r e))
-            (prune_renamed r (refused0 :: refused) sites))
-         (IH (prune (refused0 :: refused) sites) e)).
-Qed.
+Lemma twin_settle_renamed : equivariance_of twin_settle.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite twin_settle_renamed : equivariance.
 
-Lemma twin_positions_renamed (r : renaming) (e : expr) :
-  twin_positions (rename_expr r e) = rename_keyed r (twin_positions e).
-Proof.
-  unfold twin_positions.
-  rewrite twin_candidates_renamed, count_positions_renamed.
-  apply twin_settle_renamed.
-Qed.
+Lemma twin_positions_renamed : equivariance_of twin_positions.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite twin_positions_renamed : equivariance.
 
 Lemma twin_params_renamed : rewrite_equivariant twin_params.
-Proof.
-  intros r e. unfold twin_params.
-  rewrite twin_candidates_renamed, count_positions_renamed.
-  destruct (count_positions (twin_candidates e)); [ reflexivity | ].
-  rewrite twin_positions_renamed. apply twin_untag_at_renamed.
-Qed.
+Proof. equivariance. Qed.
 
 (* ======================================================================== *)
 (* The pass keeps scope                                                     *)
