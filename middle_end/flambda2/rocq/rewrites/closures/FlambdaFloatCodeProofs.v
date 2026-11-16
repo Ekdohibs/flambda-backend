@@ -35,7 +35,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaPrimitiveProofs FlambdaSemanticsSpec FlambdaSemanticsProofs
   FlambdaContextSpec FlambdaContextProofs FlambdaStaticSpec
   FlambdaStaticProofs FlambdaNominalSpec FlambdaNormaliseSpec
-  FlambdaNormaliseProofs FlambdaFloatCodeSpec.
+  FlambdaNormaliseProofs FlambdaFloatCodeSpec FlambdaEquivarianceTactic.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -350,51 +350,31 @@ Proof. exact float_code_equivalent_aux. Qed.
 (* Renaming                                                                 *)
 (* ======================================================================== *)
 
-Lemma binds_code_rename (r : renaming) (binding : static_binding) :
-  binds_code (rename_static_binding r binding) = binds_code binding.
-Proof. destruct binding; reflexivity. Qed.
-
-Lemma filter_rename_bindings (r : renaming) (f : static_binding -> bool)
-    (bindings : list static_binding) :
-  (∀ binding : static_binding,
-    f (rename_static_binding r binding) = f binding) ->
-  filter f (map (rename_static_binding r) bindings)
-  = map (rename_static_binding r) (filter f bindings).
-Proof.
-  intros Hf.
-  induction bindings as [ | binding bindings IH]; [ reflexivity | ].
-  cbn [map filter]. rewrite Hf, IH. destruct (f binding); reflexivity.
-Qed.
+(* The law of the pass is proved from the definitions by [equivariance]
+   (FlambdaEquivarianceTactic.v). [float_over] takes a function, the
+   binder that the code is taken over, and the tactic states no law of
+   such a function: its law is by hand, with a premise on the two
+   binders, and a rule gives it to the tactic. The three lemmas that its
+   proof rewrites with are proved by the tactic. *)
 
 Lemma filter_code_rename (r : renaming) (bindings : list static_binding) :
   filter binds_code (map (rename_static_binding r) bindings)
   = map (rename_static_binding r) (filter binds_code bindings).
-Proof. apply filter_rename_bindings, binds_code_rename. Qed.
+Proof. equivariance. Qed.
 
 Lemma filter_rest_rename (r : renaming) (bindings : list static_binding) :
   filter (fun binding => negb (binds_code binding))
     (map (rename_static_binding r) bindings)
   = map (rename_static_binding r)
       (filter (fun binding => negb (binds_code binding)) bindings).
-Proof.
-  apply filter_rename_bindings. intros binding. cbv beta.
-  rewrite binds_code_rename. reflexivity.
-Qed.
-
-Lemma code_first_rename (r : renaming) (bindings : list static_binding) :
-  code_first (map (rename_static_binding r) bindings)
-  = map (rename_static_binding r) (code_first bindings).
-Proof.
-  unfold code_first.
-  rewrite map_app, filter_code_rename, filter_rest_rename. reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 Lemma let_static_if_any_rename (r : renaming)
     (bindings : list static_binding) (body : expr) :
   rename_expr r (let_static_if_any bindings body)
   = let_static_if_any (map (rename_static_binding r) bindings)
       (rename_expr r body).
-Proof. destruct bindings; reflexivity. Qed.
+Proof. equivariance. Qed.
 
 Lemma float_over_rename (r : renaming) (wrap wrap' : expr -> expr) :
   (∀ e : expr, rename_expr r (wrap e) = wrap' (rename_expr r e)) ->
@@ -413,26 +393,12 @@ Proof.
   reflexivity.
 Qed.
 
-Fixpoint float_code_rename (r : renaming) (e : expr) {struct e} :
-  rename_expr r (float_code e) = float_code (rename_expr r e).
-Proof.
-  destruct e
-    as [ x kind d body | bindings body | k [params metadata handler] body
-       | handlers body | ap | ac | scrutinee arms | ];
-    try reflexivity.
-  - cbn [float_code rename_expr]. rewrite <- float_code_rename.
-    apply float_over_rename. intros e'. reflexivity.
-  - cbn [float_code rename_expr]. rewrite <- float_code_rename.
-    destruct (float_code body)
-      as [ x kind' d body' | bindings' body' | k h body' | handlers body' | ap
-         | ac | scrutinee arms | ];
-      cbn [rename_expr]; rewrite <- ?map_app, code_first_rename; reflexivity.
-  - cbn [float_code rename_expr rename_handler].
-    rewrite <- !float_code_rename.
-    apply float_over_rename. intros e'. reflexivity.
-  - cbn [float_code rename_expr]. rewrite <- float_code_rename.
-    apply float_over_rename. intros e'. reflexivity.
-Qed.
+#[local] Ltac eqv_extra ::=
+  match goal with
+  | |- float_over _ (rename_expr ?r ?inner)
+       = rename_expr ?r (float_over _ ?inner) =>
+    symmetry; apply float_over_rename; intros; reflexivity
+  end.
 
 Theorem float_code_equivariant : float_code_equivariant_statement.
-Proof. exact float_code_rename. Qed.
+Proof. equivariance. Qed.
