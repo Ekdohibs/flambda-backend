@@ -3850,11 +3850,9 @@ Proof. intros r e. exact (drop_params_equivariant_aux r e []). Qed.
    Four laws that are proved by hand are given to the tactic: three
    that are above, and that of [var_free_b], which is in
    FlambdaValidatorEquivarianceBaseProofs.v. The tactic does not derive
-   those of [used_params] and of [keep_all_or]; with the law of
-   [var_free_b] that it derives, the proof is not complete; and without
-   that of [returned_to] it leaves the goal. *)
-From OxCamlFlambda2 Require Import FlambdaEquivarianceTactic.
-
+   those of [used_params] and of [keep_all_or], and without that of
+   [returned_to] it leaves the goal. It derives that of [var_free_b];
+   the hint saves the time of that derivation. *)
 Section Dead_params.
 
 #[local] Hint Rewrite @keep_all_or_map var_free_b_equivariant_aux
