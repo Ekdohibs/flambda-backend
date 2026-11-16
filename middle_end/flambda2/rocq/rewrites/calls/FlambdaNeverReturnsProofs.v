@@ -38,7 +38,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaNormaliseProofs FlambdaUnusedContsSpec FlambdaUnusedContsProofs
   FlambdaAlphaSpec FlambdaAlphaProofs FlambdaEquivarianceSpec
   FlambdaEquivarianceProofs FlambdaValidatorEquivarianceBaseProofs
-  FlambdaNeverReturnsSpec.
+  FlambdaEquivarianceTactic FlambdaNeverReturnsSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -440,157 +440,57 @@ Qed.
 (* The rewrite commutes with renaming                                       *)
 (* ======================================================================== *)
 
-(* As FlambdaValidatorEquivarianceProofs.remove_unused_conts_equivariant,
-   which is proved after this file. *)
-Fixpoint remove_unused_conts_renamed (r : renaming) (e : expr) :
-  remove_unused_conts (rename_expr r e)
-  = rename_expr r (remove_unused_conts e)
-with remove_unused_conts_in_handler_renamed (r : renaming)
-    (h : continuation_handler) :
-  remove_unused_conts_in_handler (rename_handler r h)
-  = rename_handler r (remove_unused_conts_in_handler h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      simpl; try reflexivity.
-    + rewrite remove_unused_conts_renamed. reflexivity.
-    + rewrite remove_unused_conts_renamed. reflexivity.
-    + rewrite remove_unused_conts_renamed, cont_free_b_equivariant_aux,
-        remove_unused_conts_in_handler_renamed.
-      destruct (cont_free_b k (remove_unused_conts body)); reflexivity.
-    + rewrite remove_unused_conts_renamed. reflexivity.
-  - destruct h as [params metadata handler]. simpl.
-    rewrite remove_unused_conts_renamed. reflexivity.
-Qed.
+(* The law of the rewrite is proved from the definitions by the tactic
+   of FlambdaEquivarianceTactic.v, which states and proves by itself
+   the laws of the functions that the rewrite is made of, the removal
+   of unused continuations among them. It is given three things.
 
-Lemma never_returns_b_equivariant (r : renaming) (ap : apply_expr)
-    (c : code) :
-  never_returns_b (rename_apply r ap) (rename_code r c)
-  = never_returns_b ap c.
-Proof.
-  destruct c as [params my_closure ret exn metadata body].
-  unfold never_returns_b. simpl.
-  rewrite remove_unused_conts_renamed, cont_free_b_equivariant_aux,
-    rename_continuation_eqb.
-  reflexivity.
-Qed.
+   Computation is told to unfold [never_returns_b], which makes the
+   proof quicker, and not to unfold [unarize]: unfolded on one side
+   only, it leaves the two sides with two forms of one test of the
+   parameters of the handler, which the tactic does not take for the
+   same.
 
-Lemma invalid_params_equivariant (r : renaming) (c : code) (count : nat) :
-  invalid_params (rename_code r c) count
-  = option_map (map (rename_variable r)) (invalid_params c count).
-Proof.
-  destruct c as [params my_closure ret exn metadata body].
-  unfold invalid_params. simpl. rewrite length_map.
-  destruct (Nat.leb count (S (length params))); [ | reflexivity ].
-  simpl.
-  change (rename_variable r my_closure :: map (rename_variable r) params)
-    with (map (rename_variable r) (my_closure :: params)).
-  rewrite firstn_map. reflexivity.
-Qed.
+   At a [Let_static] the body is rewritten with the code of the
+   bindings as the rewrite leaves them ([codes_of] of a mapped list).
+   The code known there commutes with renaming where the rewrite of
+   each binding does, which the induction gives: the law is stated
+   with that premise and proved by hand, and the tactic is told how to
+   show the premise ([eqv_premise]). *)
+#[local] Arguments never_returns_b ap c /.
+#[local] Arguments unarize : simpl never.
 
-Lemma cut_return_equivariant (r : renaming) (known : list (code_id * code))
-    (ap : apply_expr) :
-  cut_return (map_values (rename_code r) known) (rename_apply r ap)
-  = rename_expr r (cut_return known ap).
-Proof.
-  unfold cut_return.
-  replace (ap_call_kind (rename_apply r ap)) with (ap_call_kind ap)
-    by reflexivity.
-  destruct (ap_call_kind ap) as [called | ]; [ | reflexivity ].
-  rewrite lookup_map_values.
-  destruct (lookup called known) as [c | ]; cbn [option_map];
-    [ | reflexivity ].
-  replace (ap_return_arity (rename_apply r ap)) with (ap_return_arity ap)
-    by reflexivity.
-  rewrite invalid_params_equivariant, never_returns_b_equivariant.
-  destruct (invalid_params c (length (unarize (ap_return_arity ap))))
-    as [params | ];
-    cbn [option_map]; [ | reflexivity ].
-  destruct (never_returns_b ap c); reflexivity.
-Qed.
-
-Lemma returns_to_invalid_equivariant (r : renaming) (k : continuation)
-    (h : continuation_handler) (body : expr) :
-  returns_to_invalid (rename_continuation r k) (rename_handler r h)
-    (rename_expr r body)
-  = returns_to_invalid k h body.
-Proof.
-  destruct h as [params metadata handler].
-  destruct handler; simpl; try reflexivity.
-  destruct body; simpl; try reflexivity.
-  apply rename_continuation_eqb.
-Qed.
-
-Fixpoint cut_returns_equivariant_aux (r : renaming) (e : expr) :
-  ∀ known : list (code_id * code),
-    cut_returns (map_values (rename_code r) known) (rename_expr r e)
-    = rename_expr r (cut_returns known e)
-with cut_returns_in_handler_equivariant (r : renaming)
-    (h : continuation_handler) :
-  ∀ known : list (code_id * code),
-    cut_returns_in_handler (map_values (rename_code r) known)
-      (rename_handler r h)
-    = rename_handler r (cut_returns_in_handler known h)
-with cut_returns_in_binding_equivariant (r : renaming)
-    (binding : static_binding) :
-  ∀ known : list (code_id * code),
-    cut_returns_in_binding (map_values (rename_code r) known)
+Lemma codes_of_cut_returns_renamed (r : renaming)
+    (inner known : list (code_id * code)) (bindings : list static_binding) :
+  (∀ binding : static_binding,
+    In binding bindings ->
+    cut_returns_in_binding (map_values (rename_code r) inner)
       (rename_static_binding r binding)
-    = rename_static_binding r (cut_returns_in_binding known binding)
-with cut_returns_in_code_equivariant (r : renaming) (c : code) :
-  ∀ known : list (code_id * code),
-    cut_returns_in_code (map_values (rename_code r) known) (rename_code r c)
-    = rename_code r (cut_returns_in_code known c).
+    = rename_static_binding r (cut_returns_in_binding inner binding)) ->
+  codes_of
+    (map
+       (fun binding =>
+          cut_returns_in_binding (map_values (rename_code r) inner)
+            (rename_static_binding r binding))
+       bindings)
+    (map_values (rename_code r) known)
+  = map_values (rename_code r)
+      (codes_of (map (cut_returns_in_binding inner) bindings) known).
 Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      intros known;
-      [ | | | | exact (cut_return_equivariant r known ap) | | | ];
-      try reflexivity.
-    + (* Let *)
-      simpl. rewrite cut_returns_equivariant_aux. reflexivity.
-    + (* Let_static: the code known in the body is that of the group,
-         rewritten *)
-      simpl.
-      assert (Hbindings :
-        map (cut_returns_in_binding (map_values (rename_code r) known))
-          (map (rename_static_binding r) bindings)
-        = map (rename_static_binding r)
-            (map (cut_returns_in_binding known) bindings)).
-      { induction bindings as [ | binding bindings IH]; simpl;
-          [ reflexivity | ].
-        rewrite (cut_returns_in_binding_equivariant r binding), IH.
-        reflexivity. }
-      rewrite Hbindings, codes_of_equivariant, cut_returns_equivariant_aux.
-      reflexivity.
-    + (* Let_cont_non_recursive *)
-      change (rename_expr r (Let_cont_non_recursive k h body))
-        with (Let_cont_non_recursive (rename_continuation r k)
-                (rename_handler r h) (rename_expr r body)).
-      cbn [cut_returns]. rewrite returns_to_invalid_equivariant.
-      destruct (returns_to_invalid k h body); [ reflexivity | ].
-      rewrite cut_returns_in_handler_equivariant,
-        cut_returns_equivariant_aux.
-      reflexivity.
-    + (* Let_cont_recursive *)
-      simpl. rewrite cut_returns_equivariant_aux. f_equal.
-      induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
-      rewrite (cut_returns_in_handler_equivariant r h), IH.
-      reflexivity.
-  - destruct h as [params metadata handler]. intros known. simpl.
-    rewrite cut_returns_equivariant_aux. reflexivity.
-  - destruct binding as [id c | id | sym const]; intros known; simpl;
-      try reflexivity.
-    rewrite cut_returns_in_code_equivariant. reflexivity.
-  - destruct c as [params my_closure ret exn metadata body]. intros known.
-    simpl.
-    rewrite cut_returns_equivariant_aux. reflexivity.
+  intros Hbindings. rewrite <- codes_of_equivariant, map_map. f_equal.
+  apply map_ext_in. exact Hbindings.
 Qed.
+
+#[local] Ltac eqv_premise :=
+  lazymatch goal with
+  | |- forall x, In x ?l -> _ => eqv_enter l; intros; solve [ eqv_core ]
+  | |- _ => intros; solve [ eqv_core ]
+  end.
+#[local] Hint Rewrite codes_of_cut_returns_renamed using eqv_premise
+  : equivariance.
 
 Theorem cut_returns_equivariant : cut_returns_equivariant_statement.
-Proof. intros r known e. apply cut_returns_equivariant_aux. Qed.
+Proof. equivariance. Qed.
 
 (* ======================================================================== *)
 (* Two examples                                                             *)
