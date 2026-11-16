@@ -51,7 +51,8 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaUnusedParamsSpec FlambdaValidateSpec
   FlambdaValidatorEquivarianceSpec FlambdaScopedProofs
   FlambdaKeepsScopeProofs FlambdaLoopsScopeSpec FlambdaLoopsScopeProofs
-  FlambdaUnboxVariantsSpec FlambdaValidateScopeSpec.
+  FlambdaUnboxVariantsSpec FlambdaEquivarianceTactic
+  FlambdaValidateScopeSpec.
 From OxCamlFlambda2 Require FlambdaUnboxParamsNamesProofs.
 From OxCamlFlambda2 Require Import FlambdaUnboxParamsSpec
   FlambdaUnboxInScopeSpec FlambdaUnboxInScopeProofs
@@ -684,40 +685,9 @@ Proof.
   reflexivity.
 Qed.
 
-Lemma all_among_rename_variable (r : renaming) (xs ys : list variable) :
-  FlambdaMapSpec.all_among (map (rename_variable r) xs)
-    (map (rename_variable r) ys)
-  = FlambdaMapSpec.all_among xs ys.
-Proof.
-  unfold FlambdaMapSpec.all_among.
-  induction xs as [ | x xs IH]; [ reflexivity | ].
-  cbn [map forallb]. rewrite among_rename_variable, IH. reflexivity.
-Qed.
-
-Lemma all_among_rename_continuation (r : renaming)
-    (ks js : list continuation) :
-  FlambdaMapSpec.all_among (map (rename_continuation r) ks)
-    (map (rename_continuation r) js)
-  = FlambdaMapSpec.all_among ks js.
-Proof.
-  unfold FlambdaMapSpec.all_among.
-  induction ks as [ | k ks IH]; [ reflexivity | ].
-  cbn [map forallb]. rewrite among_rename_continuation, IH. reflexivity.
-Qed.
-
-Lemma scope_kept_renamed (r : renaming) (e e' : expr) :
-  scope_kept (rename_expr r e) (rename_expr r e') = scope_kept e e'.
-Proof.
-  unfold scope_kept.
-  rewrite code_closed_renamed, !free_variables_of_expr_renamed,
-    !free_continuations_of_expr_renamed, all_among_rename_variable,
-    all_among_rename_continuation.
-  reflexivity.
-Qed.
-
+(* The law is proved from the definitions by the tactic of
+   FlambdaEquivarianceTactic.v, which states and proves by itself the
+   law of the test [scope_kept], and uses the premise of the
+   statement, that the rewrite given commutes with renaming. *)
 Theorem guard_scope_equivariant : guard_scope_equivariant_statement.
-Proof.
-  intros f Hf r e. unfold guard_scope. cbv zeta.
-  rewrite Hf, code_closed_renamed, scope_kept_renamed.
-  destruct (negb (code_closed e) || scope_kept e (f e)); reflexivity.
-Qed.
+Proof. equivariance. Qed.
