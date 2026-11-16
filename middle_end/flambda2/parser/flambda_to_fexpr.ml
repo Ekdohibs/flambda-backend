@@ -352,10 +352,27 @@ let or_variable f env (ov : _ Or_variable.t) : _ Fexpr.or_variable =
 
 let static_const env (sc : Static_const.t) : Fexpr.static_data =
   match sc with
-  | Block (tag, mutability, _shape, fields) ->
+  | Block (tag, mutability, shape, fields) ->
     let tag = tag |> Tag.Scannable.to_int in
     let elements = List.map (field_of_block env) fields in
-    Block { tag; mutability; elements }
+    (* The kinds of the fields are written for a block that has unboxed fields:
+       a value for each field of the value prefix, and the kind of each field of
+       the flat suffix. The reader makes the shape from them. *)
+    let kinds : Fexpr.kind_with_subkind list option =
+      match shape with
+      | Value_only -> None
+      | Mixed_record shape ->
+        Some
+          (List.map
+             (fun (kind : Flambda_kind.t) : Fexpr.kind_with_subkind ->
+               match kind with
+               | Value -> Value Anything
+               | Naked_number kind -> Naked_number kind
+               | Region | Rec_info ->
+                 Misc.fatal_error "A field of a block of the kind of no field")
+             (Array.to_list (Flambda_kind.Mixed_block_shape.field_kinds shape)))
+    in
+    Block { tag; mutability; kinds; elements }
   | Set_of_closures _ -> assert false
   | Boxed_float32 f -> Boxed_float32 (or_variable float32 env f)
   | Boxed_float f -> Boxed_float (or_variable float env f)

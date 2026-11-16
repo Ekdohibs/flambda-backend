@@ -93,6 +93,10 @@
 ;; fields, from which the reader makes the shape of the block. The text is
 ;; the term.
 ;;
+;; constant_record_with_an_unboxed_field: a static block with an unboxed
+;; field, the kinds of whose fields the text writes after its tag. The text
+;; is the term.
+;;
 ;; partial_application_of_unboxed_float: the text is not read back.
 ;;
 ;; interface_only, type_error: the compiler does not reach the middle end.
@@ -176,6 +180,22 @@
   (= %{context_name} "main"))
  (action
   (diff length_of_bytes.expected length_of_bytes.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   constant_record_with_an_unboxed_field.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     %{dep:constant_record_with_an_unboxed_field.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff constant_record_with_an_unboxed_field.expected constant_record_with_an_unboxed_field.output)))
 
 (rule
  (enabled_if

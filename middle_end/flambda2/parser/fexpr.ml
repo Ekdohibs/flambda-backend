@@ -141,6 +141,9 @@ type static_data =
   | Block of
       { tag : tag_scannable;
         mutability : mutability;
+        kinds : kind_with_subkind list option;
+            (* The kinds of the fields, for a block with unboxed fields; [None]
+               for a block whose fields are all values. *)
         elements : field_of_block list
       }
   | Boxed_float32 of float or_variable

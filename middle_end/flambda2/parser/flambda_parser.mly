@@ -910,9 +910,10 @@ vec512:
  }}
 ;
 static_data:
-  | STATIC_CONST_BLOCK; m = mutability; tag = tag; LPAREN;
+  | STATIC_CONST_BLOCK; m = mutability; tag = tag;
+    kinds = option(preceded(KWD_OF, kinds_with_subkinds_nonempty)); LPAREN;
     elements = separated_list(COMMA, field_of_block); RPAREN
-    { (Block { tag; mutability = m; elements } : static_data) }
+    { (Block { tag; mutability = m; kinds; elements } : static_data) }
   | f = FLOAT {
     match snd f with
     | None -> Boxed_float (Const (fst f))

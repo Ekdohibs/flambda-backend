@@ -645,11 +645,34 @@ let rec expr env acc (e : Fexpr.expr) : _ * Flambda.Expr.t =
       match b with
       | Data { symbol = _; defining_expr = def } -> (
         match def with
-        | Block { tag; mutability; elements = args } ->
+        | Block { tag; mutability; kinds; elements = args } ->
+          (* The text writes the kinds of the fields of a block that has unboxed
+             fields, and not its shape: the shape is the one that the kinds
+             give. *)
+          let shape : Flambda_kind.Scannable_block_shape.t =
+            match kinds with
+            | None -> Value_only
+            | Some kinds -> (
+              if List.compare_lengths kinds args <> 0
+              then
+                Misc.fatal_errorf
+                  "A static block with %d fields and the kinds of %d"
+                  (List.length args) (List.length kinds);
+              match
+                Shape_of_kinds.scannable
+                  (List.map
+                     (fun kind ->
+                       Flambda_kind.With_subkind.kind
+                         (value_kind_with_subkind kind))
+                     kinds)
+              with
+              | Ok shape -> shape
+              | Error reason ->
+                Misc.fatal_errorf "The fields of a static block: %s" reason)
+          in
           let tag = tag_scannable tag in
           static_const
-            (SC.block tag mutability Value_only
-               (List.map (field_of_block env) args))
+            (SC.block tag mutability shape (List.map (field_of_block env) args))
         | Boxed_float32 f ->
           static_const (SC.boxed_float32 (or_variable float32 env f))
         | Boxed_float f ->

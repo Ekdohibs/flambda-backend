@@ -1011,6 +1011,7 @@ and static_bindings env (bindings : Model.static_binding list) :
           Block
             { tag = int_of_z tag;
               mutability = Immutable;
+              kinds = None;
               elements = List.map static_field fields
             }
       }

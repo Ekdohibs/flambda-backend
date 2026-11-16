@@ -409,9 +409,15 @@ let or_variable const ppf : _ or_variable -> unit = function
   | Var v -> variable ppf v
 
 let static_data ppf : static_data -> unit = function
-  | Block { tag; mutability = mut; elements = elts } ->
-    Format.fprintf ppf "Block %a%i (@[<hv>%a@])" (mutability ~space:After) mut
-      tag
+  | Block { tag; mutability = mut; kinds; elements = elts } ->
+    let pp_kinds ppf () =
+      match kinds with
+      | None -> ()
+      | Some kinds ->
+        Format.fprintf ppf " of @[%a@]" (pp_star_list kind_with_subkind) kinds
+    in
+    Format.fprintf ppf "Block %a%i%a (@[<hv>%a@])" (mutability ~space:After) mut
+      tag pp_kinds ()
       (pp_comma_list field_of_block)
       elts
   | Boxed_float32 (Const f) -> float32 ppf f
