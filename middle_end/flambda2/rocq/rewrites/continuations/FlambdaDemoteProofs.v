@@ -35,7 +35,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaSemanticsProofs FlambdaNormaliseProofs FlambdaContextSpec
   FlambdaContextProofs FlambdaContAlikeProofs FlambdaNominalSpec
   FlambdaNominalProofs FlambdaWellFormedSpec FlambdaTrapSpec
-  FlambdaTrapProofs FlambdaDemoteSpec.
+  FlambdaTrapProofs FlambdaEquivarianceTactic FlambdaDemoteSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -2514,203 +2514,29 @@ Qed.
 (* The rewrite commutes with renaming                                       *)
 (* ======================================================================== *)
 
-(* Each test of the rewrite compares two names, and a renaming is
-   injective: so each answers of the renamed names what it answers of
-   the names. *)
-Lemma among_scope_renamed (r : renaming) (k : continuation)
-    (scope : list continuation) :
-  among (rename_continuation r k) (map (rename_continuation r) scope)
-  = among k scope.
-Proof.
-  unfold among. induction scope as [ | k' scope IH]; simpl; [ reflexivity | ].
-  rewrite rename_continuation_eqb, IH. reflexivity.
-Qed.
+(* The law of the rewrite is proved from the definitions by the tactic
+   of FlambdaEquivarianceTactic.v, which states and proves by itself
+   the laws of the tests and of the functions that the rewrite is made
+   of. Each test compares two names, and a renaming is injective: so
+   each answers of the renamed names what it answers of the names.
 
-Lemma traps_rename (r : renaming) (k : continuation) (ac : apply_cont) :
-  traps (rename_continuation r k) (rename_apply_cont r ac) = traps k ac.
-Proof.
-  unfold traps. simpl.
-  destruct (ac_trap_action ac) as [[k' | k' kind] | ]; simpl;
-    [ apply rename_continuation_eqb | apply rename_continuation_eqb
-    | reflexivity ].
-Qed.
+   The tactic is given one law, in the form that computation leaves:
+   the continuations that renamed handlers bind are those that the
+   handlers bind, renamed. They are the scope of the handlers of a
+   [Let_cont_recursive]. *)
+Lemma map_fst_renamed_handlers (r : renaming)
+    (handlers : list (continuation * continuation_handler)) :
+  map
+    (fun x : continuation * continuation_handler =>
+       fst (let '(k, h) := x in (rename_continuation r k, rename_handler r h)))
+    handlers
+  = map (fun x => rename_continuation r (fst x)) handlers.
+Proof. apply map_ext. intros [k h]. reflexivity. Qed.
 
-Fixpoint called_with_exn_renamed (r : renaming) (k : continuation)
-    (e : expr) :
-  called_with_exn (rename_continuation r k) (rename_expr r e)
-  = called_with_exn k e
-with handler_called_with_exn_renamed (r : renaming) (k : continuation)
-    (h : continuation_handler) :
-  handler_called_with_exn (rename_continuation r k) (rename_handler r h)
-  = handler_called_with_exn k h.
-Proof.
-  - destruct e
-      as [x kind d body | bindings body | k' h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      simpl; try reflexivity.
-    + apply called_with_exn_renamed.
-    + apply called_with_exn_renamed.
-    + rewrite handler_called_with_exn_renamed, called_with_exn_renamed.
-      reflexivity.
-    + rewrite called_with_exn_renamed. f_equal.
-      induction handlers as [ | [k' h] handlers IH]; simpl; [ reflexivity | ].
-      rewrite (handler_called_with_exn_renamed r k h), IH. reflexivity.
-    + apply rename_continuation_eqb.
-  - destruct h as [params metadata handler]. simpl.
-    apply called_with_exn_renamed.
-Qed.
-
-Fixpoint binds_continuation_renamed (r : renaming) (k : continuation)
-    (e : expr) :
-  binds_continuation (rename_continuation r k) (rename_expr r e)
-  = binds_continuation k e
-with handler_binds_continuation_renamed (r : renaming) (k : continuation)
-    (h : continuation_handler) :
-  handler_binds_continuation (rename_continuation r k) (rename_handler r h)
-  = handler_binds_continuation k h.
-Proof.
-  - destruct e
-      as [x kind d body | bindings body | k' h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      simpl; try reflexivity.
-    + apply binds_continuation_renamed.
-    + apply binds_continuation_renamed.
-    + rewrite rename_continuation_eqb, handler_binds_continuation_renamed,
-        binds_continuation_renamed.
-      reflexivity.
-    + rewrite binds_continuation_renamed. f_equal.
-      induction handlers as [ | [k' h] handlers IH]; simpl; [ reflexivity | ].
-      rewrite rename_continuation_eqb,
-        (handler_binds_continuation_renamed r k h), IH.
-      reflexivity.
-  - destruct h as [params metadata handler]. simpl.
-    apply binds_continuation_renamed.
-Qed.
-
-Lemma rename_handler_is_exn_handler (r : renaming)
-    (h : continuation_handler) :
-  handler_is_exn_handler (rename_handler r h) = handler_is_exn_handler h.
-Proof. destruct h. reflexivity. Qed.
-
-Lemma demotable_renamed (r : renaming) (scope : list continuation)
-    (k : continuation) (h : continuation_handler) (body : expr) :
-  demotable (map (rename_continuation r) scope) (rename_continuation r k)
-    (rename_handler r h) (rename_expr r body)
-  = demotable scope k h body.
-Proof.
-  unfold demotable.
-  rewrite rename_handler_is_exn_handler, called_with_exn_renamed,
-    among_scope_renamed, binds_continuation_renamed.
-  reflexivity.
-Qed.
-
-Lemma strip_trap_renamed (r : renaming) (k : continuation)
-    (ac : apply_cont) :
-  strip_trap (rename_continuation r k) (rename_apply_cont r ac)
-  = rename_apply_cont r (strip_trap k ac).
-Proof.
-  unfold strip_trap. rewrite traps_rename.
-  destruct (traps k ac); reflexivity.
-Qed.
-
-Fixpoint strip_traps_renamed (r : renaming) (k : continuation) (e : expr) :
-  strip_traps (rename_continuation r k) (rename_expr r e)
-  = rename_expr r (strip_traps k e)
-with strip_traps_handler_renamed (r : renaming) (k : continuation)
-    (h : continuation_handler) :
-  strip_traps_handler (rename_continuation r k) (rename_handler r h)
-  = rename_handler r (strip_traps_handler k h).
-Proof.
-  - destruct e
-      as [x kind d body | bindings body | k' h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      cbn [rename_expr strip_traps]; try reflexivity.
-    + rewrite strip_traps_renamed. reflexivity.
-    + rewrite strip_traps_renamed. reflexivity.
-    + rewrite strip_traps_handler_renamed, strip_traps_renamed. reflexivity.
-    + rewrite strip_traps_renamed. f_equal.
-      induction handlers as [ | [k' h] handlers IH]; cbn [map fst snd];
-        [ reflexivity | ].
-      rewrite (strip_traps_handler_renamed r k h), IH. reflexivity.
-    + rewrite strip_trap_renamed. reflexivity.
-    + f_equal.
-      induction arms as [ | [i ac] arms IH]; cbn [map fst snd];
-        [ reflexivity | ].
-      rewrite strip_trap_renamed, IH. reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler strip_traps_handler].
-    rewrite strip_traps_renamed. reflexivity.
-Qed.
-
-Lemma clear_exn_handler_renamed (r : renaming) (h : continuation_handler) :
-  clear_exn_handler (rename_handler r h)
-  = rename_handler r (clear_exn_handler h).
-Proof. destruct h. reflexivity. Qed.
-
-Fixpoint demote_handlers_renamed (r : renaming) (e : expr) :
-  ∀ scope : list continuation,
-    demote_handlers (map (rename_continuation r) scope) (rename_expr r e)
-    = rename_expr r (demote_handlers scope e)
-with demote_handlers_handler_renamed (r : renaming)
-    (h : continuation_handler) :
-  ∀ scope : list continuation,
-    demote_handlers_handler (map (rename_continuation r) scope)
-      (rename_handler r h)
-    = rename_handler r (demote_handlers_handler scope h)
-with demote_handlers_binding_renamed (r : renaming)
-    (binding : static_binding) :
-  demote_handlers_binding (rename_static_binding r binding)
-  = rename_static_binding r (demote_handlers_binding binding)
-with demote_handlers_code_renamed (r : renaming) (c : code) :
-  demote_handlers_code (rename_code r c)
-  = rename_code r (demote_handlers_code c).
-Proof.
-  - destruct e
-      as [x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      intros scope; cbn [rename_expr demote_handlers]; try reflexivity.
-    + rewrite demote_handlers_renamed. reflexivity.
-    + rewrite demote_handlers_renamed. f_equal.
-      induction bindings as [ | binding bindings IH]; cbn [map];
-        [ reflexivity | ].
-      rewrite (demote_handlers_binding_renamed r binding), IH. reflexivity.
-    + rewrite demotable_renamed.
-      change (rename_continuation r k :: map (rename_continuation r) scope)
-        with (map (rename_continuation r) (k :: scope)).
-      rewrite (demote_handlers_handler_renamed r h scope),
-        (demote_handlers_renamed r body (k :: scope)).
-      destruct (demotable scope k h body); cbn [rename_expr];
-        [ | reflexivity ].
-      rewrite strip_traps_renamed, clear_exn_handler_renamed. reflexivity.
-    + assert (Hinner :
-        map fst
-          (map (fun '(k, h) => (rename_continuation r k, rename_handler r h))
-             handlers)
-        ++ map (rename_continuation r) scope
-        = map (rename_continuation r) (map fst handlers ++ scope)).
-      { rewrite map_app. f_equal. exact (map_fst_rename_handlers r handlers). }
-      rewrite Hinner. clear Hinner.
-      generalize (map fst handlers ++ scope). intros inner.
-      rewrite (demote_handlers_renamed r body inner). f_equal.
-      induction handlers as [ | [k h] handlers IH]; cbn [map fst snd];
-        [ reflexivity | ].
-      rewrite (demote_handlers_handler_renamed r h inner), IH. reflexivity.
-  - destruct h as [params metadata handler]. intros scope.
-    cbn [rename_handler demote_handlers_handler].
-    rewrite demote_handlers_renamed. reflexivity.
-  - destruct binding as [id c | id | s const];
-      cbn [rename_static_binding demote_handlers_binding];
-      try reflexivity.
-    rewrite demote_handlers_code_renamed. reflexivity.
-  - destruct c as [params my_closure ret exn metadata body].
-    cbn [rename_code demote_handlers_code].
-    change [rename_continuation r ret; rename_continuation r exn]
-      with (map (rename_continuation r) [ret; exn]).
-    rewrite demote_handlers_renamed. reflexivity.
-Qed.
+#[local] Hint Rewrite map_fst_renamed_handlers : equivariance.
 
 Theorem demote_handlers_equivariant : demote_handlers_equivariant_statement.
-Proof. intros r scope e. exact (demote_handlers_renamed r e scope). Qed.
+Proof. equivariance. Qed.
 
 (* ======================================================================== *)
 (* The examples                                                             *)
