@@ -585,35 +585,14 @@ Theorem drop_deleted_code_equivariant :
   drop_deleted_code_equivariant_statement.
 Proof. exact drop_deleted_code_equivariant_aux. Qed.
 
-Lemma binds_code_renamed (r : renaming) (binding : static_binding) :
-  binds_code (rename_static_binding r binding) = binds_code binding.
-Proof. destruct binding; reflexivity. Qed.
-
-Lemma code_first_equivariant (r : renaming) (bindings : list static_binding) :
-  code_first (map (rename_static_binding r) bindings)
-  = map (rename_static_binding r) (code_first bindings).
-Proof.
-  unfold code_first. rewrite map_app.
-  rewrite (filter_map_with _ _ binds_code) by apply binds_code_renamed.
-  rewrite (filter_map_with _ _ (fun binding => negb (binds_code binding)))
-    by (intros binding; rewrite binds_code_renamed; reflexivity).
-  reflexivity.
-Qed.
-
-Fixpoint merge_statics_equivariant_aux (r : renaming) (e : expr) :
+(* The law of [merge_statics] is proved from the definitions by the
+   tactic of FlambdaEquivarianceTactic.v, which states and proves the
+   laws of [binds_code] and of [code_first] as it goes. The law of
+   [drop_deleted_code] above stays by hand: the tactic leaves the case
+   of [Let_static], where the bindings are filtered. *)
+Lemma merge_statics_equivariant_aux (r : renaming) (e : expr) :
   merge_statics (rename_expr r e) = rename_expr r (merge_statics e).
-Proof.
-  destruct e
-    as [ x kind d body | bindings body | k [params metadata handler] body
-       | handlers body | ap | ac | scrutinee arms | ];
-    simpl; try reflexivity.
-  - rewrite merge_statics_equivariant_aux. reflexivity.
-  - rewrite merge_statics_equivariant_aux.
-    destruct (merge_statics body); simpl;
-      rewrite <- ?map_app, code_first_equivariant; reflexivity.
-  - rewrite !merge_statics_equivariant_aux. reflexivity.
-  - rewrite merge_statics_equivariant_aux. reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 Theorem merge_statics_equivariant : merge_statics_equivariant_statement.
 Proof. exact merge_statics_equivariant_aux. Qed.
@@ -636,6 +615,15 @@ Qed.
 (* Switches                                                                 *)
 (* ======================================================================== *)
 
+(* The laws of the two rewrites, and that of [arms_apply], are proved
+   from the definitions by the tactic of FlambdaEquivarianceTactic.v.
+   Each rewrite is given the law of what it does at one node,
+   [collapse_switch] and [thread_switch], which stay by hand: the
+   first compares applications of continuations for equality, and at
+   the second the tactic does not end. In a section, so that what is
+   given to the tactic here is given to it here only. *)
+Section Switches.
+
 Lemma collapse_switch_equivariant (r : renaming) (scrutinee : simple)
     (arms : list (Z * apply_cont)) :
   collapse_switch (rename_simple r scrutinee)
@@ -657,19 +645,12 @@ Proof.
     apply rename_apply_cont_injective.
 Qed.
 
-Fixpoint collapse_switches_equivariant_aux (r : renaming) (e : expr) :
+#[local] Hint Rewrite collapse_switch_equivariant : equivariance.
+#[local] Arguments collapse_switch : simpl never.
+
+Lemma collapse_switches_equivariant_aux (r : renaming) (e : expr) :
   collapse_switches (rename_expr r e) = rename_expr r (collapse_switches e).
-Proof.
-  destruct e
-    as [ x kind d body | bindings body | k [params metadata handler] body
-       | handlers body | ap | ac | scrutinee arms | ];
-    simpl; try reflexivity.
-  - rewrite collapse_switches_equivariant_aux. reflexivity.
-  - rewrite collapse_switches_equivariant_aux. reflexivity.
-  - rewrite !collapse_switches_equivariant_aux. reflexivity.
-  - rewrite collapse_switches_equivariant_aux. reflexivity.
-  - apply collapse_switch_equivariant.
-Qed.
+Proof. equivariance. Qed.
 
 Theorem collapse_switches_equivariant :
   collapse_switches_equivariant_statement.
@@ -704,10 +685,7 @@ Lemma arms_apply_equivariant (r : renaming) (k : continuation)
   arms_apply (rename_continuation r k)
     (map (fun arm => (fst arm, rename_apply_cont r (snd arm))) arms)
   = arms_apply k arms.
-Proof.
-  unfold arms_apply. apply existsb_map_with. intros arm. cbn [snd].
-  apply among_apply_cont_continuations_renamed.
-Qed.
+Proof. equivariance. Qed.
 
 Lemma thread_switch_equivariant (r : renaming) (k : continuation)
     (h : continuation_handler) (body : expr) :
@@ -737,26 +715,18 @@ Proof.
   destruct (arms_apply k (map (thread_arm k inner) arms)); reflexivity.
 Qed.
 
-Fixpoint thread_switches_equivariant_aux (r : renaming) (e : expr) :
+#[local] Hint Rewrite thread_switch_equivariant : equivariance.
+#[local] Arguments thread_switch : simpl never.
+
+Lemma thread_switches_equivariant_aux (r : renaming) (e : expr) :
   thread_switches (rename_expr r e) = rename_expr r (thread_switches e).
-Proof.
-  destruct e
-    as [ x kind d body | bindings body | k [params metadata handler] body
-       | handlers body | ap | ac | scrutinee arms | ];
-    simpl; try reflexivity.
-  - rewrite thread_switches_equivariant_aux. reflexivity.
-  - rewrite thread_switches_equivariant_aux. reflexivity.
-  - rewrite !thread_switches_equivariant_aux.
-    exact
-      (thread_switch_equivariant r k
-         (Handler params metadata (thread_switches handler))
-         (thread_switches body)).
-  - rewrite thread_switches_equivariant_aux. reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 Theorem thread_switches_equivariant :
   thread_switches_equivariant_statement.
 Proof. exact thread_switches_equivariant_aux. Qed.
+
+End Switches.
 
 (* ======================================================================== *)
 (* Rewriting the bodies of code                                             *)
@@ -824,35 +794,28 @@ Qed.
 (* FlambdaUnusedContsSpec.v                                                 *)
 (* ======================================================================== *)
 
+(* The law of [remove_unused_conts] is proved from the definitions by
+   the tactic of FlambdaEquivarianceTactic.v. It is given the law of
+   [cont_free_b], which is proved by hand in
+   FlambdaValidatorEquivarianceBaseProofs.v; in a section, so that it
+   is given here only. *)
+Section Unused_conts.
+
+#[local] Hint Rewrite cont_free_b_equivariant_aux : equivariance.
+
 Theorem cont_free_b_equivariant : cont_free_b_equivariant_statement.
 Proof. exact cont_free_b_equivariant_aux. Qed.
 
-Fixpoint remove_unused_conts_equivariant_aux (r : renaming) (e : expr) :
+Lemma remove_unused_conts_equivariant_aux (r : renaming) (e : expr) :
   remove_unused_conts (rename_expr r e)
-  = rename_expr r (remove_unused_conts e)
-with remove_unused_conts_in_handler_equivariant (r : renaming)
-    (h : continuation_handler) :
-  remove_unused_conts_in_handler (rename_handler r h)
-  = rename_handler r (remove_unused_conts_in_handler h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      simpl; try reflexivity.
-    + rewrite remove_unused_conts_equivariant_aux. reflexivity.
-    + rewrite remove_unused_conts_equivariant_aux. reflexivity.
-    + rewrite remove_unused_conts_equivariant_aux,
-        cont_free_b_equivariant_aux,
-        remove_unused_conts_in_handler_equivariant.
-      destruct (cont_free_b k (remove_unused_conts body)); reflexivity.
-    + rewrite remove_unused_conts_equivariant_aux. reflexivity.
-  - destruct h as [params metadata handler]. simpl.
-    rewrite remove_unused_conts_equivariant_aux. reflexivity.
-Qed.
+  = rename_expr r (remove_unused_conts e).
+Proof. equivariance. Qed.
 
 Theorem remove_unused_conts_equivariant :
   remove_unused_conts_equivariant_statement.
 Proof. exact remove_unused_conts_equivariant_aux. Qed.
+
+End Unused_conts.
 
 (* ======================================================================== *)
 (* FlambdaUnusedStaticsSpec.v                                               *)
