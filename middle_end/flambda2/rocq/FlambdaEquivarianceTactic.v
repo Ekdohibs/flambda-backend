@@ -1163,7 +1163,7 @@ Module Prepare.
       | _ => None
       end.
 
-  Ltac2 prepare () :=
+  Ltac2 prepare_one () :=
     ltac1:(intros;
            repeat (lazymatch goal with
                    | |- _ = _ => fail
@@ -1187,6 +1187,17 @@ Module Prepare.
       end
     | [ |- _ ] => ()
     end.
+
+  (* Goal by goal, where several are in focus; a conjunction of laws
+     is taken apart first. *)
+  Ltac2 prepare () :=
+    ltac1:(intros;
+           repeat (lazymatch goal with
+                   | |- _ = _ => fail
+                   | |- _ /\ _ => split; intros
+                   | |- _ => progress hnf; intros
+                   end));
+    Control.enter prepare_one.
 End Prepare.
 
 Tactic Notation "equivariance" :=
