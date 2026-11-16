@@ -17,6 +17,42 @@ let row_like_for_blocks_all_tags = function
     | Or_bottom.Ok _ -> Or_unknown.Unknown
     | Or_bottom.Bottom -> Or_unknown.Known (Keyed.domain Z.eqb known_tags))
 
+(** val block_case_size_and_shape : row_like_block_case Or_unknown.t -> (nat *
+    block_shape) option **)
+
+let block_case_size_and_shape = function
+  | Or_unknown.Known case0 -> (
+    match case0.case_index.index_domain with
+    | Row_like_index_domain.Known size ->
+      Some (size, case0.case_index.index_shape)
+    | Row_like_index_domain.At_least _ -> None)
+  | Or_unknown.Unknown -> None
+
+(** val row_like_for_blocks_all_tags_and_sizes : row_like_for_blocks -> (coq_Z,
+    nat * block_shape) Keyed.finite_map Or_unknown.t **)
+
+let row_like_for_blocks_all_tags_and_sizes = function
+  | Row_like_for_blocks (known_tags, other_tags, _) -> (
+    match other_tags with
+    | Or_bottom.Ok _ -> Or_unknown.Unknown
+    | Or_bottom.Bottom ->
+      if
+        Keyed.for_all_bindings_b Z.eqb
+          (fun _ case ->
+            match block_case_size_and_shape case with
+            | Some _ -> true
+            | None -> false)
+          known_tags
+      then
+        Or_unknown.Known
+          (Keyed.map_values
+             (fun case ->
+               match block_case_size_and_shape case with
+               | Some size_and_shape -> size_and_shape
+               | None -> O, Scannable Value_only)
+             known_tags)
+      else Or_unknown.Unknown)
+
 (** val row_like_for_blocks_get_singleton : row_like_for_blocks -> ((((coq_Z *
     block_shape) * nat) * flambda_type list) * Alloc_mode.t) option **)
 

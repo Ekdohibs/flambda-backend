@@ -73,6 +73,17 @@ module Generic_proof = struct
     | Invalid
 end
 
+module Boxed_or_tagged_number = struct
+  type t =
+    | Boxed of Alloc_mode.t * boxable_number * flambda_type
+    | Tagged_immediate
+end
+
+type variant_like_proof =
+  { const_ctors : coq_Z list Or_unknown.t;
+    non_const_ctors_with_sizes : (coq_Z, nat * block_shape) Keyed.finite_map
+  }
+
 module Provers = struct
   (** val is_bottom : Typing_env.t -> flambda_type -> bool option **)
 
@@ -243,6 +254,49 @@ module Provers = struct
   let meet_is_int_variant_only tenv t0 =
     gen_value_to_meet (prove_is_int_generic_value true) tenv t0
 
+  (** val prove_is_not_a_pointer_generic_value : Typing_env.t -> flambda_type ->
+      bool Generic_proof.t option **)
+
+  let prove_is_not_a_pointer_generic_value tenv t0 =
+    match expand_head tenv t0 with
+    | Some expanded -> (
+      match expanded with
+      | Oub_value head0 -> (
+        match head0 with
+        | Unknown -> Some Generic_proof.Unknown
+        | Ok a -> (
+          let (Head_of_kind_value (non_null, is_null)) = a in
+          match non_null with
+          | Unknown -> Some Generic_proof.Unknown
+          | Ok head -> (
+            match prove_is_int_generic_value false tenv head with
+            | Some proof -> (
+              match proof with
+              | Generic_proof.Proved a0 -> (
+                if a0
+                then Some (Generic_proof.Proved true)
+                else
+                  match is_null with
+                  | Not_null -> Some (Generic_proof.Proved false)
+                  | Maybe_null _ -> Some Generic_proof.Unknown)
+              | x -> Some x)
+            | None -> None)
+          | Bottom -> (
+            match is_null with
+            | Not_null -> Some Generic_proof.Invalid
+            | Maybe_null _ -> Some (Generic_proof.Proved true)))
+        | Bottom -> Some Generic_proof.Invalid)
+      | _ -> Some (wrong_kind Generic_proof.Invalid))
+    | None -> None
+
+  (** val prove_is_not_a_pointer : Typing_env.t -> flambda_type -> bool
+      Proof_of_property.t option **)
+
+  let prove_is_not_a_pointer tenv t0 =
+    match prove_is_not_a_pointer_generic_value tenv t0 with
+    | Some proof -> Some (as_property proof)
+    | None -> None
+
   (** val prove_get_tag_generic_value : Typing_env.t ->
       head_of_kind_value_non_null -> coq_Z list Generic_proof.t option **)
 
@@ -401,6 +455,34 @@ module Provers = struct
     | Some proof -> Some (as_meet_shortcut proof)
     | None -> None
 
+  (** val prove_equals_tagged_immediates_value : Typing_env.t ->
+      head_of_kind_value_non_null -> coq_Z list Generic_proof.t option **)
+
+  let prove_equals_tagged_immediates_value tenv = function
+    | Variant (_, immediates, _, blocks, _, _) -> (
+      match blocks with
+      | Or_unknown.Known blocks0 ->
+        if row_like_for_blocks_is_bottom blocks0
+        then
+          match immediates with
+          | Or_unknown.Known imms -> (
+            match prove_naked_immediates_generic tenv imms with
+            | Some proof -> (
+              match proof with
+              | Generic_proof.Invalid -> Some (Generic_proof.Proved [])
+              | x -> Some x)
+            | None -> None)
+          | Or_unknown.Unknown -> Some Generic_proof.Unknown
+        else Some Generic_proof.Unknown
+      | Or_unknown.Unknown -> Some Generic_proof.Unknown)
+    | _ -> Some Generic_proof.Unknown
+
+  (** val prove_equals_tagged_immediates : Typing_env.t -> flambda_type -> coq_Z
+      list Proof_of_property.t option **)
+
+  let prove_equals_tagged_immediates tenv t0 =
+    gen_value_to_proof prove_equals_tagged_immediates_value tenv t0
+
   (** val meet_equals_tagged_immediates_value : Typing_env.t ->
       head_of_kind_value_non_null -> coq_Z list Generic_proof.t option **)
 
@@ -417,6 +499,100 @@ module Provers = struct
   let meet_equals_tagged_immediates tenv t0 =
     gen_value_to_meet meet_equals_tagged_immediates_value tenv t0
 
+  (** val meet_equals_single_tagged_immediate : Typing_env.t -> flambda_type ->
+      coq_Z Meet_shortcut.t option **)
+
+  let meet_equals_single_tagged_immediate tenv t0 =
+    match meet_equals_tagged_immediates tenv t0 with
+    | Some shortcut -> (
+      match shortcut with
+      | Meet_shortcut.Known_result imms -> (
+        match Keyed.get_singleton Z.eqb imms with
+        | Some imm -> Some (Meet_shortcut.Known_result imm)
+        | None -> Some Meet_shortcut.Need_meet)
+      | Meet_shortcut.Need_meet -> Some Meet_shortcut.Need_meet
+      | Meet_shortcut.Invalid -> Some Meet_shortcut.Invalid)
+    | None -> None
+
+  (** val meet_naked_number : naked_number_kind -> Typing_env.t -> flambda_type
+      -> coq_Z list Meet_shortcut.t option **)
+
+  let meet_naked_number kind0 tenv t0 =
+    let head_to_proof =
+     fun head ->
+      match head with
+      | Unknown -> Meet_shortcut.Need_meet
+      | Ok set ->
+        if Keyed.is_empty set
+        then Meet_shortcut.Invalid
+        else Meet_shortcut.Known_result set
+      | Bottom -> Meet_shortcut.Invalid
+    in
+    match expand_head tenv t0 with
+    | Some expanded -> (
+      match expanded with
+      | Oub_naked_number (k, numbers) ->
+        if kind_eqb (Naked_number k) (Naked_number kind0)
+        then Some (head_to_proof numbers)
+        else Some (wrong_kind Meet_shortcut.Invalid)
+      | _ -> Some (wrong_kind Meet_shortcut.Invalid))
+    | None -> None
+
+  (** val meet_naked_float32s : Typing_env.t -> flambda_type -> coq_Z list
+      Meet_shortcut.t option **)
+
+  let meet_naked_float32s = meet_naked_number Kind_naked_float32
+
+  (** val meet_naked_floats : Typing_env.t -> flambda_type -> coq_Z list
+      Meet_shortcut.t option **)
+
+  let meet_naked_floats = meet_naked_number Kind_naked_float
+
+  (** val meet_naked_int8s : Typing_env.t -> flambda_type -> coq_Z list
+      Meet_shortcut.t option **)
+
+  let meet_naked_int8s = meet_naked_number Kind_naked_int8
+
+  (** val meet_naked_int16s : Typing_env.t -> flambda_type -> coq_Z list
+      Meet_shortcut.t option **)
+
+  let meet_naked_int16s = meet_naked_number Kind_naked_int16
+
+  (** val meet_naked_int32s : Typing_env.t -> flambda_type -> coq_Z list
+      Meet_shortcut.t option **)
+
+  let meet_naked_int32s = meet_naked_number Kind_naked_int32
+
+  (** val meet_naked_int64s : Typing_env.t -> flambda_type -> coq_Z list
+      Meet_shortcut.t option **)
+
+  let meet_naked_int64s = meet_naked_number Kind_naked_int64
+
+  (** val meet_naked_nativeints : Typing_env.t -> flambda_type -> coq_Z list
+      Meet_shortcut.t option **)
+
+  let meet_naked_nativeints = meet_naked_number Kind_naked_nativeint
+
+  (** val meet_naked_vec128s : Typing_env.t -> flambda_type -> coq_Z list
+      Meet_shortcut.t option **)
+
+  let meet_naked_vec128s = meet_naked_number Kind_naked_vec128
+
+  (** val meet_naked_vec256s : Typing_env.t -> flambda_type -> coq_Z list
+      Meet_shortcut.t option **)
+
+  let meet_naked_vec256s = meet_naked_number Kind_naked_vec256
+
+  (** val meet_naked_vec512s : Typing_env.t -> flambda_type -> coq_Z list
+      Meet_shortcut.t option **)
+
+  let meet_naked_vec512s = meet_naked_number Kind_naked_vec512
+
+  (** val meet_naked_masks : Typing_env.t -> flambda_type -> coq_Z list
+      Meet_shortcut.t option **)
+
+  let meet_naked_masks = meet_naked_number Kind_naked_mask
+
   (** val canonical_simple_of_alias : Typing_env.t -> Name_mode.t ->
       flambda_type -> simple option option **)
 
@@ -425,6 +601,163 @@ module Provers = struct
     | Some simple0 ->
       Typing_env.get_canonical_simple_exn tenv (Some min_name_mode) None simple0
     | None -> Some None
+
+  (** val prove_equals_to_simple_of_kind : Typing_env.t -> flambda_type ->
+      flambda_kind -> simple Proof_of_property.t option **)
+
+  let prove_equals_to_simple_of_kind tenv t0 kind0 =
+    let original_kind = kind t0 in
+    if negb (kind_eqb original_kind kind0)
+    then Some (wrong_kind Proof_of_property.Unknown)
+    else
+      match canonical_simple_of_alias tenv Name_mode.normal t0 with
+      | Some canonical -> (
+        match canonical with
+        | Some simple0 -> Some (Proof_of_property.Proved simple0)
+        | None -> Some Proof_of_property.Unknown)
+      | None -> None
+
+  (** val prove_is_a_boxed_or_tagged_number_value : Typing_env.t ->
+      head_of_kind_value_non_null -> Boxed_or_tagged_number.t Generic_proof.t
+      option **)
+
+  let prove_is_a_boxed_or_tagged_number_value _ = function
+    | Variant (_, _, _, blocks, _, _) -> (
+      match blocks with
+      | Or_unknown.Known blocks0 ->
+        if row_like_for_blocks_is_bottom blocks0
+        then Some (Generic_proof.Proved Boxed_or_tagged_number.Tagged_immediate)
+        else Some Generic_proof.Unknown
+      | Or_unknown.Unknown -> Some Generic_proof.Unknown)
+    | Boxed_number (k, contents_ty, alloc_mode) ->
+      Some
+        (Generic_proof.Proved
+           (Boxed_or_tagged_number.Boxed (alloc_mode, k, contents_ty)))
+    | _ -> Some Generic_proof.Unknown
+
+  (** val prove_nothing : Typing_env.t -> flambda_type -> 'a1
+      Proof_of_property.t option **)
+
+  let prove_nothing _ _ = Some Proof_of_property.Unknown
+
+  (** val prove_is_a_boxed_or_tagged_number : Typing_env.t -> flambda_type ->
+      Boxed_or_tagged_number.t Proof_of_property.t option **)
+
+  let prove_is_a_boxed_or_tagged_number tenv t0 =
+    gen_value_to_proof prove_is_a_boxed_or_tagged_number_value tenv t0
+
+  (** val prove_is_a_tagged_immediate : Typing_env.t -> flambda_type -> unit
+      Proof_of_property.t option **)
+
+  let prove_is_a_tagged_immediate tenv t0 =
+    match prove_is_a_boxed_or_tagged_number tenv t0 with
+    | Some proof -> (
+      match proof with
+      | Proof_of_property.Proved a -> (
+        match a with
+        | Boxed_or_tagged_number.Boxed (_, _, _) ->
+          Some Proof_of_property.Unknown
+        | Boxed_or_tagged_number.Tagged_immediate ->
+          Some (Proof_of_property.Proved ()))
+      | Proof_of_property.Unknown -> Some Proof_of_property.Unknown)
+    | None -> None
+
+  (** val prove_is_a_boxed_number : boxable_number -> Typing_env.t ->
+      flambda_type -> unit Proof_of_property.t option **)
+
+  let prove_is_a_boxed_number kind0 tenv t0 =
+    match prove_is_a_boxed_or_tagged_number tenv t0 with
+    | Some proof -> (
+      match proof with
+      | Proof_of_property.Proved a -> (
+        match a with
+        | Boxed_or_tagged_number.Boxed (_, k, _) ->
+          if boxable_number_eqb k kind0
+          then Some (Proof_of_property.Proved ())
+          else Some Proof_of_property.Unknown
+        | Boxed_or_tagged_number.Tagged_immediate ->
+          Some Proof_of_property.Unknown)
+      | Proof_of_property.Unknown -> Some Proof_of_property.Unknown)
+    | None -> None
+
+  (** val prove_is_a_boxed_float32 : Typing_env.t -> flambda_type -> unit
+      Proof_of_property.t option **)
+
+  let prove_is_a_boxed_float32 = prove_is_a_boxed_number Boxable_naked_float32
+
+  (** val prove_is_a_boxed_float : Typing_env.t -> flambda_type -> unit
+      Proof_of_property.t option **)
+
+  let prove_is_a_boxed_float = prove_is_a_boxed_number Boxable_naked_float
+
+  (** val prove_is_a_boxed_int32 : Typing_env.t -> flambda_type -> unit
+      Proof_of_property.t option **)
+
+  let prove_is_a_boxed_int32 = prove_is_a_boxed_number Boxable_naked_int32
+
+  (** val prove_is_a_boxed_int64 : Typing_env.t -> flambda_type -> unit
+      Proof_of_property.t option **)
+
+  let prove_is_a_boxed_int64 = prove_is_a_boxed_number Boxable_naked_int64
+
+  (** val prove_is_a_boxed_nativeint : Typing_env.t -> flambda_type -> unit
+      Proof_of_property.t option **)
+
+  let prove_is_a_boxed_nativeint =
+    prove_is_a_boxed_number Boxable_naked_nativeint
+
+  (** val prove_is_a_boxed_vec128 : Typing_env.t -> flambda_type -> unit
+      Proof_of_property.t option **)
+
+  let prove_is_a_boxed_vec128 = prove_is_a_boxed_number Boxable_naked_vec128
+
+  (** val prove_is_a_boxed_vec256 : Typing_env.t -> flambda_type -> unit
+      Proof_of_property.t option **)
+
+  let prove_is_a_boxed_vec256 = prove_is_a_boxed_number Boxable_naked_vec256
+
+  (** val prove_is_a_boxed_vec512 : Typing_env.t -> flambda_type -> unit
+      Proof_of_property.t option **)
+
+  let prove_is_a_boxed_vec512 = prove_is_a_boxed_number Boxable_naked_vec512
+
+  (** val prove_is_a_boxed_mask : Typing_env.t -> flambda_type -> unit
+      Proof_of_property.t option **)
+
+  let prove_is_a_boxed_mask = prove_is_a_boxed_number Boxable_naked_mask
+
+  (** val prove_is_or_is_not_a_boxed_float_value : Typing_env.t ->
+      head_of_kind_value_non_null -> bool Generic_proof.t option **)
+
+  let prove_is_or_is_not_a_boxed_float_value _ = function
+    | Boxed_number (k, _, _) -> (
+      match k with
+      | Boxable_naked_float -> Some (Generic_proof.Proved true)
+      | _ -> Some (Generic_proof.Proved false))
+    | _ -> Some (Generic_proof.Proved false)
+
+  (** val prove_is_or_is_not_a_boxed_float : Typing_env.t -> flambda_type ->
+      bool Proof_of_property.t option **)
+
+  let prove_is_or_is_not_a_boxed_float tenv t0 =
+    gen_value_to_proof prove_is_or_is_not_a_boxed_float_value tenv t0
+
+  (** val prove_strings_value : Typing_env.t -> head_of_kind_value_non_null ->
+      coq_Z list list Generic_proof.t option **)
+
+  let prove_strings_value _ = function
+    | String strs -> Some (Generic_proof.Proved strs)
+    | _ -> Some Generic_proof.Invalid
+
+  (** val meet_strings : Typing_env.t -> flambda_type -> coq_Z list list
+      Meet_shortcut.t option **)
+
+  let meet_strings tenv t0 = gen_value_to_meet prove_strings_value tenv t0
+
+  (** val prove_strings : Typing_env.t -> flambda_type -> coq_Z list list
+      Proof_of_property.t option **)
+
+  let prove_strings tenv t0 = gen_value_to_proof prove_strings_value tenv t0
 
   type tagging_proof_kind =
     | Prove
@@ -471,6 +804,14 @@ module Provers = struct
       | Meet -> inspect_tagging_immediates min_name_mode tenv immediates)
     | _ -> Some Generic_proof.Unknown
 
+  (** val prove_tagging_of_simple : Typing_env.t -> Name_mode.t -> flambda_type
+      -> simple Proof_of_property.t option **)
+
+  let prove_tagging_of_simple tenv min_name_mode t0 =
+    gen_value_to_proof
+      (inspect_tagging_of_simple_value Prove min_name_mode)
+      tenv t0
+
   (** val meet_tagging_of_simple : Typing_env.t -> Name_mode.t -> flambda_type
       -> simple Meet_shortcut.t option **)
 
@@ -515,6 +856,210 @@ module Provers = struct
           | Bottom -> Some Meet_shortcut.Invalid)
         | Bottom -> Some Meet_shortcut.Invalid)
       | _ -> Some (wrong_kind Meet_shortcut.Invalid))
+    | None -> None
+
+  (** val meet_boxed_float32_containing_simple : Typing_env.t -> Name_mode.t ->
+      flambda_type -> simple Meet_shortcut.t option **)
+
+  let meet_boxed_float32_containing_simple =
+    meet_boxed_number_containing_simple Boxable_naked_float32
+
+  (** val meet_boxed_float_containing_simple : Typing_env.t -> Name_mode.t ->
+      flambda_type -> simple Meet_shortcut.t option **)
+
+  let meet_boxed_float_containing_simple =
+    meet_boxed_number_containing_simple Boxable_naked_float
+
+  (** val meet_boxed_int32_containing_simple : Typing_env.t -> Name_mode.t ->
+      flambda_type -> simple Meet_shortcut.t option **)
+
+  let meet_boxed_int32_containing_simple =
+    meet_boxed_number_containing_simple Boxable_naked_int32
+
+  (** val meet_boxed_int64_containing_simple : Typing_env.t -> Name_mode.t ->
+      flambda_type -> simple Meet_shortcut.t option **)
+
+  let meet_boxed_int64_containing_simple =
+    meet_boxed_number_containing_simple Boxable_naked_int64
+
+  (** val meet_boxed_nativeint_containing_simple : Typing_env.t -> Name_mode.t
+      -> flambda_type -> simple Meet_shortcut.t option **)
+
+  let meet_boxed_nativeint_containing_simple =
+    meet_boxed_number_containing_simple Boxable_naked_nativeint
+
+  (** val meet_boxed_vec128_containing_simple : Typing_env.t -> Name_mode.t ->
+      flambda_type -> simple Meet_shortcut.t option **)
+
+  let meet_boxed_vec128_containing_simple =
+    meet_boxed_number_containing_simple Boxable_naked_vec128
+
+  (** val meet_boxed_vec256_containing_simple : Typing_env.t -> Name_mode.t ->
+      flambda_type -> simple Meet_shortcut.t option **)
+
+  let meet_boxed_vec256_containing_simple =
+    meet_boxed_number_containing_simple Boxable_naked_vec256
+
+  (** val meet_boxed_vec512_containing_simple : Typing_env.t -> Name_mode.t ->
+      flambda_type -> simple Meet_shortcut.t option **)
+
+  let meet_boxed_vec512_containing_simple =
+    meet_boxed_number_containing_simple Boxable_naked_vec512
+
+  (** val meet_boxed_mask_containing_simple : Typing_env.t -> Name_mode.t ->
+      flambda_type -> simple Meet_shortcut.t option **)
+
+  let meet_boxed_mask_containing_simple =
+    meet_boxed_number_containing_simple Boxable_naked_mask
+
+  (** val tag_is_scannable : coq_Z -> bool **)
+
+  let tag_is_scannable tag = negb (Z.ltb tag Z0 || Z.leb no_scan_tag tag)
+
+  (** val prove_variant_like_generic_value : Typing_env.t ->
+      head_of_kind_value_non_null -> variant_like_proof Generic_proof.t option **)
+
+  let prove_variant_like_generic_value tenv = function
+    | Variant (_, immediates, _, blocks, _, _) -> (
+      match blocks with
+      | Or_unknown.Known blocks0 -> (
+        match row_like_for_blocks_all_tags_and_sizes blocks0 with
+        | Or_unknown.Known non_const_ctors_with_sizes0 -> (
+          let non_const_ctors_with_sizes1 =
+            if
+              Keyed.for_all_bindings_b Z.eqb
+                (fun tag _ -> tag_is_scannable tag)
+                non_const_ctors_with_sizes0
+            then Or_unknown.Known non_const_ctors_with_sizes0
+            else Or_unknown.Unknown
+          in
+          match non_const_ctors_with_sizes1 with
+          | Or_unknown.Known non_const_ctors_with_sizes2 -> (
+            match immediates with
+            | Or_unknown.Known imms -> (
+              match prove_naked_immediates_generic tenv imms with
+              | Some proof -> (
+                match proof with
+                | Generic_proof.Proved const_ctors0 ->
+                  let const_ctors1 = Or_unknown.Known const_ctors0 in
+                  Some
+                    (Generic_proof.Proved
+                       { const_ctors = const_ctors1;
+                         non_const_ctors_with_sizes =
+                           non_const_ctors_with_sizes2
+                       })
+                | Generic_proof.Unknown ->
+                  let const_ctors0 = Or_unknown.Unknown in
+                  Some
+                    (Generic_proof.Proved
+                       { const_ctors = const_ctors0;
+                         non_const_ctors_with_sizes =
+                           non_const_ctors_with_sizes2
+                       })
+                | Generic_proof.Invalid ->
+                  let const_ctors0 = Or_unknown.Known [] in
+                  Some
+                    (Generic_proof.Proved
+                       { const_ctors = const_ctors0;
+                         non_const_ctors_with_sizes =
+                           non_const_ctors_with_sizes2
+                       }))
+              | None -> None)
+            | Or_unknown.Unknown ->
+              let const_ctors0 = Or_unknown.Unknown in
+              Some
+                (Generic_proof.Proved
+                   { const_ctors = const_ctors0;
+                     non_const_ctors_with_sizes = non_const_ctors_with_sizes2
+                   }))
+          | Or_unknown.Unknown -> Some Generic_proof.Unknown)
+        | Or_unknown.Unknown -> Some Generic_proof.Unknown)
+      | Or_unknown.Unknown -> Some Generic_proof.Unknown)
+    | Mutable_block _ -> Some Generic_proof.Unknown
+    | _ -> Some Generic_proof.Invalid
+
+  (** val meet_variant_like : Typing_env.t -> flambda_type -> variant_like_proof
+      Meet_shortcut.t option **)
+
+  let meet_variant_like tenv t0 =
+    gen_value_to_meet prove_variant_like_generic_value tenv t0
+
+  (** val prove_variant_like : Typing_env.t -> flambda_type ->
+      variant_like_proof Proof_of_property.t option **)
+
+  let prove_variant_like tenv t0 =
+    gen_value_to_proof prove_variant_like_generic_value tenv t0
+
+  (** val prove_unique_tag_and_size_value : Typing_env.t ->
+      head_of_kind_value_non_null -> ((((coq_Z * block_shape) * nat) *
+      flambda_type list) * Alloc_mode.t) Generic_proof.t option **)
+
+  let prove_unique_tag_and_size_value tenv = function
+    | Variant (_, immediates, _, blocks, _, _) -> (
+      match immediates with
+      | Or_unknown.Known immediates0 -> (
+        match is_bottom tenv immediates0 with
+        | Some immediates_bottom ->
+          if immediates_bottom
+          then
+            match blocks with
+            | Or_unknown.Known blocks0 -> (
+              match row_like_for_blocks_get_singleton blocks0 with
+              | Some p -> Some (Generic_proof.Proved p)
+              | None -> Some Generic_proof.Unknown)
+            | Or_unknown.Unknown -> Some Generic_proof.Unknown
+          else Some Generic_proof.Unknown
+        | None -> None)
+      | Or_unknown.Unknown -> Some Generic_proof.Unknown)
+    | _ -> Some Generic_proof.Unknown
+
+  (** val prove_unique_tag_and_size : Typing_env.t -> flambda_type -> ((coq_Z *
+      block_shape) * nat) Proof_of_property.t option **)
+
+  let prove_unique_tag_and_size tenv t0 =
+    match gen_value_to_proof prove_unique_tag_and_size_value tenv t0 with
+    | Some proof -> (
+      match proof with
+      | Proof_of_property.Proved a ->
+        let p, _ = a in
+        let p0, _ = p in
+        Some (Proof_of_property.Proved p0)
+      | Proof_of_property.Unknown -> Some Proof_of_property.Unknown)
+    | None -> None
+
+  (** val field_aliases_rev : simple list Proof_of_property.t -> flambda_type ->
+      simple list Proof_of_property.t **)
+
+  let field_aliases_rev result field_ty =
+    match result with
+    | Proof_of_property.Proved simples_rev -> (
+      match get_alias_opt field_ty with
+      | Some simple0 -> Proof_of_property.Proved (simple0 :: simples_rev)
+      | None -> Proof_of_property.Unknown)
+    | Proof_of_property.Unknown -> result
+
+  (** val prove_unique_fully_constructed_immutable_heap_block : Typing_env.t ->
+      flambda_type -> (((coq_Z * block_shape) * nat) * simple list)
+      Proof_of_property.t option **)
+
+  let prove_unique_fully_constructed_immutable_heap_block tenv t0 =
+    match gen_value_to_proof prove_unique_tag_and_size_value tenv t0 with
+    | Some proof -> (
+      match proof with
+      | Proof_of_property.Proved a -> (
+        let p, t1 = a in
+        let p0, product = p in
+        match t1 with
+        | Alloc_mode.Heap -> (
+          let result =
+            fold_left field_aliases_rev product (Proof_of_property.Proved [])
+          in
+          match result with
+          | Proof_of_property.Proved simples ->
+            Some (Proof_of_property.Proved (p0, rev simples))
+          | Proof_of_property.Unknown -> Some Proof_of_property.Unknown)
+        | _ -> Some Proof_of_property.Unknown)
+      | Proof_of_property.Unknown -> Some Proof_of_property.Unknown)
     | None -> None
 
   (** val meet_block_field_simple_value : Name_mode.t -> flambda_kind -> nat ->
@@ -582,12 +1127,66 @@ module Provers = struct
       | None -> None)
     | _ -> Some Generic_proof.Invalid
 
+  (** val meet_single_closures_entry : Typing_env.t -> flambda_type ->
+      (((function_slot * Alloc_mode.t) * closures_entry) * function_type)
+      Meet_shortcut.t option **)
+
+  let meet_single_closures_entry tenv t0 =
+    gen_value_to_meet prove_single_closures_entry_generic_value tenv t0
+
   (** val prove_single_closures_entry : Typing_env.t -> flambda_type ->
       (((function_slot * Alloc_mode.t) * closures_entry) * function_type)
       Proof_of_property.t option **)
 
   let prove_single_closures_entry tenv t0 =
     gen_value_to_proof prove_single_closures_entry_generic_value tenv t0
+
+  (** val add_code_id_of_case : code_id list Or_unknown.t -> (function_slot *
+      row_like_closures_case) -> code_id list Or_unknown.t **)
+
+  let add_code_id_of_case acc binding =
+    match acc with
+    | Or_unknown.Known code_ids -> (
+      let (Closures_entry (function_types, _, _)) =
+        (snd binding).case_maps_to
+      in
+      match lookup (fst binding) function_types with
+      | Some t0 -> (
+        match t0 with
+        | Or_unknown.Known function_type0 ->
+          Or_unknown.Known (function_type0.function_type_code_id :: code_ids)
+        | Or_unknown.Unknown -> Or_unknown.Unknown)
+      | None -> Or_unknown.Unknown)
+    | Or_unknown.Unknown -> Or_unknown.Unknown
+
+  (** val prove_code_ids_generic_value : Typing_env.t ->
+      head_of_kind_value_non_null -> code_id list Generic_proof.t option **)
+
+  let prove_code_ids_generic_value _ = function
+    | Closures (by_function_slot, _) -> (
+      let (Row_like_for_closures known_closures) = by_function_slot in
+      match
+        fold_left add_code_id_of_case (compact known_closures)
+          (Or_unknown.Known [])
+      with
+      | Or_unknown.Known code_ids ->
+        if Keyed.is_empty code_ids
+        then Some Generic_proof.Invalid
+        else Some (Generic_proof.Proved code_ids)
+      | Or_unknown.Unknown -> Some Generic_proof.Unknown)
+    | _ -> Some Generic_proof.Invalid
+
+  (** val meet_code_ids : Typing_env.t -> flambda_type -> code_id list
+      Meet_shortcut.t option **)
+
+  let meet_code_ids tenv t0 =
+    gen_value_to_meet prove_code_ids_generic_value tenv t0
+
+  (** val prove_code_ids : Typing_env.t -> flambda_type -> code_id list
+      Proof_of_property.t option **)
+
+  let prove_code_ids tenv t0 =
+    gen_value_to_proof prove_code_ids_generic_value tenv t0
 
   (** val meet_project_function_slot_simple_value : Name_mode.t -> function_slot
       -> Typing_env.t -> head_of_kind_value_non_null -> simple Generic_proof.t
@@ -948,4 +1547,58 @@ module Provers = struct
           | Const c2 -> Some (Proof_of_property.Proved (const_eqb c1 c2))))
       | None -> physical_equality_check_heads tenv t1 t2)
     | None -> physical_equality_check_heads tenv t1 t2
+
+  (** val prove_alloc_mode_of_boxed_number_value : Typing_env.t ->
+      head_of_kind_value_non_null -> Alloc_mode.t Generic_proof.t option **)
+
+  let prove_alloc_mode_of_boxed_number_value _ = function
+    | Boxed_number (_, _, alloc_mode) -> Some (Generic_proof.Proved alloc_mode)
+    | _ -> Some Generic_proof.Unknown
+
+  (** val prove_alloc_mode_of_boxed_number : Typing_env.t -> flambda_type ->
+      Alloc_mode.t Proof_of_property.t option **)
+
+  let prove_alloc_mode_of_boxed_number tenv t0 =
+    gen_value_to_proof prove_alloc_mode_of_boxed_number_value tenv t0
+
+  (** val never_holds_locally_allocated_values : Typing_env.t -> variable ->
+      unit Proof_of_property.t option **)
+
+  let never_holds_locally_allocated_values tenv var =
+    let heap_only =
+     fun alloc_mode ->
+      match alloc_mode with
+      | Alloc_mode.Heap -> Proof_of_property.Proved ()
+      | _ -> Proof_of_property.Unknown
+    in
+    match Typing_env.find tenv (Name_var var) None with
+    | Some ty -> (
+      match expand_head tenv ty with
+      | Some expanded -> (
+        match expanded with
+        | Oub_value head -> (
+          match head with
+          | Ok a -> (
+            let (Head_of_kind_value (non_null, _)) = a in
+            match non_null with
+            | Ok value_head -> (
+              match value_head with
+              | Variant (_, _, _, blocks, _, _) -> (
+                match blocks with
+                | Or_unknown.Known blocks0 ->
+                  if row_like_for_blocks_is_bottom blocks0
+                  then Some (Proof_of_property.Proved ())
+                  else
+                    let (Row_like_for_blocks (_, _, alloc_mode)) = blocks0 in
+                    Some (heap_only alloc_mode)
+                | Or_unknown.Unknown -> Some Proof_of_property.Unknown)
+              | Mutable_block alloc_mode -> Some (heap_only alloc_mode)
+              | Boxed_number (_, _, alloc_mode) -> Some (heap_only alloc_mode)
+              | Closures (_, alloc_mode) -> Some (heap_only alloc_mode)
+              | String _ -> Some (Proof_of_property.Proved ()))
+            | _ -> Some Proof_of_property.Unknown)
+          | _ -> Some Proof_of_property.Unknown)
+        | _ -> Some (Proof_of_property.Proved ()))
+      | None -> None)
+    | None -> None
 end

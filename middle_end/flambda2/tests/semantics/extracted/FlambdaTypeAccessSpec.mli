@@ -11,6 +11,13 @@ open PeanoNat
 val row_like_for_blocks_all_tags :
   row_like_for_blocks -> coq_Z list Or_unknown.t
 
+val block_case_size_and_shape :
+  row_like_block_case Or_unknown.t -> (nat * block_shape) option
+
+val row_like_for_blocks_all_tags_and_sizes :
+  row_like_for_blocks ->
+  (coq_Z, nat * block_shape) Keyed.finite_map Or_unknown.t
+
 val row_like_for_blocks_get_singleton :
   row_like_for_blocks ->
   ((((coq_Z * block_shape) * nat) * flambda_type list) * Alloc_mode.t) option
