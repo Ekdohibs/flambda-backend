@@ -106,7 +106,11 @@ and code rec loopify(never) size(35) newer_version_of(remove_min_binding_2)
                          ]) =
                 apply direct(bal_0_1 &my_alloc_region)
                   ($camlMap_remove__bal_1
-                   : _ ->
+                   : [ 0
+                     | 0 of [ 0 | 0 of val * imm tagged * val ] *
+                         imm tagged * [ 0 | 0 of val * imm tagged * val ] ] *
+                     val? *
+                     val? ->
                      [ 0
                      | 0 of [ 0 | 0 of val * imm tagged * val ] *
                          imm tagged * [ 0 | 0 of val * imm tagged * val ] ]
@@ -140,13 +144,20 @@ let code loopify(never) size(34) newer_version_of(merge_3)
          | 1 -> k (t1)
          where k2 =
            (apply direct(min_binding_1_1 &my_alloc_region)
-              ($camlMap_remove__min_binding_2 : _ -> imm tagged)
+              ($camlMap_remove__min_binding_2
+               : [ 0
+                 | 0 of [ 0 | 0 of val * imm tagged * val ] * imm tagged *
+                     [ 0 | 0 of val * imm tagged * val ] ] ->
+                 imm tagged
+               )
                 (t2)
                 -> k2 * k1
               where k2 (x : imm tagged) =
                 (apply direct(remove_min_binding_2_1 &my_alloc_region)
                    ($camlMap_remove__remove_min_binding_3
-                    : _ ->
+                    : [ 0
+                      | 0 of [ 0 | 0 of val * imm tagged * val ] *
+                          imm tagged * [ 0 | 0 of val * imm tagged * val ] ] ->
                       [ 0
                       | 0 of [ 0 | 0 of val * imm tagged * val ] *
                           imm tagged * [ 0 | 0 of val * imm tagged * val ] ]
@@ -161,7 +172,15 @@ let code loopify(never) size(34) newer_version_of(merge_3)
                                   [ 0 | 0 of val * imm tagged * val ] ]) =
                      apply direct(bal_0_1 &my_alloc_region)
                        ($camlMap_remove__bal_1
-                        : _ ->
+                        : [ 0
+                          | 0 of [ 0 | 0 of val * imm tagged * val ] *
+                              imm tagged *
+                              [ 0 | 0 of val * imm tagged * val ] ] *
+                          imm tagged *
+                          [ 0
+                          | 0 of [ 0 | 0 of val * imm tagged * val ] *
+                              imm tagged *
+                              [ 0 | 0 of val * imm tagged * val ] ] ->
                           [ 0
                           | 0 of [ 0 | 0 of val * imm tagged * val ] *
                               imm tagged *

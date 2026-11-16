@@ -59,16 +59,18 @@ let $camlChar_ranges_inlined_constants__first_const_0 = Block 0 () in
  in
  let class_of/91 = closure class_of_0 @class_of &toplevel in
  apply direct(class_of_0 &toplevel)
-   (class_of/91 : _ -> imm tagged) (33) -> k/56 * error
+   (class_of/91 : imm tagged -> imm tagged) (33) -> k/56 * error
    where k/56 (apply_result/92 : imm tagged) =
      (apply direct(class_of_0 &toplevel)
-        (class_of/91 : _ -> imm tagged) (55) -> k/57 * error
+        (class_of/91 : imm tagged -> imm tagged) (55) -> k/57 * error
         where k/57 (apply_result/93 : imm tagged) =
           (apply direct(class_of_0 &toplevel)
-             (class_of/91 : _ -> imm tagged) (81) -> k/58 * error
+             (class_of/91 : imm tagged -> imm tagged) (81) -> k/58 * error
              where k/58 (apply_result/94 : imm tagged) =
                (apply direct(class_of_0 &toplevel)
-                  (class_of/91 : _ -> imm tagged) (113) -> k/59 * error
+                  (class_of/91 : imm tagged -> imm tagged)
+                    (113)
+                    -> k/59 * error
                   where k/59 (apply_result/95 : imm tagged) =
                     let int_add/96 =
                       %int_barith.add (apply_result/95, apply_result/94)

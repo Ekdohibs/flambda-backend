@@ -26,7 +26,8 @@ let $camlLoop_local_mutual_both_in_loop__first_const_0 = Block 0 () in
      where k/44 =
        let int_sub/129 = %int_barith.sub (k/121, 1) in
        apply direct(up_3 &my_alloc_region/123)
-         (up/128 ~ depth my_depth/124 -> next_depth/125 : _ -> imm tagged)
+         (up/128 ~ depth my_depth/124 -> next_depth/125
+          : imm tagged -> imm tagged)
            (int_sub/129)
            -> k/42 * k/43
  and code rec size(25)
@@ -49,7 +50,8 @@ let $camlLoop_local_mutual_both_in_loop__first_const_0 = Block 0 () in
      where k/48 =
        let int_sub/141 = %int_barith.sub (k/133, 1) in
        apply direct(down_2 &my_alloc_region/135)
-         (down/140 ~ depth my_depth/136 -> next_depth/137 : _ -> imm tagged)
+         (down/140 ~ depth my_depth/136 -> next_depth/137
+          : imm tagged -> imm tagged)
            (int_sub/141)
            -> k/46 * k/47
  in
@@ -74,10 +76,14 @@ let $camlLoop_local_mutual_both_in_loop__first_const_0 = Block 0 () in
        with { n = n/145; acc = acc/146 }
        in
        (apply direct(apply_0 &my_alloc_region/148)
-          (apply/151 : _ -> imm tagged) (up/153, 1) -> k/53 * k/51
+          (apply/151 : val? * imm tagged -> imm tagged)
+            (up/153, 1)
+            -> k/53 * k/51
           where k/53 (apply_result/154 : imm tagged) =
             (apply direct(apply_0 &my_alloc_region/148)
-               (apply/151 : _ -> imm tagged) (down/152, 2) -> k/54 * k/51
+               (apply/151 : val? * imm tagged -> imm tagged)
+                 (down/152, 2)
+                 -> k/54 * k/51
                where k/54 (apply_result/155 : imm tagged) =
                  let int_add/156 =
                    %int_barith.add (apply_result/155, apply_result/154)
@@ -85,7 +91,7 @@ let $camlLoop_local_mutual_both_in_loop__first_const_0 = Block 0 () in
                  let int_sub/157 = %int_barith.sub (n/145, 1) in
                  apply direct(walk_1 &my_alloc_region/148)
                    (my_closure/147 ~ depth my_depth/149 -> next_depth/150
-                    : _ -> imm tagged)
+                    : imm tagged * imm tagged -> imm tagged)
                      (int_sub/157, int_add/156)
                      -> k/50 * k/51))
  in
@@ -95,7 +101,9 @@ let $camlLoop_local_mutual_both_in_loop__first_const_0 = Block 0 () in
  in
  (let Popaque/165 = %opaque (3) in
   apply direct(walk_1 &toplevel)
-    (walk/162 : _ -> imm tagged) (Popaque/165, 0) -> k/56 * error)
+    (walk/162 : val? * imm tagged -> imm tagged)
+      (Popaque/165, 0)
+      -> k/56 * error)
    where k/56 (result/163 : imm tagged) =
      let Pmakeblock/164 =
        %block.[`0`].`toplevel` (apply/161, walk/162, result/163)

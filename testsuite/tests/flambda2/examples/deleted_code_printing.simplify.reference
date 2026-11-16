@@ -13,7 +13,9 @@ and code loopify(never) size(4) newer_version_of(foobar_0)
         -> k * k1
         : imm tagged =
   apply direct(aux_1_1 &my_alloc_region)
-    ($camlDeleted_code_printing__aux_2 : _ -> imm tagged) (0) -> k * k1
+    ($camlDeleted_code_printing__aux_2 : imm tagged -> imm tagged)
+      (0)
+      -> k * k1
 and set_of_closures
       $camlDeleted_code_printing__aux_2 =
       closure aux_1_1 @aux &toplevel

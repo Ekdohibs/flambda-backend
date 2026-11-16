@@ -27,15 +27,15 @@
    closure positive_or_zero_0 @positive_or_zero &toplevel
  in
  apply direct(positive_or_zero_0 &toplevel)
-   (positive_or_zero/57 : _ -> imm tagged) (0) -> k/24 * error
+   (positive_or_zero/57 : imm tagged -> imm tagged) (0) -> k/24 * error
    where k/24 (apply_result/58 : imm tagged) =
      (apply direct(positive_or_zero_0 &toplevel)
-        (positive_or_zero/57 : _ -> imm tagged)
+        (positive_or_zero/57 : val -> imm tagged)
           ($camlMatch_guard__const_block_0)
           -> k/25 * error
         where k/25 (apply_result/59 : imm tagged) =
           (apply direct(positive_or_zero_0 &toplevel)
-             (positive_or_zero/57 : _ -> imm tagged)
+             (positive_or_zero/57 : val -> imm tagged)
                ($camlMatch_guard__const_block_1)
                -> k/26 * error
              where k/26 (apply_result/60 : imm tagged) =

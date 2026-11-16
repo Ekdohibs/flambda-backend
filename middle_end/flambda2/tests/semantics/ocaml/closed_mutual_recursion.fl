@@ -17,7 +17,7 @@ let $camlClosed_mutual_recursion__first_const_0 = Block 0 () in
      where k/22 =
        let int_sub/60 = %int_barith.sub (x/53, 1) in
        apply direct(h_1 &my_alloc_region/55)
-         h/59 ~ depth my_depth/56 -> next_depth/57
+         (h/59 ~ depth my_depth/56 -> next_depth/57 : imm tagged -> val?)
            (int_sub/60)
            -> k/20 * k/21
  and code rec size(6)
@@ -28,14 +28,16 @@ let $camlClosed_mutual_recursion__first_const_0 = Block 0 () in
    let a/69 = %project_value_slot.[h].[a] (my_closure/65) in
    let g/70 = %project_function_slot.[h].[g] (my_closure/65) in
    apply direct(g_0 &my_alloc_region/66)
-     g/70 ~ depth my_depth/67 -> next_depth/68 (x/64) -> k/24 * k/25
+     (g/70 ~ depth my_depth/67 -> next_depth/68 : imm tagged -> val?)
+       (x/64)
+       -> k/24 * k/25
  in
  (let a/73 = %opaque (5) in
   let g/74 = closure g_0 @g &toplevel
   and h/75 = closure h_1 @h &toplevel
   with { a = a/73 }
   in
-  apply direct(g_0 &toplevel) g/74 (3) -> k/26 * error)
+  apply direct(g_0 &toplevel) (g/74 : imm tagged -> val?) (3) -> k/26 * error)
    where k/26 (result/71 : imm tagged) =
      let Pmakeblock/72 = %block.[`0`].`toplevel` (result/71) in
      cont k/19 (Pmakeblock/72))

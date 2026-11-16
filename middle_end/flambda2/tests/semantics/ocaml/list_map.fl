@@ -17,7 +17,7 @@
        ((let Pfield/103 = %block_load.[`1`] (list/94) in
          apply direct(map_0 &my_alloc_region/96)
            (my_closure/95 ~ depth my_depth/97 -> next_depth/98
-            : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+            : val * val? -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
              (f/93, Pfield/103)
              -> k/41 * k/39)
           where k/41
@@ -83,14 +83,21 @@
        &toplevel &region/129
    in
    apply direct(map_0 &toplevel)
-     (map/125 : _ -> [ 0 | 0 of imm tagged * [ 0 | 0 of imm tagged * val ] ])
+     (map/125
+      : val? * val -> [ 0 | 0 of imm tagged * [ 0 | 0 of imm tagged * val ] ]
+      )
        (`fn[list_map.ml:12,22--38]/135`, $camlList_map__const_block_2)
        -> k/53 * error)
     where k/53
             (apply_result/134 :
                [ 0 | 0 of imm tagged * [ 0 | 0 of imm tagged * val ] ]) =
       apply direct(sum_1 &toplevel)
-        (sum/126 : _ -> imm tagged) (apply_result/134) -> k/52 * error
+        (sum/126
+         : [ 0 | 0 of imm tagged * [ 0 | 0 of imm tagged * val ] ] ->
+           imm tagged
+         )
+          (apply_result/134)
+          -> k/52 * error
     where k/52 (region_return/131 : imm tagged) =
       let unit/132 = %end_region (region/129) in
       let unit/133 = %end_ghost_region (ghost_region/130) in

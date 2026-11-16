@@ -59,37 +59,54 @@ let $camlOver_application_three_stages__first_const_0 = Block 0 () in
  let x/157 = %opaque (2) in
  let y/158 = %opaque (3) in
  let z/159 = %opaque (4) in
- apply direct(stage_0 &toplevel) stage/155 (w/156) -> k/59 * error
+ apply direct(stage_0 &toplevel)
+   (stage/155 : imm tagged -> val?) (w/156) -> k/59 * error
    where k/59 (func/180) =
-     apply &toplevel func/180 (x/157, y/158, z/159) -> k/48 * error
+     apply unknown_arity &toplevel
+       (func/180 : imm tagged * imm tagged * imm tagged -> imm tagged)
+         (x/157, y/158, z/159)
+         -> k/48 * error
    where k/48 (all_at_once/160 : imm tagged) =
      ((let region/173 = %begin_region () in
        let ghost_region/174 = %begin_ghost_region () in
-       apply direct(stage_0 &toplevel) stage/155 (w/156) -> k/58 * error
+       apply direct(stage_0 &toplevel)
+         (stage/155 : imm tagged -> val?) (w/156) -> k/58 * error
          where k/58 (func/179) =
-           apply &toplevel &region/173 &ghost_region/174
-             func/179 (x/157, y/158) -> k/57 * error
+           apply unknown_arity &toplevel &region/173 &ghost_region/174
+             (func/179 : imm tagged * imm tagged -> val)
+               (x/157, y/158)
+               -> k/57 * error
          where k/57 (last/178 : val) =
-           apply &toplevel last/178 (z/159) -> k/56 * error
+           apply unknown_arity &toplevel
+             (last/178 : imm tagged -> imm tagged) (z/159) -> k/56 * error
          where k/56 (region_return/175 : imm tagged) =
            let unit/176 = %end_region (region/173) in
            let unit/177 = %end_ghost_region (ghost_region/174) in
            cont k/49 (region_return/175))
         where k/49 (three_then_one/161 : imm tagged) =
           (apply direct(stage_0 &toplevel)
-             (stage/155 : _ -> val) (w/156) -> k/55 * error
+             (stage/155 : imm tagged -> val) (w/156) -> k/55 * error
              where k/55 (rest/172 : val) =
-               apply &toplevel rest/172 (x/157, y/158, z/159) -> k/50 * error
+               apply unknown_arity &toplevel
+                 (rest/172
+                  : imm tagged * imm tagged * imm tagged -> imm tagged)
+                   (x/157, y/158, z/159)
+                   -> k/50 * error
              where k/50 (one_then_three/162 : imm tagged) =
                ((let region/165 = %begin_region () in
                  let ghost_region/166 = %begin_ghost_region () in
                  apply direct(stage_0 &toplevel)
-                   stage/155 (w/156) -> k/54 * error
+                   (stage/155 : imm tagged -> val?) (w/156) -> k/54 * error
                    where k/54 (func/171) =
-                     apply &toplevel &region/165 &ghost_region/166
-                       func/171 (x/157) -> k/53 * error
+                     apply
+                            unknown_arity
+                            &toplevel &region/165 &ghost_region/166
+                       (func/171 : imm tagged -> val) (x/157) -> k/53 * error
                    where k/53 (rest/170 : val) =
-                     apply &toplevel rest/170 (y/158, z/159) -> k/52 * error
+                     apply unknown_arity &toplevel
+                       (rest/170 : imm tagged * imm tagged -> imm tagged)
+                         (y/158, z/159)
+                         -> k/52 * error
                    where k/52 (region_return/167 : imm tagged) =
                      let unit/168 = %end_region (region/165) in
                      let unit/169 = %end_ghost_region (ghost_region/166) in

@@ -10,7 +10,7 @@ let $camlTuple_through_kept_identity__first_const_0 = Block 0 () in
  (let Popaque/50 = %opaque (1) in
   let Pmakeblock/51 = %block.[`0`].`toplevel` (Popaque/50, 2) in
   apply direct(keep_0 &toplevel)
-    (keep/43 : _ -> [ 0 of imm tagged * imm tagged ])
+    (keep/43 : val -> [ 0 of imm tagged * imm tagged ])
       (Pmakeblock/51)
       -> k/17 * error)
    where k/17 (`*match*/46` : [ 0 of imm tagged * imm tagged ]) =

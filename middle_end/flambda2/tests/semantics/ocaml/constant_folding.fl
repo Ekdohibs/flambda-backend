@@ -10,10 +10,10 @@ let $camlConstant_folding__first_const_0 = Block 0 () in
  in
  let square/49 = closure square_0 @square &toplevel in
  apply direct(square_0 &toplevel)
-   (square/49 : _ -> imm tagged) (8) -> k/23 * error
+   (square/49 : imm tagged -> imm tagged) (8) -> k/23 * error
    where k/23 (apply_result/52 : imm tagged) =
      (apply direct(square_0 &toplevel)
-        (square/49 : _ -> imm tagged) (7) -> k/24 * error
+        (square/49 : imm tagged -> imm tagged) (7) -> k/24 * error
         where k/24 (apply_result/53 : imm tagged) =
           let x/54 = %int_barith.add (apply_result/53, apply_result/52) in
           ((let prim/58 = %int_comp.lt (x/54, 0) in

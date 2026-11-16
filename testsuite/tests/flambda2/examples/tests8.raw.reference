@@ -34,7 +34,7 @@ let $camlTests8__first_const_0 = Block 0 () in
        &my_alloc_region
    in
    apply direct(map_foo_0 &my_alloc_region) inlined(never)
-     (map_foo : _ -> [ 0 | 0 of val * val ])
+     (map_foo : val? * val? * imm tagged -> [ 0 | 0 of val * val ])
        (`fn[tests8.ml:20,49--61]`, `fn[tests8.ml:20,62--77]`, 0)
        -> k1 * k2
  and code rec size(65)
@@ -43,7 +43,8 @@ let $camlTests8__first_const_0 = Block 0 () in
          -> k1 * k2
          : [ 0 | 0 of val * val ] =
    let next_depth = rec_info (succ my_depth) in
-   apply &my_alloc_region seq (0) -> k3 * k2
+   apply unknown_arity &my_alloc_region
+     (seq : imm tagged -> [ 0 | 0 of val * val ]) (0) -> k3 * k2
      where k3 (`*match*` : [ 0 | 0 of val * val ]) =
        ((let prim = %is_int (`*match*`) in
          let Pisint = %tag_imm (prim) in
@@ -60,7 +61,8 @@ let $camlTests8__first_const_0 = Block 0 () in
             with { my_closure = my_closure ~ depth my_depth -> next_depth }
             in
             ((let Pfield = %block_load.[`0`] (`*match*`) in
-              apply &my_alloc_region f (Pfield) -> k3 * k2)
+              apply unknown_arity &my_alloc_region
+                (f : _ -> val) (Pfield) -> k3 * k2)
                where k3 (apply_result : val) =
                  let Pmakeblock =
                    %block.[`0`].my_alloc_region

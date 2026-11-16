@@ -45,9 +45,12 @@ let $camlClosure_captures_argument_inlined__first_const_0 = Block 0 () in
  (let Popaque/91 = %opaque (3) in
   let Pmakeblock/92 = %block.[`0`].`toplevel` (Popaque/91, 0) in
   apply direct(add_first_2 &toplevel)
-    add_first/88 (Pmakeblock/92) -> k/29 * error
+    (add_first/88 : [ 0 of imm tagged * val ] -> val?)
+      (Pmakeblock/92)
+      -> k/29 * error
     where k/29 (func/93) =
-      apply &toplevel func/93 (4) -> k/28 * error)
+      apply unknown_arity &toplevel
+        (func/93 : imm tagged -> imm tagged) (4) -> k/28 * error)
    where k/28 (result/89 : imm tagged) =
      let Pmakeblock/90 =
        %block.[`0`].`toplevel` (adder/87, add_first/88, result/89)

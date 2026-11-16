@@ -92,7 +92,9 @@ let $camlPartial_two_to_six_parameters__first_const_0 = Block 0 () in
    let next_depth/357 = rec_info (succ my_depth/356) in
    let two/358 = %project_value_slot.[partial_two].[two] (my_closure/354) in
    apply direct(two_0 &my_alloc_region/355)
-     (two/358 : _ -> imm tagged) (1, param1/353) -> k/86 * k/87
+     (two/358 : imm tagged * imm tagged -> imm tagged)
+       (1, param1/353)
+       -> k/86 * k/87
  in
  let code size(5) stub
        partial_three_6 (param2/359 : imm tagged)
@@ -104,7 +106,9 @@ let $camlPartial_two_to_six_parameters__first_const_0 = Block 0 () in
      %project_value_slot.[partial_three].[three] (my_closure/360)
    in
    apply direct(three_1 &my_alloc_region/361)
-     (three/364 : _ -> imm tagged) (1, 2, param2/359) -> k/88 * k/89
+     (three/364 : imm tagged * imm tagged * imm tagged -> imm tagged)
+       (1, 2, param2/359)
+       -> k/88 * k/89
  in
  let code size(5) stub
        partial_four_7 (param3/365 : imm tagged)
@@ -115,7 +119,10 @@ let $camlPartial_two_to_six_parameters__first_const_0 = Block 0 () in
    let four/370 = %project_value_slot.[partial_four].[four] (my_closure/366)
    in
    apply direct(four_2 &my_alloc_region/367)
-     (four/370 : _ -> imm tagged) (1, 2, 3, param3/365) -> k/90 * k/91
+     (four/370
+      : imm tagged * imm tagged * imm tagged * imm tagged -> imm tagged)
+       (1, 2, 3, param3/365)
+       -> k/90 * k/91
  in
  let code size(5) stub
        partial_five_8 (param4/371 : imm tagged)
@@ -126,7 +133,12 @@ let $camlPartial_two_to_six_parameters__first_const_0 = Block 0 () in
    let five/376 = %project_value_slot.[partial_five].[five] (my_closure/372)
    in
    apply direct(five_3 &my_alloc_region/373)
-     (five/376 : _ -> imm tagged) (1, 2, 3, 4, param4/371) -> k/92 * k/93
+     (five/376
+      : imm tagged * imm tagged * imm tagged * imm tagged * imm tagged ->
+        imm tagged
+      )
+       (1, 2, 3, 4, param4/371)
+       -> k/92 * k/93
  in
  let code size(5) stub
        partial_six_9 (param5/377 : imm tagged)
@@ -136,7 +148,16 @@ let $camlPartial_two_to_six_parameters__first_const_0 = Block 0 () in
    let next_depth/381 = rec_info (succ my_depth/380) in
    let six/382 = %project_value_slot.[partial_six].[six] (my_closure/378) in
    apply direct(six_4 &my_alloc_region/379)
-     (six/382 : _ -> imm tagged) (1, 2, 3, 4, 5, param5/377) -> k/94 * k/95
+     (six/382
+      : imm tagged *
+        imm tagged *
+        imm tagged *
+        imm tagged *
+        imm tagged *
+        imm tagged -> imm tagged
+      )
+       (1, 2, 3, 4, 5, param5/377)
+       -> k/94 * k/95
  in
  let two/383 = closure two_0 @two &toplevel in
  let three/384 = closure three_1 @three &toplevel in
@@ -150,10 +171,12 @@ let $camlPartial_two_to_six_parameters__first_const_0 = Block 0 () in
   cont k/96 (partial_two/414))
    where k/96 (two_but_last/389 : val) =
      (apply direct(partial_two_5 &toplevel)
-        (two_but_last/389 : _ -> imm tagged) (0) -> k/97 * error
+        (two_but_last/389 : imm tagged -> imm tagged) (0) -> k/97 * error
         where k/97 (apply_result/390 : imm tagged) =
           (apply direct(partial_two_5 &toplevel)
-             (two_but_last/389 : _ -> imm tagged) (last/388) -> k/98 * error
+             (two_but_last/389 : imm tagged -> imm tagged)
+               (last/388)
+               -> k/98 * error
              where k/98 (apply_result/391 : imm tagged) =
                let of_two/392 =
                  %int_barith.add (apply_result/391, apply_result/390)
@@ -165,12 +188,12 @@ let $camlPartial_two_to_six_parameters__first_const_0 = Block 0 () in
                  cont k/99 (partial_three/413))
                   where k/99 (three_but_last/393 : val) =
                     (apply direct(partial_three_6 &toplevel)
-                       (three_but_last/393 : _ -> imm tagged)
+                       (three_but_last/393 : imm tagged -> imm tagged)
                          (0)
                          -> k/100 * error
                        where k/100 (apply_result/394 : imm tagged) =
                          (apply direct(partial_three_6 &toplevel)
-                            (three_but_last/393 : _ -> imm tagged)
+                            (three_but_last/393 : imm tagged -> imm tagged)
                               (last/388)
                               -> k/101 * error
                             where k/101 (apply_result/395 : imm tagged) =
@@ -186,7 +209,8 @@ let $camlPartial_two_to_six_parameters__first_const_0 = Block 0 () in
                                 cont k/102 (partial_four/412))
                                  where k/102 (four_but_last/397 : val) =
                                    (apply direct(partial_four_7 &toplevel)
-                                      (four_but_last/397 : _ -> imm tagged)
+                                      (four_but_last/397
+                                       : imm tagged -> imm tagged)
                                         (0)
                                         -> k/103 * error
                                       where k/103
@@ -195,7 +219,7 @@ let $camlPartial_two_to_six_parameters__first_const_0 = Block 0 () in
                                                 direct(partial_four_7
                                                 &toplevel)
                                            (four_but_last/397
-                                            : _ -> imm tagged)
+                                            : imm tagged -> imm tagged)
                                              (last/388)
                                              -> k/104 * error
                                            where k/104
@@ -219,7 +243,9 @@ let $camlPartial_two_to_six_parameters__first_const_0 = Block 0 () in
                                                           direct(partial_five_8
                                                           &toplevel)
                                                      (five_but_last/401
-                                                      : _ -> imm tagged)
+                                                      : imm tagged ->
+                                                        imm tagged
+                                                      )
                                                        (0)
                                                        -> k/106 * error
                                                      where k/106
@@ -229,7 +255,9 @@ let $camlPartial_two_to_six_parameters__first_const_0 = Block 0 () in
                                                                direct(partial_five_8
                                                                &toplevel)
                                                           (five_but_last/401
-                                                           : _ -> imm tagged)
+                                                           : imm tagged ->
+                                                             imm tagged
+                                                           )
                                                             (last/388)
                                                             -> k/107 * error
                                                           where k/107
@@ -260,7 +288,7 @@ let $camlPartial_two_to_six_parameters__first_const_0 = Block 0 () in
                                                                     &toplevel)
                                                                     (six_but_last/405
                                                                     : 
-                                                                    _ ->
+                                                                    imm tagged ->
                                                                     imm tagged
                                                                     )
                                                                     (0)
@@ -275,7 +303,7 @@ let $camlPartial_two_to_six_parameters__first_const_0 = Block 0 () in
                                                                     &toplevel)
                                                                     (six_but_last/405
                                                                     : 
-                                                                    _ ->
+                                                                    imm tagged ->
                                                                     imm tagged
                                                                     )
                                                                     (last/388)

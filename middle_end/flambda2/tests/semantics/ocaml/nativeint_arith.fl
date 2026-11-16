@@ -26,7 +26,7 @@
  let f/69 = closure f_0 @f &toplevel in
  (let Popaque/72 = %opaque ($camlNativeint_arith__nativeint_0) in
   apply direct(f_0 &toplevel)
-    (f/69 : _ -> nativeint boxed)
+    (f/69 : val? * nativeint boxed -> nativeint boxed)
       (Popaque/72, $camlNativeint_arith__nativeint_1)
       -> k/14 * error)
    where k/14 (result/70 : nativeint boxed) =

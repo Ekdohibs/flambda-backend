@@ -11,7 +11,9 @@ let $camlLabelled_arguments__first_const_0 = Block 0 () in
  let subtract/36 = closure subtract_0 @subtract &toplevel in
  (let Popaque/39 = %opaque (3) in
   apply direct(subtract_0 &toplevel)
-    (subtract/36 : _ -> imm tagged) (10, Popaque/39) -> k/14 * error)
+    (subtract/36 : imm tagged * val? -> imm tagged)
+      (10, Popaque/39)
+      -> k/14 * error)
    where k/14 (result/37 : imm tagged) =
      let Pmakeblock/38 = %block.[`0`].`toplevel` (result/37) in
      cont k/11 (Pmakeblock/38))

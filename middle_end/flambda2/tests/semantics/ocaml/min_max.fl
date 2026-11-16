@@ -28,10 +28,12 @@ let $camlMin_max__first_const_0 = Block 0 () in
  let min/73 = closure min_0 @min &toplevel in
  let max/74 = closure max_1 @max &toplevel in
  apply direct(max_1 &toplevel)
-   (max/74 : _ -> imm tagged) (3, 7) -> k/22 * error
+   (max/74 : imm tagged * imm tagged -> imm tagged) (3, 7) -> k/22 * error
    where k/22 (apply_result/75 : imm tagged) =
      (apply direct(min_0 &toplevel)
-        (min/73 : _ -> imm tagged) (3, 7) -> k/23 * error
+        (min/73 : imm tagged * imm tagged -> imm tagged)
+          (3, 7)
+          -> k/23 * error
         where k/23 (apply_result/76 : imm tagged) =
           let result/77 = %int_barith.add (apply_result/76, apply_result/75)
           in

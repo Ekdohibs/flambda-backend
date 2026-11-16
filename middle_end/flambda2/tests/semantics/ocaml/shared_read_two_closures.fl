@@ -28,10 +28,12 @@ let $camlShared_read_two_closures__first_const_0 = Block 0 () in
    let shift/86 = %project_value_slot.[both].[shift] (my_closure/82) in
    let times/87 = %project_value_slot.[both].[times] (my_closure/82) in
    apply direct(times_1 &my_alloc_region/83)
-     (times/87 : _ -> imm tagged) (x/81) -> k/26 * k/25
+     (times/87 : imm tagged -> imm tagged) (x/81) -> k/26 * k/25
      where k/26 (apply_result/88 : imm tagged) =
        apply direct(shift_0 &my_alloc_region/83)
-         (shift/86 : _ -> imm tagged) (apply_result/88) -> k/24 * k/25
+         (shift/86 : imm tagged -> imm tagged)
+           (apply_result/88)
+           -> k/24 * k/25
  in
  let scale/89 = %opaque (3) in
  let shift/90 = closure shift_0 @shift &toplevel with { scale = scale/89 } in

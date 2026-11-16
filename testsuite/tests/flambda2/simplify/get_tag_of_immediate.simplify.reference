@@ -37,11 +37,14 @@ let code inline(always) loopify(never) size(46) newer_version_of(pick_1)
           | 1 -> k3
           | 2 -> k4)
          where k4 =
-           apply &my_alloc_region f (3) -> k * k1
+           apply unknown_arity &my_alloc_region
+             (f : imm tagged -> imm tagged) (3) -> k * k1
          where k3 =
-           apply &my_alloc_region f (2) -> k * k1
+           apply unknown_arity &my_alloc_region
+             (f : imm tagged -> imm tagged) (2) -> k * k1
          where k2 =
-           apply &my_alloc_region f (1) -> k * k1)
+           apply unknown_arity &my_alloc_region
+             (f : imm tagged -> imm tagged) (1) -> k * k1)
 in
 let $camlGet_tag_of_immediate__pick_2 = closure pick_1_1 @pick &toplevel in
 let code loopify(never) size(11) newer_version_of(tag_of_parameter_2)

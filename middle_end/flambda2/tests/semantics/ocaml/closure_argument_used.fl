@@ -11,7 +11,8 @@ let $camlClosure_argument_used__first_const_0 = Block 0 () in
  in
  (let x/38 = %opaque (3) in
   let g/39 = closure g_0 @g &toplevel with { x = x/38 } in
-  apply direct(g_0 &toplevel) g/39 (x/38) -> k/14 * error)
+  apply direct(g_0 &toplevel)
+    (g/39 : imm tagged -> val?) (x/38) -> k/14 * error)
    where k/14 (result/36 : imm tagged) =
      let Pmakeblock/37 = %block.[`0`].`toplevel` (result/36) in
      cont k/11 (Pmakeblock/37))

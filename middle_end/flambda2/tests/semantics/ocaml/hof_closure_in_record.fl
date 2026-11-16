@@ -35,17 +35,21 @@ let $camlHof_closure_in_record__first_const_0 = Block 0 () in
     apply
            direct(`fn[hof_closure_in_record.ml:17,24--48]_1`
            &my_alloc_region/72)
-      (Pfield/81 : _ -> imm tagged) (Pfield/80, 2) -> k/24 * k/23)
+      (Pfield/81 : val? * imm tagged -> imm tagged)
+        (Pfield/80, 2)
+        -> k/24 * k/23)
      where k/24 (apply_result/78 : imm tagged) =
        let Pfield/79 = %block_load.[`0`] (ops/77) in
        apply
               direct(`fn[hof_closure_in_record.ml:17,24--48]_1`
               &my_alloc_region/72)
-         (Pfield/79 : _ -> imm tagged) (apply_result/78, 3) -> k/22 * k/23
+         (Pfield/79 : imm tagged * imm tagged -> imm tagged)
+           (apply_result/78, 3)
+           -> k/22 * k/23
  in
  let body/82 = closure body_0 @body &toplevel in
  apply direct(body_0 &toplevel)
-   (body/82 : _ -> imm tagged) (1) -> k/25 * error
+   (body/82 : imm tagged -> imm tagged) (1) -> k/25 * error
    where k/25 (apply_result/83 : imm tagged) =
      ((let Popaque/87 = %opaque (3) in
        apply direct(body_0 &toplevel)

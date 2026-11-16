@@ -9,7 +9,8 @@ let $camlFct_applied_twice_same_argument__first_const_0 = Block 0 () in
    let Pfield/110 = %block_load.[`0`] (N/109) in
    let int_mul/111 = %int_barith.mul (x/104, Pfield/110) in
    let Pfield/112 = %block_load.[`1`] (N/109) in
-   apply &my_alloc_region/106 Pfield/112 (int_mul/111) -> k/38 * k/39
+   apply unknown_arity &my_alloc_region/106
+     (Pfield/112 : imm tagged -> imm tagged) (int_mul/111) -> k/38 * k/39
  in
  let code size(9)
        twice_2 (x/113 : imm tagged)
@@ -19,10 +20,12 @@ let $camlFct_applied_twice_same_argument__first_const_0 = Block 0 () in
    let next_depth/117 = rec_info (succ my_depth/116) in
    let apply/118 = %project_value_slot.[twice].[`apply`] (my_closure/114) in
    apply direct(apply_1 &my_alloc_region/115)
-     (apply/118 : _ -> imm tagged) (x/113) -> k/42 * k/41
+     (apply/118 : imm tagged -> imm tagged) (x/113) -> k/42 * k/41
      where k/42 (apply_result/119 : imm tagged) =
        apply direct(apply_1 &my_alloc_region/115)
-         (apply/118 : _ -> imm tagged) (apply_result/119) -> k/40 * k/41
+         (apply/118 : imm tagged -> imm tagged)
+           (apply_result/119)
+           -> k/40 * k/41
  in
  let code loopify(never) size(46)
        Make_0 (N/120 : val)
@@ -56,25 +59,35 @@ let $camlFct_applied_twice_same_argument__first_const_0 = Block 0 () in
   cont k/47 (Pmakeblock/151))
    where k/47 (Arg/135 : val) =
      (apply direct(Make_0 &toplevel)
-        (Make/134 : _ -> val) (Arg/135) -> k/48 * error
+        (Make/134 : val -> val) (Arg/135) -> k/48 * error
         where k/48 (One/136 : val) =
           (apply direct(Make_0 &toplevel)
-             (Make/134 : _ -> val) (Arg/135) -> k/49 * error
+             (Make/134 : val -> val) (Arg/135) -> k/49 * error
              where k/49 (Two/137 : val) =
                ((let Pfield/149 = %block_load.[`0`] (Two/137) in
-                 apply &toplevel Pfield/149 (2) -> k/53 * error)
+                 apply unknown_arity &toplevel
+                   (Pfield/149 : imm tagged -> imm tagged)
+                     (2)
+                     -> k/53 * error)
                   where k/53 (apply_result/147 : imm tagged) =
                     let Pfield/148 = %block_load.[`0`] (One/136) in
-                    apply &toplevel
-                      Pfield/148 (apply_result/147) -> k/50 * error
+                    apply unknown_arity &toplevel
+                      (Pfield/148 : imm tagged -> imm tagged)
+                        (apply_result/147)
+                        -> k/50 * error
                   where k/50 (apply_result/138 : imm tagged) =
                     ((let Popaque/145 = %opaque (1) in
                       let Pfield/146 = %block_load.[`1`] (Two/137) in
-                      apply &toplevel
-                        Pfield/146 (Popaque/145) -> k/51 * error)
+                      apply unknown_arity &toplevel
+                        (Pfield/146 : _ -> imm tagged)
+                          (Popaque/145)
+                          -> k/51 * error)
                        where k/51 (apply_result/139 : imm tagged) =
                          ((let Pfield/144 = %block_load.[`1`] (One/136) in
-                           apply &toplevel Pfield/144 (1) -> k/52 * error)
+                           apply unknown_arity &toplevel
+                             (Pfield/144 : imm tagged -> imm tagged)
+                               (1)
+                               -> k/52 * error)
                             where k/52 (apply_result/140 : imm tagged) =
                               let int_add/141 =
                                 %int_barith.add

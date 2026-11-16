@@ -15,7 +15,7 @@
  let choose/39 = closure choose_0 @choose &toplevel in
  (let Popaque/42 = %opaque ($camlFloat_const__float_0) in
   apply direct(choose_0 &toplevel)
-    (choose/39 : _ -> float boxed)
+    (choose/39 : imm tagged * float boxed * val? -> float boxed)
       (1, $camlFloat_const__float_1, Popaque/42)
       -> k/14 * error)
    where k/14 (result/40 : float boxed) =

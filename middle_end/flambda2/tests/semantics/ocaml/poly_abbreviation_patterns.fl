@@ -57,7 +57,7 @@ let $camlPoly_abbreviation_patterns__first_const_0 = Block 0 () in
           %block.[`0`].`toplevel`.local[region/108] (-605101559, Popaque/124)
         in
         apply direct(f_0 &toplevel)
-          (f/105 : _ -> imm tagged) (Pmakeblock/125) -> k/51 * error)
+          (f/105 : val -> imm tagged) (Pmakeblock/125) -> k/51 * error)
          where k/51 (apply_result/115 : imm tagged) =
            let int_mul/116 = %int_barith.mul (apply_result/115, 100) in
            ((let Popaque/123 = %opaque (749039939) in
@@ -66,7 +66,9 @@ let $camlPoly_abbreviation_patterns__first_const_0 = Block 0 () in
               where k/52 (apply_result/117 : imm tagged) =
                 let int_mul/118 = %int_barith.mul (apply_result/117, 10) in
                 (apply direct(f_0 &toplevel)
-                   (f/105 : _ -> imm tagged) (756711075) -> k/53 * error
+                   (f/105 : imm tagged -> imm tagged)
+                     (756711075)
+                     -> k/53 * error
                    where k/53 (apply_result/119 : imm tagged) =
                      let int_add/120 =
                        %int_barith.add (apply_result/119, int_mul/118)

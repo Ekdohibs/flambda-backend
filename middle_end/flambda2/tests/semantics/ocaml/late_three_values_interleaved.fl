@@ -78,16 +78,26 @@ let $camlLate_three_values_interleaved__first_const_0 = Block 0 () in
     with { x = x/260 }
     in
     apply direct(call1_2 &my_alloc_region/262)
-      (call1/267 : _ -> imm tagged) (f/283, 7) -> k/73 * k/71
+      (call1/267 : val? * imm tagged -> imm tagged) (f/283, 7) -> k/73 * k/71
       where k/73 (apply_result/284 : imm tagged) =
         (apply direct(read2_0 &my_alloc_region/262)
-           (read2/265 : _ -> imm tagged) (c/282) -> k/74 * k/71
+           (read2/265 : [ 0 of imm tagged * imm tagged ] -> imm tagged)
+             (c/282)
+             -> k/74 * k/71
            where k/74 (apply_result/285 : imm tagged) =
              (apply direct(read3_1 &my_alloc_region/262)
-                (read3/266 : _ -> imm tagged) (b/279) -> k/75 * k/71
+                (read3/266
+                 : [ 0 of imm tagged * imm tagged * imm tagged ] ->
+                   imm tagged
+                 )
+                  (b/279)
+                  -> k/75 * k/71
                 where k/75 (apply_result/286 : imm tagged) =
                   (apply direct(read2_0 &my_alloc_region/262)
-                     (read2/265 : _ -> imm tagged) (a/275) -> k/76 * k/71
+                     (read2/265
+                      : [ 0 of imm tagged * imm tagged ] -> imm tagged)
+                       (a/275)
+                       -> k/76 * k/71
                      where k/76 (apply_result/287 : imm tagged) =
                        let int_add/288 =
                          %int_barith.add (apply_result/287, apply_result/286)
@@ -129,31 +139,41 @@ let $camlLate_three_values_interleaved__first_const_0 = Block 0 () in
    (let p/312 = %block.[`0`].my_alloc_region/300.local[region/307] (x/298, 1)
     in
     apply direct(noise_3 &my_alloc_region/300)
-      (noise/306 : _ -> imm tagged) (x/298) -> k/82 * k/80
+      (noise/306 : imm tagged -> imm tagged) (x/298) -> k/82 * k/80
       where k/82 (n1/313 : imm tagged) =
         let q/314 =
           %block.[`0`].my_alloc_region/300.local[region/307]
             (n1/313, x/298, 2)
         in
         (apply direct(noise_3 &my_alloc_region/300)
-           (noise/306 : _ -> imm tagged) (n1/313) -> k/83 * k/80
+           (noise/306 : imm tagged -> imm tagged) (n1/313) -> k/83 * k/80
            where k/83 (n2/315 : imm tagged) =
              let f/316 = closure f_6 @f_1 &my_alloc_region/300 &region/307
              with { n2 = n2/315 }
              in
              (apply direct(noise_3 &my_alloc_region/300)
-                (noise/306 : _ -> imm tagged) (n2/315) -> k/84 * k/80
+                (noise/306 : imm tagged -> imm tagged)
+                  (n2/315)
+                  -> k/84 * k/80
                 where k/84 (n3/317 : imm tagged) =
                   (apply direct(call1_2 &my_alloc_region/300)
-                     (call1/305 : _ -> imm tagged) (f/316, 1) -> k/85 * k/80
+                     (call1/305 : val? * imm tagged -> imm tagged)
+                       (f/316, 1)
+                       -> k/85 * k/80
                      where k/85 (apply_result/318 : imm tagged) =
                        (apply direct(read3_1 &my_alloc_region/300)
-                          (read3/304 : _ -> imm tagged)
+                          (read3/304
+                           : [ 0 of imm tagged * imm tagged * imm tagged ] ->
+                             imm tagged
+                           )
                             (q/314)
                             -> k/86 * k/80
                           where k/86 (apply_result/319 : imm tagged) =
                             (apply direct(read2_0 &my_alloc_region/300)
-                               (read2/303 : _ -> imm tagged)
+                               (read2/303
+                                : [ 0 of imm tagged * imm tagged ] ->
+                                  imm tagged
+                                )
                                  (p/312)
                                  -> k/87 * k/80
                                where k/87 (apply_result/320 : imm tagged) =
@@ -189,7 +209,7 @@ let $camlLate_three_values_interleaved__first_const_0 = Block 0 () in
  }
  in
  apply direct(body_5 &toplevel)
-   (body/328 : _ -> imm tagged) (10) -> k/88 * error
+   (body/328 : imm tagged -> imm tagged) (10) -> k/88 * error
    where k/88 (apply_result/329 : imm tagged) =
      ((let Popaque/333 = %opaque (3) in
        apply direct(body_5 &toplevel)

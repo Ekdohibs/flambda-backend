@@ -28,7 +28,7 @@ let $camlValue_arm_constant__first_const_0 = Block 0 () in
     cont k/41 push(k/40)
       where k/41 =
         (apply direct(check_0 &my_alloc_region/77)
-           (check/80 : _ -> imm tagged) (n/75) -> k/42 * k/40
+           (check/80 : imm tagged -> imm tagged) (n/75) -> k/42 * k/40
            where k/42 (apply_result/87 : imm tagged) =
              (cont k/43 pop(k/40)
                 where k/43 =

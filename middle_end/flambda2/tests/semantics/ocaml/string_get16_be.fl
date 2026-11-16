@@ -14,7 +14,9 @@
  let get_uint16_be/45 = closure get_uint16_be_0 @get_uint16_be &toplevel in
  (let Popaque/48 = %opaque ($camlString_get16_be__immstring_0) in
   apply direct(get_uint16_be_0 &toplevel)
-    (get_uint16_be/45 : _ -> imm tagged) (Popaque/48, 1) -> k/14 * error)
+    (get_uint16_be/45 : val? * imm tagged -> imm tagged)
+      (Popaque/48, 1)
+      -> k/14 * error)
    where k/14 (result/46 : imm tagged) =
      let Pmakeblock/47 = %block.[`0`].`toplevel` (result/46) in
      cont k/11 (Pmakeblock/47))

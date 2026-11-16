@@ -72,7 +72,7 @@
  let $camlInt32_identities__int32_1 = -2147483648l in
  let opaque/278 = closure opaque_0 @opaque &toplevel in
  apply direct(opaque_0 &toplevel)
-   (opaque/278 : _ -> imm tagged) (1) -> k/94 * error
+   (opaque/278 : imm tagged -> imm tagged) (1) -> k/94 * error
    where k/94 (flag/279 : imm tagged) =
      let and_ones/280 = closure and_ones_1 @and_ones &toplevel in
      let xor_self/281 = closure xor_self_2 @xor_self &toplevel in
@@ -81,17 +81,17 @@
      in
      let shift_zero/284 = closure shift_zero_5 @shift_zero &toplevel in
      (apply direct(and_ones_1 &toplevel)
-        (and_ones/280 : _ -> int32 boxed)
+        (and_ones/280 : int32 boxed -> int32 boxed)
           ($camlInt32_identities__int32_1)
           -> k/95 * error
         where k/95 (and_ones_min/285 : int32 boxed) =
           (apply direct(opaque_0 &toplevel)
-             (opaque/278 : _ -> int32 boxed)
+             (opaque/278 : int32 boxed -> int32 boxed)
                ($camlInt32_identities__int32_1)
                -> k/119 * error
              where k/119 (apply_result/315 : int32 boxed) =
                apply direct(and_ones_1 &toplevel)
-                 (and_ones/280 : _ -> int32 boxed)
+                 (and_ones/280 : int32 boxed -> int32 boxed)
                    (apply_result/315)
                    -> k/96 * error
              where k/96 (and_ones_min_unknown/286 : int32 boxed) =
@@ -101,22 +101,22 @@
                    | 1 -> k/118 ($camlInt32_identities__int32_1))
                   where k/118 (switch_result/313 : int32 boxed) =
                     apply direct(and_ones_1 &toplevel)
-                      (and_ones/280 : _ -> int32 boxed)
+                      (and_ones/280 : int32 boxed -> int32 boxed)
                         (switch_result/313)
                         -> k/97 * error
                   where k/97 (and_ones_min_joined/287 : int32 boxed) =
                     (apply direct(xor_self_2 &toplevel)
-                       (xor_self/281 : _ -> int32 boxed)
+                       (xor_self/281 : int32 boxed -> int32 boxed)
                          ($camlInt32_identities__int32_1)
                          -> k/98 * error
                        where k/98 (xor_self_min/288 : int32 boxed) =
                          (apply direct(opaque_0 &toplevel)
-                            (opaque/278 : _ -> int32 boxed)
+                            (opaque/278 : int32 boxed -> int32 boxed)
                               ($camlInt32_identities__int32_1)
                               -> k/117 * error
                             where k/117 (apply_result/312 : int32 boxed) =
                               apply direct(xor_self_2 &toplevel)
-                                (xor_self/281 : _ -> int32 boxed)
+                                (xor_self/281 : int32 boxed -> int32 boxed)
                                   (apply_result/312)
                                   -> k/99 * error
                             where k/99
@@ -130,20 +130,23 @@
                                  where k/116
                                          (switch_result/310 : int32 boxed) =
                                    apply direct(xor_self_2 &toplevel)
-                                     (xor_self/281 : _ -> int32 boxed)
+                                     (xor_self/281
+                                      : int32 boxed -> int32 boxed)
                                        (switch_result/310)
                                        -> k/100 * error
                                  where k/100
                                          (xor_self_min_joined/290 :
                                             int32 boxed) =
                                    (apply direct(sub_self_3 &toplevel)
-                                      (sub_self/282 : _ -> int32 boxed)
+                                      (sub_self/282
+                                       : int32 boxed -> int32 boxed)
                                         ($camlInt32_identities__int32_3)
                                         -> k/101 * error
                                       where k/101
                                               (sub_self_max/291 : int32 boxed) =
                                         (apply direct(opaque_0 &toplevel)
-                                           (opaque/278 : _ -> int32 boxed)
+                                           (opaque/278
+                                            : int32 boxed -> int32 boxed)
                                              ($camlInt32_identities__int32_3)
                                              -> k/115 * error
                                            where k/115
@@ -153,7 +156,7 @@
                                                     direct(sub_self_3
                                                     &toplevel)
                                                (sub_self/282
-                                                : _ -> int32 boxed)
+                                                : int32 boxed -> int32 boxed)
                                                  (apply_result/309)
                                                  -> k/102 * error
                                            where k/102
@@ -176,7 +179,9 @@
                                                          direct(sub_self_3
                                                          &toplevel)
                                                     (sub_self/282
-                                                     : _ -> int32 boxed)
+                                                     : int32 boxed ->
+                                                       int32 boxed
+                                                     )
                                                       (switch_result/307)
                                                       -> k/103 * error
                                                 where k/103
@@ -186,7 +191,9 @@
                                                           direct(mul_minus_one_4
                                                           &toplevel)
                                                      (mul_minus_one/283
-                                                      : _ -> int32 boxed)
+                                                      : int32 boxed ->
+                                                        int32 boxed
+                                                      )
                                                        ($camlInt32_identities__int32_1)
                                                        -> k/104 * error
                                                      where k/104
@@ -196,7 +203,8 @@
                                                                direct(opaque_0
                                                                &toplevel)
                                                           (opaque/278
-                                                           : _ -> int32 boxed
+                                                           : int32 boxed ->
+                                                             int32 boxed
                                                            )
                                                             ($camlInt32_identities__int32_1)
                                                             -> k/113 * error
@@ -207,7 +215,7 @@
                                                                    direct(mul_minus_one_4
                                                                    &toplevel)
                                                               (mul_minus_one/283
-                                                               : _ ->
+                                                               : int32 boxed ->
                                                                  int32 boxed
                                                                )
                                                                 (apply_result/306)
@@ -238,7 +246,7 @@
                                                                     &toplevel)
                                                                    (mul_minus_one/283
                                                                     : 
-                                                                    _ ->
+                                                                    int32 boxed ->
                                                                     int32 boxed
                                                                     )
                                                                     (switch_result/304)
@@ -253,7 +261,7 @@
                                                                     &toplevel)
                                                                     (shift_zero/284
                                                                     : 
-                                                                    _ ->
+                                                                    int32 boxed ->
                                                                     int32 boxed
                                                                     )
                                                                     ($camlInt32_identities__int32_1)
@@ -268,7 +276,7 @@
                                                                     &toplevel)
                                                                     (opaque/278
                                                                     : 
-                                                                    _ ->
+                                                                    int32 boxed ->
                                                                     int32 boxed
                                                                     )
                                                                     ($camlInt32_identities__int32_1)
@@ -283,7 +291,7 @@
                                                                     &toplevel)
                                                                     (shift_zero/284
                                                                     : 
-                                                                    _ ->
+                                                                    int32 boxed ->
                                                                     int32 boxed
                                                                     )
                                                                     (apply_result/303)
@@ -313,7 +321,7 @@
                                                                     &toplevel)
                                                                     (shift_zero/284
                                                                     : 
-                                                                    _ ->
+                                                                    int32 boxed ->
                                                                     int32 boxed
                                                                     )
                                                                     (switch_result/301)

@@ -22,7 +22,8 @@ let $camlInlined_attribute_on_out_of_order_partial_application__g_2 =
   }
 in
 apply direct(f_0_1 &toplevel)
-  $camlInlined_attribute_on_out_of_order_partial_application__f_1
+  ($camlInlined_attribute_on_out_of_order_partial_application__f_1
+   : val? * imm tagged -> val?)
     (0, 0)
     -> k * error
   where k (h : imm tagged) =

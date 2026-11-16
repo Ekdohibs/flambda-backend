@@ -17,7 +17,7 @@ let $camlNever_returns_twice__first_const_0 = Block 0 () in
       cont k/28)
    where k/28 =
      apply direct(fail_0 &toplevel)
-       (fail/41 : _ -> imm tagged) (0) -> k/24 * error
+       (fail/41 : imm tagged -> imm tagged) (0) -> k/24 * error
    where k/24 (staticcatch_result/42 : imm tagged) =
      ((let Popaque/46 = %opaque (0) in
        (let untagged/47 = %untag_imm (Popaque/46) in
@@ -28,7 +28,7 @@ let $camlNever_returns_twice__first_const_0 = Block 0 () in
            cont k/26)
         where k/26 =
           apply direct(fail_0 &toplevel)
-            (fail/41 : _ -> imm tagged) (0) -> k/25 * error
+            (fail/41 : imm tagged -> imm tagged) (0) -> k/25 * error
         where k/25 (staticcatch_result/43 : imm tagged) =
           let result/44 =
             %int_barith.add (staticcatch_result/43, staticcatch_result/42)

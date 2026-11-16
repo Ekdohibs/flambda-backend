@@ -5,9 +5,11 @@ let $camlCaptured_closure_given_to_inlined__first_const_0 = Block 0 () in
          -> k/34 * k/35
          : imm tagged =
    let next_depth/102 = rec_info (succ my_depth/101) in
-   apply &my_alloc_region/100 f/97 (n/98) -> k/36 * k/35
+   apply unknown_arity &my_alloc_region/100
+     (f/97 : imm tagged -> imm tagged) (n/98) -> k/36 * k/35
      where k/36 (apply_result/103 : imm tagged) =
-       apply &my_alloc_region/100 f/97 (apply_result/103) -> k/34 * k/35
+       apply unknown_arity &my_alloc_region/100
+         (f/97 : imm tagged -> imm tagged) (apply_result/103) -> k/34 * k/35
  in
  let code size(6)
        scale_2 (n/104 : imm tagged)
@@ -37,13 +39,15 @@ let $camlCaptured_closure_given_to_inlined__first_const_0 = Block 0 () in
         cont k/41)
      where k/41 =
        (apply direct(twice_0 &my_alloc_region/114)
-          (twice/117 : _ -> imm tagged) (scale/118, n/111) -> k/42 * k/40
+          (twice/117 : val? * imm tagged -> imm tagged)
+            (scale/118, n/111)
+            -> k/42 * k/40
           where k/42 (apply_result/119 : imm tagged) =
             let int_add/120 = %int_barith.add (acc/112, apply_result/119) in
             let int_sub/121 = %int_barith.sub (n/111, 1) in
             apply direct(sum_3 &my_alloc_region/114)
               (my_closure/113 ~ depth my_depth/115 -> next_depth/116
-               : _ -> imm tagged)
+               : imm tagged * imm tagged -> imm tagged)
                 (int_sub/121, int_add/120)
                 -> k/39 * k/40)
  in
@@ -70,9 +74,12 @@ let $camlCaptured_closure_given_to_inlined__first_const_0 = Block 0 () in
  in
  (let Popaque/137 = %opaque (2) in
   apply direct(sum_scaled_1 &toplevel)
-    sum_scaled/134 (Popaque/137) -> k/47 * error
+    (sum_scaled/134 : imm tagged -> val?) (Popaque/137) -> k/47 * error
     where k/47 (func/138) =
-      apply &toplevel func/138 (3, 0) -> k/46 * error)
+      apply unknown_arity &toplevel
+        (func/138 : imm tagged * imm tagged -> imm tagged)
+          (3, 0)
+          -> k/46 * error)
    where k/46 (result/135 : imm tagged) =
      let Pmakeblock/136 =
        %block.[`0`].`toplevel` (twice/133, sum_scaled/134, result/135)

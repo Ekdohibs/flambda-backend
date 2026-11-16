@@ -29,17 +29,20 @@ let $camlIarray_measured_one_call_inlined__first_const_0 = Block 0 () in
  let make/85 = closure make_0 @make &toplevel in
  let len/86 = closure len_1 @len &toplevel in
  let g/87 = closure g_2 @g &toplevel in
- apply direct(g_2 &toplevel) (g/87 : _ -> imm tagged) (3) -> k/32 * error
+ apply direct(g_2 &toplevel)
+   (g/87 : imm tagged -> imm tagged) (3) -> k/32 * error
    where k/32 (a/88 : imm tagged) =
      ((let Popaque/93 = %opaque (4) in
        apply direct(g_2 &toplevel) inlined(never)
          (g/87 : _ -> imm tagged) (Popaque/93) -> k/33 * error)
         where k/33 (b/89 : imm tagged) =
           (apply direct(make_0 &toplevel)
-             (make/85 : _ -> imm array) (5) -> k/35 * error
+             (make/85 : imm tagged -> imm array) (5) -> k/35 * error
              where k/35 (apply_result/92 : imm array) =
                apply direct(len_1 &toplevel)
-                 (len/86 : _ -> imm tagged) (apply_result/92) -> k/34 * error
+                 (len/86 : imm array -> imm tagged)
+                   (apply_result/92)
+                   -> k/34 * error
              where k/34 (n/90 : imm tagged) =
                let Pmakeblock/91 = %block.[`0`].`toplevel` (a/88, b/89, n/90)
                in

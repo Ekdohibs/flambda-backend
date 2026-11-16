@@ -21,7 +21,7 @@
  let choose/58 = closure choose_0 @choose &toplevel in
  (let Popaque/69 = %opaque (0) in
   apply direct(choose_0 &toplevel)
-    (choose/58 : _ -> [ 0 of val * imm tagged ])
+    (choose/58 : val? * val * val -> [ 0 of val * imm tagged ])
       (Popaque/69,
        $camlData_string_returned_through_join__const_block_1,
        $camlData_string_returned_through_join__const_block_3)
@@ -32,7 +32,7 @@
      let Pstringlength/62 = %tag_imm (prim/61) in
      ((let Popaque/68 = %opaque (1) in
        apply direct(choose_0 &toplevel)
-         (choose/58 : _ -> val)
+         (choose/58 : val? * val * val -> val)
            (Popaque/68,
             $camlData_string_returned_through_join__immstring_4,
             $camlData_string_returned_through_join__immstring_5)

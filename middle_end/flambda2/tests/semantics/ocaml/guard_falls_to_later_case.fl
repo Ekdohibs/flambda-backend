@@ -61,7 +61,7 @@ let $camlGuard_falls_to_later_case__first_const_0 = Block 0 () in
      %block.[`1`].`toplevel`.local[region/135] (Popaque/158)
    in
    apply direct(f_0 &toplevel)
-     (f/132 : _ -> imm tagged) (Pmakeblock/159) -> k/58 * error)
+     (f/132 : val -> imm tagged) (Pmakeblock/159) -> k/58 * error)
     where k/58 (apply_result/140 : imm tagged) =
       let int_mul/141 = %int_barith.mul (apply_result/140, 10000) in
       ((let Popaque/156 = %opaque (3) in
@@ -69,18 +69,18 @@ let $camlGuard_falls_to_later_case__first_const_0 = Block 0 () in
           %block.[`1`].`toplevel`.local[region/135] (Popaque/156)
         in
         apply direct(f_0 &toplevel)
-          (f/132 : _ -> imm tagged) (Pmakeblock/157) -> k/59 * error)
+          (f/132 : val -> imm tagged) (Pmakeblock/157) -> k/59 * error)
          where k/59 (apply_result/142 : imm tagged) =
            let int_mul/143 = %int_barith.mul (apply_result/142, 1000) in
            (apply direct(f_0 &toplevel)
-              (f/132 : _ -> imm tagged) (0) -> k/60 * error
+              (f/132 : imm tagged -> imm tagged) (0) -> k/60 * error
               where k/60 (apply_result/144 : imm tagged) =
                 ((let Popaque/154 = %opaque (0) in
                   let Pmakeblock/155 =
                     %block.[`0`].`toplevel`.local[region/135] (Popaque/154)
                   in
                   apply direct(f_0 &toplevel)
-                    (f/132 : _ -> imm tagged)
+                    (f/132 : val -> imm tagged)
                       (Pmakeblock/155)
                       -> k/61 * error)
                    where k/61 (apply_result/145 : imm tagged) =
@@ -92,7 +92,7 @@ let $camlGuard_falls_to_later_case__first_const_0 = Block 0 () in
                            (Popaque/152)
                        in
                        apply direct(f_0 &toplevel)
-                         (f/132 : _ -> imm tagged)
+                         (f/132 : val -> imm tagged)
                            (Pmakeblock/153)
                            -> k/62 * error)
                         where k/62 (apply_result/147 : imm tagged) =

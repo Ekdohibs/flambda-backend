@@ -29,7 +29,7 @@ let code loopify(never) size(4) newer_version_of(switch_converted_to_lookup_tabl
         : imm tagged =
   apply direct(switch_converted_to_lookup_table_0_1 &my_alloc_region)
     ($camlCode_size_of_single_arg_switch__switch_converted_to_lookup_table_1
-     : _ -> imm tagged)
+     : imm tagged -> imm tagged)
       (x)
       -> k * k1
 in
@@ -56,7 +56,7 @@ let code loopify(never) size(4) newer_version_of(switch_converted_to_affine'_3)
         : imm tagged =
   apply direct(switch_converted_to_affine_2_1 &my_alloc_region)
     ($camlCode_size_of_single_arg_switch__switch_converted_to_affine_4
-     : _ -> imm tagged)
+     : imm tagged -> imm tagged)
       (x)
       -> k * k1
 in

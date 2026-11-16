@@ -46,17 +46,23 @@ let $camlAttr_local_in_match__first_const_0 = Block 0 () in
      %block.[`1`].`toplevel`.local[region/104] (2, Popaque/116)
    in
    apply direct(body_0 &toplevel)
-     (body/101 : _ -> imm tagged) (Pmakeblock/117, 7) -> k/42 * error)
+     (body/101 : val * imm tagged -> imm tagged)
+       (Pmakeblock/117, 7)
+       -> k/42 * error)
     where k/42 (apply_result/109 : imm tagged) =
       ((let Popaque/114 = %opaque (4) in
         let Pmakeblock/115 =
           %block.[`0`].`toplevel`.local[region/104] (Popaque/114)
         in
         apply direct(body_0 &toplevel)
-          (body/101 : _ -> imm tagged) (Pmakeblock/115, 5) -> k/43 * error)
+          (body/101 : val * imm tagged -> imm tagged)
+            (Pmakeblock/115, 5)
+            -> k/43 * error)
          where k/43 (apply_result/110 : imm tagged) =
            (apply direct(body_0 &toplevel)
-              (body/101 : _ -> imm tagged) (0, 3) -> k/44 * error
+              (body/101 : imm tagged * imm tagged -> imm tagged)
+                (0, 3)
+                -> k/44 * error
               where k/44 (apply_result/111 : imm tagged) =
                 let int_add/112 =
                   %int_barith.add (apply_result/111, apply_result/110)

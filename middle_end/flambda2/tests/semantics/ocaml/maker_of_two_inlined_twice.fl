@@ -18,7 +18,7 @@ let $camlMaker_of_two_inlined_twice__first_const_0 = Block 0 () in
        ((let int_sub/119 = %int_barith.sub (n/111, 1) in
          apply direct(down_1 &my_alloc_region/113)
            (my_closure/112 ~ depth my_depth/114 -> next_depth/115
-            : _ -> imm tagged)
+            : imm tagged -> imm tagged)
              (int_sub/119)
              -> k/45 * k/43)
           where k/45 (apply_result/117 : imm tagged) =
@@ -45,7 +45,7 @@ let $camlMaker_of_two_inlined_twice__first_const_0 = Block 0 () in
        let int_add/131 = %int_barith.add (n/123, 1) in
        apply direct(up_2 &my_alloc_region/126)
          (my_closure/125 ~ depth my_depth/127 -> next_depth/128
-          : _ -> imm tagged)
+          : imm tagged * imm tagged -> imm tagged)
            (int_add/131, int_add/130)
            -> k/47 * k/48
  in
@@ -67,32 +67,41 @@ let $camlMaker_of_two_inlined_twice__first_const_0 = Block 0 () in
  in
  let make/143 = closure make_0 @make &toplevel in
  apply direct(make_0 &toplevel)
-   (make/143 : _ -> [ 0 of val * val ]) (3) -> k/54 * error
+   (make/143 : imm tagged -> [ 0 of val * val ]) (3) -> k/54 * error
    where k/54 (`*match*/146` : [ 0 of val * val ]) =
      (apply direct(make_0 &toplevel)
-        (make/143 : _ -> [ 0 of val * val ]) (5) -> k/55 * error
+        (make/143 : imm tagged -> [ 0 of val * val ]) (5) -> k/55 * error
         where k/55 (`*match*/147` : [ 0 of val * val ]) =
           ((let Popaque/161 = %opaque (0) in
             let Pmixedfield/162 = %block_load.[`1`] (`*match*/147`) in
-            apply &toplevel Pmixedfield/162 (Popaque/161, 0) -> k/56 * error)
+            apply unknown_arity &toplevel
+              (Pmixedfield/162 : val? * imm tagged -> imm tagged)
+                (Popaque/161, 0)
+                -> k/56 * error)
              where k/56 (apply_result/148 : imm tagged) =
                ((let Popaque/159 = %opaque (9) in
                  let Pmixedfield/160 = %block_load.[`0`] (`*match*/147`) in
-                 apply &toplevel
-                   Pmixedfield/160 (Popaque/159) -> k/57 * error)
+                 apply unknown_arity &toplevel
+                   (Pmixedfield/160 : _ -> imm tagged)
+                     (Popaque/159)
+                     -> k/57 * error)
                   where k/57 (apply_result/149 : imm tagged) =
                     ((let Popaque/157 = %opaque (0) in
                       let Pmixedfield/158 = %block_load.[`1`] (`*match*/146`)
                       in
-                      apply &toplevel
-                        Pmixedfield/158 (Popaque/157, 0) -> k/58 * error)
+                      apply unknown_arity &toplevel
+                        (Pmixedfield/158 : val? * imm tagged -> imm tagged)
+                          (Popaque/157, 0)
+                          -> k/58 * error)
                        where k/58 (apply_result/150 : imm tagged) =
                          ((let Popaque/155 = %opaque (9) in
                            let Pmixedfield/156 =
                              %block_load.[`0`] (`*match*/146`)
                            in
-                           apply &toplevel
-                             Pmixedfield/156 (Popaque/155) -> k/59 * error)
+                           apply unknown_arity &toplevel
+                             (Pmixedfield/156 : _ -> imm tagged)
+                               (Popaque/155)
+                               -> k/59 * error)
                             where k/59 (apply_result/151 : imm tagged) =
                               let int_add/152 =
                                 %int_barith.add

@@ -61,7 +61,12 @@
        cont k/44 (Pfield/132)
      where k/46 =
        (apply direct(value_of_0 &my_alloc_region/126)
-          (value_of/129 : _ -> imm tagged) (a/123, base/124) -> k/47 * k/45
+          (value_of/129
+           : [ 0 | 0 of imm tagged |1 of imm tagged ] * imm tagged ->
+             imm tagged
+           )
+            (a/123, base/124)
+            -> k/47 * k/45
           where k/47 (apply_result/130 : imm tagged) =
             let int_add/131 = %int_barith.add (apply_result/130, 1) in
             cont k/44 (int_add/131))

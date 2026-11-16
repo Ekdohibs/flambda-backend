@@ -14,7 +14,7 @@ and code rec loopify(never) size(21) newer_version_of(f_0)
       ((let int_sub = %int_barith.sub (x, 1) in
         apply direct(f_0_1 &my_alloc_region)
           ($camlTests2__f_1 ~ depth my_depth -> succ my_depth
-           : _ -> imm tagged)
+           : imm tagged -> imm tagged)
             (int_sub)
             -> k2 * k1)
          where k2 (apply_result : imm tagged) =

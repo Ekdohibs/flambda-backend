@@ -19,7 +19,7 @@
        let int_add/42 = %int_barith.add (acc/35, 1) in
        apply direct(length_from_0 &my_alloc_region/38)
          (my_closure/37 ~ depth my_depth/39 -> next_depth/40
-          : _ -> imm tagged)
+          : imm tagged * val? -> imm tagged)
            (int_add/42, Pfield/41)
            -> k/16 * k/17
  in
@@ -35,7 +35,7 @@
  in
  let length_from/46 = closure length_from_0 @length_from &toplevel in
  apply direct(length_from_0 &toplevel)
-   (length_from/46 : _ -> imm tagged)
+   (length_from/46 : imm tagged * val -> imm tagged)
      (0, $camlList_length__const_block_3)
      -> k/20 * error
    where k/20 (result/47 : imm tagged) =

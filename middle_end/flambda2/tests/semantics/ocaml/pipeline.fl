@@ -24,10 +24,14 @@ let $camlPipeline__first_const_0 = Block 0 () in
     (increment/57 : _ -> imm tagged) (Popaque/63) -> k/26 * error)
    where k/26 (apply_result/62 : imm tagged) =
      apply direct(double_1 &toplevel)
-       (double/58 : _ -> imm tagged) (apply_result/62) -> k/25 * error
+       (double/58 : imm tagged -> imm tagged)
+         (apply_result/62)
+         -> k/25 * error
    where k/25 (apply_result/61 : imm tagged) =
      apply direct(increment_0 &toplevel)
-       (increment/57 : _ -> imm tagged) (apply_result/61) -> k/24 * error
+       (increment/57 : imm tagged -> imm tagged)
+         (apply_result/61)
+         -> k/24 * error
    where k/24 (result/59 : imm tagged) =
      let Pmakeblock/60 = %block.[`0`].`toplevel` (result/59) in
      cont k/19 (Pmakeblock/60))

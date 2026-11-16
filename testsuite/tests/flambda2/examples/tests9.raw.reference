@@ -18,7 +18,8 @@
        let Pfield = %block_load.[`1`] (param) in
        let int_add = %int_barith.add (len, 1) in
        apply direct(length_aux_0 &my_alloc_region)
-         (my_closure ~ depth my_depth -> next_depth : _ -> imm tagged)
+         (my_closure ~ depth my_depth -> next_depth
+          : imm tagged * val? -> imm tagged)
            (int_add, Pfield)
            -> k1 * k2
  in
@@ -30,7 +31,12 @@
    let next_depth = rec_info (succ my_depth) in
    let length_aux = %project_value_slot.[length].[length_aux] (my_closure) in
    apply direct(length_aux_0 &my_alloc_region)
-     (length_aux : _ -> imm tagged) (0, l) -> k1 * k2
+     (length_aux
+      : imm tagged * [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] ->
+        imm tagged
+      )
+       (0, l)
+       -> k1 * k2
  in
  let code rec loopify(default tailrec) size(28)
        rev_append_2
@@ -54,7 +60,7 @@
        let Pfield_1 = %block_load.[`1`] (l1) in
        apply direct(rev_append_2 &my_alloc_region)
          (my_closure ~ depth my_depth -> next_depth
-          : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+          : val? * val -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
            (Pfield_1, Pmakeblock)
            -> k1 * k2
  in
@@ -95,7 +101,9 @@
             let int_sub = %int_barith.sub (k, 1) in
             apply direct(chop_3 &my_alloc_region)
               (my_closure ~ depth my_depth -> next_depth
-               : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+               : imm tagged * val? ->
+                 [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+               )
                 (int_sub, Pfield)
                 -> k1 * k2
           where k3 =
@@ -139,7 +147,8 @@
             let h2 = %block_load.[`0`] (l2) in
             let t1 = %block_load.[`1`] (l1) in
             let h1 = %block_load.[`0`] (l1) in
-            (apply &my_alloc_region cmp (h1, h2) -> k5 * k2
+            (apply unknown_arity &my_alloc_region
+               (cmp : _ -> imm tagged) (h1, h2) -> k5 * k2
                where k5 (c : imm tagged) =
                  ((let prim = %phys_eq (c, 0) in
                    let eq = %tag_imm (prim) in
@@ -168,7 +177,9 @@
                            in
                            apply direct(rev_merge_5 &my_alloc_region)
                              (my_closure ~ depth my_depth -> next_depth
-                              : _ ->
+                              : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] *
+                                val? *
+                                val ->
                                 [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
                               )
                                (l1, t2, Pmakeblock)
@@ -179,7 +190,9 @@
                            in
                            apply direct(rev_merge_5 &my_alloc_region)
                              (my_closure ~ depth my_depth -> next_depth
-                              : _ ->
+                              : val? *
+                                [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] *
+                                val ->
                                 [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
                               )
                                (t1, l2, Pmakeblock)
@@ -190,17 +203,27 @@
                       in
                       apply direct(rev_merge_5 &my_alloc_region)
                         (my_closure ~ depth my_depth -> next_depth
-                         : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+                         : val? * val? * val ->
+                           [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+                         )
                           (t1, t2, Pmakeblock)
                           -> k1 * k2))
           where k4 =
             apply direct(rev_append_2 &my_alloc_region)
-              (rev_append : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+              (rev_append
+               : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] *
+                 [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] ->
+                 [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+               )
                 (l1, accu)
                 -> k1 * k2)
      where k3 =
        apply direct(rev_append_2 &my_alloc_region)
-         (rev_append : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+         (rev_append
+          : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] *
+            [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] ->
+            [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+          )
            (l2, accu)
            -> k1 * k2
  in
@@ -243,7 +266,8 @@
             let h2 = %block_load.[`0`] (l2) in
             let t1 = %block_load.[`1`] (l1) in
             let h1 = %block_load.[`0`] (l1) in
-            (apply &my_alloc_region cmp (h1, h2) -> k5 * k2
+            (apply unknown_arity &my_alloc_region
+               (cmp : _ -> imm tagged) (h1, h2) -> k5 * k2
                where k5 (c : imm tagged) =
                  ((let prim = %phys_eq (c, 0) in
                    let eq = %tag_imm (prim) in
@@ -272,7 +296,9 @@
                            in
                            apply direct(rev_merge_rev_6 &my_alloc_region)
                              (my_closure ~ depth my_depth -> next_depth
-                              : _ ->
+                              : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] *
+                                val? *
+                                val ->
                                 [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
                               )
                                (l1, t2, Pmakeblock)
@@ -283,7 +309,9 @@
                            in
                            apply direct(rev_merge_rev_6 &my_alloc_region)
                              (my_closure ~ depth my_depth -> next_depth
-                              : _ ->
+                              : val? *
+                                [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] *
+                                val ->
                                 [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
                               )
                                (t1, l2, Pmakeblock)
@@ -294,17 +322,27 @@
                       in
                       apply direct(rev_merge_rev_6 &my_alloc_region)
                         (my_closure ~ depth my_depth -> next_depth
-                         : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+                         : val? * val? * val ->
+                           [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+                         )
                           (t1, t2, Pmakeblock)
                           -> k1 * k2))
           where k4 =
             apply direct(rev_append_2 &my_alloc_region)
-              (rev_append : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+              (rev_append
+               : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] *
+                 [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] ->
+                 [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+               )
                 (l1, accu)
                 -> k1 * k2)
      where k3 =
        apply direct(rev_append_2 &my_alloc_region)
-         (rev_append : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+         (rev_append
+          : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] *
+            [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] ->
+            [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+          )
            (l2, accu)
            -> k1 * k2
  in
@@ -358,7 +396,8 @@
                where k5 =
                  let x2 = %block_load.[`0`] (`*match*`) in
                  let x1 = %block_load.[`0`] (l) in
-                 (apply &my_alloc_region cmp (x1, x2) -> k5 * k2
+                 (apply unknown_arity &my_alloc_region
+                    (cmp : _ -> imm tagged) (x1, x2) -> k5 * k2
                     where k5 (c : imm tagged) =
                       ((let prim = %phys_eq (c, 0) in
                         let eq = %tag_imm (prim) in
@@ -454,7 +493,8 @@
                            let x3 = %block_load.[`0`] (`*match*_1`) in
                            let x2 = %block_load.[`0`] (`*match*`) in
                            let x1 = %block_load.[`0`] (l) in
-                           (apply &my_alloc_region cmp (x1, x2) -> k4 * k2
+                           (apply unknown_arity &my_alloc_region
+                              (cmp : _ -> imm tagged) (x1, x2) -> k4 * k2
                               where k4 (c : imm tagged) =
                                 ((let prim = %phys_eq (c, 0) in
                                   let eq = %tag_imm (prim) in
@@ -480,8 +520,12 @@
                                          where k7 =
                                            cont k6)
                                         where k6 =
-                                          (apply &my_alloc_region
-                                             cmp (x1, x3) -> k6 * k2
+                                          (apply
+                                                  unknown_arity
+                                                  &my_alloc_region
+                                             (cmp : _ -> imm tagged)
+                                               (x1, x3)
+                                               -> k6 * k2
                                              where k6 (c_1 : imm tagged) =
                                                ((let prim = %phys_eq (c_1, 0)
                                                  in
@@ -516,8 +560,12 @@
                                                           cont k8)
                                                        where k8 =
                                                          (apply
+                                                                 unknown_arity
                                                                  &my_alloc_region
-                                                            cmp
+                                                            (cmp
+                                                             : _ ->
+                                                               imm tagged
+                                                             )
                                                               (x2, x3)
                                                               -> k8 * k2
                                                             where k8
@@ -651,8 +699,12 @@
                                                     in
                                                     cont k1 (Pmakeblock_1)))
                                         where k5 =
-                                          (apply &my_alloc_region
-                                             cmp (x2, x3) -> k5 * k2
+                                          (apply
+                                                  unknown_arity
+                                                  &my_alloc_region
+                                             (cmp : _ -> imm tagged)
+                                               (x2, x3)
+                                               -> k5 * k2
                                              where k5 (c_1 : imm tagged) =
                                                ((let prim = %phys_eq (c_1, 0)
                                                  in
@@ -687,8 +739,12 @@
                                                           cont k7)
                                                        where k7 =
                                                          (apply
+                                                                 unknown_arity
                                                                  &my_alloc_region
-                                                            cmp
+                                                            (cmp
+                                                             : _ ->
+                                                               imm tagged
+                                                             )
                                                               (x1, x3)
                                                               -> k7 * k2
                                                             where k7
@@ -822,8 +878,10 @@
                                                     in
                                                     cont k1 (Pmakeblock_1))))
                                    where k4 =
-                                     (apply &my_alloc_region
-                                        cmp (x2, x3) -> k4 * k2
+                                     (apply unknown_arity &my_alloc_region
+                                        (cmp : _ -> imm tagged)
+                                          (x2, x3)
+                                          -> k4 * k2
                                         where k4 (c_1 : imm tagged) =
                                           ((let prim = %phys_eq (c_1, 0) in
                                             let eq = %tag_imm (prim) in
@@ -884,26 +942,38 @@
        let n1 = %int_shift.asr (n, prim) in
        let n2 = %int_barith.sub (n, n1) in
        (apply direct(chop_3 &my_alloc_region)
-          (chop : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+          (chop
+           : imm tagged * [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] ->
+             [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+           )
             (n1, l)
             -> k3 * k2
           where k3 (l2 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
             (apply direct(rev_sort_8 &my_alloc_region)
                (rev_sort ~ depth my_depth -> next_depth
-                : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+                : imm tagged * [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] ->
+                  [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+                )
                  (n1, l)
                  -> k3 * k2
                where k3 (s1 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
                  (apply direct(rev_sort_8 &my_alloc_region)
                     (rev_sort ~ depth my_depth -> next_depth
-                     : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+                     : imm tagged *
+                       [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] ->
+                       [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+                     )
                       (n2, l2)
                       -> k3 * k2
                     where k3
                             (s2 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
                       apply direct(rev_merge_rev_6 &my_alloc_region)
                         (rev_merge_rev
-                         : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+                         : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] *
+                           [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] *
+                           imm tagged ->
+                           [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+                         )
                           (s1, s2, 0)
                           -> k1 * k2)))
  and code rec size(696)
@@ -956,7 +1026,8 @@
                where k5 =
                  let x2 = %block_load.[`0`] (`*match*`) in
                  let x1 = %block_load.[`0`] (l) in
-                 (apply &my_alloc_region cmp (x1, x2) -> k5 * k2
+                 (apply unknown_arity &my_alloc_region
+                    (cmp : _ -> imm tagged) (x1, x2) -> k5 * k2
                     where k5 (c : imm tagged) =
                       ((let prim = %phys_eq (c, 0) in
                         let eq = %tag_imm (prim) in
@@ -1052,7 +1123,8 @@
                            let x3 = %block_load.[`0`] (`*match*_1`) in
                            let x2 = %block_load.[`0`] (`*match*`) in
                            let x1 = %block_load.[`0`] (l) in
-                           (apply &my_alloc_region cmp (x1, x2) -> k4 * k2
+                           (apply unknown_arity &my_alloc_region
+                              (cmp : _ -> imm tagged) (x1, x2) -> k4 * k2
                               where k4 (c : imm tagged) =
                                 ((let prim = %phys_eq (c, 0) in
                                   let eq = %tag_imm (prim) in
@@ -1079,8 +1151,12 @@
                                          where k7 =
                                            cont k6)
                                         where k6 =
-                                          (apply &my_alloc_region
-                                             cmp (x1, x3) -> k6 * k2
+                                          (apply
+                                                  unknown_arity
+                                                  &my_alloc_region
+                                             (cmp : _ -> imm tagged)
+                                               (x1, x3)
+                                               -> k6 * k2
                                              where k6 (c_1 : imm tagged) =
                                                ((let prim = %phys_eq (c_1, 0)
                                                  in
@@ -1115,8 +1191,12 @@
                                                           cont k8)
                                                        where k8 =
                                                          (apply
+                                                                 unknown_arity
                                                                  &my_alloc_region
-                                                            cmp
+                                                            (cmp
+                                                             : _ ->
+                                                               imm tagged
+                                                             )
                                                               (x2, x3)
                                                               -> k8 * k2
                                                             where k8
@@ -1250,8 +1330,12 @@
                                                     in
                                                     cont k1 (Pmakeblock_1)))
                                         where k5 =
-                                          (apply &my_alloc_region
-                                             cmp (x2, x3) -> k5 * k2
+                                          (apply
+                                                  unknown_arity
+                                                  &my_alloc_region
+                                             (cmp : _ -> imm tagged)
+                                               (x2, x3)
+                                               -> k5 * k2
                                              where k5 (c_1 : imm tagged) =
                                                ((let prim = %phys_eq (c_1, 0)
                                                  in
@@ -1286,8 +1370,12 @@
                                                           cont k7)
                                                        where k7 =
                                                          (apply
+                                                                 unknown_arity
                                                                  &my_alloc_region
-                                                            cmp
+                                                            (cmp
+                                                             : _ ->
+                                                               imm tagged
+                                                             )
                                                               (x1, x3)
                                                               -> k7 * k2
                                                             where k7
@@ -1421,8 +1509,10 @@
                                                     in
                                                     cont k1 (Pmakeblock_1))))
                                    where k4 =
-                                     (apply &my_alloc_region
-                                        cmp (x2, x3) -> k4 * k2
+                                     (apply unknown_arity &my_alloc_region
+                                        (cmp : _ -> imm tagged)
+                                          (x2, x3)
+                                          -> k4 * k2
                                         where k4 (c_1 : imm tagged) =
                                           ((let prim = %phys_eq (c_1, 0) in
                                             let eq = %tag_imm (prim) in
@@ -1484,26 +1574,38 @@
        let n1 = %int_shift.asr (n, prim) in
        let n2 = %int_barith.sub (n, n1) in
        (apply direct(chop_3 &my_alloc_region)
-          (chop : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+          (chop
+           : imm tagged * [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] ->
+             [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+           )
             (n1, l)
             -> k3 * k2
           where k3 (l2 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
             (apply direct(sort_7 &my_alloc_region)
                (sort ~ depth my_depth -> next_depth
-                : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+                : imm tagged * [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] ->
+                  [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+                )
                  (n1, l)
                  -> k3 * k2
                where k3 (s1 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
                  (apply direct(sort_7 &my_alloc_region)
                     (sort ~ depth my_depth -> next_depth
-                     : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+                     : imm tagged *
+                       [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] ->
+                       [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+                     )
                       (n2, l2)
                       -> k3 * k2
                     where k3
                             (s2 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
                       apply direct(rev_merge_5 &my_alloc_region)
                         (rev_merge
-                         : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+                         : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] *
+                           [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] *
+                           imm tagged ->
+                           [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+                         )
                           (s1, s2, 0)
                           -> k1 * k2)))
  in
@@ -1536,7 +1638,9 @@
    }
    in
    apply direct(length_1 &my_alloc_region)
-     (length : _ -> imm tagged) (l) -> k3 * k2
+     (length : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] -> imm tagged)
+       (l)
+       -> k3 * k2
      where k3 (len : imm tagged) =
        ((let prim = %int_comp.lt (len, 2) in
          let int_lessthan = %tag_imm (prim) in
@@ -1548,7 +1652,10 @@
              cont k3)
           where k3 =
             apply direct(sort_7 &my_alloc_region)
-              (sort : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+              (sort
+               : imm tagged * [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] ->
+                 [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+               )
                 (len, l)
                 -> k1 * k2)
  in
@@ -1564,7 +1671,9 @@
    in
    apply direct(rev_sort_11 &my_alloc_region)
      (rev_sort ~ depth my_depth -> next_depth
-      : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+      : imm tagged * [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] ->
+        [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+      )
        (n, l)
        -> k1 * k2
  and code rec size(97)
@@ -1612,7 +1721,8 @@
                where k4 =
                  let x2 = %block_load.[`0`] (`*match*`) in
                  let x1 = %block_load.[`0`] (l) in
-                 (apply &my_alloc_region cmp (x1, x2) -> k4 * k2
+                 (apply unknown_arity &my_alloc_region
+                    (cmp : _ -> imm tagged) (x1, x2) -> k4 * k2
                     where k4 (c : imm tagged) =
                       ((let prim = %int_comp.lt (c, 0) in
                         let int_lessthan = %tag_imm (prim) in
@@ -1637,7 +1747,9 @@
      where k3 =
        apply direct(sort_10 &my_alloc_region)
          (sort ~ depth my_depth -> next_depth
-          : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+          : imm tagged * [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] ->
+            [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+          )
            (n, l)
            -> k1 * k2
  in
@@ -1652,7 +1764,10 @@
    with { cmp_3 = cmp }
    in
    apply direct(sort_10 &my_alloc_region)
-     (sort : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+     (sort
+      : imm tagged * [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] ->
+        [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+      )
        (42, l)
        -> k1 * k2
  in

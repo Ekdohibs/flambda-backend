@@ -44,7 +44,7 @@
  (let region/111 = %begin_region () in
   let ghost_region/112 = %begin_ghost_region () in
   apply direct(second_or_only_0 &toplevel &region/111 &ghost_region/112)
-    (second_or_only/108 : _ -> imm tagged) (0) -> k/47 * error
+    (second_or_only/108 : imm tagged -> imm tagged) (0) -> k/47 * error
     where k/47 (apply_result/116 : imm tagged) =
       ((let Popaque/130 = %opaque (7) in
         let Pmakeblock/131 =
@@ -57,7 +57,7 @@
         apply
                direct(second_or_only_0
                &toplevel &region/111 &ghost_region/112)
-          (second_or_only/108 : _ -> imm tagged)
+          (second_or_only/108 : val -> imm tagged)
             (Pmakeblock/132)
             -> k/48 * error)
          where k/48 (apply_result/117 : imm tagged) =
@@ -72,7 +72,7 @@
              apply
                     direct(second_or_only_0
                     &toplevel &region/111 &ghost_region/112)
-               (second_or_only/108 : _ -> imm tagged)
+               (second_or_only/108 : val -> imm tagged)
                  (Pmakeblock/129)
                  -> k/49 * error)
               where k/49 (apply_result/119 : imm tagged) =
@@ -85,7 +85,7 @@
                   apply
                          direct(second_or_only_0
                          &toplevel &region/111 &ghost_region/112)
-                    (second_or_only/108 : _ -> imm tagged)
+                    (second_or_only/108 : val -> imm tagged)
                       (Pmakeblock/126)
                       -> k/50 * error)
                    where k/50 (apply_result/121 : imm tagged) =

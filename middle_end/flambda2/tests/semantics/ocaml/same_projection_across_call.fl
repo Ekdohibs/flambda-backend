@@ -17,7 +17,7 @@ let $camlSame_projection_across_call__first_const_0 = Block 0 () in
    let twice/68 = %project_value_slot.[around].[twice] (my_closure/64) in
    let first/69 = %block_load.[`0`] (pair/63) in
    apply direct(twice_0 &my_alloc_region/65)
-     (twice/68 : _ -> imm tagged) (first/69) -> k/22 * k/21
+     (twice/68 : imm tagged -> imm tagged) (first/69) -> k/22 * k/21
      where k/22 (doubled/70 : imm tagged) =
        let Pfield/71 = %block_load.[`0`] (pair/63) in
        let int_add/72 = %int_barith.add (doubled/70, Pfield/71) in
@@ -30,7 +30,7 @@ let $camlSame_projection_across_call__first_const_0 = Block 0 () in
  (let Popaque/77 = %opaque (3) in
   let Pmakeblock/78 = %block.[`0`].`toplevel` (Popaque/77, 0) in
   apply direct(around_1 &toplevel)
-    (around/74 : _ -> imm tagged) (Pmakeblock/78) -> k/23 * error)
+    (around/74 : val -> imm tagged) (Pmakeblock/78) -> k/23 * error)
    where k/23 (result/75 : imm tagged) =
      let Pmakeblock/76 =
        %block.[`0`].`toplevel` (twice/73, around/74, result/75)

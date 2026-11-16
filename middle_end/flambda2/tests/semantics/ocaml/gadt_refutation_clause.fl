@@ -36,24 +36,28 @@
  let pred/82 = closure pred_0 @pred &toplevel in
  let to_int/83 = closure to_int_1 @to_int &toplevel in
  apply direct(pred_0 &toplevel)
-   (pred/82 : _ -> [ 0 | 0 of [ 0 | 0 of val ] ])
+   (pred/82 : val -> [ 0 | 0 of [ 0 | 0 of val ] ])
      ($camlGadt_refutation_clause__const_block_0)
      -> k/38 * error
    where k/38 (apply_result/93 : [ 0 | 0 of [ 0 | 0 of val ] ]) =
      apply direct(to_int_1 &toplevel)
-       (to_int/83 : _ -> imm tagged) (apply_result/93) -> k/35 * error
+       (to_int/83 : [ 0 | 0 of [ 0 | 0 of val ] ] -> imm tagged)
+         (apply_result/93)
+         -> k/35 * error
    where k/35 (apply_result/84 : imm tagged) =
      ((let Popaque/90 = %opaque ($camlGadt_refutation_clause__const_block_0)
        in
        let Pmakeblock/91 = %block.[`0`].`toplevel` (Popaque/90) in
        let Pmakeblock/92 = %block.[`0`].`toplevel` (Pmakeblock/91) in
        apply direct(pred_0 &toplevel)
-         (pred/82 : _ -> [ 0 | 0 of [ 0 | 0 of val ] ])
+         (pred/82 : val -> [ 0 | 0 of [ 0 | 0 of val ] ])
            (Pmakeblock/92)
            -> k/37 * error)
         where k/37 (apply_result/89 : [ 0 | 0 of [ 0 | 0 of val ] ]) =
           apply direct(to_int_1 &toplevel)
-            (to_int/83 : _ -> imm tagged) (apply_result/89) -> k/36 * error
+            (to_int/83 : [ 0 | 0 of [ 0 | 0 of val ] ] -> imm tagged)
+              (apply_result/89)
+              -> k/36 * error
         where k/36 (apply_result/85 : imm tagged) =
           let int_mul/86 = %int_barith.mul (apply_result/85, 10) in
           let result/87 = %int_barith.add (int_mul/86, apply_result/84) in

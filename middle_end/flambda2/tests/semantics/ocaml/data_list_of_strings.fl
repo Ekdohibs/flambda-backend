@@ -22,7 +22,7 @@
        let Pfield/57 = %block_load.[`1`] (words/47) in
        apply direct(total_0 &my_alloc_region/50)
          (my_closure/49 ~ depth my_depth/51 -> next_depth/52
-          : _ -> imm tagged)
+          : val? * imm tagged -> imm tagged)
            (Pfield/57, int_add/56)
            -> k/16 * k/17
  in
@@ -48,7 +48,9 @@
  let total/61 = closure total_0 @total &toplevel in
  (let Popaque/64 = %opaque ($camlData_list_of_strings__const_block_7) in
   apply direct(total_0 &toplevel)
-    (total/61 : _ -> imm tagged) (Popaque/64, 0) -> k/20 * error)
+    (total/61 : val? * imm tagged -> imm tagged)
+      (Popaque/64, 0)
+      -> k/20 * error)
    where k/20 (result/62 : imm tagged) =
      let Pmakeblock/63 =
        %block.[`0`].`toplevel`

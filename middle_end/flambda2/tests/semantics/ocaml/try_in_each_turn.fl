@@ -19,7 +19,7 @@
        ((let Pfield/87 = %block_load.[`1`] (divisors/67) in
          apply direct(sum_of_quotients_0 &my_alloc_region/69)
            (my_closure/68 ~ depth my_depth/70 -> next_depth/71
-            : _ -> imm tagged)
+            : imm tagged * val? -> imm tagged)
              (n/66, Pfield/87)
              -> k/39 * k/37)
           where k/39 (apply_result/72 : imm tagged) =
@@ -82,7 +82,7 @@
  in
  (let Popaque/94 = %opaque (60) in
   apply direct(sum_of_quotients_0 &toplevel)
-    (sum_of_quotients/91 : _ -> imm tagged)
+    (sum_of_quotients/91 : val? * val -> imm tagged)
       (Popaque/94, $camlTry_in_each_turn__const_block_4)
       -> k/50 * error)
    where k/50 (result/92 : imm tagged) =

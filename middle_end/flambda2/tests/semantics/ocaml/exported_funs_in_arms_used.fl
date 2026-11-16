@@ -24,9 +24,13 @@ let $camlExported_funs_in_arms_used__first_const_0 = Block 0 () in
          : imm tagged =
    let next_depth/78 = rec_info (succ my_depth/77) in
    let step/79 = %project_value_slot.[twice].[step] (my_closure/75) in
-   apply &my_alloc_region/76 step/79 (x/74) -> k/36 * k/35
+   apply unknown_arity &my_alloc_region/76
+     (step/79 : imm tagged -> imm tagged) (x/74) -> k/36 * k/35
      where k/36 (apply_result/80 : imm tagged) =
-       apply &my_alloc_region/76 step/79 (apply_result/80) -> k/34 * k/35
+       apply unknown_arity &my_alloc_region/76
+         (step/79 : imm tagged -> imm tagged)
+           (apply_result/80)
+           -> k/34 * k/35
  in
  (let Popaque/86 = %opaque (1) in
   (let untagged/87 = %untag_imm (Popaque/86) in

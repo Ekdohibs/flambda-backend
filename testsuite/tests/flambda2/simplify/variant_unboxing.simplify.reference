@@ -39,7 +39,11 @@ let code loopify(never) size(12) newer_version_of(is_empty_2)
         : imm tagged =
   let Tree = %project_value_slot.[is_empty].[Tree] (my_closure) in
   (let Pfield = %block_load.[`0`] (Tree) in
-   apply &my_alloc_region Pfield (t) -> k2 * k1)
+   apply unknown_arity &my_alloc_region
+     (Pfield
+      : val -> [ 0 | 0 of imm tagged * val |1 of imm tagged * val * val ])
+       (t)
+       -> k2 * k1)
     where k2
             (`*match*` :
                [ 0 | 0 of imm tagged * val |1 of imm tagged * val * val ]) =

@@ -37,7 +37,9 @@ and code rec loopify(never) size(42) newer_version_of(fact_1)
            cont k (int_mul))
 in
 apply direct(fact_1_1 &toplevel)
-  ($camlInlined_rec__fact_2 : _ -> imm tagged) (1000000) -> k * error
+  ($camlInlined_rec__fact_2 : imm tagged -> imm tagged)
+    (1000000)
+    -> k * error
   where k (i : imm tagged) =
     let $camlInlined_rec =
       Block 0 ($camlInlined_rec__apply_1, $camlInlined_rec__fact_2, i)

@@ -133,6 +133,7 @@ let make_boxed_const_int (i, m) : static_data =
 %token KWD_DELETED [@symbol "deleted"]
 %token KWD_DEPTH [@symbol "depth"]
 %token KWD_DIRECT [@symbol "direct"]
+%token KWD_UNKNOWN_ARITY [@symbol "unknown_arity"]
 %token KWD_DO_NOT_INLINE [@symbol "do_not_inline"]
 %token KWD_DONE  [@symbol "done"]
 %token KWD_END   [@symbol "end"]
@@ -658,6 +659,8 @@ method_kind:
 
 call_kind:
   | alloc = alloc_mode_for_applications; { (Function Indirect, alloc) }
+  | KWD_UNKNOWN_ARITY; alloc = alloc_mode_for_applications;
+    { (Function Indirect_unknown_arity, alloc) }
   | KWD_DIRECT; LPAREN;
       code_id = code_id;
       function_slot = function_slot_opt;

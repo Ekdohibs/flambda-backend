@@ -15,7 +15,8 @@ let $camlOption_bind__first_const_0 = Block 0 () in
         cont k/56)
      where k/56 =
        let Pfield/135 = %block_load.[`0`] (option/129) in
-       apply &my_alloc_region/132 f/130 (Pfield/135) -> k/54 * k/55
+       apply unknown_arity &my_alloc_region/132
+         (f/130 : _ -> [ 0 | 0 of val ]) (Pfield/135) -> k/54 * k/55
  in
  let code inline(always) size(23)
        positive_1 (x/139 : imm tagged)
@@ -83,30 +84,34 @@ let $camlOption_bind__first_const_0 = Block 0 () in
        &toplevel &region/176
    in
    apply direct(positive_1 &toplevel)
-     (positive/172 : _ -> [ 0 | 0 of val ]) (-3) -> k/77 * error
+     (positive/172 : imm tagged -> [ 0 | 0 of val ]) (-3) -> k/77 * error
      where k/77 (apply_result/189 : [ 0 | 0 of val ]) =
        apply direct(bind_0 &toplevel)
-         (bind/171 : _ -> [ 0 | 0 of val ])
+         (bind/171 : [ 0 | 0 of val ] * val? -> [ 0 | 0 of val ])
            (apply_result/189, `fn[option_bind.ml:20,32--55]/188`)
            -> k/76 * error)
     where k/76 (apply_result/187 : [ 0 | 0 of val ]) =
       apply direct(value_2 &toplevel)
-        (value/173 : _ -> imm tagged) (apply_result/187) -> k/72 * error
+        (value/173 : [ 0 | 0 of val ] -> imm tagged)
+          (apply_result/187)
+          -> k/72 * error
     where k/72 (apply_result/181 : imm tagged) =
       ((let `fn[option_bind.ml:19,27--50]/185` =
           closure `fn[option_bind.ml:19,27--50]_4`
             @`fn[option_bind.ml:19,27--50]` &toplevel &region/176
         in
         apply direct(positive_1 &toplevel)
-          (positive/172 : _ -> [ 0 | 0 of val ]) (3) -> k/75 * error
+          (positive/172 : imm tagged -> [ 0 | 0 of val ]) (3) -> k/75 * error
           where k/75 (apply_result/186 : [ 0 | 0 of val ]) =
             apply direct(bind_0 &toplevel)
-              (bind/171 : _ -> [ 0 | 0 of val ])
+              (bind/171 : [ 0 | 0 of val ] * val? -> [ 0 | 0 of val ])
                 (apply_result/186, `fn[option_bind.ml:19,27--50]/185`)
                 -> k/74 * error)
          where k/74 (apply_result/184 : [ 0 | 0 of val ]) =
            apply direct(value_2 &toplevel)
-             (value/173 : _ -> imm tagged) (apply_result/184) -> k/73 * error
+             (value/173 : [ 0 | 0 of val ] -> imm tagged)
+               (apply_result/184)
+               -> k/73 * error
          where k/73 (apply_result/182 : imm tagged) =
            let int_add/183 =
              %int_barith.add (apply_result/182, apply_result/181)

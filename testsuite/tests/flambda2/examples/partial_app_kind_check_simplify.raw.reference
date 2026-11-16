@@ -23,9 +23,11 @@ let $camlPartial_app_kind_check_simplify__first_const_0 = Block 0 () in
    let next_depth = rec_info (succ my_depth) in
    let cast = closure cast_1 @cast &my_alloc_region in
    let f = closure f_2 @f &my_alloc_region in
-   apply direct(cast_1 &my_alloc_region) (cast : _ -> val) (u, f) -> k3 * k2
+   apply direct(cast_1 &my_alloc_region)
+     (cast : imm tagged * val? -> val) (u, f) -> k3 * k2
      where k3 (apply_result : val) =
-       apply &my_alloc_region apply_result (0) -> k1 * k2
+       apply unknown_arity &my_alloc_region
+         (apply_result : imm tagged -> int64) (0) -> k1 * k2
  in
  let test = closure test_0 @test &toplevel in
  let Pmakeblock = %block.[`0`].`toplevel` (test) in

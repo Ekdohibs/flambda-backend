@@ -87,10 +87,11 @@
                  cont k/38 (s_17_unboxed0/109)))
  in
  let f/139 = closure f_0 @f &toplevel in
- apply direct(f_0 &toplevel) (f/139 : _ -> imm tagged) (6) -> k/52 * error
+ apply direct(f_0 &toplevel)
+   (f/139 : imm tagged -> imm tagged) (6) -> k/52 * error
    where k/52 (apply_result/140 : imm tagged) =
      (apply direct(f_0 &toplevel)
-        (f/139 : _ -> imm tagged) (5) -> k/53 * error
+        (f/139 : imm tagged -> imm tagged) (5) -> k/53 * error
         where k/53 (apply_result/141 : imm tagged) =
           let result/142 =
             %int_barith.add (apply_result/141, apply_result/140)

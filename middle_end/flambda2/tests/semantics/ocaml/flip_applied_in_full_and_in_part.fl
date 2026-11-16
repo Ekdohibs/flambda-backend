@@ -53,7 +53,9 @@ let $camlFlip_applied_in_full_and_in_part__first_const_0 = Block 0 () in
    in
    let a/231 = %project_value_slot.[partial_flip].[a] (my_closure/225) in
    apply direct(flip_0 &my_alloc_region/226)
-     flip/229 (weigh/230, a/231, param2/224) -> k/70 * k/71
+     (flip/229 : val * val? * val? -> val?)
+       (weigh/230, a/231, param2/224)
+       -> k/70 * k/71
  in
  let code size(6) stub
        partial_flip_5 (param1/232, param2/233)
@@ -67,7 +69,9 @@ let $camlFlip_applied_in_full_and_in_part__first_const_0 = Block 0 () in
      %project_value_slot.[partial_flip_1].[weigh_1] (my_closure/234)
    in
    apply direct(flip_0 &my_alloc_region/235)
-     flip/238 (weigh/239, param1/232, param2/233) -> k/72 * k/73
+     (flip/238 : val * val? * val? -> val?)
+       (weigh/239, param1/232, param2/233)
+       -> k/72 * k/73
  in
  let code size(6) stub
        partial_flip_6 (param1/240, param2/241)
@@ -81,7 +85,9 @@ let $camlFlip_applied_in_full_and_in_part__first_const_0 = Block 0 () in
      %project_value_slot.[partial_flip_2].[weigh_2] (my_closure/242)
    in
    apply direct(flip_0 &my_alloc_region/243)
-     flip/246 (weigh/247, param1/240, param2/241) -> k/74 * k/75
+     (flip/246 : val * val? * val? -> val?)
+       (weigh/247, param1/240, param2/241)
+       -> k/74 * k/75
  in
  let flip/248 = closure flip_0 @flip &toplevel in
  let flip_staged/249 = closure flip_staged_1 @flip_staged &toplevel in
@@ -89,7 +95,9 @@ let $camlFlip_applied_in_full_and_in_part__first_const_0 = Block 0 () in
  let a/251 = %opaque (7) in
  let b/252 = %opaque (2) in
  apply direct(flip_0 &toplevel)
-   (flip/248 : _ -> imm tagged) (weigh/250, a/251, b/252) -> k/76 * error
+   (flip/248 : val? * imm tagged * imm tagged -> imm tagged)
+     (weigh/250, a/251, b/252)
+     -> k/76 * error
    where k/76 (in_full/253 : imm tagged) =
      ((let region/276 = %begin_region () in
        let ghost_region/277 = %begin_ghost_region () in
@@ -100,7 +108,7 @@ let $camlFlip_applied_in_full_and_in_part__first_const_0 = Block 0 () in
         cont k/89 (partial_flip/282))
          where k/89 (waiting/281 : val) =
            apply direct(partial_flip_4 &toplevel)
-             (waiting/281 : _ -> imm tagged) (b/252) -> k/88 * error
+             (waiting/281 : imm tagged -> imm tagged) (b/252) -> k/88 * error
          where k/88 (region_return/278 : imm tagged) =
            let unit/279 = %end_region (region/276) in
            let unit/280 = %end_ghost_region (ghost_region/277) in
@@ -115,7 +123,7 @@ let $camlFlip_applied_in_full_and_in_part__first_const_0 = Block 0 () in
              cont k/87 (partial_flip/275))
               where k/87 (flipped/274 : val) =
                 apply direct(partial_flip_5 &toplevel)
-                  (flipped/274 : _ -> imm tagged)
+                  (flipped/274 : imm tagged * imm tagged -> imm tagged)
                     (a/251, b/252)
                     -> k/86 * error
               where k/86 (region_return/271 : imm tagged) =
@@ -124,17 +132,23 @@ let $camlFlip_applied_in_full_and_in_part__first_const_0 = Block 0 () in
                 cont k/78 (region_return/271))
              where k/78 (function_alone/255 : imm tagged) =
                (apply direct(flip_staged_1 &toplevel)
-                  flip_staged/249 (weigh/250) -> k/85 * error
+                  (flip_staged/249 : val -> val?) (weigh/250) -> k/85 * error
                   where k/85 (func/268) =
-                    apply &toplevel func/268 (a/251, b/252) -> k/79 * error
+                    apply unknown_arity &toplevel
+                      (func/268 : imm tagged * imm tagged -> imm tagged)
+                        (a/251, b/252)
+                        -> k/79 * error
                   where k/79 (staged_in_full/256 : imm tagged) =
                     (apply direct(flip_staged_1 &toplevel)
                        (flip_staged/249 : _ -> val)
                          (weigh/250)
                          -> k/84 * error
                        where k/84 (flipped/267 : val) =
-                         apply &toplevel
-                           flipped/267 (a/251, b/252) -> k/80 * error
+                         apply unknown_arity &toplevel
+                           (flipped/267
+                            : imm tagged * imm tagged -> imm tagged)
+                             (a/251, b/252)
+                             -> k/80 * error
                        where k/80 (staged_function_alone/257 : imm tagged) =
                          ((let region/260 = %begin_region () in
                            let ghost_region/261 = %begin_ghost_region () in
@@ -146,7 +160,10 @@ let $camlFlip_applied_in_full_and_in_part__first_const_0 = Block 0 () in
                             cont k/83 (partial_flip/266))
                              where k/83 (apply_result/265 : val) =
                                apply direct(flip_0 &toplevel)
-                                 (flip/248 : _ -> imm tagged)
+                                 (flip/248
+                                  : val * imm tagged * imm tagged ->
+                                    imm tagged
+                                  )
                                    (apply_result/265, a/251, b/252)
                                    -> k/82 * error
                              where k/82 (region_return/262 : imm tagged) =

@@ -18,7 +18,9 @@ let $camlShifts__first_const_0 = Block 0 () in
  let int_asr/61 = %int_shift.asr (Popaque/59, prim/60) in
  (let Popaque/66 = %opaque (3) in
   apply direct(pack_0 &toplevel)
-    (pack/56 : _ -> imm tagged) (Popaque/66, 7) -> k/14 * error)
+    (pack/56 : val? * imm tagged -> imm tagged)
+      (Popaque/66, 7)
+      -> k/14 * error)
    where k/14 (apply_result/62 : imm tagged) =
      let int_add/63 = %int_barith.add (apply_result/62, int_asr/61) in
      let result/64 = %int_barith.add (int_add/63, int_lsr/58) in

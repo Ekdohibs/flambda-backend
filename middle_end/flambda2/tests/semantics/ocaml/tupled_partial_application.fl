@@ -41,7 +41,8 @@
      %project_value_slot.[partial_pair_first].[Popaque] (my_closure/150)
    in
    apply direct(pair_first_0 &my_alloc_region/151)
-     (pair_first/154 : _ -> imm tagged)
+     (pair_first/154
+      : [ 0 of imm tagged * imm tagged ] * imm tagged -> imm tagged)
        (Popaque/155, param1/149)
        -> k/42 * k/43
  in
@@ -55,7 +56,10 @@
      %project_value_slot.[partial_pair_second].[pair_second] (my_closure/157)
    in
    apply direct(pair_second_1 &my_alloc_region/158)
-     (pair_second/161 : _ -> imm tagged) (5, param1/156) -> k/44 * k/45
+     (pair_second/161
+      : imm tagged * [ 0 of imm tagged * imm tagged ] -> imm tagged)
+       (5, param1/156)
+       -> k/44 * k/45
  in
  let $camlTupled_partial_application__const_block_2 = Block 0 (8, 9) in
  let $camlTupled_partial_application__const_block_1 = Block 0 (6, 7) in
@@ -71,10 +75,10 @@
   cont k/46 (partial_pair_first/177))
    where k/46 (with_pair/164 : val) =
      (apply direct(partial_pair_first_2 &toplevel)
-        (with_pair/164 : _ -> imm tagged) (3) -> k/47 * error
+        (with_pair/164 : imm tagged -> imm tagged) (3) -> k/47 * error
         where k/47 (pair_then_three/165 : imm tagged) =
           (apply direct(partial_pair_first_2 &toplevel)
-             (with_pair/164 : _ -> imm tagged) (4) -> k/48 * error
+             (with_pair/164 : imm tagged -> imm tagged) (4) -> k/48 * error
              where k/48 (pair_then_four/166 : imm tagged) =
                ((let partial_pair_second/175 =
                    closure partial_pair_second_3 @partial_pair_second
@@ -84,7 +88,7 @@
                  cont k/49 (partial_pair_second/175))
                   where k/49 (with_number/167 : val) =
                     (apply direct(partial_pair_second_3 &toplevel)
-                       (with_number/167 : _ -> imm tagged)
+                       (with_number/167 : val -> imm tagged)
                          ($camlTupled_partial_application__const_block_1)
                          -> k/50 * error
                        where k/50 (number_then_pair/168 : imm tagged) =
@@ -100,13 +104,15 @@
                                     (number_then_unknown_pair/169 :
                                        imm tagged) =
                               (apply direct(pair_second_1 &toplevel)
-                                 (pair_second/163 : _ -> imm tagged)
+                                 (pair_second/163
+                                  : imm tagged * val -> imm tagged)
                                    (3,
                                     $camlTupled_partial_application__const_block_0)
                                    -> k/52 * error
                                  where k/52 (apply_result/170 : imm tagged) =
                                    (apply direct(pair_first_0 &toplevel)
-                                      (pair_first/162 : _ -> imm tagged)
+                                      (pair_first/162
+                                       : val * imm tagged -> imm tagged)
                                         ($camlTupled_partial_application__const_block_0,
                                          3)
                                         -> k/53 * error

@@ -25,7 +25,7 @@ let $camlClosure_argument_exported__first_const_0 = Block 0 () in
    let apply/74 = %project_value_slot.[f].[`apply`] (my_closure/70) in
    let g/75 = closure g_2 @g &my_alloc_region/71 with { x = x/69 } in
    apply direct(apply_0 &my_alloc_region/71)
-     (apply/74 : _ -> imm tagged) (g/75, x/69) -> k/22 * k/23
+     (apply/74 : val? * imm tagged -> imm tagged) (g/75, x/69) -> k/22 * k/23
  in
  let apply/76 = closure apply_0 @`apply` &toplevel in
  let f/77 = closure f_1 @f &toplevel with { `apply` = apply/76 } in

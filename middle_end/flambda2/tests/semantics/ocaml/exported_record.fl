@@ -23,12 +23,14 @@ let $camlExported_record__first_const_0 = Block 0 () in
  let sum/71 = closure sum_1 @sum &toplevel in
  (let Popaque/75 = %opaque (1) in
   apply direct(make_0 &toplevel)
-    (make/70 : _ -> [ 0 of imm tagged * imm tagged ])
+    (make/70 : val? * imm tagged -> [ 0 of imm tagged * imm tagged ])
       (Popaque/75, 2)
       -> k/23 * error)
    where k/23 (apply_result/74 : [ 0 of imm tagged * imm tagged ]) =
      apply direct(sum_1 &toplevel)
-       (sum/71 : _ -> imm tagged) (apply_result/74) -> k/22 * error
+       (sum/71 : [ 0 of imm tagged * imm tagged ] -> imm tagged)
+         (apply_result/74)
+         -> k/22 * error
    where k/22 (result/72 : imm tagged) =
      let Pmakeblock/73 = %block.[`0`].`toplevel` (make/70, sum/71, result/72)
      in

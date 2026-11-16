@@ -36,14 +36,16 @@
             let int_add/64 = %int_barith.add (i/56, 1) in
             apply direct(count_0 &my_alloc_region/59)
               (my_closure/58 ~ depth my_depth/60 -> next_depth/61
-               : _ -> imm tagged)
+               : imm tagged * imm tagged -> imm tagged)
                 (int_add/64, staticcatch_result/63)
                 -> k/22 * k/23)
  in
  let count/75 = closure count_0 @count &toplevel in
  (let Popaque/78 = %opaque (0) in
   apply direct(count_0 &toplevel)
-    (count/75 : _ -> imm tagged) (Popaque/78, 0) -> k/29 * error)
+    (count/75 : val? * imm tagged -> imm tagged)
+      (Popaque/78, 0)
+      -> k/29 * error)
    where k/29 (result/76 : imm tagged) =
      let Pmakeblock/77 = %block.[`0`].`toplevel` (count/75, result/76) in
      cont k/21 (Pmakeblock/77))

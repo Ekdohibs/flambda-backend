@@ -30,7 +30,7 @@ let $camlInlined_test_join__first_const_0 = Block 0 () in
  let make/70 = closure make_0 @make &toplevel in
  (let Popaque/81 = %opaque (-3) in
   apply direct(make_0 &toplevel)
-    (make/70 : _ -> [ 0 of imm tagged * imm tagged ])
+    (make/70 : imm tagged * val? -> [ 0 of imm tagged * imm tagged ])
       (8, Popaque/81)
       -> k/38 * error)
    where k/38 (apply_result/73 : [ 0 of imm tagged * imm tagged ]) =

@@ -14,17 +14,22 @@ let $camlUnroll2__first_const_0 = Block 0 () in
      where k4 =
        let int_sub = %int_barith.sub (x, 1) in
        apply direct(foo_0 &my_alloc_region)
-         my_closure ~ depth my_depth -> next_depth (int_sub) -> k1 * k2
+         (my_closure ~ depth my_depth -> next_depth : imm tagged -> val?)
+           (int_sub)
+           -> k1 * k2
      where k3 =
        let int_add = %int_barith.add (x, 1) in
        apply direct(foo_0 &my_alloc_region)
-         my_closure ~ depth my_depth -> next_depth (int_add) -> k1 * k2
+         (my_closure ~ depth my_depth -> next_depth : imm tagged -> val?)
+           (int_add)
+           -> k1 * k2
  in
  let code size(5)
        bar_1 (x : imm tagged) my_closure &my_alloc_region my_depth -> k1 * k2 =
    let next_depth = rec_info (succ my_depth) in
    let foo = %project_value_slot.[bar].[foo] (my_closure) in
-   apply direct(foo_0 &my_alloc_region) unroll(2) foo (x) -> k1 * k2
+   apply direct(foo_0 &my_alloc_region) unroll(2)
+     (foo : imm tagged -> val?) (x) -> k1 * k2
  in
  let foo = closure foo_0 @foo &toplevel in
  let bar = closure bar_1 @bar &toplevel with { foo = foo } in

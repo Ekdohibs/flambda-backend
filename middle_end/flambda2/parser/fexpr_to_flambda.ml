@@ -106,6 +106,22 @@ let value_kind_with_subkind_opt :
 let arity a =
   Flambda_arity.create_singletons (List.map value_kind_with_subkind a)
 
+(* The arities of a call for which a text need not give them. Where the arity of
+   the arguments is not given, it is one value for each argument; where no arity
+   is given, that of the result is one value. *)
+let arities_or_values (arities : Fexpr.function_arities option) args =
+  let values n =
+    Flambda_arity.create_singletons
+      (List.init n (fun _ -> Flambda_kind.With_subkind.any_value))
+  in
+  match arities with
+  | None -> values (List.length args), values 1
+  | Some { params_arity; ret_arity } ->
+    ( (match params_arity with
+      | Some params_arity -> arity params_arity
+      | None -> values (List.length args)),
+      arity ret_arity )
+
 let const (c : Fexpr.const) : Reg_width_const.t =
   match c with
   | Tagged_immediate i -> Reg_width_const.tagged_immediate (i |> immediate)
@@ -860,19 +876,13 @@ let rec expr env acc (e : Fexpr.expr) : _ * Flambda.Expr.t =
       match call_kind with
       | Function (Direct { code_id; function_slot = _ }) ->
         let code_id = find_code_id env code_id in
-        let params_arity =
-          (* CR mshinwell: This needs fixing to cope with the fact that the
-             arities have moved onto [Apply_expr] *)
-          Flambda_arity.create_singletons
-            (List.map (fun _ -> Flambda_kind.With_subkind.any_value) args)
-        in
-        let return_arity =
-          match arities with
-          | None ->
-            Flambda_arity.create_singletons [Flambda_kind.With_subkind.any_value]
-          | Some { ret_arity; _ } -> arity ret_arity
-        in
+        let params_arity, return_arity = arities_or_values arities args in
         Call_kind.direct_function_call code_id, params_arity, return_arity
+      | Function Indirect_unknown_arity ->
+        let params_arity, return_arity = arities_or_values arities args in
+        ( Call_kind.indirect_function_call_unknown_arity,
+          params_arity,
+          return_arity )
       | Function Indirect -> (
         match arities with
         | Some { params_arity = Some params_arity; ret_arity } ->
@@ -908,17 +918,7 @@ let rec expr env acc (e : Fexpr.expr) : _ * Flambda.Expr.t =
         | None | Some { params_arity = None; ret_arity = _ } ->
           Misc.fatal_errorf "Must specify arities for C call")
       | Method { kind; obj } ->
-        let params_arity =
-          (* CR mshinwell: This needs fixing to cope with the fact that the
-             arities have moved onto [Apply_expr] *)
-          Flambda_arity.create_singletons
-            (List.map (fun _ -> Flambda_kind.With_subkind.any_value) args)
-        in
-        let return_arity =
-          (* CR mshinwell: This needs fixing to cope with the fact that the
-             arities have moved onto [Apply_expr] *)
-          Flambda_arity.create_singletons [Flambda_kind.With_subkind.any_value]
-        in
+        let params_arity, return_arity = arities_or_values arities args in
         ( Call_kind.method_call kind ~obj:(simple env obj),
           params_arity,
           return_arity )

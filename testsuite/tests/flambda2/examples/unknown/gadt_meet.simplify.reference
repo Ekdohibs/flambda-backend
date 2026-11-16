@@ -42,14 +42,15 @@ let code loopify(never) size(44) newer_version_of(test_3)
         -> k * k1
         : [ 0 | 0 of [ 0 of val? * val ] ] =
   apply direct(f_1_1 &my_alloc_region)
-    ($camlGadt_meet__f_5 : _ -> [ 0 of [ 0 of imm tagged ] |1 of imm tagged ]
-     )
+    ($camlGadt_meet__f_5
+     : imm tagged -> [ 0 of [ 0 of imm tagged ] |1 of imm tagged ])
       (0)
       -> k2 * k1
     where k2 (op : [ 0 of [ 0 of imm tagged ] |1 of imm tagged ]) =
       let Pfield = %block_load.[`0`] (op) in
       (apply direct(with_y_0_1 &my_alloc_region)
-         ($camlGadt_meet__with_y_4 : _ -> [ 0 of imm tagged ])
+         ($camlGadt_meet__with_y_4
+          : [ 0 of imm tagged ] * imm tagged -> [ 0 of imm tagged ])
            (Pfield, 1)
            -> k2 * k1
          where k2 (apply_result : [ 0 of imm tagged ]) =
@@ -79,7 +80,8 @@ let code loopify(never) size(17) newer_version_of(foo_4)
         -> k * k1
         : [ 0 of imm tagged * [ 0 of val |1 of imm tagged ] ] =
   apply direct(test_3_1 &my_alloc_region)
-    ($camlGadt_meet__test_7 : _ -> [ 0 | 0 of [ 0 of imm tagged * val ] ])
+    ($camlGadt_meet__test_7
+     : imm tagged -> [ 0 | 0 of [ 0 of imm tagged * val ] ])
       (0)
       -> k2 * k1
     where k2 (`*match*` : [ 0 | 0 of [ 0 of imm tagged * val ] ]) =

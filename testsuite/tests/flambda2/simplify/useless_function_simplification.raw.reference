@@ -26,7 +26,8 @@ let $camlUseless_function_simplification__first_const_0 = Block 0 () in
          : val =
    let next_depth = rec_info (succ my_depth) in
    let make = %project_value_slot.[h].[make] (my_closure) in
-   apply direct(make_0 &my_alloc_region) (make : _ -> val) (a, b) -> k1 * k2
+   apply direct(make_0 &my_alloc_region)
+     (make : imm tagged * imm tagged -> val) (a, b) -> k1 * k2
  in
  let make = closure make_0 @make &toplevel in
  let h = closure h_2 @h &toplevel with { make = make } in

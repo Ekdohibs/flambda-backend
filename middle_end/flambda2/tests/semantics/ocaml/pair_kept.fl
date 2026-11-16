@@ -21,7 +21,10 @@
  let $camlPair_kept__const_block_1 = Block 0 (5, 6) in
  let sum/57 = closure sum_0 @sum &toplevel in
  apply direct(sum_0 &toplevel)
-   (sum/57 : _ -> [ 0 of imm tagged * [ 0 of imm tagged * imm tagged ] ])
+   (sum/57
+    : imm tagged * val ->
+      [ 0 of imm tagged * [ 0 of imm tagged * imm tagged ] ]
+    )
      (0, $camlPair_kept__const_block_1)
      -> k/19 * error
    where k/19
@@ -29,7 +32,9 @@
               [ 0 of imm tagged * [ 0 of imm tagged * imm tagged ] ]) =
      let Pfield/59 = %block_load.[`0`] (apply_result/58) in
      (apply direct(sum_0 &toplevel)
-        (sum/57 : _ -> [ 0 of imm tagged * [ 0 of imm tagged * imm tagged ] ]
+        (sum/57
+         : imm tagged * val ->
+           [ 0 of imm tagged * [ 0 of imm tagged * imm tagged ] ]
          )
           (1, $camlPair_kept__const_block_2)
           -> k/20 * error

@@ -56,11 +56,12 @@ let $camlCompose__first_const_0 = Block 0 () in
       &toplevel
   in
   apply direct(compose_0 &toplevel)
-    compose/102
+    (compose/102 : val * val -> val?)
       (`fn[compose.ml:12,22--38]/107`, `fn[compose.ml:12,39--55]/106`)
       -> k/38 * error
     where k/38 (func/108) =
-      apply &toplevel func/108 (Popaque/105) -> k/37 * error)
+      apply unknown_arity &toplevel
+        (func/108 : _ -> imm tagged) (Popaque/105) -> k/37 * error)
    where k/37 (result/103 : imm tagged) =
      let Pmakeblock/104 = %block.[`0`].`toplevel` (result/103) in
      cont k/27 (Pmakeblock/104))

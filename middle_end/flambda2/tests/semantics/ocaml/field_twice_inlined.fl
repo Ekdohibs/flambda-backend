@@ -6,7 +6,8 @@ let $camlField_twice_inlined__first_const_0 = Block 0 () in
          : imm tagged =
    let next_depth/51 = rec_info (succ my_depth/50) in
    (let Pfield/55 = %block_load.[`0`] (p/47) in
-    apply &my_alloc_region/49 Pfield/55 (0) -> k/25 * k/23)
+    apply unknown_arity &my_alloc_region/49
+      (Pfield/55 : imm tagged -> [ 0 |1 ]) (0) -> k/25 * k/23)
      where k/25 (apply_result/53 : [ 0 |1 ]) =
        ((let untagged/54 = %untag_imm (apply_result/53) in
          switch untagged/54
@@ -16,7 +17,8 @@ let $camlField_twice_inlined__first_const_0 = Block 0 () in
             cont k/24)
      where k/24 =
        let Pfield/52 = %block_load.[`0`] (p/47) in
-       apply &my_alloc_region/49 Pfield/52 (1) -> k/22 * k/23
+       apply unknown_arity &my_alloc_region/49
+         (Pfield/52 : imm tagged -> imm tagged) (1) -> k/22 * k/23
  in
  let code size(1)
        `fn[field_twice_inlined.ml:10,30--45]_1` (param/56 : imm tagged)

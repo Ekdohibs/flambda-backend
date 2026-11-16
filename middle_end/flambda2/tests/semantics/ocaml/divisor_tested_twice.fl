@@ -34,7 +34,9 @@ let $camlDivisor_tested_twice__first_const_0 = Block 0 () in
  let digits/54 = closure digits_0 @digits &toplevel in
  (let Popaque/57 = %opaque (5) in
   apply direct(digits_0 &toplevel)
-    (digits/54 : _ -> imm tagged) (17, Popaque/57) -> k/32 * error)
+    (digits/54 : imm tagged * val? -> imm tagged)
+      (17, Popaque/57)
+      -> k/32 * error)
    where k/32 (result/55 : imm tagged) =
      let Pmakeblock/56 = %block.[`0`].`toplevel` (digits/54, result/55) in
      cont k/23 (Pmakeblock/56))

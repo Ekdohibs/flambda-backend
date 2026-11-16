@@ -16,7 +16,8 @@ let $camlTests2__first_const_0 = Block 0 () in
      where k3 =
        ((let int_sub = %int_barith.sub (x, 1) in
          apply direct(f_0 &my_alloc_region)
-           (my_closure ~ depth my_depth -> next_depth : _ -> imm tagged)
+           (my_closure ~ depth my_depth -> next_depth
+            : imm tagged -> imm tagged)
              (int_sub)
              -> k3 * k2)
           where k3 (apply_result : imm tagged) =
@@ -25,7 +26,7 @@ let $camlTests2__first_const_0 = Block 0 () in
  in
  let f = closure f_0 @f &toplevel in
  apply direct(f_0 &toplevel) unroll(10)
-   (f : _ -> imm tagged) (5) -> k1 * error
+   (f : imm tagged -> imm tagged) (5) -> k1 * error
    where k1 (n : imm tagged) =
      let Pmakeblock = %block.[`0`].`toplevel` (f, n) in
      cont k (Pmakeblock))

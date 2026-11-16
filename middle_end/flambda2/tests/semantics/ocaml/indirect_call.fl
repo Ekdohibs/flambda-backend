@@ -13,7 +13,8 @@ let $camlIndirect_call__first_const_0 = Block 0 () in
       @`fn[indirect_call.ml:9,17--33]` &toplevel
   in
   let f/36 = %opaque (`fn[indirect_call.ml:9,17--33]/35`) in
-  apply &toplevel f/36 (3) -> k/14 * error)
+  apply unknown_arity &toplevel
+    (f/36 : imm tagged -> imm tagged) (3) -> k/14 * error)
    where k/14 (result/33 : imm tagged) =
      let Pmakeblock/34 = %block.[`0`].`toplevel` (result/33) in
      cont k/11 (Pmakeblock/34))

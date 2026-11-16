@@ -129,6 +129,10 @@ let is_default_arity (a : [`Unarized] Flambda_arity.t) =
   | [k] -> is_default_kind_with_subkind k
   | _ -> false
 
+(* One value, with no more known of it, for each component. *)
+let is_default_complex_arity (a : [`Complex] Flambda_arity.t) =
+  List.for_all is_default_kind_with_subkind (Flambda_arity.unarize a)
+
 let complex_arity (a : [`Complex] Flambda_arity.t) : Fexpr.arity =
   (* CR mshinwell: add unboxed arities to Fexpr *)
   Flambda_arity.unarize a |> List.map kind_with_subkind
@@ -671,9 +675,16 @@ and apply_expr env (app : Apply_expr.t) : Fexpr.expr =
       let function_slot = None in
       (* CR mshinwell: remove [function_slot] *)
       Function (Direct { code_id; function_slot })
-    | Function
-        { function_call = Indirect_unknown_arity | Indirect_known_arity _ } ->
-      Function Indirect
+    | Function { function_call = Indirect_known_arity _ } -> Function Indirect
+    | Function { function_call = Indirect_unknown_arity } ->
+      (* Written with its arities, unless they are those that a call of unknown
+         arity with no arities is read with. *)
+      if
+        is_default_complex_arity (Apply_expr.args_arity app)
+        && is_default_arity
+             (Apply_expr.return_arity app |> Flambda_arity.unarize_t)
+      then Function Indirect
+      else Function Indirect_unknown_arity
     | C_call { needs_caml_c_call; _ } -> C_call { alloc = needs_caml_c_call }
     | Method { kind; obj } -> Method { kind; obj = simple env obj }
     | Effect _ -> Misc.fatal_error "TODO: Effect call kind"
@@ -686,24 +697,23 @@ and apply_expr env (app : Apply_expr.t) : Fexpr.expr =
       let params_arity = Some (complex_arity param_arity) in
       let ret_arity = arity return_arity in
       Some { params_arity; ret_arity }
-    | Function { function_call = Direct _ } ->
-      if is_default_arity return_arity
+    | Function { function_call = Direct _ | Indirect_unknown_arity } | Method _
+      ->
+      (* The arity of the arguments is written unless it is one value for each
+         argument, which is what is read where none is written; and no arity at
+         all is written if the arity of the result is one value too. *)
+      let params_arity =
+        if is_default_complex_arity param_arity
+        then None
+        else Some (complex_arity param_arity)
+      in
+      if Option.is_none params_arity && is_default_arity return_arity
       then None
-      else
-        let params_arity =
-          (* Parameter arity is never specified for a direct call *)
-          None
-        in
-        let ret_arity = arity return_arity in
-        Some { params_arity; ret_arity }
+      else Some { params_arity; ret_arity = arity return_arity }
     | C_call _ ->
       let params_arity = Some (complex_arity param_arity) in
       let ret_arity = arity return_arity in
       Some { params_arity; ret_arity }
-    | Function { function_call = Indirect_unknown_arity } -> None
-    | Method _ ->
-      (* CR keryan: maybe use the method kind *)
-      None
     | Effect _ -> assert false
   in
   let inlined : Fexpr.inlined_attribute option =

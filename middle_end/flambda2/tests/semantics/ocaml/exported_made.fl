@@ -11,7 +11,7 @@ let $camlExported_made__first_const_0 = Block 0 () in
  let pair/39 = closure pair_0 @pair &toplevel in
  (let Popaque/42 = %opaque (1) in
   apply direct(pair_0 &toplevel)
-    (pair/39 : _ -> [ 0 of imm tagged * imm tagged ])
+    (pair/39 : val? * imm tagged -> [ 0 of imm tagged * imm tagged ])
       (Popaque/42, 2)
       -> k/14 * error)
    where k/14 (p/40 : [ 0 of imm tagged * imm tagged ]) =

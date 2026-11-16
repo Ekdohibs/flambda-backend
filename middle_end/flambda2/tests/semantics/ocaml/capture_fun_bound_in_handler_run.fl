@@ -26,7 +26,9 @@ let $camlCapture_fun_bound_in_handler_run__first_const_0 = Block 0 () in
        (my_closure/81)
    in
    apply direct(add_0 &my_alloc_region/82)
-     (add/85 : _ -> imm tagged) (n/86, x/80) -> k/26 * k/27
+     (add/85 : imm tagged * imm tagged -> imm tagged)
+       (n/86, x/80)
+       -> k/26 * k/27
  in
  let code inline(never) size(17)
        make_1 (n/87 : imm tagged)
@@ -52,9 +54,11 @@ let $camlCapture_fun_bound_in_handler_run__first_const_0 = Block 0 () in
      let add/95 = closure add_0 @add &toplevel with { base = base/94 } in
      let make/96 = closure make_1 @make &toplevel with { add_1 = add/95 } in
      ((let Popaque/99 = %opaque (1) in
-       apply direct(make_1 &toplevel) make/96 (Popaque/99) -> k/32 * error
+       apply direct(make_1 &toplevel)
+         (make/96 : imm tagged -> val?) (Popaque/99) -> k/32 * error
          where k/32 (func/100) =
-           apply &toplevel func/100 (2) -> k/31 * error)
+           apply unknown_arity &toplevel
+             (func/100 : imm tagged -> imm tagged) (2) -> k/31 * error)
         where k/31 (result/97 : imm tagged) =
           let Pmakeblock/98 = %block.[`0`].`toplevel` (result/97) in
           cont k/23 (Pmakeblock/98)))

@@ -17,7 +17,7 @@ let $camlExported_branch_two_funs__first_const_0 = Block 0 () in
    let next_depth/66 = rec_info (succ my_depth/65) in
    let next/67 = %project_value_slot.[after_next].[next] (my_closure/63) in
    apply direct(next_0 &my_alloc_region/64)
-     (next/67 : _ -> imm tagged) (x/62) -> k/22 * k/21
+     (next/67 : imm tagged -> imm tagged) (x/62) -> k/22 * k/21
      where k/22 (apply_result/68 : imm tagged) =
        let int_add/69 = %int_barith.add (apply_result/68, 1) in
        cont k/20 (int_add/69)

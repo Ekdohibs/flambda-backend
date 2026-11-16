@@ -25,7 +25,7 @@ let $camlCall_of_call_tested__first_const_0 = Block 0 () in
     (next/74 : _ -> imm tagged) (Popaque/87) -> k/35 * error)
    where k/35 (apply_result/86 : imm tagged) =
      apply direct(small_1 &toplevel)
-       (small/75 : _ -> [ 0 |1 ]) (apply_result/86) -> k/34 * error
+       (small/75 : imm tagged -> [ 0 |1 ]) (apply_result/86) -> k/34 * error
    where k/34 (apply_result/84 : [ 0 |1 ]) =
      let untagged/85 = %untag_imm (apply_result/84) in
      switch untagged/85
@@ -37,7 +37,9 @@ let $camlCall_of_call_tested__first_const_0 = Block 0 () in
          (next/74 : _ -> imm tagged) (Popaque/83) -> k/33 * error)
         where k/33 (apply_result/82 : imm tagged) =
           apply direct(small_1 &toplevel)
-            (small/75 : _ -> [ 0 |1 ]) (apply_result/82) -> k/32 * error
+            (small/75 : imm tagged -> [ 0 |1 ])
+              (apply_result/82)
+              -> k/32 * error
         where k/32 (apply_result/80 : [ 0 |1 ]) =
           let untagged/81 = %untag_imm (apply_result/80) in
           switch untagged/81

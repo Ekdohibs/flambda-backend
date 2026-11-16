@@ -28,7 +28,9 @@ let code loopify(never) size(23) newer_version_of(baz_1)
      | 1 -> k4)
     where k4 =
       apply direct(f_0_1 &my_alloc_region)
-        ($camlUnboxing_gadt__f_1 : _ -> [ 0 of float boxed |1 of imm tagged ]
+        ($camlUnboxing_gadt__f_1
+         : [ 0 | 0 of [ 0 of float boxed |1 of imm tagged ] ] ->
+           [ 0 of float boxed |1 of imm tagged ]
          )
           (x)
           -> k2 * k1

@@ -48,7 +48,8 @@ let code rec loopify(never) size(39) newer_version_of(h_4)
      | 1 -> k3)
     where k3 =
       apply direct(g_3_1 &my_alloc_region)
-        (g ~ depth my_depth -> succ my_depth : _ -> imm tagged)
+        (g ~ depth my_depth -> succ my_depth
+         : imm tagged * imm tagged -> imm tagged)
           (x, y)
           -> k2 * k1
     where k2 (staticcatch_result : imm tagged) =
@@ -59,7 +60,7 @@ let code rec loopify(never) size(39) newer_version_of(h_4)
          where k3 =
            let int_add = %int_barith.add (x, y) in
            apply direct(f_2_1 &my_alloc_region)
-             (f ~ depth my_depth -> succ my_depth : _ -> imm tagged)
+             (f ~ depth my_depth -> succ my_depth : imm tagged -> imm tagged)
                (int_add)
                -> k2 * k1
          where k2 (staticcatch_result_1 : imm tagged) =
@@ -76,14 +77,14 @@ let code inline(always) loopify(never) size(103) newer_version_of(inline_0)
   apply direct(partial_apply1_44 &my_alloc_region) inlined(never)
          inlining_state(depth(10))
     ($Stdlib__Random.camlStdlib__Random__partial_apply1_44_73
-     : _ -> imm tagged)
+     : imm tagged -> imm tagged)
       (10)
       -> k2 * k1
     where k2 (r : imm tagged) =
       (apply direct(partial_apply1_44 &my_alloc_region) inlined(never)
               inlining_state(depth(10))
          ($Stdlib__Random.camlStdlib__Random__partial_apply1_44_73
-          : _ -> imm tagged)
+          : imm tagged -> imm tagged)
            (10)
            -> k2 * k1
          where k2 (s : imm tagged) =
@@ -97,15 +98,15 @@ in
 let $camlOffset__inline_1 = closure inline_0_1 @`inline` &toplevel in
 apply direct(partial_apply1_44 &toplevel) inlined(never)
        inlining_state(depth(11))
-  ($Stdlib__Random.camlStdlib__Random__partial_apply1_44_73 : _ -> imm tagged
-   )
+  ($Stdlib__Random.camlStdlib__Random__partial_apply1_44_73
+   : imm tagged -> imm tagged)
     (10)
     -> k * error
   where k (r : imm tagged) =
     (apply direct(partial_apply1_44 &toplevel) inlined(never)
             inlining_state(depth(11))
        ($Stdlib__Random.camlStdlib__Random__partial_apply1_44_73
-        : _ -> imm tagged)
+        : imm tagged -> imm tagged)
          (10)
          -> k * error
        where k (s : imm tagged) =
@@ -130,7 +131,7 @@ apply direct(partial_apply1_44 &toplevel) inlined(never)
            let int_add = %int_barith.add (x, y) in
            apply direct(f_2_2 &my_alloc_region) inlining_state(depth(1))
              ($camlOffset__f_3 ~ depth my_depth -> succ my_depth
-              : _ -> imm tagged)
+              : imm tagged -> imm tagged)
                (int_add)
                -> k * k1
          and code loopify(never) size(4) newer_version_of(f_2_1)
@@ -146,14 +147,14 @@ apply direct(partial_apply1_44 &toplevel) inlined(never)
          (apply direct(partial_apply1_44 &toplevel) inlined(never)
                  inlining_state(depth(11))
             ($Stdlib__Random.camlStdlib__Random__partial_apply1_44_73
-             : _ -> imm tagged)
+             : imm tagged -> imm tagged)
               (10)
               -> k * error
             where k (r_1 : imm tagged) =
               (apply direct(partial_apply1_44 &toplevel) inlined(never)
                       inlining_state(depth(11))
                  ($Stdlib__Random.camlStdlib__Random__partial_apply1_44_73
-                  : _ -> imm tagged)
+                  : imm tagged -> imm tagged)
                    (10)
                    -> k * error
                  where k (s_1 : imm tagged) =

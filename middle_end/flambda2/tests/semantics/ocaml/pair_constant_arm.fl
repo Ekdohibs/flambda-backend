@@ -37,11 +37,15 @@
  let pick/72 = closure pick_0 @pick &toplevel in
  (let Popaque/78 = %opaque (0) in
   apply direct(pick_0 &toplevel)
-    (pick/72 : _ -> imm tagged) (Popaque/78, 3) -> k/34 * error)
+    (pick/72 : val? * imm tagged -> imm tagged)
+      (Popaque/78, 3)
+      -> k/34 * error)
    where k/34 (apply_result/73 : imm tagged) =
      ((let Popaque/77 = %opaque (1) in
        apply direct(pick_0 &toplevel)
-         (pick/72 : _ -> imm tagged) (Popaque/77, 3) -> k/35 * error)
+         (pick/72 : val? * imm tagged -> imm tagged)
+           (Popaque/77, 3)
+           -> k/35 * error)
         where k/35 (apply_result/74 : imm tagged) =
           let result/75 = %int_barith.add (apply_result/74, apply_result/73)
           in

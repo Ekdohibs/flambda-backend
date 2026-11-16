@@ -16,7 +16,7 @@ and code rec loopify(never) size(18) newer_version_of(odd_1)
       let int_sub = %int_barith.sub (n, 1) in
       apply direct(even_0_1 &my_alloc_region)
         ($camlUnroll3__even_1 ~ depth my_depth -> succ my_depth
-         : _ -> imm tagged)
+         : imm tagged -> imm tagged)
           (int_sub)
           -> k * k1
 and code rec loopify(never) size(18) newer_version_of(even_0)
@@ -32,12 +32,13 @@ and code rec loopify(never) size(18) newer_version_of(even_0)
       let int_sub = %int_barith.sub (n, 1) in
       apply direct(odd_1_1 &my_alloc_region)
         ($camlUnroll3__odd_2 ~ depth my_depth -> succ my_depth
-         : _ -> imm tagged)
+         : imm tagged -> imm tagged)
           (int_sub)
           -> k * k1
 in
 apply direct(odd_1_1 &toplevel) inlining_state(depth(20))
-  ($camlUnroll3__odd_2 ~ depth unroll 1 1 -> unroll 0 2 : _ -> imm tagged)
+  ($camlUnroll3__odd_2 ~ depth unroll 1 1 -> unroll 0 2
+   : imm tagged -> imm tagged)
     (2)
     -> k * error
   where k (four_is_odd : imm tagged) =

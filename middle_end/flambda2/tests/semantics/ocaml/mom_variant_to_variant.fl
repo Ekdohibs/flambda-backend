@@ -20,7 +20,7 @@ let $camlMom_variant_to_variant__first_const_0 = Block 0 () in
    let to_light/72 = %project_value_slot.[delay].[to_light] (my_closure/68)
    in
    apply direct(to_light_0 &my_alloc_region/69)
-     (to_light/72 : _ -> imm tagged) (c/67) -> k/26 * k/25
+     (to_light/72 : imm tagged -> imm tagged) (c/67) -> k/26 * k/25
      where k/26 (`*match*/73` : imm tagged) =
        let untagged/74 = %untag_imm (`*match*/73`) in
        switch untagged/74

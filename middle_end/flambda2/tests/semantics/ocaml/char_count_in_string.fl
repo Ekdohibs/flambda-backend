@@ -99,7 +99,7 @@
             let int_add/76 = %int_barith.add (i/65, 1) in
             apply direct(vowels_0 &my_alloc_region/68)
               (my_closure/67 ~ depth my_depth/69 -> next_depth/70
-               : _ -> imm tagged)
+               : val * imm tagged * imm tagged -> imm tagged)
                 (s/64, int_add/76, acc/66)
                 -> k/68 * k/69
           where k/71 =
@@ -107,7 +107,7 @@
             let int_add/75 = %int_barith.add (i/65, 1) in
             apply direct(vowels_0 &my_alloc_region/68)
               (my_closure/67 ~ depth my_depth/69 -> next_depth/70
-               : _ -> imm tagged)
+               : val * imm tagged * imm tagged -> imm tagged)
                 (s/64, int_add/75, int_add/74)
                 -> k/68 * k/69)
  in
@@ -115,7 +115,9 @@
  let vowels/87 = closure vowels_0 @vowels &toplevel in
  (let Popaque/90 = %opaque ($camlChar_count_in_string__immstring_0) in
   apply direct(vowels_0 &toplevel)
-    (vowels/87 : _ -> imm tagged) (Popaque/90, 0, 0) -> k/98 * error)
+    (vowels/87 : val? * imm tagged * imm tagged -> imm tagged)
+      (Popaque/90, 0, 0)
+      -> k/98 * error)
    where k/98 (result/88 : imm tagged) =
      let Pmakeblock/89 = %block.[`0`].`toplevel` (vowels/87, result/88) in
      cont k/67 (Pmakeblock/89))

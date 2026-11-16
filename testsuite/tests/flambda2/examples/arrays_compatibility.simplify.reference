@@ -73,7 +73,7 @@ let code loopify(never) size(75) newer_version_of(f_2)
      | 1 -> k3)
     where k3 =
       apply direct(index_0_1 &my_alloc_region)
-        ($camlArrays_compatibility__index_3 : _ -> val) (source) -> k2 * k1
+        ($camlArrays_compatibility__index_3 : val -> val) (source) -> k2 * k1
     where k2 (index : val) =
       let line = %opaque (0) in
       ((let prim = %phys_eq (line, 0) in

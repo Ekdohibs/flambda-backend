@@ -154,7 +154,9 @@ let $camlCount_after_flag__first_const_0 = Block 0 () in
  let turns_after/176 = closure turns_after_0 @turns_after &toplevel in
  (let Popaque/179 = %opaque (9) in
   apply direct(turns_after_0 &toplevel)
-    (turns_after/176 : _ -> imm tagged) (Popaque/179, 7) -> k/65 * error)
+    (turns_after/176 : val? * imm tagged -> imm tagged)
+      (Popaque/179, 7)
+      -> k/65 * error)
    where k/65 (result/177 : imm tagged) =
      let Pmakeblock/178 =
        %block.[`0`].`toplevel` (turns_after/176, result/177)

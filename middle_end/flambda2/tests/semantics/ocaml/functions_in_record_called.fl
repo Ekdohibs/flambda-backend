@@ -27,7 +27,9 @@ let $camlFunctions_in_record_called__first_const_0 = Block 0 () in
    where k/23 (apply_result/69 : imm tagged) =
      let Pfield/70 = %block_load.[`1`] (ops/66) in
      apply direct(down_1 &toplevel)
-       (Pfield/70 : _ -> imm tagged) (apply_result/69) -> k/22 * error
+       (Pfield/70 : imm tagged -> imm tagged)
+         (apply_result/69)
+         -> k/22 * error
    where k/22 (result/67 : imm tagged) =
      let Pmakeblock/68 = %block.[`0`].`toplevel` (ops/66, result/67) in
      cont k/17 (Pmakeblock/68))

@@ -39,7 +39,7 @@
    let next_depth/70 = rec_info (succ my_depth/69) in
    let length/71 = %project_value_slot.[three].[length] (my_closure/67) in
    apply direct(length_0 &my_alloc_region/68) unroll(3)
-     (length/71 : _ -> imm tagged)
+     (length/71 : val -> imm tagged)
        ($camlRec_unrolled__const_block_2)
        -> k/27 * k/28
  in
@@ -48,7 +48,7 @@
  with { length = length/72 }
  in
  apply direct(three_1 &toplevel)
-   (three/73 : _ -> imm tagged) (0) -> k/29 * error
+   (three/73 : imm tagged -> imm tagged) (0) -> k/29 * error
    where k/29 (result/74 : imm tagged) =
      let Pmakeblock/75 =
        %block.[`0`].`toplevel` (length/72, three/73, result/74)

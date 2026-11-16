@@ -22,7 +22,9 @@ let $camlPartial_in_a_pair__first_const_0 = Block 0 () in
    in
    let x/130 = %project_value_slot.[partial_combine].[x] (my_closure/125) in
    apply direct(combine_0 &my_alloc_region/126)
-     (combine/129 : _ -> imm tagged) (1, x/130, param2/124) -> k/38 * k/39
+     (combine/129 : imm tagged * imm tagged * imm tagged -> imm tagged)
+       (1, x/130, param2/124)
+       -> k/38 * k/39
  in
  let code size(6) stub
        partial_combine_3 (param2/131 : imm tagged)
@@ -36,7 +38,9 @@ let $camlPartial_in_a_pair__first_const_0 = Block 0 () in
    let x/137 = %project_value_slot.[partial_combine_1].[x_1] (my_closure/132)
    in
    apply direct(combine_0 &my_alloc_region/133)
-     (combine/136 : _ -> imm tagged) (x/137, 1, param2/131) -> k/40 * k/41
+     (combine/136 : imm tagged * imm tagged * imm tagged -> imm tagged)
+       (x/137, 1, param2/131)
+       -> k/40 * k/41
  in
  let code inline(never) size(56)
        body_1 (x/138 : imm tagged)
@@ -68,11 +72,15 @@ let $camlPartial_in_a_pair__first_const_0 = Block 0 () in
             in
             ((let Pmixedfield/156 = %block_load.[`1`] (fs/151) in
               apply direct(partial_combine_2 &my_alloc_region/140)
-                (Pmixedfield/156 : _ -> imm tagged) (6) -> k/47 * k/43)
+                (Pmixedfield/156 : imm tagged -> imm tagged)
+                  (6)
+                  -> k/47 * k/43)
                where k/47 (apply_result/152 : imm tagged) =
                  ((let Pmixedfield/155 = %block_load.[`0`] (fs/151) in
                    apply direct(partial_combine_3 &my_alloc_region/140)
-                     (Pmixedfield/155 : _ -> imm tagged) (5) -> k/48 * k/43)
+                     (Pmixedfield/155 : imm tagged -> imm tagged)
+                       (5)
+                       -> k/48 * k/43)
                     where k/48 (apply_result/153 : imm tagged) =
                       let int_add/154 =
                         %int_barith.add (apply_result/153, apply_result/152)
@@ -88,7 +96,7 @@ let $camlPartial_in_a_pair__first_const_0 = Block 0 () in
  with { combine_2 = combine/159 }
  in
  apply direct(body_1 &toplevel)
-   (body/160 : _ -> imm tagged) (9) -> k/49 * error
+   (body/160 : imm tagged -> imm tagged) (9) -> k/49 * error
    where k/49 (apply_result/161 : imm tagged) =
      ((let Popaque/165 = %opaque (2) in
        apply direct(body_1 &toplevel)

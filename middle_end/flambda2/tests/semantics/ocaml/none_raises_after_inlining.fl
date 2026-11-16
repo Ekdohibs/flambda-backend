@@ -49,7 +49,12 @@
    let next_depth/89 = rec_info (succ my_depth/88) in
    let get/90 = %project_value_slot.[nth].[get] (my_closure/86) in
    apply direct(get_0 &my_alloc_region/87) inlined(always)
-     (get/90 : _ -> [ 0 | 0 of imm tagged ]) (t/84, i/85) -> k/40 * k/39
+     (get/90
+      : [ 0 | 0 of imm tagged * [ 0 | 0 of imm tagged * val ] ] * imm tagged ->
+        [ 0 | 0 of imm tagged ]
+      )
+       (t/84, i/85)
+       -> k/40 * k/39
      where k/40 (`*match*/91` : [ 0 | 0 of imm tagged ]) =
        ((let prim/93 = %is_int (`*match*/91`) in
          let Pisint/94 = %tag_imm (prim/93) in

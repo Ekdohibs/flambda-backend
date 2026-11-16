@@ -24,9 +24,10 @@ let $camlCapture_rec_self__first_const_0 = Block 0 () in
    let int_add/73 = %int_barith.add (b/66, 1) in
    let int_sub/74 = %int_barith.sub (n/72, 1) in
    apply direct(count_0 &my_alloc_region/68)
-     count/71 (int_sub/74) -> k/32 * k/31
+     (count/71 : imm tagged -> val?) (int_sub/74) -> k/32 * k/31
      where k/32 (func/75) =
-       apply &my_alloc_region/68 func/75 (int_add/73) -> k/30 * k/31
+       apply unknown_arity &my_alloc_region/68
+         (func/75 : imm tagged -> imm tagged) (int_add/73) -> k/30 * k/31
  and code rec size(52)
        count_0 (n/76 : imm tagged)
          my_closure/77 &my_alloc_region/78 my_depth/79

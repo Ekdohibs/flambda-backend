@@ -143,7 +143,7 @@ let $camlFlag_or_test_then_count__first_const_0 = Block 0 () in
  in
  (let Popaque/170 = %opaque (9) in
   apply direct(turns_since_above_0 &toplevel)
-    (turns_since_above/167 : _ -> imm tagged)
+    (turns_since_above/167 : val? * imm tagged -> imm tagged)
       (Popaque/170, 3)
       -> k/56 * error)
    where k/56 (result/168 : imm tagged) =

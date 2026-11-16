@@ -30,14 +30,14 @@ let $camlInline_record__first_const_0 = Block 0 () in
      %block.[`1`].`toplevel`.local[region/82] (3, Popaque/92)
    in
    apply direct(area_0 &toplevel)
-     (area/79 : _ -> imm tagged) (Pmakeblock/93) -> k/28 * error)
+     (area/79 : val -> imm tagged) (Pmakeblock/93) -> k/28 * error)
     where k/28 (apply_result/87 : imm tagged) =
       ((let Popaque/90 = %opaque (2) in
         let Pmakeblock/91 =
           %block.[`0`].`toplevel`.local[region/82] (Popaque/90)
         in
         apply direct(area_0 &toplevel)
-          (area/79 : _ -> imm tagged) (Pmakeblock/91) -> k/29 * error)
+          (area/79 : val -> imm tagged) (Pmakeblock/91) -> k/29 * error)
          where k/29 (apply_result/88 : imm tagged) =
            let int_add/89 =
              %int_barith.add (apply_result/88, apply_result/87)

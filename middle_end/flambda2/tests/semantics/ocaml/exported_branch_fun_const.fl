@@ -16,10 +16,12 @@ let $camlExported_branch_fun_const__first_const_0 = Block 0 () in
    let next_depth/61 = rec_info (succ my_depth/60) in
    let succ/62 = %project_value_slot.[succ2].[`succ`] (my_closure/58) in
    apply direct(succ_0 &my_alloc_region/59)
-     (succ/62 : _ -> imm tagged) (x/57) -> k/22 * k/21
+     (succ/62 : imm tagged -> imm tagged) (x/57) -> k/22 * k/21
      where k/22 (apply_result/63 : imm tagged) =
        apply direct(succ_0 &my_alloc_region/59)
-         (succ/62 : _ -> imm tagged) (apply_result/63) -> k/20 * k/21
+         (succ/62 : imm tagged -> imm tagged)
+           (apply_result/63)
+           -> k/20 * k/21
  in
  (let Popaque/68 = %opaque (1) in
   let untagged/69 = %untag_imm (Popaque/68) in

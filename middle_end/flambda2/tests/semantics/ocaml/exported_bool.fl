@@ -17,7 +17,7 @@ let $camlExported_bool__first_const_0 = Block 0 () in
    let next_depth/60 = rec_info (succ my_depth/59) in
    let is_pos/61 = %project_value_slot.[both].[is_pos] (my_closure/57) in
    apply direct(is_pos_0 &my_alloc_region/58)
-     (is_pos/61 : _ -> imm tagged) (x/55) -> k/25 * k/23
+     (is_pos/61 : imm tagged -> imm tagged) (x/55) -> k/25 * k/23
      where k/25 (apply_result/62 : imm tagged) =
        ((let untagged/63 = %untag_imm (apply_result/62) in
          switch untagged/63
@@ -27,7 +27,7 @@ let $camlExported_bool__first_const_0 = Block 0 () in
             cont k/24)
      where k/24 =
        apply direct(is_pos_0 &my_alloc_region/58)
-         (is_pos/61 : _ -> imm tagged) (y/56) -> k/22 * k/23
+         (is_pos/61 : imm tagged -> imm tagged) (y/56) -> k/22 * k/23
  in
  let is_pos/64 = closure is_pos_0 @is_pos &toplevel in
  let both/65 = closure both_1 @both &toplevel with { is_pos = is_pos/64 } in

@@ -18,7 +18,8 @@ let $camlMaker_of_mutual_inlined__first_const_0 = Block 0 () in
      where k/36 =
        let int_sub/87 = %int_barith.sub (k/80, 1) in
        apply direct(up_2 &my_alloc_region/82)
-         (up/86 ~ depth my_depth/83 -> next_depth/84 : _ -> imm tagged)
+         (up/86 ~ depth my_depth/83 -> next_depth/84
+          : imm tagged -> imm tagged)
            (int_sub/87)
            -> k/34 * k/35
  and code rec size(28)
@@ -42,7 +43,8 @@ let $camlMaker_of_mutual_inlined__first_const_0 = Block 0 () in
      where k/41 =
        let int_sub/99 = %int_barith.sub (k/91, 1) in
        apply direct(down_1 &my_alloc_region/93)
-         (down/97 ~ depth my_depth/94 -> next_depth/95 : _ -> imm tagged)
+         (down/97 ~ depth my_depth/94 -> next_depth/95
+          : imm tagged -> imm tagged)
            (int_sub/99)
            -> k/38 * k/39
      where k/40 =
@@ -63,9 +65,11 @@ let $camlMaker_of_mutual_inlined__first_const_0 = Block 0 () in
  in
  let make/110 = closure make_0 @make &toplevel in
  (let Popaque/113 = %opaque (4) in
-  apply direct(make_0 &toplevel) make/110 (Popaque/113) -> k/47 * error
+  apply direct(make_0 &toplevel)
+    (make/110 : imm tagged -> val?) (Popaque/113) -> k/47 * error
     where k/47 (func/114) =
-      apply &toplevel func/114 (3) -> k/46 * error)
+      apply unknown_arity &toplevel
+        (func/114 : imm tagged -> imm tagged) (3) -> k/46 * error)
    where k/46 (result/111 : imm tagged) =
      let Pmakeblock/112 = %block.[`0`].`toplevel` (make/110, result/111) in
      cont k/33 (Pmakeblock/112))

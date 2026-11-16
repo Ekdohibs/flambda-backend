@@ -17,7 +17,7 @@ let $camlUnroll3__first_const_0 = Block 0 () in
      where k3 =
        let int_sub = %int_barith.sub (n, 1) in
        apply direct(odd_1 &my_alloc_region)
-         (odd ~ depth my_depth -> next_depth : _ -> imm tagged)
+         (odd ~ depth my_depth -> next_depth : imm tagged -> imm tagged)
            (int_sub)
            -> k1 * k2
  and code rec size(23)
@@ -38,7 +38,7 @@ let $camlUnroll3__first_const_0 = Block 0 () in
      where k3 =
        let int_sub = %int_barith.sub (n, 1) in
        apply direct(even_0 &my_alloc_region)
-         (even ~ depth my_depth -> next_depth : _ -> imm tagged)
+         (even ~ depth my_depth -> next_depth : imm tagged -> imm tagged)
            (int_sub)
            -> k1 * k2
  in
@@ -46,10 +46,10 @@ let $camlUnroll3__first_const_0 = Block 0 () in
  and odd = closure odd_1 @odd &toplevel
  in
  apply direct(even_0 &toplevel) unroll(4)
-   (even : _ -> imm tagged) (3) -> k1 * error
+   (even : imm tagged -> imm tagged) (3) -> k1 * error
    where k1 (three_is_even : imm tagged) =
      (apply direct(odd_1 &toplevel) unroll(2)
-        (odd : _ -> imm tagged) (4) -> k1 * error
+        (odd : imm tagged -> imm tagged) (4) -> k1 * error
         where k1 (four_is_odd : imm tagged) =
           let Pmakeblock =
             %block.[`0`].`toplevel` (even, odd, three_is_even, four_is_odd)

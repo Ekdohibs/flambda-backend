@@ -31,7 +31,9 @@ let code loopify(never) size(5) stub
         : imm tagged =
   let f = %project_value_slot.[partial_f].[f] (my_closure) in
   apply direct(f_1 &my_alloc_region) inlined(forward)
-    (f : _ -> imm tagged) (0, 0, param2) -> k * k1
+    (f : [ 0 | 0 of imm tagged ] * imm tagged * imm tagged -> imm tagged)
+      (0, 0, param2)
+      -> k * k1
 in
 let code loopify(never) size(1) newer_version_of(default_0)
       default_0_1 (x) my_closure &my_alloc_region my_depth -> k * k1 =
@@ -67,7 +69,7 @@ let $camlInlined_attribute_on_erased_optional_application__partial_f_4 =
 in
 apply direct(default_0_1 &toplevel)
   ($camlInlined_attribute_on_erased_optional_application__default_1
-   : _ -> imm tagged)
+   : imm tagged -> imm tagged)
     (0)
     -> k * error
   where k (x : imm tagged) =

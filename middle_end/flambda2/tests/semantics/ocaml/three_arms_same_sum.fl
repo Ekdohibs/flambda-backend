@@ -25,7 +25,9 @@ let $camlThree_arms_same_sum__first_const_0 = Block 0 () in
  let pick/51 = closure pick_0 @pick &toplevel in
  (let Popaque/54 = %opaque (1) in
   apply direct(pick_0 &toplevel)
-    (pick/51 : _ -> imm tagged) (Popaque/54, 2) -> k/26 * error)
+    (pick/51 : val? * imm tagged -> imm tagged)
+      (Popaque/54, 2)
+      -> k/26 * error)
    where k/26 (result/52 : imm tagged) =
      let Pmakeblock/53 = %block.[`0`].`toplevel` (pick/51, result/52) in
      cont k/19 (Pmakeblock/53))

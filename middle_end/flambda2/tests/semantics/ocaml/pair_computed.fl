@@ -29,10 +29,12 @@ let $camlPair_computed__first_const_0 = Block 0 () in
  in
  let sum/62 = closure sum_0 @sum &toplevel in
  apply direct(sum_0 &toplevel)
-   (sum/62 : _ -> imm tagged) (0, 4) -> k/31 * error
+   (sum/62 : imm tagged * imm tagged -> imm tagged) (0, 4) -> k/31 * error
    where k/31 (apply_result/63 : imm tagged) =
      (apply direct(sum_0 &toplevel)
-        (sum/62 : _ -> imm tagged) (1, 3) -> k/32 * error
+        (sum/62 : imm tagged * imm tagged -> imm tagged)
+          (1, 3)
+          -> k/32 * error
         where k/32 (apply_result/64 : imm tagged) =
           let result/65 = %int_barith.add (apply_result/64, apply_result/63)
           in

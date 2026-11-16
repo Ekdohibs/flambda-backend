@@ -5,9 +5,11 @@ let $camlLocal_closure_given_partially__first_const_0 = Block 0 () in
          -> k/32 * k/33
          : imm tagged =
    let next_depth/95 = rec_info (succ my_depth/94) in
-   apply &my_alloc_region/93 f/89 (a/90) -> k/34 * k/33
+   apply unknown_arity &my_alloc_region/93
+     (f/89 : imm tagged -> imm tagged) (a/90) -> k/34 * k/33
      where k/34 (x/96 : imm tagged) =
-       (apply &my_alloc_region/93 f/89 (b/91) -> k/35 * k/33
+       (apply unknown_arity &my_alloc_region/93
+          (f/89 : imm tagged -> imm tagged) (b/91) -> k/35 * k/33
           where k/35 (y/97 : imm tagged) =
             let int_mul/98 = %int_barith.mul (x/96, 100) in
             let int_add/99 = %int_barith.add (int_mul/98, y/97) in
@@ -41,7 +43,7 @@ let $camlLocal_closure_given_partially__first_const_0 = Block 0 () in
        (my_closure/109)
    in
    apply direct(apply_to_both_0 &my_alloc_region/110)
-     (apply_to_both/113 : _ -> imm tagged)
+     (apply_to_both/113 : val * imm tagged * imm tagged -> imm tagged)
        (add_offset/114, param1/107, param2/108)
        -> k/38 * k/39
  in
@@ -61,10 +63,14 @@ let $camlLocal_closure_given_partially__first_const_0 = Block 0 () in
     cont k/42 (partial_apply_to_both/129))
      where k/42 (waiting/125 : val) =
        (apply direct(partial_apply_to_both_2 &toplevel)
-          (waiting/125 : _ -> imm tagged) (1, 2) -> k/43 * error
+          (waiting/125 : imm tagged * imm tagged -> imm tagged)
+            (1, 2)
+            -> k/43 * error
           where k/43 (first/126 : imm tagged) =
             (apply direct(partial_apply_to_both_2 &toplevel)
-               (waiting/125 : _ -> imm tagged) (3, 4) -> k/44 * error
+               (waiting/125 : imm tagged * imm tagged -> imm tagged)
+                 (3, 4)
+                 -> k/44 * error
                where k/44 (second/127 : imm tagged) =
                  let int_add/128 = %int_barith.add (first/126, second/127) in
                  cont k/41 (int_add/128))))

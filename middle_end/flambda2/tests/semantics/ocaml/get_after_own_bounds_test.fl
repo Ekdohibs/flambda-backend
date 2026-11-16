@@ -34,11 +34,13 @@
  let char_or/78 = closure char_or_0 @char_or &toplevel in
  (let Popaque/84 = %opaque ($camlGet_after_own_bounds_test__immstring_0) in
   apply direct(char_or_0 &toplevel)
-    (char_or/78 : _ -> imm tagged) (Popaque/84, 5, 1000) -> k/28 * error)
+    (char_or/78 : val? * imm tagged * imm tagged -> imm tagged)
+      (Popaque/84, 5, 1000)
+      -> k/28 * error)
    where k/28 (apply_result/79 : imm tagged) =
      ((let Popaque/83 = %opaque (1) in
        apply direct(char_or_0 &toplevel)
-         (char_or/78 : _ -> imm tagged)
+         (char_or/78 : val * val? * imm tagged -> imm tagged)
            ($camlGet_after_own_bounds_test__immstring_1, Popaque/83, 0)
            -> k/29 * error)
         where k/29 (apply_result/80 : imm tagged) =

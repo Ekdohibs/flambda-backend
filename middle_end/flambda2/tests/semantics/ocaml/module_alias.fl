@@ -16,10 +16,12 @@ let $camlModule_alias__first_const_0 = Block 0 () in
    let next_depth/71 = rec_info (succ my_depth/70) in
    let shift/72 = %project_value_slot.[twice].[shift] (my_closure/68) in
    apply direct(shift_0 &my_alloc_region/69)
-     (shift/72 : _ -> imm tagged) (x/67) -> k/28 * k/27
+     (shift/72 : imm tagged -> imm tagged) (x/67) -> k/28 * k/27
      where k/28 (apply_result/73 : imm tagged) =
        apply direct(shift_0 &my_alloc_region/69)
-         (shift/72 : _ -> imm tagged) (apply_result/73) -> k/26 * k/27
+         (shift/72 : imm tagged -> imm tagged)
+           (apply_result/73)
+           -> k/26 * k/27
  in
  (let shift/85 = closure shift_0 @shift &toplevel in
   let Pmakeblock/86 = %block.[`0`].`toplevel` (10, shift/85) in
@@ -40,7 +42,7 @@ let $camlModule_alias__first_const_0 = Block 0 () in
              where k/32 (apply_result/78 : imm tagged) =
                let Pfield/79 = %block_load.[`1`] (Base/74) in
                apply direct(shift_0 &toplevel)
-                 (Pfield/79 : _ -> imm tagged)
+                 (Pfield/79 : imm tagged -> imm tagged)
                    (apply_result/78)
                    -> k/31 * error
              where k/31 (result/76 : imm tagged) =

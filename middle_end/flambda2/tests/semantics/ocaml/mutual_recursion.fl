@@ -17,7 +17,8 @@ let $camlMutual_recursion__first_const_0 = Block 0 () in
      where k/26 =
        let int_sub/63 = %int_barith.sub (n/57, 1) in
        apply direct(odd_1 &my_alloc_region/59)
-         (odd/62 ~ depth my_depth/60 -> next_depth/61 : _ -> imm tagged)
+         (odd/62 ~ depth my_depth/60 -> next_depth/61
+          : imm tagged -> imm tagged)
            (int_sub/63)
            -> k/24 * k/25
  and code rec size(23)
@@ -38,7 +39,8 @@ let $camlMutual_recursion__first_const_0 = Block 0 () in
      where k/30 =
        let int_sub/73 = %int_barith.sub (n/67, 1) in
        apply direct(even_0 &my_alloc_region/69)
-         (even/72 ~ depth my_depth/70 -> next_depth/71 : _ -> imm tagged)
+         (even/72 ~ depth my_depth/70 -> next_depth/71
+          : imm tagged -> imm tagged)
            (int_sub/73)
            -> k/28 * k/29
  in

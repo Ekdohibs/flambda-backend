@@ -11,15 +11,22 @@ let $camlRecord_of_functions__first_const_0 = Block 0 () in
    let next_depth/92 = rec_info (succ my_depth/91) in
    (let Pfield/97 = %block_load.[`1`] (operations/85) in
     let Pfield/98 = %block_load.[`0`] (operations/85) in
-    apply &my_alloc_region/90 Pfield/98 (Pfield/97, a/86) -> k/29 * k/27)
+    apply unknown_arity &my_alloc_region/90
+      (Pfield/98 : val? * imm tagged -> imm tagged)
+        (Pfield/97, a/86)
+        -> k/29 * k/27)
      where k/29 (apply_result/95 : imm tagged) =
        let Pfield/96 = %block_load.[`0`] (operations/85) in
-       apply &my_alloc_region/90
-         Pfield/96 (apply_result/95, b/87) -> k/28 * k/27
+       apply unknown_arity &my_alloc_region/90
+         (Pfield/96 : imm tagged * imm tagged -> imm tagged)
+           (apply_result/95, b/87)
+           -> k/28 * k/27
      where k/28 (apply_result/93 : imm tagged) =
        let Pfield/94 = %block_load.[`0`] (operations/85) in
-       apply &my_alloc_region/90
-         Pfield/94 (apply_result/93, c/88) -> k/26 * k/27
+       apply unknown_arity &my_alloc_region/90
+         (Pfield/94 : imm tagged * imm tagged -> imm tagged)
+           (apply_result/93, c/88)
+           -> k/26 * k/27
  in
  let code inline(always) size(5)
        `fn[record_of_functions.ml:22,22--49]_1`
@@ -51,7 +58,7 @@ let $camlRecord_of_functions__first_const_0 = Block 0 () in
     %block.[`0`].`toplevel` (`fn[record_of_functions.ml:22,22--49]/122`, 2)
   in
   apply direct(fold3_0 &toplevel)
-    (fold3/113 : _ -> imm tagged)
+    (fold3/113 : val * val? * imm tagged * imm tagged -> imm tagged)
       (Pmakeblock/123, Popaque/121, 3, 4)
       -> k/34 * error)
    where k/34 (apply_result/114 : imm tagged) =
@@ -65,7 +72,7 @@ let $camlRecord_of_functions__first_const_0 = Block 0 () in
            (`fn[record_of_functions.ml:21,20--47]/119`, 10)
        in
        apply direct(fold3_0 &toplevel)
-         (fold3/113 : _ -> imm tagged)
+         (fold3/113 : val * val? * imm tagged * imm tagged -> imm tagged)
            (Pmakeblock/120, Popaque/118, 2, 3)
            -> k/35 * error)
         where k/35 (apply_result/115 : imm tagged) =

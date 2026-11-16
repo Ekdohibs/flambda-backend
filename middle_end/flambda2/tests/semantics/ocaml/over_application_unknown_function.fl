@@ -63,7 +63,10 @@ let $camlOver_application_unknown_function__first_const_0 = Block 0 () in
          -> k/46 * k/47
          : imm tagged =
    let next_depth/148 = rec_info (succ my_depth/147) in
-   apply &my_alloc_region/146 f/142 (a/143, b/144) -> k/46 * k/47
+   apply unknown_arity &my_alloc_region/146
+     (f/142 : imm tagged * imm tagged -> imm tagged)
+       (a/143, b/144)
+       -> k/46 * k/47
  in
  let adder/149 = closure adder_0 @adder &toplevel in
  let subtracter/150 = closure subtracter_2 @subtracter &toplevel in
@@ -74,7 +77,10 @@ let $camlOver_application_unknown_function__first_const_0 = Block 0 () in
     | 0 -> k/53 (subtracter/150)
     | 1 -> k/53 (adder/149))
    where k/53 (switch_result/160 : val) =
-     apply &toplevel switch_result/160 (4, 2) -> k/48 * error
+     apply unknown_arity &toplevel
+       (switch_result/160 : imm tagged * imm tagged -> imm tagged)
+         (4, 2)
+         -> k/48 * error
    where k/48 (chosen_true/152 : imm tagged) =
      ((let Popaque/158 = %opaque (0) in
        let untagged/159 = %untag_imm (Popaque/158) in
@@ -82,15 +88,19 @@ let $camlOver_application_unknown_function__first_const_0 = Block 0 () in
          | 0 -> k/52 (subtracter/150)
          | 1 -> k/52 (adder/149))
         where k/52 (switch_result/157 : val) =
-          apply &toplevel switch_result/157 (4, 2) -> k/49 * error
+          apply unknown_arity &toplevel
+            (switch_result/157 : imm tagged * imm tagged -> imm tagged)
+              (4, 2)
+              -> k/49 * error
         where k/49 (chosen_false/153 : imm tagged) =
           (apply direct(apply_both_4 &toplevel)
-             (apply_both/151 : _ -> imm tagged)
+             (apply_both/151 : val? * imm tagged * imm tagged -> imm tagged)
                (adder/149, 5, 1)
                -> k/50 * error
              where k/50 (through_argument/154 : imm tagged) =
                (apply direct(apply_both_4 &toplevel)
-                  (apply_both/151 : _ -> imm tagged)
+                  (apply_both/151
+                   : val? * imm tagged * imm tagged -> imm tagged)
                     (subtracter/150, 5, 1)
                     -> k/51 * error
                   where k/51 (through_argument_other/155 : imm tagged) =

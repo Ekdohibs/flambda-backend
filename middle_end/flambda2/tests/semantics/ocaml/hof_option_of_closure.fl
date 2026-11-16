@@ -67,7 +67,9 @@ let $camlHof_option_of_closure__first_const_0 = Block 0 () in
        cont k/55 (Pmakeblock/162)
      where k/55 (o/153 : [ 0 | 0 of val ]) =
        (apply direct(call_or_0 &my_alloc_region/144)
-          (call_or/147 : _ -> imm tagged) (0, x/142, 0) -> k/56 * k/53
+          (call_or/147 : imm tagged * imm tagged * imm tagged -> imm tagged)
+            (0, x/142, 0)
+            -> k/56 * k/53
           where k/56 (apply_result/154 : imm tagged) =
             ((let `fn[hof_option_of_closure.ml:28,34--50]/159` =
                 closure `fn[hof_option_of_closure.ml:28,34--50]_3`
@@ -79,12 +81,15 @@ let $camlHof_option_of_closure__first_const_0 = Block 0 () in
                   (`fn[hof_option_of_closure.ml:28,34--50]/159`)
               in
               apply direct(call_or_0 &my_alloc_region/144)
-                (call_or/147 : _ -> imm tagged)
+                (call_or/147 : val * imm tagged * imm tagged -> imm tagged)
                   (Pmakeblock/160, 0, x/142)
                   -> k/57 * k/53)
                where k/57 (apply_result/155 : imm tagged) =
                  (apply direct(call_or_0 &my_alloc_region/144)
-                    (call_or/147 : _ -> imm tagged)
+                    (call_or/147
+                     : [ 0 | 0 of val ] * imm tagged * imm tagged ->
+                       imm tagged
+                     )
                       (o/153, 100, 5)
                       -> k/58 * k/53
                     where k/58 (apply_result/156 : imm tagged) =
@@ -106,11 +111,15 @@ let $camlHof_option_of_closure__first_const_0 = Block 0 () in
  in
  (let Popaque/171 = %opaque (4) in
   apply direct(body_1 &toplevel)
-    (body/165 : _ -> imm tagged) (0, Popaque/171) -> k/61 * error)
+    (body/165 : imm tagged * val? -> imm tagged)
+      (0, Popaque/171)
+      -> k/61 * error)
    where k/61 (apply_result/166 : imm tagged) =
      ((let Popaque/170 = %opaque (1) in
        apply direct(body_1 &toplevel)
-         (body/165 : _ -> imm tagged) (Popaque/170, 3) -> k/62 * error)
+         (body/165 : val? * imm tagged -> imm tagged)
+           (Popaque/170, 3)
+           -> k/62 * error)
         where k/62 (apply_result/167 : imm tagged) =
           let result/168 =
             %int_barith.add (apply_result/167, apply_result/166)

@@ -14,10 +14,10 @@ let $camlRef_counter__first_const_0 = Block 0 () in
  let Pmakeblock/46 = %block.mut.[`0`].`toplevel` (0) in
  let counter/47 = %opaque (Pmakeblock/46) in
  apply direct(tick_0 &toplevel)
-   (tick/45 : _ -> imm tagged) (counter/47) -> k/17 * error
+   (tick/45 : val -> imm tagged) (counter/47) -> k/17 * error
    where k/17 (apply_result/51 : imm tagged) =
      apply direct(tick_0 &toplevel)
-       (tick/45 : _ -> imm tagged) (counter/47) -> k/16 * error
+       (tick/45 : val -> imm tagged) (counter/47) -> k/16 * error
    where k/16 (`*match*/48` : imm tagged) =
      let result/49 = %block_load.mut.[`0`] (counter/47) in
      let Pmakeblock/50 = %block.[`0`].`toplevel` (result/49) in

@@ -18,7 +18,8 @@ let code loopify(never) size(16) newer_version_of(f1_0)
         -> k * k1
         : imm tagged =
   let g = closure g_1_1 @g &my_alloc_region with { unboxed_field_x = x } in
-  apply direct(g_1_1 &my_alloc_region) (g : _ -> imm tagged) (x) -> k * k1
+  apply direct(g_1_1 &my_alloc_region)
+    (g : imm tagged -> imm tagged) (x) -> k * k1
 in
 let $camlLambda_lifting__f1_1 = closure f1_0_1 @f1 &toplevel in
 let code inline(never) loopify(never) size(4) newer_version_of(h_4)
@@ -43,7 +44,8 @@ let code loopify(never) size(16) newer_version_of(f2_2)
   let h = closure h_4_1 @h &my_alloc_region
   with { unboxed_field_g_field_x = g_into_g_field_x }
   in
-  apply direct(h_4_1 &my_alloc_region) (h : _ -> imm tagged) (x) -> k * k1
+  apply direct(h_4_1 &my_alloc_region)
+    (h : imm tagged -> imm tagged) (x) -> k * k1
 in
 let $camlLambda_lifting__f2_2 = closure f2_2_1 @f2 &toplevel in
 let $camlLambda_lifting =

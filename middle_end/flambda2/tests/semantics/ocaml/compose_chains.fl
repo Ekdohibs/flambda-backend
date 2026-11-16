@@ -68,7 +68,9 @@ let $camlCompose_chains__first_const_0 = Block 0 () in
      %project_value_slot.[partial_compose].[double] (my_closure/266)
    in
    apply direct(compose_0 &my_alloc_region/267)
-     compose/270 (increment/271, double/272, param2/265) -> k/89 * k/90
+     (compose/270 : val * val * val? -> val?)
+       (increment/271, double/272, param2/265)
+       -> k/89 * k/90
  in
  let code size(7) stub
        partial_compose_7 (param2/273)
@@ -85,7 +87,9 @@ let $camlCompose_chains__first_const_0 = Block 0 () in
      %project_value_slot.[partial_compose_1].[square] (my_closure/274)
    in
    apply direct(compose_0 &my_alloc_region/275)
-     compose/278 (double/279, square/280, param2/273) -> k/91 * k/92
+     (compose/278 : val * val * val? -> val?)
+       (double/279, square/280, param2/273)
+       -> k/91 * k/92
  in
  let code size(7) stub
        partial_compose_8 (param2/281)
@@ -102,7 +106,9 @@ let $camlCompose_chains__first_const_0 = Block 0 () in
      %project_value_slot.[partial_compose_2].[square_1] (my_closure/282)
    in
    apply direct(compose_0 &my_alloc_region/283)
-     compose/286 (square/288, increment/287, param2/281) -> k/93 * k/94
+     (compose/286 : val * val * val? -> val?)
+       (square/288, increment/287, param2/281)
+       -> k/93 * k/94
  in
  let code size(5) stub
        partial_scale_9 (param1/289 : imm tagged)
@@ -114,7 +120,9 @@ let $camlCompose_chains__first_const_0 = Block 0 () in
      %project_value_slot.[partial_scale].[scale] (my_closure/290)
    in
    apply direct(scale_2 &my_alloc_region/291)
-     (scale/294 : _ -> imm tagged) (4, param1/289) -> k/95 * k/96
+     (scale/294 : imm tagged * imm tagged -> imm tagged)
+       (4, param1/289)
+       -> k/95 * k/96
  in
  let code size(5) stub
        partial_add_10 (param1/295 : imm tagged)
@@ -124,7 +132,9 @@ let $camlCompose_chains__first_const_0 = Block 0 () in
    let next_depth/299 = rec_info (succ my_depth/298) in
    let add/300 = %project_value_slot.[partial_add].[add] (my_closure/296) in
    apply direct(add_1 &my_alloc_region/297)
-     (add/300 : _ -> imm tagged) (10, param1/295) -> k/97 * k/98
+     (add/300 : imm tagged * imm tagged -> imm tagged)
+       (10, param1/295)
+       -> k/97 * k/98
  in
  let compose/301 = closure compose_0 @compose &toplevel in
  let add/302 = closure add_1 @add &toplevel in
@@ -134,7 +144,7 @@ let $camlCompose_chains__first_const_0 = Block 0 () in
  let square/306 = closure square_5 @square &toplevel in
  let x/307 = %opaque (3) in
  apply direct(compose_0 &toplevel)
-   (compose/301 : _ -> imm tagged)
+   (compose/301 : val? * val? * imm tagged -> imm tagged)
      (increment/304, double/305, x/307)
      -> k/99 * error
    where k/99 (two/308 : imm tagged) =
@@ -149,7 +159,7 @@ let $camlCompose_chains__first_const_0 = Block 0 () in
        cont k/110 (partial_compose/327))
         where k/110 (apply_result/326 : val) =
           apply direct(compose_0 &toplevel)
-            (compose/301 : _ -> imm tagged)
+            (compose/301 : val * val? * imm tagged -> imm tagged)
               (apply_result/326, square/306, x/307)
               -> k/100 * error
         where k/100 (three_left/309 : imm tagged) =
@@ -164,7 +174,7 @@ let $camlCompose_chains__first_const_0 = Block 0 () in
             cont k/109 (partial_compose/325))
              where k/109 (apply_result/324 : val) =
                apply direct(compose_0 &toplevel)
-                 (compose/301 : _ -> imm tagged)
+                 (compose/301 : val? * val * imm tagged -> imm tagged)
                    (increment/304, apply_result/324, x/307)
                    -> k/101 * error
              where k/101 (three_right/310 : imm tagged) =
@@ -179,13 +189,17 @@ let $camlCompose_chains__first_const_0 = Block 0 () in
                  cont k/102 (partial_compose/323))
                   where k/102 (kept/311 : val) =
                     (apply direct(partial_compose_8 &toplevel)
-                       (kept/311 : _ -> imm tagged) (x/307) -> k/103 * error
+                       (kept/311 : imm tagged -> imm tagged)
+                         (x/307)
+                         -> k/103 * error
                        where k/103 (apply_result/312 : imm tagged) =
                          (apply direct(partial_compose_8 &toplevel)
-                            (kept/311 : _ -> imm tagged) (2) -> k/104 * error
+                            (kept/311 : imm tagged -> imm tagged)
+                              (2)
+                              -> k/104 * error
                             where k/104 (apply_result/313 : imm tagged) =
                               (apply direct(partial_compose_8 &toplevel)
-                                 (kept/311 : _ -> imm tagged)
+                                 (kept/311 : imm tagged -> imm tagged)
                                    (1)
                                    -> k/105 * error
                                  where k/105 (apply_result/314 : imm tagged) =
@@ -215,7 +229,9 @@ let $camlCompose_chains__first_const_0 = Block 0 () in
                                              apply
                                                     direct(compose_0
                                                     &toplevel)
-                                               (compose/301 : _ -> imm tagged
+                                               (compose/301
+                                                : val * val * imm tagged ->
+                                                  imm tagged
                                                 )
                                                  (apply_result/320,
                                                   apply_result/319,

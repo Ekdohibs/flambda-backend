@@ -36,21 +36,23 @@ let $camlMatch_variant_local__first_const_0 = Block 0 () in
  (let region/95 = %begin_region () in
   let ghost_region/96 = %begin_ghost_region () in
   apply direct(cells_0 &toplevel)
-    (cells/92 : _ -> imm tagged) (0) -> k/36 * error
+    (cells/92 : imm tagged -> imm tagged) (0) -> k/36 * error
     where k/36 (apply_result/100 : imm tagged) =
       ((let Popaque/107 = %opaque (5) in
         let Pmakeblock/108 =
           %block.[`0`].`toplevel`.local[region/95] (Popaque/107)
         in
         apply direct(cells_0 &toplevel)
-          (cells/92 : _ -> imm tagged) (Pmakeblock/108) -> k/37 * error)
+          (cells/92 : val -> imm tagged) (Pmakeblock/108) -> k/37 * error)
          where k/37 (apply_result/101 : imm tagged) =
            ((let Popaque/105 = %opaque (3) in
              let Pmakeblock/106 =
                %block.[`1`].`toplevel`.local[region/95] (Popaque/105, 4)
              in
              apply direct(cells_0 &toplevel)
-               (cells/92 : _ -> imm tagged) (Pmakeblock/106) -> k/38 * error)
+               (cells/92 : val -> imm tagged)
+                 (Pmakeblock/106)
+                 -> k/38 * error)
               where k/38 (apply_result/102 : imm tagged) =
                 let int_add/103 =
                   %int_barith.add (apply_result/102, apply_result/101)

@@ -19,7 +19,7 @@ let $camlSelf_through_closure__first_const_0 = Block 0 () in
        let k/61 = %int_barith.sub (n/51, 1) in
        (apply direct(depth_0 &my_alloc_region/53)
           (my_closure/52 ~ depth my_depth/54 -> next_depth/55
-           : _ -> imm tagged)
+           : imm tagged -> imm tagged)
             (k/61)
             -> k/26 * k/23
           where k/26 (apply_result/62 : imm tagged) =
@@ -36,7 +36,7 @@ let $camlSelf_through_closure__first_const_0 = Block 0 () in
     (depth/67 : _ -> imm tagged) (Popaque/72) -> k/28 * error)
    where k/28 (apply_result/68 : imm tagged) =
      (apply direct(depth_0 &toplevel)
-        (depth/67 : _ -> imm tagged) (6) -> k/29 * error
+        (depth/67 : imm tagged -> imm tagged) (6) -> k/29 * error
         where k/29 (apply_result/69 : imm tagged) =
           let result/70 = %int_barith.add (apply_result/69, apply_result/68)
           in

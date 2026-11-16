@@ -15,7 +15,9 @@ let code rec loopify(never) size(7) newer_version_of(h_2)
   let x = %project_value_slot.[h].[x] (my_closure) in
   let g = %project_function_slot.[h].[g] (my_closure) in
   apply direct(g_1_1 &my_alloc_region)
-    (g ~ depth my_depth -> succ my_depth : _ -> imm tagged) (0) -> k2 * k1
+    (g ~ depth my_depth -> succ my_depth : imm tagged -> imm tagged)
+      (0)
+      -> k2 * k1
     where k2 (param_1 : imm tagged) =
       cont k (x)
 in
@@ -47,7 +49,7 @@ and code rec loopify(never) size(5) newer_version_of(h_2_1)
         -> k * k1 =
   apply direct(g_1_2 &my_alloc_region) inlining_state(depth(1))
     ($camlUseless_function_simplification_in_recursive_set__g_2 ~ depth my_depth -> succ my_depth
-     : _ -> imm tagged)
+     : imm tagged -> imm tagged)
       (0)
       -> k2 * k1
     where k2 (param_1 : imm tagged) =

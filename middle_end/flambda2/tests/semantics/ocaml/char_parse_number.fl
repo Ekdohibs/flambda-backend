@@ -24,7 +24,7 @@
        let int_add/69 = %int_barith.add (i/57, 1) in
        apply direct(parse_0 &my_alloc_region/60)
          (my_closure/59 ~ depth my_depth/61 -> next_depth/62
-          : _ -> imm tagged)
+          : val * imm tagged * imm tagged -> imm tagged)
            (s/56, int_add/69, int_add/68)
            -> k/16 * k/17
  in
@@ -32,7 +32,9 @@
  let parse/75 = closure parse_0 @parse &toplevel in
  (let Popaque/78 = %opaque ($camlChar_parse_number__immstring_0) in
   apply direct(parse_0 &toplevel)
-    (parse/75 : _ -> imm tagged) (Popaque/78, 0, 0) -> k/20 * error)
+    (parse/75 : val? * imm tagged * imm tagged -> imm tagged)
+      (Popaque/78, 0, 0)
+      -> k/20 * error)
    where k/20 (result/76 : imm tagged) =
      let Pmakeblock/77 = %block.[`0`].`toplevel` (parse/75, result/76) in
      cont k/15 (Pmakeblock/77))

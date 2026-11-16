@@ -55,10 +55,14 @@ let $camlClosure_in_tuple__first_const_0 = Block 0 () in
     (make_pair/96 : _ -> [ 0 of val * val ]) (Popaque/105) -> k/33 * error)
    where k/33 (`*match*/99` : [ 0 of val * val ]) =
      ((let Pmixedfield/104 = %block_load.[`1`] (`*match*/99`) in
-       apply &toplevel Pmixedfield/104 (1) -> k/34 * error)
+       apply unknown_arity &toplevel
+         (Pmixedfield/104 : imm tagged -> imm tagged) (1) -> k/34 * error)
         where k/34 (apply_result/100 : imm tagged) =
           ((let Pmixedfield/103 = %block_load.[`0`] (`*match*/99`) in
-            apply &toplevel Pmixedfield/103 (1) -> k/35 * error)
+            apply unknown_arity &toplevel
+              (Pmixedfield/103 : imm tagged -> imm tagged)
+                (1)
+                -> k/35 * error)
              where k/35 (apply_result/101 : imm tagged) =
                let int_add/102 =
                  %int_barith.add (apply_result/101, apply_result/100)

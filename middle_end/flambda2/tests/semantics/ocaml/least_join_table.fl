@@ -19,12 +19,16 @@ let $camlLeast_join_table__first_const_0 = Block 0 () in
  let pick/53 = closure pick_0 @pick &toplevel in
  (let Popaque/60 = %opaque (0) in
   apply direct(pick_0 &toplevel)
-    (pick/53 : _ -> imm tagged) (Popaque/60, 0, 2) -> k/19 * error)
+    (pick/53 : val? * imm tagged * imm tagged -> imm tagged)
+      (Popaque/60, 0, 2)
+      -> k/19 * error)
    where k/19 (apply_result/54 : imm tagged) =
      let int_mul/55 = %int_barith.mul (apply_result/54, 10) in
      ((let Popaque/59 = %opaque (1) in
        apply direct(pick_0 &toplevel)
-         (pick/53 : _ -> imm tagged) (Popaque/59, 0, 2) -> k/20 * error)
+         (pick/53 : val? * imm tagged * imm tagged -> imm tagged)
+           (Popaque/59, 0, 2)
+           -> k/20 * error)
         where k/20 (apply_result/56 : imm tagged) =
           let result/57 = %int_barith.add (apply_result/56, int_mul/55) in
           let Pmakeblock/58 = %block.[`0`].`toplevel` (result/57) in

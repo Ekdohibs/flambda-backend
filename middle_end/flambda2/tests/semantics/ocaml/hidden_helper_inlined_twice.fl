@@ -16,10 +16,10 @@ let $camlHidden_helper_inlined_twice__first_const_0 = Block 0 () in
    let next_depth/96 = rec_info (succ my_depth/95) in
    let square/97 = %project_value_slot.[sum].[square] (my_closure/93) in
    apply direct(square_0 &my_alloc_region/94)
-     (square/97 : _ -> imm tagged) (b/92) -> k/36 * k/35
+     (square/97 : imm tagged -> imm tagged) (b/92) -> k/36 * k/35
      where k/36 (apply_result/98 : imm tagged) =
        (apply direct(square_0 &my_alloc_region/94)
-          (square/97 : _ -> imm tagged) (a/91) -> k/37 * k/35
+          (square/97 : imm tagged -> imm tagged) (a/91) -> k/37 * k/35
           where k/37 (apply_result/99 : imm tagged) =
             let int_add/100 =
               %int_barith.add (apply_result/99, apply_result/98)
@@ -36,10 +36,10 @@ let $camlHidden_helper_inlined_twice__first_const_0 = Block 0 () in
      %project_value_slot.[difference].[square_1] (my_closure/103)
    in
    apply direct(square_0 &my_alloc_region/104)
-     (square/107 : _ -> imm tagged) (b/102) -> k/40 * k/39
+     (square/107 : imm tagged -> imm tagged) (b/102) -> k/40 * k/39
      where k/40 (apply_result/108 : imm tagged) =
        (apply direct(square_0 &my_alloc_region/104)
-          (square/107 : _ -> imm tagged) (a/101) -> k/41 * k/39
+          (square/107 : imm tagged -> imm tagged) (a/101) -> k/41 * k/39
           where k/41 (apply_result/109 : imm tagged) =
             let int_sub/110 =
               %int_barith.sub (apply_result/109, apply_result/108)
@@ -57,12 +57,16 @@ let $camlHidden_helper_inlined_twice__first_const_0 = Block 0 () in
      ((let Popaque/118 = %opaque (2) in
        let Pfield/119 = %block_load.[`1`] (Squares/111) in
        apply direct(difference_2 &toplevel)
-         (Pfield/119 : _ -> imm tagged) (5, Popaque/118) -> k/43 * error)
+         (Pfield/119 : imm tagged * val? -> imm tagged)
+           (5, Popaque/118)
+           -> k/43 * error)
         where k/43 (apply_result/112 : imm tagged) =
           ((let Popaque/116 = %opaque (3) in
             let Pfield/117 = %block_load.[`0`] (Squares/111) in
             apply direct(sum_1 &toplevel)
-              (Pfield/117 : _ -> imm tagged) (Popaque/116, 4) -> k/44 * error)
+              (Pfield/117 : val? * imm tagged -> imm tagged)
+                (Popaque/116, 4)
+                -> k/44 * error)
              where k/44 (apply_result/113 : imm tagged) =
                let result/114 =
                  %int_barith.add (apply_result/113, apply_result/112)

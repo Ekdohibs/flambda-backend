@@ -12,7 +12,7 @@ let $camlIs_even__first_const_0 = Block 0 () in
  in
  let is_even/45 = closure is_even_0 @is_even &toplevel in
  apply direct(is_even_0 &toplevel)
-   (is_even/45 : _ -> imm tagged) (10) -> k/25 * error
+   (is_even/45 : imm tagged -> imm tagged) (10) -> k/25 * error
    where k/25 (apply_result/50 : imm tagged) =
      ((let untagged/51 = %untag_imm (apply_result/50) in
        switch untagged/51
@@ -22,7 +22,7 @@ let $camlIs_even__first_const_0 = Block 0 () in
           cont k/23)
    where k/23 =
      (apply direct(is_even_0 &toplevel)
-        (is_even/45 : _ -> imm tagged) (7) -> k/24 * error
+        (is_even/45 : imm tagged -> imm tagged) (7) -> k/24 * error
         where k/24 (apply_result/48 : imm tagged) =
           let Pnot/49 = %boolean_not (apply_result/48) in
           cont k/22 (Pnot/49))

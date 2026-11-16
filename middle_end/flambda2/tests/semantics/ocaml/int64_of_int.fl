@@ -23,7 +23,9 @@ let $camlInt64_of_int__first_const_0 = Block 0 () in
  let add_as_int64/72 = closure add_as_int64_0 @add_as_int64 &toplevel in
  (let Popaque/75 = %opaque (40) in
   apply direct(add_as_int64_0 &toplevel)
-    (add_as_int64/72 : _ -> imm tagged) (Popaque/75, 2) -> k/14 * error)
+    (add_as_int64/72 : val? * imm tagged -> imm tagged)
+      (Popaque/75, 2)
+      -> k/14 * error)
    where k/14 (result/73 : imm tagged) =
      let Pmakeblock/74 = %block.[`0`].`toplevel` (result/73) in
      cont k/11 (Pmakeblock/74))

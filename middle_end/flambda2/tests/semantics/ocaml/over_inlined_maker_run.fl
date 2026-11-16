@@ -37,9 +37,13 @@ let $camlOver_inlined_maker_run__first_const_0 = Block 0 () in
  in
  let make/77 = closure make_0 @make &toplevel in
  (let Popaque/80 = %opaque (3) in
-  apply direct(make_0 &toplevel) make/77 (Popaque/80) -> k/29 * error
+  apply direct(make_0 &toplevel)
+    (make/77 : imm tagged -> val?) (Popaque/80) -> k/29 * error
     where k/29 (func/81) =
-      apply &toplevel func/81 (0, 4) -> k/28 * error)
+      apply unknown_arity &toplevel
+        (func/81 : imm tagged * imm tagged -> imm tagged)
+          (0, 4)
+          -> k/28 * error)
    where k/28 (result/78 : imm tagged) =
      let Pmakeblock/79 = %block.[`0`].`toplevel` (result/78) in
      cont k/21 (Pmakeblock/79))

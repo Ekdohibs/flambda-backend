@@ -19,11 +19,14 @@ let $camlTry_returned_exported__first_const_0 = Block 0 () in
      where k/36 =
        let Pfield/102 = %block_load.[`1`] (l/97) in
        ((let Pfield/104 = %block_load.[`0`] (l/97) in
-         apply &my_alloc_region/99 f/95 (acc/96, Pfield/104) -> k/37 * k/35)
+         apply unknown_arity &my_alloc_region/99
+           (f/95 : imm tagged * val? -> imm tagged)
+             (acc/96, Pfield/104)
+             -> k/37 * k/35)
           where k/37 (apply_result/103 : imm tagged) =
             apply direct(fold_left_0 &my_alloc_region/99)
               (my_closure/98 ~ depth my_depth/100 -> next_depth/101
-               : _ -> imm tagged)
+               : val * imm tagged * val? -> imm tagged)
                 (f/95, apply_result/103, Pfield/102)
                 -> k/34 * k/35)
  in
@@ -38,7 +41,8 @@ let $camlTry_returned_exported__first_const_0 = Block 0 () in
      %project_value_slot.[`fn[try_returned_exported.ml:12,16--40]`].[g]
        (my_closure/110)
    in
-   apply &my_alloc_region/111 g/114 (x/109) -> k/41 * k/40
+   apply unknown_arity &my_alloc_region/111
+     (g/114 : imm tagged -> imm tagged) (x/109) -> k/41 * k/40
      where k/41 (apply_result/115 : imm tagged) =
        let int_add/116 = %int_barith.add (acc/108, apply_result/115) in
        cont k/39 (int_add/116)
@@ -67,7 +71,12 @@ let $camlTry_returned_exported__first_const_0 = Block 0 () in
         with { g = g/117 }
         in
         apply direct(fold_left_0 &my_alloc_region/120)
-          (fold_left/123 : _ -> imm tagged)
+          (fold_left/123
+           : val? *
+             imm tagged *
+             [ 0 | 0 of imm tagged * [ 0 | 0 of imm tagged * val ] ] ->
+             imm tagged
+           )
             (`fn[try_returned_exported.ml:12,16--40]/135`, 0, l/118)
             -> k/46 * k/45
       where k/46 (body_result/134 : imm tagged) =

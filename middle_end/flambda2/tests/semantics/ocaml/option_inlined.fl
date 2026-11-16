@@ -40,7 +40,7 @@ let $camlOption_inlined__first_const_0 = Block 0 () in
  let f/75 = closure f_0 @f &toplevel in
  (let Popaque/78 = %opaque (1) in
   apply direct(f_0 &toplevel)
-    (f/75 : _ -> imm tagged) (Popaque/78, 3) -> k/32 * error)
+    (f/75 : val? * imm tagged -> imm tagged) (Popaque/78, 3) -> k/32 * error)
    where k/32 (result/76 : imm tagged) =
      let Pmakeblock/77 = %block.[`0`].`toplevel` (result/76) in
      cont k/23 (Pmakeblock/77))

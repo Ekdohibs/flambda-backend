@@ -11,10 +11,10 @@ let $camlInline_function__first_const_0 = Block 0 () in
  let square/40 = closure square_0 @square &toplevel in
  (let a/43 = %opaque (3) in
   apply direct(square_0 &toplevel)
-    (square/40 : _ -> imm tagged) (4) -> k/19 * error
+    (square/40 : imm tagged -> imm tagged) (4) -> k/19 * error
     where k/19 (apply_result/44 : imm tagged) =
       (apply direct(square_0 &toplevel)
-         (square/40 : _ -> imm tagged) (a/43) -> k/20 * error
+         (square/40 : imm tagged -> imm tagged) (a/43) -> k/20 * error
          where k/20 (apply_result/45 : imm tagged) =
            let int_add/46 =
              %int_barith.add (apply_result/45, apply_result/44)

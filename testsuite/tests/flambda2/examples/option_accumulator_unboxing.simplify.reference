@@ -16,7 +16,8 @@ let code inline(never) loopify(never) size(47) newer_version_of(last_any_0)
           where rec k3 (for_counter_naked : int64) =
             let prim_2 = %num_conv.[`int64`].[`imm`] (for_counter_naked) in
             let i = %tag_imm (prim_2) in
-            (apply &my_alloc_region h (i) -> k4 * k1
+            (apply unknown_arity &my_alloc_region
+               (h : imm tagged -> val?) (i) -> k4 * k1
                where k4 (return_val0) =
                  let for_next_naked =
                    %int_barith.`int64`.add (for_counter_naked, 1L)
@@ -52,7 +53,8 @@ let code inline(never) loopify(never) size(47) newer_version_of(last_value_1)
           where rec k3 (for_counter_naked : int64) =
             let prim_2 = %num_conv.[`int64`].[`imm`] (for_counter_naked) in
             let i = %tag_imm (prim_2) in
-            (apply &my_alloc_region h (i) -> k4 * k1
+            (apply unknown_arity &my_alloc_region
+               (h : imm tagged -> val) (i) -> k4 * k1
                where k4 (return_val0 : val) =
                  let for_next_naked =
                    %int_barith.`int64`.add (for_counter_naked, 1L)

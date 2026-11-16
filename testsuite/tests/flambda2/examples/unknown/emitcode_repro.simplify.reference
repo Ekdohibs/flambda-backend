@@ -37,22 +37,22 @@ let code loopify(never) size(50) newer_version_of(emit_instr_1)
         | 1 -> k5
     where k5 =
       apply direct(out_0_1 &my_alloc_region)
-        ($camlEmitcode_repro__out_6 : _ -> imm tagged)
+        ($camlEmitcode_repro__out_6 : val -> imm tagged)
           ($camlEmitcode_repro__const_block_0)
           -> k * k1
     where k4 =
       apply direct(out_0_1 &my_alloc_region)
-        ($camlEmitcode_repro__out_6 : _ -> imm tagged)
+        ($camlEmitcode_repro__out_6 : val -> imm tagged)
           ($camlEmitcode_repro__const_block_1)
           -> k * k1
     where k3 =
       apply direct(out_0_1 &my_alloc_region)
-        ($camlEmitcode_repro__out_6 : _ -> imm tagged)
+        ($camlEmitcode_repro__out_6 : val -> imm tagged)
           ($camlEmitcode_repro__const_block_2)
           -> k * k1
     where k2 =
       apply direct(out_0_1 &my_alloc_region)
-        ($camlEmitcode_repro__out_6 : _ -> imm tagged)
+        ($camlEmitcode_repro__out_6 : val -> imm tagged)
           ($camlEmitcode_repro__const_block_3)
           -> k * k1
 in
@@ -96,7 +96,7 @@ let code loopify(done) size(115) newer_version_of(emit_2)
                   | 1 -> k4
               where k4 =
                 (apply direct(out_0_1 &my_alloc_region)
-                   ($camlEmitcode_repro__out_6 : _ -> imm tagged)
+                   ($camlEmitcode_repro__out_6 : val -> imm tagged)
                      ($camlEmitcode_repro__const_block_4)
                      -> k5 * k1
                    where k5 (param_2 : imm tagged) =
@@ -130,7 +130,7 @@ let code loopify(done) size(115) newer_version_of(emit_2)
                              where k3 =
                                (apply direct(out_0_1 &my_alloc_region)
                                   ($camlEmitcode_repro__out_6
-                                   : _ -> imm tagged)
+                                   : val -> imm tagged)
                                     ($camlEmitcode_repro__const_block_5)
                                     -> k4 * k1
                                   where k4 (param_2 : imm tagged) =

@@ -9,7 +9,8 @@ let code inline(never) loopify(never) size(6) newer_version_of(passthrough_any_0
         my_closure &my_alloc_region my_depth
         -> k * k1
         : [ 0 | 0 of any ] =
-  apply &my_alloc_region h (0) -> k * k1
+  apply unknown_arity &my_alloc_region
+    (h : imm tagged -> [ 0 | 0 of any ]) (0) -> k * k1
 in
 let $camlOption_untouched_payload__passthrough_any_1 =
   closure passthrough_any_0_1 @passthrough_any &toplevel
@@ -19,7 +20,8 @@ let code inline(never) loopify(never) size(6) newer_version_of(passthrough_value
         my_closure &my_alloc_region my_depth
         -> k * k1
         : [ 0 | 0 of val ] =
-  apply &my_alloc_region h (0) -> k * k1
+  apply unknown_arity &my_alloc_region
+    (h : imm tagged -> [ 0 | 0 of val ]) (0) -> k * k1
 in
 let $camlOption_untouched_payload__passthrough_value_2 =
   closure passthrough_value_1_1 @passthrough_value &toplevel
@@ -34,7 +36,8 @@ let code inline(never) loopify(never) size(21) newer_version_of(is_none_any_2)
      | 0 -> k3
      | 1 -> k2 (0))
     where k3 =
-      apply &my_alloc_region h (0) -> k2 * k1
+      apply unknown_arity &my_alloc_region
+        (h : imm tagged -> [ 0 | 0 of any ]) (0) -> k2 * k1
     where k2 (o : [ 0 | 0 of any ]) =
       let prim = %is_int (o) in
       let Pisint = %tag_imm (prim) in
@@ -53,7 +56,8 @@ let code inline(never) loopify(never) size(21) newer_version_of(is_none_value_3)
      | 0 -> k3
      | 1 -> k2 (0))
     where k3 =
-      apply &my_alloc_region h (0) -> k2 * k1
+      apply unknown_arity &my_alloc_region
+        (h : imm tagged -> [ 0 | 0 of val ]) (0) -> k2 * k1
     where k2 (o : [ 0 | 0 of val ]) =
       let prim = %is_int (o) in
       let Pisint = %tag_imm (prim) in
@@ -69,7 +73,7 @@ let code inline(never) loopify(never) size(19) newer_version_of(caller_any_4)
         : imm tagged =
   apply direct(passthrough_any_0_1 &my_alloc_region)
     ($camlOption_untouched_payload__passthrough_any_1
-     : _ -> [ 0 | 0 of imm tagged ])
+     : val -> [ 0 | 0 of imm tagged ])
       (h)
       -> k2 * k1
     where k2 (`*match*` : [ 0 | 0 of imm tagged ]) =
@@ -92,7 +96,7 @@ let code inline(never) loopify(never) size(19) newer_version_of(caller_value_5)
         : imm tagged =
   apply direct(passthrough_value_1_1 &my_alloc_region)
     ($camlOption_untouched_payload__passthrough_value_2
-     : _ -> [ 0 | 0 of val ])
+     : val -> [ 0 | 0 of val ])
       (h)
       -> k2 * k1
     where k2 (`*match*` : [ 0 | 0 of val ]) =

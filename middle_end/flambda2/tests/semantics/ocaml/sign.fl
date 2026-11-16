@@ -11,15 +11,15 @@ let $camlSign__first_const_0 = Block 0 () in
  in
  let sign/46 = closure sign_0 @sign &toplevel in
  apply direct(sign_0 &toplevel)
-   (sign/46 : _ -> imm tagged) (0) -> k/18 * error
+   (sign/46 : imm tagged -> imm tagged) (0) -> k/18 * error
    where k/18 (apply_result/47 : imm tagged) =
      let int_mul/48 = %int_barith.mul (100, apply_result/47) in
      (apply direct(sign_0 &toplevel)
-        (sign/46 : _ -> imm tagged) (7) -> k/19 * error
+        (sign/46 : imm tagged -> imm tagged) (7) -> k/19 * error
         where k/19 (apply_result/49 : imm tagged) =
           let int_mul/50 = %int_barith.mul (10, apply_result/49) in
           (apply direct(sign_0 &toplevel)
-             (sign/46 : _ -> imm tagged) (-7) -> k/20 * error
+             (sign/46 : imm tagged -> imm tagged) (-7) -> k/20 * error
              where k/20 (apply_result/51 : imm tagged) =
                let int_add/52 = %int_barith.add (apply_result/51, int_mul/50)
                in

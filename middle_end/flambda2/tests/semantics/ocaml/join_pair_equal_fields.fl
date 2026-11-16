@@ -34,12 +34,16 @@
  let spread/69 = closure spread_0 @spread &toplevel in
  (let Popaque/75 = %opaque (0) in
   apply direct(spread_0 &toplevel)
-    (spread/69 : _ -> imm tagged) (Popaque/75, 5) -> k/31 * error)
+    (spread/69 : val? * imm tagged -> imm tagged)
+      (Popaque/75, 5)
+      -> k/31 * error)
    where k/31 (apply_result/70 : imm tagged) =
      ((let Popaque/74 = %opaque ($camlJoin_pair_equal_fields__const_block_0)
        in
        apply direct(spread_0 &toplevel)
-         (spread/69 : _ -> imm tagged) (Popaque/74, 4) -> k/32 * error)
+         (spread/69 : val? * imm tagged -> imm tagged)
+           (Popaque/74, 4)
+           -> k/32 * error)
         where k/32 (apply_result/71 : imm tagged) =
           let result/72 = %int_barith.add (apply_result/71, apply_result/70)
           in

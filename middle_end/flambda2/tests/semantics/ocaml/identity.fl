@@ -9,14 +9,17 @@ let $camlIdentity__first_const_0 = Block 0 () in
  let id/38 = closure id_0 @`id` &toplevel in
  apply direct(id_0 &toplevel) id/38 (id/38) -> k/23 * error
    where k/23 (func/45) =
-     apply &toplevel func/45 (4) -> k/20 * error
+     apply unknown_arity &toplevel
+       (func/45 : imm tagged -> imm tagged) (4) -> k/20 * error
    where k/20 (apply_result/39 : imm tagged) =
      ((let Popaque/44 = %opaque (3) in
        apply direct(id_0 &toplevel)
          (id/38 : _ -> imm tagged) (Popaque/44) -> k/22 * error)
         where k/22 (apply_result/43 : imm tagged) =
           apply direct(id_0 &toplevel)
-            (id/38 : _ -> imm tagged) (apply_result/43) -> k/21 * error
+            (id/38 : imm tagged -> imm tagged)
+              (apply_result/43)
+              -> k/21 * error
         where k/21 (apply_result/40 : imm tagged) =
           let result/41 = %int_barith.add (apply_result/40, apply_result/39)
           in

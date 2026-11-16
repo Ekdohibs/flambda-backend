@@ -22,7 +22,10 @@ let code loopify(never) size(19) newer_version_of(p_2)
     where k2 =
       let Pfield = %block_load.[`1`] (param) in
       let Popaque = %opaque ($camlTest_exn_handler_inlining__id_1) in
-      apply &my_alloc_region Popaque (Pfield) -> k * k1
+      apply unknown_arity &my_alloc_region
+        (Popaque : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+          (Pfield)
+          -> k * k1
 in
 let $camlTest_exn_handler_inlining__p_3 = closure p_2_1 @p &toplevel in
 let code loopify(never) size(4) newer_version_of(g_1)
@@ -32,7 +35,9 @@ let code loopify(never) size(4) newer_version_of(g_1)
         : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] =
   apply direct(p_2_1 &my_alloc_region)
     ($camlTest_exn_handler_inlining__p_3
-     : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+     : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] ->
+       [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+     )
       (y)
       -> k * k1
 in
@@ -50,7 +55,9 @@ let code loopify(never) size(18) newer_version_of(f_3)
          where k6 =
            (apply direct(p_2_1 &my_alloc_region) inlining_state(depth(10))
               ($camlTest_exn_handler_inlining__p_3
-               : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+               : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] ->
+                 [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+               )
                 (c_unboxed0)
                 -> k6 * k5
               where k6

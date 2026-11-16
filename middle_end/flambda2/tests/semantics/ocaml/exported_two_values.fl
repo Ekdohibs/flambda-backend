@@ -10,10 +10,10 @@ let $camlExported_two_values__first_const_0 = Block 0 () in
  in
  let square/38 = closure square_0 @square &toplevel in
  apply direct(square_0 &toplevel)
-   (square/38 : _ -> imm tagged) (3) -> k/16 * error
+   (square/38 : imm tagged -> imm tagged) (3) -> k/16 * error
    where k/16 (nine/39 : imm tagged) =
      (apply direct(square_0 &toplevel)
-        (square/38 : _ -> imm tagged) (4) -> k/17 * error
+        (square/38 : imm tagged -> imm tagged) (4) -> k/17 * error
         where k/17 (apply_result/40 : imm tagged) =
           let result/41 = %int_barith.add (nine/39, apply_result/40) in
           let Pmakeblock/42 = %block.[`0`].`toplevel` (nine/39, result/41) in

@@ -17,7 +17,7 @@ let code loopify(never) size(13) newer_version_of(f_1)
         -> k * k1
         : float boxed =
   apply direct(g_0_1 &my_alloc_region)
-    ($camlFloat_fn__g_2 : _ -> float boxed) (x) -> k2 * k1
+    ($camlFloat_fn__g_2 : float boxed -> float boxed) (x) -> k2 * k1
     where k2 (y : float boxed) =
       let prim = %unbox_num.`float` (y) in
       let prim_1 = %bfloat_arith.add (prim, 0x0p+0) in

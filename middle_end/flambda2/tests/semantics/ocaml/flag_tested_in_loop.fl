@@ -146,7 +146,9 @@ let $camlFlag_tested_in_loop__first_const_0 = Block 0 () in
  let first_above/167 = closure first_above_0 @first_above &toplevel in
  (let Popaque/170 = %opaque (9) in
   apply direct(first_above_0 &toplevel)
-    (first_above/167 : _ -> imm tagged) (Popaque/170, 7) -> k/59 * error)
+    (first_above/167 : val? * imm tagged -> imm tagged)
+      (Popaque/170, 7)
+      -> k/59 * error)
    where k/59 (result/168 : imm tagged) =
      let Pmakeblock/169 =
        %block.[`0`].`toplevel` (first_above/167, result/168)

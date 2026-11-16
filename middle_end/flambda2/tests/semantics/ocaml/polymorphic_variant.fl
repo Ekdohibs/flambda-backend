@@ -44,7 +44,7 @@
  (let region/97 = %begin_region () in
   let ghost_region/98 = %begin_ghost_region () in
   apply direct(weight_0 &toplevel &region/97 &ghost_region/98)
-    (weight/94 : _ -> imm tagged)
+    (weight/94 : val -> imm tagged)
       ($camlPolymorphic_variant__const_block_1)
       -> k/42 * error
     where k/42 (apply_result/102 : imm tagged) =
@@ -53,10 +53,12 @@
           %block.[`0`].`toplevel`.local[region/97] (390299717, Popaque/107)
         in
         apply direct(weight_0 &toplevel &region/97 &ghost_region/98)
-          (weight/94 : _ -> imm tagged) (Pmakeblock/108) -> k/43 * error)
+          (weight/94 : val -> imm tagged) (Pmakeblock/108) -> k/43 * error)
          where k/43 (apply_result/103 : imm tagged) =
            (apply direct(weight_0 &toplevel &region/97 &ghost_region/98)
-              (weight/94 : _ -> imm tagged) (-406572541) -> k/44 * error
+              (weight/94 : imm tagged -> imm tagged)
+                (-406572541)
+                -> k/44 * error
               where k/44 (apply_result/104 : imm tagged) =
                 let int_add/105 =
                   %int_barith.add (apply_result/104, apply_result/103)

@@ -20,7 +20,8 @@ let $camlRec_helper_among_three__first_const_0 = Block 0 () in
    let third/94 = %project_function_slot.[first].[third] (my_closure/89) in
    let int_add/95 = %int_barith.add (x/88, 1) in
    apply direct(second_1 &my_alloc_region/90)
-     (second/93 ~ depth my_depth/91 -> next_depth/92 : _ -> imm tagged)
+     (second/93 ~ depth my_depth/91 -> next_depth/92
+      : imm tagged -> imm tagged)
        (int_add/95)
        -> k/24 * k/25
  in
@@ -45,7 +46,7 @@ let $camlRec_helper_among_three__first_const_0 = Block 0 () in
     (third/106 : _ -> imm tagged) (Popaque/111) -> k/28 * error)
    where k/28 (apply_result/107 : imm tagged) =
      (apply direct(second_1 &toplevel)
-        (second/105 : _ -> imm tagged) (1) -> k/29 * error
+        (second/105 : imm tagged -> imm tagged) (1) -> k/29 * error
         where k/29 (apply_result/108 : imm tagged) =
           let result/109 =
             %int_barith.add (apply_result/108, apply_result/107)

@@ -52,7 +52,7 @@ let $camlProject_record_two_levels__first_const_0 = Block 0 () in
     in
     apply direct(widen_1 &my_alloc_region/134)
       (widen/138
-       : _ -> [ 0 of imm tagged * [ 0 of imm tagged * imm tagged ] ])
+       : val -> [ 0 of imm tagged * [ 0 of imm tagged * imm tagged ] ])
         (Pmakeblock/144)
         -> k/31 * k/30)
      where k/31
@@ -61,7 +61,12 @@ let $camlProject_record_two_levels__first_const_0 = Block 0 () in
        let unit/142 = %end_region (region/139) in
        let unit/143 = %end_ghost_region (ghost_region/140) in
        apply direct(width_of_0 &my_alloc_region/134)
-         (width_of/137 : _ -> imm tagged) (apply_result/141) -> k/29 * k/30
+         (width_of/137
+          : [ 0 of imm tagged * [ 0 of imm tagged * imm tagged ] ] ->
+            imm tagged
+          )
+           (apply_result/141)
+           -> k/29 * k/30
  in
  let width_of/145 = closure width_of_0 @width_of &toplevel in
  let widen/146 = closure widen_1 @widen &toplevel in
@@ -75,7 +80,7 @@ let $camlProject_record_two_levels__first_const_0 = Block 0 () in
      %block.[`0`].`toplevel`.local[region/150] (Popaque/155, 4)
    in
    apply direct(widened_width_2 &toplevel)
-     (widened_width/147 : _ -> imm tagged)
+     (widened_width/147 : imm tagged * val -> imm tagged)
        (0, Pmakeblock/156)
        -> k/33 * error)
     where k/33 (region_return/152 : imm tagged) =

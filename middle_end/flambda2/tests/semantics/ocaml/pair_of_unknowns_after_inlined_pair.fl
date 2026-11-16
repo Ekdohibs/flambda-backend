@@ -16,7 +16,9 @@ let $camlPair_of_unknowns_after_inlined_pair__first_const_0 = Block 0 () in
  let calls/56 = %block.mut.[`0`].`toplevel` (0) in
  let entry/57 = closure entry_0 @entry &toplevel with { calls = calls/56 } in
  apply direct(entry_0 &toplevel)
-   (entry/57 : _ -> [ 0 of imm tagged * imm tagged ]) (1) -> k/14 * error
+   (entry/57 : imm tagged -> [ 0 of imm tagged * imm tagged ])
+     (1)
+     -> k/14 * error
    where k/14 (first/58 : [ 0 of imm tagged * imm tagged ]) =
      let Popaque/59 = %opaque (4) in
      let Popaque/60 = %opaque (3) in

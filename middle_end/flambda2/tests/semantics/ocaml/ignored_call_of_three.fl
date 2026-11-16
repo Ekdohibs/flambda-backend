@@ -23,10 +23,10 @@ let $camlIgnored_call_of_three__first_const_0 = Block 0 () in
      where k/28 =
        let int_add/72 = %int_barith.add (x/64, 1) in
        apply direct(twice_0 &my_alloc_region/66)
-         (twice/69 : _ -> imm tagged) (int_add/72) -> k/26 * k/25
+         (twice/69 : imm tagged -> imm tagged) (int_add/72) -> k/26 * k/25
      where k/27 =
        apply direct(twice_0 &my_alloc_region/66)
-         (twice/69 : _ -> imm tagged) (x/64) -> k/26 * k/25
+         (twice/69 : imm tagged -> imm tagged) (x/64) -> k/26 * k/25
      where k/26 (switch_result/70 : imm tagged) =
        let int_add/71 = %int_barith.add (x/64, 1) in
        cont k/24 (int_add/71)
@@ -37,7 +37,9 @@ let $camlIgnored_call_of_three__first_const_0 = Block 0 () in
  in
  (let Popaque/78 = %opaque (2) in
   apply direct(ignored_1 &toplevel)
-    (ignored/75 : _ -> imm tagged) (Popaque/78, 3) -> k/29 * error)
+    (ignored/75 : val? * imm tagged -> imm tagged)
+      (Popaque/78, 3)
+      -> k/29 * error)
    where k/29 (result/76 : imm tagged) =
      let Pmakeblock/77 =
        %block.[`0`].`toplevel` (twice/74, ignored/75, result/76)

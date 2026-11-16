@@ -15,7 +15,7 @@ let code loopify(never) size(4) newer_version_of(g_1)
         -> k * k1
         : imm tagged =
   apply direct(f_0_1 &my_alloc_region)
-    ($camlCode_size_of_boolean_not_switch__f_1 : _ -> imm tagged)
+    ($camlCode_size_of_boolean_not_switch__f_1 : imm tagged -> imm tagged)
       (b)
       -> k * k1
 in

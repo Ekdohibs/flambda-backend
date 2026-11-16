@@ -23,9 +23,10 @@ let $camlOver_rec__first_const_0 = Block 0 () in
    let int_add/79 = %int_barith.add (b/72, b/72) in
    let int_sub/80 = %int_barith.sub (n/78, 1) in
    apply direct(times_0 &my_alloc_region/74)
-     times/77 (int_sub/80) -> k/36 * k/35
+     (times/77 : imm tagged -> val?) (int_sub/80) -> k/36 * k/35
      where k/36 (func/81) =
-       apply &my_alloc_region/74 func/81 (int_add/79) -> k/34 * k/35
+       apply unknown_arity &my_alloc_region/74
+         (func/81 : imm tagged -> imm tagged) (int_add/79) -> k/34 * k/35
  and code rec size(52)
        times_0 (n/82 : imm tagged)
          my_closure/83 &my_alloc_region/84 my_depth/85
@@ -61,9 +62,11 @@ let $camlOver_rec__first_const_0 = Block 0 () in
  in
  let times/92 = closure times_0 @times &toplevel in
  (let Popaque/95 = %opaque (3) in
-  apply direct(times_0 &toplevel) times/92 (Popaque/95) -> k/44 * error
+  apply direct(times_0 &toplevel)
+    (times/92 : imm tagged -> val?) (Popaque/95) -> k/44 * error
     where k/44 (func/96) =
-      apply &toplevel func/96 (1) -> k/43 * error)
+      apply unknown_arity &toplevel
+        (func/96 : imm tagged -> imm tagged) (1) -> k/43 * error)
    where k/43 (result/93 : imm tagged) =
      let Pmakeblock/94 = %block.[`0`].`toplevel` (result/93) in
      cont k/31 (Pmakeblock/94))

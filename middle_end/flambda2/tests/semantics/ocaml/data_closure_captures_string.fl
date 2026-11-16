@@ -30,7 +30,7 @@
  let $camlData_closure_captures_string__immstring_0 = "hello" in
  let reader/79 = closure reader_0 @reader &toplevel in
  apply direct(reader_0 &toplevel)
-   (reader/79 : _ -> val)
+   (reader/79 : val -> val)
      ($camlData_closure_captures_string__immstring_0)
      -> k/26 * error
    where k/26 (from_constant/80 : val) =
@@ -41,9 +41,15 @@
          (reader/79 : _ -> val) (Popaque/87) -> k/27 * error)
         where k/27 (from_unknown/81 : val) =
           ((let Popaque/86 = %opaque (0) in
-            apply &toplevel from_unknown/81 (Popaque/86) -> k/28 * error)
+            apply unknown_arity &toplevel
+              (from_unknown/81 : _ -> imm tagged)
+                (Popaque/86)
+                -> k/28 * error)
              where k/28 (apply_result/82 : imm tagged) =
-               (apply &toplevel from_constant/80 (1) -> k/29 * error
+               (apply unknown_arity &toplevel
+                  (from_constant/80 : imm tagged -> imm tagged)
+                    (1)
+                    -> k/29 * error
                   where k/29 (apply_result/83 : imm tagged) =
                     let result/84 =
                       %int_barith.add (apply_result/83, apply_result/82)

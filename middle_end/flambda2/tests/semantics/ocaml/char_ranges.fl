@@ -112,7 +112,9 @@ let $camlChar_ranges__first_const_0 = Block 0 () in
                      -> k/91 * error)
                   where k/91 (apply_result/134 : imm tagged) =
                     (apply direct(class_of_0 &toplevel)
-                       (class_of/130 : _ -> imm tagged) (113) -> k/92 * error
+                       (class_of/130 : imm tagged -> imm tagged)
+                         (113)
+                         -> k/92 * error
                        where k/92 (apply_result/135 : imm tagged) =
                          let int_add/136 =
                            %int_barith.add

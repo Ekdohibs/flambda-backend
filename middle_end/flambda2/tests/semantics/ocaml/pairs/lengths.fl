@@ -20,7 +20,7 @@ let $camlLengths__first_const_0 = Block 0 () in
        let int_add/57 = %int_barith.add (n/50, 1) in
        apply direct(length_from_0 &my_alloc_region/53)
          (my_closure/52 ~ depth my_depth/54 -> next_depth/55
-          : _ -> imm tagged)
+          : imm tagged * val? -> imm tagged)
            (int_add/57, Pfield/56)
            -> k/18 * k/19
  in
@@ -35,7 +35,12 @@ let $camlLengths__first_const_0 = Block 0 () in
      %project_value_slot.[length].[length_from] (my_closure/62)
    in
    apply direct(length_from_0 &my_alloc_region/63)
-     (length_from/66 : _ -> imm tagged) (0, l/61) -> k/22 * k/23
+     (length_from/66
+      : imm tagged * [ 0 | 0 of imm tagged * [ 0 | 0 of imm tagged * val ] ] ->
+        imm tagged
+      )
+       (0, l/61)
+       -> k/22 * k/23
  in
  let length_from/67 = closure length_from_0 @length_from &toplevel in
  let length/68 = closure length_1 @length &toplevel

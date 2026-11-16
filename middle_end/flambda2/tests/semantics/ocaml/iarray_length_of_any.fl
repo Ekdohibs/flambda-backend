@@ -11,7 +11,7 @@ let $camlIarray_length_of_any__first_const_0 = Block 0 () in
  let len/36 = closure len_0 @len &toplevel in
  (let Pmakearray/39 = %array.`imm`.`toplevel` (1, 2, 3) in
   apply direct(len_0 &toplevel)
-    (len/36 : _ -> imm tagged) (Pmakearray/39) -> k/14 * error)
+    (len/36 : val -> imm tagged) (Pmakearray/39) -> k/14 * error)
    where k/14 (n/37 : imm tagged) =
      let Pmakeblock/38 = %block.[`0`].`toplevel` (len/36, n/37) in
      cont k/11 (Pmakeblock/38))

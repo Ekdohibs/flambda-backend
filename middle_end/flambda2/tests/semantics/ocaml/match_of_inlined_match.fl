@@ -20,7 +20,7 @@
    let next_depth/76 = rec_info (succ my_depth/75) in
    let weigh/77 = %project_value_slot.[body].[weigh] (my_closure/73) in
    apply direct(weigh_0 &my_alloc_region/74)
-     (weigh/77 : _ -> [ 0 | 0 of imm tagged ]) (c/71) -> k/30 * k/29
+     (weigh/77 : imm tagged -> [ 0 | 0 of imm tagged ]) (c/71) -> k/30 * k/29
      where k/30 (`*match*/78` : [ 0 | 0 of imm tagged ]) =
        ((let prim/81 = %is_int (`*match*/78`) in
          let Pisint/82 = %tag_imm (prim/81) in
@@ -39,14 +39,20 @@
  let body/85 = closure body_1 @body &toplevel with { weigh = weigh/84 } in
  (let Popaque/93 = %opaque (5) in
   apply direct(body_1 &toplevel)
-    (body/85 : _ -> imm tagged) (2, Popaque/93) -> k/33 * error)
+    (body/85 : imm tagged * val? -> imm tagged)
+      (2, Popaque/93)
+      -> k/33 * error)
    where k/33 (apply_result/86 : imm tagged) =
      ((let Popaque/92 = %opaque (1) in
        apply direct(body_1 &toplevel)
-         (body/85 : _ -> imm tagged) (Popaque/92, 5) -> k/34 * error)
+         (body/85 : val? * imm tagged -> imm tagged)
+           (Popaque/92, 5)
+           -> k/34 * error)
         where k/34 (apply_result/87 : imm tagged) =
           (apply direct(body_1 &toplevel)
-             (body/85 : _ -> imm tagged) (0, 5) -> k/35 * error
+             (body/85 : imm tagged * imm tagged -> imm tagged)
+               (0, 5)
+               -> k/35 * error
              where k/35 (apply_result/88 : imm tagged) =
                let int_add/89 =
                  %int_barith.add (apply_result/88, apply_result/87)

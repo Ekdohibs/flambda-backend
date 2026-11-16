@@ -18,7 +18,7 @@
  in
  let make/56 = closure make_0 @make &toplevel in
  apply direct(make_0 &toplevel)
-   (make/56 : _ -> imm array) (10) -> k/28 * error
+   (make/56 : imm tagged -> imm array) (10) -> k/28 * error
    where k/28 (apply_result/57 : imm array) =
      ((let prim/65 = %array_length.`imm` (apply_result/57) in
        let prim/66 = %int_comp.unsigned.lt (0, prim/65) in

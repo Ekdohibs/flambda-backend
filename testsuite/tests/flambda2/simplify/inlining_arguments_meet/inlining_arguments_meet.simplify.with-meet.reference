@@ -7,7 +7,8 @@ let code loopify(never) size(4) newer_version_of(h_0)
         : imm tagged =
   apply direct(f_with_code_size_between_1_and_10_0 &my_alloc_region)
          inlining_state(depth(10))
-    ($Lib.camlLib__f_with_code_size_between_1_and_10_1 : _ -> imm tagged)
+    ($Lib.camlLib__f_with_code_size_between_1_and_10_1
+     : imm tagged -> imm tagged)
       (x)
       -> k * k1
 in
@@ -35,7 +36,7 @@ let code loopify(never) size(4) newer_version_of(q_1)
         : imm tagged =
   apply direct(g_with_code_size_between_11_and_20_3 &my_alloc_region)
     ($camlInlining_arguments_meet__g_with_code_size_between_11_and_20_2
-     : _ -> imm tagged)
+     : imm tagged -> imm tagged)
       (x)
       -> k * k1
 in

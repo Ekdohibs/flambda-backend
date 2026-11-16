@@ -27,7 +27,7 @@ let $camlSibling_given_as_value__first_const_0 = Block 0 () in
      where k/28 =
        let int_sub/89 = %int_barith.sub (n/82, 1) in
        apply direct(call_0 &my_alloc_region/84)
-         (call/87 : _ -> imm tagged)
+         (call/87 : val? * imm tagged -> imm tagged)
            (restart/88 ~ depth my_depth/85 -> next_depth/86, int_sub/89)
            -> k/26 * k/27
  in
@@ -42,7 +42,8 @@ let $camlSibling_given_as_value__first_const_0 = Block 0 () in
      %project_function_slot.[restart].[count_down] (my_closure/94)
    in
    apply direct(count_down_1 &my_alloc_region/95)
-     (count_down/99 ~ depth my_depth/96 -> next_depth/97 : _ -> imm tagged)
+     (count_down/99 ~ depth my_depth/96 -> next_depth/97
+      : imm tagged -> imm tagged)
        (n/93)
        -> k/30 * k/31
  in

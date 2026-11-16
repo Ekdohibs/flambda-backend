@@ -25,7 +25,7 @@ let $camlFrom_odoc_texi__foo_3 = closure foo_1_1 @foo &toplevel in
     | 1 -> k1)
    where k1 =
      (apply direct(foo_1_1 &toplevel)
-        ($camlFrom_odoc_texi__foo_3 : _ -> val)
+        ($camlFrom_odoc_texi__foo_3 : val -> val)
           ($camlFrom_odoc_texi__immstring_0)
           -> k1 * error
         where k1 (apply_result : val) =

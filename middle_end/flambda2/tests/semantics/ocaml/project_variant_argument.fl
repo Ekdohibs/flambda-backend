@@ -29,7 +29,7 @@ let $camlProject_variant_argument__first_const_0 = Block 0 () in
    in
    let Pmakeblock/76 = %block.[`1`].my_alloc_region/72 (w/69, h/70) in
    apply direct(height_0 &my_alloc_region/72)
-     (height/75 : _ -> imm tagged) (Pmakeblock/76) -> k/24 * k/25
+     (height/75 : val -> imm tagged) (Pmakeblock/76) -> k/24 * k/25
  in
  let height/77 = closure height_0 @height &toplevel in
  let rect_height/78 = closure rect_height_1 @rect_height &toplevel
@@ -37,7 +37,9 @@ let $camlProject_variant_argument__first_const_0 = Block 0 () in
  in
  (let Popaque/81 = %opaque (2) in
   apply direct(rect_height_1 &toplevel)
-    (rect_height/78 : _ -> imm tagged) (Popaque/81, 7) -> k/26 * error)
+    (rect_height/78 : val? * imm tagged -> imm tagged)
+      (Popaque/81, 7)
+      -> k/26 * error)
    where k/26 (result/79 : imm tagged) =
      let Pmakeblock/80 =
        %block.[`0`].`toplevel` (height/77, rect_height/78, result/79)

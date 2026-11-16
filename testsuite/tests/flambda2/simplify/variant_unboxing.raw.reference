@@ -50,7 +50,11 @@ let $camlVariant_unboxing__first_const_0 = Block 0 () in
    let next_depth = rec_info (succ my_depth) in
    let Tree = %project_value_slot.[is_empty].[Tree] (my_closure) in
    (let Pfield = %block_load.[`0`] (Tree) in
-    apply &my_alloc_region Pfield (t) -> k3 * k2)
+    apply unknown_arity &my_alloc_region
+      (Pfield
+       : val -> [ 0 | 0 of imm tagged * val |1 of imm tagged * val * val ])
+        (t)
+        -> k3 * k2)
      where k3
              (`*match*` :
                 [ 0 | 0 of imm tagged * val |1 of imm tagged * val * val ]) =
@@ -78,7 +82,7 @@ let $camlVariant_unboxing__first_const_0 = Block 0 () in
        closure Tree_operations_1 @Tree_operations &toplevel
      in
      (apply direct(Tree_operations_1 &toplevel)
-        (Tree_operations : _ -> val) (Set0) -> k2 * error
+        (Tree_operations : val -> val) (Set0) -> k2 * error
         where k2 (include : val) =
           let Pfield = %block_load.[`0`] (include) in
           let Pmakeblock = %block.[`0`].`toplevel` (Pfield) in

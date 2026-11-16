@@ -26,12 +26,20 @@
    let next_depth/88 = rec_info (succ my_depth/87) in
    let swap/89 = %project_value_slot.[back].[swap] (my_closure/85) in
    let first/90 = %project_value_slot.[back].[first] (my_closure/85) in
-   apply &my_alloc_region/86 swap/89 (pair/84) -> k/31 * k/29
+   apply unknown_arity &my_alloc_region/86
+     (swap/89 : [ 0 of val * val ] -> [ 0 of val * val ])
+       (pair/84)
+       -> k/31 * k/29
      where k/31 (apply_result/92 : [ 0 of val * val ]) =
-       apply &my_alloc_region/86 swap/89 (apply_result/92) -> k/30 * k/29
+       apply unknown_arity &my_alloc_region/86
+         (swap/89 : [ 0 of val * val ] -> [ 0 of val * val ])
+           (apply_result/92)
+           -> k/30 * k/29
      where k/30 (apply_result/91 : [ 0 of val * val ]) =
        apply direct(first_1 &my_alloc_region/86)
-         (first/90 : _ -> val) (apply_result/91) -> k/28 * k/29
+         (first/90 : [ 0 of val * val ] -> val)
+           (apply_result/91)
+           -> k/28 * k/29
  in
  let $camlHelper_called_through_slot__immstring_1 = "two" in
  let $camlHelper_called_through_slot__immstring_0 = "one" in
@@ -46,7 +54,7 @@
       (Popaque/98, $camlHelper_called_through_slot__immstring_1)
   in
   apply direct(back_2 &toplevel)
-    (back/95 : _ -> val) (Pmakeblock/99) -> k/32 * error)
+    (back/95 : val -> val) (Pmakeblock/99) -> k/32 * error)
    where k/32 (result/96 : val) =
      let Pmakeblock/97 = %block.[`0`].`toplevel` (back/95, result/96) in
      cont k/23 (Pmakeblock/97))

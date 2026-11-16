@@ -27,9 +27,11 @@ let $camlOver_application__first_const_0 = Block 0 () in
  in
  let adder/56 = closure adder_0 @adder &toplevel in
  (let Popaque/59 = %opaque (1) in
-  apply direct(adder_0 &toplevel) adder/56 (Popaque/59) -> k/23 * error
+  apply direct(adder_0 &toplevel)
+    (adder/56 : imm tagged -> val?) (Popaque/59) -> k/23 * error
     where k/23 (func/60) =
-      apply &toplevel func/60 (2) -> k/22 * error)
+      apply unknown_arity &toplevel
+        (func/60 : imm tagged -> imm tagged) (2) -> k/22 * error)
    where k/22 (result/57 : imm tagged) =
      let Pmakeblock/58 = %block.[`0`].`toplevel` (result/57) in
      cont k/17 (Pmakeblock/58))

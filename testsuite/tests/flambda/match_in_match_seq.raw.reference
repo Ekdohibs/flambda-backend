@@ -4,7 +4,8 @@ let $camlMatch_in_match_seq__first_const_0 = Block 0 () in
    let next_depth = rec_info (succ my_depth) in
    let f = %project_value_slot.[aux].[f] (my_closure) in
    let next = %project_value_slot.[aux].[next] (my_closure) in
-   apply &my_alloc_region inlined(hint) next (s) -> k3 * k2
+   apply unknown_arity &my_alloc_region inlined(hint)
+     (next : val -> [ 0 | 0 of val * val ]) (s) -> k3 * k2
      where k3 (`*match*` : [ 0 | 0 of val * val ]) =
        ((let prim = %is_int (`*match*`) in
          let Pisint = %tag_imm (prim) in
@@ -51,7 +52,8 @@ let $camlMatch_in_match_seq__first_const_0 = Block 0 () in
      %project_value_slot.[`fn[match_in_match_seq.ml:35,14--125]`].[next_1]
        (my_closure)
    in
-   apply &my_alloc_region inlined(hint) next (s) -> k3 * k2
+   apply unknown_arity &my_alloc_region inlined(hint)
+     (next : val -> [ 0 | 0 of val * val ]) (s) -> k3 * k2
      where k3 (`*match*` : [ 0 | 0 of val * val ]) =
        ((let prim = %is_int (`*match*`) in
          let Pisint = %tag_imm (prim) in
@@ -64,7 +66,8 @@ let $camlMatch_in_match_seq__first_const_0 = Block 0 () in
           where k3 =
             let Pfield = %block_load.[`1`] (`*match*`) in
             ((let Pfield_1 = %block_load.[`0`] (`*match*`) in
-              apply &my_alloc_region f (Pfield_1) -> k3 * k2)
+              apply unknown_arity &my_alloc_region
+                (f : _ -> val) (Pfield_1) -> k3 * k2)
                where k3 (apply_result : val) =
                  let Pmakeblock =
                    %block.[`0`].my_alloc_region (apply_result, Pfield)
@@ -100,7 +103,8 @@ let $camlMatch_in_match_seq__first_const_0 = Block 0 () in
    let next_depth = rec_info (succ my_depth) in
    let f = %project_value_slot.[aux_1].[f_2] (my_closure) in
    let next = %project_value_slot.[aux_1].[next_2] (my_closure) in
-   apply &my_alloc_region inlined(hint) next (s) -> k3 * k2
+   apply unknown_arity &my_alloc_region inlined(hint)
+     (next : val -> [ 0 | 0 of val * val ]) (s) -> k3 * k2
      where k3 (`*match*` : [ 0 | 0 of val * val ]) =
        ((let prim = %is_int (`*match*`) in
          let Pisint = %tag_imm (prim) in
@@ -113,7 +117,8 @@ let $camlMatch_in_match_seq__first_const_0 = Block 0 () in
           where k3 =
             let s' = %block_load.[`1`] (`*match*`) in
             let x = %block_load.[`0`] (`*match*`) in
-            (apply &my_alloc_region f (x) -> k5 * k2
+            (apply unknown_arity &my_alloc_region
+               (f : _ -> [ 0 |1 ]) (x) -> k5 * k2
                where k5 (apply_result : [ 0 |1 ]) =
                  ((let untagged = %untag_imm (apply_result) in
                    switch untagged
@@ -204,7 +209,7 @@ let $camlMatch_in_match_seq__first_const_0 = Block 0 () in
    with { hi = hi }
    in
    apply direct(unfold_6 &my_alloc_region)
-     (unfold : _ -> [ 0 of [ 0 of val * val ] ])
+     (unfold : val? * imm tagged -> [ 0 of [ 0 of val * val ] ])
        (`fn[match_in_match_seq.ml:55,11--63]`, lo)
        -> k1 * k2
  in
@@ -230,7 +235,8 @@ let $camlMatch_in_match_seq__first_const_0 = Block 0 () in
        @`fn[match_in_match_seq.ml:57,33--36]` &my_alloc_region
    in
    apply direct(fold_left_0 &my_alloc_region)
-     (fold_left : _ -> imm tagged)
+     (fold_left
+      : val? * imm tagged * [ 0 of [ 0 of val * val ] ] -> imm tagged)
        (`fn[match_in_match_seq.ml:57,33--36]`, 0, s)
        -> k1 * k2
  in
@@ -256,24 +262,32 @@ let $camlMatch_in_match_seq__first_const_0 = Block 0 () in
    let ints = %project_value_slot.[foo].[ints] (my_closure) in
    let sum = %project_value_slot.[foo].[sum] (my_closure) in
    apply direct(ints_8 &my_alloc_region)
-     (ints : _ -> [ 0 of [ 0 of val * val ] ]) (0, 11) -> k5 * k2
+     (ints : imm tagged * imm tagged -> [ 0 of [ 0 of val * val ] ])
+       (0, 11)
+       -> k5 * k2
      where k5 (apply_result : [ 0 of [ 0 of val * val ] ]) =
        let `fn[match_in_match_seq.ml:60,28--44]` =
          closure `fn[match_in_match_seq.ml:60,28--44]_13`
            @`fn[match_in_match_seq.ml:60,28--44]` &my_alloc_region
        in
        apply direct(filter_4 &my_alloc_region)
-         (filter : _ -> [ 0 of [ 0 of val * val ] ])
+         (filter
+          : val? * [ 0 of [ 0 of val * val ] ] -> [ 0 of [ 0 of val * val ] ]
+          )
            (`fn[match_in_match_seq.ml:60,28--44]`, apply_result)
            -> k4 * k2
      where k4 (apply_result : [ 0 of [ 0 of val * val ] ]) =
        apply direct(map_2 &my_alloc_region)
-         (map : _ -> [ 0 of [ 0 of val * val ] ])
+         (map
+          : val? * [ 0 of [ 0 of val * val ] ] -> [ 0 of [ 0 of val * val ] ]
+          )
            (square, apply_result)
            -> k3 * k2
      where k3 (apply_result : [ 0 of [ 0 of val * val ] ]) =
        apply direct(sum_10 &my_alloc_region)
-         (sum : _ -> imm tagged) (apply_result) -> k1 * k2
+         (sum : [ 0 of [ 0 of val * val ] ] -> imm tagged)
+           (apply_result)
+           -> k1 * k2
  in
  (let fold_left = closure fold_left_0 @fold_left &toplevel in
   let map = closure map_2 @map &toplevel in

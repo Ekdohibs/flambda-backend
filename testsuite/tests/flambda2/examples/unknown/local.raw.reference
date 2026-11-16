@@ -29,12 +29,13 @@
                 direct(map_local_1
                 &my_alloc_region &my_region &my_ghost_region)
            (my_closure ~ depth my_depth -> next_depth
-            : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+            : val * val? -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
              (f, Pfield)
              -> k3 * k2)
           where k3 (apply_result : [ 0 | 0 of val * [ 0 | 0 of val * val ] ]) =
             ((let Pfield = %block_load.[`0`] (l) in
-              apply &my_alloc_region f (Pfield) -> k3 * k2)
+              apply unknown_arity &my_alloc_region
+                (f : _ -> val) (Pfield) -> k3 * k2)
                where k3 (apply_result_1 : val) =
                  let Pmakeblock =
                    %block.[`0`].my_alloc_region.local[my_region]
@@ -99,7 +100,7 @@
        let Pfield_1 = %block_load.[`1`] (l1) in
        apply direct(rev_app_4 &my_alloc_region &my_region &my_ghost_region)
          (my_closure ~ depth my_depth -> next_depth
-          : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+          : val? * val -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
            (Pfield_1, Pmakeblock)
            -> k1 * k2
  in
@@ -128,7 +129,8 @@
        let l_1 = %block_load.[`1`] (l) in
        let a = %block_load.[`0`] (l) in
        let acc_1 = %block.[`0`].my_alloc_region.local[my_region] (a, acc) in
-       (apply &my_alloc_region break_here (a) -> k6 * k2
+       (apply unknown_arity &my_alloc_region
+          (break_here : _ -> [ 0 |1 ]) (a) -> k6 * k2
           where k6 (apply_result : [ 0 |1 ]) =
             ((let untagged = %untag_imm (apply_result) in
               switch untagged
@@ -143,7 +145,7 @@
                    direct(find_span_6
                    &my_alloc_region &my_region &my_ghost_region)
               (my_closure ~ depth my_depth -> next_depth
-               : _ ->
+               : val * val? * [ 0 | 0 of val * [ 0 | 0 of val * val ] ] ->
                  [ 0 of [ 0 | 0 of val * val ] * [ 0 | 0 of val * val ] ]
                )
                 (break_here, l_1, acc_1)
@@ -181,7 +183,9 @@
                direct(find_span_6
                &my_alloc_region &my_region &my_ghost_region)
           (find_span ~ depth my_depth -> next_depth
-           : _ -> [ 0 of [ 0 | 0 of val * val ] * [ 0 | 0 of val * val ] ])
+           : val * [ 0 | 0 of val * [ 0 | 0 of val * val ] ] * imm tagged ->
+             [ 0 of [ 0 | 0 of val * val ] * [ 0 | 0 of val * val ] ]
+           )
             (break_here, l, 0)
             -> k3 * k2
           where k3
@@ -192,7 +196,7 @@
                      direct(spans_5
                      &my_alloc_region &my_region &my_ghost_region)
                 (my_closure ~ depth my_depth -> next_depth
-                 : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+                 : val * val? -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
                   (break_here, Pmixedfield)
                   -> k3 * k2)
                where k3
@@ -203,7 +207,9 @@
                           direct(rev_app_4
                           &my_alloc_region &my_region &my_ghost_region)
                      (rev_app
-                      : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+                      : val? * imm tagged ->
+                        [ 0 | 0 of val * [ 0 | 0 of val * val ] ]
+                      )
                        (Pmixedfield, 0)
                        -> k3 * k2)
                     where k3
@@ -262,7 +268,7 @@
  let map_local = closure map_local_1 @map_local &toplevel in
  let length = closure length_2 @length &toplevel in
  apply direct(length_2 &toplevel)
-   (length : _ -> imm tagged) ($camlLocal__const_block_3) -> k3 * error
+   (length : val -> imm tagged) ($camlLocal__const_block_3) -> k3 * error
    where k3 (apply_result : imm tagged) =
      let prim = %phys_eq (apply_result, 1) in
      let eq = %tag_imm (prim) in
@@ -278,12 +284,16 @@
      ((let `region` = %begin_region () in
        let ghost_region = %begin_ghost_region () in
        apply direct(return_local_0 &toplevel &`region` &ghost_region)
-         (return_local : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+         (return_local
+          : imm tagged -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
            (0)
            -> k5 * error
          where k5 (apply_result : [ 0 | 0 of val * [ 0 | 0 of val * val ] ]) =
            apply direct(length_2 &toplevel) unroll(3)
-             (length : _ -> imm tagged) (apply_result) -> k4 * error
+             (length
+              : [ 0 | 0 of val * [ 0 | 0 of val * val ] ] -> imm tagged)
+               (apply_result)
+               -> k4 * error
          where k4 (apply_result : imm tagged) =
            let prim = %phys_eq (apply_result, 3) in
            let eq = %tag_imm (prim) in
@@ -303,7 +313,8 @@
           ((let `region` = %begin_region () in
             let ghost_region = %begin_ghost_region () in
             apply direct(return_local_0 &toplevel &`region` &ghost_region)
-              (return_local : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+              (return_local
+               : imm tagged -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
                 (0)
                 -> k3 * error
               where k3 (ns : [ 0 | 0 of val * [ 0 | 0 of val * val ] ]) =
@@ -313,12 +324,19 @@
                   in
                   apply direct(map_local_1 &toplevel &`region` &ghost_region)
                     (map_local
-                     : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+                     : val? * [ 0 | 0 of val * [ 0 | 0 of val * val ] ] ->
+                       [ 0 | 0 of val * [ 0 | 0 of val * val ] ]
+                     )
                       (`fn[local.ml:32,27--43]`, ns)
                       -> k3 * error)
                    where k3 (ms : [ 0 | 0 of val * [ 0 | 0 of val * val ] ]) =
                      (apply direct(length_2 &toplevel)
-                        (length : _ -> imm tagged) (ms) -> k4 * error
+                        (length
+                         : [ 0 | 0 of val * [ 0 | 0 of val * val ] ] ->
+                           imm tagged
+                         )
+                          (ms)
+                          -> k4 * error
                         where k4 (apply_result : imm tagged) =
                           let prim = %phys_eq (apply_result, 3) in
                           let eq = %tag_imm (prim) in
@@ -346,14 +364,21 @@
                ((let `region` = %begin_region () in
                  let ghost_region = %begin_ghost_region () in
                  apply direct(spans_5 &toplevel &`region` &ghost_region)
-                   (spans : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+                   (spans
+                    : val? * val -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ]
+                    )
                      (is_even, $camlLocal__const_block_15)
                      -> k3 * error
                    where k3
                            (even_spans :
                               [ 0 | 0 of val * [ 0 | 0 of val * val ] ]) =
                      (apply direct(length_2 &toplevel)
-                        (length : _ -> imm tagged) (even_spans) -> k4 * error
+                        (length
+                         : [ 0 | 0 of val * [ 0 | 0 of val * val ] ] ->
+                           imm tagged
+                         )
+                          (even_spans)
+                          -> k4 * error
                         where k4 (apply_result : imm tagged) =
                           let prim = %phys_eq (apply_result, 3) in
                           let eq = %tag_imm (prim) in

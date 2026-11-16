@@ -27,7 +27,7 @@ let $camlIgnored_second_of_pair__first_const_0 = Block 0 () in
        cont k/30 (8, 9)
      where k/31 =
        apply direct(both_0 &my_alloc_region/71)
-         (both/74 : _ -> val? * val?) (x/69) -> k/30 * k/29
+         (both/74 : imm tagged -> val? * val?) (x/69) -> k/30 * k/29
      where k/30 (`*match*_23_unboxed0/75`, `*match*_23_unboxed1/76`) =
        let int_add/77 = %int_barith.add (`*match*_23_unboxed0/75`, 1) in
        cont k/28 (int_add/77)
@@ -38,7 +38,9 @@ let $camlIgnored_second_of_pair__first_const_0 = Block 0 () in
  in
  (let Popaque/83 = %opaque (1) in
   apply direct(first_of_1 &toplevel)
-    (first_of/80 : _ -> imm tagged) (Popaque/83, 3) -> k/35 * error)
+    (first_of/80 : val? * imm tagged -> imm tagged)
+      (Popaque/83, 3)
+      -> k/35 * error)
    where k/35 (result/81 : imm tagged) =
      let Pmakeblock/82 =
        %block.[`0`].`toplevel` (both/79, first_of/80, result/81)

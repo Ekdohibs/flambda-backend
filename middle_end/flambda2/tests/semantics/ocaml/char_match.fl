@@ -23,13 +23,13 @@ let $camlChar_match__first_const_0 = Block 0 () in
  in
  let digit/51 = closure digit_0 @digit &toplevel in
  apply direct(digit_0 &toplevel)
-   (digit/51 : _ -> imm tagged) (120) -> k/24 * error
+   (digit/51 : imm tagged -> imm tagged) (120) -> k/24 * error
    where k/24 (apply_result/52 : imm tagged) =
      (apply direct(digit_0 &toplevel)
-        (digit/51 : _ -> imm tagged) (50) -> k/25 * error
+        (digit/51 : imm tagged -> imm tagged) (50) -> k/25 * error
         where k/25 (apply_result/53 : imm tagged) =
           (apply direct(digit_0 &toplevel)
-             (digit/51 : _ -> imm tagged) (49) -> k/26 * error
+             (digit/51 : imm tagged -> imm tagged) (49) -> k/26 * error
              where k/26 (apply_result/54 : imm tagged) =
                let int_add/55 =
                  %int_barith.add (apply_result/54, apply_result/53)

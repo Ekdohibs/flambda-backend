@@ -39,7 +39,7 @@
           let prim/72 = %string_length (apply_result/71) in
           let Pstringlength/73 = %tag_imm (prim/72) in
           (apply direct(or_default_0 &toplevel)
-             (or_default/67 : _ -> val)
+             (or_default/67 : val -> val)
                ($camlData_option_of_string__const_block_4)
                -> k/26 * error
              where k/26 (apply_result/74 : val) =

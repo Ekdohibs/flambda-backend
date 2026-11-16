@@ -18,7 +18,7 @@ let code loopify(never) size(4) newer_version_of(g_1)
         -> k * k1
         : imm tagged =
   apply direct(f_0_1 &my_alloc_region)
-    ($camlInlining_cost_of_primitive_on_parameters__f_1 : _ -> imm tagged)
+    ($camlInlining_cost_of_primitive_on_parameters__f_1 : val -> imm tagged)
       (x)
       -> k * k1
 in

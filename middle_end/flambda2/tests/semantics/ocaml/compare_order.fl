@@ -26,17 +26,23 @@ let $camlCompare_order__first_const_0 = Block 0 () in
  let order/73 = closure order_0 @order &toplevel in
  (let Popaque/84 = %opaque (9) in
   apply direct(order_0 &toplevel)
-    (order/73 : _ -> imm tagged) (Popaque/84, 2) -> k/24 * error)
+    (order/73 : val? * imm tagged -> imm tagged)
+      (Popaque/84, 2)
+      -> k/24 * error)
    where k/24 (apply_result/74 : imm tagged) =
      let int_mul/75 = %int_barith.mul (100, apply_result/74) in
      ((let Popaque/83 = %opaque (5) in
        apply direct(order_0 &toplevel)
-         (order/73 : _ -> imm tagged) (Popaque/83, 5) -> k/25 * error)
+         (order/73 : val? * imm tagged -> imm tagged)
+           (Popaque/83, 5)
+           -> k/25 * error)
         where k/25 (apply_result/76 : imm tagged) =
           let int_mul/77 = %int_barith.mul (10, apply_result/76) in
           ((let Popaque/82 = %opaque (3) in
             apply direct(order_0 &toplevel)
-              (order/73 : _ -> imm tagged) (Popaque/82, 4) -> k/26 * error)
+              (order/73 : val? * imm tagged -> imm tagged)
+                (Popaque/82, 4)
+                -> k/26 * error)
              where k/26 (apply_result/78 : imm tagged) =
                let int_add/79 = %int_barith.add (apply_result/78, int_mul/77)
                in

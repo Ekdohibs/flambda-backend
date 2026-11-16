@@ -25,7 +25,8 @@ let $camlImp_knowing_local_mutual__first_const_0 = Block 0 () in
      where k/48 =
        let int_sub/132 = %int_barith.sub (k/125, 1) in
        apply direct(up_3 &my_alloc_region/127)
-         (up/131 ~ depth my_depth/128 -> next_depth/129 : _ -> imm tagged)
+         (up/131 ~ depth my_depth/128 -> next_depth/129
+          : imm tagged -> imm tagged)
            (int_sub/132)
            -> k/46 * k/47
  and code rec size(28)
@@ -49,7 +50,8 @@ let $camlImp_knowing_local_mutual__first_const_0 = Block 0 () in
      where k/53 =
        let int_sub/144 = %int_barith.sub (k/136, 1) in
        apply direct(down_2 &my_alloc_region/138)
-         (down/142 ~ depth my_depth/139 -> next_depth/140 : _ -> imm tagged)
+         (down/142 ~ depth my_depth/139 -> next_depth/140
+          : imm tagged -> imm tagged)
            (int_sub/144)
            -> k/50 * k/51
      where k/52 =
@@ -68,10 +70,14 @@ let $camlImp_knowing_local_mutual__first_const_0 = Block 0 () in
    with { n = n/148 }
    in
    apply direct(apply_0 &my_alloc_region/150)
-     (apply/153 : _ -> imm tagged) (up/155, n/148) -> k/58 * k/57
+     (apply/153 : val? * imm tagged -> imm tagged)
+       (up/155, n/148)
+       -> k/58 * k/57
      where k/58 (apply_result/156 : imm tagged) =
        (apply direct(apply_0 &my_alloc_region/150)
-          (apply/153 : _ -> imm tagged) (down/154, 3) -> k/59 * k/57
+          (apply/153 : val? * imm tagged -> imm tagged)
+            (down/154, 3)
+            -> k/59 * k/57
           where k/59 (apply_result/157 : imm tagged) =
             let int_add/158 =
               %int_barith.add (apply_result/157, apply_result/156)

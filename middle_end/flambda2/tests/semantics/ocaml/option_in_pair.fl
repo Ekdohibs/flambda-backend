@@ -47,11 +47,15 @@ let $camlOption_in_pair__first_const_0 = Block 0 () in
  let total/84 = closure total_0 @total &toplevel in
  (let Popaque/90 = %opaque (0) in
   apply direct(total_0 &toplevel)
-    (total/84 : _ -> imm tagged) (Popaque/90, 5, 30) -> k/43 * error)
+    (total/84 : val? * imm tagged * imm tagged -> imm tagged)
+      (Popaque/90, 5, 30)
+      -> k/43 * error)
    where k/43 (apply_result/85 : imm tagged) =
      ((let Popaque/89 = %opaque (1) in
        apply direct(total_0 &toplevel)
-         (total/84 : _ -> imm tagged) (Popaque/89, 5, 30) -> k/44 * error)
+         (total/84 : val? * imm tagged * imm tagged -> imm tagged)
+           (Popaque/89, 5, 30)
+           -> k/44 * error)
         where k/44 (apply_result/86 : imm tagged) =
           let result/87 = %int_barith.add (apply_result/86, apply_result/85)
           in

@@ -24,7 +24,8 @@ let $camlLocal_closure_applied_mutual__first_const_0 = Block 0 () in
      where k/46 =
        let int_sub/135 = %int_barith.sub (n/129, 1) in
        apply direct(odd_2 &my_alloc_region/131)
-         (odd/134 ~ depth my_depth/132 -> next_depth/133 : _ -> imm tagged)
+         (odd/134 ~ depth my_depth/132 -> next_depth/133
+          : imm tagged -> imm tagged)
            (int_sub/135)
            -> k/44 * k/45
  and code rec size(23)
@@ -45,7 +46,8 @@ let $camlLocal_closure_applied_mutual__first_const_0 = Block 0 () in
      where k/50 =
        let int_sub/145 = %int_barith.sub (n/139, 1) in
        apply direct(even_1 &my_alloc_region/141)
-         (even/144 ~ depth my_depth/142 -> next_depth/143 : _ -> imm tagged)
+         (even/144 ~ depth my_depth/142 -> next_depth/143
+          : imm tagged -> imm tagged)
            (int_sub/145)
            -> k/48 * k/49
  in
@@ -71,15 +73,17 @@ let $camlLocal_closure_applied_mutual__first_const_0 = Block 0 () in
    with { n = n/156 }
    in
    apply direct(even_1 &my_alloc_region/158)
-     (even/162 : _ -> imm tagged) (n/156) -> k/58 * k/55
+     (even/162 : imm tagged -> imm tagged) (n/156) -> k/58 * k/55
      where k/58 (apply_result/167 : imm tagged) =
        apply direct(apply_0 &my_alloc_region/158)
-         (apply/161 : _ -> imm tagged)
+         (apply/161 : val? * imm tagged -> imm tagged)
            (add_n/163, apply_result/167)
            -> k/56 * k/55
      where k/56 (apply_result/164 : imm tagged) =
        (apply direct(apply_0 &my_alloc_region/158)
-          (apply/161 : _ -> imm tagged) (add_n/163, 1) -> k/57 * k/55
+          (apply/161 : val? * imm tagged -> imm tagged)
+            (add_n/163, 1)
+            -> k/57 * k/55
           where k/57 (apply_result/165 : imm tagged) =
             let int_add/166 =
               %int_barith.add (apply_result/165, apply_result/164)

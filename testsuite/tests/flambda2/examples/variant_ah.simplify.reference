@@ -27,7 +27,8 @@ let code loopify(never) size(33) newer_version_of(shouldn't_alloc_1)
          | 0 -> k2
          | 1 -> k3
          where k3 =
-           apply &my_alloc_region g (0) -> k * k1
+           apply unknown_arity &my_alloc_region
+             (g : imm tagged -> val?) (0) -> k * k1
          where k2 =
            apply &my_alloc_region f (unboxed_field_0_0) -> k * k1)
 in

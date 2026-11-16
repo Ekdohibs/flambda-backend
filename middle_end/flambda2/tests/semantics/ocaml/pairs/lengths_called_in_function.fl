@@ -7,7 +7,13 @@ let $camlLengths_called_in_function__first_const_0 = Block 0 () in
          : imm tagged =
    let next_depth/32 = rec_info (succ my_depth/31) in
    (let Pfield/35 = %block_load.[`1`] ($Lengths.camlLengths) in
-    apply &my_alloc_region/30 Pfield/35 (l/28) -> k/14 * k/13)
+    apply unknown_arity &my_alloc_region/30
+      (Pfield/35
+       : [ 0 | 0 of imm tagged * [ 0 | 0 of imm tagged * val ] ] ->
+         imm tagged
+       )
+        (l/28)
+        -> k/14 * k/13)
      where k/14 (apply_result/33 : imm tagged) =
        let int_add/34 = %int_barith.add (apply_result/33, 1) in
        cont k/12 (int_add/34)

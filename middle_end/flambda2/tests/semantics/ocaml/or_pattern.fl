@@ -23,13 +23,13 @@ let $camlOr_pattern__first_const_0 = Block 0 () in
  in
  let hours/54 = closure hours_0 @hours &toplevel in
  apply direct(hours_0 &toplevel)
-   (hours/54 : _ -> imm tagged) (6) -> k/24 * error
+   (hours/54 : imm tagged -> imm tagged) (6) -> k/24 * error
    where k/24 (apply_result/55 : imm tagged) =
      (apply direct(hours_0 &toplevel)
-        (hours/54 : _ -> imm tagged) (4) -> k/25 * error
+        (hours/54 : imm tagged -> imm tagged) (4) -> k/25 * error
         where k/25 (apply_result/56 : imm tagged) =
           (apply direct(hours_0 &toplevel)
-             (hours/54 : _ -> imm tagged) (0) -> k/26 * error
+             (hours/54 : imm tagged -> imm tagged) (0) -> k/26 * error
              where k/26 (apply_result/57 : imm tagged) =
                let int_add/58 =
                  %int_barith.add (apply_result/57, apply_result/56)

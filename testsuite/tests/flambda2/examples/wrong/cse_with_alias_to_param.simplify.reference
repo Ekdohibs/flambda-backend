@@ -20,7 +20,7 @@ let code loopify(never) size(42) newer_version_of(foo_1)
      where k3 =
        let Pmakeblock = %block.[`0`].my_alloc_region (v) in
        apply direct(id_0_1 &my_alloc_region)
-         ($camlCse_with_alias_to_param__id_1 : _ -> [ 0 of val ])
+         ($camlCse_with_alias_to_param__id_1 : val -> [ 0 of val ])
            (Pmakeblock)
            -> k2 * k1)
     where k2 (x : [ 0 of val ]) =

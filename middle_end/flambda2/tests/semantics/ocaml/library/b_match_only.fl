@@ -18,7 +18,7 @@ let $camlB_match_only__first_const_0 = Block 0 () in
     (degrees/38 : _ -> imm tagged) (Popaque/42) -> k/16 * error)
    where k/16 (s/39 : imm tagged) =
      (apply direct(degrees_0 &toplevel)
-        (degrees/38 : _ -> imm tagged) (3) -> k/17 * error
+        (degrees/38 : imm tagged -> imm tagged) (3) -> k/17 * error
         where k/17 (w/40 : imm tagged) =
           let Pmakeblock/41 = %block.[`0`].`toplevel` (s/39, w/40) in
           cont k/13 (Pmakeblock/41)))

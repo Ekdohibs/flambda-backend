@@ -20,7 +20,8 @@ in
  in
  let len/67 = closure len_0 @len &toplevel in
  let g/68 = closure g_1 @g &toplevel in
- apply direct(g_1 &toplevel) (g/68 : _ -> imm tagged) (3) -> k/24 * error
+ apply direct(g_1 &toplevel)
+   (g/68 : imm tagged -> imm tagged) (3) -> k/24 * error
    where k/24 (a/69 : imm tagged) =
      ((let Popaque/75 = %opaque (4) in
        apply direct(g_1 &toplevel) inlined(never)
@@ -29,7 +30,7 @@ in
           ((let Popaque/73 = %opaque (6) in
             let Pmakearray/74 = %array.`imm`.`toplevel` (5, Popaque/73) in
             apply direct(len_0 &toplevel)
-              (len/67 : _ -> imm tagged) (Pmakearray/74) -> k/26 * error)
+              (len/67 : val -> imm tagged) (Pmakearray/74) -> k/26 * error)
              where k/26 (n/71 : imm tagged) =
                let Pmakeblock/72 = %block.[`0`].`toplevel` (a/69, b/70, n/71)
                in

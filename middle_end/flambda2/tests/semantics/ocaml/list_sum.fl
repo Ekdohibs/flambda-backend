@@ -32,7 +32,9 @@
  in
  let sum/49 = closure sum_0 @sum &toplevel in
  apply direct(sum_0 &toplevel)
-   (sum/49 : _ -> imm tagged) ($camlList_sum__const_block_2) -> k/23 * error
+   (sum/49 : val -> imm tagged)
+     ($camlList_sum__const_block_2)
+     -> k/23 * error
    where k/23 (result/50 : imm tagged) =
      let Pmakeblock/51 = %block.[`0`].`toplevel` (result/50) in
      cont k/17 (Pmakeblock/51))

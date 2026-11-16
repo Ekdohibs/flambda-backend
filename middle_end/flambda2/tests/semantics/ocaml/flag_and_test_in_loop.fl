@@ -82,7 +82,7 @@ let $camlFlag_and_test_in_loop__first_const_0 = Block 0 () in
  in
  (let Popaque/126 = %opaque (5) in
   apply direct(every_double_below_0 &toplevel)
-    (every_double_below/123 : _ -> imm tagged)
+    (every_double_below/123 : val? * imm tagged -> imm tagged)
       (Popaque/126, 30)
       -> k/44 * error)
    where k/44 (result/124 : imm tagged) =

@@ -37,7 +37,7 @@ let $camlDead_division_in_dead_arm__first_const_0 = Block 0 () in
  cont k/68 push(k/64)
    where k/68 =
      apply direct(f_0 &toplevel)
-       (f/87 : _ -> imm tagged) (1, 4) -> k/67 * k/64
+       (f/87 : imm tagged * imm tagged -> imm tagged) (1, 4) -> k/67 * k/64
    where k/67 (body_result/110 : imm tagged) =
      cont k/57 pop(k/64) (body_result/110)
    where k/64 exn (exn/104 : val) =
@@ -62,7 +62,9 @@ let $camlDead_division_in_dead_arm__first_const_0 = Block 0 () in
         where k/63 =
           let Popaque/103 = %opaque (4) in
           apply direct(f_0 &toplevel)
-            (f/87 : _ -> imm tagged) (0, Popaque/103) -> k/62 * k/59
+            (f/87 : imm tagged * val? -> imm tagged)
+              (0, Popaque/103)
+              -> k/62 * k/59
         where k/62 (body_result/102 : imm tagged) =
           cont k/58 pop(k/59) (body_result/102)
         where k/59 exn (exn/96 : val) =

@@ -78,16 +78,26 @@ let $camlInl_callee_region_twice__first_const_0 = Block 0 () in
     with { x = x/278 }
     in
     apply direct(call1_2 &my_alloc_region/280)
-      (call1/285 : _ -> imm tagged) (f/301, 7) -> k/75 * k/73
+      (call1/285 : val? * imm tagged -> imm tagged) (f/301, 7) -> k/75 * k/73
       where k/75 (apply_result/302 : imm tagged) =
         (apply direct(read2_0 &my_alloc_region/280)
-           (read2/283 : _ -> imm tagged) (c/300) -> k/76 * k/73
+           (read2/283 : [ 0 of imm tagged * imm tagged ] -> imm tagged)
+             (c/300)
+             -> k/76 * k/73
            where k/76 (apply_result/303 : imm tagged) =
              (apply direct(read3_1 &my_alloc_region/280)
-                (read3/284 : _ -> imm tagged) (b/297) -> k/77 * k/73
+                (read3/284
+                 : [ 0 of imm tagged * imm tagged * imm tagged ] ->
+                   imm tagged
+                 )
+                  (b/297)
+                  -> k/77 * k/73
                 where k/77 (apply_result/304 : imm tagged) =
                   (apply direct(read2_0 &my_alloc_region/280)
-                     (read2/283 : _ -> imm tagged) (a/293) -> k/78 * k/73
+                     (read2/283
+                      : [ 0 of imm tagged * imm tagged ] -> imm tagged)
+                       (a/293)
+                       -> k/78 * k/73
                      where k/78 (apply_result/305 : imm tagged) =
                        let int_add/306 =
                          %int_barith.add (apply_result/305, apply_result/304)
@@ -121,10 +131,12 @@ let $camlInl_callee_region_twice__first_const_0 = Block 0 () in
         (int_add/322, int_add/321)
     in
     apply direct(noise_3 &my_alloc_region/311)
-      (noise/315 : _ -> imm tagged) (x/309) -> k/82 * k/80
+      (noise/315 : imm tagged -> imm tagged) (x/309) -> k/82 * k/80
       where k/82 (n/324 : imm tagged) =
         (apply direct(read2_0 &my_alloc_region/311)
-           (read2/314 : _ -> imm tagged) (t/323) -> k/83 * k/80
+           (read2/314 : [ 0 of imm tagged * imm tagged ] -> imm tagged)
+             (t/323)
+             -> k/83 * k/80
            where k/83 (apply_result/325 : imm tagged) =
              let int_add/326 = %int_barith.add (n/324, apply_result/325) in
              cont k/81 (int_add/326)))
@@ -150,18 +162,21 @@ let $camlInl_callee_region_twice__first_const_0 = Block 0 () in
     in
     (let int_add/349 = %int_barith.add (x/327, 1) in
      apply direct(work_5 &my_alloc_region/329)
-       (work/334 : _ -> imm tagged) (int_add/349) -> k/87 * k/85)
+       (work/334 : imm tagged -> imm tagged) (int_add/349) -> k/87 * k/85)
       where k/87 (apply_result/342 : imm tagged) =
         (apply direct(work_5 &my_alloc_region/329)
-           (work/334 : _ -> imm tagged) (x/327) -> k/88 * k/85
+           (work/334 : imm tagged -> imm tagged) (x/327) -> k/88 * k/85
            where k/88 (apply_result/343 : imm tagged) =
              let w/344 = %int_barith.add (apply_result/343, apply_result/342)
              in
              (apply direct(noise_3 &my_alloc_region/329)
-                (noise/333 : _ -> imm tagged) (x/327) -> k/89 * k/85
+                (noise/333 : imm tagged -> imm tagged) (x/327) -> k/89 * k/85
                 where k/89 (n/345 : imm tagged) =
                   (apply direct(read2_0 &my_alloc_region/329)
-                     (read2/332 : _ -> imm tagged) (p/341) -> k/90 * k/85
+                     (read2/332
+                      : [ 0 of imm tagged * imm tagged ] -> imm tagged)
+                       (p/341)
+                       -> k/90 * k/85
                      where k/90 (apply_result/346 : imm tagged) =
                        let int_add/347 = %int_barith.add (n/345, w/344) in
                        let int_add/348 =
@@ -186,7 +201,7 @@ let $camlInl_callee_region_twice__first_const_0 = Block 0 () in
  with { read2_2 = read2/350; noise_1 = noise/353; work = work/354 }
  in
  apply direct(body_6 &toplevel)
-   (body/355 : _ -> imm tagged) (10) -> k/91 * error
+   (body/355 : imm tagged -> imm tagged) (10) -> k/91 * error
    where k/91 (apply_result/356 : imm tagged) =
      ((let Popaque/360 = %opaque (3) in
        apply direct(body_6 &toplevel)

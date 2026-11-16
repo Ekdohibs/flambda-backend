@@ -33,7 +33,7 @@ let $camlExported_function_raises__first_const_0 = Block 0 () in
    cont k/46 push(k/42)
      where k/46 =
        apply direct(pred_0 &my_alloc_region/82)
-         (pred/85 : _ -> imm tagged) (n/80) -> k/45 * k/42
+         (pred/85 : imm tagged -> imm tagged) (n/80) -> k/45 * k/42
      where k/45 (body_result/94 : imm tagged) =
        cont k/40 pop(k/42) (body_result/94)
      where k/42 exn (exn/88 : val) =
@@ -55,7 +55,7 @@ let $camlExported_function_raises__first_const_0 = Block 0 () in
  with { pred = pred/95 }
  in
  apply direct(pred_or_zero_1 &toplevel)
-   (pred_or_zero/96 : _ -> imm tagged) (0) -> k/47 * error
+   (pred_or_zero/96 : imm tagged -> imm tagged) (0) -> k/47 * error
    where k/47 (result/97 : imm tagged) =
      let Pmakeblock/98 =
        %block.[`0`].`toplevel` (pred/95, pred_or_zero/96, result/97)

@@ -24,7 +24,9 @@ let ghost_region = %begin_ghost_region () in
              -> k3 * k4
              : imm tagged =
        apply direct(opaque_0_1 &my_alloc_region)
-         ($camlUnused_bucket_switch__opaque_1 : _ -> [ 0 |1 ]) (1) -> k6 * k4
+         ($camlUnused_bucket_switch__opaque_1 : imm tagged -> [ 0 |1 ])
+           (1)
+           -> k6 * k4
          where k6 (param_1) =
            let unboxed_field = %untag_imm (param_1) in
            cont k5 (unboxed_field)
@@ -37,7 +39,9 @@ let ghost_region = %begin_ghost_region () in
      in
      let $camlUnused_bucket_switch__f_2 = closure f_1_1 @f &toplevel in
      apply direct(f_1_1 &toplevel)
-       ($camlUnused_bucket_switch__f_2 : _ -> imm tagged) (0) -> k2 * k1
+       ($camlUnused_bucket_switch__f_2 : imm tagged -> imm tagged)
+         (0)
+         -> k2 * k1
    where k2 (body_result : imm tagged) =
      cont k pop(k1) (body_result)
    where k1 exn (`exn` : val) =

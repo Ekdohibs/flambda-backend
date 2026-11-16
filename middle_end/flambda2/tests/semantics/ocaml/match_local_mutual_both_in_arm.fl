@@ -25,7 +25,8 @@
      where k/46 =
        let int_sub/133 = %int_barith.sub (j/125, 1) in
        apply direct(up_3 &my_alloc_region/127)
-         (up/132 ~ depth my_depth/128 -> next_depth/129 : _ -> imm tagged)
+         (up/132 ~ depth my_depth/128 -> next_depth/129
+          : imm tagged -> imm tagged)
            (int_sub/133)
            -> k/44 * k/45
  and code rec size(25)
@@ -48,7 +49,8 @@
      where k/50 =
        let int_sub/145 = %int_barith.sub (j/137, 1) in
        apply direct(down_2 &my_alloc_region/139)
-         (down/144 ~ depth my_depth/140 -> next_depth/141 : _ -> imm tagged)
+         (down/144 ~ depth my_depth/140 -> next_depth/141
+          : imm tagged -> imm tagged)
            (int_sub/145)
            -> k/48 * k/49
  in
@@ -74,10 +76,14 @@
        with { n = n/150; k = k/156 }
        in
        (apply direct(apply_0 &my_alloc_region/152)
-          (apply/155 : _ -> imm tagged) (up/158, 3) -> k/55 * k/53
+          (apply/155 : val? * imm tagged -> imm tagged)
+            (up/158, 3)
+            -> k/55 * k/53
           where k/55 (apply_result/159 : imm tagged) =
             (apply direct(apply_0 &my_alloc_region/152)
-               (apply/155 : _ -> imm tagged) (down/157, 2) -> k/56 * k/53
+               (apply/155 : val? * imm tagged -> imm tagged)
+                 (down/157, 2)
+                 -> k/56 * k/53
                where k/56 (apply_result/160 : imm tagged) =
                  let int_add/161 =
                    %int_barith.add (apply_result/160, apply_result/159)
@@ -88,13 +94,15 @@
  let apply/165 = closure apply_0 @`apply` &toplevel in
  let run/166 = closure run_1 @run &toplevel with { `apply` = apply/165 } in
  apply direct(run_1 &toplevel)
-   (run/166 : _ -> imm tagged) (0, 2) -> k/58 * error
+   (run/166 : imm tagged * imm tagged -> imm tagged) (0, 2) -> k/58 * error
    where k/58 (apply_result/167 : imm tagged) =
      ((let Popaque/171 =
          %opaque ($camlMatch_local_mutual_both_in_arm__const_block_0)
        in
        apply direct(run_1 &toplevel)
-         (run/166 : _ -> imm tagged) (Popaque/171, 4) -> k/59 * error)
+         (run/166 : val? * imm tagged -> imm tagged)
+           (Popaque/171, 4)
+           -> k/59 * error)
         where k/59 (apply_result/168 : imm tagged) =
           let result/169 =
             %int_barith.add (apply_result/168, apply_result/167)

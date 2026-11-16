@@ -17,7 +17,7 @@ let $camlFact_exported__first_const_0 = Block 0 () in
        ((let int_sub/40 = %int_barith.sub (n/33, 1) in
          apply direct(fact_0 &my_alloc_region/35)
            (my_closure/34 ~ depth my_depth/36 -> next_depth/37
-            : _ -> imm tagged)
+            : imm tagged -> imm tagged)
              (int_sub/40)
              -> k/19 * k/17)
           where k/19 (apply_result/38 : imm tagged) =

@@ -78,16 +78,26 @@ let $camlStack_pair__first_const_0 = Block 0 () in
     with { x = x/228 }
     in
     apply direct(call1_2 &my_alloc_region/230)
-      (call1/235 : _ -> imm tagged) (f/251, 7) -> k/61 * k/59
+      (call1/235 : val? * imm tagged -> imm tagged) (f/251, 7) -> k/61 * k/59
       where k/61 (apply_result/252 : imm tagged) =
         (apply direct(read2_0 &my_alloc_region/230)
-           (read2/233 : _ -> imm tagged) (c/250) -> k/62 * k/59
+           (read2/233 : [ 0 of imm tagged * imm tagged ] -> imm tagged)
+             (c/250)
+             -> k/62 * k/59
            where k/62 (apply_result/253 : imm tagged) =
              (apply direct(read3_1 &my_alloc_region/230)
-                (read3/234 : _ -> imm tagged) (b/247) -> k/63 * k/59
+                (read3/234
+                 : [ 0 of imm tagged * imm tagged * imm tagged ] ->
+                   imm tagged
+                 )
+                  (b/247)
+                  -> k/63 * k/59
                 where k/63 (apply_result/254 : imm tagged) =
                   (apply direct(read2_0 &my_alloc_region/230)
-                     (read2/233 : _ -> imm tagged) (a/243) -> k/64 * k/59
+                     (read2/233
+                      : [ 0 of imm tagged * imm tagged ] -> imm tagged)
+                       (a/243)
+                       -> k/64 * k/59
                      where k/64 (apply_result/255 : imm tagged) =
                        let int_add/256 =
                          %int_barith.add (apply_result/255, apply_result/254)
@@ -119,10 +129,12 @@ let $camlStack_pair__first_const_0 = Block 0 () in
       %block.[`0`].my_alloc_region/261.local[region/266] (x/259, int_add/271)
     in
     apply direct(noise_3 &my_alloc_region/261)
-      (noise/265 : _ -> imm tagged) (x/259) -> k/68 * k/66
+      (noise/265 : imm tagged -> imm tagged) (x/259) -> k/68 * k/66
       where k/68 (n/273 : imm tagged) =
         (apply direct(read2_0 &my_alloc_region/261)
-           (read2/264 : _ -> imm tagged) (p/272) -> k/69 * k/66
+           (read2/264 : [ 0 of imm tagged * imm tagged ] -> imm tagged)
+             (p/272)
+             -> k/69 * k/66
            where k/69 (apply_result/274 : imm tagged) =
              let int_add/275 = %int_barith.add (n/273, apply_result/274) in
              cont k/67 (int_add/275)))
@@ -141,7 +153,7 @@ let $camlStack_pair__first_const_0 = Block 0 () in
  with { read2_1 = read2/276; noise = noise/279 }
  in
  apply direct(body_5 &toplevel)
-   (body/280 : _ -> imm tagged) (10) -> k/70 * error
+   (body/280 : imm tagged -> imm tagged) (10) -> k/70 * error
    where k/70 (apply_result/281 : imm tagged) =
      ((let Popaque/285 = %opaque (3) in
        apply direct(body_5 &toplevel)

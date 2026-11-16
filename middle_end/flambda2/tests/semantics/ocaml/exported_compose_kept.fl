@@ -42,7 +42,7 @@ let $camlExported_compose_kept__first_const_0 = Block 0 () in
      %project_value_slot.[succ_of_double].[double] (my_closure/103)
    in
    apply direct(compose_0 &my_alloc_region/104)
-     (compose/107 : _ -> imm tagged)
+     (compose/107 : val? * val? * imm tagged -> imm tagged)
        (succ/108, double/109, x/102)
        -> k/31 * k/32
  in

@@ -600,6 +600,10 @@ let call_kind_and_alloc_mode ~space ppf (ck, alloc_mode) =
   match ck with
   | Function Indirect ->
     (alloc_mode_for_applications region) ppf alloc_mode ~space
+  | Function Indirect_unknown_arity ->
+    pp_spaced ~space ppf "@[unknown_arity%a@]"
+      (alloc_mode_for_applications region ~space:Before)
+      alloc_mode
   | Function (Direct { code_id = c; function_slot = cl }) ->
     pp_spaced ~space ppf "@[direct(%a%a%a)@]" code_id c
       (pp_option ~space:Before (pp_like "@@%a" function_slot))

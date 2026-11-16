@@ -46,11 +46,17 @@
  in
  let last/71 = closure last_0 @last &toplevel in
  apply direct(last_0 &toplevel)
-   (last/71 : _ -> imm tagged) (1, 4, 5, 6) -> k/40 * error
+   (last/71 : imm tagged * imm tagged * imm tagged * imm tagged -> imm tagged
+    )
+     (1, 4, 5, 6)
+     -> k/40 * error
    where k/40 (one/72 : imm tagged) =
      ((let Popaque/75 = %opaque (0) in
        apply direct(last_0 &toplevel)
-         (last/71 : _ -> imm tagged) (Popaque/75, 4, 5, 6) -> k/41 * error)
+         (last/71 : val? * imm tagged * imm tagged * imm tagged -> imm tagged
+          )
+           (Popaque/75, 4, 5, 6)
+           -> k/41 * error)
         where k/41 (three/73 : imm tagged) =
           let Pmakeblock/74 = %block.[`0`].`toplevel` (one/72, three/73) in
           cont k/29 (Pmakeblock/74)))

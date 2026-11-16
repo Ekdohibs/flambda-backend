@@ -129,7 +129,7 @@
  (let region/485 = %begin_region () in
   let ghost_region/486 = %begin_ghost_region () in
   apply direct(opaque_0 &toplevel &region/485 &ghost_region/486)
-    (opaque/431 : _ -> imm tagged) (1) -> k/134 * error
+    (opaque/431 : imm tagged -> imm tagged) (1) -> k/134 * error
     where k/134 (region_return/487 : imm tagged) =
       let unit/488 = %end_region (region/485) in
       let unit/489 = %end_ghost_region (ghost_region/486) in
@@ -146,19 +146,19 @@
        closure difference_is_negative_4 @difference_is_negative &toplevel
      in
      (apply direct(shift_there_and_back_1 &toplevel)
-        (shift_there_and_back/433 : _ -> imm tagged)
+        (shift_there_and_back/433 : nativeint boxed -> imm tagged)
           ($camlNativeint_laws_more__nativeint_1)
           -> k/107 * error
         where k/107 (shift_there_and_back_max/437 : imm tagged) =
           ((let region/479 = %begin_region () in
             let ghost_region/480 = %begin_ghost_region () in
             apply direct(opaque_0 &toplevel &region/479 &ghost_region/480)
-              (opaque/431 : _ -> nativeint boxed)
+              (opaque/431 : nativeint boxed -> nativeint boxed)
                 ($camlNativeint_laws_more__nativeint_1)
                 -> k/133 * error
               where k/133 (apply_result/484 : nativeint boxed) =
                 apply direct(shift_there_and_back_1 &toplevel)
-                  (shift_there_and_back/433 : _ -> imm tagged)
+                  (shift_there_and_back/433 : nativeint boxed -> imm tagged)
                     (apply_result/484)
                     -> k/132 * error
               where k/132 (region_return/481 : imm tagged) =
@@ -172,13 +172,15 @@
                    | 1 -> k/131 ($camlNativeint_laws_more__nativeint_1))
                   where k/131 (switch_result/477 : nativeint boxed) =
                     apply direct(shift_there_and_back_1 &toplevel)
-                      (shift_there_and_back/433 : _ -> imm tagged)
+                      (shift_there_and_back/433
+                       : nativeint boxed -> imm tagged)
                         (switch_result/477)
                         -> k/109 * error
                   where k/109
                           (shift_there_and_back_max_joined/439 : imm tagged) =
                     (apply direct(add_then_sub_2 &toplevel)
-                       (add_then_sub/434 : _ -> imm tagged)
+                       (add_then_sub/434
+                        : nativeint boxed * nativeint boxed -> imm tagged)
                          ($camlNativeint_laws_more__nativeint_1,
                           $camlNativeint_laws_more__nativeint_1)
                          -> k/110 * error
@@ -188,20 +190,25 @@
                            apply
                                   direct(opaque_0
                                   &toplevel &region/470 &ghost_region/471)
-                             (opaque/431 : _ -> nativeint boxed)
+                             (opaque/431 : nativeint boxed -> nativeint boxed
+                              )
                                ($camlNativeint_laws_more__nativeint_1)
                                -> k/129 * error
                              where k/129 (apply_result/475 : nativeint boxed) =
                                (apply
                                        direct(opaque_0
                                        &toplevel &region/470 &ghost_region/471)
-                                  (opaque/431 : _ -> nativeint boxed)
+                                  (opaque/431
+                                   : nativeint boxed -> nativeint boxed)
                                     ($camlNativeint_laws_more__nativeint_1)
                                     -> k/130 * error
                                   where k/130
                                           (apply_result/476 : nativeint boxed) =
                                     apply direct(add_then_sub_2 &toplevel)
-                                      (add_then_sub/434 : _ -> imm tagged)
+                                      (add_then_sub/434
+                                       : nativeint boxed * nativeint boxed ->
+                                         imm tagged
+                                       )
                                         (apply_result/476, apply_result/475)
                                         -> k/128 * error)
                              where k/128 (region_return/472 : imm tagged) =
@@ -224,7 +231,10 @@
                                  where k/127
                                          (switch_result/468 : nativeint boxed) =
                                    apply direct(add_then_sub_2 &toplevel)
-                                     (add_then_sub/434 : _ -> imm tagged)
+                                     (add_then_sub/434
+                                      : nativeint boxed * nativeint boxed ->
+                                        imm tagged
+                                      )
                                        (switch_result/468,
                                         $camlNativeint_laws_more__nativeint_1)
                                        -> k/112 * error
@@ -232,7 +242,10 @@
                                          (add_then_sub_max_max_joined/442 :
                                             imm tagged) =
                                    (apply direct(sum_is_positive_3 &toplevel)
-                                      (sum_is_positive/435 : _ -> imm tagged)
+                                      (sum_is_positive/435
+                                       : nativeint boxed * nativeint boxed ->
+                                         imm tagged
+                                       )
                                         ($camlNativeint_laws_more__nativeint_1,
                                          $camlNativeint_laws_more__nativeint_2)
                                         -> k/113 * error
@@ -248,7 +261,9 @@
                                                  direct(opaque_0
                                                  &toplevel &region/461 &ghost_region/462)
                                             (opaque/431
-                                             : _ -> nativeint boxed)
+                                             : nativeint boxed ->
+                                               nativeint boxed
+                                             )
                                               ($camlNativeint_laws_more__nativeint_2)
                                               -> k/125 * error
                                             where k/125
@@ -258,7 +273,9 @@
                                                       direct(opaque_0
                                                       &toplevel &region/461 &ghost_region/462)
                                                  (opaque/431
-                                                  : _ -> nativeint boxed)
+                                                  : nativeint boxed ->
+                                                    nativeint boxed
+                                                  )
                                                    ($camlNativeint_laws_more__nativeint_1)
                                                    -> k/126 * error
                                                  where k/126
@@ -268,7 +285,10 @@
                                                           direct(sum_is_positive_3
                                                           &toplevel)
                                                      (sum_is_positive/435
-                                                      : _ -> imm tagged)
+                                                      : nativeint boxed *
+                                                        nativeint boxed ->
+                                                        imm tagged
+                                                      )
                                                        (apply_result/467,
                                                         apply_result/466)
                                                        -> k/124 * error)
@@ -303,7 +323,10 @@
                                                          direct(sum_is_positive_3
                                                          &toplevel)
                                                     (sum_is_positive/435
-                                                     : _ -> imm tagged)
+                                                     : nativeint boxed *
+                                                       nativeint boxed ->
+                                                       imm tagged
+                                                     )
                                                       (switch_result/459,
                                                        $camlNativeint_laws_more__nativeint_2)
                                                       -> k/115 * error
@@ -314,7 +337,10 @@
                                                           direct(difference_is_negative_4
                                                           &toplevel)
                                                      (difference_is_negative/436
-                                                      : _ -> imm tagged)
+                                                      : nativeint boxed *
+                                                        nativeint boxed ->
+                                                        imm tagged
+                                                      )
                                                        ($camlNativeint_laws_more__nativeint_3,
                                                         $camlNativeint_laws_more__nativeint_2)
                                                        -> k/116 * error
@@ -332,7 +358,7 @@
                                                                 direct(opaque_0
                                                                 &toplevel &region/452 &ghost_region/453)
                                                            (opaque/431
-                                                            : _ ->
+                                                            : nativeint boxed ->
                                                               nativeint boxed
                                                             )
                                                              ($camlNativeint_laws_more__nativeint_2)
@@ -344,7 +370,7 @@
                                                                     direct(opaque_0
                                                                     &toplevel &region/452 &ghost_region/453)
                                                                 (opaque/431
-                                                                 : _ ->
+                                                                 : nativeint boxed ->
                                                                    nativeint boxed
                                                                  )
                                                                   ($camlNativeint_laws_more__nativeint_3)
@@ -360,7 +386,8 @@
                                                                     &toplevel)
                                                                     (difference_is_negative/436
                                                                     : 
-                                                                    _ ->
+                                                                    nativeint boxed *
+                                                                    nativeint boxed ->
                                                                     imm tagged
                                                                     )
                                                                     (apply_result/458,
@@ -406,7 +433,8 @@
                                                                     &toplevel)
                                                                    (difference_is_negative/436
                                                                     : 
-                                                                    _ ->
+                                                                    nativeint boxed *
+                                                                    nativeint boxed ->
                                                                     imm tagged
                                                                     )
                                                                     (switch_result/450,

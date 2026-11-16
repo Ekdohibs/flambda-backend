@@ -16,7 +16,8 @@
         cont k/28)
      where k/28 =
        ((let Pfield/66 = %block_load.[`0`] (l/58) in
-         apply &my_alloc_region/60 p/57 (Pfield/66) -> k/30 * k/27)
+         apply unknown_arity &my_alloc_region/60
+           (p/57 : _ -> [ 0 |1 ]) (Pfield/66) -> k/30 * k/27)
           where k/30 (apply_result/64 : [ 0 |1 ]) =
             ((let untagged/65 = %untag_imm (apply_result/64) in
               switch untagged/65
@@ -28,7 +29,7 @@
             let Pfield/63 = %block_load.[`1`] (l/58) in
             apply direct(exists_0 &my_alloc_region/60)
               (my_closure/59 ~ depth my_depth/61 -> next_depth/62
-               : _ -> imm tagged)
+               : val * val? -> imm tagged)
                 (p/57, Pfield/63)
                 -> k/26 * k/27)
  in

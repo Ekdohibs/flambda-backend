@@ -44,7 +44,7 @@ let code inline(never) loopify(never) size(6) newer_version_of(Make_2)
 in
 let $camlRewrite_unused_unboxed__Make_3 = closure Make_2_1 @Make &toplevel in
 apply direct(Make_2_1 &toplevel)
-  ($camlRewrite_unused_unboxed__Make_3 : _ -> unit)
+  ($camlRewrite_unused_unboxed__Make_3 : val -> unit)
     ($camlRewrite_unused_unboxed__Pmakeblock_0)
     -> k1 * error
   where k1 =

@@ -14,12 +14,16 @@ let $camlIarray_element_read_twice__first_const_0 = Block 0 () in
  (let Popaque/59 = %opaque (0) in
   let Pmakearray/60 = %array.`imm`.`toplevel` (4, 6) in
   apply direct(twice_0 &toplevel)
-    (twice/52 : _ -> imm tagged) (Pmakearray/60, Popaque/59) -> k/16 * error)
+    (twice/52 : val * val? -> imm tagged)
+      (Pmakearray/60, Popaque/59)
+      -> k/16 * error)
    where k/16 (apply_result/53 : imm tagged) =
      ((let Popaque/57 = %opaque (6) in
        let Pmakearray/58 = %array.`imm`.`toplevel` (4, Popaque/57) in
        apply direct(twice_0 &toplevel)
-         (twice/52 : _ -> imm tagged) (Pmakearray/58, 1) -> k/17 * error)
+         (twice/52 : val * imm tagged -> imm tagged)
+           (Pmakearray/58, 1)
+           -> k/17 * error)
         where k/17 (apply_result/54 : imm tagged) =
           let result/55 = %int_barith.add (apply_result/54, apply_result/53)
           in

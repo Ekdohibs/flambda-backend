@@ -53,8 +53,10 @@ let $camlLoop_function_twice__first_const_0 = Block 0 () in
                           %opaque
                             (`fn[loop_function_twice.ml:20,22--38]/132`)
                         in
-                        apply &my_alloc_region/108
-                          Popaque/133 (i/124) -> k/47 * k/39
+                        apply unknown_arity &my_alloc_region/108
+                          (Popaque/133 : imm tagged -> imm tagged)
+                            (i/124)
+                            -> k/47 * k/39
                           where k/47 (return_val0/134 : imm tagged) =
                             cont k/45 (return_val0/134, s_15_unboxed0/122))
                          where k/45

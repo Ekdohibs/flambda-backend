@@ -18,14 +18,16 @@ let $camlTail_loop__first_const_0 = Block 0 () in
        let int_sub/44 = %int_barith.sub (n/37, 1) in
        apply direct(sum_0 &my_alloc_region/40)
          (my_closure/39 ~ depth my_depth/41 -> next_depth/42
-          : _ -> imm tagged)
+          : imm tagged * imm tagged -> imm tagged)
            (int_sub/44, int_add/43)
            -> k/16 * k/17
  in
  let sum/48 = closure sum_0 @sum &toplevel in
  (let Popaque/51 = %opaque (10) in
   apply direct(sum_0 &toplevel)
-    (sum/48 : _ -> imm tagged) (Popaque/51, 0) -> k/20 * error)
+    (sum/48 : val? * imm tagged -> imm tagged)
+      (Popaque/51, 0)
+      -> k/20 * error)
    where k/20 (result/49 : imm tagged) =
      let Pmakeblock/50 = %block.[`0`].`toplevel` (result/49) in
      cont k/15 (Pmakeblock/50))

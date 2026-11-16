@@ -32,7 +32,7 @@
   let prim/104 = %int_barith.`int64`.add (prim/103, prim/102) in
   let int64_add/105 = %box_num.`int64`.`toplevel` (prim/104) in
   apply direct(between_0 &toplevel)
-    (between/89 : _ -> imm tagged)
+    (between/89 : int64 boxed * int64 boxed * int64 boxed -> imm tagged)
       ($camlInt64_compare__int64_2,
        int64_add/105,
        $camlInt64_compare__int64_3)

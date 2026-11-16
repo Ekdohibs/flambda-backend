@@ -152,7 +152,8 @@ let $camlTwo_flags_and_or_in_loop__first_const_0 = Block 0 () in
  in
  (let Popaque/185 = %opaque (9) in
   apply direct(all_below_and_some_above_0 &toplevel)
-    (all_below_and_some_above/182 : _ -> imm tagged)
+    (all_below_and_some_above/182
+     : val? * imm tagged * imm tagged -> imm tagged)
       (Popaque/185, 20, 3)
       -> k/62 * error)
    where k/62 (result/183 : imm tagged) =

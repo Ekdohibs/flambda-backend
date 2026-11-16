@@ -5,7 +5,8 @@ let $camlCurry__first_const_0 = Block 0 () in
          -> k/28 * k/29 =
    let next_depth/105 = rec_info (succ my_depth/104) in
    let Pmakeblock/106 = %block.[`0`].my_alloc_region/103 (a/100, b/101) in
-   apply &my_alloc_region/103 f/99 (Pmakeblock/106) -> k/28 * k/29
+   apply unknown_arity &my_alloc_region/103
+     (f/99 : val -> val?) (Pmakeblock/106) -> k/28 * k/29
  in
  let code inline(always) size(8)
        uncurry_1 (f/107 : val, param/108 : [ 0 of val? * val? ])
@@ -42,7 +43,7 @@ let $camlCurry__first_const_0 = Block 0 () in
        (my_closure/125)
    in
    apply direct(curry_0 &my_alloc_region/126)
-     curry/129
+     (curry/129 : val * val? * val? -> val?)
        (`fn[curry.ml:12,28--49]/130`, param1/123, param2/124)
        -> k/34 * k/35
  in
@@ -66,7 +67,7 @@ let $camlCurry__first_const_0 = Block 0 () in
     cont k/38 (partial_curry/144))
      where k/38 (apply_result/142 : val) =
        apply direct(uncurry_1 &toplevel)
-         (uncurry/132 : _ -> imm tagged)
+         (uncurry/132 : val * val -> imm tagged)
            (apply_result/142, Pmakeblock/141)
            -> k/37 * error)
     where k/37 (region_return/137 : imm tagged) =

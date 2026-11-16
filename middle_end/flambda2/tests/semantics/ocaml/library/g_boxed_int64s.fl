@@ -19,7 +19,9 @@
  let make/52 = closure make_0 @make &toplevel in
  let Popaque/53 = %opaque (0) in
  apply direct(make_0 &toplevel)
-   (make/52 : _ -> val array) ($camlG_boxed_int64s__int64_1) -> k/22 * error
+   (make/52 : int64 boxed -> val array)
+     ($camlG_boxed_int64s__int64_1)
+     -> k/22 * error
    where k/22 (apply_result/54 : val array) =
      ((let prim/62 = %array_length (apply_result/54) in
        let prim/63 = %int_comp.unsigned.lt (Popaque/53, prim/62) in
@@ -36,7 +38,7 @@
           let prim/57 = %num_conv.[`int64`].[`imm`] (prim/56) in
           let v/58 = %tag_imm (prim/57) in
           (apply direct(make_0 &toplevel)
-             (make/52 : _ -> val array)
+             (make/52 : int64 boxed -> val array)
                ($camlG_boxed_int64s__int64_1)
                -> k/24 * error
              where k/24 (apply_result/59 : val array) =

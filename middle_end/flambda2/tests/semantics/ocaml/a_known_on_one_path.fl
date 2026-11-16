@@ -75,15 +75,19 @@
  let $camlA_known_on_one_path__empty_block_0 = Block 0 () in
  let run/151 = closure run_0 @run &toplevel in
  apply direct(run_0 &toplevel)
-   (run/151 : _ -> imm tagged) (1, 1) -> k/67 * error
+   (run/151 : imm tagged * imm tagged -> imm tagged) (1, 1) -> k/67 * error
    where k/67 (both/152 : imm tagged) =
      ((let Popaque/163 = %opaque (1) in
        apply direct(run_0 &toplevel)
-         (run/151 : _ -> imm tagged) (Popaque/163, 0) -> k/68 * error)
+         (run/151 : val? * imm tagged -> imm tagged)
+           (Popaque/163, 0)
+           -> k/68 * error)
         where k/68 (first/153 : imm tagged) =
           ((let Popaque/162 = %opaque (1) in
             apply direct(run_0 &toplevel)
-              (run/151 : _ -> imm tagged) (0, Popaque/162) -> k/69 * error)
+              (run/151 : imm tagged * val? -> imm tagged)
+                (0, Popaque/162)
+                -> k/69 * error)
              where k/69 (second/154 : imm tagged) =
                ((let Popaque/160 = %opaque (0) in
                  let Popaque/161 = %opaque (0) in

@@ -46,13 +46,17 @@ let code loopify(never) size(11) newer_version_of(`fn[protect_refs.ml:29,2--43]_
         my_closure &my_alloc_region my_depth
         -> k * k1 =
   apply direct(iter_0_1 &my_alloc_region) inlining_state(depth(10))
-    ($camlProtect_refs__iter_1 : _ -> imm tagged)
+    ($camlProtect_refs__iter_1
+     : val? * [ 0 | 0 of [ 0 of val * val ] * [ 0 | 0 of val * val ] ] ->
+       imm tagged
+     )
       ($`camlProtect_refs__fn[protect_refs.ml:28,24--50]_3`, refs)
       -> k3 * k1
     where k3 (param : imm tagged) =
       cont k2
     where k2 =
-      apply &my_alloc_region f (0) -> k * k1
+      apply unknown_arity &my_alloc_region
+        (f : imm tagged -> val?) (0) -> k * k1
 in
 let $`camlProtect_refs__fn[protect_refs.ml:29,2--43]_4` =
   closure `fn[protect_refs.ml:29,2--43]_3_1` @`fn[protect_refs.ml:29,2--43]`
@@ -67,7 +71,7 @@ and code inline(never) loopify(never) size(4) newer_version_of(set_mode_pattern_
         my_closure &my_alloc_region my_depth
         -> k * k1 =
   apply direct(`fn[protect_refs.ml:29,2--43]_3_1` &my_alloc_region)
-    $`camlProtect_refs__fn[protect_refs.ml:29,2--43]_4`
+    ($`camlProtect_refs__fn[protect_refs.ml:29,2--43]_4` : val * val -> val?)
       ($camlProtect_refs__Pmakeblock_7, f)
       -> k * k1
 and $camlProtect_refs__Pmakeblock_6 =

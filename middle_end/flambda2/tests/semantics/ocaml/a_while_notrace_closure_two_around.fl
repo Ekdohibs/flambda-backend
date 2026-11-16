@@ -240,14 +240,20 @@
     (run/297 : _ -> imm tagged) (Popaque/305, Popaque/304) -> k/80 * error)
    where k/80 (stopped/298 : imm tagged) =
      (apply direct(run_0 &toplevel)
-        (run/297 : _ -> imm tagged) (5, 9) -> k/81 * error
+        (run/297 : imm tagged * imm tagged -> imm tagged)
+          (5, 9)
+          -> k/81 * error
         where k/81 (finished/299 : imm tagged) =
           ((let Popaque/303 = %opaque (3) in
             apply direct(run_0 &toplevel)
-              (run/297 : _ -> imm tagged) (Popaque/303, 1) -> k/82 * error)
+              (run/297 : val? * imm tagged -> imm tagged)
+                (Popaque/303, 1)
+                -> k/82 * error)
              where k/82 (at_once/300 : imm tagged) =
                (apply direct(run_0 &toplevel)
-                  (run/297 : _ -> imm tagged) (0, 0) -> k/83 * error
+                  (run/297 : imm tagged * imm tagged -> imm tagged)
+                    (0, 0)
+                    -> k/83 * error
                   where k/83 (empty/301 : imm tagged) =
                     let Pmakeblock/302 =
                       %block.[`0`].`toplevel`

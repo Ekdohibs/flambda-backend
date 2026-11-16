@@ -137,7 +137,9 @@ let $camlFlag_guards_update__first_const_0 = Block 0 () in
  in
  (let Popaque/161 = %opaque (9) in
   apply direct(sum_until_above_0 &toplevel)
-    (sum_until_above/158 : _ -> imm tagged) (Popaque/161, 7) -> k/53 * error)
+    (sum_until_above/158 : val? * imm tagged -> imm tagged)
+      (Popaque/161, 7)
+      -> k/53 * error)
    where k/53 (result/159 : imm tagged) =
      let Pmakeblock/160 =
        %block.[`0`].`toplevel` (sum_until_above/158, result/159)

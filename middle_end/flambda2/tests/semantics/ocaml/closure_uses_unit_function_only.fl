@@ -21,7 +21,7 @@ let $camlClosure_uses_unit_function_only__first_const_0 = Block 0 () in
    in
    let int_add/79 = %int_barith.add (x/73, 1) in
    apply direct(double_0 &my_alloc_region/75)
-     (double/78 : _ -> imm tagged) (int_add/79) -> k/30 * k/31
+     (double/78 : imm tagged -> imm tagged) (int_add/79) -> k/30 * k/31
  in
  let code inline(never) size(17)
        doubler_1 (param/80 : imm tagged)
@@ -44,15 +44,17 @@ let $camlClosure_uses_unit_function_only__first_const_0 = Block 0 () in
  with { double_1 = double/87 }
  in
  apply direct(doubler_1 &toplevel)
-   (doubler/88 : _ -> val) (0) -> k/35 * error
+   (doubler/88 : imm tagged -> val) (0) -> k/35 * error
    where k/35 (f/91 : val) =
      (apply direct(doubler_1 &toplevel)
-        (doubler/88 : _ -> val) (0) -> k/36 * error
+        (doubler/88 : imm tagged -> val) (0) -> k/36 * error
         where k/36 (g/92 : val) =
-          (apply &toplevel g/92 (4) -> k/37 * error
+          (apply unknown_arity &toplevel
+             (g/92 : imm tagged -> imm tagged) (4) -> k/37 * error
              where k/37 (apply_result/93 : imm tagged) =
                ((let Popaque/96 = %opaque (2) in
-                 apply &toplevel f/91 (Popaque/96) -> k/38 * error)
+                 apply unknown_arity &toplevel
+                   (f/91 : _ -> imm tagged) (Popaque/96) -> k/38 * error)
                   where k/38 (apply_result/94 : imm tagged) =
                     let int_add/95 =
                       %int_barith.add (apply_result/94, apply_result/93)

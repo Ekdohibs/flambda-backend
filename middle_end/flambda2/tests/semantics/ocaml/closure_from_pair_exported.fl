@@ -19,7 +19,7 @@ let $camlClosure_from_pair_exported__first_const_0 = Block 0 () in
    let p/54 = %block.[`0`].my_alloc_region/50 (g/53, x/48) in
    let Pfield/55 = %block_load.[`0`] (p/54) in
    apply direct(g_1 &my_alloc_region/50)
-     (Pfield/55 : _ -> imm tagged) (x/48) -> k/16 * k/17
+     (Pfield/55 : imm tagged -> imm tagged) (x/48) -> k/16 * k/17
  in
  let f/56 = closure f_0 @f &toplevel in
  let Pmakeblock/57 = %block.[`0`].`toplevel` (f/56) in

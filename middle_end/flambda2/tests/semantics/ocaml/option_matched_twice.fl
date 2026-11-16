@@ -55,11 +55,15 @@ let $camlOption_matched_twice__first_const_0 = Block 0 () in
  let twice/102 = closure twice_0 @twice &toplevel in
  (let Popaque/108 = %opaque (0) in
   apply direct(twice_0 &toplevel)
-    (twice/102 : _ -> imm tagged) (Popaque/108, 4) -> k/46 * error)
+    (twice/102 : val? * imm tagged -> imm tagged)
+      (Popaque/108, 4)
+      -> k/46 * error)
    where k/46 (apply_result/103 : imm tagged) =
      ((let Popaque/107 = %opaque (1) in
        apply direct(twice_0 &toplevel)
-         (twice/102 : _ -> imm tagged) (Popaque/107, 4) -> k/47 * error)
+         (twice/102 : val? * imm tagged -> imm tagged)
+           (Popaque/107, 4)
+           -> k/47 * error)
         where k/47 (apply_result/104 : imm tagged) =
           let result/105 =
             %int_barith.add (apply_result/104, apply_result/103)

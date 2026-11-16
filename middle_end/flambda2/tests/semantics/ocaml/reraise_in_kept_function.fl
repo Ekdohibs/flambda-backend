@@ -9,7 +9,8 @@ let $camlReraise_in_kept_function__first_const_0 = Block 0 () in
    let try_ghost_region/100 = %begin_try_ghost_region () in
    cont k/44 push(k/40)
      where k/44 =
-       (apply &my_alloc_region/96 f/93 (x/94) -> k/45 * k/40
+       (apply unknown_arity &my_alloc_region/96
+          (f/93 : _ -> imm tagged) (x/94) -> k/45 * k/40
           where k/45 (apply_result/107 : imm tagged) =
             let int_add/108 = %int_barith.add (apply_result/107, 1) in
             cont k/43 (int_add/108))

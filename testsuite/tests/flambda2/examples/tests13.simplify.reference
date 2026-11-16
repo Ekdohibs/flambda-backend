@@ -35,8 +35,8 @@ let code loopify(never) size(10) newer_version_of(`fn[tests13.ml:27,2--118]_1`)
   in
   let j = %int_barith.add (i, 3) in
   let Popaque = %opaque (j) in
-  apply &my_alloc_region inlined(never)
-    map_foo
+  apply unknown_arity &my_alloc_region inlined(never)
+    (map_foo : val? * val? * imm tagged -> val?)
       ($`camlTests13__fn[tests13.ml:30,31--43]_3`,
        $`camlTests13__fn[tests13.ml:30,44--59]_2`,
        0)
@@ -60,7 +60,8 @@ and code rec loopify(never) size(77) newer_version_of(map_foo_4)
         my_closure &my_alloc_region my_depth
         -> k * k1
         : [ 0 | 0 of val * val ] =
-  apply &my_alloc_region seq (0) -> k2 * k1
+  apply unknown_arity &my_alloc_region
+    (seq : imm tagged -> [ 0 | 0 of val * val ]) (0) -> k2 * k1
     where k2 (`*match*` : [ 0 | 0 of val * val ]) =
       let prim = %is_int (`*match*`) in
       (switch prim
@@ -95,11 +96,13 @@ and code rec loopify(never) size(77) newer_version_of(map_foo_4)
                  in
                  cont k2 (`fn[tests13.ml:27,2--118]`))
               where k2 (g : val) =
-                (apply &my_alloc_region inlined(always) g (0) -> k2 * k1
+                (apply unknown_arity &my_alloc_region inlined(always)
+                   (g : imm tagged -> [ 0 | 0 of val * val ]) (0) -> k2 * k1
                    where k2 (g_result : [ 0 | 0 of val * val ]) =
                      let Popaque = %opaque (g_result) in
                      ((let Pfield = %block_load.[`0`] (`*match*`) in
-                       apply &my_alloc_region f (Pfield) -> k2 * k1)
+                       apply unknown_arity &my_alloc_region
+                         (f : _ -> val) (Pfield) -> k2 * k1)
                         where k2 (apply_result : val) =
                           let Pmakeblock =
                             %block.[`0`].my_alloc_region
@@ -114,7 +117,8 @@ and code loopify(never) size(4) newer_version_of(`fn[tests13.ml:27,2--118]_1_1`)
   let Popaque = %opaque (23) in
   apply direct(map_foo_4_1 &my_alloc_region) inlined(never)
          inlining_state(depth(1))
-    $camlTests13__map_foo_4 ~ depth do_not_inline -> do_not_inline
+    ($camlTests13__map_foo_4 ~ depth do_not_inline -> do_not_inline
+     : val? * val? * imm tagged -> val?)
       ($`camlTests13__fn[tests13.ml:30,31--43]_3`,
        $`camlTests13__fn[tests13.ml:30,44--59]_2`,
        0)
@@ -126,7 +130,8 @@ and code loopify(never) size(4) newer_version_of(`fn[tests13.ml:27,2--118]_1_1`)
   let Popaque = %opaque (13) in
   apply direct(map_foo_4_1 &my_alloc_region) inlined(never)
          inlining_state(depth(1))
-    $camlTests13__map_foo_4 ~ depth do_not_inline -> do_not_inline
+    ($camlTests13__map_foo_4 ~ depth do_not_inline -> do_not_inline
+     : val? * val? * imm tagged -> val?)
       ($`camlTests13__fn[tests13.ml:30,31--43]_3`,
        $`camlTests13__fn[tests13.ml:30,44--59]_2`,
        0)

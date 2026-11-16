@@ -25,7 +25,7 @@ let $camlStack_argument_result_returned__first_const_0 = Block 0 () in
       %block.[`0`].my_alloc_region/75.local[region/79] (x/73, int_add/84)
     in
     apply direct(total_0 &my_alloc_region/75)
-      (total/78 : _ -> imm tagged) (Pmakeblock/85) -> k/22 * k/21)
+      (total/78 : val -> imm tagged) (Pmakeblock/85) -> k/22 * k/21)
      where k/22 (region_return/81 : imm tagged) =
        let unit/82 = %end_region (region/79) in
        let unit/83 = %end_ghost_region (ghost_region/80) in

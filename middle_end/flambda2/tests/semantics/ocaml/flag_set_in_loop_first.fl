@@ -120,7 +120,9 @@ let $camlFlag_set_in_loop_first__first_const_0 = Block 0 () in
  let last_below/155 = closure last_below_0 @last_below &toplevel in
  (let Popaque/158 = %opaque (5) in
   apply direct(last_below_0 &toplevel)
-    (last_below/155 : _ -> imm tagged) (Popaque/158, 3) -> k/53 * error)
+    (last_below/155 : val? * imm tagged -> imm tagged)
+      (Popaque/158, 3)
+      -> k/53 * error)
    where k/53 (result/156 : imm tagged) =
      let Pmakeblock/157 =
        %block.[`0`].`toplevel` (last_below/155, result/156)

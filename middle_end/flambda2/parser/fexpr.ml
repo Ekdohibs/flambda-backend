@@ -260,8 +260,12 @@ type function_call =
         function_slot : function_slot option
       }
   | Indirect
-(* Will translate to indirect_known_arity or indirect_unknown_arity depending on
-   whether the apply record's arities field has a value *)
+    (* Will translate to indirect_known_arity or indirect_unknown_arity
+       depending on whether the apply record's arities field has a value *)
+  | Indirect_unknown_arity
+(* A call of unknown arity whose arities are given: a call of unknown arity with
+   no arities is [Indirect], and is read with one value for each argument and
+   one for the result. *)
 
 type call_kind =
   | Function of function_call

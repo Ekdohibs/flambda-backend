@@ -19,7 +19,7 @@ let $camlShared_read_slot_and_field__first_const_0 = Block 0 () in
    let Pfield/69 = %block_load.[`0`] (Prices/68) in
    (let Pfield/72 = %block_load.[`1`] (Prices/68) in
     apply direct(of_items_0 &my_alloc_region/65)
-      (Pfield/72 : _ -> imm tagged) (boxes/63) -> k/22 * k/21)
+      (Pfield/72 : imm tagged -> imm tagged) (boxes/63) -> k/22 * k/21)
      where k/22 (apply_result/70 : imm tagged) =
        let int_add/71 = %int_barith.add (apply_result/70, Pfield/69) in
        cont k/20 (int_add/71)

@@ -17,7 +17,8 @@ let $camlMutual_alias_exported__first_const_0 = Block 0 () in
      where k/26 =
        let int_sub/72 = %int_barith.sub (n/66, 1) in
        apply direct(pong_1 &my_alloc_region/68)
-         (pong/71 ~ depth my_depth/69 -> next_depth/70 : _ -> imm tagged)
+         (pong/71 ~ depth my_depth/69 -> next_depth/70
+          : imm tagged -> imm tagged)
            (int_sub/72)
            -> k/24 * k/25
  and code rec size(23)
@@ -38,7 +39,8 @@ let $camlMutual_alias_exported__first_const_0 = Block 0 () in
      where k/30 =
        let int_sub/82 = %int_barith.sub (n/76, 1) in
        apply direct(ping_0 &my_alloc_region/78)
-         (ping/81 ~ depth my_depth/79 -> next_depth/80 : _ -> imm tagged)
+         (ping/81 ~ depth my_depth/79 -> next_depth/80
+          : imm tagged -> imm tagged)
            (int_sub/82)
            -> k/28 * k/29
  in

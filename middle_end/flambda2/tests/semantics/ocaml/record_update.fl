@@ -22,7 +22,8 @@ let $camlRecord_update__first_const_0 = Block 0 () in
      %block.[`0`].`toplevel`.local[region/69] (Popaque/80, 2, 3)
    in
    apply direct(with_y_0 &toplevel)
-     (with_y/66 : _ -> [ 0 of imm tagged * imm tagged * imm tagged ])
+     (with_y/66
+      : val * imm tagged -> [ 0 of imm tagged * imm tagged * imm tagged ])
        (Pmakeblock/81, 20)
        -> k/20 * error)
     where k/20 (point/74 : [ 0 of imm tagged * imm tagged * imm tagged ]) =

@@ -107,7 +107,7 @@ let $camlWhile_flag_and_two_tests__first_const_0 = Block 0 () in
  in
  (let Popaque/145 = %opaque (9) in
   apply direct(first_square_above_0 &toplevel)
-    (first_square_above/142 : _ -> imm tagged)
+    (first_square_above/142 : val? * imm tagged -> imm tagged)
       (Popaque/145, 7)
       -> k/56 * error)
    where k/56 (result/143 : imm tagged) =

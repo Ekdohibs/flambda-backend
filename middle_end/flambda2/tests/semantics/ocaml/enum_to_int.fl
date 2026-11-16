@@ -13,10 +13,10 @@ let $camlEnum_to_int__first_const_0 = Block 0 () in
  in
  let code/35 = closure code_0 @`code` &toplevel in
  apply direct(code_0 &toplevel)
-   (code/35 : _ -> imm tagged) (2) -> k/16 * error
+   (code/35 : imm tagged -> imm tagged) (2) -> k/16 * error
    where k/16 (apply_result/36 : imm tagged) =
      (apply direct(code_0 &toplevel)
-        (code/35 : _ -> imm tagged) (0) -> k/17 * error
+        (code/35 : imm tagged -> imm tagged) (0) -> k/17 * error
         where k/17 (apply_result/37 : imm tagged) =
           let result/38 = %int_barith.add (apply_result/37, apply_result/36)
           in

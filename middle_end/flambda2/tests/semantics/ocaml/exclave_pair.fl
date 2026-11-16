@@ -78,16 +78,26 @@ let $camlExclave_pair__first_const_0 = Block 0 () in
     with { x = x/248 }
     in
     apply direct(call1_2 &my_alloc_region/250)
-      (call1/255 : _ -> imm tagged) (f/271, 7) -> k/67 * k/65
+      (call1/255 : val? * imm tagged -> imm tagged) (f/271, 7) -> k/67 * k/65
       where k/67 (apply_result/272 : imm tagged) =
         (apply direct(read2_0 &my_alloc_region/250)
-           (read2/253 : _ -> imm tagged) (c/270) -> k/68 * k/65
+           (read2/253 : [ 0 of imm tagged * imm tagged ] -> imm tagged)
+             (c/270)
+             -> k/68 * k/65
            where k/68 (apply_result/273 : imm tagged) =
              (apply direct(read3_1 &my_alloc_region/250)
-                (read3/254 : _ -> imm tagged) (b/267) -> k/69 * k/65
+                (read3/254
+                 : [ 0 of imm tagged * imm tagged * imm tagged ] ->
+                   imm tagged
+                 )
+                  (b/267)
+                  -> k/69 * k/65
                 where k/69 (apply_result/274 : imm tagged) =
                   (apply direct(read2_0 &my_alloc_region/250)
-                     (read2/253 : _ -> imm tagged) (a/263) -> k/70 * k/65
+                     (read2/253
+                      : [ 0 of imm tagged * imm tagged ] -> imm tagged)
+                       (a/263)
+                       -> k/70 * k/65
                      where k/70 (apply_result/275 : imm tagged) =
                        let int_add/276 =
                          %int_barith.add (apply_result/275, apply_result/274)
@@ -131,15 +141,17 @@ let $camlExclave_pair__first_const_0 = Block 0 () in
    let region/296 = %begin_region () in
    let ghost_region/297 = %begin_ghost_region () in
    apply direct(make_5 &my_alloc_region/290 &region/296 &ghost_region/297)
-     (make/295 : _ -> [ 0 of imm tagged * imm tagged ])
+     (make/295 : imm tagged -> [ 0 of imm tagged * imm tagged ])
        (x/288)
        -> k/76 * k/74
      where k/76 (p/301 : [ 0 of imm tagged * imm tagged ]) =
        (apply direct(noise_3 &my_alloc_region/290)
-          (noise/294 : _ -> imm tagged) (x/288) -> k/77 * k/74
+          (noise/294 : imm tagged -> imm tagged) (x/288) -> k/77 * k/74
           where k/77 (n/302 : imm tagged) =
             (apply direct(read2_0 &my_alloc_region/290)
-               (read2/293 : _ -> imm tagged) (p/301) -> k/78 * k/74
+               (read2/293 : [ 0 of imm tagged * imm tagged ] -> imm tagged)
+                 (p/301)
+                 -> k/78 * k/74
                where k/78 (apply_result/303 : imm tagged) =
                  let int_add/304 = %int_barith.add (n/302, apply_result/303)
                  in
@@ -160,7 +172,7 @@ let $camlExclave_pair__first_const_0 = Block 0 () in
  with { read2_1 = read2/305; noise = noise/308; make = make/309 }
  in
  apply direct(body_6 &toplevel)
-   (body/310 : _ -> imm tagged) (10) -> k/79 * error
+   (body/310 : imm tagged -> imm tagged) (10) -> k/79 * error
    where k/79 (apply_result/311 : imm tagged) =
      ((let Popaque/315 = %opaque (3) in
        apply direct(body_6 &toplevel)

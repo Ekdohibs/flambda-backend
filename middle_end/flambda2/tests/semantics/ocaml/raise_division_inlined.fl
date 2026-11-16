@@ -29,7 +29,9 @@ let $camlRaise_division_inlined__first_const_0 = Block 0 () in
    cont k/63 push(k/57)
      where k/63 =
        apply direct(ratio_0 &my_alloc_region/108)
-         (ratio/111 : _ -> imm tagged) (a/105, b/106) -> k/62 * k/57
+         (ratio/111 : imm tagged * imm tagged -> imm tagged)
+           (a/105, b/106)
+           -> k/62 * k/57
      where k/62 (body_result/121 : imm tagged) =
        cont k/55 pop(k/57) (body_result/121)
      where k/57 exn (exn/114 : val) =
@@ -60,7 +62,9 @@ let $camlRaise_division_inlined__first_const_0 = Block 0 () in
  cont k/71 push(k/67)
    where k/71 =
      apply direct(ratio_0 &toplevel)
-       (ratio/122 : _ -> imm tagged) (9, 0) -> k/70 * k/67
+       (ratio/122 : imm tagged * imm tagged -> imm tagged)
+         (9, 0)
+         -> k/70 * k/67
    where k/70 (body_result/140 : imm tagged) =
      cont k/64 pop(k/67) (body_result/140)
    where k/67 exn (exn/134 : val) =
@@ -81,11 +85,15 @@ let $camlRaise_division_inlined__first_const_0 = Block 0 () in
    where k/64 (try_with_result/126 : imm tagged) =
      ((let Popaque/133 = %opaque (7) in
        apply direct(body_1 &toplevel)
-         (body/123 : _ -> imm tagged) (Popaque/133, 0) -> k/65 * error)
+         (body/123 : val? * imm tagged -> imm tagged)
+           (Popaque/133, 0)
+           -> k/65 * error)
         where k/65 (apply_result/127 : imm tagged) =
           ((let Popaque/132 = %opaque (4) in
             apply direct(body_1 &toplevel)
-              (body/123 : _ -> imm tagged) (20, Popaque/132) -> k/66 * error)
+              (body/123 : imm tagged * val? -> imm tagged)
+                (20, Popaque/132)
+                -> k/66 * error)
              where k/66 (apply_result/128 : imm tagged) =
                let int_add/129 =
                  %int_barith.add (apply_result/128, apply_result/127)

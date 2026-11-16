@@ -24,11 +24,15 @@ let $camlAttr_local_two_uses__first_const_0 = Block 0 () in
  let body/63 = closure body_0 @body &toplevel in
  (let Popaque/69 = %opaque (2) in
   apply direct(body_0 &toplevel)
-    (body/63 : _ -> imm tagged) (8, Popaque/69) -> k/25 * error)
+    (body/63 : imm tagged * val? -> imm tagged)
+      (8, Popaque/69)
+      -> k/25 * error)
    where k/25 (apply_result/64 : imm tagged) =
      ((let Popaque/68 = %opaque (3) in
        apply direct(body_0 &toplevel)
-         (body/63 : _ -> imm tagged) (Popaque/68, 5) -> k/26 * error)
+         (body/63 : val? * imm tagged -> imm tagged)
+           (Popaque/68, 5)
+           -> k/26 * error)
         where k/26 (apply_result/65 : imm tagged) =
           let result/66 = %int_barith.add (apply_result/65, apply_result/64)
           in

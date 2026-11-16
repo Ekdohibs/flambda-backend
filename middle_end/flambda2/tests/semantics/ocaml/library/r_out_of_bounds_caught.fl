@@ -47,17 +47,19 @@
  let read/92 = closure read_0 @read &toplevel in
  let make/93 = closure make_1 @make &toplevel in
  apply direct(make_1 &toplevel)
-   (make/93 : _ -> imm array) (5) -> k/47 * error
+   (make/93 : imm tagged -> imm array) (5) -> k/47 * error
    where k/47 (apply_result/99 : imm array) =
      apply direct(read_0 &toplevel)
-       (read/92 : _ -> imm tagged) (apply_result/99, 1) -> k/44 * error
+       (read/92 : imm array * imm tagged -> imm tagged)
+         (apply_result/99, 1)
+         -> k/44 * error
    where k/44 (inside/94 : imm tagged) =
      ((let Popaque/97 = %opaque (2) in
        apply direct(make_1 &toplevel)
-         (make/93 : _ -> imm array) (5) -> k/46 * error
+         (make/93 : imm tagged -> imm array) (5) -> k/46 * error
          where k/46 (apply_result/98 : imm array) =
            apply direct(read_0 &toplevel)
-             (read/92 : _ -> imm tagged)
+             (read/92 : imm array * val? -> imm tagged)
                (apply_result/98, Popaque/97)
                -> k/45 * error)
         where k/45 (outside/95 : imm tagged) =

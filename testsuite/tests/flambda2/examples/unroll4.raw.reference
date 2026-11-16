@@ -19,9 +19,12 @@ let $camlUnroll4__first_const_0 = Block 0 () in
      where k4 =
        let int_sub = %int_barith.sub (n, 1) in
        apply direct(odd_2 &my_alloc_region)
-         odd ~ depth my_depth -> next_depth (int_sub) -> k1 * k2
+         (odd ~ depth my_depth -> next_depth : imm tagged -> val?)
+           (int_sub)
+           -> k1 * k2
      where k3 =
-       apply &my_alloc_region inlined(hint) k (1) -> k1 * k2
+       apply unknown_arity &my_alloc_region inlined(hint)
+         (k : imm tagged -> val?) (1) -> k1 * k2
  and code rec size(31)
        odd_2 (n : imm tagged) my_closure &my_alloc_region my_depth -> k1 * k2 =
    let next_depth = rec_info (succ my_depth) in
@@ -40,9 +43,12 @@ let $camlUnroll4__first_const_0 = Block 0 () in
      where k4 =
        let int_sub = %int_barith.sub (n, 1) in
        apply direct(even_1 &my_alloc_region)
-         even ~ depth my_depth -> next_depth (int_sub) -> k1 * k2
+         (even ~ depth my_depth -> next_depth : imm tagged -> val?)
+           (int_sub)
+           -> k1 * k2
      where k3 =
-       apply &my_alloc_region inlined(hint) k (0) -> k1 * k2
+       apply unknown_arity &my_alloc_region inlined(hint)
+         (k : imm tagged -> val?) (0) -> k1 * k2
  in
  let code inline(always) size(94)
        parity_is_0 (p : imm tagged, n : imm tagged, k : val)
@@ -62,9 +68,11 @@ let $camlUnroll4__first_const_0 = Block 0 () in
      where k5 =
        cont k4
      where k4 =
-       apply direct(even_1 &my_alloc_region) unroll(3) even (n) -> k1 * k2
+       apply direct(even_1 &my_alloc_region) unroll(3)
+         (even : imm tagged -> val?) (n) -> k1 * k2
      where k3 =
-       apply direct(odd_2 &my_alloc_region) unroll(4) odd (n) -> k1 * k2
+       apply direct(odd_2 &my_alloc_region) unroll(4)
+         (odd : imm tagged -> val?) (n) -> k1 * k2
  in
  let code inline(always) size(1)
        k_3 (b) my_closure &my_alloc_region my_depth -> k1 * k2 =
@@ -74,10 +82,14 @@ let $camlUnroll4__first_const_0 = Block 0 () in
  let parity_is = closure parity_is_0 @parity_is &toplevel in
  let k = closure k_3 @k &toplevel in
  apply direct(parity_is_0 &toplevel)
-   (parity_is : _ -> imm tagged) (0, 1, k) -> k1 * error
+   (parity_is : imm tagged * imm tagged * val? -> imm tagged)
+     (0, 1, k)
+     -> k1 * error
    where k1 (one_is_even : imm tagged) =
      (apply direct(parity_is_0 &toplevel)
-        (parity_is : _ -> imm tagged) (1, 4, k) -> k1 * error
+        (parity_is : imm tagged * imm tagged * val? -> imm tagged)
+          (1, 4, k)
+          -> k1 * error
         where k1 (four_is_odd : imm tagged) =
           let Pmakeblock =
             %block.[`0`].`toplevel` (parity_is, k, one_is_even, four_is_odd)

@@ -33,8 +33,8 @@ let code loopify(never) size(5) newer_version_of(f_2)
         -> unboxed_return * k
         : imm tagged * imm tagged =
   apply direct(helper_0_1 &my_alloc_region)
-    ($camlInlined_attribute_on_unboxable_function__helper_1 : _ -> imm tagged
-     )
+    ($camlInlined_attribute_on_unboxable_function__helper_1
+     : imm tagged * imm tagged -> imm tagged)
       (x, y)
       -> k1 * k
     where k1 (apply_result : imm tagged) =
@@ -46,7 +46,8 @@ and $camlInlined_attribute_on_unboxable_function__f_unboxed_3 =
   closure f_2_2 @f_unboxed &toplevel
 in
 apply direct(helper_0_1 &toplevel) inlining_state(depth(1))
-  ($camlInlined_attribute_on_unboxable_function__helper_1 : _ -> imm tagged)
+  ($camlInlined_attribute_on_unboxable_function__helper_1
+   : imm tagged * imm tagged -> imm tagged)
     (0, 0)
     -> k * error
   where k (apply_result : imm tagged) =

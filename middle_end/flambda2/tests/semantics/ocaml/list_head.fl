@@ -48,7 +48,7 @@
        (Popaque/80, $camlList_head__const_block_1)
    in
    apply direct(first_two_0 &toplevel)
-     (first_two/72 : _ -> imm tagged) (Pmakeblock/81) -> k/38 * error)
+     (first_two/72 : val -> imm tagged) (Pmakeblock/81) -> k/38 * error)
     where k/38 (region_return/77 : imm tagged) =
       let unit/78 = %end_region (region/75) in
       let unit/79 = %end_ghost_region (ghost_region/76) in

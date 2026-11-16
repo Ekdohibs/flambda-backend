@@ -15,7 +15,9 @@ let code loopify(never) size(4) newer_version_of(foo_1)
         -> k * k1
         : imm tagged =
   apply direct(f_0_1 &my_alloc_region)
-    ($camlFunction_never_returns__f_1 : _ -> imm tagged) (0) -> never * k1
+    ($camlFunction_never_returns__f_1 : imm tagged -> imm tagged)
+      (0)
+      -> never * k1
 in
 let $camlFunction_never_returns__foo_2 = closure foo_1_1 @foo &toplevel in
 let code loopify(never) size(4) newer_version_of(bar_2)
@@ -24,7 +26,9 @@ let code loopify(never) size(4) newer_version_of(bar_2)
         -> k * k1
         : imm tagged =
   apply direct(f_0_1 &my_alloc_region) inlining_state(depth(1))
-    ($camlFunction_never_returns__f_1 : _ -> imm tagged) (0) -> never * k1
+    ($camlFunction_never_returns__f_1 : imm tagged -> imm tagged)
+      (0)
+      -> never * k1
 in
 let $camlFunction_never_returns__bar_3 = closure bar_2_1 @bar &toplevel in
 let $camlFunction_never_returns =

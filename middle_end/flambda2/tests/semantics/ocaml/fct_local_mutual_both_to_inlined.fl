@@ -28,7 +28,8 @@ let $camlFct_local_mutual_both_to_inlined__first_const_0 = Block 0 () in
      where k/51 =
        let int_sub/152 = %int_barith.sub (k/142, 1) in
        apply direct(up_4 &my_alloc_region/144)
-         (up/149 ~ depth my_depth/145 -> next_depth/146 : _ -> imm tagged)
+         (up/149 ~ depth my_depth/145 -> next_depth/146
+          : imm tagged -> imm tagged)
            (int_sub/152)
            -> k/48 * k/49
      where k/50 =
@@ -55,7 +56,8 @@ let $camlFct_local_mutual_both_to_inlined__first_const_0 = Block 0 () in
      where k/56 =
        let int_sub/164 = %int_barith.sub (k/156, 1) in
        apply direct(down_3 &my_alloc_region/158)
-         (down/163 ~ depth my_depth/159 -> next_depth/160 : _ -> imm tagged)
+         (down/163 ~ depth my_depth/159 -> next_depth/160
+          : imm tagged -> imm tagged)
            (int_sub/164)
            -> k/54 * k/55
  in
@@ -72,10 +74,14 @@ let $camlFct_local_mutual_both_to_inlined__first_const_0 = Block 0 () in
    with { n = n/168; S = S/174 }
    in
    apply direct(apply_0 &my_alloc_region/170)
-     (apply/173 : _ -> imm tagged) (up/176, n/168) -> k/60 * k/59
+     (apply/173 : val? * imm tagged -> imm tagged)
+       (up/176, n/168)
+       -> k/60 * k/59
      where k/60 (apply_result/177 : imm tagged) =
        (apply direct(apply_0 &my_alloc_region/170)
-          (apply/173 : _ -> imm tagged) (down/175, 2) -> k/61 * k/59
+          (apply/173 : val? * imm tagged -> imm tagged)
+            (down/175, 2)
+            -> k/61 * k/59
           where k/61 (apply_result/178 : imm tagged) =
             let int_add/179 =
               %int_barith.add (apply_result/178, apply_result/177)
@@ -102,10 +108,11 @@ let $camlFct_local_mutual_both_to_inlined__first_const_0 = Block 0 () in
  (let by/194 = %opaque (2) in
   let Pmakeblock/195 = %block.[`0`].`toplevel` (by/194) in
   apply direct(Make_1 &toplevel)
-    (Make/189 : _ -> val) (Pmakeblock/195) -> k/64 * error)
+    (Make/189 : val -> val) (Pmakeblock/195) -> k/64 * error)
    where k/64 (M/190 : val) =
      ((let Pfield/193 = %block_load.[`0`] (M/190) in
-       apply &toplevel Pfield/193 (3) -> k/65 * error)
+       apply unknown_arity &toplevel
+         (Pfield/193 : imm tagged -> imm tagged) (3) -> k/65 * error)
         where k/65 (result/191 : imm tagged) =
           let Pmakeblock/192 =
             %block.[`0`].`toplevel` (apply/188, Make/189, M/190, result/191)

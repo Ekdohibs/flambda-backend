@@ -20,7 +20,8 @@ let $camlUnboxed_pair_with_float_argument__first_const_0 = Block 0 () in
  let f/52 = closure f_0 @f &toplevel in
  (let Popaque/55 = %opaque (3) in
   apply direct(f_0 &toplevel)
-    (f/52 : _ -> [ 0 of float boxed * imm tagged ])
+    (f/52
+     : float * imm tagged * imm tagged -> [ 0 of float boxed * imm tagged ])
       (0x1.8p+0, Popaque/55, 4)
       -> k/14 * error)
    where k/14 (result/53 : [ 0 of float boxed * imm tagged ]) =

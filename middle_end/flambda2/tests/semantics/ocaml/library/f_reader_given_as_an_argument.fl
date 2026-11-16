@@ -9,7 +9,8 @@
    let Pmakearray/88 =
      %array.`imm`.my_alloc_region/83 (x/81, int_add/87, int_add/86)
    in
-   apply &my_alloc_region/83 f/80 (Pmakearray/88) -> k/30 * k/31
+   apply unknown_arity &my_alloc_region/83
+     (f/80 : val -> imm tagged) (Pmakearray/88) -> k/30 * k/31
  in
  let $camlF_reader_given_as_an_argument__string_0 = "index out of bounds" in
  let $camlF_reader_given_as_an_argument__block_1 =
@@ -49,7 +50,9 @@
  let apply/103 = closure apply_0 @`apply` &toplevel in
  let middle/104 = closure middle_1 @middle &toplevel in
  apply direct(apply_0 &toplevel)
-   (apply/103 : _ -> imm tagged) (middle/104, 10) -> k/39 * error
+   (apply/103 : val? * imm tagged -> imm tagged)
+     (middle/104, 10)
+     -> k/39 * error
    where k/39 (p/105 : imm tagged) =
      ((let region/108 = %begin_region () in
        let ghost_region/109 = %begin_ghost_region () in

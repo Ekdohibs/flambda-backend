@@ -23,10 +23,10 @@ let $camlInt_switch__first_const_0 = Block 0 () in
  in
  let weight/44 = closure weight_0 @weight &toplevel in
  apply direct(weight_0 &toplevel)
-   (weight/44 : _ -> imm tagged) (7) -> k/22 * error
+   (weight/44 : imm tagged -> imm tagged) (7) -> k/22 * error
    where k/22 (apply_result/45 : imm tagged) =
      (apply direct(weight_0 &toplevel)
-        (weight/44 : _ -> imm tagged) (2) -> k/23 * error
+        (weight/44 : imm tagged -> imm tagged) (2) -> k/23 * error
         where k/23 (apply_result/46 : imm tagged) =
           let result/47 = %int_barith.add (apply_result/46, apply_result/45)
           in

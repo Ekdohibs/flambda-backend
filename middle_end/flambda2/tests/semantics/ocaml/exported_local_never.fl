@@ -16,10 +16,12 @@ let $camlExported_local_never__first_const_0 = Block 0 () in
    let next_depth/47 = rec_info (succ my_depth/46) in
    let step/48 = closure step_1 @step &my_alloc_region/45 in
    apply direct(step_1 &my_alloc_region/45)
-     (step/48 : _ -> imm tagged) (x/43) -> k/20 * k/19
+     (step/48 : imm tagged -> imm tagged) (x/43) -> k/20 * k/19
      where k/20 (apply_result/49 : imm tagged) =
        apply direct(step_1 &my_alloc_region/45)
-         (step/48 : _ -> imm tagged) (apply_result/49) -> k/18 * k/19
+         (step/48 : imm tagged -> imm tagged)
+           (apply_result/49)
+           -> k/18 * k/19
  in
  let f/50 = closure f_0 @f &toplevel in
  let Pmakeblock/51 = %block.[`0`].`toplevel` (f/50) in

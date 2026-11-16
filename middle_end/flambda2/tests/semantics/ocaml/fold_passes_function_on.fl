@@ -18,11 +18,14 @@
      where k/24 =
        let Pfield/64 = %block_load.[`1`] (l/59) in
        ((let Pfield/66 = %block_load.[`0`] (l/59) in
-         apply &my_alloc_region/61 f/57 (acc/58, Pfield/66) -> k/25 * k/23)
+         apply unknown_arity &my_alloc_region/61
+           (f/57 : imm tagged * val? -> imm tagged)
+             (acc/58, Pfield/66)
+             -> k/25 * k/23)
           where k/25 (apply_result/65 : imm tagged) =
             apply direct(fold_0 &my_alloc_region/61)
               (my_closure/60 ~ depth my_depth/62 -> next_depth/63
-               : _ -> imm tagged)
+               : val * imm tagged * val? -> imm tagged)
                 (f/57, apply_result/65, Pfield/64)
                 -> k/22 * k/23)
  in
@@ -50,7 +53,7 @@
       @`fn[fold_passes_function_on.ml:15,18--36]` &toplevel
   in
   apply direct(fold_0 &toplevel)
-    (fold/77 : _ -> imm tagged)
+    (fold/77 : val? * imm tagged * val? -> imm tagged)
       (`fn[fold_passes_function_on.ml:15,18--36]/81`, 0, Popaque/80)
       -> k/29 * error)
    where k/29 (result/78 : imm tagged) =

@@ -72,7 +72,7 @@
  (let region/120 = %begin_region () in
   let ghost_region/121 = %begin_ghost_region () in
   apply direct(class__0 &toplevel)
-    (class_/117 : _ -> imm tagged)
+    (class_/117 : val -> imm tagged)
       ($camlVar_twelve_mixed__const_block_0)
       -> k/72 * error
     where k/72 (apply_result/125 : imm tagged) =
@@ -81,10 +81,10 @@
           %block.[`2`].`toplevel`.local[region/120] (1, Popaque/140)
         in
         apply direct(class__0 &toplevel)
-          (class_/117 : _ -> imm tagged) (Pmakeblock/141) -> k/73 * error)
+          (class_/117 : val -> imm tagged) (Pmakeblock/141) -> k/73 * error)
          where k/73 (apply_result/126 : imm tagged) =
            (apply direct(class__0 &toplevel)
-              (class_/117 : _ -> imm tagged)
+              (class_/117 : val -> imm tagged)
                 ($camlVar_twelve_mixed__const_block_1)
                 -> k/74 * error
               where k/74 (apply_result/127 : imm tagged) =
@@ -93,7 +93,7 @@
                     %block.[`0`].`toplevel`.local[region/120] (Popaque/138)
                   in
                   apply direct(class__0 &toplevel)
-                    (class_/117 : _ -> imm tagged)
+                    (class_/117 : val -> imm tagged)
                       (Pmakeblock/139)
                       -> k/75 * error)
                    where k/75 (apply_result/128 : imm tagged) =

@@ -26,7 +26,8 @@ let $camlFun_local_three_mutual_to_inlined__first_const_0 = Block 0 () in
      where k/58 =
        let int_sub/153 = %int_barith.sub (k/145, 1) in
        apply direct(one_3 &my_alloc_region/147)
-         (one/151 ~ depth my_depth/148 -> next_depth/149 : _ -> imm tagged)
+         (one/151 ~ depth my_depth/148 -> next_depth/149
+          : imm tagged -> imm tagged)
            (int_sub/153)
            -> k/56 * k/57
  and code rec size(29)
@@ -51,7 +52,8 @@ let $camlFun_local_three_mutual_to_inlined__first_const_0 = Block 0 () in
      where k/63 =
        let int_sub/166 = %int_barith.sub (k/157, 1) in
        apply direct(two_4 &my_alloc_region/159)
-         (two/164 ~ depth my_depth/160 -> next_depth/161 : _ -> imm tagged)
+         (two/164 ~ depth my_depth/160 -> next_depth/161
+          : imm tagged -> imm tagged)
            (int_sub/166)
            -> k/60 * k/61
      where k/62 =
@@ -79,7 +81,8 @@ let $camlFun_local_three_mutual_to_inlined__first_const_0 = Block 0 () in
      where k/69 =
        let int_sub/179 = %int_barith.sub (k/170, 1) in
        apply direct(zero_2 &my_alloc_region/172)
-         (zero/176 ~ depth my_depth/173 -> next_depth/174 : _ -> imm tagged)
+         (zero/176 ~ depth my_depth/173 -> next_depth/174
+          : imm tagged -> imm tagged)
            (int_sub/179)
            -> k/66 * k/67
      where k/68 =
@@ -99,13 +102,19 @@ let $camlFun_local_three_mutual_to_inlined__first_const_0 = Block 0 () in
    with { n = n/183 }
    in
    apply direct(apply_0 &my_alloc_region/185)
-     (apply/188 : _ -> imm tagged) (two/191, 2) -> k/74 * k/73
+     (apply/188 : val? * imm tagged -> imm tagged)
+       (two/191, 2)
+       -> k/74 * k/73
      where k/74 (apply_result/192 : imm tagged) =
        (apply direct(apply_0 &my_alloc_region/185)
-          (apply/188 : _ -> imm tagged) (one/190, n/183) -> k/75 * k/73
+          (apply/188 : val? * imm tagged -> imm tagged)
+            (one/190, n/183)
+            -> k/75 * k/73
           where k/75 (apply_result/193 : imm tagged) =
             (apply direct(apply_0 &my_alloc_region/185)
-               (apply/188 : _ -> imm tagged) (zero/189, 4) -> k/76 * k/73
+               (apply/188 : val? * imm tagged -> imm tagged)
+                 (zero/189, 4)
+                 -> k/76 * k/73
                where k/76 (apply_result/194 : imm tagged) =
                  let int_add/195 =
                    %int_barith.add (apply_result/194, apply_result/193)

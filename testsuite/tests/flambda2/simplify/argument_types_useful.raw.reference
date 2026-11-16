@@ -20,7 +20,9 @@ let $camlArgument_types_useful__first_const_0 = Block 0 () in
        (my_closure)
    in
    apply direct(unbox_int_and_add_one_0 &my_alloc_region)
-     (unbox_int_and_add_one : _ -> imm tagged) (x) -> k1 * k2
+     (unbox_int_and_add_one : [ 0 of imm tagged ] -> imm tagged)
+       (x)
+       -> k1 * k2
  in
  let code size(11)
        box_int_then_call_unbox_int_and_add_one_wrapper_2 (x : imm tagged)
@@ -34,7 +36,7 @@ let $camlArgument_types_useful__first_const_0 = Block 0 () in
    in
    let Pmakeblock = %block.[`0`].my_alloc_region (x) in
    apply direct(unbox_int_and_add_one_wrapper_1 &my_alloc_region)
-     (unbox_int_and_add_one_wrapper : _ -> imm tagged)
+     (unbox_int_and_add_one_wrapper : val -> imm tagged)
        (Pmakeblock)
        -> k1 * k2
  in

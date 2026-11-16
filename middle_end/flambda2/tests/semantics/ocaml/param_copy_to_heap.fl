@@ -78,16 +78,26 @@ let $camlParam_copy_to_heap__first_const_0 = Block 0 () in
     with { x = x/260 }
     in
     apply direct(call1_2 &my_alloc_region/262)
-      (call1/267 : _ -> imm tagged) (f/283, 7) -> k/67 * k/65
+      (call1/267 : val? * imm tagged -> imm tagged) (f/283, 7) -> k/67 * k/65
       where k/67 (apply_result/284 : imm tagged) =
         (apply direct(read2_0 &my_alloc_region/262)
-           (read2/265 : _ -> imm tagged) (c/282) -> k/68 * k/65
+           (read2/265 : [ 0 of imm tagged * imm tagged ] -> imm tagged)
+             (c/282)
+             -> k/68 * k/65
            where k/68 (apply_result/285 : imm tagged) =
              (apply direct(read3_1 &my_alloc_region/262)
-                (read3/266 : _ -> imm tagged) (b/279) -> k/69 * k/65
+                (read3/266
+                 : [ 0 of imm tagged * imm tagged * imm tagged ] ->
+                   imm tagged
+                 )
+                  (b/279)
+                  -> k/69 * k/65
                 where k/69 (apply_result/286 : imm tagged) =
                   (apply direct(read2_0 &my_alloc_region/262)
-                     (read2/265 : _ -> imm tagged) (a/275) -> k/70 * k/65
+                     (read2/265
+                      : [ 0 of imm tagged * imm tagged ] -> imm tagged)
+                       (a/275)
+                       -> k/70 * k/65
                      where k/70 (apply_result/287 : imm tagged) =
                        let int_add/288 =
                          %int_barith.add (apply_result/287, apply_result/286)
@@ -133,15 +143,19 @@ let $camlParam_copy_to_heap__first_const_0 = Block 0 () in
       %block.[`0`].my_alloc_region/301.local[region/307] (x/299, int_add/312)
     in
     apply direct(copy_5 &my_alloc_region/301)
-      (copy/306 : _ -> [ 0 of imm tagged * imm tagged ])
+      (copy/306
+       : [ 0 of imm tagged * imm tagged ] -> [ 0 of imm tagged * imm tagged ]
+       )
         (p/313)
         -> k/76 * k/74
       where k/76 (q/314 : [ 0 of imm tagged * imm tagged ]) =
         (apply direct(noise_3 &my_alloc_region/301)
-           (noise/305 : _ -> imm tagged) (x/299) -> k/77 * k/74
+           (noise/305 : imm tagged -> imm tagged) (x/299) -> k/77 * k/74
            where k/77 (n/315 : imm tagged) =
              (apply direct(read2_0 &my_alloc_region/301)
-                (read2/304 : _ -> imm tagged) (p/313) -> k/78 * k/74
+                (read2/304 : [ 0 of imm tagged * imm tagged ] -> imm tagged)
+                  (p/313)
+                  -> k/78 * k/74
                 where k/78 (apply_result/316 : imm tagged) =
                   let Pmixedfield/317 = %block_load.[`1`] (q/314) in
                   let Pmixedfield/318 = %block_load.[`0`] (q/314) in
@@ -170,7 +184,7 @@ let $camlParam_copy_to_heap__first_const_0 = Block 0 () in
  with { read2_1 = read2/323; noise = noise/326; copy = copy/327 }
  in
  apply direct(body_6 &toplevel)
-   (body/328 : _ -> imm tagged) (10) -> k/79 * error
+   (body/328 : imm tagged -> imm tagged) (10) -> k/79 * error
    where k/79 (apply_result/329 : imm tagged) =
      ((let Popaque/333 = %opaque (3) in
        apply direct(body_6 &toplevel)

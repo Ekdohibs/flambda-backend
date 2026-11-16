@@ -10,7 +10,8 @@ let $camlExported_after_effect__first_const_0 = Block 0 () in
  in
  let x/39 = %opaque (1) in
  let f/40 = closure f_0 @f &toplevel in
- apply direct(f_0 &toplevel) (f/40 : _ -> imm tagged) (x/39) -> k/14 * error
+ apply direct(f_0 &toplevel)
+   (f/40 : imm tagged -> imm tagged) (x/39) -> k/14 * error
    where k/14 (z/41 : imm tagged) =
      let Pmakeblock/42 = %block.[`0`].`toplevel` (x/39, f/40, z/41) in
      cont k/11 (Pmakeblock/42))

@@ -51,7 +51,12 @@
      %project_value_slot.[partial_place].[place] (my_closure/158)
    in
    apply direct(place_0 &my_alloc_region/159)
-     (place/162 : _ -> imm tagged)
+     (place/162
+      : [ 0 | 0 of imm tagged ] *
+        imm tagged *
+        [ 0 | 0 of imm tagged ] *
+        imm tagged -> imm tagged
+      )
        (0, 9, param2/156, param3/157)
        -> k/58 * k/59
  in
@@ -67,7 +72,12 @@
      %project_value_slot.[partial_place_1].[place_1] (my_closure/165)
    in
    apply direct(place_0 &my_alloc_region/166)
-     (place/169 : _ -> imm tagged)
+     (place/169
+      : [ 0 | 0 of imm tagged ] *
+        imm tagged *
+        [ 0 | 0 of imm tagged ] *
+        imm tagged -> imm tagged
+      )
        ($camlOptional_between_positional__const_block_4,
         9,
         param2/163,
@@ -81,25 +91,33 @@
  let $camlOptional_between_positional__const_block_0 = Block 0 (5) in
  let place/170 = closure place_0 @place &toplevel in
  apply direct(place_0 &toplevel)
-   (place/170 : _ -> imm tagged) (0, 3, 0, 4) -> k/62 * error
+   (place/170
+    : imm tagged * imm tagged * imm tagged * imm tagged -> imm tagged)
+     (0, 3, 0, 4)
+     -> k/62 * error
    where k/62 (all_omitted/171 : imm tagged) =
      (apply direct(place_0 &toplevel)
-        (place/170 : _ -> imm tagged)
+        (place/170 : val * imm tagged * imm tagged * imm tagged -> imm tagged
+         )
           ($camlOptional_between_positional__const_block_0, 3, 0, 4)
           -> k/63 * error
         where k/63 (first_given/172 : imm tagged) =
           (apply direct(place_0 &toplevel)
-             (place/170 : _ -> imm tagged)
+             (place/170
+              : imm tagged * imm tagged * val * imm tagged -> imm tagged)
                (0, 3, $camlOptional_between_positional__const_block_1, 4)
                -> k/64 * error
              where k/64 (second_given/173 : imm tagged) =
                (apply direct(place_0 &toplevel)
-                  (place/170 : _ -> imm tagged)
+                  (place/170
+                   : imm tagged * imm tagged * val * imm tagged -> imm tagged
+                   )
                     (0, 3, $camlOptional_between_positional__const_block_1, 4)
                     -> k/65 * error
                   where k/65 (second_given_early/174 : imm tagged) =
                     (apply direct(place_0 &toplevel)
-                       (place/170 : _ -> imm tagged)
+                       (place/170
+                        : val * imm tagged * val * imm tagged -> imm tagged)
                          ($camlOptional_between_positional__const_block_2,
                           3,
                           $camlOptional_between_positional__const_block_3,
@@ -113,12 +131,14 @@
                            cont k/67 (partial_place/183))
                             where k/67 (after_first/176 : val) =
                               (apply direct(partial_place_1 &toplevel)
-                                 (after_first/176 : _ -> imm tagged)
+                                 (after_first/176
+                                  : imm tagged * imm tagged -> imm tagged)
                                    (0, 4)
                                    -> k/68 * error
                                  where k/68 (rest_plain/177 : imm tagged) =
                                    (apply direct(partial_place_1 &toplevel)
-                                      (after_first/176 : _ -> imm tagged)
+                                      (after_first/176
+                                       : val * imm tagged -> imm tagged)
                                         ($camlOptional_between_positional__const_block_0,
                                          4)
                                         -> k/69 * error
@@ -138,7 +158,9 @@
                                                      direct(partial_place_2
                                                      &toplevel)
                                                 (after_first_with_a/179
-                                                 : _ -> imm tagged)
+                                                 : val * imm tagged ->
+                                                   imm tagged
+                                                 )
                                                   ($camlOptional_between_positional__const_block_5,
                                                    1)
                                                   -> k/71 * error

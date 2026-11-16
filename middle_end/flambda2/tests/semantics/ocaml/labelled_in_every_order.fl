@@ -35,43 +35,62 @@ let $camlLabelled_in_every_order__first_const_0 = Block 0 () in
  let t/145 = %opaque (2) in
  let u/146 = %opaque (3) in
  apply direct(weigh_0 &toplevel)
-   (weigh/142 : _ -> imm tagged) (h/144, t/145, u/146) -> k/42 * error
+   (weigh/142 : imm tagged * imm tagged * imm tagged -> imm tagged)
+     (h/144, t/145, u/146)
+     -> k/42 * error
    where k/42 (htu/147 : imm tagged) =
      (apply direct(weigh_0 &toplevel)
-        (weigh/142 : _ -> imm tagged) (h/144, t/145, u/146) -> k/43 * error
+        (weigh/142 : imm tagged * imm tagged * imm tagged -> imm tagged)
+          (h/144, t/145, u/146)
+          -> k/43 * error
         where k/43 (hut/148 : imm tagged) =
           (apply direct(weigh_0 &toplevel)
-             (weigh/142 : _ -> imm tagged)
+             (weigh/142 : imm tagged * imm tagged * imm tagged -> imm tagged)
                (h/144, t/145, u/146)
                -> k/44 * error
              where k/44 (thu/149 : imm tagged) =
                (apply direct(weigh_0 &toplevel)
-                  (weigh/142 : _ -> imm tagged)
+                  (weigh/142
+                   : imm tagged * imm tagged * imm tagged -> imm tagged)
                     (h/144, t/145, u/146)
                     -> k/45 * error
                   where k/45 (tuh/150 : imm tagged) =
                     (apply direct(weigh_0 &toplevel)
-                       (weigh/142 : _ -> imm tagged)
+                       (weigh/142
+                        : imm tagged * imm tagged * imm tagged -> imm tagged)
                          (h/144, t/145, u/146)
                          -> k/46 * error
                        where k/46 (uht/151 : imm tagged) =
                          (apply direct(weigh_0 &toplevel)
-                            (weigh/142 : _ -> imm tagged)
+                            (weigh/142
+                             : imm tagged * imm tagged * imm tagged ->
+                               imm tagged
+                             )
                               (h/144, t/145, u/146)
                               -> k/47 * error
                             where k/47 (uth/152 : imm tagged) =
                               (apply direct(weigh_kept_1 &toplevel)
-                                 (weigh_kept/143 : _ -> imm tagged)
+                                 (weigh_kept/143
+                                  : imm tagged * imm tagged * imm tagged ->
+                                    imm tagged
+                                  )
                                    (h/144, t/145, u/146)
                                    -> k/48 * error
                                  where k/48 (kept_htu/153 : imm tagged) =
                                    (apply direct(weigh_kept_1 &toplevel)
-                                      (weigh_kept/143 : _ -> imm tagged)
+                                      (weigh_kept/143
+                                       : imm tagged * imm tagged * imm tagged ->
+                                         imm tagged
+                                       )
                                         (h/144, t/145, u/146)
                                         -> k/49 * error
                                       where k/49 (kept_hut/154 : imm tagged) =
                                         (apply direct(weigh_kept_1 &toplevel)
-                                           (weigh_kept/143 : _ -> imm tagged)
+                                           (weigh_kept/143
+                                            : imm tagged *
+                                              imm tagged *
+                                              imm tagged -> imm tagged
+                                            )
                                              (h/144, t/145, u/146)
                                              -> k/50 * error
                                            where k/50
@@ -80,7 +99,10 @@ let $camlLabelled_in_every_order__first_const_0 = Block 0 () in
                                                      direct(weigh_kept_1
                                                      &toplevel)
                                                 (weigh_kept/143
-                                                 : _ -> imm tagged)
+                                                 : imm tagged *
+                                                   imm tagged *
+                                                   imm tagged -> imm tagged
+                                                 )
                                                   (h/144, t/145, u/146)
                                                   -> k/51 * error
                                                 where k/51
@@ -90,7 +112,11 @@ let $camlLabelled_in_every_order__first_const_0 = Block 0 () in
                                                           direct(weigh_kept_1
                                                           &toplevel)
                                                      (weigh_kept/143
-                                                      : _ -> imm tagged)
+                                                      : imm tagged *
+                                                        imm tagged *
+                                                        imm tagged ->
+                                                        imm tagged
+                                                      )
                                                        (h/144, t/145, u/146)
                                                        -> k/52 * error
                                                      where k/52
@@ -100,7 +126,11 @@ let $camlLabelled_in_every_order__first_const_0 = Block 0 () in
                                                                direct(weigh_kept_1
                                                                &toplevel)
                                                           (weigh_kept/143
-                                                           : _ -> imm tagged)
+                                                           : imm tagged *
+                                                             imm tagged *
+                                                             imm tagged ->
+                                                             imm tagged
+                                                           )
                                                             (h/144,
                                                              t/145,
                                                              u/146)

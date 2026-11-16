@@ -34,7 +34,7 @@
             let int_add/57 = %int_barith.add (i/49, 1) in
             apply direct(sum_0 &my_alloc_region/52)
               (my_closure/51 ~ depth my_depth/53 -> next_depth/54
-               : _ -> imm tagged)
+               : imm array * imm tagged * imm tagged -> imm tagged)
                 (a/48, int_add/57, int_add/56)
                 -> k/22 * k/23)
  in
@@ -42,7 +42,9 @@
  let sum/64 = closure sum_0 @sum &toplevel in
  (let Popaque/67 = %opaque ($camlArray_length_twice__empty_array_2) in
   apply direct(sum_0 &toplevel)
-    (sum/64 : _ -> imm tagged) (Popaque/67, 0, 100) -> k/29 * error)
+    (sum/64 : val? * imm tagged * imm tagged -> imm tagged)
+      (Popaque/67, 0, 100)
+      -> k/29 * error)
    where k/29 (result/65 : imm tagged) =
      let Pmakeblock/66 = %block.[`0`].`toplevel` (result/65) in
      cont k/21 (Pmakeblock/66))

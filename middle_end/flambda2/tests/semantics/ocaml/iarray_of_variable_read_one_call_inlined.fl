@@ -30,7 +30,8 @@ in
  let make/87 = closure make_0 @make &toplevel in
  let first/88 = closure first_1 @first &toplevel in
  let g/89 = closure g_2 @g &toplevel in
- apply direct(g_2 &toplevel) (g/89 : _ -> imm tagged) (3) -> k/32 * error
+ apply direct(g_2 &toplevel)
+   (g/89 : imm tagged -> imm tagged) (3) -> k/32 * error
    where k/32 (a/90 : imm tagged) =
      ((let Popaque/96 = %opaque (4) in
        apply direct(g_2 &toplevel) inlined(never)
@@ -41,7 +42,7 @@ in
               (make/87 : _ -> imm array) (Popaque/95) -> k/35 * error)
              where k/35 (apply_result/94 : imm array) =
                apply direct(first_1 &toplevel)
-                 (first/88 : _ -> imm tagged)
+                 (first/88 : imm array -> imm tagged)
                    (apply_result/94)
                    -> k/34 * error
              where k/34 (n/92 : imm tagged) =

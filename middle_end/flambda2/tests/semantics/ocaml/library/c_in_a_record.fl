@@ -55,12 +55,14 @@
  let weight/98 = closure weight_1 @weight &toplevel in
  (let Popaque/102 = %opaque (5) in
   apply direct(make_0 &toplevel)
-    (make/97 : _ -> [ 0 of imm tagged * imm array ])
+    (make/97 : imm tagged * val? -> [ 0 of imm tagged * imm array ])
       (2, Popaque/102)
       -> k/41 * error)
    where k/41 (apply_result/101 : [ 0 of imm tagged * imm array ]) =
      apply direct(weight_1 &toplevel)
-       (weight/98 : _ -> imm tagged) (apply_result/101) -> k/40 * error
+       (weight/98 : [ 0 of imm tagged * imm array ] -> imm tagged)
+         (apply_result/101)
+         -> k/40 * error
    where k/40 (w/99 : imm tagged) =
      let Pmakeblock/100 = %block.[`0`].`toplevel` (w/99) in
      cont k/29 (Pmakeblock/100))

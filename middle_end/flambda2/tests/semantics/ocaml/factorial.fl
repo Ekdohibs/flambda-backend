@@ -17,7 +17,7 @@ let $camlFactorial__first_const_0 = Block 0 () in
        ((let int_sub/44 = %int_barith.sub (n/37, 1) in
          apply direct(factorial_0 &my_alloc_region/39)
            (my_closure/38 ~ depth my_depth/40 -> next_depth/41
-            : _ -> imm tagged)
+            : imm tagged -> imm tagged)
              (int_sub/44)
              -> k/21 * k/19)
           where k/21 (apply_result/42 : imm tagged) =

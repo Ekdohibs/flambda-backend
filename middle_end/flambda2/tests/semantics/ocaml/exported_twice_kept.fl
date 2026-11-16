@@ -26,7 +26,9 @@ let $camlExported_twice_kept__first_const_0 = Block 0 () in
    let twice/79 = %project_value_slot.[add2].[twice] (my_closure/75) in
    let succ/80 = %project_value_slot.[add2].[`succ`] (my_closure/75) in
    apply direct(twice_0 &my_alloc_region/76)
-     (twice/79 : _ -> imm tagged) (succ/80, x/74) -> k/25 * k/26
+     (twice/79 : val? * imm tagged -> imm tagged)
+       (succ/80, x/74)
+       -> k/25 * k/26
  in
  let twice/81 = closure twice_0 @twice &toplevel in
  let succ/82 = closure succ_1 @`succ` &toplevel in

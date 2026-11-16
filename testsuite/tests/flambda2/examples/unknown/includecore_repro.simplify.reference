@@ -97,7 +97,7 @@ in
 let $camlIncludecore_repro__f_2 = closure f_0_1 @f &toplevel in
 apply direct(f_0_1 &toplevel)
   ($camlIncludecore_repro__f_2
-   : _ -> [ 0 | 0 of [ 0 of imm tagged * imm tagged ] ])
+   : val * val -> [ 0 | 0 of [ 0 of imm tagged * imm tagged ] ])
     ($camlIncludecore_repro__const_block_1,
      $camlIncludecore_repro__const_block_1)
     -> k1 * error

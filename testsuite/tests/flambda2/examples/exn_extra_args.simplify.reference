@@ -28,7 +28,7 @@ let code loopify(never) size(49) newer_version_of(ld_conf_contents_1)
                          [ 0 | 0 of val * [ 0 | 0 of val * val ] ]) =
             let path_unboxed0_1 = path_unboxed0 in
             (apply direct(input_line_0_1 &my_alloc_region)
-               ($camlExn_extra_args__input_line_1 : _ -> val)
+               ($camlExn_extra_args__input_line_1 : imm tagged -> val)
                  (0)
                  -> k7 * k5 (path_unboxed0 val?)
                where k7 (return_val0 : val) =

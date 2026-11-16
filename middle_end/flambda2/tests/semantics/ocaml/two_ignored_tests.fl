@@ -23,7 +23,7 @@ let $camlTwo_ignored_tests__first_const_0 = Block 0 () in
        cont k/36
      where k/36 =
        apply direct(twice_0 &my_alloc_region/75)
-         (twice/78 : _ -> imm tagged) (x/73) -> k/32 * k/31
+         (twice/78 : imm tagged -> imm tagged) (x/73) -> k/32 * k/31
      where k/32 (staticcatch_result/79 : imm tagged) =
        ((let untagged/83 = %untag_imm (d/72) in
          switch untagged/83
@@ -34,7 +34,9 @@ let $camlTwo_ignored_tests__first_const_0 = Block 0 () in
           where k/34 =
             let int_add/82 = %int_barith.add (x/73, 1) in
             apply direct(twice_0 &my_alloc_region/75)
-              (twice/78 : _ -> imm tagged) (int_add/82) -> k/33 * k/31
+              (twice/78 : imm tagged -> imm tagged)
+                (int_add/82)
+                -> k/33 * k/31
           where k/33 (staticcatch_result/80 : imm tagged) =
             let int_add/81 = %int_barith.add (x/73, 1) in
             cont k/30 (int_add/81))
@@ -46,7 +48,7 @@ let $camlTwo_ignored_tests__first_const_0 = Block 0 () in
  (let Popaque/89 = %opaque (0) in
   let Popaque/90 = %opaque (1) in
   apply direct(ignored_1 &toplevel)
-    (ignored/86 : _ -> imm tagged)
+    (ignored/86 : val? * val? * imm tagged -> imm tagged)
       (Popaque/90, Popaque/89, 3)
       -> k/38 * error)
    where k/38 (result/87 : imm tagged) =

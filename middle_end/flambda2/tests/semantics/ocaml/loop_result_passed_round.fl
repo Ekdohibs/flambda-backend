@@ -65,7 +65,7 @@ let $camlLoop_result_passed_round__first_const_0 = Block 0 () in
             let int_sub/86 = %int_barith.sub (n/79, 1) in
             apply direct(settle_0 &my_alloc_region/82)
               (my_closure/81 ~ depth my_depth/83 -> next_depth/84
-               : _ -> imm tagged)
+               : imm tagged * imm tagged -> imm tagged)
                 (int_sub/86, staticcatch_result/85)
                 -> k/34 * k/35)
  in

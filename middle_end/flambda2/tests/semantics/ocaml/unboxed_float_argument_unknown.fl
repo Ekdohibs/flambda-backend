@@ -10,7 +10,8 @@ let $camlUnboxed_float_argument_unknown__first_const_0 = Block 0 () in
  in
  let f/33 = closure f_0 @f &toplevel in
  (let Popaque/36 = %opaque (f/33) in
-  apply &toplevel Popaque/36 (0x1.8p+0) -> k/14 * error)
+  apply unknown_arity &toplevel
+    (Popaque/36 : float -> float boxed) (0x1.8p+0) -> k/14 * error)
    where k/14 (result/34 : float boxed) =
      let Pmakeblock/35 = %block.[`0`].`toplevel` (result/34) in
      cont k/11 (Pmakeblock/35))

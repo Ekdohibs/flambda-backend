@@ -15,11 +15,15 @@ let $camlJoin_phys_equal_arms__first_const_0 = Block 0 () in
  let either/48 = closure either_0 @either &toplevel in
  (let Popaque/54 = %opaque (3) in
   apply direct(either_0 &toplevel)
-    (either/48 : _ -> imm tagged) (Popaque/54, 4) -> k/16 * error)
+    (either/48 : val? * imm tagged -> imm tagged)
+      (Popaque/54, 4)
+      -> k/16 * error)
    where k/16 (apply_result/49 : imm tagged) =
      ((let Popaque/53 = %opaque (3) in
        apply direct(either_0 &toplevel)
-         (either/48 : _ -> imm tagged) (Popaque/53, 3) -> k/17 * error)
+         (either/48 : val? * imm tagged -> imm tagged)
+           (Popaque/53, 3)
+           -> k/17 * error)
         where k/17 (apply_result/50 : imm tagged) =
           let result/51 = %int_barith.add (apply_result/50, apply_result/49)
           in

@@ -57,7 +57,12 @@ let $camlLoad_through_join__first_const_0 = Block 0 () in
                 [ 0 of imm tagged |1 of imm tagged * imm tagged
                 |2 of imm tagged * imm tagged * imm tagged ]) =
        apply direct(sum_0 &my_alloc_region/106)
-         (sum/109 : _ -> imm tagged) (v/110) -> k/39 * k/40
+         (sum/109
+          : [ 0 of imm tagged |1 of imm tagged * imm tagged
+            |2 of imm tagged * imm tagged * imm tagged ] -> imm tagged
+          )
+           (v/110)
+           -> k/39 * k/40
  in
  let sum/114 = closure sum_0 @sum &toplevel in
  let f/115 = closure f_1 @f &toplevel with { sum = sum/114 } in

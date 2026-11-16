@@ -81,28 +81,31 @@ let $camlTwo_options_matched__first_const_0 = Block 0 () in
  (let Popaque/152 = %opaque (0) in
   let Popaque/153 = %opaque (0) in
   apply direct(add_options_0 &toplevel)
-    (add_options/137 : _ -> imm tagged)
+    (add_options/137 : val? * val? * imm tagged * imm tagged -> imm tagged)
       (Popaque/153, Popaque/152, 1000, 2000)
       -> k/65 * error)
    where k/65 (apply_result/138 : imm tagged) =
      ((let Popaque/150 = %opaque (1) in
        let Popaque/151 = %opaque (0) in
        apply direct(add_options_0 &toplevel)
-         (add_options/137 : _ -> imm tagged)
+         (add_options/137
+          : val? * val? * imm tagged * imm tagged -> imm tagged)
            (Popaque/151, Popaque/150, 100, 200)
            -> k/66 * error)
         where k/66 (apply_result/139 : imm tagged) =
           ((let Popaque/148 = %opaque (0) in
             let Popaque/149 = %opaque (1) in
             apply direct(add_options_0 &toplevel)
-              (add_options/137 : _ -> imm tagged)
+              (add_options/137
+               : val? * val? * imm tagged * imm tagged -> imm tagged)
                 (Popaque/149, Popaque/148, 10, 20)
                 -> k/67 * error)
              where k/67 (apply_result/140 : imm tagged) =
                ((let Popaque/146 = %opaque (1) in
                  let Popaque/147 = %opaque (1) in
                  apply direct(add_options_0 &toplevel)
-                   (add_options/137 : _ -> imm tagged)
+                   (add_options/137
+                    : val? * val? * imm tagged * imm tagged -> imm tagged)
                      (Popaque/147, Popaque/146, 1, 2)
                      -> k/68 * error)
                   where k/68 (apply_result/141 : imm tagged) =

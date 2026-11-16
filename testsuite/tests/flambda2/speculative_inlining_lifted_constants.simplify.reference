@@ -14,7 +14,7 @@ in
 let zero = %opaque (0) in
 apply direct(f_0_1 &toplevel)
   ($camlSpeculative_inlining_lifted_constants__f_1
-   : _ -> [ 0 of imm tagged * imm tagged ])
+   : imm tagged -> [ 0 of imm tagged * imm tagged ])
     (zero)
     -> k * error
   where k (v0 : [ 0 of imm tagged * imm tagged ]) =
@@ -32,7 +32,7 @@ apply direct(f_0_1 &toplevel)
       in
       apply direct(f_0_1 &my_alloc_region)
         ($camlSpeculative_inlining_lifted_constants__f_1
-         : _ -> [ 0 of imm tagged * imm tagged ])
+         : imm tagged -> [ 0 of imm tagged * imm tagged ])
           (one_1)
           -> k * k1
       with { one = one }

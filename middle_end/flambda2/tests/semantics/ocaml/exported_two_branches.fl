@@ -18,7 +18,7 @@ let $camlExported_two_branches__first_const_0 = Block 0 () in
    let add_a/78 = %project_value_slot.[add_b].[add_a] (my_closure/74) in
    let b/79 = %project_value_slot.[add_b].[b] (my_closure/74) in
    apply direct(add_a_0 &my_alloc_region/75)
-     (add_a/78 : _ -> imm tagged) (x/73) -> k/24 * k/23
+     (add_a/78 : imm tagged -> imm tagged) (x/73) -> k/24 * k/23
      where k/24 (apply_result/80 : imm tagged) =
        let int_add/81 = %int_barith.add (apply_result/80, b/79) in
        cont k/22 (int_add/81)

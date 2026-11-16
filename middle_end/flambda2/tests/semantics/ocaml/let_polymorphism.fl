@@ -16,12 +16,12 @@
  (let region/60 = %begin_region () in
   let ghost_region/61 = %begin_ghost_region () in
   apply direct(first_0 &toplevel &region/60 &ghost_region/61)
-    (first/57 : _ -> val)
+    (first/57 : val -> val)
       ($camlLet_polymorphism__const_block_1)
       -> k/22 * error
     where k/22 (apply_result/65 : val) =
       (apply direct(first_0 &toplevel &region/60 &ghost_region/61)
-         (first/57 : _ -> imm tagged)
+         (first/57 : val -> imm tagged)
            ($camlLet_polymorphism__const_block_2)
            -> k/23 * error
          where k/23 (apply_result/66 : imm tagged) =

@@ -40,7 +40,7 @@
  let $camlData_variant_argument__const_block_0 = Block 1 (4) in
  let size/80 = closure size_0 @`size` &toplevel in
  apply direct(size_0 &toplevel)
-   (size/80 : _ -> imm tagged)
+   (size/80 : val -> imm tagged)
      ($camlData_variant_argument__const_block_0)
      -> k/32 * error
    where k/32 (apply_result/81 : imm tagged) =
@@ -55,7 +55,7 @@
               (size/80 : _ -> imm tagged) (Popaque/89) -> k/34 * error)
              where k/34 (apply_result/83 : imm tagged) =
                (apply direct(size_0 &toplevel)
-                  (size/80 : _ -> imm tagged)
+                  (size/80 : val -> imm tagged)
                     ($camlData_variant_argument__const_block_4)
                     -> k/35 * error
                   where k/35 (apply_result/84 : imm tagged) =

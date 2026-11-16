@@ -183,7 +183,9 @@ let $camlTwo_flags_set_in_loop__first_const_0 = Block 0 () in
  let two_flags/208 = closure two_flags_0 @two_flags &toplevel in
  (let Popaque/211 = %opaque (5) in
   apply direct(two_flags_0 &toplevel)
-    (two_flags/208 : _ -> imm tagged) (Popaque/211, 3) -> k/68 * error)
+    (two_flags/208 : val? * imm tagged -> imm tagged)
+      (Popaque/211, 3)
+      -> k/68 * error)
    where k/68 (result/209 : imm tagged) =
      let Pmakeblock/210 = %block.[`0`].`toplevel` (two_flags/208, result/209)
      in

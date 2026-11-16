@@ -17,12 +17,12 @@ let $camlSpeculative_inlining_lifted_constants__first_const_0 = Block 0 () in
    let f = %project_value_slot.[v1].[f] (my_closure) in
    let one = %project_value_slot.[v1].[one] (my_closure) in
    apply direct(f_0 &my_alloc_region)
-     (f : _ -> [ 0 of imm tagged * imm tagged ]) (one) -> k1 * k2
+     (f : imm tagged -> [ 0 of imm tagged * imm tagged ]) (one) -> k1 * k2
  in
  let f = closure f_0 @f &toplevel in
  let zero = %opaque (0) in
  apply direct(f_0 &toplevel)
-   (f : _ -> [ 0 of imm tagged * imm tagged ]) (zero) -> k1 * error
+   (f : imm tagged -> [ 0 of imm tagged * imm tagged ]) (zero) -> k1 * error
    where k1 (v0 : [ 0 of imm tagged * imm tagged ]) =
      let one = %opaque (1) in
      let v1 = closure v1_1 @v1 &toplevel with { f = f; one = one } in

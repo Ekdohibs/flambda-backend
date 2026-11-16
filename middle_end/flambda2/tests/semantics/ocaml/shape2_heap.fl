@@ -44,10 +44,11 @@ let $camlShape2_heap__first_const_0 = Block 0 () in
                  cont k/32 (int_add/60)))
  in
  let f/71 = closure f_0 @f &toplevel in
- apply direct(f_0 &toplevel) (f/71 : _ -> imm tagged) (0, 4) -> k/43 * error
+ apply direct(f_0 &toplevel)
+   (f/71 : imm tagged * imm tagged -> imm tagged) (0, 4) -> k/43 * error
    where k/43 (apply_result/72 : imm tagged) =
      (apply direct(f_0 &toplevel)
-        (f/71 : _ -> imm tagged) (1, 3) -> k/44 * error
+        (f/71 : imm tagged * imm tagged -> imm tagged) (1, 3) -> k/44 * error
         where k/44 (apply_result/73 : imm tagged) =
           let result/74 = %int_barith.add (apply_result/73, apply_result/72)
           in

@@ -28,7 +28,10 @@ let $camlMatch_pair_option_built__first_const_0 = Block 0 () in
      %project_value_slot.[width].[ordered_pair] (my_closure/98)
    in
    apply direct(ordered_pair_0 &my_alloc_region/99)
-     (ordered_pair/102 : _ -> [ 0 | 0 of [ 0 of imm tagged * imm tagged ] ])
+     (ordered_pair/102
+      : imm tagged * imm tagged ->
+        [ 0 | 0 of [ 0 of imm tagged * imm tagged ] ]
+      )
        (a/96, b/97)
        -> k/34 * k/33
      where k/34

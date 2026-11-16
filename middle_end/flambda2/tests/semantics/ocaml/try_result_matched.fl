@@ -32,7 +32,7 @@ let $camlTry_result_matched__first_const_0 = Block 0 () in
     cont k/50 push(k/48)
       where k/50 =
         (apply direct(positive_0 &my_alloc_region/100)
-           (positive/103 : _ -> imm tagged) (x/98) -> k/51 * k/48
+           (positive/103 : imm tagged -> imm tagged) (x/98) -> k/51 * k/48
            where k/51 (apply_result/121 : imm tagged) =
              let Pmakeblock/122 =
                %block.[`0`].my_alloc_region/100.local[region/104]

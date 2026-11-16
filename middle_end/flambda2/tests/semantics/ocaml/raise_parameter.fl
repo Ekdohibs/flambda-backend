@@ -19,7 +19,7 @@ let $camlRaise_parameter__first_const_0 = Block 0 () in
    cont k/26 push(k/24)
      where k/26 =
        apply direct(throw_0 &my_alloc_region/57)
-         (throw/60 : _ -> imm tagged) (e/55) -> k/25 * k/24
+         (throw/60 : val -> imm tagged) (e/55) -> k/25 * k/24
      where k/25 (body_result/66 : imm tagged) =
        cont k/22 pop(k/24) (body_result/66)
      where k/24 exn (exn/63 : val) =

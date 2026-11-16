@@ -17,7 +17,8 @@ let $camlParity__first_const_0 = Block 0 () in
      where k/24 =
        let int_sub/62 = %int_barith.sub (n/56, 1) in
        apply direct(odd_1 &my_alloc_region/58)
-         (odd/61 ~ depth my_depth/59 -> next_depth/60 : _ -> imm tagged)
+         (odd/61 ~ depth my_depth/59 -> next_depth/60
+          : imm tagged -> imm tagged)
            (int_sub/62)
            -> k/22 * k/23
  and code rec size(23)
@@ -38,7 +39,8 @@ let $camlParity__first_const_0 = Block 0 () in
      where k/28 =
        let int_sub/72 = %int_barith.sub (n/66, 1) in
        apply direct(even_0 &my_alloc_region/68)
-         (even/71 ~ depth my_depth/69 -> next_depth/70 : _ -> imm tagged)
+         (even/71 ~ depth my_depth/69 -> next_depth/70
+          : imm tagged -> imm tagged)
            (int_sub/72)
            -> k/26 * k/27
  in

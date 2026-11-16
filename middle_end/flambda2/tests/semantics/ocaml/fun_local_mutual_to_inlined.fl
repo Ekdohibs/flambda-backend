@@ -25,7 +25,8 @@ let $camlFun_local_mutual_to_inlined__first_const_0 = Block 0 () in
      where k/44 =
        let int_sub/116 = %int_barith.sub (k/109, 1) in
        apply direct(up_3 &my_alloc_region/111)
-         (up/115 ~ depth my_depth/112 -> next_depth/113 : _ -> imm tagged)
+         (up/115 ~ depth my_depth/112 -> next_depth/113
+          : imm tagged -> imm tagged)
            (int_sub/116)
            -> k/42 * k/43
  and code rec size(28)
@@ -49,7 +50,8 @@ let $camlFun_local_mutual_to_inlined__first_const_0 = Block 0 () in
      where k/49 =
        let int_sub/128 = %int_barith.sub (k/120, 1) in
        apply direct(down_2 &my_alloc_region/122)
-         (down/126 ~ depth my_depth/123 -> next_depth/124 : _ -> imm tagged)
+         (down/126 ~ depth my_depth/123 -> next_depth/124
+          : imm tagged -> imm tagged)
            (int_sub/128)
            -> k/46 * k/47
      where k/48 =
@@ -68,10 +70,14 @@ let $camlFun_local_mutual_to_inlined__first_const_0 = Block 0 () in
    with { n = n/132 }
    in
    apply direct(apply_0 &my_alloc_region/134)
-     (apply/137 : _ -> imm tagged) (up/139, n/132) -> k/54 * k/53
+     (apply/137 : val? * imm tagged -> imm tagged)
+       (up/139, n/132)
+       -> k/54 * k/53
      where k/54 (apply_result/140 : imm tagged) =
        (apply direct(apply_0 &my_alloc_region/134)
-          (apply/137 : _ -> imm tagged) (down/138, 3) -> k/55 * k/53
+          (apply/137 : val? * imm tagged -> imm tagged)
+            (down/138, 3)
+            -> k/55 * k/53
           where k/55 (apply_result/141 : imm tagged) =
             let int_add/142 =
               %int_barith.add (apply_result/141, apply_result/140)

@@ -25,7 +25,7 @@ let $camlNested_tuple__first_const_0 = Block 0 () in
      %block.[`0`].`toplevel`.local[region/65] (Pmakeblock/71, 3)
    in
    apply direct(sum_0 &toplevel)
-     (sum/62 : _ -> imm tagged) (Pmakeblock/72) -> k/17 * error)
+     (sum/62 : val -> imm tagged) (Pmakeblock/72) -> k/17 * error)
     where k/17 (region_return/67 : imm tagged) =
       let unit/68 = %end_region (region/65) in
       let unit/69 = %end_ghost_region (ghost_region/66) in

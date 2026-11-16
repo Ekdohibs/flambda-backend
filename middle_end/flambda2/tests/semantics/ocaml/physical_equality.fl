@@ -11,7 +11,7 @@ let $camlPhysical_equality__first_const_0 = Block 0 () in
  in
  let same/47 = closure same_0 @same &toplevel in
  apply direct(same_0 &toplevel)
-   (same/47 : _ -> imm tagged) (0, 0) -> k/28 * error
+   (same/47 : imm tagged * imm tagged -> imm tagged) (0, 0) -> k/28 * error
    where k/28 (apply_result/53 : imm tagged) =
      ((let untagged/54 = %untag_imm (apply_result/53) in
        switch untagged/54
@@ -30,7 +30,9 @@ let $camlPhysical_equality__first_const_0 = Block 0 () in
            cont k/26)
         where k/26 =
           apply direct(same_0 &toplevel)
-            (same/47 : _ -> imm tagged) (2, 2) -> k/24 * error)
+            (same/47 : imm tagged * imm tagged -> imm tagged)
+              (2, 2)
+              -> k/24 * error)
    where k/24 (result/48 : imm tagged) =
      let Pmakeblock/49 = %block.[`0`].`toplevel` (result/48) in
      cont k/21 (Pmakeblock/49))

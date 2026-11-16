@@ -33,7 +33,9 @@ let $camlProbed__first_const_0 = Block 0 () in
     apply
            direct(probe_handler_bump_2
            &my_alloc_region/86 &region/90 &ghost_region/91) inlined(never)
-      (probe_handler_bump/95 : _ -> unit) (note/89, x/84) -> k/32 * k/30
+      (probe_handler_bump/95 : val? * imm tagged -> unit)
+        (note/89, x/84)
+        -> k/32 * k/30
       where k/32 =
         let int_add/96 = %int_barith.add (x/84, 1) in
         cont k/31 (int_add/96))

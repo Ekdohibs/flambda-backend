@@ -34,7 +34,9 @@
  (let Popaque/86 = %opaque (0) in
   let Pmakearray/87 = %array.mut.`toplevel` (Popaque/86) in
   apply direct(pick_0 &toplevel)
-    (pick/78 : _ -> imm tagged) (Pmakearray/87, 1) -> k/28 * error)
+    (pick/78 : val * imm tagged -> imm tagged)
+      (Pmakearray/87, 1)
+      -> k/28 * error)
    where k/28 (apply_result/79 : imm tagged) =
      ((let Popaque/83 = %opaque (0) in
        let Popaque/84 =
@@ -42,7 +44,9 @@
        in
        let Pmakearray/85 = %array.mut.`toplevel` (Popaque/84, Popaque/83) in
        apply direct(pick_0 &toplevel)
-         (pick/78 : _ -> imm tagged) (Pmakearray/85, 9) -> k/29 * error)
+         (pick/78 : val * imm tagged -> imm tagged)
+           (Pmakearray/85, 9)
+           -> k/29 * error)
         where k/29 (apply_result/80 : imm tagged) =
           let result/81 = %int_barith.add (apply_result/80, apply_result/79)
           in

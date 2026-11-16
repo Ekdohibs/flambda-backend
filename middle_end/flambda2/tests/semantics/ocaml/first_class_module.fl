@@ -19,7 +19,9 @@ let $camlFirst_class_module__first_const_0 = Block 0 () in
         where k/20 (apply_result/48 : imm tagged) =
           let Pfield/49 = %block_load.[`1`] (packed/45) in
           apply direct(step_0 &toplevel)
-            (Pfield/49 : _ -> imm tagged) (apply_result/48) -> k/19 * error
+            (Pfield/49 : imm tagged -> imm tagged)
+              (apply_result/48)
+              -> k/19 * error
         where k/19 (result/46 : imm tagged) =
           let Pmakeblock/47 = %block.[`0`].`toplevel` (result/46) in
           cont k/15 (Pmakeblock/47)))

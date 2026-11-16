@@ -16,11 +16,13 @@
    where k/20 (By_two/46 : val) =
      ((let Pfield/51 = %block_load.[`0`] (By_two/46) in
        apply direct(next_0 &toplevel)
-         (Pfield/51 : _ -> imm tagged) (1) -> k/22 * error)
+         (Pfield/51 : imm tagged -> imm tagged) (1) -> k/22 * error)
         where k/22 (apply_result/49 : imm tagged) =
           let Pfield/50 = %block_load.[`0`] (By_two/46) in
           apply direct(next_0 &toplevel)
-            (Pfield/50 : _ -> imm tagged) (apply_result/49) -> k/21 * error
+            (Pfield/50 : imm tagged -> imm tagged)
+              (apply_result/49)
+              -> k/21 * error
         where k/21 (result/47 : imm tagged) =
           let Pmakeblock/48 = %block.[`0`].`toplevel` (result/47) in
           cont k/17 (Pmakeblock/48)))

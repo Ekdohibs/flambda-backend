@@ -16,7 +16,9 @@ let $camlPartial_application__first_const_0 = Block 0 () in
    let next_depth/66 = rec_info (succ my_depth/65) in
    let add/67 = %project_value_slot.[partial_add].[add] (my_closure/63) in
    apply direct(add_0 &my_alloc_region/64)
-     (add/67 : _ -> imm tagged) (1, param1/62) -> k/22 * k/23
+     (add/67 : imm tagged * imm tagged -> imm tagged)
+       (1, param1/62)
+       -> k/22 * k/23
  in
  let add/68 = closure add_0 @add &toplevel in
  (let region/71 = %begin_region () in

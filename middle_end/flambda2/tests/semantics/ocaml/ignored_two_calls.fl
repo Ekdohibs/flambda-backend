@@ -36,10 +36,10 @@ let $camlIgnored_two_calls__first_const_0 = Block 0 () in
        cont k/38
      where k/38 =
        apply direct(thrice_1 &my_alloc_region/92)
-         (thrice/96 : _ -> imm tagged) (x/90) -> k/36 * k/35
+         (thrice/96 : imm tagged -> imm tagged) (x/90) -> k/36 * k/35
      where k/37 =
        apply direct(twice_0 &my_alloc_region/92)
-         (twice/95 : _ -> imm tagged) (x/90) -> k/36 * k/35
+         (twice/95 : imm tagged -> imm tagged) (x/90) -> k/36 * k/35
      where k/36 (staticcatch_result/97 : imm tagged) =
        let int_add/98 = %int_barith.add (x/90, 1) in
        cont k/34 (int_add/98)
@@ -51,7 +51,9 @@ let $camlIgnored_two_calls__first_const_0 = Block 0 () in
  in
  (let Popaque/105 = %opaque (1) in
   apply direct(ignored_2 &toplevel)
-    (ignored/102 : _ -> imm tagged) (Popaque/105, 3) -> k/41 * error)
+    (ignored/102 : val? * imm tagged -> imm tagged)
+      (Popaque/105, 3)
+      -> k/41 * error)
    where k/41 (result/103 : imm tagged) =
      let Pmakeblock/104 =
        %block.[`0`].`toplevel`

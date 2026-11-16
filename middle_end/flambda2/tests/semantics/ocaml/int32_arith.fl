@@ -25,7 +25,7 @@
  let f/69 = closure f_0 @f &toplevel in
  (let Popaque/72 = %opaque ($camlInt32_arith__int32_2) in
   apply direct(f_0 &toplevel)
-    (f/69 : _ -> int32 boxed)
+    (f/69 : val? * int32 boxed -> int32 boxed)
       (Popaque/72, $camlInt32_arith__int32_3)
       -> k/14 * error)
    where k/14 (result/70 : int32 boxed) =

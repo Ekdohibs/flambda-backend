@@ -25,12 +25,14 @@
  let first/56 = closure first_0 @first &toplevel in
  let second/57 = closure second_1 @second &toplevel in
  apply direct(second_1 &toplevel)
-   (second/57 : _ -> [ 0 of val * val ])
+   (second/57 : val -> [ 0 of val * val ])
      ($camlString_const__Pmakeblock_3)
      -> k/23 * error
    where k/23 (apply_result/60 : [ 0 of val * val ]) =
      apply direct(first_0 &toplevel)
-       (first/56 : _ -> val) (apply_result/60) -> k/22 * error
+       (first/56 : [ 0 of val * val ] -> val)
+         (apply_result/60)
+         -> k/22 * error
    where k/22 (result/58 : val) =
      let Pmakeblock/59 = %block.[`0`].`toplevel` (result/58) in
      cont k/17 (Pmakeblock/59))

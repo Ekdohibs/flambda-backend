@@ -17,7 +17,7 @@ let $camlLocal_rec_below_a_let_and_in_an_arm__first_const_0 = Block 0 () in
        ((let int_sub/92 = %int_barith.sub (n/85, 1) in
          apply direct(depth_0 &my_alloc_region/87)
            (my_closure/86 ~ depth my_depth/88 -> next_depth/89
-            : _ -> imm tagged)
+            : imm tagged -> imm tagged)
              (int_sub/92)
              -> k/39 * k/37)
           where k/39 (apply_result/90 : imm tagged) =
@@ -42,7 +42,7 @@ let $camlLocal_rec_below_a_let_and_in_an_arm__first_const_0 = Block 0 () in
        let int_sub/101 = %int_barith.sub (n/96, 1) in
        apply direct(count_1 &my_alloc_region/98)
          (my_closure/97 ~ depth my_depth/99 -> next_depth/100
-          : _ -> imm tagged)
+          : imm tagged -> imm tagged)
            (int_sub/101)
            -> k/41 * k/42
  in

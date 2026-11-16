@@ -22,7 +22,7 @@ in
    in
    let int_add/80 = %int_barith.add (x/74, 1) in
    apply direct(double_0 &my_alloc_region/76)
-     (double/79 : _ -> imm tagged) (int_add/80) -> k/30 * k/31
+     (double/79 : imm tagged -> imm tagged) (int_add/80) -> k/30 * k/31
  in
  let code inline(never) size(17)
        doubler_1 (param/81 : imm tagged)
@@ -45,15 +45,17 @@ in
  with { double_1 = double/88 }
  in
  apply direct(doubler_1 &toplevel)
-   (doubler/89 : _ -> val) (0) -> k/35 * error
+   (doubler/89 : imm tagged -> val) (0) -> k/35 * error
    where k/35 (f/92 : val) =
      (apply direct(doubler_1 &toplevel)
-        (doubler/89 : _ -> val) (0) -> k/36 * error
+        (doubler/89 : imm tagged -> val) (0) -> k/36 * error
         where k/36 (g/93 : val) =
-          (apply &toplevel g/93 (4) -> k/37 * error
+          (apply unknown_arity &toplevel
+             (g/93 : imm tagged -> imm tagged) (4) -> k/37 * error
              where k/37 (apply_result/94 : imm tagged) =
                ((let Popaque/97 = %opaque (2) in
-                 apply &toplevel f/92 (Popaque/97) -> k/38 * error)
+                 apply unknown_arity &toplevel
+                   (f/92 : _ -> imm tagged) (Popaque/97) -> k/38 * error)
                   where k/38 (apply_result/95 : imm tagged) =
                     let int_add/96 =
                       %int_barith.add (apply_result/95, apply_result/94)

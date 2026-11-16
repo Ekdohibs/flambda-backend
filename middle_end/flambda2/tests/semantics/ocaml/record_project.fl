@@ -24,12 +24,16 @@ let $camlRecord_project__first_const_0 = Block 0 () in
   let Popaque/80 = %opaque (1) in
   let Pmakeblock/81 = %block.[`0`].`toplevel` (Popaque/80, 2) in
   apply direct(add_0 &toplevel)
-    (add/70 : _ -> [ 0 of imm tagged * imm tagged ])
+    (add/70 : val * val -> [ 0 of imm tagged * imm tagged ])
       (Pmakeblock/81, Pmakeblock/79)
       -> k/19 * error)
    where k/19 (r/73 : [ 0 of imm tagged * imm tagged ]) =
      (apply direct(add_0 &toplevel)
-        (add/70 : _ -> [ 0 of imm tagged * imm tagged ])
+        (add/70
+         : [ 0 of imm tagged * imm tagged ] *
+           [ 0 of imm tagged * imm tagged ] ->
+           [ 0 of imm tagged * imm tagged ]
+         )
           (r/73, r/73)
           -> k/20 * error
         where k/20 (s/74 : [ 0 of imm tagged * imm tagged ]) =

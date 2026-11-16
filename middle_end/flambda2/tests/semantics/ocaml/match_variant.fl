@@ -34,17 +34,17 @@ let $camlMatch_variant__first_const_0 = Block 0 () in
  in
  let cells/80 = closure cells_0 @cells &toplevel in
  apply direct(cells_0 &toplevel)
-   (cells/80 : _ -> imm tagged) (0) -> k/30 * error
+   (cells/80 : imm tagged -> imm tagged) (0) -> k/30 * error
    where k/30 (apply_result/81 : imm tagged) =
      ((let Popaque/89 = %opaque (5) in
        let Pmakeblock/90 = %block.[`0`].`toplevel` (Popaque/89) in
        apply direct(cells_0 &toplevel)
-         (cells/80 : _ -> imm tagged) (Pmakeblock/90) -> k/31 * error)
+         (cells/80 : val -> imm tagged) (Pmakeblock/90) -> k/31 * error)
         where k/31 (apply_result/82 : imm tagged) =
           ((let Popaque/87 = %opaque (3) in
             let Pmakeblock/88 = %block.[`1`].`toplevel` (Popaque/87, 4) in
             apply direct(cells_0 &toplevel)
-              (cells/80 : _ -> imm tagged) (Pmakeblock/88) -> k/32 * error)
+              (cells/80 : val -> imm tagged) (Pmakeblock/88) -> k/32 * error)
              where k/32 (apply_result/83 : imm tagged) =
                let int_add/84 =
                  %int_barith.add (apply_result/83, apply_result/82)

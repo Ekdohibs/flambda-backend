@@ -17,7 +17,7 @@ let $camlCall_result_unused__first_const_0 = Block 0 () in
        ((let int_sub/47 = %int_barith.sub (n/40, 1) in
          apply direct(count_0 &my_alloc_region/43)
            (my_closure/42 ~ depth my_depth/44 -> next_depth/45
-            : _ -> imm tagged)
+            : imm tagged * imm tagged -> imm tagged)
              (int_sub/47, acc/41)
              -> k/21 * k/19)
           where k/21 (apply_result/46 : imm tagged) =
@@ -26,7 +26,9 @@ let $camlCall_result_unused__first_const_0 = Block 0 () in
  let count/51 = closure count_0 @count &toplevel in
  (let Popaque/54 = %opaque (4) in
   apply direct(count_0 &toplevel)
-    (count/51 : _ -> imm tagged) (5, Popaque/54) -> k/23 * error)
+    (count/51 : imm tagged * val? -> imm tagged)
+      (5, Popaque/54)
+      -> k/23 * error)
    where k/23 (result/52 : imm tagged) =
      let Pmakeblock/53 = %block.[`0`].`toplevel` (count/51, result/52) in
      cont k/17 (Pmakeblock/53))

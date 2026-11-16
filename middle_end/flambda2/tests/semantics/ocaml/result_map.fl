@@ -17,7 +17,8 @@ let $camlResult_map__first_const_0 = Block 0 () in
        cont k/32 (Pmakeblock/103)
      where k/34 =
        ((let Pfield/101 = %block_load.[`0`] (r/94) in
-         apply &my_alloc_region/96 f/93 (Pfield/101) -> k/35 * k/33)
+         apply unknown_arity &my_alloc_region/96
+           (f/93 : _ -> val) (Pfield/101) -> k/35 * k/33)
           where k/35 (apply_result/99 : val) =
             let Pmakeblock/100 =
               %block.[`0`].my_alloc_region/96 (apply_result/99)
@@ -60,12 +61,14 @@ let $camlResult_map__first_const_0 = Block 0 () in
        &toplevel &region/127
    in
    apply direct(map_0 &toplevel)
-     (map/123 : _ -> [ 0 of val |1 of val ])
+     (map/123 : val? * val -> [ 0 of val |1 of val ])
        (`fn[result_map.ml:15,24--40]/135`, Pmakeblock/134)
        -> k/44 * error)
     where k/44 (apply_result/132 : [ 0 of val |1 of val ]) =
       apply direct(ok_or_1 &toplevel)
-        (ok_or/124 : _ -> imm tagged) (apply_result/132, 0) -> k/43 * error
+        (ok_or/124 : [ 0 of val |1 of val ] * imm tagged -> imm tagged)
+          (apply_result/132, 0)
+          -> k/43 * error
     where k/43 (region_return/129 : imm tagged) =
       let unit/130 = %end_region (region/127) in
       let unit/131 = %end_ghost_region (ghost_region/128) in

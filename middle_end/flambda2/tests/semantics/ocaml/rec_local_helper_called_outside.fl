@@ -20,7 +20,8 @@ let $camlRec_local_helper_called_outside__first_const_0 = Block 0 () in
    let second/94 = %project_function_slot.[first].[second] (my_closure/89) in
    let int_add/95 = %int_barith.add (x/88, 1) in
    apply direct(second_2 &my_alloc_region/90)
-     (second/94 ~ depth my_depth/91 -> next_depth/92 : _ -> imm tagged)
+     (second/94 ~ depth my_depth/91 -> next_depth/92
+      : imm tagged -> imm tagged)
        (int_add/95)
        -> k/28 * k/29
  in
@@ -37,10 +38,10 @@ let $camlRec_local_helper_called_outside__first_const_0 = Block 0 () in
     with { n = n/96 }
     in
     apply direct(second_2 &my_alloc_region/98)
-      (second/107 : _ -> imm tagged) (1) -> k/33 * k/31
+      (second/107 : imm tagged -> imm tagged) (1) -> k/33 * k/31
       where k/33 (apply_result/108 : imm tagged) =
         (apply direct(first_1 &my_alloc_region/98)
-           (first/106 : _ -> imm tagged) (2) -> k/34 * k/31
+           (first/106 : imm tagged -> imm tagged) (2) -> k/34 * k/31
            where k/34 (apply_result/109 : imm tagged) =
              let int_add/110 =
                %int_barith.add (apply_result/109, apply_result/108)

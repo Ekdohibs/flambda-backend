@@ -36,7 +36,7 @@ let $camlChar_uppercase__first_const_0 = Block 0 () in
          (uppercase/64 : _ -> imm tagged) (Popaque/71) -> k/31 * error)
         where k/31 (apply_result/66 : imm tagged) =
           (apply direct(uppercase_0 &toplevel)
-             (uppercase/64 : _ -> imm tagged) (97) -> k/32 * error
+             (uppercase/64 : imm tagged -> imm tagged) (97) -> k/32 * error
              where k/32 (apply_result/67 : imm tagged) =
                let int_add/68 =
                  %int_barith.add (apply_result/67, apply_result/66)

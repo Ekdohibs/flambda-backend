@@ -19,7 +19,8 @@ let $camlMutual_capture_exported__first_const_0 = Block 0 () in
        let int_sub/80 = %int_barith.sub (n/73, step/78) in
        let int_sub/81 = %int_barith.sub (int_sub/80, step/78) in
        apply direct(grow_1 &my_alloc_region/75)
-         (grow/79 ~ depth my_depth/76 -> next_depth/77 : _ -> imm tagged)
+         (grow/79 ~ depth my_depth/76 -> next_depth/77
+          : imm tagged -> imm tagged)
            (int_sub/81)
            -> k/26 * k/27
  and code rec size(24)
@@ -41,7 +42,8 @@ let $camlMutual_capture_exported__first_const_0 = Block 0 () in
      where k/32 =
        let int_add/92 = %int_barith.add (n/85, step/90) in
        apply direct(shrink_0 &my_alloc_region/87)
-         (shrink/91 ~ depth my_depth/88 -> next_depth/89 : _ -> imm tagged)
+         (shrink/91 ~ depth my_depth/88 -> next_depth/89
+          : imm tagged -> imm tagged)
            (int_add/92)
            -> k/30 * k/31
  in
@@ -51,10 +53,10 @@ let $camlMutual_capture_exported__first_const_0 = Block 0 () in
  with { step = step/96 }
  in
  apply direct(grow_1 &toplevel)
-   (grow/98 : _ -> imm tagged) (1) -> k/34 * error
+   (grow/98 : imm tagged -> imm tagged) (1) -> k/34 * error
    where k/34 (apply_result/99 : imm tagged) =
      (apply direct(shrink_0 &toplevel)
-        (shrink/97 : _ -> imm tagged) (10) -> k/35 * error
+        (shrink/97 : imm tagged -> imm tagged) (10) -> k/35 * error
         where k/35 (apply_result/100 : imm tagged) =
           let result/101 =
             %int_barith.add (apply_result/100, apply_result/99)

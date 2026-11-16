@@ -17,10 +17,12 @@
    let next_depth/100 = rec_info (succ my_depth/99) in
    let apply/101 = %project_value_slot.[twice].[`apply`] (my_closure/97) in
    apply direct(apply_1 &my_alloc_region/98)
-     (apply/101 : _ -> imm tagged) (x/96) -> k/32 * k/31
+     (apply/101 : imm tagged -> imm tagged) (x/96) -> k/32 * k/31
      where k/32 (apply_result/102 : imm tagged) =
        apply direct(apply_1 &my_alloc_region/98)
-         (apply/101 : _ -> imm tagged) (apply_result/102) -> k/30 * k/31
+         (apply/101 : imm tagged -> imm tagged)
+           (apply_result/102)
+           -> k/30 * k/31
  in
  let code loopify(never) size(38)
        Add_0 (S/103 : val)
@@ -43,22 +45,26 @@
  let $camlF2_one_inlined_one_not__Pmakeblock_0 = Block 0 (3) in
  let Add/111 = closure Add_0 @Add &toplevel in
  apply direct(Add_0 &toplevel) inlined(always)
-   (Add/111 : _ -> val)
+   (Add/111 : val -> val)
      ($camlF2_one_inlined_one_not__Pmakeblock_0)
      -> k/35 * error
    where k/35 (Add_three/112 : val) =
      (apply direct(Add_0 &toplevel) inlined(never)
-        (Add/111 : _ -> val)
+        (Add/111 : val -> val)
           ($camlF2_one_inlined_one_not__Pmakeblock_1)
           -> k/36 * error
         where k/36 (Add_five/113 : val) =
           ((let Popaque/120 = %opaque (1) in
             let Pfield/121 = %block_load.[`1`] (Add_five/113) in
-            apply &toplevel Pfield/121 (Popaque/120) -> k/37 * error)
+            apply unknown_arity &toplevel
+              (Pfield/121 : _ -> imm tagged) (Popaque/120) -> k/37 * error)
              where k/37 (apply_result/114 : imm tagged) =
                ((let Popaque/118 = %opaque (4) in
                  let Pfield/119 = %block_load.[`1`] (Add_three/112) in
-                 apply &toplevel Pfield/119 (Popaque/118) -> k/38 * error)
+                 apply unknown_arity &toplevel
+                   (Pfield/119 : _ -> imm tagged)
+                     (Popaque/118)
+                     -> k/38 * error)
                   where k/38 (apply_result/115 : imm tagged) =
                     let result/116 =
                       %int_barith.add (apply_result/115, apply_result/114)

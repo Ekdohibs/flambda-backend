@@ -44,7 +44,9 @@ let $camlChar_digit_value__first_const_0 = Block 0 () in
     (digit/99 : _ -> [ 0 | 0 of imm tagged ]) (Popaque/111) -> k/47 * error)
    where k/47 (apply_result/110 : [ 0 | 0 of imm tagged ]) =
      apply direct(value_1 &toplevel)
-       (value/100 : _ -> imm tagged) (apply_result/110) -> k/42 * error
+       (value/100 : [ 0 | 0 of imm tagged ] -> imm tagged)
+         (apply_result/110)
+         -> k/42 * error
    where k/42 (apply_result/101 : imm tagged) =
      ((let Popaque/109 = %opaque (51) in
        apply direct(digit_0 &toplevel)
@@ -53,13 +55,17 @@ let $camlChar_digit_value__first_const_0 = Block 0 () in
            -> k/46 * error)
         where k/46 (apply_result/108 : [ 0 | 0 of imm tagged ]) =
           apply direct(value_1 &toplevel)
-            (value/100 : _ -> imm tagged) (apply_result/108) -> k/43 * error
+            (value/100 : [ 0 | 0 of imm tagged ] -> imm tagged)
+              (apply_result/108)
+              -> k/43 * error
         where k/43 (apply_result/102 : imm tagged) =
           (apply direct(digit_0 &toplevel)
-             (digit/99 : _ -> [ 0 | 0 of imm tagged ]) (55) -> k/45 * error
+             (digit/99 : imm tagged -> [ 0 | 0 of imm tagged ])
+               (55)
+               -> k/45 * error
              where k/45 (apply_result/107 : [ 0 | 0 of imm tagged ]) =
                apply direct(value_1 &toplevel)
-                 (value/100 : _ -> imm tagged)
+                 (value/100 : [ 0 | 0 of imm tagged ] -> imm tagged)
                    (apply_result/107)
                    -> k/44 * error
              where k/44 (apply_result/103 : imm tagged) =

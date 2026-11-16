@@ -33,7 +33,7 @@ let $camlInlined_attribute_on_functors__Pmakeblock_3 =
   Block 0 ($`camlInlined_attribute_on_functors__fn[inlined_attribute_on_functors.ml:19,6--272]_2`)
 in
 apply direct(Make_0_1 &toplevel)
-  ($camlInlined_attribute_on_functors__Make_1 : _ -> val)
+  ($camlInlined_attribute_on_functors__Make_1 : val -> val)
     ($camlInlined_attribute_on_functors__Pmakeblock_0)
     -> k * error
   where k (`let` : val) =

@@ -47,7 +47,10 @@ let $camlLoop_function_in_kept__first_const_0 = Block 0 () in
                          %opaque
                            (`fn[loop_function_in_kept.ml:21,22--38]/112`)
                        in
-                       apply &toplevel Popaque/113 (i/104) -> k/40 * error
+                       apply unknown_arity &toplevel
+                         (Popaque/113 : imm tagged -> imm tagged)
+                           (i/104)
+                           -> k/40 * error
                          where k/40 (return_val0/114 : imm tagged) =
                            cont k/38 (return_val0/114, s_15_unboxed0/102))
                         where k/38

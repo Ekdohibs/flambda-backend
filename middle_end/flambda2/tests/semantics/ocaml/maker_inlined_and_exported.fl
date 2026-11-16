@@ -26,10 +26,12 @@ let $camlMaker_inlined_and_exported__first_const_0 = Block 0 () in
    cont k/20 (`fn[maker_inlined_and_exported.ml:15,10--19]/61`)
  in
  let adder/62 = closure adder_0 @adder &toplevel in
- apply direct(adder_0 &toplevel) (adder/62 : _ -> val) (3) -> k/22 * error
+ apply direct(adder_0 &toplevel)
+   (adder/62 : imm tagged -> val) (3) -> k/22 * error
    where k/22 (add_three/63 : val) =
      ((let Popaque/66 = %opaque (4) in
-       apply &toplevel add_three/63 (Popaque/66) -> k/23 * error)
+       apply unknown_arity &toplevel
+         (add_three/63 : _ -> imm tagged) (Popaque/66) -> k/23 * error)
         where k/23 (result/64 : imm tagged) =
           let Pmakeblock/65 =
             %block.[`0`].`toplevel` (adder/62, add_three/63, result/64)

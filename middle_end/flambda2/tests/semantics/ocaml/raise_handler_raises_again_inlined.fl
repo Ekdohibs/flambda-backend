@@ -32,7 +32,7 @@
    cont k/64 push(k/58)
      where k/64 =
        apply direct(check_0 &my_alloc_region/124)
-         (check/127 : _ -> imm tagged) (x/122) -> k/63 * k/58
+         (check/127 : imm tagged -> imm tagged) (x/122) -> k/63 * k/58
      where k/63 (body_result/136 : imm tagged) =
        cont k/56 pop(k/58) (body_result/136)
      where k/58 exn (exn/130 : val) =
@@ -67,7 +67,7 @@
    cont k/71 push(k/67)
      where k/71 =
        (apply direct(guarded_1 &my_alloc_region/139)
-          (guarded/142 : _ -> imm tagged) (x/137) -> k/72 * k/67
+          (guarded/142 : imm tagged -> imm tagged) (x/137) -> k/72 * k/67
           where k/72 (apply_result/153 : imm tagged) =
             let int_add/154 = %int_barith.add (apply_result/153, 1) in
             cont k/70 (int_add/154))

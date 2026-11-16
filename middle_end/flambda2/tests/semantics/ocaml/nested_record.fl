@@ -27,7 +27,7 @@
        (Pmakeblock/68, $camlNested_record__const_block_0)
    in
    apply direct(width_0 &toplevel)
-     (width/59 : _ -> imm tagged) (Pmakeblock/69) -> k/17 * error)
+     (width/59 : val -> imm tagged) (Pmakeblock/69) -> k/17 * error)
     where k/17 (region_return/64 : imm tagged) =
       let unit/65 = %end_region (region/62) in
       let unit/66 = %end_ghost_region (ghost_region/63) in

@@ -15,7 +15,9 @@
  let make/51 = closure make_0 @make &toplevel in
  (let Popaque/60 = %opaque (4) in
   apply direct(make_0 &toplevel)
-    (make/51 : _ -> imm array) (3, Popaque/60) -> k/26 * error)
+    (make/51 : imm tagged * val? -> imm array)
+      (3, Popaque/60)
+      -> k/26 * error)
    where k/26 (a/52 : imm array) =
      ((let prim/58 = %array_length.`imm` (a/52) in
        let prim/59 = %int_comp.unsigned.lt (0, prim/58) in

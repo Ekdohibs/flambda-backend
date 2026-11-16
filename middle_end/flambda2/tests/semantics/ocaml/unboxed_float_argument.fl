@@ -10,13 +10,13 @@
  let $camlUnboxed_float_argument__float_0 = 0x1.4p+1 in
  let f/37 = closure f_0 @f &toplevel in
  apply direct(f_0 &toplevel)
-   (f/37 : _ -> float boxed) (0x1.8p+0) -> k/16 * error
+   (f/37 : float -> float boxed) (0x1.8p+0) -> k/16 * error
    where k/16 (apply_result/38 : float boxed) =
      ((let `float#_of_float/42` =
          %unbox_num.`float` ($camlUnboxed_float_argument__float_0)
        in
        apply direct(f_0 &toplevel)
-         (f/37 : _ -> float boxed) (`float#_of_float/42`) -> k/17 * error)
+         (f/37 : float -> float boxed) (`float#_of_float/42`) -> k/17 * error)
         where k/17 (apply_result/39 : float boxed) =
           let result/40 =
             %block.[`0`].`toplevel` (apply_result/39, apply_result/38)

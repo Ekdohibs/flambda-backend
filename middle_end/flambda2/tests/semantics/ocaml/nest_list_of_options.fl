@@ -126,7 +126,7 @@
        ($camlNest_list_of_options__const_block_3, Pmakeblock/149)
    in
    apply direct(count_pairs_0 &toplevel)
-     (count_pairs/136 : _ -> imm tagged) (Pmakeblock/150) -> k/68 * error)
+     (count_pairs/136 : val -> imm tagged) (Pmakeblock/150) -> k/68 * error)
     where k/68 (region_return/141 : imm tagged) =
       let unit/142 = %end_region (region/139) in
       let unit/143 = %end_ghost_region (ghost_region/140) in

@@ -53,7 +53,8 @@
             $camlV_of_closures__string_0)
  in
  let ops/102 = closure ops_0 @ops &toplevel in
- apply direct(ops_0 &toplevel) (ops/102 : _ -> val array) (3) -> k/50 * error
+ apply direct(ops_0 &toplevel)
+   (ops/102 : imm tagged -> val array) (3) -> k/50 * error
    where k/50 (apply_result/111 : val array) =
      ((let prim/113 = %array_length (apply_result/111) in
        let prim/114 = %int_comp.unsigned.lt (0, prim/113) in
@@ -66,7 +67,8 @@
           cont error pop(regular error) ($camlV_of_closures__block_1)
         where k/51 =
           let Parrayrefs/112 = %array_load (apply_result/111, 0) in
-          apply &toplevel Parrayrefs/112 (5) -> k/44 * error)
+          apply unknown_arity &toplevel
+            (Parrayrefs/112 : imm tagged -> imm tagged) (5) -> k/44 * error)
    where k/44 (add/103 : imm tagged) =
      ((let Popaque/110 = %opaque (3) in
        apply direct(ops_0 &toplevel)
@@ -83,7 +85,10 @@
                cont error pop(regular error) ($camlV_of_closures__block_1)
              where k/47 =
                let Parrayrefs/107 = %array_load (apply_result/106, 1) in
-               apply &toplevel Parrayrefs/107 (5) -> k/45 * error)
+               apply unknown_arity &toplevel
+                 (Parrayrefs/107 : imm tagged -> imm tagged)
+                   (5)
+                   -> k/45 * error)
         where k/45 (mul/104 : imm tagged) =
           let Pmakeblock/105 = %block.[`0`].`toplevel` (add/103, mul/104) in
           cont k/37 (Pmakeblock/105)))

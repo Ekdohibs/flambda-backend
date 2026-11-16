@@ -15,7 +15,8 @@ let $camlOption_map__first_const_0 = Block 0 () in
         cont k/46)
      where k/46 =
        ((let Pfield/119 = %block_load.[`0`] (option/112) in
-         apply &my_alloc_region/114 f/111 (Pfield/119) -> k/47 * k/45)
+         apply unknown_arity &my_alloc_region/114
+           (f/111 : _ -> val) (Pfield/119) -> k/47 * k/45)
           where k/47 (apply_result/117 : val) =
             let Pmakeblock/118 =
               %block.[`0`].my_alloc_region/114 (apply_result/117)
@@ -67,12 +68,14 @@ let $camlOption_map__first_const_0 = Block 0 () in
        &toplevel &region/149
    in
    apply direct(map_0 &toplevel)
-     (map/145 : _ -> [ 0 | 0 of val ])
+     (map/145 : val? * imm tagged -> [ 0 | 0 of val ])
        (`fn[option_map.ml:20,15--31]/162`, 0)
        -> k/62 * error)
     where k/62 (apply_result/161 : [ 0 | 0 of val ]) =
       apply direct(value_1 &toplevel)
-        (value/146 : _ -> imm tagged) (apply_result/161, 10) -> k/59 * error
+        (value/146 : [ 0 | 0 of val ] * imm tagged -> imm tagged)
+          (apply_result/161, 10)
+          -> k/59 * error
     where k/59 (apply_result/154 : imm tagged) =
       ((let Popaque/158 = %opaque (4) in
         let Pmakeblock/159 =
@@ -83,12 +86,12 @@ let $camlOption_map__first_const_0 = Block 0 () in
             @`fn[option_map.ml:19,13--29]` &toplevel &region/149
         in
         apply direct(map_0 &toplevel)
-          (map/145 : _ -> [ 0 | 0 of val ])
+          (map/145 : val? * val -> [ 0 | 0 of val ])
             (`fn[option_map.ml:19,13--29]/160`, Pmakeblock/159)
             -> k/61 * error)
          where k/61 (apply_result/157 : [ 0 | 0 of val ]) =
            apply direct(value_1 &toplevel)
-             (value/146 : _ -> imm tagged)
+             (value/146 : [ 0 | 0 of val ] * imm tagged -> imm tagged)
                (apply_result/157, 0)
                -> k/60 * error
          where k/60 (apply_result/155 : imm tagged) =

@@ -23,7 +23,7 @@ let $camlIgnored_call_or_constant__first_const_0 = Block 0 () in
        cont k/27
      where k/27 =
        apply direct(twice_0 &my_alloc_region/64)
-         (twice/67 : _ -> imm tagged) (x/62) -> k/26 * k/25
+         (twice/67 : imm tagged -> imm tagged) (x/62) -> k/26 * k/25
      where k/26 (staticcatch_result/68 : imm tagged) =
        let int_add/69 = %int_barith.add (x/62, 1) in
        cont k/24 (int_add/69)
@@ -34,7 +34,9 @@ let $camlIgnored_call_or_constant__first_const_0 = Block 0 () in
  in
  (let Popaque/75 = %opaque (1) in
   apply direct(ignored_1 &toplevel)
-    (ignored/72 : _ -> imm tagged) (Popaque/75, 3) -> k/29 * error)
+    (ignored/72 : val? * imm tagged -> imm tagged)
+      (Popaque/75, 3)
+      -> k/29 * error)
    where k/29 (result/73 : imm tagged) =
      let Pmakeblock/74 =
        %block.[`0`].`toplevel` (twice/71, ignored/72, result/73)

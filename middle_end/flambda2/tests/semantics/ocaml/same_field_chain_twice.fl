@@ -29,7 +29,7 @@ let $camlSame_field_chain_twice__first_const_0 = Block 0 () in
      %block.[`0`].`toplevel`.local[region/80] (1, Pmakeblock/86)
    in
    apply direct(measure_0 &toplevel)
-     (measure/77 : _ -> imm tagged) (Pmakeblock/87) -> k/17 * error)
+     (measure/77 : val -> imm tagged) (Pmakeblock/87) -> k/17 * error)
     where k/17 (region_return/82 : imm tagged) =
       let unit/83 = %end_region (region/80) in
       let unit/84 = %end_ghost_region (ghost_region/81) in

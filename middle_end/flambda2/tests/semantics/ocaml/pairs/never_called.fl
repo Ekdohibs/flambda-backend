@@ -6,14 +6,19 @@ let $camlNever_called__first_const_0 = Block 0 () in
          : imm tagged =
    let next_depth/41 = rec_info (succ my_depth/40) in
    (let Pfield/44 = %block_load.[`0`] ($Never.camlNever) in
-    apply &my_alloc_region/39 Pfield/44 (x/37) -> k/16 * k/15)
+    apply unknown_arity &my_alloc_region/39
+      (Pfield/44 : imm tagged -> imm tagged) (x/37) -> k/16 * k/15)
      where k/16 (apply_result/42 : imm tagged) =
        let Pfield/43 = %block_load.[`0`] ($Never.camlNever) in
-       apply &my_alloc_region/39 Pfield/43 (apply_result/42) -> k/14 * k/15
+       apply unknown_arity &my_alloc_region/39
+         (Pfield/43 : imm tagged -> imm tagged)
+           (apply_result/42)
+           -> k/14 * k/15
  in
  let add_two/45 = closure add_two_0 @add_two &toplevel in
  (let Pfield/48 = %block_load.[`0`] ($Never.camlNever) in
-  apply &toplevel Pfield/48 (1) -> k/17 * error)
+  apply unknown_arity &toplevel
+    (Pfield/48 : imm tagged -> imm tagged) (1) -> k/17 * error)
    where k/17 (two/46 : imm tagged) =
      let Pmakeblock/47 = %block.[`0`].`toplevel` (add_two/45, two/46) in
      cont k/13 (Pmakeblock/47))

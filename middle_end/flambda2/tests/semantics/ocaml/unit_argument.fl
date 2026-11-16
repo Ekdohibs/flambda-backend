@@ -12,7 +12,8 @@ let $camlUnit_argument__first_const_0 = Block 0 () in
          my_closure/45 &my_alloc_region/46 my_depth/47
          -> k/20 * k/21 =
    let next_depth/48 = rec_info (succ my_depth/47) in
-   apply &my_alloc_region/46 f/44 (0) -> k/20 * k/21
+   apply unknown_arity &my_alloc_region/46
+     (f/44 : imm tagged -> val?) (0) -> k/20 * k/21
  in
  let five/49 = closure five_0 @five &toplevel in
  let apply_to_unit/50 = closure apply_to_unit_1 @apply_to_unit &toplevel in
@@ -20,7 +21,7 @@ let $camlUnit_argument__first_const_0 = Block 0 () in
    (apply_to_unit/50 : _ -> imm tagged) (five/49) -> k/22 * error
    where k/22 (apply_result/51 : imm tagged) =
      (apply direct(five_0 &toplevel)
-        (five/49 : _ -> imm tagged) (0) -> k/23 * error
+        (five/49 : imm tagged -> imm tagged) (0) -> k/23 * error
         where k/23 (apply_result/52 : imm tagged) =
           let result/53 = %int_barith.add (apply_result/52, apply_result/51)
           in

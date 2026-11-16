@@ -19,7 +19,9 @@ in
    let x = %project_value_slot.[h].[x] (my_closure) in
    let g = %project_function_slot.[h].[g] (my_closure) in
    apply direct(g_1 &my_alloc_region)
-     (g ~ depth my_depth -> next_depth : _ -> imm tagged) (0) -> k3 * k2
+     (g ~ depth my_depth -> next_depth : imm tagged -> imm tagged)
+       (0)
+       -> k3 * k2
      where k3 (apply_result : imm tagged) =
        cont k1 (x)
  in
@@ -33,7 +35,7 @@ in
    cont k1 (h)
  in
  let make = closure make_0 @make &toplevel in
- apply direct(make_0 &toplevel) (make : _ -> val) (0) -> k1 * error
+ apply direct(make_0 &toplevel) (make : imm tagged -> val) (0) -> k1 * error
    where k1 (h : val) =
      let Pmakeblock = %block.[`0`].`toplevel` (make, h) in
      cont k (Pmakeblock))

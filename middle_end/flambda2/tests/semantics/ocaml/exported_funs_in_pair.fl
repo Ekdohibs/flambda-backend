@@ -28,7 +28,7 @@ let $camlExported_funs_in_pair__first_const_0 = Block 0 () in
    apply
           direct(`fn[exported_funs_in_pair.ml:9,10--26]_1`
           &my_alloc_region/72)
-     (Pfield/76 : _ -> imm tagged) (x/70) -> k/22 * k/23
+     (Pfield/76 : imm tagged -> imm tagged) (x/70) -> k/22 * k/23
  in
  let `fn[exported_funs_in_pair.ml:9,28--42]/77` =
    closure `fn[exported_funs_in_pair.ml:9,28--42]_0`

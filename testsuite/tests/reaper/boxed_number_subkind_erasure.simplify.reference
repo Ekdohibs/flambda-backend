@@ -35,7 +35,7 @@ let code loopify(never) size(65) newer_version_of(f_0)
     where k2 (a : int32 boxed, b_1 : int64 boxed) =
       (apply direct(merge_usages_1_1 &my_alloc_region)
          ($camlBoxed_number_subkind_erasure__merge_usages_2
-          : _ -> int32 boxed)
+          : int32 boxed -> int32 boxed)
            (a)
            -> k3 * k1
          where k3 (param) =
@@ -43,7 +43,7 @@ let code loopify(never) size(65) newer_version_of(f_0)
          where k2 =
            (apply direct(merge_usages_1_1 &my_alloc_region)
               ($camlBoxed_number_subkind_erasure__merge_usages_2
-               : _ -> int64 boxed)
+               : int64 boxed -> int64 boxed)
                 (b_1)
                 -> k2 * k1
               where k2 (b_2 : int64 boxed) =

@@ -1,7 +1,8 @@
 let $camlProbed_inlined__first_const_0 = Block 0 () in
 (let Popaque/18 = %opaque (1) in
  let Pfield/19 = %block_load.[`1`] ($Probed.camlProbed) in
- apply &toplevel Pfield/19 (Popaque/18) -> k/8 * error)
+ apply unknown_arity &toplevel
+   (Pfield/19 : _ -> imm tagged) (Popaque/18) -> k/8 * error)
   where k/8 (two/16 : imm tagged) =
     let Pmakeblock/17 = %block.[`0`].`toplevel` (two/16) in
     cont k/7 (Pmakeblock/17)

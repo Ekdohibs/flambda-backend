@@ -25,7 +25,7 @@
        let int_sub/57 = %int_barith.sub (n/45, 1) in
        apply direct(fib_0 &my_alloc_region/48)
          (my_closure/47 ~ depth my_depth/49 -> next_depth/50
-          : _ -> imm tagged)
+          : imm tagged * val -> imm tagged)
            (int_sub/57, Pmakeblock/56)
            -> k/20 * k/21
      where k/22 =
@@ -35,7 +35,7 @@
  let $camlPair_loop__const_block_0 = Block 0 (0, 1) in
  let fib/61 = closure fib_0 @fib &toplevel in
  apply direct(fib_0 &toplevel)
-   (fib/61 : _ -> imm tagged)
+   (fib/61 : imm tagged * val -> imm tagged)
      (10, $camlPair_loop__const_block_0)
      -> k/26 * error
    where k/26 (result/62 : imm tagged) =

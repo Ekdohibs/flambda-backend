@@ -9,8 +9,12 @@
 ;; first_of_a_pair: a unit whose term has a kind that says of a value that it
 ;; may be null, where the text writes a kind. The text is the term.
 ;;
-;; call_of_unknown_function: the text is not the term, and the driver names
-;; the first difference.
+;; call_of_unknown_function: the arity of the arguments of the call is not
+;; one plain value for each argument, and the text writes it. The text is the
+;; term.
+;;
+;; block_of_an_immediate: the text is not the term, and the driver names the
+;; first difference.
 ;;
 ;; c_call: the text is not read back.
 ;;
@@ -307,3 +311,19 @@
   (= %{context_name} "main"))
  (action
   (diff first_of_a_pair.expected first_of_a_pair.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   block_of_an_immediate.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     %{dep:block_of_an_immediate.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff block_of_an_immediate.expected block_of_an_immediate.output)))

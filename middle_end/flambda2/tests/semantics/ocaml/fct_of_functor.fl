@@ -9,7 +9,8 @@ let $camlFct_of_functor__first_const_0 = Block 0 () in
    let Pfield/124 = %block_load.[`0`] (N/123) in
    let int_mul/125 = %int_barith.mul (x/118, Pfield/124) in
    let Pfield/126 = %block_load.[`1`] (N/123) in
-   apply &my_alloc_region/120 Pfield/126 (int_mul/125) -> k/38 * k/39
+   apply unknown_arity &my_alloc_region/120
+     (Pfield/126 : imm tagged -> imm tagged) (int_mul/125) -> k/38 * k/39
  in
  let code size(9)
        twice_2 (x/127 : imm tagged)
@@ -19,10 +20,12 @@ let $camlFct_of_functor__first_const_0 = Block 0 () in
    let next_depth/131 = rec_info (succ my_depth/130) in
    let apply/132 = %project_value_slot.[twice].[`apply`] (my_closure/128) in
    apply direct(apply_1 &my_alloc_region/129)
-     (apply/132 : _ -> imm tagged) (x/127) -> k/42 * k/41
+     (apply/132 : imm tagged -> imm tagged) (x/127) -> k/42 * k/41
      where k/42 (apply_result/133 : imm tagged) =
        apply direct(apply_1 &my_alloc_region/129)
-         (apply/132 : _ -> imm tagged) (apply_result/133) -> k/40 * k/41
+         (apply/132 : imm tagged -> imm tagged)
+           (apply_result/133)
+           -> k/40 * k/41
  in
  let code loopify(never) size(46)
        Make_0 (N/134 : val)
@@ -58,18 +61,20 @@ let $camlFct_of_functor__first_const_0 = Block 0 () in
    let next_depth/152 = rec_info (succ my_depth/151) in
    let M/153 = %project_value_slot.[shift].[M] (my_closure/149) in
    let Pfield/154 = %block_load.[`0`] (M/153) in
-   apply &my_alloc_region/150 Pfield/154 (x/148) -> k/47 * k/48
+   apply unknown_arity &my_alloc_region/150
+     (Pfield/154 : imm tagged -> imm tagged) (x/148) -> k/47 * k/48
  in
  let Make/155 = closure Make_0 @Make &toplevel in
  (let shift/171 = closure shift_3 @shift_1 &toplevel in
   let Pmakeblock/172 = %block.[`0`].`toplevel` (2, shift/171) in
   apply direct(Make_0 &toplevel)
-    (Make/155 : _ -> val) (Pmakeblock/172) -> k/49 * error)
+    (Make/155 : val -> val) (Pmakeblock/172) -> k/49 * error)
    where k/49 (Base/156 : val) =
      ((let Pfield/165 = %block_load.[`0`] (Base/156) in
        let M/166 = %block.[`0`].`toplevel` (Pfield/165) in
        (let Pfield/170 = %block_load.[`0`] (M/166) in
-        apply &toplevel Pfield/170 (1) -> k/53 * error)
+        apply unknown_arity &toplevel
+          (Pfield/170 : imm tagged -> imm tagged) (1) -> k/53 * error)
          where k/53 (scale/167 : imm tagged) =
            let shift/168 = closure shift_4 @shift &toplevel
            with { M = M/166 }
@@ -78,14 +83,18 @@ let $camlFct_of_functor__first_const_0 = Block 0 () in
              %block.[`0`].`toplevel` (scale/167, shift/168)
            in
            apply direct(Make_0 &toplevel)
-             (Make/155 : _ -> val) (Pmakeblock/169) -> k/50 * error)
+             (Make/155 : val -> val) (Pmakeblock/169) -> k/50 * error)
         where k/50 (Top/157 : val) =
           ((let Popaque/163 = %opaque (1) in
             let Pfield/164 = %block_load.[`1`] (Top/157) in
-            apply &toplevel Pfield/164 (Popaque/163) -> k/51 * error)
+            apply unknown_arity &toplevel
+              (Pfield/164 : _ -> imm tagged) (Popaque/163) -> k/51 * error)
              where k/51 (apply_result/158 : imm tagged) =
                ((let Pfield/162 = %block_load.[`0`] (Top/157) in
-                 apply &toplevel Pfield/162 (3) -> k/52 * error)
+                 apply unknown_arity &toplevel
+                   (Pfield/162 : imm tagged -> imm tagged)
+                     (3)
+                     -> k/52 * error)
                   where k/52 (apply_result/159 : imm tagged) =
                     let result/160 =
                       %int_barith.add (apply_result/159, apply_result/158)

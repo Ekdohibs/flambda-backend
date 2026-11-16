@@ -46,15 +46,17 @@
  in
  let Describe/112 = closure Describe_0 @Describe &toplevel in
  apply direct(Describe_0 &toplevel)
-   (Describe/112 : _ -> val)
+   (Describe/112 : val -> val)
      ($camlData_string_in_module_and_functor__Pmakeblock_1)
      -> k/30 * error
    where k/30 (D/113 : val) =
      ((let Pfield/119 = %block_load.[`1`] (D/113) in
-       apply &toplevel Pfield/119 (0) -> k/31 * error)
+       apply unknown_arity &toplevel
+         (Pfield/119 : imm tagged -> imm tagged) (0) -> k/31 * error)
         where k/31 (apply_result/114 : imm tagged) =
           ((let Pfield/118 = %block_load.[`0`] (D/113) in
-            apply &toplevel Pfield/118 (0) -> k/32 * error)
+            apply unknown_arity &toplevel
+              (Pfield/118 : imm tagged -> imm tagged) (0) -> k/32 * error)
              where k/32 (apply_result/115 : imm tagged) =
                let result/116 =
                  %int_barith.add (apply_result/115, apply_result/114)

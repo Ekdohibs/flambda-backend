@@ -6,8 +6,10 @@
    Block 0 (1, $camlLengths_called_at_toplevel__const_block_1)
  in
  (let Pfield/16 = %block_load.[`1`] ($Lengths.camlLengths) in
-  apply &toplevel
-    Pfield/16 ($camlLengths_called_at_toplevel__const_block_2) -> k/8 * error)
+  apply unknown_arity &toplevel
+    (Pfield/16 : val -> imm tagged)
+      ($camlLengths_called_at_toplevel__const_block_2)
+      -> k/8 * error)
    where k/8 (three/14 : imm tagged) =
      let Pmakeblock/15 = %block.[`0`].`toplevel` (three/14) in
      cont k/7 (Pmakeblock/15))

@@ -11,7 +11,10 @@
  let $camlExported_record_update__const_block_0 = Block 0 (0, 0) in
  let move_x/41 = closure move_x_0 @move_x &toplevel in
  apply direct(move_x_0 &toplevel)
-   (move_x/41 : _ -> [ 0 of imm tagged * imm tagged ])
+   (move_x/41
+    : [ 0 of imm tagged * imm tagged ] * imm tagged ->
+      [ 0 of imm tagged * imm tagged ]
+    )
      ($camlExported_record_update__const_block_0, 5)
      -> k/14 * error
    where k/14 (p/42 : [ 0 of imm tagged * imm tagged ]) =

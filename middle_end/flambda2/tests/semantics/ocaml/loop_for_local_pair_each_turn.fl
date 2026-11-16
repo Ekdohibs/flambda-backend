@@ -78,16 +78,26 @@ let $camlLoop_for_local_pair_each_turn__first_const_0 = Block 0 () in
     with { x = x/292 }
     in
     apply direct(call1_2 &my_alloc_region/294)
-      (call1/299 : _ -> imm tagged) (f/315, 7) -> k/81 * k/79
+      (call1/299 : val? * imm tagged -> imm tagged) (f/315, 7) -> k/81 * k/79
       where k/81 (apply_result/316 : imm tagged) =
         (apply direct(read2_0 &my_alloc_region/294)
-           (read2/297 : _ -> imm tagged) (c/314) -> k/82 * k/79
+           (read2/297 : [ 0 of imm tagged * imm tagged ] -> imm tagged)
+             (c/314)
+             -> k/82 * k/79
            where k/82 (apply_result/317 : imm tagged) =
              (apply direct(read3_1 &my_alloc_region/294)
-                (read3/298 : _ -> imm tagged) (b/311) -> k/83 * k/79
+                (read3/298
+                 : [ 0 of imm tagged * imm tagged * imm tagged ] ->
+                   imm tagged
+                 )
+                  (b/311)
+                  -> k/83 * k/79
                 where k/83 (apply_result/318 : imm tagged) =
                   (apply direct(read2_0 &my_alloc_region/294)
-                     (read2/297 : _ -> imm tagged) (a/307) -> k/84 * k/79
+                     (read2/297
+                      : [ 0 of imm tagged * imm tagged ] -> imm tagged)
+                       (a/307)
+                       -> k/84 * k/79
                      where k/84 (apply_result/319 : imm tagged) =
                        let int_add/320 =
                          %int_barith.add (apply_result/319, apply_result/318)
@@ -148,14 +158,17 @@ let $camlLoop_for_local_pair_each_turn__first_const_0 = Block 0 () in
                        (i/346, r_38_unboxed0/344)
                    in
                    apply direct(noise_3 &my_alloc_region/325)
-                     (noise/329 : _ -> imm tagged) (i/346) -> k/98 * k/86
+                     (noise/329 : imm tagged -> imm tagged)
+                       (i/346)
+                       -> k/98 * k/86
                      where k/98 (return_val0/366 : imm tagged) =
                        cont k/95 (return_val0/366, r_38_unboxed0/344)
                      where k/95
                              (k/360 : imm tagged,
                               r_38_unboxed0/361 : imm tagged) =
                        (apply direct(read2_0 &my_alloc_region/325)
-                          (read2/328 : _ -> imm tagged)
+                          (read2/328
+                           : [ 0 of imm tagged * imm tagged ] -> imm tagged)
                             (p/359)
                             -> k/97 * k/86
                           where k/97 (return_val0/365 : imm tagged) =
@@ -211,7 +224,7 @@ let $camlLoop_for_local_pair_each_turn__first_const_0 = Block 0 () in
  with { read2_1 = read2/370; noise = noise/373 }
  in
  apply direct(body_5 &toplevel)
-   (body/374 : _ -> imm tagged) (10) -> k/100 * error
+   (body/374 : imm tagged -> imm tagged) (10) -> k/100 * error
    where k/100 (apply_result/375 : imm tagged) =
      ((let Popaque/379 = %opaque (3) in
        apply direct(body_5 &toplevel)

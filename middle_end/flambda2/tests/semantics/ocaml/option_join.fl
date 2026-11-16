@@ -38,10 +38,11 @@ let $camlOption_join__first_const_0 = Block 0 () in
        cont k/26 (region_return/65)
  in
  let f/77 = closure f_0 @f &toplevel in
- apply direct(f_0 &toplevel) (f/77 : _ -> imm tagged) (0, 4) -> k/34 * error
+ apply direct(f_0 &toplevel)
+   (f/77 : imm tagged * imm tagged -> imm tagged) (0, 4) -> k/34 * error
    where k/34 (apply_result/78 : imm tagged) =
      (apply direct(f_0 &toplevel)
-        (f/77 : _ -> imm tagged) (1, 3) -> k/35 * error
+        (f/77 : imm tagged * imm tagged -> imm tagged) (1, 3) -> k/35 * error
         where k/35 (apply_result/79 : imm tagged) =
           let result/80 = %int_barith.add (apply_result/79, apply_result/78)
           in

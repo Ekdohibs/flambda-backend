@@ -23,13 +23,15 @@
  let scale/57 = closure scale_0 @scale &toplevel in
  (let Popaque/63 = %opaque (5) in
   apply direct(scale_0 &toplevel)
-    (scale/57 : _ -> imm tagged)
+    (scale/57 : val * val? -> imm tagged)
       ($camlLabelled_optional__const_block_0, Popaque/63)
       -> k/25 * error)
    where k/25 (apply_result/58 : imm tagged) =
      ((let Popaque/62 = %opaque (5) in
        apply direct(scale_0 &toplevel)
-         (scale/57 : _ -> imm tagged) (0, Popaque/62) -> k/26 * error)
+         (scale/57 : imm tagged * val? -> imm tagged)
+           (0, Popaque/62)
+           -> k/26 * error)
         where k/26 (apply_result/59 : imm tagged) =
           let result/60 = %int_barith.add (apply_result/59, apply_result/58)
           in

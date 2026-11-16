@@ -32,9 +32,12 @@ let $camlClosure_captures_field_once__first_const_0 = Block 0 () in
  (let Popaque/73 = %opaque (3) in
   let Pmakeblock/74 = %block.[`0`].`toplevel` (Popaque/73, 0) in
   apply direct(doubler_0 &toplevel)
-    doubler/70 (Pmakeblock/74) -> k/23 * error
+    (doubler/70 : [ 0 of imm tagged * val ] -> val?)
+      (Pmakeblock/74)
+      -> k/23 * error
     where k/23 (func/75) =
-      apply &toplevel func/75 (4) -> k/22 * error)
+      apply unknown_arity &toplevel
+        (func/75 : imm tagged -> imm tagged) (4) -> k/22 * error)
    where k/22 (result/71 : imm tagged) =
      let Pmakeblock/72 = %block.[`0`].`toplevel` (doubler/70, result/71) in
      cont k/17 (Pmakeblock/72))

@@ -17,7 +17,7 @@ let $camlOr_null_known__first_const_0 = Block 0 () in
    (or_zero/41 : _ -> imm tagged) (null) -> k/16 * error
    where k/16 (apply_result/42 : imm tagged) =
      (apply direct(or_zero_0 &toplevel)
-        (or_zero/41 : _ -> imm tagged) (3) -> k/17 * error
+        (or_zero/41 : imm tagged -> imm tagged) (3) -> k/17 * error
         where k/17 (apply_result/43 : imm tagged) =
           let result/44 = %int_barith.add (apply_result/43, apply_result/42)
           in

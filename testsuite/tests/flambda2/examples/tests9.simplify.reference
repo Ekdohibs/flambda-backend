@@ -42,7 +42,11 @@ let code loopify(never) size(4) newer_version_of(length_1)
         -> k * k1
         : imm tagged =
   apply direct(length_aux_0_1 &my_alloc_region)
-    ($camlTests9__length_aux_3 : _ -> imm tagged) (0, l) -> k * k1
+    ($camlTests9__length_aux_3
+     : imm tagged * [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] -> imm tagged
+     )
+      (0, l)
+      -> k * k1
 in
 let $camlTests9__length_4 = closure length_1_1 @length &toplevel in
 let code loopify(done) size(22) newer_version_of(rev_append_2)
@@ -114,7 +118,10 @@ let code loopify(done) size(90) newer_version_of(rev_merge_5)
          where k3 =
            apply direct(rev_append_2_1 &my_alloc_region)
              ($camlTests9__rev_append_5
-              : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+              : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] *
+                [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] ->
+                [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+              )
                (l2_1, accu_1)
                -> k * k1
          where k2 =
@@ -125,7 +132,10 @@ let code loopify(done) size(90) newer_version_of(rev_merge_5)
               where k3 =
                 apply direct(rev_append_2_1 &my_alloc_region)
                   ($camlTests9__rev_append_5
-                   : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+                   : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] *
+                     [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] ->
+                     [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+                   )
                     (l1_1, accu_1)
                     -> k * k1
               where k2 =
@@ -133,7 +143,8 @@ let code loopify(done) size(90) newer_version_of(rev_merge_5)
                 let h2 = %block_load.[`0`] (l2_1) in
                 let t1 = %block_load.[`1`] (l1_1) in
                 let h1 = %block_load.[`0`] (l1_1) in
-                (apply &my_alloc_region cmp (h1, h2) -> k2 * k1
+                (apply unknown_arity &my_alloc_region
+                   (cmp : _ -> imm tagged) (h1, h2) -> k2 * k1
                    where k2 (c : imm tagged) =
                      let prim_2 = %phys_eq (c, 0) in
                      (switch prim_2
@@ -181,7 +192,10 @@ let code loopify(done) size(90) newer_version_of(rev_merge_rev_6)
          where k3 =
            apply direct(rev_append_2_1 &my_alloc_region)
              ($camlTests9__rev_append_5
-              : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+              : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] *
+                [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] ->
+                [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+              )
                (l2_1, accu_1)
                -> k * k1
          where k2 =
@@ -192,7 +206,10 @@ let code loopify(done) size(90) newer_version_of(rev_merge_rev_6)
               where k3 =
                 apply direct(rev_append_2_1 &my_alloc_region)
                   ($camlTests9__rev_append_5
-                   : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+                   : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] *
+                     [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] ->
+                     [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+                   )
                     (l1_1, accu_1)
                     -> k * k1
               where k2 =
@@ -200,7 +217,8 @@ let code loopify(done) size(90) newer_version_of(rev_merge_rev_6)
                 let h2 = %block_load.[`0`] (l2_1) in
                 let t1 = %block_load.[`1`] (l1_1) in
                 let h1 = %block_load.[`0`] (l1_1) in
-                (apply &my_alloc_region cmp (h1, h2) -> k2 * k1
+                (apply unknown_arity &my_alloc_region
+                   (cmp : _ -> imm tagged) (h1, h2) -> k2 * k1
                    where k2 (c : imm tagged) =
                      let prim_2 = %phys_eq (c, 0) in
                      (switch prim_2
@@ -266,15 +284,18 @@ let code rec loopify(never) size(588) newer_version_of(rev_sort_8)
                            let x3 = %block_load.[`0`] (`*match*_1`) in
                            let x2 = %block_load.[`0`] (`*match*`) in
                            let x1 = %block_load.[`0`] (l) in
-                           (apply &my_alloc_region cmp (x1, x2) -> k4 * k1
+                           (apply unknown_arity &my_alloc_region
+                              (cmp : _ -> imm tagged) (x1, x2) -> k4 * k1
                               where k4 (c : imm tagged) =
                                 let prim_5 = %phys_eq (c, 0) in
                                 (switch prim_5
                                    | 0 -> k4
                                    | 1 -> k5
                                    where k5 =
-                                     (apply &my_alloc_region
-                                        cmp (x2, x3) -> k5 * k1
+                                     (apply unknown_arity &my_alloc_region
+                                        (cmp : _ -> imm tagged)
+                                          (x2, x3)
+                                          -> k5 * k1
                                         where k5 (c_1 : imm tagged) =
                                           let prim_6 = %phys_eq (c_1, 0) in
                                           (switch prim_6
@@ -319,8 +340,12 @@ let code rec loopify(never) size(588) newer_version_of(rev_sort_8)
                                         | 0 -> k4
                                         | 1 -> k5
                                         where k5 =
-                                          (apply &my_alloc_region
-                                             cmp (x2, x3) -> k5 * k1
+                                          (apply
+                                                  unknown_arity
+                                                  &my_alloc_region
+                                             (cmp : _ -> imm tagged)
+                                               (x2, x3)
+                                               -> k5 * k1
                                              where k5 (c_1 : imm tagged) =
                                                let prim_7 = %phys_eq (c_1, 0)
                                                in
@@ -362,8 +387,12 @@ let code rec loopify(never) size(588) newer_version_of(rev_sort_8)
                                                                 (Pmakeblock_2)
                                                        where k5 =
                                                          (apply
+                                                                 unknown_arity
                                                                  &my_alloc_region
-                                                            cmp
+                                                            (cmp
+                                                             : _ ->
+                                                               imm tagged
+                                                             )
                                                               (x1, x3)
                                                               -> k5 * k1
                                                             where k5
@@ -439,8 +468,12 @@ let code rec loopify(never) size(588) newer_version_of(rev_sort_8)
                                                                     k
                                                                     (Pmakeblock_2)))))))
                                         where k4 =
-                                          (apply &my_alloc_region
-                                             cmp (x1, x3) -> k4 * k1
+                                          (apply
+                                                  unknown_arity
+                                                  &my_alloc_region
+                                             (cmp : _ -> imm tagged)
+                                               (x1, x3)
+                                               -> k4 * k1
                                              where k4 (c_1 : imm tagged) =
                                                let prim_7 = %phys_eq (c_1, 0)
                                                in
@@ -482,8 +515,12 @@ let code rec loopify(never) size(588) newer_version_of(rev_sort_8)
                                                                 (Pmakeblock_2)
                                                        where k4 =
                                                          (apply
+                                                                 unknown_arity
                                                                  &my_alloc_region
-                                                            cmp
+                                                            (cmp
+                                                             : _ ->
+                                                               imm tagged
+                                                             )
                                                               (x2, x3)
                                                               -> k4 * k1
                                                             where k4
@@ -572,7 +609,8 @@ let code rec loopify(never) size(588) newer_version_of(rev_sort_8)
                where k3 =
                  let x2 = %block_load.[`0`] (`*match*`) in
                  let x1 = %block_load.[`0`] (l) in
-                 (apply &my_alloc_region cmp (x1, x2) -> k3 * k1
+                 (apply unknown_arity &my_alloc_region
+                    (cmp : _ -> imm tagged) (x1, x2) -> k3 * k1
                     where k3 (c : imm tagged) =
                       let prim_3 = %phys_eq (c, 0) in
                       (switch prim_3
@@ -611,26 +649,37 @@ let code rec loopify(never) size(588) newer_version_of(rev_sort_8)
       let n2 = %int_barith.sub (n, n1) in
       (apply direct(chop_3_1 &my_alloc_region)
          ($camlTests9__chop_6
-          : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+          : imm tagged * [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] ->
+            [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+          )
            (n1, l)
            -> k2 * k1
          where k2 (l2 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
            (apply direct(sort_7_1 &my_alloc_region)
               (sort ~ depth my_depth -> succ my_depth
-               : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+               : imm tagged * [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] ->
+                 [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+               )
                 (n1, l)
                 -> k2 * k1
               where k2 (s1 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
                 (apply direct(sort_7_1 &my_alloc_region)
                    (sort ~ depth my_depth -> succ my_depth
-                    : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+                    : imm tagged *
+                      [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] ->
+                      [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+                    )
                      (n2, l2)
                      -> k2 * k1
                    where k2
                            (s2 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
                      apply direct(rev_merge_5_1 &my_alloc_region)
                        (rev_merge
-                        : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+                        : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] *
+                          [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] *
+                          imm tagged ->
+                          [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+                        )
                          (s1, s2, 0)
                          -> k * k1)))
 and code rec loopify(never) size(588) newer_version_of(sort_7)
@@ -673,15 +722,18 @@ and code rec loopify(never) size(588) newer_version_of(sort_7)
                            let x3 = %block_load.[`0`] (`*match*_1`) in
                            let x2 = %block_load.[`0`] (`*match*`) in
                            let x1 = %block_load.[`0`] (l) in
-                           (apply &my_alloc_region cmp (x1, x2) -> k4 * k1
+                           (apply unknown_arity &my_alloc_region
+                              (cmp : _ -> imm tagged) (x1, x2) -> k4 * k1
                               where k4 (c : imm tagged) =
                                 let prim_5 = %phys_eq (c, 0) in
                                 (switch prim_5
                                    | 0 -> k4
                                    | 1 -> k5
                                    where k5 =
-                                     (apply &my_alloc_region
-                                        cmp (x2, x3) -> k5 * k1
+                                     (apply unknown_arity &my_alloc_region
+                                        (cmp : _ -> imm tagged)
+                                          (x2, x3)
+                                          -> k5 * k1
                                         where k5 (c_1 : imm tagged) =
                                           let prim_6 = %phys_eq (c_1, 0) in
                                           (switch prim_6
@@ -726,8 +778,12 @@ and code rec loopify(never) size(588) newer_version_of(sort_7)
                                         | 0 -> k4
                                         | 1 -> k5
                                         where k5 =
-                                          (apply &my_alloc_region
-                                             cmp (x2, x3) -> k5 * k1
+                                          (apply
+                                                  unknown_arity
+                                                  &my_alloc_region
+                                             (cmp : _ -> imm tagged)
+                                               (x2, x3)
+                                               -> k5 * k1
                                              where k5 (c_1 : imm tagged) =
                                                let prim_7 = %phys_eq (c_1, 0)
                                                in
@@ -769,8 +825,12 @@ and code rec loopify(never) size(588) newer_version_of(sort_7)
                                                                 (Pmakeblock_2)
                                                        where k5 =
                                                          (apply
+                                                                 unknown_arity
                                                                  &my_alloc_region
-                                                            cmp
+                                                            (cmp
+                                                             : _ ->
+                                                               imm tagged
+                                                             )
                                                               (x1, x3)
                                                               -> k5 * k1
                                                             where k5
@@ -846,8 +906,12 @@ and code rec loopify(never) size(588) newer_version_of(sort_7)
                                                                     k
                                                                     (Pmakeblock_2)))))))
                                         where k4 =
-                                          (apply &my_alloc_region
-                                             cmp (x1, x3) -> k4 * k1
+                                          (apply
+                                                  unknown_arity
+                                                  &my_alloc_region
+                                             (cmp : _ -> imm tagged)
+                                               (x1, x3)
+                                               -> k4 * k1
                                              where k4 (c_1 : imm tagged) =
                                                let prim_7 = %phys_eq (c_1, 0)
                                                in
@@ -889,8 +953,12 @@ and code rec loopify(never) size(588) newer_version_of(sort_7)
                                                                 (Pmakeblock_2)
                                                        where k4 =
                                                          (apply
+                                                                 unknown_arity
                                                                  &my_alloc_region
-                                                            cmp
+                                                            (cmp
+                                                             : _ ->
+                                                               imm tagged
+                                                             )
                                                               (x2, x3)
                                                               -> k4 * k1
                                                             where k4
@@ -979,7 +1047,8 @@ and code rec loopify(never) size(588) newer_version_of(sort_7)
                where k3 =
                  let x2 = %block_load.[`0`] (`*match*`) in
                  let x1 = %block_load.[`0`] (l) in
-                 (apply &my_alloc_region cmp (x1, x2) -> k3 * k1
+                 (apply unknown_arity &my_alloc_region
+                    (cmp : _ -> imm tagged) (x1, x2) -> k3 * k1
                     where k3 (c : imm tagged) =
                       let prim_3 = %phys_eq (c, 0) in
                       (switch prim_3
@@ -1018,26 +1087,37 @@ and code rec loopify(never) size(588) newer_version_of(sort_7)
       let n2 = %int_barith.sub (n, n1) in
       (apply direct(chop_3_1 &my_alloc_region)
          ($camlTests9__chop_6
-          : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+          : imm tagged * [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] ->
+            [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+          )
            (n1, l)
            -> k2 * k1
          where k2 (l2 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
            (apply direct(rev_sort_8_1 &my_alloc_region)
               (rev_sort ~ depth my_depth -> succ my_depth
-               : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+               : imm tagged * [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] ->
+                 [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+               )
                 (n1, l)
                 -> k2 * k1
               where k2 (s1 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
                 (apply direct(rev_sort_8_1 &my_alloc_region)
                    (rev_sort ~ depth my_depth -> succ my_depth
-                    : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+                    : imm tagged *
+                      [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] ->
+                      [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+                    )
                      (n2, l2)
                      -> k2 * k1
                    where k2
                            (s2 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]) =
                      apply direct(rev_merge_rev_6_1 &my_alloc_region)
                        (rev_merge_rev
-                        : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+                        : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] *
+                          [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] *
+                          imm tagged ->
+                          [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+                        )
                          (s1, s2, 0)
                          -> k * k1)))
 in
@@ -1064,7 +1144,11 @@ let code loopify(never) size(1412) newer_version_of(sort_uniq_4)
   }
   in
   apply direct(length_aux_0_1 &my_alloc_region) inlining_state(depth(10))
-    ($camlTests9__length_aux_3 : _ -> imm tagged) (0, l) -> k2 * k1
+    ($camlTests9__length_aux_3
+     : imm tagged * [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] -> imm tagged
+     )
+      (0, l)
+      -> k2 * k1
     where k2 (len : imm tagged) =
       let prim = %int_comp.lt (len, 2) in
       (switch prim
@@ -1072,7 +1156,10 @@ let code loopify(never) size(1412) newer_version_of(sort_uniq_4)
          | 1 -> k (l)
          where k2 =
            apply direct(sort_7_1 &my_alloc_region)
-             (sort : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+             (sort
+              : imm tagged * [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] ->
+                [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+              )
                (len, l)
                -> k * k1)
 in
@@ -1103,7 +1190,8 @@ let code rec loopify(never) size(77) newer_version_of(rev_sort_11)
                where k3 =
                  let x2 = %block_load.[`0`] (`*match*`) in
                  let x1 = %block_load.[`0`] (l) in
-                 (apply &my_alloc_region cmp (x1, x2) -> k3 * k1
+                 (apply unknown_arity &my_alloc_region
+                    (cmp : _ -> imm tagged) (x1, x2) -> k3 * k1
                     where k3 (c : imm tagged) =
                       let prim_3 = %int_comp.lt (c, 0) in
                       (switch prim_3
@@ -1122,7 +1210,9 @@ let code rec loopify(never) size(77) newer_version_of(rev_sort_11)
     where k2 =
       apply direct(sort_10_1 &my_alloc_region)
         (sort ~ depth my_depth -> succ my_depth
-         : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+         : imm tagged * [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] ->
+           [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+         )
           (n, l)
           -> k * k1
 and code rec loopify(never) size(5) newer_version_of(sort_10)
@@ -1134,7 +1224,9 @@ and code rec loopify(never) size(5) newer_version_of(sort_10)
   let rev_sort = %project_function_slot.[sort_1].[rev_sort_1] (my_closure) in
   apply direct(rev_sort_11_1 &my_alloc_region)
     (rev_sort ~ depth my_depth -> succ my_depth
-     : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+     : imm tagged * [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] ->
+       [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+     )
       (n, l)
       -> k * k1
 in
@@ -1148,7 +1240,10 @@ let code loopify(never) size(99) newer_version_of(foo_9)
   with { cmp_3 = cmp }
   in
   apply direct(sort_10_1 &my_alloc_region)
-    (sort : _ -> [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+    (sort
+     : imm tagged * [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ] ->
+       [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ]
+     )
       (42, l)
       -> k * k1
 in

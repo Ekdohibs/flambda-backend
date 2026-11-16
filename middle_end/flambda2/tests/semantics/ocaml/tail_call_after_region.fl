@@ -78,16 +78,26 @@ let $camlTail_call_after_region__first_const_0 = Block 0 () in
     with { x = x/245 }
     in
     apply direct(call1_2 &my_alloc_region/247)
-      (call1/252 : _ -> imm tagged) (f/268, 7) -> k/64 * k/62
+      (call1/252 : val? * imm tagged -> imm tagged) (f/268, 7) -> k/64 * k/62
       where k/64 (apply_result/269 : imm tagged) =
         (apply direct(read2_0 &my_alloc_region/247)
-           (read2/250 : _ -> imm tagged) (c/267) -> k/65 * k/62
+           (read2/250 : [ 0 of imm tagged * imm tagged ] -> imm tagged)
+             (c/267)
+             -> k/65 * k/62
            where k/65 (apply_result/270 : imm tagged) =
              (apply direct(read3_1 &my_alloc_region/247)
-                (read3/251 : _ -> imm tagged) (b/264) -> k/66 * k/62
+                (read3/251
+                 : [ 0 of imm tagged * imm tagged * imm tagged ] ->
+                   imm tagged
+                 )
+                  (b/264)
+                  -> k/66 * k/62
                 where k/66 (apply_result/271 : imm tagged) =
                   (apply direct(read2_0 &my_alloc_region/247)
-                     (read2/250 : _ -> imm tagged) (a/260) -> k/67 * k/62
+                     (read2/250
+                      : [ 0 of imm tagged * imm tagged ] -> imm tagged)
+                       (a/260)
+                       -> k/67 * k/62
                      where k/67 (apply_result/272 : imm tagged) =
                        let int_add/273 =
                          %int_barith.add (apply_result/272, apply_result/271)
@@ -129,16 +139,20 @@ let $camlTail_call_after_region__first_const_0 = Block 0 () in
      %block.[`0`].my_alloc_region/284.local[region/290] (x/282, int_add/292)
    in
    apply direct(noise_3 &my_alloc_region/284)
-     (noise/288 : _ -> imm tagged) (x/282) -> k/72 * k/71
+     (noise/288 : imm tagged -> imm tagged) (x/282) -> k/72 * k/71
      where k/72 (n/294 : imm tagged) =
        (apply direct(read2_0 &my_alloc_region/284)
-          (read2/287 : _ -> imm tagged) (p/293) -> k/73 * k/71
+          (read2/287 : [ 0 of imm tagged * imm tagged ] -> imm tagged)
+            (p/293)
+            -> k/73 * k/71
           where k/73 (apply_result/295 : imm tagged) =
             let int_add/296 = %int_barith.add (n/294, apply_result/295) in
             let unit/297 = %end_region (region/290) in
             let unit/298 = %end_ghost_region (ghost_region/291) in
             apply direct(finish_5 &my_alloc_region/284)
-              (finish/289 : _ -> imm tagged) (int_add/296) -> k/70 * k/71)
+              (finish/289 : imm tagged -> imm tagged)
+                (int_add/296)
+                -> k/70 * k/71)
  in
  let read2/299 = closure read2_0 @read2 &toplevel in
  let read3/300 = closure read3_1 @read3 &toplevel in
@@ -151,7 +165,7 @@ let $camlTail_call_after_region__first_const_0 = Block 0 () in
  with { read2_1 = read2/299; noise = noise/302; finish = finish/303 }
  in
  apply direct(body_6 &toplevel)
-   (body/304 : _ -> imm tagged) (10) -> k/74 * error
+   (body/304 : imm tagged -> imm tagged) (10) -> k/74 * error
    where k/74 (apply_result/305 : imm tagged) =
      ((let Popaque/309 = %opaque (3) in
        apply direct(body_6 &toplevel)

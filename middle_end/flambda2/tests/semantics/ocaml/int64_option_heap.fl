@@ -44,12 +44,12 @@
  let $camlInt64_option_heap__int64_3 = 4L in
  let f/92 = closure f_0 @f &toplevel in
  apply direct(f_0 &toplevel)
-   (f/92 : _ -> int64 boxed)
+   (f/92 : imm tagged * int64 boxed -> int64 boxed)
      (0, $camlInt64_option_heap__int64_3)
      -> k/31 * error
    where k/31 (apply_result/93 : int64 boxed) =
      (apply direct(f_0 &toplevel)
-        (f/92 : _ -> int64 boxed)
+        (f/92 : imm tagged * int64 boxed -> int64 boxed)
           (1, $camlInt64_option_heap__int64_4)
           -> k/32 * error
         where k/32 (apply_result/94 : int64 boxed) =

@@ -39,7 +39,14 @@ let $camlPartial_one_argument_at_a_time__first_const_0 = Block 0 () in
      %project_value_slot.[partial_six].[Popaque] (my_closure/197)
    in
    apply direct(six_0 &my_alloc_region/198)
-     (six/201 : _ -> imm tagged)
+     (six/201
+      : imm tagged *
+        imm tagged *
+        imm tagged *
+        imm tagged *
+        imm tagged *
+        imm tagged -> imm tagged
+      )
        (Popaque/202,
         param1/192,
         param2/193,
@@ -60,7 +67,10 @@ let $camlPartial_one_argument_at_a_time__first_const_0 = Block 0 () in
    let next_depth/210 = rec_info (succ my_depth/209) in
    let p1/211 = %project_value_slot.[partial_p1].[p1] (my_closure/207) in
    apply direct(partial_six_1 &my_alloc_region/208)
-     (p1/211 : _ -> imm tagged)
+     (p1/211
+      : imm tagged * imm tagged * imm tagged * imm tagged * imm tagged ->
+        imm tagged
+      )
        (2, param1/203, param2/204, param3/205, param4/206)
        -> k/52 * k/53
  in
@@ -75,7 +85,8 @@ let $camlPartial_one_argument_at_a_time__first_const_0 = Block 0 () in
    let next_depth/218 = rec_info (succ my_depth/217) in
    let p2/219 = %project_value_slot.[partial_p2].[p2] (my_closure/215) in
    apply direct(partial_p1_2 &my_alloc_region/216)
-     (p2/219 : _ -> imm tagged)
+     (p2/219
+      : imm tagged * imm tagged * imm tagged * imm tagged -> imm tagged)
        (3, param1/212, param2/213, param3/214)
        -> k/54 * k/55
  in
@@ -87,7 +98,9 @@ let $camlPartial_one_argument_at_a_time__first_const_0 = Block 0 () in
    let next_depth/225 = rec_info (succ my_depth/224) in
    let p3/226 = %project_value_slot.[partial_p3].[p3] (my_closure/222) in
    apply direct(partial_p2_3 &my_alloc_region/223)
-     (p3/226 : _ -> imm tagged) (4, param1/220, param2/221) -> k/56 * k/57
+     (p3/226 : imm tagged * imm tagged * imm tagged -> imm tagged)
+       (4, param1/220, param2/221)
+       -> k/56 * k/57
  in
  let code size(5) stub
        partial_p4_5 (param1/227 : imm tagged)
@@ -97,7 +110,9 @@ let $camlPartial_one_argument_at_a_time__first_const_0 = Block 0 () in
    let next_depth/231 = rec_info (succ my_depth/230) in
    let p4/232 = %project_value_slot.[partial_p4].[p4] (my_closure/228) in
    apply direct(partial_p3_4 &my_alloc_region/229)
-     (p4/232 : _ -> imm tagged) (5, param1/227) -> k/58 * k/59
+     (p4/232 : imm tagged * imm tagged -> imm tagged)
+       (5, param1/227)
+       -> k/58 * k/59
  in
  let six/233 = closure six_0 @six &toplevel in
  (let Popaque/248 = %opaque (1) in
@@ -129,15 +144,20 @@ let $camlPartial_one_argument_at_a_time__first_const_0 = Block 0 () in
                       cont k/64 (partial_p4/244))
                        where k/64 (p5/238 : val) =
                          (apply direct(partial_p4_5 &toplevel)
-                            (p5/238 : _ -> imm tagged) (6) -> k/65 * error
+                            (p5/238 : imm tagged -> imm tagged)
+                              (6)
+                              -> k/65 * error
                             where k/65 (whole/239 : imm tagged) =
                               (apply direct(partial_p4_5 &toplevel)
-                                 (p5/238 : _ -> imm tagged)
+                                 (p5/238 : imm tagged -> imm tagged)
                                    (7)
                                    -> k/66 * error
                                  where k/66 (other_end/240 : imm tagged) =
                                    (apply direct(partial_p2_3 &toplevel)
-                                      (p3/236 : _ -> imm tagged)
+                                      (p3/236
+                                       : imm tagged * imm tagged * imm tagged ->
+                                         imm tagged
+                                       )
                                         (0, 0, 0)
                                         -> k/67 * error
                                       where k/67
@@ -146,7 +166,13 @@ let $camlPartial_one_argument_at_a_time__first_const_0 = Block 0 () in
                                         (apply
                                                 direct(partial_six_1
                                                 &toplevel)
-                                           (p1/234 : _ -> imm tagged)
+                                           (p1/234
+                                            : imm tagged *
+                                              imm tagged *
+                                              imm tagged *
+                                              imm tagged *
+                                              imm tagged -> imm tagged
+                                            )
                                              (9, 9, 9, 9, 9)
                                              -> k/68 * error
                                            where k/68

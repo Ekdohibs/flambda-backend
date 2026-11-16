@@ -106,7 +106,9 @@ let $camlWhile_flag_or_two_tests__first_const_0 = Block 0 () in
  let steps_until/145 = closure steps_until_0 @steps_until &toplevel in
  (let Popaque/148 = %opaque (9) in
   apply direct(steps_until_0 &toplevel)
-    (steps_until/145 : _ -> imm tagged) (Popaque/148, 7) -> k/56 * error)
+    (steps_until/145 : val? * imm tagged -> imm tagged)
+      (Popaque/148, 7)
+      -> k/56 * error)
    where k/56 (result/146 : imm tagged) =
      let Pmakeblock/147 =
        %block.[`0`].`toplevel` (steps_until/145, result/146)

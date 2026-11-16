@@ -17,7 +17,7 @@ let $camlTests5__first_const_0 = Block 0 () in
      where k3 =
        let int_sub = %int_barith.sub (x, 1) in
        apply direct(g_1 &my_alloc_region)
-         (g ~ depth my_depth -> next_depth : _ -> imm tagged)
+         (g ~ depth my_depth -> next_depth : imm tagged -> imm tagged)
            (int_sub)
            -> k1 * k2
  and code rec size(23)
@@ -38,7 +38,7 @@ let $camlTests5__first_const_0 = Block 0 () in
      where k3 =
        let int_sub = %int_barith.sub (y, 1) in
        apply direct(f_0 &my_alloc_region)
-         (f ~ depth my_depth -> next_depth : _ -> imm tagged)
+         (f ~ depth my_depth -> next_depth : imm tagged -> imm tagged)
            (int_sub)
            -> k1 * k2
  in

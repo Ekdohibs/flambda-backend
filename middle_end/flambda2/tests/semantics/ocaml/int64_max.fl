@@ -27,13 +27,13 @@
  let next_max/81 = closure next_max_0 @next_max &toplevel in
  (let Popaque/93 = %opaque ($camlInt64_max__int64_1) in
   apply direct(next_max_0 &toplevel)
-    (next_max/81 : _ -> int64 boxed)
+    (next_max/81 : val? * int64 boxed -> int64 boxed)
       (Popaque/93, $camlInt64_max__int64_2)
       -> k/19 * error)
    where k/19 (apply_result/82 : int64 boxed) =
      ((let Popaque/92 = %opaque ($camlInt64_max__int64_3) in
        apply direct(next_max_0 &toplevel)
-         (next_max/81 : _ -> int64 boxed)
+         (next_max/81 : val? * int64 boxed -> int64 boxed)
            (Popaque/92, $camlInt64_max__int64_4)
            -> k/20 * error)
         where k/20 (apply_result/83 : int64 boxed) =

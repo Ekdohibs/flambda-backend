@@ -26,10 +26,15 @@
  in
  let first/59 = closure first_0 @first &toplevel in
  let second/60 = closure second_1 @second &toplevel in
- apply &toplevel
-   second/60 ($camlTupled_function__const_block_3) -> k/23 * error
+ apply unknown_arity &toplevel
+   (second/60 : val -> [ 0 of val * val ])
+     ($camlTupled_function__const_block_3)
+     -> k/23 * error
    where k/23 (apply_result/63 : [ 0 of val * val ]) =
-     apply &toplevel first/59 (apply_result/63) -> k/22 * error
+     apply unknown_arity &toplevel
+       (first/59 : [ 0 of val * val ] -> val)
+         (apply_result/63)
+         -> k/22 * error
    where k/22 (result/61 : val) =
      let Pmakeblock/62 = %block.[`0`].`toplevel` (result/61) in
      cont k/17 (Pmakeblock/62))

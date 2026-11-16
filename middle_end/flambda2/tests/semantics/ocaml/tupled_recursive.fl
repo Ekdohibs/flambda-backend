@@ -20,15 +20,16 @@ let $camlTupled_recursive__first_const_0 = Block 0 () in
        let Pmakeblock/52 =
          %block.[`0`].my_alloc_region/46 (int_sub/51, int_add/50)
        in
-       apply &my_alloc_region/46
-         sum/49 ~ depth my_depth/47 -> next_depth/48
+       apply unknown_arity &my_alloc_region/46
+         (sum/49 ~ depth my_depth/47 -> next_depth/48 : val -> imm tagged)
            (Pmakeblock/52)
            -> k/16 * k/17
  in
  let sum/56 = closure sum_0 @sum &toplevel in
  (let Popaque/59 = %opaque (10) in
   let Pmakeblock/60 = %block.[`0`].`toplevel` (Popaque/59, 0) in
-  apply &toplevel sum/56 (Pmakeblock/60) -> k/20 * error)
+  apply unknown_arity &toplevel
+    (sum/56 : val -> imm tagged) (Pmakeblock/60) -> k/20 * error)
    where k/20 (result/57 : imm tagged) =
      let Pmakeblock/58 = %block.[`0`].`toplevel` (result/57) in
      cont k/15 (Pmakeblock/58))

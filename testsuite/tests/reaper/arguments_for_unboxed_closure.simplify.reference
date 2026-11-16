@@ -18,7 +18,7 @@ let code inline(never) loopify(never) size(10) newer_version_of(u_4)
   let x = %project_value_slot.[g].[x] (g) in
   let y = %project_value_slot.[g].[y] (g) in
   apply direct(id_2_1 &my_alloc_region) inlining_state(depth(1))
-    ($camlArguments_for_unboxed_closure__id_2 : _ -> imm tagged)
+    ($camlArguments_for_unboxed_closure__id_2 : imm tagged -> imm tagged)
       (y)
       -> k2 * k1
     where k2 (apply_result : imm tagged) =
@@ -42,7 +42,8 @@ let code loopify(never) size(11) newer_version_of(g_1)
         : imm tagged =
   let x = %project_value_slot.[g].[x] (my_closure) in
   let y = %project_value_slot.[g].[y] (my_closure) in
-  apply &my_alloc_region h (y) -> k2 * k1
+  apply unknown_arity &my_alloc_region
+    (h : imm tagged -> imm tagged) (y) -> k2 * k1
     where k2 (apply_result : imm tagged) =
       let int_add = %int_barith.add (x, apply_result) in
       cont k (int_add)
@@ -59,7 +60,8 @@ let code loopify(never) size(52) newer_version_of(f_0)
   let u = closure u_4_1 @u &my_alloc_region &`region`
   with { g = g; `id` = $camlArguments_for_unboxed_closure__id_2 }
   in
-  apply direct(u_4_1 &my_alloc_region) (u : _ -> imm tagged) (0) -> k2 * k1
+  apply direct(u_4_1 &my_alloc_region)
+    (u : imm tagged -> imm tagged) (0) -> k2 * k1
     where k2 (apply_result : imm tagged) =
       (apply direct(g_1_1 &my_alloc_region) inlined(never)
          (g : _ -> imm tagged)

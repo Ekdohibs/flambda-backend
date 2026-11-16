@@ -11,11 +11,11 @@ let $camlIarray_length_of_any_not_inlined__first_const_0 = Block 0 () in
  let len/40 = closure len_0 @len &toplevel in
  (let Pmakearray/45 = %array.`imm`.`toplevel` (1, 2, 3) in
   apply direct(len_0 &toplevel)
-    (len/40 : _ -> imm tagged) (Pmakearray/45) -> k/16 * error)
+    (len/40 : val -> imm tagged) (Pmakearray/45) -> k/16 * error)
    where k/16 (n/41 : imm tagged) =
      ((let Pmakearray/44 = %array.`imm`.`toplevel` (n/41, n/41) in
        apply direct(len_0 &toplevel)
-         (len/40 : _ -> imm tagged) (Pmakearray/44) -> k/17 * error)
+         (len/40 : val -> imm tagged) (Pmakearray/44) -> k/17 * error)
         where k/17 (m/42 : imm tagged) =
           let Pmakeblock/43 = %block.[`0`].`toplevel` (n/41, m/42) in
           cont k/13 (Pmakeblock/43)))

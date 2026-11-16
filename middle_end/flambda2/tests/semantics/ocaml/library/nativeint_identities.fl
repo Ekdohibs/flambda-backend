@@ -86,7 +86,7 @@
  let $camlNativeint_identities__nativeint_1 = -9223372036854775808n in
  let opaque/278 = closure opaque_0 @opaque &toplevel in
  apply direct(opaque_0 &toplevel)
-   (opaque/278 : _ -> imm tagged) (1) -> k/94 * error
+   (opaque/278 : imm tagged -> imm tagged) (1) -> k/94 * error
    where k/94 (flag/279 : imm tagged) =
      let and_ones/280 = closure and_ones_1 @and_ones &toplevel in
      let xor_self/281 = closure xor_self_2 @xor_self &toplevel in
@@ -95,17 +95,17 @@
      in
      let shift_zero/284 = closure shift_zero_5 @shift_zero &toplevel in
      (apply direct(and_ones_1 &toplevel)
-        (and_ones/280 : _ -> nativeint boxed)
+        (and_ones/280 : nativeint boxed -> nativeint boxed)
           ($camlNativeint_identities__nativeint_1)
           -> k/95 * error
         where k/95 (and_ones_min/285 : nativeint boxed) =
           (apply direct(opaque_0 &toplevel)
-             (opaque/278 : _ -> nativeint boxed)
+             (opaque/278 : nativeint boxed -> nativeint boxed)
                ($camlNativeint_identities__nativeint_1)
                -> k/119 * error
              where k/119 (apply_result/315 : nativeint boxed) =
                apply direct(and_ones_1 &toplevel)
-                 (and_ones/280 : _ -> nativeint boxed)
+                 (and_ones/280 : nativeint boxed -> nativeint boxed)
                    (apply_result/315)
                    -> k/96 * error
              where k/96 (and_ones_min_unknown/286 : nativeint boxed) =
@@ -115,22 +115,23 @@
                    | 1 -> k/118 ($camlNativeint_identities__nativeint_1))
                   where k/118 (switch_result/313 : nativeint boxed) =
                     apply direct(and_ones_1 &toplevel)
-                      (and_ones/280 : _ -> nativeint boxed)
+                      (and_ones/280 : nativeint boxed -> nativeint boxed)
                         (switch_result/313)
                         -> k/97 * error
                   where k/97 (and_ones_min_joined/287 : nativeint boxed) =
                     (apply direct(xor_self_2 &toplevel)
-                       (xor_self/281 : _ -> nativeint boxed)
+                       (xor_self/281 : nativeint boxed -> nativeint boxed)
                          ($camlNativeint_identities__nativeint_1)
                          -> k/98 * error
                        where k/98 (xor_self_min/288 : nativeint boxed) =
                          (apply direct(opaque_0 &toplevel)
-                            (opaque/278 : _ -> nativeint boxed)
+                            (opaque/278 : nativeint boxed -> nativeint boxed)
                               ($camlNativeint_identities__nativeint_1)
                               -> k/117 * error
                             where k/117 (apply_result/312 : nativeint boxed) =
                               apply direct(xor_self_2 &toplevel)
-                                (xor_self/281 : _ -> nativeint boxed)
+                                (xor_self/281
+                                 : nativeint boxed -> nativeint boxed)
                                   (apply_result/312)
                                   -> k/99 * error
                             where k/99
@@ -147,21 +148,25 @@
                                  where k/116
                                          (switch_result/310 : nativeint boxed) =
                                    apply direct(xor_self_2 &toplevel)
-                                     (xor_self/281 : _ -> nativeint boxed)
+                                     (xor_self/281
+                                      : nativeint boxed -> nativeint boxed)
                                        (switch_result/310)
                                        -> k/100 * error
                                  where k/100
                                          (xor_self_min_joined/290 :
                                             nativeint boxed) =
                                    (apply direct(sub_self_3 &toplevel)
-                                      (sub_self/282 : _ -> nativeint boxed)
+                                      (sub_self/282
+                                       : nativeint boxed -> nativeint boxed)
                                         ($camlNativeint_identities__nativeint_3)
                                         -> k/101 * error
                                       where k/101
                                               (sub_self_max/291 :
                                                  nativeint boxed) =
                                         (apply direct(opaque_0 &toplevel)
-                                           (opaque/278 : _ -> nativeint boxed
+                                           (opaque/278
+                                            : nativeint boxed ->
+                                              nativeint boxed
                                             )
                                              ($camlNativeint_identities__nativeint_3)
                                              -> k/115 * error
@@ -172,7 +177,9 @@
                                                     direct(sub_self_3
                                                     &toplevel)
                                                (sub_self/282
-                                                : _ -> nativeint boxed)
+                                                : nativeint boxed ->
+                                                  nativeint boxed
+                                                )
                                                  (apply_result/309)
                                                  -> k/102 * error
                                            where k/102
@@ -195,7 +202,9 @@
                                                          direct(sub_self_3
                                                          &toplevel)
                                                     (sub_self/282
-                                                     : _ -> nativeint boxed)
+                                                     : nativeint boxed ->
+                                                       nativeint boxed
+                                                     )
                                                       (switch_result/307)
                                                       -> k/103 * error
                                                 where k/103
@@ -205,7 +214,9 @@
                                                           direct(mul_minus_one_4
                                                           &toplevel)
                                                      (mul_minus_one/283
-                                                      : _ -> nativeint boxed)
+                                                      : nativeint boxed ->
+                                                        nativeint boxed
+                                                      )
                                                        ($camlNativeint_identities__nativeint_1)
                                                        -> k/104 * error
                                                      where k/104
@@ -215,7 +226,7 @@
                                                                direct(opaque_0
                                                                &toplevel)
                                                           (opaque/278
-                                                           : _ ->
+                                                           : nativeint boxed ->
                                                              nativeint boxed
                                                            )
                                                             ($camlNativeint_identities__nativeint_1)
@@ -227,7 +238,7 @@
                                                                    direct(mul_minus_one_4
                                                                    &toplevel)
                                                               (mul_minus_one/283
-                                                               : _ ->
+                                                               : nativeint boxed ->
                                                                  nativeint boxed
                                                                )
                                                                 (apply_result/306)
@@ -258,7 +269,7 @@
                                                                     &toplevel)
                                                                    (mul_minus_one/283
                                                                     : 
-                                                                    _ ->
+                                                                    nativeint boxed ->
                                                                     nativeint boxed
                                                                     )
                                                                     (switch_result/304)
@@ -273,7 +284,7 @@
                                                                     &toplevel)
                                                                     (shift_zero/284
                                                                     : 
-                                                                    _ ->
+                                                                    nativeint boxed ->
                                                                     nativeint boxed
                                                                     )
                                                                     ($camlNativeint_identities__nativeint_1)
@@ -288,7 +299,7 @@
                                                                     &toplevel)
                                                                     (opaque/278
                                                                     : 
-                                                                    _ ->
+                                                                    nativeint boxed ->
                                                                     nativeint boxed
                                                                     )
                                                                     ($camlNativeint_identities__nativeint_1)
@@ -303,7 +314,7 @@
                                                                     &toplevel)
                                                                     (shift_zero/284
                                                                     : 
-                                                                    _ ->
+                                                                    nativeint boxed ->
                                                                     nativeint boxed
                                                                     )
                                                                     (apply_result/303)
@@ -333,7 +344,7 @@
                                                                     &toplevel)
                                                                     (shift_zero/284
                                                                     : 
-                                                                    _ ->
+                                                                    nativeint boxed ->
                                                                     nativeint boxed
                                                                     )
                                                                     (switch_result/301)

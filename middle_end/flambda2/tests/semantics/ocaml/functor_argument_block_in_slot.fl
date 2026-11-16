@@ -19,7 +19,9 @@ let $camlFunctor_argument_block_in_slot__first_const_0 = Block 0 () in
      %project_value_slot.[partial_plus].[Popaque] (my_closure/95)
    in
    apply direct(plus_0 &my_alloc_region/96)
-     (plus/99 : _ -> imm tagged) (Popaque/100, param1/94) -> k/32 * k/33
+     (plus/99 : imm tagged * imm tagged -> imm tagged)
+       (Popaque/100, param1/94)
+       -> k/32 * k/33
  in
  let code size(16)
        go_2 (x/101 : imm tagged)
@@ -30,15 +32,19 @@ let $camlFunctor_argument_block_in_slot__first_const_0 = Block 0 () in
    let U/106 = %project_value_slot.[go].[U] (my_closure/102) in
    (let Pfield/111 = %block_load.[`0`] (U/106) in
     apply direct(partial_plus_1 &my_alloc_region/103)
-      (Pfield/111 : _ -> imm tagged) (x/101) -> k/37 * k/35)
+      (Pfield/111 : imm tagged -> imm tagged) (x/101) -> k/37 * k/35)
      where k/37 (apply_result/109 : imm tagged) =
        let Pfield/110 = %block_load.[`0`] (U/106) in
        apply direct(partial_plus_1 &my_alloc_region/103)
-         (Pfield/110 : _ -> imm tagged) (apply_result/109) -> k/36 * k/35
+         (Pfield/110 : imm tagged -> imm tagged)
+           (apply_result/109)
+           -> k/36 * k/35
      where k/36 (apply_result/107 : imm tagged) =
        let Pfield/108 = %block_load.[`0`] (U/106) in
        apply direct(partial_plus_1 &my_alloc_region/103)
-         (Pfield/108 : _ -> imm tagged) (apply_result/107) -> k/34 * k/35
+         (Pfield/108 : imm tagged -> imm tagged)
+           (apply_result/107)
+           -> k/34 * k/35
  in
  let plus/112 = closure plus_0 @plus &toplevel in
  (let Popaque/122 = %opaque (2) in
@@ -56,7 +62,7 @@ let $camlFunctor_argument_block_in_slot__first_const_0 = Block 0 () in
    where k/38 (M/113 : val) =
      ((let Pfield/116 = %block_load.[`0`] (M/113) in
        apply direct(go_2 &toplevel)
-         (Pfield/116 : _ -> imm tagged) (1) -> k/39 * error)
+         (Pfield/116 : imm tagged -> imm tagged) (1) -> k/39 * error)
         where k/39 (answer/114 : imm tagged) =
           let Pmakeblock/115 =
             %block.[`0`].`toplevel` (plus/112, M/113, answer/114)

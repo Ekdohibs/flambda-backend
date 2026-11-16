@@ -11,7 +11,8 @@
  let $camlTupled_unknown_pair__const_block_0 = Block 0 (1, 2) in
  let add/42 = closure add_0 @add &toplevel in
  (let Popaque/45 = %opaque ($camlTupled_unknown_pair__const_block_0) in
-  apply &toplevel add/42 (Popaque/45) -> k/14 * error)
+  apply unknown_arity &toplevel
+    (add/42 : _ -> imm tagged) (Popaque/45) -> k/14 * error)
    where k/14 (result/43 : imm tagged) =
      let Pmakeblock/44 = %block.[`0`].`toplevel` (add/42, result/43) in
      cont k/11 (Pmakeblock/44))

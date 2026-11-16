@@ -22,7 +22,7 @@
  let shorter/71 = closure shorter_0 @shorter &toplevel in
  (let Popaque/81 = %opaque ($camlLen_compare_two__immstring_0) in
   apply direct(shorter_0 &toplevel)
-    (shorter/71 : _ -> val)
+    (shorter/71 : val * val? -> val)
       ($camlLen_compare_two__immstring_1, Popaque/81)
       -> k/16 * error)
    where k/16 (apply_result/72 : val) =
@@ -30,7 +30,7 @@
      let Pstringlength/74 = %tag_imm (prim/73) in
      ((let Popaque/80 = %opaque ($camlLen_compare_two__immstring_2) in
        apply direct(shorter_0 &toplevel)
-         (shorter/71 : _ -> val)
+         (shorter/71 : val? * val -> val)
            (Popaque/80, $camlLen_compare_two__immstring_3)
            -> k/17 * error)
         where k/17 (apply_result/75 : val) =

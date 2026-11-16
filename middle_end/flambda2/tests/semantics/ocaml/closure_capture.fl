@@ -27,15 +27,17 @@ let $camlClosure_capture__first_const_0 = Block 0 () in
  in
  let make_adder/64 = closure make_adder_0 @make_adder &toplevel in
  apply direct(make_adder_0 &toplevel)
-   (make_adder/64 : _ -> val) (5) -> k/29 * error
+   (make_adder/64 : imm tagged -> val) (5) -> k/29 * error
    where k/29 (add5/67 : val) =
      (apply direct(make_adder_0 &toplevel)
-        (make_adder/64 : _ -> val) (7) -> k/30 * error
+        (make_adder/64 : imm tagged -> val) (7) -> k/30 * error
         where k/30 (add7/68 : val) =
-          (apply &toplevel add7/68 (2) -> k/31 * error
+          (apply unknown_arity &toplevel
+             (add7/68 : imm tagged -> imm tagged) (2) -> k/31 * error
              where k/31 (apply_result/69 : imm tagged) =
                ((let Popaque/72 = %opaque (1) in
-                 apply &toplevel add5/67 (Popaque/72) -> k/32 * error)
+                 apply unknown_arity &toplevel
+                   (add5/67 : _ -> imm tagged) (Popaque/72) -> k/32 * error)
                   where k/32 (apply_result/70 : imm tagged) =
                     let int_add/71 =
                       %int_barith.add (apply_result/70, apply_result/69)

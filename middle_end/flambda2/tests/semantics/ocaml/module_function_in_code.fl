@@ -32,7 +32,7 @@ let $camlModule_function_in_code__first_const_0 = Block 0 () in
    let int_add/92 = %int_barith.add (x/86, 2) in
    let Pfield/93 = %block_load.[`2`] (Bounds/91) in
    apply direct(within_0 &my_alloc_region/88)
-     (Pfield/93 : _ -> imm tagged) (int_add/92) -> k/28 * k/29
+     (Pfield/93 : imm tagged -> imm tagged) (int_add/92) -> k/28 * k/29
  in
  (let floor/101 = %opaque (1) in
   let within/102 = closure within_0 @within &toplevel
@@ -45,7 +45,7 @@ let $camlModule_function_in_code__first_const_0 = Block 0 () in
      with { Bounds = Bounds/94 }
      in
      (apply direct(step_1 &toplevel)
-        (step/95 : _ -> imm tagged) (20) -> k/31 * error
+        (step/95 : imm tagged -> imm tagged) (20) -> k/31 * error
         where k/31 (apply_result/96 : imm tagged) =
           ((let Popaque/100 = %opaque (0) in
             apply direct(step_1 &toplevel)

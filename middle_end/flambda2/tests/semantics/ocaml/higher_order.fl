@@ -5,9 +5,11 @@ let $camlHigher_order__first_const_0 = Block 0 () in
          -> k/24 * k/25
          : imm tagged =
    let next_depth/66 = rec_info (succ my_depth/65) in
-   apply &my_alloc_region/64 f/61 (x/62) -> k/26 * k/25
+   apply unknown_arity &my_alloc_region/64
+     (f/61 : imm tagged -> imm tagged) (x/62) -> k/26 * k/25
      where k/26 (apply_result/67 : imm tagged) =
-       apply &my_alloc_region/64 f/61 (apply_result/67) -> k/24 * k/25
+       apply unknown_arity &my_alloc_region/64
+         (f/61 : imm tagged -> imm tagged) (apply_result/67) -> k/24 * k/25
  in
  let code size(3)
        `fn[higher_order.ml:11,56--72]_1` (y/68 : imm tagged)
@@ -33,7 +35,7 @@ let $camlHigher_order__first_const_0 = Block 0 () in
       @`fn[higher_order.ml:11,56--72]` &toplevel
   in
   apply direct(twice_0 &toplevel)
-    (twice/80 : _ -> imm tagged)
+    (twice/80 : val? * imm tagged -> imm tagged)
       (`fn[higher_order.ml:11,56--72]/87`, 3)
       -> k/31 * error)
    where k/31 (apply_result/81 : imm tagged) =

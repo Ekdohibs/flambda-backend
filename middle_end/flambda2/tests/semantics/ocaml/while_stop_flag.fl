@@ -134,7 +134,9 @@ let $camlWhile_stop_flag__first_const_0 = Block 0 () in
  let sum_until/159 = closure sum_until_0 @sum_until &toplevel in
  (let Popaque/162 = %opaque (9) in
   apply direct(sum_until_0 &toplevel)
-    (sum_until/159 : _ -> imm tagged) (Popaque/162, 7) -> k/53 * error)
+    (sum_until/159 : val? * imm tagged -> imm tagged)
+      (Popaque/162, 7)
+      -> k/53 * error)
    where k/53 (result/160 : imm tagged) =
      let Pmakeblock/161 = %block.[`0`].`toplevel` (sum_until/159, result/160)
      in

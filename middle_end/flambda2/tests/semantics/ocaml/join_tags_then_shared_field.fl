@@ -28,7 +28,8 @@ let $camlJoin_tags_then_shared_field__first_const_0 = Block 0 () in
    let next_depth/91 = rec_info (succ my_depth/90) in
    let place/92 = %project_value_slot.[carried].[place] (my_closure/88) in
    apply direct(place_0 &my_alloc_region/89)
-     (place/92 : _ -> [ 0 | 0 of imm tagged |1 of imm tagged ])
+     (place/92
+      : imm tagged * imm tagged -> [ 0 | 0 of imm tagged |1 of imm tagged ])
        (c/86, x/87)
        -> k/40 * k/39
      where k/40 (`*match*/93` : [ 0 | 0 of imm tagged |1 of imm tagged ]) =

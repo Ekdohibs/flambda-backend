@@ -66,7 +66,7 @@ let $camlTests__first_const_0 = Block 0 () in
                       let int_add = %int_barith.add (Pfield_1, Pfield) in
                       let int_add_1 = %int_barith.add (x, y) in
                       apply direct(to_inline_0 &my_alloc_region)
-                        (to_inline : _ -> imm tagged)
+                        (to_inline : imm tagged * imm tagged -> imm tagged)
                           (int_add_1, int_add)
                           -> k1 * k2)))
  in

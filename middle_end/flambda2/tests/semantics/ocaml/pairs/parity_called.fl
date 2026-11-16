@@ -6,14 +6,16 @@ let $camlParity_called__first_const_0 = Block 0 () in
          : imm tagged =
    let next_depth/40 = rec_info (succ my_depth/39) in
    (let Pfield/43 = %block_load.[`0`] ($Parity.camlParity) in
-    apply &my_alloc_region/38 Pfield/43 (n/36) -> k/16 * k/15)
+    apply unknown_arity &my_alloc_region/38
+      (Pfield/43 : imm tagged -> [ 0 |1 ]) (n/36) -> k/16 * k/15)
      where k/16 (apply_result/41 : [ 0 |1 ]) =
        let Pnot/42 = %boolean_not (apply_result/41) in
        cont k/14 (Pnot/42)
  in
  let even_or_odd/44 = closure even_or_odd_0 @even_or_odd &toplevel in
  (let Pfield/47 = %block_load.[`0`] ($Parity.camlParity) in
-  apply &toplevel Pfield/47 (4) -> k/17 * error)
+  apply unknown_arity &toplevel
+    (Pfield/47 : imm tagged -> imm tagged) (4) -> k/17 * error)
    where k/17 (four_is_even/45 : imm tagged) =
      let Pmakeblock/46 =
        %block.[`0`].`toplevel` (even_or_odd/44, four_is_even/45)

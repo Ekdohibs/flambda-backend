@@ -22,7 +22,10 @@ let $camlUnboxed_float_over_application__first_const_0 = Block 0 () in
  with { second = second/59 }
  in
  (let Popaque/63 = %opaque (first/60) in
-  apply &toplevel Popaque/63 (1, 0x1.8p+0) -> k/20 * error)
+  apply unknown_arity &toplevel
+    (Popaque/63 : imm tagged * float -> float boxed)
+      (1, 0x1.8p+0)
+      -> k/20 * error)
    where k/20 (result/61 : float boxed) =
      let Pmakeblock/62 =
        %block.[`0`].`toplevel` (second/59, first/60, result/61)

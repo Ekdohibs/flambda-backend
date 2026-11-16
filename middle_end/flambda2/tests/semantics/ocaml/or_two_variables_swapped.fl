@@ -31,7 +31,7 @@
  (let region/91 = %begin_region () in
   let ghost_region/92 = %begin_ghost_region () in
   apply direct(slope_0 &toplevel)
-    (slope/88 : _ -> imm tagged)
+    (slope/88 : val -> imm tagged)
       ($camlOr_two_variables_swapped__const_block_0)
       -> k/33 * error
     where k/33 (apply_result/96 : imm tagged) =
@@ -40,7 +40,7 @@
           %block.[`1`].`toplevel`.local[region/91] (2, Popaque/104)
         in
         apply direct(slope_0 &toplevel)
-          (slope/88 : _ -> imm tagged) (Pmakeblock/105) -> k/34 * error)
+          (slope/88 : val -> imm tagged) (Pmakeblock/105) -> k/34 * error)
          where k/34 (apply_result/97 : imm tagged) =
            let int_mul/98 = %int_barith.mul (apply_result/97, 10) in
            ((let Popaque/102 = %opaque (9) in
@@ -48,7 +48,9 @@
                %block.[`0`].`toplevel`.local[region/91] (2, Popaque/102)
              in
              apply direct(slope_0 &toplevel)
-               (slope/88 : _ -> imm tagged) (Pmakeblock/103) -> k/35 * error)
+               (slope/88 : val -> imm tagged)
+                 (Pmakeblock/103)
+                 -> k/35 * error)
               where k/35 (apply_result/99 : imm tagged) =
                 let int_add/100 =
                   %int_barith.add (apply_result/99, int_mul/98)

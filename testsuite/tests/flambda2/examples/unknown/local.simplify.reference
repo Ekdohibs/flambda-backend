@@ -59,12 +59,13 @@ and code rec loopify(never) size(31) newer_version_of(map_local_1)
                direct(map_local_1_1
                &my_alloc_region &my_region &my_ghost_region)
           ($camlLocal__map_local_19 ~ depth my_depth -> succ my_depth
-           : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+           : val * val? -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
             (f, Pfield)
             -> k2 * k1)
          where k2 (apply_result : [ 0 | 0 of val * [ 0 | 0 of val * val ] ]) =
            ((let Pfield = %block_load.[`0`] (l) in
-             apply &my_alloc_region f (Pfield) -> k2 * k1)
+             apply unknown_arity &my_alloc_region
+               (f : _ -> val) (Pfield) -> k2 * k1)
               where k2 (apply_result_1 : val) =
                 let Pmakeblock =
                   %block.[`0`].my_alloc_region.local[my_region]
@@ -95,7 +96,7 @@ and code rec loopify(never) size(19) newer_version_of(length_2)
            cont k (int_add))
 in
 apply direct(length_2_1 &toplevel)
-  ($camlLocal__length_20 : _ -> imm tagged)
+  ($camlLocal__length_20 : val -> imm tagged)
     ($camlLocal__const_block_3)
     -> k1 * error
   where k1 (apply_result : imm tagged) =
@@ -134,13 +135,18 @@ apply direct(length_2_1 &toplevel)
            in
            apply direct(map_local_1_1 &toplevel &`region` &ghost_region)
              ($camlLocal__map_local_19
-              : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+              : val? * [ 0 | 0 of val * [ 0 | 0 of val * val ] ] ->
+                [ 0 | 0 of val * [ 0 | 0 of val * val ] ]
+              )
                ($`camlLocal__fn[local.ml:32,27--43]_21`,
                 $camlLocal__const_block_2)
                -> k1 * error)
             where k1 (ms : [ 0 | 0 of val * [ 0 | 0 of val * val ] ]) =
               (apply direct(length_2_1 &toplevel)
-                 ($camlLocal__length_20 : _ -> imm tagged) (ms) -> k1 * error
+                 ($camlLocal__length_20
+                  : [ 0 | 0 of val * [ 0 | 0 of val * val ] ] -> imm tagged)
+                   (ms)
+                   -> k1 * error
                  where k1 (apply_result : imm tagged) =
                    let prim = %phys_eq (apply_result, 3) in
                    switch prim
@@ -209,7 +215,8 @@ apply direct(length_2_1 &toplevel)
                     let acc_1 =
                       %block.[`0`].my_alloc_region.local[my_region] (a, acc)
                     in
-                    (apply &my_alloc_region break_here (a) -> k3 * k1
+                    (apply unknown_arity &my_alloc_region
+                       (break_here : _ -> [ 0 |1 ]) (a) -> k3 * k1
                        where k3 (param : [ 0 |1 ]) =
                          let unboxed_field = %untag_imm (param) in
                          cont k2 (unboxed_field)
@@ -229,7 +236,9 @@ apply direct(length_2_1 &toplevel)
                                      direct(find_span_6_1
                                      &my_alloc_region &my_region &my_ghost_region)
                                 ($camlLocal__find_span_24 ~ depth my_depth -> succ my_depth
-                                 : _ ->
+                                 : val *
+                                   val? *
+                                   [ 0 | 0 of val * [ 0 | 0 of val * val ] ] ->
                                    [ 0 of [ 0 | 0 of val * val ] *
                                        [ 0 | 0 of val * val ] ]
                                  )
@@ -252,7 +261,9 @@ apply direct(length_2_1 &toplevel)
                             direct(find_span_6_1
                             &my_alloc_region &my_region &my_ghost_region)
                        ($camlLocal__find_span_24 ~ depth my_depth -> succ my_depth
-                        : _ ->
+                        : val *
+                          [ 0 | 0 of val * [ 0 | 0 of val * val ] ] *
+                          imm tagged ->
                           [ 0 of [ 0 | 0 of val * val ] *
                               [ 0 | 0 of val * val ] ]
                         )
@@ -267,7 +278,7 @@ apply direct(length_2_1 &toplevel)
                                   direct(spans_5_1
                                   &my_alloc_region &my_region &my_ghost_region)
                              ($camlLocal__spans_23 ~ depth my_depth -> succ my_depth
-                              : _ ->
+                              : val * val? ->
                                 [ 0 | 0 of val * [ 0 | 0 of val * val ] ]
                               )
                                (break_here, Pmixedfield)
@@ -283,7 +294,7 @@ apply direct(length_2_1 &toplevel)
                                        direct(rev_app_4_1
                                        &my_alloc_region &my_region &my_ghost_region)
                                   ($camlLocal__rev_app_22
-                                   : _ ->
+                                   : val? * imm tagged ->
                                      [ 0 | 0 of val * [ 0 | 0 of val * val ]
                                      ]
                                    )
@@ -317,14 +328,17 @@ apply direct(length_2_1 &toplevel)
               let ghost_region_1 = %begin_ghost_region () in
               (apply direct(spans_5_1 &toplevel &region_1 &ghost_region_1)
                  ($camlLocal__spans_23
-                  : _ -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
+                  : val? * val -> [ 0 | 0 of val * [ 0 | 0 of val * val ] ])
                    ($camlLocal__is_even_25, $camlLocal__const_block_15)
                    -> k1 * error
                  where k1
                          (even_spans :
                             [ 0 | 0 of val * [ 0 | 0 of val * val ] ]) =
                    (apply direct(length_2_1 &toplevel)
-                      ($camlLocal__length_20 : _ -> imm tagged)
+                      ($camlLocal__length_20
+                       : [ 0 | 0 of val * [ 0 | 0 of val * val ] ] ->
+                         imm tagged
+                       )
                         (even_spans)
                         -> k1 * error
                       where k1 (apply_result : imm tagged) =

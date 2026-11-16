@@ -27,7 +27,8 @@ in
      where k/46 =
        let int_sub/137 = %int_barith.sub (k/129, 1) in
        apply direct(up_4 &my_alloc_region/131)
-         (up/136 ~ depth my_depth/132 -> next_depth/133 : _ -> imm tagged)
+         (up/136 ~ depth my_depth/132 -> next_depth/133
+          : imm tagged -> imm tagged)
            (int_sub/137)
            -> k/44 * k/45
  and code rec size(25)
@@ -50,7 +51,8 @@ in
      where k/50 =
        let int_sub/149 = %int_barith.sub (k/141, 1) in
        apply direct(down_3 &my_alloc_region/143)
-         (down/148 ~ depth my_depth/144 -> next_depth/145 : _ -> imm tagged)
+         (down/148 ~ depth my_depth/144 -> next_depth/145
+          : imm tagged -> imm tagged)
            (int_sub/149)
            -> k/48 * k/49
  in
@@ -74,10 +76,12 @@ in
    with { n = n/159; y = y/153 }
    in
    apply direct(apply_0 &my_alloc_region/155)
-     (apply/158 : _ -> imm tagged) (up/161, 1) -> k/54 * k/53
+     (apply/158 : val? * imm tagged -> imm tagged) (up/161, 1) -> k/54 * k/53
      where k/54 (apply_result/162 : imm tagged) =
        (apply direct(apply_0 &my_alloc_region/155)
-          (apply/158 : _ -> imm tagged) (down/160, 2) -> k/55 * k/53
+          (apply/158 : val? * imm tagged -> imm tagged)
+            (down/160, 2)
+            -> k/55 * k/53
           where k/55 (apply_result/163 : imm tagged) =
             let int_add/164 =
               %int_barith.add (apply_result/163, apply_result/162)
@@ -105,9 +109,11 @@ in
  with { apply_1 = apply/172 }
  in
  (let Popaque/176 = %opaque (3) in
-  apply direct(make_1 &toplevel) make/173 (Popaque/176) -> k/59 * error
+  apply direct(make_1 &toplevel)
+    (make/173 : imm tagged -> val?) (Popaque/176) -> k/59 * error
     where k/59 (func/177) =
-      apply &toplevel func/177 (4) -> k/58 * error)
+      apply unknown_arity &toplevel
+        (func/177 : imm tagged -> imm tagged) (4) -> k/58 * error)
    where k/58 (result/174 : imm tagged) =
      let Pmakeblock/175 =
        %block.[`0`].`toplevel` (apply/172, make/173, result/174)

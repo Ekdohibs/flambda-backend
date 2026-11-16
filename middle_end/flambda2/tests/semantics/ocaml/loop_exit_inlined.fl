@@ -70,7 +70,7 @@ let $camlLoop_exit_inlined__first_const_0 = Block 0 () in
  in
  let sum_or_zero/107 = closure sum_or_zero_0 @sum_or_zero &toplevel in
  apply direct(sum_or_zero_0 &toplevel)
-   (sum_or_zero/107 : _ -> imm tagged) (1) -> k/41 * error
+   (sum_or_zero/107 : imm tagged -> imm tagged) (1) -> k/41 * error
    where k/41 (result/108 : imm tagged) =
      let Pmakeblock/109 = %block.[`0`].`toplevel` (result/108) in
      cont k/29 (Pmakeblock/109))

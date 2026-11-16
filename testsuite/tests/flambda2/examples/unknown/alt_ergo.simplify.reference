@@ -52,7 +52,8 @@ let code loopify(never) size(86) newer_version_of(inv_borne_sup_1)
         let Pmixedfield = %block_load.[`0`] (Pfield) in
         let Popaque = %opaque (0) in
         let Pobj_magic = %opaque (Popaque) in
-        apply &my_alloc_region Pobj_magic (Pmixedfield) -> k3 * k1
+        apply unknown_arity &my_alloc_region
+          (Pobj_magic : _ -> [ 0 |1 ]) (Pmixedfield) -> k3 * k1
           where k3 (param : [ 0 |1 ]) =
             let unboxed_field = %untag_imm (param) in
             cont k2 (unboxed_field))
@@ -145,7 +146,7 @@ let code loopify(never) size(45) newer_version_of(inv_3) tupled
              in
              apply direct(inv_bornes_2_1 &my_alloc_region)
                ($camlAlt_ergo__inv_bornes_11
-                : _ ->
+                : val * val? ->
                   [ 0 of [ 0 |1 | 0 of val |1 of val ] *
                       [ 0 |1 | 0 of val |1 of val ] ]
                 )

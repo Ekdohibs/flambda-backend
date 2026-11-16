@@ -22,7 +22,7 @@ let $camlNever_returns_in_function__first_const_0 = Block 0 () in
        cont k/38
      where k/38 =
        apply direct(fail_0 &my_alloc_region/79)
-         (fail/82 : _ -> imm tagged) (0) -> k/36 * k/37
+         (fail/82 : imm tagged -> imm tagged) (0) -> k/36 * k/37
  in
  let fail/84 = closure fail_0 @fail &toplevel in
  let f/85 = closure f_1 @f &toplevel with { fail = fail/84 } in

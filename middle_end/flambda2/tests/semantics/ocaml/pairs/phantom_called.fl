@@ -1,7 +1,8 @@
 let $camlPhantom_called__first_const_0 = Block 0 () in
 (let Popaque/18 = %opaque (0) in
  let Pfield/19 = %block_load.[`0`] ($Phantom.camlPhantom) in
- apply &toplevel Pfield/19 (Popaque/18) -> k/8 * error)
+ apply unknown_arity &toplevel
+   (Pfield/19 : _ -> imm tagged) (Popaque/18) -> k/8 * error)
   where k/8 (r/16 : imm tagged) =
     let Pmakeblock/17 = %block.[`0`].`toplevel` (r/16) in
     cont k/7 (Pmakeblock/17)

@@ -13,7 +13,7 @@ let $camlExported_variant__first_const_0 = Block 0 () in
  let b/45 = %block.[`0`].`toplevel` (Popaque/44) in
  let is_a/46 = closure is_a_0 @is_a &toplevel in
  apply direct(is_a_0 &toplevel)
-   (is_a/46 : _ -> imm tagged) (b/45) -> k/14 * error
+   (is_a/46 : [ 0 | 0 of imm tagged ] -> imm tagged) (b/45) -> k/14 * error
    where k/14 (result/47 : imm tagged) =
      let Pmakeblock/48 = %block.[`0`].`toplevel` (b/45, is_a/46, result/47)
      in
