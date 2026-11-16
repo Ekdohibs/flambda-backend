@@ -8,7 +8,8 @@
 
 (library
  (name flambda2_rocq_types_converter)
- (modules model_numbers model_names model_type type_converter)
+ (modules model_numbers model_names model_type type_converter
+   prover_answers)
  (libraries
   ocamlfrontend
   flambda2_algorithms
