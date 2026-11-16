@@ -3746,25 +3746,30 @@ Definition rename_arm_forwards (r : renaming) (F : arm_forwards)
        (rename_continuation r (fst binding), rename_arm_entry r (snd binding)))
     F.
 
+(* The tactic is told how the two states of the pass are renamed. It
+   is given the laws of the entry kept of a continuation and of what
+   the pass does at an application of a continuation, which are by
+   hand: the tactic does not come to the end of the second. *)
+Section Forward_to_arms.
+
+#[local] Instance arm_kinds_in_scope_renaming : Renaming_of kinds_in_scope :=
+  rename_kinds_in_scope.
+#[local] Instance arm_forwards_renaming : Renaming_of arm_forwards :=
+  rename_arm_forwards.
+
+#[local] Hint Rewrite params_in_scope_equivariant : equivariance.
+
 Lemma lookup_rename_arm_forwards (r : renaming) (F : arm_forwards)
     (k : continuation) :
   lookup (rename_continuation r k) (rename_arm_forwards r F)
   = option_map (rename_arm_entry r) (lookup k F).
-Proof.
-  unfold rename_arm_forwards.
-  induction F as [ | [k' entry] F IH]; simpl; [ reflexivity | ].
-  rewrite rename_continuation_eqb.
-  destruct (Pos.eqb k k'); [ reflexivity | exact IH ].
-Qed.
+Proof. equivariance. Qed.
 
 Lemma position_of_renamed (r : renaming) (x : variable)
     (params : list variable) :
   position_of (rename_variable r x) (map (rename_variable r) params)
   = position_of x params.
-Proof.
-  induction params as [ | y params IH]; simpl; [ reflexivity | ].
-  rewrite rename_variable_eqb, IH. reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 Lemma arm_entry_of_equivariant (r : renaming) (kinded : bool)
     (params : list variable) (metadata : handler_metadata)
@@ -3827,78 +3832,19 @@ Proof.
     [ apply forwarded_equivariant | reflexivity ].
 Qed.
 
-Fixpoint forward_to_arms_under_equivariant (r : renaming) (e : expr) :
+#[local] Hint Rewrite arm_entry_of_equivariant
+  forward_to_arm_apply_cont_equivariant : equivariance.
+#[local] Arguments arm_entry_of : simpl never.
+#[local] Arguments forward_to_arm_apply_cont : simpl never.
+
+Lemma forward_to_arms_under_equivariant (r : renaming) (e : expr) :
   ∀ (kinded : bool) (G : kinds_in_scope) (F : arm_forwards),
     forward_to_arms_under kinded (rename_kinds_in_scope r G)
       (rename_arm_forwards r F) (rename_expr r e)
-    = rename_expr r (forward_to_arms_under kinded G F e)
-with forward_to_arms_in_handler_equivariant (r : renaming)
-    (h : continuation_handler) :
-  ∀ (kinded : bool) (G : kinds_in_scope) (F : arm_forwards),
-    forward_to_arms_in_handler kinded (rename_kinds_in_scope r G)
-      (rename_arm_forwards r F) (rename_handler r h)
-    = rename_handler r (forward_to_arms_in_handler kinded G F h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k [params metadata handler] body
-         | handlers body | ap | ac | scrutinee arms | ];
-      intros kinded G F; try reflexivity.
-    + cbn [rename_expr forward_to_arms_under].
-      change ((rename_variable r x, kind) :: rename_kinds_in_scope r G)
-        with (rename_kinds_in_scope r ((x, kind) :: G)).
-      rewrite forward_to_arms_under_equivariant. reflexivity.
-    + cbn [rename_expr forward_to_arms_under].
-      rewrite forward_to_arms_under_equivariant. reflexivity.
-    + cbn [rename_expr rename_handler forward_to_arms_under]. cbv zeta.
-      rewrite params_in_scope_equivariant,
-        (forward_to_arms_under_equivariant r handler),
-        arm_entry_of_equivariant.
-      change
-        ((rename_continuation r k,
-          rename_arm_entry r
-            (arm_entry_of kinded params metadata
-               (forward_to_arms_under kinded
-                  (params_in_scope params (hm_params_kinds metadata) G) F
-                  handler)
-               body))
-         :: rename_arm_forwards r F)
-        with
-          (rename_arm_forwards r
-             ((k,
-               arm_entry_of kinded params metadata
-                 (forward_to_arms_under kinded
-                    (params_in_scope params (hm_params_kinds metadata) G) F
-                    handler)
-                 body)
-              :: F)).
-      rewrite (forward_to_arms_under_equivariant r body). reflexivity.
-    + cbn [rename_expr forward_to_arms_under]. cbv zeta.
-      assert (Hscope :
-        map (fun '(k, _) => (k, None))
-          (map (fun '(k, h) => (rename_continuation r k, rename_handler r h))
-             handlers)
-        ++ rename_arm_forwards r F
-        = rename_arm_forwards r
-            (map (fun '(k, _) => (k, None)) handlers ++ F)).
-      { unfold rename_arm_forwards. rewrite map_app, !map_map. f_equal.
-        apply map_ext. intros [k h]. reflexivity. }
-      rewrite Hscope. clear Hscope.
-      rewrite (forward_to_arms_under_equivariant r body). f_equal.
-      generalize (map (fun '(k, _) => (k, @None arm_entry)) handlers ++ F).
-      intros F'.
-      induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
-      rewrite (forward_to_arms_in_handler_equivariant r h kinded G F'), IH.
-      reflexivity.
-    + cbn [rename_expr forward_to_arms_under].
-      rewrite forward_to_arm_apply_cont_equivariant. reflexivity.
-    + cbn [rename_expr forward_to_arms_under]. f_equal.
-      rewrite !map_map. apply map_ext. intros [i ac]. cbn [fst snd].
-      rewrite forward_to_arm_apply_cont_equivariant. reflexivity.
-  - destruct h as [params metadata handler]. intros kinded G F.
-    cbn [rename_handler forward_to_arms_in_handler].
-    rewrite params_in_scope_equivariant, forward_to_arms_under_equivariant.
-    reflexivity.
-Qed.
+    = rename_expr r (forward_to_arms_under kinded G F e).
+Proof. equivariance. Qed.
+
+End Forward_to_arms.
 
 Lemma forward_to_arms_equivariant : rewrite_equivariant forward_to_arms.
 Proof.
@@ -3936,36 +3882,18 @@ Proof.
   rewrite Hbody. reflexivity.
 Qed.
 
-Fixpoint forward_to_arms_in_code_equivariant_aux (r : renaming) (e : expr) :
-  forward_to_arms_in_code (rename_expr r e)
-  = rename_expr r (forward_to_arms_in_code e)
-with forward_to_arms_in_code_handler_equivariant (r : renaming)
-    (h : continuation_handler) :
-  forward_to_arms_in_code_handler (rename_handler r h)
-  = rename_handler r (forward_to_arms_in_code_handler h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      simpl; try reflexivity.
-    + rewrite forward_to_arms_in_code_equivariant_aux. reflexivity.
-    + rewrite forward_to_arms_in_code_equivariant_aux, !map_map.
-      f_equal. apply map_ext.
-      exact (forward_to_arms_in_binding_equivariant r).
-    + rewrite forward_to_arms_in_code_handler_equivariant,
-        forward_to_arms_in_code_equivariant_aux.
-      reflexivity.
-    + rewrite forward_to_arms_in_code_equivariant_aux. f_equal.
-      induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
-      rewrite (forward_to_arms_in_code_handler_equivariant r h), IH.
-      reflexivity.
-  - destruct h as [params metadata handler]. simpl.
-    rewrite forward_to_arms_in_code_equivariant_aux. reflexivity.
-Qed.
+(* The law of a binding, where the pass begins with those kinds and
+   nothing else, is given to the tactic. *)
+Section Forward_to_arms_in_code.
+
+#[local] Hint Rewrite forward_to_arms_in_binding_equivariant : equivariance.
+#[local] Arguments forward_to_arms_in_binding : simpl never.
 
 Lemma forward_to_arms_in_code_equivariant :
   rewrite_equivariant forward_to_arms_in_code.
-Proof. exact forward_to_arms_in_code_equivariant_aux. Qed.
+Proof. equivariance. Qed.
+
+End Forward_to_arms_in_code.
 
 (* Taking away a parameter that every application gives one variable:
    the lemmas are in FlambdaUnaliasParamsNamesProofs.v. *)
