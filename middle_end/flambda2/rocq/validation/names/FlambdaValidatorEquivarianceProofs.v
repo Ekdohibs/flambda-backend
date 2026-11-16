@@ -3212,7 +3212,24 @@ Qed.
    FlambdaLoopAliasesSpec.v commute with renaming. None makes a name;
    each compares names by equality only. The statements are in
    FlambdaValidatorEquivarianceSpec.v; the lemma here that has the name
-   of a statement proves it. *)
+   of a statement proves it.
+
+   The proofs are by the tactic of FlambdaEquivarianceTactic.v where it
+   does them. The passes are in one section, so that what is given to
+   the tactic here is given to it here only: the law of a function, once
+   proved, is a hint for the proofs after it, as the proofs by hand
+   rewrote with the lemmas before them. *)
+Section Passes_for_loops.
+
+(* Laws of the free names that are proved by hand in
+   FlambdaValidatorEquivarianceBaseProofs.v. The tactic derives them
+   where it meets those functions, in every case of every induction
+   again; given as hints they are not derived. *)
+#[local] Hint Rewrite var_in_simple_equivariant var_in_value_slots_equivariant
+  var_in_named_equivariant var_in_static_binding_equivariant
+  var_free_b_equivariant_aux var_free_in_handler_b_equivariant
+  cont_free_b_equivariant_aux cont_free_in_handler_b_equivariant
+  : equivariance.
 
 (* A rewrite applied to the handlers of recursive continuations. *)
 Section Rewrite_rec_handlers.
@@ -3220,41 +3237,9 @@ Section Rewrite_rec_handlers.
 Variable f : expr -> expr.
 Hypothesis f_equivariant : rewrite_equivariant f.
 
-Fixpoint rewrite_rec_handlers_equivariant_aux (r : renaming) (e : expr) :
-  rewrite_rec_handlers f (rename_expr r e)
-  = rename_expr r (rewrite_rec_handlers f e)
-with rewrite_rec_handlers_in_handler_equivariant (r : renaming)
-    (h : continuation_handler) :
-  rewrite_rec_handlers_in_handler f (rename_handler r h)
-  = rename_handler r (rewrite_rec_handlers_in_handler f h)
-with rewrite_rec_handler_equivariant (r : renaming)
-    (h : continuation_handler) :
-  rewrite_rec_handler f (rename_handler r h)
-  = rename_handler r (rewrite_rec_handler f h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      simpl; try reflexivity.
-    + rewrite rewrite_rec_handlers_equivariant_aux. reflexivity.
-    + rewrite rewrite_rec_handlers_equivariant_aux. reflexivity.
-    + rewrite rewrite_rec_handlers_in_handler_equivariant,
-        rewrite_rec_handlers_equivariant_aux.
-      reflexivity.
-    + rewrite rewrite_rec_handlers_equivariant_aux. f_equal.
-      induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
-      rewrite (rewrite_rec_handler_equivariant r h), IH. reflexivity.
-  - destruct h as [params metadata handler]. simpl.
-    rewrite rewrite_rec_handlers_equivariant_aux. reflexivity.
-  - destruct h as [params metadata handler]. simpl.
-    rewrite rewrite_rec_handlers_equivariant_aux,
-      (rewrite_code_body_equivariant f f_equivariant).
-    reflexivity.
-Qed.
-
 Lemma rewrite_rec_handlers_equivariant :
   rewrite_equivariant (rewrite_rec_handlers f).
-Proof. exact rewrite_rec_handlers_equivariant_aux. Qed.
+Proof. equivariance. Qed.
 
 End Rewrite_rec_handlers.
 
@@ -5382,6 +5367,8 @@ Proof.
   - rewrite !loopify_unit_equivariant. reflexivity.
   - rewrite loopify_unit_equivariant. reflexivity.
 Qed.
+
+End Passes_for_loops.
 
 (* ======================================================================== *)
 (* The normalisations of FlambdaValidateSpec.v                              *)
