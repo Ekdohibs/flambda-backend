@@ -1136,12 +1136,13 @@ End Unbox_numbers.
    by the tactic of FlambdaEquivarianceTactic.v. It is told how what is
    known is renamed, since the types do not say it (a typing environment
    is a list of pairs of a positive and a type): the actions are
-   [rename_naive_typing_env] and [rename_naive_type]. The laws of the
-   functions that [follow_aliases] is made of are stated, and each is
-   given to the tactic for the proofs after it: a law that is not
-   stated is derived again by every proof that needs it. The two laws
-   of lists are the forms that the terms have where [canonical_simple]
-   is under a [map]. *)
+   [rename_naive_typing_env] and [rename_naive_type]. Four laws of the
+   functions that [follow_aliases] is made of are stated, each given
+   to the tactic for the proofs after it. Those of [canonical_simple]
+   and of [canonical_call_kind] are needed: [canonical_apply] gives
+   [canonical_call_kind] a callee that is [canonical_simple] of
+   something renamed, and without the two laws in the database the
+   tactic is left there with goals that are false. *)
 Section Follow_aliases.
 
 (* The database of laws is tried in one pass (rewrite_strat) in this
@@ -1163,46 +1164,6 @@ Lemma canonical_simple_equivariant (r : renaming) (tenv : typing_env)
 Proof. equivariance. Qed.
 #[local] Hint Rewrite canonical_simple_equivariant : equivariance.
 
-Lemma canonical_simples_equivariant (r : renaming) (tenv : typing_env)
-    (args : list simple) :
-  map (canonical_simple (rename_naive_typing_env r tenv))
-    (map (rename_simple r) args)
-  = map (rename_simple r) (map (canonical_simple tenv) args).
-Proof. equivariance. Qed.
-#[local] Hint Rewrite canonical_simples_equivariant : equivariance.
-
-Lemma canonical_exn_extra_args_equivariant (r : renaming) (tenv : typing_env)
-    (extra : list (simple * flambda_kind)) :
-  map
-    (fun arg =>
-       (canonical_simple (rename_naive_typing_env r tenv) (fst arg), snd arg))
-    (map (fun arg => (rename_simple r (fst arg), snd arg)) extra)
-  = map (fun arg => (rename_simple r (fst arg), snd arg))
-      (map (fun arg => (canonical_simple tenv (fst arg), snd arg)) extra).
-Proof. equivariance. Qed.
-#[local] Hint Rewrite canonical_exn_extra_args_equivariant : equivariance.
-
-Lemma canonical_value_slots_equivariant (r : renaming) (tenv : typing_env)
-    (slots : list (value_slot * simple)) :
-  canonical_value_slots (rename_naive_typing_env r tenv)
-    (map (fun slot => (fst slot, rename_simple r (snd slot))) slots)
-  = map (fun slot => (fst slot, rename_simple r (snd slot)))
-      (canonical_value_slots tenv slots).
-Proof. equivariance. Qed.
-#[local] Hint Rewrite canonical_value_slots_equivariant : equivariance.
-
-Lemma closure_of_simple_equivariant (r : renaming) (tenv : typing_env)
-    (s : simple) :
-  closure_of_simple (rename_naive_typing_env r tenv) (rename_simple r s)
-  = option_map
-      (fun closure : code_id * list (value_slot * simple) =>
-         (fst closure,
-          map (fun slot => (fst slot, rename_simple r (snd slot)))
-            (snd closure)))
-      (closure_of_simple tenv s).
-Proof. equivariance. Qed.
-#[local] Hint Rewrite closure_of_simple_equivariant : equivariance.
-
 Lemma canonical_call_kind_equivariant (r : renaming) (tenv : typing_env)
     (callee : simple) (kind : call_kind) :
   canonical_call_kind (rename_naive_typing_env r tenv)
@@ -1218,34 +1179,12 @@ Lemma canonical_apply_equivariant (r : renaming) (tenv : typing_env)
 Proof. equivariance. Qed.
 #[local] Hint Rewrite canonical_apply_equivariant : equivariance.
 
-Lemma canonical_apply_cont_equivariant (r : renaming) (tenv : typing_env)
-    (ac : apply_cont) :
-  canonical_apply_cont (rename_naive_typing_env r tenv)
-    (rename_apply_cont r ac)
-  = rename_apply_cont r (canonical_apply_cont tenv ac).
-Proof. equivariance. Qed.
-#[local] Hint Rewrite canonical_apply_cont_equivariant : equivariance.
-
 Lemma canonical_named_equivariant (r : renaming) (tenv : typing_env)
     (d : named) :
   canonical_named (rename_naive_typing_env r tenv) (rename_named r d)
   = rename_named r (canonical_named tenv d).
 Proof. equivariance. Qed.
 #[local] Hint Rewrite canonical_named_equivariant : equivariance.
-
-Lemma canonical_static_binding_equivariant (r : renaming)
-    (tenv : typing_env) (binding : static_binding) :
-  canonical_static_binding (rename_naive_typing_env r tenv)
-    (rename_static_binding r binding)
-  = rename_static_binding r (canonical_static_binding tenv binding).
-Proof. equivariance. Qed.
-#[local] Hint Rewrite canonical_static_binding_equivariant : equivariance.
-
-Lemma drop_var_equivariant (r : renaming) (x : variable) (tenv : typing_env) :
-  drop_var (rename_variable r x) (rename_naive_typing_env r tenv)
-  = rename_naive_typing_env r (drop_var x tenv).
-Proof. equivariance. Qed.
-#[local] Hint Rewrite drop_var_equivariant : equivariance.
 
 Lemma drop_vars_equivariant (r : renaming) (xs : list variable)
     (tenv : typing_env) :
