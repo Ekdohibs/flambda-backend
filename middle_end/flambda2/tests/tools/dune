@@ -1,5 +1,5 @@
 (executables
-  (names fldiff fexprc roundtrip flsemantics_main)
+  (names fldiff fexprc roundtrip flsemantics_main flknownaritylists)
   (modes native)
   (libraries
    ocamlfrontend ocamloptcomp

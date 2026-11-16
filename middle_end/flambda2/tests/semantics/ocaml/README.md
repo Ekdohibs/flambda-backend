@@ -507,7 +507,7 @@ unit made from OCaml.
   terms, and `validate_unit_knowing_copying` where it makes a second
   asking. Each makes another term of the term before
   (`before_copied`): the term before after the same initial
-  preprocessing as `validate_unit` (`demote_stub_calls`,
+  preprocessing as `validate_unit` (`demote_full_stub_calls`,
   `cut_returns`, then `loopify_unit`); then the liftings given, each
   followed by its rounds; then one lifting more, with no round after
   it; and then, at given places, a `Let` that makes a set of closures,
@@ -1616,9 +1616,10 @@ removed it:
   an indirect call of known arity
   (`middle_end/flambda2/simplify/simplify_apply_expr.ml`;
   discrepancy C3-11). The validator does to the term before what
-  Simplify does: the direct calls in the code of a stub are made
-  indirect (`FlambdaStubCallsSpec.demote_stub_calls`, a refinement,
-  C3's), and value slots are not read in that code
+  Simplify does: the direct calls in the code of a stub that it knows
+  to be full calls are made calls of known arity
+  (`FlambdaStubCallsSpec.demote_full_stub_calls`, a refinement, C3's),
+  and value slots are not read in that code
   (`FlambdaKnownSlotsSpec.read_slots`). `../stub_by_hand.fl` and
   `../stub_by_hand_unmarked.fl`, written by hand, are one unit with
   its code marked as a stub and not: both are validated.

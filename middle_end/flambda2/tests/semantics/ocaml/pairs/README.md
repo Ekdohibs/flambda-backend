@@ -174,9 +174,13 @@ from the others.
 | `probed_inlined.ml` | `probed.ml` | calls the same function and lets Simplify inline it | not checked: the term after Simplify has the call that is a probe, which the conversion refuses |
 | `phantom_called.ml` | `phantom.ml` | calls a function of the first unit whose body, in the `.cmx`, has a phantom binding | a prefix of two bindings without the body, which the conversion refuses; the run before is undefined, the run after returns; nothing to validate |
 
-Twenty-one sources. Eight are first units; six of them have an
+Twenty-three sources. Ten are first units; eight of them have an
 expected file: five are validated, as a unit of the directory above
-is, and `phantom.ml` is not checked. Of the thirteen second units,
+is, `phantom.ml` is not checked, and two that no unit uses are here
+for the lists of calls of known arity:
+`known_arity_lists_older_code.ml` has the same two runs and is not
+validated, and `known_arity_lists_undefined_elsewhere.ml` is
+undefined before and after. Of the thirteen second units,
 four are validated given a `.cmx`, two of them with an import left;
 eight are undefined in the model, six of them with a prefix, and
 one of the six, `phantom_called.ml`, before Simplify only; one is
@@ -302,3 +306,35 @@ before was undefined then too, at the load of a field of the number
 0, which the program does not make. On `phantom.ml` itself the tool
 is given the two flags, the term that its Simplify makes has the
 phantom binding, and the unit is not checked.
+
+`known_arity_lists_older_code.ml` is here for its first line and not
+for a pair: it is compiled with `-O3`, which the rules of the
+directory above have no way to ask for, and no unit uses it. With
+`-O3` Simplify makes, in the function `run`, a call of known arity of
+a callee that is one of two closures chosen by a test, and lists the
+code of the two. It then inlines `run` where the unit calls it; the
+closures of the copy are of newer versions of that code, and the
+call of the copy still lists the code as `run` has it. The
+compiler's interface allows it (`terms/call_kind.mli`: "only the
+provided functions (or a simplified version thereof) can be
+called"). The machine of the model reads a list as it stands, and
+with the compiler's list alone it would call the term after
+undefined; the conversion extends the list under "newer version
+of", as far as the evidence and the scope allow (decision D59 of
+`middle_end/flambda2/rocq/DECISIONS.md`; `rocq/TRUST-LEDGER.md`,
+"The code ids that a call of known arity lists"), and for this unit
+the two runs are then the same. The unit is not validated:
+the validation has no rewrite that makes that call of known arity
+in the term before.
+
+`known_arity_lists_undefined_elsewhere.ml` is the same unit with one
+thing more: its toplevel then calls a number, which is undefined in
+the model whatever the lists are. The call of known arity inside
+`run` lists the code of the two closures of `run`; the newer versions
+of that code are bound later, for the copy of `run` at toplevel, out
+of the scope of that call, so the conversion does not add them
+there. The tool refuses a unit for a list only where a run stops at
+a call of known arity whose list alone makes it undefined, with code
+that the compiler's reading of the list may allow; here the run
+stops elsewhere, so it is reported as of any unit: both runs
+undefined, and nothing to validate.

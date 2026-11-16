@@ -304,7 +304,11 @@ it gave back.
   or of a call of unknown arity. Where a text leaves it out the
   reader gives such a call its default, one value of any sort for
   each argument (C2-5); a call of known arity has its arity in the
-  text. The printer writes the arity beside the callee unless it is
+  text. The text cannot say the code ids that a call of known arity
+  lists, and the reader gives such a call no list. That says nothing
+  of the lists in code that a unit imports, or in a term that is
+  given in memory and not as a text. The printer writes the arity
+  beside the callee unless it is
   that default; a direct call with no callee, which the step before
   Simplify makes at `-Oclassic`, has no place in the text for its
   arity. Before the printer wrote it, a unit that gives a function an
@@ -757,14 +761,16 @@ it gave back.
   `Flambda_arity.fold_per_parameter`.
 - **Tupled functions** are in the model as code that is marked
   (`FlambdaModel.cm_is_tupled`), and the converter gives code the mark
-  of `Code0.is_tupled`. Every call of the model gives tupled code its
-  first argument as a tuple, which the machine takes apart; any
-  arguments after it are given as they are, and make the call an
-  over-application (`FlambdaSemanticsSpec.arguments_for_code`): that
-  is the compiler's call of unknown arity. The compiler's direct call
-  and its call of
+  of `Code0.is_tupled`. A direct call and a call of unknown arity of
+  the model give tupled code their first argument as a tuple, which
+  the machine takes apart; any arguments after it are given as they
+  are, and make the call an over-application
+  (`FlambdaSemanticsSpec.arguments_for_code`): that is the compiler's
+  call of unknown arity. The compiler's direct call and its call of
   known arity give code its arguments as the code takes them, and the
-  model has not got that of tupled code. So the converter refuses
+  model has not got that of tupled code: its direct call gives the
+  tuple, and its call of known arity of tupled code is undefined
+  (decision D58). So the converter refuses
   (`Unsupported`) a direct call of tupled code that the unit binds, and
   a call of known arity in a unit that binds tupled code; that is
   OCaml, in the same file, and is trusted. Trusted too: that a tuple
@@ -785,15 +791,106 @@ it gave back.
   of a wrapper): at the end of a run the tool observes it as it
   observes a closure (`observe`, `Function`), without looking into it,
   so two runs that end with functions that differ are not told apart,
-  as for closures. And the model takes every call for a generic
-  application: a direct call, or an indirect one of known arity, with
-  fewer or more arguments than its code has parameters is a partial
-  application or an over-application in the model, where the backend
-  stops on the first and compiles the second as a full call
-  (discrepancy C3-9; the CR at `shape_of_closure_call`). The tool does
-  not refuse such a call. Of a unit with one `validate_unit` may answer
-  yes: its statement then holds of the model, and says nothing of what
-  the backend makes of the unit there.
+  as for closures. And the model takes a direct call for a generic
+  application: with fewer or more arguments than its code has
+  parameters it is a partial application or an over-application in
+  the model, where the backend stops on a direct call that has not as
+  many arguments, unboxed products flattened, as its code has
+  parameters, be they too few or too many
+  (`to_cmm/to_cmm_expr.ml`, "Wrong arity for direct call";
+  discrepancy C3-9; the CR at `shape_of_closure_call`). The tool does
+  not refuse such a call. Of a
+  unit with one `validate_unit` may answer yes: its statement then
+  holds of the model, and says nothing of what the backend makes of
+  the unit there. A call of known arity is not so taken: the model
+  has it defined only where it is a full call (decision D58).
+- **The kind of a call** is given to the model as the compiler has
+  it (`convert_apply`): a direct call with its code id, a call of
+  unknown arity, a call of known arity with its set of code ids, or
+  with none where the compiler has `Unknown`. That is OCaml and is
+  trusted. The set is given as a list of the model's ids in one
+  order, with no id twice, whatever the order in which the compiler
+  holds it (`List.sort_uniq`): the comparison of two terms asks for
+  the same list (`FlambdaCompareSpec.call_kind_eqb`), and the lists
+  that it compares both come from this conversion. The list is not
+  the compiler's set alone: the next entry. What a call of known
+  arity means in the model, and what its list means, are decisions
+  D58 and D59: the model is stricter than the compiler in what D58
+  says, so a run of the model may be undefined at such a call where
+  the program runs, and where the term before is undefined the
+  validation says nothing of the unit.
+- **The code ids that a call of known arity lists** are given to the
+  model extended under "newer version of", as far as the evidence and
+  the scope allow (`close_known_arity_lists`, with `older_version`, `chain_reaches`,
+  `code_bound_in` and `undefined_by_an_open_list`, about 230 lines). The compiler's interface says of
+  the list that "only the provided functions (or a simplified version
+  thereof) can be called" (`terms/call_kind.mli`), and Simplify keeps
+  a list as it is while it gives the closures that reach the call
+  newer versions of their code. The machine of the model has no
+  relation between the versions of code: it asks for the code of the
+  callee in the list as the term has it (decision D59). So the
+  conversion adds to the compiler's list, of the code that the term
+  or the prefix binds with its body and that is in scope at the call,
+  each piece from which a chain of older versions is seen to reach a
+  listed code id. A link of a chain is the older version that the
+  metadata of code state (`Code_metadata.newer_version_of`) and
+  nothing else: no link is made from a name, a body, an arity or a
+  common ancestor. The metadata are read in two places. Of code that
+  one of the two units binds with its body, they are as the unit has
+  them. Of other code they are as the table of code has them that
+  the pipeline gives back with the term after
+  (`Flambda2.flambda_result`, the field `all_code`), while the tool
+  checks a unit that it has itself given to Simplify (`check_file`).
+  That table is what the pipeline returns and no more: it has the
+  code that Simplify kept in it and the code of the `.cmx` files that
+  were read. It is no record of every version that was ever made:
+  Simplify does not put there code that it has declared deleted, so
+  the table does not as a rule give the link through such code, which
+  the term before or a `.cmx` file may still give; and with the
+  reaper on it is the reaper's table. A check that is
+  given its two terms by another program (the driver of the
+  compiler's own run) has no table, and then only the code that the
+  two terms bind gives links. A chain goes from the newer code to the
+  older only, needs no metadata of a listed code id, and ends where
+  it comes back to code that it has passed. A call in the code of the
+  prefix has for candidates the code of the prefix: the code of a
+  unit is not in scope there and is never added. This
+  is not the rule by which the prefix takes code from a `.cmx` file:
+  that rule is stricter, and is in the entry "What the `.cmx` files
+  of other units say".
+  Trusted: that these metadata are the compiler's relation of a
+  version of code to the older one; that the extension is computed as
+  said; and that the scopes followed are those of
+  `FlambdaStaticsInScopeSpec.expr_statics_in_scope`. Nothing is
+  proved of it. No statement of the model says that a list has the
+  newer versions, and the extension says nothing of the bodies of two
+  versions: the code that a call runs is the code that its callee has.
+  A list is not said to be closed. It has not the code from which a
+  chain meets code whose metadata are in neither place, so that it is
+  not known whether the chain goes on to a listed code id; and it has
+  not the code from which a chain does reach one and that is bound
+  out of the scope of the call. So the model's list may be short of
+  what the compiler means, and the model may call undefined a call
+  that the compiler's reading allows. Where a run is undefined, the
+  tool looks at the state that has no step
+  (`undefined_by_an_open_list`). The unit is reported as not checked,
+  with the reason, and no verdict of its two runs is given, where all
+  of this holds of that state: it is at a call of known arity that
+  lists code ids; its callee is a closure whose code is not listed;
+  the same state with the list taken away from that call, and nothing
+  else changed, has a step; and a chain of older versions from the
+  code of the callee is not known to miss the listed code. That is
+  either code which the chain shows to be a newer version of listed
+  code and which the list has not (the conversion adds such code only
+  where it is in scope at the call), or code of which the metadata of
+  an older version are missing. In every other case
+  the run is reported as ever: undefined by the arity, by the callee,
+  by anything that is not such a call, or by a list to which the code
+  of the callee does not belong under the compiler's reading either
+  (the empty list among them, which allows nothing). Trusted of this
+  test: that it is computed as said. Of a unit that it refuses the
+  tool does not know whether the model's reading of the list and the
+  compiler's agree; it does not say that the unit is right.
 - **What the conversion of terms leaves out**, in the same file. These
   are the exceptions to "never to approximate", each with a `CR
   mshinwell` where it is done. *Depths*: the depth variables of
@@ -1673,7 +1770,7 @@ it gave back.
   they make of the term before
   (`FlambdaValidateCopyingSpec.before_copied`: the term before
   after the same initial preprocessing as `validate_unit`
-  (`demote_stub_calls`, `cut_returns`, then `loopify_unit`); then
+  (`demote_full_stub_calls`, `cut_returns`, then `loopify_unit`); then
   the liftings given, each followed by its rounds; then one
   lifting more, with no round after it; then
   `FlambdaCopyLetsSpec.with_let_copies` of the copies, by which a
@@ -2542,7 +2639,7 @@ machine and the checks of well-formedness do not read it. The
 comparison reads it and is stricter for a fixed pair of terms. Three
 rewrites of the validation read it:
 `FlambdaKnownSlotsSpec.read_known_slots`, through `read_slots` under
-its checks, `FlambdaStubCallsSpec.demote_stub_calls`, and
+its checks, `FlambdaStubCallsSpec.demote_full_stub_calls`, and
 `FlambdaSharedReadsSpec.share_static_reads`, which leaves the code of
 a stub as it is. Their refinement statements hold whatever the flag
 says: the first and the third for a unit run on its own, the second

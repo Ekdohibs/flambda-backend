@@ -1,0 +1,82 @@
+THE EXTENSION OF A LIST
+
+one link, from the newer code to the listed one: added
+  in the unit: [old; newer]
+two links, the middle code declared deleted, its older version in the table: added
+  in the unit: [old; newest]
+    a chain from middle: reaches the list
+the same with no table: the middle link is missing, not added
+  in the unit: [old]
+    a chain from newest: not known
+the listed code id has no metadata anywhere: the link to it is enough
+  in the unit: [old; newer]
+the newer code listed: the older is not added
+  in the unit: [newer]
+    a chain from old: does not reach the list
+two versions of one code, one listed: the other is not added
+  in the unit: [left]
+    a chain from root: does not reach the list
+    a chain from right: does not reach the list
+a cycle that has no listed code id: nothing added
+  in the unit: [old]
+    a chain from round: does not reach the list
+    a chain from about: does not reach the list
+a cycle one of whose code ids is listed: the other is added
+  in the unit: [about; round]
+one chain known, one with a missing link: one added
+  in the unit: [old; newer]
+    a chain from newest: not known
+a call in the code of the prefix, a newer version bound by the unit: not added
+  in the prefix: [old]
+    a chain from far: reaches the list
+    a chain from wrapper: does not reach the list
+a call in the code of the prefix, a newer version in the prefix: added
+  in the prefix: [old; newer]
+    a chain from wrapper: does not reach the list
+a call with no list: left alone
+  in the unit: no list
+the empty list: stays empty
+  in the unit: []
+    a chain from old: does not reach the list
+    a chain from newer: does not reach the list
+the newer version bound by a group after the code that has the call: out of scope, not added
+  in the unit: [old]
+    a chain from wrapper: does not reach the list
+    a chain from newer: reaches the list
+the newer version bound by the body of a Let_cont, the call in its handler: in scope, added
+  in the unit: [old; newer]
+three listed, one of them twice, and one added: in one order on the numbers of the model, none twice
+  in the unit: [old; root; newer; left]
+
+A RUN THAT STOPS AT A CALL OF KNOWN ARITY
+
+the code of the callee is listed
+  not undefined
+the code of the callee is a newer version of the listed code and is not in the list
+  undefined, and the unit is not checked: newer is a newer version of listed code that the list has not (the conversion adds such code only where it is in scope at the call)
+the code of the callee has an older version of which nothing is known
+  undefined, and the unit is not checked: newest may be a newer version of listed code: the metadata of one of its older versions are not at hand
+the same, the table has the older version
+  undefined, and the unit is not checked: newest is a newer version of listed code that the list has not (the conversion adds such code only where it is in scope at the call)
+the code of the callee is known to be no version of the listed code
+  undefined, and reported as of any unit
+the empty list, whatever is known of the code of the callee
+  undefined, and reported as of any unit
+a newer version that is not in the list, and two arguments for code of one parameter
+  undefined, and reported as of any unit
+the callee is a number
+  undefined, and reported as of any unit
+the run stops at something that is not a call
+  undefined, and reported as of any unit
+a call with no list, of the newer version
+  not undefined
+a newer version that is not in the list, and an argument that has no value
+  undefined, and reported as of any unit
+a newer version that is not in the list, and a result of another arity than the code returns
+  undefined, and reported as of any unit
+code of the prefix calls its parameter with a list; the unit gives it a closure of a newer version that the unit binds (the lists extended first)
+  undefined, and the unit is not checked: far is a newer version of listed code that the list has not (the conversion adds such code only where it is in scope at the call)
+the same, the unit gives it a closure of the listed code
+  not undefined
+the same, the newer version is code of the prefix: it is in the list once extended
+  not undefined

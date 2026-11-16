@@ -1,0 +1,147 @@
+let $camlKnown_arity_lists_older_code__first_const_0 = Block 0 () in
+(let code rec size(23)
+       even_0 (n/143 : imm tagged)
+         my_closure/144 &my_alloc_region/145 my_depth/146
+         -> k/46 * k/47
+         : imm tagged =
+   let next_depth/147 = rec_info (succ my_depth/146) in
+   let odd/148 = %project_function_slot.[even].[odd] (my_closure/144) in
+   (let prim/150 = %phys_eq (n/143, 0) in
+    let eq/151 = %tag_imm (prim/150) in
+    (let untagged/152 = %untag_imm (eq/151) in
+     switch untagged/152
+       | 0 -> k/49
+       | 1 -> k/46 (1))
+      where k/49 =
+        cont k/48)
+     where k/48 =
+       let int_sub/149 = %int_barith.sub (n/143, 1) in
+       apply direct(odd_1 &my_alloc_region/145)
+         (odd/148 ~ depth my_depth/146 -> next_depth/147
+          : imm tagged -> imm tagged)
+           (int_sub/149)
+           -> k/46 * k/47
+ and code rec size(23)
+       odd_1 (n/153 : imm tagged)
+         my_closure/154 &my_alloc_region/155 my_depth/156
+         -> k/50 * k/51
+         : imm tagged =
+   let next_depth/157 = rec_info (succ my_depth/156) in
+   let even/158 = %project_function_slot.[odd].[even] (my_closure/154) in
+   (let prim/160 = %phys_eq (n/153, 0) in
+    let eq/161 = %tag_imm (prim/160) in
+    (let untagged/162 = %untag_imm (eq/161) in
+     switch untagged/162
+       | 0 -> k/53
+       | 1 -> k/50 (0))
+      where k/53 =
+        cont k/52)
+     where k/52 =
+       let int_sub/159 = %int_barith.sub (n/153, 1) in
+       apply direct(even_0 &my_alloc_region/155)
+         (even/158 ~ depth my_depth/156 -> next_depth/157
+          : imm tagged -> imm tagged)
+           (int_sub/159)
+           -> k/50 * k/51
+ in
+ let code inline(always) size(6)
+       apply_2 (f/163 : val, x/164)
+         my_closure/165 &my_alloc_region/166 my_depth/167
+         -> k/54 * k/55 =
+   let next_depth/168 = rec_info (succ my_depth/167) in
+   apply &my_alloc_region/166 f/163 (x/164) -> k/54 * k/55
+ in
+ let code size(4)
+       add_n_4 (x/169 : imm tagged)
+         my_closure/170 &my_alloc_region/171 my_depth/172
+         -> k/56 * k/57
+         : imm tagged =
+   let next_depth/173 = rec_info (succ my_depth/172) in
+   let n/174 = %project_value_slot.[add_n].[n] (my_closure/170) in
+   let int_add/175 = %int_barith.add (x/169, n/174) in
+   cont k/56 (int_add/175)
+ in
+ let code size(4)
+       sub_n_5 (x/176 : imm tagged)
+         my_closure/177 &my_alloc_region/178 my_depth/179
+         -> k/58 * k/59
+         : imm tagged =
+   let next_depth/180 = rec_info (succ my_depth/179) in
+   let n/181 = %project_value_slot.[sub_n].[n_1] (my_closure/177) in
+   let int_sub/182 = %int_barith.sub (x/176, n/181) in
+   cont k/58 (int_sub/182)
+ in
+ let code size(48)
+       run_3 (c/183 : imm tagged, n/184 : imm tagged)
+         my_closure/185 &my_alloc_region/186 my_depth/187
+         -> k/60 * k/61
+         : imm tagged =
+   let next_depth/188 = rec_info (succ my_depth/187) in
+   let even/189 = %project_value_slot.[run].[even] (my_closure/185) in
+   let apply/190 = %project_value_slot.[run].[`apply`] (my_closure/185) in
+   let add_n/191 = closure add_n_4 @add_n &my_alloc_region/186
+   with { n = n/184 }
+   in
+   let sub_n/192 = closure sub_n_5 @sub_n &my_alloc_region/186
+   with { n_1 = n/184 }
+   in
+   (let untagged/197 = %untag_imm (c/183) in
+    switch untagged/197
+      | 0 -> k/62 (sub_n/192)
+      | 1 -> k/62 (add_n/191))
+     where k/62 (f/193 : val) =
+       (apply direct(even_0 &my_alloc_region/186)
+          (even/189 : imm tagged -> imm tagged) (n/184) -> k/63 * k/61
+          where k/63 (apply_result/194 : imm tagged) =
+            (apply direct(apply_2 &my_alloc_region/186)
+               (apply/190 : val * imm tagged -> imm tagged)
+                 (f/193, 10)
+                 -> k/64 * k/61
+               where k/64 (apply_result/195 : imm tagged) =
+                 let int_add/196 =
+                   %int_barith.add (apply_result/195, apply_result/194)
+                 in
+                 cont k/60 (int_add/196)))
+ in
+ let even/198 = closure even_0 @even &toplevel
+ and odd/199 = closure odd_1 @odd &toplevel
+ in
+ let apply/200 = closure apply_2 @`apply` &toplevel in
+ let run/201 = closure run_3 @run &toplevel
+ with { even = even/198; `apply` = apply/200 }
+ in
+ (let Popaque/204 = %opaque (1) in
+  apply direct(run_3 &toplevel)
+    (run/201 : val? * imm tagged -> imm tagged)
+      (Popaque/204, 3)
+      -> k/65 * error)
+   where k/65 (result/202 : imm tagged) =
+     let Pmakeblock/203 =
+       %block.[`0`].`toplevel`
+         (even/198, odd/199, apply/200, run/201, result/202)
+     in
+     cont k/45 (Pmakeblock/203))
+  where k/45 define_root_symbol (module_block/137) =
+    let field_0/138 =
+      %block_load.tag[`0`].`size`[`5`].[`0`] (module_block/137)
+    in
+    let field_1/139 =
+      %block_load.tag[`0`].`size`[`5`].[`1`] (module_block/137)
+    in
+    let field_2/140 =
+      %block_load.tag[`0`].`size`[`5`].[`2`] (module_block/137)
+    in
+    let field_3/141 =
+      %block_load.tag[`0`].`size`[`5`].[`3`] (module_block/137)
+    in
+    let field_4/142 =
+      %block_load.tag[`0`].`size`[`5`].[`4`] (module_block/137)
+    in
+    let $camlKnown_arity_lists_older_code =
+      Block 0 (field_0/138,
+               field_1/139,
+               field_2/140,
+               field_3/141,
+               field_4/142)
+    in
+    cont done ($camlKnown_arity_lists_older_code)

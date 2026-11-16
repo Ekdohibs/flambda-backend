@@ -1,0 +1,9 @@
+known_arity_lists_older_code.fl:
+  before Simplify (81 steps): returns [0: <fun>; <fun>; <fun>; <fun>; 13]
+  after Simplify (51 steps): returns [0: <fun>; <fun>; <fun>; <fun>; 13]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
+  calls outside code: 1 before, 2 after
+  the same
+  calls outside code once those of known code are inlined: 2
+  not validated

@@ -1,0 +1,29 @@
+;; Controls of the lists of code ids of calls of known arity, as the test
+;; tool gives them to the model (../../tools/flsemantics.ml, "The code ids
+;; that a call of known arity lists"; decision D59 of
+;; middle_end/flambda2/rocq/DECISIONS.md). The tool extends the compiler's
+;; list under "newer version of", as far as the metadata of code that it
+;; has and the scope of the call allow; and where a run is undefined it
+;; looks at the state that has no step, to see whether the list alone
+;; makes it undefined, with code that the compiler's reading of the list
+;; may allow, in which case it does not check the unit.
+;;
+;; lists.expected is what ../../tools/flknownaritylists.exe prints: the
+;; extension, and that test of a state, computed on terms of the model that
+;; are made in that program, one for each case that the compiler makes
+;; rarely or never (a chain through code declared deleted, a missing link,
+;; a cycle, a call in the code of the prefix, the empty list, a version out
+;; of scope, a run that stops at a call for its list alone or for something
+;; else). `dune promote` updates it. Two units from OCaml are in
+;; ../ocaml/pairs/ (known_arity_lists_*.ml), which has the rules that
+;; compile a source with its own flags.
+
+(rule
+ (with-stdout-to
+  lists.output
+  (run ../../tools/flknownaritylists.exe)))
+
+(rule
+ (alias runtest)
+ (action
+  (diff lists.expected lists.output)))

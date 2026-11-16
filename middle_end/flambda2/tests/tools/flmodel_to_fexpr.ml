@@ -64,14 +64,14 @@
    its arity; - a static boxed number whose contents are not a number that can
    be boxed, or are a variable whose binder is not in sight (the model does not
    say which number a boxed number holds; it is read off the kind of the
-   variable); - a value slot of kind [Region] or [Rec_info]; - in a unit that
-   binds tupled code, a direct call of that code, and an indirect call at other
-   arities than those that the parser gives a call written without any. A call
-   of the model gives tupled code a tuple. A direct call of fexpr, and an
-   indirect call written with its arities, which is of known arity, give code
-   its arguments as the code takes them: neither is the model's call. So in such
-   a unit an indirect call is written without its arities, as a call of unknown
-   arity, and the model's direct call of tupled code is not written at all.
+   variable); - a value slot of kind [Region] or [Rec_info]; - a direct call of
+   tupled code: the model's gives the code a tuple, and fexpr's gives it its
+   arguments as the code takes them; - a call of known arity that lists code
+   ids, which the text cannot say. The two indirect kinds are written as the
+   compiler's printer writes them: a call of known arity with its arities, and a
+   call of unknown arity with none, or with the word [unknown_arity] and its
+   arities where they are not one value for each argument and one value
+   returned.
 
    What fexpr can write and its parser reads differently is written all the
    same, so that the check shows it: the arity of the arguments of a direct
@@ -832,6 +832,17 @@ let rec expr env (e : Model.expr) : F.expr =
       }
   | Apply ap ->
     let params_arity = arity ap.ap_args_arity in
+    (* Whether the arities of the call are those that a call of unknown arity
+       written with none is read with: one value for each argument and one value
+       returned. *)
+    let default_arities =
+      let one_value : Model.arity = [Singleton Kinds.Value] in
+      ap.ap_args_arity
+      = List.map
+          (fun _ : Model.arity_component -> Singleton Kinds.Value)
+          ap.ap_args
+      && ap.ap_return_arity = one_value
+    in
     let call_kind : F.function_call =
       match ap.ap_call_kind with
       | Direct code ->
@@ -840,27 +851,22 @@ let rec expr env (e : Model.expr) : F.expr =
           not_printable
             "a direct call of tupled code, which the model gives a tuple";
         Direct { code_id = code_id code; function_slot = None }
-      | Indirect -> Indirect
+      | Indirect_unknown_arity ->
+        if default_arities then Indirect else Indirect_unknown_arity
+      | Indirect_known_arity None -> Indirect
+      | Indirect_known_arity (Some _) ->
+        not_printable
+          "a call of known arity that lists code ids, which the text cannot say"
     in
-    (* In a unit that binds tupled code an indirect call is written without its
-       arities: with them it would be read as a call of known arity. The parser
-       then gives it one value for each argument and one value returned. *)
+    (* As the compiler's printer writes them ([Flambda_to_fexpr]): a call of
+       known arity with its arities; a call of unknown arity with none where its
+       arities are those that such a call is then read with, and with the word
+       [unknown_arity] and its arities otherwise. A call written with arities
+       and without that word is read as a call of known arity. *)
     let without_arities =
-      match ap.ap_call_kind, env.tupled_code with
-      | Indirect, _ :: _ ->
-        let one_value : Model.arity = [Singleton Kinds.Value] in
-        if
-          ap.ap_args_arity
-          <> List.map
-               (fun _ : Model.arity_component -> Singleton Kinds.Value)
-               ap.ap_args
-          || ap.ap_return_arity <> one_value
-        then
-          not_printable
-            "an indirect call, in a unit that binds tupled code, at other \
-             arities than one value for each argument and one value returned";
-        true
-      | Indirect, [] | Direct _, _ -> false
+      match ap.ap_call_kind with
+      | Indirect_unknown_arity -> default_arities
+      | Direct _ | Indirect_known_arity _ -> false
     in
     F.Apply
       { func = Some (simple ap.ap_callee);

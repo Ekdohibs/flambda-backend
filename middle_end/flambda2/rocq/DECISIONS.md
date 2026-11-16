@@ -552,9 +552,29 @@ a `CR` at the place in the `Spec` file.
 - **D59.** The code ids that a call of known arity lists are a
   promise: the call is undefined unless the code id of its callee is
   one of them; no list allows every code, the empty list none. The
-  compiler admits newer versions of the listed code, by its code age
-  relation, which the model has not got (C0-1): exact membership is
-  the model's choice, and stricter. The ids are names of code for the
+  compiler admits newer versions of the listed code ("or a simplified
+  version thereof", `terms/call_kind.mli`), by its code age relation,
+  which the model has not got (C0-1): the machine reads the list that
+  the term has as exact membership. Simplify does leave a list that
+  names older versions of the code of the closures that reach the
+  call
+  (`tests/semantics/ocaml/pairs/known_arity_lists_older_code.ml`,
+  compiled with `-O3`), and such a list, read as it stands, makes the
+  compiler's own term undefined. So the list of a term of the model
+  is not the compiler's set as it stands: the test tool's conversion
+  extends it under "newer version of", as far as the metadata of code
+  that it has and the scope of the call allow. It reads the stored
+  field of the metadata link by link and invents no link; the
+  metadata are those of the code that the two terms bind and, where
+  the tool has run Simplify itself, those of the table of code that
+  the pipeline returns with the term, which is not every version ever
+  made. A list is not said to be closed: a unit is not checked where
+  a run of it is undefined by such a list and by nothing else, at a
+  callee whose code the compiler's reading of the list may allow. The
+  extension is trusted and not proved, and no statement says of a
+  list that it has the newer versions (`rocq/TRUST-LEDGER.md`, "The
+  code ids that a call of known arity lists"). The ids are names of
+  code for the
   checks of scope and of what is kept
   (`FlambdaStaticsInScopeSpec.v`, `FlambdaUnusedStaticsSpec.v`), as
   they are free names in the compiler. Two calls of known arity are
@@ -564,7 +584,10 @@ a `CR` at the place in the `Spec` file.
   sets, and the comparison of the model is stricter so that what it
   accepts with no names paired stays alpha-equivalent. The text of a
   term cannot say the ids and its reader gives none. Decided by the
-  team; open until the developers say what the list promises.
+  team; open until the developers say what the list promises, and
+  whether the relation of code to its newer versions is to be in the
+  model, so that its machine reads the compiler's list as the
+  compiler does.
 
 ## Discrepancies with the compiler
 

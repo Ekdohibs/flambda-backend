@@ -202,7 +202,9 @@ let rec rename_expr r (e : Model.expr) : Model.expr =
     let call_kind : Model.call_kind =
       match ap.ap_call_kind with
       | Direct code -> Direct (r.code_id code)
-      | Indirect -> Indirect
+      | Indirect_unknown_arity -> Indirect_unknown_arity
+      | Indirect_known_arity codes ->
+        Indirect_known_arity (Option.map (List.map r.code_id) codes)
     in
     Apply
       { ap with

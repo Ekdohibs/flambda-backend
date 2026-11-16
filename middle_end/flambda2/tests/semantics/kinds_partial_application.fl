@@ -3,7 +3,7 @@ let code size(1) first (x, y) my_closure &my_region my_depth -> k * e =
 in
 let $First = closure first &toplevel in
 let f = %opaque ($First) in
-apply &toplevel (f : val -> val) (1) -> k1 * error
+apply &toplevel f (1) -> k1 * error
   where k1 (r) =
     let $camlKinds_partial_application = Block 0 (5) in
     cont done ($camlKinds_partial_application)

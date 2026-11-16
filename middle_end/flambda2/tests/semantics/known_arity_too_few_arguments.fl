@@ -1,0 +1,14 @@
+(* A call of known arity that gives fewer arguments than its code takes. The
+   arities written at the call make it a call of known arity: the text of a
+   call of unknown arity has none, or has the word unknown_arity. The code
+   takes two parameters and the call gives one argument, which is undefined
+   in the model (decision D58, middle_end/flambda2/rocq/DECISIONS.md). *)
+let code size(1) first (x, y) my_closure &my_region my_depth -> k * e =
+  cont k (x)
+in
+let $First = closure first &toplevel in
+let f = %opaque ($First) in
+apply &toplevel (f : val -> val) (1) -> k1 * error
+  where k1 (r) =
+    let $camlKnown_arity_too_few_arguments = Block 0 (5) in
+    cont done ($camlKnown_arity_too_few_arguments)

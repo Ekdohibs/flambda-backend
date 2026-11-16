@@ -74,21 +74,25 @@
    keeps its exception handlers apart and follows the discipline of trap
    actions: a mistake there changes what those accept.
 
-   Partial applications and over-applications are in the model: a call with
-   fewer or more arguments than the code of its callee has parameters is one,
-   whatever its kind (FlambdaSemanticsSpec.shape_of_closure_call), and an
-   application is converted with its arguments and its arities as they are. A
-   partial application is a value of the model that the compiler has not got as
-   such; at the end of a run it is observed as a function is.
+   Partial applications and over-applications are in the model: a direct call,
+   or a call of unknown arity, with fewer or more arguments than the code of its
+   callee has parameters is one (FlambdaSemanticsSpec.shape_of_closure_call); a
+   call of known arity is defined only where it is a full call (decision D58).
+   An application is converted with its kind, its arguments and its arities as
+   they are. A partial application is a value of the model that the compiler has
+   not got as such; at the end of a run it is observed as a function is.
 
-   Tupled functions are in the model, as code that is marked: every call of the
-   model gives such code its first argument as the tuple, and any arguments
-   after it as they are, for an over-application, as a call of unknown arity
-   does in the compiler (FlambdaSemanticsSpec.shape_of_closure_call). The
-   compiler's direct call and its call of known arity give code its arguments as
-   the code takes them, and the model has not got that of tupled code yet. So a
+   Tupled functions are in the model, as code that is marked: a direct call and
+   a call of unknown arity of the model give such code their first argument as
+   the tuple, and any arguments after it as they are, for an over-application,
+   as a call of unknown arity does in the compiler
+   (FlambdaSemanticsSpec.shape_of_closure_call). The compiler's direct call and
+   its call of known arity give code its arguments as the code takes them, and
+   the model has not got that of tupled code: its direct call gives a tuple, and
+   its call of known arity of tupled code is undefined (decision D58). So a
    direct call of tupled code is reported as unsupported, and so is a call of
-   known arity, which names no code, in a unit that has tupled code.
+   known arity, which may be of any code where it lists none, in a unit that has
+   tupled code.
 
    Calls that never return. A call whose result continuation is [Never_returns]
    is converted to a call that returns to a continuation bound around it, whose
@@ -1155,11 +1159,12 @@ let convert_trap_action (action : Trap_action.t) : Model.trap_action =
 
 (* Tupled code ([let f (a, b) = ...]) has one parameter for each component of
    the tuple. A call of unknown arity gives it the tuple, which the compiler
-   takes apart on the way in, and so does every call of the model. A direct
-   call, and a call of known arity, give it the components, and the model has
-   not got that. What is noted of the conventions of calls as a unit is
-   converted: the code that is tupled, the code that a direct call names, and
-   whether a call of known arity was met ([check_calls_of_tupled_code]). *)
+   takes apart on the way in, and so do the direct call and the call of unknown
+   arity of the model. The compiler's direct call, and its call of known arity,
+   give it the components, and the model has not got that. What is noted of the
+   conventions of calls as a unit is converted: the code that is tupled, the
+   code that a direct call names, and whether a call of known arity was met
+   ([check_calls_of_tupled_code]). *)
 let tupled_code : Code_id.t list ref = ref []
 
 let directly_called_code : Code_id.t list ref = ref []
@@ -1257,6 +1262,28 @@ let newer_versions : (Code_id.t * Code_id.t) list ref = ref []
 
 let deleted_code : Code_id.t list ref = ref []
 
+(* The older version of each piece of code that a unit converted binds with its
+   body, as its metadata state it ([Code0.newer_version_of]; none for code that
+   is no newer version), noted as a unit is converted. *)
+let code_older : Code_id.t option Code_id.Map.t ref = ref Code_id.Map.empty
+
+(* The older version of code that no unit converted binds with its body, as the
+   table of code has it that the pipeline gave back with the term after
+   ([Flambda2.flambda_result.all_code]): nothing where there is no table or the
+   table has not the code. In this file [check_file] alone sets it, for a unit
+   that it has given to Simplify; flknownaritylists.ml sets one of its making.
+   The table has the code that Simplify kept in it and the code of the [.cmx]
+   files read. It is no record of every version: Simplify does not put there
+   code that it has declared deleted ([Expr_builder], which calls
+   [Upwards_acc.remember_code_for_cmx] after it has taken that code away), and
+   with the reaper on the table is the reaper's. *)
+let older_version_in_run : (Code_id.t -> Code_id.t option option) ref =
+  ref (fun _ -> None)
+
+(* Whether a call of known arity that lists code ids has been converted
+   ([close_known_arity_lists]). *)
+let lists_met : bool ref = ref false
+
 (* The code ids, declared deleted, whose number has been given to a newer
    version of the code ([convert_both]). The number then stands for the code
    that the unit binds, so the declaration is left out: the term of the model
@@ -1284,6 +1311,8 @@ let reset_conversion () =
   depth_variables := Variable.Set.empty;
   newer_versions := [];
   deleted_code := [];
+  code_older := Code_id.Map.empty;
+  lists_met := false;
   superseded_code := [];
   loopify_marked := [];
   region_variables := Variable.Set.empty;
@@ -1593,6 +1622,8 @@ and convert_let (pattern : Bound_pattern.t) (defining_expr : Flambda.Named.t)
           (match Code0.newer_version_of code with
           | Some older -> newer_versions := (code_id, older) :: !newer_versions
           | None -> ());
+          code_older
+            := Code_id.Map.add code_id (Code0.newer_version_of code) !code_older;
           if Loopify_attribute.should_loopify (Code0.loopify code)
           then loopify_marked := code_id :: !loopify_marked;
           let id = Code_ids.find code_id in
@@ -1891,10 +1922,21 @@ and convert_apply (apply : Apply_expr.t) : Model.expr =
     | Function { function_call = Direct code_id; _ } ->
       directly_called_code := code_id :: !directly_called_code;
       Direct (Code_ids.find code_id)
-    | Function { function_call = Indirect_known_arity _; _ } ->
+    | Function { function_call = Indirect_known_arity code_ids; _ } ->
       known_arity_call_met := true;
-      Indirect
-    | Function { function_call = Indirect_unknown_arity; _ } -> Indirect
+      (* The set of code ids as a list in one order, whatever the order in which
+         the compiler holds it: the comparison of two terms asks for the same
+         list (FlambdaCompareSpec.call_kind_eqb). *)
+      Indirect_known_arity
+        (match code_ids with
+        | Unknown -> None
+        | Known code_ids ->
+          lists_met := true;
+          Some
+            (List.sort_uniq compare
+               (List.map Code_ids.find (Code_id.Set.elements code_ids))))
+    | Function { function_call = Indirect_unknown_arity; _ } ->
+      Indirect_unknown_arity
     | Method _ | C_call _ | Effect _ ->
       unsupported "the call %a" Apply_expr.print apply
   in
@@ -2136,7 +2178,8 @@ let rec direct_callees (e : Model.expr) : Model.code_id list =
     List.concat_map (fun (_, handler) -> in_handler handler) handlers
     @ direct_callees body
   | Apply { ap_call_kind = Direct code; _ } -> [code]
-  | Apply { ap_call_kind = Indirect; _ } | Apply_cont _ | Switch _ | Invalid ->
+  | Apply { ap_call_kind = Indirect_unknown_arity | Indirect_known_arity _; _ }
+  | Apply_cont _ | Switch _ | Invalid ->
     []
 
 (* Every piece of code that an expression binds, with its body. *)
@@ -2331,14 +2374,17 @@ let return_not_of_own_symbol (unit : Flambda_unit.t) (converted : converted) =
   and in_handler (Model.Handler (_, _, handler)) = in_expr handler in
   in_expr converted.body
 
-let run ~(statics : Values.static_env) (unit : converted) : outcome * int =
+(* A run of a unit, with the number of its steps and, where it is undefined, the
+   state that has no step. *)
+let run_to_end ~(statics : Values.static_env) (unit : converted) :
+    outcome * int * Semantics.state option =
   let rec go steps (state : Semantics.state) =
     if steps >= fuel
-    then Still_running, steps
+    then Still_running, steps, None
     else
       match Semantics.step state with
       | Step state -> go (steps + 1) state
-      | Undefined -> Undefined, steps
+      | Undefined -> Undefined, steps, Some state
       | Exit (k, values, heap, _reads) ->
         let values = List.map (observe 50 state.state_statics heap) values in
         ( (if k = unit.return_continuation
@@ -2346,7 +2392,8 @@ let run ~(statics : Values.static_env) (unit : converted) : outcome * int =
            else if k = unit.exn_continuation
            then Raises values
            else Exits_elsewhere),
-          steps )
+          steps,
+          None )
   in
   go 0
     { state_expr = unit.body;
@@ -2356,6 +2403,10 @@ let run ~(statics : Values.static_env) (unit : converted) : outcome * int =
       state_heap = Values.empty_heap;
       state_reads = Values.no_reads
     }
+
+let run ~statics unit : outcome * int =
+  let outcome, steps, _ = run_to_end ~statics unit in
+  outcome, steps
 
 (* The external symbols that the units converted so far mention, each with its
    class: the symbols of another compilation unit, the predefined exceptions
@@ -2697,7 +2748,11 @@ let rec print_expr ppf (e : Model.expr) =
     Format.fprintf ppf "@[<hov 2>apply%s %a@ (%a)@ -> %a * %a%a@]"
       (match ap.ap_call_kind with
       | Direct code -> Printf.sprintf " direct(%s)" (shown_code_id code)
-      | Indirect -> "")
+      | Indirect_unknown_arity -> ""
+      | Indirect_known_arity None -> " known_arity"
+      | Indirect_known_arity (Some codes) ->
+        Printf.sprintf " known_arity(%s)"
+          (String.concat ", " (List.map shown_code_id codes)))
       print_simple ap.ap_callee print_simples ap.ap_args print_cont
       ap.ap_continuation print_cont ap.ap_exn_continuation
       (fun ppf extra ->
@@ -2835,7 +2890,9 @@ let static_names (e : Model.expr) :
       in_simples owner (List.map fst ap.ap_exn_extra_args);
       match ap.ap_call_kind with
       | Direct code -> refer owner (Code_name code)
-      | Indirect -> ())
+      | Indirect_unknown_arity | Indirect_known_arity None -> ()
+      | Indirect_known_arity (Some codes) ->
+        List.iter (fun code -> refer owner (Code_name code)) codes)
     | Apply_cont ac -> in_simples owner ac.ac_args
     | Switch (scrutinee, arms) ->
       in_simple owner scrutinee;
@@ -4285,7 +4342,11 @@ let rec code_id_used (id : Model.code_id) (e : Model.expr) =
     List.exists (fun (_, handler) -> in_handler handler) handlers
     || code_id_used id body
   | Apply { ap_call_kind = Direct code; _ } -> code = id
-  | Apply { ap_call_kind = Indirect; _ } | Apply_cont _ | Switch _ | Invalid ->
+  | Apply { ap_call_kind = Indirect_known_arity (Some codes); _ } ->
+    List.mem id codes
+  | Apply
+      { ap_call_kind = Indirect_unknown_arity | Indirect_known_arity None; _ }
+  | Apply_cont _ | Switch _ | Invalid ->
     false
 
 (* ---- What the .cmx files say of other units ---------------------------- *)
@@ -4755,7 +4816,10 @@ let make_prefix_refusing ~(refused : int list) ~(found : int list ref)
       in_simple ap.ap_callee;
       in_simples ap.ap_args;
       in_simples (List.map fst ap.ap_exn_extra_args);
-      match ap.ap_call_kind with Direct code -> ask_code code | Indirect -> ())
+      match ap.ap_call_kind with
+      | Direct code -> ask_code code
+      | Indirect_unknown_arity | Indirect_known_arity None -> ()
+      | Indirect_known_arity (Some codes) -> List.iter ask_code codes)
     | Apply_cont ac -> in_simples ac.ac_args
     | Switch (scrutinee, arms) ->
       in_simple scrutinee;
@@ -5103,12 +5167,281 @@ let before_marked :
     (Model.code_id option * Model.apply_expr * Model.code_id * int) list ref =
   ref []
 
+(* ---- The code ids that a call of known arity lists ---------------------- *)
+
+(* The compiler's list of code ids at a call of known arity stands for more code
+   than it names: "only the provided functions (or a simplified version thereof)
+   can be called" (terms/call_kind.mli), and Simplify keeps a list as it is
+   while it gives the closures that reach the call newer versions of their code.
+   The model has no relation between the versions of code, and its machine asks
+   that the code of the callee be in the list as the term has it
+   (FlambdaSemanticsSpec.shape_of_closure_call; decision D59). So the conversion
+   extends the list under "newer version of", as far as the evidence and the
+   scope allow: to the code ids that the compiler lists it adds, of the code
+   that the term or the prefix binds with its body and that is in scope at the
+   call, each piece from which a chain of older versions is seen to reach a
+   listed one. The list is then sorted, with no id twice, as the comparison of
+   two terms asks for one list (FlambdaCompareSpec.call_kind_eqb). It is not
+   said to be closed.
+
+   For a call in the code of the prefix the candidates are the code that the
+   prefix binds with its body: the code of a unit is not in scope there.
+
+   A link of a chain is the older version that the metadata of a piece of code
+   state ([Code_metadata.newer_version_of]) and nothing else: of code that a
+   unit converted binds with its body, as the unit has it ([code_older]); of
+   other code, as the table of code has it that the pipeline gave back, where
+   there is one ([older_version_in_run]). No link is made of anything else. A
+   chain is followed from the newer code to the older only; it need not know the
+   older versions of a listed code id, and it ends where it comes back to code
+   that it has passed. [older_version] gives nothing where the metadata of the
+   code are in neither place, and then [chain_reaches] gives nothing either.
+
+   This is trusted and not proved: nothing in the model says what a newer
+   version is, and the extension says nothing of the bodies of the two versions
+   (rocq/TRUST-LEDGER.md, "The code ids that a call of known arity lists").
+
+   A list so extended is not said to be closed. It has not the code from which a
+   chain meets code whose metadata are in neither place, of which it is not
+   known whether the chain goes on to a listed code id; and it has not the code
+   from which a chain does reach one and that is bound out of the scope of the
+   call, where the list may not name it
+   (FlambdaStaticsInScopeSpec.expr_statics_in_scope, whose scopes [in_expr]
+   follows). So the model may call undefined a call that the compiler's reading
+   of the list allows. Where a run is undefined the tool looks at the state that
+   has no step ([undefined_by_an_open_list]); if the list alone makes it
+   undefined, and the code of the callee is code of one of those two sorts, the
+   unit is not checked ([check_or_raise], which raises [List_left_open]). *)
+let older_version (code_id : Code_id.t) : Code_id.t option option =
+  match Code_id.Map.find_opt code_id !code_older with
+  | Some older -> Some older
+  | None -> !older_version_in_run code_id
+
+(* The code that an expression binds with its body, wherever it binds it. *)
+let rec code_bound_in (e : Model.expr) : Model.code_id list =
+  let in_handler (Model.Handler (_, _, handler)) = code_bound_in handler in
+  match e with
+  | Let (_, _, _, body) -> code_bound_in body
+  | Let_static (bindings, body) ->
+    code_bound_in_bindings bindings @ code_bound_in body
+  | Let_cont_non_recursive (_, handler, body) ->
+    in_handler handler @ code_bound_in body
+  | Let_cont_recursive (handlers, body) ->
+    List.concat_map (fun (_, handler) -> in_handler handler) handlers
+    @ code_bound_in body
+  | Apply _ | Apply_cont _ | Switch _ | Invalid -> []
+
+and code_bound_in_bindings (bindings : Model.static_binding list) =
+  List.concat_map
+    (fun (binding : Model.static_binding) ->
+      match binding with
+      | Bind_code (id, Code (_, _, _, _, _, body)) -> id :: code_bound_in body
+      | Bind_deleted_code _ | Bind_symbol _ -> [])
+    bindings
+
+(* Whether a chain of older versions that begins at the code numbered [n]
+   reaches code that [listed] has. Nothing where that is not known: where the
+   metadata of a link are not at hand before the chain reaches a listed code id,
+   and where no code id of the compiler has the number [n]. [numbers] are the
+   code ids numbered ([Code_ids.bindings]). *)
+let chain_reaches ~(numbers : (Code_id.t * Model.code_id) list)
+    (listed : Model.code_id list) (n : Model.code_id) : bool option =
+  let is_listed code_id =
+    match
+      List.find_map
+        (fun (id, m) -> if Code_id.equal id code_id then Some m else None)
+        numbers
+    with
+    | Some m -> List.mem m listed
+    | None -> false
+  in
+  let rec follow passed code_id : bool option =
+    if is_listed code_id
+    then Some true
+    else if List.exists (Code_id.equal code_id) passed
+    then Some false
+    else
+      match older_version code_id with
+      | None -> None
+      | Some None -> Some false
+      | Some (Some older) -> follow (code_id :: passed) older
+  in
+  (* Two code ids have one number where [convert_both] gave the newer the number
+     of the older. *)
+  match List.filter (fun (_, m) -> m = n) numbers with
+  | [] -> None
+  | _ :: _ as named ->
+    List.fold_left
+      (fun (so_far : bool option) (id, _) : bool option ->
+        match so_far, follow [] id with
+        | Some true, _ | _, Some true -> Some true
+        | None, _ | _, None -> None
+        | Some false, Some false -> Some false)
+      (Some false) named
+
+let close_known_arity_lists (prefix : prefix) (before : converted)
+    (after : converted) : prefix * converted * converted =
+  let numbers = Code_ids.bindings () in
+  (* [bound] is the code that may be called: what the term and the prefix bind
+     with a body. [in_scope] are the code ids in scope at the call. The empty
+     list stays empty: no chain is asked of it. *)
+  let close ~bound ~in_scope listed =
+    let bound = match listed with [] -> [] | _ :: _ -> bound in
+    let added =
+      List.filter
+        (fun n ->
+          (not (List.mem n listed))
+          && List.mem n in_scope
+          &&
+          match chain_reaches ~numbers listed n with
+          | Some true -> true
+          | Some false | None -> false)
+        bound
+    in
+    List.sort_uniq compare (listed @ added)
+  in
+  (* The code ids in scope in the handlers of a [Let_cont], given those in scope
+     around it and its body: those, and what the body binds. This is the one
+     place that says it. *)
+  let scope_in_handlers ids body =
+    Well_formed.static_names Statics_in_scope.declared_code_ids_of_binding body
+    @ ids
+  in
+  let rec in_expr ~bound ids (e : Model.expr) : Model.expr =
+    let in_handler ids (Model.Handler (params, metadata, handler)) =
+      Model.Handler (params, metadata, in_expr ~bound ids handler)
+    in
+    match e with
+    | Let (var, kind, named, body) ->
+      Let (var, kind, named, in_expr ~bound ids body)
+    | Let_static (bindings, body) ->
+      let ids =
+        List.concat_map Statics_in_scope.declared_code_ids_of_binding bindings
+        @ ids
+      in
+      Let_static (in_bindings ~bound ids bindings, in_expr ~bound ids body)
+    | Let_cont_non_recursive (k, handler, body) ->
+      Let_cont_non_recursive
+        ( k,
+          in_handler (scope_in_handlers ids body) handler,
+          in_expr ~bound ids body )
+    | Let_cont_recursive (handlers, body) ->
+      let in_handlers = scope_in_handlers ids body in
+      Let_cont_recursive
+        ( List.map
+            (fun (k, handler) -> k, in_handler in_handlers handler)
+            handlers,
+          in_expr ~bound ids body )
+    | Apply ({ ap_call_kind = Indirect_known_arity (Some listed); _ } as ap) ->
+      Apply
+        { ap with
+          ap_call_kind =
+            Indirect_known_arity (Some (close ~bound ~in_scope:ids listed))
+        }
+    | Apply _ | Apply_cont _ | Switch _ | Invalid -> e
+  and in_bindings ~bound ids (bindings : Model.static_binding list) =
+    List.map
+      (fun (binding : Model.static_binding) : Model.static_binding ->
+        match binding with
+        | Bind_code (id, Code (params, closure, k, exn, metadata, body)) ->
+          Bind_code
+            ( id,
+              Code (params, closure, k, exn, metadata, in_expr ~bound ids body)
+            )
+        | Bind_deleted_code _ | Bind_symbol _ -> binding)
+      bindings
+  in
+  let prefix_bound =
+    List.concat_map code_bound_in_bindings prefix.prefix_groups
+  in
+  (* A call in the code of the prefix may be given a closure of code that a unit
+     binds. That code is not in scope in the prefix, so it is not a candidate
+     there; a run that is undefined at such a call for such code is seen where
+     it stops ([undefined_by_an_open_list]). *)
+  let prefix_ids, groups =
+    List.fold_left
+      (fun (ids, groups) group ->
+        let ids =
+          List.concat_map Statics_in_scope.declared_code_ids_of_binding group
+          @ ids
+        in
+        ids, in_bindings ~bound:prefix_bound ids group :: groups)
+      ([], []) prefix.prefix_groups
+  in
+  let in_unit (unit : converted) =
+    { unit with
+      body =
+        in_expr
+          ~bound:(prefix_bound @ code_bound_in unit.body)
+          prefix_ids unit.body
+    }
+  in
+  { prefix with prefix_groups = List.rev groups }, in_unit before, in_unit after
+
+(* Of a state that has no step: whether it is undefined by the list of a call of
+   known arity and by nothing else, with code of which the compiler's reading of
+   the list is not established. That is: the state is at a call of known arity
+   that lists code ids; its callee is a closure whose code is not listed; the
+   same state with the list taken away from that call, and nothing else changed,
+   has a step; and a chain of older versions from the code of the callee is not
+   known to miss the listed code ([chain_reaches]). Then the code of the callee
+   and what is the matter with it: either it is a newer version of listed code
+   that the list has not, as where the conversion could not add it because it is
+   out of the scope of the call, or it is not known whether it is one. Nothing
+   where the chain is known not to reach a listed code id: the call is then
+   undefined by the compiler's reading too. The empty list allows no code, and
+   is no such case. The state with the list taken away is asked for one step and
+   then dropped: no run goes on from it. *)
+let undefined_by_an_open_list (state : Semantics.state) :
+    (Model.code_id * string) option =
+  match state.state_expr with
+  | Apply
+      ({ ap_call_kind = Indirect_known_arity (Some (_ :: _ as listed)); _ } as
+       ap) -> (
+    match Semantics.eval_simple state.state_vars ap.ap_callee with
+    | None -> None
+    | Some callee -> (
+      match Values.closure_of state.state_statics callee with
+      | None -> None
+      | Some (called, _) -> (
+        if List.mem called listed
+        then None
+        else
+          match
+            Semantics.step
+              { state with
+                state_expr =
+                  Apply { ap with ap_call_kind = Indirect_known_arity None }
+              }
+          with
+          | Undefined -> None
+          | Step _ | Exit _ -> (
+            match
+              chain_reaches ~numbers:(Code_ids.bindings ()) listed called
+            with
+            | Some false -> None
+            | Some true ->
+              Some
+                ( called,
+                  "is a newer version of listed code that the list has not \
+                   (the conversion adds such code only where it is in scope at \
+                   the call)" )
+            | None ->
+              Some
+                ( called,
+                  "may be a newer version of listed code: the metadata of one \
+                   of its older versions are not at hand" )))))
+  | Let _ | Let_static _ | Let_cont_non_recursive _ | Let_cont_recursive _
+  | Apply _ | Apply_cont _ | Switch _ | Invalid ->
+    None
+
 let convert_both ~(units : (Compilation_unit.t * Digest.t) list)
     (before : Flambda_unit.t) (after : Flambda_unit.t) =
   let loader =
     lazy (Flambda_cmx.create_loader ~get_module_info:Flambda2.get_module_info)
   in
   superseded_code := [];
+  lists_met := false;
   let has_tupled_code () = match !tupled_code with [] -> false | _ -> true in
   let before_converted = convert_unit before in
   before_marked
@@ -5145,6 +5478,11 @@ let convert_both ~(units : (Compilation_unit.t * Digest.t) list)
     make_prefix ~units ~loader
       ~units_have_tupled_code:(before_has_tupled_code || has_tupled_code ())
       [before_converted.body; after_converted.body]
+  in
+  let prefix, before_converted, after_converted =
+    if !lists_met
+    then close_known_arity_lists prefix before_converted after_converted
+    else prefix, before_converted, after_converted
   in
   code_versions
     := List.sort_uniq compare
@@ -5588,7 +5926,7 @@ let inlining_choices
   let calls callees (ap : Model.apply_expr) =
     match ap.ap_call_kind with
     | Direct code -> List.mem code callees
-    | Indirect -> false
+    | Indirect_unknown_arity | Indirect_known_arity _ -> false
   in
   let rec choices_from n e previous =
     if n > min most 8
@@ -5866,7 +6204,7 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
         let looped =
           Loopify.loopify_unit loops
             (Never_returns.cut_returns []
-               (Stub_calls.demote_stub_calls before.body))
+               (Stub_calls.demote_full_stub_calls before.body))
         in
         let normalised_after =
           Validate.normalise_after rounds kept after.body
@@ -6680,7 +7018,7 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
     recursive_code
       (Loopify.loopify_unit loops
          (Never_returns.cut_returns []
-            (Stub_calls.demote_stub_calls before.body)))
+            (Stub_calls.demote_full_stub_calls before.body)))
     @ recursive_code after.body
   in
   let once_looped_guess = recursive_once_looped @ called_after in
@@ -7365,6 +7703,11 @@ type checked =
 (* Raised where a check has failed, after the line that says how is printed. *)
 exception Check_failed
 
+(* Raised where a unit is not checked because one of its runs is undefined by a
+   list of code ids that may be short of what the compiler means, after the line
+   that says so is printed ([undefined_by_an_open_list]). *)
+exception List_left_open
+
 (* The two terms of the last unit that [check_or_raise] ran and compared, as it
    ran them: converted with regions dropped, the prefix in front. For
    [check_regions]. *)
@@ -7434,8 +7777,26 @@ let check_or_raise ~filename ~(units : (Compilation_unit.t * Digest.t) list)
           (why_not_well_formed after);
         raise Check_failed));
     let statics = Imports.imports_statics imports in
-    let outcome_before, steps_before = run ~statics before in
-    let outcome_after, steps_after = run ~statics after in
+    let outcome_before, steps_before, stopped_before =
+      run_to_end ~statics before
+    in
+    let outcome_after, steps_after, stopped_after = run_to_end ~statics after in
+    (* A run that is undefined by the list of a call of known arity alone, with
+       code that the compiler's reading of the list may allow
+       ([undefined_by_an_open_list]): the model's reading of the list and the
+       compiler's are not known to agree there, and the unit is not checked. *)
+    (match
+       List.find_map
+         (fun stopped -> Option.bind stopped undefined_by_an_open_list)
+         [stopped_before; stopped_after]
+     with
+    | Some (code, why) ->
+      Format.printf
+        "%s: not checked: a run is undefined at a call of known arity that \
+         lists code ids and not the code of its callee, and %s %s@."
+        filename (shown_code_id code) why;
+      raise List_left_open
+    | None -> ());
     let with_imports =
       (match prefix.prefix_groups with
         | [] -> ""
@@ -8227,6 +8588,7 @@ let check ~filename ~(units : (Compilation_unit.t * Digest.t) list)
     (before : Flambda_unit.t) (after : Flambda_unit.t) : checked =
   match check_or_raise ~filename ~units before after with
   | exception Check_failed -> Failed
+  | exception List_left_open -> Not_checked
   | None -> Not_checked
   | Some validation ->
     check_regions ~units before after;
@@ -8884,8 +9246,20 @@ let check_file filename : checked =
               ~machine_width:Sixty_four ~code_slot_offsets:fl2.code_slot_offsets
               before
           in
-          check ~filename:filename_shown ~units:(units_read ()) before
-            result.flambda)
+          (* The table of code that the pipeline gives back, for the lists of
+             code ids of calls of known arity ([close_known_arity_lists]). *)
+          (older_version_in_run
+             := fun code_id ->
+                  Option.map
+                    (fun code ->
+                      Code_metadata.newer_version_of
+                        (Code_or_metadata.code_metadata code))
+                    (Exported_code.find result.all_code code_id));
+          Fun.protect
+            ~finally:(fun () -> older_version_in_run := fun _ -> None)
+            (fun () ->
+              check ~filename:filename_shown ~units:(units_read ()) before
+                result.flambda))
 
 (* The conversion, for the check that takes a term of the model through fexpr
    and back (flroundtrip.ml). *)

@@ -6,4 +6,4 @@ kinds_direct_naked.fl:
   calls outside code: 1 before, 1 after
   the same
   calls outside code once those of known code are inlined: 1
-  validated: the same once normalised
+  validated: the same once closures and blocks are lifted to symbols and the terms normalised
