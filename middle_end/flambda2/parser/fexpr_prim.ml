@@ -1115,7 +1115,7 @@ let float_comp =
         "ge", Yielding_bool (Ge ());
         "eq", Yielding_bool Eq;
         "ne", Yielding_bool Neq;
-        "lt", Yielding_int_like_compare_functions () ]
+        "qmark", Yielding_int_like_compare_functions () ]
   in
   binary "%float_comp" ~params:(param2 float_bitwidth comp) (fun _ (w, c) ->
       P.Float_comp (w, c))
