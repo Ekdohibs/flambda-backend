@@ -1093,9 +1093,7 @@ End Block_load.
    [rename_known_numbers]. And the law of [lookup] in that map, at a
    renamed variable, is stated here; the tactic proves it. The laws
    that other files use by name keep their names and statements, and
-   each is given to the tactic for the proofs after it, with two laws
-   stated before this section and the law of [forget_wrapped_var],
-   which the tactic would otherwise derive in two proofs. *)
+   each is given to the tactic for the proofs after it. *)
 Section Unbox_numbers.
 
 (* The database of laws is tried in one pass (rewrite_strat) in this
@@ -1105,15 +1103,7 @@ Section Unbox_numbers.
 
 #[local] Instance known_numbers_renaming : Renaming_of known_numbers :=
   rename_known_numbers.
-#[local] Hint Rewrite var_in_simple_equivariant
-  unary_applied_equivariant : equivariance.
-
-Lemma forget_wrapped_var_equivariant (r : renaming) (x : variable)
-    (known : known_numbers) :
-  forget_wrapped_var (rename_variable r x) (rename_known_numbers r known)
-  = rename_known_numbers r (forget_wrapped_var x known).
-Proof. equivariance. Qed.
-#[local] Hint Rewrite forget_wrapped_var_equivariant : equivariance.
+#[local] Hint Rewrite var_in_simple_equivariant : equivariance.
 
 Lemma lookup_wrapped_var_renamed (r : renaming) (x : variable)
     (wrapped_vars : list (variable * (wrapping * simple))) :
