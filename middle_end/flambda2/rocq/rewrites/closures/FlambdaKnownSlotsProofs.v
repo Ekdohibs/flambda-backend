@@ -1756,6 +1756,10 @@ Lemma rename_closed_simple (r : renaming) (a : simple) :
   closed_simple a = true -> rename_simple r a = a.
 Proof. destruct a as [x | sym | k]; [ discriminate | reflexivity .. ]. Qed.
 
+(* The tactic looks for the laws of its database in one pass over the
+   goal, which is enough for the proofs below and takes less time. *)
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
+
 Lemma closed_simple_renamed (r : renaming) (a : simple) :
   closed_simple (rename_simple r a) = closed_simple a.
 Proof. equivariance. Qed.
@@ -1874,6 +1878,9 @@ Hypothesis names_of_renamed :
   ∀ binding : static_binding,
     names_of (rename_static_binding r binding) = names_of binding.
 
+(* The one pass leaves the proof of this section open: it keeps the
+   step that the tactic has otherwise. *)
+#[local] Ltac eqv_database ::= eqv_database_by_autorewrite.
 #[local] Hint Rewrite names_of_renamed : equivariance.
 
 Lemma static_names_of_renamed (e : expr) :
