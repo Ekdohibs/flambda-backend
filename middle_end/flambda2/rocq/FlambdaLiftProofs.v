@@ -112,7 +112,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaImportsSpec FlambdaImportsProofs FlambdaStaticsInScopeSpec
   FlambdaRunUnderSpec FlambdaObserversSpec FlambdaObserversProofs
   FlambdaUnitFromProofs FlambdaHeapFreeSpec FlambdaHeapFreeProofs
-  FlambdaLiftSpec.
+  FlambdaLiftSpec FlambdaEquivarianceTactic.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -4077,338 +4077,70 @@ Qed.
 (* ======================================================================== *)
 (* Renaming                                                                 *)
 (* ======================================================================== *)
+(* The three laws are proved from the definitions by [equivariance]
+   (FlambdaEquivarianceTactic.v), which states and proves, as it goes,
+   the laws of the functions that the three are made of. What is
+   written here besides is what that tactic did not find by itself:
+   - [lift_expr_equivariant_statement] has the renaming of the result
+     on its left, and the tactic wants the function at renamed
+     arguments there: the equation is turned round first;
+   - the tests take a scope, and under a recursive group the scope is
+     not written as a renamed list, so a hypothesis of the induction
+     is used from right to left: the hypotheses are put at the
+     renaming of the goal for that, and a conjunction is taken apart
+     before the tactic looks for a law of what is in it;
+   - what an expression spoils is a list of continuations with
+     positions, renamed as its type says, and the tactic derives the
+     laws of the functions that make and read such a list but for
+     two. The law of [plain_or] is stated for it to rewrite with:
+     without it the tactic takes cases on that test on each side
+     apart. The law of [forget_conts], whose arguments are not written
+     as renamed lists either, is stated and used from right to left.
+     Both are stated from the type of the function ([equivariance_of];
+     [Check] shows the statement);
+   - two tests of every element of one list, one of them at renamed
+     arguments, are made one by showing that they agree on the
+     elements;
+   - [exn_extra_simples] is kept folded, so that its law applies. *)
 
+#[local] Arguments exn_extra_simples : simpl never.
+
+(* Used by name in FlambdaLiftAroundProofs.v and
+   FlambdaLiftFromCodeProofs.v: the symbol is as it was. *)
 Lemma lift_named_rename (r : renaming) (target : lift_to) (d : named) :
   lift_named target (rename_named r d)
   = option_map
       (fun '(bindings, s) => (map (rename_static_binding r) bindings, s))
       (lift_named target d).
-Proof.
-  destruct target as [sym | syms];
-    destruct d as [s | p args | code slots | fslot decls slots | slot closure
-      | pfrom slot closure | move_from move_to closure];
-    simpl; try reflexivity.
-  - destruct p as [p | p | p | p | rp]; try reflexivity.
-    + destruct p; try reflexivity.
-      destruct args as [ | contents [ | arg args]]; reflexivity.
-    + destruct p as [[tag] | kind]; reflexivity.
-  - destruct (lookup fslot syms) as [s | ]; [ | reflexivity ].
-    destruct (list_eq_dec Pos.eq_dec (map fst syms) (map fst decls));
-      [ | reflexivity ].
-    simpl. unfold bind_closures. rewrite map_map. do 2 f_equal.
-    apply map_ext. intros [slot' s']. reflexivity.
-Qed.
-
-Fixpoint lift_expr_rename (r : renaming) (lets : list (path * lift_to))
-    (at_path : path) (e : expr) {struct e} :
-  rename_expr r (lift_expr lets at_path e)
-  = lift_expr lets at_path (rename_expr r e)
-with lift_handler_rename (r : renaming) (lets : list (path * lift_to))
-    (at_path : path) (h : continuation_handler) {struct h} :
-  rename_handler r (lift_handler lets at_path h)
-  = lift_handler lets at_path (rename_handler r h).
-Proof.
-  - destruct e
-      as [ x xkind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      simpl; try reflexivity.
-    + destruct (lookup at_path lets) as [target | ];
-        [ | simpl; rewrite lift_expr_rename; reflexivity ].
-      rewrite lift_named_rename.
-      destruct (lift_named target d) as [[bindings s] | ]; simpl;
-        rewrite lift_expr_rename; reflexivity.
-    + rewrite lift_expr_rename. reflexivity.
-    + rewrite lift_handler_rename, lift_expr_rename. reflexivity.
-    + rewrite lift_expr_rename. reflexivity.
-  - destruct h as [params metadata handler]. simpl. rewrite lift_expr_rename.
-    reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 Theorem lift_expr_equivariant : lift_expr_equivariant_statement.
-Proof. exact lift_expr_rename. Qed.
+Proof. intros r lets at_path e. symmetry. equivariance. Qed.
 
-Lemma among_rename_continuation (r : renaming) (k : continuation)
-    (scope : list continuation) :
-  among (rename_continuation r k) (map (rename_continuation r) scope)
-  = among k scope.
-Proof.
-  unfold among. induction scope as [ | k' scope IH]; simpl; [ reflexivity | ].
-  rewrite rename_continuation_eqb, IH. reflexivity.
-Qed.
+Lemma plain_or_renamed : equivariance_of plain_or.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite plain_or_renamed : equivariance.
 
-Lemma apply_cont_exits_plain_rename (r : renaming)
-    (scope : list continuation) (ac : apply_cont) :
-  apply_cont_exits_plain (map (rename_continuation r) scope)
-    (rename_apply_cont r ac)
-  = apply_cont_exits_plain scope ac.
-Proof.
-  unfold apply_cont_exits_plain. simpl.
-  rewrite among_rename_continuation. f_equal.
-  induction (ac_args ac) as [ | s args IH]; simpl; [ reflexivity | ].
-  rewrite IH. destruct s; reflexivity.
-Qed.
+Lemma forget_conts_renamed : equivariance_of forget_conts.
+Proof. equivariance. Qed.
 
-Fixpoint exits_plain_rename (r : renaming) (scope : list continuation)
-    (e : expr) {struct e} :
-  exits_plain (map (rename_continuation r) scope) (rename_expr r e)
-  = exits_plain scope e
-with handler_exits_plain_rename (r : renaming) (scope : list continuation)
-    (h : continuation_handler) {struct h} :
-  handler_exits_plain (map (rename_continuation r) scope) (rename_handler r h)
-  = handler_exits_plain scope h
-with binding_exits_plain_rename (r : renaming) (binding : static_binding)
-    {struct binding} :
-  binding_exits_plain (rename_static_binding r binding)
-  = binding_exits_plain binding
-with code_exits_plain_rename (r : renaming) (c : code) {struct c} :
-  code_exits_plain (rename_code r c) = code_exits_plain c.
-Proof.
-  - destruct e
-      as [ x xkind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      simpl.
-    + apply exits_plain_rename.
-    + rewrite exits_plain_rename. f_equal.
-      induction bindings as [ | binding bindings IH]; simpl; [ reflexivity | ].
-      rewrite binding_exits_plain_rename, IH. reflexivity.
-    + rewrite handler_exits_plain_rename. f_equal.
-      exact (exits_plain_rename r (k :: scope) body).
-    + assert (Hscope :
-        map fst
-          (map (fun '(k, h) => (rename_continuation r k, rename_handler r h))
-             handlers)
-        ++ map (rename_continuation r) scope
-        = map (rename_continuation r) (map fst handlers ++ scope)).
-      { rewrite map_app, !map_map. f_equal. apply map_ext.
-        intros [k h]. reflexivity. }
-      rewrite Hscope, exits_plain_rename. f_equal. clear Hscope.
-      generalize (map fst handlers ++ scope) as scope'. intros scope'.
-      induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
-      rewrite handler_exits_plain_rename, IH. reflexivity.
-    + rewrite !among_rename_continuation. do 2 f_equal.
-      unfold exn_extra_simples. simpl.
-      induction (ap_exn_extra_args ap) as [ | [arg kind] extra IH]; simpl;
-        [ reflexivity | ].
-      rewrite IH. destruct arg; reflexivity.
-    + apply apply_cont_exits_plain_rename.
-    + induction arms as [ | [i ac] arms IH]; simpl; [ reflexivity | ].
-      rewrite apply_cont_exits_plain_rename, IH. reflexivity.
-    + reflexivity.
-  - destruct h as [params metadata handler]. simpl. apply exits_plain_rename.
-  - destruct binding as [id c | id | sym const]; simpl; try reflexivity.
-    apply code_exits_plain_rename.
-  - destruct c as [params my_closure ret exn metadata body]. simpl.
-    exact (exits_plain_rename r [ret] body).
-Qed.
+#[local] Ltac eqv_extra ::=
+  match goal with
+  | r : renaming, H : (forall r' : renaming, _) |- _ => specialize (H r)
+  | |- andb _ _ = andb _ _ => apply (f_equal2 andb)
+  | |- context [forallb ?f' ?l] =>
+    match goal with
+    | |- context [forallb ?f l] =>
+      eqv_has_renaming f'; eqv_no_renaming f;
+      rewrite (forallb_ext_among f' f l); [ | eqv_enter l; solve [ eqv_core ] ]
+    end
+  | |- _ = map _ (forget_conts _ _) =>
+    rewrite <- forget_conts_renamed; eqv_same_head; eqv_peel
+  end.
 
 Theorem exits_plain_equivariant : exits_plain_equivariant_statement.
-Proof. exact exits_plain_rename. Qed.
-
-(* The same of the test with what is known: the variables known and
-   what is spoilt are renamed with the term. *)
-
-Lemma among_known_renamed (r : renaming) (x : variable)
-    (plain : list variable) :
-  among (rename_variable r x) (map (rename_variable r) plain)
-  = among x plain.
-Proof.
-  unfold among. induction plain as [ | y plain IH]; simpl; [ reflexivity | ].
-  rewrite rename_variable_eqb, IH. reflexivity.
-Qed.
-
-Lemma without_renamed (r : renaming) (bound names : list variable) :
-  without (map (rename_variable r) bound) (map (rename_variable r) names)
-  = map (rename_variable r) (without bound names).
-Proof.
-  unfold without. induction names as [ | y names IH]; simpl;
-    [ reflexivity | ].
-  rewrite among_known_renamed, IH. destruct (among y bound); reflexivity.
-Qed.
-
-Definition rename_spoilt (r : renaming) (sp : spoilt) : spoilt :=
-  map (fun '(k, at_) => (rename_continuation r k, at_)) sp.
-
-Lemma spoils_at_renamed (r : renaming) (k : continuation) (i : nat)
-    (sp : spoilt) :
-  spoils_at (rename_continuation r k) i (rename_spoilt r sp)
-  = spoils_at k i sp.
-Proof.
-  induction sp as [ | [k' at_] sp IH]; simpl; [ reflexivity | ].
-  rewrite rename_continuation_eqb, IH. reflexivity.
-Qed.
-
-Lemma forget_conts_renamed (r : renaming) (ks : list continuation)
-    (sp : spoilt) :
-  forget_conts (map (rename_continuation r) ks) (rename_spoilt r sp)
-  = rename_spoilt r (forget_conts ks sp).
-Proof.
-  induction sp as [ | [k at_] sp IH]; simpl; [ reflexivity | ].
-  rewrite among_rename_continuation, IH. destruct (among k ks); reflexivity.
-Qed.
-
-Lemma plain_or_renamed (r : renaming) (plain : list variable)
-    (args : list simple) :
-  forallb (plain_or (map (rename_variable r) plain))
-    (map (rename_simple r) args)
-  = forallb (plain_or plain) args.
-Proof.
-  induction args as [ | s args IH]; simpl; [ reflexivity | ].
-  rewrite IH. f_equal.
-  destruct s as [x | sym | c]; simpl;
-    [ apply among_known_renamed | reflexivity | reflexivity ].
-Qed.
-
-Lemma args_spoil_renamed (r : renaming) (k : continuation)
-    (plain : list variable) (args : list simple) :
-  ∀ i : nat,
-    args_spoil (rename_continuation r k) (map (rename_variable r) plain) i
-      (map (rename_simple r) args)
-    = rename_spoilt r (args_spoil k plain i args).
-Proof.
-  induction args as [ | s args IH]; intros i; simpl; [ reflexivity | ].
-  rewrite IH. unfold rename_spoilt. rewrite map_app. f_equal.
-  destruct s as [x | sym | c]; simpl; try reflexivity.
-  rewrite among_known_renamed. destruct (among x plain); reflexivity.
-Qed.
-
-Lemma params_known_renamed (r : renaming) (k : continuation) (sp : spoilt)
-    (params : list variable) :
-  ∀ (i : nat) (known : list variable),
-    params_known (rename_continuation r k) (rename_spoilt r sp) i
-      (map (rename_variable r) params) (map (rename_variable r) known)
-    = map (rename_variable r) (params_known k sp i params known).
-Proof.
-  induction params as [ | x params IH]; intros i known; simpl;
-    [ reflexivity | ].
-  rewrite spoils_at_renamed. destruct (spoils_at k i sp).
-  - rewrite <- IH. f_equal. exact (without_renamed r [x] known).
-  - exact (IH (S i) (x :: known)).
-Qed.
-
-Fixpoint spoils_renamed (r : renaming) (plain : list variable) (e : expr)
-    {struct e} :
-  spoils (map (rename_variable r) plain) (rename_expr r e)
-  = rename_spoilt r (spoils plain e)
-with handler_spoils_renamed (r : renaming) (plain : list variable)
-    (h : continuation_handler) {struct h} :
-  handler_spoils (map (rename_variable r) plain) (rename_handler r h)
-  = rename_spoilt r (handler_spoils plain h).
-Proof.
-  - destruct e
-      as [ x xkind d body | bindings body
-         | k [params metadata handler] body | handlers body | ap | ac
-         | scrutinee arms | ];
-      simpl.
-    + rewrite <- spoils_renamed. f_equal. exact (without_renamed r [x] plain).
-    + apply spoils_renamed.
-    + rewrite (spoils_renamed r plain body), params_known_renamed,
-        spoils_renamed, (forget_conts_renamed r [k]).
-      unfold rename_spoilt. rewrite map_app. reflexivity.
-    + assert (Hnames :
-        map fst
-          (map (fun '(k, h) => (rename_continuation r k, rename_handler r h))
-             handlers)
-        = map (rename_continuation r) (map fst handlers)).
-      { rewrite !map_map. apply map_ext. intros [k h]. reflexivity. }
-      assert (Hgroup :
-        flat_map
-          (fun '(_, h) => handler_spoils (map (rename_variable r) plain) h)
-          (map (fun '(k, h) => (rename_continuation r k, rename_handler r h))
-             handlers)
-        = rename_spoilt r
-            (flat_map (fun '(_, h) => handler_spoils plain h) handlers)).
-      { clear Hnames.
-        induction handlers as [ | [k h] handlers IH]; simpl;
-          [ reflexivity | ].
-        rewrite handler_spoils_renamed, IH. unfold rename_spoilt.
-        rewrite map_app. reflexivity. }
-      rewrite Hnames, Hgroup, spoils_renamed, <- forget_conts_renamed.
-      unfold rename_spoilt. rewrite map_app. reflexivity.
-    + rewrite exn_extra_simples_rename, plain_or_renamed.
-      destruct (forallb (plain_or plain) (exn_extra_simples ap));
-        reflexivity.
-    + apply args_spoil_renamed.
-    + induction arms as [ | [discriminant ac] arms IH]; simpl;
-        [ reflexivity | ].
-      rewrite IH. unfold rename_spoilt. rewrite map_app. f_equal.
-      apply args_spoil_renamed.
-    + reflexivity.
-  - destruct h as [params metadata handler]. simpl.
-    rewrite <- spoils_renamed. f_equal. apply without_renamed.
-Qed.
-
-Lemma apply_cont_exits_plain_knowing_rename (r : renaming)
-    (scope : list continuation) (plain : list variable) (ac : apply_cont) :
-  apply_cont_exits_plain_knowing (map (rename_continuation r) scope)
-    (map (rename_variable r) plain) (rename_apply_cont r ac)
-  = apply_cont_exits_plain_knowing scope plain ac.
-Proof.
-  unfold apply_cont_exits_plain_knowing. simpl.
-  rewrite among_rename_continuation, plain_or_renamed. reflexivity.
-Qed.
-
-Fixpoint exits_plain_knowing_rename (r : renaming)
-    (scope : list continuation) (plain : list variable) (e : expr)
-    {struct e} :
-  exits_plain_knowing (map (rename_continuation r) scope)
-    (map (rename_variable r) plain) (rename_expr r e)
-  = exits_plain_knowing scope plain e
-with handler_exits_plain_knowing_rename (r : renaming)
-    (scope : list continuation) (plain : list variable)
-    (h : continuation_handler) {struct h} :
-  handler_exits_plain_knowing (map (rename_continuation r) scope)
-    (map (rename_variable r) plain) (rename_handler r h)
-  = handler_exits_plain_knowing scope plain h
-with binding_exits_plain_knowing_rename (r : renaming)
-    (binding : static_binding) {struct binding} :
-  binding_exits_plain_knowing (rename_static_binding r binding)
-  = binding_exits_plain_knowing binding
-with code_exits_plain_knowing_rename (r : renaming) (c : code) {struct c} :
-  code_exits_plain_knowing (rename_code r c) = code_exits_plain_knowing c.
-Proof.
-  - destruct e
-      as [ x xkind d body | bindings body
-         | k [params metadata handler] body | handlers body | ap | ac
-         | scrutinee arms | ];
-      simpl.
-    + rewrite <- (exits_plain_knowing_rename r scope (without [x] plain) body).
-      f_equal. exact (without_renamed r [x] plain).
-    + rewrite exits_plain_knowing_rename. f_equal.
-      induction bindings as [ | binding bindings IH]; simpl; [ reflexivity | ].
-      rewrite binding_exits_plain_knowing_rename, IH. reflexivity.
-    + rewrite spoils_renamed, params_known_renamed,
-        exits_plain_knowing_rename.
-      f_equal. exact (exits_plain_knowing_rename r (k :: scope) plain body).
-    + assert (Hscope :
-        map fst
-          (map (fun '(k, h) => (rename_continuation r k, rename_handler r h))
-             handlers)
-        ++ map (rename_continuation r) scope
-        = map (rename_continuation r) (map fst handlers ++ scope)).
-      { rewrite map_app, !map_map. f_equal. apply map_ext.
-        intros [k h]. reflexivity. }
-      rewrite Hscope, exits_plain_knowing_rename. f_equal. clear Hscope.
-      generalize (map fst handlers ++ scope) as scope'. intros scope'.
-      induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
-      rewrite handler_exits_plain_knowing_rename, IH. reflexivity.
-    + rewrite !among_rename_continuation, exn_extra_simples_rename,
-        plain_or_renamed.
-      reflexivity.
-    + apply apply_cont_exits_plain_knowing_rename.
-    + induction arms as [ | [discriminant ac] arms IH]; simpl;
-        [ reflexivity | ].
-      rewrite apply_cont_exits_plain_knowing_rename, IH. reflexivity.
-    + reflexivity.
-  - destruct h as [params metadata handler]. simpl.
-    rewrite
-      <- (exits_plain_knowing_rename r scope (without params plain) handler).
-    f_equal. apply without_renamed.
-  - destruct binding as [id c | id | sym const]; simpl; try reflexivity.
-    apply code_exits_plain_knowing_rename.
-  - destruct c as [params my_closure ret exn metadata body]. simpl.
-    exact (exits_plain_knowing_rename r [ret] [] body).
-Qed.
+Proof. equivariance. Qed.
 
 Theorem exits_plain_knowing_equivariant :
   exits_plain_knowing_equivariant_statement.
-Proof. exact exits_plain_knowing_rename. Qed.
+Proof. equivariance. Qed.
