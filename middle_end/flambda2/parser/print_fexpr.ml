@@ -623,13 +623,17 @@ let call_kind_and_alloc_mode ~space ppf (ck, alloc_mode) =
       alloc_mode
   | C_call { alloc } ->
     let noalloc_kwd = if alloc then None else Some "noalloc" in
-    pp_spaced ~space ppf "ccall%a"
+    pp_spaced ~space ppf "@[ccall%a%a@]"
       (pp_option ~space:Before Format.pp_print_string)
       noalloc_kwd
+      (alloc_mode_for_applications region ~space:Before)
+      alloc_mode
   | Method { kind; obj } ->
-    pp_spaced ~space ppf "mcall(%a%a)" method_kind kind
+    pp_spaced ~space ppf "@[mcall(%a%a)%a@]" method_kind kind
       (fun ppf -> pp_spaced ~space:Before ppf "%a" simple)
       obj
+      (alloc_mode_for_applications region ~space:Before)
+      alloc_mode
 
 let inline_attribute ~space ppf (i : Inline_attribute.t) =
   let str =

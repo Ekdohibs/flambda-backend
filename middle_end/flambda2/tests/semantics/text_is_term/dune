@@ -25,7 +25,9 @@
 ;; unboxed_pair_parameter: the text is not the term, and the driver names the
 ;; first difference.
 ;;
-;; c_call: the text is not read back.
+;; c_call: a unit with a call of a C function. The text is the term.
+;;
+;; partial_application_of_unboxed_float: the text is not read back.
 ;;
 ;; interface_only, type_error: the compiler does not reach the middle end.
 ;;
@@ -384,3 +386,20 @@
   (= %{context_name} "main"))
  (action
   (diff unboxed_pair_parameter.expected unboxed_pair_parameter.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   partial_application_of_unboxed_float.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     %{dep:partial_application_of_unboxed_float.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff partial_application_of_unboxed_float.expected
+   partial_application_of_unboxed_float.output)))
