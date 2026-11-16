@@ -2046,20 +2046,6 @@ Qed.
    FlambdaValidatorEquivarianceProofs.v rewrites with, and
    [code_ids_of_bindings_renamed]. *)
 
-(* By hand: the law has a premise, and the tactic states no law with
-   one. FlambdaHoistStaticsProofs.v uses it. *)
-Lemma filter_renamed (r : renaming) (keep : static_binding -> bool)
-    (bindings : list static_binding) :
-  (∀ binding : static_binding,
-    keep (rename_static_binding r binding) = keep binding) ->
-  filter keep (map (rename_static_binding r) bindings)
-  = map (rename_static_binding r) (filter keep bindings).
-Proof.
-  intros Hkeep. induction bindings as [ | binding bindings IH]; simpl;
-    [ reflexivity | ].
-  rewrite Hkeep, IH. destruct (keep binding); reflexivity.
-Qed.
-
 Lemma code_bindings_renamed (r : renaming) (e : expr) :
   code_bindings (rename_expr r e)
   = map (rename_static_binding r) (code_bindings e).
