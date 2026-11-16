@@ -784,6 +784,11 @@ inline:
 inlined:
   | KWD_INLINED LPAREN KWD_ALWAYS; u = use_info; RPAREN { Always_inlined u }
   | KWD_INLINED LPAREN KWD_HINT RPAREN { Hint_inlined }
+  | KWD_INLINED LPAREN; i = IDENT; RPAREN
+    { (* "forward" is no keyword. *)
+      match i with
+      | "forward" -> Forward_inlined
+      | _ -> Misc.fatal_errorf "Unknown inlining attribute '%s'" i }
   | KWD_INLINED LPAREN KWD_NEVER RPAREN { Never_inlined }
   | KWD_UNROLL LPAREN; i = plain_int; u = use_info; RPAREN { Unroll (i, u) }
   | KWD_INLINED LPAREN KWD_DEFAULT RPAREN { Default_inlined }

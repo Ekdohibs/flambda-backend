@@ -127,6 +127,10 @@
 ;; takes with the name where a stamp follows another slash. The text is the
 ;; term.
 ;;
+;; forwarded_inlining_attribute: a call marked [@inlined forward], whose
+;; attribute the text writes "inlined(forward)" and the reader takes. The text
+;; is the term.
+;;
 ;; call_of_code_of_another_unit: compiled with -Oclassic after other_unit.ml,
 ;; which is compiled first. The term has a direct call of code of that unit,
 ;; put there where a call of a function of it was inlined before Simplify.
@@ -228,6 +232,22 @@
   (= %{context_name} "main"))
  (action
   (diff length_of_bytes.expected length_of_bytes.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   forwarded_inlining_attribute.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     %{dep:forwarded_inlining_attribute.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff forwarded_inlining_attribute.expected forwarded_inlining_attribute.output)))
 
 (rule
  (enabled_if
