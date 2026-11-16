@@ -87,7 +87,13 @@
    And a unit that returns a name under a change of depth between two equal
    depths is written and read back, for a depth that is a number and for the
    depth that the reader has as one constant: the reader reads a change of
-   depth, not the identity. *)
+   depth, not the identity.
+
+   Last, the mark of an inlined body, whose debugging information is a stack.
+   Pairs of marks built in memory are compared: the comparison compares the
+   inlining attribute and whether the stack is empty, and not what the stack
+   holds. And a unit with a mark is written and read back, for a stack that is
+   not empty and for the empty one, which the text writes [no_dbg]. *)
 
 open Flambda2_bound_identifiers
 open Flambda2_identifiers
@@ -699,6 +705,21 @@ let poison name =
       jump return_continuation
         [Simple.const (Reg_width_const.const_poison K.value name)])
 
+(* A stack of debugging information for the mark of an inlined body, which is
+   not empty: that of one inlined call, with the given debugging information of
+   the call. *)
+let stack_of_one_call apply_dbg =
+  Inlined_debuginfo.create
+    ~called_code_id:
+      (Code_id.create ~name:"inlined" ~debug:Debuginfo.none compilation_unit)
+    ~apply_dbg
+
+(* A unit that binds a variable to the mark of an inlined body and returns
+   it. *)
+let mark ?(inlined_attribute = Inlined_attribute.Default_inlined) dbg =
+  let_prim (fun ~toplevel_my_alloc_region:_ ->
+      Flambda_primitive.Nullary (Enter_inlined_apply { dbg; inlined_attribute }))
+
 (* The words that begin with a capital and are keywords of the text: the names
    of the static constants. *)
 let keywords_with_a_capital =
@@ -869,4 +890,32 @@ let () =
       ( "the depth \"do not inline\"",
         Rec_info_expr.do_not_inline,
         do_not_inline
-          (Sys.opaque_identity Rec_info_expr.Unrolling_state.do_not_unroll) ) ]
+          (Sys.opaque_identity Rec_info_expr.Unrolling_state.do_not_unroll) ) ];
+  Printf.printf
+    "two marks of an inlined body whose stacks are not empty and have not the \
+     same debugging information: %s\n"
+    (answer
+       (mark (stack_of_one_call Debuginfo.none))
+       (mark (stack_of_one_call somewhere)));
+  Printf.printf
+    "a mark of an inlined body whose stack is not empty and one whose stack is \
+     empty: %s\n"
+    (answer
+       (mark (stack_of_one_call Debuginfo.none))
+       (mark Inlined_debuginfo.none));
+  Printf.printf
+    "two marks of an inlined body with two inlining attributes: %s\n"
+    (answer
+       (mark (stack_of_one_call Debuginfo.none))
+       (mark ~inlined_attribute:Never_inlined
+          (stack_of_one_call Debuginfo.none)));
+  List.iter
+    (fun (what, dbg) ->
+      let text, read = unit_written_and_read_back (mark dbg) in
+      Printf.printf
+        "a mark of an inlined body whose stack is %s, written and read back: \
+         \"%s\", %s\n"
+        what
+        (String.concat " " (String.split_on_char '\n' text))
+        read)
+    ["not empty", stack_of_one_call somewhere; "empty", Inlined_debuginfo.none]

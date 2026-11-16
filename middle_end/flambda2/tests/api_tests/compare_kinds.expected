@@ -210,3 +210,8 @@ a poison constant with the name "variant_unboxing_field", written and read back:
 a poison constant with the name "a \"name\" with quotes\\", written and read back: "cont done (poison.val."a \"name\" with quotes\\")", the same
 a name under a change of depth between two equal depths, the depth 1 (the identity by Coercion.is_id: false), written and read back: "cont done ($camlKinds ~ depth 1 -> 1)", the same
 a name under a change of depth between two equal depths, the depth "do not inline" (the identity by Coercion.is_id: false), written and read back: "cont done ($camlKinds ~ depth do_not_inline -> do_not_inline)", the same
+two marks of an inlined body whose stacks are not empty and have not the same debugging information: the same
+a mark of an inlined body whose stack is not empty and one whose stack is empty: different
+two marks of an inlined body with two inlining attributes: different
+a mark of an inlined body whose stack is not empty, written and read back: "let result/869 = %inlined_apply () in cont done (result/869)", the same
+a mark of an inlined body whose stack is empty, written and read back: "let result/879 = %inlined_apply.no_dbg () in cont done (result/879)", the same
