@@ -734,6 +734,10 @@ Owner: N1.
   traversal of types of the join on renamed arguments, which N3's
   proofs of the join of environments import)
 - `middle_end/flambda2/rocq/NAMES.md`
+- `middle_end/flambda2/tests/tools/nameorder/` and
+  `middle_end/flambda2/tests/semantics/name_order/` (the test that what
+  Simplify makes of a unit does not depend on the order in which the
+  compiler holds its names: the program and the rules)
 
 ## N2: the freshness quantifier
 

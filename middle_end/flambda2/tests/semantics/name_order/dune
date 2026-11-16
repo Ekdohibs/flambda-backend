@@ -1,0 +1,28 @@
+;; The test that what Simplify makes of a unit does not depend on the order
+;; of the names of the unit: README.md says what is tested and how to read
+;; the expected file. The units are the examples X.fl of the directory above;
+;; there is no list to add a new one to, and a new one whose line is "the
+;; same" changes nothing here: the expected file has the lines that are not
+;; "the same" and a line of their numbers (`dune promote` writes it).
+;; name_order.counts has the number of the units and of those that say "the
+;; same"; it is compared with nothing.
+;;
+;; The test has an alias of its own, name_order, and is not part of runtest:
+;;
+;;   dune build --root=. --workspace=duneconf/main.ws \
+;;     @middle_end/flambda2/tests/semantics/name_order/name_order
+
+(rule
+ (targets name_order.output name_order.counts)
+ (deps
+  (glob_files ../*.fl))
+ (action
+  (with-stdout-to
+   name_order.output
+   (run sh %{dep:run.sh} %{dep:../../tools/nameorder/flnameorder.exe} 1 1000
+     "" %{dep:labels} name_order.counts %{deps}))))
+
+(rule
+ (alias name_order)
+ (action
+  (diff name_order.expected name_order.output)))

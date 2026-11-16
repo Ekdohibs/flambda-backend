@@ -1,0 +1,17 @@
+;; The program of the test that what Simplify makes of a unit does not depend
+;; on the order of the names of the unit (flnameorder.ml; the rules are in
+;; ../../semantics/name_order/).
+
+(executable
+ (name flnameorder)
+ (modes native)
+ (libraries
+  ocamlfrontend
+  ocamloptcomp
+  flambda2
+  flambda2_compare
+  flambda2_identifiers
+  flambda2_kinds
+  flambda2_parser
+  flambda2_terms
+  flambda2_ui))

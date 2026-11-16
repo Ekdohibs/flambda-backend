@@ -1,0 +1,17 @@
+control, K = 1: variables in another order; continuations in another order
+control, K = 1000: variables in another order; continuations in another order
+arity_text_hidden_by_two_values: not simplified
+arity_text_no_parameter: not simplified
+arity_text_recursive_invariant: not simplified
+arity_text_return_of_code: not simplified
+closure_at_other_slot: not compared: the result with K = 0, read twice, differs: a code ID
+closure_at_own_slot: not compared: the result with K = 0, read twice, differs: a code ID
+kinds_call_unbound_written: not compared: the result with K = 0, read twice, differs: a code ID
+set_duplicate_slot: not simplified
+set_shared_code: not simplified
+set_static_group_one_function: not simplified
+set_static_group_shared_code: not simplified
+static_in_loop: not simplified
+unknown_arity_result_int64: not simplified
+unknown_arity_result_pair: not simplified
+summary: differ 0; not compared 3; not simplified 11; others 0; each other unit given was run and says the same
