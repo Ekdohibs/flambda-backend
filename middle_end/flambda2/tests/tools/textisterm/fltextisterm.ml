@@ -59,9 +59,23 @@
    - "the text is not read back: ...", 1: the reader refused the text, or
    stopped;
 
-   - "not checked: ...", 2: the comparison stopped, the compiler did not reach
-   the middle end, or a second unit was given. If the compiler fails, the status
-   is the compiler's.
+   - "not checked: ...", 2: the comparison stopped; more than one implementation
+   was given; the compiler did not reach the middle end (an interface alone), or
+   exited before it by itself, as it does for the options that make it print
+   something and stop ([-config], [-version], [-depend], [-help]).
+
+   If the compiler fails, the driver prints no line and exits with the
+   compiler's status.
+
+   The answer is the line. The driver exits with 0 only after it has printed
+   "the text is the term"; a caller should ask for that line, the last of
+   standard output, and not for the status alone.
+
+   One implementation is checked in a process: the hook stops the process at the
+   first unit, so a second would not be checked. The driver therefore refuses,
+   before the compiler runs, a command line with more than one argument that
+   ends in ".ml" or follows [-impl], and one with [-args] or [-args0], which
+   read more arguments from a file. An interface is not counted.
 
    What is trusted: that the hook is given the term that the compiler goes on
    with, and the comparison. What the comparison does not read of a term is not
@@ -128,23 +142,50 @@ let check (unit : Flambda2_terms.Flambda_unit.t) =
           | Equivalent -> The_term
           | Different { approximant = _ } -> Not_the_term)))
 
+(* Whether the driver has printed its line, or the compiler has returned to
+   it. *)
+let answered = ref false
+
+let answer line status =
+  answered := true;
+  print_endline line;
+  exit status
+
+(* For some options the compiler prints something and exits by itself, with the
+   status 0, without returning to the driver. This function is registered before
+   anything that the compiler registers, so it is run after: if the process is
+   exiting and the driver has not answered, it says so and exits with 2 in the
+   place of the compiler's status. *)
+let () =
+  at_exit (fun () ->
+      if not !answered
+      then (
+        Format.pp_print_flush Format.std_formatter ();
+        Format.pp_print_flush Format.err_formatter ();
+        (* On a line of its own, whatever the compiler printed. *)
+        print_newline ();
+        print_endline "not checked: the compiler exited before the middle end";
+        flush stdout;
+        flush stderr;
+        Unix._exit 2))
+
 let on_raw_flambda unit =
-  let answer =
+  match
     try check unit with exn -> Not_checked (one_line (Printexc.to_string exn))
-  in
-  match answer with
-  | The_term ->
-    print_endline "the text is the term";
-    exit 0
-  | Not_the_term ->
-    print_endline "the text is not the term";
-    exit 1
-  | Not_read_back why ->
-    print_endline ("the text is not read back: " ^ why);
-    exit 1
-  | Not_checked why ->
-    print_endline ("not checked: " ^ why);
-    exit 2
+  with
+  | The_term -> answer "the text is the term" 0
+  | Not_the_term -> answer "the text is not the term" 1
+  | Not_read_back why -> answer ("the text is not read back: " ^ why) 1
+  | Not_checked why -> answer ("not checked: " ^ why) 2
+
+(* The implementations that a command line gives, counted generously: an
+   argument of another option that ends in ".ml" is counted too. *)
+let rec implementations args =
+  match args with
+  | [] -> 0
+  | "-impl" :: _ :: args -> 1 + implementations args
+  | arg :: args ->
+    (if Filename.check_suffix arg ".ml" then 1 else 0) + implementations args
 
 let () =
   let argv =
@@ -154,6 +195,11 @@ let () =
       Array.of_list (program :: rest)
     | _ -> Sys.argv
   in
+  let args = List.tl (Array.to_list argv) in
+  if List.exists (fun arg -> List.mem arg ["-args"; "-args0"]) args
+  then answer "not checked: -args and -args0 are not accepted" 2;
+  if implementations args > 1
+  then answer "not checked: more than one implementation is given" 2;
   Compiler_hooks.register Raw_flambda2 on_raw_flambda;
   let compiler =
     Optmaindriver.main
@@ -163,7 +209,7 @@ let () =
   in
   (* The hook stops the process, so it was not reached. *)
   if compiler = 0
-  then (
-    print_endline "not checked: the compiler did not reach the middle end";
-    exit 2)
-  else exit compiler
+  then answer "not checked: the compiler did not reach the middle end" 2
+  else (
+    answered := true;
+    exit compiler)

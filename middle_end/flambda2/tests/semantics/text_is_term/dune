@@ -9,6 +9,16 @@
 ;; c_call: the text is not read back.
 ;;
 ;; interface_only, type_error: the compiler does not reach the middle end.
+;;
+;; two_units: two implementations in one command line. The driver refuses
+;; them before the compiler runs.
+;;
+;; config, config_var, depend: options for which the compiler prints
+;; something and exits by itself with the status 0. The driver says that
+;; nothing was checked, and exits with 2.
+;;
+;; print_interface: with -i the compiler prints the interface of the unit and
+;; does not reach the middle end.
 
 (rule
  (enabled_if
@@ -90,3 +100,83 @@
   (= %{context_name} "main"))
  (action
   (diff type_error.expected type_error.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   two_units.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     %{dep:variant_two_orders.ml} %{dep:c_call.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff two_units.expected two_units.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   config.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     -config %{dep:variant_two_orders.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff config.expected config.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   config_var.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     -config-var version %{dep:variant_two_orders.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff config_var.expected config_var.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   depend.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     -depend %{dep:variant_two_orders.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff depend.expected depend.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   print_interface.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     -i %{dep:variant_two_orders.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff print_interface.expected print_interface.output)))
