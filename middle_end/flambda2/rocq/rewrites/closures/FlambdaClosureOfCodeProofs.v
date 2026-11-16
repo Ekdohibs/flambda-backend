@@ -2876,7 +2876,8 @@ Qed.
    states and proves by itself the laws of the functions under it. By
    hand are the laws that ask that a fact holds no variable, the two
    that rest on what a slot is held to hold having no variable, and the
-   test of the groups, which rests on a renaming being injective. *)
+   six of the test that a set is whole, which rest on a renaming being
+   injective. *)
 
 (* A set that a term makes, renamed: the variables in its value
    slots. *)
@@ -3089,40 +3090,12 @@ Proof.
        binding').
 Qed.
 
-Fixpoint groups_whole_renamed (r : renaming) (e : expr) {struct e} :
-  groups_whole (rename_expr r e) = groups_whole e
-with handler_groups_whole_renamed (r : renaming) (h : continuation_handler)
-    {struct h} :
-  handler_groups_whole (rename_handler r h) = handler_groups_whole h.
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      cbn [rename_expr groups_whole]; try reflexivity.
-    + apply groups_whole_renamed.
-    + rewrite (groups_whole_renamed r body). f_equal. f_equal.
-      * generalize bindings at 1 3. intros all.
-        induction bindings as [ | binding bindings IH]; cbn [map forallb];
-          [ reflexivity | ].
-        rewrite whole_static_set_whole_renamed, IH. reflexivity.
-      * induction bindings
-          as [ | [id [params my_closure ret exn metadata code_body] | id
-                 | sym const]
-                 bindings IH];
-          cbn [map forallb rename_static_binding rename_code
-                 binding_groups_whole code_groups_whole];
-          [ reflexivity | | | ]; rewrite IH; [ | reflexivity | reflexivity ].
-        rewrite (groups_whole_renamed r code_body). reflexivity.
-    + rewrite (handler_groups_whole_renamed r h),
-        (groups_whole_renamed r body).
-      reflexivity.
-    + rewrite (groups_whole_renamed r body). f_equal.
-      induction handlers as [ | [k h] handlers IH]; cbn [map forallb];
-        [ reflexivity | ].
-      rewrite (handler_groups_whole_renamed r h), IH. reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler handler_groups_whole]. apply groups_whole_renamed.
-Qed.
+#[local] Hint Rewrite whole_static_set_whole_renamed : equivariance.
+#[local] Arguments static_set_whole : simpl never.
+
+Lemma groups_whole_renamed (r : renaming) (e : expr) :
+  groups_whole (rename_expr r e) = groups_whole e.
+Proof. equivariance. Qed.
 
 (* What is in sight, renamed: the variables; function slots and code
    ids are not renamed. *)
