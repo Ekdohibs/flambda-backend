@@ -1127,15 +1127,18 @@ Ltac eqv_same_test := fail.
 (* ======================================================================== *)
 
 (* The tactic ends on every goal. One call counts the steps of its
-   loop, those of the derivations that it makes too, and when it has
-   taken [Bound.step_limit] of them it stops with an error that no
-   [try], [first] or [repeat] catches. The error names the last step
-   taken, the step that was being tried, and the function whose law
-   was being derived (or the function at the head of the goal). A
-   step that runs for more than [Bound.seconds_of_a_step] seconds of
-   the clock stops the call in the same way; the count is the bound
-   to rely on, the clock a second guard for one step that does not
-   come back.
+   loop, those of the derivations that it makes too. A step counts
+   for one; and since a step on a large goal is dear, the sizes of
+   the goals of the steps are added up, and every [Bound.goal_unit]
+   subterms of that sum count for one more. When the count passes
+   [Bound.step_limit] the call stops with an error that no [try],
+   [first] or [repeat] catches. The error names the last step taken,
+   the step that was being tried, and the function whose law was
+   being derived (or the function at the head of the goal). A step
+   that runs for more than [Bound.seconds_of_a_step] seconds of the
+   clock stops the call in the same way; the count is the bound to
+   rely on, the clock a second guard for one step that does not come
+   back.
 
    Two more things end a call that cannot succeed sooner. A goal that
    says that a renaming is the identity on a variable ([rename_x r x
@@ -1164,13 +1167,17 @@ Module Bound.
 
   Ltac2 Type exn ::= [ Equivariance_stopped (message) ].
 
-  (* The largest count of a call in the tree when the limit was set was
-     167 steps. *)
-  Ltac2 mutable step_limit : int := 1000.
+  (* When the limit was set, the largest count of a call in the tree
+     was 222: the call of the most steps, 167, on goals of 13,961
+     subterms in all. A file whose proof needs more says so, for
+     itself: [#[local] Ltac2 Set Bound.step_limit := 1000.] *)
+  Ltac2 mutable step_limit : int := 500.
+  Ltac2 mutable goal_unit : int := 250.
   Ltac2 mutable seconds_of_a_step : int := 20.
 
-  (* To see how many steps each call took:
-     [Ltac2 Set Bound.count_shown := true.] *)
+  (* To see the steps and the count of each call, in a file that
+     imports this one:
+     [Ltac2 Set Bound.count_shown := Ltac2.Init.true.] *)
   Ltac2 mutable count_shown : bool := false.
 
   Ltac2 rec head (t : constr) : constr :=
@@ -1220,8 +1227,24 @@ Module Bound.
     | _, _ => false
     end.
 
-  Ltac2 make () : Ltac1.t * (unit -> int) :=
+  (* The number of subterms of a term. *)
+  Ltac2 size (t : constr) : int :=
+    let n := Ref.ref 0 in
+    let rec go (t : constr) : unit :=
+      Ref.set n (Int.add (Ref.get n) 1);
+      Constr.Unsafe.iter go t in
+    go t;
+    Ref.get n.
+
+  Ltac2 size_of_goal () : int :=
+    Control.once_plus (fun () => size (Control.goal ())) (fun _ => 0).
+
+  Ltac2 make () : Ltac1.t * (unit -> message) * (unit -> message) :=
     let count := Ref.ref 0 in
+    let turns := Ref.ref 0 in
+    let work := Ref.ref 0 in
+    let largest := Ref.ref 0 in
+    let gave_up := Ref.ref false in
     let trying := Ref.ref @none in
     let taken := Ref.ref @none in
     let dead := Ref.ref false in
@@ -1242,20 +1265,34 @@ Module Bound.
            match Ltac1.to_ident a with
            | Some i =>
              if Ident.equal i @eqv_tick then
-               (Ref.set count (Int.add (Ref.get count) 1);
+               (let g := size_of_goal () in
+                (if Int.gt g (Ref.get largest) then Ref.set largest g
+                 else ());
+                Ref.set turns (Int.add (Ref.get turns) 1);
+                Ref.set work (Int.add (Ref.get work) g);
+                Ref.set count
+                  (Int.add (Ref.get turns)
+                     (Int.div (Ref.get work) goal_unit));
                 if Int.gt (Ref.get count) step_limit then
                   stop
                     (Message.concat
                        (Message.of_string "equivariance stopped after ")
-                       (Message.concat (Message.of_int step_limit)
-                          (Message.of_string " steps")))
+                       (Message.concat (Message.of_int (Ref.get turns))
+                          (Message.concat
+                             (Message.concat
+                                (Message.of_string " steps: with the sizes")
+                                (Message.of_string
+                                   " of their goals they pass the limit, "))
+                             (Message.of_int step_limit))))
                 else ltac1val:(idtac))
              else if Ident.equal i @eqv_alive then
                (if Ref.get dead then ltac1val:(fail) else ltac1val:(idtac))
              else if Ident.equal i @eqv_dead then
-               (Ref.set dead true; ltac1val:(idtac))
+               (Ref.set dead true; Ref.set gave_up true;
+                ltac1val:(idtac))
              else if Ident.equal i @eqv_revive then
-               (Ref.set dead false; ltac1val:(idtac))
+               (Ref.set dead false; Ref.set gave_up false;
+                ltac1val:(idtac))
              else if Ident.equal i @eqv_taken then
                (Ref.set taken (Ref.get trying); ltac1val:(idtac))
              else (Ref.set trying i; ltac1val:(idtac))
@@ -1297,17 +1334,52 @@ Module Bound.
                if ok then ltac1val:(idtac) else ltac1val:(fail)
              end
            end) in
-    (st, (fun () => Ref.get count)).
+    let shown () :=
+      Message.concat (Message.of_string "equivariance: steps taken: ")
+        (Message.concat (Message.of_int (Ref.get turns))
+           (Message.concat (Message.of_string "; counted: ")
+              (Message.concat (Message.of_int (Ref.get count))
+                 (Message.concat (Message.of_string "; work: ")
+                    (Message.concat (Message.of_int (Ref.get work))
+                       (Message.concat
+                          (Message.of_string "; largest goal: ")
+                          (Message.of_int (Ref.get largest)))))))) in
+    let last () :=
+      Message.concat (Message.of_string "the last step taken: ")
+        (Message.concat (Message.of_ident (Ref.get taken))
+           (if Ref.get gave_up then
+              Message.of_string
+                "; given up at a goal that makes a renaming the identity"
+            else Message.of_string "")) in
+    (st, shown, last).
 
-  (* One call: its state is made, and given to the loop. *)
-  Ltac2 with_state (f : Ltac1.t -> unit) : unit :=
-    let (st, count) := make () in
+  (* One call: its state is made, and given to the loop. Where the
+     call is to close its goal ([closes]) and goals are left, it fails,
+     and says how many are left and what the first is about. *)
+  Ltac2 with_state (closes : bool) (f : Ltac1.t -> unit) : unit :=
+    let (st, shown, last) := make () in
     f st;
-    if count_shown then
-      Message.print
-        (Message.concat (Message.of_string "equivariance: steps taken: ")
-           (Message.of_int (count ())))
+    (if count_shown then Message.print (shown ()) else ());
+    if closes then
+      let n := Control.numgoals () in
+      if Int.gt n 0 then
+        let first := Control.focus 1 1 place in
+        Control.zero
+          (Tactic_failure
+             (Some
+                (Message.concat
+                   (Message.of_string "equivariance: goals left: ")
+                   (Message.concat (Message.of_int n)
+                      (Message.concat
+                         (Message.of_string "; the first is ")
+                         (Message.concat first
+                            (Message.concat (Message.of_string "; ")
+                               (last ()))))))))
+      else ()
     else ().
+
+  Ltac2 closing (f : Ltac1.t -> unit) : unit := with_state true f.
+  Ltac2 leaving (f : Ltac1.t -> unit) : unit := with_state false f.
 End Bound.
 
 (* To see the steps that a proof takes, redefine this with [::=], as
@@ -1363,15 +1435,17 @@ Ltac eqv_step st :=
     | eqv_alt st ident:(destruct_argument) ltac:(eqv_destruct_argument)
     | eqv_alt st ident:(unfold_head) ltac:(eqv_unfold_head) ].
 
-(* The loop, with the state of the call that it is part of. *)
+(* The loop, with the state of the call that it is part of. The test
+   by [reflexivity] at its head is not counted as a step, but it is
+   under the limit of time, as the alternatives of a step are. *)
 Ltac eqv_core_with st :=
   repeat first
-    [ reflexivity
+    [ st ident:(reflexivity); st ltac:(reflexivity)
     | st ident:(eqv_alive); st ident:(eqv_tick); eqv_step st ].
 
 (* The loop as a call of its own, with a count of its own. *)
 Ltac eqv_core :=
-  ltac2:(Bound.with_state
+  ltac2:(Bound.leaving
            (fun st => ltac1:(st |- eqv_core_with st) st)).
 
 (* The premise of a law that is given with [Hint Rewrite ... using
@@ -1493,8 +1567,18 @@ Module Prepare.
     Control.enter prepare_one.
 End Prepare.
 
+(* [equivariance] closes its goal or fails; the failure says how many
+   goals are left and what the first is about. [equivariance_open]
+   leaves the goals that it does not close: for a proof that goes on
+   by hand after it, and to see what is left. *)
 Tactic Notation "equivariance" :=
-  ltac2:(Bound.with_state
+  ltac2:(Bound.closing
+           (fun st =>
+              Prepare.prepare ();
+              ltac1:(st |- eqv_core_with st) st)).
+
+Tactic Notation "equivariance_open" :=
+  ltac2:(Bound.leaving
            (fun st =>
               Prepare.prepare ();
               ltac1:(st |- eqv_core_with st) st)).
