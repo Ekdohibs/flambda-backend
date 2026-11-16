@@ -398,6 +398,10 @@ Qed.
 (* Renaming                                                                 *)
 (* ======================================================================== *)
 
+(* The tactic looks for the laws of its database in one pass over the
+   goal, which is enough for the proofs below and takes less time. *)
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
+
 (* The laws of renaming are proved from the definitions by the tactic
    of FlambdaEquivarianceTactic.v, which states and proves by itself
    the laws of the functions that the pass is made of. It is told two
