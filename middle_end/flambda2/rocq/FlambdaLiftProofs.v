@@ -4079,31 +4079,20 @@ Qed.
 (* ======================================================================== *)
 (* The three laws are proved from the definitions by [equivariance]
    (FlambdaEquivarianceTactic.v), which states and proves, as it goes,
-   the laws of the functions that the three are made of. What is
-   written here besides is what that tactic did not find by itself:
-   - [lift_expr_equivariant_statement] has the renaming of the result
-     on its left, and the tactic wants the function at renamed
-     arguments there: the equation is turned round first;
-   - the tests take a scope, and under a recursive group the scope is
-     not written as a renamed list, so a hypothesis of the induction
-     is used from right to left: the hypotheses are put at the
-     renaming of the goal for that, and a conjunction is taken apart
-     before the tactic looks for a law of what is in it;
-   - what an expression spoils is a list of continuations with
-     positions, renamed as its type says, and the tactic derives the
-     laws of the functions that make and read such a list but for
-     two. The law of [plain_or] is stated for it to rewrite with:
-     without it the tactic takes cases on that test on each side
-     apart. The law of [forget_conts], whose arguments are not written
-     as renamed lists either, is stated and used from right to left.
-     Both are stated from the type of the function ([equivariance_of];
-     [Check] shows the statement);
-   - two tests of every element of one list, one of them at renamed
-     arguments, are made one by showing that they agree on the
-     elements;
-   - [exn_extra_simples] is kept folded, so that its law applies. *)
-
-#[local] Arguments exn_extra_simples : simpl never.
+   the laws of the functions that the three are made of. The first
+   two need nothing more. The third is of the test with what is
+   known, which reads what an expression spoils: a list of
+   continuations with positions, renamed as its type says. For it
+   three things are given to the tactic:
+   - the law of [plain_or] to rewrite with: without it the tactic
+     takes cases on that test on each side apart;
+   - the law of [forget_conts], used from right to left: under a
+     recursive group its arguments are not written as renamed lists;
+   - [exn_extra_simples] kept folded, so that its law applies.
+   The laws of [params_known] and of [spoils] are stated too, though
+   the tactic derives them: stated once, they are not derived again
+   in each case that needs them. Each law is stated from the type of
+   its function ([equivariance_of]; [Check] shows the statement). *)
 
 (* Used by name in FlambdaLiftAroundProofs.v and
    FlambdaLiftFromCodeProofs.v: the symbol is as it was. *)
@@ -4115,7 +4104,12 @@ Lemma lift_named_rename (r : renaming) (target : lift_to) (d : named) :
 Proof. equivariance. Qed.
 
 Theorem lift_expr_equivariant : lift_expr_equivariant_statement.
-Proof. intros r lets at_path e. symmetry. equivariance. Qed.
+Proof. equivariance. Qed.
+
+Theorem exits_plain_equivariant : exits_plain_equivariant_statement.
+Proof. equivariance. Qed.
+
+#[local] Arguments exn_extra_simples : simpl never.
 
 Lemma plain_or_renamed : equivariance_of plain_or.
 Proof. equivariance. Qed.
@@ -4126,20 +4120,17 @@ Proof. equivariance. Qed.
 
 #[local] Ltac eqv_extra ::=
   match goal with
-  | r : renaming, H : (forall r' : renaming, _) |- _ => specialize (H r)
-  | |- andb _ _ = andb _ _ => apply (f_equal2 andb)
-  | |- context [forallb ?f' ?l] =>
-    match goal with
-    | |- context [forallb ?f l] =>
-      eqv_has_renaming f'; eqv_no_renaming f;
-      rewrite (forallb_ext_among f' f l); [ | eqv_enter l; solve [ eqv_core ] ]
-    end
   | |- _ = map _ (forget_conts _ _) =>
     rewrite <- forget_conts_renamed; eqv_same_head; eqv_peel
   end.
 
-Theorem exits_plain_equivariant : exits_plain_equivariant_statement.
+Lemma params_known_renamed : equivariance_of params_known.
 Proof. equivariance. Qed.
+#[local] Hint Rewrite params_known_renamed : equivariance.
+
+Lemma spoils_renamed : equivariance_of spoils.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite spoils_renamed : equivariance.
 
 Theorem exits_plain_knowing_equivariant :
   exits_plain_knowing_equivariant_statement.
