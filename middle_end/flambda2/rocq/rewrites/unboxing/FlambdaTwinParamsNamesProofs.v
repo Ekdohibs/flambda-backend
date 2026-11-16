@@ -76,7 +76,7 @@ Import ListNotations.
 
 (* The laws of the database are applied in one pass over the goal,
    which is faster than [autorewrite], in the proofs that pass with
-   it: all but the last three. *)
+   it: all but the last. *)
 #[local] Ltac eqv_database ::= eqv_database_by_one_pass.
 
 #[local] Hint Rewrite @moved_from_map positions_of_renamed
@@ -210,43 +210,79 @@ Lemma twin_blame_renamed : equivariance_of twin_blame.
 Proof. equivariance. Qed.
 #[local] Hint Rewrite twin_blame_renamed : equivariance.
 
-Lemma twin_blame_at_start (r : renaming) (sites : positions) (e : expr) :
-  twin_blame (rename_keyed r sites) [] (rename_expr r e)
-  = rename_keyed r (twin_blame sites [] e).
-Proof. exact (twin_blame_renamed r sites [] e). Qed.
+(* [twin_settle] is proved by hand, as it was before the tactic: by
+   the tactic it was the costliest proof of the file. It goes by
+   cases on the answers of [twin_blame] and of [blame] at empty
+   states, and goes on at the positions pruned by a list that it has
+   taken apart, or by the origins of one: the two lemmas before it
+   are of [twin_origin]. *)
+Lemma twin_origin_renamed (r : renaming) (sites new : positions)
+    (k : continuation) (u : nat) :
+  twin_origin (rename_keyed r sites) (rename_keyed r new)
+    (rename_continuation r k, u)
+  = rename_keyed r (twin_origin sites new (k, u)).
+Proof.
+  unfold twin_origin. rewrite !positions_of_renamed.
+  destruct (positions_of new k) as [ | n rest]; [ reflexivity | ].
+  destruct (nth_error (positions_of sites k) (u - n)); reflexivity.
+Qed.
 
-Lemma blame_at_start (r : renaming) (sites : positions) (e : expr) :
-  blame (rename_keyed r sites) [] [] [] (rename_expr r e)
-  = rename_keyed r (blame sites [] [] [] e).
-Proof. exact (blame_renamed r sites [] [] [] e). Qed.
-#[local] Hint Rewrite twin_blame_at_start blame_at_start : equivariance.
+Lemma twin_origins_renamed (r : renaming) (sites new : positions)
+    (refused : list (continuation * nat)) :
+  flat_map (twin_origin (rename_keyed r sites) (rename_keyed r new))
+    (rename_keyed r refused)
+  = rename_keyed r (flat_map (twin_origin sites new) refused).
+Proof.
+  induction refused as [ | [k u] refused IH]; [ reflexivity | ].
+  change (rename_keyed r ((k, u) :: refused))
+    with ((rename_continuation r k, u) :: rename_keyed r refused).
+  cbn [flat_map]. rewrite twin_origin_renamed, IH, rename_keyed_app.
+  reflexivity.
+Qed.
 
-(* [twin_settle] goes on at the positions pruned by a list of refused
-   positions that it has taken apart, or by the origins of one. The
-   step for it: the list on the left is the list on the right renamed
-   (the tactic shows that), and then the law of [prune] applies.
-   [twin_settle] and [twin_params] are not proved with the one pass
-   (FlambdaEquivarianceTactic.v says what it does not find): from
-   here the database is applied by [autorewrite], as it is by
-   default. *)
-#[local] Ltac eqv_database ::= eqv_database_by_autorewrite.
-#[local] Arguments prune : simpl never.
-#[local] Arguments twin_origin : simpl never.
-#[local] Ltac eqv_extra ::=
-  lazymatch goal with
-  | |- twin_settle ?fuel (prune ?l' (rename_keyed ?r ?sites)) _
-       = _ (twin_settle ?fuel (prune ?l ?sites) _) =>
-    replace l' with (rename_keyed r l);
-    [ rewrite prune_renamed | symmetry ]
-  end.
-
-Lemma twin_settle_renamed : equivariance_of twin_settle.
-Proof. equivariance. Qed.
+Lemma twin_settle_renamed (r : renaming) (fuel : nat) :
+  ∀ (sites : positions) (e : expr),
+    twin_settle fuel (rename_keyed r sites) (rename_expr r e)
+    = rename_keyed r (twin_settle fuel sites e).
+Proof.
+  induction fuel as [ | fuel IH]; intros sites e; [ reflexivity | ].
+  cbn [twin_settle].
+  rewrite (twin_blame_renamed r sites [] e : twin_blame _ [] _ = _).
+  destruct (twin_blame sites [] e) as [ | refused0 refused] eqn:Hblame.
+  - cbn [rename_keyed map].
+    rewrite twin_sites_renamed,
+      (twin_expr_renamed r sites [] [] [] e : twin_expr _ [] [] [] _ = _),
+      (blame_renamed r (twin_sites sites e) [] [] []
+         (twin_expr sites [] [] [] e)
+       : blame _ [] [] [] _ = _).
+    destruct (blame (twin_sites sites e) [] [] [] (twin_expr sites [] [] [] e))
+      as [ | b0 bs] eqn:Hb; [ reflexivity | ].
+    exact
+      (eq_trans
+         (f_equal (fun s => twin_settle fuel s (rename_expr r e))
+            (eq_trans
+               (f_equal (fun l => prune l (rename_keyed r sites))
+                  (twin_origins_renamed r sites (twin_sites sites e)
+                     (b0 :: bs)))
+               (prune_renamed r _ sites)))
+         (IH _ e)).
+  - cbn [rename_keyed map].
+    exact
+      (eq_trans
+         (f_equal (fun s => twin_settle fuel s (rename_expr r e))
+            (prune_renamed r (refused0 :: refused) sites))
+         (IH (prune (refused0 :: refused) sites) e)).
+Qed.
 #[local] Hint Rewrite twin_settle_renamed : equivariance.
 
 Lemma twin_positions_renamed : equivariance_of twin_positions.
 Proof. equivariance. Qed.
 #[local] Hint Rewrite twin_positions_renamed : equivariance.
+
+(* [twin_params] is not proved with the one pass
+   (FlambdaEquivarianceTactic.v says what it does not find): for it
+   the database is applied by [autorewrite], as it is by default. *)
+#[local] Ltac eqv_database ::= eqv_database_by_autorewrite.
 
 Lemma twin_params_renamed : rewrite_equivariant twin_params.
 Proof. equivariance. Qed.
