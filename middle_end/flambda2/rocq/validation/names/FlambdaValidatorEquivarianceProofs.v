@@ -800,15 +800,22 @@ Qed.
 #[local] Hint Rewrite @keep_map_flat_map : equivariance.
 
 (* Three laws that the tactic would otherwise derive many times. *)
-Lemma simple_avoids_renamed : equivariance_of simple_avoids.
+Lemma simple_avoids_renamed (D : dropped) (r : renaming) (s : simple) :
+  simple_avoids D (rename_simple r s) = simple_avoids D s.
 Proof. equivariance. Qed.
 #[local] Hint Rewrite simple_avoids_renamed : equivariance.
 
-Lemma simples_avoid_renamed : equivariance_of simples_avoid.
+Lemma simples_avoid_renamed (D : dropped) (r : renaming)
+    (args : list simple) :
+  simples_avoid D (map (rename_simple r) args) = simples_avoid D args.
 Proof. equivariance. Qed.
 #[local] Hint Rewrite simples_avoid_renamed : equivariance.
 
-Lemma value_slots_avoid_renamed : equivariance_of value_slots_avoid.
+Lemma value_slots_avoid_renamed (D : dropped) (r : renaming)
+    (slots : list (value_slot * simple)) :
+  value_slots_avoid D
+    (map (fun slot => (fst slot, rename_simple r (snd slot))) slots)
+  = value_slots_avoid D slots.
 Proof. equivariance. Qed.
 #[local] Hint Rewrite value_slots_avoid_renamed : equivariance.
 
@@ -833,11 +840,14 @@ Proof. equivariance. Qed.
 (* The condition on the environments. A handler and code are terms; a
    continuation of the machine and the static environment are not, and
    their laws are by hand. *)
-Lemma handler_free_of_renamed : equivariance_of handler_free_of.
+Lemma handler_free_of_renamed (D : dropped) (r : renaming)
+    (h : continuation_handler) :
+  handler_free_of D (rename_handler r h) = handler_free_of D h.
 Proof. equivariance. Qed.
 #[local] Hint Rewrite handler_free_of_renamed : equivariance.
 
-Lemma code_free_of_renamed : equivariance_of code_free_of.
+Lemma code_free_of_renamed (D : dropped) (r : renaming) (c : code) :
+  code_free_of D (rename_code r c) = code_free_of D c.
 Proof. equivariance. Qed.
 #[local] Hint Rewrite code_free_of_renamed : equivariance.
 
