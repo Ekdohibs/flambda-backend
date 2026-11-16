@@ -770,6 +770,10 @@ Owner: N2.
   the continuations that a handler binds on its way to its `Switch`,
   bound outside the handler)
 - `middle_end/flambda2/rocq/requests/N2-fresh-quantifier.md`
+- `middle_end/flambda2/rocq/EXTERNAL-SOURCES.md` (the running file of
+  the sources outside the repository that were read for the work: N2
+  keeps its layout; every stream adds the entries of what it reads, as
+  the head of the file says)
 
 ## N3: what commutes with renaming
 

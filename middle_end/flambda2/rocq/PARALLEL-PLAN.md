@@ -415,6 +415,14 @@ there and takes a task from the corpus table instead of waiting.
 **Do not** rewrite another stream's proofs to make yours pass, weaken a
 statement to get it through, or delete a failing example. Report it.
 
+**Outside sources.** Whoever reads a source outside this repository for
+the work (a paper, a book, a web page, another project's code or
+documentation, an issue tracker, the sources of an installed OCaml or
+Rocq, a search) writes its entry in `EXTERNAL-SOURCES.md` when the
+reading happens, in the same series of commits as the work that uses
+it, or before. A merge whose accounts of provenance name an outside
+source that the file lacks is not done.
+
 ## 8. Dependencies and order
 
 ```

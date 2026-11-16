@@ -68,7 +68,9 @@ validation/       the validation of what Simplify did to a unit
 Beside the folders: `status/` (the status of each stream of the work),
 `requests/` (the notes of changes to the core), and at the top
 `NAMES.md` (how the model treats bound names), `DECISIONS.md` (the index
-of the decisions that the files cite), `OWNERS.md`, `PARALLEL-PLAN.md`
+of the decisions that the files cite), `OWNERS.md`, `PARALLEL-PLAN.md`,
+`EXTERNAL-SOURCES.md` (the sources outside this repository that were
+read for the work, kept current: whoever reads one writes its entry)
 and `_CoqProject` (for an editor: see below).
 
 - **A model stays together.** `FlambdaFooSpec.v` and `FlambdaFooProofs.v`
