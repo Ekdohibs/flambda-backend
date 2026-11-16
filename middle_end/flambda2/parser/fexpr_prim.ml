@@ -749,11 +749,84 @@ let probe_is_enabled =
         let name = unwrap_loc name in
         P.Probe_is_enabled { name; enabled_at_init }))
 
+(* The inlining attribute of the call whose inlined body [%inlined_apply] marks:
+   nothing for the default, and after "always" and after "unroll" the reason why
+   the attribute is not expected to be used, if it is not. *)
+let inlined_attribute : Inlined_attribute.t param_cons =
+  let open D in
+  let use_info =
+    default ~def:Inlined_attribute.Use_info.Expected_to_be_used
+    @@ constructor_flag
+         Inlined_attribute.Use_info.
+           [ ( "unused_because_of_call_site_decision",
+               Unused_because_of_call_site_decision );
+             "unused_because_function_unknown", Unused_because_function_unknown;
+             "jsir_inlining_disabled", Jsir_inlining_disabled ]
+  in
+  default ~def:Inlined_attribute.Default_inlined ~eq:Inlined_attribute.equal
+  @@ patterns
+  @@
+  let| always =
+    ( param2 (flag "always") use_info,
+      fun _ ((), use_info) -> Inlined_attribute.Always_inlined use_info )
+  in
+  let| hint = flag_case "hint" Inlined_attribute.Hint_inlined in
+  let| forward = flag_case "forward" Inlined_attribute.Forward_inlined in
+  let| never = flag_case "never" Inlined_attribute.Never_inlined in
+  let| unroll =
+    ( param2 (labeled "unroll" int) use_info,
+      fun _ (n, use_info) -> Inlined_attribute.Unroll (n, use_info) )
+  in
+  return_either (fun (attribute : Inlined_attribute.t) ->
+      match attribute with
+      | Always_inlined use_info -> always ((), use_info)
+      | Hint_inlined -> hint ()
+      | Forward_inlined -> forward ()
+      | Never_inlined -> never ()
+      | Unroll (n, use_info) -> unroll (n, use_info)
+      | Default_inlined ->
+        Misc.fatal_error "The default inlining attribute is not written")
+
+(* The debugging information of the mark is a stack: for each inlined call that
+   the mark stands for, the debugging information of the call, the symbol of its
+   function and an identifier. The text does not write what the stack holds, as
+   it writes no debugging information. It does say whether the stack is empty,
+   which the compiler reads: after a mark whose stack is not empty, the
+   translation to Cmm takes itself to be in an inlined body
+   ([To_cmm_env.currently_in_inlined_body]). A mark that the compiler makes has
+   a stack that is not empty ([Closure_conversion] makes the marks, with
+   [Inlined_debuginfo.create]), and is written with no word for it; a mark whose
+   stack is empty is written with [no_dbg].
+
+   The type of the stack is abstract, so the reader makes a stack that is not
+   empty with that same function, for one call: of a code ID that it makes for
+   that, which no code of the unit has, and with no debugging information of the
+   call. With none, [Inlined_debuginfo.rewrite] gives back the debugging
+   information that it is given, so the symbol of that code ID reaches no
+   debugging information of the inlined body.
+
+   What the stack of the term held does not come back: the debugging information
+   of the inlined call, which [Inlined_debuginfo.rewrite] puts before that of
+   the inlined body, and with it the assumption of zero allocation of the call,
+   which can be carried into that of the body through [Debuginfo.inline] (an
+   inferred assumption of the call is dropped; otherwise the two are met) and
+   which the backend's checker reads. *)
 let enter_inlined_apply =
   D.(
-    nullary "%inlined_apply" ~params:param0 (fun _env () ->
-        P.Enter_inlined_apply
-          { dbg = Inlined_debuginfo.none; inlined_attribute = Default_inlined }))
+    nullary "%inlined_apply"
+      ~params:(param2 (bool_flag "no_dbg") inlined_attribute)
+      (fun _env (no_dbg, inlined_attribute) ->
+        let dbg =
+          if no_dbg
+          then Inlined_debuginfo.none
+          else
+            Inlined_debuginfo.create
+              ~called_code_id:
+                (Code_id.create ~name:"inlined_body" ~debug:Debuginfo.none
+                   (Current_unit.get_cu_exn ()))
+              ~apply_dbg:Debuginfo.none
+        in
+        P.Enter_inlined_apply { dbg; inlined_attribute }))
 
 let domain_index =
   D.(nullary "%domain_index" ~params:param0 (fun _env () -> P.Domain_index))
@@ -1367,8 +1440,8 @@ module OfFlambda = struct
     | Optimised_out kind -> optimised_out env kind
     | Probe_is_enabled { name; enabled_at_init } ->
       probe_is_enabled env (wrap_loc name, enabled_at_init)
-    | Enter_inlined_apply { dbg = _; inlined_attribute = _ } ->
-      enter_inlined_apply env ()
+    | Enter_inlined_apply { dbg; inlined_attribute } ->
+      enter_inlined_apply env (Inlined_debuginfo.is_none dbg, inlined_attribute)
     | Domain_index -> domain_index env ()
     | Dls_get -> dls_get env ()
     | Tls_get -> tls_get env ()

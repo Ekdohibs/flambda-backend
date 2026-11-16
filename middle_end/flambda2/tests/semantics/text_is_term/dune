@@ -76,6 +76,13 @@
 ;; [@unrolled 3] whose attribute the term says is not used, which the text
 ;; writes after the number of the attribute. The text is the term.
 ;;
+;; inlined_call_in_classic_mode: compiled with -Oclassic, two calls inlined
+;; before Simplify, one of them marked [@inlined]: the text writes the
+;; inlining attribute of the mark of each inlined body; the reader gives the
+;; mark a stack of debugging information that is not empty; and the comparison
+;; compares whether that stack is empty, and not what it holds. The text is the
+;; term.
+;;
 ;; partial_application_of_unboxed_float: the text is not read back.
 ;;
 ;; interface_only, type_error: the compiler does not reach the middle end.
@@ -159,6 +166,22 @@
   (= %{context_name} "main"))
  (action
   (diff length_of_bytes.expected length_of_bytes.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   inlined_call_in_classic_mode.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     -Oclassic %{dep:inlined_call_in_classic_mode.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff inlined_call_in_classic_mode.expected inlined_call_in_classic_mode.output)))
 
 (rule
  (enabled_if

@@ -974,6 +974,23 @@ let unary_prim_ops env (prim_op1 : Flambda_primitive.unary_primitive)
 
 let primitives env prim1 prim2 : Flambda_primitive.t Comparison.t =
   match (prim1 : Flambda_primitive.t), (prim2 : Flambda_primitive.t) with
+  | ( Nullary
+        (Enter_inlined_apply { dbg = dbg1; inlined_attribute = attribute1 }),
+      Nullary
+        (Enter_inlined_apply { dbg = dbg2; inlined_attribute = attribute2 }) )
+    ->
+    (* The debugging information of the mark of an inlined body is a stack. What
+       it holds is not compared, as the debugging information of a call and of a
+       primitive is not. Whether it is empty is compared: after a mark whose
+       stack is not empty the translation to Cmm takes itself to be in an
+       inlined body ([To_cmm_env.currently_in_inlined_body]). *)
+    if
+      Inlined_attribute.equal attribute1 attribute2
+      && Bool.equal
+           (Inlined_debuginfo.is_none dbg1)
+           (Inlined_debuginfo.is_none dbg2)
+    then Equivalent
+    else Different { approximant = prim1 }
   | Nullary prim_op1, Nullary prim_op2 ->
     if Flambda_primitive.equal_nullary_primitive prim_op1 prim_op2
     then Equivalent
