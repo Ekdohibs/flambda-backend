@@ -40,6 +40,11 @@ flags_of() {
   sed -n 's/^(\* flags: \(.*\) \*)$/\1/p' "$here/$1.ml" | head -n 1
 }
 
+# The rule that makes a term gives the compiler to the script as an
+# argument, and that alone does not make dune run the rule again when
+# the compiler changes: so the rule names the compiler among what it
+# depends on, and a term is made again, and compared, after a change of
+# the compiler that touches no file here.
 for name in $units; do
   first=$(first_of "$name")
   flags=$(flags_of "$name")
@@ -62,7 +67,7 @@ for name in $units; do
   cat <<RULES
 (rule
  (targets $name.fl.made $name.cmi $name.cmx)
- (deps $made_needs)
+ (deps %{ocamlopt} $made_needs)
  (action
   (run sh %{dep:../from_ocaml.sh} %{ocamlopt} %{dep:../$name.ml}
    $name$against)))

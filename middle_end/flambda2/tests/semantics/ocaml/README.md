@@ -29,6 +29,10 @@ compare the term made with `X.fl` and what the tool prints with
     dune build --root=. --workspace=duneconf/main.ws \
       @middle_end/flambda2/tests/semantics/runtest
 
+The rules that make a term name the compiler among what they depend
+on: a term is made again, and compared, when the compiler changes,
+and not only when its source does.
+
 - `-drawfexpr` prints the unit after the conversion from Lambda (closure
   conversion) and before Simplify. The tool runs Simplify itself, with
   the default flags, on what the parser reads back.

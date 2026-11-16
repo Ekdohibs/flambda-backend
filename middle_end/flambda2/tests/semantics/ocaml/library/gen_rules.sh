@@ -26,6 +26,11 @@ for file in "$@"; do
   esac
 done
 
+# The rule that makes a term gives the compiler to the script as an
+# argument, and that alone does not make dune run the rule again when
+# the compiler changes: so the rule names the compiler among what it
+# depends on, and a term is made again, and compared, after a change of
+# the compiler that touches no file here.
 for name in $examples; do
   interface=
   case "$interfaces" in
@@ -37,6 +42,7 @@ for name in $examples; do
  (enabled_if
   (= %{context_name} "main"))
  (deps
+  %{ocamlopt}
   (glob_files %{ocaml_where}/*.cmi)$interface)
  (action
   (run sh %{dep:../../from_ocaml.sh} %{ocamlopt} %{dep:../$name.ml}

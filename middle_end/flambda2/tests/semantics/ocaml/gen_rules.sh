@@ -18,6 +18,11 @@ for file in "$@"; do
   esac
 done
 
+# The rule that makes a term gives the compiler to the script as an
+# argument, and that alone does not make dune run the rule again when
+# the compiler changes: so the rule names the compiler among what it
+# depends on, and a term is made again, and compared, after a change of
+# the compiler that touches no file here.
 for name in $examples; do
   interface=
   case "$interfaces" in
@@ -26,7 +31,7 @@ for name in $examples; do
   cat <<RULES
 (rule
  (targets $name.fl.made)
- (deps %{dep:../generic_is_int.txt}$interface)
+ (deps %{ocamlopt} %{dep:../generic_is_int.txt}$interface)
  (action
   (run sh %{dep:../from_ocaml.sh} %{ocamlopt} %{dep:../$name.ml}
    $name.fl.made)))

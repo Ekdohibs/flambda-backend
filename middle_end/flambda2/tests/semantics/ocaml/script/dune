@@ -6,11 +6,18 @@
 ;; updates X.says. The last two are given to the script with the directory
 ;; of the standard library, as the units of ../library/ are: one that calls
 ;; a function of the library, which is refused, and one that does not.
+;;
+;; Each rule that runs the script names the compiler among what it depends
+;; on: the compiler is an argument of the script, and that alone does not
+;; make dune run the rule again when the compiler changes.
 
 (rule
- (with-stdout-to
-  probe.says.out
-  (run sh %{dep:says.sh} %{dep:../from_ocaml.sh} %{ocamlopt} %{dep:probe.ml})))
+ (deps %{ocamlopt})
+ (action
+  (with-stdout-to
+   probe.says.out
+   (run sh %{dep:says.sh} %{dep:../from_ocaml.sh} %{ocamlopt}
+    %{dep:probe.ml}))))
 
 (rule
  (alias runtest)
@@ -18,10 +25,12 @@
   (diff probe.says probe.says.out)))
 
 (rule
- (with-stdout-to
-  probe_not.says.out
-  (run sh %{dep:says.sh} %{dep:../from_ocaml.sh} %{ocamlopt}
-   %{dep:probe_not.ml})))
+ (deps %{ocamlopt})
+ (action
+  (with-stdout-to
+   probe_not.says.out
+   (run sh %{dep:says.sh} %{dep:../from_ocaml.sh} %{ocamlopt}
+    %{dep:probe_not.ml}))))
 
 (rule
  (alias runtest)
@@ -29,10 +38,12 @@
   (diff probe_not.says probe_not.says.out)))
 
 (rule
- (with-stdout-to
-  product_argument.says.out
-  (run sh %{dep:says.sh} %{dep:../from_ocaml.sh} %{ocamlopt}
-   %{dep:product_argument.ml})))
+ (deps %{ocamlopt})
+ (action
+  (with-stdout-to
+   product_argument.says.out
+   (run sh %{dep:says.sh} %{dep:../from_ocaml.sh} %{ocamlopt}
+    %{dep:product_argument.ml}))))
 
 (rule
  (alias runtest)
@@ -40,10 +51,12 @@
   (diff product_argument.says product_argument.says.out)))
 
 (rule
- (with-stdout-to
-  product_argument_direct.says.out
-  (run sh %{dep:says.sh} %{dep:../from_ocaml.sh} %{ocamlopt}
-   %{dep:product_argument_direct.ml})))
+ (deps %{ocamlopt})
+ (action
+  (with-stdout-to
+   product_argument_direct.says.out
+   (run sh %{dep:says.sh} %{dep:../from_ocaml.sh} %{ocamlopt}
+    %{dep:product_argument_direct.ml}))))
 
 (rule
  (alias runtest)
@@ -51,10 +64,12 @@
   (diff product_argument_direct.says product_argument_direct.says.out)))
 
 (rule
- (with-stdout-to
-  product_parameter.says.out
-  (run sh %{dep:says.sh} %{dep:../from_ocaml.sh} %{ocamlopt}
-   %{dep:product_parameter.ml})))
+ (deps %{ocamlopt})
+ (action
+  (with-stdout-to
+   product_parameter.says.out
+   (run sh %{dep:says.sh} %{dep:../from_ocaml.sh} %{ocamlopt}
+    %{dep:product_parameter.ml}))))
 
 (rule
  (alias runtest)
@@ -62,10 +77,12 @@
   (diff product_parameter.says product_parameter.says.out)))
 
 (rule
- (with-stdout-to
-  product_parameter_not.says.out
-  (run sh %{dep:says.sh} %{dep:../from_ocaml.sh} %{ocamlopt}
-   %{dep:product_parameter_not.ml})))
+ (deps %{ocamlopt})
+ (action
+  (with-stdout-to
+   product_parameter_not.says.out
+   (run sh %{dep:says.sh} %{dep:../from_ocaml.sh} %{ocamlopt}
+    %{dep:product_parameter_not.ml}))))
 
 (rule
  (alias runtest)
@@ -73,10 +90,12 @@
   (diff product_parameter_not.says product_parameter_not.says.out)))
 
 (rule
- (with-stdout-to
-  void_argument.says.out
-  (run sh %{dep:says.sh} %{dep:../from_ocaml.sh} %{ocamlopt}
-   %{dep:void_argument.ml})))
+ (deps %{ocamlopt})
+ (action
+  (with-stdout-to
+   void_argument.says.out
+   (run sh %{dep:says.sh} %{dep:../from_ocaml.sh} %{ocamlopt}
+    %{dep:void_argument.ml}))))
 
 (rule
  (alias runtest)
@@ -84,10 +103,12 @@
   (diff void_argument.says void_argument.says.out)))
 
 (rule
- (with-stdout-to
-  void_argument_direct.says.out
-  (run sh %{dep:says.sh} %{dep:../from_ocaml.sh} %{ocamlopt}
-   %{dep:void_argument_direct.ml})))
+ (deps %{ocamlopt})
+ (action
+  (with-stdout-to
+   void_argument_direct.says.out
+   (run sh %{dep:says.sh} %{dep:../from_ocaml.sh} %{ocamlopt}
+    %{dep:void_argument_direct.ml}))))
 
 (rule
  (alias runtest)
@@ -95,10 +116,12 @@
   (diff void_argument_direct.says void_argument_direct.says.out)))
 
 (rule
- (with-stdout-to
-  void_parameter.says.out
-  (run sh %{dep:says.sh} %{dep:../from_ocaml.sh} %{ocamlopt}
-   %{dep:void_parameter.ml})))
+ (deps %{ocamlopt})
+ (action
+  (with-stdout-to
+   void_parameter.says.out
+   (run sh %{dep:says.sh} %{dep:../from_ocaml.sh} %{ocamlopt}
+    %{dep:void_parameter.ml}))))
 
 (rule
  (alias runtest)
@@ -109,6 +132,7 @@
  (enabled_if
   (= %{context_name} "main"))
  (deps
+  %{ocamlopt}
   (glob_files %{ocaml_where}/*.cmi))
  (action
   (with-stdout-to
@@ -127,6 +151,7 @@
  (enabled_if
   (= %{context_name} "main"))
  (deps
+  %{ocamlopt}
   (glob_files %{ocaml_where}/*.cmi))
  (action
   (with-stdout-to
