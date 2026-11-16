@@ -37,6 +37,16 @@
    laws of most of the functions of the pass by itself. What is stated
    below is what the tactic is given, for this file only.
 
+   The step of the database is the one pass
+   ([eqv_database_by_one_pass]): with the step that tries every law
+   the file takes more than twice as long. Two proofs keep that step,
+   each of a test that goes through the handlers of a recursive
+   [Let_cont], where the one pass leaves goals under the binder. With
+   the one pass the lemma needs laws stated that the other step
+   derives in good time: those of the functions that give an
+   application more arguments, and of the test of what an application
+   gives.
+
    The functions that carry a list along the term (what a handler
    reads, the continuations moved, the scrutinees known) have their
    laws stated, with the renaming of that list, which this file
@@ -64,12 +74,20 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaEquivarianceTactic.
 Import ListNotations.
 
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
+
 #[local] Hint Rewrite var_free_b_equivariant_aux cont_free_b_equivariant_aux
   : equivariance.
 
 (* ======================================================================== *)
 (* Lists of names                                                           *)
 (* ======================================================================== *)
+
+Lemma trap_action_handler_renamed (r : renaming) (action : trap_action) :
+  trap_action_handler (rename_trap_action r action)
+  = rename_continuation r (trap_action_handler action).
+Proof. equivariance. Qed.
+#[local] Hint Rewrite trap_action_handler_renamed : equivariance.
 
 Lemma distinct_variables_renamed (r : renaming) (names : list variable) :
   distinct (map (rename_variable r) names) = distinct names.
@@ -87,12 +105,40 @@ Proof. equivariance. Qed.
 (* The applications given more arguments                                    *)
 (* ======================================================================== *)
 
+Lemma give_to_equivariant (r : renaming) (j : continuation)
+    (ps : list variable) (ac : apply_cont) :
+  give_to (rename_continuation r j) (map (rename_variable r) ps)
+    (rename_apply_cont r ac)
+  = rename_apply_cont r (give_to j ps ac).
+Proof. equivariance. Qed.
+#[local] Hint Rewrite give_to_equivariant : equivariance.
+
+Lemma give_equivariant (r : renaming) (j : continuation)
+    (ps : list variable) (e : expr) :
+  give (rename_continuation r j) (map (rename_variable r) ps)
+    (rename_expr r e)
+  = rename_expr r (give j ps e).
+Proof. equivariance. Qed.
+#[local] Hint Rewrite give_equivariant : equivariance.
+
+Lemma give_in_handler_equivariant (r : renaming) (j : continuation)
+    (ps : list variable) (h : continuation_handler) :
+  give_in_handler (rename_continuation r j) (map (rename_variable r) ps)
+    (rename_handler r h)
+  = rename_handler r (give_in_handler j ps h).
+Proof. equivariance. Qed.
+#[local] Hint Rewrite give_in_handler_equivariant : equivariance.
+
+(* The one pass leaves goals in the next proof: it takes the step that
+   tries every law. *)
+#[local] Ltac eqv_database ::= eqv_database_by_autorewrite.
 Lemma only_applied_equivariant (r : renaming) (j : continuation)
     (ps : list variable) (ok : bool) (e : expr) :
   only_applied (rename_continuation r j) (map (rename_variable r) ps) ok
     (rename_expr r e)
   = only_applied j ps ok e.
 Proof. equivariance. Qed.
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
 #[local] Hint Rewrite only_applied_equivariant : equivariance.
 
 (* ======================================================================== *)
@@ -190,6 +236,24 @@ Proof.
          (give_all_equivariant r moved (Switch (Var p) arms))).
 Qed.
 #[local] Hint Rewrite lift_spine_equivariant : equivariance.
+
+Lemma gives_immediate_equivariant (r : renaming) (k : continuation) (i : nat)
+    (ac : apply_cont) :
+  gives_immediate (rename_continuation r k) i (rename_apply_cont r ac)
+  = gives_immediate k i ac.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite gives_immediate_equivariant : equivariance.
+
+(* The one pass leaves goals in the next proof: it takes the step that
+   tries every law. *)
+#[local] Ltac eqv_database ::= eqv_database_by_autorewrite.
+Lemma all_give_immediate_equivariant (r : renaming) (k : continuation)
+    (i : nat) (e : expr) :
+  all_give_immediate (rename_continuation r k) i (rename_expr r e)
+  = all_give_immediate k i e.
+Proof. equivariance. Qed.
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
+#[local] Hint Rewrite all_give_immediate_equivariant : equivariance.
 
 (* ======================================================================== *)
 (* Whether the tested parameter is a scrutinee under another name           *)
