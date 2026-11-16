@@ -1887,6 +1887,10 @@ Qed.
    a fact about what passed a test, not a law of renaming; the third is
    given to the tactic to rewrite with, as are the laws of the folds. *)
 
+(* The database is applied by its one pass, the faster step: every
+   proof below passes with it. *)
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
+
 Lemma rename_known_simple (r : renaming) (statics : static_env) (s : simple) :
   simple_known statics s = true -> rename_simple r s = s.
 Proof. destruct s; simpl; [ discriminate | reflexivity | reflexivity ]. Qed.
