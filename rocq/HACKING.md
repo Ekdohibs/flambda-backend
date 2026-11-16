@@ -1041,28 +1041,29 @@ that every such file changed since this work began is named here.
     keyword of the text is written in backquotes.
 
   These changes mend cases of the nine losses. Other cases of them
-  remain: a direct call that has no callee, as the calls made under
-  `-Oclassic` are, has nowhere to write its arities. And other losses
-  remain. The numbers that follow are answers of the compiler's
-  comparison of two terms (`middle_end/flambda2/compare/`), which does
-  not read everything that a term holds. Of the term that the compiler
-  gives to Simplify, on 2,689 units compiled with no option that changes
-  what the optimiser does: for 2,677 the text read back is the term, and
-  12 are not read back (a closure that keeps an unboxed number in a
-  value slot, 9; a number that the reader does not take, 3). A second
-  set of 706 units, written to reach what the first has little of
-  (unboxed numbers and products in every position, records with unboxed
-  fields, C calls, probes, effects, objects), has 607 for which the text
-  read back is the term, 40 for which it is read back as another term,
-  and 59 whose text is not read back or not written; each unit of it has
-  the same answer at `-O3` and at `-g`, and under `-Oclassic` the text
-  read back is the term for 40 of the 706 only. Of the term that
-  Simplify returns, on the first set, the text read back is the term for
-  2,559; the other 130 show static constants, 44; a poison constant, 42;
-  a number that the reader does not take, 15; code of another unit, 9;
-  an unboxed number in a value slot, 7; the primitives `Array_set` and
-  `Array_load`, 7; a coercion, 6. The differences and failures that
-  remain in these measures are not mended here.
+  remain: a direct call that has no callee has nowhere to write its
+  arities, and under `-Oclassic` a direct call of code that does not use
+  its closure has none. And other losses remain. The numbers that follow
+  are answers of the compiler's comparison of two terms
+  (`middle_end/flambda2/compare/`), which does not read everything that
+  a term holds. Of the term that the compiler gives to Simplify, on
+  2,689 units compiled with no option that changes what the optimiser
+  does: for 2,677 the text read back is the term, and 12 are not read
+  back (a closure that keeps an unboxed number in a value slot, 9; a
+  number that the reader does not take, 3). A second set of 706 units,
+  written to reach what the first has little of (unboxed numbers and
+  products in every position, records with unboxed fields, C calls,
+  probes, effects, objects), has 607 for which the text read back is the
+  term, 40 for which it is read back as another term, and 59 whose text
+  is not read back or not written; each unit of it has the same answer
+  at `-O3` and at `-g`, and under `-Oclassic` the text read back is the
+  term for 40 of the 706 only. Of the term that Simplify returns, on the
+  first set, the text read back is the term for 2,559; the other 130
+  show static constants, 44; a poison constant, 42; a number that the
+  reader does not take, 15; code of another unit, 9; an unboxed number
+  in a value slot, 7; the primitives `Array_set` and `Array_load`, 7; a
+  coercion, 6. The differences and failures that remain in these
+  measures are not mended here.
 
   The reader also takes `%bytes_length` for the length of a byte
   sequence; before, it took it for the length of a string. A text
