@@ -83,6 +83,11 @@
 ;; compares whether that stack is empty, and not what it holds. The text is the
 ;; term.
 ;;
+;; unboxed_field_of_a_record: reads and writes of fields of a record that are
+;; unboxed numbers, which the text writes with "flat[KIND]" for the kind of
+;; the field, and a read of a field of the same record that is a value. The
+;; text is the term.
+;;
 ;; partial_application_of_unboxed_float: the text is not read back.
 ;;
 ;; interface_only, type_error: the compiler does not reach the middle end.
@@ -166,6 +171,22 @@
   (= %{context_name} "main"))
  (action
   (diff length_of_bytes.expected length_of_bytes.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   unboxed_field_of_a_record.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     %{dep:unboxed_field_of_a_record.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff unboxed_field_of_a_record.expected unboxed_field_of_a_record.output)))
 
 (rule
  (enabled_if

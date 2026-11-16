@@ -161,10 +161,18 @@ let block_access_kind =
   let open D in
   let tag = or_unknown @@ labeled "tag" scannable_tag in
   let size = or_unknown @@ labeled "size" target_ocaml_int in
+  (* The kind of a field of the flat suffix is written [flat[KIND]], and that of
+     a field of the value prefix as the kind of a field of a block of values is,
+     [imm] or nothing. The first is looked for first: the second is there by
+     default. It stands before the tag and the size, and is looked for before
+     them: they are looked for among the parameters that have parameters of
+     their own, and would take [flat[KIND]] for theirs. *)
   let|= mixed_field_kind =
     let open P.Mixed_block_access_field_kind in
+    let| suffix_k =
+      labeled "flat" flat_suffix_element, fun _ fse -> Flat_suffix fse
+    in
     let| value_k = block_access_field_kind, fun _ bak -> Value_prefix bak in
-    let| suffix_k = flat_suffix_element, fun _ fse -> Flat_suffix fse in
     return_either (function
       | Value_prefix bak -> value_k bak
       | Flat_suffix fse -> suffix_k fse)
@@ -177,9 +185,9 @@ let block_access_kind =
   in
   let| mixed =
     param5_case
-      ~decode:(fun _ () tag size field_kind shape ->
+      ~decode:(fun _ () field_kind tag size shape ->
         P.Block_access_kind.Mixed { tag; size; field_kind; shape })
-      (flag "mixed") tag size mixed_field_kind mixed_block_shape
+      (flag "mixed") mixed_field_kind tag size mixed_block_shape
   in
   let| value_k =
     param3_case block_access_field_kind tag size
@@ -190,7 +198,7 @@ let block_access_kind =
     return_either (function
       | Values { field_kind; tag; size } -> value_k (field_kind, tag, size)
       | Naked_floats { size } -> naked_float ((), size)
-      | Mixed m -> mixed ((), m.tag, m.size, m.field_kind, m.shape)))
+      | Mixed m -> mixed ((), m.field_kind, m.tag, m.size, m.shape)))
 
 type block_kind =
   | FNaked_floats
