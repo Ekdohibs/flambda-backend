@@ -47,208 +47,32 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaNormaliseSpec FlambdaValidatorEquivarianceSpec
   FlambdaValidatorEquivarianceBaseProofs FlambdaScopedProofs
   FlambdaUnaliasParamsSpec FlambdaUnaliasParamsProofs
-  FlambdaUnaliasParamsNamesProofs FlambdaWrapReturnsSpec.
+  FlambdaUnaliasParamsNamesProofs FlambdaEquivarianceTactic
+  FlambdaWrapReturnsSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
 (* The pass commutes with renaming                                          *)
 (* ======================================================================== *)
 
-Lemma trap_free_of_equivariant (r : renaming) (k : continuation)
-    (ac : apply_cont) :
-  trap_free_of (rename_continuation r k) (rename_apply_cont r ac)
-  = trap_free_of k ac.
-Proof.
-  unfold trap_free_of, rename_apply_cont. cbn [ac_trap_action].
-  destruct (ac_trap_action ac) as [action | ]; [ | reflexivity ].
-  cbn [option_map].
-  rewrite trap_action_handler_renamed, rename_continuation_eqb. reflexivity.
-Qed.
-
-Fixpoint only_applied_or_returned_to_equivariant (r : renaming)
-    (k : continuation) (e : expr) {struct e} :
-  only_applied_or_returned_to (rename_continuation r k) (rename_expr r e)
-  = only_applied_or_returned_to k e
-with handler_only_applied_or_returned_to_equivariant (r : renaming)
-    (k : continuation) (h : continuation_handler) {struct h} :
-  handler_only_applied_or_returned_to (rename_continuation r k)
-    (rename_handler r h)
-  = handler_only_applied_or_returned_to k h.
-Proof.
-  - destruct e as [y kind d body | bindings body | k' hh body | handlers body
-                  | ap | ac | scrutinee arms | ];
-      cbn [rename_expr only_applied_or_returned_to]; try reflexivity.
-    + apply only_applied_or_returned_to_equivariant.
-    + apply only_applied_or_returned_to_equivariant.
-    + rewrite rename_continuation_eqb,
-        handler_only_applied_or_returned_to_equivariant,
-        only_applied_or_returned_to_equivariant.
-      reflexivity.
-    + rewrite only_applied_or_returned_to_equivariant. f_equal.
-      induction handlers as [ | [k' hh] handlers IH]; [ reflexivity | ].
-      cbn [map forallb].
-      rewrite rename_continuation_eqb,
-        handler_only_applied_or_returned_to_equivariant, IH.
-      reflexivity.
-    + cbn [rename_apply ap_exn_continuation].
-      rewrite rename_continuation_eqb. reflexivity.
-    + apply trap_free_of_equivariant.
-    + induction arms as [ | [n ac] arms IH]; [ reflexivity | ].
-      cbn [map forallb fst snd].
-      rewrite trap_free_of_equivariant, IH. reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler handler_only_applied_or_returned_to].
-    apply only_applied_or_returned_to_equivariant.
-Qed.
-
-Lemma one_if_same_equivariant (r : renaming) (k k' : continuation) :
-  one_if_same (rename_continuation r k) (rename_continuation r k')
-  = one_if_same k k'.
-Proof. unfold one_if_same. rewrite rename_continuation_eqb. reflexivity. Qed.
-
-Fixpoint uses_of_equivariant (r : renaming) (k : continuation) (e : expr)
-    {struct e} :
-  uses_of (rename_continuation r k) (rename_expr r e) = uses_of k e
-with uses_in_handler_equivariant (r : renaming) (k : continuation)
-    (h : continuation_handler) {struct h} :
-  uses_in_handler (rename_continuation r k) (rename_handler r h)
-  = uses_in_handler k h.
-Proof.
-  - destruct e as [y kind d body | bindings body | k' hh body | handlers body
-                  | ap | ac | scrutinee arms | ];
-      cbn [rename_expr uses_of]; try reflexivity.
-    + apply uses_of_equivariant.
-    + apply uses_of_equivariant.
-    + rewrite uses_in_handler_equivariant, uses_of_equivariant. reflexivity.
-    + rewrite uses_of_equivariant. f_equal.
-      induction handlers as [ | [k' hh] handlers IH]; [ reflexivity | ].
-      cbn [map list_sum fold_right].
-      rewrite uses_in_handler_equivariant. f_equal. exact IH.
-    + cbn [rename_apply ap_continuation]. apply one_if_same_equivariant.
-    + unfold rename_apply_cont. cbn [ac_continuation].
-      apply one_if_same_equivariant.
-    + induction arms as [ | [n ac] arms IH]; [ reflexivity | ].
-      cbn [map list_sum fold_right fst snd].
-      unfold rename_apply_cont at 1. cbn [ac_continuation].
-      rewrite one_if_same_equivariant. f_equal. exact IH.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler uses_in_handler]. apply uses_of_equivariant.
-Qed.
+(* The law of the pass is proved from the definitions alone
+   ([equivariance], of FlambdaEquivarianceTactic.v): the tactic states
+   and proves, as it goes, the laws of the functions that the pass is
+   made of. Two laws are given to it besides. That of [distinct] at
+   renamed variables is stated here, because the type of [distinct]
+   does not say that its list is of variables. That of [var_free_b] is
+   proved in FlambdaValidatorEquivarianceBaseProofs.v, and the tactic
+   would otherwise derive it again at each use. *)
 
 Lemma distinct_rename_variables (r : renaming) (params : list variable) :
   distinct (map (rename_variable r) params) = distinct params.
-Proof.
-  induction params as [ | x params IH]; [ reflexivity | ].
-  cbn [map distinct]. rewrite among_rename_variable, IH. reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
-Lemma wrapper_equivariant (r : renaming) (k : continuation) (i : nat)
-    (params : list variable) (metadata : handler_metadata) :
-  wrapper (rename_continuation r k) i (map (rename_variable r) params)
-    metadata
-  = rename_handler r (wrapper k i params metadata).
-Proof.
-  unfold wrapper. cbn [rename_handler rename_expr].
-  unfold rename_apply_cont.
-  cbn [ac_continuation ac_args ac_trap_action option_map].
-  rewrite drop_nth_map, !map_map. reflexivity.
-Qed.
-
-Fixpoint wrap_uses_equivariant (r : renaming) (k : continuation) (i : nat)
-    (w : continuation_handler) (e : expr) {struct e} :
-  wrap_uses (rename_continuation r k) i (rename_handler r w)
-    (rename_expr r e)
-  = rename_expr r (wrap_uses k i w e)
-with wrap_uses_in_handler_equivariant (r : renaming) (k : continuation)
-    (i : nat) (w : continuation_handler) (h : continuation_handler)
-    {struct h} :
-  wrap_uses_in_handler (rename_continuation r k) i (rename_handler r w)
-    (rename_handler r h)
-  = rename_handler r (wrap_uses_in_handler k i w h).
-Proof.
-  - destruct e as [y kind d body | bindings body | k' hh body | handlers body
-                  | ap | ac | scrutinee arms | ];
-      cbn [rename_expr wrap_uses]; try reflexivity.
-    + rewrite wrap_uses_equivariant. reflexivity.
-    + rewrite wrap_uses_equivariant. reflexivity.
-    + rewrite wrap_uses_in_handler_equivariant, wrap_uses_equivariant.
-      reflexivity.
-    + rewrite wrap_uses_equivariant. f_equal.
-      induction handlers as [ | [k' hh] handlers IH]; [ reflexivity | ].
-      cbn [map]. rewrite wrap_uses_in_handler_equivariant, IH. reflexivity.
-    + cbn [rename_apply ap_continuation].
-      rewrite rename_continuation_eqb.
-      destruct (Pos.eqb (ap_continuation ap) k); reflexivity.
-    + rewrite drop_arg_of_equivariant. reflexivity.
-    + f_equal. induction arms as [ | [n ac] arms IH]; [ reflexivity | ].
-      cbn [map fst snd]. rewrite drop_arg_of_equivariant, IH. reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler wrap_uses_in_handler].
-    rewrite wrap_uses_equivariant. reflexivity.
-Qed.
-
-Lemma wrap_return_equivariant (r : renaming) (i : nat) (k : continuation)
-    (h : continuation_handler) (body : expr) :
-  wrap_return i (rename_continuation r k) (rename_handler r h)
-    (rename_expr r body)
-  = rename_unaliased r (wrap_return i k h body).
-Proof.
-  destruct h as [params metadata handler].
-  cbn [rename_handler wrap_return].
-  rewrite nth_error_map.
-  destruct (nth_error params i) as [p | ]; [ | reflexivity ].
-  cbn [option_map].
-  rewrite distinct_rename_variables, var_free_b_equivariant_aux,
-    only_applied_or_returned_to_equivariant, uses_of_equivariant,
-    wrapper_equivariant, wrap_uses_equivariant, drop_nth_map.
-  destruct
-    (negb (hm_is_exn_handler metadata) && distinct params
-     && negb (var_free_b p handler) && only_applied_or_returned_to k body
-     && (2 <=? uses_of k body));
-    reflexivity.
-Qed.
-
-Lemma wrap_from_equivariant (r : renaming) (i : nat) :
-  ∀ (k : continuation) (h : continuation_handler) (body : expr),
-    wrap_from i (rename_continuation r k) (rename_handler r h)
-      (rename_expr r body)
-    = (rename_handler r (fst (wrap_from i k h body)),
-       rename_expr r (snd (wrap_from i k h body))).
-Proof.
-  induction i as [ | i IH]; intros k h body; cbn [wrap_from];
-    [ reflexivity | ].
-  rewrite wrap_return_equivariant.
-  destruct (wrap_return i k h body) as [[h' body'] | ];
-    cbn [rename_unaliased option_map]; [ reflexivity | apply IH ].
-Qed.
-
-Fixpoint wrap_returns_equivariant_aux (r : renaming) (e : expr) :
-  wrap_returns (rename_expr r e) = rename_expr r (wrap_returns e).
-Proof.
-  destruct e
-    as [ x kind d body | bindings body | k [params metadata handler] body
-       | handlers body | ap | ac | scrutinee arms | ];
-    cbn [rename_expr rename_handler wrap_returns]; try reflexivity.
-  - rewrite wrap_returns_equivariant_aux. reflexivity.
-  - rewrite wrap_returns_equivariant_aux. reflexivity.
-  - rewrite !wrap_returns_equivariant_aux, length_map.
-    pose proof
-      (wrap_from_equivariant r (length params) k
-         (Handler params metadata (wrap_returns handler))
-         (wrap_returns body))
-      as Hfrom.
-    cbn [rename_handler] in Hfrom. rewrite Hfrom.
-    destruct
-      (wrap_from (length params) k
-         (Handler params metadata (wrap_returns handler))
-         (wrap_returns body))
-      as [h' body'].
-    reflexivity.
-  - rewrite wrap_returns_equivariant_aux. reflexivity.
-Qed.
+#[local] Hint Rewrite distinct_rename_variables var_free_b_equivariant_aux
+  : equivariance.
 
 Lemma wrap_returns_renamed : rewrite_equivariant wrap_returns.
-Proof. exact wrap_returns_equivariant_aux. Qed.
+Proof. equivariance. Qed.
 
 (* ======================================================================== *)
 (* The pass keeps scope                                                     *)
