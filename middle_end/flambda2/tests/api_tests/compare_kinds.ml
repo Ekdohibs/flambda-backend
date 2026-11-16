@@ -47,8 +47,9 @@
    made; the mutability of a read and the kind of a write at an offset), and
    things that a text could not write when they were put here: that a call is a
    probe, a call that performs an effect, the shape of a static block, the
-   debugging information of its fields (which is not compared, as no other
-   debugging information is), and a group of two recursive continuations.
+   debugging information of its fields and of those of a static array of values
+   (which is not compared, as no other debugging information is), and a group of
+   two recursive continuations.
 
    Then the unit that the comparison gives for two different units, where the
    kind of a call of the first unit has a name that the second unit binds under
@@ -332,7 +333,9 @@ let call_that_performs eff =
     ~call_kind:(Call_kind.effect_ (Call_kind.Effect.perform ~eff))
     ~args_arity:Flambda_arity.nullary ~return_arity:any ~extra_args:[] ()
 
-let static_block ?(dbg = Debuginfo.none) shape =
+(* A unit that binds a symbol to the static constant made from two fields with
+   the given debugging information, and returns it. *)
+let static_constant ?(dbg = Debuginfo.none) make =
   unit
     (fun ~return_continuation ~exn_continuation:_ ~toplevel_my_alloc_region:_ ->
       let block =
@@ -350,11 +353,20 @@ let static_block ?(dbg = Debuginfo.none) shape =
         (Flambda.Named.create_static_consts
            (Flambda.Static_const_group.create
               [ Flambda.Static_const_or_code.create_static_const
-                  (Static_const.block Tag.Scannable.zero Immutable shape
+                  (make
                      [ Simple.With_debuginfo.create argument dbg;
                        Simple.With_debuginfo.create argument dbg ]) ]))
         ~body ~free_names_of_body:Unknown
       |> Flambda.Expr.create_let)
+
+let static_block ?dbg shape =
+  static_constant ?dbg (Static_const.block Tag.Scannable.zero Immutable shape)
+
+(* A static immutable array of values, of two elements or of one. *)
+let static_array ?dbg ?(short = false) () =
+  static_constant ?dbg (fun fields ->
+      Static_const.immutable_value_array
+        (if short then [List.hd fields] else fields))
 
 (* A group of [n] recursive continuations, of which the first is called. *)
 let recursive_group n =
@@ -465,6 +477,14 @@ let () =
      (one has some: %b): %s\n"
     (not (Debuginfo.is_none somewhere))
     (answer (static_block Value_only) (static_block ~dbg:somewhere Value_only));
+  Printf.printf "two static arrays of values: %s\n"
+    (answer (static_array ()) (static_array ()));
+  Printf.printf "two static arrays of values of two lengths: %s\n"
+    (answer (static_array ()) (static_array ~short:true ()));
+  Printf.printf
+    "two static arrays of values whose fields have not the same debugging \
+     information: %s\n"
+    (answer (static_array ()) (static_array ~dbg:somewhere ()));
   Printf.printf "two groups of two recursive continuations: %s\n"
     (answer (recursive_group 2) (recursive_group 2));
   Printf.printf "a group of one recursive continuation and a group of two: %s\n"

@@ -1859,6 +1859,17 @@ and static_consts env (const1 : Static_const_or_code.t)
        the same if their fields are. *)
     Env.note_difference env "a static constant";
     Different { approximant = subst_static_const env const1 }
+  | ( Static_const (Immutable_value_array fields1),
+      Static_const (Immutable_value_array fields2) ) ->
+    (* [Static_const.compare] compares the fields with their debugging
+       information, and their names as they are. They are compared here as the
+       fields of a static block are. *)
+    noting "a static constant"
+      (lists ~f:fields ~subst:subst_field ~subst_snd:true)
+      env fields1 fields2
+    |> Comparison.map ~f:(fun fields1' : Static_const_or_code.t ->
+        Static_const_or_code.create_static_const
+          (Static_const.immutable_value_array fields1'))
   | _, _ ->
     if check env "a static constant" (Static_const_or_code.equal const1 const2)
     then Equivalent

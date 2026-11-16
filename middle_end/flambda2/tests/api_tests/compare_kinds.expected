@@ -124,6 +124,9 @@ two calls that perform two effects: different
 two static blocks of values: the same
 a static block of values and a mixed one: different
 two static blocks whose fields have not the same debugging information (one has some: true): the same
+two static arrays of values: the same
+two static arrays of values of two lengths: different
+two static arrays of values whose fields have not the same debugging information: the same
 two groups of two recursive continuations: the same
 a group of one recursive continuation and a group of two: different
 a direct call of the code that the unit binds:
