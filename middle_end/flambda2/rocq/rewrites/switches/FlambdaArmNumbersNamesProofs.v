@@ -49,185 +49,25 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaUnaliasParamsSpec FlambdaUnaliasParamsProofs
   FlambdaUnaliasParamsNamesProofs FlambdaUntagParamsSpec
   FlambdaUntagParamsNamesProofs FlambdaGiveScrutineeSpec
-  FlambdaGiveScrutineeNamesProofs FlambdaArmNumbersSpec.
+  FlambdaGiveScrutineeNamesProofs FlambdaEquivarianceTactic
+  FlambdaArmNumbersSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
 (* The pass commutes with renaming                                          *)
 (* ======================================================================== *)
 
-Lemma number_simple_equivariant (r : renaming) (x : variable) (c : Z)
-    (s : simple) :
-  number_simple (rename_variable r x) c (rename_simple r s)
-  = rename_simple r (number_simple x c s).
-Proof.
-  destruct s as [y | sym | c0]; cbn [rename_simple number_simple];
-    try reflexivity.
-  rewrite rename_variable_eqb. destruct (Pos.eqb y x); reflexivity.
-Qed.
+(* The law of the pass is proved from the definitions alone
+   ([equivariance], of FlambdaEquivarianceTactic.v): the tactic states
+   and proves, as it goes, the laws of the functions that the pass is
+   made of. One law is given to it: that of
+   FlambdaGiveScrutineeSpec.arm_fact, which goes through
+   [first_answer], a function that takes a function. *)
 
-Lemma number_in_apply_cont_equivariant (r : renaming) (x : variable)
-    (known : option Z) (ac : apply_cont) :
-  number_in_apply_cont (rename_variable r x) known (rename_apply_cont r ac)
-  = rename_apply_cont r (number_in_apply_cont x known ac).
-Proof.
-  unfold number_in_apply_cont. destruct known as [c | ]; [ | reflexivity ].
-  unfold rename_apply_cont.
-  cbn [ac_continuation ac_args ac_trap_action].
-  rewrite !map_map. f_equal. apply map_ext. intros s.
-  apply number_simple_equivariant.
-Qed.
-
-(* The variable that [x] is the untagging of is renamed with the
-   term. *)
-Lemma source_under_let_equivariant (r : renaming) (x y : variable)
-    (d : named) (source : option variable) :
-  source_under_let (rename_variable r x) (rename_variable r y)
-    (rename_named r d) (option_map (rename_variable r) source)
-  = option_map (rename_variable r) (source_under_let x y d source).
-Proof.
-  unfold source_under_let. rewrite rename_variable_eqb, untag_of_renamed.
-  destruct (Pos.eqb y x).
-  - destruct (untag_of d) as [t | ]; cbn [option_map]; [ | reflexivity ].
-    rewrite rename_variable_eqb. destruct (Pos.eqb t x); reflexivity.
-  - destruct source as [t | ]; cbn [option_map]; [ | reflexivity ].
-    rewrite rename_variable_eqb. destruct (Pos.eqb y t); reflexivity.
-Qed.
-
-Lemma source_under_equivariant (r : renaming) (x : variable)
-    (params : list variable) (source : option variable) :
-  source_under (rename_variable r x) (map (rename_variable r) params)
-    (option_map (rename_variable r) source)
-  = option_map (rename_variable r) (source_under x params source).
-Proof.
-  unfold source_under. rewrite among_rename_variable.
-  destruct (among x params); [ reflexivity | ].
-  destruct source as [t | ]; cbn [option_map]; [ | reflexivity ].
-  rewrite among_rename_variable. destruct (among t params); reflexivity.
-Qed.
-
-Lemma number_read_equivariant (r : renaming) (x : variable)
-    (source : option variable) (c : Z) (s : simple) :
-  number_read (rename_variable r x) (option_map (rename_variable r) source) c
-    (rename_simple r s)
-  = rename_simple r (number_read x source c s).
-Proof.
-  destruct s as [y | sym | c0]; cbn [rename_simple number_read];
-    try reflexivity.
-  rewrite rename_variable_eqb. destruct (Pos.eqb y x); [ reflexivity | ].
-  destruct source as [t | ]; cbn [option_map]; [ | reflexivity ].
-  rewrite rename_variable_eqb. destruct (Pos.eqb y t); reflexivity.
-Qed.
-
-Lemma number_in_named_equivariant (r : renaming) (x : variable)
-    (source : option variable) (known : option Z) (d : named) :
-  number_in_named (rename_variable r x)
-    (option_map (rename_variable r) source) known (rename_named r d)
-  = rename_named r (number_in_named x source known d).
-Proof.
-  unfold number_in_named. destruct known as [c | ]; [ | reflexivity ].
-  destruct d as [s | p args | | | | | ]; cbn [rename_named];
-    try reflexivity.
-  - rewrite number_read_equivariant. reflexivity.
-  - rewrite !map_map. f_equal. apply map_ext. intros s.
-    apply number_read_equivariant.
-Qed.
-
-Lemma number_in_scrutinee_equivariant (r : renaming) (x : variable)
-    (source : option variable) (known : option Z) (scrutinee : simple) :
-  number_in_scrutinee (rename_variable r x)
-    (option_map (rename_variable r) source) known (rename_simple r scrutinee)
-  = rename_simple r (number_in_scrutinee x source known scrutinee).
-Proof.
-  unfold number_in_scrutinee. destruct known as [c | ]; [ | reflexivity ].
-  apply number_read_equivariant.
-Qed.
-
-Fixpoint number_in_region_equivariant (r : renaming) (x : variable)
-    (source : option variable) (known : option Z) (e : expr) {struct e} :
-  number_in_region (rename_variable r x)
-    (option_map (rename_variable r) source) known (rename_expr r e)
-  = rename_expr r (number_in_region x source known e)
-with number_in_handler_equivariant (r : renaming) (x : variable)
-    (source : option variable) (known : option Z) (h : continuation_handler)
-    {struct h} :
-  number_in_handler (rename_variable r x)
-    (option_map (rename_variable r) source) known (rename_handler r h)
-  = rename_handler r (number_in_handler x source known h).
-Proof.
-  - destruct e as [y kind d body | bindings body | k' hh body | handlers body
-                  | ap | ac | scrutinee arms | ];
-      cbn [rename_expr number_in_region]; try reflexivity.
-    + rewrite rename_variable_eqb, number_in_named_equivariant,
-        source_under_let_equivariant, number_in_region_equivariant.
-      reflexivity.
-    + rewrite number_in_region_equivariant. reflexivity.
-    + rewrite arm_fact_equivariant, number_in_handler_equivariant,
-        number_in_region_equivariant.
-      reflexivity.
-    + rewrite number_in_region_equivariant. f_equal.
-      induction handlers as [ | [k' hh] handlers IH]; [ reflexivity | ].
-      cbn [map]. rewrite number_in_handler_equivariant, IH. reflexivity.
-    + rewrite number_in_apply_cont_equivariant. reflexivity.
-    + rewrite number_in_scrutinee_equivariant. f_equal.
-      induction arms as [ | [d ac] arms IH]; [ reflexivity | ].
-      cbn [map fst snd].
-      rewrite arm_known_equivariant, number_in_apply_cont_equivariant, IH.
-      reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler number_in_handler].
-    rewrite known_under_equivariant, source_under_equivariant,
-      number_in_region_equivariant.
-    reflexivity.
-Qed.
-
-Lemma number_in_arms_equivariant (r : renaming) (x : variable)
-    (known : option Z) (e : expr) :
-  number_in_arms (rename_variable r x) known (rename_expr r e)
-  = rename_expr r (number_in_arms x known e).
-Proof. exact (number_in_region_equivariant r x None known e). Qed.
-
-Fixpoint scrutinees_equivariant (r : renaming) (e : expr) {struct e} :
-  scrutinees (rename_expr r e) = map (rename_variable r) (scrutinees e)
-with handler_scrutinees_equivariant (r : renaming)
-    (h : continuation_handler) {struct h} :
-  handler_scrutinees (rename_handler r h)
-  = map (rename_variable r) (handler_scrutinees h).
-Proof.
-  - destruct e as [y kind d body | bindings body | k' hh body | handlers body
-                  | ap | ac | scrutinee arms | ];
-      cbn [rename_expr scrutinees]; try reflexivity.
-    + apply scrutinees_equivariant.
-    + apply scrutinees_equivariant.
-    + rewrite map_app, handler_scrutinees_equivariant,
-        scrutinees_equivariant.
-      reflexivity.
-    + rewrite map_app, scrutinees_equivariant. f_equal.
-      induction handlers as [ | [k' hh] handlers IH]; [ reflexivity | ].
-      cbn [map flat_map].
-      rewrite map_app, handler_scrutinees_equivariant, IH. reflexivity.
-    + destruct scrutinee as [y | sym | cst]; reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler handler_scrutinees].
-    apply scrutinees_equivariant.
-Qed.
-
-Lemma numbers_fold_equivariant (r : renaming) (xs : list variable) :
-  ∀ e : expr,
-    fold_left (fun e x => number_in_arms x None e) (rename_expr r e)
-      (map (rename_variable r) xs)
-    = rename_expr r (fold_left (fun e x => number_in_arms x None e) e xs).
-Proof.
-  induction xs as [ | x xs IH]; intros e; unfold fold_left;
-    cbn [map List.fold_left]; [ reflexivity | ].
-  rewrite number_in_arms_equivariant. exact (IH (number_in_arms x None e)).
-Qed.
+#[local] Hint Rewrite arm_fact_equivariant : equivariance.
 
 Lemma numbers_in_arms_renamed : rewrite_equivariant numbers_in_arms.
-Proof.
-  intros r e. unfold numbers_in_arms.
-  rewrite scrutinees_equivariant. apply numbers_fold_equivariant.
-Qed.
+Proof. equivariance. Qed.
 
 (* ======================================================================== *)
 (* The pass keeps scope                                                     *)
