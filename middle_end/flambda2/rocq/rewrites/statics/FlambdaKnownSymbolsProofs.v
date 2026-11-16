@@ -57,7 +57,8 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaSemanticsProofs FlambdaNominalSpec FlambdaNormaliseSpec
   FlambdaClosuresProofs FlambdaUnusedStaticsSpec FlambdaUnusedSlotsProofs
   FlambdaWellFormedSpec FlambdaImportsSpec FlambdaObserversSpec
-  FlambdaUnitFromProofs FlambdaKnownSymbolsSpec FlambdaEquivarianceTactic.
+  FlambdaUnitFromProofs FlambdaKnownAritySpec FlambdaKnownArityProofs
+  FlambdaKnownSymbolsSpec FlambdaEquivarianceTactic.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -391,17 +392,19 @@ Proof.
   destruct mut; [ exact (fun H => H) | exact Hload | exact Hload ].
 Qed.
 
-(* An indirect call of such a symbol and the direct call of that code
-   step alike: both are undefined where the symbol is bound to
+(* A call of unknown arity of such a symbol and the direct call of that
+   code step alike: both are undefined where the symbol is bound to
    nothing. *)
-Lemma fold_known_apply_sound_here (vars : env) (conts : cont_env)
+Lemma fold_known_apply_unknown_arity_here (vars : env) (conts : cont_env)
     (ap : apply_expr) :
+  (∀ code_ids : option (list code_id),
+    ap_call_kind ap <> Indirect_known_arity code_ids) ->
   step (State (Apply (fold_known_apply sets ap)) vars conts run_statics hp rd)
   = step (State (Apply ap) vars conts run_statics hp rd).
 Proof.
-  unfold fold_known_apply.
+  intros Hnot. unfold fold_known_apply.
   destruct (ap_call_kind ap) as [named | | code_ids] eqn:Hkind;
-    [ reflexivity | | reflexivity ].
+    [ reflexivity | | destruct (Hnot code_ids eq_refl) ].
   destruct (ap_callee ap) as [x | s | c] eqn:Hcallee; try reflexivity.
   destruct (closure_of sets (Value_symbol s)) as [[code slots] | ] eqn:Hknown;
     [ | reflexivity ].
@@ -429,6 +432,49 @@ Proof.
   - unfold shape_of_closure_call. rewrite Hrun. reflexivity.
 Qed.
 
+(* A call of known arity is folded as the same call of unknown arity
+   is, or is left. *)
+Lemma fold_known_apply_known_arity (ap : apply_expr)
+    (code_ids : option (list code_id)) :
+  ap_call_kind ap = Indirect_known_arity code_ids ->
+  fold_known_apply sets ap
+  = fold_known_apply sets (apply_with_kind Indirect_unknown_arity ap)
+  ∨ fold_known_apply sets ap = ap.
+Proof.
+  destruct ap as [callee kind args k exn extra args_arity return_arity].
+  cbn [ap_call_kind]. intros ->.
+  unfold fold_known_apply, apply_with_kind.
+  cbn [ap_call_kind ap_callee ap_args ap_continuation ap_exn_continuation
+       ap_exn_extra_args ap_args_arity ap_return_arity].
+  destruct callee as [x | s | c]; [ right; reflexivity | | right; reflexivity ].
+  destruct (closure_of sets (Value_symbol s)) as [[code slots] | ];
+    [ left; reflexivity | right; reflexivity ].
+Qed.
+
+(* A call that has a step is folded to a call with that step. A call
+   of known arity that has a step is the call of unknown arity
+   (FlambdaKnownArityProofs.known_arity_step), which is folded to the
+   same direct call. *)
+Lemma fold_known_apply_sound_here (vars : env) (conts : cont_env)
+    (ap : apply_expr) :
+  step (State (Apply ap) vars conts run_statics hp rd) <> Undefined ->
+  step (State (Apply (fold_known_apply sets ap)) vars conts run_statics hp rd)
+  = step (State (Apply ap) vars conts run_statics hp rd).
+Proof.
+  intros Hdefined.
+  destruct (ap_call_kind ap) as [named | | code_ids] eqn:Hkind.
+  - apply fold_known_apply_unknown_arity_here.
+    intros ids Hids. rewrite Hkind in Hids. discriminate Hids.
+  - apply fold_known_apply_unknown_arity_here.
+    intros ids Hids. rewrite Hkind in Hids. discriminate Hids.
+  - destruct (fold_known_apply_known_arity ap code_ids Hkind) as [-> | ->];
+      [ | reflexivity ].
+    rewrite fold_known_apply_unknown_arity_here
+      by (intros ids Hids; destruct ap; discriminate Hids).
+    exact (known_arity_step ap code_ids vars conts run_statics hp rd Hkind
+             Hdefined).
+Qed.
+
 End Folded_slot.
 
 Theorem fold_function_slot_sound : fold_function_slot_sound_statement.
@@ -448,6 +494,15 @@ Proof.
   intros sets run_statics hp rd vars conts ap Hsets.
   exact
     (fold_known_apply_sound_here sets run_statics hp rd Hsets vars conts ap).
+Qed.
+
+Theorem fold_known_apply_unknown_arity :
+  fold_known_apply_unknown_arity_statement.
+Proof.
+  intros sets run_statics hp rd vars conts ap Hsets.
+  exact
+    (fold_known_apply_unknown_arity_here sets run_statics hp rd Hsets vars
+       conts ap).
 Qed.
 
 (* ======================================================================== *)
@@ -1528,15 +1583,38 @@ Proof.
       apply Forall2_app; [ | exact Hconts ].
       apply rec_closures_kept;
         [ right; split; [ reflexivity | exact Hno_hs ] | exact Hconts ].
-  - (* Apply *)
+  - (* Apply: the call as it is has, in the second run, the step that
+       answers the first; the call folded then has that step. *)
     assert (He' :
+      step (State (Apply ap) vars conts' (fold_statics statics) hp rd)
+      <> Undefined ->
       step (State e' vars conts' (fold_statics statics) hp rd)
       = step (State (Apply ap) vars conts' (fold_statics statics) hp rd)).
     { destruct He as [-> | [-> _]]; [ | reflexivity ].
       simpl fold_known.
       exact (fold_known_apply_sound_here T (fold_statics statics) hp rd
                (proj2 Hagrees) vars conts' ap). }
-    rewrite He'. rewrite !step_apply.
+    cut
+      (match step (State (Apply ap) vars conts statics hp rd) with
+       | Step t =>
+         (∃ t' : state,
+           step (State (Apply ap) vars conts' (fold_statics statics) hp rd)
+           = Step t'
+           ∧ state_kept t t')
+         ∧ agrees (state_statics t)
+       | Exit k vs hp' rd' =>
+         step (State (Apply ap) vars conts' (fold_statics statics) hp rd)
+         = Exit k vs hp' rd'
+       | Undefined => True
+       end).
+    { destruct (step (State (Apply ap) vars conts statics hp rd))
+        as [t | k vs hp' rd' | ]; [ | | exact (fun H => H) ].
+      - intros [[t' [Ht' Hkept]] Hstatics]. split; [ | exact Hstatics ].
+        exists t'. split; [ | exact Hkept ].
+        rewrite He' by (rewrite Ht'; discriminate). exact Ht'.
+      - intros Hexit. rewrite He' by (rewrite Hexit; discriminate).
+        exact Hexit. }
+    rewrite !step_apply.
     destruct (eval_simple vars (ap_callee ap)) as [callee | ]; [ | exact I ].
     destruct (eval_simples vars (ap_args ap)) as [vs | ]; [ | exact I ].
     destruct (eval_simples vars (exn_extra_simples ap)) as [extra | ];
@@ -1965,3 +2043,14 @@ Proof. equivariance. Qed.
 
 Theorem fold_known_equivariant : fold_known_equivariant_statement.
 Proof. equivariance. Qed.
+
+(* ======================================================================== *)
+(* The example                                                              *)
+(* ======================================================================== *)
+
+Theorem fold_known_apply_defines : fold_known_apply_defines_statement.
+Proof.
+  split; [ vm_compute; reflexivity | ].
+  split; [ exists 20; vm_compute; reflexivity | ].
+  exists 20; eexists; vm_compute; reflexivity.
+Qed.

@@ -51,12 +51,20 @@
    code of a function whose closure is a symbol, [my_closure] is that
    symbol (FlambdaMyClosureSpec.v), so the code of two functions that
    call each other comes to call through the two symbols. And an
-   indirect call of such a symbol is made a direct call of the code of
-   its closure (simplify/simplify_apply_expr.ml,
-   [simplify_function_call], which reads the closure off the type of
-   the callee): so where a function that is given a function of the
-   unit is inlined, the call of its argument is direct, and may be
-   inlined in turn.
+   indirect call of such a symbol, of unknown arity or of known arity,
+   goes the way of a call whose callee is known, where the environment
+   has the metadata of the code of its closure
+   (simplify/simplify_apply_expr.ml, [simplify_function_call], which
+   reads the closure off the type of the callee, in the case
+   [Known_result] of [T.meet_single_closures_entry]; then
+   [simplify_direct_function_call]). There the call is given the
+   direct kind, unless it lists code ids whose meet with that code is
+   bottom, where it becomes [Invalid] ([Code_age_relation.meet_set],
+   which keeps a code id whose relation to the other set is not
+   known); and Simplify then does with it what it does with a direct
+   call: it may inline it, split it or make a closure of it. So where
+   a function that is given a function of the unit is inlined, the
+   call of its argument is direct, and may be inlined in turn.
 
    What is here. [known_bindings e] are the symbols that the unit [e]
    binds, outside code, to a constant with no variable in it: one whose
@@ -73,7 +81,10 @@
    symbol is replaced by the symbol of the other closure
    ([fold_function_slot]); and it says which code the closure is of, so
    an indirect call of such a symbol is made a direct call of that code
-   ([fold_known_apply]). Of a static block one of whose fields is a
+   ([fold_known_apply]): a call of unknown arity, which steps as the
+   direct call does, and a call of known arity, which has the step of
+   the direct call where it has a step, and may have none where the
+   direct call has one. Of a static block one of whose fields is a
    variable, the tag and the other fields are known, whatever the
    variable holds ([known_sets] lists the block with [unknown_field]
    for such a field): a load of a field that is a symbol or a constant
@@ -110,7 +121,10 @@
    the unit as it was (every operation on a symbol bound to nothing is
    undefined, decision D8). So the unit folded refines the unit, run on
    its own ([fold_known_unit_program_refines_statement]); it is not an
-   equivalence, for that last reason.
+   equivalence, for that last reason, and for one more: a call of known
+   arity that is undefined, because it is no full call of the code of
+   its callee, is made a direct call, which is defined more often
+   ([fold_known_apply_defines_statement]).
 
    Nothing is guessed: the bindings are read off the unit itself. A
    variable that stands for a symbol is not looked through; following
@@ -133,7 +147,7 @@ From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaValueSpec FlambdaSemanticsSpec FlambdaNominalSpec
   FlambdaNormaliseSpec FlambdaUnusedStaticsSpec FlambdaImportsSpec
-  FlambdaObserversSpec.
+  FlambdaObserversSpec FlambdaKnownAritySpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -359,16 +373,32 @@ Definition fold_block_load (sets : static_env) (d : named) : named :=
   | _ => d
   end.
 
-(* A call of unknown arity of a symbol that [sets] binds to a closure,
-   made a direct call of the code of that closure. A call of known
-   arity is left: it is undefined wherever the code of its callee has
-   not as many parameters as the call has groups of arguments
-   (FlambdaKnownAritySpec.known_arity_other_arity_statement), and
-   nothing here says that it is the direct call. *)
+(* An indirect call of a symbol that [sets] binds to a closure, made a
+   direct call of the code of that closure: a call of unknown arity,
+   and a call of known arity, whatever its list of code ids. (The
+   list is not looked at. Where it has not the code, the call is
+   undefined in the model, by exact membership, decision D59, and the
+   direct call that is made of it is within the refinement. Simplify
+   has another test: it makes [Invalid] of a call whose list has a
+   bottom meet with the code in the relation of code to its newer
+   versions, and that meet keeps a code id whose relation is not
+   known.)
+
+   A call of unknown arity and the direct call step alike
+   ([fold_known_apply_unknown_arity_statement]). A call of known arity
+   is undefined more often than the direct call: where the call has no
+   group of arguments, where the code has not as many parameters as the
+   call has groups, where the code is tupled, and where the list has
+   not the code (FlambdaKnownAritySpec.v, the statements under "Where a
+   call of known arity is undefined"). Where it has a step, the direct
+   call has that step ([fold_known_apply_sound_statement]); where it
+   has none, the direct call may have one
+   ([fold_known_apply_defines_statement]). So the call folded refines
+   the call, and the two are not equivalent. *)
 Definition fold_known_apply (sets : static_env) (ap : apply_expr)
     : apply_expr :=
   match ap_call_kind ap, ap_callee ap with
-  | Indirect_unknown_arity, Symbol s =>
+  | Indirect_unknown_arity, Symbol s | Indirect_known_arity _, Symbol s =>
     match closure_of sets (Value_symbol s) with
     | Some (code, _) =>
       Apply_expr (ap_callee ap) (Direct code) (ap_args ap)
@@ -377,7 +407,8 @@ Definition fold_known_apply (sets : static_env) (ap : apply_expr)
     | None => ap
     end
   | Indirect_unknown_arity, (Var _ | Const _)
-  | Direct _, _ | Indirect_known_arity _, _ =>
+  | Indirect_known_arity _, (Var _ | Const _)
+  | Direct _, _ =>
     ap
   end.
 
@@ -586,8 +617,8 @@ Definition fold_block_load_sound_statement : Prop :=
     eval_named run_statics vars d = Some v ->
     eval_named run_statics vars (fold_block_load sets d) = Some v.
 
-(* A call is folded to a call that steps as it does, in any such static
-   environment. *)
+(* A call that has a step is folded to a call that has that step, in
+   any such static environment. *)
 Definition fold_known_apply_sound_statement : Prop :=
   ∀ (sets run_statics : static_env) (hp : heap) (rd : read_record) (vars : env)
     (conts : cont_env)
@@ -596,6 +627,22 @@ Definition fold_known_apply_sound_statement : Prop :=
       lookup s (static_values sets) = Some allocated ->
       lookup s (static_values run_statics) = Some allocated' ->
       same_set allocated allocated') ->
+    step (State (Apply ap) vars conts run_statics hp rd) <> Undefined ->
+    step (State (Apply (fold_known_apply sets ap)) vars conts run_statics hp rd)
+    = step (State (Apply ap) vars conts run_statics hp rd).
+
+(* A call that is not of known arity is folded to a call that steps as
+   it does, also where it has no step. *)
+Definition fold_known_apply_unknown_arity_statement : Prop :=
+  ∀ (sets run_statics : static_env) (hp : heap) (rd : read_record) (vars : env)
+    (conts : cont_env)
+    (ap : apply_expr),
+    (∀ (s : symbol) (allocated allocated' : statically_allocated_value),
+      lookup s (static_values sets) = Some allocated ->
+      lookup s (static_values run_statics) = Some allocated' ->
+      same_set allocated allocated') ->
+    (∀ code_ids : option (list code_id),
+      ap_call_kind ap <> Indirect_known_arity code_ids) ->
     step (State (Apply (fold_known_apply sets ap)) vars conts run_statics hp rd)
     = step (State (Apply ap) vars conts run_statics hp rd).
 
@@ -607,3 +654,28 @@ Definition fold_known_equivariant_statement : Prop :=
   ∀ (r : renaming) (statics sets : static_env) (e : expr),
     rename_expr r (fold_known statics sets e)
     = fold_known statics sets (rename_expr r e).
+
+(* ======================================================================== *)
+(* An example                                                               *)
+(* ======================================================================== *)
+
+(* A call of known arity that the rewrite gives a step. The unit is the
+   call of [constant] of FlambdaKnownAritySpec.v, code of no parameter
+   that returns 1, through the symbol of its closure, of known arity
+   and with no group of arguments
+   (FlambdaKnownAritySpec.call_constant). It is undefined: a call of
+   known arity has one group of arguments at least
+   (FlambdaKnownAritySpec.known_arity_no_group_statement). The unit
+   folded is the same unit with the direct call of that code in the
+   place of the call, and it returns 1. *)
+Definition fold_known_apply_defines_statement : Prop :=
+  fold_known_unit (call_constant (Indirect_known_arity None))
+  = Some (call_constant (Direct constant_code_id))
+  ∧ behaves
+      (State (call_constant (Indirect_known_arity None)) [] []
+         empty_static_env empty_heap no_reads)
+      Goes_wrong
+  ∧ behaves
+      (State (call_constant (Direct constant_code_id)) [] []
+         empty_static_env empty_heap no_reads)
+      (Exits 1%positive [Value_const (Tagged_immediate 1)] empty_heap).

@@ -181,13 +181,17 @@
    What the validation would not undo. The second form demotes every
    call that passes its test, whatever its callee, where Simplify
    keeps the call direct if the type says which closure the callee is.
-   The two rewrites that make direct again a call that the first form
-   has made indirect ([follow_aliases] and [fold_known_unit], above)
-   act on a call of unknown arity, and leave a call of known arity.
-   With this form alone a unit in which Simplify keeps such a call
-   direct, in the code of the stub or in a copy of it where the stub
-   is inlined, has a call of known arity before and a direct call
-   after.
+   Of the two rewrites that make direct again a call that the first
+   form has made indirect (above), [fold_known_unit] makes direct a
+   call of known arity too, where its callee is a symbol that the unit
+   binds, outside code, to a closure
+   (FlambdaKnownSymbolsSpec.fold_known_apply); [follow_aliases] acts
+   on a call of unknown arity, and leaves a call of known arity. So
+   with this form a unit in which Simplify keeps such a call direct,
+   in the code of the stub or in a copy of it where the stub is
+   inlined, has a call of known arity before and a direct call after,
+   unless the callee is such a symbol by the time [fold_known_unit]
+   comes to the call.
 
    This file does not say that the other rewrites of the validation
    leave the code of a stub as Simplify does; each says so of itself.
