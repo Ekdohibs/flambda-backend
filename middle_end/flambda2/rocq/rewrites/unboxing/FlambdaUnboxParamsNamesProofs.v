@@ -55,7 +55,7 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel FlambdaMapSpec
   FlambdaUnboxParamsSpec FlambdaUnboxParamsProofs
   FlambdaUnboxParamsRenameSpec FlambdaUnboxVariantsSpec
   FlambdaUnboxVariantsProofs FlambdaUnboxVariantsRenameSpec
-  FlambdaUnboxLoopsSpec.
+  FlambdaUnboxLoopsSpec FlambdaEquivarianceTactic.
 Import ListNotations.
 
 (* The comparison answers the same when both terms are renamed
@@ -144,57 +144,50 @@ Hypothesis unbox_known_named_equivariant :
 (* What is known                                                            *)
 (* ======================================================================== *)
 
-(* The reads known under a [Let] are renamed with it. *)
-Lemma reads_under_let_renamed (r : renaming) (known : computed)
-    (x : variable) (d : named) :
-  reads_under_let (rename_computed r known) (rename_variable r x)
-    (rename_named r d)
-  = rename_computed r (reads_under_let known x d).
-Proof.
-  unfold reads_under_let. rewrite forget_computed_renamed.
-  destruct d as [s | p args | | | | | ]; try reflexivity.
-  destruct p as [p | | | | ]; try reflexivity.
-  destruct args as [ | [y | sym | c] [ | arg args]]; try reflexivity.
-  cbn [rename_named map rename_simple]. rewrite rename_variable_eqb.
-  destruct (reads_a_box p && negb (Pos.eqb x y)); reflexivity.
-Qed.
+(* The laws below that the tactic of FlambdaEquivarianceTactic.v proves
+   are proved by it. The types of what is known do not say how it is
+   renamed: the actions are given here. The premises of the section are
+   given to the tactic, and each law of the section once it is proved. *)
+#[local] Instance facts_renaming : Renaming_of facts := rename_facts.
+#[local] Instance known_blocks_renaming : Renaming_of known_blocks :=
+  rename_known_blocks.
+#[local] Instance known_block_renaming : Renaming_of known_block :=
+  rename_known_block.
+#[local] Instance known_numbers_renaming : Renaming_of known_numbers :=
+  rename_known_numbers.
+#[local] Instance computed_renaming : Renaming_of computed := rename_computed.
+#[local] Hint Rewrite var_free_b_equivariant remove_unused_conts_equivariant
+  forget_vars_equivariant known_under_let_equivariant
+  known_under_statics_equivariant known_block_of_equivariant
+  field_loaded_equivariant load_known_named_equivariant
+  forget_wrapped_vars_equivariant numbers_under_let_equivariant
+  numbers_under_statics_equivariant unwrapped_equivariant
+  unbox_known_named_equivariant : equivariance.
+
 
 Lemma facts_under_let_equivariant (r : renaming) (known : facts)
     (x : variable) (d : named) :
   facts_under_let (rename_facts r known) (rename_variable r x)
     (rename_named r d)
   = rename_facts r (facts_under_let known x d).
-Proof.
-  unfold facts_under_let, rename_facts.
-  cbn [facts_blocks facts_numbers facts_reads].
-  rewrite known_under_let_equivariant, numbers_under_let_equivariant,
-    reads_under_let_renamed.
-  reflexivity.
-Qed.
+Proof. equivariance. Qed.
+
+#[local] Hint Rewrite facts_under_let_equivariant : equivariance.
 
 Lemma facts_under_statics_equivariant (r : renaming) (known : facts)
     (bindings : list static_binding) :
   facts_under_statics (rename_facts r known)
     (map (rename_static_binding r) bindings)
   = rename_facts r (facts_under_statics known bindings).
-Proof.
-  unfold facts_under_statics, rename_facts.
-  cbn [facts_blocks facts_numbers facts_reads].
-  rewrite known_under_statics_equivariant, numbers_under_statics_equivariant.
-  reflexivity.
-Qed.
+Proof. equivariance. Qed.
+
+#[local] Hint Rewrite facts_under_statics_equivariant : equivariance.
 
 Lemma facts_under_params_equivariant (r : renaming) (known : facts)
     (params : list variable) :
   facts_under_params (rename_facts r known) (map (rename_variable r) params)
   = rename_facts r (facts_under_params known params).
-Proof.
-  unfold facts_under_params, rename_facts.
-  cbn [facts_blocks facts_numbers facts_reads].
-  rewrite forget_vars_equivariant, forget_wrapped_vars_equivariant,
-    forget_computed_vars_renamed.
-  reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 (* ======================================================================== *)
 (* What reading a box gives, and the applications                           *)
@@ -223,31 +216,25 @@ Proof.
        reflexivity))).
 Qed.
 
+#[local] Hint Rewrite facts_under_params_equivariant
+  projection_of_equivariant : equivariance.
+
 Lemma extend_args_equivariant (r : renaming) (known : facts) (i : nat)
     (p : unary_primitive) (args : list simple) :
   extend_args (rename_facts r known) i p (map (rename_simple r) args)
   = option_map (map (rename_simple r)) (extend_args known i p args).
-Proof.
-  unfold extend_args. rewrite nth_error_map.
-  destruct (nth_error args i) as [arg | ]; simpl; [ | reflexivity ].
-  rewrite projection_of_equivariant.
-  destruct (projection_of known p arg); simpl; [ | reflexivity ].
-  rewrite map_app. reflexivity.
-Qed.
+Proof. equivariance. Qed.
+
+#[local] Hint Rewrite extend_args_equivariant : equivariance.
 
 Lemma extend_apply_cont_equivariant (r : renaming) (known : facts)
     (k : continuation) (i : nat) (p : unary_primitive) (ac : apply_cont) :
   extend_apply_cont (rename_facts r known) (rename_continuation r k) i p
     (rename_apply_cont r ac)
   = option_map (rename_apply_cont r) (extend_apply_cont known k i p ac).
-Proof.
-  unfold extend_apply_cont, rename_apply_cont.
-  cbn [ac_continuation ac_args ac_trap_action].
-  rewrite rename_continuation_eqb.
-  destruct (Pos.eqb (ac_continuation ac) k); [ | reflexivity ].
-  rewrite extend_args_equivariant.
-  destruct (extend_args known i p (ac_args ac)); reflexivity.
-Qed.
+Proof. equivariance. Qed.
+
+#[local] Hint Rewrite extend_apply_cont_equivariant : equivariance.
 
 Lemma extend_arms_equivariant (r : renaming) (known : facts)
     (k : continuation) (i : nat) (p : unary_primitive)
@@ -256,12 +243,9 @@ Lemma extend_arms_equivariant (r : renaming) (known : facts)
     (map (fun arm => (fst arm, rename_apply_cont r (snd arm))) arms)
   = option_map (map (fun arm => (fst arm, rename_apply_cont r (snd arm))))
       (extend_arms known k i p arms).
-Proof.
-  induction arms as [ | [discriminant ac] arms IH]; simpl; [ reflexivity | ].
-  rewrite extend_apply_cont_equivariant.
-  destruct (extend_apply_cont known k i p ac); simpl; [ | reflexivity ].
-  rewrite IH. destruct (extend_arms known k i p arms); reflexivity.
-Qed.
+Proof. equivariance. Qed.
+
+#[local] Hint Rewrite extend_arms_equivariant : equivariance.
 
 Lemma is_bound_renamed_handlers (r : renaming) (k : continuation)
     (handlers : list (continuation * continuation_handler)) :
@@ -269,12 +253,7 @@ Lemma is_bound_renamed_handlers (r : renaming) (k : continuation)
     (map (fun '(k', h) => (rename_continuation r k', rename_handler r h))
        handlers)
   = is_bound k handlers.
-Proof.
-  unfold is_bound.
-  induction handlers as [ | [k' h] handlers IH]; simpl; [ reflexivity | ].
-  rewrite rename_continuation_eqb.
-  destruct (Pos.eqb k k'); [ reflexivity | exact IH ].
-Qed.
+Proof. equivariance. Qed.
 
 Fixpoint extend_applications_equivariant_aux (r : renaming) (e : expr) :
   ∀ (known : facts) (k : continuation) (i : nat) (p : unary_primitive),
@@ -380,89 +359,35 @@ Proof.
   intros r known k i p e. apply extend_applications_equivariant_aux.
 Qed.
 
+#[local] Hint Rewrite is_bound_renamed_handlers
+  extend_applications_equivariant : equivariance.
+
 (* ======================================================================== *)
 (* The pass                                                                 *)
 (* ======================================================================== *)
 
 Lemma position_renamed (r : renaming) (x : variable) (xs : list variable) :
   position (rename_variable r x) (map (rename_variable r) xs) = position x xs.
-Proof.
-  induction xs as [ | y xs IH]; simpl; [ reflexivity | ].
-  rewrite rename_variable_eqb, IH. reflexivity.
-Qed.
+Proof. equivariance. Qed.
+
+#[local] Hint Rewrite position_renamed : equivariance.
 
 Lemma may_take_renamed (r : renaming) (params : list variable)
     (metadata : handler_metadata) (f : variable) :
   may_take (map (rename_variable r) params) metadata (rename_variable r f)
   = may_take params metadata f.
-Proof.
-  unfold may_take.
-  rewrite (distinct_map_injective _ (rename_variable_eqb r)), length_map,
-    among_rename_variable.
-  reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
-Lemma unbox_heads_equivariant (r : renaming) (handler : expr) :
-  ∀ (known : facts) (k : continuation) (params : list variable)
-    (metadata : handler_metadata) (body : expr),
-    unbox_heads (rename_facts r known) (rename_continuation r k)
-      (map (rename_variable r) params) metadata (rename_expr r handler)
-      (rename_expr r body)
-    = rename_expr r (unbox_heads known k params metadata handler body).
-Proof.
-  induction handler
-    as [ f kind d rest IH | bindings rest _ | k0 h rest _ | handlers rest _
-       | ap | ac | scrutinee arms | ];
-    intros known k params metadata body; try reflexivity.
-  destruct d
-    as [ s | pr args | code slots | fslot decls slots | slot closure
-       | pfrom slot closure | move_from move_to closure ];
-    try reflexivity.
-  destruct pr as [p | b | v | hp | rp]; try reflexivity.
-  destruct args as [ | arg args]; try reflexivity.
-  destruct arg as [x | sym | c]; try reflexivity.
-  destruct args as [ | arg' args]; try reflexivity.
-  cbn [rename_expr rename_named map rename_simple unbox_heads].
-  rewrite may_take_renamed, position_renamed.
-  destruct (may_take params metadata f); [ | reflexivity ].
-  destruct (position x params) as [i | ]; [ | reflexivity ].
-  rewrite extend_applications_equivariant.
-  destruct (extend_applications known k i p body) as [body' | ]; simpl;
-    [ | reflexivity ].
-  rewrite <- IH, map_app. reflexivity.
-Qed.
-
-Fixpoint unbox_params_knowing_equivariant_aux (r : renaming) (e : expr) :
-  ∀ known : facts,
-    unbox_params_knowing (rename_facts r known) (rename_expr r e)
-    = rename_expr r (unbox_params_knowing known e).
-Proof.
-  destruct e
-    as [ x kind d body | bindings body | k h body | handlers body | ap
-       | ac | scrutinee arms | ];
-    intros known; cbn [rename_expr unbox_params_knowing]; try reflexivity.
-  - rewrite facts_under_let_equivariant,
-      unbox_params_knowing_equivariant_aux.
-    reflexivity.
-  - rewrite facts_under_statics_equivariant,
-      unbox_params_knowing_equivariant_aux.
-    reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler unbox_params_knowing].
-    rewrite facts_under_params_equivariant,
-      !unbox_params_knowing_equivariant_aux.
-    apply unbox_heads_equivariant.
-  - rewrite unbox_params_knowing_equivariant_aux. reflexivity.
-Qed.
+#[local] Hint Rewrite may_take_renamed : equivariance.
 
 Theorem unbox_params_knowing_equivariant :
   unbox_params_knowing_equivariant_statement.
-Proof. intros r known e. apply unbox_params_knowing_equivariant_aux. Qed.
+Proof. equivariance. Qed.
 
 Theorem unbox_known_params_equivariant :
   unbox_known_params_equivariant_statement.
 Proof.
-  intros r e. exact (unbox_params_knowing_equivariant_aux r e no_facts).
+  intros r e. exact (unbox_params_knowing_equivariant r no_facts e).
 Qed.
 
 (* ======================================================================== *)
@@ -479,19 +404,17 @@ Hypothesis extend_renamed :
     extend' (rename_facts r known) (map (rename_simple r) args)
     = option_map (map (rename_simple r)) (extend known args).
 
+#[local] Hint Rewrite unbox_params_knowing_equivariant
+  unbox_known_params_equivariant extend_renamed : equivariance.
+
 Lemma extend_apply_cont_by_equivariant (known : facts) (k : continuation)
     (ac : apply_cont) :
   extend_apply_cont_by extend' (rename_facts r known)
     (rename_continuation r k) (rename_apply_cont r ac)
   = option_map (rename_apply_cont r) (extend_apply_cont_by extend known k ac).
-Proof.
-  unfold extend_apply_cont_by, rename_apply_cont.
-  cbn [ac_continuation ac_args ac_trap_action].
-  rewrite rename_continuation_eqb.
-  destruct (Pos.eqb (ac_continuation ac) k); [ | reflexivity ].
-  rewrite extend_renamed.
-  destruct (extend known (ac_args ac)); reflexivity.
-Qed.
+Proof. equivariance. Qed.
+
+#[local] Hint Rewrite extend_apply_cont_by_equivariant : equivariance.
 
 Lemma extend_arms_by_equivariant (known : facts) (k : continuation)
     (arms : list (Z * apply_cont)) :
@@ -499,12 +422,7 @@ Lemma extend_arms_by_equivariant (known : facts) (k : continuation)
     (map (fun arm => (fst arm, rename_apply_cont r (snd arm))) arms)
   = option_map (map (fun arm => (fst arm, rename_apply_cont r (snd arm))))
       (extend_arms_by extend known k arms).
-Proof.
-  induction arms as [ | [discriminant ac] arms IH]; simpl; [ reflexivity | ].
-  rewrite extend_apply_cont_by_equivariant.
-  destruct (extend_apply_cont_by extend known k ac); simpl; [ | reflexivity ].
-  rewrite IH. destruct (extend_arms_by extend known k arms); reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 Fixpoint extend_applications_by_equivariant_aux (e : expr) :
   ∀ (known : facts) (k : continuation),
@@ -677,105 +595,52 @@ Proof.
       reflexivity.
 Qed.
 
+#[local] Hint Rewrite lookup_known_var_renamed no_value_on_renamed
+  made_field_equivariant made_number_equivariant : equivariance.
+
 Lemma certain_projection_equivariant (r : renaming) (known : facts)
     (p : unary_primitive) (kind : flambda_kind) (arg : simple) :
   certain_projection (rename_facts r known) p kind (rename_simple r arg)
   = option_map (rename_simple r) (certain_projection known p kind arg).
-Proof.
-  unfold certain_projection. rewrite projection_of_equivariant.
-  assert (Hmade :
-    match made_field (rename_facts r known) p kind (rename_simple r arg) with
-    | Some contents => Some contents
-    | None => made_number (rename_facts r known) p kind (rename_simple r arg)
-    end
-    = option_map (rename_simple r)
-        match made_field known p kind arg with
-        | Some contents => Some contents
-        | None => made_number known p kind arg
-        end).
-  { rewrite made_field_equivariant, made_number_equivariant.
-    destruct (made_field known p kind arg); reflexivity. }
-  destruct (projection_of known p arg) as [[y | sym | c] | ];
-    cbn [option_map rename_simple]; try exact Hmade.
-  destruct (kind_eqb (kind_of_const c) kind); reflexivity.
-Qed.
+Proof. equivariance. Qed.
+
+#[local] Hint Rewrite certain_projection_equivariant : equivariance.
 
 Lemma lookup_rename_immediates (r : renaming) (consts : list (variable * Z))
     (t : variable) :
   lookup (rename_variable r t) (rename_immediates r consts) = lookup t consts.
-Proof.
-  unfold rename_immediates.
-  induction consts as [ | [t0 i0] consts IH]; cbn [map fst snd lookup];
-    [ reflexivity | ].
-  rewrite rename_variable_eqb, IH. reflexivity.
-Qed.
+Proof. equivariance. Qed.
+
+#[local] Hint Rewrite lookup_rename_immediates : equivariance.
 
 Lemma forget_immediates_equivariant (r : renaming) (bound : list variable)
     (consts : list (variable * Z)) :
   forget_immediates (map (rename_variable r) bound)
     (rename_immediates r consts)
   = rename_immediates r (forget_immediates bound consts).
-Proof.
-  unfold forget_immediates, rename_immediates.
-  induction consts as [ | [t0 i0] consts IH]; cbn [map filter fst snd];
-    [ reflexivity | ].
-  rewrite among_rename_variable, IH.
-  destruct (among t0 bound); reflexivity.
-Qed.
+Proof. equivariance. Qed.
+
+#[local] Hint Rewrite forget_immediates_equivariant : equivariance.
 
 Lemma only_of_equivariant (r : renaming) (tests : list variable)
     (consts : list (variable * Z)) :
   only_of (map (rename_variable r) tests) (rename_immediates r consts)
   = rename_immediates r (only_of tests consts).
-Proof.
-  unfold only_of, rename_immediates.
-  induction consts as [ | [t0 i0] consts IH]; cbn [map filter fst snd];
-    [ reflexivity | ].
-  rewrite among_rename_variable, IH.
-  destruct (among t0 tests); reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
-Fixpoint take_arms_equivariant_aux (r : renaming) (e : expr) :
-  ∀ consts : list (variable * Z),
-    take_arms (rename_immediates r consts) (rename_expr r e)
-    = rename_expr r (take_arms consts e).
-Proof.
-  destruct e
-    as [ y kind d body | bindings body | k [handler_params metadata handler]
-           body
-       | handlers body | ap | ac | scrutinee arms | ];
-    intros consts; cbn [rename_expr rename_handler take_arms];
-    try reflexivity.
-  - change [rename_variable r y] with (map (rename_variable r) [y]).
-    rewrite forget_immediates_equivariant, take_arms_equivariant_aux.
-    reflexivity.
-  - rewrite take_arms_equivariant_aux. reflexivity.
-  - rewrite forget_immediates_equivariant, !take_arms_equivariant_aux.
-    reflexivity.
-  - rewrite take_arms_equivariant_aux. reflexivity.
-  - destruct scrutinee as [t | sym | c]; try reflexivity.
-    cbn [rename_simple take_arms]. rewrite lookup_rename_immediates.
-    destruct (lookup t consts) as [i | ]; [ | reflexivity ].
-    rewrite find_arm_renamed. destruct (find_arm i arms); reflexivity.
-Qed.
+#[local] Hint Rewrite only_of_equivariant : equivariance.
 
 Theorem take_arms_equivariant : take_arms_equivariant_statement.
-Proof. intros r consts e. apply take_arms_equivariant_aux. Qed.
+Proof. equivariance. Qed.
+
+#[local] Hint Rewrite take_arms_equivariant : equivariance.
 
 Lemma known_immediates_equivariant (r : renaming) (params : list variable) :
   ∀ args : list simple,
     known_immediates (map (rename_variable r) params)
       (map (rename_simple r) args)
     = rename_immediates r (known_immediates params args).
-Proof.
-  induction params as [ | param params IH]; intros [ | arg args];
-    try reflexivity.
-  cbn [map].
-  destruct arg as [x | sym | c]; cbn [rename_simple known_immediates];
-    try apply IH.
-  destruct c; cbn [known_immediates]; try apply IH.
-  rewrite IH. reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 Lemma never_reads_renamed (r : renaming) (consts : list (variable * Z))
     (handler without : expr) :
@@ -784,29 +649,19 @@ Lemma never_reads_renamed (r : renaming) (consts : list (variable * Z))
   = never_reads consts handler without.
 Proof.
   unfold never_reads.
-  rewrite !take_arms_equivariant_aux, !remove_unused_conts_equivariant,
+  rewrite !take_arms_equivariant, !remove_unused_conts_equivariant,
     expr_eqb_under_renaming.
   reflexivity.
 Qed.
 
+#[local] Hint Rewrite known_immediates_equivariant never_reads_renamed :
+  equivariance.
+
 Theorem extend_args_certain_equivariant :
   extend_args_certain_equivariant_statement.
-Proof.
-  intros r variant tests params handler without known i p kind args.
-  unfold extend_args_certain. rewrite nth_error_map.
-  destruct (nth_error args i) as [arg | ]; [ | reflexivity ].
-  cbn [option_map]. cbv beta iota.
-  rewrite known_immediates_equivariant, only_of_equivariant,
-    never_reads_renamed, certain_projection_equivariant, no_value_on_renamed.
-  destruct
-    (never_reads (only_of tests (known_immediates params args)) handler
-       without);
-    cbn [option_map]; [ rewrite map_app; reflexivity | ].
-  destruct (certain_projection known p kind arg); cbn [option_map];
-    [ rewrite map_app; reflexivity | ].
-  destruct (no_value_on known p arg); cbn [option_map];
-    [ rewrite map_app; reflexivity | reflexivity ].
-Qed.
+Proof. equivariance. Qed.
+
+#[local] Hint Rewrite extend_args_certain_equivariant : equivariance.
 
 (* ======================================================================== *)
 (* The first read of a parameter                                            *)
@@ -817,24 +672,13 @@ Lemma param_read_renamed (r : renaming) (wanted : unary_primitive -> bool)
   param_read wanted (map (rename_variable r) params)
     (map (rename_variable r) bound) (rename_variable r f) (rename_named r d)
   = param_read wanted params bound f d.
-Proof.
-  destruct d as [s | pr args | | | | | ]; try reflexivity.
-  destruct pr as [p | b | v | hp | rp]; try reflexivity.
-  destruct args as [ | [x | sym | c] [ | arg args]]; try reflexivity.
-  cbn [param_read rename_named map rename_simple].
-  rewrite !among_rename_variable, position_renamed. reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 Lemma load_read_renamed (r : renaming) (d : named) :
   load_read (rename_named r d)
   = option_map (fun found => (rename_variable r (fst found), snd found))
       (load_read d).
-Proof.
-  destruct d as [s | pr args | | | | | ]; try reflexivity.
-  destruct pr as [p | b | v | hp | rp]; try reflexivity.
-  destruct p; try reflexivity.
-  destruct args as [ | [x | sym | c] [ | arg args]]; reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 Fixpoint first_read_equivariant_aux (r : renaming) (e : expr) :
   ∀ (wanted : unary_primitive -> bool) (params bound : list variable),
@@ -913,6 +757,10 @@ Proof.
   destruct (first_read reads_is_int [param] [] handler); reflexivity.
 Qed.
 
+#[local] Hint Rewrite load_read_renamed first_read_equivariant
+  next_read_equivariant head_read_equivariant tested_is_int_renamed :
+  equivariance.
+
 (* The tests that the pass made, with their variables renamed. *)
 Definition rename_made (r : renaming) (made : list (variable * nat))
     : list (variable * nat) :=
@@ -922,13 +770,7 @@ Lemma tests_of_renamed (r : renaming) (i : nat)
     (made : list (variable * nat)) (above : list (nat * list nat)) :
   tests_of i (rename_made r made) above
   = map (rename_variable r) (tests_of i made above).
-Proof.
-  unfold tests_of, rename_made.
-  induction made as [ | [x j] made IH]; cbn [map filter fst snd];
-    [ reflexivity | ].
-  destruct (existsb (Nat.eqb j) (boxes_of i above)); cbn [map fst];
-    rewrite IH; reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 (* The tags that the applications of a continuation give are those
    that the applications of the renamed expression give, where the
@@ -943,55 +785,23 @@ Hypothesis tag_of_renamed :
     tag_of' (rename_facts r known) (map (rename_simple r) args)
     = tag_of known args.
 
+#[local] Hint Rewrite tests_of_renamed tag_of_renamed : equivariance.
+
 Lemma tags_at_apply_cont_renamed (known : facts) (k : continuation)
     (ac : apply_cont) :
   tags_at_apply_cont tag_of' (rename_facts r known) (rename_continuation r k)
     (rename_apply_cont r ac)
   = tags_at_apply_cont tag_of known k ac.
-Proof.
-  unfold tags_at_apply_cont, rename_apply_cont.
-  cbn [ac_continuation ac_args].
-  rewrite rename_continuation_eqb.
-  destruct (Pos.eqb (ac_continuation ac) k);
-    [ apply tag_of_renamed | reflexivity ].
-Qed.
+Proof. equivariance. Qed.
 
-Fixpoint tags_given_renamed (e : expr) :
+#[local] Hint Rewrite tags_at_apply_cont_renamed : equivariance.
+
+Lemma tags_given_renamed (e : expr) :
   ∀ (known : facts) (k : continuation),
     tags_given tag_of' (rename_facts r known) (rename_continuation r k)
       (rename_expr r e)
-    = tags_given tag_of known k e
-with tags_given_in_handler_renamed (h : continuation_handler) :
-  ∀ (known : facts) (k : continuation),
-    tags_given_in_handler tag_of' (rename_facts r known)
-      (rename_continuation r k) (rename_handler r h)
-    = tags_given_in_handler tag_of known k h.
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k0 h body | handlers body | ap
-         | ac | scrutinee arms | ];
-      intros known k; cbn [rename_expr tags_given].
-    + rewrite facts_under_let_equivariant. apply tags_given_renamed.
-    + rewrite facts_under_statics_equivariant. apply tags_given_renamed.
-    + rewrite tags_given_in_handler_renamed, rename_continuation_eqb.
-      destruct (Pos.eqb k0 k); [ reflexivity | ].
-      rewrite tags_given_renamed. reflexivity.
-    + rewrite is_bound_renamed_handlers.
-      destruct (is_bound k handlers); [ reflexivity | ].
-      rewrite tags_given_renamed. f_equal.
-      induction handlers as [ | [k1 h1] handlers IH]; cbn [map flat_map];
-        [ reflexivity | ].
-      rewrite (tags_given_in_handler_renamed h1 known k), IH. reflexivity.
-    + reflexivity.
-    + apply tags_at_apply_cont_renamed.
-    + induction arms as [ | [discriminant ac] arms IH];
-        cbn [map flat_map fst snd]; [ reflexivity | ].
-      rewrite tags_at_apply_cont_renamed, IH. reflexivity.
-    + reflexivity.
-  - destruct h as [params metadata handler]. intros known k.
-    cbn [rename_handler tags_given_in_handler].
-    rewrite facts_under_params_equivariant. apply tags_given_renamed.
-Qed.
+    = tags_given tag_of known k e.
+Proof. equivariance. Qed.
 
 End Tags_renamed.
 
@@ -1001,22 +811,7 @@ Lemma tag_read_renamed (r : renaming) (tests params : list variable)
     (rename_expr r handler) (rename_expr r without) i (rename_facts r known)
     (map (rename_simple r) args)
   = tag_read tests params handler without i known args.
-Proof.
-  unfold tag_read. rewrite nth_error_map.
-  destruct (nth_error args i) as [arg | ]; [ | reflexivity ].
-  cbn [option_map].
-  rewrite known_immediates_equivariant, only_of_equivariant,
-    never_reads_renamed.
-  destruct
-    (never_reads (only_of tests (known_immediates params args)) handler
-       without);
-    [ reflexivity | ].
-  change (facts_blocks (rename_facts r known))
-    with (rename_known_blocks r (facts_blocks known)).
-  rewrite known_block_of_equivariant.
-  destruct (known_block_of (facts_blocks known) arg) as [[tag fields] | ];
-    reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 (* Whether blocks of more than one tag may come to a load is answered
    the same of the renamed term. *)
@@ -1043,17 +838,14 @@ Proof.
   reflexivity.
 Qed.
 
-Fixpoint lets_in_renamed (r : renaming) (e : expr) :
+#[local] Hint Rewrite tag_read_renamed loads_of_two_tags_renamed :
+  equivariance.
+
+Lemma lets_in_renamed (r : renaming) (e : expr) :
   lets_in (rename_expr r e) = lets_in e.
-Proof.
-  destruct e
-    as [ y kind d body | bindings body | k [handler_params metadata handler]
-           body
-       | handlers body | ap | ac | scrutinee arms | ];
-    cbn [rename_expr rename_handler lets_in]; try reflexivity.
-  - rewrite lets_in_renamed. reflexivity.
-  - rewrite !lets_in_renamed. reflexivity.
-Qed.
+Proof. equivariance. Qed.
+
+#[local] Hint Rewrite lets_in_renamed : equivariance.
 
 (* ======================================================================== *)
 (* The pass                                                                 *)
@@ -1065,81 +857,37 @@ Qed.
 Lemma reads_same_renamed (r : renaming) (p : unary_primitive) (x : variable)
     (d : named) :
   reads_same p (rename_variable r x) (rename_named r d) = reads_same p x d.
-Proof.
-  destruct d as [s | pr args | | | | | ]; try reflexivity.
-  destruct pr as [p' | b | v | hp | rp]; try reflexivity.
-  destruct args as [ | [x' | sym | c] [ | arg args]]; try reflexivity.
-  cbn [reads_same rename_named map rename_simple].
-  rewrite rename_variable_eqb. reflexivity.
-Qed.
+Proof. equivariance. Qed.
+
+#[local] Hint Rewrite reads_same_renamed : equivariance.
 
 Lemma read_of_same_renamed (r : renaming) (f : variable)
     (same : list variable) (d : named) :
   read_of_same (rename_variable r f) (map (rename_variable r) same)
     (rename_named r d)
   = rename_named r (read_of_same f same d).
-Proof.
-  destruct d as [s | pr args | | | | | ]; try reflexivity.
-  destruct pr as [p' | b | v | hp | rp]; try reflexivity.
-  destruct args as [ | [z | sym | c] [ | arg args]]; try reflexivity.
-  cbn [read_of_same rename_named map rename_simple].
-  rewrite among_rename_variable. destruct (among z same); reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
-Fixpoint share_reads_renamed (r : renaming) (p : unary_primitive)
+#[local] Hint Rewrite read_of_same_renamed : equivariance.
+
+Lemma share_reads_renamed (r : renaming) (p : unary_primitive)
     (e : expr) :
   ∀ (x f : variable) (same : list variable),
     share_reads p (rename_variable r x) (rename_variable r f)
       (map (rename_variable r) same) (rename_expr r e)
     = rename_expr r (share_reads p x f same e).
-Proof.
-  destruct e
-    as [ y kind d body | bindings body | k [params metadata handler] body
-       | handlers body | ap | ac | scrutinee arms | ];
-    intros x f same; cbn [rename_expr rename_handler share_reads];
-    try reflexivity.
-  - rewrite read_of_same_renamed, reads_same_renamed, !rename_variable_eqb.
-    destruct (reads_same p x (read_of_same f same d));
-      destruct (Pos.eqb y x || Pos.eqb y f);
-      cbn [rename_expr rename_named rename_simple]; try reflexivity.
-    + change (rename_variable r y :: map (rename_variable r) same)
-        with (map (rename_variable r) (y :: same)).
-      rewrite share_reads_renamed. reflexivity.
-    + change [rename_variable r y] with (map (rename_variable r) [y]).
-      rewrite
-        (without_map_injective (rename_variable r) (rename_variable_eqb r)),
-        share_reads_renamed.
-      reflexivity.
-  - rewrite !among_rename_variable.
-    destruct (among x params || among f params);
-      cbn [rename_expr rename_handler];
-      rewrite
-        ?(without_map_injective (rename_variable r) (rename_variable_eqb r)),
-        !share_reads_renamed;
-      reflexivity.
-  - destruct scrutinee as [z | sym | c];
-      cbn [rename_simple share_reads rename_expr]; try reflexivity.
-    rewrite among_rename_variable.
-    destruct (among z same); reflexivity.
-Qed.
+Proof. equivariance. Qed.
+
+#[local] Hint Rewrite share_reads_renamed : equivariance.
 
 Lemma with_reads_shared_renamed (r : renaming) (share : bool)
     (params : list variable) (found : read) :
   with_reads_shared share (map (rename_variable r) params)
     (rename_read r found)
   = rename_read r (with_reads_shared share params found).
-Proof.
-  unfold with_reads_shared. destruct share; [ | reflexivity ].
-  cbn [rename_read read_variable read_kind read_primitive read_position
-       read_without].
-  rewrite nth_error_map.
-  destruct (nth_error params (read_position found)) as [x | ];
-    cbn [option_map]; [ | reflexivity ].
-  cbn [rename_read read_variable read_kind read_primitive read_position
-       read_without].
-  change (@nil variable) with (map (rename_variable r) []) at 1.
-  rewrite share_reads_renamed. reflexivity.
-Qed.
+Proof. equivariance. Qed.
+
+#[local] Hint Rewrite with_reads_shared_renamed : equivariance.
 
 (* Whether the reads are shared is the same of the renamed term. *)
 Lemma shares_reads_renamed (r : renaming) (known : facts) (k : continuation)
@@ -1148,11 +896,7 @@ Lemma shares_reads_renamed (r : renaming) (known : facts) (k : continuation)
     (map (rename_variable r) tests) (map (rename_variable r) params)
     (rename_expr r handler) (rename_expr r body) (rename_read r found)
   = shares_reads known k tests params handler body found.
-Proof.
-  unfold shares_reads.
-  rewrite with_reads_shared_renamed, loads_of_two_tags_renamed.
-  reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 Definition rename_step (r : renaming)
     (step : list variable * handler_metadata * expr * expr)
@@ -1400,19 +1144,18 @@ Proof.
   intros r e. exact (unbox_variants_knowing_equivariant_aux r e no_facts).
 Qed.
 
+#[local] Hint Rewrite shares_reads_renamed head_step_equivariant
+  certain_step_equivariant unbox_reads_equivariant
+  unbox_variants_knowing_equivariant unbox_variant_params_equivariant :
+  equivariance.
+
 (* ======================================================================== *)
 (* The reads of a loop                                                      *)
 (* ======================================================================== *)
 
 Lemma on_spine_renamed (r : renaming) (x : variable) (e : expr) :
   on_spine (rename_variable r x) (rename_expr r e) = on_spine x e.
-Proof.
-  induction e
-    as [ y kind d body IH | bindings body _ | k0 h body _ | handlers body _
-       | ap | ac | scrutinee arms | ];
-    cbn [rename_expr on_spine]; try reflexivity.
-  rewrite rename_variable_eqb, IH. reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 Lemma unbox_loop_read_equivariant (r : renaming) (known : facts)
     (k : continuation) (params : list variable) (metadata : handler_metadata)
@@ -1454,10 +1197,13 @@ Proof.
     [ rewrite map_app; reflexivity | reflexivity ].
 Qed.
 
+#[local] Hint Rewrite on_spine_renamed unbox_loop_read_equivariant :
+  equivariance.
+
 Lemma loop_of_renamed (r : renaming) (k : continuation) (state : loop_state) :
   rename_expr r (loop_of k state)
   = loop_of (rename_continuation r k) (rename_step r state).
-Proof. destruct state as [[[params metadata] handler] body]. reflexivity. Qed.
+Proof. equivariance. Qed.
 
 Lemma unbox_loop_param_equivariant (r : renaming) (fuel : nat) :
   ∀ (known : facts) (k : continuation) (i : nat) (state : loop_state),
@@ -1492,64 +1238,36 @@ Proof.
     as [state' | ]; cbn [option_map]; [ apply IH | reflexivity ].
 Qed.
 
+#[local] Hint Rewrite loop_of_renamed unbox_loop_param_equivariant :
+  equivariance.
+
 Lemma reads_var_named_renamed (r : renaming) (x : variable) (d : named) :
   reads_var_named (rename_variable r x) (rename_named r d)
   = reads_var_named x d.
-Proof.
-  destruct d as [s | pr args | | | | | ]; try reflexivity.
-  destruct pr as [p' | b | v | hp | rp]; try reflexivity.
-  destruct args as [ | [z | sym | c] [ | arg args]]; try reflexivity.
-  cbn [reads_var_named rename_named map rename_simple].
-  rewrite rename_variable_eqb. reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
-Fixpoint reads_var_renamed (r : renaming) (x : variable) (e : expr)
-    {struct e} :
-  reads_var (rename_variable r x) (rename_expr r e) = reads_var x e
-with handler_reads_var_renamed (r : renaming) (x : variable)
-    (h : continuation_handler) {struct h} :
-  handler_reads_var (rename_variable r x) (rename_handler r h)
-  = handler_reads_var x h.
-Proof.
-  - destruct e
-      as [ y kind d body | bindings body | k h body | handlers body | ap
-         | ac | scrutinee arms | ];
-      cbn [rename_expr reads_var]; try reflexivity.
-    + rewrite reads_var_named_renamed, rename_variable_eqb,
-        reads_var_renamed.
-      reflexivity.
-    + apply reads_var_renamed.
-    + rewrite handler_reads_var_renamed, reads_var_renamed. reflexivity.
-    + rewrite reads_var_renamed. f_equal.
-      induction handlers as [ | [k h] handlers IH]; [ reflexivity | ].
-      cbn [map existsb]. rewrite handler_reads_var_renamed, IH.
-      reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler handler_reads_var].
-    rewrite among_rename_variable, reads_var_renamed. reflexivity.
-Qed.
+#[local] Hint Rewrite reads_var_named_renamed : equivariance.
+
+Lemma reads_var_renamed (r : renaming) (x : variable) (e : expr) :
+  reads_var (rename_variable r x) (rename_expr r e) = reads_var x e.
+Proof. equivariance. Qed.
+
+#[local] Hint Rewrite reads_var_renamed : equivariance.
 
 Lemma reads_left_renamed (r : renaming) (i : nat) (state : loop_state) :
   reads_left i (rename_step r state) = reads_left i state.
-Proof.
-  destruct state as [[[params metadata] handler] body].
-  cbn [reads_left rename_step]. rewrite nth_error_map.
-  destruct (nth_error params i) as [param | ]; cbn [option_map];
-    [ | reflexivity ].
-  apply reads_var_renamed.
-Qed.
+Proof. equivariance. Qed.
+
+#[local] Hint Rewrite reads_left_renamed : equivariance.
 
 Lemma unbox_loop_param_all_equivariant (r : renaming) (fuel : nat)
     (known : facts) (k : continuation) (i : nat) (state : loop_state) :
   unbox_loop_param_all fuel (rename_facts r known) (rename_continuation r k)
     i (rename_step r state)
   = rename_step r (unbox_loop_param_all fuel known k i state).
-Proof.
-  unfold unbox_loop_param_all.
-  rewrite unbox_loop_param_equivariant, reads_left_renamed.
-  destruct (reads_left i (unbox_loop_param fuel known k i state));
-    reflexivity.
-Qed.
+Proof. equivariance. Qed.
+
+#[local] Hint Rewrite unbox_loop_param_all_equivariant : equivariance.
 
 Lemma unbox_loop_params_equivariant (r : renaming) (fuel : nat)
     (known : facts) (k : continuation) (positions : list nat) :
@@ -1557,11 +1275,7 @@ Lemma unbox_loop_params_equivariant (r : renaming) (fuel : nat)
     unbox_loop_params fuel (rename_facts r known) (rename_continuation r k)
       positions (rename_step r state)
     = rename_step r (unbox_loop_params fuel known k positions state).
-Proof.
-  induction positions as [ | i positions IH]; intros state;
-    cbn [unbox_loop_params]; [ reflexivity | ].
-  rewrite unbox_loop_param_all_equivariant. apply IH.
-Qed.
+Proof. equivariance. Qed.
 
 Lemma unbox_loop_reads_equivariant (r : renaming) (known : facts)
     (k : continuation) (params : list variable) (metadata : handler_metadata)
@@ -1577,36 +1291,12 @@ Proof.
   reflexivity.
 Qed.
 
-Fixpoint unbox_loops_knowing_equivariant_aux (r : renaming) (e : expr) :
-  ∀ known : facts,
-    unbox_loops_knowing (rename_facts r known) (rename_expr r e)
-    = rename_expr r (unbox_loops_knowing known e).
-Proof.
-  destruct e
-    as [ x kind d body | bindings body | k h body | handlers body | ap
-       | ac | scrutinee arms | ];
-    intros known; try reflexivity.
-  - cbn [rename_expr unbox_loops_knowing].
-    rewrite facts_under_let_equivariant, unbox_loops_knowing_equivariant_aux.
-    reflexivity.
-  - cbn [rename_expr unbox_loops_knowing].
-    rewrite facts_under_statics_equivariant,
-      unbox_loops_knowing_equivariant_aux.
-    reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [rename_expr rename_handler unbox_loops_knowing].
-    rewrite facts_under_params_equivariant,
-      !unbox_loops_knowing_equivariant_aux.
-    reflexivity.
-  - destruct handlers as [ | [k [params metadata handler]] [ | h2 handlers]];
-      cbn [rename_expr rename_handler map unbox_loops_knowing];
-      rewrite unbox_loops_knowing_equivariant_aux;
-      [ reflexivity | apply unbox_loop_reads_equivariant | reflexivity ].
-Qed.
+#[local] Hint Rewrite unbox_loop_params_equivariant
+  unbox_loop_reads_equivariant : equivariance.
 
 Theorem unbox_loops_knowing_equivariant :
   unbox_loops_knowing_equivariant_statement.
-Proof. intros r known e. apply unbox_loops_knowing_equivariant_aux. Qed.
+Proof. equivariance. Qed.
 
 End Renamed.
 
