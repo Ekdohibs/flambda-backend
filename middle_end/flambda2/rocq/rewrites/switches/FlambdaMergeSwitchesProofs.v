@@ -49,7 +49,7 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaContextSpec
   FlambdaContextProofs FlambdaNominalSpec FlambdaNominalProofs
   FlambdaAlphaProofs FlambdaNormaliseSpec FlambdaNormaliseProofs
-  FlambdaMergeSwitchesSpec.
+  FlambdaEquivarianceTactic FlambdaMergeSwitchesSpec.
 Import ListNotations.
 
 Local Open Scope Z_scope.
@@ -949,24 +949,21 @@ Proof.
   rewrite Hfg, IH. reflexivity.
 Qed.
 
-(* Each function that the rewrite is made of commutes with a renaming. *)
-Lemma constant_for_renamed (r : renaming) (v : variable) (c : const)
-    (s : simple) :
-  constant_for (rename_variable r v) c (rename_simple r s)
-  = rename_simple r (constant_for v c s).
-Proof.
-  destruct s as [x | sym | c']; simpl; try reflexivity.
-  rewrite rename_variable_eqb. destruct (Pos.eqb x v); reflexivity.
-Qed.
+(* Each function that the rewrite is made of commutes with a renaming:
+   by the tactic of the laws of renaming, but for three laws. A law is
+   given to the tactic as a hint where the proofs after it use it. The
+   tactic rewrites with its laws in one pass, which is the faster way,
+   but in one proof that does not pass so: it says it. *)
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
 
 Lemma constants_for_renamed (r : renaming) (v : variable) (c : const)
     (args : list simple) :
   map (constant_for (rename_variable r v) c) (map (rename_simple r) args)
   = map (rename_simple r) (map (constant_for v c) args).
-Proof.
-  rewrite !map_map. apply map_ext. intros s. apply constant_for_renamed.
-Qed.
+Proof. equivariance. Qed.
 
+(* By hand: the tactic takes the equality of two arguments by cases on
+   one side and then on the other. *)
 Lemma merged_arguments_renamed (r : renaming) (v : variable)
     (args args' : list simple) :
   merged_arguments (rename_variable r v) (map (rename_simple r) args)
@@ -983,17 +980,17 @@ Proof.
   elim Hne. exact (renamed_simple_same r _ _ Heq).
 Qed.
 
+#[local] Hint Rewrite merged_arguments_renamed : equivariance.
+
 Lemma var_in_simples_renamed (r : renaming) (v : variable)
     (args : list simple) :
   var_in_simples (rename_variable r v) (map (rename_simple r) args)
   = var_in_simples v args.
-Proof.
-  unfold var_in_simples. induction args as [ | s args IH]; simpl;
-    [ reflexivity | ].
-  rewrite IH. f_equal. destruct s; simpl; try reflexivity.
-  apply rename_variable_eqb.
-Qed.
+Proof. equivariance. Qed.
 
+(* By hand, as [arm_has_ways_renamed] below: the test is an equality
+   with an application that is built, and the equality of two
+   applications has no law of renaming that the tactic knows. *)
 Lemma arm_is_merged_renamed (how : merge_by) (r : renaming) (v : variable)
     (merged : apply_cont) (arm : Z * apply_cont) :
   arm_is_merged how (rename_variable r v) (rename_apply_cont r merged)
@@ -1021,6 +1018,10 @@ Proof.
     rewrite constants_for_renamed. reflexivity.
 Qed.
 
+#[local] Hint Rewrite arm_is_merged_renamed : equivariance.
+#[local] Arguments arm_is_merged : simpl never.
+
+(* Two laws by hand, for the time that the tactic takes for them. *)
 Lemma first_difference_renamed (r : renaming) (args args' : list simple) :
   first_difference (map (rename_simple r) args) (map (rename_simple r) args')
   = first_difference args args'.
@@ -1045,26 +1046,40 @@ Proof.
   unfold arithmetic_of_arms. rewrite first_difference_renamed. reflexivity.
 Qed.
 
-Lemma bind_arithmetic_steps_renamed (r : renaming) (standard : standard_int)
-    (v : variable) (steps : list arithmetic_step) (body : expr) :
-  rename_expr r (bind_arithmetic_steps standard v steps body)
-  = bind_arithmetic_steps standard (rename_variable r v) steps
-      (rename_expr r body).
+#[local] Hint Rewrite arithmetic_of_arms_renamed : equivariance.
+
+(* Four functions of this file take their list apart for its first
+   elements and then use the whole list, and the laws are of a mapped
+   list. So, the list being written with its first elements, the
+   function is unfolded at the renamed list written out, the renamed
+   list is put together again, and the law is shown of any list: the
+   steps of the tactic ([eqv_core]) then show it. *)
+#[local] Ltac at_whole_list f :=
+  lazymatch goal with
+  | |- context [map ?g (?x :: ?l)] =>
+    let g' := eval hnf in g in
+    let written := eval cbv [map fst snd] in (map g' (x :: l)) in
+    change (map g (x :: l)) with written;
+    unfold f;
+    change written with (map g (x :: l));
+    generalize (x :: l);
+    intro
+  end.
+
+(* The law of [arm_is_merged] where the merged application is written,
+   as [merge_switch] writes it. *)
+Lemma arm_is_merged_at_renamed (how : merge_by) (r : renaming) (v : variable)
+    (k : continuation) (args : list simple) (arm : Z * apply_cont) :
+  arm_is_merged how (rename_variable r v)
+    (Apply_cont_expr (rename_continuation r k) (map (rename_simple r) args)
+       None)
+    (fst arm, rename_apply_cont r (snd arm))
+  = arm_is_merged how v (Apply_cont_expr k args None) arm.
 Proof.
-  induction steps as [ | [c | c | c] steps IH]; simpl;
-    [ reflexivity | rewrite IH; reflexivity .. ].
+  exact (arm_is_merged_renamed how r v (Apply_cont_expr k args None) arm).
 Qed.
 
-Lemma bind_arithmetic_renamed (r : renaming) (kind : arithmetic_kind)
-    (offset slope : Z) (v : variable) (body : expr) :
-  rename_expr r (bind_arithmetic kind offset slope v body)
-  = bind_arithmetic kind offset slope (rename_variable r v)
-      (rename_expr r body).
-Proof.
-  unfold bind_arithmetic. cbv zeta.
-  destruct kind; [ unfold bind_tagged; simpl | ];
-    rewrite bind_arithmetic_steps_renamed; reflexivity.
-Qed.
+#[local] Hint Rewrite arm_is_merged_at_renamed : equivariance.
 
 Lemma merge_switch_equivariant (r : renaming) (scrutinee : simple)
     (arms : list (Z * apply_cont)) :
@@ -1074,49 +1089,7 @@ Lemma merge_switch_equivariant (r : renaming) (scrutinee : simple)
 Proof.
   destruct scrutinee as [v | sym | c]; try reflexivity.
   destruct arms as [ | [i ac] [ | [i' ac'] others]]; try reflexivity.
-  unfold merge_switch. cbn [map fst snd rename_simple]. cbv zeta.
-  set (merged :=
-    Apply_cont_expr (ac_continuation ac)
-      (merged_arguments v (ac_args ac) (ac_args ac')) None).
-  replace
-    (Apply_cont_expr (ac_continuation (rename_apply_cont r ac))
-       (merged_arguments (rename_variable r v)
-          (ac_args (rename_apply_cont r ac))
-          (ac_args (rename_apply_cont r ac')))
-       None)
-    with (rename_apply_cont r merged)
-    by (unfold merged, rename_apply_cont;
-        cbn [ac_continuation ac_args ac_trap_action option_map];
-        rewrite merged_arguments_renamed; reflexivity).
-  change (ac_args (rename_apply_cont r merged))
-    with (map (rename_simple r) (ac_args merged)).
-  rewrite var_in_simples_renamed.
-  change
-    ((i, rename_apply_cont r ac) :: (i', rename_apply_cont r ac')
-     :: map (fun arm => (fst arm, rename_apply_cont r (snd arm))) others)
-    with
-      (map (fun arm => (fst arm, rename_apply_cont r (snd arm)))
-         ((i, ac) :: (i', ac') :: others)).
-  rewrite
-    !(forallb_under_map _ _ (arm_is_merged _ v merged))
-    by (intros arm; apply arm_is_merged_renamed).
-  destruct (var_in_simples v (ac_args merged)); [ | reflexivity ].
-  destruct (forallb (arm_is_merged By_tagging v merged) _); [ reflexivity | ].
-  destruct (forallb (arm_is_merged By_tagging_and_negating v merged) _);
-    [ reflexivity | ].
-  destruct (forallb (arm_is_merged As_it_is v merged) _); [ reflexivity | ].
-  change (ac_args (rename_apply_cont r ac))
-    with (map (rename_simple r) (ac_args ac)).
-  change (ac_args (rename_apply_cont r ac'))
-    with (map (rename_simple r) (ac_args ac')).
-  rewrite arithmetic_of_arms_renamed.
-  destruct (arithmetic_of_arms i i' (ac_args ac) (ac_args ac'))
-    as [[[kind offset] slope] | ]; [ | reflexivity ].
-  rewrite length_map,
-    (forallb_under_map _ _ (arm_is_merged _ v merged))
-    by (intros arm; apply arm_is_merged_renamed).
-  destruct (_ && _); [ | reflexivity ].
-  rewrite bind_arithmetic_renamed. reflexivity.
+  at_whole_list merge_switch. eqv_core.
 Qed.
 
 (* The ways chosen for each argument. A way, a row, a column and the
@@ -1142,50 +1115,40 @@ Definition rename_known_continuations (r : renaming)
         map (rename_variable r) (snd entry)))
     known.
 
+(* The tactic of the laws of renaming is told how a way and what is
+   known of the continuations are renamed. *)
+#[local] Instance argument_way_renaming : Renaming_of argument_way :=
+  rename_way.
+
+#[local] Instance known_continuations_renaming :
+  Renaming_of known_continuations := rename_known_continuations.
+
 Lemma among_names_renamed (r : renaming) (x : variable)
     (names : list variable) :
   among (rename_variable r x) (map (rename_variable r) names) = among x names.
-Proof.
-  unfold among. induction names as [ | y names IH]; simpl; [ reflexivity | ].
-  rewrite rename_variable_eqb, IH. reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 Lemma distinct_names_renamed (r : renaming) (names : list variable) :
   distinct (map (rename_variable r) names) = distinct names.
-Proof.
-  induction names as [ | y names IH]; [ reflexivity | ].
-  cbn [map distinct]. rewrite among_names_renamed, IH. reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 Lemma names_in_simple_renamed (r : renaming) (s : simple)
     (names : list variable) :
   existsb (fun x => var_in_simple x (rename_simple r s))
     (map (rename_variable r) names)
   = existsb (fun x => var_in_simple x s) names.
-Proof.
-  induction names as [ | y names IH]; simpl; [ reflexivity | ].
-  rewrite IH. f_equal. destruct s; simpl; try reflexivity.
-  apply rename_variable_eqb.
-Qed.
+Proof. equivariance. Qed.
 
 Lemma argument_in_arm_renamed (r : renaming) (i : Z) (way : argument_way) :
   argument_in_arm i (rename_way r way)
   = option_map (rename_simple r) (argument_in_arm i way).
-Proof.
-  destruct way as [s | how]; simpl; [ reflexivity | ].
-  destruct (constant_of_arm how i); reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 Lemma arguments_in_arm_renamed (r : renaming) (i : Z)
     (ways : list argument_way) :
   arguments_in_arm i (map (rename_way r) ways)
   = option_map (map (rename_simple r)) (arguments_in_arm i ways).
-Proof.
-  induction ways as [ | way ways IH]; [ reflexivity | ].
-  cbn [map arguments_in_arm]. rewrite argument_in_arm_renamed, IH.
-  destruct (argument_in_arm i way); [ | reflexivity ].
-  destruct (arguments_in_arm i ways); reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 Lemma arm_has_ways_renamed (r : renaming) (k : continuation)
     (ways : list argument_way) (arm : Z * apply_cont) :
@@ -1208,199 +1171,92 @@ Proof.
   elim Hne. exact (renamed_apply_cont_same r _ _ Heq).
 Qed.
 
+#[local] Hint Rewrite arm_has_ways_renamed : equivariance.
+#[local] Arguments arm_has_ways : simpl never.
+
 Lemma column_of_arms_renamed (r : renaming) (rows : list (Z * list simple)) :
   column_of_arms (map (rename_row r) rows)
   = option_map (map (rename_entry r)) (column_of_arms rows).
-Proof.
-  induction rows as [ | [i [ | s args]] rows IH]; try reflexivity.
-  cbn [map rename_row fst snd column_of_arms]. rewrite IH.
-  destruct (column_of_arms rows); reflexivity.
-Qed.
+Proof. equivariance. Qed.
+
+#[local] Hint Rewrite column_of_arms_renamed : equivariance.
+#[local] Arguments column_of_arms : simpl never.
 
 Lemma rest_of_arms_renamed (r : renaming) (rows : list (Z * list simple)) :
   rest_of_arms (map (rename_row r) rows)
   = map (rename_row r) (rest_of_arms rows).
-Proof.
-  unfold rest_of_arms. rewrite !map_map. apply map_ext.
-  intros [i [ | s args]]; reflexivity.
-Qed.
+Proof. equivariance. Qed.
+
+#[local] Hint Rewrite rest_of_arms_renamed : equivariance.
+#[local] Arguments rest_of_arms : simpl never.
 
 Lemma simple_is_renamed (r : renaming) (s s' : simple) :
   (if simple_eq_dec (rename_simple r s) (rename_simple r s')
    then true
    else false)
   = (if simple_eq_dec s s' then true else false).
-Proof.
-  destruct (simple_eq_dec s s') as [-> | Hne],
-    (simple_eq_dec (rename_simple r _) (rename_simple r _)) as [Heq | Hne'];
-    try reflexivity; [ contradiction | ].
-  elim Hne. exact (renamed_simple_same r _ _ Heq).
-Qed.
+Proof. exact (eqv_simple_eq_dec r s s' true false). Qed.
+
+(* The tactic's law of the equality of two arguments wants both
+   renamed; a constant is its own renaming. *)
+Lemma simple_is_constant_renamed {B : Type} (r : renaming) (s : simple)
+    (c : const) (a b : B) :
+  (if simple_eq_dec (rename_simple r s) (Const c) then a else b)
+  = (if simple_eq_dec s (Const c) then a else b).
+Proof. exact (eqv_simple_eq_dec r s (Const c) a b). Qed.
+
+#[local] Hint Rewrite @simple_is_constant_renamed : equivariance.
 
 Lemma column_is_computed_renamed (r : renaming) (how : merge_by)
     (column : list (Z * simple)) :
   column_is_computed how (map (rename_entry r) column)
   = column_is_computed how column.
-Proof.
-  unfold column_is_computed. apply forallb_under_map. intros entry.
-  cbn [rename_entry fst snd].
-  destruct (constant_of_arm how (fst entry)) as [c | ]; [ | reflexivity ].
-  exact (simple_is_renamed r (snd entry) (Const c)).
-Qed.
+Proof. equivariance. Qed.
 
+#[local] Hint Rewrite column_is_computed_renamed : equivariance.
+#[local] Arguments column_is_computed : simpl never.
+
+#[local] Ltac eqv_database ::= eqv_database_by_autorewrite.
 Lemma way_of_column_renamed (r : renaming) (column : list (Z * simple)) :
   way_of_column (map (rename_entry r) column)
   = option_map (rename_way r) (way_of_column column).
 Proof.
   destruct column as [ | [i s] [ | [i' s'] rest]]; try reflexivity.
-  set (column := (i, s) :: (i', s') :: rest).
-  assert
-    (Hsame :
-      forallb
-        (fun entry =>
-           if simple_eq_dec (rename_simple r s) (snd entry)
-           then true
-           else false)
-        (map (rename_entry r) column)
-      = forallb
-          (fun entry => if simple_eq_dec s (snd entry) then true else false)
-          column).
-  { apply forallb_under_map. intros entry. cbn [rename_entry snd].
-    apply simple_is_renamed. }
-  change
-    (way_of_column (map (rename_entry r) column)
-     = option_map (rename_way r) (way_of_column column))
-    with
-      ((if forallb
-             (fun entry =>
-                if simple_eq_dec (rename_simple r s) (snd entry)
-                then true
-                else false)
-             (map (rename_entry r) column)
-        then Some (Same_in_every_arm (rename_simple r s))
-        else if column_is_computed By_tagging (map (rename_entry r) column)
-        then Some (Computed By_tagging)
-        else if column_is_computed By_tagging_and_negating
-                  (map (rename_entry r) column)
-        then Some (Computed By_tagging_and_negating)
-        else if column_is_computed As_it_is (map (rename_entry r) column)
-        then Some (Computed As_it_is)
-        else
-          match rename_simple r s, rename_simple r s' with
-          | Const c, Const c' =>
-            match arithmetic_of_constants i i' c c' with
-            | Some (kind, offset, slope) =>
-              if (3 <=? length (map (rename_entry r) column))%nat
-                 && column_is_computed (By_arithmetic kind offset slope)
-                      (map (rename_entry r) column)
-              then Some (Computed (By_arithmetic kind offset slope))
-              else None
-            | None => None
-            end
-          | _, _ => None
-          end)
-       = option_map (rename_way r)
-           (if forallb
-                 (fun entry =>
-                    if simple_eq_dec s (snd entry) then true else false)
-                 column
-            then Some (Same_in_every_arm s)
-            else if column_is_computed By_tagging column
-            then Some (Computed By_tagging)
-            else if column_is_computed By_tagging_and_negating column
-            then Some (Computed By_tagging_and_negating)
-            else if column_is_computed As_it_is column
-            then Some (Computed As_it_is)
-            else
-              match s, s' with
-              | Const c, Const c' =>
-                match arithmetic_of_constants i i' c c' with
-                | Some (kind, offset, slope) =>
-                  if (3 <=? length column)%nat
-                     && column_is_computed (By_arithmetic kind offset slope)
-                          column
-                  then Some (Computed (By_arithmetic kind offset slope))
-                  else None
-                | None => None
-                end
-              | _, _ => None
-              end)).
-  rewrite Hsame, !column_is_computed_renamed, length_map.
-  destruct (forallb _ column); [ reflexivity | ].
-  destruct (column_is_computed By_tagging column); [ reflexivity | ].
-  destruct (column_is_computed By_tagging_and_negating column);
-    [ reflexivity | ].
-  destruct (column_is_computed As_it_is column); [ reflexivity | ].
-  destruct s as [x | sym | c], s' as [x' | sym' | c']; try reflexivity.
-  cbn [rename_simple].
-  destruct (arithmetic_of_constants i i' c c') as [[[kind offset] slope] | ];
-    [ | reflexivity ].
-  rewrite column_is_computed_renamed.
-  destruct (_ && _); reflexivity.
+  at_whole_list way_of_column. eqv_core.
 Qed.
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
+
+#[local] Hint Rewrite way_of_column_renamed : equivariance.
+#[local] Arguments way_of_column : simpl never.
 
 Lemma ways_of_arguments_renamed (r : renaming) (count : nat) :
   ∀ rows : list (Z * list simple),
     ways_of_arguments count (map (rename_row r) rows)
     = option_map (map (rename_way r)) (ways_of_arguments count rows).
-Proof.
-  induction count as [ | count IH]; intros rows; [ reflexivity | ].
-  cbn [ways_of_arguments]. rewrite column_of_arms_renamed.
-  destruct (column_of_arms rows) as [column | ]; [ | reflexivity ].
-  cbn [option_map]. rewrite way_of_column_renamed.
-  destruct (way_of_column column) as [way | ]; [ | reflexivity ].
-  cbn [option_map]. rewrite rest_of_arms_renamed, IH.
-  destruct (ways_of_arguments count (rest_of_arms rows)); reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 Lemma bind_way_renamed (r : renaming) (how : merge_by) (v x : variable)
     (body : expr) :
   rename_expr r (bind_way how v x body)
   = bind_way how (rename_variable r v) (rename_variable r x)
       (rename_expr r body).
-Proof.
-  destruct how as [ | | | [ | ] offset slope]; cbn [bind_way]; cbv zeta;
-    unfold bind_tagged_to, bind_same_to, bind_negated;
-    cbn [rename_expr rename_named rename_simple map];
-    rewrite ?bind_arithmetic_steps_renamed; reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
-Lemma bind_ways_renamed (r : renaming) (v : variable) (body : expr)
-    (names : list variable) :
-  ∀ ways : list argument_way,
-    rename_expr r (bind_ways v names ways body)
-    = bind_ways (rename_variable r v) (map (rename_variable r) names)
-        (map (rename_way r) ways) (rename_expr r body).
-Proof.
-  induction names as [ | x names IH]; intros [ | [s | how] ways];
-    cbn [bind_ways map rename_way]; try reflexivity; [ apply IH | ].
-  rewrite bind_way_renamed, IH. reflexivity.
-Qed.
+#[local] Hint Rewrite <- bind_way_renamed : equivariance.
 
-Lemma merged_by_ways_renamed (r : renaming) (v : variable)
-    (names : list variable) :
-  ∀ ways : list argument_way,
-    map (rename_simple r) (merged_by_ways v names ways)
-    = merged_by_ways (rename_variable r v) (map (rename_variable r) names)
-        (map (rename_way r) ways).
-Proof.
-  induction names as [ | x names IH]; intros [ | [s | how] ways];
-    cbn [merged_by_ways map rename_way]; try reflexivity;
-    rewrite IH; [ reflexivity | ].
-  destruct how; reflexivity.
-Qed.
+(* The law of [ways_of_arguments] at the rows of renamed arms, as
+   computation gives them. *)
+Lemma ways_of_arms_renamed (r : renaming) (count : nat)
+    (arms : list (Z * apply_cont)) :
+  ways_of_arguments count
+    (map (fun arm => (fst arm, map (rename_simple r) (ac_args (snd arm))))
+       arms)
+  = option_map (map (rename_way r))
+      (ways_of_arguments count
+         (map (fun arm => (fst arm, ac_args (snd arm))) arms)).
+Proof. rewrite <- ways_of_arguments_renamed, map_map. reflexivity. Qed.
 
-Lemma names_usable_renamed (r : renaming) (v : variable)
-    (names : list variable) (ways : list argument_way) :
-  names_usable (rename_variable r v) (map (rename_variable r) names)
-    (map (rename_way r) ways)
-  = names_usable v names ways.
-Proof.
-  unfold names_usable.
-  rewrite !length_map, distinct_names_renamed, among_names_renamed.
-  f_equal. apply forallb_under_map. intros [s | how]; [ | reflexivity ].
-  cbn [rename_way]. rewrite names_in_simple_renamed. reflexivity.
-Qed.
+#[local] Hint Rewrite ways_of_arms_renamed : equivariance.
 
 Lemma merge_switch_by_arguments_renamed (r : renaming)
     (names : list variable) (scrutinee : simple)
@@ -1413,80 +1269,19 @@ Lemma merge_switch_by_arguments_renamed (r : renaming)
 Proof.
   destruct scrutinee as [v | sym | c]; try reflexivity.
   destruct arms as [ | [i ac] [ | arm1 others]]; try reflexivity.
-  set (arms := (i, ac) :: arm1 :: others).
-  assert
-    (Hrows :
-      map (fun arm => (fst arm, ac_args (snd arm)))
-        (map (fun arm => (fst arm, rename_apply_cont r (snd arm))) arms)
-      = map (rename_row r)
-          (map (fun arm => (fst arm, ac_args (snd arm))) arms)).
-  { rewrite !map_map. apply map_ext. intros arm. reflexivity. }
-  change
-    (merge_switch_by_arguments (map (rename_variable r) names)
-       (rename_simple r (Var v))
-       (map (fun arm => (fst arm, rename_apply_cont r (snd arm))) arms))
-    with
-      (let* ways :=
-         ways_of_arguments (length (map (rename_simple r) (ac_args ac)))
-           (map (fun arm => (fst arm, ac_args (snd arm)))
-              (map (fun arm => (fst arm, rename_apply_cont r (snd arm)))
-                 arms))
-       in
-       if names_usable (rename_variable r v) (map (rename_variable r) names)
-            ways
-          && forallb
-               (arm_has_ways (rename_continuation r (ac_continuation ac))
-                  ways)
-               (map (fun arm => (fst arm, rename_apply_cont r (snd arm)))
-                  arms)
-       then
-         Some
-           (bind_ways (rename_variable r v) (map (rename_variable r) names)
-              ways
-              (Apply_cont
-                 (Apply_cont_expr (rename_continuation r (ac_continuation ac))
-                    (merged_by_ways (rename_variable r v)
-                       (map (rename_variable r) names) ways)
-                    None)))
-       else None).
-  change (merge_switch_by_arguments names (Var v) arms)
-    with
-      (let* ways :=
-         ways_of_arguments (length (ac_args ac))
-           (map (fun arm => (fst arm, ac_args (snd arm))) arms)
-       in
-       if names_usable v names ways
-          && forallb (arm_has_ways (ac_continuation ac) ways) arms
-       then
-         Some
-           (bind_ways v names ways
-              (Apply_cont
-                 (Apply_cont_expr (ac_continuation ac)
-                    (merged_by_ways v names ways) None)))
-       else None).
-  rewrite Hrows, length_map, ways_of_arguments_renamed.
-  destruct (ways_of_arguments _ _) as [ways | ]; [ | reflexivity ].
-  cbn [option_map].
-  rewrite names_usable_renamed,
-    (forallb_under_map _ _ (arm_has_ways (ac_continuation ac) ways))
-    by (intros arm; apply arm_has_ways_renamed).
-  destruct (_ && _); [ | reflexivity ].
-  cbn [option_map]. rewrite bind_ways_renamed.
-  cbn [rename_expr]. unfold rename_apply_cont.
-  cbn [ac_continuation ac_args ac_trap_action option_map].
-  rewrite merged_by_ways_renamed. reflexivity.
+  at_whole_list merge_switch_by_arguments. eqv_core.
 Qed.
 
 Lemma lookup_known_renamed (r : renaming) (k : continuation)
     (known : known_continuations) :
   lookup (rename_continuation r k) (rename_known_continuations r known)
   = option_map (map (rename_variable r)) (lookup k known).
-Proof.
-  induction known as [ | [k' names] known IH]; [ reflexivity | ].
-  cbn [rename_known_continuations map fst snd lookup].
-  rewrite rename_continuation_eqb.
-  destruct (Pos.eqb k k'); [ reflexivity | exact IH ].
-Qed.
+Proof. equivariance. Qed.
+
+#[local] Hint Rewrite merge_switch_equivariant
+  merge_switch_by_arguments_renamed lookup_known_renamed : equivariance.
+#[local] Arguments merge_switch : simpl never.
+#[local] Arguments merge_switch_by_arguments : simpl never.
 
 Lemma merge_switch_knowing_renamed (r : renaming)
     (known : known_continuations) (scrutinee : simple)
@@ -1496,61 +1291,9 @@ Lemma merge_switch_knowing_renamed (r : renaming)
     (map (fun arm => (fst arm, rename_apply_cont r (snd arm))) arms)
   = rename_expr r (merge_switch_knowing known scrutinee arms).
 Proof.
-  unfold merge_switch_knowing. rewrite merge_switch_equivariant.
-  destruct (merge_switch scrutinee arms); try reflexivity.
-  cbn [rename_expr].
-  destruct arms as [ | [i ac] others]; [ reflexivity | ].
-  set (arms := (i, ac) :: others).
-  change
-    (match
-       map (fun arm => (fst arm, rename_apply_cont r (snd arm))) arms
-     with
-     | [] =>
-       Switch (rename_simple r scrutinee)
-         (map (fun arm => (fst arm, rename_apply_cont r (snd arm))) arms)
-     | (_, ac0) :: _ =>
-       match
-         lookup (ac_continuation ac0) (rename_known_continuations r known)
-       with
-       | Some names =>
-         match
-           merge_switch_by_arguments names (rename_simple r scrutinee)
-             (map (fun arm => (fst arm, rename_apply_cont r (snd arm))) arms)
-         with
-         | Some merged => merged
-         | None =>
-           Switch (rename_simple r scrutinee)
-             (map (fun arm => (fst arm, rename_apply_cont r (snd arm))) arms)
-         end
-       | None =>
-         Switch (rename_simple r scrutinee)
-           (map (fun arm => (fst arm, rename_apply_cont r (snd arm))) arms)
-       end
-     end)
-    with
-      (match
-         lookup (rename_continuation r (ac_continuation ac))
-           (rename_known_continuations r known)
-       with
-       | Some names =>
-         match
-           merge_switch_by_arguments names (rename_simple r scrutinee)
-             (map (fun arm => (fst arm, rename_apply_cont r (snd arm))) arms)
-         with
-         | Some merged => merged
-         | None =>
-           Switch (rename_simple r scrutinee)
-             (map (fun arm => (fst arm, rename_apply_cont r (snd arm))) arms)
-         end
-       | None =>
-         Switch (rename_simple r scrutinee)
-           (map (fun arm => (fst arm, rename_apply_cont r (snd arm))) arms)
-       end).
-  rewrite lookup_known_renamed.
-  destruct (lookup (ac_continuation ac) known) as [names | ];
-    [ | reflexivity ].
-  cbn [option_map]. rewrite merge_switch_by_arguments_renamed.
-  destruct (merge_switch_by_arguments names scrutinee arms); reflexivity.
+  destruct arms as [ | [i ac] others].
+  - destruct scrutinee; reflexivity.
+  - at_whole_list merge_switch_knowing. eqv_core.
 Qed.
 
 Lemma known_of_handlers_renamed (r : renaming)
@@ -1564,31 +1307,17 @@ Lemma known_of_handlers_renamed (r : renaming)
       (map (fun entry => (fst entry, parameters_of_handler (snd entry)))
          handlers
        ++ known).
-Proof.
-  unfold rename_known_continuations. rewrite map_app, !map_map. f_equal.
-  apply map_ext. intros [k [params metadata handler]]. reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
-Fixpoint merge_switches_knowing_equivariant (r : renaming)
-    (known : known_continuations) (e : expr) {struct e} :
+#[local] Hint Rewrite merge_switch_knowing_renamed known_of_handlers_renamed
+  : equivariance.
+#[local] Arguments merge_switch_knowing : simpl never.
+
+Lemma merge_switches_knowing_equivariant (r : renaming)
+    (known : known_continuations) (e : expr) :
   merge_switches_knowing (rename_known_continuations r known) (rename_expr r e)
   = rename_expr r (merge_switches_knowing known e).
-Proof.
-  destruct e
-    as [ x kind d body | bindings body | k [params metadata handler] body
-       | handlers body | ap | ac | scrutinee arms | ];
-    simpl; try reflexivity.
-  - rewrite merge_switches_knowing_equivariant. reflexivity.
-  - rewrite merge_switches_knowing_equivariant. reflexivity.
-  - change
-      ((rename_continuation r k, map (rename_variable r) params)
-       :: rename_known_continuations r known)
-      with (rename_known_continuations r ((k, params) :: known)).
-    rewrite !merge_switches_knowing_equivariant. reflexivity.
-  - rewrite known_of_handlers_renamed, merge_switches_knowing_equivariant.
-    reflexivity.
-  - apply merge_switch_knowing_renamed.
-Qed.
+Proof. equivariance. Qed.
 
 Theorem merge_switches_equivariant : merge_switches_equivariant_statement.
 Proof.
