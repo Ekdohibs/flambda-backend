@@ -65,7 +65,14 @@
    needs two lemmas (it at a mapped list; it at two functions that
    agree on the elements of the list) and a rule that uses them, given
    to the tactic by redefining [eqv_extra]: see [first_answer] in
-   FlambdaUnaliasParamsNamesProofs.v.
+   FlambdaUnaliasParamsNamesProofs.v. Redefine it with [#[local]]: a
+   redefinition replaces the one before it, for every file that comes
+   after.
+
+   A type that does not say how it is renamed (a map keyed by names)
+   is declared by an instance of [Renaming_of] (the section before
+   the last); without it the tactic keeps such an argument as it is,
+   tries laws that are false, and is slow to fail.
 
    The statement of a law need not be written: [equivariance_of f] is
    the law of renaming of [f], read from its type (the section before
@@ -243,6 +250,26 @@ Create Rewrite HintDb equivariance.
   @filter_of_map @rev_of_map @option_map_same @map_same @fold_right_of_map
   @fold_left_of_map @map_keys_as_map_bindings : equivariance.
 
+(* Two laws of FlambdaEquivarianceProofs.v are written with the
+   renaming outside the function. The database has them the other
+   way, as the tactic writes a law that it derives: else, once the
+   tactic had derived the law of the function, the two would rewrite
+   each other without end. *)
+Lemma eqv_let_params (r : renaming) (params : list variable)
+    (kinds : list flambda_kind) (args : list simple) (body : expr) :
+  FlambdaApplySpec.let_params (map (rename_variable r) params) kinds
+    (map (rename_simple r) args) (rename_expr r body)
+  = rename_expr r (FlambdaApplySpec.let_params params kinds args body).
+Proof. symmetry. apply let_params_equivariant. Qed.
+
+Lemma eqv_let_tuple_fields (r : renaming) (params : list variable)
+    (size field : nat) (tuple : simple) (body : expr) :
+  FlambdaTupledSpec.let_tuple_fields (map (rename_variable r) params) size
+    field (rename_simple r tuple) (rename_expr r body)
+  = rename_expr r
+      (FlambdaTupledSpec.let_tuple_fields params size field tuple body).
+Proof. symmetry. apply let_tuple_fields_equivariant. Qed.
+
 (* The laws of the files that this one is built on: the free names,
    the conditions on binders, the lookups, and the functions of the
    machine and of the two rewrites that FlambdaEquivarianceProofs.v
@@ -273,8 +300,8 @@ Create Rewrite HintDb equivariance.
   var_in_simples_equivariant params_not_in_args_equivariant
   inlinable_b_equivariant tupled_inlinable_b_equivariant
   over_applied_b_equivariant split_over_application_equivariant
-  codes_of_equivariant let_params_equivariant inlined_body_equivariant
-  let_tuple_fields_equivariant inlined_tupled_call_equivariant
+  codes_of_equivariant eqv_let_params inlined_body_equivariant
+  eqv_let_tuple_fields inlined_tupled_call_equivariant
   inline_apply_equivariant inline_calls_equivariant_aux
   inline_calls_in_handler_equivariant inline_calls_in_binding_equivariant
   inline_calls_in_code_equivariant : equivariance.
@@ -302,7 +329,31 @@ Proof.
 Qed.
 #[export] Hint Rewrite @eqv_simple_eq_dec : equivariance.
 
-#[global] Arguments simple_eq_dec : simpl never.
+(* The same for two lists of simples. *)
+Lemma eqv_rename_simples_injective (r : renaming) (l l' : list simple) :
+  map (rename_simple r) l = map (rename_simple r) l' -> l = l'.
+Proof.
+  revert l'. induction l as [ | s l IH]; intros [ | s' l']; cbn; intros H;
+    try discriminate H; [ reflexivity | ].
+  injection H as Hs Hl.
+  rewrite (eqv_rename_simple_injective r s s' Hs), (IH l' Hl). reflexivity.
+Qed.
+
+Lemma eqv_simples_eq_dec {B : Type} (r : renaming) (l l' : list simple)
+    (a b : B) :
+  (if list_eq_dec simple_eq_dec (map (rename_simple r) l)
+        (map (rename_simple r) l')
+   then a else b)
+  = (if list_eq_dec simple_eq_dec l l' then a else b).
+Proof.
+  destruct (list_eq_dec simple_eq_dec l l') as [-> | Hne],
+    (list_eq_dec simple_eq_dec (map (rename_simple r) _)
+       (map (rename_simple r) _)) as [Heq | Hne'];
+    try reflexivity; [ contradiction | ].
+  elim Hne. exact (eqv_rename_simples_injective r _ _ Heq).
+Qed.
+#[export] Hint Rewrite @eqv_simples_eq_dec : equivariance.
+
 
 (* ======================================================================== *)
 (* The tactic                                                               *)
@@ -536,10 +587,22 @@ Ltac eqv_congr :=
    right-hand side is the function at the arguments before renaming,
    which always has the form of the hypothesis; what is left is that
    the arguments on the left are the renamed ones. *)
+Ltac eqv_not_a_law H :=
+  let T := type of H in
+  lazymatch T with
+  | eqv_law _ _ => fail
+  | _ => idtac
+  end.
+
 Ltac eqv_hyp_back :=
   match goal with
   | H : _ |- _ = _ =>
-    eqv_not_true H; rewrite <- H by assumption; eqv_same_head; eqv_peel
+    eqv_not_true H; eqv_not_a_law H;
+    ((rewrite <- H by assumption)
+     + (match goal with
+        | r : renaming |- _ => rewrite <- (H r) by assumption
+        end));
+    eqv_same_head; eqv_peel
   end.
 
 Module Inspect.
@@ -908,11 +971,19 @@ Ltac eqv_nested :=
 
 (* Computation, refused if it leaves a recursive function unfolded
    and not applied to a constructor. *)
+(* Computation does not unfold the decision on lists, nor a test that
+   has a law in the database, so that their laws apply. *)
+Ltac eqv_folded tac :=
+  with_strategy opaque
+    [simple_eq_dec list_eq_dec FlambdaNormaliseSpec.var_in_simples] tac.
+
 Ltac eqv_compute :=
   first
-    [ progress cbn -[Keyed.map_bindings Keyed.map_keys Keyed.map_values];
+    [ eqv_folded
+        ltac:(progress
+                cbn -[Keyed.map_bindings Keyed.map_keys Keyed.map_values]);
       ltac2:(Nested.no_fix ())
-    | progress simpl; ltac2:(Nested.no_fix ()) ].
+    | eqv_folded ltac:(progress simpl); ltac2:(Nested.no_fix ()) ].
 
 (* What a law of the database asks, when it asks something: a goal
    that is not yet an equation. *)
@@ -942,31 +1013,126 @@ Ltac eqv_use_law :=
 Ltac eqv_derive := fail.
 Ltac eqv_unfold_underived := fail.
 
+(* Two lists appended, on both sides: part by part, before any
+   induction is tried on a list that one of the parts maps. *)
+Ltac eqv_append :=
+  lazymatch goal with
+  | |- @app _ _ _ = @app _ _ _ => eqv_peel
+  | |- andb _ _ = andb _ _ => eqv_peel
+  end.
+
+(* What is under the [option_map]s that a term begins with. *)
+Ltac eqv_under_option_map t :=
+  lazymatch t with
+  | option_map _ ?u => eqv_under_option_map u
+  | _ => t
+  end.
+
+(* A test that the two sides share and that has no renaming in it: by
+   its cases, before a law is derived for what is under it. An answer
+   that may be absent, with no renaming in it, that the two sides map
+   over: by its cases. *)
+Ltac eqv_shared :=
+  match goal with
+  | |- (if ?c then _ else _) = ?rhs =>
+    eqv_no_renaming c;
+    lazymatch rhs with
+    | context [if c then _ else _] => destruct c
+    end
+  | |- option_map ?f ?x = option_map ?g ?y =>
+    let o := eqv_under_option_map x in
+    let o' := eqv_under_option_map y in
+    constr_eq o o';
+    eqv_no_renaming o;
+    destruct o
+  end.
+
+(* Two tests of every element of one list, one of them at renamed
+   arguments: they agree on the elements. It needs the tactic itself
+   and is defined after it. *)
+Ltac eqv_same_test := fail.
+
+(* To see the steps that a proof takes, as when it does not end,
+   redefine this with [::=], as [Ltac eqv_note_step say ::= say.]: it
+   is given a tactic that prints the name of the step taken. *)
+Ltac eqv_note_step say := idtac.
+
+Tactic Notation "eqv_say" string(s) := eqv_note_step ltac:(idtac s).
+
 Ltac eqv_step :=
   first
-    [ eqv_intro
-    | progress autorewrite with equivariance
-    | eqv_use_law
-    | eqv_compute
-    | eqv_rewrite_hyp
-    | eqv_extra
-    | eqv_ext
-    | eqv_fold; progress autorewrite with equivariance
-    | eqv_fold; eqv_rewrite_hyp
-    | eqv_unfold_at_constructor
-    | eqv_hyp_back
-    | eqv_unfold_wrapper
-    | eqv_unfold_stuck
-    | eqv_nested
-    | eqv_derive
-    | eqv_unfold_underived
-    | eqv_destruct_scrutinee
-    | eqv_congr
-    | eqv_destruct_renamed
-    | eqv_destruct_argument
-    | eqv_unfold_head ].
+    [ eqv_intro; eqv_say "intro"
+    | progress autorewrite with equivariance; eqv_say "database"
+    | eqv_use_law; eqv_say "use_law"
+    | eqv_compute; eqv_say "compute"
+    | eqv_rewrite_hyp; eqv_say "rewrite_hyp"
+    | eqv_extra; eqv_say "extra"
+    | eqv_append; eqv_say "append"
+    | eqv_shared; eqv_say "shared"
+    | eqv_same_test; eqv_say "same_test"
+    | eqv_ext; eqv_say "ext"
+    | eqv_fold; progress autorewrite with equivariance;
+      eqv_say "fold, database"
+    | eqv_fold; eqv_rewrite_hyp; eqv_say "fold, rewrite_hyp"
+    | eqv_unfold_at_constructor; eqv_say "unfold_at_constructor"
+    | eqv_hyp_back; eqv_say "hyp_back"
+    | eqv_unfold_wrapper; eqv_say "unfold_wrapper"
+    | eqv_unfold_stuck; eqv_say "unfold_stuck"
+    | eqv_nested; eqv_say "nested"
+    | eqv_derive; eqv_say "derive"
+    | eqv_unfold_underived; eqv_say "unfold_underived"
+    | eqv_destruct_scrutinee; eqv_say "destruct_scrutinee"
+    | eqv_congr; eqv_say "congr"
+    | eqv_destruct_renamed; eqv_say "destruct_renamed"
+    | eqv_destruct_argument; eqv_say "destruct_argument"
+    | eqv_unfold_head; eqv_say "unfold_head" ].
 
 Ltac eqv_core := repeat first [ reflexivity | eqv_step ].
+
+Ltac eqv_same_test ::=
+  match goal with
+  | |- context [forallb ?f' ?l] =>
+    match goal with
+    | |- context [forallb ?f l] =>
+      eqv_has_renaming f'; eqv_no_renaming f;
+      rewrite (forallb_ext_among f' f l);
+      [ | eqv_enter l; solve [ eqv_core ] ]
+    end
+  end.
+
+(* A statement with the renaming of the answer on the left is turned
+   round: the laws that the tactic derives and the hypotheses of its
+   inductions have the function at renamed arguments on the left. *)
+Ltac eqv_orient :=
+  lazymatch goal with
+  | |- ?lhs = _ =>
+    let h := eqv_head lhs in
+    let T := type of h in
+    lazymatch T with
+    | renaming -> _ => symmetry
+    | _ => idtac
+    end
+  | |- _ => idtac
+  end.
+
+(* The law of the function at the head of the goal is being proved:
+   the mark that a derivation puts, put at the top too, so that the
+   law of a function of the same recursion is not derived apart but
+   had from the induction. *)
+Ltac eqv_mark_top :=
+  lazymatch goal with
+  | |- ?lhs = _ =>
+    let g := eqv_head lhs in
+    tryif is_const g then
+      lazymatch goal with
+      | _ : eqv_deriving g |- _ => idtac
+      | |- _ =>
+        let D := fresh "Hderiving" in
+        assert (D : eqv_deriving g) by exact I
+      end
+    else idtac
+  | |- _ => idtac
+  end.
 
 (* The induction: the argument that the function goes by recursion on
    is a variable, or something done to a variable (a renaming of it,
@@ -1002,7 +1168,9 @@ Module Prepare.
            repeat (lazymatch goal with
                    | |- _ = _ => fail
                    | |- _ => progress hnf; intros
-                   end));
+                   end);
+           eqv_orient;
+           eqv_mark_top);
     lazy_match! goal with
     | [ |- ?lhs = _ ] =>
       match Inspect.structural_argument lhs with
@@ -1059,8 +1227,27 @@ Definition equivariant {T : Type} (s : signature T) (f : T) : Prop :=
    renaming of a name or of a part of a term, and by structure for a
    list, an option and a pair. It fails on a type that has no names in
    it (a number, a boolean, a kind), and on a type that it does not
-   know. A type of one file is added by redefining [eqv_action_extra]. *)
-Ltac eqv_action_extra T := fail.
+   know. A type of one file whose action cannot be read from it (a map
+   keyed by names is a list of pairs of positives) is declared by an
+   instance of [Renaming_of], whose value is the function that renames
+   it:
+     #[local] Instance known_renaming : Renaming_of known := rename_known.
+   The instances of several files hold together; the type is matched
+   as it is written, not up to its definition. *)
+Class Renaming_of (T : Type) : Type := renaming_of : renaming -> T -> T.
+
+Ltac eqv_action_extra T :=
+  let i := constr:(@renaming_of T _) in
+  lazymatch i with
+  | @renaming_of _ ?c =>
+    let Tc := type of c in
+    lazymatch Tc with
+    | Renaming_of ?T' =>
+      let _ := match constr:(tt) with _ => constr_eq T T' end in
+      let a := eval cbv delta [c] in c in
+      a
+    end
+  end.
 
 Ltac eqv_action T :=
   lazymatch T with
@@ -1262,7 +1449,8 @@ Ltac eqv_clear_context :=
 Ltac eqv_depth_ok :=
   lazymatch goal with
   | _ : eqv_deriving _, _ : eqv_deriving _, _ : eqv_deriving _,
-    _ : eqv_deriving _, _ : eqv_deriving _, _ : eqv_deriving _ |- _ => fail
+    _ : eqv_deriving _, _ : eqv_deriving _, _ : eqv_deriving _,
+    _ : eqv_deriving _ |- _ => fail
   | |- _ => idtac
   end.
 
