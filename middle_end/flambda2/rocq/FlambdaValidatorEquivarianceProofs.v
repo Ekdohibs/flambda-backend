@@ -75,6 +75,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaMergeSwitchesSpec FlambdaMergeSwitchesProofs
   FlambdaMergeTablesSpec FlambdaMergeTablesProofs FlambdaStaticsOrderSpec
   FlambdaStaticsOrderProofs FlambdaRenameApartSpec FlambdaRenameApartProofs
+  FlambdaRenameApartCanonicalProofs
   FlambdaInlineSiblingsSpec FlambdaInlineSiblingsProofs
   FlambdaUnusedProjectionsSpec FlambdaReadsAfterSpec
   FlambdaUnboxVariantsSpec
@@ -7382,7 +7383,7 @@ Theorem rename_apart_avoiding_commutes_up_to :
   rename_apart_avoiding_commutes_up_to_statement.
 Proof.
   intros r avoid e Hclosed.
-  destruct (rename_apart_avoiding_equivariant_up_to r avoid e)
+  destruct (rename_apart_avoiding_equivariant_up_to r avoid e Hclosed)
     as (r' & Hvars & Hconts & Havoid & Heq).
   destruct (rename_apart_avoiding_scope avoid e Hclosed)
     as (_ & Hvars_kept & Hconts_kept).

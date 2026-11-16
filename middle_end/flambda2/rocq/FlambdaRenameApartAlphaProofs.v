@@ -1508,16 +1508,6 @@ Proof.
   split; intros Hin; apply among_In in Hin; congruence.
 Qed.
 
-Theorem rename_apart_avoiding_candidate :
-  rename_apart_avoiding_candidate_statement.
-Proof.
-  intros avoid e Hclosed Hdistinct. unfold rename_apart_avoiding.
-  rewrite
-    (alpha_equivalent_accepted _ _
-       (renamed_apart_avoiding_alpha avoid e Hclosed Hdistinct)).
-  reflexivity.
-Qed.
-
 Theorem renamed_apart_repeated_parameter :
   renamed_apart_repeated_parameter_statement.
 Proof.

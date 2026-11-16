@@ -77,7 +77,7 @@
 
    The canonical form of a renamed term
    ([canonical_avoiding_equivariant_up_to]) is as in
-   FlambdaRenameApartProofs.rename_apart_avoiding_equivariant_up_to_names,
+   FlambdaRenameApartProofs.renamed_apart_avoiding_equivariant_up_to_names,
    with the free names of the term in place of all its names: the
    second renaming is the first and then swaps that fix what it makes
    of the free names and send what it makes of each new name of the
@@ -103,7 +103,8 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaCompareAlphaSpec FlambdaCompareAlphaProofs
   FlambdaRenameApartSpec FlambdaRenameApartProofs
   FlambdaRenameApartAlphaSpec FlambdaRenameApartAlphaProofs
-  FlambdaTermInductionProofs FlambdaRenameApartCanonicalSpec.
+  FlambdaTermInductionProofs FlambdaFreeNamesSpec FlambdaFreeNamesProofs
+  FlambdaRenameApartCanonicalSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -2535,6 +2536,14 @@ Proof.
        (canonical_avoiding_alpha avoid e Hclosed Hdistinct)).
 Qed.
 
+Theorem rename_apart_avoiding_candidate :
+  rename_apart_avoiding_candidate_statement.
+Proof.
+  intros avoid e Hclosed Hdistinct. unfold rename_apart_avoiding. cbv zeta.
+  rewrite (canonical_avoiding_accepted avoid e Hclosed Hdistinct).
+  reflexivity.
+Qed.
+
 (* ======================================================================== *)
 (* The free names of the candidate                                          *)
 (* ======================================================================== *)
@@ -3340,11 +3349,18 @@ Qed.
    new name at the same place of the renamed term. Both canonical forms
    are what [apart] gives of the term under that renaming with the new
    names of the renamed term. *)
-Theorem canonical_avoiding_equivariant_up_to :
-  canonical_avoiding_equivariant_up_to_statement.
+Lemma canonical_avoiding_renamed (r : renaming) (avoid : list continuation)
+    (e : expr) :
+  ∃ s : renaming,
+    (∀ x : variable,
+      In x (free_variables_of_expr e) ->
+      rename_variable r x = rename_variable s x)
+    ∧ (∀ k : continuation,
+        In k (avoid ++ free_continuations_of_expr e) ->
+        rename_continuation r k = rename_continuation s k)
+    ∧ canonical_avoiding (map (rename_continuation r) avoid) (rename_expr r e)
+      = rename_expr s (canonical_avoiding avoid e).
 Proof.
-  intros r avoid e.
-  destruct (canonical_avoiding_free_names avoid e) as [Hfree_v Hfree_k].
   pose proof
     (fresh_names_length (binders e)
        (avoid ++ free_variables_of_expr e ++ free_continuations_of_expr e))
@@ -3527,13 +3543,127 @@ Proof.
       (apart_renamed s e identity_renaming identity_renaming news
          (carries_identity s) Hagree).
     reflexivity. }
+  exists s. split; [ exact Hsame_v | split; [ exact Hsame_fixed | ] ].
+  rewrite Hcandidate', Hcandidate, <- Hrenamed, Hleft, Hright.
+  reflexivity.
+Qed.
+
+Theorem canonical_avoiding_equivariant_up_to :
+  canonical_avoiding_equivariant_up_to_statement.
+Proof.
+  intros r avoid e.
+  destruct (canonical_avoiding_free_names avoid e) as [Hfree_v Hfree_k].
+  destruct (canonical_avoiding_renamed r avoid e)
+    as (s & Hsame_v & Hsame_fixed & Hcanonical).
   exists s. split; [ | split; [ | split ] ].
   - intros x Hx. symmetry. apply Hsame_v, Hfree_v, among_In, Hx.
-  - intros k Hk. symmetry. apply Hsame_k, Hfree_k, among_In, Hk.
+  - intros k Hk. symmetry. apply Hsame_fixed, in_or_app. right.
+    apply Hfree_k, among_In, Hk.
   - intros k Hk. symmetry. apply Hsame_fixed, in_or_app. left.
     apply among_In, Hk.
-  - rewrite Hcandidate', Hcandidate, <- Hrenamed, Hleft, Hright.
-    reflexivity.
+  - exact Hcanonical.
+Qed.
+
+(* ======================================================================== *)
+(* The normalisation of a renamed term                                      *)
+(* ======================================================================== *)
+
+(* A term whose code is closed, under two renamings that do the same to
+   its free names: the comparison accepts the two. The second is the
+   first under the renaming that undoes the one and does the other,
+   which fixes the free names of the term. *)
+Lemma renamed_alike_accepted (r s : renaming) (e : expr) :
+  code_closed e = true ->
+  (∀ x : variable,
+    In x (free_variables_of_expr e) ->
+    rename_variable r x = rename_variable s x) ->
+  (∀ k : continuation,
+    In k (free_continuations_of_expr e) ->
+    rename_continuation r k = rename_continuation s k) ->
+  expr_eqb [] [] (rename_expr r e) (rename_expr s e) = true.
+Proof.
+  intros Hclosed Hsame_v Hsame_k.
+  set (q := compose_renaming (inverse_renaming r) s).
+  assert (Hq : expr_eqb [] [] e (rename_expr q e) = true).
+  { apply rename_expr_accepted; [ exact Hclosed | | ].
+    - intros x Hx. unfold q. rewrite rename_variable_compose.
+      rewrite <- (Hsame_v x (proj1 (among_In _ _) (var_free_among x e Hx))).
+      apply rename_variable_inverse_l.
+    - intros k Hk. unfold q. rewrite rename_continuation_compose.
+      rewrite
+        <- (Hsame_k k (proj1 (among_In _ _) (cont_free_among k e Hk))).
+      apply rename_continuation_inverse_l. }
+  pose proof (expr_eqb_equivariant r [] [] e (rename_expr q e)) as Hrenamed.
+  unfold rename_name_map in Hrenamed. cbn [map] in Hrenamed.
+  rewrite Hq in Hrenamed.
+  assert (Hback : rename_expr r (rename_expr q e) = rename_expr s e).
+  { rewrite <- rename_expr_compose.
+    apply rename_expr_ext.
+    - intros x. unfold q. rewrite !rename_variable_compose.
+      apply rename_variable_inverse_r.
+    - intros k. unfold q. rewrite !rename_continuation_compose.
+      apply rename_continuation_inverse_r. }
+  rewrite Hback in Hrenamed. exact Hrenamed.
+Qed.
+
+(* The comparison answers the same of the term with its canonical form
+   and of the renamed term with its own, where the code of the term is
+   closed. So [rename_apart_avoiding] takes the canonical form of both
+   or of neither; the second renaming is that of the canonical form in
+   the one case, and the first in the other. *)
+Theorem rename_apart_avoiding_equivariant_up_to :
+  rename_apart_avoiding_equivariant_up_to_statement.
+Proof.
+  intros r avoid e Hclosed.
+  destruct (canonical_avoiding_renamed r avoid e)
+    as (s & Hsame_v & Hsame_fixed & Hcanonical).
+  assert (Hsame_k :
+    ∀ k : continuation,
+      In k (free_continuations_of_expr e) ->
+      rename_continuation r k = rename_continuation s k)
+    by (intros k Hk; apply Hsame_fixed, in_or_app; right; exact Hk).
+  pose proof (renamed_alike_accepted r s e Hclosed Hsame_v Hsame_k)
+    as Halike.
+  pose proof (expr_eqb_equivariant s [] [] e (canonical_avoiding avoid e))
+    as Hguard.
+  unfold rename_name_map in Hguard. cbn [map] in Hguard.
+  assert (Hcheck :
+    expr_eqb [] [] (rename_expr r e)
+      (rename_expr s (canonical_avoiding avoid e))
+    = expr_eqb [] [] e (canonical_avoiding avoid e)).
+  { rewrite <- Hguard.
+    destruct
+      (expr_eqb [] [] (rename_expr s e)
+         (rename_expr s (canonical_avoiding avoid e)))
+      eqn:Hs.
+    - exact (expr_eqb_transitive _ _ _ Halike Hs).
+    - destruct
+        (expr_eqb [] [] (rename_expr r e)
+           (rename_expr s (canonical_avoiding avoid e)))
+        eqn:Hr; [ | reflexivity ].
+      pose proof
+        (expr_eqb_transitive _ _ _ (expr_eqb_symmetric _ _ Halike) Hr)
+        as Hboth.
+      rewrite Hs in Hboth. discriminate Hboth. }
+  unfold rename_apart_avoiding. cbv zeta. rewrite Hcanonical, Hcheck.
+  destruct (expr_eqb [] [] e (canonical_avoiding avoid e)).
+  - exists s. split; [ | split; [ | split ] ].
+    + intros x Hx. symmetry. apply Hsame_v, among_In, Hx.
+    + intros k Hk. symmetry. apply Hsame_k, among_In, Hk.
+    + intros k Hk. symmetry. apply Hsame_fixed, in_or_app. left.
+      apply among_In, Hk.
+    + reflexivity.
+  - exists r. split; [ | split; [ | split ] ]; [ | | | reflexivity ];
+      intros name _; reflexivity.
+Qed.
+
+Theorem rename_apart_equivariant_up_to :
+  rename_apart_equivariant_up_to_statement.
+Proof.
+  intros r e Hclosed.
+  destruct (rename_apart_avoiding_equivariant_up_to r [] e Hclosed)
+    as (r' & Hv & Hk & _ & Hrenamed).
+  exists r'. split; [ exact Hv | split; [ exact Hk | exact Hrenamed ] ].
 Qed.
 
 (* ======================================================================== *)

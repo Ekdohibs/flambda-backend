@@ -25,18 +25,23 @@
  * DEALINGS IN THE SOFTWARE.                                                  *
  ******************************************************************************)
 
-(* What the renaming apart makes is the term up to bound names.
+(* What the first candidate of the renaming apart makes is the term up
+   to bound names.
 
-   This file is to be reviewed: the three statements.
+   This file is to be reviewed: the two statements.
 
    FlambdaRenameApartSpec.rename_apart_avoiding makes a candidate, the
-   term with every binder given a new name
-   (FlambdaRenameApartSpec.renamed_apart_avoiding), and keeps it only
-   if the comparison up to bound names
-   (FlambdaCompareSpec.expr_eqb) says, at that run, that it is the
-   term. Its statements hold whatever the candidate is, by the
-   soundness of the comparison. This file says what the comparison
-   finds, once for all:
+   term with every binder given a new name, and keeps it only if the
+   comparison up to bound names (FlambdaCompareSpec.expr_eqb) says, at
+   that run, that it is the term. Its statements hold whatever the
+   candidate is, by the soundness of the comparison. The candidate was
+   FlambdaRenameApartSpec.renamed_apart_avoiding, whose new names are
+   different from every name of the term; it is now
+   FlambdaRenameApartSpec.canonical_avoiding, whose new names are
+   different from the free names of the term, and
+   FlambdaRenameApartCanonicalSpec.v says the same of that one, from
+   what is proved here. This file says what the comparison finds of
+   the first candidate, once for all:
 
    - [renamed_apart_avoiding_alpha_statement]: the candidate of a term
      whose code is closed and whose binders are distinct is
@@ -45,10 +50,12 @@
      (FlambdaBindersSpec.code_closed, [binders_distinct]): code
      mentions no name but those it binds, and the names that one
      binder binds are distinct.
-   - [rename_apart_avoiding_candidate_statement]: so on such a term
-     the comparison accepts the candidate, and the normalisation
-     gives it. The check that is made at each run does not fail on a
-     well-formed term.
+   - That on such a term the normalisation gives its candidate, so
+     that the check made at each run does not fail on a well-formed
+     term, is said of the candidate that the normalisation has now
+     (FlambdaRenameApartCanonicalSpec
+     .rename_apart_avoiding_candidate_statement). It was a statement
+     of this file when the candidate was the first.
    - [renamed_apart_repeated_parameter_statement]: distinct binders
      are needed. The candidate has a new name for each parameter of a
      handler; for a handler that repeats a parameter those are two
@@ -81,13 +88,6 @@ Definition renamed_apart_avoiding_alpha_statement : Prop :=
     code_closed e = true ->
     binders_distinct e = true ->
     alpha_equivalent e (renamed_apart_avoiding avoid e).
-
-(* The normalisation gives the candidate. *)
-Definition rename_apart_avoiding_candidate_statement : Prop :=
-  ∀ (avoid : list continuation) (e : expr),
-    code_closed e = true ->
-    binders_distinct e = true ->
-    rename_apart_avoiding avoid e = renamed_apart_avoiding avoid e.
 
 (* A term whose code is closed, whose candidate is not
    alpha-equivalent to it, and whose candidate the comparison accepts:

@@ -152,8 +152,9 @@
    continuation of the unit of any of the liftings given, the later
    ones included, whether or not the term mentions them
    ([unit_continuations]; FlambdaRenameApartSpec.rename_apart_avoiding
-   takes its new names outside the names of the term and outside
-   those): a lifting checks the unit by the names of those two
+   takes its new names outside the free names of the term and outside
+   those; a new name may be one that the term binds): a lifting checks
+   the unit by the names of those two
    continuations, which the term may no longer mention once it is
    normalised, so a binder made in a round must not take one of them.
    After the last of the liftings it reads the known value slots once

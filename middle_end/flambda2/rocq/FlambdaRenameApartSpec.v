@@ -31,11 +31,11 @@
    This file is to be reviewed: [rename_apart_avoiding] and
    [rename_apart], which are extracted and run by the validation of
    middle_end/flambda2/tests/semantics/; the names of a term
-   ([variables_of], [continuations_of]), which two statements mention;
-   and the statements. What makes the candidate
-   ([renamed_apart_avoiding] and what it is made of) need not be read
-   for the first statement: [rename_apart_avoiding] keeps the candidate
-   only if the comparison up to bound names
+   ([variables_of], [continuations_of]), which one statement of
+   FlambdaRenameApartCanonicalSpec.v mentions; and the statements. What
+   makes the candidate ([canonical_avoiding] and what it is made of)
+   need not be read for the first statement: [rename_apart_avoiding]
+   keeps the candidate only if the comparison up to bound names
    (FlambdaCompareSpec.expr_eqb) says it is the term, and gives the term
    back as it was otherwise. So that statement holds whatever the
    candidate is, by the soundness of the comparison alone.
@@ -60,9 +60,19 @@
    ids and slots are left alone. There are as many new names as the
    term has binders ([binders]), and they are made by
    FlambdaFreshQuantifierSpec.fresh_names, different from one another,
-   from every name of the term ([names_of]) and from the continuations
-   that the caller says to avoid; the term is gone through once, each
-   binder taking the next of them ([apart]). The uses
+   from every free name of the term, those of its code included
+   (FlambdaBindersSpec.free_variables_of_expr,
+   free_continuations_of_expr), and from the continuations that the
+   caller says to avoid; the term is gone through once, each binder
+   taking the next of them ([apart]). A new name may be a name that the
+   term binds: the new names are made from the free names alone, so two
+   terms that differ in their bound names only have the same candidate,
+   which is a canonical form of the term ([canonical_avoiding];
+   FlambdaRenameApartCanonicalSpec.v says what it is). The candidate
+   that this file had first, [renamed_apart_avoiding], keeps its new
+   names away from every name of the term, bound names too; nothing
+   runs it now, and FlambdaRenameApartAlphaSpec.v and
+   FlambdaRenameApartCanonicalSpec.v have statements about it. The uses
    are renamed by the renamings of FlambdaNominalSpec.v, which are
    permutations: at a binder, what the name is under the renaming so far
    is swapped with the new name ([bind_variable], [bind_continuation]).
@@ -70,15 +80,18 @@
    names.
 
    Renaming. [rename_apart] does not commute with a renaming of the
-   term: the new names are made from the names of the term, and those of
-   the renamed term are others. It commutes up to the new names: for a
-   renaming [r] there is a renaming that does to every name of the term
-   what [r] does, and with which the result for the renamed term is the
-   renamed result ([rename_apart_equivariant_up_to_names_statement]). In
-   particular it agrees with [r] on the free variables and
-   continuations of the term, those of its code included
-   ([rename_apart_equivariant_up_to_statement]). Nothing is asked of the
-   term.
+   term: the new names are made from the free names of the term, and
+   those of the renamed term are others. It commutes up to the new
+   names, on a term whose code is closed: for a renaming [r] there is a
+   renaming that does to the free variables and continuations of the
+   term, those of its code included, what [r] does, and with which the
+   result for the renamed term is the renamed result. The statement is
+   in FlambdaRenameApartCanonicalSpec.v, with what it is proved from
+   ([rename_apart_equivariant_up_to_statement]). The form in which the
+   second renaming does what [r] does to every name of the term, bound
+   names too, which held of the first candidate, is false of this one
+   (FlambdaRenameApartCanonicalSpec
+   .canonical_avoiding_not_equivariant_up_to_names_statement).
 
    The continuations to avoid. A term may stand where continuations are
    in scope that it does not mention: those of the unit it is part of.
@@ -87,7 +100,8 @@
    and makes no new name that is one of them; [rename_apart] is given
    none. Under a renaming the continuations to avoid are renamed with
    the term, and the renaming that the statement gives agrees with [r]
-   on them too ([rename_apart_avoiding_equivariant_up_to_statement]).
+   on them too (FlambdaRenameApartCanonicalSpec
+   .rename_apart_avoiding_equivariant_up_to_statement).
    The numbers of the continuations to avoid are avoided for the new
    variables as well, which is more than is needed and harms nothing.
 
@@ -388,14 +402,26 @@ with apart_code (r : renaming) (news : list positive) (c : code) {struct c}
        body')
   end.
 
-(* The candidate: the binders of the expression given new names that
-   are different from one another, from every name of the expression
-   and from the continuations [avoid]. *)
+(* The first candidate, which nothing runs now: the binders of the
+   expression given new names that are different from one another, from
+   every name of the expression and from the continuations [avoid]. *)
 Definition renamed_apart_avoiding (avoid : list continuation) (e : expr)
     : expr :=
   snd
     (apart identity_renaming
        (fresh_names (binders e) (avoid ++ names_of e)) e).
+
+(* The candidate: the binders of the expression given new names that
+   are different from one another, from every free name of the
+   expression and from the continuations [avoid]. A new name may be a
+   name that the expression binds. *)
+Definition canonical_avoiding (avoid : list continuation) (e : expr)
+    : expr :=
+  snd
+    (apart identity_renaming
+       (fresh_names (binders e)
+          (avoid ++ free_variables_of_expr e ++ free_continuations_of_expr e))
+       e).
 
 (* ======================================================================== *)
 (* The normalisation                                                        *)
@@ -405,7 +431,7 @@ Definition renamed_apart_avoiding (avoid : list continuation) (e : expr)
    not. *)
 Definition rename_apart_avoiding (avoid : list continuation) (e : expr)
     : expr :=
-  let e' := renamed_apart_avoiding avoid e in
+  let e' := canonical_avoiding avoid e in
   if expr_eqb [] [] e e' then e' else e.
 
 (* With no continuation to avoid. *)
@@ -417,52 +443,3 @@ Definition rename_apart_avoiding_equivalent_statement : Prop :=
 
 Definition rename_apart_equivalent_statement : Prop :=
   ∀ e : expr, expr_equivalent e (rename_apart e).
-
-(* ======================================================================== *)
-(* Renaming                                                                 *)
-(* ======================================================================== *)
-
-(* For a renaming of the term there is one that does to every name of
-   the term what it does, with which the result for the renamed term is
-   the renamed result: the two differ on the new names only. *)
-Definition rename_apart_equivariant_up_to_names_statement : Prop :=
-  ∀ (r : renaming) (e : expr),
-    ∃ r' : renaming,
-      (∀ x : variable,
-        among x (variables_of e) = true ->
-        rename_variable r' x = rename_variable r x)
-      ∧ (∀ k : continuation,
-          among k (continuations_of e) = true ->
-          rename_continuation r' k = rename_continuation r k)
-      ∧ rename_apart (rename_expr r e) = rename_expr r' (rename_apart e).
-
-(* The same, said of the free variables and continuations of the term,
-   as FlambdaBindersSpec.v lists them, in its code too. *)
-Definition rename_apart_equivariant_up_to_statement : Prop :=
-  ∀ (r : renaming) (e : expr),
-    ∃ r' : renaming,
-      (∀ x : variable,
-        among x (free_variables_of_expr e) = true ->
-        rename_variable r' x = rename_variable r x)
-      ∧ (∀ k : continuation,
-          among k (free_continuations_of_expr e) = true ->
-          rename_continuation r' k = rename_continuation r k)
-      ∧ rename_apart (rename_expr r e) = rename_expr r' (rename_apart e).
-
-(* With continuations to avoid: they are renamed with the term, and the
-   renaming agrees with [r] on them too. *)
-Definition rename_apart_avoiding_equivariant_up_to_statement : Prop :=
-  ∀ (r : renaming) (avoid : list continuation) (e : expr),
-    ∃ r' : renaming,
-      (∀ x : variable,
-        among x (free_variables_of_expr e) = true ->
-        rename_variable r' x = rename_variable r x)
-      ∧ (∀ k : continuation,
-          among k (free_continuations_of_expr e) = true ->
-          rename_continuation r' k = rename_continuation r k)
-      ∧ (∀ k : continuation,
-          among k avoid = true ->
-          rename_continuation r' k = rename_continuation r k)
-      ∧ rename_apart_avoiding (map (rename_continuation r) avoid)
-          (rename_expr r e)
-        = rename_expr r' (rename_apart_avoiding avoid e).

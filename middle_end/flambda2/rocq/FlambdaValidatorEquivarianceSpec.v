@@ -369,11 +369,12 @@
    renaming that does to its free names, and to the continuations
    that the validation is given, what the first does
    ([validate_unit_renamed_alike_statement]). They rest on what the
-   file of [rename_apart] states and
+   file of the canonical form of [rename_apart] states and
    proves, that [rename_apart_avoiding] commutes with renaming up to
-   the names that it makes, the second renaming doing to the
-   continuations to avoid what the first does
-   (FlambdaRenameApartSpec.rename_apart_avoiding_equivariant_up_to_statement),
+   the names that it makes where the code of the term is closed, the
+   second renaming doing to the continuations to avoid what the first
+   does (FlambdaRenameApartCanonicalSpec
+   .rename_apart_avoiding_equivariant_up_to_statement),
    and on the statements that each rewrite of the validation keeps
    scope: FlambdaKeepsScopeSpec.v and FlambdaValidateScopeSpec.v for
    those of a round, and FlambdaStaticsScopeSpec.v for those that the
@@ -1481,10 +1482,11 @@ Definition equivariant_up_to_avoiding_unless_same_statement : Prop :=
 
 (* [rename_apart_avoiding] commutes with renaming up to the names that
    it makes in the sense of this file, with the continuations that it
-   is given to avoid. Its own file says that the second renaming does
-   what the first does to the names that are free in the term and to
-   those continuations
-   (FlambdaRenameApartSpec.rename_apart_avoiding_equivariant_up_to_statement).
+   is given to avoid. The file of its canonical form says that the
+   second renaming does what the first does to the names that are free
+   in the term and to those continuations, where the code of the term
+   is closed (FlambdaRenameApartCanonicalSpec
+   .rename_apart_avoiding_equivariant_up_to_statement).
    Here it does so to the names that are free in the result:
    [rename_apart_avoiding] keeps scope
    (FlambdaKeepsScopeSpec.rename_apart_avoiding_keeps_scope_statement).

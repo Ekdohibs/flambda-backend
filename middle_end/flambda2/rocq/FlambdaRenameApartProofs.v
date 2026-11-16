@@ -47,7 +47,7 @@ Theorem rename_apart_avoiding_equivalent :
   rename_apart_avoiding_equivalent_statement.
 Proof.
   intros avoid e. unfold rename_apart_avoiding.
-  destruct (expr_eqb [] [] e (renamed_apart_avoiding avoid e)) eqn:Hsame.
+  destruct (expr_eqb [] [] e (canonical_avoiding avoid e)) eqn:Hsame.
   - exact (expr_eqb_sound _ _ Hsame).
   - intros vars conts statics hp rd. apply equivalent_refl.
 Qed.
@@ -1314,10 +1314,15 @@ Proof.
   destruct Ha as [-> | Ha]; [ exact Hhead | exact (IH Htail a Ha) ].
 Qed.
 
-(* For a renaming of the term there is one that does to every name of
-   the term, and to every continuation to avoid, what it does, with
-   which the result for the renamed term is the renamed result. *)
-Lemma rename_apart_avoiding_equivariant_up_to_names (r : renaming)
+(* Of the first candidate. For a renaming of the term there is one that
+   does to every name of the term, and to every continuation to avoid,
+   what it does, with which the first candidate of the renamed term is
+   the renamed first candidate. The candidate that
+   [rename_apart_avoiding] takes now has not this
+   (FlambdaRenameApartCanonicalSpec
+   .canonical_avoiding_not_equivariant_up_to_names_statement); what it
+   has is in FlambdaRenameApartCanonicalProofs.v. *)
+Lemma renamed_apart_avoiding_equivariant_up_to_names (r : renaming)
     (avoid : list continuation) (e : expr) :
   ∃ r' : renaming,
     (∀ x : variable,
@@ -1329,9 +1334,9 @@ Lemma rename_apart_avoiding_equivariant_up_to_names (r : renaming)
     ∧ (∀ k : continuation,
         among k avoid = true ->
         rename_continuation r' k = rename_continuation r k)
-    ∧ rename_apart_avoiding (map (rename_continuation r) avoid)
+    ∧ renamed_apart_avoiding (map (rename_continuation r) avoid)
         (rename_expr r e)
-      = rename_expr r' (rename_apart_avoiding avoid e).
+      = rename_expr r' (renamed_apart_avoiding avoid e).
 Proof.
   pose proof (fresh_names_length (binders e) (avoid ++ names_of e))
     as Hlength.
@@ -1467,22 +1472,7 @@ Proof.
   - intros k Hk. symmetry. apply Hsame_k, among_In, Hk.
   - intros k Hk. symmetry. apply Hsame_fixed, in_or_app. left.
     apply among_In, Hk.
-  - unfold rename_apart_avoiding. cbv zeta. rewrite Hrenamed, Hsame.
-    pose proof
-      (expr_eqb_equivariant s [] [] e (renamed_apart_avoiding avoid e))
-      as Hguard.
-    unfold rename_name_map in Hguard. cbn [map] in Hguard. rewrite Hguard.
-    destruct (expr_eqb [] [] e (renamed_apart_avoiding avoid e));
-      reflexivity.
-Qed.
-
-Theorem rename_apart_equivariant_up_to_names :
-  rename_apart_equivariant_up_to_names_statement.
-Proof.
-  intros r e.
-  destruct (rename_apart_avoiding_equivariant_up_to_names r [] e)
-    as (r' & Hv & Hk & _ & Hrenamed).
-  exists r'. split; [ exact Hv | split; [ exact Hk | exact Hrenamed ] ].
+  - exact Hrenamed.
 Qed.
 
 (* ======================================================================== *)
@@ -1784,51 +1774,4 @@ Proof.
     intros j Hj. unfold without in Hj. apply filter_In in Hj.
     right. right.
     exact (free_continuations_in_continuations_of body j (proj1 Hj)).
-Qed.
-
-Theorem rename_apart_equivariant_up_to :
-  rename_apart_equivariant_up_to_statement.
-Proof.
-  intros r e.
-  destruct (rename_apart_equivariant_up_to_names r e)
-    as (r' & Hv & Hk & Hrenamed).
-  exists r'. split; [ | split ]; [ | | exact Hrenamed ].
-  - intros x Hx.
-    apply Hv, among_In, free_variables_in_variables_of, among_In, Hx.
-  - intros k Hfree.
-    apply Hk, among_In, free_continuations_in_continuations_of, among_In,
-      Hfree.
-Qed.
-
-Theorem rename_apart_avoiding_equivariant_up_to :
-  rename_apart_avoiding_equivariant_up_to_statement.
-Proof.
-  intros r avoid e.
-  destruct (rename_apart_avoiding_equivariant_up_to_names r avoid e)
-    as (r' & Hv & Hk & Havoid & Hrenamed).
-  exists r'. split; [ | split; [ | split ] ];
-    [ | | exact Havoid | exact Hrenamed ].
-  - intros x Hx.
-    apply Hv, among_In, free_variables_in_variables_of, among_In, Hx.
-  - intros k Hfree.
-    apply Hk, among_In, free_continuations_in_continuations_of, among_In,
-      Hfree.
-Qed.
-
-(* The older form, of the names that are free by the relations of
-   FlambdaNominalSpec.v, which do not go into code. *)
-Lemma rename_apart_equivariant_up_to_by_relation (r : renaming) (e : expr) :
-  ∃ r' : renaming,
-    (∀ x : variable,
-      var_free_in_expr x e -> rename_variable r' x = rename_variable r x)
-    ∧ (∀ k : continuation,
-        cont_free_in_expr k e ->
-        rename_continuation r' k = rename_continuation r k)
-    ∧ rename_apart (rename_expr r e) = rename_expr r' (rename_apart e).
-Proof.
-  destruct (rename_apart_equivariant_up_to_names r e)
-    as (r' & Hv & Hk & Hrenamed).
-  exists r'. split; [ | split ]; [ | | exact Hrenamed ].
-  - intros x Hx. apply Hv, among_In, var_free_in_variables_of, Hx.
-  - intros k Hfree. apply Hk, among_In, cont_free_in_continuations_of, Hfree.
 Qed.

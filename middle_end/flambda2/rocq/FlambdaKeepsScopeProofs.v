@@ -70,9 +70,9 @@ Theorem rename_apart_avoiding_keeps_scope :
   rename_apart_avoiding_keeps_scope_statement.
 Proof.
   intros avoid e Hclosed. unfold rename_apart_avoiding. cbv zeta.
-  destruct (expr_eqb [] [] e (renamed_apart_avoiding avoid e)) eqn:Hsame.
+  destruct (expr_eqb [] [] e (canonical_avoiding avoid e)) eqn:Hsame.
   - exact
-      (expr_eqb_keeps_scope e (renamed_apart_avoiding avoid e) Hclosed Hsame).
+      (expr_eqb_keeps_scope e (canonical_avoiding avoid e) Hclosed Hsame).
   - split; [ exact Hclosed | split; intros name Hname; exact Hname ].
 Qed.
 
