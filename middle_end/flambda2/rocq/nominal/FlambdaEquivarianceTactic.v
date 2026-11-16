@@ -398,10 +398,41 @@ Ltac eqv_not_a_name h :=
   end.
 
 (* After an induction on a list of pairs, the pair at its head. *)
+(* A variable or a hypothesis of a section that is open: it is not
+   of the statement, and the hints of the section name it. It stays
+   in the context: an induction does not generalise it, and the
+   derivation of a law does not clear it. *)
+Module Section_context.
+  Import Ltac2.Ltac2.
+
+  Ltac2 of_section (h : Ltac1.t) : unit :=
+    let id :=
+      match Ltac1.to_constr h with
+      | Some c =>
+        match Constr.Unsafe.kind c with
+        | Constr.Unsafe.Var id => Some id
+        | _ => None
+        end
+      | None => Ltac1.to_ident h
+      end
+    in
+    match id with
+    | Some id =>
+      if List.exist
+           (fun r => match r with Std.VarRef _ => true | _ => false end)
+           (Env.expand [id])
+      then ()
+      else Control.zero (Tactic_failure None)
+    | None => Control.zero (Tactic_failure None)
+    end.
+End Section_context.
+
+Ltac eqv_of_section := ltac2:(h |- Section_context.of_section h).
+
 Ltac eqv_revert_all_but v :=
   repeat match goal with
          | H : ?T |- _ =>
-           tryif constr_eq H v then fail
+           tryif first [ constr_eq H v | eqv_of_section H ] then fail
            else
              (lazymatch T with
               | eqv_deriving _ => fail
@@ -439,6 +470,11 @@ Ltac eqv_induction v :=
    that it makes a scheme for it. *)
 Ltac eqv_not_true H :=
   let P := type of H in
+  let s := type of P in
+  lazymatch s with
+  | Prop => idtac
+  | _ => fail
+  end;
   let P' := eval hnf in P in
   lazymatch P' with
   | True => fail
@@ -468,7 +504,7 @@ Ltac eqv_enter l :=
          | H : (forall x, In x l -> _) |- _ => specialize (H a Ha)
          end;
   clear Ha;
-  eqv_open.
+  first [ solve [ autorewrite with equivariance; reflexivity ] | eqv_open ].
 
 Ltac eqv_enter_right l :=
   let a := fresh "a" in
@@ -479,7 +515,7 @@ Ltac eqv_enter_right l :=
          | H : (forall x, In x l -> _) |- _ => specialize (H a Ha)
          end;
   clear Ha;
-  eqv_open.
+  first [ solve [ autorewrite with equivariance; reflexivity ] | eqv_open ].
 
 Ltac eqv_enter_left l :=
   let a := fresh "a" in
@@ -490,7 +526,7 @@ Ltac eqv_enter_left l :=
          | H : (forall x, In x l -> _) |- _ => specialize (H a Ha)
          end;
   clear Ha;
-  eqv_open.
+  first [ solve [ autorewrite with equivariance; reflexivity ] | eqv_open ].
 
 Ltac eqv_ext :=
   lazymatch goal with
@@ -598,6 +634,7 @@ Ltac eqv_hyp_back :=
   match goal with
   | H : _ |- _ = _ =>
     eqv_not_true H; eqv_not_a_law H;
+    tryif eqv_of_section H then fail else idtac;
     ((rewrite <- H by assumption)
      + (match goal with
         | r : renaming |- _ => rewrite <- (H r) by assumption
@@ -806,8 +843,11 @@ Ltac eqv_destruct_scrutinee :=
         eqv_no_renaming x; destruct x
       end ].
 
+Ltac eqv_destruct_renamed_extra := fail.
+
 Ltac eqv_destruct_renamed :=
   match goal with
+  | |- _ => eqv_destruct_renamed_extra
   | |- context [rename_handler _ ?h] => is_var h; destruct h
   | |- context [rename_apply_cont _ ?ac] => is_var ac; destruct ac
   | |- context [rename_apply _ ?ap] => is_var ap; destruct ap
@@ -1019,6 +1059,12 @@ Ltac eqv_append :=
   lazymatch goal with
   | |- @app _ _ _ = @app _ _ _ => eqv_peel
   | |- andb _ _ = andb _ _ => eqv_peel
+  | |- ?l = ?r =>
+    let hl := eqv_head l in
+    let hr := eqv_head r in
+    constr_eq hl hr;
+    is_constructor hl;
+    eqv_peel
   end.
 
 (* What is under the [option_map]s that a term begins with. *)
@@ -1088,6 +1134,14 @@ Ltac eqv_step :=
     | eqv_unfold_head; eqv_say "unfold_head" ].
 
 Ltac eqv_core := repeat first [ reflexivity | eqv_step ].
+
+(* The premise of a law that is given with [Hint Rewrite ... using
+   eqv_premise]: about the elements of a list, or any other. *)
+Ltac eqv_premise :=
+  lazymatch goal with
+  | |- forall x, In x ?l -> _ => eqv_enter l; intros; solve [ eqv_core ]
+  | |- _ => intros; solve [ assumption | eqv_core ]
+  end.
 
 Ltac eqv_same_test ::=
   match goal with
@@ -1453,7 +1507,7 @@ Ltac eqv_clear_context :=
            | eqv_deriving _ => fail
            | eqv_failed _ => fail
            | eqv_law _ _ => fail
-           | _ => clear H
+           | _ => tryif eqv_of_section H then fail else clear H
            end
          end.
 
@@ -1500,6 +1554,9 @@ Ltac eqv_derive ::=
     let H := fresh "Hlaw" in
     first
       [ assert (H : eqv_law g S)
+          by (unfold eqv_law; intros;
+              autorewrite with equivariance; reflexivity)
+      | assert (H : eqv_law g S)
           by (eqv_clear_context;
               let D := fresh "Hderiving" in
               assert (D : eqv_deriving g) by exact I;
