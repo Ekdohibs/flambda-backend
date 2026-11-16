@@ -75,6 +75,11 @@
    test is a text with code, for the constructor that takes the metadata of
    code.
 
+   And a unit with a static block whose shape is that of a mixed block with no
+   field in its flat suffix is given to the printer of texts, which stops: the
+   text writes the kinds of the fields, and those give the shape of a block of
+   values.
+
    And a unit that returns a poison constant is written and read back, for two
    names: the printer writes the name as a string, which is what the reader
    takes.
@@ -831,6 +836,16 @@ let () =
        (fun (_, reason) -> Flambda2_compare.Compare.name_of_invalid reason)
        reasons
     @ ["Message"; "Not_yet"] @ keywords_with_a_capital);
+  (let no_flat_field : K.Scannable_block_shape.t =
+     Mixed_record
+       (K.Mixed_block_shape.from_prefix_size_and_suffix_elements 2 [])
+   in
+   Printf.printf
+     "a static block whose shape is that of a mixed block with no flat field, \
+      written and read back: %s\n"
+     (match unit_written_and_read_back (static_block no_flat_field) with
+     | _text, read -> read
+     | exception Misc.Fatal_error -> "the printer stops"));
   List.iter
     (fun name ->
       let text, read = unit_written_and_read_back (poison name) in

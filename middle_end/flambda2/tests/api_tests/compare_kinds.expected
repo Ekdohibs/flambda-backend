@@ -205,6 +205,7 @@ the kind Vec256_array (a keyword of the text), written and read back: "invalid `
 the kind Vec512_array (a keyword of the text), written and read back: "invalid `Vec512_array`", the same
 the kind Float_block (a keyword of the text), written and read back: "invalid `Float_block`", the same
 the kind Empty_array (a keyword of the text), written and read back: "invalid `Empty_array`", the same
+a static block whose shape is that of a mixed block with no flat field, written and read back: the printer stops
 a poison constant with the name "variant_unboxing_field", written and read back: "cont done (poison.val."variant_unboxing_field")", the same
 a poison constant with the name "a \"name\" with quotes\\", written and read back: "cont done (poison.val."a \"name\" with quotes\\")", the same
 a name under a change of depth between two equal depths, the depth 1 (the identity by Coercion.is_id: false), written and read back: "cont done ($camlKinds ~ depth 1 -> 1)", the same

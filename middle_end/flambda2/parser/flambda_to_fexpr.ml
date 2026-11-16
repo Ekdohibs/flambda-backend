@@ -357,11 +357,26 @@ let static_const env (sc : Static_const.t) : Fexpr.static_data =
     let elements = List.map (field_of_block env) fields in
     (* The kinds of the fields are written for a block that has unboxed fields:
        a value for each field of the value prefix, and the kind of each field of
-       the flat suffix. The reader makes the shape from them. *)
+       the flat suffix. The reader makes the shape from them, so a shape that
+       the kinds of its fields do not give cannot be written: that of a mixed
+       block with no field in its flat suffix, which the kinds give as a block
+       of values. *)
     let kinds : Fexpr.kind_with_subkind list option =
       match shape with
       | Value_only -> None
-      | Mixed_record shape ->
+      | Mixed_record mixed ->
+        let field_kinds =
+          Array.to_list (Flambda_kind.Mixed_block_shape.field_kinds mixed)
+        in
+        (match Shape_of_kinds.scannable field_kinds with
+        | Ok shape_of_kinds
+          when Flambda_kind.Scannable_block_shape.equal shape shape_of_kinds ->
+          ()
+        | Ok _ | Error _ ->
+          Misc.fatal_errorf
+            "The text of a term cannot say the shape %a of a static block: it \
+             is not the shape that the kinds of its fields give"
+            Flambda_kind.Scannable_block_shape.print shape);
         Some
           (List.map
              (fun (kind : Flambda_kind.t) : Fexpr.kind_with_subkind ->
@@ -370,7 +385,7 @@ let static_const env (sc : Static_const.t) : Fexpr.static_data =
                | Naked_number kind -> Naked_number kind
                | Region | Rec_info ->
                  Misc.fatal_error "A field of a block of the kind of no field")
-             (Array.to_list (Flambda_kind.Mixed_block_shape.field_kinds shape)))
+             field_kinds)
     in
     Block { tag; mutability; kinds; elements }
   | Set_of_closures _ -> assert false
