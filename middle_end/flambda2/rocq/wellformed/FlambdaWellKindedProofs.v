@@ -1189,7 +1189,7 @@ Proof.
     apply andb_true_iff in Hc as [Hremaining Hreturn_wk].
     apply kinds_eqb_eq in Hreturn_to, Hexn_to.
     unfold call_function.
-    apply (run_call_well_kinded _ Indirect); try assumption.
+    apply (run_call_well_kinded _ Indirect_unknown_arity); try assumption.
     + apply shape_of_call_calls.
     + apply (shape_of_call_values_all _ value_well_kinded_partial);
         [ exact (tuple_fields_well_kinded statics Hstatics) | exact Hvs_wk
@@ -1701,7 +1701,7 @@ Proof.
   destruct
     (match ap_call_kind ap with
      | Direct named => Pos.eqb called named
-     | Indirect => true
+     | Indirect_unknown_arity => true
      end);
     [ | reflexivity ].
   rewrite Hcode.
@@ -2006,8 +2006,8 @@ Proof. vm_compute. reflexivity. Qed.
 Definition example_call_of_number : expr :=
   Let 4%positive naked_immediate (Simple (Const (Naked_immediate 0)))
     (Apply
-       (Apply_expr (Var 4%positive) Indirect [] 1%positive 2%positive [] []
-          [Singleton Value])).
+       (Apply_expr (Var 4%positive) Indirect_unknown_arity [] 1%positive
+          2%positive [] [] [Singleton Value])).
 
 Example example_call_of_number_passes :
   well_kinded_unit [] 1%positive 2%positive example_call_of_number = true.

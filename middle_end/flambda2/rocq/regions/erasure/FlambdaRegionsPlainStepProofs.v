@@ -633,7 +633,7 @@ Proof.
   destruct
     (match kind with
      | Direct named => Pos.eqb called named
-     | Indirect => true
+     | Indirect_unknown_arity => true
      end);
     [ | discriminate ].
   rewrite live_statics_code, Hcode.
@@ -729,7 +729,8 @@ Proof.
     rewrite (kinds_of_values_if_usable rs vs vs' Hvs).
     destruct (kinds_eqb _ _); [ | discriminate ].
     intros Hshape.
-    apply (shape_of_closure_call_erased rs statics' closure closure' Indirect
+    apply (shape_of_closure_call_erased rs statics' closure closure'
+             Indirect_unknown_arity
              (applied ++ vs) (applied' ++ vs') _ _ shape Hstatics);
       [ | apply Forall2_app; assumption | exact Hshape ].
     exact

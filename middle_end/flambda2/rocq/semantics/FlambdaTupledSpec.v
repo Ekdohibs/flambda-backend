@@ -142,7 +142,8 @@ Definition apply_tupled_statement : Prop :=
     eval_simples vars (ap_args ap) = Some [tuple] ->
     eval_simples vars (exn_extra_simples ap) = Some extra ->
     closure_of statics callee = Some (called, slots) ->
-    ap_call_kind ap = Indirect ∨ ap_call_kind ap = Direct called ->
+    ap_call_kind ap = Indirect_unknown_arity
+    ∨ ap_call_kind ap = Direct called ->
     lookup called (static_code statics) = Some c ->
     code_is_tupled c = true ->
     params_are_values c ->
@@ -171,7 +172,8 @@ Definition apply_tupled_over_statement : Prop :=
     eval_simples vars (ap_args ap) = Some (tuple :: rest) ->
     eval_simples vars (exn_extra_simples ap) = Some extra ->
     closure_of statics callee = Some (called, slots) ->
-    ap_call_kind ap = Indirect ∨ ap_call_kind ap = Direct called ->
+    ap_call_kind ap = Indirect_unknown_arity
+    ∨ ap_call_kind ap = Direct called ->
     lookup called (static_code statics) = Some c ->
     code_is_tupled c = true ->
     params_are_values c ->
@@ -281,8 +283,8 @@ Definition tupled_bindings : list static_binding :=
 Definition tupled_static_example : expr :=
   Let_static tupled_bindings
     (Apply
-       (Apply_expr (Symbol tupled_first_symbol) Indirect [Symbol pair_symbol]
-          done error [] a_value a_value)).
+       (Apply_expr (Symbol tupled_first_symbol) Indirect_unknown_arity
+          [Symbol pair_symbol] done error [] a_value a_value)).
 
 (* [first (1, 2)], where a primitive makes the pair, and the call names
    the code. *)
@@ -301,7 +303,7 @@ Definition tupled_made_example : expr :=
 Definition tupled_over_example : expr :=
   Let_static tupled_bindings
     (Apply
-       (Apply_expr (Symbol tupled_first_symbol) Indirect
+       (Apply_expr (Symbol tupled_first_symbol) Indirect_unknown_arity
           [Symbol pair_of_identity_symbol; Const (Tagged_immediate 1)] done
           error [] [Singleton Value; Singleton Value] a_value)).
 
@@ -326,8 +328,8 @@ Definition tupled_wrong_tuple (tag : Z) (fields : list simple) : expr :=
     (Let pair Value
        (Prim (Variadic (Make_block (Block_kind_values tag))) fields)
        (Apply
-          (Apply_expr (Symbol tupled_first_symbol) Indirect [Var pair] done
-             error [] a_value a_value))).
+          (Apply_expr (Symbol tupled_first_symbol) Indirect_unknown_arity
+             [Var pair] done error [] a_value a_value))).
 
 Definition wrong_tuple_undefined_statement : Prop :=
   ∀ e : expr,

@@ -246,13 +246,13 @@
    code ([Code_metadata.is_tupled]; [simplify_direct_tuple_application]
    turns such a call into a direct one of the code, on the fields); a
    direct call and a call of known arity go by the arity of the code.
-   The code of this fragment has no such mark, and its [Indirect] is
-   both sorts of indirect call. So the call with the tuple would be
-   a partial application here, or undefined, or, where the code has one
-   parameter, run with the parameter bound to the tuple and not to its
-   field, which is a wrong result and not an undefined one. The test
-   tool refuses a unit that has tupled code and a call that is not
-   direct.
+   The code of this fragment has no such mark, and its
+   [Indirect_unknown_arity] is both sorts of indirect call. So the call
+   with the tuple would be a partial application here, or undefined, or,
+   where the code has one parameter, run with the parameter bound to the
+   tuple and not to its field, which is a wrong result and not an
+   undefined one. The test tool refuses a unit that has tupled code and
+   a call that is not direct.
 
    The primitives. The check takes the kind of the result of a primitive
    from FlambdaPrimitiveSpec.prim_result_kind, and the proofs use two of

@@ -161,7 +161,7 @@ Definition apply_statics_in_scope (syms : list symbol) (ids : list code_id)
   simple_statics_in_scope syms (ap_callee ap)
   && match ap_call_kind ap with
      | Direct code => among code ids
-     | Indirect => true
+     | Indirect_unknown_arity => true
      end
   && simples_statics_in_scope syms (ap_args ap)
   && simples_statics_in_scope syms (exn_extra_simples ap).

@@ -1636,7 +1636,8 @@ Definition example_pass_call_statement : Prop :=
            [Singleton Value])
     in
     simplify_by_types
-      (unknown (Let example_c Value closure (call (Var example_c) Indirect)))
+      (unknown (Let example_c Value closure (call (Var example_c)
+        Indirect_unknown_arity)))
     = unknown
         (Let example_c Value closure
            (call (Var example_c) (Direct example_f))).
@@ -1670,7 +1671,8 @@ Definition example_pass_call_from_pair_statement : Prop :=
       (unknown
          (Let example_c Value closure
             (Let example_p Value pair
-               (Let example_q Value load (call (Var example_q) Indirect)))))
+               (Let example_q Value load (call (Var example_q)
+                 Indirect_unknown_arity)))))
     = unknown
         (Let example_c Value closure
            (Let example_p Value pair
@@ -1815,8 +1817,8 @@ Definition example_pass_static_closure_statement : Prop :=
             (call kind (Var example_x) ret exn'))]
     in
     simplify_by_types
-      (Let_static (bindings Indirect)
-         (call Indirect (Const (Tagged_immediate 7)) k exn))
+      (Let_static (bindings Indirect_unknown_arity)
+         (call Indirect_unknown_arity (Const (Tagged_immediate 7)) k exn))
     = Let_static (bindings (Direct example_f))
         (call (Direct example_f) (Const (Tagged_immediate 7)) k exn).
 

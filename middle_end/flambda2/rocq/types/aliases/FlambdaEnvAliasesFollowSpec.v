@@ -549,14 +549,14 @@ Definition canonical_apply_cont (known : Known.t) (ac : apply_cont)
 Definition canonical_call_kind (known : Known.t) (callee : simple)
     (kind : call_kind) : call_kind :=
   match kind with
-  | Indirect =>
+  | Indirect_unknown_arity =>
     match Known.find_closure known callee with
     | Some c =>
       match Known.closure_code c with
       | Some code => Direct code
-      | None => Indirect
+      | None => Indirect_unknown_arity
       end
-    | None => Indirect
+    | None => Indirect_unknown_arity
     end
   | Direct _ => kind
   end.

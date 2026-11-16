@@ -402,7 +402,7 @@ Definition copy_let_code_one_let_statement : Prop :=
     (let_copied_before (Const (Tagged_immediate 0)))
   = let_copied_unit
       [Bind_code old let_copied_code; Bind_code new let_copied_code] new old
-      Indirect (Const (Tagged_immediate 0)).
+      Indirect_unknown_arity (Const (Tagged_immediate 0)).
 
 (* The same unit, but that it exits with the first closure: the test
    of the exits fails, and the unit is left as it is. *)

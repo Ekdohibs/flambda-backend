@@ -87,7 +87,8 @@ Definition try_with (in_body : expr) : expr :=
 Definition call_with (exn : continuation)
     (extra : list (simple * flambda_kind)) : expr :=
   Apply
-    (Apply_expr (Var x) Indirect [] leave exn extra [] [Singleton Value]).
+    (Apply_expr (Var x) Indirect_unknown_arity
+      [] leave exn extra [] [Singleton Value]).
 
 Definition call (exn : continuation) : expr :=
   call_with exn [(Const (Tagged_immediate 1), Value)].
@@ -1605,10 +1606,10 @@ Proof.
               is called with the arguments that remain. *)
            destruct vs as [ | v [ | v' vs]]; [ exact I | | exact I ].
            apply (run_call_related statics _ rd_ n f bottom' conts_n' conts_s'
-                    k_ret k_exn ts extra rest Indirect);
+                    k_ret k_exn ts extra rest Indirect_unknown_arity);
              [ exact Hcode
-             | exact (shape_of_call_calls statics v Indirect remaining
-                        remaining_arity return_arity)
+             | exact (shape_of_call_calls statics v Indirect_unknown_arity
+                        remaining remaining_arity return_arity)
              | apply target_ok_weaken; exact Hret
              | apply target_ok_weaken; exact Hexn | exact Hcorr'
              | exact Henv' | apply stack_sim_weaken; exact Hsim' | ].
@@ -2019,7 +2020,7 @@ Definition over_application_unit : expr :=
           (Handler [x] (make_handler_metadata [Value])
              (Apply_cont (Apply_cont_expr leave [Var x] None)))
           (Apply
-             (Apply_expr (Var f) Indirect
+             (Apply_expr (Var f) Indirect_unknown_arity
                 [Const (Tagged_immediate 1%Z); Const (Tagged_immediate 2%Z)]
                 after unit_exn [] (one ++ one) one)))).
 
@@ -2059,12 +2060,13 @@ Definition partial_application_unit : expr :=
           (Let_cont_non_recursive after
              (Handler [p] (make_handler_metadata [Value])
                 (Apply
-                   (Apply_expr (Var p) Indirect
+                   (Apply_expr (Var p) Indirect_unknown_arity
                       [Const (Tagged_immediate 2%Z)] last unit_exn [] one
                       one)))
              (Apply
-                (Apply_expr (Var f) Indirect [Const (Tagged_immediate 1%Z)]
-                   after unit_exn [] one one))))).
+                (Apply_expr (Var f) Indirect_unknown_arity
+                   [Const (Tagged_immediate 1%Z)] after unit_exn [] one
+                   one))))).
 
 Example partial_application_runs :
   let s := State partial_application_unit [] [] empty_static_env empty_heap

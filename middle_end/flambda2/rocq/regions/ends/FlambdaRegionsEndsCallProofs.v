@@ -83,8 +83,8 @@ Fixpoint apply_unkinded (c : cont_value) (vs : list value)
     match vs with
     | [v] =>
       run_call (fun partial => apply_unkinded return_to [partial] statics hp rd)
-        (shape_of_call statics v Indirect remaining remaining_arity
-           return_arity)
+        (shape_of_call statics v Indirect_unknown_arity remaining
+           remaining_arity return_arity)
         return_arity return_to exn_to statics hp rd
     | _ => Undefined
     end
@@ -106,7 +106,8 @@ Proof.
   - exact (IH _ _ _ _).
   - destruct vs as [ | v [ | w vs]]; try (left; reflexivity).
     destruct
-      (shape_of_call statics v Indirect remaining remaining_arity return_arity)
+      (shape_of_call statics v Indirect_unknown_arity remaining remaining_arity
+        return_arity)
       as [[closure c vs' args_arity
           | closure c vs' remaining' args_arity remaining_arity' | partial] | ];
       cbn [run_call].
@@ -177,8 +178,8 @@ Proof.
   { destruct (shape_of_call_cases _ _ _ _ _ _ _ Hshape)
       as [H | (closure & applied & applied_arity & _ & _ & _ & H)].
     - exists callee, kind, vs, args_arity. exact H.
-    - exists closure, Indirect, (applied ++ vs), (applied_arity ++ args_arity).
-      exact H. }
+    - exists closure, Indirect_unknown_arity, (applied ++ vs), (applied_arity ++
+      args_arity). exact H. }
   destruct Hclosure as (closure & kind' & vs' & args_arity' & Hclosure).
   destruct (shape_of_closure_call_cases _ _ _ _ _ _ _ Hclosure)
     as (called & slots & c & vs'' & args_arity'' & _ & Hlookup & _ & _

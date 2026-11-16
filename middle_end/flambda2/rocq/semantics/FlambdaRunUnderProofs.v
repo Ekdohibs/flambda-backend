@@ -334,7 +334,7 @@ Proof.
   - rewrite !apply_cont_value_over_application.
     destruct vs as [ | v [ | v' vs]]; [ exact eq_refl | | exact eq_refl ].
     unfold call_function.
-    apply (run_call_under _ _ Indirect); try assumption.
+    apply (run_call_under _ _ Indirect_unknown_arity); try assumption.
     + apply shape_of_call_calls.
     + intros partial. apply IHreturn. exact Hstatics.
 Qed.

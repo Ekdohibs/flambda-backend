@@ -686,7 +686,7 @@ Definition copy_shape (shape : call_shape) : call_shape :=
 Definition expected (kind : call_kind) (called : code_id) : bool :=
   match kind with
   | Direct named => Pos.eqb called named
-  | Indirect => true
+  | Indirect_unknown_arity => true
   end.
 
 (* The call kind of the second run answers that of the first, for a
@@ -695,14 +695,14 @@ Definition expected (kind : call_kind) (called : code_id) : bool :=
    run. *)
 Definition kind_follows (statics : static_env) (callee : value)
     (kind kind' : call_kind) : Prop :=
-  (kind = Indirect -> kind' = Indirect)
+  (kind = Indirect_unknown_arity -> kind' = Indirect_unknown_arity)
   ∧ (∀ (called : code_id) (slots : list (value_slot * value)),
       closure_of statics callee = Some (called, slots) ->
       expected kind called = true ->
       expected kind' (code_at callee called) = true).
 
 Lemma kind_follows_indirect (statics : static_env) (callee : value) :
-  kind_follows statics callee Indirect Indirect.
+  kind_follows statics callee Indirect_unknown_arity Indirect_unknown_arity.
 Proof. split; [ exact (fun H => H) | reflexivity ]. Qed.
 
 (* The code of a closure of the first run is bound, in the second, to
@@ -748,7 +748,7 @@ Proof.
   destruct
     (match kind with
      | Direct named => Pos.eqb called named
-     | Indirect => true
+     | Indirect_unknown_arity => true
      end);
     [ | discriminate ].
   rewrite (Hkind eq_refl).
@@ -812,12 +812,14 @@ Proof.
   - rewrite (proj1 Hkind eq_refl).
     destruct (partial_application_of callee)
       as [[[closure applied] applied_arity] | ];
-      [ | exact (shape_of_closure_call_copy statics callee Indirect Indirect
+      [ | exact (shape_of_closure_call_copy statics callee
+                   Indirect_unknown_arity Indirect_unknown_arity
                    vs args_arity return_arity shape Hno
                    (kind_follows_indirect statics callee)) ].
     destruct args_arity as [ | component args_arity]; [ discriminate | ].
     destruct (kinds_eqb _ _); [ | discriminate ].
-    exact (shape_of_closure_call_copy statics closure Indirect Indirect _ _
+    exact (shape_of_closure_call_copy statics closure Indirect_unknown_arity
+             Indirect_unknown_arity _ _
              return_arity shape Hno (kind_follows_indirect statics closure)).
 Qed.
 
@@ -995,7 +997,7 @@ Proof.
     ∀ kind' : call_kind,
       kind'
       = match lookup id ids with
-        | Some _ => Indirect
+        | Some _ => Indirect_unknown_arity
         | None => Direct id
         end ->
       kind_follows statics callee (Direct id) kind').

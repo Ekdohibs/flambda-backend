@@ -183,8 +183,8 @@ Definition canonical_apply_cont (tenv : typing_env) (ac : apply_cont)
 Definition canonical_call_kind (tenv : typing_env) (callee : simple)
     (kind : call_kind) : call_kind :=
   match kind, closure_of_simple tenv callee with
-  | Indirect, Some (code, _) => Direct code
-  | Indirect, None | Direct _, _ => kind
+  | Indirect_unknown_arity, Some (code, _) => Direct code
+  | Indirect_unknown_arity, None | Direct _, _ => kind
   end.
 
 Definition canonical_apply (tenv : typing_env) (ap : apply_expr) : apply_expr :=

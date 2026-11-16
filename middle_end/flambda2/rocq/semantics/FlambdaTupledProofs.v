@@ -117,7 +117,7 @@ Lemma shape_of_closure_call_tupled (statics : static_env) (callee : value)
     (called : code_id) (slots : list (value_slot * value)) (c : code)
     (fields : list value) :
   closure_of statics callee = Some (called, slots) ->
-  kind = Indirect ∨ kind = Direct called ->
+  kind = Indirect_unknown_arity ∨ kind = Direct called ->
   lookup called (static_code statics) = Some c ->
   code_is_tupled c = true ->
   map kind_of_value (tuple :: rest) = unarize (first :: rest_arity) ->
@@ -137,7 +137,7 @@ Proof.
   assert (Hexpected :
     match kind with
     | Direct named => Pos.eqb called named
-    | Indirect => true
+    | Indirect_unknown_arity => true
     end = true)
     by (destruct Hkind as [-> | ->]; [ reflexivity | apply Pos.eqb_refl ]).
   rewrite Hexpected, Hcode. unfold arguments_for_code, detuple.

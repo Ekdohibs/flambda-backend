@@ -109,10 +109,10 @@ Lemma shape_of_partial_callee (statics : static_env) (closure : value)
     (Value_partial_application closure applied applied_arity) kind vs
     args_arity return_arity
   = Some shape ->
-  kind = Indirect
+  kind = Indirect_unknown_arity
   ∧ args_arity <> []
   ∧ map kind_of_value vs = unarize args_arity
-  ∧ shape_of_closure_call statics closure Indirect (applied ++ vs)
+  ∧ shape_of_closure_call statics closure Indirect_unknown_arity (applied ++ vs)
       (applied_arity ++ args_arity) return_arity
     = Some shape.
 Proof.
@@ -1051,16 +1051,16 @@ Lemma call_unknown (a : caller) (callee : value) (l_c : lifetime)
   returns_ok a l' return_to ->
   cont_values_all (good cert codes rs) return_to ->
   cont_values_all (good cert codes rs) exn_to ->
-  call_function callee Indirect vs args_arity return_arity return_to exn_to
-    (live_statics rs) hp rd
+  call_function callee Indirect_unknown_arity vs args_arity return_arity
+    return_to exn_to (live_statics rs) hp rd
   = Step s' ->
   entered cert codes rs s'.
 Proof.
   intros Hcaller Hgood_callee Hlive_callee Hholds_callee Hgood_vs Hholds
     Hunknown Hret Hraise Hreturns Hgood_ret Hgood_exn.
   unfold call_function.
-  destruct (shape_of_call (live_statics rs) callee Indirect vs args_arity
-              return_arity)
+  destruct (shape_of_call (live_statics rs) callee Indirect_unknown_arity vs
+              args_arity return_arity)
     as [shape | ] eqn:Hshape; [ | discriminate ].
   set (cs := caller_check a) in *.
   set (kept := shortest cs (l_c :: ls)).

@@ -518,7 +518,7 @@ Proof.
     { split; [ exact C2 | ].
       intros n Hn. apply Nr, in_or_app. right. exact Hn. }
     unfold call_function in Hstep.
-    apply (run_call_inv _ Indirect _ _ _ _ statics _ rd_ s' S
+    apply (run_call_inv _ Indirect_unknown_arity _ _ _ _ statics _ rd_ s' S
              (shape_of_call_calls _ _ _ _ _ _) Hreturn Hexn)
       in Hstep; [ exact Hstep | ].
     intros partial Hpartial.

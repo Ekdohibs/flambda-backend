@@ -876,12 +876,12 @@ Definition shape_of_code_call (closure : value) (c : code) (vs : list value)
 
 (* CR mshinwell: a direct call, and an indirect call that the compiler
    has marked as of known arity
-   ([Call_kind.Function_call.Indirect_known_arity]; the [Indirect] of
-   this fragment is both sorts of indirect call), are generic
-   applications here: with fewer or more arguments than the code has
-   parameters they are partial applications and over-applications. That
-   is how Simplify reads a call of any kind once it knows the callee
-   ([simplify_function_call] sends all three to
+   ([Call_kind.Function_call.Indirect_known_arity]; the
+   [Indirect_unknown_arity] of this fragment is both sorts of indirect
+   call), are generic applications here: with fewer or more arguments
+   than the code has parameters they are partial applications and
+   over-applications. That is how Simplify reads a call of any kind
+   once it knows the callee ([simplify_function_call] sends all three to
    [simplify_direct_function_call]), and it is what makes an indirect
    call of a known closure the same as a direct call of its code
    whatever the number of arguments
@@ -922,7 +922,7 @@ Definition shape_of_closure_call (statics : static_env) (closure : value)
     let expected :=
       match kind with
       | Direct named => Pos.eqb called named
-      | Indirect => true
+      | Indirect_unknown_arity => true
       end
     in
     match expected, lookup called (static_code statics) with
@@ -953,14 +953,14 @@ Definition shape_of_call (statics : static_env) (callee : value)
     (kind : call_kind) (vs : list value) (args_arity return_arity : arity)
     : option call_shape :=
   match kind, partial_application_of callee with
-  | Indirect, Some (closure, applied, applied_arity) =>
+  | Indirect_unknown_arity, Some (closure, applied, applied_arity) =>
     match args_arity with
     | [] => None
     | _ :: _ =>
       if kinds_eqb (map kind_of_value vs) (unarize args_arity)
       then
-        shape_of_closure_call statics closure Indirect (applied ++ vs)
-          (applied_arity ++ args_arity) return_arity
+        shape_of_closure_call statics closure Indirect_unknown_arity
+          (applied ++ vs) (applied_arity ++ args_arity) return_arity
       else None
     end
   | _, _ => shape_of_closure_call statics callee kind vs args_arity return_arity
@@ -1028,8 +1028,8 @@ Fixpoint apply_cont_value (c : cont_value) (vs : list value)
     | [v] =>
       run_call
         (fun partial => apply_cont_value return_to [partial] statics hp rd)
-        (shape_of_call statics v Indirect remaining remaining_arity
-           return_arity)
+        (shape_of_call statics v Indirect_unknown_arity remaining
+           remaining_arity return_arity)
         return_arity return_to exn_to statics hp rd
     | _ => Undefined
     end

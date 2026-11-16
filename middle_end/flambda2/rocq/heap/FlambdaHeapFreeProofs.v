@@ -229,8 +229,8 @@ Proof.
   - rewrite apply_cont_value_over_application.
     destruct vs as [ | v [ | v' vs]]; [ discriminate | | discriminate ].
     unfold call_function.
-    apply (run_call_free _ Indirect _ _ _ _ statics _ _ st Hstatics
-             (shape_of_call_calls _ _ _ _ _ _));
+    apply (run_call_free _ Indirect_unknown_arity _ _ _ _ statics _ _ st
+             Hstatics (shape_of_call_calls _ _ _ _ _ _));
       [ exact Hreturn | exact Hexn | ].
     intros partial. apply IHreturn. exact Hstatics.
 Qed.

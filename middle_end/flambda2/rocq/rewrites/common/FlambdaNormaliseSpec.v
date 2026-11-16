@@ -338,7 +338,7 @@ Definition split_over_application (called : code_id) (c : code)
   Let_cont_non_recursive k
     (Handler [p] (make_handler_metadata [Value])
        (Apply
-          (Apply_expr (Var p) Indirect (skipn size (ap_args ap))
+          (Apply_expr (Var p) Indirect_unknown_arity (skipn size (ap_args ap))
              (ap_continuation ap) (ap_exn_continuation ap)
              (ap_exn_extra_args ap)
              (skipn params (ap_args_arity ap)) (ap_return_arity ap))))
@@ -384,7 +384,7 @@ Definition inline_apply (kept : list code_id)
       else Apply ap
     | None => Apply ap
     end
-  | Indirect => Apply ap
+  | Indirect_unknown_arity => Apply ap
   end.
 
 Fixpoint inline_calls (kept : list code_id) (known : list (code_id * code))

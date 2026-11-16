@@ -562,7 +562,7 @@ Proof.
   destruct
     (match kind with
      | Direct named => Pos.eqb called named
-     | Indirect => true
+     | Indirect_unknown_arity => true
      end);
     [ | discriminate ].
   lookup_trimmed.

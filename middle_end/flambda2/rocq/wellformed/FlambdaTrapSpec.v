@@ -303,8 +303,8 @@ Fixpoint unwind (st : stack) (how : leaving) (vs : list value)
              | Exit k vs hp rd => unwind rest (Leaving_by k) vs statics hp rd
              | Undefined => Stack_undefined
              end)
-          (shape_of_call statics v Indirect remaining remaining_arity
-             return_arity)
+          (shape_of_call statics v Indirect_unknown_arity remaining
+             remaining_arity return_arity)
           return_arity return_to extra statics hp rd rest
       | _ => Stack_undefined
       end

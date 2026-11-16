@@ -241,10 +241,10 @@ Proof.
   - apply apply_cont_value_more.
   - destruct vs as [ | v [ | v' vs]]; try exact I.
     apply (run_call_more _ _
-             (shape_of_call statics' v Indirect remaining remaining_arity
-                return_arity)
-             (shape_of_call statics v Indirect remaining remaining_arity
-                return_arity));
+             (shape_of_call statics' v Indirect_unknown_arity remaining
+                remaining_arity return_arity)
+             (shape_of_call statics v Indirect_unknown_arity remaining
+                remaining_arity return_arity));
       [ intros partial; apply apply_cont_value_more
       | intros sh; apply shape_of_call_more ].
 Qed.

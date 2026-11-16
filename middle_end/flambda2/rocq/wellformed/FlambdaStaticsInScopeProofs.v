@@ -733,8 +733,8 @@ Proof.
     destruct vs as [ | v [ | v' vs]]; [ discriminate | | discriminate ].
     inversion Hgood as [ | | syms0 ids0 r ra rta rt et Hreturn Hexn | ]; subst.
     unfold call_function in Hstep.
-    apply (run_call_terms _ Indirect _ _ _ _ statics _ rd_ s' Hcode
-             (shape_of_call_calls _ _ _ _ _ _) Hreturn Hexn)
+    apply (run_call_terms _ Indirect_unknown_arity _ _ _ _ statics _ rd_ s'
+             Hcode (shape_of_call_calls _ _ _ _ _ _) Hreturn Hexn)
       in Hstep; [ exact Hstep | ].
     intros partial Hpartial.
     exact (IHreturn [partial] statics hp rd_ s' Hcode Hreturn Hpartial).

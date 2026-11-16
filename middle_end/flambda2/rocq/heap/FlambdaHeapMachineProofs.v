@@ -101,7 +101,7 @@ Definition use_partial : expr :=
              (Prim (Binary (Array_load Array_values Load_values Mutable))
                 [Var a; Const (Tagged_immediate 0)])
              (Apply
-                (Apply_expr (Var loaded) Indirect
+                (Apply_expr (Var loaded) Indirect_unknown_arity
                    [Const (Tagged_immediate 0)] done error [] one_value
                    one_value))))).
 
@@ -116,8 +116,8 @@ Definition program : expr :=
        (Let_cont_non_recursive after_partial
           (Handler [partial] (make_handler_metadata [Value]) use_partial)
           (Apply
-             (Apply_expr (Symbol get_symbol) Indirect [Var r] after_partial
-                error [] one_value one_value)))).
+             (Apply_expr (Symbol get_symbol) Indirect_unknown_arity [Var r]
+                after_partial error [] one_value one_value)))).
 
 (* It returns 8: the array holds the partial application with the
    location of the cell, and the call completed reads the cell as it is
@@ -4377,7 +4377,7 @@ Proof.
   destruct
     match kind with
     | Direct named => Pos.eqb called named
-    | Indirect => true
+    | Indirect_unknown_arity => true
     end;
     [ | exact I ].
   destruct (lookup called (static_code st)) as [c | ]; [ | exact I ].
@@ -6232,7 +6232,8 @@ Proof.
     simpl in Hc. apply andb_true_iff in Hc as [Hreturn Hexn].
     cbn [heap_apply_cont_value].
     destruct vs as [ | v [ | v2 vs]]; try discriminate.
-    apply (heap_run_call_code_free_of D st h _ Indirect); try assumption.
+    apply (heap_run_call_code_free_of D st h _ Indirect_unknown_arity); try
+      assumption.
     - intros partial s0. apply IHreturn. exact Hreturn.
     - apply FlambdaSemanticsProofs.shape_of_call_calls. }
   all: simpl.

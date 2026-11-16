@@ -707,7 +707,7 @@ Definition call_result (cert : certificate) (codes : list (code_id * code))
           unknown_call cert codes cs first (skipn (length flags) args)
             (count - full_arity c)
     else None
-  | Indirect => unknown_call cert codes cs callee args count
+  | Indirect_unknown_arity => unknown_call cert codes cs callee args count
   end.
 
 (* The code of the closures that a [Let] makes. *)

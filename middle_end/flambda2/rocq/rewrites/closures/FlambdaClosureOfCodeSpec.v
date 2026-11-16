@@ -245,7 +245,7 @@ Definition read_code_slot (sets : list set_made) (syms : list symbol)
 Definition call_code_closure (known : closure_codes) (ap : apply_expr)
     : apply_expr :=
   match ap_call_kind ap, ap_callee ap with
-  | Indirect, Var x =>
+  | Indirect_unknown_arity, Var x =>
     match lookup x known with
     | Some c =>
       Apply_expr (ap_callee ap) (Direct c) (ap_args ap) (ap_continuation ap)
@@ -253,7 +253,7 @@ Definition call_code_closure (known : closure_codes) (ap : apply_expr)
         (ap_return_arity ap)
     | None => ap
     end
-  | Indirect, (Symbol _ | Const _) | Direct _, _ => ap
+  | Indirect_unknown_arity, (Symbol _ | Const _) | Direct _, _ => ap
   end.
 
 (* What is known once the variables given are bound again: nothing

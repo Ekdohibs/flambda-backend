@@ -94,8 +94,8 @@ Definition apply_indirect_known_statement : Prop :=
     equivalent
       (State
          (Apply
-            (Apply_expr callee Indirect args k exn extra args_arity
-               return_arity))
+            (Apply_expr callee Indirect_unknown_arity args k exn extra
+               args_arity return_arity))
          vars conts statics hp rd)
       (State
          (Apply

@@ -392,7 +392,7 @@ Proof.
   destruct
     (match kind with
      | Direct named => Pos.eqb called named
-     | Indirect => true
+     | Indirect_unknown_arity => true
      end);
     [ | reflexivity ].
   destruct (lookup called (static_code statics)) as [c | ];

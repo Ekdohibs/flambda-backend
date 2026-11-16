@@ -364,7 +364,7 @@ Lemma shape_of_closure_call_full (statics : static_env) (closure : value)
     (kind : call_kind) (vs : list value) (args_arity return_arity : arity)
     (called : code_id) (slots : list (value_slot * value)) (c : code) :
   closure_of statics closure = Some (called, slots) ->
-  kind = Indirect ∨ kind = Direct called ->
+  kind = Indirect_unknown_arity ∨ kind = Direct called ->
   lookup called (static_code statics) = Some c ->
   code_is_tupled c = false ->
   length args_arity = length (code_params_arity c) ->
@@ -376,7 +376,7 @@ Proof.
   assert (Hexpected :
     match kind with
     | Direct named => Pos.eqb called named
-    | Indirect => true
+    | Indirect_unknown_arity => true
     end = true)
     by (destruct Hkind as [-> | ->]; [ reflexivity | apply Pos.eqb_refl ]).
   rewrite Hexpected, Hcode, (arguments_for_code_not_tupled _ _ _ _ Htupled).
@@ -388,7 +388,7 @@ Lemma shape_of_closure_call_not_full (statics : static_env)
     (args_arity return_arity : arity) (called : code_id)
     (slots : list (value_slot * value)) (c : code) :
   closure_of statics closure = Some (called, slots) ->
-  kind = Indirect ∨ kind = Direct called ->
+  kind = Indirect_unknown_arity ∨ kind = Direct called ->
   lookup called (static_code statics) = Some c ->
   code_is_tupled c = false ->
   length args_arity <> length (code_params_arity c) ->
@@ -414,7 +414,7 @@ Proof.
   assert (Hexpected :
     match kind with
     | Direct named => Pos.eqb called named
-    | Indirect => true
+    | Indirect_unknown_arity => true
     end = true)
     by (destruct Hkind as [-> | ->]; [ reflexivity | apply Pos.eqb_refl ]).
   apply Nat.eqb_neq in Hcount.
@@ -426,9 +426,9 @@ Lemma shape_of_closure_call_kind (statics : static_env) (closure : value)
     (kind : call_kind) (vs : list value) (args_arity return_arity : arity)
     (called : code_id) (slots : list (value_slot * value)) :
   closure_of statics closure = Some (called, slots) ->
-  kind = Indirect ∨ kind = Direct called ->
+  kind = Indirect_unknown_arity ∨ kind = Direct called ->
   shape_of_closure_call statics closure kind vs args_arity return_arity
-  = shape_of_closure_call statics closure Indirect vs args_arity
+  = shape_of_closure_call statics closure Indirect_unknown_arity vs args_arity
       return_arity.
 Proof.
   intros Hclosure [-> | ->]; [ reflexivity | ].
@@ -474,7 +474,7 @@ Lemma step_apply_closure (ap : apply_expr) (vars : env) (conts : cont_env)
   eval_simples vars (ap_args ap) = Some vs ->
   eval_simples vars (exn_extra_simples ap) = Some extra ->
   closure_of statics callee = Some (called, slots) ->
-  ap_call_kind ap = Indirect ∨ ap_call_kind ap = Direct called ->
+  ap_call_kind ap = Indirect_unknown_arity ∨ ap_call_kind ap = Direct called ->
   lookup called (static_code statics) = Some c ->
   code_is_tupled c = false ->
   binds_statics (code_body c) = false ->
@@ -502,7 +502,7 @@ Proof.
   assert (Hexpected :
     match ap_call_kind ap with
     | Direct named => Pos.eqb called named
-    | Indirect => true
+    | Indirect_unknown_arity => true
     end = true)
     by (destruct Hkind as [-> | ->]; [ reflexivity | apply Pos.eqb_refl ]).
   rewrite Hexpected, Hcode, (arguments_for_code_not_tupled _ _ _ _ Htupled).
@@ -2446,8 +2446,8 @@ Lemma apply_cont_value_over_application (remaining : list value)
     vs statics hp rd
   = match vs with
     | [v] =>
-      call_function v Indirect remaining remaining_arity return_arity
-        return_to exn_to statics hp rd
+      call_function v Indirect_unknown_arity remaining remaining_arity
+        return_arity return_to exn_to statics hp rd
     | _ => Undefined
     end.
 Proof. destruct vs as [ | v [ | v' vs]]; reflexivity. Qed.
@@ -2623,7 +2623,7 @@ Proof.
   destruct
     (match kind with
      | Direct named => Pos.eqb called named
-     | Indirect => true
+     | Indirect_unknown_arity => true
      end)
     eqn:Hexpected; [ | discriminate ].
   destruct (lookup called (static_code statics)) as [c | ] eqn:Hcode;
@@ -2647,11 +2647,11 @@ Lemma shape_of_call_cases (statics : static_env) (callee : value)
   shape_of_closure_call statics callee kind vs args_arity return_arity
   = Some shape
   ∨ ∃ (closure : value) (applied : list value) (applied_arity : arity),
-      kind = Indirect
+      kind = Indirect_unknown_arity
       ∧ callee = Value_partial_application closure applied applied_arity
       ∧ args_arity <> []
-      ∧ shape_of_closure_call statics closure Indirect (applied ++ vs)
-          (applied_arity ++ args_arity) return_arity
+      ∧ shape_of_closure_call statics closure Indirect_unknown_arity
+          (applied ++ vs) (applied_arity ++ args_arity) return_arity
         = Some shape.
 Proof.
   unfold shape_of_call.
@@ -2951,7 +2951,7 @@ Proof.
     destruct vs as [ | v [ | v' vs]]; [ discriminate | | discriminate ].
     apply Kc_over in Hc as [Hreturn Hexn].
     unfold call_function in Hstep.
-    apply (run_call_lands _ Indirect _ _ _ _ s'
+    apply (run_call_lands _ Indirect_unknown_arity _ _ _ _ s'
              (shape_of_call_calls _ _ _ _ _ _) Hreturn Hexn)
       in Hstep; [ exact Hstep | ].
     intros partial. exact (IHreturn [partial] s' Hreturn).
@@ -3049,7 +3049,7 @@ Proof.
   destruct
     (match kind with
      | Direct named => Pos.eqb called named
-     | Indirect => true
+     | Indirect_unknown_arity => true
      end);
     [ | apply Shapes_none ].
   destruct (lookup called (static_code statics)) as [c | ],

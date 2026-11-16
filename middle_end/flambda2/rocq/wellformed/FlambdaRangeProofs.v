@@ -720,7 +720,7 @@ Proof.
   - rewrite apply_cont_value_over_application.
     destruct vs as [ | v [ | v' vs]]; [ exact I | | exact I ].
     simpl in Hvs. rewrite andb_true_r in Hvs. unfold call_function.
-    apply (run_call_in_range _ Indirect); try assumption.
+    apply (run_call_in_range _ Indirect_unknown_arity); try assumption.
     + apply shape_of_call_calls.
     + apply (shape_of_call_values_all _ value_in_range_partial);
         [ exact (tuple_fields_in_range statics Hstatics) | exact Hvs

@@ -1267,7 +1267,7 @@ Definition kind_ok (callee : value) (kind : call_kind) : Prop :=
   match kind with
   | Direct named =>
     (∃ s : symbol, callee = Value_symbol s) ∨ lookup named ids = None
-  | Indirect => True
+  | Indirect_unknown_arity => True
   end.
 
 (* Code with some [Let]s copied has the parameters, the arities and the
@@ -1349,13 +1349,13 @@ Proof.
   destruct
     (match kind with
      | Direct named => Pos.eqb called named
-     | Indirect => true
+     | Indirect_unknown_arity => true
      end) eqn:Hexpected;
     [ | discriminate ].
   assert (Hexpected' :
     match kind with
     | Direct named => Pos.eqb called' named
-    | Indirect => true
+    | Indirect_unknown_arity => true
     end = true).
   { destruct kind as [named | ]; [ | reflexivity ].
     apply Pos.eqb_eq in Hexpected. subst named. apply Pos.eqb_eq.
@@ -1652,7 +1652,7 @@ Definition apply_ok (e : expr) : Prop :=
     match ap_call_kind ap with
     | Direct named =>
       (∃ s : symbol, ap_callee ap = Symbol s) ∨ lookup named ids = None
-    | Indirect => True
+    | Indirect_unknown_arity => True
     end
   | Let _ _ _ _ | Let_static _ _ | Let_cont_non_recursive _ _ _
   | Let_cont_recursive _ _ | Apply_cont _ | Switch _ _ | Invalid =>

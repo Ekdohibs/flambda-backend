@@ -57,7 +57,8 @@ Lemma shape_of_closure_call_direct (statics : static_env) (closure : value)
   shape_of_closure_call statics closure (Direct code) vs args_arity
     return_arity
   <> None ->
-  shape_of_closure_call statics closure Indirect vs args_arity return_arity
+  shape_of_closure_call statics closure Indirect_unknown_arity vs args_arity
+    return_arity
   = shape_of_closure_call statics closure (Direct code) vs args_arity
       return_arity.
 Proof.
@@ -73,7 +74,7 @@ Lemma shape_of_call_direct (statics : static_env) (callee : value)
     (code : code_id) (vs : list value) (args_arity return_arity : arity) :
   shape_of_call statics callee (Direct code) vs args_arity return_arity
   <> None ->
-  shape_of_call statics callee Indirect vs args_arity return_arity
+  shape_of_call statics callee Indirect_unknown_arity vs args_arity return_arity
   = shape_of_call statics callee (Direct code) vs args_arity return_arity.
 Proof.
   unfold shape_of_call.
@@ -94,8 +95,8 @@ Lemma call_function_direct (callee : value) (code : code_id)
   call_function callee (Direct code) vs args_arity return_arity return_to
     exn_to statics hp rd
   <> Undefined ->
-  call_function callee Indirect vs args_arity return_arity return_to exn_to
-    statics hp rd
+  call_function callee Indirect_unknown_arity vs args_arity return_arity
+    return_to exn_to statics hp rd
   = call_function callee (Direct code) vs args_arity return_arity return_to
       exn_to statics hp rd.
 Proof.

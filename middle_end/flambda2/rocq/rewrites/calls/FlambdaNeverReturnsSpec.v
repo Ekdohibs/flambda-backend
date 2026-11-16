@@ -180,7 +180,7 @@ Definition cut_return (known : list (code_id * code)) (ap : apply_expr)
       end
     | None => Apply ap
     end
-  | Indirect => Apply ap
+  | Indirect_unknown_arity => Apply ap
   end.
 
 (* Whether a binding of [k] is of a handler that is [Invalid] around a

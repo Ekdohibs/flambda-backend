@@ -1818,7 +1818,7 @@ Example second_closure_known :
   follow_aliases Known.empty
     (two_closures
        (Let x Value (Project_value_slot_from g_slot v_slot (Var g))
-          (call (Var g) Indirect [Var x])))
+          (call (Var g) Indirect_unknown_arity [Var x])))
   = two_closures
       (Let x Value (Simple three) (call (Var g) (Direct g_code) [three])).
 Proof. reflexivity. Qed.
@@ -1861,7 +1861,7 @@ Example static_closures_known :
        (Let f Value (Simple (Symbol s_f))
           (Let g Value (Project_function_slot f_slot g_slot (Var f))
              (Let x Value (Project_value_slot_from g_slot v_slot (Var g))
-                (call (Var g) Indirect [Var x])))))
+                (call (Var g) Indirect_unknown_arity [Var x])))))
   = two_static_closures
       (Let f Value (Simple (Symbol s_f))
          (Let g Value (Simple (Symbol s_g))
@@ -1877,20 +1877,20 @@ Example static_closures_forgotten :
     (two_static_closures
        (Let y Value (Simple three)
           (Let x Value (Project_value_slot_from f_slot v_slot (Symbol s_f))
-             (call (Symbol s_f) Indirect [Var x]))))
+             (call (Symbol s_f) Indirect_unknown_arity [Var x]))))
   = two_static_closures
       (Let y Value (Simple three)
          (Let x Value (Project_value_slot_from f_slot v_slot (Symbol s_f))
-            (call (Symbol s_f) Indirect [Var x]))).
+            (call (Symbol s_f) Indirect_unknown_arity [Var x]))).
 Proof. reflexivity. Qed.
 
 (* Before the [Let_static] nothing is known of its symbols. *)
 Example static_closures_in_scope :
   follow_aliases Known.empty
     (Let x Value (Project_function_slot f_slot g_slot (Symbol s_f))
-       (two_static_closures (call (Var x) Indirect [])))
+       (two_static_closures (call (Var x) Indirect_unknown_arity [])))
   = Let x Value (Project_function_slot f_slot g_slot (Symbol s_f))
-      (two_static_closures (call (Var x) Indirect [])).
+      (two_static_closures (call (Var x) Indirect_unknown_arity [])).
 Proof. reflexivity. Qed.
 
 (* What is learnt in the body of a [Let_cont] is not known in the

@@ -364,8 +364,8 @@ Definition example_call_of_static_closure_statement : Prop :=
             (example_call (Symbol example_s) kind (Var example_x) ret exn'))]
     in
     expr_refines_under Typing_env.create
-      (Let_static (bindings Indirect)
-         (example_call (Symbol example_s) Indirect
+      (Let_static (bindings Indirect_unknown_arity)
+         (example_call (Symbol example_s) Indirect_unknown_arity
             (Const (Tagged_immediate 7)) k exn))
       (Let_static (bindings (Direct example_f))
          (example_call (Symbol example_s) (Direct example_f)

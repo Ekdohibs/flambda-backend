@@ -77,8 +77,8 @@
    What is here. [demote_stub_calls e] makes indirect, in the code of
    each stub that the unit [e] binds, every direct call that names
    code which [e] binds and which is not a stub ([non_stub_code]). The
-   [Indirect] of the model is both sorts of indirect call of the
-   compiler (FlambdaSemanticsSpec.v, the comment at
+   [Indirect_unknown_arity] of the model is both sorts of indirect call
+   of the compiler (FlambdaSemanticsSpec.v, the comment at
    [shape_of_closure_call]). Every such call of that code is made
    indirect, whatever its callee. Simplify does it where the type of
    the callee is not available. Where the type says which closure the
@@ -163,11 +163,12 @@ Definition demote_call (ids : list code_id) (ap : apply_expr) : apply_expr :=
   | Direct code =>
     if among code ids
     then
-      Apply_expr (ap_callee ap) Indirect (ap_args ap) (ap_continuation ap)
+      Apply_expr (ap_callee ap) Indirect_unknown_arity (ap_args ap)
+        (ap_continuation ap)
         (ap_exn_continuation ap) (ap_exn_extra_args ap) (ap_args_arity ap)
         (ap_return_arity ap)
     else ap
-  | Indirect => ap
+  | Indirect_unknown_arity => ap
   end.
 
 (* Every call of an expression, in handlers too. Static bindings are
@@ -333,7 +334,8 @@ Definition stub_example (metadata : code_metadata) (kind : call_kind) : expr :=
 Definition demote_stub_calls_demotes_statement : Prop :=
   demote_stub_calls
     (stub_example (stub_code_metadata stub_example_metadata) (Direct function))
-  = stub_example (stub_code_metadata stub_example_metadata) Indirect.
+  = stub_example (stub_code_metadata stub_example_metadata)
+    Indirect_unknown_arity.
 
 (* Where the wrapper is not marked as a stub, nothing changes. *)
 Definition demote_stub_calls_not_a_stub_statement : Prop :=

@@ -1955,7 +1955,7 @@ Proof.
   destruct
     (match kind with
      | Direct named => Pos.eqb called named
-     | Indirect => true
+     | Indirect_unknown_arity => true
      end);
     [ | discriminate ].
   rewrite (proj1 Hstatics called).
@@ -3584,9 +3584,10 @@ Proof.
     generalize
       (run_call_plain
          (fun partial => apply_cont_value return_to [partial] statics hp rd)
-         Indirect _ return_arity return_to exn_to m_return m_exn statics hp rd
-         (shape_of_call_calls statics v Indirect remaining remaining_arity
-            return_arity)
+         Indirect_unknown_arity _ return_arity return_to exn_to m_return m_exn
+           statics hp rd
+         (shape_of_call_calls statics v Indirect_unknown_arity remaining
+            remaining_arity return_arity)
          Hcode Hreturn Hany Hclosed Hexn
          (fun partial =>
             closed_stays_plain return_to [partial] statics _ rd_ Hclosed

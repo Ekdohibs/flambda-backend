@@ -250,8 +250,8 @@ Definition apply_sibling_statement : Prop :=
       (State
          (Let x kind (Project_function_slot move_from move_to closure)
             (Apply
-               (Apply_expr (Var x) Indirect args k exn extra args_arity
-                  return_arity)))
+               (Apply_expr (Var x) Indirect_unknown_arity args k exn extra
+                  args_arity return_arity)))
          vars conts statics hp rd)
       (State
          (Let x kind (Project_function_slot move_from move_to closure)
@@ -1063,8 +1063,8 @@ Definition parity_code (this other : function_slot)
           (Let other_closure Value
              (Project_function_slot this other (Var my_closure))
              (Apply
-                (Apply_expr (Var other_closure) Indirect [Var predecessor]
-                   ret exn [] parity_arity parity_arity))))
+                (Apply_expr (Var other_closure) Indirect_unknown_arity
+                   [Var predecessor] ret exn [] parity_arity parity_arity))))
        (Let_cont_non_recursive at_zero
           (Handler [] (make_handler_metadata [])
              (Let answer_at_zero parity_kind
@@ -1108,8 +1108,9 @@ Definition parity_let (i : Z) : option expr :=
   option_map (Let_static parity_code_bindings)
     (let_closures [even; odd] parity_decls parity_value_slots
        (Apply
-          (Apply_expr (Var odd) Indirect [Const (Naked_immediate i)] done
-             error [] parity_arity parity_arity))).
+          (Apply_expr (Var odd) Indirect_unknown_arity
+             [Const (Naked_immediate i)] done error [] parity_arity
+             parity_arity))).
 
 Definition even_symbol : symbol := 1%positive.
 Definition odd_symbol : symbol := 2%positive.

@@ -634,7 +634,7 @@ Proof.
   - rewrite apply_cont_value_over_application.
     destruct vs as [ | v [ | v' vs]]; [ exact I | | exact I ].
     simpl in Hvs. rewrite andb_true_r in Hvs. unfold call_function.
-    apply (run_call_free_of_arrays _ Indirect); try assumption.
+    apply (run_call_free_of_arrays _ Indirect_unknown_arity); try assumption.
     + apply shape_of_call_calls.
     + apply (shape_of_call_values_all _ no_array_value_partial);
         [ exact (tuple_fields_no_array_value statics Hstatics) | exact Hvs

@@ -1021,7 +1021,7 @@ Proof.
     + rewrite !apply_cont_value_over_application.
       destruct vs as [ | v [ | v' vs]]; try exact I.
       unfold call_function.
-      apply (run_call_loops statics statics' _ rd_ Indirect);
+      apply (run_call_loops statics statics' _ rd_ Indirect_unknown_arity);
         [ exact Hstatics | apply shape_of_call_loops, Hstatics
         | apply shape_of_call_calls | apply Rel_same | apply Rel_same | ].
       intros partial. apply IHreturn.
@@ -1056,7 +1056,7 @@ Proof.
   - rewrite !apply_cont_value_over_application.
     destruct vs as [ | v [ | v' vs]]; try exact I.
     unfold call_function.
-    apply (run_call_loops statics statics' _ rd_ Indirect);
+    apply (run_call_loops statics statics' _ rd_ Indirect_unknown_arity);
       [ exact Hstatics | apply shape_of_call_loops, Hstatics
       | apply shape_of_call_calls | exact Hreturn | exact Hraise | ].
     intros partial. apply IHreturn.
@@ -1160,7 +1160,7 @@ Proof.
   destruct
     (match kind with
      | Direct named => Pos.eqb id named
-     | Indirect => true
+     | Indirect_unknown_arity => true
      end);
     [ | exact I ].
   rewrite Hid. unfold arguments_for_code.

@@ -155,7 +155,7 @@ Proof.
     destruct vs as [ | v [ | v' vs]]; [ discriminate | | discriminate ].
     apply Kc_over in Hc as [Hreturn Hexn].
     unfold call_function in Hstep.
-    apply (run_call_lands_bound _ Indirect _ _ _ _ s'
+    apply (run_call_lands_bound _ Indirect_unknown_arity _ _ _ _ s'
              (shape_of_call_calls _ _ _ _ _ _) Hreturn Hexn)
       in Hstep; [ exact Hstep | ].
     intros partial. exact (IHreturn [partial] s' Hreturn).

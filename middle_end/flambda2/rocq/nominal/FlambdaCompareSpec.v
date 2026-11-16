@@ -193,7 +193,7 @@ Definition static_const_eqb (vm : name_map) (const const' : static_const)
 Definition call_kind_eqb (kind kind' : call_kind) : bool :=
   match kind, kind' with
   | Direct code, Direct code' => Pos.eqb code code'
-  | Indirect, Indirect => true
+  | Indirect_unknown_arity, Indirect_unknown_arity => true
   | _, _ => false
   end.
 

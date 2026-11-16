@@ -157,7 +157,7 @@ Definition with_call_kind (kind : call_kind) (ap : apply_expr)
 Definition copy_call (ids : list (code_id * code_id))
     (symbols : list symbol) (ap : apply_expr) : apply_expr :=
   match ap_call_kind ap with
-  | Indirect => ap
+  | Indirect_unknown_arity => ap
   | Direct id =>
     match ap_callee ap with
     | Symbol s =>
@@ -166,7 +166,7 @@ Definition copy_call (ids : list (code_id * code_id))
       else ap
     | Var _ | Const _ =>
       match lookup id ids with
-      | Some _ => with_call_kind Indirect ap
+      | Some _ => with_call_kind Indirect_unknown_arity ap
       | None => ap
       end
     end
@@ -410,9 +410,9 @@ Definition copied_twice_before : expr :=
    in the code and in the two copies. *)
 Definition copied_twice_after : expr :=
   copied_unit
-    [Bind_code old (copied_code Indirect);
-     Bind_code second_new (copied_code Indirect);
-     Bind_code first_new (copied_code Indirect)]
+    [Bind_code old (copied_code Indirect_unknown_arity);
+     Bind_code second_new (copied_code Indirect_unknown_arity);
+     Bind_code first_new (copied_code Indirect_unknown_arity)]
     first_new second_new.
 
 (* Two copies given in turn, each for one of the closures. *)

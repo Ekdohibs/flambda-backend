@@ -182,8 +182,8 @@ Fixpoint heap_apply_cont_value (c : cont_value) (vs : list value)
     | [v] =>
       heap_run_call
         (fun partial => heap_apply_cont_value return_to [partial] statics h)
-        (shape_of_call statics v Indirect remaining remaining_arity
-           return_arity)
+        (shape_of_call statics v Indirect_unknown_arity remaining
+           remaining_arity return_arity)
         return_arity return_to exn_to statics h
     | _ => Heap_undefined
     end

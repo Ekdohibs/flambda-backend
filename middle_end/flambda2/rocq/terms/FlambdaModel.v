@@ -480,7 +480,7 @@ Definition is_raise (ac : apply_cont) : bool :=
    whatever closure the callee turns out to be. *)
 Inductive call_kind : Type :=
   | Direct (code : code_id)
-  | Indirect.
+  | Indirect_unknown_arity.
 
 (* [Apply_expr.t]. An exception raised by the call goes to the exception
    continuation, which is applied to the exception followed by the extra

@@ -322,7 +322,7 @@ Proof.
   - rewrite apply_cont_value_over_application.
     destruct vs as [ | v [ | v' vs]]; [ exact I | | exact I ].
     destruct Hc as [Hreturn Hexn]. unfold call_function.
-    apply (run_call_in_scope outer _ Indirect); try assumption.
+    apply (run_call_in_scope outer _ Indirect_unknown_arity); try assumption.
     + apply shape_of_call_calls.
     + intros partial. exact
       (IHreturn [partial] statics hp rd_ Hstatics Hreturn).

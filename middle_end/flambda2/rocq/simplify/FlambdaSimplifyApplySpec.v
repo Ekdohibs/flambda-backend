@@ -235,7 +235,7 @@ Definition apply_direct_proved_statement : Prop :=
   ∀ (tenv : Typing_env.t) (ap : apply_expr) (ty : flambda_type)
     (slot : function_slot) (alloc_mode : Alloc_mode.t)
     (entry : closures_entry) (function_type : function_type),
-    ap_call_kind ap = Indirect ->
+    ap_call_kind ap = Indirect_unknown_arity ->
     argument_type tenv (ap_callee ap) ty ->
     Provers.prove_single_closures_entry tenv ty
     = Some
@@ -272,15 +272,15 @@ Definition direct_call_kind (tenv : Typing_env.t) (ap : apply_expr)
     : call_kind :=
   match ap_call_kind ap with
   | Direct code => Direct code
-  | Indirect =>
+  | Indirect_unknown_arity =>
     match simplify_simple tenv (ap_callee ap) with
     | Some (ty, _) =>
       match Provers.prove_single_closures_entry tenv ty with
       | Some (Proof_of_property.Proved (_, _, _, function_type)) =>
         Direct (function_type_code_id function_type)
-      | Some Proof_of_property.Unknown | None => Indirect
+      | Some Proof_of_property.Unknown | None => Indirect_unknown_arity
       end
-    | None => Indirect
+    | None => Indirect_unknown_arity
     end
   end.
 
@@ -452,7 +452,8 @@ Definition call_closure : named :=
 Definition example_local_function_statement : Prop :=
   ∀ k exn : continuation,
     expr_refines_under call_env
-      (Let call_g Value call_closure (call_of (Var call_g) Indirect k exn))
+      (Let call_g Value call_closure (call_of (Var call_g)
+        Indirect_unknown_arity k exn))
       (Let call_g Value call_closure
          (call_of (Var call_g) (Direct call_code) k exn)).
 
@@ -476,7 +477,8 @@ Definition example_closure_from_pair_statement : Prop :=
     expr_refines_under call_env
       (Let call_g Value call_closure
          (Let call_p Value pair
-            (Let call_h Value load (call_of (Var call_h) Indirect k exn))))
+            (Let call_h Value load (call_of (Var call_h) Indirect_unknown_arity
+              k exn))))
       (Let call_g Value call_closure
          (Let call_p Value pair
             (Let call_h Value (Simple (Var call_g))
@@ -491,7 +493,7 @@ Definition example_function_argument_statement : Prop :=
     expr_refines_under call_env
       (Let call_g Value call_closure
          (Let call_h Value (Simple (Var call_g))
-            (call_of (Var call_h) Indirect k exn)))
+            (call_of (Var call_h) Indirect_unknown_arity k exn)))
       (Let call_g Value call_closure
          (Let call_h Value (Simple (Var call_g))
             (call_of (Var call_g) (Direct call_code) k exn))).

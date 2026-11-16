@@ -133,7 +133,8 @@ Definition apply_partial_statement : Prop :=
     eval_simples vars (ap_args ap) = Some vs ->
     eval_simples vars (exn_extra_simples ap) = Some extra ->
     closure_of statics callee = Some (called, slots) ->
-    ap_call_kind ap = Indirect ∨ ap_call_kind ap = Direct called ->
+    ap_call_kind ap = Indirect_unknown_arity
+    ∨ ap_call_kind ap = Direct called ->
     lookup called (static_code statics) = Some c ->
     code_is_tupled c = false ->
     length (ap_args_arity ap) < length (code_params_arity c) ->
@@ -161,12 +162,12 @@ Definition apply_partial_application_statement : Prop :=
     = Some (Value_partial_application closure applied applied_arity) ->
     eval_simples vars (ap_args ap) = Some vs ->
     eval_simples vars (exn_extra_simples ap) = Some extra ->
-    ap_call_kind ap = Indirect ->
+    ap_call_kind ap = Indirect_unknown_arity ->
     ap_args_arity ap <> [] ->
     map kind_of_value vs = unarize (ap_args_arity ap) ->
     partial_application_of closure = None ->
     step (State (Apply ap) vars conts statics hp rd)
-    = call_function closure Indirect (applied ++ vs)
+    = call_function closure Indirect_unknown_arity (applied ++ vs)
         (applied_arity ++ ap_args_arity ap) (ap_return_arity ap)
         (resolve (ap_continuation ap) conts)
         (with_extra_args (resolve (ap_exn_continuation ap) conts) extra)
@@ -180,7 +181,7 @@ Definition apply_partial_application_undefined_statement : Prop :=
     (closure : value) (applied : list value) (applied_arity : arity),
     eval_simple vars (ap_callee ap)
     = Some (Value_partial_application closure applied applied_arity) ->
-    ap_call_kind ap <> Indirect ∨ ap_args_arity ap = [] ->
+    ap_call_kind ap <> Indirect_unknown_arity ∨ ap_args_arity ap = [] ->
     step (State (Apply ap) vars conts statics hp rd) = Undefined.
 
 (* A call of a partial application whose own arguments are not of the
@@ -221,7 +222,7 @@ Definition partial_then_apply_statement : Prop :=
     (called : code_id) (slots : list (value_slot * value)) (c : code),
     eval_simple vars f = Some callee ->
     closure_of statics callee = Some (called, slots) ->
-    kind = Indirect ∨ kind = Direct called ->
+    kind = Indirect_unknown_arity ∨ kind = Direct called ->
     lookup called (static_code statics) = Some c ->
     code_is_tupled c = false ->
     length args_arity < length (code_params_arity c) ->
@@ -233,8 +234,8 @@ Definition partial_then_apply_statement : Prop :=
          (Let_cont_non_recursive k
             (Handler [p] metadata
                (Apply
-                  (Apply_expr (Var p) Indirect args' k' exn' extra'
-                     args_arity' return_arity)))
+                  (Apply_expr (Var p) Indirect_unknown_arity args' k' exn'
+                     extra' args_arity' return_arity)))
             (Apply
                (Apply_expr f kind args k exn extra args_arity
                   partial_arity)))
@@ -267,7 +268,8 @@ Definition apply_over_statement : Prop :=
     eval_simples vars (ap_args ap) = Some vs ->
     eval_simples vars (exn_extra_simples ap) = Some extra ->
     closure_of statics callee = Some (called, slots) ->
-    ap_call_kind ap = Indirect ∨ ap_call_kind ap = Direct called ->
+    ap_call_kind ap = Indirect_unknown_arity
+    ∨ ap_call_kind ap = Direct called ->
     lookup called (static_code statics) = Some c ->
     code_is_tupled c = false ->
     length (code_params_arity c) < length (ap_args_arity ap) ->
@@ -302,8 +304,8 @@ Definition over_application_applied_statement : Prop :=
       vs statics hp rd
     = match vs with
       | [v] =>
-        call_function v Indirect remaining remaining_arity return_arity
-          return_to exn_to statics hp rd
+        call_function v Indirect_unknown_arity remaining remaining_arity
+          return_arity return_to exn_to statics hp rd
       | _ => Undefined
       end.
 
@@ -355,7 +357,7 @@ Definition over_application_split_statement : Prop :=
          (Let_cont_non_recursive k
             (Handler [p] (make_handler_metadata [Value])
                (Apply
-                  (Apply_expr (Var p) Indirect args' k' exn' extra
+                  (Apply_expr (Var p) Indirect_unknown_arity args' k' exn' extra
                      args_arity' return_arity)))
             (Apply
                (Apply_expr f (Direct called) args k exn' extra
@@ -409,10 +411,11 @@ Definition partial_example : expr :=
     (Let_cont_non_recursive apply_rest
        (Handler [partial] (make_handler_metadata [Value])
           (Apply
-             (Apply_expr (Var partial) Indirect [Const (Tagged_immediate 2)]
-                done error [] one_value one_value)))
+             (Apply_expr (Var partial) Indirect_unknown_arity
+                [Const (Tagged_immediate 2)] done error [] one_value
+                one_value)))
        (Apply
-          (Apply_expr (Symbol first_symbol) Indirect
+          (Apply_expr (Symbol first_symbol) Indirect_unknown_arity
              [Const (Tagged_immediate 1)] apply_rest error [] one_value
              one_value))).
 
@@ -422,7 +425,7 @@ Definition partial_example : expr :=
 Definition over_example : expr :=
   Let_static example_bindings
     (Apply
-       (Apply_expr (Symbol identity_symbol) Indirect
+       (Apply_expr (Symbol identity_symbol) Indirect_unknown_arity
           [Symbol first_symbol; Const (Tagged_immediate 1);
            Const (Tagged_immediate 2)]
           done error []
@@ -452,8 +455,8 @@ Definition malformed_partial_application_statement : Prop :=
   step
     (State
        (Apply
-          (Apply_expr (Var partial) Indirect [] done error [] one_value
-             one_value))
+          (Apply_expr (Var partial) Indirect_unknown_arity [] done error []
+             one_value one_value))
        [(partial,
          Value_partial_application (Value_closure identity_code_id [])
            [Value_const (Tagged_immediate 5)] [])]
@@ -488,7 +491,7 @@ Definition raising_bindings : list static_binding :=
 Definition over_raising (callee : symbol) (first second : Z) : expr :=
   Let_static raising_bindings
     (Apply
-       (Apply_expr (Symbol callee) Indirect
+       (Apply_expr (Symbol callee) Indirect_unknown_arity
           [Const (Tagged_immediate first); Const (Tagged_immediate second)]
           done error
           [(Const (Tagged_immediate 9), Value)]

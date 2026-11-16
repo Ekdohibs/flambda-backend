@@ -61,7 +61,8 @@ Proof.
   intros ap vars conts statics hp rd closure applied vs extra applied_arity
     Hcallee Hargs Hextra Hkind Hnonempty Hkinds Hclosure.
   rewrite step_apply, Hcallee, Hargs, Hextra, Hkind. unfold call_function.
-  rewrite (shape_of_call_closure statics closure Indirect _ _ _ Hclosure).
+  rewrite (shape_of_call_closure statics closure Indirect_unknown_arity _ _ _
+    Hclosure).
   unfold shape_of_call. cbn [partial_application_of].
   rewrite Hkinds, kinds_eqb_refl.
   destruct (ap_args_arity ap) as [ | component rest];
@@ -448,8 +449,8 @@ Inductive cont_split : cont_value -> cont_value -> Prop :=
       (Closure
          (Handler [p] (make_handler_metadata [Value])
             (Apply
-               (Apply_expr (Var p) Indirect args k exn extra remaining_arity
-                  return_arity)))
+               (Apply_expr (Var p) Indirect_unknown_arity args k exn extra
+                  remaining_arity return_arity)))
          vars conts []).
 
 Definition conts_split (conts conts' : cont_env) : Prop :=
@@ -492,7 +493,7 @@ Lemma cont_split_inv (c c' : cont_value) :
         = Closure
             (Handler [p] (make_handler_metadata [Value])
                (Apply
-                  (Apply_expr (Var p) Indirect args k exn extra
+                  (Apply_expr (Var p) Indirect_unknown_arity args k exn extra
                      remaining_arity return_arity)))
             vars conts []
         ∧ eval_simples vars args = Some remaining
@@ -670,8 +671,8 @@ Proof.
       apply run_call_split; [ exact Hreturn | exact Hexn | ].
       intros partial. apply IHreturn, Hreturn.
     + destruct
-        (shape_of_call statics v Indirect remaining remaining_arity
-           return_arity)
+        (shape_of_call statics v Indirect_unknown_arity remaining
+           remaining_arity return_arity)
         as [shape | ] eqn:Hshape.
       2: { cbn [apply_cont_value]. rewrite Hshape. exact I. }
       pose proof (shape_of_call_callee_kind _ _ _ _ _ _ _ Hshape) as Hv.
@@ -681,7 +682,7 @@ Proof.
       cbn [bind_params rec_closures map app].
       apply carried_later.
       rewrite
-        (step_apply_values (Var p) Indirect args k exn extra _ _
+        (step_apply_values (Var p) Indirect_unknown_arity args k exn extra _ _
            ((p, v) :: vars) conts statics _ rd_ v remaining extra_vs);
         [ | simpl; rewrite Pos.eqb_refl; reflexivity
         | rewrite (eval_simples_extend vars p v args Hfresh); exact Hargs
@@ -837,7 +838,7 @@ Proof.
        slots c Hclosure (or_intror eq_refl) Hcode Htupled eq_refl).
   (* a direct call of other code is undefined *)
   assert (Hkind :
-    (kind = Indirect ∨ kind = Direct called)
+    (kind = Indirect_unknown_arity ∨ kind = Direct called)
     ∨ ∃ named : code_id, kind = Direct named ∧ called <> named).
   { destruct kind as [named | ]; [ | auto ].
     destruct (Pos.eq_dec called named) as [<- | Hother]; [ auto | ].

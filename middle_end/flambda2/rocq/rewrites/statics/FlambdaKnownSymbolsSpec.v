@@ -364,7 +364,7 @@ Definition fold_block_load (sets : static_env) (d : named) : named :=
 Definition fold_known_apply (sets : static_env) (ap : apply_expr)
     : apply_expr :=
   match ap_call_kind ap, ap_callee ap with
-  | Indirect, Symbol s =>
+  | Indirect_unknown_arity, Symbol s =>
     match closure_of sets (Value_symbol s) with
     | Some (code, _) =>
       Apply_expr (ap_callee ap) (Direct code) (ap_args ap)
@@ -372,7 +372,7 @@ Definition fold_known_apply (sets : static_env) (ap : apply_expr)
         (ap_args_arity ap) (ap_return_arity ap)
     | None => ap
     end
-  | Indirect, (Var _ | Const _) | Direct _, _ => ap
+  | Indirect_unknown_arity, (Var _ | Const _) | Direct _, _ => ap
   end.
 
 (* Every [Let] of the expression, in handlers and in code too, with its

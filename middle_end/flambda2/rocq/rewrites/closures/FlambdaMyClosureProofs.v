@@ -655,8 +655,8 @@ Proof.
   - rewrite apply_cont_value_over_application.
     destruct vs as [ | v [ | v' vs]]; [ discriminate | | discriminate ].
     simpl in Hvs. rewrite andb_true_r in Hvs. unfold call_function.
-    apply (run_call_ok _ Indirect _ _ _ _ statics _ rd_ st Hstatics
-             (shape_of_call_calls _ _ _ _ _ _));
+    apply (run_call_ok _ Indirect_unknown_arity _ _ _ _ statics _ rd_ st
+             Hstatics (shape_of_call_calls _ _ _ _ _ _));
       [ | exact Hreturn | exact Hexn | ].
     + apply (shape_of_call_values_all _ value_free_partial);
         [ exact (tuple_fields_free statics Hstatics) | exact Hvs

@@ -177,11 +177,11 @@ Definition made_callee_code (known : made_closures) (callee : simple)
 Definition call_made_closure (known : made_closures) (ap : apply_expr)
     : apply_expr :=
   match ap_call_kind ap, made_callee_code known (ap_callee ap) with
-  | Indirect, Some code =>
+  | Indirect_unknown_arity, Some code =>
     Apply_expr (ap_callee ap) (Direct code) (ap_args ap) (ap_continuation ap)
       (ap_exn_continuation ap) (ap_exn_extra_args ap) (ap_args_arity ap)
       (ap_return_arity ap)
-  | Indirect, None | Direct _, _ => ap
+  | Indirect_unknown_arity, None | Direct _, _ => ap
   end.
 
 Fixpoint call_closures_knowing (known : made_closures) (e : expr) : expr :=

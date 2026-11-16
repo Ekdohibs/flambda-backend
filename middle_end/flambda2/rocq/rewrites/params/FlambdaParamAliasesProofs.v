@@ -979,8 +979,8 @@ Proof.
     unfold call_function.
     apply
       (run_call_aliased
-         (shape_of_call statics v Indirect remaining remaining_arity
-            return_arity)
+         (shape_of_call statics v Indirect_unknown_arity remaining
+            remaining_arity return_arity)
          return_arity f_ret f_exn return_to return_to' exn_to exn_to' vars
          statics _ rd_ Hno_ret Hno_exn Hreturn Hraise).
     intros partial. apply IHreturn. intros i s Hs. exfalso.
