@@ -96,7 +96,7 @@ Proof.
   intros b Hb. apply Hf. right. exact Hb.
 Qed.
 
-Ltac eqv_extra ::=
+#[local] Ltac eqv_extra ::=
   match goal with
   | |- context [first_answer ?f' ?l] =>
     match goal with
