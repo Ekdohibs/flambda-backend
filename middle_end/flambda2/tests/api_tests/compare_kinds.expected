@@ -111,5 +111,6 @@ two calls that are probes of one name: the same
 two calls that are probes of two names: different
 two static blocks of values: the same
 a static block of values and a mixed one: different
+two static blocks whose fields have not the same debugging information (one has some: true): the same
 two groups of two recursive continuations: the same
 a group of one recursive continuation and a group of two: different

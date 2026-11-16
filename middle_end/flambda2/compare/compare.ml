@@ -761,18 +761,13 @@ let simple_exprs env simple1 simple2 : Simple.t Comparison.t =
 
 let simples_with_debuginfo env simple_with_dbg1 simple_with_dbg2 :
     Simple.With_debuginfo.t Comparison.t =
-  let simple1 = Simple.With_debuginfo.simple simple_with_dbg1 in
-  let simple2 = Simple.With_debuginfo.simple simple_with_dbg2 in
-  let dbg1 = Simple.With_debuginfo.dbg simple_with_dbg1 in
-  let dbg2 = Simple.With_debuginfo.dbg simple_with_dbg2 in
-  Comparison.map
-    ~f:(fun (simple, dbg) -> Simple.With_debuginfo.create simple dbg)
-    (pairs ~f1:simple_exprs
-       ~f2:
-         (Comparator.of_predicate (fun dbg1 dbg2 ->
-              Debuginfo.compare dbg1 dbg2 = 0))
-       ~subst2:(fun _ dbg -> dbg)
-       env (simple1, dbg1) (simple2, dbg2))
+  (* The debugging information is not compared, here as everywhere else. *)
+  simple_exprs env
+    (Simple.With_debuginfo.simple simple_with_dbg1)
+    (Simple.With_debuginfo.simple simple_with_dbg2)
+  |> Comparison.map ~f:(fun simple ->
+      Simple.With_debuginfo.create simple
+        (Simple.With_debuginfo.dbg simple_with_dbg1))
 
 let print_list f ppf l =
   let pp_sep ppf () = Format.fprintf ppf ";@;<1 2>" in

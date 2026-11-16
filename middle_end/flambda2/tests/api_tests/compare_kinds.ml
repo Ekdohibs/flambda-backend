@@ -42,8 +42,10 @@
    units of the two orders), and the kinds of the invariant parameters of
    recursive continuations (compare_texts).
 
-   Then three things that a text cannot write: that a call is a probe, the shape
-   of a static block, and a group of two recursive continuations. *)
+   Then things that a text cannot write: that a call is a probe, the shape of a
+   static block, the debugging information of its fields (which is not compared,
+   as no other debugging information is), and a group of two recursive
+   continuations. *)
 
 open Flambda2_bound_identifiers
 open Flambda2_identifiers
@@ -282,7 +284,20 @@ let probe name = Probe.from_lambda (Some { name; enabled_at_init = false })
 let call_that_is probe =
   call ~probe ~args_arity:any ~return_arity:any ~extra_args:[] ()
 
-let static_block shape =
+(* Debugging information that is not empty. *)
+let somewhere =
+  let position : Lexing.position =
+    { pos_fname = "kinds.ml"; pos_lnum = 1; pos_bol = 0; pos_cnum = 0 }
+  in
+  Debuginfo.from_location
+    (Debuginfo.Scoped_location.of_location
+       ~scopes:Debuginfo.Scoped_location.empty_scopes
+       { loc_start = position;
+         loc_end = { position with pos_cnum = 1 };
+         loc_ghost = false
+       })
+
+let static_block ?(dbg = Debuginfo.none) shape =
   unit
     (fun ~return_continuation ~exn_continuation:_ ~toplevel_my_alloc_region:_ ->
       let block =
@@ -301,9 +316,8 @@ let static_block shape =
            (Flambda.Static_const_group.create
               [ Flambda.Static_const_or_code.create_static_const
                   (Static_const.block Tag.Scannable.zero Immutable shape
-                     [ Simple.With_debuginfo.create argument Debuginfo.none;
-                       Simple.With_debuginfo.create argument Debuginfo.none ])
-              ]))
+                     [ Simple.With_debuginfo.create argument dbg;
+                       Simple.With_debuginfo.create argument dbg ]) ]))
         ~body ~free_names_of_body:Unknown
       |> Flambda.Expr.create_let)
 
@@ -338,6 +352,11 @@ let () =
     (answer (static_block Value_only) (static_block Value_only));
   Printf.printf "a static block of values and a mixed one: %s\n"
     (answer (static_block Value_only) (static_block mixed));
+  Printf.printf
+    "two static blocks whose fields have not the same debugging information \
+     (one has some: %b): %s\n"
+    (not (Debuginfo.is_none somewhere))
+    (answer (static_block Value_only) (static_block ~dbg:somewhere Value_only));
   Printf.printf "two groups of two recursive continuations: %s\n"
     (answer (recursive_group 2) (recursive_group 2));
   Printf.printf "a group of one recursive continuation and a group of two: %s\n"
