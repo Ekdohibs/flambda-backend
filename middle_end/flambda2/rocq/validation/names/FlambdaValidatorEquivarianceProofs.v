@@ -782,6 +782,12 @@ End Unused_conts.
    them is as it was on both sides of a law. *)
 Section Dropped.
 
+(* Every proof of this section passes with the faster step of the
+   database. That step finds a law by its equation as it is written,
+   so a theorem that is stated by the name of its statement is given
+   as a hint with its arguments written. *)
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
+
 (* [keep_map] as a function of lists that the tactic goes under. *)
 Lemma keep_map_flat_map {A : Type} (keep : A -> bool) (f : A -> A)
     (l : list A) :
@@ -808,15 +814,18 @@ Proof. equivariance. Qed.
 
 Theorem expr_avoids_equivariant : expr_avoids_equivariant_statement.
 Proof. equivariance. Qed.
-#[local] Hint Rewrite expr_avoids_equivariant : equivariance.
+#[local] Hint Rewrite (fun r D e => expr_avoids_equivariant r D e)
+  : equivariance.
 
 Theorem binds_only_kept_equivariant : binds_only_kept_equivariant_statement.
 Proof. equivariance. Qed.
-#[local] Hint Rewrite binds_only_kept_equivariant : equivariance.
+#[local] Hint Rewrite (fun r D e => binds_only_kept_equivariant r D e)
+  : equivariance.
 
 Theorem erase_expr_equivariant : erase_expr_equivariant_statement.
 Proof. equivariance. Qed.
-#[local] Hint Rewrite erase_expr_equivariant : equivariance.
+#[local] Hint Rewrite (fun D r e => erase_expr_equivariant D r e)
+  : equivariance.
 
 Theorem drop_statics_equivariant : drop_statics_equivariant_statement.
 Proof. equivariance. Qed.
