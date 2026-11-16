@@ -358,7 +358,9 @@ let boxable_number =
         "vec512", Naked_vec512;
         "mask", Naked_mask ]
 
-let array_kind =
+(* [written_array_kind] is an array kind that is always written; with
+   [array_kind], [Values] is the kind where none is written. *)
+let written_array_kind, array_kind =
   let open D in
   let open P.Array_kind in
   let ak =
@@ -397,7 +399,19 @@ let array_kind =
           | Gc_ignorable_values -> gc_ign ()
           | Unboxed_product aks -> product aks))
   in
-  default ~def:Values ak
+  ak, default ~def:Values ak
+
+(* For [%array_load] and [%array_set]: the array kind and the load kind or set
+   kind [access] as they are written. [unwritten] is the kind that the reader
+   gives the access where none is written, which depends on the array kind
+   alone. [access] is left out only where it is that one. Where it is written,
+   the array kind is written too, [Values] included: the first flag would
+   otherwise be read as the array kind. *)
+let written_array_kinds (k : P.Array_kind.t) access ~unwritten ~compare =
+  match unwritten with
+  | Some unwritten when compare access unwritten = 0 ->
+    (if P.Array_kind.compare k Values = 0 then None else Some k), None
+  | Some _ | None -> Some k, Some access
 
 let array_kind_for_length =
   let open D in
@@ -1008,44 +1022,40 @@ let array_load =
         "vec512", Naked_vec512s;
         "mask", Naked_masks ]
   in
+  (* The load kind that is read where none is written: the one that goes with
+     the array kind. *)
+  let unwritten (k : P.Array_kind.t) : P.Array_load_kind.t option =
+    match k with
+    | Immediates -> Some Immediates
+    | Gc_ignorable_values -> Some Gc_ignorable_values
+    | Values -> Some Values
+    | Naked_floats -> Some Naked_floats
+    | Naked_float32s -> Some Naked_float32s
+    | Naked_ints -> Some Naked_ints
+    | Naked_int8s -> Some Naked_int8s
+    | Naked_int16s -> Some Naked_int16s
+    | Naked_int32s -> Some Naked_int32s
+    | Naked_int64s -> Some Naked_int64s
+    | Naked_nativeints -> Some Naked_nativeints
+    | Naked_vec128s -> Some Naked_vec128s
+    | Naked_vec256s -> Some Naked_vec256s
+    | Naked_vec512s -> Some Naked_vec512s
+    | Naked_masks -> Some Naked_masks
+    | Unboxed_product _ -> None
+  in
   binary "%array_load"
     ~params:
       (maps
-         (param3 array_kind (option load_kind) opt_mutability)
+         (param3 (option written_array_kind) (option load_kind) opt_mutability)
          ~from:(fun _ (k, lk, m) ->
-           let lk : P.Array_load_kind.t =
-             match lk with
-             | Some lk -> lk
-             | None -> (
-               match (k : P.Array_kind.t) with
-               | Immediates -> Immediates
-               | Gc_ignorable_values -> Gc_ignorable_values
-               | Values -> Values
-               | Naked_floats -> Naked_floats
-               | Naked_float32s -> Naked_float32s
-               | Naked_ints -> Naked_ints
-               | Naked_int8s -> Naked_int8s
-               | Naked_int16s -> Naked_int16s
-               | Naked_int32s -> Naked_int32s
-               | Naked_int64s -> Naked_int64s
-               | Naked_nativeints -> Naked_nativeints
-               | Naked_vec128s -> Naked_vec128s
-               | Naked_vec256s -> Naked_vec256s
-               | Naked_vec512s -> Naked_vec512s
-               | Naked_masks -> Naked_masks
-               | Unboxed_product _ ->
-                 Misc.fatal_error "missing product array load kind")
-           in
-           k, lk, m)
+           let k = Option.value k ~default:P.Array_kind.Values in
+           match lk, unwritten k with
+           | Some lk, _ | None, Some lk -> k, lk, m
+           | None, None -> Misc.fatal_error "missing product array load kind")
          ~to_:(fun _ (k, lk, m) ->
-           let lk =
-             match (k : P.Array_kind.t) with
-             | Unboxed_product _ -> Some lk
-             | Immediates | Gc_ignorable_values | Values | Naked_floats
-             | Naked_float32s | Naked_ints | Naked_int8s | Naked_int16s
-             | Naked_int32s | Naked_int64s | Naked_nativeints | Naked_vec128s
-             | Naked_vec256s | Naked_vec512s | Naked_masks ->
-               None
+           let k, lk =
+             written_array_kinds k lk ~unwritten:(unwritten k)
+               ~compare:P.Array_load_kind.compare
            in
            k, lk, m))
     (fun _ (k, lk, m) -> P.Array_load (k, lk, m))
@@ -1198,48 +1208,41 @@ let array_set =
       | Naked_masks -> mask ()
       | Gc_ignorable_values -> gc_ign ())
   in
+  (* The set kind that is read where none is written: the one that goes with the
+     array kind, an assignment on the heap for [Values]. *)
+  let unwritten (k : P.Array_kind.t) : P.Array_set_kind.t option =
+    match k with
+    | Values ->
+      Some
+        (Values (P.Init_or_assign.Assignment Alloc_mode.For_assignments.heap))
+    | Immediates -> Some Immediates
+    | Gc_ignorable_values -> Some Gc_ignorable_values
+    | Naked_floats -> Some Naked_floats
+    | Naked_float32s -> Some Naked_float32s
+    | Naked_ints -> Some Naked_ints
+    | Naked_int8s -> Some Naked_int8s
+    | Naked_int16s -> Some Naked_int16s
+    | Naked_int32s -> Some Naked_int32s
+    | Naked_int64s -> Some Naked_int64s
+    | Naked_nativeints -> Some Naked_nativeints
+    | Naked_vec128s -> Some Naked_vec128s
+    | Naked_vec256s -> Some Naked_vec256s
+    | Naked_vec512s -> Some Naked_vec512s
+    | Naked_masks -> Some Naked_masks
+    | Unboxed_product _ -> None
+  in
   ternary "%array_set"
     ~params:
       (maps
-         (param2 array_kind (option set_kind))
+         (param2 (option written_array_kind) (option set_kind))
          ~from:(fun _ (k, sk) ->
-           let sk : P.Array_set_kind.t =
-             match sk with
-             | Some sk -> sk
-             | None -> (
-               match (k : P.Array_kind.t) with
-               | Values ->
-                 Values
-                   (P.Init_or_assign.Assignment Alloc_mode.For_assignments.heap)
-               | Immediates -> Immediates
-               | Gc_ignorable_values -> Gc_ignorable_values
-               | Naked_floats -> Naked_floats
-               | Naked_float32s -> Naked_float32s
-               | Naked_ints -> Naked_ints
-               | Naked_int8s -> Naked_int8s
-               | Naked_int16s -> Naked_int16s
-               | Naked_int32s -> Naked_int32s
-               | Naked_int64s -> Naked_int64s
-               | Naked_nativeints -> Naked_nativeints
-               | Naked_vec128s -> Naked_vec128s
-               | Naked_vec256s -> Naked_vec256s
-               | Naked_vec512s -> Naked_vec512s
-               | Naked_masks -> Naked_masks
-               | Unboxed_product _ ->
-                 Misc.fatal_error "Missing product array set kind")
-           in
-           k, sk)
+           let k = Option.value k ~default:P.Array_kind.Values in
+           match sk, unwritten k with
+           | Some sk, _ | None, Some sk -> k, sk
+           | None, None -> Misc.fatal_error "Missing product array set kind")
          ~to_:(fun _ (k, sk) ->
-           let sk =
-             match (k : P.Array_kind.t) with
-             | Unboxed_product _ -> Some sk
-             | Immediates | Gc_ignorable_values | Values | Naked_floats
-             | Naked_float32s | Naked_ints | Naked_int8s | Naked_int16s
-             | Naked_int32s | Naked_int64s | Naked_nativeints | Naked_vec128s
-             | Naked_vec256s | Naked_vec512s | Naked_masks ->
-               None
-           in
-           k, sk))
+           written_array_kinds k sk ~unwritten:(unwritten k)
+             ~compare:P.Array_set_kind.compare))
     (fun _ (k, sk) -> P.Array_set (k, sk))
 
 let atomic_exchange =

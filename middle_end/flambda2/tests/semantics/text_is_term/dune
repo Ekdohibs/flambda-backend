@@ -46,6 +46,18 @@
 ;; see through, which the text writes "%opaque.middle_end_only". The text is
 ;; the term.
 ;;
+;; first_write_of_a_cell: a write into an array of values that is the first
+;; write of the field and not an assignment, which the text writes
+;; "%array_set.values.value.init". The text is the term.
+;;
+;; vector_read_of_an_array_of_integers: a read of an array of immediates that
+;; gives a 128-bit vector, which the text writes "%array_load.`imm`.`vec128`".
+;; The text is the term.
+;;
+;; vector_write_into_an_array_of_integers: a write into an array of immediates
+;; that takes a 128-bit vector, which the text writes
+;; "%array_set.`imm`.`vec128`". The text is the term.
+;;
 ;; partial_application_of_unboxed_float: the text is not read back.
 ;;
 ;; interface_only, type_error: the compiler does not reach the middle end.
@@ -129,6 +141,54 @@
   (= %{context_name} "main"))
  (action
   (diff length_of_bytes.expected length_of_bytes.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   vector_write_into_an_array_of_integers.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     %{dep:vector_write_into_an_array_of_integers.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff vector_write_into_an_array_of_integers.expected vector_write_into_an_array_of_integers.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   vector_read_of_an_array_of_integers.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     %{dep:vector_read_of_an_array_of_integers.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff vector_read_of_an_array_of_integers.expected vector_read_of_an_array_of_integers.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   first_write_of_a_cell.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     %{dep:first_write_of_a_cell.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff first_write_of_a_cell.expected first_write_of_a_cell.output)))
 
 (rule
  (enabled_if

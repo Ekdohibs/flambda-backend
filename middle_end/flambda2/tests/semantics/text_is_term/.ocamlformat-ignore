@@ -1,2 +1,4 @@
 partial_application_of_unboxed_float.ml
 unboxed_pair_parameter.ml
+vector_read_of_an_array_of_integers.ml
+vector_write_into_an_array_of_integers.ml
