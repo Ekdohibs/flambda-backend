@@ -74,6 +74,25 @@ Import ListNotations.
     end
   end.
 
+(* Two laws are stated, of the two functions of the pass that go down
+   the term: with them the law of the pass passes with the one pass
+   of the database, which is faster; they do not. *)
+Lemma all_give_equivariant (r : renaming) (k : continuation) (i : nat)
+    (s : simple) (e : expr) :
+  all_give (rename_continuation r k) i (rename_simple r s) (rename_expr r e)
+  = all_give k i s e.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite all_give_equivariant : equivariance.
+
+Lemma first_given_equivariant (r : renaming) (k : continuation)
+    (i : nat) (e : expr) :
+  first_given (rename_continuation r k) i (rename_expr r e)
+  = option_map (option_map (rename_simple r)) (first_given k i e).
+Proof. equivariance. Qed.
+#[local] Hint Rewrite first_given_equivariant : equivariance.
+
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
+
 Lemma bind_const_params_renamed : rewrite_equivariant bind_const_params.
 Proof. equivariance. Qed.
 
