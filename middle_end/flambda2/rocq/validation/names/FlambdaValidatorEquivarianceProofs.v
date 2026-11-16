@@ -3026,53 +3026,22 @@ Proof. equivariance. Qed.
 (* Binding the parameters that every application gives the same thing. *)
 Lemma simple_eqb_renamed (r : renaming) (s s' : simple) :
   simple_eqb (rename_simple r s) (rename_simple r s') = simple_eqb s s'.
-Proof.
-  unfold simple_eqb.
-  destruct (simple_eq_dec (rename_simple r s) (rename_simple r s'))
-    as [Heq | Hne'],
-    (simple_eq_dec s s') as [Heq' | Hne];
-    try reflexivity.
-  - exfalso. apply Hne, (rename_simple_injective r), Heq.
-  - exfalso. apply Hne'. rewrite Heq'. reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
-Fixpoint binds_var_equivariant (r : renaming) (x : variable) (e : expr) :
-  binds_var (rename_variable r x) (rename_expr r e) = binds_var x e
-with binds_var_in_handler_equivariant (r : renaming) (x : variable)
-    (h : continuation_handler) :
-  binds_var_in_handler (rename_variable r x) (rename_handler r h)
-  = binds_var_in_handler x h.
-Proof.
-  - destruct e
-      as [ y kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      simpl; try reflexivity.
-    + rewrite rename_variable_eqb, binds_var_equivariant. reflexivity.
-    + apply binds_var_equivariant.
-    + rewrite binds_var_in_handler_equivariant, binds_var_equivariant.
-      reflexivity.
-    + rewrite binds_var_equivariant. f_equal.
-      induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
-      rewrite (binds_var_in_handler_equivariant r x h), IH. reflexivity.
-  - destruct h as [params metadata handler]. simpl.
-    rewrite among_rename_variable, binds_var_equivariant. reflexivity.
-Qed.
+Lemma binds_var_equivariant (r : renaming) (x : variable) (e : expr) :
+  binds_var (rename_variable r x) (rename_expr r e) = binds_var x e.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite binds_var_equivariant : equivariance.
 
 Lemma stable_equivariant (r : renaming) (s : simple) (e : expr) :
   stable (rename_simple r s) (rename_expr r e) = stable s e.
-Proof.
-  destruct s; simpl; [ rewrite binds_var_equivariant | | ]; reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 Lemma args_if_applies_equivariant (r : renaming) (k : continuation)
     (ac : apply_cont) :
   args_if_applies (rename_continuation r k) (rename_apply_cont r ac)
   = option_map (map (rename_simple r)) (args_if_applies k ac).
-Proof.
-  unfold args_if_applies, rename_apply_cont.
-  cbn [ac_continuation ac_args]. rewrite rename_continuation_eqb.
-  destruct (Pos.eqb (ac_continuation ac) k); reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 Lemma first_some_map {A B : Type} (g : A -> B) (a b : option A) :
   first_some (option_map g a) (option_map g b)
@@ -3216,83 +3185,65 @@ Lemma bind_aliases_equivariant (r : renaming) (params : list variable) :
     bind_aliases (map (rename_variable r) params) kinds
       (map (option_map (rename_simple r)) aliases) (rename_expr r handler)
     = rename_expr r (bind_aliases params kinds aliases handler).
-Proof.
-  induction params as [ | p params IH]; intros kinds aliases handler;
-    [ reflexivity | ].
-  destruct kinds as [ | kind kinds]; [ reflexivity | ].
-  destruct aliases as [ | [s | ] aliases]; [ reflexivity | | ]; simpl;
-    rewrite IH; reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 Lemma alone_map {A B : Type} (g : A -> B) (l : list A) :
   alone (map g l) = alone l.
 Proof. destruct l as [ | a [ | b l]]; reflexivity. Qed.
 
-Fixpoint bind_aliased_params_equivariant_aux (r : renaming) (e : expr) :
-  bind_aliased_params (rename_expr r e) = rename_expr r (bind_aliased_params e)
-with bind_aliased_params_in_loop_equivariant (r : renaming)
-    (h : continuation_handler) :
-  ∀ (flag : bool) (k : continuation) (body whole : expr),
-    bind_aliased_params_in_loop flag (rename_continuation r k)
-      (rename_expr r body) (rename_expr r whole) (rename_handler r h)
-    = rename_handler r (bind_aliased_params_in_loop flag k body whole h).
+(* The law of the pass is by the tactic. The aliases of a continuation
+   are asked of the whole term of the case, which computation has taken
+   apart: [aliases_of] is kept from unfolding, and its law is given at
+   the term of a continuation and at the term of a loop. *)
+Section Param_aliases.
+
+#[local] Arguments aliases_of : simpl never.
+
+Lemma aliases_of_at_let_cont_renamed (r : renaming) (k : continuation)
+    (params : list variable) (metadata : handler_metadata)
+    (handler body : expr) :
+  aliases_of (rename_continuation r k) (map (rename_variable r) params)
+    metadata None (rename_expr r body)
+    (Let_cont_non_recursive (rename_continuation r k)
+       (Handler (map (rename_variable r) params) metadata
+          (rename_expr r handler))
+       (rename_expr r body))
+  = map (option_map (rename_simple r))
+      (aliases_of k params metadata None body
+         (Let_cont_non_recursive k (Handler params metadata handler) body)).
 Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k [params metadata handler] body
-         | handlers body | ap | ac | scrutinee arms | ];
-      try reflexivity.
-    + cbn [rename_expr bind_aliased_params].
-      rewrite bind_aliased_params_equivariant_aux. reflexivity.
-    + cbn [rename_expr bind_aliased_params].
-      rewrite bind_aliased_params_equivariant_aux. reflexivity.
-    + cbn [rename_expr rename_handler bind_aliased_params].
-      change
-        (Let_cont_non_recursive (rename_continuation r k)
-           (Handler (map (rename_variable r) params) metadata
-              (rename_expr r handler))
-           (rename_expr r body))
-        with
-          (rename_expr r
-             (Let_cont_non_recursive k (Handler params metadata handler)
-                body)).
-      rewrite
-        (aliases_of_equivariant r k params metadata None None body _ eq_refl),
-        (bind_aliased_params_equivariant_aux r handler),
-        bind_aliases_equivariant,
-        (bind_aliased_params_equivariant_aux r body).
-      reflexivity.
-    + cbn [rename_expr bind_aliased_params].
-      rewrite (bind_aliased_params_equivariant_aux r body), alone_map.
-      change
-        (Let_cont_recursive
-           (map (fun '(k, h) => (rename_continuation r k, rename_handler r h))
-              handlers)
-           (rename_expr r body))
-        with (rename_expr r (Let_cont_recursive handlers body)).
-      f_equal.
-      generalize (alone handlers) (Let_cont_recursive handlers body).
-      intros flag whole.
-      induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
-      rewrite (bind_aliased_params_in_loop_equivariant r h flag k body whole),
-        IH.
-      reflexivity.
-  - destruct h as [params metadata handler]. intros flag k body whole.
-    cbn [rename_handler bind_aliased_params_in_loop].
-    rewrite (bind_aliased_params_equivariant_aux r handler).
-    destruct flag.
-    + rewrite
-        (aliases_of_equivariant r k params metadata (Some handler)
-           (Some (rename_expr r handler)) body whole eq_refl),
-        bind_aliases_equivariant.
-      reflexivity.
-    + change (@nil (option simple))
-        with (map (option_map (rename_simple r)) []).
-      rewrite bind_aliases_equivariant. reflexivity.
+  exact (aliases_of_equivariant r k params metadata None None body
+           (Let_cont_non_recursive k (Handler params metadata handler) body)
+           eq_refl).
 Qed.
+
+Lemma aliases_of_at_loop_renamed (r : renaming) (k : continuation)
+    (params : list variable) (metadata : handler_metadata)
+    (handler body : expr)
+    (handlers : list (continuation * continuation_handler)) :
+  aliases_of (rename_continuation r k) (map (rename_variable r) params)
+    metadata (Some (rename_expr r handler)) (rename_expr r body)
+    (Let_cont_recursive
+       (map (fun '(k, h) => (rename_continuation r k, rename_handler r h))
+          handlers)
+       (rename_expr r body))
+  = map (option_map (rename_simple r))
+      (aliases_of k params metadata (Some handler) body
+         (Let_cont_recursive handlers body)).
+Proof.
+  exact (aliases_of_equivariant r k params metadata (Some handler) _ body
+           (Let_cont_recursive handlers body) eq_refl).
+Qed.
+
+#[local] Hint Rewrite aliases_of_at_let_cont_renamed
+  aliases_of_at_loop_renamed bind_aliases_equivariant @alone_map
+  : equivariance.
 
 Lemma bind_aliased_params_equivariant :
   rewrite_equivariant bind_aliased_params.
-Proof. exact bind_aliased_params_equivariant_aux. Qed.
+Proof. equivariance. Qed.
+
+End Param_aliases.
 
 (* An application made to go where the handler of its continuation
    goes. The entries are keyed by continuations, which are renamed, and
