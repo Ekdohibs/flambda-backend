@@ -853,10 +853,19 @@ Definition shape_of_code_call (closure : value) (c : code) (vs : list value)
 (* CR mshinwell: the code ids of a call of known arity. The compiler
    says that "only the provided functions (or a simplified version
    thereof) can be called" (terms/call_kind.mli). Here the call is
-   undefined unless the code id of the callee is one of those listed.
-   That is a choice of the model and stricter than the compiler: the
-   model has not got what code is a newer version of (the code age
-   relation; discrepancy C0-1). The compiler relies on the list.
+   undefined unless the code id of the callee is one of those listed:
+   the model has not got what code is a newer version of (the code age
+   relation; discrepancy C0-1), so its machine reads a list as it
+   stands. Simplify does leave a list that names older versions of the
+   code of the closures that reach the call, where it has inlined a
+   function that makes several closures and calls one of them; such a
+   list, read as it stands, makes the compiler's own term undefined.
+   So the list of a term of the model is meant to have those newer
+   versions too: the test tool's conversion adds the ones that the
+   metadata of code show and that are in scope at the call, which is
+   trusted and not proved and may miss some (rocq/TRUST-LEDGER.md),
+   and no statement here says of a list that it has them. The
+   compiler relies on the list.
    Simplify meets it, in the code age relation, with the code id that
    the type of the callee gives, keeps what is related or of unknown
    relation, and makes the call [Invalid] if nothing is left
@@ -866,7 +875,9 @@ Definition shape_of_code_call (closure : value) (c : code) (vs : list value)
    [Capply]). Nothing tests at run time that the callee is one of
    them. Asked of the developers: is the list a promise that every
    pass must keep true, as it is read here, and is "a simplified
-   version" any newer version in the code age relation?
+   version" any newer version in the code age relation? And is the
+   relation of code to its newer versions to be in the model, so that
+   the machine reads the compiler's list as the compiler does?
    Decision D59. *)
 Definition code_ids_allow (code_ids : option (list code_id))
     (called : code_id) : bool :=

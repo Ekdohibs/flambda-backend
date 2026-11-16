@@ -47,9 +47,12 @@
    the arity of the call, so that the backend calls the code with the
    arguments and tests nothing; it may list code ids, and then, by the
    compiler's interface, only the functions listed, or a simplified
-   version of one, can be called (terms/call_kind.mli). The model
-   reads the list as exact membership, which is a choice of its own
-   and stricter (decision D59).
+   version of one, can be called (terms/call_kind.mli). The machine
+   of the model reads the list that the term has as exact membership.
+   The test tool's conversion adds to a list the newer versions of
+   the listed code that the metadata of code show and that are in
+   scope at the call, and no others; decision D59 and
+   rocq/TRUST-LEDGER.md say what it may miss.
 
    - A call of known arity that has a shape is a full call, of code
      that is not tupled, and it is what the call of unknown arity of the
