@@ -2814,51 +2814,29 @@ Proof. destruct l as [ | a [ | b l]]; reflexivity. Qed.
 
 (* The law of the pass is by the tactic. The aliases of a continuation
    are asked of the whole term of the case, which computation has taken
-   apart: [aliases_of] is kept from unfolding, and its law is given at
-   the term of a continuation and at the term of a loop. *)
+   apart. [aliases_of] is kept from unfolding, and the rule writes the
+   term that it is asked of as the term of the other side of the
+   equation renamed, which it is by computation, and uses the law
+   above. *)
 Section Param_aliases.
 
 #[local] Arguments aliases_of : simpl never.
 
-Lemma aliases_of_at_let_cont_renamed (r : renaming) (k : continuation)
-    (params : list variable) (metadata : handler_metadata)
-    (handler body : expr) :
-  aliases_of (rename_continuation r k) (map (rename_variable r) params)
-    metadata None (rename_expr r body)
-    (Let_cont_non_recursive (rename_continuation r k)
-       (Handler (map (rename_variable r) params) metadata
-          (rename_expr r handler))
-       (rename_expr r body))
-  = map (option_map (rename_simple r))
-      (aliases_of k params metadata None body
-         (Let_cont_non_recursive k (Handler params metadata handler) body)).
-Proof.
-  exact (aliases_of_equivariant r k params metadata None None body
-           (Let_cont_non_recursive k (Handler params metadata handler) body)
-           eq_refl).
-Qed.
+#[local] Hint Rewrite bind_aliases_equivariant @alone_map : equivariance.
 
-Lemma aliases_of_at_loop_renamed (r : renaming) (k : continuation)
-    (params : list variable) (metadata : handler_metadata)
-    (handler body : expr)
-    (handlers : list (continuation * continuation_handler)) :
-  aliases_of (rename_continuation r k) (map (rename_variable r) params)
-    metadata (Some (rename_expr r handler)) (rename_expr r body)
-    (Let_cont_recursive
-       (map (fun '(k, h) => (rename_continuation r k, rename_handler r h))
-          handlers)
-       (rename_expr r body))
-  = map (option_map (rename_simple r))
-      (aliases_of k params metadata (Some handler) body
-         (Let_cont_recursive handlers body)).
-Proof.
-  exact (aliases_of_equivariant r k params metadata (Some handler) _ body
-           (Let_cont_recursive handlers body) eq_refl).
-Qed.
-
-#[local] Hint Rewrite aliases_of_at_let_cont_renamed
-  aliases_of_at_loop_renamed bind_aliases_equivariant @alone_map
-  : equivariance.
+#[local] Ltac eqv_extra ::=
+  match goal with
+  | |- context [aliases_of (rename_continuation ?r ?k) _ ?metadata ?loop' _
+                  ?whole'] =>
+    match goal with
+    | |- context [aliases_of k ?params metadata ?loop ?body ?whole] =>
+      eqv_no_renaming whole;
+      change whole' with (rename_expr r whole);
+      rewrite
+        (aliases_of_equivariant r k params metadata loop loop' body whole
+           eq_refl)
+    end
+  end.
 
 Lemma bind_aliased_params_equivariant :
   rewrite_equivariant bind_aliased_params.
