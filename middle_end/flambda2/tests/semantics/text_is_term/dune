@@ -10,8 +10,13 @@
 ;;
 ;; interface_only, type_error: the compiler does not reach the middle end.
 ;;
-;; two_units: two implementations in one command line. The driver refuses
-;; them before the compiler runs.
+;; two_units, args_file, impl_attached, mlt: more than one implementation,
+;; given as two files, in a file of arguments (-args=FILE), by two options
+;; -impl=FILE, and as two files .mlt. The driver counts the implementations
+;; that the compiler compiles, and says that nothing was checked.
+;;
+;; impl_attached_alone, mlt_alone: one implementation given in those two
+;; ways. It is checked.
 ;;
 ;; config, config_var, depend: options for which the compiler prints
 ;; something and exits by itself with the status 0. The driver says that
@@ -180,3 +185,87 @@
   (= %{context_name} "main"))
  (action
   (diff print_interface.expected print_interface.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   args_file.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     copy:%{dep:variant_two_orders.ml}:first.ml
+     copy:%{dep:c_call.ml}:second.ml
+     copy:%{dep:two_units.args}:two_units.args -args=two_units.args))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff args_file.expected args_file.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   impl_attached.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     copy:%{dep:variant_two_orders.ml}:first.src
+     copy:%{dep:c_call.ml}:second.src -impl=first.src -impl=second.src))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff impl_attached.expected impl_attached.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   impl_attached_alone.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     copy:%{dep:variant_two_orders.ml}:first.src -impl=first.src))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff impl_attached_alone.expected impl_attached_alone.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   mlt.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     copy:%{dep:variant_two_orders.ml}:first.mlt
+     copy:%{dep:c_call.ml}:second.mlt first.mlt second.mlt))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff mlt.expected mlt.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   mlt_alone.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     copy:%{dep:variant_two_orders.ml}:first.mlt first.mlt))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff mlt_alone.expected mlt_alone.output)))

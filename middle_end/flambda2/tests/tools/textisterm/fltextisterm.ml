@@ -35,7 +35,7 @@
 
    The hook [Raw_flambda2] is given the term that the compiler gives to Simplify
    (middle_end/flambda2/flambda2.ml, [flambda_to_flambda0], before anything else
-   is done with the term). The driver then
+   is done with the term). The first time it is called, the driver
 
    1. writes the term as text, as [-drawfexpr-to] does ([Flambda_to_fexpr.conv],
    [Print_fexpr.flambda_unit]): to FILE if [-text-to] is given, to a temporary
@@ -47,35 +47,43 @@
    3. compares the term in memory with the term read, with the comparison of the
    compiler ([Compare.flambda_units], as ../fldiff.ml does);
 
-   4. prints one line on standard output and stops the process: Simplify is not
-   run and no .cmx file is written.
+   4. keeps the answer, and lets the compiler go on.
 
-   The line and the exit status:
+   The hook counts its calls: the compiler calls it once for each implementation
+   that it compiles as far as the middle end, however the implementations are
+   given to it. When the compiler has returned, the driver prints one line on
+   standard output and exits:
 
-   - "the text is the term", 0: the comparison says that the two are equivalent;
+   - "the text is the term", 0: the hook was called once, and the comparison
+   said that the two are equivalent;
 
-   - "the text is not the term", 1: it says that they are different;
+   - "the text is not the term", 1: called once, and the comparison said that
+   they are different;
 
-   - "the text is not read back: ...", 1: the reader refused the text, or
-   stopped;
+   - "the text is not read back: ...", 1: called once, and the reader refused
+   the text, or stopped;
 
-   - "not checked: ...", 2: the comparison stopped; more than one implementation
-   was given; the compiler did not reach the middle end (an interface alone), or
-   exited before it by itself, as it does for the options that make it print
-   something and stop ([-config], [-version], [-depend], [-help]).
+   - "not checked: ...", 2: the comparison stopped; or the hook was called more
+   than once (more than one implementation was given: the file of [-text-to] is
+   then removed); or it was not called (the compiler did not reach the middle
+   end: an interface alone, [-i], [-stop-after typing]).
 
-   If the compiler fails, the driver prints no line and exits with the
-   compiler's status.
+   If the compiler fails and returns to the driver, the driver prints no line
+   and exits with the compiler's status. If the compiler exits by itself, with
+   whatever status, as it does for the options that make it print something and
+   stop ([-config], [-depend], ...) and for some errors of the command line, the
+   driver prints "not checked: the compiler exited by itself" and exits with 2.
 
-   The answer is the line. The driver exits with 0 only after it has printed
-   "the text is the term"; a caller should ask for that line, the last of
-   standard output, and not for the status alone.
+   So the driver exits with 0 only after it has printed "the text is the term",
+   and it prints that only if the compiler compiled one implementation as far as
+   the middle end and returned with 0.
 
-   One implementation is checked in a process: the hook stops the process at the
-   first unit, so a second would not be checked. The driver therefore refuses,
-   before the compiler runs, a command line with more than one argument that
-   ends in ".ml" or follows [-impl], and one with [-args] or [-args0], which
-   read more arguments from a file. An interface is not counted.
+   The compiler goes on after the check as it would alone: give [-stop-after
+   middle_end] to stop it there, as the scripts of the tests do. It then leaves
+   what the compiler leaves when it is stopped there (X.cmi if X has no
+   interface, X.cmx). The driver is not for building: the reader of texts has
+   made names in the compiler's process, and what the compiler writes afterwards
+   need not be byte for byte what it writes alone.
 
    What is trusted: that the hook is given the term that the compiler goes on
    with, and the comparison. What the comparison does not read of a term is not
@@ -142,8 +150,24 @@ let check (unit : Flambda2_terms.Flambda_unit.t) =
           | Equivalent -> The_term
           | Different { approximant = _ } -> Not_the_term)))
 
-(* Whether the driver has printed its line, or the compiler has returned to
-   it. *)
+(* What the check said of the first implementation, and how many times the hook
+   has been called: once for each implementation that the compiler compiles as
+   far as the middle end. *)
+let first_answer = ref None
+
+let calls = ref 0
+
+let on_raw_flambda unit =
+  incr calls;
+  if !calls = 1
+  then
+    first_answer
+      := Some
+           (try check unit
+            with exn -> Not_checked (one_line (Printexc.to_string exn)))
+
+(* Whether the driver has printed its line, or exits with the status that the
+   compiler returned. *)
 let answered = ref false
 
 let answer line status =
@@ -151,41 +175,20 @@ let answer line status =
   print_endline line;
   exit status
 
-(* For some options the compiler prints something and exits by itself, with the
-   status 0, without returning to the driver. This function is registered before
-   anything that the compiler registers, so it is run after: if the process is
-   exiting and the driver has not answered, it says so and exits with 2 in the
-   place of the compiler's status. *)
+(* For some options, and for some errors, the compiler exits by itself, without
+   returning to the driver. This function is registered when this module is
+   initialised: at the exit of the process it is run after the functions that
+   the compiler registers as it runs, and before those that the libraries
+   registered when they were initialised. If the process is exiting and the
+   driver has not answered, it says so, and exits with 2 in the place of the
+   compiler's status: that second exit runs the functions that remain. *)
 let () =
   at_exit (fun () ->
       if not !answered
       then (
-        Format.pp_print_flush Format.std_formatter ();
-        Format.pp_print_flush Format.err_formatter ();
         (* On a line of its own, whatever the compiler printed. *)
         print_newline ();
-        print_endline "not checked: the compiler exited before the middle end";
-        flush stdout;
-        flush stderr;
-        Unix._exit 2))
-
-let on_raw_flambda unit =
-  match
-    try check unit with exn -> Not_checked (one_line (Printexc.to_string exn))
-  with
-  | The_term -> answer "the text is the term" 0
-  | Not_the_term -> answer "the text is not the term" 1
-  | Not_read_back why -> answer ("the text is not read back: " ^ why) 1
-  | Not_checked why -> answer ("not checked: " ^ why) 2
-
-(* The implementations that a command line gives, counted generously: an
-   argument of another option that ends in ".ml" is counted too. *)
-let rec implementations args =
-  match args with
-  | [] -> 0
-  | "-impl" :: _ :: args -> 1 + implementations args
-  | arg :: args ->
-    (if Filename.check_suffix arg ".ml" then 1 else 0) + implementations args
+        answer "not checked: the compiler exited by itself" 2))
 
 let () =
   let argv =
@@ -195,11 +198,6 @@ let () =
       Array.of_list (program :: rest)
     | _ -> Sys.argv
   in
-  let args = List.tl (Array.to_list argv) in
-  if List.exists (fun arg -> List.mem arg ["-args"; "-args0"]) args
-  then answer "not checked: -args and -args0 are not accepted" 2;
-  if implementations args > 1
-  then answer "not checked: more than one implementation is given" 2;
   Compiler_hooks.register Raw_flambda2 on_raw_flambda;
   let compiler =
     Optmaindriver.main
@@ -207,9 +205,20 @@ let () =
       argv Format.err_formatter
       ~flambda2:(module Flambda2)
   in
-  (* The hook stops the process, so it was not reached. *)
-  if compiler = 0
-  then answer "not checked: the compiler did not reach the middle end" 2
-  else (
+  if compiler <> 0
+  then (
     answered := true;
     exit compiler)
+  else if !calls > 1
+  then (
+    (* The text written is that of the first implementation only. *)
+    Option.iter Misc.remove_file !text_to;
+    answer "not checked: more than one implementation is given" 2)
+  else
+    (* The hook sets [first_answer] at its first call. *)
+    match !first_answer with
+    | None -> answer "not checked: the compiler did not reach the middle end" 2
+    | Some The_term -> answer "the text is the term" 0
+    | Some Not_the_term -> answer "the text is not the term" 1
+    | Some (Not_read_back why) -> answer ("the text is not read back: " ^ why) 1
+    | Some (Not_checked why) -> answer ("not checked: " ^ why) 2

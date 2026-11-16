@@ -1,8 +1,8 @@
 (* Two functions with a parameter that is a [t2].
 
-   [f] matches on a GADT, so the front end takes the kinds of its two
-   parameters (it is a function of a pair, which the front end makes a function
-   of two parameters) to be the join of the kinds of the patterns of its cases
+   [f] matches on a GADT, so the front end takes the kinds of its two parameters
+   (it is a function of a pair, which the front end makes a function of two
+   parameters) to be the join of the kinds of the patterns of its cases
    ([Translcore.join_layout_of_cases], [Lambda.join_value_kind]): in the first
    case the second component is a [t1], in the second a [t2], and the join of
    the two kinds has the constructors of [t2], which [Lambda] sorts in
