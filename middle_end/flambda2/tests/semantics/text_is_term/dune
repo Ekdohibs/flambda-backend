@@ -123,6 +123,16 @@
 ;; float in a value slot. The text writes the kind of the slot where the code
 ;; reads it. The text is the term.
 ;;
+;; call_of_code_of_another_unit: compiled with -Oclassic after other_unit.ml,
+;; which is compiled first. The term has a direct call of code of that unit,
+;; put there where a call of a function of it was inlined before Simplify.
+;; The text names that code as it names code that the unit binds, and the
+;; reader makes a new code ID of the unit being read for the name. The text is
+;; not the term.
+;;
+;; closure_of_code_of_another_unit: the same, where the term has a closure of
+;; code of the other unit. The reader stops on it. The text is not read back.
+;;
 ;; interface_only, type_error: the compiler does not reach the middle end.
 ;;
 ;; two_units, args_file, impl_attached, mlt: more than one implementation,
@@ -204,6 +214,40 @@
   (= %{context_name} "main"))
  (action
   (diff length_of_bytes.expected length_of_bytes.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   call_of_code_of_another_unit.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     -Oclassic first:%{dep:other_unit.ml}
+     %{dep:call_of_code_of_another_unit.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff call_of_code_of_another_unit.expected call_of_code_of_another_unit.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   closure_of_code_of_another_unit.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     -Oclassic first:%{dep:other_unit.ml}
+     %{dep:closure_of_code_of_another_unit.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff closure_of_code_of_another_unit.expected closure_of_code_of_another_unit.output)))
 
 (rule
  (enabled_if

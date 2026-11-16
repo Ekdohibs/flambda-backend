@@ -14,6 +14,12 @@
 # driver (the compiler asks for -depend there). The last line that the
 # driver prints on standard output is printed, then its exit status; what
 # the compiler writes on standard error is not shown.
+#
+# first:X.ml copies X.ml there and has the driver compile it to its end
+# before the run that is shown, with no standard library, no initially opened
+# module and no other option, so that the unit of that run can name the unit
+# X. If the driver does not exit with 0 on it, which it does only if the text
+# of X is its term, "X.ml is not compiled" is printed and nothing is run.
 
 set -u
 
@@ -28,8 +34,14 @@ esac
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 args=
+firsts=
 for arg in "$@"; do
   case "$arg" in
+  first:*)
+    file=${arg#first:}
+    cp "$file" "$work/$(basename "$file")"
+    firsts="$firsts $(basename "$file")"
+    ;;
   copy:*)
     rest=${arg#copy:}
     cp "${rest%:*}" "$work/${rest##*:}"
@@ -49,6 +61,12 @@ for arg in "$@"; do
   esac
 done
 cd "$work"
+for file in $firsts; do
+  if ! "$driver" -nopervasives -nostdlib -c "$file" >/dev/null 2>&1; then
+    echo "$file is not compiled"
+    exit 0
+  fi
+done
 "$driver" $args -nopervasives -nostdlib -stop-after middle_end -c \
   >stdout 2>/dev/null
 status=$?
