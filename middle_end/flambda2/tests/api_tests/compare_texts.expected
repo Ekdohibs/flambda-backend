@@ -1,0 +1,6 @@
+names: the same
+four_arguments: the same
+arity: different; the unit given is printed
+params: different; the unit given is printed
+value_slot: different; the unit given is printed
+function_slot: different; the unit given is printed

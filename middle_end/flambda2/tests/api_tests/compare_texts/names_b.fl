@@ -1,0 +1,6 @@
+let code size(1) g (y) my_closure &my_region my_depth -> k2 * e =
+  cont k2 (y)
+in
+let $G = closure g @g &toplevel in
+let $B = Block 0 ($G) in
+cont done ($B)

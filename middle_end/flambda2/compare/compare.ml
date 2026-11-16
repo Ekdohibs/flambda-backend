@@ -149,6 +149,125 @@ let log_comp c f e1 e2 =
     let rel = match c e1 e2 with n when n < 0 -> "<" | 0 -> "=" | _ -> ">" in
     log_rel f e1 rel e2
 
+(* Equality of kinds and arities by what they hold.
+ *
+ * [Flambda_kind.With_subkind.equal] compares the set of constant constructors
+ * and the map of non-constant constructors of a [Variant] subkind with the
+ * structural comparison, applied to the balanced trees that represent them.
+ * Two such trees that hold the same elements can have different shapes,
+ * depending on the order in which the elements were added, and then that
+ * function tells apart two kinds of the same variant: for instance the kind
+ * that the front end builds for a variant type and the kind that the parser
+ * of Flambda builds from the text of that kind.  Here the sets and the maps are
+ * compared by their elements, so that two kinds are equal exactly when they
+ * hold the same things. *)
+module Kinds = struct
+  module K = Flambda_kind
+  module KS = Flambda_kind.With_subkind
+
+  let nullables_equal (nullable1 : KS.Nullable.t) (nullable2 : KS.Nullable.t) =
+    match nullable1, nullable2 with
+    | Nullable, Nullable | Non_nullable, Non_nullable -> true
+    | (Nullable | Non_nullable), _ -> false
+
+  let rec with_subkinds_equal kind1 kind2 =
+    K.equal (KS.kind kind1) (KS.kind kind2)
+    && nullables_equal (KS.nullable kind1) (KS.nullable kind2)
+    && subkinds_equal
+         (KS.non_null_value_subkind kind1)
+         (KS.non_null_value_subkind kind2)
+
+  and subkinds_equal (subkind1 : KS.Non_null_value_subkind.t)
+      (subkind2 : KS.Non_null_value_subkind.t) =
+    match subkind1, subkind2 with
+    | ( Variant { consts = consts1; non_consts = non_consts1 },
+        Variant { consts = consts2; non_consts = non_consts2 } ) ->
+      Target_ocaml_int.Set.equal consts1 consts2
+      && Tag.Scannable.Map.equal constructor_shapes_equal non_consts1
+           non_consts2
+    | Variant _, _ | _, Variant _ -> false
+    | ( ( Anything | Boxed_float32 | Boxed_float | Boxed_int32 | Boxed_int64
+        | Boxed_nativeint | Boxed_vec128 | Boxed_vec256 | Boxed_vec512
+        | Boxed_mask | Tagged_immediate | Float_block _ | Float_array
+        | Immediate_array | Value_array | Generic_array | Unboxed_float32_array
+        | Untagged_int_array | Untagged_int8_array | Untagged_int16_array
+        | Unboxed_int32_array | Unboxed_int64_array | Unboxed_nativeint_array
+        | Unboxed_vec128_array | Unboxed_vec256_array | Unboxed_vec512_array
+        | Unboxed_mask_array | Unboxed_product_array ),
+        _ ) ->
+      (* None of these holds a set or a map. *)
+      KS.Non_null_value_subkind.equal subkind1 subkind2
+
+  and constructor_shapes_equal
+      (shape1 : KS.Non_null_value_subkind.constructor_shape)
+      (shape2 : KS.Non_null_value_subkind.constructor_shape) =
+    match shape1, shape2 with
+    | Undetermined, Undetermined -> true
+    | Determined (block_shape1, fields1), Determined (block_shape2, fields2) ->
+      K.Block_shape.equal block_shape1 block_shape2
+      && Misc.Stdlib.List.equal with_subkinds_equal fields1 fields2
+    | (Undetermined | Determined _), _ -> false
+
+  (* [Flambda_arity.equal_ignoring_subkinds] says that the two arities group the
+     same kinds in the same way; the kinds of their components, taken in order,
+     are then compared in full. *)
+  let arities_equal arity1 arity2 =
+    Flambda_arity.equal_ignoring_subkinds arity1 arity2
+    && Misc.Stdlib.List.equal with_subkinds_equal
+         (Flambda_arity.unarize arity1)
+         (Flambda_arity.unarize arity2)
+
+  let mutable_flags_equal (flag1 : Asttypes.mutable_flag)
+      (flag2 : Asttypes.mutable_flag) =
+    match flag1, flag2 with
+    | Immutable, Immutable | Mutable, Mutable -> true
+    | (Immutable | Mutable), _ -> false
+
+  (* The primitives that carry kinds with subkinds; for the others the equality
+     of [Flambda_primitive] is by what they hold already. *)
+
+  let binary_primitives_equal (prim1 : Flambda_primitive.binary_primitive)
+      (prim2 : Flambda_primitive.binary_primitive) =
+    match prim1, prim2 with
+    | Read_offset (kind1, flag1), Read_offset (kind2, flag2) ->
+      with_subkinds_equal kind1 kind2 && mutable_flags_equal flag1 flag2
+    | _, _ -> Flambda_primitive.equal_binary_primitive prim1 prim2
+
+  let ternary_primitives_equal (prim1 : Flambda_primitive.ternary_primitive)
+      (prim2 : Flambda_primitive.ternary_primitive) =
+    match prim1, prim2 with
+    | ( Write_offset (write_kind1, kind1, mode1),
+        Write_offset (write_kind2, kind2, mode2) ) ->
+      (* Comparing the two primitives with the kind of the first in both leaves
+         what [Flambda_primitive] compares of the rest. *)
+      with_subkinds_equal kind1 kind2
+      && Flambda_primitive.equal_ternary_primitive
+           (Write_offset (write_kind1, kind1, mode1))
+           (Write_offset (write_kind2, kind1, mode2))
+    | _, _ -> Flambda_primitive.equal_ternary_primitive prim1 prim2
+
+  let variadic_primitives_equal (prim1 : Flambda_primitive.variadic_primitive)
+      (prim2 : Flambda_primitive.variadic_primitive) =
+    match prim1, prim2 with
+    | ( Make_block (Values (tag1, kinds1), mutability1, mode1),
+        Make_block (Values (tag2, kinds2), mutability2, mode2) ) ->
+      Misc.Stdlib.List.equal with_subkinds_equal kinds1 kinds2
+      && Flambda_primitive.equal_variadic_primitive
+           (Make_block (Values (tag1, kinds1), mutability1, mode1))
+           (Make_block (Values (tag2, kinds1), mutability2, mode2))
+    | _, _ -> Flambda_primitive.equal_variadic_primitive prim1 prim2
+
+  let exn_continuations_equal exn_continuation1 exn_continuation2 =
+    Continuation.equal
+      (Exn_continuation.exn_handler exn_continuation1)
+      (Exn_continuation.exn_handler exn_continuation2)
+    && Misc.Stdlib.List.equal
+         (fun (simple1, kind1) (simple2, kind2) ->
+           Simple.equal simple1 simple2 && with_subkinds_equal kind1 kind2)
+         (Exn_continuation.extra_args exn_continuation1)
+         (Exn_continuation.extra_args exn_continuation2)
+end
+
 module Env = struct
   (* We rely on unification for function slots and value slots, so for those,
    * we need to keep a map both ways so that we know whether a given (say)
@@ -183,13 +302,13 @@ module Env = struct
   let add_function_slot t function_slot1 function_slot2 =
     t.function_slots
       <- Function_slot.Map.add function_slot1 function_slot2 t.function_slots;
-    t.function_slots
+    t.function_slots_rev
       <- Function_slot.Map.add function_slot2 function_slot1
            t.function_slots_rev
 
   let add_value_slot t value_slot1 value_slot2 =
     t.value_slots <- Value_slot.Map.add value_slot1 value_slot2 t.value_slots;
-    t.value_slots
+    t.value_slots_rev
       <- Value_slot.Map.add value_slot2 value_slot1 t.value_slots_rev
 
   let find_symbol t sym = Symbol.Map.find_opt sym t.symbols
@@ -378,7 +497,10 @@ and subst_code env (code : Code.t) : Code.t =
   let newer_version_of =
     Option.map (subst_code_id env) (Code.newer_version_of code)
   in
+  (* The pattern that binds this code, in an approximant, has the code ID that
+     the environment gives (see [patterns]); the code must have the same one. *)
   code
+  |> Code.with_code_id (subst_code_id env (Code.code_id code))
   |> Code.with_params_and_body ~cost_metrics:(Code.cost_metrics code)
        ~params_and_body ~free_names_of_params_and_body
   |> Code.with_newer_version_of newer_version_of
@@ -698,7 +820,7 @@ let primitives env prim1 prim2 : Flambda_primitive.t Comparison.t =
     |> Comparison.map ~f:(fun (prim_op1', arg1') ->
         Flambda_primitive.Unary (prim_op1', arg1'))
   | Binary (prim_op1, arg1_1, arg2_1), Binary (prim_op2, arg1_2, arg2_2) ->
-    if Flambda_primitive.equal_binary_primitive prim_op1 prim_op2
+    if Kinds.binary_primitives_equal prim_op1 prim_op2
     then
       simple_lists env [arg1_1; arg2_1] [arg1_2; arg2_2]
       |> Comparison.map ~f:(function
@@ -712,7 +834,7 @@ let primitives env prim1 prim2 : Flambda_primitive.t Comparison.t =
       Different { approximant }
   | ( Ternary (prim_op1, arg1_1, arg2_1, arg3_1),
       Ternary (prim_op2, arg1_2, arg2_2, arg3_2) ) ->
-    if Flambda_primitive.equal_ternary_primitive prim_op1 prim_op2
+    if Kinds.ternary_primitives_equal prim_op1 prim_op2
     then
       simple_lists env [arg1_1; arg2_1; arg3_1] [arg1_2; arg2_2; arg3_2]
       |> Comparison.map ~f:(function
@@ -729,7 +851,7 @@ let primitives env prim1 prim2 : Flambda_primitive.t Comparison.t =
       in
       Different { approximant }
   | Variadic (prim_op1, args1), Variadic (prim_op2, args2) ->
-    if Flambda_primitive.equal_variadic_primitive prim_op1 prim_op2
+    if Kinds.variadic_primitives_equal prim_op1 prim_op2
     then
       simple_lists env args1 args2
       |> Comparison.map ~f:(fun args : Flambda_primitive.t ->
@@ -737,6 +859,27 @@ let primitives env prim1 prim2 : Flambda_primitive.t Comparison.t =
     else
       let approximant : Flambda_primitive.t =
         Variadic (prim_op1, List.map (subst_simple env) args1)
+      in
+      Different { approximant }
+  | ( Quaternary (prim_op1, arg1_1, arg2_1, arg3_1, arg4_1),
+      Quaternary (prim_op2, arg1_2, arg2_2, arg3_2, arg4_2) ) ->
+    if Flambda_primitive.equal_quaternary_primitive prim_op1 prim_op2
+    then
+      simple_lists env
+        [arg1_1; arg2_1; arg3_1; arg4_1]
+        [arg1_2; arg2_2; arg3_2; arg4_2]
+      |> Comparison.map ~f:(function
+        | [arg1; arg2; arg3; arg4] ->
+          Flambda_primitive.Quaternary (prim_op1, arg1, arg2, arg3, arg4)
+        | _ -> assert false)
+    else
+      let approximant =
+        Flambda_primitive.Quaternary
+          ( prim_op1,
+            subst_simple env arg1_1,
+            subst_simple env arg2_1,
+            subst_simple env arg3_1,
+            subst_simple env arg4_1 )
       in
       Different { approximant }
   | _, _ -> Different { approximant = subst_primitive env prim1 }
@@ -1024,7 +1167,7 @@ let apply_exprs env apply1 apply2 : Expr.t Comparison.t =
     Apply.Result_continuation.equal
       (Apply.continuation apply1)
       (Apply.continuation apply2)
-    && Exn_continuation.equal
+    && Kinds.exn_continuations_equal
          (Apply.exn_continuation apply1)
          (Apply.exn_continuation apply2)
     && Inlined_attribute.equal (Apply.inlined apply1) (Apply.inlined apply2)
@@ -1032,9 +1175,8 @@ let apply_exprs env apply1 apply2 : Expr.t Comparison.t =
          (Apply.inlining_state apply1)
          (Apply.inlining_state apply2)
     && Apply.Position.equal (Apply.position apply1) (Apply.position apply2)
-    && Flambda_arity.equal_exact (Apply.args_arity apply1)
-         (Apply.args_arity apply2)
-    && Flambda_arity.equal_exact
+    && Kinds.arities_equal (Apply.args_arity apply1) (Apply.args_arity apply2)
+    && Kinds.arities_equal
          (Apply.return_arity apply1)
          (Apply.return_arity apply2)
     && Alloc_mode.For_applications.compare (Apply.return_mode apply1)
@@ -1127,6 +1269,50 @@ let switch_exprs env switch1 switch2 : Expr.t Comparison.t =
   |> Comparison.map ~f:(fun (arms, scrutinee) ->
       Expr.create_switch
         (Switch.create ~condition_dbg:Debuginfo.none ~scrutinee ~arms))
+
+(* The functions that open two binders together stop with a fatal error if the
+   two do not bind their names alike. The comparison asks first, so that it says
+   of two such terms that they are different. *)
+
+(* For [Function_params_and_body.pattern_match_pair]: the same number of
+   parameters, and both or neither may allocate on the stack. *)
+let functions_bind_alike params_and_body1 params_and_body2 =
+  let shape params_and_body =
+    Function_params_and_body.pattern_match params_and_body
+      ~f:(fun
+          ~return_continuation:_
+          ~exn_continuation:_
+          params
+          ~body:_
+          ~my_closure:_
+          ~is_my_closure_used:_
+          ~my_alloc_mode
+          ~my_depth:_
+          ~free_names_of_body:_
+        ->
+        ( Bound_parameters.cardinal params,
+          match (my_alloc_mode : Alloc_mode.For_applications.t) with
+          | Not_alloc_stack _ -> false
+          | Maybe_alloc_stack _ -> true ))
+  in
+  let num_params1, may_alloc_stack1 = shape params_and_body1 in
+  let num_params2, may_alloc_stack2 = shape params_and_body2 in
+  Int.equal num_params1 num_params2
+  && Bool.equal may_alloc_stack1 may_alloc_stack2
+
+(* For [Recursive_let_cont_handlers.pattern_match_pair]: the same number of
+   continuations and of invariant parameters. *)
+let recursive_handlers_bind_alike handlers1 handlers2 =
+  let shape handlers =
+    Recursive_let_cont_handlers.pattern_match handlers
+      ~f:(fun ~invariant_params ~body:_ handlers ->
+        ( Bound_parameters.cardinal invariant_params,
+          List.length (Continuation_handlers.domain handlers) ))
+  in
+  let num_invariant_params1, num_continuations1 = shape handlers1 in
+  let num_invariant_params2, num_continuations2 = shape handlers2 in
+  Int.equal num_invariant_params1 num_invariant_params2
+  && Int.equal num_continuations1 num_continuations2
 
 let rec exprs env e1 e2 : Expr.t Comparison.t =
   log Expr.print e1 e2 (fun () ->
@@ -1251,6 +1437,13 @@ and codes env (code1 : Code.t) (code2 : Code.t) =
               ~exn_continuation params ~body:body1' ~my_closure ~my_alloc_mode
               ~my_depth ~free_names_of_body:Unknown))
   in
+  let bodies env params_and_body1 params_and_body2 =
+    if functions_bind_alike params_and_body1 params_and_body2
+    then bodies env params_and_body1 params_and_body2
+    else
+      Comparison.Different
+        { approximant = subst_params_and_body env params_and_body1 }
+  in
   pairs ~f1:bodies
     ~f2:(options ~f:code_ids ~subst:subst_code_id)
     env
@@ -1258,7 +1451,7 @@ and codes env (code1 : Code.t) (code2 : Code.t) =
     (Code.params_and_body code2, Code.newer_version_of code2)
   |> Comparison.map ~f:(fun (params_and_body, newer_version_of) ->
       code1
-      |> Code.with_code_id (Code.code_id code2)
+      |> Code.with_code_id (subst_code_id env (Code.code_id code1))
       |> Code.with_params_and_body ~cost_metrics:(Code.cost_metrics code2)
            ~params_and_body
              (* CR mshinwell: This needs fixing XXX (used to call a free names
@@ -1268,9 +1461,9 @@ and codes env (code1 : Code.t) (code2 : Code.t) =
   |> Comparison.add_condition
        ~approximant:(fun () -> subst_code env code1)
        ~cond:
-         (Flambda_arity.equal_exact (Code.params_arity code1)
+         (Kinds.arities_equal (Code.params_arity code1)
             (Code.params_arity code2)
-         && Flambda_arity.equal_exact (Code.result_arity code1)
+         && Kinds.arities_equal (Code.result_arity code1)
               (Code.result_arity code2)
          && Bool.equal (Code.stub code1) (Code.stub code2)
          && Inline_attribute.equal (Code.inline code1) (Code.inline code2)
@@ -1315,7 +1508,8 @@ and let_cont_exprs env (let_cont1 : Let_cont.t) (let_cont2 : Let_cont.t) :
         |> Comparison.map ~f:(fun (body, handler) ->
             Let_cont.create_non_recursive cont handler ~body
               ~free_names_of_body:Unknown))
-  | Recursive handlers1, Recursive handlers2 ->
+  | Recursive handlers1, Recursive handlers2
+    when recursive_handlers_bind_alike handlers1 handlers2 ->
     let compare_handler_maps env map1 map2 :
         Continuation_handler.t Continuation.Lmap.t Comparison.t =
       lists

@@ -109,3 +109,63 @@
   ocamloptcomp ocamlfrontend flambda2 flambda2_parser flambda2_terms
   flambda2_bound_identifiers flambda2_identifiers flambda2_kinds
   flambda2_lattices flambda2_nominal flambda2_term_basics flambda2_types))
+
+;; What Compare.flambda_units says of two units that differ in one kind with
+;; a subkind.
+
+(rule
+ (target compare_kinds.output)
+ (deps compare_kinds.exe)
+ (action
+  (with-stdout-to
+   %{target}
+   (run %{deps}))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff compare_kinds.expected compare_kinds.output)))
+
+(executable
+ (name compare_kinds)
+ (modes native)
+ (instrumentation (backend bisect_ppx))
+ (modules compare_kinds)
+ (libraries
+  ocamloptcomp ocamlfrontend
+  flambda2_bound_identifiers flambda2_compare flambda2_identifiers
+  flambda2_import flambda2_kinds flambda2_nominal flambda2_numbers
+  flambda2_term_basics flambda2_terms))
+
+;; What Compare.flambda_units says of pairs of units read from texts. One
+;; process for each pair: a symbol is of the compilation unit of the first
+;; text that names it in the process.
+
+(rule
+ (target compare_texts.output)
+ (deps
+  compare_texts.exe
+  (glob_files compare_texts/*.fl))
+ (action
+  (with-stdout-to
+   %{target}
+   (progn
+    (run ./compare_texts.exe compare_texts/names)
+    (run ./compare_texts.exe compare_texts/four_arguments)
+    (run ./compare_texts.exe compare_texts/arity)
+    (run ./compare_texts.exe compare_texts/params)
+    (run ./compare_texts.exe compare_texts/value_slot)
+    (run ./compare_texts.exe compare_texts/function_slot)))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff compare_texts.expected compare_texts.output)))
+
+(executable
+ (name compare_texts)
+ (modes native)
+ (instrumentation (backend bisect_ppx))
+ (modules compare_texts)
+ (libraries
+  ocamloptcomp ocamlfrontend flambda2_compare flambda2_parser flambda2_terms))

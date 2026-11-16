@@ -1,0 +1,7 @@
+let code size(4) g (y) my_closure &my_region my_depth -> k * e =
+  let set = %atomic_compare_and_set.field.`imm` (y, 0, 0, 1) in
+  cont k (set)
+in
+let $F = closure g @g &toplevel in
+let $B = Block 0 ($F) in
+cont done ($B)
