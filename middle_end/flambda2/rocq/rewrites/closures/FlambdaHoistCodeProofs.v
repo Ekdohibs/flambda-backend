@@ -57,7 +57,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaNominalSpec FlambdaNormaliseSpec FlambdaWellFormedSpec
   FlambdaWellFormedProofs FlambdaHeapProofs FlambdaUnusedSlotsProofs
   FlambdaImportsSpec FlambdaStaticsInScopeSpec FlambdaObserversSpec
-  FlambdaUnitFromProofs FlambdaHoistCodeSpec.
+  FlambdaUnitFromProofs FlambdaHoistCodeSpec FlambdaEquivarianceTactic.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -2040,10 +2040,14 @@ Qed.
 (* Renaming                                                                 *)
 (* ======================================================================== *)
 
-Lemma is_code_renamed (r : renaming) (binding : static_binding) :
-  is_code (rename_static_binding r binding) = is_code binding.
-Proof. destruct binding; reflexivity. Qed.
+(* The laws are proved from the definitions by [equivariance]
+   (FlambdaEquivarianceTactic.v). Those that another file names keep
+   their names and their statements: the three laws of the pass, which
+   FlambdaValidatorEquivarianceProofs.v rewrites with, and
+   [code_ids_of_bindings_renamed]. *)
 
+(* By hand: the law has a premise, and the tactic states no law with
+   one. FlambdaHoistStaticsProofs.v uses it. *)
 Lemma filter_renamed (r : renaming) (keep : static_binding -> bool)
     (bindings : list static_binding) :
   (∀ binding : static_binding,
@@ -2056,128 +2060,43 @@ Proof.
   rewrite Hkeep, IH. destruct (keep binding); reflexivity.
 Qed.
 
-Fixpoint code_bindings_renamed (r : renaming) (e : expr) {struct e} :
+Lemma code_bindings_renamed (r : renaming) (e : expr) :
   code_bindings (rename_expr r e)
-  = map (rename_static_binding r) (code_bindings e)
-with handler_code_bindings_renamed (r : renaming) (h : continuation_handler)
-    {struct h} :
-  handler_code_bindings (rename_handler r h)
-  = map (rename_static_binding r) (handler_code_bindings h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      cbn [rename_expr code_bindings]; try reflexivity.
-    + apply code_bindings_renamed.
-    + rewrite map_app, (code_bindings_renamed r body),
-        (filter_renamed r is_code bindings (is_code_renamed r)).
-      reflexivity.
-    + rewrite map_app, (code_bindings_renamed r body),
-        (handler_code_bindings_renamed r h).
-      reflexivity.
-    + apply code_bindings_renamed.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler handler_code_bindings].
-    apply code_bindings_renamed.
-Qed.
+  = map (rename_static_binding r) (code_bindings e).
+Proof. equivariance. Qed.
 
 Theorem code_bindings_equivariant : code_bindings_equivariant_statement.
 Proof. exact code_bindings_renamed. Qed.
 
-Fixpoint without_code_renamed (r : renaming) (e : expr) {struct e} :
-  rename_expr r (without_code e) = without_code (rename_expr r e)
-with handler_without_code_renamed (r : renaming) (h : continuation_handler)
-    {struct h} :
-  rename_handler r (handler_without_code h)
-  = handler_without_code (rename_handler r h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      cbn [rename_expr without_code]; try reflexivity.
-    + rewrite (without_code_renamed r body). reflexivity.
-    + rewrite (without_code_renamed r body),
-        (filter_renamed r (fun binding => negb (is_code binding)) bindings).
-      * reflexivity.
-      * intros binding. rewrite is_code_renamed. reflexivity.
-    + rewrite (without_code_renamed r body),
-        (handler_without_code_renamed r h).
-      reflexivity.
-    + rewrite (without_code_renamed r body). reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler handler_without_code].
-    rewrite (without_code_renamed r handler). reflexivity.
-Qed.
+Lemma without_code_renamed (r : renaming) (e : expr) :
+  rename_expr r (without_code e) = without_code (rename_expr r e).
+Proof. equivariance. Qed.
 
 Theorem without_code_equivariant : without_code_equivariant_statement.
 Proof. exact without_code_renamed. Qed.
-
-Lemma named_closures_bound_renamed (r : renaming) (bound : code_id -> bool)
-    (d : named) :
-  named_closures_bound bound (rename_named r d) = named_closures_bound bound d.
-Proof. destruct d; reflexivity. Qed.
-
-Lemma const_closures_bound_renamed (r : renaming) (bound : code_id -> bool)
-    (const : static_const) :
-  const_closures_bound bound (rename_static_const r const)
-  = const_closures_bound bound const.
-Proof. destruct const; reflexivity. Qed.
 
 Lemma code_ids_of_bindings_renamed (r : renaming)
     (bindings : list static_binding) :
   flat_map code_ids_of_binding (map (rename_static_binding r) bindings)
   = flat_map code_ids_of_binding bindings.
-Proof.
-  induction bindings as [ | binding bindings IH]; simpl; [ reflexivity | ].
-  rewrite IH. destruct binding; reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
-Fixpoint closures_in_scope_renamed (r : renaming) (bound : code_id -> bool)
-    (e : expr) {struct e} :
-  closures_in_scope bound (rename_expr r e) = closures_in_scope bound e
-with handler_closures_in_scope_renamed (r : renaming)
-    (bound : code_id -> bool) (h : continuation_handler) {struct h} :
-  handler_closures_in_scope bound (rename_handler r h)
-  = handler_closures_in_scope bound h
-with code_closures_in_scope_renamed (r : renaming) (bound : code_id -> bool)
-    (c : code) {struct c} :
-  code_closures_in_scope bound (rename_code r c)
-  = code_closures_in_scope bound c.
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      cbn [rename_expr closures_in_scope]; try reflexivity.
-    + rewrite named_closures_bound_renamed,
-        (closures_in_scope_renamed r bound body).
-      reflexivity.
-    + rewrite code_ids_of_bindings_renamed,
-        (closures_in_scope_renamed r _ body).
-      f_equal.
-      generalize (bound_with (flat_map code_ids_of_binding bindings) bound).
-      intros b.
-      induction bindings as [ | binding bindings IH]; [ reflexivity | ].
-      cbn [map forallb]. rewrite IH. f_equal.
-      destruct binding as [id c | id | sym const];
-        cbn [rename_static_binding binding_closures_in_scope].
-      * apply code_closures_in_scope_renamed.
-      * reflexivity.
-      * apply const_closures_bound_renamed.
-    + rewrite (handler_closures_in_scope_renamed r bound h),
-        (closures_in_scope_renamed r bound body).
-      reflexivity.
-    + rewrite (closures_in_scope_renamed r bound body). f_equal.
-      induction handlers as [ | [k h] handlers IH]; [ reflexivity | ].
-      cbn [map forallb].
-      rewrite IH, (handler_closures_in_scope_renamed r bound h).
-      reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler handler_closures_in_scope].
-    apply closures_in_scope_renamed.
-  - destruct c as [params my_closure ret exn metadata body].
-    cbn [rename_code code_closures_in_scope].
-    apply closures_in_scope_renamed.
-Qed.
+(* The same law in the form that computation gives it, for the tactic to
+   rewrite with: the code ids that are bound are an argument of the
+   test, and a function, so the tactic meets them under a binder. *)
+Lemma code_ids_of_renamed_bindings (r : renaming)
+    (bindings : list static_binding) :
+  flat_map
+    (fun binding => code_ids_of_binding (rename_static_binding r binding))
+    bindings
+  = flat_map code_ids_of_binding bindings.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite code_ids_of_renamed_bindings : equivariance.
+
+Lemma closures_in_scope_renamed (r : renaming) (bound : code_id -> bool)
+    (e : expr) :
+  closures_in_scope bound (rename_expr r e) = closures_in_scope bound e.
+Proof. equivariance. Qed.
 
 Theorem closures_in_scope_equivariant :
   closures_in_scope_equivariant_statement.
