@@ -383,9 +383,20 @@ Ltac eqv_induction v :=
          | H : Forall _ _ |- _ => rewrite Forall_forall in H
          end.
 
+(* A hypothesis that is not one of the marks of the tactic, which are
+   [True]: to rewrite with such a one does nothing, and Rocq warns
+   that it makes a scheme for it. *)
+Ltac eqv_not_true H :=
+  let P := type of H in
+  let P' := eval hnf in P in
+  lazymatch P' with
+  | True => fail
+  | _ => idtac
+  end.
+
 Ltac eqv_rewrite_hyp :=
   match goal with
-  | H : _ |- _ => rewrite H by assumption
+  | H : _ |- _ => eqv_not_true H; rewrite H by assumption
   end.
 
 (* What is inside an element of a list. *)
@@ -527,7 +538,8 @@ Ltac eqv_congr :=
    the arguments on the left are the renamed ones. *)
 Ltac eqv_hyp_back :=
   match goal with
-  | H : _ |- _ = _ => rewrite <- H by assumption; eqv_same_head; eqv_peel
+  | H : _ |- _ = _ =>
+    eqv_not_true H; rewrite <- H by assumption; eqv_same_head; eqv_peel
   end.
 
 Module Inspect.
