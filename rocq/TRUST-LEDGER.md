@@ -281,14 +281,11 @@ it gave back.
   Trusted of this step, as of the one that sets the modes of
   parameters: that the unit which it builds again is the unit read,
   but for those kinds and for the variables and continuations that
-  are made fresh. Where the kind of the argument comes from a nullary
-  primitive at one of the two kinds that the reader's table of kinds
-  gives for two words each (`parser/fexpr_prim.ml`, `kind`), the unit
-  is not checked (`kinds_opaque_misread.fl`, in `tests/semantics/`).
-  The units there whose names begin with `kinds_opaque_` show the
-  step: before it, a unit that applies the primitive to a naked
-  number was undefined in the model as read, the tool's Simplify made
-  it `Invalid`, and the tool printed a validation that said nothing.
+  are made fresh. The units of `tests/semantics/` whose names begin
+  with `kinds_opaque_` show the step: before it, a unit that applies
+  the primitive to a naked number was undefined in the model as read,
+  the tool's Simplify made it `Invalid`, and the tool printed a
+  validation that said nothing.
   The flag of `Is_int` is not restored. Two examples not in this tree
   show that loss: the compiler's own term is defined, but the term
   read before Simplify is undefined in the model. In one of them the
@@ -346,9 +343,7 @@ it gave back.
   component that is an unboxed product.
   The tool checks none of the three. Together they suffice, and they
   are not necessary; where one fails no recovery of the compiler's
-  arity is claimed. Where the kind of an argument comes from a word
-  that the reader may misread, the unit is not checked
-  (`kinds_call_misread.fl`).
+  arity is claimed.
   The arity so given is flat, one component for each argument that
   the text writes, as the reader's was. The compiler's arity groups
   the kinds of an argument that is an unboxed product, which may be

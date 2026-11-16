@@ -9008,15 +9008,6 @@ let with_unknown_param_modes (unit : Flambda_unit.t) : Flambda_unit.t =
    primitive is for the middle end only as well; that is left as the reader
    gives it, as neither the model nor Simplify reads it.
 
-   The reader has one more kind wrong that is known: its table of kinds for the
-   nullary primitives that carry one gives two of the kinds for two words each
-   ([Fexpr_prim.kind]), so that a text does not say which kind such a primitive
-   had. Where the kind of the argument of an [Opaque_identity] is one of those
-   two and comes from such a primitive, directly or by [Let]s that bind a
-   variable to a variable, the unit is not checked. (The conversion refuses
-   every nullary primitive today, so such a unit is not checked for that reason
-   either.)
-
    The arity of the arguments of a call. A text need not write it for a direct
    call, nor for a call of unknown arity: where it writes none, the reader gives
    the call one value for each argument ([Fexpr_to_flambda.arities_or_values];
@@ -9065,9 +9056,7 @@ let with_unknown_param_modes (unit : Flambda_unit.t) : Flambda_unit.t =
    makes [Invalid] a call of which it is not so. And that arity had one
    singleton component for each argument, with no component that is an unboxed
    product. The three together suffice and are not necessary; where one fails no
-   recovery of the compiler's arity is claimed. Where the kind of an argument
-   comes from one of the two words that the reader may misread, the unit is not
-   checked.
+   recovery of the compiler's arity is claimed.
 
    The arity so given is flat, one component for each argument that the text
    writes, as the reader's was. The compiler's arity may group arguments: an
@@ -9112,33 +9101,11 @@ let with_unknown_param_modes (unit : Flambda_unit.t) : Flambda_unit.t =
    give, and compares nothing of the compiler's own terms. *)
 exception Lost_kind_not_known of string
 
-let opaque_kind_not_known_message =
-  "the text does not say the kind of an Opaque_identity, and the kind of its \
-   argument is one that the reader may have misread: it comes from a nullary \
-   primitive whose kind the text writes with a word that the reader takes for \
-   two kinds"
-
-let arity_of_unknown_call_not_known_message =
-  "the text does not give the arity of the arguments of a call of unknown \
-   arity, and the kind of one of its arguments is one that the reader may have \
-   misread: it comes from a nullary primitive whose kind the text writes with \
-   a word that the reader takes for two kinds"
-
 let arity_of_direct_call_not_known_message =
   "the text does not give the arity of the arguments of a direct call, one of \
    which is not a value, and nothing else gives it: the unit does not bind the \
    code that the call names, or that code has not as many parameters as the \
    call has arguments"
-
-let kind_that_the_reader_may_misread (kind : Flambda_kind.t) =
-  Flambda_kind.equal kind Flambda_kind.naked_int8
-  || Flambda_kind.equal kind Flambda_kind.naked_int16
-
-let variable_of_misread_kind ~misread (simple : Simple.t) =
-  Simple.pattern_match' simple
-    ~var:(fun var ~coercion:_ -> Variable.Set.mem var misread)
-    ~symbol:(fun _ ~coercion:_ -> false)
-    ~const:(fun _ -> false)
 
 (* The kinds of the parameters, unarized, of each piece of code that a unit
    binds, wherever it binds it. The unit is looked at as for printing and
@@ -9231,9 +9198,8 @@ let arity_of_arguments_was_written (apply : Flambda.Apply.t) : bool =
              (Flambda.Apply.args apply))))
 
 (* [code_params] has the parameters of the code that the unit binds
-   ([params_of_code_in_expr]); [misread], the variables whose kind may be one
-   that the reader misread. *)
-let arity_of_arguments ~code_params ~misread (apply : Flambda.Apply.t) :
+   ([params_of_code_in_expr]). *)
+let arity_of_arguments ~code_params (apply : Flambda.Apply.t) :
     arity_of_arguments =
   let args = Flambda.Apply.args apply in
   let given (kinds : Flambda_kind.t list) =
@@ -9259,84 +9225,66 @@ let arity_of_arguments ~code_params ~misread (apply : Flambda.Apply.t) :
       if List.for_all (fun arg -> Flambda_kind.is_value (Simple.kind arg)) args
       then As_read
       else Not_known arity_of_direct_call_not_known_message)
-  | Function { function_call = Indirect_unknown_arity; _ } -> (
-    match given (List.map Simple.kind args) with
-    | Given _ when List.exists (variable_of_misread_kind ~misread) args ->
-      Not_known arity_of_unknown_call_not_known_message
-    | (As_read | Given _ | Not_known _) as arity -> arity)
+  | Function { function_call = Indirect_unknown_arity; _ } ->
+    given (List.map Simple.kind args)
   | Function { function_call = Indirect_known_arity _; _ }
   | Method _ | C_call _ | Effect _ ->
     As_read
 
-let rec with_lost_kinds_of_expr ~code_params ~misread (e : Flambda.Expr.t) :
+let rec with_lost_kinds_of_expr ~code_params (e : Flambda.Expr.t) :
     Flambda.Expr.t =
   match Flambda.Expr.descr e with
   | Let let_expr ->
     Flambda.Let_expr.pattern_match let_expr ~f:(fun pattern ~body ->
         let named =
-          with_lost_kinds_of_named ~code_params ~misread
+          with_lost_kinds_of_named ~code_params
             (Flambda.Let_expr.defining_expr let_expr)
         in
-        let pattern, body, misread =
+        let pattern, body =
           match (pattern : Bound_pattern.t) with
-          | Set_of_closures _ | Static _ -> pattern, body, misread
+          | Set_of_closures _ | Static _ -> pattern, body
           | Singleton bound_var ->
             let var = Bound_var.var bound_var in
             let kind = Flambda.Named.kind named in
-            let var, pattern, body =
-              if Flambda_kind.equal kind (Variable.kind var)
-              then var, pattern, body
-              else
-                let user_visible =
-                  if Variable.user_visible var then Some () else None
-                in
-                let new_var =
-                  Variable.create ?user_visible (Variable.name var) kind
-                in
-                ( new_var,
-                  Bound_pattern.singleton
-                    (Bound_var.create new_var
-                       (Bound_var.debug_uid bound_var)
-                       (Bound_var.name_mode bound_var)),
-                  Flambda.Expr.apply_renaming body
-                    (Flambda2_nominal.Renaming.add_variable
-                       Flambda2_nominal.Renaming.empty var new_var) )
-            in
-            let misread =
-              match named with
-              | Prim (Nullary (Invalid kind | Optimised_out kind), _)
-                when kind_that_the_reader_may_misread kind ->
-                Variable.Set.add var misread
-              | Simple simple when variable_of_misread_kind ~misread simple ->
-                Variable.Set.add var misread
-              | Simple _ | Prim _ | Set_of_closures _ | Static_consts _
-              | Rec_info _ ->
-                misread
-            in
-            pattern, body, misread
+            if Flambda_kind.equal kind (Variable.kind var)
+            then pattern, body
+            else
+              let user_visible =
+                if Variable.user_visible var then Some () else None
+              in
+              let new_var =
+                Variable.create ?user_visible (Variable.name var) kind
+              in
+              ( Bound_pattern.singleton
+                  (Bound_var.create new_var
+                     (Bound_var.debug_uid bound_var)
+                     (Bound_var.name_mode bound_var)),
+                Flambda.Expr.apply_renaming body
+                  (Flambda2_nominal.Renaming.add_variable
+                     Flambda2_nominal.Renaming.empty var new_var) )
         in
         Flambda.Expr.create_let
           (Flambda.Let_expr.create pattern named
-             ~body:(with_lost_kinds_of_expr ~code_params ~misread body)
+             ~body:(with_lost_kinds_of_expr ~code_params body)
              ~free_names_of_body:Unknown))
   | Let_cont (Non_recursive { handler; _ }) ->
     Flambda.Non_recursive_let_cont_handler.pattern_match handler
       ~f:(fun k ~body ->
         Flambda.Let_cont_expr.create_non_recursive k
-          (with_lost_kinds_of_handler ~code_params ~misread
+          (with_lost_kinds_of_handler ~code_params
              (Flambda.Non_recursive_let_cont_handler.handler handler))
-          ~body:(with_lost_kinds_of_expr ~code_params ~misread body)
+          ~body:(with_lost_kinds_of_expr ~code_params body)
           ~free_names_of_body:Unknown)
   | Let_cont (Recursive handlers) ->
     Flambda.Recursive_let_cont_handlers.pattern_match handlers
       ~f:(fun ~invariant_params ~body handlers ->
         Flambda.Let_cont_expr.create_recursive ~invariant_params
           (Continuation.Lmap.map
-             (with_lost_kinds_of_handler ~code_params ~misread)
+             (with_lost_kinds_of_handler ~code_params)
              (Flambda.Continuation_handlers.to_map handlers))
-          ~body:(with_lost_kinds_of_expr ~code_params ~misread body))
+          ~body:(with_lost_kinds_of_expr ~code_params body))
   | Apply apply -> (
-    match arity_of_arguments ~code_params ~misread apply with
+    match arity_of_arguments ~code_params apply with
     | As_read -> e
     | Given args_arity ->
       Flambda.Expr.create_apply
@@ -9344,12 +9292,10 @@ let rec with_lost_kinds_of_expr ~code_params ~misread (e : Flambda.Expr.t) :
     | Not_known why -> raise (Lost_kind_not_known why))
   | Apply_cont _ | Switch _ | Invalid _ -> e
 
-and with_lost_kinds_of_named ~code_params ~misread (named : Flambda.Named.t) :
+and with_lost_kinds_of_named ~code_params (named : Flambda.Named.t) :
     Flambda.Named.t =
   match named with
   | Prim (Unary (Opaque_identity { middle_end_only; kind }, arg), dbg) ->
-    if variable_of_misread_kind ~misread arg
-    then raise (Lost_kind_not_known opaque_kind_not_known_message);
     let kind_of_arg = Simple.kind arg in
     if Flambda_kind.equal kind kind_of_arg
     then named
@@ -9363,21 +9309,21 @@ and with_lost_kinds_of_named ~code_params ~misread (named : Flambda.Named.t) :
            match Flambda.Static_const_or_code.to_code const with
            | Some code ->
              Flambda.Static_const_or_code.create_code
-               (with_lost_kinds_of_code ~code_params ~misread code)
+               (with_lost_kinds_of_code ~code_params code)
            | None -> const))
   | Simple _ | Prim _ | Set_of_closures _ | Rec_info _ -> named
 
-and with_lost_kinds_of_handler ~code_params ~misread
+and with_lost_kinds_of_handler ~code_params
     (handler : Flambda.Continuation_handler.t) : Flambda.Continuation_handler.t
     =
   let is_exn_handler = Flambda.Continuation_handler.is_exn_handler handler in
   let is_cold = Flambda.Continuation_handler.is_cold handler in
   Flambda.Continuation_handler.pattern_match handler ~f:(fun params ~handler ->
       Flambda.Continuation_handler.create params
-        ~handler:(with_lost_kinds_of_expr ~code_params ~misread handler)
+        ~handler:(with_lost_kinds_of_expr ~code_params handler)
         ~free_names_of_handler:Unknown ~is_exn_handler ~is_cold)
 
-and with_lost_kinds_of_code ~code_params ~misread (code : Code.t) : Code.t =
+and with_lost_kinds_of_code ~code_params (code : Code.t) : Code.t =
   let params_and_body =
     Flambda.Function_params_and_body.pattern_match (Code.params_and_body code)
       ~f:(fun
@@ -9393,7 +9339,7 @@ and with_lost_kinds_of_code ~code_params ~misread (code : Code.t) : Code.t =
         ->
         Flambda.Function_params_and_body.create ~return_continuation
           ~exn_continuation params
-          ~body:(with_lost_kinds_of_expr ~code_params ~misread body)
+          ~body:(with_lost_kinds_of_expr ~code_params body)
           ~free_names_of_body ~my_closure ~my_alloc_mode ~my_depth)
   in
   Code.create_with_metadata ~params_and_body
@@ -9435,7 +9381,7 @@ let rec kind_lost_in_expr ~code_params (e : Flambda.Expr.t) : bool =
              (Continuation.Lmap.data
                 (Flambda.Continuation_handlers.to_map handlers)))
   | Apply apply -> (
-    match arity_of_arguments ~code_params ~misread:Variable.Set.empty apply with
+    match arity_of_arguments ~code_params apply with
     | As_read -> false
     | Given _ | Not_known _ -> true)
   | Apply_cont _ | Switch _ | Invalid _ -> false
@@ -9477,9 +9423,7 @@ let with_lost_kinds (unit : Flambda_unit.t) : (Flambda_unit.t, string) result =
   if not (kind_lost_in_expr ~code_params body)
   then Ok unit
   else
-    match
-      with_lost_kinds_of_expr ~code_params ~misread:Variable.Set.empty body
-    with
+    match with_lost_kinds_of_expr ~code_params body with
     | exception Lost_kind_not_known why -> Error why
     | body ->
       Ok
