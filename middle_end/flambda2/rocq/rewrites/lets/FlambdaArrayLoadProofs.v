@@ -40,7 +40,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaNominalProofs FlambdaApplyProofs FlambdaWellFormedSpec
   FlambdaWellFormedProofs FlambdaNormaliseSpec FlambdaNormaliseProofs
   FlambdaValidatorEquivarianceBaseProofs FlambdaBlockLoadSpec
-  FlambdaBlockLoadProofs FlambdaArrayLoadSpec.
+  FlambdaBlockLoadProofs FlambdaArrayLoadSpec FlambdaEquivarianceTactic.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -518,18 +518,18 @@ Qed.
 (* Renaming                                                                 *)
 (* ======================================================================== *)
 
-(* A map whose keys are renamed: a renaming is injective, so a variable
-   is found where its image is. *)
-Lemma lookup_renamed_array_vars {A B : Type} (r : renaming) (g : A -> B)
-    (x : variable) (l : list (variable * A)) :
-  lookup (rename_variable r x)
-    (map (fun entry => (rename_variable r (fst entry), g (snd entry))) l)
-  = option_map g (lookup x l).
-Proof.
-  induction l as [ | [y a] l IH]; simpl; [ reflexivity | ].
-  rewrite rename_variable_eqb.
-  destruct (Pos.eqb x y); [ reflexivity | exact IH ].
-Qed.
+(* Three laws below are proved by the tactic of
+   FlambdaEquivarianceTactic.v, which states and proves by itself the
+   laws of what their functions call: those of [forget_field],
+   [known_array_of], [length_of_known], [element_loaded] and
+   [of_known_array] are not stated here. The types of what is known do
+   not say how it is renamed (an array is a list, the arrays are lists
+   of pairs): the actions are [rename_known_array] and
+   [rename_known_arrays]. *)
+#[local] Instance known_array_renaming : Renaming_of known_array :=
+  rename_known_array.
+#[local] Instance known_arrays_renaming : Renaming_of known_arrays :=
+  rename_known_arrays.
 
 Lemma filter_map_array_vars {A B : Type} (keep' : B -> bool) (g : A -> B)
     (keep : A -> bool) (l : list A) :
@@ -540,23 +540,11 @@ Proof.
   rewrite Hkeep, IH. destruct (keep a); reflexivity.
 Qed.
 
-Lemma forget_array_field_equivariant (r : renaming) (x : variable)
-    (field : option simple) :
-  forget_field (rename_variable r x) (option_map (rename_simple r) field)
-  = option_map (rename_simple r) (forget_field x field).
-Proof.
-  destruct field as [s | ]; simpl; [ | reflexivity ].
-  rewrite var_in_simple_equivariant. destruct (var_in_simple x s); reflexivity.
-Qed.
-
 Lemma forget_in_array_equivariant (r : renaming) (x : variable)
     (array : known_array) :
   forget_in_array (rename_variable r x) (rename_known_array r array)
   = rename_known_array r (forget_in_array x array).
-Proof.
-  unfold forget_in_array, rename_known_array. rewrite !map_map.
-  apply map_ext. intros field. apply forget_array_field_equivariant.
-Qed.
+Proof. equivariance. Qed.
 
 Lemma forget_array_var_equivariant (r : renaming) (x : variable)
     (known : known_arrays) :
@@ -609,11 +597,7 @@ Qed.
 Lemma static_array_made_renamed (r : renaming) (binding : static_binding) :
   static_array_made (rename_static_binding r binding)
   = map_values (rename_known_array r) (static_array_made binding).
-Proof.
-  destruct binding as [id c | id | sym const]; try reflexivity.
-  destruct const; try reflexivity.
-  simpl. unfold rename_known_array. rewrite !map_map. reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 Lemma arrays_under_statics_equivariant (r : renaming)
     (known : known_arrays) (bindings : list static_binding) :
@@ -627,71 +611,21 @@ Proof.
   rewrite static_array_made_renamed, map_app, IH. reflexivity.
 Qed.
 
-Lemma known_array_of_equivariant (r : renaming) (known : known_arrays)
-    (s : simple) :
-  known_array_of (rename_known_arrays r known) (rename_simple r s)
-  = option_map (rename_known_array r) (known_array_of known s).
-Proof.
-  destruct s as [x | sym | c]; simpl;
-    [ apply lookup_renamed_array_vars | apply lookup_map_values
-    | reflexivity ].
-Qed.
+(* An element of a renamed array: given to the tactic for the law of
+   [element_loaded]. *)
+Lemma nth_error_known_array_renamed (r : renaming) (array : known_array)
+    (n : nat) :
+  nth_error (rename_known_array r array) n
+  = option_map (option_map (rename_simple r)) (nth_error array n).
+Proof. apply nth_error_map. Qed.
 
-Lemma length_of_known_equivariant (r : renaming) (array : known_array) :
-  length_of_known (rename_known_array r array)
-  = option_map (rename_simple r) (length_of_known array).
-Proof.
-  unfold length_of_known, rename_known_array. rewrite length_map.
-  destruct
-    (in_range (int_width Standard_tagged_immediate)
-       (Z.of_nat (length array)));
-    reflexivity.
-Qed.
-
-Lemma element_loaded_equivariant (r : renaming) (array : known_array)
-    (index : simple) :
-  element_loaded (rename_known_array r array) (rename_simple r index)
-  = option_map (rename_simple r) (element_loaded array index).
-Proof.
-  destruct index as [x | sym | c]; try reflexivity.
-  destruct c; try reflexivity. simpl.
-  destruct (0 <=? i)%Z; [ | reflexivity ].
-  unfold rename_known_array. rewrite nth_error_map.
-  destruct (nth_error array (Z.to_nat i)) as [[contents | ] | ];
-    reflexivity.
-Qed.
-
-Lemma of_known_array_equivariant (r : renaming) (known : known_arrays)
-    (p : prim) (args : list simple) :
-  of_known_array (rename_known_arrays r known) p
-    (map (rename_simple r) args)
-  = option_map (rename_simple r) (of_known_array known p args).
-Proof.
-  destruct p as [u | b | vp | hp | rp]; try reflexivity.
-  - destruct u; try reflexivity.
-    destruct args as [ | a [ | a' args]]; try reflexivity.
-    cbn [of_known_array map]. rewrite known_array_of_equivariant.
-    destruct (known_array_of known a) as [array | ]; cbn [option_map];
-      [ | reflexivity ].
-    apply length_of_known_equivariant.
-  - destruct b; try reflexivity.
-    destruct args as [ | a [ | index [ | arg args]]]; try reflexivity.
-    cbn [of_known_array map]. rewrite known_array_of_equivariant.
-    destruct (known_array_of known a) as [array | ]; cbn [option_map];
-      [ | reflexivity ].
-    apply element_loaded_equivariant.
-Qed.
+#[local] Hint Rewrite nth_error_known_array_renamed : equivariance.
 
 Lemma load_known_array_named_equivariant (r : renaming)
     (known : known_arrays) (d : named) :
   load_known_array_named (rename_known_arrays r known) (rename_named r d)
   = rename_named r (load_known_array_named known d).
-Proof.
-  destruct d as [s | p args | | | | | ]; try reflexivity.
-  cbn [rename_named load_known_array_named].
-  rewrite of_known_array_equivariant.
-  destruct (of_known_array known p args); reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 Fixpoint load_arrays_knowing_equivariant_aux (r : renaming) (e : expr) :
   ∀ known : known_arrays,
