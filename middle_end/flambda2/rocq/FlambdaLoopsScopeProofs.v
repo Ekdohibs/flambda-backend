@@ -743,68 +743,46 @@ Qed.
 (* The parameters that a loop only passes round removed, with the
    [Let]s that are left unused. Whatever the masks of a loop are, a
    handler loses only parameters that it does not use once it is
-   rewritten, so how the masks are found is not looked at. *)
+   rewritten, so how the masks are found is not looked at.
 
-Fixpoint drop_dead_scoped (e : expr) :
-  ∀ known : masks, scoped e (drop_dead known e)
-with drop_dead_in_loop_scoped (h : continuation_handler) :
-  ∀ (inside : masks) (kept : bool),
-    scoped_handler h (drop_dead_in_loop inside kept h).
+   The proof goes by the induction of FlambdaTermInductionProofs.v, which
+   knows of the body of every handler of a loop what it knows of a term,
+   so the handlers of a loop need no statement of their own. The tactic
+   of FlambdaScopedInductionProofs.v closes the forms of term that the
+   rewrite only goes through; what is left are the five places where it
+   does something. FlambdaScopeTactic.v is required and not imported: it
+   has three names that this file defines above. *)
+From OxCamlFlambda2 Require Import FlambdaTermInductionProofs
+  FlambdaScopedInductionProofs.
+From OxCamlFlambda2 Require FlambdaScopeTactic.
+
+Lemma drop_dead_scoped (e : expr) :
+  ∀ known : masks, scoped e (drop_dead known e).
 Proof.
-  - destruct e
-      as [x kind d body | bindings body | k [params metadata handler] body
-         | handlers body | ap | ac | scrutinee arms | ];
-      intros known; cbn [drop_dead drop_dead_in_loop]; cbv zeta.
-    + destruct (var_free_b x (drop_dead known body)) eqn:Hfree; cbn [orb];
-        [ apply scoped_let; [ apply incl_refl | apply drop_dead_scoped ] | ].
-      destruct (named_may_go d); cbn [negb];
-        [ | apply scoped_let; [ apply incl_refl | apply drop_dead_scoped ] ].
-      apply scoped_let_unused; [ apply drop_dead_scoped | exact Hfree ].
-    + apply scoped_let_static;
-        [ apply scoped_bindings_refl | apply drop_dead_scoped ].
-    + apply scoped_let_cont; [ | apply drop_dead_scoped ].
-      apply
-        (scoped_handler_unused_params (hm_is_exn_handler metadata) _ _ _ _ _
-           (drop_dead known handler));
-        [ destruct (returned_to k body); [ left | right ]; reflexivity
-        | right; reflexivity | apply drop_dead_scoped ].
-    + assert
-        (Hhandlers :
-          ∀ (inside : masks) (kept : continuation -> bool),
-            scoped_handlers handlers
-              (map
-                 (fun '(k, h) => (k, drop_dead_in_loop inside (kept k) h))
-                 handlers)).
-      { intros inside kept.
-        induction handlers as [ | [k h] handlers IH]; cbn [map];
-          [ apply scoped_handlers_nil | ].
-        apply scoped_handlers_cons;
-          [ apply drop_dead_in_loop_scoped | exact IH ]. }
-      apply scoped_let_cont_recursive;
-        [ | apply Hhandlers | apply drop_dead_scoped ].
-      rewrite map_map. apply map_ext. intros [k h]. reflexivity.
-    + apply scoped_refl.
-    + intros _. scope.
-      split; [ reflexivity | split; [ apply drop_args_free | ] ].
-      apply incl_refl.
-    + intros _. scope. split; [ reflexivity | split ].
-      * apply incl_app_app; [ apply incl_refl | ].
-        intros x Hx. apply in_flat_map in Hx.
-        destruct Hx as (arm' & Harm' & Hx). apply in_map_iff in Harm'.
-        destruct Harm' as (arm & <- & Harm). apply in_flat_map. exists arm.
-        split; [ exact Harm | exact (drop_args_free known (snd arm) x Hx) ].
-      * rewrite
-          (flat_map_map_same (fun arm => apply_cont_continuations (snd arm))
-             (fun arm => apply_cont_continuations (snd arm)));
-          [ apply incl_refl | intros arm; reflexivity ].
-    + apply scoped_refl.
-  - destruct h as [params metadata handler]. intros inside kept.
-    cbn [drop_dead drop_dead_in_loop]. cbv zeta.
-    apply
-      (scoped_handler_unused_params (hm_is_exn_handler metadata) _ _ _ _ _
-         (drop_dead inside handler));
-      [ destruct kept; [ left | right ]; reflexivity
-      | right; reflexivity | apply drop_dead_scoped ].
+  induction e using expr_deep_ind; intros known;
+    cbn [drop_dead drop_dead_in_loop]; cbv zeta; scoped_congruence; auto.
+  - FlambdaScopeTactic.goal_tests; [ scoped_congruence; auto | ].
+    match goal with
+    | H : _ || _ = false |- _ => apply orb_false_iff in H as [Hfree _]
+    end.
+    apply scoped_let_unused; auto.
+  - eapply scoped_handler_unused_params; [ | right; reflexivity | auto ].
+    FlambdaScopeTactic.goal_tests;
+      first [ left; reflexivity | right; reflexivity ].
+  - apply scoped_let_cont_recursive;
+      [ apply FlambdaScopeTactic.map_fst_keyed | | auto ].
+    apply FlambdaScopeTactic.scoped_handlers_map_keyed.
+    eapply Forall_impl; [ | eassumption ].
+    intros [k [params metadata handler]] IH.
+    cbn [fst snd handler_body drop_dead drop_dead_in_loop] in *. cbv zeta.
+    eapply scoped_handler_unused_params; [ | right; reflexivity | apply IH ].
+    FlambdaScopeTactic.goal_tests;
+      first [ left; reflexivity | right; reflexivity ].
+  - apply scoped_apply_cont; [ apply drop_args_free | apply incl_refl ].
+  - rewrite (map_ext _ (fun '(n, ac) => (n, drop_args known ac)))
+      by (intros []; reflexivity).
+    apply scoped_switch_map; intros ac;
+      [ apply drop_args_free | apply incl_refl ].
 Qed.
 
 Lemma drop_dead_params_scoped (e : expr) : scoped e (drop_dead_params e).

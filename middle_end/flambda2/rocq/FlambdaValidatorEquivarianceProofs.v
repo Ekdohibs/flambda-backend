@@ -3753,50 +3753,57 @@ Qed.
 Lemma drop_unused_params_equivariant : rewrite_equivariant drop_unused_params.
 Proof. intros r e. exact (drop_params_equivariant_aux r e []). Qed.
 
-(* Removing the parameters of a loop that are only passed round it: the
-   search for the masks of a loop goes the same way on the renamed
-   term, through masks whose names are renamed. *)
-Lemma map_keys_cons {A : Type} (r : renaming) (k : continuation) (a : A)
-    (l : list (continuation * A)) :
-  Keyed.map_keys (rename_continuation r) ((k, a) :: l)
-  = (rename_continuation r k, a) :: Keyed.map_keys (rename_continuation r) l.
-Proof. reflexivity. Qed.
+(* Removing the parameters of a loop that are only passed round it. The
+   law of the pass is proved from the definitions by the tactic of
+   FlambdaEquivarianceTactic.v, which states the law of [drop_dead] from
+   its type and proves it as it goes: the masks are renamed as their type
+   says, the name of each continuation and nothing of what a mask holds.
 
-Lemma map_keys_app {A : Type} (r : renaming)
-    (l l' : list (continuation * A)) :
-  Keyed.map_keys (rename_continuation r) (l ++ l')
-  = Keyed.map_keys (rename_continuation r) l
-    ++ Keyed.map_keys (rename_continuation r) l'.
-Proof. unfold Keyed.map_keys, Keyed.map_bindings. apply map_app. Qed.
+   What is stated here is what the tactic does not do by itself.
+   - The search for the masks of a loop ([settle]) takes a function, so
+     its law is a lemma about two functions that agree up to renaming,
+     and a rule gives the lemma to the tactic. Computation is kept from
+     unfolding [settle], so that the rule finds it.
+   - The hypothesis of the induction is about renamed masks. In a loop
+     the masks are a list made of renamed parts, and where the call is
+     under a function whose answer has no names the tactic does not use
+     the hypothesis from right to left. A second rule takes the masks
+     from the other side of the equation and shows that the list is
+     those masks renamed.
+   - [returned_to] is asked of the whole term of the case, which
+     computation has taken apart: it is kept from unfolding, and its law
+     is stated at that form.
+   Four laws that are proved by hand are given to the tactic: three
+   that are above, and that of [var_free_b], which is in
+   FlambdaValidatorEquivarianceBaseProofs.v. The tactic does not derive
+   those of [used_params] and of [keep_all_or]; with the law of
+   [var_free_b] that it derives, the proof is not complete; and without
+   that of [returned_to] it leaves the goal. *)
+From OxCamlFlambda2 Require Import FlambdaEquivarianceTactic.
 
-Lemma masks_eqb_renamed (r : renaming) (known known' : masks) :
-  masks_eqb (Keyed.map_keys (rename_continuation r) known)
-    (Keyed.map_keys (rename_continuation r) known')
-  = masks_eqb known known'.
+Section Dead_params.
+
+#[local] Hint Rewrite @keep_all_or_map var_free_b_equivariant_aux
+  returned_to_equivariant used_params_equivariant : equivariance.
+
+#[local] Arguments returned_to : simpl never.
+
+#[local] Abbreviation rename_masks r :=
+  (map (fun p : continuation * option (list bool) =>
+          (rename_continuation r (fst p), snd p))).
+
+Lemma returned_to_rec_renamed (r : renaming) (k : continuation)
+    (handlers : list (continuation * continuation_handler)) (body : expr) :
+  returned_to (rename_continuation r k)
+    (Let_cont_recursive
+       (map (fun '(k, h) => (rename_continuation r k, rename_handler r h))
+          handlers)
+       (rename_expr r body))
+  = returned_to k (Let_cont_recursive handlers body).
 Proof.
-  revert known'.
-  induction known as [ | [k mask] known IH]; intros [ | [k' mask'] known'];
-    try reflexivity.
-  rewrite !map_keys_cons. cbn [masks_eqb].
-  rewrite rename_continuation_eqb, IH. reflexivity.
+  exact (returned_to_equivariant r k (Let_cont_recursive handlers body)).
 Qed.
-
-Lemma settle_renamed (r : renaming) (fuel : nat)
-    (next next' : masks -> masks) :
-  (∀ loop : masks,
-    next' (Keyed.map_keys (rename_continuation r) loop)
-    = Keyed.map_keys (rename_continuation r) (next loop)) ->
-  ∀ loop : masks,
-    settle fuel next' (Keyed.map_keys (rename_continuation r) loop)
-    = option_map (Keyed.map_keys (rename_continuation r))
-        (settle fuel next loop).
-Proof.
-  intros Hnext.
-  induction fuel as [ | fuel IH]; intros loop; cbn [settle];
-    [ reflexivity | ].
-  rewrite Hnext, masks_eqb_renamed.
-  destruct (masks_eqb (next loop) loop); [ reflexivity | apply IH ].
-Qed.
+#[local] Hint Rewrite returned_to_rec_renamed : equivariance.
 
 Lemma count_params_renamed (r : renaming)
     (handlers : list (continuation * continuation_handler)) :
@@ -3804,118 +3811,68 @@ Lemma count_params_renamed (r : renaming)
     (map (fun '(k, h) => (rename_continuation r k, rename_handler r h))
        handlers)
   = count_params handlers.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite count_params_renamed : equivariance.
+
+Lemma masks_eqb_equivariant : equivariance_of masks_eqb.
+Proof. equivariance. Qed.
+
+(* The search goes the same way on the renamed term, through masks
+   whose names are renamed. *)
+Lemma settle_renamed (r : renaming) (fuel : nat)
+    (next next' : masks -> masks) (first first' : masks) :
+  first' = rename_masks r first ->
+  (∀ loop : masks, next' (rename_masks r loop) = rename_masks r (next loop)) ->
+  settle fuel next' first'
+  = option_map (rename_masks r) (settle fuel next first).
 Proof.
-  unfold count_params.
-  induction handlers as [ | [k [params metadata handler]] handlers IH];
+  intros -> Hnext. revert first.
+  induction fuel as [ | fuel IH]; intros loop; cbn [settle];
     [ reflexivity | ].
-  cbn [map rename_handler fold_right]. rewrite length_map, IH. reflexivity.
+  rewrite Hnext, masks_eqb_equivariant.
+  destruct (masks_eqb (next loop) loop); [ reflexivity | apply IH ].
 Qed.
 
-Fixpoint drop_dead_equivariant_aux (r : renaming) (e : expr) :
-  ∀ known : masks,
-    drop_dead (Keyed.map_keys (rename_continuation r) known)
-      (rename_expr r e)
-    = rename_expr r (drop_dead known e)
-with live_params_equivariant (r : renaming) (h : continuation_handler) :
-  ∀ (known : masks) (kept : bool),
-    live_params (Keyed.map_keys (rename_continuation r) known) kept
-      (rename_handler r h)
-    = live_params known kept h
-with drop_dead_in_loop_equivariant (r : renaming)
-    (h : continuation_handler) :
-  ∀ (known : masks) (kept : bool),
-    drop_dead_in_loop (Keyed.map_keys (rename_continuation r) known) kept
-      (rename_handler r h)
-    = rename_handler r (drop_dead_in_loop known kept h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k [params metadata handler] body
-         | handlers body | ap | ac | scrutinee arms | ];
-      intros known; cbn [rename_expr rename_handler drop_dead];
-      try reflexivity.
-    + rewrite drop_dead_equivariant_aux, var_free_b_equivariant_aux,
-        named_may_go_renamed.
-      destruct (var_free_b x (drop_dead known body) || negb (named_may_go d));
-        reflexivity.
-    + rewrite drop_dead_equivariant_aux. reflexivity.
-    + rewrite (drop_dead_equivariant_aux r handler known),
-        returned_to_equivariant, used_params_equivariant, keep_all_or_map,
-        <- map_keys_cons, drop_dead_equivariant_aux.
-      reflexivity.
-    + change
-        (Let_cont_recursive
-           (map (fun '(k, h) => (rename_continuation r k, rename_handler r h))
-              handlers)
-           (rename_expr r body))
-        with (rename_expr r (Let_cont_recursive handlers body)).
-      set (whole := Let_cont_recursive handlers body).
-      assert (Hkeys :
-        ∀ mask : option (list bool),
-          map (fun '(k, _) => (k, mask))
-            (map
-               (fun '(k, h) => (rename_continuation r k, rename_handler r h))
-               handlers)
-          = Keyed.map_keys (rename_continuation r)
-              (map (fun '(k, _) => (k, mask)) handlers)).
-      { intros mask. clear.
-        induction handlers as [ | [k h] handlers IH]; [ reflexivity | ].
-        cbn [map]. rewrite map_keys_cons, IH. reflexivity. }
-      rewrite count_params_renamed, !Hkeys.
-      match goal with
-      | |- context [settle ?fuel ?next' (Keyed.map_keys _ ?first)] =>
+#[local] Arguments settle : simpl never.
+
+(* The two rules. The first: [settle] at a function and at first masks
+   that mention the renaming, where the other side has it at ones that
+   do not. The second: [drop_dead] at masks that are not written as a
+   renamed list, of a term that the induction has a hypothesis for,
+   where the other side has it at masks that do not mention the
+   renaming. *)
+#[local] Ltac eqv_extra ::=
+  first
+    [ match goal with
+      | r : renaming |- context [settle ?fuel ?next' ?first'] =>
+        eqv_has_renaming next';
         match goal with
-        | |- context [settle fuel ?next first] =>
-          assert (Hnext :
-            ∀ loop : masks,
-              next' (Keyed.map_keys (rename_continuation r) loop)
-              = Keyed.map_keys (rename_continuation r) (next loop));
-          [ | rewrite (settle_renamed r fuel next next' Hnext first);
-              destruct (settle fuel next first) as [loop | ] ]
+        | |- context [settle fuel ?next ?first] =>
+          eqv_no_renaming next;
+          rewrite (settle_renamed r fuel next next' first first')
         end
-      end.
-      * intros loop. cbv beta. rewrite <- map_keys_app. clearbody whole.
-        clear Hkeys. generalize (loop ++ known). intros inside.
-        induction handlers as [ | [k h] handlers IH]; [ reflexivity | ].
-        cbn [map].
-        rewrite map_keys_cons, IH, returned_to_equivariant,
-          (live_params_equivariant r h inside).
-        reflexivity.
-      * cbn [option_map].
-        rewrite <- map_keys_app, drop_dead_equivariant_aux. f_equal.
-        clearbody whole. clear Hkeys Hnext.
-        generalize (loop ++ known). intros inside.
-        induction handlers as [ | [k h] handlers IH]; [ reflexivity | ].
-        cbn [map].
-        rewrite IH, returned_to_equivariant,
-          (drop_dead_in_loop_equivariant r h inside).
-        reflexivity.
-      * cbn [option_map].
-        rewrite <- map_keys_app, drop_dead_equivariant_aux. f_equal.
-        clearbody whole. clear Hkeys Hnext.
+      end
+    | match goal with
+      | r : renaming,
+        H : context [drop_dead _ (rename_expr _ ?e)
+                     = rename_expr _ (drop_dead _ ?e)]
+        |- context [drop_dead ?m' (rename_expr ?r ?e)] =>
+        lazymatch m' with
+        | map _ _ => fail
+        | _ => idtac
+        end;
         match goal with
-        | |- context [drop_dead_in_loop (?none ++ known)] =>
-          generalize (none ++ known)
-        end.
-        intros inside.
-        induction handlers as [ | [k h] handlers IH]; [ reflexivity | ].
-        cbn [map].
-        rewrite IH, (drop_dead_in_loop_equivariant r h inside).
-        reflexivity.
-    + rewrite drop_args_equivariant. reflexivity.
-    + f_equal. rewrite !map_map. apply map_ext. intros arm. cbn [fst snd].
-      rewrite drop_args_equivariant. reflexivity.
-  - destruct h as [params metadata handler]. intros known kept.
-    cbn [rename_handler live_params].
-    rewrite drop_dead_equivariant_aux, used_params_equivariant. reflexivity.
-  - destruct h as [params metadata handler]. intros known kept.
-    cbn [rename_handler drop_dead_in_loop].
-    rewrite drop_dead_equivariant_aux, used_params_equivariant,
-      keep_all_or_map.
-    reflexivity.
-Qed.
+        | |- context [drop_dead ?m e] =>
+          eqv_no_renaming m;
+          replace m' with (rename_masks r m);
+          [ rewrite H | solve [ eqv_core ] ]
+        end
+      end ].
 
 Lemma drop_dead_params_equivariant : rewrite_equivariant drop_dead_params.
-Proof. intros r e. exact (drop_dead_equivariant_aux r e []). Qed.
+Proof. equivariance. Qed.
+
+End Dead_params.
 
 (* Removing the unused [Let]s whose defining expression has a value, in
    the handlers of recursive continuations too. *)
