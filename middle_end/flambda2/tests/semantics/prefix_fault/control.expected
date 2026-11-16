@@ -1,0 +1,15 @@
+a prefix declares a code id deleted, and the two units bind nothing: no fault
+the same prefix, and the unit before binds that code id: the prefix binds a symbol that the unit binds, or binds or declares deleted a code id that the unit binds or declares deleted
+the same prefix, and the unit after declares that code id deleted: the prefix binds a symbol that the unit binds, or binds or declares deleted a code id that the unit binds or declares deleted
+the same prefix, and the units bind and declare deleted another code id: no fault
+a prefix declares a code id deleted twice: the prefix binds a symbol twice, or binds or declares deleted a code id twice
+a prefix binds a code id and declares it deleted: the prefix binds a symbol twice, or binds or declares deleted a code id twice
+a unit that returns, with no prefix (0 steps): returns 7
+the same unit after a prefix that declares a code id deleted (1 steps): returns 7
+a unit that binds code and returns, with no prefix (1 steps): returns 7
+the same unit after the same prefix (2 steps): returns 7
+a unit that is undefined, with no prefix (0 steps): undefined
+the same unit after the same prefix (1 steps): undefined
+the first unit after a prefix that binds and declares nothing (0 steps): returns 7
+a unit that returns at the last step allowed, with no prefix (999999 steps): returns 7
+the same unit after the same prefix (1000000 steps): still running when the fuel ran out

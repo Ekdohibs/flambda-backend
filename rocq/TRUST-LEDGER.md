@@ -1629,6 +1629,35 @@ it gave back.
     conversion of terms leaves out"). What is asked for is in the
     comment above `make_prefix`: the code of a closure that is bound
     only as a field of a block is not;
+  - such code, where the file of its own unit was read and has it
+    or its metadata, is declared deleted by the prefix
+    (`Bind_deleted_code`): the code that is asked for and not bound,
+    and the code of each closure that the prefix binds. A
+    declaration binds nothing and gives no run a value; it says that
+    the code id is one of a unit that the program is linked with and
+    that its body is not given, and it makes the code id a static
+    name in scope. That is trusted as the rest of the prefix is: a
+    code id is declared only where the run read the code id's own
+    unit and the file of that unit has it. The file is asked alone:
+    the compiler's loader keeps one table of code for all the files
+    that it has loaded, so the tool imports that one file once more,
+    with the compiler's own reader, and takes its answer from that.
+    What another file that was read says of a code id is not taken
+    (a closure of one unit that is of code of another, metadata that
+    a file exports again), and code of a unit that was not read is
+    not declared: a unit whose prefix binds a closure of such code
+    is stopped by the tool's guard for it ("not checked"), whether
+    or not the file of that unit is on the load path, and no option
+    of the tool mends that. The controls are two units of
+    `middle_end/flambda2/tests/semantics/ocaml/pairs/`:
+    `never_called_unread`, for code that a body calls, and
+    `maker_kept_unread`, for the code of a closure of a unit that
+    was read. A prefix that declares code and binds nothing is one
+    group of static bindings where the unit had no prefix: each run
+    takes one step more, which is counted with the others against
+    the steps that the tool allows (the comment above `make_prefix`;
+    `middle_end/flambda2/tests/semantics/prefix_fault/` has a
+    control of it);
   - a symbol is bound to a block only where the file says that it is
     an immutable block of values each of whose fields is a constant,
     a symbol, or a field of which the file says nothing, as of a
@@ -1687,12 +1716,16 @@ it gave back.
 
   The round trip of the conversion does not reach the prefix: the
   text of terms cannot declare what a prefix binds. What does check
-  it: before a prefix is used the tool tests that it binds each name
-  once, none that either unit binds and none that is still an
-  import, that it evaluates from the static environment of the
-  imports, and that the term after with the prefix in front of it is
-  well-formed; and the prefix is printed for each unit that has one,
-  to be read against the other unit.
+  it: before a prefix is used the tool tests that it binds each
+  symbol once, and binds or declares deleted each code id once, none
+  that either unit binds or declares deleted and no symbol that is
+  still an import
+  (`middle_end/flambda2/tests/semantics/prefix_fault/` is the
+  control of that test on a code id declared deleted), that it
+  evaluates from the static environment of the imports, and that the
+  term after with the prefix in front of it is well-formed; and the
+  prefix is printed for each unit that has one, to be read against
+  the other unit.
   The lines. A unit whose two terms have a prefix in front of them
   is reported apart, whatever imports it has left. The line begins
   "validated with its imports, given the .cmx of N of them" where a
@@ -1703,15 +1736,16 @@ it gave back.
   given the .cmx of N", and is followed by a line that begins "not
   validated with its imports", as for a unit with no prefix (the
   entry "What the tool reports"). Both rest on the two things above.
-  The line "the check of static names" (the same entry) is of the
-  two terms with the prefix in front of them, and says so.
-  `statics_in_scope` asks that the code of a closure, and of a
-  direct call, be bound or declared deleted, and a prefix binds
-  closures of the other unit whose code it leaves unbound (above).
-  So of a unit with such a prefix the line says "fails" of both
-  terms, for what the prefix leaves out: it is not then a finding
-  about the unit or about Simplify, and it says nothing of the names
-  of the unit itself.
+  The guard (the entry "The tool's guard") asks its tests of the
+  two terms with the prefix in front of them, and the line "the
+  check of static names" says so. `statics_in_scope` asks that the
+  code of a closure, and of a direct call, be bound or declared
+  deleted, and a prefix declares deleted the code that it has from
+  the file of the code's own unit and does not bind (above). So a
+  unit with a prefix that the guard stops for a static name is
+  stopped for something of the unit, or for a code id, named by the
+  term or by the prefix, whose own unit the run did not read or
+  whose file says nothing of it.
   The tool's Simplify looks for a `.cmx` file in the directories
   given with `-I` and in no other, whatever other options of the
   compiler the tool is given (`init_load_path`). Where it is given
@@ -2034,14 +2068,16 @@ it gave back.
   fail `statics_in_scope` (discrepancy X5-34), and such a term
   given to the tool is "not checked".
   With a prefix, `statics_in_scope` asks that the code of a closure
-  and of a direct call be bound or declared deleted, and a prefix
-  binds the code of some of the closures of another unit only: a
-  unit whose term before, with the prefix in front of it, mentions
-  code of another unit that the prefix neither binds nor declares is
-  "not checked" for it. Eight units of
-  `tests/semantics/ocaml/pairs/` are so. Where the term before
-  passes and only the term after mentions such code, that is the
-  failure of the check, with the status 1.
+  and of a direct call be bound or declared deleted. A prefix binds
+  the code of some of the closures of another unit only, and
+  declares deleted the rest where the file of the code's own unit
+  gives it (the entry of the prefix): a unit whose term before, with
+  the prefix in front of it, mentions code of another unit that the
+  prefix neither binds nor declares is "not checked" for it. Two
+  units of `tests/semantics/ocaml/pairs/` are so, the controls of
+  that rule: `never_called_unread` and `maker_kept_unread`. Where
+  the term before passes and only the term after mentions such
+  code, that is the failure of the check, with the status 1.
   The scope of this check is the scope that the conversion follows
   where it adds code to the list of a call of known arity (the
   entry "The code ids that a call of known arity lists", decision

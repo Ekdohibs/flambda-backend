@@ -40,6 +40,13 @@ flags_of() {
   sed -n 's/^(\* flags: \(.*\) \*)$/\1/p' "$here/$1.ml" | head -n 1
 }
 
+# Whether a source asks, on a line "(* load path: the first unit alone *)",
+# that the tool be given the .cmx of its first unit and of no other unit:
+# the tool is then run by tool_alone.sh.
+alone_of() {
+  grep -c '^(\* load path: the first unit alone \*)$' "$here/$1.ml" || true
+}
+
 # The rule that makes a term gives the compiler to the script as an
 # argument, and that alone does not make dune run the rule again when
 # the compiler changes: so the rule names the compiler among what it
@@ -59,10 +66,27 @@ for name in $units; do
   *" $name "*) made_needs="$made_needs ../$name.expected" ;;
   esac
   if [ -n "$first" ]; then
+    # The tool is given the directory of the build as its load path, where
+    # it finds the .cmx of the first unit, and of the first unit of that one
+    # in turn: all of them are needed.
     needs="
- (deps $first.cmi $first.cmx)"
+ (deps $first.cmi $first.cmx"
+    before=$(first_of "$first")
+    while [ -n "$before" ]; do
+      needs="$needs $before.cmi $before.cmx"
+      before=$(first_of "$before")
+    done
+    needs="$needs)"
     against=" $first"
     made_needs="$made_needs $first.cmi $first.cmx"
+  fi
+  tool="(run ../../../../tools/flsemantics.exe $flags-I . %{dep:../$name.fl})"
+  if [ -n "$first" ] && [ "$(alone_of "$name")" != 0 ]; then
+    needs="
+ (deps $first.cmi $first.cmx)"
+    tool="(run sh %{dep:../tool_alone.sh}
+    %{dep:../../../../tools/flsemantics.exe} $first.cmx
+    $flags%{dep:../$name.fl})"
   fi
   cat <<RULES
 (rule
@@ -87,7 +111,7 @@ RULES
  (action
   (with-stdout-to
    $name.output
-   (run ../../../../tools/flsemantics.exe $flags-I . %{dep:../$name.fl}))))
+   $tool)))
 
 (rule
  (alias runtest)

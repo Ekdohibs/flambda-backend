@@ -1,6 +1,6 @@
 (executables
   (names fldiff fexprc roundtrip flsemantics_main flknownaritylists
-   scope_diagnosis_control)
+   scope_diagnosis_control prefix_fault_control)
   (modes native)
   (libraries
    ocamlfrontend ocamloptcomp

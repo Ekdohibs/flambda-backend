@@ -1,0 +1,20 @@
+;; Two controls of a prefix that declares code deleted, on prefixes and units
+;; made by hand. The first is of the test that the tool makes of a prefix
+;; before it uses one (prefix_fault in ../../tools/flsemantics.ml): no source
+;; and no text makes a unit that binds, or declares deleted, a code id of
+;; another unit, so the tool given a file does not reach these refusals. The
+;; second is of the steps of a run: a prefix of declarations alone is one step
+;; more, and the run ends as it did unless it ended at the last step that the
+;; tool allows. What ../../tools/prefix_fault_control.ml prints is compared
+;; with control.expected.
+
+(rule
+ (action
+  (with-stdout-to
+   control.output
+   (run %{dep:../../tools/prefix_fault_control.exe}))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff control.expected control.output)))

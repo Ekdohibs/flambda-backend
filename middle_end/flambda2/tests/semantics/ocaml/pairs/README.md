@@ -72,6 +72,36 @@ The alias of `tests/semantics/` runs these rules with the others.
   on that file, which is not kept: like `X.fl`, it moves with the
   compiler.
 
+## The load path
+
+The tool is given the directory of the build as its load path, which
+has the `.cmx` of every unit of this directory. A second unit names
+its first unit only, and the tool's Simplify reads that one file. A
+unit whose first unit is itself a second unit
+(`never_called_again.ml`) reaches the first unit of that one through
+code that it inlines, and the tool's Simplify reads that file too.
+
+A source may ask, on a line of its own,
+
+    (* load path: the first unit alone *)
+
+that the tool be given the `.cmx` of its first unit and of no other
+unit: `tool_alone.sh` then runs the tool with a load path of its own
+that has that one file. `never_called_unread.ml` is
+`never_called_again.ml` with that line: see "The pairs".
+
+Both sources have `(* flags: -w -58 *)`: the compiler is given the
+`.cmx` of the first unit only ("How a pair is made and checked"),
+and warns that it has not that of `never.ml`.
+
+A file that is on the load path is not thereby read. The `.cmx` of
+`maker.ml` is on the load path of `maker_kept_unread.ml` and of
+`maker_kept_read.ml` alike. The tool's Simplify reads it for the
+second, which keeps a function of `maker.ml` (and has the flag, for
+the same reason as above), and not for the first, which reaches
+nothing of that unit; and what makes the prefix opens no file that
+the tool's Simplify did not read. See "The pairs".
+
 ## What is claimed
 
 Where its Simplify read a `.cmx`, the tool tells the model what the
@@ -88,6 +118,42 @@ rule):
   slot;
 - the code that the two terms ask for, and the code that such code
   asks for in turn, where the file has its body.
+
+The prefix declares deleted, and binds to nothing, the code that it
+has from the file of the code's own unit and does not bind: code
+that is asked for and has no body in the file, or a body that the
+model has not got, and the code of a closure that is bound where
+nothing asks for its code. The declaration says that the code id is
+one of a unit that the program is linked with and that its body is
+not given. A call of such code is undefined, as it was when the code
+id was bound to nothing and not declared; what the declaration
+changes is that the code id is a static name in scope (the guard,
+below). Nothing is declared of a unit whose `.cmx` the tool's
+Simplify did not read, whatever the `.cmx` of another unit says of
+its code: a closure of a unit that was read can be of code of a unit
+that was not (`maker_kept_unread.ml`), and is then bound, as it was,
+with its code neither bound nor declared.
+
+A unit whose prefix names such code passes the guard only where the
+tool's Simplify reads the `.cmx` of the unit of that code. Where the
+unit, or code that it inlines, reaches something of that unit, giving
+the tool the file is what does it (`never_called_again.ml` against
+`never_called_unread.ml`). Where nothing reaches it, the file is not
+read though the tool is given it, and no option of the tool makes
+its Simplify read one: `maker_kept_unread.ml` is "not checked" as it
+stands, and `maker_kept_read.ml`, which keeps a function of
+`maker.ml`, passes.
+
+The declarations are in the first group of the prefix, and a group
+is one step of a run whatever it binds. A prefix that binds
+something has as many groups as it had, and the runs as many steps.
+A prefix that declares code and binds nothing is one group where the
+unit had no prefix at all: each run takes one step more to end as it
+did, and the lines of the unit are those of a unit with a prefix.
+The tool counts the steps of a unit with its prefix in front of it
+against those that it allows, so a run that ended at the last step
+allowed is then "still running". No unit here has such a prefix;
+`../../prefix_fault/` has a control of it, on units made by hand.
 
 The tool prints the prefix after the name of the term, to be read
 against `F.ml`:
@@ -125,11 +191,11 @@ then "after the prefix".
   the unit. No line begins "validated:" for a unit that has a
   prefix.
 - What the prefix leaves out is not said to be absent. Code that has
-  no body in the file is bound to nothing, and a call of it is
-  undefined when it runs. A module block with a field of which the
-  file says nothing is not bound: its symbol stays an import, a load
-  from it has no value, and where nothing of the file can be bound
-  there is no prefix and the tool prints
+  no body in the file is declared deleted and bound to nothing, and
+  a call of it is undefined when it runs. A module block with a field
+  of which the file says nothing is not bound: its symbol stays an
+  import, a load from it has no value, and where nothing of the file
+  can be bound or declared there is no prefix and the tool prints
 
       the tool's Simplify read the .cmx of: F
 
@@ -138,24 +204,22 @@ then "after the prefix".
 - The guard of the tool (`../README.md`, "What a validation does not
   say") asks its two tests, where the two terms have a prefix, of
   the two terms with the prefix in front of them, as they are run.
-  Of 8 of the 10 units here that have a prefix
-  (`lengths_called_at_toplevel`, `lengths_called_in_function`,
-  `lengths_included`, `lengths_kept_with_exception`, `never_called`,
-  `parity_called`, `phantom_called` and `probed_called`) the check of
-  static names then fails of both terms: the prefix binds a closure
-  of the first unit, or code of it that calls other code of it, and
-  not all of that code, which `statics_in_scope` refuses whatever
-  follows the prefix. The tool prints of each the one line
+  `statics_in_scope` asks that the code of a closure, and of a
+  direct call, be bound or declared deleted, and the prefix declares
+  deleted the code that it has from the file of the code's own unit
+  and does not bind. Of 12 of the 14 units here for which a prefix
+  is made the guard passes, and the line "the check of static names"
+  says "passes" of both terms and ends ", each with the prefix in
+  front of it". Of `never_called_unread` and of `maker_kept_unread`
+  the check of static names fails of both terms: those two are
+  controls, whose prefixes name code of a unit that the tool did not
+  read ("The pairs"). The tool prints of each the one line
 
       X.fl: not checked: with the prefix made from the .cmx files in front of it, the term before Simplify mentions a code id where it is not in scope
 
   and neither runs the two terms nor asks the validation. The line
-  is for a name of the first unit that the prefix leaves out, and
-  says nothing of those 8 units themselves. Of the 2 others
-  (`hidden_known_read` and `partly_tested`), whose prefix binds no
-  closure, the guard passes, and the line "the check of static
-  names" says "passes" of both terms and ends ", each with the
-  prefix in front of it".
+  is for a name of another unit, of which the prefix says nothing;
+  it says nothing of those two units themselves.
 - Nothing is said of the first unit itself: its initialisation is
   not run, and what its `.cmx` says of it is taken as it is.
 
@@ -168,40 +232,46 @@ from the others.
 
 | Second unit | First unit | What the second unit does | What the tool says of it |
 |-------------|------------|---------------------------|--------------------------|
-| `lengths_called_in_function.ml` | `lengths.ml` | a function calls a function of the first unit | a prefix of four bindings; not checked: with the prefix in front of it the term before mentions a code id of the first unit where it is not in scope (the guard, above) |
-| `lengths_called_at_toplevel.ml` | `lengths.ml` | a toplevel calls one | the same prefix; not checked: with the prefix in front of it the term before mentions a code id of the first unit where it is not in scope (the guard, above) |
-| `lengths_included.ml` | `lengths.ml` | a toplevel reads the fields of the first unit and keeps them (`include`) | the same prefix; not checked: with the prefix in front of it the term before mentions a code id of the first unit where it is not in scope (the guard, above) |
-| `lengths_kept_with_exception.ml` | `lengths.ml` | the same, and exports a predefined exception too | the same prefix, and one import left; not checked: with the prefix in front of it the term before mentions a code id of the first unit where it is not in scope (the guard, above) |
-| `never_called.ml` | `never.ml` | calls a function that is never inlined, whose code has no body in the `.cmx`, in a function and at toplevel | a prefix of two bindings; not checked: with the prefix in front of it the term before mentions a code id of the first unit where it is not in scope (the guard, above) |
+| `lengths_called_in_function.ml` | `lengths.ml` | a function calls a function of the first unit | a prefix of five bindings; both runs return the module block; the same; validated with its imports, given the `.cmx` |
+| `lengths_called_at_toplevel.ml` | `lengths.ml` | a toplevel calls one | the same prefix; undefined before and after; validated, with the line that says the validation says nothing of a unit whose term before is undefined |
+| `lengths_included.ml` | `lengths.ml` | a toplevel reads the fields of the first unit and keeps them (`include`) | the same prefix; both runs return a block of the two closures; the same; validated with its imports, given the `.cmx` |
+| `lengths_kept_with_exception.ml` | `lengths.ml` | the same, and exports a predefined exception too | the same prefix, and one import left; both runs return a block of the two closures and the imported exception; the same; validated with its imports, given the `.cmx` |
+| `never_called.ml` | `never.ml` | calls a function that is never inlined, whose code has no body in the `.cmx`, in a function and at toplevel | a prefix of three bindings; undefined before and after; validated, with the line that says the validation says nothing |
+| `never_called_again.ml` | `never_called.ml` | a toplevel calls the function of `never_called.ml`, which calls that of `never.ml` | the tool reads the `.cmx` of both units: a prefix of five bindings, with the code of `add_two`, and the code of `add_one` declared deleted; undefined before and after; the check of static names passes; validated, with the line that says the validation says nothing |
+| `never_called_unread.ml` | `never_called.ml` | the same unit; the tool is given the `.cmx` of `never_called.ml` alone | a control: the prefix binds the code of `add_two`, which names the code of `add_one`, of a unit that was not read and of which nothing is declared; not checked: with the prefix in front of it the term before mentions a code id where it is not in scope (the guard, above) |
+| `maker_kept_unread.ml` | `maker_kept.ml` | a toplevel reads a field of the second unit that is a constant | a control: the tool reads the `.cmx` of `maker_kept.ml` and not that of `maker.ml`; the prefix binds the module block and the closure that is a field of it, whose code is of `maker.ml`, a unit that was not read, and is not declared; not checked: with the prefix in front of it the term before mentions a code id where it is not in scope (the guard, above) |
+| `maker_kept_read.ml` | `maker_kept.ml` | a toplevel keeps the function of `maker.ml`, which the second unit gives again | the tool reads the `.cmx` of both units: a prefix of five bindings, the same module block and closure, the closure of `make`, and the code of both, bound from the file of `maker.ml`; the check of static names passes; both runs return the module block; the same; validated with its imports, given the `.cmx` of both |
 | `hidden_read.ml` | `hidden.ml` | a toplevel reads a field of which the `.cmx` says nothing, beside one that it knows | no prefix; undefined before and after; nothing to validate |
 | `hidden_known_read.ml` | `hidden.ml` | a toplevel reads the field that the `.cmx` knows, and not the one of which it says nothing | a prefix of one binding, the module block with a symbol of which nothing is known in the other field, which is the one import left; both runs return the module block; the same; validated with its imports, given the `.cmx` |
 | `partly_tested.ml` | `partly.ml` | a function loads, from its argument, the field of a record of which the `.cmx` says nothing, and adds to it; the toplevel reads the other field and gives the function the record | a prefix of two bindings, the record with a symbol of which nothing is known in that field; undefined before and after, as the addition has no value on such a symbol; validated with its imports, given the `.cmx`, with the line that says the validation says nothing |
-| `parity_called.ml` | `parity.ml` | calls a function that is one of a set of two, in a function and at toplevel | a prefix of three bindings; not checked: with the prefix in front of it the term before mentions a code id of the first unit where it is not in scope (the guard, above) |
+| `parity_called.ml` | `parity.ml` | calls a function that is one of a set of two, in a function and at toplevel | a prefix of five bindings; undefined before and after; validated, with the line that says the validation says nothing |
 | `cycle_read.ml` | `cycle.ml` | a toplevel reads a block that the first unit made by calls of the runtime | no prefix; undefined before and after; validated with its imports, with the line that says the validation says nothing |
-| `probed_called.ml` | `probed.ml` | calls, without inlining it, a function of the first unit whose body has a probe | a prefix of three bindings without the body, which the conversion refuses; not checked: with the prefix in front of it the term before mentions a code id of the first unit where it is not in scope (the guard, above) |
+| `probed_called.ml` | `probed.ml` | calls, without inlining it, a function of the first unit whose body has a probe | a prefix of five bindings without the body, which the conversion refuses; the run is undefined before and after, and the validation says nothing of it |
 | `probed_inlined.ml` | `probed.ml` | calls the same function and lets Simplify inline it | not checked: the term after Simplify has the call that is a probe, which the conversion refuses |
-| `phantom_called.ml` | `phantom.ml` | calls a function of the first unit whose body, in the `.cmx`, has a phantom binding | a prefix of two bindings without the body, which the conversion refuses; not checked: with the prefix in front of it the term before mentions a code id of the first unit where it is not in scope (the guard, above) |
+| `phantom_called.ml` | `phantom.ml` | calls a function of the first unit whose body, in the `.cmx`, has a phantom binding | a prefix of three bindings without the body, which the conversion refuses; the run before is undefined, the run after returns; nothing to validate |
 
-Twenty-three sources. Ten are first units; eight of them have an
-expected file: five are validated, as a unit of the directory above
-is, `phantom.ml` is not checked, and two that no unit uses are here
-for the lists of calls of known arity:
+Twenty-nine sources. Eleven are first units and use no other unit;
+eight of them have an expected file: five are validated, as a unit
+of the directory above is, `phantom.ml` is not checked, and two that
+no unit uses are here for the lists of calls of known arity:
 `known_arity_lists_older_code.ml` has the same two runs and is not
 validated, and `known_arity_lists_undefined_elsewhere.ml` is
-undefined before and after. Of the thirteen second units, one is
-validated given a `.cmx`, with an import left; three are undefined
-in the model, one of them with a prefix; and nine are not checked:
-the eight that the guard stops, and `probed_inlined.ml`, which the
-conversion refuses. What follows says, of the eight, what their runs
-and the validation came to before the guard stopped them; the tool
-does not print it of them now.
+undefined before and after. Of the eighteen second units, one has no
+expected file (`maker_kept.ml`, which is compiled for the two units
+that use it); five are validated given a `.cmx`, two of them with an
+import left; nine are undefined in the model, seven of them with a
+prefix, and one of the seven, `phantom_called.ml`, before Simplify
+only; and three are not checked: the two controls that the guard
+stops, and `probed_inlined.ml`, which the conversion refuses.
+`never_called.ml` and `maker_kept.ml` are each the first unit of two
+of the eighteen.
 
 The prefix of the four units that use `lengths.ml` is the same: the
 module block, the closures of `length_from` and of `length`, and the
 code of `length`, whose body the `.cmx` has. That body calls the code
 of `length_from` directly; `length_from` is recursive, its code has
-no body in the `.cmx`, and so its code id is bound to nothing. No
-import is left in the first three.
+no body in the `.cmx`, and so its code id is declared deleted and
+bound to nothing. No import is left in the first three.
 
 In `lengths_called_in_function.ml` the unit only makes its closure, so
 both runs are defined. The term before loads `length` from the module
@@ -237,7 +307,46 @@ terms are compared all the same, and are accepted. The prefix of
 `parity_called.ml` binds the closure of `odd`, which the unit does
 not ask for, as it is a field of the module block: each of the two
 closures is bound alone in a set of its own, which is less than the
-`.cmx` says of them.
+`.cmx` says of them. Its prefix declares the code of both deleted:
+that of `even`, which the unit calls, and that of `odd`, whose
+closure is bound and whose code nothing asks for.
+
+`never_called_again.ml` and `never_called_unread.ml` are one unit
+under two names, and the two sides of a control of the rule by which
+the prefix declares code deleted. The unit calls `add_two` of
+`never_called.ml`, whose body is in the `.cmx` of that unit and
+calls the code of `add_one` of `never.ml` directly; that code has no
+body. Of `never_called_again.ml` the tool's Simplify reads the
+`.cmx` of both units: the prefix binds the code of `add_two` and
+declares the code of `add_one` deleted, and the check of static
+names passes. Of `never_called_unread.ml` the tool is given the
+`.cmx` of `never_called.ml` alone ("The load path"): the unit of
+`never.ml` is not read, the prefix binds the code of `add_two`,
+which names the code of `add_one`, and declares nothing of a unit
+that was not read. The check of static names fails of both terms
+with that prefix in front of them, as it should, as nothing is known
+of that code: the guard stops the unit.
+
+`maker_kept_unread.ml` and `maker_kept_read.ml` are the two sides of
+a second control, of the code of a closure. `maker.ml` has a
+function, to be inlined, that makes a closure of what it is given.
+`maker_kept.ml` keeps such a closure, of a value that is not known:
+its Simplify inlines the function and makes no new code for the
+closure, so the closure is a symbol of `maker_kept.ml` and its code
+is still that of `maker.ml`. `maker_kept_unread.ml` reads a constant
+of `maker_kept.ml`: the tool's Simplify reads the `.cmx` of
+`maker_kept.ml` and not that of `maker.ml`; the prefix binds the
+module block and, as a field of it, that closure; nothing is
+declared of its code, and the guard stops the unit.
+`maker_kept_read.ml` keeps the function of `maker.ml`, which
+`maker_kept.ml` gives again: the tool's Simplify reads both files,
+the prefix binds the code of the closure from the file of
+`maker.ml`, and the guard passes. Another control,
+`../../prefix_fault/`, is of the test that the tool makes of a
+prefix before it uses one: a prefix that declares deleted a code id
+which a unit binds, or declares deleted itself, is refused. No
+source and no text makes such a unit, so that control is of
+prefixes and units made by hand.
 
 In `hidden_read.ml` the module block of the first unit has a field of
 which the `.cmx` says nothing, and the unit loads that field: the
@@ -290,7 +399,8 @@ model has nothing of that, so the conversion refuses a call that is
 a probe. In `probed_called.ml`, which forbids the inlining of `bump`,
 the body is therefore left out of the prefix, as a body that the
 model has not got is: the closure of `bump` is bound, its code is
-bound to nothing, and the call is undefined before and after. The
+declared deleted and bound to nothing, and the call is undefined
+before and after. The
 tool as it was when the prefix came in took the probe for a plain
 call and printed, for this unit, a prefix of six bindings with the
 body of `bump` and the code of the handler; both runs were undefined

@@ -1,0 +1,16 @@
+let $camlMaker_kept__first_const_0 = Block 0 () in
+(let Popaque/26 = %opaque (1) in
+ let Pfield/27 = %block_load.[`0`] ($Maker.camlMaker) in
+ apply unknown_arity &toplevel
+   (Pfield/27 : _ -> val) (Popaque/26) -> k/8 * error)
+  where k/8 (add/23 : val) =
+    let make/24 = %block_load.[`0`] ($Maker.camlMaker) in
+    let Pmakeblock/25 = %block.[`0`].`toplevel` (add/23, make/24, 1) in
+    cont k/7 (Pmakeblock/25)
+  where k/7 define_root_symbol (module_block/20) =
+    let field_0/21 = %block_load.tag[`0`].`size`[`3`].[`0`] (module_block/20)
+    in
+    let field_1/22 = %block_load.tag[`0`].`size`[`3`].[`1`] (module_block/20)
+    in
+    let $camlMaker_kept = Block 0 (field_0/21, field_1/22, 1) in
+    cont done ($camlMaker_kept)

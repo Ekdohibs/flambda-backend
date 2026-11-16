@@ -1,0 +1,26 @@
+maker_kept_read.fl:
+  given the .cmx of Maker, Maker_kept, a prefix of 5 static bindings:
+    camlMaker__make_0_2_code (v1) v2 -> k1 * k2 =
+      let v3 =
+        closure Maker.fn[maker.ml:6,22--51]_1 of
+          {Maker.fn[maker.ml:6,22--51]_1 = camlMaker__fn[maker.ml:6,22--51]_1_3_code}
+          {Maker.y_0 = v1} in
+      cont k1 (v3)
+    camlMaker__fn[maker.ml:6,22--51]_1_3_code (v1) v2 -> k1 * k2 =
+      let v3 = v2.(Maker.fn[maker.ml:6,22--51]_1).Maker.y_0 in
+      let v4 = Int_arith tagged_imm add (v1, v3) in
+      cont k1 (v4)
+    camlMaker__make_0_1 = closure Maker.make_0 of
+      {Maker.make_0 = camlMaker__make_0_2_code}
+      at {Maker.make_0 = camlMaker__make_0_1} {}
+    camlMaker_kept = Block 0 (camlMaker_kept__fn[maker.ml:6,22--51]_1_1,
+      camlMaker__make_0_1, 1)
+    and 1 closure of camlMaker_kept that nothing asks for
+  before Simplify, after the prefix (8 steps): returns [0: <fun>]
+  after Simplify, after the prefix (2 steps): returns [0: <fun>]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after, each with the prefix in front of it
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated with its imports, given the .cmx of 2 of them: the same once normalised and unused static bindings removed, at the head of the term after too

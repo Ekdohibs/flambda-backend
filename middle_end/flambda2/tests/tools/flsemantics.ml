@@ -4422,13 +4422,51 @@ let unit_names (units : (Compilation_unit.t * Digest.t) list) =
    a call of known arity where one of the two units has tupled code. A call of
    code that is not bound is undefined.
 
+   A code id of which the file of its own unit has the code or its metadata, and
+   which is not bound: it is declared deleted ([Bind_deleted_code]), once, where
+   it is asked for or is the code of a closure that the prefix binds. The
+   declaration says that the code id is one of a unit that the program is linked
+   with and that its body is not given here: the compiler's own reading of code
+   that it has with its metadata only. It binds nothing, so the static
+   environment that the prefix makes is what it was, and a call of the code is
+   undefined as before; what it changes is that the code id is a static name in
+   scope (FlambdaStaticsInScopeSpec.statics_in_scope asks that the code of a
+   closure, and of a direct call, be bound or declared deleted). The code of a
+   closure that is bound without being asked for is declared and not bound,
+   whether or not the file has its body: the prefix says less than the file
+   there, as above.
+
+   The word taken for a declaration is that of the file of the code id's own
+   unit, as for a binding of code. A code id whose unit the run did not read
+   (its file may be on the load path all the same), or of which the file of its
+   unit says nothing, is not declared, even where a file that was read names it:
+   a closure of one unit that is of code of another (Simplify keeps the code id
+   where it inlines a function that makes a closure and makes no new code for
+   the closure), a body that calls code of another unit, metadata that a file
+   exports again. Nothing is known of such a code id here. A closure of it is
+   bound all the same, as it was, so the test of scope then fails of the prefix,
+   and so of both terms.
+
+   The steps. The declarations are in the first group, and a group is one step
+   of a run whatever it binds. Where the prefix binds something, its groups are
+   as many as they were, and so are the steps of the two runs. Where it binds
+   nothing and declares something, the unit has a prefix of that one group where
+   it had none: each run takes one step more to end as it did, and the lines
+   printed of the unit are those of a unit with a prefix. The steps allowed
+   ([fuel]) are counted of the unit with its prefix in front of it, as they
+   were. So a run that ended at the last step allowed is "still running" with
+   that one group in front of it, and what is said of how a run ended (the
+   comparison of the two runs, a term before that is undefined) is then said of
+   a run that did not end. The same holds of the run of the check of regions.
+   tests/semantics/prefix_fault/ has a control of the steps of a run.
+
    A symbol of which the file says nothing: nothing.
 
    A symbol that is asked for and that the file says is another symbol, or a
    constant, is refused, and the unit is not checked: no static binding says
    either, and the class of data could be wrong of the first. What is not bound
    stays as it was: a symbol is an import ([imports]), and a code id is bound to
-   nothing.
+   nothing, declared deleted or not.
 
    What is asked for is the least set of names that has: (a) every symbol and
    every code id that either term names; (b) the code id of a closure that is
@@ -4456,16 +4494,16 @@ let unit_names (units : (Compilation_unit.t * Digest.t) list) =
 
    The bindings are in groups ([Let_static]), to be well-formed
    (FlambdaWellFormedSpec.sets_well_formed): two closures of the same code are
-   not bound by one group. The first group has the code, a closure of each code,
-   and the blocks, each after those of its fields that are blocks where the
-   blocks are not cyclic; the closures left are in groups after it. The machine
-   looks up neither a field that is a symbol when it binds a block, nor code
-   when it binds a closure, so the groups make the same static environment in
-   any order. *)
+   not bound by one group. The first group has the declarations of deleted code,
+   the code, a closure of each code, and the blocks, each after those of its
+   fields that are blocks where the blocks are not cyclic; the closures left are
+   in groups after it. The machine looks up neither a field that is a symbol
+   when it binds a block, nor code when it binds a closure, so the groups make
+   the same static environment in any order. *)
 type prefix =
   { prefix_groups : Model.static_binding list list;
-    (* The units from whose [.cmx] files something is bound, with the digests of
-       the files. *)
+    (* The units from whose [.cmx] files something is bound or declared deleted,
+       with the digests of the files. *)
     prefix_units : (Compilation_unit.t * Digest.t) list;
     (* The symbols that the prefix binds. *)
     prefix_symbols : Model.symbol list;
@@ -4549,25 +4587,80 @@ let make_prefix_refusing ~(refused : int list) ~(found : int list ref)
     if not (List.exists (fun (u, _) -> Compilation_unit.equal u unit) !used)
     then used := read :: !used
   in
-  let bind_code unit id code_id =
-    let loader = Lazy.force loader in
-    ignore
-      (Flambda_cmx.load_cmx_file_contents loader
-         (Code_id.get_compilation_unit code_id)
-        : _ option);
+  (* The code ids that are declared deleted, last declared first. *)
+  let declared_code : (int, unit) Hashtbl.t = Hashtbl.create 16 in
+  let declarations = ref [] in
+  let declare_code id =
+    let n = int_of_positive id in
+    if not (Hashtbl.mem declared_code n)
+    then (
+      Hashtbl.replace declared_code n ();
+      declarations := Model.Bind_deleted_code id :: !declarations)
+  in
+  (* The code that the file of a unit has, alone. The loader keeps one table of
+     code for all the files that it has loaded, which cannot say which of them
+     has a code id. So the file is imported once more here, apart, and nothing
+     else of that import is used. It is asked only of a unit that the run read
+     ([read]): no file that the run did not read is opened for it. *)
+  let code_of_files : (Compilation_unit.t * Exported_code.t option) list ref =
+    ref []
+  in
+  let code_of_file file =
     match
-      Exported_code.find (Flambda_cmx.get_imported_code loader ()) code_id
+      List.find_opt
+        (fun (unit, _) -> Compilation_unit.equal unit file)
+        !code_of_files
     with
+    | Some (_, code) -> code
+    | None ->
+      let code =
+        Option.map
+          (fun cmx -> snd (Flambda_cmx_format.import_typing_env_and_code cmx))
+          (Flambda2.get_module_info file)
+      in
+      code_of_files := (file, code) :: !code_of_files;
+      code
+  in
+  (* What the file of its own unit has for a code id, the code or its metadata,
+     with that unit: nothing where the unit was not read, or where its file says
+     nothing of the code id. What another file says of the code id (a closure of
+     it, a call of it, its metadata exported again) is not asked: the answer is
+     taken from the code of that one file, and not from the table of the
+     loader. *)
+  let code_in_file id =
+    match Code_ids.name_of id with
+    | None -> None
+    | Some code_id -> (
+      match read (Code_id.get_compilation_unit code_id) with
+      | None -> None
+      | Some ((file, _) as unit) ->
+        (* The loader is given the file too, as it was. *)
+        ignore
+          (Flambda_cmx.load_cmx_file_contents (Lazy.force loader)
+             (Code_id.get_compilation_unit code_id)
+            : _ option);
+        let found own = Exported_code.find own code_id in
+        Option.map
+          (fun code -> unit, code)
+          (Option.bind (code_of_file file) found))
+  in
+  let bind_code id =
+    match code_in_file id with
     | None -> ()
-    | Some code -> (
+    | Some (unit, code) -> (
+      (* The file has the code or its metadata, and the code is not bound. *)
+      let not_bound () =
+        declare_code id;
+        use unit
+      in
       match Code_or_metadata.view code with
-      | Metadata_only _ -> ()
+      | Metadata_only _ -> not_bound ()
       | Code_present code -> (
         tupled_code := [];
         directly_called_code := [];
         known_arity_call_met := false;
         match convert_code code with
-        | exception Unsupported _ -> ()
+        | exception Unsupported _ -> not_bound ()
         | Model.Code (_, _, _, _, _, body) as converted ->
           let is_tupled = match !tupled_code with [] -> false | _ -> true in
           if
@@ -4576,7 +4669,8 @@ let make_prefix_refusing ~(refused : int list) ~(found : int list ref)
           then (
             code_bindings := Model.Bind_code (id, converted) :: !code_bindings;
             bodies := body :: !bodies;
-            use unit)))
+            use unit)
+          else not_bound ()))
   in
   let ask_code id =
     let n = int_of_positive id in
@@ -4584,12 +4678,7 @@ let make_prefix_refusing ~(refused : int list) ~(found : int list ref)
     then (
       Hashtbl.replace asked_code n ();
       changed := true;
-      match Code_ids.name_of id with
-      | None -> ()
-      | Some code_id -> (
-        match read (Code_id.get_compilation_unit code_id) with
-        | None -> ()
-        | Some unit -> bind_code unit id code_id))
+      bind_code id)
   in
   (* Binds a closure, if it is not bound yet, and gives its code. *)
   let bind_closure unit sym ~function_slot ~code_id =
@@ -4912,10 +5001,33 @@ let make_prefix_refusing ~(refused : int list) ~(found : int list ref)
     let first_closures, later_closures =
       match closure_groups with [] -> [], [] | first :: later -> first, later
     in
+    (* The code of a closure that is bound, where the code is not and nothing
+       asked for it: declared on the word of the file of the code's own unit, as
+       code that is asked for is, and not on that of the file which gave the
+       closure. *)
+    let bound_code : (int, unit) Hashtbl.t = Hashtbl.create 16 in
+    List.iter
+      (fun (binding : Model.static_binding) ->
+        match binding with
+        | Bind_code (id, _) ->
+          Hashtbl.replace bound_code (int_of_positive id) ()
+        | Bind_deleted_code _ | Bind_symbol _ -> ())
+      !code_bindings;
+    List.iter
+      (fun (code, _) ->
+        if not (Hashtbl.mem bound_code (int_of_positive code))
+        then
+          match code_in_file code with
+          | Some (unit, (_ : Code_or_metadata.t)) ->
+            declare_code code;
+            use unit
+          | None -> ())
+      (List.rev !closure_bindings);
     let groups =
       List.filter
         (fun group -> match group with [] -> false | _ :: _ -> true)
-        ((List.rev !code_bindings @ first_closures @ ordered_blocks)
+        ((List.rev !declarations @ List.rev !code_bindings @ first_closures
+        @ ordered_blocks)
         :: later_closures)
     in
     let symbols =
@@ -5003,11 +5115,14 @@ let with_prefix (prefix : prefix) (unit : converted) : converted =
   }
 
 (* What is wrong with a prefix, if something is, given the imports that are left
-   and the two units that it goes in front of: it must bind each symbol and each
-   code id once, none that either unit binds and none that is still an import,
-   and it must evaluate from the static environment of the imports. Each of
-   these fails only where [make_prefix] is wrong, as no source makes a unit that
-   binds a name of another unit. *)
+   and the two units that it goes in front of: it must bind each symbol once,
+   and bind or declare deleted each code id once, none that either unit binds or
+   declares deleted and no symbol that is still an import, and it must evaluate
+   from the static environment of the imports. So the names of the prefix and of
+   each unit are apart (FlambdaStaticsInScopeSpec.static_names_apart, of the
+   unit with the prefix in front of it, where they are of the unit alone). Each
+   of these fails only where [make_prefix] is wrong, as no source makes a unit
+   that binds, or declares deleted, a name of another unit. *)
 let prefix_fault (prefix : prefix)
     ~(imports : (Model.symbol * Values.import_class) list) (before : converted)
     (after : converted) : string option =
@@ -5015,7 +5130,8 @@ let prefix_fault (prefix : prefix)
     List.concat_map (List.concat_map names) prefix.prefix_groups
   in
   let symbols = names_of Well_formed.symbols_of_binding in
-  let code = names_of Well_formed.code_ids_of_binding in
+  (* The code ids that are bound and those that are declared deleted. *)
+  let code = names_of Statics_in_scope.declared_code_ids_of_binding in
   let set_of names =
     let set : (int, unit) Hashtbl.t = Hashtbl.create 64 in
     List.iter (fun name -> Hashtbl.replace set (int_of_positive name) ()) names;
@@ -5029,11 +5145,16 @@ let prefix_fault (prefix : prefix)
   in
   let among set name = Hashtbl.mem set (int_of_positive name) in
   if twice symbols || twice code
-  then Some "binds a symbol or a code id twice"
+  then Some "binds a symbol twice, or binds or declares deleted a code id twice"
   else if
     List.exists (among (of_units Well_formed.symbols_of_binding)) symbols
-    || List.exists (among (of_units Well_formed.code_ids_of_binding)) code
-  then Some "binds a symbol or a code id that the unit binds"
+    || List.exists
+         (among (of_units Statics_in_scope.declared_code_ids_of_binding))
+         code
+  then
+    Some
+      "binds a symbol that the unit binds, or binds or declares deleted a code \
+       id that the unit binds or declares deleted"
   else if List.exists (among (set_of (List.map fst imports))) symbols
   then Some "binds a symbol that is still among the imports"
   else
@@ -5568,11 +5689,16 @@ let well_formed (unit : converted) =
 
    A prefix binds the closures of another unit that it reaches and the code of
    some of them only, and [statics_in_scope] asks that the code of a closure,
-   and of a direct call, be bound or declared deleted. So a unit whose term
-   before, with the prefix in front of it, mentions code of another unit that
-   the prefix neither binds nor declares is "not checked", for a name that is
-   not its own; where the term before passes and the term after does not, that
-   is a failure of the check as any other. *)
+   and of a direct call, be bound or declared deleted: the prefix declares
+   deleted the code that it has from the file of the code's own unit and does
+   not bind ([make_prefix]). So a unit whose term before, with the prefix in
+   front of it, mentions code of another unit that the prefix neither binds nor
+   declares is "not checked", for a name that is not its own: a code id, which
+   the term or the prefix itself names, that the file of its own unit does not
+   give, because the run did not read that unit or because its file says nothing
+   of the code id. What another file that was read says of such a code id is not
+   taken. Where the term before passes and the term after does not, that is a
+   failure of the check as any other. *)
 
 (* Which static names a unit mentions where they are not in scope, given the
    symbols and the code ids in scope around it: [None] where the check passes.

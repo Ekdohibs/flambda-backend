@@ -1,0 +1,9 @@
+let $camlMaker_kept_read__first_const_0 = Block 0 () in
+(let made/12 = %block_load.[`1`] ($Maker_kept.camlMaker_kept) in
+ let Pmakeblock/13 = %block.[`0`].`toplevel` (made/12) in
+ cont k/5 (Pmakeblock/13))
+  where k/5 define_root_symbol (module_block/10) =
+    let field_0/11 = %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/10)
+    in
+    let $camlMaker_kept_read = Block 0 (field_0/11) in
+    cont done ($camlMaker_kept_read)
