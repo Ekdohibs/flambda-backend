@@ -49,81 +49,19 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaEquivarianceSpec FlambdaEquivarianceProofs FlambdaBindersSpec
   FlambdaValidatorEquivarianceSpec FlambdaScopedProofs
   FlambdaUnaliasParamsSpec FlambdaUnaliasParamsProofs
-  FlambdaUnaliasParamsNamesProofs FlambdaUnaliasRecParamsSpec.
+  FlambdaUnaliasParamsNamesProofs FlambdaUnaliasRecParamsSpec
+  FlambdaEquivarianceTactic.
 Import ListNotations.
 
 (* ======================================================================== *)
 (* The pass commutes with renaming                                          *)
 (* ======================================================================== *)
 
-Lemma unalias_rec_param_equivariant (r : renaming) (i : nat)
-    (k : continuation) (h : continuation_handler) (body : expr) :
-  unalias_rec_param i (rename_continuation r k) (rename_handler r h)
-    (rename_expr r body)
-  = rename_unaliased r (unalias_rec_param i k h body).
-Proof.
-  destruct h as [params metadata handler].
-  cbn [rename_handler unalias_rec_param].
-  rewrite nth_error_map, first_given_var_equivariant.
-  destruct (nth_error params i) as [p | ]; [ | reflexivity ].
-  cbn [option_map].
-  destruct (nth_error (hm_params_kinds metadata) i) as [kind | ];
-    [ | reflexivity ].
-  destruct (first_given_var k i body) as [[x | ] | ]; try reflexivity.
-  cbn [rename_given option_map].
-  rewrite !all_give_var_equivariant, drop_nth_map, !among_rename_variable,
-    !drop_arg_equivariant.
-  destruct
-    (negb (hm_is_exn_handler metadata) && all_give_var k i x true body
-     && all_give_var k i p true handler
-     && negb (among x (drop_nth i params))
-     && negb (among p (drop_nth i params)));
-    reflexivity.
-Qed.
-
-Lemma unalias_rec_from_equivariant (r : renaming) (i : nat) :
-  ∀ (k : continuation) (h : continuation_handler) (body : expr),
-    unalias_rec_from i (rename_continuation r k) (rename_handler r h)
-      (rename_expr r body)
-    = (rename_handler r (fst (unalias_rec_from i k h body)),
-       rename_expr r (snd (unalias_rec_from i k h body))).
-Proof.
-  induction i as [ | i IH]; intros k h body; cbn [unalias_rec_from];
-    [ reflexivity | ].
-  rewrite unalias_rec_param_equivariant.
-  destruct (unalias_rec_param i k h body) as [[h' body'] | ];
-    cbn [rename_unaliased option_map]; apply IH.
-Qed.
-
-Fixpoint unalias_rec_params_equivariant_aux (r : renaming) (e : expr) :
-  unalias_rec_params (rename_expr r e) = rename_expr r (unalias_rec_params e).
-Proof.
-  destruct e
-    as [ x kind d body | bindings body | k [params metadata handler] body
-       | handlers body | ap | ac | scrutinee arms | ];
-    cbn [rename_expr rename_handler unalias_rec_params]; try reflexivity.
-  - rewrite unalias_rec_params_equivariant_aux. reflexivity.
-  - rewrite unalias_rec_params_equivariant_aux. reflexivity.
-  - rewrite !unalias_rec_params_equivariant_aux. reflexivity.
-  - rewrite unalias_rec_params_equivariant_aux.
-    destruct handlers
-      as [ | [k [params metadata handler]] [ | second handlers]];
-      try reflexivity.
-    cbn [map rename_handler]. rewrite length_map.
-    pose proof
-      (unalias_rec_from_equivariant r (length params) k
-         (Handler params metadata handler) (unalias_rec_params body))
-      as Hfrom.
-    cbn [rename_handler] in Hfrom. rewrite Hfrom.
-    destruct
-      (unalias_rec_from (length params) k (Handler params metadata handler)
-         (unalias_rec_params body))
-      as [h' body'].
-    reflexivity.
-Qed.
-
+(* By the tactic of FlambdaEquivarianceTactic.v, from the definitions:
+   it derives the laws of [unalias_rec_param] and of
+   [unalias_rec_from]. *)
 Lemma unalias_rec_params_renamed : rewrite_equivariant unalias_rec_params.
-Proof. exact unalias_rec_params_equivariant_aux. Qed.
+Proof. equivariance. Qed.
 
 (* ======================================================================== *)
 (* The pass keeps scope                                                     *)
