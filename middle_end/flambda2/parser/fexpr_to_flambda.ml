@@ -62,10 +62,21 @@ let rec subkind :
             match sk with
             | None ->
               Flambda_kind.With_subkind.Non_null_value_subkind.Undetermined
-            | Some sk ->
-              Flambda_kind.With_subkind.Non_null_value_subkind.Determined
-                ( Flambda_kind.Block_shape.Scannable Value_only,
-                  List.map value_kind_with_subkind sk ) ))
+            | Some sk -> (
+              (* The text writes the kinds of the fields and not the shape of
+                 the block: the shape is the one that the kinds give. *)
+              let fields = List.map value_kind_with_subkind sk in
+              match
+                Shape_of_kinds.scannable
+                  (List.map Flambda_kind.With_subkind.kind fields)
+              with
+              | Ok shape ->
+                Flambda_kind.With_subkind.Non_null_value_subkind.Determined
+                  (Flambda_kind.Block_shape.Scannable shape, fields)
+              | Error reason ->
+                Misc.fatal_errorf
+                  "The fields of the constructor %d of the kind of a value: %s"
+                  tag reason) ))
       |> Tag.Scannable.Map.of_list
     in
     Variant { consts; non_consts }

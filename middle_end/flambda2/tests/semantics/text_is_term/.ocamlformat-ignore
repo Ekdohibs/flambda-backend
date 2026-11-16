@@ -3,3 +3,4 @@ unboxed_pair_parameter.ml
 vector_read_of_an_array_of_integers.ml
 vector_write_into_an_array_of_integers.ml
 unboxed_field_of_a_record.ml
+kind_of_a_record_with_an_unboxed_field.ml

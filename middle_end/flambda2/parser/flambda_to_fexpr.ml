@@ -102,7 +102,26 @@ and variant_subkind consts non_consts : Fexpr.subkind =
                 .constructor_shape)
           with
           | Undetermined -> None
-          | Determined (_shape, sk) -> Some (List.map kind_with_subkind sk) ))
+          | Determined (shape, sk) ->
+            (* The text writes the kinds of the fields and not the shape, and
+               its reader gives the shape that the kinds give: a constructor of
+               another shape cannot be written. *)
+            (match
+               ( shape,
+                 Shape_of_kinds.scannable
+                   (List.map Flambda_kind.With_subkind.kind sk) )
+             with
+            | Scannable shape, Ok shape_of_kinds
+              when Flambda_kind.Scannable_block_shape.equal shape shape_of_kinds
+              ->
+              ()
+            | (Scannable _ | Float_record), (Ok _ | Error _) ->
+              Misc.fatal_errorf
+                "The text of a term cannot say the shape %a of the constructor \
+                 %a of the kind of a value: it is not the shape that the kinds \
+                 of its fields give"
+                Flambda_kind.Block_shape.print shape Tag.Scannable.print tag);
+            Some (List.map kind_with_subkind sk) ))
   in
   Variant { consts; non_consts }
 
