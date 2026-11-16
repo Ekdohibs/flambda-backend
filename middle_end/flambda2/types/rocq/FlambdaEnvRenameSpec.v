@@ -44,7 +44,7 @@
    in FlambdaTypingEnvExtension.v. The action is here
    because everything that holds names is to have its renaming and its
    free names, with the laws of the interface for things that contain
-   names (FlambdaNameAbstractionSpec.v, in ../../rocq/), and the
+   names (FlambdaNameAbstractionSpec.v), and the
    functions on it are to commute with renaming.
 
    A renaming (FlambdaNominalSpec.renaming) permutes variables; a typing

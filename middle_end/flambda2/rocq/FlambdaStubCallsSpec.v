@@ -86,7 +86,7 @@
    direct again the call that this has made indirect: for a variable
    that a [Let] of the stub binds to a [Set_of_closures] whose value
    slots do not hold the variable
-   (../types/rocq/FlambdaAliasesSpec.follow_aliases, by
+   (FlambdaAliasesSpec.follow_aliases, by
    [typing_env_under_let]), and for a symbol that the unit binds,
    outside code, to a closure
    (FlambdaKnownSymbolsSpec.fold_known_unit). [follow_aliases] does

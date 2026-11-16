@@ -38,7 +38,7 @@
    not sound under every environment of values, only under those the
    typing environment describes; so its statement of correctness is a
    refinement relative to a typing environment ([expr_refines_in]), where
-   those of ../../rocq/ are under all environments.
+   [expr_refines] of FlambdaSemanticsSpec.v is under all environments.
 
    The model is naive on purpose. A type is unknown, bottom, an alias to a
    [Simple] ([Equals], which is how the compiler says that a variable is
@@ -79,7 +79,7 @@
      put these together with the removal of an unused [Let]: a constant, or
      any [Simple], is propagated to its use;
    - [inline_identity_statement] puts that together with inlining
-     (../../rocq/FlambdaApplySpec.v) and rewriting under a context: a
+     (FlambdaApplySpec.v) and rewriting under a context: a
      direct call of the identity function is its argument passed to the
      return continuation.
 

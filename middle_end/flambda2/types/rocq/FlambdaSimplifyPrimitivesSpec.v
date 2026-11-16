@@ -35,7 +35,7 @@
    Refinement relative to a typing environment is
    FlambdaTypingEnvRefinementSpec.v; the provers and what their answers
    mean are FlambdaProvers.v and FlambdaProversSpec.v; the primitives
-   are ../../rocq/FlambdaPrimitiveSpec.v.
+   are FlambdaPrimitiveSpec.v.
 
    Simplify reads the type of each argument of a primitive from its
    typing environment, asks a prover about it, and follows the answer:

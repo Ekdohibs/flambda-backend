@@ -39,7 +39,7 @@
    rewrite of the handler under the parameters at every choice of
    kinds: they were written when the machine did not test the kind of
    a value where a handler binds it. It does now
-   (../../rocq/FlambdaSemanticsSpec.apply_cont_value): the application
+   (FlambdaSemanticsSpec.apply_cont_value): the application
    of a handler has no step unless the arguments are of the kinds that
    the handler gives its parameters. So a function that rewrites a
    handler can do so under one environment, in which each parameter is

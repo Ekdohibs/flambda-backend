@@ -55,7 +55,7 @@
 
    so that [my_closure] is from there on an alias of the symbol;
    following the alias and removing the [Let] are other passes
-   (../types/rocq/FlambdaAliasesSpec.follow_aliases,
+   (FlambdaAliasesSpec.follow_aliases,
    FlambdaNormaliseSpec.remove_unused_lets, taken into code by
    FlambdaNormaliseSpec.rewrite_code). Code one of whose parameters is
    named as its [my_closure] is left alone: the parameter is what the

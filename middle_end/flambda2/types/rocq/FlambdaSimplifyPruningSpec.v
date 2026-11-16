@@ -43,17 +43,17 @@
    arms that the type of the scrutinee excludes
    (FlambdaSimplifySwitchSpec.v) rests on the meet, whose contract
    supposes that the static environment is valid
-   (../../rocq/FlambdaClosuresSpec.statics_valid): it holds in the
+   (FlambdaClosuresSpec.statics_valid): it holds in the
    states that have a valid static environment and not in every state.
    A step keeps no such thing by itself: a [Let_static] of a term that
    is not well formed can bind what is not valid. What a step keeps is
    [run_valid]: every value that the state holds is valid
-   ([state_valid], ../../rocq/FlambdaClosuresSpec.v), and the sets of
+   ([state_valid], FlambdaClosuresSpec.v), and the sets of
    closures of every term that it holds are well formed (its
    expression, the handlers that its continuations keep, the code that
    is bound: [sets_inv], the same file). The state that a unit starts
    in has it as soon as the sets of the unit are well formed
-   (../../rocq/FlambdaWellFormedSpec.sets_well_formed, a test, and one
+   (FlambdaWellFormedSpec.sets_well_formed, a test, and one
    of the conditions of a well-formed unit).
 
    What is stated.
@@ -176,9 +176,9 @@
    application, where there is one that it finds, and otherwise
    nothing of a parameter but its kind. That it commutes with
    renaming is in FlambdaSimplifyPruningRenamingSpec.v. That it keeps
-   scope (../../rocq/FlambdaValidatorEquivarianceSpec.v) is not
+   scope (FlambdaValidatorEquivarianceSpec.v) is not
    stated: the validation can have it by the test of
-   ../../rocq/FlambdaGuardScopeSpec.v.
+   FlambdaGuardScopeSpec.v.
 
    The proofs are in FlambdaSimplifyPruningProofs.v, which needs no
    review. *)
@@ -211,7 +211,7 @@ Local Open Scope Z_scope.
 (* What holds of every state of the run of a unit whose sets are well
    formed: the sets of every term that the state holds are well
    formed and the static sets are bound ([sets_inv],
-   ../../rocq/FlambdaClosuresSpec.v), and every value that it holds is
+   FlambdaClosuresSpec.v), and every value that it holds is
    valid ([state_valid], the same file). *)
 Definition run_valid (s : state) : Prop := sets_inv s ∧ state_valid s.
 

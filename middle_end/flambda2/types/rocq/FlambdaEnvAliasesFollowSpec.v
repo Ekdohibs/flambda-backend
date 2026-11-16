@@ -73,7 +73,7 @@
      names by the symbol that the set names for the other slot
      ([canonical_project_function_slot]).
    There is no substitution, and a [Let] stays where it is, to be
-   removed if it is then unused (../../rocq/FlambdaNormaliseSpec.v).
+   removed if it is then unused (FlambdaNormaliseSpec.v).
 
    Going under a [Let] ([Known.under_let]) the variable is bound
    ([Known.bind]), and then:

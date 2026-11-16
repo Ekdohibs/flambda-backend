@@ -818,12 +818,12 @@ Definition demote_and_tidy (rounds : nat) (e : expr) : expr :=
 
    Between the rounds of the second phase and the same rounds once
    more come the rewrites that Simplify makes from the types
-   (../types/rocq/FlambdaSimplifyPassSpec.simplify_by_types, which
+   (FlambdaSimplifyPassSpec.simplify_by_types, which
    goes down the whole term with a typing environment: into the
    handlers of continuations, where a handler that is applied once is
    rewritten under the environment of that application, and into the
    bodies of code; it is computed by
-   ../types/rocq/FlambdaSimplifyCarriedSpec.simplify_by_types_carried,
+   FlambdaSimplifyCarriedSpec.simplify_by_types_carried,
    which is that function, of every term, without the test of the
    environment that it makes at every [Let]), under the test of
    FlambdaGuardScopeSpec.guard_scope: of a term whose code is closed,

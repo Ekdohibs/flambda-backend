@@ -34,9 +34,9 @@
    Simplify and the term after in rounds, tidies each once its
    continuations are placed, and compares them. In each round, and
    where it tidies, it follows aliases with the function of
-   ../types/rocq/FlambdaAliasesSpec.v, which knows nothing of what a
+   FlambdaAliasesSpec.v, which knows nothing of what a
    symbol is bound to. The function of
-   ../types/rocq/FlambdaEnvAliasesFollowSpec.v knows the closures that
+   FlambdaEnvAliasesFollowSpec.v knows the closures that
    the static bindings in sight bind symbols to: it makes an indirect
    call of such a symbol the direct call of its code, puts in the
    place of the projection of a value slot from such a symbol what the

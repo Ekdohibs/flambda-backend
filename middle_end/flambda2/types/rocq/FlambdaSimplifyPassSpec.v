@@ -255,7 +255,7 @@
    That the function commutes with renaming ([simplify_expr] of the
    renamed environment and the renamed term is the renamed answer),
    as the other rewrites of the validation do
-   (../../rocq/FlambdaValidatorEquivarianceSpec.v), is in
+   (FlambdaValidatorEquivarianceSpec.v), is in
    FlambdaSimplifyPassRenamingSpec.v, with the equations of its
    parts. The functions of the section "Where a continuation is
    applied" and [rewrite_handler_at_use] have equations of their own

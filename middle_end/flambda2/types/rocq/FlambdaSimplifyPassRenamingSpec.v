@@ -82,7 +82,7 @@
      [rewrite_handler_at_use]. The two tests of free names that
      [find_use] and [binders_not_free] make are the validator's, and
      that they commute with renaming is proved in the validator's
-     proof file (../../rocq/FlambdaValidatorEquivarianceProofs.v),
+     proof file (FlambdaValidatorEquivarianceProofs.v),
      which the proof file of this one imports. Those lemmas are to
      move to a proof file below both before the validation runs the
      function: the validator's proof file will then import this

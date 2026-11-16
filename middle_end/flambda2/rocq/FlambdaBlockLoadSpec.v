@@ -91,7 +91,7 @@
    (FlambdaPrimitiveSpec.eval_block_load) and anything would refine it.
 
    Nothing else is rewritten. The [Let] stays, as with
-   ../types/rocq/FlambdaAliasesSpec.follow_aliases: the variable is then
+   FlambdaAliasesSpec.follow_aliases: the variable is then
    an alias of the field, which that pass follows, and the [Make_block]
    is removed if it is then unused.
 

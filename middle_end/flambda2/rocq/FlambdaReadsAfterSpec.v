@@ -88,7 +88,7 @@
      that it has a value, is not changed.
 
    The read leaves the [Let]: the variable is then an alias of what
-   was read, which ../types/rocq/FlambdaAliasesSpec.follow_aliases
+   was read, which FlambdaAliasesSpec.follow_aliases
    follows, and the allocation is removed by the second pass if
    nothing else uses it.
 

@@ -32,7 +32,7 @@
    typing environment is FlambdaTypingEnv.v; what it is for the machine
    to satisfy one is FlambdaTypingEnvSpec.v ([env_satisfies_strictly]);
    the invariant is FlambdaTypingEnvInvariantSpec.v; refinement of
-   states is ../../rocq/FlambdaSemanticsSpec.v.
+   states is FlambdaSemanticsSpec.v.
 
    Simplify rewrites a term by what its typing environment says of the
    names in scope. Such a rewrite is not right under every environment
@@ -82,11 +82,11 @@
      together; what they say of the terms is plain.
 
    Kinds. A [Let] gives the kind of its variable and a handler the
-   kinds of its parameters (../../rocq/FlambdaModel.v), and the machine
+   kinds of its parameters (FlambdaModel.v), and the machine
    tests them where it binds: a [Let] has no step unless the value of
    its defining expression is of the kind that the [Let] gives, and a
    handler none unless the values that it is given are of the kinds of
-   its parameters (../../rocq/FlambdaWellKindedSpec.v,
+   its parameters (FlambdaWellKindedSpec.v,
    [let_binds_at_kind_statement], [handler_binds_at_kinds_statement]).
    Most statements here were made before the machine tested, and do
    not read those kinds; they hold as they are, and ask more than they
@@ -316,7 +316,7 @@ Definition let_refines_under_statement : Prop :=
 
 (* At the kind that the [Let] declares, with no premise on the defining
    expression: the machine has no step at a [Let] unless the value is
-   of that kind (../../rocq/FlambdaWellKindedSpec.v). This is what
+   of that kind (FlambdaWellKindedSpec.v). This is what
    Simplify does where it knows nothing of the defining expression. *)
 Definition let_declared_refines_under_statement : Prop :=
   ∀ (tenv : Typing_env.t) (x : variable) (declared : flambda_kind)
@@ -464,7 +464,7 @@ Definition let_cont_recursive_handler_refines_under_statement : Prop :=
    element; then [x] is defined and made equal to the constant too. In
    the body [x] is replaced by its canonical element. (The two [Let]s
    are then unused: removing them is [unused_let_statement],
-   ../../rocq/FlambdaNominalSpec.v.) *)
+   FlambdaNominalSpec.v.) *)
 Definition example_constant_propagated_statement : Prop :=
   ∀ k : continuation,
     expr_refines

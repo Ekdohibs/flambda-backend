@@ -32,7 +32,7 @@
    it is for the machine to satisfy a typing environment is
    FlambdaTypingEnvSpec.v ([env_satisfies_strictly]); what it is for a
    state of the machine to be in range is
-   ../../rocq/FlambdaRangeSpec.v ([state_in_range]), where every state
+   FlambdaRangeSpec.v ([state_in_range]), where every state
    of the run of a well-formed unit is shown to be.
 
    Some statements about types hold only of values in range: the tag

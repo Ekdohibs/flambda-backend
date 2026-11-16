@@ -104,7 +104,7 @@
 
    The variable stays, bound to the symbol; following the alias and
    removing the [Let] are other passes
-   (../types/rocq/FlambdaAliasesSpec.follow_aliases,
+   (FlambdaAliasesSpec.follow_aliases,
    FlambdaNormaliseSpec.remove_unused_lets). The fields and the value
    slots are not touched: where one is a variable, the static constant
    is computed where the [Let] was, from the same variable. The other

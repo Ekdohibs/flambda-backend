@@ -28,7 +28,7 @@
 (* Proofs of the statements of FlambdaLoopAliasesSpec.v. Nothing here
    needs review.
 
-   The induction is that of ../types/rocq/FlambdaAliasesProofs.v, under
+   The induction is that of FlambdaAliasesProofs.v, under
    a typing environment that the variables satisfy. At a recursive
    [Let_cont] the handlers are replaced all at once
    (FlambdaContextProofs.let_cont_recursive_handlers_refine_where): each

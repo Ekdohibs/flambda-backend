@@ -38,7 +38,7 @@
    an argument and the function that computes it are
    FlambdaSimplifyPrimitivesSpec.v; the provers and what their answers
    mean are FlambdaProvers.v and FlambdaProversSpec.v; what a call
-   does is ../../rocq/FlambdaSemanticsSpec.v ([call_function]).
+   does is FlambdaSemanticsSpec.v ([call_function]).
 
    What Simplify does at an [Apply] of an OCaml function.
    - [simplify_apply_shared] replaces the callee and the arguments by
@@ -92,7 +92,7 @@
      code ([apply_direct_proved_statement]). That an indirect call of
      a closure of known code is the direct call of the code is
      [apply_indirect_known_statement] of
-     ../../rocq/FlambdaApplySpec.v; this is the step from the type to
+     FlambdaApplySpec.v; this is the step from the type to
      "known".
    - The callee and the arguments may be replaced by their canonical
      elements ([apply_canonical_statement]).
@@ -155,7 +155,7 @@
    either call; where it runs them as a partial application or an
    over-application (after the change above), a direct call of a
    closure of the code is the generic application that the indirect
-   one is, and the statement of ../../rocq/FlambdaApplySpec.v that is
+   one is, and the statement of FlambdaApplySpec.v that is
    used here is kept for any number of arguments.
 
    Code ids. The code answered is the very code of the closure
@@ -484,7 +484,7 @@ Definition example_closure_from_pair_statement : Prop :=
 
 (* [let apply h x = h x] inlined at a call [apply g x], [g] being the
    local function above: the parameter [h] is bound to [g] by a [Let]
-   (the inlined body of ../../rocq/FlambdaApplySpec.v). The variable
+   (the inlined body of FlambdaApplySpec.v). The variable
    is made equal to [g], and the call is a direct call of [g]. *)
 Definition example_function_argument_statement : Prop :=
   ∀ k exn : continuation,

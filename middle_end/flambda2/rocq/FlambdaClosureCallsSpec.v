@@ -44,7 +44,7 @@
 
    FlambdaKnownClosuresSpec.use_known_closures does this for a symbol
    that a [Let_static] in sight binds to a closure, and
-   ../types/rocq/FlambdaAliasesSpec.follow_aliases for a variable that a
+   FlambdaAliasesSpec.follow_aliases for a variable that a
    [Let] binds to the closure of a set of one function with no function
    slot named ([Set_of_closures]). [call_made_closures] does it for a
    variable that a [Let] binds to a closure at a function slot of a set

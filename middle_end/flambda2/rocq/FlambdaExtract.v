@@ -27,7 +27,7 @@
 
 (* Extraction of the machine of FlambdaSemanticsSpec.v, of the comparison
    of FlambdaCompareSpec.v and of the normalisations of
-   FlambdaNormaliseSpec.v and ../types/rocq/FlambdaAliasesSpec.v to OCaml,
+   FlambdaNormaliseSpec.v and FlambdaAliasesSpec.v to OCaml,
    for testing:
    middle_end/flambda2/tests/semantics/ runs terms before and after
    Simplify on the machine and compares what they come to, and compares

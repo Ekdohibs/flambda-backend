@@ -2356,7 +2356,7 @@ Qed.
 
 (* By recursion on the term, as for the first function: the bodies of
    the code that a [Let_static] binds are rewritten one binding at a
-   time, each by the statement of ../../rocq/FlambdaContextWhereSpec.v
+   time, each by the statement of FlambdaContextWhereSpec.v
    for the body of code at a predicate that a step keeps. The two
    whole states have [run_valid] together because the sets of the two
    groups are well formed together. *)

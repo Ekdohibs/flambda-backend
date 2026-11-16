@@ -42,7 +42,7 @@
    holds. This is what the simplifier
    does with its aliases: there is no substitution, and the [Let] stays,
    to be removed if it is then unused
-   (../../rocq/FlambdaNormaliseSpec.remove_unused_lets).
+   (FlambdaNormaliseSpec.remove_unused_lets).
 
    It holds too, for a variable bound to a store ([Block_set],
    [Array_set]), the constant unit, and the uses of the variable that
@@ -55,7 +55,7 @@
    variable. The pass keeps the [Let] of the store. That its result is
    then unused does not let the rewrites that remove an unused [Let]
    remove it: their tests refuse a primitive of the heap
-   (../../rocq/FlambdaNormaliseSpec.prim_may_fold, [named_defined]).
+   (FlambdaNormaliseSpec.prim_may_fold, [named_defined]).
 
    Going under a binder, what is known of its name, and of anything said
    to be an alias of it, is dropped ([drop_var]): the name stands for
@@ -200,7 +200,7 @@ Definition canonical_apply (tenv : typing_env) (ap : apply_expr) : apply_expr :=
    [x], and that the new one is [d] if that is a [Simple] or a closure not
    mentioning it. If [d] is a store, the new [x] is the constant unit:
    a store has a value only where it returns that constant
-   (../../rocq/FlambdaHeapSpec.exec_heap_primitive, whose two cases of a
+   (FlambdaHeapSpec.exec_heap_primitive, whose two cases of a
    store end with [unit_value]). *)
 Definition typing_env_under_let (tenv : typing_env) (x : variable) (d : named)
     : typing_env :=

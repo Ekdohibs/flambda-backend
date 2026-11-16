@@ -634,8 +634,8 @@ Qed.
 (* What the validation uses of the function                                 *)
 (* ======================================================================== *)
 
-(* The two facts that ../../rocq/FlambdaValidateProofs.v and
-   ../../rocq/FlambdaValidatorEquivarianceProofs.v use of
+(* The two facts that FlambdaValidateProofs.v and
+   FlambdaValidatorEquivarianceProofs.v use of
    [simplify_by_types], of the function that is equal to it. *)
 Lemma simplify_by_types_carried_refines (e : expr) :
   expr_refines e (simplify_by_types_carried e).

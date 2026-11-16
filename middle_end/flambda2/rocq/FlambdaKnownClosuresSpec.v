@@ -49,7 +49,7 @@
    and that one is inlined, the call of its argument is a call of a
    symbol.
 
-   ../types/rocq/FlambdaAliasesSpec.follow_aliases does both for a
+   FlambdaAliasesSpec.follow_aliases does both for a
    variable that a [Let] binds to a closure. [use_known_closures] does
    them for a symbol. It goes through a term keeping, for the symbols
    that the [Let_static]s passed bind to closures, what they are bound

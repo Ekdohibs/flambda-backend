@@ -57,7 +57,7 @@
    [switch i with 0 -> k x 0t | 1 -> k x 1t], where [0t] is the tagged
    immediate, becomes [let tagged = Tag_immediate i in k x tagged].
    The model of that function, with what it is given and what is
-   stated of it, is ../types/rocq/FlambdaSimplifySwitchMergeSpec.v.
+   stated of it, is FlambdaSimplifySwitchMergeSpec.v.
 
    [merge_switches] does as much to the term before, for four of the
    ways in which Simplify computes an argument:

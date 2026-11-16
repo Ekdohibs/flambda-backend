@@ -32,7 +32,7 @@
    extracted and run by the validation of
    middle_end/flambda2/tests/semantics/, and the statement.
 
-   ../types/rocq/FlambdaAliasesSpec.follow_aliases replaces a variable
+   FlambdaAliasesSpec.follow_aliases replaces a variable
    bound by a [Let] to a [Simple] by what it is bound to, in the body of
    the [Let] and in the handlers of the non-recursive continuations
    there; it leaves the handlers of recursive continuations as they are.

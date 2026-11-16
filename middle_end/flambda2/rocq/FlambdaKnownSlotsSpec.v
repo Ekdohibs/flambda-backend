@@ -110,7 +110,7 @@
    projection of a value slot that [known] lists, from any closure, by
    the symbol or constant listed, where that is in scope. The [Let]
    stays: its variable is then an alias, which other passes follow
-   (../types/rocq/FlambdaAliasesSpec.follow_aliases) and remove
+   (FlambdaAliasesSpec.follow_aliases) and remove
    (FlambdaNormaliseSpec.remove_unused_lets). The set of closures keeps
    the slot.
 

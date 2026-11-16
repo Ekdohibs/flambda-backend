@@ -32,7 +32,7 @@
    A rewrite keeps scope (FlambdaValidatorEquivarianceSpec.keeps_scope)
    if, on a term whose code is closed, the code of its result is closed
    and every variable or continuation that is free in the result is
-   free in the term. ../../rocq/FlambdaKeepsScopeSpec.v says it of the
+   free in the term. FlambdaKeepsScopeSpec.v says it of the
    rewrites of the validation, one statement to a rewrite, and among
    them of the [follow_aliases] of FlambdaAliasesSpec.v, which the
    validator runs today. This is the same of the [follow_aliases] of
@@ -49,7 +49,7 @@
 
    The proof is in FlambdaEnvAliasesFollowScopeProofs.v, which needs
    no review; it follows the one of
-   ../../rocq/FlambdaKeepsScopeProofs.v. *)
+   FlambdaKeepsScopeProofs.v. *)
 
 From Stdlib Require Import ZArith List.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.

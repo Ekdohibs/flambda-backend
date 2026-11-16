@@ -82,7 +82,7 @@
    not marked [Mutable] of a symbol ([read_of]). A read of a place
    whose class has been read becomes a [Let] of the variable of that
    read; the [Let] stays, and its variable is then an alias, which
-   other passes follow (../types/rocq/FlambdaAliasesSpec.follow_aliases).
+   other passes follow (FlambdaAliasesSpec.follow_aliases).
    A read of a class that has not been read is kept and remembered. A
    read is forgotten under a binder of its variable. A handler starts
    with the reads made where it is defined, less those of its

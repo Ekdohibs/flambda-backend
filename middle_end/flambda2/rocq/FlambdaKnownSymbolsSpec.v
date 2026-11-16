@@ -114,7 +114,7 @@
 
    Nothing is guessed: the bindings are read off the unit itself. A
    variable that stands for a symbol is not looked through; following
-   aliases is another pass (../types/rocq/FlambdaAliasesSpec.v), to be
+   aliases is another pass (FlambdaAliasesSpec.v), to be
    run before this one, and again after it for the symbols and constants
    that it puts in place of projections.
 

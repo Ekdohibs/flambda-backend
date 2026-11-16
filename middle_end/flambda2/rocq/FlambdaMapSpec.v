@@ -166,7 +166,7 @@
    the test.
 
    An exception, for now: the typing environment. [typing_env] of
-   FlambdaTypesSpec.v (in types/rocq) has the type of a map of types,
+   FlambdaTypesSpec.v has the type of a map of types,
    [list (variable * flambda_type)], and is not one. It is a list of
    constraints: [env_satisfies] asks for every pair in the list, not for
    the first pair of each variable, so a variable listed twice has to

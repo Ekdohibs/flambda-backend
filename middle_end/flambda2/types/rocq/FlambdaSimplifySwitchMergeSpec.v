@@ -38,8 +38,8 @@
    slices are FlambdaSimplifySwitchSpec.v and
    FlambdaSimplifySwitchArmsSpec.v, whose notions and functions are
    used here; what is known of the primitives that have been computed
-   is that of ../../rocq/FlambdaCseSpec.v; the machine is
-   ../../rocq/FlambdaSemanticsSpec.v.
+   is that of FlambdaCseSpec.v; the machine is
+   FlambdaSemanticsSpec.v.
 
    What Simplify does. On the way up, when the arms that are left all
    apply the same continuation with no trap action
@@ -72,14 +72,14 @@
    or [k c] where [c] is known to be the tagged [i].
    [merge_arms] here is that function. Its inputs are the arms as they
    are after the first two slices, what is known of the primitives
-   that have been computed ([computed], ../../rocq/FlambdaCseSpec.v),
+   that have been computed ([computed], FlambdaCseSpec.v),
    and the names for the variables that it may bind.
 
    What is stated.
    - Of the machine ([merge_arms_refines_statement]): what
      [merge_arms] answers refines the [Switch], in every state in
      which what is known holds ([all_computed],
-     ../../rocq/FlambdaCseSpec.v). So does what
+     FlambdaCseSpec.v). So does what
      [rebuild_switch] answers, which is [Invalid] for no arm, the
      merged term where there is one, and otherwise what the first
      slice makes of the arms ([rebuild_switch_refines_statement]); with
@@ -115,7 +115,7 @@
      known is one whose value stays, and the machine, run on it and
      its arguments in the state, gives the value that the variable
      holds and leaves the heap and the read record as they are
-     ([all_computed], ../../rocq/FlambdaCseSpec.v, where it is what
+     ([all_computed], FlambdaCseSpec.v, where it is what
      it means for what the pass that shares primitives knows to
      hold). It is a hypothesis about the caller, as the soundness of
      the meet is in the first slice. Nothing here says that what
@@ -169,7 +169,7 @@
    - What is known. For Simplify it is its environment of common
      subexpressions before the [Switch], of which it takes an alias
      that the term still needs; here it is a list of variables with
-     the primitive that each holds, as in ../../rocq/FlambdaCseSpec.v,
+     the primitive that each holds, as in FlambdaCseSpec.v,
      which stands for what that search answers. What is bound for an
      argument is added to it for the next ones, as Simplify adds it
      to its local environment. A primitive none of whose arguments is
@@ -629,7 +629,7 @@ Definition rebuild_switch (known : computed) (fresh : list variable)
 (* ======================================================================== *)
 
 (* That what is known holds in a state is [all_computed] of
-   ../../rocq/FlambdaCseSpec.v: each primitive is one whose value
+   FlambdaCseSpec.v: each primitive is one whose value
    stays, and run by the machine in the state on its arguments it
    gives the value that its variable holds, and leaves the heap and
    the read record as they are. *)
@@ -728,7 +728,7 @@ Definition simplify_switch_merging_of_meet_to_prove_refines_statement : Prop :=
 (* ======================================================================== *)
 
 (* What is known and the names that are given are renamed with the
-   term ([rename_computed], ../../rocq/FlambdaCseSpec.v). *)
+   term ([rename_computed], FlambdaCseSpec.v). *)
 Definition merge_arms_rename_statement : Prop :=
   ∀ (r : renaming) (known : computed) (fresh : list variable)
     (scrutinee : simple) (arms : list (Z * apply_cont)),

@@ -35,9 +35,9 @@
    [create_switch] of middle_end/flambda2/simplify/expr_builder.ml.
    Refinement relative to a typing environment is
    FlambdaTypingEnvRefinementSpec.v; the contract of the meet is
-   FlambdaMeetSpec.v; the machine is ../../rocq/FlambdaSemanticsSpec.v;
+   FlambdaMeetSpec.v; the machine is FlambdaSemanticsSpec.v;
    what it is for a static environment to be valid is
-   ../../rocq/FlambdaClosuresSpec.v.
+   FlambdaClosuresSpec.v.
 
    What Simplify does. It reads the type of the scrutinee from its
    typing environment ([Simplify_simple.simplify_simple]: the alias
@@ -121,7 +121,7 @@
      machine its type is of that kind, and where it is not the [Switch]
      is undefined.
    - That the static environment is valid ([statics_valid],
-     ../../rocq/FlambdaClosuresSpec.v): the contract of the meet
+     FlambdaClosuresSpec.v): the contract of the meet
      supposes it (FlambdaMeetSpec.v says why), and the states of a run
      of a well-formed unit have it. [expr_refines_under] of
      FlambdaTypingEnvRefinementSpec.v is about every state that
@@ -159,7 +159,7 @@
 
    The arms. In the compiler the arms are a map from numbers; here
    they are a list, and the machine takes the first arm for a number
-   (../../rocq/FlambdaModel.v). The test of an arm reads its number
+   (FlambdaModel.v). The test of an arm reads its number
    only, so a list with two arms for one number loses both or neither,
    and the statements hold of any list. [switch_of_arms] counts the
    arms of the list; on a list that has two arms for one number and no
@@ -179,7 +179,7 @@
    the arm and which it records for the continuation); the arms that
    are removed on the way up ([rebuild_arm]); the arms that are the
    same [Apply_cont], which [create_switch] makes one
-   ([switch_same_arms_statement], ../../rocq/FlambdaControlFlowSpec.v,
+   ([switch_same_arms_statement], FlambdaControlFlowSpec.v,
    is the law); the merging of arms and the rewrites of a boolean
    [Switch] ([rebuild_switch]).
 
@@ -247,7 +247,7 @@ Definition switch_of_arms_refines_statement : Prop :=
    is not valid, and that the static environment stays valid is known
    of the runs of a well-formed unit
    ([well_formed_values_valid_statement],
-   ../../rocq/FlambdaClosuresSpec.v) and not of every term.
+   FlambdaClosuresSpec.v) and not of every term.
    Decided with the owner of the function that simplifies a whole term
    by types: the pruning does not go into that function, whose theorem
    is about every state and is what the validator's rests on. It goes
@@ -448,7 +448,7 @@ Definition simplify_switch_of_meet_to_prove_refines_statement : Prop :=
    [meet_function_equivariant], FlambdaMeetRenameSpec.v. *)
 
 (* The arms of a [Switch], renamed ([rename_expr],
-   ../../rocq/FlambdaNominalSpec.v). *)
+   FlambdaNominalSpec.v). *)
 Definition rename_arms (r : renaming) (arms : list (Z * apply_cont))
     : list (Z * apply_cont) :=
   map (fun arm => (fst arm, rename_apply_cont r (snd arm))) arms.
