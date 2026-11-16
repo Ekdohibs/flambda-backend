@@ -44,7 +44,7 @@ From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaMapProofs FlambdaSemanticsSpec FlambdaSemanticsProofs
   FlambdaNominalSpec FlambdaNominalProofs FlambdaAlphaProofs
-  FlambdaWellFormedProofs FlambdaMyClosureSpec.
+  FlambdaWellFormedProofs FlambdaMyClosureSpec FlambdaEquivarianceTactic.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -959,94 +959,13 @@ Proof.
   repeat (split; [ reflexivity | ]). right. exists s. auto.
 Qed.
 
-(* It commutes with renaming. In code the test that [my_closure] is not
-   a parameter has the same answer of the names renamed: a renaming
-   keeps names apart. *)
-Fixpoint bind_my_closures_rename (r : renaming)
-    (known : list (code_id * symbol)) (e : expr) {struct e} :
-  rename_expr r (bind_my_closures known e)
-  = bind_my_closures known (rename_expr r e)
-with bind_my_closures_handler_rename (r : renaming)
-    (known : list (code_id * symbol)) (h : continuation_handler) {struct h} :
-  rename_handler r (bind_my_closures_in_handler known h)
-  = bind_my_closures_in_handler known (rename_handler r h)
-with bind_my_closures_binding_rename (r : renaming)
-    (known : list (code_id * symbol)) (binding : static_binding)
-    {struct binding} :
-  rename_static_binding r (bind_my_closures_in_binding known binding)
-  = bind_my_closures_in_binding known (rename_static_binding r binding)
-with bind_my_closure_rename (r : renaming)
-    (known : list (code_id * symbol)) (id : code_id) (c : code) {struct c} :
-  rename_code r (bind_my_closure known id c)
-  = bind_my_closure known id (rename_code r c).
-Proof.
-  - destruct e
-      as [ x xkind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      simpl; try reflexivity.
-    + rewrite bind_my_closures_rename. reflexivity.
-    + rewrite bind_my_closures_rename. f_equal. rewrite !map_map.
-      induction bindings as [ | binding bindings IH]; simpl; [ reflexivity | ].
-      rewrite bind_my_closures_binding_rename, IH. reflexivity.
-    + rewrite bind_my_closures_handler_rename, bind_my_closures_rename.
-      reflexivity.
-    + rewrite bind_my_closures_rename. f_equal. rewrite !map_map.
-      induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
-      rewrite bind_my_closures_handler_rename, IH. reflexivity.
-  - destruct h as [params metadata handler]. simpl.
-    rewrite bind_my_closures_rename.
-    reflexivity.
-  - destruct binding as [id c | id | sym const]; simpl; try reflexivity.
-    rewrite bind_my_closure_rename. reflexivity.
-  - destruct c as [params my_closure ret exn metadata body]. simpl.
-    destruct (lookup id known) as [s | ].
-    + rewrite (among_map_injective (rename_variable r)
-        (rename_variable_eqb r)).
-      destruct (among my_closure params); simpl;
-        rewrite bind_my_closures_rename; reflexivity.
-    + simpl. rewrite bind_my_closures_rename. reflexivity.
-Qed.
-
+(* It commutes with renaming, and so does the check: proved from the
+   definitions by [equivariance] (FlambdaEquivarianceTactic.v). In code
+   the test that [my_closure] is not a parameter has the same answer of
+   the names renamed: a renaming keeps names apart. *)
 Theorem bind_my_closures_equivariant :
   bind_my_closures_equivariant_statement.
-Proof. exact bind_my_closures_rename. Qed.
-
-Fixpoint only_closure_of_rename (r : renaming) (id : code_id) (s : symbol)
-    (e : expr) {struct e} :
-  only_closure_of id s (rename_expr r e) = only_closure_of id s e
-with handler_only_closure_of_rename (r : renaming) (id : code_id)
-    (s : symbol) (h : continuation_handler) {struct h} :
-  handler_only_closure_of id s (rename_handler r h)
-  = handler_only_closure_of id s h
-with binding_only_closure_of_rename (r : renaming) (id : code_id)
-    (s : symbol) (binding : static_binding) {struct binding} :
-  binding_only_closure_of id s (rename_static_binding r binding)
-  = binding_only_closure_of id s binding
-with code_only_closure_of_rename (r : renaming) (id : code_id)
-    (s : symbol) (c : code) {struct c} :
-  code_only_closure_of id s (rename_code r c) = code_only_closure_of id s c.
-Proof.
-  - destruct e
-      as [ x xkind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      simpl; try reflexivity.
-    + rewrite only_closure_of_rename. f_equal. destruct d; reflexivity.
-    + rewrite only_closure_of_rename. f_equal.
-      induction bindings as [ | binding bindings IH]; simpl; [ reflexivity | ].
-      rewrite binding_only_closure_of_rename, IH. reflexivity.
-    + rewrite handler_only_closure_of_rename, only_closure_of_rename.
-      reflexivity.
-    + rewrite only_closure_of_rename. f_equal.
-      induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
-      rewrite handler_only_closure_of_rename, IH. reflexivity.
-  - destruct h as [params metadata handler]. simpl.
-    apply only_closure_of_rename.
-  - destruct binding as [id' c | id' | sym const]; simpl; try reflexivity.
-    + apply code_only_closure_of_rename.
-    + destruct const; reflexivity.
-  - destruct c as [params my_closure ret exn metadata body]. simpl.
-    apply only_closure_of_rename.
-Qed.
+Proof. equivariance. Qed.
 
 Theorem only_closure_of_equivariant : only_closure_of_equivariant_statement.
-Proof. exact only_closure_of_rename. Qed.
+Proof. equivariance. Qed.
