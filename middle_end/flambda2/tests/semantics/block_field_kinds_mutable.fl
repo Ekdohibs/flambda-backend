@@ -1,0 +1,29 @@
+(* A function makes a block that can change, and the text says more of its
+   fields than that each is any value: the first is an immediate, and the
+   second an immediate that may be null. It writes the first field and
+   returns the block. A block that can change is converted at another place
+   of the tool than one that cannot (it is a cell of the heap), and there
+   too the conversion drops that much of the kind of a field (decision D25,
+   which is open: this is provisional). So the unit is run and validated. A
+   tool that takes such a block only where the kind of every field is that
+   of any value says of this unit that it is not checked, which is not what
+   the expected file says. *)
+let code inline(never) loopify(never) size(20)
+      work_0 (x : imm tagged)
+        my_closure &my_alloc_region my_depth
+        -> k * e
+        : val =
+  let r =
+    %block.mut.[`0`].my_alloc_region (0 : imm tagged, 1 : imm tagged?)
+  in
+  let c = %opaque (r) in
+  let w = %block_set.`imm`.[`0`] (c, x) in
+  cont k (c)
+in
+let $camlBlock_field_kinds_mutable__work_1 = closure work_0 @work &toplevel in
+apply direct(work_0 &toplevel)
+  ($camlBlock_field_kinds_mutable__work_1 : _ -> val)
+    (41) -> k1 * error
+  where k1 (r : val) =
+    let $camlBlock_field_kinds_mutable = Block 0 (r) in
+    cont done ($camlBlock_field_kinds_mutable)
