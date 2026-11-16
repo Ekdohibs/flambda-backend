@@ -115,13 +115,13 @@ let canonical_apply_cont tenv ac =
 
 let canonical_call_kind tenv callee kind =
   match kind with
-  | Direct _ -> kind
-  | Indirect -> (
+  | Indirect_unknown_arity -> (
     match closure_of_simple tenv callee with
     | Some p ->
       let code, _ = p in
       Direct code
     | None -> kind)
+  | _ -> kind
 
 (** val canonical_apply : typing_env -> apply_expr -> apply_expr **)
 

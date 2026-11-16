@@ -84,8 +84,7 @@ let read_code_slot sets syms known d =
 
 let call_code_closure known ap =
   match ap.ap_call_kind with
-  | Direct _ -> ap
-  | Indirect -> (
+  | Indirect_unknown_arity -> (
     match ap.ap_callee with
     | Var x -> (
       match lookup x known with
@@ -101,6 +100,7 @@ let call_code_closure known ap =
         }
       | None -> ap)
     | _ -> ap)
+  | _ -> ap
 
 (** val forget_code_vars : variable list -> closure_codes -> closure_codes **)
 

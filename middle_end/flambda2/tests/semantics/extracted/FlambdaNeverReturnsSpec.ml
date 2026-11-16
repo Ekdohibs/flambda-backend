@@ -43,7 +43,7 @@ let cut_return known ap =
         else Apply ap
       | None -> Apply ap)
     | None -> Apply ap)
-  | Indirect -> Apply ap
+  | _ -> Apply ap
 
 (** val returns_to_invalid : continuation -> continuation_handler -> expr ->
     bool **)

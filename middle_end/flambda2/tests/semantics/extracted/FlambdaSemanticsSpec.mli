@@ -118,6 +118,10 @@ val arguments_for_code :
 val shape_of_code_call :
   value -> code -> value list -> arity -> arity -> call_shape option
 
+val code_ids_allow : code_id list option -> code_id -> bool
+
+val known_arity_full : static_env -> code_id -> arity -> bool
+
 val shape_of_closure_call :
   static_env ->
   value ->

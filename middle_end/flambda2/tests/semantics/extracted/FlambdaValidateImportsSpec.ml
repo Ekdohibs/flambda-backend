@@ -179,7 +179,9 @@ let head_removal_free_in statics d e =
     loopified -> lifting list -> code_id list -> expr -> expr -> bool **)
 
 let lifted_holds_from statics rounds unused slots g ls kept before after =
-  let before0 = loopify_unit g (cut_returns [] (demote_stub_calls before)) in
+  let before0 =
+    loopify_unit g (cut_returns [] (demote_full_stub_calls before))
+  in
   let tidied = tidied_after rounds (normalise_after rounds kept after) in
   let taken = negb (keeps_a_return tidied) in
   let after0 = without_head_statics unused tidied in

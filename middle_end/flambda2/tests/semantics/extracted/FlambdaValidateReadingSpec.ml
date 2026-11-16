@@ -42,7 +42,7 @@ let normalise_before_avoiding avoid rounds kept e =
 let reading_round avoid rounds g kept e =
   let normalised =
     normalise_before_avoiding avoid rounds kept
-      (loopify_unit g (cut_returns [] (demote_stub_calls e)))
+      (loopify_unit g (cut_returns [] (demote_full_stub_calls e)))
   in
   let read = read_arrays normalised in
   if expr_eqb [] [] normalised read then e else read

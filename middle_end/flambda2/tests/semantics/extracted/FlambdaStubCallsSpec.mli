@@ -1,29 +1,27 @@
 open Datatypes
 open FlambdaMapSpec
 open FlambdaModel
-open List
+open FlambdaNormaliseSpec
 open ListDef
+open PeanoNat
 
-val binding_non_stub_code : static_binding -> code_id list
+val full_call_of_b : apply_expr -> code -> bool
 
-val non_stub_code : expr -> code_id list
+val demote_full_call : (code_id * code) list -> apply_expr -> apply_expr
 
-val handler_non_stub_code : continuation_handler -> code_id list
+val demote_full_calls : (code_id * code) list -> expr -> expr
 
-val demote_call : code_id list -> apply_expr -> apply_expr
+val demote_full_calls_in_handler :
+  (code_id * code) list -> continuation_handler -> continuation_handler
 
-val demote_calls : code_id list -> expr -> expr
+val demote_full_calls_in_code : (code_id * code) list -> code -> code
 
-val demote_calls_in_handler :
-  code_id list -> continuation_handler -> continuation_handler
+val demote_full_in_stub_binding :
+  (code_id * code) list -> static_binding -> static_binding
 
-val demote_calls_in_code : code_id list -> code -> code
+val demote_full_in_stubs : (code_id * code) list -> expr -> expr
 
-val demote_in_stub_binding : code_id list -> static_binding -> static_binding
+val demote_full_in_stubs_of_handler :
+  (code_id * code) list -> continuation_handler -> continuation_handler
 
-val demote_in_stubs : code_id list -> expr -> expr
-
-val demote_in_stubs_of_handler :
-  code_id list -> continuation_handler -> continuation_handler
-
-val demote_stub_calls : expr -> expr
+val demote_full_stub_calls : expr -> expr

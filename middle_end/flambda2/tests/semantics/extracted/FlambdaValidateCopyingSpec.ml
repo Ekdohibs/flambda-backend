@@ -38,7 +38,7 @@ let before_copied rounds g ls l copies ls' kept before =
        (lifted_steps rounds
           (copied_avoiding g ls l ls')
           ls kept
-          (loopify_unit g (cut_returns [] (demote_stub_calls before)))))
+          (loopify_unit g (cut_returns [] (demote_full_stub_calls before)))))
 
 (** val validate_unit_copying : nat -> dropped -> value_slot list -> loopified
     -> lifting list -> lifting -> let_copy list -> lifting list -> code_id list
@@ -79,6 +79,8 @@ let rec lifted_steps_free_in statics rounds avoid ls kept e =
 
 let before_copied_holds_from statics rounds g ls l ls' kept before =
   let avoid = copied_avoiding g ls l ls' in
-  let looped = loopify_unit g (cut_returns [] (demote_stub_calls before)) in
+  let looped =
+    loopify_unit g (cut_returns [] (demote_full_stub_calls before))
+  in
   lifted_steps_free_in statics rounds avoid ls kept looped
   && lifting_free_in statics l (lifted_steps rounds avoid ls kept looped)

@@ -63,7 +63,11 @@ let apply_statics_in_scope syms ids ap =
    &&
    match ap.ap_call_kind with
    | Direct code0 -> among code0 ids
-   | Indirect -> true)
+   | Indirect_unknown_arity -> true
+   | Indirect_known_arity code_ids0 -> (
+     match code_ids0 with
+     | Some code_ids -> all_among code_ids ids
+     | None -> true))
   && simples_statics_in_scope syms ap.ap_args)
   && simples_statics_in_scope syms (exn_extra_simples ap)
 

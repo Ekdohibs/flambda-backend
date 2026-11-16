@@ -51,8 +51,7 @@ let made_callee_code known = function
 
 let call_made_closure known ap =
   match ap.ap_call_kind with
-  | Direct _ -> ap
-  | Indirect -> (
+  | Indirect_unknown_arity -> (
     match made_callee_code known ap.ap_callee with
     | Some code ->
       { ap_callee = ap.ap_callee;
@@ -65,6 +64,7 @@ let call_made_closure known ap =
         ap_return_arity = ap.ap_return_arity
       }
     | None -> ap)
+  | _ -> ap
 
 (** val call_closures_knowing : made_closures -> expr -> expr **)
 

@@ -40,8 +40,7 @@ let with_callee_and_args ap callee args =
 
 let direct_call_kind tenv ap =
   match ap.ap_call_kind with
-  | Direct code -> Direct code
-  | Indirect -> (
+  | Indirect_unknown_arity -> (
     match simplify_simple tenv ap.ap_callee with
     | Some p -> (
       let ty, _ = p in
@@ -51,9 +50,10 @@ let direct_call_kind tenv ap =
         | Proof_of_property.Proved a ->
           let _, function_type = a in
           Direct function_type.function_type_code_id
-        | Proof_of_property.Unknown -> Indirect)
-      | None -> Indirect)
-    | None -> Indirect)
+        | Proof_of_property.Unknown -> Indirect_unknown_arity)
+      | None -> Indirect_unknown_arity)
+    | None -> Indirect_unknown_arity)
+  | x -> x
 
 (** val canonical_apply : Typing_env.t -> apply_expr -> apply_expr **)
 

@@ -402,14 +402,14 @@ let canonical_apply_cont known ac =
 
 let canonical_call_kind known callee kind =
   match kind with
-  | Direct _ -> kind
-  | Indirect -> (
+  | Indirect_unknown_arity -> (
     match Known.find_closure known callee with
     | Some c -> (
       match Known.closure_code c with
       | Some code -> Direct code
-      | None -> Indirect)
-    | None -> Indirect)
+      | None -> Indirect_unknown_arity)
+    | None -> Indirect_unknown_arity)
+  | _ -> kind
 
 (** val canonical_apply : Known.t -> apply_expr -> apply_expr **)
 

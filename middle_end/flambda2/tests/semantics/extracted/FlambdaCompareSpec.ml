@@ -197,8 +197,23 @@ let static_const_eqb vm const0 const' =
 let call_kind_eqb kind kind' =
   match kind with
   | Direct code0 -> (
-    match kind' with Direct code' -> Pos.eqb code0 code' | Indirect -> false)
-  | Indirect -> ( match kind' with Direct _ -> false | Indirect -> true)
+    match kind' with Direct code' -> Pos.eqb code0 code' | _ -> false)
+  | Indirect_unknown_arity -> (
+    match kind' with Indirect_unknown_arity -> true | _ -> false)
+  | Indirect_known_arity code_ids0 -> (
+    match code_ids0 with
+    | Some code_ids -> (
+      match kind' with
+      | Indirect_known_arity code_ids1 -> (
+        match code_ids1 with
+        | Some code_ids' -> forall2b Pos.eqb code_ids code_ids'
+        | None -> false)
+      | _ -> false)
+    | None -> (
+      match kind' with
+      | Indirect_known_arity code_ids -> (
+        match code_ids with Some _ -> false | None -> true)
+      | _ -> false))
 
 (** val raise_kind_eqb : raise_kind option -> raise_kind option -> bool **)
 

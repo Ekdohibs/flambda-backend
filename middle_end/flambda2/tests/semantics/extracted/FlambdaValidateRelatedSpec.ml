@@ -66,7 +66,9 @@ type related_validation =
 
 let validate_unit_related imports rounds unused slots g ls kept before after =
   let statics = imports_statics imports in
-  let source = loopify_unit g (cut_returns [] (demote_stub_calls before)) in
+  let source =
+    loopify_unit g (cut_returns [] (demote_full_stub_calls before))
+  in
   let tidied = tidied_after rounds (normalise_after rounds kept after) in
   let taken = negb (keeps_a_return tidied) in
   let target = without_head_statics unused tidied in

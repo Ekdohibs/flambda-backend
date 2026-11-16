@@ -79,7 +79,11 @@ let apply_avoids d ap =
    &&
    match ap.ap_call_kind with
    | Direct code0 -> code_kept d code0
-   | Indirect -> true)
+   | Indirect_unknown_arity -> true
+   | Indirect_known_arity code_ids0 -> (
+     match code_ids0 with
+     | Some code_ids -> forallb (code_kept d) code_ids
+     | None -> true))
   && simples_avoid d ap.ap_args)
   && simples_avoid d (exn_extra_simples ap)
 

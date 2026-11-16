@@ -381,7 +381,8 @@ let is_raise ac =
 
 type call_kind =
   | Direct of code_id
-  | Indirect
+  | Indirect_unknown_arity
+  | Indirect_known_arity of code_id list option
 
 type apply_expr =
   { ap_callee : simple;

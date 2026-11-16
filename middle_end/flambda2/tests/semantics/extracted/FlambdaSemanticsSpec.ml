@@ -389,6 +389,23 @@ let shape_of_code_call closure c vs args_arity return_arity =
   then None
   else Some (Partial_call (Value_partial_application (closure, vs, args_arity)))
 
+(** val code_ids_allow : code_id list option -> code_id -> bool **)
+
+let code_ids_allow code_ids called =
+  match code_ids with Some ids -> among called ids | None -> true
+
+(** val known_arity_full : static_env -> code_id -> arity -> bool **)
+
+let known_arity_full statics called args_arity =
+  match args_arity with
+  | [] -> false
+  | _ :: _ -> (
+    match lookup called statics.static_code with
+    | Some c ->
+      negb (code_is_tupled c)
+      && Nat.eqb (length args_arity) (length (code_params_arity c))
+    | None -> false)
+
 (** val shape_of_closure_call : static_env -> value -> call_kind -> value list
     -> arity -> arity -> call_shape option **)
 
@@ -399,7 +416,10 @@ let shape_of_closure_call statics closure kind vs args_arity return_arity =
     let expected =
       match kind with
       | Direct named0 -> Pos.eqb called named0
-      | Indirect -> true
+      | Indirect_unknown_arity -> true
+      | Indirect_known_arity code_ids ->
+        code_ids_allow code_ids called
+        && known_arity_full statics called args_arity
     in
     if expected
     then
@@ -419,9 +439,7 @@ let shape_of_closure_call statics closure kind vs args_arity return_arity =
 
 let shape_of_call statics callee kind vs args_arity return_arity =
   match kind with
-  | Direct _ ->
-    shape_of_closure_call statics callee kind vs args_arity return_arity
-  | Indirect -> (
+  | Indirect_unknown_arity -> (
     match partial_application_of callee with
     | Some p -> (
       let p0, applied_arity = p in
@@ -431,12 +449,14 @@ let shape_of_call statics callee kind vs args_arity return_arity =
       | _ :: _ ->
         if kinds_eqb (map kind_of_value vs) (unarize args_arity)
         then
-          shape_of_closure_call statics closure Indirect (app applied vs)
+          shape_of_closure_call statics closure Indirect_unknown_arity
+            (app applied vs)
             (app applied_arity args_arity)
             return_arity
         else None)
     | None ->
       shape_of_closure_call statics callee kind vs args_arity return_arity)
+  | _ -> shape_of_closure_call statics callee kind vs args_arity return_arity
 
 (** val run_call : (value -> step_result) -> call_shape option -> arity ->
     cont_value -> cont_value -> static_env -> heap -> read_record -> step_result
@@ -491,8 +511,8 @@ let rec apply_cont_value c vs statics hp rd =
         run_call
           (fun partial ->
             apply_cont_value return_to (partial :: []) statics hp rd)
-          (shape_of_call statics v Indirect remaining remaining_arity
-             return_arity)
+          (shape_of_call statics v Indirect_unknown_arity remaining
+             remaining_arity return_arity)
           return_arity return_to exn_to statics hp rd
       | _ :: _ -> Undefined))
 

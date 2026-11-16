@@ -1,129 +1,116 @@
 open Datatypes
 open FlambdaMapSpec
 open FlambdaModel
-open List
+open FlambdaNormaliseSpec
 open ListDef
+open PeanoNat
 
-(** val binding_non_stub_code : static_binding -> code_id list **)
+(** val full_call_of_b : apply_expr -> code -> bool **)
 
-let binding_non_stub_code = function
-  | Bind_code (id, c) -> if code_is_stub c then [] else id :: []
-  | _ -> []
+let full_call_of_b ap c =
+  ((negb (code_is_stub c) && negb (code_is_tupled c))
+  && match ap.ap_args_arity with [] -> false | _ :: _ -> true)
+  && Nat.eqb (length ap.ap_args_arity) (length (code_params_arity c))
 
-(** val non_stub_code : expr -> code_id list **)
+(** val demote_full_call : (code_id * code) list -> apply_expr -> apply_expr **)
 
-let rec non_stub_code = function
-  | Let (_, _, _, body) -> non_stub_code body
-  | Let_static (bindings, body) ->
-    app (flat_map binding_non_stub_code bindings) (non_stub_code body)
-  | Let_cont_non_recursive (_, h, body) ->
-    app (handler_non_stub_code h) (non_stub_code body)
-  | Let_cont_recursive (handlers, body) ->
-    app
-      (flat_map
-         (fun pat ->
-           let _, h = pat in
-           handler_non_stub_code h)
-         handlers)
-      (non_stub_code body)
-  | _ -> []
-
-(** val handler_non_stub_code : continuation_handler -> code_id list **)
-
-and handler_non_stub_code = function
-  | Handler (_, _, handler) -> non_stub_code handler
-
-(** val demote_call : code_id list -> apply_expr -> apply_expr **)
-
-let demote_call ids ap =
+let demote_full_call known ap =
   match ap.ap_call_kind with
-  | Direct code0 ->
-    if among code0 ids
-    then
-      { ap_callee = ap.ap_callee;
-        ap_call_kind = Indirect;
-        ap_args = ap.ap_args;
-        ap_continuation = ap.ap_continuation;
-        ap_exn_continuation = ap.ap_exn_continuation;
-        ap_exn_extra_args = ap.ap_exn_extra_args;
-        ap_args_arity = ap.ap_args_arity;
-        ap_return_arity = ap.ap_return_arity
-      }
-    else ap
-  | Indirect -> ap
+  | Direct called -> (
+    match lookup called known with
+    | Some c ->
+      if full_call_of_b ap c
+      then
+        { ap_callee = ap.ap_callee;
+          ap_call_kind = Indirect_known_arity None;
+          ap_args = ap.ap_args;
+          ap_continuation = ap.ap_continuation;
+          ap_exn_continuation = ap.ap_exn_continuation;
+          ap_exn_extra_args = ap.ap_exn_extra_args;
+          ap_args_arity = ap.ap_args_arity;
+          ap_return_arity = ap.ap_return_arity
+        }
+      else ap
+    | None -> ap)
+  | _ -> ap
 
-(** val demote_calls : code_id list -> expr -> expr **)
+(** val demote_full_calls : (code_id * code) list -> expr -> expr **)
 
-let rec demote_calls ids e =
+let rec demote_full_calls known e =
   match e with
-  | Let (x, kind, d, body) -> Let (x, kind, d, demote_calls ids body)
-  | Let_static (bindings, body) -> Let_static (bindings, demote_calls ids body)
+  | Let (x, kind, d, body) -> Let (x, kind, d, demote_full_calls known body)
+  | Let_static (bindings, body) ->
+    Let_static (bindings, demote_full_calls known body)
   | Let_cont_non_recursive (k, h, body) ->
     Let_cont_non_recursive
-      (k, demote_calls_in_handler ids h, demote_calls ids body)
+      (k, demote_full_calls_in_handler known h, demote_full_calls known body)
   | Let_cont_recursive (handlers, body) ->
     Let_cont_recursive
       ( map
           (fun pat ->
             let k, h = pat in
-            k, demote_calls_in_handler ids h)
+            k, demote_full_calls_in_handler known h)
           handlers,
-        demote_calls ids body )
-  | Apply ap -> Apply (demote_call ids ap)
+        demote_full_calls known body )
+  | Apply ap -> Apply (demote_full_call known ap)
   | _ -> e
 
-(** val demote_calls_in_handler : code_id list -> continuation_handler ->
-    continuation_handler **)
+(** val demote_full_calls_in_handler : (code_id * code) list ->
+    continuation_handler -> continuation_handler **)
 
-and demote_calls_in_handler ids = function
+and demote_full_calls_in_handler known = function
   | Handler (params, metadata, handler) ->
-    Handler (params, metadata, demote_calls ids handler)
+    Handler (params, metadata, demote_full_calls known handler)
 
-(** val demote_calls_in_code : code_id list -> code -> code **)
+(** val demote_full_calls_in_code : (code_id * code) list -> code -> code **)
 
-let demote_calls_in_code ids = function
+let demote_full_calls_in_code known = function
   | Code (params, my_closure, ret, exn, metadata, body) ->
-    Code (params, my_closure, ret, exn, metadata, demote_calls ids body)
+    Code (params, my_closure, ret, exn, metadata, demote_full_calls known body)
 
-(** val demote_in_stub_binding : code_id list -> static_binding ->
+(** val demote_full_in_stub_binding : (code_id * code) list -> static_binding ->
     static_binding **)
 
-let demote_in_stub_binding ids binding =
+let demote_full_in_stub_binding known binding =
   match binding with
   | Bind_code (id, c) ->
     if code_is_stub c
-    then Bind_code (id, demote_calls_in_code ids c)
+    then Bind_code (id, demote_full_calls_in_code known c)
     else binding
   | _ -> binding
 
-(** val demote_in_stubs : code_id list -> expr -> expr **)
+(** val demote_full_in_stubs : (code_id * code) list -> expr -> expr **)
 
-let rec demote_in_stubs ids e =
+let rec demote_full_in_stubs known e =
   match e with
-  | Let (x, kind, d, body) -> Let (x, kind, d, demote_in_stubs ids body)
+  | Let (x, kind, d, body) -> Let (x, kind, d, demote_full_in_stubs known body)
   | Let_static (bindings, body) ->
+    let known0 = codes_of bindings known in
     Let_static
-      (map (demote_in_stub_binding ids) bindings, demote_in_stubs ids body)
+      ( map (demote_full_in_stub_binding known0) bindings,
+        demote_full_in_stubs known0 body )
   | Let_cont_non_recursive (k, h, body) ->
     Let_cont_non_recursive
-      (k, demote_in_stubs_of_handler ids h, demote_in_stubs ids body)
+      ( k,
+        demote_full_in_stubs_of_handler known h,
+        demote_full_in_stubs known body )
   | Let_cont_recursive (handlers, body) ->
     Let_cont_recursive
       ( map
           (fun pat ->
             let k, h = pat in
-            k, demote_in_stubs_of_handler ids h)
+            k, demote_full_in_stubs_of_handler known h)
           handlers,
-        demote_in_stubs ids body )
+        demote_full_in_stubs known body )
   | _ -> e
 
-(** val demote_in_stubs_of_handler : code_id list -> continuation_handler ->
-    continuation_handler **)
+(** val demote_full_in_stubs_of_handler : (code_id * code) list ->
+    continuation_handler -> continuation_handler **)
 
-and demote_in_stubs_of_handler ids = function
+and demote_full_in_stubs_of_handler known = function
   | Handler (params, metadata, handler) ->
-    Handler (params, metadata, demote_in_stubs ids handler)
+    Handler (params, metadata, demote_full_in_stubs known handler)
 
-(** val demote_stub_calls : expr -> expr **)
+(** val demote_full_stub_calls : expr -> expr **)
 
-let demote_stub_calls e = demote_in_stubs (non_stub_code e) e
+let demote_full_stub_calls e = demote_full_in_stubs [] e

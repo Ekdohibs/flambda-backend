@@ -529,7 +529,9 @@ let validate_unit rounds unused slots g ls kept before after =
   if expr_eqb [] [] before after
   then Same_up_to_bound_names
   else
-    let before0 = loopify_unit g (cut_returns [] (demote_stub_calls before)) in
+    let before0 =
+      loopify_unit g (cut_returns [] (demote_full_stub_calls before))
+    in
     let after0 = tidied_after rounds (normalise_after rounds kept after) in
     let taken = negb (keeps_a_return after0) in
     let normalised =

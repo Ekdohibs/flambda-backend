@@ -217,7 +217,7 @@ let fold_block_load sets d =
 let fold_known_apply sets ap =
   match ap.ap_call_kind with
   | Direct _ -> ap
-  | Indirect -> (
+  | _ -> (
     match ap.ap_callee with
     | Symbol s -> (
       match closure_of sets (Value_symbol s) with

@@ -40,6 +40,11 @@ let with_call_kind kind ap =
     ap_return_arity = ap.ap_return_arity
   }
 
+(** val names_copied : (code_id * code_id) list -> code_id list -> bool **)
+
+let names_copied ids code_ids =
+  existsb (fun id -> among id (map fst ids)) code_ids
+
 (** val copy_call : (code_id * code_id) list -> symbol list -> apply_expr ->
     apply_expr **)
 
@@ -53,9 +58,16 @@ let copy_call ids symbols ap =
       else ap
     | _ -> (
       match lookup id ids with
-      | Some _ -> with_call_kind Indirect ap
+      | Some _ -> with_call_kind Indirect_unknown_arity ap
       | None -> ap))
-  | Indirect -> ap
+  | Indirect_unknown_arity -> ap
+  | Indirect_known_arity code_ids0 -> (
+    match code_ids0 with
+    | Some code_ids ->
+      if names_copied ids code_ids
+      then with_call_kind (Indirect_known_arity None) ap
+      else ap
+    | None -> ap)
 
 (** val copy_expr : (code_id * code_id) list -> symbol list -> expr -> expr **)
 

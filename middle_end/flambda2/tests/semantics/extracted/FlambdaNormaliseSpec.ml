@@ -177,7 +177,7 @@ let split_over_application called c ap =
           make_handler_metadata (Value :: []),
           Apply
             { ap_callee = Var p;
-              ap_call_kind = Indirect;
+              ap_call_kind = Indirect_unknown_arity;
               ap_args = skipn size ap.ap_args;
               ap_continuation = ap.ap_continuation;
               ap_exn_continuation = ap.ap_exn_continuation;
@@ -233,7 +233,7 @@ let inline_apply kept known ap =
       then split_over_application called c ap
       else Apply ap
     | None -> Apply ap)
-  | Indirect -> Apply ap
+  | _ -> Apply ap
 
 (** val inline_calls : code_id list -> (code_id * code) list -> expr -> expr **)
 
@@ -680,7 +680,7 @@ let inline_known_apply kept known_code known_symbols ap =
           | None -> Apply ap)
         | None -> Apply ap)
       | None -> Apply ap)
-    | Indirect -> Apply ap)
+    | _ -> Apply ap)
   | _ -> Apply ap
 
 (** val inline_known_calls : code_id list -> (code_id * code) list -> (symbol *

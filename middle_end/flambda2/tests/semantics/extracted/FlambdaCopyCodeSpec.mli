@@ -15,6 +15,8 @@ val copy_static_const : (code_id * code_id) list -> static_const -> static_const
 
 val with_call_kind : call_kind -> apply_expr -> apply_expr
 
+val names_copied : (code_id * code_id) list -> code_id list -> bool
+
 val copy_call :
   (code_id * code_id) list -> symbol list -> apply_expr -> apply_expr
 
