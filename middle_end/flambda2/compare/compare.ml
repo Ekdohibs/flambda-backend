@@ -1743,6 +1743,26 @@ and static_consts env (const1 : Static_const_or_code.t)
     |> Comparison.map ~f:(fun set1' : Static_const_or_code.t ->
         Static_const_or_code.create_static_const
           (Static_const.set_of_closures set1'))
+  | ( Static_const (Immutable_float_block fields1),
+      Static_const (Immutable_float_block fields2) ) ->
+    (* [Static_const.compare] has no case for two float blocks, and says of any
+       two that they are different. *)
+    if
+      check env "a static constant"
+        (Misc.Stdlib.List.equal
+           (fun field1 field2 ->
+             Or_variable.compare Numeric_types.Float_by_bit_pattern.compare
+               field1 field2
+             = 0)
+           fields1 fields2)
+    then Equivalent
+    else Different { approximant = subst_static_const env const1 }
+  | ( Static_const (Immutable_float_block _),
+      Static_const (Immutable_float_array _) ) ->
+    (* It has a case for a float block and a float array, and says that they are
+       the same if their fields are. *)
+    Env.note_difference env "a static constant";
+    Different { approximant = subst_static_const env const1 }
   | _, _ ->
     if check env "a static constant" (Static_const_or_code.equal const1 const2)
     then Equivalent

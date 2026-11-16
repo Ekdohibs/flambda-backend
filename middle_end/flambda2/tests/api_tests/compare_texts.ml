@@ -76,7 +76,12 @@
    the slots have other names in the second. They are the same.
    value_slots_collision, function_slots_collision: the second projects one slot
    where the first projects two. They are different: two slots of the first are
-   not one slot of the second. *)
+   not one slot of the second.
+
+   float_block: the two have the same static float block. They are the same.
+   float_block_other: the second has another number in it. float_block_array:
+   the second has a static float array of the same numbers. They are
+   different. *)
 
 module P = Flambda2_parser
 

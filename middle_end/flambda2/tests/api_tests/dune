@@ -169,7 +169,10 @@
     (run ./compare_texts.exe compare_texts/value_slots_consistent)
     (run ./compare_texts.exe compare_texts/value_slots_collision)
     (run ./compare_texts.exe compare_texts/function_slots_consistent)
-    (run ./compare_texts.exe compare_texts/function_slots_collision)))))
+    (run ./compare_texts.exe compare_texts/function_slots_collision)
+    (run ./compare_texts.exe compare_texts/float_block)
+    (run ./compare_texts.exe compare_texts/float_block_other)
+    (run ./compare_texts.exe compare_texts/float_block_array)))))
 
 (rule
  (alias runtest)

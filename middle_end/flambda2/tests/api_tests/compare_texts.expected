@@ -18,3 +18,6 @@ value_slots_consistent: the same
 value_slots_collision: different (a value slot); the unit given is printed
 function_slots_consistent: the same
 function_slots_collision: different (a function slot); the unit given is printed
+float_block: the same
+float_block_other: different (a static constant); the unit given is printed
+float_block_array: different (a static constant); the unit given is printed
