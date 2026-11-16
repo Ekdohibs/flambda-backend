@@ -3087,10 +3087,10 @@ let the_chosen_joins (names : names) : chosen_join list =
 
 (* Small joins whose answers were written down from a transcription of the n-way
    join of types into the model, without running the compiler
-   (middle_end/flambda2/types/rocq/FlambdaJoinTypesExamplesSpec.v). Each is run
-   here: the types are the types of the argument at the uses of a continuation,
-   and the answer is the type of the parameter in the joined environment, which
-   is compared with the answer written down.
+   (FlambdaJoinTypesExamplesSpec.v). Each is run here: the types are the types
+   of the argument at the uses of a continuation, and the answer is the type of
+   the parameter in the joined environment, which is compared with the answer
+   written down.
 
    Where the transcription makes a variable, the compiler makes one of its own
    and gives it a type in the joined environment. The join of environments then
@@ -3550,7 +3550,7 @@ let run_examples_of_joins (names : names) =
    from a pair, the boxing and unboxing of a float, and two projections of value
    slots (FlambdaMeetMatchExamplesSpec.v, FlambdaMeetTagExamplesSpec.v,
    FlambdaMeetProjectionExamplesSpec.v and three statements of
-   FlambdaMeetExamplesSpec.v, in middle_end/flambda2/types/rocq/). Each is run
+   FlambdaMeetExamplesSpec.v, in middle_end/flambda2/rocq/types/). Each is run
    here, with each of the two meets of the compiler: the environment is built by
    the same calls, the meet is called on the two types of the statement, and
    what is compared with the statement is whether the meet is bottom, the type
@@ -4361,7 +4361,7 @@ let chosen_meets () =
 
 (* The transcription of the meet (FlambdaMeet.v), given the transcription of the
    n-way join for the join that it calls (FlambdaJoinMeet.v, in
-   middle_end/flambda2/types/rocq/), is extracted, and is run here beside the
+   middle_end/flambda2/rocq/types/), is extracted, and is run here beside the
    n-way meet of the compiler: on the scenarios of the examples of the meet and
    of the chosen meets, where it is the function that the statements are about
    that is run and not an answer copied from them, and on generated pairs of

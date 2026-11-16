@@ -25,8 +25,8 @@
  * DEALINGS IN THE SOFTWARE.                                                  *
  ******************************************************************************)
 
-(* A term of the Rocq model of Flambda 2
-   (middle_end/flambda2/rocq/FlambdaModel.v) written back as fexpr.
+(* A term of the Rocq model of Flambda 2 (FlambdaModel.v, under
+   middle_end/flambda2/rocq/) written back as fexpr.
 
    This is the other direction of the conversion of flsemantics.ml, and it is
    written from the model and from the syntax of fexpr, not from that

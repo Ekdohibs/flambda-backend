@@ -28,13 +28,13 @@
 (* The converter between the types of the compiler and those of the Rocq model.
 
    [Type_grammar.t] (middle_end/flambda2/types/grammar/type_grammar.ml) on one
-   side, [flambda_type] (middle_end/flambda2/types/rocq/FlambdaTypeGrammar.v,
-   extracted) on the other. The tests that compare a function of the model with
-   the function of the compiler that it transcribes go through this file, so it
-   is trusted, and it is unverified: it is to be read, case by case, against the
-   two grammars. The header of FlambdaTypeGrammar.v says, constructor by
-   constructor, what the model has; a case below that is not a constructor for a
-   constructor says what it does and refers to it.
+   side, [flambda_type] (FlambdaTypeGrammar.v, extracted) on the other. The
+   tests that compare a function of the model with the function of the compiler
+   that it transcribes go through this file, so it is trusted, and it is
+   unverified: it is to be read, case by case, against the two grammars. The
+   header of FlambdaTypeGrammar.v says, constructor by constructor, what the
+   model has; a case below that is not a constructor for a constructor says what
+   it does and refers to it.
 
    The rules it keeps: - Nothing is approximated. What the model has not got
    ([Array], a [Simple] with a coercion) is refused, by [Not_in_the_model]. What

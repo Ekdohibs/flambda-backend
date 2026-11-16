@@ -38,11 +38,11 @@
    that Simplify is given, is the unit read with, in the place of the mode of
    each, the least that the compiler can say of where a value is,
    [with_unknown_param_modes].) The unit before and the unit after are each
-   converted to a term of the Rocq model
-   (middle_end/flambda2/rocq/FlambdaModel.v) and run on the machine extracted
-   from FlambdaSemanticsSpec.v. What the two runs come to is printed and
-   compared: Simplify is right on the example if, unless the run before is
-   undefined, the run after ends the same way.
+   converted to a term of the Rocq model (FlambdaModel.v, under
+   middle_end/flambda2/rocq/) and run on the machine extracted from
+   FlambdaSemanticsSpec.v. What the two runs come to is printed and compared:
+   Simplify is right on the example if, unless the run before is undefined, the
+   run after ends the same way.
 
    This is a test and not a proof. What is trusted, beyond the semantics itself:
    the conversion below, which must be read against the model. What a primitive
@@ -5095,7 +5095,7 @@ let print_prefix (prefix : prefix) =
    CR mshinwell: This identification is part of what is trusted, and will most
    likely not be enough: it does nothing for code that has no older version, or
    whose older version is still used. The comparison should relate code ids
-   itself; see the CR in middle_end/flambda2/rocq/FlambdaCompareSpec.v for what
+   itself; see the CR in FlambdaCompareSpec.v for what
    that takes. *)
 (* The marked calls of the unit before ([marked_calls]), as its conversion
    left them, each with the number of the code that it stands in. *)

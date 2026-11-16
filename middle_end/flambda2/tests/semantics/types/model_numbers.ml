@@ -28,10 +28,10 @@
 (* The numbers of the Rocq model, and OCaml's.
 
    The model's numbers are extracted as they are, binary: [positive], [Z] and
-   [nat] (middle_end/flambda2/rocq/FlambdaExtract.v). This is the conversion
-   between them and the numbers of the compiler. It is trusted, like the
-   converter of types that uses it (type_converter.ml), and is meant to be read:
-   every conversion goes through the bits of a number, least significant first.
+   [nat] (FlambdaExtract.v). This is the conversion between them and the numbers
+   of the compiler. It is trusted, like the converter of types that uses it
+   (type_converter.ml), and is meant to be read: every conversion goes through
+   the bits of a number, least significant first.
 
    An integer of the compiler (an immediate, an [int8] to a [nativeint], a tag,
    a size) is the [Z] of its signed value. A bit pattern (a float, a vector, a
@@ -39,9 +39,9 @@
    integers are: of 32 bits for a float32, of 64 for a float and for a mask, and
    of 128, 256 and 512 for the vectors, whose words are given with [word0] the
    least significant. This is the reading of [const_in_range]
-   (middle_end/flambda2/rocq/FlambdaPrimitiveSpec.v) and of the converter of
-   terms (middle_end/flambda2/tests/tools/flsemantics.ml). Back from the model,
-   a number that is outside the range of what it is to become has no conversion:
+   (FlambdaPrimitiveSpec.v) and of the converter of terms
+   (middle_end/flambda2/tests/tools/flsemantics.ml). Back from the model, a
+   number that is outside the range of what it is to become has no conversion:
    the functions answer [None], and never reduce a number modulo anything. *)
 
 module Numbers = Flambda2_rocq_semantics.BinNums
