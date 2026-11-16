@@ -300,13 +300,24 @@ it gave back.
   it there; this does not say that the validator accepts every such
   pair. Neither comparing the two model runs nor proving refinement of
   that pair recovers the meaning lost from the program's term.
-  The text loses the arity of the arguments of a direct call and of a
-  call of unknown arity as well, and the reader gives such a call one
-  value for each argument (C2-5); a call of known arity has its arity
-  in the text. A unit that gives a function an unboxed number was
-  therefore undefined in the model as read, and the tool's Simplify
-  made a direct call of it `Invalid`. The same pass over a unit read
-  gives each such call an arity. A direct call is given the kinds of
+  A text need not write the arity of the arguments of a direct call
+  or of a call of unknown arity. Where a text leaves it out the
+  reader gives such a call its default, one value of any sort for
+  each argument (C2-5); a call of known arity has its arity in the
+  text. The printer writes the arity beside the callee unless it is
+  that default; a direct call with no callee, which the step before
+  Simplify makes at `-Oclassic`, has no place in the text for its
+  arity. Before the printer wrote it, a unit that gives a function an
+  unboxed number was therefore undefined in the model as read, and
+  the tool's Simplify made a direct call of it `Invalid`. The same
+  pass over a unit read gives such a call an arity where the arity as
+  read is the default, and leaves alone a call whose arity as read is
+  not the default, which must have been written
+  (`kinds_call_direct_written.fl`, `kinds_call_unbound_written.fl`: a
+  written arity that is not that of the code stays as it was
+  written). An arity that the text wrote and that is the default is
+  not told from none, and the call is treated as one with none.
+  Where the pass gives an arity: a direct call is given the kinds of
   the parameters of the code that it names, where the unit binds that
   code and the call has as many arguments as the code has parameters.
   The conversion from Lambda makes a call direct only where the arity
@@ -340,9 +351,14 @@ it gave back.
   the product of nothing, and then the text does not write the
   argument at all; and an application counts the groups against the
   parameters of the code, to tell a full application from a partial
-  application or an over-application. The text has no grouping, at a
-  call or in the parameters that it writes for code, so the third
-  condition is one that the tool cannot test. A direct call is given
+  application or an over-application. A text that writes the arity of
+  a call writes its groups, and a text can write, apart from that,
+  the groups of the parameters of code; nothing makes the two agree
+  in a text written by hand (`kinds_call_direct_written.fl` writes
+  them otherwise on purpose). A text that leaves the arity out has
+  no grouping there, so of such a text the third condition is one
+  that the tool cannot test, and the rest of this paragraph and the
+  next are of such a text. A direct call is given
   the parameters of its code, which are flattened alike. Of a call
   of unknown arity, as far as the grouping goes and that alone (the
   kinds are as said above, and the text loses the other things that
@@ -368,7 +384,8 @@ it gave back.
   last argument, of no kind: the tool printed "DIFFERENT" and "not
   validated", with status 1, where the driver of the compiler's own
   run validates it: a false alarm.
-  A measure was made outside this tree, of 112 units from sources
+  A measure was made outside this tree, while the text wrote no
+  arity and no group, of 112 units from sources
   that apply functions with unboxed products among their parameters
   or their arguments. It is a report of those units and proves
   nothing of others. What it compares is the module block that a run
@@ -381,9 +398,9 @@ it gave back.
   edge of an application; of the units in which every product has a
   field of some kind, it printed no such run. Through the compiler's
   own two terms it printed none (right on 99, undefined on 7 for
-  want of code in a `.cmx`, not run on 6). The refusal of the
-  scripts, below, refuses 69 of the 112, those 12 and the unit of
-  the false "DIFFERENT" among them. And
+  want of code in a `.cmx`, not run on 6). The refusal that the
+  scripts then had, below, refused 69 of the 112, those 12 and the
+  unit of the false "DIFFERENT" among them. And
   where the call and the code group the same kinds differently,
   which is ill-kinded in the compiler's term, the term read may be
   defined where the compiler's is not. All of that was so before
@@ -391,7 +408,11 @@ it gave back.
   reader has always read flat; what the step would add is the same
   of a call with an argument that is not a value, which was
   undefined as read.
-  The scripts that make the texts of `tests/semantics/ocaml` refuse
+  The text writes the arity of a call and its groups now, and the
+  scripts refuse no unit for a group; `script/` keeps the units that
+  are about it, which are made. What follows to the end of this
+  paragraph is the refusal that they had while the text wrote none.
+  The scripts that make the texts of `tests/semantics/ocaml` refused
   the units in which that can happen, where the tool is to be run on
   the unit (`from_ocaml.sh` there and in `pairs/`; `script/` there
   has a unit for each refusal and, for most, the same unit without
@@ -412,20 +433,19 @@ it gave back.
   is said above of a group stands.
   Trusted of this step, beside what is trusted of the pass: that the
   conversion from Lambda keeps to that rule for a direct call, which
-  is read from its source and tested by nothing here; and of the
-  refusals of the scripts, that the compiler prints a call and code
-  as they expect: the arity of the arguments of a call, then that of
-  its result, then its kind; the arity of the parameters of code,
-  then their modes; a product with `#(`, or `void` for the product
-  of nothing. A unit in whose print those fields are not found is
-  refused.
+  is read from its source and tested by nothing here; and, of a text
+  that writes its arities, that the printer writes the arity which
+  the term has and the reader takes it, which the driver of
+  `tests/semantics/text_is_term/` checks of the units it is given and
+  of no other. (While the scripts had their refusal, it was trusted
+  of them that the compiler prints a call and code as they
+  expected.)
   What is still not claimed: the model erases the regions of
   allocations and their lifetimes (the entry "What the conversion of
   terms leaves out"). Equal outcomes in the model do not establish
   that a block returned is still alive, and no validation, whether
-  plain or counted apart, is a check of that. Other things that the
-  text loses, the kind of a value that may be null among them
-  (T4-13), are described in
+  plain or counted apart, is a check of that. Other things that a
+  text loses are described in
   `middle_end/flambda2/tests/semantics/ocaml/README.md`, "What a
   validation does not say"; the classification of the units in that
   file says which are counted apart, and for which of these reasons.
