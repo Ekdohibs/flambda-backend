@@ -51,7 +51,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaNominalSpec FlambdaWellFormedSpec FlambdaWellFormedProofs
   FlambdaUnusedSlotsProofs FlambdaStaticsInScopeSpec
   FlambdaStaticsInScopeProofs FlambdaImportsSpec FlambdaUnitFromProofs
-  FlambdaHoistStaticsSpec.
+  FlambdaHoistStaticsSpec FlambdaEquivarianceTactic.
 From OxCamlFlambda2 Require FlambdaClosuresProofs FlambdaEquivarianceProofs
   FlambdaHoistCodeProofs.
 Import ListNotations.
@@ -1842,6 +1842,13 @@ Qed.
 (* Renaming                                                                 *)
 (* ======================================================================== *)
 
+(* The two laws of the pass are proved from the definitions by
+   [equivariance] (FlambdaEquivarianceTactic.v). What is hoisted is told
+   by a test that evaluates a constant in the empty environment: its law
+   is a law of the machine, by hand, and it is given to the tactic in the
+   two forms in which computation leaves it, under the binder of a
+   [filter]. *)
+
 (* A constant has a value in the empty environment when the constant
    renamed has one: a renaming moves no symbol. *)
 Lemma is_hoisted_renamed (r : renaming) (binding : static_binding) :
@@ -1854,61 +1861,39 @@ Proof.
   reflexivity.
 Qed.
 
-Fixpoint hoisted_bindings_renamed (r : renaming) (e : expr) {struct e} :
-  hoisted_bindings (rename_expr r e)
-  = map (rename_static_binding r) (hoisted_bindings e)
-with handler_hoisted_bindings_renamed (r : renaming)
-    (h : continuation_handler) {struct h} :
-  handler_hoisted_bindings (rename_handler r h)
-  = map (rename_static_binding r) (handler_hoisted_bindings h).
+Lemma filter_hoisted_renamed (r : renaming)
+    (bindings : list static_binding) :
+  filter (fun binding => is_hoisted (rename_static_binding r binding))
+    bindings
+  = filter is_hoisted bindings.
+Proof. apply filter_ext. intros binding. apply is_hoisted_renamed. Qed.
+
+Lemma filter_not_hoisted_renamed (r : renaming)
+    (bindings : list static_binding) :
+  filter
+    (fun binding => negb (is_hoisted (rename_static_binding r binding)))
+    bindings
+  = filter (fun binding => negb (is_hoisted binding)) bindings.
 Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      cbn [rename_expr hoisted_bindings]; try reflexivity.
-    + apply hoisted_bindings_renamed.
-    + rewrite map_app, (hoisted_bindings_renamed r body),
-        (FlambdaHoistCodeProofs.filter_renamed r is_hoisted bindings
-           (is_hoisted_renamed r)).
-      reflexivity.
-    + rewrite map_app, (hoisted_bindings_renamed r body),
-        (handler_hoisted_bindings_renamed r h).
-      reflexivity.
-    + apply hoisted_bindings_renamed.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler handler_hoisted_bindings].
-    apply hoisted_bindings_renamed.
+  apply filter_ext. intros binding. rewrite is_hoisted_renamed. reflexivity.
 Qed.
+#[local] Hint Rewrite filter_hoisted_renamed filter_not_hoisted_renamed
+  : equivariance.
+
+(* FlambdaValidatorEquivarianceProofs.v rewrites with the two laws by
+   these names. *)
+Lemma hoisted_bindings_renamed (r : renaming) (e : expr) :
+  hoisted_bindings (rename_expr r e)
+  = map (rename_static_binding r) (hoisted_bindings e).
+Proof. equivariance. Qed.
 
 Theorem hoisted_bindings_equivariant :
   hoisted_bindings_equivariant_statement.
 Proof. exact hoisted_bindings_renamed. Qed.
 
-Fixpoint without_hoisted_renamed (r : renaming) (e : expr) {struct e} :
-  rename_expr r (without_hoisted e) = without_hoisted (rename_expr r e)
-with handler_without_hoisted_renamed (r : renaming)
-    (h : continuation_handler) {struct h} :
-  rename_handler r (handler_without_hoisted h)
-  = handler_without_hoisted (rename_handler r h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      cbn [rename_expr without_hoisted]; try reflexivity.
-    + rewrite (without_hoisted_renamed r body). reflexivity.
-    + rewrite (without_hoisted_renamed r body),
-        (FlambdaHoistCodeProofs.filter_renamed r
-           (fun binding => negb (is_hoisted binding)) bindings).
-      * reflexivity.
-      * intros binding. rewrite is_hoisted_renamed. reflexivity.
-    + rewrite (without_hoisted_renamed r body),
-        (handler_without_hoisted_renamed r h).
-      reflexivity.
-    + rewrite (without_hoisted_renamed r body). reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler handler_without_hoisted].
-    rewrite (without_hoisted_renamed r handler). reflexivity.
-Qed.
+Lemma without_hoisted_renamed (r : renaming) (e : expr) :
+  rename_expr r (without_hoisted e) = without_hoisted (rename_expr r e).
+Proof. equivariance. Qed.
 
 Theorem without_hoisted_equivariant :
   without_hoisted_equivariant_statement.
