@@ -4715,6 +4715,17 @@ Proof.
   symmetry. apply fold_known_equivariant.
 Qed.
 
+(* In this part the laws of the tests of one name or constant, of the
+   continuations that a unit binds and of the interface continuations
+   are proved from the definitions by [equivariance]
+   (FlambdaEquivarianceTactic.v); six of them are given to the tactic,
+   as hints of the Section, for the laws after them. The rest is by
+   hand: the two laws that turn round the theorem of a pass; the laws
+   of the unit with its code first and with its static bindings first,
+   which rewrite with laws of other files; and the check of the static
+   names in scope, of which the tactic leaves goals. *)
+Section Code_and_statics_first.
+
 (* The use of the static closures in sight, and the moving up of the
    bindings of code. *)
 Lemma use_known_closures_rewrite_equivariant :
@@ -4767,26 +4778,23 @@ Lemma simple_statics_in_scope_renamed (r : renaming) (syms : list symbol)
     (s : simple) :
   simple_statics_in_scope syms (rename_simple r s)
   = simple_statics_in_scope syms s.
-Proof. destruct s; reflexivity. Qed.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite simple_statics_in_scope_renamed : equivariance.
 
 Lemma simples_statics_in_scope_renamed (r : renaming) (syms : list symbol)
     (args : list simple) :
   simples_statics_in_scope syms (map (rename_simple r) args)
   = simples_statics_in_scope syms args.
-Proof.
-  unfold simples_statics_in_scope. apply forallb_map_with. intros s.
-  apply simple_statics_in_scope_renamed.
-Qed.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite simples_statics_in_scope_renamed : equivariance.
 
 Lemma value_slots_statics_in_scope_renamed (r : renaming)
     (syms : list symbol) (slots : list (value_slot * simple)) :
   value_slots_statics_in_scope syms
     (map (fun slot => (fst slot, rename_simple r (snd slot))) slots)
   = value_slots_statics_in_scope syms slots.
-Proof.
-  unfold value_slots_statics_in_scope. apply forallb_map_with. intros slot.
-  cbn [snd]. apply simple_statics_in_scope_renamed.
-Qed.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite value_slots_statics_in_scope_renamed : equivariance.
 
 Lemma named_statics_in_scope_renamed (r : renaming) (syms : list symbol)
     (ids : list code_id) (d : named) :
@@ -4811,15 +4819,13 @@ Proof.
       ?value_slots_statics_in_scope_renamed;
     reflexivity.
 Qed.
+#[local] Hint Rewrite static_const_statics_in_scope_renamed : equivariance.
 
 Lemma apply_cont_statics_in_scope_renamed (r : renaming)
     (syms : list symbol) (ac : apply_cont) :
   apply_cont_statics_in_scope syms (rename_apply_cont r ac)
   = apply_cont_statics_in_scope syms ac.
-Proof.
-  unfold apply_cont_statics_in_scope, rename_apply_cont. cbn [ac_args].
-  apply simples_statics_in_scope_renamed.
-Qed.
+Proof. equivariance. Qed.
 
 Lemma apply_statics_in_scope_renamed (r : renaming) (syms : list symbol)
     (ids : list code_id) (ap : apply_expr) :
@@ -4835,23 +4841,20 @@ Qed.
 
 Lemma is_closure_const_renamed (r : renaming) (const : static_const) :
   is_closure_const (rename_static_const r const) = is_closure_const const.
-Proof. destruct const; reflexivity. Qed.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite is_closure_const_renamed : equivariance.
 
 Lemma closure_symbols_of_binding_renamed (r : renaming)
     (binding : static_binding) :
   closure_symbols_of_binding (rename_static_binding r binding)
   = closure_symbols_of_binding binding.
-Proof.
-  destruct binding as [id c | id | s const]; try reflexivity.
-  cbn [rename_static_binding closure_symbols_of_binding].
-  rewrite is_closure_const_renamed. reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 Lemma declared_code_ids_of_binding_renamed (r : renaming)
     (binding : static_binding) :
   declared_code_ids_of_binding (rename_static_binding r binding)
   = declared_code_ids_of_binding binding.
-Proof. destruct binding; reflexivity. Qed.
+Proof. equivariance. Qed.
 
 Lemma group_consts_in_scope_renamed (r : renaming) (all : list symbol)
     (ids : list code_id) (bindings : list static_binding) :
@@ -4859,14 +4862,7 @@ Lemma group_consts_in_scope_renamed (r : renaming) (all : list symbol)
     group_consts_in_scope before all ids
       (map (rename_static_binding r) bindings)
     = group_consts_in_scope before all ids bindings.
-Proof.
-  induction bindings as [ | [id c | id | s const] bindings IH];
-    intros before; cbn [map rename_static_binding group_consts_in_scope];
-    [ reflexivity | apply IH | apply IH | ].
-  rewrite is_closure_const_renamed, !static_const_statics_in_scope_renamed,
-    !IH.
-  reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 Fixpoint expr_statics_in_scope_renamed (r : renaming) (e : expr) {struct e} :
   ∀ (syms : list symbol) (ids : list code_id),
@@ -4950,63 +4946,17 @@ Qed.
 
 (* The continuations that the renamed unit binds are those that the
    unit binds, renamed. *)
-Fixpoint bound_continuations_renamed (r : renaming) (e : expr) {struct e} :
+Lemma bound_continuations_renamed (r : renaming) (e : expr) :
   bound_continuations (rename_expr r e)
-  = map (rename_continuation r) (bound_continuations e)
-with handler_bound_continuations_renamed (r : renaming)
-    (h : continuation_handler) {struct h} :
-  handler_bound_continuations (rename_handler r h)
-  = map (rename_continuation r) (handler_bound_continuations h)
-with binding_bound_continuations_renamed (r : renaming)
-    (binding : static_binding) {struct binding} :
-  binding_bound_continuations (rename_static_binding r binding)
-  = map (rename_continuation r) (binding_bound_continuations binding)
-with code_bound_continuations_renamed (r : renaming) (c : code) {struct c} :
-  code_bound_continuations (rename_code r c)
-  = map (rename_continuation r) (code_bound_continuations c).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      cbn [rename_expr bound_continuations]; try reflexivity.
-    + apply bound_continuations_renamed.
-    + rewrite map_app, bound_continuations_renamed. f_equal.
-      induction bindings as [ | binding bindings IH]; cbn [map flat_map];
-        [ reflexivity | ].
-      rewrite map_app, (binding_bound_continuations_renamed r binding), IH.
-      reflexivity.
-    + cbn [map].
-      rewrite map_app, handler_bound_continuations_renamed,
-        bound_continuations_renamed.
-      reflexivity.
-    + rewrite !map_app, bound_continuations_renamed. f_equal; [ | f_equal ].
-      * rewrite !map_map. apply map_ext. intros [k h]. reflexivity.
-      * induction handlers as [ | [k h] handlers IH]; cbn [map flat_map];
-          [ reflexivity | ].
-        rewrite map_app, (handler_bound_continuations_renamed r h), IH.
-        reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler handler_bound_continuations].
-    apply bound_continuations_renamed.
-  - destruct binding as [id c | id | s const];
-      cbn [rename_static_binding binding_bound_continuations];
-      try reflexivity.
-    apply code_bound_continuations_renamed.
-  - destruct c as [params my_closure ret exn metadata body].
-    cbn [rename_code code_bound_continuations map].
-    rewrite bound_continuations_renamed. reflexivity.
-Qed.
+  = map (rename_continuation r) (bound_continuations e).
+Proof. equivariance. Qed.
+#[local] Hint Rewrite bound_continuations_renamed : equivariance.
 
 Lemma interface_conts_not_rebound_renamed (r : renaming)
     (u : unit_interface) (e : expr) :
   interface_conts_not_rebound (rename_unit_interface r u) (rename_expr r e)
   = interface_conts_not_rebound u e.
-Proof.
-  unfold interface_conts_not_rebound, rename_unit_interface.
-  cbn [unit_return unit_exn].
-  rewrite bound_continuations_renamed, !among_rename_continuation.
-  reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 Lemma static_names_apart_renamed (r : renaming) (imports : list symbol)
     (e : expr) :
@@ -5037,6 +4987,8 @@ Proof.
      && static_names_apart [] e);
     reflexivity.
 Qed.
+
+End Code_and_statics_first.
 
 (* The liftings may be under another renaming than the term, if the
    two rename the continuations of the units of the liftings alike:
