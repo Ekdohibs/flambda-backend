@@ -2879,6 +2879,10 @@ Qed.
    six of the test that a set is whole, which rest on a renaming being
    injective. *)
 
+(* The tactic looks for the laws of its database in one pass over the
+   goal, which is enough for the proofs below and takes less time. *)
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
+
 (* A set that a term makes, renamed: the variables in its value
    slots. *)
 Definition rename_set_made (r : renaming) (set : set_made) : set_made :=
@@ -3090,12 +3094,19 @@ Proof.
        binding').
 Qed.
 
+(* The law of [static_set_whole] is used under the function given to a
+   [forallb], where the one pass does not look. *)
+Section Groups_whole.
+
+#[local] Ltac eqv_database ::= eqv_database_by_autorewrite.
 #[local] Hint Rewrite whole_static_set_whole_renamed : equivariance.
 #[local] Arguments static_set_whole : simpl never.
 
 Lemma groups_whole_renamed (r : renaming) (e : expr) :
   groups_whole (rename_expr r e) = groups_whole e.
 Proof. equivariance. Qed.
+
+End Groups_whole.
 
 (* What is in sight, renamed: the variables; function slots and code
    ids are not renamed. *)
