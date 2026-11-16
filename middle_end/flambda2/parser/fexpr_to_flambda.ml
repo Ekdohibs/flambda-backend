@@ -901,6 +901,7 @@ let rec expr env acc (e : Fexpr.expr) : _ * Flambda.Expr.t =
         inlined;
         inlining_state;
         nontail;
+        probe;
         continuation;
         exn_continuation;
         args;
@@ -990,7 +991,13 @@ let rec expr env acc (e : Fexpr.expr) : _ * Flambda.Expr.t =
         ~continuation exn_continuation
         ~args:((List.map (simple env)) args)
         ~args_arity ~return_arity ~call_kind ~return_mode Debuginfo.none
-        ~inlined ~inlining_state ~probe:None
+        ~inlined ~inlining_state
+        ~probe:
+          (Probe.from_lambda
+             (Option.map
+                (fun ({ name; enabled_at_init } : Fexpr.probe) :
+                     Lambda.probe_desc -> { name; enabled_at_init })
+                probe))
         ~position:(if nontail then Nontail else Normal)
         ~relative_history:Inlining_history.Relative.empty
     in

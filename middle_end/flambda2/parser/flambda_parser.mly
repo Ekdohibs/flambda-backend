@@ -203,6 +203,7 @@ let make_boxed_const_int (i, m) : static_data =
 %token KWD_ONLY_GENERATIVE_EFFECTS [@symbol "only_generative_effects"]
 %token KWD_POISON [@symbol "poison"]
 %token KWD_POP    [@symbol "pop"]
+%token KWD_PROBE  [@symbol "probe"]
 %token KWD_PRODUCT   [@symbol "product"]
 %token KWD_PUSH   [@symbol "push"]
 %token KWD_REC    [@symbol "rec"]
@@ -675,6 +676,7 @@ apply_expr:
     inlined = option(inlined);
     inlining_state = option(inlining_state);
     nontail = boption(KWD_NONTAIL);
+    probe = option(probe);
     func = func_name_with_optional_arities;
     args = simple_args;
     MINUSGREATER
@@ -690,8 +692,22 @@ apply_expr:
           inlined;
           inlining_state;
           nontail;
+          probe;
           arities;
      } }
+;
+
+(* [enabled_at_init] is no keyword: it is the name of a parameter of
+   [%probe_is_enabled] too. *)
+probe:
+  | KWD_PROBE; LPAREN; name = STRING; word = option(IDENT); RPAREN
+    { let enabled_at_init =
+        match word with
+        | None -> false
+        | Some "enabled_at_init" -> true
+        | Some word -> Misc.fatal_errorf "Unknown word '%s' in a probe" word
+      in
+      ({ name; enabled_at_init } : probe) }
 ;
 
 method_kind:

@@ -64,6 +64,10 @@
 ;; "ccall no_coeffects" and "ccall only_generative_effects mutable". The text
 ;; is the term.
 ;;
+;; call_that_is_a_probe: two probes, the second enabled from the start. In
+;; the call of the handler of each the text writes that it is a probe, with
+;; its name: probe("p") and probe("q" enabled_at_init). The text is the term.
+;;
 ;; partial_application_of_unboxed_float: the text is not read back.
 ;;
 ;; interface_only, type_error: the compiler does not reach the middle end.
@@ -147,6 +151,22 @@
   (= %{context_name} "main"))
  (action
   (diff length_of_bytes.expected length_of_bytes.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   call_that_is_a_probe.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     %{dep:call_that_is_a_probe.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff call_that_is_a_probe.expected call_that_is_a_probe.output)))
 
 (rule
  (enabled_if

@@ -312,6 +312,11 @@ type loopify_attribute = Loopify_attribute.t =
   | Default_loopify_and_tailrec
   | Default_loopify_and_not_tailrec
 
+type probe =
+  { name : string;
+    enabled_at_init : bool
+  }
+
 type apply =
   { func : simple option;
     continuation : result_continuation;
@@ -322,7 +327,8 @@ type apply =
     arities : function_arities option;
     inlined : inlined_attribute option;
     inlining_state : inlining_state option;
-    nontail : bool
+    nontail : bool;
+    probe : probe option
   }
 
 type size = int

@@ -773,6 +773,12 @@ and apply_expr env (app : Apply_expr.t) : Fexpr.expr =
   let nontail =
     match Apply_expr.position app with Normal -> false | Nontail -> true
   in
+  let probe =
+    Option.map
+      (fun ({ name; enabled_at_init } : Probe.desc) : Fexpr.probe ->
+        { name; enabled_at_init })
+      (Apply_expr.probe app)
+  in
   Apply
     { func;
       continuation;
@@ -783,6 +789,7 @@ and apply_expr env (app : Apply_expr.t) : Fexpr.expr =
       inlined;
       inlining_state;
       nontail;
+      probe;
       arities
     }
 

@@ -887,7 +887,8 @@ let rec expr env (e : Model.expr) : F.expr =
                });
         inlined = None;
         inlining_state = None;
-        nontail = false
+        nontail = false;
+        probe = None
       }
   | Apply_cont ac -> F.Apply_cont (apply_cont env ac)
   | Switch (scrutinee, arms) ->

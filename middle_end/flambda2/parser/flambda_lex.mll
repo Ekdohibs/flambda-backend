@@ -93,6 +93,7 @@ let keyword_table =
     "only_generative_effects", KWD_ONLY_GENERATIVE_EFFECTS;
     "poison", KWD_POISON;
     "pop", KWD_POP;
+    "probe", KWD_PROBE;
     "product", KWD_PRODUCT;
     "push", KWD_PUSH;
     "rec", KWD_REC;

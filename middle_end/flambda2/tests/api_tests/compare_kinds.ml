@@ -45,10 +45,10 @@
    Then pairs that differ in what stands beside a kind (the grouping of an
    arity; the tag, the mutability and the allocation mode of a block that is
    made; the mutability of a read and the kind of a write at an offset), and
-   things that a text cannot write: that a call is a probe, a call that performs
-   an effect, the shape of a static block, the debugging information of its
-   fields (which is not compared, as no other debugging information is), and a
-   group of two recursive continuations.
+   things that a text could not write when they were put here: that a call is a
+   probe, a call that performs an effect, the shape of a static block, the
+   debugging information of its fields (which is not compared, as no other
+   debugging information is), and a group of two recursive continuations.
 
    Then the unit that the comparison gives for two different units, where the
    kind of a call of the first unit has a name that the second unit binds under
