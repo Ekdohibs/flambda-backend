@@ -1,11 +1,16 @@
 ;; A test of ../from_ocaml.sh itself: of each X.ml here, X.says is what the
 ;; script says, "made" where it makes the text of the unit and otherwise the
-;; reason that it prints, then "refused" (says.sh). Most units go by twos: one
-;; that the script refuses, for something that the text of a term loses and
-;; the tool cannot give back, and the same unit without it. `dune promote`
-;; updates X.says. The last two are given to the script with the directory
-;; of the standard library, as the units of ../library/ are: one that calls
-;; a function of the library, which is refused, and one that does not.
+;; reason that it prints, then "refused" (says.sh). The first two go together:
+;; a unit that the script refuses, for something that the text of a term
+;; loses and the tool cannot give back, and the same unit without it. The
+;; seven after them are of an unboxed product, which may be the product of
+;; nothing, among the arguments of a call or the parameters of code (the one
+;; named ..._not is another of them without the product): the script refused
+;; four of them while the text did not write such products, and makes the
+;; text of all seven. `dune promote` updates X.says. The last two are given
+;; to the script with the directory of the standard library, as the units of
+;; ../library/ are: one that calls a function of the library, which is
+;; refused, and one that does not.
 ;;
 ;; Each rule that runs the script names the compiler among what it depends
 ;; on: the compiler is an argument of the script, and that alone does not

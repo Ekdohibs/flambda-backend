@@ -1,7 +1,1 @@
-void_parameter.ml: the term that the compiler gives to Simplify has a call
-of unknown arity, and code with an unboxed product among its
-parameters, which may be the product of nothing. The text does not
-group the parameters of code, nor write one that has no kind in
-it, and nothing in it says that the call does not reach that code:
-the unit read may not be the compiler's.
-refused
+made

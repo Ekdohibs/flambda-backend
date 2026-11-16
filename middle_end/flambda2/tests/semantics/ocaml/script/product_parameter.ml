@@ -1,7 +1,8 @@
-(* A call of unknown arity, in a unit that has a function of an unboxed pair:
-   from_ocaml.sh refuses it (product_parameter.says). The text writes the
-   parameters of that function as two, and nothing in it says that the call
-   of unknown arity does not reach it. *)
+(* A call of unknown arity, in a unit that has a function of an unboxed pair.
+   The text writes the two parameters of that function as one group:
+   from_ocaml.sh makes the text of the unit (product_parameter.says). It
+   refused the unit while the text wrote the parameters as two, and nothing
+   in it said that the call of unknown arity does not reach the function. *)
 
 external ( + ) : int -> int -> int = "%addint"
 

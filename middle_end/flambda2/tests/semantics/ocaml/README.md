@@ -55,21 +55,23 @@ and not only when its source does.
 - `from_ocaml.sh` refuses a unit of whose term the text loses
   something that the tool cannot give back. It compiles the unit once
   more, for what `-drawflambda` prints of the term before Simplify,
-  and fails on three things. The test of being an integer that is for
+  and fails on two things. The test of being an integer that is for
   any value (`Is_int_generic`), which the text writes as the test for
   variants (label C2-26), unless `generic_is_int.txt` names the unit.
   A call that is a probe: the text does not say that it is one, and
   the program runs the handler of a probe only while the probe is
-  enabled (label C2-17). A call of unknown arity, where such a call
-  has an unboxed product among its arguments or code of the unit has
-  one among its parameters, the product of nothing included: the
-  text groups neither the arguments of a call nor the parameters of
-  code, and writes nothing for one of no kind, so that a partial
-  application or an over-application may be read as a full one
-  (labels C2-5 and C2-30). `script/` has a unit for each of these
-  refusals and, for most, the same unit without the reason for it,
-  with what the script says of each; and two more for the refusal
-  that is of `library/` only.
+  enabled (label C2-17). `script/` has a unit that is refused for a
+  probe and the same unit without the probe, with what the script
+  says of each, and two more for the refusal that is of `library/`
+  only. It has seven more, of an unboxed product among the arguments
+  of a call or the parameters of code, the product of nothing
+  included. The script refused the four of them that have a call of
+  unknown arity, while the text grouped neither the arguments of a
+  call nor the parameters of code and wrote nothing for one of no
+  kind, so that a partial application or an over-application might
+  be read as a full one (labels C2-5 and C2-30). The text now writes
+  the arity of the arguments of a call, and the parameters of code
+  in their groups, and the script makes the text of all seven.
 - The sources are formatted by `ocamlformat`, as `make fmt` wants, but
   for those that it does not read, which `.ocamlformat-ignore` names:
   the sources, here, in `script/` and in `library/`, that have an
@@ -2983,34 +2985,46 @@ directory sets the variable; one of `../regions/` does.
   not put that right. No unit of this directory has the test that
   is for any value, and `from_ocaml.sh` fails on a unit that has it
   and that `generic_is_int.txt` does not name; that list is empty.
-- Of a call the text loses the arity of its arguments, where the
-  call is direct or of unknown arity, and the reader gives such a
+- Of a call the text lost the arity of its arguments, where the
+  call is direct or of unknown arity, and the reader gave such a
   call one value for each argument: a unit that gives a function an
   unboxed number was undefined in the model as read (discrepancy
-  C2-5). In the same step as for an `Opaque_identity`, the tool
-  gives a direct call the kinds of the parameters of the code that
-  it names, which is what the conversion from Lambda made the arity
-  of such a call, and a call of unknown arity the kinds of its
+  C2-5). The text now writes that arity, unless it is one value of
+  which nothing more is known for each argument, and the reader
+  takes it. The step that the tool has for it stays: in the same
+  step as for an `Opaque_identity`, the tool looks, for a direct
+  call, at the kinds of the parameters of the code that it names,
+  which is what the conversion from Lambda made the arity of such a
+  call, and for a call of unknown arity at the kinds of its
   arguments as the reader has them, on the two conditions said
-  above (`unboxed_float_argument.ml` and the three units beside it,
-  each undefined as read before). What it cannot give back is the
-  grouping: in the compiler's term an argument that is an unboxed
-  product is one component of several kinds, or of none, which an
-  application counts as one against the parameters of the code, and
-  the text has as many arguments as kinds, at a call and in the
-  parameters of code alike. A direct call has the parameters of its
-  code. Of a call of unknown arity nothing tells: read flat, a
-  partial application that stops before a parameter of no kind is
-  a full application, and so is an over-application whose last
-  argument has no kind (discrepancy C2-30; the tool printed an
-  integer where the program has a closure, and a closure where it
-  has an integer, of two units that are not here). So
-  `from_ocaml.sh` fails on a unit that has a call of unknown arity
-  if such a call has a product among its arguments or code of the
-  unit has one among its parameters; no unit of this directory is
-  one. The text does not say that a call is a probe either
-  (discrepancy C2-17), and `from_ocaml.sh` fails on a unit that has
-  one.
+  above. Where those are the kinds of the arity that the call has
+  as read, the call keeps that arity; where they are not, the tool
+  gives the call one component for each of those kinds
+  (`unboxed_float_argument.ml` and the three units beside it, each
+  undefined as read before the tool had the step). What the text
+  lost besides was the grouping: in the compiler's term an argument
+  that is an unboxed product is one component of several kinds, or
+  of none, which an application counts as one against the
+  parameters of the code, and the text had as many arguments as
+  kinds, at a call and in the parameters of code alike. A direct
+  call has the parameters of its code. Of a call of unknown arity
+  nothing told: read flat, a partial application that stops before
+  a parameter of no kind was a full application, and so was an
+  over-application whose last argument has no kind (discrepancy
+  C2-30; the tool printed an integer where the program has a
+  closure, and a closure where it has an integer, of two units that
+  are not here). So `from_ocaml.sh` failed on a unit that has a
+  call of unknown arity if such a call had a product among its
+  arguments or code of the unit had one among its parameters. The
+  text now writes a product in an arity as `#(...)`, the product of
+  nothing as `#()`, and the parameters of code that are the
+  components of one product as a group; the reader takes both, and
+  `from_ocaml.sh` no longer fails so (the units that it refused are
+  in `script/`). A group that is read is kept by the step of the
+  tool where the call keeps its arity, and lost where the tool
+  gives the call one component for each kind. The text does not say
+  that a call is a probe (discrepancy C2-17), and `from_ocaml.sh`
+  fails on a unit that has one.
 - Two things that the tool refuses, to stay clear of two ways in
   which the term of the model may not be the program. Neither
   refusal shows that it is not: each refuses more than it need. A

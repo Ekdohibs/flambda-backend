@@ -1,6 +1,1 @@
-product_argument.ml: the term that the compiler gives to Simplify has a call
-of unknown arity with an unboxed product among its arguments, which
-may be the product of nothing. The text does not group the
-arguments of such a call, nor write an argument that has no kind
-in it: the unit read is not the compiler's.
-refused
+made

@@ -24,9 +24,7 @@
 #
 # A unit is refused if the text loses of its term something that the tool
 # cannot give back (see below): the test of being an integer that is for any
-# value, unless generic_is_int.txt names the unit; a call that is a probe; a
-# call of unknown arity, where such a call has an unboxed product among its
-# arguments or code of the unit has one among its parameters.
+# value, unless generic_is_int.txt names the unit; a call that is a probe.
 
 set -eu
 
@@ -113,86 +111,6 @@ if grep -q '(probe [^(]' "$work/$name.line"; then
   echo "compiler's." >&2
   exit 1
 fi
-
-# The text does not give the arity of the arguments of a call of unknown
-# arity. Such a call is read with one value for each argument, and the tool
-# then gives it one kind for each argument (label C2-5): one component for
-# each argument that the text writes, either way. In the compiler's arity the
-# arguments may be grouped. An argument that is an unboxed product is one
-# component, printed "#(...)"; the product of nothing is printed "void", and
-# the text does not write such an argument at all. An application counts the
-# components against the parameters of the code, to tell a full application
-# from a partial application or an over-application, and the text writes the
-# parameters of code with no grouping either, and none for a parameter that
-# is the product of nothing. So a call of unknown arity is read as the
-# compiler has it, as far as the grouping goes, if neither it nor the code
-# that it reaches has a group, and may not be if one of them has; and of what
-# is read from the text it can reach the code of the unit. A unit that has a
-# call of unknown arity is therefore refused if such a call has a group among
-# its arguments, or if code that the unit binds has one among its parameters
-# (labels C2-5 and C2-30). A unit that has only direct calls is not: a direct
-# call has the parameters of its code.
-#
-# What is printed of a call begins with the arity of its arguments, then that
-# of its result, then its kind; of code, the arity of its parameters is
-# followed by their modes; the kinds of an arity are separated by " ⨯ ". A
-# unit of which that is not found is refused too.
-calls=0
-sed 's/(args_arity /\
-(args_arity /g; s/(params_arity /\
-(params_arity /g' "$work/$name.line" | awk '
-  function grouped(arity,    n, kinds, i) {
-    if (index(arity, "#(") > 0) return 1
-    n = split(arity, kinds, " ⨯ ")
-    for (i = 1; i <= n; i++) if (kinds[i] == "void") return 1
-    return 0
-  }
-  /^\(params_arity / {
-    j = index($0, ") (param_modes ")
-    if (j == 0) { bad = 1; next }
-    if (grouped(substr($0, 15, j - 15))) code_grouped = 1
-  }
-  /^\(args_arity / {
-    j = index($0, ") (return_arity ")
-    k = index($0, "(call_kind ")
-    if (j == 0 || k == 0) { bad = 1; next }
-    unknown = "(call_kind (Function (function_call Indirect_unknown_arity"
-    if (index(substr($0, k), unknown) == 1) {
-      call_of_unknown_arity = 1
-      if (grouped(substr($0, 13, j - 13))) call_grouped = 1
-    }
-  }
-  END {
-    if (bad) exit 12
-    if (call_grouped) exit 10
-    if (call_of_unknown_arity && code_grouped) exit 11
-  }' || calls=$?
-case "$calls" in
-0) ;;
-10)
-  echo "$name.ml: the term that the compiler gives to Simplify has a call" >&2
-  echo "of unknown arity with an unboxed product among its arguments, which" >&2
-  echo "may be the product of nothing. The text does not group the" >&2
-  echo "arguments of such a call, nor write an argument that has no kind" >&2
-  echo "in it: the unit read is not the compiler's." >&2
-  exit 1
-  ;;
-11)
-  echo "$name.ml: the term that the compiler gives to Simplify has a call" >&2
-  echo "of unknown arity, and code with an unboxed product among its" >&2
-  echo "parameters, which may be the product of nothing. The text does not" >&2
-  echo "group the parameters of code, nor write one that has no kind in" >&2
-  echo "it, and nothing in it says that the call does not reach that code:" >&2
-  echo "the unit read may not be the compiler's." >&2
-  exit 1
-  ;;
-*)
-  echo "$name.ml: what -drawflambda printed of a call or of code is not" >&2
-  echo "what this script expects, so it cannot tell whether the unit has" >&2
-  echo "a call of unknown arity that it refuses." >&2
-  exit 1
-  ;;
-esac
 
 # A unit compiled with the standard library may name a symbol of a unit of
 # the library: a function or a value that the library defines. Its term then
