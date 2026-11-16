@@ -72,7 +72,10 @@
    answers a default. The model answers the default (FlambdaProvers.v). The runs
    are without them, as the compiler is, but one, which shows the difference as
    a recorded one (C2-2 is the entry of what the compiler does with and without
-   them).
+   them): where the two answers differ and the stop of the compiler has the
+   message of a kind check, the compiler is asked again without them, and the
+   difference is the recorded one only if the model answers what it answers
+   then.
 
    Besides the runs: controls of what the comparisons can see, on the inputs of
    the first run; and one case that no type of the model gives, of two poison
@@ -701,9 +704,11 @@ let type_of_kind (names : names) r (kind : MK.flambda_kind) : MT.flambda_type =
 
 (* Equations on names of the tests, a name having at most one. The type of a
    variable mentions no variable but those numbered after it, and the type of a
-   symbol no variable: no type is reached from itself. The variables that are
-   regions or of kind [Rec_info] have none: the conversion makes no head of kind
-   [Rec_info] of the compiler from the model's. *)
+   symbol no variable: no type is reached from itself through a variable. A
+   symbol is not kept out of a type: the type of a name may mention either
+   symbol, and the type of a symbol may mention that symbol. The variables that
+   are regions or of kind [Rec_info] have none: the conversion makes no head of
+   kind [Rec_info] of the compiler from the model's. *)
 let rec generate_equations ?(twice = false) (names : names) r :
     (MT.name * MT.flambda_type) list =
   if twice
@@ -1239,11 +1244,13 @@ let environment_is_seen_the_same (implementation : implementation)
         | Not_asked why -> Not_run why)
   }
 
-(* The kind checks of the compiler, for one run. *)
-let with_kind_checks (f : unit -> 'a) : 'a =
+(* The kind checks of the compiler set on, or off, while [f] runs. *)
+let with_kind_checks_set (on : bool) (f : unit -> 'a) : 'a =
   let before = !Oxcaml_flags.Flambda2.kind_checks in
-  Oxcaml_flags.Flambda2.kind_checks := Oxcaml_flags.Set true;
+  Oxcaml_flags.Flambda2.kind_checks := Oxcaml_flags.Set on;
   Fun.protect f ~finally:(fun () -> Oxcaml_flags.Flambda2.kind_checks := before)
+
+let with_kind_checks (f : unit -> 'a) : 'a = with_kind_checks_set true f
 
 let stops_at_a_kind_check (answer : A.answer) : bool =
   match answer with
@@ -1258,11 +1265,16 @@ let stops_at_a_kind_check (answer : A.answer) : bool =
 (* A prover, asked in each environment of the compiler that is seen the same as
    the model's; a case in which neither is does not count, the two comparisons
    of the environments having counted it. With [kind_checks], the compiler is
-   asked with its kind checks on: where the two answers then differ and the stop
-   of the compiler has the message of a kind check, the difference is counted as
-   the recorded one. That the model's answer is then the compiler's without the
-   checks is what FlambdaProvers.v says; it is not asked here. *)
+   asked with its kind checks on. Where the two answers then differ and the stop
+   of the compiler has the message of a kind check, the compiler is asked again
+   in the same environment on the same input with them off: the difference is
+   the recorded one only if the model answers what the compiler answers then,
+   and a disagreement like any other if it does not. Two answers that both stop
+   agree, as in every run, and nothing is asked again. *)
 let comparison_of ?(kind_checks = false) (prover : prover) : input comparison =
+  let without_kind_checks prover env input =
+    with_kind_checks_set false (fun () -> answer_of_compiler prover env input)
+  in
   let answer_of_compiler prover env input =
     if kind_checks
     then with_kind_checks (fun () -> answer_of_compiler prover env input)
@@ -1292,12 +1304,15 @@ let comparison_of ?(kind_checks = false) (prover : prover) : input comparison =
               Some
                 (if A.same of_model of_compiler
                  then Agree
-                 else if kind_checks && stops_at_a_kind_check of_compiler
+                 else if
+                   kind_checks
+                   && stops_at_a_kind_check of_compiler
+                   && A.same of_model (without_kind_checks prover env input)
                  then
                    Known_to_disagree
                      ( "C2-2, with the kind checks on: the compiler stops on a \
                         type of another kind than the prover is for, and the \
-                        model answers the default of the compiler without them",
+                        model answers what the compiler answers without them",
                        what () )
                  else Disagree (what ()))
           in

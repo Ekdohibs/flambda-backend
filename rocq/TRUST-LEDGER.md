@@ -2071,11 +2071,17 @@ it gave back.
     variables allowed and the same two sets of variables; that a
     fatal error, an assertion that fails, `Not_found` and
     `Invalid_argument` of the compiler are a stop, and nothing else
-    is; that with the kind checks on, only a stop whose message is
-    that of a kind check, where the model answers, is counted as the
-    recorded difference; that the table of answers and the controls
-    are computed from the same inputs as the comparisons. The
-    generators are trusted for nothing;
+    is; that such an exception, where it is caught, comes from the
+    function of the compiler: the conversion of the arguments and of
+    the answer runs inside the same guard (`answer_of_compiler`), so
+    where a stop comes from is trusted, not separated mechanically;
+    that with the kind checks on, a stop whose message is that of a
+    kind check is counted as the recorded difference only where the
+    model answers what the compiler, asked again in the same
+    environment on the same input with the checks off, answers, and
+    is a disagreement otherwise; that the table of answers and the
+    controls are computed from the same inputs as the comparisons.
+    The generators are trusted for nothing;
   - `same_text`: two printed answers are taken to be the same when
     they have the same words in the same order. Trusted: that the
     printer of `model_type.ml` brackets every part of a type and

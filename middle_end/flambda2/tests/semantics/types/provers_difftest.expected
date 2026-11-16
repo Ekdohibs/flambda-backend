@@ -696,7 +696,7 @@ With the kind checks of the compiler on: a type of any kind, and one more, in an
   the environment made with the n-way meet, seen the same in the model and in the compiler: 2970 agree
   the environment made with the binary meet, seen the same in the model and in the compiler: 2970 agree
   prove_equals_to_simple_of_kind: 2348 agree, 622 disagree as recorded
-    recorded as C2-2, with the kind checks on: the compiler stops on a type of another kind than the prover is for, and the model answers the default of the compiler without them (seed 1000002): the model answers Unknown,
+    recorded as C2-2, with the kind checks on: the compiler stops on a type of another kind than the prover is for, and the model answers what the compiler answers without them (seed 1000002): the model answers Unknown,
 the compiler, in the environment made with the n-way meet, no answer (a fatal error: Kind error: expected [ℕ𝟙𝟞]:)
     on the shrunk input:
     (Naked_number naked_int64 Unknown)
@@ -705,7 +705,7 @@ the compiler, in the environment made with the n-way meet, no answer (a fatal er
     with the arguments: min_name_mode in types, kind naked_int16, field 2,
       function slot 1, value slot 2, variable v8
   meet_naked_immediates: 599 agree, 2371 disagree as recorded
-    recorded as C2-2, with the kind checks on: the compiler stops on a type of another kind than the prover is for, and the model answers the default of the compiler without them (seed 1000000): the model answers Invalid,
+    recorded as C2-2, with the kind checks on: the compiler stops on a type of another kind than the prover is for, and the model answers what the compiler answers without them (seed 1000000): the model answers Invalid,
 the compiler, in the environment made with the n-way meet, no answer (a fatal error: Kind error: expected [Naked_immediate]:)
     on the shrunk input:
     (Value Unknown)
@@ -714,7 +714,7 @@ the compiler, in the environment made with the n-way meet, no answer (a fatal er
     with the arguments: min_name_mode normal, kind value, field 1,
       function slot 2, value slot 1, variable v1
   meet_naked_floats: 60 agree, 2910 disagree as recorded
-    recorded as C2-2, with the kind checks on: the compiler stops on a type of another kind than the prover is for, and the model answers the default of the compiler without them (seed 1000000): the model answers Invalid,
+    recorded as C2-2, with the kind checks on: the compiler stops on a type of another kind than the prover is for, and the model answers what the compiler answers without them (seed 1000000): the model answers Invalid,
 the compiler, in the environment made with the n-way meet, no answer (a fatal error: Kind error: expected [Naked_float]:)
     on the shrunk input:
     (Value Unknown)
@@ -723,7 +723,7 @@ the compiler, in the environment made with the n-way meet, no answer (a fatal er
     with the arguments: min_name_mode normal, kind value, field 1,
       function slot 2, value slot 1, variable v1
   prove_is_int: 1686 agree, 1284 disagree as recorded
-    recorded as C2-2, with the kind checks on: the compiler stops on a type of another kind than the prover is for, and the model answers the default of the compiler without them (seed 1000002): the model answers Unknown,
+    recorded as C2-2, with the kind checks on: the compiler stops on a type of another kind than the prover is for, and the model answers what the compiler answers without them (seed 1000002): the model answers Unknown,
 the compiler, in the environment made with the n-way meet, no answer (a fatal error: Kind error: expected [Value]:)
     on the shrunk input:
     (Naked_number naked_int64 Unknown)
@@ -732,7 +732,7 @@ the compiler, in the environment made with the n-way meet, no answer (a fatal er
     with the arguments: min_name_mode in types, kind naked_int16, field 2,
       function slot 1, value slot 2, variable v8
   prove_is_not_a_pointer: 1686 agree, 1284 disagree as recorded
-    recorded as C2-2, with the kind checks on: the compiler stops on a type of another kind than the prover is for, and the model answers the default of the compiler without them (seed 1000002): the model answers Unknown,
+    recorded as C2-2, with the kind checks on: the compiler stops on a type of another kind than the prover is for, and the model answers what the compiler answers without them (seed 1000002): the model answers Unknown,
 the compiler, in the environment made with the n-way meet, no answer (a fatal error: Kind error: expected [Value]:)
     on the shrunk input:
     (Naked_number naked_int64 Unknown)
@@ -741,7 +741,7 @@ the compiler, in the environment made with the n-way meet, no answer (a fatal er
     with the arguments: min_name_mode in types, kind naked_int16, field 2,
       function slot 1, value slot 2, variable v8
   meet_is_null: 1686 agree, 1284 disagree as recorded
-    recorded as C2-2, with the kind checks on: the compiler stops on a type of another kind than the prover is for, and the model answers the default of the compiler without them (seed 1000002): the model answers Invalid,
+    recorded as C2-2, with the kind checks on: the compiler stops on a type of another kind than the prover is for, and the model answers what the compiler answers without them (seed 1000002): the model answers Invalid,
 the compiler, in the environment made with the n-way meet, no answer (a fatal error: Kind error: expected [Value]:)
     on the shrunk input:
     (Naked_number naked_int64 Unknown)
@@ -750,7 +750,7 @@ the compiler, in the environment made with the n-way meet, no answer (a fatal er
     with the arguments: min_name_mode in types, kind naked_int16, field 2,
       function slot 1, value slot 2, variable v8
   meet_boxed_float_containing_simple: 1686 agree, 1284 disagree as recorded
-    recorded as C2-2, with the kind checks on: the compiler stops on a type of another kind than the prover is for, and the model answers the default of the compiler without them (seed 1000002): the model answers Invalid,
+    recorded as C2-2, with the kind checks on: the compiler stops on a type of another kind than the prover is for, and the model answers what the compiler answers without them (seed 1000002): the model answers Invalid,
 the compiler, in the environment made with the n-way meet, no answer (a fatal error: Kind error: expected [Value]:)
     on the shrunk input:
     (Naked_number naked_int64 Unknown)
@@ -760,7 +760,7 @@ the compiler, in the environment made with the n-way meet, no answer (a fatal er
       function slot 1, value slot 2, variable v8
   never_holds_locally_allocated_values: 2970 agree
   prove_physical_equality: 1664 agree, 1306 disagree as recorded
-    recorded as C2-2, with the kind checks on: the compiler stops on a type of another kind than the prover is for, and the model answers the default of the compiler without them (seed 1000002): the model answers Unknown,
+    recorded as C2-2, with the kind checks on: the compiler stops on a type of another kind than the prover is for, and the model answers what the compiler answers without them (seed 1000002): the model answers Unknown,
 the compiler, in the environment made with the n-way meet, no answer (a fatal error: Kind error: expected [Value]:)
     on the shrunk input:
     (Naked_number naked_int64 Unknown)
