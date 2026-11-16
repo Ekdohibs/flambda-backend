@@ -486,6 +486,25 @@ Ltac eqv_rewrite_hyp :=
   | H : _ |- _ => eqv_not_true H; rewrite H by assumption
   end.
 
+(* The laws of the database, wherever they apply. [autorewrite]
+   tries every law of the database on the whole goal, one law after
+   another, and where no law applies that is most of the time of a
+   proof. One pass of [rewrite_strat] looks at each subterm once and
+   is many times faster; but it finds a law by the look of a term
+   (not inside a [match], not under a binder, not where a sort is
+   written [positive] in one place and [variable] in another), and
+   in another order, so a proof that passes with the one need not
+   pass with the other. The step is [autorewrite]; a section whose
+   proofs all pass with the one pass takes it by
+   [#[local] Ltac eqv_database ::= eqv_database_by_one_pass.] *)
+Ltac eqv_database_by_autorewrite :=
+  progress autorewrite with equivariance.
+
+Ltac eqv_database_by_one_pass :=
+  progress rewrite_strat (topdown (hints equivariance)).
+
+Ltac eqv_database := eqv_database_by_autorewrite.
+
 (* What is inside an element of a list. *)
 Ltac eqv_open :=
   repeat match goal with
@@ -504,7 +523,7 @@ Ltac eqv_enter l :=
          | H : (forall x, In x l -> _) |- _ => specialize (H a Ha)
          end;
   clear Ha;
-  first [ solve [ autorewrite with equivariance; reflexivity ] | eqv_open ].
+  first [ solve [ try eqv_database; reflexivity ] | eqv_open ].
 
 Ltac eqv_enter_right l :=
   let a := fresh "a" in
@@ -515,7 +534,7 @@ Ltac eqv_enter_right l :=
          | H : (forall x, In x l -> _) |- _ => specialize (H a Ha)
          end;
   clear Ha;
-  first [ solve [ autorewrite with equivariance; reflexivity ] | eqv_open ].
+  first [ solve [ try eqv_database; reflexivity ] | eqv_open ].
 
 Ltac eqv_enter_left l :=
   let a := fresh "a" in
@@ -526,7 +545,7 @@ Ltac eqv_enter_left l :=
          | H : (forall x, In x l -> _) |- _ => specialize (H a Ha)
          end;
   clear Ha;
-  first [ solve [ autorewrite with equivariance; reflexivity ] | eqv_open ].
+  first [ solve [ try eqv_database; reflexivity ] | eqv_open ].
 
 Ltac eqv_ext :=
   lazymatch goal with
@@ -1108,7 +1127,7 @@ Tactic Notation "eqv_say" string(s) := eqv_note_step ltac:(idtac s).
 Ltac eqv_step :=
   first
     [ eqv_intro; eqv_say "intro"
-    | progress autorewrite with equivariance; eqv_say "database"
+    | eqv_database; eqv_say "database"
     | eqv_use_law; eqv_say "use_law"
     | eqv_compute; eqv_say "compute"
     | eqv_rewrite_hyp; eqv_say "rewrite_hyp"
@@ -1117,7 +1136,7 @@ Ltac eqv_step :=
     | eqv_shared; eqv_say "shared"
     | eqv_same_test; eqv_say "same_test"
     | eqv_ext; eqv_say "ext"
-    | eqv_fold; progress autorewrite with equivariance;
+    | eqv_fold; eqv_database;
       eqv_say "fold, database"
     | eqv_fold; eqv_rewrite_hyp; eqv_say "fold, rewrite_hyp"
     | eqv_unfold_at_constructor; eqv_say "unfold_at_constructor"
@@ -1555,7 +1574,7 @@ Ltac eqv_derive ::=
     first
       [ assert (H : eqv_law g S)
           by (unfold eqv_law; intros;
-              autorewrite with equivariance; reflexivity)
+              try eqv_database; reflexivity)
       | assert (H : eqv_law g S)
           by (eqv_clear_context;
               let D := fresh "Hderiving" in
