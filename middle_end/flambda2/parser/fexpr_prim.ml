@@ -388,7 +388,9 @@ let written_array_kind, array_kind =
         let| vec512 = flag_case "vec512" Naked_vec512s in
         let| mask = flag_case "mask" Naked_masks in
         let| gc_ign = flag_case "gc_ign" Gc_ignorable_values in
-        let| product = list ak, fun _ aks -> Unboxed_product aks in
+        (* The components of a product are read in the order of the text: one of
+           them may be a product again, which is a list, beside flags. *)
+        let| product = ordered_list ak, fun _ aks -> Unboxed_product aks in
         return_either (function
           | Immediates -> imm ()
           | Values -> values ()
@@ -408,6 +410,29 @@ let written_array_kind, array_kind =
           | Unboxed_product aks -> product aks))
   in
   ak, default ~def:Values ak
+
+(* The array kind of [%array_load] and [%array_set], where a load kind or a set
+   kind follows it. An unboxed product is looked for first: it is written as a
+   list, a list and a flag are found whatever their order, and the flag of the
+   load kind or set kind would otherwise be taken for the array kind and the
+   product left over. *)
+let accessed_array_kind =
+  let open D in
+  patterns
+  @@
+  let| product =
+    ( ordered_list written_array_kind,
+      fun _ aks -> P.Array_kind.Unboxed_product aks )
+  in
+  let| other = written_array_kind, fun _ k -> k in
+  return_either (fun (k : P.Array_kind.t) ->
+      match k with
+      | Unboxed_product aks -> product aks
+      | Immediates | Gc_ignorable_values | Values | Naked_floats
+      | Naked_float32s | Naked_ints | Naked_int8s | Naked_int16s | Naked_int32s
+      | Naked_int64s | Naked_nativeints | Naked_vec128s | Naked_vec256s
+      | Naked_vec512s | Naked_masks ->
+        other k)
 
 (* For [%array_load] and [%array_set]: the array kind and the load kind or set
    kind [access] as they are written. [unwritten] is the kind that the reader
@@ -1131,7 +1156,7 @@ let array_load =
   binary "%array_load"
     ~params:
       (maps
-         (param3 (option written_array_kind) (option load_kind) opt_mutability)
+         (param3 (option accessed_array_kind) (option load_kind) opt_mutability)
          ~from:(fun _ (k, lk, m) ->
            let k = Option.value k ~default:P.Array_kind.Values in
            match lk, unwritten k with
@@ -1319,7 +1344,7 @@ let array_set =
   ternary "%array_set"
     ~params:
       (maps
-         (param2 (option written_array_kind) (option set_kind))
+         (param2 (option accessed_array_kind) (option set_kind))
          ~from:(fun _ (k, sk) ->
            let k = Option.value k ~default:P.Array_kind.Values in
            match sk, unwritten k with

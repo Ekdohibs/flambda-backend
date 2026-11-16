@@ -53,6 +53,7 @@ type _ param_cons =
       -> 'p param_cons
   | CMap : 'a param_cons * ('b, 'a) map_lens -> 'b param_cons
   | CList : 'a param_cons -> 'a list param_cons
+  | COrdered_list : 'a param_cons -> 'a list param_cons
   | CParam2 : 'a param_cons * 'b param_cons -> ('a * 'b) param_cons
   | CParam3 :
       'a param_cons * 'b param_cons * 'c param_cons
@@ -130,6 +131,19 @@ let extract_param (env : decode_env) (params : param list)
     match aux cons params with
     | None -> Some (List.rev acc, params) (* Empty list always matchable *)
     | Some (e, params) -> list cons (e :: acc) params
+  (* Each element is read from the one parameter at the head of those that are
+     left, so the elements are read in the order of the text, whether they are
+     flags or lists. [list] looks for each element among all that are left, and
+     finds a flag past a list and a list past a flag. *)
+  and ordered_list : type a.
+      a param_cons -> a list -> param list -> (a list * param list) option =
+   fun cons acc params ->
+    match params with
+    | [] -> Some (List.rev acc, [])
+    | p :: rest -> (
+      match aux cons [p] with
+      | Some (e, []) -> ordered_list cons (e :: acc) rest
+      | None | Some (_, _ :: _) -> Some (List.rev acc, params))
   and map : type a b.
       a param_cons ->
       (decode_env -> a -> b) ->
@@ -193,6 +207,7 @@ let extract_param (env : decode_env) (params : param list)
     | CEither (_, cases) -> etr cases
     | CMap (pcons, l) -> map pcons l.decode
     | CList pcons -> list pcons []
+    | COrdered_list pcons -> ordered_list pcons []
     | CVoid -> void
     | CAtom pc -> atom pc []
     | CLazy l -> aux (Lazy.force l)
@@ -219,6 +234,8 @@ let rec build_param : type p. encode_env -> p -> p param_cons -> param list =
     if eq p default then [] else build_param env p pcons
   | CEither (encode, _) -> encode p env
   | CList pcons -> List.concat_map (fun pe -> build_param env pe pcons) p
+  | COrdered_list pcons ->
+    List.concat_map (fun pe -> build_param env pe pcons) p
   | CMap (pcons, f) -> build_param env (f.encode env p) pcons
   | CParam2 (pc1, pc2) ->
     let p1, p2 = p in
@@ -325,7 +342,8 @@ module Describe = struct
     | CDefault (_pcons, _, _) ->
       Misc.fatal_error "Positional parameter does not support defaulting values"
     | CVoid | CAtom _ | CLazy _ | CLabeled _ | COptional _ | CEither _ | CList _
-    | CMap _ | CParam2 _ | CParam3 _ | CParam4 _ | CParam5 _ ->
+    | COrdered_list _ | CMap _ | CParam2 _ | CParam3 _ | CParam4 _ | CParam5 _
+      ->
       CAtom pcons
 
   let labeled label (pcons : 'a param_cons) : 'a param_cons =
@@ -350,6 +368,9 @@ module Describe = struct
     (* Atomize the list to render explicitely the empty list and avoid
        interleaving of other values *)
     CAtom (CList pcons)
+
+  let ordered_list (pcons : 'p param_cons) : 'p list param_cons =
+    CAtom (COrdered_list pcons)
 
   type 'p encode_case = 'p -> encode_env -> param list
 

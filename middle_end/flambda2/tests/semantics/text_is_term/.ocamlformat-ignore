@@ -7,3 +7,4 @@ kind_of_a_record_with_an_unboxed_field.ml
 constant_record_with_an_unboxed_field.ml
 parameters_of_small_unboxed_integers.ml
 large_unboxed_integer.ml
+arrays_of_unboxed_products.ml

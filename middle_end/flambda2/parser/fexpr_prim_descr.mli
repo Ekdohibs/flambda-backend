@@ -185,6 +185,14 @@ module Describe : sig
       expects its own level of bracket syntactically *)
   val list : 'p param_cons -> 'p list param_cons
 
+  (** A list whose elements are read in the order of the text: each element is
+      one parameter, a flag, a labeled parameter or a list in brackets, and is
+      read from the parameter at the head of those that are left. With
+      {!val:list}, each element is looked for among all that are left, so that
+      between a flag and a list in brackets the order of the text is lost. It is
+      written as {!val:list} writes, with its own level of brackets. *)
+  val ordered_list : 'p param_cons -> 'p list param_cons
+
   (** Custom transformation of parameter value.
 
       Labels inverted to be related to the argument. [maps x ~to_ ~from] read
