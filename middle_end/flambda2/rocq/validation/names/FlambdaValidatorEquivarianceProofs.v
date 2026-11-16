@@ -3946,68 +3946,31 @@ Proof.
   exact FlambdaUnaliasRecParamsNamesProofs.unalias_rec_params_renamed.
 Qed.
 
-(* Following aliases into the handlers of recursive continuations. *)
-Fixpoint follow_aliases_in_loops_equivariant_aux (r : renaming) (e : expr) :
-  ∀ tenv : typing_env,
-    follow_aliases_in_loops (rename_naive_typing_env r tenv) (rename_expr r e)
-    = rename_expr r (follow_aliases_in_loops tenv e)
-with follow_aliases_in_loops_in_handler_equivariant (r : renaming)
-    (h : continuation_handler) :
-  ∀ tenv : typing_env,
-    follow_aliases_in_loops_in_handler (rename_naive_typing_env r tenv)
-      (rename_handler r h)
-    = rename_handler r (follow_aliases_in_loops_in_handler tenv h)
-with follow_aliases_in_loop_equivariant (r : renaming)
-    (h : continuation_handler) :
-  ∀ tenv : typing_env,
-    follow_aliases_in_loop (rename_naive_typing_env r tenv)
-      (rename_handler r h)
-    = rename_handler r (follow_aliases_in_loop tenv h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      intros tenv; cbn [rename_expr follow_aliases_in_loops];
-      try reflexivity.
-    + rewrite typing_env_under_let_equivariant,
-        follow_aliases_in_loops_equivariant_aux.
-      reflexivity.
-    + rewrite follow_aliases_in_loops_equivariant_aux. reflexivity.
-    + rewrite follow_aliases_in_loops_in_handler_equivariant,
-        follow_aliases_in_loops_equivariant_aux.
-      reflexivity.
-    + rewrite follow_aliases_in_loops_equivariant_aux. f_equal.
-      induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
-      rewrite (follow_aliases_in_loop_equivariant r h tenv), IH. reflexivity.
-  - destruct h as [params metadata handler]. intros tenv.
-    cbn [rename_handler follow_aliases_in_loops_in_handler].
-    rewrite drop_vars_equivariant, follow_aliases_in_loops_equivariant_aux.
-    reflexivity.
-  - destruct h as [params metadata handler]. intros tenv.
-    cbn [rename_handler follow_aliases_in_loop].
-    rewrite drop_vars_equivariant, follow_aliases_in_loops_equivariant_aux.
-    unfold rewrite_code_body. cbv zeta.
-    rewrite follow_aliases_equivariant_aux, !rename_binds_statics.
-    destruct
-      (Bool.eqb
-         (binds_statics
-            (follow_aliases_in_loops (drop_vars params tenv) handler))
-         (binds_statics
-            (follow_aliases (drop_vars params tenv)
-               (follow_aliases_in_loops (drop_vars params tenv) handler))));
-      reflexivity.
-Qed.
+(* Following aliases into the handlers of recursive continuations. The
+   tactic is told how a typing environment is renamed, and is given the
+   laws of the environment under a [Let] and without the parameters of
+   a handler, and that of the pass that follows aliases, which the
+   handler of a loop is given to. *)
+Section Follow_aliases_in_loops.
+
+#[local] Instance loops_typing_env_renaming : Renaming_of typing_env :=
+  rename_naive_typing_env.
+
+#[local] Hint Rewrite typing_env_under_let_equivariant drop_vars_equivariant
+  follow_aliases_equivariant_aux : equivariance.
 
 Lemma follow_aliases_in_loops_equivariant (r : renaming) (tenv : typing_env)
     (e : expr) :
   follow_aliases_in_loops (rename_naive_typing_env r tenv) (rename_expr r e)
   = rename_expr r (follow_aliases_in_loops tenv e).
-Proof. apply follow_aliases_in_loops_equivariant_aux. Qed.
+Proof. equivariance. Qed.
+
+End Follow_aliases_in_loops.
 
 Lemma follow_aliases_in_loops_unknowing_equivariant :
   rewrite_equivariant (follow_aliases_in_loops []).
 Proof.
-  intros r e. exact (follow_aliases_in_loops_equivariant_aux r e []).
+  intros r e. exact (follow_aliases_in_loops_equivariant r [] e).
 Qed.
 
 (* Loopify. The name given for the loop of each piece of code is renamed
