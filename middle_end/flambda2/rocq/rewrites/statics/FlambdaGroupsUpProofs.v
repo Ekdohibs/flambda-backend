@@ -113,6 +113,9 @@ Proof. exact groups_up_equivalent_aux. Qed.
 (* ======================================================================== *)
 
 (* Proved from the definitions by [equivariance]
-   (FlambdaEquivarianceTactic.v). *)
+   (FlambdaEquivarianceTactic.v), its database applied by the one pass,
+   the faster step: the proof passes with it. *)
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
+
 Theorem groups_up_equivariant : groups_up_equivariant_statement.
 Proof. equivariance. Qed.
