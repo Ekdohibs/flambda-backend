@@ -1,0 +1,5 @@
+let x = %opaque (1) in
+cont k (x)
+  where k (r : imm tagged) =
+    let $B = Block 0 (r) in
+    cont done ($B)

@@ -1,0 +1,10 @@
+let x = %opaque (1) in
+cont loop (x, 0)
+  where rec (n) loop (i) =
+    let c = %int_comp.`lt` (i, n) in
+    (switch c
+       | 0 -> finish (i)
+       | 1 -> loop (n, i))
+  where finish (r) =
+    let $B = Block 0 (r) in
+    cont done ($B)

@@ -570,8 +570,8 @@ and subst_apply env apply =
   let args_arity = Apply_expr.args_arity apply in
   let return_arity = Apply_expr.return_arity apply in
   Apply_expr.create ~callee ~continuation exn_continuation ~args ~call_kind
-    ~return_mode dbg ~inlined ~inlining_state ~probe:None ~position
-    ~relative_history ~args_arity ~return_arity
+    ~return_mode dbg ~inlined ~inlining_state ~probe:(Apply_expr.probe apply)
+    ~position ~relative_history ~args_arity ~return_arity
   |> Expr.create_apply
 
 and subst_apply_cont env apply_cont =
@@ -1157,6 +1157,14 @@ let call_kinds env (call_kind1 : Call_kind.t) (call_kind2 : Call_kind.t) :
     else Different { approximant = call_kind1 }
   | _, _ -> Different { approximant = call_kind1 }
 
+let probes_equal (probe1 : Probe.t) (probe2 : Probe.t) =
+  match probe1, probe2 with
+  | None, None -> true
+  | ( Some { name = name1; enabled_at_init = enabled_at_init1 },
+      Some { name = name2; enabled_at_init = enabled_at_init2 } ) ->
+    String.equal name1 name2 && Bool.equal enabled_at_init1 enabled_at_init2
+  | (None | Some _), _ -> false
+
 let inlining_states_equal is1 is2 : bool =
   (* CR lmaurer: Compare inlining arguments once we've added them to the Flambda
      syntax *)
@@ -1182,6 +1190,7 @@ let apply_exprs env apply1 apply2 : Expr.t Comparison.t =
     && Alloc_mode.For_applications.compare (Apply.return_mode apply1)
          (Apply.return_mode apply2)
        = 0
+    && probes_equal (Apply.probe apply1) (Apply.probe apply2)
   in
   let ok = ref atomic_things_equal in
   let callee1' =
@@ -1209,7 +1218,7 @@ let apply_exprs env apply1 apply2 : Expr.t Comparison.t =
             ~return_mode:(Apply.return_mode apply1) (Apply.dbg apply1)
             ~inlined:(Apply.inlined apply1)
             ~inlining_state:(Apply.inlining_state apply1)
-            ~probe:None ~position:(Apply.position apply1)
+            ~probe:(Apply.probe apply1) ~position:(Apply.position apply1)
             ~relative_history:(Apply_expr.relative_history apply1)
             ~args_arity:(Apply_expr.args_arity apply1)
             ~return_arity:(Apply_expr.return_arity apply1)
@@ -1301,17 +1310,20 @@ let functions_bind_alike params_and_body1 params_and_body2 =
   && Bool.equal may_alloc_stack1 may_alloc_stack2
 
 (* For [Recursive_let_cont_handlers.pattern_match_pair]: the same number of
-   continuations and of invariant parameters. *)
+   continuations and of invariant parameters. The kinds of the invariant
+   parameters are compared here too. *)
 let recursive_handlers_bind_alike handlers1 handlers2 =
   let shape handlers =
     Recursive_let_cont_handlers.pattern_match handlers
       ~f:(fun ~invariant_params ~body:_ handlers ->
-        ( Bound_parameters.cardinal invariant_params,
+        ( List.map Bound_parameter.kind
+            (Bound_parameters.to_list invariant_params),
           List.length (Continuation_handlers.domain handlers) ))
   in
-  let num_invariant_params1, num_continuations1 = shape handlers1 in
-  let num_invariant_params2, num_continuations2 = shape handlers2 in
-  Int.equal num_invariant_params1 num_invariant_params2
+  let kinds_of_invariant_params1, num_continuations1 = shape handlers1 in
+  let kinds_of_invariant_params2, num_continuations2 = shape handlers2 in
+  Misc.Stdlib.List.equal Kinds.with_subkinds_equal kinds_of_invariant_params1
+    kinds_of_invariant_params2
   && Int.equal num_continuations1 num_continuations2
 
 let rec exprs env e1 e2 : Expr.t Comparison.t =
@@ -1399,13 +1411,15 @@ and static_consts env (const1 : Static_const_or_code.t)
   | Code code1, Code code2 ->
     codes env code1 code2 |> Comparison.map ~f:Static_const_or_code.create_code
   | ( Static_const (Block (tag1, mut1, shape1, fields1)),
-      Static_const (Block (tag2, mut2, _shape2, fields2)) ) ->
-    (* XXX compare the shapes *)
+      Static_const (Block (tag2, mut2, shape2, fields2)) ) ->
     blocks env (tag1, mut1, fields1) (tag2, mut2, fields2)
     |> Comparison.map
          ~f:(fun (tag1', mut1', fields1') : Static_const_or_code.t ->
            Static_const_or_code.create_static_const
              (Static_const.block tag1' mut1' shape1 fields1'))
+    |> Comparison.add_condition
+         ~cond:(Flambda_kind.Scannable_block_shape.equal shape1 shape2)
+         ~approximant:(fun () -> subst_static_const env const1)
   | Static_const (Set_of_closures set1), Static_const (Set_of_closures set2) ->
     sets_of_closures env set1 set2
     |> Comparison.map ~f:(fun set1' : Static_const_or_code.t ->
@@ -1468,7 +1482,8 @@ and codes env (code1 : Code.t) (code2 : Code.t) =
          && Bool.equal (Code.stub code1) (Code.stub code2)
          && Inline_attribute.equal (Code.inline code1) (Code.inline code2)
          && Bool.equal (Code.is_a_functor code1) (Code.is_a_functor code2)
-         && Recursive.equal (Code.recursive code1) (Code.recursive code2))
+         && Recursive.equal (Code.recursive code1) (Code.recursive code2)
+         && Bool.equal (Code.is_tupled code1) (Code.is_tupled code2))
 
 and let_cont_exprs env (let_cont1 : Let_cont.t) (let_cont2 : Let_cont.t) :
     Expr.t Comparison.t =
@@ -1537,6 +1552,10 @@ and let_cont_exprs env (let_cont1 : Let_cont.t) (let_cont2 : Let_cont.t) :
   | _, _ -> Different { approximant = subst_let_cont env let_cont1 }
 
 and cont_handlers env handler1 handler2 =
+  let kinds_of_params handler =
+    Continuation_handler.pattern_match handler ~f:(fun params ~handler:_ ->
+        List.map Bound_parameter.kind (Bound_parameters.to_list params))
+  in
   Flambda.Continuation_handler.pattern_match_pair handler1 handler2
     ~f:(fun params ~handler1:expr1 ~handler2:expr2 ->
       exprs env expr1 expr2
@@ -1556,6 +1575,11 @@ and cont_handlers env handler1 handler2 =
              (Bool.equal
                 (Continuation_handler.is_cold handler1)
                 (Continuation_handler.is_cold handler2))
+           ~approximant:(fun () -> subst_cont_handler env handler1)
+      |> Comparison.add_condition
+           ~cond:
+             (Misc.Stdlib.List.equal Kinds.with_subkinds_equal
+                (kinds_of_params handler1) (kinds_of_params handler2))
            ~approximant:(fun () -> subst_cont_handler env handler1))
   |> function
   | Ok comp -> comp

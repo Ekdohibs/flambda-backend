@@ -4,3 +4,6 @@ arity: different; the unit given is printed
 params: different; the unit given is printed
 value_slot: different; the unit given is printed
 function_slot: different; the unit given is printed
+handler_kind: different; the unit given is printed
+invariant_kind: different; the unit given is printed
+tupled: different; the unit given is printed

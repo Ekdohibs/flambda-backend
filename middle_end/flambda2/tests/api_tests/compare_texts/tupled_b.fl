@@ -1,0 +1,6 @@
+let code size(1) tupled f (x, y) my_closure &my_region my_depth -> k * e =
+  cont k (x)
+in
+let $F = closure f @f &toplevel in
+let $B = Block 0 ($F) in
+cont done ($B)

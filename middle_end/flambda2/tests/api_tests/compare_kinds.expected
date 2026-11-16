@@ -70,3 +70,8 @@ not a variant (the kinds, by Flambda_kind.With_subkind.equal: not equal)
   the arity of the result of a call: different
   the kind of an extra argument of an exception continuation: different
   the kinds of the fields of a block that is made: different
+a call that is a probe and a plain call: different
+two calls that are probes of one name: the same
+two calls that are probes of two names: different
+two static blocks of values: the same
+a static block of values and a mixed one: different

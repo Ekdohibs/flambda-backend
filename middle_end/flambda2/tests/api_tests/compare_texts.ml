@@ -45,7 +45,14 @@
 
    value_slot, function_slot: the two project different slots of the same
    closure. They are different: a slot of the first is one slot of the second
-   and no other. *)
+   and no other.
+
+   handler_kind, invariant_kind: the two differ in the kind of a parameter of a
+   continuation, and of an invariant parameter of a recursive continuation. They
+   are different.
+
+   tupled: the code of the second takes its parameters as one tuple. They are
+   different. *)
 
 module P = Flambda2_parser
 

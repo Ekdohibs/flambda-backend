@@ -35,7 +35,10 @@
    same, and must still tell apart two kinds that hold different things.
 
    Each pair of kinds below is put in each place of a term where the comparison
-   reads a kind with its subkind, and the answer is printed. *)
+   reads a kind with its subkind, and the answer is printed.
+
+   Then two things that the text of a term does not write, and that the
+   comparison reads: that a call is a probe, and the shape of a static block. *)
 
 open Flambda2_bound_identifiers
 open Flambda2_identifiers
@@ -149,7 +152,7 @@ let unit body =
       (body ~return_continuation ~exn_continuation ~toplevel_my_alloc_region)
     ~module_symbol
 
-let call ~args_arity ~return_arity ~extra_args =
+let call ?(probe = None) ~args_arity ~return_arity ~extra_args () =
   unit (fun ~return_continuation ~exn_continuation ~toplevel_my_alloc_region ->
       Flambda.Apply.create ~callee:(Some argument)
         ~continuation:(Return return_continuation)
@@ -162,7 +165,7 @@ let call ~args_arity ~return_arity ~extra_args =
              ~alloc_region:toplevel_my_alloc_region)
         Debuginfo.none ~inlined:Default_inlined
         ~inlining_state:(Inlining_state.default ~round:0)
-        ~probe:None ~position:Normal
+        ~probe ~position:Normal
         ~relative_history:Inlining_history.Relative.empty
       |> Flambda.Expr.create_apply)
 
@@ -172,21 +175,22 @@ let any = one KS.any_value
 
 let places =
   [ ( "the arity of the arguments of a call",
-      fun kind -> call ~args_arity:(one kind) ~return_arity:any ~extra_args:[]
-    );
+      fun kind ->
+        call ~args_arity:(one kind) ~return_arity:any ~extra_args:[] () );
     ( "the arity of the arguments of a call, in an unboxed product",
       fun kind ->
         call
           ~args_arity:
             (Flambda_arity.create
                [Unboxed_product [Singleton KS.naked_float; Singleton kind]])
-          ~return_arity:any ~extra_args:[] );
+          ~return_arity:any ~extra_args:[] () );
     ( "the arity of the result of a call",
-      fun kind -> call ~args_arity:any ~return_arity:(one kind) ~extra_args:[]
-    );
+      fun kind ->
+        call ~args_arity:any ~return_arity:(one kind) ~extra_args:[] () );
     ( "the kind of an extra argument of an exception continuation",
       fun kind ->
-        call ~args_arity:any ~return_arity:any ~extra_args:[argument, kind] );
+        call ~args_arity:any ~return_arity:any ~extra_args:[argument, kind] ()
+    );
     ( "the kinds of the fields of a block that is made",
       fun kind ->
         unit
@@ -217,6 +221,12 @@ let places =
               ~body ~free_names_of_body:Unknown
             |> Flambda.Expr.create_let) ) ]
 
+let answer unit1 unit2 =
+  match Flambda2_compare.Compare.flambda_units unit1 unit2 with
+  | Equivalent -> "the same"
+  | Different { approximant = _ } -> "different"
+  | exception exn -> "STOPPED: " ^ Printexc.to_string exn
+
 let () =
   List.iter
     (fun (what, kind1, kind2) ->
@@ -225,14 +235,52 @@ let () =
         (if KS.equal kind1 kind2 then "equal" else "not equal");
       List.iter
         (fun (place, make) ->
-          let answer =
-            match
-              Flambda2_compare.Compare.flambda_units (make kind1) (make kind2)
-            with
-            | Equivalent -> "the same"
-            | Different { approximant = _ } -> "different"
-            | exception exn -> "STOPPED: " ^ Printexc.to_string exn
-          in
-          Printf.printf "  %s: %s\n" place answer)
+          Printf.printf "  %s: %s\n" place (answer (make kind1) (make kind2)))
         places)
     pairs
+
+let probe name = Probe.from_lambda (Some { name; enabled_at_init = false })
+
+let call_that_is probe =
+  call ~probe ~args_arity:any ~return_arity:any ~extra_args:[] ()
+
+let static_block shape =
+  unit
+    (fun ~return_continuation ~exn_continuation:_ ~toplevel_my_alloc_region:_ ->
+      let block =
+        Symbol.create compilation_unit (Linkage_name.of_string "block")
+      in
+      let body =
+        Flambda.Apply_cont.create return_continuation
+          ~args:[Simple.symbol block]
+          ~dbg:Debuginfo.none
+        |> Flambda.Expr.create_apply_cont
+      in
+      Flambda.Let.create
+        (Bound_pattern.static
+           (Bound_static.singleton (Bound_static.Pattern.block_like block)))
+        (Flambda.Named.create_static_consts
+           (Flambda.Static_const_group.create
+              [ Flambda.Static_const_or_code.create_static_const
+                  (Static_const.block Tag.Scannable.zero Immutable shape
+                     [ Simple.With_debuginfo.create argument Debuginfo.none;
+                       Simple.With_debuginfo.create argument Debuginfo.none ])
+              ]))
+        ~body ~free_names_of_body:Unknown
+      |> Flambda.Expr.create_let)
+
+let () =
+  Printf.printf "a call that is a probe and a plain call: %s\n"
+    (answer (call_that_is (probe "a")) (call_that_is None));
+  Printf.printf "two calls that are probes of one name: %s\n"
+    (answer (call_that_is (probe "a")) (call_that_is (probe "a")));
+  Printf.printf "two calls that are probes of two names: %s\n"
+    (answer (call_that_is (probe "a")) (call_that_is (probe "b")));
+  let mixed : K.Scannable_block_shape.t =
+    Mixed_record
+      (K.Mixed_block_shape.from_prefix_size_and_suffix_elements 1 [Naked_float])
+  in
+  Printf.printf "two static blocks of values: %s\n"
+    (answer (static_block Value_only) (static_block Value_only));
+  Printf.printf "a static block of values and a mixed one: %s\n"
+    (answer (static_block Value_only) (static_block mixed))

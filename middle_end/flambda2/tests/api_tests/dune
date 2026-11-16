@@ -155,7 +155,10 @@
     (run ./compare_texts.exe compare_texts/arity)
     (run ./compare_texts.exe compare_texts/params)
     (run ./compare_texts.exe compare_texts/value_slot)
-    (run ./compare_texts.exe compare_texts/function_slot)))))
+    (run ./compare_texts.exe compare_texts/function_slot)
+    (run ./compare_texts.exe compare_texts/handler_kind)
+    (run ./compare_texts.exe compare_texts/invariant_kind)
+    (run ./compare_texts.exe compare_texts/tupled)))))
 
 (rule
  (alias runtest)
