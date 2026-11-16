@@ -3529,68 +3529,38 @@ Proof.
   exact (forwarding_equivariant r k [] metadata handler body).
 Qed.
 
-Fixpoint forward_jumps_under_equivariant (r : renaming) (e : expr) :
+(* The law of the pass by the tactic, with the same rule as for the pass
+   above. *)
+Section Forward_jumps.
+
+#[local] Hint Rewrite forward_apply_cont_equivariant jump_entry_equivariant
+  : equivariance.
+
+#[local] Ltac eqv_extra ::=
+  match goal with
+  | r : renaming,
+    H : context [forward_jumps_under _ (rename_expr _ ?e)
+                 = rename_expr _ (forward_jumps_under _ ?e)]
+    |- context [forward_jumps_under ?m' (rename_expr ?r ?e)] =>
+    lazymatch m' with
+    | rename_forwards _ _ => fail
+    | _ => idtac
+    end;
+    match goal with
+    | |- context [forward_jumps_under ?m e] =>
+      eqv_no_renaming m;
+      replace m' with (rename_forwards r m);
+      [ rewrite H | solve [ eqv_core ] ]
+    end
+  end.
+
+Lemma forward_jumps_under_equivariant (r : renaming) (e : expr) :
   ∀ F : forwards,
     forward_jumps_under (rename_forwards r F) (rename_expr r e)
-    = rename_expr r (forward_jumps_under F e)
-with forward_jumps_in_handler_equivariant (r : renaming)
-    (h : continuation_handler) :
-  ∀ F : forwards,
-    forward_jumps_in_handler (rename_forwards r F)
-      (rename_handler r h)
-    = rename_handler r (forward_jumps_in_handler F h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k [params metadata handler] body
-         | handlers body | ap | ac | scrutinee arms | ];
-      intros F; try reflexivity.
-    + cbn [rename_expr forward_jumps_under].
-      rewrite forward_jumps_under_equivariant. reflexivity.
-    + cbn [rename_expr forward_jumps_under].
-      rewrite forward_jumps_under_equivariant. reflexivity.
-    + cbn [rename_expr rename_handler forward_jumps_under]. cbv zeta.
-      rewrite (forward_jumps_under_equivariant r handler F),
-        jump_entry_equivariant.
-      change
-        ((rename_continuation r k,
-          rename_forward_entry r
-            (jump_entry k params metadata
-               (forward_jumps_under F handler) body))
-         :: rename_forwards r F)
-        with
-          (rename_forwards r
-             ((k,
-               jump_entry k params metadata
-                 (forward_jumps_under F handler) body)
-              :: F)).
-      rewrite (forward_jumps_under_equivariant r body). reflexivity.
-    + cbn [rename_expr forward_jumps_under]. cbv zeta.
-      assert (Hscope :
-        map (fun '(k, _) => (k, None))
-          (map (fun '(k, h) => (rename_continuation r k, rename_handler r h))
-             handlers)
-        ++ rename_forwards r F
-        = rename_forwards r
-            (map (fun '(k, _) => (k, None)) handlers ++ F)).
-      { unfold rename_forwards. rewrite map_app, !map_map. f_equal.
-        apply map_ext. intros [k h]. reflexivity. }
-      rewrite Hscope. clear Hscope.
-      rewrite (forward_jumps_under_equivariant r body). f_equal.
-      generalize (map (fun '(k, _) => (k, @None (list variable * apply_cont)))
-                    handlers ++ F).
-      intros F'.
-      induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
-      rewrite (forward_jumps_in_handler_equivariant r h F'), IH.
-      reflexivity.
-    + cbn [rename_expr forward_jumps_under].
-      rewrite forward_apply_cont_equivariant. reflexivity.
-    + cbn [rename_expr forward_jumps_under]. f_equal.
-      rewrite !map_map. apply map_ext. intros [i ac]. cbn [fst snd].
-      rewrite forward_apply_cont_equivariant. reflexivity.
-  - destruct h as [params metadata handler]. intros F.
-    cbn [rename_handler forward_jumps_in_handler].
-    rewrite forward_jumps_under_equivariant. reflexivity.
-Qed.
+    = rename_expr r (forward_jumps_under F e).
+Proof. equivariance. Qed.
+
+End Forward_jumps.
 
 Lemma forward_jumps_equivariant : rewrite_equivariant forward_jumps.
 Proof.
