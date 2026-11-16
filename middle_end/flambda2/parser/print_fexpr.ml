@@ -776,6 +776,7 @@ let rec expr scope ppf = function
         alloc_mode;
         inlined;
         inlining_state = is;
+        nontail;
         continuation = ret;
         exn_continuation = ek;
         args;
@@ -787,13 +788,15 @@ let rec expr scope ppf = function
         (pp_like "inlining_state(%a)" inlining_state)
         ppf is
     in
+    let pp_nontail ppf () = if nontail then Format.fprintf ppf "@ nontail" in
     Format.fprintf ppf
-      "@[<hv 2>%tapply%t@[<2>%t%a%a%a%t@]@ @[<hv 2>%a%a@ @[<hov>-> %a@ %a@]@]@]"
+      "@[<hv 2>%tapply%t@[<2>%t%a%a%a%a%t@]@ @[<hv 2>%a%a@ @[<hov>-> %a@ \
+       %a@]@]@]"
       Flambda_colours.expr_keyword Flambda_colours.pop Flambda_colours.elide
       (call_kind_and_alloc_mode ~space:Before)
       (kind, alloc_mode)
       (inlined_attribute_opt ~space:Before)
-      inlined pp_inlining_state () Flambda_colours.pop
+      inlined pp_inlining_state () pp_nontail () Flambda_colours.pop
       func_name_with_optional_arities (func, arities)
       (simple_args ~space:Before ~omit_if_empty:true)
       args result_continuation ret exn_continuation ek

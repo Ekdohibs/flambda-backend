@@ -82,6 +82,7 @@ let keyword_table =
     "never", KWD_NEVER;
     "newer_version_of", KWD_NEWER_VERSION_OF;
     "noalloc", KWD_NOALLOC;
+    "nontail", KWD_NONTAIL;
     "notrace", KWD_NOTRACE;
     "null", KWD_NULL;
     "of", KWD_OF;

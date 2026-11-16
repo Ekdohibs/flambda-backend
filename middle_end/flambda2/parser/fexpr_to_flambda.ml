@@ -900,6 +900,7 @@ let rec expr env acc (e : Fexpr.expr) : _ * Flambda.Expr.t =
         alloc_mode;
         inlined;
         inlining_state;
+        nontail;
         continuation;
         exn_continuation;
         args;
@@ -989,7 +990,8 @@ let rec expr env acc (e : Fexpr.expr) : _ * Flambda.Expr.t =
         ~continuation exn_continuation
         ~args:((List.map (simple env)) args)
         ~args_arity ~return_arity ~call_kind ~return_mode Debuginfo.none
-        ~inlined ~inlining_state ~probe:None ~position:Normal
+        ~inlined ~inlining_state ~probe:None
+        ~position:(if nontail then Nontail else Normal)
         ~relative_history:Inlining_history.Relative.empty
     in
     acc, Flambda.Expr.create_apply apply

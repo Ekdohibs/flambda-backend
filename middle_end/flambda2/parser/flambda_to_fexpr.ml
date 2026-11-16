@@ -764,6 +764,9 @@ and apply_expr env (app : Apply_expr.t) : Fexpr.expr =
       | Never_inlined -> Some Never_inlined
   in
   let inlining_state = inlining_state (Apply_expr.inlining_state app) in
+  let nontail =
+    match Apply_expr.position app with Normal -> false | Nontail -> true
+  in
   Apply
     { func;
       continuation;
@@ -773,6 +776,7 @@ and apply_expr env (app : Apply_expr.t) : Fexpr.expr =
       alloc_mode;
       inlined;
       inlining_state;
+      nontail;
       arities
     }
 

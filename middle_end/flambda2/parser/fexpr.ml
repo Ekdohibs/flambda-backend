@@ -316,7 +316,8 @@ type apply =
     alloc_mode : region alloc_mode_for_applications;
     arities : function_arities option;
     inlined : inlined_attribute option;
-    inlining_state : inlining_state option
+    inlining_state : inlining_state option;
+    nontail : bool
   }
 
 type size = int

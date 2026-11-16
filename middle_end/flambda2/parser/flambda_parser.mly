@@ -192,6 +192,7 @@ let make_boxed_const_int (i, m) : static_data =
 %token KWD_NEVER  [@symbol "never"]
 %token KWD_NEWER_VERSION_OF [@symbol "newer_version_of"]
 %token KWD_NOALLOC [@symbol "noalloc"]
+%token KWD_NONTAIL [@symbol "nontail"]
 %token KWD_NOTRACE [@symbol "notrace"]
 %token KWD_NULL [@symbol "null"]
 %token KWD_OF     [@symbol "of"]
@@ -668,6 +669,7 @@ apply_expr:
   | call_kind_and_alloc_mode = call_kind;
     inlined = option(inlined);
     inlining_state = option(inlining_state);
+    nontail = boption(KWD_NONTAIL);
     func = func_name_with_optional_arities;
     args = simple_args;
     MINUSGREATER
@@ -682,6 +684,7 @@ apply_expr:
           alloc_mode;
           inlined;
           inlining_state;
+          nontail;
           arities;
      } }
 ;

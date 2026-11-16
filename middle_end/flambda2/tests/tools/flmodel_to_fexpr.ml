@@ -880,7 +880,8 @@ let rec expr env (e : Model.expr) : F.expr =
                  ret_arity = arity ap.ap_return_arity
                });
         inlined = None;
-        inlining_state = None
+        inlining_state = None;
+        nontail = false
       }
   | Apply_cont ac -> F.Apply_cont (apply_cont env ac)
   | Switch (scrutinee, arms) ->

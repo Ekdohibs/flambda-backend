@@ -150,7 +150,7 @@ let $camlTail_nontail_annot__first_const_0 = Block 0 () in
              -> k/75 * k/72
            where k/75 (apply_result/297 : imm tagged) =
              let int_add/298 = %int_barith.add (n/296, apply_result/297) in
-             apply direct(finish_5 &my_alloc_region/283)
+             apply direct(finish_5 &my_alloc_region/283) nontail
                (finish/288 : imm tagged -> imm tagged)
                  (int_add/298)
                  -> k/73 * k/72))
