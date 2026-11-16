@@ -2634,6 +2634,11 @@ Section Passes_for_loops.
   cont_free_b_equivariant_aux cont_free_in_handler_b_equivariant
   : equivariance.
 
+(* Two laws that are proved further up in this file, for the same
+   reason. *)
+#[local] Hint Rewrite no_trap_action_renamed
+  inline_cont_at_tail_equivariant_aux : equivariance.
+
 (* A rewrite applied to the handlers of recursive continuations. *)
 Section Rewrite_rec_handlers.
 
@@ -2855,6 +2860,28 @@ Section Masks.
 #[local] Abbreviation rename_masks r :=
   (map (fun p : continuation * option (list bool) =>
           (rename_continuation r (fst p), snd p))).
+
+(* The laws of [mask_of] and of [drop_args], which both passes call at
+   every application of a continuation: stated, they are not derived in
+   each proof. *)
+Lemma mask_of_renamed (r : renaming) (known : masks) (k : continuation) :
+  mask_of (rename_masks r known) (rename_continuation r k) = mask_of known k.
+Proof.
+  unfold mask_of.
+  induction known as [ | [k' mask] known IH]; simpl; [ reflexivity | ].
+  rewrite rename_continuation_eqb.
+  destruct (Pos.eqb k k'); [ reflexivity | exact IH ].
+Qed.
+
+Lemma drop_args_renamed (r : renaming) (known : masks) (ac : apply_cont) :
+  drop_args (rename_masks r known) (rename_apply_cont r ac)
+  = rename_apply_cont r (drop_args known ac).
+Proof.
+  unfold drop_args, rename_apply_cont.
+  cbn [ac_continuation ac_args ac_trap_action].
+  rewrite mask_of_renamed, keep_all_or_map. reflexivity.
+Qed.
+#[local] Hint Rewrite mask_of_renamed drop_args_renamed : equivariance.
 
 (* The hypothesis of the induction is about renamed masks. Under a
    continuation, and in a loop, the masks are a list made of renamed
