@@ -38,7 +38,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaEquivarianceProofs FlambdaCompareAlphaSpec
   FlambdaCompareAlphaProofs FlambdaNameAbstractionSpec
   FlambdaFreshQuantifierSpec FlambdaFreshQuantifierProofs
-  FlambdaRenameApartSpec.
+  FlambdaRenameApartSpec FlambdaEquivarianceTactic.
 Import ListNotations.
 
 (* What [rename_apart_avoiding] gives is the term, or is the same as it
@@ -299,194 +299,43 @@ Qed.
 (* A renaming keeps the number of binders and renames the names             *)
 (* ======================================================================== *)
 
-Fixpoint binders_renamed (r : renaming) (e : expr) :
-  binders (rename_expr r e) = binders e
-with binders_in_handler_renamed (r : renaming) (h : continuation_handler) :
-  binders_in_handler (rename_handler r h) = binders_in_handler h
-with binders_in_binding_renamed (r : renaming) (binding : static_binding) :
-  binders_in_binding (rename_static_binding r binding)
-  = binders_in_binding binding
-with binders_in_code_renamed (r : renaming) (c : code) :
+(* These laws are proved from the definitions ([equivariance], of
+   FlambdaEquivarianceTactic.v). The law of a function on terms is
+   given to the tactic, for this file only, for the law of the
+   function on handlers or on code that comes after it: the tactic
+   does not derive the first where it proves the second. Only the laws
+   that are used further on or in another file are stated. *)
+
+Lemma binders_renamed (r : renaming) (e : expr) :
+  binders (rename_expr r e) = binders e.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite binders_renamed : equivariance.
+
+Lemma binders_in_code_renamed (r : renaming) (c : code) :
   binders_in_code (rename_code r c) = binders_in_code c.
-Proof.
-  - destruct e
-      as [x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      simpl; try reflexivity.
-    + rewrite (binders_renamed r body). reflexivity.
-    + rewrite (binders_renamed r body). f_equal.
-      induction bindings as [ | binding bindings IH]; simpl;
-        [ reflexivity | ].
-      rewrite (binders_in_binding_renamed r binding), IH. reflexivity.
-    + rewrite (binders_in_handler_renamed r h), (binders_renamed r body).
-      reflexivity.
-    + rewrite (binders_renamed r body), length_map. f_equal. f_equal.
-      induction handlers as [ | [k h] handlers IH]; simpl;
-        [ reflexivity | ].
-      rewrite (binders_in_handler_renamed r h), IH. reflexivity.
-  - destruct h as [params metadata handler]. simpl.
-    rewrite length_map, (binders_renamed r handler). reflexivity.
-  - destruct binding as [id c | id | sym const]; simpl;
-      [ exact (binders_in_code_renamed r c) | reflexivity | reflexivity ].
-  - destruct c as [params my_closure ret exn metadata body]. simpl.
-    rewrite length_map, (binders_renamed r body). reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
-Lemma variables_in_simple_renamed (r : renaming) (s : simple) :
-  variables_in_simple (rename_simple r s)
-  = map (rename_variable r) (variables_in_simple s).
-Proof. destruct s; reflexivity. Qed.
+Lemma variables_of_renamed (r : renaming) (e : expr) :
+  variables_of (rename_expr r e) = map (rename_variable r) (variables_of e).
+Proof. equivariance. Qed.
+#[local] Hint Rewrite variables_of_renamed : equivariance.
 
-Lemma variables_in_simples_renamed (r : renaming) (args : list simple) :
-  variables_in_simples (map (rename_simple r) args)
-  = map (rename_variable r) (variables_in_simples args).
-Proof.
-  unfold variables_in_simples.
-  induction args as [ | s args IH]; simpl; [ reflexivity | ].
-  rewrite map_app, IH, variables_in_simple_renamed. reflexivity.
-Qed.
-
-Lemma variables_in_slots_renamed (r : renaming)
-    (slots : list (value_slot * simple)) :
-  variables_in_slots
-    (map (fun slot => (fst slot, rename_simple r (snd slot))) slots)
-  = map (rename_variable r) (variables_in_slots slots).
-Proof.
-  unfold variables_in_slots.
-  induction slots as [ | [slot s] slots IH]; simpl; [ reflexivity | ].
-  rewrite map_app, IH, variables_in_simple_renamed. reflexivity.
-Qed.
-
-Lemma variables_in_named_renamed (r : renaming) (d : named) :
-  variables_in_named (rename_named r d)
-  = map (rename_variable r) (variables_in_named d).
-Proof.
-  destruct d; simpl;
-    first
-      [ apply variables_in_simple_renamed | apply variables_in_simples_renamed
-      | apply variables_in_slots_renamed ].
-Qed.
-
-Lemma variables_in_static_const_renamed (r : renaming)
-    (const : static_const) :
-  variables_in_static_const (rename_static_const r const)
-  = map (rename_variable r) (variables_in_static_const const).
-Proof.
-  destruct const; simpl;
-    first
-      [ apply variables_in_simple_renamed | apply variables_in_simples_renamed
-      | apply variables_in_slots_renamed | reflexivity ].
-Qed.
-
-Lemma variables_in_apply_cont_renamed (r : renaming) (ac : apply_cont) :
-  variables_in_apply_cont (rename_apply_cont r ac)
-  = map (rename_variable r) (variables_in_apply_cont ac).
-Proof. apply variables_in_simples_renamed. Qed.
-
-Lemma variables_in_apply_renamed (r : renaming) (ap : apply_expr) :
-  variables_in_apply (rename_apply r ap)
-  = map (rename_variable r) (variables_in_apply ap).
-Proof.
-  unfold variables_in_apply. rewrite exn_extra_simples_rename.
-  unfold rename_apply. cbn [ap_callee ap_args].
-  rewrite !map_app, variables_in_simple_renamed,
-    !variables_in_simples_renamed.
-  reflexivity.
-Qed.
-
-Fixpoint variables_of_renamed (r : renaming) (e : expr) :
-  variables_of (rename_expr r e) = map (rename_variable r) (variables_of e)
-with variables_in_handler_renamed (r : renaming) (h : continuation_handler) :
+Lemma variables_in_handler_renamed (r : renaming) (h : continuation_handler) :
   variables_in_handler (rename_handler r h)
-  = map (rename_variable r) (variables_in_handler h)
-with variables_in_binding_renamed (r : renaming) (binding : static_binding) :
-  variables_in_binding (rename_static_binding r binding)
-  = map (rename_variable r) (variables_in_binding binding)
-with variables_in_code_renamed (r : renaming) (c : code) :
-  variables_in_code (rename_code r c)
-  = map (rename_variable r) (variables_in_code c).
-Proof.
-  - destruct e
-      as [x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      simpl.
-    + rewrite map_app, variables_in_named_renamed,
-        (variables_of_renamed r body).
-      reflexivity.
-    + rewrite map_app, (variables_of_renamed r body). f_equal.
-      induction bindings as [ | binding bindings IH]; simpl;
-        [ reflexivity | ].
-      rewrite map_app, (variables_in_binding_renamed r binding), IH.
-      reflexivity.
-    + rewrite map_app, (variables_in_handler_renamed r h),
-        (variables_of_renamed r body).
-      reflexivity.
-    + rewrite map_app, (variables_of_renamed r body). f_equal.
-      induction handlers as [ | [k h] handlers IH]; simpl;
-        [ reflexivity | ].
-      rewrite map_app, (variables_in_handler_renamed r h), IH. reflexivity.
-    + apply variables_in_apply_renamed.
-    + apply variables_in_apply_cont_renamed.
-    + rewrite map_app, variables_in_simple_renamed. f_equal.
-      induction arms as [ | [i ac] arms IH]; simpl; [ reflexivity | ].
-      rewrite map_app, variables_in_apply_cont_renamed, IH. reflexivity.
-    + reflexivity.
-  - destruct h as [params metadata handler]. simpl.
-    rewrite map_app, (variables_of_renamed r handler). reflexivity.
-  - destruct binding as [id c | id | sym const]; simpl;
-      [ exact (variables_in_code_renamed r c) | reflexivity
-      | apply variables_in_static_const_renamed ].
-  - destruct c as [params my_closure ret exn metadata body]. simpl.
-    rewrite map_app, (variables_of_renamed r body). reflexivity.
-Qed.
+  = map (rename_variable r) (variables_in_handler h).
+Proof. equivariance. Qed.
 
-Fixpoint continuations_of_renamed (r : renaming) (e : expr) :
+Lemma continuations_of_renamed (r : renaming) (e : expr) :
   continuations_of (rename_expr r e)
-  = map (rename_continuation r) (continuations_of e)
-with continuations_in_handler_renamed (r : renaming)
+  = map (rename_continuation r) (continuations_of e).
+Proof. equivariance. Qed.
+#[local] Hint Rewrite continuations_of_renamed : equivariance.
+
+Lemma continuations_in_handler_renamed (r : renaming)
     (h : continuation_handler) :
   continuations_in_handler (rename_handler r h)
-  = map (rename_continuation r) (continuations_in_handler h)
-with continuations_in_binding_renamed (r : renaming)
-    (binding : static_binding) :
-  continuations_in_binding (rename_static_binding r binding)
-  = map (rename_continuation r) (continuations_in_binding binding)
-with continuations_in_code_renamed (r : renaming) (c : code) :
-  continuations_in_code (rename_code r c)
-  = map (rename_continuation r) (continuations_in_code c).
-Proof.
-  - destruct e
-      as [x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      simpl.
-    + exact (continuations_of_renamed r body).
-    + rewrite map_app, (continuations_of_renamed r body). f_equal.
-      induction bindings as [ | binding bindings IH]; simpl;
-        [ reflexivity | ].
-      rewrite map_app, (continuations_in_binding_renamed r binding), IH.
-      reflexivity.
-    + rewrite map_app, (continuations_in_handler_renamed r h),
-        (continuations_of_renamed r body).
-      reflexivity.
-    + rewrite map_app, (continuations_of_renamed r body). f_equal.
-      induction handlers as [ | [k h] handlers IH]; simpl;
-        [ reflexivity | ].
-      rewrite map_app, (continuations_in_handler_renamed r h), IH.
-      reflexivity.
-    + reflexivity.
-    + apply apply_cont_continuations_renamed.
-    + induction arms as [ | [i ac] arms IH]; cbn [map flat_map snd];
-        [ reflexivity | ].
-      rewrite map_app, apply_cont_continuations_renamed, IH. reflexivity.
-    + reflexivity.
-  - destruct h as [params metadata handler]. simpl.
-    exact (continuations_of_renamed r handler).
-  - destruct binding as [id c | id | sym const]; simpl;
-      [ exact (continuations_in_code_renamed r c) | reflexivity
-      | reflexivity ].
-  - destruct c as [params my_closure ret exn metadata body]. simpl.
-    rewrite (continuations_of_renamed r body). reflexivity.
-Qed.
+  = map (rename_continuation r) (continuations_in_handler h).
+Proof. equivariance. Qed.
 
 (* ======================================================================== *)
 (* Two renamings that agree on the names of a term rename it alike          *)
