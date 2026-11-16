@@ -109,6 +109,8 @@ not a variant (the kinds, by Flambda_kind.With_subkind.equal: not equal)
 a call that is a probe and a plain call: different
 two calls that are probes of one name: the same
 two calls that are probes of two names: different
+two calls that perform one effect: the same
+two calls that perform two effects: different
 two static blocks of values: the same
 a static block of values and a mixed one: different
 two static blocks whose fields have not the same debugging information (one has some: true): the same

@@ -1127,6 +1127,27 @@ let call_kinds env (call_kind1 : Call_kind.t) (call_kind2 : Call_kind.t) :
   | ( Function { function_call = Indirect_unknown_arity },
       Function { function_call = Indirect_unknown_arity } ) ->
     Equivalent
+  | Effect operation1, Effect operation2 ->
+    (* Which operation it is, and its arguments in order. *)
+    let parts (operation : Call_kind.Effect.t) =
+      match operation with
+      | Perform { eff } -> 0, [eff]
+      | Reperform { eff; cont; last_fiber } -> 1, [eff; cont; last_fiber]
+      | With_stack { valuec; exnc; effc; f; arg } ->
+        2, [valuec; exnc; effc; f; arg]
+      | With_stack_preemptible { valuec; exnc; effc; handle_tick; f; arg } ->
+        3, [valuec; exnc; effc; handle_tick; f; arg]
+      | Continue { cont; value } -> 4, [cont; value]
+      | Discontinue { cont; exn } -> 5, [cont; exn]
+      | Discontinue_with_backtrace { cont; exn; bt } -> 6, [cont; exn; bt]
+    in
+    let which1, args1 = parts operation1 in
+    let which2, args2 = parts operation2 in
+    if
+      Int.equal which1 which2
+      && simple_lists env args1 args2 |> Comparison.is_equivalent
+    then Equivalent
+    else Different { approximant = call_kind1 }
   | Method { kind = kind1; obj = obj1 }, Method { kind = kind2; obj = obj2 } ->
     pairs ~f1:method_kinds ~f2:simple_exprs ~subst2:subst_simple env
       (kind1, obj1) (kind2, obj2)

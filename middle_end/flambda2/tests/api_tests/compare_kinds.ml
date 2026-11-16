@@ -42,10 +42,10 @@
    units of the two orders), and the kinds of the invariant parameters of
    recursive continuations (compare_texts).
 
-   Then things that a text cannot write: that a call is a probe, the shape of a
-   static block, the debugging information of its fields (which is not compared,
-   as no other debugging information is), and a group of two recursive
-   continuations. *)
+   Then things that a text cannot write: that a call is a probe, a call that
+   performs an effect, the shape of a static block, the debugging information of
+   its fields (which is not compared, as no other debugging information is), and
+   a group of two recursive continuations. *)
 
 open Flambda2_bound_identifiers
 open Flambda2_identifiers
@@ -159,14 +159,14 @@ let unit body =
       (body ~return_continuation ~exn_continuation ~toplevel_my_alloc_region)
     ~module_symbol
 
-let call ?(probe = None) ~args_arity ~return_arity ~extra_args () =
+let call ?(probe = None) ?(callee = Some argument)
+    ?(call_kind = Call_kind.indirect_function_call_unknown_arity) ~args_arity
+    ~return_arity ~extra_args () =
   unit (fun ~return_continuation ~exn_continuation ~toplevel_my_alloc_region ->
-      Flambda.Apply.create ~callee:(Some argument)
-        ~continuation:(Return return_continuation)
+      Flambda.Apply.create ~callee ~continuation:(Return return_continuation)
         (Exn_continuation.create ~exn_handler:exn_continuation ~extra_args)
         ~args:(List.map (fun _ -> argument) (Flambda_arity.unarize args_arity))
-        ~args_arity ~return_arity
-        ~call_kind:Call_kind.indirect_function_call_unknown_arity
+        ~args_arity ~return_arity ~call_kind
         ~return_mode:
           (Alloc_mode.For_applications.not_alloc_stack
              ~alloc_region:toplevel_my_alloc_region)
@@ -297,6 +297,13 @@ let somewhere =
          loc_ghost = false
        })
 
+(* The operation of an effect has no callee and no arguments: what it is given
+   is in the kind of the call. *)
+let call_that_performs eff =
+  call ~callee:None
+    ~call_kind:(Call_kind.effect_ (Call_kind.Effect.perform ~eff))
+    ~args_arity:Flambda_arity.nullary ~return_arity:any ~extra_args:[] ()
+
 let static_block ?(dbg = Debuginfo.none) shape =
   unit
     (fun ~return_continuation ~exn_continuation:_ ~toplevel_my_alloc_region:_ ->
@@ -344,6 +351,12 @@ let () =
     (answer (call_that_is (probe "a")) (call_that_is (probe "a")));
   Printf.printf "two calls that are probes of two names: %s\n"
     (answer (call_that_is (probe "a")) (call_that_is (probe "b")));
+  Printf.printf "two calls that perform one effect: %s\n"
+    (answer (call_that_performs argument) (call_that_performs argument));
+  Printf.printf "two calls that perform two effects: %s\n"
+    (answer
+       (call_that_performs argument)
+       (call_that_performs (Simple.const_zero machine_width)));
   let mixed : K.Scannable_block_shape.t =
     Mixed_record
       (K.Mixed_block_shape.from_prefix_size_and_suffix_elements 1 [Naked_float])
