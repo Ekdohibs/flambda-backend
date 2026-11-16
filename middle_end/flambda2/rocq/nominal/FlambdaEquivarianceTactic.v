@@ -674,7 +674,7 @@ Module Inspect.
   Ltac2 body_of (c : constr) : constr option :=
     match Constr.Unsafe.kind c with
     | Constr.Unsafe.Constant cst _ =>
-      Control.plus
+      Control.once_plus
         (fun () =>
            Some
              (Std.eval_lazy
@@ -743,7 +743,7 @@ Module Inspect.
     match Constr.Unsafe.kind c with
     | Constr.Unsafe.Constant cst _ =>
       let body :=
-        Control.plus
+        Control.once_plus
           (fun () =>
              Some
                (Std.eval_lazy
@@ -928,12 +928,17 @@ Module Nested.
       end
     end.
 
-  (* The term mentions a renaming of the context. *)
+  (* The term mentions a renaming of the context. The answer is given
+     once: a failure after it does not come back here for the other
+     answer, which would run the search that asked again, twice for
+     each question that it put. *)
   Ltac2 mentions_renaming (t : constr) : bool :=
-    Control.plus
+    Control.once
       (fun () =>
-         ltac1:(a |- eqv_has_renaming a) (Ltac1.of_constr t); true)
-      (fun _ => false).
+         Control.plus
+           (fun () =>
+              ltac1:(a |- eqv_has_renaming a) (Ltac1.of_constr t); true)
+           (fun _ => false)).
 
   Ltac2 rec find_stuck (t : constr) : constr option :=
     match Constr.Unsafe.kind t with
@@ -1069,7 +1074,7 @@ Ltac eqv_use_law :=
 (* The two steps of the last section, which need the statement of a
    law from the type of its function and the tactic itself: they are
    defined there. *)
-Ltac eqv_derive := fail.
+Ltac eqv_derive st := fail.
 Ltac eqv_unfold_underived := fail.
 
 (* Two lists appended, on both sides: part by part, before any
@@ -1117,42 +1122,257 @@ Ltac eqv_shared :=
    and is defined after it. *)
 Ltac eqv_same_test := fail.
 
-(* To see the steps that a proof takes, as when it does not end,
-   redefine this with [::=], as [Ltac eqv_note_step say ::= say.]: it
-   is given a tactic that prints the name of the step taken. *)
+(* ======================================================================== *)
+(* The bound                                                                *)
+(* ======================================================================== *)
+
+(* The tactic ends on every goal. One call counts the steps of its
+   loop, those of the derivations that it makes too, and when it has
+   taken [Bound.step_limit] of them it stops with an error that no
+   [try], [first] or [repeat] catches. The error names the last step
+   taken, the step that was being tried, and the function whose law
+   was being derived (or the function at the head of the goal). A
+   step that runs for more than [Bound.seconds_of_a_step] seconds of
+   the clock stops the call in the same way; the count is the bound
+   to rely on, the clock a second guard for one step that does not
+   come back.
+
+   Two more things end a call that cannot succeed sooner. A goal that
+   says that a renaming is the identity on a variable ([rename_x r x
+   = x]) is false: the derivation that reached it is given up at
+   once. And a function whose law could not be derived is not tried
+   again where the same derivations are under way: the failure is
+   remembered for the rest of the call.
+
+   The state of a call (the count, what is given up, what has failed)
+   is behind a function, [st] below, that the loop is given and hands
+   to the derivations that it makes. It is asked by an identifier, a
+   term or a tactic:
+   - [st ident:(eqv_tick)] counts a step;
+   - [st ident:(eqv_alive)] fails if the derivation is given up,
+     [st ident:(eqv_dead)] gives it up, [st ident:(eqv_revive)] is
+     said where a derivation that was given up has ended;
+   - [st ident:(name)], any other name, says which step is tried now,
+     and [st ident:(eqv_taken)] that it was taken;
+   - [st constr:(eqv_failed g)] remembers that the law of [g] could
+     not be derived here, and [st constr:(eqv_deriving g)] fails if
+     that is remembered;
+   - [st ltac:(tac)] runs a step under the limit of time, and fails
+     if the step fails. *)
+Module Bound.
+  Import Ltac2.Ltac2.
+
+  Ltac2 Type exn ::= [ Equivariance_stopped (message) ].
+
+  (* The largest count of a call in the tree when the limit was set was
+     167 steps. *)
+  Ltac2 mutable step_limit : int := 1000.
+  Ltac2 mutable seconds_of_a_step : int := 20.
+
+  (* To see how many steps each call took:
+     [Ltac2 Set Bound.count_shown := true.] *)
+  Ltac2 mutable count_shown : bool := false.
+
+  Ltac2 rec head (t : constr) : constr :=
+    match Constr.Unsafe.kind t with
+    | Constr.Unsafe.App f _ => head f
+    | _ => t
+    end.
+
+  (* The functions whose laws are being derived where the goal is,
+     the innermost first. *)
+  Ltac2 deriving () : constr list :=
+    Control.once_plus
+      (fun () =>
+         List.flat_map
+           (fun (_, _, ty) =>
+              lazy_match! ty with
+              | eqv_deriving ?g => [g]
+              | _ => []
+              end)
+           (List.rev (Control.hyps ())))
+      (fun _ => []).
+
+  Ltac2 place () : message :=
+    Control.once_plus
+      (fun () =>
+         match deriving () with
+         | g :: _ =>
+           Message.concat
+             (Message.of_string "in the derivation of the law of ")
+             (Message.of_constr g)
+         | [] =>
+           lazy_match! goal with
+           | [ |- ?l = _ ] =>
+             Message.concat (Message.of_string "at a goal about ")
+               (Message.of_constr (head l))
+           | [ |- _ ] =>
+             Message.of_string "at a goal that is not an equation"
+           end
+         end)
+      (fun _ => Message.of_string "with no one goal in focus").
+
+  Ltac2 rec same_list (l : constr list) (m : constr list) : bool :=
+    match l, m with
+    | [], [] => true
+    | a :: l, b :: m =>
+      if Constr.equal a b then same_list l m else false
+    | _, _ => false
+    end.
+
+  Ltac2 make () : Ltac1.t * (unit -> int) :=
+    let count := Ref.ref 0 in
+    let trying := Ref.ref @none in
+    let taken := Ref.ref @none in
+    let dead := Ref.ref false in
+    let failed : (constr * constr list) list ref := Ref.ref [] in
+    let stop (why : message) :=
+      Control.throw
+        (Equivariance_stopped
+           (Message.concat why
+              (Message.concat (Message.of_string "; the last step taken: ")
+                 (Message.concat (Message.of_ident (Ref.get taken))
+                    (Message.concat (Message.of_string "; the step tried: ")
+                       (Message.concat (Message.of_ident (Ref.get trying))
+                          (Message.concat (Message.of_string "; ")
+                             (place ())))))))) in
+    let st :=
+      Ltac1.lambda
+        (fun (a : Ltac1.t) =>
+           match Ltac1.to_ident a with
+           | Some i =>
+             if Ident.equal i @eqv_tick then
+               (Ref.set count (Int.add (Ref.get count) 1);
+                if Int.gt (Ref.get count) step_limit then
+                  stop
+                    (Message.concat
+                       (Message.of_string "equivariance stopped after ")
+                       (Message.concat (Message.of_int step_limit)
+                          (Message.of_string " steps")))
+                else ltac1val:(idtac))
+             else if Ident.equal i @eqv_alive then
+               (if Ref.get dead then ltac1val:(fail) else ltac1val:(idtac))
+             else if Ident.equal i @eqv_dead then
+               (Ref.set dead true; ltac1val:(idtac))
+             else if Ident.equal i @eqv_revive then
+               (Ref.set dead false; ltac1val:(idtac))
+             else if Ident.equal i @eqv_taken then
+               (Ref.set taken (Ref.get trying); ltac1val:(idtac))
+             else (Ref.set trying i; ltac1val:(idtac))
+           | None =>
+             match Ltac1.to_constr a with
+             | Some c =>
+               lazy_match! c with
+               | eqv_failed ?g =>
+                 (Ref.set failed ((g, deriving ()) :: Ref.get failed);
+                  ltac1val:(idtac))
+               | eqv_deriving ?g =>
+                 let here := deriving () in
+                 if List.exist
+                      (fun (h, chain) =>
+                         if Constr.equal g h then same_list here chain
+                         else false)
+                      (Ref.get failed)
+                 then ltac1val:(fail)
+                 else ltac1val:(idtac)
+               end
+             | None =>
+               let ok :=
+                 Control.once_plus
+                   (fun () =>
+                      Control.timeout seconds_of_a_step
+                        (fun () =>
+                           match Control.case (fun () => Ltac1.run a) with
+                           | Val _ => true
+                           | Err _ => false
+                           end))
+                   (fun _ =>
+                      stop
+                        (Message.concat
+                           (Message.of_string
+                              "equivariance stopped: a step took over ")
+                           (Message.concat
+                              (Message.of_int seconds_of_a_step)
+                              (Message.of_string " seconds")))) in
+               if ok then ltac1val:(idtac) else ltac1val:(fail)
+             end
+           end) in
+    (st, (fun () => Ref.get count)).
+
+  (* One call: its state is made, and given to the loop. *)
+  Ltac2 with_state (f : Ltac1.t -> unit) : unit :=
+    let (st, count) := make () in
+    f st;
+    if count_shown then
+      Message.print
+        (Message.concat (Message.of_string "equivariance: steps taken: ")
+           (Message.of_int (count ())))
+    else ().
+End Bound.
+
+(* To see the steps that a proof takes, redefine this with [::=], as
+   [Ltac eqv_note_step say ::= say.]: it is given a tactic that prints
+   the name of the step taken. *)
 Ltac eqv_note_step say := idtac.
 
-Tactic Notation "eqv_say" string(s) := eqv_note_step ltac:(idtac s).
+(* An alternative of the step: its name is said, it is run under the
+   limit of time, and it is noted as taken. *)
+Ltac eqv_alt st name tac :=
+  st name; st tac; st ident:(eqv_taken);
+  eqv_note_step ltac:(idtac name).
 
-Ltac eqv_step :=
+(* A goal that no law of renaming proves: a renaming is the identity
+   on a variable. *)
+Ltac eqv_identity_goal :=
+  lazymatch goal with
+  | |- ?f ?x = ?x => is_var x; eqv_has_renaming f
+  | |- ?x = ?f ?x => is_var x; eqv_has_renaming f
+  end.
+
+Ltac eqv_step st :=
   first
-    [ eqv_intro; eqv_say "intro"
-    | eqv_database; eqv_say "database"
-    | eqv_use_law; eqv_say "use_law"
-    | eqv_compute; eqv_say "compute"
-    | eqv_rewrite_hyp; eqv_say "rewrite_hyp"
-    | eqv_extra; eqv_say "extra"
-    | eqv_append; eqv_say "append"
-    | eqv_shared; eqv_say "shared"
-    | eqv_same_test; eqv_say "same_test"
-    | eqv_ext; eqv_say "ext"
-    | eqv_fold; eqv_database;
-      eqv_say "fold, database"
-    | eqv_fold; eqv_rewrite_hyp; eqv_say "fold, rewrite_hyp"
-    | eqv_unfold_at_constructor; eqv_say "unfold_at_constructor"
-    | eqv_hyp_back; eqv_say "hyp_back"
-    | eqv_unfold_wrapper; eqv_say "unfold_wrapper"
-    | eqv_unfold_stuck; eqv_say "unfold_stuck"
-    | eqv_nested; eqv_say "nested"
-    | eqv_derive; eqv_say "derive"
-    | eqv_unfold_underived; eqv_say "unfold_underived"
-    | eqv_destruct_scrutinee; eqv_say "destruct_scrutinee"
-    | eqv_congr; eqv_say "congr"
-    | eqv_destruct_renamed; eqv_say "destruct_renamed"
-    | eqv_destruct_argument; eqv_say "destruct_argument"
-    | eqv_unfold_head; eqv_say "unfold_head" ].
+    [ eqv_alt st ident:(intro) ltac:(eqv_intro)
+    | eqv_alt st ident:(database) ltac:(eqv_database)
+    | eqv_alt st ident:(use_law) ltac:(eqv_use_law)
+    | eqv_alt st ident:(compute) ltac:(eqv_compute)
+    | eqv_alt st ident:(rewrite_hyp) ltac:(eqv_rewrite_hyp)
+    | eqv_alt st ident:(extra) ltac:(eqv_extra)
+    | eqv_alt st ident:(append) ltac:(eqv_append)
+    | eqv_alt st ident:(shared) ltac:(eqv_shared)
+    | st ident:(same_test); eqv_same_test; st ident:(eqv_taken);
+      eqv_note_step ltac:(idtac "same_test")
+    | eqv_alt st ident:(ext) ltac:(eqv_ext)
+    | eqv_alt st ident:(fold_database) ltac:(eqv_fold; eqv_database)
+    | eqv_alt st ident:(fold_rewrite_hyp)
+        ltac:(eqv_fold; eqv_rewrite_hyp)
+    | eqv_alt st ident:(unfold_at_constructor)
+        ltac:(eqv_unfold_at_constructor)
+    | eqv_alt st ident:(hyp_back) ltac:(eqv_hyp_back)
+    | eqv_alt st ident:(unfold_wrapper) ltac:(eqv_unfold_wrapper)
+    | eqv_alt st ident:(unfold_stuck) ltac:(eqv_unfold_stuck)
+    | eqv_alt st ident:(nested) ltac:(eqv_nested)
+    | st ident:(derive); eqv_derive st; st ident:(eqv_taken);
+      eqv_note_step ltac:(idtac "derive")
+    | eqv_alt st ident:(unfold_underived) ltac:(eqv_unfold_underived)
+    | eqv_identity_goal; st ident:(eqv_dead);
+      eqv_note_step ltac:(idtac "given up: a renaming as the identity");
+      fail 1
+    | eqv_alt st ident:(destruct_scrutinee) ltac:(eqv_destruct_scrutinee)
+    | eqv_alt st ident:(congr) ltac:(eqv_congr)
+    | eqv_alt st ident:(destruct_renamed) ltac:(eqv_destruct_renamed)
+    | eqv_alt st ident:(destruct_argument) ltac:(eqv_destruct_argument)
+    | eqv_alt st ident:(unfold_head) ltac:(eqv_unfold_head) ].
 
-Ltac eqv_core := repeat first [ reflexivity | eqv_step ].
+(* The loop, with the state of the call that it is part of. *)
+Ltac eqv_core_with st :=
+  repeat first
+    [ reflexivity
+    | st ident:(eqv_alive); st ident:(eqv_tick); eqv_step st ].
+
+(* The loop as a call of its own, with a count of its own. *)
+Ltac eqv_core :=
+  ltac2:(Bound.with_state
+           (fun st => ltac1:(st |- eqv_core_with st) st)).
 
 (* The premise of a law that is given with [Hint Rewrite ... using
    eqv_premise]: about the elements of a list, or any other. *)
@@ -1274,7 +1494,10 @@ Module Prepare.
 End Prepare.
 
 Tactic Notation "equivariance" :=
-  ltac2:(Prepare.prepare ()); eqv_core.
+  ltac2:(Bound.with_state
+           (fun st =>
+              Prepare.prepare ();
+              ltac1:(st |- eqv_core_with st) st)).
 
 (* ======================================================================== *)
 (* The statement, from the type of the function                             *)
@@ -1559,7 +1782,11 @@ Ltac eqv_to_derive g :=
 Ltac eqv_note_derived g := idtac.
 Ltac eqv_note_failed g := idtac.
 
-Ltac eqv_derive ::=
+(* A derivation is part of the call that makes it: it counts its
+   steps in the same count. Where the law of [g] has failed before
+   in the same call, with the same derivations under way, it is
+   marked as failed at once and not tried again. *)
+Ltac eqv_derive st ::=
   eqv_depth_ok;
   match goal with
   | |- context [?f ?a] =>
@@ -1569,21 +1796,29 @@ Ltac eqv_derive ::=
     eqv_not_a_renaming g;
     eqv_to_derive g;
     eqv_has_action g;
-    let S := eqv_statement_of g in
-    let H := fresh "Hlaw" in
-    first
-      [ assert (H : eqv_law g S)
-          by (unfold eqv_law; intros;
-              try eqv_database; reflexivity)
-      | assert (H : eqv_law g S)
-          by (eqv_clear_context;
-              let D := fresh "Hderiving" in
-              assert (D : eqv_deriving g) by exact I;
-              unfold eqv_law;
-              equivariance);
-        eqv_note_derived g
-      | assert (H : eqv_failed g) by exact I;
-        eqv_note_failed g ]
+    tryif st constr:(eqv_deriving g) then
+      let S := eqv_statement_of g in
+      let H := fresh "Hlaw" in
+      first
+        [ assert (H : eqv_law g S)
+            by (unfold eqv_law; intros;
+                try eqv_database; reflexivity)
+        | assert (H : eqv_law g S)
+            by (eqv_clear_context;
+                let D := fresh "Hderiving" in
+                assert (D : eqv_deriving g) by exact I;
+                unfold eqv_law;
+                ltac2:(Prepare.prepare ());
+                eqv_core_with st);
+          eqv_note_derived g
+        | st ident:(eqv_revive);
+          st constr:(eqv_failed g);
+          assert (H : eqv_failed g) by exact I;
+          eqv_note_failed g ]
+    else
+      let H := fresh "Hlaw" in
+      assert (H : eqv_failed g) by exact I;
+      eqv_note_failed g
   end.
 
 (* A function that is not defined by recursion, at something renamed,
