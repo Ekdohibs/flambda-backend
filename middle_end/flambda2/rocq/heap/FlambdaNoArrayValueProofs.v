@@ -45,7 +45,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaHeapProofs FlambdaHeapMachineSpec FlambdaHeapMachineProofs
   FlambdaHeapEquivarianceSpec FlambdaHeapEquivarianceProofs FlambdaLiftSpec
   FlambdaLiftProofs FlambdaWellFormedSpec FlambdaMyClosureSpec
-  FlambdaNoArrayValueSpec.
+  FlambdaEquivarianceTactic FlambdaNoArrayValueSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -1021,51 +1021,26 @@ Qed.
 (* Renaming                                                                 *)
 (* ======================================================================== *)
 
-Lemma rename_named_makes_array (r : renaming) (d : named) :
-  named_makes_array (rename_named r d) = named_makes_array d.
-Proof. destruct d; reflexivity. Qed.
-
-Fixpoint rename_makes_array (r : renaming) (e : expr) :
+(* The law of [makes_array] is proved from the definitions by the
+   tactic of FlambdaEquivarianceTactic.v ([equivariance]), which
+   states and proves by itself the law of [named_makes_array]. The
+   law is given back to the tactic for those of the handler and of
+   the code, which are of the same recursion. *)
+Lemma rename_makes_array (r : renaming) (e : expr) :
   makes_array (rename_expr r e) = makes_array e.
-Proof.
-  destruct e
-    as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-       | scrutinee arms | ];
-    simpl.
-  - rewrite rename_named_makes_array, rename_makes_array. reflexivity.
-  - rewrite rename_makes_array. f_equal.
-    induction bindings
-      as [ | [id [params my_closure ret exn metadata code_body] | id
-             | sym const]
-             bindings IH];
-      simpl;
-      [ reflexivity
-      | rewrite rename_makes_array, IH; reflexivity
-      | rewrite IH; reflexivity | rewrite IH; reflexivity ].
-  - destruct h as [params metadata handler]. simpl.
-    rewrite !rename_makes_array. reflexivity.
-  - rewrite rename_makes_array. f_equal.
-    induction handlers as [ | [k [params metadata handler]] handlers IH];
-      simpl; [ reflexivity | ].
-    rewrite rename_makes_array, IH. reflexivity.
-  - reflexivity.
-  - reflexivity.
-  - reflexivity.
-  - reflexivity.
-Qed.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite rename_makes_array : equivariance.
 
 Theorem makes_array_renamed : makes_array_renamed_statement.
 Proof. exact rename_makes_array. Qed.
 
 Lemma rename_handler_makes_array (r : renaming) (h : continuation_handler) :
   handler_makes_array (rename_handler r h) = handler_makes_array h.
-Proof.
-  destruct h as [params metadata handler]. simpl. apply rename_makes_array.
-Qed.
+Proof. equivariance. Qed.
 
 Lemma rename_code_makes_array (r : renaming) (c : code) :
   code_makes_array (rename_code r c) = code_makes_array c.
-Proof. destruct c. simpl. apply rename_makes_array. Qed.
+Proof. equivariance. Qed.
 
 Lemma rename_env_no_array_value (r : renaming) (vars : env) :
   env_no_array_value vars -> env_no_array_value (rename_env r vars).
