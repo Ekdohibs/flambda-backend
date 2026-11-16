@@ -683,6 +683,8 @@ FLAMBDA2_TYPES := $(addprefix $(FLAMBDA2_DIR)/, \
   simplify/FlambdaSimplifyBoxingSpec.v \
   simplify/FlambdaSimplifyCarriedProofs.v \
   simplify/FlambdaSimplifyCarriedSpec.v \
+  simplify/FlambdaSimplifyClosuresUnionProofs.v \
+  simplify/FlambdaSimplifyClosuresUnionSpec.v \
   simplify/FlambdaSimplifyCodeEnvProofs.v \
   simplify/FlambdaSimplifyCodeEnvSpec.v \
   simplify/FlambdaSimplifyHandlersProofs.v \
