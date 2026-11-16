@@ -36,7 +36,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaContextSpec FlambdaContextProofs FlambdaNominalSpec
   FlambdaNominalProofs FlambdaNormaliseSpec FlambdaNormaliseProofs
   FlambdaHeapSpec FlambdaCseSpec FlambdaCseProofs
-  FlambdaSameComparisonSpec.
+  FlambdaSameComparisonSpec FlambdaEquivarianceTactic.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -242,43 +242,6 @@ Proof. exact fold_same_comparisons_refines_aux. Qed.
 (* The renamings                                                            *)
 (* ======================================================================== *)
 
-Lemma fold_same_comparison_equivariant (r : renaming) (d : named) :
-  fold_same_comparison (rename_named r d)
-  = rename_named r (fold_same_comparison d).
-Proof.
-  destruct d as [s | p args | code slots | fslot decls slots | slot closure
-    | pfrom slot closure | move_from move_to closure]; try reflexivity.
-  destruct p as [p | p | p | p | rp]; try reflexivity.
-  destruct p as [k lk m | w | op | k o | k o | k b]; try reflexivity.
-  destruct args as [ | a [ | b [ | c args]]]; try reflexivity.
-  cbn [rename_named map fold_same_comparison].
-  destruct (FlambdaModel.simple_eq_dec a b) as [<- | Hne].
-  - destruct
-      (FlambdaModel.simple_eq_dec (rename_simple r a) (rename_simple r a))
-      as [_ | Hne]; [ reflexivity | elim Hne; reflexivity ].
-  - destruct
-      (FlambdaModel.simple_eq_dec (rename_simple r a) (rename_simple r b))
-      as [Heq | _];
-      [ elim Hne; exact (rename_simple_injective r a b Heq) | ].
-    destruct a as [x1 | s1 | c1], b as [x2 | s2 | c2]; reflexivity.
-Qed.
-
-Fixpoint fold_same_comparisons_equivariant_aux (r : renaming) (e : expr) :
-  fold_same_comparisons (rename_expr r e)
-  = rename_expr r (fold_same_comparisons e).
-Proof.
-  destruct e
-    as [ x kind d body | bindings body | k [params metadata handler] body
-       | handlers body | ap | ac | scrutinee arms | ];
-    cbn [rename_expr rename_handler fold_same_comparisons]; try reflexivity.
-  - rewrite fold_same_comparison_equivariant,
-      fold_same_comparisons_equivariant_aux.
-    reflexivity.
-  - rewrite fold_same_comparisons_equivariant_aux. reflexivity.
-  - rewrite !fold_same_comparisons_equivariant_aux. reflexivity.
-  - rewrite fold_same_comparisons_equivariant_aux. reflexivity.
-Qed.
-
 Theorem fold_same_comparisons_equivariant
     : fold_same_comparisons_equivariant_statement.
-Proof. exact fold_same_comparisons_equivariant_aux. Qed.
+Proof. equivariance. Qed.
