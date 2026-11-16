@@ -1562,3 +1562,38 @@ Qed.
 
 Theorem unalias_params_equivalent : unalias_params_equivalent_statement.
 Proof. exact (walk_spine_equivalent _ unalias_node_equivalent). Qed.
+
+(* ======================================================================== *)
+(* The pass is the recursion that it was defined as                         *)
+(* ======================================================================== *)
+
+(* [unalias_params] was defined by a recursion on terms before it was
+   defined by the walk. That recursion, word for word, under another
+   name; and the pass is that function. *)
+Fixpoint unalias_params_by_recursion (e : expr) {struct e} : expr :=
+  match e with
+  | Let x kind d body => Let x kind d (unalias_params_by_recursion body)
+  | Let_static bindings body =>
+    Let_static bindings (unalias_params_by_recursion body)
+  | Let_cont_non_recursive k (Handler params metadata handler) body =>
+    let h := Handler params metadata (unalias_params_by_recursion handler) in
+    let body := unalias_params_by_recursion body in
+    let '(h, body) := unalias_from (length params) k h body in
+    Let_cont_non_recursive k h body
+  | Let_cont_recursive handlers body =>
+    Let_cont_recursive handlers (unalias_params_by_recursion body)
+  | Apply _ | Apply_cont _ | Switch _ _ | Invalid => e
+  end.
+
+Fixpoint unalias_params_is_the_recursion (e : expr) {struct e} :
+  unalias_params e = unalias_params_by_recursion e.
+Proof.
+  destruct e as [x kind d body | bindings body
+                | k [params metadata handler] body | handlers body
+                | ap | ac | scrutinee arms | ];
+    unfold unalias_params in *;
+    cbn [walk_spine unalias_params_by_recursion unalias_node];
+    rewrite ?(unalias_params_is_the_recursion body),
+      ?(unalias_params_is_the_recursion handler);
+    reflexivity.
+Qed.
