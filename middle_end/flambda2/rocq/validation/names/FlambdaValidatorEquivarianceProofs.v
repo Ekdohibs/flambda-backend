@@ -3497,6 +3497,9 @@ Qed.
    handler of a loop is given to. *)
 Section Follow_aliases_in_loops.
 
+(* One pass over the goal for the laws of the database: enough here. *)
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
+
 #[local] Instance loops_typing_env_renaming : Renaming_of typing_env :=
   rename_naive_typing_env.
 
