@@ -48,189 +48,64 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaNormaliseSpec FlambdaValidatorEquivarianceSpec
   FlambdaValidatorEquivarianceBaseProofs FlambdaScopedProofs
   FlambdaUntagParamsSpec FlambdaUntagParamsProofs
-  FlambdaUntagParamsNamesProofs FlambdaShadowParamsSpec.
+  FlambdaUntagParamsNamesProofs FlambdaEquivarianceTactic
+  FlambdaShadowParamsSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
 (* The rewrite commutes with renaming                                       *)
 (* ======================================================================== *)
 
-Lemma shadow_lets_renamed (r : renaming) (us : list nat) (e : expr) :
-  ∀ (params : list variable) (kinds : list flambda_kind) (i : nat),
-    shadow_lets us i (map (rename_variable r) params) kinds (rename_expr r e)
-    = rename_expr r (shadow_lets us i params kinds e).
-Proof.
-  induction params as [ | p params IH]; intros [ | kind kinds] i;
-    cbn [map shadow_lets]; try reflexivity.
-  destruct (at_position us i); [ | apply IH ].
-  cbn [rename_expr rename_named rename_simple]. rewrite IH. reflexivity.
-Qed.
-
-Fixpoint shadow_expr_renamed (r : renaming) (sites : positions) (e : expr)
-    {struct e} :
-  shadow_expr (rename_keyed r sites) (rename_expr r e)
-  = rename_expr r (shadow_expr sites e)
-with shadow_handler_renamed (r : renaming) (sites : positions)
-    (us : list nat) (h : continuation_handler) {struct h} :
-  shadow_handler (rename_keyed r sites) us (rename_handler r h)
-  = rename_handler r (shadow_handler sites us h).
-Proof.
-  - destruct e as [y kind d body | bindings body | k' hh body | handlers body
-                  | ap | ac | scrutinee arms | ];
-      cbn [rename_expr shadow_expr]; try reflexivity.
-    + rewrite shadow_expr_renamed. reflexivity.
-    + rewrite shadow_expr_renamed. reflexivity.
-    + rewrite positions_of_renamed, shadow_handler_renamed,
-        shadow_expr_renamed.
-      reflexivity.
-    + rewrite shadow_expr_renamed. f_equal.
-      induction handlers as [ | [k' hh] handlers IH]; [ reflexivity | ].
-      cbn [map].
-      rewrite positions_of_renamed, shadow_handler_renamed, IH. reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler shadow_handler].
-    rewrite distinct_renamed, shadow_expr_renamed.
-    destruct (distinct params); [ rewrite shadow_lets_renamed | ];
-      reflexivity.
-Qed.
+(* The laws of renaming are proved from the definitions by the tactic
+   of FlambdaEquivarianceTactic.v ([equivariance]), which states and
+   proves by itself the laws of the functions that the pass is made
+   of, those of the rewrite ([shadow_lets], [shadow_expr]) among
+   them. It is told how the positions are renamed (a map keyed by
+   continuations is a list of pairs: the action is [rename_keyed]),
+   and it is given two laws of functions of lists that other files
+   prove. *)
+#[local] Instance positions_renaming : Renaming_of positions := rename_keyed.
+#[local] Hint Rewrite @moved_from_map distinct_renamed : equivariance.
 
 (* ======================================================================== *)
 (* The positions that the validation uses commute with renaming             *)
 (* ======================================================================== *)
 
-Lemma rename_handlers_app (r : renaming)
-    (l l' : list (continuation * continuation_handler)) :
-  rename_handlers r (l ++ l') = rename_handlers r l ++ rename_handlers r l'.
-Proof. apply map_app. Qed.
-
-Fixpoint handlers_of_renamed (r : renaming) (e : expr) {struct e} :
-  handlers_of (rename_expr r e) = rename_handlers r (handlers_of e)
-with handlers_in_handler_renamed (r : renaming) (h : continuation_handler)
-    {struct h} :
-  handlers_in_handler (rename_handler r h)
-  = rename_handlers r (handlers_in_handler h).
-Proof.
-  - destruct e as [y kind d body | bindings body | k' hh body | handlers body
-                  | ap | ac | scrutinee arms | ];
-      cbn [rename_expr handlers_of]; try reflexivity.
-    + apply handlers_of_renamed.
-    + apply handlers_of_renamed.
-    + rewrite handlers_in_handler_renamed, handlers_of_renamed.
-      cbn [rename_handlers map]. rewrite <- rename_handlers_app.
-      reflexivity.
-    + rewrite handlers_of_renamed, rename_handlers_app. f_equal.
-      induction handlers as [ | [k' hh] handlers IH]; [ reflexivity | ].
-      cbn [map flat_map].
-      rewrite handlers_in_handler_renamed, IH.
-      cbn [rename_handlers map app]. rewrite <- rename_handlers_app.
-      reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler handlers_in_handler]. apply handlers_of_renamed.
-Qed.
-
-Fixpoint untagged_in_renamed (r : renaming) (p : variable) (e : expr)
-    {struct e} :
-  untagged_in (rename_variable r p) (rename_expr r e) = untagged_in p e
-with untagged_in_handler_renamed (r : renaming) (p : variable)
-    (h : continuation_handler) {struct h} :
-  untagged_in_handler (rename_variable r p) (rename_handler r h)
-  = untagged_in_handler p h.
-Proof.
-  - destruct e as [y kind d body | bindings body | k' hh body | handlers body
-                  | ap | ac | scrutinee arms | ];
-      cbn [rename_expr untagged_in]; try reflexivity.
-    + rewrite untag_of_renamed, untagged_in_renamed.
-      destruct (untag_of d) as [q | ]; cbn [option_map]; [ | reflexivity ].
-      rewrite rename_variable_eqb. reflexivity.
-    + apply untagged_in_renamed.
-    + rewrite untagged_in_handler_renamed, untagged_in_renamed. reflexivity.
-    + rewrite untagged_in_renamed. f_equal.
-      induction handlers as [ | [k' hh] handlers IH]; [ reflexivity | ].
-      cbn [map existsb]. rewrite untagged_in_handler_renamed, IH.
-      reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler untagged_in_handler]. apply untagged_in_renamed.
-Qed.
-
+(* Five laws are stated. The tactic proves four of them. The law of
+   [gives_needed] is given back to it and the function is kept folded,
+   since computation would unfold it in an arm of a [Switch] before
+   the law applies. The laws of [handlers_of], [needed_round] and
+   [needed_positions] are those from which the law of the positions
+   of the pass is proved, by hand: the pass starts its rounds at no
+   position, which is not something renamed as it is written. That
+   law is given to the tactic for the law of the pass, with the
+   positions kept folded, so that the six rounds are not computed. *)
 Lemma gives_needed_renamed (r : renaming) (needed : positions) (p : variable)
     (ac : apply_cont) :
   gives_needed (rename_keyed r needed) (rename_variable r p)
     (rename_apply_cont r ac)
   = gives_needed needed p ac.
-Proof.
-  unfold gives_needed, rename_apply_cont. cbn [ac_continuation ac_args].
-  rewrite positions_of_renamed, moved_from_map.
-  apply var_in_simples_equivariant.
-Qed.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite gives_needed_renamed : equivariance.
+#[local] Arguments gives_needed : simpl never.
 
-Fixpoint given_needed_renamed (r : renaming) (needed : positions)
-    (p : variable) (e : expr) {struct e} :
-  given_needed (rename_keyed r needed) (rename_variable r p) (rename_expr r e)
-  = given_needed needed p e
-with given_needed_in_handler_renamed (r : renaming) (needed : positions)
-    (p : variable) (h : continuation_handler) {struct h} :
-  given_needed_in_handler (rename_keyed r needed) (rename_variable r p)
-    (rename_handler r h)
-  = given_needed_in_handler needed p h.
-Proof.
-  - destruct e as [y kind d body | bindings body | k' hh body | handlers body
-                  | ap | ac | scrutinee arms | ];
-      cbn [rename_expr given_needed]; try reflexivity.
-    + apply given_needed_renamed.
-    + apply given_needed_renamed.
-    + rewrite given_needed_in_handler_renamed, given_needed_renamed.
-      reflexivity.
-    + rewrite given_needed_renamed. f_equal.
-      induction handlers as [ | [k' hh] handlers IH]; [ reflexivity | ].
-      cbn [map existsb]. rewrite given_needed_in_handler_renamed, IH.
-      reflexivity.
-    + apply gives_needed_renamed.
-    + induction arms as [ | [n ac] arms IH]; [ reflexivity | ].
-      cbn [map existsb fst snd]. rewrite gives_needed_renamed, IH.
-      reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler given_needed_in_handler]. apply given_needed_renamed.
-Qed.
-
-Lemma needed_from_renamed (r : renaming) (needed : positions)
-    (handler : expr) :
-  ∀ (params : list variable) (kinds : list flambda_kind) (i : nat),
-    needed_from (rename_keyed r needed) i (map (rename_variable r) params)
-      kinds (rename_expr r handler)
-    = needed_from needed i params kinds handler.
-Proof.
-  induction params as [ | p params IH]; intros [ | kind kinds] i;
-    cbn [map needed_from]; try reflexivity.
-  rewrite untagged_in_renamed, given_needed_renamed, IH. reflexivity.
-Qed.
-
-Lemma needed_of_renamed (r : renaming) (needed : positions)
-    (h : continuation_handler) :
-  needed_of (rename_keyed r needed) (rename_handler r h) = needed_of needed h.
-Proof.
-  destruct h as [params metadata handler]. cbn [rename_handler needed_of].
-  rewrite needed_from_renamed. reflexivity.
-Qed.
+Lemma handlers_of_renamed (r : renaming) (e : expr) :
+  handlers_of (rename_expr r e) = rename_handlers r (handlers_of e).
+Proof. equivariance. Qed.
 
 Lemma needed_round_renamed (r : renaming)
     (hs : list (continuation * continuation_handler)) (needed : positions) :
   needed_round (rename_handlers r hs) (rename_keyed r needed)
   = rename_keyed r (needed_round hs needed).
-Proof.
-  unfold needed_round, rename_handlers. unfold rename_keyed at 2.
-  rewrite !map_map. apply map_ext. intros [k h]. cbn [fst snd].
-  rewrite needed_of_renamed. reflexivity.
-Qed.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite needed_round_renamed : equivariance.
 
 Lemma needed_positions_renamed (r : renaming)
     (hs : list (continuation * continuation_handler)) (rounds : nat) :
   ∀ needed : positions,
     needed_positions rounds (rename_handlers r hs) (rename_keyed r needed)
     = rename_keyed r (needed_positions rounds hs needed).
-Proof.
-  induction rounds as [ | rounds IH]; intros needed; [ reflexivity | ].
-  cbn [needed_positions]. rewrite needed_round_renamed. apply IH.
-Qed.
+Proof. equivariance. Qed.
 
 Lemma shadow_positions_renamed (r : renaming) (e : expr) :
   shadow_positions (rename_expr r e) = rename_keyed r (shadow_positions e).
@@ -238,14 +113,11 @@ Proof.
   unfold shadow_positions. rewrite handlers_of_renamed.
   exact (needed_positions_renamed r (handlers_of e) 6 []).
 Qed.
+#[local] Hint Rewrite shadow_positions_renamed : equivariance.
+#[local] Arguments shadow_positions : simpl never.
 
 Lemma shadow_params_renamed : rewrite_equivariant shadow_params.
-Proof.
-  intros r e. unfold shadow_params.
-  rewrite shadow_positions_renamed, count_positions_renamed.
-  destruct (count_positions (shadow_positions e)); [ reflexivity | ].
-  apply shadow_expr_renamed.
-Qed.
+Proof. equivariance. Qed.
 
 (* ======================================================================== *)
 (* The pass keeps scope                                                     *)
