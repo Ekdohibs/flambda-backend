@@ -95,6 +95,9 @@ and kind_with_subkind =
   | Naked_number of Flambda_kind.Naked_number_kind.t
   | Region
   | Rec_info
+  | Unboxed_product of kind_with_subkind list
+(* In an arity only: one component that is an unboxed product, of the components
+   given. The product of nothing is one component too. *)
 
 type const =
   | Naked_immediate of immediate

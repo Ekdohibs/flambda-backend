@@ -13,10 +13,10 @@ let $`camlUnbox_noreturn__fn[unbox_noreturn.ml:15,7--28]_2` =
     @`fn[unbox_noreturn.ml:15,7--28]` &toplevel
 in
 let code inline(never) loopify(never) size(32) newer_version_of(body_1)
-      body_1_1 (return : val)
+      body_1_1 (#(return : val))
         my_closure &my_alloc_region my_depth
         -> k * k1
-        : imm tagged =
+        : #(imm tagged) =
   let b = %project_value_slot.[body].[unboxed_field_b] (my_closure) in
   let x = %project_value_slot.[body].[unboxed_field_x] (my_closure) in
   (let untagged = %untag_imm (b) in
@@ -52,7 +52,7 @@ let code loopify(never) size(45) newer_version_of(run_0)
   with { unboxed_field_b = b; unboxed_field_x = x }
   in
   apply direct(body_1_1 &my_alloc_region)
-    (body : val -> imm tagged)
+    (body : #(val) -> #(imm tagged))
       ($`camlUnbox_noreturn__fn[unbox_noreturn.ml:15,7--28]_2`)
       -> k * k1
 in

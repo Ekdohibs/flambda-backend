@@ -1,11 +1,14 @@
 let $camlApp_unarized_to_single_kind__first_const_0 = Block 0 () in
 (let code size(1)
-       f_0 (x) my_closure &my_alloc_region my_depth -> k1 * k2 : imm tagged =
+       f_0 (#(x, #()))
+         my_closure &my_alloc_region my_depth
+         -> k1 * k2
+         : imm tagged =
    let next_depth = rec_info (succ my_depth) in
    cont k1 (x)
  in
  let code size(6)
-       g_1 (f : val, x)
+       g_1 (f : val, #(x, #()))
          my_closure &my_alloc_region my_depth
          -> k1 * k2
          : imm tagged =
@@ -13,7 +16,10 @@ let $camlApp_unarized_to_single_kind__first_const_0 = Block 0 () in
    apply unknown_arity &my_alloc_region (f : _ -> imm tagged) (x) -> k1 * k2
  in
  let code size(6)
-       h_2 (x) my_closure &my_alloc_region my_depth -> k1 * k2 : imm tagged =
+       h_2 (#(x, #()))
+         my_closure &my_alloc_region my_depth
+         -> k1 * k2
+         : imm tagged =
    let next_depth = rec_info (succ my_depth) in
    let f = %project_value_slot.[h].[f] (my_closure) in
    let g = %project_value_slot.[h].[g] (my_closure) in

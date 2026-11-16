@@ -1,7 +1,10 @@
 let code merge_usages_1 deleted in
 let code f_0 deleted in
 let code inline(never) loopify(never) size(1) newer_version_of(merge_usages_1)
-      merge_usages_1_1 (u) my_closure &my_alloc_region my_depth -> k * k1 =
+      merge_usages_1_1 (#(u))
+        my_closure &my_alloc_region my_depth
+        -> k * k1
+        : #(val?) =
   cont k (u)
 in
 let $camlBoxed_number_subkind_erasure__merge_usages_2 =
@@ -30,14 +33,18 @@ let code loopify(never) size(50) newer_version_of(f_0)
       cont k2 (int32_mul, int64_mul)
     where k2 (a : val, b_1 : int64 boxed) =
       (apply direct(merge_usages_1_1 &my_alloc_region)
-         $camlBoxed_number_subkind_erasure__merge_usages_2 (a) -> k4 * k1
+         ($camlBoxed_number_subkind_erasure__merge_usages_2
+          : #(val?) -> #(val?))
+           (a)
+           -> k4 * k1
          where k4 (function_return_0_merge_usages_1) =
            cont k3
          where k3 =
            cont k2
          where k2 =
            (apply direct(merge_usages_1_1 &my_alloc_region)
-              $camlBoxed_number_subkind_erasure__merge_usages_2
+              ($camlBoxed_number_subkind_erasure__merge_usages_2
+               : #(val?) -> #(val?))
                 (b_1)
                 -> k2 * k1
               where k2 (b_2 : int64 boxed) =

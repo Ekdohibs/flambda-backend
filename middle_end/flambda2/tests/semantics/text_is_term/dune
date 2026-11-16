@@ -22,8 +22,8 @@
 ;; functor_of_a_module: code of the unit is that of a functor, and the text
 ;; says so. The text is the term.
 ;;
-;; unboxed_pair_parameter: the text is not the term, and the driver names the
-;; first difference.
+;; unboxed_pair_parameter: code has a parameter that is an unboxed product, and
+;; the text writes its components as a group. The text is the term.
 ;;
 ;; c_call: a unit with a call of a C function. The text is the term.
 ;;

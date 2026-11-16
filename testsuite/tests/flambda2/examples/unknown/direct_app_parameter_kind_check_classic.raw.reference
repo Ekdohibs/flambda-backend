@@ -30,7 +30,7 @@
    cont k1 (Pmakeblock)
  in
  let code size(1)
-       fn_2 (param_unboxed0, param_unboxed1)
+       fn_2 (#(param_unboxed0, param_unboxed1))
          my_closure &my_alloc_region my_depth
          -> k1 * k2
          : imm tagged =

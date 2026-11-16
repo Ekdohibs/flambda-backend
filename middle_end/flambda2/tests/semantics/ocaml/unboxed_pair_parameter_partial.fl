@@ -1,6 +1,6 @@
 let $camlUnboxed_pair_parameter_partial__first_const_0 = Block 0 () in
 (let code inline(never) size(13)
-       weigh_0 (p_9_unboxed0/155, p_9_unboxed1/156, c/157 : imm tagged)
+       weigh_0 (#(p_9_unboxed0/155, p_9_unboxed1/156), c/157 : imm tagged)
          my_closure/158 &my_alloc_region/159 my_depth/160
          -> k/42 * k/43
          : imm tagged =
@@ -13,10 +13,8 @@ let $camlUnboxed_pair_parameter_partial__first_const_0 = Block 0 () in
  in
  let code inline(never) size(11)
        cross_1
-         (p_15_unboxed0/166,
-          p_15_unboxed1/167,
-          q_16_unboxed0/168,
-          q_16_unboxed1/169)
+         (#(p_15_unboxed0/166, p_15_unboxed1/167),
+          #(q_16_unboxed0/168, q_16_unboxed1/169))
          my_closure/170 &my_alloc_region/171 my_depth/172
          -> k/44 * k/45
          : imm tagged =
@@ -38,7 +36,7 @@ let $camlUnboxed_pair_parameter_partial__first_const_0 = Block 0 () in
      %project_value_slot.[partial_weigh].[weigh] (my_closure/178)
    in
    apply direct(weigh_0 &my_alloc_region/179)
-     (weigh/182 : val? * val? * imm tagged -> imm tagged)
+     (weigh/182 : #(val? * val?) * imm tagged -> imm tagged)
        (1, 2, param1/177)
        -> k/46 * k/47
  in
@@ -58,14 +56,14 @@ let $camlUnboxed_pair_parameter_partial__first_const_0 = Block 0 () in
      %project_value_slot.[partial_weigh_1].[Popaque] (my_closure/184)
    in
    apply direct(weigh_0 &my_alloc_region/185)
-     (weigh/188 : val? * val? * imm tagged -> imm tagged)
+     (weigh/188 : #(val? * val?) * imm tagged -> imm tagged)
        (Pmake_unboxed_product_72_unboxed0/189,
         Pmake_unboxed_product_72_unboxed1/190,
         param1/183)
        -> k/48 * k/49
  in
  let code size(5) stub
-       partial_cross_4 (param1/191, param2/192)
+       partial_cross_4 (#(param1/191, param2/192))
          my_closure/193 &my_alloc_region/194 my_depth/195
          -> k/50 * k/51
          : imm tagged =
@@ -74,7 +72,7 @@ let $camlUnboxed_pair_parameter_partial__first_const_0 = Block 0 () in
      %project_value_slot.[partial_cross].[cross] (my_closure/193)
    in
    apply direct(cross_1 &my_alloc_region/194)
-     (cross/197 : _ -> imm tagged)
+     (cross/197 : #(val? * val?) * #(val? * val?) -> imm tagged)
        (2, 3, param1/191, param2/192)
        -> k/50 * k/51
  in
@@ -116,14 +114,14 @@ let $camlUnboxed_pair_parameter_partial__first_const_0 = Block 0 () in
                             where k/57 (with_first/205 : val) =
                               (apply direct(partial_cross_4 &toplevel)
                                  (with_first/205
-                                  : imm tagged * imm tagged -> imm tagged)
+                                  : #(imm tagged * imm tagged) -> imm tagged)
                                    (4, 5)
                                    -> k/58 * error
                                  where k/58 (crossed/206 : imm tagged) =
                                    ((let Popaque/209 = %opaque (1) in
                                      apply direct(partial_cross_4 &toplevel)
                                        (with_first/205
-                                        : imm tagged * imm tagged ->
+                                        : #(imm tagged * imm tagged) ->
                                           imm tagged
                                         )
                                          (Popaque/209, 1)

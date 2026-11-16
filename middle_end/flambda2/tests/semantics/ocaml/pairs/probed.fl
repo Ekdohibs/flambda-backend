@@ -12,7 +12,7 @@ let $camlProbed__first_const_0 = Block 0 () in
          my_closure/77 &my_alloc_region/78 &my_region/79 &my_ghost_region/80
            my_depth/81
          -> k/26 * k/27
-         : unit stack =
+         : #() stack =
    let next_depth/82 = rec_info (succ my_depth/81) in
    apply &my_alloc_region/78 note/75 (x/76) -> k/28 * k/27
      where k/28 (apply_result/83) =
@@ -33,7 +33,7 @@ let $camlProbed__first_const_0 = Block 0 () in
     apply
            direct(probe_handler_bump_2
            &my_alloc_region/86 &region/90 &ghost_region/91) inlined(never)
-      (probe_handler_bump/95 : val? * imm tagged -> unit)
+      (probe_handler_bump/95 : val? * imm tagged -> #())
         (note/89, x/84)
         -> k/32 * k/30
       where k/32 =

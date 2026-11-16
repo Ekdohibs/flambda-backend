@@ -124,24 +124,43 @@ let kind_with_subkind_opt (k : Flambda_kind.With_subkind.t) :
     Fexpr.kind_with_subkind option =
   if is_default_kind_with_subkind k then None else Some (k |> kind_with_subkind)
 
-let is_default_arity (a : [`Unarized] Flambda_arity.t) =
-  match Flambda_arity.unarized_components a with
-  | [k] -> is_default_kind_with_subkind k
-  | _ -> false
-
-(* One value, with no more known of it, for each component. *)
+(* One value, with no more known of it, for each component, and no component
+   that is an unboxed product. *)
 let is_default_complex_arity (a : [`Complex] Flambda_arity.t) =
-  List.for_all is_default_kind_with_subkind (Flambda_arity.unarize a)
+  List.for_all
+    (fun (component : Flambda_kind.With_subkind.t option) ->
+      match component with
+      | Some k -> is_default_kind_with_subkind k
+      | None -> false)
+    (Flambda_arity.singleton_component_per_parameter a)
+
+(* One such value. *)
+let is_default_arity (a : [`Complex] Flambda_arity.t) =
+  Flambda_arity.num_params a = 1 && is_default_complex_arity a
+
+(* What [Flambda_arity.fold_per_parameter] is asked to build of a component: a
+   kind, or the members of an unboxed product, the last first. *)
+type arity_shape =
+  | Kind of Flambda_kind.With_subkind.t
+  | Members of arity_shape list
 
 let complex_arity (a : [`Complex] Flambda_arity.t) : Fexpr.arity =
-  (* CR mshinwell: add unboxed arities to Fexpr *)
-  Flambda_arity.unarize a |> List.map kind_with_subkind
+  let rec component (shape : arity_shape) : Fexpr.kind_with_subkind =
+    match shape with
+    | Kind k -> kind_with_subkind k
+    | Members members -> Unboxed_product (List.rev_map component members)
+  in
+  Flambda_arity.fold_per_parameter a ~init:(Members [])
+    ~singleton:(fun _ k -> Kind k)
+    ~unboxed_product:(fun ~outer ~inner ->
+      match outer with
+      | Members members -> Members (inner :: members)
+      | Kind _ -> Misc.fatal_error "A kind that has members")
+  |> List.map component
 
-let arity (a : [`Unarized] Flambda_arity.t) : Fexpr.arity =
-  (* CR mshinwell: add unboxed arities to Fexpr *)
-  Flambda_arity.unarized_components a |> List.map kind_with_subkind
+let arity = complex_arity
 
-let arity_opt (a : [`Unarized] Flambda_arity.t) : Fexpr.arity option =
+let arity_opt (a : [`Complex] Flambda_arity.t) : Fexpr.arity option =
   if is_default_arity a then None else Some (arity a)
 
 let kinded_parameter env (kp : Bound_parameter.t) :
@@ -475,9 +494,7 @@ and static_let_expr env bound_static defining_expr body : Fexpr.expr =
         Option.map (Env.find_code_id_exn env) (Code.newer_version_of code)
       in
       let param_arity = Some (complex_arity (Code.params_arity code)) in
-      let ret_arity =
-        Code.result_arity code |> Flambda_arity.unarize_t |> arity_opt
-      in
+      let ret_arity = Code.result_arity code |> arity_opt in
       let recursive = recursive_flag (Code.recursive code) in
       let inline =
         if Flambda2_terms.Inline_attribute.is_default (Code.inline code)
@@ -700,8 +717,7 @@ and apply_expr env (app : Apply_expr.t) : Fexpr.expr =
          arity with no arities is read with. *)
       if
         is_default_complex_arity (Apply_expr.args_arity app)
-        && is_default_arity
-             (Apply_expr.return_arity app |> Flambda_arity.unarize_t)
+        && is_default_arity (Apply_expr.return_arity app)
       then Function Indirect
       else Function Indirect_unknown_arity
     | C_call { needs_caml_c_call; _ } -> C_call { alloc = needs_caml_c_call }
@@ -709,7 +725,7 @@ and apply_expr env (app : Apply_expr.t) : Fexpr.expr =
     | Effect _ -> Misc.fatal_error "TODO: Effect call kind"
   in
   let param_arity = Apply_expr.args_arity app in
-  let return_arity = Apply_expr.return_arity app |> Flambda_arity.unarize_t in
+  let return_arity = Apply_expr.return_arity app in
   let arities : Fexpr.function_arities option =
     match Apply_expr.call_kind app with
     | Function { function_call = Indirect_known_arity _ } ->

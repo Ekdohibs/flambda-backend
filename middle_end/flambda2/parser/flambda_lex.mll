@@ -215,6 +215,8 @@ rule token = parse
       { LBRACE }
   | "}"
       { RBRACE }
+  | "#("
+      { HASH_LPAREN }
   | "("
       { LPAREN }
   | ")"

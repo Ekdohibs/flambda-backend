@@ -25,9 +25,10 @@ let $camlUnused_tupled_function_param__tupled_4 =
   closure tupled_0_1 @`tupled` &toplevel
 in
 (let code inline(never) loopify(never) size(1) newer_version_of(id_1)
-       id_1_1 (f)
+       id_1_1 (#(f))
          my_closure &my_alloc_region &my_region &my_ghost_region my_depth
-         -> k1 * k2 stack =
+         -> k1 * k2
+         : #(val?) stack =
    cont k1 (f)
  in
  let $camlUnused_tupled_function_param__id_5 = closure id_1_1 @`id` &toplevel
@@ -35,7 +36,7 @@ in
  let over_app_region = %begin_region () in
  let over_app_ghost_region = %begin_ghost_region () in
  apply direct(id_1_1 &toplevel &over_app_region &over_app_ghost_region)
-   $camlUnused_tupled_function_param__id_5
+   ($camlUnused_tupled_function_param__id_5 : #(val?) -> #(val?))
      ($camlUnused_tupled_function_param__tupled_4)
      -> k1 * error
    where k1 (func) =

@@ -1,6 +1,31 @@
 %{
 open! Fexpr
 
+(* The parameters of code as they are written: one variable, or a group of
+   parameters that are the components of one unboxed product. *)
+type code_param =
+  | Param of kinded_parameter
+  | Group of code_param list
+
+let rec params_of_code_param = function
+  | Param param -> [param]
+  | Group params -> List.concat_map params_of_code_param params
+
+let rec arity_component_of_code_param = function
+  | Param { kind = Some kind; _ } -> kind
+  | Param { kind = None; _ } -> Nullable_value Anything
+  | Group params ->
+    Unboxed_product (List.map arity_component_of_code_param params)
+
+(* The variables, in order, and the arity if there is a group: with no group
+   the arity is that of the variables. *)
+let code_params params =
+  let is_group = function Group _ -> true | Param _ -> false in
+  ( List.concat_map params_of_code_param params,
+    if List.exists is_group params
+    then Some (List.map arity_component_of_code_param params)
+    else None )
+
 let make_loc (startpos, endpos) =
   Debuginfo.Scoped_location.of_location
     ~scopes:Debuginfo.Scoped_location.empty_scopes
@@ -97,6 +122,7 @@ let make_boxed_const_int (i, m) : static_data =
 %token LBRACE [@symbol "{"]
 %token LBRACK [@symbol "["]
 %token LBRACKPIPE [@symbol "[|"]
+%token HASH_LPAREN [@symbol "#("]
 %token LPAREN [@symbol "("]
 %token MINUSGREATER [@symbol "->"]
 %token PIPE [@symbol "|"]
@@ -300,7 +326,7 @@ deleted_code:
 
 code:
   | header = code_header;
-    params = kinded_args;
+    params_and_arity = code_params;
     closure_var = variable;
     region_vars = alloc_mode_for_function_params;
     depth_var = variable;
@@ -318,7 +344,8 @@ code:
       let result_mode : alloc_mode_for_return =
         if result_mode then Maybe_alloc_stack else Not_alloc_stack
       in
-      { id; newer_version_of; param_arity = None; ret_arity; recursive; inline;
+      let params, param_arity = params_and_arity in
+      { id; newer_version_of; param_arity; ret_arity; recursive; inline;
         params_and_body = { params; closure_var; region_vars; depth_var;
                             ret_cont; exn_cont; body };
         code_size; is_tupled; stub; is_a_functor; loopify; result_mode; } }
@@ -464,6 +491,8 @@ kind_with_subkind:
   | subkind = subkind; QMARK { Nullable_value subkind }
   | KWD_REGION { Region }
   | KWD_REC_INFO { Rec_info }
+  | HASH_LPAREN; ks = separated_list(STAR, kind_with_subkind); RPAREN
+    { Unboxed_product ks }
 ;
 kinds_with_subkinds :
   | KWD_UNIT { [] }
@@ -767,6 +796,17 @@ continuation_binding:
 kinded_args:
   | { [] }
   | LPAREN; vs = separated_nonempty_list(COMMA, kinded_variable); RPAREN { vs }
+;
+
+code_params:
+  | { [], None }
+  | LPAREN; ps = separated_nonempty_list(COMMA, code_param); RPAREN
+    { code_params ps }
+;
+
+code_param:
+  | v = kinded_variable { Param v }
+  | HASH_LPAREN; ps = separated_list(COMMA, code_param); RPAREN { Group ps }
 ;
 
 static_data_binding:

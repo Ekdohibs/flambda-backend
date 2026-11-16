@@ -261,6 +261,8 @@ and kind_with_subkind ppf (k : kind_with_subkind) =
   | Region -> str "region"
   | Value sk -> subkind ppf sk
   | Nullable_value sk -> Format.fprintf ppf "%a?" subkind sk
+  | Unboxed_product ks ->
+    Format.fprintf ppf "#(@[<hv>%a@])" (pp_star_list kind_with_subkind) ks
 
 let kind_with_subkind ppf k =
   directive Flambda_colours.kind kind_with_subkind ppf k
@@ -529,6 +531,32 @@ let parameter ppf { param; kind = k } = kinded_variable ppf (param, k)
 let kinded_parameters ~space ppf = function
   | [] -> ()
   | args -> pp_spaced ~space ppf "(@[<hv>%a@])" (pp_comma_list parameter) args
+
+(* The parameters of code. Where the arity has an unboxed product, the
+   parameters that are its components are written as a group, "#(p, q)"; the
+   product of nothing is "#()". *)
+let code_parameters ~space ppf (params, (param_arity : arity option)) =
+  let is_product (k : kind_with_subkind) =
+    match k with
+    | Unboxed_product _ -> true
+    | Value _ | Nullable_value _ | Naked_number _ | Region | Rec_info -> false
+  in
+  match param_arity with
+  | Some param_arity when List.exists is_product param_arity ->
+    let remaining = ref params in
+    let rec component ppf (k : kind_with_subkind) =
+      match k with
+      | Unboxed_product ks ->
+        Format.fprintf ppf "#(@[<hv>%a@])" (pp_comma_list component) ks
+      | Value _ | Nullable_value _ | Naked_number _ | Region | Rec_info -> (
+        match !remaining with
+        | param :: rest ->
+          remaining := rest;
+          parameter ppf param
+        | [] -> Misc.fatal_error "Fewer parameters than the arity has")
+    in
+    pp_spaced ~space ppf "(@[<hv>%a@])" (pp_comma_list component) param_arity
+  | None | Some _ -> kinded_parameters ~space ppf params
 
 let cont_recursive ~space ppf recu =
   match (recu : is_cont_recursive) with
@@ -863,7 +891,7 @@ and code_binding ppf
        inline;
        id;
        newer_version_of;
-       param_arity = _;
+       param_arity;
        ret_arity;
        params_and_body;
        code_size = cs;
@@ -897,8 +925,8 @@ and code_binding ppf
   in
   Format.fprintf ppf
     "%a@]@ @[<hov 2>%a%a@ %a@]@ @[<hv 2>-> %a@ * %a@]%a%s@]@] =@ %a"
-    (kinded_parameters ~space:Before)
-    params variable closure_var
+    (code_parameters ~space:Before)
+    (params, param_arity) variable closure_var
     (alloc_mode_for_applications variable ~space:Before)
     region_vars variable depth_var continuation_id ret_cont continuation_id
     exn_cont

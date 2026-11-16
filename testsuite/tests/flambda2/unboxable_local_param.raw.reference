@@ -1,5 +1,5 @@
 (let code size(10)
-       f_1 (_x_unboxed : float)
+       f_1 (#(_x_unboxed : float))
          my_unboxed_closure &my_alloc_region my_depth
          -> return * k1
          : imm tagged =
@@ -25,11 +25,11 @@
    let _x_unboxed = %unbox_num.`float` (_x) in
    let f_unboxed = %project_function_slot.[f].[f_unboxed] (my_closure) in
    apply direct(f_1 &my_alloc_region)
-     (f_unboxed : float -> imm tagged) (_x_unboxed) -> k1 * k2
+     (f_unboxed : #(float) -> imm tagged) (_x_unboxed) -> k1 * k2
  in
  let $camlUnboxable_local_param__float_0 = 0x0p+0 in
  let code size(11)
-       g_3 (_x_unboxed : float)
+       g_3 (#(_x_unboxed : float))
          my_unboxed_closure &my_alloc_region my_depth
          -> unboxed_return * k1
          : float =
@@ -56,7 +56,7 @@
    (let _x_unboxed = %unbox_num.`float` (_x) in
     let g_unboxed = %project_function_slot.[g].[g_unboxed] (my_closure) in
     apply direct(g_3 &my_alloc_region)
-      (g_unboxed : float -> float) (_x_unboxed) -> k3 * k2)
+      (g_unboxed : #(float) -> float) (_x_unboxed) -> k3 * k2)
      where k3 (unboxed_return : float) =
        let boxed_return = %box_num.`float`.my_alloc_region (unboxed_return)
        in

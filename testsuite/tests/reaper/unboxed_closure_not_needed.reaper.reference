@@ -7,7 +7,7 @@
  in
  let $camlUnboxed_closure_not_needed__s0 = closure fn_3 @fn &toplevel in
  let code inline(never) size(1)
-       g_1 my_closure &my_alloc_region my_depth -> k1 * k2 : val =
+       g_1 (#()) my_closure &my_alloc_region my_depth -> k1 * k2 : #(val) =
    cont k1 ($camlUnboxed_closure_not_needed__s0)
  in
  let code size(10)
@@ -21,10 +21,10 @@
          (func : imm tagged -> imm tagged) (0) -> k1 * k2
  in
  let code inline(never) size(24)
-       f_0 (f_into_my_closure_field_bind)
+       f_0 (#(f_into_my_closure_field_bind))
          my_closure &my_alloc_region my_depth
          -> k1 * k2
-         : unit =
+         : #() =
    let next_depth = rec_info (succ my_depth) in
    let bind = f_into_my_closure_field_bind in
    let fn = closure fn_2 @fn_1 &my_alloc_region in

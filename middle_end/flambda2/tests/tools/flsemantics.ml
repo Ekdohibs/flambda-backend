@@ -5290,7 +5290,9 @@ let result_arity_lost (unit : Fexpr.flambda_unit) : bool =
   let one_value (kinds : Fexpr.kind_with_subkind option list) =
     match kinds with
     | [(None | Some (Value _ | Nullable_value _))] -> true
-    | [Some (Naked_number _ | Region | Rec_info)] | [] | _ :: _ :: _ -> false
+    | [Some (Naked_number _ | Region | Rec_info | Unboxed_product _)]
+    | [] | _ :: _ :: _ ->
+      false
   in
   (* [others] are the names of the continuations in sight whose parameters are
      not one value; a name that is bound again hides the one before. *)

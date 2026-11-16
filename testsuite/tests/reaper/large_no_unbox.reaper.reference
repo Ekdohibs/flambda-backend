@@ -3,10 +3,11 @@ let code large_2 deleted in
 let code f_0 deleted in
 let code inline(never) loopify(never) size(11) newer_version_of(large_2)
       large_2_1
-        (param : [ 0 of imm tagged * imm tagged * imm tagged * imm tagged ])
+        (#(param : [ 0 of imm tagged * imm tagged * imm tagged * imm tagged ]),
+         #())
         my_closure &my_alloc_region my_depth
         -> k * k1
-        : imm tagged =
+        : #(imm tagged) =
   let Pmixedfield = %block_load.[`3`] (param) in
   let Pmixedfield_1 = %block_load.[`2`] (param) in
   let Pmixedfield_2 = %block_load.[`1`] (param) in
@@ -19,12 +20,13 @@ in
 let $camlLarge_no_unbox__large_3 = closure large_2_1 @large &toplevel in
 let code inline(never) loopify(never) size(5) newer_version_of(small_1)
       small_1_1
-        (Pmakeblock_into_param_field_0,
-         Pmakeblock_into_param_field_1,
-         Pmakeblock_into_param_field_2)
+        (#(Pmakeblock_into_param_field_0,
+           Pmakeblock_into_param_field_1,
+           Pmakeblock_into_param_field_2),
+         #())
         my_closure &my_alloc_region my_depth
         -> k * k1
-        : imm tagged =
+        : #(imm tagged) =
   let Pmixedfield = Pmakeblock_into_param_field_2 in
   let Pmixedfield_1 = Pmakeblock_into_param_field_1 in
   let Pmixedfield_2 = Pmakeblock_into_param_field_0 in
@@ -52,8 +54,8 @@ let code loopify(never) size(36) newer_version_of(f_0)
    in
    apply direct(large_2_1 &my_alloc_region)
      ($camlLarge_no_unbox__large_3
-      : [ 0 of imm tagged * imm tagged * imm tagged * imm tagged ] ->
-        imm tagged
+      : #([ 0 of imm tagged * imm tagged * imm tagged * imm tagged ]) * #() ->
+        #(imm tagged)
       )
        (Pmakeblock)
        -> k2 * k1)
@@ -65,7 +67,8 @@ let code loopify(never) size(36) newer_version_of(f_0)
         let Pmakeblock_into_Pmakeblock_field_1 = int_add_1 in
         let Pmakeblock_into_Pmakeblock_field_0 = int_add_2 in
         apply direct(small_1_1 &my_alloc_region)
-          ($camlLarge_no_unbox__small_2 : _ -> imm tagged)
+          ($camlLarge_no_unbox__small_2
+           : #(val? * val? * val?) * #() -> #(imm tagged))
             (Pmakeblock_into_Pmakeblock_field_0,
              Pmakeblock_into_Pmakeblock_field_1,
              Pmakeblock_into_Pmakeblock_field_2)

@@ -4,23 +4,26 @@ let code unused_3 deleted in
 let code u_4 deleted in
 let code f_0 deleted in
 let code inline(never) loopify(never) size(1) newer_version_of(id_2)
-      id_2_1 (z) my_closure &my_alloc_region my_depth -> k * k1 =
+      id_2_1 (#(z)) my_closure &my_alloc_region my_depth -> k * k1 : #(val?) =
   cont k (z)
 in
 let $camlArguments_for_unboxed_closure__id_2 = closure id_2_1 @`id` &toplevel
 in
 let code inline(never) loopify(never) size(7) newer_version_of(u_4)
       u_4_1
-        (u_into_my_closure_field_g_field_x, u_into_my_closure_field_g_field_y)
+        (#(u_into_my_closure_field_g_field_x,
+           u_into_my_closure_field_g_field_y))
         my_closure &my_alloc_region my_depth
         -> k * k1
-        : imm tagged =
+        : #(imm tagged) =
   let g_into_g_field_y = u_into_my_closure_field_g_field_y in
   let g_into_g_field_x = u_into_my_closure_field_g_field_x in
   let x = g_into_g_field_x in
   let y = g_into_g_field_y in
   apply direct(id_2_1 &my_alloc_region) inlining_state(depth(1))
-    $camlArguments_for_unboxed_closure__id_2 (y) -> k2 * k1
+    ($camlArguments_for_unboxed_closure__id_2 : #(val?) -> #(val?))
+      (y)
+      -> k2 * k1
     where k2 (apply_result : imm tagged) =
       let int_add = %int_barith.add (x, apply_result) in
       cont k (int_add)
@@ -36,10 +39,10 @@ let $camlArguments_for_unboxed_closure__unused_3 =
   closure unused_3_1 @unused &toplevel
 in
 let code loopify(never) size(9) newer_version_of(g_1)
-      g_1_1 (g_into_my_closure_field_x, h : val)
+      g_1_1 (#(g_into_my_closure_field_x, h : val))
         my_closure &my_alloc_region my_depth
         -> k * k1
-        : imm tagged =
+        : #(imm tagged) =
   let x = g_into_my_closure_field_x in
   apply unknown_arity &my_alloc_region
     (h : imm tagged -> imm tagged)

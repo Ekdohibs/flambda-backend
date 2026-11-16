@@ -52,10 +52,9 @@
 
    What is covered: the terms that the conversion makes today. A term that is
    outside them, or that fexpr has no way to write, raises [Not_printable] with
-   the reason: - an arity with an unboxed product: an arity of fexpr is a list
-   of kinds; - a constant that is a vector or a mask, which the conversion does
-   not make; - [Closure_of_set] other than as FlambdaModel.let_closures makes
-   it: the closure at the first function slot of its set, followed by the
+   the reason: - a constant that is a vector or a mask, which the conversion
+   does not make; - [Closure_of_set] other than as FlambdaModel.let_closures
+   makes it: the closure at the first function slot of its set, followed by the
    projections of the other function slots, in order, each bound at kind
    [Value]. Flambda binds all the closures of a set at once; -
    [Static_const_closure_of_set] other than as FlambdaModel.bind_closures makes
@@ -245,17 +244,14 @@ let compiler_kind (kind : Kinds.flambda_kind) : Flambda_kind.t =
   | Region -> Flambda_kind.region
   | Rec_info -> Flambda_kind.rec_info
 
-let arity ~of_what (arity : Model.arity) : F.arity =
-  List.map
-    (fun (component : Model.arity_component) ->
-      match component with
-      | Singleton k -> kind k
-      | Unboxed_product _ ->
-        not_printable
-          "an arity of %s with an unboxed product: an arity of fexpr is a list \
-           of kinds"
-          of_what)
-    arity
+let rec arity_component (component : Model.arity_component) :
+    F.kind_with_subkind =
+  match component with
+  | Singleton k -> kind k
+  | Unboxed_product components ->
+    Unboxed_product (List.map arity_component components)
+
+let arity (arity : Model.arity) : F.arity = List.map arity_component arity
 
 let const (c : Model.const) : F.const =
   match c with
@@ -835,9 +831,7 @@ let rec expr env (e : Model.expr) : F.expr =
         bindings = List.map (fun (k, h) -> handler env k h) handlers
       }
   | Apply ap ->
-    let params_arity =
-      arity ~of_what:"the arguments of a call" ap.ap_args_arity
-    in
+    let params_arity = arity ap.ap_args_arity in
     let call_kind : F.function_call =
       match ap.ap_call_kind with
       | Direct code ->
@@ -883,8 +877,7 @@ let rec expr env (e : Model.expr) : F.expr =
            else
              Some
                { params_arity = Some params_arity;
-                 ret_arity =
-                   arity ~of_what:"the results of a call" ap.ap_return_arity
+                 ret_arity = arity ap.ap_return_arity
                });
         inlined = None;
         inlining_state = None
@@ -1048,10 +1041,8 @@ and code env id (Model.Code (params, my_closure, ret, exn, metadata, body)) :
   in
   { id = code_id id;
     newer_version_of = None;
-    param_arity =
-      Some (arity ~of_what:"the parameters of code" metadata.cm_params_arity);
-    ret_arity =
-      Some (arity ~of_what:"the results of code" metadata.cm_result_arity);
+    param_arity = Some (arity metadata.cm_params_arity);
+    ret_arity = Some (arity metadata.cm_result_arity);
     recursive = Nonrecursive;
     inline = None;
     params_and_body =

@@ -97,14 +97,23 @@ and value_kind_with_subkind :
   | Naked_number nnk -> Flambda_kind.With_subkind.of_naked_number_kind nnk
   | Region -> Flambda_kind.With_subkind.region
   | Rec_info -> Flambda_kind.With_subkind.rec_info
+  | Unboxed_product _ ->
+    Misc.fatal_error "An unboxed product where the kind of one value is wanted"
 
 let value_kind_with_subkind_opt :
     Fexpr.kind_with_subkind option -> Flambda_kind.With_subkind.t = function
   | Some kind -> value_kind_with_subkind kind
   | None -> Flambda_kind.With_subkind.any_value
 
-let arity a =
-  Flambda_arity.create_singletons (List.map value_kind_with_subkind a)
+let rec arity_component (k : Fexpr.kind_with_subkind) :
+    [`Complex] Flambda_arity.Component_for_creation.t =
+  match k with
+  | Unboxed_product ks -> Unboxed_product (List.map arity_component ks)
+  | Value _ | Nullable_value _ | Naked_number _ | Region | Rec_info ->
+    Singleton (value_kind_with_subkind k)
+
+let arity a : [`Complex] Flambda_arity.t =
+  Flambda_arity.create (List.map arity_component a)
 
 (* The arities of a call for which a text need not give them. Where the arity of
    the arguments is not given, it is one value for each argument; where no arity
@@ -1020,14 +1029,17 @@ let bind_all_code_ids_and_function_slots env (unit : Fexpr.flambda_unit) =
             | Deleted_code id ->
               let _ = fresh_or_existing_code_id env id in
               env, fs_size_of_code_ids, code_ids_of_slots
-            | Code { id; params_and_body; is_tupled; _ } ->
+            | Code { id; params_and_body; param_arity; is_tupled; _ } ->
               let code_id = fresh_or_existing_code_id env id in
               let function_slot_size =
-                (* CR ncourant: this is only correct as long as fexpr does not
-                   support unboxed products *)
-                Function_slot.size_from_arity
-                  ~num_complex_params:(List.length params_and_body.params)
-                  ~is_tupled
+                (* The parameters as the arity groups them, where the text gives
+                   one. *)
+                let num_complex_params =
+                  match param_arity with
+                  | Some param_arity -> List.length param_arity
+                  | None -> List.length params_and_body.params
+                in
+                Function_slot.size_from_arity ~num_complex_params ~is_tupled
               in
               let fs_size_of_code_ids =
                 Code_id.Map.add code_id function_slot_size fs_size_of_code_ids
