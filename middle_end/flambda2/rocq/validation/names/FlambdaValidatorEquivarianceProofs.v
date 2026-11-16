@@ -2903,56 +2903,10 @@ Lemma keep_all_or_map {A B : Type} (g : A -> B) (mask : option (list bool))
   keep_all_or mask (map g l) = map g (keep_all_or mask l).
 Proof. destruct mask; [ apply keep_map | reflexivity ]. Qed.
 
-Lemma mask_of_renamed (r : renaming) (known : masks) (k : continuation) :
-  mask_of (Keyed.map_keys (rename_continuation r) known)
-    (rename_continuation r k)
-  = mask_of known k.
-Proof.
-  unfold mask_of, Keyed.map_keys, Keyed.map_bindings.
-  assert (Hlookup :
-    lookup (rename_continuation r k)
-      (map (fun binding => (rename_continuation r (fst binding), snd binding))
-         known)
-    = lookup k known).
-  { induction known as [ | [k' mask] known IH]; simpl; [ reflexivity | ].
-    rewrite rename_continuation_eqb.
-    destruct (Pos.eqb k k'); [ reflexivity | exact IH ]. }
-  rewrite Hlookup. reflexivity.
-Qed.
-
-Lemma drop_args_equivariant (r : renaming) (known : masks) (ac : apply_cont) :
-  drop_args (Keyed.map_keys (rename_continuation r) known)
-    (rename_apply_cont r ac)
-  = rename_apply_cont r (drop_args known ac).
-Proof.
-  unfold drop_args, rename_apply_cont.
-  cbn [ac_continuation ac_args ac_trap_action].
-  rewrite mask_of_renamed, keep_all_or_map. reflexivity.
-Qed.
-
-Fixpoint returned_to_equivariant (r : renaming) (k : continuation)
+Lemma returned_to_equivariant (r : renaming) (k : continuation)
     (e : expr) :
-  returned_to (rename_continuation r k) (rename_expr r e) = returned_to k e
-with returned_to_in_handler_equivariant (r : renaming) (k : continuation)
-    (h : continuation_handler) :
-  returned_to_in_handler (rename_continuation r k) (rename_handler r h)
-  = returned_to_in_handler k h.
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | bound h body | handlers body | ap
-         | ac | scrutinee arms | ];
-      simpl; try reflexivity.
-    + apply returned_to_equivariant.
-    + apply returned_to_equivariant.
-    + rewrite returned_to_in_handler_equivariant, returned_to_equivariant.
-      reflexivity.
-    + rewrite returned_to_equivariant. f_equal.
-      induction handlers as [ | [k' h] handlers IH]; simpl; [ reflexivity | ].
-      rewrite (returned_to_in_handler_equivariant r k h), IH. reflexivity.
-    + rewrite !rename_continuation_eqb. reflexivity.
-  - destruct h as [params metadata handler]. simpl.
-    apply returned_to_equivariant.
-Qed.
+  returned_to (rename_continuation r k) (rename_expr r e) = returned_to k e.
+Proof. equivariance. Qed.
 
 Lemma used_params_equivariant (r : renaming) (is_exn_handler : bool)
     (params : list variable) (handler : expr) :
@@ -2966,133 +2920,8 @@ Proof.
   reflexivity.
 Qed.
 
-Lemma used_params_in_loop_equivariant (r : renaming) (k : continuation)
-    (h : continuation_handler) (whole : expr) :
-  used_params_in_loop (rename_continuation r k) (rename_handler r h)
-    (rename_expr r whole)
-  = used_params_in_loop k h whole.
-Proof.
-  destruct h as [params metadata handler]. simpl.
-  rewrite returned_to_equivariant, used_params_equivariant. reflexivity.
-Qed.
-
-Lemma loop_masks_renamed (r : renaming)
-    (handlers : list (continuation * continuation_handler)) (whole : expr)
-    (known : masks) :
-  map (fun '(k, h) => (k, used_params_in_loop k h (rename_expr r whole)))
-    (map (fun '(k, h) => (rename_continuation r k, rename_handler r h))
-       handlers)
-  ++ Keyed.map_keys (rename_continuation r) known
-  = Keyed.map_keys (rename_continuation r)
-      (map (fun '(k, h) => (k, used_params_in_loop k h whole)) handlers
-       ++ known).
-Proof.
-  unfold Keyed.map_keys, Keyed.map_bindings. rewrite map_app. f_equal.
-  induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
-  rewrite used_params_in_loop_equivariant, IH. reflexivity.
-Qed.
-
-Fixpoint drop_params_equivariant_aux (r : renaming) (e : expr) :
-  ∀ known : masks,
-    drop_params (Keyed.map_keys (rename_continuation r) known)
-      (rename_expr r e)
-    = rename_expr r (drop_params known e)
-with drop_params_in_loop_equivariant (r : renaming)
-    (h : continuation_handler) :
-  ∀ (known : masks) (mask : option (list bool)),
-    drop_params_in_loop (Keyed.map_keys (rename_continuation r) known) mask
-      (rename_handler r h)
-    = rename_handler r (drop_params_in_loop known mask h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k [params metadata handler] body
-         | handlers body | ap | ac | scrutinee arms | ];
-      intros known; cbn [rename_expr rename_handler drop_params];
-      try reflexivity.
-    + rewrite drop_params_equivariant_aux. reflexivity.
-    + rewrite drop_params_equivariant_aux. reflexivity.
-    + rewrite (drop_params_equivariant_aux r handler known),
-        returned_to_equivariant, used_params_equivariant, keep_all_or_map.
-      change
-        ((rename_continuation r k,
-          if returned_to k body then None
-          else
-            used_params (hm_is_exn_handler metadata) params
-              (drop_params known handler))
-         :: Keyed.map_keys (rename_continuation r) known)
-        with
-          (Keyed.map_keys (rename_continuation r)
-             ((k,
-               if returned_to k body then None
-               else
-                 used_params (hm_is_exn_handler metadata) params
-                   (drop_params known handler))
-              :: known)).
-      rewrite drop_params_equivariant_aux. reflexivity.
-    + change
-        (Let_cont_recursive
-           (map (fun '(k, h) => (rename_continuation r k, rename_handler r h))
-              handlers)
-           (rename_expr r body))
-        with (rename_expr r (Let_cont_recursive handlers body)).
-      rewrite loop_masks_renamed, drop_params_equivariant_aux. f_equal.
-      generalize (Let_cont_recursive handlers body). intros whole.
-      generalize
-        (map (fun '(k, h) => (k, used_params_in_loop k h whole)) handlers
-         ++ known).
-      intros known'.
-      induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
-      rewrite used_params_in_loop_equivariant,
-        (drop_params_in_loop_equivariant r h known'), IH.
-      reflexivity.
-    + rewrite drop_args_equivariant. reflexivity.
-    + f_equal. rewrite !map_map. apply map_ext. intros arm. cbn [fst snd].
-      rewrite drop_args_equivariant. reflexivity.
-  - destruct h as [params metadata handler]. intros known mask.
-    cbn [rename_handler drop_params_in_loop].
-    rewrite drop_params_equivariant_aux, keep_all_or_map. reflexivity.
-Qed.
-
-Lemma drop_unused_params_equivariant : rewrite_equivariant drop_unused_params.
-Proof. intros r e. exact (drop_params_equivariant_aux r e []). Qed.
-
-(* Removing the parameters of a loop that are only passed round it. The
-   law of the pass is proved from the definitions by the tactic of
-   FlambdaEquivarianceTactic.v, which states the law of [drop_dead] from
-   its type and proves it as it goes: the masks are renamed as their type
-   says, the name of each continuation and nothing of what a mask holds.
-
-   What is stated here is what the tactic does not do by itself.
-   - The search for the masks of a loop ([settle]) takes a function, so
-     its law is a lemma about two functions that agree up to renaming,
-     and a rule gives the lemma to the tactic. Computation is kept from
-     unfolding [settle], so that the rule finds it.
-   - The hypothesis of the induction is about renamed masks. In a loop
-     the masks are a list made of renamed parts, and where the call is
-     under a function whose answer has no names the tactic does not use
-     the hypothesis from right to left. A second rule takes the masks
-     from the other side of the equation and shows that the list is
-     those masks renamed.
-   - [returned_to] is asked of the whole term of the case, which
-     computation has taken apart: it is kept from unfolding, and its law
-     is stated at that form.
-   Four laws that are proved by hand are given to the tactic: three
-   that are above, and that of [var_free_b], which is in
-   FlambdaValidatorEquivarianceBaseProofs.v. The tactic does not derive
-   those of [used_params] and of [keep_all_or], and without that of
-   [returned_to] it leaves the goal. It derives that of [var_free_b];
-   the hint saves the time of that derivation. *)
-Section Dead_params.
-
-#[local] Hint Rewrite @keep_all_or_map var_free_b_equivariant_aux
-  returned_to_equivariant used_params_equivariant : equivariance.
-
-#[local] Arguments returned_to : simpl never.
-
-#[local] Abbreviation rename_masks r :=
-  (map (fun p : continuation * option (list bool) =>
-          (rename_continuation r (fst p), snd p))).
-
+(* In a loop [returned_to] is asked of the whole term of the case, which
+   computation has taken apart: its law at that form. *)
 Lemma returned_to_rec_renamed (r : renaming) (k : continuation)
     (handlers : list (continuation * continuation_handler)) (body : expr) :
   returned_to (rename_continuation r k)
@@ -3104,8 +2933,69 @@ Lemma returned_to_rec_renamed (r : renaming) (k : continuation)
 Proof.
   exact (returned_to_equivariant r k (Let_cont_recursive handlers body)).
 Qed.
-#[local] Hint Rewrite returned_to_rec_renamed : equivariance.
 
+(* This pass and the next carry masks down the term. The law of each is
+   proved from the definitions by the tactic of
+   FlambdaEquivarianceTactic.v, which states the law of the function of
+   masks and a term from its type and proves it as it goes: the masks
+   are renamed as their type says, the name of each continuation and
+   nothing of what a mask holds. Both are given the four laws above.
+   The tactic does not derive those of [keep_all_or] and of
+   [used_params], and without those of [returned_to] it leaves the
+   goal; [returned_to] is kept from unfolding, so that its law at the
+   term of a loop applies. *)
+Section Masks.
+
+#[local] Hint Rewrite @keep_all_or_map returned_to_equivariant
+  used_params_equivariant returned_to_rec_renamed : equivariance.
+
+#[local] Arguments returned_to : simpl never.
+
+#[local] Abbreviation rename_masks r :=
+  (map (fun p : continuation * option (list bool) =>
+          (rename_continuation r (fst p), snd p))).
+
+(* The hypothesis of the induction is about renamed masks. Under a
+   continuation, and in a loop, the masks are a list made of renamed
+   parts, and the tactic does not use the hypothesis from right to left
+   there. The rule takes the masks from the other side of the equation
+   and shows that the list is those masks renamed. *)
+#[local] Ltac eqv_extra ::=
+  match goal with
+  | r : renaming,
+    H : context [drop_params _ (rename_expr _ ?e)
+                 = rename_expr _ (drop_params _ ?e)]
+    |- context [drop_params ?m' (rename_expr ?r ?e)] =>
+    lazymatch m' with
+    | map _ _ => fail
+    | _ => idtac
+    end;
+    match goal with
+    | |- context [drop_params ?m e] =>
+      eqv_no_renaming m;
+      replace m' with (rename_masks r m);
+      [ rewrite H | solve [ eqv_core ] ]
+    end
+  end.
+
+Lemma drop_params_renamed : equivariance_of drop_params.
+Proof. equivariance. Qed.
+
+Lemma drop_unused_params_equivariant : rewrite_equivariant drop_unused_params.
+Proof. intros r e. exact (drop_params_renamed r [] e). Qed.
+
+(* Removing the parameters of a loop that are only passed round it.
+   What is stated here is what the tactic does not do by itself.
+   - The search for the masks of a loop ([settle]) takes a function, so
+     its law is a lemma about two functions that agree up to renaming,
+     and a rule gives the lemma to the tactic. Computation is kept from
+     unfolding [settle], so that the rule finds it.
+   - The hypothesis of the induction is about renamed masks. In a loop
+     the masks are a list made of renamed parts, and where the call is
+     under a function whose answer has no names the tactic does not use
+     the hypothesis from right to left. A second rule, as for the pass
+     above, takes the masks from the other side of the equation and
+     shows that the list is those masks renamed. *)
 Lemma count_params_renamed (r : renaming)
     (handlers : list (continuation * continuation_handler)) :
   count_params
@@ -3173,7 +3063,7 @@ Qed.
 Lemma drop_dead_params_equivariant : rewrite_equivariant drop_dead_params.
 Proof. equivariance. Qed.
 
-End Dead_params.
+End Masks.
 
 (* Removing the unused [Let]s whose defining expression has a value, in
    the handlers of recursive continuations too. *)
