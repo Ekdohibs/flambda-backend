@@ -1971,6 +1971,24 @@ it gave back.
   through which they work are as they were when either returns or
   raises, so that `type_to_model` and `type_of_model` are the
   conversions described above.
+  Also trusted, of `prover_answers.ml` beside it, which makes an
+  answer of a prover or of reification, of the compiler and of the
+  model, into a value of one type: that the constructor of the answer
+  is kept (`Proved`, `Unknown`, `Known_result`, `Need_meet`,
+  `Invalid`, `Lift`, `Simple`, `Cannot_reify`); that each part of an
+  answer of the compiler is converted by the functions above, but for
+  three that the file converts itself, in the representations of
+  those functions: the kind of number that is boxed (constructor for
+  constructor), the bytes of a string, and a size
+  (`Target_ocaml_int.to_int`; the model's by `int_of_nat`); that a
+  set is put in order without repeats and a map written in one way,
+  on both sides, and a type inside an answer put in the normal form
+  of `model_type.ml`; that two answers are then taken to be the same
+  exactly when they are structurally equal, except that two answers
+  that are no answer (a stop of the compiler, `None` of the model)
+  are taken to be the same whatever is said of why; that nothing of
+  an answer is left out but what the conversion of types drops; and
+  that an array to lift is refused.
 - **The tests of types**, in the same directory (`model_type.ml`,
   `type_generator.ml`, `types_difftest.ml`). No theorem rests on them;
   what a reader of their output trusts:
@@ -2035,6 +2053,29 @@ it gave back.
     nothing is concluded from "not for the values tried".
   - the files `type_comparisons.ml` and `types_of_compilations.ml`
     beside those named;
+  - the provers and reification (`provers_difftest.ml`): that the two
+    environments of a case are made by the same definitions, in the
+    same order with the same name modes, and the same equations, the
+    model's by its `add_equation` with the compiler's choices and the
+    compiler's by `Meet_env.add_equation` with each of its two meets;
+    that `seen_differently` compares, of every name defined, the type
+    (as a type of the model, by `Model_type.same`) and the canonical
+    element at the two name modes, and whether the environment is
+    bottom, and that a prover is asked in an environment of the
+    compiler only where it finds no difference (what a prover reads
+    of an environment is trusted to be among these); that each entry
+    of `provers` calls the prover of the compiler that it names and
+    its transcription with the same arguments, the kind that the
+    compiler reads off a value slot being given to the model; that
+    `reification` gives the two sides the same environment of the
+    variables allowed and the same two sets of variables; that a
+    fatal error, an assertion that fails, `Not_found` and
+    `Invalid_argument` of the compiler are a stop, and nothing else
+    is; that with the kind checks on, only a stop whose message is
+    that of a kind check, where the model answers, is counted as the
+    recorded difference; that the table of answers and the controls
+    are computed from the same inputs as the comparisons. The
+    generators are trusted for nothing;
   - `same_text`: two printed answers are taken to be the same when
     they have the same words in the same order. Trusted: that the
     printer of `model_type.ml` brackets every part of a type and
