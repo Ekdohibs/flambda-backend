@@ -477,12 +477,15 @@ naked_number_kind:
   | KWD_IMM { Naked_immediate }
   | KWD_FLOAT { Naked_float }
   | KWD_FLOAT32 { Naked_float32 }
+  | KWD_INT8 { Naked_int8 }
+  | KWD_INT16 { Naked_int16 }
   | KWD_INT32 { Naked_int32 }
   | KWD_INT64 { Naked_int64 }
   | KWD_NATIVEINT { Naked_nativeint }
   | KWD_VEC128 { Naked_vec128 }
   | KWD_VEC256 { Naked_vec256 }
   | KWD_VEC512 { Naked_vec512 }
+  | KWD_MASK { Naked_mask }
 ;
 (*
 kind:

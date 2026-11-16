@@ -83,10 +83,8 @@
    keeps no name for it, and the printer of fexpr writes a name as it is where
    the parser reads a string, so that a name without its quotes is not read
    back. A poison constant of kind naked [int8], naked [int16] or [mask] is
-   written all the same: the parser of fexpr has no rule for those three kinds
-   (parser/flambda_parser.mly, the rule [naked_number_kind]), though its printer
-   writes them, so such a constant is not read back today, and the check shows
-   it. *)
+   written like any other: the parser of fexpr reads those three kinds
+   (parser/flambda_parser.mly, the rule [naked_number_kind]). *)
 
 open Import
 open Flambda2_kinds

@@ -140,7 +140,7 @@ the rule `const`), so a poison constant printed with the name that the
 compiler gave it is not read back (discrepancy C2-14).
 
 A poison constant whose kind is a naked `int8`, a naked `int16` or
-`mask` is printed all the same and is not read back today: the
-printer of fexpr writes those three kinds and the parser has no rule
-for them (`flambda_parser.mly`, the rule `naked_number_kind`;
-discrepancy R6-1). No example has one.
+`mask` was printed all the same and was not read back, until the
+parser of fexpr had a rule for those three kinds, which its printer
+wrote (`flambda_parser.mly`, the rule `naked_number_kind`; discrepancy
+R6-1). No example has one.
