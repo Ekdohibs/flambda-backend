@@ -3122,6 +3122,9 @@ Section Forward_kinded.
 #[local] Hint Rewrite kind_of_simple_in_scope_equivariant
   params_in_scope_equivariant : equivariance.
 
+(* One pass over the goal for the laws of the database: enough here. *)
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
+
 Lemma lookup_rename_cont_kinds (r : renaming) (k : continuation)
     (K : cont_kinds) :
   lookup (rename_continuation r k) (rename_cont_kinds r K) = lookup k K.
@@ -3248,6 +3251,9 @@ Qed.
 (* The law of a binding, where the pass begins with those kinds and
    nothing else, is given to the tactic. *)
 Section Forward_kinded_in_code.
+
+(* One pass over the goal for the laws of the database: enough here. *)
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
 
 #[local] Hint Rewrite forward_kinded_in_binding_equivariant : equivariance.
 #[local] Arguments forward_kinded_in_binding : simpl never.
