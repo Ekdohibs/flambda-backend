@@ -257,7 +257,9 @@ let code loopify(never) size(10) newer_version_of(test_value_slot_10)
     b_into_b_field_unboxed_int64
   in
   apply direct(read_11_1 &my_alloc_region)
-     (read_into_read_field_b_field_unboxed_int64) -> k2 * k1
+    (_ : #(int64) -> #(imm tagged))
+      (read_into_read_field_b_field_unboxed_int64)
+      -> k2 * k1
     where k2 (apply_result : imm tagged) =
       let int_add = %int_barith.add (apply_result, 1) in
       let `unit` = %end_region (`region`) in

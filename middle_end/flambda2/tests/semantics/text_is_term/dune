@@ -68,6 +68,10 @@
 ;; the call of the handler of each the text writes that it is a probe, with
 ;; its name: probe("p") and probe("q" enabled_at_init). The text is the term.
 ;;
+;; direct_call_in_classic_mode: compiled with -Oclassic, a direct call that
+;; has no callee, whose arities the text writes with a blank in the place of
+;; the callee. The text is the term.
+;;
 ;; partial_application_of_unboxed_float: the text is not read back.
 ;;
 ;; interface_only, type_error: the compiler does not reach the middle end.
@@ -151,6 +155,22 @@
   (= %{context_name} "main"))
  (action
   (diff length_of_bytes.expected length_of_bytes.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   direct_call_in_classic_mode.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     -Oclassic %{dep:direct_call_in_classic_mode.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff direct_call_in_classic_mode.expected direct_call_in_classic_mode.output)))
 
 (rule
  (enabled_if

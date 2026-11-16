@@ -44,7 +44,7 @@
  and g = closure g_1 @g &toplevel
  with { bind = bind }
  in
- apply direct(g_1 &toplevel)  (0) -> k1 * error
+ apply direct(g_1 &toplevel) (_ : imm tagged -> val) (0) -> k1 * error
    where k1 (apply_result : val) =
      (apply direct(f_0 &toplevel)
         (f : imm tagged -> imm tagged) (0) -> k1 * error

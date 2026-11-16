@@ -15,7 +15,7 @@
          my_closure &my_alloc_region my_depth
          -> k1 * k2
          : imm tagged =
-   apply direct(g_1 &my_alloc_region)  -> k3 * k2
+   apply direct(g_1 &my_alloc_region) (_ : #() -> #(val)) -> k3 * k2
      where k3 (func) =
        apply unknown_arity &my_alloc_region
          (func : imm tagged -> imm tagged) (0) -> k1 * k2
@@ -36,11 +36,12 @@
  let  in
  let bind = %opaque (0) in
  let f_into_f_field_bind = bind in
- apply direct(g_1 &toplevel)  -> k2 * error
+ apply direct(g_1 &toplevel) (_ : #() -> #(val)) -> k2 * error
    where k2 (function_return_0_g_1 : val) =
      cont k1
    where k1 =
-     (apply direct(f_0 &toplevel)  (f_into_f_field_bind) -> k1 * error
+     (apply direct(f_0 &toplevel)
+        (_ : #(val?) -> #()) (f_into_f_field_bind) -> k1 * error
         where k1 =
           cont k))
   where k define_root_symbol =

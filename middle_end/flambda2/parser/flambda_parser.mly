@@ -1030,6 +1030,11 @@ const:
       MINUSGREATER; ret_arity = kinds_with_subkinds;
     RPAREN
     { Some s, Some ({ params_arity; ret_arity } : function_arities) }
+  | LPAREN;
+      BLANK; COLON; params_arity = blank_or(kinds_with_subkinds);
+      MINUSGREATER; ret_arity = kinds_with_subkinds;
+    RPAREN
+    { None, Some ({ params_arity; ret_arity } : function_arities) }
 ;
 
 blank_or(a):

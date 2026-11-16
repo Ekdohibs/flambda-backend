@@ -63,10 +63,12 @@ let code loopify(never) size(13) newer_version_of(f_0)
   let u_into_u_field_g_field_y = g_into_g_field_y in
   let u_into_u_field_g_field_x = g_into_g_field_x in
   apply direct(u_4_1 &my_alloc_region)
-     (u_into_u_field_g_field_x, u_into_u_field_g_field_y) -> k2 * k1
+    (_ : #(val? * val?) -> #(imm tagged))
+      (u_into_u_field_g_field_x, u_into_u_field_g_field_y)
+      -> k2 * k1
     where k2 (apply_result : imm tagged) =
       (apply direct(g_1_1 &my_alloc_region) inlined(never)
-         
+         (_ : #(val? * val) -> #(imm tagged))
            (g_into_g_field_x, $camlArguments_for_unboxed_closure__unused_3)
            -> k2 * k1
          where k2 (apply_result_1 : imm tagged) =

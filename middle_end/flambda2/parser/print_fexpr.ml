@@ -727,15 +727,15 @@ let code_size ppf code_size = Format.fprintf ppf "%d" code_size
 let or_blank f ppf ob =
   match ob with None -> Format.pp_print_string ppf "_" | Some a -> f ppf a
 
+(* A call that has no callee and has arities is written with a blank in the
+   place of the callee. *)
 let func_name_with_optional_arities ppf (n, arities) =
-  match n with
-  | None -> ()
-  | Some n -> (
-    match arities with
-    | None -> simple ppf n
-    | Some { params_arity; ret_arity } ->
-      Format.fprintf ppf "@[<1>(%a@ : @[%a ->@ %a@]@,)@]" simple n
-        (or_blank arity) params_arity arity ret_arity)
+  match n, arities with
+  | None, None -> ()
+  | Some n, None -> simple ppf n
+  | _, Some { params_arity; ret_arity } ->
+    Format.fprintf ppf "@[<1>(%a@ : @[%a ->@ %a@]@,)@]" (or_blank simple) n
+      (or_blank arity) params_arity arity ret_arity
 
 type scope =
   | Outer
