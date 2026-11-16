@@ -1,4 +1,5 @@
 clos_partial_local.ml
+copy_local.ml
 empty_immutable_array.ml
 exclave_after_local_work.ml
 exclave_pair.ml

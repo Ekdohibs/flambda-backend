@@ -17,8 +17,8 @@
 ;; compared with X.expected too (own_same.sh): byte for byte, or, for a unit
 ;; that own_run_numbers.txt names, as one line in which the words that
 ;; own_same.sh takes for variables are compared without their numbers. A
-;; unit that has X.own_expected is compared with that file instead; none
-;; has one. See README.md, "The compiler's own run".
+;; unit that has X.own_expected is compared with that file instead:
+;; copy_heap.ml has one. See README.md, "The compiler's own run".
 ;;
 ;; The tool exits with the status 1 where it fails on a unit, and so does
 ;; the driver. The rule that runs either takes that status, and no other, of

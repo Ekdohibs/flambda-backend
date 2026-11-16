@@ -1,0 +1,55 @@
+let $camlHandler_of_reraise_gone_without_g__first_const_0 = Block 0 () in
+(let code size(61)
+       find_0 (x/59 : imm tagged)
+         my_closure/60 &my_alloc_region/61 my_depth/62
+         -> k/30 * k/31
+         : imm tagged =
+   let next_depth/63 = rec_info (succ my_depth/62) in
+   let try_region/64 = %begin_try_region () in
+   let try_ghost_region/65 = %begin_try_ghost_region () in
+   cont k/36 push(k/32)
+     where k/36 =
+       let try_region/73 = %begin_try_region () in
+       let try_ghost_region/74 = %begin_try_ghost_region () in
+       (cont k/39 push(k/37)
+          where k/39 =
+            ((let prim/79 = %int_comp.gt (x/59, 0) in
+              let int_greaterthan/80 = %tag_imm (prim/79) in
+              (let untagged/81 = %untag_imm (int_greaterthan/80) in
+               switch untagged/81
+                 | 0 -> k/38 (1)
+                 | 1 -> k/41)
+                where k/41 =
+                  cont k/40)
+               where k/40 =
+                 cont k/37 pop(notrace k/37) ($`*predef*`.caml_exn_Not_found))
+          where k/38 (body_result/78 : imm tagged) =
+            cont k/35 pop(k/37) (body_result/78)
+          where k/37 exn (e/75 : val) =
+            let unit/76 = %end_try_region (try_region/73) in
+            let unit/77 = %end_try_ghost_region (try_ghost_region/74) in
+            cont k/32 pop(reraise k/32) (e/75))
+     where k/35 (body_result/72 : imm tagged) =
+       cont k/30 pop(k/32) (body_result/72)
+     where k/32 exn (exn/66 : val) =
+       let unit/67 = %end_try_region (try_region/64) in
+       let unit/68 = %end_try_ghost_region (try_ghost_region/65) in
+       ((let prim/69 = %phys_eq (exn/66, $`*predef*`.caml_exn_Not_found) in
+         let eq/70 = %tag_imm (prim/69) in
+         (let untagged/71 = %untag_imm (eq/70) in
+          switch untagged/71
+            | 0 -> k/34
+            | 1 -> k/30 (0))
+           where k/34 =
+             cont k/33)
+          where k/33 =
+            cont k/31 pop(reraise k/31) (exn/66))
+ in
+ let find/82 = closure find_0 @find &toplevel in
+ let Pmakeblock/83 = %block.[`0`].`toplevel` (find/82) in
+ cont k/29 (Pmakeblock/83))
+  where k/29 define_root_symbol (module_block/57) =
+    let field_0/58 = %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/57)
+    in
+    let $camlHandler_of_reraise_gone_without_g = Block 0 (field_0/58) in
+    cont done ($camlHandler_of_reraise_gone_without_g)

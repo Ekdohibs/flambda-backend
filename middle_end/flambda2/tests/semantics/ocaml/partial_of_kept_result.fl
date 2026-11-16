@@ -1,0 +1,51 @@
+let $camlPartial_of_kept_result__first_const_0 = Block 0 () in
+(let code inline(never) size(3)
+       add_0 (a/61 : imm tagged, b/62 : imm tagged)
+         my_closure/63 &my_alloc_region/64 my_depth/65
+         -> k/20 * k/21
+         : imm tagged =
+   let next_depth/66 = rec_info (succ my_depth/65) in
+   let int_add/67 = %int_barith.add (a/61, b/62) in
+   cont k/20 (int_add/67)
+ in
+ let code inline(never) size(2)
+       chosen_1 (param/68 : imm tagged)
+         my_closure/69 &my_alloc_region/70 my_depth/71
+         -> k/22 * k/23
+         : val =
+   let next_depth/72 = rec_info (succ my_depth/71) in
+   let add/73 = %project_value_slot.[chosen].[add] (my_closure/69) in
+   cont k/22 (add/73)
+ in
+ let code size(11)
+       add_to_2 (v/74 : imm tagged)
+         my_closure/75 &my_alloc_region/76 my_depth/77
+         -> k/24 * k/25
+         : val =
+   let next_depth/78 = rec_info (succ my_depth/77) in
+   let chosen/79 = %project_value_slot.[add_to].[chosen] (my_closure/75) in
+   apply direct(chosen_1 &my_alloc_region/76)
+     (chosen/79 : imm tagged -> val?) (0) -> k/26 * k/25
+     where k/26 (func/80) =
+       apply unknown_arity &my_alloc_region/76
+         (func/80 : imm tagged -> val) (v/74) -> k/24 * k/25
+ in
+ let add/81 = closure add_0 @add &toplevel in
+ let chosen/82 = closure chosen_1 @chosen &toplevel with { add = add/81 } in
+ let add_to/83 = closure add_to_2 @add_to &toplevel
+ with { chosen = chosen/82 }
+ in
+ let Pmakeblock/84 = %block.[`0`].`toplevel` (add/81, chosen/82, add_to/83)
+ in
+ cont k/19 (Pmakeblock/84))
+  where k/19 define_root_symbol (module_block/57) =
+    let field_0/58 = %block_load.tag[`0`].`size`[`3`].[`0`] (module_block/57)
+    in
+    let field_1/59 = %block_load.tag[`0`].`size`[`3`].[`1`] (module_block/57)
+    in
+    let field_2/60 = %block_load.tag[`0`].`size`[`3`].[`2`] (module_block/57)
+    in
+    let $camlPartial_of_kept_result =
+      Block 0 (field_0/58, field_1/59, field_2/60)
+    in
+    cont done ($camlPartial_of_kept_result)

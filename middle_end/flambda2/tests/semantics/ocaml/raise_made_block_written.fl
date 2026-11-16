@@ -1,0 +1,37 @@
+(let $camlRaise_made_block_written__immstring_0 = "get" in
+ let $camlRaise_made_block_written__Pmakeblock_1 =
+   Block 0 ($`*predef*`.caml_exn_Invalid_argument,
+            $camlRaise_made_block_written__immstring_0)
+ in
+ let code size(21)
+       get_0 (o/31 : [ 0 | 0 of imm tagged ])
+         my_closure/32 &my_alloc_region/33 my_depth/34
+         -> k/18 * k/19
+         : imm tagged =
+   let next_depth/35 = rec_info (succ my_depth/34) in
+   (let prim/37 = %is_int (o/31) in
+    let Pisint/38 = %tag_imm (prim/37) in
+    (let untagged/39 = %untag_imm (Pisint/38) in
+     switch untagged/39
+       | 0 -> k/22
+       | 1 -> k/23)
+      where k/23 =
+        cont k/20
+      where k/22 =
+        cont k/21)
+     where k/21 =
+       let Pfield/36 = %block_load.[`0`] (o/31) in
+       cont k/18 (Pfield/36)
+     where k/20 =
+       cont k/19
+              pop(regular k/19)
+              ($camlRaise_made_block_written__Pmakeblock_1)
+ in
+ let get/40 = closure get_0 @get &toplevel in
+ let Pmakeblock/41 = %block.[`0`].`toplevel` (get/40) in
+ cont k/17 (Pmakeblock/41))
+  where k/17 define_root_symbol (module_block/29) =
+    let field_0/30 = %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/29)
+    in
+    let $camlRaise_made_block_written = Block 0 (field_0/30) in
+    cont done ($camlRaise_made_block_written)

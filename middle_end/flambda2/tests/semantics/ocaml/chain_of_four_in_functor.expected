@@ -1,0 +1,9 @@
+chain_of_four_in_functor.fl:
+  before Simplify (11 steps): returns [0: <fun>]
+  after Simplify (14 steps): returns [0: <fun>]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated: the same once closures and blocks are lifted to symbols, the terms normalised and unused value slots removed

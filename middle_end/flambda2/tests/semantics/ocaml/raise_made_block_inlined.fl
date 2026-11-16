@@ -1,0 +1,48 @@
+(let code inline(always) size(10)
+       fail_0 (reason/46 : val)
+         my_closure/47 &my_alloc_region/48 my_depth/49
+         -> k/22 * k/23
+         : imm tagged =
+   let next_depth/50 = rec_info (succ my_depth/49) in
+   let Pmakeblock/51 =
+     %block.[`0`].my_alloc_region/48
+       ($`*predef*`.caml_exn_Invalid_argument, reason/46 : val)
+   in
+   cont k/23 pop(regular k/23) (Pmakeblock/51)
+ in
+ let $camlRaise_made_block_inlined__immstring_0 = "get" in
+ let code size(23)
+       get_1 (o/52 : [ 0 | 0 of imm tagged ])
+         my_closure/53 &my_alloc_region/54 my_depth/55
+         -> k/24 * k/25
+         : imm tagged =
+   let next_depth/56 = rec_info (succ my_depth/55) in
+   let fail/57 = %project_value_slot.[get].[fail] (my_closure/53) in
+   (let prim/59 = %is_int (o/52) in
+    let Pisint/60 = %tag_imm (prim/59) in
+    (let untagged/61 = %untag_imm (Pisint/60) in
+     switch untagged/61
+       | 0 -> k/28
+       | 1 -> k/29)
+      where k/29 =
+        cont k/26
+      where k/28 =
+        cont k/27)
+     where k/27 =
+       let Pfield/58 = %block_load.[`0`] (o/52) in
+       cont k/24 (Pfield/58)
+     where k/26 =
+       apply direct(fail_0 &my_alloc_region/54)
+         (fail/57 : val -> imm tagged)
+           ($camlRaise_made_block_inlined__immstring_0)
+           -> k/24 * k/25
+ in
+ let fail/62 = closure fail_0 @fail &toplevel in
+ let get/63 = closure get_1 @get &toplevel with { fail = fail/62 } in
+ let Pmakeblock/64 = %block.[`0`].`toplevel` (get/63) in
+ cont k/21 (Pmakeblock/64))
+  where k/21 define_root_symbol (module_block/44) =
+    let field_0/45 = %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/44)
+    in
+    let $camlRaise_made_block_inlined = Block 0 (field_0/45) in
+    cont done ($camlRaise_made_block_inlined)

@@ -29,6 +29,16 @@ A unit that has no `X.expected` is compiled, for the unit that uses
 it, and its term is compared with `X.fl`; the tool is not run on it.
 There are no interface files: a unit exports everything.
 
+Five units are no part of a pair: each is a unit that no other uses
+and that uses no other. They are here for their first line, the
+flags that the rules of this directory give to the compiler and to
+the tool and that the rules of the directory above have no place
+for, or as the control of such a unit, which has no such line
+("Units that are here for their first line", below). Two more that
+no unit uses are counted with the first units ("The pairs", below).
+No unit may have the name of another followed by an underscore and
+more unless it is its second unit.
+
 ## How a pair is made and checked
 
     sh from_ocaml.sh <ocamlopt> F.ml F
@@ -250,7 +260,9 @@ from the others.
 | `probed_inlined.ml` | `probed.ml` | calls the same function and lets Simplify inline it | not checked: the term after Simplify has the call that is a probe, which the conversion refuses |
 | `phantom_called.ml` | `phantom.ml` | calls a function of the first unit whose body, in the `.cmx`, has a phantom binding | a prefix of three bindings without the body, which the conversion refuses; the run before is undefined, the run after returns; nothing to validate |
 
-Twenty-nine sources. Eleven are first units and use no other unit;
+Thirty-four sources. Five are the units that are here for their
+first line and their controls, which the last section is about. Of
+the other twenty-nine, eleven are first units and use no other unit;
 eight of them have an expected file: five are validated, as a unit
 of the directory above is, `phantom.ml` is not checked, and two that
 no unit uses are here for the lists of calls of known arity:
@@ -461,3 +473,61 @@ a call of known arity whose list alone makes it undefined, with code
 that the compiler's reading of the list may allow; here the run
 stops elsewhere, so it is reported as of any unit: both runs
 undefined, and nothing to validate.
+
+## Units that are here for their first line
+
+| Unit | Its first line | What it is | What the tool says of it |
+|------|----------------|------------|--------------------------|
+| `handler_kept_with_g.ml` | `(* flags: -g *)` | a function whose `try` catches, by name, the exception that its body raises | both runs return the module block; the same; not validated, with no line of the second check |
+| `handler_gone_without_g.ml` | none | its control: the same source without the line | validated with its imports |
+| `handler_gone_with_g_notrace.ml` | `(* flags: -g *)` | a control: the same with `raise_notrace` in the place of `raise` | validated with its imports |
+| `handler_of_reraise_kept_with_g.ml` | `(* flags: -g *)` | a `try` inside a `try`: the body raises by `raise_notrace`, the inner handler raises again what it caught, and the outer handler catches that by name | both runs return the module block; the same; not validated, with no line of the second check |
+| `handler_of_reraise_gone_without_g.ml` | none | its control: the same source without the line | validated with its imports |
+
+Each has one import, the predefined exception that it raises, and
+no prefix: it uses no other unit.
+
+For a continuation of the sort `Normal_or_exn` that is used by a pop
+of a trap, Simplify marks the use as one that it will not make a
+jump (`escaping`) if debugging information is on and the raise of
+the pop is a regular one, a raise again of what was caught, or has
+no kind; it does not mark it so if debugging information is off,
+nor, on or off, if the raise is one with no trace, which
+`raise_notrace` makes. A use of a continuation of the sort `Return`
+or `Toplevel_return` never has the mark (`apply_cont_use_kind` in
+`middle_end/flambda2/simplify/simplify_common.ml`, whose comment
+gives the backtrace as the reason; discrepancy C5-4). The model has
+no backtraces, and gives a raise the same meaning whatever its
+kind.
+
+What the five units show of that, in the term that the compiler's
+Simplify makes of each. With `-g` the term after of
+`handler_kept_with_g.ml` keeps the handler, the push and the pop of
+its trap, and the regular raise. Without `-g`
+(`handler_gone_without_g.ml`), and with `-g` where the raise is by
+`raise_notrace` (`handler_gone_with_g_notrace.ml`), the raise is a
+jump and the term after has no trap. In
+`handler_of_reraise_kept_with_g.ml` the first raise, by
+`raise_notrace`, is a jump to the inner handler, with `-g`; the
+raise again of what that handler caught is left, with the outer
+handler and its trap; without `-g`
+(`handler_of_reraise_gone_without_g.ml`) both are jumps. That is of
+these five units: it is not said here that Simplify makes a jump of
+every raise that has not the mark.
+
+The validation removes a handler of exceptions in the term before
+(`FlambdaDemoteSpec.demote_handlers`), and not in the term after:
+where Simplify kept the handler the two terms differ by it, and the
+unit is not validated.
+
+The two expected files that say "not validated" say what the tool
+of this tree prints of those units. They are no finding about the
+compiler: the two runs are the same, and what stops the validation
+is that limit of it. What is expected to turn them is the same
+removal in the term after, which is not done
+(`middle_end/flambda2/rocq/status/C5.md`). The units are here with
+their controls so that their expected files change when it comes.
+The flags are given to the tool as to the compiler, and
+with `-g` the tool's Simplify keeps the handler as the compiler's
+does; the directory above, whose rules give no flags, has no unit
+compiled with `-g`.

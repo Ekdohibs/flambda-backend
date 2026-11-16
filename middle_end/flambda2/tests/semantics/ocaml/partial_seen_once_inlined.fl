@@ -1,0 +1,46 @@
+let $camlPartial_seen_once_inlined__first_const_0 = Block 0 () in
+(let code inline(never) size(3)
+       add_0 (a/61 : imm tagged, b/62 : imm tagged)
+         my_closure/63 &my_alloc_region/64 my_depth/65
+         -> k/18 * k/19
+         : imm tagged =
+   let next_depth/66 = rec_info (succ my_depth/65) in
+   let int_add/67 = %int_barith.add (a/61, b/62) in
+   cont k/18 (int_add/67)
+ in
+ let code inline(always) size(6)
+       apply_1 (f/68 : val, x/69)
+         my_closure/70 &my_alloc_region/71 my_depth/72
+         -> k/20 * k/21 =
+   let next_depth/73 = rec_info (succ my_depth/72) in
+   apply &my_alloc_region/71 f/68 (x/69) -> k/20 * k/21
+ in
+ let code size(6)
+       add_to_2 (v/74 : imm tagged)
+         my_closure/75 &my_alloc_region/76 my_depth/77
+         -> k/22 * k/23
+         : val =
+   let next_depth/78 = rec_info (succ my_depth/77) in
+   let add/79 = %project_value_slot.[add_to].[add] (my_closure/75) in
+   let apply/80 = %project_value_slot.[add_to].[`apply`] (my_closure/75) in
+   apply direct(apply_1 &my_alloc_region/76)
+     (apply/80 : val? * imm tagged -> val) (add/79, v/74) -> k/22 * k/23
+ in
+ let add/81 = closure add_0 @add &toplevel in
+ let apply/82 = closure apply_1 @`apply` &toplevel in
+ let add_to/83 = closure add_to_2 @add_to &toplevel
+ with { add = add/81; `apply` = apply/82 }
+ in
+ let Pmakeblock/84 = %block.[`0`].`toplevel` (add/81, apply/82, add_to/83) in
+ cont k/17 (Pmakeblock/84))
+  where k/17 define_root_symbol (module_block/57) =
+    let field_0/58 = %block_load.tag[`0`].`size`[`3`].[`0`] (module_block/57)
+    in
+    let field_1/59 = %block_load.tag[`0`].`size`[`3`].[`1`] (module_block/57)
+    in
+    let field_2/60 = %block_load.tag[`0`].`size`[`3`].[`2`] (module_block/57)
+    in
+    let $camlPartial_seen_once_inlined =
+      Block 0 (field_0/58, field_1/59, field_2/60)
+    in
+    cont done ($camlPartial_seen_once_inlined)

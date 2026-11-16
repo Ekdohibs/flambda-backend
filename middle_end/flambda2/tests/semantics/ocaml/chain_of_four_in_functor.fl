@@ -1,0 +1,50 @@
+let $camlChain_of_four_in_functor__first_const_0 = Block 0 () in
+(let code size(3)
+       a_1 (x/65 : imm tagged)
+         my_closure/66 &my_alloc_region/67 my_depth/68
+         -> k/22 * k/23
+         : imm tagged =
+   let next_depth/69 = rec_info (succ my_depth/68) in
+   let int_add/70 = %int_barith.add (x/65, 1) in
+   cont k/22 (int_add/70)
+ in
+ let code size(5)
+       b_2 (x/71 : imm tagged)
+         my_closure/72 &my_alloc_region/73 my_depth/74
+         -> k/24 * k/25
+         : imm tagged =
+   let next_depth/75 = rec_info (succ my_depth/74) in
+   let a/76 = %project_value_slot.[b].[a] (my_closure/72) in
+   apply direct(a_1 &my_alloc_region/73)
+     (a/76 : imm tagged -> imm tagged) (x/71) -> k/24 * k/25
+ in
+ let code size(5)
+       c_3 (x/77 : imm tagged)
+         my_closure/78 &my_alloc_region/79 my_depth/80
+         -> k/26 * k/27
+         : imm tagged =
+   let next_depth/81 = rec_info (succ my_depth/80) in
+   let b/82 = %project_value_slot.[c].[b] (my_closure/78) in
+   apply direct(b_2 &my_alloc_region/79)
+     (b/82 : imm tagged -> imm tagged) (x/77) -> k/26 * k/27
+ in
+ let code loopify(never) size(45) functor
+       Make_0 (X/83 : val)
+         my_closure/84 &my_alloc_region/85 my_depth/86
+         -> k/28 * k/29
+         : val =
+   let next_depth/87 = rec_info (succ my_depth/86) in
+   let a/88 = closure a_1 @a &my_alloc_region/85 in
+   let b/89 = closure b_2 @b &my_alloc_region/85 with { a = a/88 } in
+   let c/90 = closure c_3 @c &my_alloc_region/85 with { b = b/89 } in
+   let Pmakeblock/91 = %block.[`0`].my_alloc_region/85 (a/88, b/89, c/90) in
+   cont k/28 (Pmakeblock/91)
+ in
+ let Make/92 = closure Make_0 @Make &toplevel in
+ let Pmakeblock/93 = %block.[`0`].`toplevel` (Make/92) in
+ cont k/21 (Pmakeblock/93))
+  where k/21 define_root_symbol (module_block/63) =
+    let field_0/64 = %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/63)
+    in
+    let $camlChain_of_four_in_functor = Block 0 (field_0/64) in
+    cont done ($camlChain_of_four_in_functor)
