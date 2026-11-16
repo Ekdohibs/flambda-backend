@@ -55,46 +55,62 @@ above, the rule takes the status 1, and no other, of a unit that
 To add a unit, add `X.ml` (and `X.mli`), `X.fl` and `X.expected`, and
 nothing else. Each unit is looked at before it enters as the units of
 the directory above are (`../README.md`, "What a validation does not
-say"): for a kind that may be null where the text writes a kind, and
-for the modes of the parameters of its code.
+say"): for the modes of the parameters of its code.
 
 ## The examples
 
-Twenty sources: 9 validated, 11 validated with their imports. The
-import of each of the 11 is a predefined exception, that of a read
-out of the bounds of an array. Steps are those of the machine, before
+Twenty sources: 9 validated, 6 validated with their imports, and 5 on
+which the tool fails and which have no verdict (below). The import of
+each of the 6 is a predefined exception, that of a read out of the
+bounds of an array. Steps are those of the machine, before
 and after Simplify.
 
 Fourteen are on immutable arrays (sources by T5, each cut before the
-part that prints the values: the comment at its head says what the
-unit gives, which is what both runs return here). Six are on the
+part that prints the values: the comment at its head says what the unit
+gives). Six are on the
 fixed-width integers (sources by T5b).
 
 | Source | Steps | Verdict | What it has |
 |--------|-------|---------|-------------|
 | `b_match_only.ml` | 20, 14 | validated | a match of four constants, of which Simplify makes a table |
 | `c_exported.ml` | 17, 12 | validated | an immutable array made as the unit runs and exported |
-| `c_in_a_record.ml` | 45, 36 | validated with its imports | a record with a field that is an immutable array, made by one function and read by another |
+| `c_in_a_record.ml` | 45, 38 | validated with its imports | a record with a field that is an immutable array, made by one function and read by another |
 | `e_empty_in_one_arm.ml` | 47, 28 | validated | one arm of a test gives the empty array and the other an array of two elements |
-| `f_reader_given_as_an_argument.ml` | 43, 34 | validated with its imports | a function that is kept makes an array and gives it to the function that it is given |
-| `g_boxed_int64s.ml` | 34, 27 | validated with its imports | an immutable array of boxed 64-bit integers |
+| `f_reader_given_as_an_argument.ml` | 43, 35 | validated with its imports | a function that is kept makes an array and gives it to the function that it is given |
+| `g_boxed_int64s.ml` |  | the tool fails: the term after Simplify is not well-formed | an immutable array of boxed 64-bit integers |
 | `int32_identities.ml` | 184, 51 | validated | `Int32` operations with one operand written in the function, or the same operand twice |
 | `int32_laws_more.ml` | 302, 63 | validated | laws of the integers on `Int32` numbers: one that holds whatever the width, and three that fail at the ends of the range |
 | `int64_identities.ml` | 184, 51 | validated | as `int32_identities.ml`, on `Int64` |
 | `int64_laws_more.ml` | 302, 63 | validated | as `int32_laws_more.ml`, on `Int64` |
-| `l_summed_by_a_recursive_function.ml` | 251, 178 | validated with its imports | a recursive function sums an array made by another function |
-| `m_constant_and_variable.ml` | 45, 30 | validated with its imports | a literal with a variable between two constants |
+| `l_summed_by_a_recursive_function.ml` | 251, 188 | validated with its imports | a recursive function sums an array made by another function |
+| `m_constant_and_variable.ml` |  | the tool fails: the term after Simplify is not well-formed | a literal with a variable between two constants |
 | `nativeint_identities.ml` | 184, 51 | validated | as `int32_identities.ml`, on `Nativeint` |
 | `nativeint_laws_more.ml` | 302, 63 | validated | as `int32_laws_more.ml`, on `Nativeint` |
-| `r_constant_index.ml` | 41, 31 | validated with its imports | an array made by a function that is kept, read at two constant indices |
+| `r_constant_index.ml` |  | the tool fails: the term after Simplify is not well-formed | an array made by a function that is kept, read at two constant indices |
 | `r_out_of_bounds_caught.ml` | 57, 39 | validated with its imports | a read past the end of an array, caught by a handler |
-| `r_out_of_bounds_escapes.ml` | 32, 26 | validated with its imports | a read past the end with no handler: both runs raise the exception |
-| `t_two_lengths.ml` | 61, 43 | validated with its imports | the arms make arrays of one and of three elements; the last element is read by the length |
-| `v_of_closures.ml` | 53, 45 | validated with its imports | an immutable array of two closures over a parameter; one is read and applied |
-| `v_two_parameters.ml` | 33, 23 | validated with its imports | a function that is kept returns the immutable array of its two parameters; both are read |
+| `r_out_of_bounds_escapes.ml` |  | the tool fails: the term after Simplify is not well-formed | a read past the end with no handler |
+| `t_two_lengths.ml` | 61, 45 | validated with its imports | the arms make arrays of one and of three elements; the last element is read by the length |
+| `v_of_closures.ml` | 53, 47 | validated with its imports | an immutable array of two closures over a parameter; one is read and applied |
+| `v_two_parameters.ml` |  | the tool fails: the term after Simplify is not well-formed | a function that is kept returns the immutable array of its two parameters; both are read |
 
-No unit here has a kind that may be null where the text writes a
-kind. Four have code with a parameter whose mode is not heap
+On five units the tool fails (`g_boxed_int64s`,
+`m_constant_and_variable`, `r_constant_index`, `r_out_of_bounds_escapes`
+and `v_two_parameters`): it says that the term after Simplify is not
+well-formed, prints the line of the check of static names, and exits
+with the status 1, which is no verdict (`../README.md`, "What the
+verdicts mean"). `tool_fails.txt` names the five. Each has a
+continuation that the front end marks cold, which raises where the check
+of an index fails; the text says so since it writes that mark, and what
+Simplify then makes of the unit is discrepancy X5-9 (`../README.md`,
+"What a validation does not say"). Until the text had the mark, each of
+the five was validated with its imports. Five more units have such a
+continuation and are validated as they were, the run of the term after
+taking more steps (`c_in_a_record`, `f_reader_given_as_an_argument`,
+`l_summed_by_a_recursive_function`, `t_two_lengths` and
+`v_of_closures`); so has `r_out_of_bounds_caught`, of which the tool
+prints what it printed. With `-O3` the tool fails on the same five.
+
+Four units have code with a parameter whose mode is not heap
 (`f_reader_given_as_an_argument`, `int32_laws_more`,
 `int64_laws_more`, `nativeint_laws_more`), and the term before
 Simplify of those four and of `e_empty_in_one_arm` has an allocation

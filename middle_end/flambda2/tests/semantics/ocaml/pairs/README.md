@@ -256,13 +256,12 @@ of a unit of the directory above, and each is validated.
 `cycle.ml` is compiled and the tool is not run on it. Its two blocks
 name each other, and the compiler makes them by four calls of C
 functions of the runtime (`caml_alloc_dummy`, `caml_update_dummy`).
-The model has no call of a C function, and the tool cannot read the
-term at all: `-drawfexpr` prints such a call as `apply ccall (...)`
-with no region, and the parser asks for one after `ccall`
-(`middle_end/flambda2/parser/print_fexpr.ml`, at `C_call`;
-`middle_end/flambda2/parser/flambda_parser.mly`, rule `call_kind`).
-So the `.cmx` of that unit says nothing of its two fields, which
-hold what the calls returned.
+The model has no call of a C function. (The tool could not read the term
+at all while `-drawfexpr` printed such a call as `apply ccall (...)`
+with no region, where the parser asks for one after `ccall`
+(`middle_end/flambda2/parser/flambda_parser.mly`, rule `call_kind`); the
+text writes the region now, `apply ccall &toplevel`.) The `.cmx` of that
+unit says nothing of its two fields, which hold what the calls returned.
 
 `probed.ml` has no expected file: the text of its term does not say
 that a call is a probe, so a verdict of the tool on it would be of a
