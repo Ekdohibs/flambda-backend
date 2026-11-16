@@ -942,13 +942,13 @@ let rec expr env acc (e : Fexpr.expr) : _ * Flambda.Expr.t =
           ( Call_kind.indirect_function_call_unknown_arity,
             params_arity,
             return_arity ))
-      | C_call { alloc = needs_caml_c_call } -> (
+      | C_call { alloc = needs_caml_c_call; is_c_builtin; effects; coeffects }
+        -> (
         match arities with
         | Some { params_arity = Some params_arity; ret_arity } ->
           let params_arity = arity params_arity in
           let return_arity = arity ret_arity in
-          ( Call_kind.c_call ~needs_caml_c_call ~is_c_builtin:false
-              ~effects:Arbitrary_effects ~coeffects:Has_coeffects,
+          ( Call_kind.c_call ~needs_caml_c_call ~is_c_builtin ~effects ~coeffects,
             params_arity,
             return_arity )
         | None | Some { params_arity = None; ret_arity = _ } ->

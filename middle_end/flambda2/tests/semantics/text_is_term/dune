@@ -58,6 +58,12 @@
 ;; that takes a 128-bit vector, which the text writes
 ;; "%array_set.`imm`.`vec128`". The text is the term.
 ;;
+;; marks_of_a_c_call: four calls of C functions, of a builtin, of one with no
+;; effects, of one with no coeffects and of one whose only effects are those
+;; of an allocation, which the text writes "ccall builtin", "ccall no_effects",
+;; "ccall no_coeffects" and "ccall only_generative_effects mutable". The text
+;; is the term.
+;;
 ;; partial_application_of_unboxed_float: the text is not read back.
 ;;
 ;; interface_only, type_error: the compiler does not reach the middle end.
@@ -141,6 +147,22 @@
   (= %{context_name} "main"))
  (action
   (diff length_of_bytes.expected length_of_bytes.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   marks_of_a_c_call.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     %{dep:marks_of_a_c_call.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff marks_of_a_c_call.expected marks_of_a_c_call.output)))
 
 (rule
  (enabled_if

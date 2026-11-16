@@ -276,7 +276,12 @@ type call_kind =
       { kind : Call_kind.Method_kind.t;
         obj : simple
       }
-  | C_call of { alloc : bool }
+  | C_call of
+      { alloc : bool;
+        is_c_builtin : bool;
+        effects : Effects.t;
+        coeffects : Coeffects.t
+      }
 
 type function_arities =
   { params_arity : arity option;

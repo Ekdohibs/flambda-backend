@@ -651,11 +651,24 @@ let call_kind_and_alloc_mode ~space ppf (ck, alloc_mode) =
       cl
       (alloc_mode_for_applications region ~space:Before)
       alloc_mode
-  | C_call { alloc } ->
-    let noalloc_kwd = if alloc then None else Some "noalloc" in
-    pp_spaced ~space ppf "@[ccall%a%a@]"
-      (pp_option ~space:Before Format.pp_print_string)
-      noalloc_kwd
+  | C_call { alloc; is_c_builtin; effects; coeffects } ->
+    let word ppf w = Format.fprintf ppf "@ %s" w in
+    let words ppf () =
+      if not alloc then word ppf "noalloc";
+      if is_c_builtin then word ppf "builtin";
+      (match (effects : Effects.t) with
+      | Arbitrary_effects -> ()
+      | No_effects -> word ppf "no_effects"
+      | Only_generative_effects Immutable -> word ppf "only_generative_effects"
+      | Only_generative_effects Mutable ->
+        word ppf "only_generative_effects mutable"
+      | Only_generative_effects Immutable_unique ->
+        word ppf "only_generative_effects immutable_unique");
+      match (coeffects : Coeffects.t) with
+      | Has_coeffects -> ()
+      | No_coeffects -> word ppf "no_coeffects"
+    in
+    pp_spaced ~space ppf "@[ccall%a%a@]" words ()
       (alloc_mode_for_applications region ~space:Before)
       alloc_mode
   | Method { kind; obj } ->

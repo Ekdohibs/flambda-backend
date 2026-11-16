@@ -146,6 +146,7 @@ let make_boxed_const_int (i, m) : static_data =
 %token KWD_ARRAY [@symbol "array"]
 %token KWD_AVAILABLE [@symbol "available"]
 %token KWD_BOXED [@symbol "boxed"]
+%token KWD_BUILTIN [@symbol "builtin"]
 %token KWD_CCALL  [@symbol "ccall"]
 %token KWD_MCALL  [@symbol "mcall"]
 %token KWD_SELF  [@symbol "self"]
@@ -192,11 +193,14 @@ let make_boxed_const_int (i, m) : static_data =
 %token KWD_NATIVEINT [@symbol "nativeint"]
 %token KWD_NEVER  [@symbol "never"]
 %token KWD_NEWER_VERSION_OF [@symbol "newer_version_of"]
+%token KWD_NO_COEFFECTS [@symbol "no_coeffects"]
+%token KWD_NO_EFFECTS [@symbol "no_effects"]
 %token KWD_NOALLOC [@symbol "noalloc"]
 %token KWD_NONTAIL [@symbol "nontail"]
 %token KWD_NOTRACE [@symbol "notrace"]
 %token KWD_NULL [@symbol "null"]
 %token KWD_OF     [@symbol "of"]
+%token KWD_ONLY_GENERATIVE_EFFECTS [@symbol "only_generative_effects"]
 %token KWD_POISON [@symbol "poison"]
 %token KWD_POP    [@symbol "pop"]
 %token KWD_PRODUCT   [@symbol "product"]
@@ -706,11 +710,27 @@ call_kind:
     RPAREN
     { (Function (Direct { code_id; function_slot; }), alloc) }
   | KWD_CCALL; noalloc = boption(KWD_NOALLOC);
+      is_c_builtin = boption(KWD_BUILTIN);
+      effects = c_call_effects;
+      coeffects = c_call_coeffects;
       alloc = alloc_mode_for_applications
-    { (C_call { alloc = not noalloc }, alloc) }
+    { (C_call { alloc = not noalloc; is_c_builtin; effects; coeffects },
+       alloc) }
   | KWD_MCALL LPAREN; kind = method_kind; obj = simple; RPAREN;
       alloc = alloc_mode_for_applications
     { (Method { kind; obj }, alloc) }
+;
+
+c_call_effects:
+  | { Effects.Arbitrary_effects }
+  | KWD_NO_EFFECTS { Effects.No_effects }
+  | KWD_ONLY_GENERATIVE_EFFECTS; m = mutability
+    { Effects.Only_generative_effects m }
+;
+
+c_call_coeffects:
+  | { Coeffects.Has_coeffects }
+  | KWD_NO_COEFFECTS { Coeffects.No_coeffects }
 ;
 
 inline:

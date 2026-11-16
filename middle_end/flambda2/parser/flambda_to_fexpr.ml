@@ -725,7 +725,8 @@ and apply_expr env (app : Apply_expr.t) : Fexpr.expr =
         && is_default_arity (Apply_expr.return_arity app)
       then Function Indirect
       else Function Indirect_unknown_arity
-    | C_call { needs_caml_c_call; _ } -> C_call { alloc = needs_caml_c_call }
+    | C_call { needs_caml_c_call; is_c_builtin; effects; coeffects } ->
+      C_call { alloc = needs_caml_c_call; is_c_builtin; effects; coeffects }
     | Method { kind; obj } -> Method { kind; obj = simple env obj }
     | Effect _ -> Misc.fatal_error "TODO: Effect call kind"
   in

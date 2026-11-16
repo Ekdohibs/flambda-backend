@@ -36,6 +36,7 @@ let keyword_table =
     "array", KWD_ARRAY;
     "available", KWD_AVAILABLE;
     "boxed", KWD_BOXED;
+    "builtin", KWD_BUILTIN;
     "ccall", KWD_CCALL;
     "mcall", KWD_MCALL;
     "self", KWD_SELF;
@@ -82,11 +83,14 @@ let keyword_table =
     "nativeint", KWD_NATIVEINT;
     "never", KWD_NEVER;
     "newer_version_of", KWD_NEWER_VERSION_OF;
+    "no_coeffects", KWD_NO_COEFFECTS;
+    "no_effects", KWD_NO_EFFECTS;
     "noalloc", KWD_NOALLOC;
     "nontail", KWD_NONTAIL;
     "notrace", KWD_NOTRACE;
     "null", KWD_NULL;
     "of", KWD_OF;
+    "only_generative_effects", KWD_ONLY_GENERATIVE_EFFECTS;
     "poison", KWD_POISON;
     "pop", KWD_POP;
     "product", KWD_PRODUCT;
