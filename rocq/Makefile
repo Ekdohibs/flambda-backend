@@ -149,6 +149,7 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   FlambdaDemoteSpec.v \
   FlambdaEquivarianceProofs.v \
   FlambdaEquivarianceSpec.v \
+  FlambdaEquivarianceTactic.v \
   FlambdaExitBoundProofs.v \
   FlambdaExitBoundSpec.v \
   FlambdaExitWorldActionsProofs.v \
@@ -369,6 +370,8 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   FlambdaRunUnderSpec.v \
   FlambdaScopeProofs.v \
   FlambdaScopeSpec.v \
+  FlambdaScopeTactic.v \
+  FlambdaScopedInductionProofs.v \
   FlambdaScopedProofs.v \
   FlambdaSemanticsProofs.v \
   FlambdaSemanticsSpec.v \
@@ -394,6 +397,10 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   FlambdaSinkUsesSpec.v \
   FlambdaSlotsOfCodeProofs.v \
   FlambdaSlotsOfCodeSpec.v \
+  FlambdaSpineWalkNamesProofs.v \
+  FlambdaSpineWalkNamesSpec.v \
+  FlambdaSpineWalkProofs.v \
+  FlambdaSpineWalkSpec.v \
   FlambdaStateSupportProofs.v \
   FlambdaStateSupportSpec.v \
   FlambdaStaticProofs.v \
@@ -406,6 +413,7 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   FlambdaStaticsScopeSpec.v \
   FlambdaStubCallsProofs.v \
   FlambdaStubCallsSpec.v \
+  FlambdaTermInductionProofs.v \
   FlambdaTrapProofs.v \
   FlambdaTrapSpec.v \
   FlambdaTupledProofs.v \
