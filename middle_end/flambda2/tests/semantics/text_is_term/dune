@@ -39,6 +39,9 @@
 ;; comparison_of_two_floats: the comparison of two floats that gives -1, 0 or
 ;; 1, which the text writes "%float_comp.qmark". The text is the term.
 ;;
+;; test_for_an_immediate_of_any_value: the test for an immediate that works on
+;; any value, which the text writes "%is_int.generic". The text is the term.
+;;
 ;; partial_application_of_unboxed_float: the text is not read back.
 ;;
 ;; interface_only, type_error: the compiler does not reach the middle end.
@@ -122,6 +125,22 @@
   (= %{context_name} "main"))
  (action
   (diff length_of_bytes.expected length_of_bytes.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   test_for_an_immediate_of_any_value.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     %{dep:test_for_an_immediate_of_any_value.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff test_for_an_immediate_of_any_value.expected test_for_an_immediate_of_any_value.output)))
 
 (rule
  (enabled_if

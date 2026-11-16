@@ -847,10 +847,12 @@ let is_flat_float_array =
     unary "%is_flat_float_array" ~params:param0 (fun _ () ->
         P.Is_flat_float_array))
 
+(* The test for a value of a variant type is written with no parameter, and the
+   test that works on any value with [generic]. *)
 let is_int =
   D.(
-    unary "%is_int" ~params:param0 (fun _ () ->
-        P.Is_int { variant_only = true } (* CR vlaviron: discuss *)))
+    unary "%is_int" ~params:(bool_flag "generic") (fun _ generic ->
+        P.Is_int { variant_only = not generic }))
 
 let is_null = D.(unary "%is_null" ~params:param0 (fun _ () -> P.Is_null))
 
@@ -1386,7 +1388,7 @@ module OfFlambda = struct
     | Int_arith (i, o) -> int_uarith env (i, o)
     | Int_as_pointer a -> int_as_pointer env a
     | Is_flat_float_array -> is_flat_float_array env ()
-    | Is_int _ -> is_int env () (* CR vlaviron: discuss *)
+    | Is_int { variant_only } -> is_int env (not variant_only)
     | Is_null -> is_null env ()
     | Make_lazy { lazy_tag; alloc_region } ->
       make_lazy env (lazy_tag, alloc_region)
