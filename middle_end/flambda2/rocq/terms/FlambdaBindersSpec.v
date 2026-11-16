@@ -77,7 +77,12 @@
    neither.)
 
    The free names are lists, read as sets (FlambdaMapSpec.v): a name may
-   be repeated, and only [among] is to be asked of them. The compiler's
+   be repeated, and only [among] is to be asked of them, with one
+   exception: FlambdaParamOrderSpec.use_order reads the order in which
+   [free_variables_of_expr] lists the free variables of a handler, to
+   put the parameters of the handler in an order. A renaming changes
+   that list name by name and keeps its order
+   (FlambdaAlphaSpec.free_variables_equivariant_statement). The compiler's
    [Name_occurrences.t] also counts occurrences and tells their modes;
    the model has neither.
 
