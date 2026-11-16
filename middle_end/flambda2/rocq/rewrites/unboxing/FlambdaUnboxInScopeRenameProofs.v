@@ -32,10 +32,11 @@
    The validation runs the two rewrites:
    FlambdaValidatorEquivarianceProofs.v and FlambdaValidateScopeProofs.v
    need what is proved here for the round of FlambdaValidateSpec.v, so
-   this file imports neither. The two proofs of each rewrite are those
-   of FlambdaNormaliseSpec.rewrite_code and of
-   FlambdaRecHandlersSpec.rewrite_rec_handlers, with what is known of
-   symbols alone given to the rewrite. *)
+   this file imports neither. That each rewrite commutes with renaming
+   is proved by the tactic of FlambdaEquivarianceTactic.v. That it
+   keeps scope is proved as for FlambdaNormaliseSpec.rewrite_code and
+   for FlambdaRecHandlersSpec.rewrite_rec_handlers, with what is known
+   of symbols alone given to the rewrite. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
@@ -49,6 +50,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaUnboxTogetherSpec.
 From OxCamlFlambda2 Require FlambdaUnboxParamsNamesProofs.
 From OxCamlFlambda2 Require FlambdaUnboxTogetherNamesProofs.
+From OxCamlFlambda2 Require Import FlambdaEquivarianceTactic.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -68,41 +70,11 @@ Proof.
   intros [[x | s' | c] | ]; reflexivity.
 Qed.
 
-Lemma closed_blocks_renamed (r : renaming) (bindings : list static_binding) :
-  map
-    (fun entry : symbol * known_block =>
-       (fst entry, (fst (snd entry), map closed_field (snd (snd entry)))))
-    (flat_map static_block_made (map (rename_static_binding r) bindings))
-  = map
-      (fun entry : symbol * known_block =>
-         (fst entry, (fst (snd entry), map closed_field (snd (snd entry)))))
-      (flat_map static_block_made bindings).
-Proof.
-  induction bindings as [ | binding bindings IH]; [ reflexivity | ].
-  cbn [map flat_map]. rewrite !map_app, IH. f_equal.
-  destruct binding
-    as [id c | id
-       | s [code slots | fslot syms decls slots | tag fields | contents
-           | bytes | elements]];
-    try reflexivity.
-  cbn. do 3 f_equal. rewrite !map_map. apply map_ext.
-  intros [x | s' | c]; reflexivity.
-Qed.
-
-Lemma boxed_numbers_renamed (r : renaming) (bindings : list static_binding) :
-  flat_map static_number_boxed (map (rename_static_binding r) bindings)
-  = flat_map static_number_boxed bindings.
-Proof.
-  induction bindings as [ | binding bindings IH]; [ reflexivity | ].
-  cbn [map flat_map]. rewrite IH. f_equal.
-  destruct binding
-    as [id c | id
-       | s [code slots | fslot syms decls slots | tag fields | contents
-           | bytes | elements]];
-    try reflexivity.
-  destruct contents as [x | s' | c]; reflexivity.
-Qed.
-
+(* What is known of the symbols alone has the fields that hold symbols
+   and constants, and no other: so the answer is the same, though the
+   blocks that the bindings make are renamed. The definitions are
+   unfolded here, and the two equations of lists are proved by
+   [equivariance] (FlambdaEquivarianceTactic.v). *)
 Theorem symbols_under_statics_renamed :
   symbols_under_statics_renamed_statement.
 Proof.
@@ -110,141 +82,35 @@ Proof.
   unfold symbols_under_statics, facts_under_statics, known_under_statics,
     numbers_under_statics, facts_of_symbols.
   cbn [facts_blocks facts_numbers known_symbols known_boxed_symbols].
-  rewrite !map_app, closed_blocks_renamed, boxed_numbers_renamed.
-  reflexivity.
+  rewrite !map_app. do 3 f_equal; equivariance.
 Qed.
 
 (* ======================================================================== *)
 (* The two rewrites commute with renaming                                   *)
 (* ======================================================================== *)
 
-Section Renamed.
+(* The two laws are proved from the definitions by [equivariance]. Two
+   things are given to it:
+   - the law above, to rewrite with;
+   - a step: the rewrite given, and the hypothesis of the induction,
+     ask that what is known be of symbols alone, and under a group of
+     static bindings it is ([facts_of_symbols_only]). *)
+#[local] Hint Rewrite symbols_under_statics_renamed : equivariance.
 
-Variable f : facts -> expr -> expr.
-
-Hypothesis f_equivariant : equivariant_where_known f.
-
-Lemma rewritten_body_renamed (known : facts) (r : renaming) (body : expr) :
-  symbols_only known ->
-  rewrite_code_body (f known) (rename_expr r body)
-  = rename_expr r (rewrite_code_body (f known) body).
-Proof.
-  intros Honly. unfold rewrite_code_body.
-  rewrite (f_equivariant known Honly), !rename_binds_statics.
-  destruct (Bool.eqb (binds_statics body) (binds_statics (f known body)));
-    reflexivity.
-Qed.
-
-Lemma rewritten_binding_renamed (known : facts) (r : renaming)
-    (binding : static_binding) :
-  symbols_only known ->
-  rewrite_code_in_binding (f known) (rename_static_binding r binding)
-  = rename_static_binding r (rewrite_code_in_binding (f known) binding).
-Proof.
-  intros Honly.
-  destruct binding
-    as [id [params my_closure ret exn metadata body] | id | sym const];
-    try reflexivity.
-  cbn [rename_static_binding rename_code rewrite_code_in_binding].
-  rewrite (rewritten_body_renamed known _ _ Honly). reflexivity.
-Qed.
-
-Fixpoint rewrite_code_in_scope_equivariant_aux (r : renaming) (e : expr) :
-  ∀ known : facts,
-    rewrite_code_in_scope f known (rename_expr r e)
-    = rename_expr r (rewrite_code_in_scope f known e)
-with rewrite_code_in_scope_in_handler_equivariant (r : renaming)
-    (h : continuation_handler) :
-  ∀ known : facts,
-    rewrite_code_in_scope_in_handler f known (rename_handler r h)
-    = rename_handler r (rewrite_code_in_scope_in_handler f known h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      intros known; cbn [rename_expr rewrite_code_in_scope]; cbv zeta;
-      try reflexivity.
-    + rewrite rewrite_code_in_scope_equivariant_aux. reflexivity.
-    + rewrite symbols_under_statics_renamed,
-        rewrite_code_in_scope_equivariant_aux, !map_map.
-      f_equal. apply map_ext. intros binding.
-      apply rewritten_binding_renamed, facts_of_symbols_only.
-    + rewrite rewrite_code_in_scope_in_handler_equivariant,
-        rewrite_code_in_scope_equivariant_aux.
-      reflexivity.
-    + rewrite rewrite_code_in_scope_equivariant_aux. f_equal.
-      induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
-      rewrite (rewrite_code_in_scope_in_handler_equivariant r h), IH.
-      reflexivity.
-  - destruct h as [params metadata handler]. intros known.
-    cbn [rename_handler rewrite_code_in_scope_in_handler].
-    rewrite rewrite_code_in_scope_equivariant_aux. reflexivity.
-Qed.
-
-Fixpoint rewrite_rec_handlers_in_scope_equivariant_aux (r : renaming)
-    (e : expr) :
-  ∀ known : facts,
-    symbols_only known ->
-    rewrite_rec_handlers_in_scope f known (rename_expr r e)
-    = rename_expr r (rewrite_rec_handlers_in_scope f known e)
-with rewrite_rec_handlers_in_scope_in_handler_equivariant (r : renaming)
-    (h : continuation_handler) :
-  ∀ known : facts,
-    symbols_only known ->
-    rewrite_rec_handlers_in_scope_in_handler f known (rename_handler r h)
-    = rename_handler r (rewrite_rec_handlers_in_scope_in_handler f known h)
-with rewrite_rec_handler_in_scope_equivariant (r : renaming)
-    (h : continuation_handler) :
-  ∀ known : facts,
-    symbols_only known ->
-    rewrite_rec_handler_in_scope f known (rename_handler r h)
-    = rename_handler r (rewrite_rec_handler_in_scope f known h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      intros known Honly; cbn [rename_expr rewrite_rec_handlers_in_scope];
-      try reflexivity.
-    + rewrite rewrite_rec_handlers_in_scope_equivariant_aux by exact Honly.
-      reflexivity.
-    + rewrite symbols_under_statics_renamed,
-        rewrite_rec_handlers_in_scope_equivariant_aux
-        by apply facts_of_symbols_only.
-      reflexivity.
-    + rewrite rewrite_rec_handlers_in_scope_in_handler_equivariant,
-        rewrite_rec_handlers_in_scope_equivariant_aux
-        by exact Honly.
-      reflexivity.
-    + rewrite rewrite_rec_handlers_in_scope_equivariant_aux by exact Honly.
-      f_equal.
-      induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
-      rewrite (rewrite_rec_handler_in_scope_equivariant r h known Honly), IH.
-      reflexivity.
-  - destruct h as [params metadata handler]. intros known Honly.
-    cbn [rename_handler rewrite_rec_handlers_in_scope_in_handler].
-    rewrite rewrite_rec_handlers_in_scope_equivariant_aux by exact Honly.
-    reflexivity.
-  - destruct h as [params metadata handler]. intros known Honly.
-    cbn [rename_handler rewrite_rec_handler_in_scope].
-    rewrite rewrite_rec_handlers_in_scope_equivariant_aux by exact Honly.
-    rewrite (rewritten_body_renamed known _ _ Honly). reflexivity.
-Qed.
-
-End Renamed.
+#[local] Ltac eqv_extra ::=
+  match goal with
+  | H : _ |- _ =>
+    eqv_not_true H;
+    rewrite H by first [ assumption | apply facts_of_symbols_only ]
+  end.
 
 Theorem rewrite_code_in_scope_equivariant :
   rewrite_code_in_scope_equivariant_statement.
-Proof.
-  intros f Hf known _ r e.
-  exact (rewrite_code_in_scope_equivariant_aux f Hf r e known).
-Qed.
+Proof. equivariance. Qed.
 
 Theorem rewrite_rec_handlers_in_scope_equivariant :
   rewrite_rec_handlers_in_scope_equivariant_statement.
-Proof.
-  intros f Hf known Honly r e.
-  exact (rewrite_rec_handlers_in_scope_equivariant_aux f Hf r e known Honly).
-Qed.
+Proof. equivariance. Qed.
 
 (* ======================================================================== *)
 (* The two rewrites keep scope                                              *)
