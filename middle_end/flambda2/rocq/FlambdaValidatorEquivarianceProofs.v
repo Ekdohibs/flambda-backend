@@ -479,6 +479,51 @@ Qed.
 (* A continuation applied once, at the end of its scope                     *)
 (* ======================================================================== *)
 
+(* The laws of [inline_cont_at_tail] and of the two rewrites that are
+   made of it are proved from the definitions by the tactic of
+   FlambdaEquivarianceTactic.v. What the tactic is given here:
+   - the law of [var_free_b], which is proved by hand in
+     FlambdaValidatorEquivarianceBaseProofs.v: without it the tactic
+     leaves the first proof incomplete;
+   - computation is kept from unfolding [var_in_simples], so that the
+     law of the test that no parameter is among the arguments
+     (FlambdaEquivarianceProofs.params_not_in_args_equivariant) applies
+     as it is written: without that the first proof does not end;
+   - two rules. Where [option_map] is at what a function answers of
+     the term before renaming, the two cases of that answer: the tactic
+     has no step for [option_map] at an answer that is not known. And
+     where the two sides choose on one condition that has no renaming
+     left in it, the two cases of the condition, before the tactic
+     derives a law for what is under the choice: the law of
+     [let_params] that it derives and the law of the database
+     (FlambdaEquivarianceProofs.let_params_equivariant), which is
+     written the other way round, undo each other without end. *)
+From OxCamlFlambda2 Require Import FlambdaEquivarianceTactic.
+
+Section Inline_tail.
+
+#[local] Hint Rewrite var_free_b_equivariant_aux : equivariance.
+
+#[local] Arguments var_in_simples : simpl never.
+
+#[local] Ltac eqv_extra ::=
+  match goal with
+  | |- context [option_map _ ?o] =>
+    eqv_no_renaming o;
+    let h := eqv_head o in
+    is_const h;
+    lazymatch h with
+    | @option_map => fail
+    | _ => idtac
+    end;
+    destruct o
+  | |- (if ?c then _ else _) = ?rhs =>
+    eqv_no_renaming c;
+    lazymatch rhs with
+    | context [if c then _ else _] => destruct c
+    end
+  end.
+
 Lemma inline_cont_at_tail_equivariant_aux (r : renaming) (k : continuation)
     (params : list variable) (metadata : handler_metadata) (handler : expr) :
   ∀ body : expr,
@@ -487,28 +532,8 @@ Lemma inline_cont_at_tail_equivariant_aux (r : renaming) (k : continuation)
       (rename_expr r body)
     = option_map (rename_expr r)
         (inline_cont_at_tail k params metadata handler body).
-Proof.
-  induction body
-    as [ x kind d body IH | bindings body IH | k' h body IH | handlers body IH
-       | ap | ac | scrutinee arms | ];
-    simpl; try reflexivity.
-  - rewrite among_rename_variable, var_free_b_equivariant_aux, IH.
-    destruct (negb (among x params) && var_free_b x handler);
-      [ reflexivity | ].
-    destruct (inline_cont_at_tail k params metadata handler body); reflexivity.
-  - rewrite IH.
-    destruct (inline_cont_at_tail k params metadata handler body); reflexivity.
-  - rewrite rename_continuation_eqb, no_trap_action_renamed, !length_map,
-      params_not_in_args_equivariant.
-    destruct
-      (Pos.eqb (ac_continuation ac) k
-       && no_trap_action ac
-       && Nat.eqb (length params) (length (ac_args ac))
-       && forallb (fun param => negb (var_in_simples param (ac_args ac)))
-            params);
-      [ | reflexivity ].
-    simpl. rewrite let_params_equivariant. reflexivity.
-Qed.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite inline_cont_at_tail_equivariant_aux : equivariance.
 
 Theorem inline_cont_at_tail_equivariant :
   inline_cont_at_tail_equivariant_statement.
@@ -517,27 +542,26 @@ Proof.
   apply inline_cont_at_tail_equivariant_aux.
 Qed.
 
-Fixpoint inline_tail_conts_equivariant_aux (r : renaming) (e : expr) :
+Lemma inline_tail_conts_equivariant_aux (r : renaming) (e : expr) :
   inline_tail_conts (rename_expr r e) = rename_expr r (inline_tail_conts e).
-Proof.
-  destruct e
-    as [ x kind d body | bindings body | k [params metadata handler] body
-       | handlers body | ap | ac | scrutinee arms | ];
-    simpl; try reflexivity.
-  - rewrite inline_tail_conts_equivariant_aux. reflexivity.
-  - rewrite inline_tail_conts_equivariant_aux. reflexivity.
-  - rewrite !inline_tail_conts_equivariant_aux,
-      inline_cont_at_tail_equivariant_aux.
-    destruct
-      (inline_cont_at_tail k params metadata (inline_tail_conts handler)
-         (inline_tail_conts body));
-      reflexivity.
-  - rewrite inline_tail_conts_equivariant_aux. reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 Theorem inline_tail_conts_equivariant :
   inline_tail_conts_equivariant_statement.
 Proof. exact inline_tail_conts_equivariant_aux. Qed.
+
+(* Inlining a continuation at the end of its scope, where its handler
+   gives one kind for each parameter. *)
+Lemma inline_tail_conts_kinded_equivariant_aux (r : renaming) (e : expr) :
+  inline_tail_conts_kinded (rename_expr r e)
+  = rename_expr r (inline_tail_conts_kinded e).
+Proof. equivariance. Qed.
+
+Lemma inline_tail_conts_kinded_equivariant :
+  rewrite_equivariant inline_tail_conts_kinded.
+Proof. exact inline_tail_conts_kinded_equivariant_aux. Qed.
+
+End Inline_tail.
 
 (* ======================================================================== *)
 (* Static bindings: deleted code, and groups                                *)
@@ -5108,33 +5132,6 @@ Qed.
 Lemma forward_to_arms_in_code_equivariant :
   rewrite_equivariant forward_to_arms_in_code.
 Proof. exact forward_to_arms_in_code_equivariant_aux. Qed.
-
-(* Inlining a continuation at the end of its scope, where its handler
-   gives one kind for each parameter. *)
-Fixpoint inline_tail_conts_kinded_equivariant_aux (r : renaming) (e : expr) :
-  inline_tail_conts_kinded (rename_expr r e)
-  = rename_expr r (inline_tail_conts_kinded e).
-Proof.
-  destruct e
-    as [ x kind d body | bindings body | k [params metadata handler] body
-       | handlers body | ap | ac | scrutinee arms | ];
-    simpl; try reflexivity.
-  - rewrite inline_tail_conts_kinded_equivariant_aux. reflexivity.
-  - rewrite inline_tail_conts_kinded_equivariant_aux. reflexivity.
-  - rewrite !inline_tail_conts_kinded_equivariant_aux,
-      inline_cont_at_tail_equivariant_aux, length_map.
-    destruct (Nat.eqb (length params) (length (hm_params_kinds metadata)));
-      [ | reflexivity ].
-    destruct
-      (inline_cont_at_tail k params metadata
-         (inline_tail_conts_kinded handler) (inline_tail_conts_kinded body));
-      reflexivity.
-  - rewrite inline_tail_conts_kinded_equivariant_aux. reflexivity.
-Qed.
-
-Lemma inline_tail_conts_kinded_equivariant :
-  rewrite_equivariant inline_tail_conts_kinded.
-Proof. exact inline_tail_conts_kinded_equivariant_aux. Qed.
 
 (* Taking away a parameter that every application gives one variable:
    the lemmas are in FlambdaUnaliasParamsNamesProofs.v. *)
